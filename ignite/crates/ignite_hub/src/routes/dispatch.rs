@@ -544,14 +544,20 @@ fn close(conn: &mut Connection, close: &Close, now: Timestamp) -> Answer {
 /// closing session deletes from the remote.
 fn closing(ticket: &Ticket, reason: &str) -> Vec<Operation> {
     let mut ops = Vec::new();
-    if ticket.metadata.contains_key(SAVED_BRANCH) {
+    // A landing applies the work again after a tip round reverted it, so `reverted` is done.
+    let stale: Vec<String> = [SAVED_BRANCH, crate::upkeep::reverted::KEY]
+        .into_iter()
+        .filter(|key| ticket.metadata.contains_key(*key))
+        .map(str::to_owned)
+        .collect();
+    if !stale.is_empty() {
         ops.push(Operation::Update {
             id: ticket.id.as_str().to_owned(),
             set: None,
             add_labels: Vec::new(),
             remove_labels: Vec::new(),
             set_meta: BTreeMap::new(),
-            unset_meta: vec![SAVED_BRANCH.to_owned()],
+            unset_meta: stale,
         });
     }
     ops.push(Operation::Close {

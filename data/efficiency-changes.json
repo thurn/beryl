@@ -694,5 +694,10 @@
     "label": "With `[land] mode = \"verdict\"`, a change that touches none of Ignite's own source lands by the verdict its gate earned on its own base: the commits are rebased onto the tip in git's object database and pushed without building or checking again when the tip moves (the slowest gated landing on 2026-11-19 took 91 minutes over 7 passes)",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "A reverted landing reopens its ticket at P0 and the dispatcher offers it to the session that wrote it, which still has the context, and sessions holding dependent tickets are told to release them",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

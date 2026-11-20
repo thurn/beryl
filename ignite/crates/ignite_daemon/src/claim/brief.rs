@@ -261,6 +261,9 @@ pub fn render(brief: &TicketBrief, tree: &TreeView) -> String {
             format!("(+{more} more: ignite ticket show {})", ticket.id),
         ));
     }
+    if let Some(line) = reverted_line(ticket) {
+        rows.push(("reverted", line));
+    }
     if let Some(topic) = guide(ticket) {
         rows.push((
             "guide",
@@ -272,6 +275,24 @@ pub fn render(brief: &TicketBrief, tree: &TreeView) -> String {
         "set the title first, then cd to the tree, read the files and edit".to_owned(),
     ));
     lines(&rows)
+}
+
+/// For a ticket whose landing a tip round reverted: the revert commit, the checks that failed
+/// with the landing, and the command that applies the work again.
+fn reverted_line(ticket: &Ticket) -> Option<String> {
+    let reverted = ticket.metadata.get("reverted")?;
+    let revert = reverted.get("revert")?.as_str()?;
+    let checks: Vec<&str> = reverted
+        .get("checks")
+        .and_then(Value::as_array)
+        .map(|checks| checks.iter().filter_map(Value::as_str).collect())
+        .unwrap_or_default();
+    Some(format!(
+        "{} undid your landing: the tip did not build with it ({}); apply your work again with: \
+         git revert --no-edit {revert}",
+        revert.get(..7).unwrap_or(revert),
+        checks.join(", ")
+    ))
 }
 
 /// The brief as one JSON object, for `--json`.

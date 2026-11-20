@@ -15,7 +15,8 @@
 //!   person touched it or a worker holds it ([`clearing`]);
 //! - takes an hourly snapshot of the database and a daily export ([`backup`]).
 //!
-//! The routes call the rest as reports arrive: a regression ([`regressions::file`], which
+//! The routes call the rest as reports arrive: a landing a tip round reverted ([`reverted::file`]),
+//! a regression ([`regressions::file`], which
 //! records why tip verification missed a check a landing found failing, in [`missed`]), a check
 //! still incomplete after its attempts ([`stuck::incomplete`]), a cache audit that disagreed
 //! ([`stuck::audit`]), an exploration find ([`explore::find`]) and a pass that replaced another
@@ -36,6 +37,7 @@ pub mod machines;
 pub mod missed;
 pub mod offline;
 pub mod regressions;
+pub mod reverted;
 pub mod schedules;
 pub mod signature;
 pub mod stuck;
@@ -48,6 +50,8 @@ mod guard_tests;
 mod justiciar_tests;
 #[cfg(test)]
 mod missed_tests;
+#[cfg(test)]
+mod reverted_tests;
 #[cfg(test)]
 mod schedules_tests;
 #[cfg(test)]

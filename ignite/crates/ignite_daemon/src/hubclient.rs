@@ -28,9 +28,9 @@ use ignite_core::protocol::hub::{
     LandingsRequest, ListingKey, ListingLookup, ListingReply, LookupReply, LookupRequest,
     MAX_BODY_BYTES, MachineFree, MachineRegister, MachineRegistered, MetricsImport, NewResult,
     OpenRegression, OpenRegressions, Pause, Record, RecordBatch, RegressionFiled, RegressionReport,
-    Release, ReportFiled, Reservation, ResultKey, SessionTitle, StoreRequest, StoredListing,
-    TicketBrief, TipClaim, TipClaimReply, TipVerified, TipWaiting, TipWaitingFiled, Verdict,
-    VerdictKey,
+    Release, ReportFiled, Reservation, ResultKey, RevertFiled, Reverted, SessionTitle,
+    StoreRequest, StoredListing, TicketBrief, TipClaim, TipClaimReply, TipVerified, TipWaiting,
+    TipWaitingFiled, Verdict, VerdictKey,
 };
 use ignite_core::protocol::tickets::{
     BatchReply, BatchRequest, FeedBatch, ImportReply, ImportRequest, Lease, LeaseBusy, LeaseOp,
@@ -525,6 +525,10 @@ impl Hub for HubClient {
 
     fn regression(&self, report: &RegressionReport) -> Result<RegressionFiled> {
         self.post("/regressions", report)
+    }
+
+    fn reverted(&self, reverted: &Reverted) -> Result<RevertFiled> {
+        self.post("/reverted", reverted)
     }
 
     fn open_regressions(&self) -> Result<Vec<OpenRegression>> {

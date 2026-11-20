@@ -1,5 +1,5 @@
 //! The result cache, check and record routes: `/results/lookup`, `/results/store`, `/flaky`,
-//! `/checks/stats`, `/tips/claim`, `/tips/verified`, `/landings/lookup`, `/regressions`,
+//! `/checks/stats`, `/tips/claim`, `/tips/verified`, `/landings/lookup`, `/regressions`, `/reverted`,
 //! `/records`, `/metrics/import`, and the reports that file tickets: `/incomplete`, `/audits`,
 //! `/finds` and `/tips/waiting`.
 //! `/results/store` also files a ticket when a pass replaces another machine's failure.
@@ -21,8 +21,8 @@ use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::{
     AuditReport, ExplorationFind, FlakyReport, IncompleteReport, JusticiarReport, LandingsReply,
     LandingsRequest, LookupReply, LookupRequest, MetricsImport, NewResult, OpenRegression,
-    OpenRegressions, RecordBatch, RegressionReport, ReportFiled, StoreRequest, TipClaim,
-    TipVerified, TipWaiting, TipWaitingFiled,
+    OpenRegressions, RecordBatch, RegressionReport, ReportFiled, RevertFiled, Reverted,
+    StoreRequest, TipClaim, TipVerified, TipWaiting, TipWaitingFiled,
 };
 use ignite_core::time::Timestamp;
 use ignite_store::StoreError;
@@ -30,7 +30,7 @@ use ignite_store::hub::{checks, records, results, ticket_spend, tips};
 
 use super::{Request, Response};
 use crate::upkeep::filing::Author;
-use crate::upkeep::{explore, justiciar, machines, regressions, stuck};
+use crate::upkeep::{explore, justiciar, machines, regressions, reverted, stuck};
 
 /// Instructions are stored one by one; checks are costed in billions of them.
 const BILLION: f64 = 1e9;
@@ -41,8 +41,8 @@ pub fn handle(conn: &mut Connection, request: &Request, now: Timestamp) -> Optio
         "/results/lookup" | "/landings/lookup" => ("POST", false),
         "/checks/stats" | "/regressions/open" => ("GET", false),
         "/results/store" | "/flaky" | "/tips/claim" | "/tips/verified" | "/regressions"
-        | "/records" | "/metrics/import" | "/incomplete" | "/audits" | "/finds" | "/justiciar"
-        | "/tips/waiting" => ("POST", true),
+        | "/reverted" | "/records" | "/metrics/import" | "/incomplete" | "/audits" | "/finds"
+        | "/justiciar" | "/tips/waiting" => ("POST", true),
         _ => return None,
     };
     if request.method != method {
@@ -83,6 +83,7 @@ fn route(conn: &mut Connection, request: &Request, now: Timestamp) -> Result<Res
         }
         "/tips/waiting" => tip_waiting(conn, request, &body(request)?, now),
         "/regressions" => regression(conn, request, &body(request)?, now),
+        "/reverted" => reverted(conn, request, &body(request)?, now),
         "/records" => {
             let batch: RecordBatch = body(request)?;
             let ids = records::insert(conn, &batch.records).map_err(|e| store_failure(&e))?;
@@ -336,6 +337,28 @@ fn regression(
         other => store_failure(&other),
     })?;
     filed_reply(&ticket)
+}
+
+/// Reopens the ticket of a reverted landing (see `upkeep::reverted`).
+fn reverted(
+    conn: &mut Connection,
+    request: &Request,
+    report: &Reverted,
+    now: Timestamp,
+) -> Result<Response, Response> {
+    let writer = request.writer.as_ref().expect("checked in handle");
+    let author = Author {
+        actor: &writer.actor,
+        machine: writer.machine.as_str(),
+    };
+    let ticket = reverted::file(conn, author, report, now).map_err(|e| match e {
+        StoreError::Rejected(message) => failure(409, &message),
+        other => store_failure(&other),
+    })?;
+    let ticket = ticket
+        .parse()
+        .map_err(|error| failure(500, &format!("ticket ID {ticket:?}: {error}")))?;
+    Ok(Response::json(200, &json!(RevertFiled { ticket })))
 }
 
 /// Files the tickets naming the machines a tip has waited an hour for.

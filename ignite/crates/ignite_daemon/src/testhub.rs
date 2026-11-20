@@ -8,8 +8,8 @@ use ignite_core::ids::{Commit, RecordId, Seq, TicketId};
 use ignite_core::protocol::hub::{
     AuditReport, CachedResult, Claim, ExplorationFind, FlakyReport, Landed, LandedCommit,
     MachineFree, MetricsImport, NewResult, OpenRegression, Pause, Record, RegressionFiled,
-    RegressionReport, ReportFiled, Reservation, ResultKey, TicketBrief, TipClaim, TipClaimReply,
-    TipVerified, TipWaiting, TipWaitingFiled,
+    RegressionReport, ReportFiled, Reservation, ResultKey, RevertFiled, Reverted, TicketBrief,
+    TipClaim, TipClaimReply, TipVerified, TipWaiting, TipWaitingFiled,
 };
 use ignite_core::protocol::tickets::{
     BatchReply, BatchRequest, FeedBatch, LeaseOp, LeaseReply, Ticket, TicketDetail, TicketQuery,
@@ -113,6 +113,10 @@ impl Hub for SpyHub {
     fn regression(&self, report: &RegressionReport) -> Result<RegressionFiled> {
         self.gate("regression")?;
         self.inner.regression(report)
+    }
+    fn reverted(&self, reverted: &Reverted) -> Result<RevertFiled> {
+        self.gate("reverted")?;
+        self.inner.reverted(reverted)
     }
     fn open_regressions(&self) -> Result<Vec<OpenRegression>> {
         self.gate("open_regressions")?;

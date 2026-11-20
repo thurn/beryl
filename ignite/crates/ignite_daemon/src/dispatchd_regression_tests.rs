@@ -118,3 +118,46 @@ fn a_ticket_for_the_culprit_goes_to_another_idle_worker() {
     );
     assert_eq!(handoff_to(&second), ("local_w2", "U"));
 }
+
+/// A reopened ticket whose landing a tip round reverted.
+fn reverted(id: &str) -> TicketDetail {
+    let mut ticket = detail(id, "open", None, &[], "");
+    ticket.ticket.metadata.insert(
+        "reverted".to_owned(),
+        serde_json::json!({"revert": "abc1234", "landed": ["def5678"], "checks": ["rust:a::b"]}),
+    );
+    ticket
+}
+
+#[test]
+fn a_reverted_ticket_goes_back_to_the_worker_that_landed_it() {
+    let rig = rig(&["local_w1", "local_w2"]);
+    finished(&rig, "local_w1", "T.1");
+    rig.hub.insert_ticket(reverted("T.1"));
+    reserve_for(&rig, "T.1", "local_w2");
+    let handoff = rig.step().unwrap();
+    assert_eq!(handoff.action, DispatchAction::Handoff);
+    assert_eq!(handoff.session, Some(session("local_w1")));
+    assert!(!handoff.clear);
+    let prompt = handoff.prompt.unwrap();
+    assert!(
+        prompt.contains(
+            "your landing of T.1 was reverted: the tip did not build with it (rust:a::b). Run \
+             `ignite start T.1 --reservation 7f3a`"
+        ),
+        "{prompt}"
+    );
+    assert_eq!(rig.state_of("local_w1"), "reserved");
+    assert_eq!(rig.state_of("local_w2"), "idle");
+}
+
+#[test]
+fn a_reverted_ticket_goes_to_the_worker_the_hub_named_when_nobody_landed_it() {
+    let rig = rig(&["local_w1", "local_w2"]);
+    finished(&rig, "local_w1", "T.9");
+    rig.hub.insert_ticket(reverted("T.1"));
+    reserve_for(&rig, "T.1", "local_w2");
+    let handoff = rig.step().unwrap();
+    assert_eq!(handoff_to(&handoff), ("local_w2", "T.1"));
+    assert!(handoff.clear);
+}

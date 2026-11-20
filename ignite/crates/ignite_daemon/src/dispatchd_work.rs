@@ -394,7 +394,11 @@ impl Dispatcher {
         };
         if let Some(culprit) = Self::culprit_worker(state, &detail, &reserved, members, now) {
             Self::drop_placeholder(state, named, ticket);
-            Self::queue_regression_handoff(state, &culprit, reserved, &detail.ticket.title);
+            if detail.ticket.metadata.contains_key("reverted") {
+                Self::queue_reverted_handoff(state, &culprit, reserved, &detail);
+            } else {
+                Self::queue_regression_handoff(state, &culprit, reserved, &detail.ticket.title);
+            }
             return;
         }
         if !taken {
@@ -412,7 +416,8 @@ impl Dispatcher {
         }
     }
 
-    /// The idle worker here whose last ticket caused `detail`, a regression, if one can run it.
+    /// The idle worker here whose last ticket caused `detail`, a regression, or whose last ticket
+    /// `detail` is, a ticket that was reverted, if one can run it.
     fn culprit_worker(
         state: &State,
         detail: &TicketDetail,
@@ -420,16 +425,52 @@ impl Dispatcher {
         members: &[Member],
         now: Timestamp,
     ) -> Option<SessionId> {
-        if !detail.ticket.labels.iter().any(|l| l == "regression") {
+        // A reverted ticket goes back to the worker that landed it, which still has the
+        // conversation in which it wrote the change.
+        let cause = if detail.ticket.metadata.contains_key("reverted") {
+            detail.ticket.id.clone()
+        } else if detail.ticket.labels.iter().any(|l| l == "regression") {
+            feed::caused_by(&detail.ticket.body)?
+        } else {
             return None;
-        }
-        let cause = feed::caused_by(&detail.ticket.body)?;
+        };
         let workers = slots::with_slots(state, members);
         Self::idle_workers(state, &workers, now)
             .into_iter()
             .filter(|m| suits(m, reserved.tier.as_ref(), &reserved.app))
             .find(|m| state.last_ticket.get(&m.session) == Some(&cause))
             .map(|m| m.session.clone())
+    }
+
+    /// Offers a reopened ticket whose landing a tip round reverted to the worker that landed
+    /// it. It keeps its conversation, as the culprit of a regression does.
+    fn queue_reverted_handoff(
+        state: &mut State,
+        session: &SessionId,
+        reserved: Reserved,
+        detail: &TicketDetail,
+    ) {
+        let checks = detail
+            .ticket
+            .metadata
+            .get("reverted")
+            .and_then(|m| m.get("checks"))
+            .and_then(serde_json::Value::as_array)
+            .map(|checks| {
+                checks
+                    .iter()
+                    .filter_map(serde_json::Value::as_str)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            })
+            .unwrap_or_default();
+        let prompt = format!(
+            "your landing of {} was reverted: the tip did not build with it ({checks}). Run \
+             `ignite start {}`",
+            reserved.ticket,
+            super::start_arguments(&reserved)
+        );
+        Self::push_handoff(state, session, reserved, prompt, false);
     }
 
     /// Removes the placeholder reservation of `ticket` for `session`, left while the ticket's

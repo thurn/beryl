@@ -583,3 +583,30 @@ fn green_that_holds_every_dependency_is_the_start() {
     );
     assert!(!reply.text.contains("note "), "{}", reply.text);
 }
+
+#[test]
+fn the_brief_of_a_reverted_ticket_says_how_to_apply_its_work_again() {
+    let world = World::new();
+    let mut reverted = ticket("Tq.48", "Counter names", "");
+    reverted.metadata.insert(
+        "reverted".to_owned(),
+        serde_json::json!({
+            "revert": "abcdef0123456789", "landed": ["1111111"], "checks": ["rust:a::b"],
+        }),
+    );
+    world.desk.add(reverted);
+    let reply = start(&world, &["Tq.48"], WORKER);
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    assert!(
+        reply.text.contains(
+            "reverted abcdef0 undid your landing: the tip did not build with it (rust:a::b); \
+             apply your work again with: git revert --no-edit abcdef0123456789"
+        ),
+        "{}",
+        reply.text
+    );
+    // A ticket that was never reverted prints no such line.
+    world.desk.add(ticket("Tq.49", "Other", ""));
+    let plain = start(&world, &["Tq.49"], "local_other");
+    assert!(!plain.text.contains("reverted"), "{}", plain.text);
+}

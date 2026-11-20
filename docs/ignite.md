@@ -2756,11 +2756,22 @@ holds it, checks that the tip has not moved, and pushes. When the tip moved, it
 builds the revert again on the new tip, three times at most, then reports a
 regression instead. A new tip that changed what the check reads, such as a fix
 or another machine's revert, is left to the next round, which runs the check
-there first. The round then tells the hub (`Hub::reverted`), which reopens the
-landing's ticket; a report the hub does not take is kept in the verifier's
-memory and sent again at the start of the next round. Another build check that
-failed with the same landing is covered by the same revert once it passes at
-that revert commit.
+there first. The round then tells the hub (`Hub::reverted`, `POST /reverted`).
+In one batch the hub reopens the landing's ticket, sets its priority to 0 and
+its metadata `reverted` (the revert commit, the landed commits and the failing
+checks), and comments with the check, its output and the line
+`apply your work again with: git revert --no-edit <revert commit>`. For commits
+no landing recorded it files a new P0 ticket with the same text. A second report
+of the same revert commit changes nothing, and a landing of the ticket clears
+`reverted`. A session already holding a ticket that depends on the reopened one
+is told, as `ignite tell` tells it, to release that ticket, which is handed out
+again when the reopened one lands. The dispatcher offers the reopened ticket to
+the idle worker whose last ticket it was ("your landing of <ticket> was
+reverted: the tip did not build with it"), and the brief of `ignite start`
+prints a `reverted` line with the revert commit, the checks and that command. A
+report the hub does not take is kept in the verifier's memory and sent again at
+the start of the next round. Another build check that failed with the same
+landing is covered by the same revert once it passes at that revert commit.
 
 ### Regression tickets
 
