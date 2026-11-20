@@ -23,7 +23,8 @@ fn refused_next(gated: &GateRun) -> String {
         .as_deref()
         .is_some_and(|base| base.starts_with("not compared with the tip"));
     let not_started = gated.run.build_failures.iter().any(|(_, output)| {
-        std::fs::read_to_string(output).is_ok_and(|text| text.starts_with(crate::build::NOT_STARTED))
+        std::fs::read_to_string(output)
+            .is_ok_and(|text| text.starts_with(crate::build::NOT_STARTED))
     });
     if not_started {
         "a build could not start because the machine failed, not because of your change: \
