@@ -191,11 +191,15 @@ fn panel(index: usize) -> Element {
 
 /// A line of words in `style` and `tint`, centred in `area`.
 fn words(words: &str, style: TypeStyle, tint: [u8; 4], area: [Vec2; 2]) -> Element {
+    // Text in the web's box widths can come out wider in Beryl 3D's faces (the web sets the
+    // captions in italic Times New Roman, which is narrower than the upright face drawn), so
+    // each line shrinks to stay on one line instead of wrapping out of its box.
     place(
         text(words)
             .style(style)
             .color(tint)
-            .text_align(TextAlign::Center),
+            .text_align(TextAlign::Center)
+            .fit(true),
         area,
     )
 }
