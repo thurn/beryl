@@ -69,9 +69,10 @@ fn sample_rows(raw: &str, machine: &str, now: Timestamp) -> Vec<PlanUsage> {
         posted: 0,
     };
     let parsed = serde_json::from_str::<Value>(raw.trim()).ok();
-    let plan = parsed.as_ref().map(|value| value.get("plan").unwrap_or(value));
-    let Some((plan, status)) =
-        plan.and_then(|plan| Some((plan, plan.get("status")?.as_str()?)))
+    let plan = parsed
+        .as_ref()
+        .map(|value| value.get("plan").unwrap_or(value));
+    let Some((plan, status)) = plan.and_then(|plan| Some((plan, plan.get("status")?.as_str()?)))
     else {
         return vec![row("unreadable", Some(raw::short(raw)))];
     };
@@ -222,7 +223,8 @@ impl Dispatcher {
 
     /// Posts every sample row the hub has not acknowledged, and marks them posted.
     fn post_usage(&self, ctx: &Context) -> ignite_core::traits::Result<()> {
-        let store_error = |e: ignite_store::StoreError| ignite_core::traits::Error::Io(e.to_string());
+        let store_error =
+            |e: ignite_store::StoreError| ignite_core::traits::Error::Io(e.to_string());
         let waiting = self
             .pool
             .with_database(|conn| plan_usage::unposted(conn))

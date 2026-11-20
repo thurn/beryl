@@ -405,7 +405,10 @@ mod tests {
         let settings: serde_json::Value =
             serde_json::from_str(&with_dispatcher_settings(existing)).unwrap();
         let deny = settings["permissions"]["deny"].as_array().unwrap();
-        assert!(deny.iter().all(|rule| rule != "mcp__ccd_session_mgmt__get_usage"));
+        assert!(
+            deny.iter()
+                .all(|rule| rule != "mcp__ccd_session_mgmt__get_usage")
+        );
         assert_eq!(deny.len(), 1 + DENIED_TOOLS.len());
     }
 

@@ -139,10 +139,16 @@ mod tests {
         let second = "2026-11-20T11:00:00.000Z";
         let old = "2026-10-01T00:00:00.000Z";
         insert(&mut conn, &[row(old, Some("Weekly"), Some(1.0))], now).unwrap();
-        assert!(latest(&conn).unwrap().is_empty(), "a row past 30 days is deleted");
+        assert!(
+            latest(&conn).unwrap().is_empty(),
+            "a row past 30 days is deleted"
+        );
         insert(
             &mut conn,
-            &[row(first, Some("Weekly"), Some(10.0)), row(first, Some("5h"), Some(50.0))],
+            &[
+                row(first, Some("Weekly"), Some(10.0)),
+                row(first, Some("5h"), Some(50.0)),
+            ],
             now,
         )
         .unwrap();
@@ -152,12 +158,23 @@ mod tests {
             .iter()
             .map(|r| (r.label.as_deref(), r.percent_used))
             .collect();
-        assert_eq!(summary, [(Some("5h"), Some(50.0)), (Some("Weekly"), Some(12.0))]);
-        insert(&mut conn, &[row("2026-11-20T11:30:00.000Z", None, None)], now).unwrap();
+        assert_eq!(
+            summary,
+            [(Some("5h"), Some(50.0)), (Some("Weekly"), Some(12.0))]
+        );
+        insert(
+            &mut conn,
+            &[row("2026-11-20T11:30:00.000Z", None, None)],
+            now,
+        )
+        .unwrap();
         let rows = latest(&conn).unwrap();
         assert_eq!(rows.len(), 3);
         assert_eq!(rows[2].status, "unavailable");
-        assert_eq!(newest_at(&conn).unwrap().as_deref(), Some("2026-11-20T11:30:00.000Z"));
+        assert_eq!(
+            newest_at(&conn).unwrap().as_deref(),
+            Some("2026-11-20T11:30:00.000Z")
+        );
 
         let waiting = unposted(&conn).unwrap();
         assert_eq!(waiting.len(), 4);
