@@ -111,9 +111,11 @@ impl Drop for World {
 
 impl World {
     /// A fresh world under a short temporary path, so the daemons' socket paths stay short.
+    /// macOS caps a socket path at 103 bytes, and `TMPDIR` alone takes 49, so the folder holds
+    /// no process ID of its own: `temp_dir()` already names the process, and a second, six-digit
+    /// ID once pushed `home-alpha/daemon.sock` past the cap.
     pub fn new(name: &str) -> World {
-        let root =
-            ignite_core::test_files::temp_dir().join(format!("ie2e-{name}-{}", std::process::id()));
+        let root = ignite_core::test_files::temp_dir().join(format!("ie2e-{name}"));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
         let placeholder = Config::parse("ignite.toml", &config("http://127.0.0.1:1")).unwrap();
