@@ -352,7 +352,10 @@ impl Claims {
             // branch until the retry, and the next lease of the ticket frees it (see `trees`).
             Ok(given) => {
                 if let Some(error) = given.reset {
-                    eprintln!("ignite: released {ticket}, but {} not reset: {error}", held.tree);
+                    eprintln!(
+                        "ignite: released {ticket}, but {} not reset: {error}",
+                        held.tree
+                    );
                 }
                 Ok(())
             }
