@@ -1,8 +1,8 @@
-//! Moving the release branch after a landing (see `release` in `ignite.toml`).
+//! Moving the release ref after a landing (see `release` in `ignite.toml`).
 //!
 //! When a landing's commits change Ignite's own source (not counting the check manifests, see
 //! [`crate::update::scope::ignite_change`]), the landed commit may also move the
-//! release branch, which daemons build their executable from. It moves only if every check of
+//! release ref, which daemons build their executable from. It moves only if every check of
 //! the release family passed on that commit. The landing decides that before it pushes
 //! ([`Landing::judge_release`]):
 //!
@@ -18,17 +18,17 @@
 //!   for Ignite's own family under load. A family run that passes is added to the gate's
 //!   outcomes. One that fails does not refuse the landing; the release just stays where it is.
 //!
-//! After the push, the ticket's tree is released and the hub told before the release branch is
+//! After the push, the ticket's tree is released and the hub told before the release ref is
 //! pushed ([`Landing::move_release`]), so the only work left before the reply is that one push.
 //! It is not handed to a thread: `ignite land` runs in a verb process that exits once it has
 //! replied (see `crate::verbproc`), and a failed move must reach the `release` line. Whatever
 //! happens here is reported on that line and never fails or undoes the landing.
 //!
-//! The push fast-forwards the release branch. When the release branch holds a commit the landed
+//! The push fast-forwards the release ref. When the release ref holds a commit the landed
 //! commit does not contain, the push is refused; if the landed commit holds that commit's
 //! changes to Ignite's source anyway, the branch is moved over it with `--force-with-lease`.
-//! That is the state a commit pushed to the release branch by hand leaves: its landing rebases
-//! it, and the release branch holds the copy from before the rebase. Before this, the release
+//! That is the state a commit pushed to the release ref by hand leaves: its landing rebases
+//! it, and the release ref holds the copy from before the rebase. Before this, the release
 //! stayed on that copy until someone moved it by hand.
 //!
 //! A landing that moved the release names the deploy handle in its `next` line
@@ -46,12 +46,12 @@ use crate::server::Context;
 use crate::update::SOURCE;
 use crate::update::scope::{Source, ignite_change};
 
-/// Whether the landed commit may move the release branch, decided before the push: `Ok` when
+/// Whether the landed commit may move the release ref, decided before the push: `Ok` when
 /// every check of the release family passed, or `Err` with the reason it may not.
 pub(super) type Verdict = Result<(), String>;
 
 impl Landing {
-    /// The release branch and family a landing that changed `files` must judge, or `None`
+    /// The release ref and family a landing that changed `files` must judge, or `None`
     /// when the repository names no release or the files are all outside Ignite's source. The
     /// check manifests are outside it even where their directory lies under Ignite's: no
     /// executable compiles them, so a landing that changes only them builds no release and
@@ -68,7 +68,7 @@ impl Landing {
             .then_some((branch.as_str(), family.as_str()))
     }
 
-    /// Decides, before the push, whether the commit in `tree` may move the release branch;
+    /// Decides, before the push, whether the commit in `tree` may move the release ref;
     /// `None` when the landing does not call for a move. A gate that did not run every check of
     /// the release family has the family run now in `tree`, and a passing run is added to
     /// `gated`, so the landing's output counts it with the gate.
@@ -127,7 +127,7 @@ impl Landing {
         gated.run.wall_s += run.wall_s;
     }
 
-    /// Moves the release branch to the pushed commit if `verdict` allows it. Returns the
+    /// Moves the release ref to the pushed commit if `verdict` allows it. Returns the
     /// `release` line for the landing's output, or `None` when the landing called for no move.
     pub(super) fn move_release(
         &self,
@@ -149,7 +149,7 @@ impl Landing {
         })
     }
 
-    /// Moves the release branch to the landed commit over a commit it does not contain, when
+    /// Moves the release ref to the landed commit over a commit it does not contain, when
     /// the landed commit holds that commit's changes to Ignite's source; the push was refused
     /// for `refused`.
     fn replace_release(
