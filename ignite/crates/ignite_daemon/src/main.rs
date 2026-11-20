@@ -16,6 +16,7 @@
 //! [`loops::daemon_serves_hub`]).
 
 pub(crate) mod assemble;
+mod cli;
 mod desk;
 pub mod drill;
 mod loops;
@@ -103,6 +104,7 @@ impl Daemon {
             tree: None,
         };
         let desks = assemble::desks(&base, &ctx, &machinery)?;
+        let cli = cli::cli_mode(&base, &ctx, &machinery, &desks)?;
         let health = LoopHealth::new(base.clock.clone());
         let parts = loops::Parts {
             ctx: ctx.clone(),
@@ -142,6 +144,7 @@ impl Daemon {
                 base.clock.clone(),
                 Some(base.open()?),
             )),
+            cli,
             titles: Arc::new(crate::session_title::TitleHook::new(
                 crate::session_title::app_data(&|name: &str| std::env::var(name).ok()),
             )),

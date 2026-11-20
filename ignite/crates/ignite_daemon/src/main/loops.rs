@@ -106,6 +106,8 @@ pub struct Parts {
     /// Reports session titles to the hub, both as a hook on each command and from the sender
     /// loop for the sessions holding trees.
     pub titles: Arc<crate::session_title::TitleHook>,
+    /// The CLI pool, when `ignite.toml` gives any app a CLI program (see `super::cli`).
+    pub cli: Option<Arc<super::cli::CliMode>>,
 }
 
 impl Parts {
@@ -129,6 +131,9 @@ impl Parts {
         self.spawn_metrics();
         self.spawn_mirror();
         self.spawn_overdue_stops(server.clone());
+        if let Some(cli) = &self.cli {
+            cli.spawn(self);
+        }
     }
 
     /// Ends a verb process that was asked to stop, by any path, and still runs a minute later
@@ -207,7 +212,7 @@ impl Parts {
     /// Starts the loop `name` on a thread of that name. It registers with the loop health,
     /// which `body` reports each round to, and the daemon exits if it ever stops (see
     /// [`crash::spawn_loop`]).
-    fn start_loop(
+    pub(super) fn start_loop(
         &self,
         name: &'static str,
         stalls_after: Duration,

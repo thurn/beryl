@@ -3583,8 +3583,8 @@ for each action live in the dispatcher's `AGENTS.md`.
 A dispatcher is a session only a person can start, it can make mistakes, and
 when it stops answering nothing automatic repairs the pool. In CLI mode an app
 has no dispatcher on a machine: the daemon runs each worker itself as a headless
-CLI process, `claude -p` or `codex exec`, one process per turn. This section is
-the design; `ignite pool list` shows which mode each app on a machine runs.
+CLI process, `claude -p` or `codex exec`, one process per turn.
+`ignite pool list` shows which mode each app on a machine runs.
 
 ```toml
 # How each app's workers run on this machine: "desktop" (the default) or "cli".
@@ -3615,6 +3615,13 @@ args = ["--dangerously-skip-permissions"]
   one.
 - An app's slots are offered only after a one-word probe turn has succeeded on
   that machine since the daemon started.
+- The daemon builds its CLI pool at start when `[pool.cli.<app>]` gives any app
+  a program, and gives every such app an adapter whatever its mode, so
+  `ignite pool mode` switches an app without a restart. Two loops follow the
+  pool: `ignite-cli` reads every running turn and acts on each end about once a
+  second, and `ignite-cli-health` runs the probe turns of the apps in CLI mode
+  and sends each CLI hold's report. A probe runs a whole turn, so it never holds
+  up the turns of other slots. `ignite doctor` lists both loops.
 
 A turn:
 
@@ -3636,8 +3643,11 @@ A turn:
   turn. No run means the turn never started, so it starts it. A run whose lock
   is held is running, one with `result.json` has ended, and one with a free lock
   and no result was interrupted, as by a reboot: its process group is ended
-  first. A turn's run is marked with `output.keep`, so its log is kept for 14
-  days.
+  first. The daemon starts the turns that never started before its socket
+  answers, and leaves the rest to `ignite-cli`. Within one daemon, a hand-off
+  and the loop can both find a turn recorded as starting; looking for its run
+  and starting it happen under one lock, so the second finds the first's run. A
+  turn's run is marked with `output.keep`, so its log is kept for 14 days.
 - The model and effort are arguments of every turn. Claude's first line names
   the model before any request is made. If it is not the one asked for, the
   daemon ends the turn, releases the ticket and stops reporting that tier to the
@@ -3729,6 +3739,14 @@ verb.
 Clearing a worker, the settle time after a ticket, the model read-back, the
 `dispatch allowed` hooks, rotation and session titles exist only for the desktop
 dispatcher.
+
+The `cli_e2e_*` tests in `ignite_daemon` run the whole of this against a shell
+script that stands in for `claude`: real supervisors, a real database file and
+the real `decide`, with only the clock faked. They cover a daemon restart during
+a turn, a program killed mid-turn, a reboot that left no supervisor and no
+result, a crash between recording a turn and starting it, two starts of one
+turn, a row an older build wrote, a plan-limit end, a refusal with its CLI hold
+and probe, `ignite tell --now`, and the block text followed by a release.
 
 ### What the daemon hands off, and when
 

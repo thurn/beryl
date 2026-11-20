@@ -53,6 +53,9 @@ use crate::pool::Pool;
 
 #[path = "clid_claim.rs"]
 mod claim;
+#[cfg(all(test, unix))]
+#[path = "clid_e2e_tests.rs"]
+mod e2e;
 #[path = "clid_end.rs"]
 pub mod end;
 #[path = "clid_fake.rs"]
@@ -70,9 +73,12 @@ pub mod start;
 mod tests;
 #[path = "clid_transcript.rs"]
 pub mod transcript;
+#[path = "clid_turns.rs"]
+pub mod turns;
 
 pub use fake::{FakeCliPool, JusticiarStart, SentMessage};
 pub use start::Recovery;
+pub use turns::SupervisedTurns;
 
 /// The name the `ignite-cli` loop registers under.
 pub const LOOP: &str = "ignite-cli";
