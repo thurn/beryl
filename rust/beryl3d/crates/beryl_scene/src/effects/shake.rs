@@ -27,7 +27,9 @@ pub fn write(runs: &[EffectRun], now: u64, scale: f32, builder: &mut FrameBuilde
         builder.effect(EffectLook {
             effect: Effect::Shake,
             on: run.on,
-            model: [1.0, 0.0, 0.0, points.x, 0.0, 1.0, 0.0, points.y, 0.0, 0.0, 1.0, 0.0],
+            model: [
+                1.0, 0.0, 0.0, points.x, 0.0, 1.0, 0.0, points.y, 0.0, 0.0, 1.0, 0.0,
+            ],
             opacity: 1.0,
         });
     }

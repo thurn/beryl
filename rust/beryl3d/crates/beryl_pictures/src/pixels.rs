@@ -323,7 +323,10 @@ fn inside(differ: &[bool], width: u32, scale: f32, given: &str) -> Result<usize,
         .filter_map(|n| n.trim().parse().ok())
         .collect();
     let [x, y, w, h] = numbers[..] else {
-        return Err(Usage(format!("--box {given}: give <x>,<y>,<width>,<height> in points")).into());
+        return Err(Usage(format!(
+            "--box {given}: give <x>,<y>,<width>,<height> in points"
+        ))
+        .into());
     };
     let height = differ.len() as u32 / width.max(1);
     #[expect(

@@ -207,7 +207,9 @@ fn records_list_each_effect_under_way_as_an_element() {
         .filter(|element| element["role"] == "effect" && element["name"] == "glow")
         .collect();
     assert!(!glows.is_empty(), "{printed}");
-    let first = elements.iter().position(|element| element["role"] == "effect");
+    let first = elements
+        .iter()
+        .position(|element| element["role"] == "effect");
     assert!(
         elements[first.unwrap()..]
             .iter()

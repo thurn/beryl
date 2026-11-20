@@ -344,7 +344,10 @@ def peaks(found: Measured, window: tuple[int, int]) -> dict[str, dict[str, objec
             b3d.setdefault(lonely.effect, []).append(lonely.track)
     out: dict[str, dict[str, object]] = {}
     for name in sorted({*web, *b3d}):
-        def on_window(side: list[tracks.Track]) -> list[tuple[float, int, tracks.Sample]]:
+
+        def on_window(
+            side: list[tracks.Track],
+        ) -> list[tuple[float, int, tracks.Sample]]:
             return [
                 (sample.opacity, at, sample)
                 for track in side

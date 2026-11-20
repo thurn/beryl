@@ -282,7 +282,9 @@ fn effect_box(frame: &Frame, effect: &EffectLook, size: Size) -> Vec<Value> {
             m[4] * x + m[5] * y + m[7],
             m[8] * x + m[9] * y + m[11],
         ];
-        let clip = |row: usize| c[row] * point[0] + c[4 + row] * point[1] + c[8 + row] * point[2] + c[12 + row];
+        let clip = |row: usize| {
+            c[row] * point[0] + c[4 + row] * point[1] + c[8 + row] * point[2] + c[12 + row]
+        };
         let w = clip(3);
         let screen = [
             f32::midpoint(clip(0) / w, 1.0) * size.width,
