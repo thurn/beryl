@@ -14,7 +14,7 @@ use glam::Vec2;
 
 use super::TablePress;
 use crate::element::{Anchor, Element, Press};
-use crate::input::Size;
+use crate::table::Window;
 use crate::widgets::primary;
 
 /// The phase each icon of the step track sets, by its index in the track
@@ -135,14 +135,26 @@ pub fn advance(view: &PlayerView, with_action: bool) -> Vec<TableAction> {
     }
 }
 
-/// The Next button and, under it, the name of the phase after `phase`, in the lower right of a
-/// window of `window`'s size inset by `inset`, as the web's `turn-action` stands in the dock.
+/// The Next button and, under it, the name of the phase after `phase`, in the lower right of
+/// `window`. On the desktop it stands as the web's table stands its `turn-action`, at the foot
+/// of the game's action dock (`prompts::bar`), `layout::DOCK_RIGHT` and `DOCK_BOTTOM` in from
+/// the corner. On the phone it stands the table's edge (`flat.table.edge`) in from the corner.
 #[must_use]
-pub fn next(phase: TablePhase, window: Size, inset: f32) -> Element {
+pub fn next(phase: TablePhase, window: Window) -> Element {
+    use crate::layout::{DOCK_BOTTOM, DOCK_RIGHT};
+    use crate::prompts::bar::{captioned, desktop_dock, dock_sized, turn_action};
+    let size = window.size;
     let button = primary("Next").on_press(Press::Table(TablePress::Next));
-    let mut action = crate::prompts::captioned(button, caption(next_phase(phase)));
+    let caption = caption(next_phase(phase));
+    let (mut action, inset) = if window.phone() {
+        let edge = crate::data::space::flat::table::EDGE;
+        (captioned(button, caption), Vec2::splat(edge))
+    } else {
+        let dock = desktop_dock().child(turn_action(dock_sized(button), None, caption));
+        (dock, Vec2::new(DOCK_RIGHT, DOCK_BOTTOM))
+    };
     action.anchor = Some(Anchor::Point(
-        Vec2::new(window.width - inset, window.height - inset),
+        Vec2::new(size.width, size.height) - inset,
         Vec2::ONE,
     ));
     action

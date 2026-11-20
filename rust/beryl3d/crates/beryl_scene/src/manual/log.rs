@@ -5,17 +5,18 @@
 //! When the table refuses an undo because later lines depend on it, the log opens with those
 //! lines highlighted (`sendHistory` in `ui/src/table/tableLog.ts`). The log stays folded to a
 //! button until it is opened, as the web's desktop table always folds it (`TableLog` is given
-//! `folded` in `ui/src/stage/Chrome.tsx`), so that it never lies over the cards. On a phone the
-//! folded log is the web's icon button (`.game-log-toggle`) in the safe area's top right corner,
-//! since the desktop's corner lies over the opponent's lands there. This is the web's
-//! `TableLog` (`ui/src/table/TableLog.tsx`).
+//! `folded` in `ui/src/stage/Chrome.tsx`), so that it never lies over the cards. The button is
+//! the web's icon button (`.game-log-toggle`): on the desktop at the game log's place in the
+//! window's top left, and on a phone in the safe area's top right corner, since the desktop's
+//! corner lies over the opponent's lands there. This is the web's `TableLog`
+//! (`ui/src/table/TableLog.tsx`), which is the game's `LogPanel` with the table's lines.
 
 use beryl_protocol::protocol::{LogLine, TableAction};
 use glam::Vec2;
 
 use super::TablePress;
 use super::commands;
-use crate::element::{Align, Anchor, Element, Overflow, Press, column, row, text};
+use crate::element::{Align, Anchor, Element, Overflow, Press, column, holder, row, text};
 use crate::frame::Role;
 use crate::table::Window;
 use crate::tokens::{color, size, space, type_style};
@@ -53,52 +54,67 @@ pub fn log(
         return None;
     }
     let name = if open { "Hide log" } else { "Show log" };
-    let (heading, corner, metrics) = if let Some(window) = phone {
-        use crate::data::space::flat::phone::GUTTER;
-        let safe = window.safe_area;
-        let right = window.size.width - safe.right - GUTTER;
-        let corner = Anchor::Point(Vec2::new(right, safe.top + GUTTER), Vec2::X);
-        let width = crate::data::space::flat::table::log::WIDTH
-            .min(window.size.width - safe.left - safe.right - 2.0 * GUTTER);
-        (icon_button(icons::LOG, name), corner, width)
-    } else {
-        let left = crate::data::space::flat::table::EDGE;
-        let top = crate::data::space::flat::table::log::TOP;
-        let corner = Anchor::Point(Vec2::new(left, top), Vec2::ZERO);
-        let width = crate::data::space::flat::table::log::WIDTH;
-        (button(TITLE).name(name), corner, width)
+    let toggle = |button: Element| {
+        button
+            .selected(open)
+            .on_press(Press::Table(TablePress::ToggleLog))
     };
-    let heading = heading
-        .selected(open)
-        .on_press(Press::Table(TablePress::ToggleLog));
+    let lines = || {
+        let mut list = column()
+            .name("lines")
+            .gap(space::S)
+            .overflow(Overflow::Scroll)
+            .max_height(crate::data::space::flat::table::log::HEIGHT)
+            .children(
+                lines
+                    .iter()
+                    .map(|each| line(each, blocked.contains(&each.n))),
+            );
+        list.role = Role::List;
+        list
+    };
+    let panel = |width: f32| {
+        column()
+            .name(TITLE)
+            .width(width)
+            .gap(space::S)
+            .padding(space::M)
+            .background(color::PANEL)
+            .border((color::METAL, size::BORDER))
+            .radius(size::PANEL_RADIUS)
+    };
+    let Some(window) = phone else {
+        // The desktop's button is the game screen's log button, at its place in the window's
+        // top left, and the open log stands under it where the game's log does
+        // (`hud::log::log`), as the web's `TableLog` is the game's `LogPanel` folded.
+        use crate::data::space::hud::{LOG_BUTTON_TOP, LOG_LEFT, LOG_TOP};
+        let mut button = toggle(icon_button(icons::LOG, name));
+        button.anchor = Some(Anchor::Point(
+            Vec2::new(LOG_LEFT, LOG_BUTTON_TOP),
+            Vec2::ZERO,
+        ));
+        let open = open.then(|| {
+            let mut shown = panel(crate::data::space::flat::table::log::WIDTH).child(lines());
+            shown.anchor = Some(Anchor::Point(Vec2::new(LOG_LEFT, LOG_TOP), Vec2::ZERO));
+            shown
+        });
+        return Some(holder().name("table log").child(button).children(open));
+    };
+    let gutter = crate::data::space::flat::phone::GUTTER;
+    let safe = window.safe_area;
+    let right = window.size.width - safe.right - gutter;
+    let corner = Anchor::Point(Vec2::new(right, safe.top + gutter), Vec2::X);
+    let width = crate::data::space::flat::table::log::WIDTH
+        .min(window.size.width - safe.left - safe.right - 2.0 * gutter);
+    let heading = toggle(icon_button(icons::LOG, name));
     if !open {
         let mut folded = heading;
         folded.anchor = Some(corner);
         return Some(folded);
     }
-    let mut panel = column()
-        .name(TITLE)
-        .width(metrics)
-        .gap(space::S)
-        .padding(space::M)
-        .background(color::PANEL)
-        .border((color::METAL, size::BORDER))
-        .radius(size::PANEL_RADIUS)
-        .child(heading);
-    let mut list = column()
-        .name("lines")
-        .gap(space::S)
-        .overflow(Overflow::Scroll)
-        .max_height(crate::data::space::flat::table::log::HEIGHT)
-        .children(
-            lines
-                .iter()
-                .map(|each| line(each, blocked.contains(&each.n))),
-        );
-    list.role = Role::List;
-    panel = panel.child(list);
-    panel.anchor = Some(corner);
-    Some(panel)
+    let mut shown = panel(width).child(heading).child(lines());
+    shown.anchor = Some(corner);
+    Some(shown)
 }
 
 /// One line of the log: its number, who, what, and its controls, highlighted as the web's

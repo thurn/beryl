@@ -139,7 +139,7 @@ pub fn sheet(view: &PlayerView, window: Window, side: Side) -> Option<Element> {
         .grid_template_columns(vec![Track::Fraction(1.0); 3]);
     grid.style.display = Display::Grid;
     let grid = grid.children(entries(player(view, side), adjust).enumerate().map(
-        |(at, (name, count, words))| {
+        |(at, (name, count, words, _))| {
             let at = u8::try_from(at).unwrap_or(u8::MAX);
             let add = counter(&format!("{name} counter: {count}"), &words, adjust)
                 .grow(1.0)
@@ -193,35 +193,40 @@ fn pool(player: &PlayerState, side: Side, window: Size, adjust: bool) -> Element
         Side::You => "Your",
         Side::Opponent => "Opponent's",
     };
-    let mut element = row()
-        .name(&format!("{whose} counters"))
-        .gap(space::S)
-        .align_items(Align::Center)
-        .children(
-            entries(player, adjust)
-                .enumerate()
-                .map(|(at, (name, count, words))| {
+    let mut element =
+        row()
+            .name(&format!("{whose} counters"))
+            .gap(size::POOL_GAP)
+            .align_items(Align::Center)
+            .children(entries(player, adjust).enumerate().map(
+                |(at, (name, count, words, mana))| {
                     let at = u8::try_from(at).unwrap_or(u8::MAX);
-                    let button = counter(&format!("{name} counter: {count}"), &words, adjust);
+                    let button =
+                        desktop_counter(&format!("{name} counter: {count}"), &words, mana, adjust);
                     if adjust {
                         button.on_press(Press::Table(TablePress::Counter { side, at }))
                     } else {
                         button
                     }
-                }),
-        );
+                },
+            ));
+    // The point is the row's top left corner, as the web's `MANA_POOLS` places the `.hud` that
+    // holds it (`ui/src/game/tableRows.ts`).
     element.anchor = Some(Anchor::Point(
         points(DESKTOP.players[index(side)].pool, window),
-        glam::Vec2::new(0.0, 0.5),
+        Vec2::ZERO,
     ));
     element
 }
 
 /// `player`'s mana symbols and named counters as a row or a sheet shows them, each its name, its
-/// count and the words it shows: every mana symbol if `adjust`, and otherwise only those with
+/// count, the words it shows and whether it is a mana symbol: every mana symbol if `adjust`, and otherwise only those with
 /// mana, then each named counter that is not zero. Their order is the one `counter_name`
 /// numbers them in.
-fn entries(player: &PlayerState, adjust: bool) -> impl Iterator<Item = (String, u32, String)> {
+fn entries(
+    player: &PlayerState,
+    adjust: bool,
+) -> impl Iterator<Item = (String, u32, String, bool)> {
     let mana = (mana(player.mana).into_iter())
         .filter(move |&(_, count)| adjust || count > 0)
         .map(|(symbol, count)| {
@@ -230,7 +235,7 @@ fn entries(player: &PlayerState, adjust: bool) -> impl Iterator<Item = (String, 
             } else {
                 format!("{{{symbol}}}")
             };
-            (symbol.to_owned(), count, words)
+            (symbol.to_owned(), count, words, true)
         });
     let named = (player.named_counters.iter())
         .filter(|counter| counter.count != 0)
@@ -240,6 +245,7 @@ fn entries(player: &PlayerState, adjust: bool) -> impl Iterator<Item = (String, 
                 counter.name.clone(),
                 u32::try_from(counter.count).unwrap_or(0),
                 words,
+                false,
             )
         });
     mana.chain(named)
@@ -259,6 +265,42 @@ fn counter(name: &str, words: &str, button: bool) -> Element {
         .background(color::PANEL)
         .child(text(words).passes(true))
 }
+
+/// One counter of a desktop row, named `name`, showing `words`, a button if it takes clicks, as
+/// the web's `.manual-counter-button` draws it: no face or border of its own, two points of
+/// padding round what it holds. A mana symbol (`mana`) is set as the web's `.mana-pool` sets
+/// it, a disc of `type_style::POOL`'s size with its amount after it in `POOL_COUNT`.
+fn desktop_counter(name: &str, words: &str, mana: bool, button: bool) -> Element {
+    let role = if button {
+        crate::frame::Role::Button
+    } else {
+        crate::frame::Role::Region
+    };
+    let mut shown = text(words).passes(true);
+    if mana {
+        shown = shown.style(type_style::POOL);
+        let symbol_end = words.find('}').map_or(words.len(), |end| end + 1);
+        #[expect(clippy::cast_possible_truncation, reason = "a short text")]
+        let range = symbol_end as u32..words.len() as u32;
+        if !range.is_empty() {
+            shown.spans.push(crate::element::Span {
+                range,
+                style: type_style::POOL_COUNT,
+                color: None,
+            });
+        }
+    }
+    let mut element = Element::new(role)
+        .name(name)
+        .padding(COUNTER_PADDING)
+        .background([0; 4])
+        .child(shown);
+    element.style.border = Some(crate::element::Border::uniform([0; 4], 0.0));
+    element
+}
+
+/// The padding of a desktop counter: `.manual-counter-button`'s `padding: 2px`.
+const COUNTER_PADDING: f32 = 2.0;
 
 /// The name a table action gives the counter at `at` of `side`'s row in `view`: a mana
 /// symbol's letter, or a named counter's name.

@@ -124,7 +124,7 @@ pub(super) fn bar(
 /// column of buttons of one width, at least a turn button's (`--button-width`), with what the
 /// prompt asks over them and the turn button at the foot. It draws no panel of its own, as the
 /// web's dock draws none.
-fn desktop_dock() -> Element {
+pub(crate) fn desktop_dock() -> Element {
     column()
         .name("prompt")
         .gap(space::M)
@@ -137,7 +137,7 @@ fn desktop_dock() -> Element {
 
 /// `element`, a button of the dock, as wide as the dock (`.dock .button`: `min-width: 0;
 /// width: 100%`).
-fn dock_sized(mut element: Element) -> Element {
+pub(crate) fn dock_sized(mut element: Element) -> Element {
     element.style.min_width = Some(0.0);
     element.align_self(Align::Stretch)
 }
@@ -146,7 +146,11 @@ fn dock_sized(mut element: Element) -> Element {
 /// round button that passes on, `pass_on`, to its left, and what it says under its label,
 /// `caption`, centred under it. Neither takes room in the dock's column, so the turn button
 /// stands at the same place whatever is beside or under it.
-fn turn_action(pressed: Element, pass_on: Option<&PromptButton>, caption: &str) -> Element {
+pub(crate) fn turn_action(
+    pressed: Element,
+    pass_on: Option<&PromptButton>,
+    caption: &str,
+) -> Element {
     let gap = space::M;
     let height = size::BUTTON_HEIGHT;
     let pass_on = pass_on.map(|button_view| {

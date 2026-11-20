@@ -299,9 +299,16 @@ fn icon(at: usize, whose: &str, side: Side, set: StepSet, current: Option<Step>)
 }
 
 /// The icon at `at` of a manual table's step track, lit if `here`, which a press sets the phase
-/// to; `active` says whether its rows are the active player's.
+/// to; `active` says whether its rows are the active player's. Every icon is a toggle, as the
+/// web's track is a `.step-toggle` button round each icon. An unlit step that never stops a
+/// game (Untap and Cleanup) is faded further, as the web's `.step-fixed` is.
 fn track_icon(at: usize, whose: &str, active: bool, here: bool) -> Element {
     let name = format!("{whose} {}", STEP_STOPS[at].label);
+    let faded = if STEP_STOPS[at].steps.is_empty() {
+        STEP_FIXED
+    } else {
+        STEP_OFF
+    };
     let tint = if here {
         color::STEP_CURRENT
     } else {
@@ -311,10 +318,10 @@ fn track_icon(at: usize, whose: &str, active: bool, here: bool) -> Element {
         &name,
         icons::STEPS_OUTLINED[at],
         tint,
-        if here { 1.0 } else { STEP_OFF },
+        if here { 1.0 } else { faded },
         here,
     );
-    Element::new(Role::Button)
+    Element::new(Role::Toggle)
         .name(&name)
         .width(size::STEP)
         .height(size::STEP)

@@ -156,10 +156,7 @@ fn controls(state: &TableState, input: &ScreenIn, frozen: bool) -> Vec<Element> 
     }
     let next = (input.view.and_then(|view| view.table.as_ref()))
         .filter(|_| state.menu.is_none() && !state.overlay_open() && !frozen)
-        .map(|table| {
-            let inset = crate::data::space::flat::table::EDGE;
-            turn::next(table.phase, input.window.size, inset)
-        });
+        .map(|table| turn::next(table.phase, input.window));
     let pools = (input.view).and_then(|view| pools::pools(view, input.window));
     [
         players::players(input),

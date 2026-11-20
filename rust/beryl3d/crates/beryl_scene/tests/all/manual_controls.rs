@@ -31,7 +31,7 @@ fn next_advances_to_the_phase_it_names() {
 fn a_step_icon_sets_the_phase_and_the_lit_draw_icon_draws() {
     let mut view = table_view();
     let (mut client, _) = client_at_table(&view);
-    press(&mut client, 0, Role::Button, "Opponent's end step");
+    press(&mut client, 0, Role::Toggle, "Opponent's end step");
     let end = action(serde_json::json!({ "phase": { "phase": "end" } }));
     assert_eq!(acts(&mut client), vec![end]);
 
@@ -40,7 +40,7 @@ fn a_step_icon_sets_the_phase_and_the_lit_draw_icon_draws() {
     }
     view.turn.active = Side::You;
     let (mut client, _) = client_at_table(&view);
-    press(&mut client, 0, Role::Button, "Your draw");
+    press(&mut client, 0, Role::Toggle, "Your draw");
     let draw = action(serde_json::json!({ "draw": { "seat": 0, "count": 1 } }));
     assert_eq!(acts(&mut client), vec![draw]);
 }

@@ -3,7 +3,7 @@
 //! layer"). Each group of shapes has a file of its own; both entry points are one match over
 //! the prompt's `ShapeBody`.
 
-mod bar;
+pub(crate) mod bar;
 mod catalog;
 mod choose;
 mod declare;
@@ -18,7 +18,6 @@ use beryl_protocol::prompt::{ButtonId, Marked, PromptButton, PromptView, Purpose
 use beryl_protocol::protocol::{ObjectId, PlayerView, ZoneName};
 use beryl_protocol::script::{Arrow, Mark, OwnStep, OwnTimings, StepTiming, Subject, Verb};
 
-pub(crate) use bar::captioned;
 pub use bar::{prompt_bar, waiting};
 pub use tray::Piles;
 
