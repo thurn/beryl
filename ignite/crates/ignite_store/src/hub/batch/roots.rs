@@ -1,7 +1,11 @@
 //! New root ticket IDs. A root ID is a letter, `T` for a ticket, `E` for an epic, `M` for a
 //! meta-ticket, `A` for a ticket Ignite filed on its own or `B` for a player's bug report, and
-//! then a four-character root (`TQ44S`, `EQ44S`, `MAB12`, `AR2D2`, `BX9K2`). Children add dotted numbers to their parent's ID, so a
-//! whole epic's tree shares its `E`.
+//! then a root of at least four characters (`TQ44S`, `EQ44S`, `MAB12`, `AR2D2`, `BX9K2`).
+//! Children add dotted numbers to their parent's ID, so a whole epic's tree shares its `E`.
+//!
+//! Four characters give 720,896 roots. As they fill, a random four-character root is more
+//! often taken, and after [`TRIES_PER_LENGTH`] taken roots in a row [`allocate`] tries one
+//! character longer, so IDs stay short for as long as the space allows and never run out.
 //!
 //! The roots of all the letters are one space: a root used under one letter is never minted
 //! under another, so a bare root (`q44s`) names one ticket and lookups try every letter.
@@ -15,6 +19,18 @@ use crate::{Result, StoreError};
 /// The characters of a root. The first is never a digit, so a root never looks like a number,
 /// and `I`, `L`, `O` and `U` are left out as easy to misread.
 const ALPHABET: &[u8; 32] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+
+/// How many taken roots of one length [`allocate`] draws in a row before it tries a root one
+/// character longer. With a fraction `f` of the four-character roots taken, a new ID is longer
+/// with probability `f^8`: under 1% while half are taken, about 10% at three quarters.
+const TRIES_PER_LENGTH: usize = 8;
+
+/// The shortest root.
+const MIN_ROOT_LENGTH: usize = 4;
+
+/// The longest root [`allocate`] tries before it gives up. Eight characters are a trillion
+/// roots, so reaching it means `taken` is wrong, not that the space is full.
+const MAX_ROOT_LENGTH: usize = 8;
 
 /// The letters a root ID starts with: `T` for a ticket, `E` for an epic, `M` for a meta-ticket
 /// `A` for a ticket Ignite filed on its own and `B` for a player's bug report.
@@ -62,26 +78,41 @@ fn has_bug_report_label(fields: &TicketFields) -> bool {
         .is_some_and(|labels| labels.iter().any(|label| label == BUG_REPORT_LABEL))
 }
 
-/// A new root ID: `prefix`, a capital letter and three capitals or digits (`TQ44S`), whose root
-/// is not [`taken`].
+/// A new root ID: `prefix`, a capital letter and at least three more capitals or digits
+/// (`TQ44S`), whose root is not [`taken`]. Roots are four characters long until
+/// [`TRIES_PER_LENGTH`] random four-character roots in a row are taken, then five, and so on.
 pub(crate) fn allocate(conn: &Connection, prefix: char) -> Result<String> {
-    loop {
-        let mut bytes = [0_u8; 4];
-        getrandom::getrandom(&mut bytes)
-            .map_err(|e| StoreError::Invalid(format!("no random numbers: {e}")))?;
-        // Rejection sampling keeps all 22 letters equally likely as the first character.
-        if bytes[0] >= 242 {
-            continue;
-        }
-        let mut root = String::with_capacity(4);
-        root.push(char::from(ALPHABET[10 + usize::from(bytes[0]) % 22]));
-        for byte in &bytes[1..] {
-            root.push(char::from(ALPHABET[usize::from(*byte) % 32]));
-        }
-        if !taken(conn, &root)? {
-            return Ok(format!("{prefix}{root}"));
+    for length in MIN_ROOT_LENGTH..=MAX_ROOT_LENGTH {
+        for _ in 0..TRIES_PER_LENGTH {
+            let root = random_root(length)?;
+            if !taken(conn, &root)? {
+                return Ok(format!("{prefix}{root}"));
+            }
         }
     }
+    Err(StoreError::Invalid(format!(
+        "no free ticket root of up to {MAX_ROOT_LENGTH} characters"
+    )))
+}
+
+/// A random root of `length` characters: a capital letter, then capitals or digits.
+fn random_root(length: usize) -> Result<String> {
+    let mut root = String::with_capacity(length);
+    while root.len() < length {
+        let mut byte = [0_u8; 1];
+        getrandom::getrandom(&mut byte)
+            .map_err(|e| StoreError::Invalid(format!("no random numbers: {e}")))?;
+        let byte = usize::from(byte[0]);
+        if root.is_empty() {
+            // Rejection sampling keeps all 22 letters equally likely as the first character.
+            if byte < 242 {
+                root.push(char::from(ALPHABET[10 + byte % 22]));
+            }
+        } else {
+            root.push(char::from(ALPHABET[byte % 32]));
+        }
+    }
+    Ok(root)
 }
 
 /// Whether `root` is used by a ticket or an alias under any letter. Aliases are stored in
@@ -151,5 +182,26 @@ mod tests {
         let conn = crate::hub::open_in_memory().unwrap();
         let id = allocate(&conn, 'E').unwrap();
         assert!(id.starts_with('E') && id.len() == 5, "{id}");
+    }
+
+    /// Inserts a ticket for every four-character root, so `allocate` can only find a longer one.
+    #[test]
+    fn a_full_four_character_space_gives_five_character_roots() {
+        let conn = crate::hub::open_in_memory().unwrap();
+        conn.execute_batch(
+            "WITH RECURSIVE n(i) AS (SELECT 0 UNION ALL SELECT i + 1 FROM n WHERE i < 31),
+                  a(c, i) AS (SELECT substr('0123456789ABCDEFGHJKMNPQRSTVWXYZ', i + 1, 1), i
+                              FROM n)
+             INSERT INTO tickets (id, title, created_at, created_by, updated_at, version)
+             SELECT 'T' || w.c || x.c || y.c || z.c, 't', 'x', 'x', 'x', 1
+             FROM a w, a x, a y, a z WHERE w.i >= 10;",
+        )
+        .unwrap();
+        let id = allocate(&conn, 'T').unwrap();
+        assert_eq!(id.len(), 6, "{id}");
+        let root = &id[1..];
+        assert!(root.as_bytes()[0].is_ascii_uppercase(), "{id}");
+        assert!(root.bytes().all(|b| ALPHABET.contains(&b)), "{id}");
+        assert!(!taken(&conn, root).unwrap());
     }
 }

@@ -94,14 +94,16 @@ fn collect(chars: &[char]) -> String {
 }
 
 /// Whether `name` has the shape of the root ID of a meta-ticket or of a ticket Ignite filed on
-/// its own: `M`, `A` or `B` and four capitals or digits (`MAB12`, `AR2D2`, `BX9K2`), which ordinary words
-/// written in capitals rarely are.
+/// its own: `M`, `A` or `B` and four capitals or digits (`MAB12`, `AR2D2`, `BX9K2`), which
+/// ordinary words written in capitals rarely are. Roots grow longer once the four-character
+/// ones fill; a longer one must hold a digit (`AQ7XK2`), so words such as `ACTIVE` stay words.
 fn lettered_root(name: &str) -> bool {
-    name.len() == 5
+    (5..=9).contains(&name.len())
         && name.starts_with(['M', 'A', 'B'])
         && name
             .chars()
             .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit())
+        && (name.len() == 5 || name.chars().any(|c| c.is_ascii_digit()))
 }
 
 /// Calls `replace` on each ticket-like word of `text` and keeps the result. Bare names are
@@ -210,10 +212,14 @@ mod tests {
     #[test]
     fn automatic_and_meta_root_ids_are_found_but_other_capital_words_are_not() {
         let mut seen = Vec::new();
-        mentions("proj", "AR2D2 and MAB12 filed, ALL ACTIVE.", &mut |name| {
-            seen.push(name.to_owned());
-            name.to_owned()
-        });
-        assert_eq!(seen, ["AR2D2", "MAB12"]);
+        mentions(
+            "proj",
+            "AR2D2, MAB12 and AQ7XK2 filed, ALL ACTIVE BACKLOG.",
+            &mut |name| {
+                seen.push(name.to_owned());
+                name.to_owned()
+            },
+        );
+        assert_eq!(seen, ["AR2D2", "MAB12", "AQ7XK2"]);
     }
 }
