@@ -56,6 +56,12 @@ pub struct GateRun {
     /// What comparing the gate's failures with the tip the landing was rebased onto found, when
     /// they still refuse the landing.
     pub base: Option<String>,
+    /// Every failure fails at the landing's base as well, and that base is older than the tip.
+    /// A landing by verdict then rebases onto the tip and gates there, where a check failing at
+    /// the tip too is filed as a regression and left out. Telling the worker to sync instead
+    /// looped: `ignite sync` rebases onto green, which was the old base again, so the worker
+    /// released the ticket and the pool gave it to another worker, which redid the work.
+    pub fails_at_older_base: bool,
     /// The seconds the gate took, from opening the tree to its last check, which the `took`
     /// line splits into the stages recorded in `run.stages`.
     pub seconds: f64,
@@ -284,8 +290,7 @@ impl Checks {
             scoped,
             carried,
             known_failing: gate_plan.known_failing,
-            base: None,
-            seconds: 0.0,
+            ..GateRun::default()
         }
     }
 

@@ -15,7 +15,9 @@
 //!    `max_base_age_hours` ago is replaced: the ticket tree is rebased onto the tip for real.
 //! 3. Looks up the verdict for the tree, the base and the `[gate]` section. Without one, it
 //!    runs the gate in the ticket tree as it is, comparing a failure with the base (see
-//!    [`super::base`]), and stores the verdict when the gate passes.
+//!    [`super::base`]), and stores the verdict when the gate passes. When every failure fails
+//!    at a base older than the tip as well, the ticket tree is rebased onto the tip for real
+//!    and the gate runs again there, where such a check is filed as a regression and left out.
 //! 4. Rebases the change onto the tip in git's object database ([`Git::replay`]), takes the
 //!    lease, and pushes the rebased commit. When the tip moves, or the remote rejects the push,
 //!    it rebases again in the object database and runs nothing. A conflict exits with code 3.
@@ -247,22 +249,26 @@ impl Landing {
             }
         }
 
-        // Step 3: the verdict for the tree as it is now, or the gate run in it.
-        let key = VerdictKey {
-            tree: ctx.git.tree_id(&held.path).map_err(io)?,
-            base: at.onto.clone(),
-            settings: verdict_settings(&ctx.config),
-        };
-        let found = if reverted {
-            None
-        } else {
-            self.gate.verdict(ctx, &key)
-        };
-        let judged = if let Some(verdict) = found {
-            Judged::Reused {
-                age_s: ctx.clock.now().seconds_since(verdict.passed_at).max(0.0),
+        // Step 3: the verdict for the tree as it is now, or the gate run in it. When every
+        // failure fails at a base older than the tip as well, the ticket tree is rebased onto
+        // the tip for real and the gate runs there once more (see
+        // `GateRun::fails_at_older_base`).
+        let judged = loop {
+            let key = VerdictKey {
+                tree: ctx.git.tree_id(&held.path).map_err(io)?,
+                base: at.onto.clone(),
+                settings: verdict_settings(&ctx.config),
+            };
+            let found = if reverted {
+                None
+            } else {
+                self.gate.verdict(ctx, &key)
+            };
+            if let Some(verdict) = found {
+                break Judged::Reused {
+                    age_s: ctx.clock.now().seconds_since(verdict.passed_at).max(0.0),
+                };
             }
-        } else {
             let tree = GateTree {
                 tree: held.tree.clone(),
                 path: held.path.clone(),
@@ -290,6 +296,14 @@ impl Landing {
             if steps::stop_requested() {
                 return Err(stopped());
             }
+            if !gated.run.passed() && gated.fails_at_older_base && at.onto != tip {
+                steps::step(format!("rebasing onto {staging} {}", short(&tip)));
+                at = Self::rebase(ctx, held, &tip)?;
+                if at.head == at.onto {
+                    return Err(nothing_to_land(&staging));
+                }
+                continue;
+            }
             if !gated.run.passed() {
                 let failed = failed_gate(&staging, &at, &gated, &held.path);
                 let failed = timeline.onto(ctx.clock.now(), failed, gated.seconds);
@@ -302,10 +316,10 @@ impl Landing {
                 Ok(()) => "stored for this tree".to_owned(),
                 Err(error) => format!("not stored: {error}"),
             };
-            Judged::Ran {
+            break Judged::Ran {
                 gated: Box::new(gated),
                 stored,
-            }
+            };
         };
 
         // Step 4: rebase in the object database, take the lease, push; again when the tip moves.

@@ -407,20 +407,42 @@ fn a_failure_at_a_base_that_is_the_tip_is_filed_and_left_out() {
     assert_eq!(world.git.pushes().len(), 1);
 }
 
-/// When the base is older than the tip, the check may be fixed at the tip, so nothing is filed
-/// against the old base and the landing is refused with the advice to rebase.
+/// When the base is older than the tip and the check is fixed there, the landing rebases the
+/// ticket tree onto the tip, the gate passes there, and nothing is filed against the old base.
+/// It once refused and said to run `ignite sync`, which rebased onto the same old base, so
+/// workers released finished tickets and the pool handed them to new workers.
 #[test]
-fn a_failure_at_a_base_older_than_the_tip_files_nothing_and_says_to_sync() {
+fn a_failure_at_a_base_older_than_the_tip_rebases_and_lands_when_the_tip_fixed_it() {
     let world = broken_b();
     world.git.land_other(&[("b.txt", "broken")]);
     world.hold("tree-01", "t.1", "local_a", &[("a.txt", "mine")]);
     world.git.land_other(&[("b.txt", "fixed")]);
+    let tip = world.git.tip_now();
 
     let reply = world.land_as("tree-01", "local_a");
 
-    assert_eq!(reply.exit, Exit::CheckFailed, "{}", reply.text);
-    assert!(reply.text.contains("fails at the base"), "{}", reply.text);
-    assert!(reply.text.contains("`ignite sync`"), "{}", reply.text);
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    assert_eq!(base_of(&world), tip);
     assert!(world.hub.hub.regressions().is_empty());
-    assert!(world.git.pushes().is_empty());
+    assert_eq!(world.git.pushes().len(), 1);
+}
+
+/// When the check still fails at the tip, the landing rebases onto the tip, files the check as a
+/// regression there and leaves it out, as a strict landing does.
+#[test]
+fn a_failure_at_a_base_older_than_the_tip_that_still_fails_there_is_filed_and_left_out() {
+    let world = broken_b();
+    world.git.land_other(&[("b.txt", "broken")]);
+    world.hold("tree-01", "t.1", "local_a", &[("a.txt", "mine")]);
+    world.git.land_other(&[("c.txt", "later")]);
+    let tip = world.git.tip_now();
+
+    let reply = world.land_as("tree-01", "local_a");
+
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    assert_eq!(base_of(&world), tip);
+    let regressions = world.hub.hub.regressions();
+    assert_eq!(regressions.len(), 1, "{regressions:?}");
+    assert_eq!(regressions[0].first_bad, tip);
+    assert_eq!(world.git.pushes().len(), 1);
 }

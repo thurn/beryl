@@ -101,6 +101,7 @@ impl Landing {
                         at_base.join(", "),
                         short(&pass.rebased.onto)
                     ));
+                    gated.fails_at_older_base = true;
                     return gated;
                 }
             }

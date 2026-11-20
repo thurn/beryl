@@ -2214,9 +2214,12 @@ The steps, in order:
    the ticket tree as it is (see [The gate](#the-gate)), and store the verdict
    when it passes. A failure that the gate's rerun confirmed is compared with
    the base rather than the tip. A check that fails at the base too is filed as
-   a regression and left out only when the base is the tip; on an older base it
-   may be fixed at the tip, so nothing is filed and the reply says to run
-   `ignite sync` and land again.
+   a regression and left out only when the base is the tip. On an older base it
+   may be fixed at the tip, so nothing is filed against the old base: the ticket
+   tree is rebased onto the tip for real and the gate runs again there, where a
+   check that still fails is filed and left out. (The reply once said to run
+   `ignite sync`, which rebases onto `green`, often the same old base, so
+   workers released finished tickets and the pool gave them to new workers.)
 4. Rebase the commits onto the tip in git's object database (`Git::replay`),
    take the hub's short `staging` lease, check that the tip has not moved, write
    the landing record and push the rebased commit. When the tip moves or the
