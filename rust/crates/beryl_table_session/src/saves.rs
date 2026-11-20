@@ -143,12 +143,31 @@ impl Save {
         io::copy(&mut current, &mut staged)?;
         staged.as_file().sync_all()?;
 
-        // Windows requires both handles to the destination to be closed before
-        // persist can replace it. If replacement fails, continue with the old save.
         drop(current);
+        self.replace_save(staged, |staged, path| {
+            staged.persist(path).map_err(|error| error.error)
+        })?;
+        self.metadata.guest = Some(name.to_owned());
+        Ok(())
+    }
+
+    /// Replaces the save file with `staged` using `persist`, then keeps appending to the
+    /// replacement. If `persist` fails, reopens the old save at its end so appends continue.
+    ///
+    /// Windows requires every handle to the destination to be closed before a file can replace
+    /// it, so both handles are dropped first. `persist` is a parameter so that a test can make
+    /// the replacement fail on any operating system.
+    fn replace_save(
+        &mut self,
+        staged: tempfile::NamedTempFile,
+        persist: impl FnOnce(tempfile::NamedTempFile, &Path) -> io::Result<File>,
+    ) -> Result<(), SaveError> {
         drop(self.file.take());
-        match staged.persist(&self.path) {
-            Ok(file) => self.file = Some(file),
+        match persist(staged, &self.path) {
+            Ok(file) => {
+                self.file = Some(file);
+                Ok(())
+            }
             Err(error) => {
                 self.file = OpenOptions::new()
                     .read(true)
@@ -159,11 +178,9 @@ impl Save {
                         Ok(file)
                     })
                     .ok();
-                return Err(error.error.into());
+                Err(error.into())
             }
         }
-        self.metadata.guest = Some(name.to_owned());
-        Ok(())
     }
 }
 
@@ -244,10 +261,8 @@ fn read_header(mut reader: impl BufRead) -> Result<serde_json::Value, SaveError>
     Ok(serde_json::from_slice(&line)?)
 }
 
-#[cfg(all(test, windows))]
+#[cfg(test)]
 mod tests {
-    use std::os::windows::fs::OpenOptionsExt;
-
     use beryl_table::action::Adjustment;
     use beryl_table::{Action, Seat};
 
@@ -255,7 +270,6 @@ mod tests {
 
     #[test]
     fn failed_guest_reservation_preserves_the_log_and_allows_retry() {
-        const FILE_SHARE_READ_WRITE: u32 = 0x0003;
         let directory = tempfile::tempdir().unwrap();
         let mut table = Table::new(2);
         let mut log = Log::new(&table);
@@ -273,20 +287,17 @@ mod tests {
         save.append(entry).unwrap();
         let before = fs::read(&save.path).unwrap();
 
-        // Allow reads and writes to the original, but deny replacing it.
-        let reader = OpenOptions::new()
-            .read(true)
-            .share_mode(FILE_SHARE_READ_WRITE)
-            .open(&save.path)
-            .unwrap();
-        assert!(save.reserve_guest("Guest").is_err());
+        // Stage a replacement and make the replacement step fail, as Windows does while
+        // another handle holds the save open.
+        let staged = tempfile::NamedTempFile::new_in(directory.path()).unwrap();
+        let result = save.replace_save(staged, |_, _| Err(io::Error::other("denied")));
+        assert!(result.is_err());
         assert!(save.metadata.guest.is_none());
         assert_eq!(fs::read(&save.path).unwrap(), before);
         let entry = log
             .apply(&mut table, Seat(0), &action, &mut chance)
             .unwrap();
         save.append(entry).unwrap();
-        drop(reader);
 
         save.reserve_guest("Guest").unwrap();
         drop(save);
