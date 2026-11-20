@@ -57,7 +57,7 @@ pub(crate) struct GateView {
     /// Billions of instructions per second of wall time that the gate's check commands
     /// achieve, which converts `[gate] seconds` to instructions.
     pub rate: f64,
-    /// The checks the last passing gate of the same change chose by score, which count against
+    /// The checks the last gate of the same change chose by score, which count against
     /// the budget when cached (see `ignite_core::gate`).
     pub paid: BTreeSet<CheckName>,
 }

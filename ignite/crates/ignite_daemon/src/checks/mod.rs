@@ -370,6 +370,12 @@ impl std::ops::Deref for Checks {
 }
 
 impl Checks {
+    /// When `handle` began, from its row in the daemon's database; `None` when it has no row.
+    pub(crate) fn handle_began(&self, handle: &ignite_core::ids::Handle) -> Option<ignite_core::time::Timestamp> {
+        let row = ignite_store::local::handles::get(&self.cache.conn(), handle.as_str()).ok()??;
+        ignite_core::time::Timestamp::parse(&row.started_at).ok()
+    }
+
     pub fn new(
         settings: CheckSettings,
         cache: ResultCache,

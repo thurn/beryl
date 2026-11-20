@@ -626,10 +626,11 @@ fn a_client_hears_a_verb_processs_steps_and_gets_its_reply() {
     );
 }
 
-/// A verb process found dead when the daemon starts (its handle `running`, its lock free) is the
-/// only case in which the daemon runs the verb again itself, under the same handle.
+/// A verb process found dead when the daemon starts (its handle `running`, its lock free) has
+/// its verb run again under the same handle, in a new verb process, so that the run again
+/// outlives the daemon's next restart too.
 #[test]
-fn a_verb_process_found_dead_at_start_is_run_again_in_the_daemon() {
+fn a_verb_process_found_dead_at_start_is_run_again_in_a_new_one() {
     let machine = Machine::new("dead-at-start", false);
     let handle = {
         let handles = Handles::open(Arc::new(FakeClock::new(T0)), machine.db.clone()).unwrap();
@@ -643,14 +644,19 @@ fn a_verb_process_found_dead_at_start_is_run_again_in_the_daemon() {
     handle_store::set_process(&lock(&machine.db), handle.as_str(), &process).unwrap();
 
     let server = machine.daemon();
-    // The daemon's own launcher is a fake whose commands exit 0.
+    machine.switch.set(Some(server.clone()));
+    assert!(until(|| machine.commands.begun() == 1));
+    machine.commands.finish_all();
     assert_eq!(waited(&server, &handle).text, "test: Some(0)");
-    assert_eq!(machine.ran_in_daemon("test"), 1);
-    assert_eq!(machine.threads.started.load(Ordering::SeqCst), 0);
+    assert_eq!(
+        (machine.ran_in_process("test"), machine.ran_in_daemon("test")),
+        (1, 0)
+    );
+    assert_eq!(machine.threads.started.load(Ordering::SeqCst), 1);
     let row = handle_store::get(&lock(&machine.db), handle.as_str())
         .unwrap()
         .unwrap();
-    assert_eq!(row.pid, None, "the row no longer names the dead process");
+    assert_ne!(row.pid, Some(999_999), "the row no longer names the dead process");
 }
 
 /// A verb process that dies while the daemon runs is noticed, and its verb is run again in the

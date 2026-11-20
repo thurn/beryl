@@ -97,7 +97,7 @@ pub struct GateBudget {
     pub forced: (usize, f64),
     /// Answered from the cache, with what running them would have cost.
     pub cached: (usize, f64),
-    /// Billions of the budget an earlier passing gate of the same change spent on checks this
+    /// Billions of the budget an earlier gate of the same change spent on checks this
     /// gate answered from the cache (see `ignite_core::gate`).
     pub paid: f64,
     /// Left to tip verification because the budget was spent.
@@ -243,7 +243,7 @@ impl Checks {
         let hits = self.lookup(&prepared, options);
         let mut view = gate_view_of(self, ctx, tree, &prepared, &hits, &changed);
         landing_view(&mut view, options, excused);
-        let gate_plan = view.plan(&ctx.config.gate);
+        let gate_plan = self.remember_choice(ctx, &changed, view.plan(&ctx.config.gate));
         // The products never built before the gate started, so the `build` line can name a
         // cold build even when listing a family made the product.
         let budget = gate_budget(&view.budget(&ctx.config.gate), &gate_plan, unbuilt.clone());
@@ -275,7 +275,7 @@ impl Checks {
         let running = Stopwatch::start(ctx);
         self.run_families(ctx, tree, families, options, &mut run);
         run.stage(ctx, "running", running);
-        self.remember(ctx, &changed, &gate_plan, &run, running.seconds(ctx));
+        self.remember_rate(ctx, &gate_plan, &run, running.seconds(ctx));
         GateRun {
             run,
             left: gate_plan.past_budget.len() + gate_plan.cold.len() + gate_plan.tip.len(),
@@ -312,10 +312,39 @@ impl Checks {
         }
     }
 
+    /// Remembers what `gate_plan` chose by score, before any of it runs, so the change's next
+    /// gate spends no second budget (see `spent`), and returns the plan.
+    ///
+    /// The choice is remembered whatever becomes of the run. It was once remembered only when
+    /// the gate passed, and on 2026-11-20 neither the two `ignite check`s of a one-card comment
+    /// change nor its first landing passed, because a file was missing from the machine's cache.
+    /// The landing was cut off by daemon restarts and run again five times in 13 minutes, and
+    /// each run found the checks the run before had finished in the cache, where they cost
+    /// nothing, and spent a fresh budget on the next checks by score: about 2,100 checks and two
+    /// builds of a product the change does not touch. The landing after it ran 1,685 more
+    /// checks for the same reason.
+    fn remember_choice(
+        &self,
+        ctx: &Context,
+        changed: &[String],
+        gate_plan: ignite_core::gate::GatePlan,
+    ) -> ignite_core::gate::GatePlan {
+        use ignite_core::gate::Why;
+        let chosen: BTreeSet<CheckName> = gate_plan
+            .run
+            .iter()
+            .chain(&gate_plan.cached)
+            .filter(|planned| planned.why == Why::Scored)
+            .map(|planned| planned.check.clone())
+            .collect();
+        let conn = self.cache.conn();
+        super::spent::GateMemory(&conn).chose(ctx.clock.now(), changed, &chosen);
+        gate_plan
+    }
+
     /// Remembers the rate the gate's check commands achieved over `running_s`, the seconds the
     /// running stage took, so the next budget's seconds convert at the load of the moment (see
-    /// `spent`). When the gate passed, it also remembers what it chose by score, so the
-    /// change's next gate spends no second budget.
+    /// `spent`).
     ///
     /// The rate is taken from every gate that ran all it chose, which is one where no check
     /// failed, since a failure stops the rest. On 2026-11-19 two gates of a one-card change
@@ -325,35 +354,21 @@ impl Checks {
     /// budget. The seconds are those that passed while the families ran at once, not the sum
     /// of their commands' seconds, which was 512 s in that gate, because the budget is
     /// seconds of waiting.
-    fn remember(
+    fn remember_rate(
         &self,
         ctx: &Context,
-        changed: &[String],
         gate_plan: &ignite_core::gate::GatePlan,
         run: &CheckRun,
         running_s: f64,
     ) {
-        use ignite_core::gate::Why;
-        let conn = self.cache.conn();
-        let memory = super::spent::GateMemory(&conn);
         let ran_all = run.build_failures.is_empty()
             && run.skipped == 0
             && !run.outcomes.iter().any(|(_, o)| *o == Outcome::Fail);
         if ran_all {
+            let conn = self.cache.conn();
             let billions = gate_plan.scored_cost + gate_plan.forced_cost;
-            memory.observe(ctx.clock.now(), billions, running_s);
+            super::spent::GateMemory(&conn).observe(ctx.clock.now(), billions, running_s);
         }
-        if !run.passed() {
-            return;
-        }
-        let chosen: BTreeSet<CheckName> = gate_plan
-            .run
-            .iter()
-            .chain(&gate_plan.cached)
-            .filter(|planned| planned.why == Why::Scored)
-            .map(|planned| planned.check.clone())
-            .collect();
-        memory.passed(ctx.clock.now(), changed, &chosen);
     }
 
     /// Splits the families the change can affect into those to judge again and the names of

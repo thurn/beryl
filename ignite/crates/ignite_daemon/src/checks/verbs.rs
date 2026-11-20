@@ -471,7 +471,7 @@ pub(super) fn gate_view_of(
     let mut view = GateView::new(prepared, hits, family, &stats, &regressions, changed, areas);
     view.unbuilt = unbuilt(ctx, tree, prepared.iter().filter_map(|p| family(&p.family)));
     // The rate of the gates of the last hour on this daemon, or the hub's for the day, and the
-    // checks the change's last passing gate chose (see `spent`).
+    // checks the change's last gate chose (see `spent`).
     let daily = plan::class_rates(ctx).land();
     let conn = checks.cache.conn();
     let memory = super::spent::GateMemory(&conn);

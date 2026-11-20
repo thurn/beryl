@@ -281,6 +281,13 @@ impl Host {
         }
     }
 
+    /// A new verb process runs `handle`'s verb again after [`Host::hand_back`]: the host serves
+    /// its calls and keeps an activity for it again. The earlier process's watch ends, since its
+    /// activity is no longer the handle's.
+    pub fn take_on(&self, handle: &Handle) {
+        crate::handles::lock(&self.handed_back).remove(handle);
+    }
+
     fn is_handed_back(&self, handle: &Handle) -> bool {
         crate::handles::lock(&self.handed_back).contains(handle)
     }

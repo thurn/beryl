@@ -120,7 +120,7 @@ fn the_formatters_run_once_however_many_passes_the_landing_takes() {
     let reply = world.land_as("tree-01", "local_a");
 
     assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
-    assert!(reply.text.contains("landed on pass 2"), "{}", reply.text);
+    assert!(reply.text.contains("in pass 2 ("), "{}", reply.text);
     assert_eq!(format.given.lock().unwrap().len(), 1);
     let pushes = world.git.pushes();
     let repo = world.git.repo.lock().unwrap();

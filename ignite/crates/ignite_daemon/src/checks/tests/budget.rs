@@ -230,3 +230,42 @@ fn a_second_gate_of_the_same_change_spends_no_second_budget() {
         "{text}"
     );
 }
+
+/// A gate that fails still fixes what the change's next gate spends. On 2026-11-20 a change's
+/// gates kept failing on a file missing from the machine's cache, and each one found the checks
+/// the last had finished in the cache, at no cost, and spent a fresh budget on the next ones by
+/// score. The second gate here charges and answers only what the first one chose.
+#[test]
+fn a_gate_after_a_failed_gate_of_the_same_change_spends_no_second_budget() {
+    let names: Vec<String> = (0..9).map(|i| format!("unit:c{i}")).collect();
+    let mut history = FakeHistory::default();
+    history.replies.insert(
+        "unit".to_owned(),
+        CheckStatsReply {
+            startup_billions: None,
+            startup_cpu_s: None,
+            family: "unit".to_owned(),
+            family_rate: 0.01,
+            checks: (0..9u32)
+                .map(|i| stats(&names[i as usize], 9 - i, 350.0))
+                .collect(),
+        },
+    );
+    let mut world = world(&family("unit", "", false), &["src/a.py"], history);
+    world.ctx.config.gate.threshold = 1e-6;
+    list(&world, &names);
+    world
+        .launcher
+        .script("unit:c2", &[Some("fail"), Some("fail")]);
+
+    let first = world.checks.gate(&world.ctx, &tree(), &landing());
+    assert!(!first.run.passed(), "{first:?}");
+    assert_eq!(first.left, 6);
+
+    let second = world.checks.gate(&world.ctx, &tree(), &landing());
+
+    // The failure is cached as well, so the second gate charges all three again.
+    assert_eq!(second.run.ran + second.run.from_cache, 3, "{second:?}");
+    assert_eq!(second.left, 6, "{second:?}");
+    assert!((second.budget.unwrap().paid - 1050.0).abs() < 1e-6);
+}

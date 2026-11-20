@@ -217,7 +217,7 @@ fn two_landings_on_one_tip_both_land_and_the_second_reruns_only_checks_reading_b
 
     assert_eq!(first.exit, Exit::Success, "{}", first.text);
     assert_eq!(second.exit, Exit::Success, "{}", second.text);
-    assert!(second.text.contains("landed on pass 2"), "{}", second.text);
+    assert!(second.text.contains("in pass 2 ("), "{}", second.text);
     let passes = world.gate.passes.lock().unwrap().clone();
     assert_eq!(passes.len(), 3, "{passes:?}");
     assert_eq!(passes[2], ["unit:both"]);
@@ -276,7 +276,7 @@ fn a_landing_that_loses_races_never_holds_the_lease_through_a_gate() {
         ["landed", "landed", "landed", "landed"]
     );
     assert_eq!(world.gate.passes.lock().unwrap().len(), 5);
-    assert!(reply.text.contains("landed on pass 5"), "{}", reply.text);
+    assert!(reply.text.contains("in pass 5 ("), "{}", reply.text);
     assert_eq!(world.git.pushes().len(), 1);
     assert_eq!(world.hub.holder("staging"), None);
 }

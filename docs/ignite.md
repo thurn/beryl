@@ -764,8 +764,15 @@ How a restart is survived:
   to 563 seconds during bursts of landings. A landing whose push has begun
   refuses to stop and finishes under its build, since a push cut short may or
   may not have reached the remote. One that stops gives back its cores, lease
-  and tree, and once its process has ended the daemon runs it again itself under
-  the same handle, with the same request, so the same note and session. A
+  and tree, and once its process has ended the daemon runs it again under the
+  same handle, with the same request, so the same note and session. The run
+  again starts in a new verb process, as does the run of any verb whose process
+  died while no daemon ran, so it outlives the next restart too. On 2026-11-20 a
+  landing run again on a thread of the daemon was cut off by each of the four
+  restarts that followed in 13 minutes, since a restart waits only for landings
+  whose code its release changes, and each run started its gate over. A verb
+  process that dies while the daemon runs is run again on a thread of the
+  daemon instead, so a process that dies at once cannot start another forever. A
   landing that agreed to stop and is still running 60 seconds later has its verb
   process ended, as `ignite stop` ends one. The stopped reply never reaches the
   session: its `ignite wait` keeps waiting and gets the new run's reply, and a
@@ -1696,8 +1703,13 @@ The gate's budget belongs to the change, not to each command that gates it.
 The land found the checks the check had chosen in the cache, where they cost
 nothing, and spent a fresh budget on the next slice of checks with lower scores.
 For a one-line comment in a card file that was 398 more checks and 173 more
-seconds. Each daemon now remembers, for each change, the checks its last passing
-gate chose by score. A change is known by its own files: the paths that differ
+seconds. Each daemon now remembers, for each change, the checks its last gate
+chose by score. It remembers them once the gate has planned, before anything
+runs, so a gate that fails or is cut off by a daemon restart still fixes what
+the next gate of the change spends. On 2026-11-20 the two checks and the first
+landing of a one-card change all failed on a file missing from the machine's
+cache, so no gate of it was remembered, and each gate spent a fresh budget: its
+two landings ran about 3,800 checks. A change is known by its own files: the paths that differ
 from `staging`. A later gate of the change charges its budget for those checks
 when it answers them from the cache, with their families' start-ups, as if it
 had run them. So a gate of an unchanged change chooses the same checks and runs
@@ -1938,6 +1950,13 @@ The gate stops at the first fault it knows of:
   each of its two products only when the listing reached the family that needed
   it, ran its families one after another for 123 s, and its output accounted for
   164 s.
+- A landing's reply, landed or refused, adds a `pass` line for each pass that
+  did not land, with its seconds and why it ended (the tip moved, the lease was
+  lost, the push was refused), and a `landing` line with the seconds since its
+  handle began, split into earlier runs that daemon restarts cut off, the passes
+  before the last and the last pass, whose gate is the one the `took` line
+  splits. On 2026-11-20 a landing ran for 13.4 minutes and its reply said only
+  `took 28 s`.
 - When judging scope, `crate-closure` stands for the packages the family's
   listed checks belong to. In a listing hash it stands for the packages of the
   workspaces the family's other inputs reach into, so a change to Ignite's own

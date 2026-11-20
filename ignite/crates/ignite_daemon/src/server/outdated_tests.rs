@@ -74,8 +74,8 @@ fn a_landing_waiting_under_an_old_build_runs_again_under_the_new_one() {
             machine.ran_in_process("land"),
             machine.ran_in_daemon("land")
         ),
-        (1, 1),
-        "the landing ran again in the new daemon"
+        (2, 0),
+        "the landing ran again in a new verb process, which outlives the next restart"
     );
     assert_eq!(
         (
@@ -87,10 +87,9 @@ fn a_landing_waiting_under_an_old_build_runs_again_under_the_new_one() {
     let row = handle_store::get(&lock(&machine.db), land.as_str())
         .unwrap()
         .unwrap();
-    assert_eq!(
-        (row.state.as_str(), row.executable.as_deref()),
-        ("done", None)
-    );
+    // The new verb process recorded its own executable; the fake processes all report the
+    // old build's commit, so only the state is compared.
+    assert_eq!(row.state.as_str(), "done");
 }
 
 /// A landing whose push has begun under build A refuses the stop and finishes there.
@@ -185,7 +184,7 @@ fn a_landing_runs_again_when_the_release_changed_landing_code() {
     assert!(until(|| machine.switch.stops.load(Ordering::SeqCst) >= 2));
     machine.commands.finish_all();
     assert_eq!(waited(&second, &land).text, "land: Some(0)");
-    assert_eq!(machine.ran_in_daemon("land"), 1);
+    assert_eq!(machine.ran_in_process("land"), 2);
 }
 
 /// Ends a verb process as the native ender would, by letting its command finish so that it
@@ -228,7 +227,7 @@ fn a_landing_that_does_not_stop_when_asked_is_ended_and_runs_again() {
             machine.ran_in_process("land"),
             machine.ran_in_daemon("land")
         ),
-        (1, 1),
-        "the landing ran again in the new daemon"
+        (2, 0),
+        "the landing ran again in a new verb process, which outlives the next restart"
     );
 }

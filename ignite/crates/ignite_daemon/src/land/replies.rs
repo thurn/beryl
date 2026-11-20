@@ -126,26 +126,19 @@ impl Landing {
                     summary.landed_since
                 ),
             ));
-            if summary.passes > 1 {
-                lines.push(line(
-                    "raced",
-                    format!(
-                        "the tip moved during {} passes; landed on pass {}",
-                        summary.passes - 1,
-                        summary.passes
-                    ),
-                ));
-            }
             if let Some(formatted) = &summary.formatted {
                 lines.extend(formatted.line());
                 lines.extend(formatted.warnings());
             }
-            if let Some(run) = &summary.express {
+            let gate_s = if let Some(run) = &summary.express {
                 lines.push(run.line());
+                run.ran.iter().map(|(_, seconds)| seconds).sum()
             } else {
                 lines.extend(built_lines(&summary.gated.run));
                 lines.extend(gate_lines(&summary.gated));
-            }
+                summary.gated.seconds
+            };
+            lines.extend(summary.timeline.lines(ctx.clock.now(), gate_s));
         }
         lines.push(line(
             "landed",
@@ -198,6 +191,7 @@ impl Landing {
                 "express": summary.is_some_and(|s| s.express.is_some()),
                 "formatted": summary.and_then(|s| s.formatted.as_ref()).and_then(|f| f.commit.clone()),
                 "express_carried": summary.is_some_and(|s| s.express.as_ref().is_some_and(|r| r.carried)),
+                "landing": summary.map(|s| s.timeline.json(ctx.clock.now())),
             })),
             handle: None,
         }

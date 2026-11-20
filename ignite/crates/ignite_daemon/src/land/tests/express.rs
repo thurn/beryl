@@ -270,7 +270,7 @@ fn an_express_pass_that_lost_the_race_to_unrelated_files_pushes_without_running_
     let reply = world.land_as("tree-01", "local_a");
 
     assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
-    assert!(reply.text.contains("landed on pass 2"), "{}", reply.text);
+    assert!(reply.text.contains("in pass 2 ("), "{}", reply.text);
     assert_eq!(lane.trees.lock().unwrap().len(), 1);
     assert!(
         reply.text.contains("cores, on an earlier pass"),
@@ -294,7 +294,7 @@ fn an_express_pass_that_lost_the_race_to_a_lock_file_change_runs_the_commands_ag
     let reply = world.land_as("tree-01", "local_a");
 
     assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
-    assert!(reply.text.contains("landed on pass 2"), "{}", reply.text);
+    assert!(reply.text.contains("in pass 2 ("), "{}", reply.text);
     assert_eq!(lane.trees.lock().unwrap().len(), 2);
     assert!(!reply.text.contains("earlier pass"), "{}", reply.text);
 }

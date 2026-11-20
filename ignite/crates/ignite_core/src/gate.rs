@@ -23,7 +23,7 @@
 //!   with their summed cost, and are chosen or left together.
 //!   A member that must run anyway (always, edited or being fixed) leaves its group first.
 //! - A chosen check whose result is cached is answered from the cache and costs nothing against
-//!   the budget, unless an earlier passing gate of the same change chose it by score
+//!   the budget, unless an earlier gate of the same change chose it by score
 //!   ([`GateInput::paid`]). That gate already spent the change's budget on it, so the check
 //!   counts against this gate's budget as well, with its family's start-up, and a second gate
 //!   of an unchanged change (`ignite check` and then `ignite land`) chooses the same checks
@@ -91,7 +91,7 @@ pub struct GateInput<'a> {
     pub unbuilt: &'a BTreeSet<String>,
     /// The ticket being landed.
     pub landing: Option<&'a TicketId>,
-    /// The checks an earlier passing gate of the same change chose by score. The budget belongs
+    /// The checks an earlier gate of the same change chose by score. The budget belongs
     /// to the change, not to each gate: such a check, when cached, still counts against it.
     pub paid: &'a BTreeSet<CheckName>,
     /// The rate at which a cost known only in CPU seconds converts to billions of instructions
@@ -156,7 +156,7 @@ pub struct GatePlan {
     /// Billions of instructions the always set and the other checks that must run spend, with
     /// the start-ups of their families.
     pub forced_cost: f64,
-    /// Billions of the budget that an earlier passing gate of the same change spent on checks
+    /// Billions of the budget that an earlier gate of the same change spent on checks
     /// chosen by score that this gate answers from the cache, with their families' start-ups
     /// ([`GateInput::paid`]).
     pub paid_cost: f64,

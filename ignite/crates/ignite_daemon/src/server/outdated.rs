@@ -28,7 +28,7 @@
 //! A landing that stops unwinds as from a failure, giving back its cores, lease and landing tree.
 //! Its `stopped` reply is not handed to whoever waits on the handle ([`Handles::hold_stopped`]):
 //! once the verb process has ended, the daemon makes the handle's row `running` again with the
-//! same request, so the same note and session, and runs the landing again on a thread of its own
+//! same request, so the same note and session, and runs the landing again in a new verb process
 //! under the same handle (see `server/resume.rs`). The session's `ignite wait` on the handle goes
 //! on waiting and gets the new run's reply; a wait that ends first says, in a `restart` line, that
 //! the landing was restarted under the new build.
@@ -65,8 +65,8 @@ const UNKNOWN_VERSION: &str = "unknown";
 
 impl Server {
     /// For a verb process the restarted daemon found alive: when it runs a landing under another
-    /// build than the daemon's own and agrees to stop, asks it to stop and returns true; a thread
-    /// then runs the landing again under the same handle once the process has ended. False
+    /// build than the daemon's own and agrees to stop, asks it to stop and returns true; once the
+    /// process has ended, a new verb process runs the landing again under the same handle. False
     /// otherwise, as when its push has begun: the caller goes on watching the process.
     pub(super) fn restart_if_outdated(
         &self,
@@ -203,7 +203,7 @@ fn run_again_once_ended(
     host.hand_back(handle);
     shared.handles.reopen(handle, &request);
     shared.handles.release_hold(handle, true);
-    super::resume::run_again(shared, handle, verb, Ok((rerun, request)));
+    super::resume::run_again(shared, handle, verb, Ok((rerun, request)), true);
 }
 
 /// Whether a landing started under the build `old` would run other landing code under `own`

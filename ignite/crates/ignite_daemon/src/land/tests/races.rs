@@ -36,7 +36,7 @@ fn a_lost_race_whose_landed_commits_touch_no_gated_input_pushes_without_a_second
     let reply = world.land_as("tree-01", "local_a");
 
     assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
-    assert!(reply.text.contains("landed on pass 2"), "{}", reply.text);
+    assert!(reply.text.contains("in pass 2 ("), "{}", reply.text);
     assert!(reply.text.contains("carried  2 families"), "{}", reply.text);
     assert_eq!(judged(&world).len(), 1, "{:?}", judged(&world));
     let pushes = world.git.pushes();
@@ -56,7 +56,7 @@ fn a_lost_race_judges_again_only_the_families_the_landed_commits_touch() {
     let reply = world.land_as("tree-01", "local_a");
 
     assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
-    assert!(reply.text.contains("landed on pass 2"), "{}", reply.text);
+    assert!(reply.text.contains("in pass 2 ("), "{}", reply.text);
     let judged = judged(&world);
     assert_eq!(judged.len(), 2, "{judged:?}");
     assert_eq!(judged[0].1, ["fa", "fb"]);
@@ -85,7 +85,7 @@ fn a_landing_keeps_its_landing_tree_across_passes() {
     let reply = world.land_as("tree-01", "local_a");
 
     assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
-    assert!(reply.text.contains("landed on pass 2"), "{}", reply.text);
+    assert!(reply.text.contains("in pass 2 ("), "{}", reply.text);
     let leased = world.trees.leased.lock().unwrap().clone();
     assert_eq!(leased.len(), 1, "{leased:?}");
     let path = PathBuf::from(format!("/trees/{}", leased[0]));

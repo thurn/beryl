@@ -599,5 +599,10 @@
     "label": "A comment edit in one card file no longer recompiles the search crate and everything above it (about 150 CPU-seconds with beryl_session and beryl_cli), because beryl_search takes its card names from a new crate, beryl_card_names, built from the card store alone, and depends on beryl_cards only for its tests",
     "metric": "machine.queued-core-hours-per-day",
     "expect": "down"
+  },
+  {
+    "label": "A landing that a daemon restart runs again starts in a new verb process, which outlives the next restart, and the gate remembers the checks it chose as soon as it plans them, not only when it passes, so a landing after failed or cut-off gates of the same change spends no fresh budget (on 2026-11-20 a one-card landing was cut off five times in 13 minutes and ran about 2,100 checks, then its retry ran 1,685 more)",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

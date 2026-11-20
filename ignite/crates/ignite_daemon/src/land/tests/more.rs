@@ -80,7 +80,7 @@ fn a_lease_taken_over_before_the_push_makes_the_landing_start_again() {
     let reply = world.land_as("tree-01", "local_a");
 
     assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
-    assert!(reply.text.contains("landed on pass 2"), "{}", reply.text);
+    assert!(reply.text.contains("in pass 2 ("), "{}", reply.text);
     // It pushed once, and only with a lease of its own; the thief's lease was left alone.
     assert_eq!(world.git.pushes().len(), 1);
     assert_eq!(world.hub.holder("staging"), None);

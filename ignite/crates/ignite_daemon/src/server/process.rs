@@ -248,6 +248,9 @@ pub(super) struct Shared {
     pub(super) watch: Duration,
     /// Gone once the server is dropped, as when a test restarts it.
     pub(super) server: Weak<()>,
+    /// Starts verb processes, and the verbs that run in them; `None` for a server without
+    /// verb processes.
+    pub(super) starter: Option<(Arc<dyn VerbStarter>, BTreeSet<String>)>,
 }
 
 /// The reply to a request sent while the daemon is about to restart: nothing was started, and
@@ -298,6 +301,10 @@ impl Server {
                 .as_ref()
                 .map_or(Duration::from_secs(1), |p| p.watch),
             server: Arc::downgrade(&self.token),
+            starter: self
+                .processes
+                .as_ref()
+                .map(|p| (p.starter.clone(), p.verbs.clone())),
         }
     }
 
@@ -406,25 +413,9 @@ impl Server {
     /// Starts `handle`'s verb process and waits until it holds its lock, or has exited, or
     /// [`LOCK_WAIT`] has passed.
     fn start_process(&self, handle: &Handle) -> io::Result<Box<dyn VerbChild>> {
-        let processes = self
-            .processes
-            .as_ref()
-            .expect("only a server with verb processes starts one");
-        // Counted while it starts, so a restart waits until the process holds its lock: a
-        // daemon that started in between would take it for a dead one and run it twice.
-        self.running.fetch_add(1, Ordering::SeqCst);
-        let started = processes.starter.start(handle).map(|mut child| {
-            let since = Instant::now();
-            while !crate::verbproc::alive(&processes.home, handle)
-                && !child.exited()
-                && since.elapsed() < LOCK_WAIT
-            {
-                std::thread::sleep(Duration::from_millis(5));
-            }
-            child
-        });
-        self.running.fetch_sub(1, Ordering::SeqCst);
-        started
+        self.shared()
+            .start_process(handle)
+            .expect("only a server with verb processes starts one")
     }
 
     /// Starts the internal verb that `req` names for a loop of the daemon and returns its handle
@@ -547,6 +538,34 @@ fn req_wait_s(wait: Duration) -> u32 {
 }
 
 impl Shared {
+    /// Starts `handle`'s verb process and waits until it holds its lock, or has exited, or
+    /// [`LOCK_WAIT`] has passed. `None` for a server without verb processes.
+    pub(super) fn start_process(&self, handle: &Handle) -> Option<io::Result<Box<dyn VerbChild>>> {
+        let (starter, _) = self.starter.as_ref()?;
+        // Counted while it starts, so a restart waits until the process holds its lock: a
+        // daemon that started in between would take it for a dead one and run it twice.
+        self.running.fetch_add(1, Ordering::SeqCst);
+        let process = starter.start(handle).map(|mut child| {
+            let since = Instant::now();
+            while !crate::verbproc::alive(&self.home, handle)
+                && !child.exited()
+                && since.elapsed() < LOCK_WAIT
+            {
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            child
+        });
+        self.running.fetch_sub(1, Ordering::SeqCst);
+        Some(process)
+    }
+
+    /// Whether `verb` runs in a verb process.
+    pub(super) fn runs_in_process(&self, verb: &str) -> bool {
+        self.starter
+            .as_ref()
+            .is_some_and(|(_, verbs)| verbs.contains(verb))
+    }
+
     pub(super) fn row(&self, handle: &Handle) -> Option<ignite_store::local::rows::Handle> {
         let db = self.db.as_ref()?;
         handle_store::get(&lock(db), handle.as_str()).ok().flatten()
@@ -609,7 +628,7 @@ impl Shared {
 
 /// Watches `handle`'s verb process until its handle finishes; runs the verb again with `rerun`,
 /// or ends it `incomplete` without one, if the process ends first.
-fn watch(
+pub(super) fn watch(
     shared: Shared,
     handle: &Handle,
     mut child: Option<Box<dyn VerbChild>>,
@@ -659,7 +678,15 @@ fn died(shared: &Shared, handle: &Handle, rerun: Option<Arc<dyn Verb>>) {
     eprintln!("ignite: the verb process of `ignite {verb}` ({handle}) ended without a reply");
     shared.bury(handle);
     let rerun = rerun.ok_or("it cannot be run again safely");
-    super::resume::run_again(shared, handle, &verb, rerun.map(|verb| (verb, request)));
+    // On a thread of the daemon: a verb process that died under a running daemon may die again
+    // the same way, and starting another each time would never end.
+    super::resume::run_again(
+        shared,
+        handle,
+        &verb,
+        rerun.map(|verb| (verb, request)),
+        false,
+    );
 }
 
 #[cfg(all(test, unix))]

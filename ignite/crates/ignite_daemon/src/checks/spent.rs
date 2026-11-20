@@ -1,5 +1,5 @@
 //! What the landing gate remembers from one gate to the next on this daemon: the checks each
-//! change's last passing gate chose by score, and the rate the gate's check commands achieved
+//! change's last gate chose by score, and the rate the gate's check commands achieved
 //! lately (see "Where regression checks run" in `docs/ignite.md`).
 //!
 //! - The budget belongs to the change, not to each command. On 2026-11-19 an `ignite check` of
@@ -7,8 +7,10 @@
 //!   `ignite land` that followed, on the same content, ran 398 more: the checks the check had
 //!   chosen were now cached, so they cost nothing, and the land spent a fresh budget on the
 //!   next slice of checks with lower scores. A gate now passes the planner the checks the last
-//!   passing gate of the same change chose by score ([`GateMemory::paid`]), and those, when
-//!   cached, count against its budget again (see `ignite_core::gate`).
+//!   gate of the same change chose by score ([`GateMemory::paid`]), and those, when cached,
+//!   count against its budget again (see `ignite_core::gate`). The choice is remembered when
+//!   the gate has planned, before anything runs, so a gate that failed or was cut off by a
+//!   restart of the daemon still fixes what the next one spends.
 //! - A change is known by its own files, the paths that differ from `staging`, sorted. A
 //!   rebase over commits that touch other files keeps them, so a landing after `ignite check`
 //!   finds what the check chose. A check another change chose is only charged when cached for
@@ -53,8 +55,8 @@ const RATE_RANGE: (f64, f64) = (0.1, 2.0);
 pub(crate) struct GateMemory<'a>(pub &'a Connection);
 
 impl GateMemory<'_> {
-    /// The checks the last passing gate of the change whose own files are `changed` chose by
-    /// score; none for a change no gate here has passed.
+    /// The checks the last gate of the change whose own files are `changed` chose by score; none
+    /// for a change no gate here has planned.
     pub(crate) fn paid(&self, changed: &[String]) -> BTreeSet<CheckName> {
         match gate_memory::chosen(self.0, &key(changed)) {
             Ok(checks) => checks
@@ -69,9 +71,9 @@ impl GateMemory<'_> {
         }
     }
 
-    /// Remembers `chosen`, the checks a passing gate of the change whose own files are
-    /// `changed` chose by score at `now`, in place of what an earlier gate of it chose.
-    pub(crate) fn passed(&self, now: Timestamp, changed: &[String], chosen: &BTreeSet<CheckName>) {
+    /// Remembers `chosen`, the checks a gate of the change whose own files are `changed` chose
+    /// by score at `now`, in place of what an earlier gate of it chose.
+    pub(crate) fn chose(&self, now: Timestamp, changed: &[String], chosen: &BTreeSet<CheckName>) {
         let checks: Vec<String> = chosen.iter().map(ToString::to_string).collect();
         let recorded = gate_memory::record_chosen(
             self.0,
@@ -165,11 +167,11 @@ mod tests {
         let conn = open_in_memory().unwrap();
         let memory = GateMemory(&conn);
         let a = ["src/b.rs".to_owned(), "src/a.rs".to_owned()];
-        memory.passed(at(0.0), &a, &BTreeSet::from([check("unit:x")]));
+        memory.chose(at(0.0), &a, &BTreeSet::from([check("unit:x")]));
         let reordered = ["src/a.rs".to_owned(), "src/b.rs".to_owned()];
         assert_eq!(memory.paid(&reordered), BTreeSet::from([check("unit:x")]));
         assert!(memory.paid(&["src/a.rs".to_owned()]).is_empty());
-        memory.passed(at(1.0), &a, &BTreeSet::from([check("unit:y")]));
+        memory.chose(at(1.0), &a, &BTreeSet::from([check("unit:y")]));
         assert_eq!(memory.paid(&a), BTreeSet::from([check("unit:y")]));
     }
 
@@ -220,7 +222,7 @@ mod tests {
         {
             let first = ignite_store::local::open(&path).unwrap();
             let memory = GateMemory(&first);
-            memory.passed(at(0.0), &changed, &BTreeSet::from([check("unit:x")]));
+            memory.chose(at(0.0), &changed, &BTreeSet::from([check("unit:x")]));
             memory.observe(at(0.0), 469.0, 173.0);
         }
         let land = ignite_store::local::open(&path).unwrap();

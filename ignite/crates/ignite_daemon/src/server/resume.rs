@@ -6,7 +6,11 @@
 //! that started it, before it began, so the new daemon finds those handles still `running` in
 //! the local database and, for each:
 //!
-//! - runs the verb again under the same handle if it is [resumable](super::Registry::register_resumable).
+//! - runs the verb again under the same handle if it is [resumable](super::Registry::register_resumable),
+//!   in a new verb process when the verb runs in one, so the run again outlives the next restart
+//!   too. On 2026-11-20 a landing run again on a thread of the daemon was cut off by each of the
+//!   four restarts that followed within 13 minutes, since a restart waits only for landings whose
+//!   code its release changes, and each run started its gate over.
 //!   Its checks that finished come back from the result cache, and each command that was still
 //!   running is taken over from its supervisor instead of being started again (see
 //!   [`crate::adopt`]), so the run finishes as the old daemon's would have: results stored once,
@@ -64,19 +68,22 @@ impl Server {
                 (_, None) => Err("it cannot be run again safely"),
                 (None, Some(_)) => Err("the request that started it was not recorded"),
             };
-            run_again(&shared, &handle, &verb, runs);
+            run_again(&shared, &handle, &verb, runs, true);
         }
     }
 }
 
-/// Runs `verb` again on a thread of the daemon under `handle`, with the request that started
-/// it, as for a verb the previous daemon was cut off in, or ends the handle `incomplete` for
-/// the reason given instead.
+/// Runs `verb` again under `handle`, with the request that started it, as for a verb the
+/// previous daemon was cut off in, or ends the handle `incomplete` for the reason given instead.
+/// With `in_process`, a verb that runs in a verb process runs again in a new one, which outlives
+/// the daemon's next restart; otherwise, or when no verb process can be started, it runs on a
+/// thread of the daemon.
 pub(super) fn run_again(
     shared: &Shared,
     handle: &Handle,
     verb: &str,
     runs: Result<(Arc<dyn Verb>, Request), &str>,
+    in_process: bool,
 ) {
     let (runs, request) = match runs {
         Ok(found) => found,
@@ -88,6 +95,34 @@ pub(super) fn run_again(
         }
     };
     eprintln!("ignite: running `ignite {verb}` ({handle}) again after the restart");
+    if in_process && shared.runs_in_process(verb) {
+        // The host serves the new process, though an earlier one of the handle was handed back.
+        if let Some(host) = &shared.host {
+            host.take_on(handle);
+        }
+        match shared.start_process(handle) {
+            Some(Ok(child)) => {
+                if let Some(host) = &shared.host {
+                    let mut ctx = shared.ctx.clone();
+                    ctx.session.clone_from(&request.session);
+                    ctx.tree = ctx.tree_of(&request.cwd);
+                    host.track(&ctx, handle);
+                }
+                super::process::watch(shared.clone(), handle, Some(child), Some(runs));
+                return;
+            }
+            Some(Err(error)) => {
+                eprintln!(
+                    "ignite: cannot start the verb process of {handle}, so `ignite {verb}` runs \
+                     in the daemon: {error}"
+                );
+                if let Some(host) = &shared.host {
+                    host.hand_back(handle);
+                }
+            }
+            None => {}
+        }
+    }
     run_on_daemon(shared, handle, verb, runs, request);
 }
 

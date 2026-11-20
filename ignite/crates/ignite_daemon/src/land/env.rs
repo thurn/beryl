@@ -7,7 +7,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use ignite_core::config::Os;
-use ignite_core::ids::{CheckName, Commit, SessionId, TicketId, TreeId};
+use ignite_core::ids::{CheckName, Commit, Handle, SessionId, TicketId, TreeId};
+use ignite_core::time::Timestamp;
 use ignite_core::protocol::Outcome;
 use ignite_core::traits::{Error, Result};
 use ignite_git::{push, refs, save};
@@ -116,6 +117,12 @@ pub trait LandGate: Send + Sync {
         family: &str,
         options: &RunOptions,
     ) -> CheckRun;
+    /// When the landing's handle began. A daemon restart that cuts a landing off runs it again
+    /// under the same handle, so this is earlier than the run's own start when one did.
+    fn began(&self, handle: &Handle) -> Option<Timestamp> {
+        let _ = handle;
+        None
+    }
 }
 
 /// [`LandTrees`] over the machine's [`Trees`] and `git`.
@@ -235,6 +242,10 @@ impl LandGate for ChecksGate {
     ) -> GateRun {
         self.checks
             .gate_carrying(ctx, &tree.tree, options, carried, excused)
+    }
+
+    fn began(&self, handle: &Handle) -> Option<Timestamp> {
+        self.checks.handle_began(handle)
     }
 
     fn run_checks(

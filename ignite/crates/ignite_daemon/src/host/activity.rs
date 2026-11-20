@@ -227,8 +227,9 @@ impl Host {
                 let Some(host) = host.upgrade() else {
                     return;
                 };
-                // The daemon runs the verb itself now, and its commands are the new run's.
-                if host.is_handed_back(&handle) {
+                // The daemon runs the verb itself now, or a new verb process of the handle runs
+                // it, and its commands are the new run's.
+                if host.is_handed_back(&handle) || !host.is_current(&handle, &activity) {
                     return;
                 }
                 // Before looking whether the verb finished: a verb process that ends at once
@@ -279,6 +280,15 @@ impl Host {
         if let Err(error) = spawned {
             eprintln!("ignite: cannot watch the verb process of {handle}: {error}");
         }
+    }
+
+    /// Whether `activity` is still the one the host keeps for `handle`'s verb process. Every
+    /// place that drops it from the host also stops watching it, so one that is not is an
+    /// earlier process's.
+    fn is_current(&self, handle: &Handle, activity: &Arc<Activity>) -> bool {
+        lock(&self.remotes)
+            .get(handle)
+            .is_some_and(|remote| Arc::ptr_eq(&remote.activity, activity))
     }
 
     fn row(&self, handle: &Handle) -> Option<rows::Handle> {

@@ -53,6 +53,7 @@
 //! landing up to the moment its push begins, and is refused while the push runs and after it
 //! succeeds. A push the remote rejects lets the landing be stopped again.
 
+mod args;
 mod base;
 pub mod env;
 pub mod express;
@@ -63,6 +64,7 @@ pub mod records;
 mod release;
 mod replies;
 mod resolve;
+mod timeline;
 
 #[cfg(test)]
 mod tests;
@@ -83,12 +85,14 @@ use crate::checks::{GateRun, RunOptions};
 use crate::server::{Context, Verb, error_reply};
 use crate::steps;
 use crate::update::prebuild;
+use args::LandArgs;
 use env::{GateTree, LandGate, LandTrees, TicketTree};
 use express::{ExpressLane, ExpressRun, Expressed};
 use format::{Formatted, Formatter};
 use lease::{HeldLease, LEASE_TTL_S};
 use passes::{GateHome, Passed};
 use records::{LandingRecord, RecordState, Records};
+use timeline::Timeline;
 use replies::{failed_gate, stopped};
 
 /// The longest wait between two tries for a busy lease.
@@ -152,33 +156,6 @@ impl Verb for SyncVerb {
             return Reply::text(Exit::Usage, "usage: ignite sync");
         }
         self.landing.sync(ctx)
-    }
-}
-
-/// The arguments of `ignite land`.
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct LandArgs {
-    /// The explicit note; `None` when the note is the landed commits' subjects.
-    note: Option<String>,
-    fresh: bool,
-}
-
-impl LandArgs {
-    fn parse(args: &[String]) -> Option<LandArgs> {
-        let mut note = None;
-        let mut fresh = false;
-        let mut args = args.iter();
-        while let Some(arg) = args.next() {
-            match arg.as_str() {
-                "-m" | "--message" => note = Some(args.next()?.trim().to_owned()),
-                "--fresh" => fresh = true,
-                _ => return None,
-            }
-        }
-        if note.as_ref().is_some_and(|n: &String| n.is_empty()) {
-            return None;
-        }
-        Some(LandArgs { note, fresh })
     }
 }
 
@@ -394,7 +371,9 @@ impl Landing {
         let mut formatted: Option<Formatted> = None;
         // Checks found failing at the tip as well, left out of every later gate (see `base`).
         let mut excused = crate::checks::Excused::new();
+        let mut timeline = Timeline::start(ctx, self.gate.as_ref());
         loop {
+            timeline.next_pass(ctx, &last_cause);
             if passes >= MAX_PASSES {
                 return Err(stop(
                     Exit::Conflict,
@@ -526,12 +505,8 @@ impl Landing {
                 )));
             }
             if !gated.run.passed() {
-                return Err(format_onto(failed_gate(
-                    &staging,
-                    &rebased,
-                    &gated,
-                    &gate_tree.path,
-                )));
+                let failed = failed_gate(&staging, &rebased, &gated, &gate_tree.path);
+                return Err(format_onto(timeline.onto(ctx.clock.now(), failed, gated.seconds)));
             }
             // Whether the commit may move the release branch is settled now, running the
             // release family if the gate did not, so nothing but a push is left after the
@@ -668,6 +643,7 @@ impl Landing {
                 release,
                 express: expressed,
                 formatted,
+                timeline,
             };
             return Ok(Self::reply(
                 ctx,
@@ -794,4 +770,6 @@ struct Summary {
     express: Option<ExpressRun>,
     /// What the formatters did, if the machine has any.
     formatted: Option<Formatted>,
+    /// Where the landing's time went, across passes and restarts.
+    timeline: Timeline,
 }
