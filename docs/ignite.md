@@ -1086,10 +1086,10 @@ work lost at release has to be done again from nothing.
 - A ticket that cannot be completed as written goes to a justiciar. Its
   acceptance may contradict its body, gate on something the worker cannot
   control (such as a timing on a loaded machine), or need a constraint relaxed.
-  The worker runs `ignite justiciar "<ticket>: <what is impossible, and the
-  evidence>"` and then releases the ticket with its exact state. This is
-  distinct from ordinary difficulty, which stays the worker's job. See
-  [The justiciar](#the-justiciar).
+  The worker runs
+  `ignite justiciar "<ticket>: <what is impossible, and the evidence>"` and then
+  releases the ticket with its exact state. This is distinct from ordinary
+  difficulty, which stays the worker's job. See [The justiciar](#the-justiciar).
 
 ```text
 $ ignite release --needs person -m "Needs the App Store Connect key. Tried the
@@ -3515,11 +3515,11 @@ release branch when Ignite blocks its own landing.
 - When relaxing a constraint cannot resolve it, because the work needs
   credentials, access or a decision only the person has, the justiciar does two
   things. It files a ticket for the person with `--needs person`, stating the
-  exact need and what was tried. And it rewrites the blocked work to continue
-  in the interim with fake data, a stub, a fixture or a local substitute, filing
-  the step that swaps in the real thing as a ticket that depends on the
-  person's ticket. Nothing in the pool waits on the person. The justiciar then
-  closes its ticket, and titles itself ⛔ only when no interim path exists.
+  exact need and what was tried. And it rewrites the blocked work to continue in
+  the interim with fake data, a stub, a fixture or a local substitute, filing
+  the step that swaps in the real thing as a ticket that depends on the person's
+  ticket. Nothing in the pool waits on the person. The justiciar then closes its
+  ticket, and titles itself ⛔ only when no interim path exists.
 - An order is a message from the dispatcher that starts
   `Message about <ticket>:`. `ignite tell` signs each comment `from <session>`,
   taken from the session the caller's environment names. A worker checks an
