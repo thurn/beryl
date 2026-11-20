@@ -24,17 +24,18 @@ parts:
   it never waits for another landing or starts again because of one.
 - **Verify the tip in batches.** The tip is compiled and checked once for each
   batch of landings, in one tree that has cores kept for it.
-- **Revert automatically.** A landing that breaks the tip is reverted, and its
-  ticket opens again with the failure.
+- **Revert a broken build, and nothing else.** A landing that leaves the tip
+  unable to compile is reverted, and its ticket opens again. Any other failing
+  check is fixed forward, as today.
 - **Start from a commit that builds.** New work begins at the newest commit
   known to compile, not at whatever the tip is.
 - **Keep cores for the tip.** The tip's checks run on cores that no other work
   can take, and Ignite's own processes stop counting as load from outside it.
 
-Checking once and landing with git alone remove the race for the tip. Automatic
-reverts are what make that safe. Verifying in batches and starting from a commit
-that builds remove most compiling, and the cores kept for the tip make its one
-build finish soon.
+Checking once and landing with git alone remove the race for the tip. Reverting
+a landing that breaks the build is what makes that safe. Verifying in batches
+and starting from a commit that builds remove most compiling, and the cores kept
+for the tip make its one build finish soon.
 
 ## Related information
 
@@ -46,8 +47,7 @@ build finish soon.
   `ignite.toml` and is shown where it is introduced.
 - [Software Engineering at Google, chapter 23, "Continuous Integration"](https://abseil.io/resources/swe-book/html/ch23.html)
   describes checking a change before submission on a subset of tests, running
-  the rest after submission, finding the change that broke a test and rolling it
-  back, and building from the last commit known to pass.
+  the rest after submission, and building from the last commit known to pass.
 - "Taming Google-Scale Continuous Testing", by Memon and others at ICSE-SEIP in
   2017, describes running tests after submission on batches of changes instead
   of on every change.
@@ -217,16 +217,16 @@ CPU-seconds takes five minutes or more, however many cores the machine has.
 The proposal is easier to judge against the practice it borrows from. This table
 names each part of that practice, what Ignite does today and what changes.
 
-| Practice                                                       | Ignite today                                     | This proposal                                     |
-| -------------------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------- |
-| Cache a check's result under a hash of its inputs              | Yes: the result cache                            | Unchanged                                         |
-| Before submission, run the tests most likely to fail           | Yes: scores and the gate's budget                | Unchanged                                         |
-| After submission, run the rest on batches of changes           | Yes: tip verification                            | Adds a build step that runs first                 |
-| Keep a branch that only holds verified commits                 | Yes: `master`                                    | Adds `green`, which moves sooner                  |
-| Submit without checking again when the main branch has moved   | No: every landing checks on the exact tip        | Yes: [The change's verdict](#the-changes-verdict) |
-| Roll back the change that broke the main branch, automatically | No: a regression ticket is filed, `master` waits | Yes: [Automatic revert](#automatic-revert)        |
-| Start new work from the last commit known to pass              | No: new work starts at the tip                   | Yes: [The green branch](#the-green-branch)        |
-| Compile each commit once                                       | No: each landing compiles what others landed     | Mostly: [Builds](#builds)                         |
+| Practice                                                     | Ignite today                                        | This proposal                                                                      |
+| ------------------------------------------------------------ | --------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Cache a check's result under a hash of its inputs            | Yes: the result cache                               | Unchanged                                                                          |
+| Before submission, run the tests most likely to fail         | Yes: scores and the gate's budget                   | Unchanged                                                                          |
+| After submission, run the rest on batches of changes         | Yes: tip verification                               | Adds a build step that runs first                                                  |
+| Keep a branch that only holds verified commits               | Yes: `master`                                       | Adds `green`, which moves sooner                                                   |
+| Submit without checking again when the main branch has moved | No: every landing checks on the exact tip           | Yes: [The change's verdict](#the-changes-verdict)                                  |
+| Remove a change that breaks the build for everyone           | No need: every landing type-checks on the exact tip | Yes, and only then: [A broken build](#a-broken-build-is-reverted-and-nothing-else) |
+| Start new work from the last commit known to pass            | No: new work starts at the tip                      | Yes: [The green branch](#the-green-branch)                                         |
+| Compile each commit once                                     | No: each landing compiles what others landed        | Mostly: [Builds](#builds)                                                          |
 
 Ignite already has the half of this model that costs the most to build: the
 cache, the scoring, tip verification and the search for the landing that broke a
@@ -357,7 +357,8 @@ only three cases:
   does the same ahead of time. None of the 253 landings of 2026-11-18 and
   2026-11-19 had a base that old: the longest time from claim to landing was 4.4
   hours.
-- **The ticket was reverted before.** See [Automatic revert](#automatic-revert).
+- **The ticket was reverted before.** See
+  [A broken build](#a-broken-build-is-reverted-and-nothing-else).
 
 An earlier draft of this rule also checked again whenever a landed commit
 touched a file the change touches. Measurement ruled it out: 73 of those 253
@@ -394,9 +395,10 @@ is now the only place where the combined code is compiled and type-checked.
 
 A round has three parts, in order:
 
-- **The build step.** Run the always set's checks at the tip: formatting, the
-  lint rules for source files, and the type checks, which compile everything.
-  When they pass, move `green` to the tip.
+- **The build step.** Run the **build checks** at the tip: the checks that fail
+  when the code does not compile or type-check (clippy, `tsc` and pyre). The
+  repository marks their families with `builds = true`. When they pass, move
+  `green` to the tip.
 - **The budgeted checks.** Run the best-scored checks within the budget of 300
   seconds. When they pass, move `master` to the tip. This part exists today.
 - **The remaining checks.** Run everything else. This part exists today.
@@ -422,48 +424,48 @@ tip_build_cores = 4
 
 ```text
 staging  3a9e4c1
-green    3a9e4c1  the always set passed 70 s after it landed
+green    3a9e4c1  the build checks passed 70 s after it landed
 master   91d07be  14 commits behind; the round ends in about 3 min
 ```
 
-## Automatic revert
+## A broken build is reverted, and nothing else
 
-When a check fails at the tip and the result cache holds a pass for it at the
-commit the last round verified, some landing in the batch broke it. Today the
-hub files a regression ticket and `master` waits for the repair. Under the
-proposal Ignite removes the landing instead.
+The rule is one line: "the build is broken and nobody can work" is a revert, and
+"a test failed" is not.
 
-A tip that does not compile needs no rule of its own: it fails clippy, which is
-one of the always set's checks.
+**Why a broken build is different.** Today a landing type-checks on the exact
+tip, so a tip that does not compile cannot be produced. Under this proposal two
+landings that each compile alone can produce one. While the tip stays that way,
+`green` cannot move, no round can build anything, and every later landing piles
+onto code that nobody can compile. A fix written by an agent takes tens of
+minutes. Removing the landing takes one round.
 
-How the culprit is found:
+**Why nothing else is reverted.** A revert pulls code out from under tickets
+that already build on it, and it is a second way for work to move through the
+system. A failing test stops nobody from working: the tip still compiles, and
+`master` simply waits. So a check that fails outside the build step is handled
+exactly as today. Ignite finds the landing that broke it and files a regression
+ticket, and the fix lands on top.
 
-- The candidates are the landings in the batch that changed any input of the
-  failing check. A single candidate is the culprit, with nothing run.
-- With several, Ignite first tries the candidate that changed the file the
-  failure names. It runs the check at the tip with that landing reverted.
-- If the check still fails, Ignite searches by bisection, as today, for at most
-  ten runs.
+A landing is reverted only when all of these hold:
 
-A landing is reverted automatically only when all of these hold:
-
-- A second run confirmed the failure, so the check is not flaky.
-- The search ended at one landing, not at a range of landings.
+- A build check failed at the tip, and a second run confirmed it.
+- The search for the culprit, which is unchanged, ended at one landing.
 - The revert of the landing's commits applies cleanly at the tip.
-- The check passes at the tip with the revert applied. When the revert restores
-  the check's inputs to a state that already passed, the result cache answers
-  this and nothing runs.
-- The round has reverted fewer than three landings. The limit stops a check that
-  the machine broke, not a commit, from reverting a whole batch.
+- The build check passes at the tip with the revert applied. When the revert
+  restores the check's inputs to a state that already passed, the result cache
+  answers this and nothing runs.
+- The round has reverted fewer than three landings. The limit stops a failure
+  that the machine caused, not a commit, from reverting a whole batch.
 
-When any of them fails, Ignite files a regression ticket exactly as it does
-today.
+When any of them fails, Ignite files a regression ticket, as it does for any
+other check.
 
 What a revert does:
 
 - Ignite pushes one revert commit to `staging`, under the same lease a landing
   takes. Its message names the check that failed and the commit it reverts.
-- The reverted ticket opens again at the highest priority, with the check's
+- The reverted ticket opens again at the highest priority, with the compiler's
   output.
 - The ticket's work is not saved on a branch. Its commits are already in the
   history of `staging`, so a branch of them would rebase to nothing. The
@@ -472,19 +474,15 @@ What a revert does:
 - If the session that landed it has not started another ticket, the reopened
   ticket goes to that session, which still has the context. Otherwise it goes
   first in the order tickets are handed out.
-- Tickets that depend on the reverted one are blocked again, because a reopened
-  ticket counts as unfinished. A session already working on one of them is sent
-  a message.
 
 ```text
 revert: feat: ward counts mana spent
 
 This reverts commit 5e1b0aa.
 
-After it landed, the check
-rust:beryl_bench::family::tests::family_corpora_never_change failed at the tip
-and passed with this commit reverted. Its ticket is open again and holds the
-check's output.
+After it landed, the tip did not build: clippy:workspace failed at the tip and
+passed with this commit reverted. Its ticket is open again and holds the
+compiler's output.
 ```
 
 Rules for what follows a revert:
@@ -492,13 +490,19 @@ Rules for what follows a revert:
 - **A revert commit is a landing with no ticket.** The next round verifies it
   like any other. It is never reverted itself: if the tip fails with it, Ignite
   files a regression ticket.
-- **A ticket that started from a commit holding the culprit** lands by the
-  ordinary rule. Its rebase passes over the revert commit, and conflicts if its
-  work depended on the reverted lines.
+- **A ticket that depends on the reverted one** is blocked again if no session
+  holds it, because a reopened ticket counts as unfinished. A session that
+  already works on it is told to release its ticket, which is handed out again
+  when the reverted ticket lands. Its tree could not build anyway: it started on
+  the commit that broke the build.
 - **A reverted ticket lands under a stricter rule the next time.** The landing
-  rebases the ticket tree onto the tip for real and runs its checks there,
-  including the checks that got it reverted. Then it pushes by the ordinary
-  steps.
+  rebases the ticket tree onto the tip for real and runs its checks there, which
+  include the build checks. Then it pushes by the ordinary steps.
+
+```toml
+[revert]
+broken_build = true
+```
 
 ## The green branch
 
@@ -590,9 +594,9 @@ were fixing. It keeps the parts that solve that problem.
 - **Replaced:** a pass of those commands is a verdict like any other, stored
   under the tree ID. The express lane's own rules for reusing a pass after a
   lost race are deleted, because every landing now behaves that way.
-- **Added:** an Ignite change can be reverted automatically like any other. The
-  revert commit is itself a change to Ignite, so it moves the release branch and
-  daemons restart into it.
+- **Added:** an Ignite change that breaks the build is reverted like any other.
+  The revert commit is itself a change to Ignite, so it moves the release branch
+  and daemons restart into it.
 
 ## Records
 
@@ -638,18 +642,12 @@ back without moving any data.
   files regression tickets, and a round on a newer one reverts.
 - **`green`.** The first round whose build step passes creates the branch by
   pushing it. Until then `ignite start` begins at the tip, as today.
-- **Reverts alone can be switched off.** `[revert] automatic = false` keeps
-  regression tickets as the only response to a broken tip.
+- **Reverts alone can be switched off.** `[revert] broken_build = false` leaves
+  a regression ticket as the only response to a tip that does not build.
 - **The design document.** When this is built, the sections of
   [`docs/ignite.md`](ignite.md) named under
   [Related information](#related-information) are rewritten to match, and this
   document is deleted.
-
-```toml
-[revert]
-automatic = true
-max_per_round = 3
-```
 
 ## Alternatives considered
 
@@ -672,6 +670,11 @@ verifying after landing.
   builds, which are worth about 25 times on a small edit to a core crate. That
   still holds. This proposal removes the repeated builds instead of caching
   them.
+- **Revert any landing that fails a check.** An earlier draft did this. It was
+  cut down to a broken build for the reasons under
+  [A broken build](#a-broken-build-is-reverted-and-nothing-else): a revert pulls
+  code out from under tickets that build on it, and a failing test stops nobody
+  from working.
 - **More cores.** A larger machine shortens every build and leaves the race and
   the repeated builds growing as before.
 
@@ -708,17 +711,19 @@ Landing:
 
 Reverts:
 
-- Break a check with a landing whose revert conflicts with a later landing.
+- Land a change that compiles and breaks a unit test. Expect a regression ticket
+  and no revert.
+- Break the build with a landing whose revert conflicts with a later landing.
   Expect a regression ticket and no revert.
-- Make a check fail once and pass on its second run. Expect no revert and the
-  check marked flaky.
-- Land four changes in one batch that each break a different check. Expect three
-  reverts and one regression ticket.
+- Make a build check fail once and pass on its second run. Expect no revert and
+  the check marked flaky.
+- Land four changes in one batch that each break the build. Expect three reverts
+  and one regression ticket.
 - Start the reverted ticket again, apply its work with the command in the brief
-  and land it without a fix. Expect the stricter rule to run the failing check
-  on the rebased commit and to refuse the landing.
-- Revert a ticket that another open ticket depends on. Expect the dependent
-  ticket to be blocked again, or a message in the session already working on it.
+  and land it without a fix. Expect the landing to rebase the ticket tree, run
+  the build checks there and refuse the landing.
+- Revert a ticket that another session's ticket depends on. Expect that session
+  to be told to release its ticket.
 
 Starting:
 
