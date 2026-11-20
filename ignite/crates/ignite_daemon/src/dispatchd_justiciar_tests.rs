@@ -94,7 +94,9 @@ fn a_stuck_loop_is_reported_once_for_this_machine() {
 /// On 2026-11-20 cygnus filed a P0 justiciar ticket because its idle loop had waited ten
 /// minutes in the scheduler's queue for 12 cores while a tip round and an agent's build held all
 /// 18. That is how idle work is meant to behave, so a round waiting for cores is not reported;
-/// the same round is reported once it is stuck on anything else.
+/// the same round is reported once it has been stuck on anything else for the stall time. The
+/// time it waited for cores does not count towards that: cygnus reported its idle round stuck
+/// three minutes into a build that had waited 25 minutes for cores.
 #[test]
 fn a_loop_waiting_for_cores_is_not_reported_until_it_waits_on_something_else() {
     use std::sync::{Arc, Barrier};
@@ -126,6 +128,10 @@ fn a_loop_waiting_for_cores_is_not_reported_until_it_waits_on_something_else() {
     assert!(rig.hub.justiciar_reports().is_empty());
     barriers[1].wait();
     barriers[2].wait();
+    rig.clock.advance(599.0);
+    reporter.tick(&rig.ctx, true);
+    assert!(rig.hub.justiciar_reports().is_empty());
+    rig.clock.advance(2.0);
     reporter.tick(&rig.ctx, true);
     barriers[3].wait();
     round.join().unwrap();

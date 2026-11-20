@@ -118,6 +118,8 @@ struct State {
     /// What the work waits for, innermost last.
     waits: Vec<Wait>,
     next_wait: u64,
+    /// Seconds spent in waits for cores that have ended.
+    cores_waited_s: f64,
     stop: Stop,
     /// How many [`critical`] guards are held.
     critical: u32,
@@ -168,6 +170,9 @@ pub struct View {
     /// What the work waits for is cores in the scheduler's queue, which work of a higher class
     /// holds: the work is not stuck, only behind others (see [`waiting_for_cores`]).
     pub waiting_for_cores: bool,
+    /// Seconds the work has spent in the scheduler's queue for cores, the wait still open
+    /// included.
+    pub cores_waited_s: f64,
     /// A stop has been asked for and the work has not ended yet.
     pub stopping: bool,
     /// The work started under an earlier daemon, which did not tell this one its step yet.
@@ -230,6 +235,7 @@ impl Activity {
                 step: None,
                 waits: Vec::new(),
                 next_wait: 0,
+                cores_waited_s: 0.0,
                 stop: Stop::Running,
                 critical: 0,
                 finished: false,
@@ -442,7 +448,14 @@ impl Activity {
     }
 
     fn pop_wait(&self, id: u64) {
-        lock(&self.state).waits.retain(|wait| wait.id != id);
+        let now = self.clock.now();
+        let mut state = lock(&self.state);
+        if let Some(at) = state.waits.iter().position(|wait| wait.id == id) {
+            let wait = state.waits.remove(at);
+            if wait.cores {
+                state.cores_waited_s += now.seconds_since(wait.at);
+            }
+        }
     }
 
     /// Puts in place everything a verb running in a process of its own says it is doing (the
@@ -526,6 +539,12 @@ impl Activity {
             waiting_for: wait.map(|wait| wait.what.clone()),
             waiting_s: wait.map(|wait| now.seconds_since(wait.at)),
             waiting_for_cores: wait.is_some_and(|wait| wait.cores),
+            cores_waited_s: state.cores_waited_s
+                + state
+                    .waits
+                    .iter()
+                    .find(|wait| wait.cores)
+                    .map_or(0.0, |wait| now.seconds_since(wait.at)),
             stopping: state.stop == Stop::Asked && !state.finished,
             adopted: self.adopted,
         }

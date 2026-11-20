@@ -46,7 +46,15 @@ impl LoopReport {
     /// Why the loop is unhealthy at `now`, or `None` if it is healthy.
     pub fn problem(&self, now: Timestamp) -> Option<String> {
         let since = self.last_finished.unwrap_or(self.registered_at);
-        let quiet = now.seconds_since(since);
+        // Time the round in progress spent in the scheduler's queue for cores does not count:
+        // work of a higher class held them, so the loop was behind, not stuck. On 2026-11-20
+        // cygnus's idle round waited 25 minutes for 12 cores during a tip round, then was
+        // reported stuck three minutes into its build.
+        let behind = match (self.in_round, &self.doing) {
+            (true, Some(doing)) => doing.cores_waited_s,
+            _ => 0.0,
+        };
+        let quiet = now.seconds_since(since) - behind;
         if quiet > self.stall_after_s {
             return Some(format!(
                 "the {} loop has not finished a round for {} (it should finish one at least \
