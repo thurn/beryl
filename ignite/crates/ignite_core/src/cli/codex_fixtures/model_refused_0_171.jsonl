@@ -1,0 +1,5 @@
+{"type":"thread.started","thread_id":"01a1fa13-9f06-7420-b246-dc07de434bb7"}
+{"type":"item.completed","item":{"id":"item_0","type":"error","message":"Model metadata for `gpt-nonexistent-9` not found. Defaulting to fallback metadata; this can degrade performance and cause issues."}}
+{"type":"turn.started"}
+{"type":"error","message":"The 'gpt-nonexistent-9' model is not supported when using Codex with a ChatGPT account."}
+{"type":"turn.failed","error":{"message":"The 'gpt-nonexistent-9' model is not supported when using Codex with a ChatGPT account."}}
