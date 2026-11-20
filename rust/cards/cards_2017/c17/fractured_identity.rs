@@ -14,15 +14,18 @@ use crate::prelude::*;
 /// requires information from a specific object, including the source of the ability itself, the
 /// effect uses the current information of that object if it's in the public zone it was expected to
 /// be in; if it's no longer in that zone, ... the effect uses the object's last known information."
-/// So an exiled token, which ceases to exist, is copied all the same (CR 111.12). Each copy has the
-/// permanent's copiable values (CR 707.2): not its counters, so a planeswalker's copy enters with
-/// its printed loyalty (CR 306.5b).
+/// So an exiled token, which ceases to exist, is copied all the same ([CR 111.12]). Each copy has
+/// the permanent's copiable values ([CR 707.2]): not its counters, so a planeswalker's copy enters
+/// with its printed loyalty ([CR 306.5b]).
 ///
-/// [CR 111.2](https://yawgatog.com/resources/magic-rules/#R1112): "The player who creates a token is its owner. The token enters the battlefield under
-/// that player's control."
+/// Each token belongs to the player who creates it ([CR 111.2]): "The player who creates a token is
+/// its owner. The token enters the battlefield under that player's control."
 ///
 /// [CR 608.2h]: https://yawgatog.com/resources/magic-rules/#R6082h
 /// [CR 111.2]: https://yawgatog.com/resources/magic-rules/#R1112
+/// [CR 111.12]: https://yawgatog.com/resources/magic-rules/#R11112
+/// [CR 707.2]: https://yawgatog.com/resources/magic-rules/#R7072
+/// [CR 306.5b]: https://yawgatog.com/resources/magic-rules/#R3065b
 pub static CARD: CardDef = Printed::FracturedIdentity
     .abilities(&[Ability::spell()
         .target(&TargetSpec::permanent(Filter::Not(&Filter::Types(
