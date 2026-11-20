@@ -222,6 +222,7 @@ impl Trees {
         }
         let trees = self.clone();
         let (tree, at, tip) = (tree.clone(), request.at.clone(), request.tip.clone());
+        let files = request.files.clone();
         std::thread::spawn(move || {
             if let Some(seeding) = seeding {
                 let started = trees.inner.clock.now();
@@ -250,7 +251,7 @@ impl Trees {
                 }
             }
             if !trees.inner.config.prebuild.get().is_empty() {
-                trees.build(&tree, &at);
+                trees.build(&tree, &at, &files);
             }
         });
     }

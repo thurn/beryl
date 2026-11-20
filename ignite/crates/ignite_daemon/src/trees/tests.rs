@@ -137,6 +137,7 @@ impl Fixture {
             disk_limit: None,
             keep: vec!["out".to_owned()].into(),
             prebuild: vec!["bin".to_owned()].into(),
+            prebuild_outputs: BTreeMap::from([("bin".to_owned(), vec!["out".to_owned()])]).into(),
         };
         let clock = Arc::new(FakeClock::new(
             Timestamp::parse("2026-11-18T00:00:00.000Z").unwrap(),

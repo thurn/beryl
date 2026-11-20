@@ -38,7 +38,7 @@ mod setup;
 mod tests;
 mod wait;
 
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
@@ -98,6 +98,9 @@ pub struct TreeConfig {
     /// The products built at the lease of a ticket expected to compile, and kept built at the
     /// tip in one free tree: those whose inputs name workspace packages.
     pub prebuild: Live<Vec<String>>,
+    /// Each prebuild product's output directories, which order a lease's prebuild by the
+    /// ticket's files ([`TreeConfig::prebuild_order`]).
+    pub prebuild_outputs: Live<BTreeMap<String, Vec<String>>>,
 }
 
 impl TreeConfig {
@@ -105,7 +108,7 @@ impl TreeConfig {
         let machine = config
             .machine(hostname)
             .ok_or_else(|| Error::Invalid(format!("ignite.toml declares no machine {hostname}")))?;
-        let (keep, prebuild) = Self::products(manifest);
+        let (keep, prebuild, prebuild_outputs) = Self::products(manifest);
         Ok(TreeConfig {
             repo: repo.to_path_buf(),
             dir: repo.join(&config.repository.trees),
@@ -121,6 +124,7 @@ impl TreeConfig {
                 .map(|gb| u64::from(gb) * 1_000_000_000),
             keep: keep.into(),
             prebuild: prebuild.into(),
+            prebuild_outputs: prebuild_outputs.into(),
         })
     }
 
@@ -506,15 +510,21 @@ impl Trees {
         })
     }
 
-    /// Makes every prebuild product current in `tree` and, if all succeed, records `at` as the
-    /// commit its build directories match.
-    fn build(&self, tree: &TreeId, at: &Commit) -> bool {
-        let built = self.inner.config.prebuild.get().iter().all(|product| {
-            !matches!(
-                self.inner.builds.ensure(tree, product, &[]),
-                BuildResult::Failed { .. }
-            )
-        });
+    /// Makes every prebuild product current in `tree`, first those beside `files` (see
+    /// [`TreeConfig::prebuild_order`]), and, if all succeed, records `at` as the commit its build
+    /// directories match.
+    fn build(&self, tree: &TreeId, at: &Commit, files: &[String]) -> bool {
+        let built = self
+            .inner
+            .config
+            .prebuild_order(files)
+            .iter()
+            .all(|product| {
+                !matches!(
+                    self.inner.builds.ensure(tree, product, &[]),
+                    BuildResult::Failed { .. }
+                )
+            });
         if built {
             let _ = self.record_build(tree, at);
         }
@@ -687,7 +697,7 @@ impl Trees {
             tip,
             &self.inner.config.keep.get(),
         );
-        let built = reset.is_ok() && self.build(&tree, tip);
+        let built = reset.is_ok() && self.build(&tree, tip, &[]);
         store::release(&self.lock().db, tree.as_str(), None, &self.now())
             .map_err(|e| store_error(&e))?;
         self.serve_waiters();

@@ -604,5 +604,10 @@
     "label": "A landing that a daemon restart runs again starts in a new verb process, which outlives the next restart, and the gate remembers the checks it chose as soon as it plans them, not only when it passes, so a landing after failed or cut-off gates of the same change spends no fresh budget (on 2026-11-20 a one-card landing was cut off five times in 13 minutes and ran about 2,100 checks, then its retry ran 1,685 more)",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "A lease prebuilds the products beside the ticket's files first, so an Ignite ticket's tree has Ignite's test build current before Beryl's, and the express commands compile on every core instead of the 2 reserved on multivac, so an express landing there stops spending 130 to 165 s rebuilding Ignite",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

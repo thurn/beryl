@@ -50,7 +50,15 @@ commands = [
   # here means the landing's formatters change nothing. The command is split on whitespace and
   # run without a shell, so the pattern is unquoted; `target` holds build output, not sources.
   "uv run --quiet --project ../tools mdformat --check --exclude target/** ../docs/ignite.md .",
-  "cargo clippy --locked --all-targets -- -D warnings",
+  # `--jobs default` (and `--build-jobs default` below) compile on as many jobs as the machine
+  # has cores, whatever the `CARGO_BUILD_JOBS` the daemon sets from the express cores. Every
+  # process runs at the same priority, so under load a build gets CPU in proportion to its jobs;
+  # priority is no lever, since the commands run at `nice 10` were no slower. On multivac (10
+  # cores) on 2026-11-19, at a load average of 50 to 110, after an edit to `ignite_core` the
+  # test build took 31 to 43 s on 2 jobs and 24 to 27 s on 10, and clippy 8 to 9 s and 6 to 7 s.
+  # After an edit to one daemon file only that crate rebuilds, and 2 or 10 jobs made no
+  # difference: all four commands took 32 to 37 s. Builds stay current across the flags.
+  "cargo clippy --locked --all-targets --jobs default -- -D warnings",
   # The `express` profile (ignite/.config/nextest.toml) kills a test after 120 s, so a hung test
   # fails in about two minutes with its name instead of holding the landing to the verb limit.
   # It also leaves out the few tests that take over 3 s, which the `ignite` family runs in tip
@@ -60,7 +68,7 @@ commands = [
   # processes and `git` commands they start, so threads beyond the cores cost little CPU. On
   # 2026-11-19, at a load average of 15 to 23 on 18 cores, the run took 56 to 82 s on 3 threads,
   # 37 to 72 s on 6, 14 to 17 s on 12 and 12 s on 18.
-  "cargo nextest run --locked --cargo-quiet --workspace --profile express --test-threads=num-cpus --status-level=fail --final-status-level=fail",
+  "cargo nextest run --locked --cargo-quiet --workspace --profile express --build-jobs default --test-threads=num-cpus --status-level=fail --final-status-level=fail",
 ]
 families = ["ignite", "ignite-lint"]
 # Files no express command builds or runs: the design document, which the Markdown check only

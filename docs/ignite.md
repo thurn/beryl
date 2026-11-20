@@ -979,6 +979,12 @@ Rules for trees:
   donor, the commit its build is taken to match, how many commits and files that
   is behind the tip, the products the donor never built, and how long the copy
   took.
+- A lease prebuilds the products that write a directory beside the ticket's
+  files first, then the rest, each group in name order. In name order alone, a
+  ticket that changed only Ignite had its tree build three of Beryl's products,
+  two of them optimized, before Ignite's test build, and its express landing a
+  few minutes later took 165 s; with Ignite's test build current, the express
+  commands take 32 to 37 s after a one-file edit under the same load.
 - While cores are idle, the daemon keeps one free ticket tree built at the tip,
   so the next lease starts with nothing to compile.
 - A tree keeps the directories that its build products declare as their output,
@@ -2044,8 +2050,8 @@ dir = "ignite"
 commands = [
   "cargo fmt --check",
   "uv run --quiet --project ../tools mdformat --check --exclude target/** ../docs/ignite.md .",
-  "cargo clippy --locked --all-targets -- -D warnings",
-  "cargo nextest run --locked --cargo-quiet --workspace --profile express --test-threads=num-cpus --status-level=fail --final-status-level=fail",
+  "cargo clippy --locked --all-targets --jobs default -- -D warnings",
+  "cargo nextest run --locked --cargo-quiet --workspace --profile express --build-jobs default --test-threads=num-cpus --status-level=fail --final-status-level=fail",
 ]
 families = ["ignite", "ignite-lint"]
 inert = ["docs/ignite.md", "data/efficiency-changes.json"]
@@ -2078,6 +2084,15 @@ express_cores = 3
   so it borrows through the host protocol (`host-borrow-cores` and
   `host-return-cores`, version 2), and the daemon releases a grant its handle
   still holds when the handle ends. The `express` line names the cores used.
+- The build commands still compile on every core of the machine
+  (`--jobs default`, `--build-jobs default`), and the tests run on as many
+  threads (`--test-threads=num-cpus`), whatever the four variables say. Every
+  process runs at the same priority, so under load a build gets CPU in
+  proportion to its jobs, and the cores the scheduler leaves out are only kept
+  out of its grants. On multivac (10 cores) at a load average of 50 to 110, the
+  test build after an edit to `ignite_core` took 31 to 43 s on 2 jobs and 24 to
+  27 s on 10. The commands run at `nice 10` were no slower, so priority is no
+  lever on macOS.
 - Express runs take no lock and run side by side, each in its own tree with its
   own warm target directory. Until 2026-11-18 they all ran in one shared tree,
   `.worktrees/express`, under one file lock; that evening eight landings queued
