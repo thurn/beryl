@@ -970,6 +970,8 @@
       "padding_x": 8,
       "padding_y": 3,
       "text": 20,
+      "line": 1.1,
+      "lethal_glow_blur": 14,
       "phone": {
         "left": 22,
         "top": -4,

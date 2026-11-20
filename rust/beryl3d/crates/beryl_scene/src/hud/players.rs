@@ -145,10 +145,6 @@ const LETHAL_FILL: [u8; 4] = [179, 38, 30, 255];
 const LETHAL_RING: [u8; 4] = [255, 180, 168, 255];
 const LETHAL_GLOW: [u8; 4] = [230, 40, 30, 191];
 const LETHAL_INK: [u8; 4] = [255, 255, 255, 255];
-/// The blur of a lethal badge's glow.
-const LETHAL_GLOW_BLUR: f32 = 14.0;
-/// The badge's line height, as a share of its text size: `.life-incoming`'s `font`.
-const INCOMING_LINE: f32 = 1.1;
 
 /// The combat damage `damage` that `side`, at `life`, stands to take, as the web's `Incoming`
 /// writes it ("−3", or "0") on a badge on the rim of their orb toward the table: the upper rim
@@ -192,7 +188,7 @@ fn incoming_text(damage: i32, life: i32, side: Side, orb_width: f32, phone: bool
     };
     let mut shadows = vec![Shadow::new(0.0, 0.0, 0.0, ring).spread(1.0).inset()];
     if lethal {
-        shadows.push(Shadow::new(0.0, 0.0, LETHAL_GLOW_BLUR, LETHAL_GLOW));
+        shadows.push(Shadow::new(0.0, 0.0, badge::LETHAL_GLOW_BLUR, LETHAL_GLOW));
     }
     let mut element = text(&words)
         .name(&format!(
@@ -203,7 +199,7 @@ fn incoming_text(damage: i32, life: i32, side: Side, orb_width: f32, phone: bool
             font: Font::OpenSans,
             weight: 700,
             size: text_size,
-            line_height: INCOMING_LINE,
+            line_height: badge::LINE,
         })
         .text_align(TextAlign::Center)
         .position(Position::Absolute)
@@ -211,7 +207,7 @@ fn incoming_text(damage: i32, life: i32, side: Side, orb_width: f32, phone: bool
         .min_width(min_width)
         .background(fill)
         // `border-radius: 999px`: half the badge's height rounds its ends fully.
-        .radius(text_size * INCOMING_LINE / 2.0 + padding_y)
+        .radius(text_size * badge::LINE / 2.0 + padding_y)
         .box_shadow(shadows)
         .color(ink);
     element.style.padding = [padding_y, padding_x, padding_y, padding_x];
