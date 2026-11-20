@@ -10,6 +10,8 @@ import json
 from dataclasses import replace
 from pathlib import Path
 
+import pytest
+
 from beryl_tools.beryl3d.match import (
     boxes,
     fonts,
@@ -518,3 +520,17 @@ def test_the_ratchet_lets_a_sample_improve_or_become_supported_but_not_worsen() 
     assert samples.judge(4, 3).kind == "raise"
     assert samples.judge("unsupported", 0).kind == "raise"
     assert samples.judge(0, None).kind == "add"
+
+
+def test_two_build_trees_never_share_a_snapshot_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(target.beryl3d_paths, "cache", lambda: tmp_path)
+    found = target.target(args("opening-play"))
+    monkeypatch.setattr(target.repo_paths, "REPO", Path("/trees/tree-1"))
+    first = found.directory()
+    monkeypatch.setattr(target.repo_paths, "REPO", Path("/other/tree-1"))
+    second = found.directory()
+    assert first != second
+    assert first.name == second.name
+    assert first.parent.parent == second.parent.parent == tmp_path / "match"

@@ -119,9 +119,9 @@ through the client with no window or GPU (the `b3d` skill has the details):
   `--web <png>` reuses.
 - `just b3d match snapshot <name> --at <moment>` writes both clients' pictures
   and element records (box, paint order, CSS style, lines of text) of the same
-  moment, mid-animation too, to `$BERYL_CACHE/b3d/match/<target>/`, with a
-  `report.txt` that warns of fonts or card scans the two sides do not share. It
-  takes `compare`'s target or a test's name, at scale 2 by default. The other
+  moment, mid-animation too, to `$BERYL_CACHE/b3d/match/<tree>/<target>/`, with
+  a `report.txt` that warns of fonts or card scans the two sides do not share.
+  It takes `compare`'s target or a test's name, at scale 2 by default. The other
   `just b3d match` subcommands read its directory. Beryl 3D's records alone are
   `just b3d tree <name> --at <moment> --records`.
 - `just b3d match boxes <name> --at <moment>` pairs the snapshot's elements

@@ -272,8 +272,17 @@ def dump_web(
     return lines, failure
 
 
-def report(t: Target, moment: dict[str, object], warnings: list[str], out: Path) -> str:
-    """The snapshot's report: how to take it again, the moment, the warnings and the files."""
+def report(
+    t: Target,
+    moment: dict[str, object],
+    warnings: list[str],
+    out: Path,
+    final: Path | None = None,
+) -> str:
+    """The snapshot's report: how to take it again, the moment, the warnings and the files.
+    It reads the records in `out` and names the files as they will be in `final` (default
+    `out`), where a snapshot taken in a staging directory ends up."""
+    final = final or out
     web = json.loads((out / "web.json").read_text())
     b3d = json.loads((out / "b3d.json").read_text())
     state = "at rest"
@@ -294,7 +303,7 @@ def report(t: Target, moment: dict[str, object], warnings: list[str], out: Path)
         f"t={moment['t_ms']}ms, {state}",
         f"web: {len(web['elements'])} elements, Beryl 3D: {len(b3d['elements'])} elements",
         *warnings,
-        *(str(out / name) for name in FILES),
+        *(str(final / name) for name in FILES),
     ]
     return "\n".join(lines) + "\n"
 
@@ -418,21 +427,48 @@ def ensure(
     printing why it could not be taken. The other `match` subcommands start from this. Given
     `serving` (`shared`), it neither builds nor starts a server of its own.
     """
-    out = t.directory()
+    final = t.directory()
     digest = inputs(t, art)
-    stamp = out / "inputs.txt"
-    complete = all((out / name).exists() for name in FILES)
+    stamp = final / "inputs.txt"
+    complete = all((final / name).exists() for name in FILES)
     if not fresh and complete and stamp.exists() and stamp.read_text() == digest:
-        return out
-    stamp.unlink(missing_ok=True)
+        return final
+    # The snapshot is written to a directory of its own and renamed into place when complete,
+    # so a reader never sees half of one and an interrupted run leaves the old one intact.
+    out = final.parent / f".{final.name}.{os.getpid()}-{uuid.uuid4().hex[:8]}"
+    out.mkdir()
+    try:
+        if not complete_into(
+            t, out, final, whole_args=(fresh, art, serving), digest=digest
+        ):
+            return None
+        trash = final.parent / f".{final.name}.old-{uuid.uuid4().hex[:8]}"
+        if final.exists():
+            final.rename(trash)
+        out.rename(final)
+        shutil.rmtree(trash, ignore_errors=True)
+        return final
+    finally:
+        shutil.rmtree(out, ignore_errors=True)
 
+
+def complete_into(
+    t: Target,
+    out: Path,
+    final: Path,
+    whole_args: tuple[bool, bool, Shared | None],
+    digest: str,
+) -> bool:
+    """Takes the snapshot of `t` into the empty directory `out`, with its report naming the files
+    as they will be in `final`; False after printing why it could not."""
+    fresh, art, serving = whole_args
     if t.only is None:
         took = take(t, out, art, serving)
     else:
         whole = ensure(replace(t, only=None), fresh, art, serving)
         took = None if whole is None else take_only(t, whole, out, art, serving)
     if took is None:
-        return None
+        return False
     moment, printed_lines = took
 
     for side in ("web", "b3d"):
@@ -443,7 +479,7 @@ def ensure(
                 f"match snapshot: {side}.json breaks the record contract:\n  {listed}",
                 file=sys.stderr,
             )
-            return None
+            return False
     warnings = fonts.check()
     missing = [line for line in printed_lines if line.startswith("scan missing:")]
     if art:
@@ -460,9 +496,9 @@ def ensure(
     warnings += [
         f"warning: web {line}" for line in printed_lines if line not in missing
     ]
-    (out / "report.txt").write_text(report(t, moment, warnings, out))
-    stamp.write_text(digest)
-    return out
+    (out / "report.txt").write_text(report(t, moment, warnings, out, final))
+    (out / "inputs.txt").write_text(digest)
+    return True
 
 
 def test_targets(prefix: str, at: str) -> list[Target] | None:

@@ -16,6 +16,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from ... import paths as repo_paths
 from .. import paths as beryl3d_paths
 
 # A test's name, as `just b3d test` prints it: b3d:<recording>/<seat>/<width>x<height>, with
@@ -29,6 +30,14 @@ DEFAULT_SIZE = {"desktop": "1600x900", "phone": "393x759"}
 DEFAULT_SCALE = "2"
 # A character that may not stand in a directory's name.
 UNSAFE: re.Pattern[str] = re.compile(r"[^A-Za-z0-9.@-]+")
+
+
+def tree_key() -> str:
+    """The build tree's name and a digest of its path, so that trees with the same folder name
+    (or the main checkout) still get directories of their own."""
+    root = repo_paths.REPO
+    digest = hashlib.sha256(str(root).encode()).hexdigest()[:8]
+    return UNSAFE.sub("_", f"{root.name}-{digest}")
 
 
 @dataclass(frozen=True)
@@ -70,8 +79,10 @@ class Target:
         return UNSAFE.sub("_", name)
 
     def directory(self) -> Path:
-        """`$BERYL_CACHE/b3d/match/<slug>/`, which holds the snapshot's files."""
-        path = beryl3d_paths.cache() / "match" / self.slug()
+        """`$BERYL_CACHE/b3d/match/<tree>/<slug>/`, which holds the snapshot's files. `<tree>` names
+        the build tree that runs this command (`tree_key`), so two trees scoring the same target
+        at once never read or write each other's files."""
+        path = beryl3d_paths.cache() / "match" / tree_key() / self.slug()
         path.mkdir(parents=True, exist_ok=True)
         return path
 
