@@ -15,7 +15,7 @@ use tauri::{AppHandle, Emitter, State};
 pub fn sessions(app: &AppHandle, dirs: &Dirs) -> Sessions {
     let app = app.clone();
     beryl_shell::sessions(&beryl_cards::CARDS, dirs, move |update| {
-        emit_update(&app, update)
+        emit_update(&app, update);
     })
 }
 

@@ -132,9 +132,7 @@ fn a_resumed_game_keeps_its_callers_search_budget() {
 fn a_scripted_human_plays_a_whole_game_and_its_replay_reproduces_it() {
     let dir = std::env::temp_dir().join(format!("beryl-session-{}", std::process::id()));
     let (sent, views) = channel();
-    let sessions = Sessions::new(&CARDS, Some(dir.clone()), move |u| {
-        sent.send(u).unwrap();
-    });
+    let sessions = Sessions::new(&CARDS, Some(dir.clone()), move |u| sent.send(u).unwrap());
     let session = sessions
         .start_game(
             &StartGame {
@@ -291,9 +289,7 @@ fn the_latest_view_of_the_game_in_progress_is_kept_for_a_reloaded_ui() {
 fn a_concession_ends_the_game_in_defeat_and_its_replay_reproduces_it() {
     let dir = std::env::temp_dir().join(format!("beryl-concede-{}", std::process::id()));
     let (sent, views) = channel();
-    let sessions = Sessions::new(&CARDS, Some(dir.clone()), move |u| {
-        sent.send(u).unwrap();
-    });
+    let sessions = Sessions::new(&CARDS, Some(dir.clone()), move |u| sent.send(u).unwrap());
     let session = sessions
         .start_game(&start(4, StopsSetting::SMART), None)
         .unwrap();
@@ -442,9 +438,7 @@ fn a_game_resumed_from_its_save_plays_on_as_if_it_never_stopped() {
 
     let dir = replay_dir("resume");
     let (sent, views) = channel();
-    let first = Sessions::new(&CARDS, Some(dir.clone()), move |u| {
-        sent.send(u).unwrap();
-    });
+    let first = Sessions::new(&CARDS, Some(dir.clone()), move |u| sent.send(u).unwrap());
     first
         .start_game(&start(3, StopsSetting::EXACT), None)
         .unwrap();
@@ -460,9 +454,7 @@ fn a_game_resumed_from_its_save_plays_on_as_if_it_never_stopped() {
     saved.save(&path).unwrap();
 
     let (sent, views) = channel();
-    let second = Sessions::new(&CARDS, Some(dir.clone()), move |u| {
-        sent.send(u).unwrap();
-    });
+    let second = Sessions::new(&CARDS, Some(dir.clone()), move |u| sent.send(u).unwrap());
     let session = second.resume_latest().expect("the unfinished game resumes");
     assert_eq!(
         second.resume_latest(),
@@ -545,9 +537,7 @@ fn a_game_against_the_expert_resumes_at_any_decision() {
 fn only_an_unfinished_game_that_still_replays_is_resumed() {
     let dir = replay_dir("no-resume");
     let (sent, views) = channel();
-    let sessions = Sessions::new(&CARDS, Some(dir.clone()), move |u| {
-        sent.send(u).unwrap();
-    });
+    let sessions = Sessions::new(&CARDS, Some(dir.clone()), move |u| sent.send(u).unwrap());
     assert_eq!(sessions.resume_latest(), None, "no replay directory");
     assert_eq!(
         Sessions::new(&CARDS, None, |_| {}).resume_latest(),
@@ -566,9 +556,7 @@ fn only_an_unfinished_game_that_still_replays_is_resumed() {
     drop(sessions);
     let over = only_replay(&dir);
     let (sent, views) = channel();
-    let sessions = Sessions::new(&CARDS, Some(dir.clone()), move |u| {
-        sent.send(u).unwrap();
-    });
+    let sessions = Sessions::new(&CARDS, Some(dir.clone()), move |u| sent.send(u).unwrap());
     assert_eq!(sessions.resume_latest(), None, "the newest game is over");
     assert_eq!(sessions.current(), None);
 
