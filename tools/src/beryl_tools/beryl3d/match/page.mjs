@@ -98,6 +98,62 @@ export async function withPage(job, use) {
     return failed;
 }
 
+/** The text the page draws in a face that is not the first of its `font-family` list, one line
+ * per family, as lines for report.txt; empty when every line of text is drawn in the
+ * face its CSS asks for first. It runs in the page. A face counts as present when it is a
+ * loaded `@font-face`, or, for an installed font, when text set in it measures differently from
+ * text in at least one of the three generic families alone (a missing face falls back to the
+ * generic one and measures the same as it). */
+export function fontFallbacks() {
+    const GENERIC = new Set(["serif", "sans-serif", "monospace", "cursive", "fantasy", "system-ui"]);
+    const unquote = (name) => name.trim().replace(/^["']|["']$/g, "");
+    const canvas = document.createElement("canvas").getContext("2d");
+    const width = (font) => {
+        canvas.font = font;
+        return canvas.measureText("Hamburgefonstiv 0123 mmmmmm").width;
+    };
+    const present = new Map();
+    const isPresent = (name) => {
+        if (!present.has(name)) {
+            const declared = [...document.fonts].filter((f) => unquote(f.family) === name);
+            present.set(
+                name,
+                declared.length > 0
+                    ? declared.some((f) => f.status === "loaded")
+                    : ["serif", "sans-serif", "monospace"].some(
+                          (base) => width(`16px "${name}", ${base}`) !== width(`16px ${base}`),
+                      ),
+            );
+        }
+        return present.get(name);
+    };
+    const found = new Map();
+    const walk = (el) => {
+        const s = getComputedStyle(el);
+        if (s.display === "none") return;
+        const hasText = [...el.childNodes].some(
+            (n) => n.nodeType === Node.TEXT_NODE && n.data.trim(),
+        );
+        if (hasText && s.visibility !== "hidden") {
+            const list = s.fontFamily.split(",").map(unquote);
+            const first = list[0];
+            if (first && !GENERIC.has(first) && !isPresent(first)) {
+                const text = el.textContent.replace(/\s+/g, " ").trim().slice(0, 30);
+                const seen = found.get(first) ?? { list, count: 0, text };
+                seen.count++;
+                found.set(first, seen);
+            }
+        }
+        for (const child of el.children) walk(child);
+    };
+    walk(document.body);
+    return [...found].map(
+        ([first, { list, count, text }]) =>
+            `fonts: ${count} element(s) of text such as ${JSON.stringify(text)} ` +
+            `fall back from ${first} to the next face of ${list.join(", ")}`,
+    );
+}
+
 /** The page's elements as the contract's records. It runs in the page, so it defines what it
  * calls. With `only`, an index into the records, it marks that element's node with
  * `data-b3d-only` (dump.mjs's `ONLY`). With `light`, for one frame of many (motion.mjs), it

@@ -12,7 +12,7 @@
 //
 // page.mjs opens the page and reads its records.
 import { readFile, writeFile } from "node:fs/promises";
-import { FRAME, MOST, records, withPage } from "./page.mjs";
+import { FRAME, MOST, fontFallbacks, records, withPage } from "./page.mjs";
 
 /** Frames in a row the stage must be idle for the view to count as at rest. */
 const TAIL = 30;
@@ -74,6 +74,8 @@ const failed = await withPage(job, async (page, errors) => {
         await page.addStyleTag({ content: ONLY });
         await page.screenshot({ path: job.png });
     }
+    // snapshot.py puts each line printed here in report.txt as "warning: web <line>".
+    for (const line of await page.evaluate(fontFallbacks)) console.log(line);
     await writeFile(
         job.json,
         `${JSON.stringify({ target: job.target, scale: job.scale, elements }, null, 1)}\n`,
