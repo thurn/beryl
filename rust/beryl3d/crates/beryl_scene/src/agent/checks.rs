@@ -13,9 +13,7 @@ use super::hit::{
 };
 use super::tree::locator_of;
 use crate::data::audit;
-use crate::frame::{
-    Draw, Frame, Missing, Place, REVEALED_FACE, Ring, Ringed, Role, StateBits,
-};
+use crate::frame::{Draw, Frame, Missing, Place, REVEALED_FACE, Ring, Ringed, Role, StateBits};
 use crate::input::{Rect, Size};
 
 /// The most covering elements a "reachable" fault names.

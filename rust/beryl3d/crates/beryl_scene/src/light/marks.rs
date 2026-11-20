@@ -307,7 +307,12 @@ impl Outline {
         };
         let mut farthest = 0.0_f32;
         for inset in [false, true] {
-            for layer in self.shadows.iter().rev().filter(|layer| layer.inset == inset) {
+            for layer in self
+                .shadows
+                .iter()
+                .rev()
+                .filter(|layer| layer.inset == inset)
+            {
                 let [red, green, blue, _] = tint;
                 let opacity = u16::from(layer.color[3]) * u16::from(tint[3]) / 255;
                 let shadow = Shadow {
