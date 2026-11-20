@@ -117,7 +117,8 @@ pub mod scenarios {
                 THEM.has(Zone::Exile, Card::Island, 2),
                 THEM.has_cards(Zone::Library, 3),
                 THEM.has_cards(Zone::Hand, 0),
-                // Loyalty 0: put into its owner's graveyard (CR 704.5i).
+                // At loyalty 0 it is put into its owner's graveyard
+                // ([CR 704.5i](https://yawgatog.com/resources/magic-rules/#R7045i)).
                 ME.has(Zone::Graveyard, JACE, 1),
             ]),
     ];
