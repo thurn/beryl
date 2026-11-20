@@ -1,11 +1,11 @@
 {
  "targets": {
   "b3d:game-over/you/1600x900@2": {
-   "unmatched": 122,
+   "unmatched": 121,
    "boxes": 21,
    "styles": 49,
    "unsupported": 19,
-   "pixels": 710461
+   "pixels": 708619
   },
   "b3d:game-over/you/393x759": {
    "unmatched": 65,
