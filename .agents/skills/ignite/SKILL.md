@@ -6,8 +6,8 @@ description: Start work through Ignite. `/ignite <ticket or small task>` does it
 # Ignite
 
 Ignite is the build, check and delivery system (`docs/ignite.md`). Workers are
-desktop-app sessions that the dispatcher hands tickets to; nothing here runs a
-loop. Run `ignite prime` first: it holds the workflow every ticket follows
+desktop-app sessions that the dispatcher hands tickets to, or headless CLI
+processes that the daemon runs itself; nothing here runs a loop. Run `ignite prime` first: it holds the workflow every ticket follows
 (start, test, land, release), and this skill does not repeat it.
 
 Pick the mode from the argument:
@@ -19,7 +19,8 @@ Pick the mode from the argument:
 | `sweep [older than N days] [dry]`      | [Sweep](#sweep)              |
 | `pool <n>` or `dispatch`               | [Staffing](#staffing)        |
 
-Titles, for every session: `⚒️` while working (`🚒` while working a regression
+Titles, for every session except a headless CLI worker (session ID starting with
+`cli-`), which has none: `⚒️` while working (`🚒` while working a regression
 ticket), `🔍` while waiting on the person's answer (only when a person is there),
 `✅` done, `⛔` stopped unfinished. Every final turn ends on one of the last
 three. A turn that ends to wait on a running command (an ignite verb or a
@@ -166,8 +167,15 @@ will work.
 
 ## Staffing
 
-For pool dispatch, a person opens the dispatcher in a folder outside the
-repository. Tell the person:
+A machine runs each app's workers in one of two modes. In CLI mode the daemon
+runs every worker itself as a headless `claude -p` or `codex exec` process, one
+per turn, so nothing needs staffing: set `mode = "cli"` and `slots` under
+`[machine.<name>.pool.<app>]` in `ignite.toml` (with `[pool.cli.<app>]` naming
+the program), or run `ignite pool mode <app> cli|desktop|config`, which
+outranks the file until set back to `config`. Watch a worker with
+`ignite pool watch <ticket>` and steer it with `ignite tell` (`--now` ends the
+running turn). Desktop mode, the default, needs a dispatcher; for pool dispatch,
+a person opens it in a folder outside the repository. Tell the person:
 
 1. Run `ignite pool init` once per machine from the main checkout. It writes
    `~/ignite` with the dispatcher's instructions and the main checkout's path,

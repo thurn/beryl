@@ -129,7 +129,9 @@ situation, and a command names the topic when it applies.
   answer (only when a person is there), `✅` when done and `⛔` when stopped
   unfinished. `ignite start` prints the title to set. Every final turn ends on
   one of the last three (Claude Desktop: `set_session_title` on `self`; Codex:
-  `set_thread_title`).
+  `set_thread_title`). A headless CLI worker, whose session ID starts with
+  `cli-`, has no title to set: `ignite start` prints none and this rule does not
+  apply to it.
 - File tickets freely and in parallel with `ignite ticket create`, and record
   plans, designs and decisions on their tickets. Merge conflicts are cheap:
   `ignite land` rebases, and you fix and land again. A single ticket is filed

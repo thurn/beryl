@@ -3322,14 +3322,20 @@ ignite ticket update MAB12 --every 2d
 
 ## Workers, the pool and the dispatcher
 
-Workers are sessions in the Claude and Codex desktop apps, so a person can see
-every one in the app's sidebar, open it, and steer it from another device with
-the app's Remote Control feature. Ignite makes handing them work cheap, and each
-machine's daemon holds work back while that machine is full.
+In desktop mode, the default, workers are sessions in the Claude and Codex
+desktop apps, so a person can see every one in the app's sidebar, open it, and
+steer it from another device with the app's Remote Control feature. In CLI mode
+(see [CLI mode](#cli-mode)) the daemon runs each worker as a headless CLI
+process, and a person watches it with `ignite pool watch` or the dashboard. The
+mode is set per machine and per app. Ignite makes handing workers work cheap,
+and each machine's daemon holds work back while that machine is full.
 
 ### The pool
 
-Each machine has one standing pool that serves every active epic.
+Each machine has one standing pool that serves every active epic. The steps
+below that name a dispatcher apply to apps in desktop mode; an app in CLI mode
+has no dispatcher and its slots come from `ignite.toml` (see
+[CLI mode](#cli-mode)).
 
 - `ignite pool init`, run from the main checkout, writes the dispatcher's
   instructions into `~/ignite`. In Claude, a person opens a session there and
@@ -3708,9 +3714,16 @@ Messages, usage and repair:
   with the new build, so a release that cannot read an older build's rows is
   rejected before any daemon restarts into it.
 - When the daemon has been down for 15 minutes and `justiciar-needed.json`
-  exists, the monitor starts one headless justiciar turn in the main checkout
-  with the crash evidence and resumes it on later runs, at most 6 turns per
-  incident and never two at once.
+  exists, a machine with an app in CLI mode has its monitor start one headless
+  justiciar turn in the main checkout, on the `opus` tier at `high` effort, as
+  session `cli-monitor-justiciar`. Its prompt is `ignite guide justiciar` with
+  the crash evidence: the monitor's request, the newest crash record, and the
+  last 50 lines of the daemon's log and of `starts.jsonl`. The turn holds
+  `monitor/justiciar.lock` in the Ignite home and logs to
+  `monitor/justiciar-<n>.log`. Later runs resume its transcript while the daemon
+  still does not answer, at most 6 turns per incident and never two at once. The
+  incident ends once the daemon has answered in two runs in a row. A machine
+  with no app in CLI mode gets none of this.
 - The daemon sends a digest of each transcript to the hub, which shows it at
   `/pool/session/<id>` with a box that sends `ignite tell`.
   `ignite pool watch <ticket or session>` follows the same digest in a terminal,
@@ -4197,7 +4210,8 @@ release branch when Ignite blocks its own landing.
   carry the label `hub`.
 - A daemon keeps one worker free for justiciar tickets while its pool has more
   than one worker, so a pool full of stuck tickets cannot starve the ticket that
-  would free them.
+  would free them. In CLI mode that is the one slot above `slots`, which takes
+  only tickets that hold `master` back.
 - When the hub cannot be reached for 15 minutes, a daemon hands a justiciar
   prompt to its own idle worker directly, since the hub is what would have filed
   the ticket.
@@ -4205,9 +4219,12 @@ release branch when Ignite blocks its own landing.
   reach it. If the monitor has written `justiciar-needed.json`, the client
   answers with a hand-off of a justiciar prompt to a worker of the pool, which
   it reads from the daemon's database.
-- The one fault nothing automatic repairs is a missing dispatcher: only a turn a
-  person started can start sessions. The daemon posts a notification when the
-  dispatcher stops answering.
+- For an app in desktop mode, the one fault nothing automatic repairs is a
+  missing dispatcher: only a turn a person started can start sessions. The
+  daemon posts a notification when the dispatcher stops answering. An app in CLI
+  mode has no dispatcher, and a machine that runs one repairs a daemon that
+  stays down by itself: the monitor starts a headless justiciar (see
+  [CLI mode](#cli-mode)).
 - A person can also declare an emergency by invoking the `/ignite-justiciar`
   skill in any session. That session files or claims the justiciar ticket,
   declares the emergency pause (below), fixes the fault first and validates
@@ -4226,14 +4243,15 @@ release branch when Ignite blocks its own landing.
   the step that swaps in the real thing as a ticket that depends on the person's
   ticket. Nothing in the pool waits on the person. The justiciar then closes its
   ticket, and titles itself ⛔ only when no interim path exists.
-- An order is a message from the dispatcher that starts
-  `Message about <ticket>:`. `ignite tell` signs each comment `from <session>`,
-  taken from the session the caller's environment names. A worker checks an
-  order with `ignite ticket show <ticket>`: the ticket must be labelled
-  `justiciar` and held by the session the order names. The skill therefore reads
-  its own session ID (`mcp__ccd_session_mgmt__get_session` with `self`, or the
-  thread ID on Codex) before it declares, and uses it in the ticket comment and
-  every order.
+- An order is a message that starts `Message about <ticket>:`, sent through the
+  dispatcher in desktop mode and as an `ignite tell` for a CLI session, which
+  ends the running turn and resumes with it. `ignite tell` signs each comment
+  `from <session>`, taken from the session the caller's environment names. A
+  worker checks an order with `ignite ticket show <ticket>`: the ticket must be
+  labelled `justiciar` and held by the session the order names. The skill
+  therefore reads its own session ID (`mcp__ccd_session_mgmt__get_session` with
+  `self`, or the thread ID on Codex) before it declares, and uses it in the
+  ticket comment and every order.
 
 #### The emergency pause
 
@@ -4898,12 +4916,27 @@ These show that cores, trees and workers go where the rules say.
 - **No free tree.** Lease every ticket tree and run `ignite start` in one more
   session. Expect a wait that names the reason, no new directory, and no
   hand-off from the dispatcher.
-- **The dispatcher.** Run `ignite pool init`, open a session in `~/ignite` and
-  send `/ignite pool 4`. Expect four workers whose folder is the main checkout.
-  File six ready tickets. Expect four hand-offs at once and two as workers
-  finish, and each worker titled with its ticket. After 50 hand-offs, expect the
-  dispatcher's transcript to show at least one compaction and no request with
-  more than about 130,000 tokens of context.
+- **The dispatcher (desktop mode).** Run `ignite pool init`, open a session in
+  `~/ignite` and send `/ignite pool 4`. Expect four workers whose folder is the
+  main checkout. File six ready tickets. Expect four hand-offs at once and two
+  as workers finish, and each worker titled with its ticket. After 50 hand-offs,
+  expect the dispatcher's transcript to show at least one compaction and no
+  request with more than about 130,000 tokens of context.
+- **CLI mode.** Set an app to `mode = "cli"`, restart the daemon and file two
+  ready tickets. Expect `ignite pool list` to show the mode and the slots, two
+  workers whose session IDs start with `cli-`, and no dispatcher. Run
+  `ignite pool watch <ticket>` and expect the worker's messages and tool calls.
+  Run `ignite pool mode <app> desktop` and expect running workers to finish and
+  new hand-offs to wait for a dispatcher.
+- **A CLI turn killed.** Kill a CLI worker's process mid-turn, then restart the
+  daemon. Expect the turn to resume with the interruption message, the ticket
+  still held, and no second turn on the transcript.
+- **A CLI hold.** Make the app's program fail before its first line. Expect one
+  notification and one justiciar report, no turn started for that app, a probe
+  turn every 5 minutes, and every parked slot resumed after the first success.
+- **A headless justiciar.** On a machine with an app in CLI mode, stop the
+  daemon for 15 minutes with its kickstart failing. Expect the monitor to start
+  a justiciar turn and no second one while it runs.
 - **A stalled worker.** Stop a worker mid-ticket. Expect one message after 30
   minutes, then the ticket released, the tree reset and a comment on the ticket.
 - **A waiting worker.** Have a worker run `ignite wait` on a landing that is
