@@ -30,6 +30,8 @@ tauri-build = { version = "2", features = [] }
 crossbeam-utils = "0.8.23"
 tauri = { version = "2", features = [] }
 beryl_session = { path = "../beryl_session" }
+# The card table the app's games are played with, which `beryl_session` takes as a value.
+beryl_cards = { path = "../beryl_cards" }
 # Profiles, data folders, bug report storage and resuming, shared with Beryl 3D.
 beryl_shell = { path = "../beryl_shell" }
 # Runs the manual table and projects it onto the shared game-update event.

@@ -42,7 +42,9 @@ fn a_game_dropped_mid_game_resumes_from_a_second_sessions_on_the_same_dirs() {
     };
 
     let (sent, views) = channel();
-    let first = sessions(&dirs, move |update| sent.send(update).unwrap());
+    let first = sessions(&beryl_cards::CARDS, &dirs, move |update| {
+        sent.send(update).unwrap()
+    });
     first.start_game(&start, None).unwrap();
     let stopped = to_decision(&views);
     assert!(matches!(stopped.status, Status::Deciding { .. }));
@@ -54,7 +56,9 @@ fn a_game_dropped_mid_game_resumes_from_a_second_sessions_on_the_same_dirs() {
     );
 
     let (sent, views) = channel();
-    let second = sessions(&dirs, move |update| sent.send(update).unwrap());
+    let second = sessions(&beryl_cards::CARDS, &dirs, move |update| {
+        sent.send(update).unwrap()
+    });
     assert!(
         crate::resume_latest(&second).is_some(),
         "the unfinished game resumes"

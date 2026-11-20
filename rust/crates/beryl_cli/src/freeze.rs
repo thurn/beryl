@@ -67,7 +67,8 @@ pub fn main(args: &[String]) -> Result<(), String> {
 
 /// Freezes the replay file at `path`.
 fn freeze_replay(dir: &Path, path: &Path) -> Result<(), String> {
-    let mut file = ReplayFile::load(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let mut file = ReplayFile::load(path, &beryl_cards::CARDS)
+        .map_err(|e| format!("{}: {e}", path.display()))?;
     let ending = corpus::check(&CARDS, &file, None)
         .map_err(|f| format!("{} does not replay exactly: {f}", path.display()))?;
     let stem = path

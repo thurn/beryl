@@ -857,7 +857,7 @@ fn a_save_made_through_clicks_replays() {
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("clicks.json");
     play.game.replay().save(&path).unwrap();
-    let loaded = ReplayFile::load(&path);
+    let loaded = ReplayFile::load(&path, &beryl_cards::CARDS);
     std::fs::remove_dir_all(&dir).unwrap();
     let (replayed, view) = Game::from_replay(&CARDS, &loaded.unwrap(), SESSION).unwrap();
     assert_eq!(replayed.state(), play.game.state());

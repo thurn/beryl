@@ -135,7 +135,10 @@ pub fn record_all(definitions: &Path, out: &Path, only: &[String]) -> Result<(),
         }
         let mut messages =
             record(def, definitions).map_err(|e| format!("fixture {}: {e}", def.name))?;
-        messages.insert(0, beryl_session::card_records::fixture_message(&messages));
+        messages.insert(
+            0,
+            beryl_session::card_records::fixture_message(&messages, &beryl_cards::CARDS),
+        );
         // The stage asks for the timing of its own steps once, whatever the game.
         messages.insert(
             1,
@@ -365,7 +368,7 @@ fn listen(stop: &Arc<Stop>, across: bool) -> Listening {
     // The session sends the other seat's view of an update just before the human's.
     let other = Arc::new(Mutex::new(None));
     let drawn = Arc::clone(&other);
-    let sessions = Sessions::new(None, move |update| {
+    let sessions = Sessions::new(&beryl_cards::CARDS, None, move |update| {
         crate::panics::watch(|| {
             let told = sent.clone();
             move |panic| drop(told.send(Err(panic)))

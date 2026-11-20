@@ -188,7 +188,7 @@ fn a_loaded_version_1_save_is_in_the_format_of_today() {
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("v1.json");
     std::fs::write(&path, version_1(game.replay()).to_string()).unwrap();
-    let loaded = ReplayFile::load(&path);
+    let loaded = ReplayFile::load(&path, &beryl_cards::CARDS);
     std::fs::remove_dir_all(&dir).unwrap();
     let loaded = loaded.unwrap();
     assert_eq!(loaded.format_version, FORMAT_VERSION);

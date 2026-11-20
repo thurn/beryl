@@ -621,7 +621,9 @@ pub fn start(
     let (table, state) = prepare(variant)?;
     let opponent = opponent::Opponent::new(variant, view.other(), &table)?;
     let stand_in = Scripted::with_actions(&[], view.seat(), &table, Shared::default())?;
-    let sessions = Sessions::new(None, move |update| emit(update, Phase::Live));
+    let sessions = Sessions::new(&beryl_cards::CARDS, None, move |update| {
+        emit(update, Phase::Live)
+    });
     sessions
         .start_prepared(Prepared {
             opponent: Box::new(opponent),

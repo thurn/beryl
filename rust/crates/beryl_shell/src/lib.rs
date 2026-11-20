@@ -12,12 +12,18 @@ pub mod reports;
 pub use dirs::{Dirs, desktop_base, desktop_logs};
 pub use profile::{InvalidName, Profile};
 
+use beryl_engine::CardTable;
 use beryl_session::{GameUpdate, SessionId, Sessions};
 
-/// The sessions, writing replays into `<data>/replays` and the games ledger into
+/// The sessions, playing with `cards`, writing replays into `<data>/replays` and the games ledger into
 /// `<data>/games.jsonl`, and handing every update to `emit`.
-pub fn sessions(dirs: &Dirs, emit: impl Fn(GameUpdate) + Send + Sync + 'static) -> Sessions {
-    Sessions::new(Some(dirs.data.join("replays")), emit).with_ledger(dirs.data.join("games.jsonl"))
+pub fn sessions(
+    cards: &'static CardTable,
+    dirs: &Dirs,
+    emit: impl Fn(GameUpdate) + Send + Sync + 'static,
+) -> Sessions {
+    Sessions::new(cards, Some(dirs.data.join("replays")), emit)
+        .with_ledger(dirs.data.join("games.jsonl"))
 }
 
 /// Resumes the newest unfinished game saved in the sessions' replay folder, if there is one

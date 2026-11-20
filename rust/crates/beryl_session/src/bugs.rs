@@ -558,7 +558,7 @@ mod tests {
     #[test]
     fn writes_a_report_without_a_game() {
         let dir = std::env::temp_dir().join(format!("beryl-bugs-{}", std::process::id()));
-        let sessions = Sessions::new(None, |_| {});
+        let sessions = Sessions::new(&beryl_cards::CARDS, None, |_| {});
         let report = BugReport {
             description: "The button: it vanished\nafter I clicked".to_owned(),
             ai: true,
@@ -625,7 +625,7 @@ mod tests {
     #[test]
     fn spec_notes_name_their_moment_and_are_counted_while_open() {
         let dir = std::env::temp_dir().join(format!("beryl-spec-bugs-{}", std::process::id()));
-        let sessions = Sessions::new(None, |_| {});
+        let sessions = Sessions::new(&beryl_cards::CARDS, None, |_| {});
         let note = |description: &str| BugReport {
             description: description.to_owned(),
             ai: false,

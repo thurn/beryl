@@ -84,7 +84,8 @@ fn agent_name<'a>(file: &'a ReplayFile, searcher_name: Option<&'a str>) -> &'a s
 
 /// With `only`, the agent searches that turn's decisions alone and the transcript ends with it.
 fn review(path: &Path, searcher_name: Option<&str>, only: Option<u16>) -> Result<String, String> {
-    let file = ReplayFile::load(path).map_err(|e| format!("{}: {e:?}", path.display()))?;
+    let file = ReplayFile::load(path, &beryl_cards::CARDS)
+        .map_err(|e| format!("{}: {e:?}", path.display()))?;
     let mut walk = Walk::of_file(&file)?;
     let bot = walk.human.opponent();
     let name = agent_name(&file, searcher_name);

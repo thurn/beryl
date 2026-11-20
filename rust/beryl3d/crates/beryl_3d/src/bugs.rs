@@ -308,7 +308,7 @@ impl Job {
         let sessions = if let Some(sessions) = sessions {
             sessions
         } else {
-            none = Sessions::new(None, |_| {});
+            none = Sessions::new(&beryl_cards::CARDS, None, |_| {});
             &none
         };
         let environment = Environment::current();

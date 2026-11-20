@@ -226,7 +226,7 @@ fn ui_log(request: UiLogRequest) {
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
 fn card_records(request: CardRecordsRequest) -> CardRecords {
-    beryl_session::card_records::card_records(&request)
+    beryl_session::card_records::card_records(&request, &beryl_cards::CARDS)
 }
 
 /// Tells long searches whether the stage is animating ([`ipc::STAGE_ANIMATING`]).

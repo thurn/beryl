@@ -9,7 +9,6 @@
 
 use std::path::Path;
 
-use beryl_cards::CARDS;
 use beryl_engine::chance::Random;
 use beryl_engine::{CardTable, GameTable, LargeCardIx, Seat, State, TableError};
 use serde::{Deserialize, Serialize};
@@ -243,12 +242,12 @@ impl ReplayFile {
     }
 
     /// Reads the file at `path`, upgraded to the format this build writes ([`crate::migrate`]).
-    pub fn load(path: &Path) -> Result<ReplayFile, SessionError> {
+    pub fn load(path: &Path, cards: &'static CardTable) -> Result<ReplayFile, SessionError> {
         let text = std::fs::read_to_string(path).map_err(SessionError::io(path))?;
         let file = serde_json::from_str(&text).map_err(|e| SessionError::BadReplay {
             reason: e.to_string(),
         })?;
-        migrate::to_current(file, &CARDS)
+        migrate::to_current(file, cards)
     }
 
     /// Writes the file whole: to a sibling first, then renamed over `path`, so a reader never

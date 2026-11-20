@@ -16,9 +16,8 @@
 
 use std::thread;
 
-use beryl_cards::CARDS;
 use beryl_engine::rng::SplitMix64;
-use beryl_engine::{GameTable, Outcome, Profile, Scratch, Seat, State};
+use beryl_engine::{CardTable, GameTable, Outcome, Profile, Scratch, Seat, State};
 use beryl_search::{RolloutPolicy, Softmax, soft_rollout};
 
 use crate::game::with_stops;
@@ -64,8 +63,12 @@ const TEMPERATURE: f64 = 10.0;
 
 /// The seed, out of `fairness.deals` candidates drawn from `start.seed`, whose deal the first
 /// seat wins closest to half the time.
-pub fn fair_seed(start: &StartGame, fairness: Fairness) -> Result<u64, SessionError> {
-    let (table, _) = ReplayFile::dealt(start).setup(&CARDS)?;
+pub fn fair_seed(
+    cards: &'static CardTable,
+    start: &StartGame,
+    fairness: Fairness,
+) -> Result<u64, SessionError> {
+    let (table, _) = ReplayFile::dealt(start).setup(cards)?;
     let profile = with_stops(Profile::SMART, start.stops, start.human);
     let policy = RolloutPolicy::new(&table);
     let mut stream = SplitMix64::new(start.seed);
@@ -149,7 +152,7 @@ mod tests {
     use crate::protocol::StopsSetting;
 
     fn start(seed: u64) -> StartGame {
-        let deck = beryl_cards::decks::default_deck();
+        let deck = beryl_card_names::decks::default_deck();
         StartGame {
             seed,
             decks: [deck.clone(), deck],
@@ -166,14 +169,16 @@ mod tests {
 
     #[test]
     fn the_same_seed_picks_the_same_deal() {
-        let a = fair_seed(&start(7), SMALL).unwrap();
-        assert_eq!(a, fair_seed(&start(7), SMALL).unwrap());
+        let a = fair_seed(&beryl_cards::CARDS, &start(7), SMALL).unwrap();
+        assert_eq!(a, fair_seed(&beryl_cards::CARDS, &start(7), SMALL).unwrap());
     }
 
     #[test]
     fn the_pick_is_the_candidate_nearest_even() {
         let start = start(11);
-        let (table, _) = ReplayFile::dealt(&start).setup(&CARDS).unwrap();
+        let (table, _) = ReplayFile::dealt(&start)
+            .setup(&beryl_cards::CARDS)
+            .unwrap();
         let profile = with_stops(Profile::SMART, start.stops, start.human);
         let policy = RolloutPolicy::new(&table);
         let mut stream = SplitMix64::new(start.seed);
@@ -190,7 +195,7 @@ mod tests {
                 win_rate(&table, &policy, seed, state, SMALL.playouts).to_bits()
             );
         }
-        let picked = fair_seed(&start, SMALL).unwrap();
+        let picked = fair_seed(&beryl_cards::CARDS, &start, SMALL).unwrap();
         let at = seeds.iter().position(|&s| s == picked).unwrap();
         let gap = |r: f64| (r - 0.5).abs();
         assert!(rates.iter().all(|&r| gap(rates[at]) <= gap(r)));

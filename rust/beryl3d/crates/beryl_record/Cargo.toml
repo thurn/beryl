@@ -21,3 +21,5 @@ beryl_inspect = { path = "../beryl_inspect" }
 beryl_cli = { path = "../../../crates/beryl_cli" }
 # The card records each recording is headed by (`card_records::fixture_message`).
 beryl_session = { path = "../../../crates/beryl_session" }
+# The card table whose cards the records are made for.
+beryl_cards = { path = "../../../crates/beryl_cards" }

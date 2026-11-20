@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use beryl_cards::CARDS;
+use beryl_engine::CardTable;
 use beryl_search::Budget;
 use serde_json::json;
 
@@ -28,7 +28,7 @@ use crate::{
 /// The game the UI's request starts: the default deck's mirror against the agent it names,
 /// the human in seat 0 under the smart stops.
 fn requested_game(request: &StartRequest) -> StartGame {
-    let deck = beryl_cards::decks::default_deck();
+    let deck = beryl_card_names::decks::default_deck();
     StartGame {
         seed: request.seed.map_or_else(clock_seed, u64::from),
         decks: [deck.clone(), deck],
@@ -42,6 +42,8 @@ type Emit = dyn Fn(GameUpdate) + Send + Sync;
 
 /// The game in progress, if any, and every view it emits, sent to one callback.
 pub struct Sessions {
+    /// The cards every game in these sessions is played with.
+    cards: &'static CardTable,
     /// Where replay files go, if anywhere.
     replays: Option<PathBuf>,
     pub(crate) ledger: Option<Arc<Ledger>>,
@@ -69,13 +71,15 @@ struct Current {
 }
 
 impl Sessions {
-    /// Sessions that write each game's replay into `replays`, if given, and send every view
-    /// to `emit`.
+    /// Sessions that play games with `cards`, write each game's replay into `replays`, if
+    /// given, and send every view to `emit`.
     pub fn new(
+        cards: &'static CardTable,
         replays: Option<PathBuf>,
         emit: impl Fn(GameUpdate) + Send + Sync + 'static,
     ) -> Sessions {
         Sessions {
+            cards,
             replays,
             ledger: None,
             emit: Arc::new(emit),
@@ -123,7 +127,7 @@ impl Sessions {
     pub fn start(&self, request: &StartRequest) -> Result<SessionId, SessionError> {
         let mut start = requested_game(request);
         if request.fair {
-            start.seed = fair::fair_seed(&start, Fairness::THIS_DEVICE)?;
+            start.seed = fair::fair_seed(self.cards, &start, Fairness::THIS_DEVICE)?;
         }
         self.start_game(&start, None)
     }
@@ -166,7 +170,7 @@ impl Sessions {
         });
         self.launch(
             |session| {
-                let mut game = Game::with_budget(&CARDS, start, session, self.budget)?;
+                let mut game = Game::with_budget(self.cards, start, session, self.budget)?;
                 if let Some(hand_over) = hand_over {
                     game.hand_over_when(hand_over);
                 }
@@ -222,10 +226,10 @@ impl Sessions {
             return Some(*session);
         }
         let path = newest_replay(self.replays.as_ref()?)?;
-        let resumed = ReplayFile::load(&path).and_then(|file| {
+        let resumed = ReplayFile::load(&path, self.cards).and_then(|file| {
             // Replayed apart first, so an ended game is left alone without a session.
             let (_, view) =
-                Game::from_replay_with_budget(&CARDS, &file, SessionId(0), self.budget)?;
+                Game::from_replay_with_budget(self.cards, &file, SessionId(0), self.budget)?;
             if matches!(view.status, Status::Over { .. }) {
                 return Ok(None);
             }
@@ -251,7 +255,7 @@ impl Sessions {
     ///
     /// When the file cannot be read, or its game does not replay.
     pub fn resume_replay(&self, path: &Path) -> Result<SessionId, SessionError> {
-        let file = ReplayFile::load(path)?;
+        let file = ReplayFile::load(path, self.cards)?;
         self.resume_file(&file, path, None)
     }
 
@@ -282,7 +286,7 @@ impl Sessions {
         self.launch(
             |session| {
                 let (game, view) =
-                    Game::from_replay_with_budget(&CARDS, file, session, self.budget)?;
+                    Game::from_replay_with_budget(self.cards, file, session, self.budget)?;
                 Ok((game, Some(view)))
             },
             None,

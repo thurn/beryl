@@ -85,7 +85,8 @@ pub fn reach(e: &Entry) -> Result<Reached, String> {
     let mut walk = match &e.source {
         Source::Replay(path) => {
             let path = root().join(path);
-            let file = ReplayFile::load(&path).map_err(|err| drift(format!("{err:?}")))?;
+            let file = ReplayFile::load(&path, &beryl_cards::CARDS)
+                .map_err(|err| drift(format!("{err:?}")))?;
             Walk::of_file(&file).map_err(drift)?
         }
         Source::Seeded(path) => {

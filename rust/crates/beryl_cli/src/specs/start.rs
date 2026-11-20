@@ -62,7 +62,7 @@ pub(super) fn start_guarded(
     let watched = Arc::clone(&progress);
     #[cfg(test)]
     let first = std::sync::atomic::AtomicBool::new(true);
-    let sessions = Sessions::new(None, move |update| {
+    let sessions = Sessions::new(&beryl_cards::CARDS, None, move |update| {
         #[cfg(test)]
         if !first.swap(false, std::sync::atomic::Ordering::Relaxed)
             && FAULTS.lock().unwrap().contains(&moment.board.name)
@@ -146,7 +146,7 @@ pub(super) fn start_review(
             .map(|a| Box::new(a) as Box<dyn GameAgent + Send>)
     };
     let watched = Arc::clone(&progress);
-    let sessions = Sessions::new(None, |_| {});
+    let sessions = Sessions::new(&beryl_cards::CARDS, None, |_| {});
     sessions
         .start_review(
             Prepared {

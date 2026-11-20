@@ -33,9 +33,12 @@ fn engine_names() -> Vec<&'static str> {
 #[test]
 fn every_face_token_and_emblem_name_is_in_the_card_store() {
     let names = engine_names();
-    let found = card_records(&CardRecordsRequest {
-        names: names.iter().map(|&n| n.to_owned()).collect(),
-    });
+    let found = card_records(
+        &CardRecordsRequest {
+            names: names.iter().map(|&n| n.to_owned()).collect(),
+        },
+        &CARDS,
+    );
     let missing: Vec<_> = names
         .into_iter()
         .filter(|n| !found.cards.contains_key(*n) && !found.tokens.contains_key(*n))
@@ -60,7 +63,7 @@ fn the_card_back_is_the_one_cards_in_the_store_have() {
 fn the_nameless_token_is_a_copy_token_in_the_store() {
     let copies = STORE.tokens("Copy");
     assert!(copies.iter().any(|t| t.scryfall_id == NAMELESS_TOKEN_ID));
-    let found = card_records(&CardRecordsRequest { names: Vec::new() });
+    let found = card_records(&CardRecordsRequest { names: Vec::new() }, &CARDS);
     assert!(
         found
             .nameless_token
@@ -73,9 +76,12 @@ fn the_nameless_token_is_a_copy_token_in_the_store() {
 #[test]
 fn a_token_is_the_printing_its_card_makes() {
     let names = ["Insect Token", "Human Token", "Spirit Token", "Map Token"];
-    let found = card_records(&CardRecordsRequest {
-        names: names.map(str::to_owned).into(),
-    });
+    let found = card_records(
+        &CardRecordsRequest {
+            names: names.map(str::to_owned).into(),
+        },
+        &CARDS,
+    );
     let shown = |name: &str| {
         let face = &found.tokens[name].faces[0];
         (
@@ -148,16 +154,22 @@ fn implemented_cards_make_one_token_of_each_name() {
 
 #[test]
 fn a_fixture_s_strings_find_the_names_among_them() {
-    let found = card_records_among(["Island", "Main phase", "Island", "Samurai Token", ""]);
+    let found = card_records_among(
+        ["Island", "Main phase", "Island", "Samurai Token", ""],
+        &CARDS,
+    );
     assert_eq!(found.cards.keys().collect::<Vec<_>>(), ["Island"]);
     assert_eq!(found.tokens.keys().collect::<Vec<_>>(), ["Samurai Token"]);
 }
 
 #[test]
 fn requests_keep_the_asked_name_for_case_insensitive_card_matches() {
-    let records = card_records(&CardRecordsRequest {
-        names: vec!["insectile aberration".to_owned(), "constructor".to_owned()],
-    });
+    let records = card_records(
+        &CardRecordsRequest {
+            names: vec!["insectile aberration".to_owned(), "constructor".to_owned()],
+        },
+        &CARDS,
+    );
     let card = &records.cards["insectile aberration"];
     assert_eq!(card.faces[1].name, "Insectile Aberration");
     assert!(!records.cards.contains_key("constructor"));

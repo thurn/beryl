@@ -181,8 +181,8 @@ impl Live {
         );
         let decks = Decks::new(data.join("decks"));
         let sessions = match dirs {
-            Some(dirs) => beryl_shell::sessions(&dirs, emit),
-            None => Sessions::new(None, emit),
+            Some(dirs) => beryl_shell::sessions(&beryl_cards::CARDS, &dirs, emit),
+            None => Sessions::new(&beryl_cards::CARDS, None, emit),
         };
         let table_views = inbox.clone();
         let events = inbox.clone();
@@ -305,9 +305,12 @@ pub fn decklist_records(decks: &[Vec<(u8, String)>]) -> CardRecords {
             );
         }
     }
-    card_records(&CardRecordsRequest {
-        names: names.into_iter().collect(),
-    })
+    card_records(
+        &CardRecordsRequest {
+            names: names.into_iter().collect(),
+        },
+        &beryl_cards::CARDS,
+    )
 }
 
 /// One search of the opponent's: how long its decision took in milliseconds, search and all,

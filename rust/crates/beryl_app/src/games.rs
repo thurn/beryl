@@ -14,7 +14,9 @@ use tauri::{AppHandle, Emitter, State};
 /// views to the UI.
 pub fn sessions(app: &AppHandle, dirs: &Dirs) -> Sessions {
     let app = app.clone();
-    beryl_shell::sessions(dirs, move |update| emit_update(&app, update))
+    beryl_shell::sessions(&beryl_cards::CARDS, dirs, move |update| {
+        emit_update(&app, update)
+    })
 }
 
 pub(super) fn emit_update(app: &AppHandle, update: GameUpdate) {

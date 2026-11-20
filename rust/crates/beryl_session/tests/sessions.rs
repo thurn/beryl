@@ -132,7 +132,9 @@ fn a_resumed_game_keeps_its_callers_search_budget() {
 fn a_scripted_human_plays_a_whole_game_and_its_replay_reproduces_it() {
     let dir = std::env::temp_dir().join(format!("beryl-session-{}", std::process::id()));
     let (sent, views) = channel();
-    let sessions = Sessions::new(Some(dir.clone()), move |u| sent.send(u).unwrap());
+    let sessions = Sessions::new(&beryl_cards::CARDS, Some(dir.clone()), move |u| {
+        sent.send(u).unwrap()
+    });
     let session = sessions
         .start_game(
             &StartGame {
@@ -217,7 +219,7 @@ fn a_scripted_human_plays_a_whole_game_and_its_replay_reproduces_it() {
 
     let replays: Vec<_> = std::fs::read_dir(&dir).unwrap().collect();
     assert_eq!(replays.len(), 1, "one replay file per game");
-    let file = ReplayFile::load(&replays[0].as_ref().unwrap().path()).unwrap();
+    let file = ReplayFile::load(&replays[0].as_ref().unwrap().path(), &beryl_cards::CARDS).unwrap();
     assert!(file.log.len() > decisions as usize);
     let (_, replayed) = Game::from_replay(&CARDS, &file, session).unwrap();
     assert_eq!(replayed, last);
@@ -255,7 +257,7 @@ fn to_decision(views: &std::sync::mpsc::Receiver<beryl_session::GameUpdate>) -> 
 #[test]
 fn the_latest_view_of_the_game_in_progress_is_kept_for_a_reloaded_ui() {
     let (sent, views) = channel();
-    let sessions = Sessions::new(None, move |u| sent.send(u).unwrap());
+    let sessions = Sessions::new(&beryl_cards::CARDS, None, move |u| sent.send(u).unwrap());
     assert_eq!(sessions.current(), None, "no game");
     let first = sessions
         .start_game(&start(2, StopsSetting::SMART), None)
@@ -289,7 +291,9 @@ fn the_latest_view_of_the_game_in_progress_is_kept_for_a_reloaded_ui() {
 fn a_concession_ends_the_game_in_defeat_and_its_replay_reproduces_it() {
     let dir = std::env::temp_dir().join(format!("beryl-concede-{}", std::process::id()));
     let (sent, views) = channel();
-    let sessions = Sessions::new(Some(dir.clone()), move |u| sent.send(u).unwrap());
+    let sessions = Sessions::new(&beryl_cards::CARDS, Some(dir.clone()), move |u| {
+        sent.send(u).unwrap()
+    });
     let session = sessions
         .start_game(&start(4, StopsSetting::SMART), None)
         .unwrap();
@@ -324,7 +328,7 @@ fn a_concession_ends_the_game_in_defeat_and_its_replay_reproduces_it() {
     assert_eq!(sessions.choose(id, index), Err(SessionError::NotDeciding));
 
     let replays: Vec<_> = std::fs::read_dir(&dir).unwrap().collect();
-    let file = ReplayFile::load(&replays[0].as_ref().unwrap().path()).unwrap();
+    let file = ReplayFile::load(&replays[0].as_ref().unwrap().path(), &beryl_cards::CARDS).unwrap();
     let (_, replayed) = Game::from_replay(&CARDS, &file, session).unwrap();
     assert_eq!(replayed.status, over.status);
     std::fs::remove_dir_all(&dir).unwrap();
@@ -438,7 +442,9 @@ fn a_game_resumed_from_its_save_plays_on_as_if_it_never_stopped() {
 
     let dir = replay_dir("resume");
     let (sent, views) = channel();
-    let first = Sessions::new(Some(dir.clone()), move |u| sent.send(u).unwrap());
+    let first = Sessions::new(&beryl_cards::CARDS, Some(dir.clone()), move |u| {
+        sent.send(u).unwrap()
+    });
     first
         .start_game(&start(3, StopsSetting::EXACT), None)
         .unwrap();
@@ -447,14 +453,16 @@ fn a_game_resumed_from_its_save_plays_on_as_if_it_never_stopped() {
     // The app quits at the human's decision.
     drop(first);
     let path = only_replay(&dir);
-    let mut saved = ReplayFile::load(&path).unwrap();
+    let mut saved = ReplayFile::load(&path, &beryl_cards::CARDS).unwrap();
     assert!(saved.commit.is_some(), "the save names its build");
     // A file from before saves named their build still resumes.
     saved.commit = None;
     saved.save(&path).unwrap();
 
     let (sent, views) = channel();
-    let second = Sessions::new(Some(dir.clone()), move |u| sent.send(u).unwrap());
+    let second = Sessions::new(&beryl_cards::CARDS, Some(dir.clone()), move |u| {
+        sent.send(u).unwrap()
+    });
     let session = second.resume_latest().expect("the unfinished game resumes");
     assert_eq!(
         second.resume_latest(),
@@ -472,7 +480,7 @@ fn a_game_resumed_from_its_save_plays_on_as_if_it_never_stopped() {
 
     // The resumed game keeps saving to its file.
     assert_eq!(only_replay(&dir), path);
-    let saved = ReplayFile::load(&path).unwrap();
+    let saved = ReplayFile::load(&path, &beryl_cards::CARDS).unwrap();
     assert_eq!(saved.log, game.replay().log);
     assert!(saved.commit.is_some());
     std::fs::remove_dir_all(&dir).unwrap();
@@ -537,10 +545,12 @@ fn a_game_against_the_expert_resumes_at_any_decision() {
 fn only_an_unfinished_game_that_still_replays_is_resumed() {
     let dir = replay_dir("no-resume");
     let (sent, views) = channel();
-    let sessions = Sessions::new(Some(dir.clone()), move |u| sent.send(u).unwrap());
+    let sessions = Sessions::new(&beryl_cards::CARDS, Some(dir.clone()), move |u| {
+        sent.send(u).unwrap()
+    });
     assert_eq!(sessions.resume_latest(), None, "no replay directory");
     assert_eq!(
-        Sessions::new(None, |_| {}).resume_latest(),
+        Sessions::new(&beryl_cards::CARDS, None, |_| {}).resume_latest(),
         None,
         "no replays at all"
     );
@@ -556,12 +566,14 @@ fn only_an_unfinished_game_that_still_replays_is_resumed() {
     drop(sessions);
     let over = only_replay(&dir);
     let (sent, views) = channel();
-    let sessions = Sessions::new(Some(dir.clone()), move |u| sent.send(u).unwrap());
+    let sessions = Sessions::new(&beryl_cards::CARDS, Some(dir.clone()), move |u| {
+        sent.send(u).unwrap()
+    });
     assert_eq!(sessions.resume_latest(), None, "the newest game is over");
     assert_eq!(sessions.current(), None);
 
     // Nor is a newer file that no longer replays: the player starts a new game.
-    let mut unknown = ReplayFile::load(&over).unwrap();
+    let mut unknown = ReplayFile::load(&over, &beryl_cards::CARDS).unwrap();
     unknown.log.truncate(unknown.log.len() / 2);
     unknown.decks[1][0].1 = "No Such Card".to_owned();
     let newer = dir.join("9999999998-1.json");

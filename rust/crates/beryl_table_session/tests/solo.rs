@@ -123,7 +123,7 @@ fn start_draw_play_tap_and_undo_emit_updates() {
 
 #[test]
 fn replacement_and_leave_retire_the_old_view() {
-    let engine = Sessions::new(None, |_| {});
+    let engine = Sessions::new(&beryl_cards::CARDS, None, |_| {});
     let ids = engine.session_ids();
     let tables = TableSessions::new(ids.clone(), |_| {});
     assert!(tables.current().is_none());

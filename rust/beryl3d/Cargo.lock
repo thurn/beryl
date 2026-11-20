@@ -433,6 +433,7 @@ dependencies = [
 name = "beryl_record"
 version = "0.1.0"
 dependencies = [
+ "beryl_cards",
  "beryl_cli",
  "beryl_inspect",
  "beryl_session",
@@ -514,9 +515,9 @@ name = "beryl_session"
 version = "0.1.0"
 dependencies = [
  "beryl_card",
+ "beryl_card_names",
  "beryl_card_records",
  "beryl_card_store",
- "beryl_cards",
  "beryl_engine",
  "beryl_protocol",
  "beryl_search",
@@ -535,6 +536,7 @@ dependencies = [
 name = "beryl_shell"
 version = "0.1.0"
 dependencies = [
+ "beryl_engine",
  "beryl_session",
  "serde_json",
 ]

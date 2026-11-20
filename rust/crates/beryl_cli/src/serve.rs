@@ -77,7 +77,7 @@ impl BrowserSeat {
         let events = Arc::clone(&streams);
         let game_streams = Arc::clone(&streams);
         let emit = move |update: GameUpdate| broadcast(&game_streams, ipc::GAME_UPDATE, &update);
-        let sessions = Sessions::new(None, emit.clone());
+        let sessions = Sessions::new(&beryl_cards::CARDS, None, emit.clone());
         let tables =
             TableConnections::new(sessions.session_ids(), data.into(), emit, move |event| {
                 let (name, payload) = event.into_message();
@@ -268,7 +268,9 @@ fn events(mut stream: TcpStream, streams: &Streams) -> Result<(), String> {
 /// The [`ipc::CARD_RECORDS`] command's answer, which needs no game: the spec server's too.
 pub(crate) fn card_records(args: Value) -> Value {
     match serde_json::from_value::<Request<CardRecordsRequest>>(args) {
-        Ok(r) => json!({ "ok": beryl_session::card_records::card_records(&r.request) }),
+        Ok(r) => {
+            json!({ "ok": beryl_session::card_records::card_records(&r.request, &beryl_cards::CARDS) })
+        }
         Err(e) => json!({ "err": { "kind": "badRequest", "message": e.to_string() } }),
     }
 }
