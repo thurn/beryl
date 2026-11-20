@@ -45,6 +45,7 @@ mod execute;
 mod express;
 mod gate;
 mod keying;
+pub(crate) mod named;
 pub(crate) mod listings;
 mod observed;
 pub(crate) mod plan;

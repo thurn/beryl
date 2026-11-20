@@ -669,5 +669,10 @@
     "label": "The scheduler keeps a machine's `tip_build_cores` for the build checks of a tip round (`Reserve::TipBuild`), which start at once on them however full the machine is, so `green` and the tickets waiting on it are not held behind a dozen one-core commands; idle reserved cores are lent to the express lane and the release build",
     "metric": "ignite.master-lag-minutes",
     "expect": "down"
+  },
+  {
+    "label": "`ignite test <name>` leaves out a family whose listing needs a product build when every name it matches is also matched by a family that is cheap to list, and names it on a `skipped` line; `ignite test fork` after a one-line change to a card file spent 24 to 55 minutes listing two Beryl 3D interface families before running its one Rust test (2026-11-19)",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

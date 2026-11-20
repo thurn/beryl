@@ -335,6 +335,17 @@ The verbs an agent uses while working:
   one package. A test added in a package the branch does not change, whose name
   matches as well, is left out until the family is listed whole.
 
+  A family whose listing needs a product build (its listing is not kept for the
+  tree, its `list` needs a product, and it cannot be listed for some packages
+  only) is left out when every name it matches also matches a family that is
+  cheap to list. A `skipped` line names it, with the prefixed name that runs its
+  checks. On 2026-11-19 `ignite test fork`, after a one-line change to the card
+  Fork, matched one Rust test and also the recordings of Fork in two families of
+  Beryl 3D's interface checks, whose listing needs the client built; it spent 24
+  to 55 minutes listing those families before it ran the Rust test. A family
+  never listed on the machine whose listing needs a build is likewise listed
+  only when some name matched no cheap family.
+
   The families are listed, and then run, each on a thread of its own, so a
   family whose `list` needs no product is listed while another family's product
   builds, and the products of different families build at once where the

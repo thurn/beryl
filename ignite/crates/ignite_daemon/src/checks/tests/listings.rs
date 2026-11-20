@@ -310,3 +310,94 @@ fn a_named_test_lists_and_runs_only_its_packages() {
         "a scoped listing is not kept"
     );
 }
+
+/// After a one-line change to the card Fork, `ignite test fork` matched one Rust test and also
+/// the recordings of Fork in two interface families of the game's 3D client, whose listing needs
+/// that client built. It listed those families for 24 to 55 minutes before it ran the Rust
+/// test. A family whose listing needs a build is now left out when every name it matches also
+/// matches a family that is cheap to list, and the reply names it; a name with its prefix, or a
+/// name only it matches, still lists it.
+#[test]
+fn a_name_a_cheap_family_matches_skips_families_whose_listing_needs_a_build() {
+    let manifest = MANIFEST.replace(
+        "[family.rs]\n",
+        "[family.rs]\nlist = \"cargo nextest list {packages} --message-format json\"\n\
+         run = \"cargo nextest run {packages} --message-format libtest-json-plus\"\n",
+    );
+    let world = world(&manifest, &[], FakeHistory::default());
+    *world.launcher.listing.lock().unwrap() =
+        format!("{{\"check\": \"unit:core::a/you\"}}\n{NEXTEST_LISTING}\n");
+    *world.launcher.nextest_run.lock().unwrap() =
+        "{\"type\":\"test\",\"event\":\"ok\",\"name\":\"core::core$a\"}\n".to_owned();
+    let trees = FakeTrees {
+        graph: CrateGraph {
+            packages: vec![ignite_core::inputs::Package {
+                name: "core".to_owned(),
+                dir: "game/core".to_owned(),
+                deps: Vec::new(),
+                workspace: "game".to_owned(),
+            }],
+        },
+        ..FakeTrees::new(&world.dir, &[])
+    };
+    let checks = daemon(
+        &world,
+        ignite_store::local::open_in_memory().unwrap(),
+        trees,
+    );
+    assert!(run_on(&checks, &world, &["unit:core::a/you", "rs:core::a"]).passed());
+    // A change every family reads, as a card file is, leaves neither with a kept listing.
+    world
+        .git
+        .set_object("src", Oid::new("e".repeat(40)).unwrap());
+    let verb = TestVerb {
+        checks,
+        express: None,
+    };
+    let test = |words: &[&str]| {
+        let request = Request {
+            verb: "test".to_owned(),
+            args: words.iter().map(|w| (*w).to_owned()).collect(),
+            cwd: world.dir.join("sub"),
+            session: None,
+            wait_s: 1,
+            pid: None,
+        };
+        let reply = verb.run(&world.ctx, &request);
+        assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+        reply.text
+    };
+    let listers = world.launcher.commands("lister").len();
+    let cargo = world.launcher.commands("cargo").len();
+
+    let reply = test(&["core::a"]);
+    assert_eq!(
+        world.launcher.commands("lister").len(),
+        listers,
+        "the family whose listing needs a build is not listed"
+    );
+    assert!(
+        world.launcher.commands("cargo").len() > cargo,
+        "the Rust family is listed and run"
+    );
+    assert!(
+        reply.contains(
+            "skipped  unit also hold matching checks, but listing them needs a build; \
+             `ignite test unit:core::a` runs them"
+        ),
+        "{reply}"
+    );
+
+    // A name no cheap family matches lists it.
+    let reply = test(&["/you"]);
+    assert_eq!(world.launcher.commands("lister").len(), listers + 1);
+    assert!(!reply.contains("skipped"), "{reply}");
+
+    // So does its prefix, after another change leaves it without a kept listing again.
+    world
+        .git
+        .set_object("src", Oid::new("f".repeat(40)).unwrap());
+    let reply = test(&["unit:core::a", "core::a"]);
+    assert_eq!(world.launcher.commands("lister").len(), listers + 2);
+    assert!(!reply.contains("skipped"), "{reply}");
+}
