@@ -98,10 +98,9 @@
   left: 50%;
   top: calc(57 * var(--orb));
   translate: -50% -50%;
-  font-family: var(--font-serif);
+  font-family: var(--font-card);
   font-weight: 700;
   font-size: calc(48 * var(--orb));
-  letter-spacing: calc(-4 * var(--orb));
   line-height: 1;
   color: #fdfcfa;
   text-shadow: 0 calc(2 * var(--orb)) calc(3 * var(--orb)) rgb(0 0 0 / 80%);
