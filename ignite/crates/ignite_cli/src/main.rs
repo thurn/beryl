@@ -27,7 +27,14 @@ use ignite_core::protocol::client::Reply;
 use crate::args::{Cli, Command, DispatchCommand, HubCommand, InternalCommand, PoolCommand};
 
 fn main() -> ExitCode {
-    let raw = with_shim_verb(std::env::args().collect());
+    let raw: Vec<String> = std::env::args().collect();
+    // The launcher the daemon's launch agent starts on macOS. Its copy of this executable is
+    // never replaced, so this reads its arguments the same way in every release, before clap.
+    #[cfg(target_os = "macos")]
+    if raw.get(1).map(String::as_str) == Some(ignite_os::service::LAUNCH_VERB) {
+        return ExitCode::from(ignite_os::service::launch(&raw[2..]));
+    }
+    let raw = with_shim_verb(raw);
     let cli = Cli::try_parse_from(&raw).unwrap_or_else(|error| rejected::exit(&error, &raw));
     let reply = answer(&cli, &raw);
     if cli.json && reply.json.is_none() && reply.text.is_empty() {

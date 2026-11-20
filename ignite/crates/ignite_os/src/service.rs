@@ -12,6 +12,9 @@ mod macos;
 #[cfg(windows)]
 mod windows;
 
+#[cfg(target_os = "macos")]
+pub use macos::{LAUNCH_VERB, LAUNCHER, launch, launcher_for};
+
 /// The variables that tell `ignite hub` where to listen: the writable listener, and the
 /// read-only one that the public address proxies. The hub's login service starts with them,
 /// and the daemon's does not.

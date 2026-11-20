@@ -1345,9 +1345,15 @@ Rules for cores:
   listed under Developer Tools in System Settings is not scanned.
   `ignite doctor`'s `scanning` line times a fresh program's first run from the
   daemon, warns when it is scanned and says what to add to that list. Each
-  release is signed ad hoc, so macOS knows it only by its code hash, and a grant
-  lapses at the next release. Spotlight does not index the trees, because they
-  are under a hidden folder.
+  release is signed ad hoc, so macOS knows it only by its code hash and path,
+  and a grant to a release would lapse at the next one. So the daemon's launch
+  agent starts `bin/launcher launch bin/current daemon`: the launcher is a copy
+  of `ignite`, written once by `ignite install` (or by the monitor when it
+  rewrites an older agent) and never replaced, which starts the daemon and stays
+  its parent. launchd makes the launcher the responsible process of everything
+  the daemon starts, so the launcher is the program to list, and one grant
+  lasts. Spotlight does not index the trees, because they are under a hidden
+  folder.
 
 - A command that uses well below its grant lends the idle cores to waiting
   requests. After 30 seconds of measurement a grant counts as using its measured

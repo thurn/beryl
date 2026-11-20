@@ -583,17 +583,42 @@ fn the_http_probe_sends_a_tokenless_post_and_reads_the_refusal() {
 #[test]
 fn doctor_warns_when_a_new_program_waits_for_a_security_scan() {
     use std::time::Duration;
-    let scanned = scanning::judge(scanning::Starts {
-        first: Duration::from_millis(180),
-        second: Duration::from_millis(5),
-    });
+    let dir = ignite_core::test_files::temp_dir()
+        .join(format!("ignite-doctor-launcher-{}", std::process::id()));
+    let scanned = scanning::judge(
+        scanning::Starts {
+            first: Duration::from_millis(180),
+            second: Duration::from_millis(5),
+        },
+        &dir.join("launcher"),
+    );
     assert!(scanned.warning, "{}", scanned.line());
     assert!(scanned.line().contains("180 ms"), "{}", scanned.line());
-    assert!(scanned.fix.unwrap().contains("Developer Tools"));
-    let exempt = scanning::judge(scanning::Starts {
-        first: Duration::from_millis(9),
-        second: Duration::from_millis(5),
-    });
+    let without = scanned.fix.unwrap();
+    assert!(without.contains("ignite install"), "{without}");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("launcher"), b"").unwrap();
+    let with = scanning::judge(
+        scanning::Starts {
+            first: Duration::from_millis(180),
+            second: Duration::from_millis(5),
+        },
+        &dir.join("launcher"),
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
+    let fix = with.fix.unwrap();
+    assert!(fix.contains("Developer Tools"), "{fix}");
+    assert!(
+        fix.contains(&dir.join("launcher").display().to_string()),
+        "{fix}"
+    );
+    let exempt = scanning::judge(
+        scanning::Starts {
+            first: Duration::from_millis(9),
+            second: Duration::from_millis(5),
+        },
+        &dir.join("launcher"),
+    );
     assert!(exempt.ok && !exempt.warning, "{}", exempt.line());
 }
 

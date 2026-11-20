@@ -14,6 +14,10 @@ use crate::Native;
 
 #[path = "macos_agent.rs"]
 mod agent;
+#[path = "macos_launcher.rs"]
+mod launcher;
+
+pub use launcher::{LAUNCH_VERB, LAUNCHER, launch, launcher_for};
 
 /// The agent's launchd label, which also names its property list file.
 const LABEL: &str = "ignite.daemon";
@@ -179,8 +183,14 @@ fn uninstall_agent(label: &str) -> io::Result<()> {
 }
 
 impl Service for Native {
+    /// The daemon's agent starts it through the launcher beside `executable`
+    /// ([`launcher`]), so that one Developer Tools grant lasts across releases.
     fn install(&self, executable: &Path, args: &[String]) -> io::Result<()> {
-        install_agent(LABEL, Launch::KeepAlive, executable, args, &[])
+        let launcher = launcher::ensure_launcher(executable)?;
+        let mut program = vec![executable.to_string_lossy().into_owned()];
+        program.extend(args.iter().cloned());
+        let wrapped = launcher::wrapped(&program);
+        install_agent(LABEL, Launch::KeepAlive, &launcher, &wrapped[1..], &[])
     }
 
     fn uninstall(&self) -> io::Result<()> {
@@ -202,6 +212,14 @@ impl Service for Native {
         let Some(current) = refreshed(&text) else {
             return Ok(false);
         };
+        // An agent from a build before the launcher runs the daemon directly; the launcher it
+        // is rewritten to start must exist first.
+        if let Some(recorded) = agent::read(&text)
+            && !launcher::is_wrapped(&recorded.program)
+            && let Some(first) = recorded.program.first()
+        {
+            launcher::ensure_launcher(Path::new(first))?;
+        }
         fs::write(&path, current)?;
         reload(&SystemLaunchctl, &domain(), LABEL, &path)?;
         Ok(true)
@@ -398,15 +416,15 @@ fn plist(
     )
 }
 
-/// The daemon agent's property list as this build writes it, running the program with the
-/// environment and log file that `text` records, or `None` when `text` already says that or
-/// cannot be read ([`agent::read`]).
+/// The daemon agent's property list as this build writes it, running the program that `text`
+/// records through the launcher ([`launcher::wrapped`]) with the environment and log file it
+/// records, or `None` when `text` already says that or cannot be read ([`agent::read`]).
 fn refreshed(text: &str) -> Option<String> {
     let recorded = agent::read(text)?;
     let current = plist(
         LABEL,
         Launch::KeepAlive,
-        &recorded.program,
+        &launcher::wrapped(&recorded.program),
         &recorded.environment,
         Path::new(&recorded.log),
     );
@@ -740,12 +758,18 @@ mod tests {
         ];
         let old = standard_daemon_agent(&program, &environment);
         let current = refreshed(&old).expect("the old agent is rewritten");
+        let through_launcher = [
+            "/opt/ignite/bin/launcher".to_owned(),
+            "launch".to_owned(),
+            program[0].clone(),
+            program[1].clone(),
+        ];
         assert_eq!(
             current,
             plist(
                 LABEL,
                 Launch::KeepAlive,
-                &program,
+                &through_launcher,
                 &environment,
                 Path::new("/Users/x/Library/Logs/ignite.daemon.log"),
             )

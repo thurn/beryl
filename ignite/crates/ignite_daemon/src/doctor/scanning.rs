@@ -24,12 +24,26 @@ use super::Finding;
 /// costs over a hundred.
 const SCANNED_AFTER: Duration = Duration::from_millis(60);
 
-/// What to do about scanning.
-const FIX: &str = "in System Settings, Privacy & Security, Developer Tools, add the daemon's \
-                   executable (the target of `~/.config/ignite/bin/current`; run `spctl \
-                   developer-mode enable-terminal` once if the list is not shown), then restart \
-                   the daemon. Each release is signed ad hoc, so macOS knows it by its code \
-                   hash and the grant lapses at the next release";
+/// What to do about scanning, for the launcher at `launcher`: the program the daemon's launch
+/// agent starts, which is copied once and never replaced, so one grant lasts across releases
+/// (see `ignite_os::service`'s macOS launcher).
+fn fix(launcher: &Path) -> String {
+    let exists = launcher.is_file();
+    let launcher = launcher.display();
+    if !exists {
+        return format!(
+            "run `ignite install` once, which starts the daemon through the launcher \
+             {launcher}, then follow this line's advice again"
+        );
+    }
+    format!(
+        "in System Settings, Privacy & Security, Developer Tools, press + and add the launcher \
+         {launcher} (press Command-Shift-G in the file dialog and paste the path; run `spctl \
+         developer-mode enable-terminal` once if the list is not shown), then restart the \
+         daemon with `launchctl kickstart -k gui/$(id -u)/ignite.daemon`. The launcher is \
+         never replaced, so the grant lasts across releases"
+    )
+}
 
 /// A string no earlier probe used: the process ID and the time in nanoseconds.
 fn unique() -> Option<String> {
@@ -57,7 +71,17 @@ pub fn finding() -> Option<Finding> {
     let dir = std::env::temp_dir().join(format!("ignite-doctor-scanning-{}", unique()?));
     let starts = probe(&dir);
     let _ = std::fs::remove_dir_all(&dir);
-    Some(judge(starts?))
+    let launcher = launcher();
+    Some(judge(starts?, &launcher))
+}
+
+/// The launcher the daemon's launch agent starts: `launcher` beside `bin/current`.
+fn launcher() -> std::path::PathBuf {
+    let current = crate::update::Home::from_env().store().current_link();
+    #[cfg(target_os = "macos")]
+    return ignite_os::service::launcher_for(&current);
+    #[cfg(not(target_os = "macos"))]
+    return current;
 }
 
 /// Compiles a program in `dir` that no earlier run has seen, and times its first two runs.
@@ -96,8 +120,9 @@ fn probe(dir: &Path) -> Option<Starts> {
     Some(Starts { first, second })
 }
 
-/// The finding for a probe whose runs took `starts`.
-pub(super) fn judge(starts: Starts) -> Finding {
+/// The finding for a probe whose runs took `starts`, on a machine whose daemon starts through
+/// the launcher at `launcher`.
+pub(super) fn judge(starts: Starts, launcher: &Path) -> Finding {
     let ms = |d: Duration| d.as_millis();
     let measured = format!(
         "a newly built program took {} ms to start the first time and {} ms the second",
@@ -111,7 +136,7 @@ pub(super) fn judge(starts: Starts) -> Finding {
                 "{measured}: macOS scans every program a build links before it first runs, \
                  which costs CPU the scheduler counts as load outside Ignite."
             ),
-            FIX,
+            fix(launcher),
         )
     } else {
         Finding::ok(
