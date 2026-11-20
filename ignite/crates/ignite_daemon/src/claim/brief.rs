@@ -457,6 +457,40 @@ pub fn already_closed(
     }
 }
 
+/// The reply to a release or close of a ticket that the hub no longer holds for the session,
+/// because it was reopened or reassigned there. The work is saved and the tree freed, but the
+/// hub recorded nothing from the session.
+pub fn not_held(
+    ticket: &TicketId,
+    tree: &TreeId,
+    saved: &Saved,
+    title: &str,
+    reset: Option<Error>,
+) -> Reply {
+    let mut rows = vec![
+        ("saved", saved_line(saved)),
+        (
+            "released",
+            format!(
+                "{ticket} was no longer yours at the hub, so it recorded nothing; {tree} is \
+                 free; do not use this path again"
+            ),
+        ),
+    ];
+    if let Some(error) = reset {
+        rows.push(("reset", format!("{tree} failed: {error}")));
+    }
+    rows.push(("title", format!("{STOPPED} {title}")));
+    Reply {
+        exit: Exit::Success,
+        text: lines(&rows),
+        json: Some(json!({
+            "released": ticket, "tree": tree, "branch": saved.branch, "not_held": true,
+        })),
+        handle: None,
+    }
+}
+
 #[cfg(test)]
 mod resolve_tests {
     use super::resolved;

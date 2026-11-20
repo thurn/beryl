@@ -267,7 +267,7 @@ impl Claims {
     pub fn tick(&self, _ctx: &Context) {
         self.forget_released();
         self.retry_failed_resets();
-        self.free_closed_tickets();
+        self.free_lost_tickets();
         let now = self.clock.now();
         let trees: Vec<_> = {
             let mut state = lock(&self.state);

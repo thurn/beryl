@@ -18,7 +18,9 @@
 //!   nothing.
 //! - When the fix has landed and closed the ticket but the check still fails, the ticket is
 //!   reopened with the new output and no assignee, so that dispatch offers it to a worker
-//!   again, unless the rules above add the check to an open ticket.
+//!   again, unless the rules above add the check to an open ticket. The reopen also clears the
+//!   session, tree and machine of the old claim, as a release does: a daemon that still saw
+//!   them took the ticket for held and refused every other session's `ignite start`.
 //! - A regression a landing found, not tip verification, also records why tip verification
 //!   missed it (`super::missed`).
 //! - An upkeep pass marks a regression fixed once its ticket is closed and the check has passed
@@ -28,7 +30,7 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 
 use rusqlite::{Connection, OptionalExtension, params};
-use serde_json::json;
+use serde_json::{Value, json};
 
 use ignite_core::owner::Owner;
 use ignite_core::protocol::hub::RegressionReport;
@@ -41,6 +43,7 @@ use ignite_store::hub::{tickets, tips};
 use ignite_store::{Result, StoreError};
 
 use super::filing::{self, Author};
+use crate::routes::dispatch::set_columns;
 
 /// The lines of a regression's output kept in its ticket.
 pub const OUTPUT_LINES: usize = 40;
@@ -143,6 +146,11 @@ pub fn file(
             )));
         }
     };
+    if outcome == Outcome::Reopened {
+        let cleared =
+            ["session", "tree", "machine", "claimed_at"].map(|column| (column, Value::Null));
+        set_columns(conn, &ticket, author.actor, &cleared, now)?;
+    }
     if outcome == Outcome::Added && existing.is_some() {
         conn.execute(
             "UPDATE regressions SET ticket = ?2 WHERE check_name = ?1",

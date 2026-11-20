@@ -650,3 +650,75 @@ fn the_gate_refuses_a_start_before_leasing_a_tree() {
     assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
     assert_eq!(start(&world, &["Tq.48"], WORKER).exit, Exit::Success);
 }
+
+#[test]
+fn a_ticket_reopened_at_the_hub_can_be_started_by_another_session() {
+    // A worker closed a regression with `ignite ticket close`, and upkeep reopened it seconds
+    // later because a check still failed, before any tick freed the worker's tree. Every other
+    // worker handed the ticket was refused as "held by another session in tree-01".
+    let world = World::new();
+    world.desk.add(ticket("Tq.70", "Counter names", ""));
+    start(&world, &["Tq.70"], WORKER);
+    world.trees.touch("tree-01", "rust/src/fix.rs");
+    world.desk.reopen("Tq.70");
+    let reply = start(&world, &["Tq.70"], "local_other");
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    // The old tree's work was saved before the tree was freed, and the new start resumed it.
+    assert_eq!(lock(&world.trees.resets).len(), 1);
+    assert_eq!(
+        lock(&world.desk.holders).get(&id("Tq.70")),
+        Some(&session("local_other"))
+    );
+    let (_, ticket, holder) = world
+        .claims
+        .holder(Path::new("/trees/tree-01"))
+        .expect("the new start leased the freed tree");
+    assert_eq!((ticket, holder), (id("Tq.70"), session("local_other")));
+    assert_eq!(
+        lock(&world.trees.files).get(&super::TreeId::new("tree-01").unwrap()),
+        Some(&vec!["rust/src/fix.rs".to_owned()])
+    );
+}
+
+#[test]
+fn a_ticket_the_hub_still_holds_is_refused_to_another_session() {
+    let world = World::new();
+    world.desk.add(ticket("Tq.71", "Counter names", ""));
+    start(&world, &["Tq.71"], WORKER);
+    let reply = start(&world, &["Tq.71"], "local_other");
+    assert_eq!(reply.exit, Exit::Conflict, "{}", reply.text);
+    assert!(reply.text.contains("held by another session in tree-01"));
+    assert!(lock(&world.trees.resets).is_empty());
+}
+
+#[test]
+fn release_of_a_ticket_reopened_at_the_hub_frees_the_tree() {
+    // The hub answers 409 "not held by" because the reopen cleared the assignee. That answer
+    // proves the hold is gone, so the tree is freed instead of staying leased forever.
+    let world = World::new();
+    world.desk.add(ticket("Tq.72", "Counter names", ""));
+    start(&world, &["Tq.72"], WORKER);
+    world.trees.touch("tree-01", "rust/src/fix.rs");
+    world.desk.reopen("Tq.72");
+    let reply = release(&world, &["-m", "Giving up."], WORKER);
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    assert!(reply.text.contains("no longer yours"), "{}", reply.text);
+    assert_eq!(lock(&world.trees.free).len(), 2);
+    assert!(world.claims.holder(Path::new("/trees/tree-01")).is_none());
+    // The work is saved for whoever works the ticket next; the hub recorded no release.
+    assert!(lock(&world.trees.saved).contains_key(&id("Tq.72")));
+    assert!(lock(&world.desk.releases).is_empty());
+}
+
+#[test]
+fn the_tick_frees_the_tree_of_a_ticket_reopened_at_the_hub() {
+    let world = World::new();
+    world.desk.add(ticket("Tq.73", "Counter names", ""));
+    start(&world, &["Tq.73"], WORKER);
+    world.claims.tick(&world.ctx);
+    assert!(world.claims.holder(Path::new("/trees/tree-01")).is_some());
+    world.desk.reopen("Tq.73");
+    world.claims.tick(&world.ctx);
+    assert!(world.claims.holder(Path::new("/trees/tree-01")).is_none());
+    assert_eq!(lock(&world.trees.free).len(), 2);
+}

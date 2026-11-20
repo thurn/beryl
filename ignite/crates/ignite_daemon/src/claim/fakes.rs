@@ -151,13 +151,43 @@ impl FakeDesk {
             .status = Status::Closed;
     }
 
-    /// The hub's refusal of a release or close of a closed ticket, which it no longer holds.
-    fn refuse_closed(&self, ticket: &TicketId) -> Result<()> {
+    /// Reopens a ticket as upkeep reopens a regression whose fix did not work: open, with no
+    /// assignee, while the daemon still holds its tree.
+    pub fn reopen(&self, ticket: &str) {
+        lock(&self.holders).remove(&id(ticket));
+        let mut details = lock(&self.details);
+        let held = &mut details.get_mut(&id(ticket)).unwrap().ticket;
+        held.status = Status::Open;
+        held.assignee = None;
+    }
+
+    /// Records the ticket's holder in its detail, as the hub's claim and release do.
+    fn assign(&self, ticket: &TicketId, holder: Option<&SessionId>) {
+        let mut holders = lock(&self.holders);
+        match holder {
+            Some(session) => holders.insert(ticket.clone(), session.clone()),
+            None => holders.remove(ticket),
+        };
+        if let Some(detail) = lock(&self.details).get_mut(ticket) {
+            detail.ticket.assignee = holder.map(ToString::to_string);
+            detail.ticket.status = if holder.is_some() {
+                Status::InProgress
+            } else {
+                Status::Open
+            };
+        }
+    }
+
+    /// The hub's refusal of a release or close from a session that no longer holds the ticket:
+    /// it was closed, reopened or claimed by another session.
+    fn refuse_not_held(&self, ticket: &TicketId, session: &SessionId) -> Result<()> {
         let closed = lock(&self.details)
             .get(ticket)
             .is_some_and(|d| d.ticket.status == Status::Closed);
-        if closed {
-            return Err(Error::Conflict(format!("{ticket} is not held by anyone")));
+        if closed || lock(&self.holders).get(ticket) != Some(session) {
+            return Err(Error::Conflict(format!(
+                "{ticket} is not held by {session}"
+            )));
         }
         Ok(())
     }
@@ -218,7 +248,7 @@ impl TicketDesk for FakeDesk {
                 id.clone()
             }
         };
-        lock(&self.holders).insert(ticket.clone(), claim.session.clone());
+        self.assign(&ticket, Some(&claim.session));
         self.brief_of(&ticket)
     }
 
@@ -234,8 +264,8 @@ impl TicketDesk for FakeDesk {
                 release.ticket
             )));
         }
-        self.refuse_closed(&release.ticket)?;
-        lock(&self.holders).remove(&release.ticket);
+        self.refuse_not_held(&release.ticket, &release.session)?;
+        self.assign(&release.ticket, None);
         lock(&self.releases).push(release.clone());
         Ok(())
     }
@@ -244,11 +274,14 @@ impl TicketDesk for FakeDesk {
         &self,
         ticket: &TicketId,
         _machine: &MachineId,
-        _session: &SessionId,
+        session: &SessionId,
         reason: &str,
     ) -> Result<()> {
-        self.refuse_closed(ticket)?;
+        self.refuse_not_held(ticket, session)?;
         lock(&self.holders).remove(ticket);
+        if let Some(detail) = lock(&self.details).get_mut(ticket) {
+            detail.ticket.status = Status::Closed;
+        }
         lock(&self.closes).push((ticket.clone(), reason.to_owned()));
         Ok(())
     }

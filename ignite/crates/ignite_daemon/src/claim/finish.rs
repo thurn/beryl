@@ -1,10 +1,13 @@
 //! Ending a held ticket: `ignite release`, `ignite close`, the stall procedure's release, and
 //! freeing the tree afterwards.
 //!
-//! A ticket that was closed at the hub by hand (`ignite ticket close`) is no longer held there,
-//! so the hub refuses its release and its close. This module frees the tree anyway when the
-//! hub says the ticket is not held and the ticket is closed, and [`Claims::tick`] does the same
-//! for a session that never tries.
+//! The hub can stop holding a ticket for its session without the daemon hearing of it: a ticket
+//! closed by hand (`ignite ticket close`), a regression that upkeep reopens without an assignee,
+//! or a ticket released or reassigned from the dashboard. The hub then refuses the session's
+//! release and close. This module frees the tree anyway, after saving its work, when the hub
+//! says the session no longer holds the ticket, and [`Claims::tick`] does the same for a session
+//! that never tries. Until it did, a reopened regression stayed held by its old tree, and every
+//! other worker's `ignite start` of it was refused as held by another session.
 
 use ignite_core::ids::{SessionId, TicketId, TreeId};
 use ignite_core::protocol::client::{Reply, Request};
@@ -22,8 +25,32 @@ pub(super) struct Given {
     pub saved: Saved,
     /// The reset's failure, if any.
     pub reset: Option<Error>,
-    /// The ticket had already been closed at the hub, so the hub took no release.
-    pub already_closed: bool,
+    /// How the hub took the release.
+    pub ended: Ended,
+}
+
+/// How the hub took a release or close.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Ended {
+    /// The hub took it.
+    Taken,
+    /// The ticket had already been closed at the hub, so the hub took nothing.
+    AlreadyClosed,
+    /// The ticket is open but the hub no longer names the session as its holder, so the hub
+    /// took nothing.
+    NotHeld,
+}
+
+/// What the hub says of a ticket that this machine holds for a session.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum AtHub {
+    /// The session holds it there too.
+    Held,
+    Closed,
+    /// It is open and has no assignee, or another session's.
+    Lost,
+    /// The hub could not be read, which proves nothing.
+    Unknown,
 }
 
 impl Claims {
@@ -39,22 +66,29 @@ impl Claims {
         let title = brief::title_of(held.brief.as_ref(), &held.ticket);
         match self.give_back(ctx, &held, |_| note, needs, req.pid, ReleaseCause::GaveUp) {
             Ok(Given {
-                already_closed: true,
+                ended: Ended::AlreadyClosed,
                 reset,
                 ..
             }) => brief::already_closed(&held.ticket, &held.tree, &title, reset),
-            Ok(Given { saved, reset, .. }) => {
-                brief::released(&held.ticket, &held.tree, &saved, &title, reset)
-            }
+            Ok(Given {
+                ended: Ended::NotHeld,
+                saved,
+                reset,
+            }) => brief::not_held(&held.ticket, &held.tree, &saved, &title, reset),
+            Ok(Given {
+                ended: Ended::Taken,
+                saved,
+                reset,
+            }) => brief::released(&held.ticket, &held.tree, &saved, &title, reset),
             Err(error) => failure(&error, &format!("{} is still yours", held.ticket)),
         }
     }
 
     /// Saves the tree's work, releases the ticket at the hub with the note made from what was
     /// saved, and frees the tree. If the save or the release fails, the session keeps the ticket
-    /// and the tree. The exception is a ticket that was closed at the hub by hand: the hub then
-    /// refuses the release because it no longer holds the ticket, and the tree is freed anyway,
-    /// after the save.
+    /// and the tree. The exception is a ticket that the hub no longer holds for the session,
+    /// because it was closed or reopened at the hub: the hub then refuses the release, and that
+    /// refusal proves the hold is gone, so the tree is freed anyway, after the save.
     pub(super) fn give_back(
         &self,
         ctx: &Context,
@@ -74,17 +108,14 @@ impl Claims {
             saved: saved.clone(),
             cause,
         });
-        let mut already_closed = false;
-        if let Err(error) = released {
-            if !self.closed_by_hand(&held.ticket, &error) {
-                return Err(error);
-            }
-            already_closed = true;
-        }
+        let ended = match released {
+            Ok(()) => Ended::Taken,
+            Err(error) => self.refused_as_not_held(held, &error).ok_or(error)?,
+        };
         Ok(Given {
             saved,
             reset: self.free(held, caller),
-            already_closed,
+            ended,
         })
     }
 
@@ -101,54 +132,97 @@ impl Claims {
         let closed = self
             .desk
             .close(&held.ticket, &ctx.machine, &held.session, &reason);
-        let already_closed = match closed {
-            Ok(()) => false,
-            Err(error) if self.closed_by_hand(&held.ticket, &error) => true,
-            Err(error) => return failure(&error, &format!("{} is still open", held.ticket)),
+        let ended = match closed {
+            Ok(()) => Ended::Taken,
+            Err(error) => match self.refused_as_not_held(&held, &error) {
+                Some(ended) => ended,
+                None => return failure(&error, &format!("{} is still open", held.ticket)),
+            },
         };
-        let dropped = self.trees.drop_saved(&held.ticket).err();
-        let reset = self.free(&held, req.pid);
-        if already_closed {
-            return brief::already_closed(&held.ticket, &held.tree, &title, reset);
+        match ended {
+            Ended::Taken => {
+                let dropped = self.trees.drop_saved(&held.ticket).err();
+                let reset = self.free(&held, req.pid);
+                brief::closed(&held.ticket, &held.tree, &reason, &title, dropped, reset)
+            }
+            Ended::AlreadyClosed => {
+                let dropped = self.trees.drop_saved(&held.ticket).err();
+                let reset = self.free(&held, req.pid);
+                if let Some(error) = dropped {
+                    eprintln!(
+                        "ignite: the saved branch of {} remains: {error}",
+                        held.ticket
+                    );
+                }
+                brief::already_closed(&held.ticket, &held.tree, &title, reset)
+            }
+            // The ticket stays open for whoever works it next, so its work is saved, not
+            // dropped.
+            Ended::NotHeld => match self.trees.save(&held.tree, &held.ticket) {
+                Ok(saved) => {
+                    let reset = self.free(&held, req.pid);
+                    brief::not_held(&held.ticket, &held.tree, &saved, &title, reset)
+                }
+                Err(error) => failure(&error, &format!("{} not saved", held.tree)),
+            },
         }
-        brief::closed(&held.ticket, &held.tree, &reason, &title, dropped, reset)
     }
 
-    /// Whether `error`, the hub's refusal of a release or close, only means that the ticket is
-    /// not held any more because it was closed at the hub by hand (`ignite ticket close`).
-    fn closed_by_hand(&self, ticket: &TicketId, error: &Error) -> bool {
-        matches!(error, Error::Conflict(_)) && self.closed_at_hub(ticket)
+    /// What the hub's refusal of a release or close means, when it only means that the hub no
+    /// longer holds the ticket for the session. Any other refusal is `None`, and the session
+    /// keeps the ticket.
+    fn refused_as_not_held(&self, held: &Held, error: &Error) -> Option<Ended> {
+        if !matches!(error, Error::Conflict(_)) {
+            return None;
+        }
+        match self.at_hub(&held.ticket, &held.session) {
+            AtHub::Closed => Some(Ended::AlreadyClosed),
+            AtHub::Lost => Some(Ended::NotHeld),
+            AtHub::Held | AtHub::Unknown => None,
+        }
     }
 
-    /// Whether the hub says the ticket is closed. A hub that cannot be read says nothing.
-    fn closed_at_hub(&self, ticket: &TicketId) -> bool {
-        self.desk
-            .detail(ticket)
-            .is_ok_and(|detail| detail.ticket.status == Status::Closed)
+    /// What the hub says of `ticket`, which this machine holds for `session`.
+    pub(super) fn at_hub(&self, ticket: &TicketId, session: &SessionId) -> AtHub {
+        match self.desk.detail(ticket) {
+            Err(_) => AtHub::Unknown,
+            Ok(detail) if detail.ticket.status == Status::Closed => AtHub::Closed,
+            Ok(detail) if detail.ticket.assignee.as_deref() == Some(session.as_str()) => {
+                AtHub::Held
+            }
+            Ok(_) => AtHub::Lost,
+        }
     }
 
-    /// Frees the trees of held tickets that were closed at the hub by hand, as
-    /// `ignite ticket close` does without telling the daemon. The tree's work is saved first,
-    /// like a release; if the save fails the ticket stays held and the next tick tries again.
-    pub(super) fn free_closed_tickets(&self) {
+    /// Frees the trees of held tickets that the hub no longer holds for their session: closed
+    /// by hand (`ignite ticket close`), or reopened or reassigned at the hub, none of which tells
+    /// the daemon. A tree that a previous daemon leased (`at` unknown) is freed only when its
+    /// ticket is closed, because it may be a waiting `ignite start`'s tree that the session has
+    /// not claimed yet. The tree's work is saved first, like a release; if the save fails the
+    /// ticket stays held and the next tick tries again.
+    pub(super) fn free_lost_tickets(&self) {
         let held: Vec<Held> = lock(&self.state).held.values().cloned().collect();
         for held in held {
-            if !self.closed_at_hub(&held.ticket) {
-                continue;
+            let gone = match self.at_hub(&held.ticket, &held.session) {
+                AtHub::Closed => "closed",
+                AtHub::Lost if held.at.is_some() => "no longer held",
+                AtHub::Lost | AtHub::Held | AtHub::Unknown => continue,
+            };
+            if let Err(error) = self.free_saved(&held) {
+                eprintln!("ignite: {} is {gone} but {error}", held.ticket);
             }
-            if let Err(error) = self.trees.save(&held.tree, &held.ticket) {
-                eprintln!(
-                    "ignite: {} is closed but {} not saved: {error}",
-                    held.ticket, held.tree
-                );
-                continue;
-            }
-            if let Some(error) = self.free(&held, None) {
-                eprintln!(
-                    "ignite: {} is closed but {} not reset: {error}",
-                    held.ticket, held.tree
-                );
-            }
+        }
+    }
+
+    /// Saves a tree's work and frees it, for a ticket nobody on this machine holds any more.
+    /// A failed save keeps the ticket held.
+    pub(super) fn free_saved(&self, held: &Held) -> std::result::Result<(), String> {
+        if let Err(error) = self.trees.save(&held.tree, &held.ticket) {
+            return Err(format!("{} not saved: {error}", held.tree));
+        }
+        match self.free(held, None) {
+            Some(error) => Err(format!("{} not reset: {error}", held.tree)),
+            None => Ok(()),
         }
     }
 

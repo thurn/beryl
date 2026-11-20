@@ -187,7 +187,8 @@ fn regression_ticket_of(conn: &Connection, check: &str) -> String {
 /// A worker takes the ticket.
 fn hold(conn: &Connection, id: &str) {
     conn.execute(
-        "UPDATE tickets SET status = 'in_progress', assignee = 'local_w' WHERE id = ?1",
+        "UPDATE tickets SET status = 'in_progress', assignee = 'local_w', session = 'local_w', \
+         tree = 'tree-11', machine = 'jarvis' WHERE id = ?1",
         [id],
     )
     .unwrap();
@@ -324,7 +325,8 @@ fn a_fix_that_did_not_work_reopens_the_ticket_with_the_new_output() {
     clock.advance(3_600.0);
     // A worker held the ticket when it closed it, and a closed ticket keeps its assignee.
     conn.execute(
-        "UPDATE tickets SET status = 'in_progress', assignee = 'local_w' WHERE id = ?1",
+        "UPDATE tickets SET status = 'in_progress', assignee = 'local_w', session = 'local_w', \
+         tree = 'tree-11', machine = 'jarvis' WHERE id = ?1",
         [&id],
     )
     .unwrap();
@@ -346,6 +348,13 @@ fn a_fix_that_did_not_work_reopens_the_ticket_with_the_new_output() {
     assert_eq!(ticket(&conn, &id).status, Status::Open);
     // Dispatch offers only tickets nobody holds, so the reopened one has no assignee.
     assert_eq!(ticket(&conn, &id).assignee, None);
+    // Nor the old claim's session and tree: a daemon that still saw them took the ticket for
+    // held by that session and refused every other worker's `ignite start`.
+    let reopened = ticket(&conn, &id);
+    assert_eq!(
+        (reopened.session, reopened.tree, reopened.machine),
+        (None, None, None)
+    );
     let comments = tickets::comments(&conn, &id).unwrap();
     assert_eq!(comments.len(), 1);
     assert!(comments[0].text.contains("still fails"));

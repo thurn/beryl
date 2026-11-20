@@ -517,19 +517,37 @@ impl Claims {
 
     /// The reply for a ticket this machine already holds: the brief again for its own session,
     /// a lost claim for any other.
+    ///
+    /// A local hold that the hub no longer backs (the ticket was closed, or reopened or
+    /// reassigned at the hub, without the holder running `ignite close` or `ignite release`) is
+    /// not a hold: its tree's work is saved, the tree is freed and the start goes on. Without
+    /// this, a regression the hub reopened stayed held by the tree of the session that had
+    /// closed it, and every worker handed it was refused for 45 minutes.
     fn already_held(&self, id: &TicketId, session: &SessionId, staging: &str) -> Option<Reply> {
         self.forget_released();
         let held = {
             let state = lock(&self.state);
             state.held.values().find(|h| &h.ticket == id).cloned()?
         };
-        if &held.session != session {
-            return Some(Reply::text(
-                Exit::Conflict,
-                format!("held     {id} is held by another session in {}", held.tree),
-            ));
+        if &held.session == session {
+            return Some(self.brief_reply(&held, staging));
         }
-        Some(self.brief_reply(&held, staging))
+        let refusal = |why: String| {
+            Some(Reply::text(
+                Exit::Conflict,
+                format!(
+                    "held     {id} is held by another session in {}{why}",
+                    held.tree
+                ),
+            ))
+        };
+        match self.at_hub(id, &held.session) {
+            finish::AtHub::Held | finish::AtHub::Unknown => refusal(String::new()),
+            finish::AtHub::Closed | finish::AtHub::Lost => match self.free_saved(&held) {
+                Ok(()) => None,
+                Err(error) => refusal(format!(", which the hub no longer names, but {error}")),
+            },
+        }
     }
 
     fn expected_cores(&self, ctx: &Context, detail: Option<&TicketDetail>, now: Timestamp) -> f64 {
