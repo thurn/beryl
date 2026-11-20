@@ -168,3 +168,40 @@ fn a_worker_that_died_before_a_restart_is_checked_and_released() {
         [(session("local_w1"), ticket_id("T.1"))]
     );
 }
+
+/// A tell delivered before a restart is not delivered again after it. Before the delivered
+/// tells were saved, the restarted dispatcher re-sent a ticket's latest tell at the next change
+/// to the ticket, and for a CLI worker an old `tell --now` ended its running turn again.
+#[test]
+fn a_tell_delivered_before_a_restart_is_not_delivered_again() {
+    let file = DbFile::new("tells");
+    let told = super::tell_tests::claimed(
+        "T.1",
+        "local_w1",
+        &[(1, "2027-01-02T00:00:00.000Z", "Land when the gate passes.")],
+        "2027-01-01T00:00:00.000Z",
+    );
+    let first = rig_on(&["local_w1"], file.open(), Timestamp::from_millis(START));
+    first.hold("local_w1", "T.1");
+    assert!(first.step().is_none());
+    first.dispatcher.poll_feed(&first.ctx, 0).unwrap();
+    first.hub.insert_ticket(told.clone());
+    first.hub.push_change("ticket", Some(ticket_id("T.1")));
+    first.dispatcher.poll_feed(&first.ctx, 0).unwrap();
+    let message = first.step().unwrap();
+    assert_eq!(message.action, DispatchAction::Message);
+    assert_eq!(first.ack(message.id, "ok", "").exit, Exit::Success);
+
+    let restarted = rig_on(&["local_w1"], file.open(), first.clock.now());
+    restarted.hold("local_w1", "T.1");
+    assert!(restarted.step().is_none());
+    restarted.dispatcher.poll_feed(&restarted.ctx, 0).unwrap();
+    restarted.hub.insert_ticket(told);
+    restarted.hub.push_change("ticket", Some(ticket_id("T.1")));
+    restarted.dispatcher.poll_feed(&restarted.ctx, 0).unwrap();
+    let next = restarted.step();
+    assert!(
+        next.as_ref().is_none_or(|i| i.action != DispatchAction::Message),
+        "{next:?}"
+    );
+}

@@ -9,12 +9,14 @@
 //! Saved: the pending and given instructions, the reservations, the hand-offs that wait for
 //! another worker (`orphan`), the workers that refused (`refused`), the stalls (when a silent
 //! worker was checked and messaged), the sessions whose ticket Ignite released (`released`), so a
-//! restart does not let one claim again, the next instruction ID, the justiciar worker and the
-//! shared failure in force (see `shared`), so a restart does not lift it. An
+//! restart does not let one claim again, the next instruction ID, the justiciar worker, the
+//! shared failure in force (see `shared`), so a restart does not lift it, and the last tell
+//! delivered for each ticket that is held now, so a restart does not send it again (for a CLI
+//! worker, an old `tell --now` would end its running turn again). An
 //! instruction that was given and not acknowledged is queued again first, so that it is given
 //! again at once. Instruction IDs continue where they were, so an acknowledgement of an old ID
 //! cannot be taken for a new instruction. What is not saved is rebuilt from the hub and the
-//! trees: who holds a tree, the feed position and the tells already delivered.
+//! trees: who holds a tree and the feed position.
 
 use std::collections::{BTreeMap, VecDeque};
 
@@ -33,6 +35,7 @@ const ORPHAN: &str = "orphan";
 const REFUSED: &str = "refused";
 const STALL: &str = "stall";
 const RELEASED: &str = "released";
+const TELL: &str = "tell";
 const META: &str = "meta";
 
 fn entry(kind: &str, key: &impl ToString, body: &impl Serialize) -> Option<DispatchEntry> {
@@ -66,6 +69,13 @@ fn entries_of(state: &State) -> Vec<DispatchEntry> {
     }
     for (session, ticket) in &state.released {
         entries.extend(entry(RELEASED, session, ticket));
+    }
+    // A ticket nobody holds needs no record: a tell is delivered only to the session that
+    // claimed the ticket before the tell was made.
+    for (ticket, tell) in &state.tells {
+        if state.held.values().any(|held| held == ticket) {
+            entries.extend(entry(TELL, ticket, tell));
+        }
     }
     entries.extend(entry(META, &"next_id", &state.next_id));
     if let Some(justiciar) = &state.justiciar {
@@ -117,6 +127,11 @@ pub(super) fn restore(entries: &[DispatchEntry]) -> State {
                     (SessionId::new(&row.key), read::<TicketId>(row))
                 {
                     state.released.insert(session, ticket);
+                }
+            }
+            TELL => {
+                if let (Ok(ticket), Some(tell)) = (TicketId::new(&row.key), read::<u64>(row)) {
+                    state.tells.insert(ticket, tell);
                 }
             }
             META => match row.key.as_str() {

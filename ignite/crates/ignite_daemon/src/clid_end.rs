@@ -271,8 +271,12 @@ impl CliDaemon {
     /// lease expired, or its reservation lapsed before `ignite start` claimed it. Nothing else
     /// looks at a parked slot until its app's CLI hold ends, and a slot parked for an end
     /// `decide` could not place has no such end, so without this the slot would stay taken
-    /// for good. A slot with no ticket (a justiciar) is left for a person.
+    /// for good. A slot with no ticket (a justiciar) is left for a person, and so is a state
+    /// this build does not know, which only reads as parked.
     pub(super) fn free_if_released(&self, row: &CliSlot) -> Result<()> {
+        if row.state != SlotState::Parked.as_str() {
+            return Ok(());
+        }
         let slot = slot_of(row);
         let (Some(session), Some(ticket)) = (&slot.session, &slot.ticket) else {
             return Ok(());

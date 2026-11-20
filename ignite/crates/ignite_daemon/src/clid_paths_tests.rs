@@ -154,3 +154,38 @@ fn a_turn_ended_for_an_urgent_message_is_not_counted_as_stuck() {
     assert_eq!(end, TurnEnd::Interrupted);
     assert_eq!(facts.interrupted_in_row, 1);
 }
+
+/// A slot in a state this build does not know (a newer build wrote it) reads as parked, but is
+/// never freed, since its turn may be running.
+#[test]
+fn a_slot_in_an_unknown_state_is_not_freed() {
+    let rig = Rig::new();
+    rig.keep_running(1);
+    let session = rig.begin();
+    rig.pool
+        .put(&crate::pool::Member {
+            session: session.clone(),
+            app: "fake".to_owned(),
+            role: ignite_core::protocol::hub::WorkerRole::Worker,
+            down: false,
+            models: Vec::new(),
+            parent: None,
+            files: Vec::new(),
+            added_at: rig.clock.now(),
+            slots: 0,
+            single_use: true,
+        })
+        .unwrap();
+    rig.pool
+        .with_database(|conn| {
+            conn.execute(
+                "UPDATE cli_slots SET state = 'draining' WHERE session = ?1",
+                [session.as_str()],
+            )
+        })
+        .unwrap();
+    rig.host.holders.lock().unwrap().clear();
+    rig.daemon.step().unwrap();
+    assert_eq!(rig.row(&session).state, "draining");
+    assert!(rig.pool.member(&session).unwrap().is_some());
+}
