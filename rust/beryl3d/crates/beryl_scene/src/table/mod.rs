@@ -8,6 +8,7 @@
 
 pub mod badges;
 mod camera;
+pub mod far_shade;
 mod hands;
 pub(crate) use hands::HandFits;
 pub(crate) mod lifted;

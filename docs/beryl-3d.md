@@ -520,7 +520,7 @@ zero. The numbers in the first column are the values of `material`:
 
 | Material         | `uv`                                                   | `layer`    | `params`                                                            |
 | ---------------- | ------------------------------------------------------ | ---------- | ------------------------------------------------------------------- |
-| 0 table          | unused                                                 | unused     | `[1 to paint the tabletop, 0, 0, 0]`                                |
+| 0 table          | unused                                                 | unused     | `[1 to paint the tabletop, far shade x, y, radius]`, physical px    |
 | 1 card           | `uv[0]` is the back's layer                            | the face   | `[dissolve, whiten, desaturate, 0]`, each from 0 to 1               |
 | 2 contact shadow | unused                                                 | unused     | `[blur in millimetres, 0, 0, 0]`                                    |
 | 3 glow           | the sprite's rectangle in texels                       | atlas page | `[progress from 0 to 1, 0, 0, 0]`                                   |
@@ -537,7 +537,12 @@ zero. The numbers in the first column are the values of `material`:
   interface's `--tabletop`: a radial gradient centred on the window and spanning
   it, times the grain's average darkening, times the tint. It lies on the
   screen, not on the cloth, and moves only when the table shakes. A table record
-  with `params` zero is its tint alone, a solid color.
+  with `params` zero is its tint alone, a solid color. On the desktop layout the
+  tabletop also carries the shade along the table's far edge
+  (`Draw::with_far_shade`), the web's `.far-shade`: a radial gradient of near
+  black centred on the stage's point (800, 48), whose centre and radius across
+  in physical pixels are `params.yzw` (no shade where the radius is 0). Painted
+  into the cloth, it lies under every card, as the web's element does.
 - **A box shadow's** box is the element's border box, or its padding box for an
   inset shadow, and its deviation is the Gaussian's standard deviation. `fixed`
   is a length in sixteenths of a point plus 32,768. The shape radius is the

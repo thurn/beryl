@@ -80,7 +80,18 @@ fn camera() -> Mat4 {
 
 /// The cloth, far larger than the view, in a wide target, shaken by `shake` pixels.
 fn draw_cloth(renderer: &mut beryl_render::Renderer, size: (u32, u32), shake: Vec2) -> Picture {
-    let cloth = Draw::tabletop(
+    draw_shaded_cloth(renderer, size, shake, None)
+}
+
+/// The cloth as `draw_cloth` draws it, darkened by the far shade at `far_shade`'s centre and
+/// radius across, in pixels, if given.
+fn draw_shaded_cloth(
+    renderer: &mut beryl_render::Renderer,
+    size: (u32, u32),
+    shake: Vec2,
+    far_shade: Option<(Vec2, f32)>,
+) -> Picture {
+    let mut cloth = Draw::tabletop(
         Affine3A::from_scale_rotation_translation(
             Vec3::new(4000.0 / CARD_WIDTH, 4000.0 / CARD_HEIGHT, 1.0),
             Quat::IDENTITY,
@@ -88,6 +99,9 @@ fn draw_cloth(renderer: &mut beryl_render::Renderer, size: (u32, u32), shake: Ve
         ),
         [255; 4],
     );
+    if let Some((centre, radius)) = far_shade {
+        cloth = cloth.with_far_shade(centre, radius);
+    }
     let mut frame = Frame::with_capacity(0, 1, 0);
     let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
     builder.camera(camera());
@@ -148,5 +162,68 @@ fn a_shake_moves_the_tabletop_with_the_table() {
                 "{limits:?} at ({x}, {y})"
             );
         }
+    }
+}
+
+/// The far shade's opacity `t` of the way out to its ellipse's edge, as the web's `.far-shade`
+/// gives its stops in `ui/src/screens/styles/table.css`.
+fn far_shade_opacity(t: f64) -> f64 {
+    let stops = [(0.0, 0.8), (0.5, 0.64), (0.8, 0.32), (1.0, 0.0)];
+    let mut opacity = stops[0].1;
+    for pair in stops.windows(2) {
+        let ((low, from), (high, to)) = (pair[0], pair[1]);
+        if t > low {
+            opacity = from + (to - from) * ((t - low) / (high - low)).min(1.0);
+        }
+    }
+    opacity
+}
+
+/// The far shade darkens the cloth toward `rgb(10 7 5)` by the web's stops along an ellipse
+/// 300 by 85 in shape, and leaves the cloth beyond the ellipse as it was.
+#[test]
+fn the_far_shade_darkens_the_cloth_by_the_webs_stops() {
+    let stops = stops();
+    let size = (320, 180);
+    let centre = Vec2::new(160.0, 20.0);
+    let radius = 120.0;
+    let aspect = 85.0 / 300.0;
+    for limits in BOTH {
+        let mut renderer = renderer(limits);
+        let plain = draw_cloth(&mut renderer, size, Vec2::ZERO);
+        let shaded = draw_shaded_cloth(&mut renderer, size, Vec2::ZERO, Some((centre, radius)));
+        let mut faults = Vec::new();
+        for y in (0..60).step_by(3) {
+            for x in (20..300).step_by(9) {
+                let dx = (f64::from(x) + 0.5 - f64::from(centre.x)) / f64::from(radius);
+                let dy = (f64::from(y) + 0.5 - f64::from(centre.y)) / (f64::from(radius) * aspect);
+                let opacity = far_shade_opacity(dx.hypot(dy));
+                let cloth = expected(&stops, (x, y), size);
+                let shade = [10.0, 7.0, 5.0];
+                let wanted: [u8; 3] = std::array::from_fn(|at| {
+                    let c = f64::from(cloth[at]);
+                    (c + (shade[at] - c) * opacity).round() as u8
+                });
+                let found = shaded.at(x, y);
+                if found
+                    .iter()
+                    .zip(wanted)
+                    .any(|(&f, w)| f.abs_diff(w) > TOLERANCE)
+                {
+                    faults.push(format!("({x}, {y}): {found:?}, not {wanted:?}"));
+                }
+            }
+        }
+        assert!(faults.is_empty(), "{limits:?}: {}", faults.join("; "));
+        assert!(
+            shaded.at(160, 20)[0] < 40,
+            "{limits:?}: the centre is near black"
+        );
+        assert_eq!(
+            shaded.at(160, 120),
+            plain.at(160, 120),
+            "{limits:?}: below it"
+        );
+        assert_eq!(shaded.at(10, 20), plain.at(10, 20), "{limits:?}: beside it");
     }
 }

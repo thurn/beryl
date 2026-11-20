@@ -236,7 +236,7 @@
     },
     "table": {
       "samples": 1,
-      "expressions": 123
+      "expressions": 142
     },
     "streak": {
       "samples": 1,
@@ -248,7 +248,7 @@
     },
     "table_lit": {
       "samples": 5,
-      "expressions": 364
+      "expressions": 421
     },
     "particle": {
       "samples": 5,

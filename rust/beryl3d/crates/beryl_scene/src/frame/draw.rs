@@ -180,6 +180,21 @@ impl Draw {
         draw
     }
 
+    /// The same tabletop record, darkened along the table's far edge as the web's `.far-shade`
+    /// darkens it: a radial gradient of near black, from 80% opaque at `centre` to nothing at
+    /// the ellipse `radius` across, both in physical pixels of the target (`table::far_shade`).
+    /// The shader holds the gradient's stops and the ratio of its radii. `params` becomes
+    /// `[1, centre.x, centre.y, radius]`; a radius of 0 draws no shade.
+    #[must_use]
+    pub fn with_far_shade(mut self, centre: Vec2, radius: f32) -> Self {
+        debug_assert!(
+            self.material == Material::Table as u8 && self.params[0] > 0.5,
+            "only the tabletop carries the far shade"
+        );
+        self.params = [1.0, centre.x, centre.y, radius];
+        self
+    }
+
     /// A card showing `face` on its front and `back` on its back, both layers of the array for
     /// `size`. The back's layer goes in `uv[0]`, because a face fills its layer and needs no
     /// rectangle. `dissolve` is how far the card has broken up and `whiten` how far its face is

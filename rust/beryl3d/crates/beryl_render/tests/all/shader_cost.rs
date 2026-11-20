@@ -41,7 +41,7 @@ const ENHANCED_MATERIALS: [(&str, &str); 3] = [
 /// tier, which reuses its functions and repeats its entry points; a deliberate change to it
 /// updates this constant in the same commit, after checking that the Enhanced shader still
 /// matches it.
-const BASELINE_SHADER_HASH: u64 = 0x1ac7_8140_f625_83be;
+const BASELINE_SHADER_HASH: u64 = 0x099b_394b_de74_ab95;
 
 /// A material's counts.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
