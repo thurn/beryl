@@ -12,7 +12,9 @@ use ignite_core::protocol::hub::{IdleWorker, MachineFree, NextReply, Reservation
 use ignite_core::protocol::tickets::TicketDetail;
 use ignite_core::time::Timestamp;
 
-use super::{DEFAULT_EFFORT, Dispatcher, Purpose, Reserved, State, label, slots, tier_for};
+use super::{
+    DEFAULT_EFFORT, Dispatcher, Purpose, Reserved, State, feed, label, slots, suits, tier_for,
+};
 use crate::pool::Member;
 use crate::server::Context;
 
@@ -94,7 +96,15 @@ impl Dispatcher {
             let mut state = self.state();
             for (reservation, app, detail) in unread {
                 if state.reserved.contains_key(&reservation.session) {
-                    Self::queue_handoff(&ctx.config, &mut state, &reservation, &app, detail);
+                    Self::queue_handoff(
+                        &ctx.config,
+                        &mut state,
+                        &reservation,
+                        &app,
+                        detail,
+                        members,
+                        now,
+                    );
                 }
             }
             Self::expire_given(&mut state, now);
@@ -111,7 +121,15 @@ impl Dispatcher {
         let mut state = self.state();
         state.idle_reason = idle_reason;
         for (reservation, app, detail) in offers {
-            Self::queue_handoff(&ctx.config, &mut state, &reservation, &app, detail);
+            Self::queue_handoff(
+                &ctx.config,
+                &mut state,
+                &reservation,
+                &app,
+                detail,
+                members,
+                now,
+            );
         }
     }
 
@@ -298,20 +316,39 @@ impl Dispatcher {
         (offers, left)
     }
 
-    /// Turns a reservation into a hand-off for its worker. `detail` is the ticket as the hub
-    /// has it. The model comes from its labels, so until they can be read the worker stays
-    /// reserved and nothing is sent, so a ticket never runs on a model it does not name.
+    /// Turns a reservation into a hand-off. `detail` is the ticket as the hub has it. The model
+    /// comes from its labels, so until they can be read the worker stays reserved and nothing is
+    /// sent, so a ticket never runs on a model it does not name; the hand-off is decided again
+    /// when they arrive.
+    ///
+    /// A reservation's code may be used by any session of the machine it was made for, so the
+    /// worker it goes to is decided here:
+    ///
+    /// - A regression goes to the idle worker whose last ticket its `caused-by` line names, which
+    ///   still has the conversation in which it made that change. The hub decides which machine
+    ///   works a regression; this only picks among this machine's workers.
+    /// - A reservation for a worker that was meanwhile given a regression in its place goes to
+    ///   another idle worker, or waits for one with the refused hand-offs.
+    /// - Every other reservation goes to the worker the hub named.
     pub(super) fn queue_handoff(
         config: &Config,
         state: &mut State,
         reservation: &Reservation,
         app: &str,
         detail: Option<TicketDetail>,
+        members: &[Member],
+        now: Timestamp,
     ) {
-        let session = &reservation.session;
+        let named = &reservation.session;
         let ticket = &reservation.ticket;
         let expires_at = reservation.expires_at;
         let code = Some(reservation.code.clone());
+        // The named worker holds another reservation when an earlier hand-off of this step gave
+        // it a regression it caused.
+        let taken = state
+            .reserved
+            .get(named)
+            .is_some_and(|reserved| reserved.ticket != *ticket);
         let Some(detail) = detail else {
             let placeholder = Reserved {
                 ticket: ticket.clone(),
@@ -322,21 +359,26 @@ impl Dispatcher {
                 effort: String::new(),
                 app: app.to_owned(),
             };
-            state.reserved.insert(session.clone(), placeholder);
+            if !taken {
+                state.reserved.insert(named.clone(), placeholder);
+            }
             state.unread.push((reservation.clone(), app.to_owned()));
             return;
         };
-        let labels = detail.ticket.labels;
-        let tier = tier_for(&labels, app);
+        let labels = &detail.ticket.labels;
+        let tier = tier_for(labels, app);
         // The hub is only told about tiers the app has a model ID for (see `ask_for_work`), so
         // a tier without one means `ignite.toml` changed after the hub was asked. Reserving the
         // worker anyway would hand the dispatcher a model it cannot set, so the worker is left
         // idle and the reservation lapses at the hub.
         let model = match &tier {
-            Some(tier) => match config.pool.model_id(app, tier) {
-                Some(id) => Some(id),
-                None => return,
-            },
+            Some(tier) => {
+                let Some(id) = config.pool.model_id(app, tier) else {
+                    Self::drop_placeholder(state, named, ticket);
+                    return;
+                };
+                Some(id)
+            }
             None => None,
         };
         let reserved = Reserved {
@@ -345,12 +387,61 @@ impl Dispatcher {
             code,
             tier,
             model,
-            effort: label(&labels, "effort:")
+            effort: label(labels, "effort:")
                 .unwrap_or(DEFAULT_EFFORT)
                 .to_owned(),
             app: app.to_owned(),
         };
-        Self::queue_handoff_reserved(state, session, reserved);
+        if let Some(culprit) = Self::culprit_worker(state, &detail, &reserved, members, now) {
+            Self::drop_placeholder(state, named, ticket);
+            Self::queue_regression_handoff(state, &culprit, reserved, &detail.ticket.title);
+            return;
+        }
+        if !taken {
+            Self::queue_handoff_reserved(state, named, reserved);
+            return;
+        }
+        let workers = slots::with_slots(state, members);
+        let other = Self::idle_workers(state, &workers, now)
+            .into_iter()
+            .find(|m| suits(m, reserved.tier.as_ref(), &reserved.app))
+            .map(|m| m.session.clone());
+        match other {
+            Some(other) => Self::queue_handoff_reserved(state, &other, reserved),
+            None => state.orphans.push(reserved),
+        }
+    }
+
+    /// The idle worker here whose last ticket caused `detail`, a regression, if one can run it.
+    fn culprit_worker(
+        state: &State,
+        detail: &TicketDetail,
+        reserved: &Reserved,
+        members: &[Member],
+        now: Timestamp,
+    ) -> Option<SessionId> {
+        if !detail.ticket.labels.iter().any(|l| l == "regression") {
+            return None;
+        }
+        let cause = feed::caused_by(&detail.ticket.body)?;
+        let workers = slots::with_slots(state, members);
+        Self::idle_workers(state, &workers, now)
+            .into_iter()
+            .filter(|m| suits(m, reserved.tier.as_ref(), &reserved.app))
+            .find(|m| state.last_ticket.get(&m.session) == Some(&cause))
+            .map(|m| m.session.clone())
+    }
+
+    /// Removes the placeholder reservation of `ticket` for `session`, left while the ticket's
+    /// details could not be read, so that the worker is idle again.
+    fn drop_placeholder(state: &mut State, session: &SessionId, ticket: &TicketId) {
+        if state
+            .reserved
+            .get(session)
+            .is_some_and(|reserved| reserved.ticket == *ticket)
+        {
+            state.reserved.remove(session);
+        }
     }
 }
 

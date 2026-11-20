@@ -14,8 +14,9 @@
 //!   worker alone for a minute;
 //! - leaves a worker whose ticket just ended alone for 3 minutes while it finishes its turn;
 //! - reads the hub's feed: a new `tell` on a ticket held here becomes a `message` to its session
-//!   and ends that session's `ignite wait`; a regression whose culprit's worker is still idle
-//!   here becomes a `message` to that worker;
+//!   and ends that session's `ignite wait`;
+//! - gives a regression the hub reserved for this machine to the idle worker whose ticket caused
+//!   it, if there is one, so that the worker that still holds the change's context fixes it;
 //! - asks the dispatcher to `check` a worker that has run no command for 30 minutes, or whose
 //!   command has run far past its time (see `stall`), messages it once if it is idle, and
 //!   releases its ticket when it is gone or stays idle 15 minutes more;
@@ -27,7 +28,7 @@
 //! (see `store`), so after a restart an instruction that was given and not acknowledged is given
 //! again at once instead of lapsing at the hub 10 minutes later.
 
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::collections::{BTreeMap, VecDeque};
 use std::fmt::Write as _;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
@@ -37,7 +38,7 @@ use ignite_core::config::Os;
 use ignite_core::ids::{Seq, SessionId, TicketId};
 use ignite_core::protocol::client::{DispatchAction, DispatchInstruction, Exit, Reply};
 use ignite_core::protocol::hub::{Reservation, WorkerRole};
-use ignite_core::protocol::tickets::{Status, TicketDetail};
+use ignite_core::protocol::tickets::TicketDetail;
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{Error, Result};
 use ignite_store::local::rows::DispatchEntry;
@@ -250,7 +251,6 @@ struct State {
     finished_at: BTreeMap<SessionId, Timestamp>,
     feed: Option<Seq>,
     tells: BTreeMap<TicketId, u64>,
-    seen: BTreeSet<TicketId>,
     given_to: BTreeMap<SessionId, u32>,
     /// A step is asking the hub for tickets, with the state unlocked.
     asking_hub: bool,
@@ -297,6 +297,15 @@ fn tier_for(labels: &[String], app: &str) -> Option<String> {
 
 fn label<'a>(labels: &'a [String], prefix: &str) -> Option<&'a str> {
     labels.iter().find_map(|l| l.strip_prefix(prefix))
+}
+
+/// What follows `ignite start` in a hand-off: the ticket and, when the hub reserved it, the
+/// reservation's code.
+fn start_arguments(reserved: &Reserved) -> String {
+    match &reserved.code {
+        Some(code) => format!("{} --reservation {code}", reserved.ticket),
+        None => reserved.ticket.to_string(),
+    }
 }
 
 fn suits(member: &Member, tier: Option<&String>, app: &str) -> bool {
@@ -375,8 +384,10 @@ impl Dispatcher {
             .flatten()
             .map_or_else(|| "claude".to_owned(), |m| m.app);
         let detail = ctx.hub.ticket(&reservation.ticket).ok();
+        let members = self.pool.members().unwrap_or_default();
         let mut state = self.state();
-        Self::queue_handoff(&ctx.config, &mut state, reservation, &app, detail);
+        let now = ctx.clock.now();
+        Self::queue_handoff(&ctx.config, &mut state, reservation, &app, detail, &members, now);
         drop(state);
         self.save();
     }
@@ -480,8 +491,6 @@ impl Dispatcher {
                 tickets.push(ticket.clone());
             }
         }
-        let members = self.pool.members()?;
-        let now = ctx.clock.now();
         let wanted: Vec<TicketId> = {
             let mut state = self.state();
             if batch.seq < since {
@@ -496,7 +505,7 @@ impl Dispatcher {
             state.feed = Some(batch.seq);
             tickets
                 .into_iter()
-                .filter(|ticket| Self::cares_about(&state, &members, ticket, now))
+                .filter(|ticket| Self::cares_about(&state, ticket))
                 .collect()
         };
         let details: Vec<(TicketId, Option<TicketDetail>)> = wanted
@@ -508,7 +517,7 @@ impl Dispatcher {
             .collect();
         let mut state = self.state();
         for (ticket, detail) in details {
-            self.ticket_changed(&mut state, &members, &ticket, detail.as_ref(), now);
+            self.ticket_changed(&mut state, &ticket, detail.as_ref());
         }
         drop(state);
         self.save();
@@ -676,6 +685,39 @@ impl Dispatcher {
     /// Queues the hand-off of `reserved` to `session`. A Codex slot's hand-off names no session
     /// and clears nothing: the dispatcher opens a new chat for it (see `slots`).
     fn queue_handoff_reserved(state: &mut State, session: &SessionId, reserved: Reserved) {
+        let prompt = format!(
+            "Run `ignite start {}` and follow what it prints.",
+            start_arguments(&reserved)
+        );
+        let clear = !slots::is_slot(session);
+        Self::push_handoff(state, session, reserved, prompt, clear);
+    }
+
+    /// Queues the hand-off of `reserved`, a regression, to `session`, the idle worker whose last
+    /// ticket caused it. The worker is not cleared, so it keeps the conversation in which it made
+    /// the change that broke the check.
+    fn queue_regression_handoff(
+        state: &mut State,
+        session: &SessionId,
+        reserved: Reserved,
+        title: &str,
+    ) {
+        let prompt = format!(
+            "{} is a regression caused by your last ticket: {title}. Run `ignite start {}` and \
+             fix it.",
+            reserved.ticket,
+            start_arguments(&reserved)
+        );
+        Self::push_handoff(state, session, reserved, prompt, false);
+    }
+
+    fn push_handoff(
+        state: &mut State,
+        session: &SessionId,
+        reserved: Reserved,
+        prompt: String,
+        clear: bool,
+    ) {
         state.reserved.insert(session.clone(), reserved.clone());
         let id = Self::next_id(state);
         let slot = slots::is_slot(session);
@@ -684,18 +726,10 @@ impl Dispatcher {
                 id,
                 action: DispatchAction::Handoff,
                 session: (!slot).then(|| session.clone()),
-                clear: !slot,
+                clear,
                 model: reserved.model.clone(),
                 effort: Some(reserved.effort.clone()),
-                prompt: Some(format!(
-                    "Run `ignite start {}{}` and follow what it prints.",
-                    reserved.ticket,
-                    reserved
-                        .code
-                        .as_ref()
-                        .map(|code| format!(" --reservation {code}"))
-                        .unwrap_or_default(),
-                )),
+                prompt: Some(prompt),
             },
             purpose: Purpose::Handoff(reserved),
             gives: 0,
@@ -746,95 +780,27 @@ impl Dispatcher {
     }
 
     /// Whether a change to `ticket` needs its details from the hub: it is held by a session
-    /// here, or it may be a regression to offer to an idle worker.
-    fn cares_about(state: &State, members: &[Member], ticket: &TicketId, now: Timestamp) -> bool {
-        if state.held.values().any(|held| held == ticket) {
-            return true;
-        }
-        let has_culprit = Self::idle_workers(state, members, now)
-            .iter()
-            .any(|m| state.last_ticket.contains_key(&m.session));
-        has_culprit && !state.seen.contains(ticket)
+    /// here. A regression is not read here: the hub alone decides which machine works it, and
+    /// its reservation reaches this machine through `/next` (see `work`).
+    fn cares_about(state: &State, ticket: &TicketId) -> bool {
+        state.held.values().any(|held| held == ticket)
     }
 
     /// Acts on a change to `ticket`, whose `detail` the caller read from the hub, if it could.
-    fn ticket_changed(
-        &self,
-        state: &mut State,
-        members: &[Member],
-        ticket: &TicketId,
-        detail: Option<&TicketDetail>,
-        now: Timestamp,
-    ) {
+    fn ticket_changed(&self, state: &mut State, ticket: &TicketId, detail: Option<&TicketDetail>) {
         if let Some(holder) = state
             .held
             .iter()
             .find(|(_, t)| *t == ticket)
             .map(|(s, _)| s.clone())
+            && let Some(detail) = detail
         {
-            if let Some(detail) = detail {
-                self.deliver_tell(state, &holder, detail);
-            }
-            return;
-        }
-        let culprits: BTreeMap<TicketId, SessionId> = Self::idle_workers(state, members, now)
-            .into_iter()
-            .filter_map(|m| {
-                state
-                    .last_ticket
-                    .get(&m.session)
-                    .map(|t| (t.clone(), m.session.clone()))
-            })
-            .collect();
-        if culprits.is_empty() || !state.seen.insert(ticket.clone()) {
-            return;
-        }
-        if let Some(detail) = detail {
-            Self::offer_regression(state, &culprits, detail, now);
+            self.deliver_tell(state, &holder, detail);
         }
     }
 
     fn deliver_tell(&self, state: &mut State, holder: &SessionId, detail: &TicketDetail) {
         feed::deliver_tell(self, state, holder, detail);
-    }
-
-    fn offer_regression(
-        state: &mut State,
-        culprits: &BTreeMap<TicketId, SessionId>,
-        detail: &TicketDetail,
-        now: Timestamp,
-    ) {
-        let ticket = &detail.ticket;
-        if ticket.status != Status::Open || !ticket.labels.iter().any(|l| l == "regression") {
-            return;
-        }
-        let Some(session) = feed::caused_by(&ticket.body).and_then(|c| culprits.get(&c)) else {
-            return;
-        };
-        let session = session.clone();
-        let text = format!(
-            "{} is a regression caused by your last ticket: {}. Run `ignite start {}` and fix it.",
-            ticket.id, ticket.title, ticket.id
-        );
-        state.reserved.insert(
-            session.clone(),
-            Reserved {
-                ticket: ticket.id.clone(),
-                expires_at: now.plus_seconds(600.0),
-                code: None,
-                tier: None,
-                model: None,
-                effort: DEFAULT_EFFORT.to_owned(),
-                app: String::new(),
-            },
-        );
-        Self::queue(
-            state,
-            Some(&session),
-            DispatchAction::Message,
-            &text,
-            Purpose::Message,
-        );
     }
 }
 
@@ -853,6 +819,9 @@ mod models_tests;
 #[cfg(test)]
 #[path = "dispatchd_raw_tests.rs"]
 mod raw_tests;
+#[cfg(test)]
+#[path = "dispatchd_regression_tests.rs"]
+mod regression_tests;
 #[cfg(test)]
 #[path = "dispatchd_restart_tests.rs"]
 mod restart_tests;

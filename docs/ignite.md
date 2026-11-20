@@ -2686,9 +2686,13 @@ output (last 40 lines; whole output on jarvis at ...)
 - It names the operating system the check failed on, and records that system
   when the check is not portable. It is owned by the machine that found it (see
   [Owners](#owners)).
-- If the worker that landed the culprit has not yet been given another ticket,
-  that machine's daemon has the regression sent to that session, which still
-  holds the context. Otherwise it goes first in the dispatch order.
+- It goes first in the dispatch order, and the hub alone decides which machine
+  works it: it reserves the ticket for a machine under a one-time code, as it
+  does any ticket. A reservation's code may be used by any session of that
+  machine, so when the worker that landed the culprit is idle there, the
+  machine's daemon hands the reservation to that session, which still holds the
+  context, without clearing it. A daemon never points a worker at a regression
+  the hub has not reserved for its machine, since the hub refuses that start.
 - Failing checks share as few tickets as they can. One bad landing often fails
   several checks, and when each check had a ticket and a worker of its own, most
   of those workers closed their ticket as fixed by another. A check is added to

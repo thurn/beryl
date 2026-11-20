@@ -641,27 +641,6 @@ fn the_pool_shows_the_command_each_worker_runs() {
 }
 
 #[test]
-fn a_regression_goes_to_the_idle_worker_whose_ticket_caused_it() {
-    let rig = rig(&["local_w1"]);
-    rig.hold("local_w1", "T.1");
-    assert!(rig.step().is_none());
-    rig.dispatcher.poll_feed(&rig.ctx, 0).unwrap();
-    rig.finish("local_w1");
-    *lock(&rig.host.trees) = 0;
-    assert!(rig.step().is_none());
-    rig.clock.advance(SETTLE_S);
-    let body = "caused-by T.1 (commit 5e1b0aa)\nfirst bad 5e1b0aa, last good 77c2d14";
-    rig.hub
-        .insert_ticket(detail("R", "open", None, &["regression"], body));
-    rig.hub.push_change("ticket", Some(ticket_id("R")));
-    rig.dispatcher.poll_feed(&rig.ctx, 0).unwrap();
-    let message = rig.step().unwrap();
-    assert_eq!(message.action, DispatchAction::Message);
-    assert!(message.prompt.unwrap().contains("ignite start R"));
-    assert_eq!(rig.state_of("local_w1"), "reserved");
-}
-
-#[test]
 fn a_codex_dispatcher_opens_a_new_chat_after_many_instructions() {
     let rig = rig(&[]);
     rig.pool(

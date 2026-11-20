@@ -2,6 +2,7 @@
 
 use super::tests::{Rig, detail, lock, rig, ticket_id};
 use super::*;
+use ignite_core::protocol::tickets::Status;
 
 /// An in-progress ticket held by `holder` since `claimed_at`, with `comments` as
 /// `(n, written_at, text)` and its `tell` metadata set to the last comment's number.
