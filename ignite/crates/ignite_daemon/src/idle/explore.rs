@@ -138,6 +138,13 @@ impl Idle {
             // Nothing reported means the tool itself failed; the batch stays saved and runs
             // again next time.
             self.add_spent(name, &run.usage)?;
+            if crate::supervise::ResultFile::ended_from_outside(&run.output) {
+                // The scheduler stopped the run for a higher class: not a failure of the tool.
+                return Err(Error::Conflict(format!(
+                    "{name}: the run was stopped before it finished; its output is in {}",
+                    run.output.display()
+                )));
+            }
             return Err(Error::Io(format!(
                 "{name}: the run reported no check; its output is in {}",
                 run.output.display()

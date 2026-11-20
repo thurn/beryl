@@ -87,6 +87,9 @@ const LOCK: &str = "lock";
 const OUTPUT: &str = "output.log";
 const RESULT: &str = "result.json";
 const COLLECTED: &str = "collected";
+/// Written by [`Run::end`] before it signals the command, so a command that catches `SIGTERM`
+/// and exits with a code of its own (`uv run` exits 143) still reads as ended from outside.
+const ENDED: &str = "ended";
 /// The process group ID of the command, which ends it and everything it started.
 const GROUP: &str = "group";
 /// The supervisor's own standard error, for a supervisor that fails before it can write a
@@ -141,10 +144,11 @@ pub struct ResultFile {
 }
 
 impl ResultFile {
-    /// Whether the command whose whole output is `output` was ended by a signal before its
+    /// Whether the command whose whole output is `output` was ended from outside before its
     /// hang limit, as when the scheduler stops `idle` work for a higher class or a daemon
-    /// restart cuts it. Such a failure says nothing about the source it built. `false` when
-    /// `output` is not in a run directory or the run wrote no result.
+    /// restart cuts it: [`Run::end`] asked it to stop, or a signal ended it. Such a failure
+    /// says nothing about the source it built. `false` when `output` is not in a run directory
+    /// or the run wrote no result.
     pub fn ended_from_outside(output: &Path) -> bool {
         let Some(dir) = output.parent() else {
             return false;
@@ -152,7 +156,9 @@ impl ResultFile {
         fs::read(dir.join(RESULT))
             .ok()
             .and_then(|bytes| serde_json::from_slice::<ResultFile>(&bytes).ok())
-            .is_some_and(|result| result.exit.is_none() && !result.hung)
+            .is_some_and(|result| {
+                !result.hung && (result.exit.is_none() || dir.join(ENDED).exists())
+            })
     }
 }
 
@@ -403,9 +409,14 @@ impl Run {
     }
 
     /// Ends the command and every process in its group, with `SIGTERM` (on Windows, by ending
-    /// its job object, which stops its processes at once). Its supervisor then
-    /// writes a result with no exit code. Does nothing to a run whose command has not started.
+    /// its job object, which stops its processes at once). Its supervisor then writes a result
+    /// with no exit code, or with the code of a command that caught the signal. Either way the
+    /// run is marked ended first, for [`ResultFile::ended_from_outside`]. Does nothing to a run
+    /// whose command has not started.
     pub fn end(&self) -> io::Result<()> {
+        if self.dir.join(GROUP).exists() {
+            fs::write(self.dir.join(ENDED), b"")?;
+        }
         self.signal("TERM")
     }
 

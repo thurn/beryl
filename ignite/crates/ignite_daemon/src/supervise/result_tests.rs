@@ -54,3 +54,31 @@ fn a_run_whose_supervisor_could_not_write_the_result_is_told_apart_from_a_killed
     );
     fs::remove_dir_all(&dir).unwrap();
 }
+
+#[test]
+fn a_command_that_exits_with_its_own_code_after_being_ended_was_ended_from_outside() {
+    let dir = scratch("ended");
+    let output = dir.join(OUTPUT);
+    // `uv run` catches the scheduler's `SIGTERM` and exits 143 instead of dying from it.
+    let caught = ResultFile {
+        exit: Some(143),
+        output: output.clone(),
+        ..result()
+    };
+    write_result(&dir, &caught, Duration::ZERO).unwrap();
+    assert!(!ResultFile::ended_from_outside(&output), "a plain failure");
+
+    // `Run::end` marks the run before it signals the command. This group ID names no process.
+    fs::write(dir.join(GROUP), "999999999").unwrap();
+    let _ = Run { dir: dir.clone() }.end();
+    assert!(ResultFile::ended_from_outside(&output));
+
+    // A command the supervisor ended at its hang limit is still a failure.
+    let hung = ResultFile {
+        hung: true,
+        ..caught
+    };
+    write_result(&dir, &hung, Duration::ZERO).unwrap();
+    assert!(!ResultFile::ended_from_outside(&output));
+    fs::remove_dir_all(&dir).unwrap();
+}
