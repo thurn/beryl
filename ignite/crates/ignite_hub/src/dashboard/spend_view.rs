@@ -186,7 +186,7 @@ fn figures(spend: &Spend) -> String {
     if totals.person_s >= 1.0 {
         items.push(("Waited on a person", duration(totals.person_s)));
     }
-    let body: String = items
+    let mut body: String = items
         .iter()
         .map(|(name, value)| {
             format!(
@@ -196,6 +196,24 @@ fn figures(spend: &Spend) -> String {
             )
         })
         .collect();
+    if let Some(plan) = &totals.plan {
+        let mut tip = "Estimated from plan usage samples and API-priced dollars.".to_owned();
+        if plan.borrowed {
+            tip.push_str(" Part of it used the previous week's rate, because this week has too few samples yet.");
+        }
+        let window = if plan.window.is_empty() {
+            "plan".to_owned()
+        } else {
+            format!("{} plan", plan.window.to_lowercase())
+        };
+        body.push_str(&format!(
+            "<div class=\"c-spend-figure\" title=\"{}\"><span class=\"c-spend-figure-label\">\
+             Est. plan usage</span><span class=\"c-spend-figure-value\">{:.2}% of {}</span></div>",
+            esc(&tip),
+            plan.percent,
+            esc(&window)
+        ));
+    }
     format!("<div class=\"c-spend-figures\">{body}</div>")
 }
 

@@ -149,3 +149,22 @@ fn an_epic_stacks_a_band_per_child_and_offers_a_merged_view() {
     assert!(fragment.contains("7m 00s"));
     assert!(fragment.contains("$4.00"));
 }
+
+#[test]
+fn the_estimated_plan_usage_shows_only_for_windows_that_carry_it() {
+    let conn = seeded();
+    let window = json!({
+        "ticket": "TEPIC.2", "window": "claude:TEPIC.2:plan", "provider": "claude",
+        "session": "local_plan", "start": "2026-11-16T13:00:00Z", "end": "2026-11-16T14:00:00Z",
+        "plan_percent": 0.12, "plan_window": "Weekly", "plan_borrowed": true,
+        "time": [{"c": "model", "k": "", "g": "model", "t": 0.0, "s": 60.0}],
+        "dollars": [{"c": "model", "k": "reply", "g": "model", "t": 0.0, "d": 0.5, "r": 1}]
+    });
+    let now = Timestamp::parse(NOW).unwrap();
+    ticket_spend::record(&conn, "m-two", &window, now).unwrap();
+    let fragment = get(&conn, "/TEPIC.2?fragment=spend", false);
+    assert!(fragment.contains("Est. plan usage"));
+    assert!(fragment.contains("0.12% of weekly plan"));
+    assert!(fragment.contains("previous week"));
+    assert!(!get(&conn, "/TEPIC.1?fragment=spend", false).contains("Est. plan usage"));
+}

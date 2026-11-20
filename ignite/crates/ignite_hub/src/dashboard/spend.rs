@@ -85,6 +85,11 @@ struct Posted {
 #[serde(default)]
 struct PostedWindow {
     session: String,
+    /// The estimated percent of the plan window `plan_window` this window used; absent in
+    /// windows posted before the estimate existed.
+    plan_percent: Option<f64>,
+    plan_window: String,
+    plan_borrowed: bool,
     time: Vec<Posted>,
     dollars: Vec<Posted>,
 }
@@ -240,9 +245,21 @@ impl Strip {
     }
 }
 
+/// The estimated share of one Claude plan window that a ticket's sessions used.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PlanUsage {
+    pub percent: f64,
+    /// The plan window's label, such as `Weekly`.
+    pub window: String,
+    /// Whether some of it was priced with the previous period's factor.
+    pub borrowed: bool,
+}
+
 /// The figures above the strips.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Totals {
+    /// `None` when no window carries an estimate, which is not the same as 0%.
+    pub plan: Option<PlanUsage>,
     pub agent_s: f64,
     pub person_s: f64,
     pub idle_s: f64,
@@ -416,6 +433,7 @@ fn collect(windows: &[ticket_spend::Window], root: &str) -> Collected {
     let mut totals = Totals::default();
     let mut sessions: Vec<String> = Vec::new();
     let mut machines: Vec<String> = Vec::new();
+    let mut plans: Vec<PlanUsage> = Vec::new();
     let epic = windows.iter().any(|window| window.ticket != root);
     let shortest_break = if epic { EPIC_BREAK_S } else { TICKET_BREAK_S };
     for window in windows {
@@ -433,6 +451,22 @@ fn collect(windows: &[ticket_spend::Window], root: &str) -> Collected {
         }
         if !machines.contains(&window.machine) {
             machines.push(window.machine.clone());
+        }
+        if let Some(percent) = posted.plan_percent {
+            match plans
+                .iter_mut()
+                .find(|plan| plan.window == posted.plan_window)
+            {
+                Some(plan) => {
+                    plan.percent += percent;
+                    plan.borrowed |= posted.plan_borrowed;
+                }
+                None => plans.push(PlanUsage {
+                    percent,
+                    window: posted.plan_window.clone(),
+                    borrowed: posted.plan_borrowed,
+                }),
+            }
         }
         let items = time.entry(window.ticket.clone()).or_default();
         for segment in &posted.time {
@@ -459,6 +493,10 @@ fn collect(windows: &[ticket_spend::Window], root: &str) -> Collected {
             items.push(Item::Segment(block));
         }
     }
+    // Percents of different plan windows cannot be added; show the one that used the most.
+    totals.plan = plans
+        .into_iter()
+        .max_by(|left, right| left.percent.total_cmp(&right.percent));
     totals.sessions = sessions.len();
     totals.machines = machines.len();
     Collected {
