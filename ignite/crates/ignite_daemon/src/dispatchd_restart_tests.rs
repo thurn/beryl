@@ -201,7 +201,8 @@ fn a_tell_delivered_before_a_restart_is_not_delivered_again() {
     restarted.dispatcher.poll_feed(&restarted.ctx, 0).unwrap();
     let next = restarted.step();
     assert!(
-        next.as_ref().is_none_or(|i| i.action != DispatchAction::Message),
+        next.as_ref()
+            .is_none_or(|i| i.action != DispatchAction::Message),
         "{next:?}"
     );
 }

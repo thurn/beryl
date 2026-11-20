@@ -266,7 +266,6 @@ impl CliDaemon {
         Ok(next)
     }
 
-
     /// Frees a parked slot whose session no longer holds its ticket: someone released it or
     /// its lease expired. Nothing else looks at such a slot, since only a CLI hold's end
     /// resumes parked slots, so a slot parked for an end `decide` could not place would

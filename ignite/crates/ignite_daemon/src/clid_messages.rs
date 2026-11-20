@@ -33,7 +33,12 @@ impl CliDaemon {
     /// Queues `text` for `session`'s next turn, then makes sure the session sees it: an urgent
     /// message ends the running turn; otherwise a session inside `ignite wait` has the wait
     /// ended. Fails when the session has no CLI slot.
-    pub(super) fn queue_message(&self, session: &SessionId, text: &str, urgent: bool) -> Result<()> {
+    pub(super) fn queue_message(
+        &self,
+        session: &SessionId,
+        text: &str,
+        urgent: bool,
+    ) -> Result<()> {
         let row = self
             .row(session)?
             .ok_or_else(|| Error::NotFound(format!("{session} has no CLI slot")))?;
