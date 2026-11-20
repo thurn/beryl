@@ -3623,11 +3623,18 @@ args = ["--dangerously-skip-permissions"]
   that machine since the daemon started.
 - The daemon builds its CLI pool at start when `[pool.cli.<app>]` gives any app
   a program, and gives every such app an adapter whatever its mode, so
-  `ignite pool mode` switches an app without a restart. Two loops follow the
+  `ignite pool mode` switches an app without a restart. Three loops follow the
   pool: `ignite-cli` reads every running turn and acts on each end about once a
-  second, and `ignite-cli-health` runs the probe turns of the apps in CLI mode
-  and sends each CLI hold's report. A probe runs a whole turn, so it never holds
-  up the turns of other slots. `ignite doctor` lists both loops.
+  second, `ignite-cli-health` runs the probe turns of the apps in CLI mode and
+  sends each CLI hold's report, and `ignite-cli-dispatch` runs the dispatcher's
+  step every 10 seconds while any app is in CLI mode. A probe runs a whole turn,
+  so it never holds up the turns of other slots. `ignite doctor` lists all
+  three loops.
+- The dispatch loop is what offers idle slots to the hub. A machine whose apps
+  all run in CLI mode has no dispatcher session to ask for steps, and the only
+  other steps come from `ignite` verbs. Before 2026-11-20 there was no such
+  loop, so once every worker on jarvis was idle, no verb ran and the machine
+  took no ticket for over half an hour.
 
 A turn:
 
