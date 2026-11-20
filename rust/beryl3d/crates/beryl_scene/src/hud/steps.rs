@@ -214,7 +214,13 @@ fn step_shadow(here: bool) -> Vec<Shadow> {
 
 /// The glyph of a step icon, an element of its own as the web's `.step-icon` svg is: it carries
 /// the color, the fade and the drop shadows, which the `.step-toggle` button around it does not.
-fn glyph_element(name: &str, glyph: icons::IconId, color: [u8; 4], opacity: f32, here: bool) -> Element {
+fn glyph_element(
+    name: &str,
+    glyph: icons::IconId,
+    color: [u8; 4],
+    opacity: f32,
+    here: bool,
+) -> Element {
     let mut element = Element::new(Role::Icon)
         .name(name)
         .width(size::STEP)
@@ -252,7 +258,7 @@ fn icon(at: usize, whose: &str, side: Side, set: StepSet, current: Option<Step>)
         color::STEP
     };
     let glyph = glyph_element(&name, glyph, tint, if here { 1.0 } else { opacity }, here);
-    let Some(&step) = stop.steps.last() else {
+    let Some(&last_step) = stop.steps.last() else {
         return glyph;
     };
     Element::new(Role::Toggle)
@@ -261,7 +267,7 @@ fn icon(at: usize, whose: &str, side: Side, set: StepSet, current: Option<Step>)
         .height(size::STEP)
         .selected(on)
         .on_press(Press::Stop {
-            step,
+            step: last_step,
             theirs: side == Side::Opponent,
         })
         .children([glyph])
