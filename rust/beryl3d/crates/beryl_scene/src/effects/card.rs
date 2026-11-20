@@ -11,8 +11,8 @@ use glam::{Affine3A, Vec3};
 use super::{Effect, EffectRun};
 use crate::data::space::effects::{blanch, cover, dim, dissolve, settle};
 use crate::data::space::light;
-use crate::frame::{Band, Draw, FrameBuilder, sprites};
-use crate::table::{CARD_WIDTH, Look};
+use crate::frame::{Band, Draw, EffectLook, FrameBuilder, sprites};
+use crate::table::{CARD_HEIGHT, CARD_WIDTH, Look};
 use crate::tokens::color;
 
 /// The runs in `runs` that play on `on` at `now`, each with its eased progress from 0 to 1.
@@ -41,6 +41,30 @@ fn settle_white(p: f32) -> f32 {
         share(p, settle::STILL, settle::WHITE)
     } else {
         1.0 - share(p, settle::WHITE, 1.0)
+    }
+}
+
+/// How white a `cover` card is at progress `p`: whitening until `cover.white`, held until
+/// `cover.held`, and back to its face by the end.
+fn cover_white(p: f32) -> f32 {
+    if p < cover::HELD {
+        share(p, 0.0, cover::WHITE)
+    } else {
+        1.0 - share(p, cover::HELD, 1.0)
+    }
+}
+
+/// How strongly `effect` shows on a card at progress `p`, as the opacity of the web's overlay
+/// of white light or of near black would say: how far the card is washed white, or how much of
+/// its color darkening takes away. None for an effect that does not change how a card is drawn.
+fn strength(effect: Effect, p: f32) -> Option<f32> {
+    match effect {
+        Effect::Settle => Some(settle_white(p)),
+        Effect::Dissolve => Some((1.0 - dissolve::DARK) * share(p, 0.0, dissolve::DARKENED)),
+        Effect::Dim => Some((1.0 - dim::DARK) * share(p, 0.0, dim::DARKENED)),
+        Effect::Blanch => Some(share(p, 0.0, blanch::WHITE)),
+        Effect::Cover => Some(cover_white(p)),
+        _ => None,
     }
 }
 
@@ -90,12 +114,7 @@ pub(crate) fn look_with_face(
                 look.pose.opacity *= 1.0 - share(p, blanch::WHITE, 1.0);
             }
             Effect::Cover => {
-                let white = if p < cover::HELD {
-                    share(p, 0.0, cover::WHITE)
-                } else {
-                    1.0 - share(p, cover::HELD, 1.0)
-                };
-                look.whiten = look.whiten.max(white);
+                look.whiten = look.whiten.max(cover_white(p));
                 if p < cover::FACE
                     && let Some(earlier_face) = earlier_face.take()
                 {
@@ -110,7 +129,8 @@ pub(crate) fn look_with_face(
 
 /// Writes the burst of light over the card `on`, drawn as `look`, for each `settle` run in `runs`
 /// that plays on it at `now`: one glow `settle.burst_cards` cards wide, as bright as the card is
-/// white.
+/// white. Records each run that changes how the card is drawn as an `EffectLook` over its face,
+/// at the opacity `strength` gives times the card's own.
 pub fn write(
     runs: &[EffectRun],
     on: Subject,
@@ -119,6 +139,20 @@ pub fn write(
     builder: &mut FrameBuilder<'_>,
 ) {
     for (effect, p) in under_way(runs, on, now) {
+        if let Some(strength) = strength(effect, p) {
+            let face = Affine3A::from_scale_rotation_translation(
+                Vec3::new(CARD_WIDTH, CARD_HEIGHT, 1.0) * look.pose.scale,
+                look.pose.rotation,
+                look.pose.position,
+            );
+            builder.effect(EffectLook {
+                effect,
+                on,
+                // A record's model is its transform as `Draw` lays it out.
+                model: Draw::glow(face, [0; 4], sprites::BURST, 0.0).model,
+                opacity: strength * look.pose.opacity,
+            });
+        }
         let white = settle_white(p);
         if effect != Effect::Settle || white <= 0.0 {
             continue;

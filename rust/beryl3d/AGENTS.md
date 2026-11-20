@@ -141,11 +141,13 @@ through the client with no window or GPU (the `b3d` skill has the details):
   clients through the span 60 frames a second and prints, for each moving
   element and its web pair, the largest difference of position, size and opacity
   and the frame of each, worst first, with a plot of both tracks in `plots/`
-  (PNG). `--only <locator>` picks one element, moving or not; the span must lie
-  within one view. `--all` ranks every verb, effect and mark of
-  `data/beryl3d/match/motion-census.json` by how far its tracks are from the
-  web's, worst first, with the command that shows each. Beryl 3D's frames alone
-  are `just b3d tree <name> --at <moment> --to <moment> --records`.
+  (PNG). `--only <locator>` picks one element, moving or not. Effects are
+  elements of role `effect` on both sides. `--all` ranks every verb, effect and
+  mark of `data/beryl3d/match/motion-census.json` by how far its tracks are from
+  the web's (an effect by its own elements only, with the pixels that differ in
+  its box where it is strongest), worst first, with the command that shows each.
+  Beryl 3D's frames alone are
+  `just b3d tree <name> --at <moment> --to <moment> --records`.
 - `just b3d match styles <name> --at <moment>` prints each paired element's
   differing style properties as `<element>  <property>  <web>  <Beryl 3D>`,
   largest element first: colors within one level per channel, lengths within a

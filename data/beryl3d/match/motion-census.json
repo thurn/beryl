@@ -6,8 +6,8 @@
    "name": "announce",
    "recording": "verbs-combat",
    "seat": "you",
-   "start": "4632ms",
-   "end": "5231ms"
+   "start": "6730ms",
+   "end": "7829ms"
   },
   {
    "kind": "verbs",
@@ -30,8 +30,8 @@
    "name": "dwell",
    "recording": "verbs-piles",
    "seat": "you",
-   "start": "26062ms",
-   "end": "26561ms"
+   "start": "26896ms",
+   "end": "27795ms"
   },
   {
    "kind": "verbs",
@@ -94,8 +94,8 @@
    "name": "showcase",
    "recording": "verbs-reveal",
    "seat": "you",
-   "start": "6835ms",
-   "end": "7034ms"
+   "start": "8195ms",
+   "end": "8494ms"
   },
   {
    "kind": "verbs",
@@ -110,8 +110,8 @@
    "name": "strike",
    "recording": "verbs-combat",
    "seat": "you",
-   "start": "2855ms",
-   "end": "3579ms"
+   "start": "3177ms",
+   "end": "4526ms"
   },
   {
    "kind": "verbs",
@@ -182,8 +182,8 @@
    "name": "gain",
    "recording": "verbs-combat",
    "seat": "you",
-   "start": "6600ms",
-   "end": "7024ms"
+   "start": "10666ms",
+   "end": "11415ms"
   },
   {
    "kind": "effects",
@@ -198,8 +198,8 @@
    "name": "impact",
    "recording": "verbs-combat",
    "seat": "you",
-   "start": "2855ms",
-   "end": "3579ms"
+   "start": "3177ms",
+   "end": "4526ms"
   },
   {
    "kind": "effects",
@@ -230,16 +230,16 @@
    "name": "shake",
    "recording": "verbs-combat",
    "seat": "you",
-   "start": "2855ms",
-   "end": "3579ms"
+   "start": "3177ms",
+   "end": "4526ms"
   },
   {
    "kind": "effects",
    "name": "trail",
    "recording": "verbs-combat",
    "seat": "you",
-   "start": "2855ms",
-   "end": "3579ms"
+   "start": "3177ms",
+   "end": "4526ms"
   },
   {
    "kind": "marks",

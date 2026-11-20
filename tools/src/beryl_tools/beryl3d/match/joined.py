@@ -8,6 +8,11 @@ background, border, shadow, filter, mask or text) and whose role is one no playe
 anything to compare, and the two clients nest their elements differently, so they would only
 count as unmatched.
 
+An effect (role `effect`: light or a change of surface on a card, an ability or a player, or
+the table shaking) pairs next, only by its name and what it is on (its `object`), since the two
+sides draw an effect in different shapes and nest it differently. It takes part in no other
+pass.
+
 Five passes then pair the rest, each over what the passes before it left:
 
 1. **Object.** Cards of the same object (a card's slot in the view, which both clients name
@@ -26,7 +31,7 @@ Five passes then pair the rest, each over what the passes before it left:
 
 `joined.json` is `{"target", "pairs": [{"web", "b3d", "pass"}], "unmatched": {"web": [...],
 "b3d": [...]}, "wrappers": {"web": n, "b3d": n}}`: `web` and `b3d` are indexes into each side's
-elements, `pass` is "object", "key", "identity", "anywhere" or "box", each unmatched element is
+elements, `pass` is "effect", "object", "key", "identity", "anywhere" or "box", each unmatched element is
 `{"index", "role", "name", "box", "reason"}`, with `reason` saying why no pass paired it, and
 `wrappers` counts the elements left out on each side.
 """
@@ -158,15 +163,21 @@ def join(web: Sequence[Element], b3d: Sequence[Element]) -> dict[str, object]:
     b3d_out: set[int] = {i for i, e in enumerate(b3d) if wrapper(e)}
 
     def open_web(w: int) -> bool:
-        return w not in web_to and w not in web_out
+        return w not in web_to and w not in web_out and effect_of(web[w]) is None
 
     def open_b3d(b: int) -> bool:
-        return b not in b3d_to and b not in b3d_out
+        return b not in b3d_to and b not in b3d_out and effect_of(b3d[b]) is None
 
     def pair(w: int, b: int, how: str) -> None:
         web_to[w] = b
         b3d_to[b] = w
         pairs.append({"web": w, "b3d": b, "pass": how})
+
+    effects = {effect_of(e): b for b, e in enumerate(b3d) if effect_of(e) is not None}
+    for w, element in enumerate(web):
+        b = effects.get(effect_of(element))
+        if effect_of(element) is not None and b is not None and b not in b3d_to:
+            pair(w, b, "effect")
 
     def nearest_first(
         how: str, alike: Callable[[Element, Element], bool], within: float
@@ -247,6 +258,14 @@ def join(web: Sequence[Element], b3d: Sequence[Element]) -> dict[str, object]:
         "unmatched": {"web": left("web"), "b3d": left("b3d")},
         "wrappers": {"web": len(web_out), "b3d": len(b3d_out)},
     }
+
+
+def effect_of(element: Element) -> tuple[object, object] | None:
+    """An effect's name and what it is on, which the effect pass pairs by; None for an element
+    that is not an effect."""
+    if element.get("role") != "effect":
+        return None
+    return (element.get("name"), element.get("object"))
 
 
 def same_card(a: Element, b: Element) -> bool:

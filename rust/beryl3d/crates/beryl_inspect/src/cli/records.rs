@@ -7,11 +7,24 @@
 //! and each `drop-shadow` of `filter`), gradients as `{kind, repeating, shape, stops}`
 //! (`background-image` and `mask-image`), the other filter functions as `{fn, value}`, and
 //! `"none"` for what Beryl 3D's `Style` cannot say yet (transforms).
+//!
+//! After the elements come the effects the frame draws (`Looks::effects`), one record each of
+//! role `effect`, named by the effect, with what it is on as its `object` (a card's slot, an
+//! ability's `a<id>` or a player's side) as the web's dump names its `.stage-effect` nodes
+//! (`tools/src/beryl_tools/beryl3d/match/page.mjs`), the box its quad covers on the window and
+//! its opacity. `shake`, which moves the whole picture of the table, is on `table`, and its box
+//! is the offset of the picture, of no size.
 
+use beryl_protocol::protocol::Side;
+use beryl_protocol::script::Subject;
 use beryl_scene::agent::hit::bounds;
 use beryl_scene::agent::tree::{locator_of, place_word};
+use beryl_scene::effects::Effect;
 use beryl_scene::element::{Extent, Filter, Gradient, Length, Shadow, Shape};
-use beryl_scene::frame::{ElementLook, Frame, LookPaint, LookShadow, Place, REVEALED_FACE, Role};
+use beryl_scene::frame::{
+    EffectLook, ElementLook, Frame, LookPaint, LookShadow, Place, REVEALED_FACE, Role,
+};
+use beryl_scene::input::Size;
 use serde_json::{Map, Value, json};
 
 /// Rounds `value` to hundredths, as the web side rounds its boxes.
@@ -235,10 +248,93 @@ fn style(
     Value::Object(style)
 }
 
-/// The frame's elements as records. The frame must have been built `looking`
-/// (`Page::set_looking`), or no flat-layer element has a look or a line its words.
+/// What an effect is on, as the web's dump names it: a card's slot, `a<id>` for an ability, a
+/// player's side, or `table` for a shake.
+fn subject(effect: &EffectLook) -> Value {
+    if effect.effect == Effect::Shake {
+        return Value::from("table");
+    }
+    match effect.on {
+        Subject::Object { slot } => json!(slot.0),
+        Subject::Ability { id } => Value::from(format!("a{id}")),
+        Subject::Player { player: Side::You } => Value::from("you"),
+        Subject::Player {
+            player: Side::Opponent,
+        } => Value::from("opponent"),
+    }
+}
+
+/// The box on a window of `size` of the quad from -0.5 to 0.5 that `model` places in the
+/// table's space, through the frame's camera, as `[x, y, width, height]` in logical points. A
+/// shake's model is only its offset, which is its box's corner.
+fn effect_box(frame: &Frame, effect: &EffectLook, size: Size) -> Vec<Value> {
+    let m = effect.model;
+    if effect.effect == Effect::Shake {
+        return vec![round(m[3]), round(m[7]), round(0.0), round(0.0)];
+    }
+    // The camera's matrix by columns, applied by hand: this crate takes `glam` only for its
+    // tests.
+    let c = frame.view_projection.to_cols_array();
+    let (mut low, mut high) = ([f32::MAX; 2], [f32::MIN; 2]);
+    for (x, y) in [(-0.5, -0.5), (0.5, -0.5), (0.5, 0.5), (-0.5, 0.5)] {
+        let point = [
+            m[0] * x + m[1] * y + m[3],
+            m[4] * x + m[5] * y + m[7],
+            m[8] * x + m[9] * y + m[11],
+        ];
+        let clip = |row: usize| c[row] * point[0] + c[4 + row] * point[1] + c[8 + row] * point[2] + c[12 + row];
+        let w = clip(3);
+        let screen = [
+            f32::midpoint(clip(0) / w, 1.0) * size.width,
+            f32::midpoint(1.0, -clip(1) / w) * size.height,
+        ];
+        for axis in 0..2 {
+            low[axis] = low[axis].min(screen[axis]);
+            high[axis] = high[axis].max(screen[axis]);
+        }
+    }
+    vec![
+        round(low[0]),
+        round(low[1]),
+        round(high[0] - low[0]),
+        round(high[1] - low[1]),
+    ]
+}
+
+/// The records of the effects the frame draws, painted after its `elements` elements.
+fn effect_records(frame: &Frame, size: Size, elements: usize) -> Vec<Value> {
+    (frame.looks.effects.iter().enumerate())
+        .map(|(at, effect)| {
+            let on = subject(effect);
+            let name = effect.effect.name();
+            json!({
+                "key": format!("effect \"{name}\" on {}", on.as_str().map_or_else(|| on.to_string(), str::to_owned)),
+                "role": "effect",
+                "name": name,
+                "object": on,
+                "place": "",
+                "box": effect_box(frame, effect, size),
+                "z": elements + at,
+                "parent": null,
+                // The style of an element that paints nothing of its own, seen at the effect's
+                // opacity, so that the record keeps the contract.
+                "style": style(
+                    effect.opacity.clamp(0.0, 1.0),
+                    None,
+                    (Value::from("none"), Value::from("none")),
+                    (Value::from("none"), Value::from("none"), Vec::new()),
+                ),
+                "text": [],
+            })
+        })
+        .collect()
+}
+
+/// The frame's elements as records, then its effects' for a window of `size`. The frame must
+/// have been built `looking` (`Page::set_looking`), or no flat-layer element has a look or a
+/// line its words, and no effect is recorded.
 #[must_use]
-pub fn records(frame: &Frame) -> Vec<Value> {
+pub fn records(frame: &Frame, size: Size) -> Vec<Value> {
     let z = paint_order(frame);
     let mut looks: Vec<Option<&ElementLook>> = vec![None; frame.resolved.len()];
     for look in &frame.looks.elements {
@@ -293,5 +389,6 @@ pub fn records(frame: &Frame) -> Vec<Value> {
                 "text": text,
             })
         })
+        .chain(effect_records(frame, size, frame.resolved.len()))
         .collect()
 }

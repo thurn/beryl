@@ -167,7 +167,7 @@ const COMMANDS: [Command; 5] = [
         ],
         spec: Spec {
             recording: true,
-            values: &["--dir", "--only", "--web-only"],
+            values: &["--dir", "--only", "--web-only", "--box"],
             switches: &[],
         },
         own: &[
@@ -179,6 +179,11 @@ const COMMANDS: [Command; 5] = [
             (
                 "--only <locator>",
                 "the snapshot shows that element alone (`just b3d match snapshot --only`)",
+            ),
+            (
+                "--box <x>,<y>,<width>,<height>",
+                "also count, in pixels.json's `inside`, the differing pixels inside this box, \
+                 in points",
             ),
             (
                 "--web-only <index>",

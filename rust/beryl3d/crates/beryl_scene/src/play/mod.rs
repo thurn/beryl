@@ -86,6 +86,8 @@ pub struct Show {
     shown: Option<Rc<GameUpdate>>,
     playing: Option<Playing>,
     waiting: VecDeque<Waiting>,
+    /// Whether a script plays faster while many updates wait (`rate_for`).
+    catch_up: bool,
     /// The table the last script given ends with, which the next is played from. The scripts
     /// number the abilities on the stack and later steps name them by those numbers, which a
     /// table made from a view alone does not know.
@@ -152,6 +154,7 @@ impl Show {
             shown: None,
             playing: None,
             waiting: VecDeque::new(),
+            catch_up: true,
             played: None,
             unplaced: 0,
             compiled: Cell::new(0),
@@ -591,7 +594,11 @@ impl Show {
                 self.finish();
             }
             let start = ended.unwrap_or(now);
-            let rate = rate_for(self.waiting.len());
+            let rate = if self.catch_up {
+                rate_for(self.waiting.len())
+            } else {
+                1
+            };
             // Begun in `prepare` unless it did not foresee this start; this may allocate.
             self.begin(0, now, (start, rate));
             let Some(mut waiting) = self.waiting.pop_front() else {
@@ -664,7 +671,7 @@ impl Show {
         effects::light::write(&self.active_effects, now, &scene, builder);
         effects::particles::write(&self.active_effects, now, &scene, builder);
         let scale = self.table.camera().window.scale;
-        builder.shake(effects::shake::offset(&self.active_effects, now, scale));
+        effects::shake::write(&self.active_effects, now, scale, builder);
     }
 
     /// Ends the playing script: the table shows its view, at rest, with its life totals and

@@ -18,7 +18,7 @@ pub use draw::{
     Draw, Material, Mesh, RADIAL, Sprite, TextureArray, box_shadow_reach, fixed, gradient_reach,
     sprites,
 };
-pub use look::{ElementLook, LookPaint, LookShadow, Looks};
+pub use look::{EffectLook, ElementLook, LookPaint, LookShadow, Looks};
 pub use paint::{GRADIENTS, GradientEntry, MaskEntry, PaintTable, Paints};
 pub use rings::{LIFTED, Lifted, RINGS, Ring, Ringed};
 pub use undrawn::{Missing, Undrawn};

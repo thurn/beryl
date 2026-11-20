@@ -357,6 +357,21 @@ export function records({ roles, only, light = false }) {
         if (el.dataset.card) return el.dataset.card;
         return words(content(el)).slice(0, 200);
     };
+    // An effect (ui/src/stage/effects.ts) is a `.stage-effect stage-effect-<name>
+    // stage-effect-<layer>` node inside the node of what it is on, or inside a player's life
+    // total (`data-life`, the player's side): its name is the effect's and its object what it is
+    // on, as Beryl 3D's records name an effect.
+    const LAYERS = new Set(["stage-effect", "stage-effect-under", "stage-effect-over"]);
+    const effectName = (el) =>
+        [...el.classList]
+            .find((c) => c.startsWith("stage-effect-") && !LAYERS.has(c))
+            ?.slice("stage-effect-".length) ?? "";
+    const effectOn = (el) => {
+        const on = el.parentElement;
+        if (!on) return null;
+        if (on.dataset.life !== undefined) return on.dataset.life;
+        return objectOf(on);
+    };
     const objectOf = (el) => {
         const stage = el.dataset.stage;
         if (stage !== undefined && /^-?\d+$/.test(stage)) return Number(stage);
@@ -452,8 +467,8 @@ export function records({ roles, only, light = false }) {
             elements.push({
                 key: null,
                 role,
-                name: nameOf(el),
-                object: objectOf(el),
+                name: role === "effect" ? effectName(el) : nameOf(el),
+                object: role === "effect" ? effectOn(el) : objectOf(el),
                 box: [round(rect.x), round(rect.y), round(rect.width), round(rect.height)],
                 z: here,
                 parent,
@@ -465,6 +480,33 @@ export function records({ roles, only, light = false }) {
         for (const child of el.children) walk(child, here, opacity);
     };
     for (const child of document.body.children) walk(child, null, 1);
+    // `shake` moves the whole table (effects.css `[data-shaking]`), not a node of its own: it is
+    // recorded as an effect on `table` whose box is how far the table is moved from where it
+    // rests, of no size, as Beryl 3D records the offset of its picture. Where it rests is read
+    // with the attribute taken off for a moment, which no tick of the stage sees.
+    const shaking = document.querySelector(".stage[data-shaking], .phone-board[data-shaking]");
+    if (shaking) {
+        const centre = () => {
+            const r = shaking.getBoundingClientRect();
+            return [r.x + r.width / 2, r.y + r.height / 2];
+        };
+        const [x, y] = centre();
+        shaking.removeAttribute("data-shaking");
+        const [restX, restY] = centre();
+        shaking.setAttribute("data-shaking", "");
+        elements.push({
+            key: null,
+            role: "effect",
+            name: "shake",
+            object: "table",
+            box: [round(x - restX), round(y - restY), 0, 0],
+            z: elements.length,
+            parent: null,
+            style: styleOf(getComputedStyle(shaking), 1, [0, 0]),
+            text: [],
+            ...(light ? { track: "shake" } : {}),
+        });
+    }
     for (const [el, index] of indexOf) {
         if (index === only) el.setAttribute("data-b3d-only", "");
     }

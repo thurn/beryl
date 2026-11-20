@@ -4,7 +4,8 @@
 //! A recording is named as `just b3d list` prints it, or by a test's name,
 //! `b3d:<recording>/<seat>/<width>x<height>[@<scale>]`, which also sets the seat, the window and
 //! the scale. The options common to every such command are `--seat`, `--layout`, `--size`,
-//! `--scale`, `--tier`, `--at`, `--do` (repeatable) and `--json`. A command adds options of its
+//! `--scale`, `--tier`, `--at`, `--do` (repeatable), `--json` and `--no-catch-up`, which plays
+//! every script at real time however many updates wait, as the web interface does. A command adds options of its
 //! own through [`Spec`], and reads them back with [`Options::value`] and [`Options::switch`].
 
 use std::fmt::Write;
@@ -65,6 +66,8 @@ pub struct Options {
     /// Each action as it was written, for the printed command.
     action_lines: Vec<String>,
     pub json: bool,
+    /// Whether scripts play faster while many updates wait; real time with `--no-catch-up`.
+    pub pace: Pace,
     /// The command's own options, in the order given, each with its value if it takes one.
     pub own: Vec<(String, Option<String>)>,
     /// Which options were given explicitly, so that the printed command can leave out the
@@ -73,8 +76,17 @@ pub struct Options {
     at_given: bool,
 }
 
+/// How fast a recording's scripts play while many updates wait to play.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Pace {
+    /// Faster, as the app catches up (`catch_up` in `data/beryl3d/space.json`).
+    CatchUp,
+    /// At real time, as the web interface plays every script.
+    RealTime,
+}
+
 /// The options every command that takes a recording accepts, each with its value's form.
-const COMMON: [(&str, &str); 8] = [
+const COMMON: [(&str, &str); 9] = [
     ("--seat", "you|opponent"),
     ("--layout", "desktop|phone"),
     ("--size", "<width>x<height>"),
@@ -83,6 +95,7 @@ const COMMON: [(&str, &str); 8] = [
     ("--at", "<moment>"),
     ("--do", "<action>"),
     ("--json", ""),
+    ("--no-catch-up", ""),
 ];
 
 const DESKTOP: Size = Size {
@@ -118,6 +131,7 @@ impl Options {
             actions: Vec::new(),
             action_lines: Vec::new(),
             json: false,
+            pace: Pace::CatchUp,
             own: Vec::new(),
             sized: false,
             at_given: false,
@@ -140,7 +154,10 @@ impl Options {
                 .iter()
                 .any(|&(name, form)| name == flag && !form.is_empty())
                 || spec.values.contains(&flag);
-            let is_switch = flag == "--json" || spec.switches.contains(&flag);
+            let is_switch = COMMON
+                .iter()
+                .any(|&(name, form)| name == flag && form.is_empty())
+                || spec.switches.contains(&flag);
             if !takes_value && !is_switch {
                 return Err(unknown_option(command, flag, spec));
             }
@@ -224,6 +241,9 @@ impl Options {
             if self.at_given {
                 let _ = write!(out, " --at {}", self.at);
             }
+            if self.pace == Pace::RealTime {
+                out.push_str(" --no-catch-up");
+            }
         }
         for arg in &self.rest {
             let _ = write!(out, " {}", quote(arg));
@@ -293,6 +313,7 @@ impl Options {
                 self.action_lines.push(value);
             }
             "--json" => self.json = true,
+            "--no-catch-up" => self.pace = Pace::RealTime,
             _ => self
                 .own
                 .push((flag.to_owned(), takes_value.then_some(value))),

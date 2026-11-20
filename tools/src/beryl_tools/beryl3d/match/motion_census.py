@@ -5,7 +5,8 @@ worst first (docs/beryl-3d.md, "Matching the web interface's look").
 1. The census, `data/beryl3d/match/motion-census.json`, holds one span for each item: for a verb
    or an effect, the first step of its recording that plays the verb or begins the effect
    (from `b3d timeline`, the step timings both clients share), from its start on Beryl 3D's
-   clock to `AFTER_MS` after its end; for a mark, the frames before its recording's first
+   clock, with every script played at real time (`--no-catch-up`) as `match motion` plays
+   them, to `AFTER_MS` after its end; for a mark, the frames before its recording's first
    prompt is still. The file is kept so that two runs measure the same frames and their
    totals compare; `--refresh-census` finds the spans again.
 2. Each span is measured as `match motion` measures one (motion.py's `measure`) at 1600x900
@@ -14,10 +15,19 @@ worst first (docs/beryl-3d.md, "Matching the web interface's look").
    tools, and the span) are unchanged.
 3. Each moving pair adds its `tracks.Deviation`, weighed into points by `tracks.WEIGHTS`, to
    its item's total, and each element that moves on one side only adds how far it moves.
-   Element records hold no rotation on either side, so rotation is not compared.
-4. The report lists the items worst first, each with its total, the element that deviates
-   most, the kind of difference that adds most to that element's, and the `match motion`
-   command that shows it. It is written to `motion-census.txt` in the tree's match directory.
+   Element records hold no rotation on either side, so rotation is not compared. An effect's
+   total counts only its own elements (role `effect` of its name: the web's `.stage-effect`
+   nodes and the effects Beryl 3D's records list), not everything else that moves in its span,
+   so an effect drawn on one side only adds the whole of its track.
+4. Each effect is also compared in pixels at the frame where it is strongest: where its web
+   element is most opaque (or its Beryl 3D element, if the web draws none), a snapshot of that
+   moment counts the pixels that differ inside that element's box (`b3d-render pixels --box`,
+   glyph pixels left out). `shake` moves the whole table and has no box of its own, so it has
+   no pixel count.
+5. The report lists the items worst first, each with its total, the element that deviates
+   most, the kind of difference that adds most to that element's, an effect's pixel count, and
+   the `match motion` command that shows it. It is written to `motion-census.txt` in the tree's
+   match directory.
 """
 
 from __future__ import annotations
@@ -28,12 +38,12 @@ import hashlib
 import json
 import math
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from .. import compare
 from .. import paths as beryl3d_paths
-from . import snapshot, tracks
+from . import pixels, snapshot, tracks
 from .motion import Measured, command, measure
 from .target import UNSAFE, Target, target, tree_key
 
@@ -77,16 +87,20 @@ class Span:
         return (self.recording, self.seat, self.start, self.end)
 
     def target(self) -> Target:
-        return target(
-            argparse.Namespace(
-                recording=self.recording,
-                at=self.start,
-                seat=self.seat,
-                layout=None,
-                size=None,
-                scale=None,
-                only=None,
-            )
+        """The span's first moment, with Beryl 3D at real time as `match motion` plays it."""
+        return replace(
+            target(
+                argparse.Namespace(
+                    recording=self.recording,
+                    at=self.start,
+                    seat=self.seat,
+                    layout=None,
+                    size=None,
+                    scale=None,
+                    only=None,
+                )
+            ),
+            real_time=True,
         )
 
 
@@ -144,16 +158,19 @@ def step_span(
 def view_arrival(recording: str, seat: str, view: int) -> float | None:
     """When the client was given the `view`th view (counted from 1) of the recording, on its
     clock: what `tree --records` says of the frame where that view is first still."""
-    t = target(
-        argparse.Namespace(
-            recording=recording,
-            at=f"view:{view}",
-            seat=seat,
-            layout=None,
-            size=None,
-            scale=None,
-            only=None,
-        )
+    t = replace(
+        target(
+            argparse.Namespace(
+                recording=recording,
+                at=f"view:{view}",
+                seat=seat,
+                layout=None,
+                size=None,
+                scale=None,
+                only=None,
+            )
+        ),
+        real_time=True,
     )
     printed = compare.b3d(
         ["tree", recording, *t.common(), "--at", f"view:{view}", "--records"], False
@@ -170,16 +187,19 @@ def mark_span(recording: str, seat: str) -> tuple[str, str] | str:
     """A mark's span: from a frame after the view of the recording's first prompt arrives (or
     `MARK_MS` before the prompt is still, if later) to `AFTER_MS` after it is still; why not if
     the recording has no prompt."""
-    t = target(
-        argparse.Namespace(
-            recording=recording,
-            at="prompt:1",
-            seat=seat,
-            layout=None,
-            size=None,
-            scale=None,
-            only=None,
-        )
+    t = replace(
+        target(
+            argparse.Namespace(
+                recording=recording,
+                at="prompt:1",
+                seat=seat,
+                layout=None,
+                size=None,
+                scale=None,
+                only=None,
+            )
+        ),
+        real_time=True,
     )
     printed = compare.b3d(
         ["tree", recording, *t.common(), "--at", "prompt:1", "--records"], False
@@ -206,7 +226,9 @@ def find_spans(parity: dict[str, dict[str, str]]) -> list[Span]:
     ) -> tuple[list[dict[str, object]], dict[str, object]] | None:
         if (recording, seat) not in read:
             timeline = compare.b3d(["timeline", recording, "--seat", seat], False)
-            info = compare.b3d(["info", recording, "--seat", seat, "--json"], False)
+            info = compare.b3d(
+                ["info", recording, "--seat", seat, "--json", "--no-catch-up"], False
+            )
             read[(recording, seat)] = (
                 None
                 if timeline is None or info is None
@@ -261,23 +283,79 @@ def write_census(spans: Sequence[Span]) -> None:
     CENSUS.write_text(json.dumps({"about": about, "spans": entries}, indent=1) + "\n")
 
 
-def scored(found: Measured) -> dict[str, object]:
+def scored(found: Measured, window: tuple[int, int]) -> dict[str, object]:
     """What `--all` keeps of a measured span: each moving pair's and lonely element's
     `tracks.Deviation`, and the report's notes."""
     times = found.times
     rows: list[dict[str, object]] = [
-        {"key": p.key, **vars(tracks.deviation(p.web, p.b3d, times))}
+        {
+            "key": p.key,
+            "effect": p.effect,
+            **vars(tracks.deviation(p.web, p.b3d, times)),
+        }
         for p in found.pairs
     ]
     rows += [
-        {"key": f"{key} (Beryl 3D only)", **vars(tracks.alone(track))}
-        for key, track in found.lonely_b3d
+        {
+            "key": f"{lonely.key} (Beryl 3D only)",
+            "effect": lonely.effect,
+            **vars(tracks.alone(lonely.track)),
+        }
+        for lonely in found.lonely_b3d
     ]
     rows += [
-        {"key": f"{what} (web only)", **vars(tracks.alone(track))}
-        for what, track in found.lonely_web
+        {
+            "key": f"{lonely.key} (web only)",
+            "effect": lonely.effect,
+            **vars(tracks.alone(lonely.track)),
+        }
+        for lonely in found.lonely_web
     ]
-    return {"rows": rows, "notes": found.notes}
+    return {"rows": rows, "notes": found.notes, "peaks": peaks(found, window)}
+
+
+def peaks(found: Measured, window: tuple[int, int]) -> dict[str, dict[str, object]]:
+    """For each effect measured in the span, the frame where it is strongest and its box
+    there: the most opaque frame of its web elements, or of its Beryl 3D elements if the web
+    draws none of it, as `{"t_ms", "box"}`. Only frames where its box is inside the window
+    (`window`, width and height in points) count, since a picture shows nothing outside it.
+    """
+    width, height = window
+
+    def shown(sample: tracks.Sample) -> bool:
+        return (
+            sample.x >= 0
+            and sample.y >= 0
+            and sample.x + sample.width <= width
+            and sample.y + sample.height <= height
+        )
+
+    web: dict[str, list[tracks.Track]] = {}
+    b3d: dict[str, list[tracks.Track]] = {}
+    for pair in found.pairs:
+        if pair.effect:
+            web.setdefault(pair.effect, []).append(pair.web)
+            b3d.setdefault(pair.effect, []).append(pair.b3d)
+    for lonely in found.lonely_web:
+        if lonely.effect:
+            web.setdefault(lonely.effect, []).append(lonely.track)
+    for lonely in found.lonely_b3d:
+        if lonely.effect:
+            b3d.setdefault(lonely.effect, []).append(lonely.track)
+    out: dict[str, dict[str, object]] = {}
+    for name in sorted({*web, *b3d}):
+        seen = [
+            (sample.opacity, at, sample)
+            for track in web.get(name) or b3d.get(name, [])
+            for at, sample in enumerate(track)
+            if sample is not None and shown(sample)
+        ]
+        if not seen:
+            continue
+        _, at, sample = max(seen, key=lambda found: (found[0], -found[1]))
+        box = [sample.x, sample.y, sample.width, sample.height]
+        out[name] = {"t_ms": found.times[at], "box": box}
+    return out
 
 
 def span_inputs(span: Span, art: bool) -> str:
@@ -303,7 +381,7 @@ def measured_span(
     found = measure(t, span.end, None, art, serving)
     if isinstance(found, str):
         return {"failed": found}
-    result = scored(found)
+    result = scored(found, t.width_height())
     cache.parent.mkdir(parents=True, exist_ok=True)
     cache.write_text(json.dumps({"inputs": digest, "result": result}) + "\n")
     return result
@@ -320,6 +398,9 @@ class Ranked:
     element: str
     most: str
     failed: str = ""
+    # For an effect, the pixels that differ inside its box where it is strongest, or why there
+    # is no count.
+    pixels: int | str | None = None
 
 
 def rank(
@@ -336,6 +417,8 @@ def rank(
             continue
         rows = result["rows"]
         assert isinstance(rows, list)
+        if span.kind == "effects":
+            rows = [row for row in rows if row.get("effect") == span.name]
         deviations = [
             (
                 str(row["key"]),
@@ -344,12 +427,39 @@ def rank(
             for row in rows
         ]
         if not deviations:
-            out.append(Ranked(span, 0.0, "nothing moves on either side", ""))
+            nothing = (
+                "neither side draws it in its span"
+                if span.kind == "effects"
+                else "nothing moves on either side"
+            )
+            out.append(Ranked(span, 0.0, nothing, ""))
             continue
         key, worst = max(deviations, key=lambda kd: kd[1].total())
         total = sum(d.total() for _, d in deviations)
         out.append(Ranked(span, total, key, worst.most()))
     return sorted(out, key=lambda r: (bool(r.failed), -r.total))
+
+
+def effect_pixels(
+    span: Span,
+    results: dict[Where, dict[str, object]],
+    art: bool,
+    serving: snapshot.Shared,
+) -> int | str:
+    """The pixels that differ inside the effect's box at the frame where it is strongest
+    (`peaks`), or why there is no count."""
+    if span.name == "shake":
+        return "it moves the whole table and has no box"
+    found = results.get(span.where(), {}).get("peaks")
+    peak = found.get(span.name) if isinstance(found, dict) else None
+    if not isinstance(peak, dict):
+        return "neither side draws it in its span"
+    at = f"{round(float(str(peak['t_ms'])))}ms"
+    box = peak["box"]
+    assert isinstance(box, list)
+    return pixels.inside(
+        replace(span.target(), at=at), [float(n) for n in box], art, serving
+    )
 
 
 def ranking_lines(ranked: Sequence[Ranked]) -> list[str]:
@@ -359,7 +469,12 @@ def ranking_lines(ranked: Sequence[Ranked]) -> list[str]:
         if r.failed:
             lines.append(f"{n:>3}. {what}: not measured: {r.failed}")
             continue
-        lines.append(f"{n:>3}. {what}  {r.total:.1f}  {r.element}  most: {r.most}")
+        line = f"{n:>3}. {what}  {r.total:.1f}  {r.element}  most: {r.most}"
+        if isinstance(r.pixels, int):
+            line += f"  pixels: {r.pixels}"
+        elif isinstance(r.pixels, str):
+            line += f"  pixels: - ({r.pixels})"
+        lines.append(line)
         lines.append(f"     {command(r.span.target(), r.span.end)}")
     return lines
 
@@ -390,13 +505,22 @@ def run_all(args: argparse.Namespace) -> int:
             }
             for job in concurrent.futures.as_completed(jobs):
                 results[jobs[job].where()] = job.result()
-    ranked = rank(spans, results)
+        ranked = [
+            (
+                replace(r, pixels=effect_pixels(r.span, results, bool(args.art), given))
+                if r.span.kind == "effects" and not r.failed
+                else r
+            )
+            for r in rank(spans, results)
+        ]
     total = sum(r.total for r in ranked)
     report = [
         f"just b3d match motion --all: {len(ranked)} items of {CENSUS.name}, worst first",
         "each: summed deviation (points of position, with size, opacity and timing weighed "
-        "as tracks.WEIGHTS says), the element that deviates most, the kind of difference "
-        "that adds most to it, and the command that shows it",
+        "as tracks.WEIGHTS says; an effect's from its own elements only), the element that "
+        "deviates most, the kind of difference that adds most to it, for an effect the "
+        "pixels that differ inside its box where it is strongest, and the command that "
+        "shows it",
         *ranking_lines(ranked),
         f"total {total:.1f}",
     ]

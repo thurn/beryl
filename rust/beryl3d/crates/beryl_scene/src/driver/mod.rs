@@ -106,6 +106,8 @@ pub struct Page {
     records: bool,
     /// The faults planted in the recording's scripts (`plant`).
     plants: Vec<Plant>,
+    /// Whether scripts play faster while many updates wait (`Client::set_catch_up`).
+    catch_up: bool,
     /// Each named moment of the recording, with its time, once asked for.
     moments: Option<Vec<(Name, u64)>>,
     /// Every step of the recording's scripts, once asked for.
@@ -156,6 +158,7 @@ impl Page {
             given_at: Vec::new(),
             records: false,
             plants: Vec::new(),
+            catch_up: true,
             moments: None,
             steps: None,
             heard: Vec::new(),
@@ -251,6 +254,23 @@ impl Page {
         (self.inputs.iter().zip(&self.given_at).rev())
             .find(|(input, _)| matches!(input, Input::Update(_)))
             .map(|(_, &at)| at)
+    }
+
+    /// The page with scripts played at real time however many updates wait, unless `catch_up`;
+    /// it starts again if that changes.
+    #[must_use]
+    pub fn with_catch_up(mut self, catch_up: bool) -> Self {
+        if catch_up != self.catch_up {
+            self.catch_up = catch_up;
+            self.restart();
+        }
+        self
+    }
+
+    /// The window the page lays its frames out in, in logical points.
+    #[must_use]
+    pub fn size(&self) -> Size {
+        self.size
     }
 
     /// Whether later frames record their elements' looks (`Client::set_looking`), until a restart.
@@ -577,6 +597,7 @@ impl Page {
         if self.records {
             self.client.record();
         }
+        self.client.set_catch_up(self.catch_up);
         for plant in &self.plants {
             self.client.plant(*plant);
         }
@@ -758,6 +779,7 @@ impl Page {
             given_at: Vec::new(),
             records,
             plants: self.plants.clone(),
+            catch_up: self.catch_up,
             moments: Some(Vec::new()),
             steps: Some(Vec::new()),
             heard: Vec::new(),

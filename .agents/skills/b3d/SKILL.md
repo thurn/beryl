@@ -156,7 +156,8 @@ gives another, and `just b3d test` plays its 1600x900 window at scale 2.
   of x, y, scale and opacity over time with the web's line solid and Beryl 3D's
   dashed. `--all` measures the span of each verb, effect and mark that
   `data/beryl3d/match/motion-census.json` lists and ranks them by summed
-  deviation, worst first; `--refresh-census` finds the spans again from the
+  deviation, worst first, an effect by its own elements (role `effect`) only and
+  with the pixels that differ in its box where it is strongest; `--refresh-census` finds the spans again from the
   recordings' timelines. Read the plots: an easing or a path that differs shows as two curves
   of different shape. Start the span after the view arrives (the `step:` lines
   of `just b3d info` give the times); `--only '<locator>'` picks one element and

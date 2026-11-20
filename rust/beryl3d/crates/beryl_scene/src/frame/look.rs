@@ -3,7 +3,10 @@
 //! text. A frame records these only while `Frame::looking` is set, so the app's frames do no
 //! work for them.
 
+use beryl_protocol::script::Subject;
+
 use super::FrameBuilder;
+use crate::effects::Effect;
 use crate::element::{Filter, Gradient, Shadow};
 use crate::text::TypeStyle;
 
@@ -17,6 +20,33 @@ pub struct Looks {
     /// The gradients, masks and filters of every element of `elements` that has any, in its
     /// style's order.
     pub paints: Vec<LookPaint>,
+    /// Each effect the frame draws on a card, an ability or a player, in the order drawn.
+    pub effects: Vec<EffectLook>,
+}
+
+/// One effect as a frame draws it, which `tree --records` reports as an element of role
+/// `effect`, so that `just b3d match` can measure it against the web interface's `.stage-effect`
+/// node of the same name on the same thing (docs/beryl-3d.md, "Effects"). `model` places a quad
+/// from -0.5 to 0.5 in the table's space, as `Draw::model` does: the light's own record for an
+/// effect that is light, and the card's face for one that changes how the card is drawn.
+/// `opacity` is how strongly it shows, from 0 to 1, as the opacity of the web's node would say:
+/// a light's opacity as its material fades it, how far a card is washed white or darkened, and
+/// 1 while a life total is tinted.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct EffectLook {
+    pub effect: Effect,
+    pub on: Subject,
+    pub model: [f32; 12],
+    pub opacity: f32,
+}
+
+impl FrameBuilder<'_> {
+    /// Records `look` while the frame is `looking`; the app's frames record nothing.
+    pub fn effect(&mut self, look: EffectLook) {
+        if self.frame.looking {
+            self.frame.looks.effects.push(look);
+        }
+    }
 }
 
 /// One gradient, mask or filter function of a flat-layer element, as it was drawn.
@@ -58,6 +88,7 @@ impl Looks {
         self.elements.clear();
         self.shadows.clear();
         self.paints.clear();
+        self.effects.clear();
     }
 
     /// Records `look` and its element's shadows.

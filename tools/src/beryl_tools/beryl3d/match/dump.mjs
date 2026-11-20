@@ -6,7 +6,10 @@
 // The job is {base, route, fixture, width, height, scale, offset_ms, png, json, roles, target,
 // art_dir, only}: `fixture` is {name, file}, the file that answers the page's request for
 // /fixtures/<name>.json; `offset_ms` is how long after the fixture's last view arrived to stop
-// the clock, or null for the view at rest; `roles` is data/beryl3d/match/roles.json's `roles`;
+// the clock, or null for the view at rest; `advances` is [[offset_ms, count], ...], the
+// fixture transport's `advance` called `count` times at each offset, which hands the page the
+// views Beryl 3D played live (clock.py), with the clock run a 60 Hz frame at a time so that the
+// stage sees frames as it does in the app; `roles` is data/beryl3d/match/roles.json's `roles`;
 // `only` is the index of the element to draw alone (`--only`), in the records this script
 // writes, or null for the whole page.
 //
@@ -62,7 +65,24 @@ const failed = await withPage(job, async (page, errors) => {
             quiet = (await page.evaluate(settle)) ? 0 : quiet + 1;
         }
     } else {
-        await page.clock.runFor(Math.max(0, job.offset_ms));
+        let clock = 0;
+        const advances = [...(job.advances ?? [])];
+        const due = async () => {
+            while (advances.length && advances[0][0] <= clock + 1e-6) {
+                const [, count] = advances.shift();
+                await page.evaluate((n) => {
+                    for (let i = 0; i < n; i++) window.berylFixture.advance();
+                }, count);
+            }
+        };
+        const offset = Math.max(0, job.offset_ms);
+        await due();
+        while (clock + FRAME <= offset + 1e-6) {
+            await page.clock.runFor(FRAME);
+            clock += FRAME;
+            await due();
+        }
+        if (offset - clock > 1e-6) await page.clock.runFor(offset - clock);
     }
     // The records are read before anything is hidden, since a hidden node is not kept.
     let elements;

@@ -215,6 +215,11 @@ def run(args: argparse.Namespace) -> int:
             return 1
         exported = work / f"{name.replace('/', '__')}.{seat}.json"
         messages = json.loads(exported.read_text())
+        if ", animating," in tree and screen_of(messages) == "game":
+            animated = animated_web(args, name, seat, size)
+            if animated is None:
+                return 1
+            return draw(cli, name, common, args, str(animated))
         web = shoot(
             messages, int(view[1]), args.layout, size, picture_scale(args), work
         )
@@ -228,6 +233,34 @@ def run(args: argparse.Namespace) -> int:
         return draw(cli, name, common, args, str(kept))
     finally:
         shutil.rmtree(work, ignore_errors=True)
+
+
+def animated_web(
+    args: argparse.Namespace, name: str, seat: str, size: str
+) -> Path | None:
+    """The web picture of a moment in the middle of an animation, from `just b3d match
+    snapshot`, which hands the page the views Beryl 3D was still playing live and runs its clock
+    to the same point (match/clock.py). A screenshot of the page opened at the moment's view
+    showed that view at rest, since the page shows every view it is handed on opening as past:
+    at 1000 ms of `verbs-zones` it had Snapcaster Mage on the stack while Beryl 3D still had the
+    lands tapping for the spell before it. None after the snapshot printed why it failed.
+    """
+    from .match import snapshot
+    from .match.target import target as match_target
+
+    t = match_target(
+        argparse.Namespace(
+            recording=name,
+            at=args.at,
+            seat=seat,
+            layout=args.layout,
+            size=size,
+            scale=picture_scale(args),
+            only=None,
+        )
+    )
+    out = snapshot.ensure(t)
+    return None if out is None else out / "web.png"
 
 
 def draw(

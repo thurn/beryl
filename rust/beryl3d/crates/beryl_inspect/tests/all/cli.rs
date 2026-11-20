@@ -195,6 +195,38 @@ fn records_to_a_later_moment_print_one_line_a_frame_60_to_the_second() {
     assert!(bare.contains("give --records"), "{bare}");
 }
 
+/// While the lands tap for the spell, a glow plays on each of them, which `--records` lists
+/// after the elements as an element of role `effect`, named by the effect and with the land's
+/// slot as its object, so that `just b3d match` can measure it against the web's.
+#[test]
+fn records_list_each_effect_under_way_as_an_element() {
+    let printed = ok(&["tree", RECORDING, "--at", "1000ms", "--records"]);
+    let frame: Value = serde_json::from_str(printed.trim()).unwrap();
+    let elements = frame["elements"].as_array().unwrap();
+    let glows: Vec<&Value> = (elements.iter())
+        .filter(|element| element["role"] == "effect" && element["name"] == "glow")
+        .collect();
+    assert!(!glows.is_empty(), "{printed}");
+    let first = elements.iter().position(|element| element["role"] == "effect");
+    assert!(
+        elements[first.unwrap()..]
+            .iter()
+            .all(|element| element["role"] == "effect"),
+        "effects come after every element"
+    );
+    for glow in glows {
+        assert!(glow["object"].is_u64(), "{glow}");
+        let key = glow["key"].as_str().unwrap();
+        assert_eq!(key, format!("effect \"glow\" on {}", glow["object"]));
+        let size = &glow["box"];
+        assert!(size[2].as_f64().unwrap() > 0.0 && size[3].as_f64().unwrap() > 0.0);
+        let opacity = glow["style"]["opacity"].as_f64().unwrap();
+        assert!(opacity > 0.0 && opacity <= 1.0, "{glow}");
+    }
+    let views_given = frame["views_given_ms"].as_array().unwrap();
+    assert_eq!(views_given.len(), frame["view"].as_u64().unwrap() as usize);
+}
+
 #[test]
 fn json_output_parses() {
     for line in [

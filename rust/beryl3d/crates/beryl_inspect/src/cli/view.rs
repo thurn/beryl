@@ -86,10 +86,9 @@ pub(super) fn tree(options: &Options) -> Result<Printed, Usage> {
 const FRAME_NANOSECONDS: u64 = 1_000_000_000 / 60;
 
 /// `tree --records`: the moment's position and every element as a record, as one JSON object.
-/// `view_given_ms` is when the client was given the latest view, from which the web side counts
-/// how far into that view's animation the moment lies. With `--to`, one such object a line for
-/// each frame from `--at` to that moment, 1/60 s apart, each with its `frame` number, its time
-/// `t_ms` to the microsecond and `views_given_ms`, when each view so far was given.
+/// `view_given_ms` is when the client was given the latest view, and `views_given_ms` when each
+/// view so far was given. With `--to`, one such object a line for each frame from `--at` to that
+/// moment, 1/60 s apart, each with its `frame` number and its time `t_ms` to the microsecond.
 fn records(page: &mut Page, options: &Options) -> Result<Printed, Usage> {
     page.set_looking(true);
     let Some(to) = options.value("--to") else {
@@ -129,6 +128,7 @@ fn record_value(page: &mut Page, options: &Options, frame: Option<u64>) -> Value
     let (view, views, animating) = page.position();
     let now = page.now();
     let given = page.view_given_at();
+    let size = page.size();
     let frame_record = page.frame();
     let mut value = json!({
         "command": options.command_line(),
@@ -138,14 +138,16 @@ fn record_value(page: &mut Page, options: &Options, frame: Option<u64>) -> Value
         "view_given_ms": given.map(milliseconds),
         "animating": animating,
         "scale": options.scale,
-        "elements": super::records::records(frame_record),
+        "elements": super::records::records(frame_record, size),
     });
+    // When each view so far was given, from which the web side works out which views to hand
+    // its page as already played and which to play live.
+    let views_given: Vec<f64> = (page.views_given_at().into_iter())
+        .map(|at| (at as f64 / 1_000.0).round() / 1_000.0)
+        .collect();
+    value["views_given_ms"] = json!(views_given);
     if let Some(frame) = frame {
         value["frame"] = json!(frame);
-        let given: Vec<f64> = (page.views_given_at().into_iter())
-            .map(|at| (at as f64 / 1_000.0).round() / 1_000.0)
-            .collect();
-        value["views_given_ms"] = json!(given);
         // To the microsecond, so that 1/60 s steps keep their fraction of a millisecond.
         value["t_ms"] = json!((now as f64 / 1_000.0).round() / 1_000.0);
     }

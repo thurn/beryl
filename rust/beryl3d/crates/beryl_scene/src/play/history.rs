@@ -6,6 +6,12 @@ use super::compile::Compiled;
 use super::record::{Plant, ScriptRecord, StepRecord};
 
 impl Show {
+    /// Whether a script that starts with many updates waiting plays faster (`rate_for`); on
+    /// unless turned off.
+    pub fn set_catch_up(&mut self, catch_up: bool) {
+        self.catch_up = catch_up;
+    }
+
     /// From now on, keeps a record of every script the show is given (`history`).
     pub fn record(&mut self) {
         if self.history.is_none() {

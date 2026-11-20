@@ -3,8 +3,10 @@ web interface and Beryl 3D, frame by frame over a span of a recording (docs/bery
 "Matching the web interface's look"). `timeline-parity` holds each step's start, end and verb
 equal; this measures what happens in between, which is what makes an animation feel different.
 
-1. `b3d tree --records --at <from> --to <to>` plays the recording in Beryl 3D on its stepped
-   clock and prints every element's record in each 60 Hz frame of the span. A card on the 3D
+1. `b3d tree --records --at <from> --to <to> --no-catch-up` plays the recording in Beryl 3D on
+   its stepped clock, every script at real time as the web interface plays it (Beryl 3D
+   otherwise plays faster while many views wait), and prints every element's record in each
+   60 Hz frame of the span. A card on the 3D
    table has its projected screen rectangle as its box.
 2. motion.mjs opens the web interface's page of the same view on Playwright's paused clock and
    steps it to the same times after the view's arrival, reading every element's box and
@@ -16,9 +18,9 @@ equal; this measures what happens in between, which is what makes an animation f
    writes a plot of both tracks (plot.py) into the span's directory under the target's
    snapshot directory: `plots/<element>.svg` and `.png`, `motion.txt` and `motion.json`.
 
-The span must lie within one view, because the web page opens at a view and plays it alone;
-frames after the next view arrives are left out, and the report says so. As in `snapshot`, the
-web page's loading frames make the start of its animation approximate.
+The web page is handed the views Beryl 3D was still to play live, at the times Beryl 3D was given
+them (clock.py), so that both clients play the same script at the same time. Frames after a
+view given later than the span's first frame are left out, and the report says so.
 
 `--all` measures a span of every verb, effect and mark and ranks them (motion_census.py).
 """
@@ -30,13 +32,13 @@ import json
 import subprocess
 import sys
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from ... import paths as repo_paths
 from ... import shots
 from .. import compare
-from . import plot, snapshot, tracks
+from . import clock, plot, snapshot, tracks
 from .target import UNSAFE, Target, target
 
 
@@ -80,79 +82,38 @@ def motion_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
-# An element that moves on one side with no partner on the other: how the report names it, and
-# its track.
-Lonely = tuple[str, tracks.Track]
+@dataclass(frozen=True)
+class Lonely:
+    """An element that moves on one side with no partner on the other: how the report names
+    it, its track, and the effect's name if it is an effect (role `effect`)."""
+
+    key: str
+    track: tracks.Track
+    effect: str = ""
 
 
 @dataclass(frozen=True)
 class Pair:
     """A Beryl 3D element and its web partner over the span, with their tracks; `key` is the
-    Beryl 3D element's latest locator."""
+    Beryl 3D element's latest locator, and `effect` the effect's name if they are an effect.
+    """
 
     key: str
     web: tracks.Track
     b3d: tracks.Track
     difference: tracks.Difference
     plot: Path | None = None
+    effect: str = ""
 
 
-def events(messages: Sequence[dict[str, object]]) -> list[dict[str, object]]:
-    return [m for m in messages if m.get("kind") == "event"]
-
-
-def released_for(messages: Sequence[dict[str, object]], views: int) -> int:
-    """How many of the fixture's events the page must have been handed to have its first
-    `views` views (`compare.web_at`, which reads 0 as all of them)."""
-    return 0 if views == 0 else compare.web_at(list(messages), views)
-
-
-def plays_on(event: dict[str, object]) -> bool:
-    """Whether the fixture transport's `advance` hands the page the event after `event` too
-    (`playsOn` in ui/src/ipc.ts): a view whose status is thinking or playing."""
-    if event.get("event") != "game-update":
-        return False
-    payload = event.get("payload")
-    view = payload.get("view") if isinstance(payload, dict) else None
-    status = view.get("status") if isinstance(view, dict) else None
-    return isinstance(status, dict) and status.get("kind") in ("thinking", "playing")
-
-
-def schedule(
-    messages: Sequence[dict[str, object]],
-    given: Sequence[float],
-    start: float,
-    end: float,
-) -> tuple[int, list[list[float]], list[str]]:
-    """How the web page is handed the views Beryl 3D was given at the times `given`, for a span
-    whose first batch of views arrived at `start` and which ends at `end`: the events the page
-    opens with (every view given before `start`), each `[ms after start, advances]` that
-    brings it up to the views Beryl 3D had by then, and a note for each time the page gets
-    more views than Beryl 3D had, since `advance` hands over a playing view's successors too.
-    """
-    listed = events(messages)
-    released = released_for(messages, sum(1 for at in given if at < start))
-    opened = released
-    out: list[list[float]] = []
-    notes: list[str] = []
-    for at in sorted({at for at in given if start <= at <= end}):
-        wanted = released_for(messages, sum(1 for t in given if t <= at))
-        count = 0
-        while released < wanted and released < len(listed):
-            while True:
-                last = listed[released]
-                released += 1
-                if released >= len(listed) or not plays_on(last):
-                    break
-            count += 1
-        if count:
-            out.append([at - start, count])
-        if released > wanted:
-            notes.append(
-                f"note: at {at:.0f}ms the web page was handed {released - wanted} more events "
-                "than Beryl 3D's views, since a playing view brings the next with it"
-            )
-    return opened, out, notes
+def effect_names(frames: Sequence[Sequence[dict[str, object]]]) -> dict[object, str]:
+    """The effect's name of each track whose element is an effect (role `effect`)."""
+    return {
+        e.get("track"): str(e.get("name") or "")
+        for frame in frames
+        for e in frame
+        if e.get("role") == "effect"
+    }
 
 
 def span_frames(printed: str) -> list[dict[str, object]]:
@@ -259,33 +220,42 @@ def compared(
     each with its track."""
     partners = tracks.partners(web_frames, b3d_frames)
     web_tracks = tracks.tracks(web_frames)
+    b3d_effects, web_effects = effect_names(b3d_frames), effect_names(web_frames)
     pairs: list[Pair] = []
     lonely_b3d: list[Lonely] = []
     for name, track in tracks.tracks(b3d_frames).items():
         if only is not None and name != only:
             continue
         partner = partners.get(name)
+        effect = b3d_effects.get(name, "")
         if partner is None:
             if only is not None or tracks.moves(track):
-                lonely_b3d.append((latest[name], track))
+                lonely_b3d.append(Lonely(latest[name], track, effect))
             continue
         web = web_tracks[partner]
         if only is None and not (tracks.moves(track) or tracks.moves(web)):
             continue
-        pairs.append(Pair(latest[name], web, track, tracks.difference(web, track)))
+        difference = tracks.difference(web, track)
+        pairs.append(Pair(latest[name], web, track, difference, effect=effect))
     if only is not None:
         return pairs, lonely_b3d, []
     about = {
         e.get("track"): f'{e.get("role")} "{e.get("name") or ""}"'
+        + (f" on {e.get('object')}" if e.get("role") == "effect" else "")
         for frame in web_frames
         for e in frame
     }
     partnered = set(partners.values())
     # An element inside a partnered one (a card's text panel on the web) moves with it, and
-    # its partner's comparison already says how.
-    carried = tracks.inside(web_frames, partnered)
+    # its partner's comparison already says how. An effect inside a card is drawn of its own,
+    # and is measured as itself.
+    carried = tracks.inside(web_frames, partnered) - set(web_effects)
     lonely_web = [
-        (f"{about[name]} (frames {tracks.present(track)})", track)
+        Lonely(
+            f"{about[name]} (frames {tracks.present(track)})",
+            track,
+            web_effects.get(name, ""),
+        )
         for name, track in web_tracks.items()
         if name not in partnered and name not in carried and tracks.moves(track)
     ]
@@ -294,8 +264,9 @@ def compared(
 
 @dataclass(frozen=True)
 class Measured:
-    """Both clients' tracks over one span, compared: the view the span lies in, when it
-    arrived (ms on Beryl 3D's clock), each frame's time, what the report should warn of, the
+    """Both clients' tracks over one span, compared: the view the span lies in, the time both
+    clocks count from (ms on Beryl 3D's clock, when the first view handed to the web page live
+    arrived; clock.py), each frame's time, what the report should warn of, the
     span's directory, and `compared`'s pairs and lonely elements."""
 
     view: int
@@ -327,8 +298,8 @@ def measure(
         return "b3d tree failed"
     frames = span_frames(printed)
     view = int(str(frames[0]["view"]))
-    given = frames[0].get("view_given_ms")
-    if not isinstance(given, int):
+    latest = frames[0].get("view_given_ms")
+    if not isinstance(latest, int):
         return f"no view has arrived by {t.at}; start the span later"
     notes: list[str] = []
     kept = [f for f in frames if f["view"] == view]
@@ -347,8 +318,13 @@ def measure(
         return "b3d export failed"
     views_given = frames[-1].get("views_given_ms")
     assert isinstance(views_given, list)
-    opened, advances, more = schedule(
-        messages, [float(at) for at in views_given], float(given), times[-1]
+    given, opened, advances, more = clock.handover(
+        messages,
+        [float(at) for at in views_given],
+        clock.script_ends(t.recording, t.seat, built, t.real_time),
+        times[0],
+        times[-1],
+        float(latest),
     )
     notes += more
     job = snapshot.page_job(t, messages, opened, art, out)
@@ -380,9 +356,11 @@ def measure(
 
 def command(t: Target, end: str, only: str | None = None) -> str:
     """The `just b3d match motion` command that measures the span from `t.at` to `end`."""
+    # `match motion` always plays Beryl 3D at real time, so its command line has no option for it.
+    options = [option for option in t.common() if option != "--no-catch-up"]
     return (
         f"just b3d match motion {t.recording} --from {t.at} --to {end} "
-        + " ".join(t.common())
+        + " ".join(options)
         + (f" --only '{only}'" if only else "")
     )
 
@@ -397,8 +375,9 @@ def run(args: argparse.Namespace) -> int:
             "match motion: give a recording, --from and --to, or --all", file=sys.stderr
         )
         return 2
-    t: Target = target(
-        argparse.Namespace(**{**vars(args), "at": args.start, "only": None})
+    t: Target = replace(
+        target(argparse.Namespace(**{**vars(args), "at": args.start, "only": None})),
+        real_time=True,
     )
     found = measure(t, args.end, args.only, bool(args.art), None)
     if isinstance(found, str):
@@ -424,13 +403,13 @@ def run(args: argparse.Namespace) -> int:
         notes.append(f"warning: the plots stayed SVG: {failed}")
 
     only = args.only
-    lonely_b3d = [key for key, _ in m.lonely_b3d]
-    lonely_web = [what for what, _ in m.lonely_web]
+    lonely_b3d = [lonely.key for lonely in m.lonely_b3d]
+    lonely_web = [lonely.key for lonely in m.lonely_web]
     report = [
         command(t, args.end, only),
         f"target {t.test_name()} ({t.layout}), view {m.view}, {len(times)} frames from "
         f"{times[0]:.1f}ms to {times[-1]:.1f}ms ({times[0] - m.given:.1f}ms to "
-        f"{times[-1] - m.given:.1f}ms after the view arrived)",
+        f"{times[-1] - m.given:.1f}ms after the views both clocks count from arrived)",
         *notes,
         f"{len(pairs)} {'pair' if only else 'moving pairs'}, worst position first:",
     ]

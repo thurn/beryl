@@ -1739,12 +1739,14 @@ What the session does and what a client still does:
   Beryl 3D plays each script that starts with more than `catch_up.double`
   updates waiting at twice real time, and with more than `catch_up.quadruple`
   waiting at four times (`data/beryl3d/space.json`, `play::Show::frame`). The
-  web interface has no catch-up. Holds are measured in script time, as the web
-  interface measures them: `light::Lit` keeps a script clock that runs at each
-  script's rate while it plays and at real time between scripts, and a span
-  records when it stood whole on that clock. So an arrow that stood whole while
-  a script played at twice real time has stood, when a later script ends it, the
-  script time that passed, not the shorter real time.
+  web interface has no catch-up, so the text commands' `--no-catch-up` plays
+  every script at real time, and `just b3d match motion` always passes it. Holds
+  are measured in script time, as the web interface measures them: `light::Lit`
+  keeps a script clock that runs at each script's rate while it plays and at
+  real time between scripts, and a span records when it stood whole on that
+  clock. So an arrow that stood whole while a script played at twice real time
+  has stood, when a later script ends it, the script time that passed, not the
+  shorter real time.
 - **Segments are made from the laid-out beat.** Each step becomes segments, at
   absolute times, on the scene objects it concerns.
 - **Reduced motion** is a client's choice: it plays every step with no duration,
@@ -4345,14 +4347,18 @@ reference is the web interface as WebKit draws it, at scale 2.
   cannot say yet (transforms) is written as `none`. The web side is read by a
   script that Playwright evaluates in the page, so nothing under `ui/` changes,
   and its roles come from the ARIA role or from `data/beryl3d/match/roles.json`.
-  The page runs on Playwright's paused clock: a mid-animation moment runs it as
-  long after the view's arrival as Beryl 3D's moment lies, and a moment at rest
-  runs it until the stage is idle. The page's first frames while it loads make
-  the web side's start of the animation approximate, and CSS animations finish
-  rather than stopping at the moment. The report warns when a bundled font's
-  `name` table differs from the web's WOFF2 file of the same face. Neither side
-  draws card scans unless `--art` is given, and then both read the app's scan
-  cache.
+  The page runs on Playwright's paused clock. For a mid-animation moment the
+  page opens with only the views whose scripts Beryl 3D had played out, is
+  handed the views Beryl 3D was still playing live at the times Beryl 3D was
+  given them, and runs its clock a frame at a time as long as Beryl 3D's ran
+  since the first of those (`match/clock.py`): the page shows every view it
+  opens with at rest, so a page opened with all of them showed a later point of
+  the game than Beryl 3D. A moment at rest runs the clock until the stage is
+  idle. CSS animations finish rather than stopping at the moment. `b3d compare`
+  takes its web picture of a mid-animation moment the same way. The report warns
+  when a bundled font's `name` table differs from the web's WOFF2 file of the
+  same face. Neither side draws card scans unless `--art` is given, and then
+  both read the app's scan cache.
 
 - **Boxes and styles.** Elements are paired by locator, then by role, name (or
   card) and parent, then by role and the nearest box within 24 points; the pairs
@@ -4514,21 +4520,30 @@ reference is the web interface as WebKit draws it, at scale 2.
   every element's record in each 60 Hz frame of the span
   (`b3d tree --records --to`), with when each view was given; a card on the
   table has its projected screen rectangle as its box. The web page opens with
-  the views given before the span's first batch, at rest, and the fixture
-  transport's `advance` hands it each later batch at the time Beryl 3D got it,
-  since a view the page opens with is shown without its animation. Its clock
-  then steps to the same times as Beryl 3D's frames; CSS and Web Animations run
-  on the document's timeline, which no fake clock stops, so each is paused when
-  first seen and moved on by hand. Each frame is paired by the matcher, and a
-  Beryl 3D element (followed by the element id in its locator, which survives a
-  card being revealed) keeps the web element it was paired with in the most
-  frames. For each pair where either side moves it prints the largest difference
-  of box centers, of sizes and of opacity with the frame of each, worst first,
-  and writes a plot of x, y, scale and opacity over time with both sides
-  overlaid (`plots/` in the span's directory, SVG and PNG). The span must lie
-  within one view of the page; the web's animation tends to start about a frame
-  later than Beryl 3D's, because the page takes a frame to react to the views it
-  is handed.
+  the views whose scripts Beryl 3D had played out before the first view it was
+  still playing was given, at rest, and the fixture transport's `advance` hands
+  it each later batch at the time Beryl 3D got it, since a view the page opens
+  with is shown without its animation. Its clock then steps to the same times as
+  Beryl 3D's frames; CSS and Web Animations run on the document's timeline,
+  which no fake clock stops, so each is paused when first seen and moved on by
+  hand. Each frame is paired by the matcher, and a Beryl 3D element (followed by
+  the element id in its locator, which survives a card being revealed) keeps the
+  web element it was paired with in the most frames. For each pair where either
+  side moves it prints the largest difference of box centers, of sizes and of
+  opacity with the frame of each, worst first, and writes a plot of x, y, scale
+  and opacity over time with both sides overlaid (`plots/` in the span's
+  directory, SVG and PNG). Frames after a view given later than the span's start
+  are left out; the web's animation tends to start about a frame later than
+  Beryl 3D's, because the page takes a frame to react to the views it is handed.
+
+  Effects are elements on both sides. On the web each `.stage-effect` node is of
+  role `effect` (`roles.json`), named by its effect and with what it is on as
+  its object; the table shaking is a record on `table` whose box is the table's
+  offset from rest. Beryl 3D's records list each effect it draws
+  (`Looks::effects`) after its elements: a light's quad and the opacity its
+  material draws it at, the face of a card washed white or darkened and how far,
+  a life total tinted for `loss` or `gain`, and the picture's offset for
+  `shake`. The matcher pairs effects first, by name and object only.
 
   `just b3d match motion --all` ranks the verbs, effects and marks of
   `parity.json` by how far their motion is from the web's.
@@ -4539,9 +4554,14 @@ reference is the web interface as WebKit draws it, at scale 2.
   difference of position, size and opacity over the span and the gap between the
   two sides' motion start and end are weighed into points (`tracks.WEIGHTS`) and
   summed per item, and an element that moves on one side only adds how far it
-  moves. Element records hold no rotation, so rotation is not compared. Results
-  are cached beside each span's snapshot by the snapshot's input digest, and two
-  browser pages run at a time.
+  moves. An effect's total counts its own effect elements only, so an effect
+  drawn on one side only adds the whole of its track. Each effect is also
+  compared in pixels where it is strongest (its web element's most opaque
+  frame): a snapshot of that moment counts the differing pixels inside the
+  element's box (`b3d-render pixels --box`, glyph pixels left out). Element
+  records hold no rotation, so rotation is not compared. Results are cached
+  beside each span's snapshot by the snapshot's input digest, and two browser
+  pages run at a time.
 
 - **Score.**
   `just b3d match score [prefix] [--update] [--raise] [--refresh-web]` takes the

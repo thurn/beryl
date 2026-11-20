@@ -601,3 +601,37 @@ def test_two_build_trees_never_share_a_snapshot_directory(
     assert first != second
     assert first.name == second.name
     assert first.parent.parent == second.parent.parent == tmp_path / "match"
+
+
+def test_an_effect_pairs_by_its_name_and_what_it_is_on_and_with_nothing_else() -> None:
+    def element(
+        role: str, name: str, thing: object, box: list[int]
+    ) -> dict[str, object]:
+        return {"key": None, "role": role, "name": name, "object": thing, "box": box}
+
+    web = [
+        element("card", "", 7, [0, 0, 10, 10]),
+        element("effect", "glow", 7, [-2, -2, 14, 14]) | {"parent": 0},
+        element("effect", "flash", 7, [0, 0, 10, 10]) | {"parent": 0},
+    ]
+    b3d = [
+        element("card", "", 7, [0, 0, 10, 10]) | {"key": "card #7"},
+        # Drawn far larger than the web's, it still pairs with the web's glow on the same card.
+        element("effect", "glow", 7, [-40, -40, 90, 90])
+        | {"key": 'effect "glow" on 7'},
+        # A flash on another card pairs with nothing.
+        element("effect", "flash", 8, [0, 0, 10, 10]) | {"key": 'effect "flash" on 8'},
+    ]
+    found = joined.join(web, b3d)
+    pairs = found["pairs"]
+    assert isinstance(pairs, list)
+    assert {(p["web"], p["b3d"], p["pass"]) for p in pairs} == {
+        (1, 1, "effect"),
+        (0, 0, "identity"),
+    }
+    unmatched = found["unmatched"]
+    assert isinstance(unmatched, dict)
+    web_left, b3d_left = unmatched["web"], unmatched["b3d"]
+    assert isinstance(web_left, list) and isinstance(b3d_left, list)
+    assert [e["index"] for e in web_left] == [2]
+    assert [e["index"] for e in b3d_left] == [2]

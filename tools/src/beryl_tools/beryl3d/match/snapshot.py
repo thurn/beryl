@@ -8,8 +8,10 @@ target's snapshot directory (target.py), which the other `match` subcommands rea
 2. `b3d-render png` draws the moment at the target's scale as `b3d.png`.
 3. The recording is exported as the web interface's fixture (`b3d export --only`), and
    dump.mjs opens the page `?fixture=<name>&at=<n>#/game` in WebKit on Playwright's paused
-   clock. A moment in the middle of an animation runs the clock as long after the view's
-   arrival as Beryl 3D's moment lies; a moment at rest runs it until the stage is idle. It
+   clock. For a moment in the middle of an animation, the page opens with the views Beryl 3D
+   had played out, is handed the rest live at the times Beryl 3D was given them, and its clock
+   runs as long as Beryl 3D's did since the first of those (clock.py); a moment at rest runs it
+   until the stage is idle. It
    writes `web.png` and `web.json`, the same records read from the DOM and its computed styles.
 4. `report.txt` names the moment and the files, and warns of any input the two sides do not
    share: the fonts (fonts.py) and the card scans.
@@ -46,7 +48,7 @@ from typing import TypeVar
 from ... import paths as repo_paths
 from ... import shots
 from .. import compare
-from . import css, fonts, joined, records
+from . import clock, css, fonts, joined, records
 from .target import Target, arguments, only_argument, target
 
 # What a `--all` command measures on each target's snapshot.
@@ -259,18 +261,34 @@ def dump_web(
     records, the picture shows that element alone. Returns `run_page`'s lines and failure.
     """
     at = compare.web_at(messages, int(str(moment["view"])))
-    job = page_job(t, messages, at, art, out)
     given = moment.get("view_given_ms")
-    offset = None
+    views_given = moment.get("views_given_ms")
+    offset: float | None = None
+    advances: list[list[float]] = []
+    notes: list[str] = []
     if moment.get("animating") and isinstance(given, int):
-        offset = int(str(moment["t_ms"])) - given
+        now = float(str(moment["t_ms"]))
+        base = float(given)
+        if isinstance(views_given, list):
+            base, at, advances, notes = clock.handover(
+                messages,
+                [float(g) for g in views_given],
+                clock.script_ends(t.recording, t.seat, serving is None, t.real_time),
+                now,
+                now,
+                base,
+            )
+        offset = now - base
+    job = page_job(t, messages, at, art, out)
     job |= {
         "offset_ms": offset,
+        "advances": advances,
         "png": str(out / "web.png"),
         "json": str(out / "web.json"),
         "only": only,
     }
     lines, failure = run_page("dump.mjs", job, out, serving)
+    lines = [note.removeprefix("note: ") for note in notes] + lines
     if failure is None:
         # dump.mjs writes the layered properties as WebKit's text; the records hold structures.
         written = out / "web.json"
@@ -332,7 +350,15 @@ def take(
     printout = json.loads(printed.strip().splitlines()[-1])
     moment = {
         key: printout[key]
-        for key in ("view", "views", "t_ms", "view_given_ms", "animating")
+        for key in (
+            "view",
+            "views",
+            "t_ms",
+            "view_given_ms",
+            "views_given_ms",
+            "animating",
+        )
+        if key in printout
     }
     (out / "b3d.json").write_text(
         json.dumps(

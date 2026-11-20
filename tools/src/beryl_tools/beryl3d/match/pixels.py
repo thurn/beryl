@@ -16,12 +16,14 @@ and its web pair, on black, which separates an element's own error from what lie
 from __future__ import annotations
 
 import argparse
+import json
 import subprocess
 import sys
+from collections.abc import Sequence
 from dataclasses import replace
 
 from . import joined, snapshot
-from .target import arguments, only_argument, target
+from .target import Target, arguments, only_argument, target
 
 
 def pixel_arguments(parser: argparse.ArgumentParser) -> None:
@@ -61,3 +63,28 @@ def run(args: argparse.Namespace) -> int:
     if done.returncode == 0:
         (out / "pixels.txt").write_text(done.stdout)
     return done.returncode
+
+
+def inside(
+    t: Target, box: Sequence[float], art: bool, serving: snapshot.Shared
+) -> int | str:
+    """How many pixels differ, glyph pixels left out, inside `box` (`[x, y, width, height]` in
+    points) between the two clients' pictures of `t`, from `b3d-render pixels --box`; why not,
+    if they could not be counted. Both programs are built already (`snapshot.shared`).
+    """
+    from .. import cli
+
+    out = snapshot.ensure(t, art=art, serving=serving)
+    if out is None:
+        return "the snapshot failed"
+    joined.ensure(out)
+    line = [str(cli.linked("b3d-render")), "pixels", t.recording, *t.common()]
+    line += ["--at", t.at, "--dir", str(out)]
+    line += ["--box", ",".join(f"{n:.2f}" for n in box)]
+    done = subprocess.run(line, capture_output=True, text=True, check=False)
+    if done.returncode != 0:
+        return (
+            f"b3d-render pixels failed: {(done.stderr or done.stdout).strip()[-200:]}"
+        )
+    counted = json.loads((out / "pixels.json").read_text()).get("inside")
+    return int(counted) if isinstance(counted, int) else "no count in pixels.json"

@@ -29,6 +29,11 @@
 //!
 //! A record's `params[0]` is the run's eased progress, which the glow material fades the light
 //! by; where the web's light fades or rises otherwise, the tint's opacity carries the rest.
+//!
+//! While the frame is built for the match tools, each light is also recorded as an `EffectLook`
+//! with the opacity it is drawn at. So are `loss` and `gain`, which draw no light: the life
+//! total's text is tinted instead (`hud::counts`), so each is recorded over the total at full
+//! opacity for as long as it runs.
 
 use beryl_protocol::script::Subject;
 use glam::{Affine3A, Quat, Vec2, Vec3};
@@ -36,7 +41,7 @@ use glam::{Affine3A, Quat, Vec2, Vec3};
 use super::{Effect, EffectRun};
 use crate::data::space::effects::{beam, flash, glow, impact, pulse, trail};
 use crate::data::space::light::LIFT;
-use crate::frame::{Band, Draw, FrameBuilder, Sprite, sprites};
+use crate::frame::{Band, Draw, EffectLook, FrameBuilder, Material, Sprite, sprites};
 use crate::light::{marks, streaks};
 use crate::play::{Reach, Scene};
 use crate::pose::Pose;
@@ -57,6 +62,8 @@ pub fn write(runs: &[EffectRun], now: u64, scene: &Scene<'_>, builder: &mut Fram
                 | Effect::Beam
                 | Effect::Pulse
                 | Effect::Trail
+                | Effect::Loss
+                | Effect::Gain
         ) {
             continue;
         }
@@ -118,9 +125,36 @@ pub fn write(runs: &[EffectRun], now: u64, scene: &Scene<'_>, builder: &mut Fram
                 };
                 draw
             }
+            Effect::Loss | Effect::Gain => {
+                let over = lying(&pose, half * 2.0, [0; 4], sprites::RING, 0.0);
+                builder.effect(EffectLook {
+                    effect: run.effect,
+                    on: run.on,
+                    model: over.model,
+                    opacity: 1.0,
+                });
+                continue;
+            }
             _ => continue,
         };
+        builder.effect(EffectLook {
+            effect: run.effect,
+            on: run.on,
+            model: draw.model,
+            opacity: seen(&draw),
+        });
         builder.draw(Band::Glows, draw);
+    }
+}
+
+/// The opacity a light's record is drawn at: its tint's, faded by its progress for the glow
+/// material (`shade_glow` in `beryl_render`'s shader multiplies by `1 - params[0]`).
+fn seen(draw: &Draw) -> f32 {
+    let tint = f32::from(draw.tint[3]) / 255.0;
+    if draw.material == Material::Glow as u8 {
+        tint * (1.0 - draw.params[0])
+    } else {
+        tint
     }
 }
 

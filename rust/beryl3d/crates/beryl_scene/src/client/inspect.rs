@@ -18,6 +18,14 @@ use crate::inspect::inspector::{self, Inspected};
 use crate::layout::FloatLook;
 use crate::screens::{Screen, ScreenIn};
 
+impl Client {
+    /// Whether a script plays faster while many updates wait to play (`Show::set_catch_up`).
+    /// The match tools turn this off, since the web interface never catches up.
+    pub fn set_catch_up(&mut self, catch_up: bool) {
+        self.show.set_catch_up(catch_up);
+    }
+}
+
 /// The client's record of the inspector.
 #[derive(Debug, Default)]
 pub(super) struct Inspector {

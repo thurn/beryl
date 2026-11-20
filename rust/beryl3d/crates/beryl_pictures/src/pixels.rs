@@ -18,7 +18,13 @@
 //!    (`joined.json`), worst first, with a hint when one side has no element there, and writes a
 //!    crop of the web, Beryl 3D and their difference, magnified, for the worst `CROPS`.
 //!
-//! It writes `pixels.json` and the crops (`crops/<n>.png`) into the snapshot directory.
+//! It writes `pixels.json` and the crops (`crops/<n>.png`) into the snapshot directory. With
+//! `--box <x>,<y>,<width>,<height>` in points, `pixels.json` also counts the differing pixels,
+//! glyphs left out and specks kept, inside that box (`inside`), which is how `just b3d match
+//! motion --all` compares one effect's light.
+//!
+//! An effect's record (role `effect`, which Beryl 3D's records list after its elements) owns
+//! pixels only where its style paints, which on Beryl 3D's side it never says it does.
 
 mod diff;
 
@@ -110,14 +116,18 @@ fn style_paints(style: &Value) -> bool {
         || (style["border-width"].as_f64().unwrap_or(0.0) > 0.0 && alpha("border-color") > 0.0)
 }
 
-/// The records of a snapshot's `web.json` or `b3d.json`, and its scale.
-fn records(path: &Path) -> Result<(Vec<Record>, f32), Error> {
+/// The records of a snapshot's `web.json` or `b3d.json`, its scale, and how many of the records
+/// are effects.
+fn records(path: &Path) -> Result<(Vec<Record>, f32, usize), Error> {
     let text = std::fs::read_to_string(path)
         .map_err(|why| Error::Failed(format!("{}: {why}", path.display())))?;
     let document: Value = serde_json::from_str(&text)
         .map_err(|why| Error::Failed(format!("{}: {why}", path.display())))?;
     let scale = document["scale"].as_f64().unwrap_or(1.0) as f32;
     let elements = document["elements"].as_array().cloned().unwrap_or_default();
+    let effects = (elements.iter())
+        .filter(|element| element["role"] == "effect")
+        .count();
     let records = (elements.iter().enumerate())
         .map(|(at, element)| {
             let lines: Vec<[f32; 4]> = (element["text"].as_array().into_iter().flatten())
@@ -136,9 +146,10 @@ fn records(path: &Path) -> Result<(Vec<Record>, f32), Error> {
                 rect: rect(&element["box"]).unwrap_or_default(),
                 z: element["z"].as_i64().unwrap_or(0),
                 paints: style_paints(&element["style"])
-                    || !lines.is_empty()
-                    || !element["object"].is_null()
-                    || matches!(role, "card" | "ability" | "pile" | "icon" | "arrow"),
+                    || (role != "effect"
+                        && (!lines.is_empty()
+                            || !element["object"].is_null()
+                            || matches!(role, "card" | "ability" | "pile" | "icon" | "arrow"))),
                 lines,
                 parent: element["parent"]
                     .as_u64()
@@ -146,7 +157,7 @@ fn records(path: &Path) -> Result<(Vec<Record>, f32), Error> {
             }
         })
         .collect();
-    Ok((records, scale))
+    Ok((records, scale, effects))
 }
 
 /// The matcher's pairs in a snapshot's `joined.json`, as (web index, Beryl 3D index).
@@ -187,8 +198,8 @@ pub(crate) fn pixels(options: &Options) -> Result<String, Error> {
             web.width, web.height, b3d.width, b3d.height
         )));
     }
-    let (mut web_records, scale) = records(&dir.join("web.json"))?;
-    let (mut b3d_records, _) = records(&dir.join("b3d.json"))?;
+    let (mut web_records, scale, _) = records(&dir.join("web.json"))?;
+    let (mut b3d_records, _, b3d_effects) = records(&dir.join("b3d.json"))?;
     let pairs = pairs(&dir.join("joined.json"))?;
     let (width, height) = (web.width, web.height);
     let web_image = Image {
@@ -206,13 +217,7 @@ pub(crate) fn pixels(options: &Options) -> Result<String, Error> {
     let mut page = cli::open(options)?;
     cli::seek_and_act(&mut page, options, &options.at)?;
     let frame = page.frame();
-    if frame.resolved.len() != b3d_records.len() {
-        return Err(Error::Failed(format!(
-            "b3d.json has {} elements and the frame {}: take the snapshot again (--fresh)",
-            b3d_records.len(),
-            frame.resolved.len()
-        )));
-    }
+    same_elements(frame.resolved.len(), b3d_records.len() - b3d_effects)?;
     // A snapshot drawn with `--only` holds the whole window's records, but only one element's
     // subtree is drawn on each side, so only those elements can be answerable.
     if let Some(locator) = options.value("--only") {
@@ -230,6 +235,9 @@ pub(crate) fn pixels(options: &Options) -> Result<String, Error> {
         scale,
     );
     let differ = diff::differing(web_image, b3d_image, &mask);
+    let inside = (options.value("--box"))
+        .map(|given| inside(&differ, width, scale, given))
+        .transpose()?;
     let (label, sizes) = diff::regions(&differ, width);
     let points = (
         (width as f32 / scale).ceil() as u32,
@@ -275,6 +283,7 @@ pub(crate) fn pixels(options: &Options) -> Result<String, Error> {
         rows: &rows,
         nobody,
         scale,
+        inside,
     };
     report(&mut out, dir, &found)?;
     Ok(out)
@@ -290,6 +299,50 @@ struct Found<'a> {
     rows: &'a [Row],
     nobody: usize,
     scale: f32,
+    /// The differing pixels inside `--box`, if it was given.
+    inside: Option<usize>,
+}
+
+/// Fails unless `b3d.json` lists as many elements, before its effects, as the frame resolves:
+/// otherwise the snapshot is from an older build.
+fn same_elements(resolved: usize, elements: usize) -> Result<(), Error> {
+    if resolved == elements {
+        return Ok(());
+    }
+    Err(Error::Failed(format!(
+        "b3d.json has {elements} elements and the frame {resolved}: take the snapshot again \
+         (--fresh)"
+    )))
+}
+
+/// How many of the pixels in `differ`, a picture `width` pixels wide at `scale`, lie inside the
+/// box `given` names as `<x>,<y>,<width>,<height>` in points.
+fn inside(differ: &[bool], width: u32, scale: f32, given: &str) -> Result<usize, Error> {
+    let numbers: Vec<f32> = given
+        .split(',')
+        .filter_map(|n| n.trim().parse().ok())
+        .collect();
+    let [x, y, w, h] = numbers[..] else {
+        return Err(Usage(format!("--box {given}: give <x>,<y>,<width>,<height> in points")).into());
+    };
+    let height = differ.len() as u32 / width.max(1);
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "a pixel inside the picture"
+    )]
+    let pixel = |points: f32, most: u32| ((points * scale).max(0.0) as u32).min(most);
+    let (left, right) = (pixel(x, width), pixel(x + w, width));
+    let (top, bottom) = (pixel(y, height), pixel(y + h, height));
+    Ok((top..bottom)
+        .map(|row| {
+            let start = (row * width) as usize;
+            differ[start + left as usize..start + right as usize]
+                .iter()
+                .filter(|&&d| d)
+                .count()
+        })
+        .sum())
 }
 
 /// Writes `found`'s summary and rows to `out`, and its crops and `pixels.json` into `dir`.
@@ -303,6 +356,7 @@ fn report(out: &mut String, dir: &Path, found: &Found<'_>) -> Result<(), Error> 
         rows,
         nobody,
         scale,
+        inside,
     } = *found;
     let (width, height) = (web_image.width, web_image.height);
     let crops = dir.join("crops");
@@ -349,6 +403,7 @@ fn report(out: &mut String, dir: &Path, found: &Found<'_>) -> Result<(), Error> 
         "glyphs": glyphs,
         "regions": sizes.len(),
         "nobody": nobody,
+        "inside": inside,
         "rows": listed,
     });
     let path = dir.join("pixels.json");

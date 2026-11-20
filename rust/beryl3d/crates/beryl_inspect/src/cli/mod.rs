@@ -391,7 +391,8 @@ fn help(command: &Command) -> String {
 pub fn open(options: &Options) -> Result<Page, Usage> {
     options::known(options.name(), options.seat)?;
     let page = pages::page(options.name(), options.seat, options.layout, options.size);
-    Ok(page.map_err(Usage)?.with_scale(options.scale))
+    let page = page.map_err(Usage)?.with_scale(options.scale);
+    Ok(page.with_catch_up(options.pace == options::Pace::CatchUp))
 }
 
 /// The time of `moment` in `page`'s recording, in nanoseconds since its start.
