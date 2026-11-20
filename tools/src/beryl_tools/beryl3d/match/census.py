@@ -13,7 +13,10 @@ fixed list of moments instead and gives every difference it finds to one screen 
   lists as `check_times_ms`), spread across the recording. The recordings are every built
   screen of `data/beryl3d/screens.json` and every UI fixture played by two agents from a seed
   (`ui/fixtures.json`). `--choose` chooses the moments again and rewrites the file, so that
-  every other run measures the same moments.
+  every other run measures the same moments. Check times rarely fall where a small, very
+  visible mark shows (a target picked, a card selected, Auto Pay's suggested ring), so the
+  file's `added` table holds moments chosen by hand for those, often a recording's end, and
+  `--choose` leaves them as they are.
 - **The areas.** `AREAS` is the table of screen areas, each with the Beryl 3D source it lives
   in. A Beryl 3D element belongs to the first area that it, or failing that its nearest
   ancestor, matches (`b3d_areas`). A web element belongs to the area of its nearest paired
@@ -349,11 +352,15 @@ def recordings() -> list[str]:
 
 def choose(prefix: str) -> int:
     """Rewrites the moments file with up to `PER_RECORDING` check times of each recording
-    whose name starts with `prefix`, keeping the other recordings' moments."""
+    whose name starts with `prefix`, keeping the other recordings' moments and the moments
+    added by hand."""
     t = moment_target("x", 0)
     held: dict[str, list[int]] = {}
+    added: dict[str, list[int]] = {}
     if MOMENTS.is_file():
-        held = load_moments()
+        file = json.loads(MOMENTS.read_text())
+        held = file["recordings"]
+        added = file.get("added", {})
     for name in recordings():
         if not name.startswith(prefix):
             continue
@@ -367,18 +374,38 @@ def choose(prefix: str) -> int:
     about = (
         "The moments `just b3d match census` measures, in milliseconds, by recording: up "
         f"to {PER_RECORDING} of each recording's check times, spread across it, from the "
-        f"seat {SEAT} in the window {WINDOW}. `just b3d match census --choose` rewrites it."
+        f"seat {SEAT} in the window {WINDOW}. `just b3d match census --choose` rewrites it. "
+        "`added` holds moments chosen by hand, where a small mark (a target picked, a card "
+        "selected, Auto Pay's suggested ring) shows that no check time catches; `--choose` "
+        "keeps them."
     )
-    # One recording to a line, so that choosing one recording's moments again is a short diff.
-    lines = ",\n".join(f"  {json.dumps(n)}: {json.dumps(ms)}" for n, ms in held.items())
-    text = f'{{\n "about": {json.dumps(about)},\n "recordings": {{\n{lines}\n }}\n}}\n'
+    text = (
+        f'{{\n "about": {json.dumps(about)},\n "recordings": {table(held)},\n'
+        f' "added": {table(added)}\n}}\n'
+    )
     MOMENTS.write_text(text)
     print(f"wrote {MOMENTS}: {sum(len(ms) for ms in held.values())} moments")
     return 0
 
 
+def table(moments: Mapping[str, Sequence[int]]) -> str:
+    """A table of moments by recording as JSON, one recording to a line, so that choosing one
+    recording's moments again is a short diff."""
+    lines = ",\n".join(
+        f"  {json.dumps(n)}: {json.dumps(ms)}" for n, ms in moments.items()
+    )
+    return f"{{\n{lines}\n }}"
+
+
 def load_moments() -> dict[str, list[int]]:
-    moments: dict[str, list[int]] = json.loads(MOMENTS.read_text())["recordings"]
+    """The moments the census measures by recording: the chosen check times, with the
+    moments added by hand."""
+    file = json.loads(MOMENTS.read_text())
+    moments: dict[str, list[int]] = {
+        n: list(ms) for n, ms in file["recordings"].items()
+    }
+    for name, times in file.get("added", {}).items():
+        moments[name] = sorted({*moments.get(name, ()), *times})
     return moments
 
 

@@ -3,6 +3,10 @@ given to a screen area, and how the moments are spread across a recording."""
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
+
 from beryl_tools.beryl3d.match import census
 
 STYLE: dict[str, object] = {
@@ -119,12 +123,15 @@ def test_differences_and_pixels_go_to_the_area_of_their_beryl_3d_element_else_th
         "prompt": counts(pixels=7, boxes=1, styles=1, unmatched=1),
         "hand": counts(pixels=100),
         "card face": counts(pixels=5, unmatched=1),
-        # The flat layer's root, the web page's root and the pixels no side paints.
-        "cloth": counts(pixels=20 + 11, unmatched=2),
+        # The web page's root and the pixels no side paints. The flat layer's root and the
+        # page's root are wrappers that draw nothing, so the matcher leaves them unmatched
+        # without counting them.
+        "cloth": counts(pixels=20 + 11),
         "battlefield": counts(unmatched=1),
         "piles": counts(unmatched=1),
-        "steps": counts(unmatched=1),
-        "other": counts(unmatched=3),
+        # The web's text and Beryl 3D's unnamed icon. The opponent's steps region and the
+        # web's small unnamed box draw nothing, so neither counts.
+        "other": counts(unmatched=2),
     }
 
 
@@ -133,3 +140,15 @@ def test_the_moments_are_spread_across_the_recording_and_each_taken_once() -> No
     times = [0, 1, 2, 3, 50, 51, 52, 100]
     assert census.spread(times, 4) == [3, 50, 52, 100]
     assert len(census.spread(list(range(1000)), 8)) == 8
+
+
+def test_moments_added_by_hand_are_measured_with_the_chosen_ones(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    moments = tmp_path / "census.json"
+    moments.write_text(
+        '{"about": "", "recordings": {"a": [10, 20], "b": [5]},'
+        ' "added": {"a": [30, 10], "c": [7]}}'
+    )
+    monkeypatch.setattr(census, "MOMENTS", moments)
+    assert census.load_moments() == {"a": [10, 20, 30], "b": [5], "c": [7]}

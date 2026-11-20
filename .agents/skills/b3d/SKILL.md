@@ -203,7 +203,10 @@ time, largest differences first, and land each improvement as you go:
    three worst moments with the `just b3d match pixels` command that shows
    each; take one of those as your target. `--areas hand,prompt` and
    `--recordings <prefix>` narrow a run, and `--json` prints the report.
-   `just b3d match score` then shows which reference targets the change moves.
+   The moments are interface check times, chosen again by `--choose`, and
+   moments added by hand in the file's `added` table where a small mark (a
+   target, a selected card, a suggested payment) shows that no check time
+   catches. `just b3d match score` then shows which reference targets the change moves.
 2. **Fix boxes.** `just b3d match boxes <target> --at <moment>` lists elements laid
    out in a different place, at a different size or with text wrapped
    differently, then the elements only one side has. A whole row of cards
