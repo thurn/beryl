@@ -114,7 +114,12 @@ impl Filter {
 
     /// The picture the records before the filter are drawn into, for a frame `width` by
     /// `height`, made when there is none of that size.
-    pub(crate) fn drawn(&mut self, device: &wgpu::Device, width: u32, height: u32) -> wgpu::TextureView {
+    pub(crate) fn drawn(
+        &mut self,
+        device: &wgpu::Device,
+        width: u32,
+        height: u32,
+    ) -> wgpu::TextureView {
         if let Some(pictures) = &self.pictures
             && pictures.size == (width, height)
         {
@@ -181,7 +186,10 @@ impl Filter {
         view: &wgpu::TextureView,
     ) -> u32 {
         let Some(pictures) = &self.pictures else {
-            debug_assert!(false, "the backdrop's pictures are made before it is applied");
+            debug_assert!(
+                false,
+                "the backdrop's pictures are made before it is applied"
+            );
             return 0;
         };
         let sigma = backdrop.blur.max(0.0);
@@ -191,7 +199,11 @@ impl Filter {
         )]
         let radius = (3.0 * sigma).ceil() as i32;
         let linear = self.format.is_srgb();
-        let identity = [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0]];
+        let identity = [
+            [1.0, 0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
+        ];
         let rows = backdrop.color.map(|[r, g, b]| [r, g, b, 0.0]);
         let passes = [
             Uniforms {

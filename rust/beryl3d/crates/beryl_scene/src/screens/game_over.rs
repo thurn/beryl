@@ -19,9 +19,7 @@ use super::{Screen, ScreenIn};
 use crate::data::space::flat::phone::game_over as metrics;
 use crate::data::space::flat::phone::opening::NARROW_BELOW;
 use crate::data::space::flat::phone::{ACTION_GAP, GUTTER};
-use crate::element::{
-    Align, Anchor, Element, Filter, Justify, Press, Shown, column, holder, text,
-};
+use crate::element::{Align, Anchor, Element, Filter, Justify, Press, Shown, column, holder, text};
 use crate::faces::FaceList;
 use crate::frame::Role;
 use crate::input::FaceSize;

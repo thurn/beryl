@@ -2,10 +2,10 @@
 //! (docs/beryl-3d.md, "The frame"). It has two parts, built together: the resolved elements,
 //! which the interface checks and agent tools read, and the draw list, which the renderer reads.
 
+mod backdrop;
 mod draw;
 mod look;
 mod order;
-mod backdrop;
 mod paint;
 mod rings;
 mod undrawn;
@@ -13,12 +13,12 @@ mod undrawn;
 use beryl_protocol::protocol::{RowName, Side, ZoneName};
 use glam::{Mat4, Vec2};
 
+pub use backdrop::Backdrop;
 pub use draw::{
     Draw, Material, Mesh, RADIAL, Sprite, TextureArray, box_shadow_reach, fixed, gradient_reach,
     sprites,
 };
 pub use look::{ElementLook, LookPaint, LookShadow, Looks};
-pub use backdrop::Backdrop;
 pub use paint::{GRADIENTS, GradientEntry, MaskEntry, PaintTable, Paints};
 pub use rings::{LIFTED, Lifted, RINGS, Ring, Ringed};
 pub use undrawn::{Missing, Undrawn};

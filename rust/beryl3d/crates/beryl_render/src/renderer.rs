@@ -459,7 +459,14 @@ impl Renderer {
             draw_calls += self
                 .backdrop
                 .apply(&self.queue, &mut encoder, &backdrop, view);
-            draw_calls += over_pass(&mut encoder, &draws, backdrop.at, view, &depth, &self.pipelines);
+            draw_calls += over_pass(
+                &mut encoder,
+                &draws,
+                backdrop.at,
+                view,
+                &depth,
+                &self.pipelines,
+            );
         }
         if let Some(counter) = &self.counter {
             counter.resolve(&mut encoder);
