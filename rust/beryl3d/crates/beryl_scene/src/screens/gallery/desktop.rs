@@ -397,10 +397,13 @@ fn actions() -> Element {
         .into_iter()
         .enumerate()
         .map(|(index, name)| {
+            // Each caption's box is exactly the web's text width, which Beryl 3D's italic face
+            // can overrun by a fraction of a point, so the caption shrinks to stay inside it.
             place(
                 text(name)
                     .style(type_style::GALLERY_ROW_CAPTION)
-                    .color(color::TYPE),
+                    .color(color::TYPE)
+                    .fit(true),
                 [at::ROW_CAPTIONS[index], at::ROW_CAPTION_SIZES[index]],
             )
         });
