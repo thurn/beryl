@@ -391,11 +391,14 @@ impl Look {
 
     /// Follows the look as `act`, applied to `played`, changes it, and marks in `dirty`, by
     /// `Group::index`, the groups whose cards it lifts or puts back. `timed` says whether the
-    /// step, or the room it makes, takes time.
+    /// step, or the room it makes, takes time. `arrival` is the order the hands of `played`
+    /// list their cards in (`table::arrival`): a look at a hand holds its cards up in that
+    /// order, the order the view the script leads to rests them in, where the table played over
+    /// keeps them by slot.
     pub(crate) fn follow(
         &mut self,
         (act, timed): (&Act, bool),
-        played: &Played,
+        (played, arrival): (&Played, &[u32]),
         dirty: &mut [bool],
     ) {
         self.lifting.clear();
@@ -417,7 +420,7 @@ impl Look {
             let ended = self.handled.take();
             if *span == Span::Begin {
                 self.handled = Some(Handled::of(
-                    &Zones::of_table(played),
+                    &Zones::of_table(played).arrived(arrival),
                     *handling,
                     self.opening,
                 ));

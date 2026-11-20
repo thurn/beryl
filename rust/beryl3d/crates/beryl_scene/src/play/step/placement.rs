@@ -37,7 +37,7 @@ impl<'a> Motion<'a> {
         // The resting places a script starts from may not number an ability the table played
         // over does, so its first step places the stack again whatever its act.
         dirty[Group::Stack.index()] |= self.first || index::restacks(act);
-        self.look.follow((act, timed), &self.played, &mut dirty);
+        self.follow_look(act, timed, &mut dirty);
         if self.touched.is_empty() && !self.first && !dirty.iter().any(|&changed| changed) {
             return Some(dirty);
         }
@@ -129,6 +129,14 @@ impl<'a> Motion<'a> {
             }
         }
         Some(dirty)
+    }
+
+    /// Follows the look open over the table played as `act` changes it (`Look::follow`), with
+    /// the order the table's hands list their cards in, and marks in `dirty` the groups whose
+    /// cards it lifts or puts back.
+    fn follow_look(&mut self, act: &Act, timed: bool, dirty: &mut [bool]) {
+        self.look
+            .follow((act, timed), (&self.played, &self.arrival), dirty);
     }
 
     /// Every object's resting place in `view`, the view the script leads to. The table played
