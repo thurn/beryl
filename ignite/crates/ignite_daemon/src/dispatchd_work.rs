@@ -613,6 +613,7 @@ mod offered_models_tests {
             ]),
             default_owner: None,
             usage_hold_percent: 99,
+            cli: BTreeMap::new(),
         };
         assert_eq!(offered_models(&pool, "codex", &[]), ["opus", "sonnet"]);
         let listed = ["opus".to_owned(), "light".to_owned()];

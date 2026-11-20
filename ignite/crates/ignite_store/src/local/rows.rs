@@ -222,4 +222,92 @@ crate::tables! {
         verdict: String,
         passed_at: String,
     }
+
+    /// One CLI worker slot of one app (see `schema_20.sql`).
+    CliSlot = "cli_slots" {
+        app: String,
+        /// The slot's number, from 1.
+        slot: i64,
+        /// The Ignite session, `cli-<app>-<8 hex>`; `None` while free.
+        session: Option<String>,
+        ticket: Option<String>,
+        /// `starting`, `running`, `waiting_verb`, `backing_off`, `parked` or `free`.
+        state: String,
+        /// The latest turn's number; 0 before the first.
+        turn: i64,
+        /// The CLI's own transcript ID, from the latest turn's first line.
+        transcript: Option<String>,
+        model: Option<String>,
+        effort: Option<String>,
+        /// When the slot entered its state.
+        since: Option<String>,
+        /// The hub's reservation code the slot was handed.
+        reservation: Option<String>,
+        /// The prompt of the next turn, while the slot waits to start it.
+        next_prompt: Option<String>,
+        /// The `ignite` verb's handle a `waiting_verb` slot waits on.
+        wait_handle: Option<String>,
+        /// When a `backing_off` slot starts its next turn.
+        resume_at: Option<String>,
+        /// Why a `parked` slot is parked.
+        park_reason: Option<String>,
+        /// Interrupted ends in a row with no `ignite` command between them.
+        interrupted_in_row: i64,
+        /// 1 when the last clean end was answered with the turn-ended block text.
+        block_sent: i64,
+        /// 1 when the last end was an API error answered with a back-off.
+        backed_off: i64,
+    }
+
+    /// One turn of a CLI session.
+    CliTurn = "cli_turns" {
+        session: String,
+        turn: i64,
+        app: String,
+        slot: i64,
+        ticket: Option<String>,
+        prompt: String,
+        /// `starting`, `running` or `ended`.
+        state: String,
+        /// The supervised run's directory, once found.
+        run: Option<String>,
+        started_at: Option<String>,
+        ended_at: Option<String>,
+        exit: Option<i64>,
+        /// JSON: the turn's end, as `ignite_core::cli::TurnEnd`.
+        end_kind: Option<String>,
+        transcript: Option<String>,
+        model: Option<String>,
+        cli_version: Option<String>,
+        cost_usd: Option<f64>,
+        /// Lines of `output.log` whose effects were applied.
+        lines_applied: i64,
+    }
+
+    /// A message waiting for, or delivered in, a CLI session's turn.
+    CliMessage = "cli_messages" {
+        id: i64,
+        session: String,
+        ticket: Option<String>,
+        text: String,
+        /// 1 for `tell --now` and orders from a justiciar, which end the running turn.
+        urgent: i64,
+        queued_at: Option<String>,
+        /// The turn whose prompt carried it; `None` while it waits.
+        delivered_turn: Option<i64>,
+    }
+
+    /// An app's CLI hold.
+    CliHold = "cli_holds" {
+        app: String,
+        /// `ignite_core::cli::HoldReason`'s stored name.
+        reason: String,
+        since: Option<String>,
+        cli_version: Option<String>,
+        /// The first line of the error.
+        message: Option<String>,
+        probed_at: Option<String>,
+        /// 1 once the hold's notification and justiciar report were sent.
+        reported: i64,
+    }
 }

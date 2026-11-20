@@ -28,6 +28,7 @@ use crate::tipround::{TipCosts, TipCostsRequest, TipRound, TipRoundFiled};
 use crate::traits::{Clock, CommandSpec, Error, Hub, Launcher, Result, RunResult};
 
 mod builds;
+mod cli;
 mod fleet;
 mod git;
 mod host;
@@ -35,6 +36,7 @@ mod tips;
 mod verdicts;
 mod whole;
 pub use builds::FakeBuilds;
+pub use cli::{FakeCliApp, ScriptedLauncher, ScriptedTurn};
 pub use git::FakeGit;
 pub use host::FakeHost;
 

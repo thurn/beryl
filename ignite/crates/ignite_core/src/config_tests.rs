@@ -207,3 +207,66 @@ fn a_check_is_protected_by_its_own_name_or_its_family() {
     assert!(!rules.is_protected("tests:other"));
     assert!(!rules.is_protected("linter:workspace"));
 }
+
+#[test]
+fn the_cli_pool_tables_parse_and_default_to_desktop_mode() {
+    let config = Config::parse("ignite.toml", DOCUMENT_EXAMPLES).unwrap();
+    assert_eq!(
+        config.machine_pool("jarvis", "claude"),
+        MachinePool {
+            mode: PoolMode::Desktop,
+            slots: 0
+        }
+    );
+    assert_eq!(config.machine_pool("nowhere", "claude").mode, PoolMode::Desktop);
+    assert_eq!(config.cli_program("claude"), None);
+
+    let cli = "\n[machine.jarvis.pool.claude]\nmode = \"cli\"\nslots = 8\n\
+               [machine.jarvis.pool.codex]\nslots = 2\n\
+               [pool.cli.claude]\nprogram = \"claude\"\n\
+               args = [\"--dangerously-skip-permissions\"]\n\
+               [pool.cli.codex]\nprogram = \"codex\"\n";
+    let (config, unknown) =
+        Config::parse_with_unknown("ignite.toml", &format!("{DOCUMENT_EXAMPLES}{cli}")).unwrap();
+    assert!(unknown.is_empty(), "{unknown:?}");
+    assert_eq!(
+        config.machine_pool("JARVIS", "claude"),
+        MachinePool {
+            mode: PoolMode::Cli,
+            slots: 8
+        }
+    );
+    assert_eq!(
+        config.machine_pool("jarvis", "codex"),
+        MachinePool {
+            mode: PoolMode::Desktop,
+            slots: 2
+        },
+        "a table without a mode is desktop mode"
+    );
+    assert_eq!(config.machine_pool("cygnus", "claude").mode, PoolMode::Desktop);
+    let claude = config.cli_program("claude").unwrap();
+    assert_eq!(
+        (claude.program.as_str(), claude.args.as_slice()),
+        ("claude", ["--dangerously-skip-permissions".to_owned()].as_slice())
+    );
+    assert!(config.cli_program("codex").unwrap().args.is_empty());
+
+    let no_slots = "\n[machine.jarvis.pool.claude]\nmode = \"cli\"\n\
+                    [pool.cli.claude]\nprogram = \"claude\"\n";
+    assert_eq!(
+        Config::parse("ignite.toml", &format!("{DOCUMENT_EXAMPLES}{no_slots}"))
+            .unwrap_err()
+            .key,
+        "machine.jarvis.pool.claude.slots"
+    );
+    let no_program = "\n[machine.jarvis.pool.claude]\nmode = \"cli\"\nslots = 1\n";
+    assert_eq!(
+        Config::parse("ignite.toml", &format!("{DOCUMENT_EXAMPLES}{no_program}"))
+            .unwrap_err()
+            .key,
+        "machine.jarvis.pool.claude.mode"
+    );
+    let bad_mode = "\n[machine.jarvis.pool.claude]\nmode = \"tui\"\n";
+    assert!(Config::parse("ignite.toml", &format!("{DOCUMENT_EXAMPLES}{bad_mode}")).is_err());
+}

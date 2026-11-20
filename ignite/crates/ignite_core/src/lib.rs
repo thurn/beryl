@@ -3,6 +3,7 @@
 
 pub mod admission;
 pub mod budget;
+pub mod cli;
 pub mod config;
 pub mod dispatch;
 pub mod explore;

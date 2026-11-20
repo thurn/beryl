@@ -3,6 +3,7 @@
 
 pub mod activity;
 pub mod builds;
+pub mod cli_slots;
 pub mod dispatch_queue;
 pub mod express_passes;
 pub mod gate_memory;
@@ -124,6 +125,11 @@ pub const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 19,
         sql: include_str!("schema_19.sql"),
+        code: None,
+    },
+    Migration {
+        version: 20,
+        sql: include_str!("schema_20.sql"),
         code: None,
     },
 ];

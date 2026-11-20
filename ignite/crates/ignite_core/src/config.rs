@@ -13,8 +13,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::manifest::RebuildEdit;
 
+#[path = "config_cli.rs"]
+mod cli;
 #[path = "config_land.rs"]
 mod land;
+pub use cli::{CliProgram, MachinePool, PoolMode};
 pub use land::{Land, LandMode, Revert};
 
 /// An operating system a machine runs or a check must pass on.
@@ -382,6 +385,9 @@ pub struct PoolConfig {
     /// window resets (see `crate::plan_usage`).
     #[serde(default = "default_hold_percent")]
     pub usage_hold_percent: u32,
+    /// `[pool.cli.<app>]`: the program each app's CLI turns run, by app.
+    #[serde(default)]
+    pub cli: BTreeMap<String, CliProgram>,
 }
 
 fn default_hold_percent() -> u32 {
@@ -394,6 +400,7 @@ impl Default for PoolConfig {
             models: BTreeMap::new(),
             default_owner: None,
             usage_hold_percent: default_hold_percent(),
+            cli: BTreeMap::new(),
         }
     }
 }
@@ -435,6 +442,10 @@ pub struct Machine {
     /// tip round. Zero reserves none.
     #[serde(default)]
     pub tip_build_cores: u32,
+    /// `[machine.<host>.pool.<app>]`: how each app's workers run here, by app. An app with no
+    /// table runs in desktop mode (see [`Config::machine_pool`]).
+    #[serde(default)]
+    pub pool: BTreeMap<String, MachinePool>,
 }
 
 /// Cores reserved for the `batch` and `tip` classes.
@@ -616,6 +627,7 @@ impl Config {
             return fail("machine", "declares no machine");
         }
         self.validate_pool()?;
+        self.validate_cli()?;
         for (name, machine) in &self.machine {
             if machine.ticket_trees == 0 {
                 return fail(

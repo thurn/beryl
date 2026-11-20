@@ -14,6 +14,7 @@ pub mod build;
 pub mod cache;
 pub mod checks;
 pub mod claim;
+pub mod clid;
 pub mod crash;
 pub mod deploy;
 pub mod dispatchd;
