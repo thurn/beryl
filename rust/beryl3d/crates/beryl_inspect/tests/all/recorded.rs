@@ -292,11 +292,21 @@ fn pay_default_shows_each_prompt_in_the_prompt_bar() {
         ),
         (
             "prompt:2",
-            &["text \"Pay {1}{W}.\"", "button \"Auto Pay\""][..],
+            &[
+                "text \"Pay {1}{W}.\"",
+                "region \"turn action\"",
+                "button \"Auto Pay\"",
+            ][..],
         ),
         (
             "prompt:3",
-            &["button \"Resolve\"", "button \"To Main 2\""][..],
+            &[
+                "region \"turn action\"",
+                "button \"Resolve\"",
+                "button \"To Main 2\"",
+                "region #",
+                "icon #",
+            ][..],
         ),
     ] {
         page.seek(&moment.parse().expect("a moment"))

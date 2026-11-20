@@ -62,11 +62,11 @@ fn asks(page: &mut Page) -> String {
 #[test]
 fn a_payment_says_what_is_left_to_pay_unless_a_mana_payment_has_paid_nothing() {
     // The title of a mana payment names the whole cost, so nothing more is said before a pick.
-    // The element's id (`#<n>`) counts the elements made before it, so it changes whenever a
-    // screen gains one, and is left out.
+    // The element's id (`#<n>`) counts the elements made before it, and its position follows the
+    // dock's layout, so both change whenever a screen does and are left out.
     let words = asks(&mut at("pay-default", 2, SETTLE_MS));
     assert!(
-        words.starts_with("text \"Pay {1}{W}.\" #") && words.ends_with(" 1241,749 102x48"),
+        words.starts_with("text \"Pay {1}{W}.\" #"),
         "{words}"
     );
     // A waterbend cost keeps its amount beside the title, as mana symbols.
