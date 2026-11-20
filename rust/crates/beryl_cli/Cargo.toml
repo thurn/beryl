@@ -11,8 +11,10 @@ workspace = true
 
 
 [dependencies]
-# Specs, script checks and boards are built from the cards' scenarios.
-beryl_cards = { path = "../beryl_cards", features = ["scenarios"] }
+# The card names and decklists, which change only when a card is added. The cards themselves
+# come in as a `Catalog` from the binary (crates/beryl_cli_main), so that an edit to a card
+# file recompiles none of this library.
+beryl_card_names = { path = "../beryl_card_names" }
 beryl_engine = { path = "../beryl_engine" }
 beryl_scenario = { path = "../beryl_scenario" }
 beryl_search = { path = "../beryl_search" }
@@ -33,6 +35,9 @@ tempfile = "3"
 windows-sys = { version = "0.61.2", features = ["Win32_System_Threading"] }
 
 [dev-dependencies]
+# The unit tests' catalog (`catalog::TEST`), until they move to tests/ and use only the
+# public API.
+beryl_cards = { path = "../beryl_cards", features = ["scenarios"] }
 # Every shared dependency with the whole workspace's features, so that a build of this
 # package's tests alone builds what the whole workspace's does (beryl_workspace_hack).
 beryl_workspace_hack = { path = "../beryl_workspace_hack" }

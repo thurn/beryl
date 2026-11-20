@@ -40,6 +40,7 @@ use beryl_engine::{
 };
 use beryl_search::{Agent, AgentDecision, Budget, DEEP_SEARCHER, LongSearch, Settings};
 
+use crate::Catalog;
 use crate::anchor_replay::{
     GameLine, duel, fits, games, log, logged_decision, mean_and_error, start,
 };
@@ -156,12 +157,13 @@ fn screen_game(
 /// left behind is refused in seconds, naming its first game that no longer fits, before any
 /// search. The first game to fail during the screen stops the rest.
 pub fn screen(
+    catalog: &'static Catalog,
     dir: &Path,
     champion: &str,
     build: &Build<'_>,
     limit: Option<usize>,
 ) -> Result<Screened, String> {
-    let t = mirror();
+    let t = mirror(catalog);
     let mut all = games(dir)?;
     all.retain(|g| g.seat_of(champion).is_some());
     if let Some(n) = limit {
@@ -209,11 +211,16 @@ pub fn screen(
 
 /// The challenger's lead over the champion's choice at `n` of the differing decisions, spread
 /// evenly over them, each dueled from a fresh seed with `settings`.
-pub fn recheck(differs: &[Differ], settings: Settings, n: usize) -> Vec<(usize, f64, f64)> {
+pub fn recheck(
+    catalog: &'static Catalog,
+    differs: &[Differ],
+    settings: Settings,
+    n: usize,
+) -> Vec<(usize, f64, f64)> {
     if n == 0 || differs.is_empty() {
         return Vec::new();
     }
-    let t = mirror();
+    let t = mirror(catalog);
     let step = (differs.len() as f64 / n as f64).max(1.0);
     (0..n.min(differs.len()))
         .map(|k| (k as f64 * step) as usize)
@@ -335,7 +342,7 @@ fn match_champion(dir: &Path) -> Result<String, String> {
         .ok_or_else(|| format!("{}: no champion", path.display()))
 }
 
-pub fn main(args: &[String]) -> Result<(), String> {
+pub fn main(catalog: &'static Catalog, args: &[String]) -> Result<(), String> {
     let mut positional: Vec<String> = Vec::new();
     let mut champion = None;
     let mut recheck_n = 20;
@@ -370,7 +377,7 @@ pub fn main(args: &[String]) -> Result<(), String> {
         None => match_champion(&dir)?,
     };
     let build = builder(&challenger)?;
-    let screened = screen(&dir, &champion, build.as_ref(), limit)?;
+    let screened = screen(catalog, &dir, &champion, build.as_ref(), limit)?;
     // The duels judge with the champion's search, or the Deep Searcher's for a champion that
     // does not search as a long-think entrant, at the proxy budget on every core.
     let judge = entrant_settings(&champion).map_or(DEEP_SEARCHER, |s| s.family);
@@ -381,7 +388,7 @@ pub fn main(args: &[String]) -> Result<(), String> {
         work,
         threads,
     };
-    let fresh = recheck(&screened.differs, settings, recheck_n);
+    let fresh = recheck(catalog, &screened.differs, settings, recheck_n);
     print!("{}", report(&challenger, &champion, &screened, &fresh));
     Ok(())
 }
@@ -389,6 +396,7 @@ pub fn main(args: &[String]) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::catalog::TEST;
     use crate::ladder::{Bar, Match, run};
 
     const CHAMPION: &str = "pimc2/hidden/rollout/tuned@2k";
@@ -406,7 +414,7 @@ mod tests {
             out: out.clone(),
             positions: Vec::new(),
         };
-        run(&m, |_, _| {}).unwrap();
+        run(&TEST, &m, |_, _| {}).unwrap();
         out
     }
 
@@ -435,14 +443,14 @@ mod tests {
             .collect::<Vec<_>>()
             .join("\n");
         std::fs::write(&path, stale).unwrap();
-        let e = screen(&dir, CHAMPION, &build, None).err().unwrap();
+        let e = screen(&TEST, &dir, CHAMPION, &build, None).err().unwrap();
         assert!(
             e.contains(&last.game) && e.contains("no longer fits"),
             "{e}"
         );
         // A log cut short inside its last line, as by a crash mid-write.
         std::fs::write(&path, &text[..text.trim_end().len() - 3]).unwrap();
-        let e = screen(&dir, CHAMPION, &build, None).err().unwrap();
+        let e = screen(&TEST, &dir, CHAMPION, &build, None).err().unwrap();
         assert!(e.contains(&format!("{}.jsonl", last.game)), "{e}");
         assert_eq!(agents.load(Ordering::Relaxed), 0);
         let _ = std::fs::remove_dir_all(&dir);

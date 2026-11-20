@@ -1,7 +1,7 @@
 //! The boards the verb suite watches (`ui/verbs.json`, `ui/scripts/verbs.mjs`): each plays the
 //! changes a verb's check asks for, recorded from both seats.
 
-use beryl_cards::names::{
+use beryl_card_names::names::{
     AANGS_ICEBERG, ADELINE_RESPLENDENT_CATHAR, BEZA_THE_BOUNDING_SPRING, COUNTERSPELL,
     CURRENCY_CONVERTER, DAMN, ELITE_SPELLBINDER, ISLAND, JACE_THE_MIND_SCULPTOR,
     JACE_WIELDER_OF_MYSTERIES, MANA_CRYPT, OUST, OVERLORD_OF_THE_MISTMOORS, PLAINS, PORTABLE_HOLE,

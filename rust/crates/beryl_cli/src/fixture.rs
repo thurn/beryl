@@ -17,8 +17,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvError, RecvTimeoutError, channel};
 use std::sync::{Arc, Mutex, PoisonError};
 
-use beryl_cards::CARDS;
-use beryl_cards::decks::{WU_CONTROL, fuzz_deck};
+use beryl_card_names::decks::WU_CONTROL;
 use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_search::GameAgent;
 use beryl_session::ipc::{Fixture, FixtureMessage};
@@ -29,6 +28,7 @@ use beryl_session::{
 };
 use serde::Deserialize;
 
+use crate::Catalog;
 use crate::boards::{self, Scripted, Shared};
 
 use self::clicks::Written;
@@ -120,7 +120,12 @@ pub fn definitions(definitions: &Path) -> Result<Vec<Definition>, String> {
 }
 
 /// Records the fixtures in `definitions` named in `only`, or all of them, into `out`.
-pub fn record_all(definitions: &Path, out: &Path, only: &[String]) -> Result<(), String> {
+pub fn record_all(
+    catalog: &'static Catalog,
+    definitions: &Path,
+    out: &Path,
+    only: &[String],
+) -> Result<(), String> {
     let fixtures = self::definitions(definitions)?;
     if let Some(name) = only
         .iter()
@@ -134,10 +139,10 @@ pub fn record_all(definitions: &Path, out: &Path, only: &[String]) -> Result<(),
             continue;
         }
         let mut messages =
-            record(def, definitions).map_err(|e| format!("fixture {}: {e}", def.name))?;
+            record(catalog, def, definitions).map_err(|e| format!("fixture {}: {e}", def.name))?;
         messages.insert(
             0,
-            beryl_session::card_records::fixture_message(&messages, &beryl_cards::CARDS),
+            beryl_session::card_records::fixture_message(&messages, catalog.cards),
         );
         // The stage asks for the timing of its own steps once, whatever the game.
         messages.insert(
@@ -178,7 +183,11 @@ impl Stop {
 }
 
 /// The messages of `def`'s recording, or why it could not be made.
-pub fn record(def: &Definition, source: &Path) -> Result<Vec<FixtureMessage>, String> {
+pub fn record(
+    catalog: &'static Catalog,
+    def: &Definition,
+    source: &Path,
+) -> Result<Vec<FixtureMessage>, String> {
     if let Some(table) = &def.table {
         if def.seed.is_some()
             || def.decks.is_some()
@@ -195,7 +204,7 @@ pub fn record(def: &Definition, source: &Path) -> Result<Vec<FixtureMessage>, St
         }
         return table::record(table, source);
     }
-    record_game(def, false)
+    record_game(catalog, def, false)
 }
 
 /// The messages of `def`'s recording as `seat`, one of [`Definition::seats`], sees it. From the
@@ -203,17 +212,18 @@ pub fn record(def: &Definition, source: &Path) -> Result<Vec<FixtureMessage>, St
 /// the same clicks and the same stop, read from the human's views: only the views recorded are
 /// the other seat's. That seat never decides, so nothing answers them.
 pub fn record_from(
+    catalog: &'static Catalog,
     def: &Definition,
     source: &Path,
     seat: Seat,
 ) -> Result<Vec<FixtureMessage>, String> {
     if seat == def.seat()? {
-        return record(def, source);
+        return record(catalog, def, source);
     }
     if !def.seats()?.contains(&seat) {
         return Err(format!("it is not seen from seat {}", seat.index()));
     }
-    record_game(def, true)
+    record_game(catalog, def, true)
 }
 
 /// A view sent to the human, and with it the same update as the seat across the table sees it
@@ -223,7 +233,11 @@ type Seen = (GameUpdate, Option<GameUpdate>);
 /// A session whose thread panicked (in a debug build, a script that breaks its checks)
 /// says where. With `across`, the views recorded are the seat's across the table from the
 /// human, and none of the human's answers is.
-fn record_game(def: &Definition, across: bool) -> Result<Vec<FixtureMessage>, String> {
+fn record_game(
+    catalog: &'static Catalog,
+    def: &Definition,
+    across: bool,
+) -> Result<Vec<FixtureMessage>, String> {
     let until = def.stop()?;
     let stop = Arc::new(Stop::parse(def)?);
     let clicks = (def.clicks.iter())
@@ -241,9 +255,9 @@ fn record_game(def: &Definition, across: bool) -> Result<Vec<FixtureMessage>, St
         progress,
         at_stop,
         guard,
-    } = listen(&stop, across);
+    } = listen(catalog, &stop, across);
     let before = crate::panics::mark();
-    let (session, unused) = start(def, &sessions, human, &progress, &at_stop, guard)?;
+    let (session, unused) = start(catalog, def, &sessions, human, &progress, &at_stop, guard)?;
     // A seeded game owns no guard, so nothing tells of a panic before its first view.
     let mut unguarded = unused.is_some();
     let mut messages = vec![
@@ -279,7 +293,7 @@ fn record_game(def: &Definition, across: bool) -> Result<Vec<FixtureMessage>, St
         let shown = match other {
             Some(other) => other,
             None if across => return Err("the session sent no view across the table".to_owned()),
-            None => prop::watched(prop.filter(|_| watches), human, &update)?,
+            None => prop::watched(catalog.cards, prop.filter(|_| watches), human, &update)?,
         };
         messages.push(FixtureMessage::game_update(&shown));
         if !clicks.is_empty() && deciding {
@@ -351,7 +365,7 @@ struct Listening {
 
 /// Sessions that send each view to a recording that stops at `stop`, with the view across the
 /// table beside it when `across`.
-fn listen(stop: &Arc<Stop>, across: bool) -> Listening {
+fn listen(catalog: &'static Catalog, stop: &Arc<Stop>, across: bool) -> Listening {
     let (sent, updates) = channel::<Result<Seen, String>>();
     let told = sent.clone();
     let guard = crate::panics::Guard::new(move |panic| drop(told.send(Err(panic))));
@@ -368,7 +382,7 @@ fn listen(stop: &Arc<Stop>, across: bool) -> Listening {
     // The session sends the other seat's view of an update just before the human's.
     let other = Arc::new(Mutex::new(None));
     let drawn = Arc::clone(&other);
-    let sessions = Sessions::new(&beryl_cards::CARDS, None, move |update| {
+    let sessions = Sessions::new(catalog.cards, None, move |update| {
         crate::panics::watch(|| {
             let told = sent.clone();
             move |panic| drop(told.send(Err(panic)))
@@ -443,7 +457,7 @@ fn answer(
     if messages.len() != OPENING + 1 {
         return Err("a prop stands at its board's first view".to_owned());
     }
-    let (asks, mut stood) = prop::stand(prop, stop)?;
+    let (asks, mut stood) = prop::stand(sessions.cards(), prop, stop)?;
     messages.pop();
     messages.push(FixtureMessage::game_update(&asks));
     let mut after = Some(prop::after(stop));
@@ -485,6 +499,7 @@ fn first_view(
 /// fixture with clicks hands its human seat over once `at_stop` says the view last sent was
 /// its stop.
 fn start(
+    catalog: &'static Catalog,
     def: &Definition,
     sessions: &Sessions,
     human: Seat,
@@ -499,7 +514,7 @@ fn start(
             (None, Some(seed), Some(decks), Some(agents)) => {
                 let start = StartGame {
                     seed,
-                    decks: [deck(&decks[0])?, deck(&decks[1])?],
+                    decks: [deck(catalog, &decks[0])?, deck(catalog, &decks[1])?],
                     human,
                     opponent: agents[human.opponent().index()].clone(),
                     stops,
@@ -517,7 +532,7 @@ fn start(
             (Some(name), None, None, None) => {
                 let board = boards::named(name)?;
                 let (table, state) =
-                    beryl_scenario::position(&CARDS, board).map_err(|e| e.to_string())?;
+                    beryl_scenario::position(catalog.cards, board).map_err(|e| e.to_string())?;
                 let agent = |seat: Seat| {
                     Scripted::new(board, seat, &table, Arc::clone(progress))
                         .map(|a| Box::new(a) as Box<dyn GameAgent + Send>)
@@ -547,11 +562,11 @@ fn start(
     Ok((started.map_err(|e| e.to_string())?, guard))
 }
 
-fn deck(name: &str) -> Result<Vec<(u8, String)>, String> {
+fn deck(catalog: &'static Catalog, name: &str) -> Result<Vec<(u8, String)>, String> {
     let list = if name == "wu-control" {
         WU_CONTROL.to_vec()
     } else if let Some(seed) = name.strip_prefix("fuzz:") {
-        fuzz_deck(
+        catalog.fuzz_deck(
             seed.parse()
                 .map_err(|_| format!("bad fuzz seed {seed:?}"))?,
         )
@@ -567,6 +582,7 @@ fn number<T: std::str::FromStr>(text: &str, n: &str) -> Result<T, String> {
 
 #[cfg(test)]
 mod tests {
+    use crate::catalog::TEST;
     use beryl_session::GameUpdate;
     use beryl_session::protocol::{Kind, Step, ZoneName};
 
@@ -720,7 +736,7 @@ mod tests {
             clicks: vec![],
             prop: None,
         };
-        let messages = record_game(&def, false).unwrap();
+        let messages = record_game(&TEST, &def, false).unwrap();
         let Some(FixtureMessage::Event { payload, .. }) = messages.last() else {
             panic!("a recording ends on a view");
         };
@@ -768,8 +784,8 @@ mod tests {
             let seats = def.seats().unwrap();
             assert_eq!(seats.len(), 2);
             let path = Path::new("unused");
-            let human = views(&record_from(&def, path, seats[0]).unwrap());
-            let across = views(&record_from(&def, path, seats[1]).unwrap());
+            let human = views(&record_from(&TEST, &def, path, seats[0]).unwrap());
+            let across = views(&record_from(&TEST, &def, path, seats[1]).unwrap());
             assert_eq!(human.len(), across.len(), "{}", def.name);
             for (mine, theirs) in human.iter().zip(&across) {
                 assert_eq!(mine.turn.number, theirs.turn.number);

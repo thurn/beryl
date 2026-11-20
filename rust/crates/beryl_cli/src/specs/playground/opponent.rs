@@ -7,6 +7,7 @@ use beryl_scenario::{Action, Scenario};
 use beryl_search::{Agent, AgentDecision};
 
 use super::{Variant, actor, auto};
+use crate::Catalog;
 use crate::boards::{self, Scripted, Shared};
 
 pub type Context = Vec<(&'static str, bool, Seat)>;
@@ -14,8 +15,11 @@ pub type Context = Vec<(&'static str, bool, Seat)>;
 /// Preserve targets that were automatic in the original scenario. Adding a second legal
 /// target to Playground must not make the opponent pick a different one (by-yfw's token).
 /// Keep original action ordinals for stable example links.
-pub fn plan(scenario: &Scenario) -> (Vec<Action>, Vec<Option<Context>>, Vec<usize>) {
-    let trace = beryl_scenario::trace(&beryl_cards::CARDS, scenario).ok();
+pub fn plan(
+    catalog: &'static Catalog,
+    scenario: &Scenario,
+) -> (Vec<Action>, Vec<Option<Context>>, Vec<usize>) {
+    let trace = beryl_scenario::trace(catalog.cards, scenario).ok();
     let mut actions = Vec::new();
     let mut contexts = Vec::new();
     let mut ordinals = Vec::new();

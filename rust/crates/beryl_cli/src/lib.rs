@@ -1,11 +1,15 @@
 //! The code behind `beryl_cli`'s commands, as a library so other tools can record the same
 //! fixtures and spec moments: [`fixture::record`], [`fixture::definitions`] and
 //! [`specs::trace`].
+//!
+//! The library names no card crate: the binary that links the cards (`crates/beryl_cli_main`, or
+//! Beryl 3D's recorder) passes them to every command as a [`Catalog`].
 
 pub mod agreement;
 pub mod anchor_replay;
 pub mod blunders;
 mod boards;
+pub mod catalog;
 pub mod evalfit;
 pub mod fit;
 pub mod fixture;
@@ -26,6 +30,8 @@ pub mod tournament;
 pub mod transcript;
 mod walk;
 pub mod why;
+
+pub use catalog::Catalog;
 
 /// Parses the value of `flag` as a number.
 pub fn number<T: std::str::FromStr>(flag: &str, v: &str) -> Result<T, String> {

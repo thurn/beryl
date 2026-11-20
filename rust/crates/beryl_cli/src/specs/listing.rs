@@ -6,13 +6,14 @@ use beryl_session::bugs;
 use serde_json::{Value, json};
 
 use super::{Spec, reviews};
+use crate::Catalog;
 
 /// The cards as `GET /specs` lists them: each with when it was reviewed and its open reports.
-pub fn cards() -> Value {
+pub fn cards(catalog: &'static Catalog) -> Value {
     let reviewed = reviews::load(&reviews::path());
     let reports = bugs::open_by_card(&bugs::dir());
     let moment_reports = bugs::open_by_moment(&bugs::dir());
-    super::cards()
+    super::cards(catalog)
         .iter()
         .map(|s| {
             let prefix = format!("{}/", s.slug);

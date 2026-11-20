@@ -270,7 +270,7 @@ outputs = ["rust/target/clippy"]
 [product.cli]
 build = "cargo build --locked --quiet --profile test --workspace --exclude beryl_link_iroh --lib --bin beryl_cli"
 dir = "rust"
-inputs = ["crate:beryl_cli", "rust/Cargo.toml", "data/card-store.tsv", "data/catalogs.json", "data/table-commands.json", "data/save-breaks.json", "data/ui-conventions.json", "ui/src/generated/**", "docs/sample-decks/**", "data/set-groups.json"]
+inputs = ["crate:beryl_cli_main", "rust/Cargo.toml", "data/card-store.tsv", "data/catalogs.json", "data/table-commands.json", "data/save-breaks.json", "data/ui-conventions.json", "ui/src/generated/**", "docs/sample-decks/**", "data/set-groups.json"]
 outputs = ["rust/target"]
 
 # `beryl_scenario`, which dumps the oracle scenarios and renders the cards' rules text, built

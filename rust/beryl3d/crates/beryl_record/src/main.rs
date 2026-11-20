@@ -8,9 +8,26 @@ mod recorder;
 
 use std::process::ExitCode;
 
+use beryl_cli::Catalog;
+
+/// Every implemented card and what is built from their files, which the recorders play with.
+/// This binary links the cards and hands them to `beryl_cli`'s library, which names no card
+/// crate, so an edit to a card file recompiles none of that library.
+static CATALOG: Catalog = Catalog {
+    cards: &beryl_cards::CARDS,
+    scenarios: beryl_cards::scenarios,
+    library_scenarios: || beryl_cards::library::by_card().collect(),
+    derived_scenarios: |def| beryl_cards::derive::for_card(def).scenarios,
+    fuzz_deck_from: beryl_cards::decks::fuzz_deck_from,
+    keystone_family: beryl_cards::decks::keystone_family,
+};
+
 fn main() -> ExitCode {
     let root = beryl_inspect::recordings::root();
-    match beryl_inspect::recordings::build(&recorder::Cli { root }) {
+    match beryl_inspect::recordings::build(&recorder::Cli {
+        root,
+        catalog: &CATALOG,
+    }) {
         Ok(path) => {
             println!("{}", path.display());
             ExitCode::SUCCESS

@@ -18,6 +18,7 @@ use beryl_search::{
 use beryl_session::save::Chosen;
 use serde::{Deserialize, Serialize};
 
+use crate::Catalog;
 use crate::anchor_replay::duel;
 use crate::game::{mirror, parse_work, seat_seeds};
 use crate::match_log::{cache, files};
@@ -246,10 +247,10 @@ fn reconstruct(t: &GameTable, p: &Packet) -> Result<(State, Decision), String> {
     Ok((s, d))
 }
 
-fn inspect(path: &Path) -> Result<(), String> {
+fn inspect(catalog: &'static Catalog, path: &Path) -> Result<(), String> {
     let text = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
     let p: Packet = serde_json::from_str(&text).map_err(|e| e.to_string())?;
-    let t = mirror();
+    let t = mirror(catalog);
     let (s, d) = reconstruct(&t, &p)?;
     if usize::from(p.chosen) >= d.len() {
         return Err("invalid chosen candidate".into());
@@ -266,11 +267,11 @@ fn inspect(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-pub fn main(args: &[String]) -> Result<(), String> {
+pub fn main(catalog: &'static Catalog, args: &[String]) -> Result<(), String> {
     if let [flag, file] = args
         && flag == "--inspect"
     {
-        return inspect(Path::new(file));
+        return inspect(catalog, Path::new(file));
     }
     if args == ["--help"] {
         println!(
@@ -329,7 +330,7 @@ pub fn main(args: &[String]) -> Result<(), String> {
         c.work,
         c.out.display()
     );
-    let result = run(&c, &clock);
+    let result = run(catalog, &c, &clock);
     write_json(
         &c.out.join("status.json"),
         &serde_json::json!({
@@ -340,8 +341,8 @@ pub fn main(args: &[String]) -> Result<(), String> {
     result
 }
 
-fn run(c: &Config, clock: &Clock) -> Result<(), String> {
-    let t = mirror();
+fn run(catalog: &'static Catalog, c: &Config, clock: &Clock) -> Result<(), String> {
+    let t = mirror(catalog);
     let mut rng = SplitMix64::new(c.seed);
     let mut index = Vec::new();
     let mut games = 0;

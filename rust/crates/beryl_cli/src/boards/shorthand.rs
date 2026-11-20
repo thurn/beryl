@@ -1,6 +1,6 @@
 //! The names and constructors the boards share.
 
-use beryl_cards::names::{ISLAND, PLAINS};
+use beryl_card_names::names::{ISLAND, PLAINS};
 use beryl_engine::card::{Castings, FaceIx};
 use beryl_engine::{DecisionKind, Seat};
 use beryl_scenario::{Action, Permanent};

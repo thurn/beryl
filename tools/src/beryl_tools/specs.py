@@ -71,7 +71,7 @@ def out_dir(kind: str) -> Path:
 def build(release: bool) -> Path | None:
     """Builds beryl_cli, optimized if `release` and otherwise as the tests step does
     (`paths.CLI_BUILD`); returns its binary, or None if the build failed."""
-    optimized = ["cargo", "build", "--quiet", "--release", "--package", "beryl_cli"]
+    optimized = ["cargo", "build", "--quiet", "--release", "--package", "beryl_cli_main"]
     built = subprocess.run(
         optimized if release else paths.CLI_BUILD,
         cwd=paths.RUST,
@@ -223,7 +223,7 @@ def serve_specs(binary: Path, port: int) -> subprocess.Popen[bytes]:
     env = {
         **os.environ,
         "BERYL_FILE_BUGS": str(paths.REPO),
-        "CARGO_MANIFEST_DIR": str(paths.REPO / "rust" / "crates" / "beryl_cli"),
+        "CARGO_MANIFEST_DIR": str(paths.REPO / "rust" / "crates" / "beryl_cli_main"),
     }
     return subprocess.Popen(
         [str(binary), "specs-serve", "--port", str(port)],

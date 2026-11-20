@@ -17,13 +17,14 @@ use std::collections::BTreeSet;
 use std::path::Path;
 use std::thread;
 
-use beryl_cards::CARDS;
-use beryl_cards::decks::{VINTAGE_WU_CONTROL, fuzz_deck};
+use beryl_card_names::decks::VINTAGE_WU_CONTROL;
 use beryl_engine::card::Supertypes;
 use beryl_session::corpus;
 use beryl_session::replay::Entry;
 use beryl_session::save::{Act, Kind};
 use beryl_session::{Game, ReplayFile, Seat, SessionId, StartGame, Status, StopsSetting};
+
+use crate::Catalog;
 
 const USAGE: &str = "usage: beryl_cli freeze-saves <dir> [--games N] [--seed N] [--replay FILE]";
 
@@ -33,7 +34,7 @@ const AGENTS: [&str; 2] = ["greedy", "random"];
 /// The human's decisions a game is played for at most.
 const DECISIONS: usize = 3000;
 
-pub fn main(args: &[String]) -> Result<(), String> {
+pub fn main(catalog: &'static Catalog, args: &[String]) -> Result<(), String> {
     let [dir, flags @ ..] = args else {
         return Err(USAGE.to_owned());
     };
@@ -52,7 +53,7 @@ pub fn main(args: &[String]) -> Result<(), String> {
         }
     }
     if let Some(path) = replay {
-        return freeze_replay(dir, path);
+        return freeze_replay(catalog, dir, path);
     }
     // Days since the epoch, so each day's run plays games of its own.
     let seed = seed.unwrap_or_else(|| {
@@ -62,14 +63,14 @@ pub fn main(args: &[String]) -> Result<(), String> {
             .as_secs();
         secs / 86_400 * 1_000_000
     });
-    freeze_games(dir, seed, games)
+    freeze_games(catalog, dir, seed, games)
 }
 
 /// Freezes the replay file at `path`.
-fn freeze_replay(dir: &Path, path: &Path) -> Result<(), String> {
-    let mut file = ReplayFile::load(path, &beryl_cards::CARDS)
-        .map_err(|e| format!("{}: {e}", path.display()))?;
-    let ending = corpus::check(&CARDS, &file, None)
+fn freeze_replay(catalog: &'static Catalog, dir: &Path, path: &Path) -> Result<(), String> {
+    let mut file =
+        ReplayFile::load(path, catalog.cards).map_err(|e| format!("{}: {e}", path.display()))?;
+    let ending = corpus::check(catalog.cards, &file, None)
         .map_err(|f| format!("{} does not replay exactly: {f}", path.display()))?;
     let stem = path
         .file_stem()
@@ -100,8 +101,13 @@ enum Target {
     Vintage,
 }
 
-fn freeze_games(dir: &Path, seed: u64, games: u64) -> Result<(), String> {
-    let targets = targets();
+fn freeze_games(
+    catalog: &'static Catalog,
+    dir: &Path,
+    seed: u64,
+    games: u64,
+) -> Result<(), String> {
+    let targets = targets(catalog);
     let threads = thread::available_parallelism().map_or(4, usize::from) as u64;
     let played: Vec<Played> = thread::scope(|scope| {
         let handles: Vec<_> = (0..threads)
@@ -109,7 +115,7 @@ fn freeze_games(dir: &Path, seed: u64, games: u64) -> Result<(), String> {
                 scope.spawn(move || {
                     (t..games)
                         .step_by(threads as usize)
-                        .map(|i| play(seed + i, i))
+                        .map(|i| play(catalog, seed + i, i))
                         .collect::<Vec<_>>()
                 })
             })
@@ -125,7 +131,7 @@ fn freeze_games(dir: &Path, seed: u64, games: u64) -> Result<(), String> {
     let commit = head();
     let date = corpus::today();
     for p in kept {
-        let ending = corpus::check(&CARDS, &p.file, None)
+        let ending = corpus::check(catalog.cards, &p.file, None)
             .map_err(|f| format!("the game of seed {} does not replay exactly: {f}", p.seed))?;
         let mut file = p.file.clone();
         file.commit.clone_from(&commit);
@@ -138,8 +144,9 @@ fn freeze_games(dir: &Path, seed: u64, games: u64) -> Result<(), String> {
 
 /// Every implemented card but the basic lands, every kind of decision and a game of the
 /// vintage WU Control deck.
-fn targets() -> BTreeSet<Target> {
-    CARDS
+fn targets(catalog: &'static Catalog) -> BTreeSet<Target> {
+    catalog
+        .cards
         .cards()
         .iter()
         .filter(|c| !c.front().supertypes.contains(Supertypes::BASIC))
@@ -181,18 +188,18 @@ fn report(kept: &[&Played], targets: &BTreeSet<Target>, games: u64) {
 }
 
 /// Game `i` of a run, from `seed`: who plays it varies with `i`.
-fn play(seed: u64, i: u64) -> Played {
+fn play(catalog: &'static Catalog, seed: u64, i: u64) -> Played {
     let owned = |deck: &[(u8, &str)]| -> Vec<(u8, String)> {
         deck.iter().map(|&(n, name)| (n, name.to_owned())).collect()
     };
     let first = if i.is_multiple_of(8) {
         owned(VINTAGE_WU_CONTROL)
     } else {
-        owned(&fuzz_deck(seed))
+        owned(&catalog.fuzz_deck(seed))
     };
     let start = StartGame {
         seed,
-        decks: [first, owned(&fuzz_deck(seed ^ 1 << 40))],
+        decks: [first, owned(&catalog.fuzz_deck(seed ^ 1 << 40))],
         human: Seat::P0,
         opponent: AGENTS[(i / 2 % 2) as usize].to_owned(),
         stops: if i.is_multiple_of(3) {
@@ -201,7 +208,7 @@ fn play(seed: u64, i: u64) -> Played {
             StopsSetting::EXACT
         },
     };
-    let mut game = Game::new(&CARDS, &start, SessionId(0)).expect("a fuzz game starts");
+    let mut game = Game::new(catalog.cards, &start, SessionId(0)).expect("a fuzz game starts");
     game.set_stand_in(AGENTS[(i % 2) as usize])
         .expect("a registered agent");
     for _ in 0..DECISIONS {

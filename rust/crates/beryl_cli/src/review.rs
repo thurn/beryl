@@ -21,11 +21,12 @@ use beryl_engine::{observe, view};
 use beryl_search::{Agent, AgentDecision, Budget, GameAgent, Search, find_agent};
 use beryl_session::ReplayFile;
 
+use crate::Catalog;
 use crate::game;
 use crate::transcript::Transcript;
 use crate::walk::{Walk, Walked};
 
-pub fn main(args: &[String]) -> Result<(), String> {
+pub fn main(catalog: &'static Catalog, args: &[String]) -> Result<(), String> {
     let usage = || {
         "usage: beryl_cli review <replay.json> [--agent NAME] [--turn N] [--out FILE]".to_owned()
     };
@@ -44,7 +45,7 @@ pub fn main(args: &[String]) -> Result<(), String> {
             _ => return Err(usage()),
         }
     }
-    let text = review(Path::new(path), searcher, only)?;
+    let text = review(catalog, Path::new(path), searcher, only)?;
     if let Some(out) = out {
         std::fs::write(out, text).map_err(|e| format!("{out}: {e}"))
     } else {
@@ -83,10 +84,15 @@ fn agent_name<'a>(file: &'a ReplayFile, searcher_name: Option<&'a str>) -> &'a s
 }
 
 /// With `only`, the agent searches that turn's decisions alone and the transcript ends with it.
-fn review(path: &Path, searcher_name: Option<&str>, only: Option<u16>) -> Result<String, String> {
-    let file = ReplayFile::load(path, &beryl_cards::CARDS)
-        .map_err(|e| format!("{}: {e:?}", path.display()))?;
-    let mut walk = Walk::of_file(&file)?;
+fn review(
+    catalog: &'static Catalog,
+    path: &Path,
+    searcher_name: Option<&str>,
+    only: Option<u16>,
+) -> Result<String, String> {
+    let file =
+        ReplayFile::load(path, catalog.cards).map_err(|e| format!("{}: {e:?}", path.display()))?;
+    let mut walk = Walk::of_file(catalog, &file)?;
     let bot = walk.human.opponent();
     let name = agent_name(&file, searcher_name);
     // As `beryl_session`'s `Game::new`: the agent draws from its own stream.
@@ -180,6 +186,7 @@ fn search_line(search: &Search, chose: Choice, logged: Choice) -> String {
 
 #[cfg(test)]
 mod tests {
+    use crate::catalog::TEST;
     use beryl_cards::CARDS;
     use beryl_cards::decks::WU_CONTROL;
     use beryl_session::protocol::{Candidate, DecisionView, Kind};
@@ -256,7 +263,7 @@ mod tests {
         let path =
             std::env::temp_dir().join(format!("beryl-review-{}-{name}.json", std::process::id()));
         file.save(&path).unwrap();
-        let text = review(&path, Some("greedy"), None);
+        let text = review(&TEST, &path, Some("greedy"), None);
         std::fs::remove_file(&path).unwrap();
         text.unwrap()
     }

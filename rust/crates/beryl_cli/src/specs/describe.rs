@@ -5,13 +5,18 @@ use beryl_session::Status;
 use beryl_session::script::Follow;
 
 use super::{Moment, Phase, View, auto, chosen, start_guarded};
+use crate::Catalog;
 use crate::boards;
 
 /// Plays `moment` headless, seen from `view`, to the viewer's first live decision (or the
 /// game's end, once every action is taken), and returns what the viewer sees there: an error
 /// says what failed on the way.
-pub fn reach(moment: &'static Moment, view: View) -> Result<beryl_session::PlayerView, Unreached> {
-    trace(moment, view).map(|(view, _)| view)
+pub fn reach(
+    catalog: &'static Catalog,
+    moment: &'static Moment,
+    view: View,
+) -> Result<beryl_session::PlayerView, Unreached> {
+    trace(catalog, moment, view).map(|(view, _)| view)
 }
 
 /// Why a moment's game did not reach the viewer's live decision.
@@ -42,6 +47,7 @@ impl From<Unreached> for String {
 /// [`reach`], with the views the viewer was shown once the setup was done, each with the
 /// events it animates and its script: the first, shown at once, and the last, [`reach`]'s.
 pub fn trace(
+    catalog: &'static Catalog,
     moment: &'static Moment,
     view: View,
 ) -> Result<(beryl_session::PlayerView, Vec<beryl_session::PlayerView>), Unreached> {
@@ -49,10 +55,11 @@ pub fn trace(
     let told = sent.clone();
     // The session's thread owns the guard, which tells of a panic there, however early.
     let guard = crate::panics::Guard::new(move |panic| drop(told.send(Err(panic))));
-    let (_sessions, progress) = start_guarded(moment, view, Some(guard), move |update, phase| {
-        let _ = sent.send(Ok((update, phase)));
-    })
-    .map_err(Unreached::Failed)?;
+    let (_sessions, progress) =
+        start_guarded(catalog, moment, view, Some(guard), move |update, phase| {
+            let _ = sent.send(Ok((update, phase)));
+        })
+        .map_err(Unreached::Failed)?;
     let mut shown = false;
     let mut views = Vec::new();
     let mut follow = Follow::default();
@@ -291,9 +298,14 @@ fn view_lines(view: &beryl_session::PlayerView) -> Vec<String> {
 /// events shown on the way and what holds at its first live decision, abilities by their cost.
 /// With `views`, each view shown is printed whole instead: its events, what it asks, the stack
 /// and each side's zones ([`view_lines`]).
-pub fn describe(cards: &[String], moment: Option<&str>, views: bool) -> Result<(), String> {
+pub fn describe(
+    catalog: &'static Catalog,
+    cards: &[String],
+    moment: Option<&str>,
+    views: bool,
+) -> Result<(), String> {
     let mut found = false;
-    for spec in chosen(cards)? {
+    for spec in chosen(catalog, cards)? {
         let def = spec.def;
         let labels = auto::ability_labels(def);
         // An ability by its cost rather than its index: "offers Currency Converter {T}".
@@ -321,7 +333,7 @@ pub fn describe(cards: &[String], moment: Option<&str>, views: bool) -> Result<(
                 println!("plays: {a:?}");
             }
             for view in View::ALL {
-                let (shown, views_shown) = trace(m, view)?;
+                let (shown, views_shown) = trace(catalog, m, view)?;
                 println!("{}:", view.name());
                 // The first view shown animates nothing (`specs-serve` clears its events).
                 for (n, v) in views_shown.iter().skip(1).enumerate() {

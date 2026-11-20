@@ -18,6 +18,7 @@ use std::path::Path;
 use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex, PoisonError};
 
+use beryl_engine::CardTable;
 use beryl_session::bugs::{self, BugReport, Images, UiLogRequest};
 use beryl_session::card_records::CardRecordsRequest;
 use beryl_session::ipc::decks::{
@@ -36,11 +37,13 @@ use beryl_table_session::decks::{self, Decks};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
+use crate::Catalog;
+
 /// The open event streams, each a channel to its connection's thread.
 type Streams = Arc<Mutex<Vec<Sender<String>>>>;
 
 /// Serves the game commands on loopback until the process is killed.
-pub fn serve(port: u16) -> Result<(), String> {
+pub fn serve(catalog: &'static Catalog, port: u16) -> Result<(), String> {
     beryl_session::journal::install_panic_hook();
     let listener =
         TcpListener::bind(("127.0.0.1", port)).map_err(|e| format!("port {port}: {e}"))?;
@@ -48,8 +51,8 @@ pub fn serve(port: u16) -> Result<(), String> {
     let data = tempfile::tempdir().map_err(|error| error.to_string())?;
     let memory = MemoryInvites::default();
     let seats = Arc::new([
-        BrowserSeat::new(&data.path().join("host"), memory.clone()),
-        BrowserSeat::new(&data.path().join("guest"), memory),
+        BrowserSeat::new(catalog, &data.path().join("host"), memory.clone()),
+        BrowserSeat::new(catalog, &data.path().join("guest"), memory),
     ]);
     println!("beryl_cli: serving on http://{address}");
     for connection in listener.incoming() {
@@ -72,12 +75,12 @@ struct BrowserSeat {
 }
 
 impl BrowserSeat {
-    fn new(data: &Path, memory: MemoryInvites) -> Self {
+    fn new(catalog: &'static Catalog, data: &Path, memory: MemoryInvites) -> Self {
         let streams: Streams = Arc::default();
         let events = Arc::clone(&streams);
         let game_streams = Arc::clone(&streams);
         let emit = move |update: GameUpdate| broadcast(&game_streams, ipc::GAME_UPDATE, &update);
-        let sessions = Sessions::new(&beryl_cards::CARDS, None, emit.clone());
+        let sessions = Sessions::new(catalog.cards, None, emit.clone());
         let tables =
             TableConnections::new(sessions.session_ids(), data.into(), emit, move |event| {
                 let (name, payload) = event.into_message();
@@ -265,11 +268,12 @@ fn events(mut stream: TcpStream, streams: &Streams) -> Result<(), String> {
     Ok(())
 }
 
-/// The [`ipc::CARD_RECORDS`] command's answer, which needs no game: the spec server's too.
-pub(crate) fn card_records(args: Value) -> Value {
+/// The [`ipc::CARD_RECORDS`] command's answer for `cards`, which needs no game: the spec
+/// server's too.
+pub(crate) fn card_records(cards: &'static CardTable, args: Value) -> Value {
     match serde_json::from_value::<Request<CardRecordsRequest>>(args) {
         Ok(r) => {
-            json!({ "ok": beryl_session::card_records::card_records(&r.request, &beryl_cards::CARDS) })
+            json!({ "ok": beryl_session::card_records::card_records(&r.request, cards) })
         }
         Err(e) => json!({ "err": { "kind": "badRequest", "message": e.to_string() } }),
     }
@@ -364,7 +368,7 @@ pub(crate) fn invoke(sessions: &Sessions, command: &str, args: Value) -> Value {
             .map_err(|e| json!(e))
         })),
         ipc::UI_LOG => answer(request::<UiLogRequest>(args).map(bugs::ui_log)),
-        ipc::CARD_RECORDS => card_records(args),
+        ipc::CARD_RECORDS => card_records(sessions.cards(), args),
         _ => json!({ "err": { "kind": "unknownCommand", "command": command } }),
     }
 }

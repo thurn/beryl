@@ -6,7 +6,7 @@
 
 use std::collections::VecDeque;
 
-use beryl_cards::decks::WU_CONTROL;
+use beryl_card_names::decks::WU_CONTROL;
 use beryl_engine::event::Event;
 use beryl_engine::{
     Choice, Decision, GameTable, Outcome, Profile, Replay, Scratch, Seat, State, Step, apply, next,
@@ -15,6 +15,7 @@ use beryl_engine::{
 use beryl_session::replay::Entry;
 use beryl_session::{ReplayFile, StopsSetting, UNDO_POINTS, with_stops};
 
+use crate::Catalog;
 use crate::game;
 
 /// What the record does next.
@@ -53,7 +54,7 @@ pub struct Walk {
 
 impl Walk {
     /// The record of `file`, from its seed: a WU Control mirror played from its start.
-    pub fn of_file(file: &ReplayFile) -> Result<Walk, String> {
+    pub fn of_file(catalog: &'static Catalog, file: &ReplayFile) -> Result<Walk, String> {
         let mirror: Vec<(u8, String)> = WU_CONTROL
             .iter()
             .map(|&(n, name)| (n, name.to_owned()))
@@ -65,7 +66,7 @@ impl Walk {
             return Err("a game rebuilt from a turn's beginning cannot be replayed".to_owned());
         }
         let human = Seat::try_new(file.human).ok_or("no such human seat")?;
-        let t = game::mirror();
+        let t = game::mirror(catalog);
         let s = State::new(&t, file.seed, with_stops(Profile::SMART, file.stops, human))
             .map_err(|e| e.to_string())?;
         // Each turn's board, as it began, is the session's to check.

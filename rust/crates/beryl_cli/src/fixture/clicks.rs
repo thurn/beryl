@@ -199,6 +199,7 @@ pub(super) fn next_view<T>(updates: &Receiver<Result<T, String>>) -> Result<T, S
 
 #[cfg(test)]
 mod tests {
+    use crate::catalog::TEST;
     use beryl_session::prompt::ShapeBody;
 
     use super::*;
@@ -274,7 +275,7 @@ mod tests {
             "clicks": ["Counterspell", "Island", "press decline"],
         }))
         .unwrap();
-        let messages = super::super::record_game(&def, false).unwrap();
+        let messages = super::super::record_game(&TEST, &def, false).unwrap();
         let replies: Vec<(ClickRequest, ClickReply)> = (messages.iter())
             .filter_map(|message| match message {
                 FixtureMessage::Response {
@@ -324,7 +325,7 @@ mod tests {
             "clicks": ["drop 0 0 Island", "press confirm"],
         }))
         .unwrap();
-        let messages = super::super::record_game(&def, false).unwrap();
+        let messages = super::super::record_game(&TEST, &def, false).unwrap();
         let replies: Vec<(ClickRequest, ClickReply)> = (messages.iter())
             .filter_map(|message| match message {
                 FixtureMessage::Response {
@@ -367,7 +368,7 @@ mod tests {
             "clicks": ["press decline"],
         }))
         .unwrap();
-        let refused = super::super::record_game(&def, false).unwrap_err();
+        let refused = super::super::record_game(&TEST, &def, false).unwrap_err();
         assert!(refused.contains("scripts must end"), "{refused}");
     }
 }

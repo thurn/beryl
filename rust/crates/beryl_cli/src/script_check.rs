@@ -26,6 +26,7 @@ use std::time::Instant;
 use beryl_session::GameUpdate;
 use beryl_session::ipc::{FixtureMessage, GAME_UPDATE};
 
+use crate::Catalog;
 use crate::fixture::{self, Definition};
 use crate::specs::{self, View};
 
@@ -47,7 +48,7 @@ struct Check {
 /// what it names instead: slow CI passes one for each script check it leaves to the fast check
 /// (`tools/src/beryl_tools/slow_only.py`). `fixtures` is the definitions file. With
 /// `--dump <dir>` first, the scripts of the checks run are written under `dir`.
-pub fn main(fixtures: &Path, filters: &[String]) -> Result<(), String> {
+pub fn main(catalog: &'static Catalog, fixtures: &Path, filters: &[String]) -> Result<(), String> {
     let (dump, filters) = match filters {
         [flag, dir, rest @ ..] if flag == "--dump" => (Some(Path::new(dir)), rest),
         _ => (None, filters),
@@ -61,15 +62,15 @@ pub fn main(fixtures: &Path, filters: &[String]) -> Result<(), String> {
         .map(|f| f.strip_prefix("script:").unwrap_or(f).trim_end_matches('/'))
         .collect();
     let mut checks = BTreeMap::new();
-    let chosen: Vec<&specs::Spec> = specs::cards()
+    let chosen: Vec<&specs::Spec> = specs::cards(catalog)
         .iter()
         .filter(|s| group_wanted(&filters, &s.slug))
         .collect();
     moments(&chosen, &filters, &mut checks);
     let definitions = fixture::definitions(fixtures)?;
-    let recorded = recordings(&definitions, fixtures, &filters, &mut checks);
+    let recorded = recordings(catalog, &definitions, fixtures, &filters, &mut checks);
     if let Some(dir) = dump {
-        dump_moments(dir, &chosen, &filters)?;
+        dump_moments(catalog, dir, &chosen, &filters)?;
         for (name, text) in recorded {
             write(&dir.join(FIXTURES).join(format!("{name}.txt")), &text)?;
         }
@@ -139,6 +140,7 @@ fn moments(chosen: &[&specs::Spec], filters: &[&str], checks: &mut BTreeMap<Stri
 /// Each fixture recorded, on as many threads as the machine has cores: the scripts of each
 /// that could be, as text, by its name.
 fn recordings(
+    catalog: &'static Catalog,
     definitions: &[Definition],
     source: &Path,
     filters: &[&str],
@@ -167,7 +169,7 @@ fn recordings(
             scope.spawn(|| {
                 while let Some((id, def)) = chosen.get(next.fetch_add(1, Ordering::Relaxed)) {
                     let started = Instant::now();
-                    let recorded = fixture::record(def, source);
+                    let recorded = fixture::record(catalog, def, source);
                     let seconds = started.elapsed().as_secs_f64();
                     let scripts = recorded.as_deref().ok().map(scripts);
                     let mut done = done
@@ -212,6 +214,7 @@ fn scripts(messages: &[FixtureMessage]) -> String {
 /// Writes under `dir` the scripts of each kept moment of `chosen` that `filters` take, from
 /// each seat.
 fn dump_moments(
+    catalog: &'static Catalog,
     dir: &Path,
     chosen: &[&'static specs::Spec],
     filters: &[&str],
@@ -221,7 +224,7 @@ fn dump_moments(
             for view in View::ALL {
                 let id = format!("{}/{}/{}", spec.slug, moment.name, view.name());
                 if wanted(filters, &id) {
-                    let text = specs::script_text(moment, view)
+                    let text = specs::script_text(catalog, moment, view)
                         .unwrap_or_else(|unreached| format!("{unreached}\n"));
                     write(&dir.join(format!("{id}.txt")), &text)?;
                 }
@@ -318,7 +321,7 @@ mod tests {
     /// card's other moments and another card's pass.
     #[test]
     fn a_failing_moment_fails_only_its_own_checks() {
-        use beryl_cards::names::{MANA_DRAIN, REPRIEVE};
+        use beryl_card_names::names::{MANA_DRAIN, REPRIEVE};
         let scenarios = |card| {
             beryl_cards::scenarios()
                 .iter()

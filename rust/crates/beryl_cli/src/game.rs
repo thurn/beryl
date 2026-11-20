@@ -1,8 +1,7 @@
 //! A headless game between two named agents in the WU Control mirror, seeded, optionally
 //! checking the invariants at every decision and writing a transcript.
 
-use beryl_cards::CARDS;
-use beryl_cards::decks::WU_CONTROL;
+use beryl_card_names::decks::WU_CONTROL;
 use beryl_engine::event::Event;
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{GameTable, Outcome, Profile, Replay, Scratch, Small, State, Step};
@@ -11,11 +10,12 @@ use beryl_search::{
     Agent, AgentDecision, Budget, Family, GameAgent, LongSearch, Settings, Widening, find_agent,
 };
 
+use crate::Catalog;
 use crate::transcript::Transcript;
 
 /// The table every CLI game is played on: the Milestone 1 mirror.
-pub fn mirror() -> GameTable {
-    GameTable::new(&CARDS, [WU_CONTROL, WU_CONTROL]).expect("the WU Control mirror's table")
+pub fn mirror(catalog: &Catalog) -> GameTable {
+    GameTable::new(catalog.cards, [WU_CONTROL, WU_CONTROL]).expect("the WU Control mirror's table")
 }
 
 /// How a game went.

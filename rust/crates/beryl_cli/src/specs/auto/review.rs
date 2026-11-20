@@ -12,6 +12,7 @@ use super::definition::from_definition;
 use super::scenarios::{from_scenario, heading};
 use super::snapshot::snapshot;
 use super::{Candidate, Kind, leak, moment, timeless};
+use crate::Catalog;
 
 /// A playable setup and the interaction it exposes to a reviewer.
 pub struct Checkpoint {
@@ -28,10 +29,14 @@ pub struct ReviewSet {
     pub unreached: Vec<&'static str>,
 }
 
-pub fn checkpoints(def: &'static CardDef, scenarios: &'static [Scenario]) -> ReviewSet {
+pub fn checkpoints(
+    catalog: &'static Catalog,
+    def: &'static CardDef,
+    scenarios: &'static [Scenario],
+) -> ReviewSet {
     let mut candidates = from_definition(def);
     for scenario in scenarios {
-        from_scenario(def, scenario, &mut candidates);
+        from_scenario(catalog, def, scenario, &mut candidates);
     }
     // Prefer the choice itself to arriving at it through an earlier decision.
     candidates.sort_by_key(|c| match c.kind {
@@ -49,7 +54,7 @@ pub fn checkpoints(def: &'static CardDef, scenarios: &'static [Scenario]) -> Rev
             continue;
         }
         let m = moment(&c, c.title.clone(), None);
-        let Ok((views, countered)) = super::super::review_position(&m) else {
+        let Ok((views, countered)) = super::super::review_position(catalog, &m) else {
             continue;
         };
         let Some((key, checkpoint)) = review_example(def, &c, m, &views, countered.is_some())
@@ -64,7 +69,7 @@ pub fn checkpoints(def: &'static CardDef, scenarios: &'static [Scenario]) -> Rev
                 && c.kind == Kind::Play
                 && checkpoint.moment.title == "Spell countered"
             {
-                use_cast_before_counter(def, &mut checkpoint, &card);
+                use_cast_before_counter(catalog, def, &mut checkpoint, &card);
             }
             result.push(checkpoint);
         }
@@ -80,7 +85,12 @@ pub fn checkpoints(def: &'static CardDef, scenarios: &'static [Scenario]) -> Rev
 }
 
 /// Start the counter example before the original spell, so either cast can be tried.
-fn use_cast_before_counter(def: &CardDef, checkpoint: &mut Checkpoint, countered: &str) {
+fn use_cast_before_counter(
+    catalog: &'static Catalog,
+    def: &CardDef,
+    checkpoint: &mut Checkpoint,
+    countered: &str,
+) {
     let m = &checkpoint.moment;
     let [
         Action::Cast {
@@ -121,7 +131,7 @@ fn use_cast_before_counter(def: &CardDef, checkpoint: &mut Checkpoint, countered
         m.board.actions(&m.board.actions[..index]),
     );
     before.group = m.group;
-    let Ok((views, _)) = super::super::review_position(&before) else {
+    let Ok((views, _)) = super::super::review_position(catalog, &before) else {
         return;
     };
     let view = &views[caster.index()];

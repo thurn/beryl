@@ -327,7 +327,7 @@ dependencies = [
 name = "beryl_cli"
 version = "0.1.0"
 dependencies = [
- "beryl_cards",
+ "beryl_card_names",
  "beryl_engine",
  "beryl_scenario",
  "beryl_search",

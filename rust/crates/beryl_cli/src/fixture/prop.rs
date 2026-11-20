@@ -11,7 +11,7 @@
 //! first view of its recording, in which that player is asked something, says they are asked
 //! this instead.
 
-use beryl_cards::CARDS;
+use beryl_engine::CardTable;
 use beryl_engine::card::{Prompt, Purpose};
 use beryl_engine::{
     Bitboard, Decision, DecisionKind, GameTable, Layout, OPTIONS, Observation, Opt, Replay,
@@ -105,9 +105,13 @@ pub(super) struct Stood {
     answered: bool,
 }
 
-/// The opening position of `board`, at its first decision, and `prop`'s decision in it.
-fn position(prop: Prop, board: &'static Scenario) -> Result<(GameTable, State, Decision), String> {
-    let (table, mut state) = beryl_scenario::position(&CARDS, board).map_err(|e| e.to_string())?;
+/// The opening position of `board` played with `cards`, at its first decision, and `prop`'s decision in it.
+fn position(
+    cards: &'static CardTable,
+    prop: Prop,
+    board: &'static Scenario,
+) -> Result<(GameTable, State, Decision), String> {
+    let (table, mut state) = beryl_scenario::position(cards, board).map_err(|e| e.to_string())?;
     let mut scratch = Scratch::new();
     let Step::Decide(_) = next(&mut state, &table, &mut scratch, &mut Replay) else {
         return Err("the board ends before a decision".to_owned());
@@ -120,6 +124,7 @@ fn position(prop: Prop, board: &'static Scenario) -> Result<(GameTable, State, D
 /// recording stopped at with nothing yet played: the view to record in that one's place, and
 /// the prop to click.
 pub(super) fn stand(
+    cards: &'static CardTable,
     Standing { prop, board, stops }: Standing,
     stop: &GameUpdate,
 ) -> Result<(GameUpdate, Stood), String> {
@@ -127,7 +132,7 @@ pub(super) fn stand(
         return Err("a prop stands where its board's seat is first asked".to_owned());
     };
     let id = asked.id;
-    let (table, state, decision) = position(prop, board)?;
+    let (table, state, decision) = position(cards, prop, board)?;
     let mut view = player_view(
         &table,
         Observation::new(&state, ASKED),
@@ -156,6 +161,7 @@ pub(super) fn stand(
 /// `first`, the first view of a recording from `seat`, across the table from `prop`, saying
 /// that the first player is asked its decision; or as it is, with no prop.
 pub(super) fn watched(
+    cards: &'static CardTable,
     prop: Option<Standing>,
     seat: Seat,
     first: &GameUpdate,
@@ -168,7 +174,7 @@ pub(super) fn watched(
             "a prop is watched from a first view in which the other player decides".to_owned(),
         );
     }
-    let (table, state, decision) = position(prop, board)?;
+    let (table, state, decision) = position(cards, prop, board)?;
     let view = player_view(
         &table,
         Observation::new(&state, seat),

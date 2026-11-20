@@ -21,5 +21,6 @@ beryl_inspect = { path = "../beryl_inspect" }
 beryl_cli = { path = "../../../crates/beryl_cli" }
 # The card records each recording is headed by (`card_records::fixture_message`).
 beryl_session = { path = "../../../crates/beryl_session" }
-# The card table whose cards the records are made for.
-beryl_cards = { path = "../../../crates/beryl_cards" }
+# The cards the recorders play and the records are made for, with the scenarios the card spec
+# moments are built from, handed to `beryl_cli` as its `Catalog`.
+beryl_cards = { path = "../../../crates/beryl_cards", features = ["scenarios"] }

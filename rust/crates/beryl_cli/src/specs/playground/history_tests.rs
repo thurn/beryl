@@ -11,12 +11,14 @@ use beryl_session::protocol::{
 use std::sync::mpsc::channel;
 use std::time::Duration;
 
+use crate::catalog::TEST;
+
 /// How long a test waits for the next view before it calls the playground hung. Healthy views
 /// arrive in milliseconds; a loaded machine only slows that, so the limit is far above it.
 const HANG_LIMIT: Duration = Duration::from_secs(120);
 
 fn variant(card: &str, fragment: &str) -> &'static Variant {
-    super::super::spec(card)
+    super::super::spec(&TEST, card)
         .unwrap()
         .playground()
         .examples
@@ -38,7 +40,7 @@ fn exercise(
     let variant = variant(card, fragment);
     let view = View::ALL[variant.controller.seat().index() ^ usize::from(opposite)];
     let (tx, rx) = channel();
-    let session = start(variant, view, move |u, _| {
+    let session = start(&TEST, variant, view, move |u, _| {
         let _ = tx.send(u.view);
     })
     .unwrap();
@@ -313,7 +315,7 @@ fn a_response_waits_until_the_permanent_has_resolved() {
 fn undo_rewinds_the_opponents_response_too() {
     let variant = variant("Oust", "opposing counterspell");
     let (tx, rx) = channel();
-    let session = start(variant, variant.controller, move |u, _| {
+    let session = start(&TEST, variant, variant.controller, move |u, _| {
         let _ = tx.send(u.view);
     })
     .unwrap();

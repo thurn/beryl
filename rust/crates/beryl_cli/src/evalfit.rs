@@ -14,14 +14,19 @@ use beryl_search::{
     AgentDecision, Budget, CardValues, FEATURES, NAMES, WEIGHTS, features, sigmoid,
 };
 
+use crate::Catalog;
 use crate::game::{agents, mirror};
 
 /// One position: the feature differences and whether the first seat won.
 type Sample = ([f64; FEATURES], bool);
 
 /// The positions of game `seed` between `names`.
-fn positions(seed: u64, names: [&str; 2]) -> Result<Vec<Sample>, String> {
-    let t = mirror();
+fn positions(
+    catalog: &'static Catalog,
+    seed: u64,
+    names: [&str; 2],
+) -> Result<Vec<Sample>, String> {
+    let t = mirror(catalog);
     let values = CardValues::new(&t);
     let mut agents = agents(&t, names, seed, Budget::DEFAULT)?;
     let mut s = State::new(&t, seed, Profile::SMART).map_err(|e| e.to_string())?;
@@ -56,7 +61,7 @@ fn positions(seed: u64, names: [&str; 2]) -> Result<Vec<Sample>, String> {
 }
 
 /// Each game's positions, played in parallel.
-fn sample(games: u32, seed: u64) -> Result<Vec<Vec<Sample>>, String> {
+fn sample(catalog: &'static Catalog, games: u32, seed: u64) -> Result<Vec<Vec<Sample>>, String> {
     let pairings: [[&str; 2]; 3] = [
         ["expert-frozen", "greedy"],
         ["greedy", "expert-frozen"],
@@ -74,7 +79,7 @@ fn sample(games: u32, seed: u64) -> Result<Vec<Vec<Sample>>, String> {
                 scope.spawn(move || {
                     let mut out = Vec::new();
                     for &(seed, names) in *chunk {
-                        out.push(positions(seed, names)?);
+                        out.push(positions(catalog, seed, names)?);
                     }
                     Ok(out)
                 })
@@ -163,7 +168,7 @@ fn score(samples: &[Sample], w: &[f64; FEATURES]) -> (f64, f64) {
     (loss / n, right as f64 / n)
 }
 
-pub fn main(args: &[String]) -> Result<(), String> {
+pub fn main(catalog: &'static Catalog, args: &[String]) -> Result<(), String> {
     let mut games = 6_000;
     let mut seed = 1;
     let mut args = args.iter();
@@ -175,7 +180,7 @@ pub fn main(args: &[String]) -> Result<(), String> {
             _ => return Err("usage: beryl_cli eval-fit [--games N] [--seed N]".to_owned()),
         }
     }
-    let games_played = sample(games, seed)?;
+    let games_played = sample(catalog, games, seed)?;
     // Every fifth game is held out, its positions together.
     let (mut train, mut test) = (Vec::new(), Vec::new());
     for (g, positions) in games_played.iter().enumerate() {

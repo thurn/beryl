@@ -10,6 +10,7 @@ use beryl_engine::{
 };
 use beryl_search::{AnchorCheck, CardValues, Knowledge, PolicyWeights, RolloutPolicy, Rules};
 
+use crate::Catalog;
 use crate::anchor_replay::{games, log, logged_decision, start};
 use crate::game::mirror;
 use crate::match_log::{AnchorRecord, files, game::Line};
@@ -261,7 +262,7 @@ fn report(name: &str, before: usize, after: usize, count: usize) {
     );
 }
 
-pub fn main(args: &[String]) -> Result<(), String> {
+pub fn main(catalog: &'static Catalog, args: &[String]) -> Result<(), String> {
     let mut dirs = BTreeSet::new();
     let mut seed = 0;
     let mut out = None;
@@ -283,7 +284,7 @@ pub fn main(args: &[String]) -> Result<(), String> {
     if dirs.is_empty() {
         return Err(USAGE.to_owned());
     }
-    let table = mirror();
+    let table = mirror(catalog);
     let mut samples = Samples::default();
     for dir in dirs {
         let count = collect(&dir, &table, seed, &mut samples)?;

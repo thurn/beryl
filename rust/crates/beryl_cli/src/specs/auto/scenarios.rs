@@ -1,6 +1,6 @@
 //! The scenarios' moments.
 
-use beryl_cards::names::{
+use beryl_card_names::names::{
     FRACTURED_IDENTITY, ISLAND, MANA_DRAIN, OUST, PLAINS, REPRIEVE, SINK_INTO_STUPOR, STOCK_UP,
     TIME_SPIRAL,
 };
@@ -11,6 +11,7 @@ use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
 use super::super::slug;
 use super::definition::{THEIR_HAND, cause_of, cost_label};
 use super::{Candidate, Kind, leak};
+use crate::Catalog;
 
 /// Whether an action answers one decision, as a spec's scripts play them.
 pub(super) fn decides(action: &Action) -> bool {
@@ -55,7 +56,7 @@ pub(in crate::specs) fn playground_action(action: &Action) -> bool {
 /// the scenario still passes, its assertions and its scripted decisions alike, so nothing
 /// added changes it: the table without the twin, then the libraries, are tried alone if the
 /// whole fails.
-fn dressed(def: &'static CardDef, scenario: &Scenario) -> Scenario {
+fn dressed(catalog: &'static Catalog, def: &'static CardDef, scenario: &Scenario) -> Scenario {
     let passes = |d: &Scenario| {
         let checked = d.actions(leak(
             d.actions
@@ -63,7 +64,7 @@ fn dressed(def: &'static CardDef, scenario: &Scenario) -> Scenario {
                 .map(|action| deeper(action, scenario, d))
                 .collect(),
         ));
-        beryl_scenario::run(&beryl_cards::CARDS, &checked).is_ok()
+        beryl_scenario::run(catalog.cards, &checked).is_ok()
     };
     let deep = with_libraries(scenario);
     let full = with_table(&deep);
@@ -212,8 +213,13 @@ pub(super) fn flipped(action: &Action) -> Option<(Action, &'static str)> {
     }
 }
 
-pub(super) fn from_scenario(def: &'static CardDef, scenario: &Scenario, out: &mut Vec<Candidate>) {
-    let board = dressed(def, scenario);
+pub(super) fn from_scenario(
+    catalog: &'static Catalog,
+    def: &'static CardDef,
+    scenario: &Scenario,
+    out: &mut Vec<Candidate>,
+) {
+    let board = dressed(catalog, def, scenario);
     let group = heading(def, scenario);
     let actions = playable(scenario);
     let card = slug(def.name);

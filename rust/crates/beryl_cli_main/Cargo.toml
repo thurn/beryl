@@ -1,0 +1,37 @@
+[package]
+name = "beryl_cli_main"
+version = "0.1.0"
+description = "The beryl_cli binary: links the cards and runs beryl_cli's commands with them"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "beryl_cli"
+path = "src/main.rs"
+
+# Cargo recompiles a package's library whenever any normal dependency of the package changes,
+# even one only its binary uses. So the binary, which alone links the cards, is a package of its
+# own: an edit to a card file recompiles the set crate and relinks this binary, and recompiles
+# no code of the `beryl_cli` library.
+[dependencies]
+# The cards, which the binary hands to the commands as a `beryl_cli::Catalog`.
+beryl_cards = { path = "../beryl_cards", features = ["scenarios"] }
+# The commands.
+beryl_cli = { path = "../beryl_cli" }
+# The budget flags of `play` and `tournament`.
+beryl_search = { path = "../beryl_search" }
+# Writes the tournament's results with `--json`.
+serde_json = { version = "1.0.154", features = ["float_roundtrip"] }
+
+[dev-dependencies]
+# The linked-table test drives the binary's live server over the session protocol.
+beryl_session = { path = "../beryl_session" }
+beryl_table = { path = "../beryl_table" }
+tempfile = "3"
+# Every shared dependency with the whole workspace's features, so that a build of this
+# package's tests alone builds what the whole workspace's does (beryl_workspace_hack).
+beryl_workspace_hack = { path = "../beryl_workspace_hack" }

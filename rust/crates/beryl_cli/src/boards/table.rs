@@ -1,6 +1,6 @@
 //! Boards that show the table itself: its piles, marks, signals and permanents.
 
-use beryl_cards::names::{
+use beryl_card_names::names::{
     ABHORRENT_OCULUS, BEZA_THE_BOUNDING_SPRING, COUNTERSPELL, CURRENCY_CONVERTER, DAMN,
     ELITE_SPELLBINDER, FRACTURED_IDENTITY, GET_LOST, ISLAND, JACE_THE_MIND_SCULPTOR,
     JACE_VRYNS_PRODIGY, MALCOLM_ALLURING_SCOUNDREL, MANA_CRYPT, MANA_DRAIN, NO_MORE_LIES, OUST,

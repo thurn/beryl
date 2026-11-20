@@ -38,6 +38,7 @@ use std::thread;
 use beryl_engine::{GameTable, Outcome};
 use beryl_search::{Agent, AgentDecision, Budget, DEEP_SEARCHER, Family, LongSearch, Settings};
 
+use crate::Catalog;
 use crate::game::{mirror, parse_work};
 use crate::match_log::files::{self, Log};
 use crate::match_log::game::{self as arena, Entrant, Game, GameDecision, Line, Resume};
@@ -65,7 +66,7 @@ const USAGE: &str = "usage: beryl_cli ladder <challenger> [--vs NAME] [--work 3M
                      [--bar stronger|plausible|audit] [--cap N] [--seed N] [--positions DIR] \
                      [--out DIR]";
 
-pub fn main(args: &[String]) -> Result<(), String> {
+pub fn main(catalog: &'static Catalog, args: &[String]) -> Result<(), String> {
     let mut challenger = None;
     let mut champion = None;
     let mut work = PROXY;
@@ -129,7 +130,7 @@ pub fn main(args: &[String]) -> Result<(), String> {
     if let Err(error) = disable_execution_speed_throttling() {
         eprintln!("ladder: could not disable Windows execution speed throttling: {error}");
     }
-    let report = run(&m, |pairs, sprt| {
+    let report = run(catalog, &m, |pairs, sprt| {
         let line = format!(
             "pairs {}: {} swept, {} split, {} lost",
             pairs.total(),
@@ -278,6 +279,7 @@ impl Shared {
 /// Plays match `m`, reporting the pairs and the optional sequential test as pairs are counted,
 /// and writes its games and `match.json` to `m.out`.
 pub fn run(
+    catalog: &'static Catalog,
     m: &Match,
     mut progress: impl FnMut(Pairs, Option<Sprt>) + Send,
 ) -> Result<Report, String> {
@@ -298,7 +300,7 @@ pub fn run(
     }
     let entrants = [entrant(&m.challenger)?, entrant(&m.champion)?];
     let sprt = m.bar.sprt();
-    let t = mirror();
+    let t = mirror(catalog);
     let games = m.cap - m.cap % 2;
     let next = AtomicU32::new(0);
     let stop = AtomicBool::new(false);
@@ -549,6 +551,7 @@ fn decision(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::catalog::TEST;
 
     fn scratch(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("beryl-ladder-{name}-{}", std::process::id()));
@@ -608,7 +611,7 @@ mod tests {
             out: out.clone(),
             positions: Vec::new(),
         };
-        let r = run(&m, |_, _| {}).unwrap();
+        let r = run(&TEST, &m, |_, _| {}).unwrap();
         assert_eq!(
             (r.games, r.pairs.total(), r.verdict),
             (6, 3, Verdict::Undecided)
@@ -635,6 +638,7 @@ mod tests {
         assert!(out.join("match.json").exists());
         // The same seed plays the same games.
         let again = run(
+            &TEST,
             &Match {
                 out: scratch("again"),
                 ..m.clone()
@@ -647,7 +651,7 @@ mod tests {
             (r.wins, r.losses, r.pairs)
         );
         assert!(
-            run(&m, |_, _| {}).is_err(),
+            run(&TEST, &m, |_, _| {}).is_err(),
             "a second match in one directory"
         );
         let _ = fs::remove_dir_all(&out);
@@ -659,6 +663,7 @@ mod tests {
     #[test]
     fn positions_start_four_pairs_in_five() {
         let set = crate::positions::build(
+            &TEST,
             &crate::positions::Build {
                 games: 1,
                 seed: 2,
@@ -690,7 +695,7 @@ mod tests {
             .collect();
         let name = |k: usize| Some(set[k % set.len()].0.as_str());
         assert_eq!(names, [name(0), name(1), name(2), name(3), None, name(4)]);
-        let r = run(&m, |_, _| {}).unwrap();
+        let r = run(&TEST, &m, |_, _| {}).unwrap();
         assert_eq!((r.from_positions.total(), r.from_shuffle.total()), (5, 1));
         assert!(r.text().contains("from positions 5"));
         let games: Vec<GameRecord> = files::read(&out.join("games.jsonl")).unwrap();
@@ -699,7 +704,8 @@ mod tests {
             assert_eq!(g.position, expected, "{}", g.game);
         }
         let mut visited = 0;
-        let walked = crate::anchor_replay::walk(&out, "greedy", |_, _, _, _, _, _| visited += 1);
+        let walked =
+            crate::anchor_replay::walk(&TEST, &out, "greedy", |_, _, _, _, _, _| visited += 1);
         assert_eq!(walked.unwrap(), 12);
         let _ = fs::remove_dir_all(&out);
     }

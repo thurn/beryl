@@ -54,8 +54,8 @@ use std::process::ExitCode;
 
 use beryl_cli::transcript::Transcript;
 use beryl_cli::{
-    agreement, anchor_replay, blunders, evalfit, fit, fixture, freeze, game, gate, hunt, ladder,
-    number, positions, review, screen, script_check, serve, specs, tournament, why,
+    Catalog, agreement, anchor_replay, blunders, evalfit, fit, fixture, freeze, game, gate, hunt,
+    ladder, number, positions, review, screen, script_check, serve, specs, tournament, why,
 };
 use beryl_search::Budget;
 
@@ -87,17 +87,30 @@ const USAGE: &str = "usage:
   beryl_cli anchor-replay <run-dir> <entrant> [--examples N] [--recheck N] [--guarded]
   beryl_cli agreement <run-dir> <entrant> [--positions N] [--budget B]";
 
+/// Every implemented card and what is built from their files, which every command plays with.
+/// This binary is the only part of `beryl_cli` that links the cards: the library takes them
+/// from here, so an edit to a card file relinks this binary and recompiles no library code.
+static CATALOG: Catalog = Catalog {
+    cards: &beryl_cards::CARDS,
+    scenarios: beryl_cards::scenarios,
+    library_scenarios: || beryl_cards::library::by_card().collect(),
+    derived_scenarios: |def| beryl_cards::derive::for_card(def).scenarios,
+    fuzz_deck_from: beryl_cards::decks::fuzz_deck_from,
+    keystone_family: beryl_cards::decks::keystone_family,
+};
+
 /// The port `serve` listens on unless told otherwise.
 const DEFAULT_PORT: u16 = 1421;
 /// The port `specs-serve` listens on unless told otherwise.
 const SPECS_PORT: u16 = 1422;
 
 fn main() -> ExitCode {
+    let c = &CATALOG;
     let args: Vec<String> = std::env::args().skip(1).collect();
     if let [command, rest @ ..] = args.as_slice()
         && command == "gate"
     {
-        return match gate::main(rest) {
+        return match gate::main(c, rest) {
             Ok(()) => ExitCode::SUCCESS,
             Err(error) => {
                 eprintln!("beryl_cli: {error}");
@@ -107,49 +120,49 @@ fn main() -> ExitCode {
     }
     let result = match args.as_slice() {
         [command, definitions, out, names @ ..] if command == "record-fixture" => {
-            fixture::record_all(Path::new(definitions), Path::new(out), names)
+            fixture::record_all(c, Path::new(definitions), Path::new(out), names)
         }
-        [command, rest @ ..] if command == "eval-fit" => evalfit::main(rest),
-        [command, rest @ ..] if command == "fit" => fit::main(rest),
-        [command, rest @ ..] if command == "review" => review::main(rest),
-        [command, rest @ ..] if command == "freeze-saves" => freeze::main(rest),
-        [command, rest @ ..] if command == "anchor-replay" => anchor_replay::main(rest),
-        [command, rest @ ..] if command == "agreement" => agreement::main(rest),
-        [command, rest @ ..] if command == "ladder" => ladder::main(rest),
-        [command, rest @ ..] if command == "blunder-hunt" => hunt::main(rest),
-        [command, rest @ ..] if command == "blunders" => blunders::main(rest),
-        [command, rest @ ..] if command == "why" => why::main(rest),
-        [command, rest @ ..] if command == "screen" => screen::main(rest),
-        [command, rest @ ..] if command == "positions" => positions::main(rest),
-        [command] if command == "serve" => serve::serve(DEFAULT_PORT),
+        [command, rest @ ..] if command == "eval-fit" => evalfit::main(c, rest),
+        [command, rest @ ..] if command == "fit" => fit::main(c, rest),
+        [command, rest @ ..] if command == "review" => review::main(c, rest),
+        [command, rest @ ..] if command == "freeze-saves" => freeze::main(c, rest),
+        [command, rest @ ..] if command == "anchor-replay" => anchor_replay::main(c, rest),
+        [command, rest @ ..] if command == "agreement" => agreement::main(c, rest),
+        [command, rest @ ..] if command == "ladder" => ladder::main(c, rest),
+        [command, rest @ ..] if command == "blunder-hunt" => hunt::main(c, rest),
+        [command, rest @ ..] if command == "blunders" => blunders::main(c, rest),
+        [command, rest @ ..] if command == "why" => why::main(c, rest),
+        [command, rest @ ..] if command == "screen" => screen::main(c, rest),
+        [command, rest @ ..] if command == "positions" => positions::main(c, rest),
+        [command] if command == "serve" => serve::serve(c, DEFAULT_PORT),
         [command, flag, port] if command == "serve" && flag == "--port" => {
-            number(flag, port).and_then(serve::serve)
+            number(flag, port).and_then(|port| serve::serve(c, port))
         }
-        [command] if command == "specs-serve" => specs::serve::serve(SPECS_PORT),
+        [command] if command == "specs-serve" => specs::serve::serve(c, SPECS_PORT),
         [command, flag, port] if command == "specs-serve" && flag == "--port" => {
-            number(flag, port).and_then(specs::serve::serve)
+            number(flag, port).and_then(|port| specs::serve::serve(c, port))
         }
-        [command, cards @ ..] if command == "specs-check" => specs::check_all(cards),
+        [command, cards @ ..] if command == "specs-check" => specs::check_all(c, cards),
         [command, definitions, checks @ ..] if command == "script-check" => {
-            script_check::main(Path::new(definitions), checks)
+            script_check::main(c, Path::new(definitions), checks)
         }
         [command, flag, card] if command == "specs-describe" && flag == "--views" => {
-            specs::describe(std::slice::from_ref(card), None, true)
+            specs::describe(c, std::slice::from_ref(card), None, true)
         }
         [command, flag, card, moment] if command == "specs-describe" && flag == "--views" => {
-            specs::describe(std::slice::from_ref(card), Some(moment), true)
+            specs::describe(c, std::slice::from_ref(card), Some(moment), true)
         }
         [command, card] if command == "specs-describe" => {
-            specs::describe(std::slice::from_ref(card), None, false)
+            specs::describe(c, std::slice::from_ref(card), None, false)
         }
         [command, card, moment] if command == "specs-describe" => {
-            specs::describe(std::slice::from_ref(card), Some(moment), false)
+            specs::describe(c, std::slice::from_ref(card), Some(moment), false)
         }
         [command, card] if command == "specs-script" => {
-            specs::scripts(std::slice::from_ref(card), None)
+            specs::scripts(c, std::slice::from_ref(card), None)
         }
         [command, card, moment] if command == "specs-script" => {
-            specs::scripts(std::slice::from_ref(card), Some(moment))
+            specs::scripts(c, std::slice::from_ref(card), Some(moment))
         }
         [command, rest @ ..] if command == "play" => Flags::parse(rest).and_then(|f| play(&f)),
         [command, rest @ ..] if command == "tournament" => {
@@ -215,7 +228,7 @@ fn play(f: &Flags) -> Result<(), String> {
         return Err(format!("play takes two agents\n{USAGE}"));
     };
     let names = [a.as_str(), b.as_str()];
-    let t = game::mirror();
+    let t = game::mirror(&CATALOG);
     let mut transcript = Transcript::new(names);
     let played = game::play(&t, f.seed, names, f.budget, true, Some(&mut transcript))?;
     match &f.out {
@@ -236,6 +249,7 @@ fn tournament(f: &Flags) -> Result<(), String> {
         return Err(format!("tournament takes at least one agent\n{USAGE}"));
     }
     let results = tournament::run(
+        &CATALOG,
         &f.agents,
         f.games.unwrap_or(100),
         f.seed,

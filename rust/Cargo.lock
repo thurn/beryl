@@ -399,6 +399,7 @@ dependencies = [
 name = "beryl_cli"
 version = "0.1.0"
 dependencies = [
+ "beryl_card_names",
  "beryl_cards",
  "beryl_engine",
  "beryl_scenario",
@@ -412,6 +413,20 @@ dependencies = [
  "serde_json",
  "tempfile",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "beryl_cli_main"
+version = "0.1.0"
+dependencies = [
+ "beryl_cards",
+ "beryl_cli",
+ "beryl_search",
+ "beryl_session",
+ "beryl_table",
+ "beryl_workspace_hack",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]

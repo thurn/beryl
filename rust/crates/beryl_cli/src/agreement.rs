@@ -13,6 +13,7 @@ use std::path::Path;
 use beryl_engine::{Choice, Decision, Scratch, State, observe};
 use beryl_search::{Agent, AgentDecision, Family, LongSearch, Settings};
 
+use crate::Catalog;
 use crate::anchor_replay::walk;
 use crate::game::{mirror, parse_work};
 
@@ -27,7 +28,7 @@ struct Position {
     decided: bool,
 }
 
-pub fn main(args: &[String]) -> Result<(), String> {
+pub fn main(catalog: &'static Catalog, args: &[String]) -> Result<(), String> {
     let usage =
         || "usage: beryl_cli agreement <run-dir> <entrant> [--positions N] [--budget B]".to_owned();
     let [dir, entrant, flags @ ..] = args else {
@@ -44,17 +45,26 @@ pub fn main(args: &[String]) -> Result<(), String> {
             _ => return Err(usage()),
         }
     }
-    print!("{}", agreement(Path::new(dir), entrant, n, budget)?);
+    print!(
+        "{}",
+        agreement(catalog, Path::new(dir), entrant, n, budget)?
+    );
     Ok(())
 }
 
-fn agreement(dir: &Path, entrant: &str, n: usize, budget: Option<u64>) -> Result<String, String> {
+fn agreement(
+    catalog: &'static Catalog,
+    dir: &Path,
+    entrant: &str,
+    n: usize,
+    budget: Option<u64>,
+) -> Result<String, String> {
     let bad = || format!("{entrant:?} is no long-think entrant (family@budget)");
     let (family, logged_budget) = entrant.split_once('@').ok_or_else(bad)?;
     let family: Family = family.parse()?;
     let work = budget.unwrap_or(parse_work(logged_budget).ok_or_else(bad)?);
     let mut positions = Vec::new();
-    walk(dir, entrant, |_, s, d, choice, search, _| {
+    walk(catalog, dir, entrant, |_, s, d, choice, search, _| {
         let best = search
             .visits
             .iter()
@@ -69,7 +79,7 @@ fn agreement(dir: &Path, entrant: &str, n: usize, budget: Option<u64>) -> Result
             decided: !(0.05..=0.95).contains(&best),
         });
     })?;
-    let t = mirror();
+    let t = mirror(catalog);
     let threads = std::thread::available_parallelism()
         .map_or(1, |n| u32::try_from(n.get()).unwrap_or(u32::MAX));
     let settings = Settings {

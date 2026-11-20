@@ -36,6 +36,7 @@ use beryl_search::{Agent, AgentDecision, DEEP_SEARCHER, LongSearch, Settings};
 use beryl_session::checkpoint::Checkpoint;
 use serde::{Deserialize, Serialize};
 
+use crate::Catalog;
 use crate::game::{mirror, parse_work, seat_seeds};
 use crate::ladder::games_at_once;
 use crate::match_log::{cache, files};
@@ -88,15 +89,15 @@ pub struct Built {
     pub scored: u32,
 }
 
-pub fn main(args: &[String]) -> Result<(), String> {
+pub fn main(catalog: &'static Catalog, args: &[String]) -> Result<(), String> {
     match args {
-        [command, rest @ ..] if command == "build" => build_main(rest),
-        [command, rest @ ..] if command == "sample" => sample_main(rest),
+        [command, rest @ ..] if command == "build" => build_main(catalog, rest),
+        [command, rest @ ..] if command == "sample" => sample_main(catalog, rest),
         _ => Err(USAGE.to_owned()),
     }
 }
 
-fn build_main(args: &[String]) -> Result<(), String> {
+fn build_main(catalog: &'static Catalog, args: &[String]) -> Result<(), String> {
     let mut b = Build {
         games: 250,
         seed: 0,
@@ -131,7 +132,9 @@ fn build_main(args: &[String]) -> Result<(), String> {
             out.display()
         ));
     }
-    let built = build(&b, |done| eprintln!("game {done} of {} cut", b.games))?;
+    let built = build(catalog, &b, |done| {
+        eprintln!("game {done} of {} cut", b.games);
+    })?;
     write(&out, &built.positions)?;
     println!(
         "{} games: {} turn starts cut, {} clean, {} scored, {} kept in [{}, {}]; set {:016x} in {}",
@@ -148,13 +151,13 @@ fn build_main(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-fn sample_main(args: &[String]) -> Result<(), String> {
+fn sample_main(catalog: &'static Catalog, args: &[String]) -> Result<(), String> {
     let (count, dir) = match args {
         [flag, n, dir] if flag == "--count" => (crate::number(flag, n)?, dir),
         [dir] => (10, dir),
         _ => return Err(USAGE.to_owned()),
     };
-    print!("{}", sample(Path::new(dir), count)?);
+    print!("{}", sample(catalog, Path::new(dir), count)?);
     Ok(())
 }
 
@@ -180,8 +183,12 @@ pub fn start(t: &GameTable, position: &Position, seed: u64) -> Result<State, Str
 }
 
 /// Builds a set, calling `progress` with the games cut so far as each finishes.
-pub fn build(b: &Build, progress: impl Fn(u32) + Sync) -> Result<Built, String> {
-    let t = mirror();
+pub fn build(
+    catalog: &'static Catalog,
+    b: &Build,
+    progress: impl Fn(u32) + Sync,
+) -> Result<Built, String> {
+    let t = mirror(catalog);
     let next_game = AtomicU32::new(0);
     let done = AtomicU32::new(0);
     let found: Mutex<Vec<(u32, Result<GameCuts, String>)>> = Mutex::new(Vec::new());
@@ -366,9 +373,9 @@ pub fn hash(positions: &[(String, Position)]) -> Result<u64, String> {
 
 /// `count` positions of the set in `dir`, spread evenly over it, as transcripts: each board as
 /// its turn begins and the first decision greedy answers there.
-pub fn sample(dir: &Path, count: usize) -> Result<String, String> {
+pub fn sample(catalog: &'static Catalog, dir: &Path, count: usize) -> Result<String, String> {
     let set = load(dir)?;
-    let t = mirror();
+    let t = mirror(catalog);
     let step = (set.len() as f64 / count.max(1) as f64).max(1.0);
     let mut out = String::new();
     for k in 0..count.min(set.len()) {

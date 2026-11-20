@@ -2,7 +2,7 @@
 
 use std::fmt::Write as _;
 
-use beryl_cards::names::{
+use beryl_card_names::names::{
     COUNTERSPELL, ISLAND, MANA_DRAIN, OUST, PLAINS, REPRIEVE, SINK_INTO_STUPOR, STOCK_UP, SWAMP,
     THIEVING_SKYDIVER,
 };

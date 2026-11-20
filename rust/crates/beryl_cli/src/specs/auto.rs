@@ -18,12 +18,13 @@
 //!
 //! Labels are short and general: what made the moment, not prose.
 
-use beryl_cards::names::ISLAND;
+use beryl_card_names::names::ISLAND;
 use beryl_engine::TurnStep;
 use beryl_engine::card::CardDef;
 use beryl_scenario::{Action, P0, Permanent, Scenario};
 
 use super::{Moment, Unreached, View, reach};
+use crate::Catalog;
 use definition::{activated, from_definition};
 use scenarios::from_scenario;
 
@@ -120,13 +121,17 @@ fn timeless(recorded: &[String]) -> Vec<&str> {
         .collect()
 }
 
-pub fn generate(def: &'static CardDef, scenarios: &'static [Scenario]) -> Generated {
+pub fn generate(
+    catalog: &'static Catalog,
+    def: &'static CardDef,
+    scenarios: &'static [Scenario],
+) -> Generated {
     let mut candidates = from_definition(def);
     for scenario in scenarios {
-        from_scenario(def, scenario, &mut candidates);
+        from_scenario(catalog, def, scenario, &mut candidates);
     }
     let mut played = Vec::new();
-    let mut recorded = record(def, &candidates, &mut played);
+    let mut recorded = record(catalog, def, &candidates, &mut played);
     let mut kept = select(def, &candidates, &recorded, &mut Vec::new());
     // What follows the card's moments, for a card whose abilities decide its stops.
     if !activated(def.front()).is_empty() {
@@ -135,7 +140,7 @@ pub fn generate(def: &'static CardDef, scenarios: &'static [Scenario]) -> Genera
             .filter_map(|i| Some((&candidates[i], recorded[i].as_ref().ok()?)))
             .flat_map(|(c, r)| follow_ons(c, r))
             .collect();
-        recorded.extend(record(def, &follow, &mut played));
+        recorded.extend(record(catalog, def, &follow, &mut played));
         candidates.extend(follow);
     }
     let mut dropped = Vec::new();
@@ -169,6 +174,7 @@ type Recorded = Result<[Vec<String>; 2], String>;
 /// Each candidate played from both seats to its first live decision, and what held there; each
 /// seat's play goes to `played`.
 fn record(
+    catalog: &'static Catalog,
     def: &'static CardDef,
     candidates: &[Candidate],
     played: &mut Vec<Played>,
@@ -179,7 +185,7 @@ fn record(
             let m: &'static Moment = Box::leak(Box::new(moment(c, c.title.clone(), None)));
             let [yours, theirs] = View::ALL.map(|view| {
                 let started = std::time::Instant::now();
-                let reached = reach(m, view);
+                let reached = reach(catalog, m, view);
                 played.push(Played {
                     name: c.name.clone(),
                     view,
@@ -370,12 +376,12 @@ pub(super) fn playground_probes(def: &'static CardDef) -> Vec<Moment> {
 
 /// Supply printed casting resources to a play-from-hand fallback. The engine still owns
 /// affordability and payment; this only builds a testing position.
-pub(super) fn fund_cast(def: &CardDef, mut board: Scenario) -> Scenario {
+pub(super) fn fund_cast(catalog: &'static Catalog, def: &CardDef, mut board: Scenario) -> Scenario {
     let cost = def.front().cost;
     let mut permanents: Vec<Permanent> = board.setup.players[0].all_permanents().collect();
     let basics = ["Plains", "Island", "Swamp", "Mountain", "Forest", "Wastes"];
     for (name, count) in basics.into_iter().zip(cost.symbols) {
-        if beryl_cards::CARDS.cards().iter().any(|d| d.name == name) {
+        if catalog.cards.cards().iter().any(|d| d.name == name) {
             permanents.extend(std::iter::repeat_n(
                 Permanent::new(name),
                 usize::from(count),

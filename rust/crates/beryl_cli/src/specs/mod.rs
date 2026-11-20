@@ -28,10 +28,11 @@ mod start;
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use beryl_cards::CARDS;
 use beryl_engine::card::CardDef;
 use beryl_scenario::{Action, Scenario};
 use beryl_session::Seat;
+
+use crate::Catalog;
 
 use describe::reach;
 pub use describe::{Unreached, describe, trace};
@@ -45,13 +46,17 @@ use start::{at_checkpoint, review_position, start_guarded, start_review};
 /// The specs, one per implemented card, each generated on its first request: asking for one
 /// card's moments plays no other card's.
 struct Library {
+    catalog: &'static Catalog,
     specs: Vec<Spec>,
 }
 
 impl Library {
-    fn new() -> Library {
+    fn new(catalog: &'static Catalog) -> Library {
         Library {
-            specs: CARDS.cards().iter().map(|&def| Spec::new(def)).collect(),
+            catalog,
+            specs: (catalog.cards.cards().iter())
+                .map(|&def| Spec::new(catalog, def))
+                .collect(),
         }
     }
 
@@ -60,29 +65,37 @@ impl Library {
     }
 }
 
-fn library() -> &'static Library {
+/// The library of `catalog`'s cards, made on the first call. A process plays with one catalog,
+/// the one its binary links, so the library made for the first is kept for every later call.
+fn library(catalog: &'static Catalog) -> &'static Library {
     static LIBRARY: OnceLock<Library> = OnceLock::new();
-    LIBRARY.get_or_init(Library::new)
+    let library = LIBRARY.get_or_init(|| Library::new(catalog));
+    debug_assert!(
+        std::ptr::eq(library.catalog, catalog),
+        "one catalog per process"
+    );
+    library
 }
 
 /// Every implemented card's spec, generating none.
-pub fn cards() -> &'static [Spec] {
-    &library().specs
+pub fn cards(catalog: &'static Catalog) -> &'static [Spec] {
+    &library(catalog).specs
 }
 
 /// The spec of the card `card` names, by its name or its slug, generating nothing. A card
 /// complete from the card store, which has no file, gets its spec on its first request, and no
 /// list of every card's spec ([`cards`]) holds it: there are hundreds.
-pub fn spec(card: &str) -> Option<&'static Spec> {
-    library().find(card).or_else(|| from_store(card))
+pub fn spec(catalog: &'static Catalog, card: &str) -> Option<&'static Spec> {
+    library(catalog)
+        .find(card)
+        .or_else(|| from_store(catalog, card))
 }
 
 /// The spec of the card complete from the store that `card` names, by its name or its slug,
 /// made once and kept.
-fn from_store(card: &str) -> Option<&'static Spec> {
+fn from_store(catalog: &'static Catalog, card: &str) -> Option<&'static Spec> {
     static MADE: std::sync::Mutex<Vec<&'static Spec>> = std::sync::Mutex::new(Vec::new());
-    let def = CARDS
-        .from_store()
+    let def = (catalog.cards.from_store())
         .iter()
         .find(|d| d.name == card || slug(d.name) == card)?;
     let mut made = MADE
@@ -91,7 +104,7 @@ fn from_store(card: &str) -> Option<&'static Spec> {
     if let Some(&spec) = made.iter().find(|s| s.card == def.name) {
         return Some(spec);
     }
-    let spec: &'static Spec = Box::leak(Box::new(Spec::new(def)));
+    let spec: &'static Spec = Box::leak(Box::new(Spec::new(catalog, def)));
     made.push(spec);
     Some(spec)
 }
@@ -102,20 +115,26 @@ fn from_store(card: &str) -> Option<&'static Spec> {
 pub(crate) fn fresh(cards: &[&str]) -> Vec<Spec> {
     cards
         .iter()
-        .map(|&card| Spec::new(CARDS.cards().iter().find(|d| d.name == card).unwrap()))
+        .map(|&card| {
+            let cards = crate::catalog::TEST.cards.cards();
+            Spec::new(
+                &crate::catalog::TEST,
+                cards.iter().find(|d| d.name == card).unwrap(),
+            )
+        })
         .collect()
 }
 
 /// The specs `cards` name (by name or slug; every one if none), each generated, failing on an
 /// unknown card. Generating every card is a sweep someone asked for (`specs-check` with no
 /// card), so it runs on a pool the size of the machine, not a thread per card.
-fn chosen(cards: &[String]) -> Result<Vec<&'static Spec>, String> {
+fn chosen(catalog: &'static Catalog, cards: &[String]) -> Result<Vec<&'static Spec>, String> {
     let chosen: Vec<&'static Spec> = if cards.is_empty() {
-        self::cards().iter().collect()
+        self::cards(catalog).iter().collect()
     } else {
         cards
             .iter()
-            .map(|c| spec(c).ok_or_else(|| format!("no card {c:?}")))
+            .map(|c| spec(catalog, c).ok_or_else(|| format!("no card {c:?}")))
             .collect::<Result<_, _>>()?
     };
     generate(&chosen);
@@ -141,13 +160,12 @@ pub fn generate(specs: &[&Spec]) {
 
 /// A card's own scenarios, or the rules library's and the generated scenarios
 /// if it has none. Build and cache the fallback one card at a time.
-fn scenarios(def: &'static CardDef) -> &'static [Scenario] {
+fn scenarios(catalog: &'static Catalog, def: &'static CardDef) -> &'static [Scenario] {
     static MADE: std::sync::Mutex<Vec<(&'static str, &'static [Scenario])>> =
         std::sync::Mutex::new(Vec::new());
     let card = def.name;
-    if let Some((_, written)) = beryl_cards::scenarios()
-        .iter()
-        .find(|(name, written)| *name == card && !written.is_empty())
+    if let Some((_, written)) =
+        ((catalog.scenarios)().iter()).find(|(name, written)| *name == card && !written.is_empty())
     {
         return written;
     }
@@ -157,11 +175,11 @@ fn scenarios(def: &'static CardDef) -> &'static [Scenario] {
     if let Some(&(_, scenarios)) = made.iter().find(|(name, _)| *name == card) {
         return scenarios;
     }
-    let mut all: Vec<Scenario> = beryl_cards::library::by_card()
+    let mut all: Vec<Scenario> = ((catalog.library_scenarios)().into_iter())
         .filter(|&(name, _)| name == card)
         .flat_map(|(_, scenarios)| scenarios.iter().copied())
         .collect();
-    all.extend(beryl_cards::derive::for_card(def).scenarios);
+    all.extend((catalog.derived_scenarios)(def));
     let scenarios: &'static [Scenario] = all.leak();
     made.push((def.name, scenarios));
     scenarios
@@ -172,6 +190,8 @@ pub struct Spec {
     pub card: &'static str,
     /// Its name in the page's URL ([`slug`]).
     pub slug: String,
+    /// The cards its games are played with.
+    catalog: &'static Catalog,
     def: &'static CardDef,
     generated: OnceLock<auto::Generated>,
     checkpoints: OnceLock<auto::ReviewSet>,
@@ -179,10 +199,11 @@ pub struct Spec {
 }
 
 impl Spec {
-    fn new(def: &'static CardDef) -> Spec {
+    fn new(catalog: &'static Catalog, def: &'static CardDef) -> Spec {
         Spec {
             card: def.name,
             slug: slug(def.name),
+            catalog,
             def,
             generated: OnceLock::new(),
             checkpoints: OnceLock::new(),
@@ -207,18 +228,20 @@ impl Spec {
     }
 
     fn generated(&self) -> &auto::Generated {
-        self.generated
-            .get_or_init(|| auto::generate(self.def, scenarios(self.def)))
+        self.generated.get_or_init(|| {
+            auto::generate(self.catalog, self.def, scenarios(self.catalog, self.def))
+        })
     }
 
     fn playground(&self) -> &playground::Playground {
         self.playground
-            .get_or_init(|| playground::generate(self.card))
+            .get_or_init(|| playground::generate(self.catalog, self.card))
     }
 
     pub fn checkpoints(&self) -> &auto::ReviewSet {
-        self.checkpoints
-            .get_or_init(|| auto::checkpoints(self.def, scenarios(self.def)))
+        self.checkpoints.get_or_init(|| {
+            auto::checkpoints(self.catalog, self.def, scenarios(self.catalog, self.def))
+        })
     }
 
     /// The original replay, if it shows this card being cast from hand.
@@ -332,16 +355,20 @@ pub fn slug(card: &str) -> String {
 }
 
 /// The spec for the card `slug` names, and its moment `name`.
-pub fn find(slug: &str, name: &str) -> Option<(&'static Spec, &'static Moment)> {
-    let spec = spec(slug)?;
+pub fn find(
+    catalog: &'static Catalog,
+    slug: &str,
+    name: &str,
+) -> Option<(&'static Spec, &'static Moment)> {
+    let spec = spec(catalog, slug)?;
     Some((spec, spec.moments().iter().find(|m| m.name == name)?))
 }
 
 /// Lists every moment of the specs for `cards` (by name or slug; all of them if none), each
 /// generated by playing it headless from both seats to its first live decision, then the
 /// candidates generation could not play, with why. Fails on an unknown card.
-pub fn check_all(cards: &[String]) -> Result<(), String> {
-    let chosen = chosen(cards)?;
+pub fn check_all(catalog: &'static Catalog, cards: &[String]) -> Result<(), String> {
+    let chosen = chosen(catalog, cards)?;
     let mut moments = 0;
     for spec in &chosen {
         for m in spec.moments() {
@@ -364,7 +391,7 @@ pub fn check_all(cards: &[String]) -> Result<(), String> {
 /// otherwise a fixed 64 chosen by a stable hash of the name, so a failure reproduces. The full
 /// sweep is `beryl_cli specs-check` with no card, which runs nightly (`by nightly`).
 #[cfg(test)]
-fn sample() -> Vec<&'static Spec> {
+fn sample(catalog: &'static Catalog) -> Vec<&'static Spec> {
     const SAMPLE: usize = 64;
     // FNV-1a: stable across runs and platforms, unlike std's hasher.
     let hash = |name: &str| {
@@ -372,7 +399,7 @@ fn sample() -> Vec<&'static Spec> {
             (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
         })
     };
-    let mut specs: Vec<&'static Spec> = cards().iter().collect();
+    let mut specs: Vec<&'static Spec> = cards(catalog).iter().collect();
     if specs.len() > SAMPLE {
         specs.sort_by_key(|s| (hash(s.card), s.card));
         specs.truncate(SAMPLE);
@@ -383,6 +410,7 @@ fn sample() -> Vec<&'static Spec> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::catalog::TEST;
     use beryl_session::Status;
 
     #[test]
@@ -393,25 +421,26 @@ mod tests {
 
     #[test]
     fn a_card_without_hand_written_scenarios_gets_playable_moments() {
-        let spec = spec(beryl_cards::names::HOLY_STRENGTH).unwrap();
+        let spec = spec(&TEST, beryl_card_names::names::HOLY_STRENGTH).unwrap();
         let moment = spec
             .moments()
             .iter()
             .find(|m| m.name.starts_with("generated-"))
             .expect("a moment from a generated scenario");
         for view in View::ALL {
-            assert!(reach(moment, view).is_ok(), "{view:?}");
+            assert!(reach(&TEST, moment, view).is_ok(), "{view:?}");
         }
     }
 
     #[test]
     fn review_shares_the_payment_choice_and_its_result() {
-        use beryl_cards::names::MANA_TITHE;
+        use beryl_card_names::names::MANA_TITHE;
         const ARTIFACT: &str = beryl_cards::props::ARTIFACT.card;
         use beryl_session::CandidateIndex;
         use beryl_session::protocol::{Candidate, ZoneName};
 
-        let def = CARDS
+        let def = TEST
+            .cards
             .cards()
             .iter()
             .copied()
@@ -421,7 +450,7 @@ mod tests {
             .iter()
             .find(|(n, _)| *n == MANA_TITHE)
             .unwrap();
-        let checkpoints = auto::checkpoints(def, scenarios).examples;
+        let checkpoints = auto::checkpoints(&TEST, def, scenarios).examples;
         assert_eq!(checkpoints.len(), 3);
         let payment = checkpoints
             .iter()
@@ -433,7 +462,7 @@ mod tests {
             (Candidate::No, ZoneName::Graveyard),
         ] {
             let (send, receive) = std::sync::mpsc::channel();
-            let sessions = start_review(&payment.moment, move |updates, live| {
+            let sessions = start_review(&TEST, &payment.moment, move |updates, live| {
                 if at_checkpoint(&updates, live) {
                     let _ = send.send(updates);
                 }
@@ -479,11 +508,12 @@ mod tests {
 
     #[test]
     fn counter_review_starts_before_the_target_spell_is_cast() {
-        use beryl_cards::names::MANA_TITHE;
+        use beryl_card_names::names::MANA_TITHE;
         const ARTIFACT: &str = beryl_cards::props::ARTIFACT.card;
         use beryl_session::protocol::ZoneName;
 
-        let def = CARDS
+        let def = TEST
+            .cards
             .cards()
             .iter()
             .copied()
@@ -493,7 +523,7 @@ mod tests {
             .iter()
             .find(|(n, _)| *n == MANA_TITHE)
             .unwrap();
-        let checkpoints = auto::checkpoints(def, scenarios).examples;
+        let checkpoints = auto::checkpoints(&TEST, def, scenarios).examples;
         let counter = checkpoints
             .iter()
             .find(|c| !c.review_casts.is_empty())
@@ -502,7 +532,7 @@ mod tests {
 
         let (send, receive) = std::sync::mpsc::channel();
         let casts = std::sync::Mutex::new(counter.review_casts);
-        let sessions = start_review(&counter.moment, move |updates, live| {
+        let sessions = start_review(&TEST, &counter.moment, move |updates, live| {
             if live {
                 let steps = serve::recorded_cast_moves(&mut casts.lock().unwrap(), &updates);
                 if at_checkpoint(&updates, live) {
@@ -547,7 +577,7 @@ mod tests {
     /// waited, and the decision it fit no candidate of, not just that the game ended.
     #[test]
     fn a_stalled_script_names_the_decision_it_missed() {
-        use beryl_cards::names::{COUNTERSPELL, ISLAND};
+        use beryl_card_names::names::{COUNTERSPELL, ISLAND};
         use beryl_scenario::{P0, Permanent};
         static MOMENT: Moment = Moment::new(
             "stalled",
@@ -560,7 +590,7 @@ mod tests {
                 .at(2, beryl_scenario::P1, beryl_engine::TurnStep::PrecombatMain),
         )
         .play(&[Action::cast(P0, COUNTERSPELL)]);
-        let error = reach(&MOMENT, View::Yours)
+        let error = reach(&TEST, &MOMENT, View::Yours)
             .expect_err("Counterspell has no target")
             .to_string();
         assert!(error.contains("Counterspell"), "{error}");
@@ -570,8 +600,8 @@ mod tests {
     /// Asking for one card's spec generates that card and no other.
     #[test]
     fn a_spec_generates_only_its_card() {
-        use beryl_cards::names::COUNTERSPELL;
-        let library = Library::new();
+        use beryl_card_names::names::COUNTERSPELL;
+        let library = Library::new(&TEST);
         let spec = library
             .find(&slug(COUNTERSPELL))
             .expect("Counterspell has a spec");
@@ -593,8 +623,8 @@ mod tests {
     #[test]
     fn a_spell_that_asks_a_stand_in_stays_on_the_watched_stack() {
         use beryl_session::protocol::{StackItem, ZoneName};
-        let (_, moment) = find("mana-tithe", "the-controller-pays-1").expect("the moment");
-        let (_, views) = describe::trace(moment, View::Yours).expect("the moment plays");
+        let (_, moment) = find(&TEST, "mana-tithe", "the-controller-pays-1").expect("the moment");
+        let (_, views) = describe::trace(&TEST, moment, View::Yours).expect("the moment plays");
         let mut watched = 0;
         for view in &views {
             if matches!(view.status, Status::Deciding { .. }) {
@@ -619,7 +649,7 @@ mod tests {
 
     #[test]
     fn moments_are_named_uniquely() {
-        let specs = sample();
+        let specs = sample(&TEST);
         generate(&specs);
         for spec in specs {
             let moments = spec.moments();

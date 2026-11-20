@@ -619,5 +619,10 @@
     "label": "A seed clones each of a donor tree's Cargo profile directories in one `clonefile` call (7 s for 72,000 files under load, against 134-680 s file by file), passes over a donor that is building for the next one, and starts again after a daemon restart, so a leased tree whose build the disk loop deleted no longer compiles about 320 crates from nothing on its first `ignite test`",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "`beryl_cli`'s library takes the cards as a `Catalog` from its binary, now the package `beryl_cli_main`, and Beryl 3D's recorder, so a card file edit relinks those binaries and recompiles none of the library's 20,000 lines, here or in Beryl 3D's build",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

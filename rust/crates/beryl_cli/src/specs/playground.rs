@@ -5,7 +5,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
-use beryl_cards::CARDS;
 use beryl_engine::Seat;
 use beryl_engine::card::{AbilityKind, CardDef, TargetKind, Types, Words};
 use beryl_engine::filter::Evaluate;
@@ -15,6 +14,7 @@ use beryl_session::{GameUpdate, Prepared, Sessions, StopsSetting};
 use serde_json::{Value, json};
 
 use super::{Moment, Phase, View, auto, slug};
+use crate::Catalog;
 use crate::boards::{self, Scripted, Shared};
 
 #[cfg(test)]
@@ -56,16 +56,17 @@ fn actor(action: &Action) -> Option<Seat> {
 
 /// Existing scenario setups are reusable data, not card-name branches in the viewer.
 /// Each distinct variant has its own pair of full-width boards on the scrolling page.
-pub fn generate(card: &'static str) -> Playground {
-    let def = CARDS
+pub fn generate(catalog: &'static Catalog, card: &'static str) -> Playground {
+    let def = catalog
+        .cards
         .cards()
         .iter()
         .copied()
         .find(|d| d.name == card)
         .expect("card definition");
-    let scenarios = super::scenarios(def);
+    let scenarios = super::scenarios(catalog, def);
     let mut groups: BTreeMap<String, Vec<Variant>> = BTreeMap::new();
-    add_scenarios(def, scenarios, &mut groups);
+    add_scenarios(catalog, def, scenarios, &mut groups);
     // Definitions supply ability setups even when the scenario suite has no activation.
     for moment in auto::playground_probes(def) {
         let title = moment.title.to_owned();
@@ -83,7 +84,7 @@ pub fn generate(card: &'static str) -> Playground {
         variants.sort_by_key(|v| std::cmp::Reverse(v.quality));
         let mut seen = BTreeSet::new();
         variants.retain(|variant| {
-            interaction_signature(variant).is_none_or(|signature| seen.insert(signature))
+            interaction_signature(catalog, variant).is_none_or(|signature| seen.insert(signature))
         });
     }
     let mut examples = Vec::new();
@@ -110,7 +111,7 @@ pub fn generate(card: &'static str) -> Playground {
                 Seat::P0,
                 leak([board.setup.players[0].hand, &[card]].concat()),
             );
-            board = auto::fund_cast(def, board);
+            board = auto::fund_cast(catalog, def, board);
             let action = if def.front().types.intersects(Types::LAND) {
                 Action::PlayLand {
                     player: Seat::P0,
@@ -135,7 +136,7 @@ pub fn generate(card: &'static str) -> Playground {
         }
     }
     if let Some(first) = examples.first_mut() {
-        fold_loyalty_abilities(def, first, &mut groups);
+        fold_loyalty_abilities(catalog, def, first, &mut groups);
     }
     examples.extend(
         groups
@@ -148,6 +149,7 @@ pub fn generate(card: &'static str) -> Playground {
 /// Ordinary loyalty activations can be reviewed on the cast board itself. Only a setup
 /// requiring extra loyalty, or exposing a different branch, needs another pair of boards.
 fn fold_loyalty_abilities(
+    catalog: &'static Catalog,
     def: &CardDef,
     first: &mut Example,
     groups: &mut BTreeMap<String, Vec<Variant>>,
@@ -196,7 +198,7 @@ fn fold_loyalty_abilities(
             quality: 0,
             contexts: Vec::new(),
         };
-        if interaction_signature(&candidate).is_none() {
+        if interaction_signature(catalog, &candidate).is_none() {
             return true;
         }
         first.variants.push(candidate);
@@ -206,9 +208,9 @@ fn fold_loyalty_abilities(
 
 /// Collapse examples only when their observed UI events and choices agree. In particular,
 /// identical cast actions are not enough: conditional triggers can produce different UI.
-fn interaction_signature(variant: &Variant) -> Option<String> {
+fn interaction_signature(catalog: &'static Catalog, variant: &Variant) -> Option<String> {
     let (tx, rx) = std::sync::mpsc::channel();
-    let session = super::start_review(&variant.moment, move |updates, live| {
+    let session = super::start_review(catalog, &variant.moment, move |updates, live| {
         let _ = tx.send((updates, live));
     })
     .ok()?;
@@ -325,13 +327,14 @@ fn strip_slots(value: &mut Value) {
 }
 
 fn add_scenarios(
+    catalog: &'static Catalog,
     def: &'static CardDef,
     scenarios: &[Scenario],
     groups: &mut BTreeMap<String, Vec<Variant>>,
 ) {
     let card = def.name;
     for scenario in scenarios {
-        let (actions, contexts, ordinals) = opponent::plan(scenario);
+        let (actions, contexts, ordinals) = opponent::plan(catalog, scenario);
         let mut points: Vec<_> = actions
             .iter()
             .enumerate()
@@ -373,8 +376,13 @@ fn add_scenarios(
             let mut moment = Moment::new(
                 name,
                 auto::heading(def, scenario),
-                choice_rich(def, auto::with_libraries(scenario), View::ALL[controller])
-                    .actions(leak(actions[..i].to_vec())),
+                choice_rich(
+                    catalog,
+                    def,
+                    auto::with_libraries(scenario),
+                    View::ALL[controller],
+                )
+                .actions(leak(actions[..i].to_vec())),
             )
             .play(leak(actions[i..].to_vec()));
             moment.group = auto::heading(def, scenario);
@@ -395,9 +403,11 @@ fn add_scenarios(
 }
 
 fn target_position(
+    catalog: &'static Catalog,
     board: &Scenario,
 ) -> Result<(beryl_engine::GameTable, beryl_engine::State), String> {
-    let (table, mut state) = beryl_scenario::position(&CARDS, board).map_err(|e| e.to_string())?;
+    let (table, mut state) =
+        beryl_scenario::position(catalog.cards, board).map_err(|e| e.to_string())?;
     state.set_profile(beryl_engine::Profile {
         stops: beryl_engine::Stops::Forced,
         ..state.profile()
@@ -411,10 +421,11 @@ fn target_position(
     Ok((table, state))
 }
 
-fn support_cards() -> &'static [&'static CardDef] {
+fn support_cards(catalog: &'static Catalog) -> &'static [&'static CardDef] {
     static SUPPORTS: std::sync::OnceLock<Vec<&'static CardDef>> = std::sync::OnceLock::new();
     SUPPORTS.get_or_init(|| {
-        let mut supports: Vec<_> = CARDS
+        let mut supports: Vec<_> = catalog
+            .cards
             .cards()
             .iter()
             .copied()
@@ -438,8 +449,13 @@ fn support_cards() -> &'static [&'static CardDef] {
 
 /// Populate actual target filters, rather than a card-name list of special cases. Extra
 /// targets belong only to Playground; the exact scenario viewer remains unchanged.
-fn choice_rich(def: &CardDef, mut board: Scenario, controller: View) -> Scenario {
-    let supports = support_cards();
+fn choice_rich(
+    catalog: &'static Catalog,
+    def: &CardDef,
+    mut board: Scenario,
+    controller: View,
+) -> Scenario {
+    let supports = support_cards(catalog);
     for target in def
         .faces
         .iter()
@@ -454,7 +470,7 @@ fn choice_rich(def: &CardDef, mut board: Scenario, controller: View) -> Scenario
             )
         })
     {
-        let Ok((table, state)) = target_position(&board) else {
+        let Ok((table, state)) = target_position(catalog, &board) else {
             continue;
         };
         let eligible: Vec<_> = state
@@ -497,7 +513,7 @@ fn choice_rich(def: &CardDef, mut board: Scenario, controller: View) -> Scenario
                     .collect();
                 permanents.push(Permanent::new(support.name));
                 let candidate = board.replace_permanents(owner, leak(permanents));
-                let Ok((table, state)) = target_position(&candidate) else {
+                let Ok((table, state)) = target_position(catalog, &candidate) else {
                     continue;
                 };
                 if state.battlefield().iter().any(|&slot| {
@@ -539,11 +555,11 @@ pub fn listing(playground: &Playground) -> Value {
     })).collect::<Vec<_>>(), "missing": playground.missing })
 }
 
-pub fn find(card: &str, name: &str) -> Option<&'static Variant> {
+pub fn find(catalog: &'static Catalog, card: &str, name: &str) -> Option<&'static Variant> {
     if !name.starts_with("playground-") {
         return None;
     }
-    super::spec(card)?
+    super::spec(catalog, card)?
         .playground()
         .examples
         .iter()
@@ -554,14 +570,17 @@ pub fn find(card: &str, name: &str) -> Option<&'static Variant> {
 /// Finish setup before creating either visible game. A cast in the setup is not finished
 /// merely because its first action was taken: its targets, payment and resolution may still
 /// be pending. Stop only when the intended interaction is actually offered.
-fn prepare(variant: &Variant) -> Result<(beryl_engine::GameTable, beryl_engine::State), String> {
+fn prepare(
+    catalog: &'static Catalog,
+    variant: &Variant,
+) -> Result<(beryl_engine::GameTable, beryl_engine::State), String> {
     let moment = &variant.moment;
     let progress = Shared::default();
     if let Some(Action::AdvanceTo { turn, .. }) = moment.board.actions.last() {
         boards::lock(&progress).until = Some(*turn);
     }
     let (table, mut state) =
-        beryl_scenario::position(&CARDS, &moment.board).map_err(|e| e.to_string())?;
+        beryl_scenario::position(catalog.cards, &moment.board).map_err(|e| e.to_string())?;
     state.set_profile(beryl_engine::Profile {
         stops: beryl_engine::Stops::Forced,
         ..state.profile()
@@ -614,14 +633,15 @@ fn prepare(variant: &Variant) -> Result<(beryl_engine::GameTable, beryl_engine::
 }
 
 pub fn start(
+    catalog: &'static Catalog,
     variant: &'static Variant,
     view: View,
     emit: impl Fn(GameUpdate, Phase) + Send + Sync + 'static,
 ) -> Result<Sessions, String> {
-    let (table, state) = prepare(variant)?;
+    let (table, state) = prepare(catalog, variant)?;
     let opponent = opponent::Opponent::new(variant, view.other(), &table)?;
     let stand_in = Scripted::with_actions(&[], view.seat(), &table, Shared::default())?;
-    let sessions = Sessions::new(&beryl_cards::CARDS, None, move |update| {
+    let sessions = Sessions::new(catalog.cards, None, move |update| {
         emit(update, Phase::Live);
     });
     sessions
@@ -640,154 +660,4 @@ pub fn start(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use beryl_session::protocol::{Candidate, Side, Status, ZoneName};
-    use std::sync::mpsc::channel;
-    use std::time::Duration;
-
-    fn first_decision(variant: &'static Variant, view: View) -> beryl_session::PlayerView {
-        let (tx, rx) = channel();
-        let _session = start(variant, view, move |u, phase| {
-            let _ = tx.send((u, phase));
-        })
-        .unwrap();
-        loop {
-            let (update, phase) = rx
-                .recv_timeout(Duration::from_secs(3))
-                .expect("playground stalled");
-            if phase == Phase::Live
-                && matches!(
-                    update.view.status,
-                    Status::Deciding { .. } | Status::Over { .. }
-                )
-            {
-                return update.view;
-            }
-        }
-    }
-
-    #[test]
-    fn empty_library_manifest_example_has_no_filler() {
-        let variant = find(
-            "abhorrent-oculus",
-            "playground-manifest-dread-with-an-empty-library-does-nothing-0",
-        )
-        .expect("the empty-library variant");
-        let (_, state) = prepare(variant).unwrap();
-        assert!(state.library(variant.controller.seat()).is_empty());
-    }
-
-    #[test]
-    fn one_card_manifest_example_has_no_filler_to_choose_or_mill() {
-        let generated = Box::leak(Box::new(generate("Abhorrent Oculus")));
-        let variant = generated
-            .examples
-            .iter()
-            .flat_map(|e| &e.variants)
-            .find(|v| v.label == "Manifest dread with one card in the library manifests it")
-            .expect("the one-card variant");
-        let (table, state) = prepare(variant).unwrap();
-        let library = state.library(variant.controller.seat());
-        assert_eq!(library.len(), 1);
-        assert_eq!(state.name(&table, library[0]), "Island");
-    }
-
-    #[test]
-    fn first_example_offers_the_card_in_hand() {
-        for spec in super::super::sample() {
-            let card = spec.card;
-            let generated = Box::leak(Box::new(generate(card)));
-            assert!(
-                generated.missing.is_empty(),
-                "{card}: {:?}",
-                generated.missing
-            );
-            let first = &generated.examples[0];
-            assert_eq!(first.title, "Play from hand", "{card}");
-            let variant = &first.variants[0];
-            let view = first_decision(variant, variant.controller);
-            let card = view
-                .objects
-                .iter()
-                .find(|o| {
-                    o.name.as_deref() == Some(card)
-                        && o.zone == ZoneName::Hand
-                        && o.controller == Side::You
-                })
-                .expect(card);
-            let Status::Deciding { decision } = &view.status else {
-                panic!("game ended")
-            };
-            assert!(decision.candidates.iter().any(|c| matches!(c.option, Candidate::Cast { slot, .. } | Candidate::PlayLand { slot } if slot == card.slot)), "card is not playable: {:?}", decision.candidates);
-        }
-    }
-
-    #[test]
-    fn every_prepared_example_reaches_its_interaction() {
-        let mut failures = Vec::new();
-        for spec in super::super::sample() {
-            for example in &spec.playground().examples {
-                for variant in &example.variants {
-                    match prepare(variant) {
-                        Err(error) => {
-                            failures.push(format!("{} / {}: {error}", spec.card, variant.label));
-                        }
-                        Ok((table, state)) => {
-                            // A generic nonland target filler once put Counterspell on the battlefield.
-                            for &slot in state.battlefield() {
-                                assert!(
-                                    !state
-                                        .derived(slot)
-                                        .types
-                                        .intersects(Types::INSTANT.union(Types::SORCERY)),
-                                    "{} / {}: {} is not a permanent",
-                                    spec.card,
-                                    variant.label,
-                                    state.name(&table, slot)
-                                );
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        assert!(failures.is_empty(), "{}", failures.join("\n"));
-    }
-
-    #[test]
-    fn opponent_play_leaves_the_viewers_search_interactive() {
-        let generated = Box::leak(Box::new(generate("Winds of Abandon")));
-        let variant = &generated.examples[0].variants[0];
-        let view = View::ALL[1 - variant.controller.seat().index()];
-        let (tx, rx) = channel();
-        let session = start(variant, view, move |u, _| {
-            let _ = tx.send(u);
-        })
-        .unwrap();
-        for _ in 0..50 {
-            let update = rx
-                .recv_timeout(Duration::from_secs(3))
-                .expect("search never reached");
-            let Status::Deciding { decision } = update.view.status else {
-                continue;
-            };
-            if decision.prompt.is(beryl_engine::card::Purpose::Search) {
-                assert!(decision.candidates.len() > 1, "search needs a real choice");
-                return;
-            }
-            let pass = decision
-                .candidates
-                .iter()
-                .position(|c| matches!(c.option, Candidate::Pass))
-                .expect("unexpected prompt before search");
-            session
-                .choose(
-                    decision.id,
-                    beryl_session::protocol::CandidateIndex(u16::try_from(pass).unwrap()),
-                )
-                .unwrap();
-        }
-        panic!("search never offered");
-    }
-}
+mod tests;

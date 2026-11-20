@@ -7,6 +7,7 @@ use std::path::Path;
 use beryl_search::DEEP_SEARCHER;
 use beryl_session::corpus::today;
 
+use crate::Catalog;
 use crate::blunders::{self, BUDGETS, Entry, EntryReport, Report};
 use crate::ladder::{dropped_row, resolve};
 use crate::match_log::{cache, files};
@@ -17,7 +18,7 @@ const USAGE: &str = "usage: beryl_cli gate <challenger family> --claims NAME,...
 const SEEDS: u32 = 10;
 const RUNS: usize = BUDGETS.len() * SEEDS as usize;
 
-pub fn main(args: &[String]) -> Result<(), String> {
+pub fn main(catalog: &'static Catalog, args: &[String]) -> Result<(), String> {
     let mut challenger = None;
     let mut champion = None;
     let mut claims = None;
@@ -50,8 +51,8 @@ pub fn main(args: &[String]) -> Result<(), String> {
     fs::create_dir_all(&out).map_err(|e| format!("{}: {e}", out.display()))?;
     let _lock = files::lock(&out)?;
 
-    let champion = suite(&entries, &champion, "champion")?;
-    let challenger = suite(&entries, &challenger, "challenger")?;
+    let champion = suite(catalog, &entries, &champion, "champion")?;
+    let challenger = suite(catalog, &entries, &challenger, "challenger")?;
     save(&out.join("champion.json"), &champion)?;
     save(&out.join("challenger.json"), &challenger)?;
     println!("Reports saved to {}", out.display());
@@ -106,9 +107,14 @@ fn check_drift(champion: &Report, challenger: &Report) -> Result<(), String> {
     ))
 }
 
-fn suite(entries: &[Entry], family: &str, role: &str) -> Result<Report, String> {
+fn suite(
+    catalog: &'static Catalog,
+    entries: &[Entry],
+    family: &str,
+    role: &str,
+) -> Result<Report, String> {
     eprintln!("{role}: {family}");
-    blunders::run(entries, family, &BUDGETS, SEEDS, 1, |line| {
+    blunders::run(catalog, entries, family, &BUDGETS, SEEDS, 1, |line| {
         eprintln!("{role}: {line}");
     })
 }

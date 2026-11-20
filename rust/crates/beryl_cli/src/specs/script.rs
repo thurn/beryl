@@ -6,13 +6,18 @@ use std::fmt::Write as _;
 
 use super::describe::{Unreached, events_line, trace, turn_line};
 use super::{Moment, View, chosen};
+use crate::Catalog;
 
 /// `moment`'s scripts from `view`'s seat as text: each view shown once the setup was done,
 /// played to the viewer's first live decision as `specs-describe` plays it, headed by its
 /// number, turn and events, then its script one step a line (`beryl_session::script`'s text
 /// form). The first view is shown at once: the stage plays nothing for it.
-pub fn text(moment: &'static Moment, view: View) -> Result<String, Unreached> {
-    let (_, shown) = trace(moment, view)?;
+pub fn text(
+    catalog: &'static Catalog,
+    moment: &'static Moment,
+    view: View,
+) -> Result<String, Unreached> {
+    let (_, shown) = trace(catalog, moment, view)?;
     let mut text = String::new();
     for (n, v) in shown.iter().enumerate() {
         let head = events_line(v).unwrap_or_else(|| format!("{}: no events", turn_line(v)));
@@ -33,9 +38,13 @@ pub fn text(moment: &'static Moment, view: View) -> Result<String, Unreached> {
 
 /// Prints the scripts of each moment of the specs for `cards` (by name or slug; all of them if
 /// none), or of the one `moment` names, from each seat ([`text`]).
-pub fn scripts(cards: &[String], moment: Option<&str>) -> Result<(), String> {
+pub fn scripts(
+    catalog: &'static Catalog,
+    cards: &[String],
+    moment: Option<&str>,
+) -> Result<(), String> {
     let mut found = false;
-    for spec in chosen(cards)? {
+    for spec in chosen(catalog, cards)? {
         for m in spec
             .moments()
             .iter()
@@ -45,7 +54,7 @@ pub fn scripts(cards: &[String], moment: Option<&str>) -> Result<(), String> {
             println!("== {} / {}  \"{}\"", spec.slug, m.name, m.title);
             for view in View::ALL {
                 println!("{}:", view.name());
-                print!("{}", text(m, view)?);
+                print!("{}", text(catalog, m, view)?);
             }
             println!();
         }
@@ -63,14 +72,15 @@ pub fn scripts(cards: &[String], moment: Option<&str>) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::catalog::TEST;
 
     /// Counterspell's first moment, from both seats: every view is numbered, the first shown
     /// at once, and the spell's flight to the stack is a step in each seat's script.
     #[test]
     fn a_moment_prints_each_seats_scripts_view_by_view() {
-        let moment = &chosen(&["Counterspell".to_owned()]).unwrap()[0].moments()[0];
+        let moment = &chosen(&TEST, &["Counterspell".to_owned()]).unwrap()[0].moments()[0];
         for view in View::ALL {
-            let text = text(moment, view).unwrap();
+            let text = text(&TEST, moment, view).unwrap();
             assert!(text.starts_with("-- view 1 (shown at once)"), "{text}");
             assert!(text.contains("\n-- view 2 "), "{text}");
             assert!(

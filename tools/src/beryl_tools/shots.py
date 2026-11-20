@@ -391,7 +391,7 @@ def ui_live(args: argparse.Namespace) -> int:
         / time.strftime("%Y%m%d-%H%M%S")
     )
     out.mkdir(parents=True)
-    release = ["cargo", "build", "--quiet", "--package", "beryl_cli", "--release"]
+    release = ["cargo", "build", "--quiet", "--package", "beryl_cli_main", "--release"]
     built = subprocess.run(
         release if args.release else paths.CLI_BUILD,
         cwd=paths.RUST,

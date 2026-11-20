@@ -32,6 +32,7 @@ use beryl_search::{ANCHOR_ERRORS, Family, LongSearch, PAIRED_ERRORS, Settings, g
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
+use crate::Catalog;
 use crate::game::{mirror, parse_work};
 use crate::match_log::AnchorRecord;
 use crate::positions::{self, Position};
@@ -189,7 +190,7 @@ struct Differs {
     line: String,
 }
 
-pub fn main(args: &[String]) -> Result<(), String> {
+pub fn main(catalog: &'static Catalog, args: &[String]) -> Result<(), String> {
     let usage = || {
         "usage: beryl_cli anchor-replay <run-dir> <entrant> [--examples N] [--recheck N] \
          [--guarded]"
@@ -211,12 +212,20 @@ pub fn main(args: &[String]) -> Result<(), String> {
     }
     print!(
         "{}",
-        replay(Path::new(dir), entrant, examples, recheck, only_guarded)?
+        replay(
+            catalog,
+            Path::new(dir),
+            entrant,
+            examples,
+            recheck,
+            only_guarded
+        )?
     );
     Ok(())
 }
 
 fn replay(
+    catalog: &'static Catalog,
     dir: &Path,
     entrant: &str,
     examples: usize,
@@ -227,57 +236,62 @@ fn replay(
     let (family, budget) = entrant.split_once('@').ok_or_else(bad)?;
     let family: Family = family.parse()?;
     let work = parse_work(budget).ok_or_else(bad)?;
-    let t = mirror();
+    let t = mirror(catalog);
     let policy = family.rollout_policy(&t);
     let mut searched = 0u32;
     let mut differs = Vec::new();
-    let played = walk(dir, entrant, |game, s, d, choice, search, names| {
-        searched += 1;
-        let mut x = Scratch::new();
-        let obs = observe(s, &t, &mut x, d.decider);
-        let greedy = policy.choose(&t, obs, d);
-        let counted =
-            !only_guarded || guarded(&t, &policy, obs, d, greedy, Choice(choice), family.options);
-        if greedy.0 != choice && counted {
-            let mean = |c: u16| {
-                let v = f64::from(search.visits[usize::from(c)]);
-                (v > 0.0).then(|| (search.rewards[usize::from(c)] / v, v))
-            };
-            let pair = search.anchor.filter(|a| {
-                a.pairs.is_some_and(|n| n >= 2) && a.search == choice && a.greedy == greedy.0
-            });
-            let lead = if let Some(pair) = pair {
-                Some((pair.lead, PAIRED_ERRORS * pair.error))
-            } else {
-                mean(choice)
-                    .zip(mean(greedy.0))
-                    .map(|((mc, vc), (mg, vg))| {
-                        let var = |m: f64, v: f64| m * (1.0 - m) / v;
-                        (mc - mg, ANCHOR_ERRORS * (var(mc, vc) + var(mg, vg)).sqrt())
-                    })
-            };
-            let mut transcript = Transcript::new(names);
-            transcript.decision(&t, s, d, Choice(choice), &[]);
-            let shown = transcript.text().lines().last().unwrap_or_default().trim();
-            let label =
-                |c: u16| mean(c).map_or("unvisited".to_owned(), |(m, v)| format!("{v} {m:.3}"));
-            differs.push(Differs {
-                game: game.to_owned(),
-                state: *s,
-                decision: *d,
-                search: Choice(choice),
-                greedy,
-                lead,
-                line: format!(
-                    "{:?}: {shown}  search [{choice}] {}  greedy [{}] {}",
-                    d.kind,
-                    label(choice),
-                    greedy.0,
-                    label(greedy.0)
-                ),
-            });
-        }
-    })?;
+    let played = walk(
+        catalog,
+        dir,
+        entrant,
+        |game, s, d, choice, search, names| {
+            searched += 1;
+            let mut x = Scratch::new();
+            let obs = observe(s, &t, &mut x, d.decider);
+            let greedy = policy.choose(&t, obs, d);
+            let counted = !only_guarded
+                || guarded(&t, &policy, obs, d, greedy, Choice(choice), family.options);
+            if greedy.0 != choice && counted {
+                let mean = |c: u16| {
+                    let v = f64::from(search.visits[usize::from(c)]);
+                    (v > 0.0).then(|| (search.rewards[usize::from(c)] / v, v))
+                };
+                let pair = search.anchor.filter(|a| {
+                    a.pairs.is_some_and(|n| n >= 2) && a.search == choice && a.greedy == greedy.0
+                });
+                let lead = if let Some(pair) = pair {
+                    Some((pair.lead, PAIRED_ERRORS * pair.error))
+                } else {
+                    mean(choice)
+                        .zip(mean(greedy.0))
+                        .map(|((mc, vc), (mg, vg))| {
+                            let var = |m: f64, v: f64| m * (1.0 - m) / v;
+                            (mc - mg, ANCHOR_ERRORS * (var(mc, vc) + var(mg, vg)).sqrt())
+                        })
+                };
+                let mut transcript = Transcript::new(names);
+                transcript.decision(&t, s, d, Choice(choice), &[]);
+                let shown = transcript.text().lines().last().unwrap_or_default().trim();
+                let label =
+                    |c: u16| mean(c).map_or("unvisited".to_owned(), |(m, v)| format!("{v} {m:.3}"));
+                differs.push(Differs {
+                    game: game.to_owned(),
+                    state: *s,
+                    decision: *d,
+                    search: Choice(choice),
+                    greedy,
+                    lead,
+                    line: format!(
+                        "{:?}: {shown}  search [{choice}] {}  greedy [{}] {}",
+                        d.kind,
+                        label(choice),
+                        greedy.0,
+                        label(greedy.0)
+                    ),
+                });
+            }
+        },
+    )?;
     let threads = std::thread::available_parallelism()
         .map_or(1, |n| u32::try_from(n.get()).unwrap_or(u32::MAX));
     let settings = Settings {
@@ -296,11 +310,12 @@ fn replay(
 /// the logged answer, the search's root visits and rewards, and the seats' names for a
 /// transcript. Returns the games walked; crashed ones are skipped.
 pub fn walk(
+    catalog: &'static Catalog,
     dir: &Path,
     entrant: &str,
     mut visit: impl FnMut(&str, &State, &Decision, u16, &Searched, [&str; 2]),
 ) -> Result<u32, String> {
-    let t = mirror();
+    let t = mirror(catalog);
     let mut played = 0;
     for g in games(dir)? {
         let Some(seat) = g.seat_of(entrant) else {

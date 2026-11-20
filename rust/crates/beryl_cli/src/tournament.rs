@@ -9,14 +9,14 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 
-use beryl_cards::CARDS;
-use beryl_cards::decks::{KEYSTONE_FAMILIES, fuzz_deck_from, keystone_family};
+use beryl_card_names::decks::KEYSTONE_FAMILIES;
 use beryl_engine::card::CardDef;
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{GameTable, Outcome, Seat, StallReason};
 use beryl_search::Budget;
 use serde::Serialize;
 
+use crate::Catalog;
 use crate::game::{Played, mirror, play};
 
 /// One pairing's results, from its first agent's side.
@@ -97,7 +97,9 @@ fn pairings(agents: &[String]) -> Vec<(usize, usize)> {
 /// games come in pairs on one seed, seats swapped. With `family`, each game deals two fuzz
 /// decks from that keystone family's cards ([`family_table`]) in place of the WU Control
 /// mirror. The first invariant violation fails it.
+#[allow(clippy::too_many_arguments)] // each is a separate flag of `beryl_cli tournament`
 pub fn run(
+    catalog: &'static Catalog,
     agents: &[String],
     games: u32,
     seed: u64,
@@ -106,13 +108,13 @@ pub fn run(
     paired: bool,
     family: Option<&str>,
 ) -> Result<Results, String> {
-    let cards = family.map(family_cards).transpose()?;
+    let cards = family.map(|name| family_cards(catalog, name)).transpose()?;
     // Games run in parallel, one thread each, so a search grows its trees one after another.
     let budget = Budget {
         parallel: false,
         ..budget
     };
-    let mirror = mirror();
+    let mirror = mirror(catalog);
     let pairs = pairings(agents);
     let jobs: Vec<(usize, u32)> = (0..pairs.len())
         .flat_map(|p| (0..games).map(move |g| (p, g)))
@@ -134,7 +136,9 @@ pub fn run(
                     };
                     let on = if paired { g / 2 } else { g };
                     let game = game_seed(seed, p, on);
-                    let dealt = cards.as_deref().map(|cards| family_table(cards, game));
+                    let dealt = cards
+                        .as_deref()
+                        .map(|cards| family_table(catalog, cards, game));
                     let t = dealt.as_ref().unwrap_or(&mirror);
                     match play(t, game, names, budget, check, None) {
                         Ok(played) => results.lock().unwrap().push((p, g, played)),
@@ -208,8 +212,8 @@ pub fn run(
 }
 
 /// The cards of the keystone family called `name`, which its games' decks are dealt from.
-fn family_cards(name: &str) -> Result<Vec<&'static CardDef>, String> {
-    keystone_family(name).ok_or_else(|| {
+fn family_cards(catalog: &'static Catalog, name: &str) -> Result<Vec<&'static CardDef>, String> {
+    (catalog.keystone_family)(name).ok_or_else(|| {
         let known: Vec<&str> = KEYSTONE_FAMILIES.iter().map(|(n, _)| *n).collect();
         format!(
             "no keystone family is named {name:?} (families: {})",
@@ -220,12 +224,13 @@ fn family_cards(name: &str) -> Result<Vec<&'static CardDef>, String> {
 
 /// The table of game `seed` in a family's tournament: two fuzz decks from `cards`, each
 /// player's drawn from its own seed.
-fn family_table(cards: &[&CardDef], seed: u64) -> GameTable {
+fn family_table(catalog: &'static Catalog, cards: &[&CardDef], seed: u64) -> GameTable {
     let decks = [
-        fuzz_deck_from(seed, cards),
-        fuzz_deck_from(seed.wrapping_add(1 << 32), cards),
+        (catalog.fuzz_deck_from)(seed, cards),
+        (catalog.fuzz_deck_from)(seed.wrapping_add(1 << 32), cards),
     ];
-    GameTable::new(&CARDS, [decks[0].as_slice(), decks[1].as_slice()]).expect("a fuzz deck's table")
+    GameTable::new(catalog.cards, [decks[0].as_slice(), decks[1].as_slice()])
+        .expect("a fuzz deck's table")
 }
 
 /// Each pairing's seeds, by `a`'s score over both seats in half points (4 swept, 0 swept by
@@ -329,6 +334,7 @@ pub fn table(r: &Results) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::catalog::TEST;
 
     #[test]
     fn wilson_intervals_match_known_values() {
@@ -363,7 +369,7 @@ mod tests {
     #[test]
     fn wins_go_to_the_agent_not_the_seat() {
         let agents = ["greedy".to_owned(), "random".to_owned()];
-        let r = run(&agents, 8, 3, Budget::DEFAULT, false, false, None).unwrap();
+        let r = run(&TEST, &agents, 8, 3, Budget::DEFAULT, false, false, None).unwrap();
         let p = &r.pairings[0];
         assert_eq!(
             (p.a.as_str(), p.b.as_str(), p.games),
@@ -384,12 +390,12 @@ mod tests {
     #[test]
     fn paired_games_share_a_seed_from_both_seats() {
         let agents = ["greedy".to_owned(), "random".to_owned()];
-        let r = run(&agents, 6, 5, Budget::DEFAULT, false, true, None).unwrap();
+        let r = run(&TEST, &agents, 6, 5, Budget::DEFAULT, false, true, None).unwrap();
         let q = r.pairings[0].paired.expect("paired seeds");
         assert_eq!(q.a_swept + q.split + q.b_swept, 3);
         assert!(q.a_swept >= 2, "{q:?}");
         assert!(r.pairings[0].paired.is_some());
-        let unpaired = run(&agents, 2, 5, Budget::DEFAULT, false, false, None).unwrap();
+        let unpaired = run(&TEST, &agents, 2, 5, Budget::DEFAULT, false, false, None).unwrap();
         assert!(unpaired.pairings[0].paired.is_none());
     }
 

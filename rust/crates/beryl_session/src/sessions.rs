@@ -91,6 +91,12 @@ impl Sessions {
         }
     }
 
+    /// The cards these sessions' games are played with.
+    #[must_use]
+    pub fn cards(&self) -> &'static CardTable {
+        self.cards
+    }
+
     /// Use these numbers for other sessions sending updates to the same receiver.
     pub fn session_ids(&self) -> SessionIds {
         self.ids.clone()

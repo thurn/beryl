@@ -12,6 +12,7 @@ use serde_json::{Value, json};
 
 use super::super::{View, find};
 use super::{Instances, checkpoint, instance_key, lock};
+use crate::Catalog;
 use crate::serve::respond;
 
 /// Report writes can create local beads, and bundles contain private diagnostics.
@@ -61,7 +62,7 @@ pub(super) fn export(stream: &mut TcpStream) -> Result<(), String> {
 
 /// `POST /report`: a note from the spec page about the moment an instance plays, written as a
 /// bug report with what its game knows, if it still runs.
-pub(super) fn report(instances: &Instances, body: &[u8]) -> Value {
+pub(super) fn report(catalog: &'static Catalog, instances: &Instances, body: &[u8]) -> Value {
     let request: Value = serde_json::from_slice(body).unwrap_or(Value::Null);
     let (Some(key), Some(description)) = (request["key"].as_str(), request["description"].as_str())
     else {
@@ -76,9 +77,9 @@ pub(super) fn report(instances: &Instances, body: &[u8]) -> Value {
     else {
         return json!({ "err": { "kind": "badRequest", "message": format!("no moment in {key}") } });
     };
-    if (find(card, moment).is_none()
-        && checkpoint(card, moment).is_none()
-        && super::super::playground::find(card, moment).is_none())
+    if (find(catalog, card, moment).is_none()
+        && checkpoint(catalog, card, moment).is_none()
+        && super::super::playground::find(catalog, card, moment).is_none())
         || View::parse(view).is_none()
     {
         return json!({ "err": { "kind": "spec", "message": format!("no moment {key}") } });

@@ -3,12 +3,12 @@
 
 use std::sync::Arc;
 
-use beryl_cards::CARDS;
 use beryl_scenario::Action;
 use beryl_search::GameAgent;
 use beryl_session::{GameUpdate, Prepared, Seat, Sessions, Status, StopsSetting};
 
 use super::{Moment, View};
+use crate::Catalog;
 use crate::boards::{self, Scripted, Shared};
 
 /// Where a moment's game stood when it emitted a view.
@@ -31,15 +31,17 @@ pub(crate) static FAULTS: std::sync::Mutex<Vec<&'static str>> = std::sync::Mutex
 /// phase it was emitted in. Scripts that fail report to the view's phase as `Live` with the
 /// failure.
 pub fn start(
+    catalog: &'static Catalog,
     moment: &'static Moment,
     view: View,
     emit: impl Fn(GameUpdate, Phase) + Send + Sync + 'static,
 ) -> Result<(Sessions, Shared), String> {
-    start_guarded(moment, view, None, emit)
+    start_guarded(catalog, moment, view, None, emit)
 }
 
 /// [`start`], the session's thread owning `guard`, if given, which tells of its panic.
 pub(super) fn start_guarded(
+    catalog: &'static Catalog,
     moment: &'static Moment,
     view: View,
     guard: Option<crate::panics::Guard>,
@@ -62,7 +64,7 @@ pub(super) fn start_guarded(
     let watched = Arc::clone(&progress);
     #[cfg(test)]
     let first = std::sync::atomic::AtomicBool::new(true);
-    let sessions = Sessions::new(&beryl_cards::CARDS, None, move |update| {
+    let sessions = Sessions::new(catalog.cards, None, move |update| {
         #[cfg(test)]
         if !first.swap(false, std::sync::atomic::Ordering::Relaxed)
             && FAULTS.lock().unwrap().contains(&moment.board.name)
@@ -103,7 +105,7 @@ pub(super) fn start_guarded(
         emit(update, phase);
     });
     let (table, state) =
-        beryl_scenario::position(&CARDS, &moment.board).map_err(|e| e.to_string())?;
+        beryl_scenario::position(catalog.cards, &moment.board).map_err(|e| e.to_string())?;
     let actions = || moment.board.actions.iter().chain(moment.play);
     let agent = |seat: Seat, guard: Option<crate::panics::Guard>| {
         let agent = Scripted::with_actions(actions(), seat, &table, Arc::clone(&progress))?;
@@ -131,6 +133,7 @@ pub(super) fn start_guarded(
 
 /// Run the setup in one shared game, then publish both seats at every manual decision.
 pub(super) fn start_review(
+    catalog: &'static Catalog,
     moment: &Moment,
     emit: impl Fn([GameUpdate; 2], bool) + Send + 'static,
 ) -> Result<Sessions, String> {
@@ -140,13 +143,13 @@ pub(super) fn start_review(
         boards::lock(&progress).until = Some(*turn);
     }
     let (table, state) =
-        beryl_scenario::position(&CARDS, &moment.board).map_err(|e| e.to_string())?;
+        beryl_scenario::position(catalog.cards, &moment.board).map_err(|e| e.to_string())?;
     let agent = |seat| {
         Scripted::with_actions(actions(), seat, &table, Arc::clone(&progress))
             .map(|a| Box::new(a) as Box<dyn GameAgent + Send>)
     };
     let watched = Arc::clone(&progress);
-    let sessions = Sessions::new(&beryl_cards::CARDS, None, |_| {});
+    let sessions = Sessions::new(catalog.cards, None, |_| {});
     sessions
         .start_review(
             Prepared {
@@ -178,12 +181,13 @@ pub(super) fn at_checkpoint(updates: &[GameUpdate; 2], live: bool) -> bool {
 }
 
 pub(super) fn review_position(
+    catalog: &'static Catalog,
     moment: &Moment,
 ) -> Result<([beryl_session::PlayerView; 2], Option<String>), String> {
     use beryl_session::protocol::{GameEvent, Why};
 
     let (sent, received) = std::sync::mpsc::channel();
-    let _sessions = start_review(moment, move |updates, live| {
+    let _sessions = start_review(catalog, moment, move |updates, live| {
         let _ = sent.send((updates, live));
     })?;
     let mut countered = None;

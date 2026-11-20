@@ -8,6 +8,7 @@ use beryl_search::{
     DEEP_SEARCHER, Family, LongSearch, PairedRollouts, PairedScores, Settings, Visits,
 };
 
+use crate::Catalog;
 use crate::blunders::{Reached, entries, reach, run_seed};
 use crate::game::parse_work;
 use crate::transcript::{Transcript, label, labels};
@@ -17,19 +18,19 @@ const USAGE: &str = "usage: beryl_cli why ENTRY --a LABEL --b LABEL [--rollouts 
 const DEFAULT_ROLLOUTS: u32 = 2_000;
 const EXAMPLES: usize = 3;
 
-pub fn main(args: &[String]) -> Result<(), String> {
-    print!("{}", run(args)?);
+pub fn main(catalog: &'static Catalog, args: &[String]) -> Result<(), String> {
+    print!("{}", run(catalog, args)?);
     Ok(())
 }
 
-fn run(args: &[String]) -> Result<String, String> {
+fn run(catalog: &'static Catalog, args: &[String]) -> Result<String, String> {
     let (name, flags) = args.split_first().ok_or(USAGE)?;
     let options = parse(flags)?;
     let entry = entries()?
         .into_iter()
         .find(|entry| entry.name == *name)
         .ok_or_else(|| format!("unknown blunder entry {name:?}"))?;
-    let at = reach(&entry)?;
+    let at = reach(catalog, &entry)?;
     let candidates = labels(&at.t, view(&at.s, &at.t, &mut Scratch::new()), &at.d);
     let find = |name: &str| {
         // Identically labeled objects use the first candidate, in the suite's printed order.
@@ -355,10 +356,14 @@ fn write_examples(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::catalog::TEST;
     use beryl_search::{Agent, Method};
 
     fn oust(a: &str, b: &str) -> Result<String, String> {
-        run(&["oust-own-token", "--a", a, "--b", b, "--rollouts", "8"].map(str::to_owned))
+        run(
+            &TEST,
+            &["oust-own-token", "--a", a, "--b", b, "--rollouts", "8"].map(str::to_owned),
+        )
     }
 
     #[test]
@@ -396,19 +401,22 @@ mod tests {
 
     #[test]
     fn prints_both_tree_branches() {
-        let out = run(&[
-            "oust-own-token",
-            "--a",
-            "cast Oust",
-            "--b",
-            "pass",
-            "--rollouts",
-            "1",
-            "--tree",
-            "--work",
-            "100k",
-        ]
-        .map(str::to_owned))
+        let out = run(
+            &TEST,
+            &[
+                "oust-own-token",
+                "--a",
+                "cast Oust",
+                "--b",
+                "pass",
+                "--rollouts",
+                "1",
+                "--tree",
+                "--work",
+                "100k",
+            ]
+            .map(str::to_owned),
+        )
         .unwrap();
         let tree = out.split_once("\nTree (100000 steps").unwrap().1;
         assert!(tree.contains("\nA \"cast Oust\""), "{tree}");
@@ -424,7 +432,7 @@ mod tests {
             .into_iter()
             .find(|entry| entry.name == name)
             .unwrap();
-        let at = reach(&entry).unwrap();
+        let at = reach(&TEST, &entry).unwrap();
         let mut scratch = Scratch::new();
         let obs = observe(&at.s, &at.t, &mut scratch, at.d.decider);
         let candidates = labels(&at.t, &at.s, &at.d);
@@ -457,7 +465,7 @@ mod tests {
             .into_iter()
             .find(|entry| entry.name == name)
             .unwrap();
-        let at = reach(&entry).unwrap();
+        let at = reach(&TEST, &entry).unwrap();
         let mut scratch = Scratch::new();
         let obs = observe(&at.s, &at.t, &mut scratch, at.d.decider);
         let candidates = labels(&at.t, &at.s, &at.d);

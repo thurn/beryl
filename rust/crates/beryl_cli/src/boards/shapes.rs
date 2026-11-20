@@ -2,7 +2,7 @@
 //! one fixture answers by clicks from the seat that is asked, and another watches from across
 //! the table with the same play scripted.
 
-use beryl_cards::names::{
+use beryl_card_names::names::{
     AANGS_ICEBERG, ABHORRENT_OCULUS, BEZA_THE_BOUNDING_SPRING, COUNTERSPELL, CURRENCY_CONVERTER,
     DAMN, ELITE_SPELLBINDER, ISLAND, JACE_THE_MIND_SCULPTOR, JACE_VRYNS_PRODIGY,
     JACE_WIELDER_OF_MYSTERIES, MALCOLM_ALLURING_SCOUNDREL, MANA_CRYPT, MANA_DRAIN, OUST, PLAINS,

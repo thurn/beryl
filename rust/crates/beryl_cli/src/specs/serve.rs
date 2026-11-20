@@ -49,6 +49,7 @@ use beryl_session::{CandidateIndex, DecisionId, GameUpdate, Sessions, Status};
 use serde_json::{Value, json};
 
 use super::{Phase, View, cards, find, listing, reviews, spec};
+use crate::Catalog;
 use crate::serve::{CORS, HttpRequest, card_records, invoke, read_request, respond};
 
 mod reports;
@@ -113,7 +114,7 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 /// Serves the specs on `127.0.0.1:port` until the process is killed.
-pub fn serve(port: u16) -> Result<(), String> {
+pub fn serve(catalog: &'static Catalog, port: u16) -> Result<(), String> {
     beryl_session::journal::install_panic_hook();
     let listener =
         TcpListener::bind(("127.0.0.1", port)).map_err(|e| format!("port {port}: {e}"))?;
@@ -125,7 +126,7 @@ pub fn serve(port: u16) -> Result<(), String> {
         let instances = Arc::clone(&instances);
         let pages = Arc::clone(&pages);
         std::thread::spawn(move || {
-            if let Err(e) = handle(connection, &instances, &pages) {
+            if let Err(e) = handle(catalog, connection, &instances, &pages) {
                 eprintln!("beryl_cli: {e}");
             }
         });
@@ -133,7 +134,12 @@ pub fn serve(port: u16) -> Result<(), String> {
     Ok(())
 }
 
-fn handle(mut stream: TcpStream, instances: &Instances, pages: &Pages) -> Result<(), String> {
+fn handle(
+    catalog: &'static Catalog,
+    mut stream: TcpStream,
+    instances: &Instances,
+    pages: &Pages,
+) -> Result<(), String> {
     let HttpRequest {
         method,
         path,
@@ -158,20 +164,24 @@ fn handle(mut stream: TcpStream, instances: &Instances, pages: &Pages) -> Result
     if method == "POST" && path == "/invoke/card_records" {
         // The list of cards asks for their records, which no moment's game is needed for.
         let args = serde_json::from_slice(&body).unwrap_or(Value::Null);
-        return respond(&mut stream, "200 OK", &card_records(args).to_string());
+        return respond(
+            &mut stream,
+            "200 OK",
+            &card_records(catalog.cards, args).to_string(),
+        );
     }
     if method == "GET" && path == "/specs" {
-        let body = listing::cards().to_string();
+        let body = listing::cards(catalog).to_string();
         return respond(&mut stream, "200 OK", &body);
     }
     if let ("GET", Some(card)) = (method.as_str(), path.strip_prefix("/specs/")) {
-        let Some(spec) = spec(card) else {
+        let Some(spec) = spec(catalog, card) else {
             return respond(&mut stream, "404 Not Found", "{}");
         };
         return respond(&mut stream, "200 OK", &listing::moments(spec).to_string());
     }
     if let ("GET", Some(card)) = (method.as_str(), path.strip_prefix("/playground/")) {
-        let Some(spec) = spec(card) else {
+        let Some(spec) = spec(catalog, card) else {
             return respond(&mut stream, "404 Not Found", "{}");
         };
         return respond(
@@ -181,7 +191,7 @@ fn handle(mut stream: TcpStream, instances: &Instances, pages: &Pages) -> Result
         );
     }
     if let ("GET", Some(card)) = (method.as_str(), path.strip_prefix("/checkpoints/")) {
-        let Some(spec) = spec(card) else {
+        let Some(spec) = spec(catalog, card) else {
             return respond(&mut stream, "404 Not Found", "{}");
         };
         let checkpoints = spec.checkpoints();
@@ -209,11 +219,11 @@ fn handle(mut stream: TcpStream, instances: &Instances, pages: &Pages) -> Result
         );
     }
     if let ("POST", Some(card)) = (method.as_str(), path.strip_prefix("/review/")) {
-        let answer = review(card, &body);
+        let answer = review(catalog, card, &body);
         return respond(&mut stream, "200 OK", &answer.to_string());
     }
     if method == "POST" && path == "/report" {
-        let answer = reports::report(instances, &body);
+        let answer = reports::report(catalog, instances, &body);
         return respond(&mut stream, "200 OK", &answer.to_string());
     }
     if let ("GET", Some(page)) = (method.as_str(), path.strip_prefix("/stream/")) {
@@ -224,10 +234,11 @@ fn handle(mut stream: TcpStream, instances: &Instances, pages: &Pages) -> Result
     let Some(rest) = path.strip_prefix("/m/") else {
         return respond(&mut stream, "404 Not Found", "{}");
     };
-    handle_moment(stream, instances, pages, &method, rest, &body)
+    handle_moment(catalog, stream, instances, pages, &method, rest, &body)
 }
 
 fn handle_moment(
+    catalog: &'static Catalog,
     mut stream: TcpStream,
     instances: &Instances,
     pages: &Pages,
@@ -246,7 +257,7 @@ fn handle_moment(
         return respond(&mut stream, "404 Not Found", "{}");
     };
     let key = format!("{card}/{name}/{view}/{id}");
-    let (sessions_feed, error) = match instance(instances, pages, &key, card, name, view) {
+    let (sessions_feed, error) = match instance(catalog, instances, pages, &key, card, name, view) {
         Ok(found) => (Some(found), None),
         Err(e) => (None, Some(e)),
     };
@@ -296,7 +307,7 @@ fn handle_moment(
                 ipc::START_GAME | ipc::CONCEDE | ipc::RESUME_GAME => json!({ "ok": null }),
                 ipc::LIST_AGENTS => json!({ "ok": [] }),
                 ipc::STAGE_TIMINGS => json!({ "ok": beryl_session::script::own_timings() }),
-                ipc::CARD_RECORDS => card_records(args),
+                ipc::CARD_RECORDS => card_records(catalog.cards, args),
                 _ => {
                     // The viewer acts on the game: it plays on from where it truly is.
                     if matches!(
@@ -332,8 +343,8 @@ fn handle_moment(
 }
 
 /// `POST /review/<card>`: sets the review mark and, when marking, finds the next unreviewed card.
-fn review(card: &str, body: &[u8]) -> Value {
-    let specs = cards();
+fn review(catalog: &'static Catalog, card: &str, body: &[u8]) -> Value {
+    let specs = cards(catalog);
     let Some(index) = specs.iter().position(|s| s.slug == card) else {
         return json!({ "err": { "kind": "spec", "message": format!("no spec {card}") } });
     };
@@ -361,11 +372,15 @@ fn review(card: &str, body: &[u8]) -> Value {
     }
 }
 
-fn checkpoint(card: &str, name: &str) -> Option<&'static super::auto::Checkpoint> {
+fn checkpoint(
+    catalog: &'static Catalog,
+    card: &str,
+    name: &str,
+) -> Option<&'static super::auto::Checkpoint> {
     if !name.starts_with("review-") {
         return None;
     }
-    spec(card)?
+    spec(catalog, card)?
         .checkpoints()
         .examples
         .iter()
@@ -404,6 +419,7 @@ fn new_feed(pages: &Pages, key: &str, plays: bool, manual: bool) -> SharedFeed {
 
 /// Both seats of a manual checkpoint share one session and have their own feeds.
 fn instance(
+    catalog: &'static Catalog,
     instances: &Instances,
     pages: &Pages,
     key: &str,
@@ -416,14 +432,14 @@ fn instance(
     let id = key.rsplit('/').next().unwrap_or_default();
     let key = instance_key(card, name, view.name(), id);
     // Generate the card's checkpoints outside the shared instances lock.
-    let review = checkpoint(card, name);
-    let playground = super::playground::find(card, name);
+    let review = checkpoint(catalog, card, name);
+    let playground = super::playground::find(catalog, card, name);
     let moment = if let Some(example) = playground {
         Some(&example.moment)
     } else if manual {
         review.map(|c| &c.moment)
     } else {
-        find(card, name).map(|(_, m)| m)
+        find(catalog, card, name).map(|(_, m)| m)
     }
     .ok_or_else(|| format!("no moment {card}/{name}"))?;
     let mut list = lock(instances);
@@ -447,7 +463,7 @@ fn instance(
     }
     let emitted = Arc::clone(&feed);
     let (sessions, mirror) = if let Some(example) = playground {
-        let sessions = super::playground::start(example, view, move |update, phase| {
+        let sessions = super::playground::start(catalog, example, view, move |update, phase| {
             record_view(&emitted, &update, phase);
         })?;
         (sessions, None)
@@ -455,7 +471,7 @@ fn instance(
         let mirror = new_feed(pages, &format!("{card}/{name}/theirs/{id}"), false, true);
         let other = Arc::clone(&mirror);
         let casts = Mutex::new(review.map_or(&[][..], |c| c.review_casts));
-        let sessions = super::start_review(moment, move |updates, live| {
+        let sessions = super::start_review(catalog, moment, move |updates, live| {
             let ready = super::at_checkpoint(&updates, live);
             let moves = if live {
                 recorded_cast_moves(&mut lock(&casts), &updates)
@@ -483,7 +499,7 @@ fn instance(
         })?;
         (sessions, Some(mirror))
     } else {
-        let (sessions, _) = super::start(moment, view, move |update, phase| {
+        let (sessions, _) = super::start(catalog, moment, view, move |update, phase| {
             record_view(&emitted, &update, phase);
         })?;
         (sessions, None)
@@ -715,6 +731,7 @@ fn pump(mut stream: TcpStream, received: &std::sync::mpsc::Receiver<String>) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::catalog::TEST;
 
     /// A view shown at once starts the page's stage over, from each seat; one that opens with
     /// an ability on the stack numbers it as the scripts after the setup do, so the stage has
@@ -727,7 +744,7 @@ mod tests {
         let moment = "1-grows-a-creature-and-gives-it-first-strike-pass";
         for (view, abilities) in [("yours", json!([1])), ("theirs", json!([]))] {
             let key = format!("{card}/{moment}/{view}/reset-test");
-            let feed = instance(&instances, &pages, &key, card, moment, view).unwrap();
+            let feed = instance(&TEST, &instances, &pages, &key, card, moment, view).unwrap();
             let shown = current(&feed);
             assert_eq!(
                 shown["ok"]["view"]["script"]["reset"],
@@ -746,7 +763,7 @@ mod tests {
         let moment =
             "playground-exiles-a-permanent-until-it-leaves-waterbend-taps-a-creature-to-pay-4";
         let key = format!("{card}/{moment}/yours/priority-test");
-        let feed = instance(&instances, &pages, &key, card, moment, "yours").unwrap();
+        let feed = instance(&TEST, &instances, &pages, &key, card, moment, "yours").unwrap();
         let shown = current(&feed);
         assert_eq!(shown["ok"]["view"]["status"]["kind"], "deciding");
         assert!(

@@ -5,16 +5,18 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use beryl_cli::fixture;
 use beryl_cli::specs::{self, Moment, View};
+use beryl_cli::{Catalog, fixture};
 use beryl_session::ipc::FixtureMessage;
 use beryl_session::{GameUpdate, Seat, SessionId, card_records};
 
 use beryl_inspect::pack::{Recorded, Recorder};
 
-/// `beryl_cli`'s recorders, reading the fixture definitions in the repository at `root`.
+/// `beryl_cli`'s recorders, reading the fixture definitions in the repository at `root` and
+/// playing with the cards of `catalog`.
 pub struct Cli {
     pub root: PathBuf,
+    pub catalog: &'static Catalog,
 }
 
 /// One recording still to make.
@@ -43,7 +45,7 @@ impl Recorder for Cli {
                 Vec::new()
             }
         };
-        let cards: Vec<&specs::Spec> = specs::cards().iter().collect();
+        let cards: Vec<&specs::Spec> = specs::cards(self.catalog).iter().collect();
         // Plays every candidate moment of every card, which decides which are kept.
         specs::generate(&cards);
         let mut jobs = Vec::new();
@@ -66,7 +68,7 @@ impl Recorder for Cli {
         let next = AtomicUsize::new(0);
         beryl_inspect::runner::spread(jobs.len(), &next, || {
             while let Some(job) = jobs.get(next.fetch_add(1, Ordering::Relaxed)) {
-                let one = record(job, &source);
+                let one = record(self.catalog, job, &source);
                 recorded
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -79,13 +81,13 @@ impl Recorder for Cli {
     }
 }
 
-fn record(job: &Job, source: &std::path::Path) -> Recorded {
+fn record(catalog: &'static Catalog, job: &Job, source: &std::path::Path) -> Recorded {
     match job {
         Job::Fixture(def, seat) => Recorded {
             name: def.name().to_owned(),
             seat: *seat,
-            messages: fixture::record_from(def, source, *seat)
-                .map(with_card_records)
+            messages: fixture::record_from(catalog, def, source, *seat)
+                .map(|messages| with_card_records(catalog, messages))
                 .map_err(|why| format!("fixture {}: {why}", def.name())),
         },
         Job::Moment(card, moment, view) => Recorded {
@@ -94,13 +96,13 @@ fn record(job: &Job, source: &std::path::Path) -> Recorded {
                 View::Yours => Seat::P0,
                 View::Theirs => Seat::P1,
             },
-            messages: specs::trace(moment, *view)
+            messages: specs::trace(catalog, moment, *view)
                 .map(|(_, views)| {
                     let session = SessionId(1);
                     let messages = (views.into_iter())
                         .map(|view| FixtureMessage::game_update(&GameUpdate { session, view }))
                         .collect();
-                    with_card_records(messages)
+                    with_card_records(catalog, messages)
                 })
                 .map_err(|why| format!("{card}/{}: {why}", moment.name)),
         },
@@ -109,10 +111,7 @@ fn record(job: &Job, source: &std::path::Path) -> Recorded {
 
 /// `messages` headed by the card records of every card they name, as `beryl_cli`'s fixture
 /// files are.
-fn with_card_records(mut messages: Vec<FixtureMessage>) -> Vec<FixtureMessage> {
-    messages.insert(
-        0,
-        card_records::fixture_message(&messages, &beryl_cards::CARDS),
-    );
+fn with_card_records(catalog: &Catalog, mut messages: Vec<FixtureMessage>) -> Vec<FixtureMessage> {
+    messages.insert(0, card_records::fixture_message(&messages, catalog.cards));
     messages
 }

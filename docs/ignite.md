@@ -1388,7 +1388,7 @@ needs = ["cli", "ui-deps"]
 resources = ["browser-pages"]
 list = "node ui/scripts/capture.mjs --list"
 run = "node ui/scripts/capture.mjs {checks}"
-inputs = ["ui/src/**", "ui/shots.json", "crate:beryl_cli"]
+inputs = ["ui/src/**", "ui/shots.json", "crate:beryl_cli_main"]
 ```
 
 The fields:
