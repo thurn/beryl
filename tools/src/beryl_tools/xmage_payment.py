@@ -7,6 +7,7 @@ from typing import cast
 
 from .card_facts import Cards, Json, Unsupported, made_by
 from .xmage_java import java_string
+from .xmage_trace import Position
 
 
 class Payments:
@@ -22,6 +23,30 @@ class Payments:
         # Whether the last payment tapped each of its sources by name for the mana Beryl
         # made, which says all its "PaymentPlan" answer does.
         self.as_made = False
+        # Where to float mana for a cast offered by this resolution.
+        self.resolve_at: tuple[int, str, int] | None = None
+
+    def float_for_offer(
+        self,
+        who: str,
+        at: str,
+        offer: Position,
+        paid: Position | None,
+        lines: list[str],
+    ) -> None:
+        """Float recorded mana in the same step before the resolving object offers the cast."""
+        self.as_made = False
+        if paid is None or not paid.mana:
+            return
+        resolve_at = self.resolve_at
+        if resolve_at is None or resolve_at[:2] != (offer.turn, offer.step):
+            raise Unsupported(
+                "paying for an offered cast outside a scripted resolution"
+            )
+        commands = self.pay(who, at, False, list(paid.taps), list(paid.mana), None)
+        before = resolve_at[2]
+        lines[before:before] = commands
+        self.resolve_at = (offer.turn, offer.step, before + len(commands))
 
     def pay(
         self,

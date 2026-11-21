@@ -23,10 +23,9 @@ trace is what places each Beryl action as XMage commands:
   questions differently, rules over the dump's description of each card the scenario names
   (`card_facts.py`) translate them.
 - Assertions run inside `runCode` at their position, through XMage's `assert*` family where it
-  states the same fact and `BerylScenarioTest`'s helpers where it does not. Beryl's decision
-  assertions (who decides, among how many candidates) are about Beryl's decision surface and are
-  skipped, as are assertions in the middle of a decision, where XMage has no priority to run
-  them, and Tapped assertions after a payment whose sources XMage chose.
+  states the same fact and `BerylScenarioTest`'s helpers otherwise. The exporter skips Beryl's
+  decision assertions, assertions between priority points and Tapped assertions after a payment
+  whose sources XMage chose.
 """
 
 from __future__ import annotations
@@ -56,7 +55,9 @@ from .xmage_java import (
     Export,
     Faces,
     assertion_code,
+    cast_choices,
     java_string,
+    offered_cast_choices,
     outcome_lines,
     trample_amount,
 )
@@ -94,9 +95,8 @@ class Exporter:
         # How many targets of an "up to N" spec are still to come when fewer than N were
         # announced: XMage asks for more until told to stop.
         self.targets_short: int | None = None
-        # The player who chose a copy's targets as it resolved, for the asserts and Resolves
-        # after it until the stack empties or another answer: XMage runs a command as soon as its player holds priority, and the
-        # player Beryl gives priority next may have held it since before the copy was made.
+        # After retargeting a copy, queue asserts and Resolves for the player who retargeted it.
+        # The other player may have held priority before the copy was made.
         self.retargeted: str | None = None
         # The resolving object and kind of the last answer, for XMage's untap shortcut.
         self.last_answer: tuple[str | None, str] = (None, "")
@@ -182,6 +182,8 @@ class Exporter:
         ]
         for i, (action, p) in enumerate(zip(actions, trace)):
             self.index = i
+            if p.kind == "Priority":
+                self.payments.resolve_at = None
             self.unasked(p)
             for answer in p.forced:
                 self.forced(answer, p)
@@ -323,6 +325,7 @@ class Exporter:
                 raise Unsupported("resolves after the game is over")
             who = self.retargeted or self.player(p.decider)
             self.prepare(who, p)
+            self.payments.resolve_at = (p.turn, p.step, len(self.lines))
             self.emit(f"resolveTop({self.at(p)}, {who});")
             self.empty_search(p)
         elif kind == "PlayLand":
@@ -377,10 +380,8 @@ class Exporter:
         if action["face"]:
             raise Unsupported(f"casting {card}'s back face")
         if Position.delves_next(self.trace, self.index):
-            at = payment_position(
-                self.actions, [t.taps for t in self.trace], self.index
-            )
-            paid = None if at is None else list(self.trace[at].taps)
+            payment = self.payment()
+            paid = None if payment is None else list(payment.taps)
             self.cards.delve_reachable(self.setup, action["player"], paid)
         name, costs = self.cards.escape_spell(card, p.supported_castings(action))
         if name == card and card in p.flashback:
@@ -424,19 +425,7 @@ class Exporter:
                 f"castSpell({self.at(p)}, {who}, {java_string(name)}, {targets}, "
                 f"{java_string(spell)});"
             )
-        questions = self.cards.cast_answers(card)
-        if costs >> len(questions):
-            raise Unsupported(f"casting option {costs:#b} of {card}")
-        alternative = None
-        for bit, (paid, unpaid) in enumerate(questions):
-            answer = paid if costs >> bit & 1 else unpaid
-            if unpaid == "Cast with no":
-                if alternative is None or costs >> bit & 1:
-                    alternative = answer
-            elif answer:
-                self.emit(f"setChoice({who}, {java_string(answer)});")
-        if alternative is not None:
-            self.emit(f"setCastCost({who}, {java_string(alternative)});")
+        self.lines.extend(cast_choices(self.cards, who, card, costs))
         if self.cards.unless_pays(card):
             self.unless_pays[card] = self.target_controller(action["player"], card)
         if self.cards.takes(card) is not None:
@@ -462,15 +451,18 @@ class Exporter:
     def pay(self, who: str, p: Position, source: str | None) -> None:
         """Replay the trace's payment for the action at hand (`Payments.pay`), excluding
         `source`, an activated ability's own tap."""
-        at = payment_position(self.actions, [t.taps for t in self.trace], self.index)
-        if at is None:
+        position = self.payment()
+        if position is None:
             self.payments.as_made = False
             return
-        taps, mana = list(self.trace[at].taps), list(self.trace[at].mana)
-        for line in self.payments.pay(
-            who, self.at(p), bool(p.stack), taps, mana, source
-        ):
-            self.emit(line)
+        taps, mana = list(position.taps), list(position.mana)
+        self.lines.extend(
+            self.payments.pay(who, self.at(p), bool(p.stack), taps, mana, source)
+        )
+
+    def payment(self) -> Position | None:
+        at = payment_position(self.actions, [t.taps for t in self.trace], self.index)
+        return self.trace[at] if at is not None else None
 
     def cast_targets(self) -> list[Json]:
         """The Target answers of the cast at hand: those that follow it, or else those Beryl
@@ -556,6 +548,12 @@ class Exporter:
         source = of or (cast(str, p.stack[-1]["name"]) if p.stack else None)
         if kind == "PaymentPlan" and self.payments.as_made:
             # The payment's taps, replayed with the mana each made, chose the plan already.
+            return
+        if kind == "CastOffer" and what == "Cast":
+            self.payments.float_for_offer(
+                who, self.at(p), p, self.payment(), self.lines
+            )
+            self.lines.extend(offered_cast_choices(self.cards, who, pick))
             return
         if kind == "YesNo" and source is not None:
             self.unless_pays.pop(source, None)
@@ -707,6 +705,8 @@ class Exporter:
                 self.emit(f"addTarget({who}, TestPlayer.TARGET_SKIP);")
             else:
                 self.emit(f"setChoice({who}, TestPlayer.CHOICE_SKIP);")
+        elif kind == "CastOffer" and what == "Pass":
+            self.emit(f"setChoice({who}, false);")
         elif kind in YES_NO_KINDS and what in ("Yes", "No", "Card"):
             self.emit(f"setChoice({who}, {'false' if what == 'No' else 'true'});")
         elif kind == "X" and what == "Number":

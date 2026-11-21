@@ -16,7 +16,7 @@ use beryl_engine::CardTable;
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::{Action, Scenario};
+use crate::{Action, Pick, Scenario};
 
 /// One card: its faces, front first.
 #[derive(Debug, Serialize)]
@@ -242,7 +242,11 @@ fn action_card(action: &Action) -> Option<&'static str> {
         Action::PlayLand { card, .. }
         | Action::Cast { card, .. }
         | Action::Activate { card, .. }
-        | Action::TurnFaceUp { card, .. } => Some(card),
+        | Action::TurnFaceUp { card, .. }
+        | Action::Answer {
+            pick: Pick::Cast { card, .. },
+            ..
+        } => Some(card),
         _ => None,
     }
 }

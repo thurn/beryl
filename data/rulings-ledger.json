@@ -115,12 +115,18 @@
     {
       "published_at": "2018-12-07",
       "hash": "7288823ce2c0",
-      "untestable": "Cavern of Souls' mana protects a spell when spent on kicker covers ordinary casting. Scripting a kicker paid on a spell cast without its mana cost requires selecting a specific casting option from a CastOffer. See by-ptc7.2.20."
+      "scenario": [
+        "Cavern of Souls' mana protects a spell when spent on kicker",
+        "Cavern of Souls' mana protects a free spell when spent on kicker"
+      ]
     },
     {
       "published_at": "2023-11-10",
       "hash": "7288823ce2c0",
-      "untestable": "Cavern of Souls' mana protects a spell when spent on kicker covers ordinary casting. Scripting a kicker paid on a spell cast without its mana cost requires selecting a specific casting option from a CastOffer. See by-ptc7.2.20."
+      "scenario": [
+        "Cavern of Souls' mana protects a spell when spent on kicker",
+        "Cavern of Souls' mana protects a free spell when spent on kicker"
+      ]
     },
     {
       "published_at": "2023-11-10",

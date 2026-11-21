@@ -10,8 +10,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -121,7 +121,7 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
          * discard of the only card in a hand before a yes or no. An optional choice reads
          * `beryl:optional:<turn>:<step>:<choice>`, with the turn and step where Beryl answered it.
          */
-        private boolean withOptional(Predicate<String> fits, BooleanSupplier question) {
+        private <T> T withOptional(Predicate<String> fits, Supplier<T> question) {
             List<String> choices = getChoices();
             List<String> bypassed = new ArrayList<>();
             while (!choices.isEmpty() && choices.get(0).startsWith(OPTIONAL)
@@ -140,7 +140,7 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
                 }
             }
             try {
-                return question.getAsBoolean();
+                return question.get();
             } finally {
                 int left = choices.size();
                 for (Map.Entry<Integer, String> entry : optional.entrySet()) {
@@ -278,6 +278,13 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
             return withOptional(
                     answer -> answer.equals("Yes") || answer.equals("No"),
                     () -> super.chooseUse(outcome, message, secondMessage, trueText, falseText, source, game));
+        }
+
+        /** A choice XMage settled silently can still precede the scripted X in the queue. */
+        @Override
+        public int announceX(int min, int max, String message, Game game, Ability source, boolean isManaPay) {
+            return withOptional(answer -> answer.startsWith("X="),
+                    () -> super.announceX(min, max, message, game, source, isManaPay));
         }
 
         /**

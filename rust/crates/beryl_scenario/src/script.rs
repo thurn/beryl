@@ -60,6 +60,13 @@ pub(crate) fn pick<L: Layout>(
     d: &Decision<L>,
     c: Choice,
 ) -> Option<Pick> {
+    if let Some(Opt::Cast { slot, face, costs }) = d.candidates.option(c) {
+        return Some(Pick::Cast {
+            card: s.name(t, slot),
+            face,
+            costs,
+        });
+    }
     let named = d
         .candidates
         .object(c)
@@ -124,22 +131,13 @@ pub fn source(action: &Action) -> String {
             card,
             face,
             costs,
-        } if costs.bits().count_ones() <= 1 && matches!(face, FaceIx::FRONT | FaceIx::BACK) => {
-            let face = if face == FaceIx::FRONT {
-                "FaceIx::FRONT"
-            } else {
-                "FaceIx::BACK"
-            };
-            let costs = match costs.bits() {
-                0 => "Castings::NONE".to_owned(),
-                _ if costs == Castings::ESCAPE => "Castings::ESCAPE".to_owned(),
-                bits => format!("Castings::only({})", bits.trailing_zeros()),
-            };
-            format!(
+        } => casting_source(face, costs).map_or_else(
+            || format!("// {action:?}"),
+            |(face, costs)| format!(
                 "Action::Cast {{ player: {}, card: {card:?}, face: {face}, costs: {costs} }}",
                 seat(player)
-            )
-        }
+            ),
+        ),
         Action::Activate {
             player,
             card,
@@ -182,6 +180,17 @@ pub fn source(action: &Action) -> String {
             "Action::choose({}, DecisionKind::{kind:?}, {card:?})",
             seat(player)
         ),
+        Action::Answer {
+            player,
+            kind,
+            pick: Pick::Cast { card, face, costs },
+        } => casting_source(face, costs).map_or_else(
+            || format!("// {action:?}"),
+            |(face, costs)| format!(
+                "Action::answer({}, DecisionKind::{kind:?}, Pick::Cast {{ card: {card:?}, face: {face}, costs: {costs} }})",
+                seat(player)
+            ),
+        ),
         Action::Answer { player, kind, pick } => {
             let pick = match pick {
                 Pick::Player { player } => format!("Pick::Player {{ player: {} }}", seat(player)),
@@ -194,6 +203,23 @@ pub fn source(action: &Action) -> String {
         }
         action => format!("// {action:?}"),
     }
+}
+
+fn casting_source(face: FaceIx, costs: Castings) -> Option<(&'static str, String)> {
+    let face = match face {
+        FaceIx::FRONT => "FaceIx::FRONT",
+        FaceIx::BACK => "FaceIx::BACK",
+        _ => return None,
+    };
+    let costs = match costs {
+        Castings::NONE => "Castings::NONE".to_owned(),
+        Castings::ESCAPE => "Castings::ESCAPE".to_owned(),
+        _ if costs.bits().is_power_of_two() => {
+            format!("Castings::only({})", costs.bits().trailing_zeros())
+        }
+        _ => return None,
+    };
+    Some((face, costs))
 }
 
 /// The setup of `scenario` as a card file's scenarios write it: `Scenario::new` and its

@@ -318,8 +318,15 @@ pub enum Pick {
     Pass,
     /// The first candidate that names a card of this name: a candidate object, or an option
     /// naming an object (an attacker, a blocker, a waiting trigger's source, a mana source).
+    /// Use [`Pick::Cast`] to choose a face and casting options from an offer.
     Card {
         card: &'static str,
+    },
+    /// The offered cast of this card with this face and these casting options.
+    Cast {
+        card: &'static str,
+        face: FaceIx,
+        costs: Castings,
     },
     /// A number: X, or how many targets.
     Number {

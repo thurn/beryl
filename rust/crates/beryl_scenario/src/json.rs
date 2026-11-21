@@ -201,6 +201,13 @@ enum PickDef {
     Card {
         card: &'static str,
     },
+    Cast {
+        card: &'static str,
+        #[serde(serialize_with = "face_ix")]
+        face: FaceIx,
+        #[serde(serialize_with = "castings")]
+        costs: Castings,
+    },
     Number {
         n: u8,
     },

@@ -311,6 +311,16 @@ def step(action: JsonObject, cards: Cards, purpose: object = None) -> JsonObject
             # Forge's AI pays a spell's costs itself (AiCostDecision), asking its controller
             # nothing.
             raise Unsupported("a choice of the cards an exile cost takes")
+        if action["kind"] == "CastOffer" and pick["pick"] == "Cast":
+            card = cast(str, pick["card"])
+            if pick["face"] != 0:
+                raise Unsupported(
+                    f"casting face {pick['face']} of {card} from an offer"
+                )
+            costs = cast(int, pick["costs"])
+            pick = dict(pick)
+            if costs:
+                pick["cost"] = casting_option(cards, card, costs)
         return {
             "op": "answer",
             "player": action["player"],
@@ -526,10 +536,19 @@ def export(
                     unchecked += 1
                     continue
                 converted = step(action, described, purpose)
-                if converted is not None and converted["op"] in ("cast", "activate"):
+                if converted is not None and (
+                    converted["op"] in ("cast", "activate")
+                    or converted.get("kind") == "CastOffer"
+                    and cast(JsonObject, converted["pick"])["pick"] == "Cast"
+                ):
                     tapped = taps(action, actions, trace, i, described, lands)
                     if tapped:
-                        converted["taps"] = tapped
+                        destination = (
+                            cast(JsonObject, converted["pick"])
+                            if converted.get("kind") == "CastOffer"
+                            else converted
+                        )
+                        destination["taps"] = tapped
                     paid_as_made = any(isinstance(t, dict) for t in tapped) and len(
                         tapped
                     ) == len(payment(action, actions, trace, i))

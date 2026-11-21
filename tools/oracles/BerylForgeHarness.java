@@ -719,12 +719,7 @@ public final class BerylForgeHarness {
                 throw new StepFailed("Forge offers no castable spell for " + name + (cost == null ? "" : " with " + cost));
             }
             if (cost != null && chosen.getAlternativeCost() == null) {
-                List<OptionalCostValue> picked = new ArrayList<>();
-                for (OptionalCostValue value : forge.game.GameActionUtil.getOptionalCostValues(chosen)) {
-                    if (value.getType().name().equalsIgnoreCase(cost) || value.toString().contains(cost)) {
-                        picked.add(value);
-                    }
-                }
+                List<OptionalCostValue> picked = optionalCosts(chosen, cost);
                 if (picked.isEmpty()) {
                     keywordCost = cost; // a keyword cost, chosen as Forge casts
                 } else {
@@ -734,6 +729,16 @@ public final class BerylForgeHarness {
             chosen.setActivatingPlayer(player);
             prepare(player, chosen);
             return chosen;
+        }
+
+        static List<OptionalCostValue> optionalCosts(SpellAbility spell, String cost) {
+            List<OptionalCostValue> picked = new ArrayList<>();
+            for (OptionalCostValue value : forge.game.GameActionUtil.getOptionalCostValues(spell)) {
+                if (value.getType().name().equalsIgnoreCase(cost) || value.toString().contains(cost)) {
+                    picked.add(value);
+                }
+            }
+            return picked;
         }
 
         /**
@@ -2046,12 +2051,33 @@ public final class BerylForgeHarness {
                 return super.playSaFromPlayEffect(spell);
             }
             String kind = pick.get("pick").getAsString();
-            if (kind.equals("Done") || kind.equals("No")) {
+            if (kind.equals("Done") || kind.equals("No") || kind.equals("Pass")) {
                 return false;
             }
             spell.setActivatingPlayer(player);
-            run.chooseTargets(player, spell);
-            return ComputerUtil.playStack(spell, player, getGame());
+            if (kind.equals("Cast")) {
+                if (!Run.named(spell.getHostCard(), pick.get("card").getAsString())) {
+                    throw new StepFailed("Forge offered " + spell + " for " + pick);
+                }
+                if (pick.has("cost")) {
+                    String cost = pick.get("cost").getAsString();
+                    List<OptionalCostValue> costs = Run.optionalCosts(spell, cost);
+                    if (costs.size() != 1) {
+                        throw new StepFailed("Forge does not offer one " + cost + " cost for " + spell);
+                    }
+                    spell = forge.game.GameActionUtil.addOptionalCosts(spell, costs);
+                }
+                run.prepare(player, spell);
+                run.taps = pick.getAsJsonArray("taps");
+                floatTaps(spell);
+            } else {
+                run.chooseTargets(player, spell);
+            }
+            boolean played = ComputerUtil.playStack(spell, player, getGame());
+            if (kind.equals("Cast") && !played) {
+                throw new StepFailed("Forge could not cast " + spell + " from the offer");
+            }
+            return played;
         }
 
         @Override

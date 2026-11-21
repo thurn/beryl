@@ -14,7 +14,7 @@ from typing import cast
 
 from . import xmage_classes
 from .cards import listed
-from .card_facts import Json, Unsupported
+from .card_facts import Cards, Json, Unsupported
 
 PACKAGE = "org.mage.test.beryl"
 BASE: Path = Path(__file__).parent / "BerylScenarioTest.java"
@@ -419,3 +419,40 @@ def counters_to_add(faces: Faces, name: str, counters: Json | None) -> tuple[str
     if count < entered:
         raise Unsupported(f"{name} starts with fewer counters than it enters with")
     return kind, count - entered
+
+
+def cast_choices(cards: Cards, who: str, card: str, costs: int) -> list[str]:
+    """The questions XMage asks about casting options during a priority cast."""
+    lines: list[str] = []
+    questions = cards.cast_answers(card)
+    if costs >> len(questions):
+        raise Unsupported(f"casting option {costs:#b} of {card}")
+    alternative = None
+    for bit, (paid, unpaid) in enumerate(questions):
+        answer = paid if costs >> bit & 1 else unpaid
+        if unpaid == "Cast with no":
+            if alternative is None or costs >> bit & 1:
+                alternative = answer
+        elif answer:
+            lines.append(f"setChoice({who}, {java_string(answer)});")
+    if alternative is not None:
+        lines.append(f"setCastCost({who}, {java_string(alternative)});")
+    return lines
+
+
+def offered_cast_choices(cards: Cards, who: str, pick: Json) -> list[str]:
+    """Accept a front-face cast and choose its additional costs."""
+    card = cast(str, pick["card"])
+    if pick["face"] != 0:
+        raise Unsupported(f"casting {card}'s back face from an offer")
+    costs = cast(int, pick["costs"])
+    extra = [
+        cast(int, option["bit"])
+        for option in cards.casting(card)
+        if not option["alternative"]
+    ]
+    if costs & ~sum(1 << bit for bit in extra):
+        raise Unsupported(f"casting option {costs:#b} of {card} from an offer")
+    return [f"setChoice({who}, true);"] + [
+        f"setChoice({who}, {'true' if costs >> bit & 1 else 'false'});" for bit in extra
+    ]

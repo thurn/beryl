@@ -93,6 +93,12 @@ pub(super) fn pick_in<L: Layout>(
                     .is_some_and(|slot| s.name(t, slot) == card)
             });
         }
+        Pick::Cast { card, face, costs } => {
+            return option_index(d, |o| {
+                matches!(o, Opt::Cast { slot, face: f, costs: m }
+                if s.name(t, slot) == card && f == face && m == costs)
+            });
+        }
         Pick::Pass => Opt::Pass,
         Pick::Number { n } => Opt::Number(n),
         Pick::Yes => Opt::Yes,

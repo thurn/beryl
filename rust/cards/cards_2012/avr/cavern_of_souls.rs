@@ -245,5 +245,43 @@ pub mod scenarios {
                 THEM.has(Zone::Hand, Prop::Flier, 1),
                 ME.controls(Card::UrborgEmissary, 1),
             ]),
+        // Malcolm supplies the alternative cost. The Cavern is the only mana source,
+        // and its restricted mana pays all of the Skydiver's kicker.
+        Scenario::new("Cavern of Souls' mana protects a free spell when spent on kicker")
+            .interaction(&[Card::MalcolmAlluringScoundrel, Card::ThievingSkydiver])
+            .permanents(
+                P0,
+                &[Permanent::new(Card::MalcolmAlluringScoundrel).counters(CounterKind::Chorus, 3)],
+            )
+            .hand(P0, &[Card::CavernOfSouls])
+            .library(P0, &[Card::ThievingSkydiver])
+            .battlefield(P1, &[Card::Island, Card::Island, Prop::Equipment])
+            .hand(P1, &[Card::Counterspell])
+            .actions(&[
+                ME.plays(Card::CavernOfSouls),
+                ME.chooses_named("Merfolk"),
+                advance_to(1, TurnStep::BeginningOfCombat),
+                ME.passes(),
+                ME.attacks_with(Card::MalcolmAlluringScoundrel),
+                advance_to(1, TurnStep::CombatDamage),
+                Resolve,
+                ME.deciding(DecisionKind::CastOffer, 3),
+                ME.answers(
+                    DecisionKind::CastOffer,
+                    Pick::Cast {
+                        card: Card::ThievingSkydiver,
+                        face: FaceIx::FRONT,
+                        costs: Castings::only(0),
+                    },
+                ),
+                ME.answers(DecisionKind::PaymentPlan, Pick::Plan { i: 0 }),
+                ME.tapped(Card::CavernOfSouls, 1),
+                THEM.casts(Card::Counterspell),
+                Resolve,
+                Resolve,
+                THEM.has(Zone::Graveyard, Card::Counterspell, 1),
+                ME.controls(Card::ThievingSkydiver, 1),
+                ME.controls(Prop::Equipment, 1),
+            ]),
     ];
 }
