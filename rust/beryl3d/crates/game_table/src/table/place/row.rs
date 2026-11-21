@@ -9,8 +9,8 @@ use super::{
     side_index,
 };
 use crate::profiles::web_fit;
-use crate::table::rows::{Beneath, NameIds, RowWindow, SameName, grouped};
-use crate::table::{Camera, FittedRow, Layout, RowArea, RowZoom, row_area};
+use crate::table::rows::{Beneath, NameIds, SameName, face_up, grouped};
+use crate::table::{Camera, FittedRow, Layout, RowArea, RowWindow, RowZoom, row_area};
 use glam::{Quat, Vec3};
 use kit_frame::frame::Place;
 use kit_scene::hit::CELL;
@@ -264,9 +264,8 @@ pub(super) fn battlefield_row(
         side,
         row: Some(row),
     };
-    let window = solver::arrange(container, &inputs, offset, |placed| {
-        let (object, mut pose) = groups.pose(&beneath, &placed, (y, camera.data.card));
-        let visible = placed.visible;
+    let posed = |placed: &solver::Placed| {
+        let (object, mut pose) = groups.pose(&beneath, placed, (y, camera.data.card));
         if let Some(fitted) = fitted {
             let at = pose.position;
             pose.position = Vec3::new(
@@ -294,24 +293,41 @@ pub(super) fn battlefield_row(
             // scrolled out of view rests undrawn at the row's end, under the cards that join
             // it, so it keeps its pose: sheared, its pose would change with every card that
             // joins and give it a track for nothing.
-            if visible {
+            if placed.visible {
                 pose = web_fit::lean((&fitted, zoom), camera, pose, object.tapped);
             }
         }
+        (object, pose)
+    };
+    let project = |placed: &solver::Placed| {
+        let (object, pose) = posed(placed);
+        let pressable = placed.copies > 0 && face_up(object) && object.name.as_deref() != Some("");
+        (camera.card_corners(pose.transform()), pressable)
+    };
+    let restore = |placed: solver::Placed| {
+        let (object, pose) = posed(&placed);
         placement.set(
             object.slot,
             Rest {
                 pose,
                 place: place(object.zone),
-                visible,
+                visible: placed.visible,
                 copies: u16::try_from(placed.copies).unwrap_or(u16::MAX),
             },
         );
-    });
+    };
+    let window = solver::arrange(
+        container,
+        &inputs,
+        offset,
+        (camera, layout.strip),
+        project,
+        restore,
+    );
     placement.rows.battlefield[side_index(side)][row_index(row)] = RowWindow::new(
-        window.groups,
         window.scroll.first,
         window.scroll.shown,
+        window.scroll.last,
         (window.before, window.after),
     );
 }

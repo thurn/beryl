@@ -20,9 +20,10 @@ pub use row::{Zooms, blocked, blocking_rows, prepared as prepare_row, row_of};
 mod under;
 pub use under::{host_slot, names_host};
 
+use super::RowWindow;
 use super::hands::{HandFits, hand};
 use super::pile::{PileShown, lay_pile, lay_unseen_exile};
-use super::rows::{NameIds, RowWindow, face_up};
+use super::rows::{NameIds, face_up};
 use super::stack::{OnStack, on_stack, place_stack, spells};
 use super::{Camera, Layout, lifted};
 use kit_base::data::verbs::Lift;

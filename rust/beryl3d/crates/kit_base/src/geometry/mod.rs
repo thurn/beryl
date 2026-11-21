@@ -1,6 +1,8 @@
 //! Surface geometry, and the dimensions of the card mesh.
 
 pub mod plane;
+mod row_window;
+pub use row_window::RowWindow;
 
 use glam::Vec2;
 

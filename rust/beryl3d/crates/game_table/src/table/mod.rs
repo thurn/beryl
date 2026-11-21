@@ -45,7 +45,7 @@ pub use place::{
 };
 pub use place::{Placement, ROWS, Rest, Rows, Scroll, Scroller, place};
 pub use place::{names_host, prepare_row, row_of, stack_slots, zone_members};
-pub use rows::{Beneath, Groups, NameIds, RowChange, RowWindow, SameName, grouped, reposed};
+pub use rows::{Beneath, Groups, NameIds, RowChange, SameName, grouped, reposed};
 pub use scene::{ABILITY_IDS, Motion, Table, Turn};
 pub use scene::{Objects, PileCount, ability_track};
 pub use shown::{Moves, Relaid};
@@ -61,7 +61,7 @@ use kit_frame::frame::Place;
 /// Half the line height of a life total in logical points.
 pub const HALF_LIFE: f32 = type_style::TITLE.size * type_style::TITLE.line_height / 2.0;
 
-pub use kit_base::geometry::Window;
+pub use kit_base::geometry::{RowWindow, Window};
 
 /// Whether a card resting at `place` takes the pointer, once it is face up and the viewer knows
 /// its name: one on the battlefield, on the stack or in the viewer's hand. A pile is one

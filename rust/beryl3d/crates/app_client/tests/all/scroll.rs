@@ -8,12 +8,12 @@ use app_client::{Client, Config};
 use beryl_card_records::{TokenMakers, fixture_message};
 use beryl_protocol::GameUpdate;
 use beryl_protocol::ipc::FixtureMessage;
-use beryl_protocol::protocol::{CardType, PlayerView, RowName, Side, Why, ZoneName};
+use beryl_protocol::protocol::{CardType, ObjectId, PlayerView, RowName, Side, Why, ZoneName};
 use beryl_protocol::script::{Act, Script, Step, StepTiming};
 use beryl_protocol::testing::{self, ScriptBuilder, ViewBuilder, step, timing};
 use game_probe::agent::steps::rest_equals_placement;
 use glam::Vec2;
-use kit_frame::frame::{Frame, Place, Role};
+use kit_frame::frame::{Frame, Place, Role, StateBits};
 use kit_probe::agent::Rule;
 use kit_scene::hit::uncovered;
 use kit_ui::input::Input as DeviceInput;
@@ -41,13 +41,17 @@ fn lands(count: usize) -> ViewBuilder {
 }
 
 fn page(view: &ViewBuilder) -> Page {
+    page_in(view, crate::REGULAR, WINDOW)
+}
+
+fn page_in(view: &ViewBuilder, layout: kit_probe::agent::Layout, size: Size) -> Page {
     let messages = vec![FixtureMessage::game_update(&view.update())];
     let mut page = Page::new(
         crate::test_data::data(),
         Recording(messages).into(),
         Side::You,
-        crate::REGULAR,
-        WINDOW,
+        layout,
+        size,
     )
     .expect("the page opens");
     page.still();
@@ -332,6 +336,120 @@ fn a_row_that_fits_ignores_the_wheel() {
     page.wheel(point, NOTCH_DOWN * 3.0);
     assert!(!page.position().2, "nothing moves");
     assert_eq!(row(page.frame()), before);
+}
+
+fn row_windows() -> [(kit_probe::agent::Layout, Size); 2] {
+    [
+        (crate::REGULAR, WINDOW),
+        (
+            crate::COMPACT,
+            Size {
+                width: 393.0,
+                height: 759.0,
+            },
+        ),
+    ]
+}
+
+fn creature(view: &mut ViewBuilder, name: &str) -> ObjectId {
+    let card = view.card(ZoneName::Battlefield, Side::You, name);
+    card.types = vec![CardType::Creature];
+    card.slot
+}
+
+fn attach(view: &mut ViewBuilder, host: ObjectId, name: &str) {
+    let card = view.card(ZoneName::Battlefield, Side::You, name);
+    card.types = vec![CardType::Enchantment];
+    card.attached_to = Some(host);
+}
+
+#[test]
+fn an_oversized_pile_stays_out_of_the_battlefield_window() {
+    let mut view = ViewBuilder::new();
+    for _ in 0..300 {
+        view.card(ZoneName::Battlefield, Side::You, "Oversized pile")
+            .types = vec![CardType::Land];
+    }
+    view.card(ZoneName::Battlefield, Side::You, "Land 0").types = vec![CardType::Land];
+    view.script(ScriptBuilder::reset().build());
+
+    for (layout, size) in row_windows() {
+        let mut page = page_in(&view, layout, size);
+        let frame = page.frame();
+        assert!(
+            !frame.resolved.iter().any(|element| {
+                element.opacity > 0.0 && frame.name(element.name) == "Oversized pile"
+            }),
+            "{size:?}"
+        );
+        assert_eq!(first(&mut page), 0, "{size:?}");
+        assert_eq!(count(&mut page, "left"), Some(300), "{size:?}");
+        assert_eq!(count(&mut page, "right"), None, "{size:?}");
+    }
+}
+
+#[test]
+fn an_unpressable_pack_does_not_hide_following_lands() {
+    let mut view = lands(41);
+    let host = view.build().battlefield[0];
+    // Tucks under a land lie level with the host in both layouts. Its neighbours
+    // must remain available when the tucked cards cannot each expose a target.
+    for index in 0..32 {
+        view.card(ZoneName::Exile, Side::You, &format!("Exiled {index}"))
+            .exiled_with = Some(host);
+    }
+
+    for (layout, size) in row_windows() {
+        let mut page = page_in(&view, layout, size);
+        assert_eq!(first(&mut page), 1, "{size:?}");
+        assert_eq!(count(&mut page, "left"), Some(1), "{size:?}");
+        assert!(
+            {
+                let frame = page.frame();
+                !frame.resolved.iter().any(|element| {
+                    element.opacity > 0.0 && frame.name(element.name).starts_with("Exiled ")
+                })
+            },
+            "{size:?}"
+        );
+        let point = on_card(&mut page, 0);
+        page.wheel(point, NOTCH_DOWN * 100.0);
+        page.still();
+        assert_eq!(
+            row(page.frame()).last().map(|&(number, _)| number),
+            Some(40),
+            "{size:?}"
+        );
+    }
+}
+
+#[test]
+fn a_crowded_host_keeps_both_attachments_in_reach() {
+    let mut view = ViewBuilder::new();
+    let host = creature(&mut view, "Host");
+    attach(&mut view, host, "First Aura");
+    attach(&mut view, host, "Second Aura");
+    for index in 0..30 {
+        creature(&mut view, &format!("Creature {index}"));
+    }
+    view.script(ScriptBuilder::reset().build());
+
+    for (layout, size) in row_windows() {
+        let mut page = page_in(&view, layout, size);
+        let faults: Vec<_> = page
+            .faults()
+            .into_iter()
+            .filter(|fault| fault.rule == Rule::Reachable && fault.message.contains("Aura"))
+            .collect();
+        assert!(faults.is_empty(), "{size:?}: {faults:?}");
+        for locator in ["card \"First Aura\"", "card \"Second Aura\""] {
+            page.hover(locator);
+            assert!(
+                page.find(locator).states().has(StateBits::HOVERED),
+                "{size:?}: {locator}"
+            );
+        }
+    }
 }
 
 fn wheel_at(point: Vec2, wheel: Vec2) -> Pointer {

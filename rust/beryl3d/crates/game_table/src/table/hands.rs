@@ -53,8 +53,12 @@ pub(super) fn hand(
 
     if yours {
         let (before, after) = (solved.before, solved.after);
-        placement.rows.hand =
-            RowWindow::new(count, before, count - before - after, (before, after));
+        placement.rows.hand = RowWindow::new(
+            before,
+            count - before - after,
+            before + after,
+            (before, after),
+        );
     }
     for (object, laid) in objects.iter().zip(&solved.items) {
         placement.set(

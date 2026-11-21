@@ -8,6 +8,7 @@ use super::{Camera, Edge};
 
 mod anchor;
 mod strip;
+mod viewport;
 
 /// An item tucked under the face of a group.
 pub struct Tuck {
@@ -50,7 +51,6 @@ pub struct Placed {
 
 /// A scroll window and the number of primary items off either end.
 pub struct Window {
-    pub groups: usize,
     pub scroll: GroupWindow,
     pub before: usize,
     pub after: usize,
@@ -221,7 +221,8 @@ struct Pack {
 
 impl Pack {
     fn new(group: &Group, row: Row) -> Self {
-        let width = group.width + row.pile_step.x * gaps(group.copies);
+        let pile = row.pile_step.x * gaps(group.copies);
+        let width = group.width + pile;
         if group.tucks.is_empty() {
             return Self {
                 width,
@@ -245,14 +246,28 @@ impl Pack {
             .map(|tuck| (group.width - tuck.width) / 2.0)
             .fold(0.0, f32::max);
         // Keep the exposed strip wide enough when the tucked item is narrower than the face.
-        // A group too wide for the entire row cannot scroll into view, so close its tucks up
-        // before measuring the space it needs.
-        let fixed = group.width + peek(0.0, Edge::Start) + peek(0.0, Edge::End);
-        let fits = (row.room() - fixed) / group.tucks.len() as f32;
-        let tuck_step = row.tuck_step.max(row.strip + narrower).min(fits).max(0.0);
+        let preferred = row.tuck_step.max(row.strip + narrower);
+        let width_at =
+            |step| peek(step, Edge::Start) + group.width + pile.max(peek(step, Edge::End));
+        let tuck_step = if width_at(preferred) <= row.room() {
+            preferred
+        } else {
+            // Start with the widest spread that fits. Projection still has to prove that
+            // each pressable tuck can be reached at this spacing.
+            let (mut low, mut high) = (0.0, preferred);
+            for _ in 0..12 {
+                let middle = f32::midpoint(low, high);
+                if width_at(middle) <= row.room() {
+                    low = middle;
+                } else {
+                    high = middle;
+                }
+            }
+            low
+        };
         let left_peek = peek(tuck_step, Edge::Start);
         Self {
-            width: width + left_peek + peek(tuck_step, Edge::End),
+            width: width_at(tuck_step),
             left_peek,
             tuck_step,
             // The next face would cover the exposed edges on this side first.
@@ -311,119 +326,35 @@ fn gaps(count: usize) -> f32 {
     count.saturating_sub(1) as f32
 }
 
-/// Arrange the row, starting the scroll window at `offset` groups if it does not fit.
-/// All items get rests, including those off either end.
+/// The projected card corners, in perimeter order, and whether a press must reach the card.
+pub type Projection = ([Vec2; 4], bool);
+
+/// Arrange the row, starting the scroll window at `offset` fitting groups if it does not fit.
+/// The caller projects placements with the same card poses it draws. All items get rests,
+/// including those off either end.
 pub fn arrange(
     row: Row,
     groups: &[Group],
     offset: usize,
+    (camera, press_points): (&Camera, f32),
+    project: impl Fn(&Placed) -> Projection,
     mut placed: impl FnMut(Placed),
 ) -> Window {
     let packs: Vec<Pack> = groups.iter().map(|group| Pack::new(group, row)).collect();
     let full = row.full_width(groups, packs.iter().map(|pack| pack.width));
-    let room = row.room();
-    let mut layer = 0;
-    let mut counts = (0, 0);
-    let (first, shown) = if full <= room || groups.is_empty() {
-        if groups.iter().any(|group| group.anchor.is_some()) {
-            let widths: Vec<f32> = packs.iter().map(|pack| pack.width).collect();
-            let (order, lefts) = anchor::arrange(groups, &widths, full, row);
-            for (index, left) in order.into_iter().zip(lefts) {
-                packs[index].place(
-                    &groups[index],
-                    index,
-                    row,
-                    left,
-                    (true, &mut layer),
-                    &mut placed,
-                );
-            }
-            return window(groups.len(), 0, groups.len(), counts);
+    let layout = viewport::Layout::new(row, groups, &packs, (camera, press_points), &project);
+    if (full <= row.room() || groups.is_empty()) && layout.full(full, &mut placed) {
+        Window {
+            scroll: GroupWindow {
+                first: 0,
+                shown: groups.len(),
+                last: 0,
+                axis: ScrollAxis::Horizontal,
+            },
+            before: 0,
+            after: 0,
         }
-        let mut left = row.start(full);
-        for (index, (group, pack)) in groups.iter().zip(&packs).enumerate() {
-            pack.place(group, index, row, left, (true, &mut layer), &mut placed);
-            let gap = groups
-                .get(index + 1)
-                .map_or(0.0, |next| row.gap_between(group.gap_class, next.gap_class));
-            left += pack.width + gap;
-        }
-        (0, groups.len())
     } else {
-        let (first, shown, step) = scroll_window(row, &packs, offset);
-        let end = first + shown;
-        let mut left = row.left;
-        for (index, (group, pack)) in groups.iter().zip(&packs).enumerate() {
-            let at = if index < first {
-                counts.0 += group.copies;
-                row.left
-            } else if index >= end {
-                counts.1 += group.copies;
-                (row.right + row.gap).min(row.limit.max(row.right) - pack.width)
-            } else {
-                let at = left;
-                left += if pack.full_advance { pack.width } else { step };
-                at
-            };
-            pack.place(
-                group,
-                index,
-                row,
-                at,
-                ((first..end).contains(&index), &mut layer),
-                &mut placed,
-            );
-        }
-        (first, shown)
-    };
-    window(groups.len(), first, shown, counts)
-}
-
-fn scroll_window(row: Row, packs: &[Pack], offset: usize) -> (usize, usize, f32) {
-    let room = row.room();
-    let widest = packs.iter().map(|pack| pack.width).fold(0.0, f32::max);
-    let mut shown = (((room - widest) / row.strip).floor() as usize)
-        .saturating_add(1)
-        .clamp(1, packs.len());
-    loop {
-        let first = offset.min(packs.len() - shown);
-        let last = first + shown - 1;
-        let (whole, overlapped) =
-            packs[first..last]
-                .iter()
-                .fold((0.0, 0), |(whole, count), pack| {
-                    if pack.full_advance {
-                        (whole + pack.width, count)
-                    } else {
-                        (whole, count + 1)
-                    }
-                });
-        let remaining = room - packs[last].width - whole;
-        let step = if overlapped > 0 {
-            (remaining / overlapped as f32).max(0.0)
-        } else {
-            0.0
-        };
-        if shown == 1
-            || (overlapped > 0 && step >= row.strip)
-            || (overlapped == 0 && whole + packs[last].width <= room)
-        {
-            return (first, shown, step);
-        }
-        shown -= 1;
-    }
-}
-
-fn window(groups: usize, first: usize, shown: usize, (before, after): (usize, usize)) -> Window {
-    Window {
-        groups,
-        scroll: GroupWindow {
-            first,
-            shown,
-            last: groups - shown,
-            axis: ScrollAxis::Horizontal,
-        },
-        before,
-        after,
+        layout.overflow(offset, &mut placed)
     }
 }

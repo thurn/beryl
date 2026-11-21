@@ -223,7 +223,7 @@
     "A battlefield row that scrolls": {
       "recording": "stress-255",
       "at": "end",
-      "shows": "text \"Your creatures right 35\""
+      "shows": "text \"Your creatures right 37\""
     }
   }
 }

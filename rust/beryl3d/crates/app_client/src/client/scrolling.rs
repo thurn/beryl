@@ -205,7 +205,7 @@ fn row_viewport(table: &Table, row: Scroller) -> Option<Viewport> {
         Viewport::groups(GroupWindow {
             first: window.first(),
             shown: window.shown(),
-            last: window.groups().saturating_sub(window.shown()),
+            last: window.last(),
             axis: ScrollAxis::Horizontal,
         })
     })

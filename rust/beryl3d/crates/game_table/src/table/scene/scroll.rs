@@ -70,7 +70,7 @@ impl Table {
                 self.scroll.battlefield[side_index(side)][row_index(row)] = first;
             }
             Scroller::Hand => self.scroll.hand = first,
-            Scroller::Stack => self.scroll.stack = window.groups() - window.shown() - first,
+            Scroller::Stack => self.scroll.stack = window.last() - first,
         }
         // A card part of the way through a slide begins the next one from where it is drawn.
         let now = self.slide.now;

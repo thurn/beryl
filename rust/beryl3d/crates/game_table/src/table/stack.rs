@@ -103,9 +103,9 @@ pub(super) fn place_stack(
     };
     let before = count - arranged.window.first - arranged.window.shown;
     placement.rows.stack = RowWindow::new(
-        count,
         before,
         arranged.window.shown,
+        count - arranged.window.shown,
         (before, arranged.window.first),
     );
     let window = camera.window.size;
@@ -217,7 +217,7 @@ impl Table {
         let (arranged, units) = arrange(
             self.layout(),
             self.camera(),
-            (window.groups(), window.after()),
+            (window.shown() + window.last(), window.after()),
         );
         let (low, high) = arranged.bounds()?;
         Some(match units {
