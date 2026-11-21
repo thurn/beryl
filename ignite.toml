@@ -223,7 +223,8 @@ args = ["--dangerously-skip-permissions"]
 
 [pool.cli.codex]
 program = "codex"
-args = ["--dangerously-bypass-approvals-and-sandbox"]
+# Playwright's separate service can still be starting when Ignite probes after a reboot.
+args = ["--dangerously-bypass-approvals-and-sandbox", "-c", "mcp_servers.playwright.required=false"]
 
 # Tip verification (docs/ignite.md, "How long a round takes"). A claim holds about this many CPU
 # seconds of recorded check costs, so a family of thousands of cheap checks is a few commands
