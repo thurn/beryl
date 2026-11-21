@@ -193,12 +193,18 @@ impl Options {
                 )));
             };
             let scene = options.test_name(&name)?;
-            if scene.starts_with(stories::PREFIX) && !name.starts_with("b3d:") && !layout_given {
-                let header = stories::open(&scene).map_err(Usage)?.header;
-                if !options.sized {
-                    options.size = header.window;
+            if stories::is_story(&scene) && !name.starts_with("b3d:") {
+                let story = stories::open(&scene).map_err(Usage)?;
+                let header = story.header();
+                if !layout_given {
+                    if !options.sized {
+                        options.size = header.window;
+                    }
+                    options.layout = header.layout;
                 }
-                options.layout = header.layout;
+                if !scale_given {
+                    options.scale = story.scale();
+                }
             }
             options.recording = Some(scene);
             options.apply_profile(&name, scale_given)?;
@@ -211,7 +217,7 @@ impl Options {
         let Some(name) = self.value(PROFILE) else {
             return Ok(());
         };
-        if self.name().starts_with(stories::PREFIX) {
+        if stories::is_story(self.name()) {
             return Err(Usage("--profile takes a recording".to_owned()));
         }
         let definition = crate::pages::inspection_profile(name)

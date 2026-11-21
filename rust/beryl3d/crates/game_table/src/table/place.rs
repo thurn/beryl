@@ -14,9 +14,9 @@ mod policy;
 pub use indexed::arrival;
 pub use policy::PileRules;
 mod row;
+use row::battlefield_row;
 pub(crate) use row::{RowFits, rezoom, zooms};
-pub use row::{Zooms, blocked, blocking_rows, prepared as prepare_row};
-use row::{battlefield_row, row_of};
+pub use row::{Zooms, blocked, blocking_rows, prepared as prepare_row, row_of};
 mod under;
 pub use under::{host_slot, names_host};
 

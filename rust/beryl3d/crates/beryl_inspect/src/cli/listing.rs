@@ -79,7 +79,7 @@ pub(super) fn list(options: &Options) -> Result<Printed, Usage> {
         let length = match (&row.failure, row.length_ms) {
             (Some(why), _) if row.name.starts_with(stories::PREFIX) => why.clone(),
             (None, Some(ms)) if row.name.starts_with(stories::PREFIX) => {
-                format!("{ms}ms, toolkit story")
+                format!("{ms}ms, story")
             }
             (Some(why), _) => format!("not recorded: {why}"),
             (None, Some(ms)) => format!("{ms}ms, {} views", row.views),
@@ -122,7 +122,7 @@ struct Listed {
 }
 
 pub(super) fn info(options: &Options) -> Result<Printed, Usage> {
-    if options.name().starts_with(stories::PREFIX) {
+    if stories::is_story(options.name()) {
         return story_info(options);
     }
     let mut page = open_recording(options)?;

@@ -8,6 +8,10 @@ publish = false
 [lints]
 workspace = true
 
+[features]
+# Authored stories build synthetic protocol views. Only tools and tests need them.
+stories = ["beryl_protocol/testing"]
+
 [dependencies]
 beryl_protocol.workspace = true
 glam.workspace = true
@@ -26,7 +30,9 @@ game_hud.workspace = true
 game_manual.workspace = true
 
 [dev-dependencies]
-# Builds synthetic protocol views and scripts for client tests.
+# Test the story parser without turning on synthetic views in the live client.
+game_probe = { path = ".", features = ["stories"] }
+# Builds synthetic views and scripts for game probe tests.
 beryl_protocol = { workspace = true, features = ["testing"] }
 # Reads the web audio manifest to verify that both clients use the same cue names.
 beryl_test_files = { path = "../../../crates/beryl_test_files" }

@@ -144,7 +144,7 @@ fn element(body: &str) -> Result<Element, String> {
         .and_then(|word| word.split_once('x'))
         .and_then(|(w, h)| Some((w.parse().ok()?, h.parse().ok()?)))
         .ok_or("no <width>x<height> size")?;
-    let states = states(&words.collect::<Vec<_>>().join(" "))?;
+    let states = parse_states(&words.collect::<Vec<_>>().join(" "))?;
     Ok(Element {
         role: role.to_owned(),
         name,
@@ -159,7 +159,8 @@ fn element(body: &str) -> Result<Element, String> {
 }
 
 /// The name up to its closing quote, unescaped, and what follows it.
-pub(crate) fn quoted_name(text: &str) -> Option<(String, &str)> {
+#[must_use]
+pub fn quoted_name(text: &str) -> Option<(String, &str)> {
     let mut name = String::new();
     let mut escaped = false;
     for (at, c) in text.char_indices() {
@@ -176,8 +177,12 @@ pub(crate) fn quoted_name(text: &str) -> Option<(String, &str)> {
     None
 }
 
-/// The states, each a word of the closed list, with a parenthesised value where it takes one.
-fn states(text: &str) -> Result<Vec<String>, String> {
+/// Reads the states of a tree line, including any quoted or numeric values.
+///
+/// # Errors
+///
+/// When a state or its value does not follow the tree's grammar.
+pub fn parse_states(text: &str) -> Result<Vec<String>, String> {
     let mut states = Vec::new();
     let mut rest = text.trim();
     while !rest.is_empty() {

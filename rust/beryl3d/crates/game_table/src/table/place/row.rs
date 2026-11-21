@@ -473,11 +473,11 @@ fn lands_in_order<'a>(
     (order, SameName::from_previous(previous))
 }
 
-/// Which row a permanent stands in: where a player pinned it, else the creatures' row for a
-/// creature, the lands' part of the back row for a mana source, and the others' part for the
-/// rest. A mana source is a land, or an artifact with a mana ability (a mana rock, a Treasure),
-/// as the web interface's `battlefieldRow` has it.
-pub(super) fn row_of(object: &ObjectView) -> RowName {
+/// The battlefield row for a permanent. A pin takes precedence over card types and mana
+/// abilities, as in the web interface's `battlefieldRow`. Artifacts with mana abilities
+/// go in the lands row.
+#[must_use]
+pub fn row_of(object: &ObjectView) -> RowName {
     let is = |kind| object.types.contains(&kind);
     object.pinned.unwrap_or(if is(CardType::Creature) {
         RowName::Creatures

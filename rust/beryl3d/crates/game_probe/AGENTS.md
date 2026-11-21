@@ -38,3 +38,62 @@ the first name in each group and includes every fixture separately.
 Names can affect row piling and text wrapping. The signature compares only their
 layout effects. It also leaves out rules text and object, ability, decision and
 session IDs.
+
+## Table and feature stories
+
+Use a story for a state the engine cannot reach or need not play. A fault in how
+a card behaves belongs in a scenario or fixture, where the engine can check
+which actions are legal.
+
+`just b3d story` lists stories. Store a story beside the crate or feature that
+it exercises, in its `stories/` directory. Open it by its `story/<crate>/<name>`
+name or by its `.story` path.
+
+```text
+story table 1600x900 desktop
+life yours 14
+life theirs 9
+card "Island" #8 battlefield.yours.lands tapped
+card "Forest {n}" battlefield.theirs.lands x40
+card #49 hand.theirs
+card "Spell" stack
+```
+
+Paste a card line from `just b3d tree` or leave out its screen coordinates. A
+missing ID is assigned the next free slot. `x40` repeats a card forty times. If
+the name uses `{n}`, the names differ from 1 through 40. An explicit ID on a
+repeat starts the run of IDs. Zones contain cards in line order, from the bottom
+of a pile when the zone is ordered that way. Use `stack.theirs` for an
+opponent's spell, and leave out the name for an unknown card. An `ability` line
+takes an ID followed by a stack ability as protocol JSON.
+
+An optional `prompt` line takes a protocol `DecisionView` as JSON. An optional
+`script` line takes a protocol `Script` as JSON and plays it from the table
+defined by the card lines. Leave its timing empty to use the session's timing.
+When both are present, the prompt opens after the script.
+
+A settings story uses key and value lines for the sheet's transient state and
+the inputs its view reads. Omitted controls use the app defaults.
+
+```text
+story feature 1600x900 desktop
+feature settings
+screen game
+confirm-concede true
+music 19
+muted true
+```
+
+`just b3d story from verbs-zones --at end` writes a table story to a temporary
+file and prints the command to replay it. Give `--out <path.story>` to choose
+the file. A capture keeps the selected seat, window, clock and the recording's
+protocol messages so it can reproduce active scripts, prompts and effects
+without the engine or recordings pack. Each `view` is followed by its card
+lines. The JSON after `|` keeps card details the tree leaves out. Replay looks
+up `start` and `end` at the captured instant. A capture made with `--profile`
+keeps that profile's name.
+
+Add `--feature settings` to capture the settings sheet as editable values. Other
+registered features with standalone views can reuse the capture's recording to
+rebuild their own view at that instant. The feature preview draws the feature
+alone.

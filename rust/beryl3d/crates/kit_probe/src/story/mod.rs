@@ -4,7 +4,7 @@ mod parse;
 mod player;
 mod style;
 
-pub use parse::ParseError;
+pub use parse::{ParseError, parse_header};
 pub use player::Player;
 
 use std::fmt;
@@ -21,6 +21,19 @@ use style::Property;
 pub struct Header {
     pub layout: Layout,
     pub window: Size,
+}
+
+impl Header {
+    /// The first line of a story, including its terminating newline.
+    #[must_use]
+    pub fn line(self, kind: &str) -> String {
+        let Size { width, height } = self.window;
+        let profile = match self.layout {
+            Layout::Desktop => "desktop",
+            Layout::Phone => "phone",
+        };
+        format!("story {kind} {width}x{height} {profile}\n")
+    }
 }
 
 /// A parsed toolkit scene. Its display form is the canonical story file, including the final
@@ -114,12 +127,7 @@ impl fmt::Display for Story {
             Body::Container(_) => "container",
             Body::Effect(..) => "effect",
         };
-        let Size { width, height } = self.header.window;
-        let profile = match self.header.layout {
-            Layout::Desktop => "desktop",
-            Layout::Phone => "phone",
-        };
-        writeln!(out, "story {kind} {width}x{height} {profile}")?;
+        out.write_str(&self.header.line(kind))?;
         match &self.body {
             Body::Elements(nodes) => {
                 for node in nodes {

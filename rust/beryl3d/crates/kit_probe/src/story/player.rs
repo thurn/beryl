@@ -121,6 +121,39 @@ impl Player {
         if let Some((&id, _)) = nodes.iter().find(|(_, node)| node.edits) {
             layer.focus(Some(id));
         }
+        Self::with_layer(window, data, layer, nodes, effect)
+    }
+
+    /// Plays a feature's own element through the toolkit's flat renderer.
+    #[must_use]
+    pub fn from_element(element: Element, window: Window, data: Arc<Data>) -> Self {
+        let mut layer = Layer::new();
+        layer.resize(window);
+        layer.show(Some(element));
+        let nodes = layer
+            .element_ids()
+            .into_iter()
+            .map(|id| {
+                (
+                    id,
+                    PreviewNode {
+                        id,
+                        states: StateBits::default(),
+                        edits: false,
+                    },
+                )
+            })
+            .collect();
+        Self::with_layer(window, data, layer, nodes, None)
+    }
+
+    fn with_layer(
+        window: Window,
+        data: Arc<Data>,
+        layer: Layer,
+        nodes: BTreeMap<ElementId, PreviewNode>,
+        effect: Option<(Effect, Rect)>,
+    ) -> Self {
         Self {
             data,
             window,

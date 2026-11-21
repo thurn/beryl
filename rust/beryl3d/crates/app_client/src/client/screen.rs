@@ -6,7 +6,7 @@ use beryl_protocol::protocol::Status;
 use glam::Vec2;
 
 use super::Client;
-use super::features::{Placement, ViewInputs};
+use super::features::{Features, Placement, ViewInputs};
 
 use crate::command::{Request, SessionCommand};
 use app_screens::screens::{self, Screen, ScreenIn, Sheet, bug_report};
@@ -198,6 +198,71 @@ impl Client {
         under_visible: bool,
         placement_scene: Option<&PlacementScene>,
     ) -> MountedViews {
+        self.with_mounted_inputs(placement_scene, |features, feature_inputs, menu_face| {
+            let sheet = feature_inputs.hud.sheet;
+            let sheet_view =
+                sheet.and_then(|sheet| features.view(Placement::Sheet(sheet), feature_inputs));
+            let log = (under_visible && feature_inputs.screen == Screen::Game)
+                .then(|| features.view(Placement::GameLog, feature_inputs))
+                .flatten();
+            let mounted_screen = under_visible
+                .then(|| features.view(Placement::Screen(feature_inputs.screen), feature_inputs))
+                .flatten();
+            let result = (under_visible && feature_inputs.screen == Screen::Game)
+                .then(|| features.view(Placement::GameOver, feature_inputs))
+                .flatten();
+            MountedViews {
+                sheet: sheet_view,
+                screen: mounted_screen,
+                log,
+                result,
+                menu_face,
+            }
+        })
+    }
+
+    /// Builds a registered feature's view using the same state and inputs as its screen.
+    #[cfg(feature = "stories")]
+    pub(crate) fn feature_element(&mut self, id: &str) -> Option<Element> {
+        let placement = self.placement_scene();
+        self.with_mounted_inputs(placement.as_ref(), |features, inputs, _| {
+            features.view_named(id, inputs)
+        })
+    }
+
+    #[cfg(feature = "stories")]
+    pub(crate) fn settings_story(&self) -> game_probe::story::SettingsStory {
+        use crate::settings::Graphics;
+
+        let settings = self.settings.screen();
+        game_probe::story::SettingsStory {
+            scale: Some(self.window.scale),
+            screen: Some(self.features.screen.name().to_owned()),
+            confirm_concede: self.features.settings_state().confirm_concede,
+            game_over: self
+                .show
+                .latest()
+                .is_some_and(|update| matches!(update.view.status, Status::Over { .. })),
+            music: Some(settings.music),
+            effects: Some(settings.effects),
+            muted: Some(settings.muted),
+            full_control: Some(settings.full_control),
+            graphics: Some(
+                match settings.graphics {
+                    Graphics::Automatic => "automatic",
+                    Graphics::Baseline => "baseline",
+                    Graphics::Enhanced => "enhanced",
+                }
+                .to_owned(),
+            ),
+        }
+    }
+
+    fn with_mounted_inputs<T>(
+        &mut self,
+        placement_scene: Option<&PlacementScene>,
+        build: impl FnOnce(&mut Features, ViewInputs<'_>, Option<FaceId>) -> T,
+    ) -> T {
         let sheet = self.features.sheet;
         let view = self.show.latest().map(|update| &update.view);
         let played = self.show.shown().map(|update| &update.view);
@@ -243,27 +308,7 @@ impl Client {
             game_over: view.is_some_and(|view| matches!(view.status, Status::Over { .. })),
             settings: self.settings.screen(),
         };
-        let sheet_view =
-            sheet.and_then(|sheet| self.features.view(Placement::Sheet(sheet), feature_inputs));
-        let log = (under_visible && self.features.screen == Screen::Game)
-            .then(|| self.features.view(Placement::GameLog, feature_inputs))
-            .flatten();
-        let mounted_screen = under_visible
-            .then(|| {
-                self.features
-                    .view(Placement::Screen(self.features.screen), feature_inputs)
-            })
-            .flatten();
-        let result = (under_visible && self.features.screen == Screen::Game)
-            .then(|| self.features.view(Placement::GameOver, feature_inputs))
-            .flatten();
-        MountedViews {
-            sheet: sheet_view,
-            screen: mounted_screen,
-            log,
-            result,
-            menu_face,
-        }
+        build(&mut self.features, feature_inputs, menu_face)
     }
 
     /// Everything the screen functions read, from what the client holds now. The inspector sets

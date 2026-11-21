@@ -133,7 +133,7 @@ pub fn tests(filter: &str, windows: Windows) -> Result<Vec<Test>, String> {
     for (recording, seat) in names {
         let story_windows = recording.starts_with(crate::stories::PREFIX).then(|| {
             let layout = crate::stories::open(&recording)
-                .map_or(Layout::Desktop, |story| story.header.layout);
+                .map_or(Layout::Desktop, |story| story.header().layout);
             match (layout, windows) {
                 (Layout::Desktop, Windows::Phone) => Vec::new(),
                 (Layout::Desktop, _) => Windows::Desktop.windows(),

@@ -12,6 +12,7 @@ pub use kit_probe::agent::line;
 mod listing;
 pub mod options;
 mod records;
+mod story;
 mod test;
 mod timeline;
 mod view;
@@ -64,7 +65,7 @@ impl Printed {
     }
 }
 
-const COMMANDS: [Command; 10] = [
+const COMMANDS: [Command; 11] = [
     Command {
         name: "data",
         summary: "validate the client tuning files",
@@ -323,6 +324,34 @@ const COMMANDS: [Command; 10] = [
         run: timeline::timeline,
     },
     Command {
+        name: "story",
+        summary: "list stories or write a story from a recording's moment",
+        argument: " from <recording>",
+        examples: [
+            (
+                "just b3d story from verbs-zones --at end",
+                "write a table story",
+            ),
+            (
+                "just b3d story from screen/settings --at end --feature settings",
+                "write a settings story",
+            ),
+        ],
+        spec: Spec {
+            recording: true,
+            values: &["--feature", "--out"],
+            switches: &[],
+        },
+        own: &[
+            ("--feature <id>", "write one registered feature's view"),
+            (
+                "--out <path.story>",
+                "write to this file instead of a temporary file",
+            ),
+        ],
+        run: story::from,
+    },
+    Command {
         name: "export",
         summary: "every recording's messages, as the fixture files the web interface reads",
         argument: " <directory>",
@@ -387,6 +416,20 @@ pub fn main(args: &[String]) -> Ran {
             ..Ran::default()
         };
     }
+    let rest = if command.name == "story" {
+        match rest {
+            [] => return main(&["list".to_owned(), "story/".to_owned()]),
+            [verb, args @ ..] if verb == "from" => args,
+            _ => {
+                return usage(&Usage(
+                    "write story from <recording> --at <moment>; just b3d story lists stories"
+                        .to_owned(),
+                ));
+            }
+        }
+    } else {
+        rest
+    };
     let printed = Options::parse(command.name, rest, command.spec).and_then(|options| {
         crate::data::checkout().map_err(Usage)?;
         (command.run)(&options)
@@ -457,7 +500,7 @@ fn help(command: &Command) -> String {
 
 /// The recording `options` names, in the window, seat and scale they give, at its start.
 pub fn open(options: &Options) -> Result<Scene, Usage> {
-    if options.name().starts_with(stories::PREFIX) {
+    if stories::is_story(options.name()) {
         Scene::open(
             options.name(),
             options.seat,
@@ -472,9 +515,9 @@ pub fn open(options: &Options) -> Result<Scene, Usage> {
 }
 
 fn open_recording(options: &Options) -> Result<Page, Usage> {
-    if options.name().starts_with(stories::PREFIX) {
+    if stories::is_story(options.name()) {
         return Err(Usage(format!(
-            "{} reads a recording; use tree, check, png or film with a toolkit story",
+            "{} reads a recording; use tree, check, png or film with a story",
             options.command
         )));
     }

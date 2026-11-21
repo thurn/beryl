@@ -1832,6 +1832,7 @@ dependencies = [
  "game_hud",
  "game_manual",
  "game_play",
+ "game_probe",
  "game_table",
  "glam",
  "kit_base",

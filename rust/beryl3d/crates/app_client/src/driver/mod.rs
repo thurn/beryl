@@ -16,6 +16,7 @@ mod glyphs;
 mod keys;
 mod playthrough;
 mod recording;
+mod story;
 
 use crate::client;
 use client::{Client, Config, Input, SessionCommand};
@@ -37,6 +38,8 @@ pub use game_probe::driver::{
     REPLY_DELAY, TICK, key_code, plays_on, point,
 };
 pub use recording::{Answer, Recording, Responses};
+#[cfg(feature = "stories")]
+pub use story::settings_element;
 
 use self::cues::Cues;
 use game_play::play::record::Plant;
@@ -44,7 +47,7 @@ use game_table::faces::FaceList;
 use kit_frame::frame::{Frame, Sound, StateBits, Wake};
 use kit_probe::agent::checks;
 use kit_probe::agent::tree::locator_of;
-use kit_probe::agent::{Fault, Layout, TreeOptions, locate, tree};
+use kit_probe::agent::{Fault, Layout, locate};
 use kit_probe::driver::{moment_distance, offset_from};
 use kit_scene::hit::{bounds, uncovered};
 use kit_ui::input::{
@@ -93,6 +96,9 @@ pub struct Page {
     client: Client,
     /// The clock, in nanoseconds since the recording's start.
     now: u64,
+    /// The single moment selected by a captured table story, if this page plays one.
+    #[cfg(feature = "stories")]
+    story_moment: Option<u64>,
     /// How many views the client has been given.
     released: usize,
     /// The index of the first view of the latest batch given together.
@@ -152,6 +158,8 @@ impl Page {
             cues: Cues::default(),
             client: Client::new(data, Config::LARGEST),
             now: 0,
+            #[cfg(feature = "stories")]
+            story_moment: None,
             released: 0,
             batch: 0,
             rest_since: None,
@@ -293,18 +301,6 @@ impl Page {
             self.deliver_stub_glyphs();
         }
         self.client.frame(self.now)
-    }
-
-    /// Prints the current state of a registered feature, by id.
-    #[must_use]
-    pub fn feature_state(&self, id: &str) -> Option<String> {
-        self.client.feature_state(id)
-    }
-
-    /// The tree printout of the present frame.
-    pub fn tree(&mut self) -> String {
-        let frame = self.frame();
-        tree(frame, &TreeOptions::default()).expect("the whole tree needs no locator")
     }
 
     /// The element `locator` names in the present frame.
@@ -779,6 +775,8 @@ impl Page {
             cues: self.cues.fresh(),
             client: Client::new(Arc::clone(self.client.data()), Config::LARGEST),
             now: 0,
+            #[cfg(feature = "stories")]
+            story_moment: None,
             released: 0,
             batch: 0,
             rest_since: None,

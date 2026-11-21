@@ -79,7 +79,8 @@ impl FromStr for Story {
     fn from_str(text: &str) -> Result<Self, Self::Err> {
         let mut lines = text.split_terminator('\n');
         let first = lines.next().unwrap_or_default();
-        let (kind, header) = header(first).ok_or_else(|| error(1, "invalid header", HEADER))?;
+        let (kind, header) =
+            parse_header(first).ok_or_else(|| error(1, "invalid header", HEADER))?;
         let body = match kind {
             "element" => elements(lines)?,
             "container" => container(lines)?,
@@ -104,7 +105,9 @@ impl FromStr for Story {
     }
 }
 
-fn header(line: &str) -> Option<(&str, Header)> {
+/// Reads the header shared by toolkit, table and feature stories.
+#[must_use]
+pub fn parse_header(line: &str) -> Option<(&str, Header)> {
     let mut words = line.split(' ');
     let ("story", kind, window, profile, None) = (
         words.next()?,

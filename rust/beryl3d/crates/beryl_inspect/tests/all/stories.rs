@@ -55,3 +55,98 @@ fn test_lists_and_reopens_each_story_in_its_profile_windows() {
     assert!(tree.stdout.contains("--layout phone --size 375x647"));
     assert!(tree.stdout.contains("button \"Continue\" #1"));
 }
+
+fn capture(source: &[&str], feature: Option<&str>) -> String {
+    let mut args = vec!["story", "from", "--json"];
+    args.extend_from_slice(source);
+    if let Some(id) = feature {
+        args.extend(["--feature", id]);
+    }
+    let written = command(&args);
+    let value: serde_json::Value = serde_json::from_str(&written.stdout).unwrap();
+    value["path"].as_str().unwrap().to_owned()
+}
+
+fn tree_body(args: &[&str]) -> String {
+    let mut command_line = vec!["tree", "--full"];
+    command_line.extend_from_slice(args);
+    command(&command_line)
+        .stdout
+        .lines()
+        .skip(2)
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn round_trip(source: &[&str]) {
+    let path = capture(source, None);
+    let expected = tree_body(source);
+    let actual = tree_body(&[&path]);
+    std::fs::remove_file(path).unwrap();
+    // The capture uses the same driver and protocol ids, so it preserves even the ids.
+    assert!(
+        actual == expected,
+        "tree changed for {source:?}\nexpected:\n{expected}\nactual:\n{actual}"
+    );
+}
+
+#[test]
+fn a_written_story_replays_a_moment_of_every_fixture() {
+    let manifest: serde_json::Value =
+        serde_json::from_slice(&beryl_test_files::read("ui/fixtures.json").unwrap()).unwrap();
+    let fixtures = manifest["fixtures"].as_array().unwrap();
+    assert!(
+        fixtures
+            .iter()
+            .any(|fixture| fixture["name"] == "verbs-zones")
+    );
+    assert!(
+        fixtures
+            .iter()
+            .any(|fixture| fixture["name"] == "pay-default")
+    );
+    let recordings = beryl_inspect::recordings::names().unwrap();
+    for fixture in fixtures {
+        let name = fixture["name"].as_str().unwrap();
+        let (_, seat) = recordings
+            .iter()
+            .find(|(recording, _)| recording == name)
+            .unwrap_or_else(|| panic!("no recording for fixture {name}"));
+        let seat = cli::options::seat_word(cli::options::side_of(*seat));
+        round_trip(&[name, "--at", "end", "--seat", seat]);
+    }
+}
+
+#[test]
+fn a_written_story_preserves_motion_and_the_selected_seat() {
+    round_trip(&[
+        "verbs-zones",
+        "--at",
+        "500ms",
+        "--seat",
+        "opponent",
+        "--no-catch-up",
+    ]);
+    round_trip(&["stress-stack", "--at", "end"]);
+    round_trip(&["verbs-zones", "--at", "end", "--profile", "wide-compact"]);
+}
+
+#[test]
+fn a_settings_feature_story_draws_the_sheet_on_its_own() {
+    let path = capture(&["screen/settings", "--at", "end"], Some("settings"));
+    let source = std::fs::read_to_string(&path).unwrap();
+    assert!(source.contains("\nfeature settings\n"));
+    assert!(source.contains("\nscreen start\n"));
+    let tree = tree_body(&[&path]);
+    std::fs::remove_file(path).unwrap();
+    assert!(tree.contains("\"settings panel\""));
+    assert!(tree.contains("\"Mute\""));
+    assert!(!tree.contains("\"Quick Seer\""));
+}
+
+#[test]
+fn an_authored_feature_story_uses_its_state_and_controls() {
+    let tree = tree_body(&["story/game_probe/settings-confirmation"]);
+    assert!(tree.contains("\"Confirm Concede\""));
+    assert!(tree.contains("\"Unmute\""));
+}

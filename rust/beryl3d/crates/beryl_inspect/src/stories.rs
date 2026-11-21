@@ -1,19 +1,63 @@
-//! Finds toolkit stories beside the crates and features they show.
+//! Finds stories beside the crates and features they show.
 
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
-use kit_probe::story::Story;
+use kit_probe::story::{self, Header, parse_header};
 
 use crate::recordings;
 
 pub(crate) const PREFIX: &str = "story/";
 
+pub(crate) enum Story {
+    Toolkit(story::Story),
+    Game(game_probe::story::Story),
+}
+
+impl Story {
+    pub fn header(&self) -> Header {
+        match self {
+            Self::Toolkit(story) => story.header,
+            Self::Game(story) => story.header,
+        }
+    }
+
+    pub fn duration(&self) -> u64 {
+        match self {
+            Self::Toolkit(story) => story.duration(),
+            Self::Game(_) => 0,
+        }
+    }
+
+    pub fn scale(&self) -> f32 {
+        match self {
+            Self::Game(game_probe::story::Story {
+                body: game_probe::story::Body::Capture { capture, .. },
+                ..
+            }) => capture.scale,
+            Self::Game(game_probe::story::Story {
+                body: game_probe::story::Body::Settings(settings),
+                ..
+            }) => settings.scale.unwrap_or(1.0),
+            _ => 1.0,
+        }
+    }
+}
+
+pub(crate) fn is_story(name: &str) -> bool {
+    name.starts_with(PREFIX) || has_extension(Path::new(name))
+}
+
+pub(crate) fn has_extension(path: &Path) -> bool {
+    path.extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("story"))
+}
+
 struct Entry {
     path: PathBuf,
-    parsed: OnceLock<Result<Story, String>>,
+    parsed: OnceLock<Result<Arc<Story>, String>>,
 }
 
 fn catalog() -> Result<&'static BTreeMap<String, Entry>, String> {
@@ -94,7 +138,11 @@ pub(crate) fn names() -> Result<impl Iterator<Item = &'static str>, String> {
     Ok(catalog()?.keys().map(String::as_str))
 }
 
-pub(crate) fn open(name: &str) -> Result<&'static Story, String> {
+pub(crate) fn open(name: &str) -> Result<Arc<Story>, String> {
+    let path = Path::new(name);
+    if has_extension(path) {
+        return read(path).map(Arc::new);
+    }
     let catalog = catalog()?;
     let entry = catalog.get(name).ok_or_else(|| {
         let candidates: Vec<_> = catalog.keys().map(String::as_str).collect();
@@ -103,13 +151,25 @@ pub(crate) fn open(name: &str) -> Result<&'static Story, String> {
     })?;
     entry
         .parsed
-        .get_or_init(|| {
-            let source = std::fs::read_to_string(&entry.path)
-                .map_err(|why| format!("{}: {why}", entry.path.display()))?;
-            source
-                .parse::<Story>()
-                .map_err(|why| format!("{}: {why}", entry.path.display()))
-        })
-        .as_ref()
-        .map_err(Clone::clone)
+        .get_or_init(|| read(&entry.path).map(Arc::new))
+        .clone()
+}
+
+fn read(path: &Path) -> Result<Story, String> {
+    let why = |error: String| format!("{}: {error}", path.display());
+    let source = std::fs::read_to_string(path).map_err(|error| why(error.to_string()))?;
+    let kind = source
+        .lines()
+        .next()
+        .and_then(parse_header)
+        .map(|(kind, _)| kind);
+    match kind {
+        Some("table" | "feature") => game_probe::story::Story::parse(&source)
+            .map(Story::Game)
+            .map_err(why),
+        _ => source
+            .parse::<story::Story>()
+            .map(Story::Toolkit)
+            .map_err(|error| why(error.to_string())),
+    }
 }

@@ -208,7 +208,14 @@ pub(crate) fn page_with_profile(
     size: Size,
     profile: Option<&InspectionProfile>,
 ) -> Result<Page, String> {
-    let (data, safe_area) = if let Some(profile) = profile {
+    page_with_messages(name, recording(name, seat)?, seat, layout, size, profile)
+}
+
+pub(crate) fn scene_data(
+    layout: Layout,
+    profile: Option<&InspectionProfile>,
+) -> Result<(Arc<Data>, Insets), String> {
+    let input = if let Some(profile) = profile {
         (
             Arc::clone(profile.data()?),
             profile.definition().test_safe_area(),
@@ -221,7 +228,18 @@ pub(crate) fn page_with_profile(
         };
         (crate::data::checkout()?, insets)
     };
-    let recording = recording(name, seat)?;
+    Ok(input)
+}
+
+pub(crate) fn page_with_messages(
+    name: &str,
+    recording: Recording,
+    seat: Side,
+    layout: Layout,
+    size: Size,
+    profile: Option<&InspectionProfile>,
+) -> Result<Page, String> {
+    let (data, safe_area) = scene_data(layout, profile)?;
     let mut page = Page::new(data, recording.into(), seat, layout, size)
         .map_err(|error| format!("{name}: {error}"))?
         .named(name);

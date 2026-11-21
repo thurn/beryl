@@ -37,6 +37,25 @@ impl Features {
         Some((entry.prompt_view?)(&self.slots, entry.id, inputs))
     }
 
+    #[cfg(feature = "stories")]
+    pub(super) fn named_prompt_view<'a>(
+        &'a self,
+        placement: Placement,
+        mut hud: HudIn<'a>,
+    ) -> Option<Element> {
+        hud.prompt = self.prompts.current();
+        if placement == Placement::PromptBar {
+            return self.draw_prompt(placement, prompts::Inputs { hud, bar: None });
+        }
+        let shown = match &hud.prompt?.body {
+            ShapeBody::Candidates => Placement::Candidates,
+            body => Placement::Shape(shape_name(body.shape()?)),
+        };
+        (shown == placement)
+            .then(|| self.prompt_view(hud))
+            .flatten()
+    }
+
     pub(in crate::client) fn prompt_view(&self, hud: HudIn<'_>) -> Option<Element> {
         if !prompts::bar::appears(&hud) {
             return None;

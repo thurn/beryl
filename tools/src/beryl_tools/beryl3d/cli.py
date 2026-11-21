@@ -502,6 +502,11 @@ OWN_COMMANDS: tuple[Command, ...] = (
         "when each step of each script of a recording begins and ends, as JSON lines",
     ),
     b3d_command(
+        "story",
+        "list stories or write a story from a recording's moment",
+        single=True,
+    ),
+    b3d_command(
         "export",
         "every recording's messages, as the fixture files the web interface reads",
     ),

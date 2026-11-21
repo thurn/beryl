@@ -1,28 +1,52 @@
 //! The common scene operations used by the text and picture tools.
 
+use std::sync::Arc;
+
 use app_client::driver::{
-    Action, Checked, DriverError, Duration, Element, Mode, Moment, Name, Page, TICK,
+    Action, Checked, DriverError, Duration, Element, Mode, Moment, Name, Page, Recording, TICK,
+    settings_element,
 };
 use beryl_protocol::Seat;
 use beryl_protocol::protocol::Side;
+use game_probe::story::Body;
 use kit_frame::frame::Frame;
 use kit_probe::agent::{Context, Judged, Layout, checks, locate};
-use kit_probe::story::{Player, Story};
+use kit_probe::story::Player;
 use kit_scene::hit::bounds;
+use kit_ui::element::Element as Widget;
 use kit_ui::input::{AssetReady, GlyphKey, Size, Tier, Window};
 
 use crate::recordings::Listed;
 use crate::{pages, recordings, stories};
 
-/// One recording or toolkit story, opened in a particular window.
+/// One scene opened in a particular window.
 pub enum Scene {
     Recording(Box<Page>),
     Story(Box<StoryScene>),
 }
 
-/// A toolkit scene and its context for the interface tools.
+enum Preview {
+    Toolkit(Arc<stories::Story>),
+    Feature(Box<Widget>),
+}
+
+impl Preview {
+    fn player(&self, window: Window, data: Arc<kit_base::data::Data>) -> Player {
+        match self {
+            Self::Toolkit(source) => {
+                let stories::Story::Toolkit(story) = source.as_ref() else {
+                    unreachable!("this preview only holds toolkit stories");
+                };
+                Player::new(story, window, data)
+            }
+            Self::Feature(element) => Player::from_element(Widget::clone(element), window, data),
+        }
+    }
+}
+
+/// A toolkit or feature preview and its context for the interface tools.
 pub struct StoryScene {
-    source: &'static Story,
+    source: Preview,
     player: Player,
     context: Context,
     scale: f32,
@@ -42,36 +66,87 @@ impl Scene {
         size: Size,
         scale: f32,
     ) -> Result<Self, String> {
-        if !name.starts_with(stories::PREFIX) {
+        if !stories::is_story(name) {
             return pages::page(name, seat, layout, size)
                 .map(|page| Self::Recording(Box::new(page.with_scale(scale))));
         }
         if seat != Side::You {
             return Err(format!("story {name:?} has one view; use --seat you"));
         }
-        let story = stories::open(name)?;
-        let safe_area = pages::safe_area(layout);
-        let mut player = Player::new(
-            story,
-            Window {
-                size_class: None,
-                size,
-                scale,
-                safe_area,
+        let source = stories::open(name)?;
+        let profile = match source.as_ref() {
+            stories::Story::Toolkit(_) => None,
+            stories::Story::Game(story) => story
+                .profile
+                .as_deref()
+                .map(pages::inspection_profile)
+                .transpose()?,
+        };
+        let (data, safe_area) = pages::scene_data(layout, profile)?;
+        let window = Window {
+            size_class: None,
+            size,
+            scale,
+            safe_area,
+        };
+        let source = match source.as_ref() {
+            stories::Story::Toolkit(_) => Preview::Toolkit(source),
+            stories::Story::Game(story) => match &story.body {
+                Body::Table(table) => {
+                    return pages::page_with_messages(
+                        name,
+                        Recording(table.messages()),
+                        seat,
+                        layout,
+                        size,
+                        profile,
+                    )
+                    .map(|page| Self::Recording(Box::new(page.with_scale(scale))));
+                }
+                Body::Settings(settings) => {
+                    Preview::Feature(Box::new(settings_element(settings, window, &data)))
+                }
+                Body::Capture { feature, capture } => {
+                    let mut page = pages::page_with_messages(
+                        &capture.source,
+                        Recording(capture.messages.clone()),
+                        capture.seat,
+                        layout,
+                        size,
+                        profile,
+                    )?
+                    .with_scale(scale)
+                    .with_catch_up(capture.catch_up);
+                    let moment = Moment::At(Duration(capture.at));
+                    page.seek(&moment).map_err(|error| error.to_string())?;
+                    if let Some(id) = feature {
+                        let element = page.feature_element(id).ok_or_else(|| {
+                            format!("feature {id:?} has no standalone view at this moment")
+                        })?;
+                        Preview::Feature(Box::new(element))
+                    } else {
+                        return Ok(Self::Recording(Box::new(
+                            page.with_story_moment(capture.at),
+                        )));
+                    }
+                }
             },
-            crate::data::checkout()?,
-        );
+        };
+        let mut player = source.player(window, data);
         player.stub_atlas();
         let audit = player.data().audit;
         Ok(Self::Story(Box::new(StoryScene {
-            source: story,
+            source,
             player,
             context: Context {
                 recording: name.to_owned(),
                 seat,
                 layout,
                 audit,
-                checks: pages::layout_checks(layout, size),
+                checks: profile.map_or_else(
+                    || pages::layout_checks(layout, size),
+                    |profile| profile.definition().checks,
+                ),
                 size,
                 safe_area,
                 at: 0,
@@ -129,7 +204,28 @@ impl Scene {
 
     pub fn time_of(&mut self, moment: &Moment) -> Result<u64, DriverError> {
         match self {
-            Self::Recording(page) => page.time_of(moment),
+            Self::Recording(page) => match (page.story_moment(), moment) {
+                (
+                    Some(time),
+                    Moment::Named {
+                        name: Name::Start | Name::End,
+                        offset,
+                    },
+                ) => {
+                    if offset.length.0 != 0 {
+                        return Err(DriverError(
+                            "a captured story has a single moment".to_owned(),
+                        ));
+                    }
+                    Ok(time)
+                }
+                (Some(time), Moment::At(at)) if time == at.0 => Ok(time),
+                (Some(_), _) => Err(DriverError(
+                    "a captured story has only its saved instant; use --at start or --at end"
+                        .to_owned(),
+                )),
+                _ => page.time_of(moment),
+            },
             Self::Story(story) => match *moment {
                 Moment::At(at) => Ok(at.0),
                 Moment::Named { name, offset } => {
@@ -138,7 +234,7 @@ impl Scene {
                         Name::End => story.player.end(),
                         _ => {
                             return Err(DriverError(format!(
-                                "a toolkit story has start, end and times in between; write one of those instead of {name}"
+                                "a preview story has start, end and times in between; write one of those instead of {name}"
                             )));
                         }
                     };
@@ -155,19 +251,22 @@ impl Scene {
     }
 
     pub fn seek(&mut self, moment: &Moment) -> Result<(), DriverError> {
-        if let Self::Recording(page) = self {
-            return page.seek(moment);
-        }
         let time = self.time_of(moment)?;
-        if let Self::Story(story) = self {
-            story.player.seek(time);
+        match self {
+            Self::Recording(page) => page.seek(&Moment::At(Duration(time))),
+            Self::Story(story) => {
+                story.player.seek(time);
+                Ok(())
+            }
         }
-        Ok(())
     }
 
     pub fn moments(&mut self) -> Vec<(Name, Duration)> {
         match self {
-            Self::Recording(page) => page.moments(),
+            Self::Recording(page) => page.story_moment().map_or_else(
+                || page.moments(),
+                |time| vec![(Name::Start, Duration(time)), (Name::End, Duration(time))],
+            ),
             Self::Story(story) => vec![
                 (Name::Start, Duration(0)),
                 (Name::End, Duration(story.player.end())),
@@ -177,14 +276,16 @@ impl Scene {
 
     pub fn check_times(&mut self) -> Vec<u64> {
         match self {
-            Self::Recording(page) => page.check_times(),
+            Self::Recording(page) => page
+                .story_moment()
+                .map_or_else(|| page.check_times(), |time| vec![time]),
             Self::Story(story) => times(story.player.end(), Mode::AtCheckTimes),
         }
     }
 
     pub fn check_all(&mut self, mode: Mode) -> Checked {
         match self {
-            Self::Recording(page) => page.check_all(mode),
+            Self::Recording(page) => page.check_story().unwrap_or_else(|| page.check_all(mode)),
             Self::Story(story) => story.check(mode),
         }
     }
@@ -226,7 +327,7 @@ impl Scene {
                     Action::Still => player.seek(player.end()),
                     _ => {
                         return Err(DriverError(
-                            "toolkit stories accept hover, move, step and still actions".to_owned(),
+                            "preview stories accept hover, move, step and still actions".to_owned(),
                         ));
                     }
                 }
@@ -266,8 +367,7 @@ impl Scene {
             Self::Recording(page) => Self::Recording(Box::new(page.with_host_atlas())),
             Self::Story(mut scene) => {
                 // Recreate the layer so it requests even glyphs the stub atlas already supplied.
-                scene.player = Player::new(
-                    scene.source,
+                scene.player = scene.source.player(
                     Window {
                         size_class: None,
                         size: scene.context.size,

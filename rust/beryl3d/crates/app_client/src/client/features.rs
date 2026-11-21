@@ -387,6 +387,20 @@ impl Features {
             .find_map(|entry| (entry.view)(self, entry.id, inputs).cloned())
     }
 
+    #[cfg(feature = "stories")]
+    pub fn view_named(&mut self, id: &str, inputs: ViewInputs<'_>) -> Option<Element> {
+        let entry = REGISTRY.iter().find(|entry| entry.id == id)?;
+        if entry.prompt_view.is_some() {
+            return self.named_prompt_view(entry.placement?, *inputs.hud);
+        }
+        (entry.view)(self, entry.id, inputs).cloned()
+    }
+
+    #[cfg(feature = "stories")]
+    pub fn settings_state(&self) -> &settings::State {
+        self.state_of::<SettingsSheet>(SETTINGS)
+    }
+
     pub fn state(&self, id: &str) -> Option<String> {
         let entry = REGISTRY.iter().find(|entry| entry.id == id)?;
         Some((entry.state)(&self.slots, entry.id))

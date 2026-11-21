@@ -8,6 +8,10 @@ publish = false
 [lints]
 workspace = true
 
+[features]
+# Exposes the recorded and authored story inputs to scene tools.
+stories = ["game_probe/stories"]
+
 [dependencies]
 beryl_protocol.workspace = true
 glam.workspace = true

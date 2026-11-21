@@ -19,6 +19,7 @@ mod play;
 mod relay;
 mod signature;
 mod sound;
+mod stories;
 mod table_phone;
 mod verbs_fly_draw;
 mod verbs_leaving;

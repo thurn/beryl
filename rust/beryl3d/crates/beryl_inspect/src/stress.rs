@@ -4,7 +4,7 @@
 //! Here every permanent has a name of its own. Nothing reads a clock or a random number, so
 //! two calls return equal values.
 
-use beryl_protocol::card_records::{CardEntry, CardFace, CardImages, CardRecords};
+use beryl_protocol::card_records::CardRecords;
 use beryl_protocol::protocol::{
     CardHandling, Facing, ObjectId, ObjectView, PlayerState, PowerToughness, Side, StackItem,
     TargetRef, Why, ZoneName,
@@ -15,6 +15,7 @@ use beryl_protocol::script::{
 };
 use beryl_protocol::testing::{self, card, permanent, step, timing};
 use beryl_protocol::{PlayerView, performance_probe};
+pub(crate) use game_probe::story::placeholder_records;
 use kit_probe::agent::Rule;
 
 /// A synthetic board and any scripted changes to it.
@@ -648,41 +649,4 @@ pub(crate) fn pointer_moves(frame: &kit_frame::frame::Frame) -> Vec<(u64, kit_ui
 /// card is drawn face up with no face.
 pub(crate) fn card_records(board: &Stress) -> CardRecords {
     placeholder_records(&board.views)
-}
-
-/// Placeholder faces for the cards of `views`, one per name.
-pub(crate) fn placeholder_records(views: &[PlayerView]) -> CardRecords {
-    let mut records = CardRecords::none();
-    for object in views.iter().flat_map(|view| &view.objects) {
-        let Some(name) = &object.name else { continue };
-        let entries = if object.token {
-            &mut records.tokens
-        } else {
-            &mut records.cards
-        };
-        entries.entry(name.clone()).or_insert_with(|| CardEntry {
-            name: name.clone(),
-            scryfall_id: String::new(),
-            set: String::new(),
-            collector_number: String::new(),
-            layout: "normal".to_owned(),
-            artist: String::new(),
-            faces: vec![CardFace {
-                name: name.clone(),
-                mana_cost: None,
-                type_line: String::new(),
-                oracle_text: None,
-                power: None,
-                toughness: None,
-                loyalty: None,
-                colors: Vec::new(),
-                images: CardImages {
-                    art_crop: String::new(),
-                    normal: String::new(),
-                    large: format!("stress-{}", object.slot.0),
-                },
-            }],
-        });
-    }
-    records
 }
