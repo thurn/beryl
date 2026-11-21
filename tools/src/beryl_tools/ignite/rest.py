@@ -79,9 +79,9 @@ FAMILY_PREFIX = "counts:family/"
 # games it plays in a batch. A game of the shrinking searches costs a second or more, so they
 # play fewer; the batch's seeds are reserved for the widest.
 FUZZ_TARGETS: dict[str, tuple[list[str], int]] = {
-    "games": (["-p", "beryl_search", "--test", "games"], 500),
-    "families": (["-p", "beryl_search", "--test", "families"], 500),
-    "shrink": (["-p", "beryl_search", "--test", "shrink"], 100),
+    "games": (["-p", "beryl_search", "--test", "all", "games::"], 500),
+    "families": (["-p", "beryl_search", "--test", "all", "families::"], 500),
+    "shrink": (["-p", "beryl_search", "--test", "all", "shrink::"], 100),
     "session": (["-p", "beryl_session", "--test", "session", "fuzz::"], 100),
 }
 # Seeds reserved per batch. A multiple of 4, since the engine fuzzer plays every fourth game in
