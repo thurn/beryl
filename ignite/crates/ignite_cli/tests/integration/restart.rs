@@ -9,18 +9,18 @@
 //! for a condition (a file, a line, a process), never for a length of time.
 
 use std::fs;
+use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output, Stdio};
 use std::time::{Duration, Instant};
 
 use ignite_core::config::Config;
-use ignite_daemon::doctor::{Host as _, NativeHost};
 use ignite_hub::server::{HubServer, RunningHub};
 
 /// How long any one wait may last before the test fails as hung.
 const HUNG: Duration = Duration::from_mins(5);
 
-/// The family's adapter. `run` logs `<class> <check> <checksum of src>` for each check to
+/// The family's adapter. `run` logs the class, check and contents of `src/b.txt` for each check to
 /// `@MARKS@/runs.log`, waits until `@GATE@` exists (at most ten minutes, so a failed test leaves no shell
 /// behind), then passes them.
 const ADAPTER: &str = r#"#!/bin/sh
@@ -30,8 +30,8 @@ list)
   echo '{"check": "slow:two"}' ;;
 run)
   shift
-  sum=$(cat src/* | cksum | cut -d ' ' -f 1)
-  for check in "$@"; do echo "$IGNITE_CLASS $check $sum" >> '@MARKS@/runs.log'; done
+  IFS= read -r source < src/b.txt
+  for check in "$@"; do echo "$IGNITE_CLASS $check $source" >> '@MARKS@/runs.log'; done
   i=0; while [ ! -e '@GATE@' ] && [ $i -lt 6000 ]; do sleep 0.1; i=$((i+1)); done
   for check in "$@"; do
     echo "{\"check\": \"$check\", \"outcome\": \"pass\", \"message\": \"ok\"}" >> "$IGNITE_RESULTS"
@@ -44,13 +44,13 @@ kind = "regression"
 adapter = "jsonl"
 platforms = "any"
 always = true
-list = "sh checks/adapter.sh list"
-run = "sh checks/adapter.sh run {checks}"
+list = "git restart-drill-adapter list"
+run = "git restart-drill-adapter run {checks}"
 inputs = ["src/**"]
 "#;
 
-/// `ignite.toml` for a hub at `url` and this machine, `host`.
-fn config(url: &str, host: &str) -> String {
+/// `ignite.toml` for a hub at `url`.
+fn config(url: &str) -> String {
     format!(
         r#"[repository]
 remote = "origin"
@@ -65,11 +65,6 @@ project = "restart"
 
 [gate]
 threshold = 1000000000.0
-
-[machine.{host}]
-ticket_trees = 2
-landing_trees = 1
-floor = {{ batch = 1, tip = 1 }}
 "#
     )
 }
@@ -81,6 +76,7 @@ fn shell_path(path: &Path) -> String {
 
 struct Drill {
     root: PathBuf,
+    executable: PathBuf,
     remote: PathBuf,
     repo: PathBuf,
     home: PathBuf,
@@ -156,9 +152,8 @@ impl Drill {
         let root = ignite_core::test_files::temp_dir().join(format!("irst-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(root.join("marks")).unwrap();
-        let host = NativeHost.hostname();
-        let placeholder = Config::parse("ignite.toml", &config("http://127.0.0.1:1", &host))
-            .unwrap_or_else(|error| panic!("this machine's name {host:?}: {error}"));
+        let executable = copy_executable(&root);
+        let placeholder = Config::parse("ignite.toml", &config("http://127.0.0.1:1")).unwrap();
         let hub = HubServer {
             config: placeholder,
             listen: "127.0.0.1:0".to_owned(),
@@ -174,7 +169,7 @@ impl Drill {
             .replace("@GATE@", &shell_path(&gate));
         let seed = root.join("seed");
         for (relative, text) in [
-            ("ignite.toml", config(&url, &host)),
+            ("ignite.toml", config(&url)),
             (".gitignore", ".trees/\n".to_owned()),
             ("src/a.txt", "a\n".to_owned()),
             ("src/b.txt", "b\n".to_owned()),
@@ -193,7 +188,7 @@ impl Drill {
         // Every update of a branch is logged, so the test can count the landing's pushes.
         git(&remote, &["config", "core.logAllRefUpdates", "always"]);
         git(&seed, &["init", "-q", "-b", "staging"]);
-        identify(&seed);
+        configure_git(&seed);
         git(&seed, &["add", "."]);
         git(&seed, &["commit", "-q", "-m", "seed"]);
         git(
@@ -216,7 +211,7 @@ impl Drill {
             ],
         );
         let repo = root.join("main");
-        identify(&repo);
+        configure_git(&repo);
         git(&repo, &["branch", "-q", "master", "origin/master"]);
         Drill {
             runs: root.join("marks").join("runs.log"),
@@ -228,12 +223,13 @@ impl Drill {
             daemon: None,
             restarted: None,
             root,
+            executable,
         }
     }
 
     /// `ignite` with this drill's home, as `session` (none for `None`).
     fn ignite(&self, cwd: &Path, session: Option<&str>, args: &[&str]) -> Command {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_ignite"));
+        let mut command = Command::new(&self.executable);
         command
             .args(args)
             .current_dir(cwd)
@@ -256,41 +252,37 @@ impl Drill {
         (output.status.code(), text(&output))
     }
 
-    /// Starts `ignite daemon` in the main checkout, logging to `daemon.log`, and waits until it
-    /// answers and has created its trees. A new daemon creates its trees on a thread of its own
-    /// after it starts answering, and an `ignite start` that finds no free tree meanwhile is
-    /// told to wait (exit code 5) rather than given one.
+    /// Starts `ignite daemon` in the main checkout, logging to `daemon.log`, and waits for a free
+    /// landing tree. The two ticket trees are created on demand by `ignite start`.
     fn start_daemon(&mut self) {
         let log = fs::File::create(self.root.join("daemon.log")).unwrap();
         let daemon = self
             .ignite(&self.repo, None, &["daemon"])
             .stdin(Stdio::null())
-            .stdout(Stdio::null())
+            .stdout(log.try_clone().unwrap())
             .stderr(log)
             .spawn()
             .unwrap();
         self.daemon = Some(daemon);
-        until("the daemon answers", || {
-            self.run(&self.root, None, &["status"]).0 == Some(0)
+        until("a landing tree is free", || {
+            let exited = self.daemon.as_mut().unwrap().try_wait().unwrap();
+            assert_eq!(exited, None, "{}", self.log());
+            self.has_free_landing_tree()
         });
-        until(
-            "the daemon's two ticket trees and landing tree are free",
-            || self.free_trees() == 3,
-        );
     }
 
-    /// How many of the daemon's trees are free. The database is opened read-only: a migrating
-    /// open would race the starting daemon's own first migration.
-    fn free_trees(&self) -> i64 {
+    /// Opens the database read-only so it can observe the daemon's startup without taking part
+    /// in its first migration.
+    fn has_free_landing_tree(&self) -> bool {
         let Ok(db) = ignite_store::local::open_read_only(&self.home.join("daemon.db")) else {
-            return 0;
+            return false;
         };
         db.query_row(
-            "SELECT count(*) FROM trees WHERE state = 'free'",
+            "SELECT EXISTS(SELECT 1 FROM trees WHERE kind = 'landing' AND state = 'free')",
             [],
             |row| row.get(0),
         )
-        .unwrap_or(0)
+        .unwrap_or(false)
     }
 
     /// `ignite start "<summary>"` for `session`: files the ticket, leases a tree and returns
@@ -337,6 +329,14 @@ fn text(output: &Output) -> String {
     String::from_utf8_lossy(&output.stdout).into_owned()
 }
 
+/// Give the drill a stable executable for every launch, including the daemon's restart.
+fn copy_executable(dir: &Path) -> PathBuf {
+    let source = Path::new(env!("CARGO_BIN_EXE_ignite"));
+    let executable = dir.join(source.file_name().unwrap());
+    fs::copy(source, &executable).unwrap();
+    executable
+}
+
 fn git(dir: &Path, args: &[&str]) -> Output {
     let out = Command::new("git")
         .current_dir(dir)
@@ -352,10 +352,20 @@ fn git(dir: &Path, args: &[&str]) -> Output {
     out
 }
 
-fn identify(repo: &Path) {
-    git(repo, &["config", "user.name", "Ignite Test"]);
-    git(repo, &["config", "user.email", "test@example.invalid"]);
-    git(repo, &["config", "commit.gpgsign", "false"]);
+/// Write the drill's local settings together. The alias uses Git's shell, which can be absent
+/// from PATH on Windows. Linked worktrees share these settings with the main checkout.
+fn configure_git(repo: &Path) {
+    let mut config = fs::OpenOptions::new()
+        .append(true)
+        .open(repo.join(".git/config"))
+        .unwrap();
+    config
+        .write_all(
+            b"\n[user]\n\tname = Ignite Test\n\temail = test@example.invalid\n\
+              [commit]\n\tgpgsign = false\n\
+              [alias]\n\trestart-drill-adapter = !sh checks/adapter.sh\n",
+        )
+        .unwrap();
 }
 
 #[test]
@@ -466,7 +476,7 @@ fn a_fault_file_makes_the_daemon_exit_at_start() {
     fs::create_dir_all(&root).unwrap();
     // An empty file names every build, including this one, which is in no store.
     fs::write(root.join("fault-start"), "").unwrap();
-    let output = Command::new(env!("CARGO_BIN_EXE_ignite"))
+    let output = Command::new(copy_executable(&root))
         .arg("daemon")
         .current_dir(&root)
         .env("IGNITE_HOME", &root)
