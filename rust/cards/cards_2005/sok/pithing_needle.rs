@@ -9,8 +9,8 @@
 
 use crate::prelude::*;
 
-/// The restriction covers loyalty abilities ([CR 606.4]) and abilities activated from
-/// zones such as the hand. An ability already on the stack still resolves.
+/// The restriction covers loyalty abilities ([CR 606.4]) and abilities activated from the
+/// hand, a graveyard, or exile. An ability already on the stack still resolves.
 ///
 /// [CR 606.4]: https://yawgatog.com/resources/magic-rules/#R6064
 pub static CARD: CardDef = Printed::PithingNeedle
@@ -36,6 +36,7 @@ pub mod scenarios {
     const JACE: &str = Prop::Planeswalker;
     const STRIP: &str = Card::StripMine;
     const IDENTITY: &str = Card::FracturedIdentity;
+    const IMMORTAL: &str = Card::MisterImmortal;
 
     /// P0 holds Pithing Needle and an Island to play. The Island keeps P0's priority a
     /// decision once nothing else can be done: a player who could only pass isn't asked.
@@ -170,6 +171,28 @@ pub mod scenarios {
                 Resolve,
                 ME.names_another_card(),
                 ME.deciding(DecisionKind::Priority, 3),
+            ]),
+        needle("naming Mister Immortal stops activation from the graveyard")
+            .interaction(&[IMMORTAL])
+            .battlefield(P0, &[Card::Forest; 4])
+            .graveyard(P0, &[IMMORTAL])
+            .actions(&[
+                ME.casts(NEEDLE),
+                Resolve,
+                ME.names(IMMORTAL),
+                ME.deciding(DecisionKind::Priority, 2),
+                ME.has(Zone::Graveyard, IMMORTAL, 1),
+            ]),
+        needle("naming Mister Immortal stops activation from exile")
+            .interaction(&[IMMORTAL])
+            .battlefield(P0, &[Card::Forest; 4])
+            .exile(P0, &[IMMORTAL])
+            .actions(&[
+                ME.casts(NEEDLE),
+                Resolve,
+                ME.names(IMMORTAL),
+                ME.deciding(DecisionKind::Priority, 2),
+                ME.has(Zone::Exile, IMMORTAL, 1),
             ]),
         // The restriction lasts only while Needle is on the battlefield (CR 611.3a, a static
         // ability's effect). On P1's turn Portable Hole exiles Needle, and P0 can activate

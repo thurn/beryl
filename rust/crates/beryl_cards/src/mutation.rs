@@ -58,6 +58,13 @@ const EQUIVALENT: &[(&str, &str, &str, &str)] = &[
          controller to choose new targets for",
     ),
     (
+        "Mister Immortal",
+        "ability 0",
+        "under Players::You",
+        "the card's owner activates the ability from the graveyard or exile, so the ability's \
+         controller is also the returning card's owner",
+    ),
+    (
         "Winds of Abandon",
         "ability 0, step 1",
         "Players::EachOpponent",

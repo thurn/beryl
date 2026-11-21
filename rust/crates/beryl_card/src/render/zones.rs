@@ -5,6 +5,7 @@ use super::Ctx;
 use super::filters::{Kind, zone_name};
 use super::words::ordinal;
 use crate::effect::{Effect, LibraryPosition, Objects, Players, PutOnto};
+use crate::ids::ZoneSet;
 
 impl Ctx {
     /// "Put [objects] into their owners' libraries [position]" (CR 400.3).
@@ -103,6 +104,22 @@ impl Ctx {
     /// "Return enchanted creature card to the battlefield under your control", for a
     /// [`PutOnto`]. A card "returns" to the battlefield from a graveyard or from exile.
     pub(super) fn put_onto(&mut self, onto: &PutOnto) -> String {
+        let tapped = if onto.tapped { " tapped" } else { "" };
+        if onto.objects == Objects::This
+            && onto.under.is_none()
+            && let Some(ability) = self.ability
+        {
+            let from = match ability.zones() {
+                ZoneSet::GRAVEYARD => Some("your graveyard"),
+                zones if zones == ZoneSet::GRAVEYARD.union(ZoneSet::EXILE) => {
+                    Some("your graveyard or from exile")
+                }
+                _ => None,
+            };
+            if let Some(from) = from {
+                return format!("return this card from {from} to the battlefield{tapped}");
+            }
+        }
         let plural = self.is_plural(onto.objects);
         let control = match onto.under {
             None => owners(plural, "control"),
@@ -115,7 +132,6 @@ impl Ctx {
                 }
             }
         };
-        let tapped = if onto.tapped { " tapped" } else { "" };
         let what = self.moved_card(onto.objects);
         let rest = format!(" to the battlefield{tapped} under {control}");
         self.discarded = None;

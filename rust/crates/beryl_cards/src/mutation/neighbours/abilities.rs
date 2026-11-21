@@ -3,7 +3,7 @@
 use beryl_card::words::Words;
 use beryl_card::{
     Ability, AbilityKind, BasicLandTypes, Behavior, Condition, Cost, Face, Filter, ManaColor,
-    ManaSet, Subject, Timing, Trigger, TriggerEvent, TurnStep, ZoneSet,
+    ManaSet, Subject, Timing, Trigger, TriggerEvent, TurnStep,
 };
 use beryl_kernel::listener::listens_to;
 use beryl_kernel::table::{is_sacrificed, is_simple};
@@ -132,12 +132,7 @@ fn with_cost_or_product(ability: &Ability, cost: Cost, product: ManaSet) -> Abil
 /// A kind's constructor builds its derived fields again. Carry over the other fields
 /// through the same builders that card definitions use.
 pub(super) fn preserve(ability: &Ability, mut changed: Ability) -> Ability {
-    changed = match ability.zones() {
-        ZoneSet::GRAVEYARD => changed.in_graveyard(),
-        ZoneSet::STACK if changed.kind() != AbilityKind::Spell => changed.on_the_stack(),
-        ZoneSet::ALL => changed.everywhere(),
-        _ => changed,
-    };
+    changed = changed.in_zones(ability.zones());
     changed = match ability.timing() {
         Timing::Sorcery => changed.as_a_sorcery(),
         Timing::AsInstant => changed.as_an_instant(),

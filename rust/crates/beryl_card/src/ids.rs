@@ -114,6 +114,7 @@ impl ZoneSet {
     pub const BATTLEFIELD: ZoneSet = ZoneSet::of(Zone::Battlefield);
     pub const STACK: ZoneSet = ZoneSet::of(Zone::Stack);
     pub const GRAVEYARD: ZoneSet = ZoneSet::of(Zone::Graveyard);
+    pub const EXILE: ZoneSet = ZoneSet::of(Zone::Exile);
     /// Every zone an object can be in.
     pub const ALL: ZoneSet = ZoneSet((1 << Zone::Nowhere as u8) - 1);
 

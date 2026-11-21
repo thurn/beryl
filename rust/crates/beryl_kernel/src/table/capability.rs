@@ -3,8 +3,8 @@
 //! Implements: none. Records which game mechanics the current card pool can use.
 
 use beryl_card::{
-    Amount, Behavior, Condition, Draws, Effect, Face, Modification, Node, Objects, Replaced,
-    Replacement, Rewrite, Subtype, Words,
+    AbilityKind, Amount, Behavior, Condition, Draws, Effect, Face, Modification, Node, Objects,
+    Replaced, Replacement, Rewrite, Subtype, Words, Zone,
 };
 
 use crate::event::Listens;
@@ -99,10 +99,13 @@ pub enum Capability {
     /// A card has a mana ability activated only as an instant ([`crate::table::is_instant_mana`]),
     /// so a priority decision looks for one to offer on its own.
     InstantMana,
+    /// A card has an activated ability that works in a graveyard or in exile
+    /// ([`beryl_card::Ability::in_zones`]), so priority decisions also look in those zones.
+    ActivatesFromGraveyardOrExile,
 }
 
 // The game keeps its capabilities in a `u32`.
-const _: () = assert!((Capability::InstantMana as u32) < u32::BITS);
+const _: () = assert!((Capability::ActivatesFromGraveyardOrExile as u32) < u32::BITS);
 
 impl Capability {
     /// The capabilities a face gives a game that can contain it.
@@ -176,6 +179,11 @@ impl Capability {
             }
             if crate::table::is_instant_mana(a) {
                 found |= Capability::InstantMana.bit();
+            }
+            if a.kind() == AbilityKind::Activated
+                && (a.zones().contains(Zone::Graveyard) || a.zones().contains(Zone::Exile))
+            {
+                found |= Capability::ActivatesFromGraveyardOrExile.bit();
             }
             // Wherever the ability holds the amount or condition that reads it: its own
             // condition, one its effect reads, its continuous effect's.

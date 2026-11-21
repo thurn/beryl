@@ -11,7 +11,7 @@ use crate::counter::CounterKind;
 use crate::effect::build::create_copy_except;
 use crate::effect::{Amount, Comparison, Condition, Effect, Objects, Players};
 use crate::filter::Filter;
-use crate::ids::{TurnStep, ZoneSet};
+use crate::ids::{TurnStep, Zone, ZoneSet};
 use crate::index::{ExceptIx, SpecIx};
 use crate::mana::{ManaCost, ManaSet};
 use crate::target::{Takes, TargetKind, TargetSpec};
@@ -377,10 +377,12 @@ impl Ability {
     /// is an activated ability that functions only while the card with cycling is in a
     /// player's hand. 'Cycling [cost]' means '[Cost], Discard this card: Draw a card.'"
     pub const fn cycling(mana: ManaCost) -> Ability {
-        Ability::activated(Cost::of(mana, &[CostPart::DISCARD])).effect(&Effect::Draw {
-            player: Players::You,
-            count: Amount::Fixed(1),
-        })
+        Ability::activated(Cost::of(mana, &[CostPart::DISCARD]))
+            .in_zones(ZoneSet::of(Zone::Hand))
+            .effect(&Effect::Draw {
+                player: Players::You,
+                count: Amount::Fixed(1),
+            })
     }
 
     /// Crew N (CR 702.122a), an activated ability any time its controller has priority:

@@ -89,6 +89,6 @@ pub mod prelude {
         ManaRestriction, ManaSet, Modification, Named, Objects, Place, PlayerRules, Players,
         Prevention, Prompt, Protection, Purpose, PutOnto, Recipients, Replacement, RuleChange,
         SpellCost, Subtype, Subtypes, Supertypes, Taken, TargetKind, TargetSpec, TextWord, Trigger,
-        TriggerEvent, TurnStep, Types, When, Zone, card, mana,
+        TriggerEvent, TurnStep, Types, When, Zone, ZoneSet, card, mana,
     };
 }

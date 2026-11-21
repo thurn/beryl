@@ -191,13 +191,26 @@ pub(crate) fn given(def: &CardDef) -> Result<Listens, Unmatched> {
 
 /// Whether the engine finds `ability` wherever it says it works (see [CR 113.6b]): "An ability
 /// that states which zones it functions in functions only from those zones." A triggered
-/// ability is matched on the battlefield and in the zones of [`AWAY`] ([`listens_to`]). Any
-/// other kind is found only where its kind works: activated and static abilities are read of
-/// permanents, and a spell's of the spell.
+/// ability is matched on the battlefield and in the zones of [`AWAY`] ([`listens_to`]).
+/// Priority decisions find activated abilities on the battlefield and in hands, graveyards,
+/// and exile. Other abilities are found in the usual zone for their kind.
 ///
 /// [CR 113.6b]: https://yawgatog.com/resources/magic-rules/#R1136b
 pub fn found_where_it_works(ability: &Ability) -> bool {
-    ability.kind() == AbilityKind::Triggered || ability.works_where_its_kind_does()
+    const ACTIVATION_ZONES: ZoneSet = ZoneSet::BATTLEFIELD
+        .union(ZoneSet::of(Zone::Hand))
+        .union(ZoneSet::GRAVEYARD)
+        .union(ZoneSet::EXILE);
+    match ability.kind() {
+        AbilityKind::Triggered => true,
+        AbilityKind::Activated => {
+            let zones = ability.zones();
+            !zones.is_empty() && ACTIVATION_ZONES.includes(zones)
+        }
+        AbilityKind::Spell | AbilityKind::Mana | AbilityKind::Static | AbilityKind::Replacement => {
+            ability.works_where_its_kind_does()
+        }
+    }
 }
 
 /// Whether the engine reads `ability` when another object grants it to a permanent
@@ -214,7 +227,7 @@ pub fn found_where_it_works(ability: &Ability) -> bool {
 /// [CR 613.1f]: https://yawgatog.com/resources/magic-rules/#R6131f
 pub fn read_when_granted(ability: &Ability) -> bool {
     match ability.kind() {
-        AbilityKind::Activated => true,
+        AbilityKind::Activated => ability.works_where_its_kind_does(),
         // A granted effect on objects in every zone would leave the battlefield's layers for
         // reads the kernel makes from the face of the permanent with it (`crate::query::zone_characteristics`),
         // and the granted one is on no face.

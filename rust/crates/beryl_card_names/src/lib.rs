@@ -176,6 +176,7 @@ pub mod decks {
                 names::FORCE_OF_WILL,
                 names::GURMAG_ANGLER,
                 names::PITHING_NEEDLE,
+                names::MISTER_IMMORTAL,
                 names::CAVERN_OF_SOULS,
             ],
         ),

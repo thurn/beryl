@@ -816,6 +816,7 @@
       ]
     }
   ],
+  "Mister Immortal": [],
   "Mother of Runes": [],
   "Notion Thief": [
     {
@@ -1087,7 +1088,11 @@
     {
       "published_at": "2005-06-01",
       "hash": "f709db8dfd4e",
-      "untestable": "The scenario naming a card stops it from being cycled in hand covers the hand. The activation engine only offers actions from the hand and battlefield, so the graveyard and exile cases await by-ptc7.2.18."
+      "scenario": [
+        "naming a card stops it from being cycled in hand",
+        "naming Mister Immortal stops activation from the graveyard",
+        "naming Mister Immortal stops activation from exile"
+      ]
     },
     {
       "published_at": "2009-10-01",

@@ -19,6 +19,15 @@ fixed in the same session. Newest first.
   as a noncreature Portable Hole and becomes a 3/3 Elk after Oko's ability
   resolves.
 
+- **Players could not activate abilities from the graveyard or exile.** The
+  engine gathered candidates from the battlefield and hand, and the card table
+  rejected activated abilities that declared any zone other than the
+  battlefield. The engine now uses each ability's declared zones and looks for
+  cards in the graveyard and exile when the game has abilities that work there.
+  The Mister Immortal scenarios verify that its owner can return it tapped from
+  each zone, and the Pithing Needle scenarios verify that naming it removes both
+  activations.
+
 - **Widening a game during Show and Tell could lose the nonactive player's hand
   pick.** The resolution record held the card's slot index from the smaller
   layout, which names a different slot in the larger layout. Relayout now

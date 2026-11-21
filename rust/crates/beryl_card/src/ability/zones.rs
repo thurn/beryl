@@ -29,10 +29,16 @@ impl Ability {
     /// [CR 113.6b]: https://yawgatog.com/resources/magic-rules/#R1136b
     #[must_use]
     pub const fn in_graveyard(self) -> Ability {
-        Ability {
-            zones: ZoneSet::GRAVEYARD,
-            ..self
-        }
+        self.in_zones(ZoneSet::GRAVEYARD)
+    }
+
+    /// It works only in the specified zones ([CR 113.6b]): "An ability that states which
+    /// zones it functions in functions only from those zones."
+    ///
+    /// [CR 113.6b]: https://yawgatog.com/resources/magic-rules/#R1136b
+    #[must_use]
+    pub const fn in_zones(self, zones: ZoneSet) -> Ability {
+        Ability { zones, ..self }
     }
 
     /// It works only on the stack, as a spell's "When you cast this spell" does

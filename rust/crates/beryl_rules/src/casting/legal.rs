@@ -457,7 +457,7 @@ pub(super) fn spent_by_cost<S: SlotId>(slot: S, a: &Ability) -> Bitboard<S> {
     b
 }
 
-/// Whether `player` may activate ability `ability` of the object in `slot` now.
+/// Whether `player` may activate `ability` now, after selecting sources they can activate.
 ///
 /// [CR 602.5](https://yawgatog.com/resources/magic-rules/#R6025): "A player can't begin to
 /// activate an ability that's prohibited from being activated."
@@ -477,15 +477,9 @@ fn activatable<L: Layout, const TARGETS: bool>(
     if a.kind() != AbilityKind::Activated {
         return false;
     }
-    // CR 602.2: "Only an object's controller (or its owner, if it doesn't have a controller)
-    // can activate its activated ability". see CR 702.29a: cycling "functions only while the card
-    // with cycling is in a player's hand."
-    let in_place = if a.cost().does(CostAction::Discard) {
-        o.zone() == Zone::Hand && o.owner() == player
-    } else {
-        o.zone() == Zone::Battlefield && s.controller(slot) == player
-    };
-    if !in_place {
+    // See CR 113.6b: "An ability that states which zones it functions in functions only from
+    // those zones."
+    if !a.zones().contains(o.zone()) {
         return false;
     }
     if a.cost().does(CostAction::Tap) {
@@ -581,10 +575,15 @@ fn activation_options<L: Layout, const TARGETS: bool>(
     // Activations that would do nothing, left out for the player the profile hides them from,
     // where a card of the game has one.
     let prunes = TARGETS && s.profile().hides_pointless[player.index()] && t.needy();
-    let objects = s
+    // CR 602.2: "Only an object's controller (or its owner, if it doesn't have a controller)
+    // can activate its activated ability unless the object specifically says otherwise."
+    let mut objects = s
         .in_zone(Zone::Battlefield)
         .filter(|slot| s.controller(slot) == player)
         | s.zone(ZoneKey::Of(player, Zone::Hand));
+    if t.can(Capability::ActivatesFromGraveyardOrExile) {
+        objects |= graveyard_and_exile(s, player);
+    }
     // Most objects have no activated ability; leaving them out before collapsing saves
     // comparing them. Whether one has is part of what collapsing compares (its card, face
     // and granted abilities), so the result is the same.
@@ -624,6 +623,17 @@ fn activation_options<L: Layout, const TARGETS: bool>(
         }
         Ok(())
     })
+}
+
+/// The cards `player` owns in the graveyard and exile. Only a game with an ability
+/// that works in one of these zones needs to look there (see [CR 113.6b]):
+/// "An ability that states which zones it functions in functions only from those zones."
+///
+/// [CR 113.6b]: https://yawgatog.com/resources/magic-rules/#R1136b
+#[cold]
+#[inline(never)]
+fn graveyard_and_exile<L: Layout>(s: &State<L>, player: Seat) -> Bitboard<L::Slot> {
+    s.zone(ZoneKey::Of(player, Zone::Graveyard)) | s.zone(ZoneKey::Of(player, Zone::Exile))
 }
 
 /// The abilities other objects granted the object in `slot`, and those of the cards under it

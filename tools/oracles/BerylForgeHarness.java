@@ -820,7 +820,7 @@ public final class BerylForgeHarness {
         SpellAbility activate(Player player, JsonObject step) {
             String name = step.get("card").getAsString();
             String selector = step.get("ability").getAsString();
-            Card card = find(player, name, ZoneType.Battlefield, ZoneType.Hand, ZoneType.Graveyard);
+            Card card = find(player, name, ZoneType.Battlefield, ZoneType.Hand, ZoneType.Graveyard, ZoneType.Exile);
             List<String> seen = new ArrayList<>();
             List<SpellAbility> offered = new ArrayList<>();
             for (SpellAbility sa : card.getAllPossibleAbilities(player, true)) {
