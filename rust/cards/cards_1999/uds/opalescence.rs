@@ -8,25 +8,16 @@
 
 use crate::prelude::*;
 
-/// "Each other non-Aura enchantment is a creature in addition to its other types and has
-/// base power and base toughness each equal to its mana value": one static ability whose
-/// effect has a part in layer 4 and a part in layer 7b ([CR 613.6]): "If an effect should be
-/// applied in different layers and/or sublayers, the parts of the effect each apply in their
-/// appropriate ones. If an effect starts to apply in one layer and/or sublayer, it will
+/// Opalescence begins applying in layer 4, so it still sets the animated enchantments'
+/// base power and toughness after Humility removes its ability ([CR 613.6]): "it will
 /// continue to be applied to the same set of objects in each other applicable layer and/or
-/// sublayer, even if the ability generating the effect is removed during this process." So
-/// an enchantment it makes a creature still gets its base power and toughness after Humility
-/// has taken this ability away in layer 6, and with Humility the later timestamp decides the
-/// size in layer 7b ([CR 613.7]): "An effect with an earlier timestamp is applied before an
-/// effect with a later timestamp."
-///
-/// The base power and toughness are read for each enchantment it affects, as that layer
-/// applies ([CR 613.4b]): "Effects that set power and/or toughness to a specific number or
-/// value are applied."
+/// sublayer, even if the ability generating the effect is removed during this process."
+/// The later timestamp determines which sets power and toughness last in layer 7b
+/// ([CR 613.7]): "An effect with an earlier timestamp is applied before an effect with a
+/// later timestamp."
 ///
 /// [CR 613.6]: https://yawgatog.com/resources/magic-rules/#R6136
 /// [CR 613.7]: https://yawgatog.com/resources/magic-rules/#R6137
-/// [CR 613.4b]: https://yawgatog.com/resources/magic-rules/#R6134b
 pub static CARD: CardDef = Printed::Opalescence
     .abilities(&[Ability::static_ability(&LayerSpec {
         affected: Objects::Other(&Objects::All {

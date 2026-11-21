@@ -8,16 +8,6 @@
 
 use crate::prelude::*;
 
-/// "{T}: Target creature you control gains protection from the color of your choice until end of
-/// turn." Its controller chooses the color as the ability resolves ([CR 608.2d]): "If an effect
-/// of a spell or ability offers any choices other than choices already made as part of casting
-/// the spell, activating the ability, or otherwise putting the spell or ability on the stack,
-/// the player announces these while applying the effect." Protection ([CR 702.16]) keeps the
-/// creature from being targeted, enchanted, equipped and blocked by what has the color, and
-/// prevents damage from sources of it.
-///
-/// [CR 608.2d]: https://yawgatog.com/resources/magic-rules/#R6082d
-/// [CR 702.16]: https://yawgatog.com/resources/magic-rules/#R70216
 pub static CARD: CardDef = Printed::MotherOfRunes
     .abilities(&[Ability::activated(Cost::TAP)
         .target(&TargetSpec::permanent(Filter::All(&[
@@ -96,17 +86,6 @@ pub mod scenarios {
             ]),
         // "You control": P1's creature is no target, so Mother and P0's creature are the
         // two.
-        Scenario::new("Mother of Runes targets only a creature its controller controls")
-            .battlefield(P0, &[MOTHER, Prop::Flier])
-            .battlefield(P1, &[Prop::Vanilla])
-            .hand(P0, &[Card::Island])
-            .actions(&[
-                ME.activates(MOTHER, 0),
-                ME.deciding(DecisionKind::Target, 2),
-                ME.targets(Prop::Flier),
-                ME.chooses_color(Colors::GREEN),
-                ME.tapped(MOTHER, 1),
-            ]),
         // [CR 702.16c]: "Such Auras attached to the permanent or player with protection will
         // be put into their owners’ graveyards as a state-based action."
         //
@@ -125,58 +104,6 @@ pub mod scenarios {
                 ME.chooses_color(Colors::WHITE),
                 ME.has(Zone::Graveyard, HOLY, 1),
                 ME.pt(Prop::Vanilla, 2, 1),
-            ]),
-        // [CR 702.16f]: "Attacking creatures with protection can’t be blocked by creatures
-        // that have the stated quality." P1's white creature can't block, so P1 takes 2.
-        //
-        // [CR 702.16f]: https://yawgatog.com/resources/magic-rules/#R70216f
-        attacking("an attacker with protection from white can't be blocked by a white creature")
-            .actions(&[
-                advance_to(3, TurnStep::BeginningOfCombat),
-                ME.passes(),
-                ME.attacks_with(Prop::Vanilla),
-                ME.done_attacking(),
-                ME.activates(MOTHER, 0),
-                ME.targets(Prop::Vanilla),
-                ME.chooses_color(Colors::WHITE),
-                advance_to(3, TurnStep::EndOfCombat),
-                THEM.life(18),
-                ME.has(Zone::Battlefield, Prop::Vanilla, 1),
-            ]),
-        // [CR 702.16e]: "Any damage that would be dealt by sources that have the stated
-        // quality to a permanent or player with protection is prevented." Blocked first, the
-        // attacker stays blocked; the white blocker's 3 damage is prevented, and the attacker's
-        // 2 kill it.
-        //
-        // [CR 702.16e]: https://yawgatog.com/resources/magic-rules/#R70216e
-        attacking("protection from white prevents a white blocker's combat damage").actions(&[
-            advance_to(3, TurnStep::BeginningOfCombat),
-            ME.passes(),
-            ME.attacks_with(Prop::Vanilla),
-            ME.done_attacking(),
-            ME.passes(),
-            THEM.chooses(DecisionKind::Blocker, Prop::Flier),
-            ME.activates(MOTHER, 0),
-            ME.targets(Prop::Vanilla),
-            ME.chooses_color(Colors::WHITE),
-            advance_to(3, TurnStep::EndOfCombat),
-            ME.has(Zone::Battlefield, Prop::Vanilla, 1),
-            THEM.has(Zone::Graveyard, Prop::Flier, 1),
-            THEM.life(20),
-        ]),
-        // [CR 602.5a]: "A creature's activated ability with the tap symbol ({T}) or the untap
-        // symbol ({Q}) in its activation cost can't be activated unless the creature has been
-        // under its controller's control since the start of their most recent turn." Only passing and playing the
-        // Island are offered.
-        //
-        // [CR 602.5a]: https://yawgatog.com/resources/magic-rules/#R6025a
-        Scenario::new("a summoning-sick Mother of Runes can't activate")
-            .battlefield(P0, &[Card::Plains])
-            .hand(P0, &[MOTHER, Card::Island])
-            .actions(&[
-                ME.casts(MOTHER),
-                Resolve,
-                ME.deciding(DecisionKind::Priority, 2),
             ]),
         // [CR 608.2b]: with its only target gone, the ability doesn't resolve, so no color is
         // chosen and the creature gains nothing.

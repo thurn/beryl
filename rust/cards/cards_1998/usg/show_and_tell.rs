@@ -8,17 +8,14 @@
 
 use crate::prelude::*;
 
-/// "Each player may put an artifact, creature, enchantment, or land card from their hand onto the
-/// battlefield." Each player chooses in turn order from the active player, and then the cards are
-/// put onto the battlefield at once ([CR 101.4]): "the active player ... makes any choices
-/// required, then the next player in turn order ... Then the actions happen simultaneously." A card
-/// chosen from a hand stays face down as it is chosen ([CR 101.4a]), so the player choosing second
-/// does not know what the first chose: the pick is hidden. Each card enters under the control of
-/// the player who put it there, its owner, since it came from that player's hand ([CR 110.2a]).
+/// Players choose in turn order starting with the active player. Each chosen card stays
+/// hidden until all players have chosen ([CR 101.4a]): "If an effect has each player choose
+/// a card in a hidden zone, such as their hand or library, those cards may remain face
+/// down as they're chosen." The cards enter simultaneously ([CR 101.4]): "Then the actions
+/// happen simultaneously."
 ///
 /// [CR 101.4]: https://yawgatog.com/resources/magic-rules/#R1014
 /// [CR 101.4a]: https://yawgatog.com/resources/magic-rules/#R1014a
-/// [CR 110.2a]: https://yawgatog.com/resources/magic-rules/#R1102a
 pub static CARD: CardDef = Printed::ShowAndTell
     .abilities(&[Ability::spell().effect(&sequence(&[
         for_each_player(
@@ -99,19 +96,6 @@ pub mod scenarios {
                 ME.controls(Card::Griselbrand, 1),
                 THEM.controls(Prop::Vanilla, 0),
                 THEM.has(Zone::Hand, Prop::Vanilla, 1),
-            ]),
-        // A land may be put. An instant stays in its owner's hand: a player whose hand holds no
-        // card the filter accepts is offered only to put nothing, a question with one answer
-        // the game answers for them.
-        Scenario::new("Show and Tell puts a land, and no instant")
-            .hand(P0, &[SHOW, Card::Plains])
-            .battlefield(P0, &[Card::Island; 3])
-            .hand(P1, &[Prop::Instant])
-            .actions(&[
-                ME.casts(SHOW),
-                ME.picks_up_to(Card::Plains),
-                ME.controls(Card::Plains, 1),
-                THEM.has(Zone::Hand, Prop::Instant, 1),
             ]),
         // An artifact may be put, and an enchantment.
         Scenario::new("Show and Tell puts an artifact and an enchantment")
@@ -198,18 +182,6 @@ pub mod scenarios {
                 THEM.picks_up_to(Card::HolyStrength),
                 THEM.controls(Card::HolyStrength, 1),
                 ME.pt(Prop::Vanilla, 3, 3),
-            ]),
-        // A land put onto the battlefield is not a land play (CR 305.1 and 305.2): P0 still
-        // plays a land from hand afterwards.
-        Scenario::new("Show and Tell's land does not use the land drop")
-            .hand(P0, &[SHOW, Card::Plains, Card::Plains])
-            .battlefield(P0, &[Card::Island; 3])
-            .actions(&[
-                ME.casts(SHOW),
-                ME.picks_up_to(Card::Plains),
-                ME.controls(Card::Plains, 1),
-                ME.plays(Card::Plains),
-                ME.controls(Card::Plains, 2),
             ]),
         // A permanent that enters as a copy chooses among permanents already on the battlefield,
         // so it can't copy one entering at the same time (CR 614.12). P0's

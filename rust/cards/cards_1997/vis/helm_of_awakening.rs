@@ -7,15 +7,6 @@
 
 use crate::prelude::*;
 
-/// "Spells cost {1} less to cast." A rule change for every player, their own spells included,
-/// that reduces a spell's total cost ([CR 601.2f]): "The total cost is the mana cost or
-/// alternative cost (as determined in rule 601.2b), plus all additional costs and cost
-/// increases, and minus all cost reductions." The reduction takes only generic mana ([CR
-/// 601.2f]): "If there is no generic mana in the cost, the reduction has no effect"; it
-/// cannot make the cost less than {0}. It applies after increases and before effects that set
-/// the total, such as Trinisphere's minimum, and it leaves the spell's mana value as it was.
-///
-/// [CR 601.2f]: https://yawgatog.com/resources/magic-rules/#R6012f
 pub static CARD: CardDef = Printed::HelmOfAwakening
     .abilities(&[Ability::rule_change(&RuleChange::spell_costs(
         Players::EachPlayer,
@@ -89,7 +80,7 @@ pub mod scenarios {
                 Resolve,
                 THEM.life(17),
             ]),
-        // Reductions apply before the minimum ([CR 601.2f]): Bolt costs {R}, plus {1} from
+        // Before applying Trinisphere's minimum, Bolt costs {R}, plus {1} from
         // Thalia, less {1} from Helm, which is {R}; Trinisphere then makes it {2}{R}. Applying
         // the minimum first would leave {1}{R}.
         Scenario::new("Helm of Awakening and Trinisphere: the reduction comes before the minimum")
