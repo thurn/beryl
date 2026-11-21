@@ -241,9 +241,10 @@ fn run_view(conn: &Connection, session: &str, ticket: &str) -> Result<(String, S
         None => tier_of(conn, ticket)?,
     };
     let model = model.map_or_else(|| c::muted("model unknown"), |model| esc(&model));
-    let effort = run
-        .and_then(|run| run.effort)
-        .map_or_else(|| c::muted("effort unknown"), |effort| format!("{} effort", esc(&effort)));
+    let effort = run.and_then(|run| run.effort).map_or_else(
+        || c::muted("effort unknown"),
+        |effort| format!("{} effort", esc(&effort)),
+    );
     Ok((model, effort))
 }
 
