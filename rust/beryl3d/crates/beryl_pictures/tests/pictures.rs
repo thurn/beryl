@@ -7,10 +7,10 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::{Command, Output};
 
+use beryl_assets::faces_built_on_this_thread;
 use beryl_assets::glyphs::glyphs_rasterized_on_this_thread;
 use beryl_assets::icons::icons_rasterized_on_this_thread;
-use beryl_assets::{MatchFaces, faces_built_on_this_thread};
-use beryl_host::{Headless, Scans};
+use beryl_host::{Headless, Scans, match_faces};
 use beryl_inspect::pages;
 use beryl_protocol::protocol::Side;
 use game_probe::driver::Moment;
@@ -129,7 +129,7 @@ fn cards_show_the_scans_in_the_cache_prepared_on_other_threads() {
     // Written as a PNG, which the decoder reads whatever the file is called.
     let scan = scratch.0.join("scan.png");
     beryl_render::write_rgba_png(&scan, &pixels, width, height).expect("a scan");
-    let faces = MatchFaces::new(page.faces().faces());
+    let faces = match_faces(page.faces());
     assert!(faces.faces.len() > 1, "the recording lists its faces");
     for face in &faces.faces {
         let file = scans.art.join(&face.scan[1..]);

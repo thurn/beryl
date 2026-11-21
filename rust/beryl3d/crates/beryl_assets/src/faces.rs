@@ -1,12 +1,8 @@
 //! A match's faces as the asset workers prepare them (docs/beryl-3d.md, "Card faces",
-//! "Preparation"). The client supplies the faces a match shows, in
-//! [`FaceId`] order; each face's index in it is also its layer in the board-size texture array.
-//! [`MatchFaces`] adds where each face's scan is found and how its compressed picture is cached.
+//! "Preparation"). The host supplies the faces a match shows in [`FaceId`] order. Each face's
+//! index is also its layer in the board-size texture array.
 
 use kit_base::atlas::FaceId;
-use kit_base::faces::{ListedFace, Plate, PrintedText};
-
-pub use kit_base::faces::CARD_BACK;
 
 /// Scryfall's card image host, which `card_records::image` puts before a face's path.
 const IMAGES: &str = "https://cards.scryfall.io";
@@ -22,16 +18,68 @@ pub struct MatchFace {
     /// The picture's identity in the compressed cache: the printing's Scryfall id and the side,
     /// or `back-` and the card back's id.
     pub key: String,
-    /// The card and face names that show this picture; the first is the name Beryl's drawn
-    /// frame prints.
-    pub names: Vec<String>,
+    /// The name Beryl's drawn frame prints.
+    pub name: String,
     /// The face's colors as the card store gives them (`W`, `U`, `B`, `R`, `G`), which choose
     /// the drawn frame's palette.
     pub colors: Vec<String>,
     /// The words the drawn frame prints.
-    pub text: PrintedText,
+    pub text: FaceText,
     /// For a face that shows an ability on the stack, the ability its plate says.
     pub plate: Option<Plate>,
+}
+
+impl MatchFace {
+    /// Makes a worker input from an image URL and the details the fallback frame prints.
+    #[must_use]
+    pub fn from_image(
+        image: &str,
+        name: String,
+        colors: Vec<String>,
+        text: FaceText,
+        plate: Option<Plate>,
+    ) -> Self {
+        let (scan, mut key) = scan_and_key(image);
+        if let Some(plate) = &plate {
+            // A plate face shares its source's scan but is a picture of its own.
+            let kind = if plate.triggered { 't' } else { 'a' };
+            key = format!("{key}-plate-{kind}-{:08x}", fnv(&plate.rules));
+        }
+        Self {
+            scan,
+            key,
+            name,
+            colors,
+            text,
+            plate,
+        }
+    }
+}
+
+/// Printed details the fallback frame draws.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct FaceText {
+    /// The mana cost in `{...}` notation.
+    pub mana_cost: Option<String>,
+    pub type_line: String,
+    /// The rules text, one ability to a line, with symbols in `{...}` notation.
+    pub rules: Option<String>,
+    pub power: Option<String>,
+    pub toughness: Option<String>,
+    pub loyalty: Option<String>,
+    /// Token frames use a pewter border.
+    pub token: bool,
+}
+
+/// The ability to print on a plate over a scan or a fallback frame.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Plate {
+    /// The face whose picture the plate covers.
+    pub source: FaceId,
+    /// Whether the plate labels the ability as triggered.
+    pub triggered: bool,
+    /// The paragraph of rules text that says the ability.
+    pub rules: String,
 }
 
 /// Every face of a match, in [`FaceId`] order.
@@ -41,38 +89,6 @@ pub struct MatchFaces {
 }
 
 impl MatchFaces {
-    /// The faces of `list`, with the same [`FaceId`]s.
-    #[must_use]
-    pub fn new(list: &[ListedFace]) -> Self {
-        let faces = list
-            .iter()
-            .map(|face| {
-                let (scan, mut key) = scan_and_key(&face.image);
-                if let Some(plate) = &face.plate {
-                    // A plate face shares its source's scan but is a picture of its own.
-                    let kind = if plate.triggered { 't' } else { 'a' };
-                    key = format!("{key}-plate-{kind}-{:08x}", fnv(&plate.rules));
-                }
-                // A plate face is listed under no name, so that a card's name finds its own
-                // face; its picture prints its source's name.
-                let names = face
-                    .plate
-                    .as_ref()
-                    .and_then(|plate| list.get(usize::from(plate.source.0)))
-                    .map_or(&face.names, |source| &source.names);
-                MatchFace {
-                    scan,
-                    key,
-                    names: names.clone(),
-                    colors: face.colors.clone(),
-                    text: face.text.clone(),
-                    plate: face.plate.clone(),
-                }
-            })
-            .collect();
-        Self { faces }
-    }
-
     /// The face with this id.
     #[must_use]
     pub fn get(&self, face: FaceId) -> Option<&MatchFace> {

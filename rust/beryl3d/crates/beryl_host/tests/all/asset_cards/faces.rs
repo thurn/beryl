@@ -13,6 +13,7 @@ use beryl_assets::{
     CacheKey, Config, ENCODER_VERSION, Format, Full, Layer, Prepared, Preparer, Source, Upload,
     faces_built_on_this_thread, frames_drawn_on_this_thread,
 };
+use beryl_host::match_faces;
 use kit_ui::input::{AssetReady, FaceId, FaceSize};
 
 use super::decklist_faces;
@@ -82,7 +83,7 @@ pub(super) fn scan() -> Vec<u8> {
 /// Puts a scan in `dir`'s scan cache for every face of the WU Control list.
 fn cache_every_scan(dir: &Path) {
     let bytes = scan();
-    let faces = beryl_assets::MatchFaces::new(decklist_faces(&[&wu_control()]).faces());
+    let faces = match_faces(&decklist_faces(&[&wu_control()]));
     for face in &faces.faces {
         let file = dir.join("art").join(&face.scan[1..]);
         fs::create_dir_all(file.parent().unwrap()).unwrap();
@@ -128,7 +129,7 @@ fn a_second_match_reads_every_face_from_the_cache_on_worker_threads() {
     let formats = [Format::Etc2Rgba8];
 
     let mut first = preparer(&scratch.0);
-    let results = first.prepare_match(faces.faces(), &formats);
+    let results = first.prepare_match(match_faces(&faces), &formats);
     let count = first.faces().unwrap().faces.len();
     assert!(count > 20, "only {count} faces listed");
     let prepared = receive(&results, count);
@@ -138,7 +139,7 @@ fn a_second_match_reads_every_face_from_the_cache_on_worker_threads() {
     // The scans go: a face read from anywhere but the compressed cache would be a drawn frame.
     fs::remove_dir_all(scratch.0.join("art")).unwrap();
     let mut second = preparer(&scratch.0);
-    let results = second.prepare_match(faces.faces(), &formats);
+    let results = second.prepare_match(match_faces(&faces), &formats);
     let again = receive(&results, count);
     assert!(again.iter().all(|p| face_layer(p).1 == Source::Cache));
 
@@ -168,7 +169,7 @@ fn a_face_with_no_scan_is_drawn_and_is_not_cached() {
     let scratch = Scratch::new("drawn");
     let mut assets = preparer(&scratch.0);
     let results = assets.prepare_match(
-        decklist_faces(&[&wu_control()]).faces(),
+        match_faces(&decklist_faces(&[&wu_control()])),
         &[Format::Etc2Rgba8],
     );
     let count = assets.faces().unwrap().faces.len();
@@ -225,7 +226,7 @@ fn a_drawn_face_is_sent_again_from_its_scan_once_the_scan_downloads() {
         start: || {},
     });
     let results = assets.prepare_match(
-        decklist_faces(&[&[(1, "Island")]]).faces(),
+        match_faces(&decklist_faces(&[&[(1, "Island")]])),
         &[Format::Rgba8],
     );
     let count = assets.faces().unwrap().faces.len();
@@ -251,7 +252,7 @@ fn the_seventeenth_full_size_face_drops_the_least_recently_used() {
     let scratch = Scratch::new("full");
     let mut assets = preparer(&scratch.0);
     let results = assets.prepare_match(
-        decklist_faces(&[&wu_control()]).faces(),
+        match_faces(&decklist_faces(&[&wu_control()])),
         &[Format::Etc2Rgba8],
     );
     let board = assets.faces().unwrap().faces.len();

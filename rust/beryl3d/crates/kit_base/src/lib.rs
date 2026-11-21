@@ -7,5 +7,3 @@ pub mod paint;
 pub mod pose;
 pub mod tokens;
 pub mod typography;
-
-pub mod faces;

@@ -25,7 +25,6 @@ mod paint;
 
 use std::cell::{Cell, RefCell};
 
-use kit_base::faces::{Plate, PrintedText};
 use kit_text::text::fonts::Font;
 use kit_ui::input::FaceSize;
 use tiny_skia::{Pixmap, Point, Shader};
@@ -33,7 +32,7 @@ use tiny_skia::{Pixmap, Point, Shader};
 pub use back::card_back;
 
 use crate::encode::dimensions;
-use crate::faces::MatchFace;
+use crate::faces::{FaceText, MatchFace, Plate};
 use layout::{Box2, Geometry, LOYALTY_SHIELD, TextStyle, Typesetter, Variant};
 use paint::{Canvas, Rgb, color, hsl, linear, mix, radial, stops, vertical};
 
@@ -191,8 +190,14 @@ pub fn frame(face: &MatchFace, size: FaceSize) -> Vec<u8> {
         let (width, height) = dimensions(size);
         let pixmap = Pixmap::new(width, height).expect("a face has an area");
         let mut canvas = Canvas::new(pixmap);
-        let name = face.names.first().map_or("", String::as_str);
-        draw_frame(&mut canvas, text, name, &face.colors, &face.text, size);
+        draw_frame(
+            &mut canvas,
+            text,
+            &face.name,
+            &face.colors,
+            &face.text,
+            size,
+        );
         if let Some(plate) = &face.plate {
             draw_plate(&mut canvas, text, plate, size);
         }
@@ -233,7 +238,7 @@ fn draw_frame(
     text: &mut Typesetter,
     name: &str,
     colors: &[String],
-    printed: &PrintedText,
+    printed: &FaceText,
     size: FaceSize,
 ) {
     let g = Geometry::new(size);
@@ -316,7 +321,7 @@ fn draw_name(
     text: &mut Typesetter,
     g: &Geometry,
     name: &str,
-    printed: &PrintedText,
+    printed: &FaceText,
 ) {
     let em = g.em;
     let cost = match g.variant {
@@ -530,7 +535,7 @@ fn draw_rules(
     text: &mut Typesetter,
     rules: Box2,
     palette: Palette,
-    printed: &PrintedText,
+    printed: &FaceText,
     foot: bool,
     em: f32,
 ) {

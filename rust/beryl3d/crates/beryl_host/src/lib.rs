@@ -26,7 +26,7 @@ pub mod rate;
 mod threads;
 mod windowless;
 
-pub use assets::{Assets, Scans};
+pub use assets::{Assets, Scans, match_faces};
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub use desktop::{Desktop, Options, WindowMode, is_fullscreen_key};
 #[cfg(feature = "drive")]

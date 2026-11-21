@@ -31,7 +31,7 @@ pub struct GlyphCell {
     pub bearing: [i16; 2],
 }
 
-/// An index into the list of faces the client made when the match loaded (`faces::FaceList`).
+/// An index into the list of faces the client made when the match loaded.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct FaceId(pub u16);
 

@@ -10,12 +10,55 @@ use app_client::Client;
 use app_client::Input;
 use beryl_art::{ArtCache, Origins};
 use beryl_assets::glyphs::{GlyphWorker, prepare_latin};
-use beryl_assets::{Config, FULL_LAYERS, Format, Full, Prepared, Preparer, default_workers};
+use beryl_assets::{
+    Config, FULL_LAYERS, FaceText, Format, Full, MatchFace, MatchFaces, Plate, Prepared, Preparer,
+    default_workers,
+};
 use beryl_render::Renderer;
+use game_table::faces::FaceList;
 use kit_frame::frame::Wake;
 use kit_ui::input::{AssetReady, FaceId, FaceSize, GlyphKey};
 
 use crate::frames::When;
+
+/// Converts a table's faces into worker inputs in the same [`FaceId`] order.
+#[must_use]
+pub fn match_faces(list: &FaceList) -> MatchFaces {
+    let faces = list
+        .faces()
+        .iter()
+        .map(|face| {
+            // Plates have no lookup names of their own. Their fallback frame prints the
+            // source card's name.
+            let named = face
+                .plate
+                .as_ref()
+                .and_then(|plate| list.get(plate.source))
+                .unwrap_or(face);
+            let text = &face.text;
+            MatchFace::from_image(
+                &face.image,
+                named.names.first().cloned().unwrap_or_default(),
+                face.colors.clone(),
+                FaceText {
+                    mana_cost: text.mana_cost.clone(),
+                    type_line: text.type_line.clone(),
+                    rules: text.rules.clone(),
+                    power: text.power.clone(),
+                    toughness: text.toughness.clone(),
+                    loyalty: text.loyalty.clone(),
+                    token: text.token,
+                },
+                face.plate.as_ref().map(|plate| Plate {
+                    source: plate.source,
+                    triggered: plate.triggered,
+                    rules: plate.rules.clone(),
+                }),
+            )
+        })
+        .collect();
+    MatchFaces { faces }
+}
 
 /// The app's identifier, which names its cache directory.
 const APP: &str = "ca.thurn.beryl";
@@ -279,18 +322,19 @@ impl Assets {
 
     fn prepare_faces(&mut self, client: &mut Client, renderer: &mut Renderer) {
         let active = (client.showing_gallery(), client.face_layers().number());
+        let list = client.faces();
         // A match's list is empty until its card records arrive.
-        if self.active == Some(active) || client.faces().faces().is_empty() {
+        if self.active == Some(active) || list.faces().is_empty() {
             return;
         }
-        let list = client.faces().faces();
         let format = Format::choose(&renderer.formats());
         let names: Vec<&str> = list
+            .faces()
             .iter()
             .map(|face| face.names.first().map_or("", String::as_str))
             .collect();
         renderer.set_faces(&names, format);
-        self.results = Some(self.faces.prepare_match(list, &[format]));
+        self.results = Some(self.faces.prepare_match(match_faces(list), &[format]));
         self.full.fill(None);
         if !active.0 {
             client.face_arrays_made();

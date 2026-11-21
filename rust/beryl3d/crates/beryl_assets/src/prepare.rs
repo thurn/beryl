@@ -24,14 +24,16 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 
 use beryl_art::{ArtCache, ArtError, Fetch};
-use kit_base::faces::ListedFace;
 use kit_ui::input::{AssetReady, FaceId, FaceSize};
 
 use crate::cache::{self, CacheKey};
 use crate::encode::{ENCODER_VERSION, Format, Layer, decode, encode};
-use crate::faces::{CARD_BACK, MatchFace, MatchFaces};
+use crate::faces::{MatchFace, MatchFaces};
 use crate::frame::{card_back, frame, plate_over};
 use crate::{Prepared, Upload};
+
+/// The host supplies the card back first.
+const CARD_BACK: FaceId = FaceId(0);
 
 /// How many full-size faces are kept: the layers of the full-size texture array.
 pub const FULL_LAYERS: usize = 16;
@@ -204,16 +206,12 @@ impl Preparer {
         }
     }
 
-    /// Queues every face of `list` at board size, in the first format of `supported` that is
-    /// compressed (see [`Format::choose`]). `list` is the client's (`Client::faces`), so that
-    /// each face arrives on the returned channel as it is ready, in layer `FaceId.0` of the
-    /// board-size array, under the `FaceId` the client knows it by. Jobs of an earlier match
-    /// still queued are dropped, and the full-size layers are emptied.
-    pub fn prepare_match(
-        &mut self,
-        list: &[ListedFace],
-        supported: &[Format],
-    ) -> Receiver<Prepared> {
+    /// Queues every face at board size, in the first compressed format in `supported`
+    /// (see [`Format::choose`]). The host supplies the faces in client order, with the card
+    /// back first. Each face arrives on the returned channel in layer `FaceId.0` of the
+    /// board-size array. Jobs still queued for an earlier match are dropped, and the
+    /// full-size layers are emptied.
+    pub fn prepare_match(&mut self, faces: MatchFaces, supported: &[Format]) -> Receiver<Prepared> {
         let format = Format::choose(supported);
         if format == Format::Rgba8 {
             eprintln!(
@@ -227,7 +225,7 @@ impl Preparer {
         let (results, received) = mpsc::channel();
         let game = Arc::new(Match {
             number: self.counter,
-            faces: MatchFaces::new(list),
+            faces,
             format,
             results,
         });

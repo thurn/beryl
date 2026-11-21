@@ -68,8 +68,8 @@
   "cap_lines": 12000,
   "cap_allowances": {
     "game_table": {
-      "lines": 12262,
-      "reason": "Placement and drawing still share the same zone data. Moving faces into a separate crate would add a crate for one lookup and leave placement and drawing near the cap. The camera and web fitting still share placement types with the zones. The arrangement and feature ports separate these callers."
+      "lines": 12311,
+      "reason": "Placement and drawing still share the same zone data. The face lookup records belong with the table badges and zones that read them. Moving them into a separate crate would add a crate for one lookup and leave placement and drawing near the cap. The camera and web fitting still share placement types with the zones. The arrangement and feature ports separate these callers."
     },
     "game_play": {
       "lines": 12484,

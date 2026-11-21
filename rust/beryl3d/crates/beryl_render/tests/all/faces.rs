@@ -3,11 +3,12 @@
 //! uploaded only as fast as the client's animations allow. Every test runs on a device with
 //! wgpu's default limits and on one with its downlevel limits.
 
-use beryl_assets::{Format, Layer, MatchFace, Prepared, Source, Upload, dimensions, encode, frame};
+use beryl_assets::{
+    FaceText, Format, Layer, MatchFace, Prepared, Source, Upload, dimensions, encode, frame,
+};
 use beryl_render::{BACK_LAYER, Limits, Renderer, Target};
 use glam::camera::rh::{proj::directx, view::look_at_mat4};
 use glam::{Affine3A, Vec3};
-use kit_base::faces::PrintedText;
 use kit_frame::frame::{Band, Draw, Frame, FrameBuilder, Wake};
 use kit_ui::input::{AssetReady, FaceId, FaceSize, Tier};
 
@@ -157,12 +158,12 @@ fn a_drawn_island_shows_its_blue_frame_s_pale_name_bar() {
     let island = MatchFace {
         scan: String::new(),
         key: String::new(),
-        names: vec!["Island".to_owned()],
+        name: "Island".to_owned(),
         colors: Vec::new(),
-        text: PrintedText {
+        text: FaceText {
             type_line: "Basic Land — Island".to_owned(),
             rules: Some("({T}: Add {U}.)".to_owned()),
-            ..PrintedText::default()
+            ..FaceText::default()
         },
         plate: None,
     };

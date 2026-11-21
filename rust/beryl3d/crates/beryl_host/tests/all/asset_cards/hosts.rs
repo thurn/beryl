@@ -7,9 +7,8 @@ use std::time::Duration;
 
 use app_client::{Client, Config, Input};
 use beryl_art::Origins;
-use beryl_assets::MatchFaces;
 use beryl_card_records::{CardRecordsRequest, TokenMakers, card_records};
-use beryl_host::{Chosen, Feed, Scans, Ticked, Windowless, WindowlessOptions};
+use beryl_host::{Chosen, Feed, Scans, Ticked, Windowless, WindowlessOptions, match_faces};
 use beryl_protocol::GameUpdate;
 use beryl_protocol::card_records::CardRecords;
 use beryl_protocol::protocol::{CardType, LossReason, OutcomeView, Side, Status, ZoneName};
@@ -110,7 +109,7 @@ fn the_desktop_frame_loop_draws_start_game_and_result_with_real_assets() {
     let listed = FaceList::from_records(&records);
     assert!(listed.find("Island").is_some());
     let bytes = scan();
-    for face in MatchFaces::new(listed.faces()).faces {
+    for face in match_faces(&listed).faces {
         let file = scans.art.join(face.scan.trim_start_matches('/'));
         fs::create_dir_all(file.parent().unwrap()).unwrap();
         fs::write(file, &bytes).unwrap();

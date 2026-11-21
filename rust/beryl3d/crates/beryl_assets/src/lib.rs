@@ -3,8 +3,8 @@
 //! worker sends what it finishes as a [`Prepared`], whose pixels go to the renderer and whose
 //! [`AssetReady`] goes to the client core.
 //!
-//! The client core lists a match's faces when it loads (`kit_base::faces::FaceList`), and
-//! [`MatchFaces`] says where each is found. The face workers ([`Preparer`])
+//! The host converts the client core's `game_table::faces::FaceList` into [`MatchFaces`],
+//! which says where each face is found. The face workers ([`Preparer`])
 //! read each from the compressed cache ([`CacheKey`]) or, on a miss, decode its scan from
 //! `beryl_art`'s scan cache, scale it to board or full size, compress it with its mipmaps
 //! ([`Format`]) and cache the result. A face with no downloaded scan is drawn as Beryl's own
@@ -31,7 +31,7 @@ use kit_ui::input::AssetReady;
 
 pub use cache::CacheKey;
 pub use encode::{ENCODER_VERSION, EncodeError, Format, Layer, decode, dimensions, encode};
-pub use faces::{CARD_BACK, MatchFace, MatchFaces};
+pub use faces::{FaceText, MatchFace, MatchFaces, Plate};
 pub use frame::{card_back, frame, frames_drawn_on_this_thread, plate_over};
 pub use prepare::{
     Config, FULL_LAYERS, Full, Preparer, Source, default_workers, faces_built_on_this_thread,
