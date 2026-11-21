@@ -359,6 +359,7 @@ impl Parts {
             self.dispatcher.clone(),
         );
         self.start_loop("ignite-idle", IDLE_STALLS_AFTER, move |ticker| {
+            let mut prebuild: Option<thread::JoinHandle<Result<()>>> = None;
             loop {
                 thread::sleep(IDLE_EVERY);
                 ticker.round(|| {
@@ -377,18 +378,38 @@ impl Parts {
                     if crate::fleet_notice::is_off(pool) {
                         return Ok(());
                     }
-                    let status = scheduler.status();
-                    if status.granted > 0 || status.outside * 2 >= status.cores {
+                    if prebuild.as_ref().is_some_and(|build| !build.is_finished()) {
                         return Ok(());
                     }
-                    let mut failure = None;
-                    crate::steps::step("keeping a free tree built at the tip");
-                    if let Ok(tip) = ctx.git.tip(&ctx.config.repository.staging)
-                        && let Err(error) = trees.keep_one_built(&tip)
+                    let status = scheduler.status();
+                    if status.granted > 0
+                        || status.outside * 2 >= status.cores
+                        || idle.below_floor()
                     {
-                        eprintln!("ignite: no tree kept built: {error}");
-                        failure = Some(format!("no tree kept built: {error}"));
+                        return Ok(());
                     }
+                    let preparation = if let Some(build) = prebuild.take() {
+                        match build.join() {
+                            Ok(result) => result,
+                            // The daemon restarts and resets any tree left in Prebuilding.
+                            Err(panic) => std::panic::resume_unwind(panic),
+                        }
+                    } else {
+                        crate::steps::step("choosing a free tree to prebuild");
+                        ctx.git
+                            .tip(&ctx.config.repository.staging)
+                            .map_or(Ok(()), |tip| {
+                                prebuild = trees.start_idle_prebuild(&tip)?;
+                                Ok(())
+                            })
+                    };
+                    if prebuild.is_some() {
+                        return Ok(());
+                    }
+                    let mut failure = preparation.err().map(|error| {
+                        eprintln!("ignite: no tree kept built: {error}");
+                        format!("no tree kept built: {error}")
+                    });
                     crate::steps::step("choosing idle work");
                     if let Err(error) = idle.drive(&ctx, &jobs, pool) {
                         eprintln!("ignite: idle work: {error}");
@@ -401,9 +422,8 @@ impl Parts {
     }
 
     /// Holds the trees under their disk limit and the disk above its floor of free space, and
-    /// retires surplus free trees. This is a loop of its own
-    /// because a round of the idle loop waits for its job, which can wait hours for cores, and
-    /// the machine is the most likely to fill its disk while it is busy.
+    /// retires surplus free trees. This is a loop of its own because the machine is the most
+    /// likely to fill its disk while it is busy, when the idle loop starts no work.
     ///
     /// The pass that gets the disk back above its floor runs first and again before each other
     /// step, and the long walks give way to it (see `idle/disk.rs`). It once ran only at the end

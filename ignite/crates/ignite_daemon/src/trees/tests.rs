@@ -490,7 +490,9 @@ fn no_directory_outside_the_configured_trees_is_created() {
     let b = f.lease("T.2", false);
     f.trees.release(&a.tree, &f.tip(), None).unwrap();
     f.trees.release(&b.tree, &f.tip(), None).unwrap();
-    f.trees.keep_one_built(&f.tip()).unwrap();
+    if let Some(prebuild) = f.trees.start_idle_prebuild(&f.tip()).unwrap() {
+        prebuild.join().unwrap().unwrap();
+    }
     let landing = f
         .trees
         .lease_landing("landing of T.1", &f.tip())
@@ -544,15 +546,54 @@ fn only_the_session_that_holds_a_tree_passes_the_fence() {
 #[test]
 fn one_free_tree_is_kept_built_at_the_tip() {
     let f = Fixture::new(2, 2);
-    let built = f.trees.keep_one_built(&f.tip()).unwrap();
-    assert_eq!(built, Some(id("tree-01")));
+    let prebuild = f.trees.start_idle_prebuild(&f.tip()).unwrap().unwrap();
+    prebuild.join().unwrap().unwrap();
     assert_eq!(f.builds.requests().len(), 1);
     assert_eq!(f.builds.requests()[0].1, "bin");
     assert_eq!(f.state("tree-01"), "free");
     // Already built at the tip: nothing more to do.
-    assert_eq!(f.trees.keep_one_built(&f.tip()).unwrap(), None);
+    assert!(f.trees.start_idle_prebuild(&f.tip()).unwrap().is_none());
     // And the next compiling ticket gets that tree.
     assert_eq!(f.lease("T.1", true).tree.as_str(), "tree-01");
+}
+
+#[test]
+fn an_idle_prebuild_can_wait_for_disk_space_after_its_caller_returns() {
+    use std::sync::mpsc::{Receiver, Sender, channel};
+
+    use ignite_core::protocol::Class;
+
+    struct WaitingBuild {
+        waiting: Sender<Class>,
+        disk_room: Mutex<Receiver<()>>,
+    }
+
+    impl Builds for WaitingBuild {
+        fn ensure(&self, _: &TreeId, _: &str, _: &[String]) -> BuildResult {
+            let _wait = crate::steps::waiting("disk space");
+            self.waiting.send(crate::steps::class().unwrap()).unwrap();
+            self.disk_room.lock().unwrap().recv().unwrap();
+            BuildResult::Current
+        }
+    }
+
+    let mut f = Fixture::new(1, 2);
+    let (waiting, started) = channel();
+    let (give_room, disk_room) = channel();
+    Arc::get_mut(&mut f.trees.inner).unwrap().builds = Arc::new(WaitingBuild {
+        waiting,
+        disk_room: Mutex::new(disk_room),
+    });
+
+    let prebuild = f.trees.start_idle_prebuild(&f.tip()).unwrap().unwrap();
+    assert_eq!(started.recv().unwrap(), Class::Idle);
+    assert_eq!(f.state("tree-01"), "prebuilding");
+    assert!(!prebuild.is_finished());
+
+    give_room.send(()).unwrap();
+    prebuild.join().unwrap().unwrap();
+    assert_eq!(f.state("tree-01"), "free");
+    assert!(f.trees.start_idle_prebuild(&f.tip()).unwrap().is_none());
 }
 
 #[test]

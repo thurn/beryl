@@ -46,6 +46,7 @@ use std::collections::{BTreeMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 use crate::manifests::Live;
@@ -677,9 +678,9 @@ impl Trees {
         locked.waiters.len() != before
     }
 
-    /// While cores are idle, keeps one free ticket tree built at `tip`: if none is, prebuilds
-    /// the free tree nearest the tip. Returns the tree it built, if any.
-    pub fn keep_one_built(&self, tip: &Commit) -> Result<Option<TreeId>> {
+    /// Starts a prebuild of the free ticket tree nearest `tip` if none is already built there.
+    /// A build can wait for disk space or cores, so the idle loop polls the thread without waiting.
+    pub fn start_idle_prebuild(&self, tip: &Commit) -> Result<Option<JoinHandle<Result<()>>>> {
         if self.inner.config.prebuild.get().is_empty() {
             return Ok(None);
         }
@@ -719,20 +720,45 @@ impl Trees {
             }
             TreeId::new(id).map_err(|e| Error::Invalid(e.to_string()))?
         };
+        let (trees, target, tip) = (self.clone(), tree.clone(), tip.clone());
+        let started = thread::Builder::new()
+            .name("ignite-idle-prebuild".to_owned())
+            .spawn(move || trees.prebuild(&target, &tip));
+        match started {
+            Ok(build) => Ok(Some(build)),
+            Err(error) => {
+                self.give_back(&tree);
+                Err(error.into())
+            }
+        }
+    }
+
+    fn prebuild(&self, tree: &TreeId, tip: &Commit) -> Result<()> {
+        let path = self.inner.config.path(tree);
+        let activity = self.inner.steps.begin(
+            crate::steps::Kind::Loop("ignite-idle-prebuild".to_owned()),
+            crate::steps::Work {
+                class: Some(ignite_core::protocol::Class::Idle),
+                tree: Some(tree.clone()),
+                tree_path: Some(path.clone()),
+                ..crate::steps::Work::default()
+            },
+        );
+        let _entered = activity.enter();
         crate::steps::step(format!("prebuilding {tree} at {}", &tip.as_str()[..7]));
-        let path = self.inner.config.path(&tree);
         let reset = worktree::reset(
             &path,
-            &park_branch(&tree),
+            &park_branch(tree),
             tip,
             &self.inner.config.keep.get(),
         );
-        let built = reset.is_ok() && self.build(&tree, tip, &[]);
+        if reset.is_ok() {
+            self.build(tree, tip, &[]);
+        }
         store::release(&self.lock().db, tree.as_str(), None, &self.now())
             .map_err(|e| store_error(&e))?;
         self.serve_waiters();
-        reset?;
-        Ok(built.then_some(tree))
+        reset
     }
 
     /// [`TreeConfig::reload`], with manifests read again from the main checkout.
