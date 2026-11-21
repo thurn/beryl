@@ -113,10 +113,10 @@
       "shows": "card \"Wetland Sambar\" revealed"
     },
     "Cards leaving a graveyard": {
-      "recording": "animate-dead/returns-a-creature-card-from-its-controllers-own-graveyard",
+      "recording": "animate-dead/destroyed-the-creature-is-sacrificed",
       "at": "step:5.0.0",
       "still": false,
-      "shows": "card \"Geist of the Moors\" battlefield.yours.creatures interactive moving"
+      "shows": "card \"Wetland Sambar\" battlefield.yours.creatures interactive moving"
     },
     "An ability with no source on the battlefield": {
       "recording": "bloodghast/a-land-entering-returns-it-from-the-graveyard",
