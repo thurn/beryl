@@ -6,6 +6,13 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **Checking whether a spell could pay its sacrifice or discard costs allocated
+  on the heap.** The payability and choice checks built temporary vectors of
+  ordered cost parts and their eligible objects. They now use the layout's
+  queues, which store entries inline in the compact engine and return `Full`
+  when the game needs to widen. The search allocation check plays fuzz decks
+  that exercise this path and requires zero allocations.
+
 - **Widening during a mandatory loop could delay the draw.** The loop detector
   stored a hash of the position using the current layout's storage, so it could
   miss a checkpoint made in the other layout. Both layouts now hash the position

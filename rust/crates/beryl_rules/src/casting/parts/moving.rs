@@ -14,6 +14,18 @@ use crate::table::GameTable;
 
 use super::{candidates, graveyard_start, itself, pay_with_all, remember_cost_pick};
 
+const INLINE_COST_PARTS: usize = 8;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+struct CostPartRef(&'static CostPart);
+
+impl Default for CostPartRef {
+    fn default() -> Self {
+        // The compact queue exposes only entries that have been pushed.
+        Self(&CostPart::Life(0))
+    }
+}
+
 fn moves_to_graveyard(part: &CostPart) -> bool {
     matches!(
         part,
@@ -41,6 +53,16 @@ pub(super) fn ordered_parts(
         )
 }
 
+fn collect_parts<L: Layout>(
+    parts: impl Iterator<Item = &'static CostPart>,
+) -> Result<L::Queue<CostPartRef, INLINE_COST_PARTS>, Full> {
+    let mut ordered: L::Queue<CostPartRef, INLINE_COST_PARTS> = Default::default();
+    for part in parts {
+        ordered.push(CostPartRef(part))?;
+    }
+    Ok(ordered)
+}
+
 pub(super) fn payable<L: Layout>(
     s: &State<L>,
     t: &GameTable,
@@ -49,8 +71,8 @@ pub(super) fn payable<L: Layout>(
     face: &Face,
     costs: Castings,
 ) -> Result<bool, Full> {
-    let parts: Vec<_> = ordered_parts(face, costs).collect();
-    Payment { t, player, spell }.can_finish(s, &parts)
+    let parts = collect_parts::<L>(ordered_parts(face, costs))?;
+    Payment { t, player, spell }.can_finish(s, parts.as_slice())
 }
 
 /// Check each offered pick against the rest of the payment before collapsing
@@ -74,10 +96,10 @@ pub(super) fn completable_choices<L: Layout>(
     if !has_moving_parts(face, costs) {
         return Ok(able);
     }
-    let parts: Vec<_> = ordered_parts(face, costs)
-        .skip(usize::from(paying.part))
-        .collect();
-    let Some((&part @ CostPart::Chosen(_, chosen), tail)) = parts.split_first() else {
+    let parts = collect_parts::<L>(ordered_parts(face, costs).skip(usize::from(paying.part)))?;
+    let Some((&CostPartRef(part @ CostPart::Chosen(_, chosen)), tail)) =
+        parts.as_slice().split_first()
+    else {
         unreachable!("the casting is paying a chosen part");
     };
     if tail.is_empty() {
@@ -116,7 +138,7 @@ pub(super) fn completable_choices<L: Layout>(
                 tail,
                 Some((chosen.zone, u32::from(next.left), rest)),
                 next.chosen,
-            )
+            )?
         };
         if can_finish {
             completable.insert(slot);
@@ -132,8 +154,9 @@ struct Payment<'a, L: Layout> {
 }
 
 impl<L: Layout> Payment<'_, L> {
-    fn can_finish(&self, s: &State<L>, parts: &[&CostPart]) -> Result<bool, Full> {
-        if let Some((&part @ CostPart::Chosen(action, chosen), tail)) = parts.split_first()
+    fn can_finish(&self, s: &State<L>, parts: &[CostPartRef]) -> Result<bool, Full> {
+        if let Some((&CostPartRef(part @ CostPart::Chosen(action, chosen)), tail)) =
+            parts.split_first()
             && moves_to_graveyard(part)
         {
             let Measure::Count(n) = chosen.measure else {
@@ -142,7 +165,7 @@ impl<L: Layout> Payment<'_, L> {
             let able = candidates(s, self.t, self.player, self.spell, *action, chosen);
             return self.choose_moving(s, part, able, &PayingObjects::start(0, n), tail);
         }
-        Ok(self.remaining_fit(s, parts, None, Bitboard::EMPTY))
+        self.remaining_fit(s, parts, None, Bitboard::EMPTY)
     }
 
     /// Search combinations of the current part's picks. Try the actual move on
@@ -154,7 +177,7 @@ impl<L: Layout> Payment<'_, L> {
         part: &CostPart,
         mut able: Bitboard<L::Slot>,
         picks: &PayingObjects<L>,
-        tail: &[&CostPart],
+        tail: &[CostPartRef],
     ) -> Result<bool, Full> {
         if able.count() < u32::from(picks.left) {
             return Ok(false);
@@ -198,22 +221,28 @@ impl<L: Layout> Payment<'_, L> {
     fn remaining_fit(
         &self,
         s: &State<L>,
-        parts: &[&CostPart],
+        parts: &[CostPartRef],
         current: Option<(Zone, u32, Bitboard<L::Slot>)>,
         picked: Bitboard<L::Slot>,
-    ) -> bool {
-        let mut counted: Vec<_> = current.into_iter().collect();
-        for part in parts {
-            match *part {
+    ) -> Result<bool, Full> {
+        let mut counted: L::Queue<(Zone, u32, Bitboard<L::Slot>), INLINE_COST_PARTS> =
+            Default::default();
+        if let Some(current) = current {
+            counted.push(current)?;
+        }
+        for &CostPartRef(part) in parts {
+            match part {
                 CostPart::Chosen(action, chosen) => {
                     let Measure::Count(n) = chosen.measure else {
                         unreachable!("a spell's chosen costs are counted");
                     };
                     let able =
                         candidates(s, self.t, self.player, self.spell, *action, chosen) & !picked;
-                    counted.push((chosen.zone, u32::from(n), able));
+                    counted.push((chosen.zone, u32::from(n), able))?;
                 }
-                CostPart::Life(n) if !life::can_pay(s, self.t, self.player, *n) => return false,
+                CostPart::Life(n) if !life::can_pay(s, self.t, self.player, *n) => {
+                    return Ok(false);
+                }
                 CostPart::Life(_) => {}
                 CostPart::This(_)
                 | CostPart::Loyalty(_)
@@ -223,7 +252,7 @@ impl<L: Layout> Payment<'_, L> {
                 }
             }
         }
-        costs_fit(&counted)
+        Ok(costs_fit(counted.as_slice()))
     }
 }
 
