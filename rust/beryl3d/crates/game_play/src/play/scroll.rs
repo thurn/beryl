@@ -31,11 +31,11 @@ impl Show {
         let playing = self
             .playing
             .iter()
-            .map(|playing| &playing.compiled.finals.rows);
+            .map(|playing| playing.compiled.finals.rows());
         let waiting = self
             .waiting
             .iter()
-            .map(|waiting| &waiting.compiled.finals.rows);
+            .map(|waiting| waiting.compiled.finals.rows());
         std::iter::once(self.table.rows())
             .chain(playing)
             .chain(waiting)

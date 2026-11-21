@@ -289,7 +289,7 @@ impl Table {
 
     /// Takes `now`, the time of the frame being drawn, and begins a move of the tray's cards
     /// that waits for it.
-    pub fn advance_tray(&mut self, now: u64) {
+    pub(super) fn advance_tray(&mut self, now: u64) {
         self.tray.now = now;
         if let Some(Wait {
             length,

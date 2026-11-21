@@ -25,7 +25,7 @@ use crate::play::TurnChange;
 use crate::sound::{SoundRun, Sounds};
 use crate::verbs::{self, Interval};
 use game_table::table::{Objects, PileCount, Table, Turn};
-use kit_base::pose::{Pose, Segment};
+use kit_base::pose::Segment;
 use kit_fx::effects::{Effect, EffectRun};
 use kit_space::motion::{Track, named_curve};
 
@@ -126,15 +126,6 @@ impl Compiled {
             add(&mut self.tracks, record.slot, record.segment);
         }
         true
-    }
-
-    /// Where each object rests in the view the script leads to, by slot.
-    pub(crate) fn final_poses(&self) -> Vec<Option<Pose>> {
-        self.finals
-            .cards
-            .iter()
-            .map(|object| object.map(|object| object.pose()))
-            .collect()
     }
 }
 

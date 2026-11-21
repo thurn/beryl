@@ -53,7 +53,7 @@ const CLOTH_HEIGHT: f32 = -0.5;
 
 /// One game object's presence on the table.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct SceneObject {
+pub(super) struct SceneObject {
     pub(super) pose: Pose,
     pub(super) place: Place,
     pub(super) visible: bool,
@@ -64,35 +64,43 @@ pub struct SceneObject {
     view_index: u32,
 }
 
-impl SceneObject {
-    /// Where it rests.
-    pub fn pose(&self) -> Pose {
-        self.pose
-    }
-}
-
-/// The scene objects of one view: a card for each game object the table shows, by slot, and
-/// one for each ability on the stack, by number, with the numbers of the stack's abilities.
+/// The table's scene at rest for one view.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Objects {
-    /// The scene object for each card, indexed by slot.
-    pub cards: Vec<Option<SceneObject>>,
+    pub(super) cards: Vec<Option<SceneObject>>,
     /// Sorted by number.
-    pub(crate) abilities: Vec<(u32, SceneObject)>,
-    /// The numbers of the abilities on the view's stack, bottom first, which the view itself
-    /// does not give.
+    abilities: Vec<(u32, SceneObject)>,
+    /// The numbers assigned to the stack's abilities, bottom first.
     pub(crate) numbers: Vec<u32>,
     /// Each library, graveyard and exile pile, by `PileShown::index`.
     pub(crate) piles: [PileShown; 6],
-    /// Which groups of each battlefield row are in view.
-    pub rows: Rows,
+    rows: Rows,
     /// The cards among `cards` that lie on the table, for contact shadows.
     pub(crate) floors: Floors,
 }
 
 impl Objects {
+    /// Where the card in `slot` rests, if the scene has one there.
+    #[must_use]
+    pub fn card_pose(&self, slot: usize) -> Option<Pose> {
+        Some(self.cards.get(slot)?.as_ref()?.pose)
+    }
+
+    /// Resting card poses in slot order, including empty slots.
+    pub fn card_poses(&self) -> impl Iterator<Item = Option<Pose>> + '_ {
+        self.cards
+            .iter()
+            .map(|object| object.as_ref().map(|object| object.pose))
+    }
+
+    /// Which groups of each scrollable line of cards are in view.
+    #[must_use]
+    pub fn rows(&self) -> &Rows {
+        &self.rows
+    }
+
     /// The scene object of the ability numbered `id`.
-    pub fn ability(&self, id: u32) -> Option<SceneObject> {
+    fn ability(&self, id: u32) -> Option<SceneObject> {
         let at = self
             .abilities
             .binary_search_by_key(&id, |(number, _)| *number)
@@ -116,8 +124,7 @@ pub fn ability_track(tracks: &[(u32, Track)], id: u32) -> Option<&Track> {
 pub struct Table {
     /// The layout the table was made with, which a desktop window takes.
     base: Layout,
-    /// The layout of the window the table is fitted to: `base`, or the phone layout
-    /// (`Layout::for_window`).
+    /// The window's layout, chosen by `Layout::for_window`.
     layout: Layout,
     camera: Camera,
     row_fits: RowFits,
@@ -126,22 +133,18 @@ pub struct Table {
     slide: scroll::Slide,
     pub(super) objects: Objects,
     placed: Placed,
-    /// The record of the face each card last showed when it was held up to be read, by slot,
-    /// which the Revealed Cards pile draws (`Span::Revealed`).
+    /// The face last held up for each card slot, used by the Revealed Cards pile.
     pub(super) revealed: Vec<Option<ObjectView>>,
-    /// Since when each permanent has fought as its record says, by slot, for the marks of its
-    /// own record.
+    /// When each permanent's combat marks began, by slot.
     fights: Fights,
     /// The cards a prompt holds up in its tray, and how they lie and move (`table::tray`).
     pub(super) held: Option<Held>,
     pub(super) tray: TrayMotion,
     /// The cards shown in the flat layer's boxes, and their moves (`table::shown`).
     pub(super) shown: Shown,
-    /// Whether the open prompt lists what it asks about over the table, which then takes no
-    /// press (`Table::cover_for_prompt`).
+    /// Whether the prompt covers the table and prevents presses there.
     pub(super) prompt_covers: bool,
-    /// Whether the viewer's hand waits below the window, as it does while the opening shows the
-    /// hand itself (`Table::set_hand_away`).
+    /// Whether the viewer's hand waits below the window (`Table::set_hand_away`).
     hand_away: bool,
 }
 
@@ -268,7 +271,7 @@ impl Table {
     /// Where the object in `slot` rests in the view the table shows, if it shows it.
     #[must_use]
     pub fn rest(&self, slot: usize) -> Option<Pose> {
-        Some(self.objects.cards.get(slot).copied().flatten()?.pose)
+        self.objects.card_pose(slot)
     }
 
     /// Where the ability numbered `id` rests in the view the table shows, if it is on its stack.
@@ -288,8 +291,7 @@ impl Table {
         self.placed.0.take()
     }
 
-    /// Every object's resting place in the view the table shows, which it holds already: the
-    /// same as `placement` of that view, for nothing but a copy.
+    /// Copies the resting places that placement stored for the view the table shows.
     pub fn rests(&self) -> Placement {
         let mut placement = Placement {
             piles: self.objects.piles,
@@ -342,8 +344,7 @@ impl Table {
         self.objects = Self::objects_for(view, numbers, &placement);
     }
 
-    /// Exchanges the scene objects for `objects`, which `objects_for` made for the view the
-    /// table now shows. Nothing is allocated, so a script can end inside a frame.
+    /// Exchanges the resting scene at the end of a script without allocating.
     /// The cards a prompt holds up stay in its tray.
     pub fn swap_objects(&mut self, objects: &mut Objects) {
         std::mem::swap(&mut self.objects, objects);

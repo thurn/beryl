@@ -170,7 +170,7 @@ impl Table {
     }
 
     /// Takes `now`, the time of the frame being drawn, and starts each move that waits for it.
-    pub fn advance_shown(&mut self, now: u64) {
+    pub(super) fn advance_shown(&mut self, now: u64) {
         self.shown.now = now;
         for (_, shown) in &mut self.shown.moves {
             if shown.over.is_none() {

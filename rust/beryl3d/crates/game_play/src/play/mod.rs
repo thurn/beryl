@@ -402,7 +402,7 @@ impl Show {
         let last = (self.waiting.back().map(|waiting| &waiting.compiled))
             .or(self.playing.as_ref().map(|playing| &playing.compiled));
         match last {
-            Some(compiled) => Some(compiled.finals.cards.get(slot).copied().flatten()?.pose()),
+            Some(compiled) => compiled.finals.card_pose(slot),
             None => self.table.rest(slot),
         }
     }

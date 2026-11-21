@@ -158,7 +158,7 @@ struct Lying {
 
 impl Floors {
     /// The cards of `cards`, by slot, that lie on the table.
-    pub(crate) fn of(cards: &[Option<SceneObject>]) -> Self {
+    pub(super) fn of(cards: &[Option<SceneObject>]) -> Self {
         let lies = |object: &&SceneObject| {
             matches!(
                 object.place,
@@ -172,11 +172,11 @@ impl Floors {
             )
         };
         let reach = (cards.iter().flatten().filter(lies))
-            .map(|object| HALF_DIAGONAL * object.pose().scale)
+            .map(|object| HALF_DIAGONAL * object.pose.scale)
             .fold(0.0_f32, f32::max);
         let mut lying: Vec<Lying> = (cards.iter().enumerate())
             .filter_map(|(slot, object)| {
-                let pose = object.as_ref().filter(lies)?.pose();
+                let pose = object.as_ref().filter(lies)?.pose;
                 Some(Lying {
                     band: band(pose.position.y, reach),
                     x: pose.position.x,

@@ -53,7 +53,7 @@ impl Show {
                 })
                 .collect(),
             segments: compiled.segments.clone(),
-            finals: compiled.final_poses(),
+            finals: compiled.finals.card_poses().collect(),
             effects: compiled.effects.clone(),
         };
         match history.get_mut(index) {

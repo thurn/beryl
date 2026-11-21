@@ -44,11 +44,10 @@ impl Slide {
 }
 
 impl Table {
-    /// Which groups of each line of cards that scrolls are in view, as the table shows the
-    /// view at rest.
+    /// Which groups of each scrollable line of cards are in view at rest.
     #[must_use]
     pub fn rows(&self) -> &Rows {
-        &self.objects.rows
+        self.objects.rows()
     }
 
     /// Which groups of `scroller` are in view, as the table shows the view at rest.
