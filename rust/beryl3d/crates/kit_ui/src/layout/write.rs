@@ -218,6 +218,7 @@ impl Layer {
                 role: element.role,
                 name: NameRef::default(),
                 place: Place::Layer,
+                pose: None,
                 corners: corners(zoom_rect(rect, look.zoom)),
                 depth: 0.0,
                 opacity: look.opacity,

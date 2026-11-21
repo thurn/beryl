@@ -1,14 +1,9 @@
-//! A hand card's mana cost, standing above its top right corner and turned with the card, so
-//! that a crowded fan still shows every card's cost (UI Conventions, "The hand's fan"). It
-//! follows the web interface's `.hand-cost` (`ui/src/game/Look.tsx`, styled in
-//! `ui/src/screens/styles/card-layer.css`): a row of mana symbols, each a disc in its color with
-//! the symbol's glyph on it and a dark ring, whose bottoms meet the frame's top, drawn in front
-//! of the next card of the fan, whose turned corner reaches up over this card's.
-//!
-//! Each symbol is shaped once, the first time a face list names it (`Badges::shape_costs`), so a
-//! frame only places glyphs it already has and allocates nothing. Its sizes are the web's, in
-//! the type unit of a hand card (a twelfth of its width), from `badges.cost` in
-//! `data/beryl3d/space.json`.
+//! Draws each mana symbol as a ringed disc above the hand card's upper-right corner, turned with
+//! the card, so the next card in the fan leaves the cost visible. This follows the web's
+//! `.hand-cost` (UI Conventions, "The hand's fan"). `badges.cost` measures each disc and gap in
+//! twelfths of a hand card's width. `Badges::shape_costs` shapes symbols when a face list arrives.
+//! A frame places the cached glyphs without allocating.
+//! The sizes come from `data/beryl3d/space.json`.
 
 use beryl_protocol::protocol::{ObjectView, ZoneName};
 use glam::{Affine3A, Quat, Vec2, Vec3};
@@ -111,11 +106,8 @@ impl Badges {
         }
     }
 
-    /// Writes the cost of `object`, a card in a hand shown face up with `face`, above the top
-    /// right corner of the card `on` describes, and its resolved element as a child of the
-    /// card's, at `parent` in `Frame::resolved`, where the card rests at `place`. A card with no cost, or whose symbols are not
-    /// shaped, writes nothing, and a cost whose records would pass `BUDGET` is cut after the
-    /// last symbol that fits.
+    /// Writes the cost of a face-up hand card over its upper-right corner and registers it
+    /// under the card's node. Omits unshaped costs and stops before a symbol exceeds `BUDGET`.
     pub(in crate::table) fn write_cost(
         &self,
         (object, face, parent, place): (&ObjectView, Option<&ListedFace>, u32, Place),
@@ -169,6 +161,15 @@ impl Badges {
                 role: Role::Text,
                 name: NameRef::default(),
                 place,
+                pose: Some(kit_base::pose::Pose {
+                    position: card.transform_point3(Vec3::new(
+                        right - width / 2.0,
+                        bottom + disc / 2.0,
+                        height,
+                    )),
+                    turn: on.pose.turn - on.pose.turn.round(),
+                    ..on.pose
+                }),
                 corners: box_corners,
                 depth: camera.depth(card.transform_point3(Vec3::new(0.0, 0.0, height))),
                 opacity: on.opacity,

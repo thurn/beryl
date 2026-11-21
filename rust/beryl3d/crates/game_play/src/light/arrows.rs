@@ -1,7 +1,6 @@
-//! Draws the arrows and lines that `Lit` holds (UI Conventions, Verbs, `point`). Each is drawn on
-//! every frame from where its two ends are then (`Scene::reach`), so it is never anywhere they
-//! are not: its shape is the web stage's (`lines::way_of`), on the screen, and an arrow with an
-//! end that has no place this frame is not drawn.
+//! Draws the arrows and lines that `Lit` holds (UI Conventions, Verbs, `point`). Each follows
+//! its endpoints (`Scene::reach`) along the web stage's curve (`lines::way_of`). If either
+//! endpoint has no place in a frame, that frame omits the arrow.
 //!
 //! Each arrow writes one resolved element, `Role::Arrow`, named by its kind, whose four corners
 //! are the control points of its cubic Bezier curve on the screen, and a ribbon of light along
@@ -155,6 +154,7 @@ impl Drawn {
                 role: Role::Arrow,
                 name: kit_frame::frame::NameRef::default(),
                 place: Place::Layer,
+                pose: None,
                 corners: points,
                 depth: camera.depth(to.pose.position),
                 opacity,

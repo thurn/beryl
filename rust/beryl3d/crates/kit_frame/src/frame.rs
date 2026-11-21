@@ -27,6 +27,7 @@ pub use undrawn::{Missing, Undrawn};
 use kit_base::atlas::Tier;
 use kit_base::geometry::Rect;
 use kit_base::paint::Shadow;
+use kit_base::pose::Pose;
 
 /// A card's element id is its object's slot in the view, and the face of that card in the
 /// Revealed Cards pile's is `REVEALED_FACE` more. A flat-layer element's is given when it first
@@ -63,6 +64,8 @@ pub struct Resolved {
     /// Its name ("Counterspell", "Auto Pay") in `Frame::names`.
     pub name: NameRef,
     pub place: Place,
+    /// The table pose before camera projection. Screen-space elements have no pose.
+    pub pose: Option<Pose>,
     /// Its corners on screen, in logical points.
     pub corners: [Vec2; 4],
     /// Nearer the camera is smaller.
@@ -202,6 +205,8 @@ impl StateBits {
     /// layer drew before it. The "reachable" check reads it to find a panel the pointer goes
     /// through drawn over a control, such as a scrim drawn over a prompt's buttons.
     pub const PAINTED: u16 = 1 << 14;
+    /// A table object drawn over the flat layer in a box or tray.
+    pub const SHOWN: u16 = 1 << 15;
 
     /// Whether every bit of `bits` is set.
     #[must_use]

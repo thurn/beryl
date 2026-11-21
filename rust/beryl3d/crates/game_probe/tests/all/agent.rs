@@ -37,6 +37,7 @@ fn element(role: Role, name: &'static str, id: u32, place: Place, rect: Rect) ->
             role,
             name: NameRef::default(),
             place,
+            pose: (place != Place::Layer).then(kit_base::pose::Pose::default),
             corners: [
                 Vec2::new(x, bottom),
                 Vec2::new(right, bottom),

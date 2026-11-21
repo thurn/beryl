@@ -16,6 +16,7 @@ fn element(id: u32, parent: u32) -> Resolved {
         role: Role::Region,
         name: NameRef::default(),
         place: Place::Layer,
+        pose: None,
         corners: [Vec2::ZERO; 4],
         depth: 0.0,
         opacity: 1.0,

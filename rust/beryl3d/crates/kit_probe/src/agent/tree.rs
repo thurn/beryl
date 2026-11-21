@@ -8,8 +8,9 @@ use beryl_protocol::protocol::{RowName, Side, ZoneName};
 
 use super::fault::rect_text;
 use super::locate::{LocateError, locate};
-use kit_frame::frame::{Frame, Place, Resolved, Role, StateBits};
-use kit_scene::hit::{bounds, covered};
+use kit_frame::frame::{ElementId, Frame, Place, Resolved, Role, StateBits};
+use kit_scene::hit::covered;
+use kit_scene::{Node, Space, Tree};
 
 /// A place holding more cards than this prints only its first `SHOWN` and a count.
 const MOST: usize = 12;
@@ -34,7 +35,8 @@ pub struct TreeOptions {
 ///
 /// When `options.within` is neither a place nor a locator of exactly one element.
 pub fn tree(frame: &Frame, options: &TreeOptions) -> Result<String, LocateError> {
-    let children = children(frame);
+    let tree = Tree::from_frame(frame);
+    let children = children(&tree);
     let within = match options.within.as_deref() {
         None => Within::All,
         Some(text) => match place_from_word(text) {
@@ -48,11 +50,17 @@ pub fn tree(frame: &Frame, options: &TreeOptions) -> Result<String, LocateError>
         let roots: Vec<u32> = children[ROOT]
             .iter()
             .copied()
-            .filter(|&index| (frame.resolved[index as usize].place == Place::Layer) == layer)
+            .filter(|&index| {
+                matches!(
+                    tree.node(index).expect("a registered node").space,
+                    Space::Screen { .. }
+                ) == layer
+            })
             .collect();
         let mut lines = String::new();
         let printer = Printer {
             frame,
+            tree: &tree,
             children: &children,
             options,
             within,
@@ -71,8 +79,11 @@ pub fn tree(frame: &Frame, options: &TreeOptions) -> Result<String, LocateError>
 #[must_use]
 pub fn locator_of(frame: &Frame, index: u32) -> String {
     let element = &frame.resolved[index as usize];
-    let name = frame.name(element.name);
-    let mut out = String::from(element.role.word());
+    locator(element.id, element.role, frame.name(element.name))
+}
+
+fn locator(id: ElementId, role: Role, name: &str) -> String {
+    let mut out = String::from(role.word());
     if !name.is_empty() {
         let _ = write!(
             out,
@@ -80,7 +91,7 @@ pub fn locator_of(frame: &Frame, index: u32) -> String {
             name.replace('\\', "\\\\").replace('"', "\\\"")
         );
     }
-    let _ = write!(out, " #{}", element.id.0);
+    let _ = write!(out, " #{}", id.0);
     out
 }
 
@@ -213,14 +224,10 @@ const ROOT: usize = 0;
 
 /// Each element's children in tree order: entry 0 holds the roots, entry `i + 1` the children
 /// of element `i`.
-fn children(frame: &Frame) -> Vec<Vec<u32>> {
-    let mut children = vec![Vec::new(); frame.resolved.len() + 1];
-    for (index, element) in frame.resolved.iter().enumerate() {
-        let parent = if element.parent == u32::MAX {
-            ROOT
-        } else {
-            element.parent as usize + 1
-        };
+fn children(tree: &Tree<&Frame>) -> Vec<Vec<u32>> {
+    let mut children = vec![Vec::new(); tree.nodes().len() + 1];
+    for (index, node) in tree.nodes().enumerate() {
+        let parent = node.parent.map_or(ROOT, |index| index as usize + 1);
         children[parent].push(index as u32);
     }
     children
@@ -228,6 +235,7 @@ fn children(frame: &Frame) -> Vec<Vec<u32>> {
 
 struct Printer<'a> {
     frame: &'a Frame,
+    tree: &'a Tree<&'a Frame>,
     children: &'a [Vec<u32>],
     options: &'a TreeOptions,
     within: Within,
@@ -244,16 +252,18 @@ impl Printer<'_> {
             if done[at] {
                 continue;
             }
-            let element = &self.frame.resolved[index as usize];
-            if element.role != Role::Card || element.place == Place::Layer {
+            let node = self.node(index);
+            let place = self.frame.resolved[index as usize].place;
+            if node.role != Role::Card || matches!(node.space, Space::Screen { .. }) {
                 self.element(index, indent, inside, out);
                 continue;
             }
             // Every card of this place among the siblings, printed together.
             let group: Vec<usize> = (at..siblings.len())
                 .filter(|&other| {
-                    let candidate = &self.frame.resolved[siblings[other] as usize];
-                    candidate.role == Role::Card && same_place(candidate.place, element.place)
+                    let candidate = siblings[other];
+                    self.node(candidate).role == Role::Card
+                        && same_place(self.frame.resolved[candidate as usize].place, place)
                 })
                 .collect();
             for &other in &group {
@@ -265,7 +275,7 @@ impl Printer<'_> {
                 self.element(siblings[other], indent, inside, out);
             }
             if cut {
-                let word = place_word(element.place);
+                let word = place_word(place);
                 let _ = writeln!(
                     out,
                     "{:indent$}... {} more in {word} (--within {word})",
@@ -276,18 +286,24 @@ impl Printer<'_> {
         }
     }
 
+    fn node(&self, index: u32) -> Node<'_> {
+        self.tree.node(index).expect("a registered node")
+    }
+
     fn element(&self, index: u32, indent: usize, inside: bool, out: &mut String) {
-        let element = &self.frame.resolved[index as usize];
+        let node = self.node(index);
         let matched = inside
             || match self.within {
                 Within::All => true,
-                Within::Place(place) => same_place(element.place, place),
+                Within::Place(place) => {
+                    same_place(self.frame.resolved[index as usize].place, place)
+                }
                 Within::Element(target) => target == index,
             };
-        let shown = matched && self.options.role.is_none_or(|role| role == element.role);
+        let shown = matched && self.options.role.is_none_or(|role| role == node.role);
         let children = &self.children[index as usize + 1];
         if shown {
-            let _ = writeln!(out, "{:indent$}{}", "", line(self.frame, index));
+            let _ = writeln!(out, "{:indent$}{}", "", line_for(self.frame, index, &node));
             self.siblings(children, indent + 2, matched, out);
         } else {
             self.siblings(children, indent, matched, out);
@@ -298,13 +314,20 @@ impl Printer<'_> {
 /// One element's tree line, without its indent.
 #[must_use]
 pub fn line(frame: &Frame, index: u32) -> String {
+    let node = Tree::from_frame(frame)
+        .node(index)
+        .expect("a registered node");
+    line_for(frame, index, &node)
+}
+
+fn line_for(frame: &Frame, index: u32, node: &Node<'_>) -> String {
     let element = &frame.resolved[index as usize];
-    let mut out = locator_of(frame, index);
+    let mut out = locator(node.id, node.role, &node.name);
     let place = place_word(element.place);
     if !place.is_empty() {
         let _ = write!(out, " {place}");
     }
-    let _ = write!(out, " {}", rect_text(bounds(element)));
+    let _ = write!(out, " {}", rect_text(node.space.screen_bounds()));
     states(frame, index, element, &mut out);
     out
 }

@@ -408,6 +408,7 @@ impl Table {
                         side,
                         row: None,
                     },
+                    pose: Some(top),
                     corners: self.camera().card_corners(top.transform()),
                     depth: self.camera().depth(top.position),
                     opacity: 1.0,

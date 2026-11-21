@@ -688,6 +688,8 @@ impl Table {
         builder: &mut FrameBuilder,
     ) -> u32 {
         let transform = look.pose.transform();
+        let shown =
+            role == Role::Card && (self.shown.holds(id.0 as usize) || self.in_tray(id.0 as usize));
         let at = builder.resolved(
             name,
             Resolved {
@@ -696,12 +698,13 @@ impl Table {
                 role,
                 name: kit_frame::frame::NameRef::default(),
                 place,
+                pose: Some(look.pose),
                 corners: self.camera.card_corners(transform),
                 depth: self.camera.depth(look.pose.position),
                 opacity: look.pose.opacity,
                 clip: None,
                 interactive: look.interactive,
-                state: StateBits(look.state),
+                state: StateBits(look.state | if shown { StateBits::SHOWN } else { 0 }),
                 face: look.face,
                 copies,
                 really: kit_frame::frame::NameRef::default(),
@@ -715,16 +718,11 @@ impl Table {
             (Some(_), Some([full, full_back])) => (FaceSize::Full, full, full_back),
             (face, _) => (FaceSize::Board, face.unwrap_or(0), back),
         };
-        // A card that is fading, breaking up or washed with light is drawn with the blended
-        // records, after the opaque ones, among the marks of cards at its height. The opaque
-        // pass neither blends nor shows what is behind a record, so a fading or broken card
-        // drawn there would darken toward black and hide the cards beneath it. It takes the
-        // band its own marks take (`light::marks::band`), or a mark drawn before it would lie
-        // under it.
-        // A card a box of the flat layer shows is drawn over the flat layer (`table::shown`),
-        // as is a card held up in the tray, over the tray's shade (`prompts::screen`).
-        let held_up = self.shown.holds(id.0 as usize) || self.in_tray(id.0 as usize);
-        let band = if role == Role::Card && held_up {
+        // A fading, dissolving or whitening card blends among its own marks so they stay
+        // visible and the records beneath it show through.
+        // Cards held in a box (`table::shown`) or tray (`prompts::screen`) draw over the
+        // flat layer.
+        let band = if shown {
             Band::LayerCards
         } else if opacity == 255 && look.dissolve <= 0.0 && look.whiten <= 0.0 {
             Band::Opaque

@@ -473,6 +473,7 @@ fn strip_card(id: u32, x: f32, depth: f32) -> Resolved {
             side: Side::You,
             row: None,
         },
+        pose: Some(kit_base::pose::Pose::default()),
         corners: [
             Vec2::new(x, 534.0),
             Vec2::new(x + 96.0, 534.0),
