@@ -60,6 +60,42 @@ pub mod scenarios {
                 Resolve,
                 ME.controls(ANGLER, 1),
             ]),
+        // Five lands and three cards: two cards must go, and P0 chooses which. Exiling the
+        // instant and the sorcery keeps the Island in the graveyard, and the five lands pay
+        // the rest rather than a third card. Cards are offered from the bottom of
+        // the graveyard up, so each set of them is one sequence of choices: the sorcery, put
+        // there last of the three, is offered first.
+        Scenario::new("Gurmag Angler: the caster chooses which cards to exile")
+            .battlefield(
+                P0,
+                &[
+                    Card::Swamp,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                ],
+            )
+            .hand(P0, &[ANGLER])
+            .graveyard(P0, &[Card::Island, Prop::Instant, Prop::Sorcery])
+            .actions(&[
+                ME.casts(ANGLER),
+                // The top card alone would leave none to pay the second {1}.
+                ME.deciding(DecisionKind::ChooseUpTo, 2),
+                ME.picks_up_to(Prop::Sorcery),
+                ME.deciding(DecisionKind::ChooseUpTo, 2),
+                ME.picks_up_to(Prop::Instant),
+                // The Island too, or mana for the rest.
+                ME.deciding(DecisionKind::ChooseUpTo, 2),
+                ME.done_picking(),
+                ME.has(Zone::Exile, Prop::Instant, 1),
+                ME.has(Zone::Exile, Prop::Sorcery, 1),
+                ME.has(Zone::Graveyard, Card::Island, 1),
+                ME.tapped(Card::Island, 4),
+                ME.tapped(Card::Swamp, 1),
+                Resolve,
+                ME.controls(ANGLER, 1),
+            ]),
         // Exiling six cards pays the generic cost and leaves the printed mana
         // value at seven for Mana Drain's delayed trigger.
         Scenario::new("Gurmag Angler cast for one mana still drains for seven")

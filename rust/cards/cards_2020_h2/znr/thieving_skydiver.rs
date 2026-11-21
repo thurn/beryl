@@ -90,5 +90,26 @@ pub mod scenarios {
                 ME.controls(Card::ManaCrypt, 1),
                 THEM.controls(crate::tokens::MAP_TOKEN, 2),
             ]),
+        // Kicked for 1, the Skydiver takes the opponent's Leonin Scimitar and attaches it to
+        // itself: a 2/1 that becomes 3/2.
+        Scenario::new("Thieving Skydiver kicked steals an Equipment and wears it")
+            .hand(P0, &[SKYDIVER])
+            .battlefield(P0, &[Card::Island; 4])
+            .battlefield(P1, &[Prop::Equipment, Prop::Flier])
+            .library(P0, &[Card::Island])
+            .library(P1, &[Card::Plains])
+            .actions(&[
+                Action::Cast {
+                    player: P0,
+                    card: SKYDIVER,
+                    face: FaceIx::FRONT,
+                    costs: Castings::only(0),
+                },
+                ME.x(1),
+                Resolve,
+                Resolve,
+                ME.controls(Prop::Equipment, 1),
+                ME.pt(SKYDIVER, 3, 2),
+            ]),
     ];
 }
