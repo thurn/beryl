@@ -27,6 +27,18 @@ pub(super) enum OfKind {
     Mana(Option<&'static Filter>, Option<&'static ManaRestriction>),
 }
 
+impl OfKind {
+    /// The control and spending restrictions of a mana ability.
+    const fn mana(self) -> (Option<&'static Filter>, Option<&'static ManaRestriction>) {
+        match self {
+            OfKind::Mana(filter, spend) => (filter, spend),
+            OfKind::None | OfKind::Trigger(_) | OfKind::Layer(_) | OfKind::Replacement(_) => {
+                (None, None)
+            }
+        }
+    }
+}
+
 impl Ability {
     /// "Activate only if you control a [permanent `filter` accepts]" (CR 602.5), of a mana
     /// ability.
@@ -36,10 +48,7 @@ impl Ability {
             matches!(self.kind, AbilityKind::Mana),
             "only a mana ability is restricted by what you control"
         );
-        let spend = match self.of_kind {
-            OfKind::Mana(_, spend) => spend,
-            _ => None,
-        };
+        let spend = self.spend();
         Ability {
             of_kind: OfKind::Mana(Some(filter), spend),
             ..self
@@ -58,10 +67,7 @@ impl Ability {
             matches!(self.kind, AbilityKind::Mana),
             "only a mana ability's mana is restricted"
         );
-        let only_if_you_control = match self.of_kind {
-            OfKind::Mana(filter, _) => filter,
-            _ => None,
-        };
+        let only_if_you_control = self.only_if_you_control();
         Ability {
             of_kind: OfKind::Mana(only_if_you_control, Some(restriction)),
             ..self
@@ -73,7 +79,7 @@ impl Ability {
     pub const fn trigger(&self) -> Option<&'static Trigger> {
         match self.of_kind {
             OfKind::Trigger(trigger) => Some(trigger),
-            _ => None,
+            OfKind::None | OfKind::Layer(_) | OfKind::Replacement(_) | OfKind::Mana(..) => None,
         }
     }
 
@@ -82,7 +88,7 @@ impl Ability {
     pub const fn replacement(&self) -> Option<&'static Replacement> {
         match self.of_kind {
             OfKind::Replacement(replacement) => Some(replacement),
-            _ => None,
+            OfKind::None | OfKind::Trigger(_) | OfKind::Layer(_) | OfKind::Mana(..) => None,
         }
     }
 
@@ -91,7 +97,7 @@ impl Ability {
     pub const fn layer(&self) -> Option<&'static LayerSpec> {
         match self.of_kind {
             OfKind::Layer(layer) => Some(layer),
-            _ => None,
+            OfKind::None | OfKind::Trigger(_) | OfKind::Replacement(_) | OfKind::Mana(..) => None,
         }
     }
 
@@ -99,19 +105,13 @@ impl Ability {
     /// ([`Ability::if_you_control`]).
     #[inline]
     pub const fn only_if_you_control(&self) -> Option<&'static Filter> {
-        match self.of_kind {
-            OfKind::Mana(filter, _) => filter,
-            _ => None,
-        }
+        self.of_kind.mana().0
     }
 
     /// A mana ability: what the mana it makes may be spent on, and what it does to the spell
     /// it pays for ([`Ability::spent_only`]).
     #[inline]
     pub const fn spend(&self) -> Option<&'static ManaRestriction> {
-        match self.of_kind {
-            OfKind::Mana(_, spend) => spend,
-            _ => None,
-        }
+        self.of_kind.mana().1
     }
 }

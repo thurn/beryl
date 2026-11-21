@@ -15,7 +15,11 @@ use crate::ids::ZoneSet;
 pub(super) const fn usual_zones(kind: AbilityKind) -> ZoneSet {
     match kind {
         AbilityKind::Spell => ZoneSet::STACK,
-        _ => ZoneSet::BATTLEFIELD,
+        AbilityKind::Activated
+        | AbilityKind::Mana
+        | AbilityKind::Triggered
+        | AbilityKind::Static
+        | AbilityKind::Replacement => ZoneSet::BATTLEFIELD,
     }
 }
 
