@@ -277,6 +277,20 @@ fn spells(filter: Filter) -> &'static str {
         Filter::Types(types) if types == Types::SORCERY => "sorceries",
         Filter::Types(types) if types == Types::INSTANT => "instants",
         Filter::Types(types) if types == Types::CREATURE => "creature spells",
-        _ => "some spells",
+        Filter::Types(_)
+        | Filter::Supertypes(_)
+        | Filter::SubtypeWord(_)
+        | Filter::ColorWords(_)
+        | Filter::Whose(_)
+        | Filter::Owned(_)
+        | Filter::Tapped
+        | Filter::Token
+        | Filter::ManaValueAtMost(_)
+        | Filter::PowerAtMost(_)
+        | Filter::ManaValueAtMostX
+        | Filter::Not(_)
+        | Filter::All(_)
+        | Filter::AnyOf(_)
+        | Filter::InZone(_) => "some spells",
     }
 }
