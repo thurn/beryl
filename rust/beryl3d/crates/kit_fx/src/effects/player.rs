@@ -98,7 +98,7 @@ pub(super) fn write_light(
                 write_quad(quad, (sprites::BURST, size), (p, lift), run, reach, builder);
             }
             Primitive::Directed { sprite } => {
-                write_directed(sprite, (p, lift), run, reach, builder)
+                write_directed(sprite, (p, lift), run, reach, builder);
             }
             Primitive::Streak {
                 lookback_ms,

@@ -604,13 +604,12 @@ impl Show {
                 .copied()
                 .filter(|run| run.effect.on_card(definitions)),
         );
-        let (pointer, tuning) = (&self.pointer, &self.table.data().pointer);
+        let data = self.table.data();
+        let (pointer, tuning) = (&self.pointer, &data.pointer);
         let dress = Dress {
             effects: &self.card_effects,
             badges: &self.badges,
-            marks: &|on, look| {
-                light::marks::look(&self.table.data().light, &self.lit, on, now, look)
-            },
+            marks: &|on, look| light::marks::look(&data.light, &self.lit, on, now, look),
             pointer: &|slot, camera, look| {
                 crate::pointer::look(pointer, slot, (now, camera), tuning, look);
             },

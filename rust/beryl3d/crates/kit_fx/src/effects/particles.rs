@@ -205,11 +205,11 @@ fn vortex_particle(
         (2.0 * seeds.random(index, 2) - 1.0) * half.y,
     );
     let turn = Vec2::from_angle(emitter.turns * std::f32::consts::TAU * age);
-    let left = 1.0 - age;
+    let shrink = 1.0 - age;
     Some(lying(
         (reach, lift),
-        turn.rotate(start) * left,
-        emitter.size.at(seeds.random(index, 3)) * left,
+        turn.rotate(start) * shrink,
+        emitter.size.at(seeds.random(index, 3)) * shrink,
         emitter.tint,
         age,
         seeds.random(index, 0),
