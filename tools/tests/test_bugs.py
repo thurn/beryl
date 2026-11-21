@@ -86,6 +86,7 @@ class Ignite:
         self.created = created
         self.tickets: list[dict[str, Any]] = []
         self.commands: list[list[str]] = []
+        self.attached: dict[str, list[str]] = {}
 
     def run(
         self, argv: list[str], **_kwargs: object
@@ -94,8 +95,14 @@ class Ignite:
         assert argv[:3] == ["ignite", "--json", "ticket"]
         verb, rest = argv[3], argv[4:]
         if verb == "list":
-            assert rest == ["--all", "--label", "bug-report"]
+            assert rest[-2:] == ["--label", "bug-report"]
             out: object = self.issues
+        elif verb == "attachment":
+            assert rest[0] == "list"
+            out = {"attachments": self.attached.get(rest[1], [])}
+        elif verb == "attach":
+            self.attached.setdefault(rest[0], []).extend(rest[1:])
+            out = {"id": rest[0]}
         else:
             assert verb == "create"
             option = lambda name: rest[rest.index(name) + 1]  # noqa: E731
@@ -107,6 +114,9 @@ class Ignite:
                     "labels": option("--labels").split(","),
                     "body": Path(option("--body-file")).read_text(),
                     "pending": "--pending" in rest,
+                    "attach": [
+                        rest[i + 1] for i, a in enumerate(rest) if a == "--attach"
+                    ],
                 }
             )
             out = {"results": [{"id": self.created}]}
@@ -149,6 +159,59 @@ def test_file_and_done(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     assert moved.fields["fix"] == "deadbeef"
     assert bugs.reports(tmp_path) == []
     assert len(bugs.reports(tmp_path, done=True)) == 1
+
+
+def test_file_attaches_and_embeds_the_images(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("BERYL_BUGS", str(tmp_path))
+    folder = report(tmp_path)
+    (folder / "screenshot.png").write_bytes(b"png")
+    ignite = fake_ignite(monkeypatch)
+    assert cli.main(["bugs", "file"]) == 0
+    ticket = ignite.tickets[0]
+    # No window.png in the folder, so only the screenshot is attached and shown.
+    assert ticket["attach"] == [str(folder / "screenshot.png")]
+    assert "![Screenshot](attachment:screenshot.png)" in ticket["body"]
+    assert "window.png" not in ticket["body"]
+    assert str(folder) in ticket["body"], "the local folder line stays"
+
+    (folder / "window.png").write_bytes(b"png")
+    other = report(tmp_path, "20261108-143013-other")
+    (other / "window.png").write_bytes(b"png")
+    assert cli.main(["bugs", "file", other.name]) == 0
+    assert ignite.tickets[1]["attach"] == [str(other / "window.png")]
+    assert "![Window](attachment:window.png)" in ignite.tickets[1]["body"]
+
+
+def test_attach_adds_screenshots_to_filed_tickets_without_any(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("BERYL_BUGS", str(tmp_path))
+    first, second = report(tmp_path), report(tmp_path, "20261108-143013-other")
+    for folder in (first, second):
+        (folder / "screenshot.png").write_bytes(b"png")
+    ignite = fake_ignite(
+        monkeypatch,
+        [
+            {"id": "by-a", "labels": ["bug-report", f"bug-report:{first.name}"]},
+            {"id": "by-b", "labels": ["bug-report", f"bug-report:{second.name}"]},
+        ],
+    )
+    ignite.attached["by-b"] = ["screenshot.png"]
+    assert cli.main(["bugs", "attach", "--open"]) == 0
+    assert ignite.attached == {
+        "by-a": [str(first / "screenshot.png")],
+        "by-b": ["screenshot.png"],
+    }
+    # Run again: by-a has an attachment now, so nothing more is sent.
+    count = len(ignite.commands)
+    assert cli.main(["bugs", "attach"]) == 0
+    assert [c[3] for c in ignite.commands[count:]] == [
+        "list",
+        "attachment",
+        "attachment",
+    ]
 
 
 def test_an_ai_report_files_an_incident_bead(

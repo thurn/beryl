@@ -3308,6 +3308,50 @@ While the hub cannot be reached:
   and reports it in the daemon's log.
 - Claims and landings exit with code 4, because both need the hub.
 
+### Attachments
+
+A ticket can carry images, such as the screenshot of a bug report, so that a
+worker on another machine and the status dashboard can see what the reporter
+saw.
+
+- **Storage.** The hub keeps each file once, named by its SHA-256, in an
+  `attachments/` directory beside `hub.db`, and an `attachments` table records
+  which ticket uses it under which name. Files are PNG, JPEG, GIF or WebP, at
+  most 20 MiB each. Uploading the same bytes under the same name again returns
+  the existing row, so a client may retry. A second image under a name the
+  ticket already uses is stored as `name-2`, `name-3`. `ignite hub import`
+  leaves attachment rows as they are.
+- **Budget and removal.** `[hub] attachment_budget_mb` (default 2048) limits the
+  files. The hub's hourly upkeep removes the files of tickets closed more than
+  90 days ago, then, while the total is over budget, the files of the
+  longest-closed tickets first. It never removes an open ticket's file. A file
+  that no kept row names is deleted once it is an hour old, which leaves an
+  upload in progress alone. When open tickets alone fill the budget, uploads are
+  refused with 507 and the hub files an `A` ticket (category `attachments-full`)
+  that closes itself when space returns.
+- **Serving.** Upload and download are `POST` and `GET`
+  `/tickets/<id>/attachments[/<name>]` on the private listener only. The
+  dashboard serves a file at `/attachments/<sha256>`, also private only. The
+  public page shows a placeholder line where an image would be.
+- **Commands.** `ignite ticket attach <id> <files>` uploads files and adds a
+  comment that shows them (`--no-comment` skips the comment, `--name` and
+  `--caption` set the name and caption of a single image). `--pasted[=N]`
+  attaches the Nth most recent image pasted into this Claude Code session (the
+  newest when N is left out), read from its transcript, and `--clipboard`
+  attaches the macOS clipboard's image. `ignite ticket create --attach <file>`
+  attaches files as it files the ticket. `ignite ticket attachment list <id>`
+  lists a ticket's images and
+  `ignite ticket attachment get <id> <name> [-o <path>]` downloads one and
+  prints where it was saved, by default under
+  `$TMPDIR/ignite-attachments/<id>/`. `ignite ticket show` and `ignite start`
+  list the attachments.
+- **On the dashboard.** In a ticket's body and comments,
+  `![alt](attachment:<name>)` shows that ticket's own image. An external image
+  URL stays a link.
+- **Bug reports.** `by bugs file` attaches a report's `screenshot.png` and
+  `window.png` and embeds them in the ticket's body. `by bugs attach` does the
+  same for tickets filed earlier that have no attachment.
+
 ### Scheduled tickets
 
 A meta-ticket is a template for work that recurs, such as a weekly sweep of

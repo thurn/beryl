@@ -50,6 +50,12 @@ LABEL = "bug-report"
 # And a report of a questionable play of the AI's (`kind: ai`) carries this one too.
 AI_LABEL = "ai-play"
 SPEC_VIEWER_LABEL = "spec-viewer"
+# The report's images that go on its ticket as attachments, in the order they are shown. The
+# ticket names each one by its file name, which `![..](attachment:<name>)` in the body uses.
+IMAGES: tuple[tuple[str, str], ...] = (
+    ("screenshot.png", "Screenshot"),
+    ("window.png", "Window"),
+)
 
 
 def app_data_dir() -> Path:
@@ -168,6 +174,22 @@ def find(root: Path, key: str) -> Report | None:
     return matches[0] if len(matches) == 1 else None
 
 
+def images(report: Report) -> list[tuple[Path, str]]:
+    """The report's images that exist, as (file, caption), for attaching to its ticket."""
+    return [
+        (report.folder / name, caption)
+        for name, caption in IMAGES
+        if (report.folder / name).is_file()
+    ]
+
+
+def embeds(report: Report) -> str:
+    """Markdown that shows the report's attached images, one per line."""
+    return "\n".join(
+        f"![{caption}](attachment:{path.name})" for path, caption in images(report)
+    )
+
+
 def bead_description(report: Report) -> str:
     f = report.fields
     game = ", ".join(
@@ -186,8 +208,9 @@ def bead_description(report: Report) -> str:
     source = (
         "Reported as a bug in the spec viewer."
         if report.kind == "spec-viewer"
-        else "Reported from the app's bug button. The report, with its screenshot "
-        "(`screenshot.png`), the game's replay, its latest views and the logs:"
+        else "Reported from the app's bug button. The screenshots are attached to "
+        "this ticket. The report folder holds them too, with the game's replay, its "
+        "latest views and the logs, on the machine that filed it:"
     )
     viewer = (
         f"- Spec moment and seat: `{f.get('spec', '')}`\n"
@@ -195,6 +218,7 @@ def bead_description(report: Report) -> str:
         if report.kind == "spec-viewer"
         else ""
     )
+    pictures = "".join(f"\n{line}\n" for line in embeds(report).split("\n") if line)
     return (
         f"{ai}{source}\n\n"
         f"Report ID: `{report.id}`. Local folder: `{report.folder}`\n\n"
@@ -204,7 +228,7 @@ def bead_description(report: Report) -> str:
         f"- Built from: {f.get('commit', 'unknown')}\n"
         f"- Page: {f.get('url', '')}\n"
         f"{viewer}\n"
-        f"## What the player said\n\n{description(report)}\n"
+        f"## What the player said\n\n{description(report)}\n{pictures}"
     )
 
 
@@ -272,8 +296,39 @@ def file_bead(report: Report, priority: str) -> str:
             # A player's report waits for the `bugfix` planner to deduplicate and group it
             # before any worker starts on it, so it is held for release like an epic.
             "--pending",
+            *[arg for path, _ in images(report) for arg in ("--attach", str(path))],
         )
     return str(created["results"][0]["id"])
+
+
+def attach_cmd(args: argparse.Namespace) -> int:
+    """Attaches the screenshots of filed reports whose tickets have none, with a comment that
+    shows them."""
+    root = bugs_dir()
+    try:
+        tickets = report_issues(
+            ignite_ticket("list", *([] if args.open else ["--all"]), "--label", LABEL)
+        )
+    except (OSError, TicketError) as error:
+        print(f"bugs: {error}", file=sys.stderr)
+        return 1
+    code = 0
+    for r in reports(root, done=not args.open):
+        ticket = tickets.get(r.id)
+        files = images(r)
+        if ticket is None or not files:
+            continue
+        try:
+            listed = ignite_ticket("attachment", "list", ticket)
+            if listed.get("attachments"):
+                continue
+            ignite_ticket("attach", ticket, *[str(path) for path, _ in files])
+        except (OSError, TicketError) as error:
+            print(f"bugs: {error}", file=sys.stderr)
+            code = 1
+            continue
+        print(f"{ticket} {r.id}: attached {', '.join(p.name for p, _ in files)}")
+    return code
 
 
 def list_cmd(args: argparse.Namespace) -> int:
@@ -518,6 +573,13 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     v.add_argument("--priority", default="1", help="the tickets' priority (0-4)")
     v.add_argument("--dry-run", action="store_true")
     v.set_defaults(func=file_cmd)
+    v = verbs.add_parser(
+        "attach", help="attach the screenshots of filed reports to their tickets"
+    )
+    v.add_argument(
+        "--open", action="store_true", help="only reports whose tickets are open"
+    )
+    v.set_defaults(func=attach_cmd)
     v = verbs.add_parser(
         "import",
         help="save reports from a ZIP for local triage, keeping tickets filed here",

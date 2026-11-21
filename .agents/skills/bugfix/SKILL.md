@@ -43,7 +43,11 @@ folder. A shared zip is taken with `just mobile-bugs <zip>`.
   and how to reproduce it.
 - `screenshot.png`: the area they selected. `window.png`: the whole window at
   that instant, animations frozen mid-flight and hovers held. Look at both with
-  the Read tool.
+  the Read tool. Both are attached to the ticket, so on a machine that does not
+  hold the report folder, fetch one with
+  `ignite ticket attachment get <id> screenshot.png` (it prints the path it
+  saved to). `by bugs attach` adds them to a ticket filed before attachments
+  existed.
 - `replay.json`: the game's replay as of its latest decision, which reproduces
   it bit for bit.
 - `view.json`: the latest view the session emitted.
