@@ -1,6 +1,6 @@
 //! The interface checks that read frames alone (docs/beryl-3d.md, "Interface checks"). Each is a
 //! function from a frame, or two for "lines hold", to the faults it finds. They know nothing
-//! about any card or screen. The thresholds are the `audit` object of `data/beryl3d/gates.json`.
+//! about any card or screen. The thresholds are `data/beryl3d/audit.json`.
 
 use std::collections::BTreeMap;
 
@@ -8,7 +8,6 @@ use glam::{Vec2, Vec4};
 
 use super::fault::{Context, Fault, Rule, Subject};
 use super::tree::locator_of;
-use kit_base::data::audit;
 use kit_frame::frame::{Draw, Frame, Missing, Place, REVEALED_FACE, Ring, Ringed, Role, StateBits};
 use kit_scene::hit::{
     Overlaps, bounds, contains, covering, has_free_rect, hit, intersection, is_within,
@@ -514,7 +513,7 @@ pub fn marks_on(
     context: &Context,
     ring_target: impl Fn(Ringed) -> Option<(u32, Rect)>,
 ) -> Vec<Fault> {
-    let tolerance = audit::MARK_POINTS;
+    let tolerance = context.audit.mark_points;
     let mut faults = Vec::new();
     for ring in &frame.rings {
         let Some((index, thing)) = ring_target(ring.on) else {
@@ -693,9 +692,10 @@ pub fn lines_hold(before: &[KeptArrow], after: &Frame, context: &Context) -> Vec
             continue;
         }
         let moved = |corner: usize| was.corners[corner].distance(now.corners[corner]);
-        let still = moved(0) <= audit::LINE_END_POINTS && moved(3) <= audit::LINE_END_POINTS;
-        let reshaped =
-            moved(1) >= audit::LINE_RESHAPE_POINTS || moved(2) >= audit::LINE_RESHAPE_POINTS;
+        let still =
+            moved(0) <= context.audit.line_end_points && moved(3) <= context.audit.line_end_points;
+        let reshaped = moved(1) >= context.audit.line_reshape_points
+            || moved(2) >= context.audit.line_reshape_points;
         if still && reshaped {
             let subject = subject(after, index as u32);
             faults.push(fault(

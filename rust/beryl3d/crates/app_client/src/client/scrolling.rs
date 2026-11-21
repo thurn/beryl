@@ -55,8 +55,13 @@ impl Client {
             self.scrolling.cancel();
         }
         let view = |target| viewport(target, &self.layer, self.show.table(), rows);
-        let ScrollInput::Claimed(update) = self.scrolling.pointer(pointer, self.now, at, view)
-        else {
+        let ScrollInput::Claimed(update) = self.scrolling.pointer(
+            pointer,
+            self.now,
+            at,
+            view,
+            &self.show.table().data().pointer,
+        ) else {
             return false;
         };
         if pointer.phase != PointerPhase::Wheel {
@@ -82,10 +87,12 @@ impl Client {
         wheel: Option<Vec2>,
     ) -> Option<(Target, Viewport)> {
         let point = pointer.position;
-        if let Some((id, view)) =
-            self.layer
-                .scroll_target_at(point, self.features.layer_open, wheel)
-        {
+        if let Some((id, view)) = self.layer.scroll_target_at(
+            point,
+            self.features.layer_open,
+            wheel,
+            self.data().pointer.wheel_notch_points,
+        ) {
             // Let mouse drags select text inside a scrollable sheet.
             if wheel.is_none()
                 && pointer.kind == PointerKind::Mouse
@@ -110,9 +117,10 @@ impl Client {
     }
 
     pub(super) fn scroll_key(&mut self, key: Key) -> bool {
+        let step = self.data().pointer.scroll.key_step_points;
         let update = self
             .layer
-            .scroll_key(key, self.features.layer_open)
+            .scroll_key(key, self.features.layer_open, step)
             .map(|(id, offset)| (Target::Element(id), offset))
             .or_else(|| {
                 let row = self
@@ -120,7 +128,7 @@ impl Client {
                     .rows()
                     .focus()
                     .filter(|_| self.layer.focused().is_none() && self.rows_scroll())?;
-                let offset = row_viewport(self.show.table(), row)?.key(key)?;
+                let offset = row_viewport(self.show.table(), row)?.key(key, step)?;
                 Some((Target::Row(row), offset))
             });
         let Some((target, offset)) = update else {
@@ -135,7 +143,10 @@ impl Client {
     pub(crate) fn prepare_scroll(&mut self, now: u64) {
         let rows = self.rows_scroll();
         let view = |target| viewport(target, &self.layer, self.show.table(), rows);
-        if let Some((target, offset)) = self.scrolling.advance(now, view) {
+        if let Some((target, offset)) =
+            self.scrolling
+                .advance(now, view, &self.show.table().data().pointer)
+        {
             self.apply_scroll(target, offset);
         }
     }

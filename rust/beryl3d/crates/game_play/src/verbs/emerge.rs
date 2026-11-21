@@ -1,6 +1,6 @@
 //! `emerge`: an ability lifts out of its source and goes on the stack. It starts as a small
 //! copy on its source, `verbs.emerge.start_scale` of the source's size and offset from its
-//! middle by `verbs.emerge.start_offset` of its width and height (`data/beryl3d/space.json`,
+//! middle by `verbs.emerge.start_offset` of its width and height (`data/beryl3d/verbs.json`,
 //! from the web interface's `emerging` in `ui/src/stage/desktop.ts`), and travels to its place
 //! on the stack over the step along the step's curve, growing as it goes. The source does not
 //! move. An ability whose source is not on the table fades in at its place.

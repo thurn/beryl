@@ -359,6 +359,7 @@ fn the_marks_check_faults_an_outline_moved_off_its_card_or_narrower_than_it() {
         recording: "test".to_owned(),
         seat: Side::You,
         layout: Layout::Desktop,
+        audit: crate::test_data::data().audit,
         checks: Layout::Desktop.checks(
             &crate::test_data::data().profiles,
             show.table().camera().window.size,

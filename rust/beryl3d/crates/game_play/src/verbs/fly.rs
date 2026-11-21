@@ -30,7 +30,7 @@
 //! (`Turning`): a drawn card as it leaves the library, any other a little
 //! before half way. A card drawn alone turns at `held.turn` of its flight in, and grows on the
 //! screen toward its held size only once it is edge-on. The values are under `verbs.fly` in
-//! `data/beryl3d/space.json`.
+//! `data/beryl3d/verbs.json`.
 //!
 //! The web turns a card that lands face down the other way up the table (the opponent's draw)
 //! half round as it leaves, so that it never spins in the table's plane on the way. Beryl 3D's

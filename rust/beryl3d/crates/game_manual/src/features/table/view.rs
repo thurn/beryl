@@ -12,12 +12,13 @@ use game_hud::hud::{HudIn, players, steps};
 use game_hud::{hud::viewer::RevealedFace, inspect::Viewed};
 use game_table::{faces::FaceList, profiles::Profile, table::Window};
 use glam::Vec2;
-use kit_base::data::{profiles::ProfileData, space::pointer::DRAG_THRESHOLD_POINTS};
+use kit_base::data::profiles::ProfileData;
 use kit_scene::SizeClass;
 use kit_ui::element::{Action, Element, column};
 use kit_ui::widgets::{FieldState, Fields};
 
 pub struct Inputs<'a> {
+    pub drag_threshold: f32,
     pub hud: HudIn<'a>,
     pub fields: &'a Fields,
     pub bindings: &'a Bindings,
@@ -31,6 +32,7 @@ pub struct Inputs<'a> {
 
 #[derive(PartialEq)]
 pub struct ViewKey {
+    drag_threshold: f32,
     window: Window,
     profile: ProfileData,
     view: Option<PlayerView>,
@@ -52,6 +54,7 @@ impl ViewKey {
     pub(super) fn new(state: &State, input: &Inputs<'_>) -> Self {
         let hud = &input.hud;
         Self {
+            drag_threshold: input.drag_threshold,
             window: hud.window,
             profile: hud.profile.data().clone(),
             view: hud.view.cloned(),
@@ -137,7 +140,7 @@ pub(super) fn table(state: &State, input: Inputs<'_>) -> Element {
         .unwrap_or_default();
     let sort = view.and_then(|view| assists::sort_tray(view, window.size));
     let sweep = (state.sweep)
-        .filter(|(from, to)| from.distance(*to) >= DRAG_THRESHOLD_POINTS)
+        .filter(|(from, to)| from.distance(*to) >= input.drag_threshold)
         .map(|(from, to)| selection::rectangle(selection::sweep_box(from, to)));
     let landing = state.landing.as_ref().map(drop::target);
     // The summary hides while a sweep is drawn, as the web's hides while selecting, and while

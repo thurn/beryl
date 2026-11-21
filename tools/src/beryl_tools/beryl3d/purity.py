@@ -293,13 +293,13 @@ def verb_names(root: Path) -> set[str]:
 
 
 def data_names(root: Path) -> list[str]:
-    """Each key under `verbs` in data/beryl3d/space.json that names no verb or case."""
-    space = root / "data" / "beryl3d" / "space.json"
+    """Each key under `verbs` in data/beryl3d/verbs.json that names no verb or case."""
+    space = root / "data" / "beryl3d" / "verbs.json"
     if not space.is_file():
         return []
     known = verb_names(root)
     return [
-        f"data/beryl3d/space.json: verbs.{key} names no verb or case of "
+        f"data/beryl3d/verbs.json: verbs.{key} names no verb or case of "
         "data/ui-conventions.json"
         for key in json.loads(space.read_text()).get("verbs", {})
         if key not in known

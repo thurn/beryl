@@ -9,7 +9,7 @@
 //! - Scripts never overlap. An update that arrives while a script plays waits, and its script
 //!   starts as the one before ends.
 //! - When more than `catch_up.double` updates are waiting as a script starts, it plays twice as
-//!   fast, and past `catch_up.quadruple` four times as fast (`data/beryl3d/space-constants.json`), so that
+//!   fast, and past `catch_up.quadruple` four times as fast (`data/beryl3d/catch-up.json`), so that
 //!   the table catches up with a session that runs ahead of it.
 //! - When the window changes shape or a row scrolls, every resting place is worked out again
 //!   and the playing script is compiled again for it. A segment under way keeps its start and
@@ -72,7 +72,7 @@ use crate::pointer::Pointer;
 use game_table::faces::Faces;
 use game_table::table::badges::Badges;
 use game_table::table::{CARD_HEIGHT, CARD_WIDTH, Dress, Table, ability_track};
-use kit_base::data::space::catch_up;
+use kit_base::data::playback::CatchUp;
 use kit_base::pose::Pose;
 use kit_frame::frame::FrameBuilder;
 use kit_fx::effects::{self, EffectRun};
@@ -213,6 +213,11 @@ impl Show {
     /// itself.
     pub fn lit_mut(&mut self) -> &mut Lit {
         &mut self.lit
+    }
+
+    /// Advances the pointer animations to the frame at `now`.
+    pub fn advance_pointer(&mut self, now: u64) {
+        self.pointer.advance(now, &self.table.data().pointer);
     }
 
     /// The pointer on the table, which takes the host's pointer events.
@@ -539,7 +544,7 @@ impl Show {
             }
             let start = ended.unwrap_or(now);
             let rate = if self.catch_up {
-                rate_for(self.waiting.len())
+                rate_for(self.waiting.len(), self.table.data().catch_up)
             } else {
                 1
             };
@@ -564,7 +569,7 @@ impl Show {
             self.place_let_go(now);
             if let Some(playing) = &mut self.playing {
                 playing.affect(&mut self.effects);
-                playing.announce(&mut self.notices);
+                playing.announce(&mut self.notices, self.table.data().notices);
             }
             if !moves {
                 self.show_playing();
@@ -599,12 +604,13 @@ impl Show {
                 .copied()
                 .filter(|run| run.effect.on_card(definitions)),
         );
+        let (pointer, tuning) = (&self.pointer, &self.table.data().pointer);
         let dress = Dress {
             effects: &self.card_effects,
             badges: &self.badges,
             marks: &|on, look| light::marks::look(&self.lit, on, now, look),
             pointer: &|slot, camera, look| {
-                crate::pointer::look(&self.pointer, slot, (now, camera), look);
+                crate::pointer::look(pointer, slot, (now, camera), tuning, look);
             },
             now,
         };
@@ -764,10 +770,10 @@ impl Show {
 /// How many times faster than real time a script plays as it starts with `waiting` scripts,
 /// itself among them, waiting to play: twice past `catch_up.double` and four times past
 /// `catch_up.quadruple`, so that the table catches up with a session that runs ahead of it.
-fn rate_for(waiting: usize) -> u64 {
+fn rate_for(waiting: usize, catch_up: CatchUp) -> u64 {
     match waiting {
-        n if n > catch_up::QUADRUPLE => 4,
-        n if n > catch_up::DOUBLE => 2,
+        n if n > catch_up.quadruple => 4,
+        n if n > catch_up.double => 2,
         _ => 1,
     }
 }

@@ -14,16 +14,15 @@ pub fn directory() -> PathBuf {
 
 /// Loads the tuning files in `directory`. Used by the tools and the source check.
 pub fn load(directory: &Path) -> Result<Data, String> {
-    let read = |name| {
-        let path = directory.join(name);
-        std::fs::read_to_string(&path).map_err(|error| format!("{}: {error}", path.display()))
+    let with_directory = |why| format!("{}/{why}", directory.display());
+    let read = |name: &str| {
+        std::fs::read_to_string(directory.join(name)).map_err(|error| format!("{name}: {error}"))
     };
-    let space = read("space.json")?;
-    let gates = read("gates.json")?;
     let files: Vec<_> = profiles::FILES
         .iter()
         .map(|&name| read(name).map(|text| (name, text)))
-        .collect::<Result<_, _>>()?;
+        .collect::<Result<_, _>>()
+        .map_err(with_directory)?;
     let contents: Vec<_> = files
         .iter()
         .map(|(name, text)| (*name, text.as_str()))
@@ -49,14 +48,13 @@ pub fn load(directory: &Path) -> Result<Data, String> {
     }
     effects.sort_unstable_by(|a, b| a.0.cmp(&b.0));
     Data::parse(
-        &space,
-        &gates,
+        read,
         &contents,
         effects
             .iter()
             .map(|(name, text)| (name.as_str(), text.as_str())),
     )
-    .map_err(|why| format!("{}/{why}", directory.display()))
+    .map_err(with_directory)
 }
 
 /// Shares one validated set with every client started by this tool invocation.

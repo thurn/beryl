@@ -499,7 +499,10 @@ impl<S: FnOnce(&mut Renderer, Opening) -> Chosen> ApplicationHandler<UserEvent> 
             }
             _ => {}
         }
-        if let Some(input) = running.translator.window_event(&event) {
+        if let Some(input) = running.translator.window_event(
+            &event,
+            running.frames.client().data().pointer.wheel_notch_points,
+        ) {
             if matches!(input, Input::Surface { .. }) {
                 let size = running.translator.size();
                 running.screen.renderer.resize(

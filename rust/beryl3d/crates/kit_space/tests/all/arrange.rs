@@ -1,5 +1,6 @@
 use glam::{Quat, Vec2, Vec3};
-use kit_base::data::{audit, space::layout::phone};
+use kit_base::data::profiles::{Profiles, SHIPPED};
+use kit_base::data::space::layout::phone;
 use kit_base::geometry::{CARD_HEIGHT, CARD_WIDTH, Insets, Rect, Size, Window};
 use kit_space::arrange::{
     Alignment, CentredFan, Container, Edge, Fan, Group, Item, Limits, Overflow, Policy, Region,
@@ -62,12 +63,14 @@ fn profiles() -> [(Camera, f32); 2] {
             height: bottom - top,
         },
     );
+    let profiles = Profiles::parse(&SHIPPED).unwrap();
+    let regular = Window::default();
     [
         (
-            Camera::fit(DESKTOP_CAMERA, Window::default()),
-            audit::TARGET_POINTS,
+            Camera::fit(DESKTOP_CAMERA, regular),
+            profiles.for_size(regular.size).checks.target_points,
         ),
-        (compact, audit::PHONE_TARGET_POINTS),
+        (compact, profiles.for_size(tall.size).checks.target_points),
     ]
 }
 

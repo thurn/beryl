@@ -21,9 +21,9 @@
 //!   A device whose window server cannot hold the higher rate therefore tries it less and less
 //!   often instead of alternating.
 //!
-//! The thresholds are `frame_rate` in `data/beryl3d/space-constants.json`.
+//! The thresholds are in `data/beryl3d/frame-rate.json`.
 
-use kit_base::data::space::frame_rate;
+pub use kit_base::data::playback::FrameRate as Thresholds;
 
 /// What the rule needs to know of one animating frame, in nanoseconds.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -42,33 +42,6 @@ pub enum Step {
     Baseline,
     /// Ask the display for this rate, in frames a second.
     Rate(f32),
-}
-
-/// The thresholds of the rule (`frame_rate` in `data/beryl3d/space-constants.json`).
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Thresholds {
-    pub settle_frames: usize,
-    pub late_intervals: f32,
-    pub window: usize,
-    pub misses: usize,
-    pub room: f32,
-    pub up_frames: usize,
-    pub up_frames_most: usize,
-    pub lowest_hz: usize,
-}
-
-impl Thresholds {
-    /// The thresholds in `data/beryl3d/space-constants.json`.
-    pub const DATA: Self = Self {
-        settle_frames: frame_rate::SETTLE_FRAMES,
-        late_intervals: frame_rate::LATE_INTERVALS,
-        window: frame_rate::WINDOW,
-        misses: frame_rate::MISSES,
-        room: frame_rate::ROOM,
-        up_frames: frame_rate::UP_FRAMES,
-        up_frames_most: frame_rate::UP_FRAMES_MOST,
-        lowest_hz: frame_rate::LOWEST_HZ,
-    };
 }
 
 /// The rule's state: the rate chosen, and what the last frames did.

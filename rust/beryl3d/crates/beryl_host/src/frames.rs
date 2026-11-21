@@ -276,7 +276,8 @@ impl<T: Ticks> FrameLoop<T> {
     /// says whether the tier is Enhanced and chosen automatically, so that it drops first.
     #[must_use]
     pub fn paced(self, display_hz: f32, tier_can_drop: bool) -> Self {
-        self.paced_by(RateRule::new(display_hz, tier_can_drop, Thresholds::DATA))
+        let thresholds = self.client.data().frame_rate;
+        self.paced_by(RateRule::new(display_hz, tier_can_drop, thresholds))
     }
 
     /// The same loop stepping by `rule`.
@@ -294,7 +295,7 @@ impl<T: Ticks> FrameLoop<T> {
     pub fn fixed_at(self, hz: f32, tier_can_drop: bool) -> Self {
         let thresholds = Thresholds {
             lowest_hz: hz.round() as usize,
-            ..Thresholds::DATA
+            ..self.client.data().frame_rate
         };
         self.paced_by(RateRule::new(hz, tier_can_drop, thresholds))
     }

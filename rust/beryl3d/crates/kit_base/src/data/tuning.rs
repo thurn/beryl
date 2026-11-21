@@ -4,6 +4,9 @@ use glam::Vec2;
 use serde::de::{DeserializeOwned, Error};
 use serde::{Deserialize, Deserializer};
 
+use super::playback::{CatchUp, FrameRate, Slide, TierProbe};
+use super::pointer::PointerTuning;
+use super::presentation::{Notices, Revealed, Shown};
 use super::{effect::Effects, profiles::Profiles, verbs::Verbs};
 
 /// The tuning data supplied by a host. The client uses the typed values directly.
@@ -11,22 +14,28 @@ use super::{effect::Effects, profiles::Profiles, verbs::Verbs};
 pub struct Data {
     pub verbs: Verbs,
     pub audit: Audit,
+    pub pointer: PointerTuning,
+    pub catch_up: CatchUp,
+    pub frame_rate: FrameRate,
+    pub slide: Slide,
+    pub tier_probe: TierProbe,
+    pub notices: Notices,
+    pub revealed: Revealed,
+    pub shown: Shown,
     pub profiles: Profiles,
     pub effects: Effects,
 }
 
 impl Data {
     /// Parses spatial tuning, interface thresholds, layout profiles and effect definitions.
-    /// Errors name the input file and the path to the offending value.
+    /// The host supplies each tuning file through `load`. Errors name the input file and key.
     pub fn parse<'a>(
-        space: &str,
-        gates: &str,
+        mut load: impl FnMut(&str) -> Result<String, String>,
         profiles: &[(&str, &str)],
         effects: impl IntoIterator<Item = (&'a str, &'a str)>,
     ) -> Result<Self, String> {
-        let Space { verbs } = read("space.json", space)?;
-        let Gates { audit } = read("gates.json", gates)?;
-        validate(&verbs).map_err(|(key, why)| format!("space.json: verbs.{key}: {why}"))?;
+        let VerbFile { verbs } = read("verbs.json", &load("verbs.json")?)?;
+        validate(&verbs).map_err(|(key, why)| format!("verbs.json: verbs.{key}: {why}"))?;
         let effects = Effects::parse(effects)?;
         for required in ["glow", "dissolve", "loss"] {
             if effects.get(required).is_none() {
@@ -35,7 +44,15 @@ impl Data {
         }
         Ok(Self {
             verbs,
-            audit,
+            audit: read("audit.json", &load("audit.json")?)?,
+            pointer: PointerTuning::parse(&load("pointer.json")?)?,
+            catch_up: CatchUp::parse(&load("catch-up.json")?)?,
+            frame_rate: FrameRate::parse(&load("frame-rate.json")?)?,
+            slide: read("slide.json", &load("slide.json")?)?,
+            tier_probe: read("tier-probe.json", &load("tier-probe.json")?)?,
+            notices: read("notices.json", &load("notices.json")?)?,
+            revealed: read("revealed.json", &load("revealed.json")?)?,
+            shown: read("shown.json", &load("shown.json")?)?,
             profiles: Profiles::parse(profiles)?,
             effects,
         })
@@ -44,18 +61,12 @@ impl Data {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Space {
+struct VerbFile {
     verbs: Verbs,
 }
 
-// The renderer and the interface runner own the other sections of gates.json.
-#[derive(Deserialize)]
-struct Gates {
-    audit: Audit,
-}
-
 /// Thresholds shared by interface checks.
-#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Audit {
     #[serde(deserialize_with = "nonnegative")]
@@ -170,10 +181,10 @@ pub(super) fn interior<'de, D: Deserializer<'de>>(de: D) -> Result<f32, D::Error
     number(de, |v| v > 0.0 && v < 1.0, "a number between 0 and 1")
 }
 
-pub(super) fn columns<'de, D: Deserializer<'de>>(de: D) -> Result<usize, D::Error> {
+pub(super) fn nonzero_count<'de, D: Deserializer<'de>>(de: D) -> Result<usize, D::Error> {
     let value = usize::deserialize(de)?;
     if value == 0 {
-        return Err(D::Error::custom("expected at least one column"));
+        return Err(D::Error::custom("expected a count of at least one"));
     }
     Ok(value)
 }

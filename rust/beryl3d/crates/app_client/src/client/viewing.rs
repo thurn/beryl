@@ -11,7 +11,6 @@ use game_hud::hud::viewer::RevealedFace;
 use game_play::light::Span;
 use game_play::verbs::Interval;
 use game_table::table::{Moves, Relaid, Window};
-use kit_base::data::space::shown::opening;
 use kit_base::pose::Curve;
 use kit_frame::frame::Place;
 use kit_scene::{ShowPlacement, Tree};
@@ -49,10 +48,9 @@ enum Coin {
 
 impl Opening {
     /// Notes whether `view`, the latest view whose script has played out if the game screen is
-    /// shown, is in its opening. As the opening begins after the opponent won the flip and before anyone
-    /// has declared, its coin spins for `FLIP_MS` from `now`, however soon they chose, as the
-    /// web's `Opening` spins it from when it first shows.
-    pub(super) fn spin(&mut self, view: Option<&PlayerView>, now: u64) {
+    /// shown, is in its opening. If the opponent won the flip and nobody has declared, the coin
+    /// spins for `flip_ms` from `now`, as it does when the web's opening first appears.
+    pub(super) fn spin(&mut self, view: Option<&PlayerView>, now: u64, flip_ms: f32) {
         let Some(view) = view.filter(|view| game_hud::screens::opening::in_opening(view)) else {
             self.coin = Coin::Before;
             return;
@@ -66,7 +64,7 @@ impl Opening {
             && you.mulligan == Declaration::Undeclared;
         self.coin = if spins {
             Coin::Spinning {
-                until: now + ns(opening::FLIP_MS),
+                until: now + ns(flip_ms),
             }
         } else {
             Coin::Landed
@@ -104,7 +102,7 @@ const GLIDE: Curve = Curve {
     y2: 1.0,
 };
 
-/// A length in milliseconds from `space-constants.json`, in nanoseconds.
+/// Converts milliseconds to nanoseconds.
 #[expect(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
@@ -202,14 +200,15 @@ impl Client {
             .is_some_and(|laid| laid != self.window);
         self.screen_cards.was_opening = self.opening.shown;
         self.screen_cards.laid_in = Some(self.window);
+        let opening = self.data().shown.opening;
         let back = if closed {
-            (ns(opening::KEPT_MS), Curve::EASE_OUT)
+            (ns(opening.kept_ms), Curve::EASE_OUT)
         } else {
             timing(OwnStep::TrayLetGo)
         };
         let relaid = (self.opening.shown && !resized).then_some(Relaid {
-            cross: (ns(opening::CROSS_MS), GLIDE),
-            shift: (ns(opening::SHIFT_MS), GLIDE),
+            cross: (ns(opening.cross_ms), GLIDE),
+            shift: (ns(opening.shift_ms), GLIDE),
         });
         // A card the opening shows stands in its box at once, as the web's opening draws its own
         // copy of each card in place rather than moving the table's card there.
@@ -268,9 +267,12 @@ impl Client {
         if !holds && self.features.viewer().open() == Some(Viewed::Revealed) {
             self.view(None);
         }
-        self.features
-            .viewer_mut()
-            .write_pill(&mut self.layer, self.window.size, visible && holds);
+        self.features.viewer_mut().write_pill(
+            &mut self.layer,
+            self.window.size,
+            self.show.table().data().revealed,
+            visible && holds,
+        );
     }
 
     pub(super) fn prepare_steps(&mut self) {

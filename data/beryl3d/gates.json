@@ -1,14 +1,4 @@
 {
-  "audit": {
-    "line_end_points": 0.1,
-    "line_reshape_points": 4,
-    "mark_points": 2,
-    "step_ms": 150,
-    "step_points": 4,
-    "seen": 0.5,
-    "transparent": 0.3,
-    "crowded": 3
-  },
   "materials": {
     "downsample": {
       "samples": 1,

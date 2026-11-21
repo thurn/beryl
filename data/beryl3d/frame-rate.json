@@ -1,0 +1,10 @@
+{
+  "settle_frames": 120,
+  "late_intervals": 1.5,
+  "window": 60,
+  "misses": 3,
+  "room": 0.5,
+  "up_frames": 600,
+  "up_frames_most": 9600,
+  "lowest_hz": 30
+}

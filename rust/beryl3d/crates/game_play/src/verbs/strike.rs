@@ -12,7 +12,7 @@
 //! would pass through it, so it stops `near` outside that card's edge instead, and keeps its
 //! size.
 //!
-//! The values are `verbs.strike` in `data/beryl3d/space.json`: `wind` and `stay` are shares of
+//! The values are `verbs.strike` in `data/beryl3d/verbs.json`: `wind` and `stay` are shares of
 //! the step, `rear` and `least` shares of the creature's card width, `lift` how much larger it
 //! is drawn at its poise, `lean` an angle in degrees and `near` how far its middle stops outside
 //! the edge of what it strikes, in millimetres.

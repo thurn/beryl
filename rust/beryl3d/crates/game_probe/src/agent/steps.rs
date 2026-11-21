@@ -2,7 +2,7 @@
 //! checks"): no jumps, rest equals placement, each step played for its timing's duration, every
 //! step shown and not crowded. The last two are ports of the web interface's stage audit
 //! (`judgeStep` and `crowds` in `ui/scripts/stage-audit.mjs`), with its thresholds, which are in
-//! the `audit` object of `data/beryl3d/gates.json`.
+//! `data/beryl3d/audit.json`.
 //!
 //! All but "every step shown" read the script records alone, with no frame. That one reads a
 //! sample of the step's subject from each frame evaluated while the step plays.
@@ -12,7 +12,7 @@ use glam::{Quat, Vec2};
 
 use game_play::play::record::{Cause, ScriptRecord, SegmentRecord, StepRecord};
 use game_table::table::Camera;
-use kit_base::data::audit;
+use kit_base::data::Audit;
 use kit_base::pose::{Pose, Segment};
 use kit_frame::frame::{Frame, Place, Role};
 use kit_probe::agent::{Judged, Rule};
@@ -42,25 +42,25 @@ const SAME_FRACTION: f32 = 1e-3;
 
 /// `audit.step_ms` in nanoseconds: the shortest motion the eye takes as motion.
 #[must_use]
-pub fn step_nanoseconds() -> u64 {
+pub fn step_nanoseconds(audit: Audit) -> u64 {
     #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
         reason = "a threshold of milliseconds"
     )]
-    let nanoseconds = (f64::from(audit::STEP_MS) * 1e6) as u64;
+    let nanoseconds = (f64::from(audit.step_ms) * 1e6) as u64;
     nanoseconds
 }
 
 /// Every segment and step check on each script of `history` that has started.
 #[must_use]
-pub fn segment_checks(history: &[ScriptRecord]) -> Vec<Found> {
+pub fn segment_checks(history: &[ScriptRecord], audit: Audit) -> Vec<Found> {
     let mut found = Vec::new();
     for script in history.iter().filter(|script| script.start.is_some()) {
         found.extend(no_jumps(script));
         found.extend(rest_equals_placement(script));
         found.extend(step_times(script));
-        found.extend(crowded(script));
+        found.extend(crowded(script, audit));
     }
     found
 }
@@ -236,8 +236,8 @@ pub fn step_times(script: &ScriptRecord) -> Vec<Found> {
 /// Not crowded: no more than `audit.crowded` different moves begin within `audit.step_ms` of one
 /// another in one beat. Cards making the same move together read as one move.
 #[must_use]
-pub fn crowded(script: &ScriptRecord) -> Vec<Found> {
-    let window = step_nanoseconds();
+pub fn crowded(script: &ScriptRecord, audit: Audit) -> Vec<Found> {
+    let window = step_nanoseconds(audit);
     let mut found = Vec::new();
     let beats = script
         .steps
@@ -267,7 +267,7 @@ pub fn crowded(script: &ScriptRecord) -> Vec<Found> {
                 }
             }
             #[expect(clippy::cast_precision_loss, reason = "a handful of moves")]
-            if kinds.len() as f32 > audit::CROWDED {
+            if kinds.len() as f32 > audit.crowded {
                 let steps: Vec<String> = group.iter().map(|step| step.describe()).collect();
                 found.push(Found {
                     rule: Rule::Crowded,
@@ -276,7 +276,7 @@ pub fn crowded(script: &ScriptRecord) -> Vec<Found> {
                     message: format!(
                         "make {} different moves that began within {} ms in beat {}: {}",
                         kinds.len(),
-                        audit::STEP_MS,
+                        audit.step_ms,
                         beat + 1,
                         steps.join(", ")
                     ),
@@ -336,7 +336,7 @@ pub fn opening_up(frame: &Frame) -> bool {
 
 /// The scene object in `slot` as `frame`, drawn at `t` in a window of `size`, shows it.
 #[must_use]
-pub fn sample(frame: &Frame, slot: usize, t: u64, size: Size) -> Option<Sample> {
+pub fn sample(frame: &Frame, slot: usize, t: u64, size: Size, audit: Audit) -> Option<Sample> {
     let index = card_of(frame, slot)?;
     let element = &frame.resolved[index as usize];
     let rect = bounds(element);
@@ -358,7 +358,7 @@ pub fn sample(frame: &Frame, slot: usize, t: u64, size: Size) -> Option<Sample> 
             let top = &frame.resolved[top as usize];
             top.copies > 1
                 && top.place == element.place
-                && top.opacity > audit::TRANSPARENT
+                && top.opacity > audit.transparent
                 && frame.name(top.name) == frame.name(element.name)
         });
     // While the opening's screen is up, it shows the hands dealt, the mulligans and the cards
@@ -369,9 +369,9 @@ pub fn sample(frame: &Frame, slot: usize, t: u64, size: Size) -> Option<Sample> 
         None
     } else if !inside {
         Some("outside the window")
-    } else if element.opacity <= audit::TRANSPARENT {
+    } else if element.opacity <= audit.transparent {
         Some("transparent")
-    } else if !shown_by_pile && covered(frame, index) > 1.0 - audit::SEEN {
+    } else if !shown_by_pile && covered(frame, index) > 1.0 - audit.seen {
         Some("covered")
     } else {
         None
@@ -392,7 +392,7 @@ pub fn sample(frame: &Frame, slot: usize, t: u64, size: Size) -> Option<Sample> 
 /// card flown from a graveyard into exile does this, since exile lies unseen under the
 /// graveyard (docs/ui-conventions.md, "The phone").
 #[must_use]
-pub fn rests_in_place(script: &ScriptRecord, number: usize, camera: &Camera) -> bool {
+pub fn rests_in_place(script: &ScriptRecord, number: usize, camera: &Camera, audit: Audit) -> bool {
     let Some(subject) = script.steps.get(number).and_then(|step| step.subject) else {
         return false;
     };
@@ -406,7 +406,7 @@ pub fn rests_in_place(script: &ScriptRecord, number: usize, camera: &Camera) -> 
     let last = own.next_back().unwrap_or(first);
     let start = camera.to_screen(first.segment.from.position);
     let end = camera.to_screen(last.segment.to.position);
-    start.distance(end) < audit::STEP_POINTS
+    start.distance(end) < audit.step_points
 }
 
 /// Every step shown: what a step concerns is seen while it plays, and a step whose verb gives its
@@ -417,7 +417,13 @@ pub fn rests_in_place(script: &ScriptRecord, number: usize, camera: &Camera) -> 
 /// `emerge` and `appear` are judged: the other verbs place their subject with no path, are
 /// drawn as instant changes, or move no card.
 #[must_use]
-pub fn step_shown(step: &StepRecord, from: u64, to: u64, samples: &[Sample]) -> Option<String> {
+pub fn step_shown(
+    step: &StepRecord,
+    from: u64,
+    to: u64,
+    samples: &[Sample],
+    audit: Audit,
+) -> Option<String> {
     step.subject?;
     let took = to.saturating_sub(from);
     match step.verb {
@@ -427,7 +433,7 @@ pub fn step_shown(step: &StepRecord, from: u64, to: u64, samples: &[Sample]) -> 
             // a frame at every tick would not see within it.
             let whole: Vec<&Sample> = samples
                 .iter()
-                .filter(|sample| sample.t >= to && sample.t < to + step_nanoseconds())
+                .filter(|sample| sample.t >= to && sample.t < to + step_nanoseconds(audit))
                 .collect();
             if whole.is_empty() || whole.iter().any(|sample| sample.seen) {
                 return None;
@@ -455,7 +461,7 @@ pub fn step_shown(step: &StepRecord, from: u64, to: u64, samples: &[Sample]) -> 
             };
             let visible = path.iter().filter(|sample| sample.seen).count();
             #[expect(clippy::cast_precision_loss, reason = "a count of frames")]
-            let unseen = (visible as f32) < path.len() as f32 * audit::SEEN;
+            let unseen = (visible as f32) < path.len() as f32 * audit.seen;
             let reach = path
                 .iter()
                 .map(|sample| apart(sample.rect, origin.rect))
@@ -476,7 +482,7 @@ pub fn step_shown(step: &StepRecord, from: u64, to: u64, samples: &[Sample]) -> 
                 }
                 _ => 0,
             };
-            if reach < audit::STEP_POINTS {
+            if reach < audit.step_points {
                 return (!stays).then(|| format!("did not move in {}", step.describe()));
             }
             if unseen {
@@ -487,8 +493,8 @@ pub fn step_shown(step: &StepRecord, from: u64, to: u64, samples: &[Sample]) -> 
                     step.describe()
                 ));
             }
-            let least = step_nanoseconds().min(took / 2);
-            if took >= step_nanoseconds() && moving + FRAME < least {
+            let least = step_nanoseconds(audit).min(took / 2);
+            if took >= step_nanoseconds(audit) && moving + FRAME < least {
                 return Some(format!(
                     "moved {} points in {} ms of the {} ms of {}",
                     reach.round(),

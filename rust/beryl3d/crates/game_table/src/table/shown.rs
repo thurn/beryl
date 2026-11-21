@@ -12,7 +12,6 @@
 
 use super::scene::SceneObject;
 use super::{Camera, Table};
-use kit_base::data::space::shown::DEPTH;
 use kit_base::pose::between;
 use kit_base::pose::{Curve, Pose};
 use kit_frame::frame::ElementId;
@@ -138,7 +137,7 @@ impl Table {
         {
             let slot = object.0 as usize;
             let in_box = InBox {
-                pose: box_pose(self.camera(), rect),
+                pose: box_pose(self.camera(), rect, self.data().shown.depth),
                 visible: clip.is_none_or(|clip| intersection(clip, rect).is_some()),
                 clip,
                 clipped_at_rest: clip.is_some_and(|clip| !contains(clip, rect)),
@@ -283,7 +282,7 @@ impl Table {
 
 /// Where a card stands to fill `rect`, a box of the window in logical points, seen through
 /// `camera`: centred in it, facing the camera, as large as fits it.
-fn box_pose(camera: &Camera, rect: Rect) -> Pose {
+fn box_pose(camera: &Camera, rect: Rect, depth: f32) -> Pose {
     use super::{CARD_HEIGHT, CARD_WIDTH};
     let window = camera.window.size;
     let centre = glam::Vec2::new(rect.x + rect.width / 2.0, rect.y + rect.height / 2.0);
@@ -292,5 +291,5 @@ fn box_pose(camera: &Camera, rect: Rect) -> Pose {
         1.0 - centre.y / window.height * 2.0,
     );
     let height = rect.height.min(rect.width * CARD_HEIGHT / CARD_WIDTH) / window.height;
-    camera.screen_pose(ndc, DEPTH, glam::Quat::IDENTITY, height)
+    camera.screen_pose(ndc, depth, glam::Quat::IDENTITY, height)
 }

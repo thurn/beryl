@@ -7,7 +7,6 @@ use std::collections::BTreeSet;
 
 use super::checks::{fault, interactive, subject};
 use super::fault::{Context, Fault, Rule};
-use kit_base::data::audit;
 use kit_frame::frame::{Frame, Place, Role};
 use kit_scene::hit::{intersection, is_within, painted_over, visible_bounds};
 use kit_ui::input::Rect;
@@ -20,7 +19,7 @@ const SLACK: f32 = 1.0;
 /// Text overlaps nothing: no line of text (`Frame::lines`) crosses a line of another element's
 /// text or an interactive element of the flat layer, unless one of the two elements holds the
 /// other in the tree, as a button holds its label. Each line is judged by the part its
-/// element's clip shows, and a line whose element is no more opaque than `audit::TRANSPARENT`
+/// element's clip shows, and a line whose element is no more opaque than `context.audit.transparent`
 /// is not seen. Cards are left out, as they are of "no overlap": the table's cards lie under
 /// the flat layer by design. One fault names each pair of elements once.
 #[must_use]
@@ -30,7 +29,7 @@ pub fn text_overlap(frame: &Frame, context: &Context) -> Vec<Fault> {
         .iter()
         .filter_map(|line| {
             let element = &frame.resolved[line.element as usize];
-            if element.opacity <= audit::TRANSPARENT {
+            if element.opacity <= context.audit.transparent {
                 return None;
             }
             let rect = match element.clip {
@@ -45,7 +44,7 @@ pub fn text_overlap(frame: &Frame, context: &Context) -> Vec<Fault> {
             let element = &frame.resolved[index as usize];
             let seen = element.place == Place::Layer
                 && element.role != Role::Card
-                && element.opacity > audit::TRANSPARENT;
+                && element.opacity > context.audit.transparent;
             Some((index, shrunk(visible_bounds(element).filter(|_| seen)?)?))
         })
         .collect();

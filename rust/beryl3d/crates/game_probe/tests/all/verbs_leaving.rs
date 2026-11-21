@@ -12,7 +12,6 @@ use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use game_play::play::Show;
 use game_play::play::record::ScriptRecord;
 use game_probe::agent::steps::{Sample, no_jumps, rest_equals_placement, step_shown, step_times};
-use kit_base::data::audit;
 use kit_base::pose::{Pose, Segment};
 use kit_frame::frame::{Frame, Role};
 use kit_scene::hit::bounds;
@@ -302,6 +301,7 @@ fn a_vanishing_card_fades_where_it_stands() {
 /// The ability numbered `ABILITY` as each of `moments` draws it, as "every step shown" samples
 /// a step's subject.
 fn ability_samples(moments: &[Moment]) -> Vec<Sample> {
+    let audit = crate::test_data::data().audit;
     moments
         .iter()
         .filter_map(|moment| {
@@ -310,7 +310,7 @@ fn ability_samples(moments: &[Moment]) -> Vec<Sample> {
                 .resolved
                 .iter()
                 .find(|element| element.role == Role::Ability)?;
-            let seen = element.opacity > audit::TRANSPARENT;
+            let seen = element.opacity > audit.transparent;
             Some(Sample {
                 t: moment.t,
                 rect: bounds(element),
@@ -373,7 +373,13 @@ fn every_case_of_emerge_travels_from_the_source_to_the_stack() {
         let mut judged = step.clone();
         judged.subject = Some(0);
         assert_eq!(
-            step_shown(&judged, from, to, &ability_samples(&moments)),
+            step_shown(
+                &judged,
+                from,
+                to,
+                &ability_samples(&moments),
+                crate::test_data::data().audit
+            ),
             None,
             "{case}: the ability moves far enough for long enough to be seen"
         );

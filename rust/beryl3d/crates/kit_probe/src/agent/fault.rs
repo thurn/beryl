@@ -5,6 +5,7 @@ use std::fmt::Write;
 
 use beryl_protocol::protocol::Side;
 
+use kit_base::data::Audit;
 use kit_base::data::profiles::{Checks, Profiles, SizeClass};
 use kit_ui::input::{Insets, Rect, Size};
 
@@ -17,6 +18,7 @@ pub struct Context {
     pub seat: Side,
     pub layout: Layout,
     pub checks: Checks,
+    pub audit: Audit,
     /// The window's size in logical points.
     pub size: Size,
     /// How far in from each edge the window's safe area starts.

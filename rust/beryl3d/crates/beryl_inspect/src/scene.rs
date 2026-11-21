@@ -62,6 +62,7 @@ impl Scene {
             crate::data::checkout()?,
         );
         player.stub_atlas();
+        let audit = player.data().audit;
         Ok(Self::Story(Box::new(StoryScene {
             source: story,
             player,
@@ -69,6 +70,7 @@ impl Scene {
                 recording: name.to_owned(),
                 seat,
                 layout,
+                audit,
                 checks: pages::layout_checks(layout, size),
                 size,
                 safe_area,

@@ -1,8 +1,8 @@
 //! Choosing the tier at startup (docs/beryl-3d.md, "Choosing a tier"). Before the first frame,
 //! with the setting at Automatic, the app draws the `stress-255` board in the Enhanced tier
 //! into an offscreen target of the window's size once unmeasured and then
-//! `enhanced.probe.frames` times, waiting for the GPU after each, and chooses Enhanced when the slowest of them took less than
-//! `enhanced.probe.share` of the display's refresh interval. The setting at Baseline or
+//! `frames` from `tier-probe.json` times, waiting for the GPU after each, and chooses Enhanced when the slowest of them took less than
+//! `share` of the display's refresh interval. The setting at Baseline or
 //! Enhanced fixes the tier instead, and measures nothing.
 //!
 //! On this Mac (an Apple M5 Max at 1600 by 900 points, scale 1, while the machine ran other
@@ -20,7 +20,6 @@ use beryl_host::{Chosen, Opening};
 use beryl_protocol::protocol::SessionId;
 use beryl_protocol::{GameUpdate, performance_probe};
 use beryl_render::{Renderer, Target};
-use kit_base::data::space::enhanced::probe as data;
 use kit_ui::input::{Insets, Size, Tier};
 use serde::{Deserialize, Serialize};
 
@@ -75,10 +74,9 @@ pub fn probe(renderer: &mut Renderer, size: Size, scale: f32, display_hz: f32) -
             chosen: Tier::Baseline,
         };
     }
-    let mut client = Client::new(
-        crate::data::embedded().expect("app tuning"),
-        Config::LARGEST,
-    );
+    let data = crate::data::embedded().expect("app tuning");
+    let tuning = data.tier_probe;
+    let mut client = Client::new(data, Config::LARGEST);
     client.handle(Input::Surface {
         size,
         scale,
@@ -99,13 +97,13 @@ pub fn probe(renderer: &mut Renderer, size: Size, scale: f32, display_hz: f32) -
     renderer.render(frame, &mut target);
     renderer.finish();
     let mut slowest = Duration::ZERO;
-    for _ in 0..data::FRAMES {
+    for _ in 0..tuning.frames {
         let started = Instant::now();
         renderer.render(frame, &mut target);
         renderer.finish();
         slowest = slowest.max(started.elapsed());
     }
-    let chosen = if slowest.as_secs_f64() < f64::from(data::SHARE) * interval.as_secs_f64() {
+    let chosen = if slowest.as_secs_f64() < f64::from(tuning.share) * interval.as_secs_f64() {
         Tier::Enhanced
     } else {
         Tier::Baseline

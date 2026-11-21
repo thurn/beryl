@@ -100,7 +100,7 @@ fn touch(phase: PointerPhase, position: Vec2) -> Input {
 /// Nanoseconds in a millisecond, the unit of `Client::frame`'s clock.
 const MS: u64 = 1_000_000;
 
-/// The hold time of a long press, `pointer.long_press_ms` in `data/beryl3d/space-constants.json`.
+/// The hold time of a long press, `long_press_ms` in `data/beryl3d/pointer.json`.
 const LONG_PRESS: u64 = 500 * MS;
 
 /// The names of the menu rows `frame` shows.

@@ -10,13 +10,12 @@
 //! skipped between changes nothing.
 //!
 //! A press on a card the open prompt lets the player pick up holds it once it has travelled
-//! `DRAG_THRESHOLD_POINTS`, and the card then follows the pointer (`held`). Letting it go is
+//! `drag_threshold_points`, and the card then follows the pointer (`held`). Letting it go is
 //! decided at the next frame, which `update` reports to the client as the card clicked, if the
 //! gesture is one.
 
 mod held;
 pub use held::Hold;
-pub mod refusal;
 
 pub mod rows;
 pub mod touch;
@@ -28,13 +27,13 @@ use crate::play::compile::Compiled;
 pub use game_table::table::takes_pointer;
 use game_table::table::{CARD_HEIGHT, Camera, Look, PILE_IDS};
 use held::{By, Fall, Grip, Lean};
-use kit_base::data::space::pointer as data;
+use kit_base::data::pointer::PointerTuning;
 use kit_base::pose::between;
 use kit_base::pose::{Curve, Pose, Segment};
 use kit_frame::frame::{ElementId, Frame, Lifted, Place, Role, StateBits};
 use kit_scene::hit::hit;
 use kit_ui::input::{self, PointerKind, PointerPhase};
-use refusal::Shake;
+use kit_ui::layout::Shake;
 
 /// The most hand cards that can be rising, raised or falling at once (`frame::LIFTED`).
 const LIFTS: usize = kit_frame::frame::LIFTED;
@@ -84,18 +83,18 @@ struct Lift {
 impl Lift {
     /// How long the whole move takes: a full rise in `RISE_MS` and a full fall in `FALL_MS`,
     /// and a part of one in that part of the time, as `raisedAt` in raised.ts has it.
-    fn length(&self) -> f32 {
+    fn length(&self, tuning: &PointerTuning) -> f32 {
         let full = if self.to > self.from {
-            data::RISE_MS
+            tuning.rise_ms
         } else {
-            data::FALL_MS
+            tuning.fall_ms
         };
         (self.to - self.from).abs() * full * MILLISECOND
     }
 
     /// How far up the card is at `now`, easing out toward `to`.
-    fn at(&self, now: u64) -> f32 {
-        let length = self.length();
+    fn at(&self, now: u64, tuning: &PointerTuning) -> f32 {
+        let length = self.length(tuning);
         if length <= 0.0 {
             return self.to;
         }
@@ -104,8 +103,8 @@ impl Lift {
     }
 
     /// Whether the move has arrived by `now`.
-    fn done(&self, now: u64) -> bool {
-        now.saturating_sub(self.since) as f32 >= self.length()
+    fn done(&self, now: u64, tuning: &PointerTuning) -> bool {
+        now.saturating_sub(self.since) as f32 >= self.length(tuning)
     }
 }
 
@@ -146,17 +145,17 @@ impl Pointer {
     }
 
     /// Takes a pointer event: where the mouse is, or that it has left the window.
-    pub fn handle(&mut self, pointer: &input::Pointer) {
+    pub fn handle(&mut self, pointer: &input::Pointer, threshold: f32) {
         self.phase = Some(pointer.phase);
         match pointer.phase {
             PointerPhase::Move => {
                 if let Some(grip) = &mut self.grip {
-                    grip.moved(pointer.position);
+                    grip.moved(pointer.position, threshold);
                 }
             }
             PointerPhase::Up => {
                 if let Some(mut grip) = self.grip.take() {
-                    grip.moved(pointer.position);
+                    grip.moved(pointer.position, threshold);
                     self.let_go = Some((grip, false));
                 }
             }
@@ -216,8 +215,8 @@ impl Pointer {
 
     /// Whether the pointer holds a card, or one it let go is still falling back at `now`: a
     /// script that starts then may take the card over from where it is (`hand_over`).
-    pub(crate) fn carries(&self, now: u64) -> bool {
-        self.held().is_some() || self.fall.is_some_and(|fall| !fall.done(now))
+    pub(crate) fn carries(&self, now: u64, fall_ms: f32) -> bool {
+        self.held().is_some() || self.fall.is_some_and(|fall| !fall.done(now, fall_ms))
     }
 
     /// The held card's lean, in radians: toward +x on the screen and toward +y (down it). It is
@@ -234,9 +233,9 @@ impl Pointer {
     /// Advances the held card's lean to the frame at `now`, starts a shake asked for since the
     /// last frame and forgets one that is over. The client calls this before it builds each
     /// frame.
-    pub fn advance(&mut self, now: u64) {
+    pub fn advance(&mut self, now: u64, tuning: &PointerTuning) {
         if let Some(grip) = self.grip.filter(|grip| grip.held) {
-            self.lean.advance(grip.at, now);
+            self.lean.advance(grip.at, now, tuning);
         }
         if let Some((_, shake)) = &mut self.shake
             && !shake.advance(now)
@@ -247,8 +246,8 @@ impl Pointer {
 
     /// Shakes the card in `slot`, from the next frame, because the manual table refused the
     /// action a click on it sent. A shake under way on another card stops.
-    pub fn refuse(&mut self, slot: usize) {
-        self.shake = Some((slot, Shake::new()));
+    pub fn refuse(&mut self, slot: usize, refusal_ms: f32) {
+        self.shake = Some((slot, Shake::new(refusal_ms)));
     }
 
     /// How far across the screen the card in `slot` is shaken at `now`, in logical points.
@@ -262,14 +261,25 @@ impl Pointer {
     /// Where the card in `slot` is drawn at `now` by `camera` because of the pointer, if it is
     /// held or falling back from where it was let go toward `rest`.
     #[must_use]
-    pub fn carried(&self, slot: usize, rest: &Pose, (now, camera): (u64, &Camera)) -> Option<Pose> {
+    pub fn carried(
+        &self,
+        slot: usize,
+        rest: &Pose,
+        (now, camera): (u64, &Camera),
+        tuning: &PointerTuning,
+    ) -> Option<Pose> {
         if let Some(grip) = self.grip.filter(|grip| grip.held && grip.slot == slot) {
-            return Some(held::pose(camera, grip.at, self.lean.tilt()));
+            return Some(held::pose(
+                camera,
+                grip.at,
+                self.lean.tilt(),
+                tuning.held_height_mm,
+            ));
         }
         let fall = self
             .fall
-            .filter(|fall| fall.slot == slot && !fall.done(now))?;
-        Some(fall.at(rest, now))
+            .filter(|fall| fall.slot == slot && !fall.done(now, tuning.fall_ms))?;
+        Some(fall.at(rest, now, tuning.fall_ms))
     }
 
     /// Where the mouse is, in logical points, while it is over the window.
@@ -298,26 +308,28 @@ impl Pointer {
 
     /// How far up the hand card in `slot` is at `now`, from 0 in the fan to 1 raised.
     #[must_use]
-    pub fn lift(&self, slot: usize, now: u64) -> f32 {
+    pub fn lift(&self, slot: usize, now: u64, tuning: &PointerTuning) -> f32 {
         self.lifts
             .iter()
             .find(|lift| lift.slot == slot)
-            .map_or(0.0, |lift| lift.at(now))
+            .map_or(0.0, |lift| lift.at(now, tuning))
     }
 
     /// Whether a hand card is rising or falling at `now`, a card is held, one let go is
     /// falling back, or a refused card is shaking.
     #[must_use]
-    pub fn moving(&self, now: u64) -> bool {
-        self.lifts.iter().any(|lift| !lift.done(now))
+    pub fn moving(&self, now: u64, tuning: &PointerTuning) -> bool {
+        self.lifts.iter().any(|lift| !lift.done(now, tuning))
             || self.held().is_some()
-            || self.fall.is_some_and(|fall| !fall.done(now))
+            || self
+                .fall
+                .is_some_and(|fall| !fall.done(now, tuning.fall_ms))
             || self.shake.is_some_and(|(_, shake)| !shake.done(now))
     }
 
     /// Starts the hand card in `slot` easing toward `to` at `now`, from where it is then.
-    fn ease(&mut self, slot: usize, to: f32, now: u64) {
-        let from = self.lift(slot, now);
+    fn ease(&mut self, slot: usize, to: f32, now: u64, tuning: &PointerTuning) {
+        let from = self.lift(slot, now, tuning);
         let lift = Lift {
             slot,
             from,
@@ -336,18 +348,18 @@ impl Pointer {
 
     /// Makes the card in `slot` the hovered one at `now`. The hand card hovered before falls
     /// back into the fan; the new one rises out of it if it is a hand card (`rises`).
-    fn hover(&mut self, slot: Option<usize>, rises: bool, now: u64) {
+    fn hover(&mut self, slot: Option<usize>, rises: bool, now: u64, tuning: &PointerTuning) {
         if slot == self.hovered {
             return;
         }
         if let Some(left) = self.hovered.take() {
-            self.ease(left, 0.0, now);
+            self.ease(left, 0.0, now, tuning);
         }
         self.hovered = slot;
         if let Some(slot) = slot
             && rises
         {
-            self.ease(slot, 1.0, now);
+            self.ease(slot, 1.0, now, tuning);
         }
     }
 }
@@ -357,11 +369,17 @@ impl Pointer {
 /// pose, and a card shaking because the manual table refused its action is drawn that far
 /// across the screen. A card a script is moving is drawn where the script has it. The card
 /// under the pointer is marked `HOVERED` by `update`, once the frame's hit test has found it.
-pub fn look(pointer: &Pointer, slot: usize, (now, camera): (u64, &Camera), look: &mut Look) {
+pub fn look(
+    pointer: &Pointer,
+    slot: usize,
+    (now, camera): (u64, &Camera),
+    tuning: &PointerTuning,
+    look: &mut Look,
+) {
     if look.state & StateBits::MOVING != 0 {
         return;
     }
-    if let Some(pose) = pointer.carried(slot, &look.pose, (now, camera)) {
+    if let Some(pose) = pointer.carried(slot, &look.pose, (now, camera), tuning) {
         look.state |= if pointer.held() == Some(slot) {
             StateBits::HELD
         } else {
@@ -370,9 +388,9 @@ pub fn look(pointer: &Pointer, slot: usize, (now, camera): (u64, &Camera), look:
         look.pose = pose;
         return;
     }
-    let lift = pointer.lift(slot, now);
+    let lift = pointer.lift(slot, now, tuning);
     if lift > 0.0 {
-        look.pose = between(&look.pose, &raised(&look.pose, camera), lift);
+        look.pose = between(&look.pose, &raised(&look.pose, camera, tuning), lift);
     }
     let shaken = pointer.shaken(slot, now);
     let points_per_millimetre = camera.points_per_millimetre(look.pose.position);
@@ -387,14 +405,14 @@ pub fn look(pointer: &Pointer, slot: usize, (now, camera): (u64, &Camera), look:
 /// the screen. It is then moved toward the eye, to `NEARER` of its distance and smaller by as
 /// much, which leaves it where it was on the screen but in front of every other card of the
 /// hand.
-fn raised(rest: &Pose, camera: &Camera) -> Pose {
+fn raised(rest: &Pose, camera: &Camera, tuning: &PointerTuning) -> Pose {
     let [right, up, back] = camera.axes();
-    let grown = (data::RAISE_SCALE - 1.0) * CARD_HEIGHT / 2.0;
-    let position = rest.position + up * (data::RAISE_MM + grown) * rest.scale;
+    let grown = (tuning.raise_scale - 1.0) * CARD_HEIGHT / 2.0;
+    let position = rest.position + up * (tuning.raise_mm + grown) * rest.scale;
     kit_space::arrange::spot(
-        camera.eye + (position - camera.eye) * data::NEARER,
+        camera.eye + (position - camera.eye) * tuning.nearer,
         Quat::from_mat3(&Mat3::from_cols(right, up, back)),
-        rest.scale * data::RAISE_SCALE * data::NEARER,
+        rest.scale * tuning.raise_scale * tuning.nearer,
         *rest,
     )
 }
@@ -413,23 +431,25 @@ pub(crate) fn update(
     frame: &mut Frame,
     (rest, in_tray): (impl Fn(usize) -> Option<Pose>, impl Fn(usize) -> bool),
     (now, camera): (u64, &Camera),
+    tuning: &PointerTuning,
 ) -> Option<LetGo> {
     pointer
         .lifts
-        .retain(|lift| lift.to > 0.0 || !lift.done(now));
-    let clicked = let_go(pointer, &rest, in_tray, (now, camera));
+        .retain(|lift| lift.to > 0.0 || !lift.done(now, tuning));
+    let clicked = let_go(pointer, &rest, in_tray, (now, camera), tuning);
     hover_under(
         pointer,
         frame,
         |slot| rest(slot).map(|pose| camera.card_box(&pose)),
         now,
+        tuning,
     );
     clicked
 }
 
 /// Decides what the press on a card that ended since the last frame means, at `now`, and
 /// returns the card it clicked, as the web interface's `Pointer.release` and the prompt's
-/// `#dropped` do. A press that never travelled `DRAG_THRESHOLD_POINTS` is a click on its card;
+/// `#dropped` do. A press that never travelled `drag_threshold_points` is a click on its card;
 /// one that travelled that far without picking its card up, such as a drag that scrolled a
 /// battlefield row, is not, as `Pointer.release` has it (`unheldDrag`). A card held and let go
 /// higher on the screen than the top of where it rests, so over the battlefield or the stack, is
@@ -443,6 +463,7 @@ fn let_go(
     rest: impl Fn(usize) -> Option<Pose>,
     in_tray: impl Fn(usize) -> bool,
     (now, camera): (u64, &Camera),
+    tuning: &PointerTuning,
 ) -> Option<LetGo> {
     let (grip, cancelled) = pointer.let_go.take()?;
     if !grip.held {
@@ -455,7 +476,7 @@ fn let_go(
     }
     pointer.fall = Some(Fall {
         slot: grip.slot,
-        from: held::pose(camera, grip.at, pointer.lean.tilt()),
+        from: held::pose(camera, grip.at, pointer.lean.tilt(), tuning.held_height_mm),
         since: now,
     });
     if in_tray(grip.slot) || pointer.drops_anywhere {
@@ -498,10 +519,11 @@ pub(crate) fn hand_over(
     compiled: &mut Compiled,
     rest: impl Fn(usize) -> Option<Pose>,
     (now, camera): (u64, &Camera),
+    tuning: &PointerTuning,
 ) -> bool {
     let Some(slot) = pointer.held().or(pointer
         .fall
-        .filter(|fall| !fall.done(now))
+        .filter(|fall| !fall.done(now, tuning.fall_ms))
         .map(|fall| fall.slot))
     else {
         return false;
@@ -512,7 +534,9 @@ pub(crate) fn hand_over(
     let Some(resting) = track.segments().first().map(|first| first.from) else {
         return false;
     };
-    let Some(from) = rest(slot).and_then(|pose| pointer.carried(slot, &pose, (now, camera))) else {
+    let Some(from) =
+        rest(slot).and_then(|pose| pointer.carried(slot, &pose, (now, camera), tuning))
+    else {
         return false;
     };
     let moved = |segment: &mut Segment| {
@@ -554,6 +578,7 @@ fn hover_under(
     frame: &mut Frame,
     rest: impl Fn(usize) -> Option<([Vec2; 4], f32)>,
     now: u64,
+    tuning: &PointerTuning,
 ) {
     for lift in &pointer.lifts {
         let (Some(index), Some((corners, depth))) = (card(frame, lift.slot), rest(lift.slot))
@@ -568,14 +593,14 @@ fn hover_under(
     }
     pointer.pile = None;
     let Some(point) = pointer.at.filter(|_| pointer.held().is_none()) else {
-        pointer.hover(None, false, now);
+        pointer.hover(None, false, now, tuning);
         return;
     };
     frame.swap_lifted();
     let reached = hit(frame, point).map(|index| index as usize);
     frame.swap_lifted();
     let Some(index) = reached else {
-        pointer.hover(None, false, now);
+        pointer.hover(None, false, now, tuning);
         return;
     };
     let element = &mut frame.resolved[index];
@@ -588,14 +613,14 @@ fn hover_under(
                 .checked_sub(PILE_IDS)
                 .map(|index| index as usize);
         }
-        pointer.hover(None, false, now);
+        pointer.hover(None, false, now, tuning);
         return;
     }
     if element.state.has(StateBits::MOVING) {
         // The script takes the card from where it lay in the fan, so it is no longer up.
         let slot = element.id.0 as usize;
         pointer.lifts.retain(|lift| lift.slot != slot);
-        pointer.hover(None, false, now);
+        pointer.hover(None, false, now, tuning);
         return;
     }
     element.state.0 |= StateBits::HOVERED;
@@ -607,7 +632,7 @@ fn hover_under(
             ..
         }
     );
-    pointer.hover(Some(element.id.0 as usize), rises, now);
+    pointer.hover(Some(element.id.0 as usize), rises, now, tuning);
 }
 
 /// The index in `frame` of the card element of the object in `slot`.

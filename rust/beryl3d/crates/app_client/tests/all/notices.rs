@@ -302,6 +302,7 @@ fn two_notices_at_once_do_not_overlap() {
         recording: "notices".to_owned(),
         seat: Side::You,
         layout: crate::REGULAR,
+        audit: crate::test_data::data().audit,
         checks: crate::REGULAR.checks(
             &crate::test_data::data().profiles,
             kit_base::geometry::Size::default(),

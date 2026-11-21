@@ -10,6 +10,13 @@ use kit_ui::input::{
 use kit_ui::layout::Layer;
 use kit_ui::scroll::{ScrollGesture, ScrollInput};
 
+fn pointer_tuning() -> kit_base::data::pointer::PointerTuning {
+    kit_base::data::pointer::PointerTuning::parse(include_str!(
+        "../../../../../../data/beryl3d/pointer.json"
+    ))
+    .expect("repository pointer tuning")
+}
+
 const INSIDE: Vec2 = Vec2::new(10.0, 10.0);
 const MS: u64 = 1_000_000;
 
@@ -42,6 +49,7 @@ struct Page {
     layer: Layer,
     gesture: ScrollGesture<ElementId>,
     viewport: ElementId,
+    tuning: kit_base::data::pointer::PointerTuning,
 }
 
 impl Page {
@@ -64,6 +72,7 @@ impl Page {
             layer,
             gesture: ScrollGesture::default(),
             viewport,
+            tuning: pointer_tuning(),
         }
     }
 
@@ -88,12 +97,19 @@ impl Page {
             wheel,
             modifiers: Modifiers::default(),
         };
-        let at =
-            self.layer
-                .scroll_target_at(at, true, (phase == PointerPhase::Wheel).then_some(wheel));
-        let input = self
-            .gesture
-            .pointer(&pointer, now, at, |id| self.layer.scroll_viewport(id));
+        let at = self.layer.scroll_target_at(
+            at,
+            true,
+            (phase == PointerPhase::Wheel).then_some(wheel),
+            self.tuning.wheel_notch_points,
+        );
+        let input = self.gesture.pointer(
+            &pointer,
+            now,
+            at,
+            |id| self.layer.scroll_viewport(id),
+            &self.tuning,
+        );
         match input {
             ScrollInput::Pass => false,
             ScrollInput::Claimed(update) => {
@@ -114,9 +130,9 @@ impl Page {
     }
 
     fn tick(&mut self, time: u64) {
-        if let Some((id, offset)) = self
-            .gesture
-            .advance(time * MS, |id| self.layer.scroll_viewport(id))
+        if let Some((id, offset)) =
+            self.gesture
+                .advance(time * MS, |id| self.layer.scroll_viewport(id), &self.tuning)
         {
             self.layer.set_scroll_offset(id, offset);
         }
@@ -130,7 +146,7 @@ impl Page {
         };
         let (id, offset) = self
             .layer
-            .scroll_key(key, true)
+            .scroll_key(key, true, self.tuning.scroll.key_step_points)
             .expect("focus is inside the viewport");
         self.layer.set_scroll_offset(id, offset);
     }
@@ -156,7 +172,7 @@ fn wheel_and_mouse_drag_share_the_clamped_offset_and_clip_presses() {
     assert!(page.drag(PointerKind::Mouse, PointerPhase::Move, -30.0, 32));
     assert!(page.drag(PointerKind::Mouse, PointerPhase::Up, -30.0, 48));
     assert_eq!(page.offset(), Vec2::new(0.0, 100.0));
-    assert!(!page.gesture.moving(500 * MS));
+    assert!(!page.gesture.moving(500 * MS, &page.tuning));
 
     page.wheel(Vec2::new(0.0, -900.0));
     assert_eq!(page.offset(), Vec2::new(0.0, 500.0));
@@ -205,7 +221,7 @@ fn touch_momentum_uses_the_frame_clock_and_decelerates_to_rest() {
     page.tick(330);
     let rest = page.offset();
     assert!(rest.y > later);
-    assert!(!page.gesture.moving(500 * MS));
+    assert!(!page.gesture.moving(500 * MS, &page.tuning));
     page.tick(390);
     assert_eq!(page.offset(), rest);
 }
@@ -223,7 +239,7 @@ fn momentum_stops_at_either_bound_and_a_held_finger_does_not_fling() {
         page.tick(80);
         assert_eq!(page.offset(), Vec2::Y * bound);
         assert!(
-            !page.gesture.moving(500 * MS),
+            !page.gesture.moving(500 * MS, &page.tuning),
             "the track ended when it hit the bound"
         );
     }
@@ -232,7 +248,7 @@ fn momentum_stops_at_either_bound_and_a_held_finger_does_not_fling() {
     page.drag(touch, PointerPhase::Move, 30.0, 150);
     page.drag(touch, PointerPhase::Up, 30.0, 300);
     assert!(
-        !page.gesture.moving(500 * MS),
+        !page.gesture.moving(500 * MS, &page.tuning),
         "no momentum after pausing before release"
     );
     page.tick(450);

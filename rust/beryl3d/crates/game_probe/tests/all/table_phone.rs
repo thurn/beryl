@@ -66,6 +66,7 @@ fn context(window: Window) -> Context {
         recording: "phone".to_owned(),
         seat: Side::You,
         layout: Layout::Phone,
+        audit: crate::test_data::data().audit,
         checks: Layout::Phone.checks(&crate::test_data::data().profiles, window.size),
         size: window.size,
         safe_area: window.safe_area,

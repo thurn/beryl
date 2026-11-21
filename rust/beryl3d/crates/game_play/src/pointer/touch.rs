@@ -9,7 +9,7 @@
 //!   finger of that touch reaches the game. A finger that lands later is another thumb, and is
 //!   ignored while the first goes on, as the web's `ReportTaps` and `inMultiTouch` have it
 //!   (`ui/src/mobile/report-taps.ts`).
-//! - **A hold.** An active finger that stays within `DRAG_THRESHOLD_POINTS` of where it went
+//! - **A hold.** An active finger that stays within `drag_threshold_points` of where it went
 //!   down for `LONG_PRESS_MS` is due (`Touch::take_hold`), and the client opens the card
 //!   inspector or the manual table's menu there. The hold is timed from the first frame after
 //!   the finger went down, because an input has no time of its own.
@@ -26,10 +26,7 @@
 
 use glam::Vec2;
 
-use kit_base::data::space::pointer::touch::{
-    DOUBLE_MS, PICKUP_MS, SLOP_POINTS, TAP_MS, TOGETHER_MS,
-};
-use kit_base::data::space::pointer::{DRAG_THRESHOLD_POINTS, LONG_PRESS_MS};
+use kit_base::data::pointer::PointerTuning;
 
 /// Nanoseconds in a millisecond, the unit of `Client::frame`'s clock.
 const MILLISECOND: u64 = 1_000_000;
@@ -105,16 +102,22 @@ impl Default for Touch {
     }
 }
 
-/// `milliseconds` as nanoseconds. The values in `space-constants.json` are whole milliseconds.
-#[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-fn nanoseconds(milliseconds: f32) -> u64 {
-    milliseconds as u64 * MILLISECOND
+/// `milliseconds` as nanoseconds.
+fn nanoseconds(milliseconds: u64) -> u64 {
+    milliseconds.saturating_mul(MILLISECOND)
 }
 
 impl Touch {
     /// Finger `id` went down at `at` at `now`, on bare felt if `felt`. Says what the game makes
     /// of it.
-    pub fn down(&mut self, id: u8, at: Vec2, now: u64, felt: bool) -> Landed {
+    pub fn down(
+        &mut self,
+        id: u8,
+        at: Vec2,
+        now: u64,
+        felt: bool,
+        tuning: &PointerTuning,
+    ) -> Landed {
         let slot = &mut self.fingers[usize::from(id)];
         if slot.replace(at).is_none() {
             self.down += 1;
@@ -122,7 +125,7 @@ impl Touch {
         let first = self.down == 1;
         let landed = match &mut self.tap {
             Some(tap) if !first => {
-                if now.saturating_sub(tap.start) <= nanoseconds(TOGETHER_MS) {
+                if now.saturating_sub(tap.start) <= nanoseconds(tuning.touch.together_ms) {
                     tap.multi = true;
                     Landed::Together
                 } else {
@@ -171,18 +174,18 @@ impl Touch {
     }
 
     /// Finger `id` moved to `at`. Returns whether it is the active finger. Moving
-    /// `DRAG_THRESHOLD_POINTS` from where it landed ends its hold and its wait for a pickup,
+    /// `drag_threshold_points` from where it landed ends its hold and its wait for a pickup,
     /// and moving more than `SLOP_POINTS` means the touch is no tap.
-    pub fn moved(&mut self, id: u8, at: Vec2) -> bool {
+    pub fn moved(&mut self, id: u8, at: Vec2, tuning: &PointerTuning) -> bool {
         if let (Some(landed), Some(tap)) = (self.fingers[usize::from(id)], &mut self.tap)
-            && landed.distance(at) > SLOP_POINTS
+            && landed.distance(at) > tuning.touch.slop_points
         {
             tap.spoiled = true;
         }
         let Some(active) = self.active.as_mut().filter(|active| active.id == id) else {
             return false;
         };
-        if active.start.distance(at) >= DRAG_THRESHOLD_POINTS {
+        if active.start.distance(at) >= tuning.drag_threshold_points {
             active.hold = false;
             active.pickup = false;
         }
@@ -191,7 +194,7 @@ impl Touch {
 
     /// Finger `id` lifted at `now`. Returns whether it was the active finger, and whether its
     /// lift finished a double tap.
-    pub fn up(&mut self, id: u8, now: u64) -> (bool, bool) {
+    pub fn up(&mut self, id: u8, now: u64, tuning: &PointerTuning) -> (bool, bool) {
         let active = self.lift(id);
         if self.down > 0 {
             return (active, false);
@@ -200,15 +203,15 @@ impl Touch {
             return (active, false);
         };
         let tapped = !tap.spoiled
-            && now.saturating_sub(tap.start) <= nanoseconds(TAP_MS)
+            && now.saturating_sub(tap.start) <= nanoseconds(tuning.touch.tap_ms)
             && (tap.multi || tap.felt);
         if !tapped {
             self.last = None;
             return (active, false);
         }
         let double = self.last.take().is_some_and(|(end, at)| {
-            tap.start.saturating_sub(end) <= nanoseconds(DOUBLE_MS)
-                && at.distance(tap.at) <= SLOP_POINTS
+            tap.start.saturating_sub(end) <= nanoseconds(tuning.touch.double_ms)
+                && at.distance(tap.at) <= tuning.touch.slop_points
         });
         if !double {
             self.last = Some((now, tap.at));
@@ -262,9 +265,11 @@ impl Touch {
     /// Where the active finger landed, if its hold is due at `now`; the hold then ends. The
     /// finger stays active, so the rest of its events still reach the game, which has ended
     /// its press.
-    pub fn take_hold(&mut self, now: u64) -> Option<Vec2> {
+    pub fn take_hold(&mut self, now: u64, tuning: &PointerTuning) -> Option<Vec2> {
         let active = self.active.as_mut().filter(|active| active.hold)?;
-        let due = active.since? + nanoseconds(LONG_PRESS_MS);
+        let due = active
+            .since?
+            .saturating_add(nanoseconds(tuning.long_press_ms));
         if now < due {
             return None;
         }
@@ -273,13 +278,13 @@ impl Touch {
     }
 
     /// Whether the active finger's wait for a pickup is over at `now`; the wait then ends.
-    pub fn take_pickup(&mut self, now: u64) -> bool {
+    pub fn take_pickup(&mut self, now: u64, tuning: &PointerTuning) -> bool {
         let Some(active) = self.active.as_mut().filter(|active| active.pickup) else {
             return false;
         };
         if active
             .since
-            .is_none_or(|since| now < since + nanoseconds(PICKUP_MS))
+            .is_none_or(|since| now < since.saturating_add(nanoseconds(tuning.touch.pickup_ms)))
         {
             return false;
         }
@@ -290,11 +295,15 @@ impl Touch {
     /// When the client should next draw a frame for a hold or a pickup that comes due, once
     /// its timing has begun.
     #[must_use]
-    pub fn due(&self) -> Option<u64> {
+    pub fn due(&self, tuning: &PointerTuning) -> Option<u64> {
         let active = self.active?;
         let since = active.since?;
-        let hold = active.hold.then(|| since + nanoseconds(LONG_PRESS_MS));
-        let pickup = active.pickup.then(|| since + nanoseconds(PICKUP_MS));
+        let hold = active
+            .hold
+            .then(|| since.saturating_add(nanoseconds(tuning.long_press_ms)));
+        let pickup = active
+            .pickup
+            .then(|| since.saturating_add(nanoseconds(tuning.touch.pickup_ms)));
         match (hold, pickup) {
             (Some(hold), Some(pickup)) => Some(hold.min(pickup)),
             (hold, pickup) => hold.or(pickup),

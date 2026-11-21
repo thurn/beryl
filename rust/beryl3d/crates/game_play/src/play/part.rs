@@ -270,7 +270,7 @@ impl Show {
                 compiled = Some((count, part.done()));
                 self.unbuilt |= playing.compiled.unbuilt;
                 playing.affect(&mut self.effects);
-                playing.announce(&mut self.notices);
+                playing.announce(&mut self.notices, self.table.data().notices);
             }
         }
         if let Some((count, done)) = compiled {
@@ -325,7 +325,7 @@ impl Show {
         };
         let count = self.waiting.len();
         for index in 0..count {
-            let rate = rate_for(count - index);
+            let rate = rate_for(count - index, self.table.data().catch_up);
             self.begin(index, now, (start, rate));
             let waiting = &self.waiting[index];
             let end = waiting.compiled.end;
@@ -361,7 +361,7 @@ impl Show {
             .is_some_and(|(before, shown)| Rc::ptr_eq(before, shown));
         let whole = self.plants.iter().any(|plant| plant.script == number)
             || self.lays_out_again(timings_of(&update, timings.as_deref()))
-            || self.pointer.carries(now);
+            || self.pointer.carries(now, self.table.data().pointer.fall_ms);
         if let (Some(before), Some(from), false) = (&before, &from, whole) {
             let inputs = Inputs {
                 before: Rc::clone(before),
@@ -421,7 +421,7 @@ impl Show {
             return false;
         };
         self.lays_out_again(timings_of(&waiting.update, waiting.timings.as_deref()))
-            || self.pointer.carries(now)
+            || self.pointer.carries(now, self.table.data().pointer.fall_ms)
     }
 
     /// Whether a script timed by `timings` that starts next is laid out again as it starts
@@ -447,7 +447,7 @@ impl Show {
             // sorts them in with those given already.
             let count = part.advance(&self.table, &mut playing.compiled, u64::MAX);
             playing.affect(&mut self.effects);
-            playing.announce(&mut self.notices);
+            playing.announce(&mut self.notices, self.table.data().notices);
             let (rest, played) = part.finish(&self.table, &mut playing.compiled);
             playing.effects_given = playing.compiled.effects.len();
             self.unbuilt |= playing.compiled.unbuilt;

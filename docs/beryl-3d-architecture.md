@@ -319,9 +319,9 @@ per subject, and `kit_base` reads each into a typed struct once.
   the data arrives.
 
 Changing how far a card lifts is then an edit to a JSON file and one
-`just b3d png`, with no compile. Verb tuning in `space.json` already takes this
-path. During the conversion, `space-constants.json` holds spatial values that
-still generate Rust constants.
+`just b3d png`, with no compile. Verb, audit, pointer, playback and presentation
+tuning already take this path. During the conversion, `space-constants.json`
+holds spatial values that still generate Rust constants.
 
 ### Effects
 

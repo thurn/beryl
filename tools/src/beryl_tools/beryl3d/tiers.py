@@ -25,10 +25,10 @@ from .. import deps
 from . import app, paths
 
 # The rate rule's frames that are not counted while a new window settles
-# (`frame_rate.settle_frames` in data/beryl3d/space-constants.json).
+# (`settle_frames` in data/beryl3d/frame-rate.json).
 SETTLE_FRAMES: int = json.loads(
-    (paths.DATA / "space-constants.json").read_text(encoding="utf-8")
-)["frame_rate"]["settle_frames"]
+    (paths.DATA / "frame-rate.json").read_text(encoding="utf-8")
+)["settle_frames"]
 # How many animating frames after settling the drop may take.
 DROP_WITHIN = 120
 # What the app prints, followed by the path, when it has written its frame log.

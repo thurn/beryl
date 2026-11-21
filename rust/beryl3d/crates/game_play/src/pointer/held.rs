@@ -2,7 +2,7 @@
 //! where it rests once let go (docs/beryl-3d.md, "Motion the pointer drives").
 //!
 //! The values are those of the web interface's `Heft` (`ui/src/stage/heft.ts`), in
-//! `data/beryl3d/space-constants.json` under `pointer`. Lengths there are stage pixels and here logical
+//! `data/beryl3d/pointer.json` under `pointer`. Lengths there are stage pixels and here logical
 //! points.
 
 use std::f32::consts::TAU;
@@ -10,7 +10,7 @@ use std::f32::consts::TAU;
 use glam::{Quat, Vec2};
 
 use game_table::table::Camera;
-use kit_base::data::space::pointer as data;
+use kit_base::data::pointer::PointerTuning;
 use kit_base::pose::between;
 use kit_base::pose::{Curve, Pose};
 
@@ -28,7 +28,7 @@ pub(super) struct Grip {
     pub at: Vec2,
     /// Which drags pick the card up.
     pub hold: Hold,
-    /// Whether the press has travelled `DRAG_THRESHOLD_POINTS` from where it began. A press
+    /// Whether the press has travelled `drag_threshold_points` from where it began. A press
     /// that has is a drag, which is never a click on its card, whether or not it picked the
     /// card up: a drag across a battlefield row scrolls the row (`rows`).
     pub moved: bool,
@@ -63,10 +63,10 @@ pub(super) enum By {
 
 impl Grip {
     /// Moves the press to `at`. A holdable card is picked up once the press has travelled
-    /// `DRAG_THRESHOLD_POINTS` from where it began, as the web interface's `Pointer` has it.
-    pub fn moved(&mut self, at: Vec2) {
+    /// `drag_threshold_points` from where it began, as the web interface's `Pointer` has it.
+    pub fn moved(&mut self, at: Vec2, threshold: f32) {
         self.at = at;
-        if let Some(sideways) = kit_ui::scroll::sideways(self.start, at) {
+        if let Some(sideways) = kit_ui::scroll::sideways(self.start, at, threshold) {
             // Whether the drag scrolls is settled where it first passes the threshold.
             if !self.moved && self.hold == Hold::UpOrDown && sideways {
                 self.hold = Hold::Never;
@@ -87,17 +87,21 @@ pub(super) struct Fall {
 
 impl Fall {
     /// Where the card is at `now`, falling toward `rest`.
-    pub fn at(&self, rest: &Pose, now: u64) -> Pose {
-        between(&self.from, rest, Curve::EASE_OUT.ease(self.share(now)))
+    pub fn at(&self, rest: &Pose, now: u64, fall_ms: f32) -> Pose {
+        between(
+            &self.from,
+            rest,
+            Curve::EASE_OUT.ease(self.share(now, fall_ms)),
+        )
     }
 
     /// How much of the fall is done at `now`, from 0 to 1.
-    fn share(&self, now: u64) -> f32 {
-        (now.saturating_sub(self.since) as f32 / (data::FALL_MS * MILLISECOND)).min(1.0)
+    fn share(&self, now: u64, fall_ms: f32) -> f32 {
+        (now.saturating_sub(self.since) as f32 / (fall_ms * MILLISECOND)).min(1.0)
     }
 
-    pub fn done(&self, now: u64) -> bool {
-        self.share(now) >= 1.0
+    pub fn done(&self, now: u64, fall_ms: f32) -> bool {
+        self.share(now, fall_ms) >= 1.0
     }
 }
 
@@ -138,29 +142,29 @@ impl Lean {
     /// Advances the spring to the frame at `now`, with the pointer at `at`, in steps of
     /// `1 / LEAN_STEPS_PER_SECOND` second. A gap between frames longer than `MAX_GAP_MS` counts
     /// as that long, as `Heft.advance` has it.
-    pub fn advance(&mut self, at: Vec2, now: u64) {
+    pub fn advance(&mut self, at: Vec2, now: u64, tuning: &PointerTuning) {
         let Some((was, then)) = self.last.replace((at, now)) else {
             return;
         };
-        let gap = (now.saturating_sub(then) as f32 / SECOND).min(data::MAX_GAP_MS / 1000.0);
+        let gap = (now.saturating_sub(then) as f32 / SECOND).min(tuning.max_gap_ms / 1000.0);
         if gap <= 0.0 {
             return;
         }
-        self.sense(at - was, gap);
-        let step = 1.0 / data::LEAN_STEPS_PER_SECOND;
+        self.sense(at - was, gap, tuning);
+        let step = 1.0 / tuning.lean_steps_per_second;
         let mut left = gap;
         while left > 1e-6 {
-            self.step(left.min(step));
+            self.step(left.min(step), tuning);
             left -= step;
         }
     }
 
     /// Smooths the pointer's velocity and acceleration over the `gap` seconds in which it moved
     /// by `moved`, as `Heft`'s `#sense` does.
-    fn sense(&mut self, moved: Vec2, gap: f32) {
+    fn sense(&mut self, moved: Vec2, gap: f32, tuning: &PointerTuning) {
         let raw = moved / gap;
-        let velocity_share = 1.0 - (-gap * 1000.0 / data::SMOOTH_VELOCITY_MS).exp();
-        let acceleration_share = 1.0 - (-gap * 1000.0 / data::SMOOTH_ACCELERATION_MS).exp();
+        let velocity_share = 1.0 - (-gap * 1000.0 / tuning.smooth_velocity_ms).exp();
+        let acceleration_share = 1.0 - (-gap * 1000.0 / tuning.smooth_acceleration_ms).exp();
         let velocity = self.velocity + (raw - self.velocity) * velocity_share;
         self.acceleration +=
             ((velocity - self.velocity) / gap - self.acceleration) * acceleration_share;
@@ -172,13 +176,13 @@ impl Lean {
     /// air it pushes through, and the grip's stiffness pulls it back flat. No lean passes
     /// `LEAN_DEGREES`. The held card stays `HELD_HEIGHT_MM` above the table, higher than a lean
     /// that large can dip its edge, so `Heft`'s limit at the felt never applies.
-    fn step(&mut self, dt: f32) {
-        let omega = TAU * data::STIFFNESS_HZ;
-        let damping = 2.0 * data::DAMPING_RATIO * omega;
-        let most = data::LEAN_DEGREES.to_radians();
+    fn step(&mut self, dt: f32, tuning: &PointerTuning) {
+        let omega = TAU * tuning.stiffness_hz;
+        let damping = 2.0 * tuning.damping_ratio * omega;
+        let most = tuning.lean_degrees.to_radians();
         for axis in 0..2 {
-            let pull = self.acceleration[axis] + data::DRAG_PER_SECOND * self.velocity[axis];
-            let goal = (pull / data::GRIP_POINTS_PER_SECOND_SQUARED).atan();
+            let pull = self.acceleration[axis] + tuning.drag_per_second * self.velocity[axis];
+            let goal = (pull / tuning.grip_points_per_second_squared).atan();
             self.spin[axis] +=
                 (omega * omega * (goal - self.tilt[axis]) - damping * self.spin[axis]) * dt;
             self.tilt[axis] += self.spin[axis] * dt;
@@ -194,9 +198,9 @@ impl Lean {
 /// the plane `HELD_HEIGHT_MM` above the table, its centre under the pointer, at its natural size.
 /// A lean toward +x on the screen dips its right edge, and one toward +y (down the screen, toward
 /// the viewer) dips its near edge.
-pub(super) fn pose(camera: &Camera, at: Vec2, tilt: Vec2) -> Pose {
+pub(super) fn pose(camera: &Camera, at: Vec2, tilt: Vec2, height: f32) -> Pose {
     Pose {
-        position: camera.on_plane(at, data::HELD_HEIGHT_MM),
+        position: camera.on_plane(at, height),
         rotation: Quat::from_rotation_y(tilt.x) * Quat::from_rotation_x(tilt.y),
         ..Pose::default()
     }

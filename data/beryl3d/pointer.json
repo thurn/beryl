@@ -1,0 +1,36 @@
+{
+  "refusal_ms": 240,
+  "rise_ms": 100,
+  "fall_ms": 160,
+  "raise_mm": 34.45,
+  "raise_scale": 1.5,
+  "nearer": 0.6,
+  "held_height_mm": 39.38,
+  "max_gap_ms": 50,
+  "stiffness_hz": 3.5,
+  "damping_ratio": 0.42,
+  "lean_degrees": 20,
+  "drag_threshold_points": 6,
+  "long_press_ms": 500,
+  "grip_points_per_second_squared": 60000,
+  "drag_per_second": 5,
+  "smooth_velocity_ms": 35,
+  "smooth_acceleration_ms": 50,
+  "lean_steps_per_second": 240,
+  "scroll_step_points": 48,
+  "wheel_notch_points": 16,
+  "scroll": {
+    "key_step_points": 40,
+    "coast_ms": 300,
+    "sample_ms": 16,
+    "stale_ms": 80,
+    "max_points_per_second": 2000
+  },
+  "touch": {
+    "together_ms": 80,
+    "tap_ms": 300,
+    "double_ms": 300,
+    "slop_points": 30,
+    "pickup_ms": 150
+  }
+}

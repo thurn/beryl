@@ -8,7 +8,6 @@ use game_hud::inspect::Viewed;
 use glam::Vec2;
 
 use super::{Client, Platform};
-use kit_base::data::space::pointer::DRAG_THRESHOLD_POINTS;
 use kit_scene::hit::hit;
 
 use app_screens::screens::Screen;
@@ -159,7 +158,9 @@ impl Client {
                     return false;
                 };
                 self.features.table_mut().sweep = Some((from, pointer.position));
-                if from.distance(pointer.position) >= DRAG_THRESHOLD_POINTS {
+                if from.distance(pointer.position)
+                    >= self.show.table().data().pointer.drag_threshold_points
+                {
                     self.show_screen();
                 }
                 true
@@ -168,7 +169,8 @@ impl Client {
                 let Some((from, _)) = self.features.table_mut().sweep.take() else {
                     return false;
                 };
-                if from.distance(pointer.position) >= DRAG_THRESHOLD_POINTS
+                if from.distance(pointer.position)
+                    >= self.show.table().data().pointer.drag_threshold_points
                     && let Some(view) = self.show.latest().map(|update| &update.view)
                 {
                     let rect = selection::sweep_box(from, pointer.position);

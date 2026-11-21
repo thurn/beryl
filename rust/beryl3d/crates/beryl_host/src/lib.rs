@@ -32,7 +32,7 @@ pub use desktop::{Desktop, Options, WindowMode, is_fullscreen_key};
 #[cfg(feature = "drive")]
 pub use drive::Drive;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
-pub use events::{LINE_POINTS, Translator, modifiers_from};
+pub use events::{Translator, modifiers_from};
 pub use frames::{
     Chosen, Draw, Feed, FrameLoop, NoFeed, Opened, Opening, Shown, Sleep, Ticked, Ticks, When,
 };

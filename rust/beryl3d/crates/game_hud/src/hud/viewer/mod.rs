@@ -6,6 +6,7 @@ use beryl_protocol::PlayerView;
 use beryl_protocol::script::Act;
 use game_table::profiles::Profile;
 use glam::Vec2;
+use kit_base::data::presentation::Revealed;
 use kit_scene::{Context, Feature};
 use kit_ui::element::{Element, floats, row};
 use kit_ui::input::{Rect, Size};
@@ -163,7 +164,7 @@ impl State {
     }
 
     /// Shows the prepared control while a revealed face is visible.
-    pub fn write_pill(&mut self, layer: &mut Layer, window: Size, visible: bool) {
+    pub fn write_pill(&mut self, layer: &mut Layer, window: Size, tuning: Revealed, visible: bool) {
         let Some(control) = &mut self.control else {
             return;
         };
@@ -176,7 +177,7 @@ impl State {
         }
         if shown.is_some() {
             let point = pile.map_or_else(
-                || revealed::pill_corner(window),
+                || revealed::pill_corner(window, tuning),
                 |area| Vec2::new(area.x, area.y),
             );
             let look = FloatLook {

@@ -62,7 +62,8 @@ impl Client {
             self.bug_point(&pointer);
             return;
         }
-        self.show.pointer_mut().handle(&pointer);
+        let threshold = self.data().pointer.drag_threshold_points;
+        self.show.pointer_mut().handle(&pointer, threshold);
         if pointer.phase == PointerPhase::Down {
             self.features.table_mut().modifiers.shift = pointer.modifiers.shift;
         }

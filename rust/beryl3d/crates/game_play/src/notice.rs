@@ -11,7 +11,7 @@ use beryl_protocol::protocol::Side;
 use beryl_protocol::script::Notice;
 
 use crate::verbs::Interval;
-use kit_base::data::space::notices;
+use kit_base::data::presentation::Notices;
 use kit_base::tokens::{ratio, size};
 
 /// A notice shown over `over`, on the script's clock. `passes` says whether the table goes on
@@ -57,8 +57,8 @@ impl Place {
 
 /// The shares of a notice's run over which it fades in and out, as the web stage's
 /// `.stage-notice` rules in `ui/src/stage/stage.css` have them for its kind: the turn banner,
-/// the pill of a scry, and the other banners (a coin's among them). The values are `notices` in
-/// `data/beryl3d/space-constants.json`.
+/// the pill of a scry, and the other banners (a coin's among them). The values are in
+/// `data/beryl3d/notices.json`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Fade {
     pub fade_in: f32,
@@ -74,13 +74,11 @@ pub struct Fade {
 impl Fade {
     /// How `notice` fades.
     #[must_use]
-    pub const fn of(notice: &Notice) -> Self {
-        let (fade_in, fade_out) = match notice {
-            Notice::Turn { .. } => (notices::turn::IN, notices::turn::OUT),
-            Notice::Scry { .. } | Notice::TopOrBottom { .. } => {
-                (notices::pill::IN, notices::pill::OUT)
-            }
-            _ => (notices::banner::IN, notices::banner::OUT),
+    pub const fn of(notice: &Notice, tuning: Notices) -> Self {
+        let shares = match notice {
+            Notice::Turn { .. } => tuning.turn,
+            Notice::Scry { .. } | Notice::TopOrBottom { .. } => tuning.pill,
+            _ => tuning.banner,
         };
         // The turn banner (`.turn-banner.stage-notice` in `ui/src/stage/stage.css`) starts at
         // 0.93 of its size, and sinks 30 points toward the player whose turn it is at its end:
@@ -95,8 +93,8 @@ impl Fade {
             _ => (1.0, 0.0),
         };
         Self {
-            fade_in,
-            fade_out,
+            fade_in: shares.r#in,
+            fade_out: shares.out,
             scale_from,
             slide,
         }

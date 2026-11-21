@@ -5,7 +5,7 @@ use std::path::Path;
 
 use serde_json::Value;
 
-pub(super) fn legacy(data: &Path, space: &mut Value, audit: &mut Value) {
+pub(super) fn legacy(data: &Path, space: &mut Value) {
     for name in ["desktop", "phone"] {
         let path = data.join("profiles").join(format!("{name}.json"));
         println!("cargo:rerun-if-changed={}", path.display());
@@ -46,10 +46,12 @@ pub(super) fn legacy(data: &Path, space: &mut Value, audit: &mut Value) {
                     data["screen"][field].take(),
                 );
             }
-            audit["phone_target_points"] = data["checks"]["target_points"].take();
-            audit["phone_text_points"] = data["checks"]["text_points"].take();
         } else {
-            audit["target_points"] = data["checks"]["target_points"].take();
+            insert(
+                space,
+                "layout.desktop.target_points",
+                data["checks"]["target_points"].take(),
+            );
         }
     }
 }

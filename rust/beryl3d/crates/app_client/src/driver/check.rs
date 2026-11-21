@@ -16,11 +16,11 @@ use game_play::play::record::{Plant, Planted, ScriptRecord};
 use game_probe::agent::game_checks;
 use game_probe::agent::steps::{self, Found, Sample, card_of, sample, step_nanoseconds};
 use game_table::table::Camera;
-use kit_base::data::audit;
+use kit_base::data::Audit;
 use kit_frame::frame::Frame;
 use kit_probe::agent::checks::{KeptArrow, arrows_held, keep_arrows, lines_hold};
 use kit_probe::agent::tree::locator_of;
-use kit_probe::agent::{self, Fault, Rule, Subject};
+use kit_probe::agent::{self, Context, Fault, Rule, Subject};
 use kit_scene::hit::bounds;
 use kit_ui::input::Rect;
 
@@ -112,6 +112,19 @@ struct Judged {
 }
 
 impl Page {
+    pub(super) fn context(&self) -> Context {
+        Context {
+            recording: self.name.clone(),
+            seat: self.seat,
+            layout: self.layout,
+            audit: self.client.data().audit,
+            checks: self.layout.checks(&self.client.data().profiles, self.size),
+            size: self.size,
+            safe_area: self.safe_area,
+            at: self.now,
+        }
+    }
+
     /// The check times of the recording as it plays with no action taken, in order, each once,
     /// in nanoseconds since its start: the frame after each input; for each segment its start,
     /// its midpoint and its end, the midpoint being a flight's apex too, and when a thrown
@@ -128,22 +141,17 @@ impl Page {
     pub fn check_all(&mut self, mode: Mode) -> Checked {
         let (played, end) = self.played();
         let history = played.client.history().to_vec();
+        let audit = played.client.data().audit;
         let checked: Vec<u64> = match mode {
             Mode::AtCheckTimes => times(&played.given_at, &played.client, end),
-            Mode::EveryTick => {
-                let mut ticks: Vec<u64> =
-                    (0..=end / self.tick.0).map(|n| n * self.tick.0).collect();
-                ticks.push(end);
-                ticks.dedup();
-                ticks
-            }
+            Mode::EveryTick => every_tick(self.tick.0, end),
         };
-        let found = steps::segment_checks(&history);
+        let found = steps::segment_checks(&history, audit);
         let mut tally = agent::Judged::default();
         for script in &history {
             steps::count_script(&mut tally, script);
         }
-        let mut judged = judged(&history, played.client.table().camera());
+        let mut judged = judged(&history, played.client.table().camera(), audit);
         // The frames that name the objects of the faults the segment checks found.
         let naming: BTreeSet<u64> = found.iter().map(|found| found.at).collect();
         // "Every step shown" judges the share of frames in which a step's subject is seen, so
@@ -190,7 +198,7 @@ impl Page {
                         .expect("only steps with a subject are judged");
                     step.evaluated |= t <= step.to;
                     step.under_opening &= t > step.to || steps::opening_up(frame);
-                    if let Some(sample) = sample(frame, slot, t, size) {
+                    if let Some(sample) = sample(frame, slot, t, size, audit) {
                         step.samples.push(sample);
                         step.subject.get_or_insert_with(|| subject(frame, slot));
                     }
@@ -213,7 +221,9 @@ impl Page {
         for step in (judged.iter()).filter(|step| step.evaluated && !step.under_opening) {
             tally.step_shown(step.samples.len());
             let record = &history[step.script].steps[step.step];
-            if let Some(message) = steps::step_shown(record, step.from, step.to, &step.samples) {
+            if let Some(message) =
+                steps::step_shown(record, step.from, step.to, &step.samples, audit)
+            {
                 let elements: Vec<Subject> = step.subject.clone().into_iter().collect();
                 let found = Found {
                     rule: Rule::StepShown,
@@ -417,6 +427,14 @@ impl Page {
     }
 }
 
+/// Every clock tick, including the recording's end even when it falls between ticks.
+fn every_tick(tick: u64, end: u64) -> Vec<u64> {
+    let mut ticks: Vec<u64> = (0..=end / tick).map(|number| number * tick).collect();
+    ticks.push(end);
+    ticks.dedup();
+    ticks
+}
+
 /// The check times of a recording whose inputs were given at `given_at` and whose scripts are
 /// `history`, up to `end`, in order, each once.
 fn times(given_at: &[u64], client: &crate::Client, end: u64) -> Vec<u64> {
@@ -446,7 +464,9 @@ fn times(given_at: &[u64], client: &crate::Client, end: u64) -> Vec<u64> {
         for run in &script.effects {
             times.insert(real(run.start));
             times.insert(real(run.start + run.duration / 2));
-            times.insert(real(run.start + last_seen(run.duration)));
+            times.insert(real(
+                run.start + last_seen(run.duration, client.data().audit.transparent),
+            ));
             times.insert(real(run.start + run.duration));
         }
     }
@@ -455,13 +475,13 @@ fn times(given_at: &[u64], client: &crate::Client, end: u64) -> Vec<u64> {
 
 /// How far into an effect run of `duration` an element it fades out, such as the amount a
 /// life total changed by (`hud::counts`), is last seen: its opacity falls from 1 to 0 over the
-/// run, and the checks stop seeing it at `audit::TRANSPARENT`. The element has moved farthest
+/// run, and the checks stop seeing it at `audit.transparent`. The element has moved farthest
 /// from where it began by then, so a line of text it crosses only late in the run, as the
 /// change crosses the "Combat" notice under the total, is crossed here, which neither the
 /// run's start nor its middle shows.
-fn last_seen(duration: u64) -> u64 {
+fn last_seen(duration: u64, transparent: f32) -> u64 {
     // A little short of the threshold, so that rounding never leaves the element transparent.
-    let through = f64::from(1.0 - audit::TRANSPARENT) * 0.95;
+    let through = f64::from(1.0 - transparent) * 0.95;
     #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
@@ -493,7 +513,7 @@ fn sampled(judged: &[Judged], tick: u64, end: u64) -> BTreeSet<u64> {
 /// Every step of `history` that "every step shown" judges: those with a subject whose verb it
 /// judges, in scripts that started, except a step that brings its subject back to where it
 /// started on the window `camera` shows (`steps::rests_in_place`).
-fn judged(history: &[ScriptRecord], camera: &Camera) -> Vec<Judged> {
+fn judged(history: &[ScriptRecord], camera: &Camera, audit: Audit) -> Vec<Judged> {
     let mut judged = Vec::new();
     for (number, script) in history.iter().enumerate() {
         if script.start.is_none() {
@@ -505,7 +525,7 @@ fn judged(history: &[ScriptRecord], camera: &Camera) -> Vec<Judged> {
                     step.verb,
                     beryl_protocol::script::Verb::Fly | beryl_protocol::script::Verb::Appear
                 )
-                || steps::rests_in_place(script, index, camera)
+                || steps::rests_in_place(script, index, camera, audit)
             {
                 continue;
             }
@@ -516,7 +536,7 @@ fn judged(history: &[ScriptRecord], camera: &Camera) -> Vec<Judged> {
                 step: index,
                 from,
                 to,
-                until: to + step_nanoseconds(),
+                until: to + step_nanoseconds(audit),
                 samples: Vec::new(),
                 under_opening: true,
                 subject: None,

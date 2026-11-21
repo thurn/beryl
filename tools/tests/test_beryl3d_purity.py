@@ -74,7 +74,7 @@ def test_the_lint_tables_must_match(tmp_path: Path) -> None:
 def test_a_verb_key_names_a_verb_or_a_case(tmp_path: Path) -> None:
     conventions = {"verbs": [{"name": "fly", "cases": {"draw": {}}}]}
     write(tmp_path, "data/ui-conventions.json", json.dumps(conventions))
-    space = "data/beryl3d/space.json"
+    space = "data/beryl3d/verbs.json"
     write(tmp_path, space, json.dumps({"verbs": {"fly": {}, "draw": {}}}))
     assert purity.data_names(tmp_path) == []
     write(tmp_path, space, json.dumps({"verbs": {"flee": {}}}))

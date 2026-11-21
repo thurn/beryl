@@ -357,9 +357,10 @@ impl Client {
         let covers = self.prompt_covers_table();
         self.show.cover_table(covers);
         let targets = self.features.prompts.targets(self.table_open());
-        let transitioning =
-            self.tick_layer(now) | self.shake_button(table_now) | self.scrolling.moving(now);
-        self.show.pointer_mut().advance(table_now);
+        let transitioning = self.tick_layer(now)
+            | self.shake_button(table_now)
+            | self.scrolling.moving(now, &self.data().pointer);
+        self.show.advance_pointer(table_now);
         self.show.advance_slide(table_now);
         self.inspect(table_now);
         self.viewing_frame(table_now);

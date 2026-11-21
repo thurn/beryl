@@ -38,7 +38,7 @@
       "data/beryl3d/parity.json"
     ],
     "tools/src/beryl_tools/beryl3d/tiers.py": [
-      "data/beryl3d/space-constants.json"
+      "data/beryl3d/frame-rate.json"
     ],
     "tools/src/beryl_tools/beryl3d/timeline.py": [
       "data/ui-conventions.json"

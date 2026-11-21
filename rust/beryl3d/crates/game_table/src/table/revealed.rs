@@ -11,7 +11,6 @@ use glam::{Quat, Vec3};
 use super::look::Look;
 use super::scene::{Table, face_of};
 use crate::faces::Faces;
-use kit_base::data::space::revealed;
 use kit_base::pose::{Curve, Interval, Segment, Shape};
 use kit_frame::frame::{ElementId, FrameBuilder, Place, REVEALED_FACE, Role, StateBits};
 use kit_space::arrange::Pile;
@@ -48,11 +47,12 @@ impl Table {
         }
         // Later faces lie nearer the eye so they cover the ones underneath. The x and y
         // offsets are in normalized device coordinates, and depth is in millimetres.
+        let tuning = self.data().revealed;
         let pile = Pile {
-            step: Vec3::new(revealed::STEP, 0.0, -1.0),
+            step: Vec3::new(tuning.step, 0.0, -1.0),
         }
-        .limited(count, revealed::REACH);
-        let (at, height) = self.layout().revealed;
+        .limited(count, tuning.reach);
+        let (at, height) = self.layout().revealed.unwrap_or((tuning.at, tuning.height));
         for (index, (slot, begins)) in revealed.enumerate() {
             let Some(shown) = self.revealed(slot) else {
                 continue;
@@ -60,7 +60,7 @@ impl Table {
             let offset = pile.offset(index);
             let rest = self.camera().screen_pose(
                 at + offset.truncate(),
-                revealed::DEPTH + offset.z,
+                tuning.depth + offset.z,
                 Quat::IDENTITY,
                 height,
             );

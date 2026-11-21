@@ -95,69 +95,7 @@
       }
     }
   },
-  "pointer": {
-    "refusal_ms": 240,
-    "rise_ms": 100,
-    "fall_ms": 160,
-    "raise_mm": 34.45,
-    "raise_scale": 1.5,
-    "nearer": 0.6,
-    "held_height_mm": 39.38,
-    "max_gap_ms": 50,
-    "stiffness_hz": 3.5,
-    "damping_ratio": 0.42,
-    "lean_degrees": 20,
-    "drag_threshold_points": 6,
-    "long_press_ms": 500,
-    "grip_points_per_second_squared": 60000,
-    "drag_per_second": 5,
-    "smooth_velocity_ms": 35,
-    "smooth_acceleration_ms": 50,
-    "lean_steps_per_second": 240,
-    "scroll_step_points": 48,
-    "wheel_notch_points": 16,
-    "scroll": {
-      "key_step_points": 40,
-      "coast_ms": 300,
-      "sample_ms": 16,
-      "stale_ms": 80,
-      "max_points_per_second": 2000
-    },
-    "touch": {
-      "together_ms": 80,
-      "tap_ms": 300,
-      "double_ms": 300,
-      "slop_points": 30,
-      "pickup_ms": 150
-    }
-  },
-  "slide": {
-    "regroup_ms": 170
-  },
-  "catch_up": {
-    "double": 10,
-    "quadruple": 40
-  },
-  "frame_rate": {
-    "settle_frames": 120,
-    "late_intervals": 1.5,
-    "window": 60,
-    "misses": 3,
-    "room": 0.5,
-    "up_frames": 600,
-    "up_frames_most": 9600,
-    "lowest_hz": 30
-  },
   "counts": [
-    "catch_up.double",
-    "catch_up.quadruple",
-    "frame_rate.settle_frames",
-    "frame_rate.window",
-    "frame_rate.misses",
-    "frame_rate.up_frames",
-    "frame_rate.up_frames_most",
-    "frame_rate.lowest_hz",
-    "enhanced.probe.frames",
     "enhanced.particles.ash.count",
     "enhanced.particles.vortex.count",
     "enhanced.bloom.taps"
@@ -202,18 +140,6 @@
       "open_ms": 120,
       "opens_from": 0.85
     }
-  },
-  "revealed": {
-    "at": [
-      -0.9125,
-      0.595
-    ],
-    "height": 0.143,
-    "step": 0.02,
-    "reach": 0.08,
-    "depth": 290,
-    "pill_x": -6,
-    "pill_y": -34
   },
   "badges": {
     "em": 0.1,
@@ -361,10 +287,6 @@
       "sheen": 0.1,
       "sheen_power": 24.0
     },
-    "probe": {
-      "frames": 30,
-      "share": 0.3333
-    },
     "particles": {
       "vortex": {
         "count": 128,
@@ -469,28 +391,9 @@
       }
     }
   },
-  "notices": {
-    "turn": {
-      "in": 0.28,
-      "out": 0.14
-    },
-    "pill": {
-      "in": 0.05,
-      "out": 0.1
-    },
-    "banner": {
-      "in": 0.06,
-      "out": 0.08
-    }
-  },
   "shown": {
-    "depth": 280,
     "opening": {
-      "flip_ms": 1500,
-    "hand_away": 420,
-      "kept_ms": 130,
-      "cross_ms": 250,
-      "shift_ms": 170
+      "hand_away": 420
     }
   },
   "hud": {

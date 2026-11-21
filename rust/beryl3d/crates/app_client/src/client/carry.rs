@@ -12,7 +12,6 @@ use glam::Vec2;
 use super::Client;
 use super::gesture::Gesture;
 use game_hud::prompts::order;
-use kit_base::data::space::pointer::DRAG_THRESHOLD_POINTS;
 use kit_ui::element::floats;
 use kit_ui::input::{Button, Pointer, PointerPhase};
 use kit_ui::layout::FloatLook;
@@ -53,7 +52,10 @@ impl Client {
                     self.end_gesture();
                     return false;
                 }
-                if !carry.lifted && carry.start.distance(pointer.position) < DRAG_THRESHOLD_POINTS {
+                if !carry.lifted
+                    && carry.start.distance(pointer.position)
+                        < self.show.table().data().pointer.drag_threshold_points
+                {
                     return false;
                 }
                 if !carry.lifted {

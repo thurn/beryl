@@ -166,6 +166,7 @@ fn the_board_passes_the_interface_checks() {
         recording: "object-states".to_owned(),
         seat: Side::You,
         layout: crate::REGULAR,
+        audit: crate::test_data::data().audit,
         checks: crate::REGULAR.checks(
             &crate::test_data::data().profiles,
             kit_base::geometry::Size::default(),

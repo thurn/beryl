@@ -165,6 +165,7 @@ fn desktop() -> Context {
         recording: "point".to_owned(),
         seat: Side::You,
         layout: Layout::Desktop,
+        audit: crate::test_data::data().audit,
         checks: Layout::Desktop.checks(
             &crate::test_data::data().profiles,
             kit_base::geometry::Size::default(),

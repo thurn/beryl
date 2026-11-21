@@ -8,6 +8,7 @@ use beryl_protocol::GameUpdate;
 use game_hud::inspect::Viewed;
 use glam::Vec2;
 use kit_ui::element::Action;
+use kit_ui::layout::Shake;
 
 use super::{Client, Platform};
 use crate::command::SessionCommand;
@@ -20,7 +21,6 @@ use game_manual::manual::menus::{self, Act};
 use game_manual::manual::tokens::TokenChoice;
 use game_manual::manual::viewers::{self, Look, ViewerControl};
 use game_manual::manual::{self, Context, Pending, Pressed, Sent, Target, commands, pools};
-use game_play::pointer::refusal::Shake;
 use kit_ui::input::{Button, Pointer, PointerPhase};
 
 /// The most table actions the client remembers sending without an answer.
@@ -351,10 +351,15 @@ impl Client {
         let Some(Pending { sent, from }) = self.features.table_mut().pending.pop_front() else {
             return;
         };
+        let refusal_ms = self.data().pointer.refusal_ms;
         match from.filter(|_| refused && !self.table_frozen()) {
-            Some(Pressed::Card(slot)) => self.show.pointer_mut().refuse(usize::from(slot.0)),
+            Some(Pressed::Card(slot)) => self
+                .show
+                .pointer_mut()
+                .refuse(usize::from(slot.0), refusal_ms),
             Some(Pressed::Button(button)) => {
-                self.features.table_mut().shaking = Some((Action::new(button), Shake::new()));
+                self.features.table_mut().shaking =
+                    Some((Action::new(button), Shake::new(refusal_ms)));
             }
             None => {}
         }

@@ -1,6 +1,6 @@
 //! `flip`: the card turns over where it lies, its `Pose::turn` running from the side it showed
 //! as the step began to the side its record now shows, rising and growing while it turns
-//! (`Shape::TurnedOver`, with `verbs.flip` of `data/beryl3d/space.json`). The veil that hides the
+//! (`Shape::TurnedOver`, with `verbs.flip` of `data/beryl3d/verbs.json`). The veil that hides the
 //! change is the `cover` effect's, which the step's timing begins.
 
 use super::{StepIn, StepOut};

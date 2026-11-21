@@ -1,6 +1,5 @@
-//! Generates spatial constants from the shared tuning and layout profiles, and the interface
-//! thresholds from the gates and profiles. It also generates the design tokens and embeds the
-//! serif font files used by the typography module.
+//! Generates spatial constants from the shared tuning and layout profiles.
+//! It also generates the design tokens and embeds the serif font files.
 
 #[path = "build/gradients.rs"]
 mod gradients;
@@ -16,34 +15,12 @@ fn main() {
     let manifest = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
     let data = manifest.join("../../../../data/beryl3d");
     let space = data.join("space-constants.json");
-    let gates = data.join("gates.json");
     println!("cargo:rerun-if-changed={}", space.display());
-    println!("cargo:rerun-if-changed={}", gates.display());
     let space_text = fs::read_to_string(&space).unwrap();
-    let mut gates_json: serde_json::Value =
-        serde_json::from_str(&fs::read_to_string(&gates).unwrap()).unwrap();
-    // Checked to parse, so a malformed file fails the build, not a run.
     let mut space_json: serde_json::Value = serde_json::from_str(&space_text).unwrap();
-    profiles::legacy(&data, &mut space_json, &mut gates_json["audit"]);
+    profiles::legacy(&data, &mut space_json);
     let mut out = String::new();
     write_space(&space_json, &mut out);
-    let audit = gates_json["audit"]
-        .as_object()
-        .expect("gates.json's `audit` is an object");
-    out.push_str("/// The interface checks' thresholds, from the gates and the layout profiles.\n");
-    out.push_str("pub mod audit {\n");
-    for (key, value) in audit {
-        let number = value
-            .as_f64()
-            .unwrap_or_else(|| panic!("gates.json's `audit.{key}` is a number"));
-        let name = key.to_uppercase();
-        writeln!(
-            out,
-            "    /// `{key}` in the interface thresholds.\n    pub const {name}: f32 = {number:?}_f32;"
-        )
-        .unwrap();
-    }
-    out.push_str("}\n");
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
     fs::write(out_dir.join("data.rs"), out).unwrap();
     write_serif(&out_dir);

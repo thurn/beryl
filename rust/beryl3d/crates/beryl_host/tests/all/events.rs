@@ -2,7 +2,7 @@
 //! gives, in logical points, on a window at 2 pixels per point.
 
 use app_client::Input;
-use beryl_host::{LINE_POINTS, Translator, is_fullscreen_key};
+use beryl_host::{Translator, is_fullscreen_key};
 use glam::Vec2;
 use kit_ui::input::{
     Button, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase, Size,
@@ -15,6 +15,14 @@ use winit::event::{
 use winit::keyboard::{KeyCode as WinitKey, ModifiersState, NativeKeyCode, PhysicalKey};
 
 const DEVICE: DeviceId = DeviceId::dummy();
+
+fn wheel_notch_points() -> f32 {
+    crate::test_data::data().pointer.wheel_notch_points
+}
+
+fn translate(translator: &mut Translator, event: &WindowEvent) -> Option<app_client::Input> {
+    translator.window_event(event, wheel_notch_points())
+}
 
 fn translator() -> Translator {
     Translator::new(PhysicalSize::new(2880, 1800), 2.0)
@@ -45,7 +53,7 @@ fn a_resize_and_a_new_scale_give_the_surface_in_points() {
     let mut translator = translator();
     let resized = WindowEvent::Resized(PhysicalSize::new(2000, 1000));
     assert_eq!(
-        translator.window_event(&resized),
+        translate(&mut translator, &resized),
         Some(surface(1000.0, 500.0, 2.0))
     );
     assert_eq!(translator.scale_changed(1.0), surface(2000.0, 1000.0, 1.0));
@@ -60,7 +68,7 @@ fn the_mouse_moves_presses_scrolls_and_leaves_in_points() {
         position: PhysicalPosition::new(200.0, 100.0),
     };
     assert_eq!(
-        translator.window_event(&moved),
+        translate(&mut translator, &moved),
         Some(mouse(PointerPhase::Move, at, Button::None, Vec2::ZERO))
     );
     for (button, expected) in [
@@ -78,7 +86,7 @@ fn the_mouse_moves_presses_scrolls_and_leaves_in_points() {
                 button,
             };
             assert_eq!(
-                translator.window_event(&event),
+                translate(&mut translator, &event),
                 Some(mouse(phase, at, expected, Vec2::ZERO))
             );
         }
@@ -88,19 +96,19 @@ fn the_mouse_moves_presses_scrolls_and_leaves_in_points() {
         state: ElementState::Pressed,
         button: MouseButton::Back,
     };
-    assert_eq!(translator.window_event(&back), None);
+    assert_eq!(translate(&mut translator, &back), None);
     let lines = WindowEvent::MouseWheel {
         device_id: DEVICE,
         delta: MouseScrollDelta::LineDelta(0.0, -2.0),
         phase: TouchPhase::Moved,
     };
     assert_eq!(
-        translator.window_event(&lines),
+        translate(&mut translator, &lines),
         Some(mouse(
             PointerPhase::Wheel,
             at,
             Button::None,
-            Vec2::new(0.0, -2.0 * LINE_POINTS)
+            Vec2::new(0.0, -2.0 * wheel_notch_points())
         ))
     );
     let pixels = WindowEvent::MouseWheel {
@@ -109,7 +117,7 @@ fn the_mouse_moves_presses_scrolls_and_leaves_in_points() {
         phase: TouchPhase::Moved,
     };
     assert_eq!(
-        translator.window_event(&pixels),
+        translate(&mut translator, &pixels),
         Some(mouse(
             PointerPhase::Wheel,
             at,
@@ -119,7 +127,7 @@ fn the_mouse_moves_presses_scrolls_and_leaves_in_points() {
     );
     let left = WindowEvent::CursorLeft { device_id: DEVICE };
     assert_eq!(
-        translator.window_event(&left),
+        translate(&mut translator, &left),
         Some(mouse(PointerPhase::Leave, at, Button::None, Vec2::ZERO))
     );
 }
@@ -141,7 +149,7 @@ fn a_finger_touches_moves_and_lifts_as_its_own_pointer() {
             id: 3,
         });
         assert_eq!(
-            translator.window_event(&event),
+            translate(&mut translator, &event),
             Some(Input::Pointer(Pointer {
                 id: 4,
                 kind: PointerKind::Touch,
@@ -160,7 +168,7 @@ fn keys_carry_their_phase_and_the_held_modifiers() {
     let mut translator = translator();
     let held =
         WindowEvent::ModifiersChanged((ModifiersState::SHIFT | ModifiersState::SUPER).into());
-    assert_eq!(translator.window_event(&held), None);
+    assert_eq!(translate(&mut translator, &held), None);
     let modifiers = Modifiers {
         shift: true,
         command: true,
@@ -229,19 +237,25 @@ fn f11_toggles_fullscreen_and_so_does_control_command_f_on_macos() {
 fn an_input_method_commits_and_composes_text_in_the_edited_field() {
     let mut translator = translator();
     assert_eq!(
-        translator.window_event(&WindowEvent::Ime(Ime::Commit("か".to_owned()))),
+        translate(
+            &mut translator,
+            &WindowEvent::Ime(Ime::Commit("か".to_owned()))
+        ),
         Some(Input::Text(TextChange::Insert("か".to_owned())))
     );
     assert_eq!(
-        translator.window_event(&WindowEvent::Ime(Ime::Preedit("ka".to_owned(), None))),
+        translate(
+            &mut translator,
+            &WindowEvent::Ime(Ime::Preedit("ka".to_owned(), None))
+        ),
         Some(Input::Text(TextChange::Preedit("ka".to_owned())))
     );
     assert_eq!(
-        translator.window_event(&WindowEvent::Ime(Ime::Disabled)),
+        translate(&mut translator, &WindowEvent::Ime(Ime::Disabled)),
         Some(Input::Text(TextChange::Preedit(String::new())))
     );
     assert_eq!(
-        translator.window_event(&WindowEvent::Ime(Ime::Enabled)),
+        translate(&mut translator, &WindowEvent::Ime(Ime::Enabled)),
         None
     );
 }
@@ -259,7 +273,7 @@ fn a_key_types_its_text_unless_it_is_a_chord_or_a_control_character() {
     assert_eq!(typed(&translator, "\u{8}"), None, "Backspace");
     assert_eq!(translator.typed(Some("a"), ElementState::Released), None);
     let command = WindowEvent::ModifiersChanged(ModifiersState::SUPER.into());
-    translator.window_event(&command);
+    translate(&mut translator, &command);
     assert_eq!(
         typed(&translator, "c"),
         None,

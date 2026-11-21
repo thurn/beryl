@@ -7,7 +7,7 @@
 //! on it where it is. A streak from a player leaves their pool's anchor. A streak whose source
 //! or target has no place on the table is not drawn.
 //!
-//! The values are `verbs.streak` in `data/beryl3d/space.json`, the web's `COMET` and
+//! The values are `verbs.streak` in `data/beryl3d/verbs.json`, the web's `COMET` and
 //! `STREAK.ribbon` with its stage pixels in millimetres: the arc rises `bow` of the way between
 //! its ends and no more than `rise` of the taller end's height; each pair of streaks after the
 //! first two that leave one place for one target together rises `fan` as high again; the tail

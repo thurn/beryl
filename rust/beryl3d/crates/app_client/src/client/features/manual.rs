@@ -148,6 +148,7 @@ impl Mounted for TableScreen {
         let link_error = features.lobby().lobby.link_error.clone();
         Some(
             Features::slot::<Self>(&mut features.slots, id).view(table::Inputs {
+                drag_threshold: inputs.drag_threshold,
                 hud: *inputs.hud,
                 fields: inputs.fields,
                 bindings: inputs.bindings,

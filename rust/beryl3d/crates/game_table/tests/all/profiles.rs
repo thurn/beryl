@@ -85,8 +85,6 @@ fn the_windows_use_the_supplied_table_and_screen_tuning() {
             "\"inset\": [0, 22, 16, 22]",
             1,
         );
-    let space = beryl_test_files::read_to_string("data/beryl3d/space.json").unwrap();
-    let gates = beryl_test_files::read_to_string("data/beryl3d/gates.json").unwrap();
     let names = ["glow", "dissolve", "loss"];
     let definitions = names.map(|name| {
         beryl_test_files::read_to_string(format!("data/beryl3d/effects/{name}.json")).unwrap()
@@ -95,8 +93,10 @@ fn the_windows_use_the_supplied_table_and_screen_tuning() {
         .into_iter()
         .zip(definitions.each_ref().map(String::as_str));
     let data = Data::parse(
-        &space,
-        &gates,
+        |name| {
+            beryl_test_files::read_to_string(format!("data/beryl3d/{name}"))
+                .map_err(|error| format!("{name}: {error}"))
+        },
         &[("narrow-test.json", &renamed), SHIPPED[1]],
         effects,
     )

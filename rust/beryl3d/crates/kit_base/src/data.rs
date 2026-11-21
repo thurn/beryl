@@ -1,6 +1,9 @@
 //! Validated tuning data supplied by the host, and the constants awaiting conversion.
 
 pub mod effect;
+pub mod playback;
+pub mod pointer;
+pub mod presentation;
 pub mod profiles;
 mod tuning;
 pub mod verbs;

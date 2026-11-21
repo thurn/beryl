@@ -1641,11 +1641,10 @@ streaks and notices (`StepOut`).
   reads as going down when it goes up the window.
 - **Space comes from data too.** Values only a 3D client needs (how high a
   flight arcs, how far a held card lifts off the table, how far a striking
-  creature lunges) are in a file of Beryl 3D's own, `data/beryl3d/space.json`,
-  under the names of the verbs and cases in `data/ui-conventions.json`. A check
-  fails for a name that is no verb or case. Tuning a 3D value does not touch the
-  web interface's data file, so none of the web interface's checks run for it
-  (decision C17).
+  creature lunges) are in `data/beryl3d/verbs.json`, under the names of the
+  verbs and cases in `data/ui-conventions.json`. A check fails for a name that
+  is no verb or case. Tuning a 3D value does not touch the web interface's data
+  file, so none of the web interface's checks run for it (decision C17).
 - **Arrows are drawn from their ends on every frame.** `point` only begins and
   ends a span. `light::arrows` draws each open arrow from where its two ends are
   in that frame, on the screen, with the web stage's shapes
@@ -1669,7 +1668,7 @@ streaks and notices (`StepOut`).
   an object slightly out of place.
 
 A verb's entry in `data/ui-conventions.json`, and then its spatial values in
-`data/beryl3d/space.json`. Durations are in milliseconds and distances in
+`data/beryl3d/verbs.json`. Durations are in milliseconds and distances in
 millimetres:
 
 ```json

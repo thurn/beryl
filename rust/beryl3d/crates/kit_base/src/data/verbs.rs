@@ -1,14 +1,14 @@
-//! The verb tuning in `space.json`. Distances, angles and shares follow each verb's motion.
+//! The verb tuning in `verbs.json`. Distances, angles and shares follow each verb's motion.
 
 use glam::Vec2;
 use serde::Deserialize;
 
 use super::tuning::{
-    before_end, columns, finite, fraction, interior, nonnegative, positive, positive_fraction,
-    vector,
+    before_end, finite, fraction, interior, nonnegative, nonzero_count, positive,
+    positive_fraction, vector,
 };
 
-/// Tuning for each of the verbs in `space.json`.
+/// Tuning for each of the verbs in `verbs.json`.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Verbs {
@@ -185,7 +185,7 @@ pub struct LiftLibrary {
     pub beside: Vec2,
     #[serde(deserialize_with = "nonnegative")]
     pub step: f32,
-    #[serde(deserialize_with = "columns")]
+    #[serde(deserialize_with = "nonzero_count")]
     pub columns: usize,
     #[serde(deserialize_with = "nonnegative")]
     pub rise: f32,
@@ -202,7 +202,7 @@ pub struct LiftHand {
     pub height: f32,
     #[serde(deserialize_with = "nonnegative")]
     pub step: f32,
-    #[serde(deserialize_with = "columns")]
+    #[serde(deserialize_with = "nonzero_count")]
     pub columns: usize,
     #[serde(deserialize_with = "finite")]
     pub lean_degrees: f32,

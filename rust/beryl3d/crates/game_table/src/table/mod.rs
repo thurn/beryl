@@ -217,7 +217,7 @@ pub struct Layout {
     pub(crate) life_dock: Option<LifeDock>,
     /// Revealed cards' centre in normalized device coordinates and height as a fraction of
     /// the window's height.
-    pub(crate) revealed: (Vec2, f32),
+    pub(crate) revealed: Option<(Vec2, f32)>,
     /// Battlefield rows fitted to a screen reference, if the profile supplies one.
     pub(crate) row_zoom: Option<RowZoom>,
     pub fitted: Option<FittedRows>,

@@ -16,7 +16,7 @@ impl Show {
     /// after the table rests, and without them the table counted as still before they showed.
     #[must_use]
     pub fn wake(&self, now: u64) -> Wake {
-        if self.pointer.moving(now)
+        if self.pointer.moving(now, &self.table.data().pointer)
             || self.table.sliding(now)
             || self.table.tray_moving(now)
             || self.table.shown_moving(now)

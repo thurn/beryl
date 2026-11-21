@@ -239,6 +239,7 @@ mod milestone_three {
 
     fn input<'a>(prompt: Option<&'a PromptView>, settings: &'a Settings) -> ScreenIn<'a> {
         ScreenIn {
+            data: TUNING.get_or_init(crate::test_data::data),
             screen: Screen::Game,
             window: Window::default(),
             profile: game_table::profiles::Profile::for_window(
@@ -303,6 +304,7 @@ mod milestone_three {
                 Screen::Table => game_manual::features::table::TableScreen::view(
                     &game_manual::features::table::State::default(),
                     game_manual::features::table::Inputs {
+                        drag_threshold: input.data.pointer.drag_threshold_points,
                         hud: input.hud(),
                         fields: &FIELDS,
                         bindings: &settings.bindings,

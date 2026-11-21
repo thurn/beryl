@@ -219,9 +219,13 @@ fn the_wheel_scrolls_a_group_window_supplied_by_the_arrangement_solver() {
 
     let mut gesture = ScrollGesture::default();
     let wheel = wheel_at(Vec2::ZERO, NOTCH_DOWN);
-    let ScrollInput::Claimed(Some(((), offset))) =
-        gesture.pointer(&wheel, 0, Some(((), initial)), |()| None)
-    else {
+    let ScrollInput::Claimed(Some(((), offset))) = gesture.pointer(
+        &wheel,
+        0,
+        Some(((), initial)),
+        |()| None,
+        &crate::test_data::data().pointer,
+    ) else {
         panic!("one notch should advance one group");
     };
     assert_eq!(offset, Vec2::Y);

@@ -47,7 +47,10 @@ impl Client {
         let game = match pointer.phase {
             PointerPhase::Down => {
                 let felt = self.on_felt(at);
-                match self.touch.down(id, at, self.now, felt) {
+                match self
+                    .touch
+                    .down(id, at, self.now, felt, &self.show.table().data().pointer)
+                {
                     Landed::Active if self.features.inspector().pinned() => {
                         self.features.inspector_mut().update(Inspect::Pin(None));
                         false
@@ -65,9 +68,11 @@ impl Client {
                     Landed::Ignored => false,
                 }
             }
-            PointerPhase::Move => self.touch.moved(id, at),
+            PointerPhase::Move => self.touch.moved(id, at, &self.show.table().data().pointer),
             PointerPhase::Up => {
-                let (active, double) = self.touch.up(id, self.now);
+                let (active, double) =
+                    self.touch
+                        .up(id, self.now, &self.show.table().data().pointer);
                 report = double;
                 active
             }
@@ -99,10 +104,13 @@ impl Client {
     /// be picked up once the pickup is due, and carries out its hold once that is due.
     pub(super) fn touch_frame(&mut self, now: u64) {
         self.touch.frame(now);
-        if self.touch.take_pickup(now) {
+        if self
+            .touch
+            .take_pickup(now, &self.show.table().data().pointer)
+        {
             self.show.pointer_mut().ready();
         }
-        let Some(at) = self.touch.take_hold(now) else {
+        let Some(at) = self.touch.take_hold(now, &self.show.table().data().pointer) else {
             return;
         };
         let held = if self.screen == Screen::Table {

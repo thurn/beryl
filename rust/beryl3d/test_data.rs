@@ -7,10 +7,6 @@ use kit_base::data::{Data, profiles};
 pub fn data() -> Arc<Data> {
     static DATA: OnceLock<Arc<Data>> = OnceLock::new();
     Arc::clone(DATA.get_or_init(|| {
-        let space =
-            beryl_test_files::read_to_string("data/beryl3d/space.json").expect("read space.json");
-        let gates =
-            beryl_test_files::read_to_string("data/beryl3d/gates.json").expect("read gates.json");
         let files = profiles::FILES.map(|name| {
             beryl_test_files::read_to_string(format!("data/beryl3d/{name}"))
                 .expect("read layout profile")
@@ -33,6 +29,16 @@ pub fn data() -> Arc<Data> {
         let effects = effects
             .iter()
             .map(|(name, text)| (name.as_str(), text.as_str()));
-        Arc::new(Data::parse(&space, &gates, &contents, effects).expect("repository tuning"))
+        Arc::new(
+            Data::parse(
+                |name| {
+                    beryl_test_files::read_to_string(format!("data/beryl3d/{name}"))
+                        .map_err(|error| format!("{name}: {error}"))
+                },
+                &contents,
+                effects,
+            )
+            .expect("repository tuning"),
+        )
     }))
 }

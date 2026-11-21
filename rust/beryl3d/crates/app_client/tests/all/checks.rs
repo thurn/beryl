@@ -68,6 +68,7 @@ fn printed(fault: &Fault) -> String {
         recording: "three-beats".to_owned(),
         seat: Side::You,
         layout: crate::REGULAR,
+        audit: crate::test_data::data().audit,
         checks: crate::REGULAR.checks(&crate::test_data::data().profiles, SIZE),
         size: SIZE,
         safe_area: Insets::default(),
@@ -241,7 +242,7 @@ fn moves_of_one_kind_together_are_not_crowded_and_four_kinds_are() {
         .map(|_| flight(0, ZoneName::Hand, Why::Play))
         .collect();
     assert!(
-        crowded(&script(same, Vec::new())).is_empty(),
+        crowded(&script(same, Vec::new()), crate::test_data::data().audit).is_empty(),
         "four of one move read as one"
     );
     let mixed = vec![
@@ -250,11 +251,18 @@ fn moves_of_one_kind_together_are_not_crowded_and_four_kinds_are() {
         flight(40, ZoneName::Graveyard, Why::Play),
         flight(60, ZoneName::Exile, Why::Play),
     ];
-    assert_eq!(crowded(&script(mixed.clone(), Vec::new())).len(), 1);
+    assert_eq!(
+        crowded(
+            &script(mixed.clone(), Vec::new()),
+            crate::test_data::data().audit
+        )
+        .len(),
+        1
+    );
     let mut apart = mixed;
     apart[3].from = 200 * MS;
     assert!(
-        crowded(&script(apart, Vec::new())).is_empty(),
+        crowded(&script(apart, Vec::new()), crate::test_data::data().audit).is_empty(),
         "the fourth begins 200 ms later"
     );
 }
@@ -404,7 +412,17 @@ fn a_flight_back_to_where_it_started_rests_in_place() {
         vec![step.clone()],
         vec![leg(0, 0.0, 50.0), leg(200, 50.0, 0.0)],
     );
-    assert!(rests_in_place(&there_and_back, 0, camera));
+    assert!(rests_in_place(
+        &there_and_back,
+        0,
+        camera,
+        crate::test_data::data().audit
+    ));
     let away = script(vec![step], vec![leg(0, 0.0, 50.0)]);
-    assert!(!rests_in_place(&away, 0, camera));
+    assert!(!rests_in_place(
+        &away,
+        0,
+        camera,
+        crate::test_data::data().audit
+    ));
 }

@@ -103,7 +103,7 @@ pub struct Aim {
 ///
 /// A step that ends a span may wait until the span has stood whole for its `hold`, and the web
 /// interface measures that hold in script time. Beryl 3D plays scripts faster than real time
-/// when updates pile up (`catch_up` in `data/beryl3d/space-constants.json`), so `Lit` keeps a script
+/// when updates pile up (`data/beryl3d/catch-up.json`), so `Lit` keeps a script
 /// clock beside real time: it runs as fast as each script played, and at real time between
 /// scripts. `ahead` is how far the script clock is ahead of real time once the last script
 /// ended, and each span records when it stood whole on that clock.

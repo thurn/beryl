@@ -518,6 +518,7 @@ fn abilities_on_the_stack_are_drawn_as_cards_above_the_spell_beneath_them() {
         recording: "abilities".to_owned(),
         seat: Side::You,
         layout: crate::REGULAR,
+        audit: crate::test_data::data().audit,
         checks: crate::REGULAR.checks(
             &crate::test_data::data().profiles,
             kit_base::geometry::Size::default(),
@@ -636,6 +637,7 @@ fn every_card_of_a_hand_of_any_size_can_be_pressed() {
                 recording: format!("{count} cards"),
                 seat: Side::You,
                 layout: crate::REGULAR,
+                audit: crate::test_data::data().audit,
                 checks: crate::REGULAR.checks(&crate::test_data::data().profiles, size),
                 size,
                 safe_area: Insets::default(),
@@ -780,6 +782,7 @@ fn every_item_of_a_stack_of_any_size_can_be_pressed() {
                 recording: "stack".to_owned(),
                 seat: Side::You,
                 layout: crate::REGULAR,
+                audit: crate::test_data::data().audit,
                 checks: crate::REGULAR.checks(&crate::test_data::data().profiles, size),
                 size,
                 safe_area: Insets::default(),

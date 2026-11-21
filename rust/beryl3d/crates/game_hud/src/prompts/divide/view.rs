@@ -68,7 +68,7 @@ fn share_control(share: Share, left: u8) -> Option<Vec<Element>> {
 
 /// The phone's control for a recipient that is an object. A card on the phone's table can be
 /// as small as 56 by 76 points, too small to hold buttons of the phone's touch size
-/// (`audit::PHONE_TARGET_POINTS`) and still leave a part of itself that size free to press. So
+/// (`checks.target_points` in the phone profile) and still leave a part of itself that size free to press. So
 /// the column of the button that gives one more over the one that takes one away, at an icon
 /// button's full size, stands against the card's edge outside it, and the share stands on the
 /// card just inside that edge, on a strip low enough to leave the rest of the card free. Both

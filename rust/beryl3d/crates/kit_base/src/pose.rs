@@ -229,7 +229,7 @@ pub enum Shape {
     /// start pose's to `aloft` within the first frames and from there to its end pose's as it
     /// comes down. Its progress along the way is launched: it is half way across after about a
     /// quarter of its time. The fractions of its time are `verbs.fly.thrown` in
-    /// `data/beryl3d/space.json`.
+    /// `data/beryl3d/verbs.json`.
     Thrown {
         rise: Vec3,
         aloft: f32,

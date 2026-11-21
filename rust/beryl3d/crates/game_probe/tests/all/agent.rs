@@ -116,6 +116,7 @@ fn context(layout: Layout) -> Context {
         recording: "pay-default".to_owned(),
         seat: Side::You,
         layout,
+        audit: crate::test_data::data().audit,
         checks: layout.checks(&crate::test_data::data().profiles, size),
         size,
         safe_area: Insets::default(),

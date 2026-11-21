@@ -263,11 +263,15 @@ project, and selects the main lanes.
   `beryl_protocol` in toolkit crates. `just b3d levels --update` lowers those
   counts when references are removed.
 
-- `data/beryl3d/space.json` holds verb tuning. The tools read it and the `audit`
-  thresholds in `gates.json` at startup from the checkout that built them or
-  from `BERYL3D_DATA`. The app embeds the files. The host passes validated
-  `kit_base::data::Data` to the client. `just b3d data` runs the same validation
-  as the `b3d-data` source check.
+- The host passes validated `kit_base::data::Data` to the client. The app embeds
+  the files, and the tools load them from the checkout or `BERYL3D_DATA`.
+  `just b3d data` runs the same validation as the `b3d-data` source check.
+  `verbs.json` holds verb motion and `audit.json` holds interface thresholds.
+  `pointer.json` holds mouse, touch and scrolling thresholds. `catch-up.json`
+  and `slide.json` govern queued scripts and table regrouping. `frame-rate.json`
+  and `tier-probe.json` control host pacing and startup tier selection.
+  `notices.json`, `revealed.json` and `shown.json` control notices, the Revealed
+  Cards fan and cards shown over the flat layer.
 
 - `data/beryl3d/effects/*.json` defines drawing layers for runtime effects. The
   app embeds them. Tools read them from the checkout or `BERYL3D_DATA`. The
@@ -379,9 +383,8 @@ project, and selects the main lanes.
   ticket). Beryl 3D never edits `data/ui-conventions.json` itself. A
   `beryl_inspect` test checks each key and each recording.
 
-- `data/beryl3d/gates.json` holds the interface thresholds under `audit`
-  (compiled into `data::audit`), per-material shader limits under `materials`
-  (checked by `shader_cost`), and the interface test frame limits under `tests`
+- `data/beryl3d/gates.json` holds per-material shader limits under `materials`
+  (checked by `shader_cost`) and the interface test frame limits under `tests`
   (`just b3d test`).
 
 - `data/beryl3d/budgets.json` holds each board's worst-frame and total work

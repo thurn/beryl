@@ -43,7 +43,7 @@ use game_probe::agent::game_checks;
 use game_table::faces::FaceList;
 use kit_frame::frame::{Frame, Sound, StateBits, Wake};
 use kit_probe::agent::tree::locator_of;
-use kit_probe::agent::{Context, Fault, Layout, TreeOptions, locate, tree};
+use kit_probe::agent::{Fault, Layout, TreeOptions, locate, tree};
 use kit_probe::driver::{moment_distance, offset_from};
 use kit_scene::hit::{bounds, uncovered};
 use kit_ui::input::{
@@ -564,18 +564,6 @@ impl Page {
 
     fn error(&mut self, message: &str) -> DriverError {
         DriverError(format!("{message}\n{}", self.clock()))
-    }
-
-    fn context(&self) -> Context {
-        Context {
-            recording: self.name.clone(),
-            seat: self.seat,
-            layout: self.layout,
-            checks: self.layout.checks(&self.client.data().profiles, self.size),
-            size: self.size,
-            safe_area: self.safe_area,
-            at: self.now,
-        }
     }
 
     fn pointer(&mut self, phase: PointerPhase, position: Vec2, button: Button) {

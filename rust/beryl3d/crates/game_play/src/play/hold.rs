@@ -19,7 +19,13 @@ impl Show {
         let camera = self.table.camera();
         let rest = |slot| self.pose(slot, now);
         let in_tray = |slot| self.table.in_tray(slot);
-        let clicked = pointer::update(&mut pointer, frame, (rest, in_tray), (now, camera));
+        let clicked = pointer::update(
+            &mut pointer,
+            frame,
+            (rest, in_tray),
+            (now, camera),
+            &self.table.data().pointer,
+        );
         self.pointer = pointer;
         clicked
     }
@@ -39,6 +45,7 @@ impl Show {
             &mut playing.compiled,
             rest,
             (now, camera),
+            &table.data().pointer,
         ) {
             return;
         }

@@ -4,7 +4,7 @@ use glam::Vec2;
 use kit_base::data::profiles::{
     HeldDraw, Life, LifeChange, LifeText, Play, ProfileData, TableStyle,
 };
-use kit_base::data::{audit, space};
+use kit_base::data::space;
 use kit_space::arrange::row::ScaleLimit;
 use kit_space::camera::DESKTOP_CAMERA;
 
@@ -108,7 +108,7 @@ pub const REFERENCE: Layout = Layout {
             pool: Vec2::new(-0.802_5, 0.503_728),
         },
     ],
-    target: audit::TARGET_POINTS,
+    target: desktop::TARGET_POINTS,
     style: TableStyle {
         show_exile: true,
         show_pile_sides: true,
@@ -132,7 +132,7 @@ pub const REFERENCE: Layout = Layout {
     },
     camera_area: None,
     life_dock: None,
-    revealed: (space::revealed::AT, space::revealed::HEIGHT),
+    revealed: None,
     row_zoom: None,
     bands: None,
     fitted: None,

@@ -13,11 +13,6 @@ use winit::dpi::{PhysicalPosition, PhysicalSize};
 use winit::event::{ElementState, Ime, MouseButton, MouseScrollDelta, TouchPhase, WindowEvent};
 use winit::keyboard::{KeyCode as WinitKey, ModifiersState, PhysicalKey};
 
-/// How many logical points one line of a mouse wheel scrolls: one notch of the wheel, which
-/// scrolls a battlefield row by one group (`pointer.wheel_notch_points` in
-/// `data/beryl3d/space-constants.json`).
-pub const LINE_POINTS: f32 = kit_base::data::space::pointer::WHEEL_NOTCH_POINTS;
-
 /// The mouse's pointer id. Fingers count from 1.
 const MOUSE: u8 = 0;
 
@@ -45,7 +40,7 @@ impl Translator {
 
     /// The `Input` for `event`, if it is one the client takes. Key events go through `key`,
     /// because winit's key event cannot be built outside winit.
-    pub fn window_event(&mut self, event: &WindowEvent) -> Option<Input> {
+    pub fn window_event(&mut self, event: &WindowEvent, wheel_notch_points: f32) -> Option<Input> {
         match event {
             WindowEvent::Resized(size) => {
                 self.size = *size;
@@ -72,7 +67,7 @@ impl Translator {
             }
             WindowEvent::MouseWheel { delta, .. } => {
                 let wheel = match delta {
-                    MouseScrollDelta::LineDelta(x, y) => Vec2::new(*x, *y) * LINE_POINTS,
+                    MouseScrollDelta::LineDelta(x, y) => Vec2::new(*x, *y) * wheel_notch_points,
                     MouseScrollDelta::PixelDelta(position) => self.logical(*position),
                 };
                 Some(self.mouse(PointerPhase::Wheel, Button::None, wheel))

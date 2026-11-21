@@ -117,6 +117,7 @@ pub(super) enum Placement {
 /// App inputs available to mounts. Each feature receives only the inputs it reads.
 #[derive(Clone, Copy)]
 pub(super) struct ViewInputs<'a> {
+    pub drag_threshold: f32,
     pub screen: Screen,
     pub window: Window,
     pub profile: Profile<'a>,

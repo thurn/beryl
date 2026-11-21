@@ -38,6 +38,7 @@ use kit_ui::widgets::Fields;
 /// Everything a screen function reads.
 #[derive(Clone, Copy, Debug)]
 pub struct ScreenIn<'a> {
+    pub data: &'a kit_base::data::Data,
     /// The screen the client is on, which a sheet opens over.
     pub screen: Screen,
     pub window: Window,

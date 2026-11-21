@@ -3,7 +3,7 @@
 //! `ui/src/stage/tracks.ts`). The turn takes the share of the step the step's `Room::From`
 //! gives, the share its row waits before making room, so that nothing crosses the card while
 //! it turns. Where it rests within `verbs.tap.near` of a card's width of where it lay
-//! (`data/beryl3d/space.json`), it turns straight onto its place, in one motion. The turn takes
+//! (`data/beryl3d/verbs.json`), it turns straight onto its place, in one motion. The turn takes
 //! the shortest way, as `Segment::pose_at` turns a rotation.
 
 use beryl_protocol::script::Room;

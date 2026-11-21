@@ -454,10 +454,10 @@ pub(super) fn layout(profile: &ProfileData, window: Window, data: Banded) -> Lay
             middle: bands.your_strip.middle(),
             top: bands.your_back.top,
         }),
-        revealed: (
+        revealed: Some((
             piles[1][2],
             data.piles.opponent.width / CARD_WIDTH * CARD_HEIGHT / window.size.height,
-        ),
+        )),
         style: profile.table_style,
         play: profile.play,
         target,

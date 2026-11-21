@@ -126,8 +126,11 @@ impl Client {
     /// Updates the opening clock and whether a result can be dismissed.
     fn refresh_screen_state(&mut self) {
         let played = self.show.shown().map(|update| &update.view);
-        self.opening
-            .spin(played.filter(|_| self.screen == Screen::Game), self.now);
+        self.opening.spin(
+            played.filter(|_| self.screen == Screen::Game),
+            self.now,
+            self.show.table().data().shown.opening.flip_ms,
+        );
         // A result put aside comes back with the next game's end.
         if self.show.latest().is_none_or(|update| {
             !matches!(update.view.status, Status::Over { .. } | Status::Stopped)
@@ -222,6 +225,7 @@ impl Client {
         };
         let menu_face = context_menu::sheet_face(self.features.menu(), &hud);
         let feature_inputs = ViewInputs {
+            drag_threshold: self.data().pointer.drag_threshold_points,
             profile,
             screen: self.screen,
             window: self.window,
@@ -261,6 +265,7 @@ impl Client {
     /// `inspected` on it; nothing else differs between the screen and the inspector.
     pub(super) fn screen_in(&self) -> ScreenIn<'_> {
         ScreenIn {
+            data: self.show.table().data(),
             screen: self.screen,
             window: self.window,
             profile: self.show.table().profile(),

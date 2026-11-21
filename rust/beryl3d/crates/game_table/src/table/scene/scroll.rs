@@ -2,7 +2,7 @@
 //! placement"). A line of cards with more than fit at the least strip shows as many groups as
 //! fit from its scroll offset, which the table keeps for each row of each side, the hand and
 //! the stack. When the pointer changes an offset, every object is placed again; each card that
-//! stays in view slides to its new place over `slide.regroup_ms`, and each card that comes into
+//! stays in view slides to its new place over `regroup_ms` in `data/beryl3d/slide.json`, and each card that comes into
 //! view fades in where it rests. A card that leaves the view is no longer drawn.
 
 use beryl_protocol::protocol::{Side, ZoneName};
@@ -10,7 +10,6 @@ use beryl_protocol::protocol::{Side, ZoneName};
 use super::{SceneObject, Table};
 use crate::table::place::{row_index, side_index};
 use crate::table::{RowWindow, Rows, Scroller};
-use kit_base::data::space::slide::REGROUP_MS;
 use kit_base::pose::between;
 use kit_base::pose::{Curve, Pose};
 use kit_frame::frame::Place;
@@ -35,10 +34,10 @@ pub(crate) struct Slide {
 
 impl Slide {
     /// How far through the slide is at `now`, eased, or `None` when none is under way.
-    fn share(&self, now: u64) -> Option<f32> {
+    fn share(&self, now: u64, regroup_ms: f32) -> Option<f32> {
         self.place?;
         let elapsed = now.saturating_sub(self.since.unwrap_or(now)) as f32;
-        let length = REGROUP_MS * MILLISECOND;
+        let length = regroup_ms * MILLISECOND;
         (elapsed < length).then(|| Curve::EASE_OUT.ease(elapsed / length))
     }
 }
@@ -104,7 +103,9 @@ impl Table {
     /// Whether a card slides or fades in at `now`.
     #[must_use]
     pub fn sliding(&self, now: u64) -> bool {
-        self.slide.share(now).is_some()
+        self.slide
+            .share(now, self.data().slide.regroup_ms)
+            .is_some()
     }
 
     /// Changes `object`, the card in `slot` as it rests, for the slide under way at `now`: a
@@ -118,9 +119,10 @@ impl Table {
         now: u64,
     ) -> bool {
         let slide = &self.slide;
-        let (Some(share), Some((pose, seen))) =
-            (slide.share(now), slide.from.get(slot).copied().flatten())
-        else {
+        let (Some(share), Some((pose, seen))) = (
+            slide.share(now, self.data().slide.regroup_ms),
+            slide.from.get(slot).copied().flatten(),
+        ) else {
             return false;
         };
         if !slide.place.is_some_and(|line| holds(line, object.place)) || !object.visible {

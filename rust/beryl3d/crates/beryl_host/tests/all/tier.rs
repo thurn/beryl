@@ -9,7 +9,6 @@ use app_screens::screens::settings::Message as SettingsMessage;
 use beryl_host::rate::Step;
 use beryl_host::{Chosen, Draw, FrameLoop, Shown, Ticks};
 use glam::Vec2;
-use kit_base::data::space::frame_rate;
 use kit_frame::frame::Frame;
 use kit_ui::element::Action;
 use kit_ui::input::{Button, Modifiers, Pointer, PointerKind, PointerPhase, Tier};
@@ -69,25 +68,22 @@ fn moved(x: f32) -> Input {
 /// returns each step the loop took with the index of the frame after the window settled that
 /// took it (0 for the first late frame).
 fn steps(frames: &mut FrameLoop<AnyTicks>, late_frames: usize) -> Vec<(usize, Step)> {
+    let settling = frames.client().data().frame_rate.settle_frames;
     let mut now = 0;
     let mut steps = Vec::new();
     // One frame before the settling ones, which has no gap to measure.
-    for index in 0..=frame_rate::SETTLE_FRAMES + late_frames {
-        now += if index <= frame_rate::SETTLE_FRAMES {
-            ON_TIME
-        } else {
-            LATE
-        };
+    for index in 0..=settling + late_frames {
+        now += if index <= settling { ON_TIME } else { LATE };
         frames.handle(moved(index as f32));
         let ticked = frames
             .tick(now, &mut Shows)
             .expect("an input draws a frame");
         if let Some(step) = ticked.step {
             assert!(
-                index > frame_rate::SETTLE_FRAMES,
+                index > settling,
                 "a step while the window settled: {step:?} at frame {index}"
             );
-            steps.push((index - frame_rate::SETTLE_FRAMES - 1, step));
+            steps.push((index - settling - 1, step));
         }
     }
     steps

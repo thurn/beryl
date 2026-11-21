@@ -6,11 +6,11 @@ pub use view::{Inputs, ViewKey};
 
 use crate::manual::{Pending, Pressed, arrows, drop, opening, tokens::TokenChoice, viewers};
 use beryl_protocol::protocol::{Answer, ObjectId, Side};
-use game_play::pointer::refusal::Shake;
 use glam::Vec2;
 use kit_frame::frame::Sound;
 use kit_scene::{Context, Feature};
 use kit_ui::element::{Action, Element};
+use kit_ui::layout::Shake;
 
 /// A control of the table or a keyboard shortcut for a table command.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

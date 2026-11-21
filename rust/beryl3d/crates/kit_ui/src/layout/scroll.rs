@@ -13,7 +13,7 @@ impl Layer {
     /// The innermost scrollable element at `point`, inside its ancestor clips.
     #[must_use]
     pub fn scroller_at(&self, point: Vec2, open: bool) -> Option<ElementId> {
-        self.scroll_target_at(point, open, None).map(|(id, _)| id)
+        self.hit(point, open, |node, _| node.viewport().map(|_| node.id))
     }
 
     /// The innermost scroll viewport at `point`. For a wheel event, skip viewports that
@@ -24,22 +24,24 @@ impl Layer {
         point: Vec2,
         open: bool,
         wheel: Option<Vec2>,
+        notch: f32,
     ) -> Option<(ElementId, Viewport)> {
         self.hit(point, open, |node, _| {
             let viewport = node.viewport()?;
             wheel
-                .is_none_or(|delta| viewport.takes_wheel(delta))
+                .is_none_or(|delta| viewport.takes_wheel(delta, notch))
                 .then_some((node.id, viewport))
         })
     }
 
     /// The innermost scroll viewport containing the focused element that takes `key`.
     #[must_use]
-    pub fn scroll_key(&self, key: Key, open: bool) -> Option<(ElementId, Vec2)> {
+    pub fn scroll_key(&self, key: Key, open: bool, step_points: f32) -> Option<(ElementId, Vec2)> {
         fn find(
             node: &Node,
             focused: ElementId,
             key: Key,
+            step_points: f32,
             open: bool,
             parent: Option<(ElementId, Vec2)>,
         ) -> Option<(ElementId, Vec2)> {
@@ -48,7 +50,7 @@ impl Layer {
             }
             let here = node
                 .viewport()
-                .and_then(|view| view.key(key))
+                .and_then(|view| view.key(key, step_points))
                 .map(|offset| (node.id, offset));
             let nearest = here.or(parent.filter(|_| node.element.anchor.is_none()));
             if node.id == focused {
@@ -56,13 +58,13 @@ impl Layer {
             }
             node.children
                 .iter()
-                .find_map(|child| find(child, focused, key, open, nearest))
+                .find_map(|child| find(child, focused, key, step_points, open, nearest))
         }
         let focused = self.focused?;
         self.screen
             .iter()
             .chain(self.floats.iter().map(|float| &float.node))
-            .find_map(|root| find(root, focused, key, open, None))
+            .find_map(|root| find(root, focused, key, step_points, open, None))
     }
 
     /// The viewport of the element `id`, if it has scrollable overflow.
