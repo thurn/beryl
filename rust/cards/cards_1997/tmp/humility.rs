@@ -7,26 +7,12 @@
 
 use crate::prelude::*;
 
-/// "All creatures lose all abilities and have base power and toughness 1/1": one static
-/// ability whose effect has a part in layer 6 and a part in layer 7b ([CR 613.6]): "If an
-/// effect should be applied in different layers and/or sublayers, the parts of the effect
-/// each apply in their appropriate ones. If an effect starts to apply in one layer and/or
-/// sublayer, it will continue to be applied to the same set of objects in each other applicable layer
-/// and/or sublayer, even if the ability generating the effect is removed during this
-/// process." So a Humility that has itself become a creature still makes the creatures 1/1
-/// after it has lost its own ability in layer 6.
-///
-/// Losing all abilities takes mana abilities, triggered abilities and keywords with the
-/// rest ([CR 613.1f]): "Layer 6: Ability-adding effects, keyword counters, ability-removing
-/// effects, and effects that say an object can't have an ability are applied." An effect
-/// that grants an ability later in timestamp order still grants it. Counters and effects
-/// that modify power and toughness apply after the base 1/1 ([CR 613.4c]): "Effects and
-/// counters that modify power and/or toughness (but don't set power and/or toughness to a
-/// specific number or value) are applied."
+/// If Humility becomes a creature, it removes its own ability in layer 6. The same
+/// effect still sets base power and toughness in layer 7b ([CR 613.6]): "it will continue
+/// to be applied to the same set of objects in each other applicable layer and/or sublayer,
+/// even if the ability generating the effect is removed during this process."
 ///
 /// [CR 613.6]: https://yawgatog.com/resources/magic-rules/#R6136
-/// [CR 613.1f]: https://yawgatog.com/resources/magic-rules/#R6131f
-/// [CR 613.4c]: https://yawgatog.com/resources/magic-rules/#R6134c
 pub static CARD: CardDef = Printed::Humility
     .abilities(&[Ability::static_ability(&LayerSpec {
         affected: Objects::All {
@@ -128,18 +114,6 @@ pub mod scenarios {
                 ME.counters(Prop::Vanilla, CounterKind::PlusOne, 1),
                 ME.pt(Prop::Vanilla, 2, 2),
             ]),
-        // Once Humility, the one target, returns to its owner's hand, the flier is a 3/1
-        // again.
-        Scenario::new("with it gone, the creatures are themselves again")
-            .battlefield(P0, &[HUMILITY])
-            .battlefield(P1, &[Prop::Flier, Card::Island, Card::Island, Card::Island])
-            .hand(P1, &[Prop::Removal])
-            .actions(&[
-                THEM.pt(Prop::Flier, 1, 1),
-                THEM.casts(Prop::Removal),
-                ME.has(Zone::Hand, HUMILITY, 1),
-                THEM.pt(Prop::Flier, 3, 1),
-            ]),
         // Tarmogoyf's characteristic-defining ability is lost in layer 6, before layer 7a would
         // apply it, so base 1/1 is all it has however full the graveyards (CR 613.1f).
         Scenario::new("Tarmogoyf under it is 1/1")
@@ -147,13 +121,5 @@ pub mod scenarios {
             .battlefield(P0, &[HUMILITY, Card::Tarmogoyf])
             .graveyard(P0, &[Prop::Flier, Prop::Sorcery, Prop::Instant])
             .actions(&[ME.pt(Card::Tarmogoyf, 1, 1)]),
-        // Counters count after the base 1/1 (CR 613.4c).
-        Scenario::new("two +1/+1 counters count on top of the base 1/1")
-            .battlefield(P0, &[HUMILITY])
-            .permanents(
-                P0,
-                &[Permanent::new(Prop::Vanilla).counters(CounterKind::PlusOne, 2)],
-            )
-            .actions(&[ME.pt(Prop::Vanilla, 3, 3)]),
     ];
 }

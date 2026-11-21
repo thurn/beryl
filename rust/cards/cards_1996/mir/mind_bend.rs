@@ -9,20 +9,11 @@
 
 use crate::prelude::*;
 
-/// "Change the text of target permanent by replacing all instances of one color word with
-/// another or one basic land type with another." A text-changing effect ([CR 612.1]): "Some
-/// continuous effects change an object’s text. This can apply to any words or symbols printed
-/// on that object, but generally affects only that object’s rules text (which appears in its
-/// text box) and/or the text that appears in its type line." Its controller chooses the two
-/// words as it resolves, and it lasts for the rest of the game ([CR 611.2a]): "If no duration
-/// is stated, it lasts until the end of the game." The reminder text says so.
-///
-/// It changes only the permanent's own text, never an ability another object granted it
+/// A text change on a permanent leaves abilities granted by other objects alone
 /// ([CR 612.3]): "any abilities that are granted to an object can't be modified by
-/// text-changing effects that affect that object".
+/// text-changing effects that affect that object". For example, Mind Bend on a Merfolk
+/// leaves its islandwalk from Lord of Atlantis alone.
 ///
-/// [CR 611.2a]: https://yawgatog.com/resources/magic-rules/#R6112a
-/// [CR 612.1]: https://yawgatog.com/resources/magic-rules/#R6121
 /// [CR 612.3]: https://yawgatog.com/resources/magic-rules/#R6123
 pub static CARD: CardDef = Printed::MindBend
     .abilities(&[Ability::spell()

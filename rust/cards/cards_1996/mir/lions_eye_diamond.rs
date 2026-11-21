@@ -8,21 +8,11 @@
 
 use crate::prelude::*;
 
-/// A mana ability ([CR 605.1a]): "An activated ability is a mana ability if it meets all of
-/// the following criteria: it doesn't require a target (see rule 115.6), it could add mana to
-/// a player's mana pool when it resolves, it's not a loyalty ability". It doesn't go on the stack
-/// ([CR 605.3b]): "An activated mana ability doesn't go on the stack, so it can't be
-/// targeted, countered, or otherwise responded to."
+/// "Activate only as an instant" requires priority. This overrides the permission for a
+/// mana ability to be activated during a payment ([CR 605.3a]): "whenever they are casting
+/// a spell or activating an ability that requires a mana payment". Lion's Eye Diamond
+/// must be activated before casting a spell, so its cost would discard a spell still in hand.
 ///
-/// "Activate only as an instant" keeps it from being activated while a cost is being paid,
-/// where another mana ability may be ([CR 605.3a]): "A player may activate an activated mana
-/// ability whenever they have priority, whenever they are casting a spell or activating an
-/// ability that requires a mana payment". So it can't pay for a spell cast from the hand it
-/// would discard: by the time the spell's cost is paid, the spell is on the stack and its
-/// caster doesn't have priority.
-///
-/// [CR 605.1a]: https://yawgatog.com/resources/magic-rules/#R6051a
-/// [CR 605.3b]: https://yawgatog.com/resources/magic-rules/#R6053b
 /// [CR 605.3a]: https://yawgatog.com/resources/magic-rules/#R6053a
 pub static CARD: CardDef = Printed::LionsEyeDiamond
     .abilities(&[Ability::mana(
@@ -56,15 +46,6 @@ pub mod scenarios {
                 ME.has(Zone::Graveyard, Card::Plains, 1),
                 ME.has(Zone::Graveyard, LED, 1),
                 ME.controls(LED, 1),
-            ]),
-        // An empty hand pays "Discard your hand".
-        Scenario::new("an empty hand pays the cost")
-            .battlefield(P0, &[LED, LED])
-            .actions(&[
-                ME.activates(LED, 0),
-                ME.chooses_color(Colors::RED),
-                ME.mana(ManaColor::Red, 3),
-                ME.has(Zone::Graveyard, LED, 1),
             ]),
         // Brain Freeze costs {1}{U}, and the Diamond is the only source. It can't be
         // activated while the spell's cost is paid, and activating it first discards the

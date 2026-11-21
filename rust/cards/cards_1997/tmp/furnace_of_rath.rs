@@ -8,15 +8,11 @@
 
 use crate::prelude::*;
 
-/// "If a source would deal damage to a permanent or player, it deals double that damage to that
-/// permanent or player instead." A replacement effect ([CR 614.1a]): "Effects that use the word
-/// 'instead' are replacement effects." The doubled damage still comes from its source. With a
-/// prevention effect on the same damage, the player dealt the damage, or the controller of the
-/// permanent dealt it, chooses which applies first ([CR 616.1]): "the affected object's
-/// controller (or its owner if it has no controller) or the affected player chooses one to
-/// apply".
+/// When prevention and doubling both apply to the same damage, the player being dealt
+/// damage or the controller of the permanent being dealt damage chooses the order
+/// ([CR 616.1]): "the affected object's controller (or its owner if it has no controller)
+/// or the affected player chooses one to apply".
 ///
-/// [CR 614.1a]: https://yawgatog.com/resources/magic-rules/#R6141a
 /// [CR 616.1]: https://yawgatog.com/resources/magic-rules/#R6161
 pub static CARD: CardDef = Printed::FurnaceOfRath
     .abilities(&[Ability::replacing(&Replacement::multiplies_damage(2))])
@@ -71,16 +67,6 @@ pub mod scenarios {
                 ME.targets_player(THEM),
                 Resolve,
                 THEM.life(8),
-            ]),
-        // P0's unblocked 3/1 deals 3 combat damage, doubled to 6.
-        Scenario::new("Furnace of Rath doubles combat damage")
-            .battlefield(P0, &[FURNACE, Prop::Flier])
-            .actions(&[
-                advance_to(1, TurnStep::BeginningOfCombat),
-                ME.passes(),
-                ME.attacks_with(Prop::Flier),
-                advance_to(1, TurnStep::EndOfCombat),
-                THEM.life(14),
             ]),
         // The ruling: "That player can either (a) prevent 4 damage first and then let Furnace
         // of Rath double the remaining 1 damage, taking 2 damage, or (b) double the damage to

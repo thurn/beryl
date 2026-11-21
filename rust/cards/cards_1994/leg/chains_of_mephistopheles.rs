@@ -9,20 +9,11 @@
 
 use crate::prelude::*;
 
-/// A replacement effect ([CR 614.1a]): "Effects that use the word 'instead' are replacement
-/// effects." It replaces every player's draws but the first one they draw in each of their draw
-/// steps ([CR 504.1]): "First, the active player draws a card." A draw of several cards is that
-/// many draws ([CR 121.2]), each replaced on its own.
+/// The draw after discarding is part of the original draw event. The same Chains can't
+/// replace it again ([CR 614.5]): "it gets only one opportunity to affect an event or any
+/// modified events that may replace that event." A second Chains or dredge can still
+/// replace the modified draw.
 ///
-/// The draw it makes after a discard is a modified event, which Chains does not replace again
-/// ([CR 614.5]): "A replacement effect doesn't invoke itself repeatedly; it gets only one
-/// opportunity to affect an event or any modified events that may replace that event." Another
-/// Chains, or a dredge in the player's graveyard, still may. With nothing to discard, the
-/// player mills a card and draws nothing.
-///
-/// [CR 614.1a]: https://yawgatog.com/resources/magic-rules/#R6141a
-/// [CR 504.1]: https://yawgatog.com/resources/magic-rules/#R5041
-/// [CR 121.2]: https://yawgatog.com/resources/magic-rules/#R1212
 /// [CR 614.5]: https://yawgatog.com/resources/magic-rules/#R6145
 pub static CARD: CardDef = Printed::ChainsOfMephistopheles
     .abilities(&[
