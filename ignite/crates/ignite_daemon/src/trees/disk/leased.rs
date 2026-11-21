@@ -31,16 +31,21 @@ use super::{id_of, profile_dirs, remove};
 /// whenever no compile runs.
 const INCREMENTAL: &str = "incremental";
 
-/// A leased tree whose builds the build manager holds back until this is dropped.
+/// Keeps the lease in place while its idleness is checked and its build files are swept.
 pub(super) struct Paused<'a> {
     trees: &'a Trees,
-    pub id: TreeId,
+    id: TreeId,
     pub path: PathBuf,
+    resume_builds: bool,
 }
 
 impl Drop for Paused<'_> {
     fn drop(&mut self) {
-        self.trees.inner.builds.resume(&self.id);
+        if self.resume_builds {
+            self.trees.inner.builds.resume(&self.id);
+        }
+        self.trees
+            .finish_ticket_tree_work(&mut self.trees.lock(), &self.id);
     }
 }
 
@@ -69,11 +74,30 @@ impl Trees {
     /// [`Trees::pause_idle`], or what keeps the tree busy, in words for the disk loop's report
     /// when it cannot get the disk back above its floor (`disk/floor.rs`).
     pub(super) fn pause_or_why(&self, id: &TreeId) -> std::result::Result<Paused<'_>, String> {
-        let path = self.inner.config.path(id);
-        if super::super::Seeding::involves(&path) {
+        {
+            let mut locked = self.lock();
+            let row = store::get(&locked.db, id.as_str())
+                .map_err(|error| store_error(&error).to_string())?
+                .ok_or_else(|| "it is no longer recorded".to_owned())?;
+            if row.state != store::State::Leased.as_str() {
+                return Err(format!("it is {}", row.state));
+            }
+            // Reserve before taking any snapshots of running work, so all of the checks and
+            // the deletion belong to the same lease.
+            if !locked.ticket_tree_work.insert(id.clone()) {
+                return Err("a checkout or disk sweep is already in progress".to_owned());
+            }
+        }
+        let mut paused = Paused {
+            trees: self,
+            id: id.clone(),
+            path: self.inner.config.path(id),
+            resume_builds: false,
+        };
+        if super::super::Seeding::involves(&paused.path) {
             return Err("a seed copies builds into it or out of it".to_owned());
         }
-        let verbs = self.inner.steps.in_tree(id, &path);
+        let verbs = self.inner.steps.in_tree(id, &paused.path);
         if !verbs.is_empty() {
             return Err(verbs
                 .iter()
@@ -84,11 +108,7 @@ impl Trees {
         if !self.inner.builds.pause(id) {
             return Err("a build runs in it".to_owned());
         }
-        let paused = Paused {
-            trees: self,
-            id: id.clone(),
-            path,
-        };
+        paused.resume_builds = true;
         // Read after the pause, so a command that starts building between the two is seen.
         match Native.occupants(&paused.path) {
             Ok(found) if !found.is_empty() => {
@@ -101,15 +121,7 @@ impl Trees {
             Ok(_) => {}
             Err(error) => return Err(format!("its processes cannot be listed: {error}")),
         }
-        let state = store::get(&self.lock().db, id.as_str())
-            .ok()
-            .flatten()
-            .map(|row| row.state);
-        match state {
-            Some(state) if state == store::State::Leased.as_str() => Ok(paused),
-            Some(state) => Err(format!("it is {state}")),
-            None => Err("it is no longer recorded".to_owned()),
-        }
+        Ok(paused)
     }
 
     /// Calls `sweep` with each idle leased tree's build directories, paused while it runs.

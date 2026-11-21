@@ -42,10 +42,10 @@ mod status;
 mod tests;
 mod wait;
 
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicU64;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
@@ -267,11 +267,15 @@ struct Inner {
     /// The store and the waiters, under one lock so a release cannot slip between a lease
     /// finding no free tree and its waiter joining the queue.
     locked: Mutex<Locked>,
+    ticket_tree_work_done: Condvar,
 }
 
 struct Locked {
     db: Connection,
     waiters: VecDeque<Arc<Slot>>,
+    /// Leased trees being checked out or swept. Neither operation may overlap the other or
+    /// let the tree become free while it still accesses the checkout.
+    ticket_tree_work: BTreeSet<TreeId>,
 }
 
 impl std::fmt::Debug for Trees {
@@ -377,7 +381,9 @@ impl Trees {
                 locked: Mutex::new(Locked {
                     db,
                     waiters: VecDeque::new(),
+                    ticket_tree_work: BTreeSet::new(),
                 }),
+                ticket_tree_work_done: Condvar::new(),
             }),
         }
     }
@@ -404,7 +410,7 @@ impl Trees {
     pub fn lease(&self, request: LeaseRequest) -> Result<Lease> {
         let tree = {
             let mut locked = self.lock();
-            if let Some(tree) = self.take_ticket_tree(&locked, &request)? {
+            if let Some(tree) = self.take_ticket_tree(&mut locked, &request)? {
                 tree
             } else {
                 let slot = Arc::new(Slot::new(request, Self::busy_reason(&locked)?));
@@ -416,8 +422,12 @@ impl Trees {
         Ok(Lease::Ready(lease))
     }
 
-    /// Picks or creates a ticket tree for `request` and marks it leased in the store.
-    fn take_ticket_tree(&self, locked: &Locked, request: &LeaseRequest) -> Result<Option<TreeId>> {
+    /// Picks or creates a ticket tree for `request` and reserves it through checkout.
+    fn take_ticket_tree(
+        &self,
+        locked: &mut Locked,
+        request: &LeaseRequest,
+    ) -> Result<Option<TreeId>> {
         let rows = store::all(&locked.db).map_err(|e| store_error(&e))?;
         let keep = self.inner.config.keep.get();
         let wanted = choice::wanted(&keep, &request.files);
@@ -472,6 +482,7 @@ impl Trees {
         if !taken {
             return Err(Error::Conflict(format!("tree {id} was taken")));
         }
+        locked.ticket_tree_work.insert(id.clone());
         Ok(Some(id))
     }
 
@@ -520,13 +531,18 @@ impl Trees {
         } else {
             request.at.clone()
         };
-        if let Err(error) = self.check_out_branch(&path, &request.branch, &at) {
-            let _ = store::release(&self.lock().db, tree.as_str(), None, &self.now());
-            return Err(error);
-        }
-        if request.compiles {
+        let checkout = self.check_out_branch(&path, &request.branch, &at);
+        if checkout.is_ok() && request.compiles {
             self.start_builds(tree, request);
         }
+        {
+            let mut locked = self.lock();
+            self.finish_ticket_tree_work(&mut locked, tree);
+            if checkout.is_err() {
+                let _ = store::release(&locked.db, tree.as_str(), None, &self.now());
+            }
+        }
+        checkout?;
         Ok(TreeLease {
             tree: tree.clone(),
             path,
@@ -635,7 +651,7 @@ impl Trees {
                 let Some(slot) = locked.waiters.front().cloned() else {
                     return;
                 };
-                match self.take_ticket_tree(&locked, slot.request()) {
+                match self.take_ticket_tree(&mut locked, slot.request()) {
                     Ok(Some(tree)) => {
                         locked.waiters.pop_front();
                         (slot, tree)
@@ -665,7 +681,10 @@ impl Trees {
     /// Frees a tree that was leased but never used, without saving or resetting it.
     fn give_back(&self, tree: &TreeId) {
         let _ = seed::wait_until_seeded(&self.inner.config.path(tree));
-        let _ = store::release(&self.lock().db, tree.as_str(), None, &self.now());
+        {
+            let locked = self.wait_for_ticket_tree_work(self.lock(), tree);
+            let _ = store::release(&locked.db, tree.as_str(), None, &self.now());
+        }
         self.serve_waiters();
     }
 

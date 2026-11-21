@@ -7,6 +7,8 @@
 //! that depends on `tree-01` being idle.
 
 use std::cell::Cell;
+use std::sync::atomic::AtomicBool;
+use std::sync::mpsc::{Receiver, Sender, channel};
 
 use ignite_core::capacity::BYTES_PER_GB;
 use ignite_os::system::DiskSpace;
@@ -14,6 +16,7 @@ use ignite_os::system::DiskSpace;
 use super::*;
 
 const MB: usize = 1_000_000;
+const SWEEP_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Every ticket tree in the fixture, leased with `sizes[i]` bytes in its build file.
 fn all_leased(f: &Fixture, sizes: &[usize]) -> Trees {
@@ -65,6 +68,140 @@ fn state(trees: &Trees, tree: &str) -> String {
         .find(|t| t.tree.as_str() == tree)
         .unwrap()
         .state
+}
+
+/// Holds a sweep at the point before it deletes the build directory.
+struct SweepBuilds {
+    active: AtomicBool,
+    paused: AtomicBool,
+    forgetting: Sender<()>,
+    finish_forgetting: Mutex<Receiver<()>>,
+    next_build: Sender<()>,
+    path: PathBuf,
+}
+
+impl Builds for SweepBuilds {
+    fn ensure(&self, _: &TreeId, _: &str, _: &[String]) -> BuildResult {
+        assert!(!self.paused.load(Ordering::SeqCst));
+        assert!(!self.path.join("out/old").exists());
+        write(&self.path, "out/next", "new build");
+        self.next_build.send(()).unwrap();
+        BuildResult::Current
+    }
+
+    fn pause(&self, _: &TreeId) -> bool {
+        if self.active.load(Ordering::SeqCst) {
+            return false;
+        }
+        assert!(!self.paused.swap(true, Ordering::SeqCst));
+        true
+    }
+
+    fn resume(&self, _: &TreeId) {
+        assert!(self.paused.swap(false, Ordering::SeqCst));
+    }
+
+    fn forget(&self, _: &TreeId) {
+        self.forgetting.send(()).unwrap();
+        self.finish_forgetting
+            .lock()
+            .unwrap()
+            .recv_timeout(SWEEP_TIMEOUT)
+            .unwrap();
+    }
+}
+
+#[test]
+fn a_sweep_finishes_before_the_tree_is_reset_and_leased_again() {
+    let f = Fixture::with_landing(1, 0, 1);
+    let tree = id("tree-01");
+    let path = f.trees.config().path(&tree);
+    let (forgetting, sweep_started) = channel();
+    let (finish_sweep, finish_forgetting) = channel();
+    let (next_build, next_build_done) = channel();
+    let builds = Arc::new(SweepBuilds {
+        active: AtomicBool::new(true),
+        paused: AtomicBool::new(false),
+        forgetting,
+        finish_forgetting: Mutex::new(finish_forgetting),
+        next_build,
+        path: path.clone(),
+    });
+    let mut trees = Trees::new(
+        f.trees.config().clone(),
+        open_in_memory().unwrap(),
+        f.clock.clone(),
+        builds.clone(),
+    );
+    let steps = Arc::new(crate::steps::Steps::new(f.clock.clone()));
+    Arc::get_mut(&mut trees.inner).unwrap().steps = steps.clone();
+    trees.setup(&f.tip()).unwrap();
+    assert!(matches!(
+        trees.lease(f.request("T.1", false)).unwrap(),
+        Lease::Ready(_)
+    ));
+    trees.record_build(&tree, &f.tip()).unwrap();
+    write(&path, "out/old", "old build");
+
+    let report = trees.free_disk(100, || Some(10)).unwrap();
+    assert!(report.reclaimed.is_empty());
+    assert!(path.join("out/old").exists());
+    assert!(!builds.paused.load(Ordering::SeqCst));
+    builds.active.store(false, Ordering::SeqCst);
+
+    std::thread::scope(|scope| {
+        let finish_sweep = finish_sweep;
+        let sweep = scope.spawn(|| {
+            trees
+                .free_disk(100, || {
+                    Some(if path.join("out/old").exists() {
+                        10
+                    } else {
+                        100
+                    })
+                })
+                .unwrap()
+        });
+        sweep_started.recv_timeout(SWEEP_TIMEOUT).unwrap();
+        let Lease::Waiting(waiter) = trees.lease(f.request("T.2", true)).unwrap() else {
+            panic!("expected the next ticket to wait for the same tree");
+        };
+        let release = steps.begin(
+            crate::steps::Kind::Verb("release".to_owned()),
+            crate::steps::Work {
+                tree: Some(tree.clone()),
+                tree_path: Some(path.clone()),
+                ..crate::steps::Work::default()
+            },
+        );
+        let release_steps = release.subscribe();
+        let (release_trees, release_tree, tip) = (&trees, &tree, f.tip());
+        let released = scope.spawn(move || {
+            let _entered = release.enter();
+            let result = release_trees.release_unsaved(release_tree, &tip, None);
+            release.finish();
+            result.unwrap();
+        });
+        assert_eq!(
+            release_steps.recv_timeout(SWEEP_TIMEOUT).unwrap(),
+            "waiting for checkout or disk cleanup in tree-01 to end"
+        );
+        assert!(waiter.wait(Duration::ZERO).is_none());
+        assert!(path.join("out/old").is_file());
+        assert_eq!(refs::branch(&path).unwrap().as_deref(), Some("work/T.1"));
+
+        finish_sweep.send(()).unwrap();
+        assert_eq!(sweep.join().unwrap().reclaimed, std::slice::from_ref(&tree));
+        released.join().unwrap();
+        let next = waiter.wait(SWEEP_TIMEOUT).unwrap().unwrap();
+        assert_eq!(next.tree, tree);
+        assert_eq!(next.branch, "work/T.2");
+        next_build_done.recv_timeout(SWEEP_TIMEOUT).unwrap();
+        assert_eq!(
+            fs::read_to_string(path.join("out/next")).unwrap(),
+            "new build"
+        );
+    });
 }
 
 #[test]

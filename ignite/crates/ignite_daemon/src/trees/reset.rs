@@ -2,7 +2,7 @@
 
 use std::collections::BTreeSet;
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, MutexGuard, PoisonError};
 use std::time::Duration;
 
 use ignite_core::ids::{Commit, TreeId};
@@ -12,9 +12,31 @@ use ignite_os::Native;
 use ignite_os::occupants::Occupants;
 use ignite_store::local::{handles as handle_store, rows, trees as store};
 
-use super::{Ended, GRACE, Trees, park_branch, store_error};
+use super::{Ended, GRACE, Locked, Trees, park_branch, store_error};
 
 impl Trees {
+    /// Waits for checkout or sweeping to finish and returns with the store locked so the
+    /// caller can end the lease before another sweep reserves the tree.
+    pub(super) fn wait_for_ticket_tree_work<'a>(
+        &self,
+        locked: MutexGuard<'a, Locked>,
+        tree: &TreeId,
+    ) -> MutexGuard<'a, Locked> {
+        if !locked.ticket_tree_work.contains(tree) {
+            return locked;
+        }
+        let _waiting = crate::steps::waiting(format!("checkout or disk cleanup in {tree} to end"));
+        self.inner
+            .ticket_tree_work_done
+            .wait_while(locked, |locked| locked.ticket_tree_work.contains(tree))
+            .unwrap_or_else(PoisonError::into_inner)
+    }
+
+    pub(super) fn finish_ticket_tree_work(&self, locked: &mut Locked, tree: &TreeId) {
+        locked.ticket_tree_work.remove(tree);
+        self.inner.ticket_tree_work_done.notify_all();
+    }
+
     pub(super) fn reset_leased(
         &self,
         tree: &TreeId,
@@ -24,42 +46,55 @@ impl Trees {
     ) -> Result<Vec<Ended>> {
         let config = &self.inner.config;
         let path = config.path(tree);
-        let head = refs::head(&path)?;
-        // Moving from `leased` is a compare-and-set, so of two overlapping releases of one tree
-        // only the first proceeds.
-        let claimed = store::transition(
-            &self.lock().db,
-            tree.as_str(),
-            store::State::Leased,
-            store::State::Resetting,
-            &self.now(),
-        )
-        .map_err(|e| store_error(&e))?;
-        if !claimed {
-            return Err(Error::Conflict(format!(
-                "tree {tree} is no longer leased; another release has it"
-            )));
-        }
+        let had_build = {
+            let locked = self.wait_for_ticket_tree_work(self.lock(), tree);
+            // Read again after waiting. The sweep may have cleared the build, or another
+            // release may have reached the tree first.
+            let current = store::get(&locked.db, tree.as_str()).map_err(|e| store_error(&e))?;
+            let Some(current) = current.filter(|current| {
+                current.leased_at == row.leased_at
+                    && current.ticket == row.ticket
+                    && current.session == row.session
+            }) else {
+                return Err(Error::Conflict(format!(
+                    "tree {tree} is no longer held by this lease"
+                )));
+            };
+            let claimed = store::transition(
+                &locked.db,
+                tree.as_str(),
+                store::State::Leased,
+                store::State::Resetting,
+                &self.now(),
+            )
+            .map_err(|e| store_error(&e))?;
+            if !claimed {
+                return Err(Error::Conflict(format!(
+                    "tree {tree} is no longer leased; another release has it"
+                )));
+            }
+            current.built_commit.is_some()
+        };
         // A release that fails after the tree is marked `resetting` goes back to `leased`, so
         // the caller can retry it; nothing else would move a `resetting` tree until the daemon
         // restarts.
         // A copy of another tree's build still running writes the target directories.
         let _ = super::seed::wait_until_seeded(&path);
-        let reset = self
-            .stop_work(tree)
-            .and_then(|()| Self::end_processes(&path, caller));
-        let reset = reset.and_then(|ended| {
+        let reset = (|| {
+            let head = refs::head(&path)?;
+            self.stop_work(tree)?;
+            let ended = Self::end_processes(&path, caller)?;
             worktree::reset(&path, &park_branch(tree), park_at, &config.keep.get())?;
-            Ok(ended)
-        });
-        let ended = match reset {
-            Ok(ended) => ended,
+            Ok((ended, head))
+        })();
+        let (ended, head) = match reset {
+            Ok(reset) => reset,
             Err(error) => {
                 self.back_to_leased(tree);
                 return Err(error);
             }
         };
-        let built = row.built_commit.is_some().then(|| head.to_string());
+        let built = had_build.then(|| head.to_string());
         let freed = store::release(
             &self.lock().db,
             tree.as_str(),
