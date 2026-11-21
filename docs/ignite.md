@@ -4223,18 +4223,32 @@ reviewed landing and never from a web page.
 
 ### Fleet settings
 
-A person edits fleet settings on the dashboard's Fleet page or with
-`ignite fleet`. The hub stores them with a version number and a log of every
-change, and sends each daemon its part in the reply to every heartbeat, about
-every 10 seconds. A daemon keeps the last reply on disk, so a restart or a hub
-outage changes nothing.
+`ignite fleet` shows machine and provider settings, registered machines,
+provider usage and holds, and the last 20 changes. Use
+`ignite fleet machine <name> --state active|checks-only|off` to set a machine's
+state. Add `--disk-cap-gb <n>` to set its cap or `--disk-cap-gb auto` to clear
+it. Use `ignite fleet provider <name>` with `--on` or `--off`, `--share <n>`, or
+`--stop-percent <n>` to set a provider's policy. The operator or the justiciar
+makes these edits. The Fleet page will offer the same controls.
 
-The hub stores the settings under `fleet` in its database. A write includes the
-version that the operator read. If another write has changed that version, the
-hub returns the current settings and the operator can apply the edit again. Each
-saved change records who made it, when, what changed and the resulting settings.
+The hub stores settings under `fleet` in its database. On its first start
+without fleet settings, it seeds them from `ignite.toml`. Machines with a CLI
+pool start active, and other configured machines start in checks-only mode. Each
+machine keeps its configured disk cap. Provider shares start at the sum of their
+CLI slots across machines, with the configured stop percentage.
+
+`GET /fleet` under the hub's project API returns the view, which
+`ignite fleet --json` also prints. `PUT /fleet` requires a machine token with an
+actor or a private dashboard request with a Tailscale login and the
+`X-Ignite-Dashboard` header. The request carries the settings and the version
+the operator read. A successful write returns the saved settings, and HTTP 409
+returns the current settings when the supplied version is stale. The CLI
+reapplies its edit to the current settings and retries once. Each saved change
+records who made it, when, what changed and the resulting settings.
+
 Heartbeats and hand-offs accept messages from releases that predate the fleet
-fields.
+fields. Under this design each heartbeat reply will carry the daemon's part of
+the policy, which the daemon will keep on disk for restarts and hub outages.
 
 Each machine has a state and an optional disk cap:
 

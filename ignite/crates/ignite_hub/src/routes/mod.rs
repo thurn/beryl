@@ -7,6 +7,7 @@ pub mod checks;
 pub mod commands;
 pub mod dispatch;
 pub mod feed;
+pub mod fleet;
 pub mod listings;
 pub mod tickets;
 pub mod tip_rounds;

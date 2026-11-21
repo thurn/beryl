@@ -177,8 +177,19 @@ impl Hub {
     pub fn post(&self, path: &[&str], body: &Value, replay_safe: bool) -> Result<Response> {
         self.send(
             &self.url(path, &[]),
-            Some(body),
+            Some((WriteMethod::Post, body)),
             replay_safe,
+            self.retry_for,
+            None,
+        )
+    }
+
+    /// `PUT path` with a version precondition, safe to replay after an unclear failure.
+    pub fn put_versioned(&self, path: &[&str], body: &Value) -> Result<Response> {
+        self.send(
+            &self.url(path, &[]),
+            Some((WriteMethod::Put, body)),
+            true,
             self.retry_for,
             None,
         )
@@ -194,7 +205,11 @@ impl Hub {
         bytes: &[u8],
         content_type: &str,
     ) -> Result<Response> {
-        let body = Body::Bytes(bytes, content_type);
+        let body = Body {
+            method: WriteMethod::Post,
+            bytes,
+            content_type,
+        };
         let raw = self.send_raw(
             &self.url(path, query),
             Some(body),
@@ -248,15 +263,19 @@ impl Hub {
     fn send(
         &self,
         url: &str,
-        body: Option<&Value>,
+        body: Option<(WriteMethod, &Value)>,
         replay_safe: bool,
         budget: Duration,
         hold: Option<Duration>,
     ) -> Result<Response> {
-        let encoded = body.map(Value::to_string);
-        let body = encoded
-            .as_deref()
-            .map(|text| Body::Bytes(text.as_bytes(), "application/json"));
+        let encoded = body.map(|(_, value)| value.to_string());
+        let body = body
+            .zip(encoded.as_deref())
+            .map(|((method, _), text)| Body {
+                method,
+                bytes: text.as_bytes(),
+                content_type: "application/json",
+            });
         let raw = self.send_raw(url, body, replay_safe, budget, hold)?;
         String::from_utf8(raw)
             .map(|body| Response { body })
@@ -295,16 +314,20 @@ impl Hub {
                 |hold| hold + Duration::from_secs(10),
             );
             let response = match (body, &authorization) {
-                (Some(Body::Bytes(bytes, content_type)), Some(authorization)) => self
-                    .agent
-                    .post(url)
-                    .header("Authorization", authorization)
-                    .header("X-Actor", &self.actor)
-                    .header("Content-Type", content_type)
-                    .config()
-                    .timeout_global(Some(timeout))
-                    .build()
-                    .send(bytes),
+                (Some(body), Some(authorization)) => {
+                    let request = match body.method {
+                        WriteMethod::Post => self.agent.post(url),
+                        WriteMethod::Put => self.agent.put(url),
+                    };
+                    request
+                        .header("Authorization", authorization)
+                        .header("X-Actor", &self.actor)
+                        .header("Content-Type", body.content_type)
+                        .config()
+                        .timeout_global(Some(timeout))
+                        .build()
+                        .send(body.bytes)
+                }
                 _ => self
                     .agent
                     .get(url)
@@ -350,8 +373,16 @@ impl Hub {
 
 /// A request body: its bytes and their content type.
 #[derive(Clone, Copy)]
-enum Body<'a> {
-    Bytes(&'a [u8], &'a str),
+struct Body<'a> {
+    method: WriteMethod,
+    bytes: &'a [u8],
+    content_type: &'a str,
+}
+
+#[derive(Clone, Copy)]
+enum WriteMethod {
+    Post,
+    Put,
 }
 
 /// An unreachable hub is retried when the request was never sent or can be repeated; any other

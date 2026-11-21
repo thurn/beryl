@@ -97,7 +97,7 @@ impl HubServer {
     }
 
     fn start_with(&self, read_only: bool) -> io::Result<RunningHub> {
-        let first = hub::open(&self.database).map_err(io::Error::other)?;
+        let mut first = hub::open(&self.database).map_err(io::Error::other)?;
         if !read_only {
             // Routes and upkeep read the machines' operating systems and the pool's apps from the
             // database, so the facts of this `ignite.toml` replace those of the last start.
@@ -106,6 +106,8 @@ impl HubServer {
                 &ignite_core::owner::Routing::from_config(&self.config),
             )
             .map_err(io::Error::other)?;
+            routes::fleet::seed(&mut first, &self.config, SystemClock.now())
+                .map_err(io::Error::other)?;
         }
         let server = Server::http(&self.listen).map_err(io::Error::other)?;
         let address = server
@@ -380,7 +382,7 @@ fn respond(shared: &Shared, http: &mut tiny_http::Request, now: Timestamp) -> Re
     };
     // The token is checked before any body is read, so a request without one cannot make the
     // hub buffer more than a small body.
-    let (writer, editable) = writer(&conn, shared.read_only, api, &header);
+    let (writer, editable) = writer(&conn, shared.read_only, api, &method, &header);
     let limit = if writer.is_some() {
         MAX_BODY
     } else {
@@ -434,18 +436,19 @@ fn respond(shared: &Shared, http: &mut tiny_http::Request, now: Timestamp) -> Re
 
 /// Who may write with this request, and whether its pages carry the dashboard's edit controls.
 /// A machine writes with its token. The dashboard's edit controls write as the Tailscale user, on
-/// the private listener only, and only tickets (`/batch`; see `auth`).
+/// the private listener for ticket edits and fleet settings (see `auth`).
 fn writer<'h>(
     conn: &Connection,
     read_only: bool,
     api: Option<&str>,
+    method: &str,
     header: &impl Fn(&str) -> Option<&'h str>,
 ) -> (Option<auth::Writer>, bool) {
     let login = header("tailscale-user-login").filter(|_| !read_only);
     let writer = auth::authorize(conn, header("authorization"), header("x-actor"))
         .ok()
         .or_else(|| {
-            (api == Some("/batch"))
+            (api == Some("/batch") || (api == Some("/fleet") && method == "PUT"))
                 .then(|| auth::dashboard_writer(login, header(auth::DASHBOARD_HEADER)))
                 .flatten()
         });
@@ -483,6 +486,7 @@ fn api_route(
     routes::tickets::handle(conn, request, now)
         .or_else(|| routes::attachments::handle(conn, request, private, attachments, now))
         .or_else(|| routes::feed::handle(conn, request, private, now))
+        .or_else(|| routes::fleet::handle(conn, request, now))
         .or_else(|| routes::checks::handle(conn, request, now))
         .or_else(|| routes::listings::handle(conn, request, now))
         .or_else(|| routes::verdicts::handle(conn, request, now))

@@ -78,7 +78,7 @@ pub fn dashboard_editor(login: Option<&str>) -> Option<String> {
 
 /// The writer of a dashboard edit: a Tailscale user (`login`) whose request carries
 /// [`DASHBOARD_HEADER`] (`marker`). The caller allows this only on the private listener and only
-/// for ticket edits.
+/// for ticket edits and fleet settings.
 pub fn dashboard_writer(login: Option<&str>, marker: Option<&str>) -> Option<Writer> {
     marker?;
     Some(Writer {

@@ -13,6 +13,7 @@ Rules, and why:
   outlives your turn, and ignite wait blocks until the operation finishes.
 - A turn may also end while an ignite verb of yours still runs. The daemon
   resumes you when the verb ends, with its result.
+- Leave fleet settings to the operator or the justiciar.
 - Never ask a person. Decide, act, and record the choice and why on the ticket.
   There is no interactive takeover. A person steers you with ignite tell, and
   the text arrives as the prompt of your next turn.

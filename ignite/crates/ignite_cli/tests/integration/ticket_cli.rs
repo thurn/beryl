@@ -1,4 +1,4 @@
-//! The `ignite` executable's ticket verbs against a hub in this process, as separate processes
+//! The `ignite` executable's direct hub verbs, as separate processes against a hub in this process
 //! like agents run them: the hub comes from `ignite.toml` above the working directory and the
 //! token from `IGNITE_TOKEN`.
 
@@ -162,4 +162,50 @@ fn ignite_cli_text(dir: &Path, token: &str, args: &[&str]) -> String {
     let output = command.output().unwrap();
     assert_eq!(output.status.code(), Some(0), "{output:?}");
     String::from_utf8(output.stdout).unwrap()
+}
+
+#[test]
+fn fleet_edits_are_visible_in_the_cli_and_preserve_other_fields() {
+    let (dir, token, running) = hub_in_dir("ignite-cli-fleet");
+    let fleet = |args: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_ignite"))
+            .current_dir(&dir)
+            .env("IGNITE_TOKEN", &token)
+            .env("IGNITE_RETRY_FOR_S", "0")
+            .arg("fleet")
+            .args(args)
+            .output()
+            .unwrap()
+    };
+    let saved = json(&fleet(&["provider", "codex", "--share", "50", "--json"]));
+    assert_eq!(saved["providers"]["codex"]["share"], 50);
+    assert_eq!(saved["providers"]["codex"]["stop_percent"], 99);
+    assert_eq!(saved["providers"]["codex"]["enabled"], true);
+
+    let text = fleet(&[]);
+    assert_eq!(text.status.code(), Some(0), "{text:?}");
+    assert!(
+        String::from_utf8(text.stdout)
+            .unwrap()
+            .contains("provider codex: on, share 50, stop at 99%")
+    );
+
+    let saved = json(&fleet(&["machine", "m1", "--state", "active", "--json"]));
+    assert_eq!(saved["machines"]["m1"]["disk_cap_gb"], 10);
+    assert_eq!(saved["providers"]["codex"]["share"], 50);
+
+    let saved = json(&fleet(&[
+        "machine",
+        "m1",
+        "--state",
+        "checks-only",
+        "--disk-cap-gb",
+        "auto",
+        "--json",
+    ]));
+    assert_eq!(saved["machines"]["m1"]["state"], "checks-only");
+    assert!(saved["machines"]["m1"]["disk_cap_gb"].is_null());
+
+    running.stop();
+    let _ = std::fs::remove_dir_all(dir);
 }
