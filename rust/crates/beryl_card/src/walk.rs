@@ -7,7 +7,7 @@ use crate::characteristics::{BasicLandTypes, Subtypes};
 use crate::continuous::{Governed, LayerSpec, Modification, Replaced};
 use crate::cost::{Cost, CostPart};
 use crate::definition::CardDef;
-use crate::effect::{Amount, Condition, Effect, Objects, Players};
+use crate::effect::{Amount, Branches, Condition, Effect, Objects, Players};
 use crate::filter::Filter;
 use crate::trigger::Subject;
 use crate::words::Words;
@@ -66,21 +66,6 @@ impl CardDef {
     /// one basic land type with another ([`Effect::ChangeText`]) names all five.
     pub fn subtypes(&self, visit: &mut dyn FnMut(Subtypes)) {
         let printed = &Words::NONE;
-        // "Islandwalk" asks whether a land the defending player controls is an Island
-        // (CR 702.14c), so a landwalk names its subtype.
-        let given = |modification: &Modification| match *modification {
-            Modification::AddSubtypeWord(word) | Modification::SetSubtypeWord(word) => {
-                Some(Subtypes::of(&[word.read(printed)]))
-            }
-            Modification::SetLandTypeWords(types) => Some(
-                types
-                    .read(printed)
-                    .subtypes()
-                    .fold(Subtypes::NONE, Subtypes::with),
-            ),
-            Modification::AddKeywords(keywords) => Some(keywords.landwalk()),
-            _ => None,
-        };
         for face in self.faces {
             visit(face.subtypes.read(printed).union(face.keywords.landwalk()));
             // A copy exception's "is an Illusion in addition to its other types" (CR 707.9b).
@@ -91,29 +76,16 @@ impl CardDef {
             }
             for ability in face.abilities.iter().chain(face.grants) {
                 if let Some(spec) = ability.layer() {
-                    for given in spec.modifications.iter().filter_map(given) {
+                    for given in spec
+                        .modifications
+                        .iter()
+                        .filter_map(Modification::granted_subtypes)
+                    {
                         visit(given);
                     }
                 }
                 if let Behavior::Data(effect) = ability.body() {
-                    let found = std::cell::RefCell::new(Subtypes::NONE);
-                    effect.any(&|instruction| {
-                        let mut found = found.borrow_mut();
-                        match instruction {
-                            Effect::Modify { modifications, .. } => {
-                                for given in modifications.iter().filter_map(given) {
-                                    *found = found.union(given);
-                                }
-                            }
-                            Effect::ChangeText { .. } => {
-                                *found =
-                                    (BasicLandTypes::ALL.subtypes()).fold(*found, Subtypes::with);
-                            }
-                            _ => {}
-                        }
-                        false
-                    });
-                    visit(found.into_inner());
+                    visit(effect.subtypes());
                 }
             }
         }
@@ -267,13 +239,11 @@ impl LayerSpec {
 
 impl Modification {
     fn walk(&self, visit: Visit) {
-        match self {
-            Modification::SetPower(amount) => amount.walk(visit),
-            Modification::SetPt(power, toughness) | Modification::SetBasePt(power, toughness) => {
-                power.walk(visit);
+        if let Some((power, toughness)) = self.pt_amounts() {
+            power.walk(visit);
+            if let Some(toughness) = toughness {
                 toughness.walk(visit);
             }
-            _ => {}
         }
     }
 }
@@ -405,6 +375,90 @@ impl Condition {
 }
 
 impl Effect {
+    /// The subtypes named in its modifications and text changes.
+    fn subtypes(&self) -> Subtypes {
+        let found = std::cell::RefCell::new(Subtypes::NONE);
+        self.any(&|instruction| {
+            let mut found = found.borrow_mut();
+            match instruction {
+                Effect::Modify { modifications, .. } => {
+                    for given in modifications
+                        .iter()
+                        .filter_map(Modification::granted_subtypes)
+                    {
+                        *found = found.union(given);
+                    }
+                }
+                Effect::ChangeText { .. } => {
+                    *found = (BasicLandTypes::ALL.subtypes()).fold(*found, Subtypes::with);
+                }
+                Effect::Sequence(_)
+                | Effect::If { .. }
+                | Effect::May { .. }
+                | Effect::Unless { .. }
+                | Effect::ForEachPlayer { .. }
+                | Effect::Choose { .. }
+                | Effect::LookAt { .. }
+                | Effect::Counter(_)
+                | Effect::CounterInto { .. }
+                | Effect::CopySpell { .. }
+                | Effect::Destroy { .. }
+                | Effect::Regenerate(_)
+                | Effect::PhaseOut(_)
+                | Effect::Exile(_)
+                | Effect::ExileUntilThisLeaves(_)
+                | Effect::ExileLinked(_)
+                | Effect::Sacrifice(_)
+                | Effect::ReturnToHand(_)
+                | Effect::PutIntoGraveyard(_)
+                | Effect::ReturnToBattlefield(_)
+                | Effect::PutOntoBattlefield(_)
+                | Effect::ReturnTransformed(_)
+                | Effect::PutIntoLibrary { .. }
+                | Effect::PutBack { .. }
+                | Effect::ShuffleInto { .. }
+                | Effect::Dig { .. }
+                | Effect::Fateseal { .. }
+                | Effect::Search { .. }
+                | Effect::Draw { .. }
+                | Effect::Discard { .. }
+                | Effect::Mill { .. }
+                | Effect::Scry { .. }
+                | Effect::Explore(_)
+                | Effect::ManifestDread(_)
+                | Effect::FlipCoin(_)
+                | Effect::DealDamage { .. }
+                | Effect::PreventDamage { .. }
+                | Effect::GainLife { .. }
+                | Effect::LoseLife { .. }
+                | Effect::CreateTokens { .. }
+                | Effect::CreateAttackingTokens { .. }
+                | Effect::CreateCopies { .. }
+                | Effect::BecomeCopy { .. }
+                | Effect::Mutate(_)
+                | Effect::AddCounters { .. }
+                | Effect::RemoveCounters { .. }
+                | Effect::AddMana { .. }
+                | Effect::AddManaOfKind { .. }
+                | Effect::ExchangeControl(..)
+                | Effect::Attach { .. }
+                | Effect::ChangeRule { .. }
+                | Effect::GainFlashback(_)
+                | Effect::PermitCast { .. }
+                | Effect::MayCast { .. }
+                | Effect::UntapUpTo { .. }
+                | Effect::Delay { .. }
+                | Effect::GetEmblem { .. }
+                | Effect::WinGame(_)
+                | Effect::LoseGame(_)
+                | Effect::ControlPlayer(_)
+                | Effect::ExtraTurn(_) => {}
+            }
+            false
+        });
+        found.into_inner()
+    }
+
     fn walk(&self, visit: Visit) {
         let operands = self.operands();
         for players in [operands.players, operands.others].into_iter().flatten() {
@@ -419,13 +473,13 @@ impl Effect {
         if let Some(filter) = operands.filter {
             filter.walk(visit);
         }
-        match self {
-            Effect::Sequence(effects) => {
-                for effect in *effects {
+        match self.branches() {
+            Branches::Sequence(effects) => {
+                for effect in effects {
                     effect.walk(visit);
                 }
             }
-            Effect::If {
+            Branches::If {
                 condition,
                 then,
                 otherwise,
@@ -436,15 +490,16 @@ impl Effect {
                     otherwise.walk(visit);
                 }
             }
-            Effect::May { effect, .. }
-            | Effect::Unless { effect, .. }
-            | Effect::ForEachPlayer { effect, .. } => effect.walk(visit),
-            Effect::Modify { modifications, .. } => {
-                for modification in *modifications {
+            Branches::May(effect)
+            | Branches::Unless(effect, _)
+            | Branches::ForEachPlayer(effect) => {
+                effect.walk(visit);
+            }
+            Branches::Single => {
+                for modification in self.modifications() {
                     modification.walk(visit);
                 }
             }
-            _ => {}
         }
     }
 }

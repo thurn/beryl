@@ -112,7 +112,7 @@ impl ManaColor {
     ];
 
     /// Its index in [`ManaColor::ALL`].
-    pub fn index(self) -> usize {
+    pub const fn index(self) -> usize {
         self as usize
     }
 }
@@ -122,7 +122,7 @@ impl ManaColor {
 const _: () = {
     let mut i = 0;
     while i < ManaColor::ALL.len() {
-        assert!(ManaColor::ALL[i] as usize == i);
+        assert!(ManaColor::ALL[i].index() == i);
         i += 1;
     }
 };
@@ -144,7 +144,7 @@ impl ManaSet {
     /// One mana of one kind.
     pub const fn one(color: ManaColor) -> ManaSet {
         ManaSet {
-            colors: 1 << color as u8,
+            colors: 1 << color.index(),
             amount: 1,
         }
     }
@@ -159,7 +159,7 @@ impl ManaSet {
     }
 
     pub fn includes(self, color: ManaColor) -> bool {
-        self.colors & (1 << color as u8) != 0
+        self.colors & (1 << color.index()) != 0
     }
 }
 

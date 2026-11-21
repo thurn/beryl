@@ -252,18 +252,24 @@ impl CostPart {
 /// [`Cost::crew`] point here instead.
 static LOYALTY: [[CostPart; 1]; 256] = {
     let mut table = [[CostPart::Loyalty(0)]; 256];
-    let mut n = 0;
-    while n < 256 {
-        table[n] = [CostPart::Loyalty(n as u8 as i8)];
+    let mut n = 0u8;
+    loop {
+        table[n as usize] = [CostPart::Loyalty(i8::from_ne_bytes([n]))];
+        if n == u8::MAX {
+            break;
+        }
         n += 1;
     }
     table
 };
 static CREW: [[CostPart; 1]; 256] = {
     let mut table = [[CostPart::crew(0)]; 256];
-    let mut n = 0;
-    while n < 256 {
-        table[n] = [CostPart::crew(n as u8)];
+    let mut n = 0u8;
+    loop {
+        table[n as usize] = [CostPart::crew(n)];
+        if n == u8::MAX {
+            break;
+        }
         n += 1;
     }
     table
@@ -310,7 +316,7 @@ impl Cost {
 
     /// A loyalty ability's cost.
     pub const fn loyalty(n: i8) -> Cost {
-        Cost::of_parts(&LOYALTY[n as u8 as usize])
+        Cost::of_parts(&LOYALTY[n.to_ne_bytes()[0] as usize])
     }
 
     /// Crew N's cost (CR 702.122a).
@@ -331,7 +337,7 @@ impl Cost {
             CostAction::Tap => self.kinds & kinds::TAP != 0,
             CostAction::Sacrifice => self.kinds & kinds::SACRIFICE != 0,
             CostAction::Discard => self.kinds & kinds::DISCARD != 0,
-            _ => {
+            CostAction::Exile | CostAction::Reveal | CostAction::RemoveCounter(_) => {
                 self.kinds & kinds::THIS != 0
                     && self
                         .parts
@@ -375,7 +381,11 @@ impl Cost {
         }
         self.parts.iter().find_map(|part| match part {
             CostPart::Loyalty(n) => Some(*n),
-            _ => None,
+            CostPart::This(_)
+            | CostPart::Chosen(..)
+            | CostPart::Life(_)
+            | CostPart::OneOf(_)
+            | CostPart::DiscardHand => None,
         })
     }
 
@@ -387,7 +397,12 @@ impl Cost {
         }
         self.parts.iter().find_map(|part| match part {
             CostPart::This(CostAction::RemoveCounter(kind)) => Some(*kind),
-            _ => None,
+            CostPart::This(_)
+            | CostPart::Chosen(..)
+            | CostPart::Loyalty(_)
+            | CostPart::Life(_)
+            | CostPart::OneOf(_)
+            | CostPart::DiscardHand => None,
         })
     }
 
@@ -400,7 +415,11 @@ impl Cost {
         }
         self.parts.iter().find_map(|part| match part {
             CostPart::Chosen(_, chosen) => Some(chosen.measure),
-            _ => None,
+            CostPart::This(_)
+            | CostPart::Loyalty(_)
+            | CostPart::Life(_)
+            | CostPart::OneOf(_)
+            | CostPart::DiscardHand => None,
         })
     }
 }
@@ -501,6 +520,13 @@ pub enum CastingKind {
     Mutate,
 }
 
+impl CastingKind {
+    /// This kind's bit position in [`CastingKinds`].
+    pub(crate) const fn index(self) -> usize {
+        self as usize
+    }
+}
+
 /// A set of [`CastingKind`]s: the keywords whose costs were paid for one spell, as the
 /// permanent it becomes remembers them. A bit for each kind of the list.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -513,8 +539,12 @@ impl CastingKinds {
     #[inline]
     #[must_use]
     pub const fn with(self, kind: CastingKind) -> CastingKinds {
-        assert!((kind as u32) < u8::BITS, "more kinds than the set has bits");
-        CastingKinds(self.0 | 1 << kind as u8)
+        let index = kind.index();
+        assert!(
+            index < u8::BITS as usize,
+            "more kinds than the set has bits"
+        );
+        CastingKinds(self.0 | 1 << index)
     }
 
     #[inline]
@@ -560,7 +590,12 @@ impl CastingOption {
             CastingOption::Overload { ability, .. } | CastingOption::Mutate { ability, .. } => {
                 Some(ability)
             }
-            _ => None,
+            CastingOption::Kicker { .. }
+            | CastingOption::Offspring(_)
+            | CastingOption::Impending { .. }
+            | CastingOption::Evoke { .. }
+            | CastingOption::Alternative { .. }
+            | CastingOption::Escape { .. } => None,
         }
     }
 
@@ -681,7 +716,7 @@ impl Castings {
     /// The indices in [`Face::casting`] of its options, in order: not the granted escape,
     /// which the face doesn't list.
     pub fn indices(self) -> impl Iterator<Item = CastingIx> {
-        (0..Castings::MOST as u8)
+        (0..u8::try_from(Castings::MOST).expect("the option count fits in a byte"))
             .filter(move |&i| self.0 & (1 << i) != 0)
             .map(CastingIx::new)
     }

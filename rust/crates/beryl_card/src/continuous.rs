@@ -1,14 +1,14 @@
 //! Continuous effects: what a static ability does all the time, and the replacement effects
 //! and layered modifications cards create.
 
-use crate::characteristics::{BasicLandTypes, Colors, Keywords, Subtype, Types};
+use crate::characteristics::{BasicLandTypes, Colors, Keywords, Subtype, Subtypes, Types};
 use crate::counter::CounterKind;
 use crate::effect::{Amount, Condition, Objects, Players};
 use crate::filter::Filter;
 use crate::ids::Zone;
 use crate::index::{AbilityIx, ExceptIx, GrantIx};
 use crate::prompt::Purpose;
-use crate::words::{ColorWords, LandTypeWords, SubtypeWord};
+use crate::words::{ColorWords, LandTypeWords, SubtypeWord, Words};
 
 mod rule_change;
 
@@ -304,7 +304,47 @@ impl ChosenKind {
             Purpose::CreatureType => Some(ChosenKind::CreatureType),
             Purpose::CardName => Some(ChosenKind::CardName),
             Purpose::ReplaceWord | Purpose::NewWord => Some(ChosenKind::Word),
-            _ => None,
+            Purpose::Priority
+            | Purpose::Target
+            | Purpose::Choose
+            | Purpose::Discard
+            | Purpose::Cleanup
+            | Purpose::PutOnBottom
+            | Purpose::LegendRule
+            | Purpose::Look
+            | Purpose::Search
+            | Purpose::Untap
+            | Purpose::ManifestDread
+            | Purpose::ExileCost
+            | Purpose::CombatDamage
+            | Purpose::TriggerOrder
+            | Purpose::Scry
+            | Purpose::Arrange
+            | Purpose::PutBack
+            | Purpose::May
+            | Purpose::MaySearch
+            | Purpose::Move
+            | Purpose::Fateseal
+            | Purpose::TopOrBottom
+            | Purpose::Mutate
+            | Purpose::Explore
+            | Purpose::UnlessPays
+            | Purpose::PayLife
+            | Purpose::X
+            | Purpose::PlayOrDraw
+            | Purpose::Mulligan
+            | Purpose::CastOffer
+            | Purpose::Act
+            | Purpose::DivideDamage
+            | Purpose::DistributeCounters
+            | Purpose::Mana
+            | Purpose::Crew
+            | Purpose::Waterbend
+            | Purpose::Delve
+            | Purpose::Attack
+            | Purpose::Block
+            | Purpose::EnterOrder
+            | Purpose::Replace => None,
         }
     }
 }
@@ -463,6 +503,70 @@ pub enum Modification {
 }
 
 impl Modification {
+    /// The subtypes this modification can give a permanent or name in a keyword.
+    pub(crate) fn granted_subtypes(&self) -> Option<Subtypes> {
+        // "Islandwalk" asks whether a land the defending player controls is an Island
+        // (CR 702.14c), so a landwalk names its subtype.
+        match *self {
+            Modification::AddSubtypeWord(word) | Modification::SetSubtypeWord(word) => {
+                Some(Subtypes::of(&[word.read(&Words::NONE)]))
+            }
+            Modification::SetLandTypeWords(types) => Some(
+                types
+                    .read(&Words::NONE)
+                    .subtypes()
+                    .fold(Subtypes::NONE, Subtypes::with),
+            ),
+            Modification::AddKeywords(keywords) => Some(keywords.landwalk()),
+            Modification::Control
+            | Modification::AddTypes(_)
+            | Modification::RemoveTypes(_)
+            | Modification::SetTypes(_)
+            | Modification::Grant(_)
+            | Modification::SetPower(_)
+            | Modification::SetPt(..)
+            | Modification::ModifyPt(..)
+            | Modification::LoseAllAbilities
+            | Modification::LoseAbility(_)
+            | Modification::SetColorWords(_)
+            | Modification::AddColorWords(_)
+            | Modification::AddChosenColor
+            | Modification::SetBasePt(..)
+            | Modification::SwitchPt
+            | Modification::AddProtection(_)
+            | Modification::GrantEscape => None,
+        }
+    }
+
+    /// Whether this grants a keyword or increases power or toughness without reducing either.
+    pub(crate) fn helps_target(&self) -> bool {
+        match *self {
+            Modification::AddKeywords(_) => true,
+            Modification::ModifyPt(power, toughness) => {
+                power >= 0 && toughness >= 0 && (power, toughness) != (0, 0)
+            }
+            Modification::Control
+            | Modification::AddTypes(_)
+            | Modification::RemoveTypes(_)
+            | Modification::SetTypes(_)
+            | Modification::AddSubtypeWord(_)
+            | Modification::SetSubtypeWord(_)
+            | Modification::SetLandTypeWords(_)
+            | Modification::Grant(_)
+            | Modification::SetPower(_)
+            | Modification::SetPt(..)
+            | Modification::LoseAllAbilities
+            | Modification::LoseAbility(_)
+            | Modification::SetColorWords(_)
+            | Modification::AddColorWords(_)
+            | Modification::AddChosenColor
+            | Modification::SetBasePt(..)
+            | Modification::SwitchPt
+            | Modification::AddProtection(_)
+            | Modification::GrantEscape => false,
+        }
+    }
+
     /// The amounts of a power or power and toughness setting.
     pub const fn pt_amounts(self) -> Option<(&'static Amount, Option<&'static Amount>)> {
         match self {

@@ -161,23 +161,23 @@ const IMPENDING: Condition = Condition::All(&[
 ]);
 
 /// The most mana of one kind [`Ability::tap_for_mana`] makes.
-const MOST_MANA: usize = 3;
+const MOST_MANA: u8 = 3;
 
 /// "Add [mana]" for every [`ManaSet`] of up to [`MOST_MANA`] mana, by amount less one and
 /// then by its kinds. An ability holds its effect by reference, and a `const fn` cannot
 /// make a reference to a value it builds from an argument, so [`Ability::tap_for_mana`]
 /// points here instead.
-static ADD_MANA: [[Effect; 64]; MOST_MANA] = {
-    let mut table = [[Effect::NOTHING; 64]; MOST_MANA];
+static ADD_MANA: [[Effect; 64]; MOST_MANA as usize] = {
+    let mut table = [[Effect::NOTHING; 64]; MOST_MANA as usize];
     let mut amount = 0;
     while amount < MOST_MANA {
         let mut colors = 0;
         while colors < 64 {
-            table[amount][colors] = Effect::AddMana {
+            table[amount as usize][colors as usize] = Effect::AddMana {
                 player: Players::You,
                 mana: ManaSet {
-                    colors: colors as u8,
-                    amount: amount as u8 + 1,
+                    colors,
+                    amount: amount + 1,
                 },
             };
             colors += 1;
@@ -190,7 +190,7 @@ static ADD_MANA: [[Effect; 64]; MOST_MANA] = {
 /// "Add [mana]", for the controller of the ability.
 const fn add_mana(mana: ManaSet) -> &'static Effect {
     assert!(
-        mana.amount >= 1 && mana.amount as usize <= MOST_MANA && mana.colors < 64,
+        mana.amount >= 1 && mana.amount <= MOST_MANA && mana.colors < 64,
         "more mana than this builder makes: write the ability's effect out"
     );
     &ADD_MANA[mana.amount as usize - 1][mana.colors as usize]
@@ -695,7 +695,7 @@ impl Ability {
     pub const fn needs(&self) -> Option<Objects> {
         match self.body {
             Behavior::Data(effect) if self.needy => effect.needs(),
-            _ => None,
+            Behavior::Data(_) | Behavior::Custom(_) => None,
         }
     }
 

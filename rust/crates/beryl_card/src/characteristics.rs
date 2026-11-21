@@ -193,7 +193,7 @@ impl Keywords {
     ///
     /// [CR 305.6]: https://yawgatog.com/resources/magic-rules/#R3056
     pub const fn intrinsic_mana(self) -> u8 {
-        ((self.0 >> INTRINSIC_MANA_SHIFT) & 0x1f) as u8
+        (self.0 >> INTRINSIC_MANA_SHIFT).to_le_bytes()[0] & 0x1f
     }
 }
 
@@ -308,7 +308,7 @@ impl Subtypes {
         let mut bits = [0; SUBTYPE_WORDS];
         let mut i = 0;
         while i < subtypes.len() {
-            let s = subtypes[i] as usize;
+            let s = subtypes[i].index();
             bits[s >> 6] |= 1 << (s & 63);
             i += 1;
         }
@@ -359,14 +359,14 @@ impl Subtypes {
     }
 
     pub fn contains(self, subtype: Subtype) -> bool {
-        let s = subtype as usize;
+        let s = subtype.index();
         self.0[s >> 6] & (1 << (s & 63)) != 0
     }
 
     #[must_use]
     pub fn with(self, subtype: Subtype) -> Subtypes {
         let mut bits = self.0;
-        let s = subtype as usize;
+        let s = subtype.index();
         bits[s >> 6] |= 1 << (s & 63);
         Subtypes(bits)
     }
@@ -378,7 +378,8 @@ impl Subtypes {
                 if bits == 0 {
                     return None;
                 }
-                let bit = bits.trailing_zeros() as usize;
+                let bit =
+                    usize::try_from(bits.trailing_zeros()).expect("a bit index fits in usize");
                 bits &= bits - 1;
                 Some(Subtype::ALL[word * 64 + bit])
             })

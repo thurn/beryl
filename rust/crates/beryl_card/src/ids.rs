@@ -116,11 +116,11 @@ impl ZoneSet {
     pub const GRAVEYARD: ZoneSet = ZoneSet::of(Zone::Graveyard);
     pub const EXILE: ZoneSet = ZoneSet::of(Zone::Exile);
     /// Every zone an object can be in.
-    pub const ALL: ZoneSet = ZoneSet((1 << Zone::Nowhere as u8) - 1);
+    pub const ALL: ZoneSet = ZoneSet((1 << Zone::Nowhere.index()) - 1);
 
     /// The set of one zone.
     pub const fn of(zone: Zone) -> ZoneSet {
-        ZoneSet(1 << zone as u8)
+        ZoneSet(1 << zone.index())
     }
 
     /// The zones of either set.
@@ -138,7 +138,7 @@ impl ZoneSet {
     /// Whether `zone` is in the set.
     #[inline]
     pub const fn contains(self, zone: Zone) -> bool {
-        self.0 & (1 << zone as u8) != 0
+        self.0 & (1 << zone.index()) != 0
     }
 
     /// Whether every zone of `other` is in the set.

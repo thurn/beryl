@@ -124,10 +124,26 @@ pub enum TriggerEvent {
 
 impl PartialEq for TriggerEvent {
     fn eq(&self, other: &TriggerEvent) -> bool {
-        match (self, other) {
-            (TriggerEvent::Step(a), TriggerEvent::Step(b)) => a == b,
-            (TriggerEvent::State(a), TriggerEvent::State(b)) => std::ptr::eq(*a, *b),
-            _ => std::mem::discriminant(self) == std::mem::discriminant(other),
+        match self {
+            TriggerEvent::Step(a) => matches!(other, TriggerEvent::Step(b) if a == b),
+            TriggerEvent::State(a) => {
+                matches!(other, TriggerEvent::State(b) if std::ptr::eq(*a, *b))
+            }
+            TriggerEvent::Enters
+            | TriggerEvent::Dies
+            | TriggerEvent::Leaves
+            | TriggerEvent::Attacks
+            | TriggerEvent::PlayerAttacks
+            | TriggerEvent::DealsCombatDamageToPlayer
+            | TriggerEvent::MainPhase
+            | TriggerEvent::CreatesTokens
+            | TriggerEvent::Casts
+            | TriggerEvent::Discards
+            | TriggerEvent::Draws
+            | TriggerEvent::BecomesTarget
+            | TriggerEvent::Mutates => {
+                std::mem::discriminant(self) == std::mem::discriminant(other)
+            }
         }
     }
 }

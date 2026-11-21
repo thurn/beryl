@@ -35,16 +35,22 @@ pub const fn read(notation: &str) -> Result<Notation, &'static str> {
         }
         i += 1;
         let start = i;
-        let mut number: u32 = 0;
+        let mut number = 0u8;
         while i < bytes.len() && bytes[i].is_ascii_digit() {
-            number = number * 10 + (bytes[i] - b'0') as u32;
-            if number > 255 || read.generic as u32 + number > 255 {
+            let Some(tens) = number.checked_mul(10) else {
+                return Err("more generic mana than a cost holds");
+            };
+            let Some(value) = tens.checked_add(bytes[i] - b'0') else {
+                return Err("more generic mana than a cost holds");
+            };
+            if read.generic.checked_add(value).is_none() {
                 return Err("more generic mana than a cost holds");
             }
+            number = value;
             i += 1;
         }
         if i > start {
-            read.generic += number as u8;
+            read.generic += number;
         } else {
             if i >= bytes.len() {
                 return Err("a mana symbol was left open");

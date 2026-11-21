@@ -86,19 +86,69 @@ impl Effect {
                 objects,
                 modifications,
                 ..
-            } => {
-                is_target(objects)
-                    && modifications
-                        .iter()
-                        .all(|modification| match *modification {
-                            Modification::AddKeywords(_) => true,
-                            Modification::ModifyPt(power, toughness) => {
-                                power >= 0 && toughness >= 0 && (power, toughness) != (0, 0)
-                            }
-                            _ => false,
-                        })
-            }
-            _ => false,
+            } => is_target(objects) && modifications.iter().all(Modification::helps_target),
+            Effect::Sequence(_)
+            | Effect::If { .. }
+            | Effect::May { .. }
+            | Effect::Unless { .. }
+            | Effect::ForEachPlayer { .. }
+            | Effect::Choose { .. }
+            | Effect::LookAt { .. }
+            | Effect::Counter(_)
+            | Effect::CounterInto { .. }
+            | Effect::CopySpell { .. }
+            | Effect::Destroy { .. }
+            | Effect::Regenerate(_)
+            | Effect::PhaseOut(_)
+            | Effect::Exile(_)
+            | Effect::ExileUntilThisLeaves(_)
+            | Effect::ExileLinked(_)
+            | Effect::Sacrifice(_)
+            | Effect::ReturnToHand(_)
+            | Effect::PutIntoGraveyard(_)
+            | Effect::ReturnToBattlefield(_)
+            | Effect::PutOntoBattlefield(_)
+            | Effect::ReturnTransformed(_)
+            | Effect::PutIntoLibrary { .. }
+            | Effect::PutBack { .. }
+            | Effect::ShuffleInto { .. }
+            | Effect::Dig { .. }
+            | Effect::Fateseal { .. }
+            | Effect::Search { .. }
+            | Effect::Draw { .. }
+            | Effect::Discard { .. }
+            | Effect::Mill { .. }
+            | Effect::Scry { .. }
+            | Effect::Explore(_)
+            | Effect::ManifestDread(_)
+            | Effect::FlipCoin(_)
+            | Effect::DealDamage { .. }
+            | Effect::PreventDamage { .. }
+            | Effect::GainLife { .. }
+            | Effect::LoseLife { .. }
+            | Effect::CreateTokens { .. }
+            | Effect::CreateAttackingTokens { .. }
+            | Effect::CreateCopies { .. }
+            | Effect::BecomeCopy { .. }
+            | Effect::Mutate(_)
+            | Effect::AddCounters { .. }
+            | Effect::RemoveCounters { .. }
+            | Effect::AddMana { .. }
+            | Effect::AddManaOfKind { .. }
+            | Effect::ChangeText { .. }
+            | Effect::ExchangeControl(..)
+            | Effect::Attach { .. }
+            | Effect::ChangeRule { .. }
+            | Effect::GainFlashback(_)
+            | Effect::PermitCast { .. }
+            | Effect::MayCast { .. }
+            | Effect::UntapUpTo { .. }
+            | Effect::Delay { .. }
+            | Effect::GetEmblem { .. }
+            | Effect::WinGame(_)
+            | Effect::LoseGame(_)
+            | Effect::ControlPlayer(_)
+            | Effect::ExtraTurn(_) => false,
         })
     }
 

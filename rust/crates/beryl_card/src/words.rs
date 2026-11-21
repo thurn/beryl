@@ -260,12 +260,13 @@ impl TextWord {
     /// Its number. A subtype outside the five basic land types returns [`TextWord::COUNT`].
     pub const fn number(self) -> u8 {
         match self {
-            TextWord::Color(color) => color.0.trailing_zeros() as u8,
+            // The number of trailing zeros in a byte is at most eight.
+            TextWord::Color(color) => color.0.trailing_zeros().to_le_bytes()[0],
             TextWord::LandType(subtype) => {
-                let mut i = 0;
+                let mut i = 0u8;
                 while i < 5 {
-                    if BasicLandTypes::SUBTYPES[i].1 as u16 == subtype as u16 {
-                        return 5 + i as u8;
+                    if BasicLandTypes::SUBTYPES[i as usize].1.index() == subtype.index() {
+                        return 5 + i;
                     }
                     i += 1;
                 }
@@ -298,7 +299,10 @@ impl TextWord {
                     to: BasicLandWord::of_subtype(to)?,
                 })
             }
-            _ => None,
+            (
+                TextWord::Color(_) | TextWord::LandType(_),
+                TextWord::Color(_) | TextWord::LandType(_),
+            ) => None,
         }
     }
 }

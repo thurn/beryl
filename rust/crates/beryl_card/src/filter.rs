@@ -65,6 +65,28 @@ pub enum Filter {
 }
 
 impl Filter {
+    /// The filters required together, when this is a conjunction.
+    pub(crate) const fn conjunction(self) -> Option<&'static [Filter]> {
+        match self {
+            Filter::All(filters) => Some(filters),
+            Filter::Any
+            | Filter::Types(_)
+            | Filter::Supertypes(_)
+            | Filter::SubtypeWord(_)
+            | Filter::ColorWords(_)
+            | Filter::Whose(_)
+            | Filter::Owned(_)
+            | Filter::Tapped
+            | Filter::Token
+            | Filter::ManaValueAtMost(_)
+            | Filter::PowerAtMost(_)
+            | Filter::ManaValueAtMostX
+            | Filter::Not(_)
+            | Filter::AnyOf(_)
+            | Filter::InZone(_) => None,
+        }
+    }
+
     /// Has `subtype`, as the card's text prints it.
     #[allow(non_snake_case)]
     #[inline]

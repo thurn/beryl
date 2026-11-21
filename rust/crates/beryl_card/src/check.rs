@@ -8,22 +8,23 @@
 //! [`card`](crate::card) runs it, so in a card's `static` one is a compile error in the
 //! card's own file.
 
-use crate::PutOnto;
-use crate::ability::{Ability, AbilityKind, Behavior};
-use crate::continuous::{Duration, LayerSpec, Modification, Replacement, Rewrite};
+use crate::ability::{Ability, Behavior};
+use crate::continuous::{LayerSpec, Modification, Rewrite};
 use crate::cost::{Chosen, Cost, CostAction, CostPart, Measure};
 use crate::definition::{CardDef, Face};
-use crate::effect::{Amount, Condition, CopyChange, Effect, Objects, Operands, Players};
+use crate::effect::{Amount, Branches, Condition, CopyChange, Effect, Objects, Players};
 use crate::filter::Filter;
 use crate::ids::Zone;
 use crate::index::SpecIx;
-use crate::prompt::Shape;
 use crate::target::TargetKind;
 use crate::trigger::{Subject, Trigger, TriggerEvent};
 
+mod instruction;
 mod malformed;
 mod modifications;
+mod movement;
 pub use malformed::Malformed;
+use movement::{Moved, moved_by};
 
 type Checked = Result<(), Malformed>;
 
@@ -150,9 +151,8 @@ const fn whole(effect: &Effect) -> Checked {
 /// ([CR 608.2g](https://yawgatog.com/resources/magic-rules/#R6082g)): the engine has the
 /// player cast the card as the effect finishes.
 const fn casts_last(effect: &Effect, last: bool) -> bool {
-    match effect {
-        Effect::MayCast { .. } => last,
-        Effect::Sequence(effects) => {
+    match effect.branches() {
+        Branches::Sequence(effects) => {
             let mut i = 0;
             while i < effects.len() {
                 if !casts_last(&effects[i], last && i + 1 == effects.len()) {
@@ -162,7 +162,7 @@ const fn casts_last(effect: &Effect, last: bool) -> bool {
             }
             true
         }
-        Effect::If {
+        Branches::If {
             then, otherwise, ..
         } => {
             casts_last(then, last)
@@ -171,18 +171,17 @@ const fn casts_last(effect: &Effect, last: bool) -> bool {
                     None => true,
                 }
         }
-        Effect::May { effect, .. } | Effect::Unless { effect, .. } => casts_last(effect, last),
+        Branches::May(effect) | Branches::Unless(effect, _) => casts_last(effect, last),
         // The next player's turn at it comes after.
-        Effect::ForEachPlayer { effect, .. } => casts_last(effect, false),
-        _ => true,
+        Branches::ForEachPlayer(effect) => casts_last(effect, false),
+        Branches::Single => last || !matches!(effect, Effect::MayCast { .. }),
     }
 }
 
 /// How many of `effect`'s instructions start a rule change ([`Effect::ChangeRule`]).
 const fn rule_changes(effect: &Effect) -> usize {
-    match effect {
-        Effect::ChangeRule { .. } => 1,
-        Effect::Sequence(effects) => {
+    match effect.branches() {
+        Branches::Sequence(effects) => {
             let mut count = 0;
             let mut i = 0;
             while i < effects.len() {
@@ -191,7 +190,7 @@ const fn rule_changes(effect: &Effect) -> usize {
             }
             count
         }
-        Effect::If {
+        Branches::If {
             then, otherwise, ..
         } => {
             rule_changes(then)
@@ -200,82 +199,16 @@ const fn rule_changes(effect: &Effect) -> usize {
                     None => 0,
                 }
         }
-        Effect::May { effect, .. }
-        | Effect::Unless { effect, .. }
-        | Effect::ForEachPlayer { effect, .. } => rule_changes(effect),
-        _ => 0,
-    }
-}
-
-/// The objects an instruction sets out to move from where they are, if it names them: a new object
-/// once it has ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)): "An object that
-/// moves from one zone to another becomes a new object with no memory of, or relation to, its
-/// previous existence."
-const fn moved_by(effect: &Effect) -> Option<&Objects> {
-    match effect {
-        Effect::Counter(objects)
-        | Effect::CounterInto {
-            spells: objects, ..
+        Branches::May(effect) | Branches::Unless(effect, _) | Branches::ForEachPlayer(effect) => {
+            rule_changes(effect)
         }
-        | Effect::Destroy { objects, .. }
-        | Effect::Exile(objects)
-        | Effect::ExileUntilThisLeaves(objects)
-        | Effect::ExileLinked(objects)
-        | Effect::Sacrifice(objects)
-        | Effect::ReturnToHand(objects)
-        | Effect::PutIntoGraveyard(objects)
-        | Effect::ReturnToBattlefield(objects)
-        | Effect::PutOntoBattlefield(PutOnto { objects, .. })
-        | Effect::ReturnTransformed(objects)
-        | Effect::PutIntoLibrary { objects, .. }
-        | Effect::ShuffleInto { cards: objects, .. } => Some(objects),
-        _ => None,
-    }
-}
-
-/// The objects named one at a time that the instructions before the one being read may have
-/// moved: a target by its place, the ability's source, what that is attached to, what the
-/// ability triggered on and what a delayed ability carries. A set named by what is in it ([`Objects::All`] and the like) is
-/// read anew each time, and [`Objects::Those`] follows what moved.
-#[derive(Clone, Copy)]
-struct Moved(u32);
-
-impl Moved {
-    const NONE: Moved = Moved(0);
-    const THIS: u32 = 1 << 31;
-    const ATTACHED_TO: u32 = 1 << 30;
-    const TRIGGERED_ON: u32 = 1 << 29;
-    const CARRIED: u32 = 1 << 28;
-
-    /// The bit of `objects`, if it is such a name. A target past the bits is not followed.
-    const fn bit(objects: &Objects) -> u32 {
-        match objects {
-            Objects::Target(target) if target.index() < 28 => 1 << target.index(),
-            Objects::This => Moved::THIS,
-            Objects::AttachedTo => Moved::ATTACHED_TO,
-            Objects::TriggeredOn | Objects::TriggeredOnIn(_) => Moved::TRIGGERED_ON,
-            Objects::Carried => Moved::CARRIED,
-            _ => 0,
+        Branches::Single => {
+            if effect.started_rule().is_some() {
+                1
+            } else {
+                0
+            }
         }
-    }
-
-    /// These and `objects`. A source that has left is attached to nothing
-    /// ([`Objects::AttachedTo`]).
-    const fn with(self, objects: &Objects) -> Moved {
-        let attached = match objects {
-            Objects::This => Moved::ATTACHED_TO,
-            _ => 0,
-        };
-        Moved(self.0 | Moved::bit(objects) | attached)
-    }
-
-    /// What either of two ways through an effect may have moved.
-    const fn or(self, other: Moved) -> Moved {
-        Moved(self.0 | other.0)
-    }
-
-    const fn has(self, objects: &Objects) -> bool {
-        self.0 & Moved::bit(objects) != 0
     }
 }
 
@@ -315,14 +248,23 @@ impl Scope<'_> {
             Behavior::Custom(_) => Ok(()),
         };
         let copy = match self.ability.replacement() {
-            Some(Replacement {
-                rewrite:
-                    Rewrite::EnterAsCopy {
-                        except: Some(ix), ..
-                    },
-                ..
-            }) if ix.index() >= self.face.excepts.len() => Err(Malformed::Copy),
-            _ => Ok(()),
+            Some(replacement) => match replacement.rewrite {
+                Rewrite::EnterAsCopy {
+                    except: Some(ix), ..
+                } if ix.index() >= self.face.excepts.len() => Err(Malformed::Copy),
+                Rewrite::None
+                | Rewrite::ToZone(_)
+                | Rewrite::EntersTapped
+                | Rewrite::EntersTappedUnlessFewLands(_)
+                | Rewrite::EntersTappedUnlessPayLife(_)
+                | Rewrite::EntersWithCounters(..)
+                | Rewrite::Instead
+                | Rewrite::Dredge(_)
+                | Rewrite::Choose(_)
+                | Rewrite::Multiply(_)
+                | Rewrite::EnterAsCopy { .. } => Ok(()),
+            },
+            None => Ok(()),
         };
         both(
             both(both(condition, self.ability_targets()), both(layer, body)),
@@ -367,7 +309,26 @@ impl Scope<'_> {
                         Err(Malformed::Lost)
                     }
                 }
-                modification => self.modification(modification),
+                modification @ (Modification::Control
+                | Modification::AddTypes(_)
+                | Modification::RemoveTypes(_)
+                | Modification::SetTypes(_)
+                | Modification::AddSubtypeWord(_)
+                | Modification::SetSubtypeWord(_)
+                | Modification::SetLandTypeWords(_)
+                | Modification::AddKeywords(_)
+                | Modification::Grant(_)
+                | Modification::SetPower(_)
+                | Modification::SetPt(..)
+                | Modification::ModifyPt(..)
+                | Modification::LoseAllAbilities
+                | Modification::SetColorWords(_)
+                | Modification::AddColorWords(_)
+                | Modification::AddChosenColor
+                | Modification::SetBasePt(..)
+                | Modification::SwitchPt
+                | Modification::AddProtection(_)
+                | Modification::GrantEscape) => self.modification(modification),
             };
             modifications = both(modifications, checked);
             i += 1;
@@ -380,7 +341,20 @@ impl Scope<'_> {
                     Err(Malformed::Everywhere)
                 }
             }
-            affected => self.objects(affected),
+            affected @ (Objects::This
+            | Objects::Target(_)
+            | Objects::AttachedTo
+            | Objects::Those
+            | Objects::TriggeredOn
+            | Objects::TriggeredOnIn(_)
+            | Objects::ExiledWithThis
+            | Objects::PutOntoBattlefieldWithThis
+            | Objects::Carried
+            | Objects::All { .. }
+            | Objects::InZoneOf { .. }
+            | Objects::CardsIn { .. }
+            | Objects::Paid(_)
+            | Objects::Other(_)) => self.objects(affected),
         };
         both(affected, both(condition, modifications))
     }
@@ -406,9 +380,9 @@ impl Scope<'_> {
         if let Err(malformed) = self.instruction(effect) {
             return Err(malformed);
         }
-        match effect {
-            Effect::Sequence(effects) => self.effects(effects),
-            Effect::If {
+        match effect.branches() {
+            Branches::Sequence(effects) => self.effects(effects),
+            Branches::If {
                 condition,
                 then,
                 otherwise,
@@ -428,8 +402,8 @@ impl Scope<'_> {
                     None => Ok(then),
                 }
             }
-            Effect::May { effect, .. } => self.effect(effect),
-            Effect::Unless { effect, cost, .. } => {
+            Branches::May(effect) => self.effect(effect),
+            Branches::Unless(effect, cost) => {
                 if let Err(malformed) = self.resolution_cost(cost) {
                     return Err(malformed);
                 }
@@ -437,7 +411,7 @@ impl Scope<'_> {
             }
             // Read a second time after what one player's turn at it moved, as the next
             // player's is.
-            Effect::ForEachPlayer { effect, .. } => {
+            Branches::ForEachPlayer(effect) => {
                 let each = Scope {
                     for_a_player: true,
                     ..self
@@ -447,130 +421,11 @@ impl Scope<'_> {
                     Err(malformed) => Err(malformed),
                 }
             }
-            _ => Ok(match moved_by(effect) {
+            Branches::Single => Ok(match moved_by(effect) {
                 Some(objects) => self.moved.with(objects),
                 None => self.moved,
             }),
         }
-    }
-
-    /// One instruction without those it holds: what the check asks of its entry alone, and
-    /// of each of its operands.
-    const fn instruction(self, effect: &Effect) -> Checked {
-        let entry = match effect {
-            Effect::CounterInto { zone, .. } => match zone {
-                Zone::Exile => Ok(()),
-                _ => Err(Malformed::Countered),
-            },
-            Effect::CreateCopies {
-                except: Some(ix), ..
-            }
-            | Effect::BecomeCopy {
-                except: Some(ix), ..
-            }
-            | Effect::CopySpell {
-                except: Some(ix), ..
-            } if ix.index() >= self.face.excepts.len() => Err(Malformed::Copy),
-            Effect::AddMana { .. } if !matches!(self.ability.kind(), AbilityKind::Mana) => {
-                Err(Malformed::AddMana)
-            }
-            Effect::Modify {
-                objects,
-                modifications,
-                ..
-            } => self.resolved_modifications(objects, modifications),
-            // One object, picked: the one run of picks the interpreter asks.
-            Effect::Choose { prompt, .. }
-                if !(matches!(prompt.purpose.shape(), Shape::Pick) && prompt.most == 1) =>
-            {
-                Err(Malformed::Chosen)
-            }
-            Effect::Choose {
-                hidden: true,
-                optional,
-                among,
-                ..
-            } if !*optional
-                || !matches!(
-                    among,
-                    Objects::InZoneOf {
-                        zone: Zone::Hand | Zone::Library,
-                        ..
-                    }
-                ) =>
-            {
-                Err(Malformed::Chosen)
-            }
-            Effect::PermitCast {
-                duration: Duration::UntilYourNextTurn,
-                ..
-            } => Err(Malformed::Permitted),
-            Effect::PutOntoBattlefield(PutOnto {
-                under: Some(Players::EachPlayer | Players::EachOpponent | Players::EachOther(_)),
-                ..
-            }) => Err(Malformed::Under),
-            Effect::Fateseal { count, .. } => match count {
-                Amount::Fixed(1) => Ok(()),
-                _ => Err(Malformed::Fateseal),
-            },
-            Effect::Delay {
-                ability, object, ..
-            } => {
-                let abilities = self.face.abilities;
-                let delayed = ability.index() < abilities.len()
-                    && match abilities[ability.index()].trigger() {
-                        Some(trigger) => trigger.delayed,
-                        None => false,
-                    }
-                    && !matches!(
-                        object,
-                        Some(
-                            Objects::All { .. }
-                                | Objects::InZoneOf { .. }
-                                | Objects::CardsIn { .. }
-                                | Objects::ExiledWithThis
-                        )
-                    );
-                if delayed {
-                    Ok(())
-                } else {
-                    Err(Malformed::Delayed)
-                }
-            }
-            _ => Ok(()),
-        };
-        both(entry, self.operands(effect.operands()))
-    }
-
-    const fn operands(self, operands: Operands) -> Checked {
-        let players = match operands.players {
-            Some(players) => self.players(players),
-            None => Ok(()),
-        };
-        let others = match operands.others {
-            Some(players) => self.players(players),
-            None => Ok(()),
-        };
-        let objects = match operands.objects {
-            Some(objects) => self.objects(objects),
-            None => Ok(()),
-        };
-        let to = match operands.to {
-            Some(objects) => self.objects(objects),
-            None => Ok(()),
-        };
-        let amount = match operands.amount {
-            Some(amount) => self.amount(amount),
-            None => Ok(()),
-        };
-        let filter = match operands.filter {
-            Some(filter) => self.filter(filter),
-            None => Ok(()),
-        };
-        both(
-            both(players, others),
-            both(both(objects, to), both(amount, filter)),
-        )
     }
 
     /// A cost paid as an effect resolves ([`Effect::Unless`]): mana alone, or the discard
@@ -619,7 +474,20 @@ impl Scope<'_> {
     const fn kept(self, objects: &Objects) -> Checked {
         match objects {
             Objects::Target(_) => Ok(()),
-            _ => self.unmoved(objects),
+            Objects::This
+            | Objects::AttachedTo
+            | Objects::Those
+            | Objects::TriggeredOn
+            | Objects::TriggeredOnIn(_)
+            | Objects::ExiledWithThis
+            | Objects::PutOntoBattlefieldWithThis
+            | Objects::Carried
+            | Objects::All { .. }
+            | Objects::InZoneOf { .. }
+            | Objects::CardsIn { .. }
+            | Objects::Everywhere(_)
+            | Objects::Paid(_)
+            | Objects::Other(_) => self.unmoved(objects),
         }
     }
 
@@ -652,7 +520,9 @@ impl Scope<'_> {
                 Zone::Library | Zone::Hand | Zone::Graveyard => {
                     both(self.players(players), self.filter(filter))
                 }
-                _ => Err(Malformed::ZoneOf),
+                Zone::Battlefield | Zone::Exile | Zone::Stack | Zone::Nowhere | Zone::Merged => {
+                    Err(Malformed::ZoneOf)
+                }
             },
             Objects::CardsIn { players, .. } => self.players(players),
             Objects::Everywhere(_) => Err(Malformed::Everywhere),
@@ -665,7 +535,16 @@ impl Scope<'_> {
             Players::You | Players::EachOpponent | Players::EachPlayer => Ok(()),
             Players::Target(target) => match self.target(*target) {
                 Some(TargetKind::Player | TargetKind::PermanentOrPlayer) => Ok(()),
-                _ => Err(Malformed::Target),
+                Some(
+                    TargetKind::Permanent
+                    | TargetKind::Spell
+                    | TargetKind::SpellOrPermanent
+                    | TargetKind::GraveyardCard
+                    | TargetKind::Ability
+                    | TargetKind::ActivatedAbility
+                    | TargetKind::TriggeredAbility,
+                )
+                | None => Err(Malformed::Target),
             },
             Players::ControllerOf(objects) | Players::OwnerOf(objects) => {
                 both(self.kept(objects), self.objects(objects))
@@ -724,7 +603,7 @@ impl Scope<'_> {
                 let casting = self.face.casting;
                 let mut i = 0;
                 while i < casting.len() {
-                    if casting[i].kind() as u8 == *kind as u8 {
+                    if casting[i].kind().index() == kind.index() {
                         return Ok(());
                     }
                     i += 1;

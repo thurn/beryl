@@ -42,7 +42,12 @@ impl TargetKind {
             TargetKind::Ability => Some(Abilities::ActivatedOrTriggered),
             TargetKind::ActivatedAbility => Some(Abilities::Activated),
             TargetKind::TriggeredAbility => Some(Abilities::Triggered),
-            _ => None,
+            TargetKind::Permanent
+            | TargetKind::Spell
+            | TargetKind::SpellOrPermanent
+            | TargetKind::GraveyardCard
+            | TargetKind::Player
+            | TargetKind::PermanentOrPlayer => None,
         }
     }
 }
