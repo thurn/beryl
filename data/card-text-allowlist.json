@@ -50,6 +50,13 @@
       "Chronicler of Heroes: when ~ enters , [-draw a card-] if [-you control a creature with-] {+there is+} a +1/+1 counter on [-it-] {+all creatures you control , draw a card+} ."
     ]
   },
+  "Coordinated Assault": {
+    "reason": "wording",
+    "note": "The renderer omits the distributive word 'each'. Both changes apply to every selected creature until end of turn.",
+    "diff": [
+      "Coordinated Assault: up to two target creatures [-each-] get +1/+0 and gain first strike until end of turn ."
+    ]
+  },
   "Crackling Triton": {
     "reason": "wording",
     "note": "After the sacrifice cost, Oracle says the damage source is ‘it’. The renderer calls the same source ‘this creature’.",
