@@ -405,6 +405,9 @@ pub struct PoolConfig {
     /// for once a worker has been chosen.
     #[serde(default)]
     pub models: BTreeMap<String, BTreeMap<String, String>>,
+    /// The reasoning effort each app uses for tickets without an `effort:` label.
+    #[serde(default)]
+    pub default_effort: BTreeMap<String, String>,
     /// The owner of every ticket that has no owner of its own and no ancestor with one, such
     /// as `jarvis/claude` (see `crate::owner`). It names a declared machine. Without it such
     /// a ticket goes to any worker.
@@ -428,6 +431,7 @@ impl Default for PoolConfig {
     fn default() -> PoolConfig {
         PoolConfig {
             models: BTreeMap::new(),
+            default_effort: BTreeMap::new(),
             default_owner: None,
             usage_hold_percent: default_hold_percent(),
             cli: BTreeMap::new(),
@@ -436,6 +440,13 @@ impl Default for PoolConfig {
 }
 
 impl PoolConfig {
+    /// The reasoning effort for a hand-off whose ticket has no `effort:` label.
+    pub fn default_effort(&self, app: &str) -> &str {
+        self.default_effort
+            .get(app)
+            .map_or("medium", String::as_str)
+    }
+
     /// The model to ask `app` for when a ticket names `tier`. An app with no table here takes
     /// the tier name itself. `None` means the app has a table and it has no ID for the tier, so
     /// the app cannot be asked for that tier at all.
@@ -592,7 +603,7 @@ impl Config {
         missing
     }
 
-    /// The `[pool]` table: no empty model ID, and a default owner on a declared machine.
+    /// The `[pool]` table: nonempty model IDs and efforts, and a default owner on a declared machine.
     fn validate_pool(&self) -> Result<(), (String, String)> {
         let fail = |key: &str, message: &str| Err((key.to_owned(), message.to_owned()));
         for (app, table) in &self.pool.models {
@@ -600,6 +611,11 @@ impl Config {
                 if id.trim().is_empty() {
                     return fail(&format!("pool.models.{app}.{tier}"), "must not be empty");
                 }
+            }
+        }
+        for (app, effort) in &self.pool.default_effort {
+            if effort.trim().is_empty() {
+                return fail(&format!("pool.default_effort.{app}"), "must not be empty");
             }
         }
         if let Some(owner) = &self.pool.default_owner

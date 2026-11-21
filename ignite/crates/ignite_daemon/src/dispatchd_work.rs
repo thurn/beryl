@@ -13,8 +13,7 @@ use ignite_core::protocol::tickets::TicketDetail;
 use ignite_core::time::Timestamp;
 
 use super::{
-    DEFAULT_EFFORT, Dispatcher, Purpose, Reserved, State, cli, feed, label, shared, slots, suits,
-    tier_for,
+    Dispatcher, Purpose, Reserved, State, cli, feed, label, shared, slots, suits, tier_for,
 };
 use crate::clid::Resume;
 use crate::pool::Member;
@@ -569,7 +568,7 @@ impl Dispatcher {
             tier,
             model,
             effort: label(labels, "effort:")
-                .unwrap_or(DEFAULT_EFFORT)
+                .unwrap_or_else(|| config.pool.default_effort(app))
                 .to_owned(),
             app: app.to_owned(),
         };
@@ -703,9 +702,7 @@ mod offered_models_tests {
                     table(&[("opus", "sol"), ("sonnet", "sol")]),
                 ),
             ]),
-            default_owner: None,
-            usage_hold_percent: 99,
-            cli: BTreeMap::new(),
+            ..PoolConfig::default()
         };
         assert_eq!(offered_models(&pool, "codex", &[]), ["opus", "sonnet"]);
         let listed = ["opus".to_owned(), "light".to_owned()];

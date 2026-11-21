@@ -134,6 +134,49 @@ fn an_app_in_cli_mode_hands_off_through_the_cli_pool_without_a_dispatcher() {
 }
 
 #[test]
+fn codex_cli_handoffs_use_the_configured_effort_unless_the_ticket_overrides_it() {
+    let fake = Arc::new(FakeCliPool::default());
+    let mut rig = rig(&[]);
+    rig.ctx.config.pool.default_effort = [("codex".to_owned(), "high".to_owned())].into();
+    rig.ctx.config.pool.cli.insert(
+        "codex".to_owned(),
+        CliProgram {
+            program: "codex".to_owned(),
+            args: Vec::new(),
+        },
+    );
+    rig.ctx
+        .config
+        .machine
+        .get_mut("local")
+        .unwrap()
+        .pool
+        .insert(
+            "codex".to_owned(),
+            MachinePool {
+                mode: PoolMode::Cli,
+                slots: 2,
+            },
+        );
+    rig.dispatcher
+        .set_cli(fake.clone(), "local", &rig.ctx.config);
+    reserve(&rig, "T.1", "cli-codex-slot-1", &[]);
+    reserve(&rig, "T.2", "cli-codex-slot-2", &["effort:medium"]);
+    tick(&rig);
+
+    let begun = fake.begun();
+    assert_eq!(begun.len(), 2);
+    let efforts: BTreeMap<_, _> = begun
+        .iter()
+        .map(|(reservation, _, effort)| (reservation.ticket.as_str(), effort.as_deref()))
+        .collect();
+    assert_eq!(
+        efforts,
+        [("T.1", Some("high")), ("T.2", Some("medium"))].into()
+    );
+}
+
+#[test]
 fn the_extra_slot_takes_only_a_ticket_that_holds_master_back() {
     let rig = rig(&[]);
     let fake = cli(&rig, 2);

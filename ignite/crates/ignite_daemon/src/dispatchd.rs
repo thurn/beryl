@@ -215,9 +215,6 @@ struct Reserved {
     app: String,
 }
 
-/// The reasoning effort of a hand-off whose ticket has no `effort:` label.
-const DEFAULT_EFFORT: &str = "medium";
-
 /// Why an instruction was queued, which decides what its acknowledgement does.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 enum Purpose {

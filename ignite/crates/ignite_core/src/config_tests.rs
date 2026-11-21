@@ -197,6 +197,20 @@ fn a_model_id_comes_from_the_apps_table_or_is_the_tier_when_there_is_none() {
 }
 
 #[test]
+fn default_effort_is_configured_per_app() {
+    let text = format!("{DOCUMENT_EXAMPLES}\n[pool.default_effort]\ncodex = \"high\"\n");
+    let config = Config::parse("ignite.toml", &text).unwrap();
+    assert_eq!(config.pool.default_effort("codex"), "high");
+    assert_eq!(config.pool.default_effort("claude"), "medium");
+
+    let text = format!("{DOCUMENT_EXAMPLES}\n[pool.default_effort]\ncodex = \" \"\n");
+    assert_eq!(
+        Config::parse("ignite.toml", &text).unwrap_err().key,
+        "pool.default_effort.codex"
+    );
+}
+
+#[test]
 fn a_check_is_protected_by_its_own_name_or_its_family() {
     let rules = Rules {
         report_only: Vec::new(),
