@@ -140,15 +140,22 @@ fn a_card_put_into_a_hand_is_known_to_its_owner_alone() {
 }
 
 #[test]
-fn two_players_at_zero_life_lose_simultaneously_and_draw() {
+fn a_player_at_zero_life_loses_and_two_at_once_draw() {
     let t = table([LANDS, LANDS]);
-    let mut s = State::new(&t, 1, Profile::EXACT).unwrap();
-    begin(&t, &mut s);
-    s.board().set_life(Seat::P0, 0);
-    s.board().set_life(Seat::P1, 0);
-
-    assert!(crate::sba::check(&mut s, &t, &mut Sink::off()).unwrap());
-    assert_eq!(s.outcome(), Some(Outcome::Draw));
+    for (lives, outcome) in [
+        ([0, 20], Outcome::Win(Seat::P1)),
+        ([20, 0], Outcome::Win(Seat::P0)),
+        ([20, -3], Outcome::Win(Seat::P0)),
+        ([0, 0], Outcome::Draw),
+    ] {
+        let mut s = State::new(&t, 1, Profile::EXACT).unwrap();
+        begin(&t, &mut s);
+        for (seat, life) in Seat::BOTH.into_iter().zip(lives) {
+            s.board().set_life(seat, life);
+        }
+        assert!(crate::sba::check(&mut s, &t, &mut Sink::off()).unwrap());
+        assert_eq!(s.outcome(), Some(outcome));
+    }
 }
 
 /// The card behind a slot of a deck.

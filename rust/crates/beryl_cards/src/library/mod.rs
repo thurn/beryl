@@ -25,7 +25,6 @@ pub mod library;
 pub mod linked;
 pub mod mana;
 pub mod replacement;
-pub mod state_based;
 pub mod tokens;
 pub mod turn;
 pub mod zones;
@@ -202,7 +201,6 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
         names::DARK_DEPTHS,
         replacement::ENTERS_WITH_COUNTERS,
     ),
-    ("state_based", names::LIGHTNING_BOLT, state_based::ZERO_LIFE),
     (
         "tokens",
         names::ADELINE_RESPLENDENT_CATHAR,
