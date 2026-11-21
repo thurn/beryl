@@ -210,19 +210,23 @@ fn a_drawn_face_is_sent_again_from_its_scan_once_the_scan_downloads() {
     });
     let results = assets.prepare_match(test_faces(1), &[Format::Rgba8]);
     let count = assets.faces().unwrap().faces.len();
-    // Every face is drawn first, since no scan is cached, and then sent again, under the same
-    // face and layer, once the download queue has fetched its scan. The renderer holds such a
-    // face until no card is moving (`faces_that_arrive_during_play_wait_for_a_still_client` in
-    // beryl_render).
-    let drawn = receive(&results, count);
-    assert!(drawn.iter().all(|p| face_layer(p).1 == Source::Drawn));
-    let late = receive(&results, count);
-    assert!(late.iter().all(|p| face_layer(p).1 == Source::Encoded));
-    let mut first: Vec<_> = drawn.iter().map(|p| p.ready.clone()).collect();
-    let mut again: Vec<_> = late.iter().map(|p| p.ready.clone()).collect();
-    first.sort_by_key(|ready| format!("{ready:?}"));
-    again.sort_by_key(|ready| format!("{ready:?}"));
-    assert_eq!(first, again);
+    // A scan can replace one face while another worker is still drawing a fallback. Check
+    // the order for each face and require both uploads to use its board texture layer.
+    let prepared = receive(&results, 2 * count);
+    for index in 0..count {
+        let layer = u16::try_from(index).unwrap();
+        let ready = AssetReady::Face {
+            face: FaceId(layer),
+            size: FaceSize::Board,
+            layer,
+        };
+        let sources: Vec<_> = prepared
+            .iter()
+            .filter(|prepared| prepared.ready == ready)
+            .map(|prepared| face_layer(prepared).1)
+            .collect();
+        assert_eq!(sources, [Source::Drawn, Source::Encoded], "{ready:?}");
+    }
     assert_eq!(faces_built_on_this_thread(), 0);
     assert_eq!(frames_drawn_on_this_thread(), 0);
 }
