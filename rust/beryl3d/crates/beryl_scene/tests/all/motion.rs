@@ -8,7 +8,7 @@
 use beryl_protocol::protocol::{ObjectId, Side, ZoneName};
 use beryl_protocol::script::{Act, Curve as Named, Room, Step, StepTiming, Subject};
 use beryl_scene::beat::{Laid, Opens, beat};
-use beryl_scene::motion::{Full, SEGMENTS, Track, pose_at};
+use beryl_scene::motion::{Full, SEGMENTS, Track, named_curve, pose_at};
 use beryl_scene::pose::{Curve, Pose, Segment};
 use beryl_scene::testing::object;
 use beryl_scene::verbs::{Follows, Interval, StepTime};
@@ -71,14 +71,14 @@ fn halfway_through_its_time_a_segment_is_where_its_curve_says() {
     assert!(close(middle.position.x, 68.464_32), "{middle:?}");
     assert!(close(middle.opacity, 1.0 - 0.684_643_2), "{middle:?}");
     assert!(close(middle.turn, 0.684_643_2), "{middle:?}");
-    segments[0].curve = Curve::named(Named::EaseIn);
+    segments[0].curve = named_curve(Named::EaseIn);
     assert!(close(
         pose_at(&segments, 100 * MS).position.x,
         100.0 - 68.464_32
     ));
-    segments[0].curve = Curve::named(Named::Linear);
+    segments[0].curve = named_curve(Named::Linear);
     assert!(close(pose_at(&segments, 50 * MS).position.x, 25.0));
-    segments[0].curve = Curve::named(Named::EaseInOut);
+    segments[0].curve = named_curve(Named::EaseInOut);
     assert!(close(pose_at(&segments, 100 * MS).position.x, 50.0));
 }
 

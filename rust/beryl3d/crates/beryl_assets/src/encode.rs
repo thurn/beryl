@@ -4,13 +4,13 @@
 
 use std::fmt;
 
-use beryl_scene::input::FaceSize;
 use ctt::encoders::Encoder;
 use ctt::{
     AlphaMode, ColorSpace, Container, ConvertSettings, FormatDesc, ImageRef, PipelineOutput,
     Quality, SurfaceRef, TargetFormat, TextureKind,
 };
 use image::imageops::FilterType;
+use kit_base::atlas::FaceSize;
 
 /// The version of everything that decides a layer's bytes: the encoders and their settings, the
 /// scaling filter, the mipmap filter and the cache file's layout. Raise it whenever one of them

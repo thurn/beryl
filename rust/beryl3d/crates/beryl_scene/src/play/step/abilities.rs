@@ -6,9 +6,9 @@ use beryl_protocol::script::Subject;
 use super::Motion;
 use crate::motion::Track;
 use crate::play::record::Cause;
-use crate::pose::{Pose, Segment};
 use crate::table::{Group, Rest, ability_track};
 use crate::verbs::{self, Interval};
+use kit_base::pose::{Pose, Segment};
 
 impl Motion<'_> {
     /// Where the ability numbered `id` rests after a step that placed the groups `dirty` again:

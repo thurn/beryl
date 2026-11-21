@@ -14,12 +14,12 @@ use beryl_protocol::protocol::{ObjectView, PlayerView, ZoneName};
 use glam::{Affine3A, Vec2};
 
 use super::{Badges, On, Plate, em, panel};
-use crate::data::space::badges::{self as data, copy, counter, note};
-use crate::frame::FrameBuilder;
 use crate::table::{CARD_HEIGHT, CARD_WIDTH};
-use crate::text::fonts::Font;
-use crate::text::{Block, Glyphs, Text, TypeStyle};
-use crate::tokens::{badge, color};
+use kit_base::data::space::badges::{self as data, copy, counter, note};
+use kit_base::tokens::{badge, color};
+use kit_frame::frame::FrameBuilder;
+use kit_text::text::fonts::Font;
+use kit_text::text::{Block, Glyphs, Text, TypeStyle};
 
 /// The style a note or a chosen value is shaped in: the interface font's bold
 /// (`.card-note`'s `font`), at `note::POINTS`.
@@ -252,7 +252,7 @@ mod tests {
     use beryl_protocol::protocol::{ObjectId, ObjectView, Side};
 
     use super::*;
-    use crate::text::Text;
+    use kit_text::text::Text;
 
     fn permanent(note: Option<&str>, chosen: Option<&str>) -> ObjectView {
         ObjectView {

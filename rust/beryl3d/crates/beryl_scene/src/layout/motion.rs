@@ -16,9 +16,9 @@
 use glam::Vec2;
 
 use super::{Layer, Node};
-use crate::data::space::flat::transition::MS;
 use crate::element::Action;
-use crate::pose::Curve;
+use kit_base::data::space::flat::transition::MS;
+use kit_base::pose::Curve;
 
 /// A node's transition, from where and how opaque it was toward where its layout puts it and
 /// its style's opacity.

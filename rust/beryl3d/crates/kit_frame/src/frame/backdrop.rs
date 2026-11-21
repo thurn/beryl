@@ -9,7 +9,7 @@
 //! flat-layer elements and what covers them) are drawn sharp whenever they were pushed.
 
 use super::FrameBuilder;
-use crate::paint::Filter;
+use kit_base::paint::Filter;
 
 /// The blur and color filters drawn over `draws[..at]` of a finished frame.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -50,7 +50,7 @@ impl FrameBuilder<'_> {
         self.frame.backdrop = Some(Backdrop {
             at: 0,
             pushed: super::index(self.frame.draws.len()),
-            blur: crate::paint::blur_of(filters) * scale,
+            blur: kit_base::paint::blur_of(filters) * scale,
             color,
         });
     }

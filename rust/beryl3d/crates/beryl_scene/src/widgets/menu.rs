@@ -9,8 +9,8 @@
 use glam::Vec2;
 
 use crate::element::{Align, Anchor, Element, column, row, text};
-use crate::frame::Role;
-use crate::tokens::{color, shadow, size, type_style};
+use kit_base::tokens::{color, shadow, size, type_style};
+use kit_frame::frame::Role;
 
 /// The selected row of an open menu.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

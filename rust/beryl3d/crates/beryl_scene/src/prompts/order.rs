@@ -20,12 +20,12 @@ use glam::Vec2;
 use super::{Shown, Steps, prompt_bar};
 use crate::element::{Anchor, Element, Justify, Shown as Showing, row, text};
 use crate::faces::FaceList;
-use crate::frame::Role;
 use crate::hud::HudIn;
 use crate::input::{FaceSize, Rect, Size};
 use crate::table::{CARD_HEIGHT, CARD_WIDTH, TraySpace, tray_area};
-use crate::text::TypeStyle;
-use crate::tokens::{color, size, space, type_style};
+use kit_base::tokens::{color, size, space, type_style};
+use kit_frame::frame::Role;
+use kit_text::text::TypeStyle;
 
 /// The space between the row and the words under it, their type's size and weight, and the
 /// widest they spread, in stage pixels: `.stage-order`'s `gap` and `.stage-order-ends`' `font`

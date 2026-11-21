@@ -267,7 +267,7 @@ fn shift(compiled: &mut Compiled, end: u64) {
             follows: Follows::Start,
         })
     };
-    let segment_later = |segment: &crate::pose::Segment| segment.step.map_or(0, later_of);
+    let segment_later = |segment: &kit_base::pose::Segment| segment.step.map_or(0, later_of);
     for track in tracks
         .iter_mut()
         .chain(ability_tracks.iter_mut().map(|(_, track)| track))

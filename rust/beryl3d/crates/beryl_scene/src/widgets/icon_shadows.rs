@@ -18,7 +18,7 @@
 use super::IconId;
 use super::icons::{FULL_CONTROL, PASS_ON, PHASES, STEPS, STEPS_OUTLINED};
 use crate::element::{MOST_DROP_SHADOWS, Shadow};
-use crate::tokens::shadow;
+use kit_base::tokens::shadow;
 
 /// Every chain of drop shadows (`Style::drop_shadow`) an icon is drawn with, beside the icons
 /// drawn with it, each with the CSS rule it copies.

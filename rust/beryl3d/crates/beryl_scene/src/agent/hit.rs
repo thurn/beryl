@@ -10,8 +10,8 @@
 
 use glam::Vec2;
 
-use crate::frame::{Frame, Place, Resolved, Role, StateBits};
 use crate::input::{Rect, Size};
+use kit_frame::frame::{Frame, Place, Resolved, Role, StateBits};
 
 /// The index of the element a press at `point` (in logical points) reaches, if any.
 #[must_use]

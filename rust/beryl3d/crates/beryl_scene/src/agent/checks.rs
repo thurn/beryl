@@ -12,9 +12,9 @@ use super::hit::{
     painted_over, visible_bounds,
 };
 use super::tree::locator_of;
-use crate::data::audit;
-use crate::frame::{Draw, Frame, Missing, Place, REVEALED_FACE, Ring, Ringed, Role, StateBits};
 use crate::input::{Rect, Size};
+use kit_base::data::audit;
+use kit_frame::frame::{Draw, Frame, Missing, Place, REVEALED_FACE, Ring, Ringed, Role, StateBits};
 
 /// The most covering elements a "reachable" fault names.
 const MOST_COVERING: usize = 6;
@@ -595,7 +595,7 @@ pub fn clips(frame: &Frame, context: &Context) -> Vec<Fault> {
             context,
             format!(
                 "the frame asked for more than {} clip rectangles",
-                crate::frame::CLIPS - 1
+                kit_frame::frame::CLIPS - 1
             ),
             Vec::new(),
         ));
@@ -606,7 +606,7 @@ pub fn clips(frame: &Frame, context: &Context) -> Vec<Fault> {
             context,
             format!(
                 "the frame asked for more than {} gradients",
-                crate::frame::GRADIENTS
+                kit_frame::frame::GRADIENTS
             ),
             Vec::new(),
         ));

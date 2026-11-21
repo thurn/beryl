@@ -7,13 +7,13 @@
 //! proportions.
 //!
 //! Text is shaped and broken into lines with parley over the bundled fonts alone, as the client
-//! core lays out its text (`beryl_scene::text`). A run of rules text may hold mana symbols in
+//! core lays out its text (`kit_text::text`). A run of rules text may hold mana symbols in
 //! `{...}` notation, which are set in the Mana font on a colored disc.
 
 use std::ops::Range;
 
-use beryl_scene::input::FaceSize;
-use beryl_scene::text::fonts::{ALL, Font, register_all};
+use kit_base::atlas::FaceSize;
+use kit_text::text::fonts::{ALL, Font, register_all};
 use parley::fontique::{Blob, Collection, CollectionOptions, SourceCache};
 use parley::{
     FontContext, FontFamily, FontFamilyName, FontWeight, Layout, LayoutContext, LineHeight,

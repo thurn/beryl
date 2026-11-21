@@ -9,10 +9,10 @@ use std::f32::consts::TAU;
 
 use glam::{Quat, Vec2};
 
-use crate::data::space::pointer as data;
-use crate::motion::between;
-use crate::pose::{Curve, Pose};
 use crate::table::Camera;
+use kit_base::data::space::pointer as data;
+use kit_base::pose::between;
+use kit_base::pose::{Curve, Pose};
 
 /// Nanoseconds in a millisecond and in a second.
 const MILLISECOND: f32 = 1_000_000.0;

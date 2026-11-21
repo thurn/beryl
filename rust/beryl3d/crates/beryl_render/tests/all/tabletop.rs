@@ -3,11 +3,11 @@
 //! from it unseen.
 
 use beryl_render::Target;
-use beryl_scene::frame::{Band, Draw, Frame, FrameBuilder};
-use beryl_scene::input::Tier;
-use beryl_scene::table::{CARD_HEIGHT, CARD_WIDTH};
 use glam::camera::rh::{proj::directx, view::look_at_mat4};
 use glam::{Affine3A, Mat4, Quat, Vec2, Vec3};
+use kit_base::atlas::Tier;
+use kit_base::geometry::{CARD_HEIGHT, CARD_WIDTH};
+use kit_frame::frame::{Band, Draw, Frame, FrameBuilder};
 use serde_json::Value;
 
 use super::render::{BOTH, Picture, renderer};

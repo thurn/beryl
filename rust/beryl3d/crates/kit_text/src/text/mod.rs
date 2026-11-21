@@ -6,7 +6,7 @@
 //! feature, so no system font is ever found or used: a character no bundled font has is drawn
 //! as the font's missing-character glyph.
 
-pub use crate::typography::{TypeStyle, fonts};
+pub use kit_base::typography::{TypeStyle, fonts};
 pub mod glyphs;
 mod symbols;
 
@@ -21,9 +21,9 @@ use parley::{
     VerticalAlign,
 };
 
-use crate::geometry::Rect;
 use fonts::Font;
 pub use glyphs::{Glyphs, blurred as blurred_glyph_key, key as glyph_key};
+use kit_base::geometry::Rect;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 struct StyleKey {
@@ -303,7 +303,7 @@ impl Text {
 
     /// A parley editor that lays a text field's text out in `style`, as `block` lays out every
     /// other text: at a scale of 1 and with no rounding to whole pixels.
-    pub(crate) fn editor(&self, style: TypeStyle) -> PlainEditor<u16> {
+    pub fn editor(&self, style: TypeStyle) -> PlainEditor<u16> {
         let mut editor = PlainEditor::new(style.size);
         editor.set_quantize(false);
         let family = FontFamilyName::Named(self.families[style.font as usize].clone().into());
@@ -322,7 +322,7 @@ impl Text {
     }
 
     /// The font and layout contexts an editor from `editor` lays its text out with.
-    pub(crate) fn contexts(&mut self) -> (&mut FontContext, &mut LayoutContext<u16>) {
+    pub fn contexts(&mut self) -> (&mut FontContext, &mut LayoutContext<u16>) {
         (&mut self.fonts, &mut self.layouts)
     }
 
@@ -524,7 +524,7 @@ fn for_each_glyph(layout: &Layout<u16>, mut each: impl FnMut(u16, u16, f32, f32)
 
 /// The lines and glyphs of `layout`, already broken at `max_width`, every glyph in the look
 /// `base`: a text field's text as its editor laid it out, with no spans or mana symbols.
-pub(crate) fn plain_block(layout: &Layout<u16>, base: Run, max_width: Option<f32>) -> Block {
+pub fn plain_block(layout: &Layout<u16>, base: Run, max_width: Option<f32>) -> Block {
     let mut block = Block {
         max_width,
         width: 0.0,

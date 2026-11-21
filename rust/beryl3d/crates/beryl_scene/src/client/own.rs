@@ -15,9 +15,9 @@ use super::Client;
 use crate::hud::notices::NoticeFloats;
 use crate::light::Aim;
 use crate::play::PlacedLetGo;
-use crate::pose::Pose;
 use crate::prompts;
 use crate::table::{Held, TrayPoses};
+use kit_base::pose::Pose;
 
 /// What the prompt's own steps depend on besides the prompt, now and when `prompts::own` last
 /// ran (beside `Client::was`).

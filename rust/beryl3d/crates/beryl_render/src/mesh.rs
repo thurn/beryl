@@ -4,8 +4,8 @@
 //! index buffer, and the indices count from the start of the vertex buffer, so a draw call
 //! needs no base vertex (OpenGL ES 3.0 has none).
 
-use beryl_scene::frame::{Mesh, sprites};
-use beryl_scene::table::{CARD_HEIGHT, CARD_WIDTH};
+use kit_base::geometry::{CARD_HEIGHT, CARD_WIDTH};
+use kit_frame::frame::{Mesh, sprites};
 
 /// The radius of a card's rounded corners, in millimetres.
 pub const CARD_RADIUS: f32 = 3.0;

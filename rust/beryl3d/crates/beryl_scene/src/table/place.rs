@@ -27,8 +27,8 @@ use super::pile::{
 use super::rows::{NameIds, RowWindow, face_up};
 use super::stack::{OnStack, on_stack, place_stack, spells, stack_pose};
 use super::{Camera, Layout, lifted, phone};
-use crate::frame::Place;
-use crate::pose::Pose;
+use kit_base::pose::Pose;
+use kit_frame::frame::Place;
 
 /// Where one object rests.
 #[derive(Clone, Copy, Debug, PartialEq)]

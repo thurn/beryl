@@ -4,7 +4,7 @@
 //! change is the `cover` effect's, which the step's timing begins.
 
 use super::{StepIn, StepOut};
-use crate::pose::{Segment, Shape};
+use kit_base::pose::{Segment, Shape};
 
 pub const BUILT: bool = true;
 

@@ -4,8 +4,8 @@
 
 use super::Element;
 use super::paint::{Filter, Gradient};
-use crate::text::TypeStyle;
-use crate::tokens::type_style;
+use kit_base::tokens::type_style;
+use kit_text::text::TypeStyle;
 
 /// Which way an element lays out its children.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -82,7 +82,7 @@ pub enum Overflow {
     Scroll,
 }
 
-use crate::paint::{Border, Shadow};
+use kit_base::paint::{Border, Shadow};
 
 /// An element's layout and look, with CSS's names.
 #[derive(Clone, Debug, PartialEq)]

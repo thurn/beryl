@@ -10,16 +10,16 @@ use crate::inspect::Viewed;
 use beryl_protocol::protocol::{ObjectId, Side};
 use glam::Vec2;
 
-use crate::data::space::hud::phone::REVEALED_WIDTH;
-use crate::data::space::layout::phone::bands::OPPONENT_STRIP;
-use crate::data::space::revealed as data;
 use crate::element::{Align, Element, Shown, row};
-use crate::frame::Role;
 use crate::input::{FaceId, Size};
 use crate::table::phone::strip;
 use crate::table::{CARD_HEIGHT, CARD_WIDTH, Window};
-use crate::tokens::{color, size, type_style};
 use crate::widgets::{button, icons};
+use kit_base::data::space::hud::phone::REVEALED_WIDTH;
+use kit_base::data::space::layout::phone::bands::OPPONENT_STRIP;
+use kit_base::data::space::revealed as data;
+use kit_base::tokens::{color, size, type_style};
+use kit_frame::frame::Role;
 
 /// What the pile and its viewer are called: Arena's words, as the web's `REVEALED`.
 pub const REVEALED: &str = "Revealed Cards";
@@ -83,7 +83,7 @@ pub fn phone_pile() -> Element {
 #[must_use]
 pub fn phone_pile_corner(window: Window) -> Vec2 {
     let strip = strip(window, Side::Opponent);
-    let x = window.safe_area.left + crate::data::space::layout::phone::piles::opponent::X.z;
+    let x = window.safe_area.left + kit_base::data::space::layout::phone::piles::opponent::X.z;
     Vec2::new(x - REVEALED_WIDTH / 2.0, strip.top)
 }
 

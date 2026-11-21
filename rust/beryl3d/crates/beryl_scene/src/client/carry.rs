@@ -11,11 +11,11 @@ use glam::Vec2;
 
 use super::Client;
 use super::gesture::Gesture;
-use crate::data::space::pointer::DRAG_THRESHOLD_POINTS;
 use crate::element::floats;
 use crate::input::{Button, Pointer, PointerPhase};
 use crate::layout::FloatLook;
 use crate::prompts::order;
+use kit_base::data::space::pointer::DRAG_THRESHOLD_POINTS;
 
 /// An item of an order's row that the primary pointer went down on: which item, where the
 /// press began, and whether it has travelled the drag threshold and left the row.

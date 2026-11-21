@@ -2,9 +2,9 @@
 //! hand-built frames drawn in both tiers. The overhead camera shows one millimetre of the table
 //! per pixel of the 200 by 200 target.
 
-use beryl_scene::frame::{Band, Draw, sprites};
-use beryl_scene::input::Tier;
 use glam::{Affine3A, Quat, Vec2, Vec3};
+use kit_base::atlas::Tier;
+use kit_frame::frame::{Band, Draw, sprites};
 
 use super::enhanced::{both_tiers, enhanced, within};
 use super::render::{Picture, draw_in, overhead, rectangle};

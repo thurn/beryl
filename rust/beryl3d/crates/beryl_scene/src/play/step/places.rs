@@ -4,8 +4,8 @@ use beryl_protocol::protocol::ObjectId;
 use beryl_protocol::script::Subject;
 
 use super::Motion;
-use crate::pose::Pose;
 use crate::table::{Camera, Layout, Table};
+use kit_base::pose::Pose;
 
 /// Where things are as a script's steps so far have them, for a verb that needs more than its
 /// own subject's poses.

@@ -28,9 +28,9 @@ use beryl_protocol::protocol::ObjectId;
 use glam::{Quat, Vec2};
 
 use super::{CARD_HEIGHT, CARD_WIDTH, Camera};
-use crate::data::space::layout::desktop::tray as data;
 use crate::input::{Rect, Size};
-use crate::pose::Pose;
+use kit_base::data::space::layout::desktop::tray as data;
+use kit_base::pose::Pose;
 
 mod put_back;
 

@@ -24,14 +24,14 @@ use beryl_protocol::script::Subject;
 use glam::Vec2;
 
 use crate::art::orb;
-use crate::data::space::hud::incoming as badge;
 use crate::element::{Anchor, Element, Position, Shadow, Shown, TextAlign, holder, text};
 use crate::hud::HudIn;
 use crate::input::Rect;
 use crate::table::phone::strip;
 use crate::table::{DESKTOP, Window};
-use crate::text::TypeStyle;
-use crate::text::fonts::Font;
+use kit_base::data::space::hud::incoming as badge;
+use kit_text::text::TypeStyle;
+use kit_text::text::fonts::Font;
 
 use super::counts::{index, points};
 
@@ -100,7 +100,7 @@ fn orb(view: &PlayerView, side: Side, window: Window) -> Element {
     let scale = u8::from(window.phone());
     let units = orb::SCALES[usize::from(scale)];
     let [_, _, width, height] = orb::ART;
-    let mut element = Element::new(crate::frame::Role::Region)
+    let mut element = Element::new(kit_frame::frame::Role::Region)
         .name(orb_name(side))
         .width(width * units)
         .height(height * units)

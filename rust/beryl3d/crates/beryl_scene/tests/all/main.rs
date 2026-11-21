@@ -1,7 +1,7 @@
 //! The integration tests of `beryl_scene`, as one binary: each file under `tests/` used
 //! to be a binary of its own, and every one of them linked the crate and its dependencies again
 //! after each edit.
-//! `frame_allocation.rs`, `order.rs` and `play_allocation.rs` stay binaries of their own,
+//! `frame_allocation.rs` and `play_allocation.rs` stay binaries of their own,
 //! because each installs a counting global allocator, and a binary has only one. The tests'
 //! shared table and scripts, `common`, sit beside them.
 
@@ -53,7 +53,6 @@ mod screens;
 mod screens_phone;
 mod scroll;
 mod scroll_phone;
-mod serif;
 mod settings_sheet;
 mod shadows;
 mod sound;
@@ -61,7 +60,6 @@ mod table;
 mod table_phone;
 mod testing_screen;
 mod text_field;
-mod tokens;
 mod touch;
 mod under;
 mod verbs_count;

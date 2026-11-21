@@ -1,8 +1,8 @@
 //! The web's serif face, `--font-serif` (`"Times New Roman", Times, serif`): Times New Roman
 //! where the build found the Mac's copy, and Crimson Pro in its place elsewhere.
 
-use beryl_scene::text::fonts::{ALL, Font};
-use beryl_scene::text::{Text, TypeStyle};
+use kit_text::text::fonts::{ALL, Font};
+use kit_text::text::{Text, TypeStyle};
 
 /// The serif style at `weight`, 24 points on one line.
 fn serif(weight: u16) -> TypeStyle {

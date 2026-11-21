@@ -29,8 +29,8 @@ pub(crate) mod vanish;
 use beryl_protocol::script::Verb;
 
 pub use crate::play::step::{Places, StepIn, StepOut};
-use crate::pose::{Curve, Pose, Segment};
-pub use crate::pose::{Follows, Interval, StepTime};
+use kit_base::pose::{Curve, Pose, Segment};
+pub use kit_base::pose::{Follows, Interval, StepTime};
 
 /// The function that plays `verb`'s steps.
 #[must_use]

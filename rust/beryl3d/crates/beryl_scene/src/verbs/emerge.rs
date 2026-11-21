@@ -10,8 +10,8 @@ use beryl_protocol::script::{Act, Subject};
 use glam::Vec3;
 
 use super::{StepIn, StepOut};
-use crate::data::space;
-use crate::pose::{Pose, Segment};
+use kit_base::data::space;
+use kit_base::pose::{Pose, Segment};
 
 pub const BUILT: bool = true;
 

@@ -13,11 +13,11 @@ use beryl_protocol::ipc::SavedTable;
 
 use crate::element::{Align, Element, column, row, text};
 use crate::manual::commands::COMMANDS;
-use crate::text::TypeStyle;
-use crate::tokens::type_style::START_LABEL as LABEL;
-use crate::tokens::{color, space, type_style};
 use crate::widgets::screen::phone_action;
 use crate::widgets::{Fields, button, field, primary};
+use kit_base::tokens::type_style::START_LABEL as LABEL;
+use kit_base::tokens::{color, space, type_style};
+use kit_text::text::TypeStyle;
 
 /// The name of the host or join form's name field.
 pub const NAME: &str = "table name";

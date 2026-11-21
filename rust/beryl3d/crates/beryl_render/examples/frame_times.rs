@@ -27,7 +27,7 @@ use std::time::{Duration, Instant};
 
 use beryl_inspect::gate::{BOARDS, FRAME_NANOS, Playback, TARGET};
 use beryl_render::{Limits, Renderer, Target};
-use beryl_scene::input::Size;
+use kit_base::geometry::Size;
 use serde_json::{Value, json};
 
 /// One time's mean and worst over a run's frames, in microseconds.

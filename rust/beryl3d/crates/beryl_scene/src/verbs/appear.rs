@@ -1,7 +1,7 @@
 //! `appear`: the object comes to be at its place with no flight, fading in where it rests.
 
 use super::{StepIn, StepOut};
-use crate::pose::{Pose, Segment};
+use kit_base::pose::{Pose, Segment};
 
 pub const BUILT: bool = true;
 

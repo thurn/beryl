@@ -6,8 +6,8 @@
 use beryl_protocol::script::Subject;
 
 use super::FrameBuilder;
-use crate::paint::{Border, Filter, Gradient, Shadow};
-use crate::text::TypeStyle;
+use kit_base::paint::{Border, Filter, Gradient, Shadow};
+use kit_text::text::TypeStyle;
 
 /// How each flat-layer element of a frame was drawn, and its shadows.
 #[derive(Clone, Debug, Default, PartialEq)]

@@ -13,12 +13,12 @@ use beryl_protocol::protocol::{Combat, Kind, PlayerView, Side, Status, Step};
 use glam::Vec2;
 
 use super::players::orb_centre;
-use crate::data::space::hud::{BANNER, BANNER_GAP};
 use crate::element::{Align, Element, Justify, column, floats, text};
-use crate::frame::Role;
 use crate::layout::{FloatLook, Layer};
 use crate::table::Window;
-use crate::tokens::{color, gradient, ratio, shadow, size, type_style};
+use kit_base::data::space::hud::{BANNER, BANNER_GAP};
+use kit_base::tokens::{color, gradient, ratio, shadow, size, type_style};
+use kit_frame::frame::Role;
 
 /// The banner's title, the same for every detail.
 const TITLE: &str = "Combat";
@@ -142,7 +142,7 @@ fn banner(detail: usize) -> Element {
         .height(size::BANNER_HEIGHT)
         .align_items(Align::Center)
         .justify_content(Justify::Center)
-        .gap(crate::tokens::space::M)
+        .gap(kit_base::tokens::space::M)
         .background_image(vec![gradient::BANNER])
         // It takes no pointer, so the permanents under it stay at hand, as the web's
         // `.step-banner` has `pointer-events: none`.

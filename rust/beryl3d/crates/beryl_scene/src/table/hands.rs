@@ -5,11 +5,11 @@
 use beryl_protocol::protocol::{ObjectView, Side, ZoneName};
 use glam::{Quat, Vec2};
 
-use crate::pose::Pose;
+use kit_base::pose::Pose;
 
 use super::place::{Placement, Rest, turn};
 use super::{CARD_HEIGHT, CARD_WIDTH, Camera, HandData, RowWindow};
-use crate::frame::Place;
+use kit_frame::frame::Place;
 
 /// A hand, fanned along an edge of the screen and placed relative to the camera so that it
 /// keeps its size and place at any window shape. The middle of each card's inner edge (the

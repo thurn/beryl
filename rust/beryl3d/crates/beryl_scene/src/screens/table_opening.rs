@@ -20,9 +20,9 @@ use crate::element::{Action, Align, Anchor, Element, column, row};
 use crate::manual::TablePress;
 use crate::manual::opening::{OpeningPress, prompt};
 use crate::table::Window;
-use crate::tokens::{color, size, space};
 use crate::widgets::screen::phone_action;
 use crate::widgets::{button, primary};
+use kit_base::tokens::{color, size, space};
 
 /// The press on a card of the opening hand: it goes on the bottom, or comes back.
 fn bottom(slot: ObjectId) -> Action {
@@ -150,7 +150,7 @@ fn dock(buttons: Vec<Element>, window: Window) -> Element {
         .border((color::METAL, size::BORDER))
         .radius(size::PANEL_RADIUS)
         .children(buttons);
-    let inset = crate::data::space::flat::table::EDGE;
+    let inset = kit_base::data::space::flat::table::EDGE;
     let corner = Vec2::new(window.width - inset, window.height - inset);
     dock.anchor = Some(Anchor::Point(corner, Vec2::ONE));
     dock
@@ -159,7 +159,7 @@ fn dock(buttons: Vec<Element>, window: Window) -> Element {
 /// The buttons stacked across the foot of the phone's safe area, as the web's phone dock
 /// stands them.
 fn phone_dock(buttons: Vec<Element>, window: Window) -> Element {
-    use crate::data::space::flat::phone::{ACTION_GAP, GUTTER};
+    use kit_base::data::space::flat::phone::{ACTION_GAP, GUTTER};
     let safe = window.safe_area;
     let width = window.size.width - safe.left - safe.right - 2.0 * GUTTER;
     let mut dock = column()

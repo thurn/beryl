@@ -16,11 +16,11 @@ use crate::agent::checks::{KeptArrow, arrows_held, keep_arrows, lines_hold};
 use crate::agent::steps::{self, Found, Sample, card_of, sample, step_nanoseconds};
 use crate::agent::tree::locator_of;
 use crate::agent::{self, Fault, Subject, hit::bounds};
-use crate::data::audit;
-use crate::frame::Frame;
 use crate::input::Rect;
 use crate::play::record::{Plant, Planted, ScriptRecord};
 use crate::table::Camera;
+use kit_base::data::audit;
+use kit_frame::frame::Frame;
 
 /// One step of a script, as `Page::steps` lists it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -330,7 +330,7 @@ impl Page {
     /// Every sound the recording plays with no action taken, in the order the frames list
     /// them, each with the time of the frame that listed it, in nanoseconds since the
     /// recording's start.
-    pub fn sounds(&self) -> Vec<(u64, crate::frame::Sound)> {
+    pub fn sounds(&self) -> Vec<(u64, kit_frame::frame::Sound)> {
         self.played().0.heard
     }
 

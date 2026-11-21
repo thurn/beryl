@@ -17,10 +17,10 @@ use glam::Vec2;
 use super::TablePress;
 use super::commands;
 use crate::element::{Align, Anchor, Element, Overflow, column, holder, row, text};
-use crate::frame::Role;
 use crate::table::Window;
-use crate::tokens::{color, size, space, type_style};
 use crate::widgets::{button, icon_button, icons};
+use kit_base::tokens::{color, size, space, type_style};
+use kit_frame::frame::Role;
 
 /// The panel's name and its heading's words.
 pub const TITLE: &str = "Log";
@@ -60,7 +60,7 @@ pub fn log(
             .name("lines")
             .gap(space::S)
             .overflow(Overflow::Scroll)
-            .max_height(crate::data::space::flat::table::log::HEIGHT)
+            .max_height(kit_base::data::space::flat::table::log::HEIGHT)
             .children(
                 lines
                     .iter()
@@ -83,24 +83,24 @@ pub fn log(
         // The desktop's button is the game screen's log button, at its place in the window's
         // top left, and the open log stands under it where the game's log does
         // (`hud::log::log`), as the web's `TableLog` is the game's `LogPanel` folded.
-        use crate::data::space::hud::{LOG_BUTTON_TOP, LOG_LEFT, LOG_TOP};
+        use kit_base::data::space::hud::{LOG_BUTTON_TOP, LOG_LEFT, LOG_TOP};
         let mut button = toggle(icon_button(icons::LOG, name));
         button.anchor = Some(Anchor::Point(
             Vec2::new(LOG_LEFT, LOG_BUTTON_TOP),
             Vec2::ZERO,
         ));
         let open = open.then(|| {
-            let mut shown = panel(crate::data::space::flat::table::log::WIDTH).child(lines());
+            let mut shown = panel(kit_base::data::space::flat::table::log::WIDTH).child(lines());
             shown.anchor = Some(Anchor::Point(Vec2::new(LOG_LEFT, LOG_TOP), Vec2::ZERO));
             shown
         });
         return Some(holder().name("table log").child(button).children(open));
     };
-    let gutter = crate::data::space::flat::phone::GUTTER;
+    let gutter = kit_base::data::space::flat::phone::GUTTER;
     let safe = window.safe_area;
     let right = window.size.width - safe.right - gutter;
     let corner = Anchor::Point(Vec2::new(right, safe.top + gutter), Vec2::X);
-    let width = crate::data::space::flat::table::log::WIDTH
+    let width = kit_base::data::space::flat::table::log::WIDTH
         .min(window.size.width - safe.left - safe.right - 2.0 * gutter);
     let heading = toggle(icon_button(icons::LOG, name));
     if !open {

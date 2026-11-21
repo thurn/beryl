@@ -14,13 +14,11 @@ from typing import NamedTuple, TypedDict, cast
 from .. import paths
 
 SCENE = "beryl_scene"
+SCENE_CRATES: frozenset[str] = frozenset({SCENE, "kit_base", "kit_frame", "kit_text"})
 RENDER = "beryl_render"
 INSPECT = "beryl_inspect"
-# What beryl_scene's source may not name: it is a pure function of its inputs, so no clock,
-# thread, file, socket, lock, global state or iteration-order-dependent map, and no GPU or
-# window crate (docs/beryl-3d.md, 'Determinism'). The modules of `std` it may not reach, however
-# the path is written (`std::time::Instant`, `use std::{fs, time}` or a group over several
-# lines).
+# Scene and toolkit code must be deterministic and independent of the host. These `std`
+# paths are banned even when they appear in grouped imports (docs/beryl-3d.md, "Determinism").
 SCENE_MODULES: tuple[str, ...] = (
     "time",
     "thread",
@@ -52,9 +50,7 @@ SCENE_NAMES: tuple[str, ...] = (
 ATOMIC: re.Pattern[str] = re.compile(r"(?<![\w:])Atomic[A-Z]\w*")
 # A path into `std`, or a braced group of them: `std::time`, `std::{fs, collections::X}`.
 STD_PATH: re.Pattern[str] = re.compile(r"\bstd\s*::\s*(\{|[a-z_]+)")
-# The crates beryl_scene may depend on. Each was checked to read no clock, start no thread and
-# touch no file inside `Client::handle` and `Client::frame`; a new one is added here once it
-# has been checked the same way, and the frame gate runs it twice to hold its counts equal.
+# Dependencies used by the scene or toolkit must preserve frame determinism.
 SCENE_DEPENDENCIES: frozenset[str] = frozenset(
     {
         "arrayvec",
@@ -65,6 +61,9 @@ SCENE_DEPENDENCIES: frozenset[str] = frozenset(
         "glam",
         "taffy",
         "parley",
+        "kit_base",
+        "kit_frame",
+        "kit_text",
         "serde",
         "serde_json",
     }
@@ -123,13 +122,13 @@ def scene_purity(root: Path) -> list[str]:
     for crate in sorted(p for p in base.iterdir() if p.is_dir()):
         found.extend(recorder_use(root, crate))
         found.extend(engine_use(root, crate))
-        if crate.name == SCENE:
+        if crate.name in SCENE_CRATES:
             found.extend(scene_dependencies(root, crate))
         for path in sorted((crate / "src").rglob("*.rs")):
             rel = path.relative_to(root).as_posix()
-            if crate.name == SCENE:
+            if crate.name in SCENE_CRATES:
                 found.extend(
-                    f"{rel}:{number}: beryl_scene names {name}; the scene is pure data, with "
+                    f"{rel}:{number}: {crate.name} names {name}; the scene is pure data, with "
                     "no clock, thread, file, socket, lock, global state, unordered map or GPU"
                     for number, name in scene_names(path)
                 )
@@ -205,13 +204,13 @@ def scene_names(path: Path) -> list[tuple[int, str]]:
 
 
 def scene_dependencies(root: Path, crate: Path) -> list[str]:
-    """A line for each crate beryl_scene's manifest depends on outside `SCENE_DEPENDENCIES`."""
+    """A line for each crate a scene manifest depends on outside `SCENE_DEPENDENCIES`."""
     manifest = crate / "Cargo.toml"
     if not manifest.is_file():
         return []
     named = tomllib.loads(manifest.read_text())
     return [
-        f"{manifest.relative_to(root).as_posix()}: beryl_scene depends on {name}, which "
+        f"{manifest.relative_to(root).as_posix()}: {crate.name} depends on {name}, which "
         "SCENE_DEPENDENCIES in tools/src/beryl_tools/beryl3d/purity.py does not list; add it "
         "there once it is known to read no clock, start no thread and touch no file"
         for name in sorted(named.get("dependencies", {}))
@@ -305,7 +304,7 @@ def data_names(root: Path) -> list[str]:
 
 # The folders of beryl_scene's `src` whose code is built from design tokens: a screen, prompt,
 # widget, heads-up display, inspector or manual element takes its sizes from the generated
-# `tokens` module (rust/beryl3d/crates/beryl_scene/src/tokens.rs), never from a number of its own
+# `tokens` module (rust/beryl3d/crates/kit_base/src/tokens.rs), never from a number of its own
 # (docs/beryl-3d.md, "Elements").
 TOKEN_FOLDERS: tuple[str, ...] = (
     "screens",

@@ -4,7 +4,7 @@
 //! (`Layer::navigate`). A row scrolled out of the list's box takes no presses.
 
 use crate::element::{Element, Overflow, column};
-use crate::frame::Role;
+use kit_frame::frame::Role;
 
 /// A list named `name` showing `rows` top to bottom. Each row that has a press, or takes the
 /// focus, is one the keys move through.

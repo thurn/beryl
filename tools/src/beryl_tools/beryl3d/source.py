@@ -20,7 +20,9 @@ from . import paths, vm
 
 # What the builds read, relative to the checkout.
 SOURCES: tuple[str, ...] = (
+    # The workspace includes the toolkit crates and their bundled fonts.
     "rust",
+    # Includes the spatial data, audit limits and design tokens that kit_base generates.
     "data",
     "docs/sample-decks",
     "ui/src/generated",

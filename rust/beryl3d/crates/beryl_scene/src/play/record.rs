@@ -10,9 +10,9 @@ use glam::Vec3;
 
 use crate::effects::EffectRun;
 use crate::motion::pose_at;
-use crate::pose::{Pose, Segment};
 use crate::sound::Cue;
 use crate::verbs::{Follows, StepTime};
+use kit_base::pose::{Pose, Segment};
 
 /// One step of a script, as it was laid out. Times are on the script's own clock, in
 /// nanoseconds.

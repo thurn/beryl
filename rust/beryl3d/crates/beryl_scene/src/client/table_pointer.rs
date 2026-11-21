@@ -9,15 +9,15 @@ use glam::Vec2;
 
 use super::{Client, Platform};
 use crate::agent::hit;
-use crate::data::space::pointer::DRAG_THRESHOLD_POINTS;
+use kit_base::data::space::pointer::DRAG_THRESHOLD_POINTS;
 
-use crate::frame::{Place, Role};
 use crate::input::{Button, Pointer, PointerPhase};
 use crate::manual::arrows::{self, Pick};
 use crate::manual::drop::{self, Area, End};
 use crate::manual::selection;
 use crate::manual::{Target, target_at, viewers};
 use crate::screens::Screen;
+use kit_frame::frame::{Place, Role};
 
 impl Client {
     /// Whether the manual table is shown with nothing over it that takes the pointer: the table

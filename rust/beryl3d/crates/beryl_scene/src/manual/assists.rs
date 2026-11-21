@@ -28,10 +28,10 @@ use crate::element::{Align, Anchor, Element, column, row, text};
 use crate::input::Size;
 use crate::inspect::viewer::object_box;
 use crate::table::Window;
-use crate::tokens::{color, size, space, type_style};
 use crate::widgets::screen::overlay;
 use crate::widgets::start_panel::{checkbox, small};
 use crate::widgets::{button, primary};
+use kit_base::tokens::{color, size, space, type_style};
 
 /// The proposal panel's name.
 pub const PROPOSALS: &str = "Proposals";
@@ -63,15 +63,15 @@ pub fn proposals(
     if !phone {
         panel = panel
             .children(proposals.iter().map(|each| proposal(each, false)))
-            .width(crate::data::space::flat::table::log::WIDTH);
-        let left = crate::data::space::flat::table::EDGE;
+            .width(kit_base::data::space::flat::table::log::WIDTH);
+        let left = kit_base::data::space::flat::table::EDGE;
         panel.anchor = Some(Anchor::Point(
             Vec2::new(left, window.size.height / 2.0),
             Vec2::new(0.0, 0.5),
         ));
         return Some(panel);
     }
-    let gutter = crate::data::space::flat::phone::GUTTER;
+    let gutter = kit_base::data::space::flat::phone::GUTTER;
     let safe = window.safe_area;
     let right = window.size.width - safe.right - gutter;
     let top = safe.top + gutter + size::ICON_BUTTON + space::S;
@@ -188,7 +188,7 @@ pub fn labels(labels: &[LabelView], view: &PlayerView, phone: bool) -> Vec<Eleme
             // middle, and one wholly above it the lower half of the row above. The desktop's
             // cards are large enough for the row to stand centred on the card.
             tags.anchor = Some(if phone {
-                let overlap = crate::data::space::flat::table::labels::PHONE_OVERLAP;
+                let overlap = kit_base::data::space::flat::table::labels::PHONE_OVERLAP;
                 Anchor::Above(subject, -overlap)
             } else {
                 Anchor::Object(subject, Vec2::splat(0.5))
@@ -201,7 +201,7 @@ pub fn labels(labels: &[LabelView], view: &PlayerView, phone: bool) -> Vec<Eleme
 /// `element`, at least as tall as a touch needs on a `phone` (the "phone sizes" check).
 fn touch(element: Element, phone: bool) -> Element {
     if phone {
-        element.min_height(crate::data::audit::PHONE_TARGET_POINTS)
+        element.min_height(kit_base::data::audit::PHONE_TARGET_POINTS)
     } else {
         element
     }

@@ -4,8 +4,8 @@ use beryl_protocol::script::Subject;
 use glam::Vec2;
 
 use super::{ABILITY_IDS, Table};
-use crate::frame::{ElementId, FrameBuilder};
 use crate::layout::Spot;
+use kit_frame::frame::{ElementId, FrameBuilder};
 
 /// Where `subject` stands on the window as the table drew it into `builder` this frame: a
 /// card's or an ability's box, wherever its flight has taken it, or a player's life total's

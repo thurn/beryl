@@ -20,13 +20,13 @@ use beryl_protocol::protocol::{ManaPool, PlayerState, Side};
 use glam::Vec2;
 
 use super::TablePress;
-use crate::data::space::hud::phone as data;
 use crate::element::{Align, Anchor, Display, Element, Justify, Track, column, holder, row, text};
 use crate::hud::counts::{index, points};
 use crate::input::Size;
 use crate::table::{DESKTOP, Window, phone_bands};
-use crate::tokens::{color, size, space, type_style};
 use crate::widgets::button;
+use kit_base::data::space::hud::phone as data;
+use kit_base::tokens::{color, size, space, type_style};
 
 /// The mana symbols, in the order the web's `POOL_SYMBOLS` shows them, with each one's amount.
 fn mana(pool: ManaPool) -> [(&'static str, u32); 6] {
@@ -91,7 +91,7 @@ fn mana_button(player: &PlayerState, side: Side, adjust: bool, at: Vec2) -> Opti
         Side::Opponent => "Opponent's",
     };
     let mut element = column();
-    element.role = crate::frame::Role::Button;
+    element.role = kit_frame::frame::Role::Button;
     let mut element = element
         .name(&format!("{whose} mana: {total}"))
         .width(data::MANA_WIDTH)
@@ -132,7 +132,7 @@ pub fn sheet(view: &PlayerView, window: Window, side: Side) -> Option<Element> {
                 .min_width(data::BUTTON_MIN_WIDTH)
                 .on_press(TablePress::ManaSheet(None)),
         );
-    let mut grid = Element::new(crate::frame::Role::Region)
+    let mut grid = Element::new(kit_frame::frame::Role::Region)
         .gap(space::S)
         .grid_template_columns(vec![Track::Fraction(1.0); 3]);
     grid.style.display = Display::Grid;
@@ -252,9 +252,9 @@ fn entries(
 /// One counter, named `name`, showing `words`: a button if it takes clicks.
 fn counter(name: &str, words: &str, button: bool) -> Element {
     let role = if button {
-        crate::frame::Role::Button
+        kit_frame::frame::Role::Button
     } else {
-        crate::frame::Role::Region
+        kit_frame::frame::Role::Region
     };
     Element::new(role)
         .name(name)
@@ -270,9 +270,9 @@ fn counter(name: &str, words: &str, button: bool) -> Element {
 /// it, a disc of `type_style::POOL`'s size with its amount after it in `POOL_COUNT`.
 fn desktop_counter(name: &str, words: &str, mana: bool, button: bool) -> Element {
     let role = if button {
-        crate::frame::Role::Button
+        kit_frame::frame::Role::Button
     } else {
-        crate::frame::Role::Region
+        kit_frame::frame::Role::Region
     };
     let mut shown = text(words).passes(true);
     if mana {

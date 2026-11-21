@@ -7,10 +7,10 @@ use glam::Vec2;
 use super::{Client, Input, Platform, Press};
 use crate::command::Request;
 
-use crate::frame::ElementId;
 use crate::input::{Key, KeyCode, Pointer, TextChange};
 use crate::layout::Edit;
 use crate::widgets::FieldState;
+use kit_frame::frame::ElementId;
 
 /// How soon after a press a second one in the same place is a double click, in nanoseconds:
 /// half a second, the usual default on the desktop platforms.

@@ -7,3 +7,9 @@ publish = false
 
 [lints]
 workspace = true
+
+[dependencies]
+glam.workspace = true
+
+[build-dependencies]
+serde_json.workspace = true

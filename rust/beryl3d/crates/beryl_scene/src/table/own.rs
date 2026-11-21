@@ -26,9 +26,9 @@ use beryl_protocol::protocol::{Combat, ObjectView, Side};
 use glam::{Affine3A, Quat, Vec2, Vec3};
 
 use super::{CARD_HEIGHT, CARD_WIDTH, Look};
-use crate::data::space::own;
-use crate::frame::{Band, Draw, FrameBuilder, Sprite, StateBits, sprites};
-use crate::tokens::color;
+use kit_base::data::space::own;
+use kit_base::tokens::color;
+use kit_frame::frame::{Band, Draw, FrameBuilder, Sprite, StateBits, sprites};
 
 /// How a creature fights, as its record says.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

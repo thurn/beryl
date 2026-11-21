@@ -3,10 +3,10 @@
 
 use std::collections::BTreeMap;
 
-use crate::frame::Sprite;
 use crate::input::IconCell;
+use kit_frame::frame::Sprite;
 
-pub use crate::atlas::IconId;
+pub use kit_base::atlas::IconId;
 
 pub const GEAR: IconId = IconId(0);
 pub const BUG: IconId = IconId(1);

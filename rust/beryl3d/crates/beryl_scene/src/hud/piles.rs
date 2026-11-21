@@ -13,12 +13,12 @@
 use beryl_protocol::protocol::{ObjectId, ObjectView, PlayerState, PlayerView, Side, ZoneName};
 use glam::Vec2;
 
-use crate::data::space::flat::TOOLTIP_GAP;
 use crate::element::{Element, floats};
 use crate::layout::{FloatLook, Layer};
 use crate::play::Show;
 use crate::table::{PileShown, Table, host_slot, pile_name};
 use crate::widgets::tip_label;
+use kit_base::data::space::flat::TOOLTIP_GAP;
 
 /// The floats that show each pile's count, and the count each shows now.
 #[derive(Debug, Default)]

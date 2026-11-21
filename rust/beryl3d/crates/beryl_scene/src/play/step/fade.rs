@@ -4,8 +4,8 @@
 
 use super::super::record::SegmentRecord;
 use crate::motion::Track;
-use crate::pose::{Fade, Pose, Segment, Shape};
 use crate::verbs::{self, Interval};
+use kit_base::pose::{Fade, Pose, Segment, Shape};
 
 /// How long a card fading in where it rests takes to go to its new place, in nanoseconds: one
 /// frame at 60 Hz. The web stage moves it between one frame and the next; a slide that short

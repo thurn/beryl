@@ -25,11 +25,11 @@ use glam::{Affine3A, Mat3, Quat, Vec2, Vec3};
 use super::place::{Placement, Rest, turn};
 use super::scene::Table;
 use super::{CARD_HEIGHT, CARD_WIDTH, Camera, LAYER, Layout};
-use crate::frame::{
+use kit_base::pose::Pose;
+use kit_frame::frame::{
     Band, Draw, ElementId, ElementLook, FrameBuilder, NameRef, Place, REVEALED_FACE, Resolved,
     Role, StateBits,
 };
-use crate::pose::Pose;
 
 /// The element id of the first pile, the viewer's library: past every card's, every ability's
 /// and every face's in the Revealed Cards pile. The six piles count up from it in the order of
@@ -416,8 +416,8 @@ impl Table {
                     state: StateBits(0),
                     face: None,
                     copies: 1,
-                    really: crate::frame::NameRef::default(),
-                    note: crate::frame::NameRef::default(),
+                    really: kit_frame::frame::NameRef::default(),
+                    note: kit_frame::frame::NameRef::default(),
                 },
             );
             builder.look(

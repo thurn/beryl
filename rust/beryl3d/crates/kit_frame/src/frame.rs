@@ -24,9 +24,9 @@ pub use paint::{GRADIENTS, GradientEntry, MaskEntry, PaintTable, Paints};
 pub use rings::{LIFTED, Lifted, RINGS, Ring, Ringed};
 pub use undrawn::{Missing, Undrawn};
 
-use crate::atlas::Tier;
-use crate::geometry::Rect;
-use crate::paint::Shadow;
+use kit_base::atlas::Tier;
+use kit_base::geometry::Rect;
+use kit_base::paint::Shadow;
 
 /// A card's element id is its object's slot in the view, and the face of that card in the
 /// Revealed Cards pile's is `REVEALED_FACE` more. A flat-layer element's is given when it first

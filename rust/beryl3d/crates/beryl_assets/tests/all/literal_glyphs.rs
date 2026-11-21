@@ -4,7 +4,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use beryl_scene::text::fonts::ALL;
+use kit_text::text::fonts::ALL;
 use swash::FontRef;
 
 fn sources(dir: &Path, out: &mut Vec<PathBuf>) {

@@ -9,12 +9,12 @@ use beryl_protocol::script::Subject;
 use glam::{Affine3A, Vec3};
 
 use super::{Effect, EffectRun};
-use crate::data::space::card::{HEIGHT as CARD_HEIGHT, WIDTH as CARD_WIDTH};
-use crate::data::space::effects::{blanch, cover, dim, dissolve, settle};
-use crate::data::space::light;
-use crate::frame::{Band, Draw, EffectLook, FrameBuilder, sprites};
-use crate::pose::Pose;
-use crate::tokens::color;
+use kit_base::data::space::card::{HEIGHT as CARD_HEIGHT, WIDTH as CARD_WIDTH};
+use kit_base::data::space::effects::{blanch, cover, dim, dissolve, settle};
+use kit_base::data::space::light;
+use kit_base::pose::Pose;
+use kit_base::tokens::color;
+use kit_frame::frame::{Band, Draw, EffectLook, FrameBuilder, sprites};
 
 /// How one card is drawn in a frame: made from its pose, face and state, and then changed in
 /// turn by the effects on it, the marks on it and the pointer.

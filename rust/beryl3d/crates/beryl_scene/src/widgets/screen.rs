@@ -4,7 +4,7 @@ use glam::Vec2;
 
 use crate::element::{Align, Anchor, Element, Overflow, TextAlign, column, row, text};
 use crate::input::{Insets, Size};
-use crate::tokens::{color, size, space, type_style};
+use kit_base::tokens::{color, size, space, type_style};
 
 /// The dimmed table, `.overlay-backdrop`: the whole window in the backdrop's color, which the
 /// pointer goes through. The opening and game over draw it under what they show.
@@ -38,7 +38,7 @@ pub(crate) fn whole_window(window: Size, screen: Element) -> Element {
 /// nothing scrolls under the status bar or the home indicator.
 #[must_use]
 pub(crate) fn phone_screen(name: &str, window: Size, safe: Insets, content: Element) -> Element {
-    use crate::data::space::flat::phone::{COLUMN, GUTTER};
+    use kit_base::data::space::flat::phone::{COLUMN, GUTTER};
     let across = window.width - safe.left - safe.right - 2.0 * GUTTER;
     let extra = ((across - COLUMN) / 2.0).max(0.0);
     let mut content = content
@@ -66,7 +66,7 @@ pub(crate) fn phone_screen(name: &str, window: Size, safe: Insets, content: Elem
 /// larger type, as the web's phone dock draws its buttons (`.phone-opening .dock .button`).
 #[must_use]
 pub(crate) fn phone_action(mut button: Element) -> Element {
-    use crate::data::space::flat::phone::{ACTION_HEIGHT, ACTION_TEXT};
+    use kit_base::data::space::flat::phone::{ACTION_HEIGHT, ACTION_TEXT};
     button.style.height = Some(ACTION_HEIGHT);
     button.style.text.size = ACTION_TEXT;
     button.style.min_width = None;

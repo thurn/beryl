@@ -5,7 +5,7 @@
 
 use beryl_inspect::gate::{BOARDS, Playback, rank};
 use beryl_render::{Limits, Renderer, Target};
-use beryl_scene::input::Size;
+use kit_base::geometry::Size;
 
 /// The largest window the downlevel limits allow a target for: their 2D textures are at most
 /// 2,048 pixels on a side, so the gates' own 2880 by 1800 target cannot be made.

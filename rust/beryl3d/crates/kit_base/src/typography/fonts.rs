@@ -91,7 +91,7 @@ impl Font {
 static CRIMSON_PRO: &[u8] = include_bytes!("../../fonts/CrimsonPro.ttf");
 
 /// Every embedded font file: each [`Font`]'s regular file in the order of [`Font`], then the
-/// serif face's bold, italic and bold italic. A [`GlyphKey`](crate::input::GlyphKey) names its
+/// serif face's bold, italic and bold italic. A [`GlyphKey`](crate::atlas::GlyphKey) names its
 /// file by its index here.
 pub static ALL: [FontFile; 8] = [
     FontFile {

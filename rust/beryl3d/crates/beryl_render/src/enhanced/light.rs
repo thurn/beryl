@@ -9,9 +9,9 @@
 //! color, `ambient + key * up·key_direction + fill * up·fill_direction == 1`. The fill reaches a
 //! flat card as well as the key does, so it is part of the rule.
 
-use beryl_scene::data::space::enhanced::light;
-use beryl_scene::frame::Frame;
 use glam::{Vec2, Vec3, Vec4, Vec4Swizzles};
+use kit_base::data::space::enhanced::light;
+use kit_frame::frame::Frame;
 
 use super::shadow::key_direction;
 

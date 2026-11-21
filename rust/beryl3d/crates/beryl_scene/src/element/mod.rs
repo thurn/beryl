@@ -5,8 +5,8 @@
 mod action;
 mod keys;
 
-pub use crate::paint;
 pub use action::Action;
+pub use kit_base::paint;
 mod style;
 
 use beryl_protocol::script::Subject;
@@ -19,10 +19,10 @@ pub use paint::{
 };
 pub use style::{Align, Direction, Display, Justify, Overflow, Position, Style, TextAlign, Track};
 
-use crate::frame::Role;
 use crate::input::{FaceId, FaceSize};
 use crate::widgets::icons::LayeredIcon;
 use crate::widgets::{FieldState, IconId};
+use kit_frame::frame::Role;
 
 /// Where an element stands when it is placed at a point of the window rather than in its
 /// parent's layout. The second vector says which point of the element's box lies there: (0, 0)
@@ -72,7 +72,7 @@ pub enum Shown {
     Layers(LayeredIcon),
 }
 
-pub use crate::text::Span;
+pub use kit_text::text::Span;
 
 /// A node of the flat layer's tree.
 #[derive(Clone, Debug, PartialEq)]

@@ -12,10 +12,10 @@ use beryl_protocol::prompt::{ClickReply, ClickRequest};
 use beryl_protocol::protocol::{Answer, Side, TableAction};
 use beryl_protocol::{DecisionId, SessionError, SessionId, StartRequest, StopsSetting};
 
-use crate::frame::ElementId;
 use crate::input::{Rect, Size};
 use crate::settings::Settings;
 use crate::sound::Music;
+use kit_frame::frame::ElementId;
 
 /// One variant for each function of `beryl_session::Sessions` that a player's action calls,
 /// carrying that function's own arguments. The host sends it to the session thread and passes

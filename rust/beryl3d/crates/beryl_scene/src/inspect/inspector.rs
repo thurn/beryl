@@ -19,14 +19,14 @@ use std::fmt::Write as _;
 use beryl_protocol::protocol::{ObjectId, ObjectView, PaidCost, RefusalView, StackItem, ZoneName};
 use glam::Vec2;
 
-use crate::data::space::layout::desktop::inspector as data;
 use crate::element::{Element, Shown, column, row, text};
 use crate::faces::FaceList;
-use crate::frame::Role;
 use crate::hud::HudIn;
 use crate::input::{FaceId, FaceSize, Rect};
 use crate::table::{CARD_HEIGHT, CARD_WIDTH, Window};
-use crate::tokens::{color, size, space, type_style};
+use kit_base::data::space::layout::desktop::inspector as data;
+use kit_base::tokens::{color, size, space, type_style};
+use kit_frame::frame::Role;
 
 /// The card the pointer is over, which the inspector shows, and what decides where it stands.
 #[derive(Clone, Debug, PartialEq)]

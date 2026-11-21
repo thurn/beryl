@@ -6,7 +6,7 @@
 
 use std::ops::Range;
 
-use crate::tokens::mana;
+use kit_base::tokens::mana;
 
 /// The character parley lays out an inline box at.
 pub const OBJECT: char = '\u{fffc}';

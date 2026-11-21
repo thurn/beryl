@@ -37,9 +37,9 @@ use beryl_protocol::protocol::{ObjectId, Side, ZoneName};
 use glam::Vec2;
 
 use crate::agent::hit;
-use crate::frame::{Frame, Place, Role};
 use bindings::Bindings;
 use commands::AppliesTo;
+use kit_frame::frame::{Frame, Place, Role};
 use tokens::TokenChoice;
 
 /// What the client knows beyond the table's view that decides which commands it offers and

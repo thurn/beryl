@@ -18,10 +18,10 @@ use super::commands;
 use super::menus::{self, Act};
 use super::{Context, TablePress, Target};
 use crate::element::{Align, Anchor, Element, Overflow, column, row, text};
-use crate::frame::Role;
 use crate::input::Size;
-use crate::tokens::{color, size, space, type_style};
 use crate::widgets::{Fields, field};
+use kit_base::tokens::{color, size, space, type_style};
+use kit_frame::frame::Role;
 
 /// The command list's field, by its name, which is also its placeholder.
 pub const FIELD: &str = "Search commands";
@@ -262,12 +262,12 @@ pub fn panel(palette: &Palette, fields: &Fields, window: Size) -> Element {
             .on_press(TablePress::CancelCapture)
     });
     let notice = (palette.notice.as_deref()).map(|words| text(words).color(color::TEXT_DIM));
-    let metrics = crate::data::space::flat::table::palette::WIDTH;
+    let metrics = kit_base::data::space::flat::table::palette::WIDTH;
     let mut list = column()
         .name("Commands")
         .gap(size::MENU_ROW_GAP)
         .overflow(Overflow::Scroll)
-        .max_height(crate::data::space::flat::table::palette::HEIGHT)
+        .max_height(kit_base::data::space::flat::table::palette::HEIGHT)
         .children(results);
     list.role = Role::List;
     let hints = row().name("hints").gap(space::L).children(
@@ -290,7 +290,7 @@ pub fn panel(palette: &Palette, fields: &Fields, window: Size) -> Element {
         .children(capture)
         .children(notice)
         .child(hints);
-    let top = crate::data::space::flat::table::palette::TOP;
+    let top = kit_base::data::space::flat::table::palette::TOP;
     panel.anchor = Some(Anchor::Point(
         Vec2::new(window.width / 2.0, top),
         Vec2::new(0.5, 0.0),

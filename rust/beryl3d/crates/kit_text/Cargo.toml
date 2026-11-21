@@ -10,3 +10,4 @@ workspace = true
 
 [dependencies]
 kit_base.workspace = true
+parley.workspace = true

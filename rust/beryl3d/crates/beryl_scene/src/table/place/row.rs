@@ -9,7 +9,6 @@ use super::{
     side_index,
 };
 use crate::agent::hit;
-use crate::frame::Place;
 use crate::table::rows::{
     Beneath, Laid, NameIds, RowRules, SameName, lay_row, least_strip, row_length,
 };
@@ -17,6 +16,7 @@ use crate::table::{
     CARD_HEIGHT, CARD_WIDTH, Camera, FittedRow, Layout, RowArea, row_area, web_fit,
 };
 use glam::{Quat, Vec3};
+use kit_frame::frame::Place;
 
 /// The limits of a row for one layout and camera, independent of its cards and scroll offset.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -92,8 +92,8 @@ impl Zooms {
     /// crowds and scrolls, since a land at a zoom of 0.3 is about 28 points wide, too narrow to
     /// leave the reachable check's 24-point square inside its slanted edges.
     fn of_fits(fits: [[f32; 3]; 2]) -> Self {
-        use crate::data::space::layout::desktop::LEAST_BACK_ZOOM;
-        use crate::data::space::layout::desktop::web::{BACK_ROW_PULL, ZOOM_LEAST};
+        use kit_base::data::space::layout::desktop::LEAST_BACK_ZOOM;
+        use kit_base::data::space::layout::desktop::web::{BACK_ROW_PULL, ZOOM_LEAST};
         let zoom = fits
             .iter()
             .fold(1.0_f32, |zoom, &[creatures, lands, others]| {

@@ -10,14 +10,14 @@ use beryl_protocol::protocol::Status;
 
 use super::{Screen, ScreenIn, Sheet};
 use crate::element::{Align, Border, Element, Justify, Position, column, row, text};
-use crate::frame::Role;
-use crate::text::TypeStyle;
-use crate::tokens::{color, ratio, size, space, type_style};
 use crate::widgets::screen::{phone_action, phone_screen, whole_window};
 use crate::widgets::start_panel::{
     PANEL_GAP, PANEL_PADDING, PANEL_WIDTH, checkbox, panel_look, small,
 };
 use crate::widgets::{self, FieldState, button, field, icon_button, list, primary, tooltip};
+use kit_base::tokens::{color, ratio, size, space, type_style};
+use kit_frame::frame::Role;
+use kit_text::text::TypeStyle;
 
 /// The name of the seed's text field.
 pub const SEED: &str = "seed";
@@ -260,7 +260,7 @@ fn with_keys(screen: Element, input: &ScreenIn, going_on: bool) -> Element {
 /// title, as on the web's phone. When the window is too short for even one opponent's row (the
 /// system keyboard is up), the whole column scrolls instead, so every action stays in reach.
 fn start_phone(input: &ScreenIn) -> Element {
-    use crate::data::space::flat::phone::start as metrics;
+    use kit_base::data::space::flat::phone::start as metrics;
     let form = input.start;
     let Chosen {
         going_on,
@@ -268,7 +268,7 @@ fn start_phone(input: &ScreenIn) -> Element {
         seed_ok,
         startable,
     } = Chosen::of(input);
-    let target = crate::data::audit::PHONE_TARGET_POINTS;
+    let target = kit_base::data::audit::PHONE_TARGET_POINTS;
     let sound = icon_button(widgets::icons::SPEAKER, "Sound")
         .width(target)
         .height(target)
@@ -403,7 +403,7 @@ fn corner() -> Element {
 /// buttons (`.start-agent`): a dot, the agent's title, a note if it cheats, and what it does
 /// under the title. The chosen row is tinted gold.
 fn agent_row(agent: &AgentView, at: u16, chosen: bool, phone: bool) -> Element {
-    use crate::data::space::flat::phone::start as metrics;
+    use kit_base::data::space::flat::phone::start as metrics;
     // The phone's rows are taller, with a larger dot and smaller type (`.phone-start-screen
     // .start-agent`), so each row is a touch target of its own.
     let radio = if phone { metrics::RADIO } else { RADIO };

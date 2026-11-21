@@ -9,7 +9,7 @@ use crate::runs::Pass;
 
 /// The depth buffer's format.
 pub const DEPTH: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
-/// The size of one draw record, `beryl_scene::frame::Draw`.
+/// The size of one draw record, `kit_frame::frame::Draw`.
 pub const RECORD: u64 = 80;
 
 const MESH_ATTRIBUTES: [wgpu::VertexAttribute; 4] = wgpu::vertex_attr_array![

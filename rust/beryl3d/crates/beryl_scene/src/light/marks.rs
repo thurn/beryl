@@ -22,16 +22,16 @@ use glam::{Affine3A, Quat, Vec2, Vec3};
 
 use super::{Lit, MarkSpan, Open, Span};
 use crate::art::orb;
-use crate::data::space::light;
 use crate::element::Shadow;
-use crate::frame::{
-    Band, Draw, ElementId, FrameBuilder, Ring, Ringed, StateBits, box_shadow_reach, rows, sprites,
-};
 use crate::layout::shape_radius;
 use crate::play::Scene;
-use crate::pose::{Curve, Pose};
 use crate::table::{ABILITY_IDS, CARD_HEIGHT, CARD_WIDTH, Look};
-use crate::tokens::color;
+use kit_base::data::space::light;
+use kit_base::pose::Pose;
+use kit_base::tokens::color;
+use kit_frame::frame::{
+    Band, Draw, ElementId, FrameBuilder, Ring, Ringed, StateBits, box_shadow_reach, rows, sprites,
+};
 
 /// How far through its coming and going an open mark is at `now`, from 0 (not seen) to 1
 /// (whole). It comes up over the interval it began over and goes over the one it ended over.
@@ -47,7 +47,7 @@ fn shown(open: &Open, now: u64) -> f32 {
         } else {
             #[expect(clippy::cast_precision_loss, reason = "a fade's share of its time")]
             let share = (now - from) as f32 / (to - from) as f32;
-            Curve::named(Named::EaseOut).ease(share)
+            crate::motion::named_curve(Named::EaseOut).ease(share)
         }
     };
     let up = through(open.begins.from, open.begins.to);

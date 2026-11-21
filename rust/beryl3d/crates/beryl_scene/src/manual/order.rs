@@ -16,9 +16,9 @@ use super::commands::seat_of;
 use crate::element::{Element, row};
 use crate::input::Size;
 use crate::inspect::viewer::object_box;
-use crate::tokens::size;
 use crate::widgets::screen::overlay;
 use crate::widgets::{button, primary};
+use kit_base::tokens::size;
 
 /// The tray's title.
 pub const TITLE: &str = "Order Cards";

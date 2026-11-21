@@ -7,7 +7,7 @@ use glam::Vec2;
 
 use super::{Layer, Node};
 use crate::element::Overflow;
-use crate::frame::ElementId;
+use kit_frame::frame::ElementId;
 
 impl Layer {
     /// The innermost element at `point` that scrolls and has content past its box, leaving out

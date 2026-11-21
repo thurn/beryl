@@ -10,9 +10,9 @@
 use beryl_protocol::protocol::Side;
 use beryl_protocol::script::Notice;
 
-use crate::data::space::notices;
-use crate::tokens::{ratio, size};
 use crate::verbs::Interval;
+use kit_base::data::space::notices;
+use kit_base::tokens::{ratio, size};
 
 /// A notice shown over `over`, on the script's clock. `passes` says whether the table goes on
 /// playing under it. `step` is the number of the step that wrote it.

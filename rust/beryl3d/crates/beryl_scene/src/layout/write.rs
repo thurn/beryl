@@ -13,13 +13,15 @@ use super::panel::{Chain, look_of, mask_of, panel, write_box, write_mask};
 use super::shadows::write_icon_shadows;
 use super::{Layer, Node, text_top};
 use crate::element::{Display, Element, Overflow, Shown, TextAlign};
-use crate::frame::text::{BlockLook, faded, write_block};
-use crate::frame::{Band, Draw, FrameBuilder, Missing, NameRef, Place, Resolved, Role, StateBits};
-use crate::geometry::{CARD_HEIGHT, CARD_WIDTH, plane::ScreenPlane, zoom_rect};
 use crate::input::{FaceId, FaceSize, Rect};
-use crate::text;
-use crate::tokens::color;
 use crate::widgets::icons::{LayeredIcon, cell_width};
+use kit_base::geometry::{CARD_HEIGHT, CARD_WIDTH, plane::ScreenPlane, zoom_rect};
+use kit_base::tokens::color;
+use kit_frame::frame::text::{BlockLook, faded, write_block};
+use kit_frame::frame::{
+    Band, Draw, FrameBuilder, Missing, NameRef, Place, Resolved, Role, StateBits,
+};
+use kit_text::text;
 
 /// Looks up texture layers for faces shown in the flat layer.
 pub struct FaceLayers<'a> {
@@ -224,8 +226,8 @@ impl Layer {
                 state,
                 face: None,
                 copies: 1,
-                really: crate::frame::NameRef::default(),
-                note: crate::frame::NameRef::default(),
+                really: kit_frame::frame::NameRef::default(),
+                note: kit_frame::frame::NameRef::default(),
             },
         );
         let mask = mask_of(node);

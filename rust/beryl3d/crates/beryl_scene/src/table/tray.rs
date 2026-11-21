@@ -7,10 +7,10 @@ use beryl_protocol::protocol::{ObjectId, PlayerView};
 use super::scene::SceneObject;
 use super::tray_layout::{Held, TrayPoses, TraySpace, tray_poses};
 use super::{Camera, Placement, Rest, Table};
-use crate::frame::{Band, Draw, FrameBuilder, OBJECTS};
 use crate::input::FaceSize;
-use crate::motion::between;
-use crate::pose::{Curve, Pose};
+use kit_base::pose::between;
+use kit_base::pose::{Curve, Pose};
+use kit_frame::frame::{Band, Draw, FrameBuilder, OBJECTS};
 
 impl Placement {
     /// Gives each card `held` names its place in the tray instead of its zone's, laid out in
@@ -146,7 +146,12 @@ impl Table {
     /// The table takes no press either while a card the tray let go still waits where it was
     /// held up for its own step (`waiting`, from `handed_waiting`): it stands over the table as
     /// it did in the tray, and nothing under it could be reached.
-    pub(super) fn pressable(&self, slot: usize, place: crate::frame::Place, waiting: bool) -> bool {
+    pub(super) fn pressable(
+        &self,
+        slot: usize,
+        place: kit_frame::frame::Place,
+        waiting: bool,
+    ) -> bool {
         match self.held {
             _ if self.covered() => false,
             // The hand held below the window lies under the opening, whose overlay takes the
@@ -426,10 +431,10 @@ impl Table {
 }
 
 /// Whether `place` is the viewer's hand.
-fn is_your_hand(place: crate::frame::Place) -> bool {
+fn is_your_hand(place: kit_frame::frame::Place) -> bool {
     matches!(
         place,
-        crate::frame::Place::Card {
+        kit_frame::frame::Place::Card {
             zone: beryl_protocol::protocol::ZoneName::Hand,
             side: beryl_protocol::protocol::Side::You,
             ..

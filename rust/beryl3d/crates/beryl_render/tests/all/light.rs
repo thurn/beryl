@@ -9,11 +9,11 @@
 //! card for the sheen's highlight to move along the face as the card tilts.
 
 use beryl_render::{BACK_LAYER, Limits};
-use beryl_scene::data::space::shadow;
-use beryl_scene::frame::{Band, Draw};
-use beryl_scene::input::{FaceSize, Tier};
 use glam::camera::rh::{proj::directx, view::look_at_mat4};
 use glam::{Affine3A, Mat4, Quat, Vec2, Vec3};
+use kit_base::atlas::{FaceSize, Tier};
+use kit_base::data::space::shadow;
+use kit_frame::frame::{Band, Draw};
 
 use super::render::{Picture, draw_in, rectangle, renderer};
 

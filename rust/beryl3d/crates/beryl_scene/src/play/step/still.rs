@@ -3,8 +3,8 @@
 
 use super::super::record::Cause;
 use super::Motion;
-use crate::pose::{Pose, Segment};
 use crate::verbs::{self, Interval};
+use kit_base::pose::{Pose, Segment};
 
 impl Motion<'_> {
     /// The instant change at the start of the `number`th step's `own` time that carries the

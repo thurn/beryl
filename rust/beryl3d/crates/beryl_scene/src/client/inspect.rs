@@ -12,11 +12,11 @@ use beryl_protocol::protocol::{ObjectId, Side, ZoneName};
 
 use super::Client;
 use crate::element::floats;
-use crate::frame::{ElementId, Place, Role, StateBits};
 use crate::input::Rect;
 use crate::inspect::inspector::{self, Inspected};
 use crate::layout::FloatLook;
 use crate::screens::{Screen, ScreenIn};
+use kit_frame::frame::{ElementId, Place, Role, StateBits};
 
 impl Client {
     /// Whether a script plays faster while many updates wait to play (`Show::set_catch_up`).

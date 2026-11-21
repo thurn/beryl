@@ -26,8 +26,10 @@
 
 use glam::Vec2;
 
-use crate::data::space::pointer::touch::{DOUBLE_MS, PICKUP_MS, SLOP_POINTS, TAP_MS, TOGETHER_MS};
-use crate::data::space::pointer::{DRAG_THRESHOLD_POINTS, LONG_PRESS_MS};
+use kit_base::data::space::pointer::touch::{
+    DOUBLE_MS, PICKUP_MS, SLOP_POINTS, TAP_MS, TOGETHER_MS,
+};
+use kit_base::data::space::pointer::{DRAG_THRESHOLD_POINTS, LONG_PRESS_MS};
 
 /// Nanoseconds in a millisecond, the unit of `Client::frame`'s clock.
 const MILLISECOND: u64 = 1_000_000;

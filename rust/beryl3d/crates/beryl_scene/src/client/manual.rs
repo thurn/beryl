@@ -70,8 +70,8 @@ impl std::ops::DerefMut for Manual {
 impl Manual {
     /// The refusal sound, once for a refusal since the last frame, as the web's
     /// `shakeRefusal` plays it.
-    pub(super) fn take_refusal(&mut self) -> Option<crate::frame::Sound> {
-        std::mem::take(&mut self.refused).then(|| crate::frame::Sound {
+    pub(super) fn take_refusal(&mut self) -> Option<kit_frame::frame::Sound> {
+        std::mem::take(&mut self.refused).then(|| kit_frame::frame::Sound {
             id: crate::sound::id("no"),
             theirs: false,
         })

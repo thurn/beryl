@@ -9,9 +9,9 @@
 use beryl_protocol::script::Room;
 
 use super::{Interval, StepIn, StepOut};
-use crate::data::space;
-use crate::pose::{Pose, Segment};
 use crate::table::CARD_WIDTH;
+use kit_base::data::space;
+use kit_base::pose::{Pose, Segment};
 
 pub const BUILT: bool = true;
 

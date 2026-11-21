@@ -9,12 +9,12 @@ use glam::Vec2;
 
 use super::{Shown, Steps, prompt_bar};
 use crate::element::{Align, Anchor, Element, Justify, column};
-use crate::frame::Role;
 use crate::hud::HudIn;
 use crate::input::Rect;
 use crate::table::{TraySpace, phone_bands};
-use crate::tokens::{color, size, type_style};
 use crate::widgets::list;
+use kit_base::tokens::{color, size, type_style};
+use kit_frame::frame::Role;
 
 /// What the flat layer shows for `prompt`: the shade over the table, then the prompt bar, then
 /// the entries over the shade. The shade comes first so that the bar is drawn over it, and it

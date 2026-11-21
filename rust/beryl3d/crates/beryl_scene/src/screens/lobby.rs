@@ -16,19 +16,19 @@ use beryl_protocol::ipc::decks::SavedDeck;
 use crate::element::{
     Align, Border, Display, Element, Justify, Overflow, Position, Track, column, row, text,
 };
-use crate::frame::Role;
 use crate::manual::commands::{COMMANDS, Scope};
 use crate::manual::lobby::{
     ASSISTS, DECK_NAME, DECKLIST, DeckPanel, Lobby, STARTING_HAND_SIZE, STARTING_LIFE,
     asked_settings, unreadable,
 };
 use crate::table::Window;
-use crate::text::TypeStyle;
-use crate::tokens::type_style::{START_LABEL as LABEL, START_TITLE as TITLE};
-use crate::tokens::{color, size, space, type_style};
 use crate::widgets::screen::{phone_action, phone_screen, whole_window};
 use crate::widgets::start_panel::{PANEL_PADDING, check_square, checkbox, panel_look, small};
 use crate::widgets::{FieldState, Fields, button, field, primary};
+use kit_base::tokens::type_style::{START_LABEL as LABEL, START_TITLE as TITLE};
+use kit_base::tokens::{color, size, space, type_style};
+use kit_frame::frame::Role;
+use kit_text::text::TypeStyle;
 
 /// The manual lobby's state and text fields for the current window.
 pub(super) struct LobbyIn<'a> {
@@ -97,7 +97,7 @@ pub(super) fn lobby(input: &LobbyIn) -> Element {
 fn lobby_phone(input: &LobbyIn) -> Element {
     let content = column()
         .name("lobby column")
-        .gap(crate::data::space::flat::phone::start::GAP);
+        .gap(kit_base::data::space::flat::phone::start::GAP);
     let content = sections(content, input, Fit::Phone);
     shortcuts(
         phone_screen("lobby", input.window.size, input.window.safe_area, content),
@@ -144,7 +144,7 @@ impl Fit {
     fn least(self, element: Element) -> Element {
         match self {
             Self::Desktop => element,
-            Self::Phone => element.min_height(crate::data::audit::PHONE_TARGET_POINTS),
+            Self::Phone => element.min_height(kit_base::data::audit::PHONE_TARGET_POINTS),
         }
     }
 }

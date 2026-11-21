@@ -2,9 +2,9 @@
 
 use super::super::record::Cause;
 use super::Motion;
-use crate::pose::{Pose, Segment};
 use crate::table::Rest;
 use crate::verbs;
+use kit_base::pose::{Pose, Segment};
 
 /// Whether a card that rested at `before` and rests at `after` goes from a place in view to one
 /// a row has scrolled out of view (`Motion::hide_on_arrival`).

@@ -9,8 +9,8 @@ use glam::Vec2;
 use super::TablePress;
 use crate::element::{Align, Anchor, Element, column, row, text};
 use crate::input::Size;
-use crate::tokens::{color, size, space, type_style};
 use crate::widgets::{button, primary};
+use kit_base::tokens::{color, size, space, type_style};
 
 /// The question, in the middle of a window of `window`'s size.
 #[must_use]

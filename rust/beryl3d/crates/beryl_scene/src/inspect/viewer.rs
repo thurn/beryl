@@ -13,18 +13,18 @@ use beryl_protocol::script::Subject;
 use glam::Vec2;
 
 use super::revealed::{REVEALED, RevealedFace};
-use crate::data::space::flat::gallery as metrics;
 use crate::element::{
     Align, Anchor, Element, Overflow, Shown, TextAlign, Track, column, row, text,
 };
 use crate::faces::{CARD_BACK, FaceList};
-use crate::frame::Role;
 use crate::hud::HudIn;
 use crate::hud::piles::pile_cards;
 use crate::input::{FaceId, FaceSize, Size};
 use crate::table::{CARD_HEIGHT, CARD_WIDTH, pile_name};
-use crate::tokens::{color, size, space, type_style};
 use crate::widgets::{icon_button, icons};
+use kit_base::data::space::flat::gallery as metrics;
+use kit_base::tokens::{color, size, space, type_style};
+use kit_frame::frame::Role;
 
 /// The viewer the game screen shows, if one is open (`HudIn::viewing`): the cards of a pile,
 /// the top one first, or the faces of the Revealed Cards pile, in a grid that scrolls past two

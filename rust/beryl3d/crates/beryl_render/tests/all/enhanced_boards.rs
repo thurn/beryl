@@ -4,7 +4,7 @@
 
 use beryl_inspect::gate::{BOARDS, Playback, TARGET, rank};
 use beryl_render::{Limits, Renderer, Target};
-use beryl_scene::input::Tier;
+use kit_base::atlas::Tier;
 
 #[test]
 fn every_gated_board_draws_in_enhanced_on_a_full_device() {

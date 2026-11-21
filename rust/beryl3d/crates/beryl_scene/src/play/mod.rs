@@ -66,18 +66,18 @@ use self::compile::{Compiled, bit, compile};
 use self::hand_order::HandOrder;
 use self::playing::{Playing, Waiting, timings_of};
 use self::record::{Plant, ScriptRecord};
-use crate::data::space::catch_up;
 use crate::effects::{self, EffectRun};
 use crate::faces::Faces;
-use crate::frame::FrameBuilder;
 use crate::hud::counts::Counts;
 use crate::light::{self, Lit};
 use crate::notice::Announced;
 use crate::pointer::Pointer;
-use crate::pose::Pose;
 use crate::table::badges::Badges;
 use crate::table::{CARD_HEIGHT, CARD_WIDTH, Dress, Table, ability_track};
-use crate::text::{Glyphs, Text};
+use kit_base::data::space::catch_up;
+use kit_base::pose::Pose;
+use kit_frame::frame::FrameBuilder;
+use kit_text::text::{Glyphs, Text};
 
 /// How many spans, streaks and effects the show holds before holding more allocates.
 const LIGHTS: usize = 256;

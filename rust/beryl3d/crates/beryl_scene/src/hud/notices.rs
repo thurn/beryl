@@ -23,7 +23,7 @@ use crate::input::Size;
 use crate::layout::{FloatLook, Layer};
 use crate::notice::{Announced, NoticeRun, Place};
 use crate::table::Layout;
-use crate::tokens::{color, ratio, space, type_style};
+use kit_base::tokens::{color, ratio, space, type_style};
 
 /// Every float a notice is shown in, with the place that shows there.
 const FLOATS: [(FloatId, Place); 4] = [

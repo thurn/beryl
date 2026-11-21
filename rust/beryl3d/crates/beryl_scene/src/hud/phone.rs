@@ -15,14 +15,14 @@ use crate::hud::GamePress;
 use beryl_protocol::protocol::{PlayerView, Side, Step};
 use glam::Vec2;
 
-use crate::data::space::hud::phone as data;
 use crate::element::{Align, Anchor, Element, Justify, Shown, column, row, text};
-use crate::frame::Role;
 use crate::hud::HudIn;
 use crate::input::Rect;
 use crate::table::PhoneBands;
-use crate::tokens::{color, shadow, size, space, type_style};
 use crate::widgets::{icon_button, icons};
+use kit_base::data::space::hud::phone as data;
+use kit_base::tokens::{color, shadow, size, space, type_style};
+use kit_frame::frame::Role;
 
 use super::log;
 

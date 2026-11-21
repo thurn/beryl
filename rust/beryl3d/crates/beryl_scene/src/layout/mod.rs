@@ -42,11 +42,11 @@ pub use tip::TIP_PREFIX;
 use float::{Float, Prepared};
 
 use crate::element::{self, Action, Element};
-use crate::frame::{ElementId, Role};
-use crate::geometry::Window;
 use crate::input::{Rect, Size};
-use crate::text::{Block, Glyphs, Text, TypeStyle};
 use crate::widgets::icons::Icons;
+use kit_base::geometry::Window;
+use kit_frame::frame::{ElementId, Role};
+use kit_text::text::{Block, Glyphs, Text, TypeStyle};
 
 /// Where the desktop layout anchors a screen: its bottom right corner this far in from the
 /// safe area's, where the web interface's action dock stands (`.dock` in
@@ -714,7 +714,7 @@ fn has_panel(role: Role, top: bool) -> bool {
 #[cfg(test)]
 mod tests {
     use super::FIRST_ID;
-    use crate::frame::{ABILITY_IDS, LAYER_ELEMENTS};
+    use kit_frame::frame::{ABILITY_IDS, LAYER_ELEMENTS};
 
     #[test]
     fn no_flat_layer_id_reaches_the_abilities_ids() {

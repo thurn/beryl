@@ -2,7 +2,7 @@
 
 use beryl_assets::light::{BORDER, light_page};
 use beryl_assets::packer::PAGE_SIZE;
-use beryl_scene::frame::{Sprite, sprites};
+use kit_frame::frame::{Sprite, sprites};
 
 const ALL: [Sprite; 16] = [
     sprites::DISC,

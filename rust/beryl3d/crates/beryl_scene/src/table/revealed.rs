@@ -11,11 +11,11 @@ use glam::{Quat, Vec2};
 use super::look::Look;
 use super::scene::{Table, face_of};
 use super::{CARD_HEIGHT, CARD_WIDTH};
-use crate::data::space::layout::phone;
-use crate::data::space::revealed;
 use crate::faces::Faces;
-use crate::frame::{ElementId, FrameBuilder, Place, REVEALED_FACE, Role, StateBits};
-use crate::pose::{Curve, Interval, Segment, Shape};
+use kit_base::data::space::layout::phone;
+use kit_base::data::space::revealed;
+use kit_base::pose::{Curve, Interval, Segment, Shape};
+use kit_frame::frame::{ElementId, FrameBuilder, Place, REVEALED_FACE, Role, StateBits};
 
 impl Table {
     /// Keeps `object`, the record of a card held up to be read, for the Revealed Cards pile to

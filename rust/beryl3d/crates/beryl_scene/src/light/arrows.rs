@@ -21,14 +21,14 @@ use glam::{Vec2, Vec3};
 use super::lines::{End, along, cubic, way_of};
 use super::marks;
 use super::{Lit, Open, Span};
-use crate::data::space::light;
-use crate::data::space::light::glow;
-pub use crate::frame::ARROW_IDS;
-use crate::frame::sprites;
-use crate::frame::{Band, Draw, ElementId, FrameBuilder, Place, Resolved, Role, StateBits};
 use crate::play::{Reach, Scene};
-use crate::tokens::color;
 use crate::verbs::Interval;
+use kit_base::data::space::light;
+use kit_base::data::space::light::glow;
+use kit_base::tokens::color;
+pub use kit_frame::frame::ARROW_IDS;
+use kit_frame::frame::sprites;
+use kit_frame::frame::{Band, Draw, ElementId, FrameBuilder, Place, Resolved, Role, StateBits};
 
 /// How many pieces an arrow's ribbon is cut into, each a quad of its body and halo and a quad of
 /// its core. The cuts lie closer together where its width changes faster, so that no piece is
@@ -153,7 +153,7 @@ impl Drawn {
                 id: ElementId(self.id),
                 parent: u32::MAX,
                 role: Role::Arrow,
-                name: crate::frame::NameRef::default(),
+                name: kit_frame::frame::NameRef::default(),
                 place: Place::Layer,
                 corners: points,
                 depth: camera.depth(to.pose.position),
@@ -163,8 +163,8 @@ impl Drawn {
                 state: StateBits(if self.moving { StateBits::MOVING } else { 0 }),
                 face: None,
                 copies: 1,
-                really: crate::frame::NameRef::default(),
-                note: crate::frame::NameRef::default(),
+                really: kit_frame::frame::NameRef::default(),
+                note: kit_frame::frame::NameRef::default(),
             },
         );
         let points_per_millimetre = camera.points_per_millimetre(to.pose.position);

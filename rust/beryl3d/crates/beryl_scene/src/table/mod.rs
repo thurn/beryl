@@ -52,9 +52,9 @@ pub use tray_layout::{
 };
 pub use web_fit::{FittedPiles, FittedRow, FittedRows};
 
-use crate::data::space;
-use crate::frame::Place;
-use crate::tokens::type_style;
+use kit_base::data::space;
+use kit_base::tokens::type_style;
+use kit_frame::frame::Place;
 
 /// Half the line height of a life total in logical points.
 pub(crate) const HALF_LIFE: f32 = type_style::TITLE.size * type_style::TITLE.line_height / 2.0;
@@ -63,7 +63,7 @@ pub(crate) const HALF_LIFE: f32 = type_style::TITLE.size * type_style::TITLE.lin
 /// `--orb: calc(1px / 1.045)` (`.table .life-orb`, `ui/src/screens/styles/table.css`).
 pub const ORB_DESKTOP_SCALE: f32 = 1.0 / 1.045;
 
-pub use crate::geometry::{CARD_HEIGHT, CARD_WIDTH, Window};
+pub use kit_base::geometry::{CARD_HEIGHT, CARD_WIDTH, Window};
 /// The height between two cards lying one on the other, in a pile or an overlapped row.
 pub const LAYER: f32 = space::card::LAYER;
 

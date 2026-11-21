@@ -25,19 +25,19 @@ use beryl_protocol::protocol::{Side, ZoneName};
 use glam::{Mat3, Quat, Vec2};
 
 use crate::agent::hit;
-use crate::data::space::pointer as data;
-use crate::frame::{ElementId, Frame, Lifted, Place, Role, StateBits};
 use crate::input::{self, PointerKind, PointerPhase};
-use crate::motion::between;
 use crate::play::compile::Compiled;
-use crate::pose::{Curve, Pose, Segment};
 pub use crate::table::takes_pointer;
 use crate::table::{CARD_HEIGHT, Camera, Look, PILE_IDS};
 use held::{By, Fall, Grip, Lean};
+use kit_base::data::space::pointer as data;
+use kit_base::pose::between;
+use kit_base::pose::{Curve, Pose, Segment};
+use kit_frame::frame::{ElementId, Frame, Lifted, Place, Role, StateBits};
 use refusal::Shake;
 
 /// The most hand cards that can be rising, raised or falling at once (`frame::LIFTED`).
-const LIFTS: usize = crate::frame::LIFTED;
+const LIFTS: usize = kit_frame::frame::LIFTED;
 
 /// Nanoseconds in a millisecond.
 const MILLISECOND: f32 = 1_000_000.0;

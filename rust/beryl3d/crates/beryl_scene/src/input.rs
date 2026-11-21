@@ -2,8 +2,8 @@
 
 use glam::Vec2;
 
-pub use crate::atlas::{FaceId, FaceSize, GlyphCell, GlyphKey, IconCell, Tier};
-pub use crate::geometry::{Insets, Rect, Size};
+pub use kit_base::atlas::{FaceId, FaceSize, GlyphCell, GlyphKey, IconCell, Tier};
+pub use kit_base::geometry::{Insets, Rect, Size};
 
 /// A mouse, touch or pen event. It carries no time: what it starts begins at the `now` of the
 /// next frame.

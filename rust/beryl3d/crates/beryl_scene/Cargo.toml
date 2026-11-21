@@ -15,24 +15,22 @@ workspace = true
 driver = ["dep:serde"]
 
 [dependencies]
+kit_base.workspace = true
+kit_frame.workspace = true
+kit_text.workspace = true
 # Stores a bounded track without initializing or cloning its unused segment slots.
 arrayvec = "0.7.8"
 # The game state the scene shows: PlayerView and the table commands.
-beryl_protocol = { path = "../../../crates/beryl_protocol" }
-# Lets the renderer upload draw records as bytes with no unsafe cast of its own.
-bytemuck = { version = "1.25.2", features = ["derive"] }
-# Vector and matrix math for poses and the camera, in place of hand-written math.
-glam = "0.34.3"
+beryl_protocol.workspace = true
+glam.workspace = true
 # Lays out text and 2D regions as flexbox and grid, in place of hand-written layout.
 taffy = "0.15.1"
-# Shapes and breaks lines of text, in place of hand-written text layout. Without its default
-# `system` feature, so no system font can be found or used.
-parley = { version = "0.13.0", default-features = false, features = ["std"] }
+parley.workspace = true
 # The manual table builds and reads table commands as JSON values, and the driver reads a
 # recording's views and responses and writes requests to match them, in place of a hand-written
 # reader. Only the `driver` feature needs `serde` itself.
 serde = { version = "1.0.229", optional = true }
-serde_json = "1.0.154"
+serde_json.workspace = true
 # Holds a script being compiled over frames beside the updates it borrows, in place of a
 # hand-written self-referential struct, which `unsafe_code = "deny"` forbids.
 self_cell = "1.3.0"
@@ -49,5 +47,5 @@ beryl_scene = { path = ".", features = ["driver"] }
 beryl_card_records = { path = "../../../crates/beryl_card_records" }
 
 [build-dependencies]
-# Reads data/beryl3d/space.json and gates.json at build time, in place of a hand-written parser.
-serde_json = "1.0.154"
+# Reads the audio manifest and the manual table commands at build time.
+serde_json.workspace = true

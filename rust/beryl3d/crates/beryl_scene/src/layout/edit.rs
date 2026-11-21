@@ -10,9 +10,9 @@ use glam::Vec2;
 use parley::{Affinity, BoundingBox, Cursor, PlainEditor, Selection};
 
 use super::{Layer, Node};
-use crate::frame::ElementId;
 use crate::input::{Key, KeyCode, KeyPhase, Rect};
-use crate::text::{self, Run};
+use kit_frame::frame::ElementId;
+use kit_text::text::{self, Run};
 
 /// The width of the caret, in logical points.
 const CARET_WIDTH: f32 = 1.5;

@@ -23,12 +23,12 @@ use super::{
 };
 use crate::effects;
 use crate::faces::{CARD_BACK, Faces};
-use crate::frame::{
-    Band, Draw, ElementId, FrameBuilder, OBJECTS, Place, Resolved, Role, StateBits,
-};
 use crate::input::FaceSize;
 use crate::motion::Track;
-use crate::pose::{Interval, Pose};
+use kit_base::pose::{Interval, Pose};
+use kit_frame::frame::{
+    Band, Draw, ElementId, FrameBuilder, OBJECTS, Place, Resolved, Role, StateBits,
+};
 
 mod abilities;
 mod motion;
@@ -41,7 +41,7 @@ pub use motion::{Motion, Turn};
 
 /// How far below the window's bottom edge the viewer's hand waits while it is held away, in
 /// points of the web's stage (`HAND_AWAY` in `ui/src/game/handLayout.ts`).
-const HAND_AWAY: f32 = crate::data::space::shown::opening::HAND_AWAY;
+const HAND_AWAY: f32 = kit_base::data::space::shown::opening::HAND_AWAY;
 /// The height of the web's desktop stage, in points (`STAGE` in `ui/src/game/perspective.ts`).
 const WEB_STAGE_HEIGHT: f32 = 900.0;
 
@@ -100,7 +100,7 @@ impl Objects {
     }
 }
 
-pub use crate::frame::ABILITY_IDS;
+pub use kit_frame::frame::ABILITY_IDS;
 
 /// The track of the ability numbered `id` in `tracks`, sorted by number, if it has one.
 pub(crate) fn ability_track(tracks: &[(u32, Track)], id: u32) -> Option<&Track> {
@@ -693,7 +693,7 @@ impl Table {
                 id,
                 parent: u32::MAX,
                 role,
-                name: crate::frame::NameRef::default(),
+                name: kit_frame::frame::NameRef::default(),
                 place,
                 corners: self.camera.card_corners(transform),
                 depth: self.camera.depth(look.pose.position),
@@ -703,8 +703,8 @@ impl Table {
                 state: StateBits(look.state),
                 face: look.face,
                 copies,
-                really: crate::frame::NameRef::default(),
-                note: crate::frame::NameRef::default(),
+                really: kit_frame::frame::NameRef::default(),
+                note: kit_frame::frame::NameRef::default(),
             },
         );
         let opacity = (look.pose.opacity.clamp(0.0, 1.0) * 255.0).round() as u8;
@@ -727,7 +727,7 @@ impl Table {
             Band::LayerCards
         } else if opacity == 255 && look.dissolve <= 0.0 && look.whiten <= 0.0 {
             Band::Opaque
-        } else if look.pose.position.z < crate::data::space::light::ON_TABLE_BELOW {
+        } else if look.pose.position.z < kit_base::data::space::light::ON_TABLE_BELOW {
             Band::TableMarks
         } else {
             Band::RaisedMarks

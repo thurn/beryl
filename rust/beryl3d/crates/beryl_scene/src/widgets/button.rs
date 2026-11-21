@@ -8,8 +8,8 @@
 
 use super::icons;
 use crate::element::{Align, Border, Element, Justify, Shown, TextAlign};
-use crate::frame::Role;
-use crate::tokens::{color, gradient, ratio, shadow, size, type_style};
+use kit_base::tokens::{color, gradient, ratio, shadow, size, type_style};
+use kit_frame::frame::Role;
 
 /// The top and bottom of an ordinary button's rim, lighter and darker than its sides
 /// (`color::SECONDARY_RIM`): `.button-secondary`'s `border-color: #e9e3da #b9b2a9 #a59e96`.

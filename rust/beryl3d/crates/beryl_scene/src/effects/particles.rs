@@ -33,12 +33,12 @@ use beryl_protocol::script::Subject;
 use glam::{Affine3A, Vec2, Vec3};
 
 use super::{Effect, EffectRun, Reach};
-use crate::data::space::effects::dissolve;
-use crate::data::space::enhanced::particles::{ash, vortex};
-use crate::data::space::light::LIFT;
-use crate::frame::{Band, Draw, FrameBuilder, PARTICLES, sprites};
 use crate::input::Tier;
-use crate::tokens::color;
+use kit_base::data::space::effects::dissolve;
+use kit_base::data::space::enhanced::particles::{ash, vortex};
+use kit_base::data::space::light::LIFT;
+use kit_base::tokens::color;
+use kit_frame::frame::{Band, Draw, FrameBuilder, PARTICLES, sprites};
 
 /// The most particles a run of `effect` writes, if it writes any.
 fn count(effect: Effect) -> Option<usize> {

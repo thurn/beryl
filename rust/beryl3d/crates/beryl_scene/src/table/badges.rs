@@ -25,15 +25,15 @@ use beryl_protocol::protocol::{Counter, ObjectView, PlayerView, ZoneName};
 use glam::{Affine3A, Quat, Vec2};
 
 use super::{CARD_HEIGHT, CARD_WIDTH};
-use crate::data::space::badges as data;
 use crate::faces::ListedFace;
-use crate::frame::{Band, Draw, FrameBuilder, RECORDS_PER_OBJECT, Sprite};
 use crate::input::{GlyphCell, IconCell};
-use crate::pose::Pose;
-use crate::text::fonts::Font;
-use crate::text::{Block, Glyphs, PlacedGlyph, Text, TypeStyle, glyph_key};
-use crate::tokens::{badge, color};
 use crate::widgets::icons::{LOCK, LOCK_SIDE};
+use kit_base::data::space::badges as data;
+use kit_base::pose::Pose;
+use kit_base::tokens::{badge, color};
+use kit_frame::frame::{Band, Draw, FrameBuilder, RECORDS_PER_OBJECT, Sprite};
+use kit_text::text::fonts::Font;
+use kit_text::text::{Block, Glyphs, PlacedGlyph, Text, TypeStyle, glyph_key};
 
 /// The style every badge's number is shaped in: the card font's bold, at the size in points a
 /// plaque's numerals have on a battlefield card of the web interface.

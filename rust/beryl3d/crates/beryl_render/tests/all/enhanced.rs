@@ -4,11 +4,11 @@
 //! panics, so a validation error fails the test.
 
 use beryl_render::{Limits, Renderer};
-use beryl_scene::data::space::enhanced::light;
-use beryl_scene::frame::{Band, Draw, sprites};
-use beryl_scene::input::Tier;
-use beryl_scene::table::{CARD_HEIGHT, CARD_WIDTH};
 use glam::{Affine3A, Quat, Vec2, Vec3};
+use kit_base::atlas::Tier;
+use kit_base::data::space::enhanced::light;
+use kit_base::geometry::{CARD_HEIGHT, CARD_WIDTH};
+use kit_frame::frame::{Band, Draw, sprites};
 
 use super::render::{Picture, TwentyCards, draw_in, overhead, rectangle, renderer, twenty_cards};
 

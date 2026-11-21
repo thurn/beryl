@@ -33,17 +33,17 @@ use beryl_protocol::protocol::{CardHandling, Declaration, ObjectId, Side, Status
 use beryl_protocol::script::{Mark, Subject};
 use glam::Vec2;
 
-use crate::data::space::flat::opening as metrics;
-use crate::data::space::flat::phone::opening as phone;
-use crate::data::space::flat::phone::{ACTION_GAP, ACTION_HEIGHT, GUTTER};
 use crate::element::{Action, Align, Anchor, Element, Justify, Overflow, Shown, column, row, text};
-use crate::frame::Role;
 use crate::hud::HudIn;
 use crate::table::{CARD_HEIGHT, CARD_WIDTH, Window};
-use crate::text::TypeStyle;
-use crate::tokens::{color, size, type_style};
 use crate::widgets::screen::backdrop;
 use crate::widgets::{button, primary};
+use kit_base::data::space::flat::opening as metrics;
+use kit_base::data::space::flat::phone::opening as phone;
+use kit_base::data::space::flat::phone::{ACTION_GAP, ACTION_HEIGHT, GUTTER};
+use kit_base::tokens::{color, size, type_style};
+use kit_frame::frame::Role;
+use kit_text::text::TypeStyle;
 
 /// The name of the element that holds the whole opening, its backdrop and its group, which
 /// "every step shown" looks for (`agent::steps::sample`).
@@ -293,7 +293,7 @@ pub(crate) fn present(shown: &Presentation, window: Window) -> Element {
         .child(
             backdrop(window.size)
                 .background([0; 4])
-                .background_image(vec![crate::tokens::gradient::OPENING_BACKDROP]),
+                .background_image(vec![kit_base::tokens::gradient::OPENING_BACKDROP]),
         )
         .child(screen)
 }

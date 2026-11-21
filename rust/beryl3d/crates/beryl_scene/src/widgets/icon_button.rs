@@ -6,8 +6,8 @@
 
 use super::{IconId, icons};
 use crate::element::{Border, Element, Shown};
-use crate::frame::Role;
-use crate::tokens::{color, shadow, size};
+use kit_base::tokens::{color, shadow, size};
+use kit_frame::frame::Role;
 
 /// A button showing the icon `icon`, named `name` because it has no words.
 #[must_use]

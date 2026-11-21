@@ -8,8 +8,8 @@
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use super::{Block, TypeStyle};
-use crate::atlas::{GlyphCell, GlyphKey};
-use crate::paint::{DropLayers, Shadow};
+use kit_base::atlas::{GlyphCell, GlyphKey};
+use kit_base::paint::{DropLayers, Shadow};
 
 /// Where a rasterized glyph is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

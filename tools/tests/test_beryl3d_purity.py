@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from beryl_tools.beryl3d import purity
 
 CRATES = "rust/beryl3d/crates"
@@ -16,13 +18,14 @@ def write(root: Path, rel: str, text: str) -> None:
     (root / rel).write_text(text)
 
 
-def test_the_scene_names_no_clock_and_a_comment_may(tmp_path: Path) -> None:
-    scene = f"{CRATES}/beryl_scene/src/lib.rs"
+@pytest.mark.parametrize("crate", ("beryl_scene", "kit_base", "kit_text", "kit_frame"))
+def test_the_scene_names_no_clock_and_a_comment_may(tmp_path: Path, crate: str) -> None:
+    scene = f"{CRATES}/{crate}/src/lib.rs"
     write(tmp_path, scene, "// std::time is banned here.\nuse glam::Vec3;\n")
     assert purity.scene_purity(tmp_path) == []
     write(tmp_path, scene, "\nlet t = std::time::Instant::now();\n")
     (found,) = purity.scene_purity(tmp_path)
-    assert found.startswith(f"{scene}:2: beryl_scene names std::time")
+    assert found.startswith(f"{scene}:2: {crate} names std::time")
 
 
 def test_only_the_renderer_calls_wgpu(tmp_path: Path) -> None:
@@ -102,13 +105,14 @@ def test_the_scene_names_no_clock_however_it_is_imported(tmp_path: Path) -> None
     assert "names AtomicU32" in found
 
 
-def test_the_scene_depends_only_on_listed_crates(tmp_path: Path) -> None:
-    manifest = f"{CRATES}/beryl_scene/Cargo.toml"
+@pytest.mark.parametrize("crate", ("beryl_scene", "kit_base", "kit_text", "kit_frame"))
+def test_the_scene_depends_only_on_listed_crates(tmp_path: Path, crate: str) -> None:
+    manifest = f"{CRATES}/{crate}/Cargo.toml"
     write(tmp_path, manifest, '[dependencies]\nglam = "0.34"\n')
     assert purity.scene_purity(tmp_path) == []
     write(tmp_path, manifest, '[dependencies]\nglam = "0.34"\nrand = "0.9"\n')
     (found,) = purity.scene_purity(tmp_path)
-    assert found.startswith(f"{manifest}: beryl_scene depends on rand")
+    assert found.startswith(f"{manifest}: {crate} depends on rand")
 
 
 def test_only_the_app_and_the_recorder_depend_on_the_engine(tmp_path: Path) -> None:

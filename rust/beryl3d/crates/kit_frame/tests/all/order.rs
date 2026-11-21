@@ -7,11 +7,11 @@
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
 
-use beryl_scene::frame::{Band, CLIPS, DRAWS, Draw, Frame, FrameBuilder, OBJECTS, Sprite, sprites};
-use beryl_scene::input::{FaceSize, Rect, Tier};
-use beryl_scene::table::{CARD_HEIGHT, CARD_WIDTH};
 use glam::camera::rh::{proj::directx, view::look_at_mat4};
 use glam::{Affine3A, Mat4, Vec2, Vec3};
+use kit_base::atlas::{FaceSize, Tier};
+use kit_base::geometry::{CARD_HEIGHT, CARD_WIDTH, Rect};
+use kit_frame::frame::{Band, CLIPS, DRAWS, Draw, Frame, FrameBuilder, OBJECTS, Sprite, sprites};
 
 /// Counts the allocations made on the thread that turned counting on, so that other tests
 /// running at the same time are not counted.

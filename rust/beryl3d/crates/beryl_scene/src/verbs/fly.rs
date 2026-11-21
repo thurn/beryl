@@ -51,11 +51,11 @@ use glam::{Quat, Vec2, Vec3};
 use std::f32::consts::PI;
 
 use super::{Interval, StepIn, StepOut};
-use crate::data::space::verbs::fly::{bows, drawn_front, front, held, played, thrown, turn};
-use crate::data::{audit, space};
-use crate::pose::{Bow, Curve, Lift, Pose, Segment, Shape, Turning};
 use crate::table::Camera;
 use beryl_protocol::script::Subject;
+use kit_base::data::space::verbs::fly::{bows, drawn_front, front, held, played, thrown, turn};
+use kit_base::data::{audit, space};
+use kit_base::pose::{Bow, Curve, Lift, Pose, Segment, Shape, Turning};
 
 pub const BUILT: bool = true;
 

@@ -17,8 +17,8 @@ use super::commands::{self, Asks, COMMANDS, Command, Values};
 use super::{TablePress, Target};
 use crate::element::{Align, Anchor, Element, column, row};
 use crate::input::Size;
-use crate::tokens::{color, size, space};
 use crate::widgets::{FieldState, Fields, button, field, primary};
+use kit_base::tokens::{color, size, space};
 
 /// The most and least a stat or a life total may be (`MAX_INT` and `MIN_INT` in
 /// `ui/src/table/cardState.ts`).
@@ -569,7 +569,7 @@ pub fn dock(ask: &Ask, fields: &Fields, window: Size) -> Element {
         .radius(size::PANEL_RADIUS)
         .children(common)
         .child(controls);
-    let inset = crate::data::space::flat::table::EDGE;
+    let inset = kit_base::data::space::flat::table::EDGE;
     let corner = Vec2::new(window.width - inset, window.height - inset);
     dock.anchor = Some(Anchor::Point(corner, Vec2::ONE));
     dock

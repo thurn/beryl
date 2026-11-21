@@ -7,8 +7,8 @@ use glam::camera::rh::{proj::directx, view::look_at_mat4};
 use glam::{Affine3A, Mat3, Mat4, Quat, Vec2, Vec3};
 
 use super::{CARD_HEIGHT, CARD_WIDTH, Window};
-use crate::geometry::{Rect, plane::ScreenPlane};
-use crate::pose::Pose;
+use kit_base::geometry::{Rect, plane::ScreenPlane};
+use kit_base::pose::Pose;
 
 /// A layout's camera, as data.
 #[derive(Clone, Copy, Debug, PartialEq)]

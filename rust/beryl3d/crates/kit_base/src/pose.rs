@@ -7,6 +7,11 @@ use std::f32::consts::PI;
 
 use glam::{Affine3A, Mat3, Quat, Vec3};
 
+mod curve;
+mod segment;
+
+pub use segment::between;
+
 /// When one step plays on the script's clock, in nanoseconds.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Interval {

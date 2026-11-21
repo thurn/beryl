@@ -4,9 +4,9 @@
 use glam::Vec2;
 
 use super::{ABILITIES, ElementId, Frame, OBJECTS};
-use crate::paint::Shadow;
 use beryl_protocol::protocol::Side;
 use beryl_protocol::script::Mark;
+use kit_base::paint::Shadow;
 
 /// The most hand cards the pointer can have up out of the fan at once. One is raised at a time,
 /// and a pointer swept across a hand leaves each card it crossed falling for a moment; past this

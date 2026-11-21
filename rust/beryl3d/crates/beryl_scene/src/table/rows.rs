@@ -11,8 +11,8 @@ use glam::{Quat, Vec2, Vec3};
 
 use super::place::host_slot;
 use super::{CARD_HEIGHT, CARD_WIDTH, Camera, LAYER, Layout, RowArea};
-use crate::data::space::card::PHASED_OUT_OPACITY;
-use crate::pose::Pose;
+use kit_base::data::space::card::PHASED_OUT_OPACITY;
+use kit_base::pose::Pose;
 
 mod change;
 mod face;

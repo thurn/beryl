@@ -3,7 +3,7 @@
 //! box instead, as the shared checkbox does.
 
 use crate::element::{Element, row};
-use crate::tokens::{color, ratio};
+use kit_base::tokens::{color, ratio};
 
 /// A gold square `side` logical points on a side, the mark of a checked box or row.
 #[must_use]

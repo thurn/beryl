@@ -8,7 +8,7 @@ use std::ops::AddAssign;
 
 use super::checks::{KeptArrow, arrows_held};
 use super::fault::{Layout, Rule};
-use crate::frame::{Frame, Material, Place, Role, StateBits};
+use kit_frame::frame::{Frame, Material, Place, Role, StateBits};
 
 /// What one rule judged.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

@@ -6,11 +6,11 @@
 //! negated, so 20 mm up puts it 2.8 mm right of and 10 mm below the card's centre.
 
 use beryl_render::{BACK_LAYER, ENHANCED_SHADER, Limits, Renderer};
-use beryl_scene::data::space::enhanced::{light, shadow as data};
-use beryl_scene::data::space::shadow as baseline;
-use beryl_scene::frame::{Band, Draw};
-use beryl_scene::input::{FaceSize, Tier};
 use glam::{Affine3A, Quat, Vec2, Vec3};
+use kit_base::atlas::{FaceSize, Tier};
+use kit_base::data::space::enhanced::{light, shadow as data};
+use kit_base::data::space::shadow as baseline;
+use kit_frame::frame::{Band, Draw};
 
 use super::render::{Picture, card, draw_in, overhead, rectangle, renderer};
 

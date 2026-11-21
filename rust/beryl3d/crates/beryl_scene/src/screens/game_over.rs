@@ -16,19 +16,19 @@ use crate::hud::GamePress;
 use beryl_protocol::protocol::{Culprit, LossReason, OutcomeView, Side, Stall, Status};
 use glam::Vec2;
 
-use crate::data::space::flat::phone::game_over as metrics;
-use crate::data::space::flat::phone::opening::NARROW_BELOW;
-use crate::data::space::flat::phone::{ACTION_GAP, GUTTER};
 use crate::element::{Align, Anchor, Element, Filter, Justify, Shown, column, holder, text};
 use crate::faces::FaceList;
-use crate::frame::Role;
 use crate::hud::HudIn;
 use crate::input::FaceSize;
 use crate::table::{CARD_HEIGHT, CARD_WIDTH};
-use crate::text::TypeStyle;
-use crate::tokens::{color, ratio, size, space, type_style};
 use crate::widgets::screen::{backdrop, phone_action};
 use crate::widgets::{button, primary};
+use kit_base::data::space::flat::phone::game_over as metrics;
+use kit_base::data::space::flat::phone::opening::NARROW_BELOW;
+use kit_base::data::space::flat::phone::{ACTION_GAP, GUTTER};
+use kit_base::tokens::{color, ratio, size, space, type_style};
+use kit_frame::frame::Role;
+use kit_text::text::TypeStyle;
 
 /// The width of the card that ended the game, the web's 230 on the desktop.
 const CULPRIT_WIDTH: f32 = size::GAME_OVER_CULPRIT_WIDTH;

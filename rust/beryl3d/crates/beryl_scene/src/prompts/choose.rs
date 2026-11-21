@@ -19,18 +19,18 @@ use glam::Vec2;
 
 use super::bar::{Controls, bar};
 use super::{Shown, Steps, marks, ways};
-use crate::data::space::hud::phone::CHARACTER_WIDTH;
 use crate::element::{
     Align, Anchor, Direction, Element, Justify, Shown as Showing, column, row, text,
 };
 use crate::faces::FaceList;
-use crate::frame::Role;
 use crate::hud::HudIn;
 use crate::input::{FaceId, FaceSize};
 use crate::table::{CARD_HEIGHT, CARD_WIDTH, DESKTOP};
-use crate::text::TypeStyle;
-use crate::tokens::{color, ratio, size, space, type_style};
 use crate::widgets::{icon_button, icons};
+use kit_base::data::space::hud::phone::CHARACTER_WIDTH;
+use kit_base::tokens::{color, ratio, size, space, type_style};
+use kit_frame::frame::Role;
+use kit_text::text::TypeStyle;
 
 /// The filter of the face of a way that cannot be chosen, as the web's `.stage-way:disabled`
 /// dims and desaturates it (`grayscale(0.85) brightness(0.55)` in `ui/src/stage/choose.css`)

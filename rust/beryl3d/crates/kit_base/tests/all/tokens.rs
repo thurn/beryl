@@ -1,9 +1,9 @@
 //! The design tokens the build script writes from `data/design-tokens.json`, against the CSS
 //! values the web interface draws with.
 
-use beryl_scene::element::Shadow;
-use beryl_scene::text::fonts::Font;
-use beryl_scene::tokens::{color, shadow, size, space, type_style};
+use kit_base::paint::Shadow;
+use kit_base::tokens::{color, shadow, size, space, type_style};
+use kit_base::typography::fonts::Font;
 
 #[test]
 fn colors_are_the_css_values() {

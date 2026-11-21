@@ -41,11 +41,11 @@ use self::cues::Cues;
 use self::moment::{moment_distance, offset_from};
 use crate::agent::{self, Context, Fault, Layout, TreeOptions, locate, uncovered};
 use crate::faces::FaceList;
-use crate::frame::{Frame, Sound, StateBits, Wake};
 use crate::input::{
     AssetReady, Button, Insets, Modifiers, Pointer, PointerKind, PointerPhase, Size, Tier,
 };
 use crate::play::record::Plant;
+use kit_frame::frame::{Frame, Sound, StateBits, Wake};
 
 /// How long after the table comes to rest a recorded reply is given.
 pub const REPLY_DELAY: Duration = Duration::from_millis(400);

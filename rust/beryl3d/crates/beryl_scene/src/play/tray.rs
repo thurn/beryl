@@ -11,8 +11,8 @@ use super::compile::{nanoseconds, subject_of};
 use crate::beat::Laid;
 use crate::input::Rect;
 use crate::light::Lit;
-use crate::pose::{Curve, Pose};
 use crate::table::{CARD_WIDTH, Held, Moves, TrayPoses};
+use kit_base::pose::{Curve, Pose};
 
 impl Show {
     /// The latest view, which says where each object lies, and the spans the table shows, for
@@ -167,7 +167,7 @@ const HANDED_NEAR: f32 = 2.0;
 /// Starts `segment` from `from`, where the tray let its card go, if it starts from `resting`,
 /// where the card rested before the tray held it up (within `HANDED_NEAR`), and holds it there
 /// too if it also ends there. Says whether the next segment may start from `resting` as well.
-fn hand_over(segment: &mut crate::pose::Segment, resting: &Pose, from: Pose) -> bool {
+fn hand_over(segment: &mut kit_base::pose::Segment, resting: &Pose, from: Pose) -> bool {
     let near = |pose: &Pose| {
         pose.position.distance(resting.position) <= HANDED_NEAR
             && pose.rotation == resting.rotation

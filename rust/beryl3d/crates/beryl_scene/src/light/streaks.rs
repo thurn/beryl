@@ -28,11 +28,11 @@ use beryl_protocol::script::{Stream, Subject};
 use glam::{Vec2, Vec3, Vec3Swizzles};
 
 use super::{Lit, StreakRun};
-use crate::data::space::verbs::streak;
 use crate::effects::light::quad;
-use crate::frame::{Band, Draw, FrameBuilder, sprites};
 use crate::play::{Reach, Scene};
-use crate::tokens::color;
+use kit_base::data::space::verbs::streak;
+use kit_base::tokens::color;
+use kit_frame::frame::{Band, Draw, FrameBuilder, sprites};
 
 /// How many records draw one streak, evenly along the part of its arc from its tail to its
 /// head.

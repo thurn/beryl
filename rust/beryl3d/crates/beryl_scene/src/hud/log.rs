@@ -17,11 +17,11 @@ use crate::hud::GamePress;
 use beryl_protocol::protocol::{PlayerView, Status};
 use glam::Vec2;
 
-use crate::data::space::hud::{LOG_BUTTON_TOP, LOG_LEFT, LOG_TOP};
 use crate::element::{Anchor, Element, holder, text};
 use crate::hud::HudIn;
-use crate::tokens::{color, size, type_style};
 use crate::widgets::{icon_button, icons, list};
+use kit_base::data::space::hud::{LOG_BUTTON_TOP, LOG_LEFT, LOG_TOP};
+use kit_base::tokens::{color, size, type_style};
 
 /// The name of the log's list, which the client scrolls to its foot (`Layer::scroll_to_end`).
 pub const LIST: &str = "Game log";
@@ -123,7 +123,7 @@ pub fn log(input: &HudIn) -> Option<Element> {
         let mut panel = (panel(entries)
             .width(size::LOG_WIDTH)
             .max_height(size::LOG_FOLDED_HEIGHT))
-        .mask(crate::tokens::gradient::LOG_MASK);
+        .mask(kit_base::tokens::gradient::LOG_MASK);
         panel.anchor = Some(Anchor::Point(Vec2::new(LOG_LEFT, LOG_TOP), Vec2::ZERO));
         panel
     });

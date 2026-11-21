@@ -20,8 +20,8 @@ use super::Target;
 use super::commands::seat_of;
 
 use crate::faces::FaceList;
-use crate::frame::{Frame, Role};
 use crate::hud::piles::pile_cards;
+use kit_frame::frame::{Frame, Role};
 
 /// The viewer's search field, by its name, which the web gives its search box as its label.
 pub const SEARCH: &str = "Search cards";

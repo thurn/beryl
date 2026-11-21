@@ -2,8 +2,8 @@
 //! pointer holds or let go over to a script that moves it (`crate::pointer`).
 
 use super::Show;
-use crate::frame::Frame;
 use crate::pointer::{self, LetGo, Pointer};
+use kit_frame::frame::Frame;
 
 impl Show {
     /// The pointer on the table.

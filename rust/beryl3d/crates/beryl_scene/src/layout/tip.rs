@@ -9,10 +9,10 @@
 use glam::Vec2;
 
 use super::{Layer, menu::fit};
-use crate::data::space::flat::{MENU_EDGE, TOOLTIP_DELAY, TOOLTIP_GAP};
 use crate::element::{Anchor, Display};
-use crate::frame::{ElementId, Role};
 use crate::input::{Rect, Size};
+use kit_base::data::space::flat::{MENU_EDGE, TOOLTIP_DELAY, TOOLTIP_GAP};
+use kit_frame::frame::{ElementId, Role};
 
 /// What a tooltip's name starts with, before the name of the element it explains.
 pub const TIP_PREFIX: &str = "tooltip ";

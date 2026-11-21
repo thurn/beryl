@@ -6,8 +6,8 @@
 use super::IconId;
 use super::icon_button::round;
 use crate::element::Element;
-use crate::frame::Role;
-use crate::tokens::color;
+use kit_base::tokens::color;
+use kit_frame::frame::Role;
 
 /// A switch named `name` showing `icon`, `on` or off. A press on it sends the press the caller
 /// gives it with `on_press`, which should turn it the other way. While on, its resolved element

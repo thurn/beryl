@@ -1,7 +1,7 @@
 """The design tokens as data: `data/design-tokens.json` holds the colors, sizes, fonts and other
 style values that both clients draw with, and `ui/src/design/tokens.css` is generated from it.
 `by design-tokens` writes the stylesheet; the ui lane fails when it is stale. Beryl 3D's
-`beryl_scene` build script reads the same file for its flat layer's constants.
+`kit_base` build script reads the same file for its flat layer's constants.
 
 The file has four members:
 

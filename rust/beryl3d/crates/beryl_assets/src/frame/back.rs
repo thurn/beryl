@@ -2,7 +2,7 @@
 //! back (`.card-back` in `ui/src/design/components/card-marks-and-piles.css`), a brown field in
 //! a black border, which shows under Magic's card back while it loads or where images do not.
 
-use beryl_scene::input::FaceSize;
+use kit_base::atlas::FaceSize;
 use tiny_skia::{Pixmap, Point};
 
 use super::FRAMES_DRAWN;

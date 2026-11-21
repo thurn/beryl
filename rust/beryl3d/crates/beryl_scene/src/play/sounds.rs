@@ -1,9 +1,9 @@
 //! The sounds a playing script lists in frames as its clock reaches them.
 
 use super::Playing;
-use crate::frame::FrameBuilder;
 use crate::hud::counts::Counts;
 use crate::light::Lit;
+use kit_frame::frame::FrameBuilder;
 
 impl Playing {
     /// Gives `lit` and `counts` what the script's clock has reached by `now` (`light`) and lists

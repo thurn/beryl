@@ -5,7 +5,7 @@
 //! white light, a glow) is the step's effect, drawn apart from this motion.
 
 use super::{StepIn, StepOut};
-use crate::pose::{Segment, Shape};
+use kit_base::pose::{Segment, Shape};
 
 pub const BUILT: bool = true;
 

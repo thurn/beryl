@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use beryl_scene::text::fonts::{ALL, Font};
+use kit_text::text::fonts::{ALL, Font};
 use swash::FontRef;
 use swash::scale::{Render, ScaleContext, Source};
 use swash::zeno::Format;

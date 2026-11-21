@@ -10,8 +10,8 @@
 //! onto the resolved picture times `enhanced.bloom.strength` (`data/beryl3d/space.json`). The
 //! glows are drawn with no depth buffer, so a glow behind a card still blooms around it.
 
-use beryl_scene::data::space::enhanced::bloom::{SCALE, SIGMA, STRENGTH, TAPS};
-use beryl_scene::frame::Band;
+use kit_base::data::space::enhanced::bloom::{SCALE, SIGMA, STRENGTH, TAPS};
+use kit_frame::frame::Band;
 use wgpu::util::DeviceExt;
 
 use crate::count::{self, FragmentCounter};

@@ -5,8 +5,8 @@ use beryl_protocol::script::{Act, Room, StepTiming, Verb};
 
 use super::super::compile::nanoseconds;
 use crate::beat::Laid;
-use crate::pose::Pose;
 use crate::verbs::{Interval, vanish};
+use kit_base::pose::Pose;
 
 /// When what the step makes room among goes to its new place, given its `timing`, when it was
 /// `laid` out and its `own` interval: what makes room for it does so before it begins, where its

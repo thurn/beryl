@@ -10,14 +10,14 @@ use super::shadows::{ShadowBox, write_box_shadows};
 use super::write::{Look, clip_inside, intersection, scaled};
 use crate::element::paint::{blur_of, filtered};
 use crate::element::{Border, Filter, Gradient, Shadow, Shape, Shown, Stop};
-use crate::frame::text::faded;
-use crate::frame::{
+use crate::input::Rect;
+use kit_base::geometry::plane::ScreenPlane;
+use kit_base::tokens::{color, shadow, size};
+use kit_frame::frame::text::faded;
+use kit_frame::frame::{
     Band, Draw, ElementLook, FrameBuilder, Role, SIDE_BOTTOM, SIDE_LEFT, SIDE_RIGHT, SIDE_TOP,
     StateBits, gradient_reach,
 };
-use crate::geometry::plane::ScreenPlane;
-use crate::input::Rect;
-use crate::tokens::{color, shadow, size};
 
 /// The most filter functions an element and its ancestors apply together; any past these, the
 /// outermost ancestors', are left out.

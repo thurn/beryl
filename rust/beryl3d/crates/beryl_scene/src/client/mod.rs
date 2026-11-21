@@ -20,7 +20,6 @@ use beryl_protocol::script::{OwnTimings, Verb, own_timings};
 use beryl_protocol::{AgentView, StartRequest, StopsSetting};
 
 use crate::faces::{CARD_BACK, FaceList, Faces};
-use crate::frame::{self, ElementId, Frame, FrameBuilder, Sound, Wake};
 use crate::hud::banner::Banner;
 use crate::hud::counts::CountFloats;
 use crate::hud::log::Log;
@@ -39,6 +38,7 @@ use crate::screens::{self, Concede, GalleryState, Music, SEED, Screen, Sheet, St
 use crate::settings::Settings;
 use crate::table::{Table, Window};
 use crate::widgets::Fields;
+use kit_frame::frame::{self, ElementId, Frame, FrameBuilder, Sound, Wake};
 
 mod input;
 mod inspect;

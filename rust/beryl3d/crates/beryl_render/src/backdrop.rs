@@ -1,4 +1,4 @@
-//! The backdrop filter (`beryl_scene::frame::Backdrop`): the records before the filter are drawn
+//! The backdrop filter (`kit_frame::frame::Backdrop`): the records before the filter are drawn
 //! into an offscreen picture the size of the frame, which is blurred across into a second
 //! picture, then blurred down into the frame's target with the color filters, and the rest of
 //! the flat layer is drawn over it. Only the web interface's end screen asks for one, so the two
@@ -10,7 +10,7 @@
 //! after the filters. The picture blurred across holds sRGB values in 8 bits, which every
 //! device can draw into.
 
-use beryl_scene::frame::Backdrop;
+use kit_frame::frame::Backdrop;
 use wgpu::util::DeviceExt;
 
 /// The format of the picture blurred across: sRGB values, stored as they are.

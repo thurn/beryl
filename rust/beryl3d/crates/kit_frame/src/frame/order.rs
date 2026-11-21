@@ -14,7 +14,7 @@
 use glam::{Mat4, Vec2, Vec4};
 
 use super::{BANDS, Band, Draw, Frame, Material, Mesh, sprites};
-use crate::geometry::{CARD_HEIGHT, CARD_WIDTH};
+use kit_base::geometry::{CARD_HEIGHT, CARD_WIDTH};
 
 /// The low bits of a sort key hold the record's index in push order, so that records that tie
 /// keep the order they were pushed in, and the sort is the same on every machine.

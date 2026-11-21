@@ -5,8 +5,8 @@
 //! it. A card's shake is held by the pointer (`Pointer::refuse`), and a flat-layer button's by
 //! the client (`Client::take_table_reply`).
 
-use crate::data::space::pointer as data;
-use crate::pose::Curve;
+use kit_base::data::space::pointer as data;
+use kit_base::pose::Curve;
 
 /// Nanoseconds in a millisecond.
 const MILLISECOND: f32 = 1_000_000.0;

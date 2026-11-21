@@ -50,11 +50,11 @@ use beryl_protocol::script::Subject;
 use glam::{Affine3A, Quat, Vec2, Vec3};
 
 use super::{Effect, EffectRun, Reach};
-use crate::data::space::effects::{beam, flash, glow, impact, pulse, trail};
-use crate::data::space::light::LIFT;
-use crate::frame::{Band, Draw, EffectLook, FrameBuilder, Sprite, sprites};
-use crate::pose::Pose;
-use crate::tokens::color;
+use kit_base::data::space::effects::{beam, flash, glow, impact, pulse, trail};
+use kit_base::data::space::light::LIFT;
+use kit_base::pose::Pose;
+use kit_base::tokens::color;
+use kit_frame::frame::{Band, Draw, EffectLook, FrameBuilder, Sprite, sprites};
 
 /// How much larger than the life orb's face the quad of a `loss` or `gain` ring is drawn, so that
 /// the `RING` sprite's line, three quarters of the way out, lies just outside the face, where

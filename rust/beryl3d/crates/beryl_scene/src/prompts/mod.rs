@@ -25,8 +25,8 @@ use crate::element::Element;
 use crate::hud::HudIn;
 use crate::input::FaceId;
 use crate::light::{ArrowSpan, Lit, MarkSpan, Span};
-use crate::pose::Curve;
 use crate::verbs::Interval;
+use kit_base::pose::Curve;
 
 /// A prompt as the table shows it: its state, and whether the pointer is on the button that
 /// shows what the prompt would tap, such as a payment's Auto Pay (`shows`). The web interface
@@ -89,7 +89,7 @@ fn shade(input: &HudIn) -> Element {
         .name("shade")
         .width(window.width)
         .height(window.height)
-        .background(crate::tokens::color::TRAY_SHADE)
+        .background(kit_base::tokens::color::TRAY_SHADE)
         .passes(true);
     shade.anchor = Some(crate::element::Anchor::Point(
         glam::Vec2::ZERO,
@@ -390,7 +390,7 @@ pub struct OwnRecord {
 
 /// Nanoseconds in a millisecond.
 #[allow(clippy::cast_lossless, reason = "`From` is not `const`")]
-const NS_PER_MS: f64 = crate::tokens::ratio::NANOS_PER_MS as f64;
+const NS_PER_MS: f64 = kit_base::tokens::ratio::NANOS_PER_MS as f64;
 
 impl<'a> Steps<'a> {
     #[expect(
@@ -422,7 +422,9 @@ impl<'a> Steps<'a> {
         let over = self.next(step, Verb::Lift, None);
         let curve = (self.timings.entries.iter())
             .find(|entry| entry.step == step)
-            .map_or(Curve::EASE_OUT, |entry| Curve::named(entry.timing.curve));
+            .map_or(Curve::EASE_OUT, |entry| {
+                crate::motion::named_curve(entry.timing.curve)
+            });
         self.tray = Some((step, over, curve));
     }
 

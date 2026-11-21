@@ -9,10 +9,10 @@ use glam::{Quat, Vec2, Vec3};
 use super::place::{Placement, Rest, turn};
 use super::{CARD_HEIGHT, CARD_WIDTH, Camera, Layout, RowArea, StackData};
 use crate::agent::hit;
-use crate::data::audit;
-use crate::frame::Place;
-use crate::pose::Pose;
-use crate::tokens::size;
+use kit_base::data::audit;
+use kit_base::pose::Pose;
+use kit_base::tokens::size;
+use kit_frame::frame::Place;
 
 /// An item of the stack as placement reads it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -441,7 +441,7 @@ mod tests {
     fn desktop_back_rows_clear_the_life_orb() {
         use glam::Vec3;
 
-        use crate::tokens::size;
+        use kit_base::tokens::size;
 
         for (width, height) in [
             (1280.0, 800.0),

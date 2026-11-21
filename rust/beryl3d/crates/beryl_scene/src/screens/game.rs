@@ -12,7 +12,7 @@ use crate::hud::{HudIn, full_control, log, phone, players, steps};
 use crate::inspect::viewer;
 use crate::prompts;
 use crate::table::phone_bands;
-use crate::tokens::ratio;
+use kit_base::tokens::ratio;
 
 /// What the flat layer shows over a game. While none of its pieces shows anything, it is the
 /// open prompt's element alone, as it has been since the prompt bar was the only thing in the

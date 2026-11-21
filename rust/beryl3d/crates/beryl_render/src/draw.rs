@@ -3,8 +3,8 @@
 
 use std::ops::Range;
 
-use beryl_scene::frame::Frame;
 use glam::Vec2;
+use kit_frame::frame::Frame;
 
 use crate::pipeline::RECORD;
 use crate::runs::{Pass, runs};

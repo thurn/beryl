@@ -40,11 +40,11 @@ use super::{
     RowWindow, TraySpace, Window,
 };
 use crate::agent::hit::CELL;
-use crate::data::audit;
-use crate::data::space::layout::phone as data;
-use crate::frame::Place;
 use crate::input::Rect;
-use crate::pose::Pose;
+use kit_base::data::audit;
+use kit_base::data::space::layout::phone as data;
+use kit_base::pose::Pose;
+use kit_frame::frame::Place;
 
 /// A card's width over its height, the web interface's `RATIO`.
 const RATIO: f32 = CARD_WIDTH / CARD_HEIGHT;
@@ -428,8 +428,8 @@ pub fn tray(window: Window) -> TraySpace {
 }
 
 fn tray_in(window: Window, bands: &PhoneBands) -> TraySpace {
-    use crate::data::space::hud::phone as hud;
     use data::tray as shape;
+    use kit_base::data::space::hud::phone as hud;
     let top = bands.opponent_back.top + shape::INSET;
     let foot = bands.middle.bottom() + shape::INSET;
     // The prompt's buttons stand on the dock's line while it holds cards up (`prompts::bar`):
@@ -471,7 +471,7 @@ fn tray_in(window: Window, bands: &PhoneBands) -> TraySpace {
 /// creatures, so the total rises only as far as it stays clear of the creatures' row.
 #[must_use]
 pub fn your_life(window: Window, bands: &PhoneBands, hand_top: f32) -> PlayerAnchor {
-    use crate::data::space::hud::phone::DOCK_GAP;
+    use kit_base::data::space::hud::phone::DOCK_GAP;
     let half = super::HALF_LIFE;
     let middle = bands.your_strip.middle();
     let raised = hand_top - DOCK_GAP - half;

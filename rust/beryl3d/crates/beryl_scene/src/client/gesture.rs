@@ -11,7 +11,7 @@ use glam::Vec2;
 use super::Client;
 use super::carry::Carry;
 
-use crate::frame::ElementId;
+use kit_frame::frame::ElementId;
 
 /// What letting the pointer go where it went down does.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

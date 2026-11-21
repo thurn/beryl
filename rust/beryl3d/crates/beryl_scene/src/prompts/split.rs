@@ -18,12 +18,12 @@ use beryl_protocol::prompt::{PromptView, ShapeBody};
 use glam::Vec2;
 
 use super::{Piles, Shown, Steps, prompt_bar, tray};
-use crate::data::audit;
 use crate::element::{Anchor, Element, TextAlign, row, text};
 use crate::hud::HudIn;
 use crate::table::{DESKTOP, tray_boxes};
-use crate::text::TypeStyle;
-use crate::tokens::{color, size, type_style};
+use kit_base::data::audit;
+use kit_base::tokens::{color, size, type_style};
+use kit_text::text::TypeStyle;
 
 /// The share of a box's heading its name's type takes, and the least size it is drawn at, in
 /// stage pixels: `.stage-tray-label`'s `max(12px, calc(var(--heading) * 0.5))`.

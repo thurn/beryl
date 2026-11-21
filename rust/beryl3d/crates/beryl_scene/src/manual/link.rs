@@ -11,12 +11,12 @@ use beryl_protocol::protocol::LinkState;
 use glam::Vec2;
 
 use super::TablePress;
-use crate::data::space::flat::table::link::{PHONE_TOP, TOP, TOP_SHARE, WIDTH};
 use crate::element::{Align, Anchor, Element, column, text};
 use crate::hud::notices::step_banner;
 use crate::input::Size;
-use crate::tokens::{color, size, space, type_style};
 use crate::widgets::button;
+use kit_base::data::space::flat::table::link::{PHONE_TOP, TOP, TOP_SHARE, WIDTH};
+use kit_base::tokens::{color, size, space, type_style};
 
 /// Whether `link` freezes the table's input.
 #[must_use]

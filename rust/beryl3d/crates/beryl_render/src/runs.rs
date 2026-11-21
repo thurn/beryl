@@ -4,7 +4,7 @@
 
 use std::ops::Range;
 
-use beryl_scene::frame::{Draw, Frame};
+use kit_frame::frame::{Draw, Frame};
 
 /// The three ways a record is drawn, in the order they come in the draw list.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -102,9 +102,9 @@ impl Iterator for Runs<'_> {
 
 #[cfg(test)]
 mod tests {
-    use beryl_scene::frame::{Band, FrameBuilder, Sprite};
-    use beryl_scene::input::{FaceSize, Tier};
     use glam::Affine3A;
+    use kit_base::atlas::{FaceSize, Tier};
+    use kit_frame::frame::{Band, FrameBuilder, Sprite};
 
     use super::*;
 

@@ -5,7 +5,7 @@ use std::ffi::c_void;
 use std::ptr::NonNull;
 use std::time::{Duration, Instant};
 
-use beryl_scene::frame::Frame;
+use kit_frame::frame::Frame;
 
 use crate::renderer::{Drawn, Renderer};
 

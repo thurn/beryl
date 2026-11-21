@@ -7,9 +7,9 @@ use crate::hud::counts::CountChange;
 use crate::light::{SpanChange, StreakRun};
 use crate::notice::NoticeRun;
 use crate::play::TurnChange;
-use crate::pose::{Pose, Segment};
 use crate::table::{PileCount, Turn};
 use crate::verbs::{self, Interval};
+use kit_base::pose::{Pose, Segment};
 
 /// What the verbs of a script have written so far, beside the segments `Motion` adds to its
 /// tracks. Kept between steps, so that a step need not allocate it.

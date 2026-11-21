@@ -9,10 +9,10 @@
 use glam::Vec2;
 
 use super::{Layer, Node};
-use crate::data::space::flat::MENU_EDGE;
 use crate::element::{Action, Anchor, Display};
-use crate::frame::{ElementId, Role};
 use crate::input::{Key, KeyCode, KeyPhase, Rect, Size};
+use kit_base::data::space::flat::MENU_EDGE;
+use kit_frame::frame::{ElementId, Role};
 
 /// What a key did to the list or menu that has the focus (`Layer::navigate`).
 #[derive(Clone, Debug, PartialEq)]

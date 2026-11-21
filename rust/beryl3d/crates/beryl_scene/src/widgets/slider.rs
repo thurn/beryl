@@ -6,8 +6,8 @@
 //! `Client::key`).
 
 use crate::element::{Align, Element, Position, row};
-use crate::frame::Role;
-use crate::tokens::{color, ratio, size};
+use kit_base::tokens::{color, ratio, size};
+use kit_frame::frame::Role;
 
 /// How far a level moves for one step of a drag or one key: the web range input's `step` of
 /// 0.05.

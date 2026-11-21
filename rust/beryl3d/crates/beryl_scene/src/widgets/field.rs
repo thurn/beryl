@@ -7,8 +7,8 @@ use std::collections::BTreeMap;
 use std::ops::Range;
 
 use crate::element::{Border, Element};
-use crate::frame::Role;
-use crate::tokens::{color, size, type_style};
+use kit_base::tokens::{color, size, type_style};
+use kit_frame::frame::Role;
 
 /// What a text field holds and where its caret is.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

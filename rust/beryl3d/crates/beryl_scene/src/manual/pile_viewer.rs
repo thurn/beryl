@@ -11,8 +11,8 @@ use crate::inspect::Viewed;
 use crate::inspect::viewer::{
     self, cards, count_words, grid, object_box, pile_title, viewer_dialog,
 };
-use crate::tokens::{color, size, space, type_style};
 use crate::widgets::{Fields, button, field, primary};
+use kit_base::tokens::{color, size, space, type_style};
 
 /// The viewer the manual table shows, if one is open, as the web's `TablePileViewer` shows it:
 /// a pile's viewer, or a library's while the table lets the viewer look at it

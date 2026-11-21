@@ -7,8 +7,8 @@ use glam::Vec2;
 
 use super::{Layer, Node, write::moved};
 use crate::element::{Action, Display};
-use crate::frame::{ElementId, Role};
 use crate::input::Rect;
+use kit_frame::frame::{ElementId, Role};
 
 impl Layer {
     /// Takes `hovered`, the element a press under the pointer would reach, and `pressed`, the

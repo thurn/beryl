@@ -12,7 +12,7 @@ pub mod shake;
 use beryl_protocol::script::Subject;
 use glam::Vec2;
 
-use crate::pose::{Curve, Pose};
+use kit_base::pose::{Curve, Pose};
 
 /// Where something is and how large, for the light drawn to or on it.
 #[derive(Clone, Copy, Debug, PartialEq)]

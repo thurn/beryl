@@ -9,8 +9,8 @@ use beryl_protocol::script::{
 };
 
 use crate::beat::Laid;
-use crate::frame::{Sound, SoundId};
 use crate::play::nanoseconds;
+use kit_frame::frame::{Sound, SoundId};
 
 include!(concat!(env!("OUT_DIR"), "/sounds.rs"));
 

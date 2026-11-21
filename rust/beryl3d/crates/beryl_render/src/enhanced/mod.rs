@@ -17,7 +17,7 @@ mod shadow;
 
 use std::num::NonZeroU64;
 
-use beryl_scene::frame::Frame;
+use kit_frame::frame::Frame;
 
 use crate::count::{self, FragmentCounter};
 use crate::draw::Draws;
@@ -361,10 +361,10 @@ fn lit_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
 
 #[cfg(test)]
 mod tests {
-    use beryl_scene::frame::{Band, Draw, Frame, FrameBuilder};
-    use beryl_scene::input::Tier;
     use glam::Affine3A;
     use glam::camera::rh::proj::directx;
+    use kit_base::atlas::Tier;
+    use kit_frame::frame::{Band, Draw, Frame, FrameBuilder};
 
     use crate::{Limits, Renderer, Target};
 

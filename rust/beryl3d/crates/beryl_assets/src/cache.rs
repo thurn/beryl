@@ -7,7 +7,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use beryl_scene::input::FaceSize;
+use kit_base::atlas::FaceSize;
 
 use crate::encode::{Format, Layer};
 

@@ -10,6 +10,8 @@ publish = false
 workspace = true
 
 [dependencies]
+kit_base.workspace = true
+kit_frame.workspace = true
 # The card faces it uploads: their formats and layers, as the asset workers prepare them.
 beryl_assets = { path = "../beryl_assets" }
 beryl_scene = { path = "../beryl_scene" }

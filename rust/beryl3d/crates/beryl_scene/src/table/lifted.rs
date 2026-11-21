@@ -15,9 +15,9 @@ use glam::{Quat, Vec2};
 
 use super::place::{Group, Placement, Zones, members};
 use super::{CARD_HEIGHT, CARD_WIDTH, Camera, LAYER, Layout};
-use crate::data::space::verbs::lift;
-use crate::frame::Place;
-use crate::pose::Pose;
+use kit_base::data::space::verbs::lift;
+use kit_base::pose::Pose;
+use kit_frame::frame::Place;
 
 /// The group that holds the cards `handling` takes, if the table places any of them.
 #[must_use]

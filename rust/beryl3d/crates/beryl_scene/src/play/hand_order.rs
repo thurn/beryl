@@ -14,7 +14,7 @@ use beryl_protocol::prompt::{PlaceName, ShapeBody};
 use beryl_protocol::protocol::{ObjectId, ObjectView, PlayerView, Status, ZoneName};
 use beryl_protocol::script::Act;
 
-use crate::frame::OBJECTS;
+use kit_frame::frame::OBJECTS;
 
 /// Each card in a hand, by slot, and its turn among the cards that came to a hand. The lists
 /// it works in are kept between views, so that arranging a view allocates nothing.

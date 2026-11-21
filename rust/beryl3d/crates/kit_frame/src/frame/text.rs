@@ -7,11 +7,11 @@
 use glam::Vec2;
 
 use super::{Band, Draw, FrameBuilder, Sprite};
-use crate::atlas::GlyphKey;
-use crate::geometry::{Rect, plane::ScreenPlane};
-use crate::paint::{DropLayers, Shadow};
-use crate::text::glyphs::{Glyphs, blurred, key};
-use crate::text::{Block, PlacedGlyph};
+use kit_base::atlas::GlyphKey;
+use kit_base::geometry::{Rect, plane::ScreenPlane};
+use kit_base::paint::{DropLayers, Shadow};
+use kit_text::text::glyphs::{Glyphs, blurred, key};
+use kit_text::text::{Block, PlacedGlyph};
 
 /// How a block of text is drawn.
 #[derive(Clone, Copy, Debug)]
@@ -127,7 +127,7 @@ fn write_glyph(
 }
 
 /// `color` with its alpha scaled by `opacity`.
-pub(crate) fn faded(color: [u8; 4], opacity: f32) -> [u8; 4] {
+pub fn faded(color: [u8; 4], opacity: f32) -> [u8; 4] {
     let [red, green, blue, alpha] = color;
     // An alpha times a value from 0 to 1 stays in 0 to 255, so the cast loses nothing but the
     // fraction.

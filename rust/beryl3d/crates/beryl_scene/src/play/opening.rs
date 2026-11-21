@@ -9,7 +9,7 @@ use glam::Vec2;
 /// it looks dimmed as the web's overlay dims the orb under it.
 #[must_use]
 pub(crate) fn backdrop_cover(y: f32, height: f32) -> f32 {
-    let resolved = crate::tokens::gradient::OPENING_BACKDROP.resolve(Vec2::new(1.0, height));
+    let resolved = kit_base::tokens::gradient::OPENING_BACKDROP.resolve(Vec2::new(1.0, height));
     let at = (y / height.max(1.0)).clamp(0.0, 1.0);
     let alpha = |stop: usize| f32::from(resolved.colors[stop][3]) / f32::from(u8::MAX);
     let offsets = resolved.offsets;

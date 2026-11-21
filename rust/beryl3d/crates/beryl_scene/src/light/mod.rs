@@ -14,8 +14,8 @@ pub mod streaks;
 use beryl_protocol::protocol::{CardHandling, ObjectId};
 use beryl_protocol::script::{self, Arrow, Mark, Stream, Subject};
 
-use crate::pose::Curve;
 use crate::verbs::Interval;
+use kit_base::pose::Curve;
 
 /// An arrow or line from one thing to another.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

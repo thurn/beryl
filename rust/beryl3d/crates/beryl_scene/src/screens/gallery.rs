@@ -10,17 +10,17 @@ use crate::screens::ScreenPress;
 use glam::Vec2;
 
 use super::{Screen, ScreenIn};
-use crate::data::space::flat::gallery as metrics;
 use crate::element::{
     Action, Align, Anchor, Element, Justify, Overflow, Shown, TextAlign, column, row, text,
 };
 use crate::faces::{CARD_BACK, FaceList};
-use crate::frame::Role;
 use crate::input::{FaceId, FaceSize};
 use crate::inspect::viewer::scry_sample;
 use crate::table::{CARD_HEIGHT, CARD_WIDTH};
-use crate::tokens::{color, shadow, size, space, type_style};
 use crate::widgets::{MenuGroup, MenuId, MenuRow, button, context_menu, icons, menu, primary};
+use kit_base::data::space::flat::gallery as metrics;
+use kit_base::tokens::{color, shadow, size, space, type_style};
+use kit_frame::frame::Role;
 
 /// A context menu sample opened in the gallery.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -69,7 +69,7 @@ pub fn gallery(input: &ScreenIn) -> Element {
     // On a phone the samples stand in one column the phone's gutter in from the safe area's
     // sides, as the other portrait screens do; the sample rows wrap to that width.
     let edge = if input.window.phone() {
-        crate::data::space::flat::phone::GUTTER
+        kit_base::data::space::flat::phone::GUTTER
     } else {
         space::L
     };
@@ -305,7 +305,7 @@ fn phase_tracker() -> Element {
         .padding(space::S)
         .gap(space::S)
         .background([0; 4])
-        .background_image(vec![crate::tokens::gradient::PHASE_TRACKER])
+        .background_image(vec![kit_base::tokens::gradient::PHASE_TRACKER])
         .border((PHASE_TRACKER_RIM, 1.0))
         .radius(size::PILL_HEIGHT / 2.0)
         .children(

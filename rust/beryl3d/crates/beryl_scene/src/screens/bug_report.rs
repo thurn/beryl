@@ -19,13 +19,13 @@ use crate::screens::ScreenPress;
 use glam::Vec2;
 
 use super::ScreenIn;
-use crate::data::space::flat::phone::bug as metrics;
 use crate::element::{Align, Anchor, Element, Justify, Position, TextAlign, column, row, text};
-use crate::frame::Role;
 use crate::input::{Insets, Rect};
-use crate::text::TypeStyle;
-use crate::tokens::{color, ratio, shadow, size, type_style};
 use crate::widgets::{self, check_mark, field, icon_button, primary};
+use kit_base::data::space::flat::phone::bug as metrics;
+use kit_base::tokens::{color, ratio, shadow, size, type_style};
+use kit_frame::frame::Role;
+use kit_text::text::TypeStyle;
 
 /// The name of the field the player describes the bug in.
 pub const DESCRIPTION: &str = "description";
@@ -298,7 +298,7 @@ fn describe(
     submit.style.height = Some(size::BUTTON_HEIGHT * ratio::SMALL_SCALE);
     submit.style.text.size = type_style::BUTTON.size * ratio::SMALL_SCALE;
     submit.style.min_width = None;
-    let target = crate::data::audit::PHONE_TARGET_POINTS;
+    let target = kit_base::data::audit::PHONE_TARGET_POINTS;
     let mut ai = ai_box(input.bug.ai);
     if phone.is_some() {
         // `body.phone .bug-actions .button` and `.bug-ai`: touch targets.
@@ -420,7 +420,7 @@ fn ai_box(on: bool) -> Element {
 /// (`body.phone .bug-tools`).
 fn tools(choosing: bool, phone: Option<Insets>) -> Element {
     let side = if phone.is_some() {
-        crate::data::audit::PHONE_TARGET_POINTS
+        kit_base::data::audit::PHONE_TARGET_POINTS
     } else {
         TOOL
     };

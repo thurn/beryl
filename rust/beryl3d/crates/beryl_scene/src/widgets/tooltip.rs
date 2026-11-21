@@ -5,9 +5,9 @@
 //! element it explains once the pointer has rested there (`layout::tip`).
 
 use crate::element::{Anchor, Element};
-use crate::frame::Role;
 use crate::layout::TIP_PREFIX;
-use crate::tokens::{color, shadow, size, type_style};
+use kit_base::tokens::{color, shadow, size, type_style};
+use kit_frame::frame::Role;
 
 /// The tooltip saying `words` about the element named `of`, named `tooltip <of>`. It never
 /// takes a press.

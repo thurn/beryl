@@ -252,6 +252,9 @@ dependencies = [
  "beryl_test_files",
  "ctt",
  "image",
+ "kit_base",
+ "kit_frame",
+ "kit_text",
  "parley",
  "swash",
  "tiny-skia",
@@ -490,6 +493,8 @@ dependencies = [
  "bytemuck",
  "glam",
  "image",
+ "kit_base",
+ "kit_frame",
  "naga",
  "pollster",
  "serde_json",
@@ -532,8 +537,10 @@ dependencies = [
  "beryl_protocol",
  "beryl_scene",
  "beryl_test_files",
- "bytemuck",
  "glam",
+ "kit_base",
+ "kit_frame",
+ "kit_text",
  "parley",
  "self_cell",
  "serde",
@@ -2259,11 +2266,18 @@ checksum = "e2db585e1d738fc771bf08a151420d3ed193d9d895a36df7f6f8a9456b911ddc"
 [[package]]
 name = "kit_base"
 version = "0.1.0"
+dependencies = [
+ "glam",
+ "serde_json",
+]
 
 [[package]]
 name = "kit_frame"
 version = "0.1.0"
 dependencies = [
+ "beryl_protocol",
+ "bytemuck",
+ "glam",
  "kit_base",
  "kit_text",
 ]
@@ -2319,6 +2333,7 @@ name = "kit_text"
 version = "0.1.0"
 dependencies = [
  "kit_base",
+ "parley",
 ]
 
 [[package]]

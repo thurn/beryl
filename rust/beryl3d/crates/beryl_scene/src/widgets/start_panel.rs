@@ -1,8 +1,8 @@
 //! The panel and controls shared by the start and lobby screens.
 
 use crate::element::{Align, Border, Element, Justify, row, text};
-use crate::frame::Role;
-use crate::tokens::{color, ratio, shadow, size, space, type_style};
+use kit_base::tokens::{color, ratio, shadow, size, space, type_style};
+use kit_frame::frame::Role;
 
 const CHECKBOX: f32 = size::CHECKBOX;
 

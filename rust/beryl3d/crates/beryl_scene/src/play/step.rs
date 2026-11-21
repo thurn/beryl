@@ -9,12 +9,12 @@ use super::compile::nanoseconds;
 use super::index::{self, Index};
 use super::record::{Cause, SegmentRecord};
 use crate::beat::Laid;
-use crate::frame::Place;
-use crate::motion::Track;
-use crate::pose::{Curve, Pose, Segment};
+use crate::motion::{Track, named_curve};
 use crate::table::lifted::Look;
 use crate::table::{Group, HandFits, NameIds, PileRules, Placement, Rest, Table, Zones};
 use crate::verbs::{self, Interval};
+use kit_base::pose::{Curve, Pose, Segment};
+use kit_frame::frame::Place;
 
 mod abilities;
 mod counts;
@@ -53,7 +53,7 @@ pub struct StepIn<'a> {
     pub index: usize,
     /// When the step plays, on the script's clock.
     pub own: Interval,
-    /// `Curve::named(timing.curve)`.
+    /// `named_curve(timing.curve)`.
     pub curve: Curve,
     /// What the step moves (`mover_of`).
     pub subject: Option<Subject>,
@@ -662,7 +662,7 @@ impl<'a> Motion<'a> {
             beat,
             index,
             own,
-            curve: Curve::named(timing.curve),
+            curve: named_curve(timing.curve),
             subject,
             from,
             to,

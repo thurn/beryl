@@ -8,8 +8,8 @@ use std::f32::consts::PI;
 use glam::Vec2;
 
 use super::{Effect, EffectRun};
-use crate::data::space::effects::shake;
-use crate::frame::{EffectLook, FrameBuilder};
+use kit_base::data::space::effects::shake;
+use kit_frame::frame::{EffectLook, FrameBuilder};
 
 /// Shakes the frame's picture by `offset` of the runs in `runs` at `now`, for a window of `scale`
 /// physical pixels per logical point. While a `shake` run is under way it also records an

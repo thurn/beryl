@@ -7,8 +7,8 @@ use beryl_protocol::script::Table as Played;
 pub use super::compile::STEPS_PER_ADVANCE;
 use super::compile::{Compiled, Compiling, compile};
 use crate::motion::Track;
-use crate::pose::Pose;
 use crate::table::Table;
+use kit_base::pose::Pose;
 
 /// What compiling a script a few steps at a time did, frame by frame.
 #[derive(Clone, Debug, Default)]

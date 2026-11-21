@@ -8,11 +8,11 @@ use beryl_protocol::prompt::ButtonId;
 use glam::Vec2;
 
 use crate::element::{Anchor, Element, Shown};
-use crate::frame::Role;
 use crate::hud::HudIn;
 use crate::layout::DOCK_BOTTOM;
-use crate::tokens::{color, shadow, size, space};
 use crate::widgets::icons;
+use kit_base::tokens::{color, shadow, size, space};
+use kit_frame::frame::Role;
 
 /// The stop sign, while full control is on during a game on the desktop. Whether it is on is
 /// read from the stops the game holds (`PlayerView::stops`), as the web's game screen reads

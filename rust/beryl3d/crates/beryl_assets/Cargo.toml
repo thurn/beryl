@@ -16,6 +16,8 @@ workspace = true
 decklists = ["dep:beryl_card_records"]
 
 [dependencies]
+kit_base.workspace = true
+kit_text.workspace = true
 beryl_scene = { path = "../beryl_scene" }
 # The scan cache and Scryfall's download queue, shared with the Tauri app.
 beryl_art = { path = "../../../crates/beryl_art" }
@@ -40,6 +42,7 @@ swash = "=0.2.10"
 tiny-skia = { version = "=0.11.4", default-features = false, features = ["std", "simd"] }
 
 [dev-dependencies]
+kit_frame.workspace = true
 # Opens repository files and records each read, so Ignite reruns the tests when one changes.
 beryl_test_files = { path = "../../../crates/beryl_test_files" }
 # The crate itself with `decklists`, whose faces the tests prepare.

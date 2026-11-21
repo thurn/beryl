@@ -10,7 +10,7 @@ use beryl_protocol::script::{Act, Subject};
 use super::{Interval, StepIn, StepOut};
 use crate::light::{Span, SpanChange};
 use crate::play::nanoseconds;
-use crate::pose::Segment;
+use kit_base::pose::Segment;
 
 pub const BUILT: bool = true;
 

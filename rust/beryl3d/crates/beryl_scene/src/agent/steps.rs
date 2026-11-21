@@ -13,13 +13,13 @@ use glam::{Quat, Vec2};
 use super::fault::Rule;
 use super::hit::{bounds, covered, hit};
 use super::judged::Judged;
-use crate::data::audit;
-use crate::frame::{Frame, Place, Role};
 use crate::input::{Rect, Size};
 use crate::motion::pose_at;
 use crate::play::record::{Cause, ScriptRecord, SegmentRecord, StepRecord};
-use crate::pose::{Pose, Segment};
 use crate::table::Camera;
+use kit_base::data::audit;
+use kit_base::pose::{Pose, Segment};
+use kit_frame::frame::{Frame, Place, Role};
 
 /// A fault the segment and step checks found, before the frame that names its objects is
 /// known.

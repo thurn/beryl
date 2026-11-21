@@ -24,9 +24,9 @@
 use beryl_protocol::protocol::Side;
 use glam::Vec2;
 
-use crate::tokens::size;
 use crate::widgets::IconId;
 use crate::widgets::icons::{IconLayer, LayeredIcon, ORB};
+use kit_base::tokens::size;
 
 /// The view box of the web's orb art: its left, top, width and height, about the orb's middle.
 pub const ART: [f32; 4] = [-136.0, -57.0, 272.0, 116.0];
@@ -46,7 +46,7 @@ pub use crate::table::ORB_DESKTOP_SCALE as DESKTOP_SCALE;
 
 /// The scales the art is drawn at: the desktop's and the phone's
 /// (`data::space::hud::phone::ORB_SCALE`).
-pub const SCALES: [f32; 2] = [DESKTOP_SCALE, crate::data::space::hud::phone::ORB_SCALE];
+pub const SCALES: [f32; 2] = [DESKTOP_SCALE, kit_base::data::space::hud::phone::ORB_SCALE];
 
 /// One outline of the art, in units, as the viewer's orb draws it.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -266,7 +266,7 @@ pub const LAYERS: [Layer; 16] = [
     plain(
         Shape::Core,
         FILL,
-        crate::tokens::color::ORB_CORE,
+        kit_base::tokens::color::ORB_CORE,
         mirrored([-50.0, -41.0, 100.0, 76.0]),
     ),
     // The bezel's gradient: #dcd8d2 at 0, #8e8984 at 0.2, #4a4643 at 0.6 and #3a3633 at 1,

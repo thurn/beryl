@@ -8,12 +8,12 @@
 use glam::Vec2;
 
 use crate::element::Shadow;
-use crate::frame::text::faded;
-use crate::frame::{Band, Draw, FrameBuilder, Missing, box_shadow_reach};
-use crate::geometry::plane::ScreenPlane;
 use crate::input::Rect;
 use crate::widgets::icons::Icons;
 use crate::widgets::{IconId, icon_shadows};
+use kit_base::geometry::plane::ScreenPlane;
+use kit_frame::frame::text::faded;
+use kit_frame::frame::{Band, Draw, FrameBuilder, Missing, box_shadow_reach};
 
 /// The element box the shadows of one element are cast from.
 #[derive(Clone, Copy, Debug)]

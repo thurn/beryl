@@ -14,18 +14,18 @@ use beryl_protocol::protocol::{ObjectView, ZoneName};
 use glam::{Affine3A, Quat, Vec2, Vec3};
 
 use super::{Badges, On, faded};
-use crate::data::space::badges::cost as data;
 use crate::faces::{FaceList, ListedFace};
-use crate::frame::{
+use kit_base::data::space::badges::cost as data;
+use kit_base::tokens::{badge, mana};
+use kit_frame::frame::{
     Draw, ElementId, FrameBuilder, NameRef, Place, RECORDS_PER_OBJECT, Resolved, Role, Sprite,
     StateBits,
 };
-use crate::text::fonts::Font;
-use crate::text::{Block, Glyphs, Text, TypeStyle, glyph_key};
-use crate::tokens::{badge, mana};
+use kit_text::text::fonts::Font;
+use kit_text::text::{Block, Glyphs, Text, TypeStyle, glyph_key};
 
 use super::super::{CARD_HEIGHT, CARD_WIDTH, Camera};
-use crate::frame::ARROW_IDS;
+use kit_frame::frame::ARROW_IDS;
 
 /// The element id of the cost of the card in slot 0: past the arrows' and the aims'. The cost
 /// of the card in slot `s` is this plus `s`.

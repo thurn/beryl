@@ -15,12 +15,12 @@ use serde_json::Value;
 
 use super::commands::seat_of;
 use super::viewers::inside;
-use crate::data::space::flat::table::drop as data;
 use crate::element::{Align, Anchor, Element, Justify, column, text};
-use crate::frame::{Frame, Place, Role, StateBits};
 use crate::input::Rect;
 use crate::table::{Camera, Layout};
-use crate::tokens::{color, ratio, type_style};
+use kit_base::data::space::flat::table::drop as data;
+use kit_base::tokens::{color, ratio, type_style};
+use kit_frame::frame::{Frame, Place, Role, StateBits};
 
 /// What a dropped card lands in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -449,7 +449,7 @@ fn row_in(frame: &Frame, slot: ObjectId) -> Option<RowName> {
 }
 
 /// The card element of `slot` in `frame`.
-fn card_element(frame: &Frame, slot: ObjectId) -> Option<&crate::frame::Resolved> {
+fn card_element(frame: &Frame, slot: ObjectId) -> Option<&kit_frame::frame::Resolved> {
     (frame.resolved.iter())
         .find(|element| element.role == Role::Card && element.id.0 == u32::from(slot.0))
 }

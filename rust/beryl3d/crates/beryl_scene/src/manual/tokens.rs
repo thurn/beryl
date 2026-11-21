@@ -17,10 +17,10 @@ use super::TablePress;
 use super::ask::parse;
 use super::palette::list_row;
 use crate::element::{Align, Anchor, Element, Overflow, column, row, text};
-use crate::frame::Role;
 use crate::input::Size;
-use crate::tokens::{color, size, space, type_style};
 use crate::widgets::{Fields, button, field, primary};
+use kit_base::tokens::{color, size, space, type_style};
+use kit_frame::frame::Role;
 
 /// The token search's field, by its name, which is also its placeholder.
 pub const FIELD: &str = "Search tokens";
@@ -215,12 +215,12 @@ pub fn panel(search: &TokenSearch, view: &PlayerView, fields: &Fields, window: S
         .name("Tokens")
         .gap(size::MENU_ROW_GAP)
         .overflow(Overflow::Scroll)
-        .max_height(crate::data::space::flat::table::palette::HEIGHT)
+        .max_height(kit_base::data::space::flat::table::palette::HEIGHT)
         .children(rows);
     list.role = Role::List;
     let mut panel = column()
         .name("Token search")
-        .width(crate::data::space::flat::table::palette::WIDTH)
+        .width(kit_base::data::space::flat::table::palette::WIDTH)
         .gap(space::M)
         .padding(size::MENU_PADDING)
         .background(color::SURFACE)
@@ -228,7 +228,7 @@ pub fn panel(search: &TokenSearch, view: &PlayerView, fields: &Fields, window: S
         .radius(size::MENU_RADIUS)
         .child(field(FIELD, &state))
         .child(list);
-    let top = crate::data::space::flat::table::palette::TOP;
+    let top = kit_base::data::space::flat::table::palette::TOP;
     panel.anchor = Some(Anchor::Point(
         Vec2::new(window.width / 2.0, top),
         Vec2::new(0.5, 0.0),
@@ -375,7 +375,7 @@ pub fn custom_panel(form: &CustomToken, fields: &Fields, window: Size) -> Elemen
         );
     let mut panel = column()
         .name("Custom token")
-        .width(crate::data::space::flat::table::palette::WIDTH)
+        .width(kit_base::data::space::flat::table::palette::WIDTH)
         .gap(space::M)
         .padding(size::MENU_PADDING)
         .background(color::SURFACE)
@@ -395,7 +395,7 @@ pub fn custom_panel(form: &CustomToken, fields: &Fields, window: Size) -> Elemen
         .child(stats)
         .child(input(NOTE))
         .child(footer);
-    let top = crate::data::space::flat::table::palette::TOP;
+    let top = kit_base::data::space::flat::table::palette::TOP;
     panel.anchor = Some(Anchor::Point(
         Vec2::new(window.width / 2.0, top),
         Vec2::new(0.5, 0.0),

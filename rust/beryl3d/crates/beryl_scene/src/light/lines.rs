@@ -19,7 +19,7 @@
 use beryl_protocol::script::Arrow;
 use glam::Vec2;
 
-use crate::data::space::light::{bow, hang, onto};
+use kit_base::data::space::light::{bow, hang, onto};
 
 /// One end of a line as it lies on the screen: its middle, how far it reaches from there across
 /// and down, as a box or, `round`, as the ellipse inside that box (a player's life total, as the

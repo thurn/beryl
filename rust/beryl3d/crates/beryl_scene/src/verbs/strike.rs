@@ -21,9 +21,9 @@ use beryl_protocol::script::{Act, Step, Subject};
 use glam::{Quat, Vec2, Vec3, Vec3Swizzles};
 
 use super::{Interval, StepIn, StepOut};
-use crate::data::space::verbs::strike;
-use crate::pose::{Curve, Pose, Segment};
 use crate::table::{CARD_HEIGHT, CARD_WIDTH};
+use kit_base::data::space::verbs::strike;
+use kit_base::pose::{Curve, Pose, Segment};
 
 pub const BUILT: bool = true;
 

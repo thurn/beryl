@@ -14,10 +14,10 @@
 
 use std::num::NonZeroU64;
 
-use beryl_scene::data::space::{enhanced::shadow as data, shadow as baseline};
-use beryl_scene::frame::{Frame, Mesh};
 use glam::camera::rh::{proj::directx, view::look_to_mat4};
 use glam::{Mat4, Vec3, Vec4, Vec4Swizzles};
+use kit_base::data::space::{enhanced::shadow as data, shadow as baseline};
+use kit_frame::frame::{Frame, Mesh};
 
 use super::{LIT, LIT_OFFSET, SHADER};
 use crate::count::{self, FragmentCounter};

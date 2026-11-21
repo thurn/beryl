@@ -113,7 +113,7 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
   registry and verifies that excluded rows have no mapping.
 - `design-tokens.json`: the design tokens both clients draw with.
   `just design-tokens` writes the web interface's `ui/src/design/tokens.css`
-  from it, and Beryl 3D's `beryl_scene` build script writes the constants of its
+  from it, and Beryl 3D's `kit_base` build script writes the constants of its
   `tokens` module. `tokens` lists every CSS variable in order, each with a
   `name`, a `kind` (`color`, `length`, `number`, `font`, or `css` for values
   only CSS can use, which Beryl 3D skips), its CSS `value`, an optional `note`

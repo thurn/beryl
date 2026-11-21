@@ -9,17 +9,17 @@ use beryl_protocol::protocol::{Declaration, ObjectId, Side, Step, StopsSetting, 
 use beryl_protocol::script::{Act, OwnStep, Turn};
 
 use super::Client;
-use crate::data::space::shown::opening;
 use crate::element::{Element, floats};
-use crate::frame::Place;
 use crate::input::Rect;
 use crate::inspect::revealed::{self, RevealedFace};
 use crate::layout::FloatLook;
 use crate::light::Span;
-use crate::pose::Curve;
 use crate::screens::{self, Screen, ScreenIn};
 use crate::table::{Moves, Relaid, Window};
 use crate::verbs::Interval;
+use kit_base::data::space::shown::opening;
+use kit_base::pose::Curve;
+use kit_frame::frame::Place;
 
 /// Nanoseconds in a millisecond, as the session's step timings are written in milliseconds.
 const NS_PER_MS: f64 = 1_000_000.0;
@@ -218,7 +218,7 @@ impl Client {
                         reason = "a step lasts well under a second"
                     )]
                     let length = (entry.timing.duration * NS_PER_MS) as u64;
-                    (length, Curve::named(entry.timing.curve))
+                    (length, crate::motion::named_curve(entry.timing.curve))
                 })
         };
         // The kept opening hand drops from the opening screen into the hand in about an eighth

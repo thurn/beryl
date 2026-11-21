@@ -36,6 +36,17 @@ edition = "2024"
 license = "Apache-2.0"
 
 [workspace.dependencies]
+# The protocol types still carried by the scene and its frame records.
+beryl_protocol = { path = "../crates/beryl_protocol" }
+# Lets the renderer upload draw records as bytes without hand-written unsafe casts.
+bytemuck = { version = "1.25.2", features = ["derive"] }
+# Vector and matrix math for poses and the camera, in place of hand-written math.
+glam = "0.34.3"
+# Shapes and breaks text into lines without hand-written layout or system font discovery.
+parley = { version = "0.13.0", default-features = false, features = ["std"] }
+# Reads configuration and protocol data without hand-written parsers.
+serde_json = "1.0.154"
+
 # Ids, vectors, `Pose`, curves, design tokens, the data store.
 kit_base = { path = "crates/kit_base" }
 # Shaping, line breaking, glyph requests.

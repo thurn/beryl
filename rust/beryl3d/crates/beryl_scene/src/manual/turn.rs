@@ -147,7 +147,7 @@ pub fn next(phase: TablePhase, window: Window) -> Element {
     let button = primary("Next").on_press(TablePress::Next);
     let caption = caption(next_phase(phase));
     let (mut action, inset) = if window.phone() {
-        let edge = crate::data::space::flat::table::EDGE;
+        let edge = kit_base::data::space::flat::table::EDGE;
         (captioned(button, caption), Vec2::splat(edge))
     } else {
         let dock = desktop_dock().child(turn_action(dock_sized(button), None, caption));
