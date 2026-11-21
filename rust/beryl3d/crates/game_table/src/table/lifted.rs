@@ -18,6 +18,7 @@ use super::{CARD_HEIGHT, CARD_WIDTH, Camera, LAYER, Layout};
 use kit_base::data::verbs::{Lift, LiftHand};
 use kit_base::pose::Pose;
 use kit_frame::frame::Place;
+use kit_space::arrange::spot;
 
 /// The group that holds the cards `handling` takes, if the table places any of them.
 #[must_use]
@@ -251,7 +252,13 @@ fn held_up(
         + hand.packet * under as f32;
     let rotation = Quat::from_rotation_z(-(offset * hand.lean_degrees).to_radians());
     let depth = hand.depth - order;
-    let mut pose = camera.screen_pose(ndc, depth, rotation, height);
+    let anchor = camera.screen_pose(ndc, depth, Quat::IDENTITY, height);
+    let mut pose = spot(
+        anchor.position,
+        anchor.rotation * rotation,
+        anchor.scale,
+        anchor,
+    );
     pose.turn = if pile || object.owner == Side::Opponent || !super::rows::face_up(object) {
         1.0
     } else {

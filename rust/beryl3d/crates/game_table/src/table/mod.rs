@@ -128,9 +128,7 @@ pub struct HandData {
     /// of their strip, as the web interface's `backSpot` puts it.
     pub across: f32,
     /// The highest the inner edge of the hand's back row may stand, in normalized device
-    /// coordinates. A hand that would need more rows than fit under it closes its rows up past
-    /// their strips instead. On the desktop nothing limits the rows; on the phone they stop at
-    /// the top safe inset.
+    /// coordinates. Cards that cannot keep a press square below the ceiling scroll into view.
     pub ceiling: f32,
 }
 

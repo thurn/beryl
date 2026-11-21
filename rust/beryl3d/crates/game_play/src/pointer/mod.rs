@@ -391,12 +391,12 @@ fn raised(rest: &Pose, camera: &Camera) -> Pose {
     let [right, up, back] = camera.axes();
     let grown = (data::RAISE_SCALE - 1.0) * CARD_HEIGHT / 2.0;
     let position = rest.position + up * (data::RAISE_MM + grown) * rest.scale;
-    Pose {
-        position: camera.eye + (position - camera.eye) * data::NEARER,
-        rotation: Quat::from_mat3(&Mat3::from_cols(right, up, back)),
-        scale: rest.scale * data::RAISE_SCALE * data::NEARER,
-        ..*rest
-    }
+    kit_space::arrange::spot(
+        camera.eye + (position - camera.eye) * data::NEARER,
+        Quat::from_mat3(&Mat3::from_cols(right, up, back)),
+        rest.scale * data::RAISE_SCALE * data::NEARER,
+        *rest,
+    )
 }
 
 /// Finds the card under the pointer in `frame`, the frame just built at `now`, and marks it

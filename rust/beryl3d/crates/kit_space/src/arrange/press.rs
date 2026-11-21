@@ -1,11 +1,53 @@
 //! Proves that a square fits in the exposed part of a projected rectangle. Convex clipping
 //! works for tilted and perspective-projected items as well as face-on ones.
 
+use arrayvec::ArrayVec;
 use glam::Vec2;
 
 use super::{Camera, Region};
 
-type Polygon = Vec<Vec2>;
+type Polygon = Buffer<Vec2, 16>;
+
+/// Keep ordinary clips and nearby blockers on the stack. Dense layouts can exceed the
+/// inline capacity, so the same search spills to the heap when it needs more room.
+struct Buffer<T, const CAPACITY: usize> {
+    inline: ArrayVec<T, CAPACITY>,
+    heap: Option<Vec<T>>,
+}
+
+impl<T, const CAPACITY: usize> Buffer<T, CAPACITY> {
+    fn new() -> Self {
+        Self {
+            inline: ArrayVec::new(),
+            heap: None,
+        }
+    }
+
+    fn push(&mut self, value: T) {
+        if let Some(heap) = &mut self.heap {
+            heap.push(value);
+        } else if let Err(full) = self.inline.try_push(value) {
+            let mut heap = Vec::with_capacity(CAPACITY * 2);
+            heap.extend(self.inline.drain(..));
+            heap.push(full.element());
+            self.heap = Some(heap);
+        }
+    }
+
+    fn as_slice(&self) -> &[T] {
+        self.heap.as_deref().unwrap_or(&self.inline)
+    }
+}
+
+impl<T, const CAPACITY: usize> FromIterator<T> for Buffer<T, CAPACITY> {
+    fn from_iter<I: IntoIterator<Item = T>>(items: I) -> Self {
+        let mut buffer = Self::new();
+        for item in items {
+            buffer.push(item);
+        }
+        buffer
+    }
+}
 
 /// Extra space left around the witness, in logical points, for projection rounding.
 const CLEARANCE: f32 = 0.002;
@@ -40,7 +82,7 @@ impl HalfPlane {
     }
 
     fn clip(self, polygon: &[Vec2]) -> Polygon {
-        let mut result = Vec::new();
+        let mut result = Polygon::new();
         for (a, b) in edges(polygon) {
             let from = self.inward.dot(a) - self.limit;
             let to = self.inward.dot(b) - self.limit;
@@ -130,12 +172,12 @@ impl PressArea {
     pub(super) fn new(item: Quad, screen: Quad, side: f32) -> Self {
         let axis = ((item.0[1] - item.0[0]) + (item.0[2] - item.0[3])).normalize_or_zero();
         let mut area = Self {
-            centres: item.0.to_vec(),
+            centres: item.0.into_iter().collect(),
             axes: [axis, axis.perp()],
             half: side / 2.0,
         };
         for plane in item.planes().chain(screen.planes()) {
-            area.centres = area.eroded(plane).clip(&area.centres);
+            area.centres = area.eroded(plane).clip(area.centres.as_slice());
         }
         area
     }
@@ -155,12 +197,15 @@ impl PressArea {
 
     pub(super) fn holds_in(&self, strip: HalfPlane) -> bool {
         let strip = self.eroded(strip);
-        self.centres.iter().any(|&centre| strip.contains(centre))
+        self.centres
+            .as_slice()
+            .iter()
+            .any(|&centre| strip.contains(centre))
     }
 
     pub(super) fn witness(&self, blockers: impl Iterator<Item = Quad>) -> Option<[Vec2; 4]> {
-        let forbidden: Vec<_> = blockers.map(|quad| self.forbidden(quad)).collect();
-        let centre = uncovered(&self.centres, &forbidden)?;
+        let forbidden: Buffer<_, 12> = blockers.map(|quad| self.forbidden(quad)).collect();
+        let centre = uncovered(self.centres.as_slice(), forbidden.as_slice())?;
         let [x, y] = self.axes.map(|axis| axis * self.half);
         Some([
             centre - x - y,
@@ -223,13 +268,13 @@ fn uncovered(polygon: &[Vec2], forbidden: &[[HalfPlane; 8]]) -> Option<Vec2> {
     {
         return uncovered(polygon, rest);
     }
-    let mut inside = polygon.to_vec();
+    let mut inside: Polygon = polygon.iter().copied().collect();
     for plane in obstacle {
-        let outside = plane.outside().clip(&inside);
-        if let Some(point) = uncovered(&outside, rest) {
+        let outside = plane.outside().clip(inside.as_slice());
+        if let Some(point) = uncovered(outside.as_slice(), rest) {
             return Some(point);
         }
-        inside = plane.clip(&inside);
+        inside = plane.clip(inside.as_slice());
     }
     None
 }

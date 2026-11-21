@@ -2,8 +2,8 @@ use glam::{Quat, Vec2, Vec3};
 use kit_base::data::{audit, space::layout::phone};
 use kit_base::geometry::{CARD_HEIGHT, CARD_WIDTH, Insets, Rect, Size, Window};
 use kit_space::arrange::{
-    Alignment, Container, Edge, Group, Item, Limits, Overflow, Policy, Region, Solved, Under,
-    arrange,
+    Alignment, CentredFan, Container, Edge, Fan, Group, Item, Limits, Overflow, Policy, Region,
+    Solved, Under, arrange,
 };
 use kit_space::camera::{Camera, CameraData, DESKTOP_CAMERA};
 
@@ -305,12 +305,12 @@ fn seeded_rows_and_fans_leave_each_pressable_rectangle_a_projected_square() {
             };
             for (index, policy) in [
                 row(alignment),
-                Policy::Fan {
+                Policy::Fan(Fan::Fixed {
                     alignment,
                     radius: natural(&camera, Vec2::splat(720.0)).x,
                     max_lean: 0.48,
                     gap: 0.0,
-                },
+                }),
             ]
             .into_iter()
             .enumerate()
@@ -344,12 +344,12 @@ fn seeded_full_size_layouts_keep_the_prefix_before_a_removal() {
         for alignment in [Alignment::Start, Alignment::Middle, Alignment::End] {
             for policy in [
                 row(alignment),
-                Policy::Fan {
+                Policy::Fan(Fan::Fixed {
                     alignment,
                     radius: natural(&camera, Vec2::splat(3000.0)).x,
                     max_lean: 0.35,
                     gap: 0.0,
-                },
+                }),
             ] {
                 let container = container(
                     &camera,
@@ -419,6 +419,66 @@ fn overlapping_rows_keep_the_prefix_before_a_removal() {
             for (before, after) in before.items.iter().zip(&after.items).take(removed) {
                 assert_eq!(before.pose, after.pose);
             }
+        }
+    }
+}
+
+#[test]
+fn a_centred_fan_wraps_before_scrolling_and_keeps_its_press_squares() {
+    let items = rectangles(60, Vec2::new(CARD_WIDTH, CARD_HEIGHT));
+    for ((camera, target), scrolls) in profiles().into_iter().zip([false, true]) {
+        let window = camera.window.size;
+        let anchor = camera.screen_pose(Vec2::new(0.0, -0.62), 300.0, Quat::IDENTITY, 0.5);
+        let units = anchor.scale * CARD_HEIGHT;
+        let fan = Container {
+            region: Region {
+                centre: anchor.position,
+                size: units * Vec2::new(2.0 * window.width / window.height, 0.55),
+                rotation: anchor.rotation,
+            },
+            policy: Policy::Fan(Fan::Centred(CentredFan {
+                height: f32::min(100.0 / (CARD_WIDTH / CARD_HEIGHT), window.height * 0.28)
+                    / window.height,
+                radius: 14.0,
+                step: 0.95,
+                span: 3.35,
+                bias: 0.6_f32.to_radians(),
+                inverted: false,
+                depth_step: 1.5,
+            })),
+            limits: Limits {
+                press_points: target,
+                overlap: true,
+                scroll: true,
+                ..Limits::default()
+            },
+        };
+        let start = arrange(&fan, &items, &camera, 0);
+        verify(&items, &start, &camera, target);
+        assert_eq!(start.before, 0);
+        assert!(start.items.iter().filter(|item| item.in_view).count() > 6);
+        // A middle card in a back row stands higher than either end of the front row.
+        let back = camera.to_screen(start.items[2].pose.position);
+        let front = camera.to_screen(
+            start
+                .items
+                .iter()
+                .rfind(|item| item.in_view)
+                .unwrap()
+                .pose
+                .position,
+        );
+        assert!(front.y - back.y > target);
+        if scrolls {
+            assert_eq!(start.overflow, Overflow::Scrolled);
+            let end = arrange(&fan, &items, &camera, items.len());
+            verify(&items, &end, &camera, target);
+            assert_eq!((end.before, end.after), (start.after, 0));
+            assert!(
+                end.items[..end.before]
+                    .iter()
+                    .all(|item| !item.in_view && item.pose == end.items[end.before].pose)
+            );
         }
     }
 }

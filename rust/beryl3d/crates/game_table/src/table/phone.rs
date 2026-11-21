@@ -323,7 +323,7 @@ fn piles(camera: &Camera, bands: &PhoneBands) -> ([[Vec2; 3]; 2], [f32; 2]) {
 /// phone's touch target tall above it, and a cell of the hit test's grid more at each edge. A
 /// hand of several rows that rose higher would cover the lands and other permanents, and then
 /// the creatures, past what a press can reach; the cards that do not fit under this ceiling
-/// scroll instead (`hands::Fan::shown`).
+/// scroll instead.
 fn hand_ceiling(camera: &Camera) -> f32 {
     // A tapped card lies across its row, so its far edge is half a card's width from the row's
     // middle, toward the opponent.

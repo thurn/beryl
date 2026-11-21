@@ -5,7 +5,8 @@ use kit_base::geometry::{GroupWindow, ScrollAxis};
 
 use super::press::{self, PressArea, Quad};
 use super::{
-    Alignment, Camera, Cluster, Container, Edge, Item, Overflow, Pile, Placed, Policy, Pose, Solved,
+    Alignment, Camera, Cluster, Container, Edge, Fan, Item, Overflow, Pile, Placed, Policy, Pose,
+    Solved, spot,
 };
 
 /// Bisection of projected strips and layout scale. Twelve steps resolve a typical item
@@ -156,7 +157,7 @@ impl<'a> Layout<'a> {
         let (mut low, mut high) = (Vec2::ZERO, Vec2::ZERO);
         for &(_, rect) in &parts {
             let mut half = rect.half;
-            if let Policy::Fan { max_lean, .. } = self.container.policy {
+            if let Policy::Fan(Fan::Fixed { max_lean, .. }) = self.container.policy {
                 // Reserve room for a turned rectangle without depending on the positions or
                 // number of the items that follow it.
                 half.x += half.y * max_lean.abs().min(std::f32::consts::FRAC_PI_2).sin();
@@ -169,9 +170,9 @@ impl<'a> Layout<'a> {
 
     fn local(&self, mut rect: Rect, centre: Vec2) -> Rect {
         rect.centre += centre;
-        if let Policy::Fan {
+        if let Policy::Fan(Fan::Fixed {
             radius, max_lean, ..
-        } = self.container.policy
+        }) = self.container.policy
             && radius > 0.0
         {
             let fraction = (rect.centre.x / radius).clamp(-1.0, 1.0);
@@ -207,12 +208,12 @@ impl<'a> Layout<'a> {
         // strip, unchanged. At a common point on screen the higher layer is nearer.
         let factor = 1.0 / (1.0 + depth * 0.0001);
         let position = region.point(rect.centre);
-        let pose = Pose {
-            position: position + (self.camera.eye - position) * (1.0 - factor),
-            scale: scale * factor,
-            rotation: region.rotation * Quat::from_rotation_z(rect.angle),
-            ..Pose::default()
-        };
+        let pose = spot(
+            position + (self.camera.eye - position) * (1.0 - factor),
+            region.rotation * Quat::from_rotation_z(rect.angle),
+            scale * factor,
+            Pose::default(),
+        );
         let transform = pose.transform();
         let half = size / 2.0;
         let corners = (Rect {
@@ -552,7 +553,9 @@ impl Positioner {
     fn new(region: super::Region, policy: Policy, scale: f32) -> Self {
         let half = region.size / 2.0;
         let (direction, alignment) = match policy {
-            Policy::Row { alignment, .. } | Policy::Fan { alignment, .. } => (Vec2::X, alignment),
+            Policy::Row { alignment, .. } | Policy::Fan(Fan::Fixed { alignment, .. }) => {
+                (Vec2::X, alignment)
+            }
             Policy::Cascade { direction, .. } => (
                 direction.try_normalize().unwrap_or(Vec2::Y),
                 Alignment::Start,
@@ -596,10 +599,10 @@ impl Positioner {
             Policy::Row {
                 alignment: Alignment::Middle,
                 ..
-            } | Policy::Fan {
+            } | Policy::Fan(Fan::Fixed {
                 alignment: Alignment::Middle,
                 ..
-            }
+            })
         )
     }
 
@@ -614,7 +617,7 @@ impl Positioner {
     fn line(&self) -> Option<Line> {
         matches!(
             self.policy,
-            Policy::Row { .. } | Policy::Fan { .. } | Policy::Cascade { .. }
+            Policy::Row { .. } | Policy::Fan(_) | Policy::Cascade { .. }
         )
         .then(|| self.lines[self.active()])
     }
@@ -650,7 +653,7 @@ impl Positioner {
 
     fn advance(&mut self, pack: &Pack, step: f32, overlap: bool) {
         let gap = match self.policy {
-            Policy::Row { gap, .. } | Policy::Fan { gap, .. } if !overlap => {
+            Policy::Row { gap, .. } | Policy::Fan(Fan::Fixed { gap, .. }) if !overlap => {
                 gap.max(0.0) * self.scale
             }
             _ => 0.0,

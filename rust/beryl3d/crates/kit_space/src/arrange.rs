@@ -9,11 +9,13 @@ use kit_base::pose::Pose;
 use crate::camera::Camera;
 
 mod cascade;
+mod fan;
 mod layout;
 mod press;
 pub mod row;
 
 pub use cascade::{AnchoredCascade, Cascade, CascadeLayout};
+pub use fan::CentredFan;
 use layout::Layout;
 
 /// The available rectangle in table space. The rotation takes the region's local right,
@@ -88,14 +90,8 @@ pub enum Policy {
         group_gap: f32,
         tuck_step: Vec2,
     },
-    /// A circular arc of radius `radius`, tangent to the horizontal at the middle.
-    /// Each rectangle turns to follow the arc, up to `max_lean` radians.
-    Fan {
-        alignment: Alignment,
-        radius: f32,
-        max_lean: f32,
-        gap: f32,
-    },
+    /// A circular arc, with each rectangle turned along the arc.
+    Fan(Fan),
     /// A step along `direction`, with `step` as the preferred distance between successive advances.
     Cascade { direction: Vec2, step: f32 },
     /// One stack, with its first item on top. The following nonpressable items are
@@ -144,6 +140,21 @@ impl Pile {
             ..first
         }
     }
+}
+
+/// How the arc is anchored in its region.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Fan {
+    /// Grow from a fixed origin. The positions of earlier rectangles stay fixed.
+    Fixed {
+        alignment: Alignment,
+        radius: f32,
+        max_lean: f32,
+        gap: f32,
+    },
+    /// Centre each row on a screen edge. The arc stays symmetrical as the number of items
+    /// changes. This fan wraps, then scrolls at the original size, without gathering copies.
+    Centred(CentredFan),
 }
 
 /// Which overflow steps a container allows. A scale of 1 disables shrinking.
@@ -294,16 +305,32 @@ fn clusters(items: &[Item], policy: Policy, pile_identical: bool) -> Vec<Cluster
     clusters
 }
 
+/// The pose of the single item in a `Policy::Spot`. Use this allocation-free form when the
+/// caller has already chosen the region and scale and the item does not need overflow or a
+/// press square (for example, a card moving towards a raised pose).
+#[must_use]
+pub fn spot(centre: Vec3, rotation: Quat, scale: f32, appearance: Pose) -> Pose {
+    Pose {
+        position: centre,
+        rotation,
+        scale,
+        ..appearance
+    }
+}
+
 /// Arrange the items, taking the first allowed overflow stage that fits. The scroll offset
 /// is the number of clusters to skip. A window reaching the end is filled back towards the
 /// start. A cluster that cannot fit alone can be passed by scrolling.
 ///
-/// Within a scale and overflow stage, the policies arrange from fixed origins in input order.
-/// Removing a later cluster leaves earlier positions stable. Tucked items share a cluster
+/// Within a scale and overflow stage, fixed-origin policies preserve earlier positions when a
+/// later cluster leaves. A centred fan instead reflows to stay symmetrical. Tucked items share a cluster
 /// with their host. If the cluster's footprint changes, its contents are arranged together.
 /// A change of scale, piling stage or visible window can reflow the container.
 #[must_use]
 pub fn arrange(container: &Container, items: &[Item], camera: &Camera, scroll: usize) -> Solved {
+    if let Policy::Fan(Fan::Centred(fan)) = container.policy {
+        return fan::arrange(container, fan, items, camera, scroll);
+    }
     let layout = Layout::new(container, items, camera);
     let mut clusters = clusters(items, container.policy, false);
     if let Ok(placed) = layout.fit(&clusters, 1.0, false) {
