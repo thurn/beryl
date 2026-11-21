@@ -28,6 +28,24 @@
       }
     ]
   },
+  "blood-toll harpy": {
+    "oracle_text": "Flying\nWhen this creature enters, each player loses 1 life.",
+    "keywords": ["Flying"],
+    "triggers": [
+      {
+        "mode": "ChangesZone",
+        "execute": {
+          "kind": "Spell",
+          "effect": {"type": "LoseLife", "amount": {"type": "Fixed", "value": 1}},
+          "player_scope": {"type": "All"}
+        },
+        "valid_card": {"type": "SelfRef"},
+        "destination": "Battlefield",
+        "trigger_zones": ["Battlefield"],
+        "description": "When this creature enters, each player loses 1 life."
+      }
+    ]
+  },
   "visionary": {
     "oracle_text": "When this creature enters, draw a card.",
     "triggers": [

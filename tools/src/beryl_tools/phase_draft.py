@@ -324,7 +324,12 @@ EFFECT_KINDS: set[str] = (
 
 
 def effect(
-    code: Node, duration: object, up_to: int = 0, keyword: str = ""
+    code: Node,
+    duration: object,
+    up_to: int = 0,
+    keyword: str = "",
+    *,
+    all_players: bool = False,
 ) -> tuple[str, str]:
     kind = code.take("type")
     if not isinstance(kind, str):
@@ -333,14 +338,18 @@ def effect(
         raise Unsupported(f"effect.type: unsupported {kind}", node_kind("effect", kind))
     if up_to and kind != "Pump":
         raise Unsupported(f"ability.multi_target: unsupported on {kind}")
-    affected = target(code.take("target"), up_to)
+    if all_players:
+        code.expect("target", None)
+        affected = Target(players="each_player()")
+    else:
+        affected = target(code.take("target"), up_to)
     if kind not in ("Pump", "ChangeZone") and duration is not None:
         raise Unsupported(f"ability.duration: unsupported on {kind}")
     if kind in PLAYER_COUNTS and affected.players:
         builder, amount = PLAYER_COUNTS[kind]
         if kind == "Mill":
             code.expect("destination", "Graveyard")
-        if kind in ("GainLife", "LoseLife") and not affected.spec:
+        if kind in ("GainLife", "LoseLife") and not (affected.spec or all_players):
             code.expect("player", "controller")
         result = f"{builder}({affected.players}, {fixed(code.take(amount))})"
     elif kind in OBJECT_EFFECTS and affected.objects:
@@ -515,6 +524,16 @@ def ability(value: object, trigger: str = "", parent: bool = False) -> Ability:
             raise Unsupported("ability.multi_target: expected a top-level spell")
         up_to = optional_target_limit(multi_target)
     body = Node(node.take("effect"), "effect")
+    player_scope = node.take("player_scope")
+    # A Phase sub-ability can depend on the enclosing player scope.
+    if player_scope is not None and (
+        player_scope != {"type": "All"}
+        or body.fields.get("type") != "LoseLife"
+        or child is not None
+    ):
+        raise Unsupported(
+            f"ability.player_scope: unsupported value {player_scope!r} for this ability"
+        )
     node.take("description")
     node.expect("condition", None)
     node.expect("target_prompt", None)
@@ -561,7 +580,9 @@ def ability(value: object, trigger: str = "", parent: bool = False) -> Ability:
         keyword = pump_keyword(child)
         duration = "UntilEndOfTurn"
         child = None
-    expression, spec = effect(body, duration, up_to, keyword)
+    expression, spec = effect(
+        body, duration, up_to, keyword, all_players=player_scope is not None
+    )
     if child is None:
         return Ability(builder, (expression,), spec)
     following = ability(child, parent=True)

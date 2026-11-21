@@ -144,6 +144,54 @@ def test_refuses_a_second_target_in_the_pump_keyword_grant(
         phase_draft.ability(spell)
 
 
+def test_translates_a_life_loss_trigger_for_each_player(
+    phase: dict[str, card_store.Json],
+) -> None:
+    trigger = cast(list[object], phase["blood-toll harpy"]["triggers"])[0]
+    assert (
+        phase_draft.triggered(trigger).expression()
+        == "when_enters(&lose_life(each_player(), 1))"
+    )
+
+
+@pytest.mark.parametrize(
+    ("overrides", "field"),
+    [
+        ({"player_scope": {"type": "Opponent"}}, "ability.player_scope"),
+        ({"player_scope": {"type": "All", "extra": True}}, "ability.player_scope"),
+        ({"effect": {"type": "GainLife"}}, "ability.player_scope"),
+        (
+            {"effect": {"type": "LoseLife", "target": {"type": "Player"}}},
+            "effect.target",
+        ),
+        (
+            {
+                "sub_ability": {
+                    "kind": "Spell",
+                    "effect": {"type": "Draw", "count": {"type": "Fixed", "value": 1}},
+                }
+            },
+            "ability.player_scope",
+        ),
+    ],
+)
+def test_life_loss_scope_rejects_unsupported_combinations(
+    overrides: card_store.Json, field: str
+) -> None:
+    with pytest.raises(phase_draft.Unsupported, match=field):
+        phase_draft.ability(
+            {
+                "kind": "Spell",
+                "effect": {
+                    "type": "LoseLife",
+                    "amount": {"type": "Fixed", "value": 1},
+                },
+                "player_scope": {"type": "All"},
+                **overrides,
+            }
+        )
+
+
 @pytest.mark.parametrize(
     ("extra", "field"),
     [
