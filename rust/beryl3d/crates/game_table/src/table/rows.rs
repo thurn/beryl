@@ -81,10 +81,10 @@ impl RowWindow {
         usize::from(self.after)
     }
 
-    /// Whether the row has cards off either end, and so scrolls.
+    /// Whether the row shows a window with cards off either end.
     #[must_use]
     pub fn scrolls(&self) -> bool {
-        self.before + self.after > 0
+        self.shown > 0 && (self.before > 0 || self.after > 0)
     }
 
     /// The first group it may show: from 0 to the last from which every group to the end fits.

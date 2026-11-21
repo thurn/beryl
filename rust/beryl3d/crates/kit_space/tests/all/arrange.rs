@@ -486,6 +486,59 @@ fn a_centred_fan_wraps_before_scrolling_and_keeps_its_press_squares() {
     }
 }
 
+#[test]
+fn a_centred_fan_keeps_its_cards_within_the_available_width() {
+    for (camera, target) in profiles() {
+        let size = Vec2::new(crate::card().x, crate::card().y);
+        let items = rectangles(1, size);
+        let mut fan = container(
+            &camera,
+            Policy::Fan(Fan::Centred(CentredFan {
+                height: 2.0 * target / camera.window.size.height * (size.y / size.x),
+                radius: 14.0,
+                step: 0.95,
+                span: 3.35,
+                bias: 0.0,
+                inverted: false,
+                depth_step: 1.5,
+            })),
+            Limits {
+                press_points: target,
+                overlap: true,
+                scroll: true,
+                ..Limits::default()
+            },
+            Vec2::splat(3.0 * target),
+        );
+        let empty = arrange(&fan, &[], &camera, usize::MAX);
+        assert!(empty.items.is_empty());
+        assert_eq!((empty.before, empty.after), (0, 0));
+        let single = arrange(&fan, &items, &camera, usize::MAX);
+        assert!(single.items[0].in_view);
+        verify(&items, &single, &camera, target);
+
+        let many = rectangles(100, size);
+        let start = arrange(&fan, &many, &camera, 0);
+        let end = arrange(&fan, &many, &camera, usize::MAX);
+        assert_eq!(start.overflow, Overflow::Scrolled);
+        assert!(start.items[0].in_view);
+        assert!(end.items[99].in_view);
+        assert_eq!((start.before, end.after), (0, 0));
+        assert_eq!(start.after, end.before);
+        verify(&many, &start, &camera, target);
+        verify(&many, &end, &camera, target);
+
+        // A full-size card is twice the press target. The safe area can hold it,
+        // but this narrower region cannot, and the centred policy does not shrink it.
+        fan.region.size.x *= 0.5;
+        let narrow = arrange(&fan, &items, &camera, 0);
+        assert!(!narrow.items[0].in_view);
+        assert_eq!((narrow.before, narrow.after), (0, 1));
+        assert_eq!(narrow.overflow, Overflow::Clipped);
+        assert!(narrow.scroll.is_none());
+    }
+}
+
 fn verify(items: &[Item], result: &Solved, camera: &Camera, target: f32) {
     assert_eq!(items.len(), result.items.len());
     let visible: Vec<_> = items

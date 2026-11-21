@@ -91,7 +91,7 @@ pub(super) fn arrange(
     }
     let after = count - first - shown;
     if shown < count {
-        overflow = if container.limits.scroll {
+        overflow = if container.limits.scroll && shown > 0 {
             Overflow::Scrolled
         } else {
             Overflow::Clipped
@@ -173,6 +173,10 @@ struct Trial {
 )]
 impl Fit<'_> {
     fn capacity(&self) -> usize {
+        // Wrapping does not change the width required for a single card.
+        if self.width > self.room.x {
+            return 0;
+        }
         if self.strip <= 0.0 {
             return usize::MAX;
         }
