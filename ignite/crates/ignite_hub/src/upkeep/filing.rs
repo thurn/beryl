@@ -26,7 +26,7 @@
 
 use std::collections::BTreeMap;
 
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, TransactionBehavior, params};
 use serde_json::Value;
 
 use ignite_core::pins::{from_labels, machine_label};
@@ -151,6 +151,18 @@ pub fn file(
     filing: &Filing,
     now: Timestamp,
 ) -> Result<Filed> {
+    file_if(conn, author, filing, now, |_| Ok(true))?
+        .ok_or_else(|| StoreError::Invalid("an unconditional filing was skipped".to_owned()))
+}
+
+/// Files only if `needed` still holds when the write transaction starts.
+pub(super) fn file_if(
+    conn: &mut Connection,
+    author: Author,
+    filing: &Filing,
+    now: Timestamp,
+    needed: impl Fn(&Connection) -> Result<bool>,
+) -> Result<Option<Filed>> {
     let key = filing.signature.key();
     let body = filing.fields.body.clone().unwrap_or_default();
     let origin = origin(conn, author.machine)?;
@@ -165,10 +177,10 @@ pub fn file(
                 .iter()
                 .find(|m| saw_exploration(m, &filing.evidence, &key))
             {
-                return Ok(Filed {
+                return Ok(Some(Filed {
                     ticket: seen.id.clone(),
                     change: Change::Unchanged,
-                });
+                }));
             }
             pending_exploration(&matches, label)
         } else {
@@ -177,10 +189,10 @@ pub fn file(
         };
         let (ops, change) = match live {
             Some(open) if open.sightings.contains(&filing.evidence) => {
-                return Ok(Filed {
+                return Ok(Some(Filed {
                     ticket: open.id.clone(),
                     change: Change::Unchanged,
-                });
+                }));
             }
             Some(open) => {
                 let release = filing.released && open.pending;
@@ -230,12 +242,17 @@ pub fn file(
             preconditions: vec![Precondition::Seq { seq }],
             ops,
         };
-        match batch::apply_automatic(conn, &request, author.actor, author.machine, now)? {
+        let mut tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        if !needed(&tx)? {
+            return Ok(None);
+        }
+        match batch::apply_automatic_in(&mut tx, &request, author.actor, author.machine, now)? {
             BatchOutcome::Applied(reply) => {
-                return Ok(Filed {
+                tx.commit()?;
+                return Ok(Some(Filed {
                     ticket: reply.results[0].id.to_string(),
                     change,
-                });
+                }));
             }
             BatchOutcome::Conflict(_) => {}
         }

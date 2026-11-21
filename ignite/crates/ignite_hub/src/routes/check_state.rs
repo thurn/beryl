@@ -95,6 +95,9 @@ fn switch(conn: &mut Connection, request: &Request, now: Timestamp) -> Result<Re
         None
     };
     tx.commit().map_err(|e| store_failure(&e.into()))?;
+    if change.state == CheckState::Off && previous != change.state {
+        crate::upkeep::regressions::settle_after_change(conn, now);
+    }
     Ok(Response::json(
         200,
         &json!(CheckStateChanged {

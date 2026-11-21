@@ -23,8 +23,8 @@
 //!   them took the ticket for held and refused every other session's `ignite start`.
 //! - A regression a landing found, not tip verification, also records why tip verification
 //!   missed it (`super::missed`).
-//! - An upkeep pass marks a regression fixed once its ticket is closed and the check has passed
-//!   since.
+//! - A verified tip can settle an open regression as soon as every check passes. See
+//!   [`resolution`] for how the hub closes an unheld ticket or tells its holder.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -46,6 +46,17 @@ use super::culprit_affinity;
 use super::filing::{self, Author};
 use crate::routes::dispatch::set_columns;
 
+mod resolution;
+pub use resolution::{passing, settle};
+
+/// Settle regressions after verification or a check switch. The evidence has already
+/// committed, so upkeep can retry a failure without making the original request fail.
+pub(crate) fn settle_after_change(conn: &mut Connection, now: Timestamp) {
+    if let Err(error) = settle(conn, now) {
+        eprintln!("ignite-hub: could not settle passing regressions: {error}");
+    }
+}
+
 /// The lines of a regression's output kept in its ticket.
 pub const OUTPUT_LINES: usize = 40;
 
@@ -53,7 +64,7 @@ pub const OUTPUT_LINES: usize = 40;
 pub const OPEN_TICKETS: usize = 3;
 
 /// The ticket metadata key that holds when a check was last added to an open regression
-/// ticket, so that only tips seen after that can clear it (see `super::clearing`).
+/// ticket, so that only tips seen after that can clear it (see [`resolution`]).
 pub const ADDED_KEY: &str = "ignite_regression_added_at";
 
 /// The check whose confirmed culprit supplies the transcript when several checks share a ticket.

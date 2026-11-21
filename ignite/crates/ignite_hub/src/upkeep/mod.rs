@@ -11,8 +11,9 @@
 //! - files a P1 ticket for a tip that has waited an hour on a machine that has not reported,
 //!   and one for an epic in which nothing can start ([`stuck`]);
 //! - files the copy of each meta-ticket whose schedule says one is due ([`schedules`]);
-//! - closes each ticket it filed by itself whose fault has stayed clear for an hour, unless a
-//!   person touched it or a worker holds it ([`clearing`]);
+//! - closes tickets whose fault has stayed clear for an hour, unless a person touched them or
+//!   a worker holds them, and settles regressions as soon as verification confirms the fix
+//!   ([`clearing`]);
 //! - deletes efficiency rows older than any reader needs, a few small batches at a time
 //!   (`ignite_store::hub::metrics::delete_expired`);
 //! - deletes transcript digest lines a week after they arrived

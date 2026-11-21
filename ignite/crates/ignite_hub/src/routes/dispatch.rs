@@ -7,10 +7,8 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use serde::de::DeserializeOwned;
 use serde_json::{Map, Value, json};
 
-use ignite_core::config::Os;
 use ignite_core::dispatch::label;
 use ignite_core::ids::{MachineId, SessionId, TicketId};
-use ignite_core::pins::machine_label;
 use ignite_core::protocol::emergency::{EmergencyChange, EmergencyReply};
 use ignite_core::protocol::hub::{
     AdhocClaim, Claim, Close, DependencyNote, Heartbeat, Landed, LandedReply, MachineFree,
@@ -28,6 +26,7 @@ use ignite_store::hub::{
 };
 
 use super::{Request, Response};
+use crate::upkeep::regressions;
 
 #[path = "dispatch_machines.rs"]
 mod machines;
@@ -163,7 +162,7 @@ fn route(conn: &mut Connection, request: &Request, now: Timestamp) -> Answer {
             let mut parsed: Release = body(request)?;
             same_machine(request, &parsed.machine)?;
             parsed.ticket = canonical(conn, &parsed.ticket)?;
-            release(conn, &parsed, now)
+            counting::release(conn, &parsed, now)
         }
         "/close" => {
             let mut parsed: Close = body(request)?;
@@ -266,6 +265,16 @@ fn claim(conn: &mut Connection, claim: &Claim, now: Timestamp) -> Answer {
         let brief = brief(&tx, id)?;
         tx.commit().map_err(sql_failure)?;
         return Ok(Response::json(200, &json!(brief)));
+    }
+    if ticket.assignee.is_none()
+        && let Some(passing) = regressions::passing(&tx, &ticket).map_err(|e| store_failure(&e))?
+    {
+        passing
+            .close(&mut tx, &ticket, now)
+            .map_err(|e| store_failure(&e))?;
+        let closed = load(&tx, id)?;
+        tx.commit().map_err(sql_failure)?;
+        return Err(conflict(&format!("{id} is closed"), Some(&closed)));
     }
     let reservation = fleet::reservation_of(&tx, id).map_err(|e| store_failure(&e))?;
     let refused = match (&reservation, &claim.code) {
@@ -495,103 +504,13 @@ fn close(conn: &mut Connection, close: &Close, now: Timestamp) -> Answer {
             &close.machine,
             now,
         )?;
+        if let Some(passing) = regressions::passing(&tx, &ticket).map_err(|e| store_failure(&e))? {
+            passing.mark_fixed(&tx).map_err(|e| store_failure(&e))?;
+        }
     }
     free_worker(&tx, &close.machine, &close.session, None)?;
     findings::close_ticket(&tx, id, now).map_err(|e| store_failure(&e))?;
     tx.commit().map_err(sql_failure)?;
-    Ok(done())
-}
-
-/// Gives a ticket back to the queue with the note as a comment, records the branch its work was
-/// saved to and, with `needs`, records what it needs: `person` labels it `needs:person`, which
-/// sets it aside for a person; an operating system sets the system it needs; a machine's name
-/// pins the ticket to that machine. A session may also give back a
-/// reservation it has not claimed yet. A ticket released by different sessions is held back
-/// for a justiciar (see `dispatch_releases.rs`).
-fn release(conn: &mut Connection, release: &Release, now: Timestamp) -> Answer {
-    let id = release.ticket.as_str();
-    let mut tx = conn
-        .transaction_with_behavior(TransactionBehavior::Immediate)
-        .map_err(sql_failure)?;
-    let ticket = load(&tx, id)?;
-    if ticket.assignee.as_deref() != Some(release.session.as_str()) {
-        let dropped = tx
-            .execute(
-                "DELETE FROM reservations WHERE ticket = ?1 AND session = ?2",
-                params![id, release.session.as_str()],
-            )
-            .map_err(sql_failure)?;
-        if dropped > 0 {
-            tx.commit().map_err(sql_failure)?;
-            return Ok(done());
-        }
-    }
-    holds(&ticket, &release.session)?;
-    let mut set = TicketFields {
-        status: Some(Status::Open),
-        assignee: Some(None),
-        ..TicketFields::default()
-    };
-    let mut add_labels = Vec::new();
-    let mut remove_labels = Vec::new();
-    match release.needs.as_deref().map(str::trim) {
-        None => {}
-        Some("person") => add_labels.push("needs:person".to_owned()),
-        Some(needs) => {
-            if let Ok(os) = serde_json::from_value::<Os>(Value::String(needs.to_owned())) {
-                set.needs_os = Some(Some(os));
-            } else {
-                if needs.is_empty()
-                    || !needs
-                        .bytes()
-                        .all(|byte| byte.is_ascii_alphanumeric() || b"-_".contains(&byte))
-                {
-                    return Err(failure(
-                        400,
-                        "write a machine name, an operating system or person",
-                    ));
-                }
-                let label = machine_label(needs);
-                remove_labels.extend(
-                    ticket
-                        .labels
-                        .iter()
-                        .filter(|old| old.starts_with("machine:") && **old != label)
-                        .cloned(),
-                );
-                add_labels.push(label);
-            }
-        }
-    }
-    let set_meta = release
-        .branch
-        .iter()
-        .map(|branch| (SAVED_BRANCH.to_owned(), Value::from(branch.as_str())))
-        .collect();
-    let ops = vec![
-        Operation::Update {
-            id: id.to_owned(),
-            set: Some(set),
-            add_labels,
-            remove_labels,
-            set_meta,
-            unset_meta: Vec::new(),
-        },
-        Operation::Comment {
-            id: id.to_owned(),
-            text: format!("Released: {}", release.reason),
-        },
-    ];
-    apply_in(&mut tx, ops, &release.session, &release.machine, now)?;
-    let cleared = ["session", "tree", "machine", "claimed_at", "provider"]
-        .map(|column| (column, Value::Null));
-    set_columns(&tx, id, release.session.as_str(), &cleared, now).map_err(|e| store_failure(&e))?;
-    free_worker(&tx, &release.machine, &release.session, None)?;
-    let held = counting::count(&tx, &ticket, release, now).map_err(|e| store_failure(&e))?;
-    tx.commit().map_err(sql_failure)?;
-    if let Some(releases) = held {
-        counting::file_after(conn, &ticket, &releases, now);
-    }
     Ok(done())
 }
 

@@ -128,9 +128,9 @@ fn seed(conn: &Connection) {
            ('m-j', 'e1.5', 'test', 'agent', 0, 1, 0, 1, 'a', '2026-11-17T09:30:00.000Z'),
            ('m-j', 'e1.5', 'test', 'agent', 0, 5, 30, 1, 'a', '2026-11-17T09:31:00.000Z'),
            ('m-j', 'e1.5', 'land', 'agent', 0, 5, 60, 1, 'a', '2026-11-17T09:59:00.000Z');
-         INSERT INTO regressions VALUES ('kernel-test', 'r1', 'bbbbbbbbbbbb', 'aaaaaaaaaaaa', 'open');
+         INSERT INTO regressions (check_name, ticket, first_bad, last_good, state) VALUES ('kernel-test', 'r1', 'bbbbbbbbbbbb', 'aaaaaaaaaaaa', 'open');
          INSERT INTO checks VALUES ('slow-oracle', 'oracle', 'regression', 'off', 'oracle');
-         INSERT INTO tips VALUES
+         INSERT INTO tips (commit_sha, seen, verified, state) VALUES
            ('1111111111111', '2026-11-17T11:00:00.000Z', '2026-11-17T11:10:00.000Z', 'verified'),
            ('2222222222222', '2026-11-17T11:50:00.000Z', NULL, 'verifying');
          INSERT INTO tip_claims VALUES ('2222222222222', 'rust', 1, 'm-j', '2026-11-17T12:10:00.000Z');

@@ -590,7 +590,7 @@ fn a_regression_closes_once_a_later_tip_passes_and_is_marked_fixed() {
     )
     .unwrap();
     assert_eq!(
-        passes(&mut conn, &mut upkeep, &clock, 2.0 * HOLD_SECONDS),
+        upkeep.pass(&mut conn, clock.now()).unwrap().tickets_closed,
         vec![id.clone()]
     );
     let state: String = conn

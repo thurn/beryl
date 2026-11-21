@@ -6,6 +6,7 @@
 
 use rusqlite::{Connection, OptionalExtension, params};
 
+use ignite_core::config::Os;
 use ignite_core::ids::Commit;
 use ignite_core::protocol::hub::{
     LandedCommit, RegressionReport, TipClaim, TipClaimReply, TipState, TipVerified,
@@ -93,14 +94,29 @@ pub fn claim(conn: &Connection, claim: &TipClaim, now: Timestamp) -> Result<TipC
 pub fn verified(conn: &Connection, verified: &TipVerified, now: Timestamp) -> Result<()> {
     seen(conn, verified.commit.as_str(), now)?;
     let finished = matches!(verified.state, TipState::Verified | TipState::Failed);
+    let passes = verified
+        .regression_passes
+        .as_ref()
+        .map(serde_json::to_string)
+        .transpose()
+        .map_err(|error| StoreError::Invalid(error.to_string()))?;
     conn.execute(
-        "UPDATE tips SET state = ?2, verified = CASE WHEN ?3 THEN ?4 ELSE NULL END
-         WHERE commit_sha = ?1",
+        "UPDATE tips SET state = ?2, verified = CASE WHEN ?3 THEN ?4 ELSE NULL END,
+         regression_passes = CASE
+           WHEN ?2 != 'verified' THEN NULL
+           WHEN ?5 IS NULL THEN regression_passes
+           WHEN ?5 = '[]' AND state = 'verified' AND regression_passes IS NULL THEN NULL
+           ELSE (SELECT json_group_array(json(value)) FROM (
+             SELECT value FROM json_each(regression_passes)
+             UNION SELECT value FROM json_each(?5)
+           ))
+         END WHERE commit_sha = ?1",
         params![
             verified.commit.as_str(),
             tip_state_text(verified.state),
             finished,
-            now.to_string()
+            now.to_string(),
+            passes,
         ],
     )?;
     if finished {
@@ -128,26 +144,28 @@ pub fn regression(conn: &Connection, report: &RegressionReport, ticket: &str) ->
     match state.as_deref() {
         None => {
             conn.execute(
-                "INSERT INTO regressions (check_name, ticket, first_bad, last_good, state)
-                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                "INSERT INTO regressions (check_name, ticket, first_bad, last_good, state, platform)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                 params![
                     report.check.as_str(),
                     ticket,
                     report.first_bad.as_str(),
                     report.last_good.as_str(),
-                    OPEN
+                    OPEN,
+                    report.platform.map(Os::as_str).unwrap_or_default(),
                 ],
             )?;
         }
         Some(FIXED) => {
             conn.execute(
-                "UPDATE regressions SET state = ?2, first_bad = ?3, last_good = ?4
+                "UPDATE regressions SET state = ?2, first_bad = ?3, last_good = ?4, platform = ?5
                  WHERE check_name = ?1",
                 params![
                     report.check.as_str(),
                     REOPENED,
                     report.first_bad.as_str(),
-                    report.last_good.as_str()
+                    report.last_good.as_str(),
+                    report.platform.map(Os::as_str).unwrap_or_default(),
                 ],
             )?;
         }
@@ -354,6 +372,7 @@ mod tests {
             commit: Commit::new("abcd").unwrap(),
             machine: MachineId::new("m-1").unwrap(),
             state: TipState::Verified,
+            regression_passes: None,
         };
         verified(&conn, &done, at(50.0)).unwrap();
         let state = |commit: &str| -> String {
@@ -384,6 +403,7 @@ mod tests {
             commit: Commit::new("abcd").unwrap(),
             machine: MachineId::new("m-1").unwrap(),
             state: TipState::Verified,
+            regression_passes: None,
         };
         verified(&conn, &done, at(40.0)).unwrap();
         assert_eq!(

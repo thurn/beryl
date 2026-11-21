@@ -57,6 +57,34 @@ fn a_covered_check_is_stood_for_by_its_covering_check() {
 }
 
 #[test]
+fn a_covered_check_with_an_open_regression_reports_its_own_pass() {
+    let (world, tip) = covered_world();
+    let covering = in_family("a", "fast");
+    let regressed = in_family("a", "slow");
+    world
+        .hub
+        .set_open_regressions(vec![ignite_core::protocol::hub::OpenRegression {
+            check: regressed.check.clone(),
+            ticket: ticket("tk.1"),
+        }]);
+    world.store(&covering.key, Outcome::Pass, "m-2");
+    world
+        .work
+        .set_checks(&tip, vec![covering, regressed.clone()]);
+
+    assert_eq!(
+        world.verifier().verify(&world.ctx("m-1"), &tip).unwrap(),
+        TipOutcome::Verified
+    );
+    assert_eq!(ran_checks(&world), BTreeSet::from([regressed.check]));
+    let states = world.hub.tip_states();
+    assert_eq!(
+        states.last().unwrap().regression_passes.as_deref(),
+        Some(&[regressed.key][..])
+    );
+}
+
+#[test]
 fn a_failing_covering_check_is_reported_once() {
     let (world, tip) = covered_world();
     let covering = in_family("a", "fast");

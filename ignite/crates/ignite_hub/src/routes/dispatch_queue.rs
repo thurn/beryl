@@ -40,7 +40,7 @@ use ignite_store::hub::{fleet, fleet_settings, provider_usage, releases, tickets
 use ignite_store::{Result, StoreError};
 
 use super::{mix, usage};
-use crate::rules;
+use crate::{rules, upkeep::regressions};
 
 /// The labels of tickets the hub files itself, which are offered whether or not an epic is
 /// active. `hub` is on everything the hub files today (`upkeep::filing::HUB_LABEL`); the other
@@ -507,6 +507,11 @@ impl Snapshot {
             if ticket.status != Status::Open
                 || ticket.assignee.is_some()
                 || matches!(ticket.ticket_type, TicketType::Epic | TicketType::Milestone)
+            {
+                continue;
+            }
+            if self.regressions.contains(id.as_str())
+                && regressions::passing(conn, &ticket)?.is_some()
             {
                 continue;
             }

@@ -33,12 +33,12 @@ use serde_json::Value;
 use ignite_core::pins::machine_label;
 use ignite_core::protocol::hub::JusticiarReport;
 use ignite_core::protocol::tickets::{
-    BatchRequest, Operation, Precondition, TicketFields, TicketType,
+    BatchRequest, Operation, Precondition, Status, TicketFields, TicketType,
 };
 use ignite_core::time::Timestamp;
 use ignite_store::hub::batch::{self, BatchOutcome};
 use ignite_store::hub::releases::Releases;
-use ignite_store::hub::{feed, tips};
+use ignite_store::hub::{feed, tickets, tips};
 use ignite_store::{Result, StoreError};
 
 use super::filing::{self, Author, Change, Filed, Filing, UPKEEP};
@@ -357,7 +357,7 @@ pub fn released_repeatedly(
     title: &str,
     releases: &Releases,
     now: Timestamp,
-) -> Result<Filed> {
+) -> Result<Option<Filed>> {
     let mut notes = String::new();
     for release in &releases.releases {
         let _ = write!(
@@ -393,5 +393,11 @@ pub fn released_repeatedly(
         deps: Vec::new(),
         released: true,
     };
-    filing::file(conn, UPKEEP, &filing, now)
+    // Verification can finish after a release commits, before the justiciar filing.
+    filing::file_if(conn, UPKEEP, &filing, now, |tx| {
+        let Some(ticket) = tickets::load(tx, ticket)? else {
+            return Ok(false);
+        };
+        Ok(ticket.status != Status::Closed && super::regressions::passing(tx, &ticket)?.is_none())
+    })
 }

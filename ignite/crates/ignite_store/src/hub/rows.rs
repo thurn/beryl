@@ -189,9 +189,18 @@ crate::tables! {
         first_bad: String,
         last_good: String,
         state: String,
+        /// Empty for portable checks and null for a historical regression.
+        platform: Option<String>,
     }
 
-    Tip = "tips" { commit_sha: String, seen: String, verified: Option<String>, state: String }
+    Tip = "tips" {
+        commit_sha: String,
+        seen: String,
+        verified: Option<String>,
+        state: String,
+        /// JSON: the result keys that passed for open regressions.
+        regression_passes: Option<String>,
+    }
 
     TipClaim = "tip_claims" {
         commit_sha: String,

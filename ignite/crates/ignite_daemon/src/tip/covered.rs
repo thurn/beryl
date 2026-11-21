@@ -10,6 +10,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use ignite_core::config::Os;
+use ignite_core::ids::CheckName;
 
 use super::TipCheck;
 
@@ -17,6 +18,7 @@ use super::TipCheck;
 pub(super) fn drop_covered(
     checks: Vec<TipCheck>,
     covered_by: &BTreeMap<String, String>,
+    regressions: &HashSet<CheckName>,
 ) -> Vec<TipCheck> {
     if covered_by.is_empty() {
         return checks;
@@ -34,11 +36,15 @@ pub(super) fn drop_covered(
     let stood_for: Vec<bool> = checks
         .iter()
         .map(|check| {
-            covered_by.get(&check.family).is_some_and(|family| {
-                covering
-                    .get(&(family.as_str(), short(check), check.key.platform))
-                    .is_some_and(|inputs| check.inputs.iter().all(|i| inputs.contains(i.as_str())))
-            })
+            // A regression needs a pass for the check that filed it.
+            !regressions.contains(&check.check)
+                && covered_by.get(&check.family).is_some_and(|family| {
+                    covering
+                        .get(&(family.as_str(), short(check), check.key.platform))
+                        .is_some_and(|inputs| {
+                            check.inputs.iter().all(|i| inputs.contains(i.as_str()))
+                        })
+                })
         })
         .collect();
     checks

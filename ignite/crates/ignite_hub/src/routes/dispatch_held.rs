@@ -8,7 +8,9 @@ use ignite_core::dispatch::{JUSTICIAR, ReadyTicket, TicketKind};
 use ignite_core::fleet::{FleetSettings, MachineState};
 use ignite_core::protocol::hub::{MachineFree, Reservation};
 use ignite_store::Result;
-use ignite_store::hub::fleet;
+use ignite_store::hub::{fleet, tickets};
+
+use crate::upkeep::regressions;
 
 /// The states of a regression whose check still fails, so that its ticket holds `master` back.
 pub const FAILING: [&str; 2] = ["open", ignite_store::hub::tips::REOPENED];
@@ -109,6 +111,12 @@ pub(super) fn retry_reservation(
         else {
             continue;
         };
+        if let Some(ticket) = tickets::load(conn, reservation.ticket.as_str())?
+            && regressions::passing(conn, &ticket)?.is_some()
+        {
+            fleet::release_reservation(conn, reservation.ticket.as_str())?;
+            continue;
+        }
         if paused == Paused::No
             || conn.query_row(
                 "SELECT EXISTS (SELECT 1 FROM tickets t WHERE t.id = ?1

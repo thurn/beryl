@@ -428,6 +428,10 @@ pub struct TipVerified {
     pub commit: Commit,
     pub machine: MachineId,
     pub state: TipState,
+    /// Exact results witnessed by this round for checks with an open regression. Older
+    /// daemons sent only the tip's state.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub regression_passes: Option<Vec<ResultKey>>,
 }
 
 /// `POST /tips/waiting`: a tip has waited an hour for checks that only a machine running

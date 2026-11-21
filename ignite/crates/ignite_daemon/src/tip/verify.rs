@@ -1,6 +1,6 @@
 //! A tip round's check set, verdicts and advancement of master.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use ignite_core::config::Os;
 use ignite_core::ids::{CheckName, Commit};
@@ -31,6 +31,7 @@ impl TipVerifier {
                 commit: tip.clone(),
                 machine: ctx.machine.clone(),
                 state: TipState::Verified,
+                regression_passes: Some(Vec::new()),
             })?;
             return Ok(TipOutcome::Verified);
         }
@@ -73,8 +74,15 @@ impl TipVerifier {
                 portable: c.key.platform.is_none(),
             })
             .collect();
+        let regressions: HashSet<CheckName> = ctx
+            .hub
+            .open_regressions()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|regression| regression.check)
+            .collect();
         let (checks, unlisted) = scope.select(
-            covered::drop_covered(checks, &self.work.covered_by()),
+            covered::drop_covered(checks, &self.work.covered_by(), &regressions),
             unlisted,
         );
         let now = ctx.clock.now();
@@ -220,6 +228,7 @@ impl TipVerifier {
                     commit: tip.clone(),
                     machine: ctx.machine.clone(),
                     state: TipState::Failed,
+                    regression_passes: None,
                 })?;
             }
             return Ok(TipOutcome::Failed {
@@ -238,10 +247,20 @@ impl TipVerifier {
             });
         }
         scope.record_deferrals(ctx, last, tip, &deferred)?;
+        let regression_passes = checks
+            .iter()
+            .filter(|check| regressions.contains(&check.check))
+            .filter(|check| {
+                verdicts
+                    .get(&check.key)
+                    .is_some_and(|run| matches!(run.outcome, Outcome::Pass | Outcome::Flaky))
+            })
+            .map(|check| check.key.clone())
+            .collect();
         let outcome = if last == tip {
-            self.record_verified(ctx, tip)?
+            self.record_verified(ctx, tip, regression_passes)?
         } else {
-            self.move_master(ctx, tip)?
+            self.move_master(ctx, tip, regression_passes)?
         };
         if outcome != TipOutcome::Verified {
             return Ok(outcome);
@@ -255,7 +274,12 @@ impl TipVerifier {
     }
 
     /// Moves `master` to a tip whose every check passed and records it as verified.
-    fn move_master(&mut self, ctx: &Context, tip: &Commit) -> Result<TipOutcome> {
+    fn move_master(
+        &mut self,
+        ctx: &Context,
+        tip: &Commit,
+        regression_passes: Vec<ResultKey>,
+    ) -> Result<TipOutcome> {
         let repository = &ctx.config.repository;
         match ctx.git.push(&ctx.repo, tip, &repository.master)? {
             Push::Pushed { .. } => {}
@@ -273,7 +297,7 @@ impl TipVerifier {
                 }
             }
         }
-        self.record_verified(ctx, tip)
+        self.record_verified(ctx, tip, regression_passes)
     }
 
     /// Reports once that `master` refused the tip, and waits on it.
@@ -294,11 +318,17 @@ impl TipVerifier {
     }
 
     /// Records `tip` as verified with the hub and clears the waiting state.
-    fn record_verified(&mut self, ctx: &Context, tip: &Commit) -> Result<TipOutcome> {
+    fn record_verified(
+        &mut self,
+        ctx: &Context,
+        tip: &Commit,
+        regression_passes: Vec<ResultKey>,
+    ) -> Result<TipOutcome> {
         ctx.hub.tip_verified(&TipVerified {
             commit: tip.clone(),
             machine: ctx.machine.clone(),
             state: TipState::Verified,
+            regression_passes: Some(regression_passes),
         })?;
         self.waiting_since.clear();
         self.flagged.clear();

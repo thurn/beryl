@@ -5,12 +5,17 @@ use rusqlite::Connection;
 use serde_json::{Value, json};
 
 use ignite_core::ids::MachineId;
+use ignite_core::protocol::hub::{
+    FoundBy, RegressionReport, ReleaseCause, ResultKey, TipState, TipVerified,
+};
+use ignite_core::protocol::tickets::Status;
 use ignite_core::time::Timestamp;
-use ignite_store::hub;
+use ignite_store::hub::{self, releases, tickets, tips};
 
-use super::tests::{at, claim, file, free, post, release};
+use super::tests::{at, claim, claim_reserved, file, free, landed, post, release};
 use super::{Request, Response};
 use crate::auth::Writer;
+use crate::upkeep::{Upkeep, filing::UPKEEP, justiciar, regressions};
 
 /// Claims `ticket` by name for `session` and releases it with `note` and `cause`.
 fn work_and_release(
@@ -213,4 +218,252 @@ fn releasing_the_ticket_again_offers_it_again() {
     // `ignite ticket update <id> --release` sends the status `open`.
     update(&mut conn, id, &json!({"status": "open"}));
     assert!(shown(&mut conn, id)["held_back"].is_null());
+}
+
+fn regression(conn: &mut Connection, check: &str, seconds: f64) -> String {
+    let report = RegressionReport {
+        check: check.parse().unwrap(),
+        first_bad: "1111111".parse().unwrap(),
+        last_good: "0000000".parse().unwrap(),
+        output: "the check failed".to_owned(),
+        caused_by: None,
+        suspects: Vec::new(),
+        platform: None,
+        search: None,
+        found_by: FoundBy::TipVerification,
+        detected_at: None,
+    };
+    regressions::file(conn, UPKEEP, &report, at(seconds))
+        .unwrap()
+        .0
+}
+
+fn key(check: &str) -> ResultKey {
+    ResultKey {
+        check: check.parse().unwrap(),
+        hash: "a".repeat(64).parse().unwrap(),
+        platform: None,
+    }
+}
+
+fn verified(commit: &str, checks: &[&str]) -> TipVerified {
+    TipVerified {
+        commit: commit.parse().unwrap(),
+        machine: "m-1".parse().unwrap(),
+        state: TipState::Verified,
+        regression_passes: Some(checks.iter().map(|check| key(check)).collect()),
+    }
+}
+
+fn verify(conn: &mut Connection, tip: &TipVerified, seconds: f64) {
+    let request = Request {
+        method: "POST".into(),
+        path: "/tips/verified".into(),
+        query: Vec::new(),
+        writer: Some(Writer {
+            machine: tip.machine.clone(),
+            actor: "verifier".into(),
+        }),
+        body: serde_json::to_vec(tip).unwrap(),
+        headers: Vec::new(),
+    };
+    let response = crate::routes::checks::handle(conn, &request, at(seconds)).unwrap();
+    assert_eq!(
+        response.status,
+        200,
+        "{}",
+        String::from_utf8_lossy(&response.body)
+    );
+}
+
+#[test]
+fn workers_stop_getting_the_grouped_regression_when_the_last_check_passes() {
+    let mut conn = hub::open_in_memory().unwrap();
+    let rust = [
+        "rust:suite::one",
+        "rust:suite::two",
+        "rust:suite::three",
+        "rust:suite::four",
+        "rust:suite::five",
+        "rust:suite::six",
+    ];
+    let boards = "frame-counts:boards";
+    let id = regression(&mut conn, rust[0], 1.0);
+    for check in rust.iter().skip(1).chain([&boards]) {
+        assert_eq!(regression(&mut conn, check, 2.0), id);
+    }
+
+    // One worker gives up before the separate fixes land. The Rust fix alone is insufficient.
+    work_and_release(
+        &mut conn,
+        &id,
+        "local_a",
+        "The board budget still fails.",
+        None,
+        at(3.0),
+    );
+    verify(&mut conn, &verified("2222222", &rust), 5.0);
+    let (_, reservation) = post(&mut conn, "/next", &free("m-1", &["local_b"]), at(6.0));
+    assert_eq!(reservation["ticket"], id);
+    assert_eq!(
+        post(
+            &mut conn,
+            "/claims",
+            &claim_reserved(&reservation, "local_b"),
+            at(7.0)
+        )
+        .0,
+        200
+    );
+
+    // The second fix lands and tip verification passes all seven checks.
+    let second_fix = file(&mut conn, &[("fix the board budget", &[], &[])]).remove(0);
+    assert_eq!(
+        post(
+            &mut conn,
+            "/claims",
+            &claim(second_fix.as_str(), "local_fix"),
+            at(8.0)
+        )
+        .0,
+        200
+    );
+    assert_eq!(
+        post(
+            &mut conn,
+            "/landed",
+            &landed(second_fix.as_str(), "local_fix", "fixed"),
+            at(9.0)
+        )
+        .0,
+        200
+    );
+    conn.execute(
+        "INSERT INTO records (id, machine, verb, class, queued_s, wall_s, cpu_s, peak_mb,
+          commit_sha, ignite, at)
+         VALUES (1, 'm-1', 'tip', 'tip', 0, 0, 0, 0, '3a9e4c1', '1111111', ?1)",
+        [at(10.0).to_string()],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO results (check_name, hash, outcome, machine, record, at, last_lookup)
+         VALUES (?1, ?2, 'pass', 'm-1', 1, ?3, ?3)",
+        rusqlite::params![boards, key(boards).hash.as_str(), at(10.0).to_string()],
+    )
+    .unwrap();
+    let all: Vec<_> = rust.into_iter().chain([boards]).collect();
+    verify(&mut conn, &verified("3333333", &all), 11.0);
+    let held = tickets::load(&conn, &id).unwrap().unwrap();
+    assert_eq!(held.status, Status::InProgress);
+    let comments = tickets::comments(&conn, &id).unwrap();
+    let message = comments.last().unwrap();
+    assert_eq!(held.metadata["tell"], json!(message.n));
+    assert!(message.text.contains("3333333"));
+    assert!(message.text.contains("`ignite close`"));
+    assert!(message.text.contains(second_fix.as_str()));
+    Upkeep::new(None)
+        .unwrap()
+        .pass(&mut conn, at(12.0))
+        .unwrap();
+    assert_eq!(tickets::comments(&conn, &id).unwrap().len(), comments.len());
+
+    // The holder releases, which would have crossed the repeated-release threshold.
+    assert_eq!(
+        post(&mut conn, "/release", &release(&id, "local_b"), at(13.0)).0,
+        200
+    );
+    let closed = tickets::load(&conn, &id).unwrap().unwrap();
+    assert_eq!(closed.status, Status::Closed);
+    assert!(closed.close_reason.unwrap().contains("3333333"));
+    assert_eq!(releases::of(&conn, &id).unwrap().releases.len(), 1);
+    assert!(tips::open_regressions(&conn).unwrap().is_empty());
+    assert!(offered(&mut conn, "local_c", at(14.0)).is_none());
+    assert!(justiciar_tickets(&conn).is_empty());
+}
+
+#[test]
+fn dispatch_and_repeated_release_filing_skip_a_passing_regression_before_upkeep() {
+    let mut conn = hub::open_in_memory().unwrap();
+    let id = regression(&mut conn, "rust:check", 1.0);
+    let (_, reservation) = post(&mut conn, "/next", &free("m-1", &["local_a"]), at(2.0));
+    assert_eq!(reservation["ticket"], id);
+
+    // Store the proof without calling the resolution hook, as when requests interleave.
+    tips::verified(&conn, &verified("2222222", &["rust:check"]), at(3.0)).unwrap();
+    assert!(
+        offered(&mut conn, "local_a", at(4.0)).is_none(),
+        "do not repeat the reservation"
+    );
+    assert!(
+        offered(&mut conn, "local_b", at(5.0)).is_none(),
+        "do not offer a new reservation"
+    );
+    for session in ["local_c", "local_d"] {
+        releases::record(
+            &conn,
+            &id,
+            session,
+            ReleaseCause::GaveUp,
+            "blocked",
+            at(6.0),
+        )
+        .unwrap();
+    }
+    let evidence = releases::of(&conn, &id).unwrap();
+    assert!(evidence.held_back());
+    assert!(
+        justiciar::released_repeatedly(&mut conn, &id, "regression", &evidence, at(7.0))
+            .unwrap()
+            .is_none()
+    );
+    assert!(justiciar_tickets(&conn).is_empty());
+    let (status, _) = post(
+        &mut conn,
+        "/claims",
+        &claim_reserved(&reservation, "local_a"),
+        at(8.0),
+    );
+    assert_eq!(status, 409);
+    assert_eq!(
+        tickets::load(&conn, &id).unwrap().unwrap().status,
+        Status::Closed
+    );
+}
+
+#[test]
+fn a_newest_tip_missing_an_enabled_check_cannot_use_an_older_tips_pass() {
+    let mut conn = hub::open_in_memory().unwrap();
+    let id = regression(&mut conn, "rust:one", 1.0);
+    assert_eq!(regression(&mut conn, "rust:two", 2.0), id);
+    tips::verified(
+        &conn,
+        &verified("2222222", &["rust:one", "rust:two"]),
+        at(3.0),
+    )
+    .unwrap();
+    verify(&mut conn, &verified("3333333", &["rust:one"]), 4.0);
+    assert_eq!(
+        tickets::load(&conn, &id).unwrap().unwrap().status,
+        Status::Open
+    );
+
+    conn.execute(
+        "INSERT INTO checks (name, family, kind, state, check_group)
+         VALUES ('rust:two', 'rust', 'regression', 'off', '')",
+        [],
+    )
+    .unwrap();
+    assert_eq!(
+        Upkeep::new(None)
+            .unwrap()
+            .pass(&mut conn, at(5.0))
+            .unwrap()
+            .tickets_closed
+            .as_slice(),
+        std::slice::from_ref(&id)
+    );
+    let closed = tickets::load(&conn, &id).unwrap().unwrap();
+    let reason = closed.close_reason.unwrap();
+    assert!(reason.contains("3333333"));
+    assert!(reason.contains("rust:two counts as passing because it is switched off"));
 }

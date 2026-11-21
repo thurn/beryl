@@ -226,6 +226,11 @@ pub const MIGRATIONS: &[Migration] = &[
         sql: include_str!("reservation_providers.sql"),
         code: None,
     },
+    Migration {
+        version: 36,
+        sql: include_str!("regression_verification.sql"),
+        code: None,
+    },
 ];
 
 /// Opens (creating if needed) and migrates the hub's database.

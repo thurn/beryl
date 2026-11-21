@@ -3031,7 +3031,17 @@ output (last 40 lines; whole output on jarvis at ...)
   landing and every open regression ticket is being worked. At most three are
   open (`OPEN_TICKETS` in the hub's `upkeep::regressions`); past that, it joins
   the open ticket for the same operating system, else the one with the fewest
-  checks. The ticket is done when every check on it passes.
+  checks.
+- When every check on a regression ticket passes at the newest verified tip, the
+  hub closes the ticket immediately if nobody holds it. That tip must have been
+  first seen after the ticket was filed, reopened, or last given another check.
+  A switched-off check counts as passing. The close reason names the tip and any
+  landings known to have produced passing results.
+- If a worker holds the ticket, the hub sends a message as `ignite tell` does.
+  The worker can land work that is still needed or run `ignite close`. If the
+  worker releases the ticket, the hub closes it in the same transaction. Passing
+  regressions are skipped in dispatch and cannot trigger a repeated-release
+  justiciar ticket.
 - `master` stays at the last verified commit until the check passes again.
   Landings on `staging` continue.
 - The fix lands like any other change and closes the ticket. Tip verification
@@ -3188,10 +3198,12 @@ cleared:
   holds back has a result stored after the last sighting.
 - Slow tip rounds: the last three rounds came after the ticket and none was
   slow.
-- A regression: a tip first seen after the ticket was filed, or last reopened,
-  passed verification. The regression is marked fixed too.
 
-The rules that apply to every kind:
+[Regression tickets](#regression-tickets) close as soon as the newest verified
+tip confirms that their checks pass. The hub marks those regressions fixed when
+it closes the ticket.
+
+The rules for the faults listed above:
 
 - A ticket that anyone other than the actors that filed its sightings commented
   on, edited or claimed stays open until a person or worker closes it. A release

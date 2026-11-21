@@ -99,6 +99,9 @@ fn route(conn: &mut Connection, request: &Request, now: Timestamp) -> Result<Res
         "/tips/verified" => {
             let verified: TipVerified = body(request)?;
             tips::verified(conn, &verified, now).map_err(|e| store_failure(&e))?;
+            if verified.state == ignite_core::protocol::hub::TipState::Verified {
+                regressions::settle_after_change(conn, now);
+            }
             Ok(done())
         }
         "/landings/lookup" => {
