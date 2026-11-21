@@ -85,7 +85,7 @@ pub fn draw<L: Layout>(game: &mut Game<'_, L>, player: Seat, cards: u8) -> Resul
                 }
             }
             let s = &mut *game.state;
-            if let Some(&slot) = s.library(player).last() {
+            if let Some(slot) = s.draw(game.sink, player)? {
                 drawn += 1;
                 game.sink.note(Event::DrawCard { slot });
                 s.count(game.table, Count::CardsDrawn, player);
@@ -93,7 +93,6 @@ pub fn draw<L: Layout>(game: &mut Game<'_, L>, player: Seat, cards: u8) -> Resul
                     s.count(game.table, Count::DrewInDrawStep, player);
                 }
             }
-            s.draw(game.sink, player)?;
         }
         if drawn > 0 {
             let cards = drawn;

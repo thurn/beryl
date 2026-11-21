@@ -222,7 +222,7 @@ fn dredge_of<L: Layout>(
 ///
 /// [CR 702.52a]: https://yawgatog.com/resources/magic-rules/#R70252a
 pub(crate) fn dredges<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Bitboard<L::Slot> {
-    let library = s.library(player).len();
+    let library = s.library_cards_from_top(player).count();
     s.zone(ZoneKey::Of(player, Zone::Graveyard))
         .filter(|slot| dredge_of(s, t, slot).is_some_and(|(_, n)| library >= usize::from(n)))
 }

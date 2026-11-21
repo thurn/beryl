@@ -15,7 +15,7 @@ use crate::state::{State, ZoneKey};
 use crate::table::GameTable;
 
 impl<L: Layout> State<L> {
-    /// A player's library, top card first
+    /// Objects in a player's library, top first
     /// (see [CR 401.2](https://yawgatog.com/resources/magic-rules/#R4012)): "Each library must
     /// be kept in a single face-down pile."
     #[inline]
@@ -24,6 +24,19 @@ impl<L: Layout> State<L> {
         player: Seat,
     ) -> impl DoubleEndedIterator<Item = L::Slot> + ExactSizeIterator + '_ {
         self.library(player).iter().rev().copied()
+    }
+
+    /// A player's library cards, top first. It skips objects waiting for state-based actions:
+    /// a token (see [CR 111.6], "A token isn't a card") or a spell copy represented by a token
+    /// (see [CR 704.5e], "If a copy of a spell is in a zone other than the stack, it ceases to
+    /// exist.").
+    ///
+    /// [CR 111.6]: https://yawgatog.com/resources/magic-rules/#R1116
+    /// [CR 704.5e]: https://yawgatog.com/resources/magic-rules/#R7045e
+    #[inline]
+    pub fn library_cards_from_top(&self, player: Seat) -> impl Iterator<Item = L::Slot> + '_ {
+        self.library_from_top(player)
+            .filter(|&slot| self.card_behind(slot).is_some())
     }
 
     /// The cards in a hand by definition key. Each card belongs to the owner of the hand,

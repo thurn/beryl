@@ -21,13 +21,9 @@ use crate::zones;
 use beryl_kernel::reference::Library;
 
 /// The top `n` cards of a player's library, or all of it if it has fewer.
-/// A token waiting for state-based actions is skipped (see [CR 111.6]):
-/// "A token isn't a card".
-///
-/// [CR 111.6]: https://yawgatog.com/resources/magic-rules/#R1116
+/// Uses the same card order as a draw ([`State::library_cards_from_top`]).
 pub fn top<L: Layout>(s: &State<L>, player: Seat, n: u8) -> Bitboard<L::Slot> {
-    s.library_from_top(player)
-        .filter(|&slot| s.card_in(s.object_ref(slot), Library).is_some())
+    s.library_cards_from_top(player)
         .take(usize::from(n))
         .collect()
 }

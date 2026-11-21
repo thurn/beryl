@@ -210,7 +210,7 @@ impl<L: Layout> State<L> {
         Ok(())
     }
 
-    /// Draws one card.
+    /// Draws one card and returns its slot, or records an attempt to draw from an empty library.
     ///
     /// See [CR 121.1](https://yawgatog.com/resources/magic-rules/#R1211): "A player draws a card by
     /// putting the top card of their library into their hand."
@@ -218,12 +218,13 @@ impl<L: Layout> State<L> {
     /// See [CR 121.4](https://yawgatog.com/resources/magic-rules/#R1214): "A player who attempts to
     /// draw a card from a library with no cards in it loses the game the next time a player would
     /// receive priority."
-    pub fn draw(&mut self, sink: &mut Sink<L>, player: Seat) -> Result<(), Full> {
-        let Some(&slot) = self.zones.library[player.index()].as_slice().last() else {
+    pub fn draw(&mut self, sink: &mut Sink<L>, player: Seat) -> Result<Option<L::Slot>, Full> {
+        let Some(slot) = self.library_cards_from_top(player).next() else {
             self.player_mut(player).drew_from_empty = true;
-            return Ok(());
+            return Ok(None);
         };
-        self.move_object(sink, slot, Zone::Hand, Place::Top)
+        self.move_object(sink, slot, Zone::Hand, Place::Top)?;
+        Ok(Some(slot))
     }
 
     /// Draws `n` cards, one at a time (see [CR 121.2]): "If a player is instructed to draw multiple

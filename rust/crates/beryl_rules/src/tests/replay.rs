@@ -8,10 +8,14 @@
 use beryl_card::{CardDef, Face, ManaCost, Replacement, Types};
 
 use super::cast::*;
+use super::events::find;
 use super::{DUAL, LAND, fingerprint};
 use crate::card::Ability;
+use crate::game::Game;
+use crate::ids::{Seat, Slot, SlotId};
 use crate::rng::SplitMix64;
-use crate::state::Pending;
+use crate::state::{Pending, Zone};
+use crate::zone::Place;
 use crate::{
     Answers, CardTable, Choice, Decision, Decklist, GameTable, Observation, Outcome, Payment,
     Profile, Replay, Scratch, State, Step, apply, next,
@@ -229,6 +233,45 @@ fn replacement_choices_replay_to_the_same_state_in_a_step_and_a_resolution() {
         paused.step_actions >= 3 && paused.resolving >= 3,
         "{paused:?}: the test exercises too little"
     );
+}
+
+/// Dredge needs enough cards in the library (CR 702.52a). A token waiting for state-based
+/// actions (CR 111.6) cannot supply the second card for dredge 2.
+#[test]
+fn a_library_token_cannot_make_a_draw_eligible_for_dredge() {
+    let table = GameTable::new(&DREDGE_CARDS, [DREDGE_DECK, DREDGE_DECK]).unwrap();
+    let mut state = State::new(&table, 1, Profile::EXACT).unwrap();
+    let mut scratch = Scratch::new();
+    let player = Seat::P0;
+    let dredger = find(&state, &table, player, "Test Dredger");
+    state
+        .move_object(&mut scratch.events, dredger, Zone::Graveyard, Place::Top)
+        .unwrap();
+    let excess = u8::try_from(state.library(player).len() - 2).unwrap();
+    state.draw_n(&mut scratch.events, player, excess).unwrap();
+    assert_eq!(
+        crate::replace::dredges(&state, &table, player).sole(),
+        Some(dredger)
+    );
+
+    state.draw_n(&mut scratch.events, player, 1).unwrap();
+    let card = *state.library(player).last().unwrap();
+    let token = Slot::pool().next().unwrap();
+    let values = state.copiable(dredger);
+    state.make_token(&table, token, player, values).unwrap();
+    state
+        .move_object(&mut scratch.events, token, Zone::Battlefield, Place::Top)
+        .unwrap();
+    state
+        .move_object(&mut scratch.events, token, Zone::Library, Place::Top)
+        .unwrap();
+    assert!(crate::replace::dredges(&state, &table, player).is_empty());
+
+    let mut game = Game::new(&mut state, &table, &mut scratch.events);
+    crate::drawing::draw(&mut game, player, 1).unwrap();
+    assert_eq!(state.object(card).zone(), Zone::Hand);
+    assert_eq!(state.object(dredger).zone(), Zone::Graveyard);
+    assert_eq!(state.library(player), &[token]);
 }
 
 /// A value chosen as a permanent enters, answered inline as a rollout would and replayed

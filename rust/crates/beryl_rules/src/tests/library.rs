@@ -9,7 +9,7 @@ use crate::casting::payment as costs;
 use crate::decision::Candidates;
 use crate::event::{self, Event, Reason};
 use crate::game::Game;
-use crate::ids::{Seat, Slot};
+use crate::ids::{Seat, Slot, SlotId};
 use crate::resolution::Resolution;
 use crate::state::{ObjectRef, StackEntry, StackItem, TargetPlaces, TurnStep, Zone, ZoneKey};
 use crate::zone::Place;
@@ -63,16 +63,19 @@ fn tapped(s: &State, slot: Slot) -> bool {
     s.object(slot).is_tapped()
 }
 
-/// A token waiting for the next state-based check is not a card (CR 111.6).
+/// A token (CR 111.6) or a spell copy (CR 704.5e) waiting for the next state-based check
+/// stays in the library when a player looks at or draws its top card (CR 121.1).
 #[test]
-fn top_cards_skip_a_token_waiting_to_cease_to_exist() {
+fn top_cards_and_draws_skip_objects_waiting_to_cease_to_exist() {
     let t = GameTable::new(&CARDS, [DECK, DECK]).unwrap();
     let mut s = State::new(&t, 1, Profile::EXACT).unwrap();
-    let card = *s.library(Seat::P0).last().unwrap();
-    let mut scratch = Scratch::new();
+    let player = Seat::P0;
+    let card = *s.library(player).last().unwrap();
+    let remaining = u8::try_from(s.library(player).len() - 1).unwrap();
+    let mut scratch = Scratch::recording();
     let token = tokens::create(
         &mut Game::new(&mut s, &t, &mut scratch.events),
-        Seat::P0,
+        player,
         tokens::predefined(&t, &INSECT),
         1,
         tokens::TokenEntry::default(),
@@ -80,11 +83,63 @@ fn top_cards_skip_a_token_waiting_to_cease_to_exist() {
     .unwrap()
     .sole()
     .unwrap();
-    s.move_object(&mut scratch.events, token, Zone::Library, Place::Top)
-        .unwrap();
+    let object = s.object_ref(token);
+    library::put_into(
+        &mut Game::new(&mut s, &t, &mut scratch.events),
+        object,
+        Place::Top,
+    )
+    .unwrap();
 
-    assert_eq!(s.library(Seat::P0).last(), Some(&token));
-    assert_eq!(library::top(&s, Seat::P0, 1).sole(), Some(card));
+    let copy = Slot::pool()
+        .find(|&slot| s.object(slot).zone() == Zone::Nowhere)
+        .unwrap();
+    let what = s.copiable(find(&s, &t, player, "Test Bear"));
+    let face = s.make_token(&t, copy, player, what).unwrap();
+    s.move_object(&mut scratch.events, copy, Zone::Stack, Place::Top)
+        .unwrap();
+    let object = s.object_ref(copy);
+    s.become_spell(s.spell(object).unwrap(), face, player);
+    let entry = StackEntry::new(StackItem::Spell {
+        object,
+        controller: player,
+        card: what.record(&t).0,
+        face,
+        costs: Castings::NONE,
+    });
+    s.put_on_stack(&mut scratch.events, entry).unwrap();
+    library::put_into(
+        &mut Game::new(&mut s, &t, &mut scratch.events),
+        object,
+        Place::Top,
+    )
+    .unwrap();
+
+    scratch.events.drain();
+    assert_eq!(
+        &s.library(player)[s.library(player).len() - 2..],
+        &[token, copy]
+    );
+    assert_eq!(library::top(&s, player, 1).sole(), Some(card));
+    crate::drawing::draw(&mut Game::new(&mut s, &t, &mut scratch.events), player, 1).unwrap();
+    assert_eq!(s.object(card).zone(), Zone::Hand);
+    assert!(!s.player(player).drew_from_empty());
+    assert_eq!(
+        scratch.events.events(),
+        &[
+            Event::DrawCard { slot: card },
+            Event::Draw { player, cards: 1 }
+        ]
+    );
+
+    s.draw_n(&mut scratch.events, player, remaining).unwrap();
+    scratch.events.drain();
+    assert_eq!(s.library(player), &[token, copy]);
+    assert!(!s.player(player).drew_from_empty());
+    crate::drawing::draw(&mut Game::new(&mut s, &t, &mut scratch.events), player, 1).unwrap();
+    assert!(s.player(player).drew_from_empty());
+    assert_eq!(s.library(player), &[token, copy]);
+    assert!(scratch.events.events().is_empty());
 }
 
 /// [CR 701.26b](https://yawgatog.com/resources/magic-rules/#R70126b): "Only tapped permanents

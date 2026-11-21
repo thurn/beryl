@@ -564,7 +564,7 @@
 //! | Order | Query |
 //! | --- | --- |
 //! | the battlefield, as permanents entered it | [`State::battlefield`] |
-//! | a library, top first | [`State::library_from_top`] |
+//! | a library, top first | [`State::library_from_top`] for objects, [`State::library_cards_from_top`] for cards |
 //! | the stack, from the top or bottom | [`State::stack`] |
 //! | a graveyard, as cards were put there (see CR 404.2) | [`State::graveyard`] |
 //! | players in turn order (see CR 101.4) | [`State::players_in_turn_order`] and the others under "Players" |
