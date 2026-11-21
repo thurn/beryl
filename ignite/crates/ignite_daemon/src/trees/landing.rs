@@ -216,7 +216,7 @@ impl Trees {
     /// Frees every landing tree whose owner finished without freeing it, such as a verb that a
     /// restarted daemon kept a tree for but then ended `incomplete`, or one run again that
     /// finished without asking for a landing tree. The next lease resets the tree.
-    fn free_dead_owners(&self, locked: &Locked) -> Result<()> {
+    pub(super) fn free_dead_owners(&self, locked: &Locked) -> Result<()> {
         let rows = store::all(&locked.db).map_err(|e| store_error(&e))?;
         for row in rows {
             let Some(owner) = row.owner.as_deref() else {

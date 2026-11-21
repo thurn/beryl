@@ -93,6 +93,9 @@ impl Trees {
     /// tree holds the most bytes of its own matters less than freeing any. A tree whose files
     /// are clones of another's frees little, and the next free tree goes after it.
     pub fn free_disk(&self, floor: u64, free: impl Fn() -> Option<u64>) -> Result<DiskReport> {
+        // A stopped verb may have been ended before it could release its landing tree.
+        // Reclaim that tree before the sweep, so the next round can build there.
+        self.free_dead_owners(&self.lock())?;
         let mut report = DiskReport {
             limit: Some(floor),
             limit_source: Some(DiskLimitSource::FreeSpaceFloor),

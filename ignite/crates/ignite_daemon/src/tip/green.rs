@@ -87,6 +87,7 @@ impl TipVerifier {
         }
         // Another machine may have run a batch of them meanwhile.
         Self::fill_from_cache(ctx, checks, verdicts)?;
+        super::round::require_running()?;
         let outcomes: Vec<Option<Outcome>> = checks
             .iter()
             .filter(|c| builds.contains(&c.family))

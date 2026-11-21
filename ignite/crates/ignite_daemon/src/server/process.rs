@@ -48,7 +48,7 @@ use super::{CallerProbe, Context, Server, SharedSlot, Slot, Verb};
 use crate::handles::{Handles, StepFeed, lock};
 use crate::host::Host;
 use crate::steps::Steps;
-use crate::stop::EndVerbProcess;
+use crate::stop::{EndVerbProcess, StopVerb};
 
 /// The verbs that run in verb processes, the internal ones included: `idle-job` runs one idle
 /// job (see `crate::idle`) and `tip-round` one round of tip verification (see
@@ -447,14 +447,34 @@ impl Server {
         handle
     }
 
-    /// The handle of a running `verb`, such as an internal verb whose verb process outlived the
-    /// previous daemon: a restarted loop waits for it instead of starting another.
-    pub fn running_internal(&self, verb: &str) -> Option<Handle> {
+    /// The handle and saved request of a running internal verb that outlived the daemon.
+    /// Wait on the handle even if its request cannot be read.
+    pub fn running_internal(&self, verb: &str) -> Option<(Handle, Option<Request>)> {
         let db = self.db.as_ref()?;
-        let rows = handle_store::running(&lock(db)).ok()?;
-        rows.into_iter()
+        let db = lock(db);
+        let handle = handle_store::running(&db)
+            .ok()?
+            .into_iter()
             .filter(|row| row.verb == verb)
-            .find_map(|row| Handle::new(row.id).ok())
+            .find_map(|row| Handle::new(row.id).ok())?;
+        let request = crate::handles::running_request(&db, &handle)
+            .ok()
+            .flatten()
+            .map(|(_, request)| request);
+        Some((handle, request))
+    }
+
+    /// Asks the internal verb the loop owns to stop, through the same cleanup as
+    /// `ignite stop`. Returns whether the activity accepted the request.
+    pub(crate) fn stop_internal(&self, handle: &Handle) -> bool {
+        let Some(activity) = self.steps.by_handle(handle) else {
+            return false;
+        };
+        let mut stop = StopVerb::new(self.handles.clone(), self.steps.clone());
+        if let Some(ender) = self.processes.as_ref().and_then(|p| p.ender.clone()) {
+            stop = stop.ending_processes_with(ender);
+        }
+        stop.stop_activity(handle, &activity).exit != Exit::Conflict
     }
 
     /// Stops taking new requests and waits up to `within` for the verbs running on the daemon's

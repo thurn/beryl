@@ -78,7 +78,10 @@ impl Round<'_> {
     /// more often than that, `master` would never move.
     fn next(&self) -> Option<FamilyBatches> {
         let mut queue = lock(&self.queue);
-        if self.verifier.machine_is_off() || lock(&self.ended).is_some() {
+        if crate::steps::stop_requested()
+            || self.verifier.machine_is_off()
+            || lock(&self.ended).is_some()
+        {
             return None;
         }
         let next = queue.pop_front()?;
@@ -112,7 +115,8 @@ impl Round<'_> {
     fn claim(&self, family: &str, batch: u32) -> bool {
         // A family asks for its next batch once the last one has finished.
         lock(&self.held).remove(family);
-        if self.verifier.machine_is_off()
+        if crate::steps::stop_requested()
+            || self.verifier.machine_is_off()
             || self.after_master && (lock(&self.ended).is_some() || self.superseded())
         {
             return false;
@@ -240,6 +244,7 @@ impl TipVerifier {
                 std::panic::resume_unwind(panic);
             }
         });
+        super::round::require_running()?;
         self.require_machine_on()?;
         let superseded = round
             .ended

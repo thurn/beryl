@@ -174,6 +174,7 @@ impl TipVerifier {
         output: Option<&str>,
         allow_revert: bool,
     ) -> Result<()> {
+        super::round::require_running()?;
         if !check.runnable || self.reported.contains(&check.key) {
             return Ok(());
         }
@@ -204,6 +205,7 @@ impl TipVerifier {
         // recorded none between the commits), the report names the whole range since the last
         // verified commit and no ticket.
         let culprit = self.find_culprit(ctx, check, last, tip);
+        super::round::require_running()?;
         // A build check broken by one landing is reverted instead, when `revert` allows it.
         if allow_revert && let Ok(Some(found)) = &culprit {
             match self.try_revert(ctx, tip, check, found, output) {
@@ -219,6 +221,7 @@ impl TipVerifier {
                 Handled::NextRound | Handled::Report => {}
             }
         }
+        super::round::require_running()?;
         let report = RegressionReport {
             check: check.check.clone(),
             first_bad: tip.clone(),

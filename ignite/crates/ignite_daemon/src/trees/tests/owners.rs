@@ -289,6 +289,19 @@ fn a_tree_kept_for_an_owner_that_finished_is_freed_by_the_next_lease() {
     assert_eq!(next.tree, owned.tree);
 }
 
+#[test]
+fn a_floor_sweep_reclaims_a_finished_verbs_landing_tree() {
+    let f = Fixture::new(1, 1);
+    let (owned, _, _) = landing_cut_off_by_a_restart(&f, &f.tip());
+    write(&owned.path, "out/build", "build output");
+    record_handle(&f, "L-1", "incomplete");
+
+    let report = f.trees.free_disk(100, || Some(10)).unwrap();
+    assert!(report.cleared.contains(&owned.tree));
+    assert_eq!(f.state(owned.tree.as_str()), "free");
+    assert!(!owned.path.join("out").exists());
+}
+
 /// A live owner's tree is never given to anyone else.
 #[test]
 fn a_running_owners_tree_is_not_given_to_another_holder() {

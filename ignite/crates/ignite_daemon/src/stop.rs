@@ -192,6 +192,18 @@ impl Verb for StopVerb {
         if force {
             return self.force(&handle, &activity);
         }
+        self.stop_activity(&handle, &activity)
+    }
+}
+
+impl StopVerb {
+    /// Stops work after the caller has established ownership. The activity may still refuse
+    /// the stop while it is publishing a change.
+    pub(crate) fn stop_activity(
+        &self,
+        handle: &Handle,
+        activity: &crate::steps::Activity,
+    ) -> Reply {
         if let Err(reason) = activity.request_stop() {
             return Reply::text(
                 Exit::Conflict,
@@ -202,10 +214,10 @@ impl Verb for StopVerb {
         }
         let mut ended = None;
         if !activity.wait_finished(self.wait) {
-            ended = self.end_unstopped(&handle);
+            ended = self.end_unstopped(handle);
             if ended.is_none() || !activity.wait_finished(self.wait) {
                 let view = activity.view();
-                let mut reply = still_running_at(&view.name, &handle, Some(&view));
+                let mut reply = still_running_at(&view.name, handle, Some(&view));
                 let what = if ended.is_some() {
                     "its verb process was ended after it did not stop, and the daemon has not \
                      seen it finish"
@@ -240,9 +252,7 @@ impl Verb for StopVerb {
             handle: None,
         }
     }
-}
 
-impl StopVerb {
     /// Ends the verb process of `handle`, which agreed to stop and has not, and says what was
     /// ended. `None` when no verb process runs the handle, as for a verb on a thread of the
     /// daemon, which cannot be ended, or when it could not be ended.

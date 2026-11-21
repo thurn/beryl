@@ -324,6 +324,7 @@ fn wait_for_tree<T>(
 ) -> Result<T> {
     let start = clock.now();
     loop {
+        super::round::require_running()?;
         if let Some(tree) = lease()? {
             return Ok(tree);
         }

@@ -9,6 +9,7 @@ use ignite_core::protocol::hub::{ResultKey, TipFailure, TipState, TipVerified};
 use ignite_core::traits::{Push, Result};
 
 use super::coverage::{Required, Scope};
+use super::round::require_running;
 use super::{
     Listed, TipCheck, TipOutcome, TipRun, TipSet, TipVerifier, covered, green, meter, names_of,
     settle_runs, split, verdict,
@@ -63,6 +64,7 @@ impl TipVerifier {
             unlisted,
             off,
         } = self.work.checks(ctx, tip)?;
+        require_running()?;
         // Batches are cut over the listing alone, before checks switched off as flaky or
         // covered by another family are left out, so that every machine cuts them alike.
         self.listed = checks
@@ -169,6 +171,7 @@ impl TipVerifier {
             settle_runs(&checks, runs, &mut verdicts, &mut self.own_outputs);
         }
         Self::fill_from_cache(ctx, &checks, &mut verdicts)?;
+        require_running()?;
         self.note_incomplete(ctx, tip, &checks, &verdicts, true);
         self.report_unlisted(ctx, tip, &unlisted);
         self.save(ctx);
@@ -222,6 +225,7 @@ impl TipVerifier {
                         check.check
                     );
                 }
+                require_running()?;
                 self.save(ctx);
             }
             let checks = names_of(&failed);

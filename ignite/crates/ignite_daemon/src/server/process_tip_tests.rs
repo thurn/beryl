@@ -2,10 +2,12 @@
 //! fakes of the long verbs' tests: the tip loop starts the round, the daemon restarts while the
 //! round's batch runs, and the restarted loop waits for that round instead of starting one.
 
-use ignite_core::ids::{CheckName, InputHash};
+use ignite_core::config::Os;
+use ignite_core::ids::{CheckName, InputHash, Seq};
 use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::ResultKey;
-use ignite_core::traits::Git as _;
+use ignite_core::tipround::{DeferredPlatform, PlatformVerification, TipCoverageUpdate};
+use ignite_core::traits::{Git as _, Hub as _};
 
 use super::*;
 use crate::tip::{
@@ -16,16 +18,19 @@ use crate::tip::{
 /// the test finishes it. Counts the runs.
 #[derive(Default)]
 struct OneCheck {
-    runs: AtomicUsize,
+    runs: Arc<AtomicUsize>,
+    remote: Option<(Arc<Switch>, Handle)>,
+    block_listing: bool,
+    platform: Option<Os>,
 }
 
-fn the_check() -> TipCheck {
+fn the_check(platform: Option<Os>) -> TipCheck {
     let check = CheckName::new("unit:a").unwrap();
     TipCheck {
         key: ResultKey {
             check: check.clone(),
             hash: InputHash::new("a".repeat(64)).unwrap(),
-            platform: None,
+            platform,
         },
         check,
         family: "unit".to_owned(),
@@ -35,20 +40,52 @@ fn the_check() -> TipCheck {
     }
 }
 
+impl OneCheck {
+    /// Runs a command under a landing-tree lease, as the real listing and checks do.
+    fn command(&self, ctx: &Context, at: &Commit, args: &[&str]) -> Option<i32> {
+        let mut command = spec(args);
+        command.class = Class::Tip;
+        let Some((host, handle)) = &self.remote else {
+            return ctx.launcher.run(&command).exit;
+        };
+        let LeaseLandingReply::Leased { tree, path, .. } = host
+            .lease_landing(&LeaseLanding {
+                handle: handle.clone(),
+                holder: format!("tip {at}"),
+                commit: at.clone(),
+                keep_free: 0,
+            })
+            .unwrap()
+        else {
+            panic!("the round's landing tree is still held");
+        };
+        command.cwd = path;
+        command.tree = Some(tree.clone());
+        let result = ctx.launcher.run(&command);
+        host.release_landing(&ReleaseLanding {
+            handle: handle.clone(),
+            tree,
+            built: Some(at.clone()),
+        })
+        .unwrap();
+        result.exit
+    }
+}
+
 impl TipWork for OneCheck {
-    fn checks(&self, _ctx: &Context, _commit: &Commit) -> Result<TipSet> {
+    fn checks(&self, ctx: &Context, at: &Commit) -> Result<TipSet> {
+        if self.block_listing && self.command(ctx, at, &["cargo", "nextest", "list"]) != Some(0) {
+            return Err(Error::Conflict("listing did not finish".to_owned()));
+        }
         Ok(TipSet {
-            checks: vec![the_check()],
+            checks: vec![the_check(self.platform)],
             ..TipSet::default()
         })
     }
 
-    fn run(&self, ctx: &Context, _at: &Commit, checks: &[CheckName], _rerun: bool) -> Vec<TipRun> {
+    fn run(&self, ctx: &Context, at: &Commit, checks: &[CheckName], _rerun: bool) -> Vec<TipRun> {
         self.runs.fetch_add(1, Ordering::SeqCst);
-        let mut command = spec(&["cargo", "test"]);
-        command.class = Class::Tip;
-        let result = ctx.launcher.run(&command);
-        let outcome = if result.exit == Some(0) {
+        let outcome = if self.command(ctx, at, &["cargo", "test"]) == Some(0) {
             Outcome::Pass
         } else {
             Outcome::Incomplete
@@ -99,7 +136,12 @@ impl VerbStarter for RoundThreads {
         };
         let (ctx, work, memory) = (
             self.ctx.clone(),
-            self.work.clone(),
+            OneCheck {
+                runs: self.work.runs.clone(),
+                remote: Some((self.switch.clone(), handle.clone())),
+                block_listing: self.work.block_listing,
+                platform: self.work.platform,
+            },
             self.home.join("daemon.db"),
         );
         let thread = std::thread::spawn(move || {
@@ -108,7 +150,12 @@ impl VerbStarter for RoundThreads {
                 let mut ctx = ctx;
                 ctx.launcher = Arc::new(RemoteLauncher(remote.clone()));
                 Ok(Assembled {
-                    verb: Arc::new(TipRoundVerb::new(work, "test", "jarvis", Some(memory))),
+                    verb: Arc::new(TipRoundVerb::new(
+                        Arc::new(work),
+                        "test",
+                        "jarvis",
+                        Some(memory),
+                    )),
                     ctx,
                 })
             })
@@ -117,11 +164,39 @@ impl VerbStarter for RoundThreads {
     }
 }
 
+#[derive(Default)]
+struct OneLandingTree {
+    owner: Mutex<Option<Handle>>,
+}
+
+impl LandingTrees for OneLandingTree {
+    fn lease(&self, _: &str, owner: &Handle, at: &Commit, _: usize) -> Result<Option<TreeLease>> {
+        let mut held = lock(&self.owner);
+        if held.is_some() {
+            return Ok(None);
+        }
+        *held = Some(owner.clone());
+        Ok(Some(TreeLease {
+            tree: TreeId::new("landing-1").unwrap(),
+            path: PathBuf::from("/repo/trees/landing-1"),
+            branch: "landing-1".to_owned(),
+            at: at.clone(),
+        }))
+    }
+
+    fn release(&self, owner: &Handle, _: &TreeId, _: Option<&Commit>) -> Result<()> {
+        let mut held = lock(&self.owner);
+        assert_eq!(held.take().as_ref(), Some(owner));
+        Ok(())
+    }
+}
+
 /// What lasts across a restart: the home with its database, the commands, the hub and git.
 struct TipMachine {
     scratch: Scratch,
     db: Arc<Mutex<Connection>>,
     commands: Arc<Commands>,
+    landing: Arc<OneLandingTree>,
     switch: Arc<Switch>,
     threads: Arc<RoundThreads>,
     hub: Arc<FakeHub>,
@@ -132,13 +207,20 @@ struct TipMachine {
 
 impl TipMachine {
     fn new(name: &str) -> TipMachine {
+        Self::with_work(name, OneCheck::default())
+    }
+
+    fn with_work(name: &str, work: OneCheck) -> TipMachine {
         let scratch = Scratch::new(name);
         let db = Arc::new(Mutex::new(
             ignite_store::local::open(&scratch.home.join("daemon.db")).unwrap(),
         ));
         let (hub, git) = (Arc::new(FakeHub::default()), Arc::new(FakeGit::default()));
-        git.set_tip("master", Commit::new("aaaa000").unwrap());
-        git.set_tip("staging", Commit::new("bbbb000").unwrap());
+        let master = Commit::new("aaaa000").unwrap();
+        let staging = Commit::new("bbbb000").unwrap();
+        git.set_not_ancestor(&staging, &master);
+        git.set_tip("master", master);
+        git.set_tip("staging", staging);
         let mut ctx = context();
         ctx.hub = hub.clone();
         ctx.git = git.clone();
@@ -153,12 +235,13 @@ impl TipMachine {
                 db: db.clone(),
                 switch: switch.clone(),
                 ctx,
-                work: Arc::new(OneCheck::default()),
+                work: Arc::new(work),
                 started: AtomicUsize::new(0),
             }),
             scratch,
             db,
             switch,
+            landing: Arc::new(OneLandingTree::default()),
             hub,
             git,
             in_daemon: Arc::new(OneCheck::default()),
@@ -173,7 +256,7 @@ impl TipMachine {
                 dispatcher: None,
                 starter: self.commands.clone(),
                 builds: Arc::new(FakeBuilds::default()),
-                landing: Arc::new(NoTrees),
+                landing: self.landing.clone(),
                 db: self.db.clone(),
                 steps: steps.clone(),
                 clock: Arc::new(FakeClock::new(T0)),
@@ -270,6 +353,11 @@ fn a_tip_round_survives_a_restart_and_the_new_loop_waits_for_it() {
     // thread of a process that is gone would; nothing reaches it.
     machine.switch.set(None);
     drop(first);
+    // A landing updates staging without verifying it. The restarted loop still waits for
+    // the command already running at the previous tip.
+    machine
+        .git
+        .set_tip("staging", Commit::new("cccc000").unwrap());
     let (second, second_loop) = machine.daemon();
     machine.switch.set(Some(second.clone()));
     let waiting = turn_on_a_thread(second_loop, ctx.clone(), || {
@@ -290,6 +378,7 @@ fn a_tip_round_survives_a_restart_and_the_new_loop_waits_for_it() {
     assert_eq!(machine.hub.tip_rounds().len(), 1, "one round record");
 
     // The tip is settled: the next turn starts nothing.
+    machine.git.set_tip("staging", tip.clone());
     assert_eq!(
         second_loop
             .turn(&ctx, 0, || panic!("no round is due"))
@@ -299,4 +388,88 @@ fn a_tip_round_survives_a_restart_and_the_new_loop_waits_for_it() {
     assert_eq!(machine.threads.started.load(Ordering::SeqCst), 1);
     let (_, cut_turn) = cut.join().unwrap();
     assert_eq!(cut_turn.unwrap(), Some((tip, TipOutcome::Verified)));
+}
+
+#[test]
+fn a_round_blocked_in_listing_yields_to_master_and_the_latest_tip_runs() {
+    let platform = Os::current().expect("the test machine's operating system");
+    let machine = TipMachine::with_work(
+        "superseded-tip-round",
+        OneCheck {
+            block_listing: true,
+            platform: Some(platform),
+            ..OneCheck::default()
+        },
+    );
+    let ctx = machine.threads.ctx.clone();
+    let target = machine.git.tip("staging").unwrap();
+    let (server, tips) = machine.daemon();
+    machine.switch.set(Some(server.clone()));
+    let handle = server.start_internal(
+        tips.verb.clone(),
+        TipRoundVerb::request(&target, Seq(0), &ctx.repo),
+    );
+    assert!(until(|| machine.commands.begun() == 1));
+    assert_eq!(*lock(&machine.landing.owner), Some(handle.clone()));
+
+    let master = Commit::new("cccc000").unwrap();
+    let staging = Commit::new("dddd000").unwrap();
+    machine.git.set_tip("master", master.clone());
+    machine.git.set_tip("staging", staging.clone());
+    machine.git.set_not_ancestor(&staging, &master);
+    let last_good = Commit::new("aaaa000").unwrap();
+    let coverage = PlatformVerification {
+        through: master.clone(),
+        deferred: Some(DeferredPlatform {
+            since: target.clone(),
+            last_good,
+        }),
+    };
+    assert!(
+        machine
+            .hub
+            .update_tip_coverage(&TipCoverageUpdate {
+                platform,
+                expected: None,
+                replacement: coverage,
+            })
+            .unwrap()
+    );
+
+    // The loop adopts the blocked round from its saved request. The supervisor fake then
+    // finishes the listing after the stop has reached the verb.
+    let stopping = turn_on_a_thread(tips, ctx.clone(), || {
+        panic!("the old round is still active")
+    });
+    assert!(until(|| machine.switch.stops.load(Ordering::SeqCst) > 0));
+    machine.commands.finish_all();
+    let (tips, turn) = stopping.join().unwrap();
+    assert_eq!(
+        turn.unwrap(),
+        Some((target, TipOutcome::Superseded { by: master }))
+    );
+    assert!(lock(&machine.landing.owner).is_none());
+    assert_eq!(machine.threads.work.runs.load(Ordering::SeqCst), 0);
+
+    let landing = machine.landing.clone();
+    let checking = turn_on_a_thread(tips, ctx, move || {
+        assert!(
+            lock(&landing.owner).is_none(),
+            "the disk sweep can use the tree"
+        );
+    });
+    assert!(until(|| machine.commands.begun() == 2));
+    machine.commands.finish_all();
+    assert!(until(|| machine.commands.begun() == 3));
+    machine.commands.finish_all();
+    let (_, turn) = checking.join().unwrap();
+    assert_eq!(turn.unwrap(), Some((staging.clone(), TipOutcome::Verified)));
+    let coverage = machine.hub.tip_coverage().unwrap();
+    assert_eq!(
+        coverage.platforms[&platform],
+        PlatformVerification {
+            through: staging,
+            deferred: None,
+        }
+    );
 }

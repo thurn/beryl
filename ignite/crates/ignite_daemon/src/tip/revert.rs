@@ -204,6 +204,8 @@ impl TipVerifier {
         };
         self.unsent_reverts.push(report);
         self.send_reverts(ctx);
+        self.save(ctx);
+        crate::steps::allow_stop();
         Ok(Handled::Reverted)
     }
 
@@ -269,20 +271,21 @@ impl TipVerifier {
             if ctx.git.tip(staging).map_err(|e| e.to_string())? != base {
                 continue;
             }
-            match ctx
-                .git
-                .push(&ctx.repo, &revert, staging)
-                .map_err(|e| e.to_string())?
-            {
-                Push::Pushed { .. } => {
-                    eprintln!(
-                        "ignite: reverted {} on {staging} with {revert}",
-                        landing_name(landing)
-                    );
-                    return Ok(Some(revert));
-                }
-                Push::Rejected { .. } => {}
+            // Keep the round alive until a pushed revert has been reported or saved for
+            // retry, so the landing's ticket can be reopened.
+            if !crate::steps::refuse_stop(&format!("its revert push to {staging} has begun")) {
+                return Ok(None);
             }
+            let pushed = ctx.git.push(&ctx.repo, &revert, staging);
+            if matches!(pushed, Ok(Push::Pushed { .. })) {
+                eprintln!(
+                    "ignite: reverted {} on {staging} with {revert}",
+                    landing_name(landing)
+                );
+                return Ok(Some(revert));
+            }
+            crate::steps::allow_stop();
+            pushed.map_err(|e| e.to_string())?;
         }
         Err(format!(
             "the tip moved each of {MAX_ATTEMPTS} times before the revert was pushed"

@@ -21,6 +21,8 @@
 //! - When a round's reply says `master` moved, the loop asks the daemon's self-update to build
 //!   the new release (`SelfUpdate::after_master_moved`), as before; a loop that waited for a
 //!   round started before a restart does the same with that round's reply.
+//! - While waiting, the loop also checks whether `master` has advanced past the round's
+//!   target. It stops that round so its landing trees can serve the newest tip.
 //!
 //! A round whose verb process dies is not run again: its handle ends `incomplete`, and the next
 //! turn of the loop starts a new round when the tip still needs one.
@@ -43,8 +45,7 @@ use crate::server::{Context, Server, Verb, error_reply};
 /// The internal verb that runs one round of tip verification.
 pub const ROUND_VERB: &str = "tip-round";
 
-/// How long one wait on a round's handle lasts before the loop waits again; the loop's step
-/// stays the same throughout.
+/// How long the loop waits on a round's handle between checks of `master`.
 const WAIT_S: u32 = 60;
 
 /// What a round answers with, in its reply's JSON.
@@ -184,9 +185,12 @@ impl TipLoop {
         wait_s: u32,
         before_start: impl FnOnce(),
     ) -> Result<Option<(Commit, TipOutcome)>> {
-        if let Some(handle) = self.server.running_internal(ROUND_VERB) {
+        if let Some((handle, request)) = self.server.running_internal(ROUND_VERB) {
             crate::steps::step(format!("waiting for tip round {handle}"));
-            return self.wait(&handle).map(Some);
+            let target = request.and_then(|request| TipRoundVerb::parse(&request).ok());
+            return self
+                .wait(ctx, &handle, target.as_ref().map(|(tip, _)| tip), 0)
+                .map(Some);
         }
         crate::steps::step("waiting for a new tip, then verifying it");
         let batch = ctx.hub.feed(self.since, wait_s)?;
@@ -199,15 +203,32 @@ impl TipLoop {
         let request = TipRoundVerb::request(&tip, self.since, &ctx.repo);
         let handle = self.server.start_internal(self.verb.clone(), request);
         crate::steps::step(format!("verifying tip {tip} in {handle}"));
-        self.wait(&handle).map(Some)
+        self.wait(ctx, &handle, Some(&tip), WAIT_S).map(Some)
     }
 
-    /// Waits for the round `handle` to finish and reads its reply.
-    fn wait(&self, handle: &Handle) -> Result<(Commit, TipOutcome)> {
+    /// Waits for the round and reads its reply. An adopted round can already be obsolete,
+    /// so its first wait only checks whether it has finished.
+    fn wait(
+        &self,
+        ctx: &Context,
+        handle: &Handle,
+        target: Option<&Commit>,
+        mut wait_s: u32,
+    ) -> Result<(Commit, TipOutcome)> {
         let handles = self.server.handles();
+        let mut superseded = None;
         let reply = loop {
-            match handles.wait(handle, WAIT_S, None) {
-                Waited::Running(_) => {}
+            match handles.wait(handle, wait_s, None) {
+                Waited::Running(_) => {
+                    wait_s = WAIT_S;
+                    if superseded.is_none()
+                        && let Some(tip) = target
+                        && let Some(by) = verified_past(ctx, tip)
+                        && self.server.stop_internal(handle)
+                    {
+                        superseded = Some((tip.clone(), by));
+                    }
+                }
                 Waited::Done(reply) | Waited::Interrupted(reply) => break reply,
                 Waited::Unknown => {
                     return Err(Error::NotFound(format!("the tip round {handle}")));
@@ -221,7 +242,23 @@ impl TipLoop {
             .and_then(|json| serde_json::from_value::<RoundReply>(json).ok());
         match read {
             Some(RoundReply { tip, outcome }) => Ok((tip, outcome)),
+            None if let Some((tip, by)) = superseded => Ok((tip, TipOutcome::Superseded { by })),
             None => Err(Error::Conflict(format!("{handle}: {}", reply.text))),
         }
     }
+}
+
+/// A newer `staging` tip alone does not invalidate work. Stop only when a descendant is
+/// already on `master`. A round at `master` can still have deferred platform or budget checks.
+fn verified_past(ctx: &Context, target: &Commit) -> Option<Commit> {
+    let master = ctx.git.tip(&ctx.config.repository.master).ok()?;
+    (master != *target && ctx.git.is_ancestor(target, &master).ok()?).then_some(master)
+}
+
+/// Leaves a stopped round before it treats interrupted checks as missing or failing.
+pub(super) fn require_running() -> Result<()> {
+    if crate::steps::stop_requested() {
+        return Err(Error::Conflict("the tip round was stopped".to_owned()));
+    }
+    Ok(())
 }
