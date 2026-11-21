@@ -10,6 +10,7 @@ use beryl_engine::card::{ManaCost, Part, Prompt, Purpose, Shape};
 use beryl_engine::state::Pending;
 use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{Observation, Scratch, view};
+use beryl_scenario::Scenario;
 use beryl_session::prompt::{Lies, PlaceName, PromptView, ShapeBody, shape_name};
 use beryl_session::protocol::{CardHandling, DecisionView, Moment, Side, player_view};
 use beryl_session::{DecisionId, SessionId, Status, StopsSetting};
@@ -78,8 +79,12 @@ fn asked(card: &str) -> Vec<(DecisionView, Prompt)> {
         .iter()
         .find(|&&(name, _)| name == card)
         .expect("the card's scenarios");
+    asked_in(scenarios)
+}
+
+fn asked_in(scenarios: &[Scenario]) -> Vec<(DecisionView, Prompt)> {
     let mut seen = Vec::new();
-    for scenario in *scenarios {
+    for scenario in scenarios {
         beryl_scenario::visit(&CARDS, scenario, |t, s, d| {
             let mut x = Scratch::new();
             // A paused resolution's entry is still on top of the committed stack.
@@ -346,9 +351,25 @@ fn a_maps_explore_asks_whether_the_revealed_card_goes_to_the_graveyard() {
 
 #[test]
 fn time_spiral_untaps_up_to_six_lands() {
+    use beryl_engine::DecisionKind;
+    use beryl_scenario::{Action, P0, P1, Pick};
+
+    const SCENARIO: Scenario = Scenario::new("Time Spiral offers to untap lands after the shuffle")
+        .battlefield(P0, &[names::ISLAND; 6])
+        .hand(P0, &[names::TIME_SPIRAL])
+        .library(P0, &[names::ISLAND; 7])
+        .library(P1, &[names::PLAINS; 7])
+        .actions(&[
+            Action::cast(P0, names::TIME_SPIRAL),
+            Action::answer(P0, DecisionKind::ChooseUpTo, Pick::Done),
+        ]);
+    let (decision, record) = asked_in(&[SCENARIO])
+        .into_iter()
+        .find(|(decision, _)| decision.prompt.is(Purpose::Untap))
+        .expect("Time Spiral offers to untap lands");
     assert_eq!(
-        asks(names::TIME_SPIRAL, &[Purpose::Untap]),
-        ["chooseUpTo pick untap pick: \"Untap up to six lands.\" 0/6 you's battlefield"]
+        line(&decision, &record),
+        "chooseUpTo pick untap pick: \"Untap up to six lands.\" 0/6 you's battlefield"
     );
 }
 
@@ -479,7 +500,7 @@ fn every_prompt_the_scenarios_reach_is_sent_with_its_shape_and_a_whole_title() {
 #[test]
 fn the_observer_does_not_see_handling_for_a_graveyard_exile_cost() {
     use beryl_engine::{Choice, DecisionKind, Zone};
-    use beryl_scenario::{Action, P0, Permanent, Scenario};
+    use beryl_scenario::{Action, P0, Permanent};
 
     const SCENARIO: Scenario =
         Scenario::new("Oculus paid from the graveyard with a card still in hand")
