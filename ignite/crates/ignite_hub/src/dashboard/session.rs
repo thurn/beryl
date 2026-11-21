@@ -107,9 +107,10 @@ pub(crate) fn options(
     editable: bool,
 ) -> Result<Option<PageOptions>, ReadError> {
     let sessions = sessions_of(conn, ticket)?;
-    let Some(session) = session.map_or_else(|| sessions.last().cloned(), |session| {
-        sessions.iter().find(|known| *known == session).cloned()
-    }) else {
+    let Some(session) = session.map_or_else(
+        || sessions.last().cloned(),
+        |session| sessions.iter().find(|known| *known == session).cloned(),
+    ) else {
         return Ok(None);
     };
     let session = session.as_str();
@@ -135,7 +136,12 @@ pub(crate) fn options(
         None => "gone",
     };
     let tier = tier_of(conn, ticket)?;
-    let ticket_link = c::link(&ticket_url(root, ticket), &esc(&display_id(ticket)), None, "");
+    let ticket_link = c::link(
+        &ticket_url(root, ticket),
+        &esc(&display_id(ticket)),
+        None,
+        "",
+    );
     let tone = match state {
         "down" | "stalled" => Tone::Red,
         "idle" | "gone" | "done" => Tone::Muted,
@@ -209,7 +215,12 @@ fn session_tabs(root: &str, ticket: &str, sessions: &[String], current: &str) ->
             if other == current {
                 format!("<span class=\"c-session-tab\" aria-current=\"page\">{label}</span>")
             } else {
-                c::link(&session_url(root, ticket, other), &label, None, "c-session-tab")
+                c::link(
+                    &session_url(root, ticket, other),
+                    &label,
+                    None,
+                    "c-session-tab",
+                )
             }
         })
         .collect();

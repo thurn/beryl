@@ -185,7 +185,10 @@ fn the_first_address_of_a_session_redirects_to_its_ticket() {
     let conn = seeded();
     let (status, location, _) = reply(&conn, &format!("/pool/session/{SESSION}"), true, true);
     assert_eq!(status, 308);
-    assert_eq!(location.as_deref(), Some(format!("/TT1/session/{SESSION}").as_str()));
+    assert_eq!(
+        location.as_deref(),
+        Some(format!("/TT1/session/{SESSION}").as_str())
+    );
     // Another name for the ticket redirects to its own.
     let (status, location, _) = reply(&conn, "/tt1/session/", true, true);
     assert_eq!(status, 308);
@@ -213,16 +216,30 @@ fn a_ticket_with_two_sessions_links_both_and_shows_each_ones_own_lines() {
     };
     let now = Timestamp::parse(NOW).unwrap();
     let machine = MachineId::new("m-1").unwrap();
-    transcripts::append(&conn, &machine, &[line(earlier, "TT1", 0, "Giving it up")], now).unwrap();
+    transcripts::append(
+        &conn,
+        &machine,
+        &[line(earlier, "TT1", 0, "Giving it up")],
+        now,
+    )
+    .unwrap();
     transcripts::append(&conn, &machine, &lines(), now).unwrap();
-    transcripts::append(&conn, &machine, &[line(SESSION, "TT2", 9, "On the next ticket")], now)
-        .unwrap();
+    transcripts::append(
+        &conn,
+        &machine,
+        &[line(SESSION, "TT2", 9, "On the next ticket")],
+        now,
+    )
+    .unwrap();
 
     let (status, latest) = page(&conn, "/TT1/session", true, true);
     assert_eq!(status, 200);
     assert!(latest.contains("Reading the files"), "{latest}");
     assert!(!latest.contains("Giving it up") && !latest.contains("On the next ticket"));
-    assert!(latest.contains(&format!("href=\"/TT1/session/{earlier}\"")), "{latest}");
+    assert!(
+        latest.contains(&format!("href=\"/TT1/session/{earlier}\"")),
+        "{latest}"
+    );
     let (status, first) = page(&conn, &format!("/TT1/session/{earlier}"), true, true);
     assert_eq!(status, 200);
     assert!(first.contains("Giving it up") && !first.contains("Reading the files"));

@@ -419,7 +419,9 @@ fn session_reply(
             return match session::ticket_of(conn, &id) {
                 Err(error) => failed(&error),
                 Ok(None) => missing(),
-                Ok(Some(ticket)) => redirect(&session::session_url(root, &ticket, &id), &request.query),
+                Ok(Some(ticket)) => {
+                    redirect(&session::session_url(root, &ticket, &id), &request.query)
+                }
             };
         }
         Route::Session(name, id) => (name, id),
@@ -437,7 +439,14 @@ fn session_reply(
     if canonical != request.path {
         return redirect(&canonical, &request.query);
     }
-    let built = session::options(conn, root, site.project, ticket.as_str(), id.as_deref(), site.editable);
+    let built = session::options(
+        conn,
+        root,
+        site.project,
+        ticket.as_str(),
+        id.as_deref(),
+        site.editable,
+    );
     match built {
         Err(error) => failed(&error),
         Ok(None) => missing(),
