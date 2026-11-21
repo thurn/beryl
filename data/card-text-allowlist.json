@@ -35,6 +35,13 @@
       "Cerebral Vortex: target player draws two cards [-, then-] {+.+} ~ deals damage [-to that player-] equal to the number of cards [-they've drawn-] {+that player drew+} this turn {+to that player+} ."
     ]
   },
+  "Crackling Triton": {
+    "reason": "wording",
+    "note": "After the sacrifice cost, Oracle says the damage source is ‘it’. The renderer calls the same source ‘this creature’.",
+    "diff": [
+      "Crackling Triton: {2} {R} , Sacrifice ~ : [-it-] {+~+} deals 2 damage to any target ."
+    ]
+  },
   "Currency Converter": {
     "reason": "wording",
     "note": "The last ability chooses one card exiled with the Converter and puts it into the graveyard only if one was chosen; Oracle says \"put a card exiled with this artifact\", which is the same instruction. \"Otherwise\" after \"if it's a land card\" is \"if it's a nonland card\".",
