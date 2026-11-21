@@ -85,8 +85,8 @@ What the second planning changed:
   games (section A).
 - **Per-card tests are not sampled yet**, and **compile cost is measured by
   Ignite's rebuild counts** (P12, section D).
-- **The twelve new cards are written with no trial of a cheaper model.** The
-  pool has no such tier, so drafted cards are `tier:light` (section E).
+- **Drafted cards go to `tier:light`.** The Theros pilot ran both tiers on
+  GPT-6.2 Sol (section E8).
 - All 29 keystones stay, including subgames, banding and Illusionary Mask, which
   cover few cards (P5).
 
@@ -659,17 +659,60 @@ list the card in the rulings ledger when it has rulings worth holding. It keeps
 its rules that a writer never edits the vocabulary's variants, the engine or
 another card.
 
-**E8. The proof.** The existing simple cards are converted first: each card
-whose generated scenarios kill every mutant loses its hand-written scenarios,
-except those the rulings ledger names, and its doc comment keeps only
-card-specific rulings (P3). Then a dozen cards nobody has implemented are
-written with the new skill: the first six of the `drafted` tier of
-`just set plan` for one set by a `tier:light` session, and the first six of its
-`composed` tier by a `tier:sonnet` session. A report ticket then gives, from the
-efficiency store and by tier, tokens and minutes per card against the cards
-written before, the share that passed `just card check` first time, the share
-with no hand-written scenario, and the lines per card file. It names the model
-each tier ran on. No cheaper model is tried: the pool has no tier for one.
+**E8. The proof.** Under P3, existing simple cards whose generated scenarios
+kill every mutant keep only the hand-written scenarios named in the rulings
+ledger and the doc comments specific to their rulings. The new-card pilot worked
+through the first six unimplemented candidates in each of the `drafted` and
+`composed` tiers from `just set plan ths`. Both workers used Codex with GPT-6.2
+Sol. The results describe the two workflows on this sample.
+
+| Measure                                     | Drafted (`tier:light`) | Composed (`tier:sonnet`) | Median before 2026-11-20 |
+| ------------------------------------------- | ---------------------: | -----------------------: | -----------------------: |
+| Candidates                                  |                      6 |                        6 |                          |
+| Cards landed                                |                      2 |                        4 |                          |
+| Escalated for missing vocabulary            |                      0 |                        2 |                          |
+| Handed off for exporter or scenario work    |                      4 |                        0 |                          |
+| Drafts correct as written                   |                 5 of 6 |                   0 of 6 |                          |
+| Passed the fast card check on its first run |                 4 of 6 |                   0 of 4 |                          |
+| Passed the full card check on its first run |                 2 of 4 |                   4 of 4 |                          |
+| Landed with no hand-written scenario        |                 2 of 2 |                   1 of 4 |                          |
+| Median lines per landed card file           |                     14 |                     32.5 |                          |
+| Tokens per candidate                        |           4.80 million |             6.76 million |                          |
+| Direct dollars per candidate                |                  $0.59 |                    $0.85 |                          |
+| Agent minutes per candidate                 |                    7.4 |                     11.8 |                          |
+| Tokens per landed card                      |          14.41 million |            10.14 million |             8.58 million |
+| Direct dollars per landed card              |                  $1.76 |                    $1.27 |                    $1.29 |
+| Agent minutes per landed card               |                   22.3 |                     17.7 |                     12.0 |
+
+First-run pass rates use the cards that reached each check. The fast check uses
+`--no-oracles`. Draft correctness includes the Crackling Triton wording pin,
+which preserved the draft's behavior. The four drafted handoffs were two XMage
+scry export failures and two gaps in generated coverage. Costs use the whole
+ticket, including handoffs, escalations, the drafted-tier routing fix and the
+landing checks. Token totals include cache reads and writes. Direct dollars are
+modeled from API prices.
+
+Tickets closed before 2026-11-20 added 84 card files. The historical median
+covers the 11 files from five tickets with session data in the Multivac
+efficiency store. Each file gets an equal share of its ticket's cost. Both pilot
+tiers used more tokens and agent minutes per landed card than that median.
+Direct dollars per landed card were close to the median for composed cards and
+higher for drafted cards.
+
+The pilot supports P2's conditional rule. Three of the six landed cards passed
+the mutation and oracle checks using generated scenarios alone, including both
+landed drafts. The other three needed hand-written scenarios. Two more drafts
+were handed off for focused scenarios, so five of the eight candidates with a
+determined scenario requirement needed one. The other four were blocked by
+exporter or vocabulary gaps.
+
+For the next hundred cards, start with a generated scenario in which a different
+permanent enters and the source's own enters ability stays off the stack. The
+same missing case held up Horizon Scholar, Ashen Rider and Blood-Toll Harpy, and
+contributed to the coverage gaps for Chronicler of Heroes. Repair XMage's
+generated scry export so a correct draft can complete oracle checking. Both
+changes let future cards reuse the fix instead of paying for a scenario or an
+exporter investigation on each card.
 
 ### F. The shape of a game
 
