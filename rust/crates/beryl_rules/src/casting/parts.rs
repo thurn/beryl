@@ -36,6 +36,8 @@ use super::delve::{DELVE, DELVE_PART, delve_candidates, delve_most, delves};
 use super::steps::{finish, pay_mana, top};
 use super::timing::entry_ability_of;
 
+mod moving;
+
 /// The part at `index` of the cost of the spell or ability `entry`, counting its parts that
 /// are not mana from 0 in the order printed; at [`DELVE_PART`], delve's.
 fn part_at<L: Layout>(
@@ -58,7 +60,7 @@ fn part_at<L: Layout>(
     if face.additional_cost.is_empty() && costs.is_empty() {
         return None;
     }
-    face.cost_parts(costs).nth(index)
+    moving::ordered_parts(face, costs).nth(index)
 }
 
 /// The object the cost of `entry` is on: the spell's card, or the ability's source.
@@ -209,18 +211,34 @@ pub(super) fn spell_payable<L: Layout>(
     slot: L::Slot,
     face: &Face,
     costs: Castings,
-) -> bool {
+) -> Result<bool, Full> {
     // Most faces are cast with no cost but mana.
     if face.additional_cost.is_empty() && costs.is_empty() {
-        return true;
+        return Ok(true);
     }
-    face.cost_parts(costs).all(|part| match part {
+    spell_parts_payable(s, t, player, slot, face, costs)
+}
+
+#[cold]
+#[inline(never)]
+fn spell_parts_payable<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    player: Seat,
+    slot: L::Slot,
+    face: &Face,
+    costs: Castings,
+) -> Result<bool, Full> {
+    if moving::has_moving_parts(face, costs) {
+        return moving::payable(s, t, player, slot, face, costs);
+    }
+    Ok(face.cost_parts(costs).all(|part| match part {
         CostPart::Chosen(action, chosen) => payable(s, t, player, slot, *action, chosen),
         CostPart::Life(n) => life::can_pay(s, t, player, *n),
         CostPart::This(_) | CostPart::Loyalty(_) | CostPart::OneOf(_) | CostPart::DiscardHand => {
             unreachable!("the card table refuses a spell's cost the engine cannot pay")
         }
-    }) && parts_share_enough(s, t, player, slot, face, costs)
+    }) && parts_share_enough(s, t, player, slot, face, costs))
 }
 
 /// Whether the parts of the cost of casting `face` with the options `costs` that each take a
@@ -256,31 +274,7 @@ fn parts_share_enough<L: Layout>(
             len += 1;
         }
     }
-    let counted = &counted[..len];
-    // Most spells take objects for one part at most, which `payable` has answered.
-    if counted.len() < 2 {
-        return true;
-    }
-    (1u32..1 << counted.len()).all(|set| {
-        let mut parts = counted
-            .iter()
-            .enumerate()
-            .filter(|&(i, _)| set & (1 << i) != 0)
-            .map(|(_, part)| part);
-        let Some(&(zone, n, cards)) = parts.next() else {
-            return true;
-        };
-        let (mut needed, mut cards) = (n, cards);
-        for &(other_zone, n, others) in parts {
-            if other_zone != zone {
-                // Parts in different zones never compete for an object.
-                return true;
-            }
-            needed += n;
-            cards |= others;
-        }
-        cards.count() >= needed
-    })
+    len < 2 || moving::costs_fit(&counted[..len])
 }
 
 /// Whether `player` can pay `cost`, paying up to `most` of its generic mana with one of
@@ -334,10 +328,11 @@ fn pay_with_source<L: Layout>(
     }
 }
 
-/// Pays the parts of the cost from the part at `from` on, in the order printed, stopping at
+/// Pays the parts of the cost from the part at `from` on, stopping at
 /// one its player chooses objects for ([`CastStep::Objects`]); then turns to what follows
 /// them. An ability's parts are paid before its mana and a spell's after it, so a spell's
-/// caster sees the mana spent before choosing the cards it also costs.
+/// caster sees the mana spent before choosing the cards it also costs. A spell pays
+/// sacrifices and discards before the other parts, since they may supply cards to exile.
 ///
 /// [CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h): "The player pays the
 /// total cost. First, they pay all costs that don't involve random elements or moving objects
@@ -371,13 +366,14 @@ pub(super) fn pay<L: Layout>(
                 }
             }
             CostPart::Chosen(_, chosen) => match chosen.measure {
+                // A zero count needs no objects. Generic substitutions are paid with mana
+                // after the other parts ([`pay_substitutes`]).
+                Measure::Count(0) | Measure::ForGeneric(_) => {}
                 Measure::Count(n) | Measure::TotalPower(n) => {
                     c.step = CastStep::Objects(PayingObjects::start(index, n));
                     s.ask(Pending::Casting(c));
                     return Ok(());
                 }
-                // Paid as the mana is, after every other part ([`pay_substitutes`]).
-                Measure::ForGeneric(_) => {}
             },
             CostPart::Life(n) => {
                 // See CR 119.4: "If a player pays life, the payment is subtracted from their life
@@ -540,7 +536,7 @@ fn choices<L: Layout>(
     t: &GameTable,
     entry: &StackEntry<L>,
     c: &Casting<L>,
-) -> Bitboard<L::Slot> {
+) -> Result<Bitboard<L::Slot>, Full> {
     let (action, chosen) = part_being_paid(t, entry, c);
     let paying = step(c);
     let PayingObjects {
@@ -549,7 +545,8 @@ fn choices<L: Layout>(
         ..
     } = paying;
     let able = candidates(s, t, c.player, itself(entry), action, chosen) & !picked;
-    match (chosen.measure, chosen.zone) {
+    let completable = moving::completable_choices(s, t, entry, c.player, &paying, able)?;
+    Ok(match (chosen.measure, chosen.zone) {
         (Measure::Count(_), Zone::Graveyard) => {
             let graveyard = s.graveyard(c.player);
             let last = graveyard
@@ -565,21 +562,23 @@ fn choices<L: Layout>(
                 graveyard[graveyard_start(graveyard, &paying)..=last]
                     .iter()
                     .copied()
-                    .filter(|&slot| able.contains(slot)),
+                    .filter(|&slot| completable.contains(slot)),
             )
         }
-        _ => collapse(s, able),
-    }
+        _ => collapse(s, completable),
+    })
 }
 
 /// What a player is asked as they choose the objects of a part: the prompts that exist are
-/// crew's, a waterbend cost's, delve's and a card to exile.
+/// crew's, a waterbend cost's, delve's and the objects taken by other costs.
 fn purpose(action: CostAction, chosen: &Chosen) -> Purpose {
     match (action, chosen.measure) {
         (CostAction::Tap, Measure::TotalPower(_)) => Purpose::Crew,
         (CostAction::Tap, Measure::ForGeneric(_)) => Purpose::Waterbend,
         (CostAction::Exile, Measure::ForGeneric(_)) => Purpose::Delve,
         (CostAction::Exile, Measure::Count(_)) => Purpose::ExileCost,
+        (CostAction::Sacrifice, Measure::Count(_)) => Purpose::Choose,
+        (CostAction::Discard, Measure::Count(_)) => Purpose::Discard,
         _ => unreachable!("the card table refuses a cost the engine cannot pay"),
     }
 }
@@ -619,7 +618,7 @@ pub(super) fn decision<L: Layout>(
             player: c.player,
             decider: c.player,
             kind: DecisionKind::ChooseObject,
-            candidates: Candidates::Objects(choices(s, t, entry, c)),
+            candidates: Candidates::Objects(choices(s, t, entry, c)?),
             prompt: Prompt::new(purpose).count(n).most(left),
             about: Bitboard::EMPTY,
         },
@@ -628,7 +627,7 @@ pub(super) fn decision<L: Layout>(
             player: c.player,
             decider: c.player,
             kind: DecisionKind::ChooseObject,
-            candidates: Candidates::Objects(choices(s, t, entry, c)),
+            candidates: Candidates::Objects(choices(s, t, entry, c)?),
             prompt: Prompt::new(purpose).most(left),
             about: Bitboard::EMPTY,
         },
@@ -667,6 +666,14 @@ fn pay_with_all<L: Layout>(
 ) -> Result<(), Full> {
     let mut game = Game::new(s, t, sink);
     match (action, chosen.zone) {
+        (CostAction::Sacrifice, Zone::Battlefield) => {
+            crate::actions::sacrifice::sacrifice_all(&mut game, objects)
+        }
+        (CostAction::Discard, Zone::Hand) => {
+            // See CR 701.9a: "To discard a card, move it from its owner's hand to
+            // that player's graveyard."
+            crate::zones::move_all(&mut game, objects, Zone::Graveyard, Reason::Discard)
+        }
         (CostAction::Exile, Zone::Graveyard) => {
             let cards = game.state().cards_in(player, Graveyard).intersect(objects);
             assert_eq!(
@@ -754,10 +761,13 @@ pub(super) fn perform<L: Layout>(
         }
         Measure::Count(_) => {
             // CR 601.2h: "The player pays the total cost." The cards stay where they are
-            // until the last is chosen, then go from the hand or the graveyard to exile at
-            // once ([`pay_with_all`]).
+            // until the last is chosen, then move at once ([`pay_with_all`]).
             let slot = object.expect("an object to pay with");
-            remember_cost_pick(s.graveyard(c.player), &mut paying, slot);
+            if chosen.zone == Zone::Graveyard {
+                remember_cost_pick(s.graveyard(c.player), &mut paying, slot);
+            } else {
+                paying.chosen.insert(slot);
+            }
             paying.left -= 1;
             if paying.left == 0 {
                 pay_with_all(s, t, sink, action, chosen, c.player, paying.chosen)?;

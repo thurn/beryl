@@ -207,9 +207,14 @@ fn refused<L: Layout, const TARGETS: bool>(
     }) {
         return Some(Refusal::Mana);
     }
-    // CR 601.2h: the player pays the total cost, so the objects its parts take must be there.
-    if !parts::spell_payable(s, t, player, slot, face, costs) {
-        return Some(Refusal::Cost);
+    // CR 601.2h: the player pays the total cost, including any parts funded by earlier parts.
+    match parts::spell_payable(s, t, player, slot, face, costs) {
+        Ok(true) => {}
+        Ok(false) => return Some(Refusal::Cost),
+        Err(Full) => {
+            now.full.set(true);
+            return Some(Refusal::Cost);
+        }
     }
     (TARGETS
         && !targetable(

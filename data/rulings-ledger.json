@@ -1598,7 +1598,10 @@
     {
       "published_at": "2020-01-24",
       "hash": "8b673134fc05",
-      "untestable": "by-ptc7.2.13 tracks paying a sacrifice or discard before the escape exile cost. Beryl currently rejects Village Rites because the card table cannot pay the sacrifice to cast it."
+      "scenario": [
+        "a creature sacrificed for an escaped spell pays its exile cost",
+        "a card discarded for an escaped spell pays its exile cost"
+      ]
     },
     {
       "published_at": "2020-01-24",

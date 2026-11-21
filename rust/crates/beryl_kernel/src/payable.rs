@@ -53,8 +53,8 @@ pub fn pays_for_ability(part: &CostPart) -> bool {
     }
 }
 
-/// Whether the engine pays this part of a spell's cost: exiling a number of cards from its
-/// caster's hand or graveyard, or a payment of life.
+/// Whether the engine pays this part of a spell's cost: sacrificing permanents, discarding
+/// or exiling cards, or paying life.
 pub fn pays_for_spell(part: &CostPart) -> bool {
     matches!(
         *part,
@@ -62,6 +62,20 @@ pub fn pays_for_spell(part: &CostPart) -> bool {
             CostAction::Exile,
             Chosen {
                 zone: Zone::Hand | Zone::Graveyard,
+                measure: Measure::Count(_),
+                ..
+            }
+        ) | CostPart::Chosen(
+            CostAction::Sacrifice,
+            Chosen {
+                zone: Zone::Battlefield,
+                measure: Measure::Count(_),
+                ..
+            }
+        ) | CostPart::Chosen(
+            CostAction::Discard,
+            Chosen {
+                zone: Zone::Hand,
                 measure: Measure::Count(_),
                 ..
             }
@@ -288,6 +302,7 @@ mod tests {
     #[test]
     fn a_table_holds_every_cost_the_engine_pays() {
         assert!(table("Paid").is_ok());
+        assert!(table("Rite").is_ok());
     }
 
     /// A part no code pays would be skipped as its spell is cast or its ability activated:
@@ -299,7 +314,6 @@ mod tests {
         let sacrifice = Unpayable::Part(SACRIFICE_A_CREATURE);
         assert_eq!(table("Altar").err(), refused("Altar", sacrifice));
         assert_eq!(table("Maker").err(), refused("Altar", sacrifice));
-        assert_eq!(table("Rite").err(), refused("Rite", sacrifice));
         assert_eq!(
             table("Bloodletter").err(),
             refused(

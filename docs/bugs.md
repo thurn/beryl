@@ -6,6 +6,14 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **A spell could not escape using the card sacrificed or discarded to cast
+  it.** The cast check counted graveyard cards before paying any costs. The
+  casting steps now pay sacrifices and discards first and check what actually
+  reached the graveyard before offering the cast or a payment choice. The
+  Underworld Breach scenarios verify that both kinds of cost can supply the
+  third card before an opponent receives priority. They also cover tokens and
+  sacrifice moves that Rest in Peace replaces with exile.
+
 - **Phantasmal Image became an Illusion when it copied a land animated by Life
   and Limb.** The copy effect added a creature subtype to a land before the
   animation made it a creature. Copy exceptions now check the card types the

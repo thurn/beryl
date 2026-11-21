@@ -180,6 +180,59 @@ pub mod scenarios {
     ];
 
     pub const SCENARIOS: &[Scenario] = &[
+        Scenario::new("a creature sacrificed for an escaped spell pays its exile cost")
+            .interaction(&[Card::VillageRites, Card::Counterspell])
+            .battlefield(P0, &[BREACH, Card::Swamp, Prop::Vanilla])
+            .graveyard(P0, &[Card::VillageRites, Card::Island, Card::Plains])
+            .battlefield(P1, &[Card::Island; 2])
+            .hand(P1, &[Card::Counterspell])
+            .actions(&[
+                ME.escapes(Card::VillageRites),
+                ME.tapped(Card::Swamp, 1),
+                ME.controls(Prop::Vanilla, 0),
+                ME.has(Zone::Exile, Prop::Vanilla, 1),
+                ME.has(Zone::Exile, Card::Island, 1),
+                ME.has(Zone::Exile, Card::Plains, 1),
+                ME.has_cards(Zone::Graveyard, 0),
+                THEM.deciding(DecisionKind::Priority, 2),
+                THEM.casts(Card::Counterspell),
+                ME.has(Zone::Graveyard, Card::VillageRites, 1),
+            ]),
+        Scenario::new("a card discarded for an escaped spell pays its exile cost")
+            .interaction(&[Card::ThrillOfPossibility, Card::Counterspell])
+            .battlefield(P0, &[BREACH, Card::Mountain, Card::Swamp])
+            .hand(P0, &[Card::Forest])
+            .graveyard(P0, &[Card::ThrillOfPossibility, Card::Island, Card::Plains])
+            .battlefield(P1, &[Card::Island; 2])
+            .hand(P1, &[Card::Counterspell])
+            .actions(&[
+                ME.escapes(Card::ThrillOfPossibility),
+                ME.tapped(Card::Mountain, 1),
+                ME.tapped(Card::Swamp, 1),
+                ME.has_cards(Zone::Hand, 0),
+                ME.has(Zone::Exile, Card::Forest, 1),
+                ME.has(Zone::Exile, Card::Island, 1),
+                ME.has(Zone::Exile, Card::Plains, 1),
+                ME.has_cards(Zone::Graveyard, 0),
+                THEM.deciding(DecisionKind::Priority, 2),
+                THEM.casts(Card::Counterspell),
+                ME.has(Zone::Graveyard, Card::ThrillOfPossibility, 1),
+            ]),
+        Scenario::new("a sacrificed token cannot supply a card for escape")
+            .interaction(&[Card::VillageRites, Card::AdelineResplendentCathar])
+            .battlefield(P0, &[BREACH, Card::Swamp])
+            .battlefield(P1, &[Card::AdelineResplendentCathar])
+            .permanents(P0, &[Permanent::token(crate::tokens::HUMAN_TOKEN)])
+            .hand(P0, &[Card::Island])
+            .graveyard(P0, &[Card::VillageRites, Card::Island, Card::Plains])
+            .actions(&[ME.deciding(DecisionKind::Priority, 2)]),
+        Scenario::new("a sacrifice moved to exile cannot supply a card for escape")
+            .interaction(&[Card::VillageRites, Card::RestInPeace])
+            .battlefield(P0, &[BREACH, Card::Swamp, Prop::Vanilla])
+            .battlefield(P1, &[Card::RestInPeace])
+            .hand(P0, &[Card::Island])
+            .graveyard(P0, &[Card::VillageRites, Card::Island, Card::Plains])
+            .actions(&[ME.deciding(DecisionKind::Priority, 2)]),
         Scenario::new("the Breach loop empties a 53-card library")
             .interaction(&[LED, FREEZE])
             .battlefield(P0, &[BREACH, Card::Island, Card::Island])

@@ -47,6 +47,13 @@ pub fn take() -> std::collections::BTreeSet<usize> {
     std::collections::BTreeSet::new()
 }
 
+/// Runs a payment forecast without counting its hypothetical events as coverage.
+pub(crate) fn without_recording<T>(run: impl FnOnce() -> T) -> T {
+    #[cfg(debug_assertions)]
+    let _pause = record::Pause::new();
+    run()
+}
+
 #[cfg(debug_assertions)]
 mod record {
     use std::cell::RefCell;
@@ -56,6 +63,20 @@ mod record {
     // the determinism test's ban on thread-locals is for (architecture §14).
     thread_local! {
         static HITS: RefCell<Option<BTreeSet<usize>>> = const { RefCell::new(None) };
+    }
+
+    pub(super) struct Pause(Option<BTreeSet<usize>>);
+
+    impl Pause {
+        pub(super) fn new() -> Self {
+            Self(HITS.take())
+        }
+    }
+
+    impl Drop for Pause {
+        fn drop(&mut self) {
+            HITS.set(self.0.take());
+        }
     }
 
     pub(super) fn hit(address: usize) {
