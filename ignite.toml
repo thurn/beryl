@@ -299,6 +299,12 @@ express_cores = 2
 # Of 10 cores; see jarvis.
 tip_build_cores = 2
 
+# Multivac runs headless Claude workers, with no dispatcher session to keep alive. Keep the three
+# workers the desktop pool had.
+[machine.multivac.pool.claude]
+mode = "cli"
+slots = 3
+
 [machine.multivac.resources]
 browser-pages = 4
 oracle = 1
