@@ -13,9 +13,9 @@ use beryl_card::FaceIx;
 
 use crate::copiable::additions::Addition;
 use crate::event::Sink;
-use crate::fixed::{Fixed, Full};
-use crate::ids::{CardIx, Seat, Slot, SlotId};
-use crate::layout::{Layout, Queue, Small, Table};
+use crate::fixed::Full;
+use crate::ids::{Seat, SlotId};
+use crate::layout::{Layout, Queue, Table};
 use crate::query::Copiable;
 use crate::stack::StackItem;
 use crate::state::{
@@ -481,9 +481,7 @@ impl<L: Layout> Board<'_, L> {
         );
         self.0.pending = Pending::PlayOrDraw { chooser };
     }
-}
 
-impl Board<'_, Small> {
     /// Renumbers each library's slots last first ([`Board::renumber_deck_slots`]). For tests.
     ///
     /// # Panics
@@ -491,7 +489,7 @@ impl Board<'_, Small> {
     /// If the game has begun: the choice to play or draw is not open.
     #[doc(hidden)]
     pub fn reverse_deck_slots(&mut self) {
-        self.renumber_deck_slots(<[Slot]>::reverse);
+        self.renumber_deck_slots(<[L::Slot]>::reverse);
     }
 
     /// Renumbers each library's slots before the game begins: `order` rearranges the slots of
@@ -505,16 +503,16 @@ impl Board<'_, Small> {
     ///
     /// If the game has begun: the choice to play or draw is not open.
     #[doc(hidden)]
-    pub fn renumber_deck_slots(&mut self, mut order: impl FnMut(&mut [Slot])) {
+    pub fn renumber_deck_slots(&mut self, mut order: impl FnMut(&mut [L::Slot])) {
         assert!(
             matches!(self.0.pending, Pending::PlayOrDraw { .. }) && self.0.turn.number == 0,
             "the game has not begun"
         );
         for player in Seat::BOTH {
             let p = player.index();
-            let mut slots = self.0.zones.library[p];
-            let mut cards: <Small as Layout>::Deck<CardIx> = Fixed::new();
-            for &slot in &slots {
+            let mut slots = self.0.zones.library[p].clone();
+            let mut cards = L::Deck::<L::Card>::default();
+            for &slot in slots.iter() {
                 // A card for each slot of the library, in a list as long as a library.
                 cards.push_bounded(self.0.object(slot).card);
             }

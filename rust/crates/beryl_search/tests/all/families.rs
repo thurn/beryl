@@ -7,7 +7,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use crate::common::widening::play_widening;
+use crate::common::widening::{compares_layouts, play_widening};
 use crate::common::{games, seeds};
 use beryl_cards::CARDS;
 use beryl_cards::decks::{fuzz_deck_from, keystone_family};
@@ -34,7 +34,13 @@ fn family(name: &str) {
         } else {
             Profile::SMART
         };
-        let played = play_widening(&t, State::new(&t, seed, profile).unwrap(), seed, &mut kinds);
+        let played = play_widening(
+            &t,
+            State::new(&t, seed, profile).unwrap(),
+            seed,
+            &mut kinds,
+            compares_layouts(seed),
+        );
         decisions += u64::from(played.decisions);
         if let Some(list) = played.filled {
             *widened.entry(list).or_default() += 1;
@@ -124,7 +130,7 @@ fn a_dragon_exiling_more_than_small_holds_plays_on_in_large() {
         };
         s.board().place(slot, zone).unwrap();
     }
-    let played = play_widening(&t, s, 0, &mut HashMap::new());
+    let played = play_widening(&t, s, 0, &mut HashMap::new(), true);
     assert_ne!(played.outcome, Outcome::Stalled(StallReason::Capacity));
     assert_eq!(played.filled, Some("the memos"), "{:?}", played.outcome);
 }

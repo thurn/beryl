@@ -22,7 +22,7 @@ use std::cell::{Cell, RefCell};
 use std::hash::{DefaultHasher, Hasher};
 
 use crate::ids::SlotId;
-use crate::layout::{Layout, Queue};
+use crate::layout::{Large, Layout, PerLayout, Queue};
 use crate::state::{State, Zone};
 
 /// The resolutions in a row with no choice, and the hash a loop is compared with: part of the
@@ -41,6 +41,12 @@ impl Repeats {
     /// The resolutions with no choice before any hash is taken: ordinary play, in which a
     /// player chooses something every few resolutions, pays one increment and one compare.
     pub const QUIET: u16 = 8;
+}
+
+struct CanonicalHash;
+
+impl PerLayout for CanonicalHash {
+    type Of<L: Layout> = fn(&State<L>) -> u64;
 }
 
 impl<L: Layout> State<L> {
@@ -82,9 +88,19 @@ impl<L: Layout> State<L> {
     /// battlefield keeps a stale one, read as none). A loop that returns its cards to where
     /// they were changes their incarnations and timestamps each time around, and nothing else.
     ///
-    /// The random streams are hashed, so a loop that shuffles is not a repeat.
+    /// The random streams are hashed, so a loop that shuffles is not a repeat. Both layouts
+    /// hash the position in Large so a game can still use its stored checkpoint after widening.
     pub fn canonical_hash(&self) -> u64 {
-        let incarnations = L::Slot::all()
+        L::of::<CanonicalHash>(
+            |state| state.widen().hash_for_repeats(),
+            State::<Large>::hash_for_repeats,
+        )(self)
+    }
+}
+
+impl State<Large> {
+    fn hash_for_repeats(&self) -> u64 {
+        let incarnations = <Large as Layout>::Slot::all()
             .map(|slot| self.objects[slot.index()].incarnation)
             .collect();
         let mut live: Vec<u16> = self
@@ -230,6 +246,18 @@ mod tests {
         let mut stale = r;
         stale.objects[0].incarnation += 1;
         assert_ne!(s.canonical_hash(), stale.canonical_hash());
+    }
+
+    #[test]
+    fn widening_preserves_a_mandatory_loop_checkpoint() {
+        let mut small = referring(0, 0);
+        for _ in 0..=Repeats::QUIET {
+            assert!(!small.note_resolution());
+        }
+
+        let mut large = small.widen();
+        assert!(small.note_resolution());
+        assert!(large.note_resolution());
     }
 
     /// A position that repeats is a loop once more than `QUIET` resolutions passed with no

@@ -176,9 +176,8 @@ fn a_game_of_the_three_lands_runs_to_decking() {
 }
 
 /// Every card's scenarios pass, under each numbering of the decks' slots, and play out the
-/// same under each: slot numbers are random handles the rules must never read (docs/bugs.md
-/// has several bugs of that class). Debug builds check the engine's invariants at every
-/// position, so a scenario that breaks one fails here too.
+/// same under each. Written, rules-library and generated scenarios also compare the state
+/// and decisions in both layouts. Debug builds check the engine's invariants at every position.
 #[test]
 fn every_card_has_scenarios_and_they_pass() {
     let mut cards: Vec<_> = crate::scenarios().iter().map(|&(name, _)| name).collect();
@@ -195,12 +194,18 @@ fn every_card_has_scenarios_and_they_pass() {
     {
         for scenario in scenarios {
             failures.extend(plays_alike_in_every_slot_order(card, scenario));
+            failures.extend(layout_failure(card, scenario));
         }
     }
     // The derive tests replay generated scenarios under every slot order. Here they
-    // must also demonstrate every mutation for a card with no scenario of its own.
+    // also compare layouts and demonstrate every mutation for cards without written scenarios.
     let generated: std::collections::BTreeMap<_, _> =
         crate::derive::all().iter().copied().collect();
+    for (&card, &scenarios) in &generated {
+        for scenario in scenarios {
+            failures.extend(layout_failure(card, scenario));
+        }
+    }
     for (&def, &(_, written)) in CARDS.cards().iter().zip(crate::scenarios()) {
         if !written.is_empty() {
             continue;
@@ -216,6 +221,19 @@ fn every_card_has_scenarios_and_they_pass() {
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// Reports layout failures alongside the other scenarios, even if an engine invariant panics.
+fn layout_failure(card: &str, scenario: &beryl_scenario::Scenario) -> Option<String> {
+    use std::panic::{AssertUnwindSafe, catch_unwind};
+
+    match catch_unwind(AssertUnwindSafe(|| {
+        beryl_scenario::plays_alike_in_both_layouts(&CARDS, scenario)
+    })) {
+        Ok(Ok(())) => None,
+        Ok(Err(error)) => Some(format!("{card} (both layouts): {error}")),
+        Err(_) => Some(format!("{card} (both layouts): {} panicked", scenario.name)),
+    }
 }
 
 /// Why `scenario` of `card` fails in the strict runner under some slot order, or plays out

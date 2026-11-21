@@ -4,19 +4,21 @@ use beryl_engine::card::{FaceIx, Types};
 use beryl_engine::event::{Event, Tag};
 use beryl_engine::state::{CastStep, ObjectRef, Pending};
 use beryl_engine::{
-    Breakpoint, CardTable, Choice, Decision, DecisionKind, GameTable, Opt, Profile, Replay,
-    Scratch, Seat, Slot, State, Step, Stops, Zone, ZoneKey, apply, next,
+    Breakpoint, CardTable, Choice, Decision, DecisionKind, GameTable, Layout, Opt, Profile, Replay,
+    Scratch, Seat, State, Step, Stops, Zone, ZoneKey, apply, next,
 };
 
 mod answer;
 mod assertion;
+mod layouts;
 mod live;
 mod snapshot;
 
-use crate::setup::{Slots, setup};
+use crate::setup::{Slots, setup, with_layout};
 use crate::{Action, Assertion, CoinFlip, Failure, Forced, ManaMade, Pick, Position, Scenario};
 pub use answer::{answer, describe};
 use answer::{option_index, pick_in, takes, taking};
+pub use layouts::{LayoutComparison, plays_alike_in_both_layouts};
 pub use live::Live;
 
 /// The exact profile, except that a question with one answer stops too: the runner answers it
@@ -81,7 +83,26 @@ pub fn trace_with(
     scenario: &Scenario,
     slots: Slots,
 ) -> Result<Vec<Position>, Failure> {
-    walk(cards, scenario, slots, &mut |_, _, _| {}, &mut |_, _, _| {})
+    with_layout(
+        cards,
+        scenario,
+        slots,
+        |t, s| trace_from(t, s, scenario),
+        |t, s| trace_from(t, s, scenario),
+    )
+}
+
+fn trace_from<L: Layout>(
+    t: GameTable,
+    s: State<L>,
+    scenario: &Scenario,
+) -> Result<Vec<Position>, Failure> {
+    walk(
+        Runner::from_position(t, s),
+        scenario,
+        &mut |_, _, _| {},
+        &mut |_, _, _| {},
+    )
 }
 
 /// Runs a scenario like [`run`], showing `visit` the table, the state and the open decision
@@ -92,7 +113,13 @@ pub fn visit(
     scenario: &Scenario,
     mut visit: impl FnMut(&GameTable, &State, &Decision),
 ) -> Result<(), Failure> {
-    walk(cards, scenario, Slots::Dealt, &mut visit, &mut |_, _, _| {}).map(|_| ())
+    walk(
+        Runner::new(cards, scenario, Slots::Dealt)?,
+        scenario,
+        &mut visit,
+        &mut |_, _, _| {},
+    )
+    .map(|_| ())
 }
 
 /// Runs a scenario like [`run`], showing `watch` the state each action begins from and the
@@ -115,7 +142,13 @@ pub fn watch_with(
     mut watch: impl FnMut(&State, &[Event]),
 ) -> Result<(), Failure> {
     let mut watch = |state: &State, events: &[Event], _: &[Tag]| watch(state, events);
-    walk(cards, scenario, slots, &mut |_, _, _| {}, &mut watch).map(|_| ())
+    walk(
+        Runner::new(cards, scenario, slots)?,
+        scenario,
+        &mut |_, _, _| {},
+        &mut watch,
+    )
+    .map(|_| ())
 }
 
 /// Runs a scenario like [`watch`], showing `watch` each event's tag too, in step with the
@@ -125,26 +158,31 @@ pub fn watch_tagged(
     scenario: &Scenario,
     mut watch: impl FnMut(&State, &[Event], &[Tag]),
 ) -> Result<(), Failure> {
-    walk(cards, scenario, Slots::Dealt, &mut |_, _, _| {}, &mut watch).map(|_| ())
+    walk(
+        Runner::new(cards, scenario, Slots::Dealt)?,
+        scenario,
+        &mut |_, _, _| {},
+        &mut watch,
+    )
+    .map(|_| ())
 }
 
 /// What is shown the state each action begins from: the events since the action before, and
 /// each one's tag.
-type Watch<'a> = &'a mut dyn FnMut(&State, &[Event], &[Tag]);
+type Watch<'a, L> = &'a mut dyn FnMut(&State<L>, &[Event<L>], &[Tag<L>]);
+type Visit<'a, L> = &'a mut dyn FnMut(&GameTable, &State<L>, &Decision<L>);
 
-fn walk(
-    cards: &'static CardTable,
+fn walk<L: Layout>(
+    mut runner: Runner<L>,
     scenario: &Scenario,
-    slots: Slots,
-    visit: &mut dyn FnMut(&GameTable, &State, &Decision),
-    watch: Watch<'_>,
+    visit: Visit<'_, L>,
+    watch: Watch<'_, L>,
 ) -> Result<Vec<Position>, Failure> {
     let fail = |action, message: String| Failure {
         scenario: scenario.name,
         action,
         message,
     };
-    let mut runner = Runner::new(cards, scenario, slots)?;
     let mut positions = Vec::with_capacity(scenario.actions.len());
     for (i, &action) in scenario.actions.iter().enumerate() {
         runner.upcoming = upcoming(&scenario.actions[i..]);
@@ -171,22 +209,24 @@ fn upcoming(actions: &[Action]) -> Option<Action> {
         .find(|a| !matches!(a, Action::Assert { .. }))
 }
 
-struct Runner {
+struct Runner<L: Layout = beryl_engine::Small> {
     t: GameTable,
-    s: State,
-    x: Scratch,
+    s: State<L>,
+    x: Scratch<L>,
+    /// The large game that follows this runner in the layout comparison test.
+    comparison: Option<Box<LayoutComparison>>,
     /// The next action that is not an assertion, if any, which decides where the game stops
     /// before it.
     upcoming: Option<Action>,
     /// What `next` returned for the current state, or `None` after an `apply`.
-    position: Option<Step>,
+    position: Option<Step<L>>,
     /// Whether the open decision is an entry copy choice, for [`trace`].
     enter_as_copy: bool,
     /// The forced answers since the last position, for [`trace`].
     forced: Vec<Forced>,
     /// The permanents on the battlefield at the last position, by name: a tapped one that
     /// has since left, as a Treasure sacrificed for mana, is named as it was.
-    permanents: Vec<(ObjectRef, &'static str)>,
+    permanents: Vec<(ObjectRef<L>, &'static str)>,
 }
 
 /// A copy at the same position, with fresh working memory: a [`Scratch`] is never copied
@@ -197,6 +237,7 @@ impl Clone for Runner {
             t: self.t.clone(),
             s: self.s,
             x: Scratch::recording(),
+            comparison: None,
             upcoming: self.upcoming,
             position: self.position,
             enter_as_copy: self.enter_as_copy,
@@ -213,9 +254,16 @@ impl Runner {
         slots: Slots,
     ) -> Result<Runner, Failure> {
         let (t, s) = setup(cards, scenario, slots)?;
-        Ok(Runner {
+        Ok(Self::from_position(t, s))
+    }
+}
+
+impl<L: Layout> Runner<L> {
+    fn from_position(t: GameTable, s: State<L>) -> Self {
+        Self {
             t,
             s,
+            comparison: None,
             // Recording, for the coin flips each position reports.
             x: Scratch::recording(),
             upcoming: None,
@@ -223,7 +271,7 @@ impl Runner {
             enter_as_copy: false,
             forced: Vec::new(),
             permanents: Vec::new(),
-        })
+        }
     }
 
     /// The current position: the open decision or the end of the game. When the next action
@@ -233,9 +281,9 @@ impl Runner {
     /// position must keep the state's invariants (§17.4), which debug builds of `next` and
     /// `apply` check, so a setup or a rules path that breaks one panics here, and agree with
     /// the reference implementations, which fails here.
-    fn position(&mut self) -> Result<Step, String> {
-        if let Some(step) = self.position {
-            return Ok(step);
+    fn position(&mut self) -> Result<Step<L>, String> {
+        if let Some(step) = &self.position {
+            return Ok(step.clone());
         }
         let breakpoint = match self.upcoming {
             Some(Action::AdvanceTo { turn, step }) => Some(Breakpoint { turn, step }),
@@ -249,12 +297,15 @@ impl Runner {
             }
             _ => None,
         };
-        self.s.set_profile(Profile {
+        self.set_profile(Profile {
             breakpoint,
             ..TRACED
         });
         loop {
             let step = next(&mut self.s, &self.t, &mut self.x, &mut Replay);
+            if let Some(comparison) = &mut self.comparison {
+                comparison.check_next(&self.t, &self.s, &step)?;
+            }
             self.enter_as_copy = self.x.events.asking.take_enter_as_copy();
             beryl_engine::check_references(&self.s, &self.t)
                 .map_err(|v| format!("the engine disagrees with a reference: {v:?}"))?;
@@ -273,17 +324,24 @@ impl Runner {
                             answer: Action::answer(d.decider, d.kind, pick),
                         });
                     }
-                    apply(&mut self.s, &self.t, &mut self.x, &mut Replay, Choice(0));
+                    self.answer(Choice(0));
                 }
                 _ => {
-                    self.position = Some(step);
+                    self.position = Some(step.clone());
                     return Ok(step);
                 }
             }
         }
     }
 
-    fn decision(&mut self) -> Result<Decision, String> {
+    fn set_profile(&mut self, profile: Profile) {
+        self.s.set_profile(profile);
+        if let Some(comparison) = &mut self.comparison {
+            comparison.set_profile(profile);
+        }
+    }
+
+    fn decision(&mut self) -> Result<Decision<L>, String> {
         match self.position()? {
             Step::Decide(d) => Ok(d),
             Step::Over(o) => Err(format!("the game is over ({o:?})")),
@@ -292,6 +350,9 @@ impl Runner {
 
     fn answer(&mut self, c: Choice) {
         apply(&mut self.s, &self.t, &mut self.x, &mut Replay, c);
+        if let Some(comparison) = &mut self.comparison {
+            comparison.apply(&self.t, c);
+        }
         self.position = None;
     }
 
@@ -308,7 +369,7 @@ impl Runner {
                 // Waiting triggers go on the stack first.
                 self.decision()?;
                 let depth = self.s.stack().len();
-                let Some(&top) = self.s.stack().last() else {
+                let Some(top) = self.s.stack().last().cloned() else {
                     return Err("nothing on the stack to resolve".to_string());
                 };
                 loop {
@@ -350,7 +411,7 @@ impl Runner {
                 }
                 if here == target && d.player == now.active() {
                     // Stopped: keep the decision, and stop no more.
-                    self.s.set_profile(TRACED);
+                    self.set_profile(TRACED);
                     return Ok(());
                 }
                 let pass = option_index(&d, |o| o == Opt::Pass).expect("passing is offered");
@@ -370,7 +431,7 @@ impl Runner {
         &mut self,
         player: Seat,
         what: &str,
-        wanted: impl Fn(&Self, Opt) -> bool,
+        wanted: impl Fn(&Self, Opt<L>) -> bool,
     ) -> Result<(), String> {
         let d = self.expect(player, DecisionKind::Priority)?;
         let c = option_index(&d, |o| wanted(self, o))
@@ -382,7 +443,7 @@ impl Runner {
     /// The open decision, which `player` must answer and of `kind`: a scenario's actions are
     /// those of the player who answers, who controls the player it belongs to while one
     /// player controls another (CR 724.5), as in `XMage`'s tests.
-    fn expect(&mut self, player: Seat, kind: DecisionKind) -> Result<Decision, String> {
+    fn expect(&mut self, player: Seat, kind: DecisionKind) -> Result<Decision<L>, String> {
         let d = self.decision()?;
         if d.decider == player && d.kind == kind {
             Ok(d)
@@ -436,7 +497,7 @@ impl Runner {
 
     /// The position an action begins from, for [`trace`]. It takes the coin flips, taps and
     /// mana since the last position from the recorded events.
-    fn describe_position(&mut self, step: &Step) -> Position {
+    fn describe_position(&mut self, step: &Step<L>) -> Position {
         let (flips, taps, mana) = self.take_events();
         self.permanents = self
             .s
@@ -446,7 +507,7 @@ impl Runner {
             .collect();
         let turn = self.s.turn();
         let stack = self.stack_items().collect();
-        let (decider, decides_for, kind, purpose) = match *step {
+        let (decider, decides_for, kind, purpose) = match step {
             Step::Decide(d) => (
                 Some(d.decider),
                 (d.player != d.decider).then_some(d.player),
@@ -483,7 +544,8 @@ impl Runner {
         if let Step::Decide(_) = step {
             for &slot in self.s.battlefield() {
                 if self.s.derived(slot).types.contains(Types::CREATURE) {
-                    creatures[self.s.controller(slot).index()] += 1;
+                    let count = &mut creatures[self.s.controller(slot).index()];
+                    *count = count.saturating_add(1);
                 }
             }
         }
@@ -516,27 +578,23 @@ impl Runner {
         }
     }
 
-    fn name(&self, slot: Slot) -> &'static str {
+    fn name(&self, slot: L::Slot) -> &'static str {
         self.s.name(&self.t, slot)
-    }
-
-    fn named(&self, o: Opt) -> Option<Slot> {
-        o.object_named(&self.s)
     }
 
     /// The candidate `c` of `d` as a pick, where the scenario vocabulary can name it. The pick
     /// may name an earlier candidate too, of the same name.
-    fn pick_for(&self, d: &Decision, c: Choice) -> Option<Pick> {
+    fn pick_for(&self, d: &Decision<L>, c: Choice) -> Option<Pick> {
         crate::script::pick(&self.t, &self.s, d, c)
     }
 
     /// The candidate of `d` that `pick` names.
-    fn pick(&self, d: &Decision, pick: Pick) -> Option<Choice> {
+    fn pick(&self, d: &Decision<L>, pick: Pick) -> Option<Choice> {
         pick_in(&self.t, &self.s, d, pick)
     }
 
     /// The permanents named `card` that `player` controls, in the order they entered.
-    fn permanents<'b>(&'b self, player: Seat, card: &'b str) -> impl Iterator<Item = Slot> + 'b {
+    fn permanents<'b>(&'b self, player: Seat, card: &'b str) -> impl Iterator<Item = L::Slot> + 'b {
         self.s
             .battlefield()
             .iter()
@@ -545,7 +603,7 @@ impl Runner {
     }
 
     /// The first permanent named `card` that `player` controls.
-    fn permanent(&self, player: Seat, card: &str) -> Result<Slot, String> {
+    fn permanent(&self, player: Seat, card: &str) -> Result<L::Slot, String> {
         self.permanents(player, card)
             .next()
             .ok_or_else(|| format!("player {player} controls no {card}"))
@@ -553,7 +611,7 @@ impl Runner {
 
     /// The first object named `card` in `zone`: a permanent `player` controls, a spell they
     /// control, or a card they own elsewhere.
-    fn object_in(&self, player: Seat, zone: Zone, card: &str) -> Result<Slot, String> {
+    fn object_in(&self, player: Seat, zone: Zone, card: &str) -> Result<L::Slot, String> {
         let s = &self.s;
         let found = match zone {
             Zone::Battlefield => return self.permanent(player, card),
@@ -568,7 +626,7 @@ impl Runner {
         found.ok_or_else(|| format!("player {player} has no {card} in {zone:?}"))
     }
 
-    fn describe(&self, d: &Decision) -> String {
+    fn describe(&self, d: &Decision<L>) -> String {
         describe(&self.t, &self.s, d)
     }
 }

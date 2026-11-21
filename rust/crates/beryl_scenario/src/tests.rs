@@ -85,6 +85,31 @@ fn error(scenario: &Scenario) -> String {
 }
 
 #[test]
+fn a_scenario_with_an_oversized_deck_runs_its_actions_in_large() {
+    const LARGE: Scenario = Scenario::new("large deck")
+        .at(1, P0, TurnStep::PrecombatMain)
+        .library(P0, &[L; 61])
+        .hand(P0, &[L])
+        .actions(&[
+            Action::PlayLand {
+                player: P0,
+                card: L,
+            },
+            count(P0, Zone::Battlefield, 1),
+            count(P0, Zone::Library, 61),
+        ]);
+    const WRONG: Scenario = LARGE.actions(&[count(P0, Zone::Library, 60)]);
+    crate::plays_alike_in_both_layouts(&CARDS, &LARGE).unwrap();
+    for slots in crate::Slots::ALL {
+        crate::trace_with(&CARDS, &LARGE, slots).unwrap();
+    }
+
+    let failure = crate::plays_alike_in_both_layouts(&CARDS, &WRONG).unwrap_err();
+    assert_eq!(failure.action, Some(0));
+    assert!(failure.message.contains("expected 60, found 61"));
+}
+
+#[test]
 fn a_scenario_sets_up_its_position() {
     const S: Scenario = Scenario::new("setup")
         .at(4, P1, TurnStep::PostcombatMain)

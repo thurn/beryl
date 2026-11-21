@@ -6,6 +6,14 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **Widening during a mandatory loop could delay the draw.** The loop detector
+  stored a hash of the position using the current layout's storage, so it could
+  miss a checkpoint made in the other layout. Both layouts now hash the position
+  in `Large`. The regression `widening_preserves_a_mandatory_loop_checkpoint`
+  checks that a widening game finds the draw on the same resolution, and the
+  scenario and fuzz comparisons check the loop detector along with the rest of
+  the state.
+
 - **A draw could take a token or a spell copy into hand.** During a resolution,
   either object could sit above the top card until state-based actions ran. The
   draw used the last library slot, and dredge counted every slot toward its

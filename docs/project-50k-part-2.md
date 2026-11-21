@@ -262,8 +262,10 @@ test compares the layouts on two seeds. `beryl_scenario` gains
 `plays_alike_in_both_layouts`: the scenario is played on `Small` and on the
 widened `Large` state in lockstep, and at every decision `small.widen()` must
 equal the large state and the decisions must match after `relayout`.
-`every_card_has_scenarios_and_they_pass` calls it beside the three slot
-numberings, and the fuzzers call it at every decision of the keystone pool.
+`every_card_has_scenarios_and_they_pass` calls it for written, rules-library and
+generated scenarios. A scenario whose deal exceeds the small layout plays in the
+large layout. The random-game and keystone fuzzers compare both layouts at every
+decision of one in sixteen games, until a game outgrows the small layout.
 
 **B5. Typed references.** Today a rules function takes an `ObjectRef` (a slot
 and an incarnation number that every zone move bumps), checks `is_current`

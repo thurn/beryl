@@ -54,7 +54,7 @@ impl Live {
         let r = &self.runner;
         d.candidates
             .object(c)
-            .or_else(|| d.candidates.option(c).and_then(|o| r.named(o)))
+            .or_else(|| d.candidates.option(c).and_then(|o| o.object_named(&r.s)))
             .map(|slot| r.name(slot))
     }
 

@@ -347,6 +347,59 @@ impl State<Small> {
     }
 }
 
+impl State<Large> {
+    /// The name of the first unequal field when comparing games across layouts, after
+    /// widening the small state. Including every field keeps this equivalent to state equality.
+    #[doc(hidden)]
+    pub fn first_difference(&self, other: &Self) -> Option<&'static str> {
+        macro_rules! compare {
+            ($($field:ident),+ $(,)?) => {
+                let Self { $($field),+ } = self;
+                $(
+                    if $field != &other.$field {
+                        return Some(stringify!($field));
+                    }
+                )+
+            };
+        }
+
+        compare!(
+            turn,
+            players,
+            budgets,
+            listening,
+            replacing,
+            outcome,
+            profile,
+            flags,
+            layer_inputs,
+            static_rules,
+            battlefield,
+            rng,
+            repeats,
+            knowledge,
+            keyed,
+            phased_out,
+            trackers,
+            zones,
+            pending,
+            objects,
+            derived,
+            stack,
+            captured_words,
+            triggers,
+            delayed,
+            last_known,
+            departed_spells,
+            effects,
+            memos,
+            counters,
+            elsewhere,
+        );
+        None
+    }
+}
+
 impl<T: Item + Default, const N: usize> Queue<T> for Fixed<T, N> {
     const CAPACITY: usize = N;
 

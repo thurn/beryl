@@ -7,6 +7,7 @@ use beryl_engine::{
     Choice, Decision, GameTable, Large, Layout, Misfit, Outcome, Replay, Scratch, Small,
     StallReason, State, Step, apply, next, observe,
 };
+use beryl_scenario::LayoutComparison;
 use beryl_search::{Agent, AgentDecision};
 
 use super::agents;
@@ -42,6 +43,12 @@ fn call<L: Layout>(
     }
 }
 
+/// Compares both layouts for one in sixteen seeded games. The other games keep the
+/// fuzzer's existing coverage without paying for a second engine run.
+pub fn compares_layouts(seed: u64) -> bool {
+    matches!(seed % 32, 0 | 17)
+}
+
 /// Plays game `seed` from `s` with random agents, counting the decisions by kind in `kinds`
 /// and checking at every decision that it has a candidate and that every reference names an
 /// object. Debug assertions, which `just fuzz` keeps on, check the invariants at every step.
@@ -53,6 +60,7 @@ pub fn play_widening(
     mut s: State<Small>,
     seed: u64,
     kinds: &mut HashMap<String, u64>,
+    compare: bool,
 ) -> Widened {
     /// Names the game when the engine panics during it.
     struct Game(u64);
@@ -64,6 +72,7 @@ pub fn play_widening(
         }
     }
     let _game = Game(seed);
+    let mut comparison = compare.then(|| LayoutComparison::new(&s));
     let mut agents = agents(seed);
     let mut asked = [AgentDecision(0); 2];
     let mut decisions = 0;
@@ -79,6 +88,15 @@ pub fn play_widening(
             let step = call(&mut large, t, &mut xl, c);
             let list = filled(&large, t);
             break (large, xl, step, list);
+        }
+        if let Some(comparison) = &mut comparison {
+            match (&step, c) {
+                (Some(step), _) => comparison
+                    .check_next(t, &s, step)
+                    .unwrap_or_else(|error| panic!("seed {seed}: {error}")),
+                (None, Call::Apply(choice)) => comparison.apply(t, choice),
+                (None, Call::Next) => unreachable!("next returns a step"),
+            }
         }
         c = match step {
             None => Call::Next,

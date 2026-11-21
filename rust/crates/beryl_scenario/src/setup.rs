@@ -3,7 +3,7 @@
 
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::{CounterKind, Memo, Tracker};
-use beryl_engine::{CardIx, CardTable, GameTable, Profile, Seat, Slot, State, Zone};
+use beryl_engine::{CardId, CardTable, GameTable, Large, Layout, Profile, Seat, State, Zone};
 
 use crate::{Failure, Scenario};
 
@@ -24,8 +24,8 @@ pub enum Slots {
 impl Slots {
     pub const ALL: [Slots; 3] = [Slots::Dealt, Slots::Reversed, Slots::Shuffled];
 
-    /// Renumbers the slots of `s`, a game not yet begun ([`State::renumber_deck_slots`]).
-    fn apply(self, s: &mut State) {
+    /// Renumbers the deck slots of a game that has yet to begin.
+    fn apply<L: Layout>(self, s: &mut State<L>) {
         match self {
             Slots::Dealt => {}
             Slots::Reversed => s.board().reverse_deck_slots(),
@@ -54,16 +54,47 @@ pub(crate) fn setup(
     scenario: &Scenario,
     slots: Slots,
 ) -> Result<(GameTable, State), Failure> {
-    let fail = |message: String| Failure {
+    let t = table(cards, scenario)?;
+    let s = State::new(&t, scenario.setup.seed, Profile::EXACT)
+        .map_err(|error| setup_failure(scenario, error.to_string()))?;
+    let s = arrange(&t, s, scenario, slots)?;
+    Ok((t, s))
+}
+
+/// Starts in the small layout where the deal fits, or deals and sets up the scenario in
+/// the large layout. Setup errors in a dealt game are reported to the caller.
+pub(crate) fn with_layout<T>(
+    cards: &'static CardTable,
+    scenario: &Scenario,
+    slots: Slots,
+    small: impl FnOnce(GameTable, State) -> Result<T, Failure>,
+    large: impl FnOnce(GameTable, State<Large>) -> Result<T, Failure>,
+) -> Result<T, Failure> {
+    let t = table(cards, scenario)?;
+    let seed = scenario.setup.seed;
+    if let Ok(s) = State::new(&t, seed, Profile::EXACT) {
+        let s = arrange(&t, s, scenario, slots)?;
+        small(t, s)
+    } else {
+        let s = State::<Large>::deal(&t, seed, Profile::EXACT)
+            .map_err(|error| setup_failure(scenario, error.to_string()))?;
+        let s = arrange(&t, s, scenario, slots)?;
+        large(t, s)
+    }
+}
+
+fn setup_failure(scenario: &Scenario, message: String) -> Failure {
+    Failure {
         scenario: scenario.name,
         action: None,
         message,
-    };
+    }
+}
+
+fn table(cards: &'static CardTable, scenario: &Scenario) -> Result<GameTable, Failure> {
     let decks = decks(scenario);
-    let t = GameTable::new(cards, [decks[0].as_slice(), decks[1].as_slice()])
-        .map_err(|e| fail(format!("{e:?}")))?;
-    let s = arrange(&t, scenario, slots).map_err(fail)?;
-    Ok((t, s))
+    GameTable::new(cards, [decks[0].as_slice(), decks[1].as_slice()])
+        .map_err(|error| setup_failure(scenario, format!("{error:?}")))
 }
 
 /// Every card the setup names, by owner: the decks the game is built from.
@@ -83,14 +114,18 @@ fn decks(scenario: &Scenario) -> [Vec<(u8, &'static str)>; 2] {
 }
 
 /// The setup's position: every card starts in its owner's library and moves to its zone.
-fn arrange(t: &GameTable, scenario: &Scenario, slots: Slots) -> Result<State, String> {
+fn arrange<L: Layout>(
+    t: &GameTable,
+    mut s: State<L>,
+    scenario: &Scenario,
+    slots: Slots,
+) -> Result<State<L>, Failure> {
     let setup = &scenario.setup;
-    let mut s = State::new(t, setup.seed, Profile::EXACT).map_err(|e| e.to_string())?;
     slots.apply(&mut s);
     s.board().begin_at(setup.turn, setup.active, setup.step);
     for (p, player) in Seat::BOTH.into_iter().zip(&setup.players) {
         s.board().set_life(p, player.life);
-        let full = |_| "a zone is full".to_string();
+        let full = |_| setup_failure(scenario, "a zone is full".to_string());
         for &name in player.hand {
             let slot = library_slot(&s, t, p, name);
             s.board().place(slot, Zone::Hand).map_err(full)?;
@@ -98,7 +133,13 @@ fn arrange(t: &GameTable, scenario: &Scenario, slots: Slots) -> Result<State, St
         for b in player.all_permanents() {
             let slot = if b.token {
                 s.board()
-                    .place_token(p, token_index(t, b.card)?, b.face, &[])
+                    .place_token(
+                        p,
+                        token_index(t, b.card)
+                            .map_err(|message| setup_failure(scenario, message))?,
+                        b.face,
+                        &[],
+                    )
                     .map_err(full)?
             } else {
                 let slot = library_slot(&s, t, p, b.card);
@@ -155,14 +196,14 @@ fn arrange(t: &GameTable, scenario: &Scenario, slots: Slots) -> Result<State, St
 }
 
 /// The game index of the token named `name`: one a card of the decks creates.
-fn token_index(t: &GameTable, name: &str) -> Result<CardIx, String> {
+fn token_index<C: CardId>(t: &GameTable, name: &str) -> Result<C, String> {
     t.index_named(name)
         .ok_or_else(|| format!("no card of the setup creates a {name}"))
 }
 
 /// A slot in `player`'s library holding the card `name`. The decks are built from the setup,
 /// so there is always one.
-fn library_slot(s: &State, t: &GameTable, player: Seat, name: &str) -> Slot {
+fn library_slot<L: Layout>(s: &State<L>, t: &GameTable, player: Seat, name: &str) -> L::Slot {
     s.library(player)
         .iter()
         .copied()

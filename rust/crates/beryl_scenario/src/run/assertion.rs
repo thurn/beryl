@@ -1,12 +1,12 @@
 //! Checks the facts a scenario asserts at an open decision or at the end of the game.
 
 use beryl_engine::card::{FaceIx, Types};
-use beryl_engine::{Outcome, Step, Zone, ZoneKey};
+use beryl_engine::{Layout, Outcome, Step, Zone, ZoneKey};
 
 use super::Runner;
 use crate::{Assertion, Ending, StackItem};
 
-impl Runner {
+impl<L: Layout> Runner<L> {
     /// The actual and expected values of an assertion about permanents.
     fn permanent_fact(&self, assertion: Assertion) -> Result<(String, String), String> {
         let s = &self.s;
@@ -115,7 +115,7 @@ impl Runner {
     /// its colors, or its power and toughness.
     fn characteristic_in(
         &self,
-        position: &Step,
+        position: &Step<L>,
         assertion: Assertion,
     ) -> Result<(String, String), String> {
         let s = &self.s;
@@ -173,8 +173,7 @@ impl Runner {
         }
     }
 
-    pub(super) fn check(&self, position: &Step, assertion: Assertion) -> Result<(), String> {
-        let position = *position;
+    pub(super) fn check(&self, position: &Step<L>, assertion: Assertion) -> Result<(), String> {
         let s = &self.s;
         let (actual, expected) = match assertion {
             Assertion::Life { player, life } => {
@@ -213,7 +212,7 @@ impl Runner {
                 self.permanent_fact(assertion)?
             }
             Assertion::Colors { .. } | Assertion::PtIn { .. } => {
-                self.characteristic_in(&position, assertion)?
+                self.characteristic_in(position, assertion)?
             }
             Assertion::Stack { .. } | Assertion::StackObject { .. } => self.stack_fact(assertion),
             Assertion::Library { player, top } => {
@@ -236,7 +235,7 @@ impl Runner {
                 candidates,
             } => {
                 let actual = match position {
-                    Step::Decide(d) => self.describe(&d),
+                    Step::Decide(d) => self.describe(d),
                     Step::Over(o) => format!("the game over ({o:?})"),
                 };
                 let matches = matches!(position, Step::Decide(d)
@@ -252,7 +251,7 @@ impl Runner {
             Assertion::Outcome { outcome } => {
                 let actual = match position {
                     Step::Decide(_) => Ending::InProgress,
-                    Step::Over(Outcome::Win(player)) => Ending::Win { player },
+                    Step::Over(Outcome::Win(player)) => Ending::Win { player: *player },
                     Step::Over(Outcome::Draw) => Ending::Draw,
                     Step::Over(o @ Outcome::Stalled(_)) => {
                         return Err(format!("the game stalled: {o:?}"));

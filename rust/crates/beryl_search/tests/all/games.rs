@@ -7,7 +7,7 @@
 use std::collections::{BTreeSet, HashMap};
 use std::hash::{DefaultHasher, Hash, Hasher};
 
-use crate::common::widening::play_widening;
+use crate::common::widening::{compares_layouts, play_widening};
 use crate::common::{agents, fingerprint, fixed_game, game, games, mirror, play, redeal, seeds};
 use beryl_cards::decks::{VINTAGE_WU_CONTROL, WU_CONTROL, fuzz_deck};
 use beryl_cards::{CARDS, names};
@@ -45,7 +45,7 @@ fn random_games_keep_the_invariants() {
         let outcome = if seed % 4 == 3 {
             fuzz(&t, s.widen(), seed, &mut kinds)
         } else {
-            let played = play_widening(&t, s, seed, &mut kinds);
+            let played = play_widening(&t, s, seed, &mut kinds, compares_layouts(seed));
             widened.extend(played.filled.map(|list| (seed, list)));
             played.outcome
         };
@@ -98,39 +98,15 @@ fn fuzz<L: Layout>(
 #[test]
 fn a_widened_game_plays_on_as_the_small_one() {
     for seed in 0..2 {
-        widened_plays_on(game(seed), seed);
-        let decisions = widened_plays_on(fixed_game(seed), seed);
-        assert!(decisions > 40, "seed {seed}: a short game");
-    }
-}
+        let (t, s) = game(seed);
+        let fuzz = play_widening(&t, s, seed, &mut HashMap::new(), true);
+        assert_eq!(fuzz.filled, None, "fuzz seed {seed}");
 
-/// Plays game `seed`, `(t, small)`, in both layouts at once, comparing them at every decision,
-/// and returns how many decisions it had.
-fn widened_plays_on((t, mut small): (GameTable, State), seed: u64) -> u32 {
-    let mut large: State<Large> = small.widen();
-    let (mut xs, mut xl) = (Scratch::new(), Scratch::<Large>::new());
-    let mut agents = agents(seed);
-    let mut decisions = 0;
-    let mut asked = [AgentDecision(0); 2];
-    loop {
-        let step = next(&mut small, &t, &mut xs, &mut Replay);
-        assert_eq!(
-            next(&mut large, &t, &mut xl, &mut Replay),
-            step.relayout(),
-            "seed {seed}"
-        );
-        assert!(small.widen() == large, "seed {seed}, decision {decisions}");
-        let Step::Decide(d) = step else { break };
-        let c = agents[d.decider.index()].choose(
-            Observation::new(&small, d.decider),
-            &d,
-            asked[d.decider.index()].take(),
-        );
-        apply(&mut small, &t, &mut xs, &mut Replay, c);
-        apply(&mut large, &t, &mut xl, &mut Replay, c);
-        decisions += 1;
+        let (t, s) = fixed_game(seed);
+        let fixed = play_widening(&t, s, seed, &mut HashMap::new(), true);
+        assert_eq!(fixed.filled, None, "fixed seed {seed}");
+        assert!(fixed.decisions > 40, "fixed seed {seed}: a short game");
     }
-    decisions
 }
 
 /// The 40-card decks a large deck of game `seed` is made of, one after another: fuzz decks

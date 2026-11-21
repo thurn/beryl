@@ -3,13 +3,13 @@
 use beryl_engine::card::{AbilityKind, FaceIx, Subtypes, Types};
 use beryl_engine::chosen::ANOTHER;
 use beryl_engine::state::Flag;
-use beryl_engine::{Choice, Decision, Seat, Slot, Step, Zone, ZoneKey};
+use beryl_engine::{Choice, Decision, Layout, Seat, Step, Zone, ZoneKey};
 use beryl_scenario_types::{PermanentState, SnapshotRef};
 
 use super::{Runner, answer};
 use crate::{Action, Assertion, StackItem, script};
 
-impl Runner {
+impl<L: Layout> Runner<L> {
     /// Facts about the final public position, while there is an open decision. The oracle
     /// exporters compare these at the positions their harnesses can reach. The snapshot
     /// leaves out the identity of cards drawn in secret and which mana sources paid.
@@ -83,7 +83,7 @@ impl Runner {
     fn battlefield_facts(&self, player: Seat, out: &mut Vec<Assertion>) {
         let s = &self.s;
         let count = |n: usize| u8::try_from(n).unwrap_or(u8::MAX);
-        let mine: Vec<Slot> = s
+        let mine: Vec<L::Slot> = s
             .battlefield()
             .iter()
             .copied()
@@ -93,7 +93,7 @@ impl Runner {
             object: self.snapshot_ref(slot),
             state: self.permanent_state(slot),
         }));
-        let (down, up): (Vec<Slot>, Vec<Slot>) = mine
+        let (down, up): (Vec<L::Slot>, Vec<L::Slot>) = mine
             .into_iter()
             .partition(|&slot| s.object(slot).face() == FaceIx::DOWN);
         let up_names: Vec<&'static str> = up.iter().map(|&slot| self.name(slot)).collect();
@@ -105,12 +105,12 @@ impl Runner {
         // permanent has no name).
         let named_alone = |c: &&str| !c.is_empty() && !down_names.contains(c);
         for card in distinct(&up_names).into_iter().filter(named_alone) {
-            let named: Vec<Slot> = up
+            let named: Vec<L::Slot> = up
                 .iter()
                 .copied()
                 .filter(|&slot| self.name(slot) == card)
                 .collect();
-            let flag = |slot: Slot, f: Flag| s.object(slot).flags().has(f);
+            let flag = |slot: L::Slot, f: Flag| s.object(slot).flags().has(f);
             out.push(Assertion::Controls {
                 player,
                 card,
@@ -153,7 +153,7 @@ impl Runner {
         }
     }
 
-    fn public_name(&self, slot: Slot) -> Option<&'static str> {
+    fn public_name(&self, slot: L::Slot) -> Option<&'static str> {
         (self.s.object(slot).face() != FaceIx::DOWN).then(|| self.name(slot))
     }
 
@@ -161,13 +161,13 @@ impl Runner {
         &self,
         controller: Seat,
         name: Option<&str>,
-    ) -> impl Iterator<Item = Slot> {
+    ) -> impl Iterator<Item = L::Slot> {
         self.s.battlefield().iter().copied().filter(move |&slot| {
             self.s.controller(slot) == controller && self.public_name(slot) == name
         })
     }
 
-    fn snapshot_ref(&self, slot: Slot) -> SnapshotRef {
+    fn snapshot_ref(&self, slot: L::Slot) -> SnapshotRef {
         let object = self.s.object(slot);
         let zone = object.zone();
         let name = self.public_name(slot);
@@ -198,7 +198,7 @@ impl Runner {
         }
     }
 
-    pub(super) fn snapshot_permanent(&self, object: SnapshotRef) -> Result<Slot, String> {
+    pub(super) fn snapshot_permanent(&self, object: SnapshotRef) -> Result<L::Slot, String> {
         if object.zone != Zone::Battlefield {
             return Err(format!("not a battlefield reference: {object:?}"));
         }
@@ -207,7 +207,7 @@ impl Runner {
             .ok_or_else(|| format!("no permanent matches {object:?}"))
     }
 
-    pub(super) fn permanent_state(&self, slot: Slot) -> PermanentState {
+    pub(super) fn permanent_state(&self, slot: L::Slot) -> PermanentState {
         let object = self.s.object(slot);
         let derived = self.s.derived(slot);
         let all_creature_types = derived.subtypes.has_creature_type(ANOTHER);
@@ -247,7 +247,7 @@ impl Runner {
 
     /// The candidates of `d` that an action of the scenario vocabulary takes, each with that
     /// action: one the runner, given the action, would answer `d` with.
-    pub(super) fn picks(&self, d: &Decision) -> Vec<(Choice, Action)> {
+    pub(super) fn picks(&self, d: &Decision<L>) -> Vec<(Choice, Action)> {
         (0..d.len() as u16)
             .map(Choice)
             .filter_map(|c| Some((c, script(&self.t, &self.s, d, c)?)))
