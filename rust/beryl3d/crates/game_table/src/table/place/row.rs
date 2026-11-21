@@ -8,22 +8,21 @@ use super::{
     Group, PileRules, Placement, ROWS, Rest, Rules, Zones, host_slot, lay, members, row_index,
     side_index,
 };
-use crate::table::rows::{
-    Beneath, Laid, NameIds, RowRules, SameName, lay_row, least_strip, row_length,
-};
+use crate::table::rows::{Beneath, NameIds, RowWindow, SameName, grouped};
 use crate::table::{
     CARD_HEIGHT, CARD_WIDTH, Camera, FittedRow, Layout, RowArea, row_area, web_fit,
 };
 use glam::{Quat, Vec3};
 use kit_frame::frame::Place;
 use kit_scene::hit::CELL;
+use kit_space::arrange::row::{self as solver, Row, ScaleLimit};
 
 /// The limits of a row for one layout and camera, independent of its cards and scroll offset.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) struct RowFit {
     area: RowArea,
     y: f32,
-    strip: f32,
+    row: Row,
 }
 
 /// The six rows' geometry. The table rebuilds it when it fits its camera to a new window.
@@ -36,8 +35,14 @@ impl RowFits {
             ROWS.map(|row| {
                 let (area, y) = row_area((layout, camera), side, row);
                 // The reachable check can miss one grid cell at either edge of the strip.
-                let strip = least_strip(camera, area, y, layout.strip + 2.0 * CELL);
-                RowFit { area, y, strip }
+                let row = Row::new(
+                    [area.left, area.right],
+                    area.centre,
+                    y,
+                    camera,
+                    (CARD_WIDTH, layout.strip + 2.0 * CELL),
+                );
+                RowFit { area, y, row }
             })
         }))
     }
@@ -94,21 +99,11 @@ impl Zooms {
     fn of_fits(fits: [[f32; 3]; 2]) -> Self {
         use kit_base::data::space::layout::desktop::LEAST_BACK_ZOOM;
         use kit_base::data::space::layout::desktop::web::{BACK_ROW_PULL, ZOOM_LEAST};
-        let zoom = fits
-            .iter()
-            .fold(1.0_f32, |zoom, &[creatures, lands, others]| {
-                zoom.min(creatures)
-                    .min(lands.max(BACK_ROW_PULL))
-                    .min(others.max(BACK_ROW_PULL))
-            })
-            .max(ZOOM_LEAST);
-        let rows = fits.map(|[_, lands, others]| {
-            [
-                zoom,
-                zoom.min(lands).max(LEAST_BACK_ZOOM),
-                zoom.min(others).max(LEAST_BACK_ZOOM),
-            ]
+        let back = Some(ScaleLimit {
+            minimum: LEAST_BACK_ZOOM,
+            shared_minimum: BACK_ROW_PULL,
         });
+        let rows = solver::linked_scales(fits, ZOOM_LEAST, [None, back, back]);
         Self { rows, fits }
     }
 }
@@ -158,23 +153,15 @@ pub(crate) fn rezoom(
         let group = Group::Row { side, row };
         let cards = members(zones, group);
         let (cards, under, names) = prepared(&cards, row, ids);
-        let (_, _, rules) = row_rules((layout, fits.get(side, row)), (side, row), 1.0, 0);
+        let (_, _, container) = row_rules((layout, fits.get(side, row)), (side, row), 1.0);
         let beneath = Beneath::new(under, &cards);
-        let length = row_length(
-            (&cards, &beneath),
-            (names, ids, piles.for_group(group)),
-            &rules,
-        );
-        if length > 0.0 {
-            rules.room / length
-        } else {
-            1.0
-        }
+        let groups = grouped((&cards, &beneath), (names, ids, piles.for_group(group)));
+        container.fit(groups.solver_groups(&beneath, layout, &[]))
     };
     Zooms::of_fits([Side::You, Side::Opponent].map(|side| ROWS.map(|row| fit(side, row))))
 }
 
-/// The cards of a row as `lay_row` takes them: the row's permanents, lands in the order they
+/// The cards of a row as the row solver takes them: the row's permanents, lands in the order they
 /// stand (`lands_in_order`) with each linked to the one before it with its name, and apart from
 /// them the cards that lie under one of them. A row with no cards under its permanents, as
 /// nearly every row is, keeps `cards` uncopied.
@@ -202,18 +189,18 @@ pub fn prepared<'a, 'b>(
     (permanents, under, None)
 }
 
-/// How a row of `side` is laid out at `zoom` (`Zooms`) and scrolled `offset` groups: the row
-/// fitted to the web interface's, if the layout fits its rows so; the scale its cards are drawn
-/// at; and its rules, in millimetres of a card before that scale. A row so fitted is laid out in
-/// an area as much wider than its own as its cards are smaller, and then scaled about its left
-/// end (`web_fit`).
+/// The chosen web fit, its display scale, and the container expressed in units of an
+/// unscaled item. The web fit applies that display scale about the row's left end.
 fn row_rules(
     (layout, fit): (&Layout, RowFit),
     (side, row): (Side, RowName),
     zoom: f32,
-    offset: usize,
-) -> (Option<FittedRow>, f32, RowRules<'_>) {
-    let RowFit { area, strip, .. } = fit;
+) -> (Option<FittedRow>, f32, Row) {
+    let RowFit {
+        area,
+        row: container,
+        ..
+    } = fit;
     // The rightmost any row of the layout reaches, past which no card scrolled off this row's
     // right end rests.
     let rights = match &layout.fitted {
@@ -227,18 +214,15 @@ fn row_rules(
     let (scale, gap, tapped_gap) = fitted.map_or((1.0, layout.gap, layout.gap), |fitted| {
         (fitted.scale * zoom, fitted.gap, fitted.tapped_gap)
     });
-    let local = |x: f32| area.left + (x - area.left) / scale;
-    let rules = RowRules {
-        layout,
-        strip: strip / scale,
-        room: local(area.right) - area.left,
-        scroll: offset,
-        gap,
-        tapped_gap,
-        limit: local(limit),
-        faces: &[],
-    };
-    (fitted, scale, rules)
+    let container = container
+        .with_spacing(
+            (gap, tapped_gap),
+            layout.pile_step,
+            layout.beneath_step.x * CARD_WIDTH,
+            limit,
+        )
+        .at_scale(scale);
+    (fitted, scale, container)
 }
 
 /// One of one side's three battlefield rows, `cards` in the order they entered. They keep that
@@ -255,14 +239,7 @@ pub(super) fn battlefield_row(
     let RowFit { area, y, .. } = fit;
     let zoom = placement.zooms.get(side, row);
     let (cards, under, names) = prepared(cards, row, ids);
-    let (fitted, scale, rules) = row_rules((layout, fit), (side, row), zoom, offset);
-    let local = |x: f32| area.left + (x - area.left) / scale;
-    let unscaled = RowArea {
-        y: area.y,
-        left: area.left,
-        right: local(area.right),
-        centre: area.centre.map(local),
-    };
+    let (fitted, scale, container) = row_rules((layout, fit), (side, row), zoom);
     // A zoomed-out row keeps one edge where it stands at full size, as the web's does: a
     // creatures' row its edge toward the lane between the two creatures' rows, where combat and
     // the stack's arrows run, and a back row its edge toward its player. The far edge of the
@@ -278,22 +255,20 @@ pub(super) fn battlefield_row(
     });
     let height = fitted.map_or(0.0, |fitted| fitted.height(line));
     let on_line = (row, Vec3::new(0.0, line, height));
-    let faces = faces(&cards, placement, (camera, area, on_line), local);
-    let rules = RowRules {
-        faces: &faces,
-        ..rules
-    };
+    let faces = faces(&cards, placement, (camera, area, on_line), |x| {
+        fit.row.unscaled(x, scale)
+    });
+    let beneath = Beneath::new(under, &cards);
+    let groups = grouped((&cards, &beneath), (names, ids, stack_slots));
+    let inputs: Vec<_> = groups.solver_groups(&beneath, layout, &faces).collect();
     let place = |zone| Place::Card {
         zone,
         side,
         row: Some(row),
     };
-    let mut set = |Laid {
-                       object,
-                       mut pose,
-                       visible,
-                       copies,
-                   }| {
+    let window = solver::arrange(container, &inputs, offset, |placed| {
+        let (object, mut pose) = groups.pose(&beneath, &placed, y);
+        let visible = placed.visible;
         if let Some(fitted) = fitted {
             let at = pose.position;
             pose.position = Vec3::new(
@@ -331,20 +306,16 @@ pub(super) fn battlefield_row(
                 pose,
                 place: place(object.zone),
                 visible,
-                copies,
+                copies: u16::try_from(placed.copies).unwrap_or(u16::MAX),
             },
         );
-    };
-    let beneath = Beneath::new(under, &cards);
-    let window = lay_row(
-        (&cards, &beneath),
-        (names, ids, stack_slots),
-        unscaled,
-        y,
-        &rules,
-        &mut set,
+    });
+    placement.rows.battlefield[side_index(side)][row_index(row)] = RowWindow::new(
+        window.groups,
+        window.scroll.first,
+        window.scroll.shown,
+        (window.before, window.after),
     );
-    placement.rows.battlefield[side_index(side)][row_index(row)] = window;
 }
 
 /// Where each blocker of `cards` wants its middle to stand so that it faces its attacker

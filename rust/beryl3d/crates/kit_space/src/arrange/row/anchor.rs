@@ -1,81 +1,57 @@
-//! Blockers that face their attackers. While a creature blocks, the web interface stands it
-//! straight across the table from the attacker it blocks, and an attacker's blockers side by
-//! side about that attacker's middle; the row's other cards keep their order and make room
-//! (`row`, `arrange` and `settle` in `ui/src/game/battlefield.ts`). A row with no room to
-//! spare, which overlaps or scrolls its cards, lays them out as it would with no blockers.
+//! Places anchored groups among other groups in an ordered row.
 
-use beryl_protocol::protocol::{ObjectId, ObjectView};
+use super::{Group, Row};
 
-use super::{RowArea, RowRules};
-
-/// Where a row that has room to spare stands its groups when some of them face an attacker:
-/// the order of the groups, by index into `tops`, and each one's left edge in that order. None
-/// when no group faces an attacker, and the row lays its groups out side by side as usual.
-/// `tops` holds each group's top card and `widths` its width; `full` is how wide the groups are
-/// side by side with their gaps.
-pub(in crate::table) fn faced(
-    tops: &[&ObjectView],
+/// Order the groups and give their left edges for a row with at least one anchor.
+pub(super) fn arrange(
+    groups: &[Group],
     widths: &[f32],
-    (area, full): (RowArea, f32),
-    rules: &RowRules,
-) -> Option<(Vec<usize>, Vec<f32>)> {
-    if rules.faces.is_empty() {
-        return None;
-    }
-    let face: Vec<Option<f32>> = tops
+    full: f32,
+    row: Row,
+) -> (Vec<usize>, Vec<f32>) {
+    let face: Vec<Option<f32>> = groups
         .iter()
         .zip(widths)
-        .map(|(top, width)| facing(rules.faces, top.slot).map(|centre| centre - width / 2.0))
+        .map(|(group, width)| group.anchor.map(|centre| centre - width / 2.0))
         .collect();
-    if face.iter().all(Option::is_none) {
-        return None;
-    }
-    // Where each group would stand with no blockers, which is where the others want to stay.
-    let mut left = RowRules::start(area, full);
-    let mut wants = Vec::with_capacity(tops.len());
+    // Where each group would stand without anchors, which is where the others want to stay.
+    let mut left = row.start(full);
+    let mut wants = Vec::with_capacity(groups.len());
     for (index, width) in widths.iter().enumerate() {
         if index > 0 {
-            left += rules.gap_between(tops[index - 1], tops[index]);
+            left += row.gap_between(groups[index - 1].gap_class, groups[index].gap_class);
         }
         wants.push(face[index].unwrap_or(left));
         left += width;
     }
-    let step =
-        |before: usize, after: usize| widths[before] + rules.gap_between(tops[before], tops[after]);
-    let row = Row {
+    let step = |before: usize, after: usize| {
+        widths[before] + row.gap_between(groups[before].gap_class, groups[after].gap_class)
+    };
+    let anchored = Anchored {
         wants: &wants,
         face: &face,
         widths,
-        ends: (area.left, area.right),
+        ends: (row.left, row.right),
     };
-    Some(row.arrange(&step))
+    anchored.arrange(&step)
 }
 
-/// Where the blocker in `slot` wants its middle to stand, if it faces an attacker.
-fn facing(faces: &[(ObjectId, f32)], slot: ObjectId) -> Option<f32> {
-    faces
-        .iter()
-        .find(|(blocker, _)| *blocker == slot)
-        .map(|(_, centre)| *centre)
-}
-
-/// A row's groups: the left each `wants`, the left each that faces an attacker must `face`,
+/// A row's groups: the left each `wants`, the left each anchored one prefers,
 /// their `widths`, and the left and right `ends` of the row's room.
-struct Row<'a> {
+struct Anchored<'a> {
     wants: &'a [f32],
     face: &'a [Option<f32>],
     widths: &'a [f32],
     ends: (f32, f32),
 }
 
-impl Row<'_> {
-    /// The groups settled about the ones that face an attacker, as the web's `arrange` does:
+impl Anchored<'_> {
+    /// The groups settled about the ones that have an anchor, in the orders they request:
     /// those stand in the order of the middles they want, and the rest in their own order
     /// between them. Where the row has no room for them all where they want to stand, the rest
-    /// give way to whichever side of each facing group leaves the facing ones nearest the lefts
-    /// they want; between equals, each stands before the first facing group whose middle its
-    /// own is left of. It tries every such split, so its cost grows with the facing groups'
-    /// count as a power, which blocks keep small. `step` gives how far apart two groups, side
+    /// give way to whichever side of each anchored group leaves the anchored ones nearest their preferred left edges; between equals, each stands before the first anchored group whose middle its
+    /// own is left of. It tries every such split, so its cost grows with the anchored groups'
+    /// count as a power. `step` gives how far apart two groups, side
     /// by side in that order, stand.
     fn arrange(&self, step: &impl Fn(usize, usize) -> f32) -> (Vec<usize>, Vec<f32>) {
         let middle = |index: usize| self.wants[index] + self.widths[index] / 2.0;
@@ -86,7 +62,7 @@ impl Row<'_> {
         let free: Vec<usize> = (0..self.wants.len())
             .filter(|&index| self.face[index].is_none())
             .collect();
-        // How many of the rest stand before each facing group, by their middles.
+        // How many of the rest stand before each anchored group, by their middles.
         let natural: Vec<usize> = fixed
             .iter()
             .map(|&f| free.iter().filter(|&&i| middle(i) < middle(f)).count())
@@ -98,7 +74,7 @@ impl Row<'_> {
         (best.order, best.lefts)
     }
 
-    /// Tries each way of splitting the rest about the facing groups that begins with
+    /// Tries each way of splitting the rest about the anchored groups that begins with
     /// `before`, where `before[j]` of the rest stand before `fixed[j]`, keeping the best in
     /// `best`.
     fn visit(
@@ -125,7 +101,7 @@ impl Row<'_> {
         }
         order.extend_from_slice(&free[start..]);
         let lefts = self.settle(&order, step);
-        // How far the facing groups stand from where they want, to a tenth of a millimetre so
+        // How far the anchored groups stand from where they want, to a tenth of a millimetre so
         // that splits that tie in effect tie in number.
         let off: f32 = order
             .iter()
@@ -152,8 +128,7 @@ impl Row<'_> {
     }
 
     /// The groups in `order` moved as near as they can be to the lefts they want, `step` apart
-    /// at least and inside the row's ends, as the web's `settle` does: each group that faces no
-    /// attacker first gives way leftward to its right neighbour, then each is pushed right of
+    /// at least and inside the row's ends: each group without an anchor first gives way leftward to its right neighbour, then each is pushed right of
     /// its left neighbour, then left of the end and its right neighbour, then right of the start
     /// again.
     fn settle(&self, order: &[usize], step: &impl Fn(usize, usize) -> f32) -> Vec<f32> {
@@ -193,7 +168,7 @@ impl Row<'_> {
     }
 }
 
-/// The best split found so far: its order and lefts, how far its facing groups stand from where
+/// The best split found so far: its order and lefts, how far its anchored groups stand from where
 /// they want (`off`), and how far it moves the rest from their natural sides (`moved`).
 struct Best {
     order: Vec<usize>,

@@ -10,6 +10,7 @@ use crate::camera::Camera;
 
 mod layout;
 mod press;
+pub mod row;
 
 use layout::Layout;
 

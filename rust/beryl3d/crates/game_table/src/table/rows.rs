@@ -1,36 +1,21 @@
-//! One battlefield row at rest (docs/beryl-3d.md, "Objects and placement"). A row lays its
-//! groups out at full size while they fit its width, then overlaps them down to the layout's
-//! least uncovered strip. If that is still too long, it shows the groups in the scroll window.
-//! The other cards of a merged permanent and the cards it holds in exile peek out from under
-//! it, as in the web interface's `tuck` (`ui/src/game/battlefield.ts`).
+//! Battlefield grouping and the mapping between permanents and ordered row items.
 
 use std::f32::consts::FRAC_1_SQRT_2;
 
 use beryl_protocol::protocol::{CardType, FaceName, Facing, ObjectId, ObjectView, ZoneName};
-use glam::{Quat, Vec2, Vec3};
+use glam::{Quat, Vec3};
+use kit_space::arrange::Edge;
+use kit_space::arrange::row::{Group, Member, Placed, Tuck};
 
 use super::place::host_slot;
-use super::{CARD_HEIGHT, CARD_WIDTH, Camera, LAYER, Layout, RowArea};
+use super::{CARD_HEIGHT, CARD_WIDTH, LAYER, Layout};
 use kit_base::data::space::card::PHASED_OUT_OPACITY;
 use kit_base::pose::Pose;
 
 mod change;
-mod face;
 mod names;
-mod single;
 pub use change::RowChange;
-use face::faced;
 pub use names::{NameIds, SameName};
-use single::{beyond_right, lay_single_cards, spacing, window_size};
-
-/// One card of a laid-out row: its pose, and whether it is drawn.
-pub(super) struct Laid<'a> {
-    pub object: &'a ObjectView,
-    pub pose: Pose,
-    pub visible: bool,
-    /// The group's size on its top card, and 0 on the copies beneath it (`Rest::copies`).
-    pub copies: u16,
-}
 
 /// Which of a row's groups are in view: `shown` of its `groups` from `first`, with `before`
 /// cards scrolled off its left end and `after` off its right end. A row that fits shows every
@@ -110,47 +95,6 @@ impl RowWindow {
     }
 }
 
-/// How a row is laid out: the least strip in millimetres, the row's width in millimetres, the
-/// layout's spacing, and the row's scroll offset in groups.
-pub(super) struct RowRules<'a> {
-    pub layout: &'a Layout,
-    pub strip: f32,
-    pub room: f32,
-    pub scroll: usize,
-    /// How far apart cards stand while the row has room to spare.
-    pub gap: f32,
-    /// How far the first tapped card stands from the untapped card before it while the row has
-    /// room to spare: wider than `gap` in the desktop's lands' row, as the web interface's
-    /// `TAPPED_GAP` is, so that how much mana is open reads at a glance.
-    pub tapped_gap: f32,
-    /// The furthest right a card scrolled off the row's right end may rest (`beyond_right`).
-    pub limit: f32,
-    /// Where each blocker of the row that faces its attacker wants its middle to stand, in the
-    /// row's millimetres (`face`); empty outside combat.
-    pub faces: &'a [(ObjectId, f32)],
-}
-
-impl RowRules<'_> {
-    /// The gap between a card or group whose top card is `before` and the next, whose top card
-    /// is `after`.
-    pub(super) fn gap_between(&self, before: &ObjectView, after: &ObjectView) -> f32 {
-        if !before.tapped && after.tapped {
-            self.tapped_gap
-        } else {
-            self.gap
-        }
-    }
-
-    /// Where a row whose cards take `full` with room to spare starts: centred on the area's
-    /// centre as near as its limits let it be, or at its left limit.
-    pub(super) fn start(area: RowArea, full: f32) -> f32 {
-        match area.centre {
-            Some(centre) => (centre - full / 2.0).min(area.right - full).max(area.left),
-            None => area.left,
-        }
-    }
-}
-
 /// The cards that lie under a row's permanents (`place::under`), each with the permanent it
 /// lies under: the other cards of a merged permanent and the cards a permanent holds in exile,
 /// which peek out to its left, and the Auras and Equipment attached to it, which peek out to
@@ -184,48 +128,6 @@ impl<'a> Beneath<'a> {
     fn holds(&self, host: ObjectId) -> bool {
         self.cards.iter().any(|(holder, _)| *holder == host)
     }
-
-    /// How far the cards under `host` that peek out to its left (`left`) or right reach past
-    /// its edge, in millimetres: each lies `step` millimetres further out than the one before
-    /// it (`peek_step`).
-    fn peek(&self, host: &ObjectView, step: f32, left: bool) -> f32 {
-        self.of(host.slot, left)
-            .enumerate()
-            .map(|(index, card)| {
-                (index + 1) as f32 * step + (card_width(card) - card_width(host)) / 2.0
-            })
-            .fold(0.0, f32::max)
-    }
-}
-
-/// How far, in millimetres, each card under `host` peeks out past the one before it: the web
-/// interface's step, `beneath_step` of a card's width, or the least strip that leaves an
-/// overlapped card of the row reachable where that is wider, as it is in a small window, so
-/// that a press can still reach a card tucked under another. A card narrower than the
-/// permanent, as an untapped Aura under a tapped creature is, peeks out that much further, so
-/// that it too shows the least strip past the permanent's edge: at the plain step, an Aura on
-/// a tapped creature on the phone showed 37 points, short of the 44 a press needs. Where the
-/// permanent and its cards at that step would be wider than the row, as six cards held in
-/// exile are on the phone, where the strip is nearly a card's width, the step closes up until
-/// they fit: a row scrolls whole groups, so it could never bring a group wider than itself into
-/// view.
-fn peek_step(host: &ObjectView, beneath: &Beneath, rules: &RowRules) -> f32 {
-    let step = (rules.layout.beneath_step.x * CARD_WIDTH).max(rules.strip);
-    let count = beneath.of(host.slot, true).count() + beneath.of(host.slot, false).count();
-    if count == 0 {
-        return step;
-    }
-    let narrower = (beneath
-        .of(host.slot, true)
-        .chain(beneath.of(host.slot, false)))
-    .map(|card| (card_width(host) - card_width(card)) / 2.0)
-    .fold(0.0, f32::max);
-    let step = step.max(rules.strip + narrower);
-    // Each side's cards reach at most `step` further per card than they do at a step of 0, so
-    // at `fits` the group is no wider than the row.
-    let fixed = card_width(host) + beneath.peek(host, 0.0, true) + beneath.peek(host, 0.0, false);
-    let fits = (rules.room - fixed) / count as f32;
-    step.min(fits).max(0.0)
 }
 
 /// Whether a card under a permanent peeks out to its left: every card but an Aura or Equipment
@@ -254,19 +156,22 @@ impl<'a> Groups<'a, '_> {
         }
     }
 
-    /// The groups, in order.
-    pub fn piles(&self) -> impl Iterator<Item = &[&'a ObjectView]> {
-        (0..self.len()).map(|index| match self {
+    fn get(&self, index: usize) -> &[&'a ObjectView] {
+        match self {
             Groups::Single(cards) => &cards[index..=index],
             Groups::Piles { cards, ends } => {
                 let start = index.checked_sub(1).map_or(0, |before| ends[before]);
                 &cards[start..ends[index]]
             }
-        })
+        }
+    }
+    /// The groups, in order.
+    pub fn piles(&self) -> impl Iterator<Item = &[&'a ObjectView]> {
+        (0..self.len()).map(|index| self.get(index))
     }
 }
 
-/// `cards` gathered into the groups `lay_row` lays out side by side: identical permanents into
+/// `cards` gathered into the groups the solver lays out side by side: identical permanents into
 /// piles where the row piles them (`stack_slots`), and each other card alone.
 pub fn grouped<'a, 'b>(
     (cards, beneath): (&'b [&'a ObjectView], &Beneath<'a>),
@@ -294,332 +199,95 @@ pub fn grouped<'a, 'b>(
         })
 }
 
-/// How long `cards` lie side by side when `lay_row` has room for all of them, in millimetres:
-/// each group's width and the gaps between them.
-pub(super) fn row_length<'a>(
-    (cards, beneath): (&[&'a ObjectView], &Beneath<'a>),
-    (names, ids, stack_slots): (Option<SameName>, Option<&NameIds<'_>>, Option<&[ObjectId]>),
-    rules: &RowRules,
-) -> f32 {
-    let groups = grouped((cards, beneath), (names, ids, stack_slots));
-    let widths: f32 = groups.piles().map(|g| group_width(g, beneath, rules)).sum();
-    let between: f32 = groups
-        .piles()
-        .zip(groups.piles().skip(1))
-        .map(|(before, after)| rules.gap_between(before[0], after[0]))
-        .sum();
-    widths + between
-}
-
-/// Lays out `cards`, in order from left to right, in `area` at height `y` on the table. `names`
-/// links each card to the one before it with its name, if the caller has them already, and
-/// `ids` numbers the cards' names, if the caller keeps numbers. Each card goes to `laid` as it is
-/// laid out.
-pub(super) fn lay_row<'a>(
-    (cards, beneath): (&[&'a ObjectView], &Beneath<'a>),
-    (names, ids, stack_slots): (Option<SameName>, Option<&NameIds<'_>>, Option<&[ObjectId]>),
-    area: RowArea,
-    y: f32,
-    rules: &RowRules,
-    laid: &mut impl FnMut(Laid<'a>),
-) -> RowWindow {
-    let room = area.right - area.left;
-    let groups = grouped((cards, beneath), (names, ids, stack_slots));
-    if let Groups::Single(cards) = groups
-        && beneath.cards.is_empty()
-    {
-        return lay_single_cards(cards, area, y, rules, laid);
-    }
-    let widths: Vec<f32> = groups
-        .piles()
-        .map(|g| group_width(g, beneath, rules))
-        .collect();
-    let between: Vec<f32> = groups
-        .piles()
-        .zip(groups.piles().skip(1))
-        .map(|(before, after)| rules.gap_between(before[0], after[0]))
-        .collect();
-    let full: f32 = widths.iter().sum::<f32>() + between.iter().sum::<f32>();
-    // An empty row lays out nothing however little room it has. Without this, a row with no
-    // room would reach the window below, which has to show at least one of no groups.
-    if full <= room || groups.len() == 0 {
-        if let Some(window) = lay_faced((&groups, beneath), &widths, (area, full, y), rules, laid) {
-            return window;
-        }
-        let mut left = RowRules::start(area, full);
-        let mut height = 0;
-        for (index, (group, width)) in groups.piles().zip(&widths).enumerate() {
-            place_group((group, beneath), left, y, &mut height, true, rules, laid);
-            left += width + between.get(index).copied().unwrap_or(0.0);
-        }
-        return RowWindow::new(groups.len(), 0, groups.len(), (0, 0));
-    }
-    // Every window of `shown` consecutive groups fits at the least strip, however wide its
-    // last group is.
-    let widest = widths.iter().copied().fold(0.0, f32::max);
-    // A group with cards attached to it, which peek out to its right from under its permanent,
-    // is not overlapped: the next group stands past its whole width. Those cards show only past
-    // the permanent's right edge, so the next group covering any of the permanent would cover
-    // them first. On the phone layout, an Aura on a creature that the next creature overlapped
-    // showed 36 points, short of the 44 a press needs.
-    let attached = |group: &[&ObjectView]| beneath.of(group[0].slot, false).next().is_some();
-    // `window_size` counts a group's width only where that group is the window's last, so a
-    // window whose earlier groups have cards peeking out to their right can leave less than the
-    // least strip between the groups after them. On the phone layout, a crewed Vehicle with its
-    // Aura beside three tapped creatures did, and the tapped creatures covered each other. Such
-    // a window shows one group fewer until the strip fits.
-    let mut shown = window_size(groups.len(), room, widest, rules.strip);
-    let (first, step) = loop {
-        let first = rules.scroll.min(groups.len() - shown);
-        let last_width = widths[first + shown - 1];
-        let (mut whole, mut overlapped) = (0.0, 0);
-        for (group, width) in groups.piles().zip(&widths).skip(first).take(shown - 1) {
-            if attached(group) {
-                whole += width;
-            } else {
-                overlapped += 1;
+impl Groups<'_, '_> {
+    /// Describe the row's groups without giving the solver any game objects.
+    pub(super) fn solver_groups(
+        &self,
+        beneath: &Beneath<'_>,
+        layout: &Layout,
+        faces: &[(ObjectId, f32)],
+    ) -> impl Iterator<Item = Group> {
+        self.piles().map(move |pile| {
+            let face = pile[0];
+            let tucks = beneath
+                .cards
+                .iter()
+                .enumerate()
+                .filter(|(_, (host, _))| *host == face.slot)
+                .map(|(key, (_, card))| Tuck {
+                    key,
+                    width: card_width(card),
+                    edge: if peeks_left(card) {
+                        Edge::Start
+                    } else {
+                        Edge::End
+                    },
+                })
+                .collect();
+            Group {
+                width: card_width(face),
+                copies: pile.len(),
+                gap_class: face.tapped,
+                anchor: faces
+                    .iter()
+                    .find_map(|&(key, x)| (key == face.slot).then_some(x)),
+                tucks,
+                // Keeping tucks level on compact rows keeps them clear of adjacent rows.
+                tuck_rise: if face.types.contains(&CardType::Land) || layout.phone.is_some() {
+                    0.0
+                } else {
+                    layout.beneath_step.y * CARD_HEIGHT
+                },
             }
-        }
-        let step = spacing(overlapped + 1, room, last_width, whole);
-        let fits = if overlapped > 0 {
-            step >= rules.strip
-        } else {
-            whole + last_width <= room
-        };
-        if fits || shown == 1 {
-            break (first, step);
-        }
-        shown -= 1;
-    };
-    let mut height = 0;
-    let (mut before, mut after) = (0, 0);
-    let mut left = area.left;
-    for (index, (group, width)) in groups.piles().zip(&widths).enumerate() {
-        let visible = (first..first + shown).contains(&index);
-        if index < first {
-            before += group.len();
-        } else if !visible {
-            after += group.len();
-        }
-        // A group scrolled out of view rests at the nearer end of the row, undrawn.
-        let at = if index < first {
-            area.left
-        } else if visible {
-            left
-        } else {
-            beyond_right(area, rules, *width)
-        };
-        place_group((group, beneath), at, y, &mut height, visible, rules, laid);
-        if visible {
-            left += if attached(group) { *width } else { step };
-        }
+        })
     }
-    RowWindow::new(groups.len(), first, shown, (before, after))
 }
 
-/// Lays out a row with room to spare whose blockers face their attackers (`face`), or returns
-/// None and lays out nothing when none of its groups faces one.
-fn lay_faced<'a>(
-    (groups, beneath): (&Groups<'a, '_>, &Beneath<'a>),
-    widths: &[f32],
-    (area, full, y): (RowArea, f32, f32),
-    rules: &RowRules,
-    laid: &mut impl FnMut(Laid<'a>),
-) -> Option<RowWindow> {
-    if rules.faces.is_empty() {
-        return None;
-    }
-    let tops: Vec<&ObjectView> = groups.piles().map(|group| group[0]).collect();
-    let (order, lefts) = faced(&tops, widths, (area, full), rules)?;
-    let mut height = 0;
-    for (&index, &left) in order.iter().zip(&lefts) {
-        let group = groups
-            .piles()
-            .nth(index)
-            .expect("an index of the row's groups");
-        place_group((group, beneath), left, y, &mut height, true, rules, laid);
-    }
-    Some(RowWindow::new(groups.len(), 0, groups.len(), (0, 0)))
-}
-
-/// The least strip, in millimetres, that leaves an overlapped card of a row at height `y` in
-/// `area` an uncovered square `side` points on a side, wherever in the row it stands. The strip
-/// runs between the card's left edge and its neighbour's. Under the camera's perspective those
-/// edges slant toward the middle of the screen, more the farther from it they stand, so at the
-/// row's ends a strip `side` points wide at the row's centre line holds no square that large.
-/// The strip is the least that holds one at both ends of the row, over the shorter side of a
-/// card, which is how tall a tapped card lies.
-pub(super) fn least_strip(camera: &Camera, area: RowArea, y: f32, side: f32) -> f32 {
-    let flat = side / camera.points_per_millimetre(Vec3::new(0.0, y, 0.0));
-    let holds = |strip: f32| {
-        [area.left, area.right - strip]
-            .into_iter()
-            .all(|left| holds_square(camera, (left, left + strip), y, side))
-    };
-    // Every strip at least `flat` and too narrow to hold the square is narrower than every
-    // strip that holds it, so a bisection finds the least to within a hundredth of a millimetre.
-    let (mut low, mut high) = (flat, flat);
-    while !holds(high) {
-        low = high;
-        high *= 2.0;
-        if high > area.right - area.left {
-            return high;
-        }
-    }
-    while high - low > 0.01 {
-        let middle = f32::midpoint(low, high);
-        if holds(middle) {
-            high = middle;
-        } else {
-            low = middle;
-        }
-    }
-    high
-}
-
-/// Whether the part of the table between `left` and `right`, across a card's shorter side
-/// centred on `y`, holds a square `side` points on a side on screen. Each edge of the part is a
-/// straight line on screen, and points at one height of the table share a height on screen, so
-/// the width a band of the screen holds is the least gap between the edges at its top and its
-/// bottom.
-fn holds_square(camera: &Camera, (left, right): (f32, f32), y: f32, side: f32) -> bool {
-    let point = |x: f32, along: f32| camera.to_screen(Vec3::new(x, y + along, 0.0));
-    let half = CARD_WIDTH / 2.0;
-    let (near_left, far_left) = (point(left, -half), point(left, half));
-    let (near_right, far_right) = (point(right, -half), point(right, half));
-    let (top, bottom) = (far_left.y.min(near_left.y), far_left.y.max(near_left.y));
-    if bottom - top < side {
-        return false;
-    }
-    // Where the line from `from` to `to` crosses height `at` of the screen.
-    let across =
-        |from: Vec2, to: Vec2, at: f32| from.x + (to.x - from.x) * (at - from.y) / (to.y - from.y);
-    let gap = |start: f32| {
-        let end = start + side;
-        let left = across(near_left, far_left, start).max(across(near_left, far_left, end));
-        let right = across(near_right, far_right, start).min(across(near_right, far_right, end));
-        right - left
-    };
-    (0..=SQUARE_BANDS)
-        .map(|band| top + (bottom - top - side) * f32::from(band) / f32::from(SQUARE_BANDS))
-        .any(|start| gap(start) >= side)
-}
-
-/// How many steps `holds_square` tries a band of the screen at, from the part's top to its
-/// bottom.
-const SQUARE_BANDS: u8 = 16;
-
-/// The number of spaces between `count` things in a line.
-fn gaps(count: usize) -> f32 {
-    count.saturating_sub(1) as f32
-}
-
-/// Puts a group's cards at `left`, the copies beneath peeking out to the right and away from
-/// the viewer, and the cards under a permanent peeking out away from the viewer to its left, or
-/// to its right for the Auras and Equipment attached to it. Every card lies one `LAYER` above
-/// the card placed before it, whether or not the row overlaps: a tapped card is wider than an untapped row's step, and two cards at one height
-/// would flicker where they overlap.
-fn place_group<'a>(
-    (group, beneath): (&[&'a ObjectView], &Beneath<'a>),
-    left: f32,
-    y: f32,
-    height: &mut u32,
-    visible: bool,
-    rules: &RowRules,
-    laid: &mut impl FnMut(Laid<'a>),
-) {
-    let step = rules.layout.beneath_step;
-    let across_step = peek_step(group[0], beneath, rules);
-    let left = left + beneath.peek(group[0], across_step, true);
-    // The top card is the group's first; the copies beneath are placed first, lowest.
-    for (depth, &object) in group.iter().enumerate().rev() {
-        let offset = rules.layout.pile_step * depth as f32;
-        let centre = left + card_width(object) / 2.0 + offset.x;
-        if !beneath.cards.is_empty() {
-            // The cards under a permanent peek out away from the viewer on both sides, as the copies
-            // of a pile do, where the web's peek toward their controller. A card nearer the viewer
-            // is nearer the camera, which the interface checks and the hit test take for in front,
-            // so one peeking out below its permanent would read as covering it. A land keeps them
-            // level, as the web keeps them clear of the badges above the lands' row. So does every
-            // permanent on the phone layout, whose rows stand only a few millimetres apart: cards
-            // rising from the back row would reach into the creatures' row, and with a stack item
-            // over that row's other edge a creature there would keep no square a press can reach.
-            let rise = if object.types.contains(&CardType::Land) || rules.layout.phone.is_some() {
-                0.0
-            } else {
-                step.y * CARD_HEIGHT
-            };
-            // The cards to its right, then those to its left, each lower than the one nearer it.
-            let right = beneath
-                .of(object.slot, false)
-                .enumerate()
-                .map(|(i, c)| (i, c, 1.0));
-            let left_of = beneath
-                .of(object.slot, true)
-                .enumerate()
-                .map(|(i, c)| (i, c, -1.0));
-            let under: Vec<(usize, &ObjectView, f32)> = right.chain(left_of).collect();
-            for &(index, card, across) in under.iter().rev() {
-                let reach = (index + 1) as f32;
-                let pose = Pose {
-                    position: Vec3::new(
-                        centre + across * reach * across_step,
-                        y + offset.y + reach * rise,
-                        LAYER * *height as f32,
-                    ),
-                    rotation: Quat::IDENTITY,
-                    turn: if face_up(card) { 0.0 } else { 1.0 },
-                    ..Pose::default()
+impl<'a> Groups<'a, '_> {
+    /// Turn an arranged item's centre and layer into its card pose.
+    pub(super) fn pose(
+        &self,
+        beneath: &Beneath<'a>,
+        placed: &Placed,
+        y: f32,
+    ) -> (&'a ObjectView, Pose) {
+        let (object, rotation) = match placed.member {
+            Member::Copy(index) => {
+                let object = self.get(placed.group)[index];
+                let rotation = if object.tapped {
+                    Quat::from_xyzw(0.0, 0.0, -FRAC_1_SQRT_2, FRAC_1_SQRT_2)
+                } else {
+                    Quat::IDENTITY
                 };
-                *height += 1;
-                laid(Laid {
-                    object: card,
-                    pose,
-                    visible,
-                    copies: 1,
-                });
+                (object, rotation)
             }
-        }
-        let copies = if depth == 0 {
-            u16::try_from(group.len()).unwrap_or(u16::MAX)
-        } else {
-            0
+            Member::Tuck(index) => (beneath.cards[index].1, Quat::IDENTITY),
         };
-        laid(permanent(
-            object,
-            centre,
-            y + offset.y,
-            *height,
-            visible,
-            copies,
-        ));
-        *height += 1;
+        let pose = Pose {
+            position: Vec3::new(
+                placed.centre.x,
+                y + placed.centre.y,
+                LAYER * placed.layer as f32,
+            ),
+            rotation,
+            ..Pose::default()
+        };
+        let pose = match placed.member {
+            Member::Copy(_) => reposed(object, pose),
+            Member::Tuck(_) => Pose {
+                turn: if face_up(object) { 0.0 } else { 1.0 },
+                ..pose
+            },
+        };
+        (object, pose)
     }
 }
 
-fn permanent(
-    object: &ObjectView,
-    centre: f32,
-    y: f32,
-    height: u32,
-    visible: bool,
-    copies: u16,
-) -> Laid<'_> {
-    let rotation = if object.tapped {
-        Quat::from_xyzw(0.0, 0.0, -FRAC_1_SQRT_2, FRAC_1_SQRT_2)
+fn card_width(object: &ObjectView) -> f32 {
+    if object.tapped {
+        CARD_HEIGHT
     } else {
-        Quat::IDENTITY
-    };
-    let pose = Pose {
-        position: Vec3::new(centre, y, LAYER * height as f32),
-        rotation,
-        ..Pose::default()
-    };
-    Laid {
-        object,
-        pose: reposed(object, pose),
-        visible,
-        copies,
+        CARD_WIDTH
     }
 }
 
@@ -639,25 +307,6 @@ pub fn reposed(object: &ObjectView, pose: Pose) -> Pose {
         },
         ..pose
     }
-}
-
-/// How wide a card lies: a tapped card is turned a quarter turn.
-fn card_width(object: &ObjectView) -> f32 {
-    if object.tapped {
-        CARD_HEIGHT
-    } else {
-        CARD_WIDTH
-    }
-}
-
-/// How wide a group lies: its top card, the copies peeking out beside it and the cards under a
-/// merged permanent peeking out to its left.
-fn group_width(group: &[&ObjectView], beneath: &Beneath, rules: &RowRules) -> f32 {
-    let step = peek_step(group[0], beneath, rules);
-    card_width(group[0])
-        + rules.layout.pile_step.x * gaps(group.len())
-        + beneath.peek(group[0], step, true)
-        + beneath.peek(group[0], step, false)
 }
 
 /// Whether the viewer sees a card's face: a face-up card whose name they know.
