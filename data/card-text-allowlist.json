@@ -43,6 +43,13 @@
       "Cerebral Vortex: target player draws two cards [-, then-] {+.+} ~ deals damage [-to that player-] equal to the number of cards [-they've drawn-] {+that player drew+} this turn {+to that player+} ."
     ]
   },
+  "Chronicler of Heroes": {
+    "reason": "wording",
+    "note": "The effect counts +1/+1 counters across the creatures you control and draws if the total is at least one. The renderer puts the condition before the draw and describes the set as all creatures you control.",
+    "diff": [
+      "Chronicler of Heroes: when ~ enters , [-draw a card-] if [-you control a creature with-] {+there is+} a +1/+1 counter on [-it-] {+all creatures you control , draw a card+} ."
+    ]
+  },
   "Crackling Triton": {
     "reason": "wording",
     "note": "After the sacrifice cost, Oracle says the damage source is ‘it’. The renderer calls the same source ‘this creature’.",

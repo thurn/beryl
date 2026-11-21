@@ -166,6 +166,13 @@
       ]
     }
   ],
+  "Chronicler of Heroes": [
+    {
+      "published_at": "2017-11-17",
+      "hash": "62fb15ae0daf",
+      "scenario": ["a counter added in response lets the Chronicler draw"]
+    }
+  ],
   "Circle of Protection: Red": [
     {
       "published_at": "2004-10-04",
