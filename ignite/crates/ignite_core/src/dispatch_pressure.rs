@@ -188,16 +188,13 @@ impl<'a> Budget<'a> {
             && free < required
         {
             let room = free.saturating_sub(self.committed_gb);
-            // Active builds will eventually free their reservation. When no build ticket is
-            // ahead of this one, request a sweep of unused trees so it cannot wait forever
-            // above the ordinary cleanup floor.
             return Some(HandoffWait {
                 reason: format!(
                     "{} waits for disk space: {free} GB free, {room} GB available above the \
                      {DISK_FLOOR_GB} GB floor after active tickets, {growth} GB needed (rechecking each round)",
                     ticket.id
                 ),
-                reclaim_to_gb: (self.heavy == 0).then_some(required),
+                reclaim_to_gb: Some(required),
             });
         }
         if ticket.kind == TicketKind::Regression {

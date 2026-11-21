@@ -413,10 +413,6 @@ impl Parts {
                             failure = Some(format!("undeclared trees not removed: {error}"));
                         }
                     }
-                    if let Err(error) = idle.hold_disk() {
-                        eprintln!("ignite: trees not held under their disk limit: {error}");
-                        failure = Some(format!("trees not held under their disk limit: {error}"));
-                    }
                     if let Err(error) = trees.reclaim_disk_for_handoff() {
                         eprintln!(
                             "ignite: cannot reclaim unused build outputs for a handoff: {error}"
@@ -424,6 +420,10 @@ impl Parts {
                         failure = Some(format!(
                             "cannot reclaim build outputs for a handoff: {error}"
                         ));
+                    }
+                    if let Err(error) = idle.hold_disk() {
+                        eprintln!("ignite: trees not held under their disk limit: {error}");
+                        failure = Some(format!("trees not held under their disk limit: {error}"));
                     }
                     failure.map_or(Ok(()), Err)
                 });

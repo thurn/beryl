@@ -43,10 +43,37 @@ impl Space {
         for (id, dirs) in trees {
             let held = space.trees.entry(id).or_default();
             for dir in dirs {
-                add(held, &dir);
+                add(held, &dir, u64::MAX);
             }
         }
         space
+    }
+
+    /// Check a free tree without walking every tree on the machine. Stop as soon as it holds
+    /// enough private bytes to be worth clearing. Smaller trees qualify if they have no clones.
+    pub(super) fn private_enough(dirs: impl IntoIterator<Item = PathBuf>, minimum: u64) -> bool {
+        let mut held = Held::default();
+        for dir in dirs {
+            add(&mut held, &dir, minimum);
+            if held.private >= minimum {
+                return true;
+            }
+        }
+        held.shared.is_empty()
+    }
+
+    /// A group of free trees can release blocks together. Retain a donor whose only
+    /// reclaimable space is a small amount of private data.
+    pub(super) fn group_can_free(
+        &self,
+        tree: &TreeId,
+        candidates: &HashSet<TreeId>,
+        minimum: u64,
+    ) -> bool {
+        self.trees.get(tree).is_some_and(|held| {
+            let freed = self.freed_with(tree, candidates);
+            freed >= minimum || freed > held.private
+        })
     }
 
     /// Bytes on disk in every tree's directories, each clone's shared bytes counted once.
@@ -106,7 +133,7 @@ impl Space {
 }
 
 /// Adds what is under `path` to `held`.
-fn add(held: &mut Held, path: &Path) {
+fn add(held: &mut Held, path: &Path, minimum: u64) {
     let Ok(meta) = fs::symlink_metadata(path) else {
         return;
     };
@@ -126,14 +153,17 @@ fn add(held: &mut Held, path: &Path) {
         return;
     }
     held.private += allocated;
-    if !meta.is_dir() {
+    if !meta.is_dir() || held.private >= minimum {
         return;
     }
     let Ok(entries) = fs::read_dir(path) else {
         return;
     };
     for entry in entries.filter_map(io::Result::ok) {
-        add(held, &entry.path());
+        add(held, &entry.path(), minimum);
+        if held.private >= minimum {
+            break;
+        }
     }
 }
 

@@ -7,9 +7,11 @@ use std::sync::atomic::Ordering;
 
 use ignite_core::dispatch_pressure::DispatchPressure;
 use ignite_core::ids::TicketId;
+use ignite_core::traits::Result;
 
 use super::{Kind, Trees, choice};
 use crate::doctor::{Host as _, NativeHost};
+use crate::trees::DiskReport;
 
 impl Trees {
     pub(crate) fn request_disk_for_handoff(&self, target_gb: u64) {
@@ -18,11 +20,18 @@ impl Trees {
             .fetch_max(target_gb, Ordering::Relaxed);
     }
 
-    pub(crate) fn reclaim_disk_for_handoff(&self) -> ignite_core::traits::Result<()> {
+    pub(crate) fn reclaim_disk_for_handoff(&self) -> Result<()> {
+        self.reclaim_disk_for_handoff_with(|| NativeHost.disk_free_gb(&self.inner.config.dir))?;
+        Ok(())
+    }
+
+    pub(super) fn reclaim_disk_for_handoff_with(
+        &self,
+        free: impl Fn() -> Option<u64>,
+    ) -> Result<DiskReport> {
         let target = self.inner.handoff_disk_target.swap(0, Ordering::Relaxed);
-        let free = || NativeHost.disk_free_gb(&self.inner.config.dir);
         if target == 0 || free().is_none_or(|free| free >= target) {
-            return Ok(());
+            return Ok(DiskReport::default());
         }
         crate::steps::step(format!(
             "clearing unused build outputs for a handoff needing {target} GB free"
@@ -34,7 +43,7 @@ impl Trees {
                 report.cleared.len()
             );
         }
-        Ok(())
+        Ok(report)
     }
 
     pub(crate) fn dispatch_pressure(

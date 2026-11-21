@@ -4054,9 +4054,11 @@ allowances for existing claims and reservations from the free space above the 50
 GB cleanup floor. A warm tree can count for only one reservation. Short tickets
 can still fit in the remaining space while a build waits. The build runner also
 checks disk space immediately before launching a build. If disk holds up a
-handoff when no build ticket is held, the daemon tries to make room by clearing
-build outputs from unused worktrees. It leaves leased worktrees alone in this
-sweep.
+handoff, the hub sends the same free-space target it used for admission to the
+daemon, including projected growth for held tickets and the one waiting. The
+disk loop tries to reach that target by clearing build outputs in free ticket
+trees, oldest first among trees that can release space. It keeps leased trees
+and favors clearing trees whose blocks are their own over shared donors.
 
 The machine can start up to three build tickets at once when the rest of its
 budget permits. With three or more active, the newest must have been held for 90

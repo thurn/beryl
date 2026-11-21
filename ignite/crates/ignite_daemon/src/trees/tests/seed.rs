@@ -347,6 +347,42 @@ fn a_free_tree_whose_blocks_a_clone_shares_is_kept_and_one_with_its_own_is_clear
     );
 }
 
+/// The older free tree shares its build with a lease, so deleting the other tree frees room.
+#[test]
+fn a_handoff_sweep_prefers_reclaimable_builds_to_an_older_shared_donor() {
+    if !copies_are_clones_here() {
+        return;
+    }
+    let f = Fixture::new(3, 1);
+    let leased = f.lease("T.1", false);
+    let mut free = ["tree-01", "tree-02", "tree-03"]
+        .into_iter()
+        .filter(|name| *name != leased.tree.as_str());
+    let donor = f.trees.config().path(&id(free.next().unwrap()));
+    let reclaimable = id(free.next().unwrap());
+    let path = f.trees.config().path(&reclaimable);
+    write(&donor, "out/big", &"x".repeat(4_000_000));
+    fs::create_dir_all(leased.path.join("out")).unwrap();
+    clone_file(&donor.join("out/big"), &leased.path.join("out/big"));
+    write(&path, "out/own", &"y".repeat(2_000_000));
+    f.trees.request_disk_for_handoff(75);
+
+    let report = f
+        .trees
+        .reclaim_disk_for_handoff_with(|| Some(if path.join("out").exists() { 65 } else { 75 }))
+        .unwrap();
+
+    assert_eq!(report.cleared, [reclaimable]);
+    assert!(donor.join("out/big").exists());
+    assert!(leased.path.join("out/big").exists());
+
+    f.trees.request_disk_for_handoff(75);
+    let report = f.trees.reclaim_disk_for_handoff_with(|| Some(65)).unwrap();
+
+    assert!(report.cleared.is_empty(), "{report:?}");
+    assert!(donor.join("out/big").exists());
+}
+
 /// The disk loop forgets a cleared tree's builds before it deletes its build directories.
 #[test]
 fn a_cleared_tree_is_forgotten_before_its_directories_are_deleted() {

@@ -151,20 +151,9 @@ impl Trees {
                 if freed == 0 || (own_only && freed < OWN_BYTES) {
                     continue;
                 }
-                let Some(mut row) = self.take_for_sweep(&row.id)? else {
+                if !self.clear_free(&id)? {
                     continue;
-                };
-                // Forgotten before anything is deleted: the build manager would otherwise still
-                // answer that the tree holds its products, and the gate would run checks against
-                // binaries that are gone. A daemon restart partway through the deletion would
-                // otherwise leave the record of builds whose files are half deleted.
-                self.inner.builds.forget(&id);
-                let path = self.inner.config.path(&id);
-                for dir in self.inner.config.keep.get().iter() {
-                    remove(&path.join(dir));
                 }
-                row.built_commit = None;
-                self.put_back(&row)?;
                 report.after = report.after.saturating_sub(space.clear(&id));
                 report.cleared.push(id);
             }
@@ -216,24 +205,6 @@ impl Trees {
     /// tree holds the most bytes of its own matters less than freeing any. A tree whose files
     /// are clones of another's frees little, and the next free tree goes after it.
     pub fn free_disk(&self, floor: u64, free: impl Fn() -> Option<u64>) -> Result<DiskReport> {
-        self.free_disk_with(floor, free, true)
-    }
-
-    /// Reclaim only free worktrees for a handoff. Leased trees keep their builds.
-    pub(super) fn free_unused_disk(
-        &self,
-        floor: u64,
-        free: impl Fn() -> Option<u64>,
-    ) -> Result<DiskReport> {
-        self.free_disk_with(floor, free, false)
-    }
-
-    fn free_disk_with(
-        &self,
-        floor: u64,
-        free: impl Fn() -> Option<u64>,
-        may_clear_leased: bool,
-    ) -> Result<DiskReport> {
         let mut report = DiskReport {
             limit: Some(floor),
             ..DiskReport::default()
@@ -246,39 +217,14 @@ impl Trees {
             done.set(!low);
             low
         };
-        let config = &self.inner.config;
-        let ticket_trees: HashSet<_> = config
-            .configured()
-            .into_iter()
-            .filter_map(|(id, kind)| (kind == Kind::Ticket).then_some(id))
-            .collect();
-        let keep = config.keep.get();
         for row in self.free_rows()? {
             if !low() {
                 break;
             }
             let id = id_of(&row)?;
-            let path = config.path(&id);
-            if !may_clear_leased
-                && (!ticket_trees.contains(&id) || !keep.iter().any(|dir| path.join(dir).exists()))
-            {
-                continue;
+            if self.clear_free(&id)? {
+                report.cleared.push(id);
             }
-            let Some(mut row) = self.take_for_sweep(&row.id)? else {
-                continue;
-            };
-            // Forgotten before anything is deleted, as in `hold_disk`.
-            self.inner.builds.forget(&id);
-            for dir in keep.iter() {
-                remove(&path.join(dir));
-            }
-            row.built_commit = None;
-            self.put_back(&row)?;
-            report.cleared.push(id);
-        }
-        if !may_clear_leased {
-            self.serve_waiters();
-            return Ok(report);
         }
         if low() {
             let mut objects = objects::Swept::default();
@@ -300,6 +246,79 @@ impl Trees {
         }
         self.serve_waiters();
         Ok(report)
+    }
+
+    /// Make room for a handoff by clearing free ticket trees in order of last use. Trees
+    /// with private blocks go first, so a clone donor is kept when its deletion would
+    /// recover little. Only measure all the trees if shared blocks still need looking at.
+    pub(super) fn free_unused_disk(
+        &self,
+        target: u64,
+        free: impl Fn() -> Option<u64>,
+    ) -> Result<DiskReport> {
+        let mut report = DiskReport {
+            limit: Some(target),
+            ..DiskReport::default()
+        };
+        let mut short = true;
+        let mut needs_space = || {
+            short = short && free().is_some_and(|free| free < target);
+            short
+        };
+        let config = &self.inner.config;
+        let ticket_trees: HashSet<_> = config
+            .configured()
+            .into_iter()
+            .filter_map(|(id, kind)| (kind == Kind::Ticket).then_some(id))
+            .collect();
+        let keep = config.keep.get();
+        let mut shared = Vec::new();
+        for row in self.free_rows()? {
+            if !needs_space() {
+                break;
+            }
+            let id = id_of(&row)?;
+            let path = config.path(&id);
+            if !ticket_trees.contains(&id) || !keep.iter().any(|dir| path.join(dir).exists()) {
+                continue;
+            }
+            if !Space::private_enough(keep.iter().map(|dir| path.join(dir)), OWN_BYTES) {
+                shared.push(id);
+            } else if needs_space() && self.clear_free(&id)? {
+                report.cleared.push(id);
+            }
+        }
+        if !shared.is_empty() && needs_space() {
+            let mut space = self.measure();
+            let candidates: HashSet<_> = shared.iter().cloned().collect();
+            for id in shared {
+                if !needs_space() {
+                    break;
+                }
+                if space.group_can_free(&id, &candidates, OWN_BYTES) && self.clear_free(&id)? {
+                    space.clear(&id);
+                    report.cleared.push(id);
+                }
+            }
+        }
+        self.serve_waiters();
+        Ok(report)
+    }
+
+    /// Forget the build before touching its files so a restart cannot leave records of
+    /// missing outputs. Marking the tree keeps leases and seeding out during the deletion.
+    fn clear_free(&self, id: &TreeId) -> Result<bool> {
+        let Some(mut row) = self.take_for_sweep(id.as_str())? else {
+            return Ok(false);
+        };
+        self.inner.builds.forget(id);
+        let path = self.inner.config.path(id);
+        for dir in self.inner.config.keep.get().iter() {
+            remove(&path.join(dir));
+        }
+        row.built_commit = None;
+        self.put_back(&row)?;
+        Ok(true)
     }
 
     /// The free trees, used longest ago first; never used counts as longest ago.

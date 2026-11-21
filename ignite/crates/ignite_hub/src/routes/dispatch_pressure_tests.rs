@@ -61,6 +61,7 @@ fn a_pending_reservation_uses_its_warm_tree_and_a_cold_ticket_waits() {
             .contains("12 GB available"),
         "{held}"
     );
+    assert_eq!(held["reclaim_to_gb"], 103, "{held}");
     let (status, _) = post(
         &mut conn,
         "/claims",

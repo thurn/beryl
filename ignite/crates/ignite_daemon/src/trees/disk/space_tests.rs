@@ -69,6 +69,8 @@ fn a_clone_counts_once_and_frees_its_blocks_only_with_its_source() {
     assert!(own[2] >= MB, "{own:?}");
     let pair = HashSet::from([id("b")]);
     assert!(space.freed_with(&id("a"), &pair) >= 4 * MB);
+    assert!(!space.group_can_free(&id("a"), &HashSet::new(), MB));
+    assert!(space.group_can_free(&id("a"), &pair, MB));
     assert!(space.clear(&id("a")) < MB);
     assert!(space.clear(&id("b")) >= 4 * MB);
     assert!(space.holds_any(&id("c")));
