@@ -538,19 +538,22 @@ impl Checks {
                  the families its daemon read at start: {error}"
             ),
         }
-        let view = Checks {
-            settings,
-            shared: self.shared.clone(),
-            builds_seen: Mutex::default(),
-            fresh_reads: Mutex::default(),
-        };
         let tree = OpenTree {
             id: tree.clone(),
             path,
             tracked,
             graph,
         };
-        Ok((view, tree))
+        Ok((self.with_settings(settings), tree))
+    }
+
+    fn with_settings(&self, settings: CheckSettings) -> Self {
+        Self {
+            settings,
+            shared: self.shared.clone(),
+            builds_seen: Mutex::default(),
+            fresh_reads: Mutex::default(),
+        }
     }
 
     /// The families this machine runs, by name.

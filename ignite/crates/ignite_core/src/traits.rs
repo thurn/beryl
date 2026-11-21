@@ -451,6 +451,11 @@ pub trait Hub: Send + Sync {
         Err(not_supported("look up listings"))
     }
 
+    /// Which of the listing keys the hub already has, in the order asked.
+    fn listing_presence(&self, keys: &[ListingKey]) -> Result<Vec<bool>> {
+        Ok(self.listings(keys)?.iter().map(Option::is_some).collect())
+    }
+
     /// Stores a family's listing for every machine to reuse (`POST /listings/store`).
     fn store_listing(&self, listing: &StoredListing) -> Result<()> {
         let _ = listing;

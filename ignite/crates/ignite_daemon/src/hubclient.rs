@@ -661,9 +661,19 @@ impl Hub for HubClient {
     fn listings(&self, keys: &[ListingKey]) -> Result<Vec<Option<String>>> {
         let request = ListingLookup {
             keys: keys.to_vec(),
+            presence_only: false,
         };
         let reply: ListingReply = self.post("/listings/lookup", &request)?;
         Ok(reply.listings)
+    }
+
+    fn listing_presence(&self, keys: &[ListingKey]) -> Result<Vec<bool>> {
+        let request = ListingLookup {
+            keys: keys.to_vec(),
+            presence_only: true,
+        };
+        let reply: ListingReply = self.post("/listings/lookup", &request)?;
+        Ok(reply.listings.iter().map(Option::is_some).collect())
     }
 
     fn verdict(&self, key: &VerdictKey) -> Result<Option<Verdict>> {

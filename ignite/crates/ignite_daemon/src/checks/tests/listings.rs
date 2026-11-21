@@ -443,3 +443,57 @@ fn a_nextest_listing_is_not_shared_between_operating_systems() {
         "Windows listed for itself"
     );
 }
+
+#[test]
+fn tip_verification_uses_the_nextest_checks_listed_by_each_operating_system() {
+    let manifest = MANIFEST.replace(
+        "platforms = [\"macos\"]",
+        "platforms = [\"macos\", \"windows\"]",
+    );
+    let world = world(&manifest, &[], FakeHistory::default());
+    let tree = TreeId::new("tree-01").unwrap();
+    let mut windows = daemon(
+        &world,
+        ignite_store::local::open_in_memory().unwrap(),
+        FakeTrees::new(&world.dir, &[]),
+    );
+    Arc::get_mut(&mut windows).unwrap().settings.os = Os::Windows;
+    *world.launcher.listing.lock().unwrap() =
+        format!("{{\"check\": \"unit:a\"}}\n{NEXTEST_LISTING}\n");
+    let first = world.checks.regression_checks(&world.ctx, &tree).unwrap();
+    assert!(first.unlisted.iter().any(|missing| {
+        missing.name == name("rs:listing") && missing.platforms == [Os::Windows]
+    }));
+
+    let windows_listing = NEXTEST_LISTING.replace("\"a\"", "\"windows_only\"");
+    *world.launcher.listing.lock().unwrap() = windows_listing;
+    *world.launcher.nextest_run.lock().unwrap() =
+        "{\"type\":\"test\",\"event\":\"ok\",\"name\":\"core::core$windows_only\"}\n".to_owned();
+    assert!(run_on(&windows, &world, &["rs:core::windows_only"]).passed());
+
+    let listed = world.checks.regression_checks(&world.ctx, &tree).unwrap();
+    assert!(listed.unlisted.is_empty());
+    let keys: Vec<_> = listed
+        .checks
+        .iter()
+        .filter(|c| c.family == "rs")
+        .map(|c| (c.check.as_str(), c.key.platform, c.runnable))
+        .collect();
+    assert_eq!(
+        keys,
+        [
+            ("rs:core::a", Some(Os::Macos), true),
+            ("rs:core::windows_only", Some(Os::Windows), false),
+        ]
+    );
+    let windows_key = listed
+        .checks
+        .iter()
+        .find(|c| c.check == name("rs:core::windows_only"))
+        .unwrap();
+    let results = world
+        .hub
+        .lookup(std::slice::from_ref(&windows_key.key))
+        .unwrap();
+    assert_eq!(results[0].as_ref().unwrap().outcome, Outcome::Pass);
+}

@@ -96,6 +96,52 @@ fn a_foreign_family_that_cannot_be_listed_is_not_reported_and_names_its_platform
 }
 
 #[test]
+fn a_tip_waits_for_a_foreign_build_listing_without_building_it() {
+    let manifest = format!(
+        "{}\n{}\n[product.binary]\nbuild = \"builder\"\ninputs = [\"src\"]\noutputs = [\"out\"]\n",
+        family("unit", "\"any\"", "lister", ""),
+        family("desktop", "[\"macos\"]", "lister", "needs = [\"binary\"]"),
+    );
+    let world = world(&manifest, &[], FakeHistory::default());
+    *world.launcher.listing.lock().unwrap() = listing(&["unit:a", "desktop:b"]);
+    let mut windows = daemon(
+        &world,
+        ignite_store::local::open_in_memory().unwrap(),
+        FakeTrees::new(&world.dir, &[]),
+    );
+    Arc::get_mut(&mut windows).unwrap().settings.os = Os::Windows;
+
+    let cold = windows.regression_checks(&world.ctx, &tree()).unwrap();
+    assert_eq!(cold.checks.len(), 1);
+    assert!(cold.checks[0].runnable);
+    assert_eq!(cold.unlisted.len(), 1);
+    assert_eq!(cold.unlisted[0].name, name("desktop:listing"));
+    assert_eq!(cold.unlisted[0].platforms, vec![Os::Macos]);
+    assert!(!cold.unlisted[0].reportable);
+    assert!(world.builds.requests().is_empty());
+    assert_eq!(world.launcher.commands("lister").len(), 1);
+
+    world.hub.set_unreachable(true);
+    let mac = world.checks.regression_checks(&world.ctx, &tree()).unwrap();
+    world.hub.set_unreachable(false);
+    let mac_check = mac.checks.iter().find(|c| c.family == "desktop").unwrap();
+    let builds = world.builds.requests().len();
+    assert!(builds > 0, "the Mac supplies the listing");
+    let commands = world.launcher.commands("lister").len();
+
+    let waiting = windows.regression_checks(&world.ctx, &tree()).unwrap();
+    assert_eq!(waiting.unlisted.len(), 1, "the hub missed the listing");
+    world.checks.regression_checks(&world.ctx, &tree()).unwrap();
+    let warm = windows.regression_checks(&world.ctx, &tree()).unwrap();
+    assert!(warm.unlisted.is_empty());
+    let foreign_check = warm.checks.iter().find(|c| c.family == "desktop").unwrap();
+    assert_eq!(foreign_check.key, mac_check.key);
+    assert!(!foreign_check.runnable);
+    assert_eq!(world.builds.requests().len(), builds);
+    assert_eq!(world.launcher.commands("lister").len(), commands);
+}
+
+#[test]
 fn a_check_whose_inputs_cannot_be_resolved_is_unlisted_and_the_rest_are_kept() {
     let manifest = family("unit", "\"any\"", "lister", "");
     let world = world(&manifest, &[], FakeHistory::default());

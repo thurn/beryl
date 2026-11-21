@@ -299,6 +299,34 @@ impl ResultCache {
         }
     }
 
+    /// Restores kept listings that other platforms need for tip verification. A later round
+    /// retries an upload that failed, even when the originating machine reused its local copy.
+    pub(crate) fn share_listings(&self, keys: &[ListingKey]) {
+        if keys.is_empty() {
+            return;
+        }
+        let Ok(present) = self.hub.listing_presence(keys) else {
+            return;
+        };
+        for (key, present) in keys.iter().zip(present) {
+            if present {
+                continue;
+            }
+            let listing = listings::get(&self.conn(), &key.family, key.hash.as_str());
+            if let Ok(Some(listing)) = listing
+                && let Err(error) = self.hub.store_listing(&StoredListing {
+                    key: key.clone(),
+                    listing,
+                })
+            {
+                eprintln!(
+                    "ignite: cannot share the kept listing of {}: {error}",
+                    key.family
+                );
+            }
+        }
+    }
+
     /// Records that `family`'s `command` (`list` or `run`) passed in `wall_s` seconds.
     pub fn note_pass(&self, family: &str, command: &str, wall_s: f64) {
         let now = self.clock.now();

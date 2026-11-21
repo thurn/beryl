@@ -50,7 +50,14 @@ pub fn handle(conn: &mut Connection, request: &Request, now: Timestamp) -> Optio
             let found: Result<Vec<Option<String>>, _> = lookup
                 .keys
                 .iter()
-                .map(|key| listings::get(conn, &key.family, key.hash.as_str()))
+                .map(|key| {
+                    if lookup.presence_only {
+                        listings::contains(conn, &key.family, key.hash.as_str())
+                            .map(|present| present.then(String::new))
+                    } else {
+                        listings::get(conn, &key.family, key.hash.as_str())
+                    }
+                })
                 .collect();
             found
                 .map(|listings| Response::json(200, &json!(ListingReply { listings })))
@@ -113,11 +120,25 @@ mod tests {
         assert_eq!(done.unwrap().status, 200);
         let lookup = ListingLookup {
             keys: vec![key("unit"), key("other")],
+            presence_only: false,
         };
         let found = handle(&mut conn, &request("/listings/lookup", &lookup, false), now).unwrap();
         assert_eq!(found.status, 200);
         let reply: ListingReply = serde_json::from_slice(&found.body).unwrap();
         assert_eq!(reply.listings, [Some(stored.listing), None]);
         assert!(handle(&mut conn, &request("/results/lookup", &lookup, false), now).is_none());
+
+        let presence = ListingLookup {
+            presence_only: true,
+            ..lookup
+        };
+        let found = handle(
+            &mut conn,
+            &request("/listings/lookup", &presence, false),
+            now,
+        )
+        .unwrap();
+        let reply: ListingReply = serde_json::from_slice(&found.body).unwrap();
+        assert_eq!(reply.listings, [Some(String::new()), None]);
     }
 }

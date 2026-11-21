@@ -759,6 +759,9 @@ pub struct ListingKey {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ListingLookup {
     pub keys: Vec<ListingKey>,
+    /// Return an empty string for each stored listing when the caller only needs to know it exists.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub presence_only: bool,
 }
 
 /// The stored listing of each key asked for, or `None` where the hub has none. A listing is

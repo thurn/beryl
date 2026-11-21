@@ -20,6 +20,15 @@ pub fn get(conn: &Connection, family: &str, hash: &str) -> Result<Option<String>
         .optional()?)
 }
 
+/// Whether the key is stored, without loading the listing.
+pub fn contains(conn: &Connection, family: &str, hash: &str) -> Result<bool> {
+    Ok(conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM listings WHERE family = ?1 AND hash = ?2)",
+        params![family, hash],
+        |row| row.get(0),
+    )?)
+}
+
 /// Stores a listing `machine` made, replacing one under the same family and hash, and forgets
 /// all but the [`KEPT`] newest listings of the family.
 pub fn put(

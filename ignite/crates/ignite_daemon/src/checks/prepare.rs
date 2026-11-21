@@ -12,6 +12,7 @@ use std::thread;
 use ignite_core::ids::CheckName;
 use ignite_core::inputs;
 use ignite_core::manifest::Family;
+use ignite_core::protocol::Class;
 use ignite_core::protocol::hub::{CachedResult, ListingKey};
 
 use super::listings::{Kept, Listing, Origin};
@@ -184,7 +185,11 @@ impl Checks {
             })
             .collect();
         if !fail_fast {
-            return self.prepare_at_once(ctx, tree, work, options, run);
+            let prepared = self.prepare_at_once(ctx, tree, work, options, run);
+            if options.class == Class::Tip {
+                self.share_platform_listings(&prepared, &hashes);
+            }
+            return prepared;
         }
         // The families that build nothing to be listed are listed first, at once, while the
         // products the others need to be listed build.
