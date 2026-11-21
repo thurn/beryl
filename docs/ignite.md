@@ -4110,8 +4110,10 @@ The `/ignite` skill is how a person starts work. It replaces `/enact` and
   the work, `ignite land`.
 - Given a plan or a large task, the session settles the design, files the epic
   and its tickets in one `ignite ticket batch`, runs `ignite plan check`, fixes
-  what it reports, and stops. The pool takes the tickets. The planning session
-  runs no loop, which is what removes today's orchestration cost.
+  what it reports, and stops. The daemon runs the pool's CLI workers. Use
+  [machine and provider pins](#machine-and-provider-pins) only for hard
+  requirements. The [Fleet page](#fleet-settings) and `ignite fleet` show the
+  machines and provider mix.
 - Given `sweep`, the session triages the open tickets that nothing is working.
   For each it decides whether the work is done, obsolete, still wanted or in
   need of a person, with a line of evidence. It shows the table, closes the

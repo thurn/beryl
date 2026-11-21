@@ -1,14 +1,15 @@
 ---
 name: ignite
-description: Start work through Ignite. `/ignite <ticket or small task>` does it in this session; `/ignite <plan or large task>` settles the design and files an epic of tickets for the worker pool; `/ignite sweep` triages stale open tickets. Use when the user invokes /ignite or asks to plan, file or sweep work for Ignite's pool, or asks how to staff it.
+description: Start work through Ignite. `/ignite <ticket or small task>` does it in this session; `/ignite <plan or large task>` settles the design and files an epic of tickets for the worker pool; `/ignite sweep` triages stale open tickets. Use when the user invokes /ignite or asks to plan, file or sweep work for Ignite's pool, or asks where to see its fleet settings.
 ---
 
 # Ignite
 
-Ignite is the build, check and delivery system (`docs/ignite.md`). Workers are
-desktop-app sessions that the dispatcher hands tickets to, or headless CLI
-processes that the daemon runs itself; nothing here runs a loop. Run `ignite prime` first: it holds the workflow every ticket follows
-(start, test, land, release), and this skill does not repeat it.
+Ignite is the build, check and delivery system (`docs/ignite.md`). The daemon
+runs workers as headless CLI processes and starts them as capacity allows. The
+dashboard's Fleet page and `ignite fleet` show the fleet's machines, capacity
+and provider mix. The operator or justiciar can change machine and provider
+settings there. Run `ignite prime` first for the ticket workflow.
 
 Pick the mode from the argument:
 
@@ -17,7 +18,6 @@ Pick the mode from the argument:
 | a ticket ID, or a task of a few steps  | [Do it here](#do-it-here)    |
 | a plan file, or a task of many tickets | [Plan](#plan)                |
 | `sweep [older than N days] [dry]`      | [Sweep](#sweep)              |
-| `pool <n>` or `dispatch`               | [Staffing](#staffing)        |
 
 Titles, for every session except a headless CLI worker (session ID starting with
 `cli-`), which has none: `⚒️` while working (`🚒` while working a regression
@@ -87,9 +87,12 @@ start, because the person may not be there later.
   races or caches, `tier:sonnet` for ports and declarations, `tier:light` for
   mechanical work. Never `tier:fable` unless the person asked for it. No tier
   or lane label on an epic, because children inherit an epic's labels.
+- **Pins only for hard requirements.** Add `machine:<name>` when work requires
+  a specific machine and `provider:<name>` when it requires a specific coding
+  agent CLI. Each pin applies to descendants that lack their own pin of that
+  kind. Leave other tickets unpinned so any eligible worker can take them.
 - **`lane:<name>` only for a true chain**, where each ticket needs the previous
-  one's result. Tickets that merely touch the same code stay apart; the
-  dispatcher already prefers the worker that last touched those files.
+  one's result. Sharing files is insufficient reason to add a lane.
 - **Reviews**: a ticket labelled `review` per area for large or risky work
   (data loss, concurrency, security, many files), depending on what it reviews;
   the label `review:inline` for a change that deserves a second look; nothing
@@ -123,15 +126,15 @@ never meant to touch.
    ```
 
 2. `ignite ticket batch <file>`. It succeeds or fails as a whole.
-3. `ignite plan check <epic>`. It only reports: the longest chain, edges between
-   tickets that name no file in common, tickets that name no files, lanes whose
-   tickets do not depend on each other. Fix what is wrong with
-   `ignite ticket update` and `ignite ticket dep`, and run it again.
-4. An epic filed without `workers` gets a share of 3, which is enough for the
-   pool to start on it once it is released. Set
-   `ignite ticket update <epic> --workers <n>` only when the person gave a
-   number. Add `--max-workers` only for an epic whose tickets conflict when too
-   many run at once.
+3. `ignite plan check <epic>` reports the longest chain, edges between tickets
+   with no files in common, missing file references, lanes whose tickets do
+   not depend on each other, and pins that name an unknown machine or
+   provider. Fix the reported issues with `ignite ticket update` and
+   `ignite ticket dep`, and run it again.
+4. A released epic gets the default allocation of 3 unless it already has an
+   allocation. Use `ignite ticket update <epic> --allocation <n>` only when the
+   person supplied a weight. Add `--max-workers` only for an epic whose
+   tickets conflict when too many run at once.
 5. Give a short summary: the epic, the ticket count, the milestones and what
    would stop it. Do not wait for approval.
 
@@ -140,10 +143,9 @@ never meant to touch.
 `/ignite sweep [older than N days] [dry]` triages the open tickets that nothing
 will work.
 
-- A ticket is stale when it is open and unclaimed, under an inactive epic (one
-  with `--workers 0`, or none, which epics filed before the default of 3 may
-  have) or under none. Age alone does not make it stale; `older
-  than N days` only narrows the list.
+- A ticket is stale when it is open and unclaimed, under an epic with zero or
+  no allocation or under no epic. `older than N days` narrows the list to
+  tickets of that age.
 - Give each one a verdict with one line of evidence:
   - **done**: cite the commit or the code that did it;
   - **obsolete**: cite what replaced it;
@@ -162,30 +164,5 @@ will work.
   ticket, comment what in it is now wrong, such as renamed files or steps
   already done. Ask the person about each `person` ticket now, one at a time,
   and label the unresolved ones `needs:person`. Then activate what is kept:
-  give its epic a `--workers` share, or file it under an active epic.
+  give its epic a positive `--allocation` or file it under an active epic.
 - `dry` shows the table and closes, comments on and activates nothing.
-
-## Staffing
-
-A machine runs each app's workers in one of two modes. In CLI mode the daemon
-runs every worker itself as a headless `claude -p` or `codex exec` process, one
-per turn, so nothing needs staffing: set `mode = "cli"` and `slots` under
-`[machine.<name>.pool.<app>]` in `ignite.toml` (with `[pool.cli.<app>]` naming
-the program), or run `ignite pool mode <app> cli|desktop|config`, which
-outranks the file until set back to `config`. Watch a worker with
-`ignite pool watch <ticket>` and steer it with `ignite tell` (`--now` ends the
-running turn). Desktop mode, the default, needs a dispatcher; for pool dispatch,
-a person opens it in a folder outside the repository. Tell the person:
-
-1. Run `ignite pool init` once per machine from the main checkout. It writes
-   `~/ignite` with the dispatcher's instructions and the main checkout's path,
-   so the workers start in the checkout. Run it again after Ignite's
-   instructions change.
-2. In Claude, open `~/ignite` on Haiku in a permission mode that never prompts
-   and send `/ignite pool <n>` to start `n` workers and the dispatch loop. In
-   Codex, open the folder locally and follow `In Codex` in its `AGENTS.md` for
-   bounded dispatch. `n` sets concurrent slots. Ask for the worker chats in
-   the batch explicitly and authorize any follow-up messages to them.
-
-`/ignite pool` sent in this project does none of this; give the person these
-steps instead.

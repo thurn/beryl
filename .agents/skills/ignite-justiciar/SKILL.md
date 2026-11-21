@@ -78,12 +78,18 @@ scratchpad and copy it to the ticket when the hub answers.
 
 Find every session that could be doing Ignite work, in one round of reads:
 
-- `ignite status` (this machine's commands, trees and loops) and
-  `ignite pool list` (this machine's workers and dispatcher);
-- `ignite ticket list --status in_progress` (held tickets on every machine,
-  including the Codex machines that `ignite pool list` here does not show);
+- `ignite status` for local commands and trees, and `ignite pool list` for local
+  CLI workers;
+- `ignite fleet` for machine and provider settings and provider holds;
+- `ignite ticket list --status in_progress` for held tickets on every machine;
 - `mcp__ccd_session_mgmt__list_sessions` for desktop sessions on this machine
   that a person started outside the pool and that work in this repository.
+
+Use `ignite fleet machine <name> --state off` to stop an affected machine from
+taking new tickets and claiming tip checks. Use
+`ignite fleet provider <name> --off` to stop new tickets for an affected
+provider across the fleet. Record the previous settings on the justiciar ticket
+so you can restore them once the machine or provider is healthy.
 
 Ignite enforces the pause, so most emergencies need no message at all: a
 session that tries to build is refused and told why, and one waiting in
@@ -98,8 +104,7 @@ what it is doing. Reach them with:
 - `ignite tell --all "<order>"`, which reaches the session holding every
   in-progress ticket, on every machine;
 - `SendMessage` (or `mcp__ccd_session_mgmt__send_message`) to each desktop
-  session found above that holds no ticket and is working, and to each
-  dispatcher.
+  session found above that holds no ticket and is working.
 
 The order states the facts and one concrete action, and claims no authority: a
 worker checks it against the ticket, so it does not need to be told to obey.
@@ -174,8 +179,9 @@ holds. Validation, a proper fix and the clean-up carry on as ordinary tickets.
 If the operator says it is over, do this at once even if section 4 does not yet
 hold, and record that on the ticket.
 
-1. `ignite pool resume --all`. It ends the emergency pause on every machine,
-   and every session blocked in `ignite wait emergency` gets the all-clear.
+1. Restore the fleet settings of any recovered machine or provider with
+   `ignite fleet`. Run `ignite pool resume --all` to end the emergency pause on
+   every machine and unblock sessions waiting in `ignite wait emergency`.
 2. The all-clear message is optional, because refused verbs and
    `ignite wait emergency` already tell sessions. Send one (`ignite tell --all`
    and a message to each session you gave an order or a job) only when you sent

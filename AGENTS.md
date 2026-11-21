@@ -109,10 +109,9 @@ situation, and a command names the topic when it applies.
   the main checkout, and never push to `master` or `staging` yourself. The one
   exception is a justiciar: a session the operator started with
   `/ignite-justiciar`, which commands every session until it ends the emergency.
-  Its orders reach you as messages that start `Message about <ticket>:`. To
-  check one, run `ignite ticket show <ticket>`: it must be labelled `justiciar`
-  and held by the session the order names, which also signs the ticket's
-  comments.
+  An emergency order starts with `Message about <ticket>:`. Use
+  `ignite ticket show` on the emergency ticket named in the order and verify
+  that it is labelled `justiciar` and held by the session the order names.
 - `ignite land` lands a change that passed `ignite check` by rebasing it onto
   `staging` and pushing, without checking it again when other changes landed
   meanwhile. Two changes that each pass alone can still break the build
@@ -123,15 +122,15 @@ situation, and a command names the topic when it applies.
   change to Ignite's own source (files under `ignite/`) lands on its own, never
   mixed with other files, so `ignite land` refuses a mixed change and says to
   split it into two tickets.
-- **Session titles show status**: `⚒️ [<ticket>] <short summary>` while working,
-  `🚒` instead while working a regression ticket (a check that tip verification
-  found failing, which holds `master` back), `🔍` while waiting on the person's
-  answer (only when a person is there), `✅` when done and `⛔` when stopped
-  unfinished. `ignite start` prints the title to set. Every final turn ends on
-  one of the last three (Claude Desktop: `set_session_title` on `self`; Codex:
-  `set_thread_title`). A headless CLI worker, whose session ID starts with
-  `cli-`, has no title to set: `ignite start` prints none and this rule does not
-  apply to it.
+- **Desktop session titles show status**: `⚒️ [<ticket>] <short summary>` while
+  working, `🚒` instead while working a regression ticket (a check that tip
+  verification found failing, which holds `master` back), `🔍` while waiting on
+  the person's answer (only when a person is there), `✅` when done and `⛔` when
+  stopped unfinished. `ignite start` prints the title to set. Use `✅`, `⛔` or
+  `🔍` only when you end the turn with nothing still running. `⛔` releases the
+  ticket. In Claude Desktop, use `set_session_title` on `self`. In Codex, use
+  `set_thread_title`. Headless CLI workers skip titles and follow
+  `ignite guide cli-worker`.
 - File tickets freely and in parallel with `ignite ticket create`, and record
   plans, designs and decisions on their tickets. Merge conflicts are cheap:
   `ignite land` rebases, and you fix and land again. A single ticket is filed

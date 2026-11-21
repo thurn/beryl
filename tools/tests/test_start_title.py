@@ -37,7 +37,8 @@ def test_ignite_start_names_the_title() -> None:
 def test_other_commands_and_refusals_are_silent() -> None:
     assert start_title.reminder(bash_event("git status", START_OUTPUT)) is None
     refused = (
-        "refused  TQ44S.9.31 is reserved for a worker the dispatcher is starting\n"
+        "refused  TQ44S.9.31 is reserved for a worker that is starting; "
+        "nobody else can claim it, so take another ticket\n"
     )
     assert start_title.reminder(bash_event("ignite start TQ44S.9.31", refused)) is None
 

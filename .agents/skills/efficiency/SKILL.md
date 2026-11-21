@@ -201,8 +201,8 @@ open finding is a new opportunity. Offer to file a ticket for it.
   regression ticket's cost when the ticket's commit broke a check on staging, and later `fix` commits
   to a card it added. That money is already another ticket's direct cost, so
   rework is shown beside direct cost and never added to it.
-- In roll-ups, "orchestration" is the cost of a dispatcher or (before the
-  switch) an Enact run's orchestrator session, charged to its epic but to no ticket, and "(no ticket)" is every
-  other session's time outside a ticket window. The lines sum to the total.
+- In roll-ups, "orchestration" is the historical cost of an Enact run's
+  orchestrator session, charged to its epic. "(no ticket)" covers other work
+  outside ticket windows. The lines sum to the total.
 - A window counts toward `--since` when it starts in the range and a ticket when
   it closed in it; a closed ticket's own figures include all its windows.
