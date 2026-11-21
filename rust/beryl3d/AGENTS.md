@@ -274,11 +274,10 @@ project, and selects the main lanes.
   Cards fan and cards shown over the flat layer. `lighting.json` holds the light
   and shadow darkness both tiers share, the Baseline contact shadows, and the
   Enhanced lights, shadow map and bloom, which the hosts pass to
-  `beryl_render::Renderer` when they make it.
-  `light.json` holds the arrows, lines, marks and the glow of the shapes of light,
-  and `own.json` the moon, coin, attacker chevron and blocker crescent. The host
-  draws atlas page 0 from both (`Assets::sync_light`) and draws it again when
-  either changes.
+  `beryl_render::Renderer` when they make it. `light.json` holds the arrows,
+  lines, marks and the glow of the shapes of light, and `own.json` the moon,
+  coin, attacker chevron and blocker crescent. The host draws atlas page 0 from
+  both (`Assets::sync_light`) and draws it again when either changes.
 
 - `data/beryl3d/effects/*.json` defines drawing layers for runtime effects. The
   app embeds them. Tools read them from the checkout or `BERYL3D_DATA`. The
