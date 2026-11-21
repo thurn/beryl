@@ -9,27 +9,11 @@
 
 use crate::prelude::*;
 
-/// "You may have this creature enter as a copy of any creature on the battlefield" is a
-/// replacement effect that has it become a copy as it enters ([CR 707.5]): "It doesn't enter
-/// the battlefield, and then become a copy of that permanent. ... Also, any
-/// enters-the-battlefield triggered abilities of the copy will have a chance to trigger." The
-/// creature is chosen, not targeted, so hexproof does not stop it. Declining, it enters as a
-/// 0/0 and dies.
+/// Its Illusion type and sacrifice ability are copiable ([CR 707.9a]). The definition
+/// grants the ability through the copy exception so an Image that enters as itself does
+/// not have it.
 ///
-/// The exception is a creature type and an ability, both part of the copy's copiable values
-/// ([CR 707.9a]): "This ability becomes part of the copiable values for the copy, along with
-/// any other abilities that were copied." So a copy of the Image is an Illusion with the
-/// ability too. The ability is listed as one the face gives, which only the copy has: the
-/// Image that enters as itself has no such ability.
-///
-/// "When this creature becomes the target of a spell or ability" triggers as the spell is cast
-/// or the ability is put on the stack with it among its targets ([CR 603.2e]): "Some trigger
-/// events use the word 'becomes' ... These trigger only at the time the named event happens".
-/// "Sacrifice it" is the creature the trigger was about, the copy itself.
-///
-/// [CR 707.5]: https://yawgatog.com/resources/magic-rules/#R7075
 /// [CR 707.9a]: https://yawgatog.com/resources/magic-rules/#R7079a
-/// [CR 603.2e]: https://yawgatog.com/resources/magic-rules/#R6032e
 pub static CARD: CardDef = Printed::PhantasmalImage
     .abilities(&[Ability::replacing(&Replacement::enter_as_copy(
         &Filter::Types(Types::CREATURE),

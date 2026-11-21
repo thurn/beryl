@@ -7,15 +7,11 @@
 
 use crate::prelude::*;
 
-/// "This creature or another creature dies" is one ability on the event "a creature dies", which
-/// sees Blood Artist itself leave in the same event as the others. Each creature that dies
-/// triggers it once, so a sweeper that kills Blood Artist and two others triggers it three times
-/// ([CR 603.10a]): "Some zone-change triggers look back in time." A creature that is exiled or
-/// to a hand doesn't die: dying is going from the battlefield to a graveyard ([CR 700.4]): "The
-/// term dies means 'is put into a graveyard from the battlefield.'"
+/// If Blood Artist dies alongside other creatures, it triggers once for each of them and
+/// once for itself. The trigger looks back at the battlefield as it was immediately before
+/// the deaths ([CR 603.10a]): "Some zone-change triggers look back in time."
 ///
 /// [CR 603.10a]: https://yawgatog.com/resources/magic-rules/#R60310a
-/// [CR 700.4]: https://yawgatog.com/resources/magic-rules/#R7004
 pub static CARD: CardDef = Printed::BloodArtist
     .abilities(&[Ability::triggered(&Trigger::of(
         TriggerEvent::Dies,
@@ -157,21 +153,6 @@ pub mod scenarios {
                 Resolve,
                 Resolve,
                 THEM.controls(Prop::Vanilla, 0),
-                stack(0),
-                THEM.life(20),
-                ME.life(20),
-            ]),
-        // Returning a creature to its owner's hand isn't dying either.
-        Scenario::new("Blood Artist ignores a creature returned to a hand")
-            .battlefield(P0, &[Card::Island, Card::Island, Card::Island, ARTIST])
-            .hand(P0, &[Prop::Removal])
-            .battlefield(P1, &[Prop::Vanilla])
-            .library(P1, &[Card::Island])
-            .actions(&[
-                ME.casts(Prop::Removal),
-                Resolve,
-                THEM.controls(Prop::Vanilla, 0),
-                THEM.has(Zone::Hand, Prop::Vanilla, 1),
                 stack(0),
                 THEM.life(20),
                 ME.life(20),

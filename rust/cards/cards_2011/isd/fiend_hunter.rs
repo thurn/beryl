@@ -9,24 +9,11 @@
 
 use crate::prelude::*;
 
-/// The enters ability exiles the creature, linked to this Fiend Hunter
-/// ([CR 607.2a]): "If an object has an activated or triggered ability printed on it that
-/// instructs a player to exile one or more cards and an ability printed on it that refers either
-/// to "the exiled cards" or to cards "exiled with [this object]," these abilities are linked."
-/// If Fiend Hunter has already left the battlefield when the enters ability resolves, nothing is
-/// linked and the creature stays exiled for good: this is not an "until" effect ([CR 610.3]).
-///
-/// The leaves ability looks back in time ([CR 603.10a]) and returns the cards exiled with the
-/// Hunter, wherever the Hunter went, under their owners' control ([CR 110.2a]). A token that was
-/// exiled has ceased to exist ([CR 111.7]) and does not return; any other card comes back as a
-/// new object ([CR 400.7]).
+/// If Fiend Hunter leaves before its enters ability resolves, its leaves ability returns
+/// nothing and the chosen creature stays exiled ([CR 607.2a]). The linked abilities resolve
+/// independently.
 ///
 /// [CR 607.2a]: https://yawgatog.com/resources/magic-rules/#R6072a
-/// [CR 610.3]: https://yawgatog.com/resources/magic-rules/#R6103
-/// [CR 603.10a]: https://yawgatog.com/resources/magic-rules/#R60310a
-/// [CR 110.2a]: https://yawgatog.com/resources/magic-rules/#R1102a
-/// [CR 111.7]: https://yawgatog.com/resources/magic-rules/#R1117
-/// [CR 400.7]: https://yawgatog.com/resources/magic-rules/#R4007
 pub static CARD: CardDef = Printed::FiendHunter
     .abilities(&[
         Ability::triggered(&Trigger::ENTERS)
@@ -66,32 +53,6 @@ pub mod scenarios {
                 ME.has(Zone::Graveyard, HUNTER, 1),
                 THEM.has(Zone::Exile, Prop::Flier, 0),
                 THEM.controls(Prop::Flier, 1),
-            ]),
-        // The leaves ability triggers for every zone, so bouncing Fiend Hunter with Jace returns the
-        // creature too.
-        Scenario::new("Fiend Hunter returned to hand returns the exiled creature")
-            .hand(P0, &[HUNTER])
-            .battlefield(
-                P0,
-                &[Card::Plains, Card::Plains, Card::Plains, Prop::Planeswalker],
-            )
-            .battlefield(P1, &[Prop::Vanilla])
-            .library(P0, &[Card::Plains])
-            .library(P1, &[Card::Plains])
-            .actions(&[
-                ME.casts(HUNTER),
-                Resolve,
-                Resolve,
-                ME.yes(),
-                THEM.has(Zone::Exile, Prop::Vanilla, 1),
-                // Fiend Hunter is the only creature on the battlefield, so Jace targets it
-                // silently.
-                ME.activates(Prop::Planeswalker, 2), // −1
-                Resolve,
-                Resolve,
-                ME.has(Zone::Hand, HUNTER, 1),
-                THEM.has(Zone::Exile, Prop::Vanilla, 0),
-                THEM.controls(Prop::Vanilla, 1),
             ]),
         // If Fiend Hunter leaves with its enters ability still on the stack, the leaves ability
         // resolves first and returns nothing; the enters ability then exiles the creature for

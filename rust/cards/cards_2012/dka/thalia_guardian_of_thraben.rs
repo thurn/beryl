@@ -8,17 +8,9 @@
 
 use crate::prelude::*;
 
-/// First strike ([CR 702.7b]): "If at least one attacking or blocking creature has first
-/// strike ... as the combat damage step begins, the only creatures that assign combat damage
-/// in that step are those with first strike or double strike."
+/// The increase also applies to alternative costs, including flashback ([CR 601.2f]).
+/// It leaves the spell's mana value unchanged.
 ///
-/// "Noncreature spells cost {1} more to cast." A rule change for every player, their own
-/// spells included, that increases a spell's total cost ([CR 601.2f]): "The total cost is the
-/// mana cost or alternative cost (as determined in rule 601.2b), plus all additional costs and
-/// cost increases, and minus all cost reductions." It increases an alternative cost too, such
-/// as flashback, and it leaves the spell's mana value as it was.
-///
-/// [CR 702.7b]: https://yawgatog.com/resources/magic-rules/#R7027b
 /// [CR 601.2f]: https://yawgatog.com/resources/magic-rules/#R6012f
 pub static CARD: CardDef = Printed::ThaliaGuardianOfThraben
     .keywords(Keywords::FIRST_STRIKE)

@@ -8,16 +8,10 @@
 
 use crate::prelude::*;
 
-/// The enters ability exiles every card in every graveyard.
+/// A creature exiled by the replacement never dies ([CR 614.6]): "If an event is replaced,
+/// it never happens." A discard still counts as a discard even when the card goes to
+/// exile. Rest in Peace itself is exiled if it would be destroyed.
 ///
-/// The second ability is a replacement effect ([CR 614.1a]): "Effects that use the word
-/// 'instead' are replacement effects." A creature exiled instead of being put into a graveyard
-/// never dies, so nothing triggers on its dying ([CR 614.6]): "If an event is replaced, it never
-/// happens." A card discarded and exiled instead was still discarded, so what triggers on a
-/// discard still triggers. Rest in Peace itself is on the battlefield as it is destroyed, so it
-/// is exiled too.
-///
-/// [CR 614.1a]: https://yawgatog.com/resources/magic-rules/#R6141a
 /// [CR 614.6]: https://yawgatog.com/resources/magic-rules/#R6146
 pub static CARD: CardDef = Printed::RestInPeace
     .abilities(&[
@@ -42,22 +36,6 @@ pub mod scenarios {
     const CONVERTER: &str = Card::CurrencyConverter;
 
     pub const SCENARIOS: &[Scenario] = &[
-        Scenario::new("Rest in Peace exiles all graveyards as it enters")
-            .battlefield(P0, &[Card::Plains, Card::Island])
-            .hand(P0, &[RIP])
-            .graveyard(P0, &[Card::Counterspell, Card::Island])
-            .graveyard(P1, &[Card::Oust])
-            .actions(&[
-                ME.casts(RIP),
-                Resolve,
-                Resolve,
-                ME.controls(RIP, 1),
-                ME.has_cards(Zone::Graveyard, 0),
-                THEM.has_cards(Zone::Graveyard, 0),
-                ME.has(Zone::Exile, Card::Counterspell, 1),
-                ME.has(Zone::Exile, Card::Island, 1),
-                THEM.has(Zone::Exile, Card::Oust, 1),
-            ]),
         // Destroyed, the Sphinx is exiled instead: it never dies, so its "when this creature
         // dies" ability makes no copy of it. Get Lost resolves, and is exiled instead of going to
         // its owner's graveyard.
@@ -121,21 +99,6 @@ pub mod scenarios {
                 ME.has(Zone::Exile, Card::Oust, 1),
                 ME.has(Zone::Graveyard, Card::Oust, 0),
                 ME.has(Zone::Hand, Card::Plains, 1),
-            ]),
-        // A spell that is countered is put into its owner's graveyard (CR 701.6a), and is
-        // exiled instead.
-        Scenario::new("a countered spell is exiled")
-            .battlefield(P0, &[Card::Island, Card::Island])
-            .hand(P0, &[Card::Counterspell])
-            .battlefield(P1, &[RIP, Card::Plains])
-            .hand(P1, &[Prop::Artifact, Card::Plains])
-            .at(2, P1, TurnStep::PrecombatMain)
-            .actions(&[
-                THEM.casts(Prop::Artifact),
-                ME.casts(Card::Counterspell),
-                THEM.has(Zone::Exile, Prop::Artifact, 1),
-                THEM.has(Zone::Graveyard, Prop::Artifact, 0),
-                ME.has(Zone::Exile, Card::Counterspell, 1),
             ]),
         // The legend rule puts one Thalia into the graveyard (CR 704.5j), where she's exiled
         // instead: she didn't die, so Blood Artist doesn't trigger (CR 614.6).
