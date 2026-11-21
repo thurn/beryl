@@ -17,7 +17,7 @@ use game_table::faces::FaceList;
 use kit_frame::frame::Role;
 use kit_ui::input::Size;
 
-use super::faces::{Scratch, scan};
+use crate::test_scans::{Scratch, scan};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum Screen {

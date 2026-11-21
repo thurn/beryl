@@ -23,3 +23,7 @@ kit_probe.workspace = true
 [dev-dependencies]
 # Reads the tuning fixtures and records their paths for Ignite.
 beryl_test_files = { path = "../../../crates/beryl_test_files" }
+# Builds synthetic protocol views for the table tests.
+beryl_protocol = { workspace = true, features = ["testing"] }
+# Supplies face records for those views without linking the engine or cards.
+beryl_card_records = { path = "../../../crates/beryl_card_records" }

@@ -1847,6 +1847,7 @@ dependencies = [
 name = "game_table"
 version = "0.1.0"
 dependencies = [
+ "beryl_card_records",
  "beryl_protocol",
  "beryl_test_files",
  "glam",

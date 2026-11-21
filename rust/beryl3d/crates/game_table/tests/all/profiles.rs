@@ -1,9 +1,11 @@
 //! The shipped profiles select a layout and fit their named slots to the window.
 
 use game_table::profiles::Profile;
-use game_table::table::{DESKTOP, Window};
+use game_table::table::Window;
 use kit_base::geometry::Size;
 use kit_scene::{SizeClass, Slot};
+
+use crate::REGULAR_LAYOUT;
 
 #[test]
 fn the_shorter_side_selects_the_profile_in_logical_points() {
@@ -25,7 +27,7 @@ fn the_shorter_side_selects_the_profile_in_logical_points() {
     }
     assert_eq!(
         data.profiles.for_size(Window::default().size).table.camera,
-        DESKTOP.camera
+        REGULAR_LAYOUT.camera
     );
 }
 

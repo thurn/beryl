@@ -22,8 +22,6 @@ use kit_frame::frame::{Frame, FrameBuilder, Material, Place, Role, StateBits};
 use kit_probe::agent::checks::text_fits;
 use kit_probe::agent::tree::{TreeOptions, tree};
 use kit_probe::agent::{Context, Layout, Rule};
-use kit_text::text::Text;
-use kit_text::text::fonts::Font;
 use kit_ui::element::{Action, floats, row, text};
 use kit_ui::input::{
     AssetReady, Button, GlyphCell, Insets, Modifiers, Pointer, PointerKind, PointerPhase, Size,
@@ -495,29 +493,6 @@ fn two_clients_given_the_same_inputs_return_equal_frames() {
         client.frame(5).clone()
     };
     assert_eq!(run(), run());
-}
-
-#[test]
-fn a_variable_font_is_drawn_at_any_weight() {
-    let mut text = Text::new();
-    let regular = kit_text::text::TypeStyle {
-        font: Font::OpenSans,
-        weight: 400,
-        italic: false,
-        size: 20.0,
-        line_height: 1.2,
-        letter_spacing: 0.0,
-    };
-    let bold = kit_text::text::TypeStyle {
-        weight: 700,
-        ..regular
-    };
-    let (regular_width, _) = text.measure("Counterspell", regular, &[], None);
-    let (bold_width, _) = text.measure("Counterspell", bold, &[], None);
-    assert!(
-        bold_width > regular_width + 1.0,
-        "{bold_width} vs {regular_width}"
-    );
 }
 
 #[test]

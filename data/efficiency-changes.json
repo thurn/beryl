@@ -729,5 +729,10 @@
     "label": "Beryl 3D's text and picture tools read verb tuning at startup, so an edit to a flight arc or another verb value can be previewed without recompiling the client.",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Standalone Beryl 3D tests run in the crates they exercise, reducing the app and host suites that need rebuilding for lower-level test edits.",
+    "metric": "bead.core-minutes",
+    "expect": "down"
   }
 ]

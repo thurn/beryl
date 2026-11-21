@@ -86,20 +86,6 @@ fn blank(frame: &Frame) -> Vec<String> {
 }
 
 #[test]
-fn the_card_back_is_the_first_face_and_a_picture_is_listed_once() {
-    let (_, records) = sample();
-    let list = FaceList::from_records(&records);
-    assert_eq!(list.get(CARD_BACK).unwrap().image, records.card_back);
-    let island = list.find("Island").expect("Island has a face");
-    assert_ne!(island, CARD_BACK);
-    let images: Vec<&str> = list.faces().iter().map(|f| f.image.as_str()).collect();
-    let mut distinct = images.clone();
-    distinct.sort_unstable();
-    distinct.dedup();
-    assert_eq!(images.len(), distinct.len(), "each picture is listed once");
-}
-
-#[test]
 fn a_face_that_has_not_arrived_leaves_its_cards_on_layer_zero_and_blank() {
     let mut client = client(|_| Vec::new());
     let frame = client.frame(0);

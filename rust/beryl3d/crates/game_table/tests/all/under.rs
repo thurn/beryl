@@ -4,9 +4,12 @@
 
 use beryl_protocol::protocol::{CardType, ObjectId, PlayerView, RowName, Side, ZoneName};
 use beryl_protocol::testing::ViewBuilder;
-use game_table::table::{Camera, DESKTOP, Placement, Scroll, Window, place};
+use game_table::profiles::Profile;
+use game_table::table::{Camera, Placement, Scroll, Window, place};
 use kit_frame::frame::Place;
 use kit_ui::input::{Insets, Size};
+
+use crate::REGULAR_LAYOUT;
 
 fn placed(view: &PlayerView) -> Placement {
     let window = Window {
@@ -18,14 +21,16 @@ fn placed(view: &PlayerView) -> Placement {
         scale: 2.0,
         safe_area: Insets::default(),
     };
-    let camera = Camera::fit(DESKTOP.camera, window);
+    let data = crate::test_data::data();
+    let profile = Profile::for_window(&data.profiles, window);
+    let camera = Camera::fit(profile.data().table.camera, window);
     place(
         view,
         &[],
-        &DESKTOP,
+        &REGULAR_LAYOUT,
         &camera,
         &Scroll::default(),
-        &crate::test_data::data().verbs.lift,
+        &data.verbs.lift,
     )
 }
 

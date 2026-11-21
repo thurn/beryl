@@ -1,36 +1,51 @@
 //! The asset workers against scan caches made here: no test reads or assumes the user's own
-//! downloaded scans, and downloads go to an address that refuses them.
+//! downloaded scans. Cache misses use loopback origins.
 
 use std::collections::BTreeMap;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 use std::sync::mpsc::Receiver;
 use std::time::Duration;
 
 use beryl_art::{ArtCache, Origins};
 use beryl_assets::{
-    CacheKey, Config, ENCODER_VERSION, Format, Full, Layer, Prepared, Preparer, Source, Upload,
-    faces_built_on_this_thread, frames_drawn_on_this_thread,
+    CacheKey, Config, ENCODER_VERSION, FaceText, Format, Full, Layer, MatchFace, MatchFaces,
+    Prepared, Preparer, Source, Upload, faces_built_on_this_thread, frames_drawn_on_this_thread,
 };
-use beryl_host::match_faces;
 use kit_ui::input::{AssetReady, FaceId, FaceSize};
 
-use super::decklist_faces;
+use crate::test_scans::{Scratch, scan};
 
-/// The main deck of the WU Control sample list, the Milestone 1 mirror, as `(count, name)`
-/// lines: read from the file rather than from `beryl_cards`, so that these tests link no cards.
-fn wu_control() -> Vec<(u8, &'static str)> {
-    include_str!(
-        "../../../../../../../docs/sample-decks/2025-11-18-17lands-cb8d5d5f-wu-control.txt"
-    )
-    .lines()
-    .take_while(|line| !line.trim().is_empty())
-    .map(|line| {
-        let (count, name) = line.split_once(' ').expect("a line is a count and a name");
-        (count.parse().expect("a count is a number"), name.trim())
-    })
-    .collect()
+/// A card back followed by distinct front faces, in face ID order.
+fn test_faces(cards: u16) -> MatchFaces {
+    let face = |image: &str, name: String| {
+        MatchFace::from_image(
+            image,
+            name,
+            vec!["U".to_owned()],
+            FaceText {
+                type_line: "Instant".to_owned(),
+                ..FaceText::default()
+            },
+            None,
+        )
+    };
+    let back = face(
+        "https://backs.scryfall.io/large/0/a/0a000000-0000-0000-0000-000000000000.jpg",
+        "Card back".to_owned(),
+    );
+    let fronts = (1..=cards).map(|index| {
+        face(
+            &format!(
+                "https://cards.scryfall.io/large/front/a/b/ab000000-0000-0000-0000-{index:012x}.jpg"
+            ),
+            format!("Example {index}"),
+        )
+    });
+    MatchFaces {
+        faces: std::iter::once(back).chain(fronts).collect(),
+    }
 }
 
 /// Nothing listens here, so a download fails at once.
@@ -42,24 +57,6 @@ const NOWHERE: Origins<'static> = Origins {
 /// Only catches a hang: a face takes milliseconds.
 const HANG: Duration = Duration::from_secs(120);
 
-/// A directory of its own for one test, emptied first and removed when dropped.
-pub(super) struct Scratch(pub(super) PathBuf);
-
-impl Scratch {
-    pub(super) fn new(name: &str) -> Self {
-        let dir = std::env::temp_dir().join(format!("beryl_assets-{name}-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
-        Self(dir)
-    }
-}
-
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.0);
-    }
-}
-
 fn preparer(dir: &Path) -> Preparer {
     Preparer::new(Config {
         art: Arc::new(ArtCache::new(dir.join("art"), NOWHERE)),
@@ -70,20 +67,9 @@ fn preparer(dir: &Path) -> Preparer {
     })
 }
 
-/// A plain 672 by 936 JPEG, the size of Scryfall's large scans.
-pub(super) fn scan() -> Vec<u8> {
-    let picture = image::RgbImage::from_pixel(672, 936, image::Rgb([40, 90, 160]));
-    let mut bytes = Vec::new();
-    image::codecs::jpeg::JpegEncoder::new(&mut bytes)
-        .encode_image(&picture)
-        .unwrap();
-    bytes
-}
-
-/// Puts a scan in `dir`'s scan cache for every face of the WU Control list.
-fn cache_every_scan(dir: &Path) {
+/// Puts a scan in `dir`'s scan cache for every face of the match.
+fn cache_every_scan(dir: &Path, faces: &MatchFaces) {
     let bytes = scan();
-    let faces = match_faces(&decklist_faces(&[&wu_control()]));
     for face in &faces.faces {
         let file = dir.join("art").join(&face.scan[1..]);
         fs::create_dir_all(file.parent().unwrap()).unwrap();
@@ -124,12 +110,12 @@ fn the_cache_key_changes_with_the_encoder_version() {
 #[test]
 fn a_second_match_reads_every_face_from_the_cache_on_worker_threads() {
     let scratch = Scratch::new("second");
-    cache_every_scan(&scratch.0);
-    let faces = decklist_faces(&[&wu_control(), &wu_control()]);
+    let faces = test_faces(21);
+    cache_every_scan(&scratch.0, &faces);
     let formats = [Format::Etc2Rgba8];
 
     let mut first = preparer(&scratch.0);
-    let results = first.prepare_match(match_faces(&faces), &formats);
+    let results = first.prepare_match(faces.clone(), &formats);
     let count = first.faces().unwrap().faces.len();
     assert!(count > 20, "only {count} faces listed");
     let prepared = receive(&results, count);
@@ -139,7 +125,7 @@ fn a_second_match_reads_every_face_from_the_cache_on_worker_threads() {
     // The scans go: a face read from anywhere but the compressed cache would be a drawn frame.
     fs::remove_dir_all(scratch.0.join("art")).unwrap();
     let mut second = preparer(&scratch.0);
-    let results = second.prepare_match(match_faces(&faces), &formats);
+    let results = second.prepare_match(faces, &formats);
     let again = receive(&results, count);
     assert!(again.iter().all(|p| face_layer(p).1 == Source::Cache));
 
@@ -168,10 +154,7 @@ fn a_second_match_reads_every_face_from_the_cache_on_worker_threads() {
 fn a_face_with_no_scan_is_drawn_and_is_not_cached() {
     let scratch = Scratch::new("drawn");
     let mut assets = preparer(&scratch.0);
-    let results = assets.prepare_match(
-        match_faces(&decklist_faces(&[&wu_control()])),
-        &[Format::Etc2Rgba8],
-    );
+    let results = assets.prepare_match(test_faces(2), &[Format::Etc2Rgba8]);
     let count = assets.faces().unwrap().faces.len();
     let prepared = receive(&results, count);
     for prepared in &prepared {
@@ -225,10 +208,7 @@ fn a_drawn_face_is_sent_again_from_its_scan_once_the_scan_downloads() {
         wake: Arc::new(|| {}),
         start: || {},
     });
-    let results = assets.prepare_match(
-        match_faces(&decklist_faces(&[&[(1, "Island")]])),
-        &[Format::Rgba8],
-    );
+    let results = assets.prepare_match(test_faces(1), &[Format::Rgba8]);
     let count = assets.faces().unwrap().faces.len();
     // Every face is drawn first, since no scan is cached, and then sent again, under the same
     // face and layer, once the download queue has fetched its scan. The renderer holds such a
@@ -251,10 +231,7 @@ fn a_drawn_face_is_sent_again_from_its_scan_once_the_scan_downloads() {
 fn the_seventeenth_full_size_face_drops_the_least_recently_used() {
     let scratch = Scratch::new("full");
     let mut assets = preparer(&scratch.0);
-    let results = assets.prepare_match(
-        match_faces(&decklist_faces(&[&wu_control()])),
-        &[Format::Etc2Rgba8],
-    );
+    let results = assets.prepare_match(test_faces(17), &[Format::Etc2Rgba8]);
     let board = assets.faces().unwrap().faces.len();
     assert!(board > 17);
     for face in 1..=16 {

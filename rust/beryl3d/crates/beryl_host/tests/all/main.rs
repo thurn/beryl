@@ -4,6 +4,8 @@
 
 #[path = "../../../../test_data.rs"]
 mod test_data;
+#[path = "../../../../test_scans.rs"]
+mod test_scans;
 
 mod events;
 mod faces;

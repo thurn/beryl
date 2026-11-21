@@ -3,10 +3,10 @@
 //! `just b3d match` use to separate one element's pixels from what lies behind it.
 
 use glam::{Affine3A, Mat4, Vec2, Vec3};
+use kit_base::atlas::Tier;
 use kit_frame::frame::{
     Band, Draw, ElementId, Frame, FrameBuilder, NameRef, Place, Resolved, Role, Sprite, StateBits,
 };
-use kit_ui::input::Tier;
 
 /// A flat-layer element whose parent is `parent`, at no particular place.
 fn element(id: u32, parent: u32) -> Resolved {
