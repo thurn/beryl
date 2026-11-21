@@ -171,6 +171,7 @@ pub mod decks {
             "costs",
             &[
                 names::TRINISPHERE,
+                names::SHRAPNEL_BLAST,
                 names::THALIA_GUARDIAN_OF_THRABEN,
                 names::FORCE_OF_WILL,
                 names::GURMAG_ANGLER,

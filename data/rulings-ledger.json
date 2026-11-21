@@ -1219,6 +1219,22 @@
       ]
     }
   ],
+  "Shrapnel Blast": [
+    {
+      "published_at": "2014-07-18",
+      "hash": "84ef5226eeff",
+      "scenario": [
+        "Shrapnel Blast sacrifices an artifact before the opponent can respond"
+      ]
+    },
+    {
+      "published_at": "2014-07-18",
+      "hash": "7efaa2e330f5",
+      "scenario": [
+        "Shrapnel Blast sacrifices an artifact before the opponent can respond"
+      ]
+    }
+  ],
   "Stifle": [
     {
       "published_at": "2004-10-04",
@@ -1567,7 +1583,9 @@
     {
       "published_at": "2020-08-07",
       "hash": "943aceb7f9eb",
-      "untestable": "Casting Shrapnel Blast by sacrificing Trinisphere is rejected at game setup because spells cannot yet sacrifice a permanent as a cost. See by-ptc7.2.19."
+      "scenario": [
+        "Trinisphere still raises the cost when sacrificed to cast Shrapnel Blast"
+      ]
     }
   ],
   "Underworld Breach": [

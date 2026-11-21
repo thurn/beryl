@@ -51,6 +51,23 @@ pub mod scenarios {
                 Resolve,
                 THEM.life(17),
             ]),
+        // The {2}{R} cost is set while Trinisphere is untapped on the battlefield.
+        Scenario::new("Trinisphere still raises the cost when sacrificed to cast Shrapnel Blast")
+            .interaction(&[Card::ShrapnelBlast])
+            .battlefield(
+                P0,
+                &[TRINISPHERE, Card::Mountain, Card::Mountain, Card::Mountain],
+            )
+            .hand(P0, &[Card::ShrapnelBlast])
+            .actions(&[
+                ME.casts(Card::ShrapnelBlast),
+                ME.targets_player(THEM),
+                ME.tapped(Card::Mountain, 3),
+                ME.has(Zone::Graveyard, TRINISPHERE, 1),
+                stack(1),
+                Resolve,
+                THEM.life(15),
+            ]),
         // Tapped, it changes nothing: the Bolt takes one Mountain. The opponent's Trinisphere,
         // so that P0's untap step can't untap it in an oracle that plays one.
         Scenario::new("Trinisphere: tapped, it changes no cost")
