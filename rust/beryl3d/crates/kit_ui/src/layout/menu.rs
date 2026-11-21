@@ -11,7 +11,6 @@ use glam::Vec2;
 use super::{Layer, Node};
 use crate::element::{Action, Anchor, Display};
 use crate::input::{Key, KeyCode, KeyPhase, Rect, Size};
-use kit_base::data::space::flat::MENU_EDGE;
 use kit_frame::frame::{ElementId, Role};
 
 /// What a key did to the list or menu that has the focus (`Layer::navigate`).
@@ -265,39 +264,45 @@ impl Layer {
 /// Places every menu and submenu under `node`, whose tree's top left corner stands at `tree`
 /// on a window of `window`'s size. `panel` is the box on the window of the menu `node` is in,
 /// if any, beside which a submenu stands. Runs after each layout of the screen.
-pub(super) fn place_menus(node: &mut Node, tree: Vec2, panel: Option<Rect>, window: Size) {
+pub(super) fn place_menus(
+    node: &mut Node,
+    tree: Vec2,
+    panel: Option<Rect>,
+    window: Size,
+    edge: f32,
+) {
     // A submenu stands level with its row, which is `node`.
     let row_top = tree.y + node.rect.y;
     for child in &mut node.children {
         let size = Vec2::new(child.rect.width, child.rect.height);
         let corner = match child.element.anchor {
             Some(Anchor::Menu(at)) => Some(Vec2::new(
-                open_at(at.x, size.x, window.width),
-                open_at(at.y, size.y, window.height),
+                open_at(at.x, size.x, window.width, edge),
+                open_at(at.y, size.y, window.height, edge),
             )),
             Some(Anchor::Submenu) => panel.map(|panel| {
                 let right = panel.x + panel.width;
-                let x = if right + size.x + MENU_EDGE <= window.width {
+                let x = if right + size.x + edge <= window.width {
                     right
                 } else {
                     panel.x - size.x
                 };
                 Vec2::new(
-                    fit(x, size.x, window.width),
-                    fit(row_top, size.y, window.height),
+                    fit(x, size.x, window.width, edge),
+                    fit(row_top, size.y, window.height, edge),
                 )
             }),
             Some(
                 Anchor::Point(..) | Anchor::Object(..) | Anchor::Above(..) | Anchor::Below(..),
             ) => {
                 if let Some(corner) = child.corner() {
-                    place_menus(child, corner, panel, window);
+                    place_menus(child, corner, panel, window, edge);
                 }
                 continue;
             }
             Some(Anchor::Tip) => continue,
             None => {
-                place_menus(child, tree, panel, window);
+                place_menus(child, tree, panel, window, edge);
                 continue;
             }
         };
@@ -309,7 +314,7 @@ pub(super) fn place_menus(node: &mut Node, tree: Vec2, panel: Option<Rect>, wind
                 width: size.x,
                 height: size.y,
             };
-            place_menus(child, corner, Some(rect), window);
+            place_menus(child, corner, Some(rect), window, edge);
         }
     }
 }
@@ -317,19 +322,19 @@ pub(super) fn place_menus(node: &mut Node, tree: Vec2, panel: Option<Rect>, wind
 /// Where a menu `size` long on an axis starts when it opens at `start` on a window `limit`
 /// long, as `place` in `Menu.tsx` puts it: at `start`, or ending there if it would pass the
 /// window's edge, then kept inside the window.
-fn open_at(start: f32, size: f32, limit: f32) -> f32 {
-    let start = if start + size + MENU_EDGE > limit {
+fn open_at(start: f32, size: f32, limit: f32, edge: f32) -> f32 {
+    let start = if start + size + edge > limit {
         start - size
     } else {
         start
     };
-    fit(start, size, limit)
+    fit(start, size, limit, edge)
 }
 
-/// `start` moved as little as keeps a box `size` long `MENU_EDGE` points inside a window
+/// `start` moved as little as keeps a box `size` long the configured margin inside a window
 /// `limit` long, or against its start where it is too long for that (`fit` in `Menu.tsx`).
-pub(super) fn fit(start: f32, size: f32, limit: f32) -> f32 {
-    MENU_EDGE.max(start.min(limit - size - MENU_EDGE))
+pub(super) fn fit(start: f32, size: f32, limit: f32, edge: f32) -> f32 {
+    edge.max(start.min(limit - size - edge))
 }
 
 /// The nodes from `node` down to the node `id`, pushed onto `path`; `false`, with `path` as it

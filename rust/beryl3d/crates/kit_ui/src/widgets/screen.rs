@@ -3,59 +3,55 @@
 use glam::Vec2;
 
 use crate::element::{
-    Align, Anchor, Element, Overflow, Presence, Property, TextAlign, Timing, Transition, column,
-    row, text,
+    Align, Anchor, Element, Overflow, Presence, TextAlign, Timing, column, row, text,
 };
 use crate::input::{Rect, Size};
 use kit_base::data::profiles::ScreenMetrics;
-use kit_base::data::space::flat::transition::MS;
 use kit_base::geometry::Window;
 use kit_base::pose::Curve;
 use kit_base::tokens::{color, size, space, type_style};
 
-/// How the game dock and other screen controls have entered and moved in the flat layer.
-pub const SCREEN_TIMING: Timing = Timing::new(MS, 0.0, Curve::EASE_OUT);
-
-pub const SCREEN_FADE: Presence = Presence {
-    grouped: true,
-    ..Presence::fade(SCREEN_TIMING)
-};
-
-/// A fixed overlay, such as the folded log, appears at full opacity with its contents.
-pub const SCREEN_INSTANT: Presence = Presence {
-    grouped: true,
-    ..Presence::new(SCREEN_TIMING)
-};
-
-const SCREEN_OPACITY: &[Transition] = &[Transition::new(Property::Opacity, SCREEN_TIMING)];
-
-/// Declares the animation used by the existing screen and sheet trees. A panel and its
-/// direct children enter together, fixed overlays appear at once, and a transparent holder
-/// leaves each panel inside it to enter on its own.
+/// The timing used for the game dock and other screen controls.
 #[must_use]
-pub fn with_transitions(mut screen: Element) -> Element {
-    fn declare(element: &mut Element, in_fixed_overlay: bool) {
+pub const fn screen_timing(duration_ms: f32) -> Timing {
+    Timing::new(duration_ms, 0.0, Curve::EASE_OUT)
+}
+
+/// Declares the animation on a screen or sheet. A panel and its direct children
+/// enter together. Fixed overlays appear at once, and transparent holders leave
+/// each panel inside them to enter on its own.
+#[must_use]
+pub fn with_transitions(mut screen: Element, duration_ms: f32) -> Element {
+    fn declare(element: &mut Element, in_fixed_overlay: bool, fade: Presence, instant: Presence) {
         let fixed = matches!(element.anchor, Some(Anchor::Point(..)));
-        if element.style.enter.is_none()
-            || (in_fixed_overlay && element.style.enter == Some(&SCREEN_FADE))
+        if element.style.enter.is_none() || (in_fixed_overlay && element.style.enter == Some(fade))
         {
             element.style.enter = if fixed || (in_fixed_overlay && !element.draws_nothing()) {
-                Some(&SCREEN_INSTANT)
+                Some(instant)
             } else if !element.draws_nothing() {
-                Some(&SCREEN_FADE)
+                Some(fade)
             } else {
                 None
             };
         }
         if !in_fixed_overlay && element.style.transition.is_empty() {
-            element.style.transition = SCREEN_OPACITY;
+            element.style.opacity_transition = Some(fade.timing);
         }
-        element.style.layout_slide.get_or_insert(&SCREEN_TIMING);
+        element.style.layout_slide.get_or_insert(fade.timing);
         for child in &mut element.children {
-            declare(child, fixed);
+            declare(child, fixed, fade, instant);
         }
     }
-    declare(&mut screen, false);
+    let timing = screen_timing(duration_ms);
+    let fade = Presence {
+        grouped: true,
+        ..Presence::fade(timing)
+    };
+    let instant = Presence {
+        grouped: true,
+        ..Presence::new(timing)
+    };
+    declare(&mut screen, false, fade, instant);
     screen
 }
 
@@ -142,9 +138,8 @@ impl ScreenColumn {
 
 /// The stretched action used by the game result and the story palette.
 #[must_use]
-pub fn compact_action(button: Element) -> Element {
-    use kit_base::data::space::flat::phone::{ACTION_HEIGHT, ACTION_TEXT};
-    stretch_action(button, ACTION_HEIGHT, ACTION_TEXT)
+pub fn compact_action(button: Element, metrics: &ScreenMetrics) -> Element {
+    stretch_action(button, metrics.action_height, metrics.action_text)
 }
 
 fn stretch_action(mut button: Element, height: f32, text: f32) -> Element {

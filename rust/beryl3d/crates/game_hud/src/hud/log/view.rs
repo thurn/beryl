@@ -18,8 +18,7 @@ pub(super) fn log_column(open: bool, entries: &[LogEntry], toggle: Rect, area: R
         // On the desktop the oldest lines fade out under the list's top edge, as
         // `.game-log-list`'s mask fades them; the phone's sheet has no mask.
         let mut panel = (panel(entries).width(area.width).max_height(area.height))
-            .mask(kit_base::tokens::gradient::LOG_MASK)
-            .enter(&kit_ui::widgets::screen::SCREEN_INSTANT);
+            .mask(kit_base::tokens::gradient::LOG_MASK);
         panel.anchor = Some(Anchor::Point(Vec2::new(area.x, area.y), Vec2::ZERO));
         panel
     });

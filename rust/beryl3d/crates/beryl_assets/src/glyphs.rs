@@ -106,7 +106,7 @@ impl GlyphWorker {
             .name("beryl-glyphs".into())
             .spawn(move || {
                 start();
-                run(&inbox, &out, &wake, &icons);
+                run(&inbox, &out, &wake, icons);
             })
             .expect("the glyph worker's thread starts");
         Self {
@@ -161,6 +161,13 @@ impl GlyphWorker {
         }
     }
 
+    /// Supplies coverage artwork for the current layout profiles.
+    pub fn layers(&self, scale: f32, layers: Vec<CoverageLayer>) {
+        if let Some(requests) = &self.requests {
+            let _ = requests.send(Message::Layers(scale, layers));
+        }
+    }
+
     /// Waits until every glyph and icon asked for so far has been rasterized and its page sent, so
     /// that a host drawing a picture of one moment, such as the headless host, can take every
     /// page it needs before it draws. A host drawing frames as they come never calls it.
@@ -185,6 +192,7 @@ enum Message {
     Prepare(Vec<GlyphKey>),
     /// Every icon, at this scale.
     Icons(f32),
+    Layers(f32, Vec<CoverageLayer>),
     /// Answer once every glyph asked for before this has been sent.
     Flush(SyncSender<()>),
 }
@@ -202,7 +210,7 @@ impl Drop for GlyphWorker {
 /// of requests uploads each page once, sends the pages, and then answers the flushes that were
 /// waiting with them. The icons come first and glyphs asked for ahead of time last, so that
 /// what is on screen has room in the atlas before what may be.
-fn run(inbox: &Receiver<Message>, out: &Sender<Prepared>, wake: &dyn Fn(), icons: &IconSet) {
+fn run(inbox: &Receiver<Message>, out: &Sender<Prepared>, wake: &dyn Fn(), mut icons: IconSet) {
     let mut atlas = Atlas::new();
     while let Ok(first) = inbox.recv() {
         let mut keys = Vec::new();
@@ -214,12 +222,16 @@ fn run(inbox: &Receiver<Message>, out: &Sender<Prepared>, wake: &dyn Fn(), icons
                 Message::Keys(more) => keys.extend(more),
                 Message::Prepare(more) => ahead.extend(more),
                 Message::Icons(asked) => scale = Some(asked),
+                Message::Layers(asked, layers) => {
+                    icons.layers = layers;
+                    scale = Some(asked);
+                }
                 Message::Flush(done) => flushes.push(done),
             }
         }
         let mut prepared = Vec::new();
         if let Some(scale) = scale {
-            prepared.extend(atlas.add_icons(icons, scale));
+            prepared.extend(atlas.add_icons(&icons, scale));
         }
         prepared.extend(atlas.add(&keys, LAST_PAGE));
         prepared.extend(atlas.add(&ahead, LAST_PAGE - DEMAND_PAGES));
@@ -248,6 +260,7 @@ struct Atlas {
     shelves: Shelves,
     /// The scale the icons were last rasterized at.
     icon_scale: Option<f32>,
+    coverage_cells: BTreeSet<(kit_base::atlas::IconId, u16)>,
 }
 
 impl Atlas {
@@ -259,6 +272,7 @@ impl Atlas {
             pixels: blank_page(),
             shelves: Shelves::new(PAGE_SIZE),
             icon_scale: None,
+            coverage_cells: BTreeSet::new(),
         }
     }
 
@@ -326,22 +340,32 @@ impl Atlas {
     /// any earlier scale in place, since the client draws those until these arrive, and
     /// returns the pages that changed, each with the icons added to it.
     fn add_icons(&mut self, catalog: &IconSet, scale: f32) -> Vec<Prepared> {
-        if self.icon_scale == Some(scale) {
-            return Vec::new();
+        let scale_changed = self.icon_scale != Some(scale);
+        if scale_changed {
+            self.icon_scale = Some(scale);
+            self.coverage_cells.clear();
         }
-        self.icon_scale = Some(scale);
         // Pack tallest cells first so each shelf holds cells of similar height. Packing by
         // ID left most of six pages empty at three pixels per point.
         let mut rasterized: Vec<(Bitmap, IconCell)> = Vec::new();
-        for artwork in &catalog.icons {
-            let bitmap = icons::rasterize(artwork, scale);
-            rasterized.push((bitmap, artwork.cell([0; 4], 0)));
+        if scale_changed {
+            for artwork in &catalog.icons {
+                let bitmap = icons::rasterize(artwork, scale);
+                rasterized.push((bitmap, artwork.cell([0; 4], 0)));
+            }
         }
         for layer in &catalog.layers {
-            let bitmap = layers::rasterize(layer, scale);
-            rasterized.push((bitmap, layer.cell.cell([0; 4])));
+            if self
+                .coverage_cells
+                .insert((layer.cell.icon, layer.cell.size))
+            {
+                let bitmap = layers::rasterize(layer, scale);
+                rasterized.push((bitmap, layer.cell.cell([0; 4])));
+            }
         }
-        for (chain, &(drawn, shadows)) in catalog.shadows.iter().enumerate() {
+        for (chain, &(drawn, shadows)) in
+            catalog.shadows.iter().enumerate().filter(|_| scale_changed)
+        {
             let shadows = &shadows[..shadows.len().min(MOST_DROP_SHADOWS)];
             for artwork in drawn
                 .iter()

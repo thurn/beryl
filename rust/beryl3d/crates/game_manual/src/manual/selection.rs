@@ -15,7 +15,7 @@ use glam::Vec2;
 
 use game_play::light::{Lit, MarkSpan, Span};
 use game_play::verbs::Interval;
-use kit_base::data::space::flat::table::{selection as summary_space, sweep};
+use kit_base::data::flat::Selection;
 use kit_base::tokens::{color, type_style};
 use kit_frame::frame::{Frame, Place, Role, StateBits};
 use kit_ui::element::{Align, Anchor, Element, row, text};
@@ -111,13 +111,13 @@ fn touches(rect: Rect, corners: &[Vec2; 4]) -> bool {
 /// The rectangle a sweep draws over `rect`, as the web's `.selection-rectangle`: a thin gold
 /// line round a faint gold wash, which the pointer goes through.
 #[must_use]
-pub fn rectangle(rect: Rect) -> Element {
+pub fn rectangle(rect: Rect, rim: f32) -> Element {
     let mut element = Element::new(Role::Region)
         .name(SWEEP)
         .width(rect.width)
         .height(rect.height)
         .background(color::SWEEP)
-        .border((color::SWEEP_RIM, sweep::RIM))
+        .border((color::SWEEP_RIM, rim))
         .passes(true);
     element.anchor = Some(Anchor::Point(Vec2::new(rect.x, rect.y), Vec2::ZERO));
     element
@@ -193,6 +193,7 @@ pub fn summary(
     view: &PlayerView,
     selection: &[ObjectId],
     over: Option<ObjectId>,
+    metrics: Selection,
 ) -> Option<Element> {
     let over = over?;
     let (mut count, mut power, mut toughness) = (0, 0, 0);
@@ -217,23 +218,23 @@ pub fn summary(
     };
     let mut panel = row()
         .name(SUMMARY)
-        .gap(summary_space::GAP)
+        .gap(metrics.gap)
         .align_items(Align::Center)
         .background(color::SELECTION_SUMMARY)
-        .border((color::SELECTION_SUMMARY_RIM, summary_space::RIM))
-        .radius(summary_space::RADIUS)
+        .border((color::SELECTION_SUMMARY_RIM, metrics.rim))
+        .radius(metrics.radius)
         .passes(true)
         .child(label(&format!("{count} {cards}")))
         .child(label(&format!("{power}/{toughness}")));
     panel.style.padding = [
-        summary_space::PADDING_Y,
-        summary_space::PADDING_X,
-        summary_space::PADDING_Y,
-        summary_space::PADDING_X,
+        metrics.padding_y,
+        metrics.padding_x,
+        metrics.padding_y,
+        metrics.padding_x,
     ];
     panel.anchor = Some(Anchor::Above(
         anchor_target(Subject::Object { slot: over }),
-        summary_space::ABOVE,
+        metrics.above,
     ));
     Some(panel)
 }

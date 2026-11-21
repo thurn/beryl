@@ -178,7 +178,13 @@ impl Widget {
         }
     }
 
-    pub(super) fn build(self, node: &Node, words: &str, bits: StateBits) -> Element {
+    pub(super) fn build(
+        self,
+        node: &Node,
+        words: &str,
+        bits: StateBits,
+        actions: &kit_base::data::profiles::ScreenMetrics,
+    ) -> Element {
         let name = node.name.as_deref().unwrap_or_default();
         let side = node.rect.width.min(node.rect.height);
         let selected = bits.has(StateBits::SELECTED);
@@ -192,7 +198,7 @@ impl Widget {
         match self {
             Self::Button => button(),
             Self::SmallButton => widgets::start_panel::small(button()),
-            Self::PhoneAction => widgets::screen::compact_action(button()),
+            Self::PhoneAction => widgets::screen::compact_action(button(), actions),
             Self::PassOn => widgets::pass_on(name, side),
             Self::Check => widgets::check_mark(side),
             Self::Checkbox => widgets::start_panel::checkbox(words, selected),

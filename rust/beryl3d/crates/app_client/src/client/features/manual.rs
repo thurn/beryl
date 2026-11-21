@@ -286,6 +286,7 @@ impl Mounted for CommandList {
         let slot = Features::slot::<Self>(&mut features.slots, id);
         slot.state().as_ref()?;
         Some(slot.view(palette::Inputs {
+            metrics: inputs.hud.data.flat.manual.palette,
             fields: inputs.fields,
             window: inputs.window.size,
         }))
@@ -317,6 +318,7 @@ impl Mounted for AskPrompt {
         let open = slot.state().as_ref()?;
         let anchor = dock_anchor(open, inputs.profile, inputs.hud.placement_scene);
         Some(slot.view(ask::Inputs {
+            inset: inputs.hud.data.flat.manual.edge,
             fields: inputs.fields,
             window: inputs.window,
             profile: inputs.profile,
@@ -351,6 +353,7 @@ impl Mounted for TokenSearch {
             slot.state().search.as_ref()?;
         }
         Some(slot.view(tokens::Inputs {
+            metrics: inputs.hud.data.flat.manual.palette,
             view: inputs.view,
             fields: inputs.fields,
             window: inputs.window.size,
@@ -412,8 +415,22 @@ impl Mounted for TableLog {
         if lines.is_empty() || link::frozen(view) || opening::prompt(view).is_some() {
             return None;
         }
-        let folded_at = inputs.profile.slot("manual.log").map(|slot| slot.rect);
-        Some(Features::slot::<Self>(&mut features.slots, id).view(log::Inputs { lines, folded_at }))
+        let placement = if let Some(slot) = inputs.profile.slot("manual.log") {
+            log::Placement::Folded(slot.rect)
+        } else {
+            let [toggle, panel] = inputs.profile.slots(["log.toggle", "log"]);
+            log::Placement::Column {
+                toggle: toggle?.rect,
+                panel: panel?.rect,
+            }
+        };
+        Some(
+            Features::slot::<Self>(&mut features.slots, id).view(log::Inputs {
+                lines,
+                placement,
+                metrics: inputs.hud.data.flat.manual.log,
+            }),
+        )
     }
 
     fn command(client: &mut Client, command: TableAction) {
@@ -443,6 +460,7 @@ impl Mounted for ProposalPanel {
             inputs.hud.placement_scene,
         );
         Some(slot.view(proposals::Inputs {
+            metrics: inputs.hud.data.flat.manual,
             proposals,
             window: inputs.window,
             profile: inputs.profile,

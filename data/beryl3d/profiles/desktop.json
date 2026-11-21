@@ -244,7 +244,17 @@
     },
     "opening": {
       "start_choice": true,
-      "waiting_dots": true
+      "waiting_dots": true,
+      "single_row": {
+        "coin_height": 52,
+        "coin_gap": 14,
+        "title_gap": 30,
+        "card": 176,
+        "card_gap": 8,
+        "slot": 120,
+        "slot_gap": 12,
+        "slots_gap": 26
+      }
     },
     "result": {
       "title": 72,
@@ -668,11 +678,5 @@
     "corner_width": 254.8,
     "library_layers": 20,
     "graveyard_layers": 5
-  },
-  "legacy": {
-    "hud.log_left": 18,
-    "hud.log_top": 262,
-    "hud.log_button_top": 18
-  },
-  "counts": []
+  }
 }

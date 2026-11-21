@@ -612,10 +612,10 @@ fn each_pile_lies_in_its_players_strip() {
 /// leaves the card where it was at that instant, and it goes on to its place in the new layout.
 #[test]
 fn a_resize_in_mid_flight_into_and_between_phone_layouts_keeps_the_pose() {
-    for (from, to) in [
-        (Window::default(), phone(393.0, 759.0)),
-        (phone(393.0, 759.0), phone(430.0, 932.0)),
-        (phone(375.0, 647.0), Window::default()),
+    for (from, to, banded) in [
+        (Window::default(), phone(393.0, 759.0), true),
+        (phone(393.0, 759.0), phone(430.0, 932.0), true),
+        (phone(375.0, 647.0), Window::default(), false),
     ] {
         let (start, cards) = before();
         let (drawn, timings) = draw(&start, cards);
@@ -636,7 +636,7 @@ fn a_resize_in_mid_flight_into_and_between_phone_layouts_keeps_the_pose() {
                 && (was.scale - now.scale).abs() < 1e-5,
             "{from:?} to {to:?}: the card does not jump: {was:?} became {now:?}"
         );
-        assert_eq!(show.table().layout().bands.is_some(), to.phone());
+        assert_eq!(show.table().layout().bands.is_some(), banded);
         frame(&mut show, &mut scratch, 400 * MS);
         // The view the show ends on lists the drawn card last in the hand, as it rests.
         let shown = &show.shown().expect("the draw is shown").view;

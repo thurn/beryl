@@ -35,8 +35,8 @@ use glam::Vec2;
 use crate::hud::HudIn;
 use game_table::profiles::Profile;
 use kit_base::data::Card;
-use kit_base::data::profiles::{ScreenMetrics, WrappedHand};
-use kit_base::data::space::flat::opening as metrics;
+use kit_base::data::hud::OpeningStyle;
+use kit_base::data::profiles::{ScreenMetrics, SingleRow, WrappedHand};
 use kit_base::geometry::Rect;
 use kit_base::tokens::{color, size, type_style};
 use kit_frame::frame::{ElementId, Role};
@@ -166,6 +166,7 @@ pub fn opening(input: &HudIn) -> Option<Element> {
             },
         },
         input.profile,
+        input.data.hud.opening,
     ))
 }
 
@@ -202,31 +203,15 @@ pub struct Presentation<'a> {
 
 /// The opening `shown` describes, over the dimmed table: the coin, the title, the hand and the
 /// bottom slots, as the web's `OpeningPresentation` lays them out.
-pub fn present(shown: &Presentation, profile: Profile) -> Element {
+pub fn present(shown: &Presentation, profile: Profile, style: OpeningStyle) -> Element {
     let window = profile.window();
-    let opening = profile.data().hud.opening;
-    let room = profile
-        .slot("opening")
-        .expect("validated opening slot")
-        .rect;
     let Presentation {
         view,
         starting,
         slots,
         ..
     } = *shown;
-    let sizes = if let Some(wrapped) = opening.wrapped_hand {
-        let screen = profile.data().screen.expect("validated wrapped opening");
-        Sizes::wrapped(
-            shown,
-            (wrapped, profile.card()),
-            room,
-            window.size.width,
-            screen,
-        )
-    } else {
-        Sizes::single_row(room.y)
-    };
+    let sizes = Sizes::for_profile(shown, profile);
     let card = |slot: ObjectId, width: f32| {
         let mut card = card_box(view, slot, (width, profile.card()));
         card.press = shown.press.map(|press| press(slot));
@@ -253,7 +238,7 @@ pub fn present(shown: &Presentation, profile: Profile) -> Element {
         .passes(true);
     heading.style.margin = [0.0, 0.0, sizes.title_gap, 0.0];
     let hand_row = hand_grid(shown, &sizes, profile.card(), card);
-    let dots = (shown.waiting && opening.waiting_dots).then(waiting);
+    let dots = (shown.waiting && profile.data().hud.opening.waiting_dots).then(|| waiting(style));
     let slots_row = (slots > 0).then(|| {
         let boxes = (0..slots).map(|at| match shown.bottom.get(at) {
             Some(&slot) => card(slot, sizes.slot),
@@ -278,7 +263,7 @@ pub fn present(shown: &Presentation, profile: Profile) -> Element {
         .child(hand_row)
         .children(slots_row)
         .children(dots)
-        .children(choice(shown.choice));
+        .children(choice(shown.choice, style));
     // The flat layer's root puts a screen in its bottom right corner, so the group is anchored
     // below the window's top middle instead, as the web pads `.opening` down from the top.
     let top = Vec2::new(window.size.width / 2.0, sizes.top);
@@ -334,15 +319,15 @@ fn hand_grid(
 /// The play or draw buttons, `.opening-choice`: a row reversed so that the first button stands
 /// on the right, 40 points apart (so the children are laid out last to first), each at least
 /// `--button-width` wide, 40 points under what precedes them.
-fn choice(buttons: &[PromptButton]) -> Option<Element> {
+fn choice(buttons: &[PromptButton], metrics: OpeningStyle) -> Option<Element> {
     if buttons.is_empty() {
         return None;
     }
     let mut choice = row()
         .name("choice")
-        .gap(metrics::CHOICE_GAP)
+        .gap(metrics.choice_gap)
         .justify_content(Justify::Center);
-    choice.style.margin = [metrics::CHOICE_TOP, 0.0, 0.0, 0.0];
+    choice.style.margin = [metrics.choice_top, 0.0, 0.0, 0.0];
     Some(
         choice.children(buttons.iter().enumerate().rev().map(|(at, view)| {
             let widget = if at == 0 { primary } else { button };
@@ -358,29 +343,29 @@ fn choice(buttons: &[PromptButton]) -> Option<Element> {
 /// `.opening-buttons` holding `.working-dots.opening-waiting`: 34-point type whose dots are
 /// 0.26em wide, 0.22em apart, 0.3em in from the row's start. The web pulses them; these stand
 /// still.
-fn waiting() -> Element {
+fn waiting(metrics: OpeningStyle) -> Element {
     let dot = |at: usize| {
         row()
             .name(&format!("dot {}", at + 1))
-            .width(metrics::DOT)
-            .height(metrics::DOT)
-            .radius(metrics::DOT / 2.0)
+            .width(metrics.dot)
+            .height(metrics.dot)
+            .radius(metrics.dot / 2.0)
             .background(color::GOLD)
             .passes(true)
     };
     let mut dots = row()
         .name("working")
-        .gap(metrics::DOT_GAP)
+        .gap(metrics.dot_gap)
         .passes(true)
         .children((0..3).map(dot));
-    dots.style.margin = [0.0, 0.0, 0.0, metrics::DOT_INSET];
+    dots.style.margin = [0.0, 0.0, 0.0, metrics.dot_inset];
     let mut buttons = row()
         .name("waiting")
-        .min_height(metrics::WAITING_HEIGHT)
+        .min_height(metrics.waiting_height)
         .align_items(Align::Center)
         .passes(true)
         .child(dots);
-    buttons.style.margin = [metrics::WAITING_GAP, 0.0, 0.0, 0.0];
+    buttons.style.margin = [metrics.waiting_gap, 0.0, 0.0, 0.0];
     buttons
 }
 
@@ -455,21 +440,44 @@ struct Sizes {
 }
 
 impl Sizes {
+    fn for_profile(shown: &Presentation, profile: Profile) -> Self {
+        let opening = profile.data().hud.opening;
+        let room = profile
+            .slot("opening")
+            .expect("validated opening slot")
+            .rect;
+        if let Some(wrapped) = opening.wrapped_hand {
+            let screen = profile.data().screen.expect("validated wrapped opening");
+            Self::wrapped(
+                shown,
+                (wrapped, profile.card()),
+                room,
+                profile.window().size.width,
+                screen,
+            )
+        } else {
+            Self::single_row(
+                room.y,
+                opening.single_row.expect("validated single-row opening"),
+            )
+        }
+    }
+
     /// The desktop's: the hand in one row of large cards (`.opening`).
-    const fn single_row(top: f32) -> Self {
+    const fn single_row(top: f32, metrics: SingleRow) -> Self {
         Self {
             top,
-            coin_height: metrics::COIN_HEIGHT,
-            coin_gap: metrics::COIN_GAP,
+            coin_height: metrics.coin_height,
+            coin_gap: metrics.coin_gap,
             coin_align: Align::Center,
             coin: COIN,
             title: TITLE,
-            title_gap: metrics::TITLE_GAP,
-            card: metrics::CARD,
-            slot: metrics::SLOT,
-            card_gap: metrics::CARD_GAP,
-            slot_gap: metrics::SLOT_GAP,
-            slots_gap: metrics::SLOTS_GAP,
+            title_gap: metrics.title_gap,
+            card: metrics.card,
+            slot: metrics.slot,
+            card_gap: metrics.card_gap,
+            slot_gap: metrics.slot_gap,
+            slots_gap: metrics.slots_gap,
             hand_columns: None,
             hand_height: None,
         }

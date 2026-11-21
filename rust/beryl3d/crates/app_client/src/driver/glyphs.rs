@@ -16,8 +16,11 @@ use kit_base::atlas::{AssetReady, FaceId, GlyphCell, GlyphKey};
 use kit_probe::driver::atlas::{STUB_PAGE, stub_glyph, stub_icons};
 use kit_ui::input::Input as DeviceInput;
 
-pub(super) fn stub_client_icons(scale: f32) -> AssetReady {
-    stub_icons(scale, orb::atlas_cells())
+pub(super) fn stub_client_icons(
+    scale: f32,
+    profiles: &kit_base::data::profiles::Profiles,
+) -> AssetReady {
+    stub_icons(scale, orb::atlas_cells(profiles))
 }
 
 impl Page {

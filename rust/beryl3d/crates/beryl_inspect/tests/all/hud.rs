@@ -84,8 +84,9 @@ fn pay_default(width: f32, height: f32) -> Page {
 
 #[test]
 fn both_orbs_hold_the_life_totals_of_the_view() {
-    use game_hud::art::orb::SCALES;
     use game_hud::art::orb::face_offset;
+
+    let data = beryl_inspect::data::checkout().unwrap();
     let mut page = pay_default(1600.0, 900.0);
     for (side, orb, total) in [
         (Side::You, "region \"your orb\"", "player \"You 20\""),
@@ -99,7 +100,9 @@ fn both_orbs_hold_the_life_totals_of_the_view() {
         let total = page.find(total).rect();
         let (x, y) = (total.x + total.width / 2.0, total.y + total.height / 2.0);
         // The total stands in the middle of the orb's core, a few points off its art's middle.
-        let core = orb.y + orb.height / 2.0 + face_offset(side) * SCALES[0];
+        let core = orb.y
+            + orb.height / 2.0
+            + face_offset(side) * data.profiles.fallback().play.life.orb_scale;
         assert!(
             (x - (orb.x + orb.width / 2.0)).abs() < 1.0 && (y - core).abs() < 1.0,
             "{total:?} is not in the middle of {orb:?}"

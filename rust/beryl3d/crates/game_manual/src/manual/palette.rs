@@ -18,6 +18,7 @@ use glam::Vec2;
 use super::commands;
 use super::menus::{self, Act};
 use super::{Context, Target};
+use kit_base::data::flat::Palette as PaletteMetrics;
 use kit_base::tokens::{color, size, space, type_style};
 use kit_frame::frame::Role;
 use kit_ui::element::{Align, Anchor, Element, Overflow, column, row, text};
@@ -222,7 +223,7 @@ pub fn matching<'a>(query: &str, rows: &'a [Row]) -> Vec<&'a Row> {
 /// field, with what it acts on beside it, then the matching rows under their groups' headings,
 /// the highlighted one drawn as a menu's active row, and the keys that work in it.
 #[must_use]
-pub fn panel(palette: &Palette, fields: &Fields, window: Size) -> Element {
+pub fn panel(palette: &Palette, fields: &Fields, window: Size, metrics: PaletteMetrics) -> Element {
     let mut state = fields.get(FIELD);
     FIELD.clone_into(&mut state.placeholder);
     let query = state.text.clone();
@@ -263,12 +264,11 @@ pub fn panel(palette: &Palette, fields: &Fields, window: Size) -> Element {
             .on_press(PaletteMessage::CancelCapture)
     });
     let notice = (palette.notice.as_deref()).map(|words| text(words).color(color::TEXT_DIM));
-    let metrics = kit_base::data::space::flat::table::palette::WIDTH;
     let mut list = column()
         .name("Commands")
         .gap(size::MENU_ROW_GAP)
         .overflow(Overflow::Scroll)
-        .max_height(kit_base::data::space::flat::table::palette::HEIGHT)
+        .max_height(metrics.height)
         .children(results);
     list.role = Role::List;
     let hints = row().name("hints").gap(space::L).children(
@@ -280,7 +280,7 @@ pub fn panel(palette: &Palette, fields: &Fields, window: Size) -> Element {
     );
     let mut panel = column()
         .name("Command list")
-        .width(metrics)
+        .width(metrics.width)
         .gap(space::M)
         .padding(size::MENU_PADDING)
         .background(color::SURFACE)
@@ -291,7 +291,7 @@ pub fn panel(palette: &Palette, fields: &Fields, window: Size) -> Element {
         .children(capture)
         .children(notice)
         .child(hints);
-    let top = kit_base::data::space::flat::table::palette::TOP;
+    let top = metrics.top;
     panel.anchor = Some(Anchor::Point(
         Vec2::new(window.width / 2.0, top),
         Vec2::new(0.5, 0.0),

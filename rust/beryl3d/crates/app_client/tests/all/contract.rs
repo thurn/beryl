@@ -276,6 +276,7 @@ mod milestone_three {
                 Screen::Start => start::StartScreen::view(
                     &start::State::default(),
                     start::Inputs {
+                        tooltip: input.data.flat.tooltip,
                         window: input.window,
                         column: input.profile.screen_column(),
                         in_progress: false,

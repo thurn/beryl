@@ -15,7 +15,7 @@ use serde_json::Value;
 
 use super::commands::seat_of;
 use game_table::table::{Camera, Layout};
-use kit_base::data::space::flat::table::drop as data;
+use kit_base::data::flat::DropTarget;
 use kit_base::tokens::{color, ratio, type_style};
 use kit_frame::frame::{Frame, Place, Role, StateBits};
 use kit_scene::hit::within;
@@ -62,11 +62,12 @@ pub fn destination_at(
     at: Vec2,
     held: &[ObjectId],
     view: &PlayerView,
+    metrics: DropTarget,
 ) -> Option<Destination> {
     if let Some(found) = under(frame, at, held, view) {
         return Some(found);
     }
-    Some(area_at(layout, camera, at))
+    Some(area_at(layout, camera, at, metrics))
 }
 
 /// The pile or card under `at` that a card lands in, the topmost first, leaving out the held
@@ -123,10 +124,10 @@ fn under(frame: &Frame, at: Vec2, held: &[ObjectId], view: &PlayerView) -> Optio
 /// The area of the table under `at`: each side's hand along its edge of the window, and on the
 /// table each side's creatures' row toward the middle and its back row beyond, the lands on the
 /// left and the other permanents on the right, as `desktopDropAreas` divides the stage.
-fn area_at(layout: &Layout, camera: &Camera, at: Vec2) -> Destination {
+fn area_at(layout: &Layout, camera: &Camera, at: Vec2, metrics: DropTarget) -> Destination {
     let window = camera.window.size;
     let hand_top = f32::midpoint(1.0, -layout.hand.edge) * window.height;
-    let strip = data::OPPONENT_HAND * window.height;
+    let strip = metrics.opponent_hand * window.height;
     let whole = |top: f32, bottom: f32| Rect {
         x: 0.0,
         y: top,
@@ -510,13 +511,13 @@ fn row_word(row: RowName) -> &'static str {
 /// metal line round a faint glow, and over a library its two halves, Top and Bottom, the one
 /// under the pointer lit. The pointer goes through it.
 #[must_use]
-pub fn target(to: &Destination) -> Element {
+pub fn target(to: &Destination, metrics: DropTarget) -> Element {
     let mut outline = column()
         .name(TARGET)
         .width(to.rect.width)
         .height(to.rect.height)
-        .border((color::METAL_BRIGHT, data::RIM))
-        .radius(data::RADIUS)
+        .border((color::METAL_BRIGHT, metrics.rim))
+        .radius(metrics.radius)
         .passes(true);
     outline.anchor = Some(Anchor::Point(Vec2::new(to.rect.x, to.rect.y), Vec2::ZERO));
     let Some(end) = to.end else {

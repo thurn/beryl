@@ -28,7 +28,7 @@ use game_play::art::orb::CORE_CY;
 pub use game_play::art::orb::{ART, face_offset};
 use kit_base::atlas::IconId;
 use kit_base::atlas::artwork::{CoverageLayer, CoveragePaint, CoverageRamp, LayerCell};
-use kit_base::tokens::size;
+use kit_base::{data::profiles::Profiles, tokens::size};
 use kit_ui::art::icons as icon_artwork;
 use kit_ui::widgets::icons::{IconLayer, LayeredIcon, cell_width};
 
@@ -41,8 +41,6 @@ const SQUARENESS: f32 = 2.25;
 
 /// The width of the core's bezel: `BEZEL`, the stroke of `.life-orb-core`.
 pub const BEZEL: f32 = size::ORB_BEZEL;
-
-pub use game_table::profiles::ORB_SCALES as SCALES;
 
 /// One outline of the art, in units, as the viewer's orb draws it.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -382,7 +380,7 @@ const fn icon_layers(side: Orientation) -> [IconLayer; LAYERS.len()] {
 
 /// The art filling an orb's box, lit if its seat is active.
 #[must_use]
-pub fn artwork(side: Side, active: bool, scale: u8) -> LayeredIcon {
+pub fn artwork(side: Side, active: bool, scale: f32) -> LayeredIcon {
     const VIEWER: [IconLayer; LAYERS.len()] = icon_layers(Orientation::Upright);
     const OPPONENT: [IconLayer; LAYERS.len()] = icon_layers(Orientation::Mirrored);
     LayeredIcon {
@@ -391,7 +389,7 @@ pub fn artwork(side: Side, active: bool, scale: u8) -> LayeredIcon {
             Orientation::Mirrored => &OPPONENT,
         },
         origin: [ART[0], ART[1]],
-        scale: SCALES[usize::from(scale)],
+        scale,
         highlighted: active,
     }
 }
@@ -403,9 +401,28 @@ const fn orientation(side: Side) -> Orientation {
     }
 }
 
+/// The atlas scales for automatic layouts and an explicit preview.
+pub fn atlas_scales(profiles: &Profiles) -> impl Iterator<Item = f32> {
+    let automatic = profiles
+        .iter()
+        .rev()
+        .map(|profile| profile.play.life.orb_scale);
+    let preview = profiles
+        .preview()
+        .map(|profile| profile.play.life.orb_scale)
+        .filter(|preview| {
+            !profiles
+                .iter()
+                .any(|profile| profile.play.life.orb_scale.to_bits() == preview.to_bits())
+        });
+    automatic.chain(preview)
+}
+
 /// Every choice of art scale, orientation and layer, in the order sent to the atlas.
-fn atlas_layers() -> impl Iterator<Item = (Orientation, &'static Layer, LayerCell)> {
-    SCALES.into_iter().flat_map(|units| {
+fn atlas_layers(
+    profiles: &Profiles,
+) -> impl Iterator<Item = (Orientation, &'static Layer, LayerCell)> {
+    atlas_scales(profiles).flat_map(|units| {
         ORIENTATIONS.into_iter().flat_map(move |side| {
             LAYERS.iter().enumerate().map(move |(at, layer)| {
                 let view = layer.views[seat(side)];
@@ -421,14 +438,14 @@ fn atlas_layers() -> impl Iterator<Item = (Orientation, &'static Layer, LayerCel
 }
 
 /// The atlas dimensions for every orb layer, for a driver that does not rasterize them.
-pub fn atlas_cells() -> impl Iterator<Item = LayerCell> {
-    atlas_layers().map(|(_, _, cell)| cell)
+pub fn atlas_cells(profiles: &Profiles) -> impl Iterator<Item = LayerCell> {
+    atlas_layers(profiles).map(|(_, _, cell)| cell)
 }
 
 /// Describes the orb layers for the asset worker, in their existing atlas order.
 #[must_use]
-pub fn atlas_artwork() -> Vec<CoverageLayer> {
-    atlas_layers()
+pub fn atlas_artwork(profiles: &Profiles) -> Vec<CoverageLayer> {
+    atlas_layers(profiles)
         .map(|(side, layer, cell)| CoverageLayer {
             cell,
             outlines: outlines(layer.shape, side),

@@ -60,6 +60,7 @@ pub enum Request {
 
 #[derive(Clone, Copy)]
 pub struct Inputs<'a> {
+    pub tooltip: kit_base::data::flat::Tooltip,
     pub window: Window,
     pub column: Option<ScreenColumn>,
     pub in_progress: bool,
@@ -71,6 +72,7 @@ pub struct Inputs<'a> {
 
 #[derive(PartialEq)]
 pub struct ViewKey {
+    tooltip: kit_base::data::flat::Tooltip,
     window: Window,
     column: Option<ScreenColumn>,
     in_progress: bool,
@@ -152,6 +154,7 @@ impl Feature for StartScreen {
 
     fn view_key(_: &State, inputs: &Inputs) -> ViewKey {
         ViewKey {
+            tooltip: inputs.tooltip,
             window: inputs.window,
             column: inputs.column,
             in_progress: inputs.in_progress,

@@ -20,6 +20,8 @@ fn embedded_tuning(name: &str) -> Result<String, String> {
         "badges.json" => include_str!("../../../../../data/beryl3d/badges.json"),
         "verbs.json" => include_str!("../../../../../data/beryl3d/verbs.json"),
         "audit.json" => include_str!("../../../../../data/beryl3d/audit.json"),
+        "flat.json" => include_str!("../../../../../data/beryl3d/flat.json"),
+        "hud.json" => include_str!("../../../../../data/beryl3d/hud.json"),
         "catch-up.json" => include_str!("../../../../../data/beryl3d/catch-up.json"),
         "frame-rate.json" => include_str!("../../../../../data/beryl3d/frame-rate.json"),
         "slide.json" => include_str!("../../../../../data/beryl3d/slide.json"),

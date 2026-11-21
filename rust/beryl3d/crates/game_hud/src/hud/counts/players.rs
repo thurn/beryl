@@ -27,8 +27,8 @@ use glam::Vec2;
 use super::orb;
 use crate::hud::HudIn;
 use game_table::profiles::Profile;
+use kit_base::data::hud::IncomingStyle;
 use kit_base::data::profiles::{Incoming, SizeClass};
-use kit_base::data::space::hud::incoming as badge;
 use kit_text::text::TypeStyle;
 use kit_text::text::fonts::Font;
 use kit_ui::element::{Anchor, Element, Position, Shadow, Shown, TextAlign, holder, text};
@@ -40,7 +40,7 @@ pub fn players(input: &HudIn) -> Option<Element> {
     Some(
         holder()
             .name("players")
-            .children([Side::You, Side::Opponent].map(|side| orb(view, side, input.profile))),
+            .children([Side::You, Side::Opponent].map(|side| orb(view, side, input))),
     )
 }
 
@@ -55,14 +55,14 @@ pub fn orb_name(side: Side) -> &'static str {
 
 /// `side`'s orb as `view` shows it: one element the size of the web's orb art, showing the art
 /// (`Shown::Layers`).
-fn orb(view: &PlayerView, side: Side, profile: Profile) -> Element {
+fn orb(view: &PlayerView, side: Side, input: &HudIn) -> Element {
+    let profile = input.profile;
     let active = view.turn.active == side;
     let life = match side {
         Side::You => view.players.you.life,
         Side::Opponent => view.players.opponent.life,
     };
     let compact = profile.size_class() == SizeClass::Compact;
-    let scale = u8::from(compact);
     let units = profile.data().play.life.orb_scale;
     let [_, _, width, height] = orb::ART;
     let mut element = Element::new(kit_frame::frame::Role::Region)
@@ -77,10 +77,10 @@ fn orb(view: &PlayerView, side: Side, profile: Profile) -> Element {
                 life,
                 side,
                 width * units,
-                profile.data().hud.incoming,
+                (profile.data().hud.incoming, input.data.hud.incoming),
             )
         }));
-    element.shows = Some(Shown::Layers(orb::artwork(side, active, scale)));
+    element.shows = Some(Shown::Layers(orb::artwork(side, active, units)));
     // On a phone the table raises the viewer's total over a hand of several rows
     // (`table::phone::your_life`), so the orb follows the player's anchor on every frame.
     let middle = Vec2::new(0.5, 0.5);
@@ -126,7 +126,13 @@ const LETHAL_INK: [u8; 4] = [255, 255, 255, 255];
 /// for the viewer and the lower for the opponent, as `.life-incoming` places it, a fixed
 /// distance right of the middle of the orb's art, which is `orb_width` wide. A phone puts it on
 /// the upper rim for both players, as `.phone-orb .life-incoming` does.
-fn incoming_text(damage: i32, life: i32, side: Side, orb_width: f32, metrics: Incoming) -> Element {
+fn incoming_text(
+    damage: i32,
+    life: i32,
+    side: Side,
+    orb_width: f32,
+    (metrics, style): (Incoming, IncomingStyle),
+) -> Element {
     let lethal = damage > 0 && damage >= life;
     let words = if damage > 0 {
         format!("\u{2212}{damage}")
@@ -152,7 +158,7 @@ fn incoming_text(damage: i32, life: i32, side: Side, orb_width: f32, metrics: In
     };
     let mut shadows = vec![Shadow::new(0.0, 0.0, 0.0, ring).spread(1.0).inset()];
     if lethal {
-        shadows.push(Shadow::new(0.0, 0.0, badge::LETHAL_GLOW_BLUR, LETHAL_GLOW));
+        shadows.push(Shadow::new(0.0, 0.0, style.lethal_glow_blur, LETHAL_GLOW));
     }
     let mut element = text(&words)
         .name(&format!(
@@ -164,7 +170,7 @@ fn incoming_text(damage: i32, life: i32, side: Side, orb_width: f32, metrics: In
             weight: 700,
             italic: false,
             size: text_size,
-            line_height: badge::LINE,
+            line_height: style.line,
             letter_spacing: 0.0,
         })
         .text_align(TextAlign::Center)
@@ -173,7 +179,7 @@ fn incoming_text(damage: i32, life: i32, side: Side, orb_width: f32, metrics: In
         .min_width(min_width)
         .background(fill)
         // `border-radius: 999px`: half the badge's height rounds its ends fully.
-        .radius(text_size * badge::LINE / 2.0 + padding_y)
+        .radius(text_size * style.line / 2.0 + padding_y)
         .box_shadow(shadows)
         .color(ink);
     element.style.padding = [padding_y, padding_x, padding_y, padding_x];

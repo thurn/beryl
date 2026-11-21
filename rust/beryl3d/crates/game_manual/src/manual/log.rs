@@ -16,8 +16,8 @@ use beryl_protocol::protocol::{LogLine, TableAction};
 use glam::Vec2;
 
 use super::commands;
-use kit_base::geometry::Rect;
 use kit_base::tokens::{color, size, space, type_style};
+use kit_base::{data::flat::ManualLog, geometry::Rect};
 use kit_frame::frame::Role;
 use kit_ui::element::{Align, Anchor, Element, Overflow, column, holder, row, text};
 use kit_ui::widgets::{button, icon_button, icons};
@@ -39,6 +39,13 @@ pub fn rewind(to: u32) -> TableAction {
         .expect("a rewind is a table action")
 }
 
+/// The manual log either folds into one slot or opens from a separate button.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Placement {
+    Folded(Rect),
+    Column { toggle: Rect, panel: Rect },
+}
+
 /// The log at the table's left, or on a phone (`phone` is its window) at the safe area's top
 /// right: a button that opens it, and the lines of `lines` under it if `open`, those numbered
 /// in `blocked` highlighted, or nothing while the log is empty. The button is named as the
@@ -48,7 +55,8 @@ pub fn log(
     lines: &[LogLine],
     open: bool,
     blocked: &[u32],
-    folded_at: Option<Rect>,
+    placement: Placement,
+    metrics: ManualLog,
 ) -> Option<Element> {
     if lines.is_empty() {
         return None;
@@ -60,7 +68,7 @@ pub fn log(
             .name("lines")
             .gap(space::S)
             .overflow(Overflow::Scroll)
-            .max_height(kit_base::data::space::flat::table::log::HEIGHT)
+            .max_height(metrics.height)
             .children(
                 lines
                     .iter()
@@ -79,22 +87,21 @@ pub fn log(
             .border((color::METAL, size::BORDER))
             .radius(size::PANEL_RADIUS)
     };
-    let Some(rect) = folded_at else {
-        // The desktop's button is the game screen's log button, at its place in the window's
-        // top left, and the open log stands under it where the game's log does
-        // (`hud::log::log`), as the web's `TableLog` is the game's `LogPanel` folded.
-        use kit_base::data::space::hud::{LOG_BUTTON_TOP, LOG_LEFT, LOG_TOP};
-        let mut button = toggle(icon_button(icons::LOG, name));
-        button.anchor = Some(Anchor::Point(
-            Vec2::new(LOG_LEFT, LOG_BUTTON_TOP),
-            Vec2::ZERO,
-        ));
-        let open = open.then(|| {
-            let mut shown = panel(kit_base::data::space::flat::table::log::WIDTH).child(lines());
-            shown.anchor = Some(Anchor::Point(Vec2::new(LOG_LEFT, LOG_TOP), Vec2::ZERO));
-            shown
-        });
-        return Some(holder().name("table log").child(button).children(open));
+    let rect = match placement {
+        Placement::Folded(rect) => rect,
+        Placement::Column {
+            toggle: corner,
+            panel: area,
+        } => {
+            let mut button = toggle(icon_button(icons::LOG, name));
+            button.anchor = Some(Anchor::Point(Vec2::new(corner.x, corner.y), Vec2::ZERO));
+            let open = open.then(|| {
+                let mut shown = panel(metrics.width).child(lines());
+                shown.anchor = Some(Anchor::Point(Vec2::new(area.x, area.y), Vec2::ZERO));
+                shown
+            });
+            return Some(holder().name("table log").child(button).children(open));
+        }
     };
     let corner = Anchor::Point(Vec2::new(rect.x + rect.width, rect.y), Vec2::X);
     let heading = toggle(icon_button(icons::LOG, name));

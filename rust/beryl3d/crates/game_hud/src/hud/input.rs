@@ -15,6 +15,7 @@ use game_table::table::Window;
 /// The game view, playback state and UI state that the HUD reads.
 #[derive(Clone, Copy, Debug)]
 pub struct HudIn<'a> {
+    pub data: &'a kit_base::data::Data,
     pub window: Window,
     pub profile: Profile<'a>,
     pub view: Option<&'a PlayerView>,

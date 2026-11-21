@@ -101,6 +101,7 @@ pub(super) fn start(state: &State, input: &Inputs) -> Element {
     let export_tip = tooltip(
         "Includes screenshots, replays, and logs",
         "Export Bug Reports",
+        input.tooltip,
     );
 
     let panel = column()

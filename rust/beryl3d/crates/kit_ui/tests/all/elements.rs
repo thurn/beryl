@@ -253,6 +253,7 @@ fn a_fading_node_is_partway_through_its_transition() {
     let screen = |opacity: f32| {
         kit_ui::widgets::screen::with_transitions(
             region("screen").child(text("Fading").opacity(opacity)),
+            400.0,
         )
     };
     layer.show(Some(screen(1.0)));
@@ -262,14 +263,14 @@ fn a_fading_node_is_partway_through_its_transition() {
     let begun = layer.tick(2_000 * MS);
     assert!(begun.moving, "the fade out begins at the next frame");
     assert!(begun.began, "the frame that begins it says so");
-    let half = 2_000 * MS + 90 * MS;
+    let half = 2_000 * MS + 200 * MS;
     let halfway = layer.tick(half);
     assert!(halfway.moving && !halfway.began);
     let frame = write(&mut layer);
     let opacity = frame.resolved[find_index(&frame, "Fading")].opacity;
     let want = 1.0 - Curve::EASE_OUT.ease(0.5);
     assert!(close(opacity, want), "{opacity} halfway, not {want}");
-    assert!(!layer.tick(2_000 * MS + 180 * MS).moving);
+    assert!(!layer.tick(2_000 * MS + 400 * MS).moving);
     let frame = write(&mut layer);
     assert!(close(
         frame.resolved[find_index(&frame, "Fading")].opacity,

@@ -88,6 +88,7 @@ impl<'a> ScreenIn<'a> {
     #[must_use]
     pub fn hud(&self) -> HudIn<'a> {
         HudIn {
+            data: self.data,
             window: self.window,
             profile: self.profile,
             view: self.view,

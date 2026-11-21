@@ -1,25 +1,21 @@
 //! Tooltips (docs/beryl-3d.md, "Widgets"): words that explain the element the pointer rests
 //! on. A tooltip is an element anywhere in the screen's tree, anchored `Anchor::Tip` and named
 //! `tooltip <name>` for the element named `<name>` that it explains (`widgets::tooltip`). It is
-//! hidden until the pointer has rested on that element for `flat.tooltip_delay` milliseconds,
+//! hidden until the pointer has rested on that element for the milliseconds set by
+//! `tooltip.delay_ms` in `flat.json`,
 //! as the web interface's `.tip` waits for `:hover` (`ui/src/design/components/tips.css`),
 //! and then stands centred above the element, or below it where there is no room above,
-//! `flat.tooltip_gap` points away. It takes no presses.
+//! `tooltip.gap` points away. It takes no presses.
 
 use glam::Vec2;
 
 use super::{Layer, menu::fit};
 use crate::element::{Anchor, Display};
 use crate::input::{Rect, Size};
-use kit_base::data::space::flat::{MENU_EDGE, TOOLTIP_DELAY, TOOLTIP_GAP};
 use kit_frame::frame::{Anchor as SceneAnchor, ElementId, Role};
 
 /// What a tooltip's name starts with, before the name of the element it explains.
 pub const TIP_PREFIX: &str = "tooltip ";
-
-/// How long the pointer rests on an element before its tooltip shows, in nanoseconds.
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-const DELAY: u64 = TOOLTIP_DELAY as u64 * 1_000_000;
 
 /// The tooltip of the element the pointer is on.
 #[derive(Clone, Copy, Debug)]
@@ -74,7 +70,7 @@ impl Layer {
             return;
         };
         let since = *tip.since.get_or_insert(now);
-        if tip.shown || now.saturating_sub(since) < DELAY {
+        if tip.shown || now.saturating_sub(since) < self.tuning.tooltip.delay_ns() {
             return;
         }
         tip.shown = true;
@@ -87,7 +83,8 @@ impl Layer {
     #[must_use]
     pub fn tip_due(&self) -> Option<u64> {
         let tip = self.tip.as_ref().filter(|tip| !tip.shown)?;
-        tip.since.map(|since| since + DELAY)
+        tip.since
+            .map(|since| since.saturating_add(self.tuning.tooltip.delay_ns()))
     }
 
     /// Starts the tooltip's enter transition when its wait ends.
@@ -110,7 +107,15 @@ impl Layer {
     ) -> Option<(SceneAnchor, Rect)> {
         let tip = self.tip.filter(|tip| tip.shown && tip.tooltip == id)?;
         let (_, target) = self.positioned_node(tip.target, open)?;
-        Some((beside(tip.target, target, size, self.window.size), target))
+        let anchor = beside(
+            tip.target,
+            target,
+            size,
+            self.window.size,
+            self.tuning.menu_edge,
+            self.tuning.tooltip.gap,
+        );
+        Some((anchor, target))
     }
 
     /// The tooltip on the screen that explains the element named `name`, if any.
@@ -136,23 +141,30 @@ impl Layer {
 
 /// Centres a tooltip above its target, or below it when it would pass the
 /// window's top. The horizontal offset keeps the tooltip inside the window.
-fn beside(id: ElementId, target: Rect, size: Vec2, window: Size) -> SceneAnchor {
+fn beside(
+    id: ElementId,
+    target: Rect,
+    size: Vec2,
+    window: Size,
+    edge: f32,
+    gap: f32,
+) -> SceneAnchor {
     let x = target.x + (target.width - size.x) / 2.0;
-    let dx = fit(x, size.x, window.width) - x;
-    let above = target.y - TOOLTIP_GAP - size.y;
-    if above >= MENU_EDGE {
+    let dx = fit(x, size.x, window.width, edge) - x;
+    let above = target.y - gap - size.y;
+    if above >= edge {
         SceneAnchor::new(
             id,
             Vec2::new(0.5, 0.0),
             Vec2::new(0.5, 1.0),
-            Vec2::new(dx, -TOOLTIP_GAP),
+            Vec2::new(dx, -gap),
         )
     } else {
         SceneAnchor::new(
             id,
             Vec2::new(0.5, 1.0),
             Vec2::new(0.5, 0.0),
-            Vec2::new(dx, TOOLTIP_GAP),
+            Vec2::new(dx, gap),
         )
     }
 }

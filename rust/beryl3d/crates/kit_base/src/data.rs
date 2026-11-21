@@ -3,6 +3,8 @@
 pub mod badges;
 mod card;
 pub mod effect;
+pub mod flat;
+pub mod hud;
 pub mod light;
 pub mod lighting;
 pub mod playback;

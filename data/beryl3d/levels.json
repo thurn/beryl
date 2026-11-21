@@ -68,7 +68,7 @@
   "cap_lines": 12000,
   "cap_allowances": {
     "game_table": {
-      "lines": 12275,
+      "lines": 12269,
       "reason": "The tray's layout adapter, clipping and scroll offset use the same game slots and poses as the table's lift, let-go and script handoff. The grid solver and screen element adapter live in the toolkit."
     }
   },
@@ -92,10 +92,10 @@
     "beryl_inspect": 107,
     "beryl_pictures": 7,
     "beryl_render": 0,
-    "game_probe": 113,
-    "kit_base": 6,
+    "game_probe": 112,
+    "kit_base": 0,
     "kit_probe": 17,
     "kit_space": 0,
-    "kit_ui": 1
+    "kit_ui": 0
   }
 }

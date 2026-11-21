@@ -106,8 +106,9 @@ impl Client {
         self.frame.clearances = placement_scene
             .map(PlacementScene::into_clearances)
             .unwrap_or_default();
+        let duration = self.data().flat.transition_ms;
         self.layer
-            .show(shown.map(kit_ui::widgets::screen::with_transitions));
+            .show(shown.map(|screen| kit_ui::widgets::screen::with_transitions(screen, duration)));
         if let Some(field) = self.features.focus_after_show.take() {
             self.layer.focus_field(field);
         }
@@ -207,6 +208,7 @@ impl Client {
             Vec::new()
         };
         let hud = HudIn {
+            data: self.show.table().data(),
             window: self.window,
             profile,
             view,

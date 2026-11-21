@@ -545,6 +545,7 @@ pub fn dock(
     window: Window,
     profile: Profile<'_>,
     anchor: Option<Anchor>,
+    inset: f32,
 ) -> Element {
     let state = fields.get(&ask.field);
     let text = &state.text;
@@ -607,7 +608,6 @@ pub fn dock(
         .align_items(Align::End)
         .children(common)
         .child(controls);
-    let inset = kit_base::data::space::flat::table::EDGE;
     let corner = Vec2::new(window.size.width - inset, window.size.height - inset);
     dock.anchor = Some(Anchor::Point(corner, Vec2::ONE));
     dock

@@ -18,9 +18,6 @@ pub use kit_base::geometry::Band;
 pub use phone::TableBands;
 pub use web_fit::{FittedPiles, FittedRow, FittedRows};
 
-/// The logical points per unit of life-orb art, in atlas order.
-pub const ORB_SCALES: [f32; 2] = [1.0 / 1.045, phone::ORB_SCALE];
-
 /// The layout selected for a window. A feature uses its slots and size class to fit its content.
 #[derive(Clone, Copy, Debug)]
 pub struct Profile<'a> {

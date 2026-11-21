@@ -271,17 +271,19 @@ project, and selects the main lanes.
   and `slide.json` govern queued scripts and table regrouping. `frame-rate.json`
   and `tier-probe.json` control host pacing and startup tier selection.
   `notices.json`, `revealed.json` and `shown.json` control notices, the Revealed
-  Cards fan and cards shown over the flat layer. `lighting.json` holds the light
-  and shadow darkness both tiers share, the Baseline contact shadows, and the
-  Enhanced lights, shadow map and bloom, which the hosts pass to
-  `beryl_render::Renderer` when they make it. `light.json` holds the arrows,
-  lines, marks and the glow of the shapes of light, and `own.json` the moon,
-  coin, attacker chevron and blocker crescent. The host draws atlas page 0 from
-  both (`Assets::sync_light`) and draws it again when either changes.
-  `card.json` holds a card's printed size and stacking, which each profile's
-  camera carries (`CameraData::card`) and each frame passes to the renderer's
-  card mesh (`Frame::card`). `badges.json` holds the badges' sizes; a change
-  reshapes their text.
+  Cards fan and cards shown over the flat layer. `flat.json` holds menu,
+  tooltip, transition and manual-overlay tuning. `hud.json` holds the combat
+  banner, opening indicators, incoming damage and step-track appearance.
+  `lighting.json` holds the light and shadow darkness both tiers share, the
+  Baseline contact shadows, and the Enhanced lights, shadow map and bloom. The
+  hosts pass that tuning to `beryl_render::Renderer` when they make it.
+  `light.json` holds the arrows, lines, marks and the glow of the shapes of
+  light, and `own.json` the moon, coin, attacker chevron and blocker crescent.
+  The host draws atlas page 0 from both (`Assets::sync_light`) and draws it
+  again when either changes. `card.json` holds a card's printed size and
+  stacking, which each profile's camera carries (`CameraData::card`) and each
+  frame passes to the renderer's card mesh (`Frame::card`). `badges.json` holds
+  the badges' sizes; a change reshapes their text.
 
 - `data/beryl3d/effects/*.json` defines drawing layers for runtime effects. The
   app embeds them. Tools read them from the checkout or `BERYL3D_DATA`. The
@@ -290,8 +292,8 @@ project, and selects the main lanes.
 
 - `data/beryl3d/profiles/` holds the layouts, including their window conditions,
   the camera and container tuning, named slots, interface thresholds and test
-  windows. Hosts load the typed profiles with the verb tuning. Only the
-  remaining HUD and flat-layer settings are also exported as constants.
+  windows. The profiles also supply opening dimensions, orb scale and compact
+  action sizes.
 
 - `data/beryl3d/space-constants.json` holds the shared tuning that still
   compiles to constants. The `kit_base` build script publishes it under

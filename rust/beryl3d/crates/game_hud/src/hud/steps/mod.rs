@@ -6,7 +6,7 @@ use std::convert::Infallible;
 use beryl_protocol::protocol::{DecisionId, SessionId, Side, Step, StepSet, StopsSetting};
 use beryl_protocol::script::Turn;
 use glam::Vec2;
-use kit_base::data::profiles::Piece;
+use kit_base::data::{hud::StepTrack, profiles::Piece};
 use kit_scene::{Context, Feature};
 use kit_ui::element::{Element, row};
 use kit_ui::layout::Layer;
@@ -36,7 +36,14 @@ pub struct State {
     pending_at: Option<(SessionId, DecisionId)>,
 }
 
-type RowsFrom = (StopsSetting, [Vec2; 2], Option<Viewed>, bool, bool);
+type RowsFrom = (
+    StopsSetting,
+    [Vec2; 2],
+    Option<Viewed>,
+    bool,
+    bool,
+    StepTrack,
+);
 type Lit = (Side, Step);
 
 /// The desktop step row, with stops the player can toggle.
@@ -72,6 +79,7 @@ impl Feature for StepRow {
 #[derive(Clone, Copy)]
 pub struct Inputs {
     centres: [Vec2; 2],
+    tuning: StepTrack,
     enabled: bool,
     pub latest: Option<Lit>,
     pub turn: Option<Turn>,
@@ -91,6 +99,7 @@ impl Inputs {
         };
         Self {
             centres,
+            tuning: input.data.hud.steps,
             enabled,
             latest: input.view.map(|view| (view.turn.active, view.turn.step)),
             turn: input.turn,
@@ -112,6 +121,7 @@ impl Inputs {
             self.viewing,
             self.opening,
             self.enabled,
+            self.tuning,
         )
     }
 

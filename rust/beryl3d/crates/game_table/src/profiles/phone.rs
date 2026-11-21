@@ -45,9 +45,6 @@ use kit_base::geometry::Band;
 use kit_scene::hit::CELL;
 use kit_ui::input::Rect;
 
-/// Logical points per unit of life-orb art.
-pub(super) const ORB_SCALE: f32 = kit_base::data::space::hud::phone::ORB_SCALE;
-
 /// A card's width over its height, the web interface's `RATIO`.
 fn ratio(card: Card) -> f32 {
     card.width / card.height

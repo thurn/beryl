@@ -21,13 +21,13 @@ pub(super) struct Tracks {
 struct Track {
     from: Vec4,
     to: Vec4,
-    timing: &'static Timing,
+    timing: Timing,
     start: Option<u64>,
     progress: f32,
 }
 
 impl Track {
-    fn new(from: Vec4, to: Vec4, timing: &'static Timing) -> Option<Self> {
+    fn new(from: Vec4, to: Vec4, timing: Timing) -> Option<Self> {
         (from != to && timing.nanoseconds() != (0, 0)).then_some(Self {
             from,
             to,
@@ -228,7 +228,7 @@ impl Node {
             .is_some_and(|track| track.start.is_none() && track.from.x <= 0.0)
     }
 
-    pub(super) fn slide_layout(&mut self, moved: Vec2, timing: &'static Timing) {
+    pub(super) fn slide_layout(&mut self, moved: Vec2, timing: Timing) {
         let from = self.tracks.placement.map_or(Vec4::ZERO, Track::current) + vector(moved);
         self.tracks.placement = Track::new(from, Vec4::ZERO, timing);
     }
@@ -294,13 +294,7 @@ impl Node {
         }
     }
 
-    fn change_track(
-        &mut self,
-        property: Property,
-        old: Vec4,
-        new: Vec4,
-        timing: Option<&'static Timing>,
-    ) {
+    fn change_track(&mut self, property: Property, old: Vec4, new: Vec4, timing: Option<Timing>) {
         let from = self.tracks.get(property).map_or(old, Track::current);
         self.tracks.set(
             property,
@@ -312,11 +306,11 @@ impl Node {
         self.element
             .style
             .leave
-            .is_some_and(|leave| self.tracks.leaving(leave))
+            .is_some_and(|leave| self.tracks.leaving(&leave))
     }
 
     /// Starts an enter or leave. A leave starts at the currently displayed values.
-    pub(super) fn presence(&mut self, presence: &'static Presence, entering: bool) {
+    pub(super) fn presence(&mut self, presence: Presence, entering: bool) {
         let values = [
             (Property::Opacity, presence.opacity.map(Vec4::splat)),
             (Property::Translation, presence.translation.map(vector)),
@@ -334,12 +328,12 @@ impl Node {
                 )
             };
             self.tracks
-                .set(property, Track::new(from, to, &presence.timing));
+                .set(property, Track::new(from, to, presence.timing));
         }
     }
 }
 
-fn timing(style: &Style, property: Property, anchored: bool) -> Option<&'static Timing> {
+fn timing(style: &Style, property: Property, anchored: bool) -> Option<Timing> {
     if matches!(property, Property::Width | Property::Height)
         && !anchored
         && style.position != crate::element::Position::Absolute
@@ -350,7 +344,12 @@ fn timing(style: &Style, property: Property, anchored: bool) -> Option<&'static 
         .transition
         .iter()
         .find(|spec| spec.property == property)
-        .map(|spec| &spec.timing)
+        .map(|spec| spec.timing)
+        .or_else(|| {
+            style
+                .opacity_transition
+                .filter(|_| property == Property::Opacity)
+        })
 }
 
 impl Layer {

@@ -1,11 +1,8 @@
-//! Generates spatial constants from the shared tuning and layout profiles.
+//! Generates the remaining spatial constants.
 //! It also generates the design tokens and embeds the serif font files.
 
 #[path = "build/gradients.rs"]
 mod gradients;
-
-#[path = "build/profiles.rs"]
-mod profiles;
 
 use std::fmt::Write;
 use std::fs;
@@ -17,8 +14,7 @@ fn main() {
     let space = data.join("space-constants.json");
     println!("cargo:rerun-if-changed={}", space.display());
     let space_text = fs::read_to_string(&space).unwrap();
-    let mut space_json: serde_json::Value = serde_json::from_str(&space_text).unwrap();
-    profiles::legacy(&data, &mut space_json);
+    let space_json: serde_json::Value = serde_json::from_str(&space_text).unwrap();
     let mut out = String::new();
     write_space(&space_json, &mut out);
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
@@ -410,7 +406,7 @@ fn write_space(json: &serde_json::Value, out: &mut String) {
         .as_array()
         .map(|paths| paths.iter().filter_map(serde_json::Value::as_str).collect())
         .unwrap_or_default();
-    out.push_str("/// Spatial constants from `space-constants.json` and the layout profiles.\npub mod space {\n");
+    out.push_str("/// Spatial constants from `space-constants.json`.\npub mod space {\n");
     let object = json.as_object().expect("space-constants.json is an object");
     write_members(object, "", 1, &counts, out);
     out.push_str("}\n");

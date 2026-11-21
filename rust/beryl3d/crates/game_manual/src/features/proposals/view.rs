@@ -12,15 +12,23 @@ pub struct Inputs<'a> {
     pub window: Window,
     pub profile: Profile<'a>,
     pub anchor: Option<Anchor>,
+    pub metrics: kit_base::data::flat::Manual,
 }
 
-pub type ViewKey = (Vec<ProposalView>, Window, ProfileData, Option<Anchor>);
+pub type ViewKey = (
+    Vec<ProposalView>,
+    Window,
+    ProfileData,
+    Option<Anchor>,
+    kit_base::data::flat::Manual,
+);
 pub(super) fn key(inputs: &Inputs<'_>) -> ViewKey {
     (
         inputs.proposals.to_vec(),
         inputs.window,
         inputs.profile.data().clone(),
         inputs.anchor,
+        inputs.metrics,
     )
 }
 
@@ -31,6 +39,7 @@ pub(super) fn render(state: State, inputs: Inputs<'_>) -> Element {
         inputs.window,
         inputs.profile,
         inputs.anchor,
+        inputs.metrics,
     )
     .expect("the panel has proposals")
 }

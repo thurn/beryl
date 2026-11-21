@@ -341,6 +341,7 @@
   },
   "settings_quick_action_min_width": 84,
   "manual": {
+    "menu_preview_width": 144,
     "label_overlap": 16,
     "mana_right": 32,
     "mana_width": 48,
@@ -376,7 +377,5 @@
       "submit_width": 80
     },
     "list_row": 44
-  },
-  "legacy": {},
-  "counts": []
+  }
 }

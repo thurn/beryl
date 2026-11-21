@@ -6,20 +6,22 @@
 
 use crate::element::{Anchor, Element, Presence, Timing};
 use crate::layout::TIP_PREFIX;
-use kit_base::data::space::flat::transition::TOOLTIP_MS;
+use kit_base::data::flat::Tooltip;
 use kit_base::pose::Curve;
 use kit_base::tokens::{color, shadow, size, type_style};
 use kit_frame::frame::Role;
 
-const ENTER: Presence = Presence::fade(Timing::new(TOOLTIP_MS, 0.0, Curve::EASE_OUT));
-
 /// The tooltip saying `words` about the element named `of`, named `tooltip <of>`. It never
 /// takes a press.
 #[must_use]
-pub fn tooltip(words: &str, of: &str) -> Element {
+pub fn tooltip(words: &str, of: &str, metrics: Tooltip) -> Element {
     let mut element = tip_label(words.to_owned())
         .name(&format!("{TIP_PREFIX}{of}"))
-        .enter(&ENTER)
+        .enter(Presence::fade(Timing::new(
+            metrics.fade_ms,
+            0.0,
+            Curve::EASE_OUT,
+        )))
         .passes(true);
     element.anchor = Some(Anchor::Tip);
     element

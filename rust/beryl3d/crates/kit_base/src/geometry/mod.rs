@@ -129,32 +129,3 @@ pub fn zoom_rect(rect: Rect, (pivot, scale): (Vec2, f32)) -> Rect {
         height: rect.height * scale,
     }
 }
-
-impl Window {
-    /// Whether the window uses the compact phone layout.
-    #[must_use]
-    pub fn phone(self) -> bool {
-        self.size_class() == SizeClass::Compact
-    }
-
-    /// The resolved size class, with the bundled breakpoint for unresolved windows.
-    #[must_use]
-    pub fn size_class(self) -> SizeClass {
-        self.size_class.unwrap_or_else(|| {
-            if phone_size(self.size) {
-                SizeClass::Compact
-            } else {
-                SizeClass::Regular
-            }
-        })
-    }
-}
-
-/// The shorter side below which the phone layout fits the window.
-pub const PHONE_BELOW_POINTS: f32 = crate::data::space::flat::PHONE_UNDER;
-
-/// Whether the shorter side of `size` calls for the phone layout.
-#[must_use]
-pub fn phone_size(size: Size) -> bool {
-    crate::data::profiles::shorter_side_below(size, PHONE_BELOW_POINTS)
-}

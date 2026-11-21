@@ -151,6 +151,7 @@ fn reference_page(input: &ScreenIn, faces: &FaceList, width: f32, height: f32) -
             layout,
             (faces, input.data.card),
             opened.is_none() && query.is_none(),
+            input.profile.data().play.life.orb_scale,
         ));
     let mut screen = with_escape(screen, input.gallery);
     screen.anchor = Some(Anchor::Point(Vec2::new(inset.left, inset.top), Vec2::ZERO));

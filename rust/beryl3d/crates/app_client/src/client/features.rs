@@ -555,6 +555,7 @@ impl Mounted for StartScreen {
         let entries = features.lobby().entries.clone();
         Some(
             Features::slot::<Self>(&mut features.slots, id).view(start::Inputs {
+                tooltip: inputs.hud.data.flat.tooltip,
                 window: inputs.window,
                 column: inputs.profile.screen_column(),
                 in_progress,

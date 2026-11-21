@@ -148,12 +148,14 @@ pub struct Style {
     pub scale: f32,
     /// How changes to individual properties are drawn. The first entry for a property wins.
     pub transition: &'static [Transition],
+    /// The screen's default fade when no opacity transition is declared.
+    pub opacity_transition: Option<Timing>,
     /// How this element appears after it joins the tree.
-    pub enter: Option<&'static Presence>,
+    pub enter: Option<Presence>,
     /// How this element departs after it leaves the tree.
-    pub leave: Option<&'static Presence>,
+    pub leave: Option<Presence>,
     /// How a change to the element's layout position is drawn, without moving its children.
-    pub layout_slide: Option<&'static Timing>,
+    pub layout_slide: Option<Timing>,
     /// The color of the element's panel in place of the usual one. An element that is not
     /// usually drawn on a panel is drawn on one of this color.
     pub background: Option<[u8; 4]>,
@@ -252,6 +254,7 @@ impl Default for Style {
             translation: Vec2::ZERO,
             scale: 1.0,
             transition: &[],
+            opacity_transition: None,
             enter: None,
             leave: None,
             layout_slide: None,
@@ -336,9 +339,9 @@ macro_rules! optional_setters {
 
 optional_setters! {
     basis: f32,
-    enter: &'static Presence,
-    leave: &'static Presence,
-    layout_slide: &'static Timing,
+    enter: Presence,
+    leave: Presence,
+    layout_slide: Timing,
     align_items: Align,
     align_self: Align,
     justify_content: Justify,

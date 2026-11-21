@@ -17,8 +17,8 @@ use glam::Vec2;
 
 use crate::features::table::Message as TableMessage;
 use crate::manual::opening::{OpeningPress, prompt};
+use game_hud::hud::HudIn;
 use game_hud::screens::opening::{Presentation, present};
-use game_table::profiles::Profile;
 use game_table::table::Window;
 use kit_base::tokens::{color, size, space};
 use kit_ui::element::{Action, Align, Anchor, Element, row};
@@ -39,17 +39,18 @@ fn answer(label: &str, press: OpeningPress, first: bool) -> Element {
 /// they never inherit its passing the pointer through; empty while the viewer has no prompt of
 /// it open.
 #[must_use]
-pub(crate) fn table_opening(
-    view: Option<&PlayerView>,
-    window: Window,
-    profile: Profile<'_>,
-) -> Vec<Element> {
-    view.and_then(|view| pieces(view, window, profile))
+pub(crate) fn table_opening(input: &HudIn) -> Vec<Element> {
+    input
+        .view
+        .and_then(|view| pieces(view, input))
         .map_or_else(Vec::new, |(shown, actions)| vec![shown, actions])
 }
 
 /// The guided start's screen and its buttons, as `table_opening` returns them.
-fn pieces(view: &PlayerView, window: Window, profile: Profile<'_>) -> Option<(Element, Element)> {
+fn pieces(view: &PlayerView, input: &HudIn) -> Option<(Element, Element)> {
+    let window = input.window;
+    let profile = input.profile;
+    let style = input.data.hud.opening;
     let dock_slot = profile.screen_column().zip(profile.slot("screen.dock"));
     let (shown, buttons, middle) = match prompt(view)? {
         TablePrompt::Choose { title, options, .. } => {
@@ -74,7 +75,11 @@ fn pieces(view: &PlayerView, window: Window, profile: Profile<'_>) -> Option<(El
                 press: None,
                 choice: &[],
             };
-            (present(&shown, profile), buttons, dock_slot.is_none())
+            (
+                present(&shown, profile, style),
+                buttons,
+                dock_slot.is_none(),
+            )
         }
         TablePrompt::Opening {
             hand,
@@ -120,7 +125,7 @@ fn pieces(view: &PlayerView, window: Window, profile: Profile<'_>) -> Option<(El
                 press: picking.then_some(bottom as fn(ObjectId) -> Action),
                 choice: &[],
             };
-            (present(&shown, profile), buttons, false)
+            (present(&shown, profile, style), buttons, false)
         }
         TablePrompt::Sort { .. } => return None,
     };
@@ -129,7 +134,7 @@ fn pieces(view: &PlayerView, window: Window, profile: Profile<'_>) -> Option<(El
     } else if let Some((layout, slot)) = dock_slot {
         layout.actions_at_foot("opening actions", buttons, slot.rect)
     } else {
-        dock(buttons, window)
+        dock(buttons, window, input.data.flat.manual.edge)
     };
     Some((shown, actions))
 }
@@ -143,7 +148,7 @@ fn middle_row(buttons: Vec<Element>, window: Window) -> Element {
 }
 
 /// The buttons in the dock at the window's lower right, as the table's ask prompt stands.
-fn dock(buttons: Vec<Element>, window: Window) -> Element {
+fn dock(buttons: Vec<Element>, window: Window, inset: f32) -> Element {
     let window = window.size;
     let mut dock = row()
         .name("opening actions")
@@ -154,7 +159,6 @@ fn dock(buttons: Vec<Element>, window: Window) -> Element {
         .border((color::METAL, size::BORDER))
         .radius(size::PANEL_RADIUS)
         .children(buttons);
-    let inset = kit_base::data::space::flat::table::EDGE;
     let corner = Vec2::new(window.width - inset, window.height - inset);
     dock.anchor = Some(Anchor::Point(corner, Vec2::ONE));
     dock

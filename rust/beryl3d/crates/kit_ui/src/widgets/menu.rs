@@ -142,7 +142,6 @@ fn divider(index: usize, name: &str) -> Element {
 pub fn context_menu(at: Vec2, menu: Element) -> Element {
     let mut menu = menu;
     menu.anchor = Some(Anchor::Menu(at));
-    menu.style.enter = Some(&super::screen::SCREEN_FADE);
     menu
 }
 

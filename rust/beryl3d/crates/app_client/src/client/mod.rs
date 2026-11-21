@@ -114,11 +114,12 @@ impl Client {
     #[must_use]
     pub fn new(data: Arc<Data>, config: Config) -> Self {
         let window = data.profiles.resolve_window(Window::default());
+        let layer = Layer::with_tuning(data.flat);
         Self {
             frame: Frame::with_capacity(config.elements, config.draws, config.name_bytes),
             window,
             show: Show::new(Table::new(data, window)),
-            layer: Layer::new(),
+            layer,
             features: features::Features::default(),
             routes: input::Routes::default(),
             settings: crate::settings::Settings::default(),
@@ -372,7 +373,13 @@ impl Client {
             .write(&mut self.layer, self.show.table(), rows_counted);
         let at_rest = self.show.shown().map(|update| &update.view);
         let banner = self.features.banner_mut();
-        banner.write(&mut self.layer, at_rest, table_now, visible);
+        banner.write(
+            &mut self.layer,
+            at_rest,
+            table_now,
+            visible,
+            table.data().hud,
+        );
         Tree::solve_float_anchors(&mut self.layer, &builder);
         let (layout_nodes, text_runs) = self.layer.take_work();
         builder.layout_work(layout_nodes, text_runs);

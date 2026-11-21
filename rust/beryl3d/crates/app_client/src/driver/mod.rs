@@ -620,7 +620,7 @@ impl Page {
         }
         if self.stub_atlas {
             self.give(Input::Device(DeviceInput::Assets(
-                glyphs::stub_client_icons(self.scale),
+                glyphs::stub_client_icons(self.scale, &self.client.data().profiles),
             )));
         }
         for ready in self.glyphs.clone() {

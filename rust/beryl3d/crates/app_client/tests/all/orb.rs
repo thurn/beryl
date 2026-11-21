@@ -8,6 +8,7 @@ use app_client::Input;
 use beryl_protocol::protocol::Side;
 use game_hud::art::orb::{self, LAYERS};
 use glam::{Vec2, Vec4};
+use kit_base::data::profiles::Profiles;
 use kit_frame::frame::{Frame, Material, Role, StateBits};
 use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{AssetReady, IconCell};
@@ -16,8 +17,8 @@ use super::flat_layer::{client, deciding, edges, find, prompt};
 
 /// A cell for every layer of the art at every scale, each at its own column of page 1, so that
 /// a draw's `uv` names the layer it draws.
-fn orb_cells() -> Vec<IconCell> {
-    orb::atlas_cells()
+fn orb_cells(profiles: &Profiles) -> Vec<IconCell> {
+    orb::atlas_cells(profiles)
         .enumerate()
         .map(|(index, layer)| layer.cell([u16::try_from(index).unwrap(), 0, 1, 1]))
         .collect()
@@ -57,7 +58,7 @@ fn each_orb_draws_the_webs_art_with_its_ring_toward_its_edge() {
     client.handle(deciding(prompt("Pay {1}{U}")));
     client.handle(Input::Device(DeviceInput::Assets(AssetReady::Icons {
         page: 1,
-        cells: orb_cells(),
+        cells: orb_cells(&client.data().profiles),
     })));
     let frame = client.frame(0);
     let size = Vec2::new(1440.0, 900.0);

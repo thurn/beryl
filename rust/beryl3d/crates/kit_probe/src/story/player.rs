@@ -7,7 +7,11 @@ use std::sync::Arc;
 use glam::camera::rh::proj::directx;
 use glam::{Affine3A, Vec2};
 use kit_base::atlas::{GlyphKey, Tier};
-use kit_base::data::{Data, effect::Effects};
+use kit_base::data::{
+    Data,
+    effect::Effects,
+    profiles::{ScreenMetrics, SizeClass},
+};
 use kit_base::geometry::{Rect, Window, plane::ScreenPlane};
 use kit_frame::frame::{ElementId, Frame, FrameBuilder, NameRef, Place, Resolved, Role, StateBits};
 use kit_fx::effects::{Effect, preview};
@@ -46,15 +50,31 @@ impl Player {
     /// the host or with [`Self::stub_atlas`] for checks that only need draw records.
     #[must_use]
     pub fn new(story: &Story, window: Window, data: Arc<Data>) -> Self {
-        let mut layer = Layer::new();
+        let profile = data.profiles.for_size(window.size);
+        let compact = if profile.size_class == SizeClass::Compact {
+            profile
+        } else {
+            data.profiles
+                .iter()
+                .find(|profile| profile.size_class == SizeClass::Compact)
+                .expect("validated compact profile")
+        };
+        let actions = compact.screen.as_ref().expect("validated compact screen");
+        let window = data.profiles.resolve_window(window);
+        let mut layer = Layer::with_tuning(data.flat);
         layer.resize(window);
         let mut authored = vec![None];
         let mut canvas = kit_ui::widgets::screen::whole_window(window.size, holder().name("Story"));
         let mut effect = None;
         match &story.body {
             Body::Elements(nodes) => {
-                canvas.children =
-                    children(&mut nodes.iter().peekable(), 0, Vec2::ZERO, &mut authored);
+                canvas.children = children(
+                    &mut nodes.iter().peekable(),
+                    0,
+                    Vec2::ZERO,
+                    &mut authored,
+                    actions,
+                );
             }
             Body::Container(container) => {
                 // The arrangement solver has yet to land. Keep the input typed and show its
@@ -265,11 +285,12 @@ fn children<'a>(
     depth: usize,
     origin: Vec2,
     authored: &mut Vec<Option<PreviewNode>>,
+    actions: &ScreenMetrics,
 ) -> Vec<Element> {
     let mut children = Vec::new();
     while nodes.peek().is_some_and(|node| node.depth == depth) {
         let Some(node) = nodes.next() else { break };
-        let (mut element, states) = element(node, origin);
+        let (mut element, states) = element(node, origin, actions);
         authored.push(Some(PreviewNode {
             id: node.id,
             states,
@@ -283,7 +304,7 @@ fn children<'a>(
         let corner = Vec2::new(node.rect.x + border[3], node.rect.y + border[0]);
         element
             .children
-            .extend(self::children(nodes, depth + 1, corner, authored));
+            .extend(self::children(nodes, depth + 1, corner, authored, actions));
         children.push(element);
     }
     children
@@ -296,7 +317,7 @@ fn generated(element: &Element, authored: &mut Vec<Option<PreviewNode>>) {
     }
 }
 
-fn element(node: &Node, origin: Vec2) -> (Element, StateBits) {
+fn element(node: &Node, origin: Vec2, actions: &ScreenMetrics) -> (Element, StateBits) {
     let mut bits = StateBits::default();
     let mut interactive = false;
     let mut opacity = 1.0;
@@ -324,7 +345,7 @@ fn element(node: &Node, origin: Vec2) -> (Element, StateBits) {
                 .map(str::to_owned);
             element
         },
-        |widget| widget.build(node, text_property.unwrap_or(name), bits),
+        |widget| widget.build(node, text_property.unwrap_or(name), bits, actions),
     );
     element = element
         .name(name)

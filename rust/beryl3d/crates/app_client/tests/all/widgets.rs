@@ -387,10 +387,11 @@ fn down_twice_and_return_presses_the_third_row_of_a_menu() {
 fn a_tooltip_shows_after_the_pointer_rests_500_ms_and_not_before() {
     let mut client = client();
     client.frame(0);
+    let tooltip = client.data().flat.tooltip;
     (client.layer_mut()).show(Some(
         row()
             .name("dock")
-            .child(widgets::tooltip("Undo the last action", "Undo"))
+            .child(widgets::tooltip("Undo the last action", "Undo", tooltip))
             .child(widgets::button("Undo").on_press(BarMessage::Undo)),
     ));
     let frame = client.frame(OPEN);

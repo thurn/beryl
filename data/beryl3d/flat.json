@@ -1,0 +1,40 @@
+{
+  "transition_ms": 180,
+  "menu_edge": 8,
+  "tooltip": {
+    "delay_ms": 500,
+    "fade_ms": 120,
+    "gap": 8
+  },
+  "manual": {
+    "edge": 24,
+    "palette": {
+      "width": 560,
+      "top": 96,
+      "height": 420
+    },
+    "log": {
+      "width": 320,
+      "height": 460
+    },
+    "drop": {
+      "opponent_hand": 0.0533,
+      "rim": 2,
+      "radius": 6
+    },
+    "link": {
+      "top": 158,
+      "top_share": 0.18,
+      "width": 520
+    },
+    "selection": {
+      "above": 5,
+      "padding_y": 3,
+      "padding_x": 7,
+      "gap": 8,
+      "radius": 5,
+      "rim": 1
+    },
+    "sweep_rim": 1
+  }
+}

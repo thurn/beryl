@@ -58,6 +58,7 @@ pub fn proposals(
     window: Window,
     profile: Profile<'_>,
     anchor: Option<Anchor>,
+    metrics: kit_base::data::flat::Manual,
 ) -> Option<Element> {
     let first = proposals.first()?.id;
     let mut panel = column()
@@ -70,8 +71,8 @@ pub fn proposals(
     let Some(slot) = profile.slot("manual.proposals") else {
         panel = panel
             .children(proposals.iter().map(|each| proposal(each, None)))
-            .width(kit_base::data::space::flat::table::log::WIDTH);
-        let left = kit_base::data::space::flat::table::EDGE;
+            .width(metrics.log.width);
+        let left = metrics.edge;
         panel.anchor = Some(Anchor::Point(
             Vec2::new(left, window.size.height / 2.0),
             Vec2::new(0.0, 0.5),

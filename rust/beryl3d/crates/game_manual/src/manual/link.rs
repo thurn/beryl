@@ -12,7 +12,7 @@ use glam::Vec2;
 
 use crate::features::table::Message as TableMessage;
 use game_hud::hud::notices::step_banner;
-use kit_base::data::space::flat::table::link::{TOP, TOP_SHARE, WIDTH};
+use kit_base::data::flat::LinkBanner;
 use kit_base::tokens::{color, size, space, type_style};
 use kit_ui::element::{Align, Anchor, Element, column, text};
 use kit_ui::input::Size;
@@ -36,7 +36,13 @@ pub fn frozen(view: &PlayerView) -> bool {
 /// left, standing `top` points below the top of a window of `window`'s size; none while the
 /// connection is up.
 #[must_use]
-pub fn banner(view: &PlayerView, window: Size, top: f32, error: Option<&str>) -> Option<Element> {
+pub fn banner(
+    view: &PlayerView,
+    window: Size,
+    top: f32,
+    error: Option<&str>,
+    metrics: LinkBanner,
+) -> Option<Element> {
     let table = view.table.as_ref()?;
     let peer = table.peer_name.as_deref().unwrap_or("Opponent");
     let title = match table.link {
@@ -44,7 +50,7 @@ pub fn banner(view: &PlayerView, window: Size, top: f32, error: Option<&str>) ->
         LinkState::Reconnecting => format!("{peer} is reconnecting"),
         LinkState::Alone | LinkState::Connected { .. } => return None,
     };
-    let width = WIDTH.min(window.width - 2.0 * space::M);
+    let width = metrics.width.min(window.width - 2.0 * space::M);
     let notice = step_banner(&title, None)
         .name("link")
         .width(width)
@@ -71,9 +77,9 @@ pub fn banner(view: &PlayerView, window: Size, top: f32, error: Option<&str>) ->
 }
 
 /// How far below the window's top the banner stands: under the safe area on the phone, and at
-/// `.table-link`'s padding (`flat.table.link` in `data/beryl3d/space-constants.json`), at most a share of
-/// the window's height, on the desktop. The banner is at most `flat.table.link.width` wide.
+/// `.table-link`'s padding (the link metrics in `flat.json`), at most a share of
+/// the window's height, on the desktop. The banner is at most as wide as its configured width.
 #[must_use]
-pub fn top(window: Size) -> f32 {
-    TOP.min(TOP_SHARE * window.height)
+pub fn top(window: Size, metrics: LinkBanner) -> f32 {
+    metrics.top.min(metrics.top_share * window.height)
 }

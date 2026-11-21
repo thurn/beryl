@@ -19,8 +19,11 @@ use beryl_render::Renderer;
 use game_hud::art::orb;
 use game_table::faces::FaceList;
 use kit_base::atlas::{AssetReady, FaceId, FaceSize, GlyphKey};
-use kit_base::data::Data;
-use kit_base::data::light::{Light, Own};
+use kit_base::data::{
+    Data,
+    light::{Light, Own},
+    profiles::Profiles,
+};
 use kit_frame::frame::Wake;
 use kit_ui::art::icons as icon_artwork;
 use kit_ui::widgets::icon_shadows;
@@ -29,7 +32,11 @@ use crate::frames::When;
 
 /// Starts the glyph worker with the widget icons, their shadows, and the game's artwork.
 #[must_use]
-pub fn spawn_glyph_worker(out: Sender<Prepared>, wake: impl Fn() + Send + 'static) -> GlyphWorker {
+pub fn spawn_glyph_worker(
+    out: Sender<Prepared>,
+    wake: impl Fn() + Send + 'static,
+    profiles: Option<&Profiles>,
+) -> GlyphWorker {
     GlyphWorker::spawn(
         out,
         wake,
@@ -37,7 +44,7 @@ pub fn spawn_glyph_worker(out: Sender<Prepared>, wake: impl Fn() + Send + 'stati
         IconSet {
             icons: icon_artwork::ALL.to_vec(),
             shadows: &icon_shadows::CHAINS,
-            layers: orb::atlas_artwork(),
+            layers: profiles.map_or_else(Vec::new, orb::atlas_artwork),
         },
     )
 }
@@ -132,6 +139,7 @@ pub struct Assets {
     glyphs: GlyphWorker,
     pages: Receiver<Prepared>,
     scale: Option<f32>,
+    tuning: Option<Arc<Data>>,
     faces: Preparer,
     results: Option<Receiver<Prepared>>,
     /// Whether the current list belongs to the gallery, and its number.
@@ -149,10 +157,14 @@ impl Assets {
     pub fn start(scans: &Scans, origins: Origins, wake: impl Fn() + Send + Sync + 'static) -> Self {
         let wake: Arc<dyn Fn() + Send + Sync> = Arc::new(wake);
         let (out, pages) = mpsc::channel();
-        let glyphs = spawn_glyph_worker(out, {
-            let wake = Arc::clone(&wake);
-            move || wake()
-        });
+        let glyphs = spawn_glyph_worker(
+            out,
+            {
+                let wake = Arc::clone(&wake);
+                move || wake()
+            },
+            None,
+        );
         let faces = Preparer::new(Config {
             art: Arc::new(ArtCache::new(scans.art.clone(), origins)),
             faces_dir: scans.faces.clone(),
@@ -165,6 +177,7 @@ impl Assets {
             glyphs,
             pages,
             scale: None,
+            tuning: None,
             faces,
             results: None,
             active: None,
@@ -303,19 +316,40 @@ impl Assets {
     pub fn settle_glyphs(
         &mut self,
         renderer: &mut Renderer,
-        data: &Data,
+        data: &Arc<Data>,
         scale: f32,
         wanted: impl IntoIterator<Item = GlyphKey>,
         deliver: impl FnMut(AssetReady),
     ) {
         self.sync_light(renderer, data);
+        self.request_orbs(data, scale);
         self.request_glyphs(scale, wanted);
         self.glyphs.flush();
         self.upload_glyphs(renderer, deliver);
     }
 
     fn request_text(&mut self, client: &mut Client) {
-        self.request_glyphs(client.surface_scale(), client.wanted_glyphs());
+        let scale = client.surface_scale();
+        self.request_orbs(client.data(), scale);
+        self.request_glyphs(scale, client.wanted_glyphs());
+    }
+
+    fn request_orbs(&mut self, data: &Arc<Data>, scale: f32) {
+        if self
+            .tuning
+            .as_ref()
+            .is_none_or(|old| !Arc::ptr_eq(old, data))
+        {
+            if self.tuning.as_ref().is_none_or(|old| {
+                !orb::atlas_scales(&old.profiles)
+                    .map(f32::to_bits)
+                    .eq(orb::atlas_scales(&data.profiles).map(f32::to_bits))
+            }) {
+                self.glyphs
+                    .layers(scale, orb::atlas_artwork(&data.profiles));
+            }
+            self.tuning = Some(Arc::clone(data));
+        }
     }
 
     fn request_glyphs(&mut self, scale: f32, wanted: impl IntoIterator<Item = GlyphKey>) {

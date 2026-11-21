@@ -113,6 +113,7 @@ struct Node {
 
 /// The flat layer.
 pub struct Layer {
+    tuning: kit_base::data::flat::Flat,
     taffy: TaffyTree<TextLeaf>,
     /// The window, padded by the safe area: the root every screen is laid out in.
     root: NodeId,
@@ -167,6 +168,11 @@ impl Default for Layer {
 impl Layer {
     #[must_use]
     pub fn new() -> Self {
+        Self::with_tuning(kit_base::data::flat::Flat::shipped())
+    }
+
+    #[must_use]
+    pub fn with_tuning(tuning: kit_base::data::flat::Flat) -> Self {
         let mut taffy = TaffyTree::new();
         // Logical points need not be whole: a box rounded smaller than its text's measured
         // width would break the text onto another line.
@@ -176,6 +182,7 @@ impl Layer {
             .new_leaf(root_style(window))
             .expect("taffy makes a node");
         Self {
+            tuning,
             taffy,
             root,
             screen: None,
@@ -200,6 +207,16 @@ impl Layer {
             pointed: None,
             shaken: None,
             tip: None,
+        }
+    }
+
+    /// Updates the shared flat-layer metrics and repositions any open menus.
+    pub fn set_tuning(&mut self, tuning: kit_base::data::flat::Flat) {
+        let edge_changed = self.tuning.menu_edge.to_bits() != tuning.menu_edge.to_bits();
+        self.tuning = tuning;
+        if edge_changed && let Some(node) = &mut self.screen {
+            let tree = node.corner().unwrap_or(glam::Vec2::ZERO);
+            menu::place_menus(node, tree, None, self.window.size, tuning.menu_edge);
         }
     }
 
@@ -378,7 +395,13 @@ impl Layer {
                 compute_anchored(&mut self.taffy, &mut self.text, &node);
                 self.place(&mut node, glam::Vec2::ZERO, false, false);
                 let tree = node.corner().unwrap_or(glam::Vec2::ZERO);
-                menu::place_menus(&mut node, tree, None, self.window.size);
+                menu::place_menus(
+                    &mut node,
+                    tree,
+                    None,
+                    self.window.size,
+                    self.tuning.menu_edge,
+                );
                 self.screen = Some(node);
             }
         }

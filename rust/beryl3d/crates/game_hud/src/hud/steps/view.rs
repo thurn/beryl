@@ -36,8 +36,7 @@ use kit_base::tokens::ratio;
 use kit_ui::element::Shortcuts;
 
 use crate::hud::players::face_centre;
-use game_table::profiles::Profile;
-use kit_base::data::space::hud::{STEP_FIXED, STEP_OFF};
+use kit_base::data::hud::StepTrack;
 use kit_base::tokens::{color, shadow, size};
 use kit_frame::frame::Role;
 use kit_ui::element::{Action, Anchor, Display, Element, Shadow, Shown, Track, holder};
@@ -119,11 +118,13 @@ fn steps(input: &Inputs) -> Option<Element> {
             Side::You,
             (Mode::Stops(stops.yours, current(Side::You)), active),
             input.centres[0],
+            input.tuning,
         ),
         rows(
             Side::Opponent,
             (Mode::Stops(stops.theirs, current(Side::Opponent)), active),
             input.centres[1],
+            input.tuning,
         ),
     ]))
 }
@@ -132,21 +133,20 @@ fn steps(input: &Inputs) -> Option<Element> {
 pub fn table_tracks(
     active: Side,
     lit: usize,
-    profile: Profile,
+    input: &crate::hud::HudIn,
     press: fn(usize, bool) -> Action,
 ) -> Element {
-    holder().name("steps").children([
-        rows(
-            Side::You,
-            (Mode::Table { lit, press }, active),
-            face_centre(Side::You, profile),
-        ),
-        rows(
-            Side::Opponent,
-            (Mode::Table { lit, press }, active),
-            face_centre(Side::Opponent, profile),
-        ),
-    ])
+    let mode = Mode::Table { lit, press };
+    holder()
+        .name("steps")
+        .children([Side::You, Side::Opponent].map(|side| {
+            rows(
+                side,
+                (mode, active),
+                face_centre(side, input.profile),
+                input.data.hud.steps,
+            )
+        }))
 }
 
 /// What a player's rows are for: a game's stops, with the steps of their turns that stop and
@@ -163,7 +163,7 @@ enum Mode {
 
 /// `side`'s twelve icons about their orb, for `mode`, in a turn whose active player is
 /// `active`.
-fn rows(side: Side, (mode, active): (Mode, Side), centre: Vec2) -> Element {
+fn rows(side: Side, (mode, active): (Mode, Side), centre: Vec2, tuning: StepTrack) -> Element {
     let whose = match side {
         Side::You => "Your",
         Side::Opponent => "Opponent's",
@@ -190,9 +190,9 @@ fn rows(side: Side, (mode, active): (Mode, Side), centre: Vec2) -> Element {
     element.anchor = Some(Anchor::Point(centre, Vec2::new(0.5, 0.5)));
     element.children((0..STEP_STOPS.len()).map(|at| {
         let icon = match mode {
-            Mode::Stops(set, current) => icon(at, whose, side, set, current),
+            Mode::Stops(set, current) => icon(at, whose, side, set, current, tuning),
             Mode::Table { lit, press } => {
-                track_icon(at, whose, active && at == lit, press(at, active))
+                track_icon(at, whose, active && at == lit, press(at, active), tuning)
             }
         };
         icon.grid_column(column_of(at))
@@ -254,7 +254,14 @@ fn glyph_element(
 
 /// The icon at `at` in `side`'s rows. A step that can stop is a toggle holding its glyph, as the
 /// web's `.step-toggle` button holds its `.step-icon`; one that never stops is the glyph alone.
-fn icon(at: usize, whose: &str, side: Side, set: StepSet, current: Option<Step>) -> Element {
+fn icon(
+    at: usize,
+    whose: &str,
+    side: Side,
+    set: StepSet,
+    current: Option<Step>,
+    tuning: StepTrack,
+) -> Element {
     let stop = &STEP_STOPS[at];
     let here = current.is_some_and(|step| {
         stop.steps.contains(&step) || NEVER.iter().any(|&(never, s)| never == at && s == step)
@@ -262,9 +269,9 @@ fn icon(at: usize, whose: &str, side: Side, set: StepSet, current: Option<Step>)
     let name = format!("{whose} {}", stop.label);
     let on = stop.steps.iter().any(|&step| set.has(step.into()));
     let (glyph, opacity) = match stop.steps.first() {
-        None => (icons::STEPS_OUTLINED[at], STEP_FIXED),
+        None => (icons::STEPS_OUTLINED[at], tuning.fixed),
         Some(_) if on => (icons::STEPS[at], 1.0),
-        Some(_) => (icons::STEPS_OUTLINED[at], STEP_OFF),
+        Some(_) => (icons::STEPS_OUTLINED[at], tuning.off),
     };
     let tint = if here {
         color::STEP_CURRENT
@@ -290,12 +297,12 @@ fn icon(at: usize, whose: &str, side: Side, set: StepSet, current: Option<Step>)
 /// The manual step track icon at `at`, lit if `here`. Every icon is a toggle, as the
 /// web's track is a `.step-toggle` button round each icon. An unlit step that never stops a
 /// game (Untap and Cleanup) is faded further, as the web's `.step-fixed` is.
-fn track_icon(at: usize, whose: &str, here: bool, press: Action) -> Element {
+fn track_icon(at: usize, whose: &str, here: bool, press: Action, tuning: StepTrack) -> Element {
     let name = format!("{whose} {}", STEP_STOPS[at].label);
     let faded = if STEP_STOPS[at].steps.is_empty() {
-        STEP_FIXED
+        tuning.fixed
     } else {
-        STEP_OFF
+        tuning.off
     };
     let tint = if here {
         color::STEP_CURRENT

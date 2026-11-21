@@ -14,7 +14,6 @@ use beryl_protocol::protocol::{ObjectId, ObjectView, PlayerState, PlayerView, Si
 
 use game_play::play::Show;
 use game_table::table::{PileShown, Table, host_slot};
-use kit_base::data::space::flat::TOOLTIP_GAP;
 use kit_ui::element::floats;
 use kit_ui::layout::{FloatLook, Layer};
 mod view;
@@ -88,7 +87,7 @@ impl PileCounts {
         self.hovered = hovered;
         for index in 0..6 {
             let pile = (visible && hovered == Some(index))
-                .then(|| table.pile_count_anchor(index, TOOLTIP_GAP))
+                .then(|| table.pile_count_anchor(index, table.data().flat.tooltip.gap))
                 .flatten();
             let want = pile.as_ref().map(|(count, _)| *count);
             let id = float(index);

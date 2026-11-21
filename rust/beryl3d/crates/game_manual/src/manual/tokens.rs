@@ -16,6 +16,7 @@ use serde_json::Value;
 
 use super::ask::parse;
 use super::palette::list_row;
+use kit_base::data::flat::Palette as PaletteMetrics;
 use kit_base::tokens::{color, size, space, type_style};
 use kit_frame::frame::Role;
 use kit_ui::element::{Align, Anchor, Element, Overflow, column, row, text};
@@ -177,7 +178,13 @@ impl TokenSearch {
 /// stands: the field, the rows under their groups' headings with the highlighted one drawn as
 /// a menu's active row, and a notice when a search found nothing.
 #[must_use]
-pub fn panel(search: &TokenSearch, view: &PlayerView, fields: &Fields, window: Size) -> Element {
+pub fn panel(
+    search: &TokenSearch,
+    view: &PlayerView,
+    fields: &Fields,
+    window: Size,
+    metrics: PaletteMetrics,
+) -> Element {
     let mut state = fields.get(FIELD);
     FIELD.clone_into(&mut state.placeholder);
     let choices = search.choices(view);
@@ -215,12 +222,12 @@ pub fn panel(search: &TokenSearch, view: &PlayerView, fields: &Fields, window: S
         .name("Tokens")
         .gap(size::MENU_ROW_GAP)
         .overflow(Overflow::Scroll)
-        .max_height(kit_base::data::space::flat::table::palette::HEIGHT)
+        .max_height(metrics.height)
         .children(rows);
     list.role = Role::List;
     let mut panel = column()
         .name("Token search")
-        .width(kit_base::data::space::flat::table::palette::WIDTH)
+        .width(metrics.width)
         .gap(space::M)
         .padding(size::MENU_PADDING)
         .background(color::SURFACE)
@@ -228,7 +235,7 @@ pub fn panel(search: &TokenSearch, view: &PlayerView, fields: &Fields, window: S
         .radius(size::MENU_RADIUS)
         .child(field(FIELD, &state))
         .child(list);
-    let top = kit_base::data::space::flat::table::palette::TOP;
+    let top = metrics.top;
     panel.anchor = Some(Anchor::Point(
         Vec2::new(window.width / 2.0, top),
         Vec2::new(0.5, 0.0),
@@ -340,7 +347,12 @@ impl CustomToken {
 /// side, the note, and Cancel and Create token, which is enabled once the form describes a
 /// token (`CustomToken::choice`).
 #[must_use]
-pub fn custom_panel(form: &CustomToken, fields: &Fields, window: Size) -> Element {
+pub fn custom_panel(
+    form: &CustomToken,
+    fields: &Fields,
+    window: Size,
+    metrics: PaletteMetrics,
+) -> Element {
     let input = |name: &str| {
         column()
             .gap(space::S)
@@ -379,7 +391,7 @@ pub fn custom_panel(form: &CustomToken, fields: &Fields, window: Size) -> Elemen
         );
     let mut panel = column()
         .name("Custom token")
-        .width(kit_base::data::space::flat::table::palette::WIDTH)
+        .width(metrics.width)
         .gap(space::M)
         .padding(size::MENU_PADDING)
         .background(color::SURFACE)
@@ -399,7 +411,7 @@ pub fn custom_panel(form: &CustomToken, fields: &Fields, window: Size) -> Elemen
         .child(stats)
         .child(input(NOTE))
         .child(footer);
-    let top = kit_base::data::space::flat::table::palette::TOP;
+    let top = metrics.top;
     panel.anchor = Some(Anchor::Point(
         Vec2::new(window.width / 2.0, top),
         Vec2::new(0.5, 0.0),

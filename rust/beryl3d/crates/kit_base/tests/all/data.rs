@@ -39,6 +39,8 @@ fn parse(changed: Option<(&str, &str)>) -> Result<Data, String> {
                 "badges.json" => BADGES,
                 "verbs.json" => VERBS,
                 "audit.json" => AUDIT,
+                "flat.json" => include_str!("../../../../../../data/beryl3d/flat.json"),
+                "hud.json" => include_str!("../../../../../../data/beryl3d/hud.json"),
                 "catch-up.json" => include_str!("../../../../../../data/beryl3d/catch-up.json"),
                 "frame-rate.json" => include_str!("../../../../../../data/beryl3d/frame-rate.json"),
                 "slide.json" => include_str!("../../../../../../data/beryl3d/slide.json"),
@@ -105,6 +107,18 @@ fn an_unknown_key_names_its_file_and_path() {
     let why = parse(Some(("verbs.json", &space.to_string()))).unwrap_err();
     assert!(why.contains("verbs.json: verbs.fly.arx"), "{why}");
     assert!(why.contains("unknown field"), "{why}");
+}
+
+#[test]
+fn flat_tuning_errors_name_the_file_and_nested_setting() {
+    let mut flat: serde_json::Value =
+        serde_json::from_str(include_str!("../../../../../../data/beryl3d/flat.json")).unwrap();
+    flat["manual"]["selection"]["radius"] = serde_json::json!(-1);
+    let error = parse(Some(("flat.json", &flat.to_string()))).unwrap_err();
+    assert!(
+        error.starts_with("flat.json: manual.selection.radius:"),
+        "{error}"
+    );
 }
 
 #[test]

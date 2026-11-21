@@ -79,6 +79,28 @@ pub struct Opening {
     pub start_choice: bool,
     pub waiting_dots: bool,
     pub wrapped_hand: Option<WrappedHand>,
+    pub single_row: Option<SingleRow>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct SingleRow {
+    #[serde(deserialize_with = "positive")]
+    pub coin_height: f32,
+    #[serde(deserialize_with = "nonnegative")]
+    pub coin_gap: f32,
+    #[serde(deserialize_with = "nonnegative")]
+    pub title_gap: f32,
+    #[serde(deserialize_with = "positive")]
+    pub card: f32,
+    #[serde(deserialize_with = "nonnegative")]
+    pub card_gap: f32,
+    #[serde(deserialize_with = "positive")]
+    pub slot: f32,
+    #[serde(deserialize_with = "nonnegative")]
+    pub slot_gap: f32,
+    #[serde(deserialize_with = "nonnegative")]
+    pub slots_gap: f32,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]

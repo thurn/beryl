@@ -566,7 +566,6 @@ fn pill(asks: &str, place: PillPlace, slots: &PromptSlots<'_>) -> Element {
         .min_height(height)
         .background(color::PANEL)
         .radius(height / 2.0)
-        .enter(&kit_ui::widgets::screen::SCREEN_INSTANT)
         .passes(true);
     pill.style.padding = [padding / 2.0, padding, padding / 2.0, padding];
     pill.anchor = Some(match place {

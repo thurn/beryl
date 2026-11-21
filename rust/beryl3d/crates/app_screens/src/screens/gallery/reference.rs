@@ -65,6 +65,7 @@ pub(super) fn page(
     layout: &GalleryLayout,
     (faces, shape): (&FaceList, Card),
     available: bool,
+    orb_scale: f32,
 ) -> Element {
     holder()
         .name("page")
@@ -97,7 +98,7 @@ pub(super) fn page(
         ))
         .child(foundations(layout))
         .child(actions(layout))
-        .child(player_zones(layout, faces))
+        .child(player_zones(layout, faces, orb_scale))
         .child(lower::card_states(layout, (faces, shape)))
         .child(lower::combat(layout, (faces, shape)))
         .child(lower::scry(layout, faces))
@@ -501,9 +502,8 @@ fn phase_tracker(layout: &GalleryLayout) -> Element {
     tracker
 }
 
-fn player_zones(layout: &GalleryLayout, faces: &FaceList) -> Element {
+fn player_zones(layout: &GalleryLayout, faces: &FaceList, units: f32) -> Element {
     let [_, _, art_width, art_height] = game_hud::art::orb::ART;
-    let units = game_hud::art::orb::SCALES[0];
     let art = Vec2::new(art_width, art_height) * units;
     let orbs = [
         (Side::You, true, "22", "Active"),
@@ -515,7 +515,7 @@ fn player_zones(layout: &GalleryLayout, faces: &FaceList) -> Element {
         // (`--orb: 0.74px`), so it is centred on the web's orb.
         let middle = layout.orbs[index] + layout.orb / 2.0;
         let mut orb = Element::new(Role::Region).name(&format!("{name} orb"));
-        orb.shows = Some(Shown::Layers(artwork(side, active, 0)));
+        orb.shows = Some(Shown::Layers(artwork(side, active, units)));
         panel = panel
             .child(place(orb, [middle - art / 2.0, art]))
             .child(words(

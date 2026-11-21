@@ -1,7 +1,7 @@
 //! The manual table’s foldable log and its history actions.
 
 mod view;
-pub use view::{Inputs, ViewKey};
+pub use view::{Inputs, Placement, ViewKey};
 
 use crate::manual::log;
 use beryl_protocol::protocol::TableAction;

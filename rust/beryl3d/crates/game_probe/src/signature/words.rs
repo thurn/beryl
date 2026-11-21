@@ -1,6 +1,6 @@
 //! Counts lines with the bundled fonts at the widths used by the window profiles.
 
-use game_hud::hud::log::{LogKind, LogLine};
+use game_hud::hud::log::{Layout, LogKind, LogLine};
 use game_table::profiles::Profile;
 use game_table::table::Window;
 use game_table::table::badges::counter_label;
@@ -45,14 +45,17 @@ impl Words {
                         ),
                     ]);
                 }
-                widths
-                    .log
-                    .push(room - 2.0 * space::M - 2.0 * size::LOG_PADDING_X);
             } else {
                 widths
                     .desktop_prompt
                     .extend([size::BUTTON_WIDTH, size::DOCK_MAX_WIDTH]);
-                widths.log.push(size::LOG_WIDTH - 2.0 * size::LOG_PADDING_X);
+            }
+            if let Some(log) = Layout::for_profile(profile, true) {
+                let content = match log {
+                    Layout::Column { panel, .. } => panel.width,
+                    Layout::Sheet(panel) => panel.width - 2.0 * space::M,
+                };
+                widths.log.push(content - 2.0 * size::LOG_PADDING_X);
             }
             if let Some(inspector) = profile.data().table.inspector {
                 let height = profile

@@ -1,8 +1,8 @@
 //! The flat layer's icons, rasterized by the glyph worker: what a host asks for and what comes
 //! back.
 
-use std::sync::mpsc::{self, Receiver};
-use std::time::Duration;
+use std::collections::BTreeSet;
+use std::sync::mpsc;
 
 use beryl_assets::glyphs::{GlyphWorker, IconSet, prepare_latin};
 use beryl_assets::icons::icons_rasterized_on_this_thread;
@@ -11,6 +11,7 @@ use beryl_assets::{Prepared, Upload};
 use beryl_host::spawn_glyph_worker;
 use game_hud::art::orb::{self, FIRST_ICON};
 use kit_base::atlas::{AssetReady, GlyphCell, GlyphKey, IconCell, IconId};
+use kit_base::data::profiles::{Profiles, SHIPPED};
 use kit_probe::driver::atlas::stub_icons;
 use kit_text::text::fonts::Font;
 use kit_ui::art::icons::ALL;
@@ -18,13 +19,10 @@ use kit_ui::widgets::icon_shadows;
 use kit_ui::widgets::icons::{GEAR, atlas_size};
 use swash::FontRef;
 
-/// Only catches a hung worker; a page normally arrives in milliseconds.
-const HANG: Duration = Duration::from_mins(1);
-
-/// Every page the worker sends until it has nothing more, with its pixels and icons.
-fn pages(results: &Receiver<Prepared>) -> Vec<(Vec<u8>, Vec<IconCell>)> {
+/// Reads the pages queued by a worker after flushing or joining it.
+fn pages(results: &mpsc::Receiver<Prepared>) -> Vec<(Vec<u8>, Vec<IconCell>)> {
     let mut pages = Vec::new();
-    while let Ok(prepared) = results.recv_timeout(HANG) {
+    for prepared in results.try_iter() {
         let Upload::AtlasPage { page, pixels } = prepared.upload else {
             panic!("the glyph worker sent a face");
         };
@@ -41,10 +39,14 @@ fn pages(results: &Receiver<Prepared>) -> Vec<(Vec<u8>, Vec<IconCell>)> {
     pages
 }
 
+fn profiles() -> Profiles {
+    crate::test_data::data().profiles.clone()
+}
+
 /// Every icon at `scale`, asked for alone.
 fn rasterize(scale: f32) -> Vec<(Vec<u8>, Vec<IconCell>)> {
     let (out, results) = mpsc::channel();
-    let worker = spawn_glyph_worker(out, || {});
+    let worker = spawn_glyph_worker(out, || {}, Some(&profiles()));
     worker.icons(scale);
     drop(worker);
     pages(&results)
@@ -86,7 +88,8 @@ fn every_icon_rasterizes_to_a_cell_partly_inked_on_another_thread() {
     let mut icons: Vec<IconId> = sharp.map(|(_, cell)| cell.icon).collect();
     icons.sort_unstable();
     // Every icon, and the orbs' layers at each scale they are drawn at, packed tallest first.
-    let orbs = orb::atlas_cells().map(|cell| cell.icon);
+    let profiles = profiles();
+    let orbs = orb::atlas_cells(&profiles).map(|cell| cell.icon);
     let mut expected: Vec<IconId> = (0..FIRST_ICON).map(IconId).chain(orbs).collect();
     expected.sort_unstable();
     assert_eq!(icons, expected);
@@ -201,7 +204,7 @@ fn the_gear_at_scale_two_is_twice_the_side_of_the_gear_at_scale_one() {
 #[test]
 fn a_new_scale_adds_new_cells_and_the_same_scale_adds_none() {
     let (out, results) = mpsc::channel();
-    let worker = spawn_glyph_worker(out, || {});
+    let worker = spawn_glyph_worker(out, || {}, Some(&profiles()));
     worker.icons(1.0);
     worker.flush();
     let first = results.try_recv().expect("the icons at scale 1");
@@ -270,7 +273,9 @@ fn the_stub_and_worker_deliver_the_same_icon_sizes() {
         sizes
     };
     for scale in [1.0, 2.0, 3.0] {
-        let AssetReady::Icons { cells: stub, .. } = stub_icons(scale, orb::atlas_cells()) else {
+        let AssetReady::Icons { cells: stub, .. } =
+            stub_icons(scale, orb::atlas_cells(&profiles()))
+        else {
             panic!("the stub supplies icon cells");
         };
         let real = rasterize(scale)
@@ -292,12 +297,57 @@ fn open_sans(character: char, size: u16) -> GlyphKey {
     }
 }
 
+#[test]
+fn an_edited_profile_adds_its_orb_cells_at_the_current_display_scale() {
+    let profiles = profiles();
+    let (out, results) = mpsc::channel();
+    let worker = spawn_glyph_worker(out, || {}, Some(&profiles));
+    worker.icons(1.0);
+    worker.flush();
+    let keys = |cells: &[IconCell]| {
+        cells
+            .iter()
+            .map(|cell| (cell.icon, cell.size))
+            .collect::<Vec<_>>()
+    };
+    let previous: BTreeSet<_> = pages(&results)
+        .iter()
+        .flat_map(|(_, cells)| keys(cells))
+        .collect();
+
+    let (name, text) = SHIPPED[1];
+    let regular = text.replace(r#""orb_scale": 0.95693785"#, r#""orb_scale": 0.75"#);
+    assert_ne!(regular, text);
+    let updated = Profiles::parse(
+        &[SHIPPED[0], (name, &regular)],
+        crate::test_data::data().card,
+    )
+    .unwrap();
+    let expected: BTreeSet<_> = orb::atlas_cells(&updated)
+        .map(|cell| (cell.icon, cell.size))
+        .filter(|key| !previous.contains(key))
+        .collect();
+    assert!(!expected.is_empty());
+
+    worker.layers(1.0, orb::atlas_artwork(&updated));
+    worker.flush();
+    let delivered: BTreeSet<_> = pages(&results)
+        .iter()
+        .flat_map(|(_, cells)| keys(cells))
+        .collect();
+    assert_eq!(delivered, expected);
+
+    worker.layers(1.0, orb::atlas_artwork(&profiles));
+    worker.flush();
+    assert!(pages(&results).is_empty());
+}
+
 /// What the worker sent for the glyphs and icons a host asks for before its first frame, at
 /// `scale`, followed by a mana symbol and the letters of "flip" asked for as laid-out text
 /// asks: each page sent, its glyph cells and its icon cells.
 fn prepared_then_demanded(scale: f32) -> (Vec<u16>, Vec<GlyphCell>, usize, Vec<GlyphKey>) {
     let (out, results) = mpsc::channel();
-    let worker = spawn_glyph_worker(out, || {});
+    let worker = spawn_glyph_worker(out, || {}, Some(&profiles()));
     worker.icons(scale);
     worker.prepare(prepare_latin(scale));
     let size = (32.0 * scale) as u16;
@@ -345,7 +395,7 @@ fn every_icon_and_demanded_glyph_fits_the_atlas_at_every_display_scale() {
         // shadows are drawn from.
         assert_eq!(
             icons,
-            ALL.len() + orb::atlas_cells().count() + icon_shadows::cells().count(),
+            ALL.len() + orb::atlas_cells(&profiles()).count() + icon_shadows::cells().count(),
             "every icon at scale {scale}"
         );
         for key in demanded {

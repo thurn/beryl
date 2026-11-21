@@ -133,16 +133,13 @@ pub(crate) fn sample(options: &Options) -> Result<String, Error> {
         .iter()
         .map(read_sample)
         .collect::<Result<Vec<_>, _>>()?;
-    let lighting = beryl_inspect::data::checkout()
-        .map_err(Error::Failed)?
-        .lighting;
-    let renderer = Renderer::headless(Limits::Default, lighting)
+    let data = beryl_inspect::data::checkout().map_err(Error::Failed)?;
+    let renderer = Renderer::headless(Limits::Default, data.lighting)
         .map_err(|why| Error::Failed(format!("no GPU to draw with: {why}")))?;
     if !renderer.enhanced_available() {
         return Err(failed("the sample renderer needs Enhanced support"));
     }
-    let data = beryl_inspect::data::checkout().map_err(Error::Failed)?;
-    let mut drawer = Drawer::new(renderer, scale, data.profiles.fallback().table.camera);
+    let mut drawer = Drawer::new(renderer, scale, &data);
     let mut printed = String::new();
     for sample in &samples {
         let web = beryl_render::read_rgba_png(&sample.web).map_err(Error::Failed)?;
@@ -453,6 +450,7 @@ const TEXT_LINE_HEIGHT: f32 = 1.4;
 struct Drawer {
     renderer: Renderer,
     camera: CameraData,
+    flat: kit_base::data::flat::Flat,
     glyphs: GlyphWorker,
     pages: Receiver<Prepared>,
     /// The glyphs and icons the worker has delivered, which every sample's layer is given.
@@ -460,15 +458,15 @@ struct Drawer {
 }
 
 impl Drawer {
-    fn new(mut renderer: Renderer, scale: f32, camera: CameraData) -> Self {
-        let data = beryl_inspect::data::checkout().expect("the checkout's tuning is valid");
+    fn new(mut renderer: Renderer, scale: f32, data: &kit_base::data::Data) -> Self {
         renderer.upload_page(&light::prepared(&data.light, &data.own));
         let (out, pages) = mpsc::channel();
-        let glyphs = beryl_host::spawn_glyph_worker(out, || {});
+        let glyphs = beryl_host::spawn_glyph_worker(out, || {}, Some(&data.profiles));
         glyphs.icons(scale);
         Self {
             renderer,
-            camera,
+            camera: data.profiles.fallback().table.camera,
+            flat: data.flat,
             glyphs,
             pages,
             ready: Vec::new(),
@@ -483,7 +481,7 @@ impl Drawer {
             scale,
             safe_area: Insets::default(),
         };
-        let mut layer = Layer::new();
+        let mut layer = Layer::with_tuning(self.flat);
         layer.resize(window);
         self.give(&mut layer);
         layer.show(Some(screen(sample, mask)));
@@ -637,7 +635,7 @@ mod tests {
         let data = beryl_inspect::data::checkout().unwrap();
         let renderer =
             Renderer::headless(Limits::Default, data.lighting).expect("a GPU adapter and device");
-        let mut drawer = Drawer::new(renderer, 2.0, data.profiles.fallback().table.camera);
+        let mut drawer = Drawer::new(renderer, 2.0, &data);
         let sample = Sample {
             name: "plain".to_owned(),
             window: Size {
@@ -685,7 +683,7 @@ mod tests {
         let data = beryl_inspect::data::checkout().unwrap();
         let renderer =
             Renderer::headless(Limits::Default, data.lighting).expect("a GPU adapter and device");
-        let mut drawer = Drawer::new(renderer, 1.0, data.profiles.fallback().table.camera);
+        let mut drawer = Drawer::new(renderer, 1.0, &data);
         let (red, blue) = ([255, 0, 0, 255], [0, 0, 255, 255]);
         let sample = Sample {
             name: "gradient".to_owned(),

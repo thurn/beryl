@@ -20,7 +20,9 @@ mod web;
 pub use anchored::Anchored;
 pub use banded::Banded;
 pub use gallery::GalleryLayout;
-pub use hud::{FloatingPrompt, Hud, Incoming, Inspector, Piece, ResultLayout, WrappedHand};
+pub use hud::{
+    FloatingPrompt, Hud, Incoming, Inspector, Piece, ResultLayout, SingleRow, WrappedHand,
+};
 pub use tray::{PutBack, TrayTuning};
 pub use web::{Perspective, StageSize, WebFit};
 
@@ -296,6 +298,8 @@ struct Matrix {
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct ManualControls {
+    #[serde(deserialize_with = "positive")]
+    pub menu_preview_width: f32,
     #[serde(deserialize_with = "nonnegative")]
     pub label_overlap: f32,
     #[serde(deserialize_with = "nonnegative")]
@@ -326,11 +330,6 @@ pub struct ProfileData {
     pub manual: Option<ManualControls>,
     pub settings_quick_action_min_width: Option<f32>,
     test_matrix: Matrix,
-    // The build still exports these HUD and flat-layer settings.
-    #[serde(rename = "legacy")]
-    _legacy: BTreeMap<String, serde_json::Value>,
-    #[serde(rename = "counts")]
-    _counts: Vec<String>,
 }
 
 impl ProfileData {
@@ -496,6 +495,9 @@ impl ProfileData {
                 return Err(format!("missing slots.{name}"));
             }
         }
+        if self.slots.contains_key("manual.menu") && self.manual.is_none() {
+            return Err("slots.manual.menu requires manual controls".to_owned());
+        }
         if self.size_class == SizeClass::Compact {
             if self.screen.is_none() {
                 return Err("missing screen metrics".to_owned());
@@ -523,7 +525,11 @@ impl ProfileData {
                 }
             }
         }
-        if self.hud.opening.wrapped_hand.is_some() && self.screen.is_none() {
+        let opening = self.hud.opening;
+        if opening.single_row.is_some() == opening.wrapped_hand.is_some() {
+            return Err("hud.opening requires exactly one hand layout".to_owned());
+        }
+        if opening.wrapped_hand.is_some() && self.screen.is_none() {
             return Err("hud.opening.wrapped_hand requires screen metrics".to_owned());
         }
         if !self.slots.contains_key("gallery.column") && self.gallery.is_none() {
@@ -687,12 +693,18 @@ impl Profiles {
     }
 
     /// The profiles eligible for automatic selection.
-    pub fn iter(&self) -> impl ExactSizeIterator<Item = &ProfileData> {
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = &ProfileData> + DoubleEndedIterator {
         self.automatic.iter()
+    }
+
+    /// The profile explicitly selected by the host, when present.
+    #[must_use]
+    pub fn preview(&self) -> Option<&ProfileData> {
+        self.preview.as_deref()
     }
 }
 
 /// The shorter dimension determines the layout even when the window is turned sideways.
-pub(crate) fn shorter_side_below(size: Size, limit: f32) -> bool {
+fn shorter_side_below(size: Size, limit: f32) -> bool {
     size.width.min(size.height) < limit
 }

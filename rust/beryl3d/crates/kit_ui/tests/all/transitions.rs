@@ -101,7 +101,7 @@ fn a_removed_subtree_is_painted_during_its_leave_and_cannot_take_presses() {
         .height(50.0)
         .background([40, 40, 40, 255])
         .child(text("Action").on_press(1_u32))
-        .leave(&FADE);
+        .leave(FADE);
     let mut layer = started(tree(Some(child)));
     let frame = draw(&layer);
     let action = element(&frame, "Action");
@@ -139,7 +139,7 @@ fn translation_and_scale_on_enter_move_the_contents_and_hit_boxes_together() {
                 .name("Panel")
                 .width(80.0)
                 .height(50.0)
-                .enter(&ENTER)
+                .enter(ENTER)
                 .child(
                     row()
                         .name("Action")

@@ -15,6 +15,7 @@ impl Client {
     pub(super) fn set_data(&mut self, data: Arc<Data>) {
         self.layer.float(floats::DATA_ERROR, None);
         if self.data() != &data {
+            self.layer.set_tuning(data.flat);
             self.show.set_data(data);
             self.resize(self.window);
             // Badge sizes are part of shaping: shaped badges are shaped again at the new sizes

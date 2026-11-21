@@ -174,7 +174,7 @@ impl Layer {
         if node.element.anchor == Some(Anchor::Tip)
             && let Some(enter) = node.element.style.enter
         {
-            node.tracks.reserve_presence(enter);
+            node.tracks.reserve_presence(&enter);
         }
         self.reconcile_children(node, children);
         self.link_children(node);

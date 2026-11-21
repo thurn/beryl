@@ -14,9 +14,10 @@ pub struct Inputs<'a> {
     pub window: Window,
     pub profile: Profile<'a>,
     pub anchor: Option<Anchor>,
+    pub inset: f32,
 }
 
-pub type ViewKey = (Window, ProfileData, FieldState, Option<Anchor>);
+pub type ViewKey = (Window, ProfileData, FieldState, Option<Anchor>, f32);
 pub(super) fn key(state: &State, inputs: &Inputs<'_>) -> ViewKey {
     let field = &state.as_ref().expect("ask prompt is open").field;
     (
@@ -24,6 +25,7 @@ pub(super) fn key(state: &State, inputs: &Inputs<'_>) -> ViewKey {
         inputs.profile.data().clone(),
         inputs.fields.get(field),
         inputs.anchor,
+        inputs.inset,
     )
 }
 
@@ -34,5 +36,6 @@ pub(super) fn render(state: &State, inputs: Inputs<'_>) -> Element {
         inputs.window,
         inputs.profile,
         inputs.anchor,
+        inputs.inset,
     )
 }

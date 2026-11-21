@@ -568,10 +568,11 @@ fn an_anchored_element_allocates_nothing() {
 /// The frames while an element enters, another leaves, and a kept one moves to a new place.
 fn a_transition_allocates_nothing() {
     use kit_ui::element::{Presence, Property, Transition};
-    use kit_ui::widgets::screen::{SCREEN_TIMING, with_transitions};
+    use kit_ui::widgets::screen::{screen_timing, with_transitions};
 
-    const LEAVE: Presence = Presence::fade(SCREEN_TIMING);
-    const SCALE: &[Transition] = &[Transition::new(Property::Scale, SCREEN_TIMING)];
+    const DURATION: f32 = 180.0;
+    const LEAVE: Presence = Presence::fade(screen_timing(DURATION));
+    const SCALE: &[Transition] = &[Transition::new(Property::Scale, screen_timing(DURATION))];
     let mut layer = Layer::new();
     let screen = |gap: f32, scale: f32| {
         row()
@@ -581,12 +582,14 @@ fn a_transition_allocates_nothing() {
             .child(text("Pass").scale(scale).transition(SCALE))
     };
     layer.show(Some(with_transitions(
-        screen(0.0, 1.0).child(text("Leave").leave(&LEAVE)),
+        screen(0.0, 1.0).child(text("Leave").leave(LEAVE)),
+        DURATION,
     )));
     layer.tick(0);
     layer.tick(common::MS * 1_000);
     layer.show(Some(with_transitions(
         screen(40.0, 0.8).child(text("Mulligan")),
+        DURATION,
     )));
     let table = Table::new(
         crate::test_data::data(),

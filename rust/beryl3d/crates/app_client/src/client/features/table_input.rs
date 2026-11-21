@@ -211,6 +211,7 @@ impl Client {
             at,
             &cards,
             view,
+            table.data().flat.manual.drop,
         )?;
         drop::available(view, &to, &cards).then_some(to)
     }

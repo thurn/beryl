@@ -1,6 +1,6 @@
 use super::State;
 use game_table::{profiles::Profile, table::Window};
-use kit_base::{data::space::flat::sheet, geometry::Rect};
+use kit_base::geometry::Rect;
 use kit_frame::frame::Role;
 use kit_ui::element::Element;
 use kit_ui::{
@@ -22,12 +22,17 @@ pub struct Inputs<'a> {
     pub face: Option<FaceId>,
 }
 
-pub type ViewKey = (Window, Option<Rect>, Option<FaceId>);
+pub type ViewKey = (Window, Option<Rect>, Option<FaceId>, Option<f32>);
 pub(super) fn key(inputs: &Inputs<'_>) -> ViewKey {
     (
         inputs.window,
         inputs.profile.slot("manual.menu").map(|slot| slot.rect),
         inputs.face,
+        inputs
+            .profile
+            .data()
+            .manual
+            .map(|data| data.menu_preview_width),
     )
 }
 
@@ -45,13 +50,19 @@ pub(super) fn render(state: &State, inputs: Inputs<'_>) -> Element {
     .max_height(rect.height)
     .overflow(Overflow::Scroll);
     if let Some(face) = inputs.face {
+        let width = inputs
+            .profile
+            .data()
+            .manual
+            .expect("validated menu controls")
+            .menu_preview_width;
         let card = Element {
             shows: Some(Shown::Face(face, FaceSize::Full)),
             ..Element::new(Role::Region)
         }
         .name("preview")
-        .width(sheet::PREVIEW_WIDTH)
-        .height(sheet::PREVIEW_WIDTH * inputs.profile.card().height / inputs.profile.card().width);
+        .width(width)
+        .height(width * inputs.profile.card().height / inputs.profile.card().width);
         panel
             .children
             .insert(0, column().align_items(Align::Center).child(card));

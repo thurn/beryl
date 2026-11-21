@@ -1,0 +1,21 @@
+{
+  "steps": {
+    "off": 0.6,
+    "fixed": 0.32
+  },
+  "incoming": {
+    "line": 1.1,
+    "lethal_glow_blur": 14
+  },
+  "banner_gap": 12,
+  "banner_ms": 2500,
+  "opening": {
+    "waiting_gap": 40,
+    "waiting_height": 52,
+    "choice_gap": 40,
+    "choice_top": 40,
+    "dot": 8.84,
+    "dot_gap": 7.48,
+    "dot_inset": 10.2
+  }
+}

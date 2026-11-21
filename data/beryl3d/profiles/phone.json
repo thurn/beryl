@@ -339,6 +339,7 @@
   },
   "settings_quick_action_min_width": 84,
   "manual": {
+    "menu_preview_width": 144,
     "label_overlap": 16,
     "mana_right": 32,
     "mana_width": 48,
@@ -374,58 +375,5 @@
       "submit_width": 80
     },
     "list_row": 44
-  },
-  "legacy": {
-    "hud.phone": {
-      "button_text": 18,
-      "button_padding": 12,
-      "character_width": 0.55,
-      "overlap": 4,
-      "asked_gap": 4,
-      "pill_text": 16,
-      "pill_padding": 10,
-      "revealed_width": 52,
-      "sheet_margin": 8
-    },
-    "hud.incoming.phone": {
-      "left": 22,
-      "top": -4,
-      "min_width": 26,
-      "padding_x": 5,
-      "padding_y": 1,
-      "text": 13
-    },
-    "flat.phone": {
-      "gutter": 16,
-      "opening": {
-        "top": 88,
-        "coin": 64,
-        "coin_narrow": 56,
-        "narrow_below": 393,
-        "coin_line": 13,
-        "coin_gap": 8,
-        "title": 18,
-        "title_gap": 16,
-        "card_most": 90,
-        "card_most_narrow": 86,
-        "per_row": 4,
-        "gap": 8,
-        "slot_scale": 0.8,
-        "slots_gap": 16,
-        "slot_edge": 16,
-        "no_actions": 40
-      },
-      "game_over": {
-        "title": 36,
-        "reason": 16,
-        "reason_gap": 8,
-        "card": 160,
-        "card_narrow": 140,
-        "card_gap": 12
-      }
-    }
-  },
-  "counts": [
-    "flat.phone.opening.per_row"
-  ]
+  }
 }

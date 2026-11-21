@@ -35,6 +35,8 @@ pub struct ViewKey {
     drag_threshold: f32,
     window: Window,
     profile: ProfileData,
+    tuning: kit_base::data::flat::Manual,
+    hud_tuning: kit_base::data::hud::Hud,
     view: Option<PlayerView>,
     link_error: Option<String>,
     bindings: Bindings,
@@ -57,6 +59,8 @@ impl ViewKey {
             drag_threshold: input.drag_threshold,
             window: hud.window,
             profile: hud.profile.data().clone(),
+            tuning: hud.data.flat.manual,
+            hud_tuning: hud.data.hud,
             view: hud.view.cloned(),
             link_error: input.link_error.map(str::to_owned),
             bindings: input.bindings.clone(),
@@ -103,6 +107,7 @@ pub(super) fn table(state: &State, input: Inputs<'_>) -> Element {
     let hud = &input.hud;
     let window = hud.window;
     let profile = hud.profile;
+    let metrics = hud.data.flat.manual;
     let view = hud.view;
     let frozen = view.is_some_and(link::frozen);
     // A frozen table answers no key of its own (`manual::link`).
@@ -141,14 +146,24 @@ pub(super) fn table(state: &State, input: Inputs<'_>) -> Element {
     let sort = view.and_then(|view| assists::sort_tray(view, window.size, profile.card()));
     let sweep = (state.sweep)
         .filter(|(from, to)| from.distance(*to) >= input.drag_threshold)
-        .map(|(from, to)| selection::rectangle(selection::sweep_box(from, to)));
-    let landing = state.landing.as_ref().map(drop::target);
+        .map(|(from, to)| selection::rectangle(selection::sweep_box(from, to), metrics.sweep_rim));
+    let landing = state
+        .landing
+        .as_ref()
+        .map(|to| drop::target(to, metrics.drop));
     // The summary hides while a sweep is drawn, as the web's hides while selecting, and while
     // the command list, a prompt or the order tray is open over the table, or the table is frozen.
     let overlay_open = input.overlay_open;
     let summary = view
         .filter(|_| state.sweep.is_none() && !overlay_open && !frozen)
-        .and_then(|view| selection::summary(view, &state.selection, state.summary_over));
+        .and_then(|view| {
+            selection::summary(
+                view,
+                &state.selection,
+                state.summary_over,
+                metrics.selection,
+            )
+        });
     // The phone's sheet of a player's mana and counters, hidden while the table is frozen.
     let mana_sheet = view
         .zip(state.mana_sheet)
@@ -158,8 +173,8 @@ pub(super) fn table(state: &State, input: Inputs<'_>) -> Element {
     let connection = view.and_then(|view| {
         let top = profile
             .slot("manual.connection")
-            .map_or_else(|| link::top(window.size), |slot| slot.rect.y);
-        link::banner(view, window.size, top, input.link_error)
+            .map_or_else(|| link::top(window.size, metrics.link), |slot| slot.rect.y);
+        link::banner(view, window.size, top, input.link_error, metrics.link)
     });
     screen
         .children(controls(hud, frozen, covered, profile))
@@ -178,9 +193,7 @@ pub(super) fn table(state: &State, input: Inputs<'_>) -> Element {
                 .overlay
                 .or_else(|| state.quitting.then(|| quit::question(window.size))),
         )
-        .children(crate::screens::table_opening::table_opening(
-            view, window, profile,
-        ))
+        .children(crate::screens::table_opening::table_opening(hud))
         .children(connection)
 }
 
@@ -223,7 +236,7 @@ fn table_steps(input: &HudIn, size_class: SizeClass) -> Option<Element> {
     Some(steps::table_tracks(
         view.turn.active,
         lit,
-        input.profile,
+        input,
         |at, active| {
             Action::new(Message::Step {
                 #[expect(clippy::cast_possible_truncation, reason = "twelve icons")]
