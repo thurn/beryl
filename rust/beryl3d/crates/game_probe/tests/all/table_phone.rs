@@ -5,8 +5,8 @@
 use beryl_protocol::protocol::{CardType, ObjectId, RowName, Side, ZoneName};
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use game_play::play::Show;
-use game_table::profiles::phone::{Band, battlefield};
-use game_table::table::{Held, REFERENCE, Table, TrayKind, Window};
+use game_table::profiles::{Band, Profile};
+use game_table::table::{Held, Table, TrayKind, Window};
 use glam::Vec2;
 use kit_frame::frame::{Frame, Place, Resolved, Role};
 use kit_probe::agent::checks::{on_screen, reachable};
@@ -15,26 +15,29 @@ use kit_ui::input::{Insets, Size};
 
 use crate::common::{before, draw, empty_frame, frame};
 
-/// The three phone windows the interface tests run in.
-const PHONES: [(f32, f32); 3] = [(393.0, 759.0), (375.0, 647.0), (430.0, 932.0)];
-
-/// The safe area the phone interface tests give every phone window: a status bar and a home
-/// bar.
-const SAFE: Insets = Insets {
-    top: 44.0,
-    right: 0.0,
-    bottom: 34.0,
-    left: 0.0,
-};
+/// The compact windows used by the interface checks.
+fn phone_sizes() -> Vec<(f32, f32)> {
+    let data = crate::test_data::data();
+    let profile = data.profiles.for_size(Size {
+        width: 393.0,
+        height: 759.0,
+    });
+    profile
+        .test_windows()
+        .map(|window| (window.size.width, window.size.height))
+        .collect()
+}
 
 const MS: u64 = 1_000_000;
 
 fn phone(width: f32, height: f32) -> Window {
+    let size = Size { width, height };
+    let data = crate::test_data::data();
     Window {
         size_class: None,
-        size: Size { width, height },
+        size,
         scale: 3.0,
-        safe_area: SAFE,
+        safe_area: data.profiles.for_size(size).test_safe_area(),
     }
 }
 
@@ -120,11 +123,11 @@ fn battlefield_place(side: Side, row: RowName) -> Place {
 
 #[test]
 fn the_required_rectangle_lies_inside_the_battlefield_at_every_phone_size() {
-    for (width, height) in PHONES {
+    for (width, height) in phone_sizes() {
         for window in [phone(width, height), uneven(width, height)] {
             let phone_layout = layout(window);
             let camera = phone_layout.fit(window);
-            let field = battlefield(window);
+            let field = camera.area;
             assert!(camera.required_fits(), "{window:?}");
             for corner in camera.required_corners() {
                 assert!(
@@ -164,7 +167,7 @@ fn the_camera_fills_the_web_battlefield_at_393_by_759() {
             .fold(f32::NEG_INFINITY, f32::max),
     ];
     let target = [8.0, 92.0, 385.0, 578.0];
-    let field = battlefield(window);
+    let field = camera.area;
     let edges = [
         field.x,
         field.y,
@@ -191,7 +194,7 @@ fn the_camera_fills_the_web_battlefield_at_393_by_759() {
 
 #[test]
 fn the_bands_follow_one_another_without_overlapping() {
-    for (width, height) in PHONES {
+    for (width, height) in phone_sizes() {
         for window in [phone(width, height), uneven(width, height)] {
             let bands = phone_bands(window).expect("a phone window");
             let order: [Band; 8] = [
@@ -246,7 +249,7 @@ fn tapped_board() -> ViewBuilder {
 
 #[test]
 fn each_row_stands_in_its_band_and_no_row_covers_another() {
-    for (width, height) in PHONES {
+    for (width, height) in phone_sizes() {
         let window = phone(width, height);
         let bands = phone_bands(window).expect("a phone window");
         let frame = frame_in(window, &tapped_board());
@@ -300,7 +303,7 @@ fn crowded_rows_scroll_and_every_card_in_view_can_be_pressed() {
         )
         .types = vec![CardType::Artifact];
     }
-    for (width, height) in PHONES {
+    for (width, height) in phone_sizes() {
         let window = phone(width, height);
         let frame = frame_in(window, &view);
         for (side, row) in [
@@ -327,7 +330,7 @@ fn the_hand_runs_off_the_bottom_with_every_top_edge_in_reach() {
         for index in 0..count {
             view.card(ZoneName::Hand, Side::You, &format!("Card {index}"));
         }
-        for (width, height) in PHONES {
+        for (width, height) in phone_sizes() {
             let window = phone(width, height);
             let bands = phone_bands(window).expect("a phone window");
             let frame = frame_in(window, &view);
@@ -397,7 +400,7 @@ fn a_hand_of_several_rows_leaves_every_back_row_card_reachable() {
                 card.tapped = index % 2 == 0;
             }
         }
-        for (width, height) in PHONES {
+        for (width, height) in phone_sizes() {
             let window = phone(width, height);
             let frame = frame_in(window, &view);
             assert_eq!(
@@ -421,7 +424,7 @@ fn the_viewers_life_total_rises_over_a_hand_that_reaches_into_its_strip() {
             view.card(ZoneName::Hand, Side::You, &format!("Card {index}"));
         }
         view.script(ScriptBuilder::reset().build());
-        for (width, height) in PHONES {
+        for (width, height) in phone_sizes() {
             let window = phone(width, height);
             let bands = phone_bands(window).expect("a phone window");
             let mut show = Show::new(Table::new(crate::test_data::data(), window));
@@ -470,7 +473,7 @@ fn the_stack_stands_in_the_middle_band_with_the_top_item_right_and_in_front() {
             view.card(ZoneName::Stack, Side::You, &format!("Spell {index}"));
         }
         view.card(ZoneName::Battlefield, Side::You, "Bear").types = vec![CardType::Creature];
-        for (width, height) in PHONES {
+        for (width, height) in phone_sizes() {
             let window = phone(width, height);
             let bands = phone_bands(window).expect("a phone window");
             let frame = frame_in(window, &view);
@@ -544,7 +547,7 @@ fn a_stack_item_leaves_every_tapped_creature_under_it_reachable() {
         side: Side::You,
         row: None,
     };
-    for (width, height) in PHONES {
+    for (width, height) in phone_sizes() {
         let window = phone(width, height);
         let frame = frame_in(window, &view);
         let item = bounds(cards_at(&frame, stack)[0]);
@@ -577,7 +580,7 @@ fn a_stack_item_leaves_every_tapped_creature_under_it_reachable() {
 #[test]
 fn each_pile_lies_in_its_players_strip() {
     let view = ViewBuilder::sample();
-    for (width, height) in PHONES {
+    for (width, height) in phone_sizes() {
         let window = phone(width, height);
         let bands = phone_bands(window).expect("a phone window");
         let frame = frame_in(window, &view);
@@ -657,7 +660,7 @@ fn a_desktop_window_keeps_the_desktop_layout_with_its_rows_fitted() {
     let fitted = layout(Window::default());
     assert_eq!(*table.layout(), fitted);
     assert!(fitted.bands.is_none() && fitted.fitted.is_some());
-    assert_eq!(fitted.camera, REFERENCE.camera);
+    assert_eq!(fitted.camera, table.profile().data().table.camera);
     assert!(layout(phone(393.0, 759.0)).bands.is_some());
 }
 
@@ -721,7 +724,7 @@ fn every_card_held_up_on_the_phone_keeps_a_square_to_press() {
         put_back(3),
         put_back(7),
     ];
-    for (width, height) in PHONES {
+    for (width, height) in phone_sizes() {
         let window = phone(width, height);
         let bands = phone_bands(window).unwrap();
         for held in &trays {
@@ -777,7 +780,7 @@ fn an_aura_peeking_out_early_in_a_crowded_row_leaves_every_card_reachable() {
         card.types = vec![CardType::Creature];
         card.tapped = true;
     }
-    for (width, height) in PHONES {
+    for (width, height) in phone_sizes() {
         let window = phone(width, height);
         let frame = frame_in(window, &view);
         assert_eq!(
@@ -804,7 +807,7 @@ fn an_aura_on_a_tapped_creature_peeks_out_far_enough_to_press() {
     aura.types = vec![CardType::Enchantment];
     aura.attached_to = Some(creature);
     view.card(ZoneName::Battlefield, Side::You, "Bear").types = vec![CardType::Creature];
-    for (width, height) in PHONES {
+    for (width, height) in phone_sizes() {
         let window = phone(width, height);
         let frame = frame_in(window, &view);
         assert_eq!(
@@ -833,7 +836,7 @@ fn a_crowded_row_leaves_an_attached_aura_a_square_to_press() {
     let aura = view.card(ZoneName::Battlefield, Side::You, "Aura");
     aura.types = vec![CardType::Enchantment];
     aura.attached_to = Some(host);
-    for (width, height) in PHONES {
+    for (width, height) in phone_sizes() {
         let window = phone(width, height);
         let frame = frame_in(window, &view);
         assert!(
@@ -849,9 +852,9 @@ fn a_crowded_row_leaves_an_attached_aura_a_square_to_press() {
 }
 
 fn phone_bands(window: Window) -> Option<game_table::profiles::TableBands> {
-    game_table::profiles::Profile::for_window(&crate::test_data::data().profiles, window).bands()
+    Profile::for_window(&crate::test_data::data().profiles, window).bands()
 }
 
 fn layout(window: Window) -> game_table::table::Layout {
-    game_table::profiles::Profile::for_window(&crate::test_data::data().profiles, window).layout()
+    Profile::for_window(&crate::test_data::data().profiles, window).layout()
 }

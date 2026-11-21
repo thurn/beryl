@@ -8,6 +8,19 @@
 #[path = "../../../../test_data.rs"]
 mod test_data;
 
+fn reference() -> &'static game_table::table::Layout {
+    use game_table::{profiles::Profile, table::Layout};
+    use std::sync::OnceLock;
+
+    static REFERENCE: OnceLock<Layout> = OnceLock::new();
+    REFERENCE.get_or_init(|| {
+        let data = test_data::data();
+        Profile::for_window(&data.profiles, data.profiles.fallback().usual_window())
+            .reference_layout()
+            .unwrap()
+    })
+}
+
 mod bug_report;
 mod checks;
 #[path = "../common/mod.rs"]

@@ -66,7 +66,7 @@ fn moment(name: &str, title: &str, candidates: &[u16], tapped: bool) -> GameUpda
 }
 
 fn signature(update: &GameUpdate) -> Signature {
-    Measure::new(&[Window::default()])
+    Measure::new(&crate::test_data::data().profiles, &[Window::default()])
         .recording(&[FixtureMessage::game_update(update)])
         .unwrap()
 }

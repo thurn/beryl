@@ -31,6 +31,27 @@
     "row_count_gap": 4,
     "gap": 4,
     "pile_step": [3, 3],
+    "beneath_step": [0.3, 0.17],
+    "tray_tuning": {
+      "depth": 280,
+      "fan": {
+        "step": 0.42,
+        "turn": 8,
+        "drop": 0.08
+      },
+      "put_back": {
+        "cascade": 0.165,
+        "between": 0.5,
+        "step": 0.65,
+        "least_step": 0.25,
+        "turn": 7,
+        "drop": 0.1,
+        "column_turns": [-1.6, 1.4],
+        "library_rise": 0.05,
+        "deck_backs": 4,
+        "deck_offset": [-1.5, -2.5]
+      }
+    },
     "bands": {
       "side": 8,
       "opponent_strip": 48,

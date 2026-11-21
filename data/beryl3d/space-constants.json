@@ -315,11 +315,6 @@
       }
     }
   },
-  "shown": {
-    "opening": {
-      "hand_away": 420
-    }
-  },
   "hud": {
     "step_off": 0.6,
     "step_fixed": 0.32,

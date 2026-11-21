@@ -10,20 +10,19 @@ use kit_ui::widgets::screen::ScreenColumn;
 use crate::table::{Camera, Layout, RowArea, TraySpace};
 
 mod desktop;
-pub mod phone;
+mod phone;
 pub(crate) mod web_fit;
-pub use desktop::REFERENCE;
-pub(crate) use desktop::tray_tuning;
 pub use phone::{Band, TableBands};
 pub use web_fit::{FittedPiles, FittedRow, FittedRows};
 
 /// The logical points per unit of life-orb art, in atlas order.
-pub const ORB_SCALES: [f32; 2] = [REFERENCE.play.life.orb_scale, phone::ORB_SCALE];
+pub const ORB_SCALES: [f32; 2] = [1.0 / 1.045, phone::ORB_SCALE];
 
 /// The layout selected for a window. A feature uses its slots and size class to fit its content.
 #[derive(Clone, Copy, Debug)]
 pub struct Profile<'a> {
     data: &'a ProfileData,
+    fallback: &'a ProfileData,
     window: Window,
 }
 
@@ -33,6 +32,7 @@ impl<'a> Profile<'a> {
     pub fn for_window(profiles: &'a Profiles, window: Window) -> Self {
         Self {
             data: profiles.for_size(window.size),
+            fallback: profiles.fallback(),
             window,
         }
     }
@@ -50,25 +50,52 @@ impl<'a> Profile<'a> {
     /// Fits the table's containers for this window.
     #[must_use]
     pub fn layout(self) -> Layout {
-        if let Some(banded) = self.data.table.banded {
+        let table = &self.data.table;
+        if let Some(banded) = table.banded {
             phone::layout(self.data, self.window, banded)
         } else {
-            desktop::layout(self.data, self.window)
+            let anchored = table.anchored.as_ref().expect("validated anchored table");
+            desktop::layout(self.data, self.window, anchored)
         }
+    }
+
+    /// Builds an anchored table without fitting it to the window or the web stage.
+    #[must_use]
+    pub fn reference_layout(self) -> Option<Layout> {
+        let anchored = self.data.table.anchored.as_ref()?;
+        Some(desktop::reference(self.data, anchored))
     }
 
     /// Fits just the prompt tray, without projecting the table's cards and piles.
     #[must_use]
     pub fn tray(self) -> TraySpace {
-        match (self.data.table.banded, self.bands()) {
-            (Some(banded), Some(bands)) => phone::tray_in(
-                self.window,
-                &bands,
-                banded,
-                self.data.table.bands.expect("validated banded table"),
-            ),
-            _ => REFERENCE.tray,
+        let table = &self.data.table;
+        if let Some(anchored) = &table.anchored {
+            return desktop::tray(anchored.tray, table.tray_tuning);
         }
+        phone::tray_in(
+            self.window,
+            &self.bands().expect("validated banded table"),
+            table.banded.expect("validated banded table"),
+            table.bands.expect("validated banded table"),
+            table.tray_tuning,
+        )
+    }
+
+    /// The order row uses the anchored tray bounds, including in a window with bands.
+    #[must_use]
+    pub fn order_tray(self) -> TraySpace {
+        let table = &self.data.table;
+        let fallback = &self.fallback.table;
+        table.anchored.as_ref().map_or_else(
+            || {
+                fallback.anchored.as_ref().map_or_else(
+                    || self.tray(),
+                    |anchored| desktop::tray(anchored.tray, fallback.tray_tuning),
+                )
+            },
+            |anchored| desktop::tray(anchored.tray, table.tray_tuning),
+        )
     }
 
     /// The regions of the table, if the profile supplies window bands.
@@ -112,7 +139,27 @@ impl<'a> Profile<'a> {
             );
         }
         let index = usize::from(side == Side::Opponent);
-        let ndc = REFERENCE.players[index].life;
+        let anchored = self
+            .data
+            .table
+            .anchored
+            .as_ref()
+            .expect("validated anchored table");
+        self.anchor_point(anchored.players[index].life)
+    }
+
+    /// The top left of the player's mana pool in logical points.
+    #[must_use]
+    pub fn pool_position(self, side: Side) -> Vec2 {
+        let index = usize::from(side == Side::Opponent);
+        self.data.table.anchored.as_ref().map_or_else(
+            || self.player_centre(side),
+            |anchored| self.anchor_point(anchored.players[index].pool),
+        )
+    }
+
+    fn anchor_point(self, ndc: Vec2) -> Vec2 {
+        let window = self.window.size;
         Vec2::new(
             f32::midpoint(ndc.x, 1.0) * window.width,
             f32::midpoint(1.0, -ndc.y) * window.height,

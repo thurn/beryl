@@ -3,9 +3,9 @@
 
 use beryl_protocol::protocol::{CardType, Combat, ObjectId, Side, ZoneName};
 use beryl_protocol::testing::ViewBuilder;
-use game_table::table::{Scroll, Window, place};
+use game_table::profiles::Profile;
+use game_table::table::{Scroll, place};
 use glam::Vec2;
-use kit_ui::input::{Insets, Size};
 
 /// The web interface's boxes of the cards of the pay-default recording at its end, seen by the
 /// viewer in a 1600 by 900 window, from `data/beryl3d/match/web/pay-default_you_1600x900@2.json`:
@@ -18,15 +18,8 @@ const YOUR_SECOND_TAPPED: [f32; 4] = [377.9, 570.0, 135.7, 92.5];
 
 #[test]
 fn desktop_cards_land_on_the_web_interfaces_boxes() {
-    let window = Window {
-        size_class: None,
-        size: Size {
-            width: 1600.0,
-            height: 900.0,
-        },
-        scale: 2.0,
-        safe_area: Insets::default(),
-    };
+    let data = crate::test_data::data();
+    let window = data.profiles.fallback().usual_window();
     let mut builder = ViewBuilder::new();
     let mut land = |side: Side, name: &str, tapped: bool| {
         let card = builder.card(ZoneName::Battlefield, side, name);
@@ -42,9 +35,7 @@ fn desktop_cards_land_on_the_web_interfaces_boxes() {
         (land(Side::You, "Plains", true), YOUR_SECOND_TAPPED),
     ];
     let view = builder.build();
-    let layout =
-        game_table::profiles::Profile::for_window(&crate::test_data::data().profiles, window)
-            .layout();
+    let layout = Profile::for_window(&data.profiles, window).layout();
     let camera = layout.fit(window);
     let placement = place(
         &view,
@@ -93,18 +84,9 @@ fn desktop_cards_land_on_the_web_interfaces_boxes() {
 /// straight across.
 #[test]
 fn a_blocker_stands_across_from_its_attacker() {
-    let window = Window {
-        size_class: None,
-        size: Size {
-            width: 1600.0,
-            height: 900.0,
-        },
-        scale: 2.0,
-        safe_area: Insets::default(),
-    };
-    let layout =
-        game_table::profiles::Profile::for_window(&crate::test_data::data().profiles, window)
-            .layout();
+    let data = crate::test_data::data();
+    let window = data.profiles.fallback().usual_window();
+    let layout = Profile::for_window(&data.profiles, window).layout();
     let camera = layout.fit(window);
     for defender in [Side::Opponent, Side::You] {
         let attacker_side = if defender == Side::You {

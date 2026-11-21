@@ -2,6 +2,7 @@
 //! tray and answers with its buttons, a number steps through the values it offers, and the
 //! choice among a card's ways draws the card once a way over the table.
 
+use crate::reference;
 use app_client::Input;
 use app_client::command::SessionCommand;
 use app_client::{Client, Config};
@@ -14,7 +15,6 @@ use beryl_protocol::protocol::{
     Candidate, CandidateView, DecisionView, Kind, ObjectId, SessionId, Side, Status, ZoneName,
 };
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
-use game_table::table::TraySpace;
 use glam::Vec2;
 use kit_frame::frame::{Frame, Role, StateBits};
 use kit_ui::input::{Insets, PointerPhase, Size};
@@ -134,7 +134,7 @@ fn a_yes_or_no_holds_its_card_up_and_its_yes_sends_the_first_option() {
     client.frame(MS);
     client.frame(5_000 * MS);
     let frame = client.frame(10_000 * MS);
-    let (tray, _) = TraySpace::REFERENCE.on_window(SIZE);
+    let (tray, _) = reference().tray.on_window(SIZE);
     let held = card_centre(frame, card);
     assert!(
         (tray.x..tray.x + tray.width).contains(&held.x)

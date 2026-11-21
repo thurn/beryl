@@ -11,3 +11,9 @@ mod shader_cost;
 mod shadow;
 mod tabletop;
 mod text;
+
+fn reference_camera() -> kit_space::camera::CameraData {
+    use kit_base::data::profiles::{Profiles, SHIPPED};
+
+    Profiles::parse(&SHIPPED).unwrap().fallback().table.camera
+}

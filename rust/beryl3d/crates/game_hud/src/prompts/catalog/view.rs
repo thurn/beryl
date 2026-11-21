@@ -11,7 +11,6 @@ use beryl_protocol::prompt::{Click, PromptView, ShapeBody};
 use glam::Vec2;
 
 use crate::hud::HudIn;
-use game_table::table::TraySpace;
 use kit_base::tokens::{color, size, type_style};
 use kit_frame::frame::Role;
 use kit_ui::element::{Align, Anchor, Element, Justify, column};
@@ -34,12 +33,14 @@ pub(super) fn view(prompt: &PromptView, input: &HudIn, bar: Element) -> Element 
 /// in the tray's space of the desktop layout as `.stage-choose` centres it, with the one `chosen`
 /// lit.
 fn entries_column(entries: &[String], chosen: Option<u16>, input: &HudIn) -> Element {
-    let (space, _) = TraySpace::REFERENCE.on_window(input.window.size);
     // A phone gives the column the opponent's half of the table, down to the middle band, and
     // keeps every entry as tall as a finger, scrolling the list where they do not fit
     // (`.phone-board .stage-entries` in `ui/src/mobile/phone.css`).
     let slot = input.profile.slot("prompt.catalog");
-    let space = slot.map_or(space, |slot| slot.rect);
+    let space = slot.map_or_else(
+        || input.profile.tray().on_window(input.window.size).0,
+        |slot| slot.rect,
+    );
     let rows = (entries.iter().enumerate()).map(|(index, words)| {
         let index = u16::try_from(index).unwrap_or(u16::MAX);
         let entry = entry(words, index, chosen == Some(index));

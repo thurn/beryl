@@ -1,7 +1,7 @@
 //! Offscreen samples of the flat layer's CSS paint capabilities.
 
 use beryl_render::{Limits, Renderer, Target};
-use game_table::table::{Camera, REFERENCE};
+use game_table::table::Camera;
 use kit_base::atlas::Tier;
 use kit_base::geometry::{Insets, Size, Window};
 use kit_frame::frame::{Frame, FrameBuilder};
@@ -40,7 +40,8 @@ fn picture(
     layer.show(Some(root.children(elements)));
     let mut frame = Frame::with_capacity(16, 16, 64);
     let mut builder = FrameBuilder::new(&mut frame, tier);
-    let camera = Camera::fit(REFERENCE.camera, window);
+    let data = crate::test_data::data();
+    let camera = Camera::fit(data.profiles.fallback().table.camera, window);
     builder.camera(camera.view_projection);
     layer.write(&mut builder, &camera.screen_plane(), true);
     let mut target = Target::offscreen(renderer, 200, 120);

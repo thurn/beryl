@@ -181,14 +181,14 @@ fn keys_scroll_the_row_last_pressed_by_whole_groups() {
 
 #[test]
 fn the_wheel_scrolls_a_group_window_supplied_by_the_arrangement_solver() {
-    use game_table::table::REFERENCE;
+    use crate::reference;
     use glam::Quat;
     use kit_base::geometry::Window;
     use kit_space::arrange::{Container, Item, Limits, Policy, Region, arrange};
     use kit_space::camera::Camera;
     use kit_ui::scroll::{ScrollGesture, ScrollInput, Viewport};
 
-    let camera = Camera::fit(REFERENCE.camera, Window::default());
+    let camera = Camera::fit(reference().camera, Window::default());
     let container = Container {
         region: Region {
             centre: camera.data.target,

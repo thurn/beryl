@@ -77,7 +77,9 @@ impl Client {
                     return true;
                 }
                 let at = (self.features.prompts.current())
-                    .and_then(|prompt| order::slot_at(prompt, self.window.size, pointer.position.x))
+                    .and_then(|prompt| {
+                        order::slot_at(prompt, self.show.table().profile(), pointer.position.x)
+                    })
                     .and_then(|at| u16::try_from(at).ok());
                 if let Some(at) = at {
                     self.click(Click::Drop {
@@ -99,7 +101,9 @@ impl Client {
     fn still_ordering(&self, carry: Carry) -> bool {
         (self.features.prompts.current())
             .filter(|_| self.features.layer_open)
-            .is_some_and(|prompt| order::cell_of(prompt, self.window.size, carry.on).is_some())
+            .is_some_and(|prompt| {
+                order::cell_of(prompt, self.show.table().profile(), carry.on).is_some()
+            })
     }
 
     /// The item of the open order prompt's row that a press at `point` reaches, if any.
@@ -138,7 +142,7 @@ impl Client {
         let float = (self.features.prompts.current()).and_then(|prompt| {
             let view = self.show.latest().map(|update| &update.view);
             let faces = Some(self.show.faces().list());
-            order::carried_item(prompt, carry.on, view, faces, self.window.size)
+            order::carried_item(prompt, carry.on, view, faces, self.show.table().profile())
         });
         self.layer.float(floats::CARRIED_ITEM, float);
         self.show_screen();
@@ -148,7 +152,7 @@ impl Client {
     /// `at`, that it had where the press began.
     fn move_item(&mut self, carry: Carry, at: Vec2) {
         let Some(cell) = (self.features.prompts.current())
-            .and_then(|prompt| order::cell_of(prompt, self.window.size, carry.on))
+            .and_then(|prompt| order::cell_of(prompt, self.show.table().profile(), carry.on))
         else {
             return;
         };

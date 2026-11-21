@@ -280,9 +280,8 @@ project, and selects the main lanes.
 
 - `data/beryl3d/profiles/` holds the layouts, including their window conditions,
   the camera and container tuning, named slots, interface thresholds and test
-  windows. Hosts load them with the verb tuning. The build script generates the
-  old constants from these files for placement that still uses the previous
-  layout API.
+  windows. Hosts load the typed profiles with the verb tuning. Only the
+  remaining HUD and flat-layer settings are also exported as constants.
 
 - `data/beryl3d/space-constants.json` holds the shared tuning that still
   compiles to constants. The `kit_base` build script publishes it under

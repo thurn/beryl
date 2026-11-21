@@ -6,7 +6,7 @@ use kit_base::data::profiles::Region;
 use kit_base::geometry::{Rect, Size};
 use kit_scene::{SizeClass, Slot};
 
-use crate::REGULAR_LAYOUT;
+use crate::reference;
 
 #[test]
 fn the_shorter_side_selects_the_profile_in_logical_points() {
@@ -28,7 +28,7 @@ fn the_shorter_side_selects_the_profile_in_logical_points() {
     }
     assert_eq!(
         data.profiles.for_size(Window::default().size).table.camera,
-        REGULAR_LAYOUT.camera
+        reference().camera
     );
 }
 
@@ -120,4 +120,57 @@ fn the_windows_use_the_supplied_table_and_screen_tuning() {
         column.action(kit_ui::widgets::button("Keep")).style.height,
         Some(52.0)
     );
+}
+
+#[test]
+fn the_reference_and_fitted_tables_read_the_supplied_geometry() {
+    use kit_base::data::profiles::{Profiles, SHIPPED};
+
+    let shipped = Profiles::parse(&SHIPPED).unwrap();
+    let window = shipped.fallback().usual_window();
+    let original = Profile::for_window(&shipped, window).layout();
+    let modified = SHIPPED[1]
+        .1
+        .replace("\"pitch_degrees\": 27.0", "\"pitch_degrees\": 29.0")
+        .replace("\"land_width\": 100", "\"land_width\": 96")
+        .replace("\"depth\": 300", "\"depth\": 306");
+    let profiles = Profiles::parse(&[SHIPPED[0], (SHIPPED[1].0, &modified)]).unwrap();
+    let profile = Profile::for_window(&profiles, window);
+    let reference = profile.reference_layout().unwrap();
+    let fitted = profile.layout();
+
+    assert_eq!(reference.camera.pitch_degrees.to_bits(), 29.0_f32.to_bits());
+    assert_eq!(reference.hand.depth.to_bits(), 306.0_f32.to_bits());
+    assert_eq!(fitted.camera, reference.camera);
+    assert_eq!(fitted.hand, reference.hand);
+    assert!(fitted.fitted.unwrap()[0][1].width < original.fitted.unwrap()[0][1].width);
+}
+
+#[test]
+fn a_put_back_tray_uses_the_deck_geometry_of_its_own_profile() {
+    use std::sync::Arc;
+
+    use beryl_protocol::protocol::ObjectId;
+    use game_table::table::{Held, Table, TrayKind};
+    use kit_base::data::profiles::{Profiles, SHIPPED};
+
+    let compact = SHIPPED[0]
+        .1
+        .replace("\"deck_backs\": 4", "\"deck_backs\": 5");
+    let regular = SHIPPED[1]
+        .1
+        .replace("\"deck_backs\": 4", "\"deck_backs\": 3");
+    let mut data = (*crate::test_data::data()).clone();
+    data.profiles = Profiles::parse(&[(SHIPPED[0].0, &compact), (SHIPPED[1].0, &regular)]).unwrap();
+    let data = Arc::new(data);
+    let held = Held {
+        piles: vec![vec![], vec![ObjectId(1)]],
+        rooms: vec![Some(1), Some(1)],
+        kind: TrayKind::PutBack,
+    };
+    for (definition, count) in data.profiles.iter().zip([5, 3]) {
+        let table = Table::new(Arc::clone(&data), definition.usual_window());
+        assert_eq!(table.profile().tray(), table.layout().tray);
+        assert_eq!(table.tray_poses(&held).library.len(), count);
+    }
 }

@@ -31,7 +31,7 @@ use beryl_protocol::protocol::{Side, ZoneName};
 use glam::Vec2;
 
 use crate::profiles::TableBands;
-pub use crate::profiles::{FittedPiles, FittedRow, FittedRows, REFERENCE};
+pub use crate::profiles::{FittedPiles, FittedRow, FittedRows};
 pub use clearance::row_area;
 use kit_base::data::profiles::Play;
 pub use kit_base::data::profiles::TableStyle;
@@ -99,7 +99,7 @@ pub struct RowArea {
     pub centre: Option<f32>,
 }
 
-/// Where a hand stands, relative to the camera (`hand` and `opponent_hand` in `space-constants.json`).
+/// Where a hand stands relative to the camera, after fitting the selected profile.
 /// The middle of the edge of each card nearest the screen's middle (the viewer's cards' top
 /// edges, the opponent's bottom edges) lies on one circle, whatever the hand's size, so a
 /// crowded hand turns and sinks less for each card than a spread one, as Arena's does.
@@ -132,7 +132,7 @@ pub struct HandData {
 }
 
 /// Where the stack's items stand, relative to the camera at the right of the screen (`stack`
-/// in `space-constants.json`). Distances are in normalized device coordinates' vertical unit, half the
+/// in the layout profile). Distances are in normalized device coordinates' vertical unit, half the
 /// window's height, both across and up the screen. The top item stands in front, and each item
 /// beneath peeks out above it and to its left. A stack too tall to fit shrinks, all its items
 /// alike, and one too tall to leave each item beneath a reachable strip stands in rows.

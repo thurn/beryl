@@ -154,3 +154,25 @@ fn effect_errors_name_the_file_and_bad_layer() {
     let why = Effects::parse([("glow", glow.to_string().as_str())]).unwrap_err();
     assert!(why.contains("effects/glow.json: layers[0]"), "{why}");
 }
+
+#[test]
+fn table_profiles_reject_unknown_geometry_fields() {
+    use kit_base::data::profiles::{Profiles, SHIPPED};
+
+    for (index, key, section) in [
+        (0, "beneath_step", "table"),
+        (0, "deck_backs", "table.tray_tuning.put_back"),
+        (1, "vanishing_y", "table.anchored.web.perspective"),
+        (1, "bias_degrees", "table.anchored.hand"),
+        (1, "spare", "table.anchored.stack"),
+        (1, "narrow_step", "table.inspector"),
+    ] {
+        let mut files = SHIPPED;
+        let (file, text) = files[index];
+        let invalid = text.replacen(&format!("\"{key}\""), "\"unknown_measurement\"", 1);
+        files[index] = (file, &invalid);
+        let why = Profiles::parse(&files).unwrap_err();
+        assert!(why.contains(&format!("{file}: {section}")), "{why}");
+        assert!(why.contains("unknown field `unknown_measurement`"), "{why}");
+    }
+}

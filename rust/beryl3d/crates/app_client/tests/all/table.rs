@@ -1,5 +1,6 @@
 //! The table at rest: the camera's fit, and where each zone's cards are placed.
 
+use crate::reference;
 use app_client::Input;
 use app_client::{Client, Config};
 use beryl_protocol::protocol::{
@@ -7,9 +8,7 @@ use beryl_protocol::protocol::{
 };
 use beryl_protocol::script::Reset;
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, script};
-use game_table::table::{
-    ABILITY_IDS, CARD_HEIGHT, CARD_WIDTH, Camera, Placement, REFERENCE, Scroll, Window,
-};
+use game_table::table::{ABILITY_IDS, CARD_HEIGHT, CARD_WIDTH, Camera, Placement, Scroll, Window};
 use glam::{Vec2, Vec3};
 use kit_base::pose::Pose;
 use kit_frame::frame::{Frame, Place, Role};
@@ -107,8 +106,8 @@ fn every_zone_of_both_sides_gets_its_cards() {
     assert!(frame.resolved.iter().any(|r| r.place == stack));
     // Each side's library lies in its own corner of the window, as the web interface's piles
     // do: the viewer's at the bottom left, the opponent's at the top right.
-    let camera = Camera::fit(REFERENCE.camera, window(1440.0, 900.0));
-    let placement = place(&view, &[], &REFERENCE, &camera, &Scroll::default());
+    let camera = Camera::fit(reference().camera, window(1440.0, 900.0));
+    let placement = place(&view, &[], reference(), &camera, &Scroll::default());
     let library = |side: Side| {
         let player = match side {
             Side::You => &view.players.you,
@@ -127,9 +126,9 @@ fn every_zone_of_both_sides_gets_its_cards() {
 #[test]
 fn placement_is_the_same_for_the_same_view_and_window() {
     let view = ViewBuilder::sample().build();
-    let camera = Camera::fit(REFERENCE.camera, window(1440.0, 900.0));
-    let first = place(&view, &[], &REFERENCE, &camera, &Scroll::default());
-    let again = place(&view, &[], &REFERENCE, &camera, &Scroll::default());
+    let camera = Camera::fit(reference().camera, window(1440.0, 900.0));
+    let first = place(&view, &[], reference(), &camera, &Scroll::default());
+    let again = place(&view, &[], reference(), &camera, &Scroll::default());
     assert_eq!(first, again);
 }
 
@@ -150,8 +149,8 @@ fn plain_twins_pile_in_an_uncrowded_row_with_the_lowest_slot_on_top() {
     );
     let mut view = builder.build();
     view.battlefield.reverse();
-    let camera = Camera::fit(REFERENCE.camera, window(1440.0, 900.0));
-    let placement = place(&view, &[], &REFERENCE, &camera, &Scroll::default());
+    let camera = Camera::fit(reference().camera, window(1440.0, 900.0));
+    let placement = place(&view, &[], reference(), &camera, &Scroll::default());
     let top = placement.get(top).unwrap();
     let copy = placement.get(copy).unwrap();
     assert_eq!((top.copies, copy.copies), (2, 0));
@@ -168,11 +167,11 @@ fn tapped_and_untapped_twins_stand_apart() {
     tapped.token = true;
     tapped.tapped = true;
     let tapped = tapped.slot;
-    let camera = Camera::fit(REFERENCE.camera, window(1440.0, 900.0));
+    let camera = Camera::fit(reference().camera, window(1440.0, 900.0));
     let placement = place(
         &builder.build(),
         &[],
-        &REFERENCE,
+        reference(),
         &camera,
         &Scroll::default(),
     );
@@ -189,9 +188,9 @@ fn the_lands_row_piles_at_seven_lands_including_lands_in_other_rows() {
     builder
         .card(ZoneName::Battlefield, Side::Opponent, "Forest")
         .types = vec![CardType::Land];
-    let camera = Camera::fit(REFERENCE.camera, window(1440.0, 900.0));
+    let camera = Camera::fit(reference().camera, window(1440.0, 900.0));
     let sizes = |view: &PlayerView| {
-        let placement = place(view, &[], &REFERENCE, &camera, &Scroll::default());
+        let placement = place(view, &[], reference(), &camera, &Scroll::default());
         [ObjectId(0), ObjectId(1)].map(|slot| placement.get(slot).unwrap().copies)
     };
     assert_eq!(sizes(&builder.build()), [1, 1]);
@@ -216,8 +215,8 @@ fn a_permanent_targeted_on_the_stack_stands_apart_from_its_twins() {
         panic!("expected a spell");
     };
     targets.push(TargetRef::Object { slot: targeted });
-    let camera = Camera::fit(REFERENCE.camera, window(1440.0, 900.0));
-    let placement = place(&view, &[], &REFERENCE, &camera, &Scroll::default());
+    let camera = Camera::fit(reference().camera, window(1440.0, 900.0));
+    let placement = place(&view, &[], reference(), &camera, &Scroll::default());
     assert_eq!(placement.get(first).unwrap().copies, 1);
     assert_eq!(placement.get(targeted).unwrap().copies, 1);
 }
@@ -252,7 +251,7 @@ fn a_crowded_battlefield_keeps_its_cards_in_the_table_with_their_strips_uncovere
     .layout();
     let camera = layout.fit(window(1440.0, 900.0));
     let placement = place(&view, &[], &layout, &camera, &Scroll::default());
-    let [low, high] = REFERENCE.camera.required;
+    let [low, high] = reference().camera.required;
     let mut drawn = 0;
     for object in &view.objects {
         let rest = placement.get(object.slot).unwrap();
@@ -308,7 +307,7 @@ fn a_crowded_battlefield_keeps_its_cards_in_the_table_with_their_strips_uncovere
         lefts.sort_by(f32::total_cmp);
         for pair in lefts.windows(2) {
             assert!(
-                pair[1] - pair[0] >= REFERENCE.strip - 0.01,
+                pair[1] - pair[0] >= reference().strip - 0.01,
                 "{row:?}: {pair:?}"
             );
         }
@@ -319,7 +318,7 @@ fn a_crowded_battlefield_keeps_its_cards_in_the_table_with_their_strips_uncovere
 /// matrices: the eye stands back from the target along the pitched line of sight, and a point
 /// lands on screen by similar triangles.
 fn by_hand(point: Vec3, camera: &Camera) -> Vec2 {
-    let data = REFERENCE.camera;
+    let data = reference().camera;
     let pitch = data.pitch_degrees.to_radians();
     let forward = Vec3::new(0.0, pitch.sin(), -pitch.cos());
     let eye = data.target - forward * camera.distance;
@@ -343,7 +342,7 @@ fn by_hand(point: Vec3, camera: &Camera) -> Vec2 {
 
 #[test]
 fn a_card_at_the_tables_centre_projects_where_a_hand_calculation_says() {
-    let camera = Camera::fit(REFERENCE.camera, window(1440.0, 900.0));
+    let camera = Camera::fit(reference().camera, window(1440.0, 900.0));
     let (x, y) = (CARD_WIDTH / 2.0, CARD_HEIGHT / 2.0);
     for corner in [
         Vec3::new(-x, -y, 0.0),
@@ -368,11 +367,11 @@ fn the_reference_camera_is_the_one_fitted_to_arena() {
         .table
         .camera;
     assert_eq!(
-        REFERENCE.camera.pitch_degrees.to_bits(),
+        reference().camera.pitch_degrees.to_bits(),
         camera.pitch_degrees.to_bits()
     );
     assert_eq!(
-        REFERENCE.camera.fov_degrees.to_bits(),
+        reference().camera.fov_degrees.to_bits(),
         camera.fov_degrees.to_bits()
     );
 }
@@ -389,9 +388,9 @@ const REFERENCE_WINDOWS: [(f32, f32); 4] = [
 #[test]
 fn resizing_keeps_the_required_rectangle_in_view() {
     for (width, height) in REFERENCE_WINDOWS {
-        assert!(Camera::fit(REFERENCE.camera, window(width, height)).required_fits());
-        let camera = Camera::fit(REFERENCE.camera, window(width, height));
-        let [low, high] = REFERENCE.camera.required;
+        assert!(Camera::fit(reference().camera, window(width, height)).required_fits());
+        let camera = Camera::fit(reference().camera, window(width, height));
+        let [low, high] = reference().camera.required;
         for corner in [
             low,
             Vec2::new(high.x, low.y),
@@ -422,8 +421,8 @@ fn lands_stand_untapped_first_with_each_name_together_in_first_appearance_order(
         land.tapped = tapped;
     }
     let view = builder.build();
-    let camera = Camera::fit(REFERENCE.camera, window(1440.0, 900.0));
-    let placement = place(&view, &[], &REFERENCE, &camera, &Scroll::default());
+    let camera = Camera::fit(reference().camera, window(1440.0, 900.0));
+    let placement = place(&view, &[], reference(), &camera, &Scroll::default());
     let mut slots: Vec<u16> = view.objects.iter().map(|object| object.slot.0).collect();
     slots.sort_by(|&a, &b| {
         let x = |slot: u16| placement.get(ObjectId(slot)).unwrap().pose.position.x;
@@ -495,8 +494,8 @@ fn abilities_on_the_stack_are_drawn_as_cards_above_the_spell_beneath_them() {
     assert_eq!(sides, [on_stack(Side::You), on_stack(Side::Opponent)]);
 
     // The spell is the stack's bottom item and the abilities its second and third.
-    let camera = Camera::fit(REFERENCE.camera, window(1440.0, 900.0));
-    let placement = place(&view, &[3, 4], &REFERENCE, &camera, &Scroll::default());
+    let camera = Camera::fit(reference().camera, window(1440.0, 900.0));
+    let placement = place(&view, &[3, 4], reference(), &camera, &Scroll::default());
     let spell = view.objects.iter().find(|o| o.zone == ZoneName::Stack);
     let spell = placement.get(spell.expect("a spell").slot).expect("placed");
     let depths = [
@@ -554,7 +553,7 @@ fn corners(pose: &Pose, camera: &Camera) -> [Vec2; 4] {
 
 /// The poses of `side`'s hand in `view`, in the order the view lists the cards.
 fn hand_poses(view: &PlayerView, side: Side, camera: &Camera) -> Vec<Pose> {
-    let placement = place(view, &[], &REFERENCE, camera, &Scroll::default());
+    let placement = place(view, &[], reference(), camera, &Scroll::default());
     view.objects
         .iter()
         .filter(|object| {
@@ -587,7 +586,7 @@ fn hands_of_any_size_lie_inside_the_window() {
     for count in [1, 2, 5, 7, 10, 20, 60] {
         let view = hands(count);
         for (width, height) in REFERENCE_WINDOWS {
-            let camera = Camera::fit(REFERENCE.camera, window(width, height));
+            let camera = Camera::fit(reference().camera, window(width, height));
             for side in [Side::You, Side::Opponent] {
                 let cards: Vec<[Vec2; 4]> = hand_poses(&view, side, &camera)
                     .iter()
@@ -654,13 +653,13 @@ fn every_card_of_a_hand_of_any_size_can_be_pressed() {
 
 #[test]
 fn a_hands_cards_lie_on_one_circle_and_turn_more_the_farther_from_the_middle() {
-    let camera = Camera::fit(REFERENCE.camera, window(1440.0, 900.0));
+    let camera = Camera::fit(reference().camera, window(1440.0, 900.0));
     // Twenty cards, the most of these that one row holds in this window.
     for count in [7, 20] {
         let view = hands(count);
         for (side, data, down) in [
-            (Side::You, REFERENCE.hand, 1.0),
-            (Side::Opponent, REFERENCE.opponent_hand, -1.0),
+            (Side::You, reference().hand, 1.0),
+            (Side::Opponent, reference().opponent_hand, -1.0),
         ] {
             let poses = hand_poses(&view, side, &camera);
             let cards: Vec<[Vec2; 4]> = poses.iter().map(|pose| corners(pose, &camera)).collect();
@@ -730,8 +729,8 @@ fn stacks_of_any_size_stay_on_screen_with_the_newest_item_nearest() {
         }
         let view = builder.build();
         for (width, height) in REFERENCE_WINDOWS {
-            let camera = Camera::fit(REFERENCE.camera, window(width, height));
-            let placement = place(&view, &[], &REFERENCE, &camera, &Scroll::default());
+            let camera = Camera::fit(reference().camera, window(width, height));
+            let placement = place(&view, &[], reference(), &camera, &Scroll::default());
             let poses: Vec<Pose> = view
                 .stack
                 .iter()
@@ -816,8 +815,8 @@ fn a_spell_that_exiled_itself_rests_in_exile_while_the_view_still_lists_it() {
     let object = view.objects.iter_mut().find(|o| o.slot == spell);
     object.expect("the spell's card").zone = ZoneName::Exile;
 
-    let camera = Camera::fit(REFERENCE.camera, window(1440.0, 900.0));
-    let placement = place(&view, &[], &REFERENCE, &camera, &Scroll::default());
+    let camera = Camera::fit(reference().camera, window(1440.0, 900.0));
+    let placement = place(&view, &[], reference(), &camera, &Scroll::default());
     let rest = placement.get(spell).expect("placed");
     assert_eq!(
         rest.place,

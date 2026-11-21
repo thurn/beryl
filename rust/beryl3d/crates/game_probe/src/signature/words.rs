@@ -1,18 +1,17 @@
 //! Counts lines with the bundled fonts at the widths used by the window profiles.
 
 use game_hud::hud::log::{LogKind, LogLine};
-use game_table::profiles::phone::phone_bands;
+use game_table::profiles::Profile;
 use game_table::table::Window;
 use game_table::table::badges::{NAME_STYLE, counter_label};
-use kit_base::data::space::hud::phone;
-use kit_base::data::space::layout::desktop::inspector;
+use kit_base::data::profiles::Profiles;
 use kit_base::tokens::{size, space, type_style};
 use kit_text::text::{Text, TypeStyle};
 
 struct Widths {
     inspector: Vec<f32>,
     desktop_prompt: Vec<f32>,
-    phone_prompt: Vec<f32>,
+    banded_prompt: Vec<(f32, f32)>,
     log: Vec<f32>,
 }
 
@@ -23,20 +22,27 @@ pub(super) struct Words {
 }
 
 impl Words {
-    pub(super) fn new(windows: &[Window]) -> Self {
+    pub(super) fn new(profiles: &Profiles, windows: &[Window]) -> Self {
         let mut widths = Widths {
             inspector: Vec::new(),
             desktop_prompt: Vec::new(),
-            phone_prompt: Vec::new(),
+            banded_prompt: Vec::new(),
             log: Vec::new(),
         };
         for &window in windows {
-            if let Some(bands) = phone_bands(window) {
+            let profile = Profile::for_window(profiles, window);
+            if let Some(bands) = profile.bands() {
                 let room = bands.right - bands.left;
-                widths.phone_prompt.extend([
-                    room - 2.0 * phone::PILL_PADDING,
-                    room - 2.0 * phone::PILL_PADDING - phone::BUTTON_MIN_WIDTH - phone::DOCK_GAP,
-                ]);
+                if let Some(prompt) = profile.data().hud.floating_prompt {
+                    let full = room - 2.0 * prompt.pill_padding;
+                    widths.banded_prompt.extend([
+                        (full, prompt.pill_text),
+                        (
+                            full - prompt.button_min_width - prompt.gap,
+                            prompt.pill_text,
+                        ),
+                    ]);
+                }
                 widths
                     .log
                     .push(room - 2.0 * space::M - 2.0 * size::LOG_PADDING_X);
@@ -45,25 +51,34 @@ impl Words {
                     .desktop_prompt
                     .extend([size::BUTTON_WIDTH, size::DOCK_MAX_WIDTH]);
                 widths.log.push(size::LOG_WIDTH - 2.0 * size::LOG_PADDING_X);
-                let mut width = inspector::WIDTH;
-                while width >= inspector::LEAST_WIDTH {
-                    widths.inspector.push(
-                        (width - 2.0 * inspector::PAD) * window.size.height
-                            / inspector::STAGE_HEIGHT,
-                    );
-                    width -= inspector::NARROW_STEP;
+            }
+            if let Some(inspector) = profile.data().table.inspector {
+                let height = profile
+                    .slot("inspector")
+                    .expect("validated slot")
+                    .rect
+                    .height;
+                let mut width = inspector.width;
+                while width >= inspector.least_width {
+                    widths
+                        .inspector
+                        .push((width - 2.0 * inspector.pad) * height / inspector.stage_height);
+                    width -= inspector.narrow_step;
                 }
             }
         }
         for values in [
             &mut widths.inspector,
             &mut widths.desktop_prompt,
-            &mut widths.phone_prompt,
             &mut widths.log,
         ] {
             values.sort_by(f32::total_cmp);
             values.dedup();
         }
+        widths
+            .banded_prompt
+            .sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.total_cmp(&b.1)));
+        widths.banded_prompt.dedup();
         Self {
             widths,
             text: Text::new(),
@@ -90,10 +105,6 @@ impl Words {
     }
 
     pub(super) fn prompt(&mut self, words: &str) -> Vec<usize> {
-        let phone_style = TypeStyle {
-            size: phone::PILL_TEXT,
-            ..type_style::TITLE
-        };
         let mut counts: Vec<_> = lines(
             &mut self.text,
             words,
@@ -101,12 +112,13 @@ impl Words {
             &self.widths.desktop_prompt,
         )
         .collect();
-        counts.extend(lines(
-            &mut self.text,
-            words,
-            phone_style,
-            &self.widths.phone_prompt,
-        ));
+        counts.extend(self.widths.banded_prompt.iter().map(|&(width, size)| {
+            let style = TypeStyle {
+                size,
+                ..type_style::TITLE
+            };
+            line_count(&mut self.text, words, style, width)
+        }));
         counts
     }
 
@@ -135,11 +147,15 @@ fn lines<'a>(
     style: TypeStyle,
     widths: &'a [f32],
 ) -> impl Iterator<Item = usize> + 'a {
-    widths.iter().map(move |&width| {
-        if words.is_empty() {
-            0
-        } else {
-            text.block(words, style, &[], Some(width)).lines.len()
-        }
-    })
+    widths
+        .iter()
+        .map(move |&width| line_count(text, words, style, width))
+}
+
+fn line_count(text: &mut Text, words: &str, style: TypeStyle, width: f32) -> usize {
+    if words.is_empty() {
+        0
+    } else {
+        text.block(words, style, &[], Some(width)).lines.len()
+    }
 }

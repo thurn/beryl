@@ -3,15 +3,14 @@
 //! prompt holds up.
 
 use crate::common::{MS, empty_frame, frame, show, window};
+use crate::reference;
 use app_client::Input;
 use app_client::{Client, Config};
 use beryl_protocol::GameUpdate;
 use beryl_protocol::protocol::{ObjectId, Side, Why, ZoneName};
 use beryl_protocol::script::Act;
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, object, timing};
-use game_table::table::{
-    Camera, Held, LAYER, REFERENCE, Table, TrayKind, TraySpace, landing, tray, tray_boxes,
-};
+use game_table::table::{Camera, Held, LAYER, Table, TrayKind, landing, tray, tray_boxes};
 use glam::{Vec2, Vec3};
 use kit_base::pose::{Pose, Segment};
 use kit_frame::frame::{Frame, Role};
@@ -241,11 +240,11 @@ fn a_tray_lies_inside_the_window_with_every_card_seen() {
     ];
     let trays: [&[usize]; 5] = [&[1], &[5], &[12], &[3, 4], &[4, 3]];
     for (width, height) in sizes {
-        let camera = Camera::fit(REFERENCE.camera, window(width, height));
+        let camera = Camera::fit(reference().camera, window(width, height));
         for counts in trays {
             let piles: Vec<Vec<usize>> = counts.iter().map(|&count| (0..count).collect()).collect();
             let piles: Vec<&[usize]> = piles.iter().map(Vec::as_slice).collect();
-            let poses = tray(&piles, TraySpace::REFERENCE, &camera);
+            let poses = tray(&piles, reference().tray, &camera);
             assert_eq!(poses.len(), counts.iter().sum::<usize>());
             let boxes: Vec<(Vec2, Vec2)> = poses.iter().map(|p| screen_box(&camera, p)).collect();
             for (index, (low, high)) in boxes.iter().enumerate() {
@@ -270,7 +269,7 @@ fn a_card_let_go_in_a_box_lands_before_the_first_card_whose_middle_is_past_it() 
         width: 1600.0,
         height: 900.0,
     };
-    let space = TraySpace::REFERENCE;
+    let space = reference().tray;
     let held = Held {
         piles: vec![vec![ObjectId(1)], vec![ObjectId(2), ObjectId(3)]],
         rooms: vec![None, None],

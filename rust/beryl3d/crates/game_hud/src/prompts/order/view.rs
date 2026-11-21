@@ -22,6 +22,7 @@ use glam::Vec2;
 use crate::hud::HudIn;
 use crate::prompts::feature::Details;
 use game_table::faces::FaceList;
+use game_table::profiles::Profile;
 use game_table::table::{CARD_HEIGHT, CARD_WIDTH, TraySpace, tray_area};
 use kit_base::tokens::{color, size, space, type_style};
 use kit_frame::frame::Role;
@@ -37,9 +38,6 @@ const ENDS_SIZE: f32 = size::ORDER_ENDS_SIZE;
 const ENDS_WEIGHT: u16 = 600;
 const ENDS_MOST: f32 = size::ORDER_ENDS_MOST;
 
-/// The tray's space on the desktop layout, where the row lies.
-const SPACE: TraySpace = TraySpace::REFERENCE;
-
 /// What the flat layer shows for `prompt`: the shade over the table, the waiting triggers in
 /// their row with the session's words for its two ends under it, and the prompt bar. The item
 /// `carried`, which the pointer carries along the row, is left out of it: a float draws it
@@ -52,6 +50,7 @@ pub(super) fn view(prompt: &PromptView, input: &HudIn, bar: Element) -> Element 
         return bar;
     }
     let size = input.window.size;
+    let tray = (input.profile.order_tray(), size);
     let mut shade = row()
         .name("shade")
         .width(size.width)
@@ -59,7 +58,7 @@ pub(super) fn view(prompt: &PromptView, input: &HudIn, bar: Element) -> Element 
         .background(color::TRAY_SHADE)
         .passes(true);
     shade.anchor = Some(Anchor::Point(Vec2::ZERO, Vec2::ZERO));
-    let row_items = (items.iter().zip(cells(items.len(), size)).enumerate())
+    let row_items = (items.iter().zip(cells(items.len(), tray)).enumerate())
         .filter(|(_, (on, _))| input.carried != Some(**on))
         .map(|(place, (&on, cell))| {
             let mut element = item((on, place), input.view, input.faces, cell);
@@ -70,7 +69,7 @@ pub(super) fn view(prompt: &PromptView, input: &HudIn, bar: Element) -> Element 
         .name("order")
         .child(shade)
         .children(row_items)
-        .child(ends(prompt, items.len(), size))
+        .child(ends(prompt, items.len(), tray))
         .child(bar)
 }
 
@@ -153,9 +152,10 @@ fn candidate(on: Subject, view: Option<&PlayerView>) -> Option<&CandidateView> {
 
 /// The session's words for the row's two ends, under it: the last to resolve at the left and
 /// the first at the right.
-fn ends(prompt: &PromptView, count: usize, size: Size) -> Element {
+fn ends(prompt: &PromptView, count: usize, tray: (TraySpace, Size)) -> Element {
+    let (space, size) = tray;
     let [last, first] = &prompt.words.piles;
-    let (per_point, area) = (per_point(size), tray_area(SPACE, size));
+    let (per_point, area) = (per_point(tray), tray_area(space, size));
     let style = TypeStyle {
         weight: ENDS_WEIGHT,
         size: ENDS_SIZE / per_point,
@@ -170,7 +170,7 @@ fn ends(prompt: &PromptView, count: usize, size: Size) -> Element {
         .justify_content(Justify::SpaceBetween)
         .child(word(last))
         .child(word(first));
-    let row_bottom = row_top(count, size) + item_width(count, size) * CARD_HEIGHT / CARD_WIDTH;
+    let row_bottom = row_top(count, tray) + item_width(count, tray) * CARD_HEIGHT / CARD_WIDTH;
     let top = row_bottom + ENDS_GAP / per_point;
     ends.anchor = Some(Anchor::Point(
         Vec2::new(area.x + (area.width - width) / 2.0, top),
@@ -180,29 +180,31 @@ fn ends(prompt: &PromptView, count: usize, size: Size) -> Element {
 }
 
 /// Logical points to stage pixels on a window `size`.
-fn per_point(size: Size) -> f32 {
-    SPACE.stage_height / size.height
+fn per_point((space, size): (TraySpace, Size)) -> f32 {
+    space.stage_height / size.height
 }
 
 /// How wide each of `count` items is drawn, in logical points, as `OrderRow` sizes them: the
 /// space's width shared out with a gap beside each, kept between the least and the most a
 /// card in a tray is drawn.
 #[expect(clippy::cast_precision_loss, reason = "a row holds a few items")]
-fn item_width(count: usize, size: Size) -> f32 {
-    let per_point = per_point(size);
-    let wide = tray_area(SPACE, size).width * per_point;
-    let gap = SPACE.gap;
+fn item_width(count: usize, tray: (TraySpace, Size)) -> f32 {
+    let (space, size) = tray;
+    let per_point = per_point(tray);
+    let wide = tray_area(space, size).width * per_point;
+    let gap = space.gap;
     let shared = (wide - gap) / count.max(1) as f32 - gap;
-    SPACE.least.max(SPACE.most.min(shared)) / per_point
+    space.least.max(space.most.min(shared)) / per_point
 }
 
 /// The top of the row and the words under it, centred together in the space, in logical
 /// points.
-fn row_top(count: usize, size: Size) -> f32 {
-    let per_point = per_point(size);
-    let area = tray_area(SPACE, size);
+fn row_top(count: usize, tray: (TraySpace, Size)) -> f32 {
+    let (space, size) = tray;
+    let per_point = per_point(tray);
+    let area = tray_area(space, size);
     let tall =
-        item_width(count, size) * CARD_HEIGHT / CARD_WIDTH + (ENDS_GAP + ENDS_SIZE) / per_point;
+        item_width(count, tray) * CARD_HEIGHT / CARD_WIDTH + (ENDS_GAP + ENDS_SIZE) / per_point;
     area.y + (area.height - tall) / 2.0
 }
 
@@ -210,14 +212,15 @@ fn row_top(count: usize, size: Size) -> f32 {
 /// order the prompt lists them: the first to resolve at the right and each after it to its
 /// left, the row centred in the space, as `.stage-order-row`'s `row-reverse` lays them out.
 #[expect(clippy::cast_precision_loss, reason = "a row holds a few items")]
-pub(crate) fn cells(count: usize, size: Size) -> impl Iterator<Item = Rect> {
-    let area = tray_area(SPACE, size);
-    let width = item_width(count, size);
+fn cells(count: usize, tray: (TraySpace, Size)) -> impl Iterator<Item = Rect> {
+    let (space, size) = tray;
+    let area = tray_area(space, size);
+    let width = item_width(count, tray);
     let height = width * CARD_HEIGHT / CARD_WIDTH;
-    let gap = SPACE.gap / per_point(size);
+    let gap = space.gap / per_point(tray);
     let row = count as f32 * width + count.saturating_sub(1) as f32 * gap;
     let right = area.x + f32::midpoint(area.width, row);
-    let top = row_top(count, size);
+    let top = row_top(count, tray);
     (0..count).map(move |at| Rect {
         x: right - width - at as f32 * (width + gap),
         y: top,
@@ -231,24 +234,29 @@ pub(crate) fn cells(count: usize, size: Size) -> impl Iterator<Item = Rect> {
 /// before anything was carried, is right of `x`. 0 is the front, the first to resolve, and the
 /// row's length its end.
 #[must_use]
-pub fn slot_at(prompt: &PromptView, size: Size, x: f32) -> Option<usize> {
+pub fn slot_at(prompt: &PromptView, profile: Profile<'_>, x: f32) -> Option<usize> {
     let ShapeBody::Order { items } = &prompt.body else {
         return None;
     };
-    Some(slot_in(items.len(), size, x))
+    Some(slot_in(
+        items.len(),
+        (profile.order_tray(), profile.window().size),
+        x,
+    ))
 }
 
 /// `slot_at` for a row of `count` items.
-fn slot_in(count: usize, size: Size, x: f32) -> usize {
-    (cells(count, size))
+fn slot_in(count: usize, tray: (TraySpace, Size), x: f32) -> usize {
+    cells(count, tray)
         .filter(|cell| cell.x + cell.width / 2.0 > x)
         .count()
 }
 
 /// The cell of the item `on` in `prompt`'s row on a window `size`, if the row has it.
 #[must_use]
-pub fn cell_of(prompt: &PromptView, size: Size, on: Subject) -> Option<Rect> {
-    place_of(prompt, on).and_then(|(at, count)| cells(count, size).nth(at))
+pub fn cell_of(prompt: &PromptView, profile: Profile<'_>, on: Subject) -> Option<Rect> {
+    place_of(prompt, on)
+        .and_then(|(at, count)| cells(count, (profile.order_tray(), profile.window().size)).nth(at))
 }
 
 /// The place of the item `on` in `prompt`'s row, from the first to resolve, and how many items
@@ -268,9 +276,9 @@ pub fn carried_item(
     on: Subject,
     view: Option<&PlayerView>,
     faces: Option<&FaceList>,
-    size: Size,
+    profile: Profile<'_>,
 ) -> Option<Element> {
-    let cell = cell_of(prompt, size, on)?;
+    let cell = cell_of(prompt, profile, on)?;
     let (place, _) = place_of(prompt, on)?;
     let mut element = item((on, place), view, faces, cell);
     element.press = None;
@@ -279,17 +287,16 @@ pub fn carried_item(
 
 #[cfg(test)]
 mod tests {
-    use super::{cells, slot_in};
-    use kit_ui::input::Size;
-
-    const SIZE: Size = Size {
-        width: 1600.0,
-        height: 900.0,
-    };
+    use super::{Profile, cells, slot_in};
+    use kit_base::data::profiles::{Profiles, SHIPPED};
 
     #[test]
     fn an_item_let_go_past_either_end_lands_at_that_end() {
-        let row: Vec<_> = cells(3, SIZE).collect();
+        let profiles = Profiles::parse(&SHIPPED).unwrap();
+        let window = profiles.fallback().usual_window();
+        let profile = Profile::for_window(&profiles, window);
+        let tray = (profile.order_tray(), window.size);
+        let row: Vec<_> = cells(3, tray).collect();
         assert!(
             row[0].x > row[1].x && row[1].x > row[2].x,
             "the first to resolve lies at the right: {row:?}"
@@ -297,18 +304,18 @@ mod tests {
         let left = row[2].x - 1.0;
         let right = row[0].x + row[0].width + 1.0;
         assert_eq!(
-            slot_in(3, SIZE, left),
+            slot_in(3, tray, left),
             3,
             "past the left end is the last slot"
         );
         assert_eq!(
-            slot_in(3, SIZE, right),
+            slot_in(3, tray, right),
             0,
             "past the right end is the front"
         );
         let between = row[1].x + row[1].width + 1.0;
         assert_eq!(
-            slot_in(3, SIZE, between),
+            slot_in(3, tray, between),
             1,
             "between the first two is before the second"
         );

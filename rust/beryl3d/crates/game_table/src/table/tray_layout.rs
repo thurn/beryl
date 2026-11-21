@@ -15,7 +15,7 @@
 //!
 //! The web lays a tray out on its 1600 by 900 stage, in the space `desktopTray`
 //! (`ui/src/stage/desktop.ts`) gives. Here the same space is measured in stage pixels of a stage
-//! as tall as the window, `layout.desktop.tray` in `space-constants.json`, and each card is placed relative
+//! as tall as the window, with bounds from the layout profile. Each card is placed relative
 //! to the camera, so that the tray keeps its size and place on screen at any window shape.
 //!
 //! The phone's space is the web's `phoneTray` (`ui/src/stage/phone.ts`), measured in logical
@@ -28,7 +28,7 @@ use beryl_protocol::protocol::ObjectId;
 use glam::{Quat, Vec2};
 
 use super::{CARD_HEIGHT, CARD_WIDTH, Camera};
-use crate::profiles::tray_tuning as data;
+use kit_base::data::profiles::TrayTuning;
 use kit_base::pose::Pose;
 use kit_ui::input::{Rect, Size};
 
@@ -62,30 +62,10 @@ pub struct TraySpace {
     pub least_step: f32,
     /// The strip over a box's cards that says what the pile is.
     pub heading: f32,
-    /// How far in front of the eye the first card lies, in millimetres; each later card lies a
-    /// millimetre nearer, so that it covers the one before it.
-    pub depth: f32,
+    pub tuning: TrayTuning,
 }
 
 impl TraySpace {
-    /// The desktop layout's, from `layout.desktop.tray`.
-    pub const REFERENCE: Self = Self {
-        stage_height: data::STAGE_HEIGHT,
-        y: data::Y,
-        height: data::HEIGHT,
-        across: Across::Middle {
-            half_most: data::HALF_MOST,
-            stack_side: data::STACK_SIDE,
-        },
-        second: None,
-        most: data::MOST,
-        least: data::LEAST,
-        gap: data::GAP,
-        least_step: 0.0,
-        heading: data::HEADING,
-        depth: data::DEPTH,
-    };
-
     /// The space on a window of `size`, in logical points of the window, and how many logical
     /// points a stage pixel is.
     #[must_use]
@@ -455,8 +435,8 @@ fn fan(
         space.least,
         f32::min(
             f32::min(
-                tall / (1.0 + data::fan::DROP * aspect),
-                across / (1.0 + data::fan::STEP * (count - 1) as f32),
+                tall / (1.0 + space.tuning.fan.drop * aspect),
+                across / (1.0 + space.tuning.fan.step * (count - 1) as f32),
             ),
             across - between,
         ),
@@ -466,20 +446,20 @@ fn fan(
         return Laid::of(in_order(piles, order, |index| dealt[index]), Vec::new());
     }
     let step = f32::min(
-        data::fan::STEP * width,
+        space.tuning.fan.step * width,
         (across - width) / (count.max(2) - 1) as f32,
     )
     .max(space.least_step);
     let whole = width + step * (count - 1) as f32;
     let start = left + (wide - whole) / 2.0;
-    let top = space.y + (space.height - height_of(width) - data::fan::DROP * width) / 2.0;
+    let top = space.y + (space.height - height_of(width) - space.tuning.fan.drop * width) / 2.0;
     let spot = |index: usize| {
         let t = along(index, count);
         Spot {
             x: start + step * index as f32,
-            y: top + data::fan::DROP * width * t * t,
+            y: top + space.tuning.fan.drop * width * t * t,
             width,
-            turn: data::fan::TURN * t,
+            turn: space.tuning.fan.turn * t,
             drawn: index,
         }
     };
@@ -645,7 +625,7 @@ fn screen_pose(
 fn poses(laid: &Laid, space: &TraySpace, stage_width: f32, camera: &Camera) -> Vec<Pose> {
     (laid.spots.iter())
         .map(|spot| {
-            let depth = space.depth - spot.drawn as f32;
+            let depth = space.tuning.depth - spot.drawn as f32;
             let at = (spot.x, spot.y, spot.width);
             screen_pose(camera, space, stage_width, at, spot.turn, depth)
         })
@@ -677,7 +657,7 @@ pub fn tray_poses(held: &Held, space: TraySpace, camera: &Camera) -> TrayPoses {
     let cards = (held.piles.iter().flatten().copied())
         .zip(poses(&laid, &space, stage_width, camera))
         .collect();
-    let backs = data::put_back::DECK_BACKS;
+    let backs = space.tuning.put_back.deck_backs;
     let library = (laid.library.into_iter())
         .flat_map(|area| {
             (0..backs).map(move |index| {
@@ -686,7 +666,7 @@ pub fn tray_poses(held: &Held, space: TraySpace, camera: &Camera) -> TrayPoses {
                     reason = "a deck is drawn with a few backs"
                 )]
                 let under = (backs - 1 - index) as f32;
-                let offset = data::put_back::DECK_OFFSET * under;
+                let offset = space.tuning.put_back.deck_offset * under;
                 let at = (area.x + offset.x, area.y + offset.y, area.width);
                 screen_pose(
                     camera,
@@ -694,7 +674,7 @@ pub fn tray_poses(held: &Held, space: TraySpace, camera: &Camera) -> TrayPoses {
                     stage_width,
                     at,
                     0.0,
-                    space.depth + 1.0 + under,
+                    space.tuning.depth + 1.0 + under,
                 )
             })
         })

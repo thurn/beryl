@@ -9,7 +9,7 @@ use game_table::table::{Camera, Placement, Scroll, Window, place};
 use kit_frame::frame::Place;
 use kit_ui::input::{Insets, Size};
 
-use crate::REGULAR_LAYOUT;
+use crate::reference;
 
 fn placed(view: &PlayerView) -> Placement {
     let window = Window {
@@ -27,7 +27,7 @@ fn placed(view: &PlayerView) -> Placement {
     place(
         view,
         &[],
-        &REGULAR_LAYOUT,
+        &reference(),
         &camera,
         &Scroll::default(),
         &data.verbs.lift,

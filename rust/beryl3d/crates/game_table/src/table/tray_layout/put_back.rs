@@ -5,7 +5,7 @@ use beryl_protocol::protocol::ObjectId;
 use glam::Vec2;
 
 use super::super::{CARD_HEIGHT, CARD_WIDTH};
-use super::{Area, Held, Laid, Spot, TraySpace, along, data, height_of, rooms_of, widths};
+use super::{Area, Held, Laid, Spot, TraySpace, along, height_of, rooms_of, widths};
 
 /// Cards put back from the hand (the second pile) onto the library (the first), each pile laid
 /// out for what it can come to hold, as the web's `putBack`: the library at the left of the
@@ -18,7 +18,7 @@ use super::{Area, Held, Laid, Spot, TraySpace, along, data, height_of, rooms_of,
 /// that much of its left edge.
 #[expect(clippy::cast_precision_loss, reason = "a tray holds a few dozen cards")]
 pub(super) fn put_back(held: &Held, space: &TraySpace, (left, wide): (f32, f32)) -> Laid {
-    use data::put_back as shape;
+    let shape = &space.tuning.put_back;
     let gap = space.gap;
     let (onto, hand) = (&held.piles[0], &held.piles[1]);
     let rooms = rooms_of(held);
@@ -34,7 +34,7 @@ pub(super) fn put_back(held: &Held, space: &TraySpace, (left, wide): (f32, f32))
     let whole = if own.is_some() {
         width
     } else {
-        width * (1.0 + shape::BETWEEN) + fanned
+        width * (1.0 + shape.between) + fanned
     };
     let library_x = left + gap.max((wide - whole) / 2.0);
     let span = f32::min(
@@ -45,7 +45,7 @@ pub(super) fn put_back(held: &Held, space: &TraySpace, (left, wide): (f32, f32))
     let top = space.y + (space.height - column) / 2.0;
     let library = Area {
         x: library_x,
-        y: top - shape::LIBRARY_RISE * height,
+        y: top - shape.library_rise * height,
         width,
         height,
     };
@@ -54,7 +54,7 @@ pub(super) fn put_back(held: &Held, space: &TraySpace, (left, wide): (f32, f32))
     let (hand_x, hand_wide, (hand_y, hand_height)) = match own {
         Some(own) => (left, wide, (own.y, own.height)),
         None => (
-            library_x + width * (1.0 + shape::BETWEEN),
+            library_x + width * (1.0 + shape.between),
             fanned,
             (space.y, space.height),
         ),
@@ -70,14 +70,14 @@ pub(super) fn put_back(held: &Held, space: &TraySpace, (left, wide): (f32, f32))
     let (turn, drop) = if own.is_some() {
         (0.0, 0.0)
     } else {
-        (shape::TURN, shape::DROP)
+        (shape.turn, shape.drop)
     };
     let mut spots = Vec::with_capacity(onto.len() + count);
     // The library's column, the deepest first, while its pile lists the top first.
     spots.extend((0..onto.len()).map(|index| {
         let down = onto.len() - 1 - index;
         let at = (library_x, top + span * down as f32, width);
-        column_spot(at, index, down, count + down)
+        column_spot(at, shape.column_turns, index, down, count + down)
     }));
     for index in 0..count {
         let t = along(index, count);
@@ -125,8 +125,14 @@ pub(super) fn put_back(held: &Held, space: &TraySpace, (left, wide): (f32, f32))
 /// A card on a put-back's library at `x` and `y`, `width` wide, the `index`th of the library's
 /// pile from the top and the `down`th from the bottom, drawn `drawn`th: the top card, in front,
 /// lies straight, and those under it lean one way and the other.
-fn column_spot((x, y, width): (f32, f32, f32), index: usize, down: usize, drawn: usize) -> Spot {
-    let [even, odd] = data::put_back::COLUMN_TURNS.to_array();
+fn column_spot(
+    (x, y, width): (f32, f32, f32),
+    turns: Vec2,
+    index: usize,
+    down: usize,
+    drawn: usize,
+) -> Spot {
+    let [even, odd] = turns.to_array();
     Spot {
         x,
         y,
@@ -151,7 +157,10 @@ fn fan_height(space: &TraySpace, width: f32) -> f32 {
 /// How far each card on a put-back's library, `width` wide, lies below the one under it: a
 /// name bar's height, and at least the space's `least_step`.
 fn cascade(space: &TraySpace, width: f32) -> f32 {
-    f32::max(data::put_back::CASCADE * height_of(width), space.least_step)
+    f32::max(
+        space.tuning.put_back.cascade * height_of(width),
+        space.least_step,
+    )
 }
 
 /// The card's width and the step between the hand's cards of a put-back laid out in `space`,
@@ -160,17 +169,17 @@ fn cascade(space: &TraySpace, width: f32) -> f32 {
 /// neighbours no closer than the space's `least_step` and, where the fan shares the library's
 /// band, no closer than `least_step` of a card.
 fn sizes(space: &TraySpace, wide: f32, deep: f32, room: f32) -> (f32, f32) {
-    use data::put_back as shape;
+    let shape = &space.tuning.put_back;
     let gap = space.gap;
     let tall = |width: f32| height_of(width) + cascade(space, width) * (deep - 1.0);
     let fan_step = |width: f32| {
         let across = if space.second.is_some() {
             wide
         } else {
-            wide - 2.0 * gap - width * (1.0 + shape::BETWEEN)
+            wide - 2.0 * gap - width * (1.0 + shape.between)
         };
         f32::min(
-            f32::max(shape::STEP * width, space.least_step),
+            f32::max(shape.step * width, space.least_step),
             (across - width) / (room - 1.0).max(1.0),
         )
     };
@@ -178,7 +187,7 @@ fn sizes(space: &TraySpace, wide: f32, deep: f32, room: f32) -> (f32, f32) {
     for tried in widths(space) {
         width = tried;
         step = fan_step(tried);
-        let apart = (space.second.is_some() || step >= shape::LEAST_STEP * tried)
+        let apart = (space.second.is_some() || step >= shape.least_step * tried)
             && (room <= 1.0 || step >= space.least_step);
         // A hand in a band of its own fits under its name, as the library's column does.
         let hand_fits = space

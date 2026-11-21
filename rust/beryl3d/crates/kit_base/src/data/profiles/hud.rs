@@ -2,7 +2,7 @@
 
 use serde::Deserialize;
 
-use super::super::tuning::{fraction, nonnegative, positive};
+use super::super::tuning::{finite, fraction, nonnegative, positive};
 
 /// Pieces of the screen drawn around the opening and the action bar.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
@@ -151,6 +151,7 @@ pub struct Inspector {
     pub base_width: f32,
     #[serde(deserialize_with = "positive")]
     pub width: f32,
+    #[serde(deserialize_with = "finite")]
     pub top: f32,
     #[serde(deserialize_with = "nonnegative")]
     pub pad: f32,
@@ -160,9 +161,14 @@ pub struct Inspector {
     pub least_width: f32,
     #[serde(deserialize_with = "positive")]
     pub narrow_step: f32,
+    #[serde(deserialize_with = "nonnegative")]
     pub edge: f32,
+    #[serde(deserialize_with = "finite")]
     pub orbs_right: f32,
+    #[serde(deserialize_with = "finite")]
     pub between_top: f32,
+    #[serde(deserialize_with = "finite")]
     pub stack_left: f32,
+    #[serde(deserialize_with = "nonnegative")]
     pub stack_gap: f32,
 }

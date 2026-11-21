@@ -86,11 +86,11 @@
     "beryl_host": 21,
     "beryl_inspect": 107,
     "beryl_pictures": 7,
-    "beryl_render": 2,
-    "game_probe": 117,
+    "beryl_render": 0,
+    "game_probe": 114,
     "kit_base": 6,
     "kit_probe": 17,
-    "kit_space": 24,
+    "kit_space": 0,
     "kit_ui": 1
   }
 }

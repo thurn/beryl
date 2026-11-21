@@ -34,13 +34,12 @@
 use beryl_protocol::protocol::Side;
 use glam::{Vec2, Vec3};
 
-use super::{REFERENCE, row};
+use super::row;
 use crate::table::{
-    Across, CARD_HEIGHT, CARD_WIDTH, Camera, CameraData, CentredStack, HandData, Layout, LifeDock,
+    Across, CARD_HEIGHT, CARD_WIDTH, Camera, CentredStack, HandData, Layout, LifeDock,
     PlayerAnchor, Second, StackPlacement, TraySpace, Window,
 };
-use kit_base::data::profiles::{Banded, Bands, ProfileData};
-use kit_base::data::space::layout::phone as data;
+use kit_base::data::profiles::{Banded, Bands, ProfileData, TrayTuning};
 use kit_scene::hit::CELL;
 use kit_ui::input::Rect;
 
@@ -101,28 +100,6 @@ pub struct TableBands {
     pub right: f32,
 }
 
-/// The phone layout's bands in `window`, or none for a window that takes the desktop layout.
-/// The bands do not depend on what the view holds: the middle keeps room for the stack while
-/// it is empty.
-#[must_use]
-pub fn phone_bands(window: Window) -> Option<TableBands> {
-    window.phone().then(|| {
-        bands(&Camera::fit_inside(
-            camera_data(),
-            window,
-            battlefield(window),
-        ))
-    })
-}
-
-/// `side`'s strip in a phone `window`, the band of its piles and life total, without fitting
-/// the camera: the strips stand at fixed distances from the window's edges, so the client can
-/// place what stands in them on the frame path.
-#[must_use]
-pub fn strip(window: Window, side: Side) -> Band {
-    strip_with(window, side, BANDS)
-}
-
 pub(super) fn strip_with(window: Window, side: Side, sizes: Bands) -> Band {
     match side {
         Side::You => {
@@ -136,27 +113,6 @@ pub(super) fn strip_with(window: Window, side: Side, sizes: Bands) -> Band {
     }
 }
 
-/// The phone layout's camera, as data.
-fn camera_data() -> CameraData {
-    CameraData {
-        pitch_degrees: data::camera::PITCH_DEGREES,
-        fov_degrees: data::camera::FOV_DEGREES,
-        target: data::camera::TARGET,
-        required: data::camera::REQUIRED,
-    }
-}
-
-const BANDS: Bands = Bands {
-    side: data::bands::SIDE,
-    opponent_strip: data::bands::OPPONENT_STRIP,
-    you_strip: data::bands::YOU_STRIP,
-    hand_width: data::bands::HAND_WIDTH,
-    hand_share: data::bands::HAND_SHARE,
-    hand_shown: data::bands::HAND_SHOWN,
-    hand_top: data::bands::HAND_TOP,
-};
-
-/// The left and right edges of the column, inside the safe area and the side gutters.
 pub(super) fn column(window: Window, sizes: Bands) -> (f32, f32) {
     let inset = window.safe_area;
     (
@@ -176,12 +132,6 @@ fn hand_height(window: Window, sizes: Bands) -> f32 {
     (hand_width(right - left, sizes) / RATIO * sizes.hand_shown).round() + window.safe_area.bottom
 }
 
-/// The part of `window` the battlefield fills.
-#[must_use]
-pub fn battlefield(window: Window) -> Rect {
-    battlefield_with(window, BANDS)
-}
-
 pub(crate) fn battlefield_with(window: Window, sizes: Bands) -> Rect {
     let (left, right) = column(window, sizes);
     let top = window.safe_area.top + sizes.opponent_strip;
@@ -192,11 +142,6 @@ pub(crate) fn battlefield_with(window: Window, sizes: Bands) -> Rect {
         width: right - left,
         height: bottom - top,
     }
-}
-
-/// The bands, seen through `camera`, the phone camera fitted to its window.
-fn bands(camera: &Camera) -> TableBands {
-    bands_with(camera, BANDS, data::creatures::Y, data::lands::Y)
 }
 
 pub(crate) fn bands_with(
@@ -364,7 +309,13 @@ fn opponent_hand(window: Window, bands: &TableBands, data: Banded) -> HandData {
 /// and the phase in it stay clear. Its
 /// cards are at most as wide as a card of the hand, and keep `least_step` apart, as the stack's
 /// items do, so that each card beneath keeps a square of the touch target uncovered.
-pub(super) fn tray_in(window: Window, bands: &TableBands, data: Banded, sizes: Bands) -> TraySpace {
+pub(super) fn tray_in(
+    window: Window,
+    bands: &TableBands,
+    data: Banded,
+    sizes: Bands,
+    tuning: TrayTuning,
+) -> TraySpace {
     let shape = data.tray;
     let top = bands.opponent_back.top + shape.inset;
     let foot = bands.middle.bottom() + shape.inset;
@@ -393,7 +344,7 @@ pub(super) fn tray_in(window: Window, bands: &TableBands, data: Banded, sizes: B
         gap: shape.gap,
         least_step: shape.least_step,
         heading: shape.heading,
-        depth: REFERENCE.tray.depth,
+        tuning,
     }
 }
 
@@ -439,10 +390,10 @@ pub(super) fn layout(profile: &ProfileData, window: Window, data: Banded) -> Lay
         others: row(table.others, false),
         gap: table.gap,
         pile_step: table.pile_step,
-        beneath_step: REFERENCE.beneath_step,
+        beneath_step: table.beneath_step,
         piles,
         pile_scale,
-        tray: tray_in(window, &bands, data, sizes),
+        tray: tray_in(window, &bands, data, sizes, table.tray_tuning),
         stack: StackPlacement::Centred(stack),
         hand: your_hand(
             window,

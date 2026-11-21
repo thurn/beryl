@@ -41,9 +41,6 @@ mod scroll;
 pub use motion::PileCount;
 pub use motion::{Motion, Turn};
 
-/// The height of the web's desktop stage, in points (`STAGE` in `ui/src/game/perspective.ts`).
-const WEB_STAGE_HEIGHT: f32 = 900.0;
-
 /// How large the table cloth is, in millimetres: past every edge of any window.
 const CLOTH: f32 = 4000.0;
 /// The cloth lies this far below the cards lying on the table, so that the two never share a
@@ -255,10 +252,10 @@ impl Table {
         let window = self.data.profiles.resolve_window(window);
         self.layout = Profile::for_window(&self.data.profiles, window).layout();
         if self.hand_away {
-            // The web lays the desktop's hand out on a stage 900 points tall, whose height is
-            // the whole of normalized device coordinates' 2, so its `HAND_AWAY` points lower
-            // the fan's edge by that share of 2.
-            self.layout.hand.edge -= 2.0 * self.layout.style.hand_away / WEB_STAGE_HEIGHT;
+            // The stage fills the height of the window, so two normalized device units span
+            // its full height in stage points.
+            self.layout.hand.edge -=
+                2.0 * self.layout.style.hand_away / self.layout.tray.stage_height;
         }
         self.camera = self.layout.fit(window);
         self.row_fits = RowFits::new(&self.layout, &self.camera);

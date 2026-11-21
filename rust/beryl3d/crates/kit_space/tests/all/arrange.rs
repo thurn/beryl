@@ -1,12 +1,11 @@
 use glam::{Quat, Vec2, Vec3};
 use kit_base::data::profiles::{Profiles, SHIPPED};
-use kit_base::data::space::layout::phone;
 use kit_base::geometry::{CARD_HEIGHT, CARD_WIDTH, Insets, Rect, Size, Window};
 use kit_space::arrange::{
     Alignment, CentredFan, Container, Edge, Fan, Group, Item, Limits, Overflow, Policy, Region,
     Solved, Under, arrange,
 };
-use kit_space::camera::{Camera, CameraData, DESKTOP_CAMERA};
+use kit_space::camera::Camera;
 
 fn row(alignment: Alignment) -> Policy {
     Policy::Row {
@@ -29,48 +28,47 @@ fn rectangles(count: usize, size: Vec2) -> Vec<Item> {
         .collect()
 }
 
+fn reference_camera() -> Camera {
+    let profiles = Profiles::parse(&SHIPPED).unwrap();
+    Camera::fit(profiles.fallback().table.camera, Window::default())
+}
+
 fn profiles() -> [(Camera, f32); 2] {
+    let profiles = Profiles::parse(&SHIPPED).unwrap();
+    let compact = profiles.for_size(Size {
+        width: 393.0,
+        height: 759.0,
+    });
     let tall = Window {
-        size_class: None,
-        size: Size {
-            width: 393.0,
-            height: 759.0,
-        },
         scale: 2.0,
         safe_area: Insets {
             top: 47.0,
-            bottom: 34.0,
-            ..Insets::default()
+            ..compact.test_safe_area()
         },
+        ..compact.usual_window()
     };
-    let width = tall.size.width - phone::bands::SIDE * 2.0;
-    let hand = (width * phone::bands::HAND_SHARE).min(phone::bands::HAND_WIDTH);
-    let hand = (hand * (CARD_HEIGHT / CARD_WIDTH) * phone::bands::HAND_SHOWN).round();
-    let top = tall.safe_area.top + phone::bands::OPPONENT_STRIP;
-    let bottom = tall.size.height - hand - tall.safe_area.bottom - phone::bands::YOU_STRIP;
-    let compact = Camera::fit_inside(
-        CameraData {
-            pitch_degrees: phone::camera::PITCH_DEGREES,
-            fov_degrees: phone::camera::FOV_DEGREES,
-            target: phone::camera::TARGET,
-            required: phone::camera::REQUIRED,
-        },
-        tall,
-        Rect {
-            x: phone::bands::SIDE,
-            y: top,
-            width,
-            height: bottom - top,
-        },
-    );
-    let profiles = Profiles::parse(&SHIPPED).unwrap();
-    let regular = Window::default();
+    let bands = compact.table.bands.unwrap();
+    let width = tall.size.width - bands.side * 2.0;
+    let hand = (width * bands.hand_share).min(bands.hand_width);
+    let hand = (hand * (CARD_HEIGHT / CARD_WIDTH) * bands.hand_shown).round();
+    let top = tall.safe_area.top + bands.opponent_strip;
+    let bottom = tall.size.height - hand - tall.safe_area.bottom - bands.you_strip;
+    let area = Rect {
+        x: bands.side,
+        y: top,
+        width,
+        height: bottom - top,
+    };
+    let regular = profiles.fallback();
     [
         (
-            Camera::fit(DESKTOP_CAMERA, regular),
-            profiles.for_size(regular.size).checks.target_points,
+            Camera::fit(regular.table.camera, Window::default()),
+            regular.checks.target_points,
         ),
-        (compact, profiles.for_size(tall.size).checks.target_points),
+        (
+            Camera::fit_inside(compact.table.camera, tall, area),
+            compact.checks.target_points,
+        ),
     ]
 }
 
@@ -97,7 +95,7 @@ fn container(camera: &Camera, policy: Policy, limits: Limits, points: Vec2) -> C
 
 #[test]
 fn overflow_uses_the_first_enabled_stage_that_fits() {
-    let camera = Camera::fit(DESKTOP_CAMERA, Window::default());
+    let camera = reference_camera();
     let mut items = rectangles(4, natural(&camera, Vec2::splat(60.0)));
     let mut container = container(
         &camera,
@@ -164,7 +162,7 @@ fn overflow_uses_the_first_enabled_stage_that_fits() {
 
 #[test]
 fn scaling_finds_a_narrow_interval_between_size_and_press_limits() {
-    let camera = Camera::fit(DESKTOP_CAMERA, Window::default());
+    let camera = reference_camera();
     let items = rectangles(1, natural(&camera, Vec2::splat(40.0)));
     let container = container(
         &camera,
@@ -184,7 +182,7 @@ fn scaling_finds_a_narrow_interval_between_size_and_press_limits() {
 
 #[test]
 fn cascade_can_step_further_than_one_item_width() {
-    let camera = Camera::fit(DESKTOP_CAMERA, Window::default());
+    let camera = reference_camera();
     let items = rectangles(2, natural(&camera, Vec2::splat(40.0)));
     let step = natural(&camera, Vec2::splat(80.0)).x;
     let container = container(
@@ -205,7 +203,7 @@ fn cascade_can_step_further_than_one_item_width() {
 
 #[test]
 fn policies_give_tucks_stacks_columns_and_a_single_spot() {
-    let camera = Camera::fit(DESKTOP_CAMERA, Window::default());
+    let camera = reference_camera();
     let size = natural(&camera, Vec2::splat(64.0));
     let mut items = rectangles(4, size);
     let limits = Limits {

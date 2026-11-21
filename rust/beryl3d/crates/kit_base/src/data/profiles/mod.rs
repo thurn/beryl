@@ -10,12 +10,18 @@ use crate::geometry::{Insets, Size, Window};
 mod screen;
 pub use screen::{BugScreen, ScreenMetrics, StartScreen};
 
+pub mod anchored;
 mod banded;
 mod gallery;
 mod hud;
+mod tray;
+mod web;
+pub use anchored::Anchored;
 pub use banded::Banded;
 pub use gallery::GalleryLayout;
 pub use hud::{FloatingPrompt, Hud, Incoming, Inspector, Piece, ResultLayout, WrappedHand};
+pub use tray::{PutBack, TrayTuning};
+pub use web::{Perspective, StageSize, WebFit};
 
 /// The space a feature has for its content.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
@@ -80,6 +86,7 @@ pub struct Bands {
 
 /// The camera and the regions and limits of the table's containers.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct Table {
     pub camera: CameraData,
     pub creatures: Row,
@@ -87,6 +94,7 @@ pub struct Table {
     pub others: Row,
     pub bands: Option<Bands>,
     pub banded: Option<Banded>,
+    pub anchored: Option<Anchored>,
     #[serde(deserialize_with = "positive")]
     pub strip: f32,
     #[serde(deserialize_with = "nonnegative")]
@@ -96,10 +104,9 @@ pub struct Table {
     pub inspector: Option<Inspector>,
     #[serde(deserialize_with = "super::tuning::vector")]
     pub pile_step: Vec2,
-    /// The remaining container values, also emitted as constants for placement that has yet
-    /// to move to the profile API.
-    #[serde(flatten)]
-    pub containers: BTreeMap<String, serde_json::Value>,
+    #[serde(deserialize_with = "vector")]
+    pub beneath_step: Vec2,
+    pub tray_tuning: TrayTuning,
 }
 
 /// Table presentation choices independent of container geometry.
@@ -280,7 +287,7 @@ pub struct ProfileData {
     pub manual: Option<ManualControls>,
     pub settings_quick_action_min_width: Option<f32>,
     test_matrix: Matrix,
-    // Until the placement ports consume these values, the build still reads their old paths.
+    // The build still exports these HUD and flat-layer settings.
     #[serde(rename = "legacy")]
     _legacy: BTreeMap<String, serde_json::Value>,
     #[serde(rename = "counts")]
@@ -388,6 +395,34 @@ impl ProfileData {
         }
         if self.table.bands.is_some() != self.table.banded.is_some() {
             return Err("table.bands and table.banded must be supplied together".to_owned());
+        }
+        match (&self.table.anchored, &self.table.banded) {
+            (Some(anchored), None) => {
+                if anchored.tray.least > anchored.tray.most {
+                    return Err("table.anchored.tray.least exceeds most".to_owned());
+                }
+                if anchored.stack.foot >= anchored.stack.top {
+                    return Err("table.anchored.stack.foot must be below top".to_owned());
+                }
+                if let Some(web) = &anchored.web
+                    && !(web.stage.least..=web.stage.most).contains(&web.stage.base)
+                {
+                    return Err("invalid table.anchored.web.stage width range".to_owned());
+                }
+            }
+            (None, Some(banded)) => {
+                if banded.tray.least > banded.tray.most {
+                    return Err("table.banded.tray.least exceeds most".to_owned());
+                }
+            }
+            _ => return Err("supply exactly one of table.anchored and table.banded".to_owned()),
+        }
+        if let Some(inspector) = self.table.inspector
+            && (inspector.least_width <= 2.0 * inspector.pad
+                || inspector.least_width > inspector.width
+                || inspector.width - inspector.narrow_step >= inspector.width)
+        {
+            return Err("invalid table.inspector width range or narrowing step".to_owned());
         }
         self.validate_slots()
     }
@@ -574,6 +609,12 @@ impl Profiles {
     pub fn resolve_window(&self, mut window: Window) -> Window {
         window.size_class = Some(self.for_size(window.size).size_class);
         window
+    }
+
+    /// The final profile, which applies when no size limit does.
+    #[must_use]
+    pub fn fallback(&self) -> &ProfileData {
+        self.0.last().expect("validated profiles have a fallback")
     }
 
     pub fn iter(&self) -> impl ExactSizeIterator<Item = &ProfileData> {

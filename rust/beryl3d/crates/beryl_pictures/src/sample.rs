@@ -46,7 +46,7 @@ use std::sync::mpsc::{self, Receiver};
 use beryl_assets::Prepared;
 use beryl_assets::glyphs::GlyphWorker;
 use beryl_assets::light;
-use game_table::table::{Camera, REFERENCE, Window};
+use game_table::table::{Camera, CameraData, Window};
 use kit_frame::frame::{Frame, FrameBuilder};
 use kit_text::text::TypeStyle;
 use kit_text::text::fonts::Font;
@@ -138,7 +138,8 @@ pub(crate) fn sample(options: &Options) -> Result<String, Error> {
     if !renderer.enhanced_available() {
         return Err(failed("the sample renderer needs Enhanced support"));
     }
-    let mut drawer = Drawer::new(renderer, scale);
+    let data = beryl_inspect::data::checkout().map_err(Error::Failed)?;
+    let mut drawer = Drawer::new(renderer, scale, data.profiles.fallback().table.camera);
     let mut printed = String::new();
     for sample in &samples {
         let web = beryl_render::read_rgba_png(&sample.web).map_err(Error::Failed)?;
@@ -448,6 +449,7 @@ const TEXT_LINE_HEIGHT: f32 = 1.4;
 /// The renderer the samples are drawn with, and the glyph worker that rasterizes their text.
 struct Drawer {
     renderer: Renderer,
+    camera: CameraData,
     glyphs: GlyphWorker,
     pages: Receiver<Prepared>,
     /// The glyphs and icons the worker has delivered, which every sample's layer is given.
@@ -455,13 +457,14 @@ struct Drawer {
 }
 
 impl Drawer {
-    fn new(mut renderer: Renderer, scale: f32) -> Self {
+    fn new(mut renderer: Renderer, scale: f32, camera: CameraData) -> Self {
         renderer.upload_page(&light::prepared());
         let (out, pages) = mpsc::channel();
         let glyphs = beryl_host::spawn_glyph_worker(out, || {});
         glyphs.icons(scale);
         Self {
             renderer,
+            camera,
             glyphs,
             pages,
             ready: Vec::new(),
@@ -491,7 +494,7 @@ impl Drawer {
             }
         }
         self.give(&mut layer);
-        let camera = Camera::fit(REFERENCE.camera, window);
+        let camera = Camera::fit(self.camera, window);
         let mut frame = Frame::with_capacity(16, 16, 64);
         let mut builder = FrameBuilder::new(&mut frame, Tier::Enhanced);
         builder.camera(camera.view_projection);
@@ -628,7 +631,8 @@ mod tests {
     #[test]
     fn a_plain_panel_draws_its_color_on_the_page() {
         let renderer = Renderer::headless(Limits::Default).expect("a GPU adapter and device");
-        let mut drawer = Drawer::new(renderer, 2.0);
+        let data = beryl_inspect::data::checkout().unwrap();
+        let mut drawer = Drawer::new(renderer, 2.0, data.profiles.fallback().table.camera);
         let sample = Sample {
             name: "plain".to_owned(),
             window: Size {
@@ -674,7 +678,8 @@ mod tests {
     #[test]
     fn a_gradient_runs_from_its_first_stop_to_its_last_under_its_mask() {
         let renderer = Renderer::headless(Limits::Default).expect("a GPU adapter and device");
-        let mut drawer = Drawer::new(renderer, 1.0);
+        let data = beryl_inspect::data::checkout().unwrap();
+        let mut drawer = Drawer::new(renderer, 1.0, data.profiles.fallback().table.camera);
         let (red, blue) = ([255, 0, 0, 255], [0, 0, 255, 255]);
         let sample = Sample {
             name: "gradient".to_owned(),

@@ -24,7 +24,7 @@ use beryl_inspect::gate::{self, BOARDS, Playback};
 use beryl_inspect::pages;
 use beryl_protocol::protocol::Side;
 use beryl_render::{Limits, Renderer, Target};
-use game_table::table::{Camera, REFERENCE, Window};
+use game_table::table::{Camera, CameraData, Window};
 use kit_frame::frame::{Frame, FrameBuilder};
 use kit_probe::agent::Layout;
 use kit_probe::driver::Duration;
@@ -78,7 +78,7 @@ fn board(renderer: &mut Renderer, name: &str, tier: Tier) -> Option<Value> {
 }
 
 /// Counts a panel over a high-contrast board at the same resolution as the played boards.
-fn backdrop_panel(renderer: &mut Renderer, tier: Tier) -> Value {
+fn backdrop_panel(renderer: &mut Renderer, tier: Tier, camera: CameraData) -> Value {
     let [width, height] = gate::TARGET;
     let size = Size {
         width: width as f32 / 2.0,
@@ -120,7 +120,7 @@ fn backdrop_panel(renderer: &mut Renderer, tier: Tier) -> Value {
     let mut layer = Layer::new();
     layer.resize(window);
     layer.show(Some(board));
-    let camera = Camera::fit(REFERENCE.camera, window);
+    let camera = Camera::fit(camera, window);
     let mut frame = Frame::with_capacity(8, 8, 64);
     let mut builder = FrameBuilder::new(&mut frame, tier);
     builder.camera(camera.view_projection);
@@ -233,7 +233,18 @@ fn main() -> ExitCode {
     let mut counted = Vec::new();
     for name in &boards {
         if name == "backdrop-panel" {
-            counted.push(backdrop_panel(&mut renderer, tier));
+            let data = match beryl_inspect::data::checkout() {
+                Ok(data) => data,
+                Err(error) => {
+                    eprintln!("{error}");
+                    return ExitCode::FAILURE;
+                }
+            };
+            counted.push(backdrop_panel(
+                &mut renderer,
+                tier,
+                data.profiles.fallback().table.camera,
+            ));
             continue;
         }
         let Some(board) = board(&mut renderer, name, tier) else {

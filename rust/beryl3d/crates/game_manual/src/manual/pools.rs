@@ -20,13 +20,11 @@ use beryl_protocol::protocol::{ManaPool, PlayerState, Side};
 use glam::Vec2;
 
 use crate::features::table::Message as TableMessage;
-use game_play::hud::counts::{index, points};
 use game_table::profiles::Profile;
-use game_table::table::{REFERENCE, Window};
+use game_table::table::Window;
 use kit_base::data::profiles::ManualControls;
 use kit_base::tokens::{color, size, space, type_style};
 use kit_ui::element::{Align, Anchor, Display, Element, Justify, Track, column, holder, row, text};
-use kit_ui::input::Size;
 use kit_ui::widgets::button;
 
 /// The mana symbols, in the order the web's `POOL_SYMBOLS` shows them, with each one's amount.
@@ -72,7 +70,7 @@ pub fn pools(view: &PlayerView, window: Window, profile: Profile<'_>) -> Element
             pool(
                 player(view, side),
                 side,
-                window.size,
+                profile.pool_position(side),
                 adjustable(view, side),
             )
         }))
@@ -202,7 +200,7 @@ fn player(view: &PlayerView, side: Side) -> &PlayerState {
 /// `player`'s row, for `side`, at the point the desktop layout gives their pool: every mana
 /// symbol, each taking clicks, if `adjust`, and otherwise only the mana they have, taking none.
 /// Only a row that takes clicks numbers its counters as `counter_name` reads them.
-fn pool(player: &PlayerState, side: Side, window: Size, adjust: bool) -> Element {
+fn pool(player: &PlayerState, side: Side, position: Vec2, adjust: bool) -> Element {
     let whose = match side {
         Side::You => "Your",
         Side::Opponent => "Opponent's",
@@ -226,10 +224,7 @@ fn pool(player: &PlayerState, side: Side, window: Size, adjust: bool) -> Element
             ));
     // The point is the row's top left corner, as the web's `MANA_POOLS` places the `.hud` that
     // holds it (`ui/src/game/tableRows.ts`).
-    element.anchor = Some(Anchor::Point(
-        points(REFERENCE.players[index(side)].pool, window),
-        Vec2::ZERO,
-    ));
+    element.anchor = Some(Anchor::Point(position, Vec2::ZERO));
     element
 }
 

@@ -6,9 +6,9 @@
 //! the stage it lies and leaned toward a vanishing point over the stage's middle
 //! (`ui/src/game/perspective.ts`). Its rows are stage positions: `ROWS` in
 //! `ui/src/game/tableRows.ts` and `sideRows` in `ui/src/game/battlefield.ts`, copied into
-//! `layout.desktop.web` in `space-constants.json`.
+//! the desktop profile.
 //!
-//! Beryl 3D keeps its own camera, fitted to Arena (`layout.desktop.camera`), and lays its cards
+//! Beryl 3D keeps its own camera, fitted to Arena (the profile's `table.camera`), and lays its cards
 //! flat on a table. For each row it finds the line of the table under the web's cards' centres,
 //! the row's ends, and the scale at which a card is as wide on screen as the web's, so that each
 //! card's centre projects onto the centre of the web's card. A row is laid out in millimetres of
@@ -25,7 +25,7 @@ use glam::{Vec2, Vec3};
 
 use crate::table::pile::lift;
 use crate::table::{CARD_HEIGHT, CARD_WIDTH, Camera, LAYER, RowArea, Window};
-use kit_base::data::space::layout::desktop::web as data;
+use kit_base::data::profiles::{Perspective, StageSize, WebFit};
 use kit_base::pose::Pose;
 
 /// The web interface's `CARD_ASPECT`, a card's width over its height.
@@ -35,6 +35,7 @@ const ASPECT: f32 = CARD_WIDTH / CARD_HEIGHT;
 /// cards are drawn at, and the gaps between them in millimetres before that scale.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FittedRow {
+    stage: Stage,
     /// The row's band, in millimetres of the table. Its `y` is the line the centres of its
     /// untapped cards lie on, signed for its side, and its `left` and `right` are where the
     /// edges of its first and last cards may reach along that line.
@@ -79,6 +80,7 @@ impl FittedRow {
 pub type FittedRows = [[FittedRow; 3]; 2];
 
 /// The web interface's stage as it is fitted to a window (`fit` in `ui/src/game/Stage.tsx`).
+#[derive(Clone, Copy, Debug, PartialEq)]
 struct Stage {
     /// How wide the stage is, in stage pixels: as wide as the window's shape asks, within
     /// `STAGE_WIDTHS`.
@@ -87,20 +89,23 @@ struct Stage {
     scale: f32,
     /// How far the stage's top left corner lies from the window's, in stage pixels.
     offset: Vec2,
+    base: f32,
+    perspective: Perspective,
 }
 
 impl Stage {
-    fn of(window: Window) -> Self {
+    fn of(window: Window, stage: StageSize, perspective: Perspective) -> Self {
         let size = window.size;
-        let width = (data::stage::HEIGHT * size.width / size.height)
-            .clamp(data::stage::LEAST, data::stage::MOST);
-        let scale = (size.width / width).min(size.height / data::stage::HEIGHT);
+        let width = (stage.height * size.width / size.height).clamp(stage.least, stage.most);
+        let scale = (size.width / width).min(size.height / stage.height);
         Self {
             width,
             scale,
+            base: stage.base,
+            perspective,
             offset: Vec2::new(
                 (size.width / scale - width) / 2.0,
-                (size.height / scale - data::stage::HEIGHT) / 2.0,
+                (size.height / scale - stage.height) / 2.0,
             ),
         }
     }
@@ -112,25 +117,30 @@ impl Stage {
 
     /// The web's `fromRight`: what stands at the right keeps its distance from the right edge.
     fn right_held(&self, x: f32) -> f32 {
-        x + self.width - data::stage::BASE
+        x + self.width - self.base
     }
 
     /// The web's `fromMiddle`: what stands at the middle keeps its distance from the middle.
     fn middle_held(&self, x: f32) -> f32 {
-        x + (self.width - data::stage::BASE) / 2.0
+        x + (self.width - self.base) / 2.0
     }
 
     /// The tangent of the web's `lean` of a thing whose top centre is at (`x`, `y`): how far its
     /// sides run sideways for each pixel down.
     fn lean(&self, x: f32, y: f32) -> f32 {
-        (x - self.width / 2.0) / (y - data::perspective::VANISHING_Y)
+        (x - self.width / 2.0) / (y - self.perspective.vanishing_y)
     }
-}
 
-/// The web's `depthScale`: how much a thing lying at stage height `y` is shrunk by distance.
-fn depth_scale(y: f32) -> f32 {
-    use data::perspective::{DEPTH_PER_PX, DISTANCE, NEAR_Y};
-    DISTANCE / (DISTANCE + (NEAR_Y - y).max(0.0) * DEPTH_PER_PX)
+    /// The web's `depthScale`: how much a thing at stage height `y` is shrunk by distance.
+    fn depth_scale(&self, y: f32) -> f32 {
+        let Perspective {
+            distance,
+            near_y,
+            depth_per_px,
+            ..
+        } = self.perspective;
+        distance / (distance + (near_y - y).max(0.0) * depth_per_px)
+    }
 }
 
 /// One of the web's rows of permanents (`sideRows`), in stage pixels at full zoom.
@@ -150,52 +160,42 @@ struct RowSpec {
 }
 
 /// The rows of `side` (the viewer's first) fitted to `window` through `camera`.
-fn side_rows(stage: &Stage, camera: &Camera, opponent: bool) -> [FittedRow; 3] {
-    macro_rules! specs {
-        ($side:ident) => {{
-            use data::$side as rows;
-            let creatures = RowSpec {
-                top: rows::PERMANENTS,
-                start: data::room::START,
-                end: stage.right_held(data::room::END),
-                centre: Some(stage.width / 2.0),
-                frame: data::CREATURE_WIDTH,
-                gap: data::PERMANENT_GAP * data::CREATURE_WIDTH,
-                tapped_gap: data::PERMANENT_GAP * data::CREATURE_WIDTH,
-            };
-            let lands = RowSpec {
-                top: rows::BACK,
-                start: rows::LANDS,
-                end: stage.middle_held(rows::LANDS_END),
-                centre: None,
-                frame: data::LAND_WIDTH,
-                gap: data::LAND_GAP,
-                tapped_gap: data::TAPPED_GAP,
-            };
-            let others = RowSpec {
-                top: rows::BACK,
-                start: stage.middle_held(rows::OTHERS_X),
-                end: stage.right_held(rows::OTHERS_END),
-                centre: None,
-                frame: rows::OTHERS_WIDTH,
-                gap: data::PERMANENT_GAP * rows::OTHERS_WIDTH,
-                tapped_gap: data::PERMANENT_GAP * rows::OTHERS_WIDTH,
-            };
-            [creatures, lands, others]
-        }};
-    }
-    let specs = if opponent {
-        specs!(opponent)
-    } else {
-        specs!(you)
+fn side_rows(stage: &Stage, camera: &Camera, data: &WebFit, opponent: bool) -> [FittedRow; 3] {
+    let rows = if opponent { data.opponent } else { data.you };
+    let creatures = RowSpec {
+        top: rows.permanents,
+        start: data.room.start,
+        end: stage.right_held(data.room.end),
+        centre: Some(stage.width / 2.0),
+        frame: data.creature_width,
+        gap: data.permanent_gap * data.creature_width,
+        tapped_gap: data.permanent_gap * data.creature_width,
+    };
+    let lands = RowSpec {
+        top: rows.back,
+        start: rows.lands,
+        end: stage.middle_held(rows.lands_end),
+        centre: None,
+        frame: data.land_width,
+        gap: data.land_gap,
+        tapped_gap: data.tapped_gap,
+    };
+    let others = RowSpec {
+        top: rows.back,
+        start: stage.middle_held(rows.others_x),
+        end: stage.right_held(rows.others_end),
+        centre: None,
+        frame: rows.others_width,
+        gap: data.permanent_gap * rows.others_width,
+        tapped_gap: data.permanent_gap * rows.others_width,
     };
     // Toward the other side: up the stage on the viewer's side, down it on the opponent's.
     let forward = if opponent {
-        data::ADVANCE
+        data.advance
     } else {
-        -data::ADVANCE
+        -data.advance
     };
-    specs.map(|spec| fit_row(stage, camera, &spec, forward))
+    [creatures, lands, others].map(|spec| fit_row(stage, camera, &spec, forward))
 }
 
 /// `spec` fitted through `camera`. Along a line of the screen, a card's place across the table
@@ -204,7 +204,7 @@ fn side_rows(stage: &Stage, camera: &Camera, opponent: bool) -> [FittedRow; 3] {
 /// amount linear in its x. So the row's ends, its scale and its gaps follow from where two of its
 /// points land. Its line and its cards' tilt are found by `Stand::fit`.
 fn fit_row(stage: &Stage, camera: &Camera, spec: &RowSpec, forward: f32) -> FittedRow {
-    let width = spec.frame * depth_scale(spec.top);
+    let width = spec.frame * stage.depth_scale(spec.top);
     let height = width / ASPECT;
     let line = stage.on_window(Vec2::new(0.0, spec.top + height / 2.0)).y;
     // The centre of the web's card whose top left corner is at `x`, leaned about its top.
@@ -233,6 +233,7 @@ fn fit_row(stage: &Stage, camera: &Camera, spec: &RowSpec, forward: f32) -> Fitt
     // A gap of the web's, against its card's frame, is the same share of a card here.
     let gap = |pixels: f32| CARD_WIDTH * pixels / spec.frame;
     let row = FittedRow {
+        stage: *stage,
         area: RowArea {
             y: stand.y,
             left: across(centre_of(spec.start), lift) - CARD_WIDTH * scale / 2.0,
@@ -370,7 +371,7 @@ impl Stand {
 /// card is only moved, to centre its box on the web's.
 #[must_use]
 pub fn lean((row, zoom): (&FittedRow, f32), camera: &Camera, pose: Pose, tapped: bool) -> Pose {
-    let stage = Stage::of(camera.window);
+    let stage = row.stage;
     // A card at rest is face up or face down, which outlines the same shape. It is measured face
     // up, so that a card placed face up and turned over later gets the shear it would have been
     // placed with face down, to the last bit.
@@ -467,9 +468,9 @@ const CLOSE: f32 = 0.25;
 const SHEAR_STEP: f32 = 0.01;
 
 /// Every row of the desktop layout fitted to `window` through `camera`.
-pub(super) fn rows(window: Window, camera: &Camera) -> FittedRows {
-    let stage = Stage::of(window);
-    [false, true].map(|opponent| side_rows(&stage, camera, opponent))
+pub(super) fn rows(window: Window, camera: &Camera, data: &WebFit) -> FittedRows {
+    let stage = Stage::of(window, data.stage, data.perspective);
+    [false, true].map(|opponent| side_rows(&stage, camera, data, opponent))
 }
 
 /// The library, graveyard and exile piles of the desktop layout fitted to a window, so that
@@ -497,9 +498,9 @@ pub struct FittedPiles {
 /// top card as it draws a permanent: upright, shrunk by how far up the stage its anchor lies and
 /// leaned toward the vanishing point by a skew about its top left corner (`PileButton` in
 /// `ui/src/game/Piles.tsx`).
-pub(super) fn piles(window: Window, camera: &Camera) -> FittedPiles {
-    use data::piles;
-    let stage = Stage::of(window);
+pub(super) fn piles(window: Window, camera: &Camera, data: &WebFit) -> FittedPiles {
+    let piles = &data.piles;
+    let stage = Stage::of(window, data.stage, data.perspective);
     let mut fitted = FittedPiles {
         tops: [[Vec2::ZERO; 3]; 2],
         scale: [1.0; 2],
@@ -512,19 +513,19 @@ pub(super) fn piles(window: Window, camera: &Camera) -> FittedPiles {
         // so that the deepest layer of the thickest pile, which spreads downward, ends
         // `clearance` above their back row.
         let (y, frame, xs, base) = if side == 0 {
-            let xs = piles::you::X.to_array();
-            (piles::you::Y, piles::you::WIDTH, xs, piles::you::BASE)
+            let xs = piles.you.x;
+            (piles.you.y, piles.you.width, xs, piles.you.base)
         } else {
-            let xs = piles::opponent::X.to_array().map(|x| stage.right_held(x));
-            let height = piles::opponent::WIDTH * depth_scale(piles::opponent::Y) / ASPECT;
-            let base = data::opponent::BACK
-                - piles::CLEARANCE
-                - piles::opponent::SPREAD_DOWN * piles::MOST_THICKNESS
-                - piles::opponent::Y
+            let xs = piles.opponent.x.map(|x| stage.right_held(x));
+            let height = piles.opponent.width * stage.depth_scale(piles.opponent.y) / ASPECT;
+            let base = data.opponent.back
+                - piles.clearance
+                - piles.opponent.spread_down * piles.most_thickness
+                - piles.opponent.y
                 - height;
-            (piles::opponent::Y, piles::opponent::WIDTH, xs, base)
+            (piles.opponent.y, piles.opponent.width, xs, base)
         };
-        let width = frame * depth_scale(y);
+        let width = frame * stage.depth_scale(y);
         let height = width / ASPECT;
         for (zone, x) in xs.into_iter().enumerate() {
             let middle = x + width / 2.0;

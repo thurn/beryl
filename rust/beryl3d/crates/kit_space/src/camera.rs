@@ -6,7 +6,6 @@
 use glam::camera::rh::{proj::directx, view::look_at_mat4};
 use glam::{Affine3A, Mat3, Mat4, Quat, Vec2, Vec3};
 
-use kit_base::data::space::layout::desktop;
 use kit_base::geometry::{CARD_HEIGHT, CARD_WIDTH, Window};
 use kit_base::geometry::{Rect, plane::ScreenPlane};
 use kit_base::pose::Pose;
@@ -33,7 +32,7 @@ pub struct Camera {
     /// The distance from the eye to the target, in millimetres.
     pub distance: f32,
     /// The part of the window the required rectangle is fitted inside, in logical points: the
-    /// safe area, or on the phone layout the battlefield's part of it (`phone::battlefield`).
+    /// safe area, or the region a layout reserves for the table.
     pub area: Rect,
     pub eye: Vec3,
     pub view: Mat4,
@@ -281,11 +280,3 @@ impl Camera {
         self.screen_plane().layer_transform(rect)
     }
 }
-
-/// The camera fitted to the desktop table, as specified in the spatial data.
-pub const DESKTOP_CAMERA: CameraData = CameraData {
-    pitch_degrees: desktop::camera::PITCH_DEGREES,
-    fov_degrees: desktop::camera::FOV_DEGREES,
-    target: desktop::camera::TARGET,
-    required: desktop::camera::REQUIRED,
-};

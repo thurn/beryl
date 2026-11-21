@@ -1388,18 +1388,18 @@ flight start exactly where the card was.
   long for its room first zooms the battlefield out, as the web's
   `battlefieldZoom` does (`place::zooms`): the creatures' rows of both sides
   share the zoom of the most crowded row, down to the web's `ZOOM_LEAST`, and a
-  back row shrinks further alone, down to `least_back_zoom` in
-  `space-constants.json`, which keeps each card large enough to press. A
-  zoomed-out row keeps its edge toward the lane between the creatures' rows, or
-  a back row its edge toward its player.
+  back row shrinks further alone, down to the desktop profile's
+  `least_back_zoom`, which keeps each card large enough to press. A zoomed-out
+  row keeps its edge toward the lane between the creatures' rows, or a back row
+  its edge toward its player.
 - **Rows stand as the web interface's do.** The creatures' row is centred; the
   lands run from the table's edge inward and the other permanents from the
   middle outward, so a permanent that leaves one of those rows moves only the
   cards to its right.
-- **Rows follow the web's stage (desktop).** `Layout::for_window` fits each
-  side's three battlefield rows to the window (`table::web_fit`) from the web
-  interface's stage positions, copied into `layout.desktop.web` in
-  `space-constants.json`: `ROWS` and `ROOM` (`ui/src/game/tableRows.ts`) and the
+- **Rows follow the web's stage (desktop).** `Profile::layout` fits each side's
+  three battlefield rows to the window from `table.anchored.web` in the desktop
+  profile (`profiles::web_fit`). It uses the web interface's stage positions,
+  including the `ROWS` and `ROOM` values in `ui/src/game/tableRows.ts` and the
   frame widths and gaps of `ui/src/game/battlefield.ts`, with the stage fitted
   to the window as `ui/src/game/Stage.tsx` fits it. Each row gets the line of
   the table under the centres of the web's untapped cards, its ends, and the
@@ -4329,10 +4329,10 @@ change there and a small change in each client.
 
 The web interface draws the table on a 1600 by 900 surface and imitates
 perspective by shrinking and leaning each card. Beryl 3D's table is a real
-scene, seen through a camera fitted to Arena (`layout.desktop.camera`, solved by
-`just b3d camera-fit`). On the desktop, Beryl 3D takes its battlefield rows from
-the web interface's stage positions rather than from its own: see "Rows follow
-the web's stage" under "Objects and placement".
+scene, seen through a camera fitted to Arena (`table.camera` in the desktop
+profile, solved by `just b3d camera-fit`). On the desktop, Beryl 3D fits its
+battlefield rows to the web interface's stage positions. See "Rows follow the
+web's stage" under "Objects and placement".
 
 ### Matching the web interface's look
 

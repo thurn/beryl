@@ -15,6 +15,7 @@ use beryl_protocol::script::{Act, Notice, Script, Subject};
 use game_hud::hud::log::Logged;
 use game_hud::prompts::prompt_title;
 use game_table::table::Window;
+use kit_base::data::profiles::Profiles;
 use serde_json::{Value, json};
 
 use self::table::{CardGroup, zone_groups};
@@ -32,9 +33,9 @@ pub struct Measure {
 
 impl Measure {
     #[must_use]
-    pub fn new(windows: &[Window]) -> Self {
+    pub fn new(profiles: &Profiles, windows: &[Window]) -> Self {
         Self {
-            words: Words::new(windows),
+            words: Words::new(profiles, windows),
         }
     }
 
