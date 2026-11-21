@@ -10,7 +10,7 @@ import subprocess
 import sys
 import tomllib
 from pathlib import Path
-from typing import NamedTuple, TypedDict, cast
+from typing import NotRequired, NamedTuple, TypedDict, cast
 
 from .. import paths
 
@@ -412,6 +412,7 @@ class Levels(TypedDict):
     cap_allowances: dict[str, CapAllowance]
     protocol: dict[str, int]
     protocol_literals: dict[str, int]
+    profile_words: NotRequired[dict[str, int]]
 
 
 class RustToken(NamedTuple):
@@ -528,6 +529,41 @@ def protocol_literals(root: Path) -> list[str]:
                 f"{len(locations)} from {limit}. Lower or remove the allowance."
             )
     return found
+
+
+IDENTIFIER_PART: re.Pattern[str] = re.compile(
+    r"[A-Z]+(?=[A-Z][a-z]|[^A-Za-z]|$)|[A-Z]?[a-z]+"
+)
+
+
+def profile_word_counts(root: Path) -> dict[str, int]:
+    """Count layout names in Rust identifiers outside profile modules, by crate."""
+    counts: dict[str, int] = {}
+    for crate in sorted(crates(root).iterdir()):
+        count = 0
+        for path in crate.rglob("*.rs"):
+            if "profiles" in path.relative_to(crate).parts[:-1]:
+                continue
+            for token in rust_tokens(path.read_text()):
+                if RUST_IDENTIFIER.fullmatch(token.text) and any(
+                    part.lower() in {"phone", "desktop"}
+                    for part in IDENTIFIER_PART.findall(token.text.removeprefix("r#"))
+                ):
+                    count += 1
+        if count:
+            counts[crate.name] = count
+    return counts
+
+
+def profile_words(root: Path) -> list[str]:
+    """Keep knowledge of particular layout names inside profile modules."""
+    config = cast(Levels, json.loads((root / LEVELS_FILE).read_text()))
+    return compare_levels(
+        "profile_words",
+        profile_word_counts(root),
+        config.get("profile_words", {}),
+        False,
+    )
 
 
 def dependency_names(
@@ -680,6 +716,15 @@ def levels(root: Path, *, update: bool = False, verbose: bool = False) -> list[s
                 f"Cap allowance for {name}: {allowance.get('lines')} lines. {allowance.get('reason', '')}"
             )
     found.extend(compare_levels("protocol", protocol, config["protocol"], update))
+    if "profile_words" in config:
+        found.extend(
+            compare_levels(
+                "profile_words",
+                profile_word_counts(root),
+                config["profile_words"],
+                update,
+            )
+        )
     after = json.dumps(config, indent=2) + "\n"
     if update and after != before:
         path.write_text(after)
@@ -724,6 +769,11 @@ def protocol_literals_step(*_args: str) -> int:
     return report("protocol-literals", protocol_literals(paths.REPO))
 
 
+def profile_words_step(*_args: str) -> int:
+    """The `profile-words` check."""
+    return report("profile-words", profile_words(paths.REPO))
+
+
 def b3d_data_step(*_args: str) -> int:
     """The `b3d-data` check."""
     return report("b3d-data", b3d_data(paths.REPO))
@@ -737,6 +787,7 @@ STEPS = {
     "data-names": data_names_step,
     "scene-literals": scene_literals_step,
     "protocol-literals": protocol_literals_step,
+    "profile-words": profile_words_step,
 }
 
 if __name__ == "__main__":

@@ -162,6 +162,10 @@ pub(super) fn context() -> Context {
         recording: "flat-layer".to_owned(),
         seat: Side::You,
         layout: Layout::Desktop,
+        checks: Layout::Desktop.checks(
+            &crate::test_data::data().profiles,
+            kit_base::geometry::Size::default(),
+        ),
         size: Size {
             width: WIDTH,
             height: HEIGHT,

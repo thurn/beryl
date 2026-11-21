@@ -5,6 +5,7 @@ use std::fmt::Write;
 
 use beryl_protocol::protocol::Side;
 
+use kit_base::data::profiles::{Checks, Profiles, SizeClass};
 use kit_ui::input::{Insets, Rect, Size};
 
 /// Which window a frame was drawn for, and the moment, as the caller of a check knows them.
@@ -15,6 +16,7 @@ pub struct Context {
     pub recording: String,
     pub seat: Side,
     pub layout: Layout,
+    pub checks: Checks,
     /// The window's size in logical points.
     pub size: Size,
     /// How far in from each edge the window's safe area starts.
@@ -31,18 +33,36 @@ pub enum Layout {
 }
 
 impl Layout {
-    /// The shorter side, in logical points, below which a window uses the phone layout.
-    pub const PHONE_BELOW_POINTS: f32 = kit_base::geometry::PHONE_BELOW_POINTS;
-
-    /// The layout for a window of this logical size: `Phone` when its shorter side is under
-    /// `PHONE_BELOW_POINTS`, so a phone held sideways is still a phone, and `Desktop` at or above
-    /// it. Logical points do not depend on the screen's pixel density.
+    /// The size class used by this legacy layout label.
     #[must_use]
-    pub fn for_size(size: Size) -> Self {
-        if kit_base::geometry::phone_size(size) {
-            Self::Phone
-        } else {
-            Self::Desktop
+    pub fn size_class(self) -> SizeClass {
+        match self {
+            Self::Desktop => SizeClass::Regular,
+            Self::Phone => SizeClass::Compact,
+        }
+    }
+
+    /// The checks for this layout as played at `size`.
+    #[must_use]
+    pub fn checks(self, profiles: &Profiles, size: Size) -> Checks {
+        let selected = profiles.for_size(size);
+        if selected.size_class == self.size_class() {
+            return selected.checks;
+        }
+        // The inspection command can ask explicitly for a different layout label.
+        profiles
+            .iter()
+            .find(|profile| profile.size_class == self.size_class())
+            .unwrap_or(selected)
+            .checks
+    }
+
+    /// The legacy layout label for the profile that applies to this logical size.
+    #[must_use]
+    pub fn for_size(profiles: &Profiles, size: Size) -> Self {
+        match profiles.for_size(size).size_class {
+            SizeClass::Compact => Self::Phone,
+            SizeClass::Regular => Self::Desktop,
         }
     }
 }

@@ -2,7 +2,7 @@
 
 use std::sync::{Arc, OnceLock};
 
-use kit_base::data::Data;
+use kit_base::data::{Data, profiles};
 
 pub(crate) fn embedded() -> Result<Arc<Data>, String> {
     static DATA: OnceLock<Result<Arc<Data>, String>> = OnceLock::new();
@@ -10,6 +10,7 @@ pub(crate) fn embedded() -> Result<Arc<Data>, String> {
         Data::parse(
             include_str!("../../../../../data/beryl3d/space.json"),
             include_str!("../../../../../data/beryl3d/gates.json"),
+            &profiles::SHIPPED,
         )
         .map(Arc::new)
     })

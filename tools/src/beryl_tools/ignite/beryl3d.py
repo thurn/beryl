@@ -63,7 +63,6 @@ ROOTS: tuple[str, ...] = ("beryl_inspect", "beryl_record")
 CARDS: Path = paths.REPO / "rust" / "cards"
 DECKS: Path = paths.REPO / "docs" / "sample-decks"
 
-# The interface check that enforces the frame limits from gates.json across the suite.
 FRAME_LIMITS = "frame-limits"
 # The one check of `b3d-frame-counts`: Callgrind counts every board at once in the
 # beryl3d-bench machine, and the scaling check compares two boards' counts.
@@ -77,6 +76,7 @@ SOURCE_RULES: dict[str, Callable[[Path], list[str]]] = {
     "b3d-data": purity.b3d_data,
     "scene-literals": purity.scene_literals,
     "protocol-literals": purity.protocol_literals,
+    "profile-words": purity.profile_words,
     "corpus": pack.check_corpus,
 }
 

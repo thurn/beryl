@@ -85,5 +85,23 @@
   "protocol_literals": {
     "rust/beryl3d/crates/beryl_inspect/src/screens.rs": 2,
     "rust/beryl3d/crates/beryl_inspect/src/stress.rs": 1
+  },
+  "profile_words": {
+    "app_client": 182,
+    "app_screens": 67,
+    "beryl_3d": 35,
+    "beryl_host": 21,
+    "beryl_inspect": 112,
+    "beryl_pictures": 11,
+    "beryl_render": 4,
+    "game_hud": 147,
+    "game_manual": 103,
+    "game_play": 29,
+    "game_probe": 145,
+    "game_table": 118,
+    "kit_base": 9,
+    "kit_probe": 26,
+    "kit_space": 25,
+    "kit_ui": 7
   }
 }

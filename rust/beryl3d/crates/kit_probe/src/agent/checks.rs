@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 
 use glam::{Vec2, Vec4};
 
-use super::fault::{Context, Fault, Layout, Rule, Subject};
+use super::fault::{Context, Fault, Rule, Subject};
 use super::tree::locator_of;
 use kit_base::data::audit;
 use kit_frame::frame::{Draw, Frame, Missing, Place, REVEALED_FACE, Ring, Ringed, Role, StateBits};
@@ -43,7 +43,7 @@ pub fn check(
 }
 
 /// On screen: every interactive element lies inside the window's safe area. A card needs only a
-/// square `TARGET_POINTS` on a side (`PHONE_TARGET_POINTS` on the phone layout), or as much of it
+/// square with the profile's target size on a side, or as much of it
 /// as a card turned edge-on has, inside it, because a hand is held partly past the bottom edge,
 /// as Arena's and the web interface's are. A card the pointer holds is not at rest, and goes
 /// where the pointer takes it. An element a scrolling list cuts is judged by the part of it the
@@ -51,7 +51,7 @@ pub fn check(
 /// that ends inside the safe area is on screen.
 #[must_use]
 pub fn on_screen(frame: &Frame, context: &Context) -> Vec<Fault> {
-    let side = target_side(context);
+    let side = context.checks.target_points;
     let inset = context.safe_area;
     let safe = Rect {
         x: inset.left,
@@ -90,13 +90,6 @@ pub fn on_screen(frame: &Frame, context: &Context) -> Vec<Fault> {
 }
 
 /// The side of the square of a card that must be on screen and uncovered, in logical points.
-fn target_side(context: &Context) -> f32 {
-    match context.layout {
-        Layout::Desktop => audit::TARGET_POINTS,
-        Layout::Phone => audit::PHONE_TARGET_POINTS,
-    }
-}
-
 /// No overlap: no two interactive elements of the flat layer intersect where they are seen
 /// (each box cut to its clip), unless one contains the other in the tree. Cards are exempt, because rows and hands overlap them on purpose.
 #[must_use]
@@ -140,7 +133,7 @@ pub fn overlap(frame: &Frame, context: &Context) -> Vec<Fault> {
 /// (its box cut to its clip) returns that element (or something inside it), and no later
 /// element of the flat layer is drawn on a panel over that centre, which a press would go
 /// through but which would cover the element's look (`hit::painted_over`). Every interactive card at rest has an uncovered area at
-/// least `TARGET_POINTS` square (`PHONE_TARGET_POINTS` on the phone layout) where a hit test
+/// least the profile's target size square where a hit test
 /// returns it. Cards are judged only on a frame where nothing on the table moves: a card passing
 /// over another covers it for a moment, which leaves no card out of reach. A hand card the
 /// pointer has up out of the fan is judged where it rests in the fan (`Frame::lifted`), as the
@@ -157,7 +150,7 @@ pub fn reachable(frame: &Frame, context: &Context) -> Vec<Fault> {
         resting = copy;
         &resting
     };
-    let side = target_side(context);
+    let side = context.checks.target_points;
     let mut faults = Vec::new();
     // Built on the first card at rest, so a frame with none builds no index.
     let mut overlaps: Option<Overlaps> = None;
@@ -376,19 +369,17 @@ pub fn named(frame: &Frame, context: &Context) -> Vec<Fault> {
         .collect()
 }
 
-/// Phone sizes: on the phone layout, every interactive element of the flat layer is at least
-/// `PHONE_TARGET_POINTS` square, a size a finger can press, and no line of text is smaller than
-/// `PHONE_TEXT_POINTS`, as the web interface's `phoneFaults` (`ui/scripts/phone-faults.mjs`)
-/// holds its phone shots. Cards are left to "reachable", which holds a card's uncovered part to
-/// the same square. The desktop layout has no such limits. An element is measured from its
+/// In a profile with a text minimum, check the flat layer's target and text sizes as the web
+/// interface's `phoneFaults` does. Cards are checked by "reachable", which holds a card's
+/// uncovered part to the same square. An element is measured from its
 /// corners on the window, so one laid out at a fraction of a point measures a little less than
 /// its size, as 295.3 - 251.3 is 43.999985 in `f32`; a shortfall under `SIZE_TOLERANCE` passes.
 #[must_use]
 pub fn phone_sizes(frame: &Frame, context: &Context) -> Vec<Fault> {
-    if context.layout != Layout::Phone {
+    let Some(text_points) = context.checks.text_points else {
         return Vec::new();
-    }
-    let side = audit::PHONE_TARGET_POINTS;
+    };
+    let side = context.checks.target_points;
     let least = side - SIZE_TOLERANCE;
     let small_targets = interactive(frame).filter_map(|index| {
         let element = &frame.resolved[index as usize];
@@ -410,7 +401,7 @@ pub fn phone_sizes(frame: &Frame, context: &Context) -> Vec<Fault> {
             })
     });
     let small_text = (frame.lines.iter())
-        .filter(|line| line.size < audit::PHONE_TEXT_POINTS)
+        .filter(|line| line.size < text_points)
         .map(|line| {
             let subject = subject(frame, line.element);
             fault(
@@ -420,7 +411,7 @@ pub fn phone_sizes(frame: &Frame, context: &Context) -> Vec<Fault> {
                     "a line of {}'s text is {} points, under {}",
                     subject.describe(),
                     line.size,
-                    audit::PHONE_TEXT_POINTS
+                    text_points
                 ),
                 vec![subject],
             )

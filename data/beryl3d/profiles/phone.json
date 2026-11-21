@@ -1,0 +1,242 @@
+{
+  "name": "phone",
+  "size_class": "compact",
+  "shorter_side_below": 500,
+  "table": {
+    "camera": {
+      "pitch_degrees": 10.0,
+      "fov_degrees": 24.29,
+      "target": [0, -42.36, 0],
+      "required": [
+        [-152.1, -205],
+        [152.1, 205]
+      ]
+    },
+    "strip": 44,
+    "creatures": {
+      "y": -69,
+      "left": -152.1,
+      "right": 152.1
+    },
+    "lands": {
+      "y": -161,
+      "left": -152.1,
+      "right": -12
+    },
+    "others": {
+      "y": -161,
+      "left": 12,
+      "right": 152.1
+    },
+    "gap": 4,
+    "pile_step": [3, 3],
+    "bands": {
+      "side": 8,
+      "opponent_strip": 48,
+      "you_strip": 60,
+      "hand_width": 100,
+      "hand_share": 0.25,
+      "hand_shown": 0.66,
+      "hand_top": 8
+    },
+    "piles": {
+      "you": {
+        "width": 48,
+        "x": [32, 84, 136]
+      },
+      "opponent": {
+        "width": 40,
+        "x": [28, 72, 116],
+        "below_safe": 30
+      }
+    },
+    "stack": {
+      "width": 68,
+      "step": 52,
+      "count_room": 32,
+      "depth": 400,
+      "step_depth": 1.5
+    },
+    "hand": {
+      "depth": 300,
+      "step_depth": 1.5,
+      "fan_radius": 14,
+      "gap": 4,
+      "bias_degrees": 0.6
+    },
+    "opponent_hand": {
+      "width": 24,
+      "step": 14,
+      "rise": -2,
+      "right": 56,
+      "room": 5,
+      "depth": 320,
+      "step_depth": 1.5,
+      "fan_radius": 36.217
+    },
+    "tray": {
+      "inset": 4,
+      "most": 104,
+      "least": 54,
+      "gap": 6,
+      "heading": 18,
+      "least_step": 52
+    }
+  },
+  "slots": {
+    "settings.sheet": {
+      "region": "safe_area",
+      "inset": [16, 16, 16, 16],
+      "max_width": 360,
+      "align_x": "center",
+      "align_y": "center"
+    },
+    "prompt.bar": {
+      "region": "prompt_area"
+    },
+    "prompt.dock": {
+      "region": "your_strip",
+      "max_height": 44,
+      "align_x": "end",
+      "align_y": "center"
+    },
+    "prompt.stacked": {
+      "region": "prompt_area",
+      "align_x": "end"
+    },
+    "prompt.asked": {
+      "region": "your_strip",
+      "max_height": 44,
+      "align_y": "center"
+    },
+    "player.you": {
+      "region": "your_strip"
+    },
+    "player.opponent": {
+      "region": "opponent_strip"
+    },
+    "log": {
+      "region": "log_area",
+      "inset": [8, 0, 8, 0]
+    },
+    "phase": {
+      "region": "middle"
+    },
+    "menu": {
+      "region": "opponent_strip",
+      "max_width": 44,
+      "max_height": 44,
+      "align_x": "end",
+      "align_y": "center"
+    }
+  },
+  "checks": {
+    "target_points": 44,
+    "text_points": 11
+  },
+  "test_matrix": {
+    "safe_area": [44, 0, 34, 0],
+    "usual_window": 0,
+    "windows": [
+      [393, 759, 1],
+      [375, 647, 1],
+      [430, 932, 1]
+    ]
+  },
+  "settings_quick_action_min_width": 84,
+  "legacy": {
+    "hud.phone": {
+      "orb_scale": 0.5,
+      "button_height": 44,
+      "button_text": 18,
+      "button_padding": 12,
+      "character_width": 0.55,
+      "overlap": 4,
+      "dock_gap": 6,
+      "asked_gap": 4,
+      "pill_text": 16,
+      "pill_padding": 10,
+      "revealed_width": 52,
+      "sheet_margin": 8,
+      "mana_right": 32,
+      "mana_width": 48
+    },
+    "hud.incoming.phone": {
+      "left": 22,
+      "top": -4,
+      "min_width": 26,
+      "padding_x": 5,
+      "padding_y": 1,
+      "text": 13
+    },
+    "flat.phone": {
+      "gutter": 16,
+      "column": 430,
+      "action_height": 48,
+      "action_gap": 8,
+      "action_text": 18,
+      "start": {
+        "corner": 56,
+        "gap": 8,
+        "agent_row": 56,
+        "agent_gap": 4,
+        "agent_padding_y": 8,
+        "agent_padding_x": 4,
+        "radio": 24,
+        "label": 13,
+        "agent_name": 16,
+        "about": 13,
+        "agents_least": 56,
+        "field": 44
+      },
+      "opening": {
+        "top": 88,
+        "coin": 64,
+        "coin_narrow": 56,
+        "narrow_below": 393,
+        "coin_line": 13,
+        "coin_gap": 8,
+        "title": 18,
+        "title_gap": 16,
+        "card_most": 90,
+        "card_most_narrow": 86,
+        "per_row": 4,
+        "gap": 8,
+        "slot_scale": 0.8,
+        "slots_gap": 16,
+        "slot_edge": 16,
+        "no_actions": 40
+      },
+      "game_over": {
+        "title": 36,
+        "reason": 16,
+        "reason_gap": 8,
+        "card": 160,
+        "card_narrow": 140,
+        "card_gap": 12,
+        "dock_width": 398
+      },
+      "bug": {
+        "tools_top": 8,
+        "tools_right": 8,
+        "hint_top": 14,
+        "hint_left": 12,
+        "hint": 13,
+        "padding_y": 12,
+        "padding_x": 16,
+        "radius": 12,
+        "gap": 8,
+        "title": 20,
+        "description_least": 76,
+        "description_most": 144,
+        "submit_width": 80
+      },
+      "list_row": 44
+    },
+    "flat.table.labels.phone_overlap": 16,
+    "flat.table.link.phone_top": 8
+  },
+  "counts": [
+    "flat.phone.opening.per_row"
+  ]
+}

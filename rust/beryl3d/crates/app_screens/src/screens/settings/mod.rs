@@ -7,8 +7,9 @@ pub use view::{GEAR_INSET, corner};
 use super::Screen;
 use crate::settings::{ScreenSettings, Setting};
 use game_hud::hud::log::{GameLog, Message as LogMessage};
+use game_table::profiles::Profile;
 use game_table::table::Window;
-use kit_scene::{Context, Feature};
+use kit_scene::{Context, Feature, SizeClass, Slot};
 use kit_ui::element::{Action, Element};
 
 pub struct SettingsSheet;
@@ -47,6 +48,31 @@ pub struct Inputs {
     pub screen: Screen,
     pub settings: ScreenSettings,
     pub game_over: bool,
+    pub layout: Layout,
+}
+
+/// The settings geometry and size-dependent controls for this window.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Layout {
+    slot: Slot,
+    size_class: SizeClass,
+    quick_action_min_width: f32,
+}
+
+impl Layout {
+    #[must_use]
+    pub fn new(profile: Profile<'_>) -> Self {
+        Self {
+            slot: profile
+                .slot("settings.sheet")
+                .expect("validated settings slot"),
+            size_class: profile.size_class(),
+            quick_action_min_width: profile
+                .data()
+                .settings_quick_action_min_width
+                .unwrap_or_default(),
+        }
+    }
 }
 
 impl Feature for SettingsSheet {

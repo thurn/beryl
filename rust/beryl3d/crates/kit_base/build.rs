@@ -1,13 +1,12 @@
-//! Writes `data/beryl3d/space-constants.json` as a string constant and its numbers as constants of the
-//! module `space`, and each number of the `audit` object of `data/beryl3d/gates.json` as an
-//! `f32` constant named for its key in upper case, to `OUT_DIR/data.rs`, which `src/data.rs`
-//! includes. `write_space` describes the one rule that turns `space-constants.json` into modules and
-//! constants. It also writes the design tokens of `data/design-tokens.json` as the constants of
-//! `src/tokens.rs`'s modules under `OUT_DIR/tokens` (`write_tokens`). It embeds the serif font
-//! files that the typography module uses.
+//! Generates spatial constants from the shared tuning and layout profiles, and the interface
+//! thresholds from the gates and profiles. It also generates the design tokens and embeds the
+//! serif font files used by the typography module.
 
 #[path = "build/gradients.rs"]
 mod gradients;
+
+#[path = "build/profiles.rs"]
+mod profiles;
 
 use std::fmt::Write;
 use std::fs;
@@ -21,20 +20,17 @@ fn main() {
     println!("cargo:rerun-if-changed={}", space.display());
     println!("cargo:rerun-if-changed={}", gates.display());
     let space_text = fs::read_to_string(&space).unwrap();
-    let gates_json: serde_json::Value =
+    let mut gates_json: serde_json::Value =
         serde_json::from_str(&fs::read_to_string(&gates).unwrap()).unwrap();
     // Checked to parse, so a malformed file fails the build, not a run.
-    let space_json: serde_json::Value = serde_json::from_str(&space_text).unwrap();
-    let mut out = format!(
-        "/// The contents of `data/beryl3d/space-constants.json`.\npub const SPACE: &str = {space_text:?};\n"
-    );
+    let mut space_json: serde_json::Value = serde_json::from_str(&space_text).unwrap();
+    profiles::legacy(&data, &mut space_json, &mut gates_json["audit"]);
+    let mut out = String::new();
     write_space(&space_json, &mut out);
     let audit = gates_json["audit"]
         .as_object()
         .expect("gates.json's `audit` is an object");
-    out.push_str(
-        "/// The interface checks' thresholds: the `audit` object of `data/beryl3d/gates.json`.\n",
-    );
+    out.push_str("/// The interface checks' thresholds, from the gates and the layout profiles.\n");
     out.push_str("pub mod audit {\n");
     for (key, value) in audit {
         let number = value
@@ -43,7 +39,7 @@ fn main() {
         let name = key.to_uppercase();
         writeln!(
             out,
-            "    /// `audit.{key}` in `data/beryl3d/gates.json`.\n    pub const {name}: f32 = {number:?}_f32;"
+            "    /// `{key}` in the interface thresholds.\n    pub const {name}: f32 = {number:?}_f32;"
         )
         .unwrap();
     }
@@ -437,7 +433,7 @@ fn write_space(json: &serde_json::Value, out: &mut String) {
         .as_array()
         .map(|paths| paths.iter().filter_map(serde_json::Value::as_str).collect())
         .unwrap_or_default();
-    out.push_str("/// The numbers of `data/beryl3d/space-constants.json`.\npub mod space {\n");
+    out.push_str("/// Spatial constants from `space-constants.json` and the layout profiles.\npub mod space {\n");
     let object = json.as_object().expect("space-constants.json is an object");
     write_members(object, "", 1, &counts, out);
     out.push_str("}\n");
@@ -462,11 +458,7 @@ fn write_members(
         } else {
             format!("{path}.{key}")
         };
-        writeln!(
-            out,
-            "{indent}/// `{dotted}` in `data/beryl3d/space-constants.json`."
-        )
-        .unwrap();
+        writeln!(out, "{indent}/// `{dotted}` in the spatial tuning.").unwrap();
         if let Some(members) = value.as_object() {
             let module: String = key
                 .chars()

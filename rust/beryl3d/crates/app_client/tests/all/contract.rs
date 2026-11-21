@@ -290,6 +290,12 @@ mod milestone_three {
                 screen: input.screen,
                 settings: settings.screen(),
                 game_over: false,
+                layout: app_screens::screens::settings::Layout::new(
+                    game_table::profiles::Profile::for_window(
+                        &crate::test_data::data().profiles,
+                        input.window,
+                    ),
+                ),
             },
         );
         assert!(!settings.name.is_empty());

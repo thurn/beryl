@@ -11,19 +11,7 @@ use kit_base::geometry::{CARD_HEIGHT, CARD_WIDTH, Window};
 use kit_base::geometry::{Rect, plane::ScreenPlane};
 use kit_base::pose::Pose;
 
-/// A layout's camera, as data.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct CameraData {
-    /// The angle between the line of sight and straight down, in degrees.
-    pub pitch_degrees: f32,
-    /// The vertical field of view, in degrees.
-    pub fov_degrees: f32,
-    /// The point of the table the camera looks at, in millimetres.
-    pub target: Vec3,
-    /// The rectangle of the table (z = 0) that must always be visible: its lowest and highest
-    /// corners, in millimetres.
-    pub required: [Vec2; 2],
-}
+pub use kit_base::data::profiles::CameraData;
 
 /// The nearest and farthest distances drawn, in millimetres.
 const NEAR: f32 = 20.0;

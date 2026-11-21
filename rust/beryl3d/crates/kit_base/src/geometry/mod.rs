@@ -4,6 +4,8 @@ pub mod plane;
 
 use glam::Vec2;
 
+use crate::data::profiles::SizeClass;
+
 /// A rectangle with its top left corner at (`x`, `y`). It is in logical points unless the field
 /// holding it says otherwise (a frame's clips are in physical pixels).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -56,6 +58,8 @@ pub struct Window {
     /// Physical pixels per logical point.
     pub scale: f32,
     pub safe_area: Insets,
+    /// The host data's selected size class, once the client has received this window.
+    pub size_class: Option<SizeClass>,
 }
 
 impl Default for Window {
@@ -67,6 +71,7 @@ impl Default for Window {
             },
             scale: 1.0,
             safe_area: Insets::default(),
+            size_class: None,
         }
     }
 }
@@ -89,7 +94,10 @@ impl Window {
     /// Whether the window uses the compact phone layout.
     #[must_use]
     pub fn phone(self) -> bool {
-        phone_size(self.size)
+        self.size_class.map_or_else(
+            || phone_size(self.size),
+            |class| class == SizeClass::Compact,
+        )
     }
 }
 
@@ -99,5 +107,5 @@ pub const PHONE_BELOW_POINTS: f32 = crate::data::space::flat::PHONE_UNDER;
 /// Whether the shorter side of `size` calls for the phone layout.
 #[must_use]
 pub fn phone_size(size: Size) -> bool {
-    size.width.min(size.height) < PHONE_BELOW_POINTS
+    crate::data::profiles::shorter_side_below(size, PHONE_BELOW_POINTS)
 }

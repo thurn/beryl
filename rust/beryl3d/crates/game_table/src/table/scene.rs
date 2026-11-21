@@ -171,6 +171,7 @@ impl PartialEq for Placed {
 impl Table {
     #[must_use]
     pub fn new(data: Arc<Data>, base: Layout, window: Window) -> Self {
+        let window = data.profiles.resolve_window(window);
         let layout = base.for_window(window);
         let camera = layout.fit(window);
         Self {
@@ -244,6 +245,7 @@ impl Table {
     /// Fits the camera to a window of a new shape, in the layout that shape takes, and
     /// recomputes every resting place.
     pub fn resize(&mut self, window: Window, view: Option<&PlayerView>) {
+        let window = self.data.profiles.resolve_window(window);
         self.layout = self.base.for_window(window);
         if self.hand_away && self.layout.phone.is_none() {
             // The web lays the desktop's hand out on a stage 900 points tall, whose height is

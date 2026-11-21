@@ -1337,9 +1337,6 @@
         "value": 51,
         "note": "The width of the desktop lobby's 'First' box, as the web lays out its `select`."
       },
-      "SETTINGS_WIDTH": {
-        "value": 360
-      },
       "SETTINGS_GEAR_INSET": {
         "value": 14,
         "note": "How far the game screen's corner column (the gear, bug button and undo) stands from the window's top and right edges: the web's gear is 14 points from each."

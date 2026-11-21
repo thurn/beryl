@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
-use kit_base::data::Data;
+use kit_base::data::{Data, profiles};
 
 use crate::recordings;
 
@@ -20,12 +20,25 @@ pub fn load(directory: &Path) -> Result<Data, String> {
     };
     let space = read("space.json")?;
     let gates = read("gates.json")?;
-    Data::parse(&space, &gates).map_err(|why| format!("{}/{why}", directory.display()))
+    let files: Vec<_> = profiles::FILES
+        .iter()
+        .map(|&name| read(name).map(|text| (name, text)))
+        .collect::<Result<_, _>>()?;
+    let contents: Vec<_> = files
+        .iter()
+        .map(|(name, text)| (*name, text.as_str()))
+        .collect();
+    Data::parse(&space, &gates, &contents).map_err(|why| format!("{}/{why}", directory.display()))
 }
 
 /// Shares one validated set with every client started by this tool invocation.
 pub fn checkout() -> Result<Arc<Data>, String> {
+    checkout_ref().map(Arc::clone)
+}
+
+pub(crate) fn checkout_ref() -> Result<&'static Arc<Data>, String> {
     static DATA: OnceLock<Result<Arc<Data>, String>> = OnceLock::new();
     DATA.get_or_init(|| load(&directory()).map(Arc::new))
-        .clone()
+        .as_ref()
+        .map_err(Clone::clone)
 }

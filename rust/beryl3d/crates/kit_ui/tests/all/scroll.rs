@@ -48,6 +48,7 @@ impl Page {
     fn new(overflow: Overflow) -> Self {
         let mut layer = Layer::new();
         layer.resize(Window {
+            size_class: None,
             size: Size {
                 width: 800.0,
                 height: 600.0,

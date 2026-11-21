@@ -31,6 +31,7 @@ fn place(
 
 fn window(width: f32, height: f32) -> Window {
     Window {
+        size_class: None,
         size: Size { width, height },
         scale: 2.0,
         safe_area: Insets::default(),
@@ -418,15 +419,6 @@ fn lands_stand_untapped_first_with_each_name_together_in_first_appearance_order(
 }
 
 #[test]
-fn desktop_camera_is_the_data_in_space_constants_json() {
-    let space: serde_json::Value = serde_json::from_str(kit_base::data::SPACE).unwrap();
-    let pitch = space["layout"]["desktop"]["camera"]["pitch_degrees"]
-        .as_f64()
-        .unwrap();
-    assert!((f64::from(DESKTOP.camera.pitch_degrees) - pitch).abs() < 1e-6);
-}
-
-#[test]
 fn abilities_on_the_stack_are_drawn_as_cards_above_the_spell_beneath_them() {
     // A spell and then two abilities, which the reset numbers 3 and 4: a view's stack names
     // no ability, so the numbers come from the script.
@@ -512,6 +504,10 @@ fn abilities_on_the_stack_are_drawn_as_cards_above_the_spell_beneath_them() {
         recording: "abilities".to_owned(),
         seat: Side::You,
         layout: Layout::Desktop,
+        checks: Layout::Desktop.checks(
+            &crate::test_data::data().profiles,
+            kit_base::geometry::Size::default(),
+        ),
         size: Size {
             width: 1440.0,
             height: 900.0,
@@ -626,6 +622,7 @@ fn every_card_of_a_hand_of_any_size_can_be_pressed() {
                 recording: format!("{count} cards"),
                 seat: Side::You,
                 layout: Layout::Desktop,
+                checks: Layout::Desktop.checks(&crate::test_data::data().profiles, size),
                 size,
                 safe_area: Insets::default(),
                 at: 0,
@@ -769,6 +766,7 @@ fn every_item_of_a_stack_of_any_size_can_be_pressed() {
                 recording: "stack".to_owned(),
                 seat: Side::You,
                 layout: Layout::Desktop,
+                checks: Layout::Desktop.checks(&crate::test_data::data().profiles, size),
                 size,
                 safe_area: Insets::default(),
                 at: 0,

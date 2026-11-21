@@ -56,11 +56,10 @@ impl Test {
         name
     }
 
-    /// The layout its window is shown in: the phone layout below `Layout::PHONE_BELOW_POINTS`
-    /// on the shorter side, as a host chooses it.
+    /// The profile's layout for this window.
     #[must_use]
     pub fn layout(&self) -> Layout {
-        Layout::for_size(self.size)
+        pages::layout_for_size(self.size)
     }
 
     /// The test's recording at its start, from its seat in its window, in its layout with the
@@ -492,8 +491,7 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::{Duration, Instant};
 
-    use super::{Side, Test, grant_file_in, read_grant, run_until, spread_by};
-    use crate::pages::DESKTOP_WINDOWS;
+    use super::{Side, Test, Windows, grant_file_in, read_grant, run_until, spread_by};
     use app_client::driver::Mode;
 
     /// Under Ignite a command reads its grant from the file `IGNITE_CORES_FILE` names, which
@@ -561,7 +559,7 @@ mod tests {
             .map(|n| Test {
                 recording: format!("no-such-recording-{n}"),
                 seat: Side::You,
-                size: DESKTOP_WINDOWS[0],
+                size: Windows::Desktop.windows()[0].size,
                 scale: 1.0,
             })
             .collect();

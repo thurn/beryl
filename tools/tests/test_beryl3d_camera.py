@@ -31,14 +31,14 @@ def test_the_fit_recovers_the_camera_that_projected_the_cards() -> None:
     assert fit.rms < 1e-6
 
 
-def test_the_measured_cards_give_the_camera_in_space_json() -> None:
+def test_the_measured_cards_give_the_camera_in_the_regular_profile() -> None:
     import json
 
     cards = camera.load(camera.fit_path())
-    space = json.loads(
-        (camera.paths.REPO / "data/beryl3d/space-constants.json").read_text()
+    profile = json.loads(
+        (camera.paths.REPO / "data/beryl3d/profiles/desktop.json").read_text()
     )
-    data = space["layout"]["desktop"]["camera"]
+    data = profile["table"]["camera"]
     fit = camera.solve(cards)
     assert round(fit.view.pitch, 2) == data["pitch_degrees"]
     assert round(fit.view.fov, 2) == data["fov_degrees"]

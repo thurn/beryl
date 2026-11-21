@@ -54,6 +54,7 @@ impl Scene {
         let mut player = Player::new(
             story,
             Window {
+                size_class: None,
                 size,
                 scale,
                 safe_area,
@@ -67,6 +68,7 @@ impl Scene {
                 recording: name.to_owned(),
                 seat,
                 layout,
+                checks: pages::layout_checks(layout, size),
                 size,
                 safe_area,
                 at: 0,
@@ -255,6 +257,7 @@ impl Scene {
                 scene.player = Player::new(
                     scene.source,
                     Window {
+                        size_class: None,
                         size: scene.context.size,
                         scale: scene.scale,
                         safe_area: scene.context.safe_area,

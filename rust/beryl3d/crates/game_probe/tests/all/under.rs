@@ -10,6 +10,7 @@ use kit_ui::input::{Insets, Size};
 
 fn placed(view: &PlayerView) -> Placement {
     let window = Window {
+        size_class: None,
         size: Size {
             width: 1440.0,
             height: 900.0,

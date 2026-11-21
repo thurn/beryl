@@ -55,6 +55,7 @@ pub(super) fn check(options: &Options) -> Result<Printed, Usage> {
         recording: options.name().to_owned(),
         seat: options.seat,
         layout: options.layout,
+        checks: crate::pages::layout_checks(options.layout, options.size),
         size: options.size,
         safe_area: crate::pages::safe_area(options.layout),
         at: 0,

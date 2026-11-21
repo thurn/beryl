@@ -1,5 +1,6 @@
 //! Validated tuning data supplied by the host, and the constants awaiting conversion.
 
+pub mod profiles;
 mod tuning;
 pub mod verbs;
 

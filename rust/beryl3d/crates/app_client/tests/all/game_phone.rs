@@ -36,6 +36,7 @@ const MS: u64 = 1_000_000;
 
 fn window(width: f32, height: f32) -> Window {
     Window {
+        size_class: None,
         size: Size { width, height },
         scale: 3.0,
         safe_area: SAFE,
@@ -81,6 +82,7 @@ fn layer_faults(frame: &Frame, window: Window) -> Vec<String> {
         recording: "game-phone".to_owned(),
         seat: Side::You,
         layout: Layout::Phone,
+        checks: Layout::Phone.checks(&crate::test_data::data().profiles, window.size),
         size: window.size,
         safe_area: window.safe_area,
         at: 0,
@@ -198,6 +200,7 @@ fn stacked_buttons_stand_in_the_middle_band_when_a_permanent_lies_under_them() {
         recording: "game-phone".to_owned(),
         seat: Side::You,
         layout: Layout::Phone,
+        checks: Layout::Phone.checks(&crate::test_data::data().profiles, window.size),
         size: window.size,
         safe_area: window.safe_area,
         at: 0,

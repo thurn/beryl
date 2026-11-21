@@ -73,6 +73,7 @@ fn blank(frame: &Frame) -> Vec<String> {
         recording: "sample".to_owned(),
         seat: beryl_protocol::protocol::Side::You,
         layout: Layout::Desktop,
+        checks: Layout::Desktop.checks(&crate::test_data::data().profiles, SIZE),
         size: SIZE,
         safe_area: Insets::default(),
         at: 0,

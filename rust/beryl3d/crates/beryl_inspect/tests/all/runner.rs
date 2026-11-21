@@ -3,7 +3,7 @@
 use app_client::driver::Page;
 use beryl_inspect::cli::{Options, Ran, Spec, main};
 use beryl_inspect::faults::PATH_VARIABLE;
-use beryl_inspect::pages::{self, PHONE_SAFE_AREA, Windows};
+use beryl_inspect::pages::{self, Windows};
 use beryl_inspect::runner::{self, Limits, Outcome, Test};
 use beryl_protocol::protocol::Side;
 use kit_probe::agent::Layout;
@@ -122,7 +122,7 @@ fn a_phone_tests_name_opens_the_same_layout_and_insets_in_test_tree_and_check() 
     assert_eq!(test.name(), name);
     assert_eq!(test.layout(), Layout::Phone);
     let insets = pages::safe_area(test.layout());
-    assert_eq!(insets, PHONE_SAFE_AREA);
+    assert_eq!(insets, pages::safe_area(Layout::Phone));
     assert!(insets.top > 0.0 && insets.bottom > 0.0, "{insets:?}");
     for command in ["tree", "check"] {
         let spec = Spec {
@@ -159,7 +159,7 @@ fn a_phone_tests_name_opens_the_same_layout_and_insets_in_test_tree_and_check() 
         size,
     )
     .expect("the page opens")
-    .with_safe_area(PHONE_SAFE_AREA)
+    .with_safe_area(pages::safe_area(Layout::Phone))
     .tree();
     assert_eq!(tested, inset);
     let ran = run(&["tree", name]);
@@ -360,9 +360,9 @@ fn the_run_log_agrees_with_the_allowance_comparison() {
 fn a_retina_tests_name_opens_the_same_scale_in_test_tree_and_check() {
     let tests = runner::tests("pay-default/you/", Windows::Desktop).expect("the tests");
     let retina: Vec<&Test> = tests.iter().filter(|test| test.scale > 1.0).collect();
-    assert_eq!(retina.len(), pages::RETINA_WINDOWS.len(), "{tests:?}");
+    assert_eq!(retina.len(), 1, "{tests:?}");
     let test = retina[0];
-    assert_eq!(test.scale.to_bits(), pages::RETINA_SCALE.to_bits());
+    assert_eq!(test.scale.to_bits(), 2.0_f32.to_bits());
     let name = test.name();
     assert_eq!(name, "b3d:pay-default/you/1600x900@2");
     let page = test.page().expect("the page opens");

@@ -8,19 +8,12 @@ use super::{Inputs, Message, State};
 use crate::screens::Screen;
 use crate::screens::ScreenPress;
 use crate::settings::{Graphics, Setting};
-use kit_base::data::space::flat::phone::GUTTER;
-use kit_base::data::space::hud::phone::BUTTON_MIN_WIDTH as PHONE_BUTTON;
 use kit_base::tokens::{color, size, space, type_style};
+use kit_scene::SizeClass;
 use kit_ui::element::{Action, Align, Element, Justify, Overflow, Position, column, row, text};
 use kit_ui::widgets::{button, icon_button, icons, primary, slider, toggle};
 
 include!(concat!(env!("OUT_DIR"), "/credits.rs"));
-
-/// How wide the panel is, in logical points.
-const WIDTH: f32 = size::SETTINGS_WIDTH;
-
-/// The gap between the window's edge and the panel at the least.
-const MARGIN: f32 = size::SCREEN_MARGIN;
 
 /// How far the gear stands from the window's top and right edges, in logical points.
 pub const GEAR_INSET: f32 = size::SETTINGS_GEAR_INSET;
@@ -70,21 +63,13 @@ pub(super) fn settings(state: &State, input: Inputs) -> Element {
     let full_control = toggle(icons::FULL_CONTROL, "Full control", settings.full_control).on_press(
         Message::Change(Setting::FullControl(!settings.full_control)),
     );
-    let window = input.window;
-    let safe = window.safe_area;
-    // On a phone the panel keeps inside the safe area, the gutter in from its sides, and is no
-    // wider than the window leaves.
-    let (width, margin) = if input.window.phone() {
-        let across = window.size.width - safe.left - safe.right - 2.0 * GUTTER;
-        (WIDTH.min(across), GUTTER)
-    } else {
-        (WIDTH, MARGIN)
-    };
-    let tall = window.size.height - safe.top - safe.bottom - 2.0 * margin;
+    let size = input.window.size;
+    let layout = input.layout;
+    let bounds = layout.slot.rect;
     let mut panel = column()
         .name("settings panel")
-        .width(width)
-        .max_height(tall.max(0.0))
+        .width(bounds.width)
+        .max_height(bounds.height)
         .overflow(Overflow::Scroll)
         .padding(space::L)
         .gap(space::L)
@@ -104,7 +89,7 @@ pub(super) fn settings(state: &State, input: Inputs) -> Element {
                 .child(mute)
                 .child(levels),
         )
-        .child(graphics(settings.graphics, input.window.phone()))
+        .child(graphics(settings.graphics, layout.size_class))
         .child(
             row()
                 .gap(space::L)
@@ -116,20 +101,20 @@ pub(super) fn settings(state: &State, input: Inputs) -> Element {
                         .child(text("Stop at every priority")),
                 ),
         );
-    // The phone has no room for the desktop's log column or bug button, so its settings, which
-    // its menu button opens, hold both, as the web's phone `Menu` does.
-    if input.window.phone() && input.screen == Screen::Game {
+    // In a compact window the menu opens the settings sheet, which also holds the log and
+    // bug actions.
+    if layout.size_class == SizeClass::Compact && input.screen == Screen::Game {
         panel = panel.child(
             row()
                 .gap(space::M)
                 .child(
                     button("Log")
-                        .min_width(PHONE_BUTTON)
+                        .min_width(layout.quick_action_min_width)
                         .on_press(Message::ShowLog),
                 )
                 .child(
                     button("Report bug")
-                        .min_width(PHONE_BUTTON)
+                        .min_width(layout.quick_action_min_width)
                         .on_press(Message::ReportBug),
                 ),
         );
@@ -152,17 +137,20 @@ pub(super) fn settings(state: &State, input: Inputs) -> Element {
         .align_items(Align::Center)
         .justify_content(Justify::Center)
         .child(panel);
-    sheet.style.padding = [safe.top, safe.right, safe.bottom, safe.left];
+    sheet.style.padding = [
+        bounds.y,
+        (size.width - bounds.x - bounds.width).max(0.0),
+        (size.height - bounds.y - bounds.height).max(0.0),
+        bounds.x,
+    ];
     sheet
 }
 
 /// The graphics row: a label and one button for each way the visual tier is chosen, the saved
 /// one shown as the primary button and marked selected. Neither the web interface nor Arena has
-/// this setting, so it is built from the sheet's own buttons. A phone's panel is too narrow for
-/// the label and three buttons in one row without shrinking their words under the phone's
-/// least text size, so on the `phone` the label stands over the buttons, one to a line across
-/// the panel.
-fn graphics(chosen: Graphics, phone: bool) -> Element {
+/// this setting, so it is built from the sheet's own buttons. In a compact window the buttons
+/// stand one to a line to keep their text readable.
+fn graphics(chosen: Graphics, size_class: SizeClass) -> Element {
     let choice = |label: &str, graphics: Graphics| {
         let element = if graphics == chosen {
             primary(label)
@@ -179,7 +167,7 @@ fn graphics(chosen: Graphics, phone: bool) -> Element {
         choice("Baseline", Graphics::Baseline),
         choice("Enhanced", Graphics::Enhanced),
     ];
-    if phone {
+    if size_class == SizeClass::Compact {
         return column()
             .name("graphics")
             .gap(space::S)

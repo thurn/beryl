@@ -68,6 +68,7 @@ fn printed(fault: &Fault) -> String {
         recording: "three-beats".to_owned(),
         seat: Side::You,
         layout: Layout::Desktop,
+        checks: Layout::Desktop.checks(&crate::test_data::data().profiles, SIZE),
         size: SIZE,
         safe_area: Insets::default(),
         at: fault.at,

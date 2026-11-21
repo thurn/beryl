@@ -116,6 +116,7 @@ fn context(layout: Layout) -> Context {
         recording: "pay-default".to_owned(),
         seat: Side::You,
         layout,
+        checks: layout.checks(&crate::test_data::data().profiles, size),
         size,
         safe_area: Insets::default(),
         at: 850_000_000,
@@ -768,16 +769,35 @@ fn a_narrow_leaning_card_is_reachable_but_not_when_another_covers_half_of_it() {
 
 #[test]
 fn the_layout_follows_the_shorter_side_of_the_window() {
+    let data = crate::test_data::data();
     let size = |width, height| Size { width, height };
     for (width, height) in [(393.0, 759.0), (375.0, 647.0), (430.0, 932.0)] {
-        assert_eq!(Layout::for_size(size(width, height)), Layout::Phone);
+        assert_eq!(
+            Layout::for_size(&data.profiles, size(width, height)),
+            Layout::Phone
+        );
         // Rotated, the same phone is still a phone.
-        assert_eq!(Layout::for_size(size(height, width)), Layout::Phone);
+        assert_eq!(
+            Layout::for_size(&data.profiles, size(height, width)),
+            Layout::Phone
+        );
     }
-    assert_eq!(Layout::for_size(size(499.9, 1200.0)), Layout::Phone);
-    assert_eq!(Layout::for_size(size(500.0, 500.0)), Layout::Desktop);
-    assert_eq!(Layout::for_size(size(500.0, 1200.0)), Layout::Desktop);
-    assert_eq!(Layout::for_size(size(1280.0, 800.0)), Layout::Desktop);
+    assert_eq!(
+        Layout::for_size(&data.profiles, size(499.9, 1200.0)),
+        Layout::Phone
+    );
+    assert_eq!(
+        Layout::for_size(&data.profiles, size(500.0, 500.0)),
+        Layout::Desktop
+    );
+    assert_eq!(
+        Layout::for_size(&data.profiles, size(500.0, 1200.0)),
+        Layout::Desktop
+    );
+    assert_eq!(
+        Layout::for_size(&data.profiles, size(1280.0, 800.0)),
+        Layout::Desktop
+    );
 }
 
 /// A frame of a life total, a float of the flat layer, whose text line lies at `life`, beside the

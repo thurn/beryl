@@ -165,6 +165,7 @@ fn after_each_verbs_zones_script_every_object_rests_at_its_placement() {
             .and_then(|recording| recording.views())
             .unwrap_or_else(|why| panic!("{why}"));
         let window = Window {
+            size_class: None,
             size: Size {
                 width: 1600.0,
                 height: 900.0,

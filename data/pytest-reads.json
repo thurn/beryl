@@ -32,7 +32,7 @@
       "data/beryl3d/match/supported.json"
     ],
     "tools/src/beryl_tools/beryl3d/match/target.py": [
-      "data/beryl3d/space-constants.json"
+      "data/beryl3d/profiles/phone.json"
     ],
     "tools/src/beryl_tools/beryl3d/motion_film.py": [
       "data/beryl3d/parity.json"
@@ -404,7 +404,7 @@
       "rust/crates/beryl_bench/count-gate.toml"
     ],
     "tools/tests/test_beryl3d_camera.py": [
-      "data/beryl3d/space-constants.json"
+      "data/beryl3d/profiles/desktop.json"
     ],
     "tools/tests/test_beryl3d_profiles.py": [
       "rust/beryl3d/Cargo.toml"

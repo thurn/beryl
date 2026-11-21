@@ -133,7 +133,7 @@ fn verbs_play_in_one_beat_with_live_timings() {
         "stress-verbs",
         beryl_protocol::protocol::Side::You,
         kit_probe::agent::Layout::Desktop,
-        beryl_inspect::pages::DESKTOP_WINDOWS[0],
+        beryl_inspect::pages::Windows::Desktop.windows()[0].size,
     )
     .unwrap();
     let steps = page.timeline();
@@ -246,7 +246,7 @@ fn a_frame_of_every_verb_is_the_same_however_many_frames_came_before() {
             "stress-verbs",
             beryl_protocol::protocol::Side::You,
             kit_probe::agent::Layout::Desktop,
-            beryl_inspect::pages::DESKTOP_WINDOWS[0],
+            beryl_inspect::pages::Windows::Desktop.windows()[0].size,
         )
         .unwrap()
     };

@@ -31,6 +31,7 @@ const MS: u64 = 1_000_000;
 
 fn phone(width: f32, height: f32) -> Window {
     Window {
+        size_class: None,
         size: Size { width, height },
         scale: 3.0,
         safe_area: SAFE,
@@ -65,6 +66,7 @@ fn context(window: Window) -> Context {
         recording: "phone".to_owned(),
         seat: Side::You,
         layout: Layout::Phone,
+        checks: Layout::Phone.checks(&crate::test_data::data().profiles, window.size),
         size: window.size,
         safe_area: window.safe_area,
         at: 0,

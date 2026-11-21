@@ -30,6 +30,7 @@ fn rectangles(count: usize, size: Vec2) -> Vec<Item> {
 
 fn profiles() -> [(Camera, f32); 2] {
     let tall = Window {
+        size_class: None,
         size: Size {
             width: 393.0,
             height: 759.0,

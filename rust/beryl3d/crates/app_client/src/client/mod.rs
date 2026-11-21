@@ -212,15 +212,12 @@ struct Suggesting {
 impl Client {
     #[must_use]
     pub fn new(data: Arc<Data>, config: Config) -> Self {
+        let window = data.profiles.resolve_window(Window::default());
         Self {
             frame: Frame::with_capacity(config.elements, config.draws, config.name_bytes),
             inputs: Vec::new(),
-            window: Window::default(),
-            show: Show::new(Table::new(
-                data,
-                game_table::table::DESKTOP,
-                Window::default(),
-            )),
+            window,
+            show: Show::new(Table::new(data, game_table::table::DESKTOP, window)),
             layer: Layer::new(),
             counts: CountFloats::default(),
             piles: PileCounts::default(),
@@ -382,6 +379,7 @@ impl Client {
                 // A finger's gesture ends with the layout it began on.
                 self.cancel_touch();
                 self.resize(Window {
+                    size_class: None,
                     size,
                     scale,
                     safe_area,
@@ -555,6 +553,7 @@ impl Client {
 
     /// Lays the table and the flat layer out in a window of a new size, scale or safe area.
     fn resize(&mut self, window: Window) {
+        let window = self.data().profiles.resolve_window(window);
         self.end_gesture();
         self.scrolling.cancel();
         self.window = window;

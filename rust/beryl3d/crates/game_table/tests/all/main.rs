@@ -5,3 +5,4 @@ mod test_data;
 
 mod box_shadows;
 mod paints;
+mod profiles;

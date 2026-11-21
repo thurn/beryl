@@ -19,6 +19,7 @@ const YOUR_SECOND_TAPPED: [f32; 4] = [377.9, 570.0, 135.7, 92.5];
 #[test]
 fn desktop_cards_land_on_the_web_interfaces_boxes() {
     let window = Window {
+        size_class: None,
         size: Size {
             width: 1600.0,
             height: 900.0,
@@ -91,6 +92,7 @@ fn desktop_cards_land_on_the_web_interfaces_boxes() {
 #[test]
 fn a_blocker_stands_across_from_its_attacker() {
     let window = Window {
+        size_class: None,
         size: Size {
             width: 1600.0,
             height: 900.0,

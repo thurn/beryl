@@ -571,6 +571,7 @@ impl Page {
             recording: self.name.clone(),
             seat: self.seat,
             layout: self.layout,
+            checks: self.layout.checks(&self.client.data().profiles, self.size),
             size: self.size,
             safe_area: self.safe_area,
             at: self.now,

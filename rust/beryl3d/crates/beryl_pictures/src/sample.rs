@@ -471,6 +471,7 @@ impl Drawer {
     /// Draws `sample` (or its `mask` screen) at `scale` and returns its pixels and their size.
     fn draw(&mut self, sample: &Sample, scale: f32, mask: bool) -> (Vec<u8>, u32, u32) {
         let window = Window {
+            size_class: None,
             size: sample.window,
             scale,
             safe_area: Insets::default(),

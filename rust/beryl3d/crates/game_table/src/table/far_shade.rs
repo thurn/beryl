@@ -49,6 +49,7 @@ mod tests {
 
     fn window(width: f32, height: f32, scale: f32) -> Window {
         Window {
+            size_class: None,
             size: Size { width, height },
             scale,
             safe_area: Insets::default(),

@@ -482,6 +482,7 @@ fn context(test: &Test) -> Context {
         recording: test.recording.clone(),
         seat: test.seat,
         layout: test.layout(),
+        checks: pages::layout_checks(test.layout(), test.size),
         size: test.size,
         safe_area: pages::safe_area(test.layout()),
         at: 0,

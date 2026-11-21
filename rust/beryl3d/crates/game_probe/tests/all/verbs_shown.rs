@@ -132,6 +132,10 @@ fn context() -> Context {
         recording: "verbs-shown".to_owned(),
         seat: Side::You,
         layout: Layout::Desktop,
+        checks: Layout::Desktop.checks(
+            &crate::test_data::data().profiles,
+            kit_base::geometry::Size::default(),
+        ),
         size: Size {
             width: 1440.0,
             height: 900.0,

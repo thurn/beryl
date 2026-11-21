@@ -131,6 +131,7 @@ fn an_icon_button_is_44_points_square_and_passes_the_phone_sizes_check() {
     assert!((right - left - 44.0).abs() < 0.01 && (bottom - top - 44.0).abs() < 0.01);
     let phone = kit_probe::agent::Context {
         layout: Layout::Phone,
+        checks: Layout::Phone.checks(&crate::test_data::data().profiles, context().size),
         ..context()
     };
     assert_eq!(phone_sizes(&frame, &phone), Vec::new());
@@ -172,6 +173,7 @@ fn an_icon_button_in_an_inset_phone_window_stays_inside_the_safe_area() {
     };
     let phone = kit_probe::agent::Context {
         layout: Layout::Phone,
+        checks: Layout::Phone.checks(&crate::test_data::data().profiles, size),
         size,
         safe_area,
         ..context()
@@ -179,6 +181,7 @@ fn an_icon_button_in_an_inset_phone_window_stays_inside_the_safe_area() {
     let frame_of = |width: f32| {
         let mut layer = Layer::new();
         layer.resize(Window {
+            size_class: None,
             size,
             scale: 3.0,
             safe_area,

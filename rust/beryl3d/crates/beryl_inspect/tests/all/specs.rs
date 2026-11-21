@@ -1,7 +1,7 @@
 //! Every card spec moment opens from the seat it was recorded for and plays to its end.
 
 use app_client::driver::TICK;
-use beryl_inspect::pages::{self, DESKTOP_WINDOWS};
+use beryl_inspect::pages::{self, Windows};
 use beryl_inspect::runner::{caught, each};
 use beryl_inspect::{recordings, stress};
 use beryl_protocol::Seat;
@@ -33,7 +33,12 @@ fn play(name: &str, seat: Seat) -> Result<(), String> {
         Seat::P1 => Side::Opponent,
     };
     caught(|| {
-        let mut page = pages::page(name, side, Layout::Desktop, DESKTOP_WINDOWS[1])?;
+        let mut page = pages::page(
+            name,
+            side,
+            Layout::Desktop,
+            Windows::Desktop.windows()[1].size,
+        )?;
         for _ in 0..MOST_TICKS {
             if page.ended() {
                 return Ok(());

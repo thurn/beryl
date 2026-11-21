@@ -85,6 +85,7 @@ fn backdrop_panel(renderer: &mut Renderer, tier: Tier) -> Value {
         height: height as f32 / 2.0,
     };
     let window = Window {
+        size_class: None,
         size,
         scale: 2.0,
         safe_area: Insets::default(),

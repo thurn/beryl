@@ -162,6 +162,7 @@ fn player(text: &str) -> Player {
     let mut player = Player::new(
         &story,
         Window {
+            size_class: None,
             size: story.header.window,
             scale: 1.0,
             safe_area: Insets::default(),

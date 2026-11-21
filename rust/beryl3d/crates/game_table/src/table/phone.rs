@@ -39,8 +39,8 @@ use super::{
     CARD_HEIGHT, CARD_WIDTH, Camera, CameraData, DESKTOP, HandData, Layout, PlayerAnchor, RowArea,
     RowWindow, TraySpace, Window,
 };
-use kit_base::data::audit;
 use kit_base::data::space::layout::phone as data;
+use kit_base::data::{audit, profiles::Bands};
 use kit_base::pose::Pose;
 use kit_frame::frame::Place;
 use kit_scene::hit::CELL;
@@ -121,7 +121,7 @@ pub fn phone_bands(window: Window) -> Option<PhoneBands> {
 pub fn strip(window: Window, side: Side) -> Band {
     match side {
         Side::You => {
-            let bottom = window.size.height - hand_height(window);
+            let bottom = window.size.height - hand_height(window, BANDS);
             Band::between(bottom - data::bands::YOU_STRIP, bottom)
         }
         Side::Opponent => {
@@ -141,35 +141,46 @@ fn camera_data() -> CameraData {
     }
 }
 
+const BANDS: Bands = Bands {
+    side: data::bands::SIDE,
+    opponent_strip: data::bands::OPPONENT_STRIP,
+    you_strip: data::bands::YOU_STRIP,
+    hand_width: data::bands::HAND_WIDTH,
+    hand_share: data::bands::HAND_SHARE,
+    hand_shown: data::bands::HAND_SHOWN,
+    hand_top: data::bands::HAND_TOP,
+};
+
 /// The left and right edges of the column, inside the safe area and the side gutters.
-fn column(window: Window) -> (f32, f32) {
+fn column(window: Window, sizes: Bands) -> (f32, f32) {
     let inset = window.safe_area;
     (
-        inset.left + data::bands::SIDE,
-        window.size.width - inset.right - data::bands::SIDE,
+        inset.left + sizes.side,
+        window.size.width - inset.right - sizes.side,
     )
 }
 
-/// A hand card's width in a column `width` points wide: a quarter of it, and at most 100
-/// points (`handWidth`).
-fn hand_width(width: f32) -> f32 {
-    (width * data::bands::HAND_SHARE).min(data::bands::HAND_WIDTH)
+/// A hand card's width in the column.
+fn hand_width(width: f32, sizes: Bands) -> f32 {
+    (width * sizes.hand_share).min(sizes.hand_width)
 }
 
-/// The hand band's height: two thirds of a hand card and the bottom safe inset.
-fn hand_height(window: Window) -> f32 {
-    let (left, right) = column(window);
-    (hand_width(right - left) / RATIO * data::bands::HAND_SHOWN).round() + window.safe_area.bottom
+/// The hand band's height includes the bottom safe inset.
+fn hand_height(window: Window, sizes: Bands) -> f32 {
+    let (left, right) = column(window, sizes);
+    (hand_width(right - left, sizes) / RATIO * sizes.hand_shown).round() + window.safe_area.bottom
 }
 
-/// The part of `window` the battlefield fills, which the phone camera fits its required
-/// rectangle inside: the column, from the foot of the opponent's strip to the head of the
-/// viewer's.
+/// The part of `window` the battlefield fills.
 #[must_use]
 pub fn battlefield(window: Window) -> Rect {
-    let (left, right) = column(window);
-    let top = window.safe_area.top + data::bands::OPPONENT_STRIP;
-    let bottom = window.size.height - hand_height(window) - data::bands::YOU_STRIP;
+    battlefield_with(window, BANDS)
+}
+
+pub(crate) fn battlefield_with(window: Window, sizes: Bands) -> Rect {
+    let (left, right) = column(window, sizes);
+    let top = window.safe_area.top + sizes.opponent_strip;
+    let bottom = window.size.height - hand_height(window, sizes) - sizes.you_strip;
     Rect {
         x: left,
         y: top,
@@ -180,10 +191,19 @@ pub fn battlefield(window: Window) -> Rect {
 
 /// The bands, seen through `camera`, the phone camera fitted to its window.
 fn bands(camera: &Camera) -> PhoneBands {
+    bands_with(camera, BANDS, data::creatures::Y, data::lands::Y)
+}
+
+pub(crate) fn bands_with(
+    camera: &Camera,
+    sizes: Bands,
+    creatures_y: f32,
+    lands_y: f32,
+) -> PhoneBands {
     let window = camera.window;
     let field = camera.area;
     let on_screen = |y: f32| camera.to_screen(Vec3::new(0.0, y, 0.0)).y;
-    let (creatures, back) = (-data::creatures::Y, -data::lands::Y);
+    let (creatures, back) = (-creatures_y, -lands_y);
     let half = CARD_HEIGHT / 2.0;
     // Between the back row and the creatures' row, halfway between the near edge of the one and
     // the far edge of the other.
@@ -196,8 +216,8 @@ fn bands(camera: &Camera) -> PhoneBands {
         on_screen(-between),
         field.y + field.height,
     ];
-    let hand = hand_height(window);
-    let (left, right) = column(window);
+    let hand = hand_height(window, sizes);
+    let (left, right) = column(window, sizes);
     PhoneBands {
         opponent_strip: Band::between(window.safe_area.top, lines[0]),
         opponent_back: Band::between(lines[0], lines[1]),
@@ -375,7 +395,7 @@ fn hand_ceiling(camera: &Camera) -> f32 {
 /// in rows no higher than `ceiling` points from the window's top (`hand_ceiling`).
 fn your_hand(window: Window, bands: &PhoneBands, ceiling: f32) -> HandData {
     let width = bands.right - bands.left;
-    let wide = hand_width(width);
+    let wide = hand_width(width, BANDS);
     HandData {
         depth: data::hand::DEPTH,
         step_depth: data::hand::STEP_DEPTH,

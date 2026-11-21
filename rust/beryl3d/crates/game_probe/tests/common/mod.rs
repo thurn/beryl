@@ -18,6 +18,7 @@ pub const MS: u64 = 1_000_000;
 
 pub fn window(width: f32, height: f32) -> Window {
     Window {
+        size_class: None,
         size: Size { width, height },
         scale: 2.0,
         safe_area: Insets::default(),

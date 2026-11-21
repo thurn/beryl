@@ -157,14 +157,10 @@
     "frame_rate.up_frames",
     "frame_rate.up_frames_most",
     "frame_rate.lowest_hz",
-    "layout.desktop.tray.put_back.deck_backs",
-    "flat.phone.opening.per_row",
     "enhanced.probe.frames",
     "enhanced.particles.ash.count",
     "enhanced.particles.vortex.count",
-    "enhanced.bloom.taps",
-    "flat.gallery.desktop.library_layers",
-    "flat.gallery.desktop.graveyard_layers"
+    "enhanced.bloom.taps"
   ],
   "card": {
     "width": 63,
@@ -205,294 +201,6 @@
       ],
       "open_ms": 120,
       "opens_from": 0.85
-    }
-  },
-  "layout": {
-    "desktop": {
-      "camera": {
-        "pitch_degrees": 27.0,
-        "fov_degrees": 24.29,
-        "target": [
-          0,
-          -30,
-          0
-        ],
-        "required": [
-          [
-            -470,
-            -290
-          ],
-          [
-            470,
-            215
-          ]
-        ]
-      },
-      "least_back_zoom": 0.4,
-      "strip": 24,
-      "creatures": {
-        "y": -62,
-        "left": -400,
-        "right": 320
-      },
-      "lands": {
-        "y": -160,
-        "left": -400,
-        "right": -20
-      },
-      "others": {
-        "y": -160,
-        "left": 20,
-        "right": 320
-      },
-      "row_count_gap": 4,
-      "gap": 4,
-      "pile_step": [
-        4,
-        4
-      ],
-      "beneath_step": [
-        0.3,
-        0.17
-      ],
-      "piles": {
-        "you": {
-          "library": [
-            -0.905,
-            -0.8686
-          ],
-          "graveyard": [
-            -0.76125,
-            -0.8686
-          ],
-          "exile": [
-            -0.6175,
-            -0.8686
-          ],
-          "scale": 0.625
-        },
-        "opponent": {
-          "library": [
-            0.82875,
-            0.8967
-          ],
-          "graveyard": [
-            0.70875,
-            0.8967
-          ],
-          "exile": [
-            0.58875,
-            0.8967
-          ],
-          "scale": 0.6406
-        }
-      },
-      "tray": {
-        "stage_height": 900,
-        "y": 152,
-        "height": 420,
-        "half_most": 650,
-        "stack_side": 332,
-        "most": 200,
-        "least": 104,
-        "gap": 14,
-        "heading": 30,
-        "depth": 280,
-        "fan": {
-          "step": 0.42,
-          "turn": 8,
-          "drop": 0.08
-        },
-        "put_back": {
-          "cascade": 0.165,
-          "between": 0.5,
-          "step": 0.65,
-          "least_step": 0.25,
-          "turn": 7,
-          "drop": 0.1,
-          "column_turns": [-1.6, 1.4],
-          "library_rise": 0.05,
-          "deck_backs": 4,
-          "deck_offset": [-1.5, -2.5]
-        }
-      },
-      "inspector": {
-        "stage_height": 900,
-        "base_width": 1600,
-        "width": 330,
-        "top": 118,
-        "pad": 8,
-        "artist": 30,
-        "least_width": 230,
-        "narrow_step": 10,
-        "edge": 24,
-        "orbs_right": 940,
-        "between_top": 172,
-        "stack_left": 1284,
-        "stack_gap": 54
-      },
-      "web": {
-        "stage": {
-          "height": 900,
-          "base": 1600,
-          "least": 1440,
-          "most": 2134
-        },
-        "perspective": {
-          "distance": 1400,
-          "near_y": 760,
-          "depth_per_px": 0.6,
-          "vanishing_y": -4400
-        },
-        "room": {
-          "start": 76,
-          "end": 1160
-        },
-        "creature_width": 128,
-        "land_width": 100,
-        "land_gap": 12,
-        "tapped_gap": 44,
-        "permanent_gap": 0.1,
-        "advance": 16,
-        "zoom_least": 0.3,
-        "back_row_pull": 0.8,
-        "you": {
-          "back": 570,
-          "lands": 111,
-          "lands_end": 636,
-          "permanents": 408,
-          "others_x": 988,
-          "others_end": 1500,
-          "others_width": 92
-        },
-        "opponent": {
-          "back": 112,
-          "lands": 158,
-          "lands_end": 590,
-          "permanents": 235,
-          "others_x": 998,
-          "others_end": 1500,
-          "others_width": 110
-        },
-        "piles": {
-          "clearance": 4,
-          "most_thickness": 28,
-          "you": {
-            "width": 80,
-            "x": [36, 151, 266],
-            "y": 772,
-            "base": 13
-          },
-          "opponent": {
-            "width": 82,
-            "x": [1432, 1336, 1240],
-            "y": 8,
-            "spread_down": 0.65
-          }
-        }
-      }
-    },
-    "phone": {
-      "camera": {
-        "pitch_degrees": 10.0,
-        "fov_degrees": 24.29,
-        "target": [
-          0,
-          -42.36,
-          0
-        ],
-        "required": [
-          [
-            -152.1,
-            -205
-          ],
-          [
-            152.1,
-            205
-          ]
-        ]
-      },
-      "strip": 44,
-      "creatures": {
-        "y": -69,
-        "left": -152.1,
-        "right": 152.1
-      },
-      "lands": {
-        "y": -161,
-        "left": -152.1,
-        "right": -12
-      },
-      "others": {
-        "y": -161,
-        "left": 12,
-        "right": 152.1
-      },
-      "gap": 4,
-      "pile_step": [
-        3,
-        3
-      ],
-      "bands": {
-        "side": 8,
-        "opponent_strip": 48,
-        "you_strip": 60,
-        "hand_width": 100,
-        "hand_share": 0.25,
-        "hand_shown": 0.66,
-        "hand_top": 8
-      },
-      "piles": {
-        "you": {
-          "width": 48,
-          "x": [
-            32,
-            84,
-            136
-          ]
-        },
-        "opponent": {
-          "width": 40,
-          "x": [
-            28,
-            72,
-            116
-          ],
-          "below_safe": 30
-        }
-      },
-      "stack": {
-        "width": 68,
-        "step": 52,
-        "count_room": 32,
-        "depth": 400,
-        "step_depth": 1.5
-      },
-      "hand": {
-        "depth": 300,
-        "step_depth": 1.5,
-        "fan_radius": 14,
-        "gap": 4,
-        "bias_degrees": 0.6
-      },
-      "opponent_hand": {
-        "width": 24,
-        "step": 14,
-        "rise": -2,
-        "right": 56,
-        "room": 5,
-        "depth": 320,
-        "step_depth": 1.5,
-        "fan_radius": 36.217
-      },
-      "tray": {
-        "inset": 4,
-        "most": 104,
-        "least": 54,
-        "gap": 6,
-        "heading": 18,
-        "least_step": 52
-      }
     }
   },
   "revealed": {
@@ -693,38 +401,6 @@
       "taps": 4
     }
   },
-  "hand": {
-    "depth": 300,
-    "step_depth": 1.5,
-    "height": 0.28247,
-    "edge": -0.61444,
-    "fan_radius": 14,
-    "spacing": 0.94505,
-    "room": 3.34615,
-    "bias_degrees": 0.6
-  },
-  "opponent_hand": {
-    "depth": 320,
-    "step_depth": 1.5,
-    "height": 0.16296,
-    "edge": 0.90222,
-    "fan_radius": 36.217,
-    "spacing": 0.98095,
-    "room": 7.04762,
-    "bias_degrees": 0
-  },
-  "stack": {
-    "depth": 400,
-    "step_depth": 1.5,
-    "height": 0.31661,
-    "right": 0.24889,
-    "foot": -0.25778,
-    "top": 0.48,
-    "step": 0.08889,
-    "reach": 0.37778,
-    "lean": 1.2,
-    "spare": 1.25
-  },
   "shadow": {
     "light": [
       0.14,
@@ -744,74 +420,9 @@
     "tooltip_delay": 500,
     "tooltip_gap": 8,
     "menu_edge": 8,
-    "phone_under": 500,
     "sheet": {
       "max_width": 430,
       "preview_width": 144
-    },
-    "phone": {
-      "gutter": 16,
-      "column": 430,
-      "action_height": 48,
-      "action_gap": 8,
-      "action_text": 18,
-      "start": {
-        "corner": 56,
-        "gap": 8,
-        "agent_row": 56,
-        "agent_gap": 4,
-        "agent_padding_y": 8,
-        "agent_padding_x": 4,
-        "radio": 24,
-        "label": 13,
-        "agent_name": 16,
-        "about": 13,
-        "agents_least": 56,
-        "field": 44
-      },
-      "opening": {
-        "top": 88,
-        "coin": 64,
-        "coin_narrow": 56,
-        "narrow_below": 393,
-        "coin_line": 13,
-        "coin_gap": 8,
-        "title": 18,
-        "title_gap": 16,
-        "card_most": 90,
-        "card_most_narrow": 86,
-        "per_row": 4,
-        "gap": 8,
-        "slot_scale": 0.8,
-        "slots_gap": 16,
-        "slot_edge": 16,
-        "no_actions": 40
-      },
-      "game_over": {
-        "title": 36,
-        "reason": 16,
-        "reason_gap": 8,
-        "card": 160,
-        "card_narrow": 140,
-        "card_gap": 12,
-        "dock_width": 398
-      },
-      "bug": {
-        "tools_top": 8,
-        "tools_right": 8,
-        "hint_top": 14,
-        "hint_left": 12,
-        "hint": 13,
-        "padding_y": 12,
-        "padding_x": 16,
-        "radius": 12,
-        "gap": 8,
-        "title": 20,
-        "description_least": 76,
-        "description_most": 144,
-        "submit_width": 80
-      },
-      "list_row": 44
     },
     "gallery": {
       "width": 1380,
@@ -820,112 +431,7 @@
       "hand_card": 128,
       "prompt_width": 336,
       "scry_card": 154,
-      "scry_source": 184,
-      "desktop": {
-        "page": [1536, 1554],
-        "wordmark": [[627, 13], [365.9, 44]],
-        "subtitle": [[0, 60], [1536, 34]],
-        "wordmark_rules": [[189, 42], [1020, 42]],
-        "wordmark_rule": [327, 2],
-        "panels_at": [[16, 116], [503, 116], [1010, 116], [16, 523], [493, 523], [1000, 523], [16, 1022], [16, 1271], [16, 1400]],
-        "panels_size": [[473, 390], [491, 390], [509, 390], [464, 482], [491, 482], [519, 482], [1503, 232], [1503, 112], [1503, 137]],
-        "title_inset": 12,
-        "title_height": 42,
-        "title_padding": [57, 3],
-        "title_number": [[16, 5.6], [26, 28.8]],
-        "second_title_pull": 4,
-        "caption": [240, 20],
-        "chip": [[30, 61], [68, 68]],
-        "chip_step": 87.5,
-        "swatch_labels": [[37, 54.1], [124.7, 53.6], [210.8, 56.4], [298.7, 55.6], [384.6, 58.8]],
-        "swatch_name": [133, 39],
-        "swatch_line": 22,
-        "swatch_hex": [21, 18],
-        "serif_specimen": [[48, 184], [108.9, 56]],
-        "serif_caption": [[46, 247], [148.7, 22]],
-        "specimen_divider": [[222, 197], [2, 68]],
-        "sans_specimen": [[244, 196], [204.4, 30]],
-        "sans_caption": [[272, 243], [147.42, 22]],
-        "tabletop": [[28, 292], [205, 59]],
-        "tabletop_caption": [[77.7, 354], [105.6, 22]],
-        "metal_rules": [[263, 303.5], [263, 334.5]],
-        "metal_rule": [183, 2],
-        "metal_caption": [[290.6, 354], [133.8, 22]],
-        "done": [[66, 58], [243, 45]],
-        "view": [[70, 118], [239, 41]],
-        "pass": [[69, 172], [246, 45]],
-        "row_captions": [[344, 70], [344, 124], [344, 183]],
-        "row_caption_sizes": [[58.3, 22], [73.9, 22], [63.2, 22]],
-        "actions_rules": [[26, 237], [26, 304]],
-        "actions_rule": [433, 1],
-        "pill": [[109, 250], [278, 40]],
-        "pill_text": [[66, 8.5], [177.8, 20]],
-        "tracker": [[41, 315], [414, 54]],
-        "phase": [[20, 10], [32, 32]],
-        "phase_step": 85,
-        "orbs": [[0, 50], [141, 51]],
-        "orb": [201.3, 85.8],
-        "lives": [[82.9, 72.2], [226.4, 77.6]],
-        "life_sizes": [[36.1, 35.9], [30.9, 35.9]],
-        "orb_captions": [[98, 133], [238, 133]],
-        "zones_divider": [[306, 60], [2, 92]],
-        "badge": [[324, 70], [167.1, 42.8]],
-        "badge_text": [[62.9, 10.7], [88.1, 21.9]],
-        "zones_rule": [[0, 166], [506, 1]],
-        "library": [[22, 186], [119, 149.3]],
-        "library_card": [94, 131.3],
-        "library_depth": [25, 18],
-        "graveyard": [[171, 192.1], [112, 154.9]],
-        "graveyard_card": [98, 136.9],
-        "graveyard_depth": [14, 18],
-        "lands": [[336.5, 214.3], [347.9, 208.7], [359.4, 203.2]],
-        "land": [92.3, 120.1],
-        "land_count": [[396.5, 300], [45.8, 31.2]],
-        "pile_captions": [[92, 343], [237, 343], [407, 343]],
-        "face_inset": [0.0559, 0.0214],
-        "face_scale": [0.8883, 0.9107],
-        "face_radius": 0.03,
-        "states_cards": [[40, 55], [98, 200], [303, 200]],
-        "states_card": 82,
-        "tapped": [[204.1, 78.1], [97.8, 70]],
-        "untapped": [[354, 60], [70, 97.8]],
-        "states_captions": [[263, 176], [389, 176], [139, 325], [344, 325]],
-        "hand": [[54, 347], [168, 358], [274, 367]],
-        "hand_widths": [128, 124, 128],
-        "combatants": [[80, 66], [330, 60]],
-        "combatant": 80,
-        "combat_captions": [[122, 192], [370, 192]],
-        "combat_rule": [[0, 226], [488, 1]],
-        "stack_cards": [[44, 270], [360, 270]],
-        "stack_card": 78,
-        "ability": [[180, 241], [136, 172]],
-        "scry_backdrop": [[-38.5, 38.5], [560, 315]],
-        "scry_title": [[-2.3, 53.2], [350, 24.4]],
-        "scry_instruction": [[12.6, 82.6], [350, 9.6]],
-        "scry_zone": [[9.1, 108.3], [350, 163.8]],
-        "scry_backs": [[109.5, 110.3], [135.5, 111.9]],
-        "scry_back_sizes": [[94.5, 119.3], [86.1, 113.9]],
-        "scry_top": [[208.6, 119.9], [102.8, 138.6]],
-        "scry_bottom": [[57.8, 123.8], [124.5, 159.1]],
-        "scry_labels": [[19.4, 274.4], [327.7, 272.3]],
-        "scry_label_widths": [46, 21.6],
-        "scry_label_height": 11.6,
-        "scry_done": [[420.3, 306.3], [87.5, 16.8]],
-        "scry_view": [[415.1, 58.8], [87.5, 16.8]],
-        "scry_source": [[384.3, 108.5], [118.3, 165.2]],
-        "scry_captions": [[47.9, 379], [212.1, 379], [380.3, 379], [176.2, 407]],
-        "scry_caption_widths": [[108.3, 112.4], [87.7, 163.7]],
-        "prompt_columns": [143.7, 625, 1106.3],
-        "prompt_rows": [56, 114, 164],
-        "dock": [250, 48],
-        "stepper": [40, 8],
-        "stepper_field": 154,
-        "menu_buttons": [[162.2, 56], [622.6, 56], [1083, 56]],
-        "command_buttons": [[172.7, 56], [654, 56], [1135.3, 56]],
-        "corner_width": 254.8,
-        "library_layers": 20,
-        "graveyard_layers": 5
-      }
+      "scry_source": 184
     },
     "opening": {
       "top": 92,
@@ -957,9 +463,6 @@
         "top": 96,
         "height": 460
       },
-      "labels": {
-        "phone_overlap": 16
-      },
       "drop": {
         "opponent_hand": 0.0533,
         "rim": 2,
@@ -968,7 +471,6 @@
       "link": {
         "top": 158,
         "top_share": 0.18,
-        "phone_top": 8,
         "width": 520
       },
       "sweep": {
@@ -1020,37 +522,9 @@
       "padding_y": 3,
       "text": 20,
       "line": 1.1,
-      "lethal_glow_blur": 14,
-      "phone": {
-        "left": 22,
-        "top": -4,
-        "min_width": 26,
-        "padding_x": 5,
-        "padding_y": 1,
-        "text": 13
-      }
+      "lethal_glow_blur": 14
     },
     "banner": 2500,
-    "banner_gap": 12,
-    "log_left": 18,
-    "log_top": 262,
-    "log_button_top": 18,
-    "phone": {
-      "orb_scale": 0.5,
-      "button_height": 44,
-      "button_min_width": 84,
-      "button_text": 18,
-      "button_padding": 12,
-      "character_width": 0.55,
-      "overlap": 4,
-      "dock_gap": 6,
-      "asked_gap": 4,
-      "pill_text": 16,
-      "pill_padding": 10,
-      "revealed_width": 52,
-      "sheet_margin": 8,
-      "mana_right": 32,
-      "mana_width": 48
-    }
+    "banner_gap": 12
   }
 }

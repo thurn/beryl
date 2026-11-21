@@ -377,7 +377,8 @@ impl Options {
         }
         self.sized = true;
         // The layout and its safe area follow the window, as they do in `just b3d test`.
-        self.layout = Layout::for_size(self.size);
+        let data = crate::data::checkout_ref().map_err(Usage)?;
+        self.layout = Layout::for_size(&data.profiles, self.size);
         Ok(recording.to_owned())
     }
 }

@@ -302,6 +302,10 @@ fn two_notices_at_once_do_not_overlap() {
         recording: "notices".to_owned(),
         seat: Side::You,
         layout: Layout::Desktop,
+        checks: Layout::Desktop.checks(
+            &crate::test_data::data().profiles,
+            kit_base::geometry::Size::default(),
+        ),
         size: Size {
             width: WIDTH,
             height: HEIGHT,

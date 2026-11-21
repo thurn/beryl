@@ -8,6 +8,7 @@ use kit_ui::layout::Layer;
 
 fn frame(tier: Tier) -> Frame {
     let window = Window {
+        size_class: None,
         size: Size {
             width: 240.0,
             height: 160.0,

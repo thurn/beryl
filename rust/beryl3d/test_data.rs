@@ -2,7 +2,7 @@
 
 use std::sync::{Arc, OnceLock};
 
-use kit_base::data::Data;
+use kit_base::data::{Data, profiles};
 
 pub fn data() -> Arc<Data> {
     static DATA: OnceLock<Arc<Data>> = OnceLock::new();
@@ -11,6 +11,13 @@ pub fn data() -> Arc<Data> {
             beryl_test_files::read_to_string("data/beryl3d/space.json").expect("read space.json");
         let gates =
             beryl_test_files::read_to_string("data/beryl3d/gates.json").expect("read gates.json");
-        Arc::new(Data::parse(&space, &gates).expect("repository tuning"))
+        let files = profiles::FILES.map(|name| {
+            beryl_test_files::read_to_string(format!("data/beryl3d/{name}"))
+                .expect("read layout profile")
+        });
+        let contents = std::array::from_fn::<_, { profiles::FILES.len() }, _>(|index| {
+            (profiles::FILES[index], files[index].as_str())
+        });
+        Arc::new(Data::parse(&space, &gates, &contents).expect("repository tuning"))
     }))
 }

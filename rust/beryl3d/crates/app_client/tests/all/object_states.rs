@@ -166,6 +166,10 @@ fn the_board_passes_the_interface_checks() {
         recording: "object-states".to_owned(),
         seat: Side::You,
         layout: Layout::Desktop,
+        checks: Layout::Desktop.checks(
+            &crate::test_data::data().profiles,
+            kit_base::geometry::Size::default(),
+        ),
         size: Size {
             width: 1440.0,
             height: 900.0,

@@ -213,3 +213,24 @@ def test_protocol_literal_allowances_hold_exact_counts(tmp_path: Path) -> None:
     write(tmp_path, path, "")
     (stale,) = purity.protocol_literals(tmp_path)
     assert "dropped to 0 from 1" in stale
+
+
+def test_profile_words_count_identifier_parts_outside_profiles(tmp_path: Path) -> None:
+    base = "rust/beryl3d/crates"
+    write(
+        tmp_path,
+        f"{base}/game_table/src/layout.rs",
+        """
+        let phone_dock = DesktopMenu::PHONE;
+        let megaphone = "phone";
+        let phonebook = r#"desktop"#;
+        let r#phone = 0; // phone
+        /* desktop /* phone */ desktop */
+        """,
+    )
+    write(tmp_path, f"{base}/game_table/src/profiles/mod.rs", "let phone = 1;")
+    write(tmp_path, purity.LEVELS_FILE, '{"profile_words":{"game_table":4}}')
+    assert purity.profile_word_counts(tmp_path) == {"game_table": 4}
+    assert purity.profile_words(tmp_path) == []
+    write(tmp_path, f"{base}/game_table/src/feature.rs", "fn showPhone() {}")
+    assert "measured 5, above 4" in purity.profile_words(tmp_path)[0]

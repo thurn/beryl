@@ -4,6 +4,7 @@ use glam::Vec2;
 use serde::de::{DeserializeOwned, Error};
 use serde::{Deserialize, Deserializer};
 
+use super::profiles::Profiles;
 use super::verbs::Verbs;
 
 /// The tuning data supplied by a host. The client uses the typed values directly.
@@ -11,16 +12,21 @@ use super::verbs::Verbs;
 pub struct Data {
     pub verbs: Verbs,
     pub audit: Audit,
+    pub profiles: Profiles,
 }
 
 impl Data {
-    /// Parses `space.json` and the `audit` thresholds from `gates.json`.
+    /// Parses the spatial tuning, the interface thresholds and the layout profiles.
     /// Errors name the input file and the path to the offending value.
-    pub fn parse(space: &str, gates: &str) -> Result<Self, String> {
+    pub fn parse(space: &str, gates: &str, profiles: &[(&str, &str)]) -> Result<Self, String> {
         let Space { verbs } = read("space.json", space)?;
         let Gates { audit } = read("gates.json", gates)?;
         validate(&verbs).map_err(|(key, why)| format!("space.json: verbs.{key}: {why}"))?;
-        Ok(Self { verbs, audit })
+        Ok(Self {
+            verbs,
+            audit,
+            profiles: Profiles::parse(profiles)?,
+        })
     }
 }
 
@@ -40,12 +46,6 @@ struct Gates {
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Audit {
-    #[serde(deserialize_with = "positive")]
-    pub target_points: f32,
-    #[serde(deserialize_with = "positive")]
-    pub phone_target_points: f32,
-    #[serde(deserialize_with = "positive")]
-    pub phone_text_points: f32,
     #[serde(deserialize_with = "nonnegative")]
     pub line_end_points: f32,
     #[serde(deserialize_with = "nonnegative")]
@@ -64,7 +64,7 @@ pub struct Audit {
     pub crowded: f32,
 }
 
-fn read<T: DeserializeOwned>(file: &str, text: &str) -> Result<T, String> {
+pub(super) fn read<T: DeserializeOwned>(file: &str, text: &str) -> Result<T, String> {
     let mut json = serde_json::Deserializer::from_str(text);
     let data = serde_path_to_error::deserialize(&mut json).map_err(|error| {
         let path = error.path().to_string();

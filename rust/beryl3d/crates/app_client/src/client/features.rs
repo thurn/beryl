@@ -8,6 +8,7 @@ use app_screens::screens::settings::{self, SettingsSheet};
 use app_screens::screens::{Screen, Sheet};
 use app_screens::settings::ScreenSettings;
 use game_hud::hud::log::{self, GameLog, Logged};
+use game_table::profiles::Profile;
 use game_table::table::Window;
 use kit_scene::{Effect, Feature, FeatureSlot};
 use kit_ui::element::{Action, Element};
@@ -29,9 +30,10 @@ pub(super) enum Placement {
 
 /// App inputs available to mounts. Each feature receives only the inputs it reads.
 #[derive(Clone, Copy)]
-pub(super) struct ViewInputs {
+pub(super) struct ViewInputs<'a> {
     pub screen: Screen,
     pub window: Window,
+    pub profile: Profile<'a>,
     pub has_view: bool,
     pub game_over: bool,
     pub settings: ScreenSettings,
@@ -45,7 +47,7 @@ struct Registration {
     create: fn() -> Box<dyn Any>,
     state: for<'a> fn(&'a Slots, &'static str) -> &'a dyn Debug,
     route: fn(&mut Client, &'static str, &Action) -> Option<bool>,
-    view: for<'a> fn(&'a mut Features, &'static str, ViewInputs) -> Option<&'a Element>,
+    view: for<'a> fn(&'a mut Features, &'static str, ViewInputs<'_>) -> Option<&'a Element>,
 }
 
 impl Registration {
@@ -114,7 +116,7 @@ impl Features {
         Self::slot::<SettingsSheet>(&mut self.slots, SETTINGS).update(&settings::Message::Reset);
     }
 
-    pub fn view(&mut self, placement: Placement, inputs: ViewInputs) -> Option<Element> {
+    pub fn view(&mut self, placement: Placement, inputs: ViewInputs<'_>) -> Option<Element> {
         let entry = REGISTRY.iter().find(|entry| entry.placement == placement)?;
         (entry.view)(self, entry.id, inputs).cloned()
     }
@@ -145,7 +147,7 @@ trait Mounted: Feature + Sized + 'static {
     fn mounted_view<'a>(
         features: &'a mut Features,
         id: &'static str,
-        inputs: ViewInputs,
+        inputs: ViewInputs<'_>,
     ) -> Option<&'a Element>;
     fn command(client: &mut Client, command: Self::Command);
     fn request(client: &mut Client, request: Self::Request) -> bool;
@@ -170,7 +172,7 @@ impl Mounted for SettingsSheet {
     fn mounted_view<'a>(
         features: &'a mut Features,
         id: &'static str,
-        inputs: ViewInputs,
+        inputs: ViewInputs<'_>,
     ) -> Option<&'a Element> {
         Some(
             Features::slot::<Self>(&mut features.slots, id).view(settings::Inputs {
@@ -178,6 +180,7 @@ impl Mounted for SettingsSheet {
                 window: inputs.window,
                 settings: inputs.settings,
                 game_over: inputs.game_over,
+                layout: settings::Layout::new(inputs.profile),
             }),
         )
     }
@@ -209,7 +212,7 @@ impl Mounted for GameLog {
     fn mounted_view<'a>(
         features: &'a mut Features,
         id: &'static str,
-        inputs: ViewInputs,
+        inputs: ViewInputs<'_>,
     ) -> Option<&'a Element> {
         if !inputs.has_view {
             return None;

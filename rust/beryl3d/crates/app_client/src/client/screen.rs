@@ -43,6 +43,10 @@ impl Client {
             self.viewing.result_aside = false;
         }
         let feature_inputs = ViewInputs {
+            profile: game_table::profiles::Profile::for_window(
+                &self.show.table().data().profiles,
+                self.window,
+            ),
             screen: self.screen,
             window: self.window,
             has_view: view.is_some(),

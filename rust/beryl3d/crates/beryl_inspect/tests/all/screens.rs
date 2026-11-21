@@ -150,7 +150,10 @@ pub(crate) fn assert_shows(name: &str, entry: &serde_json::Value) {
                 height: 900.0,
             },
         ),
-        Some("phone") => (Layout::Phone, beryl_inspect::pages::PHONE_WINDOWS[0]),
+        Some("phone") => (
+            Layout::Phone,
+            beryl_inspect::pages::Windows::Phone.windows()[0].size,
+        ),
         Some(other) => panic!("{name}: `layout` is \"desktop\" or \"phone\", not {other:?}"),
     };
     let seat = match entry["seat"].as_str() {

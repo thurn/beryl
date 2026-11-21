@@ -269,9 +269,14 @@ project, and selects the main lanes.
   `kit_base::data::Data` to the client. `just b3d data` runs the same validation
   as the `b3d-data` source check.
 
-- `data/beryl3d/space-constants.json` holds the tuning that still compiles to
-  constants, including the camera and table layout, hand, stack, shadows,
-  pointer and HUD. The `kit_base` build script publishes them under
+- `data/beryl3d/profiles/` holds the layouts, including their window conditions,
+  the camera and container tuning, named slots, interface thresholds and test
+  windows. Hosts load them with the verb tuning. The build script generates the
+  old constants from these files for placement that still uses the previous
+  layout API.
+
+- `data/beryl3d/space-constants.json` holds the shared tuning that still
+  compiles to constants. The `kit_base` build script publishes it under
   `data::space`. An object becomes a module, a number an `f32` constant and an
   array of two or three numbers a `glam::Vec2` or `Vec3`. The top-level `counts`
   array names the numbers generated as `usize`.
@@ -279,9 +284,8 @@ project, and selects the main lanes.
 - `data/beryl3d/camera-fit.json`: cards measured in Arena's recordings, each a
   rectangle on a card's face (the art frame) with its four corners in pixels of
   a 1920 by 1080 frame. `just b3d camera-fit` solves the desktop camera's pitch
-  and field of view from them, and `layout.desktop.camera` in
-  `space-constants.json` holds the result, which a tools test keeps equal to the
-  fit.
+  and field of view from them. The camera in `profiles/desktop.json` holds the
+  result, which a tools test keeps equal to the fit.
 
 - `data/beryl3d/timeline-parity.json`: `{"recordings": {"<name>/<seat>": n}}`,
   the number of steps of each recording and seat whose start or end, verb, case,

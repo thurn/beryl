@@ -29,6 +29,7 @@ fn picture(
     elements: impl IntoIterator<Item = Element>,
 ) -> (Picture, u32) {
     let window = Window {
+        size_class: None,
         size: Size {
             width: 200.0,
             height: 120.0,

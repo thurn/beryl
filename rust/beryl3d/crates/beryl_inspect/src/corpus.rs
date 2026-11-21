@@ -6,10 +6,9 @@ use std::path::PathBuf;
 
 use beryl_protocol::Seat;
 use game_probe::signature::{Measure, Signature};
-use game_table::table::Window;
 use serde_json::Value;
 
-use crate::pages::{Windows, safe_area};
+use crate::pages::Windows;
 use crate::{pack, recordings};
 
 /// The first recording of a signature and the number of recording names that share it.
@@ -64,15 +63,7 @@ fn fixtures() -> Result<BTreeSet<String>, String> {
 /// Groups pack entries by the ordered pair of signatures for their recorded seats. The pack
 /// is sorted by name and seat, so insertion chooses the first name in each group.
 pub(crate) fn representatives() -> Result<Vec<Representative<'static>>, String> {
-    let windows: Vec<_> = Windows::All
-        .windows()
-        .into_iter()
-        .map(|window| Window {
-            size: window.size,
-            scale: window.scale,
-            safe_area: safe_area(kit_probe::agent::Layout::for_size(window.size)),
-        })
-        .collect();
+    let windows = Windows::All.windows();
     let mut measure = Measure::new(&windows);
     let mut groups = HashMap::<Vec<(Seat, Signature)>, Representative<'_>>::new();
     for entries in recordings::entries()?.chunk_by(|a, b| a.name == b.name) {
