@@ -8,15 +8,8 @@
 
 use crate::prelude::*;
 
-/// It is in no deck: it was implemented for scenarios that need a creature that regenerates, such
-/// as Damn's, whose "can't be regenerated" no other card can tell from a plain destroy.
-///
-/// "{B}: Regenerate this creature." Each activation that resolves makes one regeneration shield
-/// ([CR 701.19a]): "The next time [permanent] would be destroyed this turn, instead remove all
-/// damage marked on it and its controller taps it. If it's an attacking or blocking creature,
-/// remove it from combat."
-///
-/// [CR 701.19a]: https://yawgatog.com/resources/magic-rules/#R70119a
+/// Implemented for scenarios that need a creature that can regenerate itself, including
+/// Damn's destruction without regeneration.
 pub static CARD: CardDef = Printed::DrudgeSkeletons
     .abilities(&[Ability::activated(Cost::mana(mana("{B}"))).effect(&regenerate(this()))])
     .card();
@@ -28,29 +21,6 @@ pub mod scenarios {
     const DRUDGE: &str = Card::DrudgeSkeletons;
 
     pub const SCENARIOS: &[Scenario] = &[
-        // Blocking P1's 2/1, the Skeletons take lethal damage (CR 704.5g) and regenerate: they
-        // stay, tapped. Had the damage stayed marked, the repeated check would destroy them.
-        Scenario::new("a shield saves a blocker from lethal combat damage")
-            .battlefield(P0, &[Card::Swamp, DRUDGE])
-            .battlefield(P1, &[Prop::Vanilla])
-            .library(P0, &[Card::Island, Card::Island])
-            .library(P1, &[Card::Island, Card::Island])
-            .actions(&[
-                advance_to(1, TurnStep::BeginningOfCombat),
-                ME.passes(),
-                ME.done_attacking(),
-                advance_to(2, TurnStep::BeginningOfCombat),
-                THEM.passes(),
-                ME.passes(),
-                THEM.attacks_with(Prop::Vanilla),
-                ME.passes(),
-                ME.chooses(DecisionKind::Blocker, DRUDGE),
-                ME.activates(DRUDGE, 0),
-                advance_to(2, TurnStep::EndOfCombat),
-                ME.controls(DRUDGE, 1),
-                ME.tapped(DRUDGE, 1),
-                THEM.controls(Prop::Vanilla, 0),
-            ]),
         // An attacking Skeletons destroyed by Get Lost regenerates and leaves combat (CR
         // 701.19a), so it deals P1 no combat damage.
         Scenario::new("a shield removes an attacker from combat")

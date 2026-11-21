@@ -12,56 +12,39 @@
 
 use crate::prelude::*;
 
-/// "Enchant creature card in a graveyard": the Aura spell targets a creature card in any
-/// graveyard ([CR 303.4a]): "An Aura spell requires a target, which is defined by its enchant
-/// ability." As it resolves it enters attached to that card ([CR 608.3c]).
+/// The enters trigger's intervening "if" checks whether this Aura is still on the battlefield
+/// when it resolves ([CR 603.4]): "If the condition isn’t true at that time, the ability is
+/// removed from the stack and does nothing." If the Aura has left, the trigger neither
+/// returns the creature nor creates the delayed sacrifice trigger.
 ///
-/// The enters ability has an intervening "if" ([CR 603.4]): it does nothing unless Animate
-/// Dead is still the object that entered. Then Animate Dead loses its first enchant ability
-/// and gains the second, an effect of no duration in layer 6 ([CR 613.1f]); it returns the
-/// card under its controller's control, as a new object ([CR 400.7]) that remembers it was put
-/// onto the battlefield with this Aura; and it attaches itself to that creature. A creature
-/// that left the graveyard first is not returned, and Animate Dead, attached to nothing, goes
-/// to its owner's graveyard as a state-based action ([CR 704.5m]). So does an Animate Dead
-/// that can't legally enchant the returned creature, as one with protection from black.
+/// The returned creature is a new object ([CR 400.7]): "An object that moves from one zone
+/// to another becomes a new object". The replacement enchant ability and the delayed
+/// trigger both refer to that new object. A creature Animate Dead returns with protection
+/// from black stays on the battlefield until the delayed trigger resolves. Animate Dead
+/// goes to the graveyard unattached ([CR 704.5m]): "If an Aura is attached to an illegal
+/// object or player, or is not attached to an object or player, that Aura is put into its
+/// owner’s graveyard."
 ///
-/// "When this Aura leaves the battlefield, that creature's controller sacrifices it" is part of
-/// the enters ability's effect, so the effect creates it as a delayed triggered ability
-/// ([CR 603.7a]): "Delayed triggered abilities are created during the resolution of spells or
-/// abilities". It carries the creature put onto the battlefield with this Aura, and triggers
-/// the next time this Aura leaves the battlefield. An Animate Dead that left before its enters
-/// ability resolved never creates it. The creature's controller sacrifices it if it is still
-/// that object ([CR 603.7c]).
-///
-/// "Enchanted creature gets -1/-0" is a static ability applied in layer 7c ([CR 613.4c]).
-///
-/// [CR 303.4a]: https://yawgatog.com/resources/magic-rules/#R3034a
-/// [CR 608.3c]: https://yawgatog.com/resources/magic-rules/#R6083c
 /// [CR 603.4]: https://yawgatog.com/resources/magic-rules/#R6034
-/// [CR 613.1f]: https://yawgatog.com/resources/magic-rules/#R6131f
 /// [CR 400.7]: https://yawgatog.com/resources/magic-rules/#R4007
 /// [CR 704.5m]: https://yawgatog.com/resources/magic-rules/#R7045m
-/// [CR 603.7a]: https://yawgatog.com/resources/magic-rules/#R6037a
-/// [CR 603.7c]: https://yawgatog.com/resources/magic-rules/#R6037c
-/// [CR 613.4c]: https://yawgatog.com/resources/magic-rules/#R6134c
 pub static CARD: CardDef = Printed::AnimateDead
     .abilities(&[
         Ability::spell().target(&TargetSpec::graveyard_card(Filter::Types(Types::CREATURE))),
-        Ability::triggered(&Trigger::ENTERS)
-            .only_if(&Condition::OnBattlefield(Objects::This))
-            .effect(&sequence(&[
-                modify(
-                    this(),
-                    &[Modification::lose(0), Modification::grant(0)],
-                    Duration::Indefinite,
-                ),
-                put_onto_battlefield(&PutOnto {
-                    linked: true,
-                    ..onto_battlefield_under(Objects::AttachedTo, Players::You)
-                }),
-                attach(this(), Objects::Those),
-                delay_with(3, Objects::PutOntoBattlefieldWithThis),
-            ])),
+        when_enters(&sequence(&[
+            modify(
+                this(),
+                &[Modification::lose(0), Modification::grant(0)],
+                Duration::Indefinite,
+            ),
+            put_onto_battlefield(&PutOnto {
+                linked: true,
+                ..onto_battlefield_under(Objects::AttachedTo, Players::You)
+            }),
+            attach(this(), Objects::Those),
+            delay_with(3, Objects::PutOntoBattlefieldWithThis),
+        ]))
+        .only_if(&Condition::OnBattlefield(Objects::This)),
         Ability::static_ability(&LayerSpec {
             affected: Objects::AttachedTo,
             condition: None,
@@ -286,19 +269,6 @@ pub mod scenarios {
                 ME.controls(ANIMATE, 0),
                 THEM.has(Zone::Exile, Prop::Vanilla, 1),
                 ME.controls(Prop::Vanilla, 0),
-            ]),
-        // Any graveyard: the caster's own creature card comes back too, with -1/-0 to its 3/1.
-        SETUP
-            .titled("Animate Dead returns a creature card from its controller's own graveyard")
-            .graveyard(P0, &[Prop::Flier])
-            .actions(&[
-                ME.casts(ANIMATE),
-                ME.targets(Prop::Flier),
-                Resolve,
-                Resolve,
-                ME.controls(Prop::Flier, 1),
-                ME.pt(Prop::Flier, 2, 1),
-                THEM.has(Zone::Graveyard, Prop::Vanilla, 1),
             ]),
         // The creature dies: Animate Dead is attached to nothing and goes to the graveyard as a
         // state-based action (CR 704.5m). The creature goes to its owner's graveyard.

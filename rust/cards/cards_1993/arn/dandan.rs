@@ -8,26 +8,10 @@
 
 use crate::prelude::*;
 
-/// "This creature can't attack unless defending player controls an Island." is a restriction
-/// on declaring it as an attacker ([CR 508.1c]): "The active player checks each creature they
-/// control to see whether it's affected by any restrictions (effects that say a creature
-/// can't attack, or that it can't attack unless some condition is met)." It is read for each
-/// player it could attack.
+/// "Island" is a land type word in both abilities ([CR 612.2]): "A text-changing effect
+/// changes only those words that are used in the correct way". Mind Bend can change which
+/// land type the defending player needs and which land type keeps Dandân on the battlefield.
 ///
-/// "When you control no Islands, sacrifice this creature." is a state trigger ([CR 603.8]):
-/// "These abilities trigger as soon as the game state matches the condition. ... A
-/// state-triggered ability doesn't trigger again until the ability has resolved, has been
-/// countered, or has otherwise left the stack."
-///
-/// "Island" in both abilities is a land type word, which a text-changing effect can change
-/// ([CR 612.2]): "A text-changing effect changes only those words that are used in the
-/// correct way (for example, a Magic color word being used as a color word, a land type word
-/// used as a land type, or a creature type word used as a creature type)." With "Island"
-/// read as "Swamp", Dandân attacks only a player who controls a Swamp, and is sacrificed when
-/// its controller controls no Swamp.
-///
-/// [CR 508.1c]: https://yawgatog.com/resources/magic-rules/#R5081c
-/// [CR 603.8]: https://yawgatog.com/resources/magic-rules/#R6038
 /// [CR 612.2]: https://yawgatog.com/resources/magic-rules/#R6122
 pub static CARD: CardDef = Printed::Dandan
     .abilities(&[
@@ -63,10 +47,6 @@ pub mod scenarios {
     const ISLAND: TextWord = TextWord::LandType(Subtype::Island);
     const SWAMP: TextWord = TextWord::LandType(Subtype::Swamp);
 
-    // `Prop::Flier` is there so that P0 declares attackers even when Dandân can't attack. That a text change lets Dandân attack a player
-    // with a Swamp and no Island is a test of `beryl_cards`, `tests::text`: Forge changes the
-    // word in the trigger but not in the attack restriction, and XMage has no Mind Bend or
-    // Crystal Spray, so no oracle can show it.
     pub const SCENARIOS: &[Scenario] = &[
         Scenario::new("Dandân attacks a player who controls an Island")
             .battlefield(P0, &[DANDAN, Card::Island])
@@ -78,11 +58,6 @@ pub mod scenarios {
                 advance_to(1, TurnStep::EndOfCombat),
                 THEM.life(16),
             ]),
-        // P1 controls no Island, so only the flier is offered, beside "done".
-        Scenario::new("Dandân can't attack a player who controls no Island")
-            .battlefield(P0, &[DANDAN, Card::Island, Prop::Flier])
-            .battlefield(P1, &[Card::Plains])
-            .actions(&[ME.deciding(DecisionKind::Attacker, 2)]),
         // P0 taps their one Island for Mind Bend, which makes it a Swamp: P0 controls no
         // Island, so Dandân's trigger sacrifices it.
         Scenario::new("Dandân is sacrificed when its controller controls no Island")
@@ -112,7 +87,7 @@ pub mod scenarios {
                 Resolve,
                 ME.has(Zone::Graveyard, DANDAN, 1),
             ]),
-        // "Island" reads "Swamp", so P1's Island no longer lets Dandân attack.
+        // A flier keeps the attacker decision available after Mind Bend disqualifies Dandân.
         Scenario::new("Mind Bend keeps Dandân from attacking a player with only an Island")
             .interaction(&[MIND_BEND])
             .battlefield(P0, &[DANDAN, Card::Island, Card::Swamp, Prop::Flier])

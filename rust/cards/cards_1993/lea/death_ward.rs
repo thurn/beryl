@@ -7,15 +7,8 @@
 
 use crate::prelude::*;
 
-/// It is in no deck: it was implemented for generated scenarios that need a regeneration shield
-/// on any creature, a land creature among them, so that a destroy effect's "can't be
-/// regenerated" is tested whether it destroys a creature or a land.
-///
-/// "Regenerate target creature." makes one regeneration shield ([CR 701.19a]): "The next time
-/// [permanent] would be destroyed this turn, instead remove all damage marked on it and its
-/// controller taps it. If it's an attacking or blocking creature, remove it from combat."
-///
-/// [CR 701.19a]: https://yawgatog.com/resources/magic-rules/#R70119a
+/// Implemented so destroy effects that prohibit regeneration can be tested on any creature,
+/// including a land creature.
 pub static CARD: CardDef = Printed::DeathWard
     .abilities(&[Ability::spell()
         .target(&TargetSpec::creature())

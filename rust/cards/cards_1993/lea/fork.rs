@@ -8,15 +8,10 @@
 
 use crate::prelude::*;
 
-/// "Copy target instant or sorcery spell, except that the copy is red. You may choose new targets
-/// for the copy." The copy has the spell's targets, X and costs paid, and is not cast
-/// ([CR 707.10]): "a copy of a spell isn't cast ... A copy of a spell or ability copies both the
-/// characteristics of the spell or ability and all decisions made for it, including modes,
-/// targets, the value of X, and additional or alternative costs." Its color is part of its
-/// copiable values ([CR 707.9b]): "Some copy effects modify a characteristic as part of the
-/// copying process."
+/// Fork makes red part of the spell copy's copiable values. A later copy of that spell
+/// is red unless another effect changes the copied color ([CR 707.9b]): "The final set of
+/// values for that characteristic becomes part of the copiable values of the copy."
 ///
-/// [CR 707.10]: https://yawgatog.com/resources/magic-rules/#R70710
 /// [CR 707.9b]: https://yawgatog.com/resources/magic-rules/#R7079b
 pub static CARD: CardDef = Printed::Fork
     .abilities(&[Ability::spell()
@@ -220,8 +215,8 @@ pub mod scenarios {
                 ME.has(Zone::Graveyard, FORK, 1),
                 ME.has(Zone::Graveyard, BOLT, 1),
             ]),
-        // A Fork can copy a Fork ([CR 707.10]): the copy of the first Fork is red, targets the
-        // Bolt, and when it resolves copies the Bolt again. Three Bolts in all.
+        // When Fork copies another Fork, the copy of the first Fork is red, targets the
+        // Bolt and copies that Bolt when it resolves. Three Bolts in all.
         Scenario::new("Fork copies a Fork")
             .interaction(&[BOLT])
             .battlefield(P0, &[MOUNTAIN, MOUNTAIN, MOUNTAIN, MOUNTAIN, MOUNTAIN])
