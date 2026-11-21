@@ -93,10 +93,9 @@ pub struct Position {
     pub graveyard_cards: [usize; 2],
     /// Bottom first.
     pub stack: Vec<StackItem>,
-    /// The card the topmost ability returns directly to the battlefield. Its own entry
-    /// replacement may ask a question while that ability resolves.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub returning: Option<&'static str>,
+    /// Whether the open decision chooses what an entering permanent copies.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub enter_as_copy: bool,
     /// At the question of a new target for a copy of a spell, the target the copy has now,
     /// which Beryl offers first ([CR 707.10c]): "The player may leave any number of the targets
     /// unchanged". An oracle asks whether to change it before it asks for the new one.
@@ -156,6 +155,9 @@ pub struct Forced {
     pub step: TurnStep,
     #[serde(serialize_with = "json::purpose")]
     pub purpose: Purpose,
+    /// Whether the forced answer declines an entry copy with no candidates.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub enter_as_copy: bool,
     /// The player the question belongs to, when the answer's player answers it for them
     /// ([`Position::decides_for`]).
     #[serde(

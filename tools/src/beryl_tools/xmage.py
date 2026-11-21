@@ -16,12 +16,9 @@ trace is what places each Beryl action as XMage commands:
   as Portable Hole's trigger. `Resolve`, and passing priority over a non-empty stack, let one object
   resolve (`resolveTop`). A command after the other player put something on an empty stack
   first passes priority (`passPriority`), or it would run before that.
-- Answers go to the answer queues in Beryl's order, with the questions of one answer that Beryl
-  answered without asking (the trace's `forced`): as plain answers where XMage always asks
-  them, as optional ones (`setOptionalChoice`) where it may not. Coin flips replay Beryl's
-  results, and mana payments replay the sources Beryl tapped. Where XMage asks a card's
-  questions differently, rules over the dump's description of each card the scenario names
-  (`card_facts.py`) translate them.
+- Answers, including forced ones, are queued in order. The trace identifies entry copy
+  choices directly. Card facts translate other questions that XMage asks differently.
+- Coin flips replay Beryl's results, and payments replay the sources Beryl tapped.
 - Assertions run inside `runCode` at their position, through XMage's `assert*` family where it
   states the same fact and `BerylScenarioTest`'s helpers otherwise. The exporter skips Beryl's
   decision assertions, assertions between priority points and Tapped assertions after a payment
@@ -215,6 +212,9 @@ class Exporter:
     def forced(self, answer: Json, p: Position) -> None:
         """A question with one answer that Beryl answered silently: queued like a scripted
         answer where XMage asks it too, optional where it may not."""
+        if answer.get("enter_as_copy"):
+            self.answer(answer, p, enter_as_copy=True)
+            return
         kind = answer["kind"]
         scrying = self.scry is not None and kind == "ChooseObject"
         asked = kind in FORCED_ASKED or answer.get("purpose") in FORCED_COSTS
@@ -339,7 +339,7 @@ class Exporter:
         elif kind == "Activate":
             self.activate(action, p)
         elif kind == "Answer":
-            self.answer(action, p)
+            self.answer(action, p, enter_as_copy=p.enter_as_copy)
         elif kind == "TurnFaceUp":
             self.turn_face_up(action, p)
         else:
@@ -533,7 +533,14 @@ class Exporter:
                 f"TestPlayer.NO_TARGET, {java_string(spell)});"
             )
 
-    def answer(self, action: Json, p: Position, of: str | None = None) -> None:
+    def answer(
+        self,
+        action: Json,
+        p: Position,
+        of: str | None = None,
+        *,
+        enter_as_copy: bool = False,
+    ) -> None:
         """Queues one answer's commands. `of` names what it answers where the stack at `p` no
         longer holds it, as for a forced answer of a spell that has since resolved."""
         if id(action) in self.taken:
@@ -543,6 +550,12 @@ class Exporter:
         pick = cast(Json, action["pick"])
         what = cast(str, pick["pick"])
         card = cast("str | None", pick.get("card"))
+        if enter_as_copy:
+            # XMage asks whether to copy, then which permanent.
+            self.emit(f"setChoice({who}, {'false' if card is None else 'true'});")
+            if card is not None:
+                self.emit(f"setChoice({who}, {java_string(p.object_name(card))});")
+            return
         # A forced answer says its own; a scripted one answers the decision open at `p`.
         bending = action.get("purpose", p.purpose) == "waterbend"
         source = of or (cast(str, p.stack[-1]["name"]) if p.stack else None)
@@ -571,19 +584,6 @@ class Exporter:
             if self.last_answer != (source, kind):
                 self.emit(f'setOptionalChoice({who}, {self.at(p)}, "No");')
         self.last_answer = (source, kind)
-        copy_source = p.returning or source
-        if (
-            kind == "ChooseUpTo"
-            and copy_source is not None
-            and self.cards.enters_as_copy(copy_source)
-        ):
-            # XMage asks whether to copy, then which permanent.
-            if card is None:
-                self.emit(f"setChoice({who}, false);")
-            else:
-                self.emit(f"setChoice({who}, true);")
-                self.emit(f"setChoice({who}, {java_string(p.object_name(card))});")
-            return
         if kind == "ChooseUpTo" and self.cards.hidden_pick(source):
             # XMage asks each player whether to put a card, then which, from the hand.
             if card is None:

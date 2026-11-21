@@ -40,6 +40,51 @@ pub mod scenarios {
     }
 
     pub const SCENARIOS: &[Scenario] = &[
+        // The Dragon returns the Gargantuan and the Sambar together. The opponent's flier
+        // is the only creature the Gargantuan can copy.
+        Scenario::new("a returning Gargantuan can only copy the creature already there")
+            .interaction(&[Card::WorldgorgerDragon, Card::GloriousAnthem, Card::GetLost])
+            .hand(P0, &[Card::WorldgorgerDragon])
+            .battlefield(
+                P0,
+                &[
+                    GARGANTUAN,
+                    Prop::Vanilla,
+                    Card::GloriousAnthem,
+                    Card::Mountain,
+                    Card::Mountain,
+                    Card::Mountain,
+                    Card::Mountain,
+                    Card::Mountain,
+                    Card::Mountain,
+                ],
+            )
+            .hand(P1, &[Card::GetLost, Card::GetLost])
+            .battlefield(
+                P1,
+                &[
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Plains,
+                    Prop::Flier,
+                ],
+            )
+            .actions(&[
+                ME.casts(Card::WorldgorgerDragon),
+                Resolve,
+                Resolve,
+                ME.has(Zone::Exile, Prop::Vanilla, 1),
+                ME.passes(),
+                THEM.casts(Card::GetLost),
+                THEM.targets(Card::WorldgorgerDragon),
+                Resolve,
+                Resolve,
+                ME.deciding(DecisionKind::ChooseUpTo, 2),
+                ME.picks_up_to(Prop::Flier),
+                ME.controls(Prop::Vanilla, 1),
+                ME.pt(Prop::Flier, 8, 8),
+            ]),
         // The Gargantuan enters as Beza, the Bounding Spring, a 7/7 for its exception, and
         // Beza's enters ability triggers for it
         // ([CR 707.5](https://yawgatog.com/resources/magic-rules/#R7075)), gaining P0 4 life.

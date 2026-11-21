@@ -1,6 +1,6 @@
 //! The facts about a position that a scenario's own assertions may leave out.
 
-use beryl_engine::card::{AbilityKind, Behavior, Effect, FaceIx, Objects, Subtypes, Types};
+use beryl_engine::card::{AbilityKind, FaceIx, Subtypes, Types};
 use beryl_engine::chosen::ANOTHER;
 use beryl_engine::state::Flag;
 use beryl_engine::{Choice, Decision, Seat, Slot, Step, Zone, ZoneKey};
@@ -243,19 +243,6 @@ impl Runner {
             spell: entry.spell().is_some(),
             controller: entry.controller(),
         })
-    }
-
-    /// The card a topmost delayed return carries, while it still refers to that object.
-    pub(super) fn returning_card(&self) -> Option<&'static str> {
-        let entry = self.s.stack().last()?;
-        let object = entry.info()?.object?;
-        let body = entry.ability_in(&self.t)?.body();
-        (self.s.is_current(object)
-            && matches!(
-                body,
-                Behavior::Data(Effect::ReturnToBattlefield(Objects::Carried))
-            ))
-        .then(|| self.name(object.slot))
     }
 
     /// The candidates of `d` that an action of the scenario vocabulary takes, each with that

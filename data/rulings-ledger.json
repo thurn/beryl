@@ -1021,7 +1021,9 @@
     {
       "published_at": "2017-03-14",
       "hash": "698f03743df2",
-      "untestable": "by-ptc7.2.17 tracks the Worldgorger Dragon scenario. Beryl and Forge pass, but the XMage exporter does not supply the yes/no choice for a copy entering during another card’s resolution."
+      "scenario": [
+        "a returning Image can only copy the creature already there"
+      ]
     },
     {
       "published_at": "2017-03-14",
@@ -1154,7 +1156,9 @@
     {
       "published_at": "2011-01-01",
       "hash": "a50ab10fdc34",
-      "untestable": "by-ptc7.2.17 tracks the Worldgorger Dragon scenario. Beryl and Forge pass, but the XMage exporter does not supply the yes/no choice for a copy entering during another card’s resolution."
+      "scenario": [
+        "a returning Gargantuan can only copy the creature already there"
+      ]
     },
     {
       "published_at": "2011-06-01",

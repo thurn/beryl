@@ -551,7 +551,12 @@ fn copy_to_enter<L: Layout>(
         options,
         Prompt::new(Purpose::Choose).most(1),
     );
-    let Some(Opt::Object(copied)) = d.candidates.option(answer(s, sink, &d)?) else {
+    let choice = answer(s, sink, &d).inspect_err(|_| {
+        if s.profile().stops == Stops::Forced {
+            sink.asking.mark_enter_as_copy();
+        }
+    })?;
+    let Some(Opt::Object(copied)) = d.candidates.option(choice) else {
         return Ok(None);
     };
     crate::coverage::hit(ability);

@@ -410,11 +410,9 @@ def test_untap_shortcut_is_optional_before_explicit_land_picks() -> None:
 
 def test_a_returning_cards_copy_choice_is_queued_for_xmage() -> None:
     copier = "Clever Impersonator"
-    ability: card_facts.Json = {"kind": "Replacement", "enters_as_copy": True}
     entry: card_facts.Json = {
         "setup": {"turn": 1, "active": 0, "step": "PrecombatMain"},
         "actions": [],
-        "cards": {copier: {"faces": [{"name": copier, "abilities": [ability]}]}},
     }
     export = xmage_java.Export(card=copier, scenario="returning copy", method="copy")
     writer = xmage.Exporter(entry, xmage_java.Faces.load(card_store.STORE), export)
@@ -425,21 +423,35 @@ def test_a_returning_cards_copy_choice_is_queued_for_xmage() -> None:
             "decider": 0,
             "kind": "ChooseUpTo",
             "purpose": "choose",
-            "stack": [{"name": "Flickerwisp"}],
-            "returning": copier,
+            "stack": [{"name": "Worldgorger Dragon", "spell": False}],
+            "enter_as_copy": True,
             "flips": [],
             "taps": [],
             "forced": [],
         }
     )
-    choice: card_facts.Json = {"player": 0, "kind": "ChooseUpTo"}
-    writer.answer(
-        choice | {"pick": {"pick": "Card", "card": "Leonin Scimitar"}}, position
+    choice: card_facts.Json = {"action": "Answer", "player": 0, "kind": "ChooseUpTo"}
+    writer.act(choice | {"pick": {"pick": "Card", "card": "Leonin Scimitar"}}, position)
+    writer.act(choice | {"pick": {"pick": "Done"}}, position)
+    writer.forced(
+        choice | {"pick": {"pick": "Done"}, "enter_as_copy": True},
+        xmage.Position.of(
+            {
+                "turn": 1,
+                "step": "End",
+                "decider": 0,
+                "kind": "Priority",
+                "stack": [],
+                "flips": [],
+                "taps": [],
+                "forced": [],
+            }
+        ),
     )
-    writer.answer(choice | {"pick": {"pick": "Done"}}, position)
     assert export.body == [
         "setChoice(playerA, true);",
         'setChoice(playerA, "Leonin Scimitar");',
+        "setChoice(playerA, false);",
         "setChoice(playerA, false);",
     ]
 

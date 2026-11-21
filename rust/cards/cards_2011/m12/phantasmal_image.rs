@@ -64,6 +64,52 @@ pub mod scenarios {
     ];
 
     pub const SCENARIOS: &[Scenario] = &[
+        // Glorious Anthem keeps the original 0/0 Image alive. When the Dragon returns it and
+        // the Sambar together, only the opponent's flier is already on the battlefield.
+        Scenario::new("a returning Image can only copy the creature already there")
+            .interaction(&[Card::WorldgorgerDragon, Card::GloriousAnthem, Card::GetLost])
+            .hand(P0, &[Card::WorldgorgerDragon])
+            .battlefield(
+                P0,
+                &[
+                    IMAGE,
+                    Prop::Vanilla,
+                    Card::GloriousAnthem,
+                    Card::Mountain,
+                    Card::Mountain,
+                    Card::Mountain,
+                    Card::Mountain,
+                    Card::Mountain,
+                    Card::Mountain,
+                ],
+            )
+            .hand(P1, &[Card::GetLost, Card::GetLost])
+            .battlefield(
+                P1,
+                &[
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Plains,
+                    Card::Plains,
+                    Prop::Flier,
+                ],
+            )
+            .actions(&[
+                ME.casts(Card::WorldgorgerDragon),
+                Resolve,
+                Resolve,
+                ME.has(Zone::Exile, Prop::Vanilla, 1),
+                ME.passes(),
+                THEM.casts(Card::GetLost),
+                THEM.targets(Card::WorldgorgerDragon),
+                Resolve,
+                Resolve,
+                ME.deciding(DecisionKind::ChooseUpTo, 2),
+                ME.picks_up_to(Prop::Flier),
+                ME.controls(Prop::Vanilla, 1),
+                ME.pt(Prop::Flier, 4, 2),
+                ME.has_subtype(Prop::Flier, Subtype::Illusion, true),
+            ]),
         // Ruling: "Any enters-the-battlefield abilities of the copied creature will trigger
         // when Phantasmal Image enters the battlefield." The Image enters as Beza, a 4/5, and
         // Beza's enters ability gains P0 4 life.

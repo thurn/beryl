@@ -45,8 +45,8 @@ class Position:
     mana: list[Json] = field(default_factory=list)
     # The cards in each seat's graveyard before the cast.
     graveyard_cards: list[int] | None = None
-    # The card a delayed ability on top of the stack returns directly to the battlefield.
-    returning: str | None = None
+    # The open decision chooses what an entering permanent copies.
+    enter_as_copy: bool = False
 
     def supported_castings(self, action: Json) -> int:
         """The casting options, if XMage can offer the cast before payment."""
@@ -152,5 +152,5 @@ class Position:
             creatures=cast(list[int], t.get("creatures", [1, 1])),
             kept=cast("Json | None", t.get("kept")),
             graveyard_cards=cast("list[int] | None", t.get("graveyard_cards")),
-            returning=cast("str | None", t.get("returning")),
+            enter_as_copy=cast(bool, t.get("enter_as_copy", False)),
         )

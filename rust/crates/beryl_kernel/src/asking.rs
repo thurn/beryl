@@ -35,6 +35,9 @@ pub struct Asking<L: Layout = Small> {
     /// the slot picked ([`crate::state::Resolving`], "Hidden picks"). It outlives
     /// [`Asking::end`], for the caller to read with [`Asking::take_hidden`].
     hidden: bool,
+    /// Whether an entry copy replacement paused the run. Scenario traces read this
+    /// after [`Asking::end`] to tell this choice apart from other optional picks.
+    enter_as_copy: bool,
 }
 
 impl<L: Layout> Asking<L> {
@@ -94,6 +97,17 @@ impl<L: Layout> Asking<L> {
     #[inline]
     pub fn take_hidden(&mut self) -> bool {
         core::mem::take(&mut self.hidden)
+    }
+
+    /// Marks the stop at a copy choice made as a permanent enters the battlefield.
+    pub fn mark_enter_as_copy(&mut self) {
+        debug_assert!(self.paused());
+        self.enter_as_copy = true;
+    }
+
+    /// Takes the marker for the stop just reached. The trace takes it at each decision.
+    pub fn take_enter_as_copy(&mut self) -> bool {
+        core::mem::take(&mut self.enter_as_copy)
     }
 
     /// Whether the run stopped at a question, so that the [`Full`] it returned is that stop

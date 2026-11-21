@@ -180,6 +180,8 @@ struct Runner {
     upcoming: Option<Action>,
     /// What `next` returned for the current state, or `None` after an `apply`.
     position: Option<Step>,
+    /// Whether the open decision is an entry copy choice, for [`trace`].
+    enter_as_copy: bool,
     /// The forced answers since the last position, for [`trace`].
     forced: Vec<Forced>,
     /// The permanents on the battlefield at the last position, by name: a tapped one that
@@ -197,6 +199,7 @@ impl Clone for Runner {
             x: Scratch::recording(),
             upcoming: self.upcoming,
             position: self.position,
+            enter_as_copy: self.enter_as_copy,
             forced: self.forced.clone(),
             permanents: self.permanents.clone(),
         }
@@ -217,6 +220,7 @@ impl Runner {
             x: Scratch::recording(),
             upcoming: None,
             position: None,
+            enter_as_copy: false,
             forced: Vec::new(),
             permanents: Vec::new(),
         })
@@ -251,6 +255,7 @@ impl Runner {
         });
         loop {
             let step = next(&mut self.s, &self.t, &mut self.x, &mut Replay);
+            self.enter_as_copy = self.x.events.asking.take_enter_as_copy();
             beryl_engine::check_references(&self.s, &self.t)
                 .map_err(|v| format!("the engine disagrees with a reference: {v:?}"))?;
             match step {
@@ -263,6 +268,7 @@ impl Runner {
                             turn: turn.number(),
                             step: turn.step(),
                             purpose: d.prompt.purpose,
+                            enter_as_copy: self.enter_as_copy,
                             decides_for: (d.player != d.decider).then_some(d.player),
                             answer: Action::answer(d.decider, d.kind, pick),
                         });
@@ -502,7 +508,7 @@ impl Runner {
                     .count()
             }),
             stack,
-            returning: self.returning_card(),
+            enter_as_copy: self.enter_as_copy,
             kept,
             flips,
             taps,
