@@ -1,12 +1,15 @@
 //! The disk loop sweeps leased trees that run nothing: their stale object files and replaced
-//! builds, and, when the trees stay over their limit with no free tree left, the whole build
-//! directories of the largest.
+//! builds. Current outputs are kept between commands unless the disk is below its emergency
+//! free-space floor.
 //!
 //! Other tests in this crate register running verbs from `tree-01` with no path, which the
 //! disk loop takes for a verb in this fixture's `tree-01` too, so these tests assert nothing
 //! that depends on `tree-01` being idle.
 
 use std::cell::Cell;
+
+use ignite_core::capacity::BYTES_PER_GB;
+use ignite_os::system::DiskSpace;
 
 use super::*;
 
@@ -64,49 +67,43 @@ fn state(trees: &Trees, tree: &str) -> String {
         .state
 }
 
-/// On jarvis every tree was leased and grew to 150 to 200 GB while the disk loop could clear
-/// nothing. With no free tree, the idle leased tree holding the most bytes is cleared, and only
-/// as many trees as bring the trees under the limit.
 #[test]
-fn with_every_tree_leased_the_largest_idle_one_is_cleared() {
-    let f = Fixture::new(3, 1);
-    let trees = all_leased(&f, &[MB, 3 * MB, 2 * MB]);
-    let total = sweep_to(&trees, None).before;
+fn over_budget_sweeps_keep_the_working_set_until_the_lease_ends() {
+    let f = Fixture::new(2, 1);
+    let trees = all_leased(&f, &[MB, 3 * MB]);
+    let tree = id("tree-02");
+    let path = trees.config().path(&tree);
+    let built = built_commit(&trees, tree.as_str());
+    let forgotten = f.builds.forgotten();
 
-    let report = sweep_to(&trees, Some(total - 5 * MB as u64 / 2));
+    for (cap, available_gb, source) in [
+        (Some(0), 120, DiskLimitSource::Cap),
+        (None, 75, DiskLimitSource::Disk),
+    ] {
+        let disk = DiskSpace {
+            total: 1_000 * BYTES_PER_GB,
+            available: available_gb * BYTES_PER_GB,
+        };
+        for _ in 0..2 {
+            let report = trees
+                .hold_disk_under(|used| TreeConfig::disk_budget(Some(disk), Some(used), cap))
+                .unwrap();
+            assert_eq!(report.limit_source, Some(source));
+            assert!(report.after > report.limit.unwrap(), "{report:?}");
+            assert!(report.cleared.is_empty(), "{report:?}");
+            assert!(report.incremental.is_empty(), "{report:?}");
+            assert!(report.reclaimed.is_empty(), "{report:?}");
+            assert!(path.join("out/big").exists());
+            assert_eq!(built_commit(&trees, tree.as_str()), built);
+            assert_eq!(f.builds.forgotten(), forgotten);
+        }
+    }
 
-    assert!(report.cleared.is_empty(), "{report:?}");
-    assert_eq!(report.reclaimed, [id("tree-02")], "{report:?}");
+    trees.release_unsaved(&tree, &f.tip(), None).unwrap();
+    let report = sweep_to(&trees, Some(2 * MB as u64));
+    assert_eq!(report.cleared, [tree], "{report:?}");
     assert!(report.after <= report.limit.unwrap(), "{report:?}");
-    let worktrees = f.repo.join(".worktrees");
-    assert!(!worktrees.join("tree-02/out").exists());
-    assert!(worktrees.join("tree-03/out/big").exists());
-    assert!(f.builds.forgotten().contains(&id("tree-02")));
-    // The tree stays leased, and no longer says it holds a build.
-    assert_eq!(state(&trees, "tree-02"), "leased");
-    assert_eq!(built_commit(&trees, "tree-02"), None);
-}
-
-/// A leased tree with a verb running from it is never swept.
-#[test]
-fn a_leased_tree_running_a_verb_is_left_alone() {
-    let f = Fixture::new(3, 1);
-    let trees = all_leased(&f, &[MB, 2 * MB, 3 * MB]);
-    let busy = crate::steps::global().begin(
-        crate::steps::Kind::Verb("check".to_owned()),
-        crate::steps::Work {
-            tree: Some(id("tree-03")),
-            tree_path: Some(trees.config().path(&id("tree-03"))),
-            ..crate::steps::Work::default()
-        },
-    );
-
-    let report = sweep_to(&trees, Some(1));
-    drop(busy);
-
-    assert!(report.reclaimed.contains(&id("tree-02")), "{report:?}");
-    assert!(!report.reclaimed.contains(&id("tree-03")), "{report:?}");
-    assert!(f.repo.join(".worktrees/tree-03/out/big").exists());
+    assert!(!path.join("out").exists());
 }
 
 /// Stale object files are deleted from leased trees in every round, whether or not the trees
@@ -168,35 +165,33 @@ fn below_the_floor_idle_leased_trees_are_cleared_once_no_free_tree_is_left() {
     assert_eq!(state(&trees, "tree-02"), "leased");
 }
 
-/// Over the limit with no free tree, idle leased trees lose their incremental caches first, and
-/// a tree is cleared whole only if that is not enough. On jarvis 39 of tree-05's 101 GB in
-/// `rust/target/debug` were incremental caches, which cost only a slower next compile.
 #[test]
-fn incremental_caches_go_before_any_leased_tree_is_cleared() {
+fn the_floor_pass_can_reclaim_incremental_caches_kept_by_budget_sweeps() {
     let f = Fixture::new(2, 1);
-    // The files are written after the leases, which seed one tree as a clone of another, so
-    // the trees share no blocks and hold about 6 MB, 4 MB of it incremental caches.
     let trees = all_leased(&f, &[0, 0]);
-    for tree in ["tree-01", "tree-02"] {
-        let profile = f.repo.join(".worktrees").join(tree).join("out/debug");
-        write(&profile, ".fingerprint/app-0a0a/bin-app", "");
-        write(&profile, "deps/app-0a0a", &"x".repeat(MB));
-        write(
-            &profile,
-            "incremental/app-1b1b/s-1/query-cache.bin",
-            &"x".repeat(2 * MB),
-        );
-    }
+    let profile = trees.config().path(&id("tree-02")).join("out/debug");
+    write(&profile, ".fingerprint/app-0a0a/bin-app", "");
+    write(&profile, "deps/app-0a0a", "build");
+    let incremental = "incremental/app-1b1b/s-1/query-cache.bin";
+    write(&profile, incremental, "cache");
 
-    let report = sweep_to(&trees, Some(9 * MB as u64 / 2));
+    let report = sweep_to(&trees, Some(0));
+    assert!(report.incremental.is_empty(), "{report:?}");
+    assert!(profile.join(incremental).is_file());
 
-    assert!(report.incremental.contains(&id("tree-02")), "{report:?}");
+    let report = trees
+        .free_disk(100, || {
+            Some(if profile.join(incremental).exists() {
+                10
+            } else {
+                100
+            })
+        })
+        .unwrap();
+    assert_eq!(report.incremental, [id("tree-02")], "{report:?}");
     assert!(report.reclaimed.is_empty(), "{report:?}");
-    assert!(report.after <= report.limit.unwrap(), "{report:?}");
-    let profile = f.repo.join(".worktrees/tree-02/out/debug");
     assert!(!profile.join("incremental").exists());
     assert!(profile.join("deps/app-0a0a").exists());
-    assert_eq!(state(&trees, "tree-02"), "leased");
 }
 
 /// On 2026-11-20 every tree was leased and running commands, and the disk stayed full while the

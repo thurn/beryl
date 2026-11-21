@@ -13,9 +13,8 @@
 //!
 //! Free trees are marked `resetting` while their files are deleted, so no lease can take one half
 //! swept, and each row is put back as it was afterwards, so the order of last use survives the
-//! sweep. Leased trees are swept too while nothing runs in them, and once no free tree is left to
-//! clear, lose their incremental caches and then, largest first, their whole build directories
-//! (`disk/leased.rs`).
+//! sweep. Idle leased trees are swept for obsolete files. Their current builds stay until
+//! release unless the filesystem is below its emergency floor (`disk/floor.rs`).
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
@@ -158,6 +157,12 @@ impl Trees {
         self.measure().total()
     }
 
+    pub(super) fn refresh_disk_usage(&self, stop: &dyn Fn() -> bool) {
+        if let Some(space) = self.measure_until(&Stop::new(stop)) {
+            usage::record(&self.inner.config.dir, space.total());
+        }
+    }
+
     /// The last fleet notice, from the same local database the heartbeat writes to.
     pub(crate) fn fleet_notice(&self) -> Option<ignite_core::fleet::FleetNotice> {
         crate::fleet_notice::read(&self.lock().db)
@@ -167,7 +172,7 @@ impl Trees {
         self.fleet_notice().and_then(|notice| notice.disk_cap_gb)
     }
 
-    /// Brings the trees under the volume's current budget if they are over it.
+    /// Reclaims unused outputs when the trees exceed the volume's current budget.
     ///
     /// Free trees are cleared in two passes, each in the order of last use. The first clears
     /// only trees whose deletion alone frees at least [`OWN_BYTES`]. A tree seeded from another
@@ -176,10 +181,9 @@ impl Trees {
     /// own can go instead. The second pass clears any free tree whose bytes would be freed if
     /// every free tree went, which takes the clones that only free trees share.
     ///
-    /// Leased trees that run nothing are swept of replaced builds as well. When the free trees
-    /// are all cleared and the trees are still over the limit, the idle leased trees lose their
-    /// incremental caches, and if the trees are over it still, those holding the most bytes of
-    /// their own are cleared whole (`disk/leased.rs`).
+    /// Leased trees that run nothing are swept of replaced builds as well. Keep their usable
+    /// outputs and incremental caches between commands so an oversized working set can
+    /// drain instead of repeatedly rebuilding. Handoffs account for the budget separately.
     ///
     /// `stop` is asked before each directory the sweep reads, and once it says yes the sweep
     /// returns at once with [`DiskReport::interrupted`] set. The disk loop asks whether the disk
@@ -277,20 +281,7 @@ impl Trees {
                 report.cleared.push(id);
             }
         }
-        if report.after > limit {
-            report.incremental = self.drop_incremental()?;
-            if !report.incremental.is_empty() {
-                let Some(measured) = self.measure_until(stop) else {
-                    return Ok(interrupted(report));
-                };
-                space = measured;
-                report.after = space.total();
-            }
-        }
-        if report.after > limit {
-            self.reclaim_leased(&mut space, limit, &mut report)?;
-        }
-        if !report.cleared.is_empty() || !report.reclaimed.is_empty() {
+        if !report.cleared.is_empty() {
             let Some(measured) = self.measure_until(stop) else {
                 return Ok(interrupted(report));
             };

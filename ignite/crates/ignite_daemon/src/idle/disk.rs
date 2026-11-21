@@ -88,7 +88,7 @@ impl Idle {
         Ok(Some(report))
     }
 
-    /// Brings the trees under their disk limit if they are over it, unless they were measured
+    /// Reclaims unused outputs if the trees are over their budget, unless they were measured
     /// less than [`DISK_EVERY`] ago. Returns the report of a measurement made, which is also
     /// printed when it deleted anything. Below the floor this is [`Idle::hold_floor`]. If the
     /// disk falls below the floor during the measurement, the measurement stops, the floor pass
@@ -151,7 +151,7 @@ fn log(report: &DiskReport, quiet: bool) {
                 .join(", ")
         };
         eprintln!(
-            "ignite: trees held under their disk limit: deleted {} stale object files \
+            "ignite: tree disk sweep deleted {} stale object files \
              ({:.1} GB), {} replaced builds, the incremental caches of {} idle leased trees \
              ({}), and the build directories of {} free trees ({}) and {} idle leased trees \
              ({}), freeing {:.1} GB more ({:.1} GB to {:.1} GB, limit {limit})",

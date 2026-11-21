@@ -3,7 +3,8 @@
 use rusqlite::Connection;
 use serde_json::{Value, json};
 
-use ignite_core::dispatch_pressure::DispatchPressure;
+use ignite_core::capacity::BYTES_PER_GIB;
+use ignite_core::dispatch_pressure::{DispatchPressure, TreeCap};
 use ignite_core::ids::TicketId;
 use ignite_store::hub;
 
@@ -76,6 +77,52 @@ fn a_pending_reservation_uses_its_warm_tree_and_a_cold_ticket_waits() {
         ask(&mut conn, "local_c", &pressure, 2.0)["ticket"],
         ids[1].as_str()
     );
+}
+
+#[test]
+fn work_waits_for_tree_budget_headroom_even_with_room_above_the_floor() {
+    for fleet_cap in [true, false] {
+        let mut conn = hub::open_in_memory().unwrap();
+        let ids = file(&mut conn, &[("first", &[], &[]), ("second", &[], &[])]);
+        for ticket in &ids {
+            classify(&conn, ticket, 1.0, "Edit `app/src/main.rs`");
+        }
+        let mut pressure = DispatchPressure {
+            free_gb: Some(if fleet_cap { 300 } else { 170 }),
+            disk_reserve_gib: Some(100),
+            tree_cap: fleet_cap.then_some(TreeCap {
+                limit_gb: 200,
+                used_bytes: 120 * BYTES_PER_GIB,
+            }),
+            ..DispatchPressure::default()
+        };
+        assert_eq!(
+            ask(&mut conn, "local_a", &pressure, 0.0)["ticket"],
+            ids[0].as_str()
+        );
+        let expected = if fleet_cap {
+            ("Fleet tree disk cap", 314)
+        } else {
+            ("automatic tree disk budget", 180)
+        };
+        for now in [1.0, 2.0] {
+            let waiting = ask(&mut conn, "local_b", &pressure, now);
+            assert!(
+                waiting["nothing"].as_str().unwrap().contains(expected.0),
+                "{waiting}"
+            );
+            assert_eq!(waiting["reclaim_to_gb"], expected.1, "{waiting}");
+        }
+        if let Some(cap) = &mut pressure.tree_cap {
+            cap.used_bytes = 106 * BYTES_PER_GIB;
+        } else {
+            pressure.free_gb = Some(180);
+        }
+        assert_eq!(
+            ask(&mut conn, "local_b", &pressure, 3.0)["ticket"],
+            ids[1].as_str()
+        );
+    }
 }
 
 #[test]

@@ -6,16 +6,12 @@
 //! was leased. A tree stays leased for as long as its ticket's session works, which is hours, and
 //! its builds grow all that time.
 //!
-//! So the disk loop also sweeps a leased tree whenever nothing runs in it: no verb was asked
+//! The disk loop also sweeps a leased tree whenever nothing runs in it: no verb was asked
 //! from it, no process has its working directory or executable inside it, and the build manager
 //! agreed to start no build there until the sweep ends ([`Builds::pause`]). It deletes replaced
-//! builds and stale object files there as in a free tree. When the trees are still over their
-//! limit with no free tree left to clear, it deletes the idle leased trees' incremental caches
-//! (`<target>/<profile>/incremental`, 39 of tree-05's 101 GB in `rust/target/debug`), which
-//! costs only a slower next compile of the crates the session changed. Only if that is not
-//! enough does it clear the whole build directories of the idle leased trees holding the most
-//! bytes of their own. The tree's next command then builds from scratch, which is slower than an
-//! incremental build but keeps the disk from filling.
+//! builds and stale object files there as in a free tree. Below the emergency free-space floor,
+//! it can also delete incremental caches and then whole build directories. Doing that every
+//! time the working set exceeded its budget forced the same lease to rebuild on its next command.
 //!
 //! [`Builds::pause`]: ignite_core::traits::Builds::pause
 
@@ -28,7 +24,7 @@ use ignite_os::occupants::Occupants as _;
 use ignite_store::local::{rows, trees as store};
 
 use super::super::{Trees, store_error};
-use super::{DiskReport, OWN_BYTES, Space, id_of, profile_dirs, remove};
+use super::{id_of, profile_dirs, remove};
 
 /// The folder of rustc's incremental caches in each profile directory of a Cargo target
 /// directory. Cargo rebuilds what is missing from it at the next compile, so it can be deleted
@@ -153,45 +149,6 @@ impl Trees {
             }
         }
         Ok(dropped)
-    }
-
-    /// Deletes the whole build directories of idle leased trees, those holding the most bytes of
-    /// their own first, until `report.after` is within `limit`. A tree whose deletion alone would
-    /// free less than [`OWN_BYTES`], or a hundredth of the limit where that is less, is passed
-    /// over: its files are clones of another tree's, and clearing it would cost its session a
-    /// cold build for almost nothing.
-    pub(super) fn reclaim_leased(
-        &self,
-        space: &mut Space,
-        limit: u64,
-        report: &mut DiskReport,
-    ) -> Result<()> {
-        let mut leased: Vec<(TreeId, u64)> = self
-            .leased_rows()?
-            .iter()
-            .map(id_of)
-            .collect::<Result<Vec<_>>>()?
-            .into_iter()
-            .map(|id| {
-                let own = space.freed_with(&id, &std::collections::HashSet::new());
-                (id, own)
-            })
-            .collect();
-        leased.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
-        let least = OWN_BYTES.min(limit / 100);
-        for (id, own) in leased {
-            if report.after <= limit {
-                break;
-            }
-            if own < least || own == 0 {
-                continue;
-            }
-            if self.clear_idle_leased(&id)? {
-                report.after = report.after.saturating_sub(space.clear(&id));
-                report.reclaimed.push(id);
-            }
-        }
-        Ok(())
     }
 
     /// Deletes the build directories of the leased tree `id` if nothing runs in it. Returns

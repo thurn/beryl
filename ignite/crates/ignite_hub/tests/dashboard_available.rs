@@ -4,7 +4,9 @@
 
 use rusqlite::Connection;
 
+use ignite_core::capacity::BYTES_PER_GIB;
 use ignite_core::config::Os;
+use ignite_core::dispatch_pressure::{DispatchPressure, TreeCap};
 use ignite_core::ids::{MachineId, SessionId};
 use ignite_core::protocol::hub::{IdleWorker, MachineFree};
 use ignite_core::time::Timestamp;
@@ -195,6 +197,35 @@ fn a_machine_whose_build_queue_is_backed_up_says_only_master_tickets_start() {
         "{card}"
     );
     assert!(!section(&body, "waiting").contains("Next on jarvis"));
+}
+
+#[test]
+fn the_available_page_shows_a_fleet_cap_and_accounts_for_earlier_tickets() {
+    let conn = seeded();
+    conn.execute_batch(
+        "UPDATE tickets SET cores = 1.0 WHERE id = 'e1.3';
+         INSERT INTO workers (machine, session, app, role, state, ticket) VALUES
+           ('m-j', 'local_idle2', 'claude', 'worker', 'idle', NULL);",
+    )
+    .unwrap();
+    let mut machine = free("m-j", &["local_idle", "local_idle2"], 3);
+    let asked = Timestamp::parse("2026-11-17T11:59:00.000Z").unwrap();
+    for (limit_gb, expected) in [
+        (90, "waits for the Fleet tree disk cap"),
+        (120, "behind 1 earlier ticket"),
+    ] {
+        machine.pressure = Some(DispatchPressure {
+            free_gb: Some(300),
+            tree_cap: Some(TreeCap {
+                limit_gb,
+                used_bytes: 10 * BYTES_PER_GIB,
+            }),
+            ..DispatchPressure::default()
+        });
+        machine_asks::record(&conn, &machine, "nothing", asked).unwrap();
+        let body = page(&conn, "/available");
+        assert!(body.contains(expected), "{expected}");
+    }
 }
 
 #[test]

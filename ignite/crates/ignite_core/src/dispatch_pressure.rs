@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use crate::admission::COMPILES_FROM_CORES;
+use crate::capacity::{BYTES_PER_GB, BYTES_PER_GIB};
 use crate::dispatch::{JUSTICIAR, ReadyTicket, TicketKind};
 use crate::ids::TicketId;
 use crate::time::Timestamp;
@@ -45,9 +46,13 @@ impl QueueRecovery {
 /// Capacity observed by the machine just before asking for another handoff.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DispatchPressure {
-    /// Actual free space on the filesystem holding the worktrees. Unknown space leaves only
-    /// the pacing and build-queue checks in force.
+    /// Actual free space on the filesystem holding the worktrees, in GiB.
     pub free_gb: Option<u64>,
+    /// Free space the automatic tree budget leaves outside the trees, rounded up to GiB.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub disk_reserve_gib: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tree_cap: Option<TreeCap>,
     /// Seconds until a healthy build queue can admit more build tickets.
     pub recovery_seconds: u32,
     /// The oldest wait for a ticket command at the time of the observation.
@@ -58,6 +63,14 @@ pub struct DispatchPressure {
     pub free_trees: Vec<Vec<String>>,
     /// Populated outputs in each leased worktree. An empty list describes a cold lease.
     pub leased: BTreeMap<TicketId, Vec<String>>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TreeCap {
+    /// Fleet caps use decimal GB.
+    pub limit_gb: u32,
+    /// Estimated allocated bytes in all managed build outputs.
+    pub used_bytes: u64,
 }
 
 /// Whether a build output directory is beside one of the ticket's files.
@@ -90,6 +103,7 @@ impl From<String> for HandoffWait {
 }
 
 /// The capacity left after counting tickets already reserved or running.
+#[derive(Clone)]
 pub struct Budget<'a> {
     pressure: &'a DispatchPressure,
     committed_gb: u64,
@@ -103,7 +117,7 @@ impl<'a> Budget<'a> {
     pub fn new(pressure: &'a DispatchPressure, now: Timestamp) -> Self {
         Self {
             pressure,
-            committed_gb: DISK_FLOOR_GB,
+            committed_gb: 0,
             free_trees: pressure.free_trees.iter().collect(),
             heavy: 0,
             latest_heavy: None,
@@ -167,13 +181,7 @@ impl<'a> Budget<'a> {
         self.committed_gb = self.committed_gb.saturating_add(growth);
     }
 
-    /// The first pressure condition keeping a ticket ready, for the pool status line.
-    pub fn blocked(&self, ticket: &ReadyTicket) -> Option<HandoffWait> {
-        if ticket.labels.iter().any(|label| label == JUSTICIAR) {
-            // Emergency work can restore space itself.
-            return None;
-        }
-        let heavy = Self::heavy(ticket.expected_cores, &ticket.files);
+    fn disk_wait(&self, ticket: &ReadyTicket, heavy: bool) -> Option<HandoffWait> {
         let growth = if !heavy {
             LIGHT_GROWTH_GB
         } else if ticket.expected_cores >= COMPILES_FROM_CORES
@@ -184,18 +192,71 @@ impl<'a> Budget<'a> {
             COLD_GROWTH_GB
         };
         let required = self.committed_gb.saturating_add(growth);
+        let floor_target = DISK_FLOOR_GB.saturating_add(required);
         if let Some(free) = self.pressure.free_gb
-            && free < required
+            && free < floor_target
         {
-            let room = free.saturating_sub(self.committed_gb);
+            let room = free.saturating_sub(DISK_FLOOR_GB.saturating_add(self.committed_gb));
             return Some(HandoffWait {
                 reason: format!(
                     "{} waits for disk space: {free} GB free, {room} GB available above the \
                      {DISK_FLOOR_GB} GB floor after active tickets, {growth} GB needed (rechecking each round)",
                     ticket.id
                 ),
-                reclaim_to_gb: Some(required),
+                reclaim_to_gb: Some(floor_target),
             });
+        }
+        if let Some(reserve) = self.pressure.disk_reserve_gib
+            && let Some(free) = self.pressure.free_gb
+            && free < reserve.saturating_add(required)
+        {
+            let room = free.saturating_sub(reserve.saturating_add(self.committed_gb));
+            return Some(HandoffWait {
+                reason: format!(
+                    "{} waits for the automatic tree disk budget: {room} GiB available after \
+                     the {reserve} GiB volume reserve and active tickets, {growth} GiB needed",
+                    ticket.id
+                ),
+                reclaim_to_gb: Some(reserve.saturating_add(required)),
+            });
+        }
+        if let Some(cap) = self.pressure.tree_cap {
+            let limit = u64::from(cap.limit_gb) * BYTES_PER_GB;
+            let projected = cap
+                .used_bytes
+                .saturating_add(required.saturating_mul(BYTES_PER_GIB));
+            if projected > limit {
+                let room = (limit.saturating_sub(cap.used_bytes) / BYTES_PER_GIB)
+                    .saturating_sub(self.committed_gb);
+                // Free-tree cleanup can create cap headroom as well as filesystem headroom.
+                // Skip it when even deleting every output would leave too little room.
+                let reclaim_to_gb = self
+                    .pressure
+                    .free_gb
+                    .filter(|_| required <= limit / BYTES_PER_GIB)
+                    .map(|free| free.saturating_add((projected - limit).div_ceil(BYTES_PER_GIB)));
+                return Some(HandoffWait {
+                    reason: format!(
+                        "{} waits for the Fleet tree disk cap: {room} GiB available after active \
+                         tickets, {growth} GiB needed under the {} GB cap",
+                        ticket.id, cap.limit_gb
+                    ),
+                    reclaim_to_gb,
+                });
+            }
+        }
+        None
+    }
+
+    /// The first pressure condition keeping a ticket ready, for the pool status line.
+    pub fn blocked(&self, ticket: &ReadyTicket) -> Option<HandoffWait> {
+        if ticket.labels.iter().any(|label| label == JUSTICIAR) {
+            // Emergency work can restore space itself.
+            return None;
+        }
+        let heavy = Self::heavy(ticket.expected_cores, &ticket.files);
+        if let Some(wait) = self.disk_wait(ticket, heavy) {
+            return Some(wait);
         }
         if ticket.kind == TicketKind::Regression {
             return None;

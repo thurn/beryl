@@ -86,6 +86,7 @@ struct Seat<'a> {
     start: MachineFree,
     free: MachineFree,
     ready: HashMap<TicketId, ReadyTicket>,
+    start_disk: Option<Budget<'a>>,
     disk: Option<Budget<'a>>,
     /// How many tickets the page has handed it.
     taken: u32,
@@ -154,18 +155,17 @@ pub fn available(conn: &Connection, now: Timestamp) -> Result<Available> {
         } else {
             0
         };
-        let summary = if asked.is_some() {
-            machine_summary(&free, &master_reason, held_now.cores.len(), pending)
-        } else {
-            format!(
-                "every worker is busy · {} held · has not asked for work, so its free trees and \
-                 cores are not known",
-                held_now.cores.len()
-            )
-        };
         page.machines.push(MachineReport {
             name: name.clone(),
-            summary,
+            summary: if asked.is_some() {
+                machine_summary(&free, &master_reason, held_now.cores.len(), pending)
+            } else {
+                format!(
+                    "every worker is busy · {} held · has not asked for work, so its free trees and \
+                     cores are not known",
+                    held_now.cores.len()
+                )
+            },
             asked: asked.clone(),
         });
         let checks_only = state == MachineState::ChecksOnly;
@@ -184,6 +184,7 @@ pub fn available(conn: &Connection, now: Timestamp) -> Result<Available> {
             start: free.clone(),
             free,
             ready: ready.into_iter().map(|t| (t.id.clone(), t)).collect(),
+            start_disk: held_now.disk.clone(),
             disk: held_now.disk,
             taken: 0,
             pending,
@@ -238,7 +239,7 @@ fn waiting(
     let epic_order = shares::epic_order(&demand);
     let mut waiting = Vec::new();
     for (ticket, stage) in dispatch::order(&ready, &epic_order, improvements) {
-        waiting.push(hand_out(seats, silent, ticket, stage));
+        waiting.push(hand_out(seats, silent, ticket, stage, now));
     }
     let listed: HashSet<&TicketId> = waiting.iter().map(|w| &w.id).collect();
     for ticket in &ready {
@@ -257,6 +258,7 @@ fn hand_out(
     silent: &[(String, String)],
     ticket: &ReadyTicket,
     stage: Stage,
+    now: Timestamp,
 ) -> Waiting {
     let mut next_on: Option<String> = None;
     let mut machines = Vec::new();
@@ -273,7 +275,7 @@ fn hand_out(
         };
         let said = match (reason, &next_on) {
             (None, None) => {
-                take(seat, mine);
+                take(seat, mine, now);
                 next_on = Some(seat.name.clone());
                 "next in line here".to_owned()
             }
@@ -330,7 +332,7 @@ fn hand_out(
 /// Why the machine cannot take the ticket, from dispatch's own tests and the disk budget.
 fn refusal(seat: &Seat, start: bool, ticket: &ReadyTicket) -> Option<String> {
     let free = if start { &seat.start } else { &seat.free };
-    let disk = seat.disk.as_ref();
+    let disk = if start { &seat.start_disk } else { &seat.disk };
     let blocker = if let Some(room) = &free.room {
         let pending = seat.pending + if start { 0 } else { seat.taken };
         dispatch::blocker_with(free, ticket, || {
@@ -351,13 +353,15 @@ fn refusal(seat: &Seat, start: bool, ticket: &ReadyTicket) -> Option<String> {
             }
         })
         .or_else(|| {
-            disk.and_then(|budget| budget.blocked(ticket)).map(|wait| {
-                let prefix = format!("{} ", ticket.id);
-                wait.reason
-                    .strip_prefix(&prefix)
-                    .unwrap_or(&wait.reason)
-                    .to_owned()
-            })
+            disk.as_ref()
+                .and_then(|budget| budget.blocked(ticket))
+                .map(|wait| {
+                    let prefix = format!("{} ", ticket.id);
+                    wait.reason
+                        .strip_prefix(&prefix)
+                        .unwrap_or(&wait.reason)
+                        .to_owned()
+                })
         })
 }
 
@@ -384,7 +388,7 @@ fn held_by_usage(
 
 /// Takes from the seat what handing it the ticket uses: the worker that would get it, a ticket
 /// tree and, unless it is a regression, its expected cores.
-fn take(seat: &mut Seat, ticket: &ReadyTicket) {
+fn take(seat: &mut Seat, ticket: &ReadyTicket, now: Timestamp) {
     let free = &seat.free;
     let chosen = free.idle_workers.iter().position(|w| {
         dispatch::suits(free, w, ticket) && usage::blocking_hold(seat.holds, w, ticket).is_none()
@@ -395,6 +399,9 @@ fn take(seat: &mut Seat, ticket: &ReadyTicket) {
     seat.free.free_ticket_trees = seat.free.free_ticket_trees.saturating_sub(1);
     if ticket.kind != TicketKind::Regression {
         seat.free.free_cores -= ticket.expected_cores;
+    }
+    if let Some(budget) = &mut seat.disk {
+        budget.hold(&ticket.id, ticket.expected_cores, &ticket.files, Some(now));
     }
     seat.taken += 1;
 }
