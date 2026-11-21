@@ -15,6 +15,7 @@ use ignite_core::ids::RecordId;
 use ignite_core::manifest::{Adapter, Family};
 use ignite_core::traits::RunResult;
 
+use super::execute::interrupted;
 use super::{Checks, Keyed, OpenTree, Reported, RunOptions, adapters};
 use crate::server::Context;
 
@@ -46,17 +47,22 @@ impl Checks {
                 chunks(fixed, &lengths, max)
             },
         );
+        let split = parts.len() > 1;
         let mut joined: Option<(Vec<Reported>, RunResult, Option<RecordId>)> = None;
         for part in parts {
             let (reported, result, record) =
                 self.run_family_once(ctx, tree, name, family, &checks[part], options);
+            let stopped = split && interrupted(&result);
             joined = Some(match joined {
                 None => (reported, result, record),
                 Some((mut all, before, first)) => {
                     all.extend(reported);
-                    (all, join(before, result), first.or(record))
+                    (all, join(before, result, stopped), first.or(record))
                 }
             });
+            if stopped {
+                break;
+            }
         }
         joined.unwrap_or_else(|| self.run_family_once(ctx, tree, name, family, checks, options))
     }
@@ -93,9 +99,9 @@ fn chunks(fixed: usize, lengths: &[usize], max: usize) -> Vec<Range<usize>> {
     parts
 }
 
-/// Two consecutive commands of one run as one: the first failing exit code, the output of the
-/// first command that failed, and their usage added up.
-fn join(first: RunResult, second: RunResult) -> RunResult {
+/// Two commands of one run as one, with their usage added up. An interrupted command's output
+/// takes precedence over the first failure so the caller can detect the cancellation.
+fn join(first: RunResult, second: RunResult, stopped: bool) -> RunResult {
     let failed = |r: &RunResult| r.hung || r.exit != Some(0);
     let first_failed = failed(&first);
     let usage = ignite_core::protocol::Usage {
@@ -109,8 +115,8 @@ fn join(first: RunResult, second: RunResult) -> RunResult {
             .map(|(a, b)| a + b),
         peak_mb: first.usage.peak_mb.max(second.usage.peak_mb),
     };
-    let hung = first.hung || second.hung;
-    if first_failed || !failed(&second) {
+    let hung = !stopped && (first.hung || second.hung);
+    if !stopped && (first_failed || !failed(&second)) {
         RunResult {
             usage,
             hung,

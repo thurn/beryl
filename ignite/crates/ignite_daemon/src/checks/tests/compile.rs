@@ -30,6 +30,45 @@ fn nextest_runs(world: &World) -> usize {
         .count()
 }
 
+#[test]
+fn a_stopped_nextest_run_neither_retries_nor_caches_a_failure() {
+    let world = nextest_world();
+    // The supervisor has ended the command. The verb has yet to see the stop request.
+    fs::write(world.dir.join("ended"), "").unwrap();
+    fs::write(
+        world.dir.join("result.json"),
+        serde_json::to_vec(&crate::supervise::ResultFile {
+            exit: Some(101),
+            output: world.dir.join("output.log"),
+            usage: Usage::default(),
+            hung: false,
+        })
+        .unwrap(),
+    )
+    .unwrap();
+    // Nextest reports a failed test for the process it cancelled with SIGTERM.
+    world.launcher.nextest_run.lock().unwrap().clear();
+    let cancelled = concat!(
+        "  Cancelling due to signal: 1 test still running\n",
+        r#"{"type":"test","event":"failed","name":"core::core$a","stdout":""}"#,
+        "\n",
+    );
+    world
+        .launcher
+        .nextest_failures
+        .lock()
+        .unwrap()
+        .push_back(cancelled.to_owned());
+
+    let run = run(&world, &["rs:core::a"]);
+
+    assert!(!run.passed());
+    assert_eq!(run.skipped, 1);
+    assert!(run.outcomes.is_empty());
+    assert_eq!(nextest_runs(&world), 1);
+    assert_eq!(cached(&world, "rs:core::a"), None);
+}
+
 /// The family `rs` needs the product `deps`, whose target directory is `out`.
 fn incremental(world: &World) -> PathBuf {
     let incremental = world.dir.join("out").join("debug").join("incremental");

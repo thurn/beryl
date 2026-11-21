@@ -21,10 +21,17 @@ use crate::build::repair;
 
 use super::{
     CheckRun, Checks, Failure, Final, Keyed, Listed, OpenTree, Reported, RunOptions, TRIES, Target,
-    adapters, base_env, failure, hang_limit_s, incomplete, path_text, units,
+    adapters, base_env, failure, hang_limit_s, incomplete, incomplete_message, path_text, units,
 };
 use crate::server::Context;
 use crate::supervise;
+
+/// A verb process can read the result before the daemon tells it the verb was stopped.
+/// The supervisor marks the run before sending SIGTERM, which nextest can report as failure.
+pub(super) fn interrupted(output: &RunResult) -> bool {
+    crate::steps::stop_requested()
+        || (output.exit != Some(0) && supervise::ResultFile::ended_from_outside(&output.output))
+}
 
 /// Whom a command's builds are for: its class, ticket and session.
 pub(super) fn build_for(options: &RunOptions) -> BuildFor {
@@ -35,10 +42,9 @@ pub(super) fn build_for(options: &RunOptions) -> BuildFor {
     }
 }
 
-/// Whether the landing gate's stop flag, if there is one, has been raised by a confirmed
-/// failure.
+/// Whether the verb was stopped or the landing gate found a confirmed failure.
 fn stopped(stop: Option<&AtomicBool>) -> bool {
-    stop.is_some_and(|stop| stop.load(Ordering::SeqCst))
+    crate::steps::stop_requested() || stop.is_some_and(|stop| stop.load(Ordering::SeqCst))
 }
 
 /// The variable that tells each check command its class, so a family can wait longer for a slow
@@ -197,6 +203,12 @@ impl Checks {
                 &mut repaired,
             );
             run.wall_s += output.usage.wall_s;
+            // When the verb is stopped, nextest reports the signalled test as failed. Leave
+            // this attempt unanswered, including any failures still waiting for confirmation.
+            if interrupted(&output) {
+                run.skipped += u32::try_from(pending.len()).unwrap_or(u32::MAX);
+                break;
+            }
             if !unbuilt && super::unstarted::looks_unstarted(&reported, &output, pending.len()) {
                 // The cause is gone by the time anyone looks, so the machine is described now.
                 let machine = super::unstarted::Machine::read(&tree.path);
@@ -759,27 +771,6 @@ fn output_tail(path: &Path) -> String {
 /// The two commands of a family, as pass times name them.
 pub(super) const LIST: &str = "list";
 pub(super) const RUN: &str = "run";
-
-/// What an incomplete check's failure says: why it gave up, with what the command said.
-fn incomplete_message(
-    reason: IncompleteReason,
-    said: Option<String>,
-    machine: &ignite_core::ids::MachineId,
-) -> String {
-    let why = match reason {
-        IncompleteReason::Unreported => format!("not reported after {TRIES} tries"),
-        IncompleteReason::CannotRun => format!("cannot run on {machine}"),
-        IncompleteReason::Hung => {
-            "hung: ended at its hang limit; its output lists the processes it left".to_owned()
-        }
-        IncompleteReason::BuildFailed => super::BUILD_FAILED.to_owned(),
-        IncompleteReason::InvalidEntry => "its manifest entry is invalid".to_owned(),
-    };
-    match said {
-        Some(said) => format!("{why}: {said}"),
-        None => why,
-    }
-}
 
 /// The cores a check command asks the scheduler for. A `list` command only prints what the
 /// family has, so it asks for one core and starts at once; a `run` command asks for the

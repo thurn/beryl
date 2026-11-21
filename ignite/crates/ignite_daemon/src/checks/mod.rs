@@ -693,6 +693,27 @@ fn incomplete(check: &CheckName, error: &Error) -> Failure {
     }
 }
 
+/// What an incomplete check's failure says: why it gave up, with what the command said.
+fn incomplete_message(
+    reason: IncompleteReason,
+    said: Option<String>,
+    machine: &ignite_core::ids::MachineId,
+) -> String {
+    let why = match reason {
+        IncompleteReason::Unreported => format!("not reported after {TRIES} tries"),
+        IncompleteReason::CannotRun => format!("cannot run on {machine}"),
+        IncompleteReason::Hung => {
+            "hung: ended at its hang limit; its output lists the processes it left".to_owned()
+        }
+        IncompleteReason::BuildFailed => BUILD_FAILED.to_owned(),
+        IncompleteReason::InvalidEntry => "its manifest entry is invalid".to_owned(),
+    };
+    match said {
+        Some(said) => format!("{why}: {said}"),
+        None => why,
+    }
+}
+
 /// The failure of a check whose manifest entry is invalid: its input patterns cannot be
 /// resolved, or its listing was refused.
 fn invalid_entry(check: &CheckName, error: &Error) -> Failure {
