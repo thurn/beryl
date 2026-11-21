@@ -88,17 +88,5 @@
     "card": "Snapcaster Mage",
     "scenario": "generated 4: use a casting permission from the graveyard from hand",
     "gap": "casting a spell with flashback"
-  },
-  {
-    "oracle": "forge",
-    "card": "Underworld Breach",
-    "scenario": "generated 8: cast a spell with granted escape on the battlefield",
-    "gap": "paying more than one casting option, or one not described"
-  },
-  {
-    "oracle": "forge",
-    "card": "Underworld Breach",
-    "scenario": "generated 9: cast a spell with granted escape on the battlefield",
-    "gap": "paying more than one casting option, or one not described"
   }
 ]

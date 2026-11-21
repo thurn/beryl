@@ -25,12 +25,16 @@ import forge.game.Match;
 import forge.game.card.Card;
 import forge.game.card.CardCollection;
 import forge.game.card.CardCollectionView;
+import forge.game.card.CardLists;
+import forge.game.card.CardPredicates;
 import forge.game.card.CounterEnumType;
 import forge.game.card.CounterType;
 import forge.game.combat.Combat;
 import forge.game.combat.CombatUtil;
 import forge.game.cost.Cost;
+import forge.game.cost.CostExile;
 import forge.game.cost.CostPartWithList;
+import forge.game.cost.PaymentDecision;
 import forge.game.keyword.Keyword;
 import forge.game.phase.PhaseHandler;
 import forge.game.phase.PhaseType;
@@ -58,6 +62,7 @@ import java.io.Reader;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -222,6 +227,9 @@ public final class BerylForgeHarness {
         String keywordCost;
         // The mana sources Beryl tapped to pay for the spell or ability being played, by name.
         JsonArray taps;
+        EscapePayment escapePayment;
+
+        record EscapePayment(JsonArray delve, ArrayDeque<JsonObject> exile) {}
 
         Run(JsonObject scenario) {
             this.scenario = scenario;
@@ -691,7 +699,9 @@ public final class BerylForgeHarness {
         SpellAbility cast(Player player, JsonObject step) {
             String name = step.get("card").getAsString();
             String cost = step.has("cost") ? step.get("cost").getAsString() : null;
-            Card card = find(player, name, ZoneType.Hand, ZoneType.Graveyard, ZoneType.Exile, ZoneType.Library);
+            boolean escape = "Escape".equals(cost);
+            Card card = escape ? find(player, name, ZoneType.Graveyard)
+                    : find(player, name, ZoneType.Hand, ZoneType.Graveyard, ZoneType.Exile, ZoneType.Library);
             SpellAbility chosen = null;
             SpellAbility plain = null;
             for (SpellAbility sa : card.getAllPossibleAbilities(player, true)) {
@@ -712,7 +722,7 @@ public final class BerylForgeHarness {
                     chosen = sa;
                 }
             }
-            if (chosen == null) {
+            if (chosen == null && !escape) {
                 chosen = plain; // with an optional cost, chosen on the spell itself below
             }
             if (chosen == null) {
@@ -728,6 +738,17 @@ public final class BerylForgeHarness {
             }
             chosen.setActivatingPlayer(player);
             prepare(player, chosen);
+            if (escape && step.has("exile-cost")) {
+                ArrayDeque<JsonObject> picks = new ArrayDeque<>();
+                step.getAsJsonArray("exile-cost").forEach(pick -> picks.add(pick.getAsJsonObject()));
+                Cost payment = chosen.getPayCosts().copy();
+                payment.getCostParts().replaceAll(part -> part instanceof CostExile exile
+                        && exile.getFrom().equals(List.of(ZoneType.Graveyard)) && exile.zoneRestriction == 1
+                        ? new ScriptedGraveyardExile(exile, picks) : part);
+                chosen.setPayCosts(payment);
+                JsonArray delve = step.has("delve") ? step.getAsJsonArray("delve") : new JsonArray();
+                escapePayment = new EscapePayment(delve, picks);
+            }
             return chosen;
         }
 
@@ -739,6 +760,37 @@ public final class BerylForgeHarness {
                 }
             }
             return picked;
+        }
+
+        /**
+         * Forge's AI chooses all cost cards before paying mana. Replay the scripted graveyard
+         * picks when this cost is paid, after Forge has exiled the cards used for delve.
+         */
+        private final class ScriptedGraveyardExile extends CostExile {
+            private final ArrayDeque<JsonObject> picks;
+
+            ScriptedGraveyardExile(CostExile cost, ArrayDeque<JsonObject> picks) {
+                super(cost.getAmount(), cost.getType(), cost.getTypeDescription(), ZoneType.Graveyard);
+                this.picks = picks;
+            }
+
+            @Override
+            public boolean payAsDecided(Player payer, PaymentDecision decision, SpellAbility ability, boolean effect) {
+                CardCollection candidates = CardLists.getValidCards(payer.getCardsIn(ZoneType.Graveyard),
+                        getType().split(";"), payer, ability.getHostCard(), ability);
+                candidates = CardLists.filter(candidates, CardPredicates.canExiledBy(ability, effect));
+                CardCollection chosen = new CardCollection();
+                for (int i = 0; i < getAbilityAmount(ability); i++) {
+                    JsonObject pick = picks.poll();
+                    if (pick == null) {
+                        throw new StepFailed("missing scripted pick for " + this);
+                    }
+                    Card card = (Card) resolvePick(pick, List.copyOf(candidates));
+                    candidates.remove(card);
+                    chosen.add(card);
+                }
+                return super.payAsDecided(payer, PaymentDecision.card(chosen), ability, effect);
+            }
         }
 
         /**
@@ -1290,9 +1342,17 @@ public final class BerylForgeHarness {
             }
             int before = getGame().getStack().size();
             // Targets are already chosen. The AI pays from the mana pool first, so the sources
-            // Beryl tapped go there; the AI pays the rest its own way.
-            floatTaps(sa);
-            boolean played = ComputerUtil.handlePlayingSpellAbility(player, sa, null);
+            // Beryl tapped go there before Forge pays the spell's costs.
+            boolean played;
+            try {
+                floatTaps(sa);
+                played = ComputerUtil.handlePlayingSpellAbility(player, sa, null);
+                if (played && run.escapePayment != null && !run.escapePayment.exile().isEmpty()) {
+                    throw new StepFailed("unused graveyard picks for " + sa);
+                }
+            } finally {
+                run.escapePayment = null;
+            }
             if (!played) {
                 throw new StepFailed("Forge did not play " + sa + " (stack " + before + ")");
             }
@@ -1799,6 +1859,20 @@ public final class BerylForgeHarness {
          */
         @Override
         public CardCollectionView chooseCardsToDelve(int genericAmount, CardCollection grave) {
+            if (run.escapePayment != null) {
+                JsonArray delve = run.escapePayment.delve();
+                if (delve.size() > genericAmount) {
+                    throw new StepFailed("too many scripted delve cards for " + genericAmount + " generic mana");
+                }
+                CardCollection remaining = new CardCollection(grave);
+                CardCollection picked = new CardCollection();
+                for (JsonElement pick : delve) {
+                    Card card = (Card) run.resolvePick(pick.getAsJsonObject(), List.copyOf(remaining));
+                    remaining.remove(card);
+                    picked.add(card);
+                }
+                return picked;
+            }
             List<Card> picked = pickMany(List.copyOf(grave), 0, genericAmount, "delve");
             return picked != null ? new CardCollection(picked) : super.chooseCardsToDelve(genericAmount, grave);
         }

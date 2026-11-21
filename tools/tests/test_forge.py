@@ -5,7 +5,7 @@ from typing import cast
 import pytest
 
 from beryl_tools import card_store, forge, paths
-from beryl_tools.card_facts import Cards, Unsupported
+from beryl_tools.card_facts import Cards, ESCAPE, Unsupported
 
 FIXTURE: Path = Path(__file__).parent / "fixtures" / "scenarios-forge.json"
 
@@ -167,6 +167,50 @@ def test_legend_rule_pick_precedes_the_trigger_target() -> None:
     assert legend_step["purpose"] == "legend-rule"
     assert legend_step["pick"] == legend["pick"]
     assert target_step["pick"] == target["pick"]
+
+
+def test_granted_escape_keeps_delve_and_exile_picks_on_the_cast() -> None:
+    entry = dumped()[0]
+    spell = {
+        "action": "Cast",
+        "player": 0,
+        "card": "Gurmag Angler",
+        "face": 0,
+        "costs": ESCAPE,
+    }
+    delve = {"pick": "Card", "card": "Swamp"}
+    exile = {"pick": "Card", "card": "Island"}
+    answer = {"action": "Answer", "kind": "ChooseObject", "player": 0}
+    entry["actions"] = [spell, {**answer, "pick": exile}, {"action": "Resolve"}]
+    entry["trace"] = [
+        {"kind": "Priority", "stack": [], "flips": [], "flashback": [spell["card"]]},
+        {
+            "kind": "ChooseObject",
+            "purpose": "exile-cost",
+            "flips": [],
+            "forced": [
+                {**answer, "kind": "ChooseUpTo", "purpose": "delve", "pick": delve}
+            ],
+        },
+        {
+            "kind": "Priority",
+            "flips": [],
+            "forced": [{**answer, "purpose": "exile-cost", "pick": exile}] * 2,
+        },
+    ]
+    scenarios, skipped = forge.export([entry], card_store.STORE)
+    assert skipped == []
+    assert steps(scenarios[0]) == [
+        {
+            "op": "cast",
+            "player": 0,
+            "card": "Gurmag Angler",
+            "cost": "Escape",
+            "delve": [delve],
+            "exile-cost": [exile] * 3,
+        },
+        {"op": "resolve"},
+    ]
 
 
 def test_scenarios_outside_the_vocabulary_are_unsupported() -> None:

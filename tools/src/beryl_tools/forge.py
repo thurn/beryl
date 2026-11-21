@@ -24,6 +24,7 @@ from . import card_store, cards, paths
 from .card_facts import (
     as_their_own,
     Cards,
+    ESCAPE,
     Unsupported,
     SYMBOLS,
     cost_text,
@@ -198,6 +199,8 @@ def casting_option(cards: Cards, card: str, costs: int) -> str:
     """The casting option a Cast's `costs` pays, as the text that names it in Forge: its
     keyword, which is an alternative cost's name and an optional cost's type there. The harness
     takes one option."""
+    if costs == ESCAPE:
+        return "Escape"
     options = [o for o in cards.casting(card) if costs == 1 << cast(int, o["bit"])]
     if not options:
         raise Unsupported("paying more than one casting option, or one not described")
@@ -458,6 +461,26 @@ def advance_to_snapshot(
     return advance_step(position)
 
 
+def record_escape_payment(
+    spell: JsonObject | None, answer: JsonObject, purpose: object
+) -> bool:
+    """Attach graveyard picks to the cast, since Forge collects them during payment."""
+    if (
+        spell is None
+        or answer.get("action") != "Answer"
+        or answer["player"] != spell["player"]
+        or purpose not in ("delve", "exile-cost")
+    ):
+        return False
+    pick = cast(JsonObject, answer["pick"])
+    if pick["pick"] == "Card":
+        picks = cast(list[JsonObject], spell.setdefault(str(purpose), []))
+        picks.append(pick)
+    elif purpose != "delve" or pick["pick"] != "Done":
+        raise Unsupported("an escape payment with a pick other than a card")
+    return True
+
+
 def export(
     entries: Sequence[JsonObject], store: Path
 ) -> tuple[list[JsonObject], list[JsonObject]]:
@@ -485,33 +508,33 @@ def export(
             ]
             setup = cast(JsonObject, entry["setup"])
             snapshot_advance = advance_to_snapshot(setup, actions, trace, snapshot)
+            escape_cast: JsonObject | None = None
             for i, action in enumerate(actions):
+                position = trace[i] if i < len(trace) else {}
                 # Include answers Beryl chose silently. Forge can offer more targets or
                 # choose a different X, and needs the final Done for each damage division.
-                if i < len(trace):
-                    steps.extend(
-                        cast(
-                            JsonObject,
-                            step(
-                                as_their_own(forced, forced.get("decides_for")),
-                                described,
-                                forced.get("purpose"),
-                            ),
-                        )
-                        for forced in cast(list[JsonObject], trace[i].get("forced", []))
-                        if forced["kind"] in ("Target", "X", "DamageDivision")
-                        or forced.get("purpose") == "legend-rule"
-                    )
-                flashback = (
-                    cast(list[str], trace[i].get("flashback", []))
-                    if i < len(trace)
-                    else []
-                )
-                if action["action"] == "Cast" and action["card"] in flashback:
+                for forced in cast(list[JsonObject], position.get("forced", [])):
+                    purpose = forced.get("purpose")
+                    answer = as_their_own(forced, forced.get("decides_for"))
+                    if record_escape_payment(escape_cast, answer, purpose):
+                        continue
+                    if forced["kind"] in ("Target", "X", "DamageDivision") or (
+                        purpose == "legend-rule"
+                    ):
+                        steps.append(cast(JsonObject, step(answer, described, purpose)))
+                if position.get("kind") == "Priority":
+                    escape_cast = None
+                flashback = cast(list[str], position.get("flashback", []))
+                if (
+                    action["action"] == "Cast"
+                    and action["costs"] != ESCAPE
+                    and action["card"] in flashback
+                ):
                     # The harness finds Forge's flashback spell but fails to play it.
                     raise Unsupported("casting a spell with flashback")
-                position = trace[i] if i < len(trace) else {}
                 purpose = position.get("purpose")
+                if record_escape_payment(escape_cast, action, purpose):
+                    continue
                 if (
                     action["action"] == "Answer"
                     and position.get("paying_objects")
@@ -541,6 +564,17 @@ def export(
                     or converted.get("kind") == "CastOffer"
                     and cast(JsonObject, converted["pick"])["pick"] == "Cast"
                 ):
+                    if converted.get("cost") == "Escape":
+                        graveyard = cast(
+                            "list[int] | None", position.get("graveyard_cards")
+                        )
+                        if graveyard and graveyard[cast(int, action["player"])] < 4:
+                            # Forge offers this mode only if there are already three other
+                            # cards in the graveyard, before a discard or sacrifice can add one.
+                            raise Unsupported(
+                                "escape that needs a card another cost puts in the graveyard"
+                            )
+                        escape_cast = converted
                     tapped = taps(action, actions, trace, i, described, lands)
                     if tapped:
                         destination = (
