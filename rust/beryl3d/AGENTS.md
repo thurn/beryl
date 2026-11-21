@@ -239,6 +239,22 @@ project, and selects the main lanes.
 
 ## Data files
 
+- `data/beryl3d/levels.json` records the client core's crates, their levels and
+  dependency order, and `cap_lines`, the default limit on Rust lines in each
+  crate's `src/`. Look for a natural seam before exceeding it. If there is none,
+  add a `cap_allowances` entry for the crate with its current `lines` and a
+  `reason` explaining which seams were considered. The levels report prints each
+  allowance and its reason. Raise an allowance by editing the file. `--update`
+  lowers it or removes it when the crate fits the default limit. During the
+  split, `modules` assigns each `beryl_scene/src` module to a crate by its most
+  specific file or directory prefix. `upward` counts the references from each
+  mapped prefix to modules assigned to higher crates. `protocol` counts the
+  lines that name `beryl_protocol` in each toolkit crate and in the legacy
+  modules assigned to it, so moving a module keeps its existing count.
+  `just b3d levels` lists the upward references with their locations, and
+  `--update` lowers the recorded counts after a removal. The `levels` step in
+  `b3d-source` verifies the counts, manifest dependencies and source line cap.
+
 - `data/beryl3d/space.json`: the table's spatial values, such as `verbs`,
   `catch_up`, `frame_rate`, `card`, `layout.desktop` (the desktop layout's
   camera, rows and piles), `layout.phone` (the phone layout's camera, rows,

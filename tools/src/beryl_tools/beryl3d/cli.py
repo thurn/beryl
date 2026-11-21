@@ -36,6 +36,7 @@ from . import (
     perf,
     phone,
     play,
+    purity,
     spec,
     stand_in,
     tiers,
@@ -369,6 +370,21 @@ OWN_COMMANDS: tuple[Command, ...] = (
         "draws up to 24 frames of a recording as a grid in one PNG, a line of text per frame",
     ),
     compare.COMMAND,
+    Command(
+        "levels",
+        "reports upward imports and toolkit protocol counts during the client core split",
+        (
+            ("just b3d levels", "list each upward import with its file and line"),
+            (
+                "just b3d levels --update",
+                "lower counts after removing imports or protocol names",
+            ),
+        ),
+        lambda args: purity.STEPS["levels"](*(["--update"] if args.update else [])),
+        lambda p: p.add_argument(
+            "--update", action="store_true", help="lower the recorded counts"
+        ),
+    ),
     Command(
         "timeline-parity",
         "holds the web interface's and Beryl 3D's timelines of every recording to each other",

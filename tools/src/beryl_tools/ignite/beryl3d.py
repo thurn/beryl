@@ -73,6 +73,7 @@ FRAME_COUNTS = "b3d-frame-counts:boards"
 # The source rules of tools/src/beryl_tools/beryl3d/purity.py, by check name.
 SOURCE_RULES: dict[str, Callable[[Path], list[str]]] = {
     "scene-purity": purity.scene_purity,
+    "levels": purity.levels,
     "lints-match": purity.lints_match,
     "data-names": purity.data_names,
     "scene-literals": purity.scene_literals,

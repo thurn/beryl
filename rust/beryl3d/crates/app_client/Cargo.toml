@@ -1,0 +1,26 @@
+[package]
+name = "app_client"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+kit_base.workspace = true
+kit_text.workspace = true
+kit_frame.workspace = true
+kit_ui.workspace = true
+kit_space.workspace = true
+kit_fx.workspace = true
+kit_scene.workspace = true
+kit_probe.workspace = true
+game_table.workspace = true
+game_play.workspace = true
+game_hud.workspace = true
+game_manual.workspace = true
+game_probe.workspace = true
+app_screens.workspace = true
+scaffold_web.workspace = true

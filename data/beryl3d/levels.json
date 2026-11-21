@@ -1,0 +1,147 @@
+{
+  "crates": {
+    "kit_base": {
+      "level": "toolkit",
+      "order": 0
+    },
+    "kit_text": {
+      "level": "toolkit",
+      "order": 1
+    },
+    "kit_frame": {
+      "level": "toolkit",
+      "order": 2
+    },
+    "kit_ui": {
+      "level": "toolkit",
+      "order": 3
+    },
+    "kit_space": {
+      "level": "toolkit",
+      "order": 4
+    },
+    "kit_fx": {
+      "level": "toolkit",
+      "order": 5
+    },
+    "kit_scene": {
+      "level": "toolkit",
+      "order": 6
+    },
+    "kit_probe": {
+      "level": "toolkit",
+      "order": 7
+    },
+    "game_table": {
+      "level": "game",
+      "order": 8
+    },
+    "game_play": {
+      "level": "game",
+      "order": 9
+    },
+    "game_hud": {
+      "level": "game",
+      "order": 10
+    },
+    "game_manual": {
+      "level": "game",
+      "order": 11
+    },
+    "game_probe": {
+      "level": "game",
+      "order": 12
+    },
+    "app_screens": {
+      "level": "app",
+      "order": 13
+    },
+    "app_client": {
+      "level": "app",
+      "order": 14
+    },
+    "scaffold_web": {
+      "level": "scaffold",
+      "order": 15
+    }
+  },
+  "cap_lines": 12000,
+  "cap_allowances": {},
+  "modules": {
+    "agent": "kit_probe",
+    "agent/hit.rs": "kit_scene",
+    "agent/steps.rs": "game_probe",
+    "art": "game_hud",
+    "beat": "game_play",
+    "client": "app_client",
+    "command": "app_client",
+    "data": "kit_base",
+    "driver": "game_probe",
+    "effects": "kit_fx",
+    "element": "kit_ui",
+    "faces": "game_table",
+    "frame": "kit_frame",
+    "hud": "game_hud",
+    "input": "kit_ui",
+    "inspect": "game_hud",
+    "layout": "kit_ui",
+    "light": "game_play",
+    "manual": "game_manual",
+    "motion": "kit_space",
+    "notice": "game_play",
+    "play": "game_play",
+    "pointer": "game_play",
+    "pose": "kit_base",
+    "probe": "game_probe",
+    "prompts": "game_hud",
+    "screens": "app_screens",
+    "screens/game.rs": "game_hud",
+    "screens/game_over.rs": "game_hud",
+    "screens/lobby.rs": "game_manual",
+    "screens/opening.rs": "game_hud",
+    "screens/table.rs": "game_manual",
+    "screens/table_entries.rs": "game_manual",
+    "screens/table_opening.rs": "game_manual",
+    "settings": "app_client",
+    "sound": "game_play",
+    "table": "game_table",
+    "testing": "game_probe",
+    "text": "kit_text",
+    "tokens": "kit_base",
+    "verbs": "game_play",
+    "widgets": "kit_ui"
+  },
+  "upward": {
+    "agent": 3,
+    "driver": 9,
+    "effects": 9,
+    "element": 6,
+    "frame": 21,
+    "hud": 8,
+    "input": 2,
+    "inspect": 7,
+    "layout": 13,
+    "light": 1,
+    "manual": 4,
+    "motion": 1,
+    "play": 11,
+    "pose": 2,
+    "prompts": 10,
+    "screens": 3,
+    "table": 13,
+    "text": 15,
+    "tokens": 7,
+    "verbs": 1,
+    "widgets": 2
+  },
+  "protocol": {
+    "kit_base": 0,
+    "kit_text": 0,
+    "kit_frame": 4,
+    "kit_ui": 10,
+    "kit_space": 1,
+    "kit_fx": 4,
+    "kit_scene": 0,
+    "kit_probe": 2
+  }
+}

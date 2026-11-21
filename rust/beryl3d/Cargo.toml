@@ -4,11 +4,70 @@
 # (`just b3d lane`) keeps the lint tables below equal to the main workspace's.
 [workspace]
 resolver = "3"
-members = ["crates/*"]
+members = [
+    "crates/beryl_3d",
+    "crates/beryl_assets",
+    "crates/beryl_host",
+    "crates/beryl_inspect",
+    "crates/beryl_pictures",
+    "crates/beryl_record",
+    "crates/beryl_render",
+    "crates/beryl_scene",
+    "crates/kit_base",
+    "crates/kit_text",
+    "crates/kit_frame",
+    "crates/kit_ui",
+    "crates/kit_space",
+    "crates/kit_fx",
+    "crates/kit_scene",
+    "crates/kit_probe",
+    "crates/game_table",
+    "crates/game_play",
+    "crates/game_hud",
+    "crates/game_manual",
+    "crates/game_probe",
+    "crates/app_screens",
+    "crates/app_client",
+    "crates/scaffold_web",
+]
 
 [workspace.package]
 edition = "2024"
 license = "Apache-2.0"
+
+[workspace.dependencies]
+# Ids, vectors, `Pose`, curves, design tokens, the data store.
+kit_base = { path = "crates/kit_base" }
+# Shaping, line breaking, glyph requests.
+kit_text = { path = "crates/kit_text" }
+# `Frame`, `Draw` and `Material`: everything a renderer reads.
+kit_frame = { path = "crates/kit_frame" }
+# Elements, styles, flexbox and grid layout, widgets, focus, text entry, transitions, scrolling.
+kit_ui = { path = "crates/kit_ui" }
+# Objects in table space, the camera, tracks, containers and the arrangement solver.
+kit_space = { path = "crates/kit_space" }
+# Effect primitives, the effect player, lines and outlines between nodes.
+kit_fx = { path = "crates/kit_fx" }
+# The one tree: nodes, relations, the solve order, paint order, hit testing, input routing, the `Feature` trait.
+kit_scene = { path = "crates/kit_scene" }
+# The tree printout, locators, actions, the interface checks, toolkit stories.
+kit_probe = { path = "crates/kit_probe" }
+# Each zone as a container, for each profile: rows, hands, the stack, piles, trays, badges.
+game_table = { path = "crates/game_table" }
+# Scripts compiled to tracks; verbs, beats, notices, sound cues, arrows and marks.
+game_play = { path = "crates/game_play" }
+# The game screen's features: prompts, life totals, the log, the inspector, the pile viewer, the opening hand, the result.
+game_hud = { path = "crates/game_hud" }
+# The manual table and its lobby.
+game_manual = { path = "crates/game_manual" }
+# Replaying recordings, table and feature stories, the checks that read scripts.
+game_probe = { path = "crates/game_probe" }
+# The screens with no game: start, settings, bug report, the story browser, testing.
+app_screens = { path = "crates/app_screens" }
+# `Client`: the feature registry, routing, session commands, settings.
+app_client = { path = "crates/app_client" }
+# Fitting rows and piles to the web interface's positions; deleted at the switch.
+scaffold_web = { path = "crates/scaffold_web" }
 
 [workspace.lints.rust]
 unsafe_code = "deny"
