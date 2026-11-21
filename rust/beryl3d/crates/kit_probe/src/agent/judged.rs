@@ -104,7 +104,7 @@ impl Judged {
         );
         // "Phone sizes" judges only the phone layout.
         if layout == Layout::Phone {
-            self.add(Rule::PhoneSizes, targets + frame.lines.len());
+            self.add(Rule::MinimumSizes, targets + frame.lines.len());
         }
         // "Clips fit" judges every frame's list of clip rectangles, entry 0 of which is no clip;
         // its elements are the rectangles the frame asked for.

@@ -6,7 +6,6 @@ use app_client::driver::{OPEN, Page, RECORDINGS, Recording};
 use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::protocol::Side;
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
-use kit_probe::agent::Layout;
 use kit_ui::input::Size;
 
 /// The names a tools build lists, as the host gives them.
@@ -43,7 +42,7 @@ fn start(names: Option<&[&str]>) -> Page {
         crate::test_data::data(),
         recording.into(),
         Side::You,
-        Layout::Desktop,
+        crate::REGULAR,
         size,
     )
     .unwrap();

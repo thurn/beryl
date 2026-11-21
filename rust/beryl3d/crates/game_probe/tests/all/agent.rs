@@ -5,8 +5,8 @@ use game_probe::agent::game_checks::check;
 use glam::Vec2;
 use kit_frame::frame::{ElementId, Frame, FrameBuilder, NameRef, Place, Resolved, Role, StateBits};
 use kit_probe::agent::checks::{
-    KeptArrow, blank_cards, duplicates, keep_arrows, lines_hold, named, on_screen, overlap,
-    phone_sizes, reachable,
+    KeptArrow, blank_cards, duplicates, keep_arrows, lines_hold, minimum_sizes, named, on_screen,
+    overlap, reachable,
 };
 use kit_probe::agent::locate::LocateError;
 use kit_probe::agent::text_overlap::text_overlap;
@@ -471,23 +471,23 @@ fn sized(width: f32, height: f32, text: f32) -> Frame {
 }
 
 #[test]
-fn a_44_point_button_and_11_point_text_pass_the_phone_sizes_and_one_point_less_fails() {
+fn a_44_point_button_and_11_point_text_pass_the_minimum_sizes_and_one_point_less_fails() {
     let context = inset_phone();
     let safe = sized(44.0, 44.0, 11.0);
     assert_eq!(summary(&on_screen(&safe, &context)), vec![]);
-    assert_eq!(summary(&phone_sizes(&safe, &context)), vec![]);
-    let fault = one(Rule::PhoneSizes, &["button \"Done\" #1"]);
+    assert_eq!(summary(&minimum_sizes(&safe, &context)), vec![]);
+    let fault = one(Rule::MinimumSizes, &["button \"Done\" #1"]);
     for (width, height, text) in [(43.0, 44.0, 11.0), (44.0, 43.0, 11.0), (44.0, 44.0, 10.0)] {
         let frame = sized(width, height, text);
         assert_eq!(
-            summary(&phone_sizes(&frame, &context)),
+            summary(&minimum_sizes(&frame, &context)),
             fault,
             "{width}x{height}, {text}-point text"
         );
     }
     // The desktop layout has no such limits.
     assert_eq!(
-        summary(&phone_sizes(&sized(30.0, 30.0, 9.0), &desktop())),
+        summary(&minimum_sizes(&sized(30.0, 30.0, 9.0), &desktop())),
         vec![]
     );
 }

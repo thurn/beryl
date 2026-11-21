@@ -12,8 +12,8 @@ use game_table::table::Window;
 use glam::Vec2;
 use kit_base::tokens::{color, gradient, size, type_style};
 use kit_frame::frame::{Frame, Material, RADIAL, Role, StateBits, Wake};
-use kit_probe::agent::checks::{on_screen, phone_sizes, reachable, text_fits};
-use kit_probe::agent::{Layout, Rule};
+use kit_probe::agent::Rule;
+use kit_probe::agent::checks::{minimum_sizes, on_screen, reachable, text_fits};
 use kit_ui::element::Action;
 use kit_ui::element::{Gradient, describe, row, text};
 use kit_ui::input::{IconCell, Insets, Key, KeyCode, KeyPhase, Modifiers, PointerPhase, Size};
@@ -111,7 +111,7 @@ fn a_label_too_long_for_its_button_shrinks_until_it_fits() {
 }
 
 #[test]
-fn an_icon_button_is_44_points_square_and_passes_the_phone_sizes_check() {
+fn an_icon_button_is_44_points_square_and_passes_the_minimum_sizes_check() {
     let mut layer = Layer::new();
     layer.icons_mut().add(
         0,
@@ -129,12 +129,12 @@ fn an_icon_button_is_44_points_square_and_passes_the_phone_sizes_check() {
     let gear = find(&frame, Role::Button, "Settings");
     let (left, top, right, bottom) = edges(&frame, gear);
     assert!((right - left - 44.0).abs() < 0.01 && (bottom - top - 44.0).abs() < 0.01);
-    let phone = kit_probe::agent::Context {
-        layout: Layout::Phone,
-        checks: Layout::Phone.checks(&crate::test_data::data().profiles, context().size),
+    let compact = kit_probe::agent::Context {
+        layout: crate::COMPACT,
+        checks: crate::COMPACT.checks(&crate::test_data::data().profiles, context().size),
         ..context()
     };
-    assert_eq!(phone_sizes(&frame, &phone), Vec::new());
+    assert_eq!(minimum_sizes(&frame, &compact), Vec::new());
     // The glyph is drawn 22 points square in the dim text color.
     let icon: Vec<_> = (frame.draws.iter())
         .filter(|draw| draw.material == Material::Icon as u8)
@@ -151,16 +151,16 @@ fn an_icon_button_is_44_points_square_and_passes_the_phone_sizes_check() {
         ),
     ));
     let frame = write_layer(&mut layer, true);
-    let faults = phone_sizes(&frame, &phone);
+    let faults = minimum_sizes(&frame, &compact);
     assert_eq!(faults.len(), 1);
-    assert_eq!(faults[0].rule, Rule::PhoneSizes);
+    assert_eq!(faults[0].rule, Rule::MinimumSizes);
 }
 
 /// In a phone window whose safe area differs on every side, the flat layer keeps an icon
 /// button inside the safe area, at the size a finger can press, so the checks given the same
 /// insets find nothing; narrowed to 43 points it fails "phone sizes" alone.
 #[test]
-fn an_icon_button_in_an_inset_phone_window_stays_inside_the_safe_area() {
+fn an_icon_button_in_an_inset_compact_window_stays_inside_the_safe_area() {
     let safe_area = Insets {
         top: 44.0,
         right: 20.0,
@@ -171,9 +171,9 @@ fn an_icon_button_in_an_inset_phone_window_stays_inside_the_safe_area() {
         width: 375.0,
         height: 647.0,
     };
-    let phone = kit_probe::agent::Context {
-        layout: Layout::Phone,
-        checks: Layout::Phone.checks(&crate::test_data::data().profiles, size),
+    let compact = kit_probe::agent::Context {
+        layout: crate::COMPACT,
+        checks: crate::COMPACT.checks(&crate::test_data::data().profiles, size),
         size,
         safe_area,
         ..context()
@@ -202,13 +202,13 @@ fn an_icon_button_in_an_inset_phone_window_stays_inside_the_safe_area() {
         left >= 12.0 && top >= 44.0 && right <= 355.0 && bottom <= 613.0,
         "the button is at {left},{top} to {right},{bottom}"
     );
-    assert_eq!(on_screen(&frame, &phone), Vec::new());
-    assert_eq!(phone_sizes(&frame, &phone), Vec::new());
+    assert_eq!(on_screen(&frame, &compact), Vec::new());
+    assert_eq!(minimum_sizes(&frame, &compact), Vec::new());
     let narrow = frame_of(43.0);
-    assert_eq!(on_screen(&narrow, &phone), Vec::new());
-    let faults = phone_sizes(&narrow, &phone);
+    assert_eq!(on_screen(&narrow, &compact), Vec::new());
+    let faults = minimum_sizes(&narrow, &compact);
     assert_eq!(faults.len(), 1, "{faults:?}");
-    assert_eq!(faults[0].rule, Rule::PhoneSizes);
+    assert_eq!(faults[0].rule, Rule::MinimumSizes);
 }
 
 #[test]

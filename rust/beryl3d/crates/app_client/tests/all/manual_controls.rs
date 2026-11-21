@@ -256,7 +256,7 @@ fn a_refused_counter_press_shakes_that_button_and_an_accepted_one_does_not() {
 }
 
 #[test]
-fn on_a_phone_the_mana_button_opens_a_sheet_that_adds_and_removes_mana() {
+fn on_a_compact_the_mana_button_opens_a_sheet_that_adds_and_removes_mana() {
     let view = table_view();
     let (mut client, frame) = client_in(&view, 393.0, 759.0);
     let names = |frame: &kit_frame::frame::Frame| {

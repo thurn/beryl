@@ -12,11 +12,9 @@ use crate::screens::ScreenPress;
 use beryl_protocol::protocol::Side;
 
 use super::ScreenIn;
-use kit_base::data::space::flat::phone;
 use kit_base::tokens::{color, size, space, type_style};
 use kit_frame::frame::Role;
 use kit_ui::element::{Align, Element, Justify, column, row, text};
-use kit_ui::widgets::screen::phone_screen;
 use kit_ui::widgets::{button, field, list, primary};
 
 /// The name of the field that narrows the list.
@@ -35,13 +33,19 @@ pub fn testing(input: &ScreenIn) -> Element {
     let mut state = input.fields.get(FILTER);
     "Find a card".clone_into(&mut state.placeholder);
     let query = state.text.to_lowercase();
-    let phone = input.window.phone();
+    let layout = input.profile.screen_column();
     let filter = field(FILTER, &state).grow(1.0);
     let rows = (input.recordings.iter())
         .enumerate()
         .filter(|(_, name)| name.to_lowercase().contains(&query))
-        .filter_map(|(index, name)| Some(recording_row(u16::try_from(index).ok()?, name, phone)));
-    if phone {
+        .filter_map(|(index, name)| {
+            Some(recording_row(
+                u16::try_from(index).ok()?,
+                name,
+                layout.map(|layout| layout.metrics.list_row),
+            ))
+        });
+    if let Some(layout) = layout {
         // One safe-area column: the title beside the seat toggle, the field under them as wide
         // as the column, then the list, whose long names break onto more lines.
         let header = row()
@@ -54,7 +58,7 @@ pub fn testing(input: &ScreenIn) -> Element {
             .child(seat_toggle(input.seat));
         let filter = filter
             .grow(0.0)
-            .height(phone::start::FIELD)
+            .height(layout.metrics.start.field)
             .align_self(Align::Stretch)
             .shrink(0.0);
         let content = column()
@@ -63,13 +67,9 @@ pub fn testing(input: &ScreenIn) -> Element {
             .child(header)
             .child(filter)
             .child(list(RECORDINGS, rows).grow(1.0).basis(0.0));
-        return phone_screen(
-            "testing",
-            input.window.size,
-            input.window.safe_area,
-            content,
-        )
-        .background(color::SURFACE);
+        return layout
+            .scrolling("testing", input.window, content)
+            .background(color::SURFACE);
     }
     let header = row()
         .name("header")
@@ -104,12 +104,8 @@ fn seat_toggle(seat: Side) -> Element {
 
 /// The row of the `index`th recording, named `name`, which replays it when pressed.
 /// On a phone the row is a touch target's height at the least.
-fn recording_row(index: u16, name: &str, phone: bool) -> Element {
-    let least = if phone {
-        phone::LIST_ROW
-    } else {
-        size::MENU_ROW_HEIGHT
-    };
+fn recording_row(index: u16, name: &str, minimum: Option<f32>) -> Element {
+    let least = minimum.unwrap_or(size::MENU_ROW_HEIGHT);
     // A long name breaks onto more lines, so the row keeps the height its text takes rather
     // than shrinking to fit more rows in the list.
     let mut row = Element::new(Role::Button)
@@ -118,7 +114,7 @@ fn recording_row(index: u16, name: &str, phone: bool) -> Element {
         .shrink(0.0)
         .align_items(Align::Center)
         .on_press(ScreenPress::Replay { recording: index });
-    if phone {
+    if minimum.is_some() {
         // The name is a text element of its own, which is measured at the width it is drawn
         // at, so a name that breaks onto more lines makes the row as tall as its lines.
         row = row.child(
@@ -136,7 +132,11 @@ fn recording_row(index: u16, name: &str, phone: bool) -> Element {
     // The phone's row is a touch target's height already, so it needs no padding above and
     // below; its lines, a whole number of points tall, then make a row of whole points, which
     // keeps rows from overlapping by a fraction.
-    let padding_y = if phone { 0.0 } else { size::MENU_ROW_PADDING_Y };
+    let padding_y = if minimum.is_some() {
+        0.0
+    } else {
+        size::MENU_ROW_PADDING_Y
+    };
     row.style.padding = [
         padding_y,
         size::MENU_ROW_PADDING_END,

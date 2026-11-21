@@ -7,9 +7,9 @@ use app_client::Input;
 use beryl_protocol::protocol::{CardType, ObjectId, Side, Status, ZoneName};
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use kit_frame::frame::{Frame, Place, Resolved, Role, StateBits};
+use kit_probe::agent::Context;
 use kit_probe::agent::checks::{duplicates, on_screen, reachable};
 use kit_probe::agent::tree::{TreeOptions, tree};
-use kit_probe::agent::{Context, Layout};
 use kit_ui::input::{Insets, Size};
 
 use super::flat_layer::{client, deciding, prompt};
@@ -165,8 +165,8 @@ fn the_board_passes_the_interface_checks() {
     let context = Context {
         recording: "object-states".to_owned(),
         seat: Side::You,
-        layout: Layout::Desktop,
-        checks: Layout::Desktop.checks(
+        layout: crate::REGULAR,
+        checks: crate::REGULAR.checks(
             &crate::test_data::data().profiles,
             kit_base::geometry::Size::default(),
         ),

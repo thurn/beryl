@@ -13,11 +13,11 @@ use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::prompt::{ButtonId, Click, ClickRequest};
 use beryl_protocol::protocol::{Side, ZoneName};
 use beryl_protocol::testing::ViewBuilder;
-use game_table::profiles::phone::phone_bands;
+use game_table::profiles::Profile;
 use game_table::table::Window;
 use kit_frame::frame::{Frame, Role};
-use kit_probe::agent::checks::{keep_clear, on_screen, overlap, phone_sizes, reachable};
-use kit_probe::agent::{Context, Fault, Layout};
+use kit_probe::agent::checks::{keep_clear, minimum_sizes, on_screen, overlap, reachable};
+use kit_probe::agent::{Context, Fault};
 use kit_ui::input::{Insets, PointerPhase, Size};
 
 use super::flat_layer::{centre, deciding, decision, edges, find, pointer, prompt};
@@ -34,6 +34,10 @@ const SAFE: Insets = Insets {
 };
 
 const MS: u64 = 1_000_000;
+
+fn window_bands(window: Window) -> Option<game_table::profiles::TableBands> {
+    Profile::for_window(&crate::test_data::data().profiles, window).bands()
+}
 
 fn window(width: f32, height: f32) -> Window {
     Window {
@@ -53,7 +57,7 @@ fn surface(window: Window) -> Input {
 }
 
 /// A client in a phone window of `width` by `height`.
-fn phone(width: f32, height: f32) -> Client {
+fn compact(width: f32, height: f32) -> Client {
     let mut client = super::flat_layer::client();
     client.handle(surface(window(width, height)));
     client
@@ -82,14 +86,14 @@ fn layer_faults(frame: &Frame, window: Window) -> Vec<String> {
     let context = Context {
         recording: "game-phone".to_owned(),
         seat: Side::You,
-        layout: Layout::Phone,
-        checks: Layout::Phone.checks(&crate::test_data::data().profiles, window.size),
+        layout: crate::COMPACT,
+        checks: crate::COMPACT.checks(&crate::test_data::data().profiles, window.size),
         size: window.size,
         safe_area: window.safe_area,
         at: 0,
     };
     let checks: [fn(&Frame, &Context) -> Vec<Fault>; 4] =
-        [on_screen, overlap, reachable, phone_sizes];
+        [on_screen, overlap, reachable, minimum_sizes];
     (checks.iter())
         .flat_map(|check| check(frame, &context))
         .map(|fault| fault.message)
@@ -99,10 +103,10 @@ fn layer_faults(frame: &Frame, window: Window) -> Vec<String> {
 
 #[test]
 fn idle_furniture_stands_in_the_strips_without_a_prompt() {
-    let mut client = phone(393.0, 759.0);
+    let mut client = compact(393.0, 759.0);
     client.handle(waiting());
     let frame = client.frame(0);
-    let bands = phone_bands(window(393.0, 759.0)).unwrap();
+    let bands = window_bands(window(393.0, 759.0)).unwrap();
     for (name, strip) in [
         ("your orb", bands.your_strip),
         ("opponent's orb", bands.opponent_strip),
@@ -123,10 +127,10 @@ fn idle_furniture_stands_in_the_strips_without_a_prompt() {
 
 #[test]
 fn the_dock_stands_in_your_strip_and_sends_the_prompts_decisions() {
-    let mut client = phone(375.0, 647.0);
+    let mut client = compact(375.0, 647.0);
     client.handle(deciding(prompt("Pay {1}{U}")));
     let frame = client.frame(0);
-    let bands = phone_bands(window(375.0, 647.0)).unwrap();
+    let bands = window_bands(window(375.0, 647.0)).unwrap();
     let auto = find(frame, Role::Button, "Auto Pay");
     let (_, top, right, bottom) = edges(frame, auto);
     assert!(top >= bands.your_strip.top && bottom <= bands.your_strip.bottom());
@@ -150,8 +154,8 @@ fn the_dock_stands_in_your_strip_and_sends_the_prompts_decisions() {
 #[test]
 fn the_pill_stands_on_the_middle_line_or_clear_of_the_stack() {
     // With the stack empty, the pill is centred on the middle band's line.
-    let middle = phone_bands(window(393.0, 759.0)).unwrap().middle.middle();
-    let mut client = phone(393.0, 759.0);
+    let middle = window_bands(window(393.0, 759.0)).unwrap().middle.middle();
+    let mut client = compact(393.0, 759.0);
     client.handle(asked_over(&[]));
     let frame = client.frame(0);
     let pill = centre(frame, find(frame, Role::Text, "Pay {1}{U}"));
@@ -159,7 +163,7 @@ fn the_pill_stands_on_the_middle_line_or_clear_of_the_stack() {
 
     // A spell on the stack stands on the line, so the pill moves to the nearest height clear of
     // it.
-    let mut client = phone(393.0, 759.0);
+    let mut client = compact(393.0, 759.0);
     client.handle(asked_over(&["Lightning Bolt"]));
     let frame = client.frame(0);
     let pill = edges(frame, find(frame, Role::Text, "Pay {1}{U}"));
@@ -178,8 +182,8 @@ fn the_pill_stands_on_the_middle_line_or_clear_of_the_stack() {
 #[test]
 fn stacked_buttons_stand_in_the_middle_band_when_a_permanent_lies_under_them() {
     let size = (375.0, 647.0);
-    let bands = phone_bands(window(size.0, size.1)).unwrap();
-    let mut client = phone(size.0, size.1);
+    let bands = window_bands(window(size.0, size.1)).unwrap();
+    let mut client = compact(size.0, size.1);
     client.handle(asked_with(&[], &["Relic", "Talisman"]));
     let frame = client.frame(0);
     let cancel = edges(frame, find(frame, Role::Button, "Cancel"));
@@ -200,8 +204,8 @@ fn stacked_buttons_stand_in_the_middle_band_when_a_permanent_lies_under_them() {
     let context = Context {
         recording: "game-phone".to_owned(),
         seat: Side::You,
-        layout: Layout::Phone,
-        checks: Layout::Phone.checks(&crate::test_data::data().profiles, window.size),
+        layout: crate::COMPACT,
+        checks: crate::COMPACT.checks(&crate::test_data::data().profiles, window.size),
         size: window.size,
         safe_area: window.safe_area,
         at: 0,
@@ -250,7 +254,7 @@ fn asked_with(stack: &[&str], permanents: &[&str]) -> Input {
 
 #[test]
 fn the_menu_opens_the_settings_with_the_log_and_the_bug_report() {
-    let mut client = phone(393.0, 759.0);
+    let mut client = compact(393.0, 759.0);
     client.handle(waiting());
     press(&mut client, 0, Role::Button, "Menu");
     let frame = client.frame(MS);
@@ -289,7 +293,7 @@ fn a_pile_opens_its_viewer_and_closes_again() {
         crate::test_data::data(),
         Recording(messages).into(),
         Side::You,
-        Layout::Phone,
+        crate::COMPACT,
         size,
     )
     .expect("the view can be read");
@@ -306,7 +310,7 @@ fn a_pile_opens_its_viewer_and_closes_again() {
 #[test]
 fn every_control_is_on_screen_large_enough_and_reachable_at_every_size_and_on_resize() {
     for (width, height) in PHONES {
-        let mut client = phone(width, height);
+        let mut client = compact(width, height);
         client.handle(deciding(prompt("Pay {1}{U}")));
         let frame = client.frame(0);
         assert_eq!(
@@ -316,7 +320,7 @@ fn every_control_is_on_screen_large_enough_and_reachable_at_every_size_and_on_re
         );
     }
     // Into a smaller phone, and back to a desktop window and out again, with the prompt open.
-    let mut client = phone(393.0, 759.0);
+    let mut client = compact(393.0, 759.0);
     client.handle(deciding(prompt("Pay {1}{U}")));
     client.frame(0);
     client.handle(surface(window(375.0, 647.0)));

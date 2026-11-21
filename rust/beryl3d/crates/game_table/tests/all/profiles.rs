@@ -2,7 +2,8 @@
 
 use game_table::profiles::Profile;
 use game_table::table::Window;
-use kit_base::geometry::Size;
+use kit_base::data::profiles::Region;
+use kit_base::geometry::{Rect, Size};
 use kit_scene::{SizeClass, Slot};
 
 use crate::REGULAR_LAYOUT;
@@ -40,14 +41,23 @@ fn every_named_slot_fits_in_each_test_window() {
             let profile = Profile::for_window(&data.profiles, window);
             assert_eq!(profile.data().name, definition.name);
             let safe = Slot::safe_area(window);
-            for name in definition.slots.keys() {
+            for (name, spec) in &definition.slots {
+                let bounds = if spec.region == Region::Window {
+                    Rect {
+                        width: window.size.width,
+                        height: window.size.height,
+                        ..Rect::default()
+                    }
+                } else {
+                    safe
+                };
                 let slot = profile.slot(name).expect("declared slot").rect;
                 assert!(slot.width > 0.0 && slot.height > 0.0, "{name}: {slot:?}");
-                assert!(slot.x >= safe.x && slot.y >= safe.y, "{name}: {slot:?}");
+                assert!(slot.x >= bounds.x && slot.y >= bounds.y, "{name}: {slot:?}");
                 assert!(
-                    slot.x + slot.width <= safe.x + safe.width
-                        && slot.y + slot.height <= safe.y + safe.height,
-                    "{name}: {slot:?} outside {safe:?}"
+                    slot.x + slot.width <= bounds.x + bounds.width
+                        && slot.y + slot.height <= bounds.y + bounds.height,
+                    "{name}: {slot:?} outside {bounds:?}"
                 );
             }
             assert!(profile.slot("unregistered").is_none());
@@ -56,7 +66,7 @@ fn every_named_slot_fits_in_each_test_window() {
 }
 
 #[test]
-fn the_table_uses_the_supplied_profile_when_it_resizes() {
+fn the_windows_use_the_supplied_table_and_screen_tuning() {
     use std::sync::Arc;
 
     use game_table::table::Table;
@@ -68,7 +78,13 @@ fn the_table_uses_the_supplied_profile_when_it_resizes() {
         .replace("\"name\": \"phone\"", "\"name\": \"narrow test\"")
         .replace("\"side\": 8,", "\"side\": 14,")
         .replace("\"target_points\": 44,", "\"target_points\": 46,")
-        .replace("\"size\": 1.57,", "\"size\": 1.65,");
+        .replace("\"size\": 1.57,", "\"size\": 1.65,")
+        .replace("\"action_height\": 48,", "\"action_height\": 52,")
+        .replacen(
+            "\"inset\": [0, 16, 16, 16]",
+            "\"inset\": [0, 22, 16, 22]",
+            1,
+        );
     let space = beryl_test_files::read_to_string("data/beryl3d/space.json").unwrap();
     let gates = beryl_test_files::read_to_string("data/beryl3d/gates.json").unwrap();
     let names = ["glow", "dissolve", "loss"];
@@ -98,4 +114,10 @@ fn the_table_uses_the_supplied_profile_when_it_resizes() {
         panic!("the draw must be held over the resting card");
     };
     assert_eq!(size.to_bits(), 1.65_f32.to_bits());
+    let column = table.profile().screen_column().expect("scrolling column");
+    assert_eq!(column.bounds.x.to_bits(), 22.0_f32.to_bits());
+    assert_eq!(
+        column.action(kit_ui::widgets::button("Keep")).style.height,
+        Some(52.0)
+    );
 }

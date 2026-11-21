@@ -22,11 +22,12 @@ use beryl_protocol::protocol::{
 };
 use beryl_protocol::script::Subject;
 use game_hud::hud::placement_scene::PlacementScene;
-use game_table::profiles::TableBands;
+
 use glam::Vec2;
 
 use super::TablePress;
 use game_hud::inspect::viewer::object_box;
+use game_table::profiles::Profile;
 use game_table::table::Window;
 use kit_base::tokens::{color, size, space, type_style};
 use kit_ui::element::{Align, Anchor, Element, column, row, text};
@@ -52,7 +53,7 @@ pub fn proposals(
     proposals: &[ProposalView],
     opened: Option<u32>,
     window: Window,
-    bands: Option<TableBands>,
+    profile: Profile<'_>,
     layout: Option<&PlacementScene>,
 ) -> Option<Element> {
     let first = proposals.first()?.id;
@@ -63,9 +64,9 @@ pub fn proposals(
         .background(color::PANEL)
         .border((color::METAL, size::BORDER))
         .radius(size::PANEL_RADIUS);
-    if bands.is_none() {
+    let Some(slot) = profile.slot("manual.proposals") else {
         panel = panel
-            .children(proposals.iter().map(|each| proposal(each, false)))
+            .children(proposals.iter().map(|each| proposal(each, None)))
             .width(kit_base::data::space::flat::table::log::WIDTH);
         let left = kit_base::data::space::flat::table::EDGE;
         panel.anchor = Some(Anchor::Point(
@@ -73,19 +74,17 @@ pub fn proposals(
             Vec2::new(0.0, 0.5),
         ));
         return Some(panel);
-    }
-    let gutter = kit_base::data::space::flat::phone::GUTTER;
-    let safe = window.safe_area;
-    let right = window.size.width - safe.right - gutter;
-    let top = safe.top + gutter + size::ICON_BUTTON + space::S;
-    let corner = Anchor::Point(Vec2::new(right, top), Vec2::X);
+    };
+    let rect = slot.rect;
+    let target = profile.data().checks.target_points;
+    let corner = Anchor::Point(Vec2::new(rect.x + rect.width, rect.y), Vec2::X);
     let open = opened == Some(first);
     let name = if open {
         "Hide proposals"
     } else {
         "Show proposals"
     };
-    let mut heading = touch(small(button(PROPOSALS)), true).name(name);
+    let mut heading = small(button(PROPOSALS)).min_height(target).name(name);
     // Narrower than a button's own padding makes it, to keep clear of the opponent's cards.
     heading.style.padding = [0.0, space::M, 0.0, space::M];
     let heading = heading
@@ -97,24 +96,23 @@ pub fn proposals(
         return Some(folded);
     }
     panel = panel
-        .width(window.size.width - safe.left - safe.right - 2.0 * gutter)
+        .width(rect.width)
         .align_items(Align::End)
         .child(heading)
         .children(
             proposals
                 .iter()
-                .map(|each| proposal(each, true).align_self(Align::Stretch)),
+                .map(|each| proposal(each, Some(target)).align_self(Align::Stretch)),
         );
-    panel.anchor = bands
-        .and_then(|bands| {
-            super::profiles::proposal_slot(proposals, window, bands, layout, right, top)
-        })
+    panel.anchor = profile
+        .bands()
+        .and_then(|bands| super::profiles::proposal_slot(proposals, rect, bands, layout, target))
         .or(Some(corner));
     Some(panel)
 }
 
 /// One proposal's section, its controls as tall as a touch needs on a `phone`.
-fn proposal(proposal: &ProposalView, phone: bool) -> Element {
+fn proposal(proposal: &ProposalView, target: Option<f32>) -> Element {
     let &ProposalView { id, revision, .. } = proposal;
     let lines = proposal.lines.iter().map(|line| {
         let whose = match line.whose {
@@ -128,10 +126,10 @@ fn proposal(proposal: &ProposalView, phone: bool) -> Element {
         };
         touch(
             checkbox(&format!("{} · {whose}", line.text), line.on).on_press(press),
-            phone,
+            target,
         )
     });
-    let apply = touch(small(primary("Apply")), phone)
+    let apply = touch(small(primary("Apply")), target)
         .name("Apply")
         .align_self(Align::Start)
         .enabled(proposal.lines.iter().any(|line| line.on))
@@ -153,7 +151,9 @@ fn proposal(proposal: &ProposalView, phone: bool) -> Element {
 /// of small buttons standing over its top edge, which follows the card as it moves. A nudge
 /// about a card that is not on the battlefield shows nothing, as the web shows none.
 #[must_use]
-pub fn labels(labels: &[LabelView], view: &PlayerView, phone: bool) -> Vec<Element> {
+pub fn labels(labels: &[LabelView], view: &PlayerView, profile: Profile<'_>) -> Vec<Element> {
+    let manual = profile.data().manual;
+    let target = manual.map(|_| profile.data().checks.target_points);
     let mut on: Vec<(Subject, String, Vec<&LabelView>)> = Vec::new();
     for label in labels {
         let (subject, name) = match label.on {
@@ -185,18 +185,15 @@ pub fn labels(labels: &[LabelView], view: &PlayerView, phone: bool) -> Vec<Eleme
                 .name(&name)
                 .gap(space::S)
                 .children(group.into_iter().map(|label| {
-                    touch(small(button(&label.text)), phone)
+                    touch(small(button(&label.text)), target)
                         .name(&label.text)
                         .on_press(TablePress::Label(label.id))
                 }));
-            // On a phone the row straddles the card's top edge, reaching
-            // `labels.phone_overlap` points into the card, so that both the card and the one
-            // above it keep a touch's room uncovered; a row centred on the card would cover its
-            // middle, and one wholly above it the lower half of the row above. The desktop's
-            // cards are large enough for the row to stand centred on the card.
-            tags.anchor = Some(if phone {
-                let overlap = kit_base::data::space::flat::table::labels::PHONE_OVERLAP;
-                Anchor::Above(subject, -overlap)
+            // In the compact layout the label straddles the card's top edge. This leaves
+            // room to press both the card and the one above it. Larger cards have room
+            // for the label in the middle.
+            tags.anchor = Some(if let Some(manual) = manual {
+                Anchor::Above(subject, -manual.label_overlap)
             } else {
                 Anchor::Object(subject, Vec2::splat(0.5))
             });
@@ -206,9 +203,9 @@ pub fn labels(labels: &[LabelView], view: &PlayerView, phone: bool) -> Vec<Eleme
 }
 
 /// `element`, at least as tall as a touch needs on a `phone` (the "phone sizes" check).
-fn touch(element: Element, phone: bool) -> Element {
-    if phone {
-        element.min_height(kit_base::data::audit::PHONE_TARGET_POINTS)
+fn touch(element: Element, target: Option<f32>) -> Element {
+    if let Some(target) = target {
+        element.min_height(target)
     } else {
         element
     }

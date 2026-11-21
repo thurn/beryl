@@ -8,7 +8,7 @@ use beryl_protocol::protocol::{CardType, Side, ZoneName};
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use glam::Vec2;
 use kit_frame::frame::{Material, Role, StateBits, TextureArray};
-use kit_probe::agent::{Layout, Rule};
+use kit_probe::agent::Rule;
 use kit_ui::input::{AssetReady, FaceSize, Rect, Size};
 
 const WINDOW: Size = Size {
@@ -43,7 +43,7 @@ fn page(view: &ViewBuilder) -> Page {
         crate::test_data::data(),
         Recording(messages).into(),
         Side::You,
-        Layout::Desktop,
+        crate::REGULAR,
         WINDOW,
     )
     .expect("the view can be read");
@@ -261,7 +261,7 @@ fn the_revealed_pill_stands_over_the_revealed_pile_and_its_cross_puts_it_away() 
         crate::test_data::data(),
         Recording(messages).into(),
         Side::You,
-        Layout::Desktop,
+        crate::REGULAR,
         WINDOW,
     )
     .expect("the view can be read");

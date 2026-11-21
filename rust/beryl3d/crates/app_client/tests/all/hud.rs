@@ -196,7 +196,6 @@ fn the_log_is_a_button_until_it_is_opened() {
 fn the_recording_driver_reports_a_features_live_state() {
     use app_client::driver::{Page, Recording};
     use beryl_protocol::ipc::FixtureMessage;
-    use kit_probe::agent::Layout;
     use kit_ui::input::Size;
 
     let Input::Update(update) = lands(0) else {
@@ -207,7 +206,7 @@ fn the_recording_driver_reports_a_features_live_state() {
         crate::test_data::data(),
         recording.into(),
         Side::You,
-        Layout::Desktop,
+        crate::REGULAR,
         Size {
             width: 1440.0,
             height: 900.0,

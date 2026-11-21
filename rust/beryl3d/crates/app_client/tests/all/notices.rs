@@ -17,7 +17,7 @@ use game_play::play::record::Planted;
 use glam::Vec2;
 use kit_frame::frame::{Frame, Role, StateBits, Wake};
 use kit_probe::agent::checks::{duplicates, overlap};
-use kit_probe::agent::{Context, Layout, Rule};
+use kit_probe::agent::{Context, Rule};
 use kit_ui::input::{Insets, Size};
 
 use crate::common::{MS, empty_frame, frame, show};
@@ -138,7 +138,7 @@ fn a_fault_can_be_planted_while_a_banner_outlasts_its_script() {
         crate::test_data::data(),
         Recording(messages).into(),
         Side::You,
-        Layout::Desktop,
+        crate::REGULAR,
         size,
     )
     .unwrap();
@@ -301,8 +301,8 @@ fn two_notices_at_once_do_not_overlap() {
     let context = Context {
         recording: "notices".to_owned(),
         seat: Side::You,
-        layout: Layout::Desktop,
-        checks: Layout::Desktop.checks(
+        layout: crate::REGULAR,
+        checks: crate::REGULAR.checks(
             &crate::test_data::data().profiles,
             kit_base::geometry::Size::default(),
         ),

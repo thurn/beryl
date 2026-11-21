@@ -27,7 +27,7 @@ const NS_PER_MS: f64 = 1_000_000.0;
 /// The keys the Revealed Cards pill is laid out under: the desktop's pill, and the phone's
 /// button over the pile, which never change.
 const PILL: u64 = 0;
-const PHONE_PILE: u64 = 1;
+const REVEALED_PILE: u64 = 1;
 
 /// The client's record of the viewer and the Revealed Cards pill.
 #[derive(Debug, Default)]
@@ -268,7 +268,7 @@ impl Client {
             self.layer
                 .prepare(floats::REVEALED, PILL, revealed::revealed);
             self.layer
-                .prepare(floats::REVEALED, PHONE_PILE, revealed::phone_pile);
+                .prepare(floats::REVEALED, REVEALED_PILE, revealed::revealed_pile);
         }
     }
 
@@ -389,16 +389,16 @@ impl Client {
         if !holds && self.viewing.open == Some(Viewed::Revealed) {
             self.view(None);
         }
-        let phone = self.window.phone();
-        let key = if phone { PHONE_PILE } else { PILL };
+        let compact = self.window.size_class() == kit_scene::SizeClass::Compact;
+        let key = if compact { REVEALED_PILE } else { PILL };
         let shown = (visible && holds).then_some(key);
         if shown != self.viewing.pill {
             self.viewing.pill = shown;
             self.layer.show_prepared(floats::REVEALED, shown);
         }
         if shown.is_some() {
-            let point = if phone {
-                revealed::phone_pile_corner(self.window)
+            let point = if compact {
+                revealed::pile_corner(self.window)
             } else {
                 revealed::pill_corner(self.window.size)
             };

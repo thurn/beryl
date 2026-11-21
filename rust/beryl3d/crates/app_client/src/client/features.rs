@@ -218,13 +218,13 @@ impl Mounted for GameLog {
             return None;
         }
         let slot = Features::slot::<Self>(&mut features.slots, id);
-        let layout = if inputs.window.phone() {
+        let layout = if inputs.profile.data().table.bands.is_some() {
             if !slot.state().open {
                 return None;
             }
-            log::Layout::Phone(inputs.window)
+            log::Layout::Sheet(inputs.profile.bands()?)
         } else {
-            log::Layout::Desktop
+            log::Layout::Sidebar
         };
         Some(slot.view(log::Inputs {
             layout,

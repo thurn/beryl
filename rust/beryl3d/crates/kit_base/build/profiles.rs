@@ -39,6 +39,13 @@ pub(super) fn legacy(data: &Path, space: &mut Value, audit: &mut Value) {
                 "hud.phone.button_min_width",
                 data["settings_quick_action_min_width"].take(),
             );
+            for field in ["action_height", "action_gap", "action_text"] {
+                insert(
+                    space,
+                    &format!("flat.phone.{field}"),
+                    data["screen"][field].take(),
+                );
+            }
             audit["phone_target_points"] = data["checks"]["target_points"].take();
             audit["phone_text_points"] = data["checks"]["text_points"].take();
         } else {

@@ -10,7 +10,7 @@ use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use glam::Vec2;
 use kit_base::tokens::color;
 use kit_frame::frame::Material;
-use kit_probe::agent::{Layout, Rule};
+use kit_probe::agent::Rule;
 use kit_ui::input::{
     Button, KeyCode, Modifiers, Pointer, PointerKind, PointerPhase, Size, TextChange,
 };
@@ -31,7 +31,7 @@ fn bug_report() -> Page {
         crate::test_data::data(),
         recording.into(),
         Side::You,
-        Layout::Desktop,
+        crate::REGULAR,
         size,
     )
     .unwrap();

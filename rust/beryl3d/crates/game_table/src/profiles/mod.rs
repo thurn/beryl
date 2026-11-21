@@ -3,6 +3,7 @@
 use kit_base::data::profiles::{ProfileData, Profiles, Region, Row};
 use kit_base::geometry::{Rect, Window};
 use kit_scene::{SizeClass, Slot};
+use kit_ui::widgets::screen::ScreenColumn;
 
 use crate::table::{Camera, Layout, RowArea, TraySpace};
 
@@ -80,13 +81,36 @@ impl<'a> Profile<'a> {
         ))
     }
 
+    #[must_use]
+    pub fn window(self) -> Window {
+        self.window
+    }
+
+    /// The scrolling column and action dock, when this profile supplies them.
+    #[must_use]
+    pub fn screen_column(self) -> Option<ScreenColumn> {
+        Some(ScreenColumn {
+            bounds: self.slot("screen.column")?.rect,
+            metrics: self.data.screen?,
+            target: self.data.checks.target_points,
+        })
+    }
+
     /// Resolves a named slot in logical points. An unknown name has no slot.
     #[must_use]
     pub fn slot(self, name: &str) -> Option<Slot> {
         let spec = *self.data.slots.get(name)?;
-        let safe = Slot::safe_area(self.window);
+        let bounds = if spec.region == Region::Window {
+            Rect {
+                width: self.window.size.width,
+                height: self.window.size.height,
+                ..Rect::default()
+            }
+        } else {
+            Slot::safe_area(self.window)
+        };
         let region = match spec.region {
-            Region::SafeArea => safe,
+            Region::SafeArea | Region::Window => bounds,
             region => {
                 let bands = self.bands().expect("validated slot region");
                 let band = match region {
@@ -101,7 +125,7 @@ impl<'a> Profile<'a> {
                         top: bands.opponent_strip.bottom(),
                         height: bands.hand.top - bands.opponent_strip.bottom(),
                     },
-                    Region::SafeArea => unreachable!("handled above"),
+                    Region::SafeArea | Region::Window => unreachable!("handled above"),
                 };
                 Rect {
                     x: bands.left,
@@ -111,7 +135,7 @@ impl<'a> Profile<'a> {
                 }
             }
         };
-        Some(Slot::fit(spec, region, safe))
+        Some(Slot::fit(spec, region, bounds))
     }
 }
 

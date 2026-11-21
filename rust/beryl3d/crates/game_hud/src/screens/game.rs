@@ -102,7 +102,7 @@ fn waiting(input: &HudIn) -> Option<Element> {
 /// menu opens, and the step stops are not shown. Every piece stands at a point of the window, so
 /// the screen is an empty region at the window's corner that draws nothing and covers no card.
 #[must_use]
-pub fn game_phone(input: &HudIn, log: Option<Element>, menu: Action) -> Element {
+pub fn game_compact(input: &HudIn, log: Option<Element>, menu: Action) -> Element {
     let bands = input.profile.bands().unwrap_or_default();
     let opening = opening::shown(input);
     let prompt = waiting(input);

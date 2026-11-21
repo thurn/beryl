@@ -19,12 +19,12 @@ use crate::screens::ScreenPress;
 use glam::Vec2;
 
 use super::ScreenIn;
-use kit_base::data::space::flat::phone::bug as metrics;
+use game_table::profiles::Profile;
 use kit_base::tokens::{color, ratio, shadow, size, type_style};
 use kit_frame::frame::Role;
 use kit_text::text::TypeStyle;
 use kit_ui::element::{Align, Anchor, Element, Justify, Position, TextAlign, column, row, text};
-use kit_ui::input::{Insets, Rect};
+use kit_ui::input::Rect;
 use kit_ui::widgets::{self, check_mark, field, icon_button, primary};
 
 /// The name of the field the player describes the bug in.
@@ -151,24 +151,17 @@ pub fn span(a: glam::Vec2, b: glam::Vec2) -> Rect {
 #[must_use]
 pub fn bug_report(under: Option<Element>, input: &ScreenIn) -> Element {
     let window = whole(input);
-    let phone = input.window.phone().then_some(input.window.safe_area);
+    let profile = input.profile;
     let overlay = match &input.bug.stage {
         // Nothing of the report is in the picture.
         BugStage::Capturing { .. } => None,
-        BugStage::Select { drag } => Some(select(*drag, window, phone)),
+        BugStage::Select { drag } => Some(select(*drag, window, profile)),
         BugStage::Describe {
             region,
             saving,
             error,
-        } => Some(describe(
-            input,
-            *region,
-            *saving,
-            error.as_deref(),
-            window,
-            phone,
-        )),
-        BugStage::Saved { region, .. } => Some(saved(*region, window, phone)),
+        } => Some(describe(input, *region, *saving, error.as_deref(), window)),
+        BugStage::Saved { region, .. } => Some(saved(*region, window, profile)),
     };
     // Anchored at the window's top left corner, since the screen's top element may be no
     // larger than the prompt bar.
@@ -209,15 +202,15 @@ fn whole(input: &ScreenIn) -> Rect {
 /// The stage where a region is dragged out: the shade, or the region so far with the window
 /// shaded around it, the hint until a drag starts, and the tools. On a phone, whose safe area is
 /// `phone`, the hint stands at the top left beside the tools (`body.phone .bug-hint`).
-fn select(drag: Option<Rect>, window: Rect, phone: Option<Insets>) -> Vec<Element> {
+fn select(drag: Option<Rect>, window: Rect, profile: Profile<'_>) -> Vec<Element> {
     let mut children = match drag {
         Some(region) => framed(region, window, SHADE_DRAG),
         None => vec![placed("shade", window).background(SHADE)],
     };
     if drag.is_none() {
-        let style = if phone.is_some() {
+        let style = if let Some(metrics) = profile.data().screen.map(|screen| screen.bug) {
             TypeStyle {
-                size: metrics::HINT,
+                size: metrics.hint,
                 ..HINT
             }
         } else {
@@ -248,15 +241,10 @@ fn select(drag: Option<Rect>, window: Rect, phone: Option<Insets>) -> Vec<Elemen
             .position(Position::Absolute)
             .inset([Some(0.0), None, None, Some(0.0)])
             .width(window.width);
-        children.push(match phone {
-            Some(safe) => {
+        children.push(match profile.slot("bug.hint") {
+            Some(slot) => {
                 let mut line = line.child(hint);
-                line.style.padding = [
-                    safe.top + metrics::HINT_TOP,
-                    0.0,
-                    0.0,
-                    safe.left + metrics::HINT_LEFT,
-                ];
+                line.style.padding = [slot.rect.y, 0.0, 0.0, slot.rect.x];
                 line
             }
             None => line
@@ -264,7 +252,7 @@ fn select(drag: Option<Rect>, window: Rect, phone: Option<Insets>) -> Vec<Elemen
                 .child(hint.margin([HINT_TOP, 0.0, 0.0, 0.0])),
         });
     }
-    children.push(tools(true, phone));
+    children.push(tools(true, profile));
     children
 }
 
@@ -276,19 +264,20 @@ fn describe(
     saving: bool,
     error: Option<&str>,
     window: Rect,
-    phone: Option<Insets>,
 ) -> Vec<Element> {
+    let profile = input.profile;
+    let metrics = profile.data().screen.map(|screen| screen.bug);
     let mut state = input.fields.get(DESCRIPTION);
     "What went wrong?".clone_into(&mut state.placeholder);
     let ready = !state.text.trim().is_empty() && !saving;
     let mut description = field(DESCRIPTION, &state);
     description.style.min_height = Some(DESCRIPTION_HEIGHT);
     description.style.align_self = Some(Align::Stretch);
-    if phone.is_some() {
+    if let Some(metrics) = metrics {
         // `body.phone .bug-text`: shorter, and no taller than a few lines, so the sheet leaves
         // the frozen view above it.
-        description.style.min_height = Some(metrics::DESCRIPTION_LEAST);
-        description.style.max_height = Some(metrics::DESCRIPTION_MOST);
+        description.style.min_height = Some(metrics.description_least);
+        description.style.max_height = Some(metrics.description_most);
     }
     let submit = primary(if saving { "Saving…" } else { "Submit" });
     let mut submit = submit
@@ -298,12 +287,12 @@ fn describe(
     submit.style.height = Some(size::BUTTON_HEIGHT * ratio::SMALL_SCALE);
     submit.style.text.size = type_style::BUTTON.size * ratio::SMALL_SCALE;
     submit.style.min_width = None;
-    let target = kit_base::data::audit::PHONE_TARGET_POINTS;
+    let target = profile.data().checks.target_points;
     let mut ai = ai_box(input.bug.ai);
-    if phone.is_some() {
+    if let Some(metrics) = metrics {
         // `body.phone .bug-actions .button` and `.bug-ai`: touch targets.
         submit.style.height = Some(target);
-        submit.style.min_width = Some(metrics::SUBMIT_WIDTH);
+        submit.style.min_width = Some(metrics.submit_width);
         ai.style.min_height = Some(target);
     }
     let actions = row()
@@ -313,9 +302,9 @@ fn describe(
         .justify_content(Justify::SpaceBetween)
         .child(ai)
         .child(submit);
-    let title = if phone.is_some() {
+    let title = if let Some(metrics) = metrics {
         TypeStyle {
-            size: metrics::TITLE,
+            size: metrics.title,
             ..TITLE
         }
     } else {
@@ -328,19 +317,19 @@ fn describe(
     }
     panel_children.push(actions);
     let mut children = framed(region, window, SHADE_DESCRIBE);
-    children.push(placed_panel(panel(panel_children), window, phone));
-    children.push(tools(false, phone));
+    children.push(placed_panel(panel(panel_children), window, profile));
+    children.push(tools(false, profile));
     children
 }
 
 /// The stage once the report is saved: the region still framed, and "Saved".
-fn saved(region: Rect, window: Rect, phone: Option<Insets>) -> Vec<Element> {
+fn saved(region: Rect, window: Rect, profile: Profile<'_>) -> Vec<Element> {
     let words = text("Saved").style(SAVED).color(color::TYPE);
     let mut children = framed(region, window, SHADE_DESCRIBE);
     children.push(placed_panel(
         panel(vec![words]).name("Saved"),
         window,
-        phone,
+        profile,
     ));
     children
 }
@@ -350,20 +339,22 @@ fn saved(region: Rect, window: Rect, phone: Option<Insets>) -> Vec<Element> {
 /// corners, padded past the safe area's foot. A panel's corners all share one radius here, so
 /// its bottom corners are rounded too, unlike the web's. While the system keyboard is up the
 /// window is shorter, so the sheet stands on the keyboard.
-fn placed_panel(mut panel: Element, window: Rect, phone: Option<Insets>) -> Element {
-    let Some(safe) = phone else {
+fn placed_panel(mut panel: Element, window: Rect, profile: Profile<'_>) -> Element {
+    let Some((slot, metrics)) = profile.slot("bug.sheet").zip(profile.data().screen) else {
         return centred("panel", panel, window);
     };
+    let safe = profile.window().safe_area;
+    let metrics = metrics.bug;
     panel.style.width = Some(window.width);
-    panel.style.gap = metrics::GAP;
-    panel.style.radius = metrics::RADIUS;
+    panel.style.gap = metrics.gap;
+    panel.style.radius = metrics.radius;
     panel.style.padding = [
-        metrics::PADDING_Y,
-        safe.right + metrics::PADDING_X,
-        safe.bottom + metrics::PADDING_Y,
-        safe.left + metrics::PADDING_X,
+        metrics.padding_y,
+        safe.right + metrics.padding_x,
+        safe.bottom + metrics.padding_y,
+        safe.left + metrics.padding_x,
     ];
-    panel.style.max_height = Some(window.height - safe.top);
+    panel.style.max_height = Some(window.height - slot.rect.y);
     panel.style.overflow = kit_ui::element::Overflow::Scroll;
     column()
         .name("panel")
@@ -418,16 +409,13 @@ fn ai_box(on: bool) -> Element {
 /// region is being chosen, and the close button.
 /// On a phone, whose safe area is `phone`, they stand inside it and each is a touch target
 /// (`body.phone .bug-tools`).
-fn tools(choosing: bool, phone: Option<Insets>) -> Element {
-    let side = if phone.is_some() {
-        kit_base::data::audit::PHONE_TARGET_POINTS
-    } else {
-        TOOL
-    };
-    let inset = phone.map_or(TOOLS_INSET, |safe| {
+fn tools(choosing: bool, profile: Profile<'_>) -> Element {
+    let slot = profile.slot("bug.tools");
+    let side = slot.map_or(TOOL, |_| profile.data().checks.target_points);
+    let inset = slot.map_or(TOOLS_INSET, |slot| {
         [
-            safe.top + metrics::TOOLS_TOP,
-            safe.right + metrics::TOOLS_RIGHT,
+            slot.rect.y,
+            profile.window().size.width - (slot.rect.x + slot.rect.width),
         ]
     });
     let tool = |icon, name: &str, press| {

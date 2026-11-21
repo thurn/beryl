@@ -39,7 +39,7 @@ pub fn check(
     faults.extend(layer_drawn(frame, context));
     faults.extend(marks_on(frame, context, ring_target));
     faults.extend(keep_clear(frame, context));
-    faults.extend(phone_sizes(frame, context));
+    faults.extend(minimum_sizes(frame, context));
     faults
 }
 
@@ -405,7 +405,7 @@ pub fn named(frame: &Frame, context: &Context) -> Vec<Fault> {
 /// corners on the window, so one laid out at a fraction of a point measures a little less than
 /// its size, as 295.3 - 251.3 is 43.999985 in `f32`; a shortfall under `SIZE_TOLERANCE` passes.
 #[must_use]
-pub fn phone_sizes(frame: &Frame, context: &Context) -> Vec<Fault> {
+pub fn minimum_sizes(frame: &Frame, context: &Context) -> Vec<Fault> {
     let Some(text_points) = context.checks.text_points else {
         return Vec::new();
     };
@@ -420,7 +420,7 @@ pub fn phone_sizes(frame: &Frame, context: &Context) -> Vec<Fault> {
             .then(|| {
                 let subject = subject(frame, index);
                 fault(
-                    Rule::PhoneSizes,
+                    Rule::MinimumSizes,
                     context,
                     format!(
                         "{} is smaller than {side} by {side} points",
@@ -435,7 +435,7 @@ pub fn phone_sizes(frame: &Frame, context: &Context) -> Vec<Fault> {
         .map(|line| {
             let subject = subject(frame, line.element);
             fault(
-                Rule::PhoneSizes,
+                Rule::MinimumSizes,
                 context,
                 format!(
                     "a line of {}'s text is {} points, under {}",

@@ -20,8 +20,8 @@ mod elements;
 mod faces;
 mod flat_layer;
 mod flat_text;
+mod game_compact;
 mod game_over;
-mod game_phone;
 mod gesture;
 mod hud;
 mod inspect;
@@ -39,9 +39,9 @@ mod piles;
 mod pointer;
 mod prompts;
 mod screens;
-mod screens_phone;
+mod screens_compact;
 mod scroll;
-mod scroll_phone;
+mod scroll_compact;
 mod settings_sheet;
 mod shadows;
 mod table;
@@ -51,3 +51,8 @@ mod touch;
 mod verbs_count;
 mod verbs_fly;
 mod widgets;
+
+const REGULAR: kit_probe::agent::Layout =
+    kit_probe::agent::Layout::for_size_class(kit_base::data::profiles::SizeClass::Regular);
+const COMPACT: kit_probe::agent::Layout =
+    kit_probe::agent::Layout::for_size_class(kit_base::data::profiles::SizeClass::Compact);

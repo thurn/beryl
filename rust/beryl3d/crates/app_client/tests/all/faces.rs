@@ -8,7 +8,7 @@ use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use game_table::faces::{CARD_BACK, FaceList};
 use kit_frame::frame::{Frame, Material, Role, TextureArray};
 use kit_probe::agent::checks::blank_cards;
-use kit_probe::agent::{Context, Layout, Rule};
+use kit_probe::agent::{Context, Rule};
 use kit_ui::input::{AssetReady, FaceId, FaceSize, Insets, Lifecycle, Size, Tier};
 
 const SIZE: Size = Size {
@@ -72,8 +72,8 @@ fn blank(frame: &Frame) -> Vec<String> {
     let context = Context {
         recording: "sample".to_owned(),
         seat: beryl_protocol::protocol::Side::You,
-        layout: Layout::Desktop,
-        checks: Layout::Desktop.checks(&crate::test_data::data().profiles, SIZE),
+        layout: crate::REGULAR,
+        checks: crate::REGULAR.checks(&crate::test_data::data().profiles, SIZE),
         size: SIZE,
         safe_area: Insets::default(),
         at: 0,

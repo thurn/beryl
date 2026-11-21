@@ -19,7 +19,7 @@ use game_table::table::Window;
 use glam::Vec3;
 use kit_base::data::space;
 use kit_base::pose::{Pose, Segment};
-use kit_probe::agent::{Layout, Rule};
+use kit_probe::agent::Rule;
 use kit_space::motion::pose_at;
 use kit_ui::input::Size;
 use std::sync::Arc;
@@ -167,7 +167,7 @@ fn the_hosts_flight_arc_moves_the_card_in_the_frame() {
             data,
             Arc::clone(&recording),
             Side::You,
-            Layout::Desktop,
+            crate::REGULAR,
             window(1440.0, 900.0).size,
         )
         .unwrap();
@@ -702,7 +702,7 @@ fn unseen_steps(before: &GameUpdate, after: &GameUpdate, seat: Side, size: Size)
         crate::test_data::data(),
         Recording(messages).into(),
         seat,
-        Layout::Desktop,
+        crate::REGULAR,
         size,
     )
     .expect("the views can be read");

@@ -1989,31 +1989,25 @@ window.
 - **Scale factor.** A logical point is one pixel on a standard display and two
   or three on a high-density one. Text and icons are rasterized at the display's
   real pixel size, so they are sharp at any density.
-- **Two layouts.** The desktop layout and the phone layout are separate screen
-  functions sharing their widgets, as the web interface's two layouts share its
-  drawing code. The phone layout is used when the window's shorter side is under
-  500 points, and the desktop layout otherwise. The profile selector
-  `Profiles::for_size` uses the window's logical size. The selected profile
-  supplies the table's camera and containers and the playback settings for held
-  draws and life changes.
-- **Portrait screens.** The start screen and the testing screen are one column
-  over the safe area, the gutter in from its sides and foot (`flat.phone` in
-  `data/beryl3d/space-constants.json`): the opponents' list takes the room the
-  rest leaves, and the whole column scrolls when even that is too little, as
-  while the system keyboard is up, so every action stays in reach. The opening
-  lays the hand out in rows of four, as large as fit between the coin and the
-  dock. The result's button spans a dock at the safe area's foot. The bug
-  report's description is a sheet along the window's foot. The screens lay a
-  window the keyboard shortens out as any shorter window, and every resize
-  builds the screen again for the new size.
+- **Layout profiles.** A profile supplies the size class and the slots for a
+  window in logical points. The bundled profiles select the compact size class
+  below 500 points on the shorter side. See
+  [Layout profiles](beryl-3d-architecture.md#layout-profiles).
+- **Portrait screens.** Start, testing and the lobby share a scrolling column
+  inside the safe area. The opponents' list takes the space left by the start
+  controls. When the keyboard shortens the window, the whole column scrolls so
+  every action stays in reach. The opening lays the hand out in rows of four
+  between the coin and the action dock. The result shares the dock layout. The
+  bug report uses a sheet at the foot of the window. Each resize lays out the
+  screen again.
 - **Safe area.** The host reports the insets for notches, rounded corners and
   system bars. The root element pads itself by them, and a check holds every
   interactive element inside.
 - **Minimum sizes.** On the phone layout a check holds every touch target to at
   least 44 by 44 points and every line of text to at least 11 points.
-- **The phone's game screen** (`screens::game::game_phone`) places the desktop's
-  pieces in the table's bands (`Profile::bands`), with sizes from the phone
-  profile:
+- **The phone's game screen** (`screens::game::game_compact`) places the
+  desktop's pieces in the table's bands (`Profile::bands`), with sizes from the
+  phone profile:
   - Each orb is centred in its player's strip, drawn at half the desktop's size.
     When the viewer's hand needs more than one row, its back row stands in the
     viewer's strip, and a total in the strip's middle would split that row's

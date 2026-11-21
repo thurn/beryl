@@ -14,7 +14,7 @@ use beryl_protocol::script::{Act, Table as Played, time_script};
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use glam::Vec2;
 use kit_frame::frame::{Frame, StateBits, Wake};
-use kit_probe::agent::{Layout, TreeOptions, tree};
+use kit_probe::agent::{TreeOptions, tree};
 use kit_ui::input::{
     Button, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase, Rect,
     Size,
@@ -35,7 +35,7 @@ fn page(updates: &[GameUpdate]) -> Page {
         crate::test_data::data(),
         Recording(messages).into(),
         Side::You,
-        Layout::Desktop,
+        crate::REGULAR,
         SIZE,
     )
     .expect("the recording plays")

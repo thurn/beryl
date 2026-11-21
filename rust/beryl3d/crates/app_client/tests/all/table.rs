@@ -13,9 +13,9 @@ use game_table::table::{
 use glam::{Vec2, Vec3};
 use kit_base::pose::Pose;
 use kit_frame::frame::{Frame, Place, Role};
+use kit_probe::agent::Context;
 use kit_probe::agent::checks::{duplicates, reachable};
 use kit_probe::agent::tree::{TreeOptions, tree};
-use kit_probe::agent::{Context, Layout};
 use kit_ui::input::{Insets, Size};
 
 fn place(
@@ -361,15 +361,19 @@ fn a_card_at_the_tables_centre_projects_where_a_hand_calculation_says() {
 }
 
 #[test]
-fn the_desktop_camera_is_the_one_fitted_to_arena() {
-    use kit_base::data::space::layout::desktop::camera;
+fn the_reference_camera_is_the_one_fitted_to_arena() {
+    let camera = crate::test_data::data()
+        .profiles
+        .for_size(window(1440.0, 900.0).size)
+        .table
+        .camera;
     assert_eq!(
         REFERENCE.camera.pitch_degrees.to_bits(),
-        camera::PITCH_DEGREES.to_bits()
+        camera.pitch_degrees.to_bits()
     );
     assert_eq!(
         REFERENCE.camera.fov_degrees.to_bits(),
-        camera::FOV_DEGREES.to_bits()
+        camera.fov_degrees.to_bits()
     );
 }
 
@@ -513,8 +517,8 @@ fn abilities_on_the_stack_are_drawn_as_cards_above_the_spell_beneath_them() {
     let context = Context {
         recording: "abilities".to_owned(),
         seat: Side::You,
-        layout: Layout::Desktop,
-        checks: Layout::Desktop.checks(
+        layout: crate::REGULAR,
+        checks: crate::REGULAR.checks(
             &crate::test_data::data().profiles,
             kit_base::geometry::Size::default(),
         ),
@@ -631,8 +635,8 @@ fn every_card_of_a_hand_of_any_size_can_be_pressed() {
             let context = Context {
                 recording: format!("{count} cards"),
                 seat: Side::You,
-                layout: Layout::Desktop,
-                checks: Layout::Desktop.checks(&crate::test_data::data().profiles, size),
+                layout: crate::REGULAR,
+                checks: crate::REGULAR.checks(&crate::test_data::data().profiles, size),
                 size,
                 safe_area: Insets::default(),
                 at: 0,
@@ -775,8 +779,8 @@ fn every_item_of_a_stack_of_any_size_can_be_pressed() {
             let context = Context {
                 recording: "stack".to_owned(),
                 seat: Side::You,
-                layout: Layout::Desktop,
-                checks: Layout::Desktop.checks(&crate::test_data::data().profiles, size),
+                layout: crate::REGULAR,
+                checks: crate::REGULAR.checks(&crate::test_data::data().profiles, size),
                 size,
                 safe_area: Insets::default(),
                 at: 0,

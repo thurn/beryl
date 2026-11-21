@@ -21,7 +21,7 @@ use kit_text::text::TypeStyle;
 use kit_ui::element::{Align, Anchor, Element, Position, TextAlign, column, holder, row, text};
 use kit_ui::widgets::{self, button, icon_button, icons, primary};
 
-/// The prompt bar for `prompt`: on the desktop, the action dock (`desktop_dock`), with what the prompt
+/// The prompt bar for `prompt`: on the desktop, the action dock (`captioned_dock`), with what the prompt
 /// asks at its top, its other buttons stacked under that in the order the session sent them,
 /// the first at the foot, and the button it puts forward at the dock's foot as the turn button,
 /// with the one that passes on beside it and its caption under it, as the web's `PromptDock`
@@ -106,7 +106,7 @@ pub(super) fn bar(prompt: &PromptView, input: &HudIn, controls: Option<Controls>
             )
         })
         .collect();
-    desktop_dock()
+    captioned_dock()
         .children(title)
         .children(others)
         .children(controls.map(|controls| controls.element))
@@ -128,7 +128,7 @@ pub(super) fn bar(prompt: &PromptView, input: &HudIn, controls: Option<Controls>
 /// column of buttons of one width, at least a turn button's (`--button-width`), with what the
 /// prompt asks over them and the turn button at the foot. It draws no panel of its own, as the
 /// web's dock draws none.
-pub fn desktop_dock() -> Element {
+pub fn captioned_dock() -> Element {
     column()
         .name("prompt")
         .gap(space::M)
@@ -654,7 +654,7 @@ pub fn waiting(input: &HudIn) -> Option<Element> {
     }
     let label = button(OPPONENTS_TURN).enabled(false);
     let Some(bands) = input.profile.bands() else {
-        return Some(desktop_dock().child(turn_action(dock_sized(label), None, "")));
+        return Some(captioned_dock().child(turn_action(dock_sized(label), None, "")));
     };
     // It stands where the dock would, raised over a hand whose back row stands in the strip. Where
     // that would cover a permanent of the viewer's back row and the label is too wide for the

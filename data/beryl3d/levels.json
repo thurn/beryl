@@ -87,19 +87,16 @@
     "rust/beryl3d/crates/beryl_inspect/src/stress.rs": 1
   },
   "profile_words": {
-    "app_client": 116,
-    "app_screens": 66,
     "beryl_3d": 35,
     "beryl_host": 21,
     "beryl_inspect": 109,
     "beryl_pictures": 7,
     "beryl_render": 4,
-    "game_hud": 114,
-    "game_manual": 99,
-    "game_probe": 123,
+    "game_hud": 95,
+    "game_probe": 117,
     "kit_base": 6,
-    "kit_probe": 26,
+    "kit_probe": 17,
     "kit_space": 25,
-    "kit_ui": 7
+    "kit_ui": 4
   }
 }

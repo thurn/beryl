@@ -5,7 +5,7 @@ use kit_base::geometry::{Rect, Window};
 
 pub use kit_base::data::profiles::SizeClass;
 
-/// The box available to a feature inside the window's safe area.
+/// The box available to a feature in its selected window region.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Slot {
     pub rect: Rect,
@@ -24,20 +24,20 @@ impl Slot {
         }
     }
 
-    /// Fits a slot within its region, clipped to the safe area first.
+    /// Fits a slot within its region, clipped to the available window bounds first.
     #[must_use]
-    pub fn fit(spec: SlotSpec, region: Rect, safe: Rect) -> Self {
+    pub fn fit(spec: SlotSpec, region: Rect, bounds: Rect) -> Self {
         let [top, right, bottom, left] = spec.inset;
         let (x, width) = fit_axis(
             (region.x, region.width),
-            (safe.x, safe.width),
+            (bounds.x, bounds.width),
             (left, right),
             spec.max_width,
             spec.align_x,
         );
         let (y, height) = fit_axis(
             (region.y, region.height),
-            (safe.y, safe.height),
+            (bounds.y, bounds.height),
             (top, bottom),
             spec.max_height,
             spec.align_y,

@@ -9,7 +9,7 @@ use beryl_protocol::protocol::{Side, ZoneName};
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use glam::Vec2;
 use kit_frame::frame::{Frame, Place, Role};
-use kit_probe::agent::{Layout, Rule};
+use kit_probe::agent::Rule;
 use kit_scene::hit::uncovered;
 use kit_ui::input::Size;
 
@@ -42,7 +42,7 @@ fn page(view: &ViewBuilder, size: Size) -> Page {
         crate::test_data::data(),
         Recording(messages).into(),
         Side::You,
-        Layout::Phone,
+        crate::COMPACT,
         size,
     )
     .expect("the page opens");

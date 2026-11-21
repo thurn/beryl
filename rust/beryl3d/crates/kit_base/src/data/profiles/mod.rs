@@ -7,6 +7,8 @@ use serde::{Deserialize, Deserializer};
 
 use super::tuning::{fraction, nonnegative, positive, read, vector};
 use crate::geometry::{Insets, Size, Window};
+mod screen;
+pub use screen::{BugScreen, ScreenMetrics, StartScreen};
 
 mod banded;
 pub use banded::Banded;
@@ -180,6 +182,7 @@ pub struct Play {
 pub enum Region {
     #[default]
     SafeArea,
+    Window,
     OpponentStrip,
     YourStrip,
     Middle,
@@ -231,6 +234,20 @@ struct Matrix {
     windows: Vec<[f32; 3]>,
 }
 
+/// Dimensions of manual table controls that replace rows in a compact layout.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct ManualControls {
+    #[serde(deserialize_with = "nonnegative")]
+    pub label_overlap: f32,
+    #[serde(deserialize_with = "nonnegative")]
+    pub mana_right: f32,
+    #[serde(deserialize_with = "positive")]
+    pub mana_width: f32,
+    #[serde(deserialize_with = "positive")]
+    pub mana_done_width: f32,
+}
+
 /// A layout profile before it is fitted to a window.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
@@ -243,6 +260,9 @@ pub struct ProfileData {
     pub play: Play,
     pub checks: Checks,
     pub slots: BTreeMap<String, SlotSpec>,
+    /// Tuning for screens that use a scrolling column.
+    pub screen: Option<ScreenMetrics>,
+    pub manual: Option<ManualControls>,
     pub settings_quick_action_min_width: Option<f32>,
     test_matrix: Matrix,
     // Until the placement ports consume these values, the build still reads their old paths.
@@ -354,8 +374,14 @@ impl ProfileData {
         if self.table.bands.is_some() != self.table.banded.is_some() {
             return Err("table.bands and table.banded must be supplied together".to_owned());
         }
+        self.validate_slots()
+    }
+
+    fn validate_slots(&self) -> Result<(), String> {
         for (name, slot) in &self.slots {
-            if slot.region != Region::SafeArea && self.table.bands.is_none() {
+            if !matches!(slot.region, Region::SafeArea | Region::Window)
+                && self.table.bands.is_none()
+            {
                 return Err(format!("slots.{name} requires table.bands"));
             }
             if !slot.inset.into_iter().all(is_nonnegative)
@@ -379,6 +405,33 @@ impl ProfileData {
         ] {
             if !self.slots.contains_key(name) {
                 return Err(format!("missing slots.{name}"));
+            }
+        }
+        if self.size_class == SizeClass::Compact {
+            if self.screen.is_none() {
+                return Err("missing screen metrics".to_owned());
+            }
+            if self.manual.is_none() {
+                return Err("missing manual controls".to_owned());
+            }
+            for name in [
+                "screen.column",
+                "screen.dock",
+                "result.dock",
+                "gallery.column",
+                "bug.hint",
+                "bug.tools",
+                "bug.sheet",
+                "manual.menu",
+                "manual.connection",
+                "manual.log",
+                "manual.proposals",
+                "manual.next",
+                "manual.mana",
+            ] {
+                if !self.slots.contains_key(name) {
+                    return Err(format!("missing slots.{name}"));
+                }
             }
         }
         Ok(())

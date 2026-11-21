@@ -16,7 +16,7 @@ use serde_json::Value;
 use super::commands::{self, Asks, COMMANDS, Command, Values};
 use super::{TablePress, Target};
 use game_hud::hud::placement_scene::PlacementScene;
-use game_table::profiles::TableBands;
+use game_table::profiles::Profile;
 use kit_base::tokens::{color, size, space};
 use kit_ui::element::{Align, Anchor, Element, column, row};
 use kit_ui::input::Window;
@@ -526,7 +526,7 @@ pub fn dock(
     ask: &Ask,
     fields: &Fields,
     window: Window,
-    bands: Option<TableBands>,
+    profile: Profile<'_>,
     layout: Option<&PlacementScene>,
 ) -> Element {
     let state = fields.get(&ask.field);
@@ -553,14 +553,14 @@ pub fn dock(
         .background(color::PANEL)
         .border((color::METAL, size::BORDER))
         .radius(size::PANEL_RADIUS);
-    if let Some(bands) = bands {
+    if let Some(banded) = profile.bands().zip(profile.data().table.banded.as_ref()) {
         return super::profiles::ask_dock(
             panel,
             [minus, plus],
             input,
             [cancel, confirm],
             suggestions(ask),
-            bands,
+            banded,
             layout,
         );
     }

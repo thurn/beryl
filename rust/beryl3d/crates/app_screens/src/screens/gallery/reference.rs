@@ -17,7 +17,7 @@ use glam::Vec2;
 use super::face;
 use game_play::art::orb::artwork;
 use game_table::faces::{CARD_BACK, FaceList};
-use kit_base::data::space::flat::gallery::desktop as at;
+use kit_base::data::space::flat::gallery::reference as at;
 use kit_base::tokens::{color, gradient, shadow, size, type_style};
 use kit_frame::frame::Role;
 use kit_text::text::TypeStyle;

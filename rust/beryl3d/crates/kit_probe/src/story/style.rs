@@ -192,7 +192,7 @@ impl Widget {
         match self {
             Self::Button => button(),
             Self::SmallButton => widgets::start_panel::small(button()),
-            Self::PhoneAction => widgets::screen::phone_action(button()),
+            Self::PhoneAction => widgets::screen::compact_action(button()),
             Self::PassOn => widgets::pass_on(name, side),
             Self::Check => widgets::check_mark(side),
             Self::Checkbox => widgets::start_panel::checkbox(words, selected),

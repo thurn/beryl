@@ -21,9 +21,9 @@ use glam::Vec2;
 
 use super::TablePress;
 use game_play::hud::counts::{index, points};
-use game_table::profiles::phone::phone_bands;
+use game_table::profiles::Profile;
 use game_table::table::{REFERENCE, Window};
-use kit_base::data::space::hud::phone as data;
+use kit_base::data::profiles::ManualControls;
 use kit_base::tokens::{color, size, space, type_style};
 use kit_ui::element::{Align, Anchor, Display, Element, Justify, Track, column, holder, row, text};
 use kit_ui::input::Size;
@@ -43,30 +43,39 @@ fn mana(pool: ManaPool) -> [(&'static str, u32); 6] {
 
 /// Both players' rows in `window`, or on the phone layout their Mana buttons.
 #[must_use]
-pub fn pools(view: &PlayerView, window: Window) -> Option<Element> {
-    if let Some(bands) = phone_bands(window) {
+pub fn pools(view: &PlayerView, window: Window, profile: Profile<'_>) -> Element {
+    if let Some((bands, metrics)) = profile
+        .data()
+        .manual
+        .and_then(|metrics| Some((profile.bands()?, metrics)))
+    {
         let strips = [
             (Side::You, bands.your_strip),
             (Side::Opponent, bands.opponent_strip),
         ];
         let buttons = strips.into_iter().filter_map(|(side, strip)| {
-            let at = Vec2::new(window.size.width / 2.0 - data::MANA_RIGHT, strip.middle());
-            mana_button(player(view, side), side, adjustable(view, side), at)
+            let at = Vec2::new(window.size.width / 2.0 - metrics.mana_right, strip.middle());
+            mana_button(
+                player(view, side),
+                side,
+                adjustable(view, side),
+                at,
+                metrics,
+                profile.data().checks.target_points,
+            )
         });
-        return Some(holder().name("pools").children(buttons));
+        return holder().name("pools").children(buttons);
     }
-    Some(
-        holder()
-            .name("pools")
-            .children([Side::You, Side::Opponent].map(|side| {
-                pool(
-                    player(view, side),
-                    side,
-                    window.size,
-                    adjustable(view, side),
-                )
-            })),
-    )
+    holder()
+        .name("pools")
+        .children([Side::You, Side::Opponent].map(|side| {
+            pool(
+                player(view, side),
+                side,
+                window.size,
+                adjustable(view, side),
+            )
+        }))
 }
 
 /// Whether the viewer may change `side`'s mana and counters in `view`: their own always, and
@@ -78,7 +87,14 @@ fn adjustable(view: &PlayerView, side: Side) -> bool {
 /// `player`'s Mana button on the phone, for `side`, its right edge's middle at `at`: the word
 /// and their total mana under it, which opens their sheet. A player whose mana and counters the
 /// viewer may not change and who has none shows no button, as the web's `ManaButton` hides.
-fn mana_button(player: &PlayerState, side: Side, adjust: bool, at: Vec2) -> Option<Element> {
+fn mana_button(
+    player: &PlayerState,
+    side: Side,
+    adjust: bool,
+    at: Vec2,
+    metrics: ManualControls,
+    target: f32,
+) -> Option<Element> {
     let total: u32 = mana(player.mana).iter().map(|&(_, count)| count).sum();
     let counters = player
         .named_counters
@@ -95,8 +111,8 @@ fn mana_button(player: &PlayerState, side: Side, adjust: bool, at: Vec2) -> Opti
     element.role = kit_frame::frame::Role::Button;
     let mut element = element
         .name(&format!("{whose} mana: {total}"))
-        .width(data::MANA_WIDTH)
-        .min_height(size::ICON_BUTTON.max(data::BUTTON_HEIGHT))
+        .width(metrics.mana_width)
+        .min_height(size::ICON_BUTTON.max(target))
         .align_items(Align::Center)
         .justify_content(Justify::Center)
         .radius(size::PANEL_RADIUS)
@@ -121,8 +137,9 @@ fn mana_button(player: &PlayerState, side: Side, adjust: bool, at: Vec2) -> Opti
 /// the log sheet does (`hud::phone::log_sheet`), since the life totals are floats drawn over
 /// every screen element and would show through a sheet over the viewer's strip.
 #[must_use]
-pub fn sheet(view: &PlayerView, window: Window, side: Side) -> Option<Element> {
-    let bands = phone_bands(window)?;
+pub fn sheet(view: &PlayerView, side: Side, profile: Profile<'_>) -> Option<Element> {
+    let rect = profile.slot("manual.mana")?.rect;
+    let metrics = profile.data().manual?;
     let adjust = adjustable(view, side);
     let heading = row()
         .align_items(Align::Center)
@@ -130,7 +147,7 @@ pub fn sheet(view: &PlayerView, window: Window, side: Side) -> Option<Element> {
         .child(text("Mana").style(type_style::TITLE))
         .child(
             button("Done")
-                .min_width(data::BUTTON_MIN_WIDTH)
+                .min_width(metrics.mana_done_width)
                 .on_press(TablePress::ManaSheet(None)),
         );
     let mut grid = Element::new(kit_frame::frame::Role::Region)
@@ -160,10 +177,9 @@ pub fn sheet(view: &PlayerView, window: Window, side: Side) -> Option<Element> {
         Side::You => "Your mana and counters",
         Side::Opponent => "Opponent's mana and counters",
     };
-    let margin = data::SHEET_MARGIN;
     let mut sheet = column()
         .name(label)
-        .width(bands.right - bands.left)
+        .width(rect.width)
         .padding(space::M)
         .gap(space::S)
         .background(color::PANEL)
@@ -171,8 +187,7 @@ pub fn sheet(view: &PlayerView, window: Window, side: Side) -> Option<Element> {
         .radius(size::PANEL_RADIUS)
         .child(heading)
         .child(grid);
-    let top = bands.opponent_strip.bottom() + margin;
-    sheet.anchor = Some(Anchor::Point(Vec2::new(bands.left, top), Vec2::ZERO));
+    sheet.anchor = Some(Anchor::Point(Vec2::new(rect.x, rect.y), Vec2::ZERO));
     Some(sheet)
 }
 
@@ -201,7 +216,7 @@ fn pool(player: &PlayerState, side: Side, window: Size, adjust: bool) -> Element
                 |(at, (name, count, words, mana))| {
                     let at = u8::try_from(at).unwrap_or(u8::MAX);
                     let button =
-                        desktop_counter(&format!("{name} counter: {count}"), &words, mana, adjust);
+                        counter_cell(&format!("{name} counter: {count}"), &words, mana, adjust);
                     if adjust {
                         button.on_press(TablePress::Counter { side, at })
                     } else {
@@ -269,7 +284,7 @@ fn counter(name: &str, words: &str, button: bool) -> Element {
 /// the web's `.manual-counter-button` draws it: no face or border of its own, two points of
 /// padding round what it holds. A mana symbol (`mana`) is set as the web's `.mana-pool` sets
 /// it, a disc of `type_style::POOL`'s size with its amount after it in `POOL_COUNT`.
-fn desktop_counter(name: &str, words: &str, mana: bool, button: bool) -> Element {
+fn counter_cell(name: &str, words: &str, mana: bool, button: bool) -> Element {
     let role = if button {
         kit_frame::frame::Role::Button
     } else {

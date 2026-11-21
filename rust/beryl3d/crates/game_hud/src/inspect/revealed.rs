@@ -67,7 +67,7 @@ pub fn revealed() -> Element {
 /// the pile's faces lie at a pile's size, which opens the pile's viewer as a press on a pile
 /// does (`.phone-pile-button` in `ui/src/mobile/phone.css`).
 #[must_use]
-pub fn phone_pile() -> Element {
+pub fn revealed_pile() -> Element {
     Element::new(Role::Button)
         .name(REVEALED)
         .on_press(GamePress::View(Viewed::Revealed))
@@ -81,7 +81,7 @@ pub fn phone_pile() -> Element {
 /// logical points: centred on the opponent's third pile place, after their library and
 /// graveyard, which the phone leaves free since it rests exiled cards under the graveyard.
 #[must_use]
-pub fn phone_pile_corner(window: Window) -> Vec2 {
+pub fn pile_corner(window: Window) -> Vec2 {
     let strip = strip(window, Side::Opponent);
     let x = window.safe_area.left + kit_base::data::space::layout::phone::piles::opponent::X.z;
     Vec2::new(x - REVEALED_WIDTH / 2.0, strip.top)

@@ -6,7 +6,7 @@ use app_client::driver::{Mode, Page, Recording};
 use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::protocol::Side;
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
-use kit_probe::agent::{Fault, Layout, Rule};
+use kit_probe::agent::{Fault, Rule};
 use kit_ui::input::{AssetReady, GlyphCell, GlyphKey, Size};
 
 const SIZE: Size = Size {
@@ -25,7 +25,7 @@ fn table(scale: f32, host: bool) -> Page {
         crate::test_data::data(),
         recording.into(),
         Side::You,
-        Layout::Desktop,
+        crate::REGULAR,
         SIZE,
     )
     .expect("the sample view opens")

@@ -16,7 +16,7 @@ use glam::Vec2;
 
 use super::TablePress;
 use super::commands;
-use game_table::table::Window;
+use kit_base::geometry::Rect;
 use kit_base::tokens::{color, size, space, type_style};
 use kit_frame::frame::Role;
 use kit_ui::element::{Align, Anchor, Element, Overflow, column, holder, row, text};
@@ -48,7 +48,7 @@ pub fn log(
     lines: &[LogLine],
     open: bool,
     blocked: &[u32],
-    phone: Option<Window>,
+    folded_at: Option<Rect>,
 ) -> Option<Element> {
     if lines.is_empty() {
         return None;
@@ -79,7 +79,7 @@ pub fn log(
             .border((color::METAL, size::BORDER))
             .radius(size::PANEL_RADIUS)
     };
-    let Some(window) = phone else {
+    let Some(rect) = folded_at else {
         // The desktop's button is the game screen's log button, at its place in the window's
         // top left, and the open log stands under it where the game's log does
         // (`hud::log::log`), as the web's `TableLog` is the game's `LogPanel` folded.
@@ -96,19 +96,14 @@ pub fn log(
         });
         return Some(holder().name("table log").child(button).children(open));
     };
-    let gutter = kit_base::data::space::flat::phone::GUTTER;
-    let safe = window.safe_area;
-    let right = window.size.width - safe.right - gutter;
-    let corner = Anchor::Point(Vec2::new(right, safe.top + gutter), Vec2::X);
-    let width = kit_base::data::space::flat::table::log::WIDTH
-        .min(window.size.width - safe.left - safe.right - 2.0 * gutter);
+    let corner = Anchor::Point(Vec2::new(rect.x + rect.width, rect.y), Vec2::X);
     let heading = toggle(icon_button(icons::LOG, name));
     if !open {
         let mut folded = heading;
         folded.anchor = Some(corner);
         return Some(folded);
     }
-    let mut shown = panel(width).child(heading).child(lines());
+    let mut shown = panel(rect.width).child(heading).child(lines());
     shown.anchor = Some(corner);
     Some(shown)
 }

@@ -154,6 +154,53 @@
       "max_height": 44,
       "align_x": "end",
       "align_y": "center"
+    },
+    "screen.column": {
+      "inset": [0, 16, 16, 16],
+      "max_width": 430,
+      "align_x": "center"
+    },
+    "screen.dock": {
+      "inset": [0, 16, 16, 16]
+    },
+    "gallery.column": {
+      "inset": [16, 16, 16, 16]
+    },
+    "result.dock": {
+      "inset": [0, 16, 16, 16],
+      "max_width": 398,
+      "align_x": "center"
+    },
+    "bug.hint": {
+      "inset": [14, 0, 0, 12]
+    },
+    "bug.tools": {
+      "inset": [8, 8, 0, 0]
+    },
+    "bug.sheet": {},
+    "manual.menu": {
+      "inset": [8, 8, 8, 8],
+      "max_width": 430,
+      "align_x": "center"
+    },
+    "manual.connection": {
+      "inset": [8, 0, 0, 0]
+    },
+    "manual.log": {
+      "inset": [16, 16, 0, 16],
+      "max_width": 320,
+      "align_x": "end"
+    },
+    "manual.proposals": {
+      "inset": [64, 16, 0, 16]
+    },
+    "manual.next": {
+      "region": "window",
+      "inset": [0, 24, 24, 0]
+    },
+    "manual.mana": {
+      "region": "log_area",
+      "inset": [8, 0, 0, 0]
     }
   },
   "checks": {
@@ -170,6 +217,43 @@
     ]
   },
   "settings_quick_action_min_width": 84,
+  "manual": {
+    "label_overlap": 16,
+    "mana_right": 32,
+    "mana_width": 48,
+    "mana_done_width": 84
+  },
+  "screen": {
+    "action_height": 48,
+    "action_gap": 8,
+    "action_text": 18,
+    "start": {
+      "corner": 56,
+      "gap": 8,
+      "agent_row": 56,
+      "agent_gap": 4,
+      "agent_padding_y": 8,
+      "agent_padding_x": 4,
+      "radio": 24,
+      "label": 13,
+      "agent_name": 16,
+      "about": 13,
+      "agents_least": 56,
+      "field": 44
+    },
+    "bug": {
+      "hint": 13,
+      "padding_y": 12,
+      "padding_x": 16,
+      "radius": 12,
+      "gap": 8,
+      "title": 20,
+      "description_least": 76,
+      "description_most": 144,
+      "submit_width": 80
+    },
+    "list_row": 44
+  },
   "legacy": {
     "hud.phone": {
       "button_text": 18,
@@ -180,9 +264,7 @@
       "pill_text": 16,
       "pill_padding": 10,
       "revealed_width": 52,
-      "sheet_margin": 8,
-      "mana_right": 32,
-      "mana_width": 48
+      "sheet_margin": 8
     },
     "hud.incoming.phone": {
       "left": 22,
@@ -194,24 +276,6 @@
     },
     "flat.phone": {
       "gutter": 16,
-      "column": 430,
-      "action_height": 48,
-      "action_gap": 8,
-      "action_text": 18,
-      "start": {
-        "corner": 56,
-        "gap": 8,
-        "agent_row": 56,
-        "agent_gap": 4,
-        "agent_padding_y": 8,
-        "agent_padding_x": 4,
-        "radio": 24,
-        "label": 13,
-        "agent_name": 16,
-        "about": 13,
-        "agents_least": 56,
-        "field": 44
-      },
       "opening": {
         "top": 88,
         "coin": 64,
@@ -236,28 +300,9 @@
         "reason_gap": 8,
         "card": 160,
         "card_narrow": 140,
-        "card_gap": 12,
-        "dock_width": 398
-      },
-      "bug": {
-        "tools_top": 8,
-        "tools_right": 8,
-        "hint_top": 14,
-        "hint_left": 12,
-        "hint": 13,
-        "padding_y": 12,
-        "padding_x": 16,
-        "radius": 12,
-        "gap": 8,
-        "title": 20,
-        "description_least": 76,
-        "description_most": 144,
-        "submit_width": 80
-      },
-      "list_row": 44
-    },
-    "flat.table.labels.phone_overlap": 16,
-    "flat.table.link.phone_top": 8
+        "card_gap": 12
+      }
+    }
   },
   "counts": [
     "flat.phone.opening.per_row"

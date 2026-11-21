@@ -210,7 +210,7 @@ fn a_proposal_line_turns_off_and_apply_sends_the_proposal() {
 }
 
 #[test]
-fn a_phone_folds_the_proposal_panel_to_a_button_that_opens_it() {
+fn a_compact_layout_folds_the_proposal_panel_to_a_button_that_opens_it() {
     let mut view = assisted_view();
     view.table.as_mut().unwrap().proposals = vec![ProposalView {
         id: 7,

@@ -6,8 +6,10 @@ use crate::element::{
     Align, Anchor, Element, Overflow, Presence, Property, TextAlign, Timing, Transition, column,
     row, text,
 };
-use crate::input::{Insets, Size};
+use crate::input::{Rect, Size};
+use kit_base::data::profiles::ScreenMetrics;
 use kit_base::data::space::flat::transition::MS;
+use kit_base::geometry::Window;
 use kit_base::pose::Curve;
 use kit_base::tokens::{color, size, space, type_style};
 
@@ -81,45 +83,73 @@ pub fn whole_window(window: Size, screen: Element) -> Element {
     screen
 }
 
-/// A portrait screen named `name`, which shows `content` in one column over the safe area: the
-/// screen is clear and anchored over the whole window, and `content` stands inside its safe
-/// area, the gutter in from its sides and foot, at most `phone::COLUMN` wide in the window's
-/// middle. `content` scrolls when it is taller than that, as it is while the system keyboard
-/// shortens the window, so that every action stays in reach; it is cut at the safe area, so
-/// nothing scrolls under the status bar or the home indicator.
-#[must_use]
-pub fn phone_screen(name: &str, window: Size, safe: Insets, content: Element) -> Element {
-    use kit_base::data::space::flat::phone::{COLUMN, GUTTER};
-    let across = window.width - safe.left - safe.right - 2.0 * GUTTER;
-    let extra = ((across - COLUMN) / 2.0).max(0.0);
-    let mut content = content
-        .grow(1.0)
-        .shrink(1.0)
-        .min_height(0.0)
-        .align_self(Align::Stretch)
-        .overflow(Overflow::Scroll);
-    content.style.padding = [0.0, GUTTER + extra, GUTTER, GUTTER + extra];
-    let mut screen = column()
-        .name(name)
-        .background([0; 4])
-        .border(([0; 4], 0.0))
-        .width(window.width)
-        .height(window.height)
-        .child(content);
-    screen.style.padding = [safe.top, safe.right, safe.bottom, safe.left];
-    // The flat layer's root puts a screen in its bottom right corner inside the dock's offsets,
-    // so the screen is anchored at the window's top left instead.
-    screen.anchor = Some(Anchor::Point(Vec2::ZERO, Vec2::ZERO));
-    screen
+/// The fitted column and action dock for a screen with limited horizontal space.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ScreenColumn {
+    pub bounds: Rect,
+    pub metrics: ScreenMetrics,
+    pub target: f32,
 }
 
-/// `button` as a phone's action: as wide as its column, `phone::ACTION_HEIGHT` tall, with
-/// larger type, as the web's phone dock draws its buttons (`.phone-opening .dock .button`).
+impl ScreenColumn {
+    /// Fills the window and scrolls the column when its contents outgrow the safe area.
+    #[must_use]
+    pub fn scrolling(self, name: &str, window: Window, content: Element) -> Element {
+        let safe = window.safe_area;
+        let bounds = self.bounds;
+        let mut content = content
+            .grow(1.0)
+            .shrink(1.0)
+            .min_height(0.0)
+            .align_self(Align::Stretch)
+            .overflow(Overflow::Scroll);
+        content.style.padding = [
+            bounds.y - safe.top,
+            window.size.width - safe.right - (bounds.x + bounds.width),
+            window.size.height - safe.bottom - (bounds.y + bounds.height),
+            bounds.x - safe.left,
+        ];
+        let mut screen = column()
+            .name(name)
+            .background([0; 4])
+            .border(([0; 4], 0.0))
+            .child(content);
+        screen.style.padding = [safe.top, safe.right, safe.bottom, safe.left];
+        whole_window(window.size, screen)
+    }
+
+    /// Stretches one action across the column at the profile's action height.
+    #[must_use]
+    pub fn action(self, button: Element) -> Element {
+        stretch_action(button, self.metrics.action_height, self.metrics.action_text)
+    }
+
+    /// Stacks a standalone screen's actions at the base of its dock.
+    #[must_use]
+    pub fn actions_at_foot(self, name: &str, buttons: Vec<Element>, dock: Rect) -> Element {
+        let mut actions = column()
+            .name(name)
+            .gap(self.metrics.action_gap)
+            .width(dock.width)
+            .children(buttons.into_iter().map(|button| self.action(button)));
+        actions.anchor = Some(Anchor::Point(
+            Vec2::new(dock.x + dock.width / 2.0, dock.y + dock.height),
+            Vec2::new(0.5, 1.0),
+        ));
+        actions
+    }
+}
+
+/// The stretched action used by the game result and the story palette.
 #[must_use]
-pub fn phone_action(mut button: Element) -> Element {
+pub fn compact_action(button: Element) -> Element {
     use kit_base::data::space::flat::phone::{ACTION_HEIGHT, ACTION_TEXT};
-    button.style.height = Some(ACTION_HEIGHT);
-    button.style.text.size = ACTION_TEXT;
+    stretch_action(button, ACTION_HEIGHT, ACTION_TEXT)
+}
+
+fn stretch_action(mut button: Element, height: f32, text: f32) -> Element {
+    button.style.height = Some(height);
+    button.style.text.size = text;
     button.style.min_width = None;
     button.style.align_self = Some(Align::Stretch);
     button.style.shrink = 0.0;

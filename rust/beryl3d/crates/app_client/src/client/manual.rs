@@ -219,14 +219,14 @@ impl Client {
     /// instead shows that submenu's rows in the sheet, and `BACK` shows the menu's rows again, as
     /// the web's menu pages do.
     pub(super) fn press_table_menu(&mut self, row: u16) {
-        let phone = self.window.phone();
+        let opens_in_sheet = self.show.table().profile().slot("manual.menu").is_some();
         let Some(menu) = &mut self.manual.menu else {
             return;
         };
         let folder = (menu.groups.iter().flat_map(|group| &group.rows))
             .nth(usize::from(row))
             .is_some_and(|row| !row.submenu.is_empty());
-        if phone && (row == BACK || folder) {
+        if opens_in_sheet && (row == BACK || folder) {
             menu.page = (row != BACK).then_some(row);
             self.show_screen();
             return;

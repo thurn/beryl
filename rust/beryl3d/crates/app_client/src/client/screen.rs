@@ -255,7 +255,9 @@ impl Client {
         };
         let bug = !self.bug_open();
         let on_table = matches!(self.screen, Screen::Game | Screen::Table);
-        let gear = (on_table && self.table_shown() && !self.window.phone())
+        let gear = (on_table
+            && self.table_shown()
+            && self.show.table().profile().size_class() == kit_scene::SizeClass::Regular)
             .then(|| screens::corner(bug, undo));
         let shown = gear.is_some();
         self.layer.float(floats::GEAR, gear);

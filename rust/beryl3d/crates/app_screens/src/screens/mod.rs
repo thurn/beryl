@@ -160,12 +160,13 @@ pub fn sheet_face(input: &ScreenIn) -> Option<kit_ui::input::FaceId> {
 pub fn screen(screen: Screen, input: &ScreenIn, log: Option<Element>) -> Element {
     match screen {
         Screen::Start => start::start(input),
-        Screen::Game if input.window.phone() => {
-            game::game_phone(&input.hud(), log, Action::new(settings::Message::Open))
+        Screen::Game if input.profile.data().table.bands.is_some() => {
+            game::game_compact(&input.hud(), log, Action::new(settings::Message::Open))
         }
         Screen::Game => game::game(&input.hud(), log),
         Screen::Lobby => lobby::lobby(&lobby::LobbyIn {
             window: input.window,
+            profile: input.profile,
             lobby: input.lobby,
             fields: input.fields,
         }),

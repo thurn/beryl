@@ -21,7 +21,7 @@ use kit_base::tokens::{space, type_style};
 use kit_frame::frame::{Frame, FrameBuilder, Material, Place, Role, StateBits};
 use kit_probe::agent::checks::text_fits;
 use kit_probe::agent::tree::{TreeOptions, tree};
-use kit_probe::agent::{Context, Layout, Rule};
+use kit_probe::agent::{Context, Rule};
 use kit_ui::element::{Action, floats, row, text};
 use kit_ui::input::{
     AssetReady, Button, GlyphCell, Insets, Modifiers, Pointer, PointerKind, PointerPhase, Size,
@@ -159,8 +159,8 @@ pub(super) fn context() -> Context {
     Context {
         recording: "flat-layer".to_owned(),
         seat: Side::You,
-        layout: Layout::Desktop,
-        checks: Layout::Desktop.checks(
+        layout: crate::REGULAR,
+        checks: crate::REGULAR.checks(
             &crate::test_data::data().profiles,
             kit_base::geometry::Size::default(),
         ),

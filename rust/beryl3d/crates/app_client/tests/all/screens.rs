@@ -10,7 +10,7 @@ use beryl_protocol::protocol::{Side, Status};
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use beryl_protocol::{AgentView, SessionId, StartRequest};
 use kit_frame::frame::StateBits;
-use kit_probe::agent::{self, Layout, TreeOptions};
+use kit_probe::agent::{self, TreeOptions};
 use kit_ui::input::{Insets, Size};
 
 const START: &str = "button \"Start\"";
@@ -49,7 +49,7 @@ fn page_at(messages: Vec<FixtureMessage>, size: Size) -> Page {
         crate::test_data::data(),
         Recording(messages).into(),
         Side::You,
-        Layout::Desktop,
+        crate::REGULAR,
         size,
     )
     .unwrap();

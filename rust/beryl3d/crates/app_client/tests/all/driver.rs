@@ -11,7 +11,6 @@ use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, timing};
 use beryl_protocol::{CandidateIndex, DecisionId, SessionId};
 use glam::Vec2;
 use kit_frame::frame::StateBits;
-use kit_probe::agent::Layout;
 use kit_ui::input::{KeyCode, PointerPhase, Size};
 
 fn ms(milliseconds: u64) -> Duration {
@@ -44,7 +43,7 @@ fn page(views: &[ViewBuilder]) -> Page {
         crate::test_data::data(),
         recording(views).into(),
         Side::You,
-        Layout::Desktop,
+        crate::REGULAR,
         Size {
             width: 1600.0,
             height: 900.0,
@@ -189,7 +188,7 @@ fn views_the_game_plays_on_through_arrive_together() {
         crate::test_data::data(),
         recording.into(),
         Side::You,
-        Layout::Desktop,
+        crate::REGULAR,
         size,
     )
     .unwrap();

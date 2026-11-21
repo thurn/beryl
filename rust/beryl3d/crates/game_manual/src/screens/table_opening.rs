@@ -18,10 +18,10 @@ use glam::Vec2;
 use crate::manual::TablePress;
 use crate::manual::opening::{OpeningPress, prompt};
 use game_hud::screens::opening::{Presentation, present};
+use game_table::profiles::Profile;
 use game_table::table::Window;
 use kit_base::tokens::{color, size, space};
-use kit_ui::element::{Action, Align, Anchor, Element, column, row};
-use kit_ui::widgets::screen::phone_action;
+use kit_ui::element::{Action, Align, Anchor, Element, row};
 use kit_ui::widgets::{button, primary};
 
 /// The press on a card of the opening hand: it goes on the bottom, or comes back.
@@ -39,14 +39,18 @@ fn answer(label: &str, press: OpeningPress, first: bool) -> Element {
 /// they never inherit its passing the pointer through; empty while the viewer has no prompt of
 /// it open.
 #[must_use]
-pub(super) fn table_opening(view: Option<&PlayerView>, window: Window) -> Vec<Element> {
-    view.and_then(|view| pieces(view, window))
+pub(super) fn table_opening(
+    view: Option<&PlayerView>,
+    window: Window,
+    profile: Profile<'_>,
+) -> Vec<Element> {
+    view.and_then(|view| pieces(view, window, profile))
         .map_or_else(Vec::new, |(shown, actions)| vec![shown, actions])
 }
 
 /// The guided start's screen and its buttons, as `table_opening` returns them.
-fn pieces(view: &PlayerView, window: Window) -> Option<(Element, Element)> {
-    let phone = window.phone();
+fn pieces(view: &PlayerView, window: Window, profile: Profile<'_>) -> Option<(Element, Element)> {
+    let dock_slot = profile.screen_column().zip(profile.slot("screen.dock"));
     let (shown, buttons, middle) = match prompt(view)? {
         TablePrompt::Choose { title, options, .. } => {
             let mut buttons: Vec<Element> = (options.iter().enumerate())
@@ -70,7 +74,7 @@ fn pieces(view: &PlayerView, window: Window) -> Option<(Element, Element)> {
                 press: None,
                 choice: &[],
             };
-            (present(&shown, window), buttons, !phone)
+            (present(&shown, window), buttons, dock_slot.is_none())
         }
         TablePrompt::Opening {
             hand,
@@ -122,8 +126,8 @@ fn pieces(view: &PlayerView, window: Window) -> Option<(Element, Element)> {
     };
     let actions = if middle {
         middle_row(buttons, window)
-    } else if phone {
-        phone_dock(buttons, window)
+    } else if let Some((layout, slot)) = dock_slot {
+        layout.actions_at_foot("opening actions", buttons, slot.rect)
     } else {
         dock(buttons, window)
     };
@@ -153,24 +157,5 @@ fn dock(buttons: Vec<Element>, window: Window) -> Element {
     let inset = kit_base::data::space::flat::table::EDGE;
     let corner = Vec2::new(window.width - inset, window.height - inset);
     dock.anchor = Some(Anchor::Point(corner, Vec2::ONE));
-    dock
-}
-
-/// The buttons stacked across the foot of the phone's safe area, as the web's phone dock
-/// stands them.
-fn phone_dock(buttons: Vec<Element>, window: Window) -> Element {
-    use kit_base::data::space::flat::phone::{ACTION_GAP, GUTTER};
-    let safe = window.safe_area;
-    let width = window.size.width - safe.left - safe.right - 2.0 * GUTTER;
-    let mut dock = column()
-        .name("opening actions")
-        .gap(ACTION_GAP)
-        .width(width)
-        .children(buttons.into_iter().map(phone_action));
-    let foot = Vec2::new(
-        safe.left + GUTTER + width / 2.0,
-        window.size.height - safe.bottom - GUTTER,
-    );
-    dock.anchor = Some(Anchor::Point(foot, Vec2::new(0.5, 1.0)));
     dock
 }

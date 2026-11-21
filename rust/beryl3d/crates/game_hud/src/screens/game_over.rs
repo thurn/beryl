@@ -21,13 +21,12 @@ use game_table::faces::FaceList;
 use game_table::table::{CARD_HEIGHT, CARD_WIDTH};
 use kit_base::data::space::flat::phone::game_over as metrics;
 use kit_base::data::space::flat::phone::opening::NARROW_BELOW;
-use kit_base::data::space::flat::phone::{ACTION_GAP, GUTTER};
 use kit_base::tokens::{color, ratio, size, space, type_style};
 use kit_frame::frame::Role;
 use kit_text::text::TypeStyle;
 use kit_ui::element::{Align, Anchor, Element, Filter, Justify, Shown, column, holder, text};
 use kit_ui::input::FaceSize;
-use kit_ui::widgets::screen::{backdrop, phone_action};
+use kit_ui::widgets::screen::backdrop;
 use kit_ui::widgets::{button, primary};
 
 /// The width of the card that ended the game, the web's 230 on the desktop.
@@ -180,8 +179,12 @@ fn result(input: &HudIn, outcome: Option<&OutcomeView>) -> Element {
 /// `--button-gap` apart and as wide as the widest, at least `--button-width`. The web's
 /// `DockButtons` puts its first button at the foot, so `New Game` comes last here.
 fn dock(input: &HudIn, buttons: Vec<Element>) -> Element {
-    if input.window.phone() {
-        return phone_dock(input, buttons);
+    if let Some((layout, slot)) = input
+        .profile
+        .screen_column()
+        .zip(input.profile.slot("result.dock"))
+    {
+        return layout.actions_at_foot("game over buttons", buttons, slot.rect);
     }
     let window = input.window;
     let at = Vec2::new(
@@ -206,27 +209,6 @@ const DOCK_RIGHT: f32 = size::GAME_OVER_BUTTONS_RIGHT;
 const BUTTON_GAP: f32 = space::M;
 /// The dock's least width, the web's `--button-width`.
 const DOCK_WIDTH: f32 = size::BUTTON_WIDTH;
-
-/// The phone's dock (`.phone-game-over > .dock`): as wide as the window less its gutters, up to
-/// `game_over.dock_width`, standing the gutter above the safe area's foot, with each button as
-/// wide as the dock.
-fn phone_dock(input: &HudIn, buttons: Vec<Element>) -> Element {
-    let window = input.window;
-    let safe = window.safe_area;
-    let width =
-        (window.size.width - safe.left - safe.right - 2.0 * GUTTER).min(metrics::DOCK_WIDTH);
-    let at = Vec2::new(
-        safe.left + (window.size.width - safe.left - safe.right) / 2.0,
-        window.size.height - safe.bottom - GUTTER,
-    );
-    let mut dock = column()
-        .name("game over buttons")
-        .width(width)
-        .gap(ACTION_GAP)
-        .children(buttons.into_iter().map(phone_action));
-    dock.anchor = Some(Anchor::Point(at, Vec2::new(0.5, 1.0)));
-    dock
-}
 
 /// The middle of the window or, on the phone, of its safe area.
 fn middle(input: &HudIn) -> Vec2 {

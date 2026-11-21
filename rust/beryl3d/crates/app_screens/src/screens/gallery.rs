@@ -1,7 +1,7 @@
 //! The web component gallery's samples. On the desktop they stand on the web's page of numbered
 //! panels (`desktop`); on a phone they stand in one scrolling column.
 
-mod desktop;
+mod reference;
 mod samples;
 
 pub use samples::faces;
@@ -63,18 +63,14 @@ pub fn gallery(input: &ScreenIn) -> Element {
     let inset = input.window.safe_area;
     let width = (input.window.size.width - inset.left - inset.right).max(0.0);
     let height = (input.window.size.height - inset.top - inset.bottom).max(0.0);
-    if !input.window.phone() {
-        return on_desktop(input, faces, width, height);
-    }
+    let Some(slot) = input.profile.slot("gallery.column") else {
+        return reference_page(input, faces, width, height);
+    };
     // On a phone the samples stand in one column the phone's gutter in from the safe area's
     // sides, as the other portrait screens do; the sample rows wrap to that width.
-    let edge = if input.window.phone() {
-        kit_base::data::space::flat::phone::GUTTER
-    } else {
-        space::L
-    };
+    let edge = slot.rect.x - inset.left;
     let content = column()
-        .width((width - 2.0 * edge).clamp(0.0, metrics::WIDTH))
+        .width(slot.rect.width.min(metrics::WIDTH))
         .shrink(0.0)
         .align_items(Align::Center)
         .gap(space::L)
@@ -140,7 +136,7 @@ pub fn gallery(input: &ScreenIn) -> Element {
 /// The gallery on the desktop: the web's page, centred in the window, which scrolls to show
 /// its lower panels. A menu opens where its button was pressed, and the command list's preview
 /// stands in the middle of the window, as the web's `CommandList` panel does.
-fn on_desktop(input: &ScreenIn, faces: &FaceList, width: f32, height: f32) -> Element {
+fn reference_page(input: &ScreenIn, faces: &FaceList, width: f32, height: f32) -> Element {
     let GalleryState {
         menu: opened,
         query,
@@ -153,7 +149,7 @@ fn on_desktop(input: &ScreenIn, faces: &FaceList, width: f32, height: f32) -> El
         .background(color::GALLERY_PAGE)
         .overflow(Overflow::Scroll)
         .align_items(Align::Center)
-        .child(desktop::page(faces, opened.is_none() && query.is_none()))
+        .child(reference::page(faces, opened.is_none() && query.is_none()))
         .shortcut("Escape", escape(input.gallery));
     screen.anchor = Some(Anchor::Point(Vec2::new(inset.left, inset.top), Vec2::ZERO));
     if let Some(query) = query {

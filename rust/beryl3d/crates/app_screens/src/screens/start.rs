@@ -14,7 +14,7 @@ use kit_base::tokens::{color, ratio, size, space, type_style};
 use kit_frame::frame::Role;
 use kit_text::text::TypeStyle;
 use kit_ui::element::{Align, Border, Element, Justify, Position, column, row, text};
-use kit_ui::widgets::screen::{phone_action, phone_screen, whole_window};
+use kit_ui::widgets::screen::{ScreenColumn, whole_window};
 use kit_ui::widgets::start_panel::{
     PANEL_GAP, PANEL_PADDING, PANEL_WIDTH, checkbox, panel_look, small,
 };
@@ -129,8 +129,8 @@ pub fn in_progress(view: Option<&beryl_protocol::PlayerView>) -> bool {
 /// recordings (`ScreenIn::recordings`), the key T opens the testing screen.
 #[must_use]
 pub fn start(input: &ScreenIn) -> Element {
-    if input.window.phone() {
-        return start_phone(input);
+    if let Some(layout) = input.profile.screen_column() {
+        return start_column(input, layout);
     }
     let form = input.start;
     let Chosen {
@@ -149,7 +149,7 @@ pub fn start(input: &ScreenIn) -> Element {
     ];
     let rows = input.agents.iter().enumerate().map(|(at, agent)| {
         let at = u16::try_from(at).unwrap_or(u16::MAX);
-        agent_row(agent, at, form.agent == Some(at), false)
+        agent_row(agent, at, form.agent == Some(at), None)
     });
     // The host offers a dozen agents, more than a short window has room for, so the rows
     // scroll inside what the rest of the panel leaves.
@@ -186,7 +186,7 @@ pub fn start(input: &ScreenIn) -> Element {
         .children(game_manual::screens::table_entries::entries(
             input.entries,
             input.fields,
-            false,
+            None,
         ))
         .child(export)
         .child(export_tip);
@@ -260,8 +260,8 @@ fn with_keys(screen: Element, input: &ScreenIn, going_on: bool) -> Element {
 /// above the other, the solo table and the export of bug reports at its foot. There is no
 /// title, as on the web's phone. When the window is too short for even one opponent's row (the
 /// system keyboard is up), the whole column scrolls instead, so every action stays in reach.
-fn start_phone(input: &ScreenIn) -> Element {
-    use kit_base::data::space::flat::phone::start as metrics;
+fn start_column(input: &ScreenIn, layout: ScreenColumn) -> Element {
+    let metrics = layout.metrics.start;
     let form = input.start;
     let Chosen {
         going_on,
@@ -269,7 +269,7 @@ fn start_phone(input: &ScreenIn) -> Element {
         seed_ok,
         startable,
     } = Chosen::of(input);
-    let target = kit_base::data::audit::PHONE_TARGET_POINTS;
+    let target = layout.target;
     let sound = icon_button(widgets::icons::SPEAKER, "Sound")
         .width(target)
         .height(target)
@@ -277,40 +277,40 @@ fn start_phone(input: &ScreenIn) -> Element {
         .on_press(SettingsMessage::Open);
     let corner = row()
         .name("sound corner")
-        .height(metrics::CORNER)
+        .height(metrics.corner)
         .shrink(0.0)
         .align_items(Align::Center)
         .justify_content(Justify::End)
         .child(sound);
     let legend = text("OPPONENT")
         .style(TypeStyle {
-            size: metrics::LABEL,
+            size: metrics.label,
             ..LABEL
         })
         .color(color::TEXT_DIM)
         .shrink(0.0);
     let rows = input.agents.iter().enumerate().map(|(at, agent)| {
         let at = u16::try_from(at).unwrap_or(u16::MAX);
-        agent_row(agent, at, form.agent == Some(at), true)
+        agent_row(agent, at, form.agent == Some(at), Some(metrics))
     });
     let agents = list("Opponent", rows)
-        .gap(metrics::AGENT_GAP)
+        .gap(metrics.agent_gap)
         .shrink(1.0)
-        .min_height(metrics::AGENTS_LEAST);
+        .min_height(metrics.agents_least);
     let mut seed_row = seed_row(&seed_state, seed_ok);
-    seed_row.style.height = Some(metrics::FIELD);
+    seed_row.style.height = Some(metrics.field);
     seed_row.style.shrink = 0.0;
     if let Some(field) = seed_row.children.last_mut() {
         field.style.width = None;
         field.style.grow = 1.0;
         field.style.align_self = Some(Align::Stretch);
     }
-    let fair = fair_box(form.fair).min_height(metrics::FIELD).shrink(0.0);
+    let fair = fair_box(form.fair).min_height(metrics.field).shrink(0.0);
     let (start, back) = start_buttons(going_on, form.confirming, startable);
     let export = button("Export Bug Reports").on_press(ScreenPress::ExportBugs);
     let content = column()
         .name("start column")
-        .gap(metrics::GAP)
+        .gap(metrics.gap)
         .child(corner)
         .child(legend)
         .child(agents)
@@ -318,16 +318,16 @@ fn start_phone(input: &ScreenIn) -> Element {
         .child(row().name("space").grow(1.0))
         .child(seed_row)
         .child(fair)
-        .child(phone_action(start))
-        .children(back.map(phone_action))
+        .child(layout.action(start))
+        .children(back.map(|back| layout.action(back)))
         .children(game_manual::screens::table_entries::entries(
             input.entries,
             input.fields,
-            true,
+            Some(layout),
         ))
-        .child(phone_action(export));
+        .child(layout.action(export));
     with_keys(
-        phone_screen("start", input.window.size, input.window.safe_area, content),
+        layout.scrolling("start", input.window, content),
         input,
         going_on,
     )
@@ -402,23 +402,27 @@ fn corner() -> Element {
 /// The row that offers `agent`, the `at`th the host listed, as one of a group of radio
 /// buttons (`.start-agent`): a dot, the agent's title, a note if it cheats, and what it does
 /// under the title. The chosen row is tinted gold.
-fn agent_row(agent: &AgentView, at: u16, chosen: bool, phone: bool) -> Element {
-    use kit_base::data::space::flat::phone::start as metrics;
+fn agent_row(
+    agent: &AgentView,
+    at: u16,
+    chosen: bool,
+    compact: Option<kit_base::data::profiles::StartScreen>,
+) -> Element {
     // The phone's rows are taller, with a larger dot and smaller type (`.phone-start-screen
     // .start-agent`), so each row is a touch target of its own.
-    let radio = if phone { metrics::RADIO } else { RADIO };
-    let (agent_name, about, cheating_note) = if phone {
+    let radio = compact.map_or(RADIO, |metrics| metrics.radio);
+    let (agent_name, about, cheating_note) = if let Some(metrics) = compact {
         (
             TypeStyle {
-                size: metrics::AGENT_NAME,
+                size: metrics.agent_name,
                 ..AGENT_NAME
             },
             TypeStyle {
-                size: metrics::ABOUT,
+                size: metrics.about,
                 ..ABOUT
             },
             TypeStyle {
-                size: metrics::ABOUT,
+                size: metrics.about,
                 ..CHEATING_NOTE
             },
         )
@@ -435,7 +439,7 @@ fn agent_row(agent: &AgentView, at: u16, chosen: bool, phone: bool) -> Element {
         .align_items(Align::Center)
         .justify_content(Justify::Center)
         .margin([
-            if phone { 0.0 } else { size::START_RADIO_DROP },
+            compact.map_or(size::START_RADIO_DROP, |_| 0.0),
             0.0,
             0.0,
             0.0,
@@ -476,12 +480,12 @@ fn agent_row(agent: &AgentView, at: u16, chosen: bool, phone: bool) -> Element {
         .on_press(ScreenPress::Agent(at))
         .child(dot)
         .child(words);
-    element.style.padding = if phone {
+    element.style.padding = if let Some(metrics) = compact {
         [
-            metrics::AGENT_PADDING_Y,
-            metrics::AGENT_PADDING_X,
-            metrics::AGENT_PADDING_Y,
-            metrics::AGENT_PADDING_X,
+            metrics.agent_padding_y,
+            metrics.agent_padding_x,
+            metrics.agent_padding_y,
+            metrics.agent_padding_x,
         ]
     } else {
         [
@@ -491,9 +495,9 @@ fn agent_row(agent: &AgentView, at: u16, chosen: bool, phone: bool) -> Element {
             size::START_AGENT_PADDING_X,
         ]
     };
-    if phone {
+    if let Some(metrics) = compact {
         element = element
-            .min_height(metrics::AGENT_ROW)
+            .min_height(metrics.agent_row)
             .align_items(Align::Center)
             .shrink(0.0);
     }

@@ -16,7 +16,7 @@ use kit_base::tokens::type_style::START_LABEL as LABEL;
 use kit_base::tokens::{color, space, type_style};
 use kit_text::text::TypeStyle;
 use kit_ui::element::{Align, Element, column, row, text};
-use kit_ui::widgets::screen::phone_action;
+use kit_ui::widgets::screen::ScreenColumn;
 use kit_ui::widgets::{Fields, button, field, primary};
 
 /// The name of the host or join form's name field.
@@ -71,23 +71,31 @@ pub struct TableEntries {
 /// The table buttons, the open form, the saved tables and the last error, laid out for the
 /// desktop's panel or, with `phone`, the phone's column, whose buttons fill its width.
 #[must_use]
-pub fn entries(entries: &TableEntries, fields: &Fields, phone: bool) -> Vec<Element> {
+pub fn entries(
+    entries: &TableEntries,
+    fields: &Fields,
+    layout: Option<ScreenColumn>,
+) -> Vec<Element> {
     // Three buttons at the usual least width are wider than the desktop panel, so each takes
     // its words' width there, as the web's `.lobby-actions` buttons do.
     let action = |mut button: Element| {
-        if phone {
-            phone_action(button)
+        if let Some(layout) = layout {
+            layout.action(button)
         } else {
             button.style.min_width = None;
             button
         }
     };
     let press = |press: LobbyPress| press;
-    let mut buttons = (if phone { column() } else { row() })
+    let mut buttons = (if layout.is_some() { column() } else { row() })
         .name("manual tables")
         .gap(space::M)
-        .align_self(if phone { Align::Stretch } else { Align::Center });
-    if !phone {
+        .align_self(if layout.is_some() {
+            Align::Stretch
+        } else {
+            Align::Center
+        });
+    if layout.is_none() {
         buttons = buttons.child(action(
             button("Host a table").on_press(press(LobbyPress::Host)),
         ));
@@ -100,7 +108,7 @@ pub fn entries(entries: &TableEntries, fields: &Fields, phone: bool) -> Vec<Elem
             button("Solo table").on_press(press(LobbyPress::Solo)),
         ));
     let mut shown = vec![buttons];
-    shown.extend(entries.mode.map(|mode| form(fields, mode, phone)));
+    shown.extend(entries.mode.map(|mode| form(fields, mode, layout)));
     if !entries.saved.is_empty() {
         let rows = (0u16..).zip(&entries.saved).map(|(at, saved)| {
             let names = match &saved.guest {
@@ -139,7 +147,7 @@ pub fn entries(entries: &TableEntries, fields: &Fields, phone: bool) -> Vec<Elem
 
 /// The host or join form: the name, the invite code to join, the button that opens the table
 /// once the fields hold what it needs, and Cancel.
-fn form(fields: &Fields, mode: EntryMode, phone: bool) -> Element {
+fn form(fields: &Fields, mode: EntryMode, layout: Option<ScreenColumn>) -> Element {
     let labelled = |label: &str, name: &str| {
         let mut field = field(name, &fields.get(name));
         field.style.align_self = Some(Align::Stretch);
@@ -158,12 +166,12 @@ fn form(fields: &Fields, mode: EntryMode, phone: bool) -> Element {
         .enabled(ready)
         .on_press(LobbyPress::OpenTable);
     let cancel = button("Cancel").on_press(LobbyPress::CancelEntry);
-    let buttons = if phone {
+    let buttons = if let Some(layout) = layout {
         column()
             .gap(space::M)
             .align_self(Align::Stretch)
-            .child(phone_action(open))
-            .child(phone_action(cancel))
+            .child(layout.action(open))
+            .child(layout.action(cancel))
     } else {
         row().gap(space::M).child(open).child(cancel)
     };

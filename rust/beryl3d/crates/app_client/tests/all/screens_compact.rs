@@ -17,7 +17,7 @@ use beryl_protocol::protocol::{
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use beryl_protocol::{AgentView, StartRequest};
 use kit_frame::frame::StateBits;
-use kit_probe::agent::{Layout, Rule};
+use kit_probe::agent::Rule;
 use kit_ui::input::{Insets, Rect, Size};
 
 /// The three phone windows the interface tests play.
@@ -72,7 +72,7 @@ fn page_in(messages: Vec<FixtureMessage>, size: Size, safe: Insets) -> Page {
         crate::test_data::data(),
         Recording(messages).into(),
         Side::You,
-        Layout::Phone,
+        crate::COMPACT,
         size,
     )
     .expect("the recording plays")
@@ -88,7 +88,7 @@ fn layout_faults(page: &mut Page) -> Vec<String> {
         Rule::OnScreen,
         Rule::Overlap,
         Rule::TextFits,
-        Rule::PhoneSizes,
+        Rule::MinimumSizes,
     ];
     (page.faults().into_iter())
         .filter(|fault| rules.contains(&fault.rule))
@@ -144,7 +144,7 @@ fn start_in(size: Size, safe: Insets, agent: &str, seed: Option<u32>) -> Page {
 }
 
 #[test]
-fn the_start_screen_fits_each_phone_and_starts_with_the_chosen_agent_and_seed() {
+fn the_start_screen_fits_each_compact_and_starts_with_the_chosen_agent_and_seed() {
     for size in PHONES {
         let mut page = start(size, "greedy", Some(1234));
         assert_eq!(layout_faults(&mut page), Vec::<String>::new(), "{size:?}");

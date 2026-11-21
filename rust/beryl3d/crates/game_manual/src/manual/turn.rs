@@ -140,23 +140,30 @@ pub fn advance(view: &PlayerView, with_action: bool) -> Vec<TableAction> {
 /// of the game's action dock (`prompts::bar`), `layout::DOCK_RIGHT` and `DOCK_BOTTOM` in from
 /// the corner. On the phone it stands the table's edge (`flat.table.edge`) in from the corner.
 #[must_use]
-pub fn next(phase: TablePhase, window: Window) -> Element {
-    use game_hud::prompts::bar::{captioned, desktop_dock, dock_sized, turn_action};
+pub fn next(
+    phase: TablePhase,
+    window: Window,
+    profile: game_table::profiles::Profile<'_>,
+) -> Element {
+    use game_hud::prompts::bar::{captioned, captioned_dock, dock_sized, turn_action};
     use kit_ui::layout::{DOCK_BOTTOM, DOCK_RIGHT};
     let size = window.size;
     let button = primary("Next").on_press(TablePress::Next);
     let caption = caption(next_phase(phase));
-    let (mut action, inset) = if window.phone() {
-        let edge = kit_base::data::space::flat::table::EDGE;
-        (captioned(button, caption), Vec2::splat(edge))
+    let (mut action, corner) = if let Some(slot) = profile.slot("manual.next") {
+        let rect = slot.rect;
+        (
+            captioned(button, caption),
+            Vec2::new(rect.x + rect.width, rect.y + rect.height),
+        )
     } else {
-        let dock = desktop_dock().child(turn_action(dock_sized(button), None, caption));
-        (dock, Vec2::new(DOCK_RIGHT, DOCK_BOTTOM))
+        let dock = captioned_dock().child(turn_action(dock_sized(button), None, caption));
+        (
+            dock,
+            Vec2::new(size.width - DOCK_RIGHT, size.height - DOCK_BOTTOM),
+        )
     };
-    action.anchor = Some(Anchor::Point(
-        Vec2::new(size.width, size.height) - inset,
-        Vec2::ONE,
-    ));
+    action.anchor = Some(Anchor::Point(corner, Vec2::ONE));
     action
 }
 

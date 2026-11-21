@@ -4,10 +4,10 @@ use beryl_protocol::protocol::ProposalView;
 use game_hud::hud::placement_scene::{Group, PlacementScene, rect};
 use game_table::profiles::TableBands;
 use glam::Vec2;
-use kit_base::data::space::hud::phone;
+use kit_base::data::profiles::Banded;
+use kit_base::geometry::Rect;
 use kit_base::tokens::{size, space, type_style};
 use kit_ui::element::{Anchor, Element, row};
-use kit_ui::input::Window;
 use kit_ui::widgets::button;
 
 use super::TablePress;
@@ -20,14 +20,14 @@ pub(super) fn ask_dock(
     field: Element,
     actions: [Element; 2],
     suggestions: Option<&[&str]>,
-    bands: TableBands,
+    (bands, metrics): (TableBands, &Banded),
     layout: Option<&PlacementScene>,
 ) -> Element {
     const SUGGESTIONS_PER_ROW: u8 = 3;
     let width = bands.right - bands.left;
     let padding = space::M;
-    let gap = phone::DOCK_GAP;
-    let high = phone::BUTTON_HEIGHT;
+    let gap = metrics.dock_gap;
+    let high = metrics.button_height;
     let inner = width - 2.0 * (padding + size::BORDER);
     let control = |element: Element, wide: f32| element.min_width(0.0).width(wide).height(high);
     let [minus, plus] = inputs;
@@ -106,33 +106,36 @@ pub(super) fn ask_dock(
 /// A proposal tries the corner, then the space above the viewer’s strip.
 pub(super) fn proposal_slot(
     proposals: &[ProposalView],
-    window: Window,
+    corner: Rect,
     bands: TableBands,
     layout: Option<&PlacementScene>,
-    right: f32,
-    top: f32,
+    target: f32,
 ) -> Option<Anchor> {
     let layout = layout?;
-    let safe = window.safe_area;
-    let gutter = kit_base::data::space::flat::phone::GUTTER;
-    let width = window.size.width - safe.left - safe.right - 2.0 * gutter;
-    let height = panel_height(proposals);
-    let preferred = rect(right - width, top, width, height);
-    let over_hand = rect(right - width, bands.your_strip.top - height, width, height);
+    let height = panel_height(proposals, target);
+    let preferred = rect(corner.x, corner.y, corner.width, height);
+    let over_hand = rect(
+        corner.x,
+        bands.your_strip.top - height,
+        corner.width,
+        height,
+    );
     let choices = [preferred, over_hand].into_iter().map(Into::into);
     let avoids = vec![Group::YourRows.children(), Group::Stack.children()];
     let (_, placed) = layout.place("proposal panel", avoids, choices)?;
-    Some(Anchor::Point(Vec2::new(right, placed.y), Vec2::X))
+    Some(Anchor::Point(
+        Vec2::new(corner.x + corner.width, placed.y),
+        Vec2::X,
+    ))
 }
 
 /// The space the title, review rows and Apply need before the panel is laid out.
-fn panel_height(proposals: &[ProposalView]) -> f32 {
+fn panel_height(proposals: &[ProposalView], touch: f32) -> f32 {
     #[expect(
         clippy::cast_precision_loss,
         reason = "proposal panels hold a short list"
     )]
     let count = |length: usize| length as f32;
-    let touch = kit_base::data::audit::PHONE_TARGET_POINTS;
     let title = type_style::BODY.size * type_style::BODY.line_height;
     2.0 * space::M
         + touch

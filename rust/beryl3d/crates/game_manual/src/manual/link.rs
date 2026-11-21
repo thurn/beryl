@@ -12,7 +12,7 @@ use glam::Vec2;
 
 use super::TablePress;
 use game_play::hud::notices::step_banner;
-use kit_base::data::space::flat::table::link::{PHONE_TOP, TOP, TOP_SHARE, WIDTH};
+use kit_base::data::space::flat::table::link::{TOP, TOP_SHARE, WIDTH};
 use kit_base::tokens::{color, size, space, type_style};
 use kit_ui::element::{Align, Anchor, Element, column, text};
 use kit_ui::input::Size;
@@ -74,10 +74,6 @@ pub fn banner(view: &PlayerView, window: Size, top: f32, error: Option<&str>) ->
 /// `.table-link`'s padding (`flat.table.link` in `data/beryl3d/space-constants.json`), at most a share of
 /// the window's height, on the desktop. The banner is at most `flat.table.link.width` wide.
 #[must_use]
-pub fn top(window: Size, phone: bool, safe_top: f32) -> f32 {
-    if phone {
-        safe_top + PHONE_TOP
-    } else {
-        TOP.min(TOP_SHARE * window.height)
-    }
+pub fn top(window: Size) -> f32 {
+    TOP.min(TOP_SHARE * window.height)
 }

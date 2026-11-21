@@ -6,7 +6,6 @@ use beryl_card_records::{TokenMakers, fixture_message};
 use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::protocol::{Culprit, LossReason, OutcomeView, Side, Stall, Status, ZoneName};
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
-use kit_probe::agent::Layout;
 use kit_ui::input::Size;
 
 const WINDOW: Size = Size {
@@ -27,7 +26,7 @@ fn over(outcome: OutcomeView) -> Page {
         crate::test_data::data(),
         Recording(messages).into(),
         Side::You,
-        Layout::Desktop,
+        crate::REGULAR,
         WINDOW,
     )
     .expect("the view can be read");

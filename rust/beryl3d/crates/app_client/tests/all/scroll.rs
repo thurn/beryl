@@ -14,7 +14,7 @@ use beryl_protocol::testing::{self, ScriptBuilder, ViewBuilder, step, timing};
 use game_probe::agent::steps::rest_equals_placement;
 use glam::Vec2;
 use kit_frame::frame::{Frame, Place, Role};
-use kit_probe::agent::{Layout, Rule};
+use kit_probe::agent::Rule;
 use kit_scene::hit::uncovered;
 use kit_ui::input::{Button, Size};
 use kit_ui::input::{Insets, Modifiers, Pointer, PointerKind, PointerPhase};
@@ -45,7 +45,7 @@ fn page(view: &ViewBuilder) -> Page {
         crate::test_data::data(),
         Recording(messages).into(),
         Side::You,
-        Layout::Desktop,
+        crate::REGULAR,
         WINDOW,
     )
     .expect("the page opens");
@@ -181,13 +181,14 @@ fn keys_scroll_the_row_last_pressed_by_whole_groups() {
 
 #[test]
 fn the_wheel_scrolls_a_group_window_supplied_by_the_arrangement_solver() {
+    use game_table::table::REFERENCE;
     use glam::Quat;
     use kit_base::geometry::Window;
     use kit_space::arrange::{Container, Item, Limits, Policy, Region, arrange};
-    use kit_space::camera::{Camera, DESKTOP_CAMERA};
+    use kit_space::camera::Camera;
     use kit_ui::scroll::{ScrollGesture, ScrollInput, Viewport};
 
-    let camera = Camera::fit(DESKTOP_CAMERA, Window::default());
+    let camera = Camera::fit(REFERENCE.camera, Window::default());
     let container = Container {
         region: Region {
             centre: camera.data.target,
@@ -401,7 +402,7 @@ fn a_script_played_while_a_row_scrolls_ends_where_placement_rests_each_card() {
 /// drawn there for the whole script as soon as a card before them left and they dropped one
 /// layer. And a card already off that end rose in place there as it flew to the row's end.
 #[test]
-fn a_card_flying_to_the_hidden_end_of_a_phone_row_is_seen() {
+fn a_card_flying_to_the_hidden_end_of_a_compact_row_is_seen() {
     let size = Size {
         width: 393.0,
         height: 759.0,
@@ -415,7 +416,7 @@ fn a_card_flying_to_the_hidden_end_of_a_phone_row_is_seen() {
         crate::test_data::data(),
         Recording(vec![FixtureMessage::game_update(&before)]).into(),
         Side::You,
-        Layout::Phone,
+        crate::COMPACT,
         size,
     )
     .expect("the page opens");
@@ -463,7 +464,7 @@ fn a_card_flying_to_the_hidden_end_of_a_phone_row_is_seen() {
         crate::test_data::data(),
         Recording(messages).into(),
         Side::You,
-        Layout::Phone,
+        crate::COMPACT,
         size,
     )
     .expect("the views can be read");
@@ -540,7 +541,7 @@ fn a_card_waiting_at_a_crowded_rows_hidden_end_is_not_drawn() {
         crate::test_data::data(),
         Recording(messages).into(),
         Side::You,
-        Layout::Phone,
+        crate::COMPACT,
         size,
     )
     .expect("the views can be read");

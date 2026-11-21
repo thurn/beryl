@@ -60,7 +60,13 @@ impl Layout {
     /// The legacy layout label for the profile that applies to this logical size.
     #[must_use]
     pub fn for_size(profiles: &Profiles, size: Size) -> Self {
-        match profiles.for_size(size).size_class {
+        Self::for_size_class(profiles.for_size(size).size_class)
+    }
+
+    /// The legacy layout label for a test size class.
+    #[must_use]
+    pub const fn for_size_class(class: SizeClass) -> Self {
+        match class {
             SizeClass::Compact => Self::Phone,
             SizeClass::Regular => Self::Desktop,
         }
@@ -83,7 +89,7 @@ pub enum Rule {
     Clips,
     LayerDrawn,
     RelationsHold,
-    PhoneSizes,
+    MinimumSizes,
     Jump,
     RestPlacement,
     StepTime,
@@ -105,7 +111,7 @@ impl Rule {
         Self::Clips,
         Self::LayerDrawn,
         Self::RelationsHold,
-        Self::PhoneSizes,
+        Self::MinimumSizes,
         Self::Jump,
         Self::RestPlacement,
         Self::StepTime,
@@ -141,7 +147,7 @@ impl Rule {
             Self::Clips => "clips",
             Self::LayerDrawn => "layer-drawn",
             Self::RelationsHold => "relations-hold",
-            Self::PhoneSizes => "phone-sizes",
+            Self::MinimumSizes => "phone-sizes",
             Self::Jump => "no-jumps",
             Self::RestPlacement => "rest-placement",
             Self::StepTime => "step-time",

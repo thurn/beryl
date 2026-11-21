@@ -94,10 +94,19 @@ impl Window {
     /// Whether the window uses the compact phone layout.
     #[must_use]
     pub fn phone(self) -> bool {
-        self.size_class.map_or_else(
-            || phone_size(self.size),
-            |class| class == SizeClass::Compact,
-        )
+        self.size_class() == SizeClass::Compact
+    }
+
+    /// The resolved size class, with the bundled breakpoint for unresolved windows.
+    #[must_use]
+    pub fn size_class(self) -> SizeClass {
+        self.size_class.unwrap_or_else(|| {
+            if phone_size(self.size) {
+                SizeClass::Compact
+            } else {
+                SizeClass::Regular
+            }
+        })
     }
 }
 

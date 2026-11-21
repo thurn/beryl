@@ -24,10 +24,13 @@ use crate::manual::{
     tokens, turn,
 };
 use game_hud::hud::{HudIn, players, steps};
+use game_table::profiles::Profile;
 use game_table::table::{CARD_HEIGHT, CARD_WIDTH};
-use kit_base::data::space::flat::{MENU_EDGE, sheet};
+use kit_base::data::space::flat::sheet;
 use kit_base::data::space::pointer::DRAG_THRESHOLD_POINTS;
+use kit_base::geometry::Rect;
 use kit_frame::frame::Role;
+use kit_scene::SizeClass;
 use kit_ui::element::{Action, Align, Element, Overflow, Shown, column};
 use kit_ui::input::{FaceId, FaceSize};
 use kit_ui::widgets::{Fields, context_menu, menu, sheet_menu};
@@ -57,6 +60,7 @@ pub fn table(input: &TableIn) -> Element {
     let mut screen = column().name("table");
     let hud = &input.hud;
     let window = hud.window;
+    let profile = hud.profile;
     let view = hud.view;
     let frozen = view.is_some_and(link::frozen);
     // A frozen table answers no key of its own (`manual::link`).
@@ -99,7 +103,7 @@ pub fn table(input: &TableIn) -> Element {
             lines,
             state.log_open,
             &state.blocked,
-            window.phone().then_some(window),
+            profile.slot("manual.log").map(|slot| slot.rect),
         )
     });
     let table = view.and_then(|view| view.table.as_ref());
@@ -108,18 +112,18 @@ pub fn table(input: &TableIn) -> Element {
             &table.proposals,
             state.proposals_open,
             window,
-            hud.profile.bands(),
+            profile,
             hud.placement_scene,
         )
     });
     let labels = view
         .zip(table)
-        .map(|(view, table)| assists::labels(&table.labels, view, window.phone()))
+        .map(|(view, table)| assists::labels(&table.labels, view, profile))
         .unwrap_or_default();
     let sort = view.and_then(|view| assists::sort_tray(view, window.size));
     let open = state.menu.as_ref().map(|open| {
-        if window.phone() {
-            bottom_sheet(open, input)
+        if let Some(slot) = profile.slot("manual.menu") {
+            bottom_sheet(open, input, slot.rect)
         } else {
             context_menu(open.at, menu(MENU, &open.title, &open.whose, &open.groups))
         }
@@ -137,13 +141,15 @@ pub fn table(input: &TableIn) -> Element {
     let mana_sheet = view
         .zip(state.mana_sheet)
         .filter(|_| !frozen)
-        .and_then(|(view, side)| pools::sheet(view, window, side));
+        .and_then(|(view, side)| pools::sheet(view, side, profile));
     let connection = view.and_then(|view| {
-        let top = link::top(window.size, window.phone(), window.safe_area.top);
+        let top = profile
+            .slot("manual.connection")
+            .map_or_else(|| link::top(window.size), |slot| slot.rect.y);
         link::banner(view, window.size, top, input.lobby.link_error.as_deref())
     });
     screen
-        .children(controls(state, hud, frozen))
+        .children(controls(state, hud, frozen, profile))
         .children(log)
         .children(summary)
         .children(proposals)
@@ -155,7 +161,7 @@ pub fn table(input: &TableIn) -> Element {
         .children(open)
         .children(mana_sheet)
         .children(over(state, input))
-        .children(super::table_opening::table_opening(view, window))
+        .children(super::table_opening::table_opening(view, window, profile))
         .children(connection)
 }
 
@@ -163,28 +169,35 @@ pub fn table(input: &TableIn) -> Element {
 /// none while the guided start's screen covers the table, as the game's opening covers its
 /// controls. The Next button stands in the lower right, where the ask prompt docks, so it gives
 /// way to whatever the table shows over itself, and a `frozen` table shows none.
-fn controls(state: &TableState, input: &HudIn, frozen: bool) -> Vec<Element> {
+fn controls(state: &TableState, input: &HudIn, frozen: bool, profile: Profile<'_>) -> Vec<Element> {
     if input.view.and_then(opening::prompt).is_some() {
         return Vec::new();
     }
     let next = (input.view.and_then(|view| view.table.as_ref()))
         .filter(|_| state.menu.is_none() && !state.overlay_open() && !frozen)
-        .map(|table| turn::next(table.phase, input.window));
-    let pools = (input.view).and_then(|view| pools::pools(view, input.window));
-    [players::players(input), table_steps(input), pools, next]
-        .into_iter()
-        .flatten()
-        .collect()
+        .map(|table| turn::next(table.phase, input.window, profile));
+    let pools = input
+        .view
+        .map(|view| pools::pools(view, input.window, profile));
+    [
+        players::players(input),
+        table_steps(input, profile.size_class()),
+        pools,
+        next,
+    ]
+    .into_iter()
+    .flatten()
+    .collect()
 }
 
 /// What the manual table shows for the steps: both players' step tracks, on the desktop
 /// layout, while no pile's viewer is open, with the icon of the table's phase lit in the
 /// active player's rows, as the web's `StepStops` stands on the manual table with no stops and
 /// an `onStep`.
-fn table_steps(input: &HudIn) -> Option<Element> {
+fn table_steps(input: &HudIn, size_class: SizeClass) -> Option<Element> {
     let view = input.view?;
     let table = view.table.as_ref()?;
-    if input.window.phone() || input.viewing.is_some() {
+    if size_class == SizeClass::Compact || input.viewing.is_some() {
         return None;
     }
     let lit = turn::icon_of(table.phase);
@@ -214,7 +227,7 @@ fn over(state: &TableState, input: &TableIn) -> Option<Element> {
             open,
             input.fields,
             input.hud.window,
-            input.hud.profile.bands(),
+            input.hud.profile,
             input.hud.placement_scene,
         ));
     }
@@ -234,23 +247,23 @@ fn over(state: &TableState, input: &TableIn) -> Option<Element> {
 /// The context menu on a phone, as the web's `[data-presentation="sheet"]` menu stands: along
 /// the bottom of the window above its safe area, as wide as the window up to `sheet.max_width`,
 /// scrolling where it is taller than the window, with a card's full face above its rows.
-fn bottom_sheet(open: &OpenMenu, input: &TableIn) -> Element {
+fn bottom_sheet(open: &OpenMenu, input: &TableIn, rect: Rect) -> Element {
     let window = input.hud.window;
-    let safe = window.safe_area;
-    let width =
-        (window.size.width - safe.left - safe.right - 2.0 * MENU_EDGE).min(sheet::MAX_WIDTH);
+    let width = rect.width;
     let mut panel = sheet_menu(MENU, &open.title, &open.whose, &open.groups, open.page)
         .min_width(width)
         .max_width(width)
-        .max_height(window.size.height - safe.top - safe.bottom - 2.0 * MENU_EDGE)
+        .max_height(rect.height)
         .overflow(Overflow::Scroll);
     if let Some(face) = preview(open.target, input) {
         panel.children.insert(0, face);
     }
     // A menu whose bottom would pass the point stands with its bottom edge on it
     // (`Anchor::Menu`), so the sheet opens from the bottom, centred across the window.
-    let left = safe.left + (window.size.width - safe.left - safe.right - width) / 2.0;
-    context_menu(Vec2::new(left, window.size.height - safe.bottom), panel)
+    context_menu(
+        Vec2::new(rect.x, window.size.height - window.safe_area.bottom),
+        panel,
+    )
 }
 
 /// The full face of the card the sheet is for, `sheet.preview_width` points wide and centred,
@@ -276,7 +289,7 @@ pub fn sheet_face(input: &TableIn) -> Option<FaceId> {
         .table
         .menu
         .as_ref()
-        .filter(|_| input.hud.window.phone())?;
+        .filter(|_| input.hud.profile.slot("manual.menu").is_some())?;
     preview_face(open.target, input)
 }
 

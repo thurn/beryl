@@ -14,7 +14,7 @@ use game_probe::agent::steps::{crowded, no_jumps, rests_in_place};
 use game_table::table::Table;
 use glam::Vec3;
 use kit_base::pose::{Curve, Pose, Segment};
-use kit_probe::agent::{Context, Fault, Layout, Rule};
+use kit_probe::agent::{Context, Fault, Rule};
 use kit_ui::input::{Insets, Size};
 
 const SIZE: Size = Size {
@@ -44,7 +44,7 @@ fn page() -> Page {
         crate::test_data::data(),
         recording.into(),
         Side::You,
-        Layout::Desktop,
+        crate::REGULAR,
         SIZE,
     )
     .expect("the views can be read")
@@ -67,8 +67,8 @@ fn printed(fault: &Fault) -> String {
     fault.print(&Context {
         recording: "three-beats".to_owned(),
         seat: Side::You,
-        layout: Layout::Desktop,
-        checks: Layout::Desktop.checks(&crate::test_data::data().profiles, SIZE),
+        layout: crate::REGULAR,
+        checks: crate::REGULAR.checks(&crate::test_data::data().profiles, SIZE),
         size: SIZE,
         safe_area: Insets::default(),
         at: fault.at,
@@ -362,7 +362,7 @@ fn an_ability_that_goes_on_the_stack_and_resolves_has_no_fault() {
         crate::test_data::data(),
         Recording(messages).into(),
         Side::You,
-        Layout::Desktop,
+        crate::REGULAR,
         SIZE,
     )
     .expect("the views can be read")

@@ -10,7 +10,6 @@ use beryl_protocol::script::Act;
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, timing};
 use glam::Vec2;
 use kit_frame::frame::{Frame, Role, StateBits};
-use kit_probe::agent::Layout;
 use kit_probe::agent::checks::reachable;
 use kit_probe::agent::fault::Context;
 use kit_ui::input::{Button, Insets, Modifiers, Pointer, PointerKind, PointerPhase};
@@ -35,7 +34,7 @@ fn page(views: &[ViewBuilder]) -> Page {
         crate::test_data::data(),
         Recording(messages).into(),
         Side::You,
-        Layout::Desktop,
+        crate::REGULAR,
         WINDOW,
     )
     .unwrap();
@@ -260,8 +259,8 @@ fn the_viewers_cards_at_rest_are_interactive_and_judged_reachable() {
     let context = Context {
         recording: "sample".to_owned(),
         seat: Side::You,
-        layout: Layout::Desktop,
-        checks: Layout::Desktop.checks(&crate::test_data::data().profiles, WINDOW),
+        layout: crate::REGULAR,
+        checks: crate::REGULAR.checks(&crate::test_data::data().profiles, WINDOW),
         size: WINDOW,
         safe_area: Insets::default(),
         at: 0,
@@ -277,8 +276,8 @@ fn a_raised_hand_card_leaves_its_neighbours_reachable() {
     let context = Context {
         recording: "sample".to_owned(),
         seat: Side::You,
-        layout: Layout::Desktop,
-        checks: Layout::Desktop.checks(&crate::test_data::data().profiles, WINDOW),
+        layout: crate::REGULAR,
+        checks: crate::REGULAR.checks(&crate::test_data::data().profiles, WINDOW),
         size: WINDOW,
         safe_area: Insets::default(),
         at: 0,

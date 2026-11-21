@@ -9,8 +9,7 @@ pub use lines::{LogKind, LogLine, Names, counter_name, learn_names, listed, log_
 
 use std::convert::Infallible;
 
-use game_table::profiles::phone::phone_bands;
-use game_table::table::Window;
+use game_table::profiles::TableBands;
 use kit_scene::{Context, Feature};
 use kit_ui::element::Element;
 
@@ -36,8 +35,8 @@ pub enum Request {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Layout {
-    Desktop,
-    Phone(Window),
+    Sidebar,
+    Sheet(TableBands),
 }
 
 pub struct Inputs<'a> {
@@ -85,8 +84,8 @@ impl Feature for GameLog {
     fn view(state: &State, inputs: Inputs<'_>) -> Element {
         let entries = inputs.history.entries();
         match inputs.layout {
-            Layout::Desktop => view::desktop(state.open, entries),
-            Layout::Phone(window) => view::phone(entries, &phone_bands(window).unwrap_or_default()),
+            Layout::Sidebar => view::desktop(state.open, entries),
+            Layout::Sheet(bands) => view::phone(entries, &bands),
         }
     }
 }

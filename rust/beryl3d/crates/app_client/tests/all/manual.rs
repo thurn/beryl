@@ -1,5 +1,5 @@
 //! The manual table, on views built by hand: which commands apply to a permanent, the context
-//! menu a right click or a long press opens on one (a bottom sheet on a phone), the keys that
+//! menu a right click or a long press opens on one (a bottom sheet on a compact), the keys that
 //! change a life total and draw a card, the command list, the ask prompt, the token search, the
 //! library order tray and the log.
 
@@ -335,7 +335,7 @@ fn a_touch_that_moves_before_the_hold_time_opens_no_menu() {
 }
 
 #[test]
-fn a_long_press_on_a_phone_opens_a_bottom_sheet_with_the_card() {
+fn a_long_press_on_a_compact_opens_a_bottom_sheet_with_the_card() {
     let view = table_view();
     let (width, height) = (393.0, 759.0);
     let (mut client, _) = client_in(&view, width, height);
@@ -386,7 +386,7 @@ fn a_long_press_on_a_phone_opens_a_bottom_sheet_with_the_card() {
 }
 
 #[test]
-fn a_submenu_row_on_the_phone_sheet_shows_its_rows_with_back() {
+fn a_submenu_row_on_the_compact_sheet_shows_its_rows_with_back() {
     let view = table_view();
     let (mut client, _) = client_in(&view, 393.0, 759.0);
     client.handle(Input::Cards(Box::new(card_records_among(

@@ -26,13 +26,14 @@ use kit_text::text::TypeStyle;
 use kit_ui::element::{
     Align, Border, Display, Element, Justify, Overflow, Position, Track, column, row, text,
 };
-use kit_ui::widgets::screen::{phone_action, phone_screen, whole_window};
+use kit_ui::widgets::screen::{ScreenColumn, whole_window};
 use kit_ui::widgets::start_panel::{PANEL_PADDING, check_square, checkbox, panel_look, small};
 use kit_ui::widgets::{FieldState, Fields, button, field, primary};
 
 /// The manual lobby's state and text fields for the current window.
 pub struct LobbyIn<'a> {
     pub window: Window,
+    pub profile: game_table::profiles::Profile<'a>,
     pub lobby: &'a Lobby,
     pub fields: &'a Fields,
 }
@@ -54,17 +55,17 @@ const MARGIN: f32 = size::SCREEN_MARGIN;
 
 /// The desktop's legends and labels (`.lobby-section legend, .lobby-panel label`): semibold
 /// 15-point sans on a 20-point line.
-const DESKTOP_LABEL: TypeStyle = type_style::LOBBY_LABEL;
+const PANEL_LABEL: TypeStyle = type_style::LOBBY_LABEL;
 
-/// The height of one line of `DESKTOP_LABEL`.
-const LABEL_LINE: f32 = DESKTOP_LABEL.size * DESKTOP_LABEL.line_height;
+/// The height of one line of `PANEL_LABEL`.
+const LABEL_LINE: f32 = PANEL_LABEL.size * PANEL_LABEL.line_height;
 
 /// What the flat layer shows on the lobby screen. Until the session sends the lobby, only the
 /// heading.
 #[must_use]
 pub fn lobby(input: &LobbyIn) -> Element {
-    if input.window.phone() {
-        return lobby_phone(input);
+    if let Some(layout) = input.profile.screen_column() {
+        return lobby_column(input, layout);
     }
     // `.start-panel.lobby-panel`: wider than the start screen's panel, with its sections
     // stretched across it.
@@ -76,7 +77,7 @@ pub fn lobby(input: &LobbyIn) -> Element {
         .align_items(Align::Stretch)
         .gap(size::LOBBY_PANEL_GAP);
     let panel = panel_look(panel);
-    let mut panel = sections(panel, input, Fit::Desktop);
+    let mut panel = sections(panel, input, Fit::Regular);
     panel.style.padding = PANEL_PADDING;
     // The layer draws a screen's top element as a panel unless its style says otherwise; this
     // one fills the window and only holds the panel, so it is clear.
@@ -94,31 +95,29 @@ pub fn lobby(input: &LobbyIn) -> Element {
 /// when it is taller than the window, with no panel around them. Each button spans the column
 /// as the phone's other screens draw their actions, and the switches and fields stand one
 /// above the other, at least 44 points tall.
-fn lobby_phone(input: &LobbyIn) -> Element {
-    let content = column()
-        .name("lobby column")
-        .gap(kit_base::data::space::flat::phone::start::GAP);
-    let content = sections(content, input, Fit::Phone);
+fn lobby_column(input: &LobbyIn, layout: ScreenColumn) -> Element {
+    let content = column().name("lobby column").gap(layout.metrics.start.gap);
+    let content = sections(content, input, Fit::Column(layout));
     shortcuts(
-        phone_screen("lobby", input.window.size, input.window.safe_area, content),
+        layout.scrolling("lobby", input.window, content),
         input.lobby,
     )
 }
 
 /// Which window the lobby is laid out for.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq)]
 enum Fit {
-    Desktop,
-    Phone,
+    Regular,
+    Column(ScreenColumn),
 }
 
 impl Fit {
     /// `button` as an action of the lobby: as the desktop draws it, or spanning a phone's
-    /// column (`phone_action`).
+    /// column.
     fn action(self, button: Element) -> Element {
         match self {
-            Self::Desktop => button,
-            Self::Phone => phone_action(button),
+            Self::Regular => button,
+            Self::Column(layout) => layout.action(button),
         }
     }
 
@@ -126,8 +125,8 @@ impl Fit {
     /// across a phone's column, which is too narrow for them.
     fn group(self, name: &str) -> Element {
         match self {
-            Self::Desktop => row().name(name),
-            Self::Phone => column().name(name).align_self(Align::Stretch),
+            Self::Regular => row().name(name),
+            Self::Column(_) => column().name(name).align_self(Align::Stretch),
         }
     }
 
@@ -135,16 +134,16 @@ impl Fit {
     /// legend, and on a phone a column under `name` in capitals.
     fn section(self, name: &str) -> Element {
         match self {
-            Self::Desktop => fieldset(name),
-            Self::Phone => section(name),
+            Self::Regular => fieldset(name),
+            Self::Column(_) => section(name),
         }
     }
 
     /// The least height of a control a finger presses: none on the desktop.
     fn least(self, element: Element) -> Element {
         match self {
-            Self::Desktop => element,
-            Self::Phone => element.min_height(kit_base::data::audit::PHONE_TARGET_POINTS),
+            Self::Regular => element,
+            Self::Column(layout) => element.min_height(layout.target),
         }
     }
 }
@@ -175,8 +174,8 @@ fn sections(holder: Element, input: &LobbyIn, fit: Fit) -> Element {
             })
             .child(match fit {
                 // `.lobby-start` stands in the middle of the panel.
-                Fit::Desktop => start(lobby, view).align_self(Align::Center),
-                Fit::Phone => fit.action(start(lobby, view)),
+                Fit::Regular => start(lobby, view).align_self(Align::Center),
+                Fit::Column(_) => fit.action(start(lobby, view)),
             });
     }
     if let Some(error) = lobby.error {
@@ -231,7 +230,7 @@ fn frame(name: &str) -> Element {
 fn fieldset(name: &str) -> Element {
     let padding = size::LOBBY_SECTION_PADDING;
     let mut legend =
-        (text(name).style(DESKTOP_LABEL).color(color::TEXT_DIM)).align_self(Align::Start);
+        (text(name).style(PANEL_LABEL).color(color::TEXT_DIM)).align_self(Align::Start);
     let side = size::LOBBY_LEGEND_PADDING;
     legend.style.padding = [0.0, side, 0.0, side];
     // The legend stands over the border rather than under it, and keeps the section's padding,
@@ -328,12 +327,12 @@ fn deck(lobby: &Lobby, view: &LobbyView, fit: Fit) -> Element {
     let loaded = own.is_some_and(|own| own.loaded);
     // On the desktop, `.lobby-panel h2` and the counts under it in the panel's own type.
     let (heading, counts_style, counts_color) = match fit {
-        Fit::Desktop => (
+        Fit::Regular => (
             type_style::LOBBY_DECK,
             type_style::LOBBY_COUNTS,
             color::TYPE,
         ),
-        Fit::Phone => (HEADING, BODY, color::TEXT_DIM),
+        Fit::Column(_) => (HEADING, BODY, color::TEXT_DIM),
     };
     let mut words = column().name("deck status").child(
         text(match &lobby.deck_name {
@@ -363,10 +362,10 @@ fn deck(lobby: &Lobby, view: &LobbyView, fit: Fit) -> Element {
     // On the desktop the deck's section has no legend (`section.lobby-section`), and its rows
     // keep to their own widths.
     let holder = match fit {
-        Fit::Desktop => frame("Deck")
+        Fit::Regular => frame("Deck")
             .align_items(Align::Start)
             .padding(size::LOBBY_SECTION_PADDING),
-        Fit::Phone => section("Deck"),
+        Fit::Column(_) => section("Deck"),
     };
     let mut deck = holder.child(words).child(actions);
     if !view.unknown.is_empty() {
@@ -499,24 +498,24 @@ fn sideboard(lobby: &Lobby, view: &LobbyView, fit: Fit) -> Option<Element> {
 /// width (`.lobby-assists`), and on a phone one above the other.
 fn assists(view: &LobbyView, fit: Fit) -> Element {
     let mut boxes = match fit {
-        Fit::Desktop => row()
+        Fit::Regular => row()
             .name("assist switches")
             .display(Display::Grid)
             .grid_template_columns(vec![Track::Fraction(1.0); 2])
             .gap(size::LOBBY_SWITCH_GAP)
             .align_self(Align::Stretch),
-        Fit::Phone => fit.group("assist switches"),
+        Fit::Column(_) => fit.group("assist switches"),
     };
     for (at, (assist, label)) in (0u8..).zip(ASSISTS) {
         let on = view.assists.contains(&assist);
         let press = LobbyPress::Assist(at);
         boxes = boxes.child(match fit {
-            Fit::Desktop => switch(label, on, press),
-            Fit::Phone => fit.least(checkbox(label, on).on_press(press)),
+            Fit::Regular => switch(label, on, press),
+            Fit::Column(_) => fit.least(checkbox(label, on).on_press(press)),
         });
     }
     let mut assists = fit.section("Assists").child(boxes);
-    if fit == Fit::Desktop {
+    if fit == Fit::Regular {
         assists.style.align_items = Some(Align::Stretch);
     }
     assists
@@ -528,7 +527,7 @@ fn assists(view: &LobbyView, fit: Fit) -> Element {
 fn switch(label: &str, on: bool, press: LobbyPress) -> Element {
     let side = size::LOBBY_SWITCH_BOX;
     let mut words = text(label)
-        .style(DESKTOP_LABEL)
+        .style(PANEL_LABEL)
         .color(color::TEXT_DIM)
         .grow(1.0);
     words.style.padding = [0.0, 0.0, 0.0, side + size::LOBBY_SWITCH_LABEL_GAP];
@@ -552,7 +551,7 @@ fn switch(label: &str, on: bool, press: LobbyPress) -> Element {
 /// the control in the bottom of that room.
 fn labelled(label: &str, control: Element) -> Element {
     let height = control.style.height.unwrap_or_default();
-    let mut words = text(label).style(DESKTOP_LABEL).color(color::TEXT_DIM);
+    let mut words = text(label).style(PANEL_LABEL).color(color::TEXT_DIM);
     words.style.min_width = control.style.width;
     words.style.padding = [0.0, 0.0, size::LOBBY_LABEL_GAP + height, 0.0];
     let control = control
@@ -591,7 +590,7 @@ fn settings(view: &LobbyView, input: &LobbyIn, fit: Fit) -> Element {
     let save = button("Save settings")
         .enabled(changed)
         .on_press(LobbyPress::SaveSettings);
-    if fit == Fit::Desktop {
+    if fit == Fit::Regular {
         // `.lobby-actions`: the two fields, who plays first and 'Save settings' in one row,
         // along its bottom.
         let controls = row()
@@ -599,13 +598,13 @@ fn settings(view: &LobbyView, input: &LobbyIn, fit: Fit) -> Element {
             .wrap(true)
             .gap(size::LOBBY_SECTION_GAP)
             .align_items(Align::End)
-            .child(desktop_number(
+            .child(settings_number(
                 "Starting life",
                 STARTING_LIFE,
                 &life,
                 unreadable::<i32>(&life.text),
             ))
-            .child(desktop_number(
+            .child(settings_number(
                 "Starting hand size",
                 STARTING_HAND_SIZE,
                 &hand,
@@ -618,8 +617,8 @@ fn settings(view: &LobbyView, input: &LobbyIn, fit: Fit) -> Element {
     let fields = (fit.group("game fields"))
         .gap(space::L)
         .align_items(match fit {
-            Fit::Desktop => Align::Center,
-            Fit::Phone => Align::Start,
+            Fit::Regular => Align::Center,
+            Fit::Column(_) => Align::Start,
         })
         .child(number(
             "Starting life",
@@ -643,7 +642,7 @@ fn settings(view: &LobbyView, input: &LobbyIn, fit: Fit) -> Element {
 
 /// A desktop game setting's label over its number field `name`, holding `state`, drawn in ember
 /// if `wrong`.
-fn desktop_number(label: &str, name: &str, state: &FieldState, wrong: bool) -> Element {
+fn settings_number(label: &str, name: &str, state: &FieldState, wrong: bool) -> Element {
     let mut number = setting_field(name, state, size::LOBBY_SETTING_WIDTH);
     if wrong {
         number.style.border = Some(Border::uniform(color::EMBER, size::FIELD_BORDER));
