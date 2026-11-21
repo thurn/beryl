@@ -17,7 +17,6 @@ use wgpu::util::DeviceExt;
 use crate::count::{self, FragmentCounter};
 use crate::draw::Draws;
 use crate::pipeline::VERTEX_BUFFERS;
-use crate::runs::Pass;
 
 /// How many taps lie on each side of the blur's centre.
 const RADIUS: usize = TAPS / 2;
@@ -177,8 +176,11 @@ impl Bloom {
         counter: Option<&FragmentCounter>,
     ) -> u32 {
         let bands = &draws.frame.bands;
-        let glows = bands[Band::Glows as usize]..bands[Band::Glows as usize + 1].min(draws.kept);
-        if glows.is_empty() {
+        let ranges = [Band::Glows, Band::LayerCover].map(|band| {
+            let band = band as usize;
+            bands[band]..bands[band + 1].min(draws.kept)
+        });
+        if ranges.iter().all(std::ops::Range::is_empty) {
             return 0;
         }
         let Some(targets) = self
@@ -192,12 +194,13 @@ impl Bloom {
         let mut draw_calls = {
             let mut pass = begin(encoder, "bloom glows", &targets.first, true);
             count::begin(counter, &mut pass);
-            let calls = draws.record_part(
-                &mut pass,
-                glows,
-                |pass| (pass == Pass::Table).then_some(&self.glows),
-                targets.size,
-            );
+            let calls = ranges
+                .into_iter()
+                .filter(|range| !range.is_empty())
+                .map(|range| {
+                    draws.record_part(&mut pass, range, |_| Some(&self.glows), targets.size)
+                })
+                .sum();
             count::end(counter, &mut pass);
             calls
         };

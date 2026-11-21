@@ -101,7 +101,7 @@ pub fn pipelines(
     device: &wgpu::Device,
     layout: &wgpu::BindGroupLayout,
     format: wgpu::TextureFormat,
-) -> [wgpu::RenderPipeline; 3] {
+) -> [wgpu::RenderPipeline; 5] {
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("beryl_render"),
         source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
@@ -131,15 +131,21 @@ pub fn pipeline_set(
     device: &wgpu::Device,
     layouts: &[&wgpu::BindGroupLayout],
     shape: &Shape,
-) -> [wgpu::RenderPipeline; 3] {
+) -> [wgpu::RenderPipeline; 5] {
     let layouts: Vec<Option<&wgpu::BindGroupLayout>> = layouts.iter().copied().map(Some).collect();
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("beryl_render"),
         bind_group_layouts: &layouts,
         immediate_size: 0,
     });
-    [Pass::Opaque, Pass::Table, Pass::Layer]
-        .map(|pass| pipeline(device, &pipeline_layout, shape, pass))
+    [
+        Pass::Opaque,
+        Pass::Table,
+        Pass::MovingOpaque,
+        Pass::Moving,
+        Pass::Layer,
+    ]
+    .map(|pass| pipeline(device, &pipeline_layout, shape, pass))
 }
 
 fn pipeline(
@@ -149,8 +155,8 @@ fn pipeline(
     pass: Pass,
 ) -> wgpu::RenderPipeline {
     let (blend, depth_write, depth_compare) = match pass {
-        Pass::Opaque => (None, true, wgpu::CompareFunction::Less),
-        Pass::Table => (
+        Pass::Opaque | Pass::MovingOpaque => (None, true, wgpu::CompareFunction::Less),
+        Pass::Table | Pass::Moving => (
             Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING),
             false,
             wgpu::CompareFunction::LessEqual,
@@ -166,6 +172,8 @@ fn pipeline(
         label: Some(match pass {
             Pass::Opaque => "opaque",
             Pass::Table => "blended",
+            Pass::MovingOpaque => "opaque moving cards",
+            Pass::Moving => "moving over the table",
             Pass::Layer => "flat layer",
         }),
         layout: Some(layout),

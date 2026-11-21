@@ -417,7 +417,7 @@ fn a_draw_then_a_cast_fits_on_one_track() {
 fn a_new_end_mid_turn_or_sweep_keeps_the_pose_at_that_instant() {
     use game_play::verbs::Interval;
     use glam::Vec3;
-    use kit_base::pose::{Bow, Curve, Lift, Shape};
+    use kit_base::pose::{Bow, Curve, Shape};
     let from = Pose {
         position: Vec3::new(-200.0, 50.0, 0.0),
         turn: 1.0,
@@ -438,26 +438,10 @@ fn a_new_end_mid_turn_or_sweep_keeps_the_pose_at_that_instant() {
         },
         lean: fly.held.lean.to_radians(),
         eye: 1500.0,
-        lift: Lift {
-            eye: Vec3::new(0.0, -1200.0, 900.0),
-            forward: Vec3::new(0.0, 0.8, -0.6),
-            near: 900.0,
-            hold: 0.6,
-            keep: fly.front.keep,
-        },
     };
-    // Held nearer the eye until late in the flight, so that the times below fall both while it
-    // is held at `near` and while it eases back.
     let swept = Shape::Swept {
         bulge: Vec3::new(40.0, 120.0, 60.0),
         grow: 0.4,
-        lift: Lift {
-            eye: Vec3::new(0.0, -1200.0, 900.0),
-            forward: Vec3::new(0.0, 0.8, -0.6),
-            near: 900.0,
-            hold: 0.6,
-            keep: fly.front.keep,
-        },
     };
     for (shape, turning) in [(swept, fly.turn.draw), (held, fly.held.turn)] {
         let flight = Segment {

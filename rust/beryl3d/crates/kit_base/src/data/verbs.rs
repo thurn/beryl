@@ -29,9 +29,6 @@ pub struct Fly {
     #[serde(deserialize_with = "nonnegative")]
     pub arc: f32,
     pub bows: Bows,
-    pub played: Near,
-    pub front: Front,
-    pub drawn_front: Near,
     pub thrown: Thrown,
     pub turn: Turns,
     pub held: Held,
@@ -63,27 +60,6 @@ pub struct Bowing {
     pub lean: f32,
     #[serde(deserialize_with = "fraction")]
     pub back: f32,
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
-#[serde(deny_unknown_fields)]
-pub struct Near {
-    #[serde(deserialize_with = "positive")]
-    pub near: f32,
-    #[serde(deserialize_with = "interior")]
-    pub hold: f32,
-}
-
-/// How far forward a flying card is held, and how much of its original depth it keeps.
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
-#[serde(deny_unknown_fields)]
-pub struct Front {
-    #[serde(deserialize_with = "positive")]
-    pub near: f32,
-    #[serde(deserialize_with = "interior")]
-    pub hold: f32,
-    #[serde(deserialize_with = "positive_fraction")]
-    pub keep: f32,
 }
 
 /// The height, scale and timing of a spell resolving onto the battlefield.

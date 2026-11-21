@@ -40,19 +40,6 @@
           "back": 0.18
         }
       },
-      "played": {
-        "near": 0.6,
-        "hold": 0.5
-      },
-      "front": {
-        "near": 0.6,
-        "hold": 0.85,
-        "keep": 0.02
-      },
-      "drawn_front": {
-        "near": 0.5,
-        "hold": 0.5
-      },
       "thrown": {
         "height": 0.95,
         "risen": 0.2,

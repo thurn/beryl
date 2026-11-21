@@ -76,10 +76,8 @@ pub fn look(lit: &Lit, on: Subject, now: u64, look: &mut Look) {
     }
 }
 
-/// The band of a mark on `on` while it is at `pose`: `Band::TableMarks` for a card lying on
-/// the table, below `light.on_table_below` millimetres, whose mark the cards over it hide, and
-/// `Band::RaisedMarks` for anything raised (in flight, in a hand, on the stack), for an ability
-/// and for a player.
+/// The resting pass for a mark. Marks on cards lying close to the table are tested against
+/// the cards above them. The rest share the pass used for hand cards and stack items.
 #[must_use]
 pub fn band(on: Subject, pose: &Pose) -> Band {
     if matches!(on, Subject::Object { .. }) && pose.position.z < light::ON_TABLE_BELOW {
@@ -104,12 +102,8 @@ fn tint(mark: Mark) -> [u8; 4] {
 /// Writes the records of the marks in `lit` as they are at `now`: for each, quads lying just
 /// over the face of the thing it is on, so that they move and turn with it. Two marks on one
 /// card or ability are both drawn over the same box, as the web's are; two on a player are
-/// drawn the later begun outside the earlier. A quad over a card lying on
-/// the table goes in `Band::TableMarks`, which the depth test of the cards drawn opaque before
-/// it covers where another card lies over that one; a quad over anything raised (in flight, in
-/// a hand, on the stack) or on a player goes in `Band::RaisedMarks`, and one over a card held
-/// up in the tray in `Band::LayerCards`, with the card, over the tray's shade. Allocates
-/// nothing.
+/// drawn the later begun outside the earlier. A mark on an object shares its paint band,
+/// so it follows the object in flight, in a screen preview, or under the pointer.
 pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<'_>) {
     let open = lit.open();
     for (index, mark_open) in open.iter().enumerate() {
@@ -140,12 +134,15 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
             Subject::Object { .. } | Subject::Ability { .. } => 0.0,
         };
         let position = pose.position + pose.rotation * Vec3::new(0.0, -face, light::LIFT);
-        let band = match on {
-            Subject::Object { slot } if scene.table().in_tray(usize::from(slot.0)) => {
-                Band::LayerCards
-            }
-            _ => band(on, &pose),
+        let resting = band(on, &pose);
+        let id = match on {
+            Subject::Object { slot } => Some(ElementId(u32::from(slot.0))),
+            Subject::Ability { id } => Some(ElementId(ABILITY_IDS + id % ABILITY_IDS)),
+            Subject::Player { .. } => None,
         };
+        let band = id
+            .and_then(|id| builder.table_band(id))
+            .map_or(resting, |band| band.records(resting));
         if mark == Mark::Paying {
             let size = light::TAP_SIZE * pose.scale;
             // `look` lifts the paying card off the table as the mark comes up; the symbol

@@ -1,6 +1,6 @@
 //! Putting a frame's draw list in drawing order and counting its load (docs/beryl-3d.md, "The
 //! frame"): the opaque records first, cards nearest the camera first and the table last; then
-//! the eight blended bands in order, farthest first within a band, and the flat layer's band in
+//! the blended bands in order, farthest first within a band, and the flat layer's band in
 //! the order of its tree. Nothing here allocates once the frame's arrays have their capacity:
 //! the sort keys and the reordered records live in a scratch array the frame keeps.
 //!
@@ -13,7 +13,10 @@
 
 use glam::{Mat4, Vec2, Vec4};
 
-use super::{BANDS, Band, Draw, Frame, Material, Mesh, sprites};
+use super::{
+    BANDS, Band, Draw, ElementId, Frame, FrameBuilder, Material, Mesh, Resolved, Role, StateBits,
+    sprites,
+};
 use kit_base::geometry::{CARD_HEIGHT, CARD_WIDTH};
 
 /// The low bits of a sort key hold the record's index in push order, so that records that tie
@@ -25,12 +28,73 @@ const DEPTH_SHIFT: u32 = INDEX_BITS;
 /// The top bits hold the band, so the bands come in their declared order.
 const BAND_SHIFT: u32 = 60;
 
-/// What ordering needs between frames: one sort key per record and room for the records in
-/// their new order. Both are sized when the frame is made.
+/// The scene's paint bands, in back-to-front order.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum PaintBand {
+    Table,
+    Moving,
+    ScreenPanels,
+    ShownObjects,
+    Overlays,
+    Dragged,
+}
+
+impl PaintBand {
+    /// Assigns a node's band from its space and current state.
+    #[must_use]
+    pub fn of(node: &Resolved) -> Self {
+        match node.pose {
+            Some(_) if node.state.has(StateBits::HELD) => Self::Dragged,
+            // While a card moves into a preview, the screen's controls stay above it.
+            Some(_)
+                if node.state.has(StateBits::MOVING)
+                    && !node.state.has(StateBits::LAYOUT_MOTION) =>
+            {
+                Self::Moving
+            }
+            Some(_) if node.state.has(StateBits::SHOWN) => Self::ShownObjects,
+            Some(_) => Self::Table,
+            None if node.role == Role::Arrow => Self::Overlays,
+            None => Self::ScreenPanels,
+        }
+    }
+
+    /// The record band of a scene node. Resting table records retain their individual
+    /// opaque and blended passes.
+    #[must_use]
+    pub const fn records(self, resting: Band) -> Band {
+        match self {
+            Self::Moving if matches!(resting, Band::Opaque) => Band::MovingOpaque,
+            Self::Moving => Band::Moving,
+            Self::ShownObjects => Band::LayerCards,
+            Self::Dragged => Band::Dragged,
+            Self::Overlays => Band::LayerCover,
+            Self::ScreenPanels => Band::Layer,
+            Self::Table => resting,
+        }
+    }
+}
+
+/// The ordering of scene nodes follows the record bands and the geometry of each space.
+/// Screen nodes keep tree order and projected objects paint back to front.
+fn node_key(index: u32, element: &Resolved) -> u64 {
+    let depth = if element.pose.is_some() {
+        !ordered(element.depth)
+    } else {
+        0
+    };
+    ((PaintBand::of(element) as u64) << BAND_SHIFT)
+        | (u64::from(depth) << DEPTH_SHIFT)
+        | u64::from(index)
+}
+
+/// Sort keys for the nodes and draw records, with room to reorder the records. The frame
+/// reserves this storage when it is made.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(super) struct Scratch {
     keys: Vec<u64>,
     draws: Vec<Draw>,
+    nodes: Vec<u64>,
     batching: Batching,
     /// The call key of the first record pushed to each band, by `Band` value.
     first_calls: [Option<u8>; BANDS],
@@ -53,10 +117,11 @@ struct Batching {
 }
 
 impl Scratch {
-    pub(super) fn with_capacity(draws: usize) -> Self {
+    pub(super) fn with_capacity(draws: usize, nodes: usize) -> Self {
         Self {
             keys: Vec::with_capacity(draws),
             draws: Vec::with_capacity(draws),
+            nodes: Vec::with_capacity(nodes),
             batching: Batching {
                 rects: Vec::with_capacity(draws),
                 additive: Vec::with_capacity(draws),
@@ -72,6 +137,7 @@ impl Scratch {
     pub(super) fn clear(&mut self) {
         self.keys.clear();
         self.draws.clear();
+        self.nodes.clear();
         self.first_calls = [None; BANDS];
         self.mixed = 0;
     }
@@ -115,13 +181,14 @@ pub(super) fn finish(frame: &mut Frame) {
             .collect();
     }
 
-    let (opaque, layer) = set_bands(frame);
+    frame.order_nodes();
+    set_bands(frame);
 
     let records = super::index(frame.draws.len());
     frame.load.instances = records;
     frame.load.upload_bytes =
         records * super::index(size_of::<Draw>()) + super::index(frame.paints.bytes().len());
-    frame.load.draw_calls = draw_calls(&frame.draws, opaque, layer);
+    frame.load.draw_calls = draw_calls(frame);
 }
 
 /// The screen areas of a finished frame's opaque and blended records. Only the gates and tests
@@ -129,10 +196,12 @@ pub(super) fn finish(frame: &mut Frame) {
 /// fifth of the instructions of a stress board's frame between scripts.
 pub(super) fn areas(frame: &Frame) -> super::Areas {
     let opaque = frame.opaque as usize;
+    let moving_opaque = frame.bands[Band::MovingOpaque as usize] as usize
+        ..frame.bands[Band::Moving as usize] as usize;
     let mut areas = super::Areas::default();
     for (index, draw) in frame.draws.iter().enumerate() {
         let area = screen_area(draw, &frame.view_projection);
-        if index < opaque {
+        if index < opaque || moving_opaque.contains(&index) {
             areas.opaque += area;
         } else {
             areas.blended += area;
@@ -141,9 +210,8 @@ pub(super) fn areas(frame: &Frame) -> super::Areas {
     areas
 }
 
-/// Sets `frame.bands`, `opaque` and `layer` from its sort keys, which are in drawing order, and
-/// returns `opaque` and `layer`.
-fn set_bands(frame: &mut Frame) -> (usize, usize) {
+/// Sets `frame.bands`, `opaque` and `layer` from its sort keys, which are in drawing order.
+fn set_bands(frame: &mut Frame) {
     for (band, start) in frame.bands.iter_mut().enumerate() {
         *start = super::index(
             (frame.scratch.keys).partition_point(|&key| (band_of(key) as usize) < band),
@@ -163,10 +231,35 @@ fn set_bands(frame: &mut Frame) -> (usize, usize) {
             .partition_point(|key| key & INDEX_MASK < u64::from(backdrop.pushed));
         backdrop.at = super::index(layer + before);
     }
-    (opaque, layer)
 }
 
 impl Frame {
+    pub(super) fn order_nodes(&mut self) {
+        self.scratch.nodes.clear();
+        self.scratch.nodes.extend(
+            self.resolved
+                .iter()
+                .enumerate()
+                .map(|(index, element)| node_key(super::index(index), element)),
+        );
+        self.scratch.nodes.sort_unstable();
+    }
+
+    /// Node indexes in back-to-front paint order. The tree's registration order is retained
+    /// separately for walking parent and child relationships.
+    pub fn paint_order(&self) -> impl DoubleEndedIterator<Item = u32> + ExactSizeIterator + '_ {
+        self.scratch
+            .nodes
+            .iter()
+            .map(|key| (key & INDEX_MASK) as u32)
+    }
+
+    /// Compares two registered nodes in paint order.
+    #[must_use]
+    pub fn compare_paint(&self, a: u32, b: u32) -> std::cmp::Ordering {
+        node_key(a, &self.resolved[a as usize]).cmp(&node_key(b, &self.resolved[b as usize]))
+    }
+
     /// Keeps only the records of a finished, `looking` frame whose element (`Frame::owners`)
     /// `keep` accepts, by its index in `resolved`, so that the frame draws those elements
     /// alone. A record that belongs to no element is dropped. The frame's load is left as it
@@ -224,6 +317,31 @@ impl Frame {
     }
 }
 
+impl FrameBuilder<'_> {
+    /// The paint band of the element at `index` in the registered tree.
+    #[must_use]
+    pub fn node_band(&self, index: u32) -> PaintBand {
+        PaintBand::of(&self.frame.resolved[index as usize])
+    }
+
+    /// The paint band of a projected table element already registered with the frame.
+    #[must_use]
+    pub fn table_band(&self, id: ElementId) -> Option<PaintBand> {
+        self.frame
+            .resolved
+            .iter()
+            .find(|node| node.id == id && node.pose.is_some())
+            .map(PaintBand::of)
+    }
+
+    /// Draws the card for the element just registered, using its scene band. At rest an
+    /// opaque card writes depth, while a fading or dissolving one blends with its marks.
+    pub fn draw_card(&mut self, at: u32, resting: Band, draw: Draw) {
+        let band = self.node_band(at).records(resting);
+        self.draw(band, draw);
+    }
+}
+
 /// The band a sort key holds.
 fn band_of(key: u64) -> Band {
     match key >> BAND_SHIFT {
@@ -233,9 +351,12 @@ fn band_of(key: u64) -> Band {
         3 => Band::RaisedMarks,
         4 => Band::Glows,
         5 => Band::Particles,
-        6 => Band::Layer,
-        7 => Band::LayerCards,
-        _ => Band::LayerCover,
+        6 => Band::MovingOpaque,
+        7 => Band::Moving,
+        8 => Band::Layer,
+        9 => Band::LayerCards,
+        10 => Band::LayerCover,
+        _ => Band::Dragged,
     }
 }
 
@@ -244,9 +365,9 @@ fn depth_key(band: Band, draw: &Draw, view_projection: Mat4) -> u32 {
     match band {
         // The table comes after every card, so that a pixel a card covers is never shaded.
         Band::Opaque if draw.material == Material::Table as u8 => u32::MAX,
-        Band::Opaque => ordered(depth(draw, view_projection)),
+        Band::Opaque | Band::MovingOpaque => ordered(depth(draw, view_projection)),
         // The flat layer is drawn in the order of its tree, which is the order it was pushed.
-        Band::Layer => 0,
+        Band::Layer | Band::LayerCover => 0,
         // Blended records are drawn farthest first, so that nearer ones blend over them.
         _ => !ordered(depth(draw, view_projection)),
     }
@@ -272,15 +393,21 @@ fn ordered(value: f32) -> u32 {
 
 /// How many instanced draw calls the renderer makes for `draws`: one for each run of
 /// consecutive records with the same mesh, texture array and clip. The renderer also starts a
-/// new call where the opaque records end and where the flat layer's begin, because each of the
-/// three is drawn with its own pipeline.
-fn draw_calls(draws: &[Draw], opaque: usize, layer: usize) -> u32 {
-    let pass = |index: usize| u8::from(index >= opaque) + u8::from(index >= layer);
+/// new call wherever the pipeline changes.
+fn draw_calls(frame: &Frame) -> u32 {
+    let moving_opaque = frame.bands[Band::MovingOpaque as usize];
+    let moving = frame.bands[Band::Moving as usize];
+    let pass = |index: u32| {
+        u8::from(index >= frame.opaque)
+            + u8::from(index >= moving_opaque)
+            + u8::from(index >= moving)
+            + u8::from(index >= frame.layer)
+    };
     let mut calls = 0;
     let mut previous = None;
-    for (index, draw) in draws.iter().enumerate() {
+    for (index, draw) in frame.draws.iter().enumerate() {
         // `flags` holds exactly the texture array, the mesh and the clip.
-        let key = (pass(index), draw.flags);
+        let key = (pass(super::index(index)), draw.flags);
         if previous != Some(key) {
             calls += 1;
             previous = Some(key);
@@ -322,7 +449,7 @@ fn batch_bands(scratch: &mut Scratch, draws: &[Draw], view_projection: &Mat4) {
     while start < end {
         let band = band_of(keys[start]);
         let len = keys[start..end].partition_point(|&key| band_of(key) == band);
-        if *mixed & (1 << band as u16) != 0 {
+        if band != Band::MovingOpaque && *mixed & (1 << band as u16) != 0 {
             batch(
                 &mut keys[start..start + len],
                 draws,

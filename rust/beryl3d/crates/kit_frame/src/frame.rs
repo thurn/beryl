@@ -7,10 +7,13 @@ mod draw;
 mod look;
 mod order;
 mod paint;
+pub mod picking;
 mod relations;
 mod rings;
 pub use relations::{NodeRef, Show};
 pub mod text;
+
+pub use order::PaintBand;
 mod undrawn;
 
 use beryl_protocol::protocol::{RowName, Side, ZoneName};
@@ -180,39 +183,42 @@ pub enum Place {
 
 /// An element's states, one bit each.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct StateBits(pub u16);
+pub struct StateBits(pub u32);
 
 impl StateBits {
-    pub const TAPPED: u16 = 1 << 0;
-    pub const FACE_DOWN: u16 = 1 << 1;
-    pub const MOVING: u16 = 1 << 2;
-    pub const HOVERED: u16 = 1 << 3;
+    pub const TAPPED: u32 = 1 << 0;
+    pub const FACE_DOWN: u32 = 1 << 1;
+    pub const MOVING: u32 = 1 << 2;
+    pub const HOVERED: u32 = 1 << 3;
     /// Held under the pointer; the checks on cards at rest skip it.
-    pub const HELD: u16 = 1 << 4;
-    pub const ELIGIBLE: u16 = 1 << 5;
-    pub const SELECTED: u16 = 1 << 6;
-    pub const TARGET: u16 = 1 << 7;
-    pub const DISABLED: u16 = 1 << 8;
-    pub const FOCUSED: u16 = 1 << 9;
+    pub const HELD: u32 = 1 << 4;
+    pub const ELIGIBLE: u32 = 1 << 5;
+    pub const SELECTED: u32 = 1 << 6;
+    pub const TARGET: u32 = 1 << 7;
+    pub const DISABLED: u32 = 1 << 8;
+    pub const FOCUSED: u32 = 1 << 9;
     /// A phased-out permanent, which stays where it lay, faded.
-    pub const PHASED_OUT: u16 = 1 << 10;
+    pub const PHASED_OUT: u32 = 1 << 10;
     /// A card its player picked in a hidden pick, which lies apart from their hand.
-    pub const PICKED: u16 = 1 << 11;
+    pub const PICKED: u32 = 1 << 11;
     /// A flat-layer element the pointer goes through (`Style::passes`), which never catches a
     /// press. The tree printout leaves it out.
-    pub const PASSES: u16 = 1 << 12;
+    pub const PASSES: u32 = 1 << 12;
     /// The button a prompt or screen expects to be pressed, drawn amber.
-    pub const PRIMARY: u16 = 1 << 13;
+    pub const PRIMARY: u32 = 1 << 13;
     /// A flat-layer element drawn on a panel of its own, a fill or a rim, which covers what the
     /// layer drew before it. The "reachable" check reads it to find a panel the pointer goes
     /// through drawn over a control, such as a scrim drawn over a prompt's buttons.
-    pub const PAINTED: u16 = 1 << 14;
+    pub const PAINTED: u32 = 1 << 14;
     /// A table object drawn over the flat layer in a box or tray.
-    pub const SHOWN: u16 = 1 << 15;
+    pub const SHOWN: u32 = 1 << 15;
+
+    /// A card moving within its resting arrangement, such as a hand closing a gap.
+    pub const LAYOUT_MOTION: u32 = 1 << 16;
 
     /// Whether every bit of `bits` is set.
     #[must_use]
-    pub fn has(self, bits: u16) -> bool {
+    pub fn has(self, bits: u32) -> bool {
         self.0 & bits == bits
     }
 }
@@ -300,8 +306,8 @@ impl Wake {
     }
 }
 
-/// A group of records drawn together. The opaque pass comes first, then the eight blended
-/// bands in this order.
+/// The renderer's record bands, including the passes for depth, shadows and blending.
+/// `PaintBand` orders scene nodes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Band {
     /// Cards and the table, nearest first, with a depth buffer.
@@ -317,12 +323,18 @@ pub enum Band {
     /// Particles, which only the Enhanced tier draws: blended, tested against the depth
     /// buffer like the other bands of the table, farthest first.
     Particles,
+    /// Objects in motion above the resting table, unaffected by its depth buffer.
+    MovingOpaque,
+    /// Translucent moving cards and the decorations of cards in motion.
+    Moving,
     /// The flat layer, in the order of its tree.
     Layer,
     /// Cards shown inside flat-layer elements, such as a card browser, with their marks.
     LayerCards,
     /// Flat-layer elements that must cover those cards, such as a tooltip.
     LayerCover,
+    /// Objects held by the pointer above the scene.
+    Dragged,
 }
 
 /// How many entries `Frame::clips` has; entry 0 means no clip.
@@ -350,7 +362,7 @@ pub const TEXT_RECORDS: usize = 2048;
 pub const DRAWS: usize =
     (OBJECTS + ABILITIES) * RECORDS_PER_OBJECT + LAYER_RECORDS + PARTICLES + TEXT_RECORDS;
 /// How many bands there are (`Band`).
-pub const BANDS: usize = 9;
+pub const BANDS: usize = Band::Dragged as usize + 1;
 /// The most elements of the flat layer a frame holds.
 pub const LAYER_ELEMENTS: usize = 3072;
 /// The most resolved elements a frame holds: one for each card and each ability on the stack,
@@ -449,16 +461,6 @@ pub struct TextLine {
 }
 
 impl Frame {
-    /// The table object that the screen element `element` shows.
-    #[must_use]
-    pub fn shown_by(&self, element: u32) -> Option<ElementId> {
-        let at = self
-            .shows
-            .binary_search_by_key(&element, |&(index, _)| index)
-            .ok()?;
-        Some(self.shows[at].1)
-    }
-
     /// An empty frame with room for `elements` resolved elements, `draws` records and
     /// `name_bytes` bytes of names, so that building a frame within those sizes allocates
     /// nothing.
@@ -490,7 +492,7 @@ impl Frame {
             load: Load::default(),
             work: Work::default(),
             text_room: TEXT_RECORDS,
-            scratch: order::Scratch::with_capacity(draws),
+            scratch: order::Scratch::with_capacity(draws, elements),
         }
     }
 

@@ -5,7 +5,10 @@
 
 use glam::Vec2;
 
-use super::{Layer, Node, write::moved};
+use super::{
+    Layer, Node, element,
+    write::{self, moved},
+};
 use crate::element::{Action, Display};
 use crate::input::Rect;
 use kit_base::geometry::plane::Zoom;
@@ -18,6 +21,97 @@ impl Layer {
     pub fn point_at(&mut self, hovered: Option<ElementId>, pressed: Option<ElementId>) {
         self.hovered = hovered;
         self.pressed = pressed;
+    }
+
+    /// The first value `want` gives for an element at `point`, asking the innermost first:
+    /// the floats drawn over the screen, the last drawn first, then the screen, without what
+    /// waits for the table to settle (`Element::waits`) unless the layer is `open`, then the
+    /// floats drawn under it. While the screen shows
+    /// a child drawn over the floats (`write::over_floats`), only that child is asked. An element is at
+    /// `point` where it is drawn: moved by its own transition and by the scroll of the elements
+    /// it is in, and inside the box of every element it is in that clips or scrolls. As in CSS,
+    /// a child that overflows a box that does neither is drawn outside it, and takes presses
+    /// there; `write` marks the same elements interactive.
+    pub(super) fn hit<T>(
+        &self,
+        point: glam::Vec2,
+        open: bool,
+        want: impl Fn(&Node, Rect) -> Option<T>,
+    ) -> Option<T> {
+        use kit_frame::frame::picking::{Area, hit_test};
+
+        // Visit in reverse layout tree order. An anchored child starts its own clip chain.
+        fn visit<'a, T>(
+            node: &'a Node,
+            (origin, open, zoom): (glam::Vec2, bool, Zoom),
+            clip: Option<Rect>,
+            test: &dyn Fn(Area, (&'a Node, Rect)) -> Option<T>,
+        ) -> Option<T> {
+            if node.element.style.display == element::Display::None || (node.element.waits && !open)
+            {
+                return None;
+            }
+            let origin = origin + node.translation();
+            let rect = moved(node.paint_rect(), origin + node.offset());
+            let zoom = node.zoom(zoom, rect);
+            let rect = zoom.rect(rect);
+            let inside = origin - node.scroll;
+            let clips = node.element.style.overflow != element::Overflow::Visible;
+            let inside_clip = if clips {
+                Some(Area::clip(rect, clip))
+            } else {
+                clip
+            };
+            (node.children.iter().rev())
+                .find_map(|child| match child.element.anchor {
+                    // An anchored child's tree is laid out from (0, 0), and stands at its corner.
+                    Some(_) => visit(child, (child.corner()?, open, zoom), None, test),
+                    None => visit(child, (inside, open, zoom), inside_clip, test),
+                })
+                .or_else(|| test(Area::Rect(rect, clip), (node, rect)))
+        }
+        hit_test(
+            point,
+            |test| {
+                // The screen's children drawn over the floats (`write::over_floats`) filter what is under
+                // them, and are modal: while one is shown, nothing else is searched.
+                let modal_child =
+                    |child: &&Node| write::over_floats(child) && (open || !child.element.waits);
+                let modal = (self.screen.as_ref())
+                    .filter(|node| node.children.iter().any(|child| modal_child(&child)));
+                if let Some(node) = modal {
+                    return (node.children.iter().rev())
+                        .filter(modal_child)
+                        .find_map(|child| {
+                            visit(child, (child.corner()?, open, Zoom::IDENTITY), None, test)
+                        });
+                }
+                let floats = |under: bool| {
+                    (self.floats.iter().rev())
+                        .filter(move |float| float.id.under_screen() == under)
+                        .find_map(|float| {
+                            let corner = float.corner();
+                            let rect = float.node.rect;
+                            let pivot = corner + glam::Vec2::new(rect.width, rect.height) / 2.0;
+                            let zoom = Zoom::around(pivot, float.look.scale);
+                            visit(&float.node, (corner, open, zoom), None, test)
+                        })
+                };
+                floats(false)
+                    .or_else(|| {
+                        (self.screen.as_ref()).and_then(|node| match node.element.anchor {
+                            Some(_) => {
+                                visit(node, (node.corner()?, open, Zoom::IDENTITY), None, test)
+                            }
+                            None => {
+                                visit(node, (glam::Vec2::ZERO, open, Zoom::IDENTITY), None, test)
+                            }
+                        })
+                    })
+                    .or_else(|| floats(true))
+            },
+            |(node, rect)| want(node, rect),
+        )
     }
 
     /// The enabled slider at `point`, leaving out what waits for the table unless the layer is `open`: its id, its press and its box

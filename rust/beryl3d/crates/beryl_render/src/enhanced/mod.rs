@@ -89,7 +89,7 @@ pub(crate) struct Enhanced {
     /// flat layer is drawn with the Baseline tier's one-sample pipeline instead, after the
     /// resolve; its four-sample pipeline is made with the others so that a frame drawn some
     /// other way later needs none made during play.
-    pipelines: [wgpu::RenderPipeline; 3],
+    pipelines: [wgpu::RenderPipeline; 5],
     /// The layout of bind group 1: `Lit`, the shadow map and its comparison sampler.
     layout: wgpu::BindGroupLayout,
     shadow: Shadow,
@@ -193,7 +193,7 @@ impl Enhanced {
         encoder: &mut wgpu::CommandEncoder,
         draws: &Draws,
         view: &wgpu::TextureView,
-        layer: &[wgpu::RenderPipeline; 3],
+        layer: &[wgpu::RenderPipeline; 5],
         layer_depth: &wgpu::TextureView,
         counter: Option<&FragmentCounter>,
     ) -> u32 {

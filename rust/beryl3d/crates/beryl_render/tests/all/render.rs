@@ -669,3 +669,33 @@ fn a_shown_card_draws_only_inside_its_elements_clip() {
         }
     }
 }
+
+#[test]
+fn a_flight_draws_in_front_of_nearer_resting_cards_and_behind_panels() {
+    let nearer = card(Vec3::Z * 10.0, 1, [0, 0, 255, 255]);
+    let flying = card(Vec3::Z, 2, [255, 0, 0, 255]);
+    let panel = rectangle(Vec2::new(0.0, 10.0), Vec2::splat(16.0), 0.0, [40, 180, 60]);
+    let records = [
+        (Band::MovingOpaque, flying),
+        (Band::Opaque, nearer),
+        (Band::Layer, panel),
+    ];
+    for limits in BOTH {
+        let mut renderer = renderer(limits);
+        for tier in [Tier::Baseline, Tier::Enhanced] {
+            let (resting, _) = draw_in(tier, &mut renderer, overhead(), (200, 200), &records[1..]);
+            let (frame, _) = draw_in(tier, &mut renderer, overhead(), (200, 200), &records);
+            // The nearer card can cast a shadow in Enhanced. Its color still tells us which
+            // card painted the pixel, independent of the amount of light reaching it.
+            let [red, _, blue] = resting.at(100, 110);
+            assert!(blue > red, "{limits:?} {tier:?}");
+            let [red, _, blue] = frame.at(100, 110);
+            assert!(red > blue, "{limits:?} {tier:?}");
+            assert_eq!(
+                frame.at(100, 90),
+                resting.at(100, 90),
+                "{limits:?} {tier:?}"
+            );
+        }
+    }
+}

@@ -176,8 +176,27 @@ fn the_hosts_flight_arc_moves_the_card_in_the_frame() {
             .into_iter()
             .find(|step| step.verb == Verb::Fly)
             .unwrap();
-        page.seek(&Moment::At(Duration(flight.middle))).unwrap();
-        page.find(&format!("card #{}", mine.spell.0)).rect
+        let locator = format!("card #{}", mine.spell.0);
+        let band_at = |page: &mut Page, at| {
+            page.seek(&Moment::At(Duration(at))).unwrap();
+            let frame = page.frame();
+            let card = frame
+                .resolved
+                .iter()
+                .find(|node| node.id.0 == u32::from(mine.spell.0) && node.pose.is_some())
+                .expect("the flight's card is in the scene");
+            kit_frame::frame::PaintBand::of(card)
+        };
+        assert_eq!(
+            band_at(&mut page, flight.middle),
+            kit_frame::frame::PaintBand::Moving
+        );
+        let bounds = page.find(&locator).rect;
+        assert_eq!(
+            band_at(&mut page, flight.to),
+            kit_frame::frame::PaintBand::Table
+        );
+        bounds
     };
     let mut data = (*crate::test_data::data()).clone();
     data.verbs.fly.arc = 0.0;
@@ -250,21 +269,6 @@ fn clean(show: &Show, case: &str) {
             .collect();
         assert!(found.is_empty(), "{case}: {found:?}");
     }
-}
-
-/// How far `pose` is off the straight way from `from` to `to`, as a vector.
-/// Where the card in `slot` lies on its way at `t`, before its flight's shape draws it nearer
-/// the eye (`Segment::unlifted_at`), so that heights and progress are measured along its way.
-fn on_way(show: &Show, slot: usize, t: u64) -> Pose {
-    let track = flight(show).track(slot);
-    track
-        .iter()
-        .rev()
-        .find(|record| record.segment.start <= t)
-        .map_or_else(
-            || pose(show, slot, t),
-            |record| record.segment.unlifted_at(t),
-        )
 }
 
 fn off_line(pose: Pose, from: Pose, to: Pose) -> Vec3 {
@@ -439,7 +443,7 @@ fn a_resolving_permanent_is_thrown_up_and_half_way_across_at_a_quarter() {
     let to = pose(&show, slot, end);
     let quarter = start + (end - start) / 4;
     let [_, up, _] = axes(&show);
-    let height = |t: u64| off_line(on_way(&show, slot, t), from, to).dot(up);
+    let height = |t: u64| off_line(pose(&show, slot, t), from, to).dot(up);
     let highest = (start..=end)
         .step_by(usize::try_from(MS).expect("small"))
         .map(|t| (t, height(t)))
@@ -457,7 +461,7 @@ fn a_resolving_permanent_is_thrown_up_and_half_way_across_at_a_quarter() {
         at_quarter > 0.97 * highest.1,
         "at its greatest height by a quarter of its time: {at_quarter} of {highest:?}"
     );
-    let across = progress(on_way(&show, slot, quarter), from, to);
+    let across = progress(pose(&show, slot, quarter), from, to);
     assert!(
         (across - 0.5).abs() < 0.08,
         "half way across at a quarter of its time: {across}"
@@ -500,7 +504,7 @@ fn a_thrown_permanent_never_rises_past_the_top_of_the_window() {
                 top > edge - 1.0,
                 "{case}: its top is at {top} points, above the safe area's at {edge}, at {t}"
             );
-            highest = highest.max(off_line(on_way(&show, slot, t), from, to).dot(up));
+            highest = highest.max(off_line(pose(&show, slot, t), from, to).dot(up));
         }
         let full = show.table().data().verbs.fly.thrown.height * space::card::WIDTH * from.scale;
         if capped {

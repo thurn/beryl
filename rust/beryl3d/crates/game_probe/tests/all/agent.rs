@@ -198,7 +198,8 @@ fn the_tree_prints_states_covered_and_faded() {
             e.opacity = 0.75;
         }),
         // Covers the left half of the first card.
-        card("Plains", 2, LANDS, -48.0, 0.0, 5.0),
+        card("Plains", 2, LANDS, -48.0, 0.0, 5.0)
+            .with(|element| element.state.0 |= StateBits::MOVING),
     ]);
     assert_eq!(
         line(&frame, 0),

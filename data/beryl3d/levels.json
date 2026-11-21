@@ -68,7 +68,7 @@
   "cap_lines": 12000,
   "cap_allowances": {
     "game_play": {
-      "lines": 12479,
+      "lines": 12382,
       "reason": "The verbs use playback's step inputs and outputs, and playback invokes the verbs. Light and pointer handling read playback's scene and tracks. The arrangement and feature ports replace those dependencies before separating the code."
     }
   },

@@ -421,7 +421,7 @@ pub enum Role {
 }
 
 /// One bit each, in this order from bit 0.
-pub struct StateBits(pub u16);
+pub struct StateBits(pub u32);
 // TAPPED, FACE_DOWN, MOVING, HOVERED, HELD, ELIGIBLE, SELECTED, TARGET,
 // DISABLED, FOCUSED
 ```
@@ -636,19 +636,20 @@ The rules for building a frame:
   records it does not overlap on screen, so that a fading card among marks does
   not cut the band into many draw calls. Records that share no pixel blend the
   same in either order. A **band** is a group of records drawn together. The
-  bands, in order:
+  bands paint in this order.
 
-  1. contact shadows of cards above the table;
-  2. the soft edges of cards, and the marks on cards lying on the table;
-  3. marks on cards above the table (in flight, in a hand, on the stack, held up
-     to be read);
-  4. glows and streaks;
-  5. particles, which only the Enhanced tier draws, tested against the depth
-     buffer like the bands before them;
-  6. the flat layer, in the order of its tree;
-  7. cards shown inside flat-layer elements, such as a card browser, with their
-     marks;
-  8. flat-layer elements that must cover those cards, such as a tooltip.
+  01. contact shadows of cards above the table.
+  02. the soft edges of cards, and the marks on cards lying on the table.
+  03. marks on resting cards above the table, such as the hand and stack.
+  04. glows and streaks.
+  05. particles, which only the Enhanced tier draws, tested against the depth
+      buffer like the bands before them.
+  06. moving cards and their marks, above the resting table.
+  07. the flat layer, in the order of its tree.
+  08. cards shown inside flat-layer elements, such as a card browser, with their
+      marks.
+  09. overlays, such as targeting arrows.
+  10. cards held by the pointer.
 
   `Frame::bands` gives the index in the draw list where each band starts, so
   that a pass can draw one band's records again, as bloom does the glows.
@@ -1628,13 +1629,10 @@ streaks and notices (`StepOut`).
   place. On the phone, whose table has no room beside the stack, that place is
   over where the card will lie in the hand (`verbs.fly.held.phone`), as the web
   interface's phone holds it, and it is kept inside the safe area.
-- **A flying card is drawn in front of what it passes.** The web interface draws
-  a flying card above every other. A straight, thrown, held or swept flight
-  moves its card toward the eye along its line of sight for most of its way
-  (`Lift`, with `verbs.fly.front`), which changes nothing on the window but what
-  the card is drawn over, and eases it back as it lands. On the phone this is
-  what keeps a flight in sight: the viewer's piles lie partly under the hand,
-  and the battlefields lie just above and below the stack.
+- **A flying card is drawn in front of what it passes.** While a motion track
+  moves a card, the scene draws it above the resting table, even when its path
+  passes at a greater depth than the hand or the stack. It stays in that band
+  through pauses within a step, such as the hold at the end of a strike.
 - **Bows are measured on the screen.** A flight that leaves its straight line
   sideways (`Shape::Bowed`) takes its length across and up the window from its
   two ends' places on the window, in millimetres at the depth of its middle, as
@@ -2110,18 +2108,19 @@ as many pixels opaque as it can.
 - **A blended pass, back to front**, for the bands of the draw list: shadows,
   card edges, marks, glows and the flat layer. Colors are premultiplied by their
   opacity, so ordinary and additive shapes share one blend setting.
-- **Two pipelines and four meshes.** One opaque pipeline and one blended, each a
-  single shader that picks its branch from the record's `material`. A pipeline's
-  depth test is fixed when it is created, so the blended pipeline is made twice,
-  tested against the depth buffer for the table's bands and untested for the
-  flat layer's, with the same shader: three pipeline objects, all made at
-  startup. The card mesh, its edge strip, a unit quad and the ring of that quad
-  that the card-shaped outline sprite covers are the only meshes. The ring
-  leaves out the outline's empty middle and sides, three quarters of the quad,
-  which every outline glow and mark would otherwise shade for nothing. The
-  80-byte records are uploaded as the instance buffer unchanged. Each run of
-  records is bound from its offset in that buffer and drawn from instance 0,
-  because OpenGL ES 3.0 has no first instance and no base vertex.
+- **Five pipelines and four meshes.** The pipelines share a shader that picks
+  its branch from the record's `material`. The resting table and moving cards
+  each have an opaque pipeline and a blended pipeline. They use separate depth
+  ranges, so a moving card can cover the resting table while testing its depth
+  against other moving cards. The flat layer blends without the depth test or
+  the table's shake. All five are made at startup. The card mesh, its edge
+  strip, a unit quad and the ring of that quad that the card-shaped outline
+  sprite covers are the only meshes. The ring leaves out the outline's empty
+  middle and sides, three quarters of the quad, which every outline glow and
+  mark would otherwise shade for nothing. The 80-byte records are uploaded as
+  the instance buffer unchanged. Each run of records is bound from its offset in
+  that buffer and drawn from instance 0, because OpenGL ES 3.0 has no first
+  instance and no base vertex.
 - **Colors are blended as stored.** Faces, tints and the target hold sRGB
   values, and the shader and blending work on those values directly, as a
   browser blends CSS colors. The target format is therefore not an sRGB one.

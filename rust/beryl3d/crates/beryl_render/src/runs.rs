@@ -4,15 +4,19 @@
 
 use std::ops::Range;
 
-use kit_frame::frame::{Draw, Frame};
+use kit_frame::frame::{Band, Draw, Frame};
 
-/// The three ways a record is drawn, in the order they come in the draw list.
+/// The five ways a record is drawn, in the order they come in the draw list.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Pass {
     /// `draws[..opaque]`: no blending, writing the depth buffer.
     Opaque,
-    /// `draws[opaque..layer]`: blended, tested against the depth buffer, not writing it.
+    /// `draws[opaque..moving_opaque]`: blended, tested against the depth buffer, not writing it.
     Table,
+    /// Fully opaque moving cards, drawn over the resting table.
+    MovingOpaque,
+    /// `draws[moving..layer]`: blended and shaken, tested against moving opaque cards.
+    Moving,
     /// `draws[layer..]`: the flat layer, blended with no depth test and not shaken.
     Layer,
 }
@@ -47,6 +51,8 @@ pub fn runs(frame: &Frame) -> Runs<'_> {
         frame,
         next: 0,
         opaque,
+        moving_opaque: frame.bands[Band::MovingOpaque as usize].clamp(opaque, total),
+        moving: frame.bands[Band::Moving as usize].clamp(opaque, total),
         layer: frame.layer.clamp(opaque, total),
     }
 }
@@ -56,6 +62,8 @@ pub struct Runs<'a> {
     frame: &'a Frame,
     next: u32,
     opaque: u32,
+    moving_opaque: u32,
+    moving: u32,
     layer: u32,
 }
 
@@ -63,8 +71,12 @@ impl Runs<'_> {
     fn pass(&self, index: u32) -> Pass {
         if index < self.opaque {
             Pass::Opaque
-        } else if index < self.layer {
+        } else if index < self.moving_opaque {
             Pass::Table
+        } else if index < self.moving {
+            Pass::MovingOpaque
+        } else if index < self.layer {
+            Pass::Moving
         } else {
             Pass::Layer
         }
@@ -104,7 +116,7 @@ impl Iterator for Runs<'_> {
 mod tests {
     use glam::Affine3A;
     use kit_base::atlas::{FaceSize, Tier};
-    use kit_frame::frame::{Band, FrameBuilder, Sprite};
+    use kit_frame::frame::{FrameBuilder, Sprite};
 
     use super::*;
 

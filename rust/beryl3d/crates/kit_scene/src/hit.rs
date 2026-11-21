@@ -1,33 +1,49 @@
 //! Hit testing: which element a press at a point reaches, and where an element can be pressed
 //! (docs/beryl-3d.md, "The test driver" and the "Reachable" rule of "Interface checks").
 //!
-//! An element's area is the quadrilateral of its four corners, cut to its clip. The flat layer
-//! is drawn over the table without a depth test, so any element of the flat layer covers every
-//! card. Within the flat layer a later element of the tree is drawn over an earlier one; on the
-//! table a nearer element (smaller `depth`) covers a farther one. A pile's element lies at its
-//! top card's depth and is written after the cards, so a press on a pile reaches the pile, which
-//! opens its viewer. An arrow never catches a press, nor does an element with no opacity.
+//! The frame provides the paint order for both spaces. Hit testing visits the frontmost
+//! nodes first, testing the part of each projected quadrilateral inside its clip.
 
 use glam::Vec2;
 
-use kit_frame::frame::{Frame, Place, Resolved, Role, StateBits};
+use kit_frame::frame::{
+    Frame, Place, Resolved, Role, StateBits,
+    picking::{Area, hit_test},
+};
 use kit_ui::input::{Rect, Size};
 
 /// The index of the element a press at `point` (in logical points) reaches, if any.
 #[must_use]
 pub fn hit(frame: &Frame, point: Vec2) -> Option<u32> {
-    let mut best: Option<u32> = None;
-    for (index, element) in frame.resolved.iter().enumerate() {
-        if !catches(element, point) {
-            continue;
-        }
-        let index = index as u32;
-        best = match best {
-            Some(other) if covers(frame, other, index) => Some(other),
-            _ => Some(index),
-        };
-    }
-    best
+    hit_in(frame, point, frame.paint_order().rev())
+}
+
+fn hit_in(frame: &Frame, point: Vec2, mut front_first: impl Iterator<Item = u32>) -> Option<u32> {
+    hit_test(
+        point,
+        |test| {
+            front_first.find_map(|index| {
+                let element = &frame.resolved[index as usize];
+                if catches_anywhere(element) {
+                    test(Area::Quad(element.corners, element.clip), index)
+                } else {
+                    None
+                }
+            })
+        },
+        |index| {
+            let element = &frame.resolved[index as usize];
+            // A shown card is the picture of its screen element. When that element has its
+            // own input action, find it through the picture, within both of their clips.
+            let host = element
+                .state
+                .has(StateBits::SHOWN)
+                .then(|| frame.show_host(element.id))
+                .flatten()
+                .filter(|&host| within(&frame.resolved[host as usize], point));
+            Some(host.unwrap_or(index))
+        },
+    )
 }
 
 /// The first element of the flat layer that is drawn over element `index` at `point` on a
@@ -381,11 +397,6 @@ pub fn intersection(a: Rect, b: Rect) -> Option<Rect> {
     })
 }
 
-/// Whether a press at `point` lands on `element`, ignoring what covers it.
-fn catches(element: &Resolved, point: Vec2) -> bool {
-    catches_anywhere(element) && within(element, point)
-}
-
 /// Whether a press inside `element` lands on it, ignoring what covers it. One the pointer goes
 /// through (`StateBits::PASSES`) never does.
 fn catches_anywhere(element: &Resolved) -> bool {
@@ -400,56 +411,12 @@ fn never_catches(role: Role) -> bool {
 /// Whether `point` is inside the element's quadrilateral and its clip.
 #[must_use]
 pub fn within(element: &Resolved, point: Vec2) -> bool {
-    if let Some(clip) = element.clip
-        && !(point.x >= clip.x
-            && point.y >= clip.y
-            && point.x <= clip.x + clip.width
-            && point.y <= clip.y + clip.height)
-    {
-        return false;
-    }
-    in_quad(element.corners, point)
-}
-
-/// Whether `point` is inside the convex quadrilateral `corners`, in either winding.
-fn in_quad(corners: [Vec2; 4], point: Vec2) -> bool {
-    // Which side of the edges the point has been on so far, if any.
-    let mut side: Option<bool> = None;
-    for i in 0..4 {
-        let a = corners[i];
-        let b = corners[(i + 1) % 4];
-        let cross = (b - a).perp_dot(point - a);
-        if cross.abs() <= f32::EPSILON {
-            continue;
-        }
-        let left = cross > 0.0;
-        if *side.get_or_insert(left) != left {
-            return false;
-        }
-    }
-    // A quadrilateral with no area holds no point.
-    side.is_some()
+    Area::Quad(element.corners, element.clip).contains(point)
 }
 
 /// Whether element `a` is drawn over element `b`.
 fn covers(frame: &Frame, a: u32, b: u32) -> bool {
-    let (first, second) = (&frame.resolved[a as usize], &frame.resolved[b as usize]);
-    match (first.place == Place::Layer, second.place == Place::Layer) {
-        (true, false) => true,
-        (false, true) => false,
-        // The flat layer is drawn in the order of its tree.
-        (true, true) => a > b,
-        // A card in flight passes over a pile's element, which names the pile's top card at
-        // rest: a card landing on the pile is drawn, and pressed, above it.
-        (false, false) if flying(first) && second.role == Role::Pile => true,
-        (false, false) if first.role == Role::Pile && flying(second) => false,
-        (false, false) => first.depth.total_cmp(&second.depth).then(b.cmp(&a)).is_lt(),
-    }
-}
-
-/// Whether `element` is a card a script or the pointer is moving.
-fn flying(element: &Resolved) -> bool {
-    element.role == Role::Card && element.state.has(StateBits::MOVING)
+    frame.compare_paint(a, b).is_gt()
 }
 
 /// Every element of `frame` other than those that never catch a press, in index order.
@@ -585,6 +552,7 @@ impl Grid {
             edges.sort_by(f32::total_cmp);
             edges.dedup_by(|a, b| (*a - *b).abs() < 0.001);
         }
+        candidates.sort_unstable_by(|&a, &b| frame.compare_paint(b, a));
         Self {
             xs,
             ys,
@@ -686,17 +654,8 @@ impl Grid {
     /// descendants.
     fn reaches(&self, frame: &Frame, index: u32, point: Vec2) -> bool {
         let point = self.shear.to_screen(point);
-        let mut best: Option<u32> = None;
-        for &candidate in &self.candidates {
-            if !catches(&frame.resolved[candidate as usize], point) {
-                continue;
-            }
-            best = match best {
-                Some(other) if covers(frame, other, candidate) => Some(other),
-                _ => Some(candidate),
-            };
-        }
-        best.is_some_and(|at| is_within(frame, at, index))
+        hit_in(frame, point, self.candidates.iter().copied())
+            .is_some_and(|at| is_within(frame, at, index))
     }
 
     /// Whether each cell is free, row by row. With `whole`, a press at the cell's centre and

@@ -103,7 +103,11 @@ impl Table {
             visible: pose.opacity > 0.0,
             ..object
         };
-        Some((object, item, track.moving(motion.t)))
+        Some((
+            object,
+            item,
+            track.moving(motion.t) || track.paused(motion.t),
+        ))
     }
 
     /// Writes the resolved element and the draw record of the ability numbered `id`: `object`,

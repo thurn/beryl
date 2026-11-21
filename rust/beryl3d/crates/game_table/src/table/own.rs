@@ -28,7 +28,7 @@ use glam::{Affine3A, Quat, Vec2, Vec3};
 use super::{CARD_HEIGHT, CARD_WIDTH, Look};
 use kit_base::data::space::own;
 use kit_base::tokens::color;
-use kit_frame::frame::{Band, Draw, FrameBuilder, Sprite, StateBits, sprites};
+use kit_frame::frame::{Band, Draw, FrameBuilder, PaintBand, Sprite, sprites};
 
 /// How a creature fights, as its record says.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -95,7 +95,7 @@ pub(super) fn write(
     (slot, record): (usize, &ObjectView),
     look: &Look,
     fights: &Fights,
-    now: u64,
+    (now, band): (u64, PaintBand),
     builder: &mut FrameBuilder,
 ) {
     let fighting = Fighting::of(record);
@@ -103,7 +103,7 @@ pub(super) fn write(
     if look.pose.opacity <= 0.0 {
         return;
     }
-    let mut marks = Marks::on(look, builder);
+    let mut marks = Marks::on(look, band, builder);
     let card = Vec2::new(CARD_WIDTH, CARD_HEIGHT);
     if record.summoning_sick {
         let size = Vec2::splat(own::moon::SIZE * CARD_WIDTH);
@@ -139,15 +139,11 @@ struct Marks<'b, 'f> {
 }
 
 impl<'b, 'f> Marks<'b, 'f> {
-    fn on(look: &Look, builder: &'b mut FrameBuilder<'f>) -> Self {
+    fn on(look: &Look, band: PaintBand, builder: &'b mut FrameBuilder<'f>) -> Self {
         let pose = look.pose;
         Self {
             card: pose.upward(),
-            band: if look.state & StateBits::MOVING == 0 {
-                Band::TableMarks
-            } else {
-                Band::RaisedMarks
-            },
+            band: band.records(Band::TableMarks),
             opacity: pose.opacity.clamp(0.0, 1.0),
             builder,
         }

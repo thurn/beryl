@@ -132,6 +132,21 @@ impl Track {
         })
     }
 
+    /// Whether an authored segment carries the object across the scene at `t`. Settling into
+    /// an open slot and changing a card's face, size or opacity in place keep their depth
+    /// among the surrounding cards.
+    #[must_use]
+    pub fn crossing(&self, t: u64) -> bool {
+        self.segments().iter().any(|segment| {
+            segment.start <= t
+                && t < segment.end()
+                && segment
+                    .step
+                    .is_some_and(|step| step.follows == Follows::Start)
+                && (segment.from.position != segment.to.position || segment.arc != 0.0)
+        })
+    }
+
     /// Adds `segment` after every segment that starts no later than it, so that of two that
     /// start together the one added last decides the pose. When the track is full it first
     /// drops the segments that ended by `now`, all but the latest of them: that one still

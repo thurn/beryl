@@ -6,16 +6,8 @@
 //!   controller's edge of the table, the opponent's half as far and later, leaning the other way.
 //! - A permanent spell resolving is thrown up off the stack and drops onto its place
 //!   (`Shape::Thrown`), rising no higher than the top of the window leaves room for.
-//! - The viewer's card played from their hand onto the table, such as a land, glides straight to
-//!   its place, drawn in front of the cards left in the hand: it looks on screen as the straight
-//!   line has it but is held nearer the eye until half way (`Shape::Lifted`), as the web draws a
-//!   flying card above every other and Arena lifts a played card above the hand. A card from
-//!   the middle of a big hand would otherwise start behind the cards to its right, which each
-//!   face the camera a little nearer the eye, and stay hidden under them.
-//! - Every straight, thrown, held or swept flight is also held nearer the eye for most of its
-//!   way (`in_front`), so that it is drawn in front of the hand, the stack and the cards it
-//!   passes without moving on the window: on the phone the viewer's piles lie partly under the
-//!   hand and the battlefields lie just above and below the stack.
+//! - The viewer's card played from their hand onto the table, such as a land, glides straight
+//!   to its place. The scene draws it in front of the resting cards while it travels.
 //! - The opponent's land drops out of their hand into the open table on the side away from
 //!   where it is going, tilted, and swings back along the table to its place.
 //! - A card the viewer draws alone flies from the library to a place beside the stack, bowing
@@ -55,15 +47,13 @@ use beryl_protocol::script::Subject;
 use game_table::table::Camera;
 use kit_base::data::profiles::HeldDraw;
 use kit_base::data::space;
-use kit_base::data::verbs::{Bowing, Fly, Front};
-use kit_base::pose::{Bow, Curve, Lift, Pose, Segment, Shape};
+use kit_base::data::verbs::{Bowing, Fly};
+use kit_base::pose::{Bow, Curve, Pose, Segment, Shape};
 
 pub const BUILT: bool = true;
 
 /// The path a flight takes.
 enum Path {
-    /// The straight line, drawn in front of the hand it leaves (`Shape::Lifted`).
-    Lifted,
     /// The straight line, rising `verbs.fly.arc` at its middle when `rises`.
     Straight {
         rises: bool,
@@ -74,8 +64,6 @@ enum Path {
         bowing: Bowing,
         toward: f32,
         rises: bool,
-        /// Drawn in front of what it passes (`Shape::BowedNear`).
-        near: bool,
     },
     Thrown,
     /// The viewer's card drawn alone: held up beside the stack, then dropped into the hand.
@@ -117,10 +105,7 @@ fn path_of(act: &Act, case: Option<&str>, fly: &Fly) -> Path {
                 fly.bows.taken
             },
             toward: -toward,
-            // An opponent's draw crosses the stack on its way to their hand at the top of the
-            // window, so it is drawn in front of it.
             rises: true,
-            near: !mine,
         };
     }
     match (*from, object.zone) {
@@ -131,7 +116,6 @@ fn path_of(act: &Act, case: Option<&str>, fly: &Fly) -> Path {
             bowing: if mine { fly.bows.cast } else { fly.bows.theirs },
             toward,
             rises: *from != ZoneName::Hand,
-            near: false,
         },
         (ZoneName::Stack, ZoneName::Battlefield) => Path::Thrown,
         // The opponent's hand lies at the top of the frame. A discard drops from the
@@ -139,13 +123,12 @@ fn path_of(act: &Act, case: Option<&str>, fly: &Fly) -> Path {
         (ZoneName::Hand, ZoneName::Graveyard) if !mine && *why == Why::Discard => {
             Path::Straight { rises: false }
         }
-        (ZoneName::Hand, ZoneName::Battlefield) if mine => Path::Lifted,
+        (ZoneName::Hand, ZoneName::Battlefield) if mine => Path::Straight { rises: false },
         // The opponent's land bows toward the middle of the table, away from their own edge.
         (ZoneName::Hand, ZoneName::Battlefield) => Path::Bowed {
             bowing: fly.bows.played,
             toward: -toward,
             rises: false,
-            near: false,
         },
         _ => Path::Straight { rises: true },
     }
@@ -282,28 +265,6 @@ fn into_safe_area(corners: &[Vec2], camera: &Camera) -> Vec2 {
     )
 }
 
-/// How a flight from `from` to `to` is drawn in front of everything it passes, as the web
-/// interface draws a flying card above every other: held just beyond `front.near` of the depth
-/// of the nearer of its two ends and the stack (`Lift`), until `front.hold` of its way, and then
-/// back to where it lies as it lands. It changes nothing on the window but what the card is drawn
-/// over. On the phone the viewer's piles lie partly under the hand, the stack lies between the
-/// two battlefields, and the battlefield lies just below the stack, so a card that kept to the
-/// depth of its way would pass under the hand or the stack and be hidden for most of its
-/// flight.
-fn in_front(camera: &Camera, from: Pose, to: Pose, front: &Front) -> Lift {
-    let nearest = camera
-        .depth(from.position)
-        .min(camera.depth(to.position))
-        .min(space::stack::DEPTH);
-    Lift {
-        eye: camera.eye,
-        forward: -camera.axes()[2],
-        near: nearest * front.near,
-        hold: front.hold,
-        keep: front.keep,
-    }
-}
-
 /// Whether a card's face changes on its way from `from` to `to`.
 fn turns(from: Pose, to: Pose) -> bool {
     (from.turn - to.turn).abs() > 1e-4
@@ -352,9 +313,6 @@ fn held_up(step: &StepIn<'_>, (from, to): (Pose, Pose), out: &mut StepOut<'_>, s
     let (flying, holding) = (held.r#in, held.hold);
     let camera = step.places.camera();
     let bowed = bow(&held.bow, -1.0, (from, up), camera);
-    // Drawn in front of the hand as it rises from the library, which on the phone lies
-    // partly under the hand.
-    let lift = in_front(camera, from, to, &fly.front);
     // The web leans and holds back the growth only of a card that turns over (its `heldUp`
     // returns the bowed pose alone for a card already face up).
     let (shape, turning) = if turns(from, to) {
@@ -365,12 +323,11 @@ fn held_up(step: &StepIn<'_>, (from, to): (Pose, Pose), out: &mut StepOut<'_>, s
                 bow: bowed,
                 lean,
                 eye,
-                lift,
             },
             Some(held.turn),
         )
     } else {
-        (Shape::BowedNear { bow: bowed, lift }, None)
+        (Shape::Bowed(bowed), None)
     };
     out.segment(
         subject,
@@ -434,11 +391,9 @@ fn swept(step: &StepIn<'_>, (from, to): (Pose, Pose)) -> Shape {
         })
         .sum::<Vec3>();
     let scale = pull(from.scale, via.scale, to.scale);
-    let camera = step.places.camera();
     Shape::Swept {
         bulge: control - (from.position + to.position) / 2.0,
         grow: scale - f32::midpoint(from.scale, to.scale),
-        lift: in_front(camera, from, to, &step.verbs.fly.front),
     }
 }
 
@@ -469,63 +424,19 @@ pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
             shape: swept(step, (from, to)),
             ..between
         },
-        Path::Lifted => {
-            let camera = step.places.camera();
-            let forward = -axes[2];
-            Segment {
-                shape: Shape::Lifted(Lift {
-                    eye: camera.eye,
-                    forward,
-                    near: camera.depth(from.position) * fly.played.near,
-                    hold: fly.played.hold,
-                    keep: fly.front.keep,
-                }),
-                ..between
-            }
-        }
-        Path::Straight { rises } if travels => Segment {
+        Path::Straight { rises } => Segment {
             arc: arc(rises),
-            // A bow of nothing is the straight line, so that the card can be drawn in front.
-            shape: Shape::BowedNear {
-                bow: Bow {
-                    offset: Vec3::ZERO,
-                    sharpness: 1.0,
-                    lean: 0.0,
-                    axis: axes[2],
-                },
-                lift: in_front(step.places.camera(), from, to, &fly.front),
-            },
             ..between
         },
-        // One that stays where it rests keeps its depth among the cards beside it.
-        Path::Straight { .. } => between,
         Path::Bowed {
             bowing,
             toward,
             rises,
-            near,
-        } => {
-            let camera = step.places.camera();
-            let bow = bow(&bowing, toward, (from, to), camera);
-            Segment {
-                arc: arc(rises),
-                shape: if near {
-                    Shape::BowedNear {
-                        bow,
-                        lift: Lift {
-                            eye: camera.eye,
-                            forward: -axes[2],
-                            near: space::stack::DEPTH * fly.drawn_front.near,
-                            hold: fly.drawn_front.hold,
-                            keep: fly.front.keep,
-                        },
-                    }
-                } else {
-                    Shape::Bowed(bow)
-                },
-                ..between
-            }
-        }
+        } => Segment {
+            arc: arc(rises),
+            shape: Shape::Bowed(bow(&bowing, toward, (from, to), step.places.camera())),
+            ..between
+        },
         Path::Thrown => Segment {
             shape: Shape::Thrown {
                 // Up the screen by a share of the spell's width, and no higher than the room
@@ -535,7 +446,6 @@ pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
                         .min(room((from, to), step.places.camera())),
                 aloft: fly.thrown.scale * from.scale,
                 tuning: fly.thrown,
-                lift: in_front(step.places.camera(), from, to, &fly.front),
             },
             ..between
         },
@@ -573,14 +483,11 @@ fn kept_in_window(segment: Segment, camera: &Camera, target: f32) -> Segment {
             lean: 0.0,
             axis: back,
         },
-        Shape::Bowed(bow) | Shape::BowedNear { bow, .. } => bow,
+        Shape::Bowed(bow) => bow,
         _ => return segment,
     };
     let with = |bow: Bow| Segment {
-        shape: match segment.shape {
-            Shape::BowedNear { lift, .. } => Shape::BowedNear { bow, lift },
-            _ => Shape::Bowed(bow),
-        },
+        shape: Shape::Bowed(bow),
         ..segment
     };
     let (size, insets) = (camera.window.size, camera.window.safe_area);
@@ -591,9 +498,7 @@ fn kept_in_window(segment: Segment, camera: &Camera, target: f32) -> Segment {
     // has there, found once, since a push changes only the bow's offset. They are spread evenly
     // over the easing curve's own parameter rather than over time, which takes no search for
     // the progress at a given time (`Curve::ease`), a cost paid for every flight that starts.
-    // Each centre is projected alone, rather than the card's four corners. A lifted card is
-    // drawn nearer the eye along its line of sight, so lifting moves none of it on the window
-    // and the centre is measured where the straight way has it.
+    // Each centre is projected alone, rather than the card's four corners.
     let way = segment.to.position - segment.from.position;
     let mut moments = [(Vec3::ZERO, 0.0_f32); LOOKS as usize];
     let mut count = 0;

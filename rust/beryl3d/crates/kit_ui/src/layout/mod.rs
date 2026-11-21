@@ -44,10 +44,9 @@ use float::{Float, Prepared};
 use crate::element::{self, Action, Element};
 use crate::input::{Rect, Size};
 use crate::widgets::icons::Icons;
-use kit_base::geometry::{Window, plane::Zoom};
+use kit_base::geometry::Window;
 use kit_frame::frame::{ElementId, Role};
 use kit_text::text::{Block, Glyphs, Text, TypeStyle};
-use write::moved;
 
 /// Where the desktop layout anchors a screen: its bottom right corner this far in from the
 /// safe area's, where the web interface's action dock stands (`.dock` in
@@ -318,104 +317,6 @@ impl Layer {
             let element = &node.element;
             (element.press.clone()).map(|press| (node.id, press, element.enabled))
         })
-    }
-
-    /// The first value `want` gives for an element at `point`, asking the innermost first:
-    /// the floats drawn over the screen, the last drawn first, then the screen, without what
-    /// waits for the table to settle (`Element::waits`) unless the layer is `open`, then the
-    /// floats drawn under it. While the screen shows
-    /// a child drawn over the floats (`write::over_floats`), only that child is asked. An element is at
-    /// `point` where it is drawn: moved by its own transition and by the scroll of the elements
-    /// it is in, and inside the box of every element it is in that clips or scrolls. As in CSS,
-    /// a child that overflows a box that does neither is drawn outside it, and takes presses
-    /// there; `write` marks the same elements interactive.
-    fn hit<T>(
-        &self,
-        point: glam::Vec2,
-        open: bool,
-        want: impl Fn(&Node, Rect) -> Option<T>,
-    ) -> Option<T> {
-        /// The value at `point` in `node`'s tree, whose top left corner stands at `origin`.
-        /// `reach` says whether `point` is inside every clipping element `node` is in: an
-        /// element outside one of them is not at `point`, but an anchored element under it,
-        /// such as a submenu beside its menu, stands in a tree of its own and still may be.
-        fn find<T>(
-            node: &Node,
-            point: glam::Vec2,
-            (origin, open, zoom): (glam::Vec2, bool, Zoom),
-            reach: bool,
-            want: &impl Fn(&Node, Rect) -> Option<T>,
-        ) -> Option<T> {
-            if node.element.style.display == element::Display::None || (node.element.waits && !open)
-            {
-                return None;
-            }
-            let origin = origin + node.translation();
-            let rect = moved(node.paint_rect(), origin + node.offset());
-            let zoom = node.zoom(zoom, rect);
-            let rect = zoom.rect(rect);
-            let here = reach && rect.width > 0.0 && rect.height > 0.0 && contains(rect, point);
-            let inside = origin - node.scroll;
-            let clips = node.element.style.overflow != element::Overflow::Visible;
-            let reach_inside = if clips { here } else { reach };
-            (node.children.iter().rev())
-                .find_map(|child| match child.element.anchor {
-                    // An anchored child's tree is laid out from (0, 0), and stands at its corner.
-                    Some(_) => find(child, point, (child.corner()?, open, zoom), true, want),
-                    None => find(child, point, (inside, open, zoom), reach_inside, want),
-                })
-                .or_else(|| here.then(|| want(node, rect)).flatten())
-        }
-        // The screen's children drawn over the floats (`write::over_floats`) filter what is under
-        // them, and are modal: while one is shown, nothing else is searched.
-        let modal_child =
-            |child: &&Node| write::over_floats(child) && (open || !child.element.waits);
-        let modal = (self.screen.as_ref())
-            .filter(|node| node.children.iter().any(|child| modal_child(&child)));
-        if let Some(node) = modal {
-            return (node.children.iter().rev())
-                .filter(modal_child)
-                .find_map(|child| {
-                    find(
-                        child,
-                        point,
-                        (child.corner()?, open, Zoom::IDENTITY),
-                        true,
-                        &want,
-                    )
-                });
-        }
-        let floats = |under: bool| {
-            (self.floats.iter().rev())
-                .filter(move |float| float.id.under_screen() == under)
-                .find_map(|float| {
-                    let corner = float.corner();
-                    let rect = float.node.rect;
-                    let pivot = corner + glam::Vec2::new(rect.width, rect.height) / 2.0;
-                    let zoom = Zoom::around(pivot, float.look.scale);
-                    find(&float.node, point, (corner, open, zoom), true, &want)
-                })
-        };
-        floats(false)
-            .or_else(|| {
-                (self.screen.as_ref()).and_then(|node| match node.element.anchor {
-                    Some(_) => find(
-                        node,
-                        point,
-                        (node.corner()?, open, Zoom::IDENTITY),
-                        true,
-                        &want,
-                    ),
-                    None => find(
-                        node,
-                        point,
-                        (glam::Vec2::ZERO, open, Zoom::IDENTITY),
-                        true,
-                        &want,
-                    ),
-                })
-            })
-            .or_else(|| floats(true))
     }
 
     /// Takes `node` and everything under it out of taffy's tree.
@@ -748,13 +649,6 @@ fn size(size: Size) -> taffy::Size<Dimension> {
         width: Dimension::length(size.width),
         height: Dimension::length(size.height),
     }
-}
-
-fn contains(rect: Rect, point: glam::Vec2) -> bool {
-    point.x >= rect.x
-        && point.x <= rect.x + rect.width
-        && point.y >= rect.y
-        && point.y <= rect.y + rect.height
 }
 
 /// How far down `node`'s content box its laid-out text of `height` starts: a text field's at

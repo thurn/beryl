@@ -136,3 +136,71 @@ fn animation_places_anchors_without_repeating_layout() {
     tree.solve(SolvePhase::Frame, &mut record);
     assert_eq!(expected.next(), None);
 }
+
+#[test]
+fn a_press_follows_paint_order_across_the_table_and_screen() {
+    use kit_base::atlas::Tier;
+    use kit_frame::frame::{Frame, FrameBuilder, NameRef, Place, Resolved, StateBits};
+    use kit_scene::hit::hit;
+
+    let point = Vec2::new(16.0, 16.0);
+    let corners = [
+        Vec2::new(BOX.x, BOX.y),
+        Vec2::new(BOX.x + BOX.width, BOX.y),
+        Vec2::new(BOX.x + BOX.width, BOX.y + BOX.height),
+        Vec2::new(BOX.x, BOX.y + BOX.height),
+    ];
+    let node = |id, depth, state, projected: bool| Resolved {
+        id: ElementId(id),
+        parent: u32::MAX,
+        role: if projected { Role::Card } else { Role::Button },
+        name: NameRef::default(),
+        place: if projected {
+            Place::Revealed
+        } else {
+            Place::Layer
+        },
+        pose: projected.then(Pose::default),
+        corners,
+        depth,
+        opacity: 1.0,
+        clip: None,
+        interactive: true,
+        state: StateBits(state),
+        face: None,
+        copies: 1,
+        really: NameRef::default(),
+        note: NameRef::default(),
+    };
+    let mut frame = Frame::with_capacity(6, 0, 0);
+    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
+    let dragged = builder.resolved("dragged", node(5, 7.0, StateBits::HELD, true));
+    let moving = builder.resolved(
+        "moving into preview",
+        node(1, 5.0, StateBits::MOVING | StateBits::SHOWN, true),
+    );
+    let far = builder.resolved("far", node(0, 3.0, 0, true));
+    let near = builder.resolved("near", node(2, 1.0, 0, true));
+    let panel = builder.resolved("panel", node(3, 0.0, 0, false));
+    let mut shown = node(4, 6.0, StateBits::SHOWN, true);
+    shown.clip = Some(Rect {
+        x: 20.0,
+        width: 20.0,
+        ..BOX
+    });
+    let shown = builder.resolved("shown", shown);
+    builder.finish();
+    assert_eq!(
+        frame.paint_order().collect::<Vec<_>>(),
+        [far, near, moving, panel, shown, dragged]
+    );
+    assert_eq!(hit(&frame, point), Some(dragged));
+
+    // Transparent nodes don't catch a press. The clipped preview only catches presses on
+    // the visible half, and the moving card is in front of the nearer resting card.
+    frame.resolved[dragged as usize].opacity = 0.0;
+    assert_eq!(hit(&frame, Vec2::new(24.0, 16.0)), Some(shown));
+    assert_eq!(hit(&frame, point), Some(panel));
+    frame.resolved[panel as usize].opacity = 0.0;
+    assert_eq!(hit(&frame, point), Some(moving));
+}

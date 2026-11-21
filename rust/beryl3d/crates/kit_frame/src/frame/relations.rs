@@ -53,3 +53,23 @@ impl FrameBuilder<'_> {
             .or_else(|| self.clip(rect))
     }
 }
+
+impl super::Frame {
+    /// The table object that the screen element `element` shows.
+    #[must_use]
+    pub fn shown_by(&self, element: u32) -> Option<ElementId> {
+        let at = self
+            .shows
+            .binary_search_by_key(&element, |&(index, _)| index)
+            .ok()?;
+        Some(self.shows[at].1)
+    }
+
+    /// The screen element that presents a table object and has its own press action.
+    #[must_use]
+    pub fn show_host(&self, object: ElementId) -> Option<u32> {
+        self.shows.iter().find_map(|&(index, shown)| {
+            (shown == object && self.resolved[index as usize].interactive).then_some(index)
+        })
+    }
+}

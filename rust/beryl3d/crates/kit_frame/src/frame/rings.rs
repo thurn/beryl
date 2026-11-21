@@ -68,10 +68,14 @@ impl Frame {
     /// Exchanges each lifted card's drawn box in `resolved` with its resting box in `lifted`.
     /// Called twice, it leaves the frame as it was.
     pub fn swap_lifted(&mut self) {
+        if self.lifted.is_empty() {
+            return;
+        }
         for lifted in &mut self.lifted {
             let element = &mut self.resolved[lifted.element as usize];
             std::mem::swap(&mut element.corners, &mut lifted.corners);
             std::mem::swap(&mut element.depth, &mut lifted.depth);
         }
+        self.order_nodes();
     }
 }

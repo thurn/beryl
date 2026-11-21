@@ -64,11 +64,11 @@ struct Node {
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum NodeState {
     Interactive,
-    Bit(u16),
+    Bit(u32),
     Faded(f32),
 }
 
-const STATES: [(u16, &str); 6] = [
+const STATES: [(u32, &str); 6] = [
     (StateBits::HOVERED, "hovered"),
     (StateBits::HELD, "held"),
     (StateBits::SELECTED, "selected"),

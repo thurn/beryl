@@ -4,9 +4,9 @@ use std::borrow::Cow;
 
 use glam::Vec2;
 use kit_base::{geometry::Rect, pose::Pose};
-use kit_frame::frame::{ElementId, Frame, Resolved, Role, StateBits};
+use kit_frame::frame::{ElementId, Frame, Resolved, Role};
 
-pub use kit_frame::frame::{NodeRef, Show};
+pub use kit_frame::frame::{NodeRef, PaintBand as Band, Show};
 use kit_ui::layout::Layer;
 
 use crate::hit::bounds;
@@ -67,25 +67,6 @@ pub struct KeepClear {
     pub places: Vec<SlotRef>,
 }
 
-/// The scene's paint bands, in back-to-front order. The renderer's passes also account
-/// for depth buffering and blending within these bands. Existing frame writers
-/// still submit the passes that produce the current picture.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Band {
-    /// Things at rest on the table.
-    Table,
-    /// Things moving over the table.
-    Moving,
-    /// Screen panels and their contents.
-    ScreenPanels,
-    /// Table objects shown inside screen elements.
-    ShownObjects,
-    /// Transient elements over the scene.
-    Overlays,
-    /// What the pointer is dragging.
-    Dragged,
-}
-
 /// A named thing in the scene, with its space, paint band and placement relations.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Node<'a> {
@@ -110,21 +91,13 @@ impl<'a> Node<'a> {
             Some(pose) => Space::Table { pose, bounds },
             None => Space::Screen { bounds },
         };
-        let band = match space {
-            Space::Table { .. } if element.state.has(StateBits::HELD) => Band::Dragged,
-            Space::Table { .. } if element.state.has(StateBits::SHOWN) => Band::ShownObjects,
-            Space::Table { .. } if element.state.has(StateBits::MOVING) => Band::Moving,
-            Space::Table { .. } => Band::Table,
-            Space::Screen { .. } if element.role == Role::Arrow => Band::Overlays,
-            Space::Screen { .. } => Band::ScreenPanels,
-        };
         Self {
             id: element.id,
             role: element.role,
             name: Cow::Borrowed(frame.name(element.name)),
             parent: (element.parent != u32::MAX).then_some(element.parent),
             space,
-            band,
+            band: Band::of(element),
             anchor: None,
             keep_clear: None,
             show: frame.shown_by(index).map(Show::object),

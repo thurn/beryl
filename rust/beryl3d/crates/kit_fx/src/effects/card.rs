@@ -33,7 +33,7 @@ pub struct Look {
     /// battlefield frame, without the cost, type line or rules text.
     pub full: Option<[u16; 2]>,
     /// `StateBits`.
-    pub state: u16,
+    pub state: u32,
     pub interactive: bool,
 }
 
@@ -44,7 +44,7 @@ impl Look {
         pose: Pose,
         face: Option<u16>,
         full: Option<[u16; 2]>,
-        state: u16,
+        state: u32,
         interactive: bool,
     ) -> Self {
         Self {

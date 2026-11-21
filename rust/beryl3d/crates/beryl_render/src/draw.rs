@@ -32,7 +32,7 @@ impl Draws<'_> {
     pub(crate) fn record(
         &self,
         pass: &mut wgpu::RenderPass<'_>,
-        pipelines: &[wgpu::RenderPipeline; 3],
+        pipelines: &[wgpu::RenderPipeline; 5],
         wanted: impl Fn(Pass) -> bool,
     ) -> u32 {
         self.record_part(
@@ -80,6 +80,16 @@ impl Draws<'_> {
                 debug_assert!(false, "a record names texture array {}", run.array);
                 continue;
             };
+            if state.is_none_or(|(pass, _, _)| pass != run.pass) {
+                // The moving passes use the near half of the depth buffer. They cover the
+                // resting table and still depth-test correctly against each other.
+                let (near, far) = match run.pass {
+                    Pass::Opaque | Pass::Table => (0.5, 1.0),
+                    Pass::MovingOpaque | Pass::Moving => (0.0, 0.5),
+                    Pass::Layer => (0.0, 1.0),
+                };
+                pass.set_viewport(0.0, 0.0, target.0 as f32, target.1 as f32, near, far);
+            }
             if state != Some((run.pass, run.array, run.clip)) {
                 pass.set_pipeline(drawn_with);
                 pass.set_bind_group(0, bind_group, &[]);

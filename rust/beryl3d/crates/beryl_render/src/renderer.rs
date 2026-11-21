@@ -65,7 +65,7 @@ pub struct Renderer {
     pub(crate) device: wgpu::Device,
     pub(crate) queue: wgpu::Queue,
     pub(crate) format: wgpu::TextureFormat,
-    pipelines: [wgpu::RenderPipeline; 3],
+    pipelines: [wgpu::RenderPipeline; 5],
     layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
     /// The buffers frames write their uniforms and records into, with their bind groups.
@@ -563,7 +563,7 @@ fn baseline_pass(
     draws: &Draws,
     view: &wgpu::TextureView,
     depth: &wgpu::TextureView,
-    pipelines: &[wgpu::RenderPipeline; 3],
+    pipelines: &[wgpu::RenderPipeline; 5],
     counter: Option<&FragmentCounter>,
 ) -> u32 {
     let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -603,7 +603,7 @@ fn over_pass(
     at: u32,
     view: &wgpu::TextureView,
     depth: &wgpu::TextureView,
-    pipelines: &[wgpu::RenderPipeline; 3],
+    pipelines: &[wgpu::RenderPipeline; 5],
     counter: Option<&FragmentCounter>,
 ) -> u32 {
     let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

@@ -26,7 +26,7 @@ use crate::profiles::Profile;
 use kit_base::data::Data;
 use kit_base::pose::{Interval, Pose};
 use kit_frame::frame::{
-    Band, Draw, ElementId, FrameBuilder, OBJECTS, Place, Resolved, Role, StateBits,
+    Band, Draw, ElementId, FrameBuilder, OBJECTS, PaintBand, Place, Resolved, Role, StateBits,
 };
 use kit_fx::effects;
 use kit_space::motion::Track;
@@ -410,6 +410,10 @@ impl Table {
                 self.fights.forget(slot);
                 continue;
             };
+            let track = motion.and_then(|motion| Some((motion.tracks.get(slot)?, motion.t)));
+            let paused = track.is_some_and(|(track, time)| track.paused(time));
+            let layout_motion =
+                under_way && !paused && !track.is_some_and(|(track, time)| track.crossing(time));
             // A card at rest in a row that scrolled slides to its new place, as one does into
             // or out of a prompt's tray.
             under_way = under_way || self.slide_look(slot, &mut object, dress.now);
@@ -426,14 +430,13 @@ impl Table {
                 self.fights.forget(slot);
                 continue;
             }
-            // A card its step's own act holds still for a moment is drawn as one at rest, but
-            // reads as moving, mid-verb (`Track::paused`).
-            let paused = motion.is_some_and(|motion| {
-                (motion.tracks.get(slot)).is_some_and(|track| track.paused(motion.t))
-            });
+            let mut state = u32::from(under_way || paused) * StateBits::MOVING;
+            if layout_motion && !self.in_tray(slot) && boxed.is_none() {
+                state |= StateBits::LAYOUT_MOTION;
+            }
             self.write_card(
                 slot,
-                (&object, drawn, (under_way, paused), held_at),
+                (&object, drawn, (under_way, state), held_at),
                 (view, faces),
                 (back, dress, self.handed_waiting(motion)),
                 builder,
@@ -547,16 +550,17 @@ impl Table {
     }
 
     /// Writes the resolved element and the draw record of the card in `slot`: `object` as
-    /// `view` shows it, moving if `under_way`, and marked moving too if `paused`. Its face comes from `faces`, its back from layer
+    /// `view` shows it, with its motion in `state`. `under_way` controls its shadow. Its face
+    /// comes from `faces`, its back from layer
     /// `back`, and how it looks is changed by `dress`. `shown_view` is the view the table shows
     /// before the script, whose face a `cover` shows until half way; `waiting` is `pressable`'s.
     fn write_card(
         &self,
         slot: usize,
-        (object, view, (under_way, paused), held_at): (
+        (object, view, (under_way, mut state), held_at): (
             &SceneObject,
             &PlayerView,
-            (bool, bool),
+            (bool, u32),
             Option<Pose>,
         ),
         (shown_view, faces): (&PlayerView, &Faces),
@@ -575,18 +579,14 @@ impl Table {
             let (listed, face) = faces.listed_board(name);
             (printed.or(listed), layer.or(face))
         };
-        let mut state = 0;
         if object.tapped {
             state |= StateBits::TAPPED;
         }
         if object.pose.turn > 0.5 {
             state |= StateBits::FACE_DOWN;
         }
-        if under_way || paused {
-            state |= StateBits::MOVING;
-        }
-        state |= u16::from(shown.phased_out) * StateBits::PHASED_OUT;
-        state |= u16::from(shown.hidden_pick) * StateBits::PICKED;
+        state |= u32::from(shown.phased_out) * StateBits::PHASED_OUT;
+        state |= u32::from(shown.hidden_pick) * StateBits::PICKED;
         // The desktop hand and stack show the full frame. The phone uses the board frame
         // (`scanOrFrame` in `ui/src/mobile/faces.tsx`).
         let full = (matches!(shown.zone, ZoneName::Hand | ZoneName::Stack)
@@ -633,11 +633,6 @@ impl Table {
         (dress.pointer)(slot, &self.camera, &mut look);
         let held = held_at.map_or(look, |pose| Look { pose, ..look });
         effects::card::write(effects, dress.effects, on, dress.now, &held, builder);
-        if shown.zone == ZoneName::Battlefield {
-            own::write((slot, shown), &look, &self.fights, dress.now, builder);
-        } else {
-            self.fights.forget(slot);
-        }
         self.write_shadow((Some(slot), object.place), &look.pose, under_way, builder);
         let at = self.write_look(
             name,
@@ -651,10 +646,22 @@ impl Table {
             back,
             builder,
         );
+        let band = builder.node_band(at);
+        if shown.zone == ZoneName::Battlefield {
+            own::write(
+                (slot, shown),
+                &look,
+                &self.fights,
+                (dress.now, band),
+                builder,
+            );
+        } else {
+            self.fights.forget(slot);
+        }
         if let Some(really) = shown.really.as_deref() {
             builder.really(at, really);
         }
-        let on = self.badges_on(&look, under_way);
+        let on = self.badges_on(&look, band);
         let note = (dress.badges).write((shown, listed, object.copies), &on, builder);
         if let Some(note) = note {
             builder.note(at, note);
@@ -666,15 +673,13 @@ impl Table {
         (dress.badges).write_cost(cost, (&held, &self.camera), builder);
     }
 
-    /// Where the badges of a card drawn as `look` go, raised over the table's marks while it
-    /// moves (`under_way`).
-    fn badges_on(&self, look: &Look, under_way: bool) -> badges::On {
+    /// The badges share the card's paint band while it moves or is dragged.
+    fn badges_on(&self, look: &Look, band: PaintBand) -> badges::On {
         badges::On {
             pose: look.pose,
-            band: if under_way {
-                Band::RaisedMarks
-            } else {
-                Band::TableMarks
+            band: match band {
+                PaintBand::Moving | PaintBand::Dragged => band.records(Band::TableMarks),
+                _ => Band::TableMarks,
             },
             opacity: look.pose.opacity,
             show_copy_label: self.layout.style.show_copy_labels,
@@ -729,9 +734,7 @@ impl Table {
         // visible and the records beneath it show through.
         // Cards held in a box (`table::shown`) or tray (`prompts::screen`) draw over the
         // flat layer.
-        let band = if shown {
-            Band::LayerCards
-        } else if opacity == 255 && look.dissolve <= 0.0 && look.whiten <= 0.0 {
+        let resting = if opacity == 255 && look.dissolve <= 0.0 && look.whiten <= 0.0 {
             Band::Opaque
         } else if look.pose.position.z < kit_base::data::space::light::ON_TABLE_BELOW {
             Band::TableMarks
@@ -747,8 +750,9 @@ impl Table {
                 ))
             })
             .unwrap_or(0);
-        builder.draw(
-            band,
+        builder.draw_card(
+            at,
+            resting,
             Draw::card(
                 transform,
                 [red, green, blue, opacity],

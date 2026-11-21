@@ -4,7 +4,7 @@
 //!
 //! Each arrow writes one resolved element, `Role::Arrow`, named by its kind, whose four corners
 //! are the control points of its cubic Bezier curve on the screen, and a ribbon of light along
-//! the curve, with a head at its end for the two target kinds, in `Band::Glows`. The ribbon is
+//! the curve, with a head at its end for the two target kinds, in the overlay band. The ribbon is
 //! `RIBBON` pieces, each two quads: its body and halo in its tone's color, and a hot core in the
 //! tone's core color, as the web's ribbon shader lights them (`ui/src/stage/glow.ts`). Its
 //! width along its length follows the web stage's `widthOf` (`ui/src/stage/light.ts`), its
@@ -146,7 +146,7 @@ impl Drawn {
         };
         let points = cubic(way);
         let opacity = self.opacity;
-        builder.resolved(
+        let index = builder.resolved(
             self.arrow.name(),
             Resolved {
                 id: ElementId(self.id),
@@ -204,14 +204,15 @@ impl Drawn {
             wide: wide * k * points_per_millimetre,
             per_millimetre: points_per_millimetre,
         };
-        write_ribbon(scene, &ribbon, cut, lengths, shine, builder);
+        let band = builder.node_band(index).records(Band::Glows);
+        write_ribbon(scene, &ribbon, cut, lengths, (shine, band), builder);
         if matches!(self.arrow, Arrow::FriendlyTarget | Arrow::HostileTarget) {
             write_head(
                 scene,
                 &points,
                 self.ends[1].half.x,
                 points_per_millimetre,
-                tint,
+                (tint, band),
                 builder,
             );
         }
@@ -321,7 +322,7 @@ fn write_ribbon(
     points: &[Vec2; 4],
     cut: Cut,
     lengths: Lengths,
-    shine: Shine,
+    (shine, band): (Shine, Band),
     builder: &mut FrameBuilder<'_>,
 ) {
     let Some((cuts, whole)) = cut_ribbon(points, cut, lengths) else {
@@ -389,7 +390,7 @@ fn write_ribbon(
         };
         let reach = near.reach.max(far.reach);
         builder.draw(
-            Band::Glows,
+            band,
             Draw::glow(
                 camera.screen_transform(centre, Vec2::new(long, 2.0 * reach), along),
                 tinted(shine.tone, shine.strength),
@@ -406,7 +407,7 @@ fn write_ribbon(
         let up = Vec2::new(way.y, -way.x) * flip;
         let lean_by = lean * (from.half + to.half) / 2.0;
         builder.draw(
-            Band::Glows,
+            band,
             Draw::glow(
                 camera.screen_transform(
                     centre + up * lean_by,
@@ -546,7 +547,7 @@ fn write_head(
     points: &[Vec2; 4],
     target_half: f32,
     points_per_millimetre: f32,
-    tint: [u8; 4],
+    (tint, band): ([u8; 4], Band),
     builder: &mut FrameBuilder<'_>,
 ) {
     let long = (light::head::SHARE * target_half).clamp(
@@ -560,7 +561,7 @@ fn write_head(
         Vec2::new(long, 2.0 * long * light::head::SPREAD),
         way,
     );
-    builder.draw(Band::Glows, Draw::glow(transform, tint, sprites::HEAD, 0.0));
+    builder.draw(band, Draw::glow(transform, tint, sprites::HEAD, 0.0));
 }
 
 /// A ribbon's half-width where it has come `arc` of the `whole` points it is long, as the web

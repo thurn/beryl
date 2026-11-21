@@ -212,10 +212,6 @@ pub enum Shape {
     /// A line that leaves the straight way between its ends sideways on the screen and leans as
     /// it does, as the web interface's `bowed` (`ui/src/stage/bows.ts`) has it.
     Bowed(Bow),
-    /// `Bowed`, drawn in front of what it passes as `Lifted` is: an opponent's draw crosses the
-    /// stack's cards on its way from their library to their hand, and the web draws a flying
-    /// card above every other.
-    BowedNear { bow: Bow, lift: Lift },
     /// The flight in of a card the viewer draws alone and holds up to be read, when it turns
     /// over on the way, as the web interface's `heldUp` (`ui/src/stage/drawn.ts`) has it: bowed
     /// as `Bowed` is, and also leaning `lean` radians counterclockwise about the bow's axis by
@@ -224,45 +220,27 @@ pub enum Shape {
     /// from the eye, stays at its start pose's until it is edge-on, then changes to its end
     /// pose's along a smoothstep over the rest of its time, so that it turns over at about the
     /// size it had on the library. `eye` is how far along `bow.axis` the camera's eye is, so
-    /// that a position `p` is `eye - p · bow.axis` from it. It is drawn nearer the eye by
-    /// `lift`, as `Lifted` is, so that it leaves a library that lies under the hand, as the
-    /// phone's does, in front of the hand.
-    Held {
-        bow: Bow,
-        lean: f32,
-        eye: f32,
-        lift: Lift,
-    },
+    /// that a position `p` is `eye - p · bow.axis` from it.
+    Held { bow: Bow, lean: f32, eye: f32 },
     /// A permanent's flight off the stack onto its place, as the web interface's `lifted`
     /// (`ui/src/stage/lift.ts`) has it: it rises by `rise` (millimetres, up the screen; `fly`
     /// caps it so that the card never rises past the top of the window) at once,
     /// crosses most of the way at that height and drops onto its place. Its scale goes from its
     /// start pose's to `aloft` within the first frames and from there to its end pose's as it
     /// comes down. Its progress along the way is launched: it is half way across after about a
-    /// quarter of its time. It is drawn nearer the eye by `lift`, as `Lifted` is, so that it
-    /// leaves the stack in front of the spells left there and crosses the table in front of
-    /// the cards it passes, as the web draws a flying card above every other: on the phone the
-    /// battlefield lies just below the stack, and a card dropped behind the stack's other
-    /// items would stay hidden under them. The fractions of its time are `verbs.fly.thrown` in
-    /// `data/beryl3d/space-constants.json`.
+    /// quarter of its time. The fractions of its time are `verbs.fly.thrown` in
+    /// `data/beryl3d/space.json`.
     Thrown {
         rise: Vec3,
         aloft: f32,
-        lift: Lift,
         tuning: crate::data::verbs::Thrown,
     },
     /// A curve that passes by a place without stopping there, as the web interface's `swept`
     /// (`ui/src/stage/drawn.ts`) has it: a curve of the second degree from the start pose to the
     /// end pose, along the eased progress `u`, whose position is `2 u (1 - u) bulge` off the
     /// straight way and whose scale is `2 u (1 - u) grow` over the straight change. `fly` makes
-    /// both from the place passed by, so that the curve goes as far as it and no farther. It is
-    /// drawn nearer the eye by `lift`, as `Lifted` is, so that a card leaving a library that
-    /// lies under the hand, as the phone's does, is drawn in front of the hand.
-    Swept { bulge: Vec3, grow: f32, lift: Lift },
-    /// A straight line seen from the eye, with the card drawn nearer the eye than it lies: the
-    /// viewer's card played from their hand onto the table, which leaves the hand in front of the
-    /// cards beside it, as the web interface draws a flying card above every other.
-    Lifted(Lift),
+    /// both from the place passed by, so that the curve goes as far as it and no farther.
+    Swept { bulge: Vec3, grow: f32 },
     /// A straight line along which the opacity follows a fade of its own rather than the
     /// segment's curve: a card fading in where it rests that its hand regrouped round, on its
     /// short way to its new place and for the rest of its fade there (`play::step::fade`).
@@ -299,78 +277,6 @@ impl Fade {
         )]
         let elapsed = ((self.begun + since) as f64 / self.duration as f64).clamp(0.0, 1.0) as f32;
         self.from + (self.to - self.from) * self.curve.ease(elapsed)
-    }
-}
-
-/// How a `Shape::Lifted` path, and the other shapes that hold a card nearer the eye
-/// (`Shape::lift`), hold it there. At each moment the card is moved toward `eye` along the line
-/// from the eye through it and shrunk by the same factor, so that it looks exactly as it would
-/// on its way and only its depth changes. Until `hold` of its eased progress a card farther
-/// from the eye, along `forward`, than `near` millimetres is drawn just beyond `near`: at
-/// `near` plus `verbs.fly.front.keep` of how far beyond it the card lies, so that cards held
-/// near together keep the order in depth their ways give them. From `hold` it eases back to
-/// where it lies, which it reaches as it lands.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Lift {
-    pub eye: Vec3,
-    /// The unit direction the camera looks in.
-    pub forward: Vec3,
-    pub near: f32,
-    pub hold: f32,
-    /// The share of the depth past `near` kept while the lift is held.
-    pub keep: f32,
-}
-
-impl Shape {
-    /// How the shape holds its card nearer the eye, if it does.
-    #[must_use]
-    pub fn lift(&self) -> Option<Lift> {
-        match *self {
-            Self::Lifted(lift)
-            | Self::BowedNear { lift, .. }
-            | Self::Thrown { lift, .. }
-            | Self::Swept { lift, .. }
-            | Self::Held { lift, .. } => Some(lift),
-            _ => None,
-        }
-    }
-}
-
-impl Lift {
-    /// How much of its depth beyond `near` a card keeps `u` of the eased way through: `keep`
-    /// until `hold`, then easing to all of it.
-    fn kept(&self, u: f32) -> f32 {
-        let back = ((u - self.hold) / (1.0 - self.hold)).clamp(0.0, 1.0);
-        let back = back * back * (3.0 - 2.0 * back);
-        self.keep + (1.0 - self.keep) * back
-    }
-
-    /// The factor by which a card at `position`, `u` of the eased way through, is drawn nearer
-    /// the eye: 1 where it lies, less where it is held nearer.
-    #[must_use]
-    pub fn nearer(&self, position: Vec3, u: f32) -> f32 {
-        let depth = (position - self.eye).dot(self.forward);
-        if depth <= self.near {
-            return 1.0;
-        }
-        (self.near + (depth - self.near) * self.kept(u)) / depth
-    }
-
-    /// The pose that `nearer` draws as `drawn`, `u` of the eased way through: where the card
-    /// lies before it is drawn nearer the eye.
-    #[must_use]
-    pub fn unlifted(&self, drawn: Pose, u: f32) -> Pose {
-        let seen = (drawn.position - self.eye).dot(self.forward);
-        if seen <= self.near {
-            return drawn;
-        }
-        let depth = self.near + (seen - self.near) / self.kept(u);
-        let factor = depth / seen;
-        Pose {
-            position: self.eye + (drawn.position - self.eye) * factor,
-            scale: drawn.scale * factor,
-            ..drawn
-        }
     }
 }
 
