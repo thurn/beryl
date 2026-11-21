@@ -164,11 +164,11 @@ pub mod scenarios {
 
     pub const SCENARIOS: &[Scenario] = &[
         Scenario::new("a creature sacrificed for an escaped spell pays its exile cost")
-            .interaction(&[Card::VillageRites, Card::Counterspell])
+            .interaction(&[Card::VillageRites])
             .battlefield(P0, &[BREACH, Card::Swamp, Prop::Vanilla])
             .graveyard(P0, &[Card::VillageRites, Card::Island, Card::Plains])
             .battlefield(P1, &[Card::Island; 2])
-            .hand(P1, &[Card::Counterspell])
+            .hand(P1, &[Prop::Instant])
             .actions(&[
                 ME.escapes(Card::VillageRites),
                 ME.tapped(Card::Swamp, 1),
@@ -178,16 +178,16 @@ pub mod scenarios {
                 ME.has(Zone::Exile, Card::Plains, 1),
                 ME.has_cards(Zone::Graveyard, 0),
                 THEM.deciding(DecisionKind::Priority, 2),
-                THEM.casts(Card::Counterspell),
+                THEM.casts(Prop::Instant),
                 ME.has(Zone::Graveyard, Card::VillageRites, 1),
             ]),
         Scenario::new("a card discarded for an escaped spell pays its exile cost")
-            .interaction(&[Card::ThrillOfPossibility, Card::Counterspell])
+            .interaction(&[Card::ThrillOfPossibility])
             .battlefield(P0, &[BREACH, Card::Mountain, Card::Swamp])
             .hand(P0, &[Card::Forest])
             .graveyard(P0, &[Card::ThrillOfPossibility, Card::Island, Card::Plains])
             .battlefield(P1, &[Card::Island; 2])
-            .hand(P1, &[Card::Counterspell])
+            .hand(P1, &[Prop::Instant])
             .actions(&[
                 ME.escapes(Card::ThrillOfPossibility),
                 ME.tapped(Card::Mountain, 1),
@@ -198,19 +198,15 @@ pub mod scenarios {
                 ME.has(Zone::Exile, Card::Plains, 1),
                 ME.has_cards(Zone::Graveyard, 0),
                 THEM.deciding(DecisionKind::Priority, 2),
-                THEM.casts(Card::Counterspell),
+                THEM.casts(Prop::Instant),
                 ME.has(Zone::Graveyard, Card::ThrillOfPossibility, 1),
             ]),
         Scenario::new("a sacrificed token cannot supply a card for escape")
-            .interaction(&[
-                Card::VillageRites,
-                Card::AdelineResplendentCathar,
-                Card::SinkIntoStupor,
-            ])
+            .interaction(&[Card::VillageRites, Card::AdelineResplendentCathar])
             .battlefield(P0, &[BREACH, Card::Swamp, Card::AdelineResplendentCathar])
             .battlefield(P1, &[Card::Island; 3])
             .hand(P0, &[Card::Island])
-            .hand(P1, &[Card::SinkIntoStupor])
+            .hand(P1, &[Prop::Removal])
             .graveyard(P0, &[Card::VillageRites, Card::Island, Card::Plains])
             .actions(&[
                 advance_to(1, TurnStep::BeginningOfCombat),
@@ -220,7 +216,7 @@ pub mod scenarios {
                 Resolve,
                 ME.controls(crate::tokens::HUMAN_TOKEN, 1),
                 ME.passes(),
-                THEM.casts(Card::SinkIntoStupor),
+                THEM.casts(Prop::Removal),
                 THEM.targets(Card::AdelineResplendentCathar),
                 Resolve,
                 ME.controls(Card::AdelineResplendentCathar, 0),

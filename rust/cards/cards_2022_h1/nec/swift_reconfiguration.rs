@@ -43,8 +43,7 @@ pub mod scenarios {
 
     /// A Plains for the Aura, and four Islands for a Thieving Skydiver kicked for up to 2.
     const SKYDIVER_SETUP: Scenario = Scenario::setup()
-        .interaction(&[Card::ThievingSkydiver])
-        .hand(P0, &[SWIFT, Card::ThievingSkydiver])
+        .hand(P0, &[SWIFT, Prop::Thief])
         .battlefield(
             P0,
             &[
@@ -112,7 +111,7 @@ pub mod scenarios {
                 Resolve,
                 Action::Cast {
                     player: P0,
-                    card: Card::ThievingSkydiver,
+                    card: Prop::Thief,
                     face: FaceIx::FRONT,
                     costs: Castings::only(0),
                 },
@@ -129,7 +128,7 @@ pub mod scenarios {
                 Resolve,
                 Action::Cast {
                     player: P0,
-                    card: Card::ThievingSkydiver,
+                    card: Prop::Thief,
                     face: FaceIx::FRONT,
                     costs: Castings::only(0),
                 },
