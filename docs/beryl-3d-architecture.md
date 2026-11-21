@@ -326,9 +326,9 @@ fails validation, the app keeps the last valid data and shows a notice until a
 valid edit arrives. The log names the file and the validation error.
 
 Changing how far a card lifts is then an edit to a JSON file and one
-`just b3d png`, with no compile. Verb, audit, pointer, playback and presentation
-tuning already take this path. During the conversion, `space-constants.json`
-holds spatial values that still generate Rust constants.
+`just b3d png`, with no compile. Verb, audit, pointer, playback, presentation,
+lighting and shadow tuning already take this path. During the conversion,
+`space-constants.json` holds spatial values that still generate Rust constants.
 
 ### Effects
 

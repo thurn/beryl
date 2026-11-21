@@ -151,7 +151,14 @@ fn main() -> ExitCode {
     if boards.is_empty() {
         boards = BOARDS.iter().map(|name| (*name).to_owned()).collect();
     }
-    let mut renderer = match Renderer::headless(limits) {
+    let lighting = match beryl_inspect::data::checkout() {
+        Ok(data) => data.lighting,
+        Err(error) => {
+            eprintln!("frame_times: {error}");
+            return ExitCode::from(2);
+        }
+    };
+    let mut renderer = match Renderer::headless(limits, lighting) {
         Ok(renderer) => renderer,
         Err(error) => {
             eprintln!("frame_times: {error}");

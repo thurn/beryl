@@ -15,7 +15,7 @@ use crate::Inbox;
 
 /// The runtime tuning at the root of the data directory. The app's reload test starts with
 /// this list, the profiles and the effects, and verifies that the runtime loader accepts them.
-pub const TUNING_FILES: [&str; 11] = [
+pub const TUNING_FILES: [&str; 12] = [
     "verbs.json",
     "audit.json",
     "pointer.json",
@@ -27,6 +27,7 @@ pub const TUNING_FILES: [&str; 11] = [
     "revealed.json",
     "shown.json",
     "gallery.json",
+    "lighting.json",
 ];
 
 /// The files the runtime data loader reads. Build-time constants and other check data are

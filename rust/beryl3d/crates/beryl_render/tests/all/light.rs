@@ -12,7 +12,6 @@ use beryl_render::{BACK_LAYER, Limits};
 use glam::camera::rh::{proj::directx, view::look_at_mat4};
 use glam::{Affine3A, Mat4, Quat, Vec2, Vec3};
 use kit_base::atlas::{FaceSize, Tier};
-use kit_base::data::space::shadow;
 use kit_frame::frame::{Band, Draw};
 
 use super::render::{Picture, draw_in, rectangle, renderer};
@@ -27,7 +26,7 @@ const CENTRE: Vec3 = Vec3::new(0.0, 0.0, 50.0);
 /// The horizontal direction toward the key light: against the way the Baseline tier's contact
 /// shadows fall, which is `(light.x, -light.y)` per millimetre of height.
 fn toward_key() -> Vec3 {
-    Vec3::new(-shadow::LIGHT.x, shadow::LIGHT.y, 0.0).normalize()
+    (-crate::lighting().shadow.fall()).extend(0.0).normalize()
 }
 
 /// A camera on the key light's side, 45 degrees above the table, looking at its centre.

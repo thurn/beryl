@@ -2,21 +2,21 @@
 //! sampled by `lit_by_key` in `shadow.wgsl`.
 //!
 //! Every card before the flat layer casts a shadow of its true shape from one directional key
-//! light, on the table and on the cards below it. The light points the way the Baseline tier's
-//! contact shadows fall (`cast` in the table's `shadows.rs`), so a card at a height
-//! casts its shadow at the same place in both tiers. Each frame, the cards are drawn into a
+//! light, on the table and on the cards below it. The light is `Shadow::toward_light`, the one
+//! the Baseline tier's contact shadows fall from (`cast` in the table's `shadows.rs`), so a card
+//! at a height casts its shadow at the same place in both tiers. Each frame, the cards are drawn into a
 //! depth map seen from the light, through an orthographic projection fitted to the part of the
 //! table the camera sees; the table and every sprite cast nothing.
 //!
-//! The map's size and depth biases are `enhanced.shadow` in `data/beryl3d/space-constants.json`. Its
-//! `darkness` is `SHADOW_DARKNESS` in `shadow.wgsl`, because the Enhanced shader is one fixed
-//! source; a test holds the two equal, and `taps` to the shader's four.
+//! The map's size and depth biases are `enhanced.shadow_map` in `data/beryl3d/lighting.json`.
+//! How dark its shadows are is `shadow.darkness`, the contact shadows' opacity too, which
+//! `Lit::shade` hands to `shadow.wgsl`.
 
 use std::num::NonZeroU64;
 
 use glam::camera::rh::{proj::directx, view::look_to_mat4};
 use glam::{Mat4, Vec3, Vec4, Vec4Swizzles};
-use kit_base::data::space::{enhanced::shadow as data, shadow as baseline};
+use kit_base::data::lighting::ShadowMap;
 use kit_frame::frame::{Frame, Mesh};
 
 use super::{LIT, LIT_OFFSET, SHADER};
@@ -32,18 +32,6 @@ const SLAB: [f32; 2] = [0.0, 60.0];
 /// How far, in millimetres along the light, the map reaches past the slab's lowest point, so
 /// that a table drawn a little below height 0 is inside it.
 const BELOW: f32 = 10.0;
-
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    reason = "a size in pixels from space-constants.json"
-)]
-const MAP: u32 = data::MAP as u32;
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "a small whole number of depth steps from space-constants.json"
-)]
-const BIAS: i32 = data::BIAS as i32;
 
 /// The mesh attributes `vs_shadow` reads: the position and the uv.
 const MESH_ATTRIBUTES: [wgpu::VertexAttribute; 2] = [
@@ -107,15 +95,15 @@ pub(crate) struct Shadow {
 }
 
 impl Shadow {
-    /// The shadow map, `enhanced.shadow.map` pixels on a side, its pipeline, and its pass's
-    /// bind group for each slot whose uniform buffer is in `uniforms`, in order.
-    pub(crate) fn new(device: &wgpu::Device, uniforms: &[&wgpu::Buffer]) -> Self {
+    /// The shadow map `map` describes, its pipeline, and its pass's bind group for each slot
+    /// whose uniform buffer is in `uniforms`, in order.
+    pub(crate) fn new(device: &wgpu::Device, uniforms: &[&wgpu::Buffer], map: &ShadowMap) -> Self {
         let view = device
             .create_texture(&wgpu::TextureDescriptor {
                 label: Some("shadow map"),
                 size: wgpu::Extent3d {
-                    width: MAP,
-                    height: MAP,
+                    width: map.size,
+                    height: map.size,
                     depth_or_array_layers: 1,
                 },
                 mip_level_count: 1,
@@ -161,7 +149,7 @@ impl Shadow {
             .collect();
         Self {
             view,
-            pipeline: pipeline(device, &layout),
+            pipeline: pipeline(device, &layout, map),
             groups,
         }
     }
@@ -226,8 +214,12 @@ impl Shadow {
 }
 
 /// The depth-only pipeline that draws cards into the map: `vs_shadow`, no fragment stage, the
-/// depth biases of `enhanced.shadow`, and no culling, because a card turned over still casts.
-fn pipeline(device: &wgpu::Device, layout: &wgpu::BindGroupLayout) -> wgpu::RenderPipeline {
+/// depth biases of `map`, and no culling, because a card turned over still casts.
+fn pipeline(
+    device: &wgpu::Device,
+    layout: &wgpu::BindGroupLayout,
+    map: &ShadowMap,
+) -> wgpu::RenderPipeline {
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("shadow map"),
         source: wgpu::ShaderSource::Wgsl(SHADER.into()),
@@ -270,8 +262,8 @@ fn pipeline(device: &wgpu::Device, layout: &wgpu::BindGroupLayout) -> wgpu::Rend
             depth_compare: Some(wgpu::CompareFunction::Less),
             stencil: wgpu::StencilState::default(),
             bias: wgpu::DepthBiasState {
-                constant: BIAS,
-                slope_scale: data::SLOPE_BIAS,
+                constant: map.bias,
+                slope_scale: map.slope_bias,
                 clamp: 0.0,
             },
         }),
@@ -281,21 +273,11 @@ fn pipeline(device: &wgpu::Device, layout: &wgpu::BindGroupLayout) -> wgpu::Rend
     })
 }
 
-/// The direction toward the key light, in the table's space, where z is height. `cast` moves a
-/// point at height h by `light * h` across the table, where `light` is `shadow.light` with its
-/// y negated (a shadow falls toward the viewer), so the light lies the opposite way, one
-/// millimetre up for each `light` across.
-pub(crate) fn key_direction() -> Vec3 {
-    let light = baseline::LIGHT;
-    Vec3::new(-light.x, light.y, 1.0).normalize()
-}
-
 /// From the table's space to the key light's clip space for `frame`: an orthographic projection
-/// along the key light, fitted across the light to the slab of table between the heights in
+/// along the key light, which lies toward `key`, fitted across the light to the slab of table between the heights in
 /// `SLAB` that the camera sees, and along it from that slab's lowest point up to the highest
 /// point of the camera's frustum, so that every card the camera sees can cast into the map.
-pub(crate) fn light_view_projection(frame: &Frame) -> Mat4 {
-    let key = key_direction();
+pub(crate) fn light_view_projection(frame: &Frame, key: Vec3) -> Mat4 {
     let view = look_to_mat4(Vec3::ZERO, -key, Vec3::Y);
     let (corners, top) = frustum(frame.view_projection);
     let mut low = Vec3::splat(f32::INFINITY);

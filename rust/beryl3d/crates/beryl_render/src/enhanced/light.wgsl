@@ -3,7 +3,7 @@
 // multiplying the Baseline color, which stays the sRGB value it is stored as. A card also takes a
 // faint white sheen where its face mirrors the key light toward the camera, so the highlight
 // moves across the face as the card tilts. The shadow map's `shadow` scales the whole result,
-// not the key light alone, so that a shadow darkens what it falls on by `enhanced.shadow.darkness`
+// not the key light alone, so that a shadow darkens what it falls on by `shadow.darkness`
 // as the Baseline tier's contact shadows darken it by their opacity.
 //
 // `normal` is the record's normal on the side seen, not normalized; `view` the unit direction

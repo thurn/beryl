@@ -17,6 +17,7 @@ name = "b3d-render"
 path = "src/main.rs"
 
 [dependencies]
+kit_base.workspace = true
 kit_scene.workspace = true
 game_table.workspace = true
 kit_frame.workspace = true
@@ -41,6 +42,5 @@ beryl_assets = { path = "../beryl_assets" }
 
 [dev-dependencies]
 app_client.workspace = true
-kit_base.workspace = true
 # The seat a recording is seen from.
 beryl_protocol = { path = "../../../crates/beryl_protocol" }

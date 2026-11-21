@@ -40,7 +40,8 @@ impl Host {
             std::env::temp_dir().join(format!("beryl-host-faces-{}-{name}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let (woke, wakes) = mpsc::channel();
-        let mut renderer = Renderer::headless(Limits::Default).expect("a GPU adapter and device");
+        let mut renderer = Renderer::headless(Limits::Default, crate::test_data::data().lighting)
+            .expect("a GPU adapter and device");
         let assets = Assets::start(&mut renderer, &Scans::in_dir(&dir), NOWHERE, move || {
             let _ = woke.send(());
         });

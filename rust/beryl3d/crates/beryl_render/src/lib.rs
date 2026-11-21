@@ -25,3 +25,11 @@ pub use renderer::{Drawn, Limits, Renderer};
 pub use surface::{Native, Presented, Surface};
 pub use target::{Picture, Readback, Target, read_rgba_png, write_rgba_png};
 pub use textures::BACK_LAYER;
+
+/// The repository's lighting, `data/beryl3d/lighting.json`, for the unit tests.
+#[cfg(test)]
+fn test_lighting() -> kit_base::data::lighting::Lighting {
+    let text = beryl_test_files::read_to_string("data/beryl3d/lighting.json")
+        .expect("read the lighting tuning");
+    kit_base::data::lighting::Lighting::parse(&text).expect("the repository's lighting")
+}

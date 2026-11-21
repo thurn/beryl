@@ -6,7 +6,6 @@
 use beryl_render::{Limits, Renderer};
 use glam::{Affine3A, Quat, Vec2, Vec3};
 use kit_base::atlas::Tier;
-use kit_base::data::space::enhanced::light;
 use kit_base::geometry::{CARD_HEIGHT, CARD_WIDTH};
 use kit_frame::frame::{Band, Draw, sprites};
 
@@ -100,7 +99,8 @@ fn twenty_cards_draw_in_enhanced_as_in_baseline_away_from_edges() {
     // So is a card lying flat, but for the sheen: the same white added to every channel, no
     // more than the sheen's strength. The desktop camera is near where a flat card mirrors the
     // key light, so the sheen there is near its strongest.
-    let most_sheen = (light::SHEEN * 255.0).ceil() as i16 + i16::from(TOLERANCE);
+    let most_sheen =
+        (crate::lighting().enhanced.light.sheen * 255.0).ceil() as i16 + i16::from(TOLERANCE);
     for point in [0, 3, 7, 12, 19].map(|i| cards[i]) {
         let ((x, y), found, expected) = pixels(point);
         let added: [i16; 3] = std::array::from_fn(|i| i16::from(found[i]) - i16::from(expected[i]));

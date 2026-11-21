@@ -7,10 +7,10 @@
 //! blending, into a target `enhanced.bloom.scale` of the frame's size. That target is blurred
 //! across into a second one and down back into the first, with a Gaussian of
 //! `enhanced.bloom.taps` taps and `enhanced.bloom.sigma` texels, and the blurred light is added
-//! onto the resolved picture times `enhanced.bloom.strength` (`data/beryl3d/space-constants.json`). The
-//! glows are drawn with no depth buffer, so a glow behind a card still blooms around it.
+//! onto the resolved picture times `enhanced.bloom.strength` (`data/beryl3d/lighting.json`).
+//! The glows are drawn with no depth buffer, so a glow behind a card still blooms around it.
 
-use kit_base::data::space::enhanced::bloom::{SCALE, SIGMA, STRENGTH, TAPS};
+use kit_base::data::lighting::{BLOOM_TAPS, Bloom as Tuning};
 use kit_frame::frame::Band;
 use wgpu::util::DeviceExt;
 
@@ -18,11 +18,10 @@ use crate::count::{self, FragmentCounter};
 use crate::draw::Draws;
 use crate::pipeline::VERTEX_BUFFERS;
 
-/// How many taps lie on each side of the blur's centre.
-const RADIUS: usize = TAPS / 2;
-/// How many weights `Uniforms::weights` holds.
+/// How many weights `Uniforms::weights` holds: the centre's and one for each tap on one side
+/// of it, as many as `bloom.wgsl`'s loop reads.
 pub(crate) const WEIGHTS: usize = 16;
-const _: () = assert!(TAPS % 2 == 1 && RADIUS < WEIGHTS);
+const _: () = assert!(BLOOM_TAPS / 2 < WEIGHTS);
 
 /// `Bloom` in bloom.wgsl: one pass's uniforms.
 #[repr(C)]
@@ -60,11 +59,11 @@ impl Uniforms {
         }
     }
 
-    fn composite() -> Self {
+    fn composite(strength: f32) -> Self {
         Self {
             direction: [0.0; 2],
             radius: 0,
-            strength: STRENGTH,
+            strength,
             weights: [0.0; WEIGHTS],
         }
     }
@@ -100,14 +99,18 @@ pub(crate) struct Bloom {
     uniforms: [wgpu::Buffer; 3],
     targets: Option<Targets>,
     format: wgpu::TextureFormat,
+    /// The small targets' size as a share of the frame's.
+    scale: f32,
 }
 
 impl Bloom {
-    /// Bloom for targets of `format`, drawing records with bind group 0 laid out as `records`.
+    /// Bloom for targets of `format`, drawing records with bind group 0 laid out as `records`,
+    /// with the blur and strength of `tuning`.
     pub(crate) fn new(
         device: &wgpu::Device,
         format: wgpu::TextureFormat,
         records: &wgpu::BindGroupLayout,
+        tuning: Tuning,
     ) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("bloom"),
@@ -135,9 +138,9 @@ impl Bloom {
             Some(additive),
         );
         let uniforms = [
-            Uniforms::blur([1.0, 0.0], SIGMA, RADIUS),
-            Uniforms::blur([0.0, 1.0], SIGMA, RADIUS),
-            Uniforms::composite(),
+            Uniforms::blur([1.0, 0.0], tuning.sigma, tuning.radius()),
+            Uniforms::blur([0.0, 1.0], tuning.sigma, tuning.radius()),
+            Uniforms::composite(tuning.strength),
         ]
         .map(|uniforms| {
             device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -161,6 +164,7 @@ impl Bloom {
             uniforms,
             targets: None,
             format,
+            scale: tuning.scale,
         }
     }
 
@@ -232,8 +236,8 @@ impl Bloom {
             .is_none_or(|targets| targets.frame != (width, height))
         {
             let size = (
-                ((width as f32 * SCALE).ceil() as u32).max(1),
-                ((height as f32 * SCALE).ceil() as u32).max(1),
+                ((width as f32 * self.scale).ceil() as u32).max(1),
+                ((height as f32 * self.scale).ceil() as u32).max(1),
             );
             let texture = |label| {
                 device

@@ -120,8 +120,9 @@ impl Phone {
         let size = surface_input(width, height, scale, safe_area);
         match std::mem::replace(&mut self.state, State::Moving) {
             State::Waiting(waiting) => {
+                let lighting = waiting.0.data().lighting;
                 // SAFETY: the caller's promise, passed on.
-                match unsafe { Renderer::for_native(native, width, height) } {
+                match unsafe { Renderer::for_native(native, width, height, lighting) } {
                     Ok((renderer, surface)) => {
                         self.open(*waiting, renderer, Output::Surface(Some(surface)), size);
                         Ok(())
@@ -169,7 +170,8 @@ impl Phone {
         let size = surface_input(width, height, 1.0, Insets::default());
         match std::mem::replace(&mut self.state, State::Moving) {
             State::Waiting(waiting) => {
-                let renderer = match Renderer::headless(beryl_render::Limits::Downlevel) {
+                let lighting = waiting.0.data().lighting;
+                let renderer = match Renderer::headless(beryl_render::Limits::Downlevel, lighting) {
                     Ok(renderer) => renderer,
                     Err(error) => {
                         self.state = State::Waiting(waiting);

@@ -11,7 +11,7 @@ use glam::{Affine3A, Vec2, Vec3};
 use super::pile::PileShown;
 use super::scene::{SceneObject, Table};
 use super::{CARD_HEIGHT, CARD_WIDTH};
-use kit_base::data::space::shadow;
+use kit_base::data::lighting::Shadow;
 use kit_base::pose::Pose;
 use kit_frame::frame::{Band, Draw, FrameBuilder, Place};
 use kit_ui::input::Tier;
@@ -22,8 +22,8 @@ const HALF_DIAGONAL: f32 = 54.1;
 
 impl Table {
     /// Writes the contact shadow of the card in `slot` (none for an ability) drawn at `pose`,
-    /// resting at `place`, if it stands more than `shadow.least_height` above what lies under
-    /// it. A card at rest in a battlefield row, or in its pile, lies on the table: `under_way`
+    /// resting at `place`, if it stands more than `contact.least_height` (in
+    /// `data/beryl3d/lighting.json`) above what lies under it. A card at rest in a battlefield row, or in its pile, lies on the table: `under_way`
     /// says the card is moving, which no card lying still is.
     pub(super) fn write_shadow(
         &self,
@@ -37,25 +37,27 @@ impl Table {
         if builder.tier() == Tier::Enhanced {
             return;
         }
+        let shadow = &self.data().lighting.shadow;
+        let contact = &shadow.contact;
         // A card a box of the flat layer shows casts no shadow on the table under the box.
         let boxed = slot.is_some_and(|slot| self.in_box(slot));
         if boxed
-            || pose.position.z <= shadow::LEAST_HEIGHT
+            || pose.position.z <= contact.least_height
             || (!under_way && self.lies(place, pose))
         {
             return;
         }
         let centre = pose.position;
         let under = self.floor(centre.truncate(), slot);
-        let falls = |base: f32| centre.truncate() + light() * (centre.z - base);
+        let falls = |base: f32| centre.truncate() + shadow.fall() * (centre.z - base);
         let base = under.max(self.floor(falls(under), slot));
         let height = centre.z - base;
-        if height <= shadow::LEAST_HEIGHT {
+        if height <= contact.least_height {
             return;
         }
         // The card, grown by the shadow's spread in its own plane, and then cast along the
         // light onto the plane just above what lies under it.
-        let spread = shadow::PENUMBRA * height;
+        let spread = contact.penumbra * height;
         let scale = pose.scale.max(f32::EPSILON);
         let grown = Vec3::new(
             1.0 + spread / (CARD_WIDTH * scale),
@@ -63,9 +65,9 @@ impl Table {
             1.0,
         );
         let card = pose.transform() * Affine3A::from_scale(grown);
-        let transform = cast(base) * card;
-        let coming_in = (height / shadow::EMERGING).min(1.0);
-        let alpha = shadow::ALPHA * coming_in * pose.opacity.clamp(0.0, 1.0);
+        let transform = cast(shadow, base) * card;
+        let coming_in = (height / contact.emerging).min(1.0);
+        let alpha = shadow.darkness * coming_in * pose.opacity.clamp(0.0, 1.0);
         #[expect(
             clippy::cast_possible_truncation,
             clippy::cast_sign_loss,
@@ -208,19 +210,18 @@ fn band(y: f32, reach: f32) -> i32 {
     band
 }
 
-/// How far a shadow falls on the table for each millimetre of height: toward the viewer (down
-/// the table's y) and a little to the right.
-fn light() -> Vec2 {
-    Vec2::new(shadow::LIGHT.x, -shadow::LIGHT.y)
-}
-
-/// Casts a point along the light onto the plane `shadow.above` millimetres over `base`.
-fn cast(base: f32) -> Affine3A {
-    let light = light();
+/// Casts a point along `shadow`'s light onto the plane `contact.above` millimetres over `base`.
+fn cast(shadow: &Shadow, base: f32) -> Affine3A {
+    let light = shadow.fall();
     Affine3A::from_cols(
         Vec3::X.into(),
         Vec3::Y.into(),
         Vec3::new(light.x, light.y, 0.0).into(),
-        Vec3::new(-light.x * base, -light.y * base, base + shadow::ABOVE).into(),
+        Vec3::new(
+            -light.x * base,
+            -light.y * base,
+            base + shadow.contact.above,
+        )
+        .into(),
     )
 }

@@ -216,7 +216,14 @@ fn main() -> ExitCode {
         boards = BOARDS.iter().map(|name| (*name).to_owned()).collect();
         boards.push("backdrop-panel".to_owned());
     }
-    let mut renderer = match Renderer::counting(Limits::Default) {
+    let lighting = match beryl_inspect::data::checkout() {
+        Ok(data) => data.lighting,
+        Err(error) => {
+            eprintln!("fragments: {error}");
+            return ExitCode::from(2);
+        }
+    };
+    let mut renderer = match Renderer::counting(Limits::Default, lighting) {
         Ok(renderer) => renderer,
         Err(error) => {
             eprintln!("fragments: {error}");

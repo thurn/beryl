@@ -178,7 +178,8 @@ fn white_text_on_a_black_panel_is_inked_in_the_stem_and_empty_in_the_bowl() {
         pen += size.x + 4.0;
     }
     for limits in BOTH {
-        let mut renderer = Renderer::headless(limits).expect("a GPU adapter and device");
+        let mut renderer =
+            Renderer::headless(limits, crate::lighting()).expect("a GPU adapter and device");
         assert!(
             renderer.upload_page(&page),
             "{limits:?}: the page was not uploaded"
@@ -227,7 +228,8 @@ fn a_panel_draws_its_fill_and_border_and_leaves_its_corners_untouched() {
         ),
     );
     for limits in BOTH {
-        let mut renderer = Renderer::headless(limits).expect("a GPU adapter and device");
+        let mut renderer =
+            Renderer::headless(limits, crate::lighting()).expect("a GPU adapter and device");
         let pixels = draw(&mut renderer, &[background(table), panel]);
         let what = format!("{limits:?}");
         assert_eq!(
@@ -336,7 +338,8 @@ fn an_icon_is_tinted_on_its_ink_and_empty_in_its_hole() {
         ),
     );
     for limits in BOTH {
-        let mut renderer = Renderer::headless(limits).expect("a GPU adapter and device");
+        let mut renderer =
+            Renderer::headless(limits, crate::lighting()).expect("a GPU adapter and device");
         assert!(
             renderer.upload_page(&page),
             "{limits:?}: the page was not uploaded"

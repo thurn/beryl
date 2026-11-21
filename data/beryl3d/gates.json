@@ -54,15 +54,15 @@
     },
     "card_lit": {
       "samples": 5,
-      "expressions": 295
+      "expressions": 298
     },
     "table_lit": {
       "samples": 5,
-      "expressions": 421
+      "expressions": 424
     },
     "particle": {
       "samples": 5,
-      "expressions": 209
+      "expressions": 212
     }
   },
   "tests": {

@@ -17,6 +17,7 @@ mod shadow;
 
 use std::num::NonZeroU64;
 
+use kit_base::data::lighting::Lighting;
 use kit_frame::frame::Frame;
 
 use crate::count::{self, FragmentCounter};
@@ -58,22 +59,26 @@ pub(crate) struct Lit {
     eye: [f32; 4],
     /// The direction toward the fill light times its strength, and the sheen's power in w.
     fill: [f32; 4],
+    /// How much of the color a fragment in full shadow loses (`shadow.darkness`), in x.
+    shade: [f32; 4],
 }
 
 impl Lit {
-    /// The lights of `frame`.
-    pub(crate) fn of(frame: &Frame) -> Self {
-        let lighting = light::lighting(frame);
+    /// The lights of `frame`, from `tuning`.
+    pub(crate) fn of(frame: &Frame, tuning: &Lighting) -> Self {
+        let lights = light::lights(frame, tuning);
+        let key = tuning.shadow.toward_light();
         Self {
-            light_view_projection: shadow::light_view_projection(frame).to_cols_array(),
-            key: lighting.key.to_array(),
-            eye: lighting.eye.to_array(),
-            fill: lighting.fill.to_array(),
+            light_view_projection: shadow::light_view_projection(frame, key).to_cols_array(),
+            key: lights.key.to_array(),
+            eye: lights.eye.to_array(),
+            fill: lights.fill.to_array(),
+            shade: [tuning.shadow.darkness, 0.0, 0.0, 0.0],
         }
     }
 }
 
-const _: () = assert!(LIT == 112);
+const _: () = assert!(LIT == 128);
 
 /// The four-sample color and depth targets of the main pass, and their size.
 struct Targets {
@@ -100,18 +105,22 @@ pub(crate) struct Enhanced {
     groups: Vec<wgpu::BindGroup>,
     targets: Option<Targets>,
     format: wgpu::TextureFormat,
+    /// The tuning the lights, the shadow map and bloom were made with.
+    pub(crate) tuning: Lighting,
 }
 
 impl Enhanced {
     /// The Enhanced tier for a device drawing into targets of `format`, or `None` when the
     /// device was made with less than wgpu's default limits (the floor's, `Limits::Downlevel`)
-    /// or cannot draw four samples into `format` and `DEPTH`. `layout` is bind group 0's, and
-    /// `uniforms` the uniform buffer of each of the renderer's slots, in order.
+    /// or cannot draw four samples into `format` and `DEPTH`. `layout` is bind group 0's,
+    /// `uniforms` the uniform buffer of each of the renderer's slots, in order, and `tuning` the
+    /// lights, shadow map and bloom.
     pub(crate) fn new<'a>(
         device: &wgpu::Device,
         format: wgpu::TextureFormat,
         layout: &wgpu::BindGroupLayout,
         uniforms: impl Iterator<Item = &'a wgpu::Buffer>,
+        tuning: Lighting,
     ) -> Option<Self> {
         if !supported(device, format) {
             return None;
@@ -139,18 +148,43 @@ impl Enhanced {
         let mut enhanced = Self {
             pipelines,
             layout: lit_layout,
-            shadow: Shadow::new(device, &uniforms),
-            bloom: Bloom::new(device, format, layout),
+            shadow: Shadow::new(device, &uniforms, &tuning.enhanced.shadow_map),
+            bloom: Bloom::new(device, format, layout, tuning.enhanced.bloom),
             comparison,
             groups: Vec::new(),
             targets: None,
             format,
+            tuning,
         };
         enhanced.groups = uniforms
             .iter()
             .map(|buffer| enhanced.group(device, buffer))
             .collect();
         Some(enhanced)
+    }
+
+    /// Takes new tuning, as when a watched data file changes. The lights and darkness are read
+    /// each frame; a new shadow map or bloom is made only when its own tuning changed, with the
+    /// bind groups that name them. `layout` and `uniforms` are as for `new`.
+    pub(crate) fn retune<'a>(
+        &mut self,
+        device: &wgpu::Device,
+        layout: &wgpu::BindGroupLayout,
+        uniforms: impl Iterator<Item = &'a wgpu::Buffer>,
+        tuning: Lighting,
+    ) {
+        let old = std::mem::replace(&mut self.tuning, tuning);
+        if old.enhanced.bloom != tuning.enhanced.bloom {
+            self.bloom = Bloom::new(device, self.format, layout, tuning.enhanced.bloom);
+        }
+        if old.enhanced.shadow_map != tuning.enhanced.shadow_map {
+            let uniforms: Vec<&wgpu::Buffer> = uniforms.collect();
+            self.shadow = Shadow::new(device, &uniforms, &tuning.enhanced.shadow_map);
+            self.groups = uniforms
+                .iter()
+                .map(|buffer| self.group(device, buffer))
+                .collect();
+        }
     }
 
     /// Bind group 1 for the slot whose uniform buffer is `uniforms`.
@@ -374,7 +408,8 @@ mod tests {
     /// groups, a stall on a slow device at the moment an animation starts.
     #[test]
     fn the_first_enhanced_frame_makes_bloom_targets_without_a_glow() {
-        let mut renderer = Renderer::headless(Limits::Default).expect("a GPU adapter");
+        let mut renderer =
+            Renderer::headless(Limits::Default, crate::test_lighting()).expect("a GPU adapter");
         assert!(renderer.enhanced_available(), "no Enhanced support");
         let mut frame = Frame::with_capacity(0, 1, 0);
         let mut builder = FrameBuilder::new(&mut frame, Tier::Enhanced);

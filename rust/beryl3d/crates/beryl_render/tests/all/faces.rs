@@ -112,7 +112,8 @@ fn a_compressed_face_draws_its_picture() {
     let left = [200, 40, 40];
     let right = [40, 90, 210];
     for limits in BOTH {
-        let mut renderer = Renderer::headless(limits).expect("a GPU adapter and device");
+        let mut renderer =
+            Renderer::headless(limits, crate::lighting()).expect("a GPU adapter and device");
         for format in formats(&renderer) {
             renderer.set_faces(&["", "Island"], format);
             assert!(
@@ -131,7 +132,8 @@ fn a_compressed_face_draws_its_picture() {
 #[test]
 fn every_format_draws_the_same_placeholders() {
     for limits in BOTH {
-        let mut renderer = Renderer::headless(limits).expect("a GPU adapter and device");
+        let mut renderer =
+            Renderer::headless(limits, crate::lighting()).expect("a GPU adapter and device");
         renderer.set_faces(&["", "Island"], Format::Rgba8);
         let face = draw_card(&mut renderer, 1, NEAR);
         let back = draw_card(&mut renderer, 0, NEAR);
@@ -170,7 +172,8 @@ fn a_drawn_island_shows_its_blue_frame_s_pale_name_bar() {
     let pixels = frame(&island, FaceSize::Board);
     let layer = encode(&pixels, FaceSize::Board, Format::Rgba8).expect("the face compresses");
     for limits in BOTH {
-        let mut renderer = Renderer::headless(limits).expect("a GPU adapter and device");
+        let mut renderer =
+            Renderer::headless(limits, crate::lighting()).expect("a GPU adapter and device");
         renderer.set_faces(&["", "Island"], Format::Rgba8);
         assert!(renderer.upload_layer(&prepared(1, FaceSize::Board, 1, layer.clone())));
         // The card is 63 by 88 millimetres, its top edge 44 millimetres up. The battlefield
@@ -207,7 +210,8 @@ fn plain_layer(size: FaceSize, value: u8) -> Layer {
 #[test]
 fn faces_that_arrive_during_play_wait_for_a_still_client() {
     for limits in BOTH {
-        let mut renderer = Renderer::headless(limits).expect("a GPU adapter and device");
+        let mut renderer =
+            Renderer::headless(limits, crate::lighting()).expect("a GPU adapter and device");
         renderer.set_faces(&["", "a", "b", "c", "d", "e"], Format::Rgba8);
         for face in 1..=5 {
             renderer.hold(prepared(
@@ -255,7 +259,8 @@ fn faces_that_arrive_during_play_wait_for_a_still_client() {
 #[test]
 fn one_full_size_face_is_uploaded_a_frame_even_while_animating() {
     for limits in BOTH {
-        let mut renderer = Renderer::headless(limits).expect("a GPU adapter and device");
+        let mut renderer =
+            Renderer::headless(limits, crate::lighting()).expect("a GPU adapter and device");
         renderer.set_faces(&["", "a", "b"], Format::Rgba8);
         renderer.hold(prepared(
             1,
@@ -306,7 +311,8 @@ fn one_full_size_face_is_uploaded_a_frame_even_while_animating() {
 #[test]
 fn low_memory_frees_the_full_size_array_and_keeps_the_board_size_one() {
     for limits in BOTH {
-        let mut renderer = Renderer::headless(limits).expect("a GPU adapter and device");
+        let mut renderer =
+            Renderer::headless(limits, crate::lighting()).expect("a GPU adapter and device");
         renderer.set_faces(&["", "a", "b"], Format::Rgba8);
         for face in 1..=2 {
             let board = prepared(face, FaceSize::Board, face, plain_layer(FaceSize::Board, 9));

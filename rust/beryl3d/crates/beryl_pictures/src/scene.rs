@@ -5,6 +5,7 @@ use std::ops::{Deref, DerefMut};
 use beryl_host::{Assets, Headless, HeadlessPage};
 use beryl_inspect::scene::Scene;
 use beryl_render::Renderer;
+use kit_base::data::lighting::Lighting;
 use kit_frame::frame::Frame;
 
 pub(crate) type SceneHost = Headless<PictureScene>;
@@ -32,6 +33,10 @@ impl HeadlessPage for PictureScene {
 
     fn scale(&self) -> f32 {
         self.0.scale()
+    }
+
+    fn lighting(&self) -> Lighting {
+        self.0.data().lighting
     }
 
     fn frame(&mut self) -> &Frame {

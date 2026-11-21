@@ -56,7 +56,8 @@ fn pixel(picture: &[u8], x: usize, y: usize) -> [u8; 3] {
 
 #[test]
 fn backdrop_blurs_only_the_panel_and_its_contents_draw_sharp() {
-    let mut renderer = Renderer::headless(Limits::Default).expect("a GPU adapter and device");
+    let mut renderer = Renderer::headless(Limits::Default, crate::test_data::data().lighting)
+        .expect("a GPU adapter and device");
     assert!(renderer.enhanced_available(), "the test draws in Enhanced");
     for tier in [Tier::Enhanced, Tier::Baseline] {
         let panel = box_at(60.0, 30.0, 80.0, 60.0)
@@ -105,7 +106,8 @@ fn backdrop_blurs_only_the_panel_and_its_contents_draw_sharp() {
 
 #[test]
 fn element_blur_mask_and_grayscale_change_pixels() {
-    let mut renderer = Renderer::headless(Limits::Default).expect("a GPU adapter and device");
+    let mut renderer = Renderer::headless(Limits::Default, crate::test_data::data().lighting)
+        .expect("a GPU adapter and device");
     assert!(renderer.enhanced_available(), "the test draws in Enhanced");
     let mask = Gradient::linear(90.0, &[Stop::new([0; 4]), Stop::percent(BLACK, 70.0)]);
     let (picture, _) = picture(

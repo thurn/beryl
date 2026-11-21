@@ -27,6 +27,8 @@ pollster = "1.0.1"
 wgpu = "30.0.2"
 
 [dev-dependencies]
+# Reads data/beryl3d/lighting.json for the tests and records the read for Ignite's input hash.
+beryl_test_files = { path = "../../../crates/beryl_test_files" }
 kit_space.workspace = true
 kit_text.workspace = true
 # Parses the shader to count each material's texture samples and expressions, in place of Arm's

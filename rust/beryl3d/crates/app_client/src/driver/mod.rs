@@ -361,6 +361,12 @@ impl Page {
         panic!("{}", self.error(&printed.join("\n")));
     }
 
+    /// The tuning the page's client was made with.
+    #[must_use]
+    pub fn data(&self) -> &Arc<Data> {
+        self.client.data()
+    }
+
     /// The spans and streaks the table shows now: the marks and arrows among them.
     #[must_use]
     pub fn lit(&self) -> &game_play::light::Lit {

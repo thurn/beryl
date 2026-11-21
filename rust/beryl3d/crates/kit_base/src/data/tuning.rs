@@ -4,6 +4,7 @@ use glam::Vec2;
 use serde::de::{DeserializeOwned, Error};
 use serde::{Deserialize, Deserializer};
 
+use super::lighting::Lighting;
 use super::playback::{CatchUp, FrameRate, Slide, TierProbe};
 use super::pointer::PointerTuning;
 use super::presentation::{Gallery, Notices, Revealed, Shown};
@@ -23,6 +24,7 @@ pub struct Data {
     pub revealed: Revealed,
     pub shown: Shown,
     pub gallery: Gallery,
+    pub lighting: Lighting,
     pub profiles: Profiles,
     pub effects: Effects,
 }
@@ -55,6 +57,7 @@ impl Data {
             revealed: read("revealed.json", &load("revealed.json")?)?,
             shown: read("shown.json", &load("shown.json")?)?,
             gallery: read("gallery.json", &load("gallery.json")?)?,
+            lighting: Lighting::parse(&load("lighting.json")?)?,
             profiles: Profiles::parse(profiles)?,
             effects,
         })

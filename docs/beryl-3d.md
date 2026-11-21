@@ -2301,6 +2301,12 @@ It changes only how pixels are shaded.
 - **Per-pixel lighting.** Cards and the table are lit by the key light and a
   soft fill, with a faint sheen that moves across a card's face as it tilts.
 - **Bloom** on glows and streaks, from a half-resolution blur.
+- The key light falls along the same axis as the Baseline tier's contact shadows
+  and darkens what it shades by the same amount, so a card's shadow is in the
+  same place in both tiers. That shared light, the contact shadows, and the
+  Enhanced lights, shadow map and bloom are tuned in
+  `data/beryl3d/lighting.json`, which the host hands the renderer when it makes
+  it and again when a watched edit changes it.
 - **Particles** for the looks of `vanish` (a destroyed permanent falling to ash,
   an exiled one drawn into a vortex), drawn as instanced quads with seeded
   motion. `effects::particles` writes them: ash leaves each row of a dissolving

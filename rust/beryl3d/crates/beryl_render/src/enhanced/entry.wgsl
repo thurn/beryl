@@ -13,6 +13,8 @@ struct Lit {
     eye: vec4<f32>,
     // The direction toward the fill light times its strength, and the sheen's power in w.
     fill: vec4<f32>,
+    // How much of the color a fragment in full shadow loses, in x; the rest is unused.
+    shade: vec4<f32>,
 };
 
 @group(1) @binding(0) var<uniform> lit: Lit;

@@ -12,6 +12,7 @@ use app_client::driver::{DriverError, Page};
 use beryl_art::Origins;
 use beryl_render::{Limits, Renderer, Target};
 use game_probe::driver::Moment;
+use kit_base::data::lighting::Lighting;
 use kit_frame::frame::Frame;
 
 use crate::assets::{Assets, Scans};
@@ -27,6 +28,8 @@ pub trait HeadlessPage: Sized {
     #[must_use]
     fn with_host_atlas(self) -> Self;
     fn scale(&self) -> f32;
+    /// The lights, shadow map and bloom the renderer draws the scene with.
+    fn lighting(&self) -> Lighting;
     fn frame(&mut self) -> &Frame;
     fn prepare_assets(&mut self, assets: &mut Assets, renderer: &mut Renderer);
 }
@@ -38,6 +41,10 @@ impl HeadlessPage for Page {
 
     fn scale(&self) -> f32 {
         self.scale()
+    }
+
+    fn lighting(&self) -> Lighting {
+        self.data().lighting
     }
 
     fn frame(&mut self) -> &Frame {
@@ -70,7 +77,7 @@ impl<P: HeadlessPage> Headless<P> {
     pub fn new(page: P, width: f32, height: f32, scans: &Scans) -> Result<Self, String> {
         let page = page.with_host_atlas();
         let scale = page.scale();
-        let mut renderer = Renderer::headless(Limits::Default)?;
+        let mut renderer = Renderer::headless(Limits::Default, page.lighting())?;
         let pixels = |points: f32| (points * scale).round().max(1.0) as u32;
         let target = Target::offscreen(&renderer, pixels(width), pixels(height));
         let assets = Assets::start(&mut renderer, scans, NOWHERE, || {});

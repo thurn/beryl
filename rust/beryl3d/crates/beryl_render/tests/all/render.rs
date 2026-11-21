@@ -18,7 +18,8 @@ pub(super) const BOTH: [Limits; 2] = [Limits::Default, Limits::Downlevel];
 const TOLERANCE: u8 = 2;
 
 pub(super) fn renderer(limits: Limits) -> Renderer {
-    let mut renderer = Renderer::headless(limits).expect("a GPU adapter and device");
+    let mut renderer =
+        Renderer::headless(limits, crate::lighting()).expect("a GPU adapter and device");
     let format = Format::choose(&renderer.formats());
     renderer.set_faces(&["", "Island", "Plains", "Counterspell"], format);
     assert!(renderer.upload_page(&light::prepared()));

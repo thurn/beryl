@@ -39,6 +39,7 @@ fn parse(changed: Option<(&str, &str)>) -> Result<Data, String> {
                 "revealed.json" => include_str!("../../../../../../data/beryl3d/revealed.json"),
                 "shown.json" => include_str!("../../../../../../data/beryl3d/shown.json"),
                 "gallery.json" => include_str!("../../../../../../data/beryl3d/gallery.json"),
+                "lighting.json" => include_str!("../../../../../../data/beryl3d/lighting.json"),
                 "pointer.json" => include_str!("../../../../../../data/beryl3d/pointer.json"),
                 _ => return Err(format!("{name}: missing test tuning")),
             };

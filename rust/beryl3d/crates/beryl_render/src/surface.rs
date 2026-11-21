@@ -5,6 +5,7 @@ use std::ffi::c_void;
 use std::ptr::NonNull;
 use std::time::{Duration, Instant};
 
+use kit_base::data::lighting::Lighting;
 use kit_frame::frame::Frame;
 
 use crate::renderer::{Drawn, Renderer};
@@ -43,8 +44,13 @@ impl Renderer {
     /// `width` by `height` physical pixels. The device asks for wgpu's limits for OpenGL ES 3.0,
     /// as a phone's does, with the adapter's own texture size: the floor's 2013 integrated GPUs
     /// may lack wgpu's default limits, and a desktop run that outgrew the floor would fail here
-    /// rather than on the floor.
-    pub fn for_window<W>(window: W, width: u32, height: u32) -> Result<(Self, Surface), String>
+    /// rather than on the floor. `lighting` is as for [`Renderer::new`].
+    pub fn for_window<W>(
+        window: W,
+        width: u32,
+        height: u32,
+        lighting: Lighting,
+    ) -> Result<(Self, Surface), String>
     where
         W: wgpu::WindowHandle + wgpu::rwh::HasDisplayHandle + 'static,
     {
@@ -58,13 +64,14 @@ impl Renderer {
             width,
             height,
             wgpu::Limits::downlevel_webgl2_defaults(),
+            lighting,
         )
     }
 
     /// A renderer on the GPU adapter that can present to a phone's `native` surface, and that
     /// surface, `width` by `height` physical pixels. The device is created with wgpu's limits
     /// for OpenGL ES 3.0, the floor's, so that the same device works on Metal, Vulkan and
-    /// OpenGL ES.
+    /// OpenGL ES. `lighting` is as for [`Renderer::new`].
     ///
     /// # Safety
     ///
@@ -75,6 +82,7 @@ impl Renderer {
         native: Native,
         width: u32,
         height: u32,
+        lighting: Lighting,
     ) -> Result<(Self, Surface), String> {
         let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
         // No debug names on GPU objects. The Android emulator's Vulkan driver
@@ -92,6 +100,7 @@ impl Renderer {
             width,
             height,
             wgpu::Limits::downlevel_webgl2_defaults(),
+            lighting,
         )
     }
 
@@ -117,13 +126,15 @@ impl Renderer {
         configure(&self.device, adapter, surface, width, height)
     }
 
-    /// A renderer on the GPU adapter that can present to `surface`, with `limits`.
+    /// A renderer on the GPU adapter that can present to `surface`, with `limits`, lit by
+    /// `lighting`.
     fn on_surface(
         instance: wgpu::Instance,
         surface: wgpu::Surface<'static>,
         width: u32,
         height: u32,
         limits: wgpu::Limits,
+        lighting: Lighting,
     ) -> Result<(Self, Surface), String> {
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
@@ -142,7 +153,7 @@ impl Renderer {
         }))
         .map_err(|error| format!("no GPU device: {error}"))?;
         let surface = configure(&device, &adapter, surface, width, height)?;
-        let mut renderer = Self::new(device, queue, surface.config.format);
+        let mut renderer = Self::new(device, queue, surface.config.format, lighting);
         let info = adapter.get_info();
         renderer.adapter = format!("{} ({:?})", info.name, info.backend);
         renderer.gpu = Some((instance, adapter));

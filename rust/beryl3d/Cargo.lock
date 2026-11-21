@@ -532,6 +532,7 @@ name = "beryl_render"
 version = "0.1.0"
 dependencies = [
  "beryl_assets",
+ "beryl_test_files",
  "bytemuck",
  "glam",
  "image",

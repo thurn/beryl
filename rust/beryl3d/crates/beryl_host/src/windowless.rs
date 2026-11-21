@@ -96,7 +96,7 @@ impl Windowless {
     ) -> Result<(), String> {
         let wake = self.inbox();
         let options = self.options;
-        let mut renderer = Renderer::headless(Limits::Default)?;
+        let mut renderer = Renderer::headless(Limits::Default, client.data().lighting)?;
         let wake = move || {
             wake.send(Input::Nudge);
         };

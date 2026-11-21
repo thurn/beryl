@@ -95,9 +95,7 @@
       }
     }
   },
-  "counts": [
-    "enhanced.bloom.taps"
-  ],
+  "counts": [],
   "card": {
     "width": 63,
     "height": 88,
@@ -216,39 +214,6 @@
       "border": 0.08,
       "points": 8
     }
-  },
-  "enhanced": {
-    "bloom": {
-      "scale": 0.5,
-      "taps": 9,
-      "sigma": 3.0,
-      "strength": 0.6
-    },
-    "light": {
-      "key": 0.38,
-      "fill": 0.12,
-      "fill_elevation": 30,
-      "sheen": 0.1,
-      "sheen_power": 24.0
-    },
-    "shadow": {
-      "map": 2048,
-      "darkness": 0.55,
-      "bias": 2,
-      "slope_bias": 2.0,
-      "taps": 4
-    }
-  },
-  "shadow": {
-    "light": [
-      0.14,
-      0.5
-    ],
-    "alpha": 0.55,
-    "emerging": 4.922,
-    "penumbra": 0.18,
-    "least_height": 1,
-    "above": 0.1
   },
   "flat": {
     "transition": {

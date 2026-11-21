@@ -376,6 +376,11 @@ impl<T: Ticks> FrameLoop<T> {
         self.play_live(now, clock);
         self.feed.before(&mut self.client, clock);
         self.deliver_assets(draw, When::BeforeFrame);
+        // A watched edit of `lighting.json` reaches the client as new data; the renderer takes
+        // it before the next frame, and does nothing while it is unchanged.
+        if let Some(renderer) = draw.renderer() {
+            renderer.set_lighting(self.client.data().lighting);
+        }
         // What the frame needs of the scripts to come is compiled before it, outside the frame's
         // own time: the frame allocates nothing, and compiling does.
         self.client.prepare(clock);

@@ -16,7 +16,9 @@ const WINDOW: Size = Size {
 
 #[test]
 fn every_gated_board_draws_within_the_floors_limits() {
-    let mut renderer = Renderer::headless(Limits::Downlevel).expect("a GPU adapter and device");
+    let lighting = beryl_inspect::data::checkout().expect("tuning").lighting;
+    let mut renderer =
+        Renderer::headless(Limits::Downlevel, lighting).expect("a GPU adapter and device");
     let mut target = Target::offscreen(&renderer, WINDOW.width as u32, WINDOW.height as u32);
     for name in BOARDS {
         // The frames with the most work, which hold the most records.

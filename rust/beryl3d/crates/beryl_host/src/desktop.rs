@@ -288,8 +288,11 @@ impl<S: FnOnce(&mut Renderer, Opening) -> Chosen> App<S> {
             set_fullscreen(&window, true);
         }
         let size = window.inner_size();
+        let lighting = (self.client.as_ref())
+            .map(|(client, _)| client.data().lighting)
+            .ok_or("the window opened twice")?;
         let (mut renderer, surface) =
-            Renderer::for_window(Arc::clone(&window), size.width, size.height)?;
+            Renderer::for_window(Arc::clone(&window), size.width, size.height, lighting)?;
         let assets = Assets::live(&mut renderer, {
             let wake = self.wake.clone();
             move || {

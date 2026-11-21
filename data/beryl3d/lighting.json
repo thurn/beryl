@@ -1,0 +1,32 @@
+{
+  "shadow": {
+    "light": [0.14, 0.5],
+    "darkness": 0.55,
+    "contact": {
+      "emerging": 4.922,
+      "penumbra": 0.18,
+      "least_height": 1,
+      "above": 0.1
+    }
+  },
+  "enhanced": {
+    "light": {
+      "key": 0.38,
+      "fill": 0.12,
+      "fill_elevation": 30,
+      "sheen": 0.1,
+      "sheen_power": 24.0
+    },
+    "shadow_map": {
+      "size": 2048,
+      "bias": 2,
+      "slope_bias": 2.0
+    },
+    "bloom": {
+      "scale": 0.5,
+      "taps": 9,
+      "sigma": 3.0,
+      "strength": 0.6
+    }
+  }
+}

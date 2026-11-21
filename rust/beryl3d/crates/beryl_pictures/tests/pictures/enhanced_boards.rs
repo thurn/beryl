@@ -8,7 +8,9 @@ use kit_base::atlas::Tier;
 
 #[test]
 fn every_gated_board_draws_in_enhanced_on_a_full_device() {
-    let mut renderer = Renderer::headless(Limits::Default).expect("a GPU adapter and device");
+    let lighting = beryl_inspect::data::checkout().expect("tuning").lighting;
+    let mut renderer =
+        Renderer::headless(Limits::Default, lighting).expect("a GPU adapter and device");
     assert!(
         renderer.enhanced_available(),
         "the adapter {:?} has no Enhanced support",

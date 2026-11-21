@@ -7,6 +7,7 @@
 
 use beryl_assets::{Format, Prepared, dimensions};
 use kit_base::atlas::{AssetReady, FaceSize, Tier};
+use kit_base::data::lighting::Lighting;
 use kit_frame::frame::{Frame, TextureArray, Wake};
 use wgpu::util::DeviceExt;
 
@@ -99,13 +100,15 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    /// A renderer drawing into targets of `target_format`. The board-size face array starts with
-    /// the placeholder back alone, until `set_faces` lists the match's faces.
+    /// A renderer drawing into targets of `target_format`, with the Enhanced tier's lights,
+    /// shadow map and bloom from `lighting` (`data/beryl3d/lighting.json`). The board-size face
+    /// array starts with the placeholder back alone, until `set_faces` lists the match's faces.
     #[must_use]
     pub fn new(
         device: wgpu::Device,
         queue: wgpu::Queue,
         target_format: wgpu::TextureFormat,
+        lighting: Lighting,
     ) -> Self {
         let layout = bind_group_layout(&device);
         let pipelines = pipelines(&device, &layout, target_format);
@@ -131,7 +134,7 @@ impl Renderer {
         let slots = Slots::new(&device, UNIFORM_BUFFER, RECORDS * RECORD, |uniforms| {
             bind_groups(&device, &layout, uniforms, &sampler, &faces, &atlas)
         });
-        let enhanced = Enhanced::new(&device, target_format, &layout, slots.uniforms());
+        let enhanced = Enhanced::new(&device, target_format, &layout, slots.uniforms(), lighting);
         let backdrop = Filter::new(&device, target_format);
         let panel_blur = enhanced
             .as_ref()
@@ -162,24 +165,28 @@ impl Renderer {
     }
 
     /// A renderer on the default GPU adapter with no window or surface, drawing into offscreen
-    /// targets of RGBA bytes.
-    pub fn headless(limits: Limits) -> Result<Self, String> {
-        Self::headless_with(limits, wgpu::Features::empty()).map(|(renderer, _)| renderer)
+    /// targets of RGBA bytes, lit by `lighting`.
+    pub fn headless(limits: Limits, lighting: Lighting) -> Result<Self, String> {
+        Self::headless_with(limits, wgpu::Features::empty(), lighting).map(|(renderer, _)| renderer)
     }
 
     /// A headless renderer that counts the fragments each frame shades, read with `fragments`
     /// (docs/beryl-3d.md, "What is counted"). It needs an adapter with pipeline statistics
     /// queries: Vulkan or DirectX 12, not Metal. The gate counts on Mesa's software Vulkan
     /// driver, whose count is exact and repeatable.
-    pub fn counting(limits: Limits) -> Result<Self, String> {
+    pub fn counting(limits: Limits, lighting: Lighting) -> Result<Self, String> {
         let (mut renderer, adapter) =
-            Self::headless_with(limits, wgpu::Features::PIPELINE_STATISTICS_QUERY)?;
+            Self::headless_with(limits, wgpu::Features::PIPELINE_STATISTICS_QUERY, lighting)?;
         renderer.counter = Some(FragmentCounter::new(&renderer.device, adapter));
         Ok(renderer)
     }
 
-    /// A headless renderer with `features`, and its adapter's name.
-    fn headless_with(limits: Limits, features: wgpu::Features) -> Result<(Self, String), String> {
+    /// A headless renderer with `features`, lit by `lighting`, and its adapter's name.
+    fn headless_with(
+        limits: Limits,
+        features: wgpu::Features,
+        lighting: Lighting,
+    ) -> Result<(Self, String), String> {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
@@ -207,7 +214,7 @@ impl Renderer {
         }))
         .map_err(|error| format!("no GPU device: {error}"))?;
         // Stored as sRGB values and blended as they are, as a browser blends colors.
-        let mut renderer = Self::new(device, queue, wgpu::TextureFormat::Rgba8Unorm);
+        let mut renderer = Self::new(device, queue, wgpu::TextureFormat::Rgba8Unorm, lighting);
         renderer.adapter.clone_from(&name);
         Ok((renderer, name))
     }
@@ -218,6 +225,16 @@ impl Renderer {
     #[must_use]
     pub fn enhanced_available(&self) -> bool {
         self.enhanced.is_some()
+    }
+
+    /// Lights later frames with `lighting`, as when a watched data file changes. Nothing is
+    /// made when it equals the tuning in use, so a host may call it before every frame.
+    pub fn set_lighting(&mut self, lighting: Lighting) {
+        if let Some(enhanced) = &mut self.enhanced
+            && enhanced.tuning != lighting
+        {
+            enhanced.retune(&self.device, &self.layout, self.slots.uniforms(), lighting);
+        }
     }
 
     /// The name of the GPU adapter it draws with, as the driver gives it.
@@ -374,6 +391,14 @@ impl Renderer {
         self.render_view(frame, &target.view, target.width, target.height)
     }
 
+    /// The Enhanced tier's lighting `frame` is drawn with, or `None` when it is drawn in
+    /// Baseline.
+    fn lit_by(&self, frame: &Frame) -> Option<Lighting> {
+        (self.enhanced.as_ref())
+            .filter(|_| frame.tier == Tier::Enhanced)
+            .map(|enhanced| enhanced.tuning)
+    }
+
     /// Draws `frame` into `view`, `width` by `height` physical pixels, cleared to black first:
     /// in the Enhanced tier when the frame is in it and this renderer can draw it, and in
     /// Baseline otherwise.
@@ -384,9 +409,10 @@ impl Renderer {
         width: u32,
         height: u32,
     ) -> Drawn {
-        let enhanced = frame.tier == Tier::Enhanced && self.enhanced.is_some();
+        let lit = self.lit_by(frame);
+        let enhanced = lit.is_some();
         let mut uniforms = [0_u8; UNIFORM_BUFFER as usize];
-        let written = write_uniforms(frame, width, height, enhanced, &mut uniforms);
+        let written = write_uniforms(frame, width, height, lit.as_ref(), &mut uniforms);
         // A client made with `Config::LARGEST` never writes more records than the buffer holds.
         // Records past it are not drawn, rather than making a buffer during play.
         let kept = frame.draws.len().min(RECORDS as usize);
@@ -530,7 +556,7 @@ fn write_uniforms(
     frame: &Frame,
     width: u32,
     height: u32,
-    enhanced: bool,
+    lit: Option<&Lighting>,
     uniforms: &mut [u8; UNIFORM_BUFFER as usize],
 ) -> u64 {
     let mut baseline = [0.0_f32; (UNIFORMS / 4) as usize];
@@ -539,9 +565,9 @@ fn write_uniforms(
     baseline[20] = f32::from_bits(u32::from(frame.paints.masked));
     uniforms[..UNIFORMS as usize].copy_from_slice(bytemuck::cast_slice(&baseline));
     let mut written = UNIFORMS;
-    if enhanced {
+    if let Some(tuning) = lit {
         let lit = LIT_OFFSET as usize..LIT_OFFSET as usize + size_of::<Lit>();
-        uniforms[lit.clone()].copy_from_slice(bytemuck::bytes_of(&Lit::of(frame)));
+        uniforms[lit.clone()].copy_from_slice(bytemuck::bytes_of(&Lit::of(frame, tuning)));
         written = lit.end as u64;
     }
     // Only the part of the paint table the frame uses is written: none when it draws no

@@ -133,7 +133,10 @@ pub(crate) fn sample(options: &Options) -> Result<String, Error> {
         .iter()
         .map(read_sample)
         .collect::<Result<Vec<_>, _>>()?;
-    let renderer = Renderer::headless(Limits::Default)
+    let lighting = beryl_inspect::data::checkout()
+        .map_err(Error::Failed)?
+        .lighting;
+    let renderer = Renderer::headless(Limits::Default, lighting)
         .map_err(|why| Error::Failed(format!("no GPU to draw with: {why}")))?;
     if !renderer.enhanced_available() {
         return Err(failed("the sample renderer needs Enhanced support"));
@@ -630,8 +633,9 @@ mod tests {
 
     #[test]
     fn a_plain_panel_draws_its_color_on_the_page() {
-        let renderer = Renderer::headless(Limits::Default).expect("a GPU adapter and device");
         let data = beryl_inspect::data::checkout().unwrap();
+        let renderer =
+            Renderer::headless(Limits::Default, data.lighting).expect("a GPU adapter and device");
         let mut drawer = Drawer::new(renderer, 2.0, data.profiles.fallback().table.camera);
         let sample = Sample {
             name: "plain".to_owned(),
@@ -677,8 +681,9 @@ mod tests {
 
     #[test]
     fn a_gradient_runs_from_its_first_stop_to_its_last_under_its_mask() {
-        let renderer = Renderer::headless(Limits::Default).expect("a GPU adapter and device");
         let data = beryl_inspect::data::checkout().unwrap();
+        let renderer =
+            Renderer::headless(Limits::Default, data.lighting).expect("a GPU adapter and device");
         let mut drawer = Drawer::new(renderer, 1.0, data.profiles.fallback().table.camera);
         let (red, blue) = ([255, 0, 0, 255], [0, 0, 255, 255]);
         let sample = Sample {

@@ -2,14 +2,13 @@
 //! overhead (`render::overhead`: the point (x, y) is drawn at pixel (x + 100, 100 - y)).
 //!
 //! The key light points the way the Baseline tier's contact shadows fall: a card at height h
-//! casts its shadow's centre at its own centre moved by `shadow.light * h`, with the light's y
-//! negated, so 20 mm up puts it 2.8 mm right of and 10 mm below the card's centre.
+//! casts its shadow's centre at its own centre moved by `Shadow::fall() * h`, so with the light
+//! of `data/beryl3d/lighting.json`, 20 mm up puts it 2.8 mm right of and 10 mm below the card's
+//! centre.
 
-use beryl_render::{BACK_LAYER, ENHANCED_SHADER, Limits, Renderer};
+use beryl_render::{BACK_LAYER, Limits, Renderer};
 use glam::{Affine3A, Quat, Vec2, Vec3};
 use kit_base::atlas::{FaceSize, Tier};
-use kit_base::data::space::enhanced::{light, shadow as data};
-use kit_base::data::space::shadow as baseline;
 use kit_frame::frame::{Band, Draw};
 
 use super::render::{Picture, card, draw_in, overhead, rectangle, renderer};
@@ -67,8 +66,12 @@ fn small_card_looking(position: Vec3, alpha: u8, dissolve: f32) -> (Band, Draw) 
 /// Where a point at height `height` above a surface casts its shadow on it, from its own place
 /// `at`, as the Baseline tier's `cast` puts it.
 fn cast(at: Vec2, height: f32) -> Vec2 {
-    let light = baseline::LIGHT;
-    at + Vec2::new(light.x, -light.y) * height
+    at + crate::lighting().shadow.fall() * height
+}
+
+/// How much of what a shadow covers it darkens at its fullest, in both tiers.
+fn darkness() -> f32 {
+    crate::lighting().shadow.darkness
 }
 
 /// How much of `lit`'s brightness `shaded` lost, from 0 to 1, over all three channels.
@@ -92,9 +95,9 @@ fn a_lifted_card_shadows_the_table_where_cast_puts_its_shadow() {
         without.overhead(centre.x, centre.y),
     );
     assert!(
-        (found - data::DARKNESS).abs() <= 0.1 * data::DARKNESS,
+        (found - darkness()).abs() <= 0.1 * darkness(),
         "the shadow's centre {centre} darkened by {found}, not {}",
-        data::DARKNESS
+        darkness()
     );
     let away = -centre.normalize() * 40.0;
     assert_eq!(
@@ -120,7 +123,7 @@ fn a_lifted_card_shadows_the_card_below_it() {
     );
     let found = darkening(shaded, lit);
     assert!(
-        found > 0.5 * data::DARKNESS,
+        found > 0.5 * darkness(),
         "the lower card's face at {centre} went from {lit:?} to {shaded:?}, a darkening of {found}"
     );
 }
@@ -136,7 +139,7 @@ fn a_card_lying_flat_does_not_shadow_its_own_face() {
     let records = [lying, table()];
     let enhanced = draw(&mut renderer, Tier::Enhanced, &records);
     let baseline = draw(&mut renderer, Tier::Baseline, &records);
-    let most_sheen = (light::SHEEN * 255.0).ceil() as i16 + 3;
+    let most_sheen = (crate::lighting().enhanced.light.sheen * 255.0).ceil() as i16 + 3;
     for (x, y) in [(0.0, 0.0), (-20.0, 30.0), (20.0, -30.0), (25.0, 35.0)] {
         let (found, expected) = (enhanced.overhead(x, y), baseline.overhead(x, y));
         assert!(
@@ -211,17 +214,27 @@ fn the_same_frame_draws_the_same_shadows_twice() {
     }
 }
 
-/// The shader's darkness is `enhanced.shadow.darkness`, and it takes `enhanced.shadow.taps`
-/// samples of the map.
+/// The shadow map's darkness and size come from the tuning the renderer is handed, and a
+/// renderer handed new tuning draws with it: after `set_lighting` with a lighter shadow and a
+/// smaller map, as a watched edit of `lighting.json` gives, the table at the shadow's centre
+/// darkens by the new amount.
 #[test]
-fn the_shader_follows_the_shadow_data() {
-    let prefix = "const SHADOW_DARKNESS: f32 = ";
-    let start = ENHANCED_SHADER.find(prefix).expect("SHADOW_DARKNESS") + prefix.len();
-    let end = start + ENHANCED_SHADER[start..].find(';').expect("a `;`");
-    let darkness: f32 = ENHANCED_SHADER[start..end].parse().expect("a number");
-    assert!((darkness - data::DARKNESS).abs() < f32::EPSILON);
-    let taps = ENHANCED_SHADER
-        .matches("textureSampleCompareLevel(")
-        .count();
-    assert!((taps as f32 - data::TAPS).abs() < f32::EPSILON);
+fn a_renderer_handed_new_lighting_shades_with_it() {
+    let mut renderer = enhanced();
+    let mut lighting = crate::lighting();
+    lighting.shadow.darkness = 0.3;
+    lighting.enhanced.shadow_map.size = 1024;
+    renderer.set_lighting(lighting);
+    let lifted = small_card(Vec3::new(0.0, 0.0, 20.0));
+    let with = draw(&mut renderer, Tier::Enhanced, &[lifted, table()]);
+    let without = draw(&mut renderer, Tier::Enhanced, &[table()]);
+    let centre = cast(Vec2::ZERO, 20.0);
+    let found = darkening(
+        with.overhead(centre.x, centre.y),
+        without.overhead(centre.x, centre.y),
+    );
+    assert!(
+        (found - 0.3).abs() <= 0.03,
+        "the shadow's centre {centre} darkened by {found}, not 0.3"
+    );
 }

@@ -102,6 +102,15 @@ impl Scene {
         }
     }
 
+    /// The tuning the scene's client or story player was made with.
+    #[must_use]
+    pub fn data(&self) -> &std::sync::Arc<kit_base::data::Data> {
+        match self {
+            Self::Recording(page) => page.data(),
+            Self::Story(story) => story.player.data(),
+        }
+    }
+
     pub fn now(&self) -> u64 {
         match self {
             Self::Recording(page) => page.now(),

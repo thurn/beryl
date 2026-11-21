@@ -271,7 +271,10 @@ project, and selects the main lanes.
   and `slide.json` govern queued scripts and table regrouping. `frame-rate.json`
   and `tier-probe.json` control host pacing and startup tier selection.
   `notices.json`, `revealed.json` and `shown.json` control notices, the Revealed
-  Cards fan and cards shown over the flat layer.
+  Cards fan and cards shown over the flat layer. `lighting.json` holds the light
+  and shadow darkness both tiers share, the Baseline contact shadows, and the
+  Enhanced lights, shadow map and bloom, which the hosts pass to
+  `beryl_render::Renderer` when they make it.
 
 - `data/beryl3d/effects/*.json` defines drawing layers for runtime effects. The
   app embeds them. Tools read them from the checkout or `BERYL3D_DATA`. The
