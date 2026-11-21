@@ -132,6 +132,28 @@
   color: var(--ink-3);
 }
 
+/* A card that is not itself a link, such as one whose chips open their own cards: its title
+   is the link, and the card does not lift under the pointer. */
+.c-card-static:hover,
+.c-card-static:active {
+  transform: none;
+  box-shadow: var(--shadow-1);
+  background: var(--surface);
+}
+
+.c-card-static .c-card-title a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.c-card-static .c-card-title a:hover {
+  text-decoration: underline;
+}
+
+.c-card-static [data-hovercard] {
+  cursor: pointer;
+}
+
 /* Rows */
 
 .c-rows {

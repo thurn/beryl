@@ -4,7 +4,7 @@
 // the allocation-free forms these lints suggest.
 #![allow(clippy::format_collect, clippy::format_push_string)]
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use rusqlite::{Connection, Row, params};
 use serde_json::Value;
@@ -338,6 +338,17 @@ pub fn ordered_object(text: &str) -> Vec<(String, Value)> {
     serde_json::from_str::<super::history::Ordered>(text)
         .map(|object| object.0)
         .unwrap_or_default()
+}
+
+/// The cards of the tickets `ids` that exist, by ID.
+pub fn cards_by_id(conn: &Connection, ids: &[&str]) -> Result<HashMap<String, Card>, ReadError> {
+    let mut cards = HashMap::new();
+    for id in ids {
+        for card in cards_where(conn, "id = ?1", id)? {
+            cards.insert(card.id.clone(), card);
+        }
+    }
+    Ok(cards)
 }
 
 fn cards_where(conn: &Connection, clause: &str, argument: &str) -> Result<Vec<Card>, ReadError> {

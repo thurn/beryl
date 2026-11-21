@@ -72,6 +72,9 @@ mod files;
 use files::areas;
 pub use files::{named_files, resolve_named_file};
 
+#[path = "dispatch_view.rs"]
+pub mod view;
+
 /// The ticket to reserve for `free`'s machine, already reserved and logged, or why there is none
 /// ([`dispatch::why_nothing`]). Call it inside an `IMMEDIATE` transaction after lapsing old
 /// reservations, so that two machines asking at once are answered one after the other and never

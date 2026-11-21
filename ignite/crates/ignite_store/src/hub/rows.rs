@@ -130,6 +130,9 @@ crate::tables! {
         after_landing: Option<String>,
     }
 
+    /// A machine's latest `POST /next`: the `MachineFree` it sent as JSON, and the answer.
+    MachineAsk = "machine_asks" { machine: String, at: String, free: String, answer: String }
+
     Handoff = "handoffs" { seq: i64, machine: String, ticket: String, kind: String, at: String }
 
     /// A machine's ID, or `*` for every machine.

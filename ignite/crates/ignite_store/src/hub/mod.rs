@@ -16,6 +16,7 @@ pub mod fleet;
 pub mod fleet_settings;
 pub mod leases;
 pub mod listings;
+pub mod machine_asks;
 pub mod metrics;
 pub mod owners;
 pub mod pins;
@@ -206,6 +207,11 @@ pub const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 32,
         sql: include_str!("fleet_settings.sql"),
+        code: None,
+    },
+    Migration {
+        version: 33,
+        sql: include_str!("machine_asks.sql"),
         code: None,
     },
 ];

@@ -46,7 +46,9 @@ use ignite_core::protocol::tickets::{
 use ignite_core::time::Timestamp;
 use ignite_store::StoreError;
 use ignite_store::hub::batch::{self, BatchOutcome};
-use ignite_store::hub::{edges, emergency, feed, findings, fleet, session_titles, tickets};
+use ignite_store::hub::{
+    edges, emergency, feed, findings, fleet, machine_asks, session_titles, tickets,
+};
 
 use super::{Request, Response};
 
@@ -62,7 +64,7 @@ mod queue;
 #[path = "dispatch_releases.rs"]
 mod counting;
 
-pub use queue::{named_files, resolve_named_file};
+pub use queue::{named_files, resolve_named_file, view};
 
 /// The label on a ticket filed by `ignite start "<summary>"`.
 const ADHOC: &str = "adhoc";
@@ -232,7 +234,13 @@ fn next(conn: &mut Connection, free: &MachineFree, now: Timestamp) -> Answer {
     free.name = registered
         .or(free.name)
         .or_else(|| Some(free.machine.to_string()));
-    let reply = match queue::next(&tx, &free, now).map_err(|e| store_failure(&e))? {
+    let answer = queue::next(&tx, &free, now).map_err(|e| store_failure(&e))?;
+    let said = answer.as_ref().map_or_else(
+        |wait| wait.reason.clone(),
+        |reservation| reservation.ticket.to_string(),
+    );
+    machine_asks::record(&tx, &free, &said, now).map_err(|e| store_failure(&e))?;
+    let reply = match answer {
         Ok(reservation) => NextReply::Reserved(reservation),
         // Only a daemon that asked for the reason gets it; an older one reads `null`.
         Err(wait) => match wait.reclaim_to_gb {

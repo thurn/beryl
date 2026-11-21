@@ -6,6 +6,7 @@
 pub mod assets;
 pub mod attachments;
 pub mod attention;
+pub mod available;
 pub mod common;
 pub mod components;
 pub mod data;

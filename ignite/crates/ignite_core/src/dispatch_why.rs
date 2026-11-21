@@ -2,7 +2,8 @@
 //! `ignite status`. A person reading it decides whether more workers would help: they would only
 //! if the answer is about workers, never if it is about tickets or cores.
 
-use super::{JUSTICIAR, ReadyTicket, TicketKind, suits};
+use super::{JUSTICIAR, ReadyTicket, TicketKind, label, suits};
+use crate::admission;
 use crate::protocol::hub::MachineFree;
 use crate::shares::Group;
 
@@ -79,6 +80,72 @@ pub fn why_nothing(free: &MachineFree, ready: &[ReadyTicket], epic_order: &[Grou
         plural(runnable.len()),
         free.free_cores.max(0.0)
     )
+}
+
+/// [`blocker`]'s reason when the machine asked only for tickets that hold `master` back
+/// (`MachineFree::master_only`), which a pause, a backed-up build queue or a usage hold sets.
+pub const MASTER_ONLY: &str = "only tickets that hold master back start here";
+
+/// Why the machine `free` describes cannot take `ticket` now, in a few words, or `None` when it
+/// can: it has a free ticket tree, an idle worker that suits the ticket, the check families the
+/// ticket needs and room for its expected cores. The tests run in the order a person would fix
+/// them, so the first reason is the one to read. `free.free_cores` is the machine's room for
+/// expected cores ([`super::room`]).
+pub fn blocker(free: &MachineFree, ticket: &ReadyTicket) -> Option<String> {
+    let justiciar = ticket.labels.iter().any(|l| l == JUSTICIAR);
+    let machine = free.name.as_deref().unwrap_or_default();
+    let routed = |app: &str| {
+        ticket.destinations.is_empty()
+            || ticket
+                .destinations
+                .iter()
+                .any(|owner| owner.admits(machine, app))
+    };
+    let here = ticket.destinations.is_empty()
+        || ticket
+            .destinations
+            .iter()
+            .any(|owner| owner.machine.eq_ignore_ascii_case(machine));
+    if !here {
+        let owners: Vec<String> = ticket
+            .destinations
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+        return Some(format!("owned by {}", owners.join(", ")));
+    }
+    if free.master_only && !justiciar && ticket.kind != TicketKind::Regression {
+        return Some(MASTER_ONLY.to_owned());
+    }
+    if free.idle_workers.is_empty() {
+        return Some("every worker is busy".to_owned());
+    }
+    if free.free_ticket_trees == 0 {
+        return Some("no free ticket tree".to_owned());
+    }
+    if free.justiciar_only && !justiciar {
+        return Some("last idle worker kept for justiciar tickets".to_owned());
+    }
+    if !free.idle_workers.iter().any(|w| routed(&w.app)) {
+        return Some("no idle worker of its owner".to_owned());
+    }
+    if !free.idle_workers.iter().any(|w| suits(free, w, ticket)) {
+        let tier = label(&ticket.labels, "tier:").unwrap_or_default();
+        return Some(format!("no idle worker runs {tier}"));
+    }
+    if !free.families.is_empty() && !ticket.families.iter().all(|f| free.families.contains(f)) {
+        return Some("needs check families this machine cannot run".to_owned());
+    }
+    if ticket.kind != TicketKind::Regression
+        && !admission::fits(free.free_cores, ticket.expected_cores)
+    {
+        return Some(format!(
+            "needs {:.1} cores, {:.1} free",
+            ticket.expected_cores,
+            free.free_cores.max(0.0)
+        ));
+    }
+    None
 }
 
 fn plural(n: usize) -> &'static str {

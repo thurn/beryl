@@ -18,7 +18,9 @@ use super::common::{SITE_ICONS, brand};
 use super::components::{self as c, PageOptions, esc};
 use super::data::ReadError;
 use super::references::{dashboard_root, percent_encode, ticket_url};
-use super::{assets, explore, home, landings, machines, pool, session, status, ticket, tips};
+use super::{
+    assets, available, explore, home, landings, machines, pool, session, status, ticket, tips,
+};
 use crate::routes::{Request, Response};
 
 /// What a path under the project names.
@@ -26,7 +28,7 @@ use crate::routes::{Request, Response};
 enum Route {
     /// `/`.
     Home,
-    /// One of the fleet pages (`machines`, `pool`, `epics`, `landings`, `tips`, `finds`).
+    /// One of the fleet pages (`available`, `machines`, `pool`, `epics`, `landings`, `tips`, `finds`).
     Fleet(&'static str),
     /// `/pool/session/<id>`: the first address of a CLI worker's transcript, which redirects to
     /// the transcript under the session's ticket.
@@ -352,6 +354,7 @@ fn serve_pages(
         }
         Route::Fleet(page) => {
             let built = match page {
+                available::PATH => available::options(conn, &root, &seq, now),
                 "machines" => machines::options(conn, &root, &seq, now),
                 "pool" => pool::options(conn, &root, &seq, private, now),
                 "epics" => pool::epics(conn, &root, &seq, now),

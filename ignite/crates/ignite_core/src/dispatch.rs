@@ -228,17 +228,41 @@ pub fn next_for_with(
             }
         })
     };
-    let mut justiciar: Vec<&ReadyTicket> = ready
-        .iter()
-        .filter(|t| t.labels.iter().any(|l| l == JUSTICIAR))
-        .collect();
-    justiciar.sort_by(|a, b| queue_order(a, b));
     if free.justiciar_only {
-        return justiciar
+        return justiciar(ready)
             .into_iter()
             .filter(|ticket| machine_fits(free, ticket))
             .find_map(worker_for);
     }
+    order(ready, epic_order, improvements)
+        .into_iter()
+        .map(|(ticket, _)| ticket)
+        .filter(|ticket| machine_fits(free, ticket))
+        .find_map(worker_for)
+}
+
+/// Why a ticket has its place in [`order`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Stage {
+    /// Labeled `justiciar`: a fault in the system itself.
+    Justiciar,
+    /// An open regression ticket.
+    Regression,
+    /// An improvement ticket, ahead of the groups because improvements are under their share.
+    Improvement,
+    /// A ticket in its group's place in the epic order.
+    Group,
+}
+
+/// Every ticket of `ready` that [`next_for`] could hand off, once each, in the order it tries
+/// them, with the reason for each one's place. A ticket whose group is missing from
+/// `epic_order` (a group at its `--max-workers` cap) is left out unless an earlier stage takes
+/// it. The arguments are those of [`next_for`].
+pub fn order<'a>(
+    ready: &'a [ReadyTicket],
+    epic_order: &[Group],
+    improvements: Option<Unit>,
+) -> Vec<(&'a ReadyTicket, Stage)> {
     let mut regressions: Vec<&ReadyTicket> = ready
         .iter()
         .filter(|t| t.kind == TicketKind::Regression)
@@ -253,13 +277,25 @@ pub fn next_for_with(
         tickets.sort_by(|a, b| queue_order(a, b));
         tickets
     });
-    justiciar
+    let mut seen = std::collections::HashSet::new();
+    justiciar(ready)
         .into_iter()
-        .chain(regressions)
-        .chain(improvements)
-        .chain(groups)
-        .filter(|ticket| machine_fits(free, ticket))
-        .find_map(worker_for)
+        .map(|t| (t, Stage::Justiciar))
+        .chain(regressions.into_iter().map(|t| (t, Stage::Regression)))
+        .chain(improvements.into_iter().map(|t| (t, Stage::Improvement)))
+        .chain(groups.map(|t| (t, Stage::Group)))
+        .filter(|(ticket, _)| seen.insert(&ticket.id))
+        .collect()
+}
+
+/// The `justiciar` tickets of `ready`, in queue order.
+fn justiciar(ready: &[ReadyTicket]) -> Vec<&ReadyTicket> {
+    let mut justiciar: Vec<&ReadyTicket> = ready
+        .iter()
+        .filter(|t| t.labels.iter().any(|l| l == JUSTICIAR))
+        .collect();
+    justiciar.sort_by(|a, b| queue_order(a, b));
+    justiciar
 }
 
 /// The next ticket of a `lane:` chain, for the session that just finished one of its tickets:
@@ -274,7 +310,7 @@ pub fn chain_next<'a>(lane: &str, ready: &'a [ReadyTicket]) -> Option<&'a ReadyT
 
 #[path = "dispatch_why.rs"]
 mod why;
-pub use why::why_nothing;
+pub use why::{MASTER_ONLY, blocker, why_nothing};
 
 #[cfg(test)]
 #[path = "dispatch_tests.rs"]

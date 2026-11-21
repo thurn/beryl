@@ -62,7 +62,7 @@ pub enum Tone {
 }
 
 impl Tone {
-    fn name(self) -> &'static str {
+    pub fn name(self) -> &'static str {
         match self {
             Tone::Neutral => "neutral",
             Tone::Accent => "accent",
