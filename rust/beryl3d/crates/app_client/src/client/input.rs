@@ -8,7 +8,7 @@ use beryl_protocol::script::Subject;
 use glam::Vec2;
 
 use super::carry::Carry;
-use super::{Client, Platform};
+use super::Client;
 use app_screens::screens::settings::{Message as SettingsMessage, slider_setting};
 use app_screens::screens::{Screen, Sheet};
 use game_hud::hud::rows::Message as RowMessage;
@@ -19,8 +19,9 @@ use game_play::pointer::rows::scroller_of;
 use game_table::table::Scroller;
 use kit_frame::frame::{ElementId, Place, Role};
 use kit_scene::input::{KeyResponse, Point, Router, Target, TouchPolicy};
+use kit_scene::Reach;
 use kit_scene::scroll::ScrollGesture;
-use kit_ui::element::{Action, Chord};
+use kit_ui::element::Action;
 use kit_ui::input::{Button, Key, KeyCode, KeyPhase, Pointer, PointerKind, PointerPhase};
 use kit_ui::layout::{Edit, Navigation};
 use kit_ui::widgets::{STEP, level_at};
@@ -477,52 +478,17 @@ impl Client {
         None
     }
 
+    /// A key no focused element took: the declared shortcuts of the features shown, then
+    /// Escape closing the sheet or menu drawn over the rest, then the shortcuts every screen
+    /// answers (`features::keys`).
     fn shortcut(&mut self, key: Key) -> Option<KeyResponse<Action>> {
-        let mac = self.platform == Platform::Mac;
-        let first = key.phase == KeyPhase::Down;
-        if first && key.code == KeyCode::Escape && self.table_escape() {
-            return Some(KeyResponse::Handled);
+        if let Some(response) = self.declared_shortcut(key, Reach::Shown) {
+            return Some(response);
         }
-        if let Some(action) = self.layer.shortcut(&key, mac, self.features.layer_open) {
-            // While a context menu is open, its keys move through its rows. Table
-            // commands take each key once even when the host sends repeats.
-            let table_key = matches!(
-                action.downcast_ref::<game_manual::features::table::Message>(),
-                Some(game_manual::features::table::Message::Shortcut(..))
-            );
-            let free = self.features.menu().is_none() && !self.features.overlay_open();
-            if !table_key || (first && free) {
-                return Some(KeyResponse::Action(action));
-            }
-            if free {
-                return Some(KeyResponse::Handled);
-            }
+        if let Some(action) = self.layer.dismiss_press(&key, self.features.layer_open) {
+            return Some(KeyResponse::Action(action));
         }
-        if first && key.code == KeyCode::Escape {
-            return self
-                .layer
-                .close_press(self.features.layer_open)
-                .map(KeyResponse::Action);
-        }
-        let bug_report = if self.features.screen == Screen::Table {
-            "Cmd+Shift+B"
-        } else {
-            "Cmd+B"
-        };
-        if first && Chord::parse(bug_report, mac) == Some(Chord::of(&key)) {
-            return Some(KeyResponse::Action(Action::new(
-                app_screens::screens::bug_report::Message::Open,
-            )));
-        }
-        if first
-            && self.features.screen == Screen::Game
-            && Chord::parse("Cmd+Z", mac) == Some(Chord::of(&key))
-        {
-            return Some(KeyResponse::Action(Action::new(
-                game_hud::prompts::bar::Message::Undo,
-            )));
-        }
-        None
+        self.declared_shortcut(key, Reach::App)
     }
 
     /// The press that moves the focused slider's level up a step, or down one if not `up`,

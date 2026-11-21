@@ -33,7 +33,6 @@ use beryl_protocol::protocol::{Side, Step, StepSet};
 use glam::Vec2;
 
 use kit_base::tokens::ratio;
-use kit_ui::element::Shortcuts;
 
 use crate::hud::players::face_centre;
 use kit_base::data::hud::StepTrack;
@@ -329,7 +328,6 @@ fn track_icon(at: usize, whose: &str, here: bool, press: Action, tuning: StepTra
 /// `element` with no press on it or anything in it, as an element under an overlay takes none.
 fn inert(mut element: Element) -> Element {
     element.press = None;
-    element.shortcuts = Shortcuts::default();
     element.children = element.children.into_iter().map(inert).collect();
     element
 }

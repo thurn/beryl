@@ -227,6 +227,7 @@ pub fn panel(
     list.role = Role::List;
     let mut panel = column()
         .name("Token search")
+        .holds_focus()
         .width(metrics.width)
         .gap(space::M)
         .padding(size::MENU_PADDING)

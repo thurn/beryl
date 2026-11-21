@@ -568,6 +568,7 @@ pub fn dock(
     let plus = step(1, "+", "More");
     let panel = column()
         .name("ask")
+        .holds_focus()
         .background(color::PANEL)
         .border((color::METAL, size::BORDER))
         .radius(size::PANEL_RADIUS);

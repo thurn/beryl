@@ -188,6 +188,7 @@ pub fn overlay(
         .children(aside);
     let mut shell = row()
         .name("overlay")
+        .holds_focus()
         .width(window.width)
         .height(window.height)
         .gap(size::OVERLAY_GAP)

@@ -39,6 +39,7 @@ use kit_ui::widgets::{FieldState, Fields};
 
 use super::{Client, SessionCommand};
 
+mod keys;
 mod manual;
 mod table_input;
 use manual::{
@@ -49,7 +50,7 @@ use manual::{
 const SETTINGS: &str = "settings";
 const START: &str = "start";
 const TESTING: &str = "testing";
-const BUG_REPORT: &str = "bug-report";
+pub(super) const BUG_REPORT: &str = "bug-report";
 const GAME_OVER: &str = "game-over";
 const TOTALS: &str = "life-totals";
 const PILES: &str = "pile-counts";
@@ -63,9 +64,11 @@ const VIEWER: &str = "pile-viewer";
 const REGISTRY: &[Registration] = &[
     Registration::of::<SettingsSheet>(SETTINGS, Placement::Sheet(Sheet::Settings)),
     Registration::of::<GameLog>("game-log", Placement::GameLog),
-    Registration::of::<StartScreen>(START, Placement::Screen(Screen::Start)),
+    Registration::of::<StartScreen>(START, Placement::Screen(Screen::Start))
+        .keys(&start::SHORTCUTS, keys::start),
     Registration::of::<TestingScreen>(TESTING, Placement::Screen(Screen::Testing)),
-    Registration::of::<BugReport>(BUG_REPORT, Placement::Sheet(Sheet::BugReport)),
+    Registration::of::<BugReport>(BUG_REPORT, Placement::Sheet(Sheet::BugReport))
+        .keys(&keys::BUG_REPORT_KEYS, keys::bug_report),
     Registration::of::<GameOver>(GAME_OVER, Placement::GameOver),
     Registration::prepared::<CountFloats>(TOTALS),
     Registration::prepared::<PileCounts>(PILES),
@@ -76,7 +79,8 @@ const REGISTRY: &[Registration] = &[
     Registration::routed::<StepRow>(STEPS),
     Registration::routed::<FullControl>(FULL_CONTROL),
     Registration::routed::<Viewer>(VIEWER),
-    Registration::prompt::<PromptBar>("prompt-bar", Placement::PromptBar),
+    Registration::prompt::<PromptBar>("prompt-bar", Placement::PromptBar)
+        .keys(&keys::PROMPT_BAR, keys::prompt_bar),
     Registration::prompt::<prompts::Pick>("prompt-pick", Placement::Shape("pick")),
     Registration::prompt::<prompts::Order>("prompt-order", Placement::Shape("order")),
     Registration::prompt::<prompts::Split>("prompt-split", Placement::Shape("split")),
@@ -88,8 +92,10 @@ const REGISTRY: &[Registration] = &[
     Registration::prompt::<prompts::Pay>("prompt-pay", Placement::Shape("pay")),
     Registration::prompt::<prompts::Declare>("prompt-declare", Placement::Shape("declare")),
     Registration::prompt::<prompts::Candidates>("prompt-candidates", Placement::Candidates),
-    Registration::of::<TableScreen>(TABLE, Placement::Screen(Screen::Table)),
-    Registration::of::<LobbyScreen>(LOBBY, Placement::Screen(Screen::Lobby)),
+    Registration::of::<TableScreen>(TABLE, Placement::Screen(Screen::Table))
+        .keys(&keys::TABLE, keys::table),
+    Registration::of::<LobbyScreen>(LOBBY, Placement::Screen(Screen::Lobby))
+        .keys(&game_manual::features::lobby::SHORTCUTS, keys::lobby),
     Registration::of::<ContextMenu>(MENU, Placement::TableMenu),
     Registration::of::<CommandList>(PALETTE, Placement::TableOverlay),
     Registration::of::<AskPrompt>(ASK, Placement::TableOverlay),
@@ -142,6 +148,9 @@ struct Registration {
     route: fn(&mut Client, &'static str, &Action) -> Option<bool>,
     view: for<'a> fn(&'a mut Features, &'static str, ViewInputs<'_>) -> Option<&'a Element>,
     prompt_view: Option<prompt::Draw>,
+    /// The keyboard shortcuts the feature answers, and what a press of one sends (`keys`).
+    shortcuts: &'static [kit_scene::Shortcut],
+    on_key: keys::OnKey,
 }
 
 impl Registration {
@@ -160,6 +169,8 @@ impl Registration {
             route: route::<F>,
             view: F::mounted_view,
             prompt_view: None,
+            shortcuts: &[],
+            on_key: keys::none,
         }
     }
 
@@ -174,11 +185,21 @@ impl Registration {
             route: |_, _, _| None,
             view: |_, _, _| None,
             prompt_view: None,
+            shortcuts: &[],
+            on_key: keys::none,
         }
     }
 
     const fn routed<F: Mounted>(id: &'static str) -> Self {
         Self::mounted::<F>(id, None)
+    }
+
+    const fn keys(self, shortcuts: &'static [kit_scene::Shortcut], on_key: keys::OnKey) -> Self {
+        Self {
+            shortcuts,
+            on_key,
+            ..self
+        }
     }
 }
 

@@ -11,7 +11,6 @@
 use crate::features::lobby::{EntryMessage, Message};
 use beryl_protocol::ipc::SavedTable;
 
-use crate::manual::commands::COMMANDS;
 use kit_base::tokens::type_style::START_LABEL as LABEL;
 use kit_base::tokens::{color, space, type_style};
 use kit_text::text::TypeStyle;
@@ -192,14 +191,12 @@ fn form(fields: &Fields, mode: EntryMode, layout: Option<ScreenColumn>) -> Eleme
         .child(buttons.name("form buttons"))
 }
 
-/// `screen` with the key that opens the host form, `lobby.host` in
-/// `data/table-commands.json` (Cmd+N), as the web's start screen binds it on the desktop.
+/// The command of `data/table-commands.json` whose keys open the host form (Cmd+N), as the
+/// web's start screen binds it on the desktop.
+pub const HOST: &str = "lobby.host";
+
+/// What a key of `HOST` sends.
 #[must_use]
-pub fn with_host_key(mut screen: Element) -> Element {
-    for command in COMMANDS.iter().filter(|command| command.id == "lobby.host") {
-        for key in command.key.iter().chain(command.key_aliases) {
-            screen = screen.shortcut(key.mac, Message::Entry(EntryMessage::Host));
-        }
-    }
-    screen
+pub fn host_press() -> Message {
+    Message::Entry(EntryMessage::Host)
 }

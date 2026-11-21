@@ -500,7 +500,9 @@ impl Layer {
             .filter(|editing| editing.id == node.id)
         {
             Some(editing) => editing.shown(node),
-            None => element.text.as_deref().unwrap_or(""),
+            None => (block.shown.as_deref())
+                .or(element.text.as_deref())
+                .unwrap_or(""),
         };
         let words = if builder.looking() {
             text::shaped_words(source)

@@ -292,6 +292,7 @@ fn placed_panel(mut panel: Element, window: Rect, layout: Layout) -> Element {
 fn panel(children: Vec<Element>) -> Element {
     let mut panel = column()
         .name("Report bug")
+        .holds_focus()
         .width(PANEL_WIDTH)
         .gap(PANEL_GAP)
         .background(PANEL)

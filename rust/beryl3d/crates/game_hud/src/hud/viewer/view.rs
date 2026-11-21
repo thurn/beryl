@@ -108,6 +108,7 @@ pub fn viewer_dialog(
         .width(window.width)
         .height(window.height)
         .background(color::BACKDROP)
+        .holds_focus()
         .child(panel);
     shell.anchor = Some(Anchor::Point(Vec2::ZERO, Vec2::ZERO));
     shell

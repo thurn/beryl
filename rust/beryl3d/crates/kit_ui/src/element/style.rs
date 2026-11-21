@@ -6,7 +6,7 @@ use super::paint::{Filter, Gradient};
 use super::{Element, Presence, Timing, Transition};
 use glam::Vec2;
 use kit_base::tokens::type_style;
-use kit_text::text::TypeStyle;
+use kit_text::text::{Truncate, TypeStyle};
 
 /// Which way an element lays out its children.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -205,6 +205,11 @@ pub struct Style {
     /// web interface's `useTextFit` (`ui/src/components/fit.ts`) shrinks a button's long label,
     /// rather than breaking onto more lines (`layout::fit`).
     pub fit: bool,
+    /// How its text is cut when it does not fit its box: to at most a number of lines, the
+    /// last ending with an ellipsis, as CSS's `text-overflow: ellipsis` and `line-clamp` cut
+    /// it (`kit_text::text::Truncate`). `None` lets it take every line it needs. `fit` wins
+    /// over it.
+    pub truncate: Option<Truncate>,
     /// Whether the pointer goes through it and everything under it to what lies beneath, as
     /// CSS's `pointer-events: none` lets it: a press never lands on it, and what it covers
     /// stays hovered. Its resolved elements have the `PASSES` state.
@@ -273,6 +278,7 @@ impl Default for Style {
             text_align: TextAlign::Start,
             color: None,
             fit: false,
+            truncate: None,
             passes: false,
             backdrop: false,
             backdrop_filter: Box::default(),
@@ -357,6 +363,7 @@ optional_setters! {
     color: [u8; 4],
     mask: Gradient,
     scroll_fade: f32,
+    truncate: Truncate,
 }
 
 impl Element {
@@ -386,6 +393,18 @@ impl Element {
     pub fn style(mut self, style: TypeStyle) -> Self {
         self.style.text = style;
         self
+    }
+
+    /// Keeps its text on one line, cut with an ellipsis where it is wider than its box.
+    #[must_use]
+    pub fn ellipsis(self) -> Self {
+        self.truncate(Truncate::ELLIPSIS)
+    }
+
+    /// Keeps its text to at most `lines` lines, the last cut with an ellipsis.
+    #[must_use]
+    pub fn line_clamp(self, lines: u16) -> Self {
+        self.truncate(Truncate::clamp(lines))
     }
 
     #[must_use]

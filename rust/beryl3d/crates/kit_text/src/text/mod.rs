@@ -9,6 +9,9 @@
 pub use kit_base::typography::{TypeStyle, fonts};
 pub mod glyphs;
 mod symbols;
+mod truncate;
+
+pub use truncate::Truncate;
 
 use std::borrow::Cow;
 use std::collections::BTreeMap;
@@ -80,6 +83,10 @@ pub struct Block {
     pub glyphs: Vec<PlacedGlyph>,
     /// The disc of each mana symbol, drawn under its glyph.
     pub symbols: Vec<Symbol>,
+    /// The text the block was shaped from when it is not the text that was asked for: a text
+    /// cut to its box and ended with an ellipsis (`Text::truncated`). Its lines' byte ranges
+    /// are in this text, written as `shaped_words` writes it.
+    pub shown: Option<String>,
 }
 
 impl Block {
@@ -534,6 +541,7 @@ pub fn plain_block(layout: &Layout<u16>, base: Run, max_width: Option<f32>) -> B
         runs: Vec::new(),
         glyphs: Vec::new(),
         symbols: Vec::new(),
+        shown: None,
     };
     for line in layout.lines() {
         add_line(&mut block, &line);
@@ -576,6 +584,7 @@ fn block_of(shaped: &Shaped, max_width: Option<f32>) -> Block {
         runs: shaped.runs.clone(),
         glyphs: Vec::new(),
         symbols: Vec::new(),
+        shown: None,
     };
     for line in layout.lines() {
         add_line(&mut block, &line);

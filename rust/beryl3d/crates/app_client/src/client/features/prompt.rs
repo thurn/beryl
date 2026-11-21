@@ -25,6 +25,8 @@ impl Registration {
             prompt_view: Some(|slots, id, inputs| {
                 prompt_slot::<F>(slots, id).borrow_mut().view(inputs)
             }),
+            shortcuts: &[],
+            on_key: super::keys::none,
         }
     }
 }

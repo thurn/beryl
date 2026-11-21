@@ -1,10 +1,11 @@
 //! Connects the report's messages and paused clock to the table and input routing.
 
-use super::{Client, Platform, input::ScenePoint};
+use super::features::BUG_REPORT;
+use super::{Client, input::ScenePoint};
 use app_screens::screens::Sheet;
 use app_screens::screens::bug_report::{BugStage, Message, whole_window};
 use kit_frame::frame::Wake;
-use kit_ui::element::Chord;
+use kit_scene::input::KeyResponse;
 use kit_ui::input::{Button, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerPhase};
 
 impl Client {
@@ -181,10 +182,10 @@ impl Client {
                 true
             }
             BugStage::Describe { .. } => {
-                let mac = self.platform == Platform::Mac;
-                if Chord::parse("Cmd+Return", mac) == Some(Chord::of(&key)) {
-                    if first && self.update_bug(&Message::Save(self.window.size)) {
-                        self.show_screen();
+                // The report's own keys (Cmd+Return saves it) come first.
+                if let Some(response) = self.feature_shortcut(BUG_REPORT, key) {
+                    if let KeyResponse::Action(action) = response {
+                        self.dispatch(&action);
                     }
                     return true;
                 }

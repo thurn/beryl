@@ -2,7 +2,7 @@
 
 mod view;
 
-pub use view::{Inputs, ViewKey};
+pub use view::{Inputs, ViewKey, shortcut};
 
 use crate::manual::{ActionSource, Pending, arrows, drop, opening, tokens::TokenChoice, viewers};
 use beryl_protocol::protocol::{Answer, ObjectId, Side};

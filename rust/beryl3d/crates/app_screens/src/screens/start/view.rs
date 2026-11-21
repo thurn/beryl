@@ -136,7 +136,7 @@ pub(super) fn start(state: &State, input: &Inputs) -> Element {
         .child(panel)
         .child(corner());
     let screen = whole_window(input.window.size, screen);
-    game_manual::screens::table_entries::with_host_key(with_keys(screen, input, going_on))
+    screen
 }
 
 /// What the screen's fields and choices allow, which both layouts read the same way.
@@ -164,25 +164,6 @@ impl Chosen {
             seed_ok,
             startable,
         }
-    }
-}
-
-/// `screen` with the start screen's keys: Enter does what the primary button does (back to the
-/// game in progress, else a new one), G opens the gallery and, in a tools build of the app,
-/// which lists the recordings, T opens the testing screen.
-fn with_keys(screen: Element, input: &Inputs, going_on: bool) -> Element {
-    let enter = if going_on {
-        Message::Open(Screen::Game)
-    } else {
-        Message::Start(input.session)
-    };
-    let screen = screen
-        .shortcut("Enter", enter)
-        .shortcut("G", Message::Open(Screen::Gallery));
-    if input.has_recordings {
-        screen.shortcut("T", Message::Open(Screen::Testing))
-    } else {
-        screen
     }
 }
 
@@ -257,11 +238,7 @@ fn start_column(state: &State, input: &Inputs, layout: ScreenColumn) -> Element 
             Some(layout),
         ))
         .child(layout.action(export));
-    with_keys(
-        layout.scrolling("start", input.window, content),
-        input,
-        going_on,
-    )
+    layout.scrolling("start", input.window, content)
 }
 
 /// The seed's label and text field, holding `state`, drawn in ember unless `ok`.

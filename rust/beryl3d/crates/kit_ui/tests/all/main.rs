@@ -14,5 +14,7 @@ fn card() -> glam::Vec2 {
 
 mod backdrop;
 mod elements;
+mod focus;
 mod paints;
 mod transitions;
+mod truncate;

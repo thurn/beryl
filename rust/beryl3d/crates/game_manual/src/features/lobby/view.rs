@@ -10,6 +10,7 @@
 //! phone lobby to follow.
 
 use super::Message;
+use kit_scene::Shortcut;
 use beryl_protocol::ipc::decks::SavedDeck;
 use beryl_protocol::ipc::{LobbyChange, LobbyView};
 
@@ -124,7 +125,7 @@ fn render_lobby(input: &LobbyIn) -> Element {
         .align_items(Align::Center)
         .justify_content(Justify::Center)
         .child(panel);
-    shortcuts(whole_window(input.window.size, screen), input.view)
+    whole_window(input.window.size, screen)
 }
 
 /// The lobby on a phone: the panel's sections in one column over the safe area, which scrolls
@@ -134,7 +135,7 @@ fn render_lobby(input: &LobbyIn) -> Element {
 fn lobby_column(input: &LobbyIn, layout: ScreenColumn) -> Element {
     let content = column().name("lobby column").gap(layout.metrics.start.gap);
     let content = sections(content, input, Fit::Column(layout));
-    shortcuts(layout.scrolling("lobby", input.window, content), input.view)
+    layout.scrolling("lobby", input.window, content)
 }
 
 /// Which window the lobby is laid out for.
@@ -220,33 +221,40 @@ fn sections(holder: Element, input: &LobbyIn, fit: Fit) -> Element {
     holder
 }
 
-/// The lobby's keys, from `data/table-commands.json`, as the web's lobby resolves them: 'Paste
-/// decklist' opens the picker's paste field, 'Change' opens the picker (on the web, its file
-/// panel, which Beryl 3D does not have), 'Unload deck' unloads a loaded deck and 'Sideboard'
-/// opens or closes its sideboard swap, 'Ready' marks a guest with a deck ready or not, and
-/// 'Leave table' leaves. Written as the Mac's bindings, as the table's are.
-fn shortcuts(mut screen: Element, view: Option<&LobbyView>) -> Element {
+/// The commands of `data/table-commands.json` whose keys the lobby answers (`shortcut`), as
+/// its registry entry declares them.
+pub const SHORTCUTS: [Shortcut; 6] = [
+    Shortcut::command("lobby.change_deck", "Change deck"),
+    Shortcut::command("lobby.paste_deck", "Paste decklist"),
+    Shortcut::command("lobby.unload_deck", "Unload deck"),
+    Shortcut::command("lobby.sideboard", "Sideboard"),
+    Shortcut::command("lobby.ready", "Ready"),
+    Shortcut::command("table.leave", "Leave table"),
+];
+
+/// What a key of the lobby's command `id` (one of `SHORTCUTS`) does, as the web's lobby
+/// resolves it: 'Paste decklist' opens the picker's paste field, 'Change' opens the picker (on
+/// the web, its file panel, which Beryl 3D does not have), 'Unload deck' unloads a loaded deck
+/// and 'Sideboard' opens or closes its sideboard swap, 'Ready' marks a guest with a deck ready
+/// or not, and 'Leave table' leaves. `None` where the command does nothing now.
+#[must_use]
+pub fn shortcut(id: &str, view: Option<&LobbyView>) -> Option<Message> {
     let own = view.and_then(own);
     let loaded = own.is_some_and(|own| own.loaded);
-    for command in COMMANDS {
-        let press = match command.id {
-            "lobby.change_deck" if command.scope == Scope::Lobby => Message::Change,
-            "lobby.paste_deck" => Message::Paste,
-            "lobby.unload_deck" if loaded => Message::Unload,
-            "lobby.sideboard" if loaded => Message::Sideboard,
-            "lobby.ready" if loaded && view.is_some_and(|view| !hosting(view)) => {
-                Message::ChangeLobby(LobbyChange::Ready {
-                    ready: !own.is_some_and(|own| own.ready),
-                })
-            }
-            "table.leave" => Message::Leave,
-            _ => continue,
-        };
-        for key in command.key.iter().chain(command.key_aliases) {
-            screen = screen.shortcut(key.mac, press.clone());
+    let command = COMMANDS.iter().find(|command| command.id == id)?;
+    Some(match id {
+        "lobby.change_deck" if command.scope == Scope::Lobby => Message::Change,
+        "lobby.paste_deck" => Message::Paste,
+        "lobby.unload_deck" if loaded => Message::Unload,
+        "lobby.sideboard" if loaded => Message::Sideboard,
+        "lobby.ready" if loaded && view.is_some_and(|view| !hosting(view)) => {
+            Message::ChangeLobby(LobbyChange::Ready {
+                ready: !own.is_some_and(|own| own.ready),
+            })
         }
-    }
-    screen
+        "table.leave" => Message::Leave,
+        _ => return None,
+    })
 }
 
 /// A desktop section's frame (`.lobby-section`): a column stretched across the panel with a

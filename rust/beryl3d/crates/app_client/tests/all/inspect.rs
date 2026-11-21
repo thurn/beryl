@@ -230,6 +230,35 @@ fn escape_closes_the_viewer() {
     assert!(page.try_find("list \"cards\"").is_err(), "Escape closed it");
 }
 
+/// The box of the element named `name` in `frame`, as its smallest and largest corner, or of
+/// the focused element with `None`.
+fn corners(frame: &kit_frame::frame::Frame, name: Option<&str>) -> Option<(Vec2, Vec2)> {
+    let element = frame.resolved.iter().find(|element| match name {
+        Some(name) => frame.name(element.name) == name,
+        None => element.state.has(StateBits::FOCUSED),
+    })?;
+    let min = element.corners.into_iter().reduce(Vec2::min)?;
+    let max = element.corners.into_iter().reduce(Vec2::max)?;
+    Some((min, max))
+}
+
+#[test]
+fn tab_keeps_the_focus_inside_the_open_viewer() {
+    let mut page = page(&graveyard(3));
+    page.press(PILE);
+    page.step(Duration::from_millis(1000));
+    let (low, high) = corners(page.frame(), Some("viewer")).expect("the viewer is open");
+    for _ in 0..4 {
+        page.run("key Tab");
+        page.step(Duration::from_millis(16));
+        let (min, max) = corners(page.frame(), None).expect("Tab focused an element");
+        assert!(
+            min.cmpge(low - 0.5).all() && max.cmple(high + 0.5).all(),
+            "the focus left the viewer: {min} {max} outside {low} {high}"
+        );
+    }
+}
+
 #[test]
 fn the_revealed_pill_stands_over_the_revealed_pile_and_its_cross_puts_it_away() {
     use beryl_protocol::script::Act;

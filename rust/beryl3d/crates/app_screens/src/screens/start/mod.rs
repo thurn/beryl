@@ -1,6 +1,9 @@
 //! The start screen's opponent selection, new-game controls and navigation.
 
+mod keys;
 mod view;
+
+pub use keys::{KeyInputs, SHORTCUTS, press as shortcut_press};
 
 use beryl_protocol::protocol::Status;
 use beryl_protocol::{AgentView, SessionId, StartRequest};

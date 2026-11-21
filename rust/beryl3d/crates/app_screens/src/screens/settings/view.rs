@@ -132,6 +132,7 @@ pub(super) fn settings(state: &State, input: Inputs) -> Element {
     panel = panel.child(credits());
     let mut sheet = column()
         .name("settings")
+        .holds_focus()
         .position(Position::Absolute)
         .inset([Some(0.0); 4])
         .align_items(Align::Center)

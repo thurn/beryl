@@ -49,7 +49,7 @@ use crate::input::{Rect, Size};
 use crate::widgets::icons::Icons;
 use kit_base::geometry::Window;
 use kit_frame::frame::{ElementId, Role};
-use kit_text::text::{Block, Glyphs, Text, TypeStyle};
+use kit_text::text::{Block, Glyphs, Text, Truncate, TypeStyle};
 
 /// Where the desktop layout anchors a screen: its bottom right corner this far in from the
 /// safe area's, where the web interface's action dock stands (`.dock` in
@@ -70,6 +70,8 @@ struct TextLeaf {
     spans: Vec<element::Span>,
     /// Whether the text stays on one line (`Style::fit`), so that it is measured unbroken.
     fit: bool,
+    /// How the text is cut to its box (`Style::truncate`).
+    truncate: Option<Truncate>,
 }
 
 /// One kept element, with its layout.
@@ -528,11 +530,11 @@ impl Layer {
                 .as_ref()
                 .is_none_or(|block| block.max_width != limit)
             {
-                node.block = Some(
-                    self.text
-                        .block(words, node.element.style.text, &node.element.spans, limit)
-                        .clone(),
-                );
+                let (style, spans) = (node.element.style.text, &node.element.spans);
+                node.block = Some(match node.element.style.truncate {
+                    Some(truncate) => self.text.truncated(words, style, spans, limit, truncate),
+                    None => self.text.block(words, style, spans, limit).clone(),
+                });
             }
         }
         // A child that entered or changed size takes its new box at once, since sizes do not
@@ -627,7 +629,19 @@ fn compute(
                         AvailableSpace::MaxContent => None,
                     });
                     let limit = if leaf.fit { None } else { limit };
-                    let (width, height) = text.measure(&leaf.text, leaf.style, &leaf.spans, limit);
+                    let (width, height) = match leaf.truncate.filter(|_| !leaf.fit) {
+                        Some(truncate) => {
+                            let block = text.truncated(
+                                &leaf.text,
+                                leaf.style,
+                                &leaf.spans,
+                                limit,
+                                truncate,
+                            );
+                            (block.width, block.height)
+                        }
+                        None => text.measure(&leaf.text, leaf.style, &leaf.spans, limit),
+                    };
                     taffy::Size {
                         width: known.width.unwrap_or(width),
                         height: known.height.unwrap_or(height),

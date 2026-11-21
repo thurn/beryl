@@ -57,6 +57,7 @@ mod scroll;
 mod scroll_compact;
 mod settings_sheet;
 mod shadows;
+mod shortcuts;
 mod table;
 mod testing_screen;
 mod text_field;

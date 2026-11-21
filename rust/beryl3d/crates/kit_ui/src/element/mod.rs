@@ -12,7 +12,7 @@ mod transition;
 
 use glam::Vec2;
 
-pub use keys::{Chord, Shortcuts, describe};
+pub use keys::{Chord, describe};
 pub use paint::{
     Border, DropLayer, DropLayers, Extent, Filter, Gradient, Length, MOST_DROP_SHADOWS, Shadow,
     Shape, Stop,
@@ -103,6 +103,10 @@ pub struct Element {
     pub enabled: bool,
     /// Whether it takes keys: a press on it gives it the focus (`layout::focus`).
     pub focus: bool,
+    /// Whether Tab and Shift+Tab keep the focus inside it while it is shown, as a modal sheet
+    /// or menu holds it: the last such element in tree order, the one drawn over the rest,
+    /// bounds the focus order (`layout::focus`). A context menu holds it without this flag.
+    pub holds_focus: bool,
     /// Whether it is on or chosen, as a toggle that is on is. It is drawn so, and its resolved
     /// element has the `SELECTED` state.
     pub selected: bool,
@@ -123,8 +127,6 @@ pub struct Element {
     pub shows: Option<Shown>,
     /// A table object the scene tree places in this element's box.
     pub show: Option<Show>,
-    /// The keyboard shortcuts the screen answers, given on its top element.
-    pub shortcuts: Shortcuts,
     /// For a text field, what it holds and where its caret is (`widgets::field`), from which
     /// the layer starts editing it when it takes the focus.
     pub field: Option<Box<FieldState>>,
@@ -144,6 +146,7 @@ impl Element {
             press: None,
             enabled: true,
             focus: false,
+            holds_focus: false,
             selected: false,
             primary: false,
             waits: false,
@@ -151,7 +154,6 @@ impl Element {
             anchor: None,
             shows: None,
             show: None,
-            shortcuts: Shortcuts::default(),
             field: None,
             children: Vec::new(),
         }
@@ -168,6 +170,7 @@ impl Element {
             && self.press == other.press
             && self.enabled == other.enabled
             && self.focus == other.focus
+            && self.holds_focus == other.holds_focus
             && self.selected == other.selected
             && self.primary == other.primary
             && self.waits == other.waits
@@ -175,7 +178,6 @@ impl Element {
             && self.anchor == other.anchor
             && self.shows == other.shows
             && self.show == other.show
-            && self.shortcuts == other.shortcuts
             && self.field == other.field
     }
 
@@ -197,6 +199,13 @@ impl Element {
         self
     }
 
+    /// Makes Tab keep the focus inside it while it is shown (`Element::holds_focus`).
+    #[must_use]
+    pub fn holds_focus(mut self) -> Self {
+        self.holds_focus = true;
+        self
+    }
+
     /// Makes it wait for the table to settle (`Element::waits`).
     #[must_use]
     pub fn waits(mut self) -> Self {
@@ -214,20 +223,6 @@ impl Element {
     #[must_use]
     pub fn on_press<T: Clone + PartialEq + std::fmt::Debug + 'static>(mut self, press: T) -> Self {
         self.press = Some(Action::new(press));
-        self
-    }
-
-    /// Answers the shortcut `binding`, written as the web interface writes one (`keys`), with
-    /// `press`. Only the screen's top element's shortcuts are answered.
-    #[must_use]
-    pub fn shortcut<T: Clone + PartialEq + std::fmt::Debug + 'static>(
-        mut self,
-        binding: &str,
-        press: T,
-    ) -> Self {
-        self.shortcuts
-            .0
-            .push((binding.to_owned(), Action::new(press)));
         self
     }
 

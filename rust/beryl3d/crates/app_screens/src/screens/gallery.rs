@@ -111,7 +111,7 @@ pub fn gallery(input: &ScreenIn) -> Element {
         .align_items(Align::Center)
         .padding(edge)
         .child(content);
-    let mut screen = with_escape(screen, input.gallery);
+    let mut screen = screen;
     // The gallery fills the safe area. The game screen's root reserves room for its dock.
     screen.anchor = Some(Anchor::Point(Vec2::new(inset.left, inset.top), Vec2::ZERO));
     if let Some((kind, at)) = opened {
@@ -153,7 +153,7 @@ fn reference_page(input: &ScreenIn, faces: &FaceList, width: f32, height: f32) -
             opened.is_none() && query.is_none(),
             input.profile.data().play.life.orb_scale,
         ));
-    let mut screen = with_escape(screen, input.gallery);
+    let mut screen = screen;
     screen.anchor = Some(Anchor::Point(Vec2::new(inset.left, inset.top), Vec2::ZERO));
     if let Some(query) = query {
         let mut preview = command_preview(query)
@@ -178,13 +178,14 @@ fn reference_page(input: &ScreenIn, faces: &FaceList, width: f32, height: f32) -
 
 /// What Escape does on the gallery: closes an open menu, then the command list's preview, then
 /// goes back to the start screen.
-fn with_escape(screen: Element, state: GalleryState) -> Element {
+#[must_use]
+pub fn escape_press(state: GalleryState) -> Action {
     if state.menu.is_some() {
-        screen.shortcut("Escape", GalleryMessage::DismissMenu)
+        Action::new(GalleryMessage::DismissMenu)
     } else if state.query.is_some() {
-        screen.shortcut("Escape", GalleryMessage::GalleryQuery(None))
+        Action::new(GalleryMessage::GalleryQuery(None))
     } else {
-        screen.shortcut("Escape", start::Message::Open(Screen::Start))
+        Action::new(start::Message::Open(Screen::Start))
     }
 }
 

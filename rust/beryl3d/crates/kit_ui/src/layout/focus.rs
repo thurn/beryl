@@ -1,13 +1,15 @@
 //! Keyboard focus (docs/beryl-3d.md, "Elements"): one element of the screen at a time takes
 //! the keys. A press on an element with `focus: true` or a focus message gives it the focus,
 //! Tab and Shift+Tab move it among the focusable elements in tree order, as a browser moves it
-//! among buttons and fields, and Return presses the focused element.
+//! among buttons and fields, and Return presses the focused element. While a sheet or menu that
+//! holds the focus is shown (`Element::holds_focus`, or a context menu), Tab moves only among
+//! the elements inside it, as a modal dialog keeps the browser's focus.
 
 use glam::Vec2;
 
 use super::{Layer, Node};
-use crate::element::{Action, Display};
-use crate::input::Key;
+use crate::element::{Action, Anchor, Display};
+use crate::input::{Key, KeyCode, KeyPhase};
 use kit_frame::frame::ElementId;
 
 impl Layer {
@@ -67,8 +69,9 @@ impl Layer {
     }
 
     /// Moves the focus to the next focusable element in tree order, or the one before if not
-    /// `forward`, going round from the last to the first. With nothing focused, it goes to the
-    /// first, or the last. Allocates nothing.
+    /// `forward`, going round from the last to the first, among the elements of the sheet or
+    /// menu that holds the focus (`focus_scope`), or else the part of the screen that takes
+    /// keys. With nothing focused there, it goes to the first, or the last. Allocates nothing.
     pub fn move_focus(&mut self, forward: bool, open: bool) {
         /// Calls `visit` on every visible focusable node, in tree order.
         fn each(node: &Node, open: bool, visit: &mut impl FnMut(ElementId)) {
@@ -82,7 +85,7 @@ impl Layer {
                 each(child, open, visit);
             }
         }
-        let Some(screen) = self.keyboard_root(open) else {
+        let Some(screen) = self.keyboard_root(open).map(|root| focus_scope(root, open)) else {
             return;
         };
         let current = self.focused;
@@ -144,20 +147,37 @@ impl Layer {
         search(self.keyboard_root(open)?, open)
     }
 
-    /// The press the screen's top element gives `key` as a shortcut, on the Mac if `mac`.
+    /// The press a first press of Escape sends (`close_press`); `None` for any other key.
     #[must_use]
-    pub fn shortcut(&self, key: &Key, mac: bool, open: bool) -> Option<Action> {
-        let screen = self.keyboard_root(open)?;
-        if !screen.accepts_input(open) {
-            return None;
-        }
-        screen.element.shortcuts.press_for(key, mac).cloned()
+    pub fn dismiss_press(&self, key: &Key, open: bool) -> Option<Action> {
+        (key.code == KeyCode::Escape && key.phase == KeyPhase::Down)
+            .then(|| self.close_press(open))
+            .flatten()
     }
 
     /// The screen's node `id`.
     pub(super) fn find(&self, id: ElementId) -> Option<&Node> {
         self.screen.as_ref().and_then(|node| node.find(id))
     }
+}
+
+/// The node the focus order stays inside: the last node under `root` that takes input, in
+/// tree order, that holds the focus (`Element::holds_focus`) or is a context menu, or else
+/// `root`.
+fn focus_scope(root: &Node, open: bool) -> &Node {
+    fn last(node: &Node, open: bool) -> Option<&Node> {
+        if !node.accepts_input(open) {
+            return None;
+        }
+        (node.children.iter().rev())
+            .find_map(|child| last(child, open))
+            .or_else(|| {
+                let element = &node.element;
+                (element.holds_focus || matches!(element.anchor, Some(Anchor::Menu(_))))
+                    .then_some(node)
+            })
+    }
+    last(root, open).unwrap_or(root)
 }
 
 impl Node {

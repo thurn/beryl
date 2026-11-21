@@ -14,7 +14,7 @@ use kit_ui::element::Element;
 use crate::manual::lobby::{self, DeckPanel, Lobby};
 use crate::screens::table_entries::TableEntries;
 
-pub use view::Inputs;
+pub use view::{Inputs, SHORTCUTS, shortcut};
 
 /// The lobby and table-entry controls.
 #[derive(Clone, Debug, PartialEq, Eq)]

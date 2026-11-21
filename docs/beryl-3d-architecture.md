@@ -385,6 +385,20 @@ in points. An arranged row scrolls in whole groups and reports the counts off
 each end. After a touch drag, the client samples the offset track on its frame
 clock before it draws.
 
+A style truncates text with `Style::truncate` (`kit_text::text::Truncate`): the
+text keeps to a number of lines and the last one ends with an ellipsis, as CSS's
+`text-overflow: ellipsis` and `line-clamp` cut it, so a caller no longer
+shortens its own string to pass the "text fits" check. Tab and Shift+Tab move
+the focus through the pressable elements in tree order, and an element with
+`holds_focus` (a sheet, an overlay, the pile viewer) or an open context menu
+keeps the focus inside it. A feature declares its keyboard shortcuts as data on
+its registry entry (`kit_scene::Shortcut`: a binding or a command's keys, a
+label, and whether it answers only while the feature is shown or on every
+screen), and the client's router in `app_client`'s `features::keys` sends a key
+no focused element took to the feature that declared it. `Client::shortcuts`
+lists every declaration, and `Shortcut::describe` gives a binding's words for a
+menu row or tooltip. `Client` matches no chord of its own.
+
 A capability's conformance is shown by stories that draw it. The web interface's
 CSS samples stay the reference for paint until the switch.
 

@@ -14,7 +14,7 @@ use game_table::{faces::FaceList, profiles::Profile, table::Window};
 use glam::Vec2;
 use kit_base::data::profiles::ProfileData;
 use kit_scene::SizeClass;
-use kit_ui::element::{Action, Element, column};
+use kit_ui::element::{Action, Chord, Element, column};
 use kit_ui::widgets::{FieldState, Fields};
 
 pub struct Inputs<'a> {
@@ -90,54 +90,21 @@ impl ViewKey {
     }
 }
 
-/// What the flat layer shows on the table: a region with no box of its own, which answers every
-/// key of a table command with `Message::Shortcut`, the log, and the open context menu, command
-/// list, ask prompt, token search, custom token form or order tray, if any.
-///
-/// A command's keys are the one the player bound to it, or else its own and its aliases from
-/// `data/table-commands.json` (`Bindings::keys`). Those are written as the Mac's bindings:
-/// `Chord::parse` reads `Cmd` as Control and `Option` as Alt elsewhere, and the file's other
-/// bindings differ from the Mac's only in writing those.
+/// What the flat layer shows on the table: a region with no box of its own, the log, and the
+/// open context menu, command list, ask prompt, token search, custom token form or order tray,
+/// if any. The table's keys are declared on its registry entry and found by `shortcut`.
 #[must_use]
 pub(super) fn table(state: &State, input: Inputs<'_>) -> Element {
     // The region has no box of its own, since everything in it stands at a point of the
     // window, so the pointer reaches the table's cards around what it shows. It does not pass
     // presses through, which every element in it would inherit.
-    let mut screen = column().name("table");
+    let screen = column().name("table");
     let hud = &input.hud;
     let window = hud.window;
     let profile = hud.profile;
     let metrics = hud.data.flat.manual;
     let view = hud.view;
     let frozen = view.is_some_and(link::frozen);
-    // A frozen table answers no key of its own (`manual::link`).
-    for (index, command) in COMMANDS.iter().enumerate().filter(|_| !frozen) {
-        let Ok(index) = u16::try_from(index) else {
-            break;
-        };
-        if command.scope != Scope::Table {
-            continue;
-        }
-        for key in input.bindings.keys(command) {
-            screen = screen.shortcut(key, Message::Shortcut(index, false));
-        }
-    }
-    // With Shift held and no binding of its own, a token command's key makes its token face
-    // down (`listenTableKeys` in `ui/src/table/keyboard.ts`). The unshifted bindings come
-    // first, so a command bound to the shifted chord keeps it.
-    for (index, command) in COMMANDS.iter().enumerate().filter(|_| !frozen) {
-        let Ok(index) = u16::try_from(index) else {
-            break;
-        };
-        if command.scope != Scope::Table || !command.id.starts_with("token.") {
-            continue;
-        }
-        for key in input.bindings.keys(command) {
-            if !key.split('+').any(|part| part == "Shift") {
-                screen = screen.shortcut(&format!("Shift+{key}"), Message::Shortcut(index, true));
-            }
-        }
-    }
     let table = view.and_then(|view| view.table.as_ref());
     let labels = view
         .zip(table)
@@ -245,4 +212,36 @@ fn table_steps(input: &HudIn, size_class: SizeClass) -> Option<Element> {
             })
         },
     ))
+}
+
+/// The message the table's key `chord` sends on the Mac if `mac`: `Message::Shortcut` with the
+/// index in `COMMANDS` of the table command it is a key of, or `None`.
+///
+/// A command's keys are the one the player bound to it, or else its own and its aliases from
+/// `data/table-commands.json` (`Bindings::keys`). Those are written as the Mac's bindings:
+/// `Chord::parse` reads `Cmd` as Control and `Option` as Alt elsewhere, and the file's other
+/// bindings differ from the Mac's only in writing those. With Shift held and no binding of its
+/// own, a token command's key makes its token face down (`listenTableKeys` in
+/// `ui/src/table/keyboard.ts`). The unshifted bindings are looked at first, so a command bound
+/// to the shifted chord keeps it.
+#[must_use]
+pub fn shortcut(bindings: &Bindings, chord: Chord, mac: bool) -> Option<Message> {
+    let table = || {
+        (COMMANDS.iter().enumerate()).filter(|(_, command)| command.scope == Scope::Table)
+    };
+    let index = |at: usize| u16::try_from(at).ok();
+    for (at, command) in table() {
+        if (bindings.keys(command)).any(|key| Chord::parse(key, mac) == Some(chord)) {
+            return Some(Message::Shortcut(index(at)?, false));
+        }
+    }
+    for (at, command) in table().filter(|(_, command)| command.id.starts_with("token.")) {
+        let shifted = (bindings.keys(command))
+            .filter(|key| !key.split('+').any(|part| part == "Shift"))
+            .any(|key| Chord::parse(&format!("Shift+{key}"), mac) == Some(chord));
+        if shifted {
+            return Some(Message::Shortcut(index(at)?, true));
+        }
+    }
+    None
 }

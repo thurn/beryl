@@ -280,6 +280,7 @@ pub fn panel(palette: &Palette, fields: &Fields, window: Size, metrics: PaletteM
     );
     let mut panel = column()
         .name("Command list")
+        .holds_focus()
         .width(metrics.width)
         .gap(space::M)
         .padding(size::MENU_PADDING)

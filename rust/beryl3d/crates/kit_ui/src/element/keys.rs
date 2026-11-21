@@ -1,10 +1,9 @@
-//! Keyboard shortcuts (docs/beryl-3d.md, "Elements"): a screen gives the shortcuts it answers
-//! beside its tree, each a binding as the web interface writes one, such as `Cmd+Shift+L`, and
-//! the press it means. A binding is read by the rules of `ui/src/table/shortcuts.ts`: its
+//! Keyboard shortcuts (docs/beryl-3d.md, "Elements"): the keys a binding names, as the web
+//! interface writes one, such as `Cmd+Shift+L`, and the words that show it. Features declare
+//! their shortcuts with these bindings (`kit_scene::Shortcut`). A binding is read by the rules of `ui/src/table/shortcuts.ts`: its
 //! modifiers before the last `+`, then one key's name, matched by the physical key and every
 //! modifier held. `Cmd` is the Command key on the Mac and Control elsewhere.
 
-use super::Action;
 use crate::input::{Key, KeyCode, Modifiers};
 
 /// A physical key with the modifiers held with it: what a binding names and a key event
@@ -174,21 +173,4 @@ fn key_named(name: &str, mac: bool) -> Option<KeyCode> {
         "\\" => KeyCode::Backslash,
         _ => return None,
     })
-}
-
-/// The shortcuts a screen answers: bindings as the web interface writes them, each with the
-/// press it means. The bindings are read when a key arrives, so one table serves the Mac and
-/// other platforms.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct Shortcuts(pub Vec<(String, Action)>);
-
-impl Shortcuts {
-    /// The press the first binding that `key` presses means, on the Mac if `mac`.
-    #[must_use]
-    pub fn press_for(&self, key: &Key, mac: bool) -> Option<&Action> {
-        let chord = Chord::of(key);
-        (self.0.iter())
-            .find(|(binding, _)| Chord::parse(binding, mac) == Some(chord))
-            .map(|(_, press)| press)
-    }
 }

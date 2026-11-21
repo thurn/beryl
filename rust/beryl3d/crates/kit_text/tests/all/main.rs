@@ -2,3 +2,4 @@
 
 mod serif;
 mod shaping;
+mod truncate;

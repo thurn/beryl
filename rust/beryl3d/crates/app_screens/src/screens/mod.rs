@@ -8,6 +8,7 @@ pub mod settings;
 pub mod start;
 pub mod testing;
 
+pub use gallery::escape_press as gallery_escape;
 pub use gallery::faces as gallery_faces;
 pub use gallery::{GalleryMenu, GalleryQuery, GalleryState};
 pub use game_manual::screens::table_entries::{
