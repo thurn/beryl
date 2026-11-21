@@ -277,7 +277,7 @@ impl Client {
     /// hides the Revealed Cards pill (`write_pill`) on the game screen with no sheet open. It
     /// also lights the step the table reaches at `table_now` (`steps_frame`).
     pub(super) fn viewing_frame(&mut self, table_now: u64) {
-        let visible = self.screen == Screen::Game && self.sheet.is_none();
+        let visible = self.screen == Screen::Game && self.features.sheet.is_none();
         self.steps_frame(table_now);
         if (self.viewing.spin_due()).is_some_and(|until| self.now >= until) {
             self.viewing.coin = Coin::Landed;
@@ -425,7 +425,7 @@ impl Client {
             Screen::Table => game_manual::manual::viewers::opens_on_press(zone),
             _ => false,
         };
-        (pile && self.sheet.is_none()).then_some(Viewed::Pile(side, zone))
+        (pile && self.features.sheet.is_none()).then_some(Viewed::Pile(side, zone))
     }
 
     /// Whether the open viewer shows the card in `slot` in one of its boxes.

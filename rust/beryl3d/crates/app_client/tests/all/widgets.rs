@@ -7,6 +7,7 @@ use app_client::Input;
 use app_client::Press;
 use app_client::command::Request;
 use app_client::settings::Setting;
+use app_screens::screens::settings::Message as SettingsMessage;
 use game_table::table::Window;
 use glam::Vec2;
 use kit_base::tokens::{color, gradient, size, type_style};
@@ -122,7 +123,7 @@ fn an_icon_button_is_44_points_square_and_passes_the_phone_sizes_check() {
         }],
     );
     layer.show(Some(row().name("corner").child(
-        widgets::icon_button(icons::GEAR, "Settings").on_press(Press::Sheet(None)),
+        widgets::icon_button(icons::GEAR, "Settings").on_press(SettingsMessage::Close),
     )));
     let frame = write_layer(&mut layer, true);
     let gear = find(&frame, Role::Button, "Settings");
@@ -145,7 +146,7 @@ fn an_icon_button_is_44_points_square_and_passes_the_phone_sizes_check() {
         row().name("corner").child(
             widgets::icon_button(icons::GEAR, "Settings")
                 .width(30.0)
-                .on_press(Press::Sheet(None)),
+                .on_press(SettingsMessage::Close),
         ),
     ));
     let frame = write_layer(&mut layer, true);
@@ -186,7 +187,7 @@ fn an_icon_button_in_an_inset_phone_window_stays_inside_the_safe_area() {
             row().name("corner").child(
                 widgets::icon_button(icons::GEAR, "Settings")
                     .width(width)
-                    .on_press(Press::Sheet(None)),
+                    .on_press(SettingsMessage::Close),
             ),
         ));
         write_layer(&mut layer, true)
@@ -215,7 +216,7 @@ fn dragging_a_slider_to_its_middle_sets_the_level_to_50() {
     (client.layer_mut()).show(Some(row().name("sound").child(widgets::slider(
         "Music",
         music.level().unwrap(),
-        music,
+        SettingsMessage::Change(music),
     ))));
     let frame = client.frame(1);
     let slider = find(frame, Role::Slider, "Music");
@@ -243,7 +244,7 @@ fn a_focused_slider_moves_by_5_under_the_arrow_keys_and_is_drawn_held_while_pres
     (client.layer_mut()).show(Some(row().name("sound").child(widgets::slider(
         "Effects",
         100,
-        Setting::Effects(100),
+        SettingsMessage::Change(Setting::Effects(100)),
     ))));
     let frame = client.frame(1);
     let slider = find(frame, Role::Slider, "Effects");
@@ -386,7 +387,7 @@ fn a_tooltip_shows_after_the_pointer_rests_500_ms_and_not_before() {
     (client.layer_mut()).show(Some(
         row()
             .name("dock")
-            .child(widgets::button("Undo").on_press(Press::Concede))
+            .child(widgets::button("Undo").on_press(Press::Undo))
             .child(widgets::tooltip("Undo the last action", "Undo")),
     ));
     let frame = client.frame(OPEN);
@@ -417,7 +418,7 @@ fn a_tooltip_shows_after_the_pointer_rests_500_ms_and_not_before() {
 fn a_50_row_list_in_a_short_box_is_on_screen_and_reachable_with_only_its_visible_rows_interactive()
 {
     let mut layer = Layer::new();
-    let rows = (0..50).map(|n| text(&format!("Entry {n}")).on_press(Press::Concede));
+    let rows = (0..50).map(|n| text(&format!("Entry {n}")).on_press(Press::Undo));
     layer.show(Some(
         row()
             .name("log panel")

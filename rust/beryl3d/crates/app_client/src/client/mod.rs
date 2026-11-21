@@ -10,6 +10,7 @@ mod entries;
 mod event;
 pub(crate) use crate::command::{Reply, Request, SessionCommand};
 pub use event::Input;
+mod features;
 mod gesture;
 
 use std::collections::VecDeque;
@@ -20,9 +21,8 @@ use beryl_protocol::script::{OwnTimings, Verb, own_timings};
 use beryl_protocol::{AgentView, StartRequest, StopsSetting};
 
 use crate::settings::Settings;
-use app_screens::screens::{self, Concede, GalleryState, Music, SEED, Screen, Sheet, StartForm};
+use app_screens::screens::{self, GalleryState, Music, SEED, Screen, Sheet, StartForm};
 use game_hud::hud::banner::Banner;
-use game_hud::hud::log::Log;
 use game_hud::hud::piles::PileCounts;
 use game_hud::hud::rows::RowCounts;
 use game_hud::prompts;
@@ -109,10 +109,8 @@ pub struct Client {
     row_counts: RowCounts,
     /// The step banner under the opponent's orb.
     banner: Banner,
-    /// The game log, as the views have told it so far, and whether it is folded and open.
-    log: Log,
-    /// What the settings sheet's concede button does when pressed (`ScreenIn::concede`).
-    concede: Concede,
+    /// The registered features, their state and the open sheet route.
+    features: features::Features,
     /// What the pointer is doing to scroll a battlefield row.
     row_gesture: RowGesture,
     /// The screen the flat layer shows. A recording or a game is fed to the client on the game
@@ -121,8 +119,6 @@ pub struct Client {
     gallery: GalleryState,
     /// The static samples have their own face list, loaded only when the gallery opens.
     gallery_faces: Option<Faces>,
-    /// The sheet open over the screen, if any.
-    sheet: Option<Sheet>,
     settings: Settings,
     /// The agents a person may play, as the host listed them.
     agents: Vec<AgentView>,
@@ -223,13 +219,11 @@ impl Client {
             notices: NoticeFloats::default(),
             row_counts: RowCounts::default(),
             banner: Banner::default(),
-            log: Log::default(),
-            concede: Concede::Asks,
+            features: features::Features::default(),
             row_gesture: RowGesture::default(),
             screen: Screen::Game,
             gallery: GalleryState::default(),
             gallery_faces: None,
-            sheet: None,
             settings: Settings::default(),
             agents: Vec::new(),
             start: StartForm::default(),
@@ -306,7 +300,7 @@ impl Client {
                     .latest()
                     .is_some_and(|latest| latest.view == update.view);
                 if !again {
-                    self.log.logged.take(&update.view);
+                    self.features.log_history.take(&update.view);
                 }
                 Banner::prepare(&mut self.layer, &update.view);
                 self.show.push_update(update);
@@ -419,6 +413,7 @@ impl Client {
     /// The frame at `now`, in nanoseconds since the client started.
     pub fn frame(&mut self, now: u64) -> &Frame {
         self.now = now;
+        self.features.begin_frame(now);
         // The table plays on its own clock, which the bug report stops (`bug`).
         let table_now = self.bug_frame(now);
         self.prepare_table(table_now);
@@ -671,7 +666,7 @@ impl Client {
     /// has arrived since, because any input ends the wait.
     #[must_use]
     pub fn wake(&self) -> Wake {
-        self.wake
+        self.wake.or_at(self.features.next_frame())
     }
 
     /// The next verb that a script played as an instant change because it is not built yet,

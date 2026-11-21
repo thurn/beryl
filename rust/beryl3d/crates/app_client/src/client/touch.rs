@@ -159,7 +159,7 @@ impl Client {
     /// Shows whole the card of the table at `at`, on the game screen with no sheet over it.
     /// Returns whether there was one.
     fn inspect_at(&mut self, at: Vec2) -> bool {
-        if self.screen != Screen::Game || self.sheet.is_some() {
+        if self.screen != Screen::Game || self.features.sheet.is_some() {
             return false;
         }
         let Some(index) = hit(&self.frame, at) else {
@@ -183,12 +183,12 @@ impl Client {
     fn holds_at(&self, at: Vec2) -> bool {
         match self.screen {
             Screen::Table => {
-                self.sheet.is_none()
+                self.features.sheet.is_none()
                     && self.manual.menu.is_none()
                     && (self.show.latest()).is_some_and(|update| update.view.table.is_some())
             }
             Screen::Game => {
-                self.sheet.is_none()
+                self.features.sheet.is_none()
                     && self.layer.press_at(at, self.open).is_none()
                     && hit(&self.frame, at).is_some_and(|index| {
                         let element = &self.frame.resolved[index as usize];
@@ -203,7 +203,7 @@ impl Client {
     /// there, where a tap does nothing.
     fn on_felt(&self, at: Vec2) -> bool {
         matches!(self.screen, Screen::Game | Screen::Table)
-            && self.sheet.is_none()
+            && self.features.sheet.is_none()
             && hit(&self.frame, at).is_none()
     }
 

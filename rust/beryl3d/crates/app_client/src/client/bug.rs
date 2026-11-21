@@ -59,7 +59,7 @@ impl Bug {
 impl Client {
     /// Whether the bug report is open.
     pub(super) fn bug_open(&self) -> bool {
-        self.sheet == Some(Sheet::BugReport)
+        self.features.sheet == Some(Sheet::BugReport)
     }
 
     /// Whether the table's floats (life totals, pile counts, notices and the gear) show: with
@@ -67,7 +67,7 @@ impl Client {
     /// Floats are drawn over the screen, so once the picture is taken they would be drawn over
     /// the report.
     pub(super) fn table_shown(&self) -> bool {
-        self.sheet.is_none()
+        self.features.sheet.is_none()
             || (self.bug_open() && matches!(self.bug.form.stage, BugStage::Capturing { .. }))
     }
 
@@ -92,10 +92,17 @@ impl Client {
     /// the table and asks the host for its picture; closing it lets the table play on. Cmd+B
     /// while the report is open does nothing.
     pub(super) fn set_sheet(&mut self, sheet: Option<Sheet>) {
+        if self.change_sheet(sheet) {
+            self.show_screen();
+        }
+    }
+
+    /// Changes the route before the caller composes the new screen.
+    pub(super) fn change_sheet(&mut self, sheet: Option<Sheet>) -> bool {
         let was = self.bug_open();
         let opening = sheet == Some(Sheet::BugReport);
         if was && opening {
-            return;
+            return false;
         }
         if was {
             if let Some(frozen) = self.bug.frozen.take() {
@@ -103,9 +110,9 @@ impl Client {
             }
             self.layer.focus(None);
         }
-        self.sheet = sheet;
+        self.features.sheet = sheet;
         // Closing or changing the sheet puts the confirmation back.
-        self.concede = app_screens::screens::Concede::Asks;
+        self.features.reset_sheet();
         if opening {
             self.bug.frozen = Some(self.bug.table(self.now));
             self.bug.screen_open = self.open;
@@ -116,7 +123,7 @@ impl Client {
             self.fields.set(DESCRIPTION, FieldState::default());
             self.requests.push_back(Request::FreezeFrame);
         }
-        self.show_screen();
+        true
     }
 
     /// Carries out a press of one of the report's controls.

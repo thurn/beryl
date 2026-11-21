@@ -6,7 +6,7 @@ use app_client::Client;
 use app_client::Input;
 use app_client::Press;
 use app_client::command::{Request, SessionCommand};
-use app_screens::screens::Sheet;
+use app_screens::screens::settings::Message as SettingsMessage;
 use beryl_protocol::prompt::{ButtonId, Click, ClickRequest, PromptButton, ShapeBody};
 use beryl_protocol::script::Subject;
 use glam::Vec2;
@@ -53,7 +53,7 @@ fn clicks(client: &mut Client) -> Vec<Click> {
 fn a_drag_from_a_slider_let_go_on_a_button_sets_the_slider_and_presses_nothing() {
     let mut client = client();
     client.handle(deciding(prompt("Pay {1}{U}")));
-    client.press(&Action::new(Press::Sheet(Some(Sheet::Settings))));
+    client.press(&Action::new(SettingsMessage::Open));
     let frame = client.frame(1);
     let slider = find(frame, Role::Slider, "Music");
     let (left, _, right, _) = edges(frame, slider);

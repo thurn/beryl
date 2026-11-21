@@ -6,6 +6,7 @@ use beryl_protocol::{AgentView, DecisionId};
 use glam::Vec2;
 
 use super::Client;
+use super::features::{Placement, ViewInputs};
 
 use crate::command::{Request, SessionCommand};
 use app_screens::screens::{self, Screen, ScreenIn, ScreenPress, Sheet, StartForm};
@@ -23,8 +24,9 @@ impl Client {
     pub(super) fn show_screen(&mut self) {
         self.ask_saved_tables();
         // The element a gesture began on is gone with the screen or sheet it was on.
-        if self.shown != (self.screen, self.sheet) {
-            self.shown = (self.screen, self.sheet);
+        let sheet = self.features.sheet;
+        if self.shown != (self.screen, sheet) {
+            self.shown = (self.screen, sheet);
             self.end_gesture();
             self.cancel_touch();
             self.inspector.pinned = None;
@@ -38,6 +40,19 @@ impl Client {
         if view.is_none_or(|view| !matches!(view.status, Status::Over { .. } | Status::Stopped)) {
             self.viewing.result_aside = false;
         }
+        let feature_inputs = ViewInputs {
+            screen: self.screen,
+            window: self.window,
+            has_view: view.is_some(),
+            game_over: view.is_some_and(|view| matches!(view.status, Status::Over { .. })),
+            settings: self.settings.screen(),
+        };
+        let settings = sheet
+            .filter(|sheet| *sheet == Sheet::Settings)
+            .and_then(|sheet| self.features.view(Placement::Sheet(sheet), feature_inputs));
+        let log = (self.screen == Screen::Game && settings.is_none() && !self.bug_hides_screen())
+            .then(|| self.features.view(Placement::GameLog, feature_inputs))
+            .flatten();
         let occupied = self.occupied();
         let input = ScreenIn {
             occupied: &occupied,
@@ -50,26 +65,27 @@ impl Client {
         let read_whole = view
             .filter(|_| !input.window.phone())
             .map(|view| self.show.faces().list().read_whole(view));
-        // Until the sheets are built, the settings sheet takes the screen's place in the flat
+        // The settings sheet takes the screen's place in the flat
         // layer; the bug report is drawn over the screen. Before a game has a view and with no
         // prompt open, the game screen shows nothing, so that no empty panel is drawn over the
         // table. Once a game has a view it shows the players' furniture, and once the game has
         // ended, the result.
-        let under = match self.sheet {
+        let under = match sheet {
             Some(sheet) if sheet != Sheet::BugReport => None,
             _ if self.bug_hides_screen() => None,
             _ if self.screen == Screen::Game && input.prompt.is_none() && input.view.is_none() => {
                 None
             }
-            _ => Some(screens::screen(self.screen, &input)),
+            _ => Some(screens::screen(self.screen, &input, log)),
         };
         let opening = under.is_some()
-            && self.sheet.is_none()
+            && sheet.is_none()
             && self.screen == Screen::Game
             && game_hud::screens::opening::shown(&input.hud());
         let away = self.screen == Screen::Game && game_hud::screens::opening::shown(&input.hud());
-        let shown = match self.sheet {
-            Some(sheet) => Some(screens::sheet(sheet, under, &input)),
+        let shown = match sheet {
+            Some(Sheet::Settings) => settings,
+            Some(Sheet::BugReport) => Some(screens::bug_report(under, &input)),
             None => under,
         };
         let music = screens::music(self.screen, view);
@@ -123,10 +139,10 @@ impl Client {
             prompt: (self.prompt.as_ref())
                 .map(|(_, prompt)| prompt)
                 .filter(|_| !self.viewing.spinning(self.now)),
-            settings: self.settings.screen(),
+            full_control: self.settings.full_control,
             stops: self.settings.stops,
             bindings: &self.settings.bindings,
-            sheet: self.sheet,
+            sheet: self.features.sheet,
             agents: &self.agents,
             start: &self.start,
             entries: &self.manual.entries,
@@ -142,9 +158,6 @@ impl Client {
             table: &self.manual.state,
             carried: self.gesture.carried(),
             lobby: &self.manual.lobby,
-            log: self.log.logged.entries(),
-            log_open: self.log.open,
-            concede: self.concede,
             result_aside: self.viewing.result_aside,
             spinning: self.viewing.spinning(self.now),
             occupied: &game_hud::hud::phone::NOTHING,
@@ -155,17 +168,6 @@ impl Client {
     pub(super) fn show_result(&mut self, shown: bool) {
         self.viewing.result_aside = !shown;
         self.show_screen();
-    }
-
-    /// Opens the game log or closes it. The phone's settings sheet holds the log's button, so a
-    /// press there also closes the sheet, which would otherwise take the screen's place.
-    pub(super) fn toggle_log(&mut self) {
-        self.log.open = !self.log.open;
-        if self.sheet.is_some() {
-            self.set_sheet(None);
-        } else {
-            self.show_screen();
-        }
     }
 
     /// Where the latest view's cards will rest once every script given so far has played, on

@@ -461,7 +461,7 @@ fn tools(choosing: bool, phone: Option<Insets>) -> Element {
         .child(tool(
             widgets::icons::CLOSE,
             "Close",
-            ScreenPress::Sheet(None),
+            ScreenPress::CloseBugReport,
         ));
     pill.style.padding = [size::BUG_TOOLS_PADDING; 4];
     pill.style.box_shadow = shadow::BUG_TOOLS.to_vec();

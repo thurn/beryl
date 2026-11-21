@@ -213,10 +213,14 @@ mod milestone_three {
     use kit_ui::element::Action;
 
     use app_client::settings::{Setting, Settings};
-    use app_screens::screens::{self, BugForm, Music, Screen, ScreenIn, Sheet, StartForm};
+    use app_screens::screens::settings::{
+        Inputs, Message as SettingsMessage, SettingsSheet, State,
+    };
+    use app_screens::screens::{self, BugForm, Music, Screen, ScreenIn, StartForm};
     use game_hud::prompts;
     use game_probe::testing::ViewBuilder;
     use game_table::table::Window;
+    use kit_scene::Feature;
     use kit_ui::widgets::Fields;
 
     static FIELDS: Fields = Fields::new();
@@ -236,7 +240,7 @@ mod milestone_three {
             played: None,
             turn: None,
             prompt,
-            settings: settings.screen(),
+            full_control: settings.full_control,
             stops: settings.stops,
             bindings: &settings.bindings,
             sheet: None,
@@ -260,9 +264,6 @@ mod milestone_three {
             table: &TABLE,
             carried: None,
             lobby: &LOBBY,
-            log: &[],
-            log_open: false,
-            concede: app_screens::screens::Concede::Asks,
             result_aside: false,
             occupied: &game_hud::hud::phone::NOTHING,
         }
@@ -274,16 +275,21 @@ mod milestone_three {
         let input = input(None, &settings);
         for screen in Screen::ALL {
             assert!(
-                !screens::screen(screen, &input).name.is_empty(),
+                !screens::screen(screen, &input, None).name.is_empty(),
                 "{screen:?}"
             );
         }
-        for sheet in Sheet::ALL {
-            assert!(
-                !screens::sheet(sheet, None, &input).name.is_empty(),
-                "{sheet:?}"
-            );
-        }
+        assert!(!screens::bug_report(None, &input).name.is_empty());
+        let settings = SettingsSheet::view(
+            &State::default(),
+            Inputs {
+                window: input.window,
+                screen: input.screen,
+                settings: settings.screen(),
+                game_over: false,
+            },
+        );
+        assert!(!settings.name.is_empty());
     }
 
     /// One prompt body of each shape.
@@ -380,7 +386,7 @@ mod milestone_three {
     fn a_setting_press_asks_for_the_settings_to_be_saved() {
         let mut client = client();
         while client.next_request().is_some() {}
-        client.press(&Action::new(Press::Setting(Setting::Music(40))));
+        client.press(&Action::new(SettingsMessage::Change(Setting::Music(40))));
         let Some(Request::SaveSettings(saved)) = client.next_request() else {
             panic!("the first request saves the settings");
         };
@@ -396,7 +402,7 @@ mod milestone_three {
         assert_eq!(settings.graphics, Graphics::Baseline);
         let mut client = client();
         while client.next_request().is_some() {}
-        client.press(&Action::new(Press::Setting(Setting::Graphics(
+        client.press(&Action::new(SettingsMessage::Change(Setting::Graphics(
             Graphics::Enhanced,
         ))));
         let Some(Request::SaveSettings(saved)) = client.next_request() else {

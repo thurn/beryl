@@ -192,6 +192,36 @@ fn the_log_is_a_button_until_it_is_opened() {
     assert!(has(frame, Role::Text, "You gained 2 life"));
 }
 
+#[test]
+fn the_recording_driver_reports_a_features_live_state() {
+    use app_client::driver::{Page, Recording};
+    use beryl_protocol::ipc::FixtureMessage;
+    use kit_probe::agent::Layout;
+    use kit_ui::input::Size;
+
+    let Input::Update(update) = lands(0) else {
+        unreachable!("lands are sent in a view update");
+    };
+    let recording = Recording(vec![FixtureMessage::game_update(&update)]);
+    let mut page = Page::new(
+        recording.into(),
+        Side::You,
+        Layout::Desktop,
+        Size {
+            width: 1440.0,
+            height: 900.0,
+        },
+    )
+    .expect("the view can be read");
+    assert!(page.feature_state("unknown").is_none());
+    let closed = page.feature_state("game-log").expect("registered game log");
+    page.press("button \"Show log\"");
+    let opened = page.feature_state("game-log").expect("registered game log");
+    assert_ne!(closed, opened);
+    page.press("button \"Hide log\"");
+    assert_eq!(page.feature_state("game-log"), Some(closed));
+}
+
 /// A deciding view whose prompt has a turn button and, if `pass_on`, the round button that passes
 /// on, with full control on in the stops the game holds.
 fn full_control_on(pass_on: bool) -> Input {

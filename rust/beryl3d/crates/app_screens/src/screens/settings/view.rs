@@ -4,7 +4,8 @@
 //! `ui/src/game/Corner.tsx`, `SoundPanel` and `Credits` in `ui/src/audio/SoundControls.tsx`,
 //! `ui/src/screens/styles/settings.css`).
 
-use super::{Screen, ScreenIn, Sheet};
+use super::{Inputs, Message, State};
+use crate::screens::Screen;
 use crate::screens::ScreenPress;
 use crate::settings::{Graphics, Setting};
 use kit_base::data::space::flat::phone::GUTTER;
@@ -14,17 +15,6 @@ use kit_ui::element::{Action, Align, Element, Justify, Overflow, Position, colum
 use kit_ui::widgets::{button, icon_button, icons, primary, slider, toggle};
 
 include!(concat!(env!("OUT_DIR"), "/credits.rs"));
-
-/// What the settings sheet's concede button does: asks to confirm on its first press, as the
-/// web's `ConcedeButton` does, then concedes.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Concede {
-    /// "Concede": a press only asks to confirm.
-    #[default]
-    Asks,
-    /// "Confirm Concede": a press concedes the game.
-    Confirms,
-}
 
 /// How wide the panel is, in logical points.
 const WIDTH: f32 = size::SETTINGS_WIDTH;
@@ -47,14 +37,10 @@ pub fn corner(bug: bool, undo: Option<Action>) -> Element {
         .background([0; 4])
         .border(([0; 4], 0.0))
         .gap(size::CORNER_GAP)
-        .child(
-            icon_button(icons::GEAR, "Settings")
-                .on_press(ScreenPress::Sheet(Some(Sheet::Settings))),
+        .child(icon_button(icons::GEAR, "Settings").on_press(Message::Open))
+        .children(
+            bug.then(|| icon_button(icons::BUG, "Report bug").on_press(ScreenPress::ReportBug)),
         )
-        .children(bug.then(|| {
-            icon_button(icons::BUG, "Report bug")
-                .on_press(ScreenPress::Sheet(Some(Sheet::BugReport)))
-        }))
         .children(undo.map(|press| {
             let mut button = icon_button(icons::UNDO, "Undo");
             button.press = Some(press);
@@ -64,7 +50,7 @@ pub fn corner(bug: bool, undo: Option<Action>) -> Element {
 
 /// What the flat layer shows for the sheet: the panel in the middle of the window.
 #[must_use]
-pub fn settings(input: &ScreenIn) -> Element {
+pub(super) fn settings(state: &State, input: Inputs) -> Element {
     let settings = input.settings;
     let muted = settings.muted;
     let mute = toggle(
@@ -76,13 +62,14 @@ pub fn settings(input: &ScreenIn) -> Element {
         if muted { "Unmute" } else { "Mute" },
         muted,
     )
-    .on_press(Setting::Muted(!muted));
+    .on_press(Message::Change(Setting::Muted(!muted)));
     let levels = column()
         .gap(space::S)
         .child(level("Music", Setting::Music(settings.music)))
         .child(level("Effects", Setting::Effects(settings.effects)));
-    let full_control = toggle(icons::FULL_CONTROL, "Full control", settings.full_control)
-        .on_press(Setting::FullControl(!settings.full_control));
+    let full_control = toggle(icons::FULL_CONTROL, "Full control", settings.full_control).on_press(
+        Message::Change(Setting::FullControl(!settings.full_control)),
+    );
     let window = input.window;
     let safe = window.safe_area;
     // On a phone the panel keeps inside the safe area, the gutter in from its sides, and is no
@@ -108,7 +95,7 @@ pub fn settings(input: &ScreenIn) -> Element {
                 .align_items(Align::Center)
                 .justify_content(Justify::SpaceBetween)
                 .child(text("Settings").style(type_style::TITLE))
-                .child(icon_button(icons::CLOSE, "close").on_press(ScreenPress::Sheet(None))),
+                .child(icon_button(icons::CLOSE, "close").on_press(Message::Close)),
         )
         .child(
             row()
@@ -138,24 +125,24 @@ pub fn settings(input: &ScreenIn) -> Element {
                 .child(
                     button("Log")
                         .min_width(PHONE_BUTTON)
-                        .on_press(ScreenPress::Log),
+                        .on_press(Message::ShowLog),
                 )
                 .child(
                     button("Report bug")
                         .min_width(PHONE_BUTTON)
-                        .on_press(ScreenPress::Sheet(Some(Sheet::BugReport))),
+                        .on_press(Message::ReportBug),
                 ),
         );
     }
-    if in_game(input) {
+    if input.screen == Screen::Game && !input.game_over {
         // Asked once in place, as the web's `ConcedeButton`: the first press turns the button
         // into the confirmation, which closing the sheet puts back.
-        let concede = if input.concede == Concede::Confirms {
+        let concede = if state.confirm_concede {
             primary("Confirm Concede")
         } else {
             button("Concede")
         };
-        panel = panel.child(concede.on_press(ScreenPress::Concede));
+        panel = panel.child(concede.on_press(Message::Concede));
     }
     panel = panel.child(credits());
     let mut sheet = column()
@@ -167,15 +154,6 @@ pub fn settings(input: &ScreenIn) -> Element {
         .child(panel);
     sheet.style.padding = [safe.top, safe.right, safe.bottom, safe.left];
     sheet
-}
-
-/// Whether there is a game to concede: the game screen, until the game is over.
-fn in_game(input: &ScreenIn) -> bool {
-    use beryl_protocol::protocol::Status;
-    input.screen == Screen::Game
-        && !input
-            .view
-            .is_some_and(|view| matches!(view.status, Status::Over { .. }))
 }
 
 /// The graphics row: a label and one button for each way the visual tier is chosen, the saved
@@ -194,7 +172,7 @@ fn graphics(chosen: Graphics, phone: bool) -> Element {
         element
             .min_width(0.0)
             .selected(graphics == chosen)
-            .on_press(Setting::Graphics(graphics))
+            .on_press(Message::Change(Setting::Graphics(graphics)))
     };
     let choices = [
         choice("Automatic", Graphics::Automatic),
@@ -223,7 +201,11 @@ fn level(label: &str, setting: Setting) -> Element {
         .gap(space::M)
         .align_items(Align::Center)
         .child(text(label))
-        .child(slider(label, setting.level().unwrap_or(0), setting))
+        .child(slider(
+            label,
+            setting.level().unwrap_or(0),
+            Message::Change(setting),
+        ))
 }
 
 /// Who made the music and sounds, each author with their license and their packs.

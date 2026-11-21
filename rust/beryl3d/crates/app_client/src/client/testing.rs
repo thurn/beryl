@@ -20,7 +20,7 @@ impl Client {
             seat: self.seat,
         });
         self.screen = Screen::Game;
-        self.sheet = None;
+        self.change_sheet(None);
         self.show_screen();
     }
 

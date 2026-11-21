@@ -8,9 +8,7 @@ use crate::inspect::Viewed;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GamePress {
     OpenStart,
-    OpenSettings,
     Stop { step: Step, theirs: bool },
-    Log,
     Result(bool),
     View(Viewed),
     DismissRevealed,

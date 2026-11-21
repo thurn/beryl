@@ -25,7 +25,6 @@ impl Client {
             // The host sees the saved settings and changes the tier (`beryl_host`'s frame loop).
             Setting::Graphics(_) => {}
         }
-        self.show_screen();
     }
 
     /// Asks the host to save the settings after a stop changed, and sends the stops to the

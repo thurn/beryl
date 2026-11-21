@@ -1,7 +1,7 @@
 //! The settings sheet's controls and the changes a player can make from it.
 
 /// The values displayed by the settings sheet.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ScreenSettings {
     /// The music's level, from 0 to 100.
     pub music: u8,

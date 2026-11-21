@@ -13,7 +13,10 @@
 //! `TableConnectionError` (`{"reason": ...}`) is that command failing.
 
 use crate::client;
+use app_screens::screens::ScreenPress;
+use app_screens::screens::settings::Message as SettingsMessage;
 use client::{Press, Reply, SessionCommand};
+use kit_ui::element::Action;
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::Arc;
 
@@ -133,7 +136,7 @@ impl Recording {
     ///
     /// When an `OPEN` event names no screen or sheet.
     #[must_use]
-    pub fn opens(&self) -> Vec<Press> {
+    pub fn opens(&self) -> Vec<Action> {
         let name_of = |payload: &Value| payload.as_str().unwrap_or_default().to_owned();
         (self.0.iter())
             .filter_map(|message| match message {
@@ -144,8 +147,9 @@ impl Recording {
                 let screen = Screen::ALL.into_iter().find(|screen| screen.name() == name);
                 let sheet = Sheet::ALL.into_iter().find(|sheet| sheet.name() == name);
                 match (screen, sheet) {
-                    (Some(screen), _) => Press::Open(screen),
-                    (None, Some(sheet)) => Press::Sheet(Some(sheet)),
+                    (Some(screen), _) => Action::new(Press::Open(screen)),
+                    (None, Some(Sheet::Settings)) => Action::new(SettingsMessage::Open),
+                    (None, Some(Sheet::BugReport)) => Action::new(ScreenPress::ReportBug),
                     (None, None) => panic!("{OPEN} names no screen or sheet: {name:?}"),
                 }
             })

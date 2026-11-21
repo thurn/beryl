@@ -4,7 +4,7 @@
 
 mod bug_report;
 mod gallery;
-mod settings;
+pub mod settings;
 mod start;
 mod testing;
 
@@ -21,7 +21,7 @@ pub use game_hud::navigation::{Screen, Sheet};
 use game_hud::screens::game;
 pub use game_hud::screens::game::game_steps;
 pub use game_play::sound::Music;
-pub use settings::{Concede, GEAR_INSET, corner};
+pub use settings::{GEAR_INSET, corner};
 
 use beryl_protocol::prompt::PromptView;
 use beryl_protocol::protocol::{OutcomeView, Side, Status};
@@ -29,9 +29,8 @@ use beryl_protocol::script::{Subject, Turn};
 use beryl_protocol::{AgentView, PlayerView, StopsSetting};
 use game_hud::inspect::Viewed;
 
-use crate::settings::ScreenSettings;
+use game_hud::hud::HudIn;
 use game_hud::hud::phone::Occupied;
-use game_hud::hud::{HudIn, log::LogEntry};
 use game_hud::inspect::inspector::Inspected;
 use game_hud::inspect::revealed::RevealedFace;
 use game_manual::manual::TableState;
@@ -39,7 +38,7 @@ use game_manual::manual::bindings::Bindings;
 use game_manual::manual::lobby::Lobby;
 use game_table::faces::FaceList;
 use game_table::table::Window;
-use kit_ui::element::Element;
+use kit_ui::element::{Action, Element};
 use kit_ui::widgets::Fields;
 
 /// Everything a screen function reads.
@@ -60,8 +59,8 @@ pub struct ScreenIn<'a> {
     pub turn: Option<Turn>,
     /// The open prompt, if any.
     pub prompt: Option<&'a PromptView>,
-    /// Values drawn by the settings sheet.
-    pub settings: ScreenSettings,
+    /// Whether full control is enabled.
+    pub full_control: bool,
     /// Where the player stops with the stack empty.
     pub stops: StopsSetting,
     /// The player's key bindings for the manual table.
@@ -102,12 +101,6 @@ pub struct ScreenIn<'a> {
     pub carried: Option<Subject>,
     /// The manual table's lobby (`manual::lobby`).
     pub lobby: &'a Lobby,
-    /// What has happened in the game so far, oldest first (`hud::log`).
-    pub log: &'a [LogEntry],
-    /// Whether the folded game log is open.
-    pub log_open: bool,
-    /// What the settings sheet's concede button does when pressed.
-    pub concede: Concede,
     /// Whether the person put the game's result aside to see the battlefield
     /// (`game_over::game_over`).
     pub result_aside: bool,
@@ -130,7 +123,7 @@ impl<'a> ScreenIn<'a> {
             turn: self.turn,
             prompt: self.prompt,
             stops: StopsSetting {
-                full_control: self.settings.full_control,
+                full_control: self.full_control,
                 ..self.stops
             },
             sheet: self.sheet,
@@ -139,8 +132,6 @@ impl<'a> ScreenIn<'a> {
             viewing: self.viewing,
             revealed: self.revealed,
             carried: self.carried,
-            log: self.log,
-            log_open: self.log_open,
             result_aside: self.result_aside,
             spinning: self.spinning,
             occupied: self.occupied,
@@ -165,11 +156,13 @@ pub fn sheet_face(input: &ScreenIn) -> Option<kit_ui::input::FaceId> {
 
 /// What the flat layer shows on `screen`.
 #[must_use]
-pub fn screen(screen: Screen, input: &ScreenIn) -> Element {
+pub fn screen(screen: Screen, input: &ScreenIn, log: Option<Element>) -> Element {
     match screen {
         Screen::Start => start::start(input),
-        Screen::Game if input.window.phone() => game::game_phone(&input.hud()),
-        Screen::Game => game::game(&input.hud()),
+        Screen::Game if input.window.phone() => {
+            game::game_phone(&input.hud(), log, Action::new(settings::Message::Open))
+        }
+        Screen::Game => game::game(&input.hud(), log),
         Screen::Lobby => lobby::lobby(&lobby::LobbyIn {
             window: input.window,
             lobby: input.lobby,
@@ -181,14 +174,10 @@ pub fn screen(screen: Screen, input: &ScreenIn) -> Element {
     }
 }
 
-/// What a sheet shows over the screen, given `under`, what the screen itself shows if
-/// anything. The settings sheet takes the screen's place; the bug report is drawn over it.
+/// What the bug report shows over the screen, if the screen is visible.
 #[must_use]
-pub fn sheet(sheet: Sheet, under: Option<Element>, input: &ScreenIn) -> Element {
-    match sheet {
-        Sheet::Settings => settings::settings(input),
-        Sheet::BugReport => bug_report::bug_report(under, input),
-    }
+pub fn bug_report(under: Option<Element>, input: &ScreenIn) -> Element {
+    bug_report::bug_report(under, input)
 }
 
 /// The music that plays on `screen` with `view` the latest view of the game, as the web

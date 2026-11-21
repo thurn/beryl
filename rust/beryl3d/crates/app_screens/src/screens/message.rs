@@ -2,14 +2,14 @@
 
 use beryl_protocol::protocol::Side;
 
-use super::{GalleryMenu, GalleryQuery, Screen, Sheet};
+use super::{GalleryMenu, GalleryQuery, Screen};
 
 /// A control on an app screen or sheet.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ScreenPress {
     Open(Screen),
-    Sheet(Option<Sheet>),
-    Concede,
+    ReportBug,
+    CloseBugReport,
     Start,
     Agent(u16),
     FairDeal,
@@ -20,7 +20,6 @@ pub enum ScreenPress {
     GalleryQuery(Option<GalleryQuery>),
     DismissMenu,
     Bug(BugPress),
-    Log,
     Undo,
 }
 

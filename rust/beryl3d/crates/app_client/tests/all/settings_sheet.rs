@@ -4,6 +4,7 @@
 use app_client::Client;
 use app_client::Press;
 use app_client::command::Request;
+use app_screens::screens::settings::Message as SettingsMessage;
 use kit_ui::element::Action;
 
 use app_client::Input;
@@ -63,9 +64,7 @@ fn the_gear_opens_the_settings_sheet() {
 #[test]
 fn dragging_the_music_slider_saves_the_new_level() {
     let mut client = in_game();
-    client.press(&Action::new(Press::Sheet(Some(
-        app_screens::screens::Sheet::Settings,
-    ))));
+    client.press(&Action::new(SettingsMessage::Open));
     let frame = client.frame(1);
     let slider = find(frame, Role::Slider, "Music");
     let (left, _, right, _) = edges(frame, slider);
@@ -101,7 +100,7 @@ fn concede_asks_to_confirm_and_closing_the_sheet_puts_it_back() {
     assert!(names.contains(&"Confirm Concede".to_owned()), "{names:?}");
 
     // Closing the sheet puts the confirmation back.
-    client.press(&Action::new(Press::Sheet(None)));
+    client.press(&Action::new(SettingsMessage::Close));
     click(&mut client, Role::Button, "Settings");
     let names = controls(&mut client);
     assert!(names.contains(&"Concede".to_owned()), "{names:?}");
@@ -119,9 +118,7 @@ fn concede_asks_to_confirm_and_closing_the_sheet_puts_it_back() {
 fn concede_is_absent_on_the_start_screen() {
     let mut client = in_game();
     client.press(&Action::new(Press::Open(Screen::Start)));
-    client.press(&Action::new(Press::Sheet(Some(
-        app_screens::screens::Sheet::Settings,
-    ))));
+    client.press(&Action::new(SettingsMessage::Open));
     let names = controls(&mut client);
     assert!(names.contains(&"Music".to_owned()));
     assert!(!names.contains(&"Concede".to_owned()), "{names:?}");
@@ -154,12 +151,10 @@ fn saved(client: &mut Client) -> Option<app_client::settings::Settings> {
 fn the_graphics_row_shows_the_saved_value() {
     use app_client::settings::{Graphics, Setting};
     let mut client = in_game();
-    client.press(&Action::new(Press::Setting(Setting::Graphics(
+    client.press(&Action::new(SettingsMessage::Change(Setting::Graphics(
         Graphics::Enhanced,
     ))));
-    client.press(&Action::new(Press::Sheet(Some(
-        app_screens::screens::Sheet::Settings,
-    ))));
+    client.press(&Action::new(SettingsMessage::Open));
     let frame = client.frame(1);
     let selected = |name: &str| {
         frame.resolved[find(frame, Role::Button, name)]

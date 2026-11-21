@@ -4,9 +4,8 @@ use beryl_protocol::prompt::{ButtonId, Click};
 use beryl_protocol::protocol::{Side, Step};
 
 use super::Client;
-use crate::command::{Request, SessionCommand};
-use crate::settings::Setting;
-use app_screens::screens::{self, BugPress, Concede, GalleryState, Screen, ScreenPress, Sheet};
+use crate::command::Request;
+use app_screens::screens::{self, BugPress, GalleryState, Screen, ScreenPress, Sheet};
 use game_hud::hud::GamePress;
 use game_hud::inspect::Viewed;
 use game_manual::manual::{LobbyPress, TableCommand, TablePress};
@@ -30,15 +29,9 @@ pub enum Press {
     Prompt(Click),
     /// Go to a screen.
     Open(Screen),
-    /// Open a sheet over the screen, or close the open one.
-    Sheet(Option<Sheet>),
-    /// Change a setting.
-    Setting(Setting),
     /// Turn the stop at `step` on or off, on the player's own turns or, if `theirs`, on the
     /// opponent's.
     Stop { step: Step, theirs: bool },
-    /// Concede the game.
-    Concede,
     /// Start a game with what the start screen holds: the chosen opponent, the seed and the
     /// fair-deal box. With a game in progress the first press asks to confirm, and the next
     /// concedes that game before starting the new one.
@@ -81,8 +74,6 @@ pub enum Press {
     Bug(BugPress),
     /// One of the manual table's lobby controls.
     Lobby(LobbyPress),
-    /// Open the folded game log, or close it (`hud::log`).
-    Log,
     /// Show the ended game's result over the table, or put it aside to see the battlefield
     /// (`screens::game_over`).
     Result(bool),
@@ -104,13 +95,17 @@ pub enum Dismiss {
 impl Client {
     /// Carries a flat-layer message to the feature that handles it.
     pub fn press(&mut self, action: &Action) {
-        if let Some(press) = action.downcast_ref::<Press>() {
+        if let Some(changed) = self.route_feature(action) {
+            if changed {
+                self.show_screen();
+            }
+        } else if let Some(press) = action.downcast_ref::<Press>() {
             self.dispatch_press(press);
         } else if let Some(&press) = action.downcast_ref::<ScreenPress>() {
             let press = match press {
                 ScreenPress::Open(screen) => Press::Open(screen),
-                ScreenPress::Sheet(sheet) => Press::Sheet(sheet),
-                ScreenPress::Concede => Press::Concede,
+                ScreenPress::ReportBug => return self.set_sheet(Some(Sheet::BugReport)),
+                ScreenPress::CloseBugReport => return self.set_sheet(None),
                 ScreenPress::Start => Press::Start,
                 ScreenPress::Agent(agent) => Press::Agent(agent),
                 ScreenPress::FairDeal => Press::FairDeal,
@@ -121,20 +116,15 @@ impl Client {
                 ScreenPress::GalleryQuery(query) => Press::GalleryQuery(query),
                 ScreenPress::DismissMenu => Press::Dismiss(Dismiss::Menu),
                 ScreenPress::Bug(kind) => Press::Bug(kind),
-                ScreenPress::Log => Press::Log,
                 ScreenPress::Undo => Press::Undo,
             };
             self.dispatch_press(&press);
-        } else if let Some(&setting) = action.downcast_ref::<Setting>() {
-            self.set(setting);
         } else if let Some(&click) = action.downcast_ref::<Click>() {
             self.click(click);
         } else if let Some(&press) = action.downcast_ref::<GamePress>() {
             let press = match press {
                 GamePress::OpenStart => Press::Open(Screen::Start),
-                GamePress::OpenSettings => Press::Sheet(Some(Sheet::Settings)),
                 GamePress::Stop { step, theirs } => Press::Stop { step, theirs },
-                GamePress::Log => Press::Log,
                 GamePress::Result(shown) => Press::Result(shown),
                 GamePress::View(viewed) => Press::View(viewed),
                 GamePress::DismissRevealed => Press::Dismiss(Dismiss::Revealed),
@@ -171,8 +161,6 @@ impl Client {
                 }
                 self.set_sheet(None);
             }
-            Press::Sheet(sheet) => self.set_sheet(sheet),
-            Press::Setting(setting) => self.set(setting),
             Press::Stop { step, theirs } => {
                 let stops = &mut self.settings.stops;
                 let set = if theirs {
@@ -182,17 +170,6 @@ impl Client {
                 };
                 *set = toggled(*set, step);
                 self.save_stops();
-            }
-            // The first press only asks to confirm, as the web's `ConcedeButton` does.
-            Press::Concede if self.concede == Concede::Asks => {
-                self.concede = Concede::Confirms;
-                self.show_screen();
-            }
-            Press::Concede => {
-                self.set_sheet(None);
-                if let Some(session) = self.session {
-                    self.commands.push_back(SessionCommand::Concede(session));
-                }
             }
             Press::Start => self.start_game(),
             Press::Agent(agent) => {
@@ -224,7 +201,6 @@ impl Client {
                 self.show_screen();
             }
             Press::Menu(game_manual::manual::menus::MENU, row) => self.press_table_menu(row),
-            Press::Log => self.toggle_log(),
             Press::Result(shown) => self.show_result(shown),
             Press::Undo => self.undo(),
             Press::Menu(..) => {}

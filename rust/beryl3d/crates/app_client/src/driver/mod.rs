@@ -291,6 +291,12 @@ impl Page {
         self.client.frame(self.now)
     }
 
+    /// Prints the current state of a registered feature, by id.
+    #[must_use]
+    pub fn feature_state(&self, id: &str) -> Option<String> {
+        self.client.feature_state(id)
+    }
+
     /// The tree printout of the present frame.
     pub fn tree(&mut self) -> String {
         let frame = self.frame();
@@ -623,7 +629,7 @@ impl Page {
             self.give(Input::Recordings(names));
         }
         for press in self.recording.opens() {
-            self.client.dispatch_press(&press);
+            self.client.press(&press);
         }
         for lobby in self.recording.lobbies() {
             self.give(Input::Lobby(Box::new(lobby)));

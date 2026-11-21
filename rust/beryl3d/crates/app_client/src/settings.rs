@@ -1,7 +1,7 @@
 //! The player's settings: sound levels, stops, the keys bound to the manual table's commands
 //! and the graphics tier (docs/beryl-3d.md, "Sound" and "Choosing a tier"). The host saves
 //! them and hands them back at startup as `Input::Settings`; a change made on the settings
-//! sheet arrives as a `Press::Setting` and is sent back to be saved as
+//! sheet arrives as a settings feature message and is sent back to be saved as
 //! `Request::SaveSettings`.
 
 use beryl_protocol::StopsSetting;

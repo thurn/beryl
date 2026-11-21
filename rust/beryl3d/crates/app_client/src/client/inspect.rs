@@ -102,7 +102,7 @@ impl Client {
     /// face-down card shows its face only to a viewer who knows it, whose view names it (UI
     /// Conventions, "Inspecting a face-down manual card"): one with no name has no face to find.
     fn inspected_now(&self) -> Option<Inspected> {
-        if !matches!(self.screen, Screen::Game | Screen::Table) || self.sheet.is_some() {
+        if !matches!(self.screen, Screen::Game | Screen::Table) || self.features.sheet.is_some() {
             return None;
         }
         let pinned = self.inspector.pinned;

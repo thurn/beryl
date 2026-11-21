@@ -24,7 +24,7 @@ impl Client {
     /// screen, a table's view, no sheet, menu or overlay.
     pub(super) fn at_table(&self) -> bool {
         self.screen == Screen::Table
-            && self.sheet.is_none()
+            && self.features.sheet.is_none()
             && self.manual.menu.is_none()
             && !self.manual.overlay_open()
             && (self.show.latest()).is_some_and(|update| update.view.table.is_some())

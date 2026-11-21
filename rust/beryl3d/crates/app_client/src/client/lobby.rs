@@ -190,7 +190,7 @@ impl Client {
         self.first_view_opens = None;
         self.manual.lobby = lobby::Lobby::new();
         self.screen = Screen::Lobby;
-        self.sheet = None;
+        self.change_sheet(None);
     }
 
     /// The lobby changed. A lobby with a state is kept, and shown in place of the table when a

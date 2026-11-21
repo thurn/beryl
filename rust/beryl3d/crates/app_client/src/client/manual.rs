@@ -197,7 +197,7 @@ impl Client {
     /// Opens the context menu of what is at `at` (`manual::target_at`) there, on the table
     /// screen with no sheet over it. Returns whether it did.
     pub(super) fn open_table_menu_at(&mut self, at: Vec2) -> bool {
-        if self.screen != Screen::Table || self.sheet.is_some() || self.table_frozen() {
+        if self.screen != Screen::Table || self.features.sheet.is_some() || self.table_frozen() {
             return false;
         }
         let Some(view) = self.show.latest().map(|update| &update.view) else {
@@ -483,7 +483,7 @@ impl Client {
         self.manual.lobby = Lobby::new();
         self.commands.push_back(SessionCommand::TableLeave);
         self.screen = Screen::Start;
-        self.sheet = None;
+        self.change_sheet(None);
         self.show_screen();
     }
 }

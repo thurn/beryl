@@ -240,7 +240,7 @@ fn layer() -> Layer {
 #[test]
 fn scrolling_moves_the_rows_without_layout_and_only_the_visible_ones_take_presses() {
     let mut layer = layer();
-    let rows = (0..30).map(|index| text(&format!("Row {index}")).on_press(Press::Concede));
+    let rows = (0..30).map(|index| text(&format!("Row {index}")).on_press(Press::Undo));
     layer.show(Some(
         column()
             .name("box")
@@ -449,7 +449,7 @@ fn cmd_b_opens_the_bug_report_and_ctrl_b_does_off_the_mac() {
 
 /// A scrolling column of `count` rows named "Row 0" on, 200 points tall.
 fn rows_box(count: usize) -> Element {
-    let rows = (0..count).map(|index| text(&format!("Row {index}")).on_press(Press::Concede));
+    let rows = (0..count).map(|index| text(&format!("Row {index}")).on_press(Press::Undo));
     column()
         .name("box")
         .overflow(Overflow::Scroll)
@@ -484,7 +484,7 @@ fn a_list_that_loses_rows_scrolls_back_to_its_new_end() {
 #[test]
 fn an_anchored_element_in_a_scrolling_list_is_drawn_and_pressed_outside_it() {
     let mut layer = layer();
-    let mut beside = text("Beside").on_press(Press::Concede);
+    let mut beside = text("Beside").on_press(Press::Undo);
     beside.anchor = Some(Anchor::Point(Vec2::new(900.0, 100.0), Vec2::ZERO));
     layer.show(Some(rows_box(30).child(beside)));
     let frame = write(&mut layer);
@@ -503,7 +503,7 @@ fn a_child_overflowing_a_box_that_does_not_clip_takes_presses_where_it_is_drawn(
     layer.show(Some(
         region("narrow").width(20.0).height(20.0).child(
             text("Wide")
-                .on_press(Press::Concede)
+                .on_press(Press::Undo)
                 .margin([0.0, 0.0, 0.0, 60.0])
                 .shrink(0.0),
         ),

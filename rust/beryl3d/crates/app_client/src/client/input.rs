@@ -9,7 +9,7 @@ use glam::Vec2;
 
 use super::gesture::{Gesture, Release};
 use super::{Client, Dismiss, Input, Platform, Press};
-use crate::settings::Setting;
+use app_screens::screens::settings::{Message as SettingsMessage, slider_setting};
 use app_screens::screens::{Screen, ScreenPress, Sheet};
 use game_hud::prompts;
 use game_play::pointer::Hold;
@@ -48,7 +48,7 @@ impl Client {
             }
         }
         if heard.is_some_and(|heard| heard.report) && !self.bug_open() {
-            self.dispatch_press(&Press::Sheet(Some(Sheet::BugReport)));
+            self.set_sheet(Some(Sheet::BugReport));
         }
     }
 
@@ -147,12 +147,12 @@ impl Client {
             _ => return false,
         };
         let (press, rect) = at;
-        if let Some(setting) = press.downcast_ref::<Setting>()
+        if let Some(setting) = slider_setting(&press)
             && let Some(level) = setting.level()
         {
             let to = level_at(pointer.position.x, rect.x, rect.width);
             if to != level {
-                self.dispatch_press(&Press::Setting(setting.at_level(to)));
+                self.press(&Action::new(SettingsMessage::Change(setting.at_level(to))));
             }
         }
         true
@@ -379,7 +379,7 @@ impl Client {
             "Cmd+B"
         };
         if first && Chord::parse(bug_report, mac) == Some(Chord::of(&key)) {
-            return Some(Action::new(ScreenPress::Sheet(Some(Sheet::BugReport))));
+            return Some(Action::new(ScreenPress::ReportBug));
         }
         // The platform's undo takes back an answer, as the web's `StageBoard` lets it.
         if first
@@ -397,14 +397,14 @@ impl Client {
     /// or at the end it would move past.
     fn nudge(&self, up: bool) -> Option<Action> {
         let action = self.layer.focused_slider()?;
-        let setting = action.downcast_ref::<Setting>()?;
+        let setting = slider_setting(&action)?;
         let level = setting.level()?;
         let to = if up {
             level.saturating_add(STEP).min(100)
         } else {
             level.saturating_sub(STEP)
         };
-        (to != level).then(|| Action::new(setting.at_level(to)))
+        (to != level).then(|| Action::new(SettingsMessage::Change(setting.at_level(to))))
     }
 
     /// Whether a press may pick up the card in `slot`, resting at `place`: a card the open

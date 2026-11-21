@@ -8,7 +8,8 @@ use crate::screens::ScreenPress;
 use beryl_protocol::AgentView;
 use beryl_protocol::protocol::Status;
 
-use super::{Screen, ScreenIn, Sheet};
+use super::settings::Message as SettingsMessage;
+use super::{Screen, ScreenIn};
 use kit_base::tokens::{color, ratio, size, space, type_style};
 use kit_frame::frame::Role;
 use kit_text::text::TypeStyle;
@@ -273,7 +274,7 @@ fn start_phone(input: &ScreenIn) -> Element {
         .width(target)
         .height(target)
         .radius(target / 2.0)
-        .on_press(ScreenPress::Sheet(Some(Sheet::Settings)));
+        .on_press(SettingsMessage::Open);
     let corner = row()
         .name("sound corner")
         .height(metrics::CORNER)
@@ -390,8 +391,7 @@ fn start_buttons(going_on: bool, confirming: bool, startable: bool) -> (Element,
 
 /// The sound button in the window's corner (`SoundCorner`), which opens the settings.
 fn corner() -> Element {
-    let sound = icon_button(widgets::icons::SPEAKER, "Sound")
-        .on_press(ScreenPress::Sheet(Some(Sheet::Settings)));
+    let sound = icon_button(widgets::icons::SPEAKER, "Sound").on_press(SettingsMessage::Open);
     row()
         .name("sound corner")
         .position(Position::Absolute)

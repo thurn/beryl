@@ -7,18 +7,18 @@
 use glam::Vec2;
 
 use super::{game_over, opening};
-use crate::hud::{HudIn, full_control, log, phone, players, steps};
+use crate::hud::{HudIn, full_control, phone, players, steps};
 use crate::inspect::viewer;
 use crate::prompts;
 use game_table::table::phone_bands;
 use kit_base::tokens::ratio;
-use kit_ui::element::{Anchor, Element, Shortcuts, holder, row};
+use kit_ui::element::{Action, Anchor, Element, Shortcuts, holder, row};
 
 /// What the flat layer shows over a game. While none of its pieces shows anything, it is the
 /// open prompt's element alone, as it has been since the prompt bar was the only thing in the
 /// flat layer; with no prompt open, it is an empty region named "game".
 #[must_use]
-pub fn game(input: &HudIn) -> Element {
+pub fn game(input: &HudIn, log: Option<Element>) -> Element {
     // Play or draw stands in the opening, not in the prompt bar.
     let prompt = waiting(input).filter(|_| !opening::choosing_start(input));
     // The orbs, the steps and the log stay up while scripts play, as the web interface's
@@ -33,7 +33,7 @@ pub fn game(input: &HudIn) -> Element {
         full_control::full_control(input).filter(|_| !shown),
     ];
     let over = [
-        log::log(input),
+        log,
         viewer::viewer(input),
         // The result blurs everything drawn before it, the floats too (`Style::backdrop`).
         game_over::game_over(input).map(Element::waits),
@@ -103,7 +103,7 @@ fn waiting(input: &HudIn) -> Option<Element> {
 /// menu opens, and the step stops are not shown. Every piece stands at a point of the window, so
 /// the screen is an empty region at the window's corner that draws nothing and covers no card.
 #[must_use]
-pub fn game_phone(input: &HudIn) -> Element {
+pub fn game_phone(input: &HudIn, log: Option<Element>, menu: Action) -> Element {
     let bands = phone_bands(input.window).unwrap_or_default();
     let opening = opening::shown(input);
     let prompt = waiting(input);
@@ -126,7 +126,7 @@ pub fn game_phone(input: &HudIn) -> Element {
             players::players(input),
             middle_over,
             // A sheet drawn over the screen, the bug report, has its own controls there.
-            input.sheet.is_none().then(|| phone::menu(&bands)),
+            input.sheet.is_none().then(|| phone::menu(&bands, menu)),
         ]
     });
     // The flat layer draws in tree order. The opening's scrim comes first, as on the desktop
@@ -142,7 +142,7 @@ pub fn game_phone(input: &HudIn) -> Element {
         .children(
             [
                 game_over::game_over(input).map(Element::waits),
-                phone::log_sheet(input, &bands),
+                log,
                 viewer::viewer(input),
             ]
             .into_iter()

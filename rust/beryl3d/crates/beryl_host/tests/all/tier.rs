@@ -3,9 +3,9 @@
 //! otherwise; a change of the setting during play changes the tier or the drop.
 
 use app_client::Input;
-use app_client::Press;
 use app_client::settings::{Graphics, Setting};
 use app_client::{Client, Config};
+use app_screens::screens::settings::Message as SettingsMessage;
 use beryl_host::rate::Step;
 use beryl_host::{Chosen, Draw, FrameLoop, Shown, Ticks};
 use glam::Vec2;
@@ -152,7 +152,9 @@ fn a_fixed_rate_still_drops_the_tier_and_never_steps_the_rate() {
 fn set(frames: &mut FrameLoop<AnyTicks>, graphics: Graphics) {
     frames
         .client()
-        .press(&Action::new(Press::Setting(Setting::Graphics(graphics))));
+        .press(&Action::new(SettingsMessage::Change(Setting::Graphics(
+            graphics,
+        ))));
     while frames.next_request().is_some() {}
 }
 
