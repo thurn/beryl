@@ -439,6 +439,15 @@ pub enum PoolCommand {
         #[arg(long)]
         all: bool,
     },
+    /// Choose how an app's workers run on this machine: `cli` (headless processes), `desktop`
+    /// (a dispatcher session in the app) or `config` (remove the override so `ignite.toml`
+    /// decides). A ticket in progress finishes as it started.
+    Mode {
+        /// `claude` or `codex`.
+        app: String,
+        #[arg(value_parser = ["cli", "desktop", "config"])]
+        setting: String,
+    },
     /// Print the newest sample of each Claude plan window, and the usage hold if one is in
     /// force.
     Usage,
@@ -850,6 +859,18 @@ mod tests {
             Command::Pool {
                 command: PoolCommand::Usage
             }
+        ));
+    }
+
+    #[test]
+    fn parses_pool_mode() {
+        assert!(matches!(
+            Cli::try_parse_from(["ignite", "pool", "mode", "claude", "config"])
+                .unwrap()
+                .command,
+            Command::Pool {
+                command: PoolCommand::Mode { app, setting }
+            } if app == "claude" && setting == "config"
         ));
     }
 
