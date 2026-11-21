@@ -21,6 +21,13 @@ fixed in the same session. Newest first.
   of the hand picks and attachment choices, and checks that both Auras choose
   from the battlefield as it was before either entered.
 
+- **Fork could not choose itself as the new target of a copied Counterspell.**
+  Target selection looked at stack entries, and the engine had already set
+  Fork's entry aside to run its effects. Spell targets now come from the stack
+  zone, where the resolving card stays until it moves. Fork's regression
+  scenario chooses Fork, checks that the copy leaves the stack by itself, and
+  checks that the original Counterspell still counters Lightning Bolt.
+
 - **Containment Priest exiled Clever Impersonator before it could copy an
   artifact.** The engine decided whether to redirect the move using the
   Impersonator's original type line. It now asks for the copy first and checks

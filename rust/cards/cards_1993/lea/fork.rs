@@ -25,6 +25,7 @@ pub mod scenarios {
     use crate::prelude::*;
 
     const BOLT: &str = Card::LightningBolt;
+    const COUNTERSPELL: &str = Card::Counterspell;
     const FORK: &str = Card::Fork;
     const GEYSER: &str = Card::Braingeyser;
     const ISLAND: &str = Card::Island;
@@ -214,6 +215,33 @@ pub mod scenarios {
                 THEM.life(20),
                 ME.has(Zone::Graveyard, FORK, 1),
                 ME.has(Zone::Graveyard, BOLT, 1),
+            ]),
+        // Fork remains a legal target while the copy's target is chosen. It leaves the stack
+        // before the copy can resolve, so the original Counterspell still counters the Bolt.
+        Scenario::new("Fork targets itself with a copy of Counterspell")
+            .interaction(&[BOLT, COUNTERSPELL])
+            .battlefield(P0, &[MOUNTAIN; 4])
+            .hand(P0, &[BOLT, BOLT, FORK])
+            .battlefield(P1, &[ISLAND; 2])
+            .hand(P1, &[COUNTERSPELL])
+            .actions(&[
+                ME.casts(BOLT),
+                ME.targets_player(THEM),
+                ME.passes(),
+                THEM.casts(COUNTERSPELL),
+                ME.casts(FORK),
+                ME.targets(COUNTERSPELL),
+                Resolve,
+                ME.targets(FORK),
+                stack(3),
+                ME.has(Zone::Graveyard, FORK, 1),
+                Resolve,
+                stack(2),
+                Resolve,
+                stack(0),
+                THEM.has(Zone::Graveyard, COUNTERSPELL, 1),
+                ME.has(Zone::Graveyard, BOLT, 1),
+                THEM.life(20),
             ]),
         // When Fork copies another Fork, the copy of the first Fork is red, targets the
         // Bolt and copies that Bolt when it resolves. Three Bolts in all.

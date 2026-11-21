@@ -39,7 +39,7 @@ pub(crate) struct TargetSet<L: Layout = Small> {
 /// `spell` is the spell, if it is one; `on_stack` says whether its entry is the top of the
 /// stack, as it is while its targets are chosen, where an ability target can name only the
 /// entries below it. Before it is cast it is not yet on the stack, but it will have left the
-/// zone it is in when its targets are chosen; as it resolves it has left the stack.
+/// zone it is in when its targets are chosen. During resolution its entry is held separately.
 ///
 /// [CR 115.5]: https://yawgatog.com/resources/magic-rules/#R1155
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -67,7 +67,7 @@ impl<L: Layout> Itself<L> {
         }
     }
 
-    /// What `entry`, resolving and so off the stack, checks its targets for.
+    /// What the resolving `entry` checks its targets for.
     fn resolving(entry: &StackEntry<L>) -> Itself<L> {
         Itself {
             spell: entry.spell().map(|r| r.slot),
@@ -141,7 +141,7 @@ fn abilities<L: Layout>(s: &State<L>, kinds: Abilities, below: usize) -> u64 {
     places
 }
 
-/// The spells on the stack, as objects.
+/// The spells that have entries in the stack list, as objects.
 pub(crate) fn spells<L: Layout>(s: &State<L>) -> Bitboard<L::Slot> {
     s.stack()
         .iter()
@@ -206,6 +206,13 @@ fn candidates_through<L: Layout>(
 /// What [`candidates`] chooses from: the players and abilities a spec can choose, and the
 /// objects its filter is still to pass on. A permanent with protection from the spell, or from
 /// the ability's source, is none of them ([`protection::targetable_by`]).
+///
+/// A resolving spell's object stays in the stack zone while its entry is held separately
+/// (see [CR 608.2n]): "As the final part of an instant or sorcery spell's resolution, the
+/// spell is put into its owner's graveyard." Use zone membership so a copy can choose a
+/// resolving spell as a new target.
+///
+/// [CR 608.2n]: https://yawgatog.com/resources/magic-rules/#R6082n
 fn domain<L: Layout>(
     s: &State<L>,
     t: &GameTable,
@@ -233,8 +240,8 @@ fn domain<L: Layout>(
     let mut within = match spec.kind {
         TargetKind::Player => Bitboard::EMPTY,
         TargetKind::Permanent | TargetKind::PermanentOrPlayer => s.in_zone(Zone::Battlefield),
-        TargetKind::Spell => spells(s),
-        TargetKind::SpellOrPermanent => spells(s) | s.in_zone(Zone::Battlefield),
+        TargetKind::Spell => s.in_zone(Zone::Stack),
+        TargetKind::SpellOrPermanent => s.in_zone(Zone::Stack) | s.in_zone(Zone::Battlefield),
         TargetKind::GraveyardCard => s.in_zone(Zone::Graveyard),
         TargetKind::Ability | TargetKind::ActivatedAbility | TargetKind::TriggeredAbility => {
             return ability_domain(s, spec.kind, itself);

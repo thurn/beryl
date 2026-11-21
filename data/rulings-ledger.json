@@ -474,7 +474,7 @@
     {
       "published_at": "2004-10-04",
       "hash": "bed98cd27789",
-      "untestable": "by-ptc7.2.14 tracks the Counterspell scenario. Beryl omits the resolving Fork from the copy’s new targets."
+      "scenario": ["Fork targets itself with a copy of Counterspell"]
     },
     {
       "published_at": "2004-10-04",
