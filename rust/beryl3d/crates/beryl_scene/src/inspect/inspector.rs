@@ -19,14 +19,14 @@ use std::fmt::Write as _;
 use beryl_protocol::protocol::{ObjectId, ObjectView, PaidCost, RefusalView, StackItem, ZoneName};
 use glam::Vec2;
 
-use crate::element::{Element, Shown, column, row, text};
 use crate::faces::FaceList;
 use crate::hud::HudIn;
-use crate::input::{FaceId, FaceSize, Rect};
 use crate::table::{CARD_HEIGHT, CARD_WIDTH, Window};
 use kit_base::data::space::layout::desktop::inspector as data;
 use kit_base::tokens::{color, size, space, type_style};
 use kit_frame::frame::Role;
+use kit_ui::element::{Element, Shown, column, row, text};
+use kit_ui::input::{FaceId, FaceSize, Rect};
 
 /// The card the pointer is over, which the inspector shows, and what decides where it stands.
 #[derive(Clone, Debug, PartialEq)]
@@ -110,7 +110,7 @@ fn refusal(reason: &RefusalView, input: &HudIn, inner: f32) -> Element {
     let words = refusal_words(reason, by);
     let mut line = row()
         .name(&format!("Can't play: {words}"))
-        .justify_content(crate::element::Justify::Center)
+        .justify_content(kit_ui::element::Justify::Center)
         .max_width(inner)
         .background(color::REFUSAL)
         .radius(size::REFUSAL_RADIUS)
@@ -376,9 +376,9 @@ fn covered(place: Side, targets: &[Rect]) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::{Placed, stage_place};
-    use crate::input::{Insets, Rect, Size};
     use crate::table::Window;
     use glam::Vec2;
+    use kit_ui::input::{Insets, Rect, Size};
 
     fn window(width: f32, height: f32) -> Window {
         Window {

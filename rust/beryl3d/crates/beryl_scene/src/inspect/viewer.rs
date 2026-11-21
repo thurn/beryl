@@ -13,18 +13,18 @@ use beryl_protocol::script::Subject;
 use glam::Vec2;
 
 use super::revealed::{REVEALED, RevealedFace};
-use crate::element::{
-    Align, Anchor, Element, Overflow, Shown, TextAlign, Track, column, row, text,
-};
 use crate::faces::{CARD_BACK, FaceList};
 use crate::hud::HudIn;
 use crate::hud::piles::pile_cards;
-use crate::input::{FaceId, FaceSize, Size};
 use crate::table::{CARD_HEIGHT, CARD_WIDTH, pile_name};
-use crate::widgets::{icon_button, icons};
 use kit_base::data::space::flat::gallery as metrics;
 use kit_base::tokens::{color, size, space, type_style};
 use kit_frame::frame::Role;
+use kit_ui::element::{
+    Align, Anchor, Element, Overflow, Shown, TextAlign, Track, column, row, text,
+};
+use kit_ui::input::{FaceId, FaceSize, Size};
+use kit_ui::widgets::{icon_button, icons};
 
 /// The viewer the game screen shows, if one is open (`HudIn::viewing`): the cards of a pile,
 /// the top one first, or the faces of the Revealed Cards pile, in a grid that scrolls past two
@@ -162,7 +162,7 @@ pub(crate) fn cards(boxes: Vec<Element>) -> Element {
         .grid_template_columns(columns)
         .gap(size::VIEWER_GAP)
         .children(boxes);
-    grid.style.display = crate::element::Display::Grid;
+    grid.style.display = kit_ui::element::Display::Grid;
     grid
 }
 
@@ -238,14 +238,14 @@ pub fn scry_sample(faces: &FaceList) -> Element {
                 .text_align(TextAlign::Center),
         )
         .child(row().gap(space::M).wrap(true).children([bottom, top]))
-        .child(crate::widgets::primary("Done"));
+        .child(kit_ui::widgets::primary("Done"));
     row()
         .name("overlay")
         .padding(space::L)
         .gap(space::L)
         .wrap(true)
         .align_items(Align::Center)
-        .justify_content(crate::element::Justify::Center)
+        .justify_content(kit_ui::element::Justify::Center)
         .background(color::BACKDROP)
         .child(choice)
         .child(card(find("Foresee"), "Foresee", metrics::SCRY_SOURCE))

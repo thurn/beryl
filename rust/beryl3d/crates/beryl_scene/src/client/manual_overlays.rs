@@ -11,7 +11,6 @@ use beryl_protocol::protocol::{Answer, ObjectId, Side};
 
 use super::Client;
 use crate::command::{Request, SessionCommand};
-use crate::input::{Key, KeyCode, KeyPhase};
 use crate::manual::ask::{self, Ask, Confirmed};
 use crate::manual::bindings::binding_for;
 use crate::manual::commands::{self, COMMANDS, Values};
@@ -20,7 +19,8 @@ use crate::manual::order::LibraryOrder;
 use crate::manual::palette::{self, Palette, RESET, RESET_NOTICE};
 use crate::manual::tokens::{self, Choice, CustomToken, TokenChoice, TokenSearch};
 use crate::manual::{TablePress, Target, assists, log};
-use crate::widgets::FieldState;
+use kit_ui::input::{Key, KeyCode, KeyPhase};
+use kit_ui::widgets::FieldState;
 
 impl Client {
     /// Opens the command list acting on `target`, with its field empty and focused, and with

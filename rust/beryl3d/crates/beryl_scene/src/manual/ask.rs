@@ -15,10 +15,10 @@ use serde_json::Value;
 
 use super::commands::{self, Asks, COMMANDS, Command, Values};
 use super::{TablePress, Target};
-use crate::element::{Align, Anchor, Element, column, row};
-use crate::input::Size;
-use crate::widgets::{FieldState, Fields, button, field, primary};
 use kit_base::tokens::{color, size, space};
+use kit_ui::element::{Align, Anchor, Element, column, row};
+use kit_ui::input::Size;
+use kit_ui::widgets::{FieldState, Fields, button, field, primary};
 
 /// The most and least a stat or a life total may be (`MAX_INT` and `MIN_INT` in
 /// `ui/src/table/cardState.ts`).

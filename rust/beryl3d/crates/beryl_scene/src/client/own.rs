@@ -408,7 +408,7 @@ impl Client {
         if !ticked.began || self.own_record.is_none() {
             return ticked.moving;
         }
-        let length = crate::layout::transition_nanoseconds();
+        let length = kit_ui::layout::transition_nanoseconds();
         self.owned.times.extend([now + length / 2, now + length]);
         ticked.moving
     }

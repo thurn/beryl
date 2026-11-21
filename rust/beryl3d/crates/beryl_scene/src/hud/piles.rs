@@ -13,12 +13,12 @@
 use beryl_protocol::protocol::{ObjectId, ObjectView, PlayerState, PlayerView, Side, ZoneName};
 use glam::Vec2;
 
-use crate::element::{Element, floats};
-use crate::layout::{FloatLook, Layer};
 use crate::play::Show;
 use crate::table::{PileShown, Table, host_slot, pile_name};
-use crate::widgets::tip_label;
 use kit_base::data::space::flat::TOOLTIP_GAP;
+use kit_ui::element::{Element, floats};
+use kit_ui::layout::{FloatLook, Layer};
+use kit_ui::widgets::tip_label;
 
 /// The floats that show each pile's count, and the count each shows now.
 #[derive(Debug, Default)]
@@ -134,7 +134,7 @@ impl PileCounts {
 }
 
 /// The float that shows the count of the pile at `index` (`PileShown::index`).
-fn float(index: usize) -> crate::element::FloatId {
+fn float(index: usize) -> kit_ui::element::FloatId {
     floats::PILE_COUNT[index / 3][index % 3]
 }
 

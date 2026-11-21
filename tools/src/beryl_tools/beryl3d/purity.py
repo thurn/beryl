@@ -14,7 +14,9 @@ from typing import NamedTuple, TypedDict, cast
 from .. import paths
 
 SCENE = "beryl_scene"
-SCENE_CRATES: frozenset[str] = frozenset({SCENE, "kit_base", "kit_frame", "kit_text"})
+SCENE_CRATES: frozenset[str] = frozenset(
+    {SCENE, "kit_base", "kit_frame", "kit_text", "kit_ui"}
+)
 RENDER = "beryl_render"
 INSPECT = "beryl_inspect"
 # Scene and toolkit code must be deterministic and independent of the host. These `std`
@@ -64,6 +66,7 @@ SCENE_DEPENDENCIES: frozenset[str] = frozenset(
         "kit_base",
         "kit_frame",
         "kit_text",
+        "kit_ui",
         "serde",
         "serde_json",
     }
@@ -302,17 +305,15 @@ def data_names(root: Path) -> list[str]:
     ]
 
 
-# The folders of beryl_scene's `src` whose code is built from design tokens: a screen, prompt,
-# widget, heads-up display, inspector or manual element takes its sizes from the generated
-# `tokens` module (rust/beryl3d/crates/kit_base/src/tokens.rs), never from a number of its own
-# (docs/beryl-3d.md, "Elements").
-TOKEN_FOLDERS: tuple[str, ...] = (
-    "screens",
-    "prompts",
-    "widgets",
-    "hud",
-    "inspect",
-    "manual",
+# Screens, prompts, widgets, heads-up displays, inspectors and manual elements take their
+# sizes from the design tokens in kit_base (docs/beryl-3d.md, "Elements").
+TOKEN_FOLDERS: tuple[tuple[str, str], ...] = (
+    (SCENE, "screens"),
+    (SCENE, "prompts"),
+    ("kit_ui", "widgets"),
+    (SCENE, "hud"),
+    (SCENE, "inspect"),
+    (SCENE, "manual"),
 )
 TOKEN_FILE = "data/design-tokens.json"
 # The float literals that are not sizes: zero, one, a half to centre and two to halve or double.
@@ -346,12 +347,11 @@ def non_test_lines(path: Path) -> list[tuple[int, str]]:
 
 
 def scene_literals(root: Path) -> list[str]:
-    """Each float literal in beryl_scene's screens, prompts, widgets, heads-up display,
-    inspector and manual code, outside tests, that is not 0, 0.5, 1 or 2."""
+    """Each nontrivial float literal outside tests in code that uses design tokens."""
     found: list[str] = []
-    src = crates(root) / SCENE / "src"
-    for folder in TOKEN_FOLDERS:
-        for path in sorted((src / folder).rglob("*.rs")):
+    for crate, folder in TOKEN_FOLDERS:
+        directory = crates(root) / crate / "src" / folder
+        for path in sorted(directory.rglob("*.rs")):
             for number, line in non_test_lines(path):
                 for match in FLOAT_LITERAL.finditer(line):
                     if float(match[0].replace("_", "")) not in PLAIN_FLOATS:

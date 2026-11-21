@@ -13,12 +13,12 @@ use beryl_protocol::protocol::{Combat, Kind, PlayerView, Side, Status, Step};
 use glam::Vec2;
 
 use super::players::orb_centre;
-use crate::element::{Align, Element, Justify, column, floats, text};
-use crate::layout::{FloatLook, Layer};
 use crate::table::Window;
 use kit_base::data::space::hud::{BANNER, BANNER_GAP};
 use kit_base::tokens::{color, gradient, ratio, shadow, size, type_style};
 use kit_frame::frame::Role;
+use kit_ui::element::{Align, Element, Justify, column, floats, text};
+use kit_ui::layout::{FloatLook, Layer};
 
 /// The banner's title, the same for every detail.
 const TITLE: &str = "Combat";

@@ -10,17 +10,17 @@ use glam::Vec2;
 use super::gesture::{Gesture, Release};
 use super::{Client, Dismiss, Input, Platform, Press};
 use crate::agent::hit;
-use crate::element::{Action, Chord};
-use crate::input::{Button, Key, KeyCode, KeyPhase, Pointer, PointerKind, PointerPhase};
-use crate::layout::{Edit, Navigation};
 use crate::pointer::Hold;
 use crate::pointer::rows::scroller_of;
 use crate::prompts;
 use crate::screens::{Screen, ScreenPress, Sheet};
 use crate::settings::Setting;
 use crate::table::{self, Scroller};
-use crate::widgets::{STEP, level_at};
 use kit_frame::frame::{ElementId, Place, Role};
+use kit_ui::element::{Action, Chord};
+use kit_ui::input::{Button, Key, KeyCode, KeyPhase, Pointer, PointerKind, PointerPhase};
+use kit_ui::layout::{Edit, Navigation};
+use kit_ui::widgets::{STEP, level_at};
 
 impl Client {
     /// A press is the primary button or a touch going down and coming up on the same enabled

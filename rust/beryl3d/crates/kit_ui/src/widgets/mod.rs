@@ -10,9 +10,11 @@ pub mod icon_shadows;
 pub mod icons;
 mod list;
 mod menu;
-pub(crate) mod screen;
+/// Panels and actions that fill the window or its safe area.
+pub mod screen;
 mod slider;
-pub(crate) mod start_panel;
+/// The panel and controls shared by the start and lobby screens.
+pub mod start_panel;
 mod toggle;
 mod tooltip;
 

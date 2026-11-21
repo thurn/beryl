@@ -11,11 +11,11 @@
 use super::Page;
 use crate::art::orb;
 use crate::client;
-use crate::input::{AssetReady, FaceId, GlyphCell, GlyphKey, IconCell};
-use crate::widgets::IconId;
-use crate::widgets::icon_shadows;
-use crate::widgets::icons::{ORB, atlas_size};
 use client::Input;
+use kit_ui::input::{AssetReady, FaceId, GlyphCell, GlyphKey, IconCell};
+use kit_ui::widgets::IconId;
+use kit_ui::widgets::icon_shadows;
+use kit_ui::widgets::icons::{ORB, atlas_size};
 
 /// The atlas page the stub atlas puts every glyph and icon on. Page 0 holds the shapes of light,
 /// as in a real host's atlas.

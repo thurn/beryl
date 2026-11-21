@@ -5,8 +5,8 @@ use beryl_protocol::ipc::LobbyUpdate;
 use beryl_protocol::{AgentView, GameUpdate};
 
 use crate::command::Reply;
-use crate::input::{AssetReady, Insets, Key, Lifecycle, Pointer, Size, TextChange, Tier};
 use crate::settings::Settings;
+use kit_ui::input::{AssetReady, Insets, Key, Lifecycle, Pointer, Size, TextChange, Tier};
 
 /// One thing that has happened, passed to `Client::handle`.
 #[derive(Clone, Debug, PartialEq)]

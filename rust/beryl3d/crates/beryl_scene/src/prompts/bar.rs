@@ -10,14 +10,14 @@ use beryl_protocol::protocol::{Side, Status};
 use glam::Vec2;
 
 use super::Piles;
-use crate::element::{Align, Anchor, Element, Position, TextAlign, column, holder, row, text};
 use crate::hud::HudIn;
 use crate::hud::phone::{Occupied, asked_top, clear_at_right, phase_span};
 use crate::table::{PhoneBands, phone_bands};
-use crate::widgets::{self, button, icon_button, icons, primary};
 use kit_base::data::space::hud::phone as data;
 use kit_base::tokens::{color, shadow, size, space, type_style};
 use kit_text::text::TypeStyle;
+use kit_ui::element::{Align, Anchor, Element, Position, TextAlign, column, holder, row, text};
+use kit_ui::widgets::{self, button, icon_button, icons, primary};
 
 /// The prompt bar for `prompt`: on the desktop, the action dock (`desktop_dock`), with what the prompt
 /// asks at its top, its other buttons stacked under that in the order the session sent them,

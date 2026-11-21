@@ -33,17 +33,19 @@ use beryl_protocol::protocol::{CardHandling, Declaration, ObjectId, Side, Status
 use beryl_protocol::script::{Mark, Subject};
 use glam::Vec2;
 
-use crate::element::{Action, Align, Anchor, Element, Justify, Overflow, Shown, column, row, text};
 use crate::hud::HudIn;
 use crate::table::{CARD_HEIGHT, CARD_WIDTH, Window};
-use crate::widgets::screen::backdrop;
-use crate::widgets::{button, primary};
 use kit_base::data::space::flat::opening as metrics;
 use kit_base::data::space::flat::phone::opening as phone;
 use kit_base::data::space::flat::phone::{ACTION_GAP, ACTION_HEIGHT, GUTTER};
 use kit_base::tokens::{color, size, type_style};
 use kit_frame::frame::Role;
 use kit_text::text::TypeStyle;
+use kit_ui::element::{
+    Action, Align, Anchor, Element, Justify, Overflow, Shown, column, row, text,
+};
+use kit_ui::widgets::screen::backdrop;
+use kit_ui::widgets::{button, primary};
 
 /// The name of the element that holds the whole opening, its backdrop and its group, which
 /// "every step shown" looks for (`agent::steps::sample`).

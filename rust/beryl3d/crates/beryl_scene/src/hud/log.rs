@@ -17,11 +17,11 @@ use crate::hud::GamePress;
 use beryl_protocol::protocol::{PlayerView, Status};
 use glam::Vec2;
 
-use crate::element::{Anchor, Element, holder, text};
 use crate::hud::HudIn;
-use crate::widgets::{icon_button, icons, list};
 use kit_base::data::space::hud::{LOG_BUTTON_TOP, LOG_LEFT, LOG_TOP};
 use kit_base::tokens::{color, size, type_style};
+use kit_ui::element::{Anchor, Element, holder, text};
+use kit_ui::widgets::{icon_button, icons, list};
 
 /// The name of the log's list, which the client scrolls to its foot (`Layer::scroll_to_end`).
 pub const LIST: &str = "Game log";

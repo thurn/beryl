@@ -427,7 +427,7 @@ impl Table {
                     border: None,
                     radius: PILE_RADIUS,
                     color: [0; 4],
-                    text: crate::element::Style::default().text,
+                    text: kit_ui::element::Style::default().text,
                 },
                 &[],
                 &[],

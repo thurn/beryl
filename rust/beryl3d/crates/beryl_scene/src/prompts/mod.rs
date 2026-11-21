@@ -21,12 +21,12 @@ use beryl_protocol::script::{Arrow, Mark, OwnStep, OwnTimings, StepTiming, Subje
 pub use bar::{prompt_bar, waiting};
 pub use tray::Piles;
 
-use crate::element::Element;
 use crate::hud::HudIn;
-use crate::input::FaceId;
 use crate::light::{ArrowSpan, Lit, MarkSpan, Span};
 use crate::verbs::Interval;
 use kit_base::pose::Curve;
+use kit_ui::element::Element;
+use kit_ui::input::FaceId;
 
 /// A prompt as the table shows it: its state, and whether the pointer is on the button that
 /// shows what the prompt would tap, such as a payment's Auto Pay (`shows`). The web interface
@@ -85,13 +85,13 @@ fn shape_screen(prompt: &PromptView, input: &HudIn) -> Option<Element> {
 /// The whole window in the tray's shade (`.stage-tray`), which the pointer goes through.
 fn shade(input: &HudIn) -> Element {
     let window = input.window.size;
-    let mut shade = crate::element::column()
+    let mut shade = kit_ui::element::column()
         .name("shade")
         .width(window.width)
         .height(window.height)
         .background(kit_base::tokens::color::TRAY_SHADE)
         .passes(true);
-    shade.anchor = Some(crate::element::Anchor::Point(
+    shade.anchor = Some(kit_ui::element::Anchor::Point(
         glam::Vec2::ZERO,
         glam::Vec2::ZERO,
     ));

@@ -2,8 +2,8 @@
 
 use super::hit::bounds;
 use super::{Context, Fault, checks};
-use crate::input::Rect;
 use kit_frame::frame::{Frame, Place, Ringed};
+use kit_ui::input::Rect;
 
 /// Runs the frame checks with the game's mark targets.
 #[must_use]

@@ -12,13 +12,13 @@ use beryl_protocol::protocol::{ObjectId, Side, ZoneName};
 use beryl_protocol::script::{Mark, Subject};
 use glam::Vec2;
 
-use crate::element::{Align, Anchor, Element, row, text};
-use crate::input::Rect;
 use crate::light::{Lit, MarkSpan, Span};
 use crate::verbs::Interval;
 use kit_base::data::space::flat::table::{selection as summary_space, sweep};
 use kit_base::tokens::{color, type_style};
 use kit_frame::frame::{Frame, Place, Role, StateBits};
+use kit_ui::element::{Align, Anchor, Element, row, text};
+use kit_ui::input::Rect;
 
 /// The name of the rectangle a sweep draws.
 pub const SWEEP: &str = "selection-rectangle";

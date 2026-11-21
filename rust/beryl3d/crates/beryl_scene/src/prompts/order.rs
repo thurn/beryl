@@ -18,14 +18,14 @@ use beryl_protocol::script::Subject;
 use glam::Vec2;
 
 use super::{Shown, Steps, prompt_bar};
-use crate::element::{Anchor, Element, Justify, Shown as Showing, row, text};
 use crate::faces::FaceList;
 use crate::hud::HudIn;
-use crate::input::{FaceSize, Rect, Size};
 use crate::table::{CARD_HEIGHT, CARD_WIDTH, TraySpace, tray_area};
 use kit_base::tokens::{color, size, space, type_style};
 use kit_frame::frame::Role;
 use kit_text::text::TypeStyle;
+use kit_ui::element::{Anchor, Element, Justify, Shown as Showing, row, text};
+use kit_ui::input::{FaceSize, Rect, Size};
 
 /// The space between the row and the words under it, their type's size and weight, and the
 /// widest they spread, in stage pixels: `.stage-order`'s `gap` and `.stage-order-ends`' `font`
@@ -262,7 +262,7 @@ pub(super) fn own(_shown: Option<Shown>, _was: Option<Shown>, _steps: &mut Steps
 #[cfg(test)]
 mod tests {
     use super::{cells, slot_in};
-    use crate::input::Size;
+    use kit_ui::input::Size;
 
     const SIZE: Size = Size {
         width: 1600.0,

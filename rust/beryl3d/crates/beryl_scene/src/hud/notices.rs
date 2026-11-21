@@ -18,12 +18,12 @@ use beryl_protocol::script::Notice;
 use glam::Vec2;
 
 use super::counts::{HALF_LIFE, index, points};
-use crate::element::{Align, Element, FloatId, column, floats, text};
-use crate::input::Size;
-use crate::layout::{FloatLook, Layer};
 use crate::notice::{Announced, NoticeRun, Place};
 use crate::table::Layout;
 use kit_base::tokens::{color, ratio, space, type_style};
+use kit_ui::element::{Align, Element, FloatId, column, floats, text};
+use kit_ui::input::Size;
+use kit_ui::layout::{FloatLook, Layer};
 
 /// Every float a notice is shown in, with the place that shows there.
 const FLOATS: [(FloatId, Place); 4] = [

@@ -13,9 +13,7 @@ use crate::manual::TableCommand;
 use beryl_protocol::protocol::Facing;
 use glam::Vec2;
 
-use crate::element::{Action, Align, Element, Overflow, Shown, column};
 use crate::hud::{HudIn, players, steps};
-use crate::input::{FaceId, FaceSize};
 use crate::manual::Target;
 use crate::manual::bindings::Bindings;
 use crate::manual::commands::{COMMANDS, Scope};
@@ -27,10 +25,12 @@ use crate::manual::{
     tokens, turn,
 };
 use crate::table::{CARD_HEIGHT, CARD_WIDTH};
-use crate::widgets::{Fields, context_menu, menu, sheet_menu};
 use kit_base::data::space::flat::{MENU_EDGE, sheet};
 use kit_base::data::space::pointer::DRAG_THRESHOLD_POINTS;
 use kit_frame::frame::Role;
+use kit_ui::element::{Action, Align, Element, Overflow, Shown, column};
+use kit_ui::input::{FaceId, FaceSize};
+use kit_ui::widgets::{Fields, context_menu, menu, sheet_menu};
 
 /// State the manual table reads to build its controls and overlays.
 pub(super) struct TableIn<'a> {

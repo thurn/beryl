@@ -19,13 +19,13 @@ use crate::screens::ScreenPress;
 use glam::Vec2;
 
 use super::ScreenIn;
-use crate::element::{Align, Anchor, Element, Justify, Position, TextAlign, column, row, text};
-use crate::input::{Insets, Rect};
-use crate::widgets::{self, check_mark, field, icon_button, primary};
 use kit_base::data::space::flat::phone::bug as metrics;
 use kit_base::tokens::{color, ratio, shadow, size, type_style};
 use kit_frame::frame::Role;
 use kit_text::text::TypeStyle;
+use kit_ui::element::{Align, Anchor, Element, Justify, Position, TextAlign, column, row, text};
+use kit_ui::input::{Insets, Rect};
+use kit_ui::widgets::{self, check_mark, field, icon_button, primary};
 
 /// The name of the field the player describes the bug in.
 pub const DESCRIPTION: &str = "description";
@@ -364,7 +364,7 @@ fn placed_panel(mut panel: Element, window: Rect, phone: Option<Insets>) -> Elem
         safe.left + metrics::PADDING_X,
     ];
     panel.style.max_height = Some(window.height - safe.top);
-    panel.style.overflow = crate::element::Overflow::Scroll;
+    panel.style.overflow = kit_ui::element::Overflow::Scroll;
     column()
         .name("panel")
         .background([0; 4])

@@ -5,16 +5,16 @@ use beryl_protocol::protocol::{Side, Step};
 
 use super::Client;
 use crate::command::{Request, SessionCommand};
-use crate::element::Action;
 use crate::faces::Faces;
 use crate::hud::GamePress;
 use crate::inspect::Viewed;
-use crate::layout::DismissMenu;
 use crate::manual::{LobbyPress, TableCommand, TablePress};
 use crate::screens::{self, BugPress, Concede, GalleryState, Screen, ScreenPress, Sheet};
 use crate::settings::Setting;
-use crate::widgets::{MenuChoice, MenuId};
 use kit_frame::frame::ElementId;
+use kit_ui::element::Action;
+use kit_ui::layout::DismissMenu;
+use kit_ui::widgets::{MenuChoice, MenuId};
 
 use super::stops::toggled;
 

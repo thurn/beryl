@@ -12,11 +12,11 @@ use glam::Vec2;
 
 use super::{BugPress, Client, Platform};
 use crate::command::Request;
-use crate::element::Chord;
-use crate::input::{Button, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerPhase, Rect};
 use crate::screens::{BugForm, BugStage, CLICK, DESCRIPTION, Sheet, span};
-use crate::widgets::FieldState;
 use kit_frame::frame::Wake;
+use kit_ui::element::Chord;
+use kit_ui::input::{Button, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerPhase, Rect};
+use kit_ui::widgets::FieldState;
 
 /// How long "Saved" shows before the report closes, in nanoseconds (`SAVED_MS`).
 const SAVED: u64 = 900_000_000;

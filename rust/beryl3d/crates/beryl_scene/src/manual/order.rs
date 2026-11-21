@@ -13,12 +13,12 @@ use beryl_protocol::script::Subject;
 
 use super::TablePress;
 use super::commands::seat_of;
-use crate::element::{Element, row};
-use crate::input::Size;
 use crate::inspect::viewer::object_box;
-use crate::widgets::screen::overlay;
-use crate::widgets::{button, primary};
 use kit_base::tokens::size;
+use kit_ui::element::{Element, row};
+use kit_ui::input::Size;
+use kit_ui::widgets::screen::overlay;
+use kit_ui::widgets::{button, primary};
 
 /// The tray's title.
 pub const TITLE: &str = "Order Cards";

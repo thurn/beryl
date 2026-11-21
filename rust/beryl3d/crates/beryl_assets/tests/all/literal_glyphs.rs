@@ -27,13 +27,12 @@ fn scene_literals_have_a_glyph() {
     let mut files = Vec::new();
     // Opening the folder through the helper makes its whole tree an input of this test;
     // `sources` then walks it.
-    beryl_test_files::read_dir("rust/beryl3d/crates/beryl_scene/src").unwrap();
-    sources(
-        &beryl_test_files::root()
-            .unwrap()
-            .join("rust/beryl3d/crates/beryl_scene/src"),
-        &mut files,
-    );
+    let root = beryl_test_files::root().unwrap();
+    for crate_name in ["beryl_scene", "kit_ui"] {
+        let directory = format!("rust/beryl3d/crates/{crate_name}/src");
+        beryl_test_files::read_dir(&directory).unwrap();
+        sources(&root.join(directory), &mut files);
+    }
     let mut missing = Vec::new();
     for path in files {
         for (number, line) in fs::read_to_string(&path).unwrap().lines().enumerate() {

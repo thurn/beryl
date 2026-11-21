@@ -14,10 +14,10 @@ use beryl_protocol::protocol::ObjectId;
 
 use super::scene::SceneObject;
 use super::{Camera, Table};
-use crate::input::Rect;
 use kit_base::data::space::shown::DEPTH;
 use kit_base::pose::between;
 use kit_base::pose::{Curve, Pose};
+use kit_ui::input::Rect;
 
 /// A box that shows a card: where the card stands in it, and whether it is drawn there (false
 /// for a box scrolled partly or wholly out of the element that clips it).

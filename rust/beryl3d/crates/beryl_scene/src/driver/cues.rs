@@ -6,8 +6,8 @@ use client::Input;
 use std::sync::Arc;
 
 use super::{Duration, Page, REPLY_DELAY, STILL_LIMIT};
-use crate::input::Pointer;
 use kit_frame::frame::Wake;
+use kit_ui::input::Pointer;
 
 #[derive(Default)]
 pub(super) struct Cues {

@@ -12,9 +12,9 @@ use super::hit::{
     painted_over, visible_bounds,
 };
 use super::tree::locator_of;
-use crate::input::{Rect, Size};
 use kit_base::data::audit;
 use kit_frame::frame::{Draw, Frame, Missing, Place, REVEALED_FACE, Ring, Ringed, Role, StateBits};
+use kit_ui::input::{Rect, Size};
 
 /// The most covering elements a "reachable" fault names.
 const MOST_COVERING: usize = 6;

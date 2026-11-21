@@ -2,8 +2,8 @@
 
 use beryl_protocol::protocol::ZoneName;
 
-use crate::input::Rect;
 use kit_frame::frame::{Place, Role, StateBits};
+use kit_ui::input::Rect;
 
 /// An element as `find` found it in the present frame.
 #[derive(Clone, Debug, PartialEq)]

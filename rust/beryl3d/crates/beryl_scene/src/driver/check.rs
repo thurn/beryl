@@ -16,11 +16,11 @@ use crate::agent::checks::{KeptArrow, arrows_held, keep_arrows, lines_hold};
 use crate::agent::steps::{self, Found, Sample, card_of, sample, step_nanoseconds};
 use crate::agent::tree::locator_of;
 use crate::agent::{self, Fault, Subject, hit::bounds};
-use crate::input::Rect;
 use crate::play::record::{Plant, Planted, ScriptRecord};
 use crate::table::Camera;
 use kit_base::data::audit;
 use kit_frame::frame::Frame;
+use kit_ui::input::Rect;
 
 /// One step of a script, as `Page::steps` lists it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

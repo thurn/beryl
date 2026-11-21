@@ -8,14 +8,14 @@ use glam::Vec2;
 use super::Client;
 
 use crate::command::{Request, SessionCommand};
-use crate::element::{Action, floats};
 use crate::faces::{FaceList, Faces};
 use crate::hud::phone::Occupied;
-use crate::input::Rect;
-use crate::input::{AssetReady, FaceSize};
-use crate::layout::FloatLook;
 use crate::manual::TableCommand;
 use crate::screens::{self, Screen, ScreenIn, ScreenPress, Sheet, StartForm};
+use kit_ui::element::{Action, floats};
+use kit_ui::input::Rect;
+use kit_ui::input::{AssetReady, FaceSize};
+use kit_ui::layout::FloatLook;
 
 impl Client {
     /// Rebuilds the flat layer's screen, or the sheet open over it, from what the client holds

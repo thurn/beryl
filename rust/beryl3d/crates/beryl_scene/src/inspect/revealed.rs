@@ -10,16 +10,16 @@ use crate::inspect::Viewed;
 use beryl_protocol::protocol::{ObjectId, Side};
 use glam::Vec2;
 
-use crate::element::{Align, Element, Shown, row};
-use crate::input::{FaceId, Size};
 use crate::table::phone::strip;
 use crate::table::{CARD_HEIGHT, CARD_WIDTH, Window};
-use crate::widgets::{button, icons};
 use kit_base::data::space::hud::phone::REVEALED_WIDTH;
 use kit_base::data::space::layout::phone::bands::OPPONENT_STRIP;
 use kit_base::data::space::revealed as data;
 use kit_base::tokens::{color, size, type_style};
 use kit_frame::frame::Role;
+use kit_ui::element::{Align, Element, Shown, row};
+use kit_ui::input::{FaceId, Size};
+use kit_ui::widgets::{button, icons};
 
 /// What the pile and its viewer are called: Arena's words, as the web's `REVEALED`.
 pub const REVEALED: &str = "Revealed Cards";

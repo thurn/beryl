@@ -16,11 +16,11 @@ use serde_json::Value;
 use super::TablePress;
 use super::ask::parse;
 use super::palette::list_row;
-use crate::element::{Align, Anchor, Element, Overflow, column, row, text};
-use crate::input::Size;
-use crate::widgets::{Fields, button, field, primary};
 use kit_base::tokens::{color, size, space, type_style};
 use kit_frame::frame::Role;
+use kit_ui::element::{Align, Anchor, Element, Overflow, column, row, text};
+use kit_ui::input::Size;
+use kit_ui::widgets::{Fields, button, field, primary};
 
 /// The token search's field, by its name, which is also its placeholder.
 pub const FIELD: &str = "Search tokens";
@@ -365,7 +365,7 @@ pub fn custom_panel(form: &CustomToken, fields: &Fields, window: Size) -> Elemen
     let footer = row()
         .name("footer")
         .gap(space::M)
-        .justify_content(crate::element::Justify::End)
+        .justify_content(kit_ui::element::Justify::End)
         .child(button("Cancel").name("close").on_press(TablePress::Close))
         .child(
             primary("Create token")

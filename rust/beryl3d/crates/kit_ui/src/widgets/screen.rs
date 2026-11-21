@@ -9,7 +9,7 @@ use kit_base::tokens::{color, size, space, type_style};
 /// The dimmed table, `.overlay-backdrop`: the whole window in the backdrop's color, which the
 /// pointer goes through. The opening and game over draw it under what they show.
 #[must_use]
-pub(crate) fn backdrop(window: Size) -> Element {
+pub fn backdrop(window: Size) -> Element {
     let mut backdrop = row()
         .name("scrim")
         .width(window.width)
@@ -24,7 +24,7 @@ pub(crate) fn backdrop(window: Size) -> Element {
 /// layer's root puts a screen in its bottom right corner inside the game screen's dock offsets,
 /// which would centre what the screen holds left of and above the window's middle.
 #[must_use]
-pub(crate) fn whole_window(window: Size, screen: Element) -> Element {
+pub fn whole_window(window: Size, screen: Element) -> Element {
     let mut screen = screen.width(window.width).height(window.height);
     screen.anchor = Some(Anchor::Point(Vec2::ZERO, Vec2::ZERO));
     screen
@@ -37,7 +37,7 @@ pub(crate) fn whole_window(window: Size, screen: Element) -> Element {
 /// shortens the window, so that every action stays in reach; it is cut at the safe area, so
 /// nothing scrolls under the status bar or the home indicator.
 #[must_use]
-pub(crate) fn phone_screen(name: &str, window: Size, safe: Insets, content: Element) -> Element {
+pub fn phone_screen(name: &str, window: Size, safe: Insets, content: Element) -> Element {
     use kit_base::data::space::flat::phone::{COLUMN, GUTTER};
     let across = window.width - safe.left - safe.right - 2.0 * GUTTER;
     let extra = ((across - COLUMN) / 2.0).max(0.0);
@@ -65,7 +65,7 @@ pub(crate) fn phone_screen(name: &str, window: Size, safe: Insets, content: Elem
 /// `button` as a phone's action: as wide as its column, `phone::ACTION_HEIGHT` tall, with
 /// larger type, as the web's phone dock draws its buttons (`.phone-opening .dock .button`).
 #[must_use]
-pub(crate) fn phone_action(mut button: Element) -> Element {
+pub fn phone_action(mut button: Element) -> Element {
     use kit_base::data::space::flat::phone::{ACTION_HEIGHT, ACTION_TEXT};
     button.style.height = Some(ACTION_HEIGHT);
     button.style.text.size = ACTION_TEXT;
@@ -79,7 +79,7 @@ pub(crate) fn phone_action(mut button: Element) -> Element {
 /// `body` in the choice column, `actions` under it, and `aside` in the side column. The shell
 /// covers the window and darkens the table under it.
 #[must_use]
-pub(crate) fn overlay(
+pub fn overlay(
     window: Size,
     (title, instruction): (&str, Option<&str>),
     aside: Option<Element>,

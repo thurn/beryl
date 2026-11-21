@@ -23,12 +23,12 @@ use super::{
 };
 use crate::effects;
 use crate::faces::{CARD_BACK, Faces};
-use crate::input::FaceSize;
 use crate::motion::Track;
 use kit_base::pose::{Interval, Pose};
 use kit_frame::frame::{
     Band, Draw, ElementId, FrameBuilder, OBJECTS, Place, Resolved, Role, StateBits,
 };
+use kit_ui::input::FaceSize;
 
 mod abilities;
 mod motion;

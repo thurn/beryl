@@ -7,12 +7,12 @@
 use glam::Vec2;
 
 use super::{game_over, opening};
-use crate::element::{Anchor, Element, Shortcuts, holder, row};
 use crate::hud::{HudIn, full_control, log, phone, players, steps};
 use crate::inspect::viewer;
 use crate::prompts;
 use crate::table::phone_bands;
 use kit_base::tokens::ratio;
+use kit_ui::element::{Anchor, Element, Shortcuts, holder, row};
 
 /// What the flat layer shows over a game. While none of its pieces shows anything, it is the
 /// open prompt's element alone, as it has been since the prompt bar was the only thing in the

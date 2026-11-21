@@ -9,15 +9,15 @@ use beryl_protocol::AgentView;
 use beryl_protocol::protocol::Status;
 
 use super::{Screen, ScreenIn, Sheet};
-use crate::element::{Align, Border, Element, Justify, Position, column, row, text};
-use crate::widgets::screen::{phone_action, phone_screen, whole_window};
-use crate::widgets::start_panel::{
-    PANEL_GAP, PANEL_PADDING, PANEL_WIDTH, checkbox, panel_look, small,
-};
-use crate::widgets::{self, FieldState, button, field, icon_button, list, primary, tooltip};
 use kit_base::tokens::{color, ratio, size, space, type_style};
 use kit_frame::frame::Role;
 use kit_text::text::TypeStyle;
+use kit_ui::element::{Align, Border, Element, Justify, Position, column, row, text};
+use kit_ui::widgets::screen::{phone_action, phone_screen, whole_window};
+use kit_ui::widgets::start_panel::{
+    PANEL_GAP, PANEL_PADDING, PANEL_WIDTH, checkbox, panel_look, small,
+};
+use kit_ui::widgets::{self, FieldState, button, field, icon_button, list, primary, tooltip};
 
 /// The name of the seed's text field.
 pub const SEED: &str = "seed";

@@ -13,9 +13,9 @@ use beryl_protocol::protocol::{PlayerView, Side, TableAction, TablePhase};
 use glam::Vec2;
 
 use super::TablePress;
-use crate::element::{Anchor, Element};
 use crate::table::Window;
-use crate::widgets::primary;
+use kit_ui::element::{Anchor, Element};
+use kit_ui::widgets::primary;
 
 /// The phase each icon of the step track sets, by its index in the track
 /// (`hud::steps::STEP_STOPS`): the last, cleanup, sets the end step, as the web maps it.
@@ -141,8 +141,8 @@ pub fn advance(view: &PlayerView, with_action: bool) -> Vec<TableAction> {
 /// the corner. On the phone it stands the table's edge (`flat.table.edge`) in from the corner.
 #[must_use]
 pub fn next(phase: TablePhase, window: Window) -> Element {
-    use crate::layout::{DOCK_BOTTOM, DOCK_RIGHT};
     use crate::prompts::bar::{captioned, desktop_dock, dock_sized, turn_action};
+    use kit_ui::layout::{DOCK_BOTTOM, DOCK_RIGHT};
     let size = window.size;
     let button = primary("Next").on_press(TablePress::Next);
     let caption = caption(next_phase(phase));

@@ -6,13 +6,13 @@ use glam::{Vec2, Vec3};
 
 use super::super::{GalleryMenu, GalleryQuery, example_button, face};
 use super::{Words, apart, at, caption_at, flat_face, panel, place, rule, words};
-use crate::element::{Border, Element, Shadow, Shown, TextAlign, holder};
 use crate::faces::{CARD_BACK, FaceList};
-use crate::input::FaceSize;
 use crate::table::{CARD_HEIGHT, CARD_WIDTH};
-use crate::widgets::{button, primary};
 use kit_base::tokens::{color, shadow, size, type_style};
 use kit_frame::frame::Role;
+use kit_ui::element::{Border, Element, Shadow, Shown, TextAlign, holder};
+use kit_ui::input::FaceSize;
+use kit_ui::widgets::{button, primary};
 
 /// The dim ink of a stepper button that cannot be pressed: `.ask-step:disabled`.
 const STEPPER_DISABLED: [u8; 4] = [111, 106, 100, 255];

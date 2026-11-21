@@ -4,15 +4,15 @@ use beryl_protocol::protocol::ZoneName;
 
 use super::TablePress;
 use super::viewers::{PileViewer, SEARCH, Sort, sections};
-use crate::element::{Align, Element, Overflow, column, row, text};
 use crate::hud::GamePress;
 use crate::hud::{HudIn, piles::pile_cards};
 use crate::inspect::Viewed;
 use crate::inspect::viewer::{
     self, cards, count_words, grid, object_box, pile_title, viewer_dialog,
 };
-use crate::widgets::{Fields, button, field, primary};
 use kit_base::tokens::{color, size, space, type_style};
+use kit_ui::element::{Align, Element, Overflow, column, row, text};
+use kit_ui::widgets::{Fields, button, field, primary};
 
 /// The viewer the manual table shows, if one is open, as the web's `TablePileViewer` shows it:
 /// a pile's viewer, or a library's while the table lets the viewer look at it

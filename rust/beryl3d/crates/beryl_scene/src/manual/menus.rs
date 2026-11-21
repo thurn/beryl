@@ -11,8 +11,8 @@ use glam::Vec2;
 use super::commands::{self, Asks, Command, Entry, Values};
 use super::{Context, Target, viewers};
 
-use crate::widgets::{MenuGroup, MenuId, MenuRow};
 use beryl_protocol::script::Subject;
+use kit_ui::widgets::{MenuGroup, MenuId, MenuRow};
 
 /// The id of the table's context menu, which its rows' presses (`Press::Menu`) carry.
 pub const MENU: MenuId = MenuId(1);

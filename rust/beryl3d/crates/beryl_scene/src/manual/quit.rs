@@ -7,10 +7,10 @@
 use glam::Vec2;
 
 use super::TablePress;
-use crate::element::{Align, Anchor, Element, column, row, text};
-use crate::input::Size;
-use crate::widgets::{button, primary};
 use kit_base::tokens::{color, size, space, type_style};
+use kit_ui::element::{Align, Anchor, Element, column, row, text};
+use kit_ui::input::Size;
+use kit_ui::widgets::{button, primary};
 
 /// The question, in the middle of a window of `window`'s size.
 #[must_use]

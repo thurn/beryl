@@ -9,8 +9,8 @@ use beryl_protocol::script::Mark;
 
 use super::bar::bar;
 use super::{Shown, Steps, marks};
-use crate::element::Element;
 use crate::hud::HudIn;
+use kit_ui::element::Element;
 
 /// The prompt bar, with how much of the cost is still to pay after what it asks, as the web's
 /// `Asks` (`ui/src/stage/PromptBar.tsx`) writes it. A mana payment's title already names the

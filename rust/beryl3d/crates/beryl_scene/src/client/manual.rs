@@ -4,15 +4,14 @@
 //! reaches the session as `SessionCommand::TableAct`, and the table's next view comes back as
 //! `Input::Update`, as a game's does. What the table shows over itself is `manual_overlays`.
 
-use crate::element::Action;
 use crate::inspect::Viewed;
 use beryl_protocol::GameUpdate;
 use glam::Vec2;
+use kit_ui::element::Action;
 
 use super::{Client, Platform};
 use crate::command::SessionCommand;
 
-use crate::input::{Button, Pointer, PointerPhase};
 use crate::manual::lobby::Lobby;
 use crate::manual::menus::{self, Act};
 use crate::manual::tokens::TokenChoice;
@@ -22,9 +21,10 @@ use crate::manual::{
 };
 use crate::pointer::refusal::Shake;
 use crate::screens::Screen;
-use crate::widgets::BACK;
 use beryl_protocol::ipc::TableActReply;
 use beryl_protocol::protocol::{Answer, LinkState, ObjectId, Side, TableAction, ZoneName};
+use kit_ui::input::{Button, Pointer, PointerPhase};
+use kit_ui::widgets::BACK;
 
 /// The most table actions the client remembers sending without an answer.
 const PENDING: usize = 64;

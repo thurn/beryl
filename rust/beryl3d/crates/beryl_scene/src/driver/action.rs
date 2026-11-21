@@ -4,7 +4,7 @@
 use glam::Vec2;
 
 use super::moment::{Duration, ParseError};
-use crate::input::{KeyCode, Modifiers};
+use kit_ui::input::{KeyCode, Modifiers};
 
 /// One action. Wherever an action takes a locator, it also takes a point of the window,
 /// `<x>,<y>` in logical points (`point`), so that a drag can start on the empty table, where no

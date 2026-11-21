@@ -9,10 +9,7 @@ use beryl_protocol::protocol::{Declaration, ObjectId, Side, Step, StopsSetting, 
 use beryl_protocol::script::{Act, OwnStep, Turn};
 
 use super::Client;
-use crate::element::{Element, floats};
-use crate::input::Rect;
 use crate::inspect::revealed::{self, RevealedFace};
-use crate::layout::FloatLook;
 use crate::light::Span;
 use crate::screens::{self, Screen, ScreenIn};
 use crate::table::{Moves, Relaid, Window};
@@ -20,6 +17,9 @@ use crate::verbs::Interval;
 use kit_base::data::space::shown::opening;
 use kit_base::pose::Curve;
 use kit_frame::frame::Place;
+use kit_ui::element::{Element, floats};
+use kit_ui::input::Rect;
+use kit_ui::layout::FloatLook;
 
 /// Nanoseconds in a millisecond, as the session's step timings are written in milliseconds.
 const NS_PER_MS: f64 = 1_000_000.0;
@@ -160,7 +160,7 @@ impl Client {
         self.manual.viewer = crate::manual::viewers::PileViewer::new();
         self.fields.set(
             crate::manual::viewers::SEARCH,
-            crate::widgets::FieldState::default(),
+            kit_ui::widgets::FieldState::default(),
         );
         self.viewing.open = viewed;
         self.show_screen();

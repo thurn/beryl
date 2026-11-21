@@ -17,11 +17,11 @@ use glam::Vec2;
 
 use super::bar::bar;
 use super::{Shown, Steps, begin_spans, end_spans, mark_spans, target_arrows};
-use crate::element::{Align, Anchor, Element, TextAlign, column, text};
 use crate::hud::HudIn;
 use crate::light::Span;
-use crate::widgets::{icon_button, icons};
 use kit_base::tokens::{color, size, space, type_style};
+use kit_ui::element::{Align, Anchor, Element, TextAlign, column, text};
+use kit_ui::widgets::{icon_button, icons};
 
 /// What the flat layer shows for `prompt`: the prompt bar, with how much is not yet given out
 /// after what it asks, as the web's `Asks` (`ui/src/stage/PromptBar.tsx`) writes it, and the

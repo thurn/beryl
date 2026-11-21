@@ -9,10 +9,10 @@ use beryl_protocol::script::Script;
 use super::Show;
 use super::compile::{nanoseconds, subject_of};
 use crate::beat::Laid;
-use crate::input::Rect;
 use crate::light::Lit;
 use crate::table::{CARD_WIDTH, Held, Moves, TrayPoses};
 use kit_base::pose::{Curve, Pose};
+use kit_ui::input::Rect;
 
 impl Show {
     /// The latest view, which says where each object lies, and the spans the table shows, for

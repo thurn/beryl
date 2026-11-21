@@ -382,8 +382,8 @@ mod tests {
     use beryl_protocol::protocol::{RowName, Side};
 
     use super::row_area;
-    use crate::input::Size;
     use crate::table::{CARD_HEIGHT, Camera, DESKTOP, ORB_DESKTOP_SCALE, Window};
+    use kit_ui::input::Size;
 
     const ROWS: [RowName; 3] = [RowName::Creatures, RowName::Lands, RowName::Others];
 

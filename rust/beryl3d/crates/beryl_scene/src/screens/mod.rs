@@ -32,7 +32,6 @@ use beryl_protocol::protocol::{OutcomeView, Side, Status};
 use beryl_protocol::script::{Subject, Turn};
 use beryl_protocol::{AgentView, PlayerView, StopsSetting};
 
-use crate::element::Element;
 use crate::faces::FaceList;
 use crate::hud::phone::Occupied;
 use crate::hud::{HudIn, log::LogEntry};
@@ -42,7 +41,8 @@ use crate::manual::TableState;
 use crate::manual::lobby::Lobby;
 use crate::settings::Settings;
 use crate::table::Window;
-use crate::widgets::Fields;
+use kit_ui::element::Element;
+use kit_ui::widgets::Fields;
 
 /// Everything a screen function reads.
 #[derive(Clone, Copy, Debug)]
@@ -156,7 +156,7 @@ impl<'a> ScreenIn<'a> {
 
 /// The face that needs a full image for the manual table's menu, when it previews a card.
 #[must_use]
-pub fn sheet_face(input: &ScreenIn) -> Option<crate::input::FaceId> {
+pub fn sheet_face(input: &ScreenIn) -> Option<kit_ui::input::FaceId> {
     table::sheet_face(&input.table_input())
 }
 

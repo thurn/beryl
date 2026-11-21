@@ -5,7 +5,7 @@ use std::fmt::Write;
 
 use beryl_protocol::protocol::Side;
 
-use crate::input::{Insets, Rect, Size};
+use kit_ui::input::{Insets, Rect, Size};
 
 /// Which window a frame was drawn for, and the moment, as the caller of a check knows them.
 /// A fault's `show:` line is built from it.

@@ -33,13 +33,13 @@ use beryl_protocol::protocol::{Side, Step, StepSet};
 use glam::Vec2;
 
 use super::players::face_centre;
-use crate::element::{Action, Anchor, Display, Element, Shadow, Shown, Track, holder};
 use crate::hud::HudIn;
 use crate::table::Window;
-use crate::widgets::icons;
 use kit_base::data::space::hud::{STEP_FIXED, STEP_OFF};
 use kit_base::tokens::{color, shadow, size};
 use kit_frame::frame::Role;
+use kit_ui::element::{Action, Anchor, Display, Element, Shadow, Shown, Track, holder};
+use kit_ui::widgets::icons;
 
 /// One icon of the twelve: its label and the steps a stop at it stops in, or none for a step
 /// that is never a stop. The order is the web's `STEP_STOPS`, which `icons::STEPS` follows.

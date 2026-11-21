@@ -18,7 +18,9 @@ def write(root: Path, rel: str, text: str) -> None:
     (root / rel).write_text(text)
 
 
-@pytest.mark.parametrize("crate", ("beryl_scene", "kit_base", "kit_text", "kit_frame"))
+@pytest.mark.parametrize(
+    "crate", ("beryl_scene", "kit_base", "kit_text", "kit_frame", "kit_ui")
+)
 def test_the_scene_names_no_clock_and_a_comment_may(tmp_path: Path, crate: str) -> None:
     scene = f"{CRATES}/{crate}/src/lib.rs"
     write(tmp_path, scene, "// std::time is banned here.\nuse glam::Vec3;\n")
@@ -105,7 +107,9 @@ def test_the_scene_names_no_clock_however_it_is_imported(tmp_path: Path) -> None
     assert "names AtomicU32" in found
 
 
-@pytest.mark.parametrize("crate", ("beryl_scene", "kit_base", "kit_text", "kit_frame"))
+@pytest.mark.parametrize(
+    "crate", ("beryl_scene", "kit_base", "kit_text", "kit_frame", "kit_ui")
+)
 def test_the_scene_depends_only_on_listed_crates(tmp_path: Path, crate: str) -> None:
     manifest = f"{CRATES}/{crate}/Cargo.toml"
     write(tmp_path, manifest, '[dependencies]\nglam = "0.34"\n')
@@ -126,13 +130,16 @@ def test_only_the_app_and_the_recorder_depend_on_the_engine(tmp_path: Path) -> N
     assert "beryl_assets depends on beryl_cards" in found
 
 
-def test_a_screen_takes_its_sizes_from_tokens(tmp_path: Path) -> None:
-    screen = f"{CRATES}/beryl_scene/src/screens/start.rs"
-    write(tmp_path, screen, "let a = row().grow(1.0).margin([0.0, 0.5, 2.0, 1.0]);\n")
+@pytest.mark.parametrize(
+    "source", ("beryl_scene/src/screens/start.rs", "kit_ui/src/widgets/button.rs")
+)
+def test_elements_take_their_sizes_from_tokens(tmp_path: Path, source: str) -> None:
+    path = f"{CRATES}/{source}"
+    write(tmp_path, path, "let a = row().grow(1.0).margin([0.0, 0.5, 2.0, 1.0]);\n")
     assert purity.scene_literals(tmp_path) == []
-    write(tmp_path, screen, "// gap(9.0)\nlet a = row()\n    .gap(12.0);\n")
+    write(tmp_path, path, "// gap(9.0)\nlet a = row()\n    .gap(12.0);\n")
     (found,) = purity.scene_literals(tmp_path)
-    assert found.startswith(f"{screen}:3: the literal 12.0")
+    assert found.startswith(f"{path}:3: the literal 12.0")
     assert "data/design-tokens.json" in found
 
 

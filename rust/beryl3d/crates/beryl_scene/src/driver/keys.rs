@@ -3,9 +3,9 @@
 
 use super::{KeyChord, Page};
 use crate::client;
-use crate::element::Chord;
-use crate::input::{Key, KeyCode, KeyPhase, TextChange};
 use client::{Input, Request};
+use kit_ui::element::Chord;
+use kit_ui::input::{Key, KeyCode, KeyPhase, TextChange};
 
 impl Page {
     /// Presses the field `locator` names and types `text` at its caret, as a desktop host
@@ -45,7 +45,7 @@ impl Page {
 
     /// What the text field named `name` holds.
     #[must_use]
-    pub fn field(&self, name: &str) -> crate::widgets::FieldState {
+    pub fn field(&self, name: &str) -> kit_ui::widgets::FieldState {
         self.client.field(name)
     }
 

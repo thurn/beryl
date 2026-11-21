@@ -7,10 +7,10 @@ use beryl_protocol::protocol::{ObjectId, PlayerView};
 use super::scene::SceneObject;
 use super::tray_layout::{Held, TrayPoses, TraySpace, tray_poses};
 use super::{Camera, Placement, Rest, Table};
-use crate::input::FaceSize;
 use kit_base::pose::between;
 use kit_base::pose::{Curve, Pose};
 use kit_frame::frame::{Band, Draw, FrameBuilder, OBJECTS};
+use kit_ui::input::FaceSize;
 
 impl Placement {
     /// Gives each card `held` names its place in the tray instead of its zone's, laid out in

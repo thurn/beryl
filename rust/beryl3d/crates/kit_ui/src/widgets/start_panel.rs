@@ -6,19 +6,21 @@ use kit_frame::frame::Role;
 
 const CHECKBOX: f32 = size::CHECKBOX;
 
-/// The panel's width and padding (`.start-panel`).
-pub(crate) const PANEL_WIDTH: f32 = size::START_PANEL_WIDTH;
-pub(crate) const PANEL_PADDING: [f32; 4] = [
+/// The width of the start panel in logical points.
+pub const PANEL_WIDTH: f32 = size::START_PANEL_WIDTH;
+/// The start panel's padding in top, right, bottom and left order.
+pub const PANEL_PADDING: [f32; 4] = [
     size::START_PANEL_PADDING_TOP,
     size::START_PANEL_PADDING_SIDE,
     size::START_PANEL_PADDING_BOTTOM,
     size::START_PANEL_PADDING_SIDE,
 ];
-pub(crate) const PANEL_GAP: f32 = size::START_PANEL_GAP;
+/// The gap between rows in the start panel.
+pub const PANEL_GAP: f32 = size::START_PANEL_GAP;
 const PANEL_RADIUS: f32 = size::PANEL_RADIUS;
 
 /// A checkbox labelled `label`, ticked if `on`.
-pub(crate) fn checkbox(label: &str, on: bool) -> Element {
+pub fn checkbox(label: &str, on: bool) -> Element {
     let check = check_square(CHECKBOX, on);
     Element::new(Role::Toggle)
         .name(label)
@@ -36,7 +38,7 @@ pub(crate) fn checkbox(label: &str, on: bool) -> Element {
 /// `panel` in the look of the web's `.start-panel`, which the start and lobby screens share: a
 /// dark face, a bronze border with a lighter top edge, rounded corners, a dark ring inside the
 /// border and a shadow under it.
-pub(crate) fn panel_look(panel: Element) -> Element {
+pub fn panel_look(panel: Element) -> Element {
     panel
         .background(color::START_PANEL)
         .border(
@@ -48,7 +50,7 @@ pub(crate) fn panel_look(panel: Element) -> Element {
 }
 
 /// The square of a checkbox `side` points wide, with a gold border, ticked if `on`.
-pub(crate) fn check_square(side: f32, on: bool) -> Element {
+pub fn check_square(side: f32, on: bool) -> Element {
     row()
         .name("checkbox")
         .width(side)
@@ -70,7 +72,7 @@ pub(crate) fn check_square(side: f32, on: bool) -> Element {
 }
 
 /// `button` at the web's small size (`button-small`): shorter, with smaller type.
-pub(crate) fn small(mut button: Element) -> Element {
+pub fn small(mut button: Element) -> Element {
     button.style.height = Some(size::BUTTON_HEIGHT * ratio::SMALL_SCALE);
     button.style.text.size = type_style::BUTTON.size * ratio::SMALL_SCALE;
     button.style.min_width = None;

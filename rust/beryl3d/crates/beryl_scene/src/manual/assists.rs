@@ -24,14 +24,14 @@ use beryl_protocol::script::Subject;
 use glam::Vec2;
 
 use super::TablePress;
-use crate::element::{Align, Anchor, Element, column, row, text};
-use crate::input::Size;
 use crate::inspect::viewer::object_box;
 use crate::table::Window;
-use crate::widgets::screen::overlay;
-use crate::widgets::start_panel::{checkbox, small};
-use crate::widgets::{button, primary};
 use kit_base::tokens::{color, size, space, type_style};
+use kit_ui::element::{Align, Anchor, Element, column, row, text};
+use kit_ui::input::Size;
+use kit_ui::widgets::screen::overlay;
+use kit_ui::widgets::start_panel::{checkbox, small};
+use kit_ui::widgets::{button, primary};
 
 /// The proposal panel's name.
 pub const PROPOSALS: &str = "Proposals";

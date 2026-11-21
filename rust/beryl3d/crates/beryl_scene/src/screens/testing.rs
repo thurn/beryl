@@ -12,12 +12,12 @@ use crate::screens::ScreenPress;
 use beryl_protocol::protocol::Side;
 
 use super::ScreenIn;
-use crate::element::{Align, Element, Justify, column, row, text};
-use crate::widgets::screen::phone_screen;
-use crate::widgets::{button, field, list, primary};
 use kit_base::data::space::flat::phone;
 use kit_base::tokens::{color, size, space, type_style};
 use kit_frame::frame::Role;
+use kit_ui::element::{Align, Element, Justify, column, row, text};
+use kit_ui::widgets::screen::phone_screen;
+use kit_ui::widgets::{button, field, list, primary};
 
 /// The name of the field that narrows the list.
 pub const FILTER: &str = "filter";

@@ -18,9 +18,9 @@ use beryl_protocol::prompt::{PromptView, ShapeBody};
 use beryl_protocol::script::Subject;
 
 use super::{Shown, Steps, begin_spans, end_spans, mark_spans, prompt_bar};
-use crate::element::Element;
 use crate::hud::HudIn;
 use crate::light::{ArrowSpan, Span};
+use kit_ui::element::Element;
 
 /// What the flat layer shows for `prompt`: the prompt bar. A player the prompt marks is aimed
 /// at by a press on their life total (`CountFloats`).

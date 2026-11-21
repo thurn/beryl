@@ -21,14 +21,14 @@ use glam::Vec2;
 
 use crate::art::orb;
 use crate::effects::{Effect, EffectRun};
-use crate::element::{Align, Element, FloatId, Span, TextAlign, floats, holder, text};
-use crate::input::Size;
-use crate::layout::{FloatLook, Layer};
 pub(crate) use crate::table::HALF_LIFE;
 use crate::table::Layout;
 use kit_base::data::space::verbs::count::DRIFT;
 use kit_base::tokens::{color, size, type_style};
 use kit_frame::frame::Role;
+use kit_ui::element::{Align, Element, FloatId, Span, TextAlign, floats, holder, text};
+use kit_ui::input::Size;
+use kit_ui::layout::{FloatLook, Layer};
 
 /// A number a `count` step sets.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

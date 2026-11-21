@@ -16,11 +16,11 @@ use glam::{Vec2, Vec3};
 
 use super::counts::{index, points};
 use crate::art::orb;
-use crate::element::{Element, FloatId, floats, text};
-use crate::layout::{FloatLook, Layer};
 use crate::table::{Camera, Layout, ROWS, Rows, Scroller, Table, row_area};
 use kit_base::data::space::layout::desktop::ROW_COUNT_GAP;
 use kit_base::tokens::{size, type_style};
+use kit_ui::element::{Element, FloatId, floats, text};
+use kit_ui::layout::{FloatLook, Layer};
 
 /// Each side has three rows, and with the hand and the stack each has two ends.
 const COUNTS: usize = 16;

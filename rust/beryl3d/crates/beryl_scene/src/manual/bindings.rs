@@ -8,8 +8,8 @@
 use std::collections::BTreeMap;
 
 use super::commands::{COMMANDS, Command, Scope};
-use crate::element::Chord;
-use crate::input::{Key, KeyCode};
+use kit_ui::element::Chord;
+use kit_ui::input::{Key, KeyCode};
 
 /// The commands whose keys the player changed, by command id: the binding each now has, as the
 /// web writes one (`Cmd+Shift+L`), or `None` for a command that lost its keys to another.

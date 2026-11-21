@@ -22,8 +22,6 @@ use glam::{Affine3A, Quat, Vec2, Vec3};
 
 use super::{Lit, MarkSpan, Open, Span};
 use crate::art::orb;
-use crate::element::Shadow;
-use crate::layout::shape_radius;
 use crate::play::Scene;
 use crate::table::{ABILITY_IDS, CARD_HEIGHT, CARD_WIDTH, Look};
 use kit_base::data::space::light;
@@ -32,6 +30,8 @@ use kit_base::tokens::color;
 use kit_frame::frame::{
     Band, Draw, ElementId, FrameBuilder, Ring, Ringed, StateBits, box_shadow_reach, rows, sprites,
 };
+use kit_ui::element::Shadow;
+use kit_ui::layout::shape_radius;
 
 /// How far through its coming and going an open mark is at `now`, from 0 (not seen) to 1
 /// (whole). It comes up over the interval it began over and goes over the one it ended over.

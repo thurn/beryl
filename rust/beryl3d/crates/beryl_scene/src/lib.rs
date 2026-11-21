@@ -9,12 +9,9 @@ pub mod command;
 #[cfg(feature = "driver")]
 pub mod driver;
 pub mod effects;
-pub mod element;
 pub mod faces;
 pub mod hud;
-pub mod input;
 pub mod inspect;
-pub mod layout;
 pub mod light;
 pub mod manual;
 pub mod motion;
@@ -32,9 +29,9 @@ pub mod table;
 #[cfg(feature = "driver")]
 pub mod testing;
 pub mod verbs;
-pub mod widgets;
 
 pub use client::{BugPress, Client, Config, Dismiss, Input, Press};
 pub use kit_base::{atlas, data, geometry, paint, pose, tokens, typography};
 pub use kit_frame::frame;
 pub use kit_text::text;
+pub use kit_ui::{element, input, layout, widgets};

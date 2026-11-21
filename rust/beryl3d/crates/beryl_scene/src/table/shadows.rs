@@ -11,10 +11,10 @@ use glam::{Affine3A, Vec2, Vec3};
 use super::pile::PileShown;
 use super::scene::{SceneObject, Table};
 use super::{CARD_HEIGHT, CARD_WIDTH};
-use crate::input::Tier;
 use kit_base::data::space::shadow;
 use kit_base::pose::Pose;
 use kit_frame::frame::{Band, Draw, FrameBuilder, Place};
+use kit_ui::input::Tier;
 
 /// Half a card's diagonal, in millimetres at a scale of 1: no point of a card lies farther from
 /// its centre.

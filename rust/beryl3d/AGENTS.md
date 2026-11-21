@@ -24,9 +24,10 @@ A program here that spreads work over threads sizes them with
   embeds the serif font faces.
 - `kit_text`: text shaping, line breaking and glyph requests.
 - `kit_frame`: the resolved elements and draw records for one frame.
-- `beryl_scene`: layout and animation as pure data. It re-exports the toolkit
-  modules so callers can continue using their existing paths. The toolkit and
-  scene use no GPU, window, clock or thread (`scene-purity`).
+- `kit_ui`: elements, styles, widgets, flat layout and device input types.
+- `beryl_scene`: game views and animation as pure data. It re-exports the
+  toolkit modules so callers can continue using their existing paths. The
+  toolkit and scene use no GPU, window, clock or thread (`scene-purity`).
 - `beryl_render`: draws a scene with wgpu. The only crate that names `wgpu`.
 - `beryl_assets`: decodes and packs card pictures for the renderer.
 - `beryl_host`: the window and event loop (winit) that drive a scene and render

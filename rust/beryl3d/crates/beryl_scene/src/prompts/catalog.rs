@@ -8,13 +8,13 @@ use beryl_protocol::prompt::{Click, PromptView, ShapeBody};
 use glam::Vec2;
 
 use super::{Shown, Steps, prompt_bar};
-use crate::element::{Align, Anchor, Element, Justify, column};
 use crate::hud::HudIn;
-use crate::input::Rect;
 use crate::table::{TraySpace, phone_bands};
-use crate::widgets::list;
 use kit_base::tokens::{color, size, type_style};
 use kit_frame::frame::Role;
+use kit_ui::element::{Align, Anchor, Element, Justify, column};
+use kit_ui::input::Rect;
+use kit_ui::widgets::list;
 
 /// What the flat layer shows for `prompt`: the shade over the table, then the prompt bar, then
 /// the entries over the shade. The shade comes first so that the bar is drawn over it, and it
@@ -82,7 +82,7 @@ fn entry(words: &str, index: u16, chosen: bool) -> Element {
     let mut element = Element::new(Role::Button).name(words);
     element.text = Some(words.to_owned());
     element.style.text = type_style::ENTRY;
-    element.style.text_align = crate::element::TextAlign::Center;
+    element.style.text_align = kit_ui::element::TextAlign::Center;
     element.style.padding = [0.0, size::ENTRY_PADDING, 0.0, size::ENTRY_PADDING];
     let (face, rim) = if chosen {
         (color::ENTRY_CHOSEN, color::GOLD)

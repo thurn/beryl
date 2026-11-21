@@ -16,14 +16,14 @@ use glam::Vec2;
 
 use super::face;
 use crate::art::orb::artwork;
-use crate::element::{Border, Element, Overflow, Position, Shown, TextAlign, holder, text};
 use crate::faces::{CARD_BACK, FaceList};
-use crate::input::{FaceId, FaceSize};
-use crate::widgets::{button, icons, primary};
 use kit_base::data::space::flat::gallery::desktop as at;
 use kit_base::tokens::{color, gradient, shadow, size, type_style};
 use kit_frame::frame::Role;
 use kit_text::text::TypeStyle;
+use kit_ui::element::{Border, Element, Overflow, Position, Shown, TextAlign, holder, text};
+use kit_ui::input::{FaceId, FaceSize};
+use kit_ui::widgets::{button, icons, primary};
 
 /// The numbered panels' titles, in order.
 const TITLES: [&str; 9] = [

@@ -76,7 +76,7 @@ impl<'a> Context<'a> {
     #[must_use]
     pub fn key(&self, command: &commands::Command) -> Option<String> {
         let binding = self.bindings.get(command, self.mac)?;
-        Some(crate::element::describe(binding, self.mac))
+        Some(kit_ui::element::describe(binding, self.mac))
     }
 }
 

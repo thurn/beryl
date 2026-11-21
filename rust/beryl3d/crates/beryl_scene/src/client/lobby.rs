@@ -16,7 +16,7 @@ use crate::command::SessionCommand;
 
 use crate::manual::lobby::{self, DeckPanel};
 use crate::screens::Screen;
-use crate::widgets::FieldState;
+use kit_ui::widgets::FieldState;
 
 impl Client {
     /// Carries out a press of one of the lobby's controls, or the start screen's 'Solo table'.

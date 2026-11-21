@@ -24,9 +24,9 @@
 use beryl_protocol::protocol::Side;
 use glam::Vec2;
 
-use crate::widgets::IconId;
-use crate::widgets::icons::{IconLayer, LayeredIcon, ORB};
 use kit_base::tokens::size;
+use kit_ui::widgets::IconId;
+use kit_ui::widgets::icons::{IconLayer, LayeredIcon, ORB};
 
 /// The view box of the web's orb art: its left, top, width and height, about the orb's middle.
 pub const ART: [f32; 4] = [-136.0, -57.0, 272.0, 116.0];
@@ -399,7 +399,7 @@ pub fn artwork(side: Side, active: bool, scale: u8) -> LayeredIcon {
     }
 }
 
-pub use crate::widgets::icons::cell_width;
+pub use kit_ui::widgets::icons::cell_width;
 
 /// The height in units of the top of the core's box on `side`'s orb, from which the bezel's
 /// gradient runs down: the opponent's core is mirrored about the orb's middle.

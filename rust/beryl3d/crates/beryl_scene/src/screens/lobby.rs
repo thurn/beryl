@@ -13,22 +13,22 @@ use crate::manual::LobbyPress;
 use beryl_protocol::ipc::LobbyView;
 use beryl_protocol::ipc::decks::SavedDeck;
 
-use crate::element::{
-    Align, Border, Display, Element, Justify, Overflow, Position, Track, column, row, text,
-};
 use crate::manual::commands::{COMMANDS, Scope};
 use crate::manual::lobby::{
     ASSISTS, DECK_NAME, DECKLIST, DeckPanel, Lobby, STARTING_HAND_SIZE, STARTING_LIFE,
     asked_settings, unreadable,
 };
 use crate::table::Window;
-use crate::widgets::screen::{phone_action, phone_screen, whole_window};
-use crate::widgets::start_panel::{PANEL_PADDING, check_square, checkbox, panel_look, small};
-use crate::widgets::{FieldState, Fields, button, field, primary};
 use kit_base::tokens::type_style::{START_LABEL as LABEL, START_TITLE as TITLE};
 use kit_base::tokens::{color, size, space, type_style};
 use kit_frame::frame::Role;
 use kit_text::text::TypeStyle;
+use kit_ui::element::{
+    Align, Border, Display, Element, Justify, Overflow, Position, Track, column, row, text,
+};
+use kit_ui::widgets::screen::{phone_action, phone_screen, whole_window};
+use kit_ui::widgets::start_panel::{PANEL_PADDING, check_square, checkbox, panel_look, small};
+use kit_ui::widgets::{FieldState, Fields, button, field, primary};
 
 /// The manual lobby's state and text fields for the current window.
 pub(super) struct LobbyIn<'a> {

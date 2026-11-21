@@ -12,11 +12,11 @@ use beryl_protocol::protocol::{
 use glam::Vec2;
 
 use super::Client;
-use crate::element::{Element, floats, row, text};
-use crate::layout::FloatLook;
 use crate::screens::Screen;
 use kit_base::tokens::{color, size, type_style};
 use kit_frame::frame::{ElementId, Place, Role};
+use kit_ui::element::{Element, floats, row, text};
+use kit_ui::layout::FloatLook;
 
 /// How long the word at the permanent that forbids a click stays, in nanoseconds: the web's
 /// `NOTICE_MS` of 1,800 ms.

@@ -5,13 +5,13 @@
 //! `ui/src/screens/styles/settings.css`).
 
 use super::{Screen, ScreenIn, Sheet};
-use crate::element::{Action, Align, Element, Justify, Overflow, Position, column, row, text};
 use crate::screens::ScreenPress;
 use crate::settings::{Graphics, Setting};
-use crate::widgets::{button, icon_button, icons, primary, slider, toggle};
 use kit_base::data::space::flat::phone::GUTTER;
 use kit_base::data::space::hud::phone::BUTTON_MIN_WIDTH as PHONE_BUTTON;
 use kit_base::tokens::{color, size, space, type_style};
+use kit_ui::element::{Action, Align, Element, Justify, Overflow, Position, column, row, text};
+use kit_ui::widgets::{button, icon_button, icons, primary, slider, toggle};
 
 include!(concat!(env!("OUT_DIR"), "/credits.rs"));
 

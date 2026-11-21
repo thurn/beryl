@@ -16,11 +16,11 @@ use glam::Vec2;
 
 use super::TablePress;
 use super::commands;
-use crate::element::{Align, Anchor, Element, Overflow, column, holder, row, text};
 use crate::table::Window;
-use crate::widgets::{button, icon_button, icons};
 use kit_base::tokens::{color, size, space, type_style};
 use kit_frame::frame::Role;
+use kit_ui::element::{Align, Anchor, Element, Overflow, column, holder, row, text};
+use kit_ui::widgets::{button, icon_button, icons};
 
 /// The panel's name and its heading's words.
 pub const TITLE: &str = "Log";

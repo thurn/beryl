@@ -20,13 +20,13 @@ use beryl_protocol::protocol::{ManaPool, PlayerState, Side};
 use glam::Vec2;
 
 use super::TablePress;
-use crate::element::{Align, Anchor, Display, Element, Justify, Track, column, holder, row, text};
 use crate::hud::counts::{index, points};
-use crate::input::Size;
 use crate::table::{DESKTOP, Window, phone_bands};
-use crate::widgets::button;
 use kit_base::data::space::hud::phone as data;
 use kit_base::tokens::{color, size, space, type_style};
+use kit_ui::element::{Align, Anchor, Display, Element, Justify, Track, column, holder, row, text};
+use kit_ui::input::Size;
+use kit_ui::widgets::button;
 
 /// The mana symbols, in the order the web's `POOL_SYMBOLS` shows them, with each one's amount.
 fn mana(pool: ManaPool) -> [(&'static str, u32); 6] {
@@ -281,7 +281,7 @@ fn desktop_counter(name: &str, words: &str, mana: bool, button: bool) -> Element
         #[expect(clippy::cast_possible_truncation, reason = "a short text")]
         let range = symbol_end as u32..words.len() as u32;
         if !range.is_empty() {
-            shown.spans.push(crate::element::Span {
+            shown.spans.push(kit_ui::element::Span {
                 range,
                 style: type_style::POOL_COUNT,
                 color: None,
@@ -293,7 +293,7 @@ fn desktop_counter(name: &str, words: &str, mana: bool, button: bool) -> Element
         .padding(COUNTER_PADDING)
         .background([0; 4])
         .child(shown);
-    element.style.border = Some(crate::element::Border::uniform([0; 4], 0.0));
+    element.style.border = Some(kit_ui::element::Border::uniform([0; 4], 0.0));
     element
 }
 

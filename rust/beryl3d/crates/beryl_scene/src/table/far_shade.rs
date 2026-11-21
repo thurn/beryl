@@ -45,7 +45,7 @@ pub fn place(window: Window) -> Option<(Vec2, f32)> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::input::{Insets, Size};
+    use kit_ui::input::{Insets, Size};
 
     fn window(width: f32, height: f32, scale: f32) -> Window {
         Window {

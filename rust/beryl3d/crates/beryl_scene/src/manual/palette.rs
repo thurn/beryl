@@ -17,11 +17,11 @@ use glam::Vec2;
 use super::commands;
 use super::menus::{self, Act};
 use super::{Context, TablePress, Target};
-use crate::element::{Align, Anchor, Element, Overflow, column, row, text};
-use crate::input::Size;
-use crate::widgets::{Fields, field};
 use kit_base::tokens::{color, size, space, type_style};
 use kit_frame::frame::Role;
+use kit_ui::element::{Align, Anchor, Element, Overflow, column, row, text};
+use kit_ui::input::Size;
+use kit_ui::widgets::{Fields, field};
 
 /// The command list's field, by its name, which is also its placeholder.
 pub const FIELD: &str = "Search commands";
@@ -257,7 +257,7 @@ pub fn panel(palette: &Palette, fields: &Fields, window: Size) -> Element {
         results.push(text("No matching commands").color(color::TEXT_DIM));
     }
     let capture = palette.capturing.then(|| {
-        crate::widgets::button("Press a key · Esc cancels")
+        kit_ui::widgets::button("Press a key · Esc cancels")
             .name("capture")
             .on_press(TablePress::CancelCapture)
     });

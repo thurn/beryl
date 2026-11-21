@@ -10,17 +10,17 @@ use crate::screens::ScreenPress;
 use glam::Vec2;
 
 use super::{Screen, ScreenIn};
-use crate::element::{
-    Action, Align, Anchor, Element, Justify, Overflow, Shown, TextAlign, column, row, text,
-};
 use crate::faces::{CARD_BACK, FaceList};
-use crate::input::{FaceId, FaceSize};
 use crate::inspect::viewer::scry_sample;
 use crate::table::{CARD_HEIGHT, CARD_WIDTH};
-use crate::widgets::{MenuGroup, MenuId, MenuRow, button, context_menu, icons, menu, primary};
 use kit_base::data::space::flat::gallery as metrics;
 use kit_base::tokens::{color, shadow, size, space, type_style};
 use kit_frame::frame::Role;
+use kit_ui::element::{
+    Action, Align, Anchor, Element, Justify, Overflow, Shown, TextAlign, column, row, text,
+};
+use kit_ui::input::{FaceId, FaceSize};
+use kit_ui::widgets::{MenuGroup, MenuId, MenuRow, button, context_menu, icons, menu, primary};
 
 /// A context menu sample opened in the gallery.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

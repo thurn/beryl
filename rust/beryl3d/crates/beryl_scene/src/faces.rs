@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use beryl_protocol::card_records::{CardEntry, CardRecords};
 use beryl_protocol::protocol::{ObjectView, PlayerView, StackItem, ZoneName};
 
-use crate::input::{AssetReady, FaceId, FaceSize};
+use kit_ui::input::{AssetReady, FaceId, FaceSize};
 
 /// The card back's [`FaceId`]: always the first face.
 pub const CARD_BACK: FaceId = FaceId(0);

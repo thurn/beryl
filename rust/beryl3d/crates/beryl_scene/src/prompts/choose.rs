@@ -19,25 +19,25 @@ use glam::Vec2;
 
 use super::bar::{Controls, bar};
 use super::{Shown, Steps, marks, ways};
-use crate::element::{
-    Align, Anchor, Direction, Element, Justify, Shown as Showing, column, row, text,
-};
 use crate::faces::FaceList;
 use crate::hud::HudIn;
-use crate::input::{FaceId, FaceSize};
 use crate::table::{CARD_HEIGHT, CARD_WIDTH, DESKTOP};
-use crate::widgets::{icon_button, icons};
 use kit_base::data::space::hud::phone::CHARACTER_WIDTH;
 use kit_base::tokens::{color, ratio, size, space, type_style};
 use kit_frame::frame::Role;
 use kit_text::text::TypeStyle;
+use kit_ui::element::{
+    Align, Anchor, Direction, Element, Justify, Shown as Showing, column, row, text,
+};
+use kit_ui::input::{FaceId, FaceSize};
+use kit_ui::widgets::{icon_button, icons};
 
 /// The filter of the face of a way that cannot be chosen, as the web's `.stage-way:disabled`
 /// dims and desaturates it (`grayscale(0.85) brightness(0.55)` in `ui/src/stage/choose.css`)
 /// rather than making it translucent, which would let the cards behind it show through.
-const DIMMED: [crate::element::Filter; 2] = [
-    crate::element::Filter::Grayscale(ratio::WAY_DISABLED_GRAYSCALE),
-    crate::element::Filter::Brightness(ratio::WAY_DISABLED_BRIGHTNESS),
+const DIMMED: [kit_ui::element::Filter; 2] = [
+    kit_ui::element::Filter::Grayscale(ratio::WAY_DISABLED_GRAYSCALE),
+    kit_ui::element::Filter::Brightness(ratio::WAY_DISABLED_BRIGHTNESS),
 ];
 
 /// What the flat layer shows for `prompt`: the prompt bar, with a number's steps before its

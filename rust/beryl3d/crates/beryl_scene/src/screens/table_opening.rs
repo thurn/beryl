@@ -16,13 +16,13 @@ use beryl_protocol::protocol::{ObjectId, TablePrompt};
 use glam::Vec2;
 
 use super::opening::{Presentation, present};
-use crate::element::{Action, Align, Anchor, Element, column, row};
 use crate::manual::TablePress;
 use crate::manual::opening::{OpeningPress, prompt};
 use crate::table::Window;
-use crate::widgets::screen::phone_action;
-use crate::widgets::{button, primary};
 use kit_base::tokens::{color, size, space};
+use kit_ui::element::{Action, Align, Anchor, Element, column, row};
+use kit_ui::widgets::screen::phone_action;
+use kit_ui::widgets::{button, primary};
 
 /// The press on a card of the opening hand: it goes on the bottom, or comes back.
 fn bottom(slot: ObjectId) -> Action {

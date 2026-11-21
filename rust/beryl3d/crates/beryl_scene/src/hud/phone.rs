@@ -15,14 +15,14 @@ use crate::hud::GamePress;
 use beryl_protocol::protocol::{PlayerView, Side, Step};
 use glam::Vec2;
 
-use crate::element::{Align, Anchor, Element, Justify, Shown, column, row, text};
 use crate::hud::HudIn;
-use crate::input::Rect;
 use crate::table::PhoneBands;
-use crate::widgets::{icon_button, icons};
 use kit_base::data::space::hud::phone as data;
 use kit_base::tokens::{color, shadow, size, space, type_style};
 use kit_frame::frame::Role;
+use kit_ui::element::{Align, Anchor, Element, Justify, Shown, column, row, text};
+use kit_ui::input::Rect;
+use kit_ui::widgets::{icon_button, icons};
 
 use super::log;
 
@@ -153,7 +153,7 @@ pub fn middle(view: &PlayerView, full_control: bool, bands: &PhoneBands) -> Elem
         ));
         mark
     });
-    crate::element::holder()
+    kit_ui::element::holder()
         .name("middle")
         .child(phase)
         .children(mark)
@@ -182,7 +182,7 @@ pub fn phase_span(input: &HudIn, bands: &PhoneBands) -> (f32, f32) {
 
 /// The icon of the phase `step` is in, of the web's five (`phaseOf` in `ui/src/mobile/layout.ts`):
 /// beginning, first main, combat, second main and end.
-fn phase_icon(step: Step) -> crate::widgets::IconId {
+fn phase_icon(step: Step) -> kit_ui::widgets::IconId {
     let phase = match step {
         Step::Untap | Step::Upkeep | Step::Draw => 0,
         Step::PrecombatMain => 1,
