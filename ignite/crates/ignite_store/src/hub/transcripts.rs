@@ -11,6 +11,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 use ignite_core::ids::{MachineId, SessionId, TicketId};
 use ignite_core::protocol::cli::{
     DIGEST_LINE_CHARS, StoredTranscriptLine, TRANSCRIPT_KEEP_DAYS, TranscriptKind, TranscriptLine,
+    TranscriptSession,
 };
 use ignite_core::time::Timestamp;
 
@@ -143,6 +144,48 @@ pub fn tail(conn: &Connection, session: &str, count: usize) -> Result<Vec<Stored
         .collect())
 }
 
+/// Records the model and reasoning effort of each of `sessions`, replacing what an earlier
+/// report said.
+pub fn record_sessions(
+    conn: &Connection,
+    sessions: &[TranscriptSession],
+    now: Timestamp,
+) -> Result<()> {
+    for session in sessions {
+        conn.execute(
+            "INSERT INTO transcript_sessions (session, model, effort, updated_at)
+             VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT (session) DO UPDATE SET
+               model = excluded.model, effort = excluded.effort, updated_at = excluded.updated_at",
+            params![
+                session.session.as_str(),
+                session.model,
+                session.effort,
+                now.to_string()
+            ],
+        )?;
+    }
+    Ok(())
+}
+
+/// The model and reasoning effort reported for `session`, or `None` when none was.
+pub fn session_run(conn: &Connection, session: &str) -> Result<Option<TranscriptSession>> {
+    let row: Option<(Option<String>, Option<String>)> = conn
+        .query_row(
+            "SELECT model, effort FROM transcript_sessions WHERE session = ?1",
+            [session],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()?;
+    Ok(row.and_then(|(model, effort)| {
+        Some(TranscriptSession {
+            session: SessionId::new(session).ok()?,
+            model,
+            effort,
+        })
+    }))
+}
+
 /// The sessions that have lines on `ticket`, in the order of their first line.
 pub fn sessions_of(conn: &Connection, ticket: &str) -> Result<Vec<SessionId>> {
     let mut statement = conn.prepare(
@@ -197,10 +240,16 @@ pub fn delete_expired(conn: &Connection, now: Timestamp) -> Result<usize> {
     let cutoff = now
         .plus_seconds(-TRANSCRIPT_KEEP_DAYS * 86_400.0)
         .to_string();
-    Ok(conn.execute(
+    let deleted = conn.execute(
         "DELETE FROM transcript_lines WHERE stored_at < ?1",
-        [cutoff],
-    )?)
+        [&cutoff],
+    )?;
+    conn.execute(
+        "DELETE FROM transcript_sessions WHERE updated_at < ?1
+           AND session NOT IN (SELECT session FROM transcript_lines)",
+        [&cutoff],
+    )?;
+    Ok(deleted)
 }
 
 #[cfg(test)]
@@ -280,6 +329,24 @@ mod tests {
             Some("T.2".to_owned())
         );
         assert!(sessions_of(&conn, "T.3").unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_later_report_of_a_session_replaces_its_model_and_effort() {
+        let conn = crate::hub::open_in_memory().unwrap();
+        let now = Timestamp::parse("2026-11-20T06:00:00Z").unwrap();
+        let run = |model: &str, effort: &str| TranscriptSession {
+            session: SessionId::new("cli-claude-0a1b2c3d").unwrap(),
+            model: Some(model.to_owned()),
+            effort: Some(effort.to_owned()),
+        };
+        record_sessions(&conn, &[run("claude-sonnet-5-5", "medium")], now).unwrap();
+        record_sessions(&conn, &[run("claude-opus-5-5", "high")], now).unwrap();
+        assert_eq!(
+            session_run(&conn, "cli-claude-0a1b2c3d").unwrap(),
+            Some(run("claude-opus-5-5", "high"))
+        );
+        assert_eq!(session_run(&conn, "cli-claude-ffffffff").unwrap(), None);
     }
 
     #[test]

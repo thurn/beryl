@@ -338,6 +338,14 @@ crate::tables! {
         call_index: Option<i64>,
     }
 
+    /// The model and reasoning effort of a CLI session with a transcript.
+    TranscriptSession = "transcript_sessions" {
+        session: String,
+        model: Option<String>,
+        effort: Option<String>,
+        updated_at: String,
+    }
+
     /// One image attached to a ticket; the file is on disk under `sha256`.
     Attachment = "attachments" {
         ticket: String,

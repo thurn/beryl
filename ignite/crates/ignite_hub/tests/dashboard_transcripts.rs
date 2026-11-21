@@ -15,7 +15,7 @@ use serde_json::{Value, json};
 
 use ignite_core::config::Config;
 use ignite_core::ids::MachineId;
-use ignite_core::protocol::cli::{TranscriptKind, TranscriptLine};
+use ignite_core::protocol::cli::{TranscriptKind, TranscriptLine, TranscriptSession};
 use ignite_core::time::Timestamp;
 use ignite_hub::dashboard::serve::{Site, serve_with};
 use ignite_hub::routes::Request;
@@ -181,6 +181,24 @@ fn the_session_page_shows_the_lines_and_the_tell_box() {
 }
 
 #[test]
+fn the_session_page_shows_the_model_and_effort_the_daemon_reported() {
+    let conn = seeded();
+    // Before any report, the ticket's tier stands in for the model.
+    let (_, html) = page(&conn, "/TT1/session", true, true);
+    assert!(html.contains("class=\"c-session-model\">sonnet<"), "{html}");
+    assert!(html.contains("effort unknown"), "{html}");
+    let run = TranscriptSession {
+        session: SESSION.parse().unwrap(),
+        model: Some("claude-opus-5-5".to_owned()),
+        effort: Some("high".to_owned()),
+    };
+    transcripts::record_sessions(&conn, &[run], Timestamp::parse(NOW).unwrap()).unwrap();
+    let (_, html) = page(&conn, "/TT1/session", true, true);
+    assert!(html.contains("class=\"c-session-model\">claude-opus-5-5<"), "{html}");
+    assert!(html.contains("high effort"), "{html}");
+}
+
+#[test]
 fn the_first_address_of_a_session_redirects_to_its_ticket() {
     let conn = seeded();
     let (status, location, _) = reply(&conn, &format!("/pool/session/{SESSION}"), true, true);
@@ -327,7 +345,12 @@ fn the_hub_stores_a_line_once_and_the_public_listener_answers_404() {
         "X-Actor: s1".to_owned(),
     ];
     let auth: Vec<&str> = auth.iter().map(String::as_str).collect();
-    let body = json!({"machine": "m-1", "lines": lines()}).to_string();
+    let body = json!({
+        "machine": "m-1",
+        "lines": lines(),
+        "sessions": [{"session": SESSION, "model": "claude-opus-5-5", "effort": "high"}],
+    })
+    .to_string();
 
     let append = |headers: &[&str], body: &str| {
         send(
@@ -348,6 +371,10 @@ fn the_hub_stores_a_line_once_and_the_public_listener_answers_404() {
     assert_eq!(serde_json::from_str::<Value>(&first).unwrap()["stored"], 5);
     let (_, second) = append(&auth, &body);
     assert_eq!(serde_json::from_str::<Value>(&second).unwrap()["stored"], 0);
+    // The session's model and effort are stored with the lines.
+    let run = transcripts::session_run(&hub::open(&dir.join("hub.sqlite")).unwrap(), SESSION);
+    let run = run.unwrap().unwrap();
+    assert_eq!((run.model.unwrap(), run.effort.unwrap()), ("claude-opus-5-5".into(), "high".into()));
 
     let route = format!("/pj/api/transcripts/{SESSION}");
     let (status, read) = send(private.address(), "GET", &route, &[], "");

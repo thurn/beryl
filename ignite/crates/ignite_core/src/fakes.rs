@@ -145,6 +145,7 @@ pub struct FakeHub {
     flaky: Mutex<Vec<FlakyReport>>,
     session_titles: Mutex<Vec<SessionTitle>>,
     transcript_lines: Mutex<Vec<TranscriptLine>>,
+    transcript_sessions: Mutex<Vec<crate::protocol::cli::TranscriptSession>>,
     tip_claims: Mutex<Vec<TipClaim>>,
     /// Every tip claim asked, renewals included.
     tip_claim_asks: Mutex<Vec<TipClaim>>,
@@ -254,6 +255,11 @@ impl FakeHub {
     /// (the same session, turn and index) is held once, as the real hub holds it.
     pub fn transcript_lines(&self) -> Vec<TranscriptLine> {
         lock(&self.transcript_lines).clone()
+    }
+
+    /// Every session's model and effort reported with transcript lines so far, in order.
+    pub fn transcript_sessions(&self) -> Vec<crate::protocol::cli::TranscriptSession> {
+        lock(&self.transcript_sessions).clone()
     }
 
     /// Every session title reported so far, in order.
@@ -511,6 +517,7 @@ impl Hub for FakeHub {
                 held.push(line.clone());
             }
         }
+        lock(&self.transcript_sessions).extend(append.sessions.iter().cloned());
         Ok(())
     }
 

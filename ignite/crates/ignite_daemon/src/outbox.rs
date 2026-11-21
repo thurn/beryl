@@ -182,9 +182,21 @@ fn send(hub: &dyn Hub, kind: &str, run: &[&rows::OutboxEntry]) -> Result<()> {
             let Some(first) = appends.first() else {
                 return Ok(());
             };
+            let machine = first.machine.clone();
+            let mut lines = Vec::new();
+            let mut sessions: Vec<ignite_core::protocol::cli::TranscriptSession> = Vec::new();
+            for append in appends {
+                lines.extend(append.lines);
+                for session in append.sessions {
+                    // A later append's report of a session replaces an earlier one.
+                    sessions.retain(|known| known.session != session.session);
+                    sessions.push(session);
+                }
+            }
             hub.transcripts(&TranscriptAppend {
-                machine: first.machine.clone(),
-                lines: appends.into_iter().flat_map(|a| a.lines).collect(),
+                machine,
+                lines,
+                sessions,
             })
         }
         other => Err(Error::Invalid(format!("unknown outbox kind {other:?}"))),

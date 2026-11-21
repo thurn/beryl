@@ -1,6 +1,7 @@
 //! The page `/<ticket>/session/<id>`: the transcript of one CLI worker's session on one ticket,
-//! laid out like a conversation in the Claude desktop app. It has a compact header with its
-//! ticket, app, model, turn and state, links to the ticket's other sessions, the digest of the
+//! laid out like a conversation in the Claude desktop app. It has a compact header with the
+//! model and reasoning effort the session runs at, its ticket, app, turn and state, links to
+//! the ticket's other sessions, the digest of the
 //! transcript as the daemon sends it, and a box at the bottom that tells the worker something.
 //! `/<ticket>/session` shows the ticket's latest session, and `/pool/session/<id>`, the page's
 //! first address, redirects to the session's page under the ticket it worked last.
@@ -126,16 +127,17 @@ pub(crate) fn options(
     let held = worker
         .as_ref()
         .is_some_and(|(_, _, holds)| holds.as_deref() == Some(ticket));
-    let app = worker
-        .as_ref()
-        .map_or("unknown", |(app, _, _)| app.as_str());
+    // A worker that is gone leaves its app in its session ID, `cli-<app>-<8 hex>`.
+    let app = worker.as_ref().map_or_else(
+        || session.split('-').nth(1).unwrap_or("unknown"),
+        |(app, _, _)| app.as_str(),
+    );
     // A worker gone on to another ticket along a lane is done with this one.
     let state = match &worker {
         Some((_, state, _)) if held => state.as_str(),
         Some(_) => "done",
         None => "gone",
     };
-    let tier = tier_of(conn, ticket)?;
     let ticket_link = c::link(
         &ticket_url(root, ticket),
         &esc(&display_id(ticket)),
@@ -147,7 +149,7 @@ pub(crate) fn options(
         "idle" | "gone" | "done" => Tone::Muted,
         _ => Tone::Green,
     };
-    let model = tier.map_or_else(|| c::muted("model unknown"), |tier| esc(&tier));
+    let (model, effort) = run_view(conn, session, ticket)?;
     let turn = last.map_or_else(
         || c::muted("no turn yet"),
         |line| format!("turn {}", line.line.turn),
@@ -155,8 +157,10 @@ pub(crate) fn options(
     let others = session_tabs(root, ticket, &sessions, session);
     let header = format!(
         "<header class=\"c-session-head\"><h1 class=\"c-session-name\">{}</h1>\
+         <p class=\"c-session-run\"><span class=\"c-session-model\">{model}</span>\
+         <span class=\"c-session-effort\">{effort}</span></p>\
          <p class=\"c-session-facts\"><span>{ticket_link}</span><span>{}</span>\
-         <span>{model}</span><span>{turn}</span><span>{}</span></p>{others}</header>",
+         <span>{turn}</span><span>{}</span></p>{others}</header>",
         c::mono(session),
         esc(app),
         c::dot(tone, state, None),
@@ -225,6 +229,22 @@ fn session_tabs(root: &str, ticket: &str, sessions: &[String], current: &str) ->
         })
         .collect();
     format!("<nav class=\"c-session-tabs\" aria-label=\"Sessions\">Sessions {tabs}</nav>")
+}
+
+/// The model and reasoning effort `session` runs at, as HTML. The daemon reports the slot's
+/// model and effort with the lines; a session from before that shows the ticket's `tier:`
+/// label as its model.
+fn run_view(conn: &Connection, session: &str, ticket: &str) -> Result<(String, String), ReadError> {
+    let run = transcripts::session_run(conn, session)?;
+    let model = match run.as_ref().and_then(|run| run.model.clone()) {
+        Some(model) => Some(model),
+        None => tier_of(conn, ticket)?,
+    };
+    let model = model.map_or_else(|| c::muted("model unknown"), |model| esc(&model));
+    let effort = run
+        .and_then(|run| run.effort)
+        .map_or_else(|| c::muted("effort unknown"), |effort| format!("{} effort", esc(&effort)));
+    Ok((model, effort))
 }
 
 /// The model tier (`sonnet`, `opus`) named by the ticket's `tier:` label.

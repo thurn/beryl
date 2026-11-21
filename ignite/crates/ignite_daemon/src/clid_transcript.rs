@@ -17,7 +17,9 @@
 
 use ignite_core::cli::digest as app_digest;
 use ignite_core::ids::{SessionId, TicketId};
-use ignite_core::protocol::cli::{DIGEST_LINE_CHARS, TranscriptAppend, TranscriptLine};
+use ignite_core::protocol::cli::{
+    DIGEST_LINE_CHARS, TranscriptAppend, TranscriptLine, TranscriptSession,
+};
 use ignite_core::traits::Result;
 use ignite_store::local::cli_slots as store;
 
@@ -89,9 +91,22 @@ impl CliDaemon {
             })
             .collect();
         let count = done + fresh.len();
+        // The slot's model and effort go with the lines, so the hub can show them after the
+        // slot is freed. A session whose slot cannot be read sends its lines without them.
+        let slot = self.row(session).ok().flatten();
+        let sessions = slot
+            .filter(|slot| slot.model.is_some() || slot.effort.is_some())
+            .map(|slot| TranscriptSession {
+                session: session.clone(),
+                model: slot.model,
+                effort: slot.effort,
+            })
+            .into_iter()
+            .collect();
         let append = TranscriptAppend {
             machine,
             lines: fresh,
+            sessions,
         };
         let queued = self
             .database(|conn| Ok(crate::outbox::push_transcript(conn, &append, now)))

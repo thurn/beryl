@@ -64,6 +64,9 @@ fn append(conn: &Connection, request: &Request, now: Timestamp) -> Response {
     if body.machine != writer.machine {
         return failure(403, "the token belongs to another machine");
     }
+    if let Err(error) = transcripts::record_sessions(conn, &body.sessions, now) {
+        return failure(500, &error.to_string());
+    }
     match transcripts::append(conn, &body.machine, &body.lines, now) {
         Ok(stored) => Response::json(200, &json!(TranscriptAppendReply { stored })),
         Err(error) => failure(500, &error.to_string()),

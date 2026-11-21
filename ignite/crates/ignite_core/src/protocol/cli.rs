@@ -123,6 +123,21 @@ pub struct TranscriptLine {
 pub struct TranscriptAppend {
     pub machine: MachineId,
     pub lines: Vec<TranscriptLine>,
+    /// The model and reasoning effort of the sessions the lines belong to, which the session
+    /// page shows. A daemon from before sessions were reported sends none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sessions: Vec<TranscriptSession>,
+}
+
+/// The model and reasoning effort a CLI session runs at, as its slot on the machine records
+/// them: a model ID such as `claude-opus-5-5` and an effort such as `medium`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TranscriptSession {
+    pub session: SessionId,
+    #[serde(default)]
+    pub model: Option<String>,
+    #[serde(default)]
+    pub effort: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
