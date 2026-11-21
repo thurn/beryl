@@ -1,4 +1,6 @@
 //! The game's randomness: two `SplitMix64` streams inside `State` (architecture §14).
+//!
+//! Implements: none. Supplies reproducible random values.
 
 /// `SplitMix64`: tiny, fast, and its output for a seed never changes, so a game is a pure
 /// function of its decks, seed and choices.

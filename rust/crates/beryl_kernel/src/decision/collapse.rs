@@ -1,5 +1,7 @@
 //! Collapsing the interchangeable: of objects that lead to the same game, one candidate each
 //! (architecture §7.2).
+//!
+//! Implements: none. Groups choices that lead to equivalent game states.
 
 use std::cell::OnceCell;
 
@@ -17,12 +19,12 @@ use beryl_card::FaceIx;
 /// signature doesn't show what refers to it.
 ///
 /// Nor is a face-down permanent: whether two are the same card is hidden from all but their
-/// controller ([CR 708.5](https://yawgatog.com/resources/magic-rules/#R7085)): "You can't look
+/// controller (see [CR 708.5](https://yawgatog.com/resources/magic-rules/#R7085)): "You can't look
 /// at face-down cards in any other zone or face-down spells or permanents controlled by
 /// another player." Offering one of them, not both, would tell the other player.
 ///
 /// Nor are two copies of a card that different players know: in a hidden zone
-/// ([CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002)), "Library and hand are
+/// (see [CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002)), "Library and hand are
 /// hidden zones, even if all the cards in one such zone happen to be revealed", a copy the
 /// other player has seen and one they haven't lead to different games, as playing the one they
 /// know tells them nothing new and leaves them the other unknown.

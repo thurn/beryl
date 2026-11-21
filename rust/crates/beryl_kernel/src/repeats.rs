@@ -15,6 +15,8 @@
 //! answer, so it is never a draw here and runs to its budget.
 //!
 //! [CR 104.4b]: https://yawgatog.com/resources/magic-rules/#R1044b
+//!
+//! Implements: CR 104.4b
 
 use std::cell::{Cell, RefCell};
 use std::hash::{DefaultHasher, Hasher};

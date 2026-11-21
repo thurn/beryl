@@ -7,6 +7,8 @@
 //! its player's turn; with none, the turn order goes on.
 //!
 //! [CR 500.7]: https://yawgatog.com/resources/magic-rules/#R5007
+//!
+//! Implements: CR 500.7
 
 use std::cell::Cell;
 

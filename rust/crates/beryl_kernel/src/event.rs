@@ -3,6 +3,8 @@
 //! keeps beside each what it came from ([`crate::cause`]). The pipeline that executes an event
 //! (replacements, the layer refresh, trigger matching) is the rules', in `beryl_engine`'s `event`
 //! module.
+//!
+//! Implements: none. Defines event records and collects them for consumers.
 
 use beryl_card::{
     Castings, CounterKind, FaceAbility, FaceIx, ManaColor, ObjectAbility, TurnStep, Zone,
@@ -27,34 +29,34 @@ pub use kinds::{EventKind, Listens, ReplacementKind, Replaces};
 /// into a graveyard from anywhere", "is discarded").
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Reason {
-    /// Played as a land (CR 305.1).
+    /// Played as a land (see CR 305.1).
     Play,
-    /// Drawn (CR 121.1).
+    /// Drawn (see CR 121.1).
     Draw,
-    /// Discarded (CR 701.9a).
+    /// Discarded (see CR 701.9a).
     Discard,
-    /// Destroyed (CR 701.8a).
+    /// Destroyed (see CR 701.8a).
     Destroy,
-    /// Sacrificed (CR 701.21a).
+    /// Sacrificed (see CR 701.21a).
     Sacrifice,
-    /// A state-based action (CR 704).
+    /// A state-based action (see CR 704).
     StateBased,
-    /// Exiled by an effect (CR 701.13a).
+    /// Exiled by an effect (see CR 701.13a).
     Exile,
-    /// A token created on the battlefield (CR 111.1).
+    /// A token created on the battlefield (see CR 111.1).
     Created,
-    /// Returned when an "until" exile ends (CR 610.3).
+    /// Returned when an "until" exile ends (see CR 610.3).
     Return,
     /// Any other effect that puts an object into a zone.
     Effect,
-    /// Put on the stack as it is cast (CR 601.2a).
+    /// Put on the stack as it is cast (see CR 601.2a).
     Cast,
-    /// Countered ([CR 701.6a]).
+    /// Countered (see [CR 701.6a]).
     ///
     /// [CR 701.6a]: https://yawgatog.com/resources/magic-rules/#R7016a
     Counter,
     /// A spell resolving or failing to: a permanent spell entering the battlefield, an
-    /// instant or sorcery put into its owner's graveyard (CR 608.2n, 608.3).
+    /// instant or sorcery put into its owner's graveyard (see CR 608.2n and see CR 608.3).
     Resolve,
 }
 
@@ -65,20 +67,20 @@ pub enum Recipient<L: Layout = Small> {
     Permanent(ObjectRef<L>),
 }
 
-/// Why a player lost the game ([CR 104.3]): "There are several ways to lose the game."
+/// Why a player lost the game (see [CR 104.3]): "There are several ways to lose the game."
 ///
 /// [CR 104.3]: https://yawgatog.com/resources/magic-rules/#R1043
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum LossCause<L: Layout = Small> {
-    /// [CR 704.5a](https://yawgatog.com/resources/magic-rules/#R7045a): "If a player has 0 or less
+    /// See [CR 704.5a](https://yawgatog.com/resources/magic-rules/#R7045a): "If a player has 0 or less
     /// life, that player loses the game." What lowered it is in the events before.
     Life,
-    /// [CR 704.5b](https://yawgatog.com/resources/magic-rules/#R7045b): "If a player attempted to
+    /// See [CR 704.5b](https://yawgatog.com/resources/magic-rules/#R7045b): "If a player attempted to
     /// draw a card from a library with no cards in it since the last time state-based actions were
     /// checked, that player loses the game."
     Library,
-    /// An effect had their opponent win ([CR 104.2b]: "An effect may state that a player wins the
-    /// game") or had them lose ([CR 104.3e]: "An effect may state that a player loses the game"):
+    /// An effect had their opponent win (see [CR 104.2b]: "An effect may state that a player wins the
+    /// game") or had them lose (see [CR 104.3e]: "An effect may state that a player loses the game"):
     /// the ability of `face` of `card` that did, or its spell when `ability` is none, and the
     /// object that had it, if any.
     ///
@@ -90,7 +92,7 @@ pub enum LossCause<L: Layout = Small> {
         face: FaceIx,
         ability: Option<FaceAbility>,
     },
-    /// [CR 104.3a](https://yawgatog.com/resources/magic-rules/#R1043a): "A player can concede the
+    /// See [CR 104.3a](https://yawgatog.com/resources/magic-rules/#R1043a): "A player can concede the
     /// game at any time. A player who concedes leaves the game immediately. That player loses the
     /// game."
     Concede,
@@ -101,7 +103,7 @@ pub enum LossCause<L: Layout = Small> {
 /// every attacker declared. Flag writes and cache updates never go through events.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Event<L: Layout = Small> {
-    /// An object changed zones; `object` is the new object ([CR 400.7]).
+    /// An object changed zones; `object` is the new object (see [CR 400.7]).
     ///
     /// [CR 400.7]: https://yawgatog.com/resources/magic-rules/#R4007
     ZoneChange {
@@ -133,7 +135,7 @@ pub enum Event<L: Layout = Small> {
         bottom: u8,
     },
     /// A player put a card on the top (`top`) or the bottom of their library by their own
-    /// choice ([CR 608.2d]): "the player announces these while applying the effect." The
+    /// choice (see [CR 608.2d]): "the player announces these while applying the effect." The
     /// public result of the choice, without the card's identity.
     ///
     /// [CR 608.2d]: https://yawgatog.com/resources/magic-rules/#R6082d
@@ -144,7 +146,7 @@ pub enum Event<L: Layout = Small> {
     LibraryShuffled {
         player: Seat,
     },
-    /// A card was revealed ([CR 701.20a]): "To reveal a card, show that card to all players for a
+    /// A card was revealed (see [CR 701.20a]): "To reveal a card, show that card to all players for a
     /// brief time." For the UI, which holds it up to be read; no rule acts on it.
     ///
     /// [CR 701.20a]: https://yawgatog.com/resources/magic-rules/#R70120a
@@ -177,7 +179,7 @@ pub enum Event<L: Layout = Small> {
     Untap {
         object: ObjectRef<L>,
     },
-    /// Mana was added to a player's mana pool ([CR 106.4]): "When an effect instructs a player to
+    /// Mana was added to a player's mana pool (see [CR 106.4]): "When an effect instructs a player to
     /// add mana, that mana goes into a player's mana pool." For the UI, which shows it flow from
     /// `source` (the mana ability's permanent, or the spell or ability that added it) to what it
     /// pays for.
@@ -188,14 +190,14 @@ pub enum Event<L: Layout = Small> {
         source: Option<ObjectRef<L>>,
         color: ManaColor,
         amount: u8,
-        /// Whether the mana remembers a restriction on what it may be spent on ([CR 106.6]):
+        /// Whether the mana remembers a restriction on what it may be spent on (see [CR 106.6]):
         /// "Some spells or abilities that produce mana restrict how that mana can be spent".
         /// A scenario's trace records it, so that an oracle can tap the same mana ability.
         ///
         /// [CR 106.6]: https://yawgatog.com/resources/magic-rules/#R1066
         restricted: bool,
     },
-    /// Mana paid during resolution ([CR 608.2g]): "If an effect gives a player the option to pay
+    /// Mana paid during resolution (see [CR 608.2g]): "If an effect gives a player the option to pay
     /// mana, they may activate mana abilities". Names the resolving item so its payment can be
     /// shown before it leaves the stack.
     ///
@@ -204,28 +206,28 @@ pub enum Event<L: Layout = Small> {
         player: Seat,
         item: StackEntry<L>,
     },
-    /// An ability left the stack at the end of resolution ([CR 608.2n]): "the ability is removed
+    /// An ability left the stack at the end of resolution (see [CR 608.2n]): "the ability is removed
     /// from the stack and ceases to exist." Playback needs this boundary even when the next trigger
     /// arrives in the same view.
     ///
     /// [CR 608.2n]: https://yawgatog.com/resources/magic-rules/#R6082n
     AbilityFinished,
-    /// A spell or ability arrived on the stack, on top ([CR 405.2]: "Each time an object is put on
+    /// A spell or ability arrived on the stack, on top (see [CR 405.2]: "Each time an object is put on
     /// the stack, it's put on top of all objects already there."), as it stood then: a spell or an
-    /// activated ability before anything is announced for it (CR 601.2a, 602.2a), a triggered
-    /// ability before its targets are chosen (CR 603.3d). For whoever follows the stack through the
-    /// events ([`StackIx`]); no rule acts on it.
+    /// activated ability before anything is announced for it (see CR 601.2a and
+    /// see CR 602.2a), a triggered ability before its targets are chosen (see CR 603.3d). The
+    /// record lets consumers follow the stack through the events ([`StackIx`]).
     ///
     /// [CR 405.2]: https://yawgatog.com/resources/magic-rules/#R4052
     StackArrival {
         entry: StackEntry<L>,
     },
-    /// The spell or ability at `entry` left the stack: resolved or failed to (CR 608.2n, 608.3),
-    /// countered ([CR 701.6a]: "To counter a spell or ability means to cancel it, removing it from
-    /// the stack."), removed as a triggered ability with nothing legal to choose ([CR 603.3d]: "the
+    /// The spell or ability at `entry` left the stack: resolved or failed to (see CR 608.2n and see CR 608.3),
+    /// countered (see [CR 701.6a]: "To counter a spell or ability means to cancel it, removing it from
+    /// the stack."), removed as a triggered ability with nothing legal to choose (see [CR 603.3d]: "the
     /// ability is simply removed from the stack"), or its card moved elsewhere by an effect. A
     /// spell's card moves in an event of its own, before this one; a resolving spell whose own
-    /// effect moved its card leaves only as its resolution ends ([CR 608.2m]: "If an instant spell,
+    /// effect moved its card leaves only as its resolution ends (see [CR 608.2m]: "If an instant spell,
     /// sorcery spell, or ability that can legally resolve leaves the stack once it starts to
     /// resolve, it will continue to resolve fully."). The entries above it fall by one place. For
     /// whoever follows the stack; no rule acts on it.
@@ -241,7 +243,7 @@ pub enum Event<L: Layout = Small> {
         controller: Seat,
         tokens: Bitboard<L::Slot>,
     },
-    /// A spell was cast ([CR 601.2i]), as the stack then showed it, for the UI: an opponent's spell
+    /// A spell was cast (see [CR 601.2i]), as the stack then showed it, for the UI: an opponent's spell
     /// that resolves unanswered has left the stack by the time anyone looks.
     ///
     /// [CR 601.2i]: https://yawgatog.com/resources/magic-rules/#R6012i
@@ -254,9 +256,9 @@ pub enum Event<L: Layout = Small> {
         flashback: bool,
     },
     /// An ability was put on the stack, for the UI's log: an activated one as it becomes activated,
-    /// its costs paid ([CR 602.2b]: "The remainder of the process for activating an ability is
+    /// its costs paid (see [CR 602.2b]: "The remainder of the process for activating an ability is
     /// identical to the process for casting a spell listed in rules 601.2b-i"), or a triggered one
-    /// once its targets are chosen ([CR 603.3d]), or at once if it has none. The ability as it
+    /// once its targets are chosen (see [CR 603.3d]), or at once if it has none. The ability as it
     /// stood on the stack then, which it may have left by the time anyone looks.
     ///
     /// [CR 602.2b]: https://yawgatog.com/resources/magic-rules/#R6022b
@@ -270,14 +272,14 @@ pub enum Event<L: Layout = Small> {
         targets: L::Queue<Target<L>, TARGETS>,
         x: u8,
     },
-    /// A player declared attackers ([CR 508.1]).
+    /// A player declared attackers (see [CR 508.1]).
     ///
     /// [CR 508.1]: https://yawgatog.com/resources/magic-rules/#R5081
     Attack {
         player: Seat,
         attackers: Bitboard<L::Slot>,
     },
-    /// A creature was declared as a blocker for `attacker` ([CR 509.1a]: "The defending player
+    /// A creature was declared as a blocker for `attacker` (see [CR 509.1a]: "The defending player
     /// chooses which creatures they control, if any, will block. ... For each of the chosen
     /// creatures, the defending player chooses one creature for it to block"), one event for each
     /// blocker of a declaration, together. For the UI, which draws the block; no rule acts on it
@@ -289,7 +291,7 @@ pub enum Event<L: Layout = Small> {
         blocker: ObjectRef<L>,
         attacker: ObjectRef<L>,
     },
-    /// A step or phase began ([CR 500.6]).
+    /// A step or phase began (see [CR 500.6]).
     ///
     /// [CR 500.6]: https://yawgatog.com/resources/magic-rules/#R5006
     StepBegins {
@@ -300,7 +302,7 @@ pub enum Event<L: Layout = Small> {
         object: ObjectRef<L>,
         player: Seat,
     },
-    /// A coin flip ([CR 705.2]): "If the call matches the result, the player wins the flip."
+    /// A coin flip (see [CR 705.2]): "If the call matches the result, the player wins the flip."
     ///
     /// [CR 705.2]: https://yawgatog.com/resources/magic-rules/#R7052
     CoinFlip {
@@ -314,7 +316,7 @@ pub enum Event<L: Layout = Small> {
         cause: LossCause<L>,
     },
     /// An object became a target of a spell or ability `controller` controls, as the spell was
-    /// cast or the ability put on the stack ([CR 603.2e]): "Some trigger events use the word
+    /// cast or the ability put on the stack (see [CR 603.2e]): "Some trigger events use the word
     /// 'becomes' ... These trigger only at the time the named event happens". Once for each
     /// object, however many of the spell's or ability's targets it is. Only trigger matching
     /// reads it: the rules raise it in a game whose cards listen to it and keep it from the
@@ -329,9 +331,9 @@ pub enum Event<L: Layout = Small> {
         player: Seat,
     },
     /// A mutating creature spell `controller` controlled merged with the permanent `object`
-    /// as it resolved ([CR 702.140d]): "An ability that triggers whenever a creature mutates
+    /// as it resolved (see [CR 702.140d]): "An ability that triggers whenever a creature mutates
     /// triggers when a spell merges with a creature as a result of a resolving mutating
-    /// creature spell." The merged permanent is the object it was (CR 731.2c).
+    /// creature spell." The merged permanent is the object it was (see CR 731.2c).
     ///
     /// [CR 702.140d]: https://yawgatog.com/resources/magic-rules/#R702140d
     Mutated {
@@ -385,7 +387,7 @@ pub struct Sink<L: Layout = Small> {
     /// one batch is [`crate::fixed::Full`].
     pub chosen: L::Queue<(L::Slot, ChosenValue<L>), 4>,
     /// The copiable values the permanents of the batch of moves under way enter as copies of
-    /// ([CR 707.5]): "An object that enters the battlefield 'as a copy' or 'that's a copy' of
+    /// (see [CR 707.5]): "An object that enters the battlefield 'as a copy' or 'that's a copy' of
     /// another object becomes a copy as it enters the battlefield." Kept as `chosen` is, from
     /// the choice until the permanent's copy effect starts as it arrives.
     ///
@@ -395,7 +397,7 @@ pub struct Sink<L: Layout = Small> {
     /// a draw that replaced it, each as its permanent and its ability, which may be one of a
     /// card under a merged permanent ([`ObjectAbility::Merged`]): a draw
     /// made by their instructions is a modified event, which they do not apply to again
-    /// ([CR 614.5]): "A replacement effect doesn't invoke itself repeatedly; it gets only one
+    /// (see [CR 614.5]): "A replacement effect doesn't invoke itself repeatedly; it gets only one
     /// opportunity to affect an event or any modified events that may replace that event."
     /// Empty between draws.
     ///
@@ -415,7 +417,7 @@ pub struct Work {
     pub events: u64,
     pub layer_recomputes: u64,
     /// Trials of whether one continuous effect depends on another, each applying one to the
-    /// layer results and undoing it (CR 613.8a).
+    /// layer results and undoing it (see CR 613.8a).
     pub dependency_trials: u64,
     pub solver_runs: u64,
 }
@@ -541,7 +543,7 @@ impl<L: Layout> Sink<L> {
     }
 
     /// Opens the scope of the resolution of the spell or ability the state has just taken off the
-    /// top of its stack, which then holds `below` entries ([CR 608.1]). The entry keeps its place
+    /// top of its stack, which then holds `below` entries (see [CR 608.1]). The entry keeps its place
     /// until [`Sink::resolved`] says it left.
     ///
     /// [CR 608.1]: https://yawgatog.com/resources/magic-rules/#R6081
@@ -596,7 +598,7 @@ impl<L: Layout> Sink<L> {
     }
 
     /// Opens a group as [`Sink::together`] does, of which the event kept last is part: what the
-    /// rules do "immediately after" an event, with nothing between ([CR 610.3]).
+    /// rules do "immediately after" an event, with nothing between (see [CR 610.3]).
     ///
     /// [CR 610.3]: https://yawgatog.com/resources/magic-rules/#R6103
     #[inline]
@@ -668,7 +670,7 @@ impl<L: Layout> Sink<L> {
     }
 
     /// Notes that the spell or ability that is resolving left the stack, as the last part of its
-    /// resolution ([CR 608.2n]: "As the final part of an ability's resolution, the ability is
+    /// resolution (see [CR 608.2n]: "As the final part of an ability's resolution, the ability is
     /// removed from the stack and ceases to exist.").
     ///
     /// [CR 608.2n]: https://yawgatog.com/resources/magic-rules/#R6082n

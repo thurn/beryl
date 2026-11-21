@@ -2,7 +2,7 @@
 //! can be asked from any depth of the rules (architecture §7.3).
 //!
 //! A resolution's body asks its questions through the resolution it runs in. A replacement
-//! effect's choice ([CR 616.1]) can come up below code that has no resolution to ask
+//! effect's choice (see [CR 616.1]) can come up below code that has no resolution to ask
 //! through: the draw of the draw step, or a draw in the middle of a body that never declared
 //! it asks. The record of answers, and the question a run stopped at, live here instead,
 //! beside the events, which go everywhere the rules do.
@@ -14,6 +14,8 @@
 //! discarded and the question waits in the committed state's `pending` with the record.
 //!
 //! [CR 616.1]: https://yawgatog.com/resources/magic-rules/#R6161
+//!
+//! Implements: none. Records answers and the question that paused a run.
 
 use crate::decision::{Choice, Decision};
 use crate::fixed::Full;

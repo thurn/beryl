@@ -1,5 +1,5 @@
 //! Mana that remembers: mana a player's pool holds with a restriction on what it may be spent
-//! on and a rider it gives the spell it pays for ([CR 106.6]): "Some spells or abilities that
+//! on and a rider it gives the spell it pays for (see [CR 106.6]): "Some spells or abilities that
 //! produce mana restrict how that mana can be spent, have an additional effect that affects the
 //! spell or ability that mana is spent on, or create a delayed triggered ability (see rule
 //! 603.7a) that triggers when that mana is spent. This doesn't affect the mana's type."
@@ -13,6 +13,8 @@
 //! counts.
 //!
 //! [CR 106.6]: https://yawgatog.com/resources/magic-rules/#R1066
+//!
+//! Implements: none. Stores mana with the restrictions and source data the rules use.
 
 use beryl_card::{Ability, CardDef, ManaColor, ManaRestriction};
 
@@ -41,10 +43,10 @@ impl RestrictionId {
     }
 }
 
-/// One mana a pool holds that remembers what it may be spent on (CR 106.6).
+/// One mana a pool holds that remembers what it may be spent on (see CR 106.6).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct RememberedMana<L: Layout = Small> {
-    /// Its kind: the restriction doesn't change it (CR 106.6).
+    /// Its kind: the restriction doesn't change it (see CR 106.6).
     pub color: ManaColor,
     /// What it may be spent on, and what it does to the spell it pays for.
     pub restriction: RestrictionId,
@@ -112,9 +114,9 @@ impl GameTable {
 }
 
 impl<L: Layout> State<L> {
-    /// Adds one mana that remembers to a player's mana pool, made by `source` (CR 106.4, CR
-    /// 106.6): "When an effect instructs a player to add mana, that mana goes into a player's
-    /// mana pool."
+    /// Adds one mana made by `source` to the player's pool (see CR 106.4: "When an effect
+    /// instructs a player to add mana, that mana goes into a player's mana pool."). The entry
+    /// keeps the mana's spending restriction (see CR 106.6).
     ///
     /// # Errors
     ///
@@ -136,7 +138,7 @@ impl<L: Layout> State<L> {
         })
     }
 
-    /// Spends the mana that remembers at `index` in a player's pool (CR 106.4), returning it:
+    /// Spends the mana that remembers at `index` in a player's pool (see CR 106.4), returning it:
     /// the entries after it move up one.
     #[inline]
     pub fn spend_remembered_mana(&mut self, player: Seat, index: usize) -> RememberedMana<L> {

@@ -1,6 +1,8 @@
 //! The kinds of event that a card's abilities may react to, as typed 64-bit sets: what its
 //! triggered abilities listen to ([`Listens`]) and what its static abilities replace
 //! ([`Replaces`]).
+//!
+//! Implements: none. Indexes events by kind for trigger and replacement lookups.
 
 use beryl_card::Zone;
 
@@ -23,11 +25,11 @@ pub enum EventKind {
     Discard,
     Draw,
     /// A permanent leaving the battlefield for any zone: matched, as "dies" is, before the
-    /// permanents of the event move ([CR 603.10a]).
+    /// permanents of the event move (see [CR 603.10a]).
     ///
     /// [CR 603.10a]: https://yawgatog.com/resources/magic-rules/#R60310a
     Leaves,
-    /// No event: a state trigger, matched as state-based actions are checked ([CR 603.8]):
+    /// No event: a state trigger, matched as state-based actions are checked (see [CR 603.8]):
     /// "Some triggered abilities trigger when a game state ... is true, rather than triggering
     /// when an event occurs."
     ///
@@ -104,7 +106,7 @@ impl std::ops::BitOrAssign for Listens {
     }
 }
 
-/// A kind of event that a static ability can replace ([CR 614.1]): "Some continuous effects
+/// A kind of event that a static ability can replace (see [CR 614.1]): "Some continuous effects
 /// are replacement effects." A card's [`Replaces`] has one bit for each, so there may be up
 /// to 62; the last two bits are [`Replaces::PROTECTION`] and
 /// [`Replaces::PLAYER_RULE_CHANGE`].
@@ -151,7 +153,7 @@ impl Replaces {
     /// permanent changes a rule ([`crate::derive::Rederive::finish`]).
     pub const PLAYER_RULE_CHANGE: Replaces = Replaces(1 << 63);
     /// Not a replacement but a prevention effect: a continuous effect gave a permanent
-    /// protection ([CR 702.16e]): "Any damage that would be dealt by sources that have the
+    /// protection (see [CR 702.16e]): "Any damage that would be dealt by sources that have the
     /// stated quality to a permanent or player with protection is prevented." Only the state's
     /// level has it, set by the layers' pass when an effect that gives protection applied, so
     /// that damage, targets, blocks and attachments ask a permanent's protection only then.

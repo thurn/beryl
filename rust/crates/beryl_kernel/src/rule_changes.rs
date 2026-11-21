@@ -1,13 +1,15 @@
 //! The rule changes a game's cards can make, numbered (the crate's contract, "Static rule
 //! changes").
 //!
-//! [CR 613.11](https://yawgatog.com/resources/magic-rules/#R61311): "Some continuous effects affect
+//! See [CR 613.11](https://yawgatog.com/resources/magic-rules/#R61311): "Some continuous effects affect
 //! game rules rather than objects." A card says one as data (`beryl_card`'s [`RuleChange`]), and
 //! any number of cards may say any number of them, so a game numbers those its own cards name
 //! ([`RuleId`]) as its table is built. A set of them is then one word ([`Rules`]), an entry of the
 //! Effects store holds one in a byte, and the table keeps the set of each kind the rules check
 //! ([`RuleKind`]): whether a change of a kind is in force for a player is one AND, and only when
 //! one is does a check read what it says.
+//!
+//! Implements: none. Classifies and indexes rule changes described by card definitions.
 
 use beryl_card::{
     Ability, AbilityKind, CardDef, Condition, Face, Filter, Governed, Named, Objects, Players,
@@ -118,27 +120,28 @@ impl Rules {
 /// each read where the rule it changes is applied.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum RuleKind {
-    /// Some players may cast some spells only when they could cast a sorcery ([CR 307.1]).
+    /// Some players may cast some spells only when they could cast a sorcery (see [CR 307.1]).
     ///
     /// [CR 307.1]: https://yawgatog.com/resources/magic-rules/#R3071
     CastOnlyAsSorcery,
     /// Some players may cast some spells any time they could cast an instant, as though the spells
-    /// had flash ([CR 702.8a]).
+    /// had flash (see [CR 702.8a]).
     ///
     /// [CR 702.8a]: https://yawgatog.com/resources/magic-rules/#R7028a
     CastAsInstant,
     /// The loyalty abilities of the permanent with the ability may be activated any time its
-    /// controller could cast an instant, where [CR 606.3] has "during a main phase of their turn".
+    /// controller could cast an instant. The usual timing is "during a main phase of their
+    /// turn" (see [CR 606.3]).
     ///
     /// [CR 606.3]: https://yawgatog.com/resources/magic-rules/#R6063
     LoyaltyAsInstant,
-    /// The creature with the ability can't be declared as a blocker ([CR 509.1a]): "The
+    /// The creature with the ability can't be declared as a blocker (see [CR 509.1a]): "The
     /// defending player chooses which creatures they control, if any, will block."
     ///
     /// [CR 509.1a]: https://yawgatog.com/resources/magic-rules/#R5091a
     CantBlock,
     /// The creature with the ability can't be declared as an attacker, or only against a
-    /// defending player who controls a permanent of a kind ([CR 508.1c]): "The active player
+    /// defending player who controls a permanent of a kind (see [CR 508.1c]): "The active player
     /// checks each creature they control to see whether it's affected by any restrictions
     /// (effects that say a creature can't attack, or that it can't attack unless some
     /// condition is met)."
@@ -147,18 +150,18 @@ pub enum RuleKind {
     CantAttack,
     /// Some players can't activate the activated abilities other than mana abilities of the
     /// sources with the card name the permanent that makes the change chose as it entered
-    /// ([CR 602.5]): "A player can't begin to activate an ability that's prohibited from
+    /// (see [CR 602.5]): "A player can't begin to activate an ability that's prohibited from
     /// being activated."
     ///
     /// [CR 602.5]: https://yawgatog.com/resources/magic-rules/#R6025
     CantActivateNamed,
-    /// The spell can't be countered ([CR 701.6a]): "To counter a spell or ability means to
+    /// The spell can't be countered (see [CR 701.6a]): "To counter a spell or ability means to
     /// cancel it, removing it from the stack." Asked of the spell: its own static ability
     /// says it, or the mana spent on it did ([`beryl_card::ManaRestriction::rider`]).
     ///
     /// [CR 701.6a]: https://yawgatog.com/resources/magic-rules/#R7016a
     CantBeCountered,
-    /// What casting some spells costs some players changes ([CR 601.2f]): "The total cost is
+    /// What casting some spells costs some players changes (see [CR 601.2f]): "The total cost is
     /// the mana cost or alternative cost (as determined in rule 601.2b), plus all additional
     /// costs and cost increases, and minus all cost reductions." Asked of each permanent
     /// whose static ability makes one, with its condition, as the total cost is found.
@@ -166,7 +169,7 @@ pub enum RuleKind {
     /// [CR 601.2f]: https://yawgatog.com/resources/magic-rules/#R6012f
     SpellCost,
     /// A change to some players themselves ([`beryl_card::PlayerRules`]): their life totals
-    /// can't change ([CR 119.8]), or they have protection from everything ([CR 702.16j]). Each
+    /// can't change (see [CR 119.8]), or they have protection from everything (see [CR 702.16j]). Each
     /// rule asked about reads which changes it makes.
     ///
     /// [CR 119.8]: https://yawgatog.com/resources/magic-rules/#R1198
@@ -212,7 +215,7 @@ impl RuleKind {
                 }
                 Ok(RuleKind::SpellCost)
             }
-            // Only its controller activates a permanent's abilities (CR 606.3), so the
+            // Only its controller activates a permanent's abilities (see CR 606.3), so the
             // change is asked of the permanent, and is for "you" or for nobody.
             (Governed::ActivateLoyaltyAbilities(Objects::This), When::AsInstant) => {
                 if matches!(rule.players, Players::You) {
@@ -221,7 +224,7 @@ impl RuleKind {
                     Err(Unchecked::Players)
                 }
             }
-            // Its controller declares the block (CR 509.1a), so the change is asked of the
+            // Its controller declares the block (see CR 509.1a), so the change is asked of the
             // creature, and is for "you" or for nobody.
             (Governed::Block(Objects::This), When::Never) => {
                 if matches!(rule.players, Players::You) {
@@ -230,7 +233,7 @@ impl RuleKind {
                     Err(Unchecked::Players)
                 }
             }
-            // Its controller declares the attack (CR 508.1a), so the change is asked of the
+            // Its controller declares the attack (see CR 508.1a), so the change is asked of the
             // creature, and is for "you" or for nobody.
             (
                 Governed::Attack {
@@ -484,7 +487,7 @@ pub(crate) fn number(def: &CardDef, rules: &mut RuleChanges) -> Result<Replaces,
 }
 
 /// Numbers the rider of a mana ability's restriction, a rule change the mana starts on the
-/// spell it is spent on ([CR 106.6]): "Some spells or abilities that produce mana ... have an
+/// spell it is spent on (see [CR 106.6]): "Some spells or abilities that produce mana ... have an
 /// additional effect that affects the spell or ability that mana is spent on". So it is one
 /// asked of an object.
 ///

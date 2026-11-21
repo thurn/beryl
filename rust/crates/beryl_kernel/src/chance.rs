@@ -9,9 +9,9 @@
 //!
 //! A card's identity matters from the moment someone learns it: until then, which card sits in a
 //! slot no player knows could be any card of the rest of its owner's decklist, as a determinization
-//! deals it ([`crate::Observation::determinize`]). No one may look at a library ([CR 401.2]:
+//! deals it ([`crate::Observation::determinize`]). No one may look at a library (see [CR 401.2]:
 //! "Players can't look at or change the order of cards in a library"), and a shuffle leaves its
-//! cards in an order no player knows ([CR 701.24a]: "randomize the cards within it so that no
+//! cards in an order no player knows (see [CR 701.24a]: "randomize the cards within it so that no
 //! player knows their order"). So replay binds a recorded card to the slot being revealed by
 //! swapping identities with another slot of the same owner and zone that no player knows, the move
 //! a shuffle's rebinding makes ([`crate::zone`]). A shuffled library's order never matters until
@@ -19,6 +19,8 @@
 //!
 //! [CR 401.2]: https://yawgatog.com/resources/magic-rules/#R4012
 //! [CR 701.24a]: https://yawgatog.com/resources/magic-rules/#R70124a
+//!
+//! Implements: none. Records and replays random outcomes.
 
 use std::collections::VecDeque;
 

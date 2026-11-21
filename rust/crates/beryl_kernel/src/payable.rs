@@ -1,11 +1,13 @@
 //! Which costs the engine has code to pay, so that a card table refuses a definition with any
 //! other ([`crate::table::TableError::Cost`]). The rules' casting steps then pay every part
 //! of every cost in a game, and none is skipped
-//! ([CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h)): "The player pays the
+//! (see [CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h)): "The player pays the
 //! total cost. ... Partial payments are not allowed. Unpayable costs can't be paid."
 //!
 //! The vocabulary says more than this ([`CostPart`]): a part the engine does not pay is a
 //! rule not yet implemented, listed in `docs/rules-coverage.md`.
+//!
+//! Implements: none. Checks whether the engine supports the costs in a card definition.
 
 use beryl_card::{Ability, AbilityKind, CardDef, Chosen, CostAction, CostPart, Measure, Zone};
 

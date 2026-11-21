@@ -4,6 +4,8 @@
 //! which one it runs on. [`Small`] is the fixed-capacity layout search runs on: one flat
 //! `Copy` value, copied with one `memcpy` (decisions D3 and D4). [`Large`] grows its queues
 //! instead, so a game that outgrows `Small` goes on in it ([`State::widen`]).
+//!
+//! Implements: none. Defines the capacities and storage types of the game state.
 
 use std::fmt::Debug;
 use std::hash::Hash;
@@ -189,7 +191,7 @@ pub trait Layout: Copy + Debug + Default + Eq + Hash + Send + Sync + 'static {
 /// 20 KiB. Search and rollouts run on it.
 ///
 /// It is two players with 60 slots a deck, which is the least a constructed deck may have
-/// ([CR 100.2a](https://yawgatog.com/resources/magic-rules/#R1002a): "each deck has a minimum
+/// (see [CR 100.2a](https://yawgatog.com/resources/magic-rules/#R1002a): "each deck has a minimum
 /// deck size of 60 cards"), and 135 slots for tokens and spell copies. A game between larger
 /// decks is refused here and dealt in [`Large`] ([`State::deal`]), and so is one whose table
 /// has more than the 255 distinct cards a one-byte [`CardIx`] numbers.
@@ -229,7 +231,7 @@ impl Layout for Small {
 /// `Copy`.
 ///
 /// A deck may have 256 cards. No rule sets that
-/// ([CR 100.5](https://yawgatog.com/resources/magic-rules/#R1005): "There is no maximum deck
+/// (see [CR 100.5](https://yawgatog.com/resources/magic-rules/#R1005): "There is no maximum deck
 /// size for non-Commander decks."); it is the share of the 1,024 slots each deck is given,
 /// which leaves 512 for the pool of tokens and spell copies, nearly four times `Small`'s
 /// 135. Its game table may hold 65,535 distinct cards, tokens and emblems: what the two

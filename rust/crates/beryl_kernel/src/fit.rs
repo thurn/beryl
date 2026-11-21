@@ -2,6 +2,8 @@
 //! the pool, each of its lists the room the layout gives that list. A game that does not is
 //! refused where a state of the layout is made, with a [`Misfit`] and never a panic
 //! ([`State::deal`], [`State::try_relayout`]).
+//!
+//! Implements: none. Checks whether game data fits a storage layout.
 
 use std::fmt;
 

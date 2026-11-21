@@ -1,15 +1,17 @@
-//! Regeneration shields in the Effects store ([CR 701.19a]): "If the effect of a resolving
+//! Regeneration shields in the Effects store (see [CR 701.19a]): "If the effect of a resolving
 //! spell or ability regenerates a permanent, it creates a replacement effect that protects
 //! the permanent the next time it would be destroyed this turn."
 //!
 //! Each shield is one entry on the permanent with the payload [`Payload::Regeneration`],
 //! lasting until end of turn. A permanent regenerated twice has two shields, and each
-//! destruction uses up one of them. A shield from a static ability ([CR 701.19b]) replaces
+//! destruction uses up one of them. A shield from a static ability (see [CR 701.19b]) replaces
 //! every destruction and is used up by none; it would be a rule of the permanent's copiable
 //! values rather than an entry here.
 //!
 //! [CR 701.19a]: https://yawgatog.com/resources/magic-rules/#R70119a
 //! [CR 701.19b]: https://yawgatog.com/resources/magic-rules/#R70119b
+//!
+//! Implements: none. Stores regeneration shields and consumes them when called by the rules.
 
 use std::cell::Cell;
 
@@ -36,7 +38,7 @@ impl<L: Layout> State<L> {
     }
 
     /// Uses up the earliest regeneration shield on `object`, as it replaces a destruction
-    /// ([CR 701.19a]): "The next time [permanent] would be destroyed this turn, instead
+    /// (see [CR 701.19a]): "The next time [permanent] would be destroyed this turn, instead
     /// remove all damage marked on it and its controller taps it." Returns whether there was
     /// one to use up.
     ///

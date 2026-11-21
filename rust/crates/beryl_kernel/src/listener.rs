@@ -7,6 +7,8 @@
 //! gives a kind ([`crate::table::TableError::Trigger`]). The rules' matcher then reads a
 //! subject with no case for what was refused, and the players through
 //! [`crate::filter::is_for`].
+//!
+//! Implements: none. Indexes supported triggers for the rules to match.
 
 use beryl_card::{
     Ability, AbilityIx, AbilityKind, CardDef, CopyChange, Face, FaceIx, Filter, Players, Subject,
@@ -30,7 +32,7 @@ pub struct Listener {
 
 /// The zones other than the battlefield in which the engine matches a triggered ability: the
 /// public ones an object of a player is in, where its card is known
-/// ([CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002)): "Graveyard, battlefield,
+/// (see [CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002)): "Graveyard, battlefield,
 /// stack, exile, ante, and command are public zones." A card in a library or a hand may yet
 /// be dealt anew among its owner's hidden cards, so no ability is matched there.
 pub const AWAY: ZoneSet = ZoneSet::GRAVEYARD
@@ -73,13 +75,13 @@ enum About {
 /// The kind of event a trigger listens to, or why the engine cannot match it. A delayed trigger
 /// listens to none (`None`): it waits in the state, not in the table, for the beginning of a step,
 /// or for its source to leave the battlefield, as Animate Dead's "When this Aura leaves the
-/// battlefield" ([CR 603.7]): "An effect may create a delayed triggered ability that can do
+/// battlefield" (see [CR 603.7]): "An effect may create a delayed triggered ability that can do
 /// something at a later time."
 ///
 /// [CR 603.7]: https://yawgatog.com/resources/magic-rules/#R6037
 ///
 /// A spell's own "when you cast this spell" is matched where the ability works on the stack
-/// ([CR 113.6k]): "A trigger condition that can't trigger from the battlefield functions in all
+/// (see [CR 113.6k]): "A trigger condition that can't trigger from the battlefield functions in all
 /// zones it can trigger from."
 ///
 /// [CR 113.6k]: https://yawgatog.com/resources/magic-rules/#R1136k
@@ -157,7 +159,7 @@ pub(crate) fn of(def: &CardDef) -> Result<Vec<Listener>, Unmatched> {
 }
 
 /// The grants of `face` that a copy exception of it gives ([`CopyChange::Has`]): read as part of
-/// a copy's copiable values ([CR 707.9a]), not through what a continuous effect grants.
+/// a copy's copiable values (see [CR 707.9a]), not through what a continuous effect grants.
 ///
 /// [CR 707.9a]: https://yawgatog.com/resources/magic-rules/#R7079a
 pub(crate) fn given_by_exception(face: &Face, grant: usize) -> bool {
@@ -187,7 +189,7 @@ pub(crate) fn given(def: &CardDef) -> Result<Listens, Unmatched> {
     Ok(kinds)
 }
 
-/// Whether the engine finds `ability` wherever it says it works ([CR 113.6b]): "An ability
+/// Whether the engine finds `ability` wherever it says it works (see [CR 113.6b]): "An ability
 /// that states which zones it functions in functions only from those zones." A triggered
 /// ability is matched on the battlefield and in the zones of [`AWAY`] ([`listens_to`]). Any
 /// other kind is found only where its kind works: activated and static abilities are read of
@@ -199,7 +201,7 @@ pub fn found_where_it_works(ability: &Ability) -> bool {
 }
 
 /// Whether the engine reads `ability` when another object grants it to a permanent
-/// ([CR 613.1f]): "Layer 6: Ability-adding effects, keyword counters, ability-removing
+/// (see [CR 613.1f]): "Layer 6: Ability-adding effects, keyword counters, ability-removing
 /// effects, and effects that say an object can't have an ability are applied." An activated
 /// ability is offered from the abilities the permanent has ([`crate::State::abilities`]), and
 /// a static ability's continuous effect is applied by the layers. Every other kind is found
@@ -223,8 +225,8 @@ pub fn read_when_granted(ability: &Ability) -> bool {
                 && ability.rule().is_none()
                 && ability.replacement().is_none()
         }
-        // An Aura's enchant ability is what its spell ability targets. CR 702.5a: "The
-        // enchant ability restricts what an Aura spell can target and what an Aura can
+        // An Aura's enchant ability is what its spell ability targets. See CR 702.5a:
+        // "The enchant ability restricts what an Aura spell can target and what an Aura can
         // enchant." The rules read the enchant abilities an Aura has through the query of its
         // abilities (`State::abilities`), as Animate Dead gains "enchant creature put onto the
         // battlefield with this Aura".

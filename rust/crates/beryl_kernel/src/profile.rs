@@ -1,5 +1,7 @@
 //! Restriction profiles: which decisions are offered, and the budgets (architecture §12.3,
 //! §15).
+//!
+//! Implements: none. Configures search budgets and which decisions the engine offers.
 
 use beryl_card::TurnStep;
 
@@ -27,7 +29,7 @@ pub enum Stops {
 /// (§15), which a human may change, as an Arena player sets phase stops. A stop in the declare
 /// attackers or declare blockers step holds only once creatures attack, as a player gets no
 /// priority in a combat that has no attack to answer
-/// ([CR 508.8](https://yawgatog.com/resources/magic-rules/#R5088): "If no creatures are
+/// (see [CR 508.8](https://yawgatog.com/resources/magic-rules/#R5088): "If no creatures are
 /// declared as attackers or put onto the battlefield attacking, skip the declare blockers and
 /// combat damage steps").
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -118,7 +120,7 @@ impl Limits {
     /// default: an endless mandatory loop is a rules draw, which needs a loop check rather than
     /// a bigger budget.
     ///
-    /// [CR 104.4b](https://yawgatog.com/resources/magic-rules/#R1044b): "If a game that's not
+    /// See [CR 104.4b](https://yawgatog.com/resources/magic-rules/#R1044b): "If a game that's not
     /// using the limited range of influence option ... somehow enters a 'loop' of mandatory
     /// actions, repeating a sequence of events with no way to stop, the game is a draw."
     pub const PLAYER: Limits = Limits {
@@ -189,12 +191,12 @@ pub struct Profile {
     /// they receive priority over. A player receives priority whether or not they can act;
     /// for everyone else the engine answers a lone pass silently (§7.2).
     ///
-    /// - [CR 117.3a](https://yawgatog.com/resources/magic-rules/#R1173a): "The active player
+    /// - see [CR 117.3a](https://yawgatog.com/resources/magic-rules/#R1173a): "The active player
     ///   receives priority at the beginning of most steps and phases".
-    /// - [CR 117.3c](https://yawgatog.com/resources/magic-rules/#R1173c): "If a player has
+    /// - see [CR 117.3c](https://yawgatog.com/resources/magic-rules/#R1173c): "If a player has
     ///   priority when they cast a spell, activate an ability, or take a special action, that
     ///   player receives priority afterward."
-    /// - [CR 117.3d](https://yawgatog.com/resources/magic-rules/#R1173d): "If a player has
+    /// - see [CR 117.3d](https://yawgatog.com/resources/magic-rules/#R1173d): "If a player has
     ///   priority and chooses not to take any actions, that player passes. ... the next
     ///   player in turn order receives priority."
     pub full_control: Option<Seat>,
@@ -204,10 +206,10 @@ pub struct Profile {
     /// aim it at their own permanent. The engine otherwise announces a lone legal target
     /// silently (§7.2).
     ///
-    /// - [CR 601.2c](https://yawgatog.com/resources/magic-rules/#R6012c): "The player
+    /// - see [CR 601.2c](https://yawgatog.com/resources/magic-rules/#R6012c): "The player
     ///   announces their choice of an appropriate object or player for each target the spell
     ///   requires."
-    /// - [CR 601.2](https://yawgatog.com/resources/magic-rules/#R6012): if the casting cannot
+    /// - see [CR 601.2](https://yawgatog.com/resources/magic-rules/#R6012): if the casting cannot
     ///   be completed, "the casting of the spell is illegal; the game returns to the moment
     ///   before the casting of that spell was proposed".
     pub asks_targets: Option<Seat>,
@@ -220,9 +222,9 @@ pub struct Profile {
     /// ahead over the rest of their turn (§10), as a player would, at a cost search's
     /// rollouts don't pay.
     ///
-    /// - [CR 605.3a](https://yawgatog.com/resources/magic-rules/#R6053a): "A player may
+    /// - see [CR 605.3a](https://yawgatog.com/resources/magic-rules/#R6053a): "A player may
     ///   activate an activated mana ability whenever they have priority".
-    /// - [CR 106.4](https://yawgatog.com/resources/magic-rules/#R1064): mana "can stay in the
+    /// - see [CR 106.4](https://yawgatog.com/resources/magic-rules/#R1064): mana "can stay in the
     ///   player's mana pool as unspent mana. Each player's mana pool empties at the end of each
     ///   step and phase".
     pub taps_mana: Option<Seat>,
@@ -230,16 +232,16 @@ pub struct Profile {
     /// ([`beryl_card::Ability::needs`]): everyone under the smart stops, search and rollouts included,
     /// which then spend no effort on them, and a human not in full control. Full control and
     /// the exact stops offer them, as the rules do: an activation that does nothing is still
-    /// legal ([CR 602.2](https://yawgatog.com/resources/magic-rules/#R6022)).
+    /// legal (see [CR 602.2](https://yawgatog.com/resources/magic-rules/#R6022)).
     pub hides_pointless: PerSeat<bool>,
     /// The player, if any, offered activations that would do nothing without their stopping
     /// for them: a human under the smart stops, who may still tap Currency Converter with
-    /// nothing exiled, as the rules allow ([CR 602.2](https://yawgatog.com/resources/magic-rules/#R6022):
+    /// nothing exiled, as the rules allow (see [CR 602.2](https://yawgatog.com/resources/magic-rules/#R6022):
     /// "To activate an ability is to put it onto the stack and pay its costs"), but whose turn
     /// should not halt on an action no strong player would take. A priority whose only actions
     /// besides passing are these (and mana abilities on their own, [`Profile::taps_mana`]) is
     /// answered as a lone pass, as the smart stops answer one where passing is all a player can
-    /// do ([CR 117.3d](https://yawgatog.com/resources/magic-rules/#R1173d)).
+    /// do (see [CR 117.3d](https://yawgatog.com/resources/magic-rules/#R1173d)).
     pub quiet_pointless: Option<Seat>,
 }
 

@@ -1,7 +1,7 @@
 //! A value a permanent chose as it entered: a color, a creature type or a card name
 //! ([`beryl_card::Replacement::choose_as_enters`]).
 //!
-//! [CR 614.12a](https://yawgatog.com/resources/magic-rules/#R61412a): "If a replacement effect
+//! See [CR 614.12a](https://yawgatog.com/resources/magic-rules/#R61412a): "If a replacement effect
 //! that modifies how a permanent enters the battlefield requires a choice, that choice is made
 //! before the permanent enters the battlefield." The permanent remembers it
 //! ([`crate::Memo::Chosen`]) until it leaves the battlefield, and its abilities read it
@@ -12,6 +12,8 @@
 //! the game's number for it, a card name by the game index of a card with it. A creature type
 //! or a name no card of the game has would have the same consequences as every other such
 //! one, since nothing in the game reads it, so one candidate, [`ANOTHER`], stands for them all.
+//!
+//! Implements: none. Encodes the values a player can choose as a permanent enters.
 
 use beryl_card::{ChosenKind, Colors, TextWord};
 

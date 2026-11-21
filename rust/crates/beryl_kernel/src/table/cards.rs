@@ -1,4 +1,6 @@
 //! The static card table: every card the program knows, by name.
+//!
+//! Implements: none. Indexes supported card definitions by name.
 
 use beryl_card::CardDef;
 

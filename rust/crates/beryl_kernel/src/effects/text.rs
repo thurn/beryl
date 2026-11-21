@@ -5,21 +5,21 @@
 //!
 //! Each is an entry of the Effects store on one object, a spell or a permanent, whose payload
 //! is one [`TextChange`]. [`State::words_of`] composes the entries on an object, in the order
-//! they began ([CR 613.7]: "An effect with an earlier timestamp is applied before an effect
+//! they began (see [CR 613.7]: "An effect with an earlier timestamp is applied before an effect
 //! with a later timestamp"), into the [`Words`] every reader of a word of its text takes. With
 //! no text change in force anywhere, as nearly every game goes, that is one AND.
 //!
-//! Text changes are applied in layer 3 ([CR 613.1c]): "Layer 3: Text-changing effects are
+//! Text changes are applied in layer 3 (see [CR 613.1c]): "Layer 3: Text-changing effects are
 //! applied." Nothing reads a word before layer 3 does, so the words are applied wherever
 //! they are read rather than as a pass of the layers: layer 1's copiable values hold words
 //! as printed, and layer 4 on reads them through [`State::words_of`].
 //!
-//! A change on a permanent spell goes on with the permanent it becomes ([CR 400.7a]):
+//! A change on a permanent spell goes on with the permanent it becomes (see [CR 400.7a]):
 //! "Effects from spells, activated abilities, and triggered abilities that change the
 //! characteristics or controller of a permanent spell on the stack continue to apply to the
 //! permanent that spell becomes."
 //!
-//! An ability on the stack keeps the words its source had as it went there ([CR 113.7a]):
+//! An ability on the stack keeps the words its source had as it went there (see [CR 113.7a]):
 //! "Once activated or triggered, an ability exists on the stack independently of its
 //! source." The state keeps up to four such sets for the abilities on the stack, which a
 //! byte of each entry names ([`StackEntry::words`]), and empties them with the stack.
@@ -29,6 +29,8 @@
 //! [CR 613.7]: https://yawgatog.com/resources/magic-rules/#R6137
 //! [CR 613.1c]: https://yawgatog.com/resources/magic-rules/#R6131c
 //! [CR 400.7a]: https://yawgatog.com/resources/magic-rules/#R4007a
+//!
+//! Implements: CR 612.1
 
 use beryl_card::Words;
 
@@ -82,7 +84,7 @@ impl<L: Layout> State<L> {
     }
 
     /// The text changes on the spell in `slot`, which it carries onto the battlefield
-    /// (CR 400.7a). Empty while no text change is in force.
+    /// (see CR 400.7a). Empty while no text change is in force.
     ///
     /// # Errors
     ///
@@ -116,7 +118,7 @@ impl<L: Layout> State<L> {
     }
 
     /// The words a spell or ability on the stack reads its text through: a spell's own, as
-    /// they are now, and an ability's source's as the ability went on the stack (CR 113.7a).
+    /// they are now, and an ability's source's as the ability went on the stack (see CR 113.7a).
     #[inline]
     pub fn entry_words(&self, entry: &StackEntry<L>) -> Words {
         match entry.spell() {

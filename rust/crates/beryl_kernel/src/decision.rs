@@ -1,5 +1,7 @@
 //! Decisions and their answers (architecture §3, §7.1, decision D6), and how a game ends
 //! (§12.2).
+//!
+//! Implements: none. Defines the records for questions, answers and game outcomes.
 
 mod collapse;
 
@@ -36,7 +38,7 @@ pub struct Choice(pub u16);
 ///
 /// A decision has two players: the one it belongs to, whose choice the rules or a card ask
 /// for, and the one who answers it. They differ only while one player controls another
-/// ([CR 724.5]): "While controlling another player, a player makes all choices and decisions
+/// (see [CR 724.5]): "While controlling another player, a player makes all choices and decisions
 /// the controlled player is allowed to make or is told to make by the rules or by any
 /// objects."
 ///
@@ -274,7 +276,7 @@ pub enum Opt<L: Layout = Small> {
     Ability(L::Index),
     /// The object in this slot, among options that also offer [`Opt::Done`].
     Object(L::Slot),
-    /// Turn the face-down permanent in this slot face up, a special action (CR 116.2b).
+    /// Turn the face-down permanent in this slot face up, a special action (see CR 116.2b).
     TurnFaceUp(L::Slot),
 }
 
@@ -327,7 +329,7 @@ impl<L: Layout> Opt<L> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Outcome {
     Win(Seat),
-    /// A rules draw ([CR 104.4a](https://yawgatog.com/resources/magic-rules/#R1044a)): "If all
+    /// A rules draw (see [CR 104.4a](https://yawgatog.com/resources/magic-rules/#R1044a)): "If all
     /// the players remaining in a game lose simultaneously, the game is a draw."
     Draw,
     /// The engine gave up: a budget or capacity ran out. Never a rules outcome.

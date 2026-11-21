@@ -1,6 +1,8 @@
 //! The open question of a machine step, a spell being cast and a paused resolution
 //! (architecture §7.3), with the mutators that open and settle it (the crate's contract,
 //! "Mutators"). Its payloads are records: the rules build one and hand it over whole.
+//!
+//! Implements: none. Stores game actions and resolutions that are waiting for a decision.
 
 use beryl_card::{ManaCost, SpecIx};
 
@@ -12,18 +14,20 @@ use crate::layout::{Layout, Queue, Small};
 use crate::object::ObjectRef;
 use crate::state::State;
 
-/// The step a spell's casting or an ability's activation has reached (CR 601.2, 602.2). The
-/// spell or ability is already the top of the stack. Each step carries what only it uses.
+/// The step a spell's casting or an ability's activation has reached
+/// (see CR 601.2 and see CR 602.2). The spell or ability is already on top of the stack.
+/// Each step carries the data it needs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum CastStep<L: Layout = Small> {
-    /// Announcing the value of X (CR 601.2b).
+    /// Announcing the value of X (see CR 601.2b).
     X,
-    /// Announcing how many targets to choose for the current spec (CR 601.2c).
+    /// Announcing how many targets to choose for the current spec (see CR 601.2c).
     TargetCount,
-    /// Choosing the targets of the current spec (CR 601.2c), of which `left` are still to
+    /// Choosing the targets of the current spec (see CR 601.2c), of which `left` are still to
     /// choose.
     Target { left: u8 },
-    /// Choosing among payment plans that differ in their consequences (CR 601.2g, 601.2h).
+    /// Choosing among payment plans that differ in their consequences
+    /// (see CR 601.2g and see CR 601.2h).
     Plan,
     /// Paying mana one source at a time, under the `manual_mana` profile: `remaining` is what
     /// is still to pay.
@@ -33,7 +37,7 @@ pub enum CastStep<L: Layout = Small> {
 }
 
 /// Where [`CastStep::Objects`] has got to in paying one part of the cost with objects its
-/// player chooses, one at a time ([CR 601.2h]: "The player pays the total cost.").
+/// player chooses, one at a time (see [CR 601.2h]: "The player pays the total cost.").
 ///
 /// Cards of a graveyard are chosen in graveyard order, bottom first, each above the one
 /// before, from position `graveyard_from` up, so each set of cards is one sequence of answers
@@ -69,17 +73,17 @@ impl<L: Layout> PayingObjects<L> {
 /// What a [`Casting`] puts on the stack, which decides the steps it takes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum CastKind {
-    /// A spell being cast. `free`: cast without paying its mana cost ([CR 118.9]).
+    /// A spell being cast. `free`: cast without paying its mana cost (see [CR 118.9]).
     /// `resolving`: cast during the resolution of another spell or ability, so no player
-    /// receives priority after it is cast ([CR 608.2g]).
+    /// receives priority after it is cast (see [CR 608.2g]).
     ///
     /// [CR 118.9]: https://yawgatog.com/resources/magic-rules/#R1189
     /// [CR 608.2g]: https://yawgatog.com/resources/magic-rules/#R6082g
     Spell { free: bool, resolving: bool },
-    /// An activated ability being activated (CR 602.2).
+    /// An activated ability being activated (see CR 602.2).
     Activation,
     /// A triggered ability being put on the stack: targets only, no costs and no change of
-    /// priority (CR 603.3d).
+    /// priority (see CR 603.3d).
     Trigger,
 }
 
@@ -89,7 +93,7 @@ pub struct Casting<L: Layout = Small> {
     pub player: Seat,
     pub kind: CastKind,
     pub step: CastStep<L>,
-    /// The target spec being chosen (CR 601.2c).
+    /// The target spec being chosen (see CR 601.2c).
     pub spec: SpecIx,
     /// Generic mana of the cost that a part paid with objects rather than with mana
     /// ([`beryl_card::Measure::ForGeneric`]). The steps after that part read it.
@@ -108,12 +112,12 @@ impl<L: Layout> Casting<L> {
         }
     }
 
-    /// Whether this is a spell cast without paying its mana cost (CR 118.9).
+    /// Whether this is a spell cast without paying its mana cost (see CR 118.9).
     pub fn free(&self) -> bool {
         matches!(self.kind, CastKind::Spell { free: true, .. })
     }
 
-    /// Whether this is a spell cast during another's resolution (CR 608.2g).
+    /// Whether this is a spell cast during another's resolution (see CR 608.2g).
     pub fn resolving(&self) -> bool {
         matches!(
             self.kind,
@@ -124,7 +128,7 @@ impl<L: Layout> Casting<L> {
         )
     }
 
-    /// Whether this puts a triggered ability on the stack (CR 603.3d).
+    /// Whether this puts a triggered ability on the stack (see CR 603.3d).
     pub fn triggered(&self) -> bool {
         self.kind == CastKind::Trigger
     }
@@ -138,7 +142,7 @@ impl<L: Layout> Casting<L> {
 /// # Hidden picks
 ///
 /// A pick a player makes without revealing it ([`beryl_card::Effect::Choose`] with `hidden`;
-/// [CR 101.4a]) is recorded as the slot picked ([`hidden_pick_answer`]), not as an index into
+/// see [CR 101.4a]) is recorded as the slot picked ([`hidden_pick_answer`]), not as an index into
 /// its candidates: which of a hand's cards a filter accepts is hidden from the other players,
 /// so a state determinized for one of them may give the question other candidates, and an
 /// index would name another card. `hidden` marks the record's entries that hold such a slot,
@@ -232,25 +236,25 @@ pub enum Pending<L: Layout = Small> {
     /// Priority, or nothing to ask.
     #[default]
     None,
-    /// The coin flip's winner chooses who takes the first turn (CR 103.1).
+    /// The coin flip's winner chooses who takes the first turn (see CR 103.1).
     PlayOrDraw { chooser: Seat },
-    /// The London mulligan (CR 103.5). Who is asked follows from the players' statuses.
+    /// The London mulligan (see CR 103.5). Who is asked follows from the players' statuses.
     Mulligans,
-    /// The active player discards down to their maximum hand size (CR 514.1).
+    /// The active player discards down to their maximum hand size (see CR 514.1).
     Discard,
-    /// The legend rule (CR 704.5j): `kept` holds the permanent each player chose to keep so
+    /// The legend rule (see CR 704.5j): `kept` holds the permanent each player chose to keep so
     /// far.
     LegendRule { kept: Bitboard<L::Slot> },
     /// A land being played asks whether its controller pays life so that it doesn't enter
     /// tapped ([`beryl_card::Rewrite::EntersTappedUnlessPayLife`]).
     EnterPayingLife { slot: L::Slot, life: u8 },
-    /// The active player declares attackers (CR 508.1), one creature at a time: `attacker`
+    /// The active player declares attackers (see CR 508.1), one creature at a time: `attacker`
     /// is the creature just chosen, whose defender is still to choose, if any.
     DeclareAttackers { attacker: Option<L::Slot> },
-    /// The defending player declares blockers (CR 509.1), one creature at a time: `blocker`
+    /// The defending player declares blockers (see CR 509.1), one creature at a time: `blocker`
     /// is the creature just chosen, whose attacker is still to choose, if any.
     DeclareBlockers { blocker: Option<L::Slot> },
-    /// The active player divides blocked attackers' combat damage (CR 510.1c): `done` holds
+    /// The active player divides blocked attackers' combat damage (see CR 510.1c): `done` holds
     /// the attackers divided so far, `lethal` the blockers chosen to be dealt lethal damage.
     CombatDamage {
         done: Bitboard<L::Slot>,
@@ -261,24 +265,24 @@ pub enum Pending<L: Layout = Small> {
     /// A body paused for an answer.
     Resolving(Resolving<L>),
     /// The turn-based actions of the step that has just begun, paused at a replacement
-    /// effect's choice they asked ([CR 616.1]): a dredge offered for the draw step's draw.
+    /// effect's choice they asked (see [CR 616.1]): a dredge offered for the draw step's draw.
     /// They run again from the start with the answers recorded so far, as a paused
     /// resolution runs its body again.
     ///
     /// [CR 616.1]: https://yawgatog.com/resources/magic-rules/#R6161
     StepActions(Resolving<L>),
-    /// A resolving spell or ability lets `player` cast this card now (CR 608.2g).
+    /// A resolving spell or ability lets `player` cast this card now (see CR 608.2g).
     CastOffer {
         object: ObjectRef<L>,
         player: Seat,
         free: bool,
     },
     /// The controller of the face-down permanent in `slot` turns it face up, a special action
-    /// (CR 116.2b), and chooses how to pay its mana cost: among payment plans, or under manual
+    /// (see CR 116.2b), and chooses how to pay its mana cost: among payment plans, or under manual
     /// payment one source at a time, `remaining` being what is left to pay.
     TurningFaceUp { slot: L::Slot, remaining: ManaCost },
     /// Permanents that entered the battlefield together, whose controllers choose the order
-    /// of their timestamps ([CR 613.7m]): "Objects controlled by the active player ... have an
+    /// of their timestamps (see [CR 613.7m]): "Objects controlled by the active player ... have an
     /// earlier relative timestamp in the order of that player's choice, followed by each
     /// other player in turn order." `group` holds those still to order, two or more of each
     /// player's; each pick gives the permanent picked the earliest of the timestamps left to

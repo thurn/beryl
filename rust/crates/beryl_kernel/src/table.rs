@@ -1,5 +1,7 @@
 //! The static card table and the per-game table built from two decklists (architecture §6.4,
 //! decision D20).
+//!
+//! Implements: none. Builds card and deck indexes for a game.
 
 use beryl_card::{
     Ability, AbilityIx, AbilityKind, BasicLandTypes, CardDef, Condition, CostAction, CostPart,
@@ -398,7 +400,7 @@ impl GameTable {
     }
 
     /// The game index of each card name of the game a player may choose, in game order
-    /// ([CR 201.4](https://yawgatog.com/resources/magic-rules/#R2014)): "the player must
+    /// (see [CR 201.4](https://yawgatog.com/resources/magic-rules/#R2014)): "the player must
     /// choose the name of a card in the Oracle card reference". A token's name is among them
     /// only where a card has it: tokens and emblems are not cards in that reference. Every
     /// other name has the same consequences in this game, as no card of it has that name, so
@@ -410,7 +412,7 @@ impl GameTable {
 
     /// The printed subtypes of the face `face` of the card at `card` by the game's numbers: found
     /// once per game for its first two faces, and from the face itself for any other. A face-down
-    /// permanent has none ([CR 708.2a]): it "becomes a 2/2 face-down creature with no text, no
+    /// permanent has none (see [CR 708.2a]): it "becomes a 2/2 face-down creature with no text, no
     /// name, no subtypes, and no mana cost."
     ///
     /// [CR 708.2a]: https://yawgatog.com/resources/magic-rules/#R7082a
@@ -628,7 +630,7 @@ impl FaceFacts {
         activated: 0,
     };
 
-    /// Whether it has an activated ability ([CR 602.1]): "Activated abilities have a cost and an
+    /// Whether it has an activated ability (see [CR 602.1]): "Activated abilities have a cost and an
     /// effect."
     ///
     /// [CR 602.1]: https://yawgatog.com/resources/magic-rules/#R6021
@@ -718,7 +720,7 @@ impl ManaFace {
     }
 }
 
-/// The mana of the intrinsic abilities of `face`'s basic land types ([CR 305.6]), a bit per
+/// The mana of the intrinsic abilities of `face`'s basic land types (see [CR 305.6]), a bit per
 /// color, less what it writes out as Plains does, read through `words`: "Island" makes {U}.
 ///
 /// [CR 305.6]: https://yawgatog.com/resources/magic-rules/#R3056
@@ -766,7 +768,7 @@ pub fn is_tap_for_mana(a: &Ability) -> bool {
 }
 
 /// Whether an ability is a mana ability whose whole cost is {T} and sacrificing its source, as a
-/// Treasure's ([CR 111.10a]): "{T}, Sacrifice this token: Add one mana of any color." Spending the
+/// Treasure's (see [CR 111.10a]): "{T}, Sacrifice this token: Add one mana of any color." Spending the
 /// permanent is a resource a plan consumes (§10): the solver taps such a source only when the cost
 /// needs it, or when sacrificing it keeps more later costs payable.
 ///

@@ -2,10 +2,12 @@
 //! the crate's contract, "Mutators"). A card a player is about to learn has its identity
 //! settled first ([`chance`]), so a save replays what was seen.
 //!
-//! [CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002): "Public zones are zones in
+//! See [CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002): "Public zones are zones in
 //! which all players can see the cards' faces ... Hidden zones are zones in which not all
 //! players can be expected to see the cards' faces." The zone moves keep what a zone tells
 //! every player ([`crate::zone`]); these are the other ways a player learns or forgets a card.
+//!
+//! Implements: CR 701.20a
 
 use crate::bitboard::Bitboard;
 use crate::chance;
@@ -30,7 +32,7 @@ impl<L: Layout> State<L> {
 
     /// `player` looks at the cards in `cards` and from then on knows them: a library and a
     /// hand are hidden zones
-    /// ([CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002)), "zones in which not
+    /// (see [CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002)), "zones in which not
     /// all players can be expected to see the cards' faces."
     pub fn look(&mut self, sink: &mut Sink<L>, player: Seat, cards: Bitboard<L::Slot>) {
         chance::settle_all(self, sink, cards);
@@ -42,7 +44,7 @@ impl<L: Layout> State<L> {
 
     /// `player` no longer knows the card in `slot`, as when a permanent they knew enters
     /// face down under another player's control
-    /// ([CR 708.5](https://yawgatog.com/resources/magic-rules/#R7085)): "You can't look at
+    /// (see [CR 708.5](https://yawgatog.com/resources/magic-rules/#R7085)): "You can't look at
     /// face-down cards in any other zone or face-down spells or permanents controlled by
     /// another player."
     pub fn forget(&mut self, player: Seat, slot: L::Slot) {

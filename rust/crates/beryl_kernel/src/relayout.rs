@@ -2,6 +2,8 @@
 //! places ([`SlotId::to`]), the same queues in the same order. Widening a [`State<Small>`]
 //! into [`crate::Large`] is lossless; values a `Small` game produced fit back into `Small`.
 //! Whether a whole game fits another layout is [`State::try_relayout`]'s to say.
+//!
+//! Implements: none. Converts game data between storage layouts.
 
 use crate::bitboard::Bitboard;
 use crate::decision::{Candidates, Decision, Opt, Refusal, Step};

@@ -10,6 +10,8 @@
 //! their own and an entry names its set by index ([`LockedIn`]). An empty set is a free
 //! place in the table: the effect whose set it was has ended. The table has no empty set
 //! at its end, so a store with no set live has an empty table, whatever it once held.
+//!
+//! Implements: CR 611.2c
 
 use crate::bitboard::Bitboard;
 use crate::fit::{Misfit, room};
@@ -103,7 +105,7 @@ impl<L: Layout> Sets<L> {
     }
 
     /// The object in `slot` has ended, so it is a member of no set
-    /// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)): whatever arrives in
+    /// (see [CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)): whatever arrives in
     /// the slot is "a new object with no memory of, or relation to, its previous existence."
     /// Says whether it was one.
     pub(super) fn leave(&mut self, slot: L::Slot) -> bool {
@@ -136,12 +138,12 @@ impl<L: Layout> State<L> {
     /// ([CR 611.2c](https://yawgatog.com/resources/magic-rules/#R6112c)): "the set of objects
     /// it affects is determined when that continuous effect begins. After that point, the set
     /// won't change."
-    /// [CR 613.7](https://yawgatog.com/resources/magic-rules/#R6137): an effect's timestamp
+    /// See [CR 613.7](https://yawgatog.com/resources/magic-rules/#R6137): an effect's timestamp
     /// is the time it was created, so the members share it. The members are permanents, the
     /// objects of the battlefield as they are now. One that leaves is no longer affected
     /// and the rest still are; the effect ends with the last of them.
     ///
-    /// Each part is an entry of its own, all with the effect's timestamp ([CR 613.6]): "If an
+    /// Each part is an entry of its own, all with the effect's timestamp (see [CR 613.6]): "If an
     /// effect should be applied in different layers and/or sublayers, the parts of the effect
     /// each apply in their appropriate ones." An effect on one object is an entry on that
     /// object for each part ([`State::start_effect`]): the same effect, and the table's

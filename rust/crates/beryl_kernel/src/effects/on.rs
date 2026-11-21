@@ -1,4 +1,6 @@
 //! What the Effects store holds about one object ([`EffectsOn`]), to compare two objects by.
+//!
+//! Implements: none. Reads stored effects to compare objects.
 
 use super::{Affects, Effects, Payload};
 use crate::layout::{Layout, Queue, Small};

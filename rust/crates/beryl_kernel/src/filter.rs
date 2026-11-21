@@ -1,5 +1,7 @@
 //! Evaluating a [`Filter`], the predicates targets and affected sets are written in
 //! (architecture §6.2), against a game state.
+//!
+//! Implements: CR 102.2
 
 pub use beryl_card::Filter;
 use beryl_card::{CardDef, Players, Words};
@@ -121,7 +123,7 @@ impl Evaluate for Filter {
                 None => elsewhere().map_or_else(|| face().colors, |c| c.colors),
             }
             .intersects(colors.read(words)),
-            // CR 108.4a: a card that is no permanent or spell has no controller, and "its
+            // See CR 108.4a: a card that is no permanent or spell has no controller, and "its
             // owner" is used instead, which is what the query answers.
             Filter::Whose(players) => is_for(players, s.controller(slot), you),
             Filter::Owned(players) => is_for(players, o.owner, you),
@@ -175,7 +177,7 @@ fn combined<L: Layout>(
 /// through `words`, its characteristics being `so_far`: what the effects that reach other
 /// zones applied before the one whose filter this is made of it ([`crate::query::zone_characteristics`]). A
 /// filter that reads a characteristic an earlier effect changed sees the change, as the
-/// layers find a static ability's set against the layers before it (CR 613.1). Out of line,
+/// layers find a static ability's set against the layers before it (see CR 613.1). Out of line,
 /// apart from [`Evaluate::matches_x`]: only a game with such an effect comes here.
 #[cold]
 #[inline(never)]
@@ -235,11 +237,11 @@ pub const fn reads(players: &Players) -> bool {
 #[inline]
 pub fn is_for(players: &Players, player: Seat, you: Seat) -> bool {
     match players {
-        // CR 109.5: "The words 'you' and 'your' on an object refer to the object's
+        // See CR 109.5: "The words 'you' and 'your' on an object refer to the object's
         // controller".
         Players::You => player == you,
         Players::EachOpponent => is_an_opponent(player, you),
-        // CR 102.1: "A player is one of the people in the game."
+        // See CR 102.1: "A player is one of the people in the game."
         Players::EachPlayer => true,
         Players::Target(_)
         | Players::ControllerOf(_)
@@ -268,7 +270,7 @@ pub(crate) fn reads_players_of(def: &CardDef) -> bool {
 ///
 /// The one place that entry is read, and [`crate::State::opponents_of`] is the set it tests. With
 /// more players and no teams every other player is an opponent, as written here. Between teams,
-/// "the player's opponents are all players not on their team" ([CR 102.3]): this function changes
+/// "the player's opponents are all players not on their team" (see [CR 102.3]): this function changes
 /// then, and no card does.
 ///
 /// [CR 102.2]: https://yawgatog.com/resources/magic-rules/#R1022

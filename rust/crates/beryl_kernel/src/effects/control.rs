@@ -1,15 +1,17 @@
-//! Player-controlling effects in the Effects store ([CR 724.1]): "Some cards allow a player to
+//! Player-controlling effects in the Effects store (see [CR 724.1]): "Some cards allow a player to
 //! control another player during that player's next turn." An entry
 //! ([`super::Payload::Control`], the controller's seat) is on the controlled player and waits
 //! for that player's next turn: [`State::begin_turn`] takes the one created last
 //! ([CR 724.1a]), ends every one on that player, and makes its controller the turn's
 //! ([`crate::state::Turn::controller`]), which the next turn's beginning clears. The
 //! controller then answers that player's decisions ([`State::decider`]) and learns what they
-//! learn, from the turn's start on, and keeps it ([CR 724.4]; `State::sharer`).
+//! learn, from the turn's start on, and keeps it (see [CR 724.4]; `State::sharer`).
 //!
 //! [CR 724.1]: https://yawgatog.com/resources/magic-rules/#R7241
 //! [CR 724.1a]: https://yawgatog.com/resources/magic-rules/#R7241a
 //! [CR 724.4]: https://yawgatog.com/resources/magic-rules/#R7244
+//!
+//! Implements: CR 724.1a, CR 724.9
 
 use super::{Affects, ContinuousEffect, Effects, Kinds, Payload};
 use crate::ids::Seat;
@@ -22,8 +24,8 @@ impl<L: Layout> Effects<L> {
     /// and returns the controller of the one created last, unless that is `player`
     /// ([CR 724.1a]): "Multiple player-controlling effects that affect the same player
     /// overwrite each other. The last one to be created is the one that works." A player who
-    /// controls themselves makes their own decisions as normal ([CR 724.9]). With none live,
-    /// one AND.
+    /// controls themselves still makes their own decisions ([CR 724.9]): "That player will make
+    /// their own decisions and choices as normal." With no effects waiting, one AND.
     ///
     /// [CR 724.1a]: https://yawgatog.com/resources/magic-rules/#R7241a
     /// [CR 724.9]: https://yawgatog.com/resources/magic-rules/#R7249

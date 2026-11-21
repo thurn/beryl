@@ -1,4 +1,6 @@
 //! Events, their causes and their tags in another layout: a part of [`super::Relayout`].
+//!
+//! Implements: none. Converts events and their causes between storage layouts.
 
 use crate::cause::{Cause, Tag};
 use crate::event::{Event, LossCause, Recipient, Tagged};

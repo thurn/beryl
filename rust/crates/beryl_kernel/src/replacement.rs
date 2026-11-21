@@ -9,6 +9,8 @@
 //! A replacement of a draw says what happens instead as an [`Effect`]: a player winning or
 //! losing the game, which the rules do directly, or instructions the rules carry out as a
 //! resolution would ([`instead_of_drawing`]).
+//!
+//! Implements: none. Checks whether the engine supports a replacement effect definition.
 
 use beryl_card::{
     Ability, Behavior, CardDef, Draws, Effect, Players, Replaced, Replacement, Rewrite, Zone,

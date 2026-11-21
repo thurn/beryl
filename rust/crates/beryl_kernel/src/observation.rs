@@ -1,5 +1,7 @@
 //! `Observation`: a borrowed view of the state for one player, masking what they do not know
 //! (architecture §13, decision D9).
+//!
+//! Implements: none. Projects the game state using the viewer's recorded knowledge.
 
 use crate::bitboard::Bitboard;
 use crate::filter::{Evaluate, Filter};
@@ -85,7 +87,7 @@ impl<'a, L: Layout> Observation<'a, L> {
     /// The object in a slot, with every field that could betray an unknown identity masked:
     /// its card, which only [`Observation::card`] reads, and the face up. Whether a
     /// permanent is face down is public: it is part of its status
-    /// ([CR 110.5](https://yawgatog.com/resources/magic-rules/#R1105)).
+    /// (see [CR 110.5](https://yawgatog.com/resources/magic-rules/#R1105)).
     pub fn object(&self, slot: L::Slot) -> Object<L> {
         let mut o = *self.state.object(slot);
         if !self.knows(slot) {
@@ -98,7 +100,7 @@ impl<'a, L: Layout> Observation<'a, L> {
     }
 
     /// Who controls an object: for a permanent the layer-2 result, otherwise its base
-    /// controller ([CR 109.4](https://yawgatog.com/resources/magic-rules/#R1094)). Public:
+    /// controller (see [CR 109.4](https://yawgatog.com/resources/magic-rules/#R1094)). Public:
     /// control is never hidden.
     pub fn controller(&self, slot: L::Slot) -> Seat {
         self.state.controller(slot)
@@ -113,7 +115,7 @@ impl<'a, L: Layout> Observation<'a, L> {
     }
 
     /// The player chosen to take the first turn; none while the coin flip's winner chooses.
-    /// [CR 103.1](https://yawgatog.com/resources/magic-rules/#R1031): "the players determine
+    /// See [CR 103.1](https://yawgatog.com/resources/magic-rules/#R1031): "the players determine
     /// which one of them will choose who takes the first turn ... The player chosen to take
     /// the first turn is the starting player."
     pub fn starting_player(&self) -> Option<Seat> {
@@ -158,7 +160,7 @@ impl<'a, L: Layout> Observation<'a, L> {
     }
 
     /// A permanent's characteristics after continuous effects, public as the battlefield is
-    /// ([CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002)).
+    /// (see [CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002)).
     ///
     /// # Panics
     ///
@@ -167,8 +169,8 @@ impl<'a, L: Layout> Observation<'a, L> {
         self.state.derived(slot)
     }
 
-    /// The stack, bottom first. It is a public zone (CR 400.2), and a spell is revealed as it
-    /// is cast ([CR 601.2a](https://yawgatog.com/resources/magic-rules/#R6012a)): "a player
+    /// The stack, bottom first. It is a public zone (see CR 400.2), and a spell is revealed as it
+    /// is cast (see [CR 601.2a](https://yawgatog.com/resources/magic-rules/#R6012a)): "a player
     /// first moves that card ... from where it is to the stack".
     pub fn stack(&self) -> &'a [StackEntry<L>] {
         self.state.stack()
@@ -215,11 +217,11 @@ impl<'a, L: Layout> Observation<'a, L> {
     /// [`Self::determinize`] with every hand shown: only the libraries' unknown cards, and
     /// any other card the viewer does not know outside a hand, are dealt at random. This is
     /// half-cheating, for measuring what seeing the opponent's hand is worth: a hand is a
-    /// hidden zone ([CR 402.3](https://yawgatog.com/resources/magic-rules/#R4023): "A player
+    /// hidden zone (see [CR 402.3](https://yawgatog.com/resources/magic-rules/#R4023): "A player
     /// may arrange their hand in any convenient fashion and look at it at any time. A
     /// player can't look at the cards in another player's hand but may count those cards
     /// at any time."), and so is a library, whose order no player
-    /// knows ([CR 401.2](https://yawgatog.com/resources/magic-rules/#R4012): "Each library
+    /// knows (see [CR 401.2](https://yawgatog.com/resources/magic-rules/#R4012): "Each library
     /// must be kept in a single face-down pile. Players can't look at or change the order of
     /// cards in a library.").
     pub fn determinize_libraries(&self, t: &GameTable, rng: &mut SplitMix64) -> State<L> {
@@ -233,7 +235,7 @@ impl<'a, L: Layout> Observation<'a, L> {
     /// A card a player picked without revealing it, earlier in the paused resolution
     /// ([`crate::pending::Resolving`], "Hidden picks"), is dealt one the pick's filter
     /// accepts: the viewer knows the slot was picked, and so that it held such a card
-    /// ([CR 101.4a]): "each player must clearly indicate which face-down card they are
+    /// (see [CR 101.4a]): "each player must clearly indicate which face-down card they are
     /// choosing." Where the deal put another card there, it trades with the first other slot
     /// of that player's unknown cards, in slot order, whose card passes; the deal's order is
     /// random, so which card that is is too.
@@ -292,7 +294,7 @@ impl<'a, L: Layout> Observation<'a, L> {
 
     /// The slots the paused resolution's hidden picks have picked so far, known card or not
     /// ([`crate::state::Resolving::hidden_picks`]). Which slot was picked is public and the
-    /// card is not ([CR 101.4a]): "those cards may remain face down as they're chosen.
+    /// card is not (see [CR 101.4a]): "those cards may remain face down as they're chosen.
     /// However, each player must clearly indicate which face-down card they are choosing."
     ///
     /// [CR 101.4a]: https://yawgatog.com/resources/magic-rules/#R1014a

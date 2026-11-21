@@ -1,4 +1,6 @@
 //! `Fixed<T, N>`: the engine's fixed-capacity vector (architecture §4.1).
+//!
+//! Implements: none. Stores values in a fixed-capacity vector.
 
 use std::hash::{Hash, Hasher};
 

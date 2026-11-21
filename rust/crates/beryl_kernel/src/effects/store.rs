@@ -1,6 +1,8 @@
 //! What the Effects store implements once, whatever its entries are (the crate's contract,
 //! "Stores"): the empty store, what ends its entries, whether it fits a layout and how it
 //! converts to one, its invariants, and what a checkpoint would lose of it.
+//!
+//! Implements: none. Maintains effect indexes and converts the store between layouts.
 
 use crate::bitboard::Bitboard;
 use crate::fit::{Misfit, room};
@@ -44,7 +46,7 @@ impl<L: Layout> Store<L> for Effects<L> {
 
     fn forget(&mut self, slot: L::Slot) -> Ended {
         // The object is a member of no set from here
-        // ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007): what the slot holds
+        // (see [CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007): what the slot holds
         // next is "a new object with no memory of, or relation to, its previous existence").
         // An effect whose set it was the last of ends below; one with other members goes on.
         let left = self.sets.leave(slot);
@@ -261,7 +263,7 @@ impl<L: Layout> Relayout for Effects<L> {
 
 impl<L: Layout> State<L> {
     /// The generic mana the cost changes on the spell `object` add to its cost
-    /// ([CR 601.2f](https://yawgatog.com/resources/magic-rules/#R6012f): "plus all additional
+    /// (see [CR 601.2f](https://yawgatog.com/resources/magic-rules/#R6012f): "plus all additional
     /// costs and cost increases"). With no cost change live on any object, one AND.
     #[inline]
     pub fn cost_increase(&self, object: ObjectRef<L>) -> u8 {

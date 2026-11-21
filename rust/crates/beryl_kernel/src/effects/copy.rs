@@ -1,14 +1,14 @@
 //! Copy effects: the entries of the Effects store that give an object the copiable values of
 //! another, with the exceptions they were made with ([`Continuous::Copy`]).
 //!
-//! A copy takes what it copies ([CR 707.2]): "When copying an object, the copy acquires the
+//! A copy takes what it copies (see [CR 707.2]): "When copying an object, the copy acquires the
 //! copiable values of the original object's characteristics". The object's definition and face hold the values it copied, so
 //! [`State::copiable`] reads what it reads of any object, and [`Flag::Copy`] says an entry
-//! holds the rest: the exceptions ([CR 707.9b]): "The final set of values for that
+//! holds the rest: the exceptions (see [CR 707.9b]): "The final set of values for that
 //! characteristic becomes part of the copiable values of the copy."
 //!
 //! A token's copy effect makes it a copy of what it copied for as long as it exists
-//! ([CR 111.3]): "The characteristic values defined this way are functionally equivalent to
+//! (see [CR 111.3]): "The characteristic values defined this way are functionally equivalent to
 //! the characteristic values that are printed on a card; for example, they define the token's
 //! copiable values." The zone move carries it to the token's next incarnation. A card under a
 //! copy effect, such as one that entered as a copy, remembers the card it really is
@@ -18,6 +18,8 @@
 //! [CR 707.2]: https://yawgatog.com/resources/magic-rules/#R7072
 //! [CR 707.9b]: https://yawgatog.com/resources/magic-rules/#R7079b
 //! [CR 111.3]: https://yawgatog.com/resources/magic-rules/#R1113
+//!
+//! Implements: none. Stores and applies effects with copiable values supplied by the caller.
 
 use super::{Affects, Continuous, ContinuousEffect, Effects, Kinds, Payload};
 use crate::fixed::Full;
@@ -42,7 +44,7 @@ pub(crate) struct Carried<L: Layout> {
 
 impl<L: Layout> Effects<L> {
     /// The latest copy effect on the object in `slot`, of those still on it: the one layer 1
-    /// applies last, and so the one whose values it has ([CR 613.7]): "An effect with an
+    /// applies last, and so the one whose values it has (see [CR 613.7]): "An effect with an
     /// earlier timestamp is applied before an effect with a later timestamp."
     ///
     /// [CR 613.7]: https://yawgatog.com/resources/magic-rules/#R6137
@@ -89,7 +91,7 @@ impl<L: Layout> State<L> {
 
     /// The copy effect a token keeps as it changes zones, read before the move ends what the
     /// stores hold about it: a token copy is a copy wherever it is until it ceases to exist
-    /// ([CR 111.3]), which is what its values were defined as.
+    /// (see [CR 111.3]), which is what its values were defined as.
     ///
     /// [CR 111.3]: https://yawgatog.com/resources/magic-rules/#R1113
     #[cold]
@@ -158,14 +160,14 @@ impl<L: Layout> State<L> {
     }
 
     /// Makes the permanent `object` become a copy with the copiable values `values`, by an
-    /// effect of the card `source` ([CR 707.2]): "When copying an object, the copy acquires
+    /// effect of the card `source` (see [CR 707.2]): "When copying an object, the copy acquires
     /// the copiable values of the original object's characteristics". It is not entering: its
     /// counters, status and memos stay. Its face up is the one it copied. The effect lasts
     /// until the permanent leaves the battlefield, and ends with what the stores hold about it
     /// then; a card is then the card it really is again ([`Memo::Really`]).
     ///
     /// A copy effect already on the permanent is ended first: it lasts as long, and the new
-    /// effect, applied after it in layer 1, replaces every value it gives ([CR 613.2a]):
+    /// effect, applied after it in layer 1, replaces every value it gives (see [CR 613.2a]):
     /// "Layer 1a: Copiable effects are applied." The new values were read with it applied, so
     /// they keep what it gave that a copy of this permanent copies. [`Full`] if the stores
     /// had no room.

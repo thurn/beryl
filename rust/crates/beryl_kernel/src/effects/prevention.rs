@@ -1,4 +1,4 @@
-//! Prevention shields in the Effects store ([CR 615.1]): "Such effects watch for a damage event
+//! Prevention shields in the Effects store (see [CR 615.1]): "Such effects watch for a damage event
 //! that would happen and completely or partially prevent the damage that would be dealt. They
 //! act like “shields” around whatever they're affecting."
 //!
@@ -9,6 +9,8 @@
 //! ([`State::prevent_with`]) and end it once nothing is.
 //!
 //! [CR 615.1]: https://yawgatog.com/resources/magic-rules/#R6151
+//!
+//! Implements: CR 615.7, CR 615.8
 
 use crate::layout::{Layout, Queue, Small};
 use crate::object::ObjectRef;
@@ -34,7 +36,7 @@ pub struct Shield<L: Layout = Small> {
     pub from: Option<ChosenSource<L>>,
 }
 
-/// The source of damage a player chose for a shield ([CR 609.7a]): "If an effect requires a
+/// The source of damage a player chose for a shield (see [CR 609.7a]): "If an effect requires a
 /// player to choose a source of damage, they may choose a permanent; a spell on the stack
 /// (including a permanent spell); any object referred to by an object on the stack".
 ///
@@ -42,12 +44,12 @@ pub struct Shield<L: Layout = Small> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ChosenSource<L: Layout = Small> {
     /// The source as it was chosen. Once it has changed zones it is a new object
-    /// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)), which the shield
+    /// (see [CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)), which the shield
     /// does not prevent damage from.
     pub object: ObjectRef<L>,
     /// The face of the shield's card, and its ability (none for the face's spell), that made
     /// the shield: the filter it holds is what the source must still pass as it would deal
-    /// damage ([CR 615.9]): "When the source would deal damage, the shield rechecks the
+    /// damage (see [CR 615.9]): "When the source would deal damage, the shield rechecks the
     /// source's properties. If the properties no longer match, the damage isn't prevented or
     /// replaced and the shield isn't used up."
     ///

@@ -1,4 +1,6 @@
 //! [`Capability`]: what a game's cards may make the stores keep.
+//!
+//! Implements: none. Records which game mechanics the current card pool can use.
 
 use beryl_card::{
     Amount, Behavior, Condition, Draws, Effect, Face, Modification, Node, Objects, Replaced,
@@ -24,7 +26,7 @@ pub enum Capability {
     /// tracked.
     EnteredThisTurn,
     /// A card has a loyalty ability, so whether one of a permanent's was activated this turn is
-    /// tracked ([CR 606.3]): "A player may activate a loyalty ability of a permanent
+    /// tracked (see [CR 606.3]): "A player may activate a loyalty ability of a permanent
     /// they control any time they have priority and the stack is empty during a main phase of their
     /// turn, but only if no player has previously activated a loyalty ability of that permanent
     /// that turn."
@@ -58,7 +60,7 @@ pub enum Capability {
     /// A card chooses a value as it enters ([`beryl_card::Replacement::choose_as_enters`]),
     /// may enter as a copy of a permanent it chooses
     /// ([`beryl_card::Replacement::enter_as_copy`]), or is an Aura, which chooses what it
-    /// enchants as it enters other than as a resolving Aura spell (CR 303.4f): a choice that
+    /// enchants as it enters other than as a resolving Aura spell (see CR 303.4f): a choice that
     /// may come up wherever a permanent enters, so every resolution runs where it can pause for
     /// it (`beryl_rules`' `resolve`).
     ChoosesAsEnters,

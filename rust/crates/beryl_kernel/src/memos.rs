@@ -3,7 +3,7 @@
 //! A memo is written once, with [`State::remember`], and read by the object's own abilities
 //! through a query by kind: [`State::paid`], [`State::x_of`]. It ends with its object,
 //! inside the zone move
-//! ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007): "An object that moves
+//! (see [CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007): "An object that moves
 //! from one zone to another becomes a new object with no memory of, or relation to, its
 //! previous existence."), so an entry names a slot and is always about the object now in
 //! it. A kind with nothing live costs its reader one AND.
@@ -14,6 +14,8 @@
 //! does, and one of the two also as a new object arrives in the slot it names
 //! ([`Memo::ExiledWith`]); and the value a permanent chose as it entered
 //! ([`Memo::Chosen`]).
+//!
+//! Implements: none. Stores facts about objects for their abilities to read later.
 
 use beryl_card::{CastingKind, CastingKinds};
 
@@ -41,19 +43,19 @@ pub const MEMOS: usize = 32;
 pub enum Memo<L: Layout = Small> {
     /// The permanent's spell was cast with these kinds of cost paid, a kicker cost among
     /// them or an evoke cost
-    /// ([CR 702.33d](https://yawgatog.com/resources/magic-rules/#R70233d): "If a spell's
+    /// (see [CR 702.33d](https://yawgatog.com/resources/magic-rules/#R70233d): "If a spell's
     /// controller declares the intention to pay any of that spell's kicker costs, that
     /// spell has been 'kicked.'"). Never the empty set: a permanent whose spell paid none
     /// remembers nothing.
     Paid(CastingKinds),
     /// The value of X the permanent's spell was cast with, for its enters abilities
-    /// ([CR 107.3m](https://yawgatog.com/resources/magic-rules/#R1073m)): "the value of X
+    /// (see [CR 107.3m](https://yawgatog.com/resources/magic-rules/#R1073m)): "the value of X
     /// for that ability is the same as the value of X for that spell". Never 0, which is
     /// what a permanent with no such memo answers.
     X(u8),
     /// The card in exile was exiled by an ability of the object in this slot, whose linked
     /// ability refers to the cards "exiled with" it
-    /// ([CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)): "If an object has
+    /// (see [CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)): "If an object has
     /// an activated or triggered ability printed on it that instructs a player to exile one
     /// or more cards and an ability printed on it that refers either to 'the exiled cards'
     /// or to cards 'exiled with [this object],' these abilities are linked."
@@ -65,14 +67,14 @@ pub enum Memo<L: Layout = Small> {
     ExiledWith(L::Slot),
     /// The card in exile was exiled until the permanent in this slot leaves the
     /// battlefield, which returns it
-    /// ([CR 610.3](https://yawgatog.com/resources/magic-rules/#R6103)): "Some one-shot
+    /// (see [CR 610.3](https://yawgatog.com/resources/magic-rules/#R6103)): "Some one-shot
     /// effects cause an object to change zones 'until' a specified event occurs."
     ExiledUntil(L::Slot),
     /// The value the permanent chose as it entered: a color, a creature type or a card name
-    /// ([CR 614.12a](https://yawgatog.com/resources/magic-rules/#R61412a)): "If a replacement
+    /// (see [CR 614.12a](https://yawgatog.com/resources/magic-rules/#R61412a)): "If a replacement
     /// effect that modifies how a permanent enters the battlefield requires a choice, that
     /// choice is made before the permanent enters the battlefield." Not a copiable value
-    /// ([CR 707.2](https://yawgatog.com/resources/magic-rules/#R7072)): "Other effects
+    /// (see [CR 707.2](https://yawgatog.com/resources/magic-rules/#R7072)): "Other effects
     /// (including type-changing and text-changing effects), status, counters, and stickers
     /// are not copied." A copy of the permanent makes its own choice as it enters, and a
     /// permanent that becomes a copy keeps this one.
@@ -80,9 +82,9 @@ pub enum Memo<L: Layout = Small> {
     /// The card the permanent really is, at this game index, while a copy effect gives it the
     /// values of another ([`crate::effects::copy`]): its definition field names the one it
     /// copies, so that every reader of its values reads them as it would of any object, and
-    /// this is what it is again once it leaves the battlefield ([CR 707.2]): "When copying an
+    /// this is what it is again once it leaves the battlefield (see [CR 707.2]): "When copying an
     /// object, the copy acquires the copiable values of the original object's characteristics".
-    /// A token has none: a token copy is what it copied wherever it is (CR 111.3).
+    /// A token has none: a token copy is what it copied wherever it is (see CR 111.3).
     ///
     /// [CR 707.2]: https://yawgatog.com/resources/magic-rules/#R7072
     Really(L::Card),
@@ -94,14 +96,14 @@ pub enum Memo<L: Layout = Small> {
     PutOntoBattlefieldWith(L::Slot),
     /// The phased-out permanent phased out under this player's control, who is not the player
     /// who put it onto the battlefield: it phases in during that player's untap step
-    /// ([CR 702.26a]): "all phased-out permanents that had phased out under that player's
+    /// (see [CR 702.26a]): "all phased-out permanents that had phased out under that player's
     /// control “phase in.”" A permanent without it phased out under its base controller's
     /// control ([`crate::phasing`]).
     ///
     /// [CR 702.26a]: https://yawgatog.com/resources/magic-rules/#R70226a
     PhasedOutUnder(Seat),
     /// The card is one of the cards of the merged permanent in this slot, other than the
-    /// card in the permanent's own slot ([CR 731.2]): "That permanent becomes a merged
+    /// card in the permanent's own slot (see [CR 731.2]): "That permanent becomes a merged
     /// permanent represented by the card or copy that represented that object in addition to
     /// any other components that were representing it." It waits in [`Zone::Merged`], in no
     /// battlefield list, and goes where the permanent goes as it leaves the battlefield
@@ -112,12 +114,12 @@ pub enum Memo<L: Layout = Small> {
     PartOf(L::Slot),
     /// The card the permanent really is ([`Memo::Really`]) was face down when a card merged
     /// over it, and stays a face-down component of the merged permanent, which only these
-    /// players know ([CR 731.2e]): "If a merged permanent contains face-up and face-down
+    /// players know (see [CR 731.2e]): "If a merged permanent contains face-up and face-down
     /// components, the permanent's status is determined by its topmost component." The
     /// merged permanent itself is face up and every player knows it, so its slot is known to
     /// all ([`State::knows`]); this says who knows the card behind it
     /// ([`State::knows_card_really_is`]). It is revealed as the permanent leaves the
-    /// battlefield ([CR 708.9]): "If a face-down permanent or a face-down component of a
+    /// battlefield (see [CR 708.9]): "If a face-down permanent or a face-down component of a
     /// merged permanent moves from the battlefield to any other zone, its owner must reveal
     /// it to all players as they move it."
     ///
@@ -163,7 +165,7 @@ impl<L: Layout> Memo<L> {
 
     /// Whether the layers read it: a static ability may apply only while a cost was paid,
     /// as one with impending does
-    /// ([CR 702.176a](https://yawgatog.com/resources/magic-rules/#R702176a)).
+    /// (see [CR 702.176a](https://yawgatog.com/resources/magic-rules/#R702176a)).
     #[inline]
     fn layer_input(self) -> bool {
         matches!(self, Memo::Paid(_))
@@ -197,11 +199,11 @@ impl<L: Layout> Memo<L> {
             Memo::Paid(paid) => !paid.is_empty(),
             Memo::Chosen(value) => value.holds(),
             Memo::Really(_) | Memo::PhasedOutUnder(_) => true,
-            // Somebody knew the face-down card: at least its controller (CR 708.5).
+            // Somebody knew the face-down card: at least its controller (see CR 708.5).
             Memo::FaceDownUnder(knew) => !knew.is_empty(),
             // What exiled it left a card or a token in its slot.
             Memo::ExiledWith(by) | Memo::PutOntoBattlefieldWith(by) => zone(by) != Zone::Nowhere,
-            // An object exiled "until" its exiler leaves returns as it leaves (CR 610.3).
+            // An object exiled "until" its exiler leaves returns as it leaves (see CR 610.3).
             Memo::ExiledUntil(by) => zone(by) == Zone::Battlefield,
             // A card is part of a permanent only while it is on the battlefield.
             Memo::PartOf(of) => zone(of) == Zone::Battlefield,
@@ -466,7 +468,7 @@ impl<L: Layout> MemosOf<'_, L> {
     }
 
     /// The slot of the object whose ability exiled this card, among the cards "exiled
-    /// with" it (CR 607.2a).
+    /// with" it (see CR 607.2a).
     #[inline]
     pub fn exiled_with(&self) -> Option<L::Slot> {
         self.iter().find_map(|memo| match memo {
@@ -483,7 +485,7 @@ impl<L: Layout> MemosOf<'_, L> {
         })
     }
 
-    /// The permanent this card is exiled until the leaving of (CR 610.3).
+    /// The permanent this card is exiled until the leaving of (see CR 610.3).
     #[inline]
     pub fn exiled_until(&self) -> Option<L::Slot> {
         self.iter().find_map(|memo| match memo {
@@ -500,7 +502,7 @@ impl<L: Layout> MemosOf<'_, L> {
         })
     }
 
-    /// The value the permanent chose as it entered (CR 614.12a).
+    /// The value the permanent chose as it entered (see CR 614.12a).
     #[inline]
     pub fn chosen(&self) -> Option<ChosenValue<L>> {
         self.iter().find_map(|memo| match memo {
@@ -530,7 +532,7 @@ impl<L: Layout> Eq for MemosOf<'_, L> {}
 impl<L: Layout> State<L> {
     /// Has the object in `slot` remember `memo`: a permanent, of the spell it was and what it
     /// chose, as it enters; a card in exile, what exiled it. It remembers until it leaves its zone
-    /// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)), and one thing of
+    /// (see [CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)), and one thing of
     /// each variant of [`Memo`]. The layer results are stale from here if the layers read
     /// the memo. No event: it is part of how the object came to be where it is.
     #[inline]
@@ -547,7 +549,7 @@ impl<L: Layout> State<L> {
     }
 
     /// Whether the spell that became the permanent in `slot` was cast with a cost of this
-    /// kind paid ([CR 702.33d](https://yawgatog.com/resources/magic-rules/#R70233d)). With
+    /// kind paid (see [CR 702.33d](https://yawgatog.com/resources/magic-rules/#R70233d)). With
     /// no permanent in the game that remembers one of the kind, one AND.
     #[inline]
     pub fn paid(&self, slot: L::Slot, kind: CastingKind) -> bool {
@@ -559,7 +561,7 @@ impl<L: Layout> State<L> {
     }
 
     /// The value of X the permanent in `slot` was cast with
-    /// ([CR 107.3m](https://yawgatog.com/resources/magic-rules/#R1073m)), 0 if none. With
+    /// (see [CR 107.3m](https://yawgatog.com/resources/magic-rules/#R1073m)), 0 if none. With
     /// no permanent in the game that remembers one, one AND.
     #[inline]
     pub fn x_of(&self, slot: L::Slot) -> u8 {
@@ -574,7 +576,7 @@ impl<L: Layout> State<L> {
     }
 
     /// The value the permanent in `slot` chose as it entered
-    /// ([CR 614.12a](https://yawgatog.com/resources/magic-rules/#R61412a)), if it chose one.
+    /// (see [CR 614.12a](https://yawgatog.com/resources/magic-rules/#R61412a)), if it chose one.
     /// With no permanent in the game that chose one, one AND.
     #[inline]
     pub fn chosen(&self, slot: L::Slot) -> Option<ChosenValue<L>> {
@@ -636,10 +638,10 @@ impl<L: Layout> State<L> {
     }
 
     /// The cards exiled with the object in `source` by an ability linked to another of its
-    /// abilities ([CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)): "The second
+    /// abilities (see [CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)): "The second
     /// ability refers only to cards in the exile zone that were put there as a result of an
     /// instruction to exile them in the first ability." Kept while that object has left its
-    /// zone, until a new object arrives in the slot (CR 400.7). With no card in the game
+    /// zone, until a new object arrives in the slot (see CR 400.7). With no card in the game
     /// exiled this way, one AND.
     #[inline]
     pub fn exiled_with(&self, source: L::Slot) -> Bitboard<L::Slot> {
@@ -648,7 +650,7 @@ impl<L: Layout> State<L> {
     }
 
     /// The cards exiled until the permanent in `source` leaves the battlefield
-    /// ([CR 610.3](https://yawgatog.com/resources/magic-rules/#R6103)). With no card in
+    /// (see [CR 610.3](https://yawgatog.com/resources/magic-rules/#R6103)). With no card in
     /// the game exiled this way, one AND.
     #[inline]
     pub fn exiled_until(&self, source: L::Slot) -> Bitboard<L::Slot> {
@@ -667,7 +669,7 @@ impl<L: Layout> State<L> {
 
     /// Ends the card in `slot`'s memo of what it was exiled until, if it has one: the card
     /// stays in exile as that permanent leaves, as an Aura with nothing it could enchant does
-    /// ([CR 303.4g](https://yawgatog.com/resources/magic-rules/#R3034g)): "If an Aura is
+    /// (see [CR 303.4g](https://yawgatog.com/resources/magic-rules/#R3034g)): "If an Aura is
     /// entering the battlefield and there is no legal object or player for it to enchant, the
     /// Aura remains in its current zone". It is exiled until nothing any more.
     #[cold]
@@ -683,11 +685,11 @@ impl<L: Layout> State<L> {
     /// onto the battlefield with it, as a new object arrives there or a token's slot is
     /// freed: the zone move calls it. The cards stay "exiled with" the object that exiled
     /// them
-    /// ([CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)): "The second
+    /// (see [CR 607.2a](https://yawgatog.com/resources/magic-rules/#R6072a)): "The second
     /// ability refers only to cards in the exile zone that were put there as a result of an
     /// instruction to exile them in the first ability." An ability of that object still on
     /// the stack after it left finds them; the new object is not that object
-    /// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)) and does not. With
+    /// (see [CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)) and does not. With
     /// no card in the game exiled this way, one AND.
     #[inline]
     pub(crate) fn forget_links_to(&mut self, slot: L::Slot) {
@@ -748,7 +750,7 @@ impl<L: Layout> State<L> {
 impl<'a, L: Layout> Observation<'a, L> {
     /// Everything the object in `slot` remembers. A memo is as public as its object: how a
     /// spell was cast is announced
-    /// ([CR 601.2b](https://yawgatog.com/resources/magic-rules/#R6012b)), and the permanent
+    /// (see [CR 601.2b](https://yawgatog.com/resources/magic-rules/#R6012b)), and the permanent
     /// it became is on the battlefield for every player to see.
     pub fn memos(&self, slot: L::Slot) -> MemosOf<'a, L> {
         self.shown().memos(slot)

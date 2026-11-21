@@ -5,8 +5,8 @@
 //! (`beryl_card::counter_kinds`), and an object has any number of them at once.
 //!
 //! The three kinds the rules themselves read are fields of the object ([`Counters`]): +1/+1
-//! and -1/-1, which the layers apply to every creature (CR 613.4c), and loyalty, which every
-//! planeswalker has (CR 306.5b). Every other kind is a row of a table keyed by object and
+//! and -1/-1, which the layers apply to every creature (see CR 613.4c), and loyalty, which every
+//! planeswalker has (see CR 306.5b). Every other kind is a row of a table keyed by object and
 //! kind ([`CounterTable`]), since 255 objects cannot each carry a field for every kind. The
 //! rules never see the difference: [`State::add_counters`], [`State::remove_counters`] and
 //! [`State::counters_of`] take any kind.
@@ -17,6 +17,8 @@
 //! are not retained if that object moves from one zone to another. The counters are not
 //! 'removed'; they simply cease to exist."). The zone move pays for the table the bit test
 //! of the keyed slots it pays for every store.
+//!
+//! Implements: CR 122.1, CR 122.2
 
 use beryl_card::{CounterKind, counter_kinds};
 
@@ -44,12 +46,12 @@ pub const COUNTERS: usize = 32;
 /// [`State::counters`] answer for any kind.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Counters {
-    /// [CR 613.4c](https://yawgatog.com/resources/magic-rules/#R6134c): "Effects and
+    /// See [CR 613.4c](https://yawgatog.com/resources/magic-rules/#R6134c): "Effects and
     /// counters that modify power and/or toughness (but don't set power and/or toughness to
     /// a specific number or value) are applied."
     pub plus_one: u8,
     pub minus_one: u8,
-    /// [CR 306.5c](https://yawgatog.com/resources/magic-rules/#R3065c): "The loyalty of a
+    /// See [CR 306.5c](https://yawgatog.com/resources/magic-rules/#R3065c): "The loyalty of a
     /// planeswalker on the battlefield is equal to the number of loyalty counters on it."
     pub loyalty: u8,
 }
@@ -321,7 +323,7 @@ impl<L: Layout> Eq for CounterRows<'_, L> {}
 const HELD: usize = 6;
 
 /// How many counters of each kind an object had: its last known information
-/// ([CR 608.2h](https://yawgatog.com/resources/magic-rules/#R6082h): "the effect uses the
+/// (see [CR 608.2h](https://yawgatog.com/resources/magic-rules/#R6082h): "the effect uses the
 /// object's last known information"), the kinds it keeps in fields and its rows of the table.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct CountersHeld {
@@ -382,7 +384,7 @@ impl<L: Layout> State<L> {
     }
 
     /// Puts counters of a kind on an object
-    /// ([CR 122.6](https://yawgatog.com/resources/magic-rules/#R1226): "Some spells and
+    /// (see [CR 122.6](https://yawgatog.com/resources/magic-rules/#R1226): "Some spells and
     /// abilities refer to counters being put on an object."). Use a fresh
     /// [`Current`] from [`State::current`]. `layered` says whether the
     /// layers read them, which is the rules' to say, with the card in hand: the layer
@@ -438,7 +440,7 @@ impl<L: Layout> State<L> {
     }
 
     /// Has the object in `slot` hold exactly `n` counters of a kind, with no event: as a
-    /// permanent that enters with counters does (CR 122.6), and as the board door arranges
+    /// permanent that enters with counters does (see CR 122.6), and as the board door arranges
     /// one.
     #[inline]
     pub(crate) fn set_counters(

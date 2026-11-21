@@ -11,6 +11,8 @@
 //! each a set of slots, and the kinds kept for each player ([`Count`]), each a `u8` per
 //! player. A count of the whole game, or one that outlasts the turn, joins with a shape and
 //! a span of its own, as its first reader does.
+//!
+//! Implements: none. Stores per-turn activity that card abilities query.
 
 use std::hash::{Hash, Hasher};
 
@@ -73,7 +75,7 @@ macro_rules! kinds {
 
 kinds! {
     /// A kind of tracker keyed by permanent: the closed list. Each is a fact about a permanent that
-    /// ends with the turn, or as the permanent leaves the battlefield ([CR 400.7]: "An object that
+    /// ends with the turn, or as the permanent leaves the battlefield (see [CR 400.7]: "An object that
     /// moves from one zone to another becomes a new object with no memory of, or relation to, its
     /// previous existence.").
     ///
@@ -82,7 +84,7 @@ kinds! {
         /// The permanent entered the battlefield this turn. The rules never ask; a static
         /// ability may, in its condition (`beryl_card`'s `Condition::EnteredThisTurn`).
         EnteredThisTurn = "entered this turn",
-        /// A loyalty ability of the permanent was activated this turn ([CR 606.3]): "A player
+        /// A loyalty ability of the permanent was activated this turn (see [CR 606.3]): "A player
         /// may activate a loyalty ability of a permanent they control any time they have
         /// priority and the stack is empty during a main phase of their turn, but only if no
         /// player has previously activated a loyalty ability of that permanent that turn."
@@ -96,19 +98,19 @@ kinds! {
     /// A kind of count kept for each player: the closed list. Each is how many times
     /// something the player did happened this turn.
     Count {
-        /// The spells the player cast this turn, each counted as it becomes cast ([CR 601.2i]):
+        /// The spells the player cast this turn, each counted as it becomes cast (see [CR 601.2i]):
         /// "the spell becomes cast." Storm reads it, and `beryl_card`'s `Amount::SpellsCast`.
         ///
         /// [CR 601.2i]: https://yawgatog.com/resources/magic-rules/#R6012i
         SpellsCast = "spells cast this turn",
-        /// The cards the player drew this turn ([CR 121.1]): "A player draws a card by putting the
+        /// The cards the player drew this turn (see [CR 121.1]): "A player draws a card by putting the
         /// top card of their library into their hand." `beryl_card`'s `Amount::CardsDrawn` reads
         /// it.
         ///
         /// [CR 121.1]: https://yawgatog.com/resources/magic-rules/#R1211
         CardsDrawn = "cards drawn this turn",
         /// The cards the player drew in their own draw step this turn, so that the first of them is
-        /// told from the others ([CR 504.1]): "First, the active player draws a card."
+        /// told from the others (see [CR 504.1]): "First, the active player draws a card."
         /// `beryl_card`'s `Condition::DrewInDrawStep` reads it.
         ///
         /// [CR 504.1]: https://yawgatog.com/resources/magic-rules/#R5041
@@ -216,7 +218,7 @@ impl<L: Layout> Store<L> for Trackers<L> {
     }
 
     /// The battlefield zone set omits phased-out permanents for gameplay, but they still have
-    /// trackers. [CR 702.26d]: "The phasing event doesn't actually cause a permanent to change
+    /// trackers. See [CR 702.26d]: "The phasing event doesn't actually cause a permanent to change
     /// zones or control, even though it's treated as though it's not on the battlefield and
     /// not under its controller's control while it's phased out."
     ///
@@ -248,7 +250,7 @@ impl<L: Layout> Store<L> for Trackers<L> {
                 None,
             )?;
         }
-        // A player's draw step is in their own turn (CR 504.1).
+        // A player's draw step is in their own turn (see CR 504.1).
         let active = s.turn().active();
         check(
             s.players()
@@ -369,7 +371,7 @@ impl<L: Layout> Observation<'_, L> {
     }
 
     /// Whether `tracker` is noted of the permanent in `slot`. Every player knows: what a tracker
-    /// notes happened on the battlefield or the stack, where all could see it ([CR 400.2]: "Public
+    /// notes happened on the battlefield or the stack, where all could see it (see [CR 400.2]: "Public
     /// zones are zones in which all players can see the cards' faces").
     ///
     /// [CR 400.2]: https://yawgatog.com/resources/magic-rules/#R4002

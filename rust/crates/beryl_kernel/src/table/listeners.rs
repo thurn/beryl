@@ -1,6 +1,8 @@
 //! The listeners of a [`GameTable`]: each card's triggered abilities under the kind of event they
 //! listen to, those that work on the battlefield apart from those that work elsewhere
 //! ([`crate::listener::AWAY`]).
+//!
+//! Implements: none. Indexes each game's triggered abilities by event kind and zone.
 
 use beryl_card::{AbilityKind, CardDef, Face, FaceIx, ZoneSet};
 
@@ -60,7 +62,7 @@ impl GameTable {
 
     /// The triggered abilities of the face `face` of the card at `card` that listen to events of
     /// `kind`, in the order the face lists them: what an event of that kind is matched against, and
-    /// nothing else of the face is read. A face-down permanent's face has none ([CR 708.2a]).
+    /// nothing else of the face is read. A face-down permanent's face has none (see [CR 708.2a]).
     ///
     /// [CR 708.2a]: https://yawgatog.com/resources/magic-rules/#R7082a
     #[inline]
