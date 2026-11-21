@@ -66,14 +66,6 @@ const DEEPEST: usize = 63;
 /// less than the cards lifted beside a library lie from it.
 const ON_PILE: f32 = 4.0;
 
-/// Table piles grow vertically from the bottom card. Visible card-stock rims are painted
-/// separately from these physical layers.
-fn table_pile(card: Card) -> Pile {
-    Pile {
-        step: Vec3::new(0.0, 0.0, card.layer),
-    }
-}
-
 /// One pile as the table shows it at rest.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct PileShown {
@@ -112,7 +104,7 @@ impl PileShown {
     pub fn shown_top(&self, top: Pose, card: Card) -> Pose {
         let layer = self.count.max(1) - 1;
         let base = bottom_pose(card, self.base, self.scale, self.tilt, self.skew);
-        let on_pile = table_pile(card).pose(base, layer);
+        let on_pile = Pile::vertical(card).pose(base, layer);
         if top.position.truncate().distance(self.base) <= ON_PILE {
             top
         } else {
@@ -171,40 +163,17 @@ fn fit(
     pile.tilt = fitted.tilt[side_index];
     pile.skew = fitted.skew[side_index][zone_index];
     let at = fitted.tops[side_index][zone_index];
-    let layer = count.saturating_sub(1);
-    let height = |layer, scale| layer_height(camera.data.card, layer, scale, pile.tilt);
-    let distance = |layer, scale| {
-        let z = height(layer, scale);
-        camera.depth(camera.on_plane(at, z).truncate().extend(z))
-    };
-    let reference = distance(0, nominal);
-    // A card's lift depends on its scale, so resolve the two together.
-    for _ in 0..3 {
-        pile.scale = nominal * distance(layer, pile.scale) / reference;
-    }
-    pile.base = camera.on_plane(at, height(layer, pile.scale)).truncate();
+    let bottom = Pile::vertical(camera.data.card).fit_top(camera, at, count, nominal, pile.tilt);
+    pile.scale = bottom.scale;
+    pile.base = bottom.position.truncate();
     pile
 }
 
-/// How far a pile card `scale` times its printed size and leaning back by `tilt` stands above
-/// where it would lie flat, so that its near edge stays where a flat card's lies.
-pub(crate) fn lift(card: Card, scale: f32, tilt: f32) -> f32 {
-    card.height / 2.0 * scale * tilt.sin()
-}
-
-/// Height of a layer's centre, including the tilt that holds its near edge up.
-fn layer_height(card: Card, layer: usize, scale: f32, tilt: f32) -> f32 {
-    card.layer / 2.0 + lift(card, scale, tilt) + table_pile(card).offset(layer).z
-}
-
-/// The bottom card's pose. The pile policy places the remaining layers above this anchor.
+/// The bottom card's pose, with the pile's painted shear.
 fn bottom_pose(card: Card, base: Vec2, scale: f32, tilt: f32, skew: f32) -> Pose {
     Pose {
-        position: base.extend(layer_height(card, 0, scale, tilt)),
-        rotation: Quat::from_rotation_x(tilt),
-        scale,
         skew,
-        ..Pose::default()
+        ..Pile::bottom(card, base, scale, tilt)
     }
 }
 
@@ -237,14 +206,15 @@ pub(super) fn lay_pile(
         (count, objects.last().map(|object| object.slot)),
     );
     let card = camera.data.card;
+    let layers = Pile::vertical(card);
     let bottom = bottom_pose(card, pile.base, pile.scale, pile.tilt, pile.skew);
     for (height, object) in objects.iter().enumerate() {
         let mut pose = Pose {
             turn: turn(object),
-            ..table_pile(card).pose(bottom, height)
+            ..layers.pose(bottom, height)
         };
         if layout.fitted_piles.is_some() && height + 2 == count {
-            let top = table_pile(card).pose(bottom, count - 1).position;
+            let top = layers.pose(bottom, count - 1).position;
             let window = camera.window.size;
             let offset = spread(side, thickness(1.0))
                 * Vec2::new(window.width / 1600.0, window.height / 900.0);
@@ -521,10 +491,13 @@ fn write_side(builder: &mut FrameBuilder, camera: &Camera, pile: &PileShown, sid
         return;
     }
     let window = camera.window.size;
-    let top_height = layer_height(camera.data.card, pile.count - 1, pile.scale, pile.tilt);
+    let card = camera.data.card;
+    let bottom = bottom_pose(card, pile.base, pile.scale, pile.tilt, pile.skew);
+    let top = Pile::vertical(card).pose(bottom, pile.count - 1).position;
+    let top_height = top.z;
     // The rims lean back with the pile's cards (`PileShown::tilt`).
     let lean = Quat::from_rotation_x(pile.tilt);
-    let top = camera.to_screen(pile.base.extend(top_height));
+    let top = camera.to_screen(top);
     // The point of the table `height` up that lies under the web's card `depth` beneath the top.
     #[expect(clippy::cast_precision_loss, reason = "depth is at most 63")]
     let centre = |depth: usize, height: f32| {

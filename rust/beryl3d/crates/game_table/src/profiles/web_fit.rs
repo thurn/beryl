@@ -23,11 +23,11 @@
 
 use glam::{Vec2, Vec3};
 
-use crate::table::pile::lift;
 use crate::table::{Camera, RowArea, Window};
 use kit_base::data::Card;
 use kit_base::data::profiles::{Perspective, StageSize, WebFit};
 use kit_base::pose::Pose;
+use kit_space::arrange::Pile;
 
 /// A card's width over its height, as the web interface's `CARD_ASPECT` is.
 fn aspect(card: Card) -> f32 {
@@ -561,13 +561,8 @@ pub(super) fn piles(window: Window, camera: &Camera, data: &WebFit) -> FittedPil
         for (zone, x) in xs.into_iter().enumerate() {
             let middle = x + width / 2.0;
             let top = fitted.tops[side][zone];
-            let z = camera.data.card.layer * 0.5 + lift(camera.data.card, stand.scale, stand.tilt);
-            let pose = Pose {
-                position: camera.on_plane(top, z).truncate().extend(z),
-                rotation: glam::Quat::from_rotation_x(stand.tilt),
-                scale: stand.scale,
-                ..Pose::default()
-            };
+            let pose =
+                Pile::vertical(camera.data.card).fit_top(camera, top, 1, stand.scale, stand.tilt);
             let [bottom_left, bottom_right, top_right, top_left] =
                 camera.card_corners(pose.transform());
             let (head, foot) = (

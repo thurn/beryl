@@ -199,12 +199,12 @@ impl Quad {
 
 #[derive(Clone, Copy)]
 pub(super) struct Bounds {
-    min: Vec2,
-    max: Vec2,
+    pub(super) min: Vec2,
+    pub(super) max: Vec2,
 }
 
 impl Bounds {
-    fn of([a, b, c, d]: [Vec2; 4]) -> Self {
+    pub(super) fn of([a, b, c, d]: [Vec2; 4]) -> Self {
         Self {
             min: a.min(b).min(c.min(d)),
             max: a.max(b).max(c.max(d)),

@@ -9,16 +9,18 @@
 //! `lift` steps so far have begun. Which cards it holds follows the web's `handledAt`
 //! (`ui/src/stage/table.ts`).
 
+use std::ops::Range;
+
 use beryl_protocol::protocol::{CardHandling, ObjectId, ObjectView, PlayerView, Side, ZoneName};
 use beryl_protocol::script::{Act, Span, Table as Played};
-use glam::{Quat, Vec2};
+use glam::Vec2;
 
 use super::place::{Group, Placement, Zones, members};
 use super::{Camera, Layout};
 use kit_base::data::verbs::{Lift, LiftHand};
 use kit_base::pose::Pose;
 use kit_frame::frame::Place;
-use kit_space::arrange::spot;
+use kit_space::arrange::{LiftedFan, LiftedPlane};
 
 /// The group that holds the cards `handling` takes, if the table places any of them.
 #[must_use]
@@ -155,48 +157,60 @@ pub(crate) fn lay(
         .iter()
         .filter_map(|slot| members.iter().find(|object| object.slot == *slot).copied())
         .collect();
-    let (side, library, columns) = match group {
-        Group::Pile { side, .. } => (side, true, lift.library.columns),
-        Group::Hand(side) => (side, false, lift.hand.columns),
+    let (fan, plane, band, backs) = match group {
+        Group::Pile { side, .. } => {
+            let library = lift.library;
+            let scale = super::pile::nominal_scale(layout, side);
+            let (direction, band) = match side {
+                Side::You => (1.0, -1.0..0.0),
+                Side::Opponent => (-1.0, 0.0..1.0),
+            };
+            // A short look follows Arena: cards lie at library size beside the pile,
+            // toward the middle of the table (UI Conventions, "Cards the opponent looks at").
+            let pile = placement.piles[super::PileShown::index(side, ZoneName::Library)];
+            let beside = pile
+                .top
+                .and_then(|slot| placement.get(slot))
+                .map(|rest| rest.pose);
+            let at = pile.base + library.beside * scale * direction;
+            (
+                LiftedFan {
+                    columns: library.columns,
+                    step: library.step,
+                    drop: 0.0,
+                    lean: 0.0,
+                },
+                LiftedPlane::Table {
+                    anchor: Pose {
+                        position: at.extend(library.rise),
+                        scale,
+                        ..Pose::default()
+                    },
+                    direction,
+                    depth_step: layout.camera.card.layer,
+                    beside,
+                },
+                band,
+                true,
+            )
+        }
+        Group::Hand(side) => {
+            let (fan, plane, band) =
+                held_up(side, handled.opening, layout.hand.ceiling, &lift.hand);
+            (
+                fan,
+                plane,
+                band,
+                matches!(handled.handling, CardHandling::Pile { .. }),
+            )
+        }
         _ => return,
     };
-    for (object, (offset, under, order)) in cards.iter().zip(fan_slots(cards.len(), columns)) {
-        let pose = if library {
-            let beside = lift.library.beside
-                + Vec2::X * offset * lift.library.step * layout.camera.card.width
-                + lift.library.packet * under as f32;
-            // Beside the library toward the table's middle: to its right on the viewer's side,
-            // and to its left on the opponent's.
-            // The lifted cards are as large as the pile's, and lie as far apart for their size.
-            // This differs from the web's `handlingPlacements` on purpose. The web draws them
-            // 1.95 times the pile's width in a flat group at the screen's top right; Beryl 3D
-            // follows Arena, which lays them at library size on the table beside the library
-            // (UI Conventions, "Cards the opponent looks at").
-            let scale = super::pile::nominal_scale(layout, side);
-            let beside = match side {
-                Side::You => beside,
-                Side::Opponent => -beside,
-            } * scale;
-            // Beside where the library stands now, which follows how many cards it holds.
-            let pile = super::PileShown::index(side, ZoneName::Library);
-            let at = placement.piles[pile].base + beside;
-            Pose {
-                position: at.extend(lift.library.rise + layout.camera.card.layer * order),
-                scale,
-                turn: 1.0,
-                ..Pose::default()
-            }
-        } else {
-            let pile = matches!(handled.handling, CardHandling::Pile { .. });
-            held_up(
-                object,
-                side,
-                (offset, under, order),
-                (handled.opening, pile),
-                camera,
-                (layout.hand.ceiling, &lift.hand),
-            )
-        };
+    for (object, mut pose) in cards
+        .iter()
+        .zip(fan.poses(camera, cards.len(), plane, band))
+    {
+        pose.turn = held_turn(object, backs);
         if let Some(rest) = placement.get(object.slot).copied() {
             // A card lifted from under the top two of a pile is drawn, as the pile's are not.
             placement.set(
@@ -211,60 +225,46 @@ pub(crate) fn lay(
     }
 }
 
-/// Where a card taken from `side`'s hand is held up in front of the camera, as the web's
-/// `handlingPlacements` holds it: the viewer's low in the middle of the screen, the opponent's
-/// high, and, for a look at an `opening` hand, either player's smaller and high at the left.
-/// `offset` is its column's distance from the middle column, `under` how many cards of its
-/// column lie over it, and `order` how far it lies over the first card. The opponent's cards,
-/// and every card a counted look at a `pile` takes, show their backs, as the web's do; so does a
-/// card whose face the viewer's record does not show. On the phone, where that place lies over
-/// the viewer's back row, the viewer's cards stand with the middle card's top edge at
-/// `ceiling`, the height in normalized device coordinates the viewer's hand keeps under so
-/// that each card of that row keeps a strip to press (`phone::hand_ceiling`); it is infinite
-/// on the desktop.
+/// The anchor for a hand held in front of the camera. The viewer's regular hand stays
+/// below the profile's ceiling so the back row retains a strip to press.
 fn held_up(
-    object: &ObjectView,
     side: Side,
-    (offset, under, order): (f32, usize, f32),
-    (opening, pile): (bool, bool),
-    camera: &Camera,
-    (ceiling, hand): (f32, &LiftHand),
-) -> Pose {
-    let aspect = camera.window.size.width / camera.window.size.height;
-    let (at, height) = match (opening, side) {
-        (true, _) => (hand.opening.at, hand.opening.height),
-        (false, Side::You) => (hand.at, hand.height),
-        (false, Side::Opponent) => (hand.theirs_at, hand.height),
+    opening: bool,
+    ceiling: f32,
+    hand: &LiftHand,
+) -> (LiftedFan, LiftedPlane, Range<f32>) {
+    let (at, height, band) = match (opening, side) {
+        (true, _) => (hand.opening.at, hand.opening.height, 0.0..1.0),
+        (false, Side::You) if ceiling.is_finite() => (
+            Vec2::new(hand.at.x, ceiling - hand.height),
+            hand.height,
+            -1.0..ceiling,
+        ),
+        (false, Side::You) => (hand.at, hand.height, -1.0..0.0),
+        (false, Side::Opponent) => (hand.theirs_at, hand.height, 0.0..1.0),
     };
-    // A card's width, in normalized device coordinates of the window.
-    let width = height * 2.0 * (camera.data.card.width / camera.data.card.height) / aspect;
-    // Where the middle card stands is given across in window heights, so that it keeps its
-    // distance from the middle of the screen at any window shape, as the web's `fromMiddle` does.
-    let y = if side == Side::You && !opening && ceiling.is_finite() {
-        ceiling - height
-    } else {
-        at.y
-    };
-    let at = Vec2::new(at.x / aspect, y);
-    #[expect(clippy::cast_precision_loss, reason = "a handful of cards")]
-    let ndc = at
-        + Vec2::new(offset * hand.step * width, -offset.abs() * hand.drop)
-        + hand.packet * under as f32;
-    let rotation = Quat::from_rotation_z(-(offset * hand.lean_degrees).to_radians());
-    let depth = hand.depth - order;
-    let anchor = camera.screen_pose(ndc, depth, Quat::IDENTITY, height);
-    let mut pose = spot(
-        anchor.position,
-        anchor.rotation * rotation,
-        anchor.scale,
-        anchor,
-    );
-    pose.turn = if pile || object.owner == Side::Opponent || !super::rows::face_up(object) {
+    (
+        LiftedFan {
+            columns: hand.columns,
+            step: hand.step,
+            drop: hand.drop,
+            lean: hand.lean_degrees.to_radians(),
+        },
+        LiftedPlane::Facing {
+            at,
+            depth: hand.depth,
+            height,
+        },
+        band,
+    )
+}
+
+fn held_turn(object: &ObjectView, backs: bool) -> f32 {
+    if backs || object.owner == Side::Opponent || !super::rows::face_up(object) {
         1.0
     } else {
         0.0
-    };
-    pose
+    }
 }
 
 /// Lays out `picked`, the cards of `side`'s hand its player picked in a hidden pick of the
@@ -283,18 +283,12 @@ pub(crate) fn lay_picked(
     hand: &LiftHand,
     placement: &mut Placement,
 ) {
-    for (object, (offset, under, order)) in picked.iter().zip(fan_slots(picked.len(), hand.columns))
+    let (fan, plane, band) = held_up(side, false, ceiling, hand);
+    for (object, mut pose) in picked
+        .iter()
+        .zip(fan.poses(camera, picked.len(), plane, band))
     {
-        // A hidden pick is made while a spell or ability resolves, which is never before the
-        // first turn, so its cards are never laid out as an opening hand's.
-        let pose = held_up(
-            object,
-            side,
-            (offset, under, order),
-            (false, false),
-            camera,
-            (ceiling, hand),
-        );
+        pose.turn = held_turn(object, false);
         placement.set(
             object.slot,
             super::Rest {
@@ -309,19 +303,6 @@ pub(crate) fn lay_picked(
             },
         );
     }
-}
-
-/// Each card's column offset from the middle, position in its packet, and depth order.
-#[expect(clippy::cast_precision_loss, reason = "a handful of cards")]
-fn fan_slots(count: usize, columns: usize) -> impl Iterator<Item = (f32, usize, f32)> {
-    let columns = columns.min(count).max(1);
-    let packet = count.div_ceil(columns);
-    (0..count).map(move |index| {
-        let (column, under) = (index % columns, index / columns);
-        let offset = column as f32 - (columns as f32 - 1.0) / 2.0;
-        // A column covers the one to its left. Its first card covers the rest of its packet.
-        (offset, under, (column * packet + packet - under) as f32)
-    })
 }
 
 /// The look open as a script plays, for the table it plays over, which does not keep it.

@@ -189,8 +189,6 @@ pub struct LiftLibrary {
     pub columns: usize,
     #[serde(deserialize_with = "nonnegative")]
     pub rise: f32,
-    #[serde(deserialize_with = "vector")]
-    pub packet: Vec2,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
@@ -208,8 +206,6 @@ pub struct LiftHand {
     pub lean_degrees: f32,
     #[serde(deserialize_with = "positive")]
     pub depth: f32,
-    #[serde(deserialize_with = "vector")]
-    pub packet: Vec2,
     #[serde(deserialize_with = "nonnegative")]
     pub drop: f32,
     #[serde(deserialize_with = "vector")]

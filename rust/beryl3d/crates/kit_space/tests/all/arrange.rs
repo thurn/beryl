@@ -750,3 +750,24 @@ fn a_wrapped_cascade_scrolls_when_its_press_squares_fill_the_region() {
         }
     }
 }
+
+#[test]
+fn a_fitted_pile_keeps_its_top_centre_and_projected_scale() {
+    let camera = reference_camera();
+    let pile = kit_space::arrange::Pile::vertical(camera.data.card);
+    let at = Vec2::new(170.0, 650.0);
+    let nominal = 2.0;
+    let tilt = 0.4;
+    let single = pile.fit_top(&camera, at, 1, nominal, tilt);
+    let magnification = single.scale / camera.depth(single.position);
+    for count in [1, 12, 60, 250] {
+        let bottom = pile.fit_top(&camera, at, count, nominal, tilt);
+        let top = pile.pose(bottom, count - 1);
+        assert!(
+            camera.to_screen(top.position).distance(at) < 0.01,
+            "{top:?}"
+        );
+        assert!((top.scale / camera.depth(top.position) - magnification).abs() < 1e-6);
+        assert!((top.position.z - bottom.position.z - pile.offset(count - 1).z).abs() < 1e-5);
+    }
+}
