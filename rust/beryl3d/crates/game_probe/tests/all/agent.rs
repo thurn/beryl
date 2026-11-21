@@ -1,9 +1,9 @@
 //! The tree printout, locators, hit testing and the frame checks, on frames built by hand.
 
 use beryl_protocol::protocol::{RowName, Side, ZoneName};
-use game_probe::agent::game_checks::check;
 use glam::Vec2;
 use kit_frame::frame::{ElementId, Frame, FrameBuilder, NameRef, Place, Resolved, Role, StateBits};
+use kit_probe::agent::checks::check;
 use kit_probe::agent::checks::{
     KeptArrow, blank_cards, duplicates, keep_arrows, lines_hold, minimum_sizes, named, on_screen,
     overlap, reachable,

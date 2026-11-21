@@ -6,12 +6,13 @@ use beryl_protocol::GameUpdate;
 use beryl_protocol::protocol::{ObjectId, Side};
 use beryl_protocol::script::{Act, Arrow, Span, StepTiming, Subject};
 use beryl_protocol::testing::{ScriptBuilder, timing};
+use game_play::art::orb;
 use game_play::light::arrows::RIBBON;
 use game_play::play::Show;
 use game_probe::agent::steps::{no_jumps, rest_equals_placement, step_times};
 use glam::Vec2;
-use kit_frame::frame::{Frame, Material, Role};
-use kit_probe::agent::checks::{KeptArrow, keep_arrows, lines_hold};
+use kit_frame::frame::{ElementId, Endpoint, Frame, Material, Role, ShapeAnchor};
+use kit_probe::agent::checks::{KeptArrow, keep_arrows, lines_hold, relations_hold};
 use kit_probe::agent::{Context, Layout, TreeOptions};
 use kit_ui::input::{Insets, Size};
 
@@ -330,19 +331,23 @@ fn lines_hold_finds_a_planted_reshape() {
         pointed(&start, vec![(arrow, point_timing("target arrow"))]),
         |_, _| {},
     );
+    let context = desktop();
     let before = played.last_frame();
     let mut kept = Vec::new();
     keep_arrows(&before, &mut kept);
     played.now += TICK;
     let mut after = played.last_frame();
-    assert_eq!(lines_hold(&kept, &after, &desktop()), Vec::new());
+    assert_eq!(lines_hold(&kept, &after, &context), Vec::new());
     let index = after
         .resolved
         .iter()
         .position(|element| element.role == Role::Arrow)
         .expect("the arrow is drawn");
     after.resolved[index].corners[1].y += 5.0;
-    assert_eq!(lines_hold(&kept, &after, &desktop()).len(), 1);
+    assert_eq!(lines_hold(&kept, &after, &context).len(), 1);
+    assert_eq!(relations_hold(&after, &context), Vec::new());
+    after.resolved[index].corners[3].y += 5.0;
+    assert_eq!(relations_hold(&after, &context).len(), 1);
 }
 
 /// An arrow at a player comes onto their life total, an oval, as the web's `reachOfLife` makes
@@ -365,11 +370,26 @@ fn an_arrow_at_a_player_ends_inside_their_life_total() {
         |_, _| {},
     );
     let drawn = played.last_frame();
-    let arrow = arrows(&drawn)[0];
+    let index = drawn
+        .resolved
+        .iter()
+        .position(|element| element.role == Role::Arrow)
+        .expect("the arrow is drawn");
+    let arrow = &drawn.resolved[index];
+    let Some(ShapeAnchor::Line([from, to])) = drawn.decoration_of(u32::try_from(index).unwrap())
+    else {
+        panic!("the arrow has two anchors");
+    };
+    assert_eq!(
+        from.target,
+        Endpoint::Node(ElementId(u32::from(cards.angel.0)))
+    );
+    assert_eq!(to.target, Endpoint::Node(orb::target_id(Side::Opponent)));
     let table = played.show.table();
     let light = &table.data().light;
     let camera = table.camera();
-    let anchor = camera.to_screen(table.player_pose(Side::Opponent).position);
+    let anchor = table.life_centre(Side::Opponent)
+        + Vec2::Y * orb::face_offset(Side::Opponent) * table.layout().play.life.orb_scale;
     // The life orb's half-size, in pixels of the web's stage, whose 900 are the window's height.
     let half = light.player_half_pixels * (camera.window.size.height / 900.0);
     let inside = ((arrow.corners[3] - anchor) / half).length();

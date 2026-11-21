@@ -15,10 +15,9 @@
 use std::f32::consts::PI;
 
 use beryl_protocol::script::{Arrow, Subject};
-use glam::{Vec2, Vec3};
+use glam::Vec2;
 
 use super::lines::{End, along, cubic, way_of};
-use super::marks;
 use super::{Lit, Open, Span};
 use crate::play::{Reach, Scene};
 use crate::verbs::Interval;
@@ -26,7 +25,10 @@ use kit_base::data::light::Light;
 use kit_base::tokens::color;
 pub use kit_frame::frame::ARROW_IDS;
 use kit_frame::frame::sprites;
-use kit_frame::frame::{Band, Draw, ElementId, FrameBuilder, Place, Resolved, Role, StateBits};
+use kit_frame::frame::{
+    Band, Draw, ElementId, Endpoint, FrameBuilder, LineEnd, Place, Resolved, Role, ShapeAnchor,
+    StateBits,
+};
 
 /// How many pieces an arrow's ribbon is cut into, each a quad of its body and halo and a quad of
 /// its core. The cuts lie closer together where its width changes faster, so that no piece is
@@ -63,18 +65,18 @@ pub fn write(lit: &Lit, now: u64, prompt: bool, scene: &Scene<'_>, builder: &mut
         if prompt && arrow.arrow == Arrow::Source {
             continue;
         }
-        let (Some(from), Some(to)) = (scene.reach(arrow.from), scene.reach(arrow.to)) else {
+        let (Some(from), Some(to)) = (
+            scene.line_target(arrow.from, builder),
+            scene.line_target(arrow.to, builder),
+        ) else {
             continue;
         };
-        // A player's end is their life total, an oval (`marks::player_half`), as the web's
-        // `reachOfLife` makes it: an arrow at a player stops at its rim, and is sized by it.
-        let (from, to) = (life(scene, arrow.from, from), life(scene, arrow.to, to));
-        let ends = [(arrow.from, from), (arrow.to, to)].map(|(subject, reach)| End {
+        let ends = [(arrow.from, from), (arrow.to, to)].map(|(subject, target)| End {
             round: matches!(subject, Subject::Player { .. }),
             toward: scene.toward(subject),
-            ..on_screen(scene, reach)
+            middle: target.bounds.centre,
+            half: target.bounds.half,
         });
-        let moving = scene.moving(arrow.from) || scene.moving(arrow.to);
         #[expect(
             clippy::cast_possible_truncation,
             reason = "far fewer open spans than element ids"
@@ -83,22 +85,23 @@ pub fn write(lit: &Lit, now: u64, prompt: bool, scene: &Scene<'_>, builder: &mut
         let drawn = Drawn {
             arrow: arrow.arrow,
             ends,
-            reaches: [from, to],
+            targets: [Endpoint::Node(from.id), Endpoint::Node(to.id)],
+            reaches: [from.reach, to.reach],
             opacity: fade(open, now),
-            moving,
+            moving: from.moving || to.moving,
             id,
         };
         drawn.write(scene, builder);
     }
     for (index, aim) in lit.aims().iter().enumerate() {
-        let Some(from) = scene.reach(aim.from) else {
+        let Some(from) = scene.line_target(aim.from, builder) else {
             continue;
         };
-        let from = life(scene, aim.from, from);
         let start = End {
             round: matches!(aim.from, Subject::Player { .. }),
             toward: scene.toward(aim.from),
-            ..on_screen(scene, from)
+            middle: from.bounds.centre,
+            half: from.bounds.half,
         };
         let pointer = End {
             middle: aim.to,
@@ -114,7 +117,8 @@ pub fn write(lit: &Lit, now: u64, prompt: bool, scene: &Scene<'_>, builder: &mut
             arrow: aim.arrow,
             ends: [start, pointer],
             // The pointer has no size: the arrow is as wide as at what asks.
-            reaches: [from, from],
+            targets: [Endpoint::Node(from.id), Endpoint::Pointer(aim.to)],
+            reaches: [from.reach, from.reach],
             opacity: 1.0,
             moving: true,
             id: AIM_ID + index as u32,
@@ -128,6 +132,7 @@ pub fn write(lit: &Lit, now: u64, prompt: bool, scene: &Scene<'_>, builder: &mut
 struct Drawn {
     arrow: Arrow,
     ends: [End; 2],
+    targets: [Endpoint; 2],
     reaches: [Reach; 2],
     opacity: f32,
     moving: bool,
@@ -166,6 +171,19 @@ impl Drawn {
                 really: kit_frame::frame::NameRef::default(),
                 note: kit_frame::frame::NameRef::default(),
             },
+        );
+        builder.decorate(
+            index,
+            ShapeAnchor::Line([
+                LineEnd {
+                    target: self.targets[0],
+                    offset: points[0] - self.ends[0].middle,
+                },
+                LineEnd {
+                    target: self.targets[1],
+                    offset: points[3] - self.ends[1].middle,
+                },
+            ]),
         );
         let points_per_millimetre = camera.points_per_millimetre(to.pose.position);
         let sized = |reach: &Reach| {
@@ -218,47 +236,6 @@ impl Drawn {
                 builder,
             );
         }
-    }
-}
-
-/// Where `subject` reaches, `reach`, with a player's anchor given the size of their life total.
-fn life(scene: &Scene<'_>, subject: Subject, reach: Reach) -> Reach {
-    match subject {
-        Subject::Player { .. } => Reach {
-            half: marks::player_half(scene, reach.pose.scale),
-            ..reach
-        },
-        Subject::Object { .. } | Subject::Ability { .. } => reach,
-    }
-}
-
-/// `reach` as an end of a line on the screen: the box round its four corners there, or its middle
-/// alone for what has no size.
-fn on_screen(scene: &Scene<'_>, reach: Reach) -> End {
-    let camera = scene.table().camera();
-    if reach.half == Vec2::ZERO || reach.pose.scale <= 0.0 {
-        return End {
-            middle: camera.to_screen(reach.pose.position),
-            half: Vec2::ZERO,
-            round: false,
-            toward: 0.0,
-        };
-    }
-    let transform = reach.pose.transform();
-    let half = reach.half / reach.pose.scale;
-    let mut low = Vec2::splat(f32::INFINITY);
-    let mut high = Vec2::splat(f32::NEG_INFINITY);
-    for (x, y) in [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)] {
-        let corner =
-            camera.to_screen(transform.transform_point3(Vec3::new(x * half.x, y * half.y, 0.0)));
-        low = low.min(corner);
-        high = high.max(corner);
-    }
-    End {
-        middle: (low + high) / 2.0,
-        half: (high - low) / 2.0,
-        round: false,
-        toward: 0.0,
     }
 }
 

@@ -28,6 +28,7 @@ fn rectangle(
         space,
         band,
         anchor: None,
+        decoration: None,
         keep_clear: None,
         show: None,
     }

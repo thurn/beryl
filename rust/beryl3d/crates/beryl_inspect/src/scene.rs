@@ -336,7 +336,7 @@ impl StoryScene {
             checked.frames += 1;
             checked.judged.frame(frame, self.context.layout);
             checked.judged.lines(&kept, frame);
-            for fault in checks::check(frame, &self.context, |_| None)
+            for fault in checks::check(frame, &self.context)
                 .into_iter()
                 .chain(checks::lines_hold(&kept, frame, &self.context))
             {

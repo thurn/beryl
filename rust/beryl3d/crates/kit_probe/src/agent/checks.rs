@@ -8,7 +8,10 @@ use glam::{Vec2, Vec4};
 
 use super::fault::{Context, Fault, Rule, Subject};
 use super::tree::locator_of;
-use kit_frame::frame::{Draw, Frame, Missing, Place, REVEALED_FACE, Ring, Ringed, Role, StateBits};
+use kit_frame::frame::{
+    AnchorBox, Draw, Frame, Missing, NodeRef, Place, REVEALED_FACE, Ring, Role, ShapeAnchor,
+    StateBits, outline_corners,
+};
 use kit_scene::hit::{
     Overlaps, bounds, contains, covering, has_free_rect, hit, intersection, is_within,
     painted_over, visible_bounds,
@@ -20,11 +23,7 @@ const MOST_COVERING: usize = 6;
 
 /// Every check that needs one frame, in the doc's order.
 #[must_use]
-pub fn check(
-    frame: &Frame,
-    context: &Context,
-    ring_target: impl Fn(Ringed) -> Option<(u32, Rect)>,
-) -> Vec<Fault> {
+pub fn check(frame: &Frame, context: &Context) -> Vec<Fault> {
     let mut faults = on_screen(frame, context);
     faults.extend(overlap(frame, context));
     faults.extend(reachable(frame, context));
@@ -36,9 +35,7 @@ pub fn check(
     faults.extend(blank_cards(frame, context));
     faults.extend(clips(frame, context));
     faults.extend(layer_drawn(frame, context));
-    faults.extend(marks_on(frame, context, ring_target));
-    faults.extend(keep_clear(frame, context));
-    faults.extend(anchors_hold(frame, context));
+    faults.extend(relations_hold(frame, context));
     faults.extend(minimum_sizes(frame, context));
     faults
 }
@@ -339,7 +336,10 @@ pub fn duplicates(frame: &Frame, context: &Context) -> Vec<Fault> {
             ids.insert(key, index);
         }
         let name = frame.name(element.name);
-        if element.place != Place::Layer || element.role == Role::Arrow || name.is_empty() {
+        if element.place != Place::Layer
+            || matches!(element.role, Role::Arrow | Role::Mark)
+            || name.is_empty()
+        {
             continue;
         }
         let key = (element.parent, element.role.word(), name);
@@ -538,51 +538,86 @@ pub fn layer_drawn(frame: &Frame, context: &Context) -> Vec<Fault> {
     )]
 }
 
-/// Marks on their things: each mark's outline (`Frame::rings`) is centred on its target's box
-/// within `MARK_POINTS`, and its line (`sprites::OUTLINE_LINE`) goes around the box with the
-/// same tolerance. The outline is projected through `Frame::view_projection` as the renderer
-/// draws it. The caller supplies each visible target's element index and box in window points
-/// through `ring_target`.
+/// Checks placement, shape and clearance relations against the frame's current nodes.
 #[must_use]
-pub fn marks_on(
-    frame: &Frame,
-    context: &Context,
-    ring_target: impl Fn(Ringed) -> Option<(u32, Rect)>,
-) -> Vec<Fault> {
-    let tolerance = context.audit.mark_points;
-    let mut faults = Vec::new();
-    for ring in &frame.rings {
-        let Some((index, thing)) = ring_target(ring.on) else {
-            continue;
-        };
-        let line = ring_rect(ring, frame.view_projection, context.size);
-        let offset = rect_centre(line) - rect_centre(thing);
-        let around = Rect {
-            x: line.x - tolerance,
-            y: line.y - tolerance,
-            width: line.width + 2.0 * tolerance,
-            height: line.height + 2.0 * tolerance,
-        };
-        let problem = if offset.length() > tolerance {
-            format!("is centred {:.1},{:.1} points from it", offset.x, offset.y)
-        } else if !contains(around, thing) {
-            "does not go round it".to_owned()
-        } else {
-            continue;
-        };
-        let subject = subject(frame, index);
-        faults.push(fault(
-            Rule::RelationsHold,
-            context,
-            format!(
-                "the mark on {} ({}) {problem}",
-                subject.describe(),
-                super::fault::rect_text(line)
+pub fn relations_hold(frame: &Frame, context: &Context) -> Vec<Fault> {
+    let mut faults = keep_clear(frame, context);
+    faults.extend(anchors_hold(frame, context));
+    for placement in &frame.decorations {
+        let node = &frame.resolved[placement.element as usize];
+        let problem = match placement.anchor {
+            ShapeAnchor::Outline(id) => {
+                let target = frame.anchor_bounds(&NodeRef::Id(id));
+                let ring = frame
+                    .rings
+                    .iter()
+                    .find(|ring| ring.element == placement.element);
+                match (target, ring) {
+                    (Some(target), Some(ring)) => {
+                        let drawn = ring_rect(ring, frame.view_projection, context.size);
+                        outline_problem(drawn, target, context.audit.mark_points)
+                    }
+                    (None, _) => Some("has no outline target".to_owned()),
+                    (Some(target), None) => {
+                        outline_problem(bounds(node), target, context.audit.mark_points)
+                    }
+                }
+            }
+            ShapeAnchor::Symbol(id) => frame.anchor_bounds(&NodeRef::Id(id)).map_or_else(
+                || Some("has no symbol target".to_owned()),
+                |target| {
+                    (rect_centre(bounds(node)).distance(rect_centre(target))
+                        > context.audit.mark_points)
+                        .then(|| "is off the centre of its target".to_owned())
+                },
             ),
-            vec![subject],
-        ));
+            ShapeAnchor::Line(ends) => [node.corners[0], node.corners[3]]
+                .into_iter()
+                .zip(ends)
+                .enumerate()
+                .find_map(|(end, (actual, relation))| {
+                    let target = frame.endpoint(relation.target);
+                    let holds = target.is_some_and(|target| {
+                        actual.distance(target.centre + relation.offset)
+                            <= context.audit.anchor_points
+                    });
+                    (!holds).then(|| {
+                        format!(
+                            "has a detached {} end",
+                            if end == 0 { "first" } else { "second" }
+                        )
+                    })
+                }),
+        };
+        if let Some(problem) = problem {
+            let subject = subject(frame, placement.element);
+            faults.push(fault(
+                Rule::RelationsHold,
+                context,
+                format!("{} {problem}", subject.describe()),
+                vec![subject],
+            ));
+        }
     }
     faults
+}
+
+/// An outline may grow around its target. Its centre and enclosed box still have to follow it.
+fn outline_problem(line: Rect, target: Rect, tolerance: f32) -> Option<String> {
+    let offset = rect_centre(line) - rect_centre(target);
+    if offset.length() > tolerance {
+        return Some(format!(
+            "is centred {:.1},{:.1} points from its target",
+            offset.x, offset.y
+        ));
+    }
+    let around = Rect {
+        x: line.x - tolerance,
+        y: line.y - tolerance,
+        width: line.width + 2.0 * tolerance,
+        height: line.height + 2.0 * tolerance,
+    };
+    (!contains(around, target)).then(|| "does not go round its target".to_owned())
 }
 
 /// The rectangle on the window, in logical points, that bounds the line `ring`'s outline is
@@ -602,28 +637,7 @@ pub fn ring_outer(ring: &Ring, projection: glam::Mat4, size: Size) -> Rect {
 /// The rectangle on the window that bounds the rectangle `half` across and up from the middle
 /// of `ring`'s quad, in the quad's own units, projected as the renderer draws it.
 fn ring_reach(ring: &Ring, projection: glam::Mat4, size: Size, half: [f32; 2]) -> Rect {
-    let m = ring.model;
-    let [x, y] = half;
-    let corners = [(-x, -y), (x, -y), (x, y), (-x, y)].map(|(qx, qy)| {
-        let point = glam::Vec3::new(
-            m[0] * qx + m[1] * qy + m[3],
-            m[4] * qx + m[5] * qy + m[7],
-            m[8] * qx + m[9] * qy + m[11],
-        );
-        let ndc = projection.project_point3(point);
-        Vec2::new(
-            f32::midpoint(ndc.x, 1.0) * size.width,
-            f32::midpoint(1.0, -ndc.y) * size.height,
-        )
-    });
-    let min = corners.into_iter().reduce(Vec2::min).unwrap_or_default();
-    let max = corners.into_iter().reduce(Vec2::max).unwrap_or_default();
-    Rect {
-        x: min.x,
-        y: min.y,
-        width: max.x - min.x,
-        height: max.y - min.y,
-    }
+    AnchorBox::around(outline_corners(ring.model, half, projection, size)).rect()
 }
 
 /// The centre of `rect`.

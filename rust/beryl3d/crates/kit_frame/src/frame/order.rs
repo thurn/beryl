@@ -14,8 +14,7 @@
 use glam::{Mat4, Vec2, Vec4};
 
 use super::{
-    BANDS, Band, Draw, ElementId, Frame, FrameBuilder, Material, Mesh, Resolved, Role, StateBits,
-    sprites,
+    BANDS, Band, Draw, Frame, FrameBuilder, Material, Mesh, Resolved, Role, StateBits, sprites,
 };
 
 /// The low bits of a sort key hold the record's index in push order, so that records that tie
@@ -321,16 +320,6 @@ impl FrameBuilder<'_> {
     #[must_use]
     pub fn node_band(&self, index: u32) -> PaintBand {
         PaintBand::of(&self.frame.resolved[index as usize])
-    }
-
-    /// The paint band of a projected table element already registered with the frame.
-    #[must_use]
-    pub fn table_band(&self, id: ElementId) -> Option<PaintBand> {
-        self.frame
-            .resolved
-            .iter()
-            .find(|node| node.id == id && node.pose.is_some())
-            .map(PaintBand::of)
     }
 
     /// Draws the card for the element just registered, using its scene band. At rest an

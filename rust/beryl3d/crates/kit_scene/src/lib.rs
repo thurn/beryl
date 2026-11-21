@@ -8,6 +8,6 @@ mod tree;
 pub use feature::{Context, Effect, Feature, FeatureSlot};
 pub use slot::{SizeClass, Slot};
 pub use tree::{
-    Anchor, Band, Candidate, KeepClear, Node, NodeQuery, NodeRef, Show, ShowPlacement, SlotRef,
-    SolvePhase, SolveStep, Space, Tree,
+    Anchor, Band, Candidate, KeepClear, Node, NodeQuery, NodeRef, ShapeAnchor, Show, ShowPlacement,
+    SlotRef, SolvePhase, SolveStep, Space, Tree,
 };

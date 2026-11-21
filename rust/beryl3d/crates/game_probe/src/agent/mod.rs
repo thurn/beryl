@@ -1,4 +1,3 @@
-//! Checks for game frames and the scripts that produce them.
+//! Checks for the scripts that produce game frames.
 
-pub mod game_checks;
 pub mod steps;

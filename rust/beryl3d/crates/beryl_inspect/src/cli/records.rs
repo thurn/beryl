@@ -19,15 +19,15 @@
 //! After the effects come the marks' outlines (`Frame::rings`), one `mark` record each, named
 //! by the mark (`eligible`, `selected`, `suggested`, `friendly-target`, `hostile-target`),
 //! parented to the card, ability or life total it rings, with that as its `object` named as an
-//! effect's is, as the web's `.stage-mark` nodes are (`data/beryl3d/match/roles.json`). The outline is not one of the
-//! frame's elements, so the matcher could not see a missing or wrong one without these.
+//! effect's is, as the web's `.stage-mark` nodes are (`data/beryl3d/match/roles.json`).
+//! Each outline takes its box shadows from the draw geometry recorded for its mark node.
 
 use beryl_protocol::protocol::Side;
 use beryl_protocol::script::Subject;
 use game_table::table::ABILITY_IDS;
 use kit_frame::frame::{
-    EffectLook, ElementLook, Frame, LookPaint, LookShadow, Place, REVEALED_FACE, Resolved, Ring,
-    Ringed, Role,
+    EffectLook, ElementLook, Frame, LookPaint, LookShadow, NodeRef, Place, REVEALED_FACE, Resolved,
+    Ring, Role, ShapeAnchor,
 };
 use kit_probe::agent::checks::{ring_outer, ring_rect};
 use kit_probe::agent::tree::{locator_of, place_word};
@@ -185,11 +185,15 @@ fn paints(at: u32, all: &[LookPaint]) -> (Value, Value, Vec<Value>) {
 /// then the flat layer's in tree order, which is the order its records are drawn in.
 fn paint_order(frame: &Frame) -> Vec<usize> {
     let mut table: Vec<usize> = (0..frame.resolved.len())
-        .filter(|&at| frame.resolved[at].place != Place::Layer)
+        .filter(|&at| {
+            frame.resolved[at].place != Place::Layer && frame.resolved[at].role != Role::Mark
+        })
         .collect();
     // Nearer the camera is a smaller depth.
     table.sort_by(|&a, &b| frame.resolved[b].depth.total_cmp(&frame.resolved[a].depth));
-    let layer = (0..frame.resolved.len()).filter(|&at| frame.resolved[at].place == Place::Layer);
+    let layer = (0..frame.resolved.len()).filter(|&at| {
+        frame.resolved[at].place == Place::Layer && frame.resolved[at].role != Role::Mark
+    });
     let mut z = vec![0; frame.resolved.len()];
     for (rank, at) in table.into_iter().chain(layer).enumerate() {
         z[at] = rank;
@@ -374,30 +378,36 @@ fn effect_records(frame: &Frame, size: Size, elements: usize) -> Vec<Value> {
 /// drawn with in the mark's color (or one whose blur reaches as far as a sprite outline's glow),
 /// with the opacity the mark has as it comes and goes. Its parent and object are those of the
 /// card, ability or life total it rings.
-fn mark_record(frame: &Frame, ring: &Ring, size: Size, z: usize) -> Value {
+fn mark_record(
+    frame: &Frame,
+    ring: &Ring,
+    size: Size,
+    z: usize,
+    indexes: &[Option<usize>],
+) -> Value {
     let line = ring_rect(ring, frame.view_projection, size);
     let outer = ring_outer(ring, frame.view_projection, size);
-    let parent = match ring.on {
-        Ringed::Element(id) => frame
+    let Some(ShapeAnchor::Outline(id)) = frame.decoration_of(ring.element) else {
+        return Value::Null;
+    };
+    let player = game_play::art::orb::target_side(id);
+    let parent = if let Some(player) = player {
+        let name = game_hud::hud::players::orb_name(player);
+        frame
             .resolved
             .iter()
-            .position(|element| element.id == id && element.place != Place::Layer),
-        Ringed::Player(player) => {
-            let name = game_hud::hud::players::orb_name(player);
-            (frame.resolved.iter()).position(|element| {
-                element.place == Place::Layer && frame.name(element.name) == name
-            })
-        }
+            .position(|element| element.place == Place::Layer && frame.name(element.name) == name)
+    } else {
+        frame
+            .anchor_element(&NodeRef::Id(id))
+            .map(|(index, _)| index as usize)
     };
-    // What it rings, as an effect's `subject` names it: a card's slot, `a<id>` for an ability
-    // (whose element id is `ABILITY_IDS` more than its id), or a player's side.
-    let object = match ring.on {
-        Ringed::Element(id) if id.0 >= ABILITY_IDS => {
-            Value::from(format!("a{}", id.0 - ABILITY_IDS))
-        }
-        Ringed::Element(id) => json!(id.0 % REVEALED_FACE),
-        Ringed::Player(Side::You) => Value::from("you"),
-        Ringed::Player(Side::Opponent) => Value::from("opponent"),
+    // The web stage names a card by its slot, an ability by its number, and a player by their side.
+    let object = match player {
+        Some(Side::You) => Value::from("you"),
+        Some(Side::Opponent) => Value::from("opponent"),
+        None if id.0 >= ABILITY_IDS => Value::from(format!("a{}", id.0 - ABILITY_IDS)),
+        None => json!(id.0 % REVEALED_FACE),
     };
     let [red, green, blue, alpha] = ring.tint;
     // An outline drawn with the stylesheet's box shadows is recorded with them, their lengths
@@ -441,7 +451,7 @@ fn mark_record(frame: &Frame, ring: &Ring, size: Size, z: usize) -> Value {
         "place": parent.map_or_else(String::new, |at| place_word(frame.resolved[at].place)),
         "box": [round(line.x), round(line.y), round(line.width), round(line.height)],
         "z": z,
-        "parent": parent,
+        "parent": parent.and_then(|at| indexes[at]),
         "style": mark_style,
         "text": [],
     })
@@ -459,7 +469,24 @@ pub fn records(frame: &Frame, size: Size) -> Vec<Value> {
             *slot = Some(look);
         }
     }
-    (frame.resolved.iter().enumerate())
+    // The web comparison lists styled outlines after the other elements and effects.
+    let mut elements = 0;
+    let indexes: Vec<_> = frame
+        .resolved
+        .iter()
+        .map(|element| {
+            (element.role != Role::Mark).then(|| {
+                let at = elements;
+                elements += 1;
+                at
+            })
+        })
+        .collect();
+    frame
+        .resolved
+        .iter()
+        .enumerate()
+        .filter(|(at, _)| indexes[*at].is_some())
         .map(|(at, element)| {
             let rect = bounds(element);
             let look = looks[at];
@@ -503,7 +530,7 @@ pub fn records(frame: &Frame, size: Size) -> Vec<Value> {
                 "place": place_word(element.place),
                 "box": [round(rect.x), round(rect.y), round(rect.width), round(rect.height)],
                 "z": z[at],
-                "parent": (element.parent != u32::MAX).then_some(element.parent),
+                "parent": indexes.get(element.parent as usize).copied().flatten(),
                 "style": style(
                     (element.opacity, transform),
                     look,
@@ -513,10 +540,10 @@ pub fn records(frame: &Frame, size: Size) -> Vec<Value> {
                 "text": text,
             })
         })
-        .chain(effect_records(frame, size, frame.resolved.len()))
+        .chain(effect_records(frame, size, elements))
         .chain((frame.rings.iter().enumerate()).map(|(at, ring)| {
-            let z = frame.resolved.len() + frame.looks.effects.len() + at;
-            mark_record(frame, ring, size, z)
+            let z = elements + frame.looks.effects.len() + at;
+            mark_record(frame, ring, size, z, &indexes)
         }))
         .collect()
 }

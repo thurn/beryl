@@ -46,12 +46,23 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
         if now < run.over.from || now >= run.over.to {
             continue;
         }
-        let (Some(from), Some(to)) = (source(run, scene), scene.reach(run.to)) else {
+        let (Some(from), Some(target)) = (
+            source(run, scene, builder),
+            scene.light_target(run.to, builder),
+        ) else {
             continue;
+        };
+        let to = if matches!(run.to, Subject::Player { .. }) {
+            Reach {
+                half: Vec2::ZERO,
+                ..target.reach
+            }
+        } else {
+            target.reach
         };
         let nth = runs[..index]
             .iter()
-            .filter(|other| beside(other, run, from, scene))
+            .filter(|other| beside(other, run, from, scene, builder))
             .count();
         #[expect(
             clippy::cast_precision_loss,
@@ -152,23 +163,29 @@ fn fade(tint: [u8; 4], by: f32) -> [u8; 4] {
 }
 
 /// Where `run` leaves: its player's pool, or the thing it leaves where that is on the table.
-fn source(run: &StreakRun, scene: &Scene<'_>) -> Option<Reach> {
+fn source(run: &StreakRun, scene: &Scene<'_>, builder: &FrameBuilder<'_>) -> Option<Reach> {
     match run.from? {
         Subject::Player { player } => Some(Reach {
             pose: scene.table().pool_pose(player),
             half: Vec2::ZERO,
         }),
-        from => scene.reach(from),
+        from => Some(scene.light_target(from, builder)?.reach),
     }
 }
 
 /// Whether `other` left one place for `run`'s target together with `run`: at the same time,
 /// for the same target, from within a card's half-width of `run`'s source, as the lands of a
 /// pile lie.
-fn beside(other: &StreakRun, run: &StreakRun, from: Reach, scene: &Scene<'_>) -> bool {
+fn beside(
+    other: &StreakRun,
+    run: &StreakRun,
+    from: Reach,
+    scene: &Scene<'_>,
+    builder: &FrameBuilder<'_>,
+) -> bool {
     other.over.from == run.over.from
         && other.to == run.to
-        && source(other, scene).is_some_and(|theirs| {
+        && source(other, scene, builder).is_some_and(|theirs| {
             theirs.pose.position.xy().distance(from.pose.position.xy()) <= from.half.x
         })
 }

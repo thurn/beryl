@@ -1,6 +1,21 @@
 //! The life-orb coordinates shared by the HUD and the effects anchored to the life total.
 
 use beryl_protocol::protocol::Side;
+use kit_frame::frame::ElementId;
+
+/// The screen node containing the life orb's core.
+#[must_use]
+pub const fn target_id(side: Side) -> ElementId {
+    ElementId((1 << 23) + 16 + matches!(side, Side::Opponent) as u32)
+}
+
+/// The side whose life orb is registered with this id.
+#[must_use]
+pub fn target_side(id: ElementId) -> Option<Side> {
+    [Side::You, Side::Opponent]
+        .into_iter()
+        .find(|&side| target_id(side) == id)
+}
 
 /// The artwork's left, top, width and height, in units relative to its origin.
 pub const ART: [f32; 4] = [-136.0, -57.0, 272.0, 116.0];

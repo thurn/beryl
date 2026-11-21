@@ -16,19 +16,18 @@
 
 use std::f32::consts::FRAC_PI_2;
 
-use beryl_protocol::protocol::Side;
 use beryl_protocol::script::{Mark, Subject};
 use glam::{Affine3A, Quat, Vec2, Vec3};
 
 use super::{Lit, MarkSpan, Open, Span};
-use crate::art::orb;
-use crate::play::Scene;
-use game_table::table::{ABILITY_IDS, Look};
+use crate::play::{LightTarget, Scene};
+use game_table::table::Look;
 use kit_base::data::light::Light;
 use kit_base::pose::{Curve, Pose};
 use kit_base::tokens::color;
 use kit_frame::frame::{
-    Band, Draw, ElementId, FrameBuilder, Ring, Ringed, StateBits, box_shadow_reach, rows, sprites,
+    Band, Draw, ElementId, FrameBuilder, NameRef, Place, Resolved, Ring, Role, ShapeAnchor,
+    StateBits, box_shadow_reach, outline_corners, rows, sprites,
 };
 use kit_ui::element::Shadow;
 use kit_ui::layout::shape_radius;
@@ -115,9 +114,10 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
         if shown <= 0.0 {
             continue;
         }
-        let Some(reach) = scene.reach(on) else {
+        let Some(target) = scene.light_target(on, builder) else {
             continue;
         };
+        let reach = target.reach;
         let pose = reach.pose;
         let [red, green, blue, alpha] = tint(mark);
         #[expect(
@@ -127,56 +127,53 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
         )]
         let alpha = (f32::from(alpha) * shown.clamp(0.0, 1.0)).round() as u8;
         let tint = [red, green, blue, alpha];
-        // Just over the face, along the face's own normal, so that a card held up toward the
-        // camera has its mark in front of it too. A player's mark rings the core of their orb,
-        // which lies a little off the middle of the orb's art, where their anchor is.
-        let face = match on {
-            Subject::Player { player } => player_face_offset(scene, player, pose.scale),
-            Subject::Object { .. } | Subject::Ability { .. } => 0.0,
+        let position = pose.position + pose.rotation * Vec3::Z * light.lift;
+        let band = target.band.records(band(light, on, &pose));
+        let camera = scene.table().camera();
+        let node = MarkNode {
+            index,
+            mark,
+            target,
+            shown,
+            camera,
         };
-        let position = pose.position + pose.rotation * Vec3::new(0.0, -face, light.lift);
-        let resting = band(light, on, &pose);
-        let id = match on {
-            Subject::Object { slot } => Some(ElementId(u32::from(slot.0))),
-            Subject::Ability { id } => Some(ElementId(ABILITY_IDS + id % ABILITY_IDS)),
-            Subject::Player { .. } => None,
-        };
-        let band = id
-            .and_then(|id| builder.table_band(id))
-            .map_or(resting, |band| band.records(resting));
+        let clip = target
+            .element
+            .and_then(|(_, element)| element.clip)
+            .and_then(|rect| {
+                builder.scissor(kit_base::geometry::zoom_rect(
+                    rect,
+                    (Vec2::ZERO, camera.window.scale),
+                ))
+            })
+            .unwrap_or(0);
         if mark == Mark::Paying {
             let size = light.tap_size * pose.scale;
-            // `look` lifts the paying card off the table as the mark comes up; the symbol
-            // rises with it, or the card's face would hide it from the depth test.
+            // The symbol keeps its orientation while the paying card turns under it.
+            let was_tapped = target
+                .element
+                .is_some_and(|(_, node)| node.state.has(StateBits::TAPPED));
+            let rotation = if was_tapped {
+                pose.rotation
+            } else {
+                pose.rotation * Quat::from_rotation_z(FRAC_PI_2 * shown)
+            };
             let transform = pose.sheared(Affine3A::from_scale_rotation_translation(
                 Vec3::new(size, size, 1.0),
-                pose.rotation,
-                position + Vec3::Z * light.paying_lift * shown,
+                rotation,
+                position,
             ));
-            builder.draw(band, Draw::glow(transform, tint, sprites::TAP, 0.0));
+            let draw = Draw::glow(transform, tint, sprites::TAP, 0.0).with_clip(clip);
+            node.register(draw.model, [0.5, 0.5], builder);
+            builder.draw(band, draw);
             continue;
         }
         if let (Some(outline), Subject::Object { .. } | Subject::Ability { .. }) =
             (Outline::of(mark), on)
         {
-            let ring = |model, line, outer| Ring {
-                on: ringed(on),
-                mark,
-                model,
-                line,
-                outer,
-                tint,
-                shadows: outline.shadows,
-                frames: 0.0,
-                radius: outline.radius,
-            };
-            outline.write(band, (&pose, position), reach.half, tint, ring, builder);
+            outline.write((band, clip), position, tint, &node, builder);
             continue;
         }
-        let half = match on {
-            Subject::Player { .. } => player_half(scene, pose.scale),
-            Subject::Object { .. } | Subject::Ability { .. } => reach.half,
-        };
         // Each outline begun earlier on the same thing, and still open, lies inside this one.
         let inside = open[..index]
             .iter()
@@ -187,15 +184,16 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
             .count();
         #[expect(clippy::cast_precision_loss, reason = "a handful of marks")]
         let grow = light.outline_grow * pose.scale * (1 + inside) as f32;
-        let size = sprites::outline_size(half + Vec2::splat(grow));
+        let size = sprites::outline_size(reach.half + Vec2::splat(grow));
         let transform = pose.sheared(Affine3A::from_scale_rotation_translation(
             size.extend(1.0),
             pose.rotation,
             position,
         ));
         let outline = Draw::glow(transform, tint, sprites::OUTLINE, 0.0);
+        let element = node.register(outline.model, sprites::OUTLINE_LINE, builder);
         builder.ring(Ring {
-            on: ringed(on),
+            element,
             mark,
             model: outline.model,
             line: sprites::OUTLINE_LINE,
@@ -205,7 +203,7 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
             frames: 0.0,
             radius: 0.0,
         });
-        builder.draw(band, outline);
+        builder.draw(band, outline.with_clip(clip));
     }
 }
 
@@ -263,26 +261,25 @@ impl Outline {
         })
     }
 
-    /// Writes one `BoxShadow` record for each of the outline's shadows round the thing `half`
-    /// millimetres across and up from `position`, at `pose`, in the color `tint`, and its ring
-    /// `ring(model, line, outer)`. The records lie in the card's own plane and units, a frame
-    /// being a card's width, and `pose` turns and scales them with it. The outer shadows come
-    /// first, the inset ones after, each kind last first, as CSS paints them. Allocates
-    /// nothing.
+    /// Writes one record per shadow in the card's own plane and units, with the same clip
+    /// as the card. The outer shadows come first, then the inset ones, as CSS paints them.
     fn write(
         &self,
-        band: Band,
-        (pose, position): (&Pose, Vec3),
-        half: Vec2,
+        (band, clip): (Band, u8),
+        position: Vec3,
         tint: [u8; 4],
-        ring: impl Fn([f32; 12], [f32; 2], [f32; 2]) -> Ring,
+        node: &MarkNode<'_>,
         builder: &mut FrameBuilder<'_>,
     ) {
         let frame = builder.card().x;
+        let pose = node.target.reach.pose;
         let scale = pose.scale.max(f32::EPSILON);
-        let size = 2.0 * (half / scale + Vec2::splat(self.grow * frame));
+        let size = 2.0 * (node.target.reach.half / scale + Vec2::splat(self.grow * frame));
         let radius = self.radius * frame;
         let placed = |quad: Vec2| pose.frame((quad * scale).extend(1.0), position);
+        let model = rows(placed(size));
+        let line = [0.5, 0.5];
+        let element = node.register(model, line, builder);
         let mut farthest = 0.0_f32;
         for inset in [false, true] {
             for layer in self
@@ -311,48 +308,89 @@ impl Outline {
                         radius,
                         &shadow,
                         shape_radius(size, radius, spread),
-                    ),
+                    )
+                    .with_clip(clip),
                 );
             }
         }
         let outer = Vec2::splat(0.5) + Vec2::splat(farthest) / size.max(Vec2::splat(f32::EPSILON));
-        let mut record = ring(rows(placed(size)), [0.5, 0.5], outer.to_array());
-        record.frames = size.x / frame;
-        builder.ring(record);
+        builder.ring(Ring {
+            element,
+            mark: node.mark,
+            model,
+            line,
+            outer: outer.to_array(),
+            tint,
+            shadows: self.shadows,
+            frames: size.x / frame,
+            radius: self.radius,
+        });
     }
 }
 
-/// What an outline on `on` rings, as the table names it: a card's element id is its slot, and
-/// an ability's is `ABILITY_IDS` more than its id (`table::scene`).
-fn ringed(on: Subject) -> Ringed {
-    match on {
-        Subject::Object { slot } => Ringed::Element(ElementId(u32::from(slot.0))),
-        Subject::Ability { id } => Ringed::Element(ElementId(ABILITY_IDS + id % ABILITY_IDS)),
-        Subject::Player { player } => Ringed::Player(player),
+/// A mark and the target it follows in the current frame.
+struct MarkNode<'a> {
+    index: usize,
+    mark: Mark,
+    target: LightTarget,
+    shown: f32,
+    camera: &'a game_table::table::Camera,
+}
+
+impl MarkNode<'_> {
+    fn register(&self, model: [f32; 12], line: [f32; 2], builder: &mut FrameBuilder<'_>) -> u32 {
+        let pose = self.target.reach.pose;
+        let (parent, place, clip, state) = self
+            .target
+            .element
+            .map_or((u32::MAX, Place::Layer, None, 0), |(index, target)| {
+                (index, target.place, target.clip, target.state.0)
+            });
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "active marks fit the mark id range"
+        )]
+        let id = ElementId((1 << 24) + self.index as u32);
+        let at = builder.resolved(
+            self.mark.name(),
+            Resolved {
+                id,
+                parent,
+                role: Role::Mark,
+                name: NameRef::default(),
+                place,
+                pose: Some(pose),
+                corners: outline_corners(
+                    model,
+                    line,
+                    self.camera.view_projection,
+                    self.camera.window.size,
+                ),
+                depth: self.camera.depth(pose.position),
+                opacity: self.shown,
+                clip,
+                interactive: false,
+                state: StateBits(
+                    StateBits::PASSES
+                        | state
+                            & (StateBits::MOVING
+                                | StateBits::HELD
+                                | StateBits::SHOWN
+                                | StateBits::LAYOUT_MOTION),
+                ),
+                face: None,
+                copies: 1,
+                really: NameRef::default(),
+                note: NameRef::default(),
+            },
+        );
+        let id = self.target.id;
+        let anchor = if self.mark == Mark::Paying {
+            ShapeAnchor::Symbol(id)
+        } else {
+            ShapeAnchor::Outline(id)
+        };
+        builder.decorate(at, anchor);
+        at
     }
-}
-
-/// Half the width and height, in millimetres, of a player's life total at the depth of their
-/// anchor, whose pose has `scale`: the face of the web interface's life orb
-/// (`light.player_half_pixels`, in pixels of its 1600 by 900 stage). The anchor's pose is scaled
-/// so that a card would fill the hand's share of the window's height
-/// (`Camera::screen_pose`), which gives how many millimetres there one pixel of the stage's
-/// 900 covers.
-pub(crate) fn player_half(scene: &Scene<'_>, scale: f32) -> Vec2 {
-    let card = scene.table().camera().data.card;
-    let window = scale * card.height / scene.table().layout().hand.height;
-    scene.table().data().light.player_half_pixels * (window / 900.0)
-}
-
-/// How far below their anchor, in millimetres at the depth of the anchor, whose pose has
-/// `scale`, the middle of `side`'s life total is: the core of their orb lies
-/// `art::orb::face_offset` units of the orb's art below the art's middle, which the anchor
-/// holds (`hud::players::face_centre`).
-fn player_face_offset(scene: &Scene<'_>, side: Side, scale: f32) -> f32 {
-    let table = scene.table();
-    let window = table.camera().window;
-    let points = orb::face_offset(side) * table.layout().play.life.orb_scale;
-    let millimetres_per_point =
-        scale * table.camera().data.card.height / table.layout().hand.height / window.size.height;
-    points * millimetres_per_point
 }

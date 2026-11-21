@@ -46,6 +46,7 @@ mod turn;
 mod wake;
 
 pub use kit_fx::effects::Reach;
+pub(crate) use scene::LightTarget;
 pub use scene::Scene;
 pub use tray::PlacedLetGo;
 pub use turn::TurnChange;
@@ -643,13 +644,18 @@ impl Show {
     /// Draws the script's arrows, marks and effects over the written table.
     fn write_light_and_effects(&self, now: u64, prompt: bool, builder: &mut FrameBuilder) {
         let scene = Scene::new(self, now);
+        scene.register_light_targets(builder);
         light::arrows::write(&self.lit, now, prompt, &scene, builder);
         light::marks::write(&self.lit, now, &scene, builder);
+        builder.clear_owner();
         light::streaks::write(&self.lit, now, &scene, builder);
         let light_target = |subject, ago| {
             let mut reach = scene.reach_before(subject, ago)?;
             if ago == 0 && matches!(subject, Subject::Player { .. }) {
-                reach.half = light::marks::player_half(&scene, reach.pose.scale);
+                let table = scene.table();
+                let card = table.camera().data.card;
+                let window = reach.pose.scale * card.height / table.layout().hand.height;
+                reach.half = table.data().light.player_half_pixels * (window / 900.0);
             }
             Some(reach)
         };

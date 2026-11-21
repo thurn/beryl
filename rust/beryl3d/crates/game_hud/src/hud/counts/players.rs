@@ -31,7 +31,6 @@ use kit_base::data::space::hud::incoming as badge;
 use kit_text::text::TypeStyle;
 use kit_text::text::fonts::Font;
 use kit_ui::element::{Anchor, Element, Position, Shadow, Shown, TextAlign, holder, text};
-use kit_ui::input::Rect;
 
 /// What the game screen shows for the players: both orbs, once a game has a view.
 #[must_use]
@@ -44,32 +43,12 @@ pub fn players(input: &HudIn) -> Option<Element> {
     )
 }
 
-/// The name of `side`'s orb in the tree, by which the "marks on their things" check finds the
-/// life total a mark on that player rings.
+/// The stable name of `side`'s orb in the tree.
 #[must_use]
 pub fn orb_name(side: Side) -> &'static str {
     match side {
         Side::You => "your orb",
         Side::Opponent => "opponent's orb",
-    }
-}
-
-/// The box on the window of the core of `side`'s orb, with its bezel, when the orb's art fills
-/// `art`: the life total a mark on that player rings. The art's scale is read from the box, so
-/// it holds on either layout.
-#[must_use]
-pub fn core_box(side: Side, art: Rect) -> Rect {
-    let units = art.width / orb::ART[2];
-    let half = (Vec2::new(orb::CORE_RX, orb::CORE_RY) + orb::BEZEL / 2.0) * units;
-    let centre = Vec2::new(
-        art.x + art.width / 2.0,
-        art.y + art.height / 2.0 + orb::face_offset(side) * units,
-    );
-    Rect {
-        x: centre.x - half.x,
-        y: centre.y - half.y,
-        width: 2.0 * half.x,
-        height: 2.0 * half.y,
     }
 }
 

@@ -70,7 +70,7 @@
   "protocol": {
     "kit_base": 0,
     "kit_text": 0,
-    "kit_frame": 4,
+    "kit_frame": 3,
     "kit_ui": 2,
     "kit_space": 0,
     "kit_fx": 4,
@@ -87,7 +87,7 @@
     "beryl_inspect": 107,
     "beryl_pictures": 7,
     "beryl_render": 0,
-    "game_probe": 114,
+    "game_probe": 113,
     "kit_base": 6,
     "kit_probe": 17,
     "kit_space": 0,

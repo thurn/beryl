@@ -39,9 +39,9 @@ pub use recording::{Answer, Recording, Responses};
 
 use self::cues::Cues;
 use game_play::play::record::Plant;
-use game_probe::agent::game_checks;
 use game_table::faces::FaceList;
 use kit_frame::frame::{Frame, Sound, StateBits, Wake};
+use kit_probe::agent::checks;
 use kit_probe::agent::tree::locator_of;
 use kit_probe::agent::{Fault, Layout, TreeOptions, locate, tree};
 use kit_probe::driver::{moment_distance, offset_from};
@@ -343,7 +343,7 @@ impl Page {
     /// The faults every interface check finds in the present frame.
     pub fn faults(&mut self) -> Vec<Fault> {
         let context = self.context();
-        game_checks::check(self.frame(), &context)
+        checks::check(self.frame(), &context)
     }
 
     /// Runs every interface check on the present frame.

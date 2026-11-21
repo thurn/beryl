@@ -10,7 +10,10 @@ mod paint;
 pub mod picking;
 mod relations;
 mod rings;
-pub use relations::{Anchor, Anchored, Clearance, NodeRef, Show};
+pub use relations::{
+    Anchor, AnchorBox, Anchored, Clearance, Decoration, Endpoint, LineEnd, NodeRef, ShapeAnchor,
+    Show,
+};
 pub mod text;
 
 pub use order::PaintBand;
@@ -29,7 +32,7 @@ pub use draw::{
 };
 pub use look::{EffectLook, ElementLook, LookPaint, LookShadow, Looks};
 pub use paint::{GRADIENTS, GradientEntry, MaskEntry, PaintTable, Paints};
-pub use rings::{LIFTED, Lifted, RINGS, Ring, Ringed};
+pub use rings::{LIFTED, Lifted, RINGS, Ring, outline_corners};
 pub use undrawn::{Missing, Undrawn};
 pub use work::{Areas, Load, Work};
 
@@ -121,6 +124,8 @@ pub enum Role {
     /// An arrow or line on the table. Its `corners` are not a box but the four control points
     /// of the cubic Bezier curve it is drawn along: its start, two control points and its end.
     Arrow,
+    /// An outline or symbol drawn against another node.
+    Mark,
 }
 
 impl Role {
@@ -142,11 +147,12 @@ impl Role {
             Self::List => "list",
             Self::MenuItem => "menuitem",
             Self::Arrow => "arrow",
+            Self::Mark => "mark",
         }
     }
 
     /// Every role, in declaration order.
-    pub const ALL: [Self; 14] = [
+    pub const ALL: [Self; 15] = [
         Self::Card,
         Self::Ability,
         Self::Pile,
@@ -161,6 +167,7 @@ impl Role {
         Self::List,
         Self::MenuItem,
         Self::Arrow,
+        Self::Mark,
     ];
 
     /// The role whose tree word is `word`.
@@ -325,8 +332,8 @@ pub const BANDS: usize = Band::Dragged as usize + 1;
 /// The most elements of the flat layer a frame holds.
 pub const LAYER_ELEMENTS: usize = 3072;
 /// The most resolved elements a frame holds: one for each card and each ability on the stack,
-/// one for the cost of each card in a hand, and the flat layer's.
-pub const ELEMENTS: usize = 2 * OBJECTS + ABILITIES + LAYER_ELEMENTS;
+/// one for the cost of each card in a hand, room for their marks, and the flat layer's.
+pub const ELEMENTS: usize = 2 * OBJECTS + ABILITIES + RINGS + LAYER_ELEMENTS;
 /// The most bytes of names a frame holds: 32 bytes for each element, which a card's name
 /// rarely exceeds.
 pub const NAME_BYTES: usize = ELEMENTS * 32;
@@ -397,8 +404,9 @@ pub struct Frame {
     /// "reachable" check put these boxes in place of the drawn ones, so that a pointer over the
     /// part of the fan a raised card covers still finds the card that rests there.
     pub lifted: Vec<Lifted>,
-    /// Each mark's outline the frame draws, with the thing it rings, for the "marks on their
-    /// things" check.
+    /// The scene relations for outlines, symbols and lines, in element registration order.
+    pub decorations: Vec<Decoration>,
+    /// Each mark's outline, with its drawn geometry and styling.
     pub rings: Vec<Ring>,
     /// The handle-time placements and the resting boxes they must avoid.
     pub clearances: Arc<[Clearance]>,
@@ -438,7 +446,7 @@ impl Frame {
             resolved: Vec::with_capacity(elements),
             shows: Vec::with_capacity(elements),
             anchors: Vec::with_capacity(elements),
-            anchor_nodes: Vec::with_capacity(32),
+            anchor_nodes: Vec::with_capacity(elements.max(32)),
             names: String::with_capacity(name_bytes),
             draws: Vec::with_capacity(draws),
             opaque: 0,
@@ -459,6 +467,7 @@ impl Frame {
             owners: Vec::new(),
             undrawn: Vec::with_capacity(elements),
             lifted: Vec::with_capacity(LIFTED),
+            decorations: Vec::with_capacity(elements),
             rings: Vec::with_capacity(RINGS),
             clearances: Arc::default(),
             load: Load::default(),
@@ -525,6 +534,7 @@ impl<'a> FrameBuilder<'a> {
         frame.owners.clear();
         frame.undrawn.clear();
         frame.lifted.clear();
+        frame.decorations.clear();
         frame.rings.clear();
         frame.load = Load::default();
         frame.work = Work::default();
@@ -554,6 +564,11 @@ impl<'a> FrameBuilder<'a> {
         self.frame.resolved.push(element);
         self.owner = index(self.frame.resolved.len() - 1);
         self.owner
+    }
+
+    /// Ends the last element's draw records before emitting light or effects with no node.
+    pub fn clear_owner(&mut self) {
+        self.owner = u32::MAX;
     }
 
     /// Records the Show relation declared by the screen element.

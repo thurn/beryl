@@ -3,7 +3,7 @@
 //! every object at its placement; a card wears its mark's state from the mark's begin to its
 //! end, across scripts; an outline encloses its card in flight; a mark under another card lies
 //! in the table's band; a card picked to pay turns and wears no outline; and a mark on a player
-//! lies on their anchor. The "marks on their things" check faults an outline off its card.
+//! lies on their anchor. The "relations hold" check faults an outline off its card.
 
 use crate::common::{MS, before, discard, empty_frame, frame, show};
 use beryl_protocol::GameUpdate;
@@ -15,12 +15,14 @@ use beryl_protocol::testing::ScriptBuilder;
 use game_play::light::marks;
 use game_play::play::Show;
 use game_play::play::record::ScriptRecord;
-use game_probe::agent::game_checks::marks_on;
 use game_probe::agent::steps::{no_jumps, rest_equals_placement, step_times};
 use glam::Vec3;
 use kit_base::data::light::Light;
 use kit_base::pose::Pose;
-use kit_frame::frame::{Band, Draw, Frame, Material, Resolved, StateBits, sprites};
+use kit_frame::frame::{
+    Band, Draw, ElementId, Frame, Material, Resolved, Role, ShapeAnchor, StateBits, sprites,
+};
+use kit_probe::agent::checks::relations_hold;
 use kit_probe::agent::{Context, Layout, Rule};
 use kit_ui::input::Insets;
 
@@ -223,6 +225,16 @@ fn an_outline_rings_its_card_through_a_flight() {
         assert_eq!(shadows, 4, "four box shadows at {} ms", t / MS);
         assert_eq!(frame.rings.len(), 1, "one outline at {} ms", t / MS);
         let ring = &frame.rings[0];
+        let mark = &frame.resolved[ring.element as usize];
+        assert_eq!(mark.role, Role::Mark);
+        assert_eq!(
+            frame.resolved[mark.parent as usize].id.0,
+            u32::from(cards.discard.0)
+        );
+        assert_eq!(
+            frame.decoration_of(ring.element),
+            Some(ShapeAnchor::Outline(ElementId(u32::from(cards.discard.0)))),
+        );
         let m = ring.model;
         let [x, y] = ring.line;
         let outline = [(-x, -y), (x, -y), (x, y), (-x, y)].map(|(x, y)| {
@@ -354,7 +366,7 @@ fn a_mark_on_a_player_lies_on_their_anchor() {
     assert!(width > 1.0, "the outline has a size: {width}");
 }
 
-/// The "marks on their things" check passes an outline the table drew round its card through a
+/// The "relations hold" check passes an outline the table drew round its card through a
 /// flight, and faults the same outline moved 10 millimetres to the right or drawn at seven
 /// tenths of its width, as the desktop app's outlines once were.
 #[test]
@@ -379,7 +391,7 @@ fn the_marks_check_faults_an_outline_moved_off_its_card_or_narrower_than_it() {
     let mut checked = 0;
     for (t, frame) in frames.iter().filter(|(_, frame)| !frame.rings.is_empty()) {
         assert_eq!(
-            marks_on(frame, &context),
+            relations_hold(frame, &context),
             Vec::new(),
             "the drawn outline is on its card at {} ms",
             t / MS
@@ -391,7 +403,7 @@ fn the_marks_check_faults_an_outline_moved_off_its_card_or_narrower_than_it() {
             narrowed.rings[0].model[column] *= 0.7;
         }
         for (how, broken) in [("moved", moved), ("narrowed", narrowed)] {
-            let faults = marks_on(&broken, &context);
+            let faults = relations_hold(&broken, &context);
             assert_eq!(faults.len(), 1, "the {how} outline at {} ms", t / MS);
             assert_eq!(faults[0].rule, Rule::RelationsHold);
         }

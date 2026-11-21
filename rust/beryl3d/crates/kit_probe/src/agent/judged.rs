@@ -100,7 +100,7 @@ impl Judged {
         );
         self.add(
             Rule::RelationsHold,
-            frame.rings.len() + frame.clearances.len(),
+            frame.decorations.len() + frame.anchors.len() + frame.clearances.len(),
         );
         // "Phone sizes" judges only the phone layout.
         if layout == Layout::Phone {

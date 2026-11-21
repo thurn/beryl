@@ -1,6 +1,6 @@
 //! Relations that screen elements can declare for the scene tree.
 
-use super::{ElementId, FrameBuilder, Place, Role};
+use super::{ElementId, FrameBuilder, Place, Resolved, Role};
 use glam::Vec2;
 use kit_base::geometry::Rect;
 
@@ -69,6 +69,76 @@ impl Anchored {
     }
 }
 
+/// What an end of a line follows. A line aimed by the player can follow the pointer.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Endpoint {
+    Node(ElementId),
+    Pointer(Vec2),
+}
+
+/// The position of a line end relative to its target's box centre.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LineEnd {
+    pub target: Endpoint,
+    pub offset: Vec2,
+}
+
+/// The geometry a decoration takes from other nodes.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ShapeAnchor {
+    Outline(ElementId),
+    Symbol(ElementId),
+    Line([LineEnd; 2]),
+}
+
+/// One decoration and the relation declared by its owner.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Decoration {
+    pub element: u32,
+    pub anchor: ShapeAnchor,
+}
+
+/// A box that a line can use in either space.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct AnchorBox {
+    pub centre: Vec2,
+    pub half: Vec2,
+}
+
+impl AnchorBox {
+    /// The box that encloses the given projected corners.
+    #[must_use]
+    pub fn around(corners: [Vec2; 4]) -> Self {
+        let low = corners.into_iter().reduce(Vec2::min).unwrap_or_default();
+        let high = corners.into_iter().reduce(Vec2::max).unwrap_or_default();
+        Self {
+            centre: (low + high) / 2.0,
+            half: (high - low) / 2.0,
+        }
+    }
+
+    #[must_use]
+    pub fn rect(self) -> Rect {
+        let low = self.centre - self.half;
+        Rect {
+            x: low.x,
+            y: low.y,
+            width: self.half.x * 2.0,
+            height: self.half.y * 2.0,
+        }
+    }
+}
+
+impl From<Rect> for AnchorBox {
+    fn from(rect: Rect) -> Self {
+        let half = Vec2::new(rect.width, rect.height) / 2.0;
+        Self {
+            centre: Vec2::new(rect.x, rect.y) + half,
+            half,
+        }
+    }
+}
+
 /// Displays a table object in this node's box, cut to the node's clip.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Show {
@@ -104,6 +174,23 @@ impl FrameBuilder<'_> {
     #[must_use]
     pub fn anchor_bounds(&self, target: &NodeRef) -> Option<Rect> {
         self.frame.anchor_bounds(target)
+    }
+
+    /// The resolved scene element and its index, among the nodes registered so far.
+    #[must_use]
+    pub fn anchor_element(&self, target: &NodeRef) -> Option<(u32, Resolved)> {
+        self.frame.anchor_element(target)
+    }
+
+    /// Resolves the target of a line before its owner shapes the curve.
+    #[must_use]
+    pub fn endpoint(&self, target: Endpoint) -> Option<AnchorBox> {
+        self.frame.endpoint(target)
+    }
+
+    /// Records a shape relation for the node just drawn.
+    pub fn decorate(&mut self, element: u32, anchor: ShapeAnchor) {
+        self.frame.decorations.push(Decoration { element, anchor });
     }
 
     /// Records the placement relation of the node just drawn.
@@ -148,7 +235,7 @@ impl super::Frame {
         {
             return Some(*rect);
         }
-        let corners = self.resolved[self.anchor_index(reference)? as usize].corners;
+        let corners = self.anchor_element(reference)?.1.corners;
         let low = corners.into_iter().reduce(Vec2::min)?;
         let high = corners.into_iter().reduce(Vec2::max)?;
         Some(Rect {
@@ -157,6 +244,35 @@ impl super::Frame {
             width: high.x - low.x,
             height: high.y - low.y,
         })
+    }
+
+    /// Resolves a relation to a drawn element and its index in this frame.
+    #[must_use]
+    pub fn anchor_element(&self, reference: &NodeRef) -> Option<(u32, Resolved)> {
+        let index = self.anchor_index(reference)?;
+        Some((index, self.resolved[index as usize]))
+    }
+
+    /// Resolves an endpoint against the current nodes or the pointer it follows.
+    #[must_use]
+    pub fn endpoint(&self, target: Endpoint) -> Option<AnchorBox> {
+        match target {
+            Endpoint::Node(id) => self.anchor_bounds(&NodeRef::Id(id)).map(AnchorBox::from),
+            Endpoint::Pointer(centre) => Some(AnchorBox {
+                centre,
+                half: Vec2::ZERO,
+            }),
+        }
+    }
+
+    /// The shape relation declared by the element at this frame index.
+    #[must_use]
+    pub fn decoration_of(&self, index: u32) -> Option<ShapeAnchor> {
+        let at = self
+            .decorations
+            .binary_search_by_key(&index, |item| item.element)
+            .ok()?;
+        Some(self.decorations[at].anchor)
     }
 
     fn anchor_index(&self, reference: &NodeRef) -> Option<u32> {

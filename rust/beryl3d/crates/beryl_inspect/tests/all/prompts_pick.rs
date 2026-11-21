@@ -66,6 +66,25 @@ fn a_target_clicked_where_it_lies_wears_the_mark_the_reply_sends() {
 }
 
 #[test]
+fn an_eligible_outline_follows_the_hand_card_when_it_rises() {
+    let mut page = at_prompt("shape-pick", "prompt:1", 1);
+    let card = "card #7";
+    let mark = "card #7 > mark \"eligible\"";
+    let resting = page.find(card).rect();
+    page.hover(card);
+    page.step(Duration::from_millis(300));
+    let raised = page.find(card).rect();
+    assert!(raised.y < resting.y - 10.0, "the card rises");
+    let outline = page.find(mark).rect();
+    assert!(
+        (outline.y - raised.y).abs() < 2.0,
+        "the outline follows: {outline:?}"
+    );
+    assert!((outline.width - raised.width).abs() < 2.0);
+    page.check();
+}
+
+#[test]
 fn the_aim_arrow_follows_the_pointer_until_the_target_is_picked() {
     let mut page = at_prompt("shape-pick", TARGET, 10);
     let first = Vec2::new(400.0, 300.0);

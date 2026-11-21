@@ -6,7 +6,7 @@ use glam::Vec2;
 use kit_base::{geometry::Rect, pose::Pose};
 use kit_frame::frame::{ElementId, Frame, FrameBuilder, Resolved, Role};
 
-pub use kit_frame::frame::{Anchor, NodeRef, PaintBand as Band, Show};
+pub use kit_frame::frame::{Anchor, NodeRef, PaintBand as Band, ShapeAnchor, Show};
 use kit_ui::layout::Layer;
 
 use crate::hit::{bounds, intersection};
@@ -83,6 +83,7 @@ pub struct Node<'a> {
     pub space: Space,
     pub band: Band,
     pub anchor: Option<Anchor>,
+    pub decoration: Option<ShapeAnchor>,
     pub keep_clear: Option<KeepClear>,
     pub show: Option<Show>,
 }
@@ -99,6 +100,7 @@ impl<'a> Node<'a> {
             space: Space::Screen { bounds },
             band: Band::ScreenPanels,
             anchor: None,
+            decoration: None,
             keep_clear: None,
             show: None,
         }
@@ -120,6 +122,7 @@ impl<'a> Node<'a> {
             space,
             band: Band::of(element),
             anchor: frame.anchor_of(index).cloned(),
+            decoration: frame.decoration_of(index),
             keep_clear: None,
             show: frame.shown_by(index).map(Show::object),
         }

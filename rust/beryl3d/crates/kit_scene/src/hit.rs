@@ -403,9 +403,9 @@ fn catches_anywhere(element: &Resolved) -> bool {
     !never_catches(element.role) && element.opacity > 0.0 && !element.state.has(StateBits::PASSES)
 }
 
-/// Whether an element of `role` never catches a press: an arrow.
+/// Whether an element of `role` never catches a press: a decoration.
 fn never_catches(role: Role) -> bool {
-    role == Role::Arrow
+    matches!(role, Role::Arrow | Role::Mark)
 }
 
 /// Whether `point` is inside the element's quadrilateral and its clip.

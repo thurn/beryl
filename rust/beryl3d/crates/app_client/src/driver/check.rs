@@ -13,11 +13,11 @@ use beryl_protocol::script::{Edge, Verb};
 
 use super::{DriverError, Name, Page};
 use game_play::play::record::{Plant, Planted, ScriptRecord};
-use game_probe::agent::game_checks;
 use game_probe::agent::steps::{self, Found, Sample, card_of, sample, step_nanoseconds};
 use game_table::table::Camera;
 use kit_base::data::Audit;
 use kit_frame::frame::Frame;
+use kit_probe::agent::checks;
 use kit_probe::agent::checks::{KeptArrow, arrows_held, keep_arrows, lines_hold};
 use kit_probe::agent::tree::locator_of;
 use kit_probe::agent::{self, Context, Fault, Rule, Subject};
@@ -179,7 +179,7 @@ impl Page {
             let size = page.size;
             let frame = page.frame();
             if checked.contains(&t) {
-                faults.extend(game_checks::check(frame, &context));
+                faults.extend(checks::check(frame, &context));
                 tally.frame(frame, context.layout);
                 tally.lines(&kept, frame);
                 if arrows_held(&kept, frame) > 0 {
@@ -258,7 +258,7 @@ impl Page {
     ) -> bool {
         let context = self.context();
         let frame = self.frame();
-        let mut faults = game_checks::check(frame, &context);
+        let mut faults = checks::check(frame, &context);
         let held = arrows_held(kept, frame) > 0;
         if held {
             faults.extend(lines_hold(kept, frame, &context));

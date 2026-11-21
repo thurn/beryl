@@ -1,12 +1,11 @@
 //! What the frame records for the checks and the pointer beyond its records: the outlines of
 //! marks with the things they ring, and the hand cards up out of their place in the fan.
 
-use glam::Vec2;
+use glam::{Mat4, Vec2, Vec3};
 
-use super::{ABILITIES, ElementId, Frame, OBJECTS};
-use beryl_protocol::protocol::Side;
+use super::{ABILITIES, Frame, OBJECTS};
 use beryl_protocol::script::Mark;
-use kit_base::paint::Shadow;
+use kit_base::{geometry::Size, paint::Shadow};
 
 /// The most hand cards the pointer can have up out of the fan at once. One is raised at a time,
 /// and a pointer swept across a hand leaves each card it crossed falling for a moment; past this
@@ -17,21 +16,14 @@ pub const LIFTED: usize = 32;
 /// player. An outline past that many is drawn but not checked.
 pub const RINGS: usize = 2 * (OBJECTS + ABILITIES + 2);
 
-/// What a mark's outline rings: a card's or an ability's element of the table, or a player's
-/// life total.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Ringed {
-    Element(ElementId),
-    Player(Side),
-}
-
 /// A mark's outline as the frame draws it: the thing it rings, which mark it is, and where it
 /// lies. `model` places a unit quad (-0.5 to 0.5 across) in the table's space, as a record's
 /// `Draw::model` does: the box the outline is drawn round, the card's own for a card, as the web
 /// interface's `.stage-mark` element is.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Ring {
-    pub on: Ringed,
+    /// The mark node that owns this outline.
+    pub element: u32,
     /// Which mark the outline draws, which `just b3d match` names its record by.
     pub mark: Mark,
     pub model: [f32; 12],
@@ -51,6 +43,23 @@ pub struct Ring {
     pub frames: f32,
     /// The box's corner radius, in frames.
     pub radius: f32,
+}
+
+/// Projects the corners of a model's rectangle, with dimensions relative to its unit quad.
+#[must_use]
+pub fn outline_corners(m: [f32; 12], [x, y]: [f32; 2], projection: Mat4, size: Size) -> [Vec2; 4] {
+    [(-x, -y), (x, -y), (x, y), (-x, y)].map(|(qx, qy)| {
+        let point = Vec3::new(
+            m[0] * qx + m[1] * qy + m[3],
+            m[4] * qx + m[5] * qy + m[7],
+            m[8] * qx + m[9] * qy + m[11],
+        );
+        let ndc = projection.project_point3(point);
+        Vec2::new(
+            f32::midpoint(ndc.x, 1.0) * size.width,
+            f32::midpoint(1.0, -ndc.y) * size.height,
+        )
+    })
 }
 
 /// A hand card up out of its place in the fan, and the box it has resting there.
