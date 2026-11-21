@@ -388,7 +388,10 @@ fn the_hub_stores_a_line_once_and_the_public_listener_answers_404() {
     let (_, second) = append(&auth, &body);
     assert_eq!(serde_json::from_str::<Value>(&second).unwrap()["stored"], 0);
     // The session's model and effort are stored with the lines.
-    assert_eq!(stored_run(&dir.join("hub.sqlite")), ("claude-opus-5-5".into(), "high".into()));
+    assert_eq!(
+        stored_run(&dir.join("hub.sqlite")),
+        ("claude-opus-5-5".into(), "high".into())
+    );
 
     let route = format!("/pj/api/transcripts/{SESSION}");
     let (status, read) = send(private.address(), "GET", &route, &[], "");
