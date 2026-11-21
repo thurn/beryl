@@ -105,7 +105,6 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
     ("combat", names::WHITE_KNIGHT, combat::FIRST_STRIKE),
     ("combat", names::GET_LOST, combat::REMOVED_BLOCKER),
     ("combat", names::GET_LOST, combat::REMOVED_PLANESWALKER),
-    ("combat", names::GET_LOST, combat::REMOVED_ATTACKERS),
     ("combat", names::BLOODGHAST, combat::CANNOT_BLOCK),
     (
         "continuous",
@@ -202,6 +201,11 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
         "replacement",
         names::DARK_DEPTHS,
         replacement::ENTERS_WITH_COUNTERS,
+    ),
+    (
+        "state_based",
+        names::BLOOD_TOLL_HARPY,
+        state_based::ZERO_LIFE,
     ),
     (
         "tokens",

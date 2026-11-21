@@ -504,8 +504,10 @@ because `beryl_scenario` sits above the engine. A test that only drives
 decisions and reads the result is a scenario in disguise: it moves to
 `beryl_cards/src/library/` as a hand-written scenario on a real card, where the
 oracles also play it, and its test card is deleted. A test that calls an
-internal function directly stays where it is. The reviews of the rules keystones
-epic already listed which test definition each real card's scenario now covers.
+internal function directly stays where it is. Opening decisions stay in
+whole-game tests because scenarios and their oracle replays start with opening
+hands already kept. The reviews of the rules keystones epic list which test
+definition each real card's scenario covers.
 
 ### D. Compile and check time
 

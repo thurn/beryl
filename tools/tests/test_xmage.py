@@ -655,17 +655,21 @@ def test_a_permanent_enters_with_the_counters_its_text_says() -> None:
     assert xmage_java.entering_counters("Draw a card.", "Ice") == 0
 
 
-def test_a_draw_is_checked_once_the_game_has_run_and_a_win_is_unsupported() -> None:
+def test_outcomes_are_checked_once_the_game_has_run() -> None:
+    def player(seat: object) -> str:
+        return "playerA" if seat == 1 else "playerB"
+
     draw: card_facts.Json = {"assert": "Outcome", "outcome": {"ending": "Draw"}}
-    assert xmage_java.outcome_lines(draw) == [
-        'org.junit.Assert.assertTrue("a draw", playerA.hasDrew() && playerB.hasDrew());'
+    assert xmage_java.outcome_lines(draw, player) == [
+        'org.junit.Assert.assertTrue("a draw", currentGame.isADraw());'
     ]
     win: card_facts.Json = {
         "assert": "Outcome",
         "outcome": {"ending": "Win", "player": 0},
     }
-    with pytest.raises(card_facts.Unsupported, match="a Win outcome assertion"):
-        xmage_java.outcome_lines(win)
+    assert xmage_java.outcome_lines(win, player) == [
+        'org.junit.Assert.assertTrue("playerB won", playerB.hasWon());'
+    ]
 
 
 def test_exact_mana_values_keep_each_snapshot_controllers_identity() -> None:

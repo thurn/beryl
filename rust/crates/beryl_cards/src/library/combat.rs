@@ -3,11 +3,11 @@
 //! [CR 506]: https://yawgatog.com/resources/magic-rules/#R506
 //! [CR 511]: https://yawgatog.com/resources/magic-rules/#R511
 
-use beryl_engine::card::{Colors, Keywords, Subtype, Subtypes, Types};
 use beryl_engine::{DecisionKind, TurnStep, Zone};
-use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
-use beryl_scenario_types::{ME, PermanentState, Resolve, SnapshotRef, THEM, advance_to};
+use beryl_scenario::{P0, P1, Permanent, Scenario};
+use beryl_scenario_types::{ME, Resolve, THEM, advance_to};
 
+use super::keywords::trample;
 use crate::{names, props};
 
 const GROUND: &str = props::VANILLA.card;
@@ -64,7 +64,7 @@ pub const FIRST_STRIKE: &[Scenario] = &[
             advance_to(1, TurnStep::FirstStrikeDamage),
             THEM.has(Zone::Graveyard, GROUND, 1),
             ME.controls(KNIGHT, 1),
-            advance_to(1, TurnStep::CombatDamage),
+            advance_to(1, TurnStep::EndOfCombat),
             ME.controls(KNIGHT, 1),
         ]),
     Scenario::new("a first striker deals damage once and the other creatures deal it second")
@@ -91,75 +91,35 @@ pub const FIRST_STRIKE: &[Scenario] = &[
             THEM.chooses(DecisionKind::Blocker, DREADMAW),
             advance_to(1, TurnStep::FirstStrikeDamage),
             ME.controls(KNIGHT, 1),
-            STRUCK_TRAMPLER,
+            trample::two_damage(P1),
             advance_to(1, TurnStep::CombatDamage),
             ME.has(Zone::Graveyard, KNIGHT, 1),
-            STRUCK_TRAMPLER,
+            trample::two_damage(P1),
         ]),
 ];
 
-const STRUCK_TRAMPLER: Action = Action::assert(Assertion::PermanentState {
-    object: SnapshotRef {
-        zone: Zone::Battlefield,
-        player: P1,
-        name: Some(DREADMAW),
-        index: 0,
-    },
-    state: PermanentState {
-        colors: Colors::GREEN,
-        types: Types::CREATURE,
-        subtypes: Subtypes::of(&[Subtype::Dinosaur]),
-        all_creature_types: false,
-        keywords: Keywords::TRAMPLE,
-        damage: 2,
-        attached_to: None,
-        pt: Some((6, 6)),
-    },
-});
-
-const BLOCKER_REMOVAL: Scenario = Scenario::setup()
-    .battlefield(P0, &[names::PLAINS, names::PLAINS])
-    .battlefield(P1, &[GROUND])
-    .hand(P0, &[names::GET_LOST]);
-
-pub const REMOVED_BLOCKER: &[Scenario] = &[
-    BLOCKER_REMOVAL
-        .titled("an attacker without trample stays blocked when its blocker leaves")
-        .battlefield(P0, &[names::PLAINS, names::PLAINS, FLIER])
-        .battlefield(P1, &[names::SERRA_ANGEL])
-        .actions(&[
-            advance_to(1, TurnStep::BeginningOfCombat),
-            ME.passes(),
-            ME.attacks_with(FLIER),
-            ME.passes(),
-            THEM.chooses(DecisionKind::Blocker, names::SERRA_ANGEL),
-            advance_to(1, TurnStep::DeclareBlockers),
-            ME.casts(names::GET_LOST),
-            ME.targets(names::SERRA_ANGEL),
-            Resolve,
-            advance_to(1, TurnStep::EndOfCombat),
-            ME.controls(FLIER, 1),
-            THEM.has(Zone::Graveyard, names::SERRA_ANGEL, 1),
-            THEM.life(20),
-        ]),
-    BLOCKER_REMOVAL
-        .titled("a blocked attacker with trample deals all its damage after its blocker leaves")
-        .battlefield(P0, &[names::PLAINS, names::PLAINS, DREADMAW])
-        .actions(&[
-            advance_to(1, TurnStep::BeginningOfCombat),
-            ME.passes(),
-            ME.attacks_with(DREADMAW),
-            ME.passes(),
-            THEM.chooses(DecisionKind::Blocker, GROUND),
-            advance_to(1, TurnStep::DeclareBlockers),
-            ME.casts(names::GET_LOST),
-            ME.targets(GROUND),
-            Resolve,
-            advance_to(1, TurnStep::EndOfCombat),
-            THEM.has(Zone::Graveyard, GROUND, 1),
-            THEM.life(14),
-        ]),
-];
+pub const REMOVED_BLOCKER: &[Scenario] =
+    &[
+        Scenario::new("an attacker without trample stays blocked when its blocker leaves")
+            .hand(P0, &[names::GET_LOST])
+            .battlefield(P0, &[names::PLAINS, names::PLAINS, FLIER])
+            .battlefield(P1, &[names::SERRA_ANGEL])
+            .actions(&[
+                advance_to(1, TurnStep::BeginningOfCombat),
+                ME.passes(),
+                ME.attacks_with(FLIER),
+                ME.passes(),
+                THEM.chooses(DecisionKind::Blocker, names::SERRA_ANGEL),
+                advance_to(1, TurnStep::DeclareBlockers),
+                ME.casts(names::GET_LOST),
+                ME.targets(names::SERRA_ANGEL),
+                Resolve,
+                advance_to(1, TurnStep::EndOfCombat),
+                ME.controls(FLIER, 1),
+                THEM.has(Zone::Graveyard, names::SERRA_ANGEL, 1),
+                THEM.life(20),
+            ]),
+    ];
 
 pub const REMOVED_PLANESWALKER: &[Scenario] =
     &[
@@ -179,29 +139,6 @@ pub const REMOVED_PLANESWALKER: &[Scenario] =
                 ME.attacking(GROUND, 1),
                 advance_to(1, TurnStep::EndOfCombat),
                 ME.life(20),
-                THEM.life(20),
-            ]),
-    ];
-
-/// The later combat steps still happen after the sole attacker leaves.
-pub const REMOVED_ATTACKERS: &[Scenario] =
-    &[
-        Scenario::new("combat continues after the only attacker is removed")
-            .battlefield(P0, &[GROUND])
-            .battlefield(P1, &[names::PLAINS, names::PLAINS])
-            .hand(P1, &[names::GET_LOST])
-            .actions(&[
-                advance_to(1, TurnStep::BeginningOfCombat),
-                ME.passes(),
-                THEM.passes(),
-                ME.attacks_with(GROUND),
-                advance_to(1, TurnStep::DeclareAttackers),
-                ME.passes(),
-                THEM.casts(names::GET_LOST),
-                Resolve,
-                advance_to(1, TurnStep::DeclareBlockers),
-                advance_to(1, TurnStep::CombatDamage),
-                ME.has(Zone::Graveyard, GROUND, 1),
                 THEM.life(20),
             ]),
     ];

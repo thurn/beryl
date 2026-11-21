@@ -767,7 +767,7 @@ class Exporter:
             self.export.skipped.append("Decision: Beryl's decision surface")
             return
         if what == "Outcome":
-            self.ending = outcome_lines(assertion)
+            self.ending = outcome_lines(assertion, self.player)
             return
         if p.decider is None:
             raise Unsupported(f"a {what} assertion after the game is over")

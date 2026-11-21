@@ -2022,16 +2022,18 @@ public final class BerylForgeHarness {
                 return; // no attack unless the script says so
             }
             while (pick != null && pick.get("pick").getAsString().equals("Card")) {
-                Card card = run.first(player, pick.get("card").getAsString(), null);
+                String name = pick.get("card").getAsString();
                 GameEntity defender = attacker.getSingleOpponent();
                 JsonObject target = run.takeFollowing(player, Set.of("AttackTarget"));
                 if (target != null && target.get("pick").getAsString().equals("Card")) {
                     defender = run.first(defender instanceof Player p ? p : attacker.getSingleOpponent(), target.get("card").getAsString(), null);
                 }
-                if (!CombatUtil.canAttack(card, defender)) {
-                    throw new StepFailed("Forge does not let " + card + " attack " + defender);
-                }
-                combat.addAttacker(card, defender);
+                GameEntity attacked = defender;
+                Card card = run.controlled(player, name).stream()
+                        .filter(candidate -> !combat.isAttacking(candidate) && CombatUtil.canAttack(candidate, attacked))
+                        .findFirst()
+                        .orElseThrow(() -> new StepFailed("Forge does not offer " + name + " to attack " + attacked));
+                combat.addAttacker(card, attacked);
                 pick = run.takeFollowing(player, Set.of("Attacker"));
             }
         }

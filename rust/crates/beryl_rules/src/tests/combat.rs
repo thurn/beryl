@@ -562,26 +562,6 @@ fn a_first_striker_held_back_does_not_add_a_combat_damage_step() {
 }
 
 #[test]
-fn a_first_striker_deals_no_regular_damage_and_others_deal_theirs_second() {
-    // A Knight and a Bear attack; a 1/4 Spider blocks the Knight. The Knight deals 2 first,
-    // then the Spider and the Bear deal theirs; the Knight does not strike again.
-    let mut g = Game::new();
-    let (a, d) = (g.attacker, g.defender());
-    let knight = g.put(a, "Knight");
-    let bear = g.put(a, "Bear");
-    let spider = g.put(d, "Spider");
-    g.pass_to_combat();
-    g.pick(DecisionKind::Attacker, Opt::Attack(knight));
-    g.pick(DecisionKind::Attacker, Opt::Attack(bear));
-    g.pick(DecisionKind::Blocker, Opt::Block(spider));
-    g.pick_object(DecisionKind::BlockTarget, knight);
-    g.finish_combat();
-    assert_eq!(g.s.object(spider).damage(), 2);
-    assert_eq!(g.s.object(knight).damage(), 1);
-    assert_eq!(g.life(d), 18);
-}
-
-#[test]
 fn an_attacker_whose_planeswalker_left_deals_no_damage() {
     let mut g = Game::new();
     let (a, d) = (g.attacker, g.defender());
