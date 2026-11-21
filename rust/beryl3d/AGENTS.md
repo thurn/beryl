@@ -263,26 +263,25 @@ project, and selects the main lanes.
   `beryl_protocol` in toolkit crates. `just b3d levels --update` lowers those
   counts when references are removed.
 
-- `data/beryl3d/space.json`: the table's spatial values, such as `verbs`,
-  `catch_up`, `frame_rate`, `card`, `layout.desktop` (the desktop layout's
-  camera, rows and piles), `layout.phone` (the phone layout's camera, rows,
-  bands and the sizes `table::phone::layout` converts for each window), `hand`,
-  `opponent_hand` and `stack` (placed relative to the camera) and `shadow`
-  (contact shadows). Its keys under `verbs` name verbs or cases of
-  `data/ui-conventions.json` (`data-names`). `kit_base`'s build script reads the
-  whole file by one rule, with no per-key code: an object becomes a `pub mod`, a
-  number an `f32` constant, an array of two or three numbers a `glam::Vec2` or
-  `Vec3`, an array of those an array of vectors, and a number whose dotted path
-  is listed in the top-level `counts` array a `usize`. The constants are in
-  `data::space`, so `verbs.fly.arc` is `data::space::verbs::fly::ARC`. A spatial
-  value is added by editing the file alone; `table::DESKTOP` is built from the
-  constants.
+- `data/beryl3d/space.json` holds verb tuning. The tools read it and the `audit`
+  thresholds in `gates.json` at startup from the checkout that built them or
+  from `BERYL3D_DATA`. The app embeds the files. The host passes validated
+  `kit_base::data::Data` to the client. `just b3d data` runs the same validation
+  as the `b3d-data` source check.
+
+- `data/beryl3d/space-constants.json` holds the tuning that still compiles to
+  constants, including the camera and table layout, hand, stack, shadows,
+  pointer and HUD. The `kit_base` build script publishes them under
+  `data::space`. An object becomes a module, a number an `f32` constant and an
+  array of two or three numbers a `glam::Vec2` or `Vec3`. The top-level `counts`
+  array names the numbers generated as `usize`.
 
 - `data/beryl3d/camera-fit.json`: cards measured in Arena's recordings, each a
   rectangle on a card's face (the art frame) with its four corners in pixels of
   a 1920 by 1080 frame. `just b3d camera-fit` solves the desktop camera's pitch
-  and field of view from them, and `layout.desktop.camera` in `space.json` holds
-  the result, which a tools test keeps equal to the fit.
+  and field of view from them, and `layout.desktop.camera` in
+  `space-constants.json` holds the result, which a tools test keeps equal to the
+  fit.
 
 - `data/beryl3d/timeline-parity.json`: `{"recordings": {"<name>/<seat>": n}}`,
   the number of steps of each recording and seat whose start or end, verb, case,

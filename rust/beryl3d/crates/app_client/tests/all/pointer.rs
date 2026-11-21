@@ -32,6 +32,7 @@ fn page(views: &[ViewBuilder]) -> Page {
         .map(|view| FixtureMessage::game_update(&view.update()))
         .collect();
     let mut page = Page::new(
+        crate::test_data::data(),
         Recording(messages).into(),
         Side::You,
         Layout::Desktop,
@@ -201,11 +202,14 @@ fn a_card_that_flies_under_a_still_pointer_is_hovered_when_it_lands() {
 
 #[test]
 fn a_touch_hovers_nothing() {
-    let mut client = Client::new(Config {
-        elements: 2048,
-        draws: 2048,
-        name_bytes: 65_536,
-    });
+    let mut client = Client::new(
+        crate::test_data::data(),
+        Config {
+            elements: 2048,
+            draws: 2048,
+            name_bytes: 65_536,
+        },
+    );
     client.handle(Input::Surface {
         size: WINDOW,
         scale: 2.0,

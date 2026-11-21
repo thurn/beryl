@@ -15,7 +15,7 @@
 //!
 //! The web lays a tray out on its 1600 by 900 stage, in the space `desktopTray`
 //! (`ui/src/stage/desktop.ts`) gives. Here the same space is measured in stage pixels of a stage
-//! as tall as the window, `layout.desktop.tray` in `space.json`, and each card is placed relative
+//! as tall as the window, `layout.desktop.tray` in `space-constants.json`, and each card is placed relative
 //! to the camera, so that the tray keeps its size and place on screen at any window shape.
 //!
 //! The phone's space is the web's `phoneTray` (`ui/src/stage/phone.ts`), measured in logical

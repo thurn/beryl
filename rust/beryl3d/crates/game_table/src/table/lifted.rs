@@ -15,7 +15,7 @@ use glam::{Quat, Vec2};
 
 use super::place::{Group, Placement, Zones, members};
 use super::{CARD_HEIGHT, CARD_WIDTH, Camera, LAYER, Layout};
-use kit_base::data::space::verbs::lift;
+use kit_base::data::verbs::{Lift, LiftHand};
 use kit_base::pose::Pose;
 use kit_frame::frame::Place;
 
@@ -143,7 +143,7 @@ pub(crate) fn lay(
     handled: Option<&Handled>,
     group: Group,
     members: &[&ObjectView],
-    (layout, camera): (&Layout, &Camera),
+    (layout, camera, lift): (&Layout, &Camera, &Lift),
     placement: &mut Placement,
 ) {
     let Some(handled) = handled.filter(|handled| group_of(handled.handling) == Some(group)) else {
@@ -154,32 +154,16 @@ pub(crate) fn lay(
         .iter()
         .filter_map(|slot| members.iter().find(|object| object.slot == *slot).copied())
         .collect();
-    if cards.is_empty() {
-        return;
-    }
-    let side = match group {
-        Group::Pile { side, .. } | Group::Hand(side) | Group::Row { side, .. } => side,
-        Group::Stack => Side::You,
+    let (side, library, columns) = match group {
+        Group::Pile { side, .. } => (side, true, lift.library.columns),
+        Group::Hand(side) => (side, false, lift.hand.columns),
+        _ => return,
     };
-    let library = matches!(group, Group::Pile { .. });
-    let columns = if library {
-        lift::library::COLUMNS
-    } else {
-        lift::hand::COLUMNS
-    }
-    .min(cards.len());
-    let packet = cards.len().div_ceil(columns);
-    #[expect(clippy::cast_precision_loss, reason = "a handful of cards")]
-    for (index, object) in cards.iter().enumerate() {
-        let (column, under) = (index % columns, index / columns);
-        let offset = column as f32 - (columns as f32 - 1.0) / 2.0;
-        // Each column lies over the one at its left, and within a column the cards of one
-        // packet lie under the first.
-        let order = (column * packet + packet - under) as f32;
+    for (object, (offset, under, order)) in cards.iter().zip(fan_slots(cards.len(), columns)) {
         let pose = if library {
-            let beside = lift::library::BESIDE
-                + Vec2::X * offset * lift::library::STEP * CARD_WIDTH
-                + lift::library::PACKET * under as f32;
+            let beside = lift.library.beside
+                + Vec2::X * offset * lift.library.step * CARD_WIDTH
+                + lift.library.packet * under as f32;
             // Beside the library toward the table's middle: to its right on the viewer's side,
             // and to its left on the opponent's.
             // The lifted cards are as large as the pile's, and lie as far apart for their size.
@@ -193,10 +177,10 @@ pub(crate) fn lay(
                 Side::Opponent => -beside,
             } * scale;
             // Beside where the library stands now, which follows how many cards it holds.
-            let library = super::PileShown::index(side, ZoneName::Library);
-            let at = placement.piles[library].base + beside;
+            let pile = super::PileShown::index(side, ZoneName::Library);
+            let at = placement.piles[pile].base + beside;
             Pose {
-                position: at.extend(lift::library::RISE + LAYER * order),
+                position: at.extend(lift.library.rise + LAYER * order),
                 scale,
                 turn: 1.0,
                 ..Pose::default()
@@ -209,7 +193,7 @@ pub(crate) fn lay(
                 (offset, under, order),
                 (handled.opening, pile),
                 camera,
-                layout.hand.ceiling,
+                (layout.hand.ceiling, &lift.hand),
             )
         };
         if let Some(rest) = placement.get(object.slot).copied() {
@@ -243,13 +227,13 @@ fn held_up(
     (offset, under, order): (f32, usize, f32),
     (opening, pile): (bool, bool),
     camera: &Camera,
-    ceiling: f32,
+    (ceiling, hand): (f32, &LiftHand),
 ) -> Pose {
     let aspect = camera.window.size.width / camera.window.size.height;
     let (at, height) = match (opening, side) {
-        (true, _) => (lift::hand::opening::AT, lift::hand::opening::HEIGHT),
-        (false, Side::You) => (lift::hand::AT, lift::hand::HEIGHT),
-        (false, Side::Opponent) => (lift::hand::THEIRS_AT, lift::hand::HEIGHT),
+        (true, _) => (hand.opening.at, hand.opening.height),
+        (false, Side::You) => (hand.at, hand.height),
+        (false, Side::Opponent) => (hand.theirs_at, hand.height),
     };
     // A card's width, in normalized device coordinates of the window.
     let width = height * 2.0 * (CARD_WIDTH / CARD_HEIGHT) / aspect;
@@ -262,13 +246,11 @@ fn held_up(
     };
     let at = Vec2::new(at.x / aspect, y);
     #[expect(clippy::cast_precision_loss, reason = "a handful of cards")]
-    let ndc =
-        at + Vec2::new(
-            offset * lift::hand::STEP * width,
-            -offset.abs() * lift::hand::DROP,
-        ) + lift::hand::PACKET * under as f32;
-    let rotation = Quat::from_rotation_z(-(offset * lift::hand::LEAN_DEGREES).to_radians());
-    let depth = lift::hand::DEPTH - order;
+    let ndc = at
+        + Vec2::new(offset * hand.step * width, -offset.abs() * hand.drop)
+        + hand.packet * under as f32;
+    let rotation = Quat::from_rotation_z(-(offset * hand.lean_degrees).to_radians());
+    let depth = hand.depth - order;
     let mut pose = camera.screen_pose(ndc, depth, rotation, height);
     pose.turn = if pile || object.owner == Side::Opponent || !super::rows::face_up(object) {
         1.0
@@ -291,18 +273,11 @@ pub(crate) fn lay_picked(
     side: Side,
     camera: &Camera,
     ceiling: f32,
+    hand: &LiftHand,
     placement: &mut Placement,
 ) {
-    let columns = lift::hand::COLUMNS.min(picked.len());
-    if columns == 0 {
-        return;
-    }
-    let packet = picked.len().div_ceil(columns);
-    #[expect(clippy::cast_precision_loss, reason = "a handful of cards")]
-    for (index, object) in picked.iter().enumerate() {
-        let (column, under) = (index % columns, index / columns);
-        let offset = column as f32 - (columns as f32 - 1.0) / 2.0;
-        let order = (column * packet + packet - under) as f32;
+    for (object, (offset, under, order)) in picked.iter().zip(fan_slots(picked.len(), hand.columns))
+    {
         // A hidden pick is made while a spell or ability resolves, which is never before the
         // first turn, so its cards are never laid out as an opening hand's.
         let pose = held_up(
@@ -311,7 +286,7 @@ pub(crate) fn lay_picked(
             (offset, under, order),
             (false, false),
             camera,
-            ceiling,
+            (ceiling, hand),
         );
         placement.set(
             object.slot,
@@ -327,6 +302,19 @@ pub(crate) fn lay_picked(
             },
         );
     }
+}
+
+/// Each card's column offset from the middle, position in its packet, and depth order.
+#[expect(clippy::cast_precision_loss, reason = "a handful of cards")]
+fn fan_slots(count: usize, columns: usize) -> impl Iterator<Item = (f32, usize, f32)> {
+    let columns = columns.min(count).max(1);
+    let packet = count.div_ceil(columns);
+    (0..count).map(move |index| {
+        let (column, under) = (index % columns, index / columns);
+        let offset = column as f32 - (columns as f32 - 1.0) / 2.0;
+        // A column covers the one to its left. Its first card covers the rest of its packet.
+        (offset, under, (column * packet + packet - under) as f32)
+    })
 }
 
 /// The look open as a script plays, for the table it plays over, which does not keep it.

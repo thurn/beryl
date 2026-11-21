@@ -1,5 +1,8 @@
 //! Integration tests of game fixtures, playback, placement and frame checks.
 
+#[path = "../../../../test_data.rs"]
+mod test_data;
+
 mod agent;
 mod badges_manual;
 #[path = "../common/mod.rs"]

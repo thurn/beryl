@@ -58,7 +58,7 @@ impl Place {
 /// The shares of a notice's run over which it fades in and out, as the web stage's
 /// `.stage-notice` rules in `ui/src/stage/stage.css` have them for its kind: the turn banner,
 /// the pill of a scry, and the other banners (a coin's among them). The values are `notices` in
-/// `data/beryl3d/space.json`.
+/// `data/beryl3d/space-constants.json`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Fade {
     pub fade_in: f32,

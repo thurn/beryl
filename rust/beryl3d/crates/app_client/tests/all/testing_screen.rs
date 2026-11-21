@@ -39,7 +39,14 @@ fn start(names: Option<&[&str]>) -> Page {
         width: 1600.0,
         height: 900.0,
     };
-    let mut page = Page::new(recording.into(), Side::You, Layout::Desktop, size).unwrap();
+    let mut page = Page::new(
+        crate::test_data::data(),
+        recording.into(),
+        Side::You,
+        Layout::Desktop,
+        size,
+    )
+    .unwrap();
     page.still();
     page
 }

@@ -34,10 +34,12 @@ use game_play::pointer::LetGo;
 use game_play::pointer::touch::Touch;
 use game_table::faces::{CARD_BACK, FaceList, Faces};
 use game_table::table::{Table, Window};
+use kit_base::data::Data;
 use kit_frame::frame::{self, ElementId, Frame, FrameBuilder, Sound, Wake};
 use kit_ui::input::{FaceId, FaceSize, GlyphKey, Lifecycle, Tier};
 use kit_ui::layout::{self, Layer};
 use kit_ui::widgets::Fields;
+use std::sync::Arc;
 
 mod input;
 mod inspect;
@@ -209,12 +211,16 @@ struct Suggesting {
 
 impl Client {
     #[must_use]
-    pub fn new(config: Config) -> Self {
+    pub fn new(data: Arc<Data>, config: Config) -> Self {
         Self {
             frame: Frame::with_capacity(config.elements, config.draws, config.name_bytes),
             inputs: Vec::new(),
             window: Window::default(),
-            show: Show::new(Table::default()),
+            show: Show::new(Table::new(
+                data,
+                game_table::table::DESKTOP,
+                Window::default(),
+            )),
             layer: Layer::new(),
             counts: CountFloats::default(),
             piles: PileCounts::default(),
@@ -266,6 +272,11 @@ impl Client {
         }
     }
 
+    /// The tuning data supplied by the host.
+    pub fn data(&self) -> &Arc<Data> {
+        self.show.table().data()
+    }
+
     /// The visual tier frames are drawn in. It starts at Baseline (docs/beryl-3d.md, "Choosing a
     /// tier"), follows `Input::Tier`, and stays Baseline for the rest of the session once memory
     /// has run low.
@@ -279,6 +290,7 @@ impl Client {
     /// This is where screens are rebuilt and laid out, and where text is shaped.
     pub fn handle(&mut self, input: Input) {
         match input {
+            Input::Data(data) => self.set_data(data),
             Input::Update(update) => {
                 // The first view of all is of a game the host resumed or started, which may
                 // reach the client after the agents put it on the start screen.
@@ -384,6 +396,13 @@ impl Client {
         self.wake = Wake::Now;
     }
 
+    fn set_data(&mut self, data: Arc<Data>) {
+        if self.data() != &data {
+            self.show.set_data(data);
+            self.resize(self.window);
+        }
+    }
+
     /// Takes the tier the host's rate rule chose, unless memory has run low, after which the
     /// tier stays Baseline (docs/beryl-3d.md, "Choosing a tier").
     fn set_tier(&mut self, tier: Tier) {
@@ -455,7 +474,7 @@ impl Client {
             self.show.counts(),
             self.show.effects(),
             table_now,
-            self.show.table().layout(),
+            (table.layout(), &table.data().verbs.count),
             self.window.size,
             (counted, targets, self.viewing.opening),
         );

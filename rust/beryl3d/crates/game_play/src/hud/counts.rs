@@ -22,7 +22,7 @@ use glam::Vec2;
 use crate::art::orb;
 pub(crate) use game_table::table::HALF_LIFE;
 use game_table::table::Layout;
-use kit_base::data::space::verbs::count::DRIFT;
+use kit_base::data::verbs::Count as CountTuning;
 use kit_base::tokens::{color, size, type_style};
 use kit_frame::frame::Role;
 use kit_fx::effects::{Effect, EffectRun};
@@ -226,7 +226,7 @@ impl CountFloats {
         counts: &Counts,
         effects: &[EffectRun],
         now: u64,
-        layout: &Layout,
+        (layout, tuning): (&Layout, &CountTuning),
         size: Size,
         (visible, targets, dimmed): (bool, [bool; 2], bool),
     ) {
@@ -314,7 +314,7 @@ impl CountFloats {
             if let Some(run) = run {
                 layer.set_float_look(
                     floats::LIFE_CHANGE[at],
-                    change_look(run, now, life, tint, phone),
+                    change_look(run, now, life, tint, phone, tuning.drift),
                 );
             }
         }
@@ -330,13 +330,14 @@ const GAIN_CLEARANCE: f32 = 2.0;
 
 /// The look of the amount a life total at `life` changed by, as the `loss` or `gain` `run`
 /// stands at `now`: from beside the total, it sinks below it for a loss, or rises above it for
-/// a gain, `DRIFT` points over the run, while its opacity falls from 1 to 0.
+/// a gain, `drift` points over the run, while its opacity falls from 1 to 0.
 fn change_look(
     run: &EffectRun,
     now: u64,
     life: Vec2,
     tint: Option<[u8; 4]>,
     phone: bool,
+    drift: f32,
 ) -> FloatLook {
     #[expect(
         clippy::cast_precision_loss,
@@ -351,7 +352,7 @@ fn change_look(
     // gain from its top (4 points in), rather than from the total's line box.
     let half = orb::ART[3] * orb::SCALES[usize::from(phone)] / 2.0;
     let height = type_style::TITLE.size * type_style::TITLE.line_height;
-    let drift = DRIFT * through;
+    let drift = drift * through;
     let (offset, anchor) = if phone && run.effect == Effect::Gain {
         (-HALF_LIFE - drift, Vec2::new(0.5, 1.0))
     } else if phone {

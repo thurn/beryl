@@ -29,7 +29,7 @@ fn sample() -> (ViewBuilder, CardRecords) {
 /// A client given the sample's card records and view, and then `faces`.
 fn client(faces: impl FnOnce(&FaceList) -> Vec<AssetReady>) -> Client {
     let (builder, records) = sample();
-    let mut client = Client::new(Config::LARGEST);
+    let mut client = Client::new(crate::test_data::data(), Config::LARGEST);
     client.handle(Input::Surface {
         size: SIZE,
         scale: 2.0,

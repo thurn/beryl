@@ -26,7 +26,11 @@ pub fn window(width: f32, height: f32) -> Window {
 
 /// A show at 1440 by 900.
 pub fn show() -> Show {
-    Show::new(Table::new(DESKTOP, window(1440.0, 900.0)))
+    Show::new(Table::new(
+        crate::test_data::data(),
+        DESKTOP,
+        window(1440.0, 900.0),
+    ))
 }
 
 /// A frame with room for every record these tables need.

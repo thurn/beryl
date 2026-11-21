@@ -154,7 +154,8 @@ impl Playback {
         };
         // Handed over from the back, so that taking one never moves the rest.
         views.reverse();
-        let mut client = Client::new(Config::LARGEST);
+        let data = crate::data::checkout().expect("gate tuning");
+        let mut client = Client::new(data.clone(), Config::LARGEST);
         client.handle(Input::Surface {
             size: window,
             scale,
@@ -170,7 +171,7 @@ impl Playback {
         let drive = Board::parse(name).map(Board::drive).unwrap_or_default();
         let mut moves = if drive.pointer_over_hand {
             let recording = recording(name, Side::You).expect("hand recording");
-            let mut page = Page::new(recording.into(), Side::You, Layout::Desktop, window)
+            let mut page = Page::new(data, recording.into(), Side::You, Layout::Desktop, window)
                 .expect("the hand plays");
             pointer_moves(page.frame())
         } else {

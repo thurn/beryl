@@ -5,12 +5,12 @@
 //! out into the table first.
 
 use crate::common::{MS, empty_frame, frame, show, window};
-use app_client::driver::{Mode, Page, Recording};
+use app_client::driver::{Duration, Mode, Moment, Page, Recording};
 use beryl_card_records::{TokenMakers, fixture_message};
 use beryl_protocol::GameUpdate;
 use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::protocol::{CardType, ObjectId, Side, StackItem, Why, ZoneName};
-use beryl_protocol::script::{Act, Curve, Room, StepTiming};
+use beryl_protocol::script::{Act, Curve, Room, StepTiming, Verb};
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, timing};
 use game_play::play::Show;
 use game_play::play::record::ScriptRecord;
@@ -18,11 +18,11 @@ use game_probe::agent::steps::{no_jumps, rest_equals_placement, step_times};
 use game_table::table::Window;
 use glam::Vec3;
 use kit_base::data::space;
-use kit_base::data::space::verbs::fly::thrown;
 use kit_base::pose::{Pose, Segment};
 use kit_probe::agent::{Layout, Rule};
 use kit_space::motion::pose_at;
 use kit_ui::input::Size;
+use std::sync::Arc;
 
 /// The cards of each side that the flights move.
 #[derive(Clone, Copy)]
@@ -144,6 +144,46 @@ fn flown(
         session: before.session,
         view,
     }
+}
+
+#[test]
+fn the_hosts_flight_arc_moves_the_card_in_the_frame() {
+    let (before, [mine, _]) = table();
+    let mut after = flown(
+        &before,
+        mine.spell,
+        ZoneName::Hand,
+        ZoneName::Graveyard,
+        Why::Discard,
+    );
+    after.view.script.as_mut().unwrap().timing =
+        vec![timed("discard", 165.0, 0.0, Curve::EaseOut, true)];
+    let recording = Arc::new(Recording(vec![
+        FixtureMessage::game_update(&before),
+        FixtureMessage::game_update(&after),
+    ]));
+    let at_middle = |data| {
+        let mut page = Page::new(
+            data,
+            Arc::clone(&recording),
+            Side::You,
+            Layout::Desktop,
+            window(1440.0, 900.0).size,
+        )
+        .unwrap();
+        let flight = page
+            .steps()
+            .into_iter()
+            .find(|step| step.verb == Verb::Fly)
+            .unwrap();
+        page.seek(&Moment::At(Duration(flight.middle))).unwrap();
+        page.find(&format!("card #{}", mine.spell.0)).rect
+    };
+    let mut data = (*crate::test_data::data()).clone();
+    data.verbs.fly.arc = 0.0;
+    let flat = at_middle(Arc::new(data.clone()));
+    data.verbs.fly.arc = 55.0;
+    assert_ne!(flat, at_middle(Arc::new(data)));
 }
 
 /// A recording show that has taken `before` and then `after`, played frame by frame at 60 Hz
@@ -462,7 +502,7 @@ fn a_thrown_permanent_never_rises_past_the_top_of_the_window() {
             );
             highest = highest.max(off_line(on_way(&show, slot, t), from, to).dot(up));
         }
-        let full = thrown::HEIGHT * space::card::WIDTH * from.scale;
+        let full = show.table().data().verbs.fly.thrown.height * space::card::WIDTH * from.scale;
         if capped {
             assert!(highest < 0.8 * full, "{case}: rises {highest} of {full}");
         } else {
@@ -654,8 +694,14 @@ fn unseen_steps(before: &GameUpdate, after: &GameUpdate, seat: Side, size: Size)
         FixtureMessage::game_update(after),
     ];
     messages.insert(0, fixture_message(&messages, TokenMakers::NONE));
-    let mut page = Page::new(Recording(messages).into(), seat, Layout::Desktop, size)
-        .expect("the views can be read");
+    let mut page = Page::new(
+        crate::test_data::data(),
+        Recording(messages).into(),
+        seat,
+        Layout::Desktop,
+        size,
+    )
+    .expect("the views can be read");
     page.check_all(Mode::EveryTick)
         .faults
         .into_iter()

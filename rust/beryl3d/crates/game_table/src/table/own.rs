@@ -17,7 +17,7 @@
 //! creature fights. The wedge starts a little large and settles over `pop_ms`, and the crescent
 //! opens from `opens_from` of its size over `open_ms`, as in `fighterLight`. The web keeps
 //! these times in its code rather than in `data/ui-conventions.json`, so they are under `own`
-//! in `data/beryl3d/space.json` with the sizes and offsets, which are shares of a card.
+//! in `data/beryl3d/space-constants.json` with the sizes and offsets, which are shares of a card.
 
 use std::cell::Cell;
 use std::f32::consts::PI;

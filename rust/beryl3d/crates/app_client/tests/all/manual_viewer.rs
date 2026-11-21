@@ -136,11 +136,14 @@ fn press(client: &mut Client, name: &str) {
 #[test]
 fn closing_a_library_search_asks_whether_to_shuffle_it() {
     let view = library_view();
-    let mut client = Client::new(Config {
-        elements: 2048,
-        draws: 2048,
-        name_bytes: 65_536,
-    });
+    let mut client = Client::new(
+        crate::test_data::data(),
+        Config {
+            elements: 2048,
+            draws: 2048,
+            name_bytes: 65_536,
+        },
+    );
     client.handle(Input::Platform { mac: true });
     client.handle(Input::Surface {
         size: Size {
@@ -225,11 +228,14 @@ fn scrolling_a_large_pile_moves_its_cards_and_clips_cards_that_leave_the_grid() 
     let mut update = builder.update();
     update.view.table = Some(table(&update.view));
 
-    let mut client = Client::new(Config {
-        elements: 2048,
-        draws: 2048,
-        name_bytes: 65_536,
-    });
+    let mut client = Client::new(
+        crate::test_data::data(),
+        Config {
+            elements: 2048,
+            draws: 2048,
+            name_bytes: 65_536,
+        },
+    );
     client.handle(Input::Surface {
         size: Size {
             width: 1600.0,

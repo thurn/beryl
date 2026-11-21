@@ -35,7 +35,7 @@ impl Table {
     fn new() -> Self {
         let recording = recording("shape-zone", Side::You).unwrap_or_else(|why| panic!("{why}"));
         let views = recording.views().unwrap_or_else(|why| panic!("{why}"));
-        let mut client = Client::new(Config::LARGEST);
+        let mut client = Client::new(crate::test_data::data(), Config::LARGEST);
         client.record();
         client.handle(Input::Surface {
             size: Size {

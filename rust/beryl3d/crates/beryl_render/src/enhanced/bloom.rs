@@ -7,7 +7,7 @@
 //! blending, into a target `enhanced.bloom.scale` of the frame's size. That target is blurred
 //! across into a second one and down back into the first, with a Gaussian of
 //! `enhanced.bloom.taps` taps and `enhanced.bloom.sigma` texels, and the blurred light is added
-//! onto the resolved picture times `enhanced.bloom.strength` (`data/beryl3d/space.json`). The
+//! onto the resolved picture times `enhanced.bloom.strength` (`data/beryl3d/space-constants.json`). The
 //! glows are drawn with no depth buffer, so a glow behind a card still blooms around it.
 
 use kit_base::data::space::enhanced::bloom::{SCALE, SIGMA, STRENGTH, TAPS};

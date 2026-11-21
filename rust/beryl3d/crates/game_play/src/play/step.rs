@@ -41,6 +41,7 @@ pub use places::Places;
 
 /// What a verb is given for one step.
 pub struct StepIn<'a> {
+    pub verbs: &'a kit_base::data::verbs::Verbs,
     pub act: &'a Act,
     /// The spell, ability, permanent or player responsible, if any.
     pub cause: Option<Subject>,
@@ -656,6 +657,7 @@ impl<'a> Motion<'a> {
             dirty,
         };
         let input = StepIn {
+            verbs: &table.data().verbs,
             act: &step.act,
             cause: step.cause,
             timing,

@@ -9,7 +9,7 @@
 //! is (docs/beryl-3d.md, "Determinism": seeded effects). Times are shares of the run's eased
 //! progress, the same progress `card::look` darkens, breaks up and whitens the card by, so
 //! that the ash leaves the card as its breaking edge passes. The values are
-//! `enhanced.particles` in `data/beryl3d/space.json`, lengths in millimetres at the card's
+//! `enhanced.particles` in `data/beryl3d/space-constants.json`, lengths in millimetres at the card's
 //! scale and lives as shares of the run:
 //!
 //! - ash, for a `dissolve`: particle i is born on a row of the card (a hash, 0 at the top) as

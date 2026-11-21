@@ -204,6 +204,7 @@ fn the_recording_driver_reports_a_features_live_state() {
     };
     let recording = Recording(vec![FixtureMessage::game_update(&update)]);
     let mut page = Page::new(
+        crate::test_data::data(),
         recording.into(),
         Side::You,
         Layout::Desktop,

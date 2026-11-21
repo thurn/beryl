@@ -4,13 +4,18 @@ use beryl_protocol::card_records::CardRecords;
 use beryl_protocol::ipc::LobbyUpdate;
 use beryl_protocol::{AgentView, GameUpdate};
 
+use std::sync::Arc;
+
 use crate::command::Reply;
 use crate::settings::Settings;
+use kit_base::data::Data;
 use kit_ui::input::{AssetReady, Insets, Key, Lifecycle, Pointer, Size, TextChange, Tier};
 
 /// One thing that has happened, passed to `Client::handle`.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Input {
+    /// Validated tuning data from the host.
+    Data(Arc<Data>),
     /// A view from the session, boxed because it is far larger than every other input.
     Update(Box<GameUpdate>),
     /// The card store's records of every card and token the match can show, from which the

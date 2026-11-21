@@ -55,7 +55,7 @@ fn uneven(width: f32, height: f32) -> Window {
 fn frame_in(window: Window, view: &ViewBuilder) -> Frame {
     let mut view = view.clone();
     view.script(ScriptBuilder::reset().build());
-    let mut show = Show::new(Table::new(DESKTOP, window));
+    let mut show = Show::new(Table::new(crate::test_data::data(), DESKTOP, window));
     show.push(Box::new(view.update()), Vec::new());
     frame(&mut show, &mut Frame::with_capacity(4096, 4096, 65_536), 0)
 }
@@ -422,7 +422,7 @@ fn the_viewers_life_total_rises_over_a_hand_that_reaches_into_its_strip() {
         for (width, height) in PHONES {
             let window = phone(width, height);
             let bands = phone_bands(window).expect("a phone window");
-            let mut show = Show::new(Table::new(DESKTOP, window));
+            let mut show = Show::new(Table::new(crate::test_data::data(), DESKTOP, window));
             show.push(Box::new(view.update()), Vec::new());
             let frame = frame(&mut show, &mut Frame::with_capacity(4096, 4096, 65_536), 0);
             let hand = Place::Card {
@@ -614,7 +614,7 @@ fn a_resize_in_mid_flight_into_and_between_phone_layouts_keeps_the_pose() {
     ] {
         let (start, cards) = before();
         let (drawn, timings) = draw(&start, cards);
-        let mut show = Show::new(Table::new(DESKTOP, from));
+        let mut show = Show::new(Table::new(crate::test_data::data(), DESKTOP, from));
         show.push(Box::new(start), Vec::new());
         show.push(Box::new(drawn.clone()), timings);
         let mut scratch = empty_frame();
@@ -651,7 +651,7 @@ fn a_resize_in_mid_flight_into_and_between_phone_layouts_keeps_the_pose() {
 
 #[test]
 fn a_desktop_window_keeps_the_desktop_layout_with_its_rows_fitted() {
-    let table = Table::new(DESKTOP, Window::default());
+    let table = Table::new(crate::test_data::data(), DESKTOP, Window::default());
     let fitted = DESKTOP.for_window(Window::default());
     assert_eq!(*table.layout(), fitted);
     assert!(fitted.phone.is_none() && fitted.fitted.is_some());
@@ -662,7 +662,7 @@ fn a_desktop_window_keeps_the_desktop_layout_with_its_rows_fitted() {
 /// The box on the window of each card of `held` held up in a tray on `window`, in logical
 /// points, and how far it stands from the eye.
 fn tray_boxes_on(window: Window, held: &Held) -> Vec<(Vec2, Vec2, f32)> {
-    let table = Table::new(DESKTOP, window);
+    let table = Table::new(crate::test_data::data(), DESKTOP, window);
     let camera = table.camera();
     (table.tray_poses(held).cards.iter())
         .map(|(_, pose)| {

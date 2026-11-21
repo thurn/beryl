@@ -4,7 +4,7 @@
 // and `lit_by_key` compares a fragment's depth from the light with the map.
 
 // How much of the color a fragment in full shadow loses: `enhanced.shadow.darkness` in
-// `data/beryl3d/space.json`, which a test holds this equal to.
+// `data/beryl3d/space-constants.json`, which a test holds this equal to.
 const SHADOW_DARKNESS: f32 = 0.55;
 
 // Where a card-mesh vertex lies in the key light's clip space, for the depth-only pass that

@@ -41,11 +41,14 @@ fn client(update: GameUpdate) -> Client {
         .card_records()
         .expect("the records can be read")
         .expect("the recording holds records");
-    let mut client = Client::new(Config {
-        elements: 2048,
-        draws: 4096,
-        name_bytes: 65_536,
-    });
+    let mut client = Client::new(
+        crate::test_data::data(),
+        Config {
+            elements: 2048,
+            draws: 4096,
+            name_bytes: 65_536,
+        },
+    );
     client.handle(Input::Surface {
         size: WINDOW,
         scale: 2.0,

@@ -183,11 +183,14 @@ fn inputs() -> Vec<Input> {
 }
 
 fn play() -> Vec<Frame> {
-    let mut client = Client::new(Config {
-        elements: 64,
-        draws: 64,
-        name_bytes: 1024,
-    });
+    let mut client = Client::new(
+        crate::test_data::data(),
+        Config {
+            elements: 64,
+            draws: 64,
+            name_bytes: 1024,
+        },
+    );
     let mut frames = Vec::new();
     for (step, input) in inputs().into_iter().enumerate() {
         client.handle(input);

@@ -40,9 +40,15 @@ fn page() -> Page {
     ];
     messages.insert(0, fixture_message(&messages, TokenMakers::NONE));
     let recording = Recording(messages);
-    Page::new(recording.into(), Side::You, Layout::Desktop, SIZE)
-        .expect("the views can be read")
-        .named("three-beats")
+    Page::new(
+        crate::test_data::data(),
+        recording.into(),
+        Side::You,
+        Layout::Desktop,
+        SIZE,
+    )
+    .expect("the views can be read")
+    .named("three-beats")
 }
 
 /// When the Plains is in the middle of its flight: 210 ms into the script.
@@ -351,9 +357,15 @@ fn an_ability_that_goes_on_the_stack_and_resolves_has_no_fault() {
         FixtureMessage::game_update(&resolved),
     ];
     messages.insert(0, fixture_message(&messages, TokenMakers::NONE));
-    let mut page = Page::new(Recording(messages).into(), Side::You, Layout::Desktop, SIZE)
-        .expect("the views can be read")
-        .named("abilities");
+    let mut page = Page::new(
+        crate::test_data::data(),
+        Recording(messages).into(),
+        Side::You,
+        Layout::Desktop,
+        SIZE,
+    )
+    .expect("the views can be read")
+    .named("abilities");
     let checked = page.check_all(Mode::AtCheckTimes);
     let printed: Vec<String> = checked.faults.iter().map(printed).collect();
     assert!(printed.is_empty(), "{}", printed.join("\n"));
@@ -382,7 +394,11 @@ fn a_flight_back_to_where_it_started_rests_in_place() {
         subject: Some(3),
         ..flight(0, ZoneName::Graveyard, Why::Exile)
     };
-    let table = Table::default();
+    let table = Table::new(
+        crate::test_data::data(),
+        game_table::table::DESKTOP,
+        game_table::table::Window::default(),
+    );
     let camera = table.camera();
     let there_and_back = script(
         vec![step.clone()],

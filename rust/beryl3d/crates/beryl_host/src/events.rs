@@ -15,7 +15,7 @@ use winit::keyboard::{KeyCode as WinitKey, ModifiersState, PhysicalKey};
 
 /// How many logical points one line of a mouse wheel scrolls: one notch of the wheel, which
 /// scrolls a battlefield row by one group (`pointer.wheel_notch_points` in
-/// `data/beryl3d/space.json`).
+/// `data/beryl3d/space-constants.json`).
 pub const LINE_POINTS: f32 = kit_base::data::space::pointer::WHEEL_NOTCH_POINTS;
 
 /// The mouse's pointer id. Fingers count from 1.

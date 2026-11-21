@@ -12,7 +12,7 @@
 //! it points at.
 //!
 //! Every point is in logical points from the window's top left corner, y down, and the values of
-//! `light` in `data/beryl3d/space.json` are copied from `lines.ts`: shares of a way or of an
+//! `light` in `data/beryl3d/space-constants.json` are copied from `lines.ts`: shares of a way or of an
 //! end's half-height, which do not depend on units, but for `hang.graze`, in points, which the
 //! web's desktop stage measures as pixels.
 

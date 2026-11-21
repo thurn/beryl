@@ -22,6 +22,8 @@ use client::{Client, Config, Input, SessionCommand};
 use std::fmt::{self, Write};
 use std::sync::Arc;
 
+use kit_base::data::Data;
+
 use beryl_protocol::GameUpdate;
 use beryl_protocol::card_records::CardRecords;
 use beryl_protocol::protocol::Side;
@@ -125,6 +127,7 @@ impl Page {
     ///
     /// When a view in the recording cannot be read.
     pub fn new(
+        data: Arc<Data>,
         recording: Arc<Recording>,
         seat: Side,
         layout: Layout,
@@ -146,7 +149,7 @@ impl Page {
             tier: Tier::Baseline,
             tick: TICK,
             cues: Cues::default(),
-            client: Client::new(Config::LARGEST),
+            client: Client::new(data, Config::LARGEST),
             now: 0,
             released: 0,
             batch: 0,
@@ -658,7 +661,7 @@ impl Page {
     }
 
     fn restart(&mut self) {
-        self.client = Client::new(Config::LARGEST);
+        self.client = Client::new(Arc::clone(self.client.data()), Config::LARGEST);
         self.responses = Responses::shared(Arc::clone(&self.recording));
         self.now = 0;
         self.released = 0;
@@ -774,7 +777,7 @@ impl Page {
             tier: self.tier,
             tick: self.tick,
             cues: self.cues.fresh(),
-            client: Client::new(Config::LARGEST),
+            client: Client::new(Arc::clone(self.client.data()), Config::LARGEST),
             now: 0,
             released: 0,
             batch: 0,

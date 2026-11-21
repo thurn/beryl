@@ -13,7 +13,6 @@ use game_play::play::Show;
 use game_play::play::record::ScriptRecord;
 use game_probe::agent::steps::{no_jumps, rest_equals_placement, step_times};
 use glam::Vec2;
-use kit_base::data::space::verbs::fly::{held, turn};
 use kit_base::pose::{Pose, Segment, Shape};
 use kit_space::motion::{Track, pose_at};
 
@@ -222,13 +221,15 @@ fn every_draw_plays_to_its_placement_with_no_jump_for_its_time() {
 /// finished just after `at + each`, and stays face up.
 #[test]
 fn a_card_drawn_alone_turns_at_the_held_turn() {
+    let fly = &crate::test_data::data().verbs.fly;
+    let held = &fly.held;
     let (before, cards) = table();
     let slot = cards.library[0];
     let show = played(&before, after(&before, &[&[(slot, ZoneName::Hand)]]));
     let segments = segments(&show, slot);
     let step = span(&show, slot);
-    let turn_at = |share: f32| pose_at(&segments, at(step, held::IN * share)).turn;
-    let (edge_on, each) = (held::turn::AT, held::turn::EACH);
+    let turn_at = |share: f32| pose_at(&segments, at(step, held.r#in * share)).turn;
+    let (edge_on, each) = (held.turn.at, held.turn.each);
     assert!(
         turn_at(edge_on - each - 0.01) > 1.0 - 1e-4,
         "not yet turning"
@@ -270,9 +271,10 @@ fn a_card_drawn_alone_leans_as_it_lifts_off_and_grows_once_edge_on() {
         let (axis, angle) = (held.rotation * plain.rotation.inverse()).to_axis_angle();
         angle.to_degrees() * axis.dot(bow.axis).signum()
     };
-    let edge_on = held::turn::AT;
+    let held = &show.table().data().verbs.fly.held;
+    let edge_on = held.turn.at;
     let peak = lean(edge_on / 2.0);
-    assert!((peak - held::LEAN).abs() < 0.1, "leans {peak} degrees");
+    assert!((peak - held.lean).abs() < 0.1, "leans {peak} degrees");
     assert!(lean(edge_on).abs() < 0.1, "upright when edge-on");
     assert!(lean(0.8).abs() < 0.1, "upright after");
     // Its width on the window: the length of its bottom edge, which stays across the screen
@@ -310,6 +312,8 @@ fn on_screen(show: &Show, pose: Pose) -> Vec2 {
 /// hundredth of the way is allowed for that.
 #[test]
 fn a_card_drawn_alone_is_held_up_beside_the_stack() {
+    let fly = &crate::test_data::data().verbs.fly;
+    let held = &fly.held;
     let (before, cards) = table();
     let slot = cards.library[0];
     let show = played(&before, after(&before, &[&[(slot, ZoneName::Hand)]]));
@@ -318,15 +322,15 @@ fn a_card_drawn_alone_is_held_up_beside_the_stack() {
     let camera = show.table().camera();
     let size = camera.window.size;
     let place = Vec2::new(
-        f32::midpoint(held::NDC.x, 1.0) * size.width,
-        f32::midpoint(1.0, -held::NDC.y) * size.height,
+        f32::midpoint(held.ndc.x, 1.0) * size.width,
+        f32::midpoint(1.0, -held.ndc.y) * size.height,
     );
     let rest = on_screen(&show, pose_at(&segments, step.1));
     let way = rest - place;
-    let sink = kit_base::data::space::verbs::fly::HELD_SINK;
+    let sink = fly.held_sink;
     for i in 0..=10 {
         #[expect(clippy::cast_precision_loss, reason = "a small count")]
-        let share = held::IN + held::HOLD * i as f32 / 10.0;
+        let share = held.r#in + held.hold * i as f32 / 10.0;
         let seen = on_screen(&show, pose_at(&segments, at(step, share)));
         let off = seen - place;
         let along = off.dot(way) / way.length_squared();
@@ -370,9 +374,10 @@ fn an_opponents_spell_is_edge_on_at_the_cast_turn() {
     let show = played(&before, after(&before, &[&[(slot, ZoneName::Stack)]]));
     let segments = segments(&show, slot);
     let step = span(&show, slot);
-    let turned = pose_at(&segments, at(step, turn::cast::AT)).turn;
+    let turn = show.table().data().verbs.fly.turn.cast;
+    let turned = pose_at(&segments, at(step, turn.at)).turn;
     assert!((turned - 0.5).abs() < 0.02, "turned {turned}");
-    let before_turn = turn::cast::AT - turn::cast::EACH - 0.01;
+    let before_turn = turn.at - turn.each - 0.01;
     assert!((pose_at(&segments, at(step, before_turn)).turn - 1.0).abs() < 1e-4);
 }
 
@@ -407,7 +412,7 @@ fn a_draw_then_a_cast_fits_on_one_track() {
 fn a_new_end_mid_turn_or_sweep_keeps_the_pose_at_that_instant() {
     use game_play::verbs::Interval;
     use glam::Vec3;
-    use kit_base::pose::{Bow, Curve, Lift, Shape, Turning};
+    use kit_base::pose::{Bow, Curve, Lift, Shape};
     let from = Pose {
         position: Vec3::new(-200.0, 50.0, 0.0),
         turn: 1.0,
@@ -418,6 +423,7 @@ fn a_new_end_mid_turn_or_sweep_keeps_the_pose_at_that_instant() {
         scale: 1.5,
         ..Pose::default()
     };
+    let fly = &crate::test_data::data().verbs.fly;
     let held = Shape::Held {
         bow: Bow {
             offset: Vec3::new(0.0, 60.0, 30.0),
@@ -425,13 +431,14 @@ fn a_new_end_mid_turn_or_sweep_keeps_the_pose_at_that_instant() {
             lean: 0.0,
             axis: Vec3::new(0.0, -0.6, 0.8),
         },
-        lean: held::LEAN.to_radians(),
+        lean: fly.held.lean.to_radians(),
         eye: 1500.0,
         lift: Lift {
             eye: Vec3::new(0.0, -1200.0, 900.0),
             forward: Vec3::new(0.0, 0.8, -0.6),
             near: 900.0,
             hold: 0.6,
+            keep: fly.front.keep,
         },
     };
     // Held nearer the eye until late in the flight, so that the times below fall both while it
@@ -444,24 +451,10 @@ fn a_new_end_mid_turn_or_sweep_keeps_the_pose_at_that_instant() {
             forward: Vec3::new(0.0, 0.8, -0.6),
             near: 900.0,
             hold: 0.6,
+            keep: fly.front.keep,
         },
     };
-    for (shape, turning) in [
-        (
-            swept,
-            Turning {
-                at: turn::draw::AT,
-                each: turn::draw::EACH,
-            },
-        ),
-        (
-            held,
-            Turning {
-                at: held::turn::AT,
-                each: held::turn::EACH,
-            },
-        ),
-    ] {
+    for (shape, turning) in [(swept, fly.turn.draw), (held, fly.held.turn)] {
         let flight = Segment {
             shape,
             turning: Some(turning),

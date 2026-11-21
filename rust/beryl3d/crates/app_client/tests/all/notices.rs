@@ -64,11 +64,14 @@ fn scripted(beats: Vec<Vec<Act>>, change: impl FnOnce(&mut GameUpdate)) -> [Game
 /// `updates[1]`, whose script starts at the frame at 1 ms; and when each step of that script
 /// begins and ends, in nanoseconds since the client started.
 fn client(updates: [GameUpdate; 2]) -> (Client, Vec<(u64, u64)>) {
-    let mut client = Client::new(Config {
-        elements: 256,
-        draws: 1024,
-        name_bytes: 4096,
-    });
+    let mut client = Client::new(
+        crate::test_data::data(),
+        Config {
+            elements: 256,
+            draws: 1024,
+            name_bytes: 4096,
+        },
+    );
     client.handle(Input::Surface {
         size: Size {
             width: WIDTH,
@@ -131,7 +134,14 @@ fn a_fault_can_be_planted_while_a_banner_outlasts_its_script() {
         width: WIDTH,
         height: HEIGHT,
     };
-    let mut page = Page::new(Recording(messages).into(), Side::You, Layout::Desktop, size).unwrap();
+    let mut page = Page::new(
+        crate::test_data::data(),
+        Recording(messages).into(),
+        Side::You,
+        Layout::Desktop,
+        size,
+    )
+    .unwrap();
     let banner = page.steps().pop().expect("the turn banner");
     page.plant(Planted::Crowded, banner.middle).unwrap();
     assert!(

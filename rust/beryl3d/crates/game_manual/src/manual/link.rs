@@ -71,7 +71,7 @@ pub fn banner(view: &PlayerView, window: Size, top: f32, error: Option<&str>) ->
 }
 
 /// How far below the window's top the banner stands: under the safe area on the phone, and at
-/// `.table-link`'s padding (`flat.table.link` in `data/beryl3d/space.json`), at most a share of
+/// `.table-link`'s padding (`flat.table.link` in `data/beryl3d/space-constants.json`), at most a share of
 /// the window's height, on the desktop. The banner is at most `flat.table.link.width` wide.
 #[must_use]
 pub fn top(window: Size, phone: bool, safe_top: f32) -> f32 {

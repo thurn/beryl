@@ -27,7 +27,7 @@ fn a_written_recording_reads_back_and_replays_to_its_end() {
     let dir = folder("fixture");
     fixture::write("verbs-zones", &dir.join("verbs-zones.json")).expect("the recording writes");
     let mut recording = Fixture::read(&dir, "verbs-zones").expect("the recording reads back");
-    let mut client = Client::new(Config::LARGEST);
+    let mut client = Client::new(crate::test_data::data(), Config::LARGEST);
     client.handle(Input::Surface {
         size: Size {
             width: 852.0,

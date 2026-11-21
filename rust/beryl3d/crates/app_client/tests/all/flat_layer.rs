@@ -37,11 +37,14 @@ const HEIGHT: f32 = 900.0;
 const MS: u64 = 1_000_000;
 
 pub(super) fn client() -> Client {
-    let mut client = Client::new(Config {
-        elements: 256,
-        draws: 1024,
-        name_bytes: 4096,
-    });
+    let mut client = Client::new(
+        crate::test_data::data(),
+        Config {
+            elements: 256,
+            draws: 1024,
+            name_bytes: 4096,
+        },
+    );
     client.handle(Input::Surface {
         size: Size {
             width: WIDTH,
@@ -376,7 +379,13 @@ fn a_title_too_long_for_its_box_fails_text_fits() {
     let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
     layer.write(
         &mut builder,
-        &Table::default().camera().screen_plane(),
+        &Table::new(
+            crate::test_data::data(),
+            game_table::table::DESKTOP,
+            game_table::table::Window::default(),
+        )
+        .camera()
+        .screen_plane(),
         true,
     );
     let frame = builder.finish();
@@ -607,7 +616,13 @@ pub(super) fn write_layer(layer: &mut Layer, open: bool) -> Frame {
     builder.layout_work(layout_nodes, text_runs);
     layer.write(
         &mut builder,
-        &Table::default().camera().screen_plane(),
+        &Table::new(
+            crate::test_data::data(),
+            game_table::table::DESKTOP,
+            game_table::table::Window::default(),
+        )
+        .camera()
+        .screen_plane(),
         open,
     );
     builder.finish().clone()

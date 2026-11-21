@@ -18,11 +18,14 @@ use kit_ui::input::{
 
 /// A client on the Mac in a 1600 by 900 window, on the start screen.
 fn client_on_start() -> Client {
-    let mut client = Client::new(Config {
-        elements: 2048,
-        draws: 2048,
-        name_bytes: 65_536,
-    });
+    let mut client = Client::new(
+        crate::test_data::data(),
+        Config {
+            elements: 2048,
+            draws: 2048,
+            name_bytes: 65_536,
+        },
+    );
     client.handle(Input::Platform { mac: true });
     client.handle(Input::Surface {
         size: Size {

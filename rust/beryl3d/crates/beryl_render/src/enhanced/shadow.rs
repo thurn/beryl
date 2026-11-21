@@ -8,7 +8,7 @@
 //! depth map seen from the light, through an orthographic projection fitted to the part of the
 //! table the camera sees; the table and every sprite cast nothing.
 //!
-//! The map's size and depth biases are `enhanced.shadow` in `data/beryl3d/space.json`. Its
+//! The map's size and depth biases are `enhanced.shadow` in `data/beryl3d/space-constants.json`. Its
 //! `darkness` is `SHADOW_DARKNESS` in `shadow.wgsl`, because the Enhanced shader is one fixed
 //! source; a test holds the two equal, and `taps` to the shader's four.
 
@@ -36,12 +36,12 @@ const BELOW: f32 = 10.0;
 #[expect(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
-    reason = "a size in pixels from space.json"
+    reason = "a size in pixels from space-constants.json"
 )]
 const MAP: u32 = data::MAP as u32;
 #[expect(
     clippy::cast_possible_truncation,
-    reason = "a small whole number of depth steps from space.json"
+    reason = "a small whole number of depth steps from space-constants.json"
 )]
 const BIAS: i32 = data::BIAS as i32;
 

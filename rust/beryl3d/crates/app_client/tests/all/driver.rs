@@ -41,6 +41,7 @@ fn recording(views: &[ViewBuilder]) -> Recording {
 
 fn page(views: &[ViewBuilder]) -> Page {
     Page::new(
+        crate::test_data::data(),
         recording(views).into(),
         Side::You,
         Layout::Desktop,
@@ -184,7 +185,14 @@ fn views_the_game_plays_on_through_arrive_together() {
         width: 1600.0,
         height: 900.0,
     };
-    let mut page = Page::new(recording.into(), Side::You, Layout::Desktop, size).unwrap();
+    let mut page = Page::new(
+        crate::test_data::data(),
+        recording.into(),
+        Side::You,
+        Layout::Desktop,
+        size,
+    )
+    .unwrap();
     let moments = page.moments();
     assert!(moments.contains(&(Name::View(2), ms(400))), "{moments:?}");
     assert!(moments.contains(&(Name::View(3), ms(400))), "{moments:?}");

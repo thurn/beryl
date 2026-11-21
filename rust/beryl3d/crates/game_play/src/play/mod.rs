@@ -9,7 +9,7 @@
 //! - Scripts never overlap. An update that arrives while a script plays waits, and its script
 //!   starts as the one before ends.
 //! - When more than `catch_up.double` updates are waiting as a script starts, it plays twice as
-//!   fast, and past `catch_up.quadruple` four times as fast (`data/beryl3d/space.json`), so that
+//!   fast, and past `catch_up.quadruple` four times as fast (`data/beryl3d/space-constants.json`), so that
 //!   the table catches up with a session that runs ahead of it.
 //! - When the window changes shape or a row scrolls, every resting place is worked out again
 //!   and the playing script is compiled again for it. A segment under way keeps its start and

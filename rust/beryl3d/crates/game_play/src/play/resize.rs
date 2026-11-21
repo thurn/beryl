@@ -3,14 +3,23 @@
 //! resting places.
 
 use std::rc::Rc;
+use std::sync::Arc;
 
 use beryl_protocol::script::Table as Played;
 
 use super::Show;
 use super::playing::timings_of;
 use game_table::table::Window;
+use kit_base::data::Data;
 
 impl Show {
+    /// Replaces the tuning after finishing any script currently being compiled with it.
+    /// Call `resize` next to lay out the table and compile the outstanding scripts again.
+    pub fn set_data(&mut self, data: Arc<Data>) {
+        self.complete();
+        self.table.set_data(data);
+    }
+
     /// Holds the viewer's hand below the window while the opening shows it, or brings it back
     /// (`Table::set_hand_away`), placing every card again and compiling every script not yet
     /// ended again for it, as a new window does. Does nothing if the hand is already held so,

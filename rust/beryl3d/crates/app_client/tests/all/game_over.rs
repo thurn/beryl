@@ -24,6 +24,7 @@ fn over(outcome: OutcomeView) -> Page {
     let mut messages = vec![FixtureMessage::game_update(&update)];
     messages.insert(0, fixture_message(&messages, TokenMakers::NONE));
     let mut page = Page::new(
+        crate::test_data::data(),
         Recording(messages).into(),
         Side::You,
         Layout::Desktop,

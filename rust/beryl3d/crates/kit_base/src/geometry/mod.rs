@@ -71,7 +71,7 @@ impl Default for Window {
     }
 }
 
-/// A card's printed width and height (`card` in `space.json`).
+/// A card's printed width and height (`card` in `space-constants.json`).
 pub const CARD_WIDTH: f32 = crate::data::space::card::WIDTH;
 pub const CARD_HEIGHT: f32 = crate::data::space::card::HEIGHT;
 

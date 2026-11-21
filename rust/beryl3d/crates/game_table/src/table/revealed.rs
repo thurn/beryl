@@ -73,7 +73,7 @@ impl Table {
                 height,
             );
             let growing = Segment {
-                shape: Shape::Grown,
+                shape: Shape::Grown(self.data().verbs.showcase),
                 ..Segment::between(rest, rest, begins, Curve::LINEAR)
             };
             let look = Look {

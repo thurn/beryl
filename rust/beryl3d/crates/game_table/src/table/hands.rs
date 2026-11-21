@@ -4,6 +4,7 @@
 
 use beryl_protocol::protocol::{ObjectView, Side, ZoneName};
 use glam::{Quat, Vec2};
+use kit_base::data::verbs::LiftHand;
 
 use kit_base::pose::Pose;
 
@@ -29,7 +30,7 @@ pub(super) fn hand(
     placement: &mut Placement,
     objects: &[&ObjectView],
     (side, scroll): (Side, usize),
-    (data, strip): (HandData, f32),
+    (data, strip, lift): (HandData, f32, &LiftHand),
     camera: &Camera,
     cache: Option<&mut HandFits>,
 ) {
@@ -92,7 +93,7 @@ pub(super) fn hand(
     } else {
         fan_poses(shown, side, data, strip, camera, &mut lay);
     }
-    super::lifted::lay_picked(&picked, side, camera, data.ceiling, placement);
+    super::lifted::lay_picked(&picked, side, camera, data.ceiling, lift, placement);
 }
 
 /// Fans of each size for a single script, whose window and hand layout stay fixed. A script

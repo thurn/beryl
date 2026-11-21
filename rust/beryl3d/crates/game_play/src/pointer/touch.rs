@@ -105,7 +105,7 @@ impl Default for Touch {
     }
 }
 
-/// `milliseconds` as nanoseconds. The values in `space.json` are whole milliseconds.
+/// `milliseconds` as nanoseconds. The values in `space-constants.json` are whole milliseconds.
 #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 fn nanoseconds(milliseconds: f32) -> u64 {
     milliseconds as u64 * MILLISECOND

@@ -273,8 +273,14 @@ fn a_pile_opens_its_viewer_and_closes_again() {
         width: 393.0,
         height: 759.0,
     };
-    let mut page = Page::new(Recording(messages).into(), Side::You, Layout::Phone, size)
-        .expect("the view can be read");
+    let mut page = Page::new(
+        crate::test_data::data(),
+        Recording(messages).into(),
+        Side::You,
+        Layout::Phone,
+        size,
+    )
+    .expect("the view can be read");
     page.still();
     page.press("pile \"Your graveyard\"");
     page.step(Duration::from_millis(1000));

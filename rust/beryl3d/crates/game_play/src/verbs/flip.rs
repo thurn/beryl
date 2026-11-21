@@ -15,7 +15,7 @@ pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
     out.segment(
         subject,
         Segment {
-            shape: Shape::TurnedOver,
+            shape: Shape::TurnedOver(step.verbs.flip),
             ..Segment::between(from, to, step.own, step.curve)
         },
     );

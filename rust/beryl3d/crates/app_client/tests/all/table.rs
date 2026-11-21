@@ -8,7 +8,7 @@ use beryl_protocol::protocol::{
 use beryl_protocol::script::Reset;
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, script};
 use game_table::table::{
-    ABILITY_IDS, CARD_HEIGHT, CARD_WIDTH, Camera, DESKTOP, Scroll, Window, place,
+    ABILITY_IDS, CARD_HEIGHT, CARD_WIDTH, Camera, DESKTOP, Placement, Scroll, Window,
 };
 use glam::{Vec2, Vec3};
 use kit_base::pose::Pose;
@@ -17,6 +17,17 @@ use kit_probe::agent::checks::{duplicates, reachable};
 use kit_probe::agent::tree::{TreeOptions, tree};
 use kit_probe::agent::{Context, Layout};
 use kit_ui::input::{Insets, Size};
+
+fn place(
+    view: &PlayerView,
+    abilities: &[u32],
+    layout: &game_table::table::Layout,
+    camera: &Camera,
+    scroll: &Scroll,
+) -> Placement {
+    let data = crate::test_data::data();
+    game_table::table::place(view, abilities, layout, camera, scroll, &data.verbs.lift)
+}
 
 fn window(width: f32, height: f32) -> Window {
     Window {
@@ -27,11 +38,14 @@ fn window(width: f32, height: f32) -> Window {
 }
 
 fn client() -> Client {
-    Client::new(Config {
-        elements: 2048,
-        draws: 2048,
-        name_bytes: 65_536,
-    })
+    Client::new(
+        crate::test_data::data(),
+        Config {
+            elements: 2048,
+            draws: 2048,
+            name_bytes: 65_536,
+        },
+    )
 }
 
 /// The frame a client draws for `view` in a 1440 by 900 window.
@@ -404,7 +418,7 @@ fn lands_stand_untapped_first_with_each_name_together_in_first_appearance_order(
 }
 
 #[test]
-fn desktop_camera_is_the_data_in_space_json() {
+fn desktop_camera_is_the_data_in_space_constants_json() {
     let space: serde_json::Value = serde_json::from_str(kit_base::data::SPACE).unwrap();
     let pitch = space["layout"]["desktop"]["camera"]["pitch_degrees"]
         .as_f64()

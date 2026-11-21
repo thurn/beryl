@@ -6,7 +6,7 @@
 //! the stage it lies and leaned toward a vanishing point over the stage's middle
 //! (`ui/src/game/perspective.ts`). Its rows are stage positions: `ROWS` in
 //! `ui/src/game/tableRows.ts` and `sideRows` in `ui/src/game/battlefield.ts`, copied into
-//! `layout.desktop.web` in `space.json`.
+//! `layout.desktop.web` in `space-constants.json`.
 //!
 //! Beryl 3D keeps its own camera, fitted to Arena (`layout.desktop.camera`), and lays its cards
 //! flat on a table. For each row it finds the line of the table under the web's cards' centres,

@@ -6,6 +6,8 @@
 
 #[path = "../../game_probe/tests/common/mod.rs"]
 mod common;
+#[path = "../../../test_data.rs"]
+mod test_data;
 
 use kit_ui::input::Tier;
 use std::alloc::{GlobalAlloc, Layout, System};

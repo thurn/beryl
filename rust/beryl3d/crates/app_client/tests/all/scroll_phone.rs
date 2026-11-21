@@ -38,8 +38,14 @@ fn table(zone: ZoneName, name: &str, count: usize) -> ViewBuilder {
 
 fn page(view: &ViewBuilder, size: Size) -> Page {
     let messages = vec![FixtureMessage::game_update(&view.update())];
-    let mut page = Page::new(Recording(messages).into(), Side::You, Layout::Phone, size)
-        .expect("the page opens");
+    let mut page = Page::new(
+        crate::test_data::data(),
+        Recording(messages).into(),
+        Side::You,
+        Layout::Phone,
+        size,
+    )
+    .expect("the page opens");
     page.still();
     page
 }

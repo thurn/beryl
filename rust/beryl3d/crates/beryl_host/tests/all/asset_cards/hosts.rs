@@ -134,7 +134,7 @@ fn the_desktop_frame_loop_draws_start_game_and_result_with_real_assets() {
         game: Some(game),
         result: Some(result),
     };
-    let mut client = Client::new(Config::LARGEST);
+    let mut client = Client::new(crate::test_data::data(), Config::LARGEST);
     client.handle(Input::Agents(Vec::new()));
     Windowless::new(WindowlessOptions {
         size: Size {

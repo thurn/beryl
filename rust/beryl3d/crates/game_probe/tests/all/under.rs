@@ -18,7 +18,14 @@ fn placed(view: &PlayerView) -> Placement {
         safe_area: Insets::default(),
     };
     let camera = Camera::fit(DESKTOP.camera, window);
-    place(view, &[], &DESKTOP, &camera, &Scroll::default())
+    place(
+        view,
+        &[],
+        &DESKTOP,
+        &camera,
+        &Scroll::default(),
+        &crate::test_data::data().verbs.lift,
+    )
 }
 
 fn creature(builder: &mut ViewBuilder, side: Side, name: &str) -> ObjectId {

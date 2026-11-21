@@ -9,7 +9,7 @@
 //! tone's core color, as the web's ribbon shader lights them (`ui/src/stage/glow.ts`). Its
 //! width along its length follows the web stage's `widthOf` (`ui/src/stage/light.ts`), its
 //! opacity the fade of its `Open`, and its color what it says.
-//! The values are `light` in `data/beryl3d/space.json`: lengths in millimetres at the arrow's
+//! The values are `light` in `data/beryl3d/space-constants.json`: lengths in millimetres at the arrow's
 //! target, which `Camera::points_per_millimetre` turns into points, and shares as they are.
 
 use std::f32::consts::PI;

@@ -7,6 +7,9 @@
 //! card following it as it flies, nor elements of the screen fading in and moving
 //! (docs/beryl-3d.md, "The frame": no allocation). This binary counts every heap allocation, so it holds one test.
 
+#[path = "../../../test_data.rs"]
+mod test_data;
+
 mod common;
 
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -120,11 +123,14 @@ fn deciding() -> Input {
 
 /// A client with room for these frames, drawing in a 1440 by 900 window.
 fn client() -> Client {
-    let mut client = Client::new(Config {
-        elements: 256,
-        draws: 1024,
-        name_bytes: 4096,
-    });
+    let mut client = Client::new(
+        crate::test_data::data(),
+        Config {
+            elements: 256,
+            draws: 1024,
+            name_bytes: 4096,
+        },
+    );
     client.handle(Input::Surface {
         size: Size {
             width: 1440.0,
@@ -281,11 +287,14 @@ fn the_turn_banner_allocates_nothing() {
 
 /// A battlefield of 255 attackers, each wearing its wedge as it fades in.
 fn a_frame_of_255_attackers_allocates_nothing() {
-    let mut client = Client::new(Config {
-        elements: 512,
-        draws: 1024,
-        name_bytes: 16_384,
-    });
+    let mut client = Client::new(
+        crate::test_data::data(),
+        Config {
+            elements: 512,
+            draws: 1024,
+            name_bytes: 16_384,
+        },
+    );
     client.handle(Input::Surface {
         size: Size {
             width: 1440.0,
@@ -332,7 +341,7 @@ fn a_frame_of_255_attackers_allocates_nothing() {
 /// A frame of a table of 255 creatures, each with its power and toughness and two kinds of
 /// counters, allocates nothing.
 fn a_badged_table_allocates_nothing() {
-    let mut client = Client::new(Config::LARGEST);
+    let mut client = Client::new(crate::test_data::data(), Config::LARGEST);
     client.handle(Input::Surface {
         size: Size {
             width: 1440.0,
@@ -407,11 +416,14 @@ fn tables_allocate_nothing() {
 /// The frames while a hand card rises under the mouse, and while it falls back as the mouse moves
 /// onto the next card, allocate nothing.
 fn a_rising_hand_card_allocates_nothing() {
-    let mut client = Client::new(Config {
-        elements: 256,
-        draws: 1024,
-        name_bytes: 4096,
-    });
+    let mut client = Client::new(
+        crate::test_data::data(),
+        Config {
+            elements: 256,
+            draws: 1024,
+            name_bytes: 4096,
+        },
+    );
     client.handle(Input::Surface {
         size: Size {
             width: 1440.0,
@@ -476,7 +488,11 @@ fn a_moved_float_allocates_nothing() {
     let mut layer = Layer::new();
     layer.float(floats::LIFE[0], Some(text("20")));
     let mut frame = Frame::with_capacity(64, 256, 1024);
-    let table = Table::default();
+    let table = Table::new(
+        crate::test_data::data(),
+        game_table::table::DESKTOP,
+        game_table::table::Window::default(),
+    );
     let before = ALLOCATIONS.load(Ordering::Relaxed);
     layer.set_float_look(
         floats::LIFE[0],
@@ -559,7 +575,11 @@ fn a_transition_allocates_nothing() {
     layer.show(Some(with_transitions(
         screen(40.0, 0.8).child(text("Mulligan")),
     )));
-    let table = Table::default();
+    let table = Table::new(
+        crate::test_data::data(),
+        game_table::table::DESKTOP,
+        game_table::table::Window::default(),
+    );
     let mut frame = Frame::with_capacity(64, 256, 1024);
     for now in (0..12).map(|index| common::MS * (1_000 + index * 16)) {
         let before = ALLOCATIONS.load(Ordering::Relaxed);
@@ -601,11 +621,14 @@ fn changing_the_look_of_a_grid_allocates_nothing() {
 /// The frames while a battlefield row slides after a turn of the wheel scrolls it, and the
 /// counts off its ends change, allocate nothing.
 fn a_scrolling_row_allocates_nothing() {
-    let mut client = Client::new(Config {
-        elements: 512,
-        draws: 2048,
-        name_bytes: 8192,
-    });
+    let mut client = Client::new(
+        crate::test_data::data(),
+        Config {
+            elements: 512,
+            draws: 2048,
+            name_bytes: 8192,
+        },
+    );
     client.handle(Input::Surface {
         size: Size {
             width: 1440.0,

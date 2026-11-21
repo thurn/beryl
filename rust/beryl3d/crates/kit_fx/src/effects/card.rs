@@ -2,7 +2,7 @@
 //! washes it white under a burst of light, `dissolve` darkens it and breaks it up from the top
 //! down, `dim` darkens and fades it, `blanch` washes it white and fades it, and `cover` washes
 //! it white while its face changes. Each is a function of the run's eased progress alone, with
-//! the shares of the run in `effects.<name>` of `data/beryl3d/space.json`, set from the
+//! the shares of the run in `effects.<name>` of `data/beryl3d/space-constants.json`, set from the
 //! keyframes of `ui/src/stage/effects.css`.
 
 use beryl_protocol::script::Subject;

@@ -52,11 +52,14 @@ fn every_card_in_a_hand_or_on_the_stack_casts_one_shadow_and_no_card_lying_down_
         builder.card(ZoneName::Exile, side, "Banished");
     }
     builder.script(ScriptBuilder::reset().build());
-    let mut client = Client::new(Config {
-        elements: 2048,
-        draws: 2048,
-        name_bytes: 65_536,
-    });
+    let mut client = Client::new(
+        crate::test_data::data(),
+        Config {
+            elements: 2048,
+            draws: 2048,
+            name_bytes: 65_536,
+        },
+    );
     client.handle(Input::Surface {
         size: Size {
             width: 1440.0,
@@ -167,11 +170,14 @@ fn a_card_in_hand_casts_a_contact_shadow_in_baseline_and_none_in_enhanced() {
         .card(ZoneName::Battlefield, Side::You, "Island")
         .types = vec![CardType::Land];
     builder.script(ScriptBuilder::reset().build());
-    let mut client = Client::new(Config {
-        elements: 256,
-        draws: 1024,
-        name_bytes: 8192,
-    });
+    let mut client = Client::new(
+        crate::test_data::data(),
+        Config {
+            elements: 256,
+            draws: 1024,
+            name_bytes: 8192,
+        },
+    );
     client.handle(Input::Surface {
         size: Size {
             width: 1440.0,

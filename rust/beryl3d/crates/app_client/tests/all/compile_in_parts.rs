@@ -43,7 +43,7 @@ fn compiles_in_parts(
     (beats, per_beat): (usize, usize),
     frames: usize,
 ) {
-    let table = Table::new(DESKTOP, window(1440.0, 900.0));
+    let table = Table::new(crate::test_data::data(), DESKTOP, window(1440.0, 900.0));
     let times: Vec<u64> = (0..420).map(|frame| frame * 50 * MS / 3).collect();
     let in_time = compile_in_parts(&table, (before, after), (&times, 0));
     let parts = compile_in_parts(&table, (before, after), (&times, STEPS_PER_ADVANCE));
@@ -130,7 +130,7 @@ type Frames = Vec<(Vec<kit_frame::frame::Draw>, u32)>;
 /// before each, handing over each tick's updates together once the tick before has played out,
 /// and returns the frames from when the last tick's updates arrive.
 fn played(ticks: &[&[GameUpdate]], whole: bool) -> Frames {
-    let mut client = Client::new(Config::LARGEST);
+    let mut client = Client::new(crate::test_data::data(), Config::LARGEST);
     if whole {
         client.compile_whole();
     }

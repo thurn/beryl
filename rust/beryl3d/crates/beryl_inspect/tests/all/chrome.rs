@@ -49,7 +49,7 @@ impl Table {
             panic!("{name}'s last view asks the viewer");
         };
         let decision = decision.id;
-        let mut client = Client::new(Config::LARGEST);
+        let mut client = Client::new(crate::test_data::data(), Config::LARGEST);
         client.handle(Input::Surface {
             size: SIZE,
             scale: 1.0,

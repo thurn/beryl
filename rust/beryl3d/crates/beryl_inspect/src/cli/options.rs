@@ -79,7 +79,7 @@ pub struct Options {
 /// How fast a recording's scripts play while many updates wait to play.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Pace {
-    /// Faster, as the app catches up (`catch_up` in `data/beryl3d/space.json`).
+    /// Faster, as the app catches up (`catch_up` in `data/beryl3d/space-constants.json`).
     CatchUp,
     /// At real time, as the web interface plays every script.
     RealTime,

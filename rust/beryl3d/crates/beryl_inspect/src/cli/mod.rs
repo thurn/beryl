@@ -64,7 +64,26 @@ impl Printed {
     }
 }
 
-const COMMANDS: [Command; 9] = [
+const COMMANDS: [Command; 10] = [
+    Command {
+        name: "data",
+        summary: "validate the client tuning files",
+        argument: "",
+        examples: [
+            ("just b3d data", "validate tuning from this checkout"),
+            (
+                "BERYL3D_DATA=/tmp/tuning just b3d data",
+                "validate an alternate directory",
+            ),
+        ],
+        spec: Spec {
+            recording: false,
+            values: &[],
+            switches: &[],
+        },
+        own: &[],
+        run: validate_data,
+    },
     Command {
         name: "list",
         summary: "every recording whose name starts with the prefix, with its length and views",
@@ -317,6 +336,16 @@ const COMMANDS: [Command; 9] = [
     },
 ];
 
+fn validate_data(options: &Options) -> Result<Printed, Usage> {
+    if let Some(argument) = options.rest.first() {
+        return Err(Usage(format!("data takes no argument, got {argument:?}")));
+    }
+    Ok(Printed::text(format!(
+        "just b3d data\nValidated tuning in {}\n",
+        crate::data::directory().display()
+    )))
+}
+
 /// Runs the command line `args`, the arguments after the program's name.
 #[must_use]
 pub fn main(args: &[String]) -> Ran {
@@ -347,8 +376,10 @@ pub fn main(args: &[String]) -> Ran {
             ..Ran::default()
         };
     }
-    let printed = Options::parse(command.name, rest, command.spec)
-        .and_then(|options| (command.run)(&options));
+    let printed = Options::parse(command.name, rest, command.spec).and_then(|options| {
+        crate::data::checkout().map_err(Usage)?;
+        (command.run)(&options)
+    });
     match printed {
         Ok(printed) => Ran {
             stdout: printed.text,

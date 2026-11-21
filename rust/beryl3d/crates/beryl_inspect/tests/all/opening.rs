@@ -110,7 +110,7 @@ fn a_card_clicked_in_the_row_while_putting_on_the_bottom_clicks_the_prompt_on_it
         panic!("the last view asks the viewer");
     };
     let (decision, revision) = (decision.id, decision.prompt.revision);
-    let mut client = Client::new(Config::LARGEST);
+    let mut client = Client::new(crate::test_data::data(), Config::LARGEST);
     client.handle(Input::Surface {
         size: SIZE,
         scale: 1.0,

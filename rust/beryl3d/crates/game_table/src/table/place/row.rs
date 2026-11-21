@@ -147,7 +147,7 @@ pub(crate) fn rezoom(
     rules: Rules,
     changed: impl Fn(Side, RowName) -> bool,
 ) -> Zooms {
-    let (layout, _, _, fits, ids) = rules;
+    let (layout, _, _, fits, ids, _) = rules;
     if layout.fitted.is_none() {
         return Zooms::default();
     }

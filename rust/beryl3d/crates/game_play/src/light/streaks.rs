@@ -29,7 +29,7 @@ use glam::{Vec2, Vec3, Vec3Swizzles};
 
 use super::{Lit, StreakRun};
 use crate::play::{Reach, Scene};
-use kit_base::data::space::verbs::streak;
+use kit_base::data::verbs::Streak;
 use kit_base::tokens::color;
 use kit_frame::frame::{Band, Draw, FrameBuilder, sprites};
 use kit_fx::effects::light::quad;
@@ -40,6 +40,7 @@ pub const RECORDS: usize = 8;
 
 /// Writes the records of the streaks of mana and damage in `lit` as they are at `now`.
 pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<'_>) {
+    let tuning = &scene.table().data().verbs.streak;
     let runs = lit.streaks();
     for (index, run) in runs.iter().enumerate() {
         if now < run.over.from || now >= run.over.to {
@@ -66,7 +67,7 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
             Some(Subject::Player { .. }) | None => 1.0,
             Some(source) => -scene.toward(source),
         };
-        let comet = Comet::new(from, to, through, run.amount, nth, faces);
+        let comet = Comet::new(from, to, through, run.amount, nth, faces, tuning);
         let eye = scene.table().camera().eye;
         let tint = tint(run.stream);
         // The glow where it left, in its color with a hot middle, which fades as its head
@@ -74,7 +75,7 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
         // at `1.1 * (1 - through)^0.7`.
         let orb = 1.1 * (1.0 - through).powf(0.7);
         let source = comet.a;
-        for (size, color) in [(streak::ORB, tint), (streak::ORB * 0.5, hot(tint))] {
+        for (size, color) in [(tuning.orb, tint), (tuning.orb * 0.5, hot(tint))] {
             let across = 2.0 * size * comet.wide;
             builder.draw(
                 Band::Glows,
@@ -98,7 +99,7 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
             let t = comet.back + lit * share;
             let at = comet.at(t);
             let tangent = comet.tangent(t);
-            let half = comet.wide * share * share * streak::RIBBON * streak::HALO;
+            let half = comet.wide * share * share * tuning.ribbon * tuning.halo;
             let long = (2.0 * spacing).max(2.0 * half);
             // The material lights a record from the tail at `head - tail` to the head at
             // `head`, in units of the record's own length, and fades it from the head back. So
@@ -118,7 +119,7 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
             );
         }
         // The hot point at its head (the web's dot `5` times the head's width across).
-        let across = streak::DOT * comet.wide;
+        let across = tuning.dot * comet.wide;
         builder.draw(
             Band::Glows,
             Draw::glow(
@@ -202,16 +203,24 @@ impl Comet {
     /// `amount` units, the `nth` after the first to leave that place for that target together.
     /// It rises to the side of its way that `faces` says: away from the viewer for 1, toward
     /// them for -1.
-    fn new(from: Reach, to: Reach, through: f32, amount: u8, nth: usize, faces: f32) -> Self {
+    fn new(
+        from: Reach,
+        to: Reach,
+        through: f32,
+        amount: u8,
+        nth: usize,
+        faces: f32,
+        tuning: &Streak,
+    ) -> Self {
         let (a, b) = (from.pose.position, to.pose.position);
         let way = (b - a).xy();
         let far = way.length();
         // Those of a sheaf rise on either side of the way by turns, each pair higher.
         #[expect(clippy::cast_precision_loss, reason = "a few streaks at once")]
         let pair = (nth / 2) as f32;
-        let sheaf = if nth % 2 == 1 { -1.0 } else { 1.0 } * (1.0 + streak::FAN * pair);
+        let sheaf = if nth % 2 == 1 { -1.0 } else { 1.0 } * (1.0 + tuning.fan * pair);
         let high = from.half.y.max(to.half.y);
-        let rise = (streak::BOW * far).min(streak::RISE * 2.0 * high) * sheaf;
+        let rise = (tuning.bow * far).min(tuning.rise * 2.0 * high) * sheaf;
         // The side of the way `faces` says, as the web's `side` picks it: the way's left turned
         // by the sign of how far it goes across the screen, and for a way straight up or down
         // the screen, its left for a source that faces away and its right for one that faces
@@ -219,11 +228,11 @@ impl Comet {
         let across = if way.x == 0.0 { 1.0 } else { way.x.signum() };
         let side = way.perp().normalize_or(Vec2::X) * across * faces;
         let c = (a + b) * 0.5 + (side * rise).extend(0.0);
-        let units = f32::from(amount.max(1)).min(streak::UNITS);
-        let wide = (streak::HEAD * to.half.x).clamp(streak::LEAST, streak::MOST)
-            * (1.0 + streak::MORE * (units - 1.0));
+        let units = f32::from(amount.max(1)).min(tuning.units);
+        let wide = (tuning.head * to.half.x).clamp(tuning.least, tuning.most)
+            * (1.0 + tuning.more * (units - 1.0));
         // The tail is drawn in as the head comes to land.
-        let back = (through - streak::TAIL * (1.0 - through.powi(3))).max(0.0);
+        let back = (through - tuning.tail * (1.0 - through.powi(3))).max(0.0);
         Self {
             a,
             c,

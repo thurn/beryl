@@ -329,6 +329,7 @@ MODULES: tuple[ModuleType, ...] = (
 )
 
 OWN_COMMANDS: tuple[Command, ...] = (
+    b3d_command("data", "validate the client tuning files", single=True),
     b3d_command(
         "list",
         "every recording whose name starts with a prefix, with its length and views",

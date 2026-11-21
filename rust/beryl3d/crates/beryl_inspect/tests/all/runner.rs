@@ -139,11 +139,18 @@ fn a_phone_tests_name_opens_the_same_layout_and_insets_in_test_tree_and_check() 
     // none, and `tree` prints the test's page.
     let tested = test.page().expect("the page opens").tree();
     let recording = pages::recording("pay-default", Side::You).expect("the recording");
-    let bare = Page::new(recording.into(), Side::You, Layout::Phone, size)
-        .expect("the page opens")
-        .tree();
+    let bare = Page::new(
+        crate::test_data::data(),
+        recording.into(),
+        Side::You,
+        Layout::Phone,
+        size,
+    )
+    .expect("the page opens")
+    .tree();
     assert_ne!(tested, bare, "the safe area changed nothing on the phone");
     let inset = Page::new(
+        crate::test_data::data(),
         pages::recording("pay-default", Side::You)
             .expect("the recording")
             .into(),

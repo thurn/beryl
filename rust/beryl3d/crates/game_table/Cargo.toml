@@ -19,3 +19,7 @@ kit_space.workspace = true
 kit_fx.workspace = true
 kit_scene.workspace = true
 kit_probe.workspace = true
+
+[dev-dependencies]
+# Reads the tuning fixtures and records their paths for Ignite.
+beryl_test_files = { path = "../../../crates/beryl_test_files" }

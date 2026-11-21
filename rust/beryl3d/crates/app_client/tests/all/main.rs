@@ -5,6 +5,9 @@
 //! because each installs a counting global allocator, and a binary has only one. The tests'
 //! shared table and scripts, `common`, sit beside them.
 
+#[path = "../../../../test_data.rs"]
+mod test_data;
+
 mod bug_report;
 mod checks;
 #[path = "../common/mod.rs"]

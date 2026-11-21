@@ -45,7 +45,14 @@ fn page(messages: Vec<FixtureMessage>) -> Page {
 }
 
 fn page_at(messages: Vec<FixtureMessage>, size: Size) -> Page {
-    let mut page = Page::new(Recording(messages).into(), Side::You, Layout::Desktop, size).unwrap();
+    let mut page = Page::new(
+        crate::test_data::data(),
+        Recording(messages).into(),
+        Side::You,
+        Layout::Desktop,
+        size,
+    )
+    .unwrap();
     page.still();
     page
 }
@@ -155,7 +162,7 @@ fn the_export_button_asks_the_host_to_export_bug_reports() {
 fn the_first_view_after_the_agents_shows_the_game() {
     // The live app's session thread sends the agents as soon as it has looked for a game to
     // resume, and a resumed game's first view may reach the client after them.
-    let mut client = Client::new(Config::LARGEST);
+    let mut client = Client::new(crate::test_data::data(), Config::LARGEST);
     let screen = |client: &mut Client| {
         let frame = client.frame(0);
         agent::tree(frame, &TreeOptions::default()).expect("the whole tree needs no locator")

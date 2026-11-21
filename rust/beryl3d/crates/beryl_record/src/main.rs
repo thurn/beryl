@@ -9,6 +9,10 @@ mod recorder;
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
+    if let Err(why) = beryl_inspect::data::checkout() {
+        eprintln!("record: {why}");
+        return ExitCode::FAILURE;
+    }
     let root = beryl_inspect::recordings::root();
     match beryl_inspect::recordings::build(&recorder::Cli { root }) {
         Ok(path) => {

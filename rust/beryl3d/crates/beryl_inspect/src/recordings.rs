@@ -144,6 +144,7 @@ pub fn weight(name: &str, seat: Seat) -> usize {
 ///
 /// When the pack cannot be built or read.
 pub fn list(prefix: &str) -> Result<Vec<Listed>, String> {
+    crate::data::checkout()?;
     let opened = opened()?;
     let entries: Vec<&Entry> = opened
         .entries
@@ -203,8 +204,14 @@ fn length(entry: &Entry) -> Option<u64> {
     let recording = Recording(messages);
     // A recording the client cannot play has no length; its tests say why.
     std::panic::catch_unwind(|| {
-        let mut page =
-            Page::new(recording.into(), Side::You, Layout::Desktop, LENGTH_WINDOW).ok()?;
+        let mut page = Page::new(
+            crate::data::checkout().ok()?,
+            recording.into(),
+            Side::You,
+            Layout::Desktop,
+            LENGTH_WINDOW,
+        )
+        .ok()?;
         page.moments().last().map(|(_, at)| at.0 / 1_000_000)
     })
     .ok()

@@ -37,6 +37,8 @@ game_probe = { workspace = true, optional = true }
 glam = "0.34.3"
 
 [dev-dependencies]
+# Reads the tuning fixtures and records their paths for Ignite.
+beryl_test_files = { path = "../../../crates/beryl_test_files" }
 # Supplies face records from sample decks to the asset preparation tests.
 beryl_card_records = { path = "../../../crates/beryl_card_records" }
 # Encodes a synthetic JPEG for the asset preparation tests.

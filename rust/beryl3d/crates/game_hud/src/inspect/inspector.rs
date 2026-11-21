@@ -10,7 +10,7 @@
 //! `pointer-events: none`, so the card under it stays hovered.
 //!
 //! Its numbers are the web's, on its stage 900 pixels tall (`layout.desktop.inspector` in
-//! `data/beryl3d/space.json`). The stage here is as tall as the window and as wide as the
+//! `data/beryl3d/space-constants.json`). The stage here is as tall as the window and as wide as the
 //! window's shape makes it, as the tray's is (`table::tray`), and a place on it is turned into
 //! logical points of the window.
 

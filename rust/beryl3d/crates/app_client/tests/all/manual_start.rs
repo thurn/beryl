@@ -29,11 +29,14 @@ fn table_view(
 
 /// A client on the Mac in a 1600 by 900 window that has been given `view`.
 fn client_at(view: &beryl_protocol::PlayerView) -> Client {
-    let mut client = Client::new(Config {
-        elements: 2048,
-        draws: 2048,
-        name_bytes: 65_536,
-    });
+    let mut client = Client::new(
+        crate::test_data::data(),
+        Config {
+            elements: 2048,
+            draws: 2048,
+            name_bytes: 65_536,
+        },
+    );
     client.handle(Input::Platform { mac: true });
     client.handle(Input::Surface {
         size: Size {

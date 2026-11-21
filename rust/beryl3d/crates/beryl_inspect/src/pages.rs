@@ -174,9 +174,15 @@ impl Recorded for Page {
 /// When there is no such recording for `seat`, or it cannot be read.
 pub fn page(name: &str, seat: Side, layout: Layout, size: Size) -> Result<Page, String> {
     let recording = recording(name, seat)?;
-    let mut page = Page::new(recording.into(), seat, layout, size)
-        .map_err(|error| format!("{name}: {error}"))?
-        .named(name);
+    let mut page = Page::new(
+        crate::data::checkout()?,
+        recording.into(),
+        seat,
+        layout,
+        size,
+    )
+    .map_err(|error| format!("{name}: {error}"))?
+    .named(name);
     if layout == Layout::Phone {
         // Only here, since giving a page its safe area sets its client up again.
         page = page.with_safe_area(safe_area(layout));

@@ -66,9 +66,12 @@ impl Draw for Trees {
 fn play(script: &str, ticks: u64) -> (Vec<String>, Option<Result<(), String>>) {
     let drive = Drive::parse("test", script).expect("the script reads");
     let fixture = Fixture::new("verbs-zones", Side::You).expect("the recording reads");
-    let mut frames = FrameLoop::new(Client::new(Config::LARGEST), TestTicks)
-        .with_feed(Box::new(Replay(fixture)))
-        .driven(Some(drive));
+    let mut frames = FrameLoop::new(
+        Client::new(crate::test_data::data(), Config::LARGEST),
+        TestTicks,
+    )
+    .with_feed(Box::new(Replay(fixture)))
+    .driven(Some(drive));
     frames.handle(Input::Surface {
         size: Size {
             width: 1600.0,

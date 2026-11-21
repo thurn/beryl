@@ -7,7 +7,7 @@
 //! page, and each sample in a panel is at the web's `At` point or in its `CaptionAt` box, in
 //! points from the inside of the panel's border, as CSS places an absolute child in its parent's
 //! padding box. Those points, and the boxes the web's text and samples take, are
-//! `flat.gallery.desktop` in `data/beryl3d/space.json`.
+//! `flat.gallery.desktop` in `data/beryl3d/space-constants.json`.
 
 mod lower;
 

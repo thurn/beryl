@@ -1,3 +1,8 @@
-//! The tables in `data/beryl3d`, written as constants by the build script.
+//! Validated tuning data supplied by the host, and the constants awaiting conversion.
+
+mod tuning;
+pub mod verbs;
+
+pub use tuning::{Audit, Data};
 
 include!(concat!(env!("OUT_DIR"), "/data.rs"));

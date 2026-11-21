@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import bisect
 import json
+import os
 import re
+import subprocess
 import sys
 import tomllib
 from pathlib import Path
@@ -68,6 +70,7 @@ SCENE_DEPENDENCIES: set[str] = SCENE_CRATES | {
     "parley",
     "serde",
     "serde_json",
+    "serde_path_to_error",
 }
 # What beryl_inspect's manifest may not name: the inspector reads a scene with no GPU.
 INSPECT_BANNED: tuple[str, ...] = (
@@ -301,6 +304,31 @@ def data_names(root: Path) -> list[str]:
         for key in json.loads(space.read_text()).get("verbs", {})
         if key not in known
     ]
+
+
+def b3d_data(root: Path) -> list[str]:
+    """Run the inspector's loader against the tuning files in this checkout."""
+    done = subprocess.run(
+        [
+            "cargo",
+            "run",
+            "--locked",
+            "--quiet",
+            "-p",
+            "beryl_inspect",
+            "--bin",
+            "b3d",
+            "--",
+            "data",
+        ],
+        cwd=root / "rust" / "beryl3d",
+        env={**os.environ, "BERYL3D_DATA": str(root / "data" / "beryl3d")},
+        capture_output=True,
+        text=True,
+        errors="replace",
+        check=False,
+    )
+    return [] if done.returncode == 0 else [done.stderr.strip() or done.stdout.strip()]
 
 
 # Elements take their sizes from kit_base design tokens (docs/beryl-3d.md, "Elements").
@@ -696,7 +724,13 @@ def protocol_literals_step(*_args: str) -> int:
     return report("protocol-literals", protocol_literals(paths.REPO))
 
 
+def b3d_data_step(*_args: str) -> int:
+    """The `b3d-data` check."""
+    return report("b3d-data", b3d_data(paths.REPO))
+
+
 STEPS = {
+    "b3d-data": b3d_data_step,
     "scene-purity": scene_purity_step,
     "levels": levels_step,
     "lints-match": lints_match_step,

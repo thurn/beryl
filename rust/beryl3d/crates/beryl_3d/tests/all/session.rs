@@ -60,11 +60,14 @@ fn the_frame_loop_draws_every_tick_while_the_session_is_busy() {
         move || Held { releases: held },
         Inbox::new(sender, || true),
     );
-    let client = Client::new(Config {
-        elements: 64,
-        draws: 64,
-        name_bytes: 1024,
-    });
+    let client = Client::new(
+        crate::test_data::data(),
+        Config {
+            elements: 64,
+            draws: 64,
+            name_bytes: 1024,
+        },
+    );
     let mut frames = FrameLoop::new(client, NoTicks);
     let mut counter = Counter(0);
     let mut sent = 0;

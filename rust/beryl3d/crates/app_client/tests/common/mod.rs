@@ -20,11 +20,14 @@ use kit_ui::input::{Insets, Size};
     reason = "The playback allocation test uses only the game fixtures"
 )]
 pub fn counting(acts: Vec<Act>) -> (Client, Vec<(u64, u64)>) {
-    let mut client = Client::new(Config {
-        elements: 256,
-        draws: 1024,
-        name_bytes: 4096,
-    });
+    let mut client = Client::new(
+        crate::test_data::data(),
+        Config {
+            elements: 256,
+            draws: 1024,
+            name_bytes: 4096,
+        },
+    );
     client.handle(Input::Surface {
         size: Size {
             width: 1440.0,

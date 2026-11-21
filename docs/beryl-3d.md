@@ -819,8 +819,8 @@ code usually goes wrong.
 ### Motion the pointer drives
 
 Three motions follow the pointer and not a script. Their values are in
-`data/beryl3d/space.json`, under `pointer`. They start as copies of the
-constants in the web interface's `ui/src/stage/raised.ts` and `heft.ts`.
+`data/beryl3d/space-constants.json`, under `pointer`. They start as copies of
+the constants in the web interface's `ui/src/stage/raised.ts` and `heft.ts`.
 
 - **Where the pointer is, is state. When it moved is not.** `handle` stores the
   pointer's latest position and phase. `frame` finds what the pointer is over
@@ -1062,7 +1062,7 @@ There are four hosts.
 **Choosing a frame rate** (decision C18). Every host feeds the time between its
 animating frames to one rule, `RateRule` in `beryl_host::rate`, through the
 frame loop that all hosts share, and carries out the steps it returns. Its
-thresholds are `frame_rate` in `data/beryl3d/space.json`.
+thresholds are `frame_rate` in `data/beryl3d/space-constants.json`.
 
 - **A frame misses the rate** when more than `late_intervals` (1.5) of the
   chosen rate's intervals passed since the frame before it while the ticks ran.
@@ -1309,20 +1309,20 @@ camera, how game objects are placed in it and how verbs move them.
   the art frame printed on each tile and gives each its own aspect ratio: the
   sides of untapped cards fix the pitch, and the slight turn of tapped cards
   fixes the field of view. The fitted values are data: the desktop layout's
-  camera, rows and piles are `layout.desktop` in `data/beryl3d/space.json`, the
-  hands and the stack, which are placed relative to the camera, are `hand`,
-  `opponent_hand` and `stack`, contact shadows are `shadow`, and the card's size
-  is `card`. A build script turns the file into constants by one rule that names
-  no key.
+  camera, rows and piles are `layout.desktop` in
+  `data/beryl3d/space-constants.json`, the hands and the stack, which are placed
+  relative to the camera, are `hand`, `opponent_hand` and `stack`, contact
+  shadows are `shadow`, and the card's size is `card`. A build script turns the
+  file into constants by one rule that names no key.
 
   The phone camera is not fitted to Arena: `just video list` found no local
   recordings when it was written. Its source is the web interface's portrait
   layout instead. The fixed orientation (pitch 10 degrees from straight down,
-  field of view 24.29 degrees, both in `layout.phone` of `space.json`) was
-  chosen so that a tapped card in the far row keeps a 44-point square at 375 by
-  647 points. Only the distance is fitted: the required rectangle must match the
-  battlefield rectangle that `phoneLayout` (`ui/src/mobile/layout.ts`) gives at
-  393 by 759, sized as `useViewport` (`ui/src/mobile/chrome.tsx`) sizes the
+  field of view 24.29 degrees, both in `layout.phone` of `space-constants.json`)
+  was chosen so that a tapped card in the far row keeps a 44-point square at 375
+  by 647 points. Only the distance is fitted: the required rectangle must match
+  the battlefield rectangle that `phoneLayout` (`ui/src/mobile/layout.ts`) gives
+  at 393 by 759, sized as `useViewport` (`ui/src/mobile/chrome.tsx`) sizes the
   viewport. That is a column inside 8-point gutters, from the top safe inset
   plus 48 points to the window's height less the hand band and 60 points. With
   safe insets of 44 and 34 points the projected edges measure (8.01, 92.00,
@@ -1340,31 +1340,32 @@ its own line of sight, nearer or farther:
 - A wider window then shows more table cloth at the sides, and a narrower one
   moves the camera back.
 
-The phone layout (`table::phone`, `layout.phone` in `space.json`) follows the
-web interface's portrait bands (`phoneLayout` in `ui/src/mobile/layout.ts`): the
-opponent's strip under the top safe inset, the battlefield, the viewer's strip
-and the hand, which runs off the window's bottom. Its camera fits the required
-rectangle inside the battlefield's part of the window rather than the whole safe
-area, and at 393 by 759 the rectangle fills it to within a hundredth of a point.
-It looks down at 10 degrees from straight down, against the desktop's 27, so
-that a tapped card in the far row keeps a 44-point square even at 375 by 647.
-Each side has two rows, as on the desktop, because the web's separate lands and
-other-permanents bands are too short for the phone's touch target. The middle
-band between the creatures' rows stays the same height whether or not the stack
-holds anything, and the stack's items stand side by side about its middle in one
-row. A stack with more items than fit across shows its top items, as many as fit
-beside room at each end for a count (`stack.count_room`), and scrolls as a
-battlefield row does: rows of items stacked over the battlefield would cover the
-creatures' rows past what a press can reach. The viewer's hand, too, shows only
-as many cards as keep their strips in rows whose top edge stays low enough that
-each card of the viewer's back row, tapped, keeps a strip of 44 points and a
-cell of the hit test's grid at each edge above it (`hand_ceiling`), and scrolls
-(below, "How a row scrolls"). A card the viewer handles from their hand, or
-picked in a hidden pick, stands with its top edge at that height too. The rows
-never move for the stack, so an item keeps the web's size, 68 points wide, only
-where the band is tall enough: at 375 by 647 it is 51 points wide, so that a
-tapped creature under it, 56 points tall there, keeps an uncovered strip of 44
-points and a cell of the hit test's grid at each edge (`stack_height`).
+The phone layout (`table::phone`, `layout.phone` in `space-constants.json`)
+follows the web interface's portrait bands (`phoneLayout` in
+`ui/src/mobile/layout.ts`): the opponent's strip under the top safe inset, the
+battlefield, the viewer's strip and the hand, which runs off the window's
+bottom. Its camera fits the required rectangle inside the battlefield's part of
+the window rather than the whole safe area, and at 393 by 759 the rectangle
+fills it to within a hundredth of a point. It looks down at 10 degrees from
+straight down, against the desktop's 27, so that a tapped card in the far row
+keeps a 44-point square even at 375 by 647. Each side has two rows, as on the
+desktop, because the web's separate lands and other-permanents bands are too
+short for the phone's touch target. The middle band between the creatures' rows
+stays the same height whether or not the stack holds anything, and the stack's
+items stand side by side about its middle in one row. A stack with more items
+than fit across shows its top items, as many as fit beside room at each end for
+a count (`stack.count_room`), and scrolls as a battlefield row does: rows of
+items stacked over the battlefield would cover the creatures' rows past what a
+press can reach. The viewer's hand, too, shows only as many cards as keep their
+strips in rows whose top edge stays low enough that each card of the viewer's
+back row, tapped, keeps a strip of 44 points and a cell of the hit test's grid
+at each edge above it (`hand_ceiling`), and scrolls (below, "How a row
+scrolls"). A card the viewer handles from their hand, or picked in a hidden
+pick, stands with its top edge at that height too. The rows never move for the
+stack, so an item keeps the web's size, 68 points wide, only where the band is
+tall enough: at 375 by 647 it is 51 points wide, so that a tapped creature under
+it, 56 points tall there, keeps an uncovered strip of 44 points and a cell of
+the hit test's grid at each edge (`stack_height`).
 
 ### Objects and placement
 
@@ -1386,57 +1387,57 @@ flight start exactly where the card was.
   long for its room first zooms the battlefield out, as the web's
   `battlefieldZoom` does (`place::zooms`): the creatures' rows of both sides
   share the zoom of the most crowded row, down to the web's `ZOOM_LEAST`, and a
-  back row shrinks further alone, down to `least_back_zoom` in `space.json`,
-  which keeps each card large enough to press. A zoomed-out row keeps its edge
-  toward the lane between the creatures' rows, or a back row its edge toward its
-  player.
+  back row shrinks further alone, down to `least_back_zoom` in
+  `space-constants.json`, which keeps each card large enough to press. A
+  zoomed-out row keeps its edge toward the lane between the creatures' rows, or
+  a back row its edge toward its player.
 - **Rows stand as the web interface's do.** The creatures' row is centred; the
   lands run from the table's edge inward and the other permanents from the
   middle outward, so a permanent that leaves one of those rows moves only the
   cards to its right.
 - **Rows follow the web's stage (desktop).** `Layout::for_window` fits each
   side's three battlefield rows to the window (`table::web_fit`) from the web
-  interface's stage positions, copied into `layout.desktop.web` in `space.json`:
-  `ROWS` and `ROOM` (`ui/src/game/tableRows.ts`) and the frame widths and gaps
-  of `ui/src/game/battlefield.ts`, with the stage fitted to the window as
-  `ui/src/game/Stage.tsx` fits it. Each row gets the line of the table under the
-  centres of the web's untapped cards, its ends, and the scale at which a card
-  is as wide on screen as the web's. It is laid out in millimetres of a card at
-  its printed size, then scaled about its left end. A card lying flat under the
-  camera's pitch is shorter on screen than the web's upright one, so a row's
-  cards lean back toward the camera until an untapped card is as tall as the
-  web's (at 1600 by 900, 11 to 15 degrees on the viewer's rows and 20 to 23 on
-  the opponent's). Every card of a row lies in one plane, which rises at that
-  angle from the near edge of an untapped card, and every card's centre lies on
-  the row's line, so a card placed later lies nearer the camera than one placed
-  before it, as the hit test needs. The web lines a row's cards up by their tops
-  instead, so a tapped card stands about 18 points lower than the web's. The
-  lands' row leaves the web's wider `TAPPED_GAP` before its first tapped land.
-  An attacking card stands out of its row toward the other side where the web's
-  attacker stands, `ADVANCE` (16 stage pixels) from the row and, when tapped,
-  with its top on the row's top as the web lines it up; it moves there as its
-  tap plays, and a card that starts or stops attacking lays its row out again.
-  The piles are fitted the same way (`web_fit::piles`, from `PILES` and
-  `pileLook` in `ui/src/game/pileLook.ts`): each pile's top card is as wide as
-  the web's and leans back until it is as tall, and the pile stands wherever
-  puts its top card's middle under the web's, however many cards it holds. Near
-  the bottom of the window a card grows taller as it leans back only for a few
-  degrees, until it faces the camera, so a fit never leans a card past that. The
-  cards lifted beside a library and the pile counts follow the pile where it
-  stands. Decided on 2026-11-19 instead of refitting the camera: no camera fit
-  could move rows that stood 25 to 80 points off while the hand already matched.
-  Untapped card centres now land within about 3 points of the web's on the
-  reference targets. The web leans a card by skewing it into a parallelogram,
-  where a card lying in perspective is a trapezoid with a narrower box, so each
-  fitted row's card also carries a shear in the table's plane (`Pose::shear`,
-  solved per card by `web_fit::lean`) that makes its box on screen as wide as
-  the web's and centres it there. Decided on 2026-11-20 instead of comparing the
-  two cards' corners in the matcher: a trapezoid's corners miss a
-  parallelogram's by as much as their boxes differ, so only a shear closes the
-  difference. Near the screen's middle, where the web's card barely leans, the
-  trapezoid's near edge alone is up to 3 points wider than the web's card, and
-  no shear narrows it. The phone layout keeps its own rows (`table::phone`), and
-  has not been fitted to the web's.
+  interface's stage positions, copied into `layout.desktop.web` in
+  `space-constants.json`: `ROWS` and `ROOM` (`ui/src/game/tableRows.ts`) and the
+  frame widths and gaps of `ui/src/game/battlefield.ts`, with the stage fitted
+  to the window as `ui/src/game/Stage.tsx` fits it. Each row gets the line of
+  the table under the centres of the web's untapped cards, its ends, and the
+  scale at which a card is as wide on screen as the web's. It is laid out in
+  millimetres of a card at its printed size, then scaled about its left end. A
+  card lying flat under the camera's pitch is shorter on screen than the web's
+  upright one, so a row's cards lean back toward the camera until an untapped
+  card is as tall as the web's (at 1600 by 900, 11 to 15 degrees on the viewer's
+  rows and 20 to 23 on the opponent's). Every card of a row lies in one plane,
+  which rises at that angle from the near edge of an untapped card, and every
+  card's centre lies on the row's line, so a card placed later lies nearer the
+  camera than one placed before it, as the hit test needs. The web lines a row's
+  cards up by their tops instead, so a tapped card stands about 18 points lower
+  than the web's. The lands' row leaves the web's wider `TAPPED_GAP` before its
+  first tapped land. An attacking card stands out of its row toward the other
+  side where the web's attacker stands, `ADVANCE` (16 stage pixels) from the row
+  and, when tapped, with its top on the row's top as the web lines it up; it
+  moves there as its tap plays, and a card that starts or stops attacking lays
+  its row out again. The piles are fitted the same way (`web_fit::piles`, from
+  `PILES` and `pileLook` in `ui/src/game/pileLook.ts`): each pile's top card is
+  as wide as the web's and leans back until it is as tall, and the pile stands
+  wherever puts its top card's middle under the web's, however many cards it
+  holds. Near the bottom of the window a card grows taller as it leans back only
+  for a few degrees, until it faces the camera, so a fit never leans a card past
+  that. The cards lifted beside a library and the pile counts follow the pile
+  where it stands. Decided on 2026-11-19 instead of refitting the camera: no
+  camera fit could move rows that stood 25 to 80 points off while the hand
+  already matched. Untapped card centres now land within about 3 points of the
+  web's on the reference targets. The web leans a card by skewing it into a
+  parallelogram, where a card lying in perspective is a trapezoid with a
+  narrower box, so each fitted row's card also carries a shear in the table's
+  plane (`Pose::shear`, solved per card by `web_fit::lean`) that makes its box
+  on screen as wide as the web's and centres it there. Decided on 2026-11-20
+  instead of comparing the two cards' corners in the matcher: a trapezoid's
+  corners miss a parallelogram's by as much as their boxes differ, so only a
+  shear closes the difference. Near the screen's middle, where the web's card
+  barely leans, the trapezoid's near edge alone is up to 3 points wider than the
+  web's card, and no shear narrows it. The phone layout keeps its own rows
+  (`table::phone`), and has not been fitted to the web's.
 - **Some cards lie under a permanent, in its row**, as the web interface tucks
   them: the other cards of a merged permanent and the cards a permanent holds in
   exile peek out to its left, and the Auras and Equipment attached to it,
@@ -1652,7 +1653,8 @@ streaks and notices (`StepOut`).
   in that frame, on the screen, with the web stage's shapes
   (`ui/src/stage/lines.ts`): a target arrow arcs over what lies between, the
   line to a source sags toward the bottom of the window by `light.sag`, and a
-  line of combat runs straight. Its values are under `light` in `space.json`.
+  line of combat runs straight. Its values are under `light` in
+  `space-constants.json`.
 - **A step ends when its animation ends.** A script's beats play in order, the
   steps of one beat together, on the time passed to `frame`.
 - **A notice outlives its beat.** `announce` moves nothing: it writes a
@@ -1813,15 +1815,15 @@ What the session does and what a client still does:
   once, as when a recording or a reconnection delivers a dozen views together,
   Beryl 3D plays each script that starts with more than `catch_up.double`
   updates waiting at twice real time, and with more than `catch_up.quadruple`
-  waiting at four times (`data/beryl3d/space.json`, `play::Show::frame`). The
-  web interface has no catch-up, so the text commands' `--no-catch-up` plays
-  every script at real time, and `just b3d match motion` always passes it. Holds
-  are measured in script time, as the web interface measures them: `light::Lit`
-  keeps a script clock that runs at each script's rate while it plays and at
-  real time between scripts, and a span records when it stood whole on that
-  clock. So an arrow that stood whole while a script played at twice real time
-  has stood, when a later script ends it, the script time that passed, not the
-  shorter real time.
+  waiting at four times (`data/beryl3d/space-constants.json`,
+  `play::Show::frame`). The web interface has no catch-up, so the text commands'
+  `--no-catch-up` plays every script at real time, and `just b3d match motion`
+  always passes it. Holds are measured in script time, as the web interface
+  measures them: `light::Lit` keeps a script clock that runs at each script's
+  rate while it plays and at real time between scripts, and a span records when
+  it stood whole on that clock. So an arrow that stood whole while a script
+  played at twice real time has stood, when a later script ends it, the script
+  time that passed, not the shorter real time.
 - **Segments are made from the laid-out beat.** Each step becomes segments, at
   absolute times, on the scene objects it concerns.
 - **Reduced motion** is a client's choice: it plays every step with no duration,
@@ -1998,14 +2000,14 @@ window.
   itself, so the game screen and the others change apart.
 - **Portrait screens.** The start screen and the testing screen are one column
   over the safe area, the gutter in from its sides and foot (`flat.phone` in
-  `data/beryl3d/space.json`): the opponents' list takes the room the rest
-  leaves, and the whole column scrolls when even that is too little, as while
-  the system keyboard is up, so every action stays in reach. The opening lays
-  the hand out in rows of four, as large as fit between the coin and the dock.
-  The result's button spans a dock at the safe area's foot. The bug report's
-  description is a sheet along the window's foot. The screens lay a window the
-  keyboard shortens out as any shorter window, and every resize builds the
-  screen again for the new size.
+  `data/beryl3d/space-constants.json`): the opponents' list takes the room the
+  rest leaves, and the whole column scrolls when even that is too little, as
+  while the system keyboard is up, so every action stays in reach. The opening
+  lays the hand out in rows of four, as large as fit between the coin and the
+  dock. The result's button spans a dock at the safe area's foot. The bug
+  report's description is a sheet along the window's foot. The screens lay a
+  window the keyboard shortens out as any shorter window, and every resize
+  builds the screen again for the new size.
 - **Safe area.** The host reports the insets for notches, rounded corners and
   system bars. The root element pads itself by them, and a check holds every
   interactive element inside.
@@ -2013,7 +2015,7 @@ window.
   least 44 by 44 points and every line of text to at least 11 points.
 - **The phone's game screen** (`screens::game::game_phone`) places the desktop's
   pieces in the table's bands (`table::phone_bands`), with sizes from
-  `hud.phone` in `space.json`:
+  `hud.phone` in `space-constants.json`:
   - Each orb is centred in its player's strip, drawn at half the desktop's size.
     When the viewer's hand needs more than one row, its back row stands in the
     viewer's strip, and a total in the strip's middle would split that row's
@@ -2313,7 +2315,8 @@ It changes only how pixels are shaded.
   particle is a pure function of its run, its index and the frame's time, its
   randomness an integer hash of the object's id and the step, and a frame holds
   at most `PARTICLES` of them, shared equally among its runs. Their counts,
-  lives and sizes are `enhanced.particles` in `data/beryl3d/space.json`.
+  lives and sizes are `enhanced.particles` in
+  `data/beryl3d/space-constants.json`.
 - **Multisampling**, four samples, with a depth buffer.
 
 The rule that keeps the tiers in step: **a tier never changes where anything is,

@@ -2,6 +2,9 @@
 //! frame": no allocation), with every script the session timed, and while a card is held. This
 //! binary counts the heap allocations made inside `frame`, on the thread of each test.
 
+#[path = "../../../test_data.rs"]
+mod test_data;
+
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
 
@@ -76,7 +79,7 @@ fn play(name: &str) -> (usize, Vec<(u64, usize)>) {
     let views = recording(name, Side::You)
         .and_then(|recording| recording.views())
         .unwrap_or_else(|why| panic!("{why}"));
-    let mut client = Client::new(Config::LARGEST);
+    let mut client = Client::new(crate::test_data::data(), Config::LARGEST);
     client.handle(Input::Surface {
         size: Size {
             width: 1600.0,
@@ -141,7 +144,7 @@ fn frames_allocate_nothing_while_a_card_is_held() {
     let views = recording("shape-zone", Side::You)
         .and_then(|recording| recording.views())
         .unwrap_or_else(|why| panic!("{why}"));
-    let mut client = Client::new(Config::LARGEST);
+    let mut client = Client::new(crate::test_data::data(), Config::LARGEST);
     client.handle(Input::Surface {
         size: Size {
             width: 1600.0,

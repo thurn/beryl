@@ -18,6 +18,7 @@ impl Table {
             &self.scroll,
             &self.row_fits,
             ids,
+            &self.data.verbs.lift,
         )
     }
 

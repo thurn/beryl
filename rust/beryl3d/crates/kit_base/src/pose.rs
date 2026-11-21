@@ -205,10 +205,10 @@ pub enum Shape {
     /// while it is up, crossing edge-on at the middle of its time, and from `verbs.flip.settle`
     /// of its time settles back to where it rests. Its time is shared out evenly: the step's
     /// curve does not bend it.
-    TurnedOver,
+    TurnedOver(crate::data::verbs::Flip),
     /// A face coming to be seen where it rests (`showcase`): it grows from `verbs.showcase.size`
     /// of its size and is opaque once `verbs.showcase.seen` of its motion is done.
-    Grown,
+    Grown(crate::data::verbs::Showcase),
     /// A line that leaves the straight way between its ends sideways on the screen and leans as
     /// it does, as the web interface's `bowed` (`ui/src/stage/bows.ts`) has it.
     Bowed(Bow),
@@ -244,8 +244,13 @@ pub enum Shape {
     /// the cards it passes, as the web draws a flying card above every other: on the phone the
     /// battlefield lies just below the stack, and a card dropped behind the stack's other
     /// items would stay hidden under them. The fractions of its time are `verbs.fly.thrown` in
-    /// `data/beryl3d/space.json`.
-    Thrown { rise: Vec3, aloft: f32, lift: Lift },
+    /// `data/beryl3d/space-constants.json`.
+    Thrown {
+        rise: Vec3,
+        aloft: f32,
+        lift: Lift,
+        tuning: crate::data::verbs::Thrown,
+    },
     /// A curve that passes by a place without stopping there, as the web interface's `swept`
     /// (`ui/src/stage/drawn.ts`) has it: a curve of the second degree from the start pose to the
     /// end pose, along the eased progress `u`, whose position is `2 u (1 - u) bulge` off the
@@ -312,6 +317,8 @@ pub struct Lift {
     pub forward: Vec3,
     pub near: f32,
     pub hold: f32,
+    /// The share of the depth past `near` kept while the lift is held.
+    pub keep: f32,
 }
 
 impl Shape {
@@ -335,8 +342,7 @@ impl Lift {
     fn kept(&self, u: f32) -> f32 {
         let back = ((u - self.hold) / (1.0 - self.hold)).clamp(0.0, 1.0);
         let back = back * back * (3.0 - 2.0 * back);
-        let keep = crate::data::space::verbs::fly::front::KEEP;
-        keep + (1.0 - keep) * back
+        self.keep + (1.0 - self.keep) * back
     }
 
     /// The factor by which a card at `position`, `u` of the eased way through, is drawn nearer
@@ -368,15 +374,7 @@ impl Lift {
     }
 }
 
-/// When a card turns over on its way, as shares of its segment's time (the web interface's
-/// `Turning` in `ui/src/stage/tracks.ts`): its turn stays at its start value until `at - each`,
-/// is half way at `at`, where the card is edge-on, and is at its end value from `at + each`,
-/// turning evenly in between. Its time is not eased by the segment's curve.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Turning {
-    pub at: f32,
-    pub each: f32,
-}
+pub use crate::data::verbs::Turn as Turning;
 
 impl Turning {
     /// How much of its turn it has made `elapsed` of its time through, from 0 to 1.

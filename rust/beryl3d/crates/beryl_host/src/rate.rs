@@ -21,7 +21,7 @@
 //!   A device whose window server cannot hold the higher rate therefore tries it less and less
 //!   often instead of alternating.
 //!
-//! The thresholds are `frame_rate` in `data/beryl3d/space.json`.
+//! The thresholds are `frame_rate` in `data/beryl3d/space-constants.json`.
 
 use kit_base::data::space::frame_rate;
 
@@ -44,7 +44,7 @@ pub enum Step {
     Rate(f32),
 }
 
-/// The thresholds of the rule (`frame_rate` in `data/beryl3d/space.json`).
+/// The thresholds of the rule (`frame_rate` in `data/beryl3d/space-constants.json`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Thresholds {
     pub settle_frames: usize,
@@ -58,7 +58,7 @@ pub struct Thresholds {
 }
 
 impl Thresholds {
-    /// The thresholds in `data/beryl3d/space.json`.
+    /// The thresholds in `data/beryl3d/space-constants.json`.
     pub const DATA: Self = Self {
         settle_frames: frame_rate::SETTLE_FRAMES,
         late_intervals: frame_rate::LATE_INTERVALS,

@@ -3,7 +3,7 @@
 //! `.hand-cost` (UI Conventions, "The hand's fan"). `badges.cost` measures each disc and gap in
 //! twelfths of a hand card's width. `Badges::shape_costs` shapes symbols when a face list arrives.
 //! A frame places the cached glyphs without allocating.
-//! The sizes come from `data/beryl3d/space.json`.
+//! The sizes come from `data/beryl3d/space-constants.json`.
 
 use beryl_protocol::protocol::{ObjectView, ZoneName};
 use glam::{Affine3A, Quat, Vec2, Vec3};

@@ -5,8 +5,7 @@ use std::f32::consts::PI;
 use glam::{Quat, Vec3};
 
 use super::{Curve, Pose, Segment, Shape};
-use crate::data::space::verbs;
-use crate::data::space::verbs::fly::thrown;
+use crate::data::verbs::{Flip, Thrown};
 
 /// Where a travelling segment's path is at one moment, besides the straight way between its
 /// two poses.
@@ -24,14 +23,14 @@ struct Along {
 
 /// How high a thrown permanent is `elapsed` of its time through, as a share of its greatest
 /// height: up quickly, level, then down evenly (the web interface's `liftAt`).
-fn thrown_height(elapsed: f32) -> f32 {
+fn thrown_height(elapsed: f32, tuning: Thrown) -> f32 {
     let at = elapsed.clamp(0.0, 1.0);
-    if at < thrown::RISEN {
-        1.0 - (1.0 - at / thrown::RISEN).powi(2)
-    } else if at <= thrown::HELD {
+    if at < tuning.risen {
+        1.0 - (1.0 - at / tuning.risen).powi(2)
+    } else if at <= tuning.held {
         1.0
     } else {
-        1.0 - (at - thrown::HELD) / (1.0 - thrown::HELD)
+        1.0 - (at - tuning.held) / (1.0 - tuning.held)
     }
 }
 
@@ -82,7 +81,7 @@ impl Segment {
         let at =
             move |share: f32| start + (duration as f64 * f64::from(share.clamp(0.0, 1.0))) as u64;
         let peak = match self.shape {
-            Shape::Thrown { .. } => Some(at(thrown::RISEN)),
+            Shape::Thrown { tuning, .. } => Some(at(tuning.risen)),
             _ => None,
         };
         let turning = self.turning.map(|turning| turning.span().map(at));
@@ -129,9 +128,11 @@ impl Segment {
                     grow: 0.0,
                 }
             }
-            Shape::Thrown { rise: up, .. } => Along {
-                u: 1.0 - (1.0 - eased).powf(thrown::LAUNCH),
-                offset: rise + up * thrown_height(elapsed),
+            Shape::Thrown {
+                rise: up, tuning, ..
+            } => Along {
+                u: 1.0 - (1.0 - eased).powf(tuning.launch),
+                offset: rise + up * thrown_height(elapsed, tuning),
                 lean: Quat::IDENTITY,
                 grow: 0.0,
             },
@@ -154,13 +155,13 @@ impl Segment {
     }
 
     /// A thrown permanent's scale `elapsed` of its time through: from its start pose's to the
-    /// first scale of its way down within `thrown::SHRUNK` of its time, then down to its end
+    /// first scale of its way down within `tuning.shrunk` of its time, then down to its end
     /// pose's.
-    fn thrown_scale(&self, aloft: f32, elapsed: f32) -> f32 {
+    fn thrown_scale(&self, aloft: f32, elapsed: f32, tuning: Thrown) -> f32 {
         let (from, to) = (self.from.scale, self.to.scale);
-        if elapsed < thrown::SHRUNK {
-            let first = thrown_down(aloft, to, thrown::SHRUNK);
-            from + (first - from) * (elapsed / thrown::SHRUNK)
+        if elapsed < tuning.shrunk {
+            let first = thrown_down(aloft, to, tuning.shrunk);
+            from + (first - from) * (elapsed / tuning.shrunk)
         } else {
             thrown_down(aloft, to, elapsed)
         }
@@ -217,7 +218,7 @@ impl Segment {
         } = self.along(elapsed);
         let pose = between(&self.from, &self.to, u);
         let scale = match self.shape {
-            Shape::Thrown { aloft, .. } => self.thrown_scale(aloft, elapsed),
+            Shape::Thrown { aloft, tuning, .. } => self.thrown_scale(aloft, elapsed, tuning),
             Shape::Held { bow, eye, .. } => {
                 let depth = |at: Vec3| eye - at.dot(bow.axis);
                 let seen = |pose: &Pose| pose.scale / depth(pose.position);
@@ -274,14 +275,14 @@ impl Segment {
                 opacity: fade.opacity(t - self.start),
                 ..self.travelled(elapsed)
             },
-            Shape::TurnedOver => turned_over(&self.from, &self.to, elapsed),
-            Shape::Grown => {
+            Shape::TurnedOver(tuning) => turned_over(&self.from, &self.to, elapsed, tuning),
+            Shape::Grown(tuning) => {
                 let u = self.curve.ease(elapsed);
                 let pose = between(&self.from, &self.to, u);
-                let size = verbs::showcase::SIZE;
+                let size = tuning.size;
                 Pose {
                     scale: pose.scale * (size + (1.0 - size) * u),
-                    opacity: pose.opacity * (u / verbs::showcase::SEEN).min(1.0),
+                    opacity: pose.opacity * (u / tuning.seen).min(1.0),
                     ..pose
                 }
             }
@@ -314,8 +315,8 @@ pub fn between(from: &Pose, to: &Pose, u: f32) -> Pose {
 /// quickly and then slowing into its largest by `grown`, stays up, and from `settle` comes back
 /// down, slowing onto the table. It turns over while it is up, evenly from `grown` to `settle`,
 /// so that it is edge-on, and shows its new side, at the middle of its time.
-fn turned_over(from: &Pose, to: &Pose, elapsed: f32) -> Pose {
-    let (grown, settle) = (verbs::flip::GROWN, verbs::flip::SETTLE);
+fn turned_over(from: &Pose, to: &Pose, elapsed: f32, tuning: Flip) -> Pose {
+    let (grown, settle) = (tuning.grown, tuning.settle);
     let up = if elapsed < grown {
         Curve::EASE_OUT.ease(elapsed / grown)
     } else if elapsed < settle {
@@ -326,8 +327,8 @@ fn turned_over(from: &Pose, to: &Pose, elapsed: f32) -> Pose {
     let pose = between(from, to, elapsed);
     let turned = ((elapsed - grown) / (settle - grown)).clamp(0.0, 1.0);
     Pose {
-        position: pose.position + Vec3::Z * verbs::flip::RISE * up,
-        scale: pose.scale * (1.0 + (verbs::flip::SCALE - 1.0) * up),
+        position: pose.position + Vec3::Z * tuning.rise * up,
+        scale: pose.scale * (1.0 + (tuning.scale - 1.0) * up),
         turn: from.turn + (to.turn - from.turn) * turned,
         ..pose
     }
@@ -381,9 +382,9 @@ impl Segment {
         let (axis, angle) = (to.rotation.inverse() * unleaned).to_axis_angle();
         let grown = self.held_grown(elapsed);
         let scale = match &mut self.shape {
-            Shape::Thrown { aloft, .. } if elapsed < thrown::SHRUNK => {
-                let share = elapsed / thrown::SHRUNK;
-                let first = thrown_down(*aloft, to.scale, thrown::SHRUNK);
+            Shape::Thrown { aloft, tuning, .. } if elapsed < tuning.shrunk => {
+                let share = elapsed / tuning.shrunk;
+                let first = thrown_down(*aloft, to.scale, tuning.shrunk);
                 (pose.scale - first * share) / (1.0 - share)
             }
             Shape::Thrown { aloft, .. } => {

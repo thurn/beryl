@@ -31,8 +31,14 @@ const SUBMIT: &str = "button \"Submit\"";
 /// A page showing `updates` from your seat in a 1600 by 900 window.
 fn page(updates: &[GameUpdate]) -> Page {
     let messages = updates.iter().map(FixtureMessage::game_update).collect();
-    Page::new(Recording(messages).into(), Side::You, Layout::Desktop, SIZE)
-        .expect("the recording plays")
+    Page::new(
+        crate::test_data::data(),
+        Recording(messages).into(),
+        Side::You,
+        Layout::Desktop,
+        SIZE,
+    )
+    .expect("the recording plays")
 }
 
 /// The sample table, at rest.
@@ -94,7 +100,7 @@ fn shows_report(frame: &Frame) -> bool {
 #[test]
 fn the_two_frames_after_cmd_b_show_nothing_of_the_report() {
     // The host sees `FreezeFrame` after the first frame and reads back the second.
-    let mut client = Client::new(Config::LARGEST);
+    let mut client = Client::new(crate::test_data::data(), Config::LARGEST);
     client.handle(Input::Surface {
         size: SIZE,
         scale: 1.0,

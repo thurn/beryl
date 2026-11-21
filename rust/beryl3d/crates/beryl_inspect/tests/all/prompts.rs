@@ -122,6 +122,7 @@ fn waterbend() -> Page {
         })
         .collect();
     let mut page = Page::new(
+        crate::test_data::data(),
         Arc::new(Recording(messages)),
         Side::You,
         Layout::Desktop,

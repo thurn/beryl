@@ -123,7 +123,7 @@ def arguments(parser: argparse.ArgumentParser, every: bool = False) -> None:
 def phone_under() -> float:
     """The points below which a window's shorter side plays the phone layout, as `b3d` reads a
     test's name (`Layout::for_size`)."""
-    space = json.loads((beryl3d_paths.DATA / "space.json").read_text())
+    space = json.loads((beryl3d_paths.DATA / "space-constants.json").read_text())
     return float(space["flat"]["phone_under"])
 
 

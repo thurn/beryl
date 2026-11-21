@@ -35,7 +35,9 @@ def test_the_measured_cards_give_the_camera_in_space_json() -> None:
     import json
 
     cards = camera.load(camera.fit_path())
-    space = json.loads((camera.paths.REPO / "data/beryl3d/space.json").read_text())
+    space = json.loads(
+        (camera.paths.REPO / "data/beryl3d/space-constants.json").read_text()
+    )
     data = space["layout"]["desktop"]["camera"]
     fit = camera.solve(cards)
     assert round(fit.view.pitch, 2) == data["pitch_degrees"]

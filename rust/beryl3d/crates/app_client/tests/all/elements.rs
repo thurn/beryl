@@ -28,7 +28,13 @@ fn write(layer: &mut Layer) -> Frame {
     builder.layout_work(layout_nodes, text_runs);
     layer.write(
         &mut builder,
-        &Table::default().camera().screen_plane(),
+        &Table::new(
+            crate::test_data::data(),
+            game_table::table::DESKTOP,
+            game_table::table::Window::default(),
+        )
+        .camera()
+        .screen_plane(),
         true,
     );
     builder.finish().clone()

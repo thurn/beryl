@@ -75,7 +75,10 @@ pub fn probe(renderer: &mut Renderer, size: Size, scale: f32, display_hz: f32) -
             chosen: Tier::Baseline,
         };
     }
-    let mut client = Client::new(Config::LARGEST);
+    let mut client = Client::new(
+        crate::data::embedded().expect("app tuning"),
+        Config::LARGEST,
+    );
     client.handle(Input::Surface {
         size,
         scale,

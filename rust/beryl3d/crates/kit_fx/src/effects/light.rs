@@ -7,7 +7,7 @@
 //!
 //! Every light lies just over the face of what it is on, `light.lift` millimetres along the
 //! face's normal as a mark does, which the depth test can tell from the face. The values are
-//! `effects` in `data/beryl3d/space.json`, as shares of the card or of the run's time:
+//! `effects` in `data/beryl3d/space-constants.json`, as shares of the card or of the run's time:
 //!
 //! - `glow`: light round the card's edge, the two box shadows of `.stage-effect-glow` (the
 //!   `HALO` sprite, `halo` in `beryl_assets::light`), which grows `spread` larger as it fades.

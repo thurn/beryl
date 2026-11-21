@@ -2,6 +2,9 @@
 //! to be a binary of its own, and every one of them linked the crate and its dependencies again
 //! after each edit.
 
+#[path = "../../../../test_data.rs"]
+mod test_data;
+
 mod events;
 mod faces;
 mod frames;

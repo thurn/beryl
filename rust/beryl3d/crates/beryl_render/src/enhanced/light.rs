@@ -2,7 +2,7 @@
 //! which `shade_card_lit` and `shade_table_lit` in `light.wgsl` shade with: an ambient term,
 //! the key light, which casts the shadow map's shadows and shines from `shadow::key_direction`,
 //! so that the lit side of a card and its shadow agree, a soft fill from the side opposite the
-//! key, and a faint sheen. Their strengths are `enhanced.light` in `data/beryl3d/space.json`.
+//! key, and a faint sheen. Their strengths are `enhanced.light` in `data/beryl3d/space-constants.json`.
 //!
 //! The ambient term is not stored there but computed, so that it cannot drift from the rule it
 //! follows: a card lying flat in the open, lit by the key and the fill, is drawn in its Baseline

@@ -11,7 +11,7 @@
 //!
 //! Each badge is a rounded panel lying on the card's face, which moves and turns with the card,
 //! and its number is glyph records. Its sizes are the web's, in the em of a battlefield card
-//! (a tenth of its width), from `badges` in `data/beryl3d/space.json`. The digits and signs are
+//! (a tenth of its width), from `badges` in `data/beryl3d/space-constants.json`. The digits and signs are
 //! shaped once, when the first view arrives (`Badges::shape`), so a frame only places glyphs it
 //! already has and allocates nothing. A named counter's name is shaped when the first view that
 //! names it arrives (`Badges::shape_names`), and the lock is the flat layer's `LOCK` icon. The

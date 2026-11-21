@@ -724,5 +724,10 @@
     "label": "The default Beryl 3D interface test runs one recording per distinct signature and keeps every fixture and story",
     "metric": "bead.core-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Beryl 3D's text and picture tools read verb tuning at startup, so an edit to a flight arc or another verb value can be previewed without recompiling the client.",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

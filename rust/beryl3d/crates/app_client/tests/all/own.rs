@@ -13,11 +13,14 @@ use kit_ui::input::{Insets, Size};
 const MS: u64 = 1_000_000;
 
 fn client() -> Client {
-    let mut client = Client::new(Config {
-        elements: 512,
-        draws: 2048,
-        name_bytes: 16_384,
-    });
+    let mut client = Client::new(
+        crate::test_data::data(),
+        Config {
+            elements: 512,
+            draws: 2048,
+            name_bytes: 16_384,
+        },
+    );
     client.handle(Input::Surface {
         size: Size {
             width: 1440.0,

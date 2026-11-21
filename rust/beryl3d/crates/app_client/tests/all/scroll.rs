@@ -42,6 +42,7 @@ fn lands(count: usize) -> ViewBuilder {
 fn page(view: &ViewBuilder) -> Page {
     let messages = vec![FixtureMessage::game_update(&view.update())];
     let mut page = Page::new(
+        crate::test_data::data(),
         Recording(messages).into(),
         Side::You,
         Layout::Desktop,
@@ -354,11 +355,14 @@ fn tapping_the_last(view: &PlayerView) -> GameUpdate {
 
 #[test]
 fn a_script_played_while_a_row_scrolls_ends_where_placement_rests_each_card() {
-    let mut client = Client::new(Config {
-        elements: 4096,
-        draws: 4096,
-        name_bytes: 1 << 18,
-    });
+    let mut client = Client::new(
+        crate::test_data::data(),
+        Config {
+            elements: 4096,
+            draws: 4096,
+            name_bytes: 1 << 18,
+        },
+    );
     client.record();
     client.handle(Input::Surface {
         size: WINDOW,
@@ -408,6 +412,7 @@ fn a_card_flying_to_the_hidden_end_of_a_phone_row_is_seen() {
         object.tapped = index % 3 == 0;
     }
     let mut page = Page::new(
+        crate::test_data::data(),
         Recording(vec![FixtureMessage::game_update(&before)]).into(),
         Side::You,
         Layout::Phone,
@@ -454,8 +459,14 @@ fn a_card_flying_to_the_hidden_end_of_a_phone_row_is_seen() {
         FixtureMessage::game_update(&after),
     ];
     messages.insert(0, fixture_message(&messages, TokenMakers::NONE));
-    let mut page = Page::new(Recording(messages).into(), Side::You, Layout::Phone, size)
-        .expect("the views can be read");
+    let mut page = Page::new(
+        crate::test_data::data(),
+        Recording(messages).into(),
+        Side::You,
+        Layout::Phone,
+        size,
+    )
+    .expect("the views can be read");
     let unseen: Vec<String> = (page.check_all(Mode::EveryTick).faults.into_iter())
         .filter(|fault| fault.rule == Rule::StepShown)
         .map(|fault| fault.message)
@@ -525,8 +536,14 @@ fn a_card_waiting_at_a_crowded_rows_hidden_end_is_not_drawn() {
         FixtureMessage::game_update(&after),
     ];
     messages.insert(0, fixture_message(&messages, TokenMakers::NONE));
-    let mut page = Page::new(Recording(messages).into(), Side::You, Layout::Phone, size)
-        .expect("the views can be read");
+    let mut page = Page::new(
+        crate::test_data::data(),
+        Recording(messages).into(),
+        Side::You,
+        Layout::Phone,
+        size,
+    )
+    .expect("the views can be read");
     // In the wait between the two flights: the first lands 150 ms after its middle, and the
     // second sets out 600 ms after that.
     page.seek(&"step:2.0.0+450ms".parse().expect("a moment"))

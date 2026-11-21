@@ -265,7 +265,10 @@ fn run(args: &[String]) -> Ran {
     }
     let result = Options::parse(command.name, rest, command.spec)
         .map_err(Error::Usage)
-        .and_then(|options| (command.run)(&options));
+        .and_then(|options| {
+            beryl_inspect::data::checkout().map_err(Error::Failed)?;
+            (command.run)(&options)
+        });
     match result {
         Ok(stdout) => Ran {
             stdout,

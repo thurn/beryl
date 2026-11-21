@@ -60,11 +60,14 @@ fn moved(x: f32) -> Input {
 
 #[test]
 fn frames_that_keep_missing_120_hz_step_the_phone_to_60_hz() {
-    let client = Client::new(Config {
-        elements: 64,
-        draws: 64,
-        name_bytes: 1024,
-    });
+    let client = Client::new(
+        crate::test_data::data(),
+        Config {
+            elements: 64,
+            draws: 64,
+            name_bytes: 1024,
+        },
+    );
     let mut frames = FrameLoop::new(client, Platform::default()).paced(120.0, false);
     assert!((frames.ticks_ref().hz() - 120.0).abs() < 1e-3);
     // Each frame comes three 120 Hz intervals after the last: late at 120 Hz, on time at 60.
@@ -82,9 +85,12 @@ fn frames_that_keep_missing_120_hz_step_the_phone_to_60_hz() {
 
 #[test]
 fn low_memory_before_a_surface_is_ignored() {
-    let mut phone = Phone::new(Client::new(Config::LARGEST), 60.0, None, |_| {
-        Box::new(NoFeed)
-    });
+    let mut phone = Phone::new(
+        Client::new(crate::test_data::data(), Config::LARGEST),
+        60.0,
+        None,
+        |_| Box::new(NoFeed),
+    );
     phone.lifecycle(Lifecycle::LowMemory);
     phone.surface_lost();
     assert_eq!(phone.frame(0), Wake::Never);

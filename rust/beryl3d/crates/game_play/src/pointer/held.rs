@@ -2,7 +2,7 @@
 //! where it rests once let go (docs/beryl-3d.md, "Motion the pointer drives").
 //!
 //! The values are those of the web interface's `Heft` (`ui/src/stage/heft.ts`), in
-//! `data/beryl3d/space.json` under `pointer`. Lengths there are stage pixels and here logical
+//! `data/beryl3d/space-constants.json` under `pointer`. Lengths there are stage pixels and here logical
 //! points.
 
 use std::f32::consts::TAU;

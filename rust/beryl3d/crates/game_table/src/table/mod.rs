@@ -98,7 +98,7 @@ pub struct RowArea {
     pub centre: Option<f32>,
 }
 
-/// Where a hand stands, relative to the camera (`hand` and `opponent_hand` in `space.json`).
+/// Where a hand stands, relative to the camera (`hand` and `opponent_hand` in `space-constants.json`).
 /// The middle of the edge of each card nearest the screen's middle (the viewer's cards' top
 /// edges, the opponent's bottom edges) lies on one circle, whatever the hand's size, so a
 /// crowded hand turns and sinks less for each card than a spread one, as Arena's does.
@@ -133,7 +133,7 @@ pub struct HandData {
 }
 
 /// Where the stack's items stand, relative to the camera at the right of the screen (`stack`
-/// in `space.json`). Distances are in normalized device coordinates' vertical unit, half the
+/// in `space-constants.json`). Distances are in normalized device coordinates' vertical unit, half the
 /// window's height, both across and up the screen. The top item stands in front, and each item
 /// beneath peeks out above it and to its left. A stack too tall to fit shrinks, all its items
 /// alike, and one too tall to leave each item beneath a reachable strip stands in rows.
@@ -286,7 +286,7 @@ macro_rules! row_area {
     };
 }
 
-/// A `HandData` from the object of the same name in `space.json`.
+/// A `HandData` from the object of the same name in `space-constants.json`.
 macro_rules! hand_data {
     ($name:ident) => {
         HandData {
@@ -305,7 +305,7 @@ macro_rules! hand_data {
 }
 
 /// The desktop layout, built from `layout.desktop`, `hand`, `opponent_hand` and `stack` in
-/// `space.json`. The camera's pitch and field of view are solved by `just b3d camera-fit` from
+/// `space-constants.json`. The camera's pitch and field of view are solved by `just b3d camera-fit` from
 /// the cards measured in Arena's recordings, `data/beryl3d/camera-fit.json`.
 pub const DESKTOP: Layout = Layout {
     camera: DESKTOP_CAMERA,

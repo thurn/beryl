@@ -38,7 +38,11 @@ fn started(effects: Vec<StepEffect>) -> Show {
         effects,
         ..timings[0].clone()
     };
-    let mut show = Show::new(Table::new(DESKTOP, window(1600.0, 900.0)));
+    let mut show = Show::new(Table::new(
+        crate::test_data::data(),
+        DESKTOP,
+        window(1600.0, 900.0),
+    ));
     show.push(Box::new(start), Vec::new());
     show.push(Box::new(after), timings);
     let mut buffer = empty_frame();

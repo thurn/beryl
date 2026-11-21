@@ -1,7 +1,7 @@
-//! Writes `data/beryl3d/space.json` as a string constant and its numbers as constants of the
+//! Writes `data/beryl3d/space-constants.json` as a string constant and its numbers as constants of the
 //! module `space`, and each number of the `audit` object of `data/beryl3d/gates.json` as an
 //! `f32` constant named for its key in upper case, to `OUT_DIR/data.rs`, which `src/data.rs`
-//! includes. `write_space` describes the one rule that turns `space.json` into modules and
+//! includes. `write_space` describes the one rule that turns `space-constants.json` into modules and
 //! constants. It also writes the design tokens of `data/design-tokens.json` as the constants of
 //! `src/tokens.rs`'s modules under `OUT_DIR/tokens` (`write_tokens`). It embeds the serif font
 //! files that the typography module uses.
@@ -16,7 +16,7 @@ use std::path::PathBuf;
 fn main() {
     let manifest = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
     let data = manifest.join("../../../../data/beryl3d");
-    let space = data.join("space.json");
+    let space = data.join("space-constants.json");
     let gates = data.join("gates.json");
     println!("cargo:rerun-if-changed={}", space.display());
     println!("cargo:rerun-if-changed={}", gates.display());
@@ -26,7 +26,7 @@ fn main() {
     // Checked to parse, so a malformed file fails the build, not a run.
     let space_json: serde_json::Value = serde_json::from_str(&space_text).unwrap();
     let mut out = format!(
-        "/// The contents of `data/beryl3d/space.json`.\npub const SPACE: &str = {space_text:?};\n"
+        "/// The contents of `data/beryl3d/space-constants.json`.\npub const SPACE: &str = {space_text:?};\n"
     );
     write_space(&space_json, &mut out);
     let audit = gates_json["audit"]
@@ -427,7 +427,7 @@ fn parse_color<'a>(value: &str, find: &dyn Fn(&str) -> &'a serde_json::Value) ->
     rgba
 }
 
-/// Writes the module `space` from `space.json` by one rule, whatever the keys are. An object
+/// Writes the module `space` from `space-constants.json` by one rule, whatever the keys are. An object
 /// becomes a `pub mod` named for its key. A number becomes a `pub const` named for its key in
 /// upper case: a `usize` when its dotted path is listed in the top-level `counts` array, and
 /// an `f32` otherwise. An array of two or three numbers becomes a `glam::Vec2` or `glam::Vec3`,
@@ -437,8 +437,8 @@ fn write_space(json: &serde_json::Value, out: &mut String) {
         .as_array()
         .map(|paths| paths.iter().filter_map(serde_json::Value::as_str).collect())
         .unwrap_or_default();
-    out.push_str("/// The numbers of `data/beryl3d/space.json`.\npub mod space {\n");
-    let object = json.as_object().expect("space.json is an object");
+    out.push_str("/// The numbers of `data/beryl3d/space-constants.json`.\npub mod space {\n");
+    let object = json.as_object().expect("space-constants.json is an object");
     write_members(object, "", 1, &counts, out);
     out.push_str("}\n");
 }
@@ -462,7 +462,11 @@ fn write_members(
         } else {
             format!("{path}.{key}")
         };
-        writeln!(out, "{indent}/// `{dotted}` in `data/beryl3d/space.json`.").unwrap();
+        writeln!(
+            out,
+            "{indent}/// `{dotted}` in `data/beryl3d/space-constants.json`."
+        )
+        .unwrap();
         if let Some(members) = value.as_object() {
             let module: String = key
                 .chars()
@@ -476,11 +480,12 @@ fn write_members(
             let (kind, expression) = if counts.contains(&dotted.as_str()) {
                 let count = value
                     .as_u64()
-                    .unwrap_or_else(|| panic!("space.json's `{dotted}` is a count"));
+                    .unwrap_or_else(|| panic!("space-constants.json's `{dotted}` is a count"));
                 ("usize".to_string(), count.to_string())
             } else {
-                value_expression(value)
-                    .unwrap_or_else(|| panic!("space.json's `{dotted}` is not a number or vector"))
+                value_expression(value).unwrap_or_else(|| {
+                    panic!("space-constants.json's `{dotted}` is not a number or vector")
+                })
             };
             writeln!(out, "{indent}pub const {name}: {kind} = {expression};").unwrap();
         }

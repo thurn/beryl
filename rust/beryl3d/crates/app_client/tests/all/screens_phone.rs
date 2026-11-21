@@ -68,9 +68,15 @@ fn page(messages: Vec<FixtureMessage>, size: Size) -> Page {
 
 /// `messages` played in the phone layout at `size` with the safe area `safe`, settled.
 fn page_in(messages: Vec<FixtureMessage>, size: Size, safe: Insets) -> Page {
-    let mut page = Page::new(Recording(messages).into(), Side::You, Layout::Phone, size)
-        .expect("the recording plays")
-        .with_safe_area(safe);
+    let mut page = Page::new(
+        crate::test_data::data(),
+        Recording(messages).into(),
+        Side::You,
+        Layout::Phone,
+        size,
+    )
+    .expect("the recording plays")
+    .with_safe_area(safe);
     page.still();
     page
 }

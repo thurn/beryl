@@ -10,7 +10,6 @@ use beryl_protocol::script::Room;
 
 use super::{Interval, StepIn, StepOut};
 use game_table::table::CARD_WIDTH;
-use kit_base::data::space;
 use kit_base::pose::{Pose, Segment};
 
 pub const BUILT: bool = true;
@@ -25,7 +24,7 @@ pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
         ..from
     };
     let onto = if from.position.truncate().distance(to.position.truncate())
-        < space::verbs::tap::NEAR * CARD_WIDTH
+        < step.verbs.tap.near * CARD_WIDTH
     {
         to
     } else {

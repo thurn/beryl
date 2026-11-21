@@ -22,7 +22,6 @@ use glam::{Quat, Vec2, Vec3, Vec3Swizzles};
 
 use super::{Interval, StepIn, StepOut};
 use game_table::table::{CARD_HEIGHT, CARD_WIDTH};
-use kit_base::data::space::verbs::strike;
 use kit_base::pose::{Curve, Pose, Segment};
 
 pub const BUILT: bool = true;
@@ -53,6 +52,7 @@ const DASH: Curve = Curve {
 };
 
 pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
+    let strike = &step.verbs.strike;
     let (Some(subject), Some(from), Some(to)) = (step.subject, step.from, step.to) else {
         return;
     };
@@ -83,9 +83,9 @@ pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
     let camera = step.places.camera();
     // Drawn `lift` larger: brought toward the eye by that share of its new distance.
     let toward_eye = (camera.eye - from.position).normalize_or_zero();
-    let raised = camera.depth(from.position) * strike::LIFT / (1.0 + strike::LIFT);
+    let raised = camera.depth(from.position) * strike.lift / (1.0 + strike.lift);
     let poised = Pose {
-        position: from.position - blow.unit * strike::REAR * width + toward_eye * raised,
+        position: from.position - blow.unit * strike.rear * width + toward_eye * raised,
         rotation: lean * from.rotation,
         ..from
     };
@@ -94,10 +94,10 @@ pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
         rotation: lean * from.rotation,
         ..from
     };
-    let stay = strike::STAY.max(hit);
+    let stay = strike.stay.max(hit);
     let home = f32::midpoint(stay, 1.0);
     let half_way = between(landed, to, 0.5);
-    let wind = strike::WIND.min(poise);
+    let wind = strike.wind.min(poise);
     let spans = [
         (from, poised, (0.0, wind), OUT),
         (poised, landed, (poise, hit), DASH),
@@ -126,6 +126,7 @@ struct Blow {
 
 /// The blow of the step's strike from `from` at `struck`, if what it strikes has a place.
 fn blow(step: &StepIn<'_>, from: Pose, struck: Subject) -> Option<Blow> {
+    let strike = &step.verbs.strike;
     let (at, half) = match struck {
         Subject::Object { .. } => {
             let pose = step.places.pose(struck, step.own.from)?;
@@ -153,17 +154,17 @@ fn blow(step: &StepIn<'_>, from: Pose, struck: Subject) -> Option<Blow> {
         .filter(|(along, _)| *along != 0.0)
         .map(|(along, half)| half / along.abs())
         .fold(f32::INFINITY, f32::min);
-    let short = edge + strike::NEAR;
+    let short = edge + strike.near;
     // Two creatures that strike each other meet half way.
     let share = if meets_another(step) { 0.5 } else { 1.0 };
-    let least = strike::LEAST * CARD_WIDTH * from.scale;
+    let least = strike.least * CARD_WIDTH * from.scale;
     let go = ((far - short) * share).max(least);
     let camera = step.places.camera();
     let leftward =
         camera.to_screen(from.position + unit.extend(0.0)).x < camera.to_screen(from.position).x;
     // It leans clockwise on the screen, a negative turn about the up axis, unless what it
     // strikes is to its left (`lunge` in tracks.ts leans the same way).
-    let lean = strike::LEAN.to_radians() * if leftward { 1.0 } else { -1.0 };
+    let lean = strike.lean.to_radians() * if leftward { 1.0 } else { -1.0 };
     Some(Blow {
         unit: unit.extend(0.0),
         go,

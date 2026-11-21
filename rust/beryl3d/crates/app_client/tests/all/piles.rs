@@ -19,11 +19,14 @@ use kit_space::motion::pose_at;
 use kit_ui::input::{Insets, Size};
 
 fn client() -> Client {
-    Client::new(Config {
-        elements: 2048,
-        draws: 2048,
-        name_bytes: 65_536,
-    })
+    Client::new(
+        crate::test_data::data(),
+        Config {
+            elements: 2048,
+            draws: 2048,
+            name_bytes: 65_536,
+        },
+    )
 }
 
 /// A view whose viewer's library holds `cards` cards and which has nothing else.
@@ -59,7 +62,7 @@ fn table_records(frame: &Frame) -> usize {
 
 /// The table at rest in `view`, in a 1600 by 900 window.
 fn table_of(view: &ViewBuilder) -> Table {
-    let mut table = Table::new(DESKTOP, window(1600.0, 900.0));
+    let mut table = Table::new(crate::test_data::data(), DESKTOP, window(1600.0, 900.0));
     table.apply(&view.build());
     table
 }
@@ -178,7 +181,7 @@ fn a_card_taken_from_inside_a_pile_starts_where_it_lay() {
     before.script(ScriptBuilder::reset().build());
     // The show's table is 1440 by 900, and a pile's cards are as large as the web's in the
     // window: lay the library out in the same window.
-    let mut table = Table::new(DESKTOP, window(1440.0, 900.0));
+    let mut table = Table::new(crate::test_data::data(), DESKTOP, window(1440.0, 900.0));
     table.apply(&before.build());
     let lay = table
         .rest(usize::from(slot.0))

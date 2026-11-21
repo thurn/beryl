@@ -2,6 +2,7 @@
 //! kept across updates, so that a card moving between zones is one object throughout.
 
 use std::cell::Cell;
+use std::sync::Arc;
 
 use beryl_protocol::protocol::{ObjectId, ObjectView, PlayerView, Side, ZoneName};
 use beryl_protocol::script::Subject;
@@ -18,10 +19,9 @@ use super::shadows::Floors;
 use super::shown::Shown;
 use super::tray::TrayMotion;
 use super::tray_layout::Held;
-use super::{
-    CARD_HEIGHT, CARD_WIDTH, Camera, DESKTOP, Layout, PlayerAnchor, Window, phone, takes_pointer,
-};
+use super::{CARD_HEIGHT, CARD_WIDTH, Camera, Layout, PlayerAnchor, Window, phone, takes_pointer};
 use crate::faces::{CARD_BACK, Faces};
+use kit_base::data::Data;
 use kit_base::pose::{Interval, Pose};
 use kit_frame::frame::{
     Band, Draw, ElementId, FrameBuilder, OBJECTS, Place, Resolved, Role, StateBits,
@@ -122,6 +122,7 @@ pub fn ability_track(tracks: &[(u32, Track)], id: u32) -> Option<&Track> {
 /// The 3D table: the camera and every scene object.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Table {
+    data: Arc<Data>,
     /// The layout the table was made with, which a desktop window takes.
     base: Layout,
     /// The window's layout, chosen by `Layout::for_window`.
@@ -167,18 +168,13 @@ impl PartialEq for Placed {
     }
 }
 
-impl Default for Table {
-    fn default() -> Self {
-        Self::new(DESKTOP, Window::default())
-    }
-}
-
 impl Table {
     #[must_use]
-    pub fn new(base: Layout, window: Window) -> Self {
+    pub fn new(data: Arc<Data>, base: Layout, window: Window) -> Self {
         let layout = base.for_window(window);
         let camera = layout.fit(window);
         Self {
+            data,
             base,
             layout,
             row_fits: RowFits::new(&layout, &camera),
@@ -195,6 +191,14 @@ impl Table {
             prompt_covers: false,
             hand_away: false,
         }
+    }
+
+    pub fn data(&self) -> &Arc<Data> {
+        &self.data
+    }
+
+    pub fn set_data(&mut self, data: Arc<Data>) {
+        self.data = data;
     }
 
     #[must_use]

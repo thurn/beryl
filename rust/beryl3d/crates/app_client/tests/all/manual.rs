@@ -43,11 +43,14 @@ pub(super) fn client_in(
     width: f32,
     height: f32,
 ) -> (Client, Frame) {
-    let mut client = Client::new(Config {
-        elements: 2048,
-        draws: 2048,
-        name_bytes: 65_536,
-    });
+    let mut client = Client::new(
+        crate::test_data::data(),
+        Config {
+            elements: 2048,
+            draws: 2048,
+            name_bytes: 65_536,
+        },
+    );
     client.handle(Input::Platform { mac: true });
     client.handle(Input::Surface {
         size: Size { width, height },
@@ -97,7 +100,7 @@ fn touch(phase: PointerPhase, position: Vec2) -> Input {
 /// Nanoseconds in a millisecond, the unit of `Client::frame`'s clock.
 const MS: u64 = 1_000_000;
 
-/// The hold time of a long press, `pointer.long_press_ms` in `data/beryl3d/space.json`.
+/// The hold time of a long press, `pointer.long_press_ms` in `data/beryl3d/space-constants.json`.
 const LONG_PRESS: u64 = 500 * MS;
 
 /// The names of the menu rows `frame` shows.

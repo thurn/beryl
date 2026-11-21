@@ -20,6 +20,7 @@ name = "b3d-frame-counts"
 path = "src/bin/frame_counts.rs"
 
 [dependencies]
+kit_base.workspace = true
 kit_scene.workspace = true
 app_client.workspace = true
 game_hud.workspace = true
@@ -53,7 +54,6 @@ harness = false
 libc = "0.2.191"
 
 [dev-dependencies]
-kit_base.workspace = true
 # Opens repository files and records each read, so Ignite reruns the tests when one changes.
 beryl_test_files = { path = "../../../crates/beryl_test_files" }
 # The points on screen the pointer tests press and drag to, the vector type the client's

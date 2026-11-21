@@ -535,7 +535,7 @@ pub fn run(options: &Options) -> Result<Finished, String> {
         #[cfg(all(feature = "tools", unix))]
         live: None,
     };
-    let mut client = Client::new(Config::LARGEST);
+    let mut client = Client::new(crate::data::embedded()?, Config::LARGEST);
     if let Some(settings) = settings {
         client.handle(Input::Settings(settings));
     }

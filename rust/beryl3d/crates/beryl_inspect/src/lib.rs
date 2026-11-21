@@ -6,6 +6,7 @@
 
 pub mod cli;
 mod corpus;
+pub mod data;
 pub mod faults;
 pub mod gate;
 pub mod pack;

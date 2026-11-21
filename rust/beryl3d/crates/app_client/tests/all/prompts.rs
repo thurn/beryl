@@ -238,7 +238,7 @@ fn the_ways_to_use_a_card_draw_one_face_each_and_a_disabled_way_sends_nothing() 
     }];
     let view = builder.build();
     let names = view.objects.iter().filter_map(|o| o.name.as_deref());
-    let mut client = Client::new(Config::LARGEST);
+    let mut client = Client::new(crate::test_data::data(), Config::LARGEST);
     client.handle(Input::Surface {
         size: SIZE,
         scale: 2.0,

@@ -10,7 +10,7 @@ use beryl_protocol::script::{Act, Subject};
 use glam::Vec3;
 
 use super::{StepIn, StepOut};
-use kit_base::data::space;
+use kit_base::data::{space, verbs::Emerge};
 use kit_base::pose::{Pose, Segment};
 
 pub const BUILT: bool = true;
@@ -31,7 +31,7 @@ pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
         _ => None,
     };
     let from = match source.filter(|source| source.opacity > 0.0) {
-        Some(source) => emerging(source, to),
+        Some(source) => emerging(source, to, &step.verbs.emerge),
         None => Pose { opacity: 0.0, ..to },
     };
     out.segment(subject, Segment::between(from, to, step.own, step.curve));
@@ -40,12 +40,12 @@ pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
 /// Where an ability that rests at `rest` starts, as a small copy lying on its source at
 /// `source`: turned as it will rest, and one card's thickness above the source, so that the
 /// source does not hide it.
-fn emerging(source: Pose, rest: Pose) -> Pose {
+fn emerging(source: Pose, rest: Pose, tuning: &Emerge) -> Pose {
     let size = source.scale * Vec3::new(space::card::WIDTH, space::card::HEIGHT, 0.0);
-    let offset = space::verbs::emerge::START_OFFSET.extend(0.0) * size;
+    let offset = tuning.start_offset.extend(0.0) * size;
     Pose {
         position: source.position + source.rotation * offset + Vec3::Z * space::card::LAYER,
-        scale: source.scale * space::verbs::emerge::START_SCALE,
+        scale: source.scale * tuning.start_scale,
         ..rest
     }
 }

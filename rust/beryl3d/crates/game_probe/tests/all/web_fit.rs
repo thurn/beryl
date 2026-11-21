@@ -43,7 +43,14 @@ fn desktop_cards_land_on_the_web_interfaces_boxes() {
     let view = builder.build();
     let layout = DESKTOP.for_window(window);
     let camera = layout.fit(window);
-    let placement = place(&view, &[], &layout, &camera, &Scroll::default());
+    let placement = place(
+        &view,
+        &[],
+        &layout,
+        &camera,
+        &Scroll::default(),
+        &crate::test_data::data().verbs.lift,
+    );
     let box_of = |slot: ObjectId| {
         let pose = placement.get(slot).expect("the card is placed").pose;
         let (corners, _) = camera.card_box(&pose);
@@ -127,7 +134,14 @@ fn a_blocker_stands_across_from_its_attacker() {
                 });
             }
         }
-        let placement = place(&view, &[], &layout, &camera, &Scroll::default());
+        let placement = place(
+            &view,
+            &[],
+            &layout,
+            &camera,
+            &Scroll::default(),
+            &crate::test_data::data().verbs.lift,
+        );
         let screen = |slot: ObjectId| {
             let pose = placement.get(slot).expect("the card is placed").pose;
             let (corners, _) = camera.card_box(&pose);

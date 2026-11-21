@@ -53,91 +53,11 @@ use std::f32::consts::PI;
 use super::{Interval, StepIn, StepOut};
 use beryl_protocol::script::Subject;
 use game_table::table::Camera;
-use kit_base::data::space::verbs::fly::{bows, drawn_front, front, held, played, thrown, turn};
+use kit_base::data::verbs::{Bowing, Fly, Front};
 use kit_base::data::{audit, space};
-use kit_base::pose::{Bow, Curve, Lift, Pose, Segment, Shape, Turning};
+use kit_base::pose::{Bow, Curve, Lift, Pose, Segment, Shape};
 
 pub const BUILT: bool = true;
-
-/// One of the web interface's `BOWS`: how far off its straight way a flight goes, as a share of
-/// that way's length, where it is farthest off (`peak` of its eased progress), how far it leans
-/// there in degrees, and how far it also swings back across the table, as a share of how far
-/// across the way runs.
-struct Bowing {
-    share: f32,
-    peak: f32,
-    lean: f32,
-    back: f32,
-}
-
-/// A spell of the viewer's thrown onto the stack.
-const CAST: Bowing = Bowing {
-    share: bows::cast::SHARE,
-    peak: bows::cast::PEAK,
-    lean: bows::cast::LEAN,
-    back: bows::cast::BACK,
-};
-
-/// A spell of the opponent's thrown onto the stack.
-const THEIRS: Bowing = Bowing {
-    share: bows::theirs::SHARE,
-    peak: bows::theirs::PEAK,
-    lean: bows::theirs::LEAN,
-    back: bows::theirs::BACK,
-};
-
-/// A land the opponent plays.
-const PLAYED: Bowing = Bowing {
-    share: bows::played::SHARE,
-    peak: bows::played::PEAK,
-    lean: bows::played::LEAN,
-    back: bows::played::BACK,
-};
-
-/// A card drawn that no one reads, the opponent's.
-const DRAWN: Bowing = Bowing {
-    share: bows::drawn::SHARE,
-    peak: bows::drawn::PEAK,
-    lean: bows::drawn::LEAN,
-    back: bows::drawn::BACK,
-};
-
-/// A card no one can read that an effect takes from a library into a hand. It drops far
-/// into the table, with a shallow sideways swing so it stays inside the window on leaving
-/// the pile.
-const TAKEN: Bowing = Bowing {
-    share: bows::taken::SHARE,
-    peak: bows::taken::PEAK,
-    lean: bows::taken::LEAN,
-    back: bows::taken::BACK,
-};
-
-/// A card the viewer draws alone, on its way to where it is held up.
-const HELD_IN: Bowing = Bowing {
-    share: held::bow::SHARE,
-    peak: held::bow::PEAK,
-    lean: held::bow::LEAN,
-    back: held::bow::BACK,
-};
-
-/// A card that turns over on a flight that is not a draw: edge-on a little before half way.
-const CAST_TURN: Turning = Turning {
-    at: turn::cast::AT,
-    each: turn::cast::EACH,
-};
-
-/// A drawn card's turn: as it leaves the library.
-const DRAW_TURN: Turning = Turning {
-    at: turn::draw::AT,
-    each: turn::draw::EACH,
-};
-
-/// The turn of a card the viewer draws alone and holds up, as shares of its flight in, not of
-/// the step (the web's `HELD_TURNING` in `ui/src/stage/drawn.ts`).
-const HELD_TURN: Turning = Turning {
-    at: held::turn::AT,
-    each: held::turn::EACH,
-};
 
 /// The path a flight takes.
 enum Path {
@@ -150,7 +70,7 @@ enum Path {
     /// Bowed toward one edge of the table: `toward` is 1 for the viewer's edge and -1 for the
     /// opponent's, as the web's `toward` is 1 down the stage.
     Bowed {
-        bowing: &'static Bowing,
+        bowing: Bowing,
         toward: f32,
         rises: bool,
         /// Drawn in front of what it passes (`Shape::BowedNear`).
@@ -173,7 +93,7 @@ fn draws(act: &Act) -> bool {
 
 /// The path of the flight `act` makes, whose case is `case` (the web's `bowOf` and `lifts`,
 /// and its `heldUp` and `swept` for the cases `draw` and `draw of several`).
-fn path_of(act: &Act, case: Option<&str>) -> Path {
+fn path_of(act: &Act, case: Option<&str>, fly: &Fly) -> Path {
     let Act::Fly {
         from, object, why, ..
     } = act
@@ -190,7 +110,11 @@ fn path_of(act: &Act, case: Option<&str>) -> Path {
     if draws(act) {
         // Toward the middle of the table, away from its player's edge.
         return Path::Bowed {
-            bowing: if *why == Why::Draw { &DRAWN } else { &TAKEN },
+            bowing: if *why == Why::Draw {
+                fly.bows.drawn
+            } else {
+                fly.bows.taken
+            },
             toward: -toward,
             // An opponent's draw crosses the stack on its way to their hand at the top of the
             // window, so it is drawn in front of it.
@@ -203,7 +127,7 @@ fn path_of(act: &Act, case: Option<&str>) -> Path {
         // leaves the table to rise above it: a rise along the table's height would carry it up
         // the screen against its bow.
         (_, ZoneName::Stack) => Path::Bowed {
-            bowing: if mine { &CAST } else { &THEIRS },
+            bowing: if mine { fly.bows.cast } else { fly.bows.theirs },
             toward,
             rises: *from != ZoneName::Hand,
             near: false,
@@ -217,7 +141,7 @@ fn path_of(act: &Act, case: Option<&str>) -> Path {
         (ZoneName::Hand, ZoneName::Battlefield) if mine => Path::Lifted,
         // The opponent's land bows toward the middle of the table, away from their own edge.
         (ZoneName::Hand, ZoneName::Battlefield) => Path::Bowed {
-            bowing: &PLAYED,
+            bowing: fly.bows.played,
             toward: -toward,
             rises: false,
             near: false,
@@ -279,6 +203,7 @@ fn room((from, to): (Pose, Pose), camera: &Camera) -> f32 {
 /// window, its foot `held.phone.foot` of the way down it (the web's `drawn`). Either is moved
 /// back inside the window's safe area where it would leave part of the card outside.
 fn held_place(step: &StepIn<'_>, rest: Pose) -> Pose {
+    let held = &step.verbs.fly.held;
     let camera = step.places.camera();
     let size = camera.window.size;
     let (mut ndc, height) = if camera.window.phone() {
@@ -293,10 +218,10 @@ fn held_place(step: &StepIn<'_>, rest: Pose) -> Pose {
             .copied()
             .reduce(Vec2::max)
             .unwrap_or_default();
-        let tall = (high.y - low.y) * held::phone::SIZE;
+        let tall = (high.y - low.y) * held.phone.size;
         let middle = Vec2::new(
             f32::midpoint(low.x, high.x),
-            low.y + (high.y - low.y) * held::phone::FOOT - tall / 2.0,
+            low.y + (high.y - low.y) * held.phone.foot - tall / 2.0,
         );
         (
             Vec2::new(
@@ -306,9 +231,9 @@ fn held_place(step: &StepIn<'_>, rest: Pose) -> Pose {
             tall / size.height,
         )
     } else {
-        (held::NDC, step.places.layout().hand.height * held::SIZE)
+        (held.ndc, step.places.layout().hand.height * held.size)
     };
-    let place = |ndc: Vec2| camera.screen_pose(ndc, held::DEPTH, Quat::IDENTITY, height);
+    let place = |ndc: Vec2| camera.screen_pose(ndc, held.depth, Quat::IDENTITY, height);
     let mut pose = place(ndc);
     // The card faces the camera at a fixed depth, so it moves on the window as its `ndc` does,
     // one window's half width or height for each unit.
@@ -366,7 +291,7 @@ fn into_safe_area(corners: &[Vec2], camera: &Camera) -> Vec2 {
 /// two battlefields, and the battlefield lies just below the stack, so a card that kept to the
 /// depth of its way would pass under the hand or the stack and be hidden for most of its
 /// flight.
-fn in_front(camera: &Camera, from: Pose, to: Pose) -> Lift {
+fn in_front(camera: &Camera, from: Pose, to: Pose, front: &Front) -> Lift {
     let nearest = camera
         .depth(from.position)
         .min(camera.depth(to.position))
@@ -374,8 +299,9 @@ fn in_front(camera: &Camera, from: Pose, to: Pose) -> Lift {
     Lift {
         eye: camera.eye,
         forward: -camera.axes()[2],
-        near: nearest * front::NEAR,
-        hold: front::HOLD,
+        near: nearest * front.near,
+        hold: front.hold,
+        keep: front.keep,
     }
 }
 
@@ -420,18 +346,20 @@ fn part(own: Interval, from: f32, to: f32) -> Interval {
 /// `held_sink` of the way toward the hand; and the drop into the hand, leaving that pace and
 /// quickening, with no jolt between the two.
 fn held_up(step: &StepIn<'_>, (from, to): (Pose, Pose), out: &mut StepOut<'_>, subject: Subject) {
+    let fly = &step.verbs.fly;
+    let held = &fly.held;
     let up = held_place(step, to);
-    let lowered = lerp(up, to, space::verbs::fly::HELD_SINK);
-    let (flying, holding) = (held::IN, held::HOLD);
+    let lowered = lerp(up, to, fly.held_sink);
+    let (flying, holding) = (held.r#in, held.hold);
     let camera = step.places.camera();
-    let bowed = bow(&HELD_IN, -1.0, (from, up), camera);
+    let bowed = bow(&held.bow, -1.0, (from, up), camera);
     // Drawn in front of the hand as it rises from the library, which on the phone lies
     // partly under the hand.
-    let lift = in_front(camera, from, to);
+    let lift = in_front(camera, from, to, &fly.front);
     // The web leans and holds back the growth only of a card that turns over (its `heldUp`
     // returns the bowed pose alone for a card already face up).
     let (shape, turning) = if turns(from, to) {
-        let lean = held::LEAN.to_radians();
+        let lean = held.lean.to_radians();
         let eye = camera.eye.dot(bowed.axis);
         (
             Shape::Held {
@@ -440,7 +368,7 @@ fn held_up(step: &StepIn<'_>, (from, to): (Pose, Pose), out: &mut StepOut<'_>, s
                 eye,
                 lift,
             },
-            Some(HELD_TURN),
+            Some(held.turn),
         )
     } else {
         (Shape::BowedNear { bow: bowed, lift }, None)
@@ -465,7 +393,7 @@ fn held_up(step: &StepIn<'_>, (from, to): (Pose, Pose), out: &mut StepOut<'_>, s
     // The drop goes `pace x + (1 - pace) x²` of its way in `x` of its time, so that it leaves
     // at the pace the hold sank at: a curve of the second degree, which as a cubic Bezier has
     // the control points (1/3, pace/3) and (2/3, (1 + pace)/3).
-    let sink = space::verbs::fly::HELD_SINK;
+    let sink = fly.held_sink;
     let pace = (sink * (1.0 - flying - holding)) / (holding * (1.0 - sink));
     let drop = Curve {
         x1: 1.0 / 3.0,
@@ -511,11 +439,12 @@ fn swept(step: &StepIn<'_>, (from, to): (Pose, Pose)) -> Shape {
     Shape::Swept {
         bulge: control - (from.position + to.position) / 2.0,
         grow: scale - f32::midpoint(from.scale, to.scale),
-        lift: in_front(camera, from, to),
+        lift: in_front(camera, from, to, &step.verbs.fly.front),
     }
 }
 
 pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
+    let fly = &step.verbs.fly;
     let (Some(subject), Some(from), Some(to)) = (step.subject, step.from, step.to) else {
         return;
     };
@@ -525,19 +454,15 @@ pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
     // view at a row's end that moves to the end of that row stays there, undrawn.
     let travels = from.position.truncate() != to.position.truncate();
     let arc = |rises: bool| {
-        if rises && travels {
-            space::verbs::fly::ARC
-        } else {
-            0.0
-        }
+        if rises && travels { fly.arc } else { 0.0 }
     };
-    let path = path_of(step.act, step.timing.case.as_deref());
+    let path = path_of(step.act, step.timing.case.as_deref(), fly);
     // A card whose face changes turns over at moments of its own: a drawn card as it leaves the
     // library, any other a little before half way (the web's `turningOf`).
     let turning = turns(from, to).then_some(if draws(step.act) {
-        DRAW_TURN
+        fly.turn.draw
     } else {
-        CAST_TURN
+        fly.turn.cast
     });
     let segment = match path {
         Path::Held => return held_up(step, (from, to), out, subject),
@@ -552,8 +477,9 @@ pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
                 shape: Shape::Lifted(Lift {
                     eye: camera.eye,
                     forward,
-                    near: camera.depth(from.position) * played::NEAR,
-                    hold: played::HOLD,
+                    near: camera.depth(from.position) * fly.played.near,
+                    hold: fly.played.hold,
+                    keep: fly.front.keep,
                 }),
                 ..between
             }
@@ -568,7 +494,7 @@ pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
                     lean: 0.0,
                     axis: axes[2],
                 },
-                lift: in_front(step.places.camera(), from, to),
+                lift: in_front(step.places.camera(), from, to, &fly.front),
             },
             ..between
         },
@@ -581,7 +507,7 @@ pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
             near,
         } => {
             let camera = step.places.camera();
-            let bow = bow(bowing, toward, (from, to), camera);
+            let bow = bow(&bowing, toward, (from, to), camera);
             Segment {
                 arc: arc(rises),
                 shape: if near {
@@ -590,8 +516,9 @@ pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
                         lift: Lift {
                             eye: camera.eye,
                             forward: -axes[2],
-                            near: space::stack::DEPTH * drawn_front::NEAR,
-                            hold: drawn_front::HOLD,
+                            near: space::stack::DEPTH * fly.drawn_front.near,
+                            hold: fly.drawn_front.hold,
+                            keep: fly.front.keep,
                         },
                     }
                 } else {
@@ -605,10 +532,11 @@ pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
                 // Up the screen by a share of the spell's width, and no higher than the room
                 // over it.
                 rise: axes[1]
-                    * (thrown::HEIGHT * space::card::WIDTH * from.scale)
+                    * (fly.thrown.height * space::card::WIDTH * from.scale)
                         .min(room((from, to), step.places.camera())),
-                aloft: thrown::SCALE * from.scale,
-                lift: in_front(step.places.camera(), from, to),
+                aloft: fly.thrown.scale * from.scale,
+                tuning: fly.thrown,
+                lift: in_front(step.places.camera(), from, to, &fly.front),
             },
             ..between
         },

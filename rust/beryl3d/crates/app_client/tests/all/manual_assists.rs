@@ -43,11 +43,14 @@ fn client_at(view: &PlayerView) -> Client {
 
 /// A client on the Mac in a window `width` by `height` that has been given `view` and drawn it.
 fn client_sized(view: &PlayerView, width: f32, height: f32) -> Client {
-    let mut client = Client::new(Config {
-        elements: 2048,
-        draws: 2048,
-        name_bytes: 65_536,
-    });
+    let mut client = Client::new(
+        crate::test_data::data(),
+        Config {
+            elements: 2048,
+            draws: 2048,
+            name_bytes: 65_536,
+        },
+    );
     client.handle(Input::Platform { mac: true });
     client.handle(Input::Surface {
         size: Size { width, height },

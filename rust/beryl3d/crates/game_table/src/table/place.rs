@@ -28,6 +28,7 @@ use super::pile::{
 use super::rows::{NameIds, RowWindow, face_up};
 use super::stack::{OnStack, on_stack, place_stack, spells, stack_pose};
 use super::{Camera, Layout, lifted, phone};
+use kit_base::data::verbs::Lift;
 use kit_base::pose::Pose;
 use kit_frame::frame::Place;
 
@@ -153,11 +154,12 @@ pub fn place(
     layout: &Layout,
     camera: &Camera,
     scroll: &Scroll,
+    lift: &Lift,
 ) -> Placement {
     let fits = RowFits::new(layout, camera);
     place_zones(
         &Zones::of_view(view, abilities),
-        (layout, camera, scroll, &fits, None),
+        (layout, camera, scroll, &fits, None, lift),
     )
 }
 
@@ -266,6 +268,7 @@ pub(crate) type Rules<'r> = (
     &'r Scroll,
     &'r RowFits,
     Option<&'r NameIds<'r>>,
+    &'r Lift,
 );
 
 /// What `Zones::of_table_grouped` holds for a slot with no object, or one the table does not
@@ -706,7 +709,7 @@ fn lay(
     (zones, piles, rules, hands): (&Zones, &PileRules, Rules, Option<&mut HandFits>),
     placement: &mut Placement,
 ) {
-    let (layout, camera, scroll, fits, ids) = rules;
+    let (layout, camera, scroll, fits, ids, lift) = rules;
     match group {
         Group::Pile { side, zone } => {
             if zone == ZoneName::Exile && layout.phone.is_some() {
@@ -742,7 +745,7 @@ fn lay(
                 placement,
                 objects,
                 (side, scroll.hand),
-                (data, layout.strip),
+                (data, layout.strip, &lift.hand),
                 camera,
                 hands,
             );
@@ -775,7 +778,7 @@ fn lay(
         zones.handling.as_ref(),
         group,
         objects,
-        (layout, camera),
+        (layout, camera, lift),
         placement,
     );
 }

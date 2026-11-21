@@ -46,7 +46,7 @@ impl Host {
             let _ = woke.send(());
         });
         Self {
-            client: Client::new(Config::LARGEST),
+            client: Client::new(crate::test_data::data(), Config::LARGEST),
             renderer,
             assets,
             wakes,

@@ -43,11 +43,14 @@ const ENHANCED: Chosen = Chosen {
 };
 
 fn client() -> Client {
-    Client::new(Config {
-        elements: 64,
-        draws: 64,
-        name_bytes: 1024,
-    })
+    Client::new(
+        crate::test_data::data(),
+        Config {
+            elements: 64,
+            draws: 64,
+            name_bytes: 1024,
+        },
+    )
 }
 
 fn moved(x: f32) -> Input {

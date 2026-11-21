@@ -136,7 +136,7 @@ const GLIDE: Curve = Curve {
     y2: 1.0,
 };
 
-/// A length in milliseconds from `space.json`, in nanoseconds.
+/// A length in milliseconds from `space-constants.json`, in nanoseconds.
 #[expect(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
