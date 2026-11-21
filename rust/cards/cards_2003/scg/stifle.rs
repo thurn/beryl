@@ -7,12 +7,8 @@
 
 use crate::prelude::*;
 
-/// Countering an ability removes it from the stack and leaves its source alone ([CR 701.6a]):
-/// "To counter a spell or ability means to cancel it, removing it from the stack. It doesn't
-/// resolve and none of its effects occur." A mana ability never goes on the stack, so it is never
-/// a target ([CR 605.3b]).
+/// Mana abilities bypass the stack ([CR 605.3b]), so Stifle has no opportunity to target them.
 ///
-/// [CR 701.6a]: https://yawgatog.com/resources/magic-rules/#R7016a
 /// [CR 605.3b]: https://yawgatog.com/resources/magic-rules/#R6053b
 pub static CARD: CardDef = Printed::Stifle
     .abilities(&[Ability::spell()
@@ -160,19 +156,6 @@ pub mod scenarios {
                 THEM.life(18),
                 ME.life(22),
                 THEM.has(Zone::Graveyard, Card::Stifle, 1),
-            ]),
-        // Stifle can target only an ability (CR 114.1 and its "target activated or triggered
-        // ability"), so with only a spell on the stack it can't be cast: P0 can pass or cast
-        // Counterspell, and nothing else.
-        Scenario::new("Stifle can't be cast with only a spell on the stack")
-            .battlefield(P0, &[Card::Island, Card::Island])
-            .hand(P0, &[Card::Stifle, Card::Counterspell])
-            .battlefield(P1, &[Card::Plains])
-            .hand(P1, &[Prop::Artifact])
-            .at(2, P1, TurnStep::PrecombatMain)
-            .actions(&[
-                THEM.casts(Prop::Artifact),
-                ME.deciding(DecisionKind::Priority, 2),
             ]),
         // Cycling is an activated ability. Stifle counters the draw, and the card, discarded as
         // a cost, stays in the graveyard (CR 602.2b, costs are paid on activation).

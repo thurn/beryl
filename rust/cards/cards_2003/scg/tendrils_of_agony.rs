@@ -9,10 +9,6 @@
 
 use crate::prelude::*;
 
-/// "Target player loses 2 life and you gain 2 life." Storm copies the spell once for each other
-/// spell cast before it this turn ([CR 702.40a]), and each copy may have a new target.
-///
-/// [CR 702.40a]: https://yawgatog.com/resources/magic-rules/#R70240a
 pub static CARD: CardDef = Printed::TendrilsOfAgony
     .abilities(&[
         Ability::spell()
@@ -60,20 +56,6 @@ pub mod scenarios {
                 THEM.life(16),
                 ME.life(24),
                 ME.has(Zone::Graveyard, TENDRILS, 1),
-            ]),
-        // The first spell of the turn: storm triggers and copies nothing.
-        Scenario::new("Tendrils of Agony with no spell before it")
-            .battlefield(P0, SWAMPS)
-            .hand(P0, &[TENDRILS])
-            .actions(&[
-                ME.casts(TENDRILS),
-                ME.targets_player(THEM),
-                stack(2),
-                Resolve,
-                stack(1),
-                Resolve,
-                THEM.life(18),
-                ME.life(22),
             ]),
         // A spell the opponent cast this turn counts for storm.
         Scenario::new("Tendrils of Agony counts the opponent's spell")

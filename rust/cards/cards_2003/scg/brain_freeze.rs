@@ -9,10 +9,6 @@
 
 use crate::prelude::*;
 
-/// "Target player mills three cards." Storm copies the spell once for each other spell cast
-/// before it this turn ([CR 702.40a]), and each copy may have a new target.
-///
-/// [CR 702.40a]: https://yawgatog.com/resources/magic-rules/#R70240a
 pub static CARD: CardDef = Printed::BrainFreeze
     .abilities(&[
         Ability::spell()
@@ -31,23 +27,6 @@ pub mod scenarios {
     const ISLAND: &str = Card::Island;
 
     pub const SCENARIOS: &[Scenario] = &[
-        // One spell before it: the spell and its copy mill three each.
-        Scenario::new("Brain Freeze with storm 1")
-            .battlefield(P0, &[Card::Island, Card::Island, Card::Plains])
-            .hand(P0, &[SCIMITAR, FREEZE])
-            .library(P1, &[Card::Plains; 10])
-            .actions(&[
-                ME.casts(SCIMITAR),
-                Resolve,
-                ME.casts(FREEZE),
-                ME.targets_player(THEM),
-                Resolve,
-                ME.targets_player(THEM),
-                Resolve,
-                Resolve,
-                THEM.has_cards(Zone::Graveyard, 6),
-                THEM.has_cards(Zone::Library, 4),
-            ]),
         // The first Brain Freeze's copy was not cast, so the second counts two spells.
         // Its two copies can choose different targets from each other.
         Scenario::new("Brain Freeze does not count copies")

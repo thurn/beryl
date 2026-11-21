@@ -11,5 +11,3 @@ use crate::prelude::*;
 pub static CARD: CardDef = Printed::GoldMyr
     .abilities(&[Ability::tap_for_mana(ManaSet::one(ManaColor::White))])
     .card();
-
-// probe

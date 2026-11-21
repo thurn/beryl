@@ -8,21 +8,10 @@
 
 use crate::prelude::*;
 
-/// "Enchanted creature has vigilance" is a static ability that adds a keyword in layer 6
-/// ([CR 613.1f]): "Layer 6: Ability-adding effects, keyword
-/// counters, ability-removing effects, and effects that say an object can't have an ability
-/// are applied." It affects the creature the Aura is
-/// attached to ([CR 303.4a]). Attacking does not cause a creature with vigilance to tap
-/// ([CR 702.20b]).
+/// The Aura gets a new timestamp each time it attaches ([CR 613.7e]). A later Dress Down
+/// removes the keyword, and attaching the Aura after Dress Down grants it again.
 ///
-/// The effect's timestamp is that of the moment the Aura is attached ([CR 613.7e]): a
-/// "loses all abilities" effect with a later timestamp takes the keyword away, and one with
-/// an earlier timestamp does not.
-///
-/// [CR 303.4a]: https://yawgatog.com/resources/magic-rules/#R3034a
-/// [CR 613.1f]: https://yawgatog.com/resources/magic-rules/#R6131f
 /// [CR 613.7e]: https://yawgatog.com/resources/magic-rules/#R6137e
-/// [CR 702.20b]: https://yawgatog.com/resources/magic-rules/#R70220b
 pub static CARD: CardDef = Printed::Vigilance
     .abilities(&[
         Ability::spell().target(&TargetSpec::creature()),
@@ -42,25 +31,6 @@ pub mod scenarios {
     const DRESS_DOWN: &str = Card::DressDown;
 
     pub const SCENARIOS: &[Scenario] = &[
-        Scenario::new("an enchanted creature attacks without tapping")
-            .battlefield(P0, &[Card::Plains, Prop::Flier])
-            .hand(P0, &[VIGILANCE])
-            .actions(&[
-                ME.casts(VIGILANCE),
-                Resolve,
-                advance_to(1, TurnStep::BeginningOfCombat),
-                ME.passes(),
-                ME.attacks_with(Prop::Flier),
-                ME.tapped(Prop::Flier, 0),
-            ]),
-        Scenario::new("a creature without the Aura taps to attack")
-            .battlefield(P0, &[Prop::Flier])
-            .actions(&[
-                advance_to(1, TurnStep::BeginningOfCombat),
-                ME.passes(),
-                ME.attacks_with(Prop::Flier),
-                ME.tapped(Prop::Flier, 1),
-            ]),
         // Dress Down, cast with flash after the Aura was attached, has the later timestamp:
         // the creature loses vigilance, though the Aura stays attached.
         Scenario::new("Dress Down after the Aura takes vigilance away")

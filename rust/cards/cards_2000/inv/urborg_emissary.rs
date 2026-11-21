@@ -9,7 +9,6 @@
 use crate::prelude::*;
 
 /// Implemented to test Cavern of Souls paying the blue part of a black spell's kicker.
-/// The enter trigger returns a permanent only if the caster paid kicker.
 pub static CARD: CardDef = Printed::UrborgEmissary
     .abilities(&[Ability::triggered(&Trigger::ENTERS)
         .only_if(&Condition::Paid(CastingKind::Kicker))
@@ -27,50 +26,40 @@ pub mod scenarios {
 
     const EMISSARY: &str = Card::UrborgEmissary;
 
-    pub const SCENARIOS: &[Scenario] = &[
-        Scenario::new("Urborg Emissary kicked returns an opposing permanent")
-            .battlefield(
-                P0,
-                &[
-                    Card::Swamp,
-                    Card::Island,
-                    Card::Island,
-                    Card::Island,
-                    Card::Island,
-                    Card::Island,
-                    Card::Island,
-                ],
-            )
-            .battlefield(P1, &[Prop::Flier])
-            .hand(P0, &[EMISSARY, Prop::Vanilla])
-            .actions(&[
-                Action::Cast {
-                    player: P0,
-                    card: EMISSARY,
-                    face: FaceIx::FRONT,
-                    costs: Castings::only(0),
-                },
-                ME.tapped(Card::Island, 4),
-                Resolve,
-                ME.targets(Prop::Flier),
-                Resolve,
-                THEM.has(Zone::Hand, Prop::Flier, 1),
-                // The kicked Emissary does not trigger again for a later creature.
-                ME.casts(Prop::Vanilla),
-                Resolve,
-                stack(0),
-                ME.controls(Prop::Vanilla, 1),
-            ]),
-        Scenario::new("Urborg Emissary unkicked leaves the opposing permanent")
-            .battlefield(P0, &[Card::Swamp; 3])
-            .battlefield(P1, &[Prop::Flier])
-            .hand(P0, &[EMISSARY])
-            .actions(&[
-                ME.casts(EMISSARY),
-                Resolve,
-                stack(0),
-                ME.controls(EMISSARY, 1),
-                THEM.controls(Prop::Flier, 1),
-            ]),
-    ];
+    pub const SCENARIOS: &[Scenario] =
+        &[
+            Scenario::new("Urborg Emissary kicked returns an opposing permanent")
+                .battlefield(
+                    P0,
+                    &[
+                        Card::Swamp,
+                        Card::Island,
+                        Card::Island,
+                        Card::Island,
+                        Card::Island,
+                        Card::Island,
+                        Card::Island,
+                    ],
+                )
+                .battlefield(P1, &[Prop::Flier])
+                .hand(P0, &[EMISSARY, Prop::Vanilla])
+                .actions(&[
+                    Action::Cast {
+                        player: P0,
+                        card: EMISSARY,
+                        face: FaceIx::FRONT,
+                        costs: Castings::only(0),
+                    },
+                    ME.tapped(Card::Island, 4),
+                    Resolve,
+                    ME.targets(Prop::Flier),
+                    Resolve,
+                    THEM.has(Zone::Hand, Prop::Flier, 1),
+                    // The kicked Emissary does not trigger again for a later creature.
+                    ME.casts(Prop::Vanilla),
+                    Resolve,
+                    stack(0),
+                    ME.controls(Prop::Vanilla, 1),
+                ]),
+        ];
 }

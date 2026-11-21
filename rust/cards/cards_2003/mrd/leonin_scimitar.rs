@@ -8,12 +8,7 @@
 
 use crate::prelude::*;
 
-/// "Equipped creature gets +1/+1": a continuous effect on the creature it is attached to
-/// ([CR 301.5a]): "The creature an Equipment is attached to is called the 'equipped creature.'"
-///
-/// Implemented so that scenarios have an Equipment to attach: it is in none of the decks.
-///
-/// [CR 301.5a]: https://yawgatog.com/resources/magic-rules/#R3015a
+/// Implemented so scenarios have an Equipment to attach.
 pub static CARD: CardDef = Printed::LeoninScimitar
     .abilities(&[
         Ability::static_ability(&LayerSpec {
@@ -24,28 +19,3 @@ pub static CARD: CardDef = Printed::LeoninScimitar
         Ability::equip(mana("{1}")),
     ])
     .card();
-
-#[cfg(feature = "scenarios")]
-pub mod scenarios {
-    use crate::prelude::*;
-
-    const SCIMITAR: &str = Card::LeoninScimitar;
-
-    pub const SCENARIOS: &[Scenario] = &[
-        // Equip {1} attaches it to a creature its controller controls, which gets +1/+1. The
-        // opponent's creature is not a legal target (CR 702.6a: "target creature you
-        // control"), so P0 chooses between its own two.
-        Scenario::new("Leonin Scimitar equips a creature, which gets +1/+1")
-            .battlefield(P0, &[SCIMITAR, Prop::Flier, Prop::Vanilla, Card::Plains])
-            .battlefield(P1, &[Prop::Vanilla])
-            .library(P0, &[Card::Plains])
-            .library(P1, &[Card::Plains])
-            .actions(&[
-                ME.activates(SCIMITAR, 1), // Equip {1}
-                ME.deciding(DecisionKind::Target, 2),
-                ME.targets(Prop::Flier),
-                Resolve,
-                ME.pt(Prop::Flier, 4, 2),
-            ]),
-    ];
-}

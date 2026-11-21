@@ -9,21 +9,12 @@
 
 use crate::prelude::*;
 
-/// "Change the text of target spell or permanent by replacing all instances of one color word
-/// with another or one basic land type with another until end of turn." A text-changing effect
-/// ([CR 612.1]): "Some continuous effects change an object’s text." Its controller chooses the
-/// two words as it resolves. A permanent spell keeps the change as the permanent it becomes
+/// A text change applied to a permanent spell carries over to the permanent it becomes
 /// ([CR 400.7a]): "Effects from spells, activated abilities, and triggered abilities that
 /// change the characteristics or controller of a permanent spell on the stack continue to
-/// apply to the permanent that spell becomes." The change ends in the cleanup step
-/// ([CR 514.2]): "the following actions happen simultaneously: ... all “until end of turn” and
-/// “this turn” effects end."
-///
-/// "Draw a card." follows.
+/// apply to the permanent that spell becomes."
 ///
 /// [CR 400.7a]: https://yawgatog.com/resources/magic-rules/#R4007a
-/// [CR 514.2]: https://yawgatog.com/resources/magic-rules/#R5142
-/// [CR 612.1]: https://yawgatog.com/resources/magic-rules/#R6121
 pub static CARD: CardDef = Printed::CrystalSpray
     .abilities(&[Ability::spell()
         .target(&TargetSpec::one(TargetKind::SpellOrPermanent, Filter::Any))

@@ -10,25 +10,10 @@
 
 use crate::prelude::*;
 
-/// The enters ability exiles every other permanent its controller controls, linked to this
-/// Dragon ([CR 607.2a]): "If an object has an activated or triggered ability printed on it that
-/// instructs a player to exile one or more cards and an ability printed on it that refers either
-/// to "the exiled cards" or to cards "exiled with [this object]," these abilities are linked."
+/// An Aura among the returning permanents chooses what it enchants as it enters
+/// ([CR 303.4f]). If the Dragon is the only creature card Animate Dead can enchant when
+/// it returns, the loop is mandatory and "the game is a draw" ([CR 104.4b]).
 ///
-/// The leaves ability looks back in time ([CR 603.10a]) and returns the cards exiled with the
-/// Dragon under their owners' control ([CR 110.2a]), each as a new object ([CR 400.7]), so a land
-/// that was tapped comes back untapped. An Aura among them chooses what it enchants as it
-/// returns and targets nothing ([CR 303.4f]).
-///
-/// With Animate Dead the two abilities make a loop: Animate Dead returns the Dragon, the Dragon
-/// exiles Animate Dead, Animate Dead's leaves ability sacrifices the Dragon, and the Dragon's
-/// leaves ability returns Animate Dead, which must enchant a creature card in a graveyard. With
-/// the Dragon the only one, nobody can stop it, and the game is a draw ([CR 104.4b]).
-///
-/// [CR 607.2a]: https://yawgatog.com/resources/magic-rules/#R6072a
-/// [CR 603.10a]: https://yawgatog.com/resources/magic-rules/#R60310a
-/// [CR 110.2a]: https://yawgatog.com/resources/magic-rules/#R1102a
-/// [CR 400.7]: https://yawgatog.com/resources/magic-rules/#R4007
 /// [CR 303.4f]: https://yawgatog.com/resources/magic-rules/#R3034f
 /// [CR 104.4b]: https://yawgatog.com/resources/magic-rules/#R1044b
 pub static CARD: CardDef = Printed::WorldgorgerDragon
