@@ -56,6 +56,10 @@ fn cards_only() -> String {
     )
 }
 
+/// A successful nextest listing of a package with no test binaries.
+const NO_PACKAGE_TESTS: &str =
+    "{\"check\": \"unit:a\"}\n{\"test-count\": 0, \"rust-suites\": {}}\n";
+
 /// Writes the workspace with `cards` as the cards package's source, and gives git an object ID
 /// for every file and directory, from `version` for those the cards file changes.
 fn write_workspace(world: &World, cards: &str, version: char) {
@@ -205,4 +209,53 @@ fn a_change_to_one_package_lists_and_builds_that_package_alone() {
     let listed = list_commands(&world).len();
     assert_eq!(gate_listing(&world, &checks), names);
     assert_eq!(list_commands(&world).len(), listed);
+}
+
+#[test]
+fn a_package_with_no_tests_leaves_the_other_packages_listed() {
+    let (world, checks) = workspace_world();
+    assert_eq!(
+        gate_listing(&world, &checks),
+        ["rs:cards::b", "rs:core::a", "unit:a"]
+    );
+    let listed = list_commands(&world).len();
+
+    write_workspace(&world, CARDS_CODE, 'd');
+    *world.launcher.listing.lock().unwrap() = NO_PACKAGE_TESTS.to_owned();
+    let names = gate_listing(&world, &checks);
+    assert_eq!(names, ["rs:core::a", "unit:a"]);
+    let lists = list_commands(&world);
+    assert!(
+        lists[listed..]
+            .iter()
+            .any(|args| args.windows(2).any(|pair| pair == ["-p", "cards"]))
+    );
+
+    // The empty package result is merged and kept, so it need not be listed again.
+    assert_eq!(gate_listing(&world, &checks), names);
+    assert_eq!(list_commands(&world).len(), lists.len());
+}
+
+#[test]
+fn a_merge_with_no_tests_checks_the_whole_family() {
+    let (world, checks) = workspace_world();
+    *world.launcher.listing.lock().unwrap() = cards_only();
+    assert_eq!(
+        gate_listing(&world, &checks),
+        ["rs:cards::b", "rs:cards::c", "unit:a"]
+    );
+    let listed = list_commands(&world).len();
+
+    write_workspace(&world, CARDS_CODE, 'd');
+    *world.launcher.listing.lock().unwrap() = NO_PACKAGE_TESTS.to_owned();
+    let tree = TreeId::new("tree-01").unwrap();
+    let set = checks.regression_checks(&world.ctx, &tree).unwrap();
+    assert_eq!(set.unlisted.len(), 1);
+    assert_eq!(set.unlisted[0].name, name("rs:listing"));
+
+    let lists = list_commands(&world);
+    assert!(lists[listed..].iter().any(|args| {
+        args.first().is_some_and(|arg| arg == "cargo")
+            && args.iter().any(|arg| arg == "--workspace")
+    }));
 }

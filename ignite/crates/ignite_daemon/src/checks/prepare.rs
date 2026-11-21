@@ -265,48 +265,8 @@ impl Checks {
         options: &RunOptions,
         run: &mut CheckRun,
     ) -> Option<Prepared> {
-        let FamilyWork {
-            name,
-            family,
-            key,
-            kept,
-            scope,
-            reuse,
-        } = work;
-        let listed = match reuse {
-            Some(Reuse::Whole(base)) => {
-                run.listings_kept += 1;
-                self.note_listed(name, &base.checks);
-                Ok(Listing {
-                    checks: base.checks,
-                    origin: Origin::Made { key: key.clone() },
-                    reads: base.reads,
-                })
-            }
-            Some(Reuse::Partial { base, changed }) => self
-                .list(
-                    ctx,
-                    tree,
-                    name,
-                    family,
-                    options,
-                    run,
-                    key.clone(),
-                    None,
-                    Some(&changed),
-                )
-                .map(|fresh| Self::merged(base, &changed, fresh, key.clone())),
-            None => self.list_remembering_foreign(
-                ctx,
-                tree,
-                (name, family),
-                options,
-                run,
-                key.clone(),
-                kept,
-                scope.as_deref(),
-            ),
-        };
+        let (name, family, key) = (work.name, work.family, work.key.clone());
+        let listed = self.list_family(ctx, tree, work, options, run);
         let mut listing = Self::listed_or_noted(name, listed, run)?;
         let keying = Stopwatch::start(ctx);
         let (mut keyed, mut broken, mut sources) =
@@ -359,6 +319,70 @@ impl Checks {
             keyed,
             broken,
         })
+    }
+
+    /// Lists a family's checks, reusing package listings whose inputs have not changed.
+    fn list_family(
+        &self,
+        ctx: &Context,
+        tree: &OpenTree,
+        work: FamilyWork,
+        options: &RunOptions,
+        run: &mut CheckRun,
+    ) -> std::result::Result<Listing, ListError> {
+        let FamilyWork {
+            name,
+            family,
+            key,
+            kept,
+            scope,
+            reuse,
+        } = work;
+        match reuse {
+            Some(Reuse::Whole(base)) => {
+                run.listings_kept += 1;
+                self.note_listed(name, &base.checks);
+                Ok(Listing {
+                    checks: base.checks,
+                    origin: Origin::Made { key },
+                    reads: base.reads,
+                })
+            }
+            Some(Reuse::Partial { base, changed }) => {
+                let mut list = |scope| {
+                    self.list(
+                        ctx,
+                        tree,
+                        name,
+                        family,
+                        options,
+                        run,
+                        key.clone(),
+                        None,
+                        scope,
+                    )
+                };
+                list(Some(changed.as_slice())).and_then(|fresh| {
+                    let merged = Self::merged(base, &changed, fresh, key.clone());
+                    if merged.checks.is_empty() {
+                        // Confirm that the whole family is empty before refusing it.
+                        list(None)
+                    } else {
+                        Ok(merged)
+                    }
+                })
+            }
+            None => self.list_remembering_foreign(
+                ctx,
+                tree,
+                (name, family),
+                options,
+                run,
+                key,
+                kept,
+                scope.as_deref(),
+            ),
+        }
     }
 
     /// Looks up every prepared check in one request, then runs each family's misses, each

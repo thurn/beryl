@@ -14,14 +14,12 @@
 //! module, a new script) also counts. A kept listing whose sources differ in the tree at hand
 //! was made from other files, and the family is listed again.
 //!
-//! Three kinds of listing are never kept: one with no checks (a `nextest` family always lists
-//! tests, and a `jsonl` family that listed checks before does not suddenly list none, so such a
-//! listing is a failed one), one in which a check carries a digest of a family that declares no
-//! `digest_inputs` (the digest may stand for something no file holds, such as the commit
-//! subjects since staging, so the listing hash cannot say when it changes), and one with checks
-//! Ignite refused. A family that declares `digest_inputs` says its digests are computed from
-//! those files and from what its listing hash already covers, so the listing hash covers them
-//! too and its listing is kept like any other.
+//! An empty listing is never kept. A package selection can list no tests, but a whole `nextest`
+//! family must list tests, and a `jsonl` family that listed checks before must still list some.
+//! Listings with refused checks are also never kept. A listing with check digests is kept only
+//! when the family declares `digest_inputs`. The digest may otherwise stand for something no
+//! file holds, such as the commit subjects since staging, so the listing hash cannot say when
+//! it changes.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs;
@@ -461,15 +459,17 @@ impl Checks {
                     continue;
                 };
                 let listed = match family.adapter {
-                    Adapter::Jsonl => adapters::jsonl_list(&text, name),
+                    Adapter::Jsonl => Some(adapters::jsonl_list(&text, name)),
                     Adapter::Nextest => adapters::nextest_list(&text, name),
                 };
-                if listed.is_empty() && self.cannot_be_empty(name, family) {
-                    // A zero-check listing that exited 0 would count as a vacuous pass. It counts
-                    // as a failed try instead, and is never kept.
+                // A package selection can contain only libraries without test harnesses.
+                // A whole nextest family must still list checks, even if its command exits 0.
+                let Some(listed) = listed.filter(|listed| {
+                    scoped || !listed.is_empty() || !self.cannot_be_empty(name, family)
+                }) else {
                     let _ = crate::supervise::keep(&result.output);
                     continue;
-                }
+                };
                 self.note_listed(name, &listed);
                 let digests_from_files = !family.digest_inputs.is_empty();
                 let keepable = !listed.is_empty()
@@ -576,9 +576,8 @@ impl Checks {
         }
     }
 
-    /// Whether an empty listing of `family` is a failure. The manifest has no way to say a
-    /// family may list nothing, so a Rust test family never may, and any other family may not
-    /// once it has listed checks.
+    /// Whether a whole listing of `family` must have checks. A Rust test family always must.
+    /// Other families must once they have listed checks.
     fn cannot_be_empty(&self, name: &str, family: &Family) -> bool {
         family.adapter == Adapter::Nextest
             || self

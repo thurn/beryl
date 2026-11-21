@@ -298,38 +298,31 @@ pub fn nextest_run_command(
     args
 }
 
-/// The tests in cargo-nextest's JSON listing, skipping ignored tests and tests its filter left
-/// out. The listing is the one line of the output that is a JSON object with `rust-suites`.
-pub fn nextest_list(text: &str, family: &str) -> Vec<Listed> {
-    let Some(listing) = text
+/// The runnable tests in cargo-nextest's JSON listing. An empty package selection can
+/// produce a valid empty listing. Missing or malformed listing data returns `None`.
+pub fn nextest_list(text: &str, family: &str) -> Option<Vec<Listed>> {
+    let listing = text
         .lines()
         .filter_map(|line| serde_json::from_str::<Value>(line.trim()).ok())
-        .find(|value| value.get("rust-suites").is_some())
-    else {
-        return Vec::new();
-    };
+        .find(|value| value.get("rust-suites").is_some())?;
     let mut listed = Vec::new();
-    let suites = listing["rust-suites"].as_object().into_iter().flatten();
-    for suite in suites.map(|(_, suite)| suite) {
-        let text = |key: &str| suite[key].as_str().unwrap_or_default().to_owned();
-        let (binary_id, package) = (text("binary-id"), text("package-name"));
-        let libtest = format!("{package}::{}", text("binary-name"));
-        let cases = suite["testcases"].as_object().into_iter().flatten();
-        for (test, case) in cases {
-            let matches = case["filter-match"]["status"].as_str() == Some("matches");
-            if !matches || case["ignored"].as_bool() == Some(true) {
+    for suite in listing["rust-suites"].as_object()?.values() {
+        let binary_id = suite["binary-id"].as_str()?;
+        let package = suite["package-name"].as_str()?;
+        let libtest = format!("{package}::{}", suite["binary-name"].as_str()?);
+        for (test, case) in suite["testcases"].as_object()? {
+            let matches = case["filter-match"]["status"].as_str()? == "matches";
+            if !matches || case["ignored"].as_bool()? {
                 continue;
             }
-            let Ok(check) = CheckName::new(format!("{family}:{binary_id}::{test}")) else {
-                continue;
-            };
+            let check = CheckName::new(format!("{family}:{binary_id}::{test}")).ok()?;
             listed.push(Listed {
                 check,
                 inputs: Vec::new(),
                 digest: None,
-                package: Some(package.clone()),
+                package: Some(package.to_owned()),
                 target: Some(Target {
-                    binary_id: binary_id.clone(),
+                    binary_id: binary_id.to_owned(),
                     libtest: libtest.clone(),
                     test: test.clone(),
                 }),
@@ -337,7 +330,7 @@ pub fn nextest_list(text: &str, family: &str) -> Vec<Listed> {
             });
         }
     }
-    listed
+    Some(listed)
 }
 
 /// The outcomes in cargo-nextest's libtest JSON for the tests in `listed`. A test that started
@@ -535,7 +528,7 @@ mod tests {
             "runs": {"ignored": false, "filter-match": {"status": "matches"}}}}}}"#;
 
     fn listing() -> Vec<Listed> {
-        nextest_list(&LISTING.replace('\n', " "), "rust")
+        nextest_list(&LISTING.replace('\n', " "), "rust").unwrap()
     }
 
     #[test]
@@ -543,6 +536,22 @@ mod tests {
         let names: Vec<String> = listing().iter().map(|l| l.check.to_string()).collect();
         assert_eq!(names, ["rust:cli::cli::runs", "rust:core::ids::tests::a"]);
         assert_eq!(listing()[0].package.as_deref(), Some("cli"));
+    }
+
+    #[test]
+    fn nextest_distinguishes_an_empty_listing_from_missing_or_malformed_output() {
+        assert!(
+            nextest_list(r#"{"rust-suites": {}}"#, "rust")
+                .unwrap()
+                .is_empty()
+        );
+        for output in [
+            "Finished",
+            r#"{"rust-suites": null}"#,
+            r#"{"rust-suites": {"core": {}}}"#,
+        ] {
+            assert!(nextest_list(output, "rust").is_none(), "{output}");
+        }
     }
 
     #[test]
