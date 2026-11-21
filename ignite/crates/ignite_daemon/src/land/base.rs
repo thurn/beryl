@@ -11,18 +11,18 @@
 //! asks whether each of those checks also fails at the tip it was rebased onto. It runs them in
 //! a landing tree checked out at that tip, each from the result cache where that tip's input
 //! hash has a result. Each check that fails there too is filed with the hub as a regression at
-//! once, as tip verification would file it. When every failure fails at the tip too, the gate
-//! runs again with those checks left out as known to fail, and the checks that already passed
+//! once, after the same bounded culprit search as tip verification. When every failure fails
+//! at the tip too, the gate runs again with those checks left out as known to fail, and the checks that already passed
 //! come from the cache. A check that passes at the tip refuses the landing as before.
 //!
 //! A check that fails at the tip counts as known to fail even when its failure in the landing
 //! says something else, such as more findings: the adapters report no list of findings that
 //! could be compared.
 
-use ignite_core::ids::{CheckName, TicketId};
+use ignite_core::ids::{CheckName, Commit, TicketId};
 use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::{FoundBy, RegressionReport};
-use ignite_core::tipround::CulpritSearch;
+use ignite_core::traits::Error;
 
 use super::env::{CheckVerdict, GateTree};
 use super::passes::Passed;
@@ -30,6 +30,7 @@ use super::{Landing, Rebased, short};
 use crate::checks::{Carried, Excused, GateRun, RunOptions};
 use crate::server::Context;
 use crate::steps;
+use crate::tip::{bisect, ticketed_landings, with_culprit};
 
 /// What one pass of a landing gates, and where.
 pub(super) struct Pass<'a> {
@@ -49,6 +50,11 @@ pub(super) struct Pass<'a> {
     /// even than `master`: a check failing there may be fixed at the tip, so it is not filed,
     /// and the landing is refused with the advice to rebase.
     pub onto_tip: bool,
+}
+
+struct Comparison {
+    verdicts: Vec<CheckVerdict>,
+    regressions: Vec<RegressionReport>,
 }
 
 impl Landing {
@@ -80,8 +86,11 @@ impl Landing {
             if steps::stop_requested() {
                 return gated;
             }
-            let verdicts = match self.at_base(ctx, pass, &failed) {
-                Ok(verdicts) => verdicts,
+            let Comparison {
+                verdicts,
+                regressions,
+            } = match self.at_base(ctx, pass, &failed) {
+                Ok(compared) => compared,
                 Err(why) => {
                     self.gate.tip_unknown(&failed, pass.options);
                     gated.base = Some(format!("not compared with the tip: {why}"));
@@ -106,18 +115,19 @@ impl Landing {
                     return gated;
                 }
             }
+            for report in regressions {
+                if let Some(ticket) = file(ctx, &report) {
+                    excused.insert(report.check, ticket);
+                }
+            }
             for check in &failed {
                 let verdict = verdicts.iter().find(|v| v.check == *check);
                 match verdict.filter(|v| v.outcome == Outcome::Fail) {
                     Some(_) if !pass.onto_tip => {
                         passing.push(format!("{check} (it fails at the base too)"));
                     }
-                    Some(verdict) => match file(ctx, pass.rebased, verdict) {
-                        Some(ticket) => {
-                            excused.insert(check.clone(), ticket);
-                        }
-                        None => passing.push(format!("{check} (its regression was not filed)")),
-                    },
+                    Some(_) if excused.contains_key(check) => {}
+                    Some(_) => passing.push(format!("{check} (its regression was not filed)")),
                     None => passing.push(check.to_string()),
                 }
             }
@@ -140,7 +150,7 @@ impl Landing {
         ctx: &Context,
         pass: &Pass<'_>,
         checks: &[CheckName],
-    ) -> Result<Vec<CheckVerdict>, String> {
+    ) -> Result<Comparison, String> {
         let onto = &pass.rebased.onto;
         let n = checks.len();
         let word = if n == 1 { "check" } else { "checks" };
@@ -151,11 +161,11 @@ impl Landing {
         let holder = format!("{}:base", pass.holder);
         let free = self.trees.lease_landing(&holder, onto);
         if let Ok(Some(tree)) = free {
-            let verdicts = self.gate.run_checks(ctx, &tree, checks, pass.options);
-            if let Err(error) = self.trees.release_landing(&tree.tree, Some(onto)) {
+            let (compared, built_at) = self.compare(ctx, pass, checks, &holder, &tree);
+            if let Err(error) = self.trees.release_landing(&tree.tree, built_at.as_ref()) {
                 eprintln!("ignite: landing tree {} not freed: {error}", tree.tree);
             }
-            return Ok(verdicts);
+            return Ok(compared);
         }
         if !pass.borrowable {
             return Err("no landing tree is free".to_owned());
@@ -172,15 +182,105 @@ impl Landing {
                 pass.tree.tree
             ));
         }
-        let verdicts = self.gate.run_checks(ctx, pass.tree, checks, pass.options);
+        let (compared, _) = self.compare(ctx, pass, checks, pass.holder, pass.tree);
         match self.trees.lease_landing(pass.holder, &pass.rebased.head) {
-            Ok(Some(tree)) if tree.tree == pass.tree.tree => Ok(verdicts),
+            Ok(Some(tree)) if tree.tree == pass.tree.tree => Ok(compared),
             _ => Err(format!(
                 "{} could not be checked out at the rebased commit again",
                 pass.tree.tree
             )),
         }
     }
+
+    /// Compares at the base and, for each confirmed staging failure, searches in the same leased
+    /// tree before sending the report to the hub. The caller restores a borrowed gate tree.
+    fn compare(
+        &self,
+        ctx: &Context,
+        pass: &Pass<'_>,
+        checks: &[CheckName],
+        holder: &str,
+        tree: &GateTree,
+    ) -> (Comparison, Option<Commit>) {
+        let verdicts = self.gate.run_checks(ctx, tree, checks, pass.options);
+        let tip = &pass.rebased.onto;
+        let mut built_at = Some(tip.clone());
+        let mut failed = verdicts
+            .iter()
+            .filter(|verdict| verdict.outcome == Outcome::Fail)
+            .peekable();
+        let mut regressions = Vec::new();
+        if pass.onto_tip && failed.peek().is_some() {
+            steps::step(format!(
+                "searching for regression culprits at {}",
+                short(tip)
+            ));
+            let master = verified_ancestor(ctx, tip);
+            let last_good = master.as_ref().unwrap_or(tip);
+            let range = master.as_ref().map_err(Clone::clone).and_then(|good| {
+                ticketed_landings(ctx, self.trees.commit_paths(&ctx.repo, good, tip)?)
+            });
+            let options = RunOptions {
+                rerun: false,
+                ..pass.options.clone()
+            };
+            for verdict in failed {
+                let culprit = range.as_ref().map_err(Clone::clone).map(|landings| {
+                    bisect(landings, &verdict.inputs, last_good, |at| {
+                        if built_at.is_none() || steps::stop_requested() {
+                            return Some(Outcome::Incomplete);
+                        }
+                        built_at = None;
+                        let moved = self.trees.lease_landing(holder, at).ok().flatten()?;
+                        if moved.tree != tree.tree {
+                            let _ = self.trees.release_landing(&moved.tree, None);
+                            return None;
+                        }
+                        built_at = Some(at.clone());
+                        self.gate
+                            .run_checks(ctx, &moved, std::slice::from_ref(&verdict.check), &options)
+                            .into_iter()
+                            .find(|probe| {
+                                probe.check == verdict.check && probe.platform == verdict.platform
+                            })
+                            .map(|probe| probe.outcome)
+                    })
+                });
+                regressions.push(with_culprit(
+                    RegressionReport {
+                        check: verdict.check.clone(),
+                        first_bad: tip.clone(),
+                        last_good: last_good.clone(),
+                        caused_by: None,
+                        output: verdict.output.clone(),
+                        suspects: Vec::new(),
+                        platform: verdict.platform,
+                        search: None,
+                        found_by: FoundBy::Landing,
+                        detected_at: Some(tip.clone()),
+                    },
+                    culprit,
+                ));
+            }
+        }
+        (
+            Comparison {
+                verdicts,
+                regressions,
+            },
+            built_at,
+        )
+    }
+}
+
+fn verified_ancestor(ctx: &Context, tip: &Commit) -> Result<Commit, Error> {
+    let verified = ctx.git.tip(&ctx.config.repository.master)?;
+    if !ctx.git.is_ancestor(&verified, tip)? {
+        return Err(Error::Conflict(format!(
+            "the verified commit {verified} is no longer an ancestor of {tip}"
+        )));
+    }
+    Ok(verified)
 }
 
 /// The checks whose failures the gate's rerun confirmed, when they are its only faults; `None`
@@ -194,38 +294,14 @@ fn confirmed_failures(gated: &GateRun) -> Option<Vec<CheckName>> {
     (!run.passed() && only_failures).then(|| run.failures.iter().map(|f| f.check.clone()).collect())
 }
 
-/// Files `verdict`'s check with the hub as a regression at the tip the landing was rebased
-/// onto, as tip verification would, and returns the ticket the hub filed it on or added it to.
-/// No culprit search runs: the report names the commits since the last verified one.
-fn file(ctx: &Context, rebased: &Rebased, verdict: &CheckVerdict) -> Option<TicketId> {
-    let repository = &ctx.config.repository;
-    let last_good = ctx
-        .git
-        .tip(&repository.master)
-        .unwrap_or_else(|_| rebased.onto.clone());
-    let report = RegressionReport {
-        check: verdict.check.clone(),
-        first_bad: rebased.onto.clone(),
-        last_good,
-        caused_by: None,
-        output: verdict.output.clone(),
-        suspects: Vec::new(),
-        platform: verdict.platform,
-        search: Some(CulpritSearch::NotRun {
-            why: format!(
-                "a landing's gate found the check failing at the {} tip it was rebased onto, \
-                 before tip verification reached that tip",
-                repository.staging
-            ),
-        }),
-        found_by: FoundBy::Landing,
-    };
-    match ctx.hub.regression(&report) {
+/// Files the search result and returns the ticket that holds the regression.
+fn file(ctx: &Context, report: &RegressionReport) -> Option<TicketId> {
+    match ctx.hub.regression(report) {
         Ok(filed) => Some(filed.ticket),
         Err(error) => {
             eprintln!(
                 "ignite: the regression of {} was not filed: {error}",
-                verdict.check
+                report.check
             );
             None
         }

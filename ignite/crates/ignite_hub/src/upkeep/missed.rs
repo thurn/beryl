@@ -154,7 +154,11 @@ pub fn record(
         return Ok(None);
     }
     let check = report.check.as_str();
-    let tip = report.first_bad.as_str();
+    let tip = report
+        .detected_at
+        .as_ref()
+        .unwrap_or(&report.first_bad)
+        .as_str();
     let evidence = tip_misses::evidence(conn, check, tip)?;
     let Some(miss) = explain(&evidence, &report.check, tip) else {
         return Ok(None);

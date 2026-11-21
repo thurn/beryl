@@ -26,6 +26,7 @@ fn report(check: &str, tip: &str, found_by: FoundBy) -> RegressionReport {
         platform: None,
         search: None,
         found_by,
+        detected_at: None,
     }
 }
 
@@ -92,6 +93,26 @@ fn nothing_is_recorded_before_tip_verification_reaches_the_tip() {
     );
     assert_eq!(miss, None);
     assert!(texts(&conn, &ticket).is_empty());
+}
+
+#[test]
+fn a_gate_search_keeps_the_tip_where_the_failure_was_observed() {
+    let mut conn = hub::open_in_memory().unwrap();
+    let clock = start();
+    round(&conn, &clock, "abcd", 0, None);
+    let mut report = report("unit:a", "1111", FoundBy::Landing);
+    report.detected_at = Some(Commit::new("abcd").unwrap());
+
+    let (id, _) = file(&mut conn, &clock, &report);
+    let misses = tip_misses::since(&conn, None, Timestamp::EPOCH).unwrap();
+
+    assert_eq!(misses.len(), 1);
+    assert_eq!(misses[0].tip, "abcd");
+    assert!(
+        texts(&conn, &id)
+            .iter()
+            .any(|text| text.contains("at that tip (abcd)"))
+    );
 }
 
 #[test]

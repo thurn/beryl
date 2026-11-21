@@ -29,10 +29,10 @@
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 use serde_json::{Value, json};
 
-use ignite_core::protocol::hub::RegressionReport;
+use ignite_core::protocol::hub::{FoundBy, RegressionReport};
 use ignite_core::protocol::tickets::{
     BatchRequest, Dependency, EdgeKind, Operation, Status, TicketFields, TicketType,
 };
@@ -85,6 +85,7 @@ pub fn file(
         Some(ticket) => {
             let loaded = tickets::load(conn, ticket)?;
             if !loaded.as_ref().is_some_and(|t| t.status == Status::Closed) {
+                name_gate_culprit(conn, author, report, ticket, now)?;
                 return Ok((ticket.clone(), Outcome::Unchanged));
             }
             Some((ticket.clone(), loaded))
@@ -161,6 +162,9 @@ pub fn file(
         tips::regression_fixed(conn, check)?;
     }
     tips::regression(conn, report, &ticket)?;
+    if outcome == Outcome::Added {
+        name_gate_culprit(conn, author, report, &ticket, now)?;
+    }
     if outcome != Outcome::Unchanged {
         // A landing found the failure before tip verification did. Recording why must not
         // keep the regression from being filed.
@@ -169,6 +173,99 @@ pub fn file(
         }
     }
     Ok((ticket, outcome))
+}
+
+/// A tip round or another gate can file while a gate is searching. When its ticket has no
+/// culprit, record the new result on the body the dispatcher reads and tell a worker that
+/// already claimed it. An existing culprit still owns the dispatch of a grouped ticket.
+fn name_gate_culprit(
+    conn: &mut Connection,
+    author: Author,
+    report: &RegressionReport,
+    id: &str,
+    now: Timestamp,
+) -> Result<()> {
+    let Some(cause) = report
+        .caused_by
+        .as_ref()
+        .filter(|_| report.found_by == FoundBy::Landing)
+    else {
+        return Ok(());
+    };
+    // Keep the assignment and the comment number stable until the tell commits.
+    let mut tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    let Some(ticket) = tickets::load(&tx, id)? else {
+        return Ok(());
+    };
+    if ticket.status == Status::Closed
+        || ticket
+            .body
+            .lines()
+            .any(|line| line.starts_with("caused-by "))
+    {
+        return Ok(());
+    }
+    let comment = format!(
+        "The culprit search for {} finished.
+
+{}",
+        report.check,
+        details(report)
+    );
+    let mut metadata = BTreeMap::new();
+    if ticket.status == Status::InProgress && ticket.assignee.is_some() {
+        let number: i64 = tx.query_row(
+            "SELECT COALESCE(MAX(n), 0) + 1 FROM comments WHERE ticket = ?1",
+            [id],
+            |row| row.get(0),
+        )?;
+        metadata.insert("tell".to_owned(), json!(number));
+    }
+    let body = if ticket.title == format!("Regression: {}", report.check) {
+        details(report)
+    } else {
+        format!(
+            "caused-by  {cause} (commit {}, for {})
+
+{}",
+            report.first_bad, report.check, ticket.body
+        )
+    };
+    let mut ops = vec![
+        Operation::Comment {
+            id: id.to_owned(),
+            text: comment,
+        },
+        Operation::Update {
+            id: id.to_owned(),
+            set: Some(TicketFields {
+                body: Some(body),
+                ..TicketFields::default()
+            }),
+            add_labels: Vec::new(),
+            remove_labels: Vec::new(),
+            set_meta: metadata,
+            unset_meta: Vec::new(),
+        },
+    ];
+    if id != cause.as_str() && ignite_store::hub::edges::kind(&tx, id, cause.as_str())?.is_none() {
+        ops.push(Operation::DepAdd {
+            id: id.to_owned(),
+            on: cause.to_string(),
+            kind: Some(EdgeKind::DiscoveredFrom),
+        });
+    }
+    let request = BatchRequest {
+        preconditions: Vec::new(),
+        ops,
+    };
+    let now = ticket.claimed_at.map_or(now, |claimed| now.max(claimed));
+    match batch::apply_in(&mut tx, &request, author.actor, author.machine, now)? {
+        BatchOutcome::Applied(_) => tx.commit().map_err(Into::into),
+        BatchOutcome::Conflict(_) => Err(StoreError::Rejected(format!(
+            "recording the culprit on {id} conflicted"
+        ))),
+    }
 }
 
 /// Marks fixed each regression whose ticket is closed and whose check has passed since the

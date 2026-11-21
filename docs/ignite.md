@@ -2452,15 +2452,16 @@ releases the lease and exits with code 4.
   in its own landing tree, which it then checks out at the landing's commit
   again. Each check is answered from the result cache where that commit's input
   hash has a result. A check that fails there too is reported to the hub as a
-  regression at once (by verdict, only when the base is the tip), which opens or
-  joins a regression ticket as tip verification would, naming the commits since
-  the last verified one without a culprit search. If every failure fails there
-  too, the gate runs again with those checks `known-failing`, for the rest of
-  the landing, and the checks that already passed come from the cache. If any
-  passes at the tip, the landing is refused as before, and the `base` line says
-  which check passed there. A check that fails at the tip counts as known to
-  fail even when its failure in the landing says something different, such as
-  more findings: the adapters report no list of findings to compare.
+  regression (by verdict, only when the base is the tip). The landing searches
+  for the culprit in the same tree before it files the report. It uses the same
+  bounded search as tip verification and files the remaining range if the search
+  cannot name one landing. If every failure fails there too, the gate runs again
+  with those checks `known-failing`, for the rest of the landing, and the checks
+  that already passed come from the cache. If any passes at the tip, the landing
+  is refused as before, and the `base` line says which check passed there. A
+  check that fails at the tip counts as known to fail even when its failure in
+  the landing says something different, such as more findings: the adapters
+  report no list of findings to compare.
 
 ### Express landings
 
@@ -2996,8 +2997,11 @@ is covered by the same revert once it passes at that revert commit.
 
 The hub then files a **regression ticket**, or adds the check to one already
 open. A landing whose gate finds a check failing at the tip it was rebased onto
-reports it the same way, before tip verification reaches that tip (see
-[Landing](#landing)). It is an ordinary P0 ticket that any worker can take:
+searches before filing, so dispatch can use the result as soon as the ticket
+opens (see [Landing](#landing)). If another report opened the ticket while the
+gate was searching, the hub records the first culprit it learns of and tells the
+worker already holding the ticket. A regression is an ordinary P0 ticket that
+any worker can take:
 
 ```text
 TK3FC  P0 bug  regression  check:rust

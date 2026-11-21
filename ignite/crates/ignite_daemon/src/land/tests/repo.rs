@@ -1,16 +1,43 @@
 //! The in-memory repository behind [`super::fakes::TestGit`]: each commit's files and parent,
 //! the integration branch's linear history, and what each tree has checked out.
 
+use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, HashMap};
+use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use ignite_core::fakes::FakeClock;
 use ignite_core::ids::{Commit, Oid};
 use ignite_core::time::Timestamp;
-use ignite_core::traits::{Clock, Rebase};
+use ignite_core::traits::{Clock, Git, Rebase, Result};
+use ignite_git::changed::CommitPaths;
 
-use super::fakes::hex;
+use super::fakes::TestGit;
+
+pub fn hex(text: &str) -> String {
+    let mut hasher = DefaultHasher::new();
+    text.hash(&mut hasher);
+    format!("{:016x}", hasher.finish()).repeat(3)[..40].to_owned()
+}
+
+impl TestGit {
+    pub(super) fn commit_paths(&self, from: &Commit, to: &Commit) -> Result<Vec<CommitPaths>> {
+        let (start, end, history) = {
+            let repo = self.repo.lock().unwrap();
+            let position = |c| repo.history.iter().position(|commit| commit == c).unwrap();
+            (position(from), position(to), repo.history.clone())
+        };
+        (start + 1..=end)
+            .map(|i| {
+                Ok(CommitPaths {
+                    commit: history[i].clone(),
+                    paths: self.changed(&history[i - 1], &history[i])?,
+                })
+            })
+            .collect()
+    }
+}
 
 /// A repository in maps: each commit's files, the integration branch's history, and what each
 /// tree has checked out. A ticket tree's branch is its base commit plus its own edits.

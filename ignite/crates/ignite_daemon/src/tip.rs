@@ -81,6 +81,7 @@ use ignite_core::traits::Result;
 use crate::checks::Scoring;
 use crate::server::Context;
 
+pub(crate) use culprit::{bisect, with_culprit};
 pub use round::{ROUND_VERB, TipLoop, TipRoundVerb};
 pub use work::{CheckTipWork, ticketed_landings};
 

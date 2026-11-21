@@ -97,6 +97,7 @@ fn regression(first_bad: &str, output: &str) -> RegressionReport {
         platform: None,
         search: None,
         found_by: FoundBy::TipVerification,
+        detected_at: None,
     }
 }
 
@@ -192,6 +193,48 @@ fn hold(conn: &Connection, id: &str) {
         [id],
     )
     .unwrap();
+}
+
+#[test]
+fn a_gate_search_names_the_culprit_on_a_regression_already_claimed() {
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    let culprit = apply(
+        &mut conn,
+        vec![create("Break the check", TicketType::Task, None, &[])],
+        clock.now(),
+    );
+    let mut report = regression("2222", "assertion failed");
+    report.found_by = FoundBy::Landing;
+    let (id, _) = file(&mut conn, &clock, &report);
+    hold(&conn, &id);
+
+    report.caused_by = Some(TicketId::new(&culprit[0]).unwrap());
+    report.detected_at = Some(report.first_bad);
+    report.first_bad = Commit::new("1111").unwrap();
+    report.search = Some(CulpritSearch::Bisected { runs: 1 });
+    assert_eq!(file(&mut conn, &clock, &report).0, id);
+
+    let current = ticket(&conn, &id);
+    assert!(
+        current
+            .body
+            .starts_with(&format!("caused-by  {} ", culprit[0]))
+    );
+    let comments = tickets::comments(&conn, &id).unwrap();
+    let [comment] = comments.as_slice() else {
+        panic!("expected one comment, got {}", comments.len());
+    };
+    assert_eq!(current.metadata["tell"], serde_json::json!(comment.n));
+    assert!(
+        comment
+            .text
+            .contains(&format!("caused-by  {} ", culprit[0]))
+    );
+    assert_eq!(current.assignee.as_deref(), Some("local_w"));
+
+    assert_eq!(file(&mut conn, &clock, &report).0, id);
+    assert_eq!(comment_count(&conn, &id), 1);
 }
 
 #[test]

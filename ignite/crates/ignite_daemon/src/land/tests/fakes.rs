@@ -3,9 +3,7 @@
 //! gate that keys each check by its inputs' object IDs and keeps results in the hub's cache
 //! ([`CacheGate`]), as the real gate does.
 
-use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -14,9 +12,9 @@ use ignite_core::fakes::{FakeClock, FakeHub};
 use ignite_core::ids::{CheckName, Commit, InputHash, Oid, RecordId, Seq, TicketId, TreeId};
 use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::{
-    CachedResult, Claim, FlakyReport, Landed, LandedReply, MachineFree, MetricsImport, NewResult,
-    Record, RegressionFiled, RegressionReport, Reservation, ResultKey, TicketBrief, TipClaim,
-    TipClaimReply, TipVerified, Verdict, VerdictKey,
+    CachedResult, Claim, FlakyReport, Landed, LandedCommit, LandedReply, MachineFree,
+    MetricsImport, NewResult, Record, RegressionFiled, RegressionReport, Reservation, ResultKey,
+    TicketBrief, TipClaim, TipClaimReply, TipVerified, Verdict, VerdictKey,
 };
 use ignite_core::protocol::tickets::{
     FeedBatch, Lease, LeaseBusy, LeaseOp, LeaseReply, TicketDetail,
@@ -28,13 +26,7 @@ use crate::checks::{Carried, CheckRun, Excused, Failure, GateRun, RunOptions};
 use crate::land::env::{CheckVerdict, GateTree, LandGate, LandTrees, TicketTree};
 use crate::server::Context;
 
-pub use super::repo::{Repo, edits};
-
-pub fn hex(text: &str) -> String {
-    let mut hasher = DefaultHasher::new();
-    text.hash(&mut hasher);
-    format!("{:016x}", hasher.finish()).repeat(3)[..40].to_owned()
-}
+pub use super::repo::{Repo, edits, hex};
 
 #[derive(Default)]
 pub struct TestGit {
@@ -402,6 +394,9 @@ impl Hub for LeaseHub {
     fn regression(&self, report: &RegressionReport) -> Result<RegressionFiled> {
         self.hub.regression(report)
     }
+    fn landed_commits(&self, commits: &[Commit]) -> Result<Vec<LandedCommit>> {
+        self.hub.landed_commits(commits)
+    }
     fn verdict(&self, key: &VerdictKey) -> Result<Option<Verdict>> {
         self.hub.verdict(key)
     }
@@ -452,6 +447,14 @@ impl LandTrees for TestTrees {
     }
     fn commits(&self, _path: &Path, _from: &Commit, to: &Commit) -> Result<Vec<Commit>> {
         Ok(vec![to.clone()])
+    }
+    fn commit_paths(
+        &self,
+        _path: &Path,
+        from: &Commit,
+        to: &Commit,
+    ) -> Result<Vec<ignite_git::changed::CommitPaths>> {
+        self.git.commit_paths(from, to)
     }
     fn subjects(&self, _path: &Path, _from: &Commit, to: &Commit) -> Result<Vec<String>> {
         Ok(vec![format!("subject of {to}")])
@@ -681,6 +684,7 @@ impl LandGate for CacheGate {
                 check: key.check,
                 outcome,
                 platform: None,
+                inputs: paths.iter().map(|path| (*path).to_owned()).collect(),
                 output: format!("{name} at {}", tree.path.display()),
             });
         }

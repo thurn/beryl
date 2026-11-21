@@ -579,6 +579,7 @@ fn a_regression_closes_once_a_later_tip_passes_and_is_marked_fixed() {
         platform: None,
         search: None,
         found_by: FoundBy::TipVerification,
+        detected_at: None,
     };
     let (id, _) = regressions::file(&mut conn, UPKEEP, &report, clock.now()).unwrap();
     assert!(passes(&mut conn, &mut upkeep, &clock, 2.0 * HOLD_SECONDS).is_empty());
@@ -625,6 +626,7 @@ fn a_ticket_given_another_check_waits_for_a_tip_seen_after_it() {
         platform: None,
         search: None,
         found_by: FoundBy::TipVerification,
+        detected_at: None,
     };
     let (id, _) = regressions::file(
         &mut conn,

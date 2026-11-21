@@ -252,6 +252,7 @@ mod tests {
             platform: None,
             search: None,
             found_by: ignite_core::protocol::hub::FoundBy::TipVerification,
+            detected_at: None,
         }
     }
 

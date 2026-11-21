@@ -57,6 +57,15 @@ pub trait LandTrees: Send + Sync {
     fn uncommitted(&self, path: &Path) -> Result<Vec<String>>;
     /// The commits after `from` up to `to`, oldest first.
     fn commits(&self, path: &Path, from: &Commit, to: &Commit) -> Result<Vec<Commit>>;
+    /// First-parent commits since `from` and the paths each changed.
+    fn commit_paths(
+        &self,
+        path: &Path,
+        from: &Commit,
+        to: &Commit,
+    ) -> Result<Vec<ignite_git::changed::CommitPaths>> {
+        ignite_git::changed::commits(path, from, to)
+    }
     /// The subject lines of the commits after `from` up to `to`, oldest first.
     fn subjects(&self, path: &Path, from: &Commit, to: &Commit) -> Result<Vec<String>>;
     /// Whether `ancestor` is in the history of `descendant`, as `path`'s repository sees it.
@@ -93,6 +102,8 @@ pub struct CheckVerdict {
     pub outcome: Outcome,
     /// The operating system the check's result is keyed to, for a check that is not portable.
     pub platform: Option<Os>,
+    /// The paths the check reads, for selecting candidate landings.
+    pub inputs: Vec<String>,
     /// What a failure said: where, its message and the end of its output.
     pub output: String,
 }
@@ -331,26 +342,32 @@ impl LandGate for ChecksGate {
         families.dedup();
         let mut run = CheckRun::default();
         let mut prepared = runner.prepare(ctx, &open, &families, options, &mut run);
-        let mut platforms = BTreeMap::new();
+        let mut keyed_checks = BTreeMap::new();
         for listed in &mut prepared {
             listed.keep(|check| checks.contains(check), &mut run);
             for keyed in &listed.keyed {
-                platforms.insert(keyed.listed.check.clone(), keyed.key.platform);
+                let inputs: Vec<String> =
+                    keyed.inputs.iter().map(|(path, _)| path.clone()).collect();
+                keyed_checks.insert(keyed.listed.check.clone(), (keyed.key.platform, inputs));
             }
         }
         runner.run_prepared(ctx, &open, prepared, options, &mut run);
         run.outcomes
             .iter()
-            .map(|(check, outcome)| CheckVerdict {
-                check: check.clone(),
-                outcome: *outcome,
-                platform: platforms.get(check).copied().flatten(),
-                output: run
-                    .failures
-                    .iter()
-                    .find(|failure| failure.check == *check)
-                    .map(failure_text)
-                    .unwrap_or_default(),
+            .map(|(check, outcome)| {
+                let (platform, inputs) = keyed_checks.remove(check).unwrap_or_default();
+                CheckVerdict {
+                    check: check.clone(),
+                    outcome: *outcome,
+                    platform,
+                    inputs,
+                    output: run
+                        .failures
+                        .iter()
+                        .find(|failure| failure.check == *check)
+                        .map(failure_text)
+                        .unwrap_or_default(),
+                }
             })
             .collect()
     }

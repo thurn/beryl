@@ -6,9 +6,11 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use ignite_core::config::LandMode;
-use ignite_core::ids::Commit;
+use ignite_core::ids::{Commit, SessionId, TicketId};
 use ignite_core::protocol::client::Exit;
-use ignite_core::protocol::hub::{Verdict, VerdictKey, verdict_settings};
+use ignite_core::protocol::hub::{Landed, Verdict, VerdictKey, verdict_settings};
+use ignite_core::protocol::tickets::LandedWork;
+use ignite_core::tipround::CulpritSearch;
 use ignite_core::traits::{Clock, Git, Hub};
 
 use super::express::{FakeExpress, express_world};
@@ -387,6 +389,100 @@ fn broken_b() -> World {
         .unwrap()
         .push(("unit:both", "b.txt", "broken"));
     world
+}
+
+/// Records another worker's landing and returns the commit it pushed.
+fn land_on_tip(world: &World, id: &str, changes: &[(&str, &str)]) -> Commit {
+    world.git.land_other(changes);
+    let commit = world.git.tip_now();
+    world
+        .hub
+        .landed(&Landed {
+            ticket: TicketId::new(id).unwrap(),
+            machine: world.ctx.machine.clone(),
+            session: SessionId::new("local_other").unwrap(),
+            work: LandedWork {
+                commits: vec![commit.clone()],
+                ..LandedWork::default()
+            },
+            fresh: false,
+            pressure: None,
+            defer_successor: false,
+        })
+        .unwrap();
+    commit
+}
+
+fn search_world() -> World {
+    let world = broken_b();
+    let master = world.git.tip_now();
+    world
+        .git
+        .repo
+        .lock()
+        .unwrap()
+        .other_tips
+        .insert("master".to_owned(), master);
+    world
+}
+
+#[test]
+fn a_gate_finds_the_culprit_before_reporting_a_regression() {
+    let world = search_world();
+    let last_good = land_on_tip(&world, "t.2", &[("b.txt", "passing")]);
+    let first_bad = land_on_tip(&world, "t.3", &[("b.txt", "broken")]);
+    let tip = land_on_tip(&world, "t.4", &[("c.txt", "later")]);
+    world.hold("tree-01", "t.1", "local_a", &[("a.txt", "mine")]);
+
+    let reply = world.land_as("tree-01", "local_a");
+
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    let reports = world.hub.hub.regressions();
+    let [report] = reports.as_slice() else {
+        panic!("expected one report, got {reports:?}");
+    };
+    assert_eq!(report.caused_by, Some(TicketId::new("t.3").unwrap()));
+    assert_eq!(report.first_bad, first_bad);
+    assert_eq!(report.last_good, last_good);
+    assert_eq!(report.detected_at, Some(tip));
+    assert_eq!(report.search, Some(CulpritSearch::Bisected { runs: 1 }));
+}
+
+#[test]
+fn a_gate_reports_the_range_when_its_culprit_probe_is_incomplete() {
+    use super::fakes::{key, store};
+    use ignite_core::protocol::Outcome;
+
+    let world = search_world();
+    let middle = land_on_tip(&world, "t.2", &[("b.txt", "passing")]);
+    let tip = land_on_tip(&world, "t.3", &[("b.txt", "broken")]);
+    let landing = Path::new("/trees/landing-1");
+    world.git.check_out(landing, &middle);
+    let key = key(&world.ctx, landing, "unit:both", &["a.txt", "b.txt"]);
+    store(&world.ctx, &key, Outcome::Incomplete);
+    world.hold("tree-01", "t.1", "local_a", &[("a.txt", "mine")]);
+
+    let reply = world.land_as("tree-01", "local_a");
+
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    let reports = world.hub.hub.regressions();
+    let [report] = reports.as_slice() else {
+        panic!("expected one report, got {reports:?}");
+    };
+    assert_eq!(report.caused_by, None);
+    assert_eq!(report.first_bad, tip);
+    assert_eq!(
+        report.suspects,
+        [TicketId::new("t.2").unwrap(), TicketId::new("t.3").unwrap()]
+    );
+    assert_eq!(
+        report.search,
+        Some(CulpritSearch::EndedEarly {
+            runs: 1,
+            candidates: 2,
+            why: format!("the run at {middle} was incomplete"),
+        })
+    );
 }
 
 /// The gate in the ticket tree fails on a check that fails at the base too. When the base is

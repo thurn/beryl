@@ -498,6 +498,10 @@ pub struct RegressionReport {
     /// the hub records why.
     #[serde(default)]
     pub found_by: FoundBy,
+    /// The tip where the gate observed the failure, which the search may narrow to an
+    /// earlier first bad commit. Older reports used the first bad commit for both.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detected_at: Option<Commit>,
 }
 
 /// Who found a regression.
