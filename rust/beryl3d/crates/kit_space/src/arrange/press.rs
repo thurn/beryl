@@ -154,16 +154,8 @@ impl Rectangle {
         ]
     }
 
-    pub(super) fn quad(self) -> Quad {
-        let corners = self.corners();
-        let x = self.axis;
-        let y = -x.perp();
-        let normals = [y, -x, -y, x];
-        let planes = std::array::from_fn(|index| HalfPlane {
-            inward: normals[index],
-            limit: normals[index].dot(corners[index]),
-        });
-        Quad::with_planes(corners, planes)
+    pub(super) fn bounds(self) -> Bounds {
+        Bounds::of(self.corners())
     }
 }
 
@@ -172,17 +164,9 @@ impl Quad {
         let centre = corners.iter().copied().sum::<Vec2>() / 4.0;
         let planes =
             std::array::from_fn(|i| HalfPlane::edge(corners[i], corners[(i + 1) % 4], centre));
-        Self::with_planes(corners, planes)
-    }
-
-    fn with_planes(corners: [Vec2; 4], planes: [HalfPlane; 4]) -> Self {
-        let [a, b, c, d] = corners;
         Self {
             corners,
-            bounds: Bounds {
-                min: a.min(b).min(c.min(d)),
-                max: a.max(b).max(c.max(d)),
-            },
+            bounds: Bounds::of(corners),
             planes,
         }
     }
@@ -205,8 +189,20 @@ pub(super) struct Bounds {
 }
 
 impl Bounds {
+    fn of([a, b, c, d]: [Vec2; 4]) -> Self {
+        Self {
+            min: a.min(b).min(c.min(d)),
+            max: a.max(b).max(c.max(d)),
+        }
+    }
+
     pub(super) fn overlaps(self, other: Self) -> bool {
         self.min.cmplt(other.max).all() && other.min.cmplt(self.max).all()
+    }
+
+    fn contains_with_clearance(self, other: Self) -> bool {
+        other.min.cmpge(self.min + Vec2::splat(CLEARANCE)).all()
+            && other.max.cmple(self.max - Vec2::splat(CLEARANCE)).all()
     }
 }
 
@@ -246,8 +242,14 @@ impl PressArea {
     }
 
     /// A square aligned with a screen-facing rectangle fits at every centre of the rectangle
-    /// inset by half the square's side, plus clearance. Only the window still needs clipping.
-    pub(super) fn in_rectangle(rectangle: Rectangle, screen: &Quad, side: f32) -> Self {
+    /// inset by half the square's side, plus clearance. A rectangle that crosses the safe
+    /// area's edge still needs clipping against the window's inset planes.
+    pub(super) fn in_rectangle(
+        rectangle: Rectangle,
+        bounds: Bounds,
+        screen: &Quad,
+        side: f32,
+    ) -> Self {
         let half = side / 2.0;
         let inset = Rectangle {
             half: rectangle.half - Vec2::splat(half + CLEARANCE),
@@ -263,7 +265,9 @@ impl PressArea {
             axes: [rectangle.axis, rectangle.axis.perp()],
             half,
         };
-        area.clip_to(&screen.planes);
+        if !screen.bounds.contains_with_clearance(bounds) {
+            area.clip_to(&screen.planes);
+        }
         area
     }
 
@@ -302,10 +306,21 @@ impl PressArea {
         &self,
         blockers: impl Iterator<Item = &'a Quad>,
     ) -> Option<[Vec2; 4]> {
+        self.witness_outside(blockers.map(|quad| self.forbidden(quad)))
+    }
+
+    pub(super) fn witness_rectangles(
+        &self,
+        blockers: impl Iterator<Item = Rectangle>,
+    ) -> Option<[Vec2; 4]> {
+        self.witness_outside(blockers.map(|rectangle| self.forbidden_rectangle(rectangle)))
+    }
+
+    fn witness_outside(&self, blockers: impl Iterator<Item = [HalfPlane; 8]>) -> Option<[Vec2; 4]> {
         if self.centres.as_slice().is_empty() {
             return None;
         }
-        let mut forbidden: Buffer<_, 12> = blockers.map(|quad| self.forbidden(quad)).collect();
+        let mut forbidden: Buffer<_, 12> = blockers.collect();
         let centre = uncovered(self.centres.as_slice(), forbidden.as_mut_slice())?;
         let [x, y] = self.axes.map(|axis| axis * self.half);
         Some([
@@ -345,6 +360,40 @@ impl PressArea {
             second,
             third,
             fourth,
+        ]
+    }
+
+    fn forbidden_rectangle(&self, blocker: Rectangle) -> [HalfPlane; 8] {
+        let [x, y] = self.axes;
+        let right = blocker.axis;
+        let up = -right.perp();
+        // Both rectangles have perpendicular axes. The two relative projections give the
+        // support distances on all four axes without projecting the blocker corner by corner.
+        let along = x.dot(right).abs();
+        let across = x.dot(up).abs();
+        let square_radius = self.radius(x);
+        let square_on_blocker = (along + across) * (self.half + CLEARANCE);
+        let extent_x = blocker.half.dot(Vec2::new(along, across)) + square_radius;
+        let extent_y = blocker.half.dot(Vec2::new(across, along)) + square_radius;
+        let extents_on_blocker =
+            blocker.half * right.length_squared() + Vec2::splat(square_on_blocker);
+        let centre_x = blocker.centre.dot(x);
+        let centre_y = blocker.centre.dot(y);
+        let centre_right = blocker.centre.dot(right);
+        let centre_up = blocker.centre.dot(up);
+        let bound = |axis, centre, extent| HalfPlane {
+            inward: axis,
+            limit: centre - extent,
+        };
+        [
+            bound(x, centre_x, extent_x),
+            bound(y, centre_y, extent_y),
+            bound(-x, -centre_x, extent_x),
+            bound(-y, -centre_y, extent_y),
+            bound(up, centre_up, extents_on_blocker.y),
+            bound(-right, -centre_right, extents_on_blocker.x),
+            bound(-up, -centre_up, extents_on_blocker.y),
+            bound(right, centre_right, extents_on_blocker.x),
         ]
     }
 }
