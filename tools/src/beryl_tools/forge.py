@@ -500,7 +500,17 @@ def export(
                 if action["action"] == "Cast" and action["card"] in flashback:
                     # The harness finds Forge's flashback spell but fails to play it.
                     raise Unsupported("casting a spell with flashback")
-                purpose = trace[i].get("purpose") if i < len(trace) else None
+                position = trace[i] if i < len(trace) else {}
+                purpose = position.get("purpose")
+                if (
+                    action["action"] == "Answer"
+                    and position.get("paying_objects")
+                    and purpose in ("discard", "choose")
+                ):
+                    # AiCostDecision pays these costs without asking the harness controller.
+                    raise Unsupported(
+                        "a choice of cards to discard or permanents to sacrifice for a cost"
+                    )
                 if replays_plan(action, paid_as_made):
                     # The payment's taps, replayed with the mana each made, chose the plan.
                     unchecked += 1

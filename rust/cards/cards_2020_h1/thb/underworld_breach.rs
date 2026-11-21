@@ -219,13 +219,31 @@ pub mod scenarios {
                 ME.has(Zone::Graveyard, Card::ThrillOfPossibility, 1),
             ]),
         Scenario::new("a sacrificed token cannot supply a card for escape")
-            .interaction(&[Card::VillageRites, Card::AdelineResplendentCathar])
-            .battlefield(P0, &[BREACH, Card::Swamp])
-            .battlefield(P1, &[Card::AdelineResplendentCathar])
-            .permanents(P0, &[Permanent::token(crate::tokens::HUMAN_TOKEN)])
+            .interaction(&[
+                Card::VillageRites,
+                Card::AdelineResplendentCathar,
+                Card::SinkIntoStupor,
+            ])
+            .battlefield(P0, &[BREACH, Card::Swamp, Card::AdelineResplendentCathar])
+            .battlefield(P1, &[Card::Island; 3])
             .hand(P0, &[Card::Island])
+            .hand(P1, &[Card::SinkIntoStupor])
             .graveyard(P0, &[Card::VillageRites, Card::Island, Card::Plains])
-            .actions(&[ME.deciding(DecisionKind::Priority, 2)]),
+            .actions(&[
+                advance_to(1, TurnStep::BeginningOfCombat),
+                ME.passes(),
+                THEM.passes(),
+                ME.attacks_with(Card::AdelineResplendentCathar),
+                Resolve,
+                ME.controls(crate::tokens::HUMAN_TOKEN, 1),
+                ME.passes(),
+                THEM.casts(Card::SinkIntoStupor),
+                THEM.targets(Card::AdelineResplendentCathar),
+                Resolve,
+                ME.controls(Card::AdelineResplendentCathar, 0),
+                advance_to(1, TurnStep::PostcombatMain),
+                ME.deciding(DecisionKind::Priority, 2),
+            ]),
         Scenario::new("a sacrifice moved to exile cannot supply a card for escape")
             .interaction(&[Card::VillageRites, Card::RestInPeace])
             .battlefield(P0, &[BREACH, Card::Swamp, Prop::Vanilla])

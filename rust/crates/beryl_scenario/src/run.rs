@@ -2,8 +2,7 @@
 
 use beryl_engine::card::{FaceIx, Types};
 use beryl_engine::event::{Event, Tag};
-use beryl_engine::state::ObjectRef;
-use beryl_engine::state::Pending;
+use beryl_engine::state::{CastStep, ObjectRef, Pending};
 use beryl_engine::{
     Breakpoint, CardTable, Choice, Decision, DecisionKind, GameTable, Opt, Profile, Replay,
     Scratch, Seat, Slot, State, Step, Stops, Zone, ZoneKey, apply, next,
@@ -494,6 +493,14 @@ impl Runner {
             decides_for,
             kind,
             purpose,
+            paying_objects: matches!(self.s.pending(), Pending::Casting(cast) if matches!(cast.step, CastStep::Objects(_))),
+            graveyard_cards: Seat::BOTH.map(|player| {
+                self.s
+                    .graveyard(player)
+                    .iter()
+                    .filter(|&&slot| self.s.card_behind(slot).is_some())
+                    .count()
+            }),
             stack,
             kept,
             flips,

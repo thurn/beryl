@@ -8,7 +8,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import cast
 
-from .card_facts import Json, Unsupported, as_their_own
+from .card_facts import ESCAPE, Json, Unsupported, as_their_own
 from .xmage_java import java_string
 
 # Questions with one answer, which Beryl answers silently, that XMage asks anyway: by kind,
@@ -43,6 +43,22 @@ class Position:
     kept: Json | None = None
     # The mana permanents and spells made, in order: `source`, `color` and `restricted`.
     mana: list[Json] = field(default_factory=list)
+    # The cards in each seat's graveyard before the cast.
+    graveyard_cards: list[int] | None = None
+
+    def supported_castings(self, action: Json) -> int:
+        """The casting options, if XMage can offer the cast before payment."""
+        costs = cast(int, action["costs"])
+        if (
+            costs & ESCAPE
+            and self.graveyard_cards is not None
+            and self.graveyard_cards[cast(int, action["player"])] < 4
+        ):
+            # The granted escape ability counts three other cards before payment.
+            raise Unsupported(
+                "escape that needs a card another cost puts in the graveyard"
+            )
+        return costs
 
     def topmost_spell(self) -> str | None:
         """The name of the highest spell on the stack, if there is one."""
@@ -133,4 +149,5 @@ class Position:
             face_down=cast(list[str], t.get("face_down", [])),
             creatures=cast(list[int], t.get("creatures", [1, 1])),
             kept=cast("Json | None", t.get("kept")),
+            graveyard_cards=cast("list[int] | None", t.get("graveyard_cards")),
         )

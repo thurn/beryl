@@ -87,6 +87,10 @@ pub struct Position {
     /// effect's.
     #[serde(serialize_with = "json::optional_purpose")]
     pub purpose: Option<Purpose>,
+    /// Whether the open decision chooses objects that pay a spell or ability cost.
+    pub paying_objects: bool,
+    /// How many actual cards each player has in their graveyard.
+    pub graveyard_cards: [usize; 2],
     /// Bottom first.
     pub stack: Vec<StackItem>,
     /// At the question of a new target for a copy of a spell, the target the copy has now,

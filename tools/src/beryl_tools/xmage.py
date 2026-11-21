@@ -382,8 +382,7 @@ class Exporter:
             )
             paid = None if at is None else list(self.trace[at].taps)
             self.cards.delve_reachable(self.setup, action["player"], paid)
-        costs = cast(int, action["costs"])
-        name, costs = self.cards.escape_spell(card, costs)
+        name, costs = self.cards.escape_spell(card, p.supported_castings(action))
         if name == card and card in p.flashback:
             self.flashback(action, p)
             return
