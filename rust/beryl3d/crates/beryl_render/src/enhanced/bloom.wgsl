@@ -18,22 +18,6 @@ struct Bloom {
 @group(0) @binding(1) var source: texture_2d<f32>;
 @group(0) @binding(2) var source_sampler: sampler;
 
-struct ScreenOut {
-    @builtin(position) clip: vec4<f32>,
-    // Where the pixel falls on the source, from 0 to 1, y down.
-    @location(0) uv: vec2<f32>,
-};
-
-// A triangle that covers the whole target: vertices at uv (0, 0), (2, 0) and (0, 2).
-@vertex
-fn vs_screen(@builtin(vertex_index) index: u32) -> ScreenOut {
-    let uv = vec2<f32>(f32((index << 1u) & 2u), f32(index & 2u));
-    var out: ScreenOut;
-    out.clip = vec4<f32>(uv * vec2<f32>(2.0, -2.0) + vec2<f32>(-1.0, 1.0), 0.0, 1.0);
-    out.uv = uv;
-    return out;
-}
-
 fn weight(i: u32) -> f32 {
     return b.weights[i / 4u][i % 4u];
 }
@@ -43,7 +27,7 @@ fn weight(i: u32) -> f32 {
 fn blur(in: ScreenOut) -> @location(0) vec4<f32> {
     let step = b.direction / vec2<f32>(textureDimensions(source));
     var sum = textureSampleLevel(source, source_sampler, in.uv, 0.0) * weight(0u);
-    for (var i = 1u; i <= b.radius; i++) {
+    for (var i = 1u; i <= min(b.radius, 15u); i++) {
         let offset = step * f32(i);
         let pair = textureSampleLevel(source, source_sampler, in.uv + offset, 0.0)
             + textureSampleLevel(source, source_sampler, in.uv - offset, 0.0);

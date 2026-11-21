@@ -6,6 +6,7 @@ mod bloom;
 mod enhanced;
 mod faces;
 mod light;
+mod paints;
 mod render;
 mod shader_cost;
 mod shadow;

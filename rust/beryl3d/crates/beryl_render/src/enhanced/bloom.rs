@@ -22,13 +22,13 @@ use crate::runs::Pass;
 /// How many taps lie on each side of the blur's centre.
 const RADIUS: usize = TAPS / 2;
 /// How many weights `Uniforms::weights` holds.
-const WEIGHTS: usize = 16;
+pub(crate) const WEIGHTS: usize = 16;
 const _: () = assert!(TAPS % 2 == 1 && RADIUS < WEIGHTS);
 
 /// `Bloom` in bloom.wgsl: one pass's uniforms.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-struct Uniforms {
+pub(crate) struct Uniforms {
     direction: [f32; 2],
     radius: u32,
     strength: f32,
@@ -37,11 +37,16 @@ struct Uniforms {
 
 impl Uniforms {
     /// The blur along `direction`, a step of one texel.
-    fn blur(direction: [f32; 2]) -> Self {
+    pub(crate) fn blur(direction: [f32; 2], sigma: f32, radius: usize) -> Self {
+        debug_assert!(radius < WEIGHTS);
         let mut weights = [0.0; WEIGHTS];
-        for (i, weight) in weights.iter_mut().enumerate().take(RADIUS + 1) {
-            let i = i as f32;
-            *weight = (-i * i / (2.0 * SIGMA * SIGMA)).exp();
+        for (i, weight) in weights.iter_mut().enumerate().take(radius + 1) {
+            let tap = i as f32;
+            *weight = if i == 0 {
+                1.0
+            } else {
+                (-tap * tap / (2.0 * sigma * sigma)).exp()
+            };
         }
         // The centre counts once and every other tap twice, once on each side.
         let total = weights[0] + 2.0 * weights[1..].iter().sum::<f32>();
@@ -50,7 +55,7 @@ impl Uniforms {
         }
         Self {
             direction,
-            radius: RADIUS as u32,
+            radius: radius as u32,
             strength: 0.0,
             weights,
         }
@@ -107,7 +112,7 @@ impl Bloom {
     ) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("bloom"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("bloom.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(SCREEN_SHADER.into()),
         });
         let layout = layout(device);
         let additive = wgpu::BlendState {
@@ -120,44 +125,19 @@ impl Bloom {
             bind_group_layouts: &[Some(&layout)],
             immediate_size: 0,
         });
-        let screen = |label, entry_point, blend, write_mask| {
-            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some(label),
-                layout: Some(&screen_layout),
-                vertex: wgpu::VertexState {
-                    module: &shader,
-                    entry_point: Some("vs_screen"),
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
-                    buffers: &[],
-                },
-                fragment: Some(wgpu::FragmentState {
-                    module: &shader,
-                    entry_point: Some(entry_point),
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
-                    targets: &[Some(wgpu::ColorTargetState {
-                        format,
-                        blend,
-                        write_mask,
-                    })],
-                }),
-                primitive: wgpu::PrimitiveState::default(),
-                depth_stencil: None,
-                multisample: wgpu::MultisampleState::default(),
-                multiview_mask: None,
-                cache: None,
-            })
-        };
-        let blur = screen("bloom blur", "blur", None, wgpu::ColorWrites::ALL);
+        let blur = screen_pipeline(device, &shader, &screen_layout, "blur", format, None);
         // The light adds to the picture's color and leaves its alpha alone.
-        let composite = screen(
-            "bloom composite",
+        let composite = screen_pipeline(
+            device,
+            &shader,
+            &screen_layout,
             "composite",
+            format,
             Some(additive),
-            wgpu::ColorWrites::COLOR,
         );
         let uniforms = [
-            Uniforms::blur([1.0, 0.0]),
-            Uniforms::blur([0.0, 1.0]),
+            Uniforms::blur([1.0, 0.0], SIGMA, RADIUS),
+            Uniforms::blur([0.0, 1.0], SIGMA, RADIUS),
             Uniforms::composite(),
         ]
         .map(|uniforms| {
@@ -386,7 +366,7 @@ const ADD: wgpu::BlendComponent = wgpu::BlendComponent {
 
 /// A render pass into `view` with no depth buffer, cleared to transparent black first when
 /// `clear` is set and loading what is there otherwise.
-fn begin<'e>(
+pub(crate) fn begin<'e>(
     encoder: &'e mut wgpu::CommandEncoder,
     label: &str,
     view: &wgpu::TextureView,
@@ -416,7 +396,7 @@ fn begin<'e>(
 
 /// The layout of a blur or composite pass's bind group: its uniforms, the texture it reads
 /// and a filtering sampler.
-fn layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+pub(crate) fn layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
     device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("bloom"),
         entries: &[
@@ -449,3 +429,47 @@ fn layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
         ],
     })
 }
+
+/// Builds a render pipeline for a full-screen triangle.
+pub(crate) fn screen_pipeline(
+    device: &wgpu::Device,
+    shader: &wgpu::ShaderModule,
+    layout: &wgpu::PipelineLayout,
+    fragment: &str,
+    format: wgpu::TextureFormat,
+    blend: Option<wgpu::BlendState>,
+) -> wgpu::RenderPipeline {
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some(fragment),
+        layout: Some(layout),
+        vertex: wgpu::VertexState {
+            module: shader,
+            entry_point: Some("vs_screen"),
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            buffers: &[],
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: shader,
+            entry_point: Some(fragment),
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            targets: &[Some(wgpu::ColorTargetState {
+                format,
+                blend,
+                write_mask: if blend.is_some() {
+                    wgpu::ColorWrites::COLOR
+                } else {
+                    wgpu::ColorWrites::ALL
+                },
+            })],
+        }),
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        multiview_mask: None,
+        cache: None,
+    })
+}
+
+/// The shader shared by bloom and backdrop filters.
+pub(crate) const SCREEN_SHADER: &str =
+    concat!(include_str!("screen.wgsl"), include_str!("bloom.wgsl"));

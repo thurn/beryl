@@ -194,6 +194,11 @@ impl Frame {
     /// Keeps the records of `draws` whose entry of `kept` is true, with their sort keys and
     /// owners, and sets the bands again.
     fn keep_kept(&mut self, kept: &[bool]) {
+        if self.backdrop.is_some_and(|backdrop| {
+            backdrop.panel.is_some() && !kept.get(backdrop.at as usize).copied().unwrap_or(false)
+        }) {
+            self.backdrop = None;
+        }
         let mut at = 0;
         self.draws.retain(|_| (kept[at], at += 1).0);
         at = 0;

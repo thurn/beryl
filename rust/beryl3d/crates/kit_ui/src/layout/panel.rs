@@ -15,8 +15,8 @@ use kit_base::geometry::plane::ScreenPlane;
 use kit_base::tokens::{color, shadow, size};
 use kit_frame::frame::text::faded;
 use kit_frame::frame::{
-    Band, Draw, ElementLook, FrameBuilder, Role, SIDE_BOTTOM, SIDE_LEFT, SIDE_RIGHT, SIDE_TOP,
-    StateBits, gradient_reach,
+    BackdropPanel, Band, Draw, ElementLook, FrameBuilder, Role, SIDE_BOTTOM, SIDE_LEFT, SIDE_RIGHT,
+    SIDE_TOP, StateBits, gradient_reach,
 };
 
 /// The most filter functions an element and its ancestors apply together; any past these, the
@@ -268,6 +268,46 @@ fn gradients<'a>(node: &'a Node, panel: Option<&Panel>) -> &'a [Gradient] {
     }
 }
 
+/// Writes the filter behind the panel, or a translucent fill on a tier without a blur pass.
+fn write_backdrop(
+    filters: &[Filter],
+    (rect, radius): (Rect, f32),
+    look: &Look<'_>,
+    scale: f32,
+    builder: &mut FrameBuilder,
+    camera: &ScreenPlane,
+) {
+    if look.opacity <= 0.0 || rect.width <= 0.0 || rect.height <= 0.0 {
+        return;
+    }
+    let bounds = scaled(look.zoom.rect(rect), scale);
+    // The parent's clip is already expressed in window points after its own transform.
+    let clip = look.clip.map_or(bounds, |(clip, _)| scaled(clip, scale));
+    let Some(clip) = intersection(bounds, clip) else {
+        return;
+    };
+    let pixels_per_point = bounds.width / rect.width;
+    let panel = BackdropPanel {
+        rect: bounds,
+        clip,
+        radius: radius * pixels_per_point,
+        opacity: look.opacity,
+    };
+    builder.backdrop_panel(filters, pixels_per_point, panel);
+    let draw = Draw::panel(
+        camera.layer_transform(rect),
+        faded(color::BACKDROP_FILTER_FALLBACK, look.opacity),
+        [0; 4],
+        Vec2::new(rect.width, rect.height),
+        radius,
+        0.0,
+    );
+    builder.draw(
+        Band::Layer,
+        draw.with_clip(look.clip.map_or(0, |(_, entry)| entry)),
+    );
+}
+
 /// Writes `node`'s box, which fills `rect`: its outer box shadows (in `state`), its `panel` if
 /// it has one, and its inset box shadows, faded, filtered and clipped by `look`.
 ///
@@ -298,6 +338,16 @@ pub(super) fn write_box(
         filters: look.filters,
     };
     write_box_shadows(shadows, &cast, false, builder, camera);
+    if !style.backdrop_filter.is_empty() {
+        write_backdrop(
+            &style.backdrop_filter,
+            (rect, cast.radius),
+            look,
+            camera.scale(),
+            builder,
+            camera,
+        );
+    }
     if let Some(panel) = panel {
         let layers = gradients(node, Some(panel));
         let sigma = look.filters.sigma();

@@ -24,10 +24,13 @@ use beryl_inspect::gate::{self, BOARDS, Playback};
 use beryl_inspect::pages;
 use beryl_protocol::protocol::Side;
 use beryl_render::{Limits, Renderer, Target};
-use kit_frame::frame::Frame;
+use game_table::table::{Camera, DESKTOP, Window};
+use kit_frame::frame::{Frame, FrameBuilder};
 use kit_probe::agent::Layout;
 use kit_probe::driver::Duration;
-use kit_ui::input::{Size, Tier};
+use kit_ui::element::{Element, Filter, Position, holder, row};
+use kit_ui::input::{Insets, Size, Tier};
+use kit_ui::layout::Layer;
 use serde_json::{Value, json};
 
 /// The window a recording is drawn in for the doc's comparison, at one pixel per point.
@@ -72,6 +75,62 @@ fn board(renderer: &mut Renderer, name: &str, tier: Tier) -> Option<Value> {
         "pixels": u64::from(width) * u64::from(height),
         "frames": frames,
     }))
+}
+
+/// Counts a panel over a high-contrast board at the same resolution as the played boards.
+fn backdrop_panel(renderer: &mut Renderer, tier: Tier) -> Value {
+    let [width, height] = gate::TARGET;
+    let size = Size {
+        width: width as f32 / 2.0,
+        height: height as f32 / 2.0,
+    };
+    let window = Window {
+        size,
+        scale: 2.0,
+        safe_area: Insets::default(),
+    };
+    let at = |x, y| -> Element {
+        row()
+            .position(Position::Absolute)
+            .inset([Some(y), None, None, Some(x)])
+    };
+    let board = holder()
+        .position(Position::Absolute)
+        .inset([Some(0.0); 4])
+        .child(
+            at(0.0, 0.0)
+                .width(size.width)
+                .height(size.height)
+                .background([34, 28, 24, 255]),
+        )
+        .child(
+            at(0.0, 0.0)
+                .width(size.width / 2.0)
+                .height(size.height)
+                .background([181, 150, 92, 255]),
+        )
+        .child(
+            at(size.width / 2.0 - 180.0, 90.0)
+                .width(360.0)
+                .height(220.0)
+                .radius(12.0)
+                .backdrop_filter(vec![Filter::Blur(6.0)]),
+        );
+    let mut layer = Layer::new();
+    layer.resize(window);
+    layer.show(Some(board));
+    let camera = Camera::fit(DESKTOP.camera, window);
+    let mut frame = Frame::with_capacity(8, 8, 64);
+    let mut builder = FrameBuilder::new(&mut frame, tier);
+    builder.camera(camera.view_projection);
+    layer.write(&mut builder, &camera.screen_plane(), true);
+    let mut target = Target::offscreen(renderer, width, height);
+    let (fragments, draw_calls) = count(renderer, builder.finish(), &mut target);
+    json!({
+        "name": "backdrop-panel",
+        "pixels": u64::from(width) * u64::from(height),
+        "frames": [{ "frame": 0, "ms": 0, "phase": "rest", "fragments": fragments, "draw_calls": draw_calls }],
+    })
 }
 
 /// `frame` with every record of the table drawn blended, farthest first, and none writing the
@@ -154,6 +213,7 @@ fn main() -> ExitCode {
     }
     if boards.is_empty() && recordings.is_empty() {
         boards = BOARDS.iter().map(|name| (*name).to_owned()).collect();
+        boards.push("backdrop-panel".to_owned());
     }
     let mut renderer = match Renderer::counting(Limits::Default) {
         Ok(renderer) => renderer,
@@ -171,6 +231,10 @@ fn main() -> ExitCode {
     }
     let mut counted = Vec::new();
     for name in &boards {
+        if name == "backdrop-panel" {
+            counted.push(backdrop_panel(&mut renderer, tier));
+            continue;
+        }
         let Some(board) = board(&mut renderer, name, tier) else {
             eprintln!("fragments: no gated board {name:?}; the boards are {BOARDS:?}");
             return ExitCode::from(2);

@@ -52,7 +52,7 @@ pub(super) struct Look<'a> {
     open: bool,
     /// The point the float is scaled about and the scale (`FloatLook::scale`), as the camera
     /// draws it: the boxes recorded for the frame are scaled the same way.
-    zoom: Zoom,
+    pub(super) zoom: Zoom,
     departing: bool,
 }
 
@@ -243,7 +243,7 @@ impl Layer {
         let active = element.role == Role::MenuItem
             && (state.has(StateBits::FOCUSED) || self.submenu == Some(node.id));
         let panel = panel(node, top, state, active);
-        if panel.is_some() {
+        if panel.is_some() || !element.style.backdrop_filter.is_empty() {
             state.0 |= StateBits::PAINTED;
         }
         let index = builder.resolved(

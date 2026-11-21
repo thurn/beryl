@@ -20,6 +20,7 @@ use crate::faces::{
     token_array,
 };
 use crate::mesh::meshes;
+use crate::panel_blur::{self, PanelBlur};
 use crate::pipeline::{DEPTH, RECORD, bind_group_layout, pipelines};
 use crate::slots::{Slots, mapped_features};
 use crate::target::Target;
@@ -87,6 +88,7 @@ pub struct Renderer {
     pub(crate) enhanced: Option<Enhanced>,
     /// The backdrop filter, for frames that ask for one (`Frame::backdrop`).
     backdrop: Filter,
+    panel_blur: Option<PanelBlur>,
     /// Present when the renderer counts the fragments each frame shades.
     counter: Option<FragmentCounter>,
     /// The GPU adapter's name and backend, for logs.
@@ -131,6 +133,9 @@ impl Renderer {
         });
         let enhanced = Enhanced::new(&device, target_format, &layout, slots.uniforms());
         let backdrop = Filter::new(&device, target_format);
+        let panel_blur = enhanced
+            .as_ref()
+            .map(|_| PanelBlur::new(&device, target_format));
         Self {
             device,
             queue,
@@ -149,6 +154,7 @@ impl Renderer {
             depth: None,
             enhanced,
             backdrop,
+            panel_blur,
             counter: None,
             adapter: "unknown".to_owned(),
             gpu: None,
@@ -314,6 +320,9 @@ impl Renderer {
             enhanced.low_memory();
         }
         self.backdrop.low_memory();
+        if let Some(blur) = &mut self.panel_blur {
+            blur.low_memory();
+        }
         let full = &self.faces[face_array(FaceSize::Full)];
         // A renderer with no match holds only the token array, which there is no need to free.
         if full.size != dimensions(FaceSize::Full) {
@@ -376,31 +385,8 @@ impl Renderer {
         height: u32,
     ) -> Drawn {
         let enhanced = frame.tier == Tier::Enhanced && self.enhanced.is_some();
-        let mut baseline = [0.0_f32; (UNIFORMS / 4) as usize];
-        baseline[..16].copy_from_slice(&frame.view_projection.to_cols_array());
-        baseline[16..20].copy_from_slice(&[
-            width as f32,
-            height as f32,
-            frame.shake.x,
-            frame.shake.y,
-        ]);
-        baseline[20] = f32::from_bits(u32::from(frame.paints.masked));
         let mut uniforms = [0_u8; UNIFORM_BUFFER as usize];
-        uniforms[..UNIFORMS as usize].copy_from_slice(bytemuck::cast_slice(&baseline));
-        let mut written = UNIFORMS;
-        if enhanced {
-            let lit = LIT_OFFSET as usize..LIT_OFFSET as usize + size_of::<Lit>();
-            uniforms[lit.clone()].copy_from_slice(bytemuck::bytes_of(&Lit::of(frame)));
-            written = lit.end as u64;
-        }
-        // Only the part of the paint table the frame uses is written: none when it draws no
-        // gradient or mask, whose records then read nothing of it.
-        let paints = frame.paints.bytes();
-        if !paints.is_empty() {
-            let start = PAINT_OFFSET as usize;
-            uniforms[start..start + paints.len()].copy_from_slice(paints);
-            written = (start + paints.len()) as u64;
-        }
+        let written = write_uniforms(frame, width, height, enhanced, &mut uniforms);
         // A client made with `Config::LARGEST` never writes more records than the buffer holds.
         // Records past it are not drawn, rather than making a buffer during play.
         let kept = frame.draws.len().min(RECORDS as usize);
@@ -435,8 +421,17 @@ impl Renderer {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
         // With a backdrop filter, the records before it are drawn offscreen, then filtered into
         // `view`, and the rest of the flat layer is drawn over them.
-        let backdrop = frame.backdrop.filter(|backdrop| backdrop.at <= draws.kept);
-        let offscreen = backdrop.map(|_| self.backdrop.drawn(&self.device, width, height));
+        let backdrop = frame.backdrop.filter(|backdrop| {
+            backdrop.at <= draws.kept
+                && (backdrop.panel.is_none() || (enhanced && backdrop.at < draws.kept))
+        });
+        let offscreen = backdrop.map(|backdrop| {
+            if let (Some(_), Some(blur)) = (backdrop.panel, &mut self.panel_blur) {
+                blur.source(&self.device, [width, height])
+            } else {
+                self.backdrop.drawn(&self.device, width, height)
+            }
+        });
         let under = Draws {
             kept: backdrop.map_or(draws.kept, |backdrop| backdrop.at),
             ..draws
@@ -462,24 +457,46 @@ impl Renderer {
             ),
         };
         if let Some(backdrop) = backdrop {
-            draw_calls += self
-                .backdrop
-                .apply(&self.queue, &mut encoder, &backdrop, view);
+            if let (Some(panel), Some(blur)) = (backdrop.panel, &mut self.panel_blur) {
+                draw_calls += blur.apply(
+                    panel_blur::Apply {
+                        device: &self.device,
+                        queue: &self.queue,
+                        encoder: &mut encoder,
+                        source: into,
+                        output: view,
+                        size: [width, height],
+                        counter: self.counter.as_ref(),
+                    },
+                    &backdrop,
+                    panel,
+                );
+            } else {
+                draw_calls += self
+                    .backdrop
+                    .apply(&self.queue, &mut encoder, &backdrop, view);
+            }
             draw_calls += over_pass(
                 &mut encoder,
                 &draws,
-                backdrop.at,
+                backdrop.at + u32::from(backdrop.panel.is_some()),
                 view,
                 &depth,
                 &self.pipelines,
+                self.counter.as_ref(),
             );
         }
+        self.submit(encoder);
+        Drawn { draw_calls }
+    }
+
+    /// Resolves fragment counts and keeps the upload slot until the submission finishes.
+    fn submit(&mut self, mut encoder: wgpu::CommandEncoder) {
         if let Some(counter) = &self.counter {
             counter.resolve(&mut encoder);
         }
         let submission = self.queue.submit([encoder.finish()]);
         self.slots.submitted(submission);
-        Drawn { draw_calls }
     }
 
     fn depth_view(&mut self, width: u32, height: u32) -> wgpu::TextureView {
@@ -506,6 +523,36 @@ impl Renderer {
         self.depth = Some((view.clone(), width, height));
         view
     }
+}
+
+/// Fills the part of the uniform buffer this frame reads and returns its length.
+fn write_uniforms(
+    frame: &Frame,
+    width: u32,
+    height: u32,
+    enhanced: bool,
+    uniforms: &mut [u8; UNIFORM_BUFFER as usize],
+) -> u64 {
+    let mut baseline = [0.0_f32; (UNIFORMS / 4) as usize];
+    baseline[..16].copy_from_slice(&frame.view_projection.to_cols_array());
+    baseline[16..20].copy_from_slice(&[width as f32, height as f32, frame.shake.x, frame.shake.y]);
+    baseline[20] = f32::from_bits(u32::from(frame.paints.masked));
+    uniforms[..UNIFORMS as usize].copy_from_slice(bytemuck::cast_slice(&baseline));
+    let mut written = UNIFORMS;
+    if enhanced {
+        let lit = LIT_OFFSET as usize..LIT_OFFSET as usize + size_of::<Lit>();
+        uniforms[lit.clone()].copy_from_slice(bytemuck::bytes_of(&Lit::of(frame)));
+        written = lit.end as u64;
+    }
+    // Only the part of the paint table the frame uses is written: none when it draws no
+    // gradient or mask, whose records then read nothing of it.
+    let paints = frame.paints.bytes();
+    if !paints.is_empty() {
+        let start = PAINT_OFFSET as usize;
+        uniforms[start..start + paints.len()].copy_from_slice(paints);
+        written = (start + paints.len()) as u64;
+    }
+    written
 }
 
 /// Records the Baseline tier's one pass over every record of `draws` into `encoder`, drawing
@@ -557,6 +604,7 @@ fn over_pass(
     view: &wgpu::TextureView,
     depth: &wgpu::TextureView,
     pipelines: &[wgpu::RenderPipeline; 3],
+    counter: Option<&FragmentCounter>,
 ) -> u32 {
     let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
         label: Some("over the backdrop"),
@@ -581,12 +629,15 @@ fn over_pass(
         occlusion_query_set: None,
         multiview_mask: None,
     });
-    draws.record_part(
+    count::begin(counter, &mut pass);
+    let calls = draws.record_part(
         &mut pass,
         at..draws.kept,
         |run| Some(&pipelines[run as usize]),
         (draws.width, draws.height),
-    )
+    );
+    count::end(counter, &mut pass);
+    calls
 }
 
 /// The index in `Renderer::faces` of the array for `size`.

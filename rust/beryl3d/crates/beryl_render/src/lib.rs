@@ -9,6 +9,7 @@ mod draw;
 mod enhanced;
 mod faces;
 mod mesh;
+mod panel_blur;
 mod pipeline;
 mod renderer;
 mod runs;

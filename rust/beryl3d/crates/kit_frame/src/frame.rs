@@ -14,7 +14,7 @@ mod undrawn;
 use beryl_protocol::protocol::{RowName, Side, ZoneName};
 use glam::{Mat4, Vec2};
 
-pub use backdrop::Backdrop;
+pub use backdrop::{Backdrop, BackdropPanel};
 pub use draw::{
     Draw, Material, Mesh, RADIAL, SIDE_BOTTOM, SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, Sprite,
     TextureArray, box_shadow_reach, fixed, gradient_reach, rows, sprites,

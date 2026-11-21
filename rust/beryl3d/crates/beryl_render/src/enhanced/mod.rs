@@ -11,7 +11,7 @@
 //! The shading of each step lives in a file of its own, Rust and WGSL alike: `shadow`,
 //! `light` and `bloom`.
 
-mod bloom;
+pub(crate) mod bloom;
 mod light;
 mod shadow;
 

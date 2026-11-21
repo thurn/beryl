@@ -1,5 +1,15 @@
 {
   "boards": {
+    "backdrop-panel": {
+      "baseline_fragment_screens": {
+        "max": 1.75,
+        "why": "The sample draws the backdrop panel as a translucent fill within the floor renderer's fragment budget."
+      },
+      "enhanced_fragment_screens": {
+        "max": 4.0,
+        "why": "The sample includes the bounded backdrop blur within the Enhanced ceiling of four screens."
+      }
+    },
     "stress-255": {
       "worst_frame_elements": {
         "max": 477,

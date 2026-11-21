@@ -135,6 +135,9 @@ pub(crate) fn sample(options: &Options) -> Result<String, Error> {
         .collect::<Result<Vec<_>, _>>()?;
     let renderer = Renderer::headless(Limits::Default)
         .map_err(|why| Error::Failed(format!("no GPU to draw with: {why}")))?;
+    if !renderer.enhanced_available() {
+        return Err(failed("the sample renderer needs Enhanced support"));
+    }
     let mut drawer = Drawer::new(renderer, scale);
     let mut printed = String::new();
     for sample in &samples {
@@ -489,7 +492,7 @@ impl Drawer {
         self.give(&mut layer);
         let camera = Camera::fit(DESKTOP.camera, window);
         let mut frame = Frame::with_capacity(16, 16, 64);
-        let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
+        let mut builder = FrameBuilder::new(&mut frame, Tier::Enhanced);
         builder.camera(camera.view_projection);
         layer.write(&mut builder, &camera.screen_plane(), true);
         let frame = builder.finish();

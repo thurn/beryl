@@ -54,7 +54,12 @@ fn cost(function: &Function) -> Cost {
     let samples = function
         .expressions
         .iter()
-        .filter(|(_, expression)| matches!(expression, Expression::ImageSample { .. }))
+        .filter(|(_, expression)| {
+            matches!(
+                expression,
+                Expression::ImageSample { .. } | Expression::ImageLoad { .. }
+            )
+        })
         .count();
     Cost {
         samples: samples as u64,
@@ -179,8 +184,40 @@ fn enhanced_costs(source: &str) -> BTreeMap<String, Cost> {
         .collect()
 }
 
+/// The screen passes for bounded backdrop filtering. The blur shares bloom's two directions:
+/// the shader reads a centre texel and at most 15 pairs.
+const BACKDROP_PASSES: [(&str, u64); 3] = [("downsample", 1), ("blur", 31), ("composite_panel", 2)];
+
+fn backdrop_costs() -> BTreeMap<String, Cost> {
+    let screen = include_str!("../../src/enhanced/screen.wgsl");
+    let backdrop = format!("{screen}{}", include_str!("../../src/panel_blur.wgsl"));
+    let bloom = format!("{screen}{}", include_str!("../../src/enhanced/bloom.wgsl"));
+    let backdrop = naga::front::wgsl::parse_str(&backdrop).expect("the backdrop shader parses");
+    let bloom = naga::front::wgsl::parse_str(&bloom).expect("the bloom shader parses");
+    BACKDROP_PASSES
+        .into_iter()
+        .map(|(name, _)| {
+            let module = if name == "blur" { &bloom } else { &backdrop };
+            let entry = module
+                .entry_points
+                .iter()
+                .find(|entry| entry.name == name)
+                .expect("the backdrop's fragment entry point exists");
+            let mut cost = transitive(module, &entry.function, &|_| false);
+            if name == "blur" {
+                // Two of the three sample sites run inside the loop.
+                cost.samples = (cost.samples - 1) * 15 + 1;
+            }
+            (name.to_owned(), cost)
+        })
+        .collect()
+}
+
 /// The most texture samples the material counted under `name` may take per fragment.
 fn most_samples(name: &str) -> u64 {
+    if let Some((_, samples)) = BACKDROP_PASSES.iter().find(|(pass, _)| *pass == name) {
+        return *samples;
+    }
     if ENHANCED_MATERIALS
         .iter()
         .any(|&(_, enhanced)| enhanced == name)
@@ -196,6 +233,7 @@ fn each_material_is_within_its_limits() {
     let mut costs = costs(SHADER);
     assert!(!costs.is_empty(), "the shader has no `shade_` functions");
     costs.extend(enhanced_costs(ENHANCED));
+    costs.extend(backdrop_costs());
     assert!(!costs.is_empty(), "the shader has no `shade_` functions");
     let printed: BTreeMap<_, _> = costs
         .iter()

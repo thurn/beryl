@@ -1555,6 +1555,10 @@
         "value": "rgb(14 13 12 / 40%)",
         "note": "What darkens the table under an overlay: `.overlay-backdrop`'s `background`."
       },
+      "BACKDROP_FILTER_FALLBACK": {
+        "value": "rgb(33 31 28 / 78%)",
+        "note": "The translucent surface drawn in Baseline in place of a panel's backdrop filter."
+      },
       "LIFE": {
         "value": "#fdfcfa",
         "note": "A life total on its orb: the `color` of `.life-orb-total`."

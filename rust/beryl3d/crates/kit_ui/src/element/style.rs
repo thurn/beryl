@@ -212,6 +212,8 @@ pub struct Style {
     /// (`.table-dimmed`). A flag rather than a list of its own keeps `Style` from growing,
     /// which added reallocations to every board's `Client::handle`.
     pub backdrop: bool,
+    /// CSS backdrop-filter functions applied to what is visible through this element.
+    pub backdrop_filter: Box<[Filter]>,
 }
 
 impl Default for Style {
@@ -266,6 +268,7 @@ impl Default for Style {
             fit: false,
             passes: false,
             backdrop: false,
+            backdrop_filter: Box::default(),
         }
     }
 }
@@ -350,6 +353,13 @@ optional_setters! {
 }
 
 impl Element {
+    /// Filters the picture behind the element's box.
+    #[must_use]
+    pub fn backdrop_filter(mut self, filters: impl Into<Box<[Filter]>>) -> Self {
+        self.style.backdrop_filter = filters.into();
+        self
+    }
+
     /// The element's border: a `Border`, or a color and a width for every side.
     #[must_use]
     pub fn border(mut self, border: impl Into<Border>) -> Self {

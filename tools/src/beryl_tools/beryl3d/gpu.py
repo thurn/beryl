@@ -183,7 +183,9 @@ def count_fragments(names: list[str]) -> dict[str, list[BoardCount]]:
     code = vm.start()
     if code != 0:
         raise SystemExit(code)
-    if not source.send_pack():
+    # The standalone panel scene is built from toolkit elements and reads no recordings.
+    needs_pack = not names or any(name != "backdrop-panel" for name in names)
+    if needs_pack and not source.send_pack():
         raise SystemExit(1)
     done = source.run_with_sources(fragments_script(names))
     if done is None:

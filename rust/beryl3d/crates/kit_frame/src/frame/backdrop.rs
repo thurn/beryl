@@ -1,7 +1,6 @@
-//! A frame's backdrop filter (`Style::backdrop`): a blur and color filters that the
-//! renderer applies to the whole window as drawn so far, before it draws the rest of the flat
-//! layer over it. The web interface's end screen blurs and darkens the table under the result
-//! this way (`.table-dimmed` in `ui/src/screens/styles/table.css`).
+//! A frame's backdrop filter blurs and recolors the picture drawn so far. A panel filters
+//! pixels inside its box. The end-screen modal filters the whole window, as the web interface's
+//! `.table-dimmed` rule does.
 //!
 //! The filter stands at a place in the flat layer's band (`Band::Layer`), whose records are drawn
 //! in the order they are pushed, so the records pushed before it are filtered and the ones pushed
@@ -9,6 +8,8 @@
 //! flat-layer elements and what covers them) are drawn sharp whenever they were pushed.
 
 use super::FrameBuilder;
+use kit_base::atlas::Tier;
+use kit_base::geometry::Rect;
 use kit_base::paint::Filter;
 
 /// The blur and color filters drawn over `draws[..at]` of a finished frame.
@@ -24,6 +25,17 @@ pub struct Backdrop {
     /// The color filters as one matrix, applied after the blur to the sRGB values of each pixel,
     /// not premultiplied: each row the weights of red, green and blue.
     pub color: [[f32; 3]; 3],
+    /// The part of the backdrop being filtered, or the whole window for a modal.
+    pub panel: Option<BackdropPanel>,
+}
+
+/// The shape of a CSS backdrop filter, in physical pixels.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BackdropPanel {
+    pub rect: Rect,
+    pub clip: Rect,
+    pub radius: f32,
+    pub opacity: f32,
 }
 
 /// The identity matrix: no color filter.
@@ -31,16 +43,34 @@ const IDENTITY: [[f32; 3]; 3] = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.
 
 impl FrameBuilder<'_> {
     /// Asks for `filters`, CSS's `backdrop-filter` functions, over every record pushed so far,
-    /// in a window of `scale` physical pixels a point. Only the first ask of a frame counts.
+    /// in a window of `scale` physical pixels a point. The first modal filter takes precedence
+    /// over a bounded panel filter.
     /// What is drawn under the filter is behind a modal element, as the web's end screen is a
     /// dialog over the table, so no element added so far takes a press.
     pub fn backdrop(&mut self, filters: &[Filter], scale: f32) {
-        if self.frame.backdrop.is_some() || filters.is_empty() {
+        if self
+            .frame
+            .backdrop
+            .is_some_and(|backdrop| backdrop.panel.is_none())
+            || filters.is_empty()
+        {
             return;
         }
         for element in &mut self.frame.resolved {
             element.interactive = false;
         }
+        self.set_backdrop(filters, scale, None);
+    }
+
+    /// Marks the next flat-layer draw as the fallback fill for a bounded backdrop filter.
+    /// The first such panel in Enhanced gets the filter. Other panels draw their fill.
+    pub fn backdrop_panel(&mut self, filters: &[Filter], scale: f32, panel: BackdropPanel) {
+        if self.tier() == Tier::Enhanced && self.frame.backdrop.is_none() && !filters.is_empty() {
+            self.set_backdrop(filters, scale, Some(panel));
+        }
+    }
+
+    fn set_backdrop(&mut self, filters: &[Filter], scale: f32, panel: Option<BackdropPanel>) {
         let mut color = IDENTITY;
         for filter in filters {
             if let Some(matrix) = filter.matrix() {
@@ -52,6 +82,7 @@ impl FrameBuilder<'_> {
             pushed: super::index(self.frame.draws.len()),
             blur: kit_base::paint::blur_of(filters) * scale,
             color,
+            panel,
         });
     }
 }

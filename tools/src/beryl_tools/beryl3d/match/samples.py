@@ -40,7 +40,7 @@ from typing import TypeVar
 from pathlib import Path
 
 from ... import paths as repo_paths
-from ... import shots
+from ... import deps, shots
 from .. import paths as beryl3d_paths
 from . import css, support
 
@@ -439,6 +439,8 @@ def html(sample: dict[str, object]) -> str:
 def web_pictures(samples: list[dict[str, object]]) -> dict[str, Path] | str:
     """Each sample's WebKit picture, by name, shooting those not in the cache; or why it could
     not shoot them."""
+    # The page embeds the web font before browser_env prepares the browser.
+    deps.ensure_node_modules()
     folder = beryl3d_paths.cache() / "match" / "samples" / "web"
     folder.mkdir(parents=True, exist_ok=True)
     pictures: dict[str, Path] = {}

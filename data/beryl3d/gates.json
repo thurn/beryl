@@ -13,6 +13,18 @@
     "crowded": 3
   },
   "materials": {
+    "downsample": {
+      "samples": 1,
+      "expressions": 48
+    },
+    "blur": {
+      "samples": 31,
+      "expressions": 61
+    },
+    "composite_panel": {
+      "samples": 2,
+      "expressions": 145
+    },
     "box_shadow": {
       "samples": 1,
       "expressions": 196

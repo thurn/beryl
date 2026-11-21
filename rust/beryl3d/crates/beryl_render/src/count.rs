@@ -13,7 +13,7 @@ use std::cell::Cell;
 /// The size of one query result: a 64-bit count.
 const RESULT: u64 = 8;
 /// The most render passes a frame records, and so the queries in the set.
-const QUERIES: u32 = 8;
+const QUERIES: u32 = 12;
 
 /// The query set around the frame's render passes and the buffers its results are read through.
 pub(crate) struct FragmentCounter {
