@@ -26,10 +26,12 @@ impl<L: Layout> State<L> {
         self.library(player).iter().rev().copied()
     }
 
-    /// A player's library cards, top first. It skips objects waiting for state-based actions:
-    /// a token (see [CR 111.6], "A token isn't a card") or a spell copy represented by a token
-    /// (see [CR 704.5e], "If a copy of a spell is in a zone other than the stack, it ceases to
-    /// exist.").
+    /// A player's library cards, top first. It skips tokens waiting for state-based actions,
+    /// including spell copies represented by tokens in the engine.
+    ///
+    /// See [CR 111.6]: "A token isn't a card".
+    /// See [CR 704.5e]: "If a copy of a spell is in a zone other than the stack, it ceases to
+    /// exist."
     ///
     /// [CR 111.6]: https://yawgatog.com/resources/magic-rules/#R1116
     /// [CR 704.5e]: https://yawgatog.com/resources/magic-rules/#R7045e

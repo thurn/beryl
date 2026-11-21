@@ -6,6 +6,16 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **A draw could take a token or a spell copy into hand.** During a resolution,
+  either object could sit above the top card until state-based actions ran. The
+  draw used the last library slot, and dredge counted every slot toward its
+  minimum. Draws, dredge and scry now use the same ordered card query. The rules
+  report the slot the draw moved. The regressions
+  `top_cards_and_draws_skip_objects_waiting_to_cease_to_exist` and
+  `a_library_token_cannot_make_a_draw_eligible_for_dredge` cover draw events,
+  empty libraries and the dredge threshold.
+  [Fix](https://github.com/thurn/beryl/commit/15115883e5fddb1fc0342bfaf6016291982da3ef).
+
 - **A permanent could phase in with damage from a previous turn.** Cleanup
   cleared damage from the battlefield list, which skips phased-out permanents.
   Cleanup now also clears damage from the phased-out set. The regression
@@ -167,8 +177,8 @@ fixed in the same session. Newest first.
 - **Scry could offer a token as a library card.** A token put into a library can
   still be there until state-based actions run. The top-card query now skips
   tokens and spell copies, and library reordering requires a `CardIn<Library>`.
-  `top_cards_skip_a_token_waiting_to_cease_to_exist` covers the interval before
-  the token disappears.
+  `top_cards_and_draws_skip_objects_waiting_to_cease_to_exist` covers the
+  interval before the token disappears.
 
 - **A spell could still affect a player who gained protection after it was
   cast.** Target selection checked protection from everything, but resolution
