@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
-use crate::values::{parse_every, parse_priority};
+use crate::values::{parse_every, parse_priority, parse_saving};
 
 /// Builds, checks and delivery for agents. Run `ignite prime` for the whole workflow.
 #[derive(Debug, Parser)]
@@ -525,6 +525,12 @@ pub struct TicketFieldArgs {
     /// it implies `--type meta`, whose ID starts with `M`.
     #[arg(long, value_parser = parse_every)]
     pub every: Option<u32>,
+    /// On create, your estimate of what the ticket would save a week, as `<unit>:<amount>` with
+    /// a unit of `dollars`, `agent-hours` or `core-hours`, such as `agent-hours:12`. It makes
+    /// the ticket an improvement, which takes the improvement share of hand-offs ahead of the
+    /// epics' order, so the body must show the measurement the estimate comes from.
+    #[arg(long, value_parser = parse_saving)]
+    pub saving: Option<(f64, String)>,
 }
 
 #[derive(Debug, Subcommand)]

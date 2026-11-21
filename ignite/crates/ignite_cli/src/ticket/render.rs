@@ -89,6 +89,13 @@ pub fn detail(ticket: &Value) -> String {
             "every: {hours}h (a meta-ticket; each copy is filed under it)"
         ));
     }
+    if let Some(amount) = ticket["saving"]["amount"].as_f64() {
+        out.push(format!(
+            "saving: {amount:.1} {} a week ({})",
+            text(&ticket["saving"], "unit"),
+            text(&ticket["saving"], "rule")
+        ));
+    }
     if let Some(reason) = ticket["close_reason"].as_str() {
         out.push(format!("closed: {reason}"));
     }

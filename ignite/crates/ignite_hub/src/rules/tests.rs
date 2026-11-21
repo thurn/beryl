@@ -372,6 +372,50 @@ fn a_landed_improvement_gets_its_measure_seven_days_later_once() {
 }
 
 #[test]
+fn a_landed_ticket_with_an_estimated_saving_gets_no_measure() {
+    use ignite_core::protocol::tickets::{BatchRequest, Operation, Saving, TicketFields};
+    use ignite_store::hub::batch::{self, BatchOutcome};
+
+    let mut conn = hub::open_in_memory().unwrap();
+    // A session filed this ticket with its own estimate, and it landed over a week ago. No rule
+    // found it, so there is nothing to measure again, and the hub leaves no comment on it.
+    let request = BatchRequest {
+        preconditions: Vec::new(),
+        ops: vec![Operation::Create {
+            fields: TicketFields {
+                title: Some("Shorten the gate's wait".to_owned()),
+                saving: Some(Saving {
+                    rule: Saving::ESTIMATE.to_owned(),
+                    subject: "Shorten the gate's wait".to_owned(),
+                    unit: "agent-hours".to_owned(),
+                    amount: 12.5,
+                }),
+                ..TicketFields::default()
+            },
+            parent: None,
+            deps: Vec::new(),
+            request_key: None,
+        }],
+    };
+    let BatchOutcome::Applied(filed) =
+        batch::apply(&mut conn, &request, "patrol", "", now()).unwrap()
+    else {
+        panic!("the create was refused");
+    };
+    conn.execute(
+        "UPDATE tickets SET status = 'closed', landed_at = ?2 WHERE id = ?1",
+        params![filed.results[0].id.to_string(), now().to_string()],
+    )
+    .unwrap();
+    let later = now().plus_seconds(8.0 * DAY);
+    assert!(evaluate(&mut conn, later).measured.is_empty());
+    let comments: i64 = conn
+        .query_row("SELECT count(*) FROM comments", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(comments, 0);
+}
+
+#[test]
 fn evaluation_runs_at_most_once_an_hour() {
     let mut conn = hub::open_in_memory().unwrap();
     let config = config::Rules::default();

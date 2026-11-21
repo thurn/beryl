@@ -227,6 +227,10 @@ fn follow_up(
         let Ok(saving) = serde_json::from_str::<Saving>(&saving) else {
             continue;
         };
+        // A session's own estimate names no subject that a rule could measure again.
+        if saving.rule == Saving::ESTIMATE {
+            continue;
+        }
         // A dashboard finding's rule is not one of Ignite's own; the efficiency rule measures it.
         let Some(rule) = rules
             .iter()

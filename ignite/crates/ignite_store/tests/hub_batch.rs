@@ -266,6 +266,35 @@ fn a_closed_create_and_a_claim_by_the_holder_behave_as_before() {
 }
 
 #[test]
+fn a_create_stores_a_saving_and_refuses_one_with_no_known_unit_or_amount() {
+    let mut hub = Hub::new();
+    let saving = |unit: &str, amount: f64| {
+        json!({"saving": {"rule": "estimate", "subject": "the gate", "unit": unit,
+                          "amount": amount}})
+    };
+    let id = hub
+        .ids(json!([create(
+            "Shorten the gate's wait",
+            None,
+            saving("agent-hours", 12.5)
+        )]))
+        .remove(0);
+    let stored = tickets::load(&hub.conn, &id)
+        .unwrap()
+        .unwrap()
+        .saving
+        .unwrap();
+    assert_eq!((stored.unit.as_str(), stored.amount), ("agent-hours", 12.5));
+    for (unit, amount) in [("minutes", 12.0), ("agent-hours", 0.0), ("dollars", -5.0)] {
+        let refused = hub.post(json!([create("Refused", None, saving(unit, amount))]));
+        assert!(
+            matches!(refused, Err(StoreError::Rejected(_))),
+            "{unit} {amount}: {refused:?}"
+        );
+    }
+}
+
+#[test]
 fn closing_a_ticket_through_a_batch_closes_its_finding() {
     let mut hub = Hub::new();
     let reply = hub.batch(json!([

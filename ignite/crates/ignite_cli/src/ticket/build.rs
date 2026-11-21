@@ -132,6 +132,11 @@ pub fn create(
     if fields.every.is_some() && fields.ticket_type.is_none() {
         set.insert("type".into(), json!("meta"));
     }
+    if let Some((amount, unit)) = &fields.saving {
+        let rule = ignite_core::protocol::tickets::Saving::ESTIMATE;
+        let saving = json!({"rule": rule, "subject": title, "unit": unit, "amount": amount});
+        set.insert("saving".into(), saving);
+    }
     if !labels.is_empty() {
         set.insert("labels".into(), json!(labels));
     }
@@ -156,6 +161,11 @@ pub struct Changes<'a> {
 }
 
 pub fn update(id: &str, fields: &TicketFieldArgs, changes: &Changes) -> Result<Value> {
+    if fields.saving.is_some() {
+        return Err(usage(
+            "--saving is given when a ticket is filed, with `ignite ticket create`",
+        ));
+    }
     let mut set = Fields::new();
     put(&mut set, "title", changes.title);
     put(&mut set, "status", changes.status);
@@ -282,7 +292,23 @@ mod tests {
             cores: None,
             owner: None,
             every: None,
+            saving: None,
         }
+    }
+
+    #[test]
+    fn a_saving_on_create_is_an_estimate_about_the_ticket_and_update_refuses_one() {
+        let estimated = TicketFieldArgs {
+            saving: Some((12.5, "agent-hours".to_owned())),
+            ..no_fields()
+        };
+        let op = create("Shorten the gate's wait", &estimated, &[], &[], None).unwrap();
+        assert_eq!(
+            op["fields"]["saving"],
+            json!({"rule": "estimate", "subject": "Shorten the gate's wait",
+                   "unit": "agent-hours", "amount": 12.5})
+        );
+        assert!(update("t1", &estimated, &no_changes()).is_err());
     }
 
     #[test]

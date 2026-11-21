@@ -61,12 +61,18 @@ pub struct LandedWork {
 /// An improvement ticket's estimated saving.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Saving {
-    /// The rule that filed the ticket.
+    /// The rule that filed the ticket, or [`Saving::ESTIMATE`].
     pub rule: String,
     pub subject: String,
     /// `dollars`, `agent-hours` or `core-hours`, per week.
     pub unit: String,
     pub amount: f64,
+}
+
+impl Saving {
+    /// The `rule` of a saving that a session estimated when it filed the ticket, as a patrol's
+    /// round does. No rule of the hub's found it, so none can measure it again after it lands.
+    pub const ESTIMATE: &'static str = "estimate";
 }
 
 /// The fields a client may set, on create or update. Every field is optional on update.
@@ -155,6 +161,11 @@ pub struct TicketFields {
         skip_serializing_if = "Option::is_none"
     )]
     pub every_hours: Option<Option<u32>>,
+    /// What the ticket is estimated to save a week. A ticket with a saving is an improvement,
+    /// which takes the improvement share of hand-offs. The hub writes the saving of a ticket
+    /// that one of its rules files; a client sets one only as an estimate.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub saving: Option<Saving>,
 }
 
 /// Reads a field that is present, so that `null` means "clear it" and absence (through

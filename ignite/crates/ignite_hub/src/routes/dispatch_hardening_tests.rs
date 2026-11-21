@@ -3,7 +3,9 @@
 
 use serde_json::{Value, json};
 
-use ignite_core::protocol::tickets::{BatchRequest, Operation, Status, TicketFields, TicketType};
+use ignite_core::protocol::tickets::{
+    BatchRequest, Operation, Saving, Status, TicketFields, TicketType,
+};
 use ignite_store::hub::{self, batch, findings, rows, tickets};
 
 use super::tests::{
@@ -282,6 +284,42 @@ fn a_lapsed_improvement_does_not_count_toward_the_improvement_share() {
     assert_eq!(status, 200);
     let (_, next) = post(&mut conn, "/next", &free("m-1", &["local_c"]), at(3_602.0));
     assert_eq!(next["ticket"], ids[0].as_str());
+}
+
+#[test]
+fn a_ticket_filed_with_an_estimated_saving_is_handed_off_as_an_improvement() {
+    let mut conn = hub::open_in_memory().unwrap();
+    let work = file(&mut conn, &[("work", &[], &[])]);
+    let request = BatchRequest {
+        preconditions: Vec::new(),
+        ops: vec![Operation::Create {
+            fields: TicketFields {
+                title: Some("Shorten the gate's wait".to_owned()),
+                // Under no epic and of lower priority than the epic's work, so only the
+                // improvement share can put it first.
+                priority: Some(3),
+                saving: Some(Saving {
+                    rule: Saving::ESTIMATE.to_owned(),
+                    subject: "Shorten the gate's wait".to_owned(),
+                    unit: "agent-hours".to_owned(),
+                    amount: 12.5,
+                }),
+                ..TicketFields::default()
+            },
+            parent: None,
+            deps: Vec::new(),
+            request_key: None,
+        }],
+    };
+    let batch::BatchOutcome::Applied(filed) =
+        batch::apply(&mut conn, &request, "patrol", "", start()).unwrap()
+    else {
+        panic!("the create was refused");
+    };
+    let (_, first) = post(&mut conn, "/next", &free("m-1", &["local_a"]), start());
+    assert_eq!(first["ticket"], filed.results[0].id.as_str());
+    let (_, second) = post(&mut conn, "/next", &free("m-1", &["local_b"]), at(1.0));
+    assert_eq!(second["ticket"], work[0].as_str());
 }
 
 #[test]
