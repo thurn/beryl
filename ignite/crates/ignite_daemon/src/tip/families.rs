@@ -45,6 +45,7 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 
 /// What the threads of one round share.
 struct Round<'a> {
+    verifier: &'a TipVerifier,
     ctx: &'a Context,
     tip: &'a Commit,
     /// Whether `master` is already at `tip`, so that the round runs only checks past the tip
@@ -74,7 +75,7 @@ impl Round<'_> {
     /// more often than that, `master` would never move.
     fn next(&self) -> Option<FamilyBatches> {
         let mut queue = lock(&self.queue);
-        if lock(&self.ended).is_some() {
+        if self.verifier.machine_is_off() || lock(&self.ended).is_some() {
             return None;
         }
         let next = queue.pop_front()?;
@@ -108,7 +109,9 @@ impl Round<'_> {
     fn claim(&self, family: &str, batch: u32) -> bool {
         // A family asks for its next batch once the last one has finished.
         lock(&self.held).remove(family);
-        if self.after_master && (lock(&self.ended).is_some() || self.superseded()) {
+        if self.verifier.machine_is_off()
+            || self.after_master && (lock(&self.ended).is_some() || self.superseded())
+        {
             return false;
         }
         let granted = self.ask(family, batch);
@@ -182,6 +185,7 @@ impl TipVerifier {
     ) -> Result<(Option<Commit>, Vec<TipRun>)> {
         let costs = |family: &str| family_costs(ctx, tip, family);
         let round = Round {
+            verifier: self,
             ctx,
             tip,
             after_master,
@@ -226,6 +230,7 @@ impl TipVerifier {
                 std::panic::resume_unwind(panic);
             }
         });
+        self.require_machine_on()?;
         let superseded = round
             .ended
             .into_inner()

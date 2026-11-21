@@ -406,7 +406,7 @@ impl TipVerifier {
     /// Whether `tip` needs a round: it was not settled, and is not resting after a round that
     /// ended waiting.
     pub fn due(&self, ctx: &Context, tip: &Commit) -> bool {
-        if self.settled.as_ref() == Some(tip) {
+        if self.machine_is_off() || self.settled.as_ref() == Some(tip) {
             return false;
         }
         !matches!(&self.resting, Some((resting, until)) if resting == tip && ctx.clock.now() < *until)
@@ -442,6 +442,7 @@ impl TipVerifier {
     /// Verifies one tip: runs what its set still needs, then moves `master`, reports failures
     /// or waits. A round that ran sends the hub a record of where its time went.
     pub fn verify(&mut self, ctx: &Context, tip: &Commit) -> Result<TipOutcome> {
+        self.require_machine_on()?;
         crate::steps::step(format!("verifying tip {tip}"));
         let last = ctx.git.tip(&ctx.config.repository.master)?;
         if last == *tip {

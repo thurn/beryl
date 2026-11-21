@@ -4,7 +4,8 @@ use std::fmt::Write as _;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use ignite_core::ids::{MachineId, SessionId};
+use ignite_core::fleet::MachineState;
+use ignite_core::ids::SessionId;
 use ignite_core::protocol::client::{Exit, Reply, Request};
 use ignite_core::protocol::hub::{Pause, WorkerState};
 use ignite_core::time::Timestamp;
@@ -133,10 +134,6 @@ impl Pool {
         store::paused(&self.conn()).map_err(|e| store_error(&e))
     }
 
-    pub fn set_paused(&self, paused: bool) -> Result<()> {
-        store::set_paused(&self.conn(), paused).map_err(|e| store_error(&e))
-    }
-
     /// Whether the hub last said every machine is paused.
     pub fn paused_everywhere(&self) -> bool {
         self.paused_everywhere.load(Ordering::Relaxed)
@@ -186,8 +183,8 @@ impl Verb for PoolVerb {
             Some((&("add" | "remove" | "mode"), _)) => Err(Error::Invalid(
                 "the desktop dispatcher was removed".to_owned(),
             )),
-            Some((&"pause", rest)) => self.pause(ctx, rest.contains(&"--all"), true),
-            Some((&"resume", rest)) => self.pause(ctx, rest.contains(&"--all"), false),
+            Some((&"pause", rest)) => self.pause(ctx, req, rest.contains(&"--all"), true),
+            Some((&"resume", rest)) => self.pause(ctx, req, rest.contains(&"--all"), false),
             Some((&"watch", rest)) => self.watch(rest),
             Some((&"usage", [])) => Ok(crate::dispatchd::usage_report(
                 self.dispatcher.pool(),
@@ -211,13 +208,17 @@ impl PoolVerb {
         };
         let mut lines = Vec::new();
         let pool = self.dispatcher.pool();
+        let state = crate::fleet_notice::current(pool);
+        if let Some(notice) = &state {
+            lines.push(crate::fleet_notice::state_line(notice));
+        }
         if pool.paused_everywhere() {
             lines.push(
                 "paused   every machine: no hand-offs, not even of tickets that hold master back, \
                  until `ignite pool resume --all`"
                     .to_owned(),
             );
-        } else if pool.paused().unwrap_or(false) {
+        } else if state.is_none() && pool.paused().unwrap_or(false) {
             lines.push(
                 "paused   only tickets that hold master back are handed off, one at a time, \
                  until `ignite pool resume`"
@@ -275,10 +276,9 @@ impl PoolVerb {
         })
     }
 
-    /// Pauses or resumes this machine (kept locally and told to the hub) or, with `all`, every
-    /// machine (kept by the hub, whose `/next` then answers nothing). Resuming every machine also
-    /// ends the emergency, if one is in force.
-    fn pause(&self, ctx: &Context, all: bool, paused: bool) -> Result<Reply> {
+    /// Changes this machine's state, or pauses or resumes all hand-offs. Resuming all
+    /// hand-offs also ends the emergency, if one is in force.
+    fn pause(&self, ctx: &Context, req: &Request, all: bool, paused: bool) -> Result<Reply> {
         let verb = if paused { "paused" } else { "resumed" };
         if all {
             ctx.hub.pause(&Pause {
@@ -299,24 +299,20 @@ impl PoolVerb {
             }
             return Ok(Reply::text(Exit::Success, text));
         }
-        self.dispatcher.pool().set_paused(paused)?;
-        let mut text = format!(
-            "{verb}   hand-offs on this machine; running workers finish, and tickets that hold \
-             master back still go to one worker at a time (`--all` stops those too)"
-        );
-        if !paused {
-            text = format!("{verb}  hand-offs on this machine");
-        }
-        if let Err(error) = ctx.hub.pause(&Pause {
-            machine: Some(MachineId::clone(&ctx.machine)),
-            paused,
-        }) {
-            let _ = write!(
-                text,
-                "\nhub      not told ({error}); this machine is {verb}"
-            );
-        }
-        Ok(Reply::text(Exit::Success, text))
+        let state = if paused {
+            MachineState::ChecksOnly
+        } else {
+            MachineState::Active
+        };
+        ctx.hub.set_fleet_machine_state(
+            &ctx.machine,
+            state,
+            req.session.as_ref().map(SessionId::as_str),
+        )?;
+        Ok(Reply::text(
+            Exit::Success,
+            format!("set this machine to {state}"),
+        ))
     }
 }
 
@@ -324,9 +320,8 @@ impl PoolVerb {
 /// verification found failing) and a justiciar ticket (a fault in Ignite itself).
 const HOLDING_MASTER: [&str; 2] = ["regression", ignite_core::dispatch::JUSTICIAR];
 
-/// `ignite status`'s `pool` lines, shown only while hand-offs are paused or on a usage hold: how
-/// far the pause reaches, which window of the plan holds, and the tickets that hold `master`
-/// back, which a person who paused the pool may not know are waiting.
+/// The machine's fleet state, any hand-off pauses and usage holds, and the tickets holding
+/// `master` back while work is paused.
 pub struct PauseSection {
     pub dispatcher: Arc<Dispatcher>,
     pub hub: Arc<dyn ignite_core::traits::Hub>,
@@ -342,12 +337,14 @@ impl crate::doctor::StatusSection for PauseSection {
         let pool = self.dispatcher.pool();
         let holds = crate::dispatchd::usage_holds(pool, self.clock.now());
         let holds: Vec<String> = crate::dispatchd::hold_lines(&holds).collect();
+        let notice = crate::fleet_notice::current(pool);
+        let state = notice.as_ref().map(crate::fleet_notice::state_line);
         let pause = if pool.paused_everywhere() {
             Some(
                 "paused on every machine: nothing is handed off, not even the tickets that hold \
                  master back",
             )
-        } else if pool.paused().unwrap_or(false) {
+        } else if notice.is_none() && pool.paused().unwrap_or(false) {
             Some(
                 "paused on this machine: only tickets that hold master back are handed off, one \
                  at a time",
@@ -356,19 +353,17 @@ impl crate::doctor::StatusSection for PauseSection {
             None
         };
         let shared = self.dispatcher.shared_failure();
-        if pause.is_none() && holds.is_empty() && shared.is_none() {
+        let restricted = notice.is_some_and(|notice| notice.state != MachineState::Active);
+        let mut lines: Vec<String> = pause.map(str::to_owned).into_iter().chain(state).collect();
+        if !restricted && pause.is_none() && holds.is_empty() && shared.is_none() {
             // Whether more workers would help: only when the reason is about workers, never
             // when it is about tickets or cores.
-            return self
-                .dispatcher
-                .idle_reason()
-                .map(|(idle, why)| {
-                    let workers = if idle == 1 { "worker" } else { "workers" };
-                    vec![format!("{idle} idle {workers}: {why}")]
-                })
-                .unwrap_or_default();
+            if let Some((idle, why)) = self.dispatcher.idle_reason() {
+                let workers = if idle == 1 { "worker" } else { "workers" };
+                lines.push(format!("{idle} idle {workers}: {why}"));
+            }
+            return lines;
         }
-        let mut lines: Vec<String> = pause.map(str::to_owned).into_iter().collect();
         lines.extend(shared);
         lines.extend(holds);
         let query = ignite_core::protocol::tickets::TicketQuery {

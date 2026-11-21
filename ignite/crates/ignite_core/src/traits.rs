@@ -517,6 +517,17 @@ pub trait Hub: Send + Sync {
         Err(not_supported("pause hand-offs"))
     }
 
+    /// Edits a registered machine's state through the versioned fleet settings API.
+    fn set_fleet_machine_state(
+        &self,
+        machine: &crate::ids::MachineId,
+        state: crate::fleet::MachineState,
+        actor: Option<&str>,
+    ) -> Result<()> {
+        let _ = (machine, state, actor);
+        Err(not_supported("change a fleet machine's state"))
+    }
+
     /// Declares, renews or adds to the emergency pause (`POST /emergency`); the reply is the
     /// emergency after the change.
     fn emergency(

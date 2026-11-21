@@ -3,6 +3,7 @@
 
 use ignite_core::config::Config;
 use ignite_core::dispatch_pressure::{BACKLOG_SECONDS, DispatchPressure};
+use ignite_core::fleet::MachineState;
 use ignite_core::ids::{SessionId, TicketId};
 use ignite_core::protocol::hub::{IdleWorker, MachineFree, NextReply, Reservation};
 use ignite_core::protocol::tickets::TicketDetail;
@@ -177,18 +178,18 @@ impl Dispatcher {
     /// Decides whether to ask the hub for tickets, and for which workers. Only one step asks
     /// at a time.
     fn plan_asking(&self, state: &mut State, members: &[Member]) -> Option<Asking> {
-        // A paused pool still asks, for the tickets that hold `master` back: a regression or
-        // justiciar ticket left until `ignite pool resume` would keep `master` stuck while
-        // nobody watches. The hub offers such tickets to one worker at a time, and nothing at
-        // all while every machine is paused (`ignite pool pause --all`).
-        let master_only = self.pool.paused().unwrap_or(true);
         if state.asking_hub {
             return None;
         }
-        if state.draining || master_only && self.pool.paused_everywhere() {
+        let machine = crate::fleet_notice::current(&self.pool).map(|notice| notice.state);
+        if state.draining || self.pool.paused_everywhere() || machine == Some(MachineState::Off) {
             state.idle_reason = None;
             return None;
         }
+        let master_only = machine.map_or_else(
+            || self.pool.paused().unwrap_or(true),
+            |state| state == MachineState::ChecksOnly,
+        );
         let (extra, idle): (Vec<Member>, Vec<Member>) = workers::cli_placeholders(state, members)
             .into_iter()
             .filter(|m| !state.reserved.contains_key(&m.session))
@@ -289,6 +290,9 @@ impl Dispatcher {
     ) -> String {
         let mut why = "no ticket tree is free".to_owned();
         while !group.is_empty() && *trees > 0 {
+            if crate::fleet_notice::is_off(&self.pool) {
+                return "this machine is off".to_owned();
+            }
             let free = MachineFree {
                 room: None,
                 machine: ctx.machine.clone(),

@@ -134,6 +134,8 @@ pub fn summary(before: &FleetSettings, after: &FleetSettings) -> String {
 pub struct FleetNotice {
     pub version: u64,
     pub state: MachineState,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub state_actor: Option<String>,
     pub disk_cap_gb: Option<u32>,
     pub off_platforms: BTreeSet<Os>,
     pub holds: BTreeMap<String, Vec<Hold>>,

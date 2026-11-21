@@ -637,3 +637,54 @@ fn a_token_still_refused_after_reading_it_again_fails_once_and_names_install() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn a_machine_state_edit_preserves_concurrent_fleet_changes() {
+    use ignite_core::fleet::MachineState;
+    use serde_json::{Value, json};
+
+    let hub =
+        FakeHttpHub::start(|method, url, body| {
+            assert_eq!(url, "/test/api/fleet");
+            match method {
+            "GET" => (200, json!({
+                "settings": {"version": 1, "machines": {}, "providers": {}},
+                "changes": [], "machines": [{
+                    "id": "m-1", "name": "host", "os": "macos", "last_seen": Timestamp::EPOCH,
+                    "capacity": null
+                }], "usage": [], "holds": {}
+            }).to_string()),
+            "PUT" => {
+                let body: Value = serde_json::from_str(body).unwrap();
+                if body["version"] == 1 {
+                    return (409, json!({
+                        "version": 2, "machines": {"host": {"state": "active", "disk_cap_gb": 350}},
+                        "providers": {"codex": {"enabled": true, "share": 2, "stop_percent": 99}}
+                    }).to_string());
+                }
+                assert_eq!(body["version"], 2);
+                assert_eq!(body["settings"]["machines"]["host"], json!({
+                    "state": "checks-only", "disk_cap_gb": 350
+                }));
+                assert_eq!(body["settings"]["providers"]["codex"]["share"], 2);
+                (200, body["settings"].to_string())
+            }
+            other => panic!("unexpected {other}"),
+        }
+        });
+
+    hub.client()
+        .set_fleet_machine_state(
+            &"m-1".parse().unwrap(),
+            MachineState::ChecksOnly,
+            Some("operator"),
+        )
+        .unwrap();
+    let seen = hub.seen();
+    assert_eq!(seen.len(), 3);
+    assert!(
+        seen[1..]
+            .iter()
+            .all(|call| call.actor.as_deref() == Some("operator"))
+    );
+}

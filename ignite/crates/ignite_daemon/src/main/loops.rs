@@ -196,15 +196,10 @@ impl Parts {
                     cli_apps: dispatcher.cli_apps().map(str::to_owned).collect(),
                     families: current_families(&ctx.repo, &hostname),
                 })?;
-                if let Some(notice) = &reply.fleet
-                    && let Err(error) = crate::fleet_notice::store(pool, notice)
-                {
+                if let Err(error) = crate::fleet_notice::heard(pool, &reply) {
                     eprintln!("ignite: fleet notice not saved: {error}");
                 }
                 *hub_version.borrow_mut() = Some(reply.hub_version);
-                dispatcher
-                    .pool()
-                    .set_paused_everywhere(reply.paused_everywhere);
                 emergencies.heard(reply.emergency);
                 Ok(())
             };
@@ -355,11 +350,12 @@ impl Parts {
             server,
             repo: self.ctx.repo.clone(),
         };
-        let (ctx, idle, trees, scheduler) = (
+        let (ctx, idle, trees, scheduler, dispatcher) = (
             self.ctx.clone(),
             self.idle.clone(),
             self.trees.clone(),
             self.scheduler.clone(),
+            self.dispatcher.clone(),
         );
         self.start_loop("ignite-idle", IDLE_STALLS_AFTER, move |ticker| {
             loop {
@@ -376,6 +372,10 @@ impl Parts {
                             return Err(format!("idle work: {error}"));
                         }
                     }
+                    let pool = dispatcher.pool();
+                    if crate::fleet_notice::is_off(pool) {
+                        return Ok(());
+                    }
                     let status = scheduler.status();
                     if status.granted > 0 || status.outside * 2 >= status.cores {
                         return Ok(());
@@ -389,7 +389,7 @@ impl Parts {
                         failure = Some(format!("no tree kept built: {error}"));
                     }
                     crate::steps::step("choosing idle work");
-                    if let Err(error) = idle.drive(&ctx, &jobs) {
+                    if let Err(error) = idle.drive(&ctx, &jobs, pool) {
                         eprintln!("ignite: idle work: {error}");
                         failure = Some(format!("idle work: {error}"));
                     }

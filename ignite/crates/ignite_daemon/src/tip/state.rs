@@ -89,6 +89,23 @@ impl TipVerifier {
         self
     }
 
+    pub(super) fn machine_is_off(&self) -> bool {
+        self.saved.as_ref().is_some_and(|saved| {
+            let conn = saved.conn.lock().unwrap_or_else(PoisonError::into_inner);
+            crate::fleet_notice::read(&conn)
+                .is_some_and(|notice| notice.state == ignite_core::fleet::MachineState::Off)
+        })
+    }
+
+    pub(super) fn require_machine_on(&self) -> ignite_core::traits::Result<()> {
+        if self.machine_is_off() {
+            return Err(ignite_core::traits::Error::Conflict(
+                "tip verification waits while this machine is off".to_owned(),
+            ));
+        }
+        Ok(())
+    }
+
     fn restore(&mut self, memory: Memory) {
         self.since = memory.since;
         self.settled = memory.settled;

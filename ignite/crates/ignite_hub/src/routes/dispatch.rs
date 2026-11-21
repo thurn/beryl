@@ -190,7 +190,7 @@ fn route(conn: &mut Connection, request: &Request, now: Timestamp) -> Answer {
             if let Some(machine) = &parsed.machine {
                 same_machine(request, machine)?;
             }
-            pause(conn, &parsed, now)
+            machines::pause(conn, &parsed, request, now)
         }
         "/emergency" => {
             // Tickets are stored by their canonical ID, which is how a daemon names the
@@ -222,28 +222,16 @@ fn route(conn: &mut Connection, request: &Request, now: Timestamp) -> Answer {
     }
 }
 
-/// Pauses or resumes hand-offs to one machine or to every machine. Resuming every machine also
-/// ends the emergency, if one is in force.
-fn pause(conn: &mut Connection, pause: &Pause, now: Timestamp) -> Answer {
-    let machine = pause.machine.as_ref().map(MachineId::as_str);
-    fleet::set_paused(conn, machine, pause.paused, now).map_err(|e| store_failure(&e))?;
-    if machine.is_none() && !pause.paused {
-        emergency::clear(conn).map_err(|e| store_failure(&e))?;
-    }
-    Ok(done())
-}
-
 fn next(conn: &mut Connection, free: &MachineFree, now: Timestamp) -> Answer {
     let tx = conn
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(sql_failure)?;
     fleet::lapse(&tx, now).map_err(|e| store_failure(&e))?;
     let mut free = free.clone();
-    if free.name.is_none() {
-        let name = crate::upkeep::machines::name(&tx, free.machine.as_str())
-            .map_err(|e| store_failure(&e))?;
-        free.name = Some(name);
-    }
+    let registered = fleet::name_of(&tx, free.machine.as_str()).map_err(|e| store_failure(&e))?;
+    free.name = registered
+        .or(free.name)
+        .or_else(|| Some(free.machine.to_string()));
     let reply = match queue::next(&tx, &free, now).map_err(|e| store_failure(&e))? {
         Ok(reservation) => NextReply::Reserved(reservation),
         // Only a daemon that asked for the reason gets it; an older one reads `null`.
@@ -398,7 +386,11 @@ fn landed(conn: &mut Connection, landed: &Landed, now: Timestamp) -> Answer {
         .map_err(sql_failure)?;
     let ticket = load(&tx, id)?;
     if ticket.status == Status::Closed && ticket.session.as_ref() == Some(&landed.session) {
-        if ticket.landed.as_ref() != Some(&landed.work) {
+        if ticket.landed.as_ref() != Some(&landed.work)
+            || queue::chain_machine(&tx, &landed.machine)
+                .map_err(|e| store_failure(&e))?
+                .is_none()
+        {
             return Ok(Response::json(200, &json!(LandedReply { next: None })));
         }
         let next = fleet::reservation_for_landing(

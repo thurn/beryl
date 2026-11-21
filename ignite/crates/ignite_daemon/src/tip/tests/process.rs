@@ -112,3 +112,37 @@ fn a_round_without_its_arguments_runs_nothing() {
     assert_ne!(reply.exit, Exit::Success);
     assert!(world.work.runs().is_empty());
 }
+
+#[test]
+fn the_tip_verifier_obeys_fleet_notices_without_a_restart() {
+    use ignite_core::fleet::{FleetNotice, MachineState};
+
+    let world = World::new();
+    let ctx = world.ctx("m-1");
+    let tip = commit("bbbb000");
+    world.land(&tip);
+    world.work.set_checks(&tip, vec![check("a", 'a')]);
+    let path = ignite_core::test_files::temp_dir().join("daemon.db");
+    let pool = crate::pool::Pool::new(ignite_store::local::open(&path).unwrap());
+    let mut verifier = world
+        .verifier()
+        .with_memory(ignite_store::local::open(&path).unwrap());
+
+    let mut notice = FleetNotice {
+        version: 1,
+        state: MachineState::Off,
+        ..FleetNotice::default()
+    };
+    crate::fleet_notice::store(&pool, &notice).unwrap();
+    assert!(verifier.round(&ctx, 0).unwrap().is_none());
+    assert!(world.hub.tip_claim_asks().is_empty());
+
+    notice.state = MachineState::Active;
+    notice.version += 1;
+    crate::fleet_notice::store(&pool, &notice).unwrap();
+    assert_eq!(
+        verifier.round(&ctx, 0).unwrap(),
+        Some((tip, TipOutcome::Verified))
+    );
+    assert_eq!(world.hub.tip_claims().len(), 1);
+}

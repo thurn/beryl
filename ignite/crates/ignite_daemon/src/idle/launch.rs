@@ -129,9 +129,17 @@ impl Idle {
     /// its cores to every other class and can run for half an hour on a busy machine; a round
     /// that waited for it stayed open that long, and the loop's health check reported
     /// `ignite-idle` as stuck while it was only waiting for a job that was making progress.
-    pub fn drive(&self, ctx: &Context, runner: &dyn JobRunner) -> Result<()> {
+    pub fn drive(
+        &self,
+        ctx: &Context,
+        runner: &dyn JobRunner,
+        pool: &crate::pool::Pool,
+    ) -> Result<()> {
         if self.recorded_handle().is_some() {
             return self.settle(runner).map(|_| ());
+        }
+        if crate::fleet_notice::is_off(pool) {
+            return Ok(());
         }
         // Other processes saved their changes, which decide what is due.
         self.refresh();

@@ -87,9 +87,12 @@ impl JobRunner for Runner {
 fn a_round_does_not_wait_for_its_job_and_a_restart_starts_no_second_one() {
     let f = Fixture::new();
     let processes = Arc::new(Processes::default());
+    let pool = crate::pool::Pool::new(ignite_store::local::open_in_memory().unwrap());
 
     // The first daemon's round starts the job and returns while it still runs.
-    f.idle().drive(&f.ctx, &Runner(processes.clone())).unwrap();
+    f.idle()
+        .drive(&f.ctx, &Runner(processes.clone()), &pool)
+        .unwrap();
     assert_eq!(processes.starts(), 1);
     assert!(f.dir.join("state/idle-job.handle").exists());
     assert_eq!(
@@ -101,7 +104,9 @@ fn a_round_does_not_wait_for_its_job_and_a_restart_starts_no_second_one() {
     // The restarted daemon's rounds find the running job and start no second one.
     let restarted = f.idle();
     assert!(restarted.settle(&Runner(processes.clone())).unwrap());
-    restarted.drive(&f.ctx, &Runner(processes.clone())).unwrap();
+    restarted
+        .drive(&f.ctx, &Runner(processes.clone()), &pool)
+        .unwrap();
     assert_eq!(
         processes.starts(),
         1,
@@ -121,6 +126,7 @@ fn a_round_does_not_wait_for_its_job_and_a_restart_starts_no_second_one() {
 fn a_job_that_finished_while_no_daemon_ran_is_not_started_again() {
     let f = Fixture::new();
     let processes = Arc::new(Processes::default());
+    let pool = crate::pool::Pool::new(ignite_store::local::open_in_memory().unwrap());
     let handle = Handle::new("I-1").unwrap();
     processes
         .started
@@ -131,7 +137,9 @@ fn a_job_that_finished_while_no_daemon_ran_is_not_started_again() {
     std::fs::write(f.dir.join("state/idle-job.handle"), handle.as_str()).unwrap();
     processes.finish(Reply::text(Exit::Success, "done"));
 
-    f.idle().drive(&f.ctx, &Runner(processes.clone())).unwrap();
+    f.idle()
+        .drive(&f.ctx, &Runner(processes.clone()), &pool)
+        .unwrap();
 
     assert_eq!(processes.starts(), 1, "a second job started");
     assert!(!f.dir.join("state/idle-job.handle").exists());
@@ -141,17 +149,22 @@ fn a_job_that_finished_while_no_daemon_ran_is_not_started_again() {
 fn a_job_that_a_stop_ended_fails_the_round_that_settles_it_and_runs_again_later() {
     let f = Fixture::new();
     let processes = Arc::new(Processes::default());
-    f.idle().drive(&f.ctx, &Runner(processes.clone())).unwrap();
+    let pool = crate::pool::Pool::new(ignite_store::local::open_in_memory().unwrap());
+    f.idle()
+        .drive(&f.ctx, &Runner(processes.clone()), &pool)
+        .unwrap();
     // The scheduler ended the job's commands, so the job's reply says it failed.
     processes.finish(Reply::text(Exit::Unreachable, "the command was ended"));
 
-    let result = f.idle().drive(&f.ctx, &Runner(processes.clone()));
+    let result = f.idle().drive(&f.ctx, &Runner(processes.clone()), &pool);
 
     assert!(result.is_err(), "a failed job succeeded");
     assert!(!f.dir.join("state/idle-job.handle").exists());
     // The next round starts the next job.
     processes.reply.lock().unwrap().take();
-    f.idle().drive(&f.ctx, &Runner(processes.clone())).unwrap();
+    f.idle()
+        .drive(&f.ctx, &Runner(processes.clone()), &pool)
+        .unwrap();
     assert_eq!(processes.starts(), 2);
 }
 
@@ -298,4 +311,35 @@ fn a_verb_process_leases_idle_trees_through_the_daemon_leaving_one_free() {
             .unwrap(),
         7
     );
+}
+
+#[test]
+fn an_off_machine_settles_its_running_idle_job_and_resumes_on_an_active_notice() {
+    use ignite_core::fleet::{FleetNotice, MachineState};
+
+    let f = Fixture::new();
+    let idle = f.idle();
+    let processes = Arc::new(Processes::default());
+    let runner = Runner(processes.clone());
+    let pool = crate::pool::Pool::new(ignite_store::local::open_in_memory().unwrap());
+    idle.drive(&f.ctx, &runner, &pool).unwrap();
+    assert_eq!(processes.starts(), 1);
+
+    let mut notice = FleetNotice {
+        version: 1,
+        state: MachineState::Off,
+        ..FleetNotice::default()
+    };
+    crate::fleet_notice::store(&pool, &notice).unwrap();
+    processes.finish(Reply::text(Exit::Success, "done"));
+    idle.drive(&f.ctx, &runner, &pool).unwrap();
+    idle.drive(&f.ctx, &runner, &pool).unwrap();
+    assert_eq!(processes.starts(), 1);
+    assert!(!f.dir.join("state/idle-job.handle").exists());
+
+    notice.state = MachineState::Active;
+    notice.version += 1;
+    crate::fleet_notice::store(&pool, &notice).unwrap();
+    idle.drive(&f.ctx, &runner, &pool).unwrap();
+    assert_eq!(processes.starts(), 2);
 }

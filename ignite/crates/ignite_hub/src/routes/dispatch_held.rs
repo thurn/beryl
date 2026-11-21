@@ -1,19 +1,16 @@
-//! What a paused machine is still offered: the tickets that hold `master` back.
-//!
-//! `ignite pool pause` stops new feature work on a machine. A regression ticket (a check that
-//! tip verification found failing) or a justiciar ticket (a fault in Ignite itself) keeps
-//! `master` from moving until someone works it, and a person who paused the pool to save usage
-//! or to work by hand may not be watching. Left until `ignite pool resume`, such tickets once
-//! held `master` back for more than 90 minutes. So a paused machine is still offered those
-//! tickets, one at a time. Only a pause of every machine (`ignite pool pause --all`, which an
-//! emergency also sets) stops them too.
+//! Which machines can take a ticket that holds `master` back.
+
+use std::collections::HashSet;
 
 use rusqlite::{Connection, params};
 
+use ignite_core::config::Os;
 use ignite_core::dispatch::{JUSTICIAR, ReadyTicket, TicketKind};
-use ignite_core::protocol::hub::MachineFree;
+use ignite_core::fleet::{FleetSettings, MachineState};
+use ignite_core::owner::Owner;
+use ignite_core::protocol::hub::{MachineFree, Reservation};
 use ignite_store::Result;
-use ignite_store::hub::fleet;
+use ignite_store::hub::{fleet, pins};
 
 /// The states of a regression whose check still fails, so that its ticket holds `master` back.
 pub const FAILING: [&str; 2] = ["open", ignite_store::hub::tips::REOPENED];
@@ -29,23 +26,149 @@ pub enum Paused {
     Everything,
 }
 
-/// How far hand-offs to `free`'s machine are paused: by a pause of every machine, by its own
-/// pause at the hub, or by its own pause that the daemon says it keeps (`master_only`), which
-/// covers a pause the hub was never told of.
-pub fn paused(conn: &Connection, free: &MachineFree) -> Result<Paused> {
-    Ok(if fleet::paused_everywhere(conn)? {
-        Paused::Everything
-    } else if free.master_only || fleet::paused(conn, free.machine.as_str())? {
-        Paused::MasterOnly
-    } else {
-        Paused::No
-    })
+/// A daemon can ask for master blockers only even on an Active machine, for example when
+/// its commands are waiting for cores. Only `ChecksOnly` machines defer to `Active` machines.
+pub fn paused(conn: &Connection, free: &MachineFree, state: MachineState) -> Result<Paused> {
+    Ok(
+        if state == MachineState::Off || fleet::paused_everywhere(conn)? {
+            Paused::Everything
+        } else if state == MachineState::ChecksOnly || free.master_only {
+            Paused::MasterOnly
+        } else {
+            Paused::No
+        },
+    )
+}
+
+pub(super) struct Fallback<'a> {
+    free: &'a MachineFree,
+    heard: &'a HashSet<String>,
+    active: Vec<(String, String, Vec<String>)>,
+}
+
+impl<'a> Fallback<'a> {
+    pub(super) fn load(
+        conn: &Connection,
+        settings: &FleetSettings,
+        heard: &'a HashSet<String>,
+        free: &'a MachineFree,
+    ) -> Result<Self> {
+        let active = fleet::machines(conn)?
+            .into_iter()
+            .filter(|machine| {
+                machine.id != free.machine.as_str()
+                    && settings.machine(&machine.name).state == MachineState::Active
+                    && heard.contains(&machine.name.to_ascii_lowercase())
+            })
+            .map(|machine| {
+                let providers = serde_json::from_str(&machine.cli_apps).unwrap_or_default();
+                (machine.name, machine.os, providers)
+            })
+            .collect();
+        Ok(Self {
+            free,
+            heard,
+            active,
+        })
+    }
+
+    /// An `Active` machine with the needed system and pins takes precedence. Its current load
+    /// does not enter this decision. A `ChecksOnly` machine keeps tip verification running while
+    /// those workers are busy.
+    pub(super) fn allows(
+        &self,
+        conn: &Connection,
+        ticket: &mut ReadyTicket,
+        needs_os: Option<Os>,
+        may_fall_back: bool,
+    ) -> Result<bool> {
+        if !holds_master(ticket) || needs_os.is_some_and(|os| os != self.free.os) {
+            return Ok(false);
+        }
+        let pins = pins::of(conn, ticket.id.as_str())?;
+        let required_machine = pins
+            .machine
+            .as_deref()
+            .filter(|name| !may_fall_back || self.heard.contains(&name.to_ascii_lowercase()));
+        let required_provider = pins.provider.as_deref();
+        let machine_fits =
+            |name: &str| required_machine.is_none_or(|pin| pin.eq_ignore_ascii_case(name));
+        let worker_fits = |name: &str, provider: &str| {
+            required_provider.is_none_or(|pin| pin.eq_ignore_ascii_case(provider))
+                && (ticket.destinations.is_empty()
+                    || ticket
+                        .destinations
+                        .iter()
+                        .any(|owner| owner.admits(name, provider)))
+        };
+        let name = self
+            .free
+            .name
+            .as_deref()
+            .unwrap_or(self.free.machine.as_str());
+        if !machine_fits(name)
+            || self.active.iter().any(|(name, os, providers)| {
+                machine_fits(name)
+                    && needs_os.is_none_or(|needed| needed.as_str() == os)
+                    && (worker_fits(name, "") || providers.iter().any(|p| worker_fits(name, p)))
+            })
+        {
+            return Ok(false);
+        }
+        // Keep the provider pin on the offer when the asking machine has multiple providers.
+        let destinations: Vec<_> = self
+            .free
+            .idle_workers
+            .iter()
+            .filter(|worker| worker_fits(name, &worker.app))
+            .map(|worker| Owner::new(name, Some(&worker.app)))
+            .collect();
+        if destinations.is_empty() {
+            return Ok(false);
+        }
+        ticket.destinations = destinations;
+        Ok(true)
+    }
 }
 
 /// Whether the ticket holds `master` back: a justiciar ticket, or the ticket of a failing
 /// regression.
 pub fn holds_master(ticket: &ReadyTicket) -> bool {
     ticket.kind == TicketKind::Regression || ticket.labels.iter().any(|l| l == JUSTICIAR)
+}
+
+/// Replays a reservation whose reply was lost. If the requester is limited to master blockers,
+/// it can retry an offer that still holds master back.
+pub(super) fn retry_reservation(
+    conn: &Connection,
+    free: &MachineFree,
+    paused: Paused,
+) -> Result<Option<Reservation>> {
+    let machine = free.machine.as_str();
+    for worker in &free.idle_workers {
+        let Some(reservation) =
+            fleet::reservation_for_worker(conn, machine, worker.session.as_str())?
+        else {
+            continue;
+        };
+        if paused == Paused::No
+            || conn.query_row(
+                "SELECT EXISTS (SELECT 1 FROM tickets t WHERE t.id = ?1
+             AND (t.id IN (SELECT ticket FROM regressions WHERE state IN (?2, ?3))
+                  OR EXISTS (SELECT 1 FROM json_each(t.labels) WHERE value = ?4)))",
+                params![
+                    reservation.ticket.as_str(),
+                    FAILING[0],
+                    FAILING[1],
+                    JUSTICIAR
+                ],
+                |row| row.get(0),
+            )?
+        {
+            return Ok(Some(reservation));
+        }
+    }
+    Ok(None)
 }
 
 /// Whether `machine` already works or has reserved a ticket that holds `master` back, so that

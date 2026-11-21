@@ -3,6 +3,7 @@
 
 use rusqlite::Connection;
 
+use ignite_core::fleet::MachineState;
 use ignite_core::time::Timestamp;
 use ignite_hub::dashboard::serve::serve;
 use ignite_hub::routes::Request;
@@ -223,17 +224,38 @@ fn a_cli_pool_needs_no_desktop_dispatcher_even_when_it_has_no_workers() {
     assert!(pool(&conn).contains("codex CLI"));
     assert!(!pool(&conn).contains("No dispatcher"));
 
-    conn.execute("INSERT INTO pauses (machine, at) VALUES ('m-m', ?1)", [NOW])
-        .unwrap();
-    assert!(page(&conn, "/").contains("multivac's pool is paused"));
-    assert!(pool(&conn).contains("codex CLI paused"));
+    hub::fleet_settings::set_machine_state(
+        &mut conn,
+        "m-m",
+        MachineState::ChecksOnly,
+        "operator",
+        now,
+    )
+    .unwrap();
+    assert!(page(&conn, "/").contains("multivac is checks-only (set by operator)"));
+    assert!(pool(&conn).contains("checks-only (set by operator)"));
 
     hub::fleet::heartbeat(&mut conn, &beat, now.plus_seconds(-601.0)).unwrap();
     assert!(page(&conn, "/").contains("multivac has not reported"));
 
     beat.cli_apps.clear();
     hub::fleet::heartbeat(&mut conn, &beat, now).unwrap();
+    hub::fleet_settings::set_machine_state(
+        &mut conn,
+        "m-m",
+        MachineState::Off,
+        "another operator",
+        now,
+    )
+    .unwrap();
+    let body = page(&conn, "/");
+    assert!(body.contains("multivac is off (set by another operator)"));
+    assert!(!body.contains("multivac has no dispatcher"));
+
+    hub::fleet_settings::set_machine_state(&mut conn, "m-m", MachineState::Active, "operator", now)
+        .unwrap();
     assert!(page(&conn, "/").contains("multivac has no dispatcher"));
+    assert!(pool(&conn).contains("active (set by operator)"));
     assert!(pool(&conn).contains("No dispatcher"));
 }
 

@@ -663,6 +663,15 @@ impl Hub for FakeHub {
         self.import_whole(request)
     }
 
+    fn set_fleet_machine_state(
+        &self,
+        machine: &crate::ids::MachineId,
+        state: crate::fleet::MachineState,
+        actor: Option<&str>,
+    ) -> Result<()> {
+        self.fake_set_machine_state(machine, state, actor)
+    }
+
     fn pause(&self, pause: &Pause) -> Result<()> {
         self.reachable()?;
         lock(&self.pauses).push(pause.clone());

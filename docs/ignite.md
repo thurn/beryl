@@ -3401,9 +3401,11 @@ with `ignite pool watch`. To work a ticket in a desktop session, run
 
 ### The pool
 
-- `ignite pool pause` limits the local machine to tickets that hold `master`
-  back. `ignite pool pause --all` stops all new starts. Use `ignite pool resume`
-  or `ignite pool resume --all` to resume work.
+- `ignite pool pause` sets the local machine to checks only. It verifies tips
+  and takes a ticket holding `master` back when no recently heard active machine
+  can take it. `ignite pool resume` sets it back to active.
+  `ignite pool pause --all` and `ignite pool resume --all` stop and resume
+  hand-offs across the fleet independently of each machine's state.
 - `ignite pool usage` names the provider of each locally observed plan window
   and shows the fleet's holds. When a window reaches the provider's
   `stop_percent` in fleet settings, the hub stops new hand-offs for the affected
@@ -4251,18 +4253,23 @@ returns the current settings when the supplied version is stale. The CLI
 reapplies its edit to the current settings and retries once. Each saved change
 records who made it, when, what changed and the resulting settings.
 
-Heartbeats and hand-offs accept messages from releases that predate the fleet
-fields. Under this design each heartbeat reply will carry the daemon's part of
-the policy, which the daemon will keep on disk for restarts and hub outages.
+Each heartbeat reply carries this machine's state and disk cap, the fleet
+settings version, the platforms whose registered machines are all off, and the
+current provider holds. The daemon saves the policy on disk for restarts and hub
+outages. `ignite status`, `ignite pool list` and the dashboard show machine
+states and who last changed them. The hub imports any existing per-machine
+pauses into fleet settings when it starts.
 
 Each machine has a state and an optional disk cap:
 
 - **Active**: the machine takes tickets and verifies tips.
 - **Checks only**: it verifies tips, and takes a ticket only when the ticket
-  holds `master` back and no active machine can take it. A machine running long
+  holds `master` back and no active machine heard from in the last 30 minutes
+  satisfies the ticket's operating system and pins. A machine running long
   experiments is kept in this state.
-- **Off**: it asks for no ticket, claims no tip check and runs no idle work. It
-  still sends heartbeats and updates itself, so it can return.
+- **Off**: it asks for no ticket, claims no new tip check and starts no idle
+  work. Running workers and commands can finish. The daemon keeps sending
+  heartbeats and updating itself.
 - The **disk cap** is an upper bound, in gigabytes, on what the machine's build
   trees may hold. Left empty, the derived budget below applies alone.
 
@@ -4278,7 +4285,8 @@ Each provider has three settings:
   same plan.
 
 `ignite pool pause` and `ignite pool resume` on one machine set it to checks
-only and active. `ignite pool pause --all` still stops every hand-off.
+only and active through the fleet API. `ignite pool pause --all` still stops
+every hand-off. `ignite pool resume --all` clears that pause and any emergency.
 
 ### Derived capacity
 
@@ -5071,10 +5079,12 @@ These show that cores, trees and workers go where the rules say.
 - **An inactive epic.** File an epic with ready tickets and `--allocation 0`.
   Expect no hand-off from it. Set `--allocation 1` and expect one. File another
   with no `--allocation` and expect hand-offs at once.
-- **A pause.** Run `ignite pool pause` with two workers busy and tickets ready.
-  Expect both to finish, no new hand-off of feature work, and hand-offs again
-  after `ignite pool resume`. File a regression while paused and expect it
-  handed to one worker; with `--all`, expect it handed to nobody.
+- **Machine states.** Set a machine with workers busy to checks only with
+  `ignite pool pause`. Expect the workers to finish and tip verification to
+  continue. A regression can start there while no recently heard active machine
+  meets its operating system and pins. Set the machine to off and expect no new
+  ticket requests, tip claims or idle jobs after a heartbeat. Use
+  `ignite pool resume` and expect new work without restarting the daemon.
 - **A worker that only looks stalled.** Leave a worker reading for 31 minutes
   with no `ignite` command. Expect the daemon to check it, find it running, and
   send nothing.

@@ -1,12 +1,12 @@
 //! Versioned fleet settings and their change log.
 
-use rusqlite::{Connection, TransactionBehavior, params};
+use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 
-use ignite_core::fleet::{FleetChange, FleetSettings, summary};
+use ignite_core::fleet::{FleetChange, FleetSettings, MachineState, summary};
 use ignite_core::time::Timestamp;
 
-use super::owners;
 use super::rows;
+use super::{fleet, owners};
 use crate::{Result, StoreError};
 
 const KEY: &str = "fleet";
@@ -27,7 +27,7 @@ pub fn settings(conn: &Connection) -> Result<FleetSettings> {
 pub fn put(
     conn: &mut Connection,
     expected_version: u64,
-    mut proposed: FleetSettings,
+    proposed: FleetSettings,
     actor: &str,
     now: Timestamp,
 ) -> Result<PutOutcome> {
@@ -36,10 +36,89 @@ pub fn put(
     if expected_version != before.version {
         return Ok(PutOutcome::Conflict(before));
     }
+    let stored = write(&transaction, &before, proposed, actor, now)?;
+    transaction.commit()?;
+    Ok(PutOutcome::Stored(stored))
+}
+
+/// Changes only the state, for older daemons still using the per-machine `POST /pause`.
+pub fn set_machine_state(
+    conn: &mut Connection,
+    machine: &str,
+    state: MachineState,
+    actor: &str,
+    now: Timestamp,
+) -> Result<()> {
+    let transaction = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    let name = fleet::name_of(&transaction, machine)?.unwrap_or_else(|| machine.to_owned());
+    let before = settings(&transaction)?;
+    if before.machine(&name).state != state {
+        let mut proposed = before.clone();
+        proposed.machines.entry(name).or_default().state = state;
+        write(&transaction, &before, proposed, actor, now)?;
+    }
+    transaction.commit()?;
+    Ok(())
+}
+
+/// Imports legacy pauses after seeding, in the same transaction that removes their rows.
+pub fn migrate_pauses(conn: &mut Connection, now: Timestamp) -> Result<()> {
+    let transaction = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    let names = {
+        let mut statement = transaction.prepare(
+            "SELECT coalesce(m.name, p.machine) FROM pauses p
+             LEFT JOIN machines m ON p.machine = m.id WHERE p.machine != ?1",
+        )?;
+        statement
+            .query_map([fleet::ALL_MACHINES], |row| row.get::<_, String>(0))?
+            .collect::<std::result::Result<Vec<_>, _>>()?
+    };
+    if !names.is_empty() {
+        let before = settings(&transaction)?;
+        let mut proposed = before.clone();
+        for name in names {
+            let setting = proposed.machines.entry(name).or_default();
+            // A legacy pause allowed tip verification. An explicit Off is more restrictive.
+            if setting.state == MachineState::Active {
+                setting.state = MachineState::ChecksOnly;
+            }
+        }
+        write(&transaction, &before, proposed, "legacy pool pause", now)?;
+        transaction.execute(
+            "DELETE FROM pauses WHERE machine != ?1",
+            [fleet::ALL_MACHINES],
+        )?;
+    }
+    transaction.commit()?;
+    Ok(())
+}
+
+/// Who last changed this machine's state. Disk cap and provider edits do not affect attribution.
+pub fn state_actor(conn: &Connection, name: &str) -> Result<Option<String>> {
+    Ok(conn.query_row(
+        "SELECT actor FROM (
+             SELECT seq, actor, state, lag(state, 1, 'active') OVER (ORDER BY seq) AS previous
+             FROM (
+                 SELECT seq, actor, coalesce(settings -> 'machines' -> ?1 ->> 'state', 'active') AS state
+                 FROM fleet_changes
+             )
+         ) WHERE state != previous ORDER BY seq DESC LIMIT 1",
+        [name],
+        |row| row.get(0),
+    ).optional()?)
+}
+
+fn write(
+    conn: &Connection,
+    before: &FleetSettings,
+    mut proposed: FleetSettings,
+    actor: &str,
+    now: Timestamp,
+) -> Result<FleetSettings> {
     proposed.validate().map_err(StoreError::Rejected)?;
     proposed.version = before.version;
-    if before.version != 0 && before == proposed {
-        return Ok(PutOutcome::Stored(before));
+    if before.version != 0 && *before == proposed {
+        return Ok(before.clone());
     }
     proposed.version = before
         .version
@@ -47,18 +126,17 @@ pub fn put(
         .ok_or_else(|| StoreError::Invalid("fleet settings version overflow".to_owned()))?;
     let settings_json = serde_json::to_string(&proposed)
         .map_err(|error| StoreError::Invalid(format!("fleet settings: {error}")))?;
-    owners::put(&transaction, KEY, &proposed)?;
-    transaction.execute(
+    owners::put(conn, KEY, &proposed)?;
+    conn.execute(
         "INSERT INTO fleet_changes (at, actor, summary, settings) VALUES (?1, ?2, ?3, ?4)",
         params![
             now.to_string(),
             actor,
-            summary(&before, &proposed),
+            summary(before, &proposed),
             settings_json
         ],
     )?;
-    transaction.commit()?;
-    Ok(PutOutcome::Stored(proposed))
+    Ok(proposed)
 }
 
 /// The most recent changes, newest first.
@@ -96,6 +174,61 @@ mod tests {
     use super::*;
     use crate::hub::open_in_memory;
     use ignite_core::fleet::{MachineSetting, MachineState, ProviderSetting};
+
+    #[test]
+    fn legacy_pauses_move_into_settings_and_leave_the_global_pause_in_force() {
+        let mut conn = open_in_memory().unwrap();
+        let now = Timestamp::EPOCH;
+        conn.execute_batch(
+            "INSERT INTO machines (id, name, os, cores, memory_mb, families, version, last_seen)
+             VALUES ('m-1', 'host', 'macos', 8, 16000, '[]', 'aaaa000', '2026-11-17T12:00:00.000Z');
+             INSERT INTO pauses (machine, at) VALUES ('m-1', 'now'), ('*', 'now');",
+        )
+        .unwrap();
+        let mut initial = FleetSettings::default();
+        initial.machines.insert(
+            "host".to_owned(),
+            MachineSetting {
+                state: MachineState::Active,
+                disk_cap_gb: Some(150),
+            },
+        );
+        put(&mut conn, 0, initial, "ignite.toml", now).unwrap();
+
+        migrate_pauses(&mut conn, now).unwrap();
+        let mut stored = settings(&conn).unwrap();
+        assert_eq!(stored.version, 2);
+        assert_eq!(
+            stored.machine("host"),
+            MachineSetting {
+                state: MachineState::ChecksOnly,
+                disk_cap_gb: Some(150),
+            }
+        );
+        assert_eq!(
+            state_actor(&conn, "host").unwrap().as_deref(),
+            Some("legacy pool pause")
+        );
+        let pause: String = conn
+            .query_row("SELECT machine FROM pauses", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(pause, "*");
+        migrate_pauses(&mut conn, now).unwrap();
+        assert_eq!(settings(&conn).unwrap(), stored);
+
+        stored.machines.get_mut("host").unwrap().disk_cap_gb = Some(100);
+        put(&mut conn, 2, stored, "disk operator", now).unwrap();
+        assert_eq!(
+            state_actor(&conn, "host").unwrap().as_deref(),
+            Some("legacy pool pause")
+        );
+        fleet::set_paused_everywhere(&conn, false, now).unwrap();
+        assert!(!fleet::paused_everywhere(&conn).unwrap());
+        assert_eq!(
+            settings(&conn).unwrap().machine("host").state,
+            MachineState::ChecksOnly
+        );
+    }
 
     #[test]
     fn settings_and_change_log_round_trip_with_version_checks() {

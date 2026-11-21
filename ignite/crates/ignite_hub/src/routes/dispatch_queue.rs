@@ -28,13 +28,14 @@ use ignite_core::admission::{self, Worked};
 use ignite_core::config::Improvement;
 use ignite_core::dispatch::{self, ReadyTicket, TicketKind};
 use ignite_core::dispatch_pressure::{DispatchPressure, HandoffWait};
-use ignite_core::ids::{SessionId, TicketId};
+use ignite_core::fleet::MachineState;
+use ignite_core::ids::{MachineId, SessionId, TicketId};
 use ignite_core::owner::{FALLBACK_SECONDS, Owner, Routing};
 use ignite_core::protocol::hub::{MachineFree, Reservation};
 use ignite_core::protocol::tickets::{LandedWork, Saving, Status, Ticket, TicketType};
 use ignite_core::shares::{self, EpicDemand, Group, Unit};
 use ignite_core::time::Timestamp;
-use ignite_store::hub::{fleet, owners, releases, tickets};
+use ignite_store::hub::{fleet, fleet_settings, owners, releases, tickets};
 use ignite_store::{Result, StoreError};
 
 use crate::rules;
@@ -66,6 +67,11 @@ use held::Paused;
 #[path = "dispatch_capacity.rs"]
 mod capacity;
 
+#[path = "dispatch_named_files.rs"]
+mod files;
+use files::areas;
+pub use files::{named_files, resolve_named_file};
+
 /// The ticket to reserve for `free`'s machine, already reserved and logged, or why there is none
 /// ([`dispatch::why_nothing`]). Call it inside an `IMMEDIATE` transaction after lapsing old
 /// reservations, so that two machines asking at once are answered one after the other and never
@@ -76,26 +82,27 @@ pub fn next(
     now: Timestamp,
 ) -> Result<std::result::Result<Reservation, HandoffWait>> {
     let machine = free.machine.as_str();
-    let paused = held::paused(conn, free)?;
+    let settings = fleet_settings::settings(conn)?;
+    let name = free.name.as_deref().unwrap_or(machine);
+    let state = settings.machine(name).state;
+    let paused = held::paused(conn, free, state)?;
     if paused == Paused::Everything {
-        return Ok(Err("hand-offs are paused on every machine"
-            .to_owned()
-            .into()));
+        let reason = if state == MachineState::Off {
+            "this machine is off"
+        } else {
+            "hand-offs are paused on every machine"
+        };
+        return Ok(Err(reason.to_owned().into()));
+    }
+    if let Some(reservation) = held::retry_reservation(conn, free, paused)? {
+        return Ok(Ok(reservation));
     }
     if paused == Paused::MasterOnly && held::holds_one(conn, machine)? {
         return Ok(Err(
-            "the pool is paused and already works a ticket that holds master back"
+            "this machine already works a ticket that holds master back"
                 .to_owned()
                 .into(),
         ));
-    }
-    // A worker of this machine that already holds a reservation is asking again because the
-    // reply to its earlier request was lost; it gets the same reservation, not another ticket
-    // and not nothing for ten minutes.
-    for worker in &free.idle_workers {
-        if let Some(held) = fleet::reservation_for_worker(conn, machine, worker.session.as_str())? {
-            return Ok(Ok(held));
-        }
     }
     let snapshot = Snapshot::load(conn, now)?;
     // A worker holding a reservation for another machine is not idle.
@@ -114,9 +121,19 @@ pub fn next(
         free.pressure.as_ref(),
     )?;
     free.free_cores = dispatch::room(&free, &capacity.cores);
-    let mut ready = snapshot.ready_tickets(conn, &history, &landed, now)?;
+    let fallback = (state == MachineState::ChecksOnly)
+        .then(|| held::Fallback::load(conn, &settings, &snapshot.heard, &free))
+        .transpose()?;
+    let mut ready = snapshot.ready_tickets(conn, &history, &landed, now, fallback.as_ref())?;
     if paused == Paused::MasterOnly {
         ready.retain(held::holds_master);
+    }
+    if state == MachineState::ChecksOnly && ready.is_empty() {
+        return Ok(Err(
+            "no ticket holding master back needs this checks-only machine"
+                .to_owned()
+                .into(),
+        ));
     }
     let demand = snapshot.demand(&ready);
     // Improvements go ahead of the epic order and so skip the share, but not a group's
@@ -144,23 +161,10 @@ pub fn next(
         Some(Ok(handoff)) => handoff,
         Some(Err(reason)) => return Ok(Err(reason)),
         None => {
-            if let Some(handoff) =
-                dispatch::next_for(&free, &ready, &epic_order, improvements, &last_files)
-                && let Some(worker) = free
-                    .idle_workers
-                    .iter()
-                    .find(|w| w.session == handoff.session)
-                && let Some(ticket) = ready.iter().find(|t| t.id == handoff.ticket)
-                && let Some(hold) = super::usage::blocking_hold(&holds, worker, ticket)
-            {
-                return Ok(Err(format!(
-                    "{} is on a usage hold ({})",
-                    worker.app,
-                    hold.describe()
-                )
-                .into()));
-            }
-            return Ok(Err(dispatch::why_nothing(&free, &ready, &epic_order).into()));
+            let reason = dispatch::next_for(&free, &ready, &epic_order, improvements, &last_files)
+                .and_then(|handoff| super::usage::hold_reason(&holds, &free, &ready, &handoff))
+                .unwrap_or_else(|| dispatch::why_nothing(&free, &ready, &epic_order));
+            return Ok(Err(reason.into()));
         }
     };
     let kind = ready
@@ -178,27 +182,33 @@ pub fn next(
     .map(Ok)
 }
 
+/// Lane hand-offs can start ordinary work, so only an Active machine can continue a chain.
+pub(super) fn chain_machine(conn: &Connection, machine: &MachineId) -> Result<Option<String>> {
+    let name = fleet::name_of(conn, machine.as_str())?.unwrap_or_else(|| machine.to_string());
+    let active = fleet_settings::settings(conn)?.machine(&name).state == MachineState::Active;
+    Ok((active && !fleet::paused_everywhere(conn)?).then_some(name))
+}
+
 /// The next ready ticket of the `lane:` chain `lane`, reserved for the session that finished
 /// the previous one, or `None`. A chain's next ticket skips the dispatch order and the share,
 /// but not a pause or the rules of which tickets are offered.
 pub fn chain_next(
     conn: &Connection,
     lane: &str,
-    machine: &ignite_core::ids::MachineId,
+    machine: &MachineId,
     session: &SessionId,
     now: Timestamp,
     pressure: Option<&DispatchPressure>,
 ) -> Result<Option<Reservation>> {
-    if fleet::paused(conn, machine.as_str())? {
+    let Some(name) = chain_machine(conn, machine)? else {
         return Ok(None);
-    }
+    };
     let snapshot = Snapshot::load(conn, now)?;
     let history = history(conn, machine.as_str())?;
     let landed = landed_files(conn)?;
-    let mut ready = snapshot.ready_tickets(conn, &history, &landed, now)?;
+    let mut ready = snapshot.ready_tickets(conn, &history, &landed, now, None)?;
     // The chain's next ticket goes to the same session only if that session's machine and app
     // are among the ticket's destinations; a ticket owned elsewhere waits for its owner.
-    let name = fleet::name_of(conn, machine.as_str())?.unwrap_or_default();
     let app = fleet::workers(conn, machine.as_str())?
         .into_iter()
         .find(|worker| worker.session == session.as_str())
@@ -239,7 +249,7 @@ pub fn chain_next(
 fn reserve(
     conn: &Connection,
     ticket: &TicketId,
-    machine: &ignite_core::ids::MachineId,
+    machine: &MachineId,
     session: &SessionId,
     kind: TicketKind,
     now: Timestamp,
@@ -407,6 +417,7 @@ impl Snapshot {
         history: &[Worked],
         landed: &[String],
         now: Timestamp,
+        fallback: Option<&held::Fallback<'_>>,
     ) -> Result<Vec<ReadyTicket>> {
         let mut memo = HashMap::new();
         let mut ready = Vec::new();
@@ -426,7 +437,15 @@ impl Snapshot {
             let Some(ticket) = self.offered(ticket) else {
                 continue;
             };
-            ready.push(self.ready_ticket(ticket, history, landed, &mut memo, now));
+            let needs_os = ticket.needs_os;
+            let may_fall_back = ticket.fallback;
+            let mut candidate = self.ready_ticket(ticket, history, landed, &mut memo, now);
+            if let Some(fallback) = fallback
+                && !fallback.allows(conn, &mut candidate, needs_os, may_fall_back)?
+            {
+                continue;
+            }
+            ready.push(candidate);
         }
         Ok(ready)
     }
@@ -561,87 +580,6 @@ fn expected_cores(
     now: Timestamp,
 ) -> f64 {
     admission::expected_cores(ticket.cores, &areas(files, landed), history, now)
-}
-
-/// The paths a ticket names, in order and without repeats:
-///
-/// - backquoted words that contain a `/` and end in a file name with an extension;
-/// - on a line that starts with `Files:` (after any list marker or emphasis), each word that
-///   contains a `/` and ends in such a file name, backquoted or not, such as
-///   `Files: game_scene/src/a.rs, tools/b.py (the parser)`. Tickets imported from the old
-///   service list their files this way.
-///
-/// A path may be short, relative to a directory below the repository's root;
-/// [`resolve_named_file`] finds the file it means.
-pub fn named_files(text: &str) -> Vec<String> {
-    let mut files: Vec<String> = Vec::new();
-    let mut add = |word: &str| {
-        if is_named_path(word) && !files.iter().any(|f| f == word) {
-            files.push(word.to_owned());
-        }
-    };
-    for word in text.split('`').skip(1).step_by(2) {
-        add(word);
-    }
-    for line in text.lines() {
-        let line = line.trim_start_matches(|c: char| c.is_whitespace() || "-*+>_".contains(c));
-        let Some(rest) = line
-            .get(..6)
-            .filter(|head| head.eq_ignore_ascii_case("files:"))
-            .map(|_| &line[6..])
-        else {
-            continue;
-        };
-        let rest = rest.trim_start_matches(['*', '_']);
-        for word in rest.split(|c: char| c.is_whitespace() || c == ',' || c == ';') {
-            let word = word.trim_start_matches(|c: char| "`'\"([*_".contains(c));
-            add(word.trim_end_matches(|c: char| "`'\")]*_.:".contains(c)));
-        }
-    }
-    files
-}
-
-/// Whether a word names a file: it contains a `/`, no space and no URL scheme, and its last
-/// part has an extension and is not a dotfile.
-fn is_named_path(word: &str) -> bool {
-    let name = word.rsplit('/').next().unwrap_or("");
-    word.contains('/')
-        && !word.contains(char::is_whitespace)
-        && !word.contains("://")
-        && name.contains('.')
-        && !name.starts_with('.')
-        && !name.ends_with('.')
-}
-
-/// The tracked file a named path means: the path itself when `tracked` (paths relative to the
-/// repository's root) holds it, or else the one tracked file that ends in `/<path>`, such as
-/// `rust/client/crates/game_scene/src/a.rs` for `game_scene/src/a.rs`. `None` when no
-/// tracked file matches or several do.
-pub fn resolve_named_file(path: &str, tracked: &[String]) -> Option<String> {
-    let path = path.trim_start_matches("./");
-    if tracked.iter().any(|t| t == path) {
-        return Some(path.to_owned());
-    }
-    let suffix = format!("/{path}");
-    let mut matching = tracked.iter().filter(|t| t.ends_with(&suffix));
-    let first = matching.next()?;
-    matching.next().is_none().then(|| first.clone())
-}
-
-/// The areas of the files a ticket names. A short path (see [`resolve_named_file`]) is resolved
-/// against `known`, the repository paths that landed tickets touched, because the hub has no
-/// checkout to list; a path that resolves to nothing is used as written.
-fn areas(files: &[String], known: &[String]) -> Vec<String> {
-    let mut areas: Vec<String> = files
-        .iter()
-        .map(|f| {
-            let file = resolve_named_file(f, known).unwrap_or_else(|| f.clone());
-            admission::area_of(&file, &[])
-        })
-        .collect();
-    areas.sort();
-    areas.dedup();
-    areas
 }
 
 /// The repository paths that every landed ticket touched, without repeats, standing in for the
@@ -787,7 +725,3 @@ fn parse_id(id: &str) -> Result<TicketId> {
     id.parse()
         .map_err(|_| StoreError::Invalid(format!("bad ticket ID {id}")))
 }
-
-#[cfg(test)]
-#[path = "dispatch_named_file_tests.rs"]
-mod named_file_tests;

@@ -291,36 +291,17 @@ fn read_reservation(
 /// The `machine` value of the pause that holds every machine.
 pub const ALL_MACHINES: &str = "*";
 
-/// Pauses or resumes hand-offs to `machine`, or to every machine when it is `None`. Resuming
-/// every machine also ends each machine's own pause; resuming one machine leaves a pause of
-/// every machine in force.
-pub fn set_paused(
-    conn: &Connection,
-    machine: Option<&str>,
-    paused: bool,
-    now: Timestamp,
-) -> Result<()> {
-    let key = machine.unwrap_or(ALL_MACHINES);
+/// Pauses or resumes every hand-off. Individual machine states are fleet settings.
+pub fn set_paused_everywhere(conn: &Connection, paused: bool, now: Timestamp) -> Result<()> {
     if paused {
         conn.execute(
             "INSERT INTO pauses (machine, at) VALUES (?1, ?2) ON CONFLICT(machine) DO NOTHING",
-            params![key, now.to_string()],
+            params![ALL_MACHINES, now.to_string()],
         )?;
-    } else if machine.is_none() {
-        conn.execute("DELETE FROM pauses", [])?;
     } else {
-        conn.execute("DELETE FROM pauses WHERE machine = ?1", [key])?;
+        conn.execute("DELETE FROM pauses WHERE machine = ?1", [ALL_MACHINES])?;
     }
     Ok(())
-}
-
-/// Whether hand-offs to `machine` are paused, by its own pause or a pause of every machine.
-pub fn paused(conn: &Connection, machine: &str) -> Result<bool> {
-    Ok(conn.query_row(
-        "SELECT EXISTS (SELECT 1 FROM pauses WHERE machine IN (?1, ?2))",
-        params![machine, ALL_MACHINES],
-        |row| row.get(0),
-    )?)
 }
 
 /// Whether hand-offs to every machine are paused (`ignite pool pause --all`).

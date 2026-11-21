@@ -6,7 +6,9 @@
 
 use rusqlite::Connection;
 
+use ignite_core::fleet::{FleetSettings, MachineState};
 use ignite_core::time::Timestamp;
+use ignite_store::hub::{fleet, fleet_settings};
 
 use super::common::{SITE_ICONS, brand};
 use super::components::{self as c, Feed, PageOptions, Tone, esc};
@@ -122,12 +124,27 @@ fn person_items(conn: &Connection, root: &str) -> Result<Vec<(Tone, String)>, Re
     Ok(found)
 }
 
-/// A machine that stopped reporting, has no dispatcher, or has paused its pool.
-fn machine_items(conn: &Connection, now: Timestamp) -> Result<Vec<(Tone, String)>, ReadError> {
+pub(super) fn machine_state(
+    conn: &Connection,
+    name: &str,
+    state: MachineState,
+) -> Result<String, ReadError> {
+    let actor = fleet_settings::state_actor(conn, name)?;
+    Ok(actor.map_or_else(
+        || state.to_string(),
+        |actor| format!("{state} (set by {})", esc(&actor)),
+    ))
+}
+
+/// Machines in a restricted state, or with a fault such as a missing heartbeat.
+fn machine_items(
+    conn: &Connection,
+    settings: &FleetSettings,
+    now: Timestamp,
+) -> Result<Vec<(Tone, String)>, ReadError> {
     let mut found = Vec::new();
     let mut machines = conn.prepare(
-        "SELECT id, name, last_seen, json_array_length(cli_apps) > 0,
-                EXISTS (SELECT 1 FROM pauses WHERE machine = machines.id)
+        "SELECT id, name, last_seen, json_array_length(cli_apps) > 0
          FROM machines ORDER BY name",
     )?;
     let machines = machines
@@ -137,7 +154,6 @@ fn machine_items(conn: &Connection, now: Timestamp) -> Result<Vec<(Tone, String)
                 row.get::<_, String>(1)?,
                 row.get::<_, String>(2)?,
                 row.get::<_, bool>(3)?,
-                row.get::<_, bool>(4)?,
             ))
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -146,7 +162,12 @@ fn machine_items(conn: &Connection, now: Timestamp) -> Result<Vec<(Tone, String)
          WHERE w.machine = ?1 AND w.role = 'dispatcher'
            AND w.app NOT IN (SELECT value FROM json_each(m.cli_apps))",
     )?;
-    for (id, name, last_seen, has_cli, paused) in machines {
+    for (id, name, last_seen, has_cli) in machines {
+        let state = settings.machine(&name).state;
+        if state != MachineState::Active {
+            let label = machine_state(conn, &name, state)?;
+            found.push((Tone::Amber, format!("{} is {label}", esc(&name))));
+        }
         let states = dispatchers
             .query_map([&id], |row| row.get::<_, String>(0))?
             .collect::<Result<Vec<_>, _>>()?;
@@ -161,9 +182,12 @@ fn machine_items(conn: &Connection, now: Timestamp) -> Result<Vec<(Tone, String)
                     age(now, Some(&last_seen))
                 ),
             ));
-        } else if !has_cli && states.iter().all(|state| state == "down") {
+        } else if state == MachineState::Active
+            && !has_cli
+            && states.iter().all(|state| state == "down")
+        {
             found.push((Tone::Red, format!("{} has no dispatcher", esc(&name))));
-        } else if paused || states.iter().any(|state| state == "paused") {
+        } else if state == MachineState::Active && states.iter().any(|state| state == "paused") {
             found.push((Tone::Amber, format!("{}'s pool is paused", esc(&name))));
         }
     }
@@ -230,26 +254,26 @@ fn regression_items(conn: &Connection, root: &str) -> Result<Vec<(Tone, String)>
     Ok(found)
 }
 
-/// The live tickets that hold `master` back (the tickets of failing regressions and justiciar
-/// tickets), named while any pool is paused. A paused machine still hands them to one worker at
-/// a time, but a pause of every machine hands them to nobody, so `master` stays where it is.
-fn held_items(conn: &Connection, root: &str) -> Result<Vec<(Tone, String)>, ReadError> {
-    let everywhere: bool = conn.query_row(
-        "SELECT EXISTS (SELECT 1 FROM pauses WHERE machine = ?1)",
-        [ignite_store::hub::fleet::ALL_MACHINES],
-        |row| row.get(0),
+/// Tickets holding `master` back, shown when a machine's fleet state limits its work
+/// or hand-offs are paused across the fleet.
+fn held_items(
+    conn: &Connection,
+    settings: &FleetSettings,
+    root: &str,
+) -> Result<Vec<(Tone, String)>, ReadError> {
+    let everywhere = fleet::paused_everywhere(conn)?;
+    let mut legacy = conn.prepare(
+        "SELECT DISTINCT m.name FROM machines m JOIN workers w ON w.machine = m.id
+         WHERE w.role = 'dispatcher' AND w.state = 'paused' ORDER BY m.name",
     )?;
-    let mut paused = conn.prepare(
-        "SELECT m.name FROM machines m
-         WHERE EXISTS (SELECT 1 FROM pauses p WHERE p.machine = m.id)
-            OR EXISTS (SELECT 1 FROM workers d WHERE d.machine = m.id
-                       AND d.role = 'dispatcher' AND d.state = 'paused')
-         ORDER BY m.name",
-    )?;
-    let paused = paused
+    let legacy = legacy
         .query_map([], |row| row.get::<_, String>(0))?
         .collect::<Result<Vec<_>, _>>()?;
-    if !everywhere && paused.is_empty() {
+    let limited = settings
+        .machines
+        .values()
+        .any(|setting| setting.state != MachineState::Active);
+    if !everywhere && !limited && legacy.is_empty() {
         return Ok(Vec::new());
     }
     let mut holding = conn.prepare(
@@ -277,8 +301,10 @@ fn held_items(conn: &Connection, root: &str) -> Result<Vec<(Tone, String)>, Read
              master back"
                 .to_owned(),
         )
+    } else if limited {
+        (Tone::Amber, "Tickets holding master back".to_owned())
     } else {
-        let names: Vec<String> = paused.iter().map(|name| esc(name)).collect();
+        let names: Vec<String> = legacy.iter().map(|name| esc(name)).collect();
         (
             Tone::Amber,
             format!(
@@ -317,10 +343,11 @@ pub fn items(
     now: Timestamp,
 ) -> Result<Vec<(Tone, String)>, ReadError> {
     let mut found = person_items(conn, root)?;
-    found.extend(machine_items(conn, now)?);
+    let settings = fleet_settings::settings(conn)?;
+    found.extend(machine_items(conn, &settings, now)?);
     found.extend(usage_items(conn, now)?);
     found.extend(regression_items(conn, root)?);
-    found.extend(held_items(conn, root)?);
+    found.extend(held_items(conn, &settings, root)?);
     found.extend(stranded_items(conn, root)?);
     Ok(found)
 }

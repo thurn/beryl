@@ -563,6 +563,52 @@ impl Hub for HubClient {
         Ok(())
     }
 
+    fn set_fleet_machine_state(
+        &self,
+        machine: &ignite_core::ids::MachineId,
+        state: ignite_core::fleet::MachineState,
+        actor: Option<&str>,
+    ) -> Result<()> {
+        use ignite_core::fleet::{FleetUpdate, FleetView};
+
+        let mut client = self.clone();
+        if let Some(actor) = actor {
+            actor.clone_into(&mut client.actor);
+        }
+        let view: FleetView = client.get("/fleet", &[])?;
+        let name = view
+            .machines
+            .iter()
+            .find(|host| host.id == *machine)
+            .ok_or_else(|| Error::NotFound(format!("machine {machine} is not registered")))?
+            .name
+            .clone();
+        let mut settings = view.settings;
+        for attempt in 0..2 {
+            if settings.machine(&name).state == state {
+                return Ok(());
+            }
+            let version = settings.version;
+            settings.machines.entry(name.clone()).or_default().state = state;
+            let bytes = serde_json::to_vec(&FleetUpdate { version, settings })
+                .map_err(|e| Error::Invalid(e.to_string()))?;
+            let url = format!("{}/fleet", client.base);
+            let reply = client.with_retries("/fleet", || {
+                client
+                    .authorized(client.agent.put(&url))
+                    .header("Content-Type", "application/json")
+                    .send(&bytes[..])
+            })?;
+            if attempt == 0 && reply.status == 409 {
+                settings = decode("/fleet", &reply.body)?;
+            } else {
+                client.ok("/fleet", reply)?;
+                return Ok(());
+            }
+        }
+        unreachable!("the second request returns its result")
+    }
+
     fn emergency(
         &self,
         change: &ignite_core::protocol::emergency::EmergencyChange,

@@ -269,9 +269,16 @@ impl Dispatcher {
         let now = ctx.clock.now();
         // A hand-off saved before a restart may run after its reservation lapsed at the hub,
         // which would refuse the `ignite start` of its prompt.
-        if reserved.expires_at <= now {
+        let stopped = if reserved.expires_at <= now {
+            Some("its reservation lapsed")
+        } else if crate::fleet_notice::is_off(&self.pool) {
+            Some("this machine is off")
+        } else {
+            None
+        };
+        if let Some(reason) = stopped {
             eprintln!(
-                "ignite: {} not started in {slot}: its reservation lapsed",
+                "ignite: {} not started in {slot}: {reason}",
                 reserved.ticket
             );
             let mut state = self.state();

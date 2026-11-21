@@ -106,8 +106,9 @@ impl HubServer {
                 &ignite_core::owner::Routing::from_config(&self.config),
             )
             .map_err(io::Error::other)?;
-            routes::fleet::seed(&mut first, &self.config, SystemClock.now())
-                .map_err(io::Error::other)?;
+            let now = SystemClock.now();
+            routes::fleet::seed(&mut first, &self.config, now).map_err(io::Error::other)?;
+            hub::fleet_settings::migrate_pauses(&mut first, now).map_err(io::Error::other)?;
         }
         let server = Server::http(&self.listen).map_err(io::Error::other)?;
         let address = server
