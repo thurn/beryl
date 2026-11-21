@@ -3,6 +3,8 @@
 //! on every tick of a recording. A name is a fixture's, a card spec moment's as
 //! `<card>/<moment>`, a stress board's ([`crate::stress`]) or a screen's ([`crate::screens`]).
 
+use std::sync::{Arc, OnceLock};
+
 use app_client::driver::{Duration, Page, Recording, TICK};
 use beryl_protocol::ipc::CARD_RECORDS;
 use beryl_protocol::ipc::FixtureMessage;
@@ -16,6 +18,7 @@ use crate::runner::Test;
 use crate::stress::{Board, card_records, pointer_moves, stress};
 use crate::{recordings, screens};
 
+use kit_base::data::Data;
 use kit_base::data::profiles::{Checks, ProfileData};
 pub use kit_base::geometry::Window;
 
@@ -50,11 +53,74 @@ pub fn safe_area(layout: Layout) -> Insets {
     by_layout(layout).test_safe_area()
 }
 
+/// An explicitly selected profile and its isolated inspection data.
+#[derive(Debug)]
+pub struct InspectionProfile {
+    source: (&'static str, &'static str),
+    data: OnceLock<Result<Arc<Data>, String>>,
+}
+
+impl PartialEq for InspectionProfile {
+    fn eq(&self, other: &Self) -> bool {
+        self.source == other.source
+    }
+}
+
+impl Eq for InspectionProfile {}
+
+impl InspectionProfile {
+    pub(crate) fn data(&self) -> Result<&Arc<Data>, String> {
+        self.data
+            .get_or_init(|| {
+                let incoming = crate::data::checkout_ref()?;
+                let mut data = incoming.as_ref().clone();
+                let (name, file) = self.source;
+                let path = crate::data::directory().join(file);
+                let text = std::fs::read_to_string(&path)
+                    .map_err(|error| format!("{}: {error}", path.display()))?;
+                data.profiles = data.profiles.with_preview(file, &text, data.card)?;
+                if data.profiles.for_size(Size::default()).name != name {
+                    return Err(format!("{file}: expected profile name {name}"));
+                }
+                Ok(Arc::new(data))
+            })
+            .as_ref()
+            .map_err(Clone::clone)
+    }
+
+    #[must_use]
+    pub(crate) fn name(&self) -> &'static str {
+        self.source.0
+    }
+
+    pub(crate) fn definition(&self) -> &ProfileData {
+        self.data()
+            .expect("validated inspection profile")
+            .profiles
+            .for_size(Size::default())
+    }
+}
+
+pub(crate) fn inspection_profile(name: &str) -> Result<&'static InspectionProfile, String> {
+    static PROFILES: [InspectionProfile; 1] = [InspectionProfile {
+        source: game_table::profiles::wide_compact::SOURCE,
+        data: OnceLock::new(),
+    }];
+    let profile = PROFILES
+        .iter()
+        .find(|profile| profile.name() == name)
+        .ok_or_else(|| format!("unknown inspection profile {name:?}"))?;
+    profile.data()?;
+    Ok(profile)
+}
+
 /// Which windows of the test matrix a run of the interface tests plays.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Windows {
     Desktop,
     Phone,
+    /// Run fixtures in the explicitly selected profile.
+    Profile(&'static InspectionProfile),
     /// Both, in the usual order.
     All,
 }
@@ -67,6 +133,7 @@ impl Windows {
             Self::Desktop => &[Layout::Desktop],
             Self::Phone => &[Layout::Phone],
             Self::All => &[Layout::Desktop, Layout::Phone],
+            Self::Profile(profile) => return profile.definition().test_windows().collect(),
         };
         classes
             .iter()
@@ -116,19 +183,36 @@ impl Recorded for Page {
 ///
 /// When there is no such recording for `seat`, or it cannot be read.
 pub fn page(name: &str, seat: Side, layout: Layout, size: Size) -> Result<Page, String> {
+    page_with_profile(name, seat, layout, size, None)
+}
+
+pub(crate) fn page_with_profile(
+    name: &str,
+    seat: Side,
+    layout: Layout,
+    size: Size,
+    profile: Option<&InspectionProfile>,
+) -> Result<Page, String> {
+    let (data, safe_area) = if let Some(profile) = profile {
+        (
+            Arc::clone(profile.data()?),
+            profile.definition().test_safe_area(),
+        )
+    } else {
+        let insets = if layout == Layout::Phone {
+            safe_area(layout)
+        } else {
+            Insets::default()
+        };
+        (crate::data::checkout()?, insets)
+    };
     let recording = recording(name, seat)?;
-    let mut page = Page::new(
-        crate::data::checkout()?,
-        recording.into(),
-        seat,
-        layout,
-        size,
-    )
-    .map_err(|error| format!("{name}: {error}"))?
-    .named(name);
-    if layout == Layout::Phone {
-        // Only here, since giving a page its safe area sets its client up again.
-        page = page.with_safe_area(safe_area(layout));
+    let mut page = Page::new(data, recording.into(), seat, layout, size)
+        .map_err(|error| format!("{name}: {error}"))?
+        .named(name);
+    if safe_area != Insets::default() {
+        // Giving a page its safe area sets its client up again.
+        page = page.with_safe_area(safe_area);
     }
     if let Some(board) = Board::parse(name) {
         let drive = board.drive();
@@ -227,6 +311,7 @@ pub fn check_recording(name: &str) -> Checked {
                 seat,
                 size: window.size,
                 scale: window.scale,
+                profile: None,
             };
             let allowed = listed.tests.get(&test.name()).cloned().unwrap_or_default();
             let mut page = test.page().unwrap_or_else(|why| panic!("{why}"));

@@ -20,7 +20,7 @@ use kit_probe::agent::{Count, Fault, Judged, Layout, Rule};
 use kit_ui::input::Size;
 
 use crate::cli::options::side_of;
-use crate::pages::{self, Windows};
+use crate::pages::{self, InspectionProfile, Windows};
 use crate::{recordings, stress};
 
 /// The prefix of every test's name.
@@ -35,6 +35,7 @@ pub struct Test {
     pub size: Size,
     /// Physical pixels to a logical point (`Page::with_scale`).
     pub scale: f32,
+    pub profile: Option<&'static InspectionProfile>,
 }
 
 impl Test {
@@ -59,7 +60,10 @@ impl Test {
     /// The profile's layout for this window.
     #[must_use]
     pub fn layout(&self) -> Layout {
-        pages::layout_for_size(self.size)
+        self.profile.map_or_else(
+            || pages::layout_for_size(self.size),
+            |profile| Layout::for_size_class(profile.definition().size_class),
+        )
     }
 
     /// The test's recording at its start, from its seat in its window, in its layout with the
@@ -69,7 +73,13 @@ impl Test {
     ///
     /// When the recording cannot be read or the client cannot open it.
     pub fn page(&self) -> Result<Page, String> {
-        let page = pages::page(&self.recording, self.seat, self.layout(), self.size)?;
+        let page = pages::page_with_profile(
+            &self.recording,
+            self.seat,
+            self.layout(),
+            self.size,
+            self.profile,
+        )?;
         Ok(page.with_scale(self.scale))
     }
 }
@@ -109,8 +119,18 @@ pub fn tests(filter: &str, windows: Windows) -> Result<Vec<Test>, String> {
     let filter = full_name(filter);
     let prefix = filter.strip_prefix(PREFIX).unwrap_or_default();
     let recording_windows = windows.windows();
+    let (profile, names) = if let Windows::Profile(profile) = windows {
+        let fixtures = crate::corpus::fixtures()?;
+        let names = recordings::names()?
+            .into_iter()
+            .filter(|(recording, _)| fixtures.contains(recording))
+            .collect();
+        (Some(profile), names)
+    } else {
+        (None, crate::scene::names(prefix)?)
+    };
     let mut tests = Vec::new();
-    for (recording, seat) in crate::scene::names(prefix)? {
+    for (recording, seat) in names {
         let story_windows = recording.starts_with(crate::stories::PREFIX).then(|| {
             let layout = crate::stories::open(&recording)
                 .map_or(Layout::Desktop, |story| story.header.layout);
@@ -126,6 +146,7 @@ pub fn tests(filter: &str, windows: Windows) -> Result<Vec<Test>, String> {
                 seat: side_of(seat),
                 size: window.size,
                 scale: window.scale,
+                profile,
             };
             if test.name().starts_with(&filter) {
                 tests.push(test);
@@ -559,6 +580,7 @@ mod tests {
             .map(|n| Test {
                 recording: format!("no-such-recording-{n}"),
                 seat: Side::You,
+                profile: None,
                 size: Windows::Desktop.windows()[0].size,
                 scale: 1.0,
             })

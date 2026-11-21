@@ -3,7 +3,7 @@
 use glam::Vec3;
 use serde::{Deserialize, Deserializer};
 
-use super::super::tuning::{finite, nonnegative, positive};
+use super::super::tuning::{finite, nonnegative, positive, vector};
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
@@ -17,6 +17,9 @@ pub struct Banded {
     pub dock_gap: f32,
     #[serde(deserialize_with = "positive")]
     pub button_height: f32,
+    /// The mana pool's offset from its player's life total, in logical points.
+    #[serde(default, deserialize_with = "vector")]
+    pub pool_offset: glam::Vec2,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
@@ -46,6 +49,9 @@ fn centres<'de, D: Deserializer<'de>>(de: D) -> Result<Vec3, D::Error> {
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Stack {
+    /// A clear right-hand column allows the full card size, outside the rows.
+    #[serde(default, deserialize_with = "nonnegative")]
+    pub side_width: f32,
     #[serde(deserialize_with = "positive")]
     pub width: f32,
     #[serde(deserialize_with = "positive")]

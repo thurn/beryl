@@ -103,6 +103,48 @@ fn the_window_matrix_has_seven_sizes_from_each_recorded_seat() {
     assert_eq!(names(Windows::Phone), phones);
 }
 
+#[test]
+fn the_explicit_profile_plays_only_fixtures_in_its_own_window() {
+    let listed = run(&["test", "--profile", "wide-compact", "--list"]);
+    assert_eq!(listed.code, 0, "{}", listed.stderr);
+    let names: Vec<_> = listed.stdout.lines().collect();
+    assert!(names.contains(&"b3d:pay-default/you/759x393"));
+    let fixtures: Value = serde_json::from_str(
+        &beryl_test_files::read_to_string("ui/fixtures.json").expect("fixture list"),
+    )
+    .expect("fixture JSON");
+    let fixtures = fixtures["fixtures"].as_array().expect("fixtures");
+    assert!(names.iter().all(|name| {
+        let (recording, window) = name.rsplit_once('/').expect("test window");
+        let (recording, _) = recording.rsplit_once('/').expect("test seat");
+        window == "759x393"
+            && fixtures
+                .iter()
+                .any(|fixture| fixture["name"].as_str() == recording.strip_prefix("b3d:"))
+    }));
+
+    let args = ["tree", "pay-default", "--at", "prompt:1"];
+    let normal = run(&[&args[..], &["--layout", "phone", "--size", "759x393"]].concat());
+    let preview = run(&[&args[..], &["--profile", "wide-compact"]].concat());
+    assert_eq!(normal.code, 0, "{}", normal.stderr);
+    assert_eq!(preview.code, 0, "{}", preview.stderr);
+    let (command, tree) = preview
+        .stdout
+        .split_once('\n')
+        .expect("tree and its command");
+    assert!(command.contains("--size 759x393"));
+    assert!(command.contains("--profile wide-compact"));
+    assert_ne!(tree, normal.stdout.split_once('\n').expect("normal tree").1);
+    let size = Size {
+        width: 759.0,
+        height: 393.0,
+    };
+    assert_eq!(
+        crate::test_data::data().profiles.for_size(size).name,
+        "phone"
+    );
+}
+
 /// A phone test plays in the phone layout with the fixed phone safe area, and `tree` and
 /// `check`, given the test's name, open the same layout and insets: the client draws what the
 /// test checked, and a fault is reported against the same safe area.
@@ -114,6 +156,7 @@ fn a_phone_tests_name_opens_the_same_layout_and_insets_in_test_tree_and_check() 
         height: 647.0,
     };
     let test = Test {
+        profile: None,
         recording: "pay-default".to_owned(),
         seat: Side::You,
         size,
@@ -238,6 +281,7 @@ fn a_panic_in_a_test_is_its_error() {
 fn outcome(recording: &str, frames: usize) -> Outcome {
     Outcome {
         test: Test {
+            profile: None,
             recording: recording.to_owned(),
             seat: Side::You,
             size: Size {

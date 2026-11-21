@@ -248,7 +248,7 @@ const COMMANDS: [Command; 10] = [
         ],
         spec: Spec {
             recording: false,
-            values: &[test::STOP_AFTER],
+            values: &[test::STOP_AFTER, options::PROFILE],
             switches: &[
                 test::EVERY_TICK,
                 test::UPDATE,
@@ -260,6 +260,10 @@ const COMMANDS: [Command; 10] = [
         },
         own: &[
             ("--all", "play every recording in the pack"),
+            (
+                "--profile <name>",
+                "play the fixtures in an explicit test profile",
+            ),
             (
                 "--every-tick",
                 "check every tick instead of the check times, as the sweep does",
@@ -468,7 +472,18 @@ fn open_recording(options: &Options) -> Result<Page, Usage> {
         )));
     }
     options::known(options.name(), options.seat)?;
-    let page = pages::page(options.name(), options.seat, options.layout, options.size);
+    let profile = options
+        .value(options::PROFILE)
+        .map(pages::inspection_profile)
+        .transpose()
+        .map_err(Usage)?;
+    let page = pages::page_with_profile(
+        options.name(),
+        options.seat,
+        options.layout,
+        options.size,
+        profile,
+    );
     let page = page.map_err(Usage)?.with_scale(options.scale);
     Ok(page.with_catch_up(options.pace == options::Pace::CatchUp))
 }

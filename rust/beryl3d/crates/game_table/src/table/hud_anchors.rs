@@ -3,7 +3,7 @@
 use beryl_protocol::protocol::Side;
 use glam::{Vec2, Vec3};
 use kit_base::data::profiles::Piece;
-use kit_base::geometry::{Rect, Size};
+use kit_base::geometry::Rect;
 use kit_base::tokens::{size, type_style};
 use kit_frame::frame::{Anchor, ElementId, FrameBuilder};
 
@@ -51,10 +51,10 @@ impl Table {
     /// The life orb's centre before the art's offset to its numeral.
     #[must_use]
     pub fn life_centre(&self, side: Side) -> Vec2 {
-        ndc(
-            self.layout().players[side_index(side)].life,
-            self.camera().window.size,
-        )
+        self.camera()
+            .window
+            .size
+            .screen(self.layout().players[side_index(side)].life)
     }
 
     /// Registers the stationary layout boxes read by the HUD anchor pass. Only rows
@@ -66,7 +66,7 @@ impl Table {
         for side in [Side::You, Side::Opponent] {
             let player = layout.players[side_index(side)];
             register(HudAnchor::Life(side), point(self.life_centre(side)));
-            register(HudAnchor::Pool(side), point(ndc(player.pool, window)));
+            register(HudAnchor::Pool(side), point(window.screen(player.pool)));
         }
         let middle = if let Some(bands) = layout.bands {
             for (side, back) in [
@@ -130,7 +130,7 @@ impl Table {
                 let (mut left, mut right) = (low.x, high.x);
                 if self.profile().data().hud.table.contains(&Piece::StepStops) {
                     // Leave room for the life orb and step stops when the count is level with them.
-                    let life = ndc(layout.players[side_index(side)].life, window);
+                    let life = window.screen(layout.players[side_index(side)].life);
                     let half_orb = size::ORB_HEIGHT * layout.play.life.orb_scale / 2.0;
                     let half_line = type_style::BODY.size * type_style::BODY.line_height / 2.0;
                     if (low.y - life.y).abs() < half_orb + half_line {
@@ -176,11 +176,4 @@ fn point(at: Vec2) -> Rect {
         y: at.y,
         ..Rect::default()
     }
-}
-
-fn ndc(at: Vec2, window: Size) -> Vec2 {
-    Vec2::new(
-        f32::midpoint(at.x, 1.0) * window.width,
-        f32::midpoint(1.0, -at.y) * window.height,
-    )
 }

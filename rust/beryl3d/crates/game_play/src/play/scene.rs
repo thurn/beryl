@@ -48,10 +48,14 @@ impl Scene<'_> {
     pub(super) fn register_light_targets(&self, builder: &mut FrameBuilder<'_>) {
         let table = self.table();
         let height = table.camera().window.size.height;
+        let life = table.layout().play.life;
+        let mut half = table.data().light.player_half_pixels * (height / 900.0);
+        if let Some(diameter) = life.mark_minimum {
+            half = half.max(Vec2::splat(diameter * 0.5));
+        }
         for side in [Side::You, Side::Opponent] {
-            let centre = table.life_centre(side)
-                + Vec2::Y * orb::face_offset(side) * table.layout().play.life.orb_scale;
-            let half = table.data().light.player_half_pixels * (height / 900.0);
+            let centre =
+                table.life_centre(side) + Vec2::Y * orb::face_offset(side) * life.orb_scale;
             builder.anchor_node(orb::target_id(side), AnchorBox { centre, half }.rect());
         }
     }

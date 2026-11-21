@@ -54,6 +54,24 @@ pub struct CameraData {
     pub card: Card,
 }
 
+impl CameraData {
+    fn validate(self) -> Result<(), String> {
+        let [lower, upper] = self.required;
+        if !(-90.0..90.0).contains(&self.pitch_degrees)
+            || !(0.0..180.0).contains(&self.fov_degrees)
+            || self.fov_degrees == 0.0
+            || !self.target.is_finite()
+            || !lower.is_finite()
+            || !upper.is_finite()
+            || lower.x >= upper.x
+            || lower.y >= upper.y
+        {
+            return Err("invalid table.camera geometry".to_owned());
+        }
+        Ok(())
+    }
+}
+
 /// The card of a camera read from a profile, before `Profiles::parse` copies in the card's data.
 fn unset_card() -> Card {
     Card {
@@ -124,6 +142,8 @@ pub struct Table {
     #[serde(deserialize_with = "vector")]
     pub beneath_step: Vec2,
     pub tray_tuning: TrayTuning,
+    /// Dedicated tray geometry for ordering prompts.
+    pub order_tray: Option<anchored::Tray>,
 }
 
 /// Table presentation choices independent of container geometry.
@@ -195,6 +215,8 @@ pub enum LifeChange {
 pub struct Life {
     #[serde(deserialize_with = "positive")]
     pub orb_scale: f32,
+    /// Minimum diameter of the life orb's target outline, in logical points.
+    pub mark_minimum: Option<f32>,
     pub text: LifeText,
     pub opening_hides_viewer: bool,
     pub change: LifeChange,
@@ -358,6 +380,10 @@ impl ProfileData {
                 "checks.text_points",
             ),
             (
+                self.play.life.mark_minimum.is_none_or(is_positive),
+                "play.life.mark_minimum",
+            ),
+            (
                 self.settings_quick_action_min_width.is_none_or(is_positive),
                 "settings_quick_action_min_width",
             ),
@@ -384,19 +410,7 @@ impl ProfileData {
                 return Err(format!("invalid test_matrix.windows[{index}]"));
             }
         }
-        let camera = self.table.camera;
-        let [lower, upper] = camera.required;
-        if !(-90.0..90.0).contains(&camera.pitch_degrees)
-            || !(0.0..180.0).contains(&camera.fov_degrees)
-            || camera.fov_degrees == 0.0
-            || !camera.target.is_finite()
-            || !lower.is_finite()
-            || !upper.is_finite()
-            || lower.x >= upper.x
-            || lower.y >= upper.y
-        {
-            return Err("invalid table.camera geometry".to_owned());
-        }
+        self.table.camera.validate()?;
         for (name, row) in [
             ("creatures", self.table.creatures),
             ("lands", self.table.lands),
@@ -433,6 +447,13 @@ impl ProfileData {
                 }
             }
             _ => return Err("supply exactly one of table.anchored and table.banded".to_owned()),
+        }
+        if self
+            .table
+            .order_tray
+            .is_some_and(|tray| tray.least > tray.most)
+        {
+            return Err("table.order_tray.least exceeds most".to_owned());
         }
         if let Some(inspector) = self.table.inspector
             && (inspector.least_width <= 2.0 * inspector.pad
@@ -539,7 +560,10 @@ fn is_nonnegative(value: f32) -> bool {
 
 /// Profiles ordered from the smallest applicable window to the fallback.
 #[derive(Clone, Debug, PartialEq)]
-pub struct Profiles(Vec<ProfileData>);
+pub struct Profiles {
+    automatic: Vec<ProfileData>,
+    preview: Option<Box<ProfileData>>,
+}
 
 /// The profile files in selection order, relative to the host's data directory.
 pub const FILES: [&str; 2] = ["profiles/phone.json", "profiles/desktop.json"];
@@ -589,7 +613,10 @@ impl Profiles {
         if profiles.is_empty() {
             return Err("no layout profiles supplied".to_owned());
         }
-        let profiles = Self(profiles);
+        let profiles = Self {
+            automatic: profiles,
+            preview: None,
+        };
         for class in [SizeClass::Compact, SizeClass::Regular] {
             if !profiles.iter().any(|profile| profile.size_class == class) {
                 return Err(format!(
@@ -610,14 +637,36 @@ impl Profiles {
         Ok(profiles)
     }
 
-    /// The first profile whose window condition fits, or the fallback.
+    /// Selects a profile explicitly for all windows in this data set.
+    ///
+    /// # Errors
+    ///
+    /// Returns the file and field at fault if the preview profile is invalid or
+    /// specifies a condition for automatic selection.
+    pub fn with_preview(mut self, file: &str, text: &str, card: Card) -> Result<Self, String> {
+        let mut profile: ProfileData = read(file, text)?;
+        profile.table.camera.card = card;
+        profile.validate().map_err(|why| format!("{file}: {why}"))?;
+        if profile.shorter_side_below.is_some() {
+            return Err(format!(
+                "{file}: an explicit profile cannot set shorter_side_below"
+            ));
+        }
+        self.preview = Some(Box::new(profile));
+        Ok(self)
+    }
+
+    /// The explicit preview, the first matching automatic profile, or the fallback.
     #[must_use]
     pub fn for_size(&self, size: Size) -> &ProfileData {
-        self.iter()
-            .find(|profile| {
-                profile
-                    .shorter_side_below
-                    .is_none_or(|limit| shorter_side_below(size, limit))
+        self.preview
+            .as_deref()
+            .or_else(|| {
+                self.iter().find(|profile| {
+                    profile
+                        .shorter_side_below
+                        .is_none_or(|limit| shorter_side_below(size, limit))
+                })
             })
             .expect("validated profiles have a fallback")
     }
@@ -632,11 +681,14 @@ impl Profiles {
     /// The final profile, which applies when no size limit does.
     #[must_use]
     pub fn fallback(&self) -> &ProfileData {
-        self.0.last().expect("validated profiles have a fallback")
+        self.automatic
+            .last()
+            .expect("validated profiles have a fallback")
     }
 
+    /// The profiles eligible for automatic selection.
     pub fn iter(&self) -> impl ExactSizeIterator<Item = &ProfileData> {
-        self.0.iter()
+        self.automatic.iter()
     }
 }
 

@@ -26,7 +26,7 @@ pub struct Inputs<'a> {
 #[derive(PartialEq)]
 pub struct ViewKey {
     window: Window,
-    slots: [Option<Rect>; 9],
+    slots: [Option<Rect>; 10],
     floating: Option<FloatingPrompt>,
     show_phase: bool,
     target_points: f32,
@@ -78,13 +78,18 @@ impl ViewKey {
                     "prompt.ways",
                     "prompt.catalog",
                     "divide.edge",
+                    "divide.side",
                 ])
                 .map(|slot| slot.map(|slot| slot.rect)),
             floating: hud.profile.data().hud.floating_prompt,
             show_phase: hud.profile.data().hud.table.contains(&Piece::Phase),
             target_points: hud.profile.data().checks.target_points,
             text_points: hud.profile.data().checks.text_points,
-            tray: hud.profile.tray(),
+            tray: if matches!(details, Details::Order { .. }) {
+                hud.profile.order_tray()
+            } else {
+                hud.profile.tray()
+            },
             prompt: hud.prompt.cloned(),
             placement,
             bar: inputs.bar.cloned(),

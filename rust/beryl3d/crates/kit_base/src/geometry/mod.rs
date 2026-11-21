@@ -23,6 +23,50 @@ pub struct Size {
     pub height: f32,
 }
 
+impl Size {
+    /// Project a logical point from the top left into normalized device coordinates.
+    #[must_use]
+    pub fn ndc(self, x: f32, y: f32) -> Vec2 {
+        Vec2::new(x / self.width * 2.0 - 1.0, 1.0 - y / self.height * 2.0)
+    }
+
+    /// Project normalized device coordinates into logical points from the top left.
+    #[must_use]
+    pub fn screen(self, at: Vec2) -> Vec2 {
+        Vec2::new(
+            f32::midpoint(at.x, 1.0) * self.width,
+            f32::midpoint(1.0, -at.y) * self.height,
+        )
+    }
+}
+
+/// A band of the window, in logical points from its top edge.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Band {
+    pub top: f32,
+    pub height: f32,
+}
+
+impl Band {
+    #[must_use]
+    pub fn between(top: f32, bottom: f32) -> Self {
+        Self {
+            top,
+            height: bottom - top,
+        }
+    }
+
+    #[must_use]
+    pub fn bottom(self) -> f32 {
+        self.top + self.height
+    }
+
+    #[must_use]
+    pub fn middle(self) -> f32 {
+        self.top + self.height / 2.0
+    }
+}
+
 /// Which screen axis advances through an arranged container.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ScrollAxis {

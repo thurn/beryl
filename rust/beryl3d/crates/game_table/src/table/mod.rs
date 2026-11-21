@@ -239,6 +239,7 @@ pub(crate) struct LifeDock {
     pub gap: f32,
     pub middle: f32,
     pub top: f32,
+    pub pool_offset: Vec2,
 }
 
 impl LifeDock {
@@ -247,7 +248,11 @@ impl LifeDock {
         let lowest_clear = self.top + HALF_LIFE;
         let y = self.middle.min(raised.max(lowest_clear));
         let life = Vec2::new(0.0, 1.0 - y / window.size.height * 2.0);
-        PlayerAnchor { life, pool: life }
+        let offset = self.pool_offset / Vec2::new(window.size.width, -window.size.height) * 2.0;
+        PlayerAnchor {
+            life,
+            pool: life + offset,
+        }
     }
 }
 

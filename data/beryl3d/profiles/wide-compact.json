@@ -1,0 +1,382 @@
+{
+  "name": "wide-compact",
+  "size_class": "compact",
+  "table": {
+    "camera": {
+      "pitch_degrees": 3.0,
+      "fov_degrees": 24.29,
+      "target": [0, -46, 0],
+      "required": [
+        [-378, -131],
+        [378, 131]
+      ]
+    },
+    "strip": 46,
+    "creatures": {
+      "y": -56,
+      "left": -310,
+      "right": 238
+    },
+    "lands": {
+      "y": -132,
+      "left": -295,
+      "right": -13
+    },
+    "others": {
+      "y": -132,
+      "left": 75,
+      "right": 250
+    },
+    "row_count_gap": 4,
+    "gap": 4,
+    "pile_step": [3, 3],
+    "beneath_step": [0.3, 0.17],
+    "tray_tuning": {
+      "depth": 280,
+      "fan": {
+        "step": 0.42,
+        "turn": 8,
+        "drop": 0.08
+      },
+      "put_back": {
+        "cascade": 0.165,
+        "between": 0.5,
+        "step": 0.65,
+        "least_step": 0.25,
+        "turn": 7,
+        "drop": 0.1,
+        "column_turns": [-1.6, 1.4],
+        "library_rise": 0.05,
+        "deck_backs": 4,
+        "deck_offset": [-1.5, -2.5]
+      }
+    },
+    "bands": {
+      "side": 8,
+      "opponent_strip": 46,
+      "you_strip": 44,
+      "hand_width": 80,
+      "hand_share": 0.25,
+      "hand_shown": 0.58,
+      "hand_top": 1
+    },
+    "banded": {
+      "piles": {
+        "you": {
+          "width": 44,
+          "x": [27, 72, 117]
+        },
+        "opponent": {
+          "width": 44,
+          "x": [27, 72, 117],
+          "below_safe": 23
+        }
+      },
+      "stack": {
+        "width": 68,
+        "step": 52,
+        "count_room": 32,
+        "depth": 400,
+        "step_depth": 1.5,
+        "side_width": 124
+      },
+      "hand": {
+        "depth": 300,
+        "step_depth": 1.5,
+        "fan_radius": 14,
+        "gap": 4,
+        "bias_degrees": 0.6
+      },
+      "opponent_hand": {
+        "width": 23,
+        "step": 14,
+        "rise": -2,
+        "right": 27,
+        "room": 4,
+        "depth": 320,
+        "step_depth": 1.5,
+        "fan_radius": 36.217
+      },
+      "tray": {
+        "inset": 14,
+        "most": 104,
+        "least": 54,
+        "gap": 6,
+        "heading": 18,
+        "least_step": 52
+      },
+      "dock_gap": 6,
+      "button_height": 44,
+      "pool_offset": [-55, -8]
+    },
+    "order_tray": {
+      "stage_height": 393,
+      "y": 58,
+      "height": 224,
+      "half_most": 295,
+      "stack_side": 0,
+      "most": 88,
+      "least": 52,
+      "gap": 10,
+      "heading": 22
+    }
+  },
+  "table_style": {
+    "show_exile": false,
+    "show_pile_sides": false,
+    "show_copy_labels": false,
+    "full_card_faces": false,
+    "hand_away": 0,
+    "far_shade": false,
+    "tuck_rise": false
+  },
+  "play": {
+    "held_draw": {
+      "kind": "over_rest",
+      "size": 1.57,
+      "foot": 0.25
+    },
+    "life": {
+      "orb_scale": 0.5,
+      "text": "title",
+      "opening_hides_viewer": true,
+      "change": "around_total",
+      "mark_minimum": 52
+    }
+  },
+  "hud": {
+    "table": ["players", "phase", "menu"],
+    "overlays": ["result", "log_sheet", "viewer"],
+    "table_under_opening": false,
+    "anchored_to_window": true,
+    "incoming": {
+      "left": 22,
+      "top": -4,
+      "min_width": 26,
+      "padding_x": 5,
+      "padding_y": 1,
+      "text": 13,
+      "opponent_top": -4
+    },
+    "opening": {
+      "start_choice": false,
+      "waiting_dots": false,
+      "wrapped_hand": {
+        "coin": 48,
+        "coin_narrow": 56,
+        "narrow_below": 393,
+        "coin_line": 13,
+        "coin_gap": 8,
+        "title": 18,
+        "title_gap": 8,
+        "card_most": 90,
+        "card_most_narrow": 86,
+        "per_row": 7,
+        "gap": 8,
+        "slot_scale": 0.8,
+        "slots_gap": 16,
+        "slot_edge": 16,
+        "no_actions": 40,
+        "dock_bottom": 16
+      }
+    },
+    "floating_prompt": {
+      "button_min_width": 84,
+      "character_width": 0.55,
+      "button_text": 18,
+      "button_padding": 12,
+      "overlap": 4,
+      "asked_gap": 4,
+      "pill_text": 16,
+      "pill_padding": 10,
+      "gap": 6
+    },
+    "result": {
+      "title": 36,
+      "reason": 16,
+      "reason_gap": 8,
+      "card": 160,
+      "card_gap": 12,
+      "narrow_card": {
+        "below": 393,
+        "width": 140
+      }
+    }
+  },
+  "slots": {
+    "player.you": {
+      "region": "your_strip"
+    },
+    "player.opponent": {
+      "region": "opponent_strip"
+    },
+    "opening": {
+      "region": "safe_area",
+      "inset": [14, 0, 0, 0]
+    },
+    "result": {
+      "region": "safe_area"
+    },
+    "viewer": {
+      "region": "window"
+    },
+    "prompt.clearance": {
+      "region": "battlefield"
+    },
+    "prompt.ways": {
+      "region": "above_viewer_rows"
+    },
+    "prompt.catalog": {
+      "region": "catalog"
+    },
+    "divide.edge": {
+      "region": "safe_area"
+    },
+    "revealed.pile": {
+      "region": "opponent_strip",
+      "inset": [0, 0, 0, 28],
+      "max_width": 52
+    },
+    "settings.sheet": {
+      "region": "safe_area",
+      "inset": [16, 16, 16, 16],
+      "max_width": 360,
+      "align_x": "center",
+      "align_y": "center"
+    },
+    "prompt.bar": {
+      "region": "prompt_area",
+      "inset": [0, 0, 0, 125],
+      "max_width": 480
+    },
+    "prompt.dock": {
+      "region": "your_strip",
+      "max_height": 44,
+      "align_x": "end",
+      "align_y": "center"
+    },
+    "prompt.stacked": {
+      "region": "middle"
+    },
+    "prompt.asked": {
+      "region": "your_strip",
+      "max_height": 44,
+      "align_y": "center",
+      "inset": [0, 0, 0, 125],
+      "max_width": 215
+    },
+    "log": {
+      "region": "log_area",
+      "inset": [8, 0, 8, 0]
+    },
+    "phase": {
+      "region": "middle"
+    },
+    "menu": {
+      "region": "opponent_strip",
+      "max_width": 44,
+      "max_height": 44,
+      "align_x": "end",
+      "align_y": "center"
+    },
+    "screen.column": {
+      "inset": [0, 16, 16, 16],
+      "max_width": 430,
+      "align_x": "center"
+    },
+    "screen.dock": {
+      "inset": [0, 16, 16, 16]
+    },
+    "gallery.column": {
+      "inset": [16, 16, 16, 16]
+    },
+    "result.dock": {
+      "inset": [0, 16, 16, 16],
+      "max_width": 398,
+      "align_x": "center"
+    },
+    "bug.hint": {
+      "inset": [14, 0, 0, 12]
+    },
+    "bug.tools": {
+      "inset": [8, 8, 0, 0]
+    },
+    "bug.sheet": {},
+    "manual.menu": {
+      "inset": [8, 8, 8, 8],
+      "max_width": 430,
+      "align_x": "center"
+    },
+    "manual.connection": {
+      "inset": [8, 0, 0, 0]
+    },
+    "manual.log": {
+      "inset": [16, 16, 0, 16],
+      "max_width": 320,
+      "align_x": "end"
+    },
+    "manual.proposals": {
+      "inset": [64, 16, 0, 16]
+    },
+    "manual.next": {
+      "region": "window",
+      "inset": [0, 24, 24, 0]
+    },
+    "manual.mana": {
+      "region": "log_area",
+      "inset": [8, 0, 0, 0]
+    },
+    "divide.side": {
+      "inset": [0, 136, 50, 90]
+    }
+  },
+  "checks": {
+    "target_points": 44,
+    "text_points": 11
+  },
+  "test_matrix": {
+    "safe_area": [0, 0, 0, 0],
+    "usual_window": 0,
+    "windows": [[759, 393, 1]]
+  },
+  "settings_quick_action_min_width": 84,
+  "manual": {
+    "label_overlap": 16,
+    "mana_right": 32,
+    "mana_width": 48,
+    "mana_done_width": 84
+  },
+  "screen": {
+    "action_height": 48,
+    "action_gap": 8,
+    "action_text": 18,
+    "start": {
+      "corner": 56,
+      "gap": 8,
+      "agent_row": 56,
+      "agent_gap": 4,
+      "agent_padding_y": 8,
+      "agent_padding_x": 4,
+      "radio": 24,
+      "label": 13,
+      "agent_name": 16,
+      "about": 13,
+      "agents_least": 56,
+      "field": 44
+    },
+    "bug": {
+      "hint": 13,
+      "padding_y": 12,
+      "padding_x": 16,
+      "radius": 12,
+      "gap": 8,
+      "title": 20,
+      "description_least": 76,
+      "description_most": 144,
+      "submit_width": 80
+    },
+    "list_row": 44
+  },
+  "legacy": {},
+  "counts": []
+}

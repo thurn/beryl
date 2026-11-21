@@ -13,7 +13,9 @@ use crate::table::{Camera, Layout, RowArea, TraySpace};
 mod desktop;
 mod phone;
 pub(crate) mod web_fit;
-pub use phone::{Band, TableBands};
+pub mod wide_compact;
+pub use kit_base::geometry::Band;
+pub use phone::TableBands;
 pub use web_fit::{FittedPiles, FittedRow, FittedRows};
 
 /// The logical points per unit of life-orb art, in atlas order.
@@ -92,33 +94,29 @@ impl<'a> Profile<'a> {
         )
     }
 
-    /// The order row uses the anchored tray bounds, including in a window with bands.
+    /// Fits the order row using its own tray, then the available anchored tray.
     #[must_use]
     pub fn order_tray(self) -> TraySpace {
         let table = &self.data.table;
         let fallback = &self.fallback.table;
-        table.anchored.as_ref().map_or_else(
-            || {
-                fallback.anchored.as_ref().map_or_else(
-                    || self.tray(),
-                    |anchored| {
-                        desktop::tray(
-                            anchored.tray,
-                            fallback.tray_tuning,
-                            table.camera.card,
-                            self.data.checks.target_points,
-                        )
-                    },
-                )
-            },
-            |anchored| {
-                desktop::tray(
-                    anchored.tray,
-                    table.tray_tuning,
-                    table.camera.card,
-                    self.data.checks.target_points,
-                )
-            },
+        let tray = table
+            .order_tray
+            .or(table.anchored.as_ref().map(|anchored| anchored.tray))
+            .map(|tray| (tray, table.tray_tuning))
+            .or_else(|| {
+                fallback
+                    .anchored
+                    .as_ref()
+                    .map(|anchored| (anchored.tray, fallback.tray_tuning))
+            });
+        let Some((tray, tuning)) = tray else {
+            return self.tray();
+        };
+        desktop::tray(
+            tray,
+            tuning,
+            table.camera.card,
+            self.data.checks.target_points,
         )
     }
 
@@ -183,17 +181,20 @@ impl<'a> Profile<'a> {
     pub fn pool_position(self, side: Side) -> Vec2 {
         let index = usize::from(side == Side::Opponent);
         self.data.table.anchored.as_ref().map_or_else(
-            || self.player_centre(side),
+            || {
+                let offset = self
+                    .data
+                    .table
+                    .banded
+                    .map_or(Vec2::ZERO, |data| data.pool_offset);
+                self.player_centre(side) + offset
+            },
             |anchored| self.anchor_point(anchored.players[index].pool),
         )
     }
 
     fn anchor_point(self, ndc: Vec2) -> Vec2 {
-        let window = self.window.size;
-        Vec2::new(
-            f32::midpoint(ndc.x, 1.0) * window.width,
-            f32::midpoint(1.0, -ndc.y) * window.height,
-        )
+        self.window.size.screen(ndc)
     }
 
     /// Resolves a named slot in logical points. An unknown name has no slot.

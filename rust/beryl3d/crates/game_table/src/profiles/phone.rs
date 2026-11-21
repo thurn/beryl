@@ -41,6 +41,7 @@ use crate::table::{
 };
 use kit_base::data::Card;
 use kit_base::data::profiles::{Banded, Bands, ProfileData, TrayTuning};
+use kit_base::geometry::Band;
 use kit_scene::hit::CELL;
 use kit_ui::input::Rect;
 
@@ -50,32 +51,6 @@ pub(super) const ORB_SCALE: f32 = kit_base::data::space::hud::phone::ORB_SCALE;
 /// A card's width over its height, the web interface's `RATIO`.
 fn ratio(card: Card) -> f32 {
     card.width / card.height
-}
-
-/// A band of the window, in logical points from its top edge.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct Band {
-    pub top: f32,
-    pub height: f32,
-}
-
-impl Band {
-    fn between(top: f32, bottom: f32) -> Self {
-        Self {
-            top,
-            height: bottom - top,
-        }
-    }
-
-    #[must_use]
-    pub fn bottom(self) -> f32 {
-        self.top + self.height
-    }
-
-    #[must_use]
-    pub fn middle(self) -> f32 {
-        self.top + self.height / 2.0
-    }
 }
 
 /// The table's bands, top to bottom, which the game screen lays its controls in. The
@@ -208,13 +183,6 @@ fn stack_height(camera: &Camera, middle: f32, (width, row_y, target): (f32, f32,
     (width / ratio(camera.data.card)).min(2.0 * reach)
 }
 
-/// A point of `window`, in logical points from its top left corner, in normalized device
-/// coordinates.
-fn ndc(window: Window, x: f32, y: f32) -> Vec2 {
-    let size = window.size;
-    Vec2::new(x / size.width * 2.0 - 1.0, 1.0 - y / size.height * 2.0)
-}
-
 /// Where each pile lies and how large its cards are, by side, the viewer's first: in each
 /// player's strip from its left, the library first, as the web's `pileSpot` puts them, the
 /// opponent's clear of the top safe inset.
@@ -232,7 +200,7 @@ fn piles(camera: &Camera, bands: &TableBands, data: Banded) -> ([[Vec2; 3]; 2], 
     let pile_width = [data.piles.you.width, data.piles.opponent.width];
     let piles: [[Vec2; 3]; 2] = std::array::from_fn(|side| {
         let x = pile_x[side];
-        [x.x, x.y, x.z].map(|x| ndc(window, inset.left + x, pile_y[side]))
+        [x.x, x.y, x.z].map(|x| window.size.ndc(inset.left + x, pile_y[side]))
     });
     let scale = std::array::from_fn(|side| {
         let base = camera.on_table(piles[side][0]).extend(0.0);
@@ -271,13 +239,16 @@ fn your_hand(
         depth: data.hand.depth,
         step_depth: data.hand.step_depth,
         height: wide / ratio(card) / window.size.height,
-        edge: ndc(window, 0.0, bands.hand.top + sizes.hand_top).y,
+        edge: window.size.ndc(0.0, bands.hand.top + sizes.hand_top).y,
         fan_radius: data.hand.fan_radius,
         spacing: (wide + data.hand.gap) / wide,
         room: (width - wide) / wide,
         bias_degrees: data.hand.bias_degrees,
-        across: ndc(window, f32::midpoint(bands.left, bands.right), 0.0).x,
-        ceiling: ndc(window, 0.0, ceiling).y,
+        across: window
+            .size
+            .ndc(f32::midpoint(bands.left, bands.right), 0.0)
+            .x,
+        ceiling: window.size.ndc(0.0, ceiling).y,
     }
 }
 
@@ -296,12 +267,12 @@ fn opponent_hand(window: Window, bands: &TableBands, data: Banded, card: Card) -
         depth: data.opponent_hand.depth,
         step_depth: data.opponent_hand.step_depth,
         height: theirs / ratio(card) / window.size.height,
-        edge: ndc(window, 0.0, foot).y,
+        edge: window.size.ndc(0.0, foot).y,
         fan_radius: data.opponent_hand.fan_radius,
         spacing: data.opponent_hand.step / theirs,
         room: data.opponent_hand.room,
         bias_degrees: 0.0,
-        across: ndc(window, right - fan / 2.0, 0.0).x,
+        across: window.size.ndc(right - fan / 2.0, 0.0).x,
         ceiling: f32::INFINITY,
     }
 }
@@ -354,12 +325,13 @@ pub(super) fn tray_in(
     }
 }
 
-/// A life total's anchor on a phone `window`, across the window's middle at `y` points from its
-/// top. A phone shows no unspent mana, so a streak out of a pool starts at the
-/// life total (`anchors` in `ui/src/stage/phone.ts`).
-fn life_anchor(window: Window, y: f32) -> PlayerAnchor {
-    let life = ndc(window, window.size.width / 2.0, y);
-    PlayerAnchor { life, pool: life }
+/// The life total at `y` points from the window's top and its mana pool's offset.
+fn life_anchor(window: Window, y: f32, pool_offset: Vec2) -> PlayerAnchor {
+    let x = window.size.width / 2.0;
+    PlayerAnchor {
+        life: window.size.ndc(x, y),
+        pool: window.size.ndc(x + pool_offset.x, y + pool_offset.y),
+    }
 }
 
 /// Fits the table inside the bands, with its stack between the creatures' rows.
@@ -372,21 +344,32 @@ pub(super) fn layout(profile: &ProfileData, window: Window, data: Banded) -> Lay
     let (piles, pile_scale) = piles(&camera, &bands, data);
     let target = profile.checks.target_points;
     let middle = bands.middle.middle();
+    let (stack_left, stack_height) = if data.stack.side_width > 0.0 {
+        (
+            (bands.right - data.stack.side_width).max(bands.left),
+            data.stack.width / ratio(table.camera.card),
+        )
+    } else {
+        (
+            bands.left,
+            stack_height(
+                &camera,
+                middle,
+                (data.stack.width, table.creatures.y, target),
+            ),
+        )
+    };
     let stack = CentredStack {
         middle,
-        height: stack_height(
-            &camera,
-            middle,
-            (data.stack.width, table.creatures.y, target),
-        ),
+        height: stack_height,
         step: data.stack.step,
-        left: bands.left,
+        left: stack_left,
         right: bands.right,
         count_room: data.stack.count_room,
         depth: data.stack.depth,
         step_depth: data.stack.step_depth,
     };
-    let anchor = |strip: Band| life_anchor(window, strip.middle());
+    let anchor = |strip: Band| life_anchor(window, strip.middle(), data.pool_offset);
     Layout {
         camera: table.camera,
         camera_area: Some(area),
@@ -419,6 +402,7 @@ pub(super) fn layout(profile: &ProfileData, window: Window, data: Banded) -> Lay
             gap: data.dock_gap,
             middle: bands.your_strip.middle(),
             top: bands.your_back.top,
+            pool_offset: data.pool_offset,
         }),
         revealed: Some((
             piles[1][2],

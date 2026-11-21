@@ -85,10 +85,13 @@ pub enum Pace {
     RealTime,
 }
 
-/// The options every command that takes a recording accepts, each with its value's form.
-const COMMON: [(&str, &str); 9] = [
+pub(super) const PROFILE: &str = "--profile";
+
+/// The common options and the form of their values.
+const COMMON: [(&str, &str); 10] = [
     ("--seat", "you|opponent"),
     ("--layout", "desktop|phone"),
+    (PROFILE, "<name>"),
     ("--size", "<width>x<height>"),
     ("--scale", "<number>"),
     ("--tier", "baseline|enhanced"),
@@ -139,6 +142,7 @@ impl Options {
         let mut positional = Vec::new();
         let mut at = 0;
         let mut layout_given = false;
+        let mut scale_given = false;
         while at < args.len() {
             let arg = &args[at];
             at += 1;
@@ -151,10 +155,9 @@ impl Options {
                 Some((flag, value)) => (flag, Some(value.to_owned())),
                 None => (arg.as_str(), None),
             };
-            let takes_value = COMMON
-                .iter()
-                .any(|&(name, form)| name == flag && !form.is_empty())
-                || spec.values.contains(&flag);
+            let takes_value = COMMON.iter().any(|&(name, form)| {
+                name == flag && !form.is_empty() && (name != PROFILE || spec.recording)
+            }) || spec.values.contains(&flag);
             let is_switch = COMMON
                 .iter()
                 .any(|&(name, form)| name == flag && form.is_empty())
@@ -177,6 +180,7 @@ impl Options {
             };
             options.set(flag, value, takes_value)?;
             layout_given |= flag == "--layout";
+            scale_given |= flag == "--scale";
         }
         let mut positional = positional.into_iter();
         if spec.recording {
@@ -197,9 +201,33 @@ impl Options {
                 options.layout = header.layout;
             }
             options.recording = Some(scene);
+            options.apply_profile(&name, scale_given)?;
         }
         options.rest = positional.collect();
         Ok(options)
+    }
+
+    fn apply_profile(&mut self, recording: &str, scale_given: bool) -> Result<(), Usage> {
+        let Some(name) = self.value(PROFILE) else {
+            return Ok(());
+        };
+        if self.name().starts_with(stories::PREFIX) {
+            return Err(Usage("--profile takes a recording".to_owned()));
+        }
+        let definition = crate::pages::inspection_profile(name)
+            .map_err(Usage)?
+            .definition();
+        self.layout = Layout::for_size_class(definition.size_class);
+        if !recording.starts_with("b3d:") {
+            let window = definition.usual_window();
+            if !self.sized {
+                self.size = window.size;
+            }
+            if !scale_given {
+                self.scale = window.scale;
+            }
+        }
+        Ok(())
     }
 
     /// The value of the command's own option `flag`, the last if it was given several times.
@@ -238,7 +266,7 @@ impl Options {
         if let Some(name) = &self.recording {
             let _ = write!(out, " {}", quote(name));
             let _ = write!(out, " --seat {}", self.seat_word());
-            if self.layout == Layout::Phone {
+            if self.layout == Layout::Phone && self.value(PROFILE).is_none() {
                 out.push_str(" --layout phone");
             } else if name.starts_with(stories::PREFIX) {
                 out.push_str(" --layout desktop");

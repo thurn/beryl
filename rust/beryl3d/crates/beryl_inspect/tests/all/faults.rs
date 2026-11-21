@@ -9,6 +9,7 @@ use kit_ui::input::Size;
 fn outcome(recording: &str, rules: &[Rule]) -> Outcome {
     Outcome {
         test: Test {
+            profile: None,
             recording: recording.to_owned(),
             seat: Side::You,
             size: Size {

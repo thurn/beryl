@@ -76,7 +76,7 @@ pub(super) fn test(options: &Options) -> Result<Printed, Usage> {
         }
     };
     let (mode, windows) = switches(options)?;
-    let phone_only = windows == Windows::Phone;
+    let desktop = windows == Windows::Desktop;
     let stop = stop(options)?;
     let all = options.switch(ALL);
     let tests = selected_tests(prefix, windows, all)?;
@@ -84,19 +84,23 @@ pub(super) fn test(options: &Options) -> Result<Printed, Usage> {
         let names: String = tests.iter().map(|test| test.name() + "\n").collect();
         return Ok(Printed::text(names));
     }
-    let limits = match mode {
-        Mode::AtCheckTimes => Some(Limits::read().map_err(Usage)?),
-        Mode::EveryTick => None,
+    let limits = match (mode, windows) {
+        (_, Windows::Profile(_)) | (Mode::EveryTick, _) => None,
+        (Mode::AtCheckTimes, _) => Some(Limits::read().map_err(Usage)?),
     };
     // Both modes are held to the one list: the differential test requires that the check times
     // find every fault the every-tick run finds.
-    let mut listed = Some(Listed::read().map_err(Usage)?);
+    let mut listed = if matches!(windows, Windows::Profile(_)) {
+        None
+    } else {
+        Some(Listed::read().map_err(Usage)?)
+    };
     let started = Instant::now();
     let outcomes = runner::run_until(&tests, mode, stop);
     let seconds = started.elapsed().as_secs_f64();
     let deferred = tests.len() - outcomes.len();
     // The median and allowlist are defined over the full desktop pack.
-    let every_test = all && prefix.is_empty() && deferred == 0 && !phone_only;
+    let every_test = all && prefix.is_empty() && deferred == 0 && desktop;
     let over = limits.map_or_else(Vec::new, |limits| limits.over(&outcomes, every_test));
     let mut changes = None;
     if let Some(listed) = listed.as_mut().filter(|_| options.switch(UPDATE)) {
@@ -168,7 +172,7 @@ pub(super) fn test(options: &Options) -> Result<Printed, Usage> {
 /// The interface tests requested by the prefix, full-pack flag or default corpus.
 fn selected_tests(prefix: &str, windows: Windows, all: bool) -> Result<Vec<Test>, Usage> {
     let mut tests = runner::tests(prefix, windows).map_err(Usage)?;
-    if prefix.is_empty() && !all {
+    if prefix.is_empty() && !all && !matches!(windows, Windows::Profile(_)) {
         let corpus = crate::corpus::read().map_err(Usage)?;
         tests.retain(|test| {
             corpus.contains(&test.recording) || crate::recordings::standalone(&test.recording)
@@ -222,7 +226,18 @@ fn switches(options: &Options) -> Result<(Mode, Windows), Usage> {
             "{UPDATE} lists the desktop tests' faults, so it does not go with {PHONE_ONLY}"
         )));
     }
-    let windows = if options.switch(PHONE_ONLY) {
+    let compact_only = options.switch(PHONE_ONLY);
+    let windows = if let Some(name) = options.value(options::PROFILE) {
+        if compact_only {
+            return Err(Usage(format!("--profile does not go with {PHONE_ONLY}")));
+        }
+        for flag in [ALL, UPDATE] {
+            if options.switch(flag) {
+                return Err(Usage(format!("--profile does not go with {flag}")));
+            }
+        }
+        Windows::Profile(pages::inspection_profile(name).map_err(Usage)?)
+    } else if compact_only {
         Windows::Phone
     } else {
         Windows::Desktop
@@ -457,7 +472,18 @@ fn grouped(outcomes: &[Outcome]) -> Vec<Found> {
         for fault in &outcome.faults {
             let locators: Vec<&str> = fault.elements.iter().map(|e| e.locator.as_str()).collect();
             add(Found {
-                text: fault.print(&context),
+                text: {
+                    let printed = fault.print(&context);
+                    if let Some(profile) = test.profile {
+                        printed.replacen(
+                            "show: just b3d tree ",
+                            &format!("show: just b3d tree --profile {} ", profile.name()),
+                            1,
+                        )
+                    } else {
+                        printed
+                    }
+                },
                 row: json!({
                     "test": test.name(),
                     "rule": fault.rule.word(),
@@ -485,9 +511,15 @@ fn context(test: &Test) -> Context {
         audit: crate::data::checkout_ref()
             .expect("validated test data")
             .audit,
-        checks: pages::layout_checks(test.layout(), test.size),
+        checks: test.profile.map_or_else(
+            || pages::layout_checks(test.layout(), test.size),
+            |profile| profile.definition().checks,
+        ),
         size: test.size,
-        safe_area: pages::safe_area(test.layout()),
+        safe_area: test.profile.map_or_else(
+            || pages::safe_area(test.layout()),
+            |profile| profile.definition().test_safe_area(),
+        ),
         at: 0,
     }
 }

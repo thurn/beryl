@@ -42,7 +42,7 @@ pub(crate) fn read() -> Result<BTreeSet<String>, String> {
     Ok(names)
 }
 
-fn fixtures() -> Result<BTreeSet<String>, String> {
+pub(crate) fn fixtures() -> Result<BTreeSet<String>, String> {
     let path = recordings::root().join("ui/fixtures.json");
     let text = fs::read_to_string(&path).map_err(|error| format!("{}: {error}", path.display()))?;
     let value: Value =

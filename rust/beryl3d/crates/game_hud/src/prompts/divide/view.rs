@@ -22,8 +22,12 @@ use crate::hud::placement_scene::{Group, PlacementScene, inset, rect};
 use crate::prompts::feature::Details;
 use kit_base::tokens::{color, size, space, type_style};
 use kit_frame::frame::ElementId;
-use kit_scene::{Slot, hit::contains};
-use kit_ui::element::{Align, Anchor, Element, TextAlign, column, text};
+use kit_scene::{
+    Slot,
+    hit::{contains, intersection},
+};
+use kit_ui::element::{Align, Anchor, Element, TextAlign, column, row, text};
+use kit_ui::input::Rect;
 use kit_ui::widgets::{icon_button, icons};
 
 /// What the flat layer shows for `prompt`: the prompt bar, with how much is not yet given out
@@ -35,9 +39,11 @@ pub(super) fn view(prompt: &PromptView, input: &HudIn, bar: Element) -> Element 
         return bar;
     };
     let left = *left;
-    let controls = (shares.iter()).filter_map(|&share| {
-        if let Some(slot) = input.profile.slot("divide.edge") {
-            edge_share(share, left, input, slot)
+    let [edge, side] = input.profile.slots(["divide.edge", "divide.side"]);
+    let mut steppers = Vec::new();
+    let controls = shares.iter().filter_map(|&share| {
+        if let Some(edge) = edge {
+            edge_share(share, left, input, (edge, side), &mut steppers)
         } else {
             share_control(share, left)
         }
@@ -75,18 +81,20 @@ fn share_control(share: Share, left: u8) -> Option<Vec<Element>> {
 /// go above a card the opponent controls, at the top of the phone's table, and below one the
 /// viewer controls, towards the window's foot, so that neither stands over the middle of the
 /// table, where the prompt bar is.
-fn edge_share(share: Share, left: u8, input: &HudIn, safe: Slot) -> Option<Vec<Element>> {
+fn edge_share(
+    share: Share,
+    left: u8,
+    input: &HudIn,
+    (safe, side): (Slot, Option<Slot>),
+    steppers: &mut Vec<Rect>,
+) -> Option<Vec<Element>> {
     let Subject::Object { slot } = share.on else {
         return None;
     };
     let theirs = opponent_controls(input, slot);
     let target = input.profile.data().checks.target_points;
     let (more, less) = steps(share, left, target);
-    let mut control = column()
-        .name(&format!("share {}", slot.0))
-        .gap(space::S)
-        .child(more)
-        .child(less);
+    let name = format!("share {}", slot.0);
     // The share's strip, as high as a desktop step is wide.
     let high = size::SHARE_STEP;
     let mut shown = text(&share.amount.to_string())
@@ -97,15 +105,28 @@ fn edge_share(share: Share, left: u8, input: &HudIn, safe: Slot) -> Option<Vec<E
         .radius(space::S)
         .height(high)
         .min_width(high);
+    if let Some(bounds) = side.and_then(|side| beside(input, slot, side, (target, high), steppers))
+    {
+        steppers.push(bounds);
+        let mut control = row()
+            .name(&name)
+            .gap(space::S)
+            .align_items(Align::Center)
+            .child(more)
+            .child(shown.width(high))
+            .child(less);
+        control.anchor = Some(Anchor::Point(Vec2::new(bounds.x, bounds.y), Vec2::ZERO));
+        return Some(vec![control]);
+    }
+    let mut control = column().name(&name).gap(space::S).child(more).child(less);
     let above = input
         .placement_scene
         .and_then(|layout| {
             let card = layout.bounds(ElementId(u32::from(slot.0)))?;
-            let size = target;
-            let height = 2.0 * size + space::S;
-            let x = card.x + (card.width - size) / 2.0;
-            let above = rect(x, card.y - height, size, height);
-            let below = rect(x, card.y + card.height, size, height);
+            let height = 2.0 * target + space::S;
+            let x = card.x + (card.width - target) / 2.0;
+            let above = rect(x, card.y - height, target, height);
+            let below = rect(x, card.y + card.height, target, height);
             let preferred = if theirs {
                 [above, below]
             } else {
@@ -121,13 +142,7 @@ fn edge_share(share: Share, left: u8, input: &HudIn, safe: Slot) -> Option<Vec<E
                 .into_iter()
                 .filter(|&bounds| contains(safe.rect, bounds))
                 .map(|bounds| inset(bounds, overlap));
-            let avoids = vec![
-                Group::YourRows.children(),
-                Group::TheirRows.children(),
-                Group::Stack.children(),
-                PlacementScene::phase_query(),
-            ];
-            let (_, placed) = layout.place("divide stepper", avoids, candidates)?;
+            let (_, placed) = layout.place("divide stepper", occupied(), candidates)?;
             Some(placed.y < card.y)
         })
         .unwrap_or(theirs);
@@ -143,6 +158,42 @@ fn edge_share(share: Share, left: u8, input: &HudIn, safe: Slot) -> Option<Vec<E
         )
     };
     Some(vec![control, shown])
+}
+
+/// The slot reserves room for a full-size stepper alongside a recipient.
+fn beside(
+    input: &HudIn,
+    object: beryl_protocol::protocol::ObjectId,
+    safe: Slot,
+    (target, label): (f32, f32),
+    steppers: &[Rect],
+) -> Option<Rect> {
+    let layout = input.placement_scene?;
+    let card = layout.bounds(ElementId(u32::from(object.0)))?;
+    let width = 2.0 * (target + space::S) + label;
+    let centre = card.y + (card.height - target) / 2.0;
+    let tops = [centre, card.y, card.y + card.height - target];
+    let candidates = [card.x + card.width + space::S, card.x - width - space::S]
+        .into_iter()
+        .flat_map(|x| tops.map(|top| rect(x, top, width, target)))
+        .filter(|&bounds| {
+            contains(safe.rect, bounds)
+                && steppers
+                    .iter()
+                    .all(|&placed| intersection(placed, bounds).is_none())
+        })
+        .map(Into::into);
+    let (_, bounds) = layout.place("divide stepper", occupied(), candidates)?;
+    Some(bounds)
+}
+
+fn occupied() -> Vec<kit_scene::NodeQuery> {
+    vec![
+        Group::YourRows.children(),
+        Group::TheirRows.children(),
+        Group::Stack.children(),
+        PlacementScene::phase_query(),
+    ]
 }
 
 /// The buttons `side` points across that give the share one more and take one away, each
