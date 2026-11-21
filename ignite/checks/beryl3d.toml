@@ -1004,3 +1004,89 @@ inputs = [
   "tools/src/beryl_tools/vocabulary.py",
   "tools/src/beryl_tools/xmage_classes.py",
 ]
+
+# Frame work trends across verified commits, using the same boards as the native frame gate.
+[family.b3d-frame-trend]
+# Idle work samples verified commits and reports increases without holding a landing.
+kind = "exploration"
+# The Python adapter emits one JSONL result for each sampled commit.
+adapter = "jsonl"
+# Sample the native Beryl 3D gate on its macOS build.
+platforms = ["macos"]
+# Use the same build products as timeline drift, including the gate binary and recordings pack.
+needs = ["python-env", "b3d", "ui-deps"]
+# Both list and next offer the checkout's commit when the local history lacks it.
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-frame-trend list"
+next = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-frame-trend next"
+# Record native counters on every run. The adapter takes the benchmark VM's guest locks only
+# for optional Callgrind sampling, so this family needs no scheduler reservation for bench-vm.
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-frame-trend run {checks}"
+# The gate binaries and recordings share these inputs with the frame gates. The trend and
+# counting modules also read the board budgets and produce the optional instruction counts.
+inputs = [
+  "crate:beryl_inspect",
+  "crate:beryl_record",
+  "rust/crates/beryl_card/**",
+  "rust/crates/beryl_card_build/**",
+  "rust/crates/beryl_card_names/**",
+  "rust/crates/beryl_card_records/**",
+  "rust/crates/beryl_card_shared/**",
+  "rust/crates/beryl_card_store/**",
+  "rust/crates/beryl_cards/**",
+  "rust/crates/beryl_cli/**",
+  "rust/crates/beryl_engine/**",
+  "rust/crates/beryl_kernel/**",
+  "rust/crates/beryl_link/**",
+  "rust/crates/beryl_link_iroh/**",
+  "rust/crates/beryl_protocol/**",
+  "rust/crates/beryl_rules/**",
+  "rust/crates/beryl_scenario/**",
+  "rust/crates/beryl_scenario_types/**",
+  "rust/crates/beryl_search/**",
+  "rust/crates/beryl_session/**",
+  "rust/crates/beryl_table/**",
+  "rust/crates/beryl_table_session/**",
+  "rust/cards/*/Cargo.toml",
+  "rust/cards/*/build.rs",
+  "rust/cards/*/lib.rs",
+  "rust/Cargo.toml",
+  "data/beryl3d/**",
+  "data/design-tokens.json",
+  "data/card-store.tsv",
+  "data/catalogs.json",
+  "ui/src/generated/**",
+  "data/set-groups.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
+  "ui/fixtures.json",
+  "ui/src/audio/manifest.json",
+  "ui/src/audio/loops.json",
+  "docs/sample-decks/**",
+  "tools/src/beryl_tools/beryl3d/**",
+  "tools/src/beryl_tools/bench.py",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/rust.py",
+  "tools/src/beryl_tools/ignite/beryl3d.py",
+  "tools/src/beryl_tools/ignite/beryl3d_frame_trend.py",
+  "tools/src/beryl_tools/__init__.py",
+  "tools/src/beryl_tools/card.py",
+  "tools/src/beryl_tools/card_crates.py",
+  "tools/src/beryl_tools/card_files.py",
+  "tools/src/beryl_tools/card_header.py",
+  "tools/src/beryl_tools/card_names.py",
+  "tools/src/beryl_tools/card_store.py",
+  "tools/src/beryl_tools/card_text.py",
+  "tools/src/beryl_tools/cards.py",
+  "tools/src/beryl_tools/catalogs.py",
+  "tools/src/beryl_tools/nearest.py",
+  "tools/src/beryl_tools/paths.py",
+  "tools/src/beryl_tools/render_diff.py",
+  "tools/src/beryl_tools/rulings.py",
+  "tools/src/beryl_tools/scryfall.py",
+  "tools/src/beryl_tools/set_groups.py",
+  "tools/src/beryl_tools/store_cards.py",
+  "tools/src/beryl_tools/system.py",
+  "tools/src/beryl_tools/vocabulary.py",
+  "tools/src/beryl_tools/xmage_classes.py",
+]
