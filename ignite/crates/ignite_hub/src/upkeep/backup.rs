@@ -4,8 +4,11 @@
 //! A snapshot is a directory named after its time (`2026-11-17T14-00-00.000Z`) holding the
 //! database file and `manifest.json` with the time, the feed position and the file's SHA-256.
 //! It is written under a temporary name, checked with `PRAGMA integrity_check`, and renamed
-//! only when complete. The newest 48 snapshots are kept, and beyond them the newest of each day
-//! for 30 days.
+//! only when complete. The newest 6 snapshots are kept, and beyond them the newest of each day
+//! for 7 days. A snapshot is a whole copy of the database, several gigabytes on a busy hub, and
+//! keeping 48 hourly and 30 daily copies took over 100 GB of the hub's disk, which the build
+//! trees on the same disk needed. Every daemon's ticket mirror is the longer record. A staging
+//! directory that a restart left behind is removed with the old snapshots.
 //!
 //! An export is `exports/<day>.json`: every ticket with its comments and history. The newest 30
 //! are kept.
@@ -26,8 +29,8 @@ use ignite_store::{Result, StoreError};
 /// The file name of the database inside a snapshot.
 pub const DATABASE: &str = "hub.sqlite";
 
-const SNAPSHOTS_KEPT: usize = 48;
-const DAILY_DAYS: f64 = 30.0;
+const SNAPSHOTS_KEPT: usize = 6;
+const DAILY_DAYS: f64 = 7.0;
 const EXPORTS_KEPT: usize = 30;
 
 fn io_error(what: &str, error: &io::Error) -> StoreError {
@@ -103,8 +106,22 @@ fn write_snapshot(conn: &Connection, staging: &Path, now: Timestamp) -> Result<(
         .map_err(|e| io_error("writing a snapshot manifest", &e))
 }
 
-/// Keeps the newest 48 snapshots, and of the older ones the newest of each day for 30 days.
+/// Keeps the newest 6 snapshots, and of the older ones the newest of each day for 7 days. Removes
+/// every staging directory: a daemon restarted while `VACUUM INTO` was writing one left it
+/// behind, and nothing else ever removed it. Only one hub writes snapshots, and it has renamed
+/// its own staging directory by the time it prunes.
 fn prune_snapshots(dir: &Path, now: Timestamp) -> Result<()> {
+    for entry in fs::read_dir(dir).map_err(|e| io_error("listing backups", &e))? {
+        let entry = entry.map_err(|e| io_error("listing backups", &e))?;
+        if entry
+            .file_name()
+            .to_string_lossy()
+            .starts_with(".snapshot-")
+        {
+            fs::remove_dir_all(entry.path())
+                .map_err(|e| io_error("removing an abandoned snapshot", &e))?;
+        }
+    }
     let mut days = std::collections::HashSet::new();
     for (index, (at, path)) in snapshots(dir)?.into_iter().enumerate() {
         let daily = days.insert(at.day()) && now.seconds_since(at) < DAILY_DAYS * 86_400.0;
@@ -170,4 +187,41 @@ pub fn last_export_day(dir: &Path) -> Option<String> {
         .filter(|name| !name.starts_with('.'))
         .filter_map(|name| name.strip_suffix(".json").map(str::to_owned))
         .max()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Backups filled the hub's disk: 48 hourly copies of a database of several gigabytes, and
+    /// staging directories that restarts left behind and nothing removed.
+    #[test]
+    fn pruning_keeps_six_recent_snapshots_and_one_a_day_for_a_week() {
+        let dir = ignite_core::test_files::temp_dir()
+            .join(format!("ignite-backup-prune-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let now = Timestamp::parse("2026-11-21T12:30:00Z").unwrap();
+        // Hourly snapshots for the last ten days, and a staging directory from a restart.
+        for hour in 1..=240 {
+            let at = now.plus_seconds(-3_600.0 * f64::from(hour));
+            fs::create_dir(dir.join(snapshot_name(at))).unwrap();
+        }
+        let abandoned = dir.join(".snapshot-2026-11-20T03-08-19.597Z");
+        fs::create_dir(&abandoned).unwrap();
+        let conn = ignite_store::hub::open_in_memory().unwrap();
+
+        snapshot(&conn, &dir, now).unwrap();
+
+        let kept = snapshots(&dir).unwrap();
+        // The new snapshot and five more from the last hours, then the newest of each older day
+        // within the week: today's earlier hours are already covered by the recent six.
+        assert_eq!(kept.len(), 6 + 7, "{kept:?}");
+        assert!(
+            kept.iter()
+                .all(|(at, _)| now.seconds_since(*at) < 7.0 * 86_400.0)
+        );
+        assert!(!abandoned.exists());
+        fs::remove_dir_all(&dir).unwrap();
+    }
 }
