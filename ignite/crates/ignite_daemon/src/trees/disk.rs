@@ -24,6 +24,7 @@ use std::time::SystemTime;
 
 use ignite_core::capacity::{BYTES_PER_GB, disk_budget_bytes};
 use ignite_core::ids::TreeId;
+use ignite_core::protocol::machine_state::ReclaimableDisk;
 use ignite_core::traits::{Error, Result};
 use ignite_os::system::{DiskSpace, disk_space};
 use ignite_store::local::{rows, trees as store};
@@ -153,14 +154,31 @@ impl Trees {
         Space::measure_until(trees, stop)
     }
 
-    fn build_bytes(&self) -> u64 {
-        self.measure().total()
+    /// Reuse a completed walk for both the total disk cap and machine history.
+    fn measure_usage(&self, stop: &Stop) -> Option<(Space, u64)> {
+        let space = self.measure_until(stop)?;
+        let finished = self.free_rows().ok().map(|rows| {
+            rows.into_iter()
+                .filter(|row| row.kind == Kind::Ticket.as_str())
+                .filter_map(|row| id_of(&row).ok())
+                .collect()
+        });
+        let empty = HashSet::new();
+        let (total, bytes) = space.totals(finished.as_ref().unwrap_or(&empty));
+        let reclaimable = finished.map(|_| ReclaimableDisk {
+            bytes,
+            measured_at: self.inner.clock.now(),
+        });
+        usage::record(&self.inner.config.dir, total, reclaimable);
+        Some((space, total))
     }
 
     pub(super) fn refresh_disk_usage(&self, stop: &dyn Fn() -> bool) {
-        if let Some(space) = self.measure_until(&Stop::new(stop)) {
-            usage::record(&self.inner.config.dir, space.total());
-        }
+        let _ = self.measure_usage(&Stop::new(stop));
+    }
+
+    pub(crate) fn reclaimable_disk(&self) -> Option<ReclaimableDisk> {
+        usage::reclaimable(self)
     }
 
     /// The last fleet notice, from the same local database the heartbeat writes to.
@@ -193,11 +211,7 @@ impl Trees {
         let dir = &self.inner.config.dir;
         let budget =
             |used| TreeConfig::disk_budget(disk_space(dir).ok(), Some(used), self.disk_cap_gb());
-        let report = self.hold_disk_until(budget, stop)?;
-        if !report.interrupted {
-            usage::record(dir, report.after);
-        }
-        Ok(report)
+        self.hold_disk_until(budget, stop)
     }
 
     #[cfg(test)]
@@ -231,7 +245,7 @@ impl Trees {
         })?;
         report.objects = objects.files;
         report.object_bytes = objects.bytes;
-        let Some(before) = self.measure_until(stop).map(|space| space.total()) else {
+        let Some((_, before)) = self.measure_usage(stop) else {
             return Ok(interrupted(report));
         };
         report.before = before;
@@ -252,10 +266,10 @@ impl Trees {
             }
         })?;
         report.superseded = superseded;
-        let Some(mut space) = self.measure_until(stop) else {
+        let Some((mut space, after)) = self.measure_usage(stop) else {
             return Ok(interrupted(report));
         };
-        report.after = space.total();
+        report.after = after;
         let free: HashSet<TreeId> = self.free_rows()?.iter().map(id_of).collect::<Result<_>>()?;
         for own_only in [true, false] {
             for row in self.free_rows()? {
@@ -282,10 +296,10 @@ impl Trees {
             }
         }
         if !report.cleared.is_empty() {
-            let Some(measured) = self.measure_until(stop) else {
+            let Some((_, measured)) = self.measure_usage(stop) else {
                 return Ok(interrupted(report));
             };
-            report.after = measured.total();
+            report.after = measured;
         }
         self.serve_waiters();
         Ok(report)

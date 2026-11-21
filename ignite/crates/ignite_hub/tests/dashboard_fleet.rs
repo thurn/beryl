@@ -526,6 +526,7 @@ fn a_reporting_cli_pool_can_start_workers_for_a_regression() {
     let mut conn = seeded();
     let now = Timestamp::parse(NOW).unwrap();
     let mut beat = ignite_core::protocol::hub::Heartbeat {
+        sample: None,
         capacity: None,
         machine: "m-m".parse().unwrap(),
         version: "abc1234".to_owned(),
@@ -775,3 +776,6 @@ fn the_first_line_names_a_provider_on_a_usage_hold() {
     );
     assert!(!page(&conn, "/").contains("usage hold"));
 }
+
+#[path = "dashboard_fleet/machine_snapshots.rs"]
+mod machine_snapshots;

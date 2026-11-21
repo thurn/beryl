@@ -460,6 +460,7 @@ mod tests {
         let clock = clock();
         register(&conn, &register_message(), clock.now()).unwrap();
         let mut beat = Heartbeat {
+            sample: None,
             capacity: None,
             machine: "m-7f3a".parse().unwrap(),
             version: "d97ed0e".into(),
@@ -495,6 +496,7 @@ mod tests {
         let clock = clock();
         register(&conn, &register_message(), clock.now()).unwrap();
         let mut beat = Heartbeat {
+            sample: None,
             capacity: None,
             machine: "m-7f3a".parse().unwrap(),
             version: "d97ed0e".into(),
@@ -514,6 +516,7 @@ mod tests {
     fn a_heartbeat_from_an_unregistered_machine_is_refused() {
         let mut conn = hub::open_in_memory().unwrap();
         let beat = Heartbeat {
+            sample: None,
             capacity: None,
             machine: "m-unknown".parse().unwrap(),
             version: "x".into(),
@@ -593,6 +596,7 @@ mod tests {
         running.command_since = Some(clock.now());
         running.command_running = true;
         let beat = Heartbeat {
+            sample: None,
             capacity: None,
             machine: "m-7f3a".parse().unwrap(),
             version: "d97ed0e".into(),

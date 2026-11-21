@@ -612,6 +612,7 @@ fn status_sections(base: &Base, parts: &loops::Parts) -> Vec<Box<dyn StatusSecti
         Arc::new(move || scheduler.status())
     };
     vec![
+        Box::new(super::machine_state::SnapshotSection(parts.client.clone())),
         Box::new(CoresSection(status.clone())),
         Box::new(AdmissionSection(status)),
         Box::new(TreesSection {

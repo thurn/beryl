@@ -117,18 +117,31 @@ impl Space {
         })
     }
 
-    /// Bytes on disk in every tree's directories, each clone's shared bytes counted once.
-    pub(super) fn total(&self) -> u64 {
-        let mut shared: HashMap<u64, u64> = HashMap::new();
-        let mut private = 0;
-        for held in self.trees.values() {
-            private += held.private;
-            for (&id, &bytes) in &held.shared {
-                let most = shared.entry(id).or_default();
-                *most = (*most).max(bytes);
+    /// Total allocated bytes, and the bytes released by deleting the finished trees together.
+    /// A shared block counts once and is reclaimed only when no retained tree holds it.
+    pub(super) fn totals(&self, finished: &HashSet<TreeId>) -> (u64, u64) {
+        let mut shared = HashMap::<u64, (u64, bool)>::new();
+        let mut total = 0;
+        let mut reclaimable = 0;
+        for (id, held) in &self.trees {
+            let finished = finished.contains(id);
+            total += held.private;
+            if finished {
+                reclaimable += held.private;
+            }
+            for (&clone, &bytes) in &held.shared {
+                let (allocated, retained) = shared.entry(clone).or_default();
+                *allocated = (*allocated).max(bytes);
+                *retained |= !finished;
             }
         }
-        private + shared.values().sum::<u64>()
+        for (bytes, retained) in shared.into_values() {
+            total += bytes;
+            if !retained {
+                reclaimable += bytes;
+            }
+        }
+        (total, reclaimable)
     }
 
     /// Whether the tree's directories hold any bytes at all.

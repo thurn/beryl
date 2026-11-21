@@ -212,6 +212,10 @@ impl HubClient {
         self.post("/machines/register", machine)
     }
 
+    pub(crate) fn fleet_view(&self) -> Result<ignite_core::fleet::FleetView> {
+        self.get("/fleet", &[])
+    }
+
     /// `POST /machines/heartbeat`.
     pub fn heartbeat(&self, heartbeat: &Heartbeat) -> Result<HeartbeatReply> {
         self.post("/machines/heartbeat", heartbeat)
@@ -597,13 +601,13 @@ impl Hub for HubClient {
         state: ignite_core::fleet::MachineState,
         actor: Option<&str>,
     ) -> Result<()> {
-        use ignite_core::fleet::{FleetUpdate, FleetView};
+        use ignite_core::fleet::FleetUpdate;
 
         let mut client = self.clone();
         if let Some(actor) = actor {
             actor.clone_into(&mut client.actor);
         }
-        let view: FleetView = client.get("/fleet", &[])?;
+        let view = client.fleet_view()?;
         let name = view
             .machines
             .iter()

@@ -111,6 +111,7 @@ mod tests {
         ignite_store::hub::fleet::heartbeat(
             conn,
             &Heartbeat {
+                sample: None,
                 capacity: None,
                 machine,
                 version: "bbbbbbb".to_owned(),

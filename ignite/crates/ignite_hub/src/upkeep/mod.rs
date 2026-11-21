@@ -209,6 +209,7 @@ impl Upkeep {
             ignite_store::hub::metrics::delete_expired(conn, now)
                 .map(|deleted| report.metrics_deleted = deleted),
         );
+        keep(ignite_store::hub::machine_snapshots::delete_expired(conn, now).map(|_| ()));
         keep(ignite_store::hub::transcripts::delete_expired(conn, now).map(|_| ()));
         if let Some(dir) = self.backups.clone() {
             keep(self.backups_due(conn, &dir, now, &mut report));

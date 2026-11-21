@@ -62,7 +62,7 @@ fn a_clone_counts_once_and_frees_its_blocks_only_with_its_source() {
 
     let mut space = s.measure();
 
-    let total = space.total();
+    let total = space.totals(&HashSet::new()).0;
     assert!((5 * MB..6 * MB).contains(&total), "{total}");
     let own: Vec<u64> = space.own().into_iter().map(|(_, bytes)| bytes).collect();
     assert!(own[0] < MB && own[1] < MB, "{own:?}");
@@ -88,5 +88,40 @@ fn plain_files_count_in_their_own_tree() {
 
     let own: Vec<u64> = space.own().into_iter().map(|(_, bytes)| bytes).collect();
     assert!(own[0] >= 2 * MB && own[1] >= 2 * MB, "{own:?}");
-    assert_eq!(space.total(), own.iter().sum::<u64>());
+    assert_eq!(space.totals(&HashSet::new()).0, own.iter().sum::<u64>());
+}
+
+#[test]
+fn reclaimable_bytes_count_clones_only_when_all_their_trees_are_finished() {
+    let space = Space {
+        trees: BTreeMap::from([
+            (
+                id("a"),
+                Held {
+                    private: 11,
+                    shared: HashMap::from([(1, 100), (2, 200)]),
+                },
+            ),
+            (
+                id("b"),
+                Held {
+                    private: 22,
+                    shared: HashMap::from([(1, 100)]),
+                },
+            ),
+            (
+                id("c"),
+                Held {
+                    private: 33,
+                    shared: HashMap::from([(2, 200)]),
+                },
+            ),
+        ]),
+    };
+    assert_eq!(space.totals(&HashSet::from([id("a")])).1, 11);
+    assert_eq!(space.totals(&HashSet::from([id("a"), id("b")])).1, 133);
+    assert_eq!(
+        space.totals(&HashSet::from([id("a"), id("b"), id("c")])).1,
+        space.totals(&HashSet::new()).0
+    );
 }

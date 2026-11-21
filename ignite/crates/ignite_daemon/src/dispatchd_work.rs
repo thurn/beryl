@@ -1,7 +1,6 @@
 //! Asks the hub for tickets when the machine has room for workers and trees.
 //! Hub requests run outside the state lock so heartbeat reporting can continue.
 
-use ignite_core::capacity::start_room;
 use ignite_core::config::Config;
 use ignite_core::dispatch_pressure::{BACKLOG_SECONDS, DispatchPressure};
 use ignite_core::fleet::MachineState;
@@ -209,19 +208,7 @@ impl Dispatcher {
                 (!providers.is_empty()).then(|| (0, "no ticket tree is free".to_owned()));
             return None;
         }
-        // The hub subtracts its pending reservations from this room. Count claimed workers here
-        // so a pending start doesn't occupy capacity twice.
-        let running = state
-            .held
-            .keys()
-            .filter(|session| cli::is_cli_session(session))
-            .count();
-        let inputs = self.room_inputs(running, 0);
-        let room = Room {
-            start: start_room(&inputs),
-            providers,
-            memory_pressed: inputs.memory_pressed,
-        };
+        let (room, _) = self.reported_room(state, providers);
         let waited = self.host.ticket_work_wait();
         state.asking_hub = true;
         Some(Asking {

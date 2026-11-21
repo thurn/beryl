@@ -6,6 +6,7 @@
 use rusqlite::Connection;
 
 use ignite_core::fleet::{FleetChange, FleetSettings, MachineSetting, MachineState};
+use ignite_core::protocol::machine_state::MachineSnapshot;
 use ignite_core::time::Timestamp;
 use ignite_store::hub::{fleet, rows::Machine};
 
@@ -110,6 +111,20 @@ fn editor(project: &str, settings: &FleetSettings, body: &str) -> Result<String,
     ))
 }
 
+fn snapshot_section(snapshot: Option<&MachineSnapshot>, now: Timestamp) -> String {
+    let readings = snapshot.map_or_else(
+        || c::muted("No machine snapshot reported"),
+        |snapshot| {
+            let reported = snapshot.at.to_string();
+            let items = snapshot
+                .readings()
+                .map(|(label, value)| (label.to_owned(), esc(&value)));
+            c::meta(&items) + &c::muted(&format!("Sampled {} ago", age(now, Some(&reported))))
+        },
+    );
+    c::subsection("Latest machine snapshot", &readings, None, 3)
+}
+
 /// One machine's section: its state, its work in the last day by class, and its trees.
 fn machine_section(
     conn: &Connection,
@@ -118,6 +133,7 @@ fn machine_section(
     machine: &Machine,
     setting: MachineSetting,
     editable: bool,
+    snapshot: Option<&MachineSnapshot>,
 ) -> Result<String, ReadError> {
     let Machine {
         id,
@@ -212,6 +228,7 @@ fn machine_section(
         name,
         &(machine_settings(machine, setting, editable)
             + &c::meta(&items)
+            + &snapshot_section(snapshot, now)
             + &c::subsection("Trees", &tree_rows, Some(trees.len()), 3)),
         None,
         None,
@@ -233,7 +250,7 @@ pub(crate) fn options(
     let settings = &view.settings;
     let editable = editor_project.is_some();
     let mut body = String::new();
-    for machine in &machines {
+    for (machine, fleet_machine) in machines.iter().zip(&view.machines) {
         body += &machine_section(
             &snapshot,
             root,
@@ -241,6 +258,7 @@ pub(crate) fn options(
             machine,
             settings.machine(&machine.name),
             editable,
+            fleet_machine.snapshot.as_ref(),
         )?;
     }
     if machines.is_empty() {

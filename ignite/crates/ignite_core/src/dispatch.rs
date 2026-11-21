@@ -111,16 +111,19 @@ pub fn room(free: &MachineFree, in_progress: &[f64]) -> f64 {
     })
 }
 
-/// Whether the machine can take the ticket, leaving aside which worker.
+/// Whether the machine has the operating system and check families the ticket requires.
+pub fn platform_fits(free: &MachineFree, ticket: &ReadyTicket) -> bool {
+    ticket.needs_os.is_none_or(|os| os == free.os)
+        && (free.families.is_empty() || ticket.families.iter().all(|f| free.families.contains(f)))
+}
+
+/// Whether the scheduler admits the ticket's expected core use.
+pub fn cores_fit(free: &MachineFree, ticket: &ReadyTicket) -> bool {
+    ticket.kind == TicketKind::Regression || admission::fits(free.free_cores, ticket.expected_cores)
+}
+
 fn machine_fits(free: &MachineFree, ticket: &ReadyTicket) -> bool {
-    let families =
-        free.families.is_empty() || ticket.families.iter().all(|f| free.families.contains(f));
-    let cores = ticket.kind == TicketKind::Regression
-        || admission::fits(free.free_cores, ticket.expected_cores);
-    free.free_ticket_trees > 0
-        && ticket.needs_os.is_none_or(|os| os == free.os)
-        && families
-        && cores
+    free.free_ticket_trees > 0 && platform_fits(free, ticket) && cores_fit(free, ticket)
 }
 
 /// The idle worker that gets the ticket: of those that suit it, the one whose last ticket shared

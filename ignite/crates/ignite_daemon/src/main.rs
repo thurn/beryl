@@ -20,6 +20,7 @@ mod cli;
 mod desk;
 pub mod drill;
 mod loops;
+mod machine_state;
 mod restart_window;
 mod selfupdate;
 

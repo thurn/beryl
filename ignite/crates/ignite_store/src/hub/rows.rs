@@ -69,6 +69,26 @@ crate::tables! {
         note: Option<String>,
     }
 
+    MachineSnapshot = "machine_snapshots" {
+        machine: String,
+        at: String,
+        free_disk_gib: Option<i64>,
+        reclaimable_bytes: Option<i64>,
+        reclaimable_measured_at: Option<String>,
+        next_ticket: Option<String>,
+        next_ticket_disk_gib: Option<i64>,
+        start_block: Option<String>,
+        start_reason: Option<String>,
+        cpu_percent: Option<i64>,
+        queued_cores: i64,
+        swap_used_mb: Option<i64>,
+        idle_workers: i64,
+        working_workers: i64,
+        stalled_workers: i64,
+        down_workers: i64,
+        ready_tickets: i64,
+    }
+
     PlacementDeferral = "placement_deferrals" { ticket: String, first_at: String }
 
     Edge = "edges" { src: String, dst: String, kind: String }

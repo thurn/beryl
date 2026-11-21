@@ -19,6 +19,7 @@ pub mod emergency;
 pub mod fleet;
 pub mod host;
 pub mod hub;
+pub mod machine_state;
 pub mod tickets;
 
 use serde::{Deserialize, Serialize};

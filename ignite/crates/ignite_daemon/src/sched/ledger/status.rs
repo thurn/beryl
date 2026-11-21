@@ -9,6 +9,15 @@ use super::super::Status;
 use super::{Ledger, Origin};
 
 impl Ledger {
+    pub(in crate::sched) fn machine_readings(&self) -> (Option<u32>, u64, Option<u64>) {
+        let queued_cores = self
+            .waiting
+            .iter()
+            .map(|waiter| u64::from(waiter.request.cores.max(1)))
+            .sum();
+        (self.cpu_percent, queued_cores, self.pressure.swap_used_mb())
+    }
+
     /// Every grant held, as `(class, cores, adopted)`, for the log line written when the grants
     /// exceed the machine's cores.
     pub fn holders(&self) -> Vec<(Class, u32, bool)> {
@@ -77,5 +86,12 @@ impl Ledger {
             classes,
             resources,
         }
+    }
+}
+
+impl super::super::Scheduler {
+    /// CPU utilization, cores requested by queued commands, and swap in use.
+    pub(crate) fn machine_readings(&self) -> (Option<u32>, u64, Option<u64>) {
+        self.lock().ledger.machine_readings()
     }
 }

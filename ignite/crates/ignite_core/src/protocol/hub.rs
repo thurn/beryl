@@ -15,7 +15,6 @@ use serde::{Deserialize, Serialize};
 
 use super::tickets::{LandedWork, Ticket};
 use super::{Class, Outcome};
-use crate::capacity::CapacityReport;
 use crate::config::Os;
 use crate::dispatch_pressure::DispatchPressure;
 use crate::fleet::FleetNotice;
@@ -93,24 +92,7 @@ pub struct SessionTitle {
     pub title: String,
 }
 
-/// `POST /machines/heartbeat`.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Heartbeat {
-    pub machine: MachineId,
-    pub version: String,
-    pub workers: Vec<WorkerState>,
-    /// Providers configured to run workers, even when they offer no slots.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub cli_apps: Vec<String>,
-    /// The check families the machine's `ignite.toml` lists for it now, empty for every
-    /// family, which replace the list it registered with. `None` from a daemon that predates
-    /// the field, which leaves the list the hub holds.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub families: Option<Vec<String>>,
-    /// The machine's current room, queue and build outputs.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub capacity: Option<CapacityReport>,
-}
+pub use super::machine_state::Heartbeat;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct HeartbeatReply {

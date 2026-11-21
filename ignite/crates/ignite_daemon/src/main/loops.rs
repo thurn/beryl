@@ -2,7 +2,6 @@
 //! its own (`ignite hub`). Each loop reports a failed round on standard error and tries again, so an
 //! unreachable hub or a busy tree never stops the daemon.
 
-use std::cell::RefCell;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -12,12 +11,11 @@ use rusqlite::Connection;
 
 use ignite_core::config::Config;
 use ignite_core::protocol::Class;
-use ignite_core::protocol::hub::Heartbeat;
 use ignite_core::time::SystemClock;
 use ignite_core::traits::{Error, Result};
 
 use super::DaemonOptions;
-use super::selfupdate::{Busy, SelfUpdate};
+use super::selfupdate::SelfUpdate;
 use crate::checks::Checks;
 use crate::claim::Claims;
 use crate::crash;
@@ -35,9 +33,6 @@ use crate::tip::{CheckTipWork, TipLoop, TipOutcome, TipRoundVerb};
 use crate::trees::{DiskReport, Trees};
 use crate::update::Home;
 
-/// How often the outbox is sent and the heartbeat beats. Transcript lines are sent sooner,
-/// as soon as they are queued (see `spawn_sender`).
-const SEND_EVERY: Duration = Duration::from_secs(10);
 /// How often the stall check looks at held tickets.
 const TICK_EVERY: Duration = Duration::from_secs(60);
 /// How often idle work looks for cores nobody uses.
@@ -58,7 +53,6 @@ const MAIN_EVERY: Duration = Duration::from_secs(30);
 /// Each is far longer than the loop's own period, so that a slow hub or a long job is not
 /// reported, and only a loop that has stopped is. A round of tip verification may run for an
 /// hour, because it runs the checks.
-const SENDER_STALLS_AFTER: Duration = Duration::from_mins(10);
 const TIP_STALLS_AFTER: Duration = Duration::from_hours(3);
 const CLAIMS_STALL_AFTER: Duration = Duration::from_mins(10);
 const IDLE_STALLS_AFTER: Duration = Duration::from_mins(10);
@@ -151,85 +145,6 @@ impl Parts {
                 }
             },
         );
-    }
-
-    /// Sends the outbox, the heartbeat and any landing the hub has not heard of. After each
-    /// heartbeat it compares the daemon's version with the hub's and restarts into a new
-    /// executable once one is ready and no landing holds it back (see
-    /// [`SelfUpdate::after_heartbeat`]).
-    /// A release build runs on a thread of its own, so a round never waits for Cargo; the round
-    /// only looks whether the build has finished and names it in the loop's step.
-    fn spawn_sender(&self, db: Connection, server: Arc<Server>) {
-        let (ctx, client, landing, dispatcher, version) = (
-            self.ctx.clone(),
-            self.client.clone(),
-            self.landing.clone(),
-            self.dispatcher.clone(),
-            self.version.clone(),
-        );
-        let update = self.update.clone();
-        let reporter = self.reporter.clone();
-        let emergencies = self.emergencies.clone();
-        let titles = self.titles.clone();
-        let hostname = self.hostname.clone();
-        self.start_loop("ignite-sender", SENDER_STALLS_AFTER, move |ticker| {
-            // The hub's version from the last heartbeat it answered.
-            let hub_version: RefCell<Option<String>> = RefCell::new(None);
-            let beat = || {
-                // A daemon that took on a release without restarting reports that release.
-                let version = update
-                    .version()
-                    .map_or_else(|| version.clone(), |commit| commit.to_string());
-                let pool = dispatcher.pool();
-                if let Err(error) =
-                    crate::dispatchd::post_usage(pool, ctx.hub.as_ref(), &ctx.machine)
-                {
-                    crate::hubclient::HUB_WRITES.failed("plan usage not sent", &error);
-                }
-                let reply = client.heartbeat(&Heartbeat {
-                    capacity: None,
-                    machine: ctx.machine.clone(),
-                    version,
-                    workers: dispatcher.view().unwrap_or_default(),
-                    cli_apps: dispatcher.cli_apps().map(str::to_owned).collect(),
-                    families: current_families(&ctx.repo, &hostname),
-                })?;
-                if let Err(error) = crate::fleet_notice::heard(pool, &reply) {
-                    eprintln!("ignite: fleet notice not saved: {error}");
-                }
-                *hub_version.borrow_mut() = Some(reply.hub_version);
-                emergencies.heard(reply.emergency);
-                Ok(())
-            };
-            loop {
-                ticker.round(|| {
-                    let sent = crate::outbox::tick(&db, ctx.hub.as_ref(), &beat);
-                    titles.report_holders(&ctx, &db);
-                    landing.deliver_pending(
-                        &ctx,
-                        |landed, next| dispatcher.chain(&ctx, &landed.ticket, next, landed.fresh),
-                        || Ok(dispatcher.pressure(ctx.clock.now())),
-                    );
-                    if let Err(error) = update.poll_release() {
-                        eprintln!("ignite: the release branch was not checked: {error}");
-                    }
-                    update.after_heartbeat(hub_version.borrow().as_deref(), busy(server.steps()));
-                    reporter.tick(&ctx, sent.is_ok());
-                    sent
-                });
-                // Between rounds, transcript lines go out as soon as they are queued, so someone
-                // following a CLI worker on the dashboard sees them within about a second. Such
-                // a send flushes the whole outbox, which only sends other entries sooner; the
-                // heartbeat and the rest of the round keep their period.
-                update.nap(SEND_EVERY, |most| {
-                    if crate::outbox::wait_for_transcripts(most)
-                        && let Err(error) = crate::outbox::flush(&db, ctx.hub.as_ref())
-                    {
-                        crate::hubclient::HUB_WRITES.failed("outbox not sent", &error);
-                    }
-                });
-            }
-        });
     }
 
     /// Starts the loop `name` on a thread of that name. It registers with the loop health,
@@ -605,18 +520,6 @@ impl HubAddresses {
     }
 }
 
-/// What runs that a restart waits for: a verb in a part that may not be cut short, and any
-/// landing, whether it runs on the daemon's threads or in a verb process of its own.
-fn busy(steps: &crate::steps::Steps) -> Busy {
-    let landing = steps.live().iter().any(
-        |activity| matches!(activity.kind(), crate::steps::Kind::Verb(verb) if verb == "land"),
-    );
-    Busy {
-        critical: steps.critical_now(),
-        landing,
-    }
-}
-
 /// Whether the daemon serves the hub itself. The hub has a login service of its own
 /// (`ignite hub`, installed by `ignite install`), so a daemon restart does not take it away.
 /// A daemon still started with `IGNITE_HUB_LISTEN` on a machine without that service is one
@@ -728,17 +631,6 @@ fn retry_bind<T>(window: Duration, start: impl Fn() -> std::io::Result<T>) -> Re
             Err(_) => thread::sleep(Duration::from_millis(100)),
         }
     }
-}
-
-/// The families the main checkout's `ignite.toml` lists for this machine now, empty for every
-/// family, for the heartbeat to report: the hub otherwise holds the list the machine registered
-/// with, however its `ignite.toml` changed since. `None`, which leaves the hub's list, when the
-/// file cannot be read or parsed (such as halfway through a merge).
-fn current_families(repo: &std::path::Path, hostname: &str) -> Option<Vec<String>> {
-    crate::manifests::machine_families(repo, hostname)
-        .ok()
-        .flatten()
-        .map(Option::unwrap_or_default)
 }
 
 #[cfg(test)]

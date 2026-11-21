@@ -173,6 +173,8 @@ pub struct FleetMachine {
     pub os: Os,
     pub last_seen: Timestamp,
     pub capacity: Option<CapacityReport>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub snapshot: Option<crate::protocol::machine_state::MachineSnapshot>,
 }
 
 /// One usage window, or a sample with no windows if the CLI had no usage figures.

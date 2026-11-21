@@ -61,6 +61,7 @@ pub(crate) fn view_in_snapshot(
                 last_seen: machine.last_seen.parse().map_err(invalid)?,
                 // The hub has no stored capacity reports yet.
                 capacity: None,
+                snapshot: ignite_store::hub::machine_snapshots::latest(conn, &machine.id)?,
             })
         })
         .collect::<Result<Vec<_>>>()?;

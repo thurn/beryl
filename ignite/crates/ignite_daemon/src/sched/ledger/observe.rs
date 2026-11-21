@@ -25,6 +25,7 @@ impl Ledger {
     /// tree's use before calling this, so the readings cover the same second.
     pub fn observe(&mut self, busy: Option<f64>, free_memory_mb: Option<u64>) {
         if let Some(busy) = busy {
+            self.cpu_percent = Some((busy.clamp(0.0, 1.0) * 100.0).round() as u32);
             let busy_cores = busy.clamp(0.0, 1.0) * f64::from(self.limits.machine_cores());
             let counted = |adopted_only: bool| -> f64 {
                 self.held

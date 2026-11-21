@@ -10,6 +10,7 @@ use crate::admission::COMPILES_FROM_CORES;
 use crate::capacity::{BYTES_PER_GB, BYTES_PER_GIB};
 use crate::dispatch::{JUSTICIAR, ReadyTicket, TicketKind};
 use crate::ids::TicketId;
+use crate::protocol::machine_state::StartBlock;
 use crate::time::Timestamp;
 
 /// The daemon starts reclaiming outputs below this much free disk space.
@@ -91,6 +92,7 @@ pub fn wants_output(output: &str, files: &[String]) -> bool {
 pub struct HandoffWait {
     pub reason: String,
     pub reclaim_to_gb: Option<u64>,
+    pub block: Option<StartBlock>,
 }
 
 impl From<String> for HandoffWait {
@@ -98,6 +100,7 @@ impl From<String> for HandoffWait {
         Self {
             reason,
             reclaim_to_gb: None,
+            block: None,
         }
     }
 }
@@ -181,8 +184,8 @@ impl<'a> Budget<'a> {
         self.committed_gb = self.committed_gb.saturating_add(growth);
     }
 
-    fn disk_wait(&self, ticket: &ReadyTicket, heavy: bool) -> Option<HandoffWait> {
-        let growth = if !heavy {
+    fn growth(&self, ticket: &ReadyTicket) -> u64 {
+        if !Self::heavy(ticket.expected_cores, &ticket.files) {
             LIGHT_GROWTH_GB
         } else if ticket.expected_cores >= COMPILES_FROM_CORES
             && self.warm_tree(&ticket.files).is_some()
@@ -190,7 +193,28 @@ impl<'a> Budget<'a> {
             WARM_GROWTH_GB
         } else {
             COLD_GROWTH_GB
-        };
+        }
+    }
+
+    /// Free space needed to start this ticket, including space reserved by active tickets.
+    pub fn disk_target_gib(&self, ticket: &ReadyTicket) -> u64 {
+        if ticket.labels.iter().any(|label| label == JUSTICIAR) {
+            return 0;
+        }
+        let volume_target = self
+            .pressure
+            .disk_reserve_gib
+            .unwrap_or(0)
+            .max(DISK_FLOOR_GB)
+            .saturating_add(self.committed_gb)
+            .saturating_add(self.growth(ticket));
+        self.disk_wait(ticket)
+            .and_then(|wait| wait.reclaim_to_gb)
+            .map_or(volume_target, |target| target.max(volume_target))
+    }
+
+    fn disk_wait(&self, ticket: &ReadyTicket) -> Option<HandoffWait> {
+        let growth = self.growth(ticket);
         let required = self.committed_gb.saturating_add(growth);
         let floor_target = DISK_FLOOR_GB.saturating_add(required);
         if let Some(free) = self.pressure.free_gb
@@ -198,6 +222,7 @@ impl<'a> Budget<'a> {
         {
             let room = free.saturating_sub(DISK_FLOOR_GB.saturating_add(self.committed_gb));
             return Some(HandoffWait {
+                block: Some(StartBlock::Disk),
                 reason: format!(
                     "{} waits for disk space: {free} GB free, {room} GB available above the \
                      {DISK_FLOOR_GB} GB floor after active tickets, {growth} GB needed (rechecking each round)",
@@ -212,6 +237,7 @@ impl<'a> Budget<'a> {
         {
             let room = free.saturating_sub(reserve.saturating_add(self.committed_gb));
             return Some(HandoffWait {
+                block: Some(StartBlock::Disk),
                 reason: format!(
                     "{} waits for the automatic tree disk budget: {room} GiB available after \
                      the {reserve} GiB volume reserve and active tickets, {growth} GiB needed",
@@ -236,6 +262,7 @@ impl<'a> Budget<'a> {
                     .filter(|_| required <= limit / BYTES_PER_GIB)
                     .map(|free| free.saturating_add((projected - limit).div_ceil(BYTES_PER_GIB)));
                 return Some(HandoffWait {
+                    block: Some(StartBlock::Disk),
                     reason: format!(
                         "{} waits for the Fleet tree disk cap: {room} GiB available after active \
                          tickets, {growth} GiB needed under the {} GB cap",
@@ -254,8 +281,7 @@ impl<'a> Budget<'a> {
             // Emergency work can restore space itself.
             return None;
         }
-        let heavy = Self::heavy(ticket.expected_cores, &ticket.files);
-        if let Some(wait) = self.disk_wait(ticket, heavy) {
+        if let Some(wait) = self.disk_wait(ticket) {
             return Some(wait);
         }
         if ticket.kind == TicketKind::Regression {
@@ -263,17 +289,17 @@ impl<'a> Budget<'a> {
         }
         if self.pressure.queue_seconds >= BACKLOG_SECONDS {
             let seconds = self.pressure.queue_seconds;
-            return Some(HandoffWait::from(format!(
+            return Some(pacing(format!(
                 "{} waits for the build queue: ticket commands have waited {seconds} s for cores",
                 ticket.id
             )));
         }
-        if !heavy {
+        if !Self::heavy(ticket.expected_cores, &ticket.files) {
             return None;
         }
         if self.pressure.recovery_seconds > 0 {
             let seconds = self.pressure.recovery_seconds;
-            return Some(HandoffWait::from(format!(
+            return Some(pacing(format!(
                 "{} waits for a healthy build queue: rechecking each round, up to {seconds} s \
                  of recovery left once waits subside",
                 ticket.id
@@ -284,13 +310,21 @@ impl<'a> Budget<'a> {
         {
             let remaining = f64::from(RAMP_SECONDS) - self.now.seconds_since(latest).max(0.0);
             if remaining > 0.0 {
-                return Some(HandoffWait::from(format!(
+                return Some(pacing(format!(
                     "{} waits for the next build-ticket handoff in {remaining:.0} s",
                     ticket.id
                 )));
             }
         }
         None
+    }
+}
+
+fn pacing(reason: String) -> HandoffWait {
+    HandoffWait {
+        reason,
+        reclaim_to_gb: None,
+        block: Some(StartBlock::Pacing),
     }
 }
 

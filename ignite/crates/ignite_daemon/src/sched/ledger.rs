@@ -112,6 +112,7 @@ pub struct Ledger {
     limits: Limits,
     /// Cores busy with processes outside Ignite at the last reading.
     outside: u32,
+    cpu_percent: Option<u32>,
     /// Free memory at the last reading; `None` until one succeeds.
     free_memory_mb: Option<u64>,
     /// Swap use over the last minute, to stop admitting work while the machine pages.
@@ -138,6 +139,7 @@ impl Ledger {
         Self {
             limits,
             outside: 0,
+            cpu_percent: None,
             free_memory_mb: None,
             pressure: Pressure::default(),
             next_id: 1,

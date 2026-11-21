@@ -17,6 +17,7 @@ pub mod fleet_settings;
 pub mod leases;
 pub mod listings;
 pub mod machine_asks;
+pub mod machine_snapshots;
 mod meta;
 pub mod metrics;
 pub mod pins;
@@ -249,6 +250,11 @@ pub const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 40,
         sql: include_str!("invalid_checks.sql"),
+        code: None,
+    },
+    Migration {
+        version: 41,
+        sql: include_str!("machine_snapshots.sql"),
         code: None,
     },
 ];

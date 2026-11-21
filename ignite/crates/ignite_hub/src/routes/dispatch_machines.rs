@@ -129,6 +129,14 @@ pub(super) fn heartbeat(conn: &mut Connection, beat: &Heartbeat, now: Timestamp)
         paused_everywhere: fleet::paused_everywhere(&snapshot).map_err(|e| store_failure(&e))?,
     };
     snapshot.commit().map_err(sql_failure)?;
+    if let Some(sample) = &beat.sample
+        && let Err(error) = super::queue::machine_snapshot::record(conn, beat, sample, now)
+    {
+        eprintln!(
+            "ignite: machine snapshot for {} was not recorded: {error}",
+            beat.machine
+        );
+    }
     Ok(Response::json(200, &json!(reply)))
 }
 

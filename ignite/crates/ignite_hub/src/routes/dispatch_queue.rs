@@ -80,6 +80,9 @@ pub use files::{named_files, resolve_named_file};
 #[path = "dispatch_view.rs"]
 pub mod view;
 
+#[path = "dispatch_snapshot.rs"]
+pub(super) mod machine_snapshot;
+
 /// The ticket to reserve for `free`'s machine, already reserved and logged, or why there is none
 /// ([`dispatch::why_nothing`]). Call it inside an `IMMEDIATE` transaction after lapsing old
 /// reservations, so that two machines asking at once are answered one after the other and never
@@ -158,16 +161,7 @@ fn dispatch_ready(
     mut ready: Vec<ReadyTicket>,
 ) -> Result<std::result::Result<Reservation, HandoffWait>> {
     let machine = free.machine.as_str();
-    let demand = snapshot.demand(&ready);
-    // Improvements go ahead of the epic order and so skip the share, but not a group's
-    // `--max-workers` cap.
-    let full: BTreeSet<&Group> = demand
-        .iter()
-        .filter(|group| group.max_workers.is_some_and(|cap| group.held >= cap))
-        .map(|group| &group.epic)
-        .collect();
-    ready.retain(|ticket| ticket.kind != TicketKind::Improvement || !full.contains(&ticket.epic));
-    let epic_order = shares::epic_order(&demand);
+    let epic_order = dispatch_groups(snapshot, &mut ready);
     let improvements = improvements_due(conn, machine)?;
     let holds = provider_usage::held(conn, settings, now)?;
     let room = free
@@ -241,6 +235,19 @@ fn dispatch_ready(
             Ok(Err(reason.into()))
         }
     }
+}
+
+fn dispatch_groups(snapshot: &Snapshot, ready: &mut Vec<ReadyTicket>) -> Vec<Group> {
+    let demand = snapshot.demand(ready);
+    // Improvements go ahead of the epic order and so skip the share, but not a group's
+    // `--max-workers` cap.
+    let full: BTreeSet<&Group> = demand
+        .iter()
+        .filter(|group| group.max_workers.is_some_and(|cap| group.held >= cap))
+        .map(|group| &group.epic)
+        .collect();
+    ready.retain(|ticket| ticket.kind != TicketKind::Improvement || !full.contains(&ticket.epic));
+    shares::epic_order(&demand)
 }
 
 /// Lane hand-offs can start ordinary work, so only an Active machine can continue a chain.
@@ -414,9 +421,10 @@ impl Snapshot {
                 },
             );
         }
-        let reserved = pairs(conn, "SELECT ticket, session FROM reservations")?
-            .into_iter()
-            .collect();
+        let reserved = conn
+            .prepare("SELECT ticket, session FROM reservations WHERE expires_at > ?1")?
+            .query_map([now.to_string()], |row| Ok((row.get(0)?, row.get(1)?)))?
+            .collect::<rusqlite::Result<_>>()?;
         let mut dependents: HashMap<String, Vec<String>> = HashMap::new();
         let waits = pairs(
             conn,
