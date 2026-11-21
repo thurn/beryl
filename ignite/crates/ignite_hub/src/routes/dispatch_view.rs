@@ -120,12 +120,13 @@ pub fn available(conn: &Connection, now: Timestamp) -> Result<Available> {
     let mut improvements = None;
     for (name, id, ask) in &asks {
         let Some((asked, free)) = ask else {
-            silent.push(name.clone());
+            let said = silent_reason(conn, &settings, name, id)?;
             page.machines.push(MachineReport {
                 name: name.clone(),
-                summary: "has not asked for work since the hub began recording asks".to_owned(),
+                summary: said.clone(),
                 asked: None,
             });
+            silent.push((name.clone(), said));
             continue;
         };
         let pressure = free.pressure.as_ref();
@@ -214,7 +215,7 @@ fn waiting(
     snapshot: &Snapshot,
     landed: &[String],
     now: Timestamp,
-    (seats, silent): (&mut [Seat], &[String]),
+    (seats, silent): (&mut [Seat], &[(String, String)]),
     improvements: Option<shares::Unit>,
 ) -> Result<(Vec<Waiting>, Vec<TicketId>)> {
     // The order does not depend on the machine: expected cores, the only part that does, plays
@@ -249,8 +250,14 @@ fn waiting(
 }
 
 /// Hands `ticket` to the first machine that can take it, and says what every machine makes of
-/// it, including the `silent` machines, which report but have not said what they have free.
-fn hand_out(seats: &mut [Seat], silent: &[String], ticket: &ReadyTicket, stage: Stage) -> Waiting {
+/// it, including the `silent` machines, which report but have not said what they have free,
+/// each with what is known about it instead.
+fn hand_out(
+    seats: &mut [Seat],
+    silent: &[(String, String)],
+    ticket: &ReadyTicket,
+    stage: Stage,
+) -> Waiting {
     let mut next_on: Option<String> = None;
     let mut machines = Vec::new();
     for seat in seats.iter_mut() {
@@ -285,21 +292,21 @@ fn hand_out(seats: &mut [Seat], silent: &[String], ticket: &ReadyTicket, stage: 
         };
         machines.push((seat.name.clone(), said));
     }
-    for name in silent {
+    // The chip names a reason from a machine that said what it has free, when one did: a
+    // silent machine's line says nothing about this ticket in particular.
+    let reported: Vec<(String, String)> = machines.clone();
+    for (name, known) in silent {
         let said = ticket
             .pins
             .machine
             .as_deref()
             .filter(|_| !ticket.pins.admits_machine(name))
-            .map_or_else(
-                || "has not said what it has free".to_owned(),
-                |pin| format!("pinned to machine {pin}"),
-            );
+            .map_or_else(|| known.clone(), |pin| format!("pinned to machine {pin}"));
         machines.push((name.clone(), said));
     }
     machines.sort_by(|a, b| a.0.cmp(&b.0));
     let summary = next_on.as_ref().map_or_else(
-        || summary(&machines),
+        || summary(&reported).unwrap_or_else(|| summary(&machines).unwrap_or_default()),
         |machine| format!("Next on {machine}"),
     );
     Waiting {
@@ -385,8 +392,9 @@ fn take(seat: &mut Seat, ticket: &ReadyTicket) {
 }
 
 /// The reason to show on a ticket no machine takes next: the one most machines give, leaving
-/// out machines excluded by its machine pin, unless all are excluded.
-fn summary(machines: &[(String, String)]) -> String {
+/// out machines excluded by its machine pin, unless all are excluded. `None` when `machines`
+/// is empty.
+fn summary(machines: &[(String, String)]) -> Option<String> {
     let matching: Vec<&str> = machines
         .iter()
         .map(|(_, reason)| reason.as_str())
@@ -405,10 +413,31 @@ fn summary(machines: &[(String, String)]) -> String {
         }
     }
     let best = counts.iter().map(|(_, n)| *n).max().unwrap_or(0);
-    counts.into_iter().find(|(_, n)| *n == best).map_or_else(
-        || "No machine has said what it has free yet".to_owned(),
-        |(reason, _)| capitalized(reason),
-    )
+    counts
+        .into_iter()
+        .find(|(_, n)| *n == best)
+        .map(|(reason, _)| capitalized(reason))
+}
+
+/// What is known about a machine that reports but has not asked for work since the hub began
+/// recording asks: that it is off, or has no workers to ask for, before the bare fact.
+fn silent_reason(
+    conn: &Connection,
+    settings: &ignite_core::fleet::FleetSettings,
+    name: &str,
+    id: &str,
+) -> Result<String> {
+    let state = settings.machine(name).state;
+    let workers = fleet::workers(conn, id)?
+        .iter()
+        .filter(|w| w.role == "worker")
+        .count();
+    Ok(match (state, workers) {
+        (MachineState::Off, _) => "this machine is off".to_owned(),
+        (MachineState::ChecksOnly, 0) => "checks-only machine with no workers".to_owned(),
+        (_, 0) => "has no workers".to_owned(),
+        _ => "has not asked for work since the hub began recording asks".to_owned(),
+    })
 }
 
 fn capitalized(text: &str) -> String {

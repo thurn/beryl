@@ -141,8 +141,8 @@ fn a_waiting_ticket_says_which_limit_keeps_it_from_each_machine() {
     assert!(card.contains("needs 20.0 cores"), "{card}");
     assert!(card.contains("every worker is busy"), "{card}");
     assert!(
-        body.contains("has not asked for work"),
-        "multivac is listed without an ask"
+        body.contains("has no workers"),
+        "multivac, which has never asked and has no workers, says so"
     );
 }
 
@@ -252,4 +252,26 @@ fn the_available_page_uses_worker_room_and_explains_provider_constraints() {
     let body = page(&conn, "/available");
     assert!(body.contains("claude does not run tier opus"));
     assert!(!section(&body, "waiting").contains("Next on jarvis"));
+}
+
+#[test]
+fn a_chip_names_a_reporting_machines_reason_not_a_silent_machines() {
+    let conn = seeded();
+    // `multivac` never asked and has no workers. Renamed to sort before the machines that
+    // reported, its line must still not become the chip.
+    conn.execute("UPDATE machines SET name = 'aardvark' WHERE id = 'm-m'", [])
+        .unwrap();
+    let body = page(&conn, "/available");
+    let waiting = section(&body, "waiting");
+    assert!(!waiting.contains(">Has no workers<"), "{waiting}");
+    assert!(
+        waiting.contains(">Every worker is busy<") || waiting.contains(">Needs 20.0 cores<"),
+        "{waiting}"
+    );
+    let card = &body[body.find("<template id=\"why-e1.3\"").unwrap()..];
+    let card = &card[..card.find("</template>").unwrap()];
+    assert!(
+        card.contains("has no workers"),
+        "the card still lists it: {card}"
+    );
 }
