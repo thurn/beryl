@@ -10,15 +10,14 @@
 
 use crate::prelude::*;
 
+/// The dies trigger checks whether the Sphinx was a token on the battlefield.
+/// [CR 603.10a] says “Some zone-change triggers look back in time.”
+///
+/// [CR 603.10a]: https://yawgatog.com/resources/magic-rules/#R60310a
 pub static CARD: CardDef = Printed::SphinxOfFalseConclusions
     .keywords(Keywords::FLASH.union(Keywords::FLYING))
     .abilities(&[
-        // "Draw a card, then discard a card."
         whenever_attacks(&sequence(&[draw(you(), 1), discard(you(), 1)])),
-        // "If it isn't a token", as it last existed on the battlefield
-        // ([CR 603.10a](https://yawgatog.com/resources/magic-rules/#R60310a)): "Some
-        // zone-change triggers look back in time." The copy's copiable values are its
-        // card's ([CR 707.2](https://yawgatog.com/resources/magic-rules/#R7072)).
         Ability::triggered(&Trigger::DIES)
             .only_if(&Condition::Not(&Condition::Token(this())))
             .effect(&create_copy(you(), this())),

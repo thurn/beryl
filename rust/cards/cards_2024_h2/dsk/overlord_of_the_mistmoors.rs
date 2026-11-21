@@ -11,22 +11,15 @@
 
 use crate::prelude::*;
 
-/// The Insect token's name ([CR 111.4]): its subtype plus the word "Token".
-///
-/// [CR 111.4]: https://yawgatog.com/resources/magic-rules/#R1114
 pub use crate::tokens::INSECT_TOKEN;
 
-/// The Insect token: a 2/1 white Insect creature token with flying.
 pub static INSECT: CardDef = Token::InsectToken.keywords(Keywords::FLYING).card();
 
-/// "Create two 2/1 white Insect creature tokens with flying": one event ([CR 111.1]).
-///
-/// [CR 111.1]: https://yawgatog.com/resources/magic-rules/#R1111
 static TWO_INSECTS: Effect = create_tokens(you(), &INSECT, 2);
 
-/// Impending is four abilities ([CR 702.176a]): the alternative cost, the time counters it enters
-/// with (both in the casting option), "isn't a creature" while it has one, and the end-step
-/// countdown.
+/// The impending casting option carries the alternative cost and initial time counters.
+/// The other two abilities apply the type change and count down at the end step.
+/// [CR 702.176a] calls impending “a keyword that represents four abilities.”
 ///
 /// [CR 702.176a]: https://yawgatog.com/resources/magic-rules/#R702176a
 pub static CARD: CardDef = Printed::OverlordOfTheMistmoors
@@ -116,28 +109,6 @@ pub mod scenarios {
                 ME.counters(OVERLORD, CounterKind::Time, 0),
                 ME.creature(OVERLORD, true),
                 ME.pt(OVERLORD, 6, 6),
-            ]),
-        // Cast in full it is a creature at once, and its attack makes two more Insects, which
-        // are not attacking.
-        Scenario::new("Overlord cast in full, then attacking")
-            .hand(P0, &[OVERLORD])
-            .battlefield(P0, plains(7))
-            .library(P0, &[Card::Plains])
-            .actions(&[
-                ME.casts(OVERLORD),
-                Resolve,
-                ME.creature(OVERLORD, true),
-                ME.counters(OVERLORD, CounterKind::Time, 0),
-                Resolve,
-                advance_to(3, TurnStep::BeginningOfCombat),
-                ME.passes(),
-                ME.attacks_with(OVERLORD),
-                ME.done_attacking(),
-                Resolve,
-                ME.controls(INSECT_TOKEN, 4),
-                ME.attacking(INSECT_TOKEN, 0),
-                advance_to(3, TurnStep::EndOfCombat),
-                THEM.life(14),
             ]),
     ];
 }

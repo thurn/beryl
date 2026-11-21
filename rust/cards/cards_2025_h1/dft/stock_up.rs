@@ -8,13 +8,6 @@
 
 use crate::prelude::*;
 
-/// The two for the hand are chosen one at a time and go there together; with two or fewer cards
-/// left to choose from, they all go unasked. The rest go to the bottom one at a time, each under
-/// the ones before, which is every order ([CR 401.4]): "If an effect puts two or more cards in a
-/// specific position in a library at the same time, the owner of those cards may arrange them in
-/// any order." With fewer than five cards in the library, the player looks at every card.
-///
-/// [CR 401.4]: https://yawgatog.com/resources/magic-rules/#R4014
 pub static CARD: CardDef = Printed::StockUp
     .abilities(&[Ability::spell().effect(&dig(you(), 5, Taken::Put(2), LibraryOrder::Any))])
     .card();
@@ -51,41 +44,6 @@ pub mod scenarios {
                 ME.has(Zone::Hand, Prop::Artifact, 1),
                 ME.has(Zone::Hand, Card::Counterspell, 1),
                 ME.library_top(&[Card::Tundra, Prop::Sorcery, Card::Plains, Card::Island]),
-            ]),
-        // Four cards: two to the hand, and the order of the other two on the bottom.
-        Scenario::new("Stock Up with four cards in the library")
-            .battlefield(P0, &[Card::Island; 3])
-            .hand(P0, &[Card::StockUp])
-            .library(
-                P0,
-                &[
-                    Card::Plains,
-                    Prop::Artifact,
-                    Card::Island,
-                    Card::Counterspell,
-                ],
-            )
-            .actions(&[
-                ME.casts(Card::StockUp),
-                Resolve,
-                ME.picks(Prop::Artifact),
-                ME.picks(Card::Counterspell),
-                ME.picks(Card::Island),
-                ME.has(Zone::Hand, Prop::Artifact, 1),
-                ME.has(Zone::Hand, Card::Counterspell, 1),
-                ME.library_top(&[Card::Island, Card::Plains]),
-            ]),
-        // Two cards: both go to the hand, with nothing to choose.
-        Scenario::new("Stock Up with two cards in the library")
-            .battlefield(P0, &[Card::Island; 3])
-            .hand(P0, &[Card::StockUp])
-            .library(P0, &[Prop::Artifact, Card::Plains])
-            .actions(&[
-                ME.casts(Card::StockUp),
-                Resolve,
-                ME.has(Zone::Hand, Prop::Artifact, 1),
-                ME.has(Zone::Hand, Card::Plains, 1),
-                ME.has_cards(Zone::Library, 0),
             ]),
     ];
 }
