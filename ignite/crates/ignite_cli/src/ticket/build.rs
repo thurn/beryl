@@ -17,6 +17,7 @@ fn shared_fields(fields: &mut Fields, args: &TicketFieldArgs) -> Result<()> {
     put(fields, "priority", args.priority);
     put(fields, "body", read_file(args.body_file.as_deref())?);
     put(fields, "acceptance", args.acceptance.clone());
+    put(fields, "notes", read_file(args.notes_file.as_deref())?);
     put(fields, "workers", args.allocation);
     put(fields, "max_workers", args.max_workers);
     put(fields, "cores", args.cores);
@@ -275,6 +276,7 @@ mod tests {
             parent: None,
             body_file: None,
             acceptance: None,
+            notes_file: None,
             allocation: None,
             max_workers: None,
             cores: None,
@@ -294,6 +296,29 @@ mod tests {
         assert_eq!(op["fields"]["every_hours"], 6);
         let changed = update("MAB12", &scheduled, &no_changes()).unwrap();
         assert_eq!(changed["set"], json!({"every_hours": 6}));
+    }
+
+    #[test]
+    fn notes_are_read_from_a_file_on_create_and_update() {
+        let path = ignite_core::test_files::temp_dir().join("ticket-build-notes.txt");
+        std::fs::write(&path, "Round 3: the gate's wait fell.\n").unwrap();
+        let noted = TicketFieldArgs {
+            notes_file: Some(path.clone()),
+            ..no_fields()
+        };
+        let created = create("Patrol", &noted, &[], &[], None).unwrap();
+        let changed = update("MAB12", &noted, &no_changes()).unwrap();
+        assert_eq!(
+            created["fields"]["notes"],
+            "Round 3: the gate's wait fell.\n"
+        );
+        assert_eq!(
+            changed["set"],
+            json!({"notes": "Round 3: the gate's wait fell.\n"})
+        );
+        // A file that cannot be read is a usage error, never an update that clears the notes.
+        std::fs::remove_file(&path).unwrap();
+        assert!(update("MAB12", &noted, &no_changes()).is_err());
     }
 
     #[test]

@@ -1,8 +1,8 @@
 //! Files the copies of meta-tickets that are due (see `ignite_core::schedule`).
 //!
 //! Each pass looks at every open meta-ticket with an interval, and for each one whose next copy
-//! is due files a child ticket with the meta-ticket's title, text, labels, priority and owner,
-//! `open`, so the pool may be offered it at once. A copy is an ordinary task: it is claimed,
+//! is due files a child ticket with the meta-ticket's title, text, notes, labels, priority and
+//! owner, `open`, so the pool may be offered it at once. A copy is an ordinary task: it is claimed,
 //! worked and closed like any other ticket, and closing it leaves the meta-ticket open.
 
 use rusqlite::Connection;
@@ -57,6 +57,9 @@ fn copy_of(meta: &Ticket) -> Operation {
             body: Some(meta.body.clone()),
             acceptance: Some(meta.acceptance.clone()),
             design: Some(meta.design.clone()),
+            // The notes are what earlier copies left for this one: a copy writes them on the
+            // meta-ticket, and the next copy starts with them.
+            notes: Some(meta.notes.clone()),
             ticket_type: Some(TicketType::Task),
             status: Some(Status::Open),
             priority: Some(meta.priority),

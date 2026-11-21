@@ -84,6 +84,41 @@ fn a_meta_ticket_files_one_copy_at_a_time_on_its_clock() {
 }
 
 #[test]
+fn a_copy_starts_with_the_notes_on_the_meta_ticket_when_it_is_filed() {
+    let mut conn = hub::open_in_memory().unwrap();
+    let t0 = start().now();
+    let id = apply(&mut conn, vec![meta(TicketFields::default())], t0).remove(0);
+    let first = format!("{id}.1");
+    assert_eq!(pass(&mut conn, t0), vec![first.clone()]);
+    assert_eq!(ticket(&conn, &first).notes, "");
+
+    // The first copy writes what it learned on the meta-ticket, then closes.
+    let learned = "Round 1: the gate waited longest for a landing tree.";
+    let note = Operation::Update {
+        id: id.clone(),
+        set: Some(TicketFields {
+            notes: Some(learned.to_owned()),
+            ..TicketFields::default()
+        }),
+        add_labels: Vec::new(),
+        remove_labels: Vec::new(),
+        set_meta: std::collections::BTreeMap::default(),
+        unset_meta: Vec::new(),
+    };
+    apply(&mut conn, vec![note], t0.plus_seconds(HOUR));
+    close(&mut conn, &first, t0.plus_seconds(HOUR));
+
+    let second = format!("{id}.2");
+    assert_eq!(
+        pass(&mut conn, t0.plus_seconds(6.0 * HOUR)),
+        vec![second.clone()]
+    );
+    assert_eq!(ticket(&conn, &second).notes, learned);
+    // A copy already filed keeps the notes it was filed with.
+    assert_eq!(ticket(&conn, &first).notes, "");
+}
+
+#[test]
 fn a_deferred_meta_ticket_files_nothing() {
     let mut conn = hub::open_in_memory().unwrap();
     let t0 = start().now();

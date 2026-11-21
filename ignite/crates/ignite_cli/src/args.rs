@@ -498,6 +498,12 @@ pub struct TicketFieldArgs {
     pub body_file: Option<PathBuf>,
     #[arg(long)]
     pub acceptance: Option<String>,
+    /// Read the notes from a file, replacing any the ticket has. Notes are for what later
+    /// readers of the ticket should know that the body does not say. A meta-ticket's notes
+    /// are given to each copy when it is filed, so a copy can leave notes for the copies
+    /// after it by writing them on the meta-ticket.
+    #[arg(long)]
+    pub notes_file: Option<PathBuf>,
     /// An epic's allocation: its weight when the pool divides workers between epics. 3 when an
     /// epic is filed without one, 0 to park it. `--workers` is its old name.
     #[arg(long, alias = "workers")]
