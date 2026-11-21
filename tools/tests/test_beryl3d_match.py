@@ -537,17 +537,20 @@ def test_a_sample_lists_what_style_cannot_say_and_draws_what_it_can() -> None:
         }
     )
     assert samples.lacking(plain) == []
-    assert samples.native_style(plain["style"]) == {  # pyre-ignore[6]
-        "background": [33, 31, 28, 255],
-        "border": {"color": [[214, 192, 150, 107]] * 4, "width": [2.0] * 4},
-        "radius": 8.0,
-        "opacity": 0.5,
-        "box_shadow": [],
-        "drop_shadow": [],
-        "background_image": [],
-        "mask": None,
-        "filter": [],
+    style = samples.native_style(plain["style"])  # pyre-ignore[6]
+    assert style["background"] == [33, 31, 28, 255]
+    assert style["border"] == {
+        "color": [[214, 192, 150, 107]] * 4,
+        "width": [2.0] * 4,
     }
+    assert style["radius"] == 8.0
+    assert style["opacity"] == 0.5
+    assert style["box_shadow"] == []
+    assert style["drop_shadow"] == []
+    assert style["background_image"] == []
+    assert style["background_boxes"] == []
+    assert style["mask"] is None
+    assert style["filter"] == []
     # A border's sides: the shorthand, then `border-color`'s one to four values, then a side's.
     sided = sample(
         **{

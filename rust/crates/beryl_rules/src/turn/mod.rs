@@ -1,6 +1,6 @@
 //! Turn structure: turns, steps and their turn-based actions (architecture §12.1).
 //!
-//! Implements: CR 103.8, CR 305.2, CR 500, CR 502.3, CR 502.4, CR 504.1, CR 514, CR 703.4d
+//! Implements: CR 103.8, CR 305.2, CR 500.2, CR 500.5, CR 500.6, CR 502.3, CR 502.4, CR 504.1, CR 514, CR 703.4d
 
 pub(crate) mod paused_step;
 pub(crate) mod stops;
