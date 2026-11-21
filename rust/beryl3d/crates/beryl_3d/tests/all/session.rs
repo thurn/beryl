@@ -5,6 +5,7 @@
 //! solo manual table and sends its view back, or opens one in its lobby and starts it from there,
 //! and saves a pasted decklist in its deck library and lists it.
 
+use kit_ui::input::Input as DeviceInput;
 use std::sync::mpsc::{Receiver, channel};
 
 use app_client::Input;
@@ -77,7 +78,7 @@ fn the_frame_loop_draws_every_tick_while_the_session_is_busy() {
             sent += 1;
         }
         // Any input makes the client want the next frame.
-        frames.handle(Input::Lifecycle(Lifecycle::Resumed));
+        frames.handle(Input::Device(DeviceInput::Lifecycle(Lifecycle::Resumed)));
         let drawn = frames.tick(u64::from(tick + 1) * 8_333_333, &mut counter);
         assert!(drawn.is_some(), "tick {tick} drew no frame");
     }

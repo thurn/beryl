@@ -174,7 +174,7 @@ impl Client {
     /// and back (`OwnStep::TrayLifts` and `OwnStep::TrayLetGo`), the steps a client makes
     /// itself that carry cards off the table to be looked at.
     pub(super) fn place_shown(&mut self) {
-        Tree::screen_shows(&self.layer, &mut self.screen_cards.placements);
+        Tree::screen_shows(&self.layer, &mut self.features.screen_cards.placements);
         let timing = |step: OwnStep| {
             (self.step_timings.entries.iter())
                 .find(|entry| entry.step == step)
@@ -193,26 +193,27 @@ impl Client {
         // while the opening is shown a card clicked into a slot under the hand, or back, glides
         // there as the web's `useGlide` moves it. A new window lays the opening out again, and
         // its cards stand at once in their new places.
-        let closed = self.screen_cards.was_opening && !self.opening.shown;
+        let closed = self.features.screen_cards.was_opening && !self.features.opening.shown;
         let resized = self
+            .features
             .screen_cards
             .laid_in
             .is_some_and(|laid| laid != self.window);
-        self.screen_cards.was_opening = self.opening.shown;
-        self.screen_cards.laid_in = Some(self.window);
+        self.features.screen_cards.was_opening = self.features.opening.shown;
+        self.features.screen_cards.laid_in = Some(self.window);
         let opening = self.data().shown.opening;
         let back = if closed {
             (ns(opening.kept_ms), Curve::EASE_OUT)
         } else {
             timing(OwnStep::TrayLetGo)
         };
-        let relaid = (self.opening.shown && !resized).then_some(Relaid {
+        let relaid = (self.features.opening.shown && !resized).then_some(Relaid {
             cross: (ns(opening.cross_ms), GLIDE),
             shift: (ns(opening.shift_ms), GLIDE),
         });
         // A card the opening shows stands in its box at once, as the web's opening draws its own
         // copy of each card in place rather than moving the table's card there.
-        let into = if self.opening.shown {
+        let into = if self.features.opening.shown {
             (0, Curve::EASE_OUT)
         } else {
             timing(OwnStep::TrayLifts { sorted: false })
@@ -221,11 +222,11 @@ impl Client {
         // A pile's viewer covers the table, and so, on a manual table, do the guided start's
         // opening and the banner of a frozen table, whose cards take no press.
         let covered = (self.features.viewer().open().is_some()
-            && matches!(self.screen, Screen::Game | Screen::Table))
+            && matches!(self.features.screen, Screen::Game | Screen::Table))
             || self.guided_start()
             || self.table_frozen();
         self.show
-            .place_shows(&self.screen_cards.placements, moves, covered);
+            .place_shows(&self.features.screen_cards.placements, moves, covered);
     }
 
     pub(super) fn prepare_pill(&mut self, view: &PlayerView) {
@@ -242,20 +243,21 @@ impl Client {
 
     /// Advances the opening and viewer after the table has reached this frame.
     pub(super) fn viewing_frame(&mut self, table_now: u64) {
-        let visible = self.screen == Screen::Game && self.features.sheet.is_none();
+        let visible = self.features.screen == Screen::Game && self.features.sheet.is_none();
         let input = self.step_inputs();
         let turn = self.show.turn_at(table_now);
+        let in_game = self.features.screen == Screen::Game;
         self.features
             .steps_mut()
-            .write(&mut self.layer, turn, &input, self.screen == Screen::Game);
-        if self.opening.land(self.now) {
+            .write(&mut self.layer, turn, &input, in_game);
+        if self.features.opening.land(self.now) {
             self.show_screen();
         }
         let views_shown = self.show.views_shown();
-        if views_shown != self.opening.views_shown {
-            self.opening.views_shown = views_shown;
+        if views_shown != self.features.opening.views_shown {
+            self.features.opening.views_shown = views_shown;
             let played = self.show.shown().map(|update| &update.view);
-            let was_opening = self.opening.shown || self.show.table().hand_away();
+            let was_opening = self.features.opening.shown || self.show.table().hand_away();
             if was_opening || played.is_some_and(game_hud::screens::opening::in_opening) {
                 self.show_screen();
             }
@@ -279,7 +281,7 @@ impl Client {
     }
 
     pub(super) fn prepare_steps(&mut self) {
-        if self.screen == Screen::Game {
+        if self.features.screen == Screen::Game {
             let input = self.step_inputs();
             self.features
                 .steps_mut()
@@ -293,28 +295,10 @@ impl Client {
         game_hud::hud::steps::Inputs::new(&self.screen_in().hud())
     }
 
-    /// Whether a press on a card resting at `place` opens a pile's viewer instead: a
-    /// card in a library, graveyard or exile pile on the game screen, or in a graveyard or exile
-    /// pile on the manual table (`manual::viewers::opens_on_press`), as the web interface's
-    /// button over each pile opens it (`PileButton` in `ui/src/game/Piles.tsx`).
-    pub(super) fn pile_at(&self, place: Place) -> Option<Viewed> {
-        let Place::Card { zone, side, .. } = place else {
-            return None;
-        };
-        let pile = match self.screen {
-            Screen::Game => matches!(
-                zone,
-                ZoneName::Library | ZoneName::Graveyard | ZoneName::Exile
-            ),
-            Screen::Table => game_manual::manual::viewers::opens_on_press(zone),
-            _ => false,
-        };
-        (pile && self.features.sheet.is_none()).then_some(Viewed::Pile(side, zone))
-    }
-
     /// Whether the open viewer shows the card in `slot` in one of its boxes.
     pub(super) fn viewer_shows(&self, slot: ObjectId) -> bool {
-        self.screen_cards
+        self.features
+            .screen_cards
             .placements
             .iter()
             .any(|shown| shown.object.0 == u32::from(slot.0))
@@ -336,4 +320,28 @@ impl Client {
     pub(super) fn rows_counted(&self, visible: bool, covered: bool) -> bool {
         visible && !covered && !self.table_frozen()
     }
+}
+
+/// Maps a card or count to the pile whose action owns it.
+pub(super) fn pointer_pile(
+    place: Place,
+    screen: Screen,
+    no_sheet: bool,
+    manual_library: bool,
+) -> Option<Viewed> {
+    let Place::Card { zone, side, .. } = place else {
+        return None;
+    };
+    let opens = match screen {
+        Screen::Game => matches!(
+            zone,
+            ZoneName::Library | ZoneName::Graveyard | ZoneName::Exile
+        ),
+        Screen::Table => {
+            game_manual::manual::viewers::opens_on_press(zone)
+                || (manual_library && zone == ZoneName::Library)
+        }
+        _ => false,
+    };
+    (opens && no_sheet).then_some(Viewed::Pile(side, zone))
 }

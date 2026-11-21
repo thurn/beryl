@@ -19,6 +19,7 @@
 //!   it would be lethal: the web's `.life-incoming` (`ui/src/screens/styles/table.css`, and
 //!   `.phone-orb .life-incoming` in `ui/src/mobile/phone.css` on a phone).
 
+use crate::hud::anchors::anchor_target;
 use beryl_protocol::protocol::{Combat, PlayerView, Side, Step};
 use beryl_protocol::script::Subject;
 use glam::Vec2;
@@ -84,7 +85,7 @@ fn orb(view: &PlayerView, side: Side, profile: Profile) -> Element {
     // (`table::phone::your_life`), so the orb follows the player's anchor on every frame.
     let middle = Vec2::new(0.5, 0.5);
     element.anchor = Some(if compact {
-        Anchor::Object(Subject::Player { player: side }, middle)
+        Anchor::Object(anchor_target(Subject::Player { player: side }), middle)
     } else {
         Anchor::Point(orb_point(side, profile), middle)
     });

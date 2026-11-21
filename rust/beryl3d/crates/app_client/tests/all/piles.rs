@@ -15,6 +15,7 @@ use glam::{Vec2, Vec3};
 use kit_base::pose::{Pose, Segment};
 use kit_frame::frame::{Frame, Role};
 use kit_space::motion::pose_at;
+use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{Insets, Size};
 
 fn client() -> Client {
@@ -40,14 +41,14 @@ fn library(cards: usize) -> ViewBuilder {
 /// The frame a client draws for `view` at rest in a 1600 by 900 window.
 fn frame_of(view: &ViewBuilder) -> Frame {
     let mut client = client();
-    client.handle(Input::Surface {
+    client.handle(Input::Device(DeviceInput::Surface {
         size: Size {
             width: 1600.0,
             height: 900.0,
         },
         scale: 2.0,
         safe_area: Insets::default(),
-    });
+    }));
     let mut view = view.clone();
     view.script(ScriptBuilder::reset().build());
     client.handle(Input::Update(Box::new(view.update())));

@@ -5,6 +5,7 @@
 use crate::client;
 use client::Input;
 use glam::Vec2;
+use kit_ui::input::Input as DeviceInput;
 
 use super::{DRAG_MOVES, DRAG_STEP, Page, point};
 use kit_scene::hit::uncovered;
@@ -29,7 +30,7 @@ impl Page {
     /// Turns the mouse wheel at `point` by `wheel` logical points, as a host gives it: positive
     /// moves the content right and down, as a wheel turned up or to the left does.
     pub fn wheel(&mut self, point: Vec2, wheel: Vec2) {
-        self.give(Input::Pointer(Pointer {
+        self.give(Input::Device(DeviceInput::Pointer(Pointer {
             id: 0,
             kind: PointerKind::Mouse,
             phase: PointerPhase::Wheel,
@@ -37,7 +38,7 @@ impl Page {
             button: Button::None,
             wheel,
             modifiers: Modifiers::default(),
-        }));
+        })));
         self.render();
     }
 

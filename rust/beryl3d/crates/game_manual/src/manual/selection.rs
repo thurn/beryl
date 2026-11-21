@@ -10,6 +10,7 @@
 use beryl_protocol::PlayerView;
 use beryl_protocol::protocol::{ObjectId, Side, ZoneName};
 use beryl_protocol::script::{Mark, Subject};
+use game_hud::hud::anchors::anchor_target;
 use glam::Vec2;
 
 use game_play::light::{Lit, MarkSpan, Span};
@@ -231,7 +232,7 @@ pub fn summary(
         summary_space::PADDING_X,
     ];
     panel.anchor = Some(Anchor::Above(
-        Subject::Object { slot: over },
+        anchor_target(Subject::Object { slot: over }),
         summary_space::ABOVE,
     ));
     Some(panel)

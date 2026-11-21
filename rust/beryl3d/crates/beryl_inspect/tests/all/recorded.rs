@@ -2,6 +2,7 @@
 //! sent: `verbs-zones`, whose scripts move cards between every zone, `pay-default`, whose
 //! prompts are answered by pressing the flat layer's buttons, and the stress boards.
 
+use kit_ui::input::Input as DeviceInput;
 use std::time::Instant;
 
 use app_client::Input;
@@ -357,14 +358,14 @@ fn a_repeated_pay_default_view_lays_out_and_shapes_nothing() {
             .and_then(|recording| recording.views())
             .unwrap_or_else(|why| panic!("{why}"));
         let mut client = Client::new(crate::test_data::data(), Config::LARGEST);
-        client.handle(Input::Surface {
+        client.handle(Input::Device(DeviceInput::Surface {
             size: Size {
                 width: 1600.0,
                 height: 900.0,
             },
             scale: 1.0,
             safe_area: Insets::default(),
-        });
+        }));
         let mut now = 0;
         for (index, update) in views.iter().enumerate() {
             client.handle(Input::Update(Box::new(update.clone())));

@@ -10,10 +10,10 @@ use beryl_protocol::script::Subject;
 use glam::Vec2;
 
 use super::Client;
-use super::gesture::Gesture;
+use super::input::{Control, ScenePoint};
 use game_hud::prompts::order;
 use kit_ui::element::floats;
-use kit_ui::input::{Button, Pointer, PointerPhase};
+use kit_ui::input::{Button, PointerPhase};
 use kit_ui::layout::FloatLook;
 
 /// An item of an order's row that the primary pointer went down on: which item, where the
@@ -26,9 +26,17 @@ pub(super) struct Carry {
 }
 
 impl Client {
+    pub(super) fn carried_item(&self) -> Option<Subject> {
+        match self.routes.control {
+            Control::Order(carry) => Some(carry.on),
+            _ => None,
+        }
+    }
+
     /// Carries an item of the open order prompt's row by `pointer`, as the module describes.
     /// Returns whether the pointer carried an item, and so means nothing else.
-    pub(super) fn carry_item(&mut self, pointer: &Pointer) -> bool {
+    pub(super) fn carry_item(&mut self, point: &ScenePoint) -> bool {
+        let pointer = &point.pointer;
         match pointer.phase {
             PointerPhase::Down if pointer.button == Button::Primary => {
                 if let Some(on) = self.order_item_at(pointer.position) {
@@ -37,25 +45,19 @@ impl Client {
                         start: pointer.position,
                         lifted: false,
                     };
-                    self.gesture = Gesture::Carry {
-                        carry,
-                        release: None,
-                    };
+                    self.routes.control = Control::Order(carry);
                 }
                 false
             }
             PointerPhase::Move => {
-                let Gesture::Carry { carry, .. } = self.gesture else {
+                let Control::Order(carry) = self.routes.control else {
                     return false;
                 };
                 if !self.still_ordering(carry) {
-                    self.end_gesture();
+                    self.cancel_gesture();
                     return false;
                 }
-                if !carry.lifted
-                    && carry.start.distance(pointer.position)
-                        < self.show.table().data().pointer.drag_threshold_points
-                {
+                if !carry.lifted && point.drag.is_none() {
                     return false;
                 }
                 if !carry.lifted {
@@ -65,13 +67,13 @@ impl Client {
                 true
             }
             PointerPhase::Up if pointer.button == Button::Primary => {
-                let Gesture::Carry { carry, .. } = self.gesture else {
+                let Control::Order(carry) = self.routes.control else {
                     return false;
                 };
                 if !carry.lifted {
                     return false;
                 }
-                self.gesture = Gesture::None;
+                self.routes.control = Control::None;
                 self.put_item_down();
                 if !self.still_ordering(carry) {
                     return true;
@@ -132,13 +134,10 @@ impl Client {
     /// Takes the item `carry` names out of the row and shows it as the carried float, which
     /// stops the press under it from clicking it.
     fn lift_item(&mut self, carry: Carry) {
-        self.gesture = Gesture::Carry {
-            carry: Carry {
-                lifted: true,
-                ..carry
-            },
-            release: None,
-        };
+        self.routes.control = Control::Order(Carry {
+            lifted: true,
+            ..carry
+        });
         let float = (self.features.prompts.current()).and_then(|prompt| {
             let view = self.show.latest().map(|update| &update.view);
             let faces = Some(self.show.faces().list());

@@ -11,6 +11,7 @@ use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use beryl_protocol::{AgentView, SessionId, StartRequest};
 use kit_frame::frame::StateBits;
 use kit_probe::agent::{self, TreeOptions};
+use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{Insets, Size};
 
 const START: &str = "button \"Start\"";
@@ -167,14 +168,14 @@ fn the_first_view_after_the_agents_shows_the_game() {
         let frame = client.frame(0);
         agent::tree(frame, &TreeOptions::default()).expect("the whole tree needs no locator")
     };
-    client.handle(Input::Surface {
+    client.handle(Input::Device(DeviceInput::Surface {
         size: Size {
             width: 1440.0,
             height: 900.0,
         },
         scale: 1.0,
         safe_area: Insets::default(),
-    });
+    }));
     client.handle(Input::Agents(agents()));
     assert!(screen(&mut client).contains("region \"start\""));
     let mut view = ViewBuilder::sample();
@@ -203,7 +204,7 @@ fn scroll_gallery(page: &mut Page, distance: f32) {
     use glam::Vec2;
     use kit_ui::input::{Button, Modifiers, Pointer, PointerKind, PointerPhase};
 
-    page.give_input(Input::Pointer(Pointer {
+    page.give_input(Input::Device(DeviceInput::Pointer(Pointer {
         kind: PointerKind::Mouse,
         phase: PointerPhase::Wheel,
         position: Vec2::new(720.0, 450.0),
@@ -211,7 +212,7 @@ fn scroll_gallery(page: &mut Page, distance: f32) {
         wheel: Vec2::new(0.0, -distance),
         id: 0,
         modifiers: Modifiers::default(),
-    }));
+    })));
     page.still();
 }
 

@@ -16,6 +16,7 @@ use kit_probe::agent::Rule;
 use kit_probe::agent::checks::{anchors_hold, minimum_sizes, on_screen, reachable, text_fits};
 use kit_ui::element::Action;
 use kit_ui::element::{Gradient, describe, row, text};
+use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{IconCell, Insets, Key, KeyCode, KeyPhase, Modifiers, PointerPhase, Size};
 use kit_ui::layout::{Layer, Navigation};
 use kit_ui::widgets::{self, MenuGroup, MenuRow, icons};
@@ -262,11 +263,11 @@ fn a_focused_slider_moves_by_5_under_the_arrow_keys_and_is_drawn_held_while_pres
     client.handle(pointer(PointerPhase::Up, end));
     assert_eq!(client.next_request(), None);
     let arrow = |code| {
-        Input::Key(Key {
+        Input::Device(DeviceInput::Key(Key {
             code,
             phase: KeyPhase::Down,
             modifiers: Modifiers::default(),
-        })
+        }))
     };
     // At 100 the right key has nowhere to go; the left key takes the level down a step.
     client.handle(arrow(KeyCode::ArrowRight));

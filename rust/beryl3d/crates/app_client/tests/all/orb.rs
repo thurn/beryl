@@ -9,6 +9,7 @@ use beryl_protocol::protocol::Side;
 use game_hud::art::orb::{self, LAYERS};
 use glam::{Vec2, Vec4};
 use kit_frame::frame::{Frame, Material, Role, StateBits};
+use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{AssetReady, IconCell};
 
 use super::flat_layer::{client, deciding, edges, find, prompt};
@@ -54,10 +55,10 @@ fn drawn(frame: &Frame, side: Side, window: Vec2) -> Vec<(usize, Vec2)> {
 fn each_orb_draws_the_webs_art_with_its_ring_toward_its_edge() {
     let mut client = client();
     client.handle(deciding(prompt("Pay {1}{U}")));
-    client.handle(Input::Assets(AssetReady::Icons {
+    client.handle(Input::Device(DeviceInput::Assets(AssetReady::Icons {
         page: 1,
         cells: orb_cells(),
-    }));
+    })));
     let frame = client.frame(0);
     let size = Vec2::new(1440.0, 900.0);
     let core = LAYERS

@@ -15,6 +15,7 @@ use kit_frame::frame::{Frame, Place, Role};
 use kit_probe::agent::Context;
 use kit_probe::agent::checks::{duplicates, reachable};
 use kit_probe::agent::tree::{TreeOptions, tree};
+use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{Insets, Size};
 
 fn place(
@@ -50,14 +51,14 @@ fn client() -> Client {
 
 /// The frame a client draws for `view` in a 1440 by 900 window.
 fn frame_of(client: &mut Client, view: &ViewBuilder) -> Frame {
-    client.handle(Input::Surface {
+    client.handle(Input::Device(DeviceInput::Surface {
         size: Size {
             width: 1440.0,
             height: 900.0,
         },
         scale: 2.0,
         safe_area: Insets::default(),
-    });
+    }));
     let mut view = view.clone();
     view.script(ScriptBuilder::reset().build());
     client.handle(Input::Update(Box::new(view.update())));
@@ -469,14 +470,14 @@ fn abilities_on_the_stack_are_drawn_as_cards_above_the_spell_beneath_them() {
     ));
     let view = update.view.clone();
     let mut client = client();
-    client.handle(Input::Surface {
+    client.handle(Input::Device(DeviceInput::Surface {
         size: Size {
             width: 1440.0,
             height: 900.0,
         },
         scale: 2.0,
         safe_area: Insets::default(),
-    });
+    }));
     client.handle(Input::Update(Box::new(update)));
     let frame = client.frame(0).clone();
 
@@ -629,11 +630,11 @@ fn every_card_of_a_hand_of_any_size_can_be_pressed() {
         for (width, height) in REFERENCE_WINDOWS {
             let size = Size { width, height };
             let mut client = client();
-            client.handle(Input::Surface {
+            client.handle(Input::Device(DeviceInput::Surface {
                 size,
                 scale: 2.0,
                 safe_area: Insets::default(),
-            });
+            }));
             let mut view = builder.clone();
             view.script(ScriptBuilder::reset().build());
             client.handle(Input::Update(Box::new(view.update())));
@@ -777,11 +778,11 @@ fn every_item_of_a_stack_of_any_size_can_be_pressed() {
         for (width, height) in REFERENCE_WINDOWS {
             let size = Size { width, height };
             let mut client = client();
-            client.handle(Input::Surface {
+            client.handle(Input::Device(DeviceInput::Surface {
                 size,
                 scale: 2.0,
                 safe_area: Insets::default(),
-            });
+            }));
             client.handle(Input::Update(Box::new(builder.update())));
             let context = Context {
                 recording: "stack".to_owned(),

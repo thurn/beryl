@@ -18,7 +18,6 @@ mod held;
 pub use held::Hold;
 
 pub mod rows;
-pub mod touch;
 
 use beryl_protocol::protocol::{Side, ZoneName};
 use glam::{Mat3, Quat, Vec2};
@@ -26,12 +25,12 @@ use glam::{Mat3, Quat, Vec2};
 use crate::play::compile::Compiled;
 pub use game_table::table::takes_pointer;
 use game_table::table::{Camera, Look, PILE_IDS};
-use held::{By, Fall, Grip, Lean};
+use held::{Fall, Grip, Lean};
 use kit_base::data::pointer::PointerTuning;
 use kit_base::pose::between;
 use kit_base::pose::{Curve, Pose, Segment};
 use kit_frame::frame::{ElementId, Frame, Lifted, Place, Role, StateBits};
-use kit_scene::hit::hit;
+use kit_scene::{hit::hit, input::Direction};
 use kit_ui::input::{self, PointerKind, PointerPhase};
 use kit_ui::layout::Shake;
 
@@ -145,17 +144,17 @@ impl Pointer {
     }
 
     /// Takes a pointer event: where the mouse is, or that it has left the window.
-    pub fn handle(&mut self, pointer: &input::Pointer, threshold: f32) {
+    pub fn handle(&mut self, pointer: &input::Pointer, drag: Option<(Direction, bool)>) {
         self.phase = Some(pointer.phase);
         match pointer.phase {
             PointerPhase::Move => {
                 if let Some(grip) = &mut self.grip {
-                    grip.moved(pointer.position, threshold);
+                    grip.moved(pointer.position, drag);
                 }
             }
-            PointerPhase::Up => {
+            PointerPhase::Up if pointer.button == input::Button::Primary => {
                 if let Some(mut grip) = self.grip.take() {
-                    grip.moved(pointer.position, threshold);
+                    grip.moved(pointer.position, drag);
                     self.let_go = Some((grip, false));
                 }
             }
@@ -173,32 +172,16 @@ impl Pointer {
 
     /// Starts a press at `at` on the card in `slot`, which the pointer may pick up by the drags
     /// `hold` names. The client calls this as the button goes down over a card.
-    pub fn press(&mut self, slot: usize, at: Vec2, hold: Hold) {
+    pub fn press(&mut self, slot: usize, at: Vec2, hold: Hold, kind: PointerKind) {
         self.grip = Some(Grip {
             slot,
-            start: at,
             at,
             hold,
             moved: false,
             held: false,
-            by: By::Mouse,
+            kind,
         });
         self.lean = Lean::FLAT;
-    }
-
-    /// Marks the press just started as a finger's, whose release without moving is a tap
-    /// (`LetGo::Tap`). If `delayed`, it may not pick its card up until `ready`.
-    pub fn by_touch(&mut self, delayed: bool) {
-        if let Some(grip) = &mut self.grip {
-            grip.by = By::Finger { ready: !delayed };
-        }
-    }
-
-    /// Lets the press pick its card up from now on, if it has not moved yet.
-    pub fn ready(&mut self) {
-        if let Some(grip) = self.grip.as_mut().filter(|grip| !grip.moved) {
-            grip.by = By::Finger { ready: true };
-        }
     }
 
     /// Ends the press as a cancelled one: a card it holds falls back where it lay, and it
@@ -467,10 +450,10 @@ fn let_go(
 ) -> Option<LetGo> {
     let (grip, cancelled) = pointer.let_go.take()?;
     if !grip.held {
-        let tap = if grip.by == By::Mouse {
-            LetGo::Click(grip.slot)
-        } else {
+        let tap = if grip.kind == PointerKind::Touch {
             LetGo::Tap(grip.slot)
+        } else {
+            LetGo::Click(grip.slot)
         };
         return (!cancelled && !grip.moved).then_some(tap);
     }

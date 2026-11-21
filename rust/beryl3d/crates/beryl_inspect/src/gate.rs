@@ -20,6 +20,7 @@ use beryl_protocol::card_records::CardRecords;
 use beryl_protocol::protocol::{SessionId, Side};
 use kit_frame::frame::{Frame, Wake, Work};
 use kit_probe::agent::Layout;
+use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{AssetReady, Insets, Pointer, Size, Tier};
 
 use crate::pages::recording;
@@ -156,17 +157,17 @@ impl Playback {
         views.reverse();
         let data = crate::data::checkout().expect("gate tuning");
         let mut client = Client::new(data.clone(), Config::LARGEST);
-        client.handle(Input::Surface {
+        client.handle(Input::Device(DeviceInput::Surface {
             size: window,
             scale,
             safe_area: Insets::default(),
-        });
+        }));
         // As a host whose asset workers had every face ready before the first frame, so that
         // the frames are drawn with their faces, as in the app.
         client.handle(Input::Cards(Box::new(records)));
         let ready: Vec<AssetReady> = client.faces().all_ready().collect();
         for ready in ready {
-            client.handle(Input::Assets(ready));
+            client.handle(Input::Device(DeviceInput::Assets(ready)));
         }
         let drive = Board::parse(name).map(Board::drive).unwrap_or_default();
         let mut moves = if drive.pointer_over_hand {
@@ -198,14 +199,14 @@ impl Playback {
     #[must_use]
     pub fn with_tier(mut self, tier: Tier) -> Self {
         assert_eq!(self.next, 0, "the tier is set before the first frame");
-        self.client.handle(Input::Tier(tier));
+        self.client.handle(Input::Device(DeviceInput::Tier(tier)));
         self
     }
 
     /// Draws every later frame in `tier`, as a host does when it steps the tier down during
     /// play: the client is handed `Input::Tier` before the next frame.
     pub fn set_tier(&mut self, tier: Tier) {
-        self.client.handle(Input::Tier(tier));
+        self.client.handle(Input::Device(DeviceInput::Tier(tier)));
     }
 
     /// Whether the next group of views is handed over before the next frame: the first at
@@ -278,7 +279,8 @@ impl Playback {
         if let Some(&(at, pointer)) = self.moves.last()
             && at == self.next as u64 * FRAME_NANOS
         {
-            self.client.handle(Input::Pointer(pointer));
+            self.client
+                .handle(Input::Device(DeviceInput::Pointer(pointer)));
             self.moves.pop();
         }
         // As a host does before each frame: the gate counts its work with the frame's

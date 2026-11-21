@@ -125,13 +125,13 @@ fn the_gallerys_faces_never_land_in_the_matchs() {
     let mut host = Host::new("gallery");
     host.client.handle(no_records());
     host.client
-        .press(&Action::new(app_screens::screens::start::Message::Open(
+        .dispatch(&Action::new(app_screens::screens::start::Message::Open(
             Screen::Gallery,
         )));
     assert!(host.client.showing_gallery());
     host.until(|client| client.face_layers().board_layer_of(FaceId(0)).is_some());
     host.client
-        .press(&Action::new(app_screens::screens::start::Message::Open(
+        .dispatch(&Action::new(app_screens::screens::start::Message::Open(
             Screen::Start,
         )));
     assert!(!host.client.showing_gallery());
@@ -145,7 +145,7 @@ fn the_gallerys_faces_never_land_in_the_matchs() {
 fn held_faces_are_uploaded_one_a_frame_before_it() {
     let mut host = Host::new("held");
     host.client
-        .press(&Action::new(app_screens::screens::start::Message::Open(
+        .dispatch(&Action::new(app_screens::screens::start::Message::Open(
             Screen::Gallery,
         )));
     host.deliver(When::AfterFrame);

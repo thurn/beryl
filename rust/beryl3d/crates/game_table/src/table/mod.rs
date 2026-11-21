@@ -7,8 +7,6 @@
 //! origin in the plane z = 0 with its face toward +z, so a pose's scale of 1 is a card's real
 //! size.
 
-mod anchors;
-pub use anchors::spot_of;
 pub mod badges;
 mod clearance;
 pub mod far_shade;

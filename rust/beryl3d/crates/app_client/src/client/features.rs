@@ -9,7 +9,7 @@ use app_screens::screens::bug_report::{self, BugReport};
 use app_screens::screens::settings::{self, SettingsSheet};
 use app_screens::screens::start::{self, StartScreen};
 use app_screens::screens::testing::{self, TestingScreen};
-use app_screens::screens::{self, GalleryState, Screen, Sheet};
+use app_screens::screens::{self, GalleryState, Music, Screen, Sheet};
 use app_screens::settings::ScreenSettings;
 use beryl_protocol::prompt::{Click, PromptView};
 use beryl_protocol::{PlayerView, SessionId};
@@ -40,6 +40,7 @@ use kit_ui::widgets::{FieldState, Fields};
 use super::{Client, SessionCommand};
 
 mod manual;
+mod table_input;
 use manual::{
     ASK, AskPrompt, CommandList, ContextMenu, LOBBY, LobbyScreen, MENU, ORDER, OrderTray, PALETTE,
     PROPOSALS, ProposalPanel, TABLE, TABLE_LOG, TOKENS, TableLog, TableScreen, TokenSearch,
@@ -183,6 +184,13 @@ impl Registration {
 
 pub(super) struct Features {
     slots: Slots,
+    pub opening: super::viewing::Opening,
+    pub screen_cards: super::viewing::ScreenCards,
+    pub screen: Screen,
+    pub gallery: GalleryState,
+    pub gallery_faces: Option<Faces>,
+    pub music: Option<Music>,
+    pub shown: (Screen, Option<Sheet>),
     pub prompts: prompts::router::Router,
     /// The layer's waiting elements draw and take input after playback settles.
     /// The bug report opens the layer even while it freezes the table.
@@ -205,6 +213,13 @@ impl Default for Features {
                 .iter()
                 .map(|entry| (entry.id, (entry.create)()))
                 .collect(),
+            opening: super::viewing::Opening::default(),
+            screen_cards: super::viewing::ScreenCards::default(),
+            screen: Screen::Game,
+            gallery: GalleryState::default(),
+            gallery_faces: None,
+            music: None,
+            shown: (Screen::Game, None),
             prompts: prompts::router::Router::default(),
             layer_open: false,
             sheet: None,
@@ -561,25 +576,26 @@ impl Mounted for StartScreen {
     fn request(client: &mut Client, request: Self::Request) -> bool {
         match request {
             start::Request::Open(screen) => {
-                client.screen = screen;
-                client.gallery = GalleryState::default();
+                client.features.screen = screen;
+                client.features.gallery = GalleryState::default();
                 if screen == Screen::Gallery {
                     client
+                        .features
                         .gallery_faces
                         .get_or_insert_with(|| Faces::new(screens::gallery_faces()));
                 }
                 client.change_sheet(None)
             }
             start::Request::AwaitGame => {
-                client.screen = Screen::Start;
+                client.features.screen = Screen::Start;
                 true
             }
             start::Request::EnterGame => {
-                client.screen = Screen::Game;
+                client.features.screen = Screen::Game;
                 client.change_sheet(None)
             }
             start::Request::ResumeGame => {
-                client.screen = Screen::Game;
+                client.features.screen = Screen::Game;
                 true
             }
         }
@@ -610,7 +626,7 @@ impl Mounted for TestingScreen {
             name: replay.name,
             seat: replay.seat,
         });
-        client.screen = Screen::Game;
+        client.features.screen = Screen::Game;
         client.change_sheet(None)
     }
 }

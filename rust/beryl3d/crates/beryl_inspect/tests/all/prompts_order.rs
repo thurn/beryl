@@ -4,6 +4,7 @@
 //! recording to the prompt, acts as the player did, and lets the driver answer each click with
 //! the session's recorded reply, which fails the test for any click the player did not make.
 
+use kit_ui::input::Input as DeviceInput;
 use std::str::FromStr;
 
 use app_client::Input;
@@ -61,7 +62,7 @@ fn done_after_the_drop(page: &mut Page) {
 
 /// Gives the mouse's `phase` at `position`, with the primary button for a press or its end.
 fn mouse(page: &mut Page, phase: PointerPhase, position: Vec2) {
-    page.give_input(Input::Pointer(Pointer {
+    page.give_input(Input::Device(DeviceInput::Pointer(Pointer {
         id: 0,
         kind: PointerKind::Mouse,
         phase,
@@ -69,7 +70,7 @@ fn mouse(page: &mut Page, phase: PointerPhase, position: Vec2) {
         button: Button::Primary,
         wheel: Vec2::ZERO,
         modifiers: Modifiers::default(),
-    }));
+    })));
     page.step(Duration::from_millis(16));
 }
 

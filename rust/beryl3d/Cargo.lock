@@ -2388,7 +2388,6 @@ dependencies = [
 name = "kit_ui"
 version = "0.1.0"
 dependencies = [
- "beryl_protocol",
  "glam",
  "kit_base",
  "kit_frame",

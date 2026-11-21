@@ -12,6 +12,7 @@ use beryl_protocol::ipc::{LobbyChange, LobbyUpdate, TableRefusalReason, TableRef
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, lobby, table};
 use glam::Vec2;
 use kit_frame::frame::{Frame, Role};
+use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{
     Button, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase, Size,
 };
@@ -26,15 +27,15 @@ fn client_on_start() -> Client {
             name_bytes: 65_536,
         },
     );
-    client.handle(Input::Platform { mac: true });
-    client.handle(Input::Surface {
+    client.handle(Input::Device(DeviceInput::Platform { mac: true }));
+    client.handle(Input::Device(DeviceInput::Surface {
         size: Size {
             width: 1600.0,
             height: 900.0,
         },
         scale: 2.0,
         safe_area: Insets::default(),
-    });
+    }));
     client.handle(Input::Agents(Vec::new()));
     client
 }
@@ -69,7 +70,7 @@ fn press(client: &mut Client, role: Role, name: &str) {
         .unwrap_or_else(|| panic!("no {role:?} named {name:?}"));
     let at = element.corners.iter().copied().sum::<Vec2>() / 4.0;
     for phase in [PointerPhase::Down, PointerPhase::Up] {
-        client.handle(Input::Pointer(Pointer {
+        client.handle(Input::Device(DeviceInput::Pointer(Pointer {
             id: 0,
             kind: PointerKind::Mouse,
             phase,
@@ -77,7 +78,7 @@ fn press(client: &mut Client, role: Role, name: &str) {
             button: Button::Primary,
             wheel: Vec2::ZERO,
             modifiers: Modifiers::default(),
-        }));
+        })));
     }
 }
 
@@ -121,7 +122,7 @@ fn imported(name: &str) -> DeckImportReply {
 /// clipboard.
 fn paste(client: &mut Client, name: &str, words: &str) {
     press(client, Role::Field, name);
-    client.handle(Input::Paste(words.to_owned()));
+    client.handle(Input::Device(DeviceInput::Paste(words.to_owned())));
 }
 
 /// A client in a solo table's lobby with a deck loaded whose main deck holds `main` and whose
@@ -327,11 +328,11 @@ fn the_paste_key_opens_the_paste_field() {
         ..Modifiers::default()
     };
     for phase in [KeyPhase::Down, KeyPhase::Up] {
-        client.handle(Input::Key(Key {
+        client.handle(Input::Device(DeviceInput::Key(Key {
             code: KeyCode::V,
             phase,
             modifiers,
-        }));
+        })));
     }
     assert!(has(&frame(&mut client), Role::Field, "decklist"));
 }

@@ -15,6 +15,7 @@ use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use glam::Vec2;
 use kit_frame::frame::{Frame, StateBits, Wake};
 use kit_probe::agent::{TreeOptions, tree};
+use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{
     Button, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase, Rect,
     Size,
@@ -64,7 +65,7 @@ fn saves(page: &mut Page) -> Vec<Request> {
 
 /// Gives the page the mouse's primary button event `phase` at `at`.
 fn mouse(page: &mut Page, phase: PointerPhase, at: Vec2) {
-    page.give_input(Input::Pointer(Pointer {
+    page.give_input(Input::Device(DeviceInput::Pointer(Pointer {
         id: 0,
         kind: PointerKind::Mouse,
         phase,
@@ -72,7 +73,7 @@ fn mouse(page: &mut Page, phase: PointerPhase, at: Vec2) {
         button: Button::Primary,
         wheel: Vec2::ZERO,
         modifiers: Modifiers::default(),
-    }));
+    })));
 }
 
 /// Opens the report with Cmd+B and waits for the region chooser.
@@ -101,11 +102,11 @@ fn shows_report(frame: &Frame) -> bool {
 fn the_two_frames_after_cmd_b_show_nothing_of_the_report() {
     // The host sees `FreezeFrame` after the first frame and reads back the second.
     let mut client = Client::new(crate::test_data::data(), Config::LARGEST);
-    client.handle(Input::Surface {
+    client.handle(Input::Device(DeviceInput::Surface {
         size: SIZE,
         scale: 1.0,
         safe_area: Insets::default(),
-    });
+    }));
     let mut view = ViewBuilder::sample();
     view.script(ScriptBuilder::reset().build());
     client.handle(Input::Update(Box::new(view.update())));
@@ -115,11 +116,11 @@ fn the_two_frames_after_cmd_b_show_nothing_of_the_report() {
         ..Modifiers::default()
     };
     for phase in [KeyPhase::Down, KeyPhase::Up] {
-        client.handle(Input::Key(Key {
+        client.handle(Input::Device(DeviceInput::Key(Key {
             code: KeyCode::B,
             phase,
             modifiers: command,
-        }));
+        })));
     }
     for tick in 1..=2 {
         assert!(
@@ -152,11 +153,11 @@ fn over_a_prompt_the_report_covers_the_whole_window() {
         ..Modifiers::default()
     };
     for phase in [KeyPhase::Down, KeyPhase::Up] {
-        client.handle(Input::Key(Key {
+        client.handle(Input::Device(DeviceInput::Key(Key {
             code: KeyCode::B,
             phase,
             modifiers: command,
-        }));
+        })));
     }
     let mut printed = String::new();
     for tick in 1..=4 {
@@ -224,8 +225,8 @@ fn a_click_takes_the_whole_window_and_cmd_return_submits_an_ai_play() {
             .has(StateBits::SELECTED)
     );
     // The description field took the focus as the form opened.
-    page.give_input(Input::Text(kit_ui::input::TextChange::Insert(
-        "attacked into a wrath".to_owned(),
+    page.give_input(Input::Device(DeviceInput::Text(
+        kit_ui::input::TextChange::Insert("attacked into a wrath".to_owned()),
     )));
     page.chord("Cmd+Return");
     assert_eq!(

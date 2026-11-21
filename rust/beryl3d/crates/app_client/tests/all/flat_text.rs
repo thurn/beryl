@@ -4,6 +4,7 @@ use app_client::Input;
 use glam::Vec2;
 use kit_frame::frame::{Frame, Material, Role};
 use kit_probe::agent::checks::text_fits;
+use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{AssetReady, GlyphCell, Insets, Size};
 
 use crate::flat_layer::{client, deciding, prompt};
@@ -28,7 +29,10 @@ fn fill_sized(client: &mut app_client::Client, page: u16, now: u64) -> Frame {
             return client.frame(tick + 1).clone();
         }
         filled = true;
-        client.handle(Input::Assets(AssetReady::Glyphs { page, glyphs }));
+        client.handle(Input::Device(DeviceInput::Assets(AssetReady::Glyphs {
+            page,
+            glyphs,
+        })));
     }
     unreachable!("the loop returns")
 }
@@ -62,13 +66,15 @@ fn glyphs_at_a_new_scale_draw_from_the_old_cells_and_move_nothing() {
     let drawn = glyph_models(&before);
     assert!(!drawn.is_empty());
 
-    let surface = |scale| Input::Surface {
-        size: Size {
-            width: 1440.0,
-            height: 900.0,
-        },
-        scale,
-        safe_area: Insets::default(),
+    let surface = |scale| {
+        Input::Device(DeviceInput::Surface {
+            size: Size {
+                width: 1440.0,
+                height: 900.0,
+            },
+            scale,
+            safe_area: Insets::default(),
+        })
     };
     client.handle(surface(3.0));
     // Until the new page arrives, every glyph is drawn from its cell at the old size, scaled

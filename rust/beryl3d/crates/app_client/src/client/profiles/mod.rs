@@ -46,7 +46,7 @@ impl super::Client {
             );
         }
         if let Some(slot) = profile.slot("phase").filter(|_| {
-            self.screen == Screen::Game && profile.data().hud.table.contains(&Piece::Phase)
+            self.features.screen == Screen::Game && profile.data().hud.table.contains(&Piece::Phase)
         }) {
             layout.phase(phase_box(update.view.stack.is_empty(), slot.rect));
         }

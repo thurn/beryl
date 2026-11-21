@@ -23,6 +23,7 @@ use kit_probe::agent::checks::text_fits;
 use kit_probe::agent::tree::{TreeOptions, tree};
 use kit_probe::agent::{Context, Rule};
 use kit_ui::element::{Action, floats, row, text};
+use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{
     AssetReady, Button, GlyphCell, Insets, Modifiers, Pointer, PointerKind, PointerPhase, Size,
     Tier,
@@ -43,14 +44,14 @@ pub(super) fn client() -> Client {
             name_bytes: 4096,
         },
     );
-    client.handle(Input::Surface {
+    client.handle(Input::Device(DeviceInput::Surface {
         size: Size {
             width: WIDTH,
             height: HEIGHT,
         },
         scale: 2.0,
         safe_area: Insets::default(),
-    });
+    }));
     client
 }
 
@@ -132,7 +133,10 @@ pub(super) fn fill_glyphs(client: &mut Client) {
             bearing: [0, -20],
         })
         .collect();
-    client.handle(Input::Assets(AssetReady::Glyphs { page: 0, glyphs }));
+    client.handle(Input::Device(DeviceInput::Assets(AssetReady::Glyphs {
+        page: 0,
+        glyphs,
+    })));
 }
 
 /// The index in `frame.resolved` of the element of `role` named `name`.
@@ -175,7 +179,7 @@ pub(super) fn context() -> Context {
 }
 
 pub(super) fn pointer(phase: PointerPhase, position: Vec2) -> Input {
-    Input::Pointer(Pointer {
+    Input::Device(DeviceInput::Pointer(Pointer {
         id: 0,
         kind: PointerKind::Mouse,
         phase,
@@ -183,7 +187,7 @@ pub(super) fn pointer(phase: PointerPhase, position: Vec2) -> Input {
         button: Button::Primary,
         wheel: Vec2::ZERO,
         modifiers: Modifiers::default(),
-    })
+    }))
 }
 
 #[test]

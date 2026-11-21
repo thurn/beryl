@@ -15,6 +15,7 @@ use beryl_protocol::script::Subject;
 use game_probe::agent::steps::no_jumps;
 use glam::Vec2;
 use kit_frame::frame::{Frame, Role, StateBits, Wake};
+use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::Size;
 use kit_ui::input::{Button, Insets, Modifiers, Pointer, PointerKind, PointerPhase};
 
@@ -37,14 +38,14 @@ impl Table {
         let views = recording.views().unwrap_or_else(|why| panic!("{why}"));
         let mut client = Client::new(crate::test_data::data(), Config::LARGEST);
         client.record();
-        client.handle(Input::Surface {
+        client.handle(Input::Device(DeviceInput::Surface {
             size: Size {
                 width: 1600.0,
                 height: 900.0,
             },
             scale: 1.0,
             safe_area: Insets::default(),
-        });
+        }));
         client.handle(Input::Update(Box::new(views[0].clone())));
         let mut table = Self {
             client,
@@ -66,15 +67,16 @@ impl Table {
     }
 
     fn pointer(&mut self, phase: PointerPhase, position: Vec2) {
-        self.client.handle(Input::Pointer(Pointer {
-            id: 0,
-            kind: PointerKind::Mouse,
-            phase,
-            position,
-            button: Button::Primary,
-            wheel: Vec2::ZERO,
-            modifiers: Modifiers::default(),
-        }));
+        self.client
+            .handle(Input::Device(DeviceInput::Pointer(Pointer {
+                id: 0,
+                kind: PointerKind::Mouse,
+                phase,
+                position,
+                button: Button::Primary,
+                wheel: Vec2::ZERO,
+                modifiers: Modifiers::default(),
+            })));
     }
 
     /// The named card's element in the frame at the present time: its state, and the centre

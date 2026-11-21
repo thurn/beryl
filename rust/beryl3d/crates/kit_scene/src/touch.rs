@@ -1,26 +1,6 @@
-//! What the fingers on a touch screen are doing (docs/beryl-3d.md, "Hosts"; the phone's
-//! gestures in docs/ui-conventions.md, "The phone"). The client acts on one finger at a time,
-//! the active one, and this decides which finger that is, when a touch held still has been
-//! held long enough, and when a double tap opens the bug report.
-//!
-//! - **One active finger.** The first finger down is the active one; the client's pointer,
-//!   flat layer and rows hear only its events. A finger that lands within `TOGETHER_MS` of the
-//!   first makes a multi-finger tap: the active finger's press ends with nothing done, and no
-//!   finger of that touch reaches the game. A finger that lands later is another thumb, and is
-//!   ignored while the first goes on, as the web's `ReportTaps` and `inMultiTouch` have it
-//!   (`ui/src/mobile/report-taps.ts`).
-//! - **A hold.** An active finger that stays within `drag_threshold_points` of where it went
-//!   down for `LONG_PRESS_MS` is due (`Touch::take_hold`), and the client opens the card
-//!   inspector or the manual table's menu there. The hold is timed from the first frame after
-//!   the finger went down, because an input has no time of its own.
-//! - **A pickup.** On the manual table, where a held touch opens a card's menu, a finger may pick
-//!   a card up only once it has been down `PICKUP_MS` without travelling the drag threshold, as
-//!   the web's `TOUCH_DRAG_DELAY` has it (`ui/src/stage/pointer.ts`); before that, moving lets
-//!   the hand or row move under it instead.
-//! - **A double tap** opens the bug report: two taps with one finger on bare felt, or two taps
-//!   with two or more fingers landing together anywhere. Each tap is short (`TAP_MS`), drifts at
-//!   most `SLOP_POINTS`, and the second lands within `DOUBLE_MS` of the first's lift and within
-//!   `SLOP_POINTS` of where it landed.
+//! Tracks active fingers and recognizes multi-finger and double taps. Hold and pickup
+//! timers start on the first frame after a press. They are cancelled by the router when
+//! the active finger crosses the drag threshold.
 //!
 //! The state is bounded by the pointer ids a host can send: one slot for each.
 
@@ -36,7 +16,7 @@ const FINGERS: usize = 256;
 
 /// What the client does with a finger that has just gone down (`Touch::down`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Landed {
+pub(super) enum Landed {
     /// It is the active finger: the game hears it.
     Active,
     /// It joined the active finger in time to make a multi-finger tap: the active finger's
@@ -49,7 +29,7 @@ pub enum Landed {
 
 /// What the fingers on the screen are doing, as the module describes.
 #[derive(Clone, Debug, PartialEq)]
-pub struct Touch {
+pub(super) struct Touch {
     /// Where each finger down landed, by pointer id.
     fingers: Box<[Option<Vec2>; FINGERS]>,
     /// How many fingers are down.
@@ -173,23 +153,21 @@ impl Touch {
         }
     }
 
-    /// Finger `id` moved to `at`. Returns whether it is the active finger. Moving
-    /// `drag_threshold_points` from where it landed ends its hold and its wait for a pickup,
-    /// and moving more than `SLOP_POINTS` means the touch is no tap.
-    pub fn moved(&mut self, id: u8, at: Vec2, tuning: &PointerTuning) -> bool {
+    /// Records tap slop and whether this move belongs to the active finger.
+    pub fn moved(&mut self, id: u8, at: Vec2, slop: f32) -> bool {
         if let (Some(landed), Some(tap)) = (self.fingers[usize::from(id)], &mut self.tap)
-            && landed.distance(at) > tuning.touch.slop_points
+            && landed.distance(at) > slop
         {
             tap.spoiled = true;
         }
-        let Some(active) = self.active.as_mut().filter(|active| active.id == id) else {
-            return false;
-        };
-        if active.start.distance(at) >= tuning.drag_threshold_points {
+        self.is_active(id)
+    }
+
+    pub fn moved_past_threshold(&mut self) {
+        if let Some(active) = &mut self.active {
             active.hold = false;
             active.pickup = false;
         }
-        true
     }
 
     /// Finger `id` lifted at `now`. Returns whether it was the active finger, and whether its

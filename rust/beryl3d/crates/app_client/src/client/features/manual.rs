@@ -237,7 +237,7 @@ impl Mounted for LobbyScreen {
             lobby::Request::OpenLobby => {
                 client.features.lobby_view = None;
                 client.update_start(&app_screens::screens::start::Message::Leave);
-                client.screen = Screen::Lobby;
+                client.features.screen = Screen::Lobby;
                 client.change_sheet(None);
             }
             lobby::Request::Leave => client.leave_table(),

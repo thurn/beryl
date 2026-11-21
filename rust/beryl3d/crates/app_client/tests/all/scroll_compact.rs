@@ -11,6 +11,7 @@ use glam::Vec2;
 use kit_frame::frame::{Frame, Place, Role};
 use kit_probe::agent::Rule;
 use kit_scene::hit::uncovered;
+use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::Size;
 
 const SMALL: Size = Size {
@@ -155,7 +156,7 @@ fn a_touch_fling_advances_the_group_window_after_release() {
     let start = on_card(&mut page, ZoneName::Hand, 3);
     let end = start - Vec2::new(70.0, 0.0);
     let finger = |phase, position| {
-        Input::Pointer(Pointer {
+        Input::Device(DeviceInput::Pointer(Pointer {
             id: 1,
             kind: PointerKind::Touch,
             phase,
@@ -163,7 +164,7 @@ fn a_touch_fling_advances_the_group_window_after_release() {
             button: Button::Primary,
             wheel: Vec2::ZERO,
             modifiers: Modifiers::default(),
-        })
+        }))
     };
     page.give_input(finger(PointerPhase::Down, start));
     page.step(Duration::from_millis(32));

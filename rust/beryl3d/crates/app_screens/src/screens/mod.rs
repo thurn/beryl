@@ -154,4 +154,4 @@ pub fn music(screen: Screen, view: Option<&PlayerView>) -> Option<Music> {
 }
 
 mod message;
-pub use message::ScreenPress;
+pub use message::GalleryMessage;

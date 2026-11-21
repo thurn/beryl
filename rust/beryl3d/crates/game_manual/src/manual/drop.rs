@@ -72,7 +72,8 @@ pub fn destination_at(
 /// The pile or card under `at` that a card lands in, the topmost first, leaving out the held
 /// cards themselves.
 fn under(frame: &Frame, at: Vec2, held: &[ObjectId], view: &PlayerView) -> Option<Destination> {
-    for element in frame.resolved.iter().rev() {
+    for index in frame.paint_order().rev() {
+        let element = &frame.resolved[index as usize];
         let Place::Card { zone, side, row } = element.place else {
             continue;
         };

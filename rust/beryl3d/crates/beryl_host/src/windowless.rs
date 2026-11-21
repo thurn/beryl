@@ -3,6 +3,7 @@
 //! display's rate, so that a run with no window measures everything up to presentation. It is
 //! what an agent's run of the app gets unless it names a window.
 
+use kit_ui::input::Input as DeviceInput;
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
 use std::time::{Duration, Instant};
 
@@ -128,11 +129,11 @@ impl Windowless {
         #[cfg(feature = "drive")]
         let frames = frames.driven(self.drive);
         let mut frames = frames;
-        frames.handle(Input::Surface {
+        frames.handle(Input::Device(DeviceInput::Surface {
             size: options.size,
             scale: options.scale,
             safe_area: Insets::default(),
-        });
+        }));
         let mut screen = Offscreen {
             renderer,
             target,

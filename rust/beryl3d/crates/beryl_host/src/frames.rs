@@ -3,6 +3,7 @@
 //! only on the next tick of the display, and ticks are asked for only while the client wants a
 //! frame. Where ticks come from is a type parameter, so a test can supply them.
 
+use kit_ui::input::Input as DeviceInput;
 use std::time::Instant;
 
 use app_client::Client;
@@ -307,7 +308,8 @@ impl<T: Ticks> FrameLoop<T> {
     pub fn with_tier(mut self, chosen: Chosen) -> Self {
         self.graphics = chosen.graphics;
         self.enhanced_available = chosen.enhanced_available;
-        self.client.handle(Input::Tier(chosen.tier));
+        self.client
+            .handle(Input::Device(DeviceInput::Tier(chosen.tier)));
         self
     }
 
@@ -464,9 +466,12 @@ impl<T: Ticks> FrameLoop<T> {
     fn set_graphics(&mut self, graphics: Graphics) {
         self.graphics = graphics;
         match graphics {
-            Graphics::Baseline => self.client.handle(Input::Tier(Tier::Baseline)),
+            Graphics::Baseline => self
+                .client
+                .handle(Input::Device(DeviceInput::Tier(Tier::Baseline))),
             Graphics::Enhanced if self.enhanced_available => {
-                self.client.handle(Input::Tier(Tier::Enhanced));
+                self.client
+                    .handle(Input::Device(DeviceInput::Tier(Tier::Enhanced)));
             }
             Graphics::Enhanced | Graphics::Automatic => {}
         }
@@ -499,7 +504,9 @@ impl<T: Ticks> FrameLoop<T> {
         let work = client + shown.map_or(0, |shown| shown.encoded);
         let step = rule.frame(Paced { gap, work })?;
         match step {
-            Step::Baseline => self.client.handle(Input::Tier(Tier::Baseline)),
+            Step::Baseline => self
+                .client
+                .handle(Input::Device(DeviceInput::Tier(Tier::Baseline))),
             Step::Rate(hz) => {
                 self.hz = hz;
                 self.ticks.set_rate(hz);

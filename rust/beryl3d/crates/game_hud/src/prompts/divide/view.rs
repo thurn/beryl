@@ -11,6 +11,7 @@
 //! or ability that asks, which the client begins and ends itself (`own`).
 
 use super::Divide;
+use crate::hud::anchors::anchor_target;
 
 use beryl_protocol::prompt::{Click, PromptView, ShapeBody, Share};
 use beryl_protocol::protocol::Side;
@@ -68,7 +69,7 @@ fn share_control(share: Share, left: u8) -> Option<Vec<Element>> {
         .child(more)
         .child(amount(share.amount))
         .child(less);
-    control.anchor = Some(Anchor::Object(share.on, Vec2::splat(0.5)));
+    control.anchor = Some(Anchor::Object(anchor_target(share.on), Vec2::splat(0.5)));
     Some(vec![control])
 }
 
@@ -148,13 +149,13 @@ fn edge_share(
         .unwrap_or(theirs);
     (control.anchor, shown.anchor) = if above {
         (
-            Some(Anchor::Above(share.on, 0.0)),
-            Some(Anchor::Above(share.on, -high)),
+            Some(Anchor::Above(anchor_target(share.on), 0.0)),
+            Some(Anchor::Above(anchor_target(share.on), -high)),
         )
     } else {
         (
-            Some(Anchor::Below(share.on, 0.0)),
-            Some(Anchor::Below(share.on, -high)),
+            Some(Anchor::Below(anchor_target(share.on), 0.0)),
+            Some(Anchor::Below(anchor_target(share.on), -high)),
         )
     };
     Some(vec![control, shown])

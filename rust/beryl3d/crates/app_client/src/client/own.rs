@@ -6,13 +6,12 @@ use game_hud::hud::notices::NoticeFloats;
 impl Client {
     /// Plays prompt-owned steps and tracks the pointer's aiming arrows.
     pub(super) fn advance_prompt(&mut self, table_now: u64) {
+        let mouse = self.mouse();
         self.features
             .prompts
             .own(table_now, self.views, &mut self.show, &self.step_timings);
         let open = self.table_open();
-        self.features
-            .prompts
-            .set_aims(&mut self.show, open, self.mouse);
+        self.features.prompts.set_aims(&mut self.show, open, mouse);
     }
 
     /// Compiles what the frame at `now`, in nanoseconds since the client started, needs of the
@@ -70,8 +69,10 @@ impl Client {
     /// out none of them, each total of a player the open prompt marks as a target too.
     pub(super) fn prepare_counts(&mut self) {
         let targets = self.features.prompts.targets(true);
-        self.features.totals_mut().passes = self.screen == app_screens::screens::Screen::Game;
-        self.features.totals_mut().pools = self.screen != app_screens::screens::Screen::Table;
+        self.features.totals_mut().passes =
+            self.features.screen == app_screens::screens::Screen::Game;
+        self.features.totals_mut().pools =
+            self.features.screen != app_screens::screens::Screen::Table;
         self.features.totals_mut().prepare(
             &mut self.layer,
             self.show.counts(),

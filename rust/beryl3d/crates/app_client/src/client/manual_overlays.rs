@@ -162,7 +162,7 @@ impl Client {
                 } else if self.features.tokens().custom.is_some() {
                     self.create_custom(shift);
                 } else if self.features.table().quitting {
-                    self.press(&kit_ui::element::Action::new(TableMessage::Quit));
+                    self.dispatch(&kit_ui::element::Action::new(TableMessage::Quit));
                 } else {
                     self.update_order(&library_order::Message::Done);
                     self.show_screen();

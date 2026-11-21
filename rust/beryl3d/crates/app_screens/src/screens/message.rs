@@ -3,7 +3,7 @@
 use super::{GalleryMenu, GalleryQuery};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ScreenPress {
+pub enum GalleryMessage {
     GalleryMenu(GalleryMenu),
     GalleryQuery(Option<GalleryQuery>),
     DismissMenu,

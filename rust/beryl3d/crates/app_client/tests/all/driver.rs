@@ -11,6 +11,7 @@ use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, timing};
 use beryl_protocol::{CandidateIndex, DecisionId, SessionId};
 use glam::Vec2;
 use kit_frame::frame::StateBits;
+use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{KeyCode, PointerPhase, Size};
 
 fn ms(milliseconds: u64) -> Duration {
@@ -235,7 +236,7 @@ fn a_press_lands_inside_the_uncovered_part_of_its_element() {
         .inputs()
         .iter()
         .filter_map(|input| match input {
-            Input::Pointer(pointer) if pointer.phase == PointerPhase::Down => {
+            Input::Device(DeviceInput::Pointer(pointer)) if pointer.phase == PointerPhase::Down => {
                 Some(pointer.position)
             }
             _ => None,

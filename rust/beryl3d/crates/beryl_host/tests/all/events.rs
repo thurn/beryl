@@ -4,6 +4,7 @@
 use app_client::Input;
 use beryl_host::{Translator, is_fullscreen_key};
 use glam::Vec2;
+use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{
     Button, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase, Size,
     TextChange,
@@ -29,7 +30,7 @@ fn translator() -> Translator {
 }
 
 fn mouse(phase: PointerPhase, position: Vec2, button: Button, wheel: Vec2) -> Input {
-    Input::Pointer(Pointer {
+    Input::Device(DeviceInput::Pointer(Pointer {
         id: 0,
         kind: PointerKind::Mouse,
         phase,
@@ -37,15 +38,15 @@ fn mouse(phase: PointerPhase, position: Vec2, button: Button, wheel: Vec2) -> In
         button,
         wheel,
         modifiers: Modifiers::default(),
-    })
+    }))
 }
 
 fn surface(width: f32, height: f32, scale: f32) -> Input {
-    Input::Surface {
+    Input::Device(DeviceInput::Surface {
         size: Size { width, height },
         scale,
         safe_area: Insets::default(),
-    }
+    })
 }
 
 #[test]
@@ -150,7 +151,7 @@ fn a_finger_touches_moves_and_lifts_as_its_own_pointer() {
         });
         assert_eq!(
             translate(&mut translator, &event),
-            Some(Input::Pointer(Pointer {
+            Some(Input::Device(DeviceInput::Pointer(Pointer {
                 id: 4,
                 kind: PointerKind::Touch,
                 phase: expected,
@@ -158,7 +159,7 @@ fn a_finger_touches_moves_and_lifts_as_its_own_pointer() {
                 button,
                 wheel: Vec2::ZERO,
                 modifiers: Modifiers::default(),
-            }))
+            })))
         );
     }
 }
@@ -182,11 +183,11 @@ fn keys_carry_their_phase_and_the_held_modifiers() {
     ] {
         assert_eq!(
             translator.key(key, state, repeat),
-            Some(Input::Key(Key {
+            Some(Input::Device(DeviceInput::Key(Key {
                 code: KeyCode::A,
                 phase,
                 modifiers,
-            }))
+            })))
         );
     }
     for (winit, code) in [
@@ -199,7 +200,7 @@ fn keys_carry_their_phase_and_the_held_modifiers() {
         (WinitKey::End, KeyCode::End),
         (WinitKey::BrowserBack, KeyCode::Back),
     ] {
-        let Some(Input::Key(key)) =
+        let Some(Input::Device(DeviceInput::Key(key))) =
             translator.key(PhysicalKey::Code(winit), ElementState::Pressed, false)
         else {
             panic!("{winit:?} is not mapped");
@@ -241,18 +242,24 @@ fn an_input_method_commits_and_composes_text_in_the_edited_field() {
             &mut translator,
             &WindowEvent::Ime(Ime::Commit("か".to_owned()))
         ),
-        Some(Input::Text(TextChange::Insert("か".to_owned())))
+        Some(Input::Device(DeviceInput::Text(TextChange::Insert(
+            "か".to_owned()
+        ))))
     );
     assert_eq!(
         translate(
             &mut translator,
             &WindowEvent::Ime(Ime::Preedit("ka".to_owned(), None))
         ),
-        Some(Input::Text(TextChange::Preedit("ka".to_owned())))
+        Some(Input::Device(DeviceInput::Text(TextChange::Preedit(
+            "ka".to_owned()
+        ))))
     );
     assert_eq!(
         translate(&mut translator, &WindowEvent::Ime(Ime::Disabled)),
-        Some(Input::Text(TextChange::Preedit(String::new())))
+        Some(Input::Device(DeviceInput::Text(TextChange::Preedit(
+            String::new()
+        ))))
     );
     assert_eq!(
         translate(&mut translator, &WindowEvent::Ime(Ime::Enabled)),
@@ -267,7 +274,9 @@ fn a_key_types_its_text_unless_it_is_a_chord_or_a_control_character() {
         |translator: &Translator, text: &str| translator.typed(Some(text), ElementState::Pressed);
     assert_eq!(
         typed(&translator, "a"),
-        Some(Input::Text(TextChange::Insert("a".to_owned())))
+        Some(Input::Device(DeviceInput::Text(TextChange::Insert(
+            "a".to_owned()
+        ))))
     );
     assert_eq!(typed(&translator, "\r"), None, "Return");
     assert_eq!(typed(&translator, "\u{8}"), None, "Backspace");

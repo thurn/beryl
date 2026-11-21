@@ -18,6 +18,7 @@ use game_table::table::Window;
 use kit_frame::frame::{Frame, Role};
 use kit_probe::agent::checks::{keep_clear, minimum_sizes, on_screen, overlap, reachable};
 use kit_probe::agent::{Context, Fault};
+use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{Insets, PointerPhase, Size};
 
 use super::flat_layer::{centre, deciding, decision, edges, find, pointer, prompt};
@@ -49,11 +50,11 @@ fn window(width: f32, height: f32) -> Window {
 }
 
 fn surface(window: Window) -> Input {
-    Input::Surface {
+    Input::Device(DeviceInput::Surface {
         size: window.size,
         scale: window.scale,
         safe_area: window.safe_area,
-    }
+    })
 }
 
 /// A client in a phone window of `width` by `height`.

@@ -18,6 +18,7 @@ use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use beryl_protocol::{AgentView, StartRequest};
 use kit_frame::frame::StateBits;
 use kit_probe::agent::Rule;
+use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{Insets, Rect, Size};
 
 /// The three phone windows the interface tests play.
@@ -194,7 +195,7 @@ fn with_the_keyboard_up_the_seed_stays_in_view_and_the_rest_scrolls_into_reach()
             "the opponents keep a row at {size:?}"
         );
         // The column scrolls to its foot, which brings every action under the seed into view.
-        page.give_input(Input::Pointer(Pointer {
+        page.give_input(Input::Device(DeviceInput::Pointer(Pointer {
             kind: PointerKind::Mouse,
             phase: PointerPhase::Wheel,
             position: glam::Vec2::new(size.width / 2.0, seed.y),
@@ -202,7 +203,7 @@ fn with_the_keyboard_up_the_seed_stays_in_view_and_the_rest_scrolls_into_reach()
             wheel: glam::Vec2::new(0.0, -2000.0),
             id: 0,
             modifiers: Modifiers::default(),
-        }));
+        })));
         page.still();
         for locator in [
             "button \"Start\"",
@@ -426,11 +427,11 @@ fn the_bug_report_is_a_sheet_at_the_foot_that_keeps_its_draft_when_the_keyboard_
 
         // The keyboard opens: the window is shorter, and the sheet stands on the keyboard.
         let short = with_keyboard(size);
-        page.give_input(Input::Surface {
+        page.give_input(Input::Device(DeviceInput::Surface {
             size: short,
             scale: 1.0,
             safe_area: SAFE,
-        });
+        }));
         page.still();
         assert_eq!(page.field("description").text, "the angel never untapped");
         let submit = page.find("button \"Submit\"").rect();

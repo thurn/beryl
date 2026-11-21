@@ -5,6 +5,7 @@
 
 use app_client::Input;
 use glam::Vec2;
+use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{
     Button, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase, Size,
     TextChange,
@@ -92,11 +93,11 @@ impl Translator {
             (ElementState::Pressed, true) => KeyPhase::Repeat,
             (ElementState::Released, _) => KeyPhase::Up,
         };
-        Some(Input::Key(Key {
+        Some(Input::Device(DeviceInput::Key(Key {
             code: key_code(code)?,
             phase,
             modifiers: self.modifiers,
-        }))
+        })))
     }
 
     /// The `Input` for the text a key press types, if it types any: what the edited field
@@ -109,7 +110,9 @@ impl Translator {
         if state != ElementState::Pressed || chord || text.chars().any(char::is_control) {
             return None;
         }
-        Some(Input::Text(TextChange::Insert(text.to_owned())))
+        Some(Input::Device(DeviceInput::Text(TextChange::Insert(
+            text.to_owned(),
+        ))))
     }
 
     /// The `Input` for the window moving to a display of `scale` pixels per point. winit sends
@@ -127,7 +130,7 @@ impl Translator {
             TouchPhase::Ended => (PointerPhase::Up, Button::Primary),
             TouchPhase::Cancelled => (PointerPhase::Cancel, Button::None),
         };
-        Input::Pointer(Pointer {
+        Input::Device(DeviceInput::Pointer(Pointer {
             // Fingers are numbered from 1 in the order winit numbers them, wrapping past 255.
             id: (id % 255) as u8 + 1,
             kind: PointerKind::Touch,
@@ -136,21 +139,21 @@ impl Translator {
             button,
             wheel: Vec2::ZERO,
             modifiers: self.modifiers,
-        })
+        }))
     }
 
     /// The window's size and scale as the client's `Surface` input. A desktop window has no
     /// system bars over it, so its clear area is all of it.
     pub fn surface(&self) -> Input {
         let size = self.size.to_logical::<f32>(self.scale);
-        Input::Surface {
+        Input::Device(DeviceInput::Surface {
             size: Size {
                 width: size.width,
                 height: size.height,
             },
             scale: self.scale as f32,
             safe_area: Insets::default(),
-        }
+        })
     }
 
     /// The window's size in physical pixels.
@@ -168,7 +171,7 @@ impl Translator {
     }
 
     fn mouse(&self, phase: PointerPhase, button: Button, wheel: Vec2) -> Input {
-        Input::Pointer(Pointer {
+        Input::Device(DeviceInput::Pointer(Pointer {
             id: MOUSE,
             kind: PointerKind::Mouse,
             phase,
@@ -176,7 +179,7 @@ impl Translator {
             button,
             wheel,
             modifiers: self.modifiers,
-        })
+        }))
     }
 }
 
@@ -190,7 +193,7 @@ pub fn ime_input(ime: &Ime) -> Option<Input> {
         Ime::Disabled => TextChange::Preedit(String::new()),
         Ime::Enabled => return None,
     };
-    Some(Input::Text(change))
+    Some(Input::Device(DeviceInput::Text(change)))
 }
 
 fn phase(state: ElementState) -> PointerPhase {

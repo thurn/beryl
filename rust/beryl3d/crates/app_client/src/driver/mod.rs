@@ -19,6 +19,7 @@ mod recording;
 
 use crate::client;
 use client::{Client, Config, Input, SessionCommand};
+use kit_ui::input::Input as DeviceInput;
 use std::fmt::{self, Write};
 use std::sync::Arc;
 
@@ -573,7 +574,7 @@ impl Page {
     }
 
     fn pointer(&mut self, phase: PointerPhase, position: Vec2, button: Button) {
-        self.give(Input::Pointer(Pointer {
+        self.give(Input::Device(DeviceInput::Pointer(Pointer {
             id: 0,
             kind: PointerKind::Mouse,
             phase,
@@ -581,7 +582,7 @@ impl Page {
             button,
             wheel: Vec2::ZERO,
             modifiers: Modifiers::default(),
-        }));
+        })));
     }
 
     fn give(&mut self, input: Input) {
@@ -601,33 +602,35 @@ impl Page {
             self.client.plant(*plant);
         }
         if self.tier != Tier::Baseline {
-            self.give(Input::Tier(self.tier));
+            self.give(Input::Device(DeviceInput::Tier(self.tier)));
         }
-        self.give(Input::Surface {
+        self.give(Input::Device(DeviceInput::Surface {
             size: self.size,
             scale: self.scale,
             safe_area: self.safe_area,
-        });
+        }));
         if let Some(cards) = &self.cards {
             self.give(Input::Cards(Box::new(CardRecords::clone(cards))));
             if self.stub_atlas {
                 let ready: Vec<AssetReady> = self.client.faces().all_ready().collect();
                 for ready in ready {
-                    self.give(Input::Assets(ready));
+                    self.give(Input::Device(DeviceInput::Assets(ready)));
                 }
             }
         }
         if self.stub_atlas {
-            self.give(Input::Assets(glyphs::stub_client_icons(self.scale)));
+            self.give(Input::Device(DeviceInput::Assets(
+                glyphs::stub_client_icons(self.scale),
+            )));
         }
         for ready in self.glyphs.clone() {
-            self.give(Input::Assets(ready));
+            self.give(Input::Device(DeviceInput::Assets(ready)));
         }
         if let Some(names) = self.recording.recordings() {
             self.give(Input::Recordings(names));
         }
         for press in self.recording.opens() {
-            self.client.press(&press);
+            self.client.dispatch(&press);
         }
         for lobby in self.recording.lobbies() {
             self.give(Input::Lobby(Box::new(lobby)));
@@ -636,7 +639,9 @@ impl Page {
             let ready: Vec<_> = self.client.faces().all_ready().collect();
             for asset in ready {
                 if let AssetReady::Face { face, layer, .. } = asset {
-                    self.give(Input::Assets(AssetReady::GalleryFace { face, layer }));
+                    self.give(Input::Device(DeviceInput::Assets(
+                        AssetReady::GalleryFace { face, layer },
+                    )));
                 }
             }
         }

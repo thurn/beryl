@@ -15,5 +15,4 @@ fn card() -> glam::Vec2 {
 mod backdrop;
 mod elements;
 mod paints;
-mod scroll;
 mod transitions;

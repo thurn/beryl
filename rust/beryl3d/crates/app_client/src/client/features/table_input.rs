@@ -7,22 +7,24 @@ use beryl_protocol::protocol::{ObjectId, Side, ZoneName};
 use game_hud::inspect::Viewed;
 use glam::Vec2;
 
-use super::{Client, Platform};
-use kit_scene::hit::hit;
+use super::super::{
+    Client, Platform,
+    input::{Node, ScenePoint},
+};
 
 use app_screens::screens::Screen;
 use game_manual::manual::arrows::{self, Pick};
 use game_manual::manual::drop::{self, Area, End};
 use game_manual::manual::selection;
-use game_manual::manual::{Target, target_at, viewers};
+use game_manual::manual::{Target, target_from_hit, viewers};
 use kit_frame::frame::{Place, Role};
-use kit_ui::input::{Button, Pointer, PointerPhase};
+use kit_ui::input::{Button, PointerPhase};
 
 impl Client {
     /// Whether the manual table is shown with nothing over it that takes the pointer: the table
     /// screen, a table's view, no sheet, menu or overlay.
-    pub(super) fn at_table(&self) -> bool {
-        self.screen == Screen::Table
+    pub(in crate::client) fn at_table(&self) -> bool {
+        self.features.screen == Screen::Table
             && self.features.sheet.is_none()
             && self.features.menu().is_none()
             && !self.features.overlay_open()
@@ -31,8 +33,9 @@ impl Client {
 
     /// Takes `pointer` on the manual table before anything else does, as the module describes.
     /// Returns whether it meant something here, and so nothing else.
-    pub(super) fn table_pointer(&mut self, pointer: &Pointer) -> bool {
-        if self.screen != Screen::Table {
+    pub(in crate::client) fn manual_point(&mut self, point: &ScenePoint) -> bool {
+        let pointer = &point.pointer;
+        if self.features.screen != Screen::Table {
             return false;
         }
         if pointer.phase == PointerPhase::Down {
@@ -44,28 +47,29 @@ impl Client {
             };
         }
         if self.features.table().picking.is_some() {
-            return self.pick_target(pointer);
+            return self.pick_target(point);
         }
-        if self.life_clicked(pointer) {
+        if self.life_clicked(point) {
             return true;
         }
-        if self.sweep(pointer) {
+        if self.sweep(point) {
             return true;
         }
-        self.follow_landing(pointer);
+        self.follow_landing(point);
         false
     }
 
     /// While a command waits for its target, a press on a card or a life total gives it that
     /// target, and a press anywhere else gives up. Every press then means nothing else.
-    fn pick_target(&mut self, pointer: &Pointer) -> bool {
+    fn pick_target(&mut self, point: &ScenePoint) -> bool {
+        let pointer = &point.pointer;
         if pointer.phase != PointerPhase::Down {
             return matches!(pointer.phase, PointerPhase::Up);
         }
         let Some(pick) = self.features.table_mut().picking.take() else {
             return false;
         };
-        let clicked = target_at(&self.frame, pointer.position);
+        let clicked = target_from_hit(&self.frame, point.hit);
         if pointer.button == Button::Primary
             && let Some(to) = arrows::picked(pick, clicked)
             && let Some(view) = self.show.latest().map(|update| &update.view)
@@ -80,43 +84,27 @@ impl Client {
     /// A click on a player's life total on the table, with nothing of the flat layer over it,
     /// opens the number prompt that sets it, as the web's `registerPlayers` gives it Set life.
     /// Returns whether it did.
-    fn life_clicked(&mut self, pointer: &Pointer) -> bool {
+    fn life_clicked(&mut self, point: &ScenePoint) -> bool {
+        let pointer = &point.pointer;
         if pointer.phase != PointerPhase::Down
             || pointer.button != Button::Primary
             || !self.at_table()
-            || self
-                .layer
-                .press_at(pointer.position, self.features.layer_open)
-                .is_some()
+            || point
+                .target
+                .is_some_and(|target| matches!(target.node, Node::Control(_)))
         {
             return false;
         }
-        let Target::Life(side) = target_at(&self.frame, pointer.position) else {
+        let Target::Life(side) = target_from_hit(&self.frame, point.hit) else {
             return false;
         };
         self.run_table_command("life.set", Target::Life(side));
         true
     }
 
-    /// A library's pile on the manual table, at `place`, as the pile a click on it draws from:
-    /// a press on it draws a card for its player instead of opening it, as the web's
-    /// `registerClicks` runs Draw a card for a click on a library.
-    pub(super) fn table_library_at(&self, place: Place) -> Option<Viewed> {
-        let Place::Card {
-            zone: ZoneName::Library,
-            side,
-            ..
-        } = place
-        else {
-            return None;
-        };
-        self.at_table()
-            .then_some(Viewed::Pile(side, ZoneName::Library))
-    }
-
     /// A click on `pile` let go over it: on the manual table, a library draws a card for its
     /// player. Returns whether it did.
-    pub(super) fn table_library_clicked(&mut self, pile: Viewed) -> bool {
+    pub(in crate::client) fn table_library_clicked(&mut self, pile: Viewed) -> bool {
         let Viewed::Pile(side, ZoneName::Library) = pile else {
             return false;
         };
@@ -128,7 +116,7 @@ impl Client {
     }
 
     /// Starts a command's wait for its target, from the card it was given to.
-    pub(super) fn start_pick(&mut self, command: u16, target: Target) {
+    pub(in crate::client) fn start_pick(&mut self, command: u16, target: Target) {
         if let Target::Card(from) = target {
             self.features.table_mut().picking = Some(Pick { command, from });
         }
@@ -137,15 +125,15 @@ impl Client {
     /// A sweep: the primary button going down on the empty table begins a rectangle, moving
     /// draws it once it has travelled the drag threshold, and letting go selects what it
     /// touches. Returns whether the pointer moved or ended a sweep, and so means nothing else.
-    fn sweep(&mut self, pointer: &Pointer) -> bool {
+    fn sweep(&mut self, point: &ScenePoint) -> bool {
+        let pointer = &point.pointer;
         match pointer.phase {
             PointerPhase::Down if pointer.button == Button::Primary => {
                 let empty = self.at_table()
-                    && self
-                        .layer
-                        .press_at(pointer.position, self.features.layer_open)
-                        .is_none()
-                    && hit(&self.frame, pointer.position).is_none_or(|index| {
+                    && point
+                        .target
+                        .is_none_or(|target| !matches!(target.node, Node::Control(_)))
+                    && point.hit.is_none_or(|index| {
                         let element = &self.frame.resolved[index as usize];
                         !matches!(element.role, Role::Card | Role::Pile | Role::Player)
                     });
@@ -158,9 +146,7 @@ impl Client {
                     return false;
                 };
                 self.features.table_mut().sweep = Some((from, pointer.position));
-                if from.distance(pointer.position)
-                    >= self.show.table().data().pointer.drag_threshold_points
-                {
+                if point.drag.is_some() {
                     self.show_screen();
                 }
                 true
@@ -169,8 +155,7 @@ impl Client {
                 let Some((from, _)) = self.features.table_mut().sweep.take() else {
                     return false;
                 };
-                if from.distance(pointer.position)
-                    >= self.show.table().data().pointer.drag_threshold_points
+                if point.drag.is_some()
                     && let Some(view) = self.show.latest().map(|update| &update.view)
                 {
                     let rect = selection::sweep_box(from, pointer.position);
@@ -202,9 +187,9 @@ impl Client {
 
     /// While a card is held on the table, outlines where it would land under `pointer`, and
     /// stops once the press ends.
-    fn follow_landing(&mut self, pointer: &Pointer) {
-        let landing = match (pointer.phase, self.show.pointer().held()) {
-            (PointerPhase::Move, Some(slot)) => self.landing_at(slot, pointer.position),
+    fn follow_landing(&mut self, point: &ScenePoint) {
+        let landing = match (point.pointer.phase, self.show.pointer().held()) {
+            (PointerPhase::Move, Some(slot)) => self.landing_at(slot, point.pointer.position),
             _ => None,
         };
         if landing != self.features.table().landing {
@@ -233,7 +218,7 @@ impl Client {
     /// The card in `slot`, held on the table, was let go at `at`: the cards it carries land
     /// where it was let go. Several put on the top of a library open the order tray instead.
     /// On a frozen table (`manual::link`) nothing moves.
-    pub(super) fn table_drop(&mut self, slot: usize, at: Vec2) {
+    pub(in crate::client) fn table_drop(&mut self, slot: usize, at: Vec2) {
         self.features.table_mut().landing = None;
         let to = (!self.table_frozen())
             .then(|| self.landing_at(slot, at))
@@ -259,7 +244,7 @@ impl Client {
     }
 
     /// A Cmd-click on the card in `slot` on the table adds it to the selection or takes it out.
-    pub(super) fn table_select(&mut self, slot: ObjectId) {
+    pub(in crate::client) fn table_select(&mut self, slot: ObjectId) {
         let actionable =
             (self.show.latest()).is_some_and(|update| selection::actionable(&update.view, slot));
         if actionable {
@@ -270,7 +255,7 @@ impl Client {
     /// Escape on the table, with no menu, overlay or viewer open for it to close, gives up a
     /// command's wait for its target, or else empties the selection, as the web's selection
     /// takes Escape. Returns whether it did either.
-    pub(super) fn table_escape(&mut self) -> bool {
+    pub(in crate::client) fn table_escape(&mut self) -> bool {
         if !self.at_table() || self.features.viewer().open().is_some() {
             return false;
         }
@@ -289,7 +274,7 @@ impl Client {
     /// Whether a press may pick up the card in `slot`, resting at `place`, on the manual table:
     /// a card on the battlefield, on the stack or in the viewer's hand that the table can act
     /// on. `None` off the table, where the open prompt decides.
-    pub(super) fn table_holdable(&self, slot: usize, place: Place) -> Option<bool> {
+    pub(in crate::client) fn table_holdable(&self, slot: usize, place: Place) -> Option<bool> {
         if !self.at_table() || self.features.table().picking.is_some() {
             return None;
         }
@@ -307,7 +292,7 @@ impl Client {
     }
 
     /// The card of the open viewer under `at` on the table, as a target, if there is one.
-    pub(super) fn viewer_card_at(&self, at: Vec2) -> Option<Target> {
+    pub(in crate::client) fn viewer_card_at(&self, at: Vec2) -> Option<Target> {
         self.features.viewer().open()?;
         viewers::card_at(&self.frame, at, |slot| self.viewer_shows(slot))
     }
@@ -316,8 +301,8 @@ impl Client {
     /// selected cards wear the `selected` mark, the selection's summary stands over the highest
     /// selected permanent, and a command waiting for its target draws an arrow from its card to
     /// the mouse.
-    pub(super) fn table_frame(&mut self, now: u64) {
-        let table = self.screen == Screen::Table
+    pub(in crate::client) fn table_frame(&mut self, now: u64) {
+        let table = self.features.screen == Screen::Table
             && (self.show.latest()).is_some_and(|update| update.view.table.is_some());
         self.show.pointer_mut().drop_anywhere(table);
         if !table {
@@ -331,7 +316,7 @@ impl Client {
             self.features.table_mut().summary_over = over;
             self.show_screen();
         }
-        if let (Some(pick), Some(mouse)) = (self.features.table().picking, self.mouse) {
+        if let (Some(pick), Some(mouse)) = (self.features.table().picking, self.mouse()) {
             self.show.lit_mut().set_aims([arrows::aim(pick, mouse)]);
         }
     }

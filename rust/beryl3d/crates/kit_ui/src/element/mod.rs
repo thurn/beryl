@@ -10,7 +10,6 @@ pub use kit_base::paint;
 mod style;
 mod transition;
 
-use beryl_protocol::script::Subject;
 use glam::Vec2;
 
 pub use keys::{Chord, Shortcuts, describe};
@@ -27,7 +26,14 @@ pub use transition::{Presence, Property, Timing, Transition};
 use crate::input::{FaceId, FaceSize};
 use crate::widgets::icons::LayeredIcon;
 use crate::widgets::{FieldState, IconId};
-use kit_frame::frame::{Role, Show};
+use kit_frame::frame::{ElementId, Role, Show};
+
+/// What supplies the projected box for a floating element.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AnchorTarget {
+    Node(ElementId),
+    Slot(u8),
+}
 
 /// Where an element stands when it is placed at a point of the window rather than in its
 /// parent's layout. The second vector says which point of the element's box lies there: (0, 0)
@@ -37,14 +43,14 @@ pub enum Anchor {
     /// A point of the window, in logical points.
     Point(Vec2, Vec2),
     /// The centre of a scene object as the camera projects it.
-    Object(Subject, Vec2),
+    Object(AnchorTarget, Vec2),
     /// Centred above a scene object's box as the table draws it, with the element's bottom
     /// edge the given number of logical points above the box's highest point, as the web's
     /// `translate(-50%, calc(-100% - 5px))` stands a label over a card.
-    Above(Subject, f32),
+    Above(AnchorTarget, f32),
     /// Centred below a scene object's box as the table draws it, with the element's top edge
     /// the given number of logical points below the box's lowest point.
-    Below(Subject, f32),
+    Below(AnchorTarget, f32),
     /// A point of the window where a menu opens, in logical points, as `Menu.tsx` places one:
     /// its top left corner stands at the point, or its right or bottom edge does where the menu
     /// would otherwise pass the window's edge, and it is kept `flat.menu_edge` points inside the

@@ -10,9 +10,10 @@ mod editing;
 mod event;
 pub(crate) use crate::command::{Reply, Request, SessionCommand};
 pub use event::Input;
+mod card_input;
 mod features;
-mod gesture;
 
+use kit_ui::input::Input as DeviceInput;
 use std::collections::VecDeque;
 
 use beryl_protocol::GameUpdate;
@@ -20,16 +21,14 @@ use beryl_protocol::prompt::Click;
 use beryl_protocol::protocol::SessionId;
 use beryl_protocol::script::{OwnTimings, Verb, own_timings};
 
-use crate::settings::Settings;
-use app_screens::screens::{GalleryState, Music, Screen, Sheet, bug_report, start, testing};
+use app_screens::screens::{Screen, bug_report, start, testing};
 use game_hud::hud::banner::Banner;
 use game_hud::hud::notices::NoticeFloats;
 use game_hud::prompts;
 use game_play::play::Show;
 use game_play::play::record::{Plant, ScriptRecord};
 use game_play::pointer::LetGo;
-use game_play::pointer::touch::Touch;
-use game_table::faces::{CARD_BACK, FaceList, Faces};
+use game_table::faces::{CARD_BACK, FaceList};
 use game_table::table::{Table, Window};
 use kit_base::data::Data;
 use kit_frame::frame::{self, Frame, FrameBuilder, Sound, Wake};
@@ -38,20 +37,18 @@ use kit_ui::input::{FaceId, FaceSize, GlyphKey, Lifecycle, Tier};
 use kit_ui::layout::{self, Layer};
 use std::sync::Arc;
 
+mod actions;
 mod input;
 mod inspect;
 mod lobby;
 mod manual;
 mod manual_overlays;
 mod own;
-mod press;
 mod profiles;
 mod refusal;
 mod screen;
 mod scrolling;
 mod stops;
-mod table_pointer;
-mod touch;
 mod viewing;
 
 /// The platform a host runs on, as far as the client cares: where `Cmd` in a shortcut means
@@ -85,9 +82,6 @@ impl Config {
 /// The client core.
 pub struct Client {
     frame: Frame,
-    /// Inputs `handle` has stored and the next `frame` has not taken yet: those no part of the
-    /// client acts on yet.
-    inputs: Vec<Input>,
     window: Window,
     /// The table and the scripts that lead it from view to view.
     show: Show,
@@ -95,31 +89,14 @@ pub struct Client {
     layer: Layer,
     /// The registered features, their state and the open sheet route.
     features: features::Features,
-    opening: viewing::Opening,
-    screen_cards: viewing::ScreenCards,
-    /// Scrolls the flat layer and the table from common pointer events.
-    scrolling: kit_ui::scroll::ScrollGesture<scrolling::Target>,
-    /// The screen the flat layer shows. A recording or a game is fed to the client on the game
-    /// screen, which it starts on.
-    screen: Screen,
-    gallery: GalleryState,
-    /// The static samples have their own face list, loaded only when the gallery opens.
-    gallery_faces: Option<Faces>,
-    settings: Settings,
+    routes: input::Routes,
+    settings: crate::settings::Settings,
     /// The session the latest view came from, which stop and concede commands name.
     session: Option<SessionId>,
-    /// The music last asked of the host, so that it is asked for again only when it changes.
-    music: Option<Music>,
     /// Timing shared by prompts and other steps the client plays itself.
     step_timings: OwnTimings,
     /// How many session views the client has been given.
     views: usize,
-    /// Where the mouse is over the window, while it is.
-    mouse: Option<glam::Vec2>,
-    /// What the primary pointer is doing since it went down (`gesture`), and the screen and
-    /// sheet the flat layer last showed, a change of which ends it.
-    gesture: gesture::Gesture,
-    shown: (Screen, Option<Sheet>),
     /// The host's platform, which says what `Cmd` in a shortcut means.
     platform: Platform,
     /// The `now` of the latest frame: the time of every input since, which has none of its own.
@@ -131,8 +108,6 @@ pub struct Client {
     /// Whether the host has said memory is low (`Lifecycle::LowMemory`), which fixes the tier at
     /// Baseline.
     low_memory: bool,
-    /// The fingers on a touch screen (`touch`).
-    touch: Touch,
 }
 
 impl Client {
@@ -141,25 +116,15 @@ impl Client {
         let window = data.profiles.resolve_window(Window::default());
         Self {
             frame: Frame::with_capacity(config.elements, config.draws, config.name_bytes),
-            inputs: Vec::new(),
             window,
             show: Show::new(Table::new(data, window)),
             layer: Layer::new(),
             features: features::Features::default(),
-            opening: viewing::Opening::default(),
-            screen_cards: viewing::ScreenCards::default(),
-            scrolling: kit_ui::scroll::ScrollGesture::default(),
-            screen: Screen::Game,
-            gallery: GalleryState::default(),
-            gallery_faces: None,
-            settings: Settings::default(),
+            routes: input::Routes::default(),
+            settings: crate::settings::Settings::default(),
             session: None,
-            music: None,
             step_timings: own_timings(),
             views: 0,
-            mouse: None,
-            gesture: gesture::Gesture::None,
-            shown: (Screen::Game, None),
             platform: Platform::Mac,
             now: 0,
             wake: Wake::Never,
@@ -167,7 +132,6 @@ impl Client {
             commands: VecDeque::new(),
             tier: Tier::Baseline,
             low_memory: false,
-            touch: Touch::default(),
         }
     }
 
@@ -202,7 +166,6 @@ impl Client {
             }
             Input::Reply(Reply::Click(Err(_))) => {
                 self.features.prompts.rejected();
-                self.inputs.push(input);
             }
             Input::Lobby(update) => self.take_lobby(*update),
             Input::Reply(Reply::TableLobby(lobby)) => self.take_lobby_reply(lobby),
@@ -230,23 +193,30 @@ impl Client {
                     self.show_screen();
                 }
             }
-            Input::Nudge => {}
-            Input::Pointer(pointer) => self.point(pointer),
-            Input::Key(key) => self.key(key),
-            Input::Platform { mac } => {
-                self.platform = if mac { Platform::Mac } else { Platform::Other };
-            }
+            Input::Device(event) => self.handle_device(event),
             Input::Cards(records) => {
                 let list = FaceList::from_records(&records);
                 self.show.faces_mut().replace(list);
             }
-            Input::Assets(asset) => self.asset_ready(asset),
-            Input::Surface {
+            Input::Reply(_) | Input::Nudge => {}
+        }
+        self.follow_entry();
+        self.wake = Wake::Now;
+    }
+
+    fn handle_device(&mut self, event: DeviceInput) {
+        match event {
+            DeviceInput::Pointer(pointer) => self.point(pointer),
+            DeviceInput::Key(key) => self.key(key),
+            DeviceInput::Platform { mac } => {
+                self.platform = if mac { Platform::Mac } else { Platform::Other };
+            }
+            DeviceInput::Assets(asset) => self.asset_ready(asset),
+            DeviceInput::Surface {
                 size,
                 scale,
                 safe_area,
             } => {
-                // A finger's gesture ends with the layout it began on.
                 self.cancel_touch();
                 self.resize(Window {
                     size_class: None,
@@ -255,13 +225,11 @@ impl Client {
                     safe_area,
                 });
             }
-            Input::Text(_) | Input::Paste(_) => self.type_into(&input),
-            Input::Tier(tier) => self.set_tier(tier),
-            Input::Lifecycle(Lifecycle::LowMemory) => self.low_memory(),
-            input => self.inputs.push(input),
+            DeviceInput::Text(_) | DeviceInput::Paste(_) => self.type_into(&event),
+            DeviceInput::Tier(tier) => self.set_tier(tier),
+            DeviceInput::Lifecycle(Lifecycle::LowMemory) => self.low_memory(),
+            DeviceInput::Lifecycle(_) => {}
         }
-        self.follow_entry();
-        self.wake = Wake::Now;
     }
 
     /// Applies a session update and lays out what its next frames will draw.
@@ -329,7 +297,7 @@ impl Client {
     /// game screen and the manual table, with no sheet over them but a bug report capturing the
     /// table (`table_shown`).
     fn hud_shown(&self) -> bool {
-        matches!(self.screen, Screen::Game | Screen::Table) && self.table_shown()
+        matches!(self.features.screen, Screen::Game | Screen::Table) && self.table_shown()
     }
 
     /// Whether each frame records how its flat-layer elements look and the words of each line
@@ -346,8 +314,7 @@ impl Client {
         let table_now = self.bug_frame(now);
         self.prepare_table(table_now);
         let reporting = self.bug_open();
-        self.inputs.clear();
-        self.touch_frame(now);
+        self.advance_gesture(now);
         self.advance_prompt(table_now);
         self.table_frame(table_now);
         let covers = self.prompt_covers_table();
@@ -355,7 +322,7 @@ impl Client {
         let targets = self.features.prompts.targets(self.table_open());
         let transitioning = self.tick_layer(now)
             | self.shake_button(table_now)
-            | self.scrolling.moving(now, &self.data().pointer);
+            | self.routes.scrolling.moving(now, &self.data().pointer);
         self.show.advance_pointer(table_now);
         self.show.advance_slide(table_now);
         self.inspect(table_now);
@@ -379,15 +346,16 @@ impl Client {
             table.write_hud_anchors(&mut builder);
         }
         self.layer
-            .follow(|subject| game_table::table::spot_of(&builder, table, subject));
+            .follow(|subject| game_hud::hud::anchors::spot_of(&builder, table, subject));
         // Each total shows what `prepare` laid out, over the opening too, as the web's does.
+        let opening = self.features.opening.shown;
         self.features.totals_mut().write(
             &mut self.layer,
             self.show.counts(),
             self.show.effects(),
             table_now,
             (table, builder.tier()),
-            (counted, targets, self.opening.shown),
+            (counted, targets, opening),
         );
         self.features
             .piles_mut()
@@ -411,8 +379,8 @@ impl Client {
         builder.placement_work(self.show.table().take_placed(), self.show.take_compiled());
         // The bug report is drawn whether or not the table has settled (`bug`).
         self.features.layer_open = reporting || self.show.settled();
-        let faces = if self.screen == Screen::Gallery {
-            self.gallery_faces.as_ref()
+        let faces = if self.features.screen == Screen::Gallery {
+            self.features.gallery_faces.as_ref()
         } else {
             Some(self.show.faces())
         };
@@ -446,7 +414,7 @@ impl Client {
         match self.show.point(&mut self.frame, table_now) {
             Some(LetGo::Click(slot)) => self.card_clicked(slot),
             Some(LetGo::Tap(slot)) => self.card_tapped(slot),
-            Some(LetGo::Dropped { slot, at }) if self.screen == Screen::Table => {
+            Some(LetGo::Dropped { slot, at }) if self.features.screen == Screen::Table => {
                 self.table_drop(slot, at);
             }
             Some(LetGo::Dropped { slot, at }) => self.drop_held(slot, at),
@@ -479,8 +447,8 @@ impl Client {
     /// Lays the table and the flat layer out in a window of a new size, scale or safe area.
     fn resize(&mut self, window: Window) {
         let window = self.data().profiles.resolve_window(window);
-        self.end_gesture();
-        self.scrolling.cancel();
+        self.cancel_gesture();
+        self.routes.scrolling.cancel();
         self.window = window;
         self.show.resize(window);
         self.layer.resize(window);
@@ -494,7 +462,7 @@ impl Client {
         // A new size builds a shown screen again, which places its shown objects too: a phone's
         // screens span the window, which the keyboard shortens. Before anything is shown, as at
         // the host's first surface, the first update or the agents build it.
-        if self.layer.showing() || self.screen == Screen::Gallery {
+        if self.layer.showing() || self.features.screen == Screen::Gallery {
             self.show_screen();
         } else {
             self.place_shown();

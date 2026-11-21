@@ -4,17 +4,21 @@
 
 use glam::Vec2;
 
-use super::Client;
+use super::{
+    Client,
+    input::{Node, ScenePoint},
+};
 use app_screens::screens::Screen;
 use game_hud::hud::rows::Message as RowMessage;
 use game_play::pointer::rows::scroller_of;
 use game_table::table::{Scroller, Table};
 use kit_base::geometry::{GroupWindow, ScrollAxis};
 use kit_frame::frame::{ElementId, Role};
-use kit_scene::hit::hit;
-use kit_ui::input::{Button, Key, Pointer, PointerKind, PointerPhase};
+
+use kit_scene::scroll::ScrollInput;
+use kit_ui::input::{Button, Key, PointerKind, PointerPhase};
 use kit_ui::layout::Layer;
-use kit_ui::scroll::{ScrollInput, Viewport};
+use kit_ui::scroll::Viewport;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Target {
@@ -25,7 +29,7 @@ pub(super) enum Target {
 
 impl Client {
     fn rows_scroll(&self) -> bool {
-        matches!(self.screen, Screen::Game | Screen::Table)
+        matches!(self.features.screen, Screen::Game | Screen::Table)
             && self.features.sheet.is_none()
             && self.features.viewer().open().is_none()
             && self.features.menu().is_none()
@@ -33,13 +37,14 @@ impl Client {
             && !self.table_frozen()
     }
 
-    pub(super) fn scroll_pointer(&mut self, pointer: &Pointer) -> bool {
+    pub(super) fn scroll_pointer(&mut self, point: &ScenePoint) -> bool {
+        let pointer = &point.pointer;
         let rows = self.rows_scroll();
         let at = match pointer.phase {
             PointerPhase::Down if pointer.button == Button::Primary => {
-                self.scroll_target(pointer, rows, None)
+                self.scroll_target(point, rows, None)
             }
-            PointerPhase::Wheel => self.scroll_target(pointer, rows, Some(pointer.wheel)),
+            PointerPhase::Wheel => self.scroll_target(point, rows, Some(pointer.wheel)),
             _ => None,
         };
         if pointer.phase == PointerPhase::Down
@@ -53,11 +58,12 @@ impl Client {
         // A card that has picked up keeps its drag. A sideways drag on a scrolling hand
         // never picked a card up because its grip used the same threshold and direction.
         if rows && pointer.phase == PointerPhase::Move && self.show.pointer().held().is_some() {
-            self.scrolling.cancel();
+            self.routes.scrolling.cancel();
         }
         let view = |target| viewport(target, &self.layer, self.show.table(), rows);
-        let ScrollInput::Claimed(update) = self.scrolling.pointer(
+        let ScrollInput::Claimed(update) = self.routes.scrolling.pointer(
             pointer,
+            point.drag.map(|drag| drag.direction),
             self.now,
             at,
             view,
@@ -66,7 +72,7 @@ impl Client {
             return false;
         };
         if pointer.phase != PointerPhase::Wheel {
-            self.gesture.set_release(None);
+            self.suppress_press();
             if self.layer.edited_id().is_some() {
                 self.edit(kit_ui::layout::Edit::Up);
             }
@@ -83,10 +89,11 @@ impl Client {
 
     fn scroll_target(
         &self,
-        pointer: &Pointer,
+        routed: &ScenePoint,
         rows: bool,
         wheel: Option<Vec2>,
     ) -> Option<(Target, Viewport)> {
+        let pointer = &routed.pointer;
         let point = pointer.position;
         if let Some((id, view)) = self.layer.scroll_target_at(
             point,
@@ -104,10 +111,9 @@ impl Client {
             return Some((Target::Element(id), view));
         }
         if !rows
-            || self
-                .layer
-                .press_at(point, self.features.layer_open)
-                .is_some()
+            || routed
+                .target
+                .is_some_and(|target| matches!(target.node, Node::Control(_)))
         {
             return None;
         }
@@ -118,7 +124,7 @@ impl Client {
         {
             return Some((Target::Tray(index), viewport));
         }
-        let element = &self.frame.resolved[hit(&self.frame, point)? as usize];
+        let element = &self.frame.resolved[routed.hit? as usize];
         let row = scroller_of(element.place).filter(|_| element.role == Role::Card)?;
         let view = row_viewport(self.show.table(), row)?;
         Some((Target::Row(row), view))
@@ -142,7 +148,7 @@ impl Client {
         let Some((target, offset)) = update else {
             return false;
         };
-        self.scrolling.cancel();
+        self.routes.scrolling.cancel();
         self.apply_scroll(target, offset);
         true
     }
@@ -152,7 +158,8 @@ impl Client {
         let rows = self.rows_scroll();
         let view = |target| viewport(target, &self.layer, self.show.table(), rows);
         if let Some((target, offset)) =
-            self.scrolling
+            self.routes
+                .scrolling
                 .advance(now, view, &self.show.table().data().pointer)
         {
             self.apply_scroll(target, offset);

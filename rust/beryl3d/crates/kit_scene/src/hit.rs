@@ -15,7 +15,24 @@ use kit_ui::input::{Rect, Size};
 /// The index of the element a press at `point` (in logical points) reaches, if any.
 #[must_use]
 pub fn hit(frame: &Frame, point: Vec2) -> Option<u32> {
-    hit_in(frame, point, frame.paint_order().rev())
+    hit_where(frame, point, |_| true)
+}
+
+/// The frontmost hit accepted by a route's policy. A drag can look through the
+/// item being carried to reach its destination.
+pub(crate) fn hit_where(
+    frame: &Frame,
+    point: Vec2,
+    accepts: impl Fn(&Resolved) -> bool,
+) -> Option<u32> {
+    hit_in(
+        frame,
+        point,
+        frame
+            .paint_order()
+            .rev()
+            .filter(|&index| accepts(&frame.resolved[index as usize])),
+    )
 }
 
 fn hit_in(frame: &Frame, point: Vec2, mut front_first: impl Iterator<Item = u32>) -> Option<u32> {

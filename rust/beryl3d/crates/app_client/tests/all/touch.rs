@@ -19,6 +19,7 @@ use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, table};
 use glam::Vec2;
 use kit_frame::frame::{ElementId, Frame, FrameBuilder, NameRef, Place, Resolved, Role, StateBits};
 use kit_scene::hit::{hit, uncovered};
+use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{Button, Insets, Modifiers, Pointer, PointerKind, PointerPhase, Tier};
 use kit_ui::input::{Rect, Size};
 
@@ -49,11 +50,11 @@ fn client(update: GameUpdate) -> Client {
             name_bytes: 65_536,
         },
     );
-    client.handle(Input::Surface {
+    client.handle(Input::Device(DeviceInput::Surface {
         size: WINDOW,
         scale: 2.0,
         safe_area: Insets::default(),
-    });
+    }));
     client.handle(Input::Cards(Box::new(records)));
     client.handle(Input::Update(Box::new(update)));
     client.frame(0);
@@ -85,7 +86,7 @@ fn object(slot: usize) -> Subject {
 
 /// Finger `id` at `at`.
 fn finger(id: u8, phase: PointerPhase, at: Vec2) -> Input {
-    Input::Pointer(Pointer {
+    Input::Device(DeviceInput::Pointer(Pointer {
         id,
         kind: PointerKind::Touch,
         phase,
@@ -93,7 +94,7 @@ fn finger(id: u8, phase: PointerPhase, at: Vec2) -> Input {
         button: Button::Primary,
         wheel: Vec2::ZERO,
         modifiers: Modifiers::default(),
-    })
+    }))
 }
 
 /// A tap of finger `id` at `at`.

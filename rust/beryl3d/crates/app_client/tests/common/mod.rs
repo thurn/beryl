@@ -9,6 +9,7 @@ use app_client::{Client, Config, Input};
 use beryl_protocol::protocol::Side;
 use beryl_protocol::script::{Act, Table as Played, time_script};
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
+use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{Insets, Size};
 
 /// A client at 1440 by 900 that keeps a record of its scripts. It shows the sample table at the
@@ -28,14 +29,14 @@ pub fn counting(acts: Vec<Act>) -> (Client, Vec<(u64, u64)>) {
             name_bytes: 4096,
         },
     );
-    client.handle(Input::Surface {
+    client.handle(Input::Device(DeviceInput::Surface {
         size: Size {
             width: 1440.0,
             height: 900.0,
         },
         scale: 2.0,
         safe_area: Insets::default(),
-    });
+    }));
     client.record();
     let mut builder = ViewBuilder::sample();
     builder.script(ScriptBuilder::reset().build());

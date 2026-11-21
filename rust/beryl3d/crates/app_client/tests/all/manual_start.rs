@@ -10,6 +10,7 @@ use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, table};
 use game_manual::manual::opening::prompt;
 use glam::Vec2;
 use kit_frame::frame::{Frame, Role};
+use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{
     Button, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase, Size,
 };
@@ -37,15 +38,15 @@ fn client_at(view: &beryl_protocol::PlayerView) -> Client {
             name_bytes: 65_536,
         },
     );
-    client.handle(Input::Platform { mac: true });
-    client.handle(Input::Surface {
+    client.handle(Input::Device(DeviceInput::Platform { mac: true }));
+    client.handle(Input::Device(DeviceInput::Surface {
         size: Size {
             width: 1600.0,
             height: 900.0,
         },
         scale: 2.0,
         safe_area: Insets::default(),
-    });
+    }));
     give(&mut client, view);
     client
 }
@@ -69,7 +70,7 @@ fn press(client: &mut Client, now: u64, role: Role, name: &str) {
     let frame = client.frame(now).clone();
     let at = middle(&frame, role, name).unwrap_or_else(|| panic!("no {role:?} {name:?}"));
     for phase in [PointerPhase::Down, PointerPhase::Up] {
-        client.handle(Input::Pointer(Pointer {
+        client.handle(Input::Device(DeviceInput::Pointer(Pointer {
             id: 0,
             kind: PointerKind::Mouse,
             phase,
@@ -77,7 +78,7 @@ fn press(client: &mut Client, now: u64, role: Role, name: &str) {
             button: Button::Primary,
             wheel: Vec2::ZERO,
             modifiers: Modifiers::default(),
-        }));
+        })));
     }
 }
 
@@ -170,14 +171,14 @@ fn a_dropped_connection_freezes_the_keys_until_the_link_returns() {
     let mut client = client_at(&view);
     let frame = client.frame(0).clone();
     assert!(middle(&frame, Role::Text, "Alex is reconnecting").is_some());
-    let draw = Input::Key(Key {
+    let draw = Input::Device(DeviceInput::Key(Key {
         code: KeyCode::D,
         phase: KeyPhase::Down,
         modifiers: Modifiers {
             command: true,
             ..Modifiers::default()
         },
-    });
+    }));
     client.handle(draw.clone());
     client.frame(0);
     assert!(

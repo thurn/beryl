@@ -20,7 +20,7 @@ use game_manual::features::{context_menu, lobby, log, table::Message as TableMes
 use game_manual::manual::menus::{self, Act};
 use game_manual::manual::tokens::TokenChoice;
 use game_manual::manual::viewers::{self, Look, ViewerControl};
-use game_manual::manual::{self, Context, Pending, Pressed, Sent, Target, commands, pools};
+use game_manual::manual::{self, ActionSource, Context, Pending, Sent, Target, commands, pools};
 use kit_ui::input::{Button, Pointer, PointerPhase};
 
 /// The most table actions the client remembers sending without an answer.
@@ -57,8 +57,8 @@ impl Client {
         }
         self.features.clear_menu();
         self.features.close_overlay();
-        if matches!(self.screen, Screen::Start | Screen::Game) {
-            self.screen = Screen::Table;
+        if matches!(self.features.screen, Screen::Start | Screen::Game) {
+            self.features.screen = Screen::Table;
         }
     }
 
@@ -70,7 +70,7 @@ impl Client {
         if pointer.phase != PointerPhase::Down || pointer.button != Button::Secondary {
             return false;
         }
-        if self.screen == Screen::Table
+        if self.features.screen == Screen::Table
             && let Some((_, action, _)) = self
                 .layer
                 .press_at(pointer.position, self.features.layer_open)
@@ -101,7 +101,7 @@ impl Client {
         let mut values = commands::Values::new();
         values.insert("text", name.into());
         let actions = commands::actions_with(command, Target::Life(side), view, &values);
-        self.features.table_mut().clicked = Some(Pressed::Button(pressed));
+        self.features.table_mut().clicked = Some(ActionSource::Button(pressed));
         self.send_table(actions);
         self.features.table_mut().clicked = None;
     }
@@ -114,7 +114,7 @@ impl Client {
     /// selection or takes it out instead (`table_select`). Returns whether the click was on
     /// the manual table, and so means nothing else.
     pub(super) fn table_click(&mut self, slot: ObjectId) -> bool {
-        if self.screen != Screen::Table {
+        if self.features.screen != Screen::Table {
             return false;
         }
         if self.features.table().modifiers.meta {
@@ -141,7 +141,7 @@ impl Client {
             ZoneName::Library => ("library.draw", Target::Pile(side, ZoneName::Library)),
             _ => return true,
         };
-        self.features.table_mut().clicked = Some(Pressed::Card(slot));
+        self.features.table_mut().clicked = Some(ActionSource::Card(slot));
         self.run_table_command(id, target);
         self.features.table_mut().clicked = None;
         true
@@ -150,7 +150,10 @@ impl Client {
     /// Opens the context menu of what is at `at` (`manual::target_at`) there, on the table
     /// screen with no sheet over it. Returns whether it did.
     pub(super) fn open_table_menu_at(&mut self, at: Vec2) -> bool {
-        if self.screen != Screen::Table || self.features.sheet.is_some() || self.table_frozen() {
+        if self.features.screen != Screen::Table
+            || self.features.sheet.is_some()
+            || self.table_frozen()
+        {
             return false;
         }
         let Some(view) = self.show.latest().map(|update| &update.view) else {
@@ -196,7 +199,7 @@ impl Client {
         if view.table.is_none() {
             return;
         }
-        let pointed = (self.mouse).map_or(Target::Table, |at| {
+        let pointed = (self.mouse()).map_or(Target::Table, |at| {
             (self.viewer_card_at(at)).unwrap_or_else(|| manual::target_at(&self.frame, at))
         });
         let on_pointer = command.id.starts_with("life.")
@@ -305,7 +308,7 @@ impl Client {
 
     /// Whether the table on screen shows the guided start's opening (`manual::opening`).
     pub(super) fn guided_start(&self) -> bool {
-        self.screen == Screen::Table
+        self.features.screen == Screen::Table
             && (self.show.latest())
                 .is_some_and(|update| manual::opening::prompt(&update.view).is_some())
     }
@@ -314,7 +317,7 @@ impl Client {
     /// the other player left (`manual::link`): the pointer and the keys then reach only the
     /// banner's Lobby and what the flat layer shows over every screen.
     pub(super) fn table_frozen(&self) -> bool {
-        self.screen == Screen::Table
+        self.features.screen == Screen::Table
             && (self.show.latest())
                 .is_some_and(|update| game_manual::manual::link::frozen(&update.view))
     }
@@ -353,11 +356,11 @@ impl Client {
         };
         let refusal_ms = self.data().pointer.refusal_ms;
         match from.filter(|_| refused && !self.table_frozen()) {
-            Some(Pressed::Card(slot)) => self
+            Some(ActionSource::Card(slot)) => self
                 .show
                 .pointer_mut()
                 .refuse(usize::from(slot.0), refusal_ms),
-            Some(Pressed::Button(button)) => {
+            Some(ActionSource::Button(button)) => {
                 self.features.table_mut().shaking =
                     Some((Action::new(button), Shake::new(refusal_ms)));
             }
@@ -416,7 +419,7 @@ impl Client {
         self.update_lobby(&lobby::Message::Reset);
         self.features.lobby_view = None;
         self.commands.push_back(SessionCommand::TableLeave);
-        self.screen = Screen::Start;
+        self.features.screen = Screen::Start;
         self.change_sheet(None);
         self.show_screen();
     }
@@ -468,7 +471,7 @@ impl Client {
     /// `TablePileViewer` does, and closing a library's viewer ends the look. Any other viewer
     /// closes.
     pub(super) fn dismiss_viewer(&mut self) {
-        if self.screen != Screen::Table || self.features.table().viewer.look.is_none() {
+        if self.features.screen != Screen::Table || self.features.table().viewer.look.is_none() {
             self.view(None);
         } else if self.whole_library_open() && !self.features.table().viewer.confirming {
             self.features.table_mut().viewer.confirming = true;

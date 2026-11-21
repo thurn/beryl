@@ -175,3 +175,35 @@ pub enum Lifecycle {
     Resumed,
     LowMemory,
 }
+
+/// An event from the window, input devices or graphics host.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Input {
+    /// The drawing surface's size in logical points, how many physical pixels make one point,
+    /// and the part of it that system bars and rounded corners leave clear.
+    Surface {
+        size: Size,
+        scale: f32,
+        safe_area: Insets,
+    },
+    /// A mouse, touch or pen event.
+    Pointer(Pointer),
+    Key(Key),
+    /// Text typed into the focused field, or its native field's new contents on a phone.
+    Text(TextChange),
+    /// The platform's clipboard held this text when the client asked for it
+    /// (`Request::Paste`): it is inserted at the focused field's caret.
+    Paste(String),
+    /// A face, or an atlas page of glyphs or icons, is ready on the GPU.
+    Assets(AssetReady),
+    /// The app was suspended or resumed, or the system is low on memory.
+    Lifecycle(Lifecycle),
+    /// Which platform the host runs on, sent once at startup: whether `Cmd` in a shortcut
+    /// means the Command key, as on the Mac, or Control. Until it arrives the client takes the
+    /// Mac's.
+    Platform {
+        mac: bool,
+    },
+    /// The visual tier to draw in.
+    Tier(Tier),
+}

@@ -18,6 +18,8 @@ fn card() -> glam::Vec2 {
 
 mod common;
 
+use game_hud::hud::anchors::anchor_target;
+use kit_ui::input::Input as DeviceInput;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -32,10 +34,10 @@ use beryl_protocol::protocol::{
 };
 use beryl_protocol::script::{Act, Mark, Notice, Subject, Tally};
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
+use game_hud::hud::anchors::spot_of;
 use game_play::light::{MarkSpan, Span};
 use game_play::verbs::Interval;
 use game_table::table::Table;
-use game_table::table::spot_of;
 use glam::Vec2;
 use kit_frame::frame::{Frame, FrameBuilder, Material, Place, Role, StateBits};
 use kit_ui::element::{Anchor, floats, row, text};
@@ -137,14 +139,14 @@ fn client() -> Client {
             name_bytes: 4096,
         },
     );
-    client.handle(Input::Surface {
+    client.handle(Input::Device(DeviceInput::Surface {
         size: Size {
             width: 1440.0,
             height: 900.0,
         },
         scale: 2.0,
         safe_area: Insets::default(),
-    });
+    }));
     client
 }
 
@@ -188,7 +190,10 @@ fn a_frame_with_a_prompt_bar_allocates_nothing() {
             bearing: [0, -20],
         })
         .collect();
-    client.handle(Input::Assets(AssetReady::Glyphs { page: 0, glyphs }));
+    client.handle(Input::Device(DeviceInput::Assets(AssetReady::Glyphs {
+        page: 0,
+        glyphs,
+    })));
     client.prepare(0);
     let before = ALLOCATIONS.load(Ordering::Relaxed);
     let records = client.frame(0).draws.len();
@@ -301,14 +306,14 @@ fn a_frame_of_255_attackers_allocates_nothing() {
             name_bytes: 16_384,
         },
     );
-    client.handle(Input::Surface {
+    client.handle(Input::Device(DeviceInput::Surface {
         size: Size {
             width: 1440.0,
             height: 900.0,
         },
         scale: 2.0,
         safe_area: Insets::default(),
-    });
+    }));
     let mut view = ViewBuilder::new();
     for _ in 0..255 {
         let card = view.card(ZoneName::Battlefield, Side::You, "Serra Angel");
@@ -348,14 +353,14 @@ fn a_frame_of_255_attackers_allocates_nothing() {
 /// counters, allocates nothing.
 fn a_badged_table_allocates_nothing() {
     let mut client = Client::new(crate::test_data::data(), Config::LARGEST);
-    client.handle(Input::Surface {
+    client.handle(Input::Device(DeviceInput::Surface {
         size: Size {
             width: 1440.0,
             height: 900.0,
         },
         scale: 2.0,
         safe_area: Insets::default(),
-    });
+    }));
     let mut builder = ViewBuilder::new();
     for index in 0..255_i32 {
         let side = if index % 2 == 0 {
@@ -387,7 +392,10 @@ fn a_badged_table_allocates_nothing() {
             bearing: [0, -20],
         })
         .collect();
-    client.handle(Input::Assets(AssetReady::Glyphs { page: 1, glyphs }));
+    client.handle(Input::Device(DeviceInput::Assets(AssetReady::Glyphs {
+        page: 1,
+        glyphs,
+    })));
     client.frame(0);
     client.prepare(1_000_000);
     let before = ALLOCATIONS.load(Ordering::Relaxed);
@@ -430,14 +438,14 @@ fn a_rising_hand_card_allocates_nothing() {
             name_bytes: 4096,
         },
     );
-    client.handle(Input::Surface {
+    client.handle(Input::Device(DeviceInput::Surface {
         size: Size {
             width: 1440.0,
             height: 900.0,
         },
         scale: 2.0,
         safe_area: Insets::default(),
-    });
+    }));
     let mut view = ViewBuilder::sample();
     view.script(ScriptBuilder::reset().build());
     client.handle(Input::Update(Box::new(view.update())));
@@ -460,7 +468,7 @@ fn a_rising_hand_card_allocates_nothing() {
     assert_eq!(hand.len(), 3, "the viewer's hand");
     let mut now = 0;
     for point in hand {
-        client.handle(Input::Pointer(Pointer {
+        client.handle(Input::Device(DeviceInput::Pointer(Pointer {
             id: 0,
             kind: PointerKind::Mouse,
             phase: PointerPhase::Move,
@@ -468,7 +476,7 @@ fn a_rising_hand_card_allocates_nothing() {
             button: Button::None,
             wheel: Vec2::ZERO,
             modifiers: Modifiers::default(),
-        }));
+        })));
         for _ in 0..4 {
             now += 16_000_000;
             client.prepare(now);
@@ -532,7 +540,7 @@ fn an_anchored_element_allocates_nothing() {
     let mut layer = Layer::new();
     let mut badge = text("Plains");
     badge.anchor = Some(Anchor::Object(
-        Subject::Object { slot: cards.land },
+        anchor_target(Subject::Object { slot: cards.land }),
         Vec2::new(0.5, 0.5),
     ));
     layer.show(Some(row().name("screen").child(badge)));
@@ -633,14 +641,14 @@ fn a_scrolling_row_allocates_nothing() {
             name_bytes: 8192,
         },
     );
-    client.handle(Input::Surface {
+    client.handle(Input::Device(DeviceInput::Surface {
         size: Size {
             width: 1440.0,
             height: 900.0,
         },
         scale: 2.0,
         safe_area: Insets::default(),
-    });
+    }));
     let mut view = ViewBuilder::new();
     for index in 0..40 {
         view.card(ZoneName::Battlefield, Side::You, &format!("Land {index}"))
@@ -655,7 +663,7 @@ fn a_scrolling_row_allocates_nothing() {
         .find(|element| element.role == Role::Card)
         .map(|element| element.corners[3] + (element.corners[1] - element.corners[3]) * 0.1)
         .expect("a land");
-    client.handle(Input::Pointer(Pointer {
+    client.handle(Input::Device(DeviceInput::Pointer(Pointer {
         id: 0,
         kind: PointerKind::Mouse,
         phase: PointerPhase::Wheel,
@@ -663,7 +671,7 @@ fn a_scrolling_row_allocates_nothing() {
         button: Button::None,
         wheel: Vec2::new(0.0, -48.0),
         modifiers: Modifiers::default(),
-    }));
+    })));
     let mut now = 0;
     let mut moving = 0;
     for _ in 0..12 {

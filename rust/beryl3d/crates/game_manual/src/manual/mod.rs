@@ -96,7 +96,7 @@ pub enum Sent {
 /// The element a press sent a table action from, which shakes if the table refuses the action,
 /// as the web's `send` names the element that `shakeRefusal` shakes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Pressed {
+pub enum ActionSource {
     /// The card in this slot.
     Card(ObjectId),
     /// The flat-layer button a `TableMessage` is the press of: a mana or player counter, or the
@@ -109,7 +109,7 @@ pub enum Pressed {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Pending {
     pub sent: Sent,
-    pub from: Option<Pressed>,
+    pub from: Option<ActionSource>,
 }
 
 /// What a command acts on: a card, a pile (a library, graveyard or exile), a hand, a life
@@ -171,7 +171,12 @@ impl Target {
 /// opponent's hand, whose cards are hidden; a player's life total; or else the table.
 #[must_use]
 pub fn target_at(frame: &Frame, point: Vec2) -> Target {
-    let Some(mut index) = hit(frame, point) else {
+    target_from_hit(frame, hit(frame, point))
+}
+
+/// Resolves a manual-table target from the shared scene hit.
+pub fn target_from_hit(frame: &Frame, hit: Option<u32>) -> Target {
+    let Some(mut index) = hit else {
         return Target::Table;
     };
     loop {

@@ -2,6 +2,7 @@
 //! requests to the workers, then hands back the cells and layers the renderer uploaded.
 //! Live hosts advance the service around each frame. Pictures wait for the same deliveries.
 
+use kit_ui::input::Input as DeviceInput;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -254,14 +255,14 @@ impl Assets {
             if client.face_layers().board_layer_of(face).is_none()
                 && renderer.layer_uploaded(FaceSize::Board, layer)
             {
-                client.handle(Input::Assets(for_list(
+                client.handle(Input::Device(DeviceInput::Assets(for_list(
                     AssetReady::Face {
                         face,
                         size: FaceSize::Board,
                         layer,
                     },
                     gallery,
-                )));
+                ))));
             }
         }
         let mut wanted = Vec::new();
@@ -337,7 +338,7 @@ impl Assets {
     ) {
         self.upload_glyphs(renderer, |ready| {
             delivered(&ready);
-            client.handle(Input::Assets(ready));
+            client.handle(Input::Device(DeviceInput::Assets(ready)));
         });
     }
 
@@ -378,11 +379,11 @@ impl Assets {
         if let Full::Kept { layer } = request
             && self.full[usize::from(layer)] == Some(face)
         {
-            client.handle(Input::Assets(AssetReady::Face {
+            client.handle(Input::Device(DeviceInput::Assets(AssetReady::Face {
                 face,
                 size: FaceSize::Full,
                 layer,
-            }));
+            })));
         }
         true
     }
@@ -406,7 +407,7 @@ impl Assets {
             {
                 self.full[usize::from(layer)] = Some(face);
             }
-            client.handle(Input::Assets(for_list(ready, gallery)));
+            client.handle(Input::Device(DeviceInput::Assets(for_list(ready, gallery))));
         }
     }
 }

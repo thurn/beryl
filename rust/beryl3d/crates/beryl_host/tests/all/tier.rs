@@ -11,6 +11,7 @@ use beryl_host::{Chosen, Draw, FrameLoop, Shown, Ticks};
 use glam::Vec2;
 use kit_frame::frame::Frame;
 use kit_ui::element::Action;
+use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{Button, Modifiers, Pointer, PointerKind, PointerPhase, Tier};
 
 /// Ticks at whatever rate the loop asks for; the test sets each tick's time itself.
@@ -53,7 +54,7 @@ fn client() -> Client {
 }
 
 fn moved(x: f32) -> Input {
-    Input::Pointer(Pointer {
+    Input::Device(DeviceInput::Pointer(Pointer {
         id: 0,
         kind: PointerKind::Mouse,
         phase: PointerPhase::Move,
@@ -61,7 +62,7 @@ fn moved(x: f32) -> Input {
         button: Button::None,
         wheel: Vec2::ZERO,
         modifiers: Modifiers::default(),
-    })
+    }))
 }
 
 /// Plays animating frames, the first `settle_frames` on time and every one after late, and
@@ -151,7 +152,7 @@ fn a_fixed_rate_still_drops_the_tier_and_never_steps_the_rate() {
 fn set(frames: &mut FrameLoop<AnyTicks>, graphics: Graphics) {
     frames
         .client()
-        .press(&Action::new(SettingsMessage::Change(Setting::Graphics(
+        .dispatch(&Action::new(SettingsMessage::Change(Setting::Graphics(
             graphics,
         ))));
     while frames.next_request().is_some() {}

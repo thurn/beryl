@@ -13,6 +13,7 @@ use glam::Vec2;
 use kit_frame::frame::{Role, StateBits};
 use kit_ui::element::Action;
 use kit_ui::element::{row, text};
+use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{Button, Modifiers, Pointer, PointerKind, PointerPhase};
 use kit_ui::widgets;
 
@@ -26,7 +27,7 @@ const DECLINE: BarMessage = BarMessage::Button(ButtonId::Decline);
 
 /// A finger at `position`.
 fn touch(phase: PointerPhase, position: Vec2) -> Input {
-    Input::Pointer(Pointer {
+    Input::Device(DeviceInput::Pointer(Pointer {
         id: 1,
         kind: PointerKind::Touch,
         phase,
@@ -34,7 +35,7 @@ fn touch(phase: PointerPhase, position: Vec2) -> Input {
         button: Button::Primary,
         wheel: Vec2::ZERO,
         modifiers: Modifiers::default(),
-    })
+    }))
 }
 
 /// The buttons each click the client queued pressed, in order.
@@ -51,7 +52,7 @@ fn clicks(client: &mut Client) -> Vec<Click> {
 fn a_drag_from_a_slider_let_go_on_a_button_sets_the_slider_and_presses_nothing() {
     let mut client = client();
     client.handle(deciding(prompt("Pay {1}{U}")));
-    client.press(&Action::new(SettingsMessage::Open));
+    client.dispatch(&Action::new(SettingsMessage::Open));
     let frame = client.frame(1);
     let slider = find(frame, Role::Slider, "Music");
     let (left, _, right, _) = edges(frame, slider);

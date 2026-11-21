@@ -2,6 +2,7 @@
 //! of large cards over the dimmed table, Keep answers the mulligan with its button, and a card
 //! clicked in the row while cards go on the bottom clicks the prompt on it.
 
+use kit_ui::input::Input as DeviceInput;
 use std::str::FromStr;
 
 use app_client::Input;
@@ -111,11 +112,11 @@ fn a_card_clicked_in_the_row_while_putting_on_the_bottom_clicks_the_prompt_on_it
     };
     let (decision, revision) = (decision.id, decision.prompt.revision);
     let mut client = Client::new(crate::test_data::data(), Config::LARGEST);
-    client.handle(Input::Surface {
+    client.handle(Input::Device(DeviceInput::Surface {
         size: SIZE,
         scale: 1.0,
         safe_area: Insets::default(),
-    });
+    }));
     for view in views {
         client.handle(Input::Update(Box::new(view)));
     }
@@ -144,7 +145,7 @@ fn a_card_clicked_in_the_row_while_putting_on_the_bottom_clicks_the_prompt_on_it
     );
     let centre = (boxed.corners[0] + boxed.corners[2]) / 2.0;
     for phase in [PointerPhase::Down, PointerPhase::Up] {
-        client.handle(Input::Pointer(Pointer {
+        client.handle(Input::Device(DeviceInput::Pointer(Pointer {
             id: 0,
             kind: PointerKind::Mouse,
             phase,
@@ -152,7 +153,7 @@ fn a_card_clicked_in_the_row_while_putting_on_the_bottom_clicks_the_prompt_on_it
             button: Button::Primary,
             wheel: glam::Vec2::ZERO,
             modifiers: Modifiers::default(),
-        }));
+        })));
         now += 16 * MILLISECOND;
         client.frame(now);
     }

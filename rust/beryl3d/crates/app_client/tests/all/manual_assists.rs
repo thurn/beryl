@@ -14,6 +14,7 @@ use beryl_protocol::protocol::{
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, table};
 use glam::Vec2;
 use kit_frame::frame::{Frame, Role, StateBits};
+use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{
     Button, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase, Size,
     TextChange,
@@ -51,12 +52,12 @@ fn client_sized(view: &PlayerView, width: f32, height: f32) -> Client {
             name_bytes: 65_536,
         },
     );
-    client.handle(Input::Platform { mac: true });
-    client.handle(Input::Surface {
+    client.handle(Input::Device(DeviceInput::Platform { mac: true }));
+    client.handle(Input::Device(DeviceInput::Surface {
         size: Size { width, height },
         scale: 2.0,
         safe_area: Insets::default(),
-    });
+    }));
     client.handle(Input::Update(Box::new(beryl_protocol::GameUpdate {
         session: beryl_protocol::SessionId(1),
         view: view.clone(),
@@ -86,7 +87,7 @@ fn middle(client: &mut Client, now: u64, role: Role, name: &str) -> Vec2 {
 
 fn click(client: &mut Client, at: Vec2, button: Button) {
     for phase in [PointerPhase::Down, PointerPhase::Up] {
-        client.handle(Input::Pointer(Pointer {
+        client.handle(Input::Device(DeviceInput::Pointer(Pointer {
             id: 0,
             kind: PointerKind::Mouse,
             phase,
@@ -94,7 +95,7 @@ fn click(client: &mut Client, at: Vec2, button: Button) {
             button,
             wheel: Vec2::ZERO,
             modifiers: Modifiers::default(),
-        }));
+        })));
     }
 }
 
@@ -307,12 +308,14 @@ fn a_permanents_menu_lists_its_abilities_and_x_asks_first() {
     menu(&mut client, 3, Role::Card, "Serra Angel");
     press(&mut client, 4, Role::MenuItem, "−X: Draw X cards.");
     assert!(answers(&mut client).is_empty(), "X was not asked for first");
-    client.handle(Input::Text(TextChange::Insert("3".to_owned())));
-    client.handle(Input::Key(Key {
+    client.handle(Input::Device(DeviceInput::Text(TextChange::Insert(
+        "3".to_owned(),
+    ))));
+    client.handle(Input::Device(DeviceInput::Key(Key {
         code: KeyCode::Enter,
         phase: KeyPhase::Down,
         modifiers: Modifiers::default(),
-    }));
+    })));
     let [
         Answer::ActivateAbility {
             row: 1, x: Some(3), ..
@@ -355,12 +358,14 @@ fn the_library_menu_scries_after_asking_how_many() {
     assert!(rows.iter().any(|row| row == "Surveil…"), "{rows:?}");
 
     press(&mut client, 2, Role::MenuItem, "Scry…");
-    client.handle(Input::Text(TextChange::Insert("2".to_owned())));
-    client.handle(Input::Key(Key {
+    client.handle(Input::Device(DeviceInput::Text(TextChange::Insert(
+        "2".to_owned(),
+    ))));
+    client.handle(Input::Device(DeviceInput::Key(Key {
         code: KeyCode::Enter,
         phase: KeyPhase::Down,
         modifiers: Modifiers::default(),
-    }));
+    })));
     let acts = acts(&mut client);
     assert_eq!(acts.len(), 1, "{acts:?}");
     assert_eq!(acts[0]["flow"]["flow"], "scry");

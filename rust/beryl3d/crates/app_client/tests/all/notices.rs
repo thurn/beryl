@@ -18,6 +18,7 @@ use glam::Vec2;
 use kit_frame::frame::{Frame, Role, StateBits, Wake};
 use kit_probe::agent::checks::{duplicates, overlap};
 use kit_probe::agent::{Context, Rule};
+use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{Insets, Size};
 
 use crate::common::{MS, empty_frame, frame, show};
@@ -72,14 +73,14 @@ fn client(updates: [GameUpdate; 2]) -> (Client, Vec<(u64, u64)>) {
             name_bytes: 4096,
         },
     );
-    client.handle(Input::Surface {
+    client.handle(Input::Device(DeviceInput::Surface {
         size: Size {
             width: WIDTH,
             height: HEIGHT,
         },
         scale: 2.0,
         safe_area: Insets::default(),
-    });
+    }));
     client.record();
     let [start, after] = updates;
     client.handle(Input::Update(Box::new(start)));

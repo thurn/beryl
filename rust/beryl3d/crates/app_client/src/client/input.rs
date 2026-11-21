@@ -7,73 +7,228 @@ use beryl_protocol::protocol::{ObjectId, Side, ZoneName};
 use beryl_protocol::script::Subject;
 use glam::Vec2;
 
-use super::gesture::{Gesture, Release};
-use super::{Client, Input, Platform};
+use super::carry::Carry;
+use super::{Client, Platform};
 use app_screens::screens::settings::{Message as SettingsMessage, slider_setting};
 use app_screens::screens::{Screen, Sheet};
 use game_hud::hud::rows::Message as RowMessage;
+use game_hud::inspect::Viewed;
 use game_hud::prompts;
 use game_play::pointer::Hold;
 use game_play::pointer::rows::scroller_of;
 use game_table::table::Scroller;
 use kit_frame::frame::{ElementId, Place, Role};
-use kit_scene::hit::hit;
+use kit_scene::input::{KeyResponse, Point, Router, Target, TouchPolicy};
+use kit_scene::scroll::ScrollGesture;
 use kit_ui::element::{Action, Chord};
 use kit_ui::input::{Button, Key, KeyCode, KeyPhase, Pointer, PointerKind, PointerPhase};
 use kit_ui::layout::{Edit, Navigation};
 use kit_ui::widgets::{STEP, level_at};
 
+/// The part of the scene that owns a pointer action.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Node {
+    Control(ElementId),
+    Card(usize),
+    Pile(Viewed),
+    Other(ElementId),
+}
+
+pub(super) type ScenePoint = Point<Target<Node, Place>>;
+
+/// View state used when a captured interaction changes its presentation.
+#[derive(Default)]
+pub(super) enum Control {
+    #[default]
+    None,
+    Slider(ElementId),
+    Order(Carry),
+}
+
+#[derive(Default)]
+pub(super) struct Routes {
+    router: Router<Target<Node, Place>>,
+    pub scrolling: ScrollGesture<super::scrolling::Target>,
+    pub control: Control,
+}
+
 impl Client {
-    /// A press is the primary button or a touch going down and coming up on the same enabled
-    /// element. It queues the command the element's `Press` means. A press on a card of the
-    /// table that no element of the flat layer covers goes to the table's pointer, which the
-    /// next `frame` asks what it meant. A press on a slider, and a drag that begins on one,
-    /// sets its level instead (`slide`). After each, the flat layer is told which element a
-    /// press under the pointer would reach and which one is held down, which it draws so.
-    ///
-    /// What the primary pointer is doing since it went down is one `Gesture`. A press going
-    /// down ends the one under way before a branch claims the new one,
-    /// and the release, Cancel or Leave ends it once every branch has seen that phase.
-    ///
-    /// A finger reaches these only if it is the active one (`hear_touch`), and a double tap
-    /// opens the bug report once the game has heard the finger lift.
     pub(super) fn point(&mut self, pointer: Pointer) {
-        let heard = (pointer.kind == PointerKind::Touch).then(|| self.hear_touch(&pointer));
-        if heard.is_none_or(|heard| heard.game) {
-            if pointer.phase == PointerPhase::Down && pointer.button == Button::Primary {
-                self.end_gesture();
-                self.scrolling.cancel();
+        let open = self.features.layer_open;
+        let screen = self.features.screen;
+        let no_sheet = self.features.sheet.is_none();
+        let at_table = screen == Screen::Table;
+        let flat = self
+            .layer
+            .press_at(pointer.position, open)
+            .map(|(id, ..)| id);
+        let manual_hold = at_table
+            && no_sheet
+            && self.features.menu().is_none()
+            && self
+                .show
+                .latest()
+                .is_some_and(|update| update.view.table.is_some());
+        let pinned = self.features.inspector().pinned();
+        // Classify each pile once by its physical zone. A press on its top card and
+        // a release on its count reach the same pile.
+        let game = screen == Screen::Game;
+        let manual_library = self.at_table();
+        let tuning = &self.show.table().data().pointer;
+        let routed = self
+            .routes
+            .router
+            .point(&self.frame, pointer, self.now, tuning, |hit| {
+                let target = if let Some(id) = flat {
+                    Some(Target {
+                        node: Node::Control(id),
+                        container: None,
+                    })
+                } else {
+                    hit.map(|element| {
+                        let pile = super::viewing::pointer_pile(
+                            element.place,
+                            screen,
+                            no_sheet,
+                            manual_library,
+                        );
+                        let node = match (element.role, pile) {
+                            (Role::Pile, Some(pile)) => Node::Pile(pile),
+                            (Role::Card, Some(pile)) if !element.interactive => Node::Pile(pile),
+                            (Role::Card, _) => Node::Card(element.id.0 as usize),
+                            _ => Node::Other(element.id),
+                        };
+                        Target {
+                            node,
+                            container: Some(element.place),
+                        }
+                    })
+                };
+                let game_hold = game
+                    && no_sheet
+                    && flat.is_none()
+                    && hit.is_some_and(|element| {
+                        element.role == Role::Card
+                            && game_play::pointer::takes_pointer(element.place)
+                    });
+                let policy = TouchPolicy {
+                    double_tap: (game || at_table) && no_sheet && hit.is_none(),
+                    hold: !pinned && (manual_hold || game_hold),
+                    delayed_pickup: at_table,
+                };
+                (target, policy)
+            });
+        if routed.cancelled {
+            self.cancel_interaction();
+        }
+        if let Some(point) = routed.point {
+            let primary_down =
+                pointer.phase == PointerPhase::Down && pointer.button == Button::Primary;
+            if primary_down {
+                self.end_control();
+                self.routes.scrolling.cancel();
                 self.features.rows_mut().update(RowMessage::Focus(None));
             }
-            self.claim(&pointer);
+            if primary_down && pointer.kind == PointerKind::Touch && pinned {
+                self.features
+                    .inspector_mut()
+                    .update(game_hud::hud::inspector::Message::Pin(None));
+                self.routes.router.cancel();
+            } else {
+                self.deliver_point(&point);
+            }
             if ends_gesture(&pointer) {
-                self.end_gesture();
+                self.end_control();
             }
         }
-        if heard.is_some_and(|heard| heard.report) && !self.bug_open() {
+        if routed.double_tap && !self.bug_open() {
             self.set_sheet(Some(Sheet::BugReport));
         }
     }
 
-    /// Gives `pointer` to the first branch that claims it, as `point` describes.
-    fn claim(&mut self, pointer: &Pointer) {
-        let pointer = *pointer;
+    pub(super) fn mouse(&self) -> Option<Vec2> {
+        self.routes.router.mouse()
+    }
+
+    pub(super) fn end_control(&mut self) {
+        if let Control::Order(carry) = std::mem::take(&mut self.routes.control)
+            && carry.lifted
+        {
+            self.put_item_down();
+        }
+    }
+
+    pub(super) fn suppress_press(&mut self) {
+        self.routes.router.suppress_press();
+    }
+
+    pub(super) fn cancel_gesture(&mut self) {
+        self.routes.router.cancel();
+        self.end_control();
+    }
+
+    pub(super) fn cancel_touch(&mut self) {
+        if self.routes.router.cancel_touch() {
+            self.cancel_interaction();
+        }
+    }
+
+    pub(super) fn gesture_due(&self) -> Option<u64> {
+        self.routes.router.due(&self.data().pointer)
+    }
+
+    pub(super) fn advance_gesture(&mut self, now: u64) {
+        let Some((source, at)) = self
+            .routes
+            .router
+            .advance(now, &self.show.table().data().pointer)
+        else {
+            return;
+        };
+        let handled = if self.features.screen == Screen::Table {
+            self.open_table_menu_at(at)
+        } else if self.features.screen == Screen::Game
+            && self.features.sheet.is_none()
+            && let Some(Target {
+                node: Node::Card(slot),
+                ..
+            }) = source
+            && let Ok(slot) = u16::try_from(slot)
+        {
+            self.features
+                .inspector_mut()
+                .update(game_hud::hud::inspector::Message::Pin(Some(ObjectId(slot))));
+            true
+        } else {
+            false
+        };
+        if handled {
+            self.cancel_interaction();
+        }
+    }
+
+    fn cancel_interaction(&mut self) {
+        self.show.pointer_mut().cancel();
+        self.routes.scrolling.cancel();
+        self.cancel_gesture();
+        if self.features.table_mut().sweep.take().is_some() {
+            self.show_screen();
+        }
+        self.layer.point_at(None, None);
+    }
+
+    /// Delivers the routed event to the feature using the captured node.
+    fn deliver_point(&mut self, point: &ScenePoint) {
+        let pointer = point.pointer;
         if self.bug_open() {
-            self.bug_point(&pointer);
+            self.bug_point(point);
             return;
         }
-        let threshold = self.data().pointer.drag_threshold_points;
-        self.show.pointer_mut().handle(&pointer, threshold);
+        let pickup = point.drag.map(|drag| (drag.direction, drag.pickup_ready));
+        self.show.pointer_mut().handle(&pointer, pickup);
         if pointer.phase == PointerPhase::Down {
             self.features.table_mut().modifiers.shift = pointer.modifiers.shift;
         }
-        // The mouse is followed whatever is asked, so that an arrow to the pointer that a
-        // prompt opens under it starts there. A touch has no pointer to follow.
-        self.mouse = match (pointer.kind, pointer.phase) {
-            (PointerKind::Mouse, PointerPhase::Leave | PointerPhase::Cancel) => None,
-            (PointerKind::Mouse, _) => Some(pointer.position),
-            _ => self.mouse,
-        };
         self.features
             .prompts
             .carry(self.show.pointer().held(), self.views, &self.show);
@@ -84,25 +239,29 @@ impl Client {
                 .layer
                 .outside_menu(pointer.position, self.features.layer_open)
         {
+            self.suppress_press();
             self.dismiss_menu();
             return;
         }
         // A frozen table takes no gesture of its own; the flat layer's buttons still work.
         let frozen = self.table_frozen();
-        if (!frozen && self.table_pointer(&pointer))
-            || self.scroll_pointer(&pointer)
-            || self.open_table_menu(&pointer)
-        {
+        if !frozen && self.manual_point(point) {
+            if pointer.phase == PointerPhase::Down {
+                self.suppress_press();
+            }
             return;
         }
-        if self.carry_item(&pointer) {
-            self.scrolling.cancel();
+        if self.scroll_pointer(point) || self.open_table_menu(&pointer) {
+            return;
+        }
+        if self.carry_item(point) {
+            self.routes.scrolling.cancel();
             return;
         }
         if self.slide(&pointer) {
-            self.scrolling.cancel();
+            self.routes.scrolling.cancel();
         } else {
-            self.press_flat(&pointer, true);
+            self.press_flat(point, true);
         }
         let hovered = self.hover_flat(&pointer);
         // The pointer on a payment's Auto Pay, or a touch held on it, marks what it would tap.
@@ -131,9 +290,22 @@ impl Client {
             })
             .flatten();
         let id = hovered.as_ref().map(|(id, ..)| *id);
-        let held = (!ends_gesture(pointer))
-            .then(|| self.gesture.held())
-            .flatten();
+        let held = if ends_gesture(pointer) {
+            None
+        } else {
+            match self.routes.control {
+                Control::Slider(id) => Some(id),
+                Control::Order(carry) if carry.lifted => None,
+                _ => self
+                    .routes
+                    .router
+                    .pressed()
+                    .and_then(|target| match target.node {
+                        Node::Control(id) => Some(id),
+                        _ => None,
+                    }),
+            }
+        };
         (self.layer).point_at(id, held);
         let at = (!gone).then_some(pointer.position);
         self.layer.hover(at, self.features.layer_open);
@@ -145,7 +317,7 @@ impl Client {
     /// whether the pointer is on a slider, and so means nothing else.
     fn slide(&mut self, pointer: &Pointer) -> bool {
         let primary = pointer.button == Button::Primary;
-        let at = match (pointer.phase, self.gesture) {
+        let at = match (pointer.phase, &self.routes.control) {
             (PointerPhase::Down, _) if primary => {
                 let Some((id, press, rect)) = self
                     .layer
@@ -153,15 +325,15 @@ impl Client {
                 else {
                     return false;
                 };
-                self.gesture = Gesture::Slider(id);
+                self.routes.control = Control::Slider(id);
                 self.layer.focus(Some(id));
                 (press, rect)
             }
-            (PointerPhase::Move, Gesture::Slider(id)) => match self.layer.slider(id) {
+            (PointerPhase::Move, Control::Slider(id)) => match self.layer.slider(*id) {
                 Some(at) => at,
                 None => return true,
             },
-            (PointerPhase::Up | PointerPhase::Cancel | PointerPhase::Leave, Gesture::Slider(_)) => {
+            (PointerPhase::Up | PointerPhase::Cancel | PointerPhase::Leave, Control::Slider(_)) => {
                 return true;
             }
             _ => return false,
@@ -172,21 +344,19 @@ impl Client {
         {
             let to = level_at(pointer.position.x, rect.x, rect.width);
             if to != level {
-                self.press(&Action::new(SettingsMessage::Change(setting.at_level(to))));
+                self.dispatch(&Action::new(SettingsMessage::Change(setting.at_level(to))));
             }
         }
         true
     }
 
-    /// A press on the flat layer, or with `table` on a card of the table that no element of
-    /// the flat layer covers, as `point` describes it.
-    pub(super) fn press_flat(&mut self, pointer: &Pointer, table: bool) {
+    /// Applies the captured press to a control, card or pile.
+    pub(super) fn press_flat(&mut self, point: &ScenePoint, table: bool) {
+        let pointer = &point.pointer;
         let primary = pointer.button == Button::Primary;
         let open = self.features.layer_open;
         match pointer.phase {
             PointerPhase::Down if primary => {
-                let pressed = (self.layer.press_at(pointer.position, open)).map(|(id, ..)| id);
-                self.gesture.set_release(pressed.map(Release::Element));
                 let focus = self
                     .layer
                     .focusable_at(pointer.position, open)
@@ -198,36 +368,21 @@ impl Client {
                     }
                 }
                 if table
-                    && pressed.is_none()
-                    && let Some(index) = hit(&self.frame, pointer.position)
-                    && let element = &self.frame.resolved[index as usize]
-                    && matches!(element.role, Role::Card | Role::Pile)
+                    && let Some(Target {
+                        node: Node::Card(slot),
+                        container: Some(place),
+                    }) = point.target
                 {
-                    // A press on a pile opens it, and is no press on the card on top. A card of a
-                    // pile that takes presses itself, as one held up in a prompt's tray does,
-                    // is pressed as a card.
-                    let opens = element.role == Role::Pile || !element.interactive;
-                    let pile = (self.pile_at(element.place))
-                        .or_else(|| self.table_library_at(element.place));
-                    if let Some(pile) = pile.filter(|_| opens) {
-                        self.gesture.set_release(Some(Release::Pile(pile)));
-                        return;
-                    }
-                    if element.role == Role::Card {
-                        let slot = element.id.0 as usize;
-                        // A drag sideways on a hand that scrolls scrolls it.
-                        let scrolls = scroller_of(element.place) == Some(Scroller::Hand)
-                            && self.show.table().row_window(Scroller::Hand).scrolls();
-                        let hold = match (self.holdable(slot, element.place), scrolls) {
-                            (false, _) => Hold::Never,
-                            (true, false) => Hold::Drag,
-                            (true, true) => Hold::UpOrDown,
-                        };
-                        (self.show.pointer_mut()).press(slot, pointer.position, hold);
-                        if pointer.kind == PointerKind::Touch {
-                            self.touch_pressed();
-                        }
-                    }
+                    let scrolls = scroller_of(place) == Some(Scroller::Hand)
+                        && self.show.table().row_window(Scroller::Hand).scrolls();
+                    let hold = match (self.holdable(slot, place), scrolls) {
+                        (false, _) => Hold::Never,
+                        (true, false) => Hold::Drag,
+                        (true, true) => Hold::UpOrDown,
+                    };
+                    self.show
+                        .pointer_mut()
+                        .press(slot, pointer.position, hold, pointer.kind);
                 }
             }
             PointerPhase::Move if self.layer.edited_id().is_some() => {
@@ -237,23 +392,21 @@ impl Client {
                 if self.layer.edited_id().is_some() {
                     self.edit(Edit::Up);
                 }
-                match self.gesture.take_release() {
-                    Some(Release::Pile(pile))
-                        if let Some(index) = hit(&self.frame, pointer.position)
-                            && let place = self.frame.resolved[index as usize].place
-                            && (self.pile_at(place).or_else(|| self.table_library_at(place)))
-                                == Some(pile) =>
-                    {
+                match point
+                    .released_by(|target| target.node)
+                    .map(|target| target.node)
+                {
+                    Some(Node::Pile(pile)) if table => {
                         if !self.table_library_clicked(pile) {
-                            self.press(&Action::new(game_hud::hud::viewer::Message::Open(pile)));
+                            self.dispatch(&Action::new(game_hud::hud::viewer::Message::Open(pile)));
                         }
                     }
-                    Some(Release::Element(pressed))
-                        if let Some((id, press, true)) =
+                    Some(Node::Control(pressed))
+                        if let Some((id, action, true)) =
                             self.layer.press_at(pointer.position, open)
                             && pressed == id =>
                     {
-                        self.press(&press);
+                        self.dispatch(&action);
                     }
                     _ => {}
                 }
@@ -262,61 +415,37 @@ impl Client {
         }
     }
 
-    /// A key goes to the screen's shortcuts first, then moves the focus (Tab), moves through
-    /// or presses a row of the focused list or menu (`Layer::navigate`), moves a focused
-    /// slider (left and right), presses the focused element (Return) or closes the menu or
-    /// sheet on top (Escape), and otherwise opens the bug report on its chord: Cmd+B, or
-    /// Cmd+Shift+B while the manual table is shown, where Cmd+B is the table's own
-    /// (`isBugReportShortcut` in `ui/src/components/bugReportKeys.ts`). A key that means none
-    /// of these waits for the next frame, as before.
+    /// Gives the open overlay and focused control the key before looking for shortcuts.
     pub(super) fn key(&mut self, key: Key) {
-        if key.phase == KeyPhase::Up || self.bug_key(key) {
+        if key.phase == KeyPhase::Up {
             return;
         }
-        if self.table_overlay_key(key) {
-            return;
-        }
-        if self.layer.edited_id().is_some() && self.field_key(key) {
-            return;
-        }
-        if let Some(press) = self.key_press(key) {
-            self.press(&press);
+        let action = kit_scene::input::key(
+            self,
+            |client| client.focused_key(key),
+            |client| client.shortcut(key),
+        );
+        if let Some(KeyResponse::Action(action)) = action {
+            self.dispatch(&action);
         }
     }
 
-    /// What `key` presses, in the order `key` describes, after it has moved the focus or the
-    /// highlighted row of a list or menu if it does that instead; a key that means none of
-    /// these is kept for the next frame.
-    fn key_press(&mut self, key: Key) -> Option<Action> {
-        let mac = self.platform == Platform::Mac;
-        let first = key.phase == KeyPhase::Down;
-        if first && key.code == KeyCode::Escape && self.table_escape() {
-            return None;
-        }
-        if let Some(press) = self.layer.shortcut(&key, mac) {
-            // A table command's key acts once for each press, not again as it repeats. While a
-            // context menu is open it does nothing, and the menu's own keys move through its
-            // rows.
-            let table_key = matches!(
-                press.downcast_ref::<game_manual::features::table::Message>(),
-                Some(game_manual::features::table::Message::Shortcut(..))
-            );
-            let free = self.features.menu().is_none() && !self.features.overlay_open();
-            if !table_key || (first && free) {
-                return Some(press);
-            }
-            if free {
-                return None;
-            }
+    /// Navigation, scrolling and editing can consume a key without returning an action.
+    fn focused_key(&mut self, key: Key) -> Option<KeyResponse<Action>> {
+        if self.bug_key(key)
+            || self.table_overlay_key(key)
+            || (self.layer.edited_id().is_some() && self.field_key(key))
+        {
+            return Some(KeyResponse::Handled);
         }
         if key.code == KeyCode::Tab {
             self.features.rows_mut().update(RowMessage::Focus(None));
             self.layer.move_focus(!key.modifiers.shift);
-            return None;
+            return Some(KeyResponse::Handled);
         }
         match self.layer.navigate(&key) {
-            Navigation::Press(press) => return Some(press),
-            Navigation::Moved => return None,
+            Navigation::Press(action) => return Some(KeyResponse::Action(action)),
+            Navigation::Moved => return Some(KeyResponse::Handled),
             Navigation::Ignored => {}
         }
         let arrow = match key.code {
@@ -327,33 +456,62 @@ impl Client {
         if let Some(up) = arrow
             && self.layer.focused_slider().is_some()
         {
-            return self.nudge(up);
+            return Some(
+                self.nudge(up)
+                    .map_or(KeyResponse::Handled, KeyResponse::Action),
+            );
         }
         if self.scroll_key(key) {
-            return None;
+            return Some(KeyResponse::Handled);
         }
-        if first && key.code == KeyCode::Enter {
-            return self.layer.focused_press();
+        if key.phase == KeyPhase::Down && key.code == KeyCode::Enter {
+            return self.layer.focused_press().map(KeyResponse::Action);
+        }
+        None
+    }
+
+    fn shortcut(&mut self, key: Key) -> Option<KeyResponse<Action>> {
+        let mac = self.platform == Platform::Mac;
+        let first = key.phase == KeyPhase::Down;
+        if first && key.code == KeyCode::Escape && self.table_escape() {
+            return Some(KeyResponse::Handled);
+        }
+        if let Some(action) = self.layer.shortcut(&key, mac) {
+            // While a context menu is open, its keys move through its rows. Table
+            // commands take each key once even when the host sends repeats.
+            let table_key = matches!(
+                action.downcast_ref::<game_manual::features::table::Message>(),
+                Some(game_manual::features::table::Message::Shortcut(..))
+            );
+            let free = self.features.menu().is_none() && !self.features.overlay_open();
+            if !table_key || (first && free) {
+                return Some(KeyResponse::Action(action));
+            }
+            if free {
+                return Some(KeyResponse::Handled);
+            }
         }
         if first && key.code == KeyCode::Escape {
-            return self.layer.close_press();
+            return self.layer.close_press().map(KeyResponse::Action);
         }
-        let bug_report = if self.screen == Screen::Table {
+        let bug_report = if self.features.screen == Screen::Table {
             "Cmd+Shift+B"
         } else {
             "Cmd+B"
         };
         if first && Chord::parse(bug_report, mac) == Some(Chord::of(&key)) {
-            return Some(Action::new(app_screens::screens::bug_report::Message::Open));
+            return Some(KeyResponse::Action(Action::new(
+                app_screens::screens::bug_report::Message::Open,
+            )));
         }
-        // The platform's undo takes back an answer, as the web's `StageBoard` lets it.
         if first
-            && self.screen == Screen::Game
+            && self.features.screen == Screen::Game
             && Chord::parse("Cmd+Z", mac) == Some(Chord::of(&key))
         {
-            return Some(Action::new(game_hud::prompts::bar::Message::Undo));
+            return Some(KeyResponse::Action(Action::new(
+                game_hud::prompts::bar::Message::Undo,
+            )));
         }
-        self.inputs.push(Input::Key(key));
         None
     }
 

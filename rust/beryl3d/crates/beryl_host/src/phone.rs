@@ -5,6 +5,7 @@
 //! of the platform. Everything else (the frame loop, the renderer, inputs from other threads)
 //! happens here, so the Swift and Kotlin apps hold no logic of their own.
 
+use kit_ui::input::Input as DeviceInput;
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::Instant;
@@ -246,22 +247,22 @@ impl Phone {
         {
             running.frames.low_memory(&mut running.screen.renderer);
         }
-        self.give(Input::Lifecycle(lifecycle));
+        self.give(Input::Device(DeviceInput::Lifecycle(lifecycle)));
     }
 
     /// A mouse, touch or pen event. Dropped before the first surface.
     pub fn pointer(&mut self, pointer: Pointer) {
-        self.give(Input::Pointer(pointer));
+        self.give(Input::Device(DeviceInput::Pointer(pointer)));
     }
 
     /// A key event. Dropped before the first surface.
     pub fn key(&mut self, key: Key) {
-        self.give(Input::Key(key));
+        self.give(Input::Device(DeviceInput::Key(key)));
     }
 
     /// The edited text field's whole new contents. Dropped before the first surface.
     pub fn text(&mut self, text: String) {
-        self.give(Input::Text(TextChange::Replace(text)));
+        self.give(Input::Device(DeviceInput::Text(TextChange::Replace(text))));
     }
 
     /// The next thing the client asks of the platform, or `None`, as always before the first
@@ -330,14 +331,14 @@ pub fn due(last_drawn: Option<u64>, now: u64, hz: f32, display_hz: f32) -> bool 
 
 /// The `Surface` input for a surface of `width` by `height` physical pixels at `scale`.
 fn surface_input(width: u32, height: u32, scale: f32, safe_area: Insets) -> Input {
-    Input::Surface {
+    Input::Device(DeviceInput::Surface {
         size: Size {
             width: width as f32 / scale,
             height: height as f32 / scale,
         },
         scale,
         safe_area,
-    }
+    })
 }
 
 /// The frame loop and what it draws on, once the platform has passed a surface.

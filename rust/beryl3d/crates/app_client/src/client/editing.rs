@@ -1,7 +1,8 @@
 //! Routes toolkit field changes and clipboard and native entry requests.
 
-use super::{Client, Input, Platform};
+use super::{Client, Platform};
 use crate::command::Request;
+use kit_ui::input::Input as DeviceInput;
 
 use kit_ui::input::{Key, KeyCode, Pointer, TextChange};
 use kit_ui::layout::Edit;
@@ -24,12 +25,12 @@ impl Client {
 
     /// Hands the edited field text typed into it, an input method's, a phone's native field's
     /// or the clipboard's (`Input::Text` and `Input::Paste`).
-    pub(super) fn type_into(&mut self, input: &Input) {
+    pub(super) fn type_into(&mut self, input: &DeviceInput) {
         let edit = match input {
-            Input::Text(TextChange::Insert(words)) => Edit::Insert(words),
-            Input::Text(TextChange::Replace(words)) => Edit::Replace(words),
-            Input::Text(TextChange::Preedit(words)) => Edit::Preedit(words),
-            Input::Paste(words) => Edit::Paste(words),
+            DeviceInput::Text(TextChange::Insert(words)) => Edit::Insert(words),
+            DeviceInput::Text(TextChange::Replace(words)) => Edit::Replace(words),
+            DeviceInput::Text(TextChange::Preedit(words)) => Edit::Preedit(words),
+            DeviceInput::Paste(words) => Edit::Paste(words),
             _ => return,
         };
         self.edit(edit);

@@ -2,6 +2,7 @@
 //! client on the frame thread, under the desktop host or the windowless one, fed by the
 //! session thread or by a replayed recording, writing its frame log.
 
+use kit_ui::input::Input as DeviceInput;
 use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -201,7 +202,7 @@ impl Feed for AppFeed {
                 println!("{GAME_OVER}");
             }
         }
-        if let Input::Lifecycle(Lifecycle::Suspended) = input {
+        if let Input::Device(DeviceInput::Lifecycle(Lifecycle::Suspended)) = input {
             summarize = self.finish == Finish::AtSuspend;
         }
         if summarize && let Some(Ok(log)) = self.log.borrow_mut().as_mut() {

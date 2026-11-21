@@ -2,6 +2,7 @@
 //! unspent mana changes as its step begins, and the `loss` or `gain` the step begins shows by
 //! how much a total changed.
 
+use kit_ui::input::Input as DeviceInput;
 use std::fmt::Write;
 
 use app_client::{Client, Input};
@@ -183,10 +184,10 @@ fn loss_draws() -> String {
     const LOSS_RGB: [u8; 3] = [255, 106, 85];
     let (mut client, steps) = counting(vec![pool(), life(Side::You, 17)]);
     let glyphs = client.wanted_glyphs().map(stub_glyph).collect();
-    client.handle(Input::Assets(AssetReady::Glyphs {
+    client.handle(Input::Device(DeviceInput::Assets(AssetReady::Glyphs {
         page: STUB_PAGE,
         glyphs,
-    }));
+    })));
     let (from, to) = steps[1];
     let mut output = String::new();
     for time in [0, 100, 200, 300, 400, 500, 600, 750, 900, 999] {

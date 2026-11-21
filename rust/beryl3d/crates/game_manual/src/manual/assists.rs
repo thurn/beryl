@@ -22,6 +22,7 @@ use beryl_protocol::protocol::{
     Answer, LabelView, ObjectId, PileName, ProposalView, Side, TablePrompt, TargetRef, ZoneName,
 };
 use beryl_protocol::script::Subject;
+use game_hud::hud::anchors::anchor_target;
 use game_hud::hud::placement_scene::PlacementScene;
 use kit_base::data::Card;
 
@@ -214,9 +215,9 @@ pub fn labels(labels: &[LabelView], view: &PlayerView, profile: Profile<'_>) -> 
             // room to press both the card and the one above it. Larger cards have room
             // for the label in the middle.
             tags.anchor = Some(if let Some(manual) = manual {
-                Anchor::Above(subject, -manual.label_overlap)
+                Anchor::Above(anchor_target(subject), -manual.label_overlap)
             } else {
-                Anchor::Object(subject, Vec2::splat(0.5))
+                Anchor::Object(anchor_target(subject), Vec2::splat(0.5))
             });
             tags
         })

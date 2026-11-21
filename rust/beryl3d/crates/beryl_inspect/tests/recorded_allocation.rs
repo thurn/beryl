@@ -5,6 +5,7 @@
 #[path = "../../../test_data.rs"]
 mod test_data;
 
+use kit_ui::input::Input as DeviceInput;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
 
@@ -80,14 +81,14 @@ fn play(name: &str) -> (usize, Vec<(u64, usize)>) {
         .and_then(|recording| recording.views())
         .unwrap_or_else(|why| panic!("{why}"));
     let mut client = Client::new(crate::test_data::data(), Config::LARGEST);
-    client.handle(Input::Surface {
+    client.handle(Input::Device(DeviceInput::Surface {
         size: Size {
             width: 1600.0,
             height: 900.0,
         },
         scale: 1.0,
         safe_area: Insets::default(),
-    });
+    }));
     let mut next = 0;
     let mut now = 0;
     let mut frames = 0;
@@ -145,14 +146,14 @@ fn frames_allocate_nothing_while_a_card_is_held() {
         .and_then(|recording| recording.views())
         .unwrap_or_else(|why| panic!("{why}"));
     let mut client = Client::new(crate::test_data::data(), Config::LARGEST);
-    client.handle(Input::Surface {
+    client.handle(Input::Device(DeviceInput::Surface {
         size: Size {
             width: 1600.0,
             height: 900.0,
         },
         scale: 1.0,
         safe_area: Insets::default(),
-    });
+    }));
     client.handle(Input::Update(Box::new(views[0].clone())));
     let mut now = 0;
     while {
@@ -167,7 +168,7 @@ fn frames_allocate_nothing_while_a_card_is_held() {
         .expect("Trinket Mage is in the hand");
     let start = card.corners.iter().copied().sum::<Vec2>() / 4.0;
     let pointer = |phase, position| {
-        Input::Pointer(Pointer {
+        Input::Device(DeviceInput::Pointer(Pointer {
             id: 0,
             kind: PointerKind::Mouse,
             phase,
@@ -175,7 +176,7 @@ fn frames_allocate_nothing_while_a_card_is_held() {
             button: Button::Primary,
             wheel: Vec2::ZERO,
             modifiers: Modifiers::default(),
-        })
+        }))
     };
     client.handle(pointer(PointerPhase::Down, start));
     let mut allocated = Vec::new();

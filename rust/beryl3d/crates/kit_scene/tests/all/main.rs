@@ -1,4 +1,5 @@
 mod features;
+mod gestures;
 
 /// A card's printed size from the repository's `card.json`, the size frames are built with. It
 /// is read once, so that a test counting a frame's allocations counts none for it.
@@ -13,3 +14,5 @@ fn card() -> glam::Vec2 {
 }
 
 mod tree;
+
+mod scroll;

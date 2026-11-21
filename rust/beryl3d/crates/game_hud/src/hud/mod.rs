@@ -1,6 +1,7 @@
 //! The heads-up display of the game screen: the players' life totals and details, the steps
 //! of the turn, the notices `announce` steps show, the step banner and the game log.
 
+pub mod anchors;
 pub mod banner;
 pub mod counts;
 pub mod full_control;

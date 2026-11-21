@@ -1,6 +1,6 @@
 //! Connects the report's messages and paused clock to the table and input routing.
 
-use super::{Client, Platform};
+use super::{Client, Platform, input::ScenePoint};
 use app_screens::screens::Sheet;
 use app_screens::screens::bug_report::{BugStage, Message, whole_window};
 use kit_frame::frame::Wake;
@@ -103,25 +103,26 @@ impl Client {
     /// waiting to pick a card up, and the word a refused click put under a permanent going.
     pub(super) fn timed_wake(&self, table: u64) -> Wake {
         let wake = self.bug_wake(table).or_at(self.layer.tip_due());
-        wake.or_at(self.touch.due(&self.data().pointer))
+        wake.or_at(self.gesture_due())
             .or_at(self.features.inspector().notice_until())
-            .or_at(self.opening.spin_due())
+            .or_at(self.features.opening.spin_due())
     }
 
     /// A pointer event while the report is open: nothing reaches the table. While a region is
     /// being chosen, a drag outside the tools draws it, and a release chooses it (a click, the
     /// whole window); otherwise the pointer presses the report's controls.
-    pub(super) fn bug_point(&mut self, pointer: &Pointer) {
+    pub(super) fn bug_point(&mut self, point: &ScenePoint) {
+        let pointer = &point.pointer;
         match self.features.bug().stage {
             BugStage::Capturing { .. } => return,
             BugStage::Select { .. } => {
                 if !self.drag_region(pointer) {
-                    self.press_flat(pointer, false);
+                    self.press_flat(point, false);
                 }
             }
             _ => {
-                if !self.scroll_pointer(pointer) {
-                    self.press_flat(pointer, false);
+                if !self.scroll_pointer(point) {
+                    self.press_flat(point, false);
                 }
             }
         }
@@ -194,7 +195,7 @@ impl Client {
                     KeyCode::Tab => self.layer.move_focus(!key.modifiers.shift),
                     KeyCode::Enter if first => {
                         if let Some(press) = self.layer.focused_press() {
-                            self.press(&press);
+                            self.dispatch(&press);
                         }
                     }
                     _ => {

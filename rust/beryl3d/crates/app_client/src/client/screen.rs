@@ -36,10 +36,10 @@ impl Client {
         self.ask_saved_tables();
         // The element a gesture began on is gone with the screen or sheet it was on.
         let sheet = self.features.sheet;
-        if self.shown != (self.screen, sheet) {
-            self.shown = (self.screen, sheet);
-            self.end_gesture();
-            self.scrolling.cancel();
+        if self.features.shown != (self.features.screen, sheet) {
+            self.features.shown = (self.features.screen, sheet);
+            self.cancel_gesture();
+            self.routes.scrolling.cancel();
             self.features.rows_mut().update(RowMessage::Focus(None));
             self.cancel_touch();
             self.features.inspector_mut().update(Inspect::Pin(None));
@@ -74,7 +74,9 @@ impl Client {
         // table. Once a game has a view it shows the players' furniture, and once the game has
         // ended, the result.
         let under = if !under_visible
-            || (self.screen == Screen::Game && input.prompt.is_none() && input.view.is_none())
+            || (self.features.screen == Screen::Game
+                && input.prompt.is_none()
+                && input.view.is_none())
         {
             None
         } else {
@@ -82,16 +84,17 @@ impl Client {
         };
         let opening = under.is_some()
             && sheet.is_none()
-            && self.screen == Screen::Game
+            && self.features.screen == Screen::Game
             && game_hud::screens::opening::shown(&input.hud());
-        let away = self.screen == Screen::Game && game_hud::screens::opening::shown(&input.hud());
+        let away =
+            self.features.screen == Screen::Game && game_hud::screens::opening::shown(&input.hud());
         let shown = match sheet {
             Some(Sheet::Settings) => sheet_view,
             Some(Sheet::BugReport) => Some(bug_report::compose(under, sheet_view)),
             None => under,
         };
-        let music = screens::music(self.screen, view);
-        self.opening.shown = opening;
+        let music = screens::music(self.features.screen, view);
+        self.features.opening.shown = opening;
         // While the opening shows the hand, the table's hand waits below the window, as the web's
         // desktop board holds it away under the opening, a sheet open over it or not; the
         // phone's board does not.
@@ -117,8 +120,8 @@ impl Client {
             self.show.faces_mut().want_full(face);
         }
         self.show_gear();
-        if music != self.music {
-            self.music = music;
+        if music != self.features.music {
+            self.features.music = music;
             self.requests.push_back(Request::Music(music));
         }
     }
@@ -126,8 +129,8 @@ impl Client {
     /// Updates the opening clock and whether a result can be dismissed.
     fn refresh_screen_state(&mut self) {
         let played = self.show.shown().map(|update| &update.view);
-        self.opening.spin(
-            played.filter(|_| self.screen == Screen::Game),
+        self.features.opening.spin(
+            played.filter(|_| self.features.screen == Screen::Game),
             self.now,
             self.show.table().data().shown.opening.flip_ms,
         );
@@ -141,7 +144,7 @@ impl Client {
 
     /// Fills the HUD positions in the game screen from the registered views.
     fn game_furniture(&mut self, visible: bool) -> Furniture {
-        if !visible || self.screen != Screen::Game {
+        if !visible || self.features.screen != Screen::Game {
             return Furniture::default();
         }
         let input = self.screen_in().hud();
@@ -198,7 +201,7 @@ impl Client {
         let view = self.show.latest().map(|update| &update.view);
         let played = self.show.shown().map(|update| &update.view);
         let profile = self.show.table().profile();
-        let revealed = if self.screen == Screen::Table {
+        let revealed = if self.features.screen == Screen::Table {
             self.features.viewer().revealed().to_vec()
         } else {
             Vec::new()
@@ -219,15 +222,15 @@ impl Client {
             faces: Some(self.show.faces().list()),
             viewing: self.features.viewer().open(),
             revealed: &revealed,
-            carried: self.gesture.carried(),
-            spinning: self.opening.spinning(self.now),
+            carried: self.carried_item(),
+            spinning: self.features.opening.spinning(self.now),
             placement_scene,
         };
         let menu_face = context_menu::sheet_face(self.features.menu(), &hud);
         let feature_inputs = ViewInputs {
             drag_threshold: self.data().pointer.drag_threshold_points,
             profile,
-            screen: self.screen,
+            screen: self.features.screen,
             window: self.window,
             view,
             session: self.session,
@@ -240,16 +243,16 @@ impl Client {
         };
         let sheet_view =
             sheet.and_then(|sheet| self.features.view(Placement::Sheet(sheet), feature_inputs));
-        let log = (under_visible && self.screen == Screen::Game)
+        let log = (under_visible && self.features.screen == Screen::Game)
             .then(|| self.features.view(Placement::GameLog, feature_inputs))
             .flatten();
         let mounted_screen = under_visible
             .then(|| {
                 self.features
-                    .view(Placement::Screen(self.screen), feature_inputs)
+                    .view(Placement::Screen(self.features.screen), feature_inputs)
             })
             .flatten();
-        let result = (under_visible && self.screen == Screen::Game)
+        let result = (under_visible && self.features.screen == Screen::Game)
             .then(|| self.features.view(Placement::GameOver, feature_inputs))
             .flatten();
         MountedViews {
@@ -266,7 +269,7 @@ impl Client {
     pub(super) fn screen_in(&self) -> ScreenIn<'_> {
         ScreenIn {
             data: self.show.table().data(),
-            screen: self.screen,
+            screen: self.features.screen,
             window: self.window,
             profile: self.show.table().profile(),
             view: self.show.latest().map(|update| &update.view),
@@ -278,18 +281,18 @@ impl Client {
                 .features
                 .prompts
                 .current()
-                .filter(|_| !self.opening.spinning(self.now)),
+                .filter(|_| !self.features.opening.spinning(self.now)),
             full_control: self.settings.full_control,
             stops: self.settings.stops,
             sheet: self.features.sheet,
-            gallery: self.gallery,
+            gallery: self.features.gallery,
             fields: self.layer.fields(),
             inspected: None,
             faces: Some(self.faces()),
             viewing: self.features.viewer().open(),
             revealed: self.features.viewer().revealed(),
-            carried: self.gesture.carried(),
-            spinning: self.opening.spinning(self.now),
+            carried: self.carried_item(),
+            spinning: self.features.opening.spinning(self.now),
             placement_scene: None,
         }
     }
@@ -304,8 +307,8 @@ impl Client {
     /// The layer each active face has landed in at each size.
     #[must_use]
     pub fn face_layers(&self) -> &Faces {
-        if self.screen == Screen::Gallery
-            && let Some(faces) = &self.gallery_faces
+        if self.features.screen == Screen::Gallery
+            && let Some(faces) = &self.features.gallery_faces
         {
             return faces;
         }
@@ -315,7 +318,7 @@ impl Client {
     /// Whether the active face list belongs to the gallery.
     #[must_use]
     pub fn showing_gallery(&self) -> bool {
-        self.screen == Screen::Gallery
+        self.features.screen == Screen::Gallery
     }
 
     /// How many glyphs the flat layer's text asked for that no atlas page holds yet
@@ -340,7 +343,7 @@ impl Client {
                 self.show.faces_mut().arrived(face, size, layer);
             }
             AssetReady::GalleryFace { face, layer } => {
-                if let Some(faces) = &mut self.gallery_faces {
+                if let Some(faces) = &mut self.features.gallery_faces {
                     faces.arrived(face, FaceSize::Board, layer);
                 }
             }
@@ -363,7 +366,7 @@ impl Client {
         // The phone's menu button, part of its game screen, opens the settings instead.
         // The game screen's undo takes back an engine decision; the manual table's runs its
         // `table.undo` command, as the web's `Table` passes it to `GameBoard`.
-        let undo = match self.screen {
+        let undo = match self.features.screen {
             Screen::Table => game_manual::manual::commands::command("table.undo")
                 .map(|(index, _)| Action::new(TableMessage::Shortcut(index, false))),
             _ => self
@@ -372,7 +375,7 @@ impl Client {
         };
         let bug = !self.bug_open();
         let profile = self.show.table().profile();
-        let at = match self.screen {
+        let at = match self.features.screen {
             Screen::Game
                 if profile
                     .data()

@@ -12,6 +12,7 @@ use glam::Vec2;
 use kit_frame::frame::{Frame, Role, StateBits};
 use kit_probe::agent::checks::reachable;
 use kit_probe::agent::fault::Context;
+use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{Button, Insets, Modifiers, Pointer, PointerKind, PointerPhase};
 use kit_ui::input::{Rect, Size};
 
@@ -209,11 +210,11 @@ fn a_touch_hovers_nothing() {
             name_bytes: 65_536,
         },
     );
-    client.handle(Input::Surface {
+    client.handle(Input::Device(DeviceInput::Surface {
         size: WINDOW,
         scale: 2.0,
         safe_area: Insets::default(),
-    });
+    }));
     client.handle(Input::Update(Box::new(sample().update())));
     let card = client
         .frame(0)
@@ -223,7 +224,7 @@ fn a_touch_hovers_nothing() {
         .map(|element| (element.corners.iter().copied().sum::<Vec2>()) / 4.0)
         .expect("an interactive card");
     for phase in [PointerPhase::Down, PointerPhase::Move] {
-        client.handle(Input::Pointer(Pointer {
+        client.handle(Input::Device(DeviceInput::Pointer(Pointer {
             id: 1,
             kind: PointerKind::Touch,
             phase,
@@ -231,7 +232,7 @@ fn a_touch_hovers_nothing() {
             button: Button::Primary,
             wheel: Vec2::ZERO,
             modifiers: Modifiers::default(),
-        }));
+        })));
         let frame = client.frame(1_000_000);
         assert!(
             frame

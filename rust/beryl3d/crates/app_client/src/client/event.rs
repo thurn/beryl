@@ -9,7 +9,6 @@ use std::sync::Arc;
 use crate::command::Reply;
 use crate::settings::Settings;
 use kit_base::data::Data;
-use kit_ui::input::{AssetReady, Insets, Key, Lifecycle, Pointer, Size, TextChange, Tier};
 
 /// One thing that has happened, passed to `Client::handle`.
 #[derive(Clone, Debug, PartialEq)]
@@ -24,33 +23,7 @@ pub enum Input {
     /// client makes the match's list of faces (`Client::faces`) when the match loads. Boxed
     /// because it is far larger than every other input.
     Cards(Box<CardRecords>),
-    /// The drawing surface's size in logical points, how many physical pixels make one point,
-    /// and the part of it that system bars and rounded corners leave clear.
-    Surface {
-        size: Size,
-        scale: f32,
-        safe_area: Insets,
-    },
-    /// A mouse, touch or pen event.
-    Pointer(Pointer),
-    Key(Key),
-    /// Text typed into the focused field, or its native field's new contents on a phone.
-    Text(TextChange),
-    /// The platform's clipboard held this text when the client asked for it
-    /// (`Request::Paste`): it is inserted at the focused field's caret.
-    Paste(String),
-    /// A face, or an atlas page of glyphs or icons, is ready on the GPU.
-    Assets(AssetReady),
-    /// The app was suspended or resumed, or the system is low on memory.
-    Lifecycle(Lifecycle),
-    /// Which platform the host runs on, sent once at startup: whether `Cmd` in a shortcut
-    /// means the Command key, as on the Mac, or Control. Until it arrives the client takes the
-    /// Mac's.
-    Platform {
-        mac: bool,
-    },
-    /// The visual tier to draw in.
-    Tier(Tier),
+    Device(kit_ui::input::Input),
     /// The session's answer to a `SessionCommand`.
     Reply(Reply),
     /// The manual table's lobby changed (`TableEvent::Lobby`): its new state, or no lobby once

@@ -23,8 +23,7 @@ const SECOND: f32 = 1_000_000_000.0;
 pub(super) struct Grip {
     /// The slot of the card pressed.
     pub slot: usize,
-    /// Where the press began and where the pointer is now, in logical points.
-    pub start: Vec2,
+    /// Where the pointer is now, in logical points.
     pub at: Vec2,
     /// Which drags pick the card up.
     pub hold: Hold,
@@ -35,7 +34,7 @@ pub(super) struct Grip {
     /// Whether the press has picked the card up: its `hold` let it, and it has `moved`.
     pub held: bool,
     /// What made the press.
-    pub by: By,
+    pub kind: kit_ui::input::PointerKind,
 }
 
 /// Which drags of a press pick its card up.
@@ -50,29 +49,20 @@ pub enum Hold {
     UpOrDown,
 }
 
-/// What made a press on a card.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum By {
-    /// The mouse or a pen.
-    Mouse,
-    /// A finger, whose press that never moved is a tap. It may pick its card up only once
-    /// `ready`: a finger on the manual table waits `PICKUP_MS` first, and one that moved before
-    /// then never picks the card up.
-    Finger { ready: bool },
-}
-
 impl Grip {
-    /// Moves the press to `at`. A holdable card is picked up once the press has travelled
-    /// `drag_threshold_points` from where it began, as the web interface's `Pointer` has it.
-    pub fn moved(&mut self, at: Vec2, threshold: f32) {
+    /// Applies the recognizer's direction and pickup decision to the card's motion.
+    pub fn moved(&mut self, at: Vec2, pickup: Option<(kit_scene::input::Direction, bool)>) {
+        use kit_scene::input::Direction;
+
         self.at = at;
-        if let Some(sideways) = kit_ui::scroll::sideways(self.start, at, threshold) {
-            // Whether the drag scrolls is settled where it first passes the threshold.
-            if !self.moved && self.hold == Hold::UpOrDown && sideways {
-                self.hold = Hold::Never;
-            }
+        if let Some((direction, ready)) = pickup {
             self.moved = true;
-            self.held |= self.hold != Hold::Never && self.by != By::Finger { ready: false };
+            self.held |= ready
+                && match self.hold {
+                    Hold::Never => false,
+                    Hold::Drag => true,
+                    Hold::UpOrDown => direction == Direction::Vertical,
+                };
         }
     }
 }

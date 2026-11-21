@@ -3,12 +3,14 @@
 use glam::Vec2;
 use kit_base::geometry::{Insets, Size, Window};
 use kit_frame::frame::ElementId;
+use kit_frame::frame::Frame;
+use kit_scene::input::{Router, TouchPolicy};
+use kit_scene::scroll::{ScrollGesture, ScrollInput};
 use kit_ui::element::{Anchor, Element, Overflow, column, row};
 use kit_ui::input::{
     Button, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase,
 };
 use kit_ui::layout::Layer;
-use kit_ui::scroll::{ScrollGesture, ScrollInput};
 
 fn pointer_tuning() -> kit_base::data::pointer::PointerTuning {
     kit_base::data::pointer::PointerTuning::parse(include_str!(
@@ -48,6 +50,8 @@ fn screen(overflow: Overflow, content_height: f32) -> Element {
 struct Page {
     layer: Layer,
     gesture: ScrollGesture<ElementId>,
+    router: Router<ElementId>,
+    frame: Frame,
     viewport: ElementId,
     tuning: kit_base::data::pointer::PointerTuning,
 }
@@ -71,6 +75,8 @@ impl Page {
         Self {
             layer,
             gesture: ScrollGesture::default(),
+            router: Router::default(),
+            frame: Frame::with_capacity(0, 0, 0),
             viewport,
             tuning: pointer_tuning(),
         }
@@ -103,8 +109,16 @@ impl Page {
             (phase == PointerPhase::Wheel).then_some(wheel),
             self.tuning.wheel_notch_points,
         );
+        let point = self
+            .router
+            .point(&self.frame, pointer, now, &self.tuning, |_| {
+                (None, TouchPolicy::default())
+            })
+            .point
+            .expect("the pointer is active");
         let input = self.gesture.pointer(
             &pointer,
+            point.drag.map(|drag| drag.direction),
             now,
             at,
             |id| self.layer.scroll_viewport(id),

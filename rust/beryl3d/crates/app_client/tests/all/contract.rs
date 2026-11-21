@@ -11,6 +11,7 @@ use app_client::{Client, Config};
 use glam::{Affine3A, Vec2, Vec3};
 use kit_frame::frame::{Draw, Frame, Material, Sprite, Wake};
 use kit_ui::element::Shadow;
+use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{
     Button, FaceSize, Insets, Modifiers, Pointer, PointerKind, PointerPhase, Size,
 };
@@ -161,15 +162,15 @@ fn a_clip_keeps_the_texture_array_and_mesh() {
 
 fn inputs() -> Vec<Input> {
     vec![
-        Input::Surface {
+        Input::Device(DeviceInput::Surface {
             size: Size {
                 width: 1280.0,
                 height: 800.0,
             },
             scale: 2.0,
             safe_area: Insets::default(),
-        },
-        Input::Pointer(Pointer {
+        }),
+        Input::Device(DeviceInput::Pointer(Pointer {
             id: 0,
             kind: PointerKind::Mouse,
             phase: PointerPhase::Move,
@@ -177,7 +178,7 @@ fn inputs() -> Vec<Input> {
             button: Button::None,
             wheel: Vec2::ZERO,
             modifiers: Modifiers::default(),
-        }),
+        })),
         Input::Reply(Reply::Done(Ok(()))),
     ]
 }
@@ -404,7 +405,7 @@ mod milestone_three {
     fn a_button_press_clicks_the_open_prompt() {
         let mut client = client();
         client.handle(deciding(prompt("Pay {1}{U}")));
-        client.press(&Action::new(BarMessage::Button(ButtonId::Auto)));
+        client.dispatch(&Action::new(BarMessage::Button(ButtonId::Auto)));
         assert_eq!(
             client.next_command(),
             Some(SessionCommand::Click(ClickRequest {
@@ -421,7 +422,7 @@ mod milestone_three {
     fn a_setting_press_asks_for_the_settings_to_be_saved() {
         let mut client = client();
         while client.next_request().is_some() {}
-        client.press(&Action::new(SettingsMessage::Change(Setting::Music(40))));
+        client.dispatch(&Action::new(SettingsMessage::Change(Setting::Music(40))));
         let Some(Request::SaveSettings(saved)) = client.next_request() else {
             panic!("the first request saves the settings");
         };
@@ -437,7 +438,7 @@ mod milestone_three {
         assert_eq!(settings.graphics, Graphics::Baseline);
         let mut client = client();
         while client.next_request().is_some() {}
-        client.press(&Action::new(SettingsMessage::Change(Setting::Graphics(
+        client.dispatch(&Action::new(SettingsMessage::Change(Setting::Graphics(
             Graphics::Enhanced,
         ))));
         let Some(Request::SaveSettings(saved)) = client.next_request() else {

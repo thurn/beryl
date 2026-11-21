@@ -9,6 +9,7 @@
 //! sessions' checks) choosing the tier took about 50 ms, which is the time the measurement
 //! adds before the first frame.
 
+use kit_ui::input::Input as DeviceInput;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
@@ -77,16 +78,16 @@ pub fn probe(renderer: &mut Renderer, size: Size, scale: f32, display_hz: f32) -
     let data = crate::data::embedded().expect("app tuning");
     let tuning = data.tier_probe;
     let mut client = Client::new(data, Config::LARGEST);
-    client.handle(Input::Surface {
+    client.handle(Input::Device(DeviceInput::Surface {
         size,
         scale,
         safe_area: Insets::default(),
-    });
+    }));
     client.handle(Input::Update(Box::new(GameUpdate {
         session: SessionId(1),
         view: performance_probe(PERMANENTS),
     })));
-    client.handle(Input::Tier(Tier::Enhanced));
+    client.handle(Input::Device(DeviceInput::Tier(Tier::Enhanced)));
     client.prepare(0);
     let frame = client.frame(0);
     let width = (size.width * scale).round().max(1.0) as u32;

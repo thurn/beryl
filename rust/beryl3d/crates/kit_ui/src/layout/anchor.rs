@@ -5,11 +5,10 @@
 //! (`Layer::follow`), so an element anchored to a card stays on the card while it flies, with no
 //! layout and no allocation.
 
-use beryl_protocol::script::Subject;
 use glam::Vec2;
 
 use super::{Layer, Node};
-use crate::element::Anchor;
+use crate::element::{Anchor, AnchorTarget};
 
 impl Layer {
     /// Reads where each element anchored to a scene object stands now: `spot` gives the
@@ -17,8 +16,8 @@ impl Layer {
     /// the table does not show it, and then the element is not drawn and takes no presses. The
     /// client calls it on every frame, after the table is drawn. Lays out nothing and allocates
     /// nothing.
-    pub fn follow(&mut self, spot: impl Fn(Subject) -> Option<Spot>) {
-        fn visit(node: &mut Node, spot: &impl Fn(Subject) -> Option<Spot>) {
+    pub fn follow(&mut self, spot: impl Fn(AnchorTarget) -> Option<Spot>) {
+        fn visit(node: &mut Node, spot: &impl Fn(AnchorTarget) -> Option<Spot>) {
             match node.element.anchor {
                 Some(Anchor::Object(subject, _)) => {
                     node.followed = spot(subject).map(|spot| spot.centre);

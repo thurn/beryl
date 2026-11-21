@@ -6,7 +6,7 @@ mod samples;
 
 pub use samples::faces;
 
-use crate::screens::ScreenPress;
+use crate::screens::GalleryMessage;
 use glam::Vec2;
 
 use super::{Screen, ScreenIn, start};
@@ -179,9 +179,9 @@ fn reference_page(input: &ScreenIn, faces: &FaceList, width: f32, height: f32) -
 /// goes back to the start screen.
 fn with_escape(screen: Element, state: GalleryState) -> Element {
     if state.menu.is_some() {
-        screen.shortcut("Escape", ScreenPress::DismissMenu)
+        screen.shortcut("Escape", GalleryMessage::DismissMenu)
     } else if state.query.is_some() {
-        screen.shortcut("Escape", ScreenPress::GalleryQuery(None))
+        screen.shortcut("Escape", GalleryMessage::GalleryQuery(None))
     } else {
         screen.shortcut("Escape", start::Message::Open(Screen::Start))
     }
@@ -548,12 +548,14 @@ fn context_menus(available: bool) -> Element {
                 ("Library", GalleryMenu::Library),
                 ("Bottom-right corner", GalleryMenu::Corner),
             ]
-            .map(|(label, kind)| example_button(label, ScreenPress::GalleryMenu(kind), available)),
+            .map(|(label, kind)| {
+                example_button(label, GalleryMessage::GalleryMenu(kind), available)
+            }),
         ),
     )
 }
 
-fn example_button(label: &str, press: ScreenPress, available: bool) -> Element {
+fn example_button(label: &str, press: GalleryMessage, available: bool) -> Element {
     let mut button = button(label);
     button.press = available.then(|| Action::new(press));
     button
@@ -565,7 +567,7 @@ fn example_menu(kind: GalleryMenu) -> Element {
             .iter()
             .map(|&(label, key)| MenuRow {
                 key: (!key.is_empty()).then(|| key.to_owned()),
-                action: Some(Action::new(ScreenPress::GalleryMenuChoice)),
+                action: Some(Action::new(GalleryMessage::GalleryMenuChoice)),
                 ..MenuRow::new(label)
             })
             .collect(),
@@ -628,7 +630,7 @@ fn commands(query: Option<GalleryQuery>, available: bool) -> Element {
             ("No matches", GalleryQuery::Untap),
         ]
         .map(|(label, query)| {
-            example_button(label, ScreenPress::GalleryQuery(Some(query)), available)
+            example_button(label, GalleryMessage::GalleryQuery(Some(query)), available)
         }),
     );
     section("Command list")

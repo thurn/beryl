@@ -4,6 +4,7 @@
 //! driven directly, so that each test reads the commands it queues: the recording driver
 //! cannot replay an undo.
 
+use kit_ui::input::Input as DeviceInput;
 use std::str::FromStr;
 
 use app_client::Input;
@@ -50,11 +51,11 @@ impl Table {
         };
         let decision = decision.id;
         let mut client = Client::new(crate::test_data::data(), Config::LARGEST);
-        client.handle(Input::Surface {
+        client.handle(Input::Device(DeviceInput::Surface {
             size: SIZE,
             scale: 1.0,
             safe_area: Insets::default(),
-        });
+        }));
         for view in views {
             client.handle(Input::Update(Box::new(view)));
         }
@@ -103,19 +104,20 @@ impl Table {
     fn click(&mut self, at: Vec2) -> Vec<kit_frame::frame::Sound> {
         let mut sounds = Vec::new();
         for phase in [PointerPhase::Move, PointerPhase::Down, PointerPhase::Up] {
-            self.client.handle(Input::Pointer(Pointer {
-                id: 0,
-                kind: PointerKind::Mouse,
-                phase,
-                position: at,
-                button: if phase == PointerPhase::Move {
-                    Button::None
-                } else {
-                    Button::Primary
-                },
-                wheel: Vec2::ZERO,
-                modifiers: Modifiers::default(),
-            }));
+            self.client
+                .handle(Input::Device(DeviceInput::Pointer(Pointer {
+                    id: 0,
+                    kind: PointerKind::Mouse,
+                    phase,
+                    position: at,
+                    button: if phase == PointerPhase::Move {
+                        Button::None
+                    } else {
+                        Button::Primary
+                    },
+                    wheel: Vec2::ZERO,
+                    modifiers: Modifiers::default(),
+                })));
             sounds.extend(self.frame().sounds.iter().copied());
             // The click on a card is found in the frame after the release, and its sound
             // plays in the frame after that.
@@ -148,14 +150,14 @@ fn undo_shows_under_the_bug_button_and_takes_back_the_open_decisions_answer() {
         "the button"
     );
     for phase in [KeyPhase::Down, KeyPhase::Up] {
-        table.client.handle(Input::Key(Key {
+        table.client.handle(Input::Device(DeviceInput::Key(Key {
             code: KeyCode::Z,
             phase,
             modifiers: Modifiers {
                 command: true,
                 ..Modifiers::default()
             },
-        }));
+        })));
     }
     table.frame();
     assert_eq!(

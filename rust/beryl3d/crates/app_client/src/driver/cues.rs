@@ -3,6 +3,7 @@
 
 use crate::client;
 use client::Input;
+use kit_ui::input::Input as DeviceInput;
 use std::sync::Arc;
 
 use super::{Duration, Page, REPLY_DELAY, STILL_LIMIT};
@@ -66,7 +67,7 @@ impl Page {
                 break;
             }
             self.cues.next += 1;
-            self.give(Input::Pointer(pointer));
+            self.give(Input::Device(DeviceInput::Pointer(pointer)));
         }
     }
 

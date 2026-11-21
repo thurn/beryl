@@ -5,6 +5,7 @@ use super::{KeyChord, Page};
 use crate::client;
 use client::{Input, Request};
 use kit_ui::element::Chord;
+use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{Key, KeyCode, KeyPhase, TextChange};
 
 impl Page {
@@ -12,7 +13,9 @@ impl Page {
     /// sends typed characters.
     pub fn type_text(&mut self, locator: &str, text: &str) {
         self.press(locator);
-        self.give(Input::Text(TextChange::Insert(text.to_owned())));
+        self.give(Input::Device(DeviceInput::Text(TextChange::Insert(
+            text.to_owned(),
+        ))));
         self.render();
     }
 
@@ -27,11 +30,11 @@ impl Page {
         let chord = Chord::parse(binding, self.client.mac())
             .unwrap_or_else(|| panic!("{binding:?} is not a chord"));
         for phase in [KeyPhase::Down, KeyPhase::Up] {
-            self.give(Input::Key(Key {
+            self.give(Input::Device(DeviceInput::Key(Key {
                 code: chord.key,
                 phase,
                 modifiers: chord.modifiers,
-            }));
+            })));
         }
         self.render();
     }
@@ -63,11 +66,11 @@ impl Page {
     pub fn key_chord(&mut self, chord: KeyChord) {
         let modifiers = chord.modifiers(self.client.mac());
         for phase in [KeyPhase::Down, KeyPhase::Up] {
-            self.give(Input::Key(Key {
+            self.give(Input::Device(DeviceInput::Key(Key {
                 code: chord.code,
                 phase,
                 modifiers,
-            }));
+            })));
         }
         self.render();
     }

@@ -11,6 +11,7 @@ use beryl_protocol::testing::{ViewBuilder, object, script, step, timing};
 use game_play::play::parts::{STEPS_PER_ADVANCE, compile_in_parts};
 use game_table::table::Table;
 use kit_frame::frame::Wake;
+use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{Insets, Size};
 
 use crate::common::{MS, window};
@@ -134,14 +135,14 @@ fn played(ticks: &[&[GameUpdate]], whole: bool) -> Frames {
     if whole {
         client.compile_whole();
     }
-    client.handle(Input::Surface {
+    client.handle(Input::Device(DeviceInput::Surface {
         size: Size {
             width: 1440.0,
             height: 900.0,
         },
         scale: 1.0,
         safe_area: Insets::default(),
-    });
+    }));
     let mut frames = Vec::new();
     let mut now = 0;
     for (index, updates) in ticks.iter().enumerate() {

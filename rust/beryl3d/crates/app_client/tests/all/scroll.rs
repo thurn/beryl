@@ -16,6 +16,7 @@ use glam::Vec2;
 use kit_frame::frame::{Frame, Place, Role};
 use kit_probe::agent::Rule;
 use kit_scene::hit::uncovered;
+use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{Button, Size};
 use kit_ui::input::{Insets, Modifiers, Pointer, PointerKind, PointerPhase};
 
@@ -158,7 +159,7 @@ fn keys_scroll_the_row_last_pressed_by_whole_groups() {
     let mut page = page(&lands(40));
     let point = on_card(&mut page, 1);
     for phase in [PointerPhase::Down, PointerPhase::Up] {
-        page.give_input(Input::Pointer(Pointer {
+        page.give_input(Input::Device(DeviceInput::Pointer(Pointer {
             id: 0,
             kind: PointerKind::Mouse,
             phase,
@@ -166,7 +167,7 @@ fn keys_scroll_the_row_last_pressed_by_whole_groups() {
             button: Button::Primary,
             wheel: Vec2::ZERO,
             modifiers: Modifiers::default(),
-        }));
+        })));
     }
     page.key(KeyCode::ArrowRight);
     page.still();
@@ -184,9 +185,10 @@ fn the_wheel_scrolls_a_group_window_supplied_by_the_arrangement_solver() {
     use crate::reference;
     use glam::Quat;
     use kit_base::geometry::Window;
+    use kit_scene::scroll::{ScrollGesture, ScrollInput};
     use kit_space::arrange::{Container, Item, Limits, Policy, Region, arrange};
     use kit_space::camera::Camera;
-    use kit_ui::scroll::{ScrollGesture, ScrollInput, Viewport};
+    use kit_ui::scroll::Viewport;
 
     let camera = Camera::fit(reference().camera, Window::default());
     let container = Container {
@@ -221,6 +223,7 @@ fn the_wheel_scrolls_a_group_window_supplied_by_the_arrangement_solver() {
     let wheel = wheel_at(Vec2::ZERO, NOTCH_DOWN);
     let ScrollInput::Claimed(Some(((), offset))) = gesture.pointer(
         &wheel,
+        None,
         0,
         Some(((), initial)),
         |()| None,
@@ -369,24 +372,30 @@ fn a_script_played_while_a_row_scrolls_ends_where_placement_rests_each_card() {
         },
     );
     client.record();
-    client.handle(Input::Surface {
+    client.handle(Input::Device(DeviceInput::Surface {
         size: WINDOW,
         scale: 2.0,
         safe_area: Insets::default(),
-    });
+    }));
     let view = lands(40);
     client.handle(Input::Update(Box::new(view.update())));
     let frame = client.frame(0).clone();
     let index = row(&frame)[1].1;
     let rect = uncovered(&frame, index).expect("an uncovered card");
     let point = Vec2::new(rect.x + rect.width / 2.0, rect.y + rect.height / 2.0);
-    client.handle(Input::Pointer(wheel_at(point, NOTCH_DOWN * 4.0)));
+    client.handle(Input::Device(DeviceInput::Pointer(wheel_at(
+        point,
+        NOTCH_DOWN * 4.0,
+    ))));
     client.frame(1_000_000);
     // The last land is out of view; a script taps it, and the row scrolls while it plays.
     client.handle(Input::Update(Box::new(tapping_the_last(&view.build()))));
     client.frame(400_000_000);
     client.frame(500_000_000);
-    client.handle(Input::Pointer(wheel_at(point, NOTCH_DOWN * 2.0)));
+    client.handle(Input::Device(DeviceInput::Pointer(wheel_at(
+        point,
+        NOTCH_DOWN * 2.0,
+    ))));
     for at in [550, 600, 700, 900, 1200] {
         client.frame(at * 1_000_000);
     }

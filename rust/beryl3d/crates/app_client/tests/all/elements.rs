@@ -4,11 +4,12 @@ use app_client::Input;
 use app_client::command::{Request, SessionCommand};
 use beryl_protocol::prompt::{ButtonId, Click, ClickRequest};
 use beryl_protocol::script::Subject;
+use game_hud::hud::anchors::{anchor_target, spot_of};
 use game_table::table::Table;
-use game_table::table::spot_of;
 use glam::Vec2;
 use kit_frame::frame::{ElementId, Frame, FrameBuilder, Role, StateBits};
 use kit_ui::element::{Anchor, Chord, row, text};
+use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{Key, KeyCode, KeyPhase, Modifiers, Tier};
 use kit_ui::layout::Layer;
 
@@ -37,7 +38,7 @@ fn an_element_anchored_to_a_card_stays_on_it_while_it_flies() {
     let mut layer = Layer::new();
     layer.show(Some(row().name("screen").child({
         let mut badge = text("Plains").padding(4.0);
-        badge.anchor = Some(Anchor::Object(land, Vec2::new(0.5, 0.5)));
+        badge.anchor = Some(Anchor::Object(anchor_target(land), Vec2::new(0.5, 0.5)));
         badge
     })));
     layer.take_work();
@@ -78,7 +79,10 @@ fn an_element_anchored_to_a_card_the_table_does_not_show_is_not_drawn() {
     layer.show(Some(row().name("screen").child({
         let mut badge = text("Gone");
         let slot = beryl_protocol::protocol::ObjectId(40);
-        badge.anchor = Some(Anchor::Object(Subject::Object { slot }, Vec2::ZERO));
+        badge.anchor = Some(Anchor::Object(
+            anchor_target(Subject::Object { slot }),
+            Vec2::ZERO,
+        ));
         badge
     })));
     layer.follow(|_| None);
@@ -103,11 +107,11 @@ fn an_element_anchored_to_a_card_the_table_does_not_show_is_not_drawn() {
 
 /// A key pressed with `modifiers`.
 fn key(code: KeyCode, modifiers: Modifiers) -> Input {
-    Input::Key(Key {
+    Input::Device(DeviceInput::Key(Key {
         code,
         phase: KeyPhase::Down,
         modifiers,
-    })
+    }))
 }
 
 /// The index in `frame.resolved` of the element named `name`.
@@ -159,7 +163,7 @@ fn cmd_b_opens_the_bug_report_and_ctrl_b_does_off_the_mac() {
     let opens = |platform: Option<bool>, modifiers: Modifiers| {
         let mut client = client();
         if let Some(mac) = platform {
-            client.handle(Input::Platform { mac });
+            client.handle(Input::Device(DeviceInput::Platform { mac }));
         }
         client.handle(key(KeyCode::B, modifiers));
         // The report opens by freezing the table and asking the host for its picture.

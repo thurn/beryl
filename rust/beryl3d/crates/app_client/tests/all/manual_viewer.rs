@@ -12,6 +12,7 @@ use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, table};
 use game_manual::manual::viewers::{Section, Sort, sections};
 use game_table::faces::FaceList;
 use kit_frame::frame::{Frame, Role};
+use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{Insets, Key, KeyCode, KeyPhase, Modifiers, Size};
 
 /// A library of five named cards, bottom first, at a solo manual table: Serra Angel at the
@@ -121,15 +122,17 @@ fn press(client: &mut Client, name: &str) {
         kit_ui::input::PointerPhase::Down,
         kit_ui::input::PointerPhase::Up,
     ] {
-        client.handle(Input::Pointer(kit_ui::input::Pointer {
-            id: 0,
-            kind: kit_ui::input::PointerKind::Mouse,
-            phase,
-            position: middle,
-            button: kit_ui::input::Button::Primary,
-            wheel: glam::Vec2::ZERO,
-            modifiers: Modifiers::default(),
-        }));
+        client.handle(Input::Device(DeviceInput::Pointer(
+            kit_ui::input::Pointer {
+                id: 0,
+                kind: kit_ui::input::PointerKind::Mouse,
+                phase,
+                position: middle,
+                button: kit_ui::input::Button::Primary,
+                wheel: glam::Vec2::ZERO,
+                modifiers: Modifiers::default(),
+            },
+        )));
     }
 }
 
@@ -144,26 +147,26 @@ fn closing_a_library_search_asks_whether_to_shuffle_it() {
             name_bytes: 65_536,
         },
     );
-    client.handle(Input::Platform { mac: true });
-    client.handle(Input::Surface {
+    client.handle(Input::Device(DeviceInput::Platform { mac: true }));
+    client.handle(Input::Device(DeviceInput::Surface {
         size: Size {
             width: 1600.0,
             height: 900.0,
         },
         scale: 2.0,
         safe_area: Insets::default(),
-    });
+    }));
     client.handle(Input::Update(Box::new(beryl_protocol::GameUpdate {
         session: beryl_protocol::SessionId(1),
         view,
     })));
     client.frame(0);
     // F3 is Search, which looks at the whole library.
-    client.handle(Input::Key(Key {
+    client.handle(Input::Device(DeviceInput::Key(Key {
         code: KeyCode::F3,
         phase: KeyPhase::Down,
         modifiers: Modifiers::default(),
-    }));
+    })));
     client.frame(0);
     let sent = acts(&mut client);
     assert_eq!(
@@ -235,17 +238,17 @@ fn scrolling_a_large_pile_moves_its_cards_and_clips_cards_that_leave_the_grid() 
             name_bytes: 65_536,
         },
     );
-    client.handle(Input::Surface {
+    client.handle(Input::Device(DeviceInput::Surface {
         size: Size {
             width: 1600.0,
             height: 900.0,
         },
         scale: 2.0,
         safe_area: Insets::default(),
-    });
+    }));
     client.handle(Input::Update(Box::new(update)));
     client.frame(0);
-    client.press(&Action::new(game_hud::hud::viewer::Message::Open(
+    client.dispatch(&Action::new(game_hud::hud::viewer::Message::Open(
         Viewed::Pile(Side::You, ZoneName::Graveyard),
     )));
     client.frame(0);
@@ -280,7 +283,7 @@ fn scrolling_a_large_pile_moves_its_cards_and_clips_cards_that_leave_the_grid() 
     let half_row = bounds.y - clip.y + bounds.height / 2.0;
     let id = card.id;
     let roll = |distance: f32| {
-        Input::Pointer(Pointer {
+        Input::Device(DeviceInput::Pointer(Pointer {
             id: 0,
             kind: PointerKind::Mouse,
             phase: PointerPhase::Wheel,
@@ -288,7 +291,7 @@ fn scrolling_a_large_pile_moves_its_cards_and_clips_cards_that_leave_the_grid() 
             button: Button::None,
             wheel: Vec2::new(0.0, -distance),
             modifiers: Modifiers::default(),
-        })
+        }))
     };
     assert!(!top.is_empty());
     client.handle(roll(half_row));

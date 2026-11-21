@@ -11,6 +11,7 @@ use beryl_host::{Class, Draw, Drive, Feed, FrameLoop, Shown, Ticked, Ticks};
 use beryl_session::protocol::Side;
 use kit_frame::frame::{Frame, Wake};
 use kit_probe::agent::{TreeOptions, tree};
+use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{Insets, Size};
 
 /// A 60 Hz display's interval, in nanoseconds.
@@ -72,14 +73,14 @@ fn play(script: &str, ticks: u64) -> (Vec<String>, Option<Result<(), String>>) {
     )
     .with_feed(Box::new(Replay(fixture)))
     .driven(Some(drive));
-    frames.handle(Input::Surface {
+    frames.handle(Input::Device(DeviceInput::Surface {
         size: Size {
             width: 1600.0,
             height: 900.0,
         },
         scale: 1.0,
         safe_area: Insets::default(),
-    });
+    }));
     let mut trees = Trees::default();
     for tick in 1..=ticks {
         if frames.at_end().is_some() {

@@ -15,7 +15,7 @@ use crate::command::Reply;
 impl Client {
     pub(super) fn ask_saved_tables(&mut self) {
         self.update_lobby(&Message::Entry(EntryMessage::StartVisible(
-            self.screen == Screen::Start,
+            self.features.screen == Screen::Start,
         )));
     }
 
@@ -32,14 +32,14 @@ impl Client {
 
     pub(super) fn table_failed(&mut self, reason: String) {
         if self.opening_table() {
-            self.screen = Screen::Start;
+            self.features.screen = Screen::Start;
         }
         self.update_lobby(&Message::Entry(EntryMessage::EntryError(reason)));
         self.show_screen();
     }
 
     pub(super) fn table_error(&mut self, reason: String) {
-        let message = if self.screen == Screen::Start || self.opening_table() {
+        let message = if self.features.screen == Screen::Start || self.opening_table() {
             Message::Entry(EntryMessage::EntryError(reason))
         } else {
             Message::LinkError(Some(reason))
@@ -70,12 +70,12 @@ impl Client {
                     self.update_lobby(&Message::LinkError(None));
                 }
                 self.features.lobby_view = Some(view);
-                if self.screen == Screen::Table {
+                if self.features.screen == Screen::Table {
                     self.update_table_menu(&context_menu::Message::Close);
-                    self.screen = Screen::Lobby;
+                    self.features.screen = Screen::Lobby;
                 }
             }
-            None if self.screen == Screen::Lobby => self.screen = Screen::Table,
+            None if self.features.screen == Screen::Lobby => self.features.screen = Screen::Table,
             None => {}
         }
         self.show_screen();
@@ -94,6 +94,6 @@ impl Client {
     }
 
     fn opening_table(&self) -> bool {
-        self.screen == Screen::Lobby && self.features.lobby_view.is_none()
+        self.features.screen == Screen::Lobby && self.features.lobby_view.is_none()
     }
 }

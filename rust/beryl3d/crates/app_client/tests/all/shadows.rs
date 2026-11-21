@@ -8,6 +8,7 @@ use beryl_protocol::protocol::{CardType, Side, Why, ZoneName};
 use beryl_protocol::script::Act;
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, object, timing};
 use kit_frame::frame::{BANDS, Band, Draw, Frame, Material};
+use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{Insets, Size, Tier};
 
 use crate::common::{MS, empty_frame, frame, show};
@@ -60,14 +61,14 @@ fn every_card_in_a_hand_or_on_the_stack_casts_one_shadow_and_no_card_lying_down_
             name_bytes: 65_536,
         },
     );
-    client.handle(Input::Surface {
+    client.handle(Input::Device(DeviceInput::Surface {
         size: Size {
             width: 1440.0,
             height: 900.0,
         },
         scale: 2.0,
         safe_area: Insets::default(),
-    });
+    }));
     client.handle(Input::Update(Box::new(builder.update())));
     let frame = client.frame(0);
     assert_eq!(shadows(frame).len(), 7 + 5 + 3);
@@ -178,14 +179,14 @@ fn a_card_in_hand_casts_a_contact_shadow_in_baseline_and_none_in_enhanced() {
             name_bytes: 8192,
         },
     );
-    client.handle(Input::Surface {
+    client.handle(Input::Device(DeviceInput::Surface {
         size: Size {
             width: 1440.0,
             height: 900.0,
         },
         scale: 2.0,
         safe_area: Insets::default(),
-    });
+    }));
     client.handle(Input::Update(Box::new(builder.update())));
 
     let frame = client.frame(0);
@@ -196,7 +197,7 @@ fn a_card_in_hand_casts_a_contact_shadow_in_baseline_and_none_in_enhanced() {
     let end = frame.bands[Band::ContactShadows as usize + 1] as usize;
     assert_eq!(end - start, 1, "{:?}", frame.bands);
 
-    client.handle(Input::Tier(Tier::Enhanced));
+    client.handle(Input::Device(DeviceInput::Tier(Tier::Enhanced)));
     let frame = client.frame(MS);
     assert_eq!(frame.tier, Tier::Enhanced);
     assert!(shadows(frame).is_empty());

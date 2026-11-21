@@ -1,7 +1,7 @@
 //! Places the gallery's lower panels, `04 Cards & states` to `09 Command list`,
 //! using the selected profile's reference layout.
 
-use crate::screens::ScreenPress;
+use crate::screens::GalleryMessage;
 use glam::Vec2;
 
 use super::super::{GalleryMenu, GalleryQuery, example_button, face};
@@ -335,7 +335,7 @@ pub(super) fn menus(layout: &GalleryLayout, available: bool) -> Element {
             size::BUTTON_MIN_WIDTH
         };
         panel = panel.child(place(
-            example_button(label, ScreenPress::GalleryMenu(kind), available),
+            example_button(label, GalleryMessage::GalleryMenu(kind), available),
             [
                 layout.menu_buttons[index],
                 Vec2::new(width, size::BUTTON_HEIGHT),
@@ -354,7 +354,7 @@ pub(super) fn commands(layout: &GalleryLayout, available: bool) -> Element {
     let mut panel = panel(layout, 8);
     for (index, (label, query)) in samples.into_iter().enumerate() {
         panel = panel.child(place(
-            example_button(label, ScreenPress::GalleryQuery(Some(query)), available),
+            example_button(label, GalleryMessage::GalleryQuery(Some(query)), available),
             [
                 layout.command_buttons[index],
                 Vec2::new(size::BUTTON_MIN_WIDTH, size::BUTTON_HEIGHT),

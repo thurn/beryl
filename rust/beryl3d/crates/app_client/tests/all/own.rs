@@ -7,6 +7,7 @@ use beryl_protocol::protocol::{CardType, Combat, ObjectId, Side, ZoneName};
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use glam::{Affine3A, Vec3};
 use kit_frame::frame::{Band, Draw, Frame, Material, Sprite, sprites};
+use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{Insets, Size};
 
 const MS: u64 = 1_000_000;
@@ -20,14 +21,14 @@ fn client() -> Client {
             name_bytes: 16_384,
         },
     );
-    client.handle(Input::Surface {
+    client.handle(Input::Device(DeviceInput::Surface {
         size: Size {
             width: 1440.0,
             height: 900.0,
         },
         scale: 2.0,
         safe_area: Insets::default(),
-    });
+    }));
     client
 }
 

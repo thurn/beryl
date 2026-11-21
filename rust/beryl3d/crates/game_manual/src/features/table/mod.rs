@@ -4,7 +4,7 @@ mod view;
 
 pub use view::{Inputs, ViewKey};
 
-use crate::manual::{Pending, Pressed, arrows, drop, opening, tokens::TokenChoice, viewers};
+use crate::manual::{ActionSource, Pending, arrows, drop, opening, tokens::TokenChoice, viewers};
 use beryl_protocol::protocol::{Answer, ObjectId, Side};
 use glam::Vec2;
 use kit_frame::frame::Sound;
@@ -76,7 +76,7 @@ pub struct State {
     pub quitting: bool,
     pub refused: bool,
     /// The card or button sending actions, remembered until their replies arrive.
-    pub clicked: Option<Pressed>,
+    pub clicked: Option<ActionSource>,
     pub shaking: Option<(Action, Shake)>,
 }
 

@@ -3,6 +3,7 @@
 //! client's `Request`s. On macOS a display link supplies the ticks; elsewhere winit's redraw
 //! requests do.
 
+use kit_ui::input::Input as DeviceInput;
 use std::path::Path;
 use std::process::Command;
 use std::sync::Arc;
@@ -335,9 +336,9 @@ impl<S: FnOnce(&mut Renderer, Opening) -> Chosen> App<S> {
         let frames = frames.driven(self.drive.take());
         let mut frames = frames;
         // Whether `Cmd` in a shortcut is the Command key or Control.
-        frames.handle(Input::Platform {
+        frames.handle(Input::Device(DeviceInput::Platform {
             mac: cfg!(target_os = "macos"),
-        });
+        }));
         frames.handle(translator.surface());
         Ok(Running {
             frames,
@@ -402,7 +403,9 @@ impl<S: FnOnce(&mut Renderer, Opening) -> Chosen> App<S> {
 impl<S: FnOnce(&mut Renderer, Opening) -> Chosen> ApplicationHandler<UserEvent> for App<S> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if let Some(running) = &mut self.running {
-            running.frames.handle(Input::Lifecycle(Lifecycle::Resumed));
+            running
+                .frames
+                .handle(Input::Device(DeviceInput::Lifecycle(Lifecycle::Resumed)));
             return;
         }
         match self.open(event_loop) {
@@ -424,7 +427,7 @@ impl<S: FnOnce(&mut Renderer, Opening) -> Chosen> ApplicationHandler<UserEvent> 
         if let Some(running) = &mut self.running {
             running
                 .frames
-                .handle(Input::Lifecycle(Lifecycle::Suspended));
+                .handle(Input::Device(DeviceInput::Lifecycle(Lifecycle::Suspended)));
         }
     }
 
@@ -433,7 +436,7 @@ impl<S: FnOnce(&mut Renderer, Opening) -> Chosen> ApplicationHandler<UserEvent> 
             running.frames.low_memory(&mut running.screen.renderer);
             running
                 .frames
-                .handle(Input::Lifecycle(Lifecycle::LowMemory));
+                .handle(Input::Device(DeviceInput::Lifecycle(Lifecycle::LowMemory)));
         }
     }
 
@@ -506,7 +509,7 @@ impl<S: FnOnce(&mut Renderer, Opening) -> Chosen> ApplicationHandler<UserEvent> 
             &event,
             running.frames.client().data().pointer.wheel_notch_points,
         ) {
-            if matches!(input, Input::Surface { .. }) {
+            if matches!(input, Input::Device(DeviceInput::Surface { .. })) {
                 let size = running.translator.size();
                 running.screen.renderer.resize(
                     &mut running.screen.surface,
@@ -588,7 +591,11 @@ fn carry_out(window: &Window, clipboard: &mut Clipboard, request: Request) -> Op
         }
         Request::EndTextEntry => window.set_ime_allowed(false),
         Request::Copy(text) => clipboard.copy(text),
-        Request::Paste => return clipboard.paste().map(Input::Paste),
+        Request::Paste => {
+            return clipboard
+                .paste()
+                .map(|text| Input::Device(DeviceInput::Paste(text)));
+        }
         Request::Share { path } => reveal(&path),
         Request::OpenUrl(url) => open_url(url),
         // A desktop has no haptics. The app's feed saves the settings, plays the sound,

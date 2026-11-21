@@ -17,6 +17,7 @@ use beryl_protocol::protocol::{
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use glam::Vec2;
 use kit_frame::frame::{Frame, Role, StateBits};
+use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{Insets, PointerPhase, Size};
 
 use super::flat_layer::{centre, client, decision, find, pointer};
@@ -239,11 +240,11 @@ fn the_ways_to_use_a_card_draw_one_face_each_and_a_disabled_way_sends_nothing() 
     let view = builder.build();
     let names = view.objects.iter().filter_map(|o| o.name.as_deref());
     let mut client = Client::new(crate::test_data::data(), Config::LARGEST);
-    client.handle(Input::Surface {
+    client.handle(Input::Device(DeviceInput::Surface {
         size: SIZE,
         scale: 2.0,
         safe_area: Insets::default(),
-    });
+    }));
     client.handle(Input::Cards(Box::new(card_records_among(
         names,
         TokenMakers::NONE,
@@ -354,14 +355,14 @@ fn a_crowded_tray_scrolls_to_its_last_card_and_clips_the_first_row() {
         },
     );
     let mut client = client();
-    client.handle(Input::Surface {
+    client.handle(Input::Device(DeviceInput::Surface {
         size: Size {
             width: 375.0,
             height: 647.0,
         },
         scale: 2.0,
         safe_area: Insets::default(),
-    });
+    }));
     client.handle(Input::Update(Box::new(builder.update())));
     client.frame(0);
     client.handle(deciding(&builder, choose, Vec::new()));
@@ -384,7 +385,7 @@ fn a_crowded_tray_scrolls_to_its_last_card_and_clips_the_first_row() {
     let rect = kit_scene::hit::bounds(&first_card);
     let clip = first_card.clip.expect("the tray clips to its viewport");
     let roll = |distance: f32| {
-        Input::Pointer(kit_ui::input::Pointer {
+        Input::Device(DeviceInput::Pointer(kit_ui::input::Pointer {
             id: 0,
             kind: kit_ui::input::PointerKind::Mouse,
             phase: PointerPhase::Wheel,
@@ -392,7 +393,7 @@ fn a_crowded_tray_scrolls_to_its_last_card_and_clips_the_first_row() {
             button: kit_ui::input::Button::None,
             wheel: Vec2::new(0.0, -distance),
             modifiers: kit_ui::input::Modifiers::default(),
-        })
+        }))
     };
     client.handle(roll(rect.height / 4.0));
     let frame = client.frame(10_001 * MS);

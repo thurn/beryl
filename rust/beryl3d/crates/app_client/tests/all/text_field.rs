@@ -11,6 +11,7 @@ use glam::Vec2;
 use kit_base::tokens::color;
 use kit_frame::frame::Material;
 use kit_probe::agent::Rule;
+use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{
     Button, KeyCode, Modifiers, Pointer, PointerKind, PointerPhase, Size, TextChange,
 };
@@ -93,7 +94,7 @@ fn a_paste_inserts_the_clipboard_at_the_caret() {
     requests(&mut page);
     page.chord("Cmd+V");
     assert_eq!(requests(&mut page), vec![Request::Paste]);
-    page.give_input(Input::Paste("xy".to_owned()));
+    page.give_input(Input::Device(DeviceInput::Paste("xy".to_owned())));
     let field = page.field("description");
     assert_eq!(field.text, "axyb");
     assert_eq!(field.caret, 3, "the caret is after the pasted text");
@@ -104,14 +105,18 @@ fn composing_text_is_underlined_and_joins_the_text_when_committed() {
     let mut page = bug_report();
     page.type_text(FIELD, "a");
     assert_eq!(type_marks(&mut page), 1, "the caret");
-    page.give_input(Input::Text(TextChange::Preedit("ka".to_owned())));
+    page.give_input(Input::Device(DeviceInput::Text(TextChange::Preedit(
+        "ka".to_owned(),
+    ))));
     assert_eq!(type_marks(&mut page), 2, "the caret and the underline");
     assert_eq!(
         page.field("description").text,
         "a",
         "not yet part of the text"
     );
-    page.give_input(Input::Text(TextChange::Insert("か".to_owned())));
+    page.give_input(Input::Device(DeviceInput::Text(TextChange::Insert(
+        "か".to_owned(),
+    ))));
     assert_eq!(page.field("description").text, "aか");
     assert_eq!(type_marks(&mut page), 1, "the underline is gone");
 }
@@ -137,7 +142,7 @@ fn the_field_focused_as_the_form_opens_begins_text_entry_over_it() {
 
 /// The primary button going `phase` at `point`.
 fn mouse(phase: PointerPhase, point: Vec2) -> Input {
-    Input::Pointer(Pointer {
+    Input::Device(DeviceInput::Pointer(Pointer {
         id: 0,
         kind: PointerKind::Mouse,
         phase,
@@ -145,7 +150,7 @@ fn mouse(phase: PointerPhase, point: Vec2) -> Input {
         button: Button::Primary,
         wheel: Vec2::ZERO,
         modifiers: Modifiers::default(),
-    })
+    }))
 }
 
 /// A point on the first line of the field's text, `x` points in from its start: inside the

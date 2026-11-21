@@ -31,7 +31,7 @@ impl Client {
     /// and keeps the reason for the inspector and the word at the permanent. Returns whether
     /// the decision refuses the card, in which case the click goes no further.
     pub(super) fn refuse_click(&mut self, slot: ObjectId) -> bool {
-        if self.screen != Screen::Game {
+        if self.features.screen != Screen::Game {
             return false;
         }
         let Some(decision) = self.open_decision() else {
@@ -70,7 +70,7 @@ impl Client {
     /// Where the word stands, centred under the permanent the refusal names, when that is a
     /// named permanent an opponent controls on the battlefield and the decision is still open.
     fn notice_place(&self) -> Option<Anchor> {
-        if self.screen != Screen::Game || !self.table_shown() {
+        if self.features.screen != Screen::Game || !self.table_shown() {
             return None;
         }
         let decision = self.open_decision()?.id;

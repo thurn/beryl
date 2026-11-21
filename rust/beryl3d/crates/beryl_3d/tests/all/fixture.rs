@@ -2,6 +2,7 @@
 //! through the client to its end, which is when a phone's app finishes its frame log. A missing
 //! file is an error that names it.
 
+use kit_ui::input::Input as DeviceInput;
 use std::path::PathBuf;
 
 use app_client::Input;
@@ -28,14 +29,14 @@ fn a_written_recording_reads_back_and_replays_to_its_end() {
     fixture::write("verbs-zones", &dir.join("verbs-zones.json")).expect("the recording writes");
     let mut recording = Fixture::read(&dir, "verbs-zones").expect("the recording reads back");
     let mut client = Client::new(crate::test_data::data(), Config::LARGEST);
-    client.handle(Input::Surface {
+    client.handle(Input::Device(DeviceInput::Surface {
         size: Size {
             width: 852.0,
             height: 393.0,
         },
         scale: 3.0,
         safe_area: Insets::default(),
-    });
+    }));
     let mut clock = 0;
     while !recording.ended(&client) {
         assert!(clock < LIMIT, "the replay had not ended after {LIMIT} ns");

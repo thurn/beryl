@@ -17,6 +17,7 @@ use game_manual::manual::commands::{AppliesTo, commands_for};
 use game_manual::manual::{Context, Target, target_at};
 use glam::Vec2;
 use kit_frame::frame::{Frame, Role, StateBits, Wake};
+use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{
     Button, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase, Size,
     TextChange,
@@ -51,12 +52,12 @@ pub(super) fn client_in(
             name_bytes: 65_536,
         },
     );
-    client.handle(Input::Platform { mac: true });
-    client.handle(Input::Surface {
+    client.handle(Input::Device(DeviceInput::Platform { mac: true }));
+    client.handle(Input::Device(DeviceInput::Surface {
         size: Size { width, height },
         scale: 2.0,
         safe_area: Insets::default(),
-    });
+    }));
     client.handle(Input::Update(Box::new(beryl_protocol::GameUpdate {
         session: beryl_protocol::SessionId(1),
         view: view.clone(),
@@ -74,7 +75,7 @@ pub(super) fn middle(frame: &Frame, role: Role, name: &str) -> Vec2 {
 }
 
 pub(super) fn pointer(phase: PointerPhase, position: Vec2, button: Button) -> Input {
-    Input::Pointer(Pointer {
+    Input::Device(DeviceInput::Pointer(Pointer {
         id: 0,
         kind: PointerKind::Mouse,
         phase,
@@ -82,11 +83,11 @@ pub(super) fn pointer(phase: PointerPhase, position: Vec2, button: Button) -> In
         button,
         wheel: Vec2::ZERO,
         modifiers: Modifiers::default(),
-    })
+    }))
 }
 
 fn touch(phase: PointerPhase, position: Vec2) -> Input {
-    Input::Pointer(Pointer {
+    Input::Device(DeviceInput::Pointer(Pointer {
         id: 1,
         kind: PointerKind::Touch,
         phase,
@@ -94,7 +95,7 @@ fn touch(phase: PointerPhase, position: Vec2) -> Input {
         button: Button::Primary,
         wheel: Vec2::ZERO,
         modifiers: Modifiers::default(),
-    })
+    }))
 }
 
 /// Nanoseconds in a millisecond, the unit of `Client::frame`'s clock.
@@ -112,11 +113,11 @@ fn menu_rows(frame: &Frame) -> Vec<&str> {
 }
 
 pub(super) fn key(code: KeyCode, modifiers: Modifiers) -> Input {
-    Input::Key(Key {
+    Input::Device(DeviceInput::Key(Key {
         code,
         phase: KeyPhase::Down,
         modifiers,
-    })
+    }))
 }
 
 /// The table actions the client has queued, in order.
@@ -263,11 +264,11 @@ fn cmd_d_draws_a_card() {
         serde_json::from_value(serde_json::json!({ "draw": { "seat": 0, "count": 1 } })).unwrap();
     assert_eq!(acts(&mut client), vec![expected]);
     // A held key's repeats draw no more.
-    client.handle(Input::Key(Key {
+    client.handle(Input::Device(DeviceInput::Key(Key {
         code: KeyCode::D,
         phase: KeyPhase::Repeat,
         modifiers: command,
-    }));
+    })));
     assert_eq!(acts(&mut client), Vec::new());
 }
 
@@ -451,7 +452,9 @@ pub(super) fn cmd() -> Modifiers {
 
 /// Types `words` into the focused field.
 pub(super) fn type_in(client: &mut Client, words: &str) {
-    client.handle(Input::Text(TextChange::Insert(words.to_owned())));
+    client.handle(Input::Device(DeviceInput::Text(TextChange::Insert(
+        words.to_owned(),
+    ))));
 }
 
 /// The names of the menu items `client` shows now, top to bottom.
@@ -1009,7 +1012,7 @@ fn a_cmd_click_adds_a_card_to_the_selection() {
         ..Modifiers::default()
     };
     let down = |phase| {
-        Input::Pointer(Pointer {
+        Input::Device(DeviceInput::Pointer(Pointer {
             id: 0,
             kind: PointerKind::Mouse,
             phase,
@@ -1017,7 +1020,7 @@ fn a_cmd_click_adds_a_card_to_the_selection() {
             button: Button::Primary,
             wheel: Vec2::ZERO,
             modifiers: cmd,
-        })
+        }))
     };
     client.handle(down(PointerPhase::Down));
     client.handle(down(PointerPhase::Up));
@@ -1279,7 +1282,7 @@ fn a_drop_of_cards_from_two_zones_sends_one_batch() {
     let graveyard = centre(slot_of(&view, ZoneName::Graveyard, Side::You, "Brainstorm"));
     let cmd_click = |at| {
         move |phase| {
-            Input::Pointer(Pointer {
+            Input::Device(DeviceInput::Pointer(Pointer {
                 id: 0,
                 kind: PointerKind::Mouse,
                 phase,
@@ -1287,7 +1290,7 @@ fn a_drop_of_cards_from_two_zones_sends_one_batch() {
                 button: Button::Primary,
                 wheel: Vec2::ZERO,
                 modifiers: cmd(),
-            })
+            }))
         }
     };
     for (at, now) in [(angel, MS), (counterspell, 2 * MS)] {

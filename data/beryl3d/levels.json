@@ -68,7 +68,7 @@
   "cap_lines": 12000,
   "cap_allowances": {
     "game_table": {
-      "lines": 12310,
+      "lines": 12275,
       "reason": "The tray's layout adapter, clipping and scroll offset use the same game slots and poses as the table's lift, let-go and script handoff. The grid solver and screen element adapter live in the toolkit."
     }
   },
@@ -76,7 +76,7 @@
     "kit_base": 0,
     "kit_text": 0,
     "kit_frame": 3,
-    "kit_ui": 2,
+    "kit_ui": 0,
     "kit_space": 0,
     "kit_fx": 4,
     "kit_scene": 0,

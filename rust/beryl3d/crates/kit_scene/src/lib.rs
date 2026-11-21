@@ -2,7 +2,10 @@
 
 mod feature;
 pub mod hit;
+pub mod input;
+pub mod scroll;
 mod slot;
+mod touch;
 mod tree;
 
 pub use feature::{Context, Effect, Feature, FeatureSlot};

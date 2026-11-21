@@ -15,6 +15,7 @@
 //! the centre of the element's largest uncovered rectangle, as the test driver's does. A point
 //! `<x>,<y>` in place of a locator is that point of the window.
 
+use kit_ui::input::Input as DeviceInput;
 use std::collections::VecDeque;
 use std::path::Path;
 
@@ -239,8 +240,10 @@ impl Drive {
                 let point = point(locator)?;
                 self.pointer(at, PointerPhase::Down, point, Button::Primary);
                 self.pointer(at, PointerPhase::Up, point, Button::Primary);
-                self.pending
-                    .push_back((at, Input::Text(TextChange::Insert(text.clone()))));
+                self.pending.push_back((
+                    at,
+                    Input::Device(DeviceInput::Text(TextChange::Insert(text.clone()))),
+                ));
             }
             Action::Key(chord) => {
                 let modifiers = chord.modifiers(client.mac());
@@ -250,7 +253,8 @@ impl Drive {
                         phase,
                         modifiers,
                     };
-                    self.pending.push_back((at, Input::Key(key)));
+                    self.pending
+                        .push_back((at, Input::Device(DeviceInput::Key(key))));
                 }
             }
             Action::Move(point) => self.pointer(at, PointerPhase::Move, *point, Button::None),
@@ -258,10 +262,10 @@ impl Drive {
                 let point = point(locator)?;
                 self.pending.push_back((
                     at,
-                    Input::Pointer(Pointer {
+                    Input::Device(DeviceInput::Pointer(Pointer {
                         wheel: *by,
                         ..mouse(PointerPhase::Wheel, point, Button::None)
-                    }),
+                    })),
                 ));
             }
             Action::Step(duration) => self.cursor = at + duration.nanos(),
@@ -272,7 +276,8 @@ impl Drive {
 
     fn pointer(&mut self, at: u64, phase: PointerPhase, position: Vec2, button: Button) {
         let pointer = mouse(phase, position, button);
-        self.pending.push_back((at, Input::Pointer(pointer)));
+        self.pending
+            .push_back((at, Input::Device(DeviceInput::Pointer(pointer))));
     }
 }
 

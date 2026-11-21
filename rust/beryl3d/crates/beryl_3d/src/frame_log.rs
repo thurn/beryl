@@ -15,6 +15,7 @@
 //! The frame thread does no file I/O (docs/beryl-3d.md, "Threads"): it counts frames itself
 //! and sends each line to a thread of the log's own, which writes it.
 
+use kit_ui::input::Input as DeviceInput;
 use std::collections::BTreeMap;
 use std::fs::{self, File};
 use std::io::{self, BufRead, BufReader, BufWriter, Write};
@@ -277,7 +278,7 @@ impl InputLine {
             Input::DataError(error) => Self::DataReloadFailed {
                 error: error.clone(),
             },
-            Input::Pointer(pointer) => Self::Pointer {
+            Input::Device(DeviceInput::Pointer(pointer)) => Self::Pointer {
                 id: pointer.id,
                 kind: format!("{:?}", pointer.kind),
                 phase: format!("{:?}", pointer.phase),
@@ -288,21 +289,21 @@ impl InputLine {
                 wheel_y: pointer.wheel.y,
                 modifiers: modifier_names(pointer.modifiers),
             },
-            Input::Key(key) => Self::Key {
+            Input::Device(DeviceInput::Key(key)) => Self::Key {
                 code: format!("{:?}", key.code),
                 phase: format!("{:?}", key.phase),
                 modifiers: modifier_names(key.modifiers),
             },
-            Input::Text(
+            Input::Device(DeviceInput::Text(
                 TextChange::Replace(text) | TextChange::Insert(text) | TextChange::Preedit(text),
-            ) => Self::Text {
+            )) => Self::Text {
                 length: text.chars().count(),
             },
-            Input::Surface {
+            Input::Device(DeviceInput::Surface {
                 size,
                 scale,
                 safe_area,
-            } => Self::Surface {
+            }) => Self::Surface {
                 width: size.width,
                 height: size.height,
                 scale: *scale,
@@ -311,7 +312,7 @@ impl InputLine {
                 bottom: safe_area.bottom,
                 left: safe_area.left,
             },
-            Input::Lifecycle(lifecycle) => Self::Lifecycle {
+            Input::Device(DeviceInput::Lifecycle(lifecycle)) => Self::Lifecycle {
                 event: format!("{lifecycle:?}"),
             },
             _ => return None,
@@ -512,7 +513,10 @@ impl FrameLog {
     /// Records an input the host handed the client when it is one the log keeps, with how
     /// long ago the last frame was drawn.
     pub fn input(&mut self, input: &Input) {
-        if let Input::Lifecycle(event @ (Lifecycle::Suspended | Lifecycle::Resumed)) = input {
+        if let Input::Device(DeviceInput::Lifecycle(
+            event @ (Lifecycle::Suspended | Lifecycle::Resumed),
+        )) = input
+        {
             self.presentation_lifecycle = Some(*event);
         }
         if let Some(line) = InputLine::of(input) {

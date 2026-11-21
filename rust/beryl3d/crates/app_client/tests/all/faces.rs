@@ -9,6 +9,7 @@ use game_table::faces::{CARD_BACK, FaceList};
 use kit_frame::frame::{Frame, Material, Role, TextureArray};
 use kit_probe::agent::checks::blank_cards;
 use kit_probe::agent::{Context, Rule};
+use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{AssetReady, FaceId, FaceSize, Insets, Lifecycle, Size, Tier};
 
 const SIZE: Size = Size {
@@ -30,14 +31,14 @@ fn sample() -> (ViewBuilder, CardRecords) {
 fn client(faces: impl FnOnce(&FaceList) -> Vec<AssetReady>) -> Client {
     let (builder, records) = sample();
     let mut client = Client::new(crate::test_data::data(), Config::LARGEST);
-    client.handle(Input::Surface {
+    client.handle(Input::Device(DeviceInput::Surface {
         size: SIZE,
         scale: 2.0,
         safe_area: Insets::default(),
-    });
+    }));
     client.handle(Input::Cards(Box::new(records)));
     for ready in faces(client.faces()) {
-        client.handle(Input::Assets(ready));
+        client.handle(Input::Device(DeviceInput::Assets(ready)));
     }
     client.handle(Input::Update(Box::new(builder.update())));
     client
@@ -152,20 +153,20 @@ fn low_memory_forgets_full_size_faces_and_keeps_the_tier_at_baseline() {
         .map(|name| client.faces().find(name).expect("a drawn card has a face"))
         .collect();
     for (layer, &face) in (10..).zip(&faces) {
-        client.handle(Input::Assets(board(face, layer)));
+        client.handle(Input::Device(DeviceInput::Assets(board(face, layer))));
     }
     for (layer, &face) in (0..).zip(&faces[..2]) {
-        client.handle(Input::Assets(AssetReady::Face {
+        client.handle(Input::Device(DeviceInput::Assets(AssetReady::Face {
             face,
             size: FaceSize::Full,
             layer,
-        }));
+        })));
     }
     assert_eq!(client.face_layers().full_layer_of(faces[1]), Some(1));
-    client.handle(Input::Tier(Tier::Enhanced));
+    client.handle(Input::Device(DeviceInput::Tier(Tier::Enhanced)));
     assert_eq!(client.tier(), Tier::Enhanced);
 
-    client.handle(Input::Lifecycle(Lifecycle::LowMemory));
+    client.handle(Input::Device(DeviceInput::Lifecycle(Lifecycle::LowMemory)));
     let layers_of = |client: &Client, face| {
         let layers = client.face_layers();
         (layers.board_layer_of(face), layers.full_layer_of(face))
@@ -187,7 +188,7 @@ fn low_memory_forgets_full_size_faces_and_keeps_the_tier_at_baseline() {
         );
     }
 
-    client.handle(Input::Tier(Tier::Enhanced));
+    client.handle(Input::Device(DeviceInput::Tier(Tier::Enhanced)));
     assert_eq!(
         client.tier(),
         Tier::Baseline,
@@ -247,11 +248,11 @@ fn hand_and_stack_cards_draw_their_full_frame_and_permanents_their_battlefield_f
     );
     let full: Vec<(FaceId, u16)> = wanted.iter().copied().zip(100..).collect();
     for &(face, layer) in &full {
-        client.handle(Input::Assets(AssetReady::Face {
+        client.handle(Input::Device(DeviceInput::Assets(AssetReady::Face {
             face,
             size: FaceSize::Full,
             layer,
-        }));
+        })));
     }
     let draws = card_draws(client.frame(1));
     let full_layer = |name| {

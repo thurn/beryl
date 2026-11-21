@@ -1,6 +1,7 @@
 //! The frame log's writer and reader agree: what a run writes reads back as the same run, the
 //! same late frames and the same summary.
 
+use kit_ui::input::Input as DeviceInput;
 use std::path::PathBuf;
 
 use app_client::Input;
@@ -241,7 +242,7 @@ fn an_input_line_says_how_long_ago_the_last_frame_was_drawn() {
         bottom: 34.0,
         left: 0.0,
     };
-    log.input(&Input::Surface {
+    log.input(&Input::Device(DeviceInput::Surface {
         size: Size {
             width: 393.0,
             height: 852.0,
@@ -253,12 +254,12 @@ fn an_input_line_says_how_long_ago_the_last_frame_was_drawn() {
             bottom: 34.0,
             left: 0.0,
         },
-    });
+    }));
     log.frame(&ticked(10, None, true), &[], false);
     let lifecycle = InputLine::Lifecycle {
         event: "Suspended".to_owned(),
     };
-    log.input(&Input::Lifecycle(Lifecycle::Suspended));
+    log.input(&Input::Device(DeviceInput::Lifecycle(Lifecycle::Suspended)));
     let path = log.path().to_owned();
     log.finish().expect("the log is finished");
 

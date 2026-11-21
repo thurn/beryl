@@ -10,6 +10,7 @@ use beryl_host::phone::{Platform, due};
 use beryl_host::{Draw, FrameLoop, NoFeed, Phone, Shown};
 use glam::Vec2;
 use kit_frame::frame::{Frame, Wake};
+use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{Button, Lifecycle, Modifiers, Pointer, PointerKind, PointerPhase};
 
 /// The interval of a 120 Hz display, in nanoseconds.
@@ -47,7 +48,7 @@ impl Draw for Discard {
 }
 
 fn moved(x: f32) -> Input {
-    Input::Pointer(Pointer {
+    Input::Device(DeviceInput::Pointer(Pointer {
         id: 0,
         kind: PointerKind::Mouse,
         phase: PointerPhase::Move,
@@ -55,7 +56,7 @@ fn moved(x: f32) -> Input {
         button: Button::None,
         wheel: Vec2::ZERO,
         modifiers: Modifiers::default(),
-    })
+    }))
 }
 
 #[test]

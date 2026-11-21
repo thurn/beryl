@@ -14,6 +14,7 @@ use client::Input;
 use game_hud::art::orb;
 use kit_base::atlas::{AssetReady, FaceId, GlyphCell, GlyphKey};
 use kit_probe::driver::atlas::{STUB_PAGE, stub_glyph, stub_icons};
+use kit_ui::input::Input as DeviceInput;
 
 pub(super) fn stub_client_icons(scale: f32) -> AssetReady {
     stub_icons(scale, orb::atlas_cells())
@@ -55,7 +56,7 @@ impl Page {
     /// page, and keeps it to give again whenever the client is made anew.
     pub fn give_glyphs(&mut self, ready: AssetReady) {
         self.glyphs.push(ready.clone());
-        self.give(Input::Assets(ready));
+        self.give(Input::Device(DeviceInput::Assets(ready)));
     }
 
     /// The full-size faces the client asked for since the last call, each once.
@@ -65,7 +66,7 @@ impl Page {
 
     /// Gives the client an uploaded face's layer.
     pub fn give_face(&mut self, ready: AssetReady) {
-        self.give(Input::Assets(ready));
+        self.give(Input::Device(DeviceInput::Assets(ready)));
     }
 
     /// Gives the drawing host the replay's client and the atlas deliveries it retains across
