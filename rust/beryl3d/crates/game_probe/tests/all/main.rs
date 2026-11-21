@@ -13,6 +13,7 @@ mod motion;
 mod particles;
 mod play;
 mod relay;
+mod signature;
 mod sound;
 mod table_phone;
 mod under;

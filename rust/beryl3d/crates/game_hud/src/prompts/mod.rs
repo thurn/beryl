@@ -18,7 +18,7 @@ use beryl_protocol::prompt::{ButtonId, Marked, PromptButton, PromptView, Purpose
 use beryl_protocol::protocol::{ObjectId, PlayerView, ZoneName};
 use beryl_protocol::script::{Arrow, Mark, OwnStep, OwnTimings, StepTiming, Subject, Verb};
 
-pub use bar::{prompt_bar, waiting};
+pub use bar::{prompt_bar, title as prompt_title, waiting};
 pub use tray::Piles;
 
 use crate::hud::HudIn;

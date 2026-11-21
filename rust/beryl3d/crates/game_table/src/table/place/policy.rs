@@ -88,7 +88,7 @@ impl PileRules {
     }
 
     /// The sorted slots that stand alone in a row whose twins can pile.
-    pub(crate) fn for_group(&self, group: Group) -> Option<&[ObjectId]> {
+    pub fn for_group(&self, group: Group) -> Option<&[ObjectId]> {
         match group {
             Group::Row { side, row } if row != RowName::Lands || self.lands[side_index(side)] => {
                 Some(&self.named)

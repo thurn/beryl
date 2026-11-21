@@ -119,7 +119,7 @@ struct Seen {
 /// looks up the last card seen with its name's number. Without, the cards are sorted by a hash
 /// of their names, which compares as one number where sorting by the names compares strings,
 /// and only cards whose hashes are equal have their names compared.
-pub(in crate::table) struct SameName {
+pub struct SameName {
     /// By index in the row: the index of the last earlier card with its name, if any.
     previous: Vec<Option<usize>>,
 }

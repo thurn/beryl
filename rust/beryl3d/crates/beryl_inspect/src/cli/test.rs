@@ -46,6 +46,9 @@ pub(super) const PHONE_ONLY: &str = "--phone-only";
 /// a line, and plays none (`just b3d match boxes --all` reads it).
 pub(super) const LIST: &str = "--list";
 
+/// The switch that runs the full pack.
+pub(super) const ALL: &str = "--all";
+
 /// How many rules the closing summary names as having the most listed faults.
 const MOST_RULES: usize = 3;
 
@@ -75,10 +78,8 @@ pub(super) fn test(options: &Options) -> Result<Printed, Usage> {
     let (mode, windows) = switches(options)?;
     let phone_only = windows == Windows::Phone;
     let stop = stop(options)?;
-    let tests = runner::tests(prefix, windows).map_err(Usage)?;
-    if tests.is_empty() {
-        return Err(nothing_matches(prefix)?);
-    }
+    let all = options.switch(ALL);
+    let tests = selected_tests(prefix, windows, all)?;
     if options.switch(LIST) {
         let names: String = tests.iter().map(|test| test.name() + "\n").collect();
         return Ok(Printed::text(names));
@@ -94,10 +95,8 @@ pub(super) fn test(options: &Options) -> Result<Printed, Usage> {
     let outcomes = runner::run_until(&tests, mode, stop);
     let seconds = started.elapsed().as_secs_f64();
     let deferred = tests.len() - outcomes.len();
-    // The median is only held over the whole run: a prefix, or the tests that started before
-    // `--stop-after`, are not typical. A phone run is never every test, so no desktop entry of
-    // the list counts as not a test.
-    let every_test = prefix.is_empty() && deferred == 0 && !phone_only;
+    // The median and allowlist are defined over the full desktop pack.
+    let every_test = all && prefix.is_empty() && deferred == 0 && !phone_only;
     let over = limits.map_or_else(Vec::new, |limits| limits.over(&outcomes, every_test));
     let mut changes = None;
     if let Some(listed) = listed.as_mut().filter(|_| options.switch(UPDATE)) {
@@ -109,7 +108,9 @@ pub(super) fn test(options: &Options) -> Result<Printed, Usage> {
     }
     let update = format!(
         "just b3d test{} {UPDATE}",
-        if prefix.is_empty() {
+        if prefix.is_empty() && all {
+            format!(" {ALL}")
+        } else if prefix.is_empty() {
             String::new()
         } else {
             format!(" {prefix}")
@@ -162,6 +163,21 @@ pub(super) fn test(options: &Options) -> Result<Printed, Usage> {
         report.text()
     };
     Ok(Printed { text, fault })
+}
+
+/// The interface tests requested by the prefix, full-pack flag or default corpus.
+fn selected_tests(prefix: &str, windows: Windows, all: bool) -> Result<Vec<Test>, Usage> {
+    let mut tests = runner::tests(prefix, windows).map_err(Usage)?;
+    if prefix.is_empty() && !all {
+        let corpus = crate::corpus::read().map_err(Usage)?;
+        tests.retain(|test| {
+            corpus.contains(&test.recording) || crate::recordings::standalone(&test.recording)
+        });
+    }
+    if tests.is_empty() {
+        return Err(nothing_matches(prefix)?);
+    }
+    Ok(tests)
 }
 
 /// When [`STOP_AFTER`] says the run stops starting tests, if it was given.

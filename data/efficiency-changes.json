@@ -719,5 +719,10 @@
     "label": "Ignite budgets worktree build growth before handing out tickets and paces new build tickets while the core queue recovers, so active worktrees can keep their build outputs.",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "The default Beryl 3D interface test runs one recording per distinct signature and keeps every fixture and story",
+    "metric": "bead.core-minutes",
+    "expect": "down"
   }
 ]

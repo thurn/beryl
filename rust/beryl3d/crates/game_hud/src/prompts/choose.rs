@@ -49,7 +49,7 @@ const DIMMED: [kit_ui::element::Filter; 2] = [
 pub(super) fn screen(prompt: &PromptView, input: &HudIn) -> Option<Element> {
     // The ways stand at a point of the window, outside the bar's flow, so the bar is laid out
     // as it is without them.
-    Some(bar(prompt, input, None, stepper(prompt)).children(ways_row(prompt, input)))
+    Some(bar(prompt, input, stepper(prompt)).children(ways_row(prompt, input)))
 }
 
 /// Whether `button` of the yes or no `prompt` shows what it would tap: its primary button, the

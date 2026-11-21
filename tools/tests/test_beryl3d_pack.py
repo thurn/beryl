@@ -91,3 +91,10 @@ def test_seen_names_are_kept_per_recording_and_reread_when_messages_change(
     kept[key] = ["Fork"]
     (tmp_path / pack.SEEN_KEPT).write_text(json.dumps(kept))
     assert pack.names_seen(first, names)["a"] == {"Fork"}
+
+
+def test_corpus_reports_a_recording_missing_from_the_pack() -> None:
+    assert pack.corpus_errors("fixture\ncard/cast\n", {"fixture", "card/cast"}) == []
+    assert pack.corpus_errors("fixture\ncard/stale\n", {"fixture"}) == [
+        "data/beryl3d/corpus.txt:2: no recording named 'card/stale'"
+    ]

@@ -173,7 +173,7 @@ impl Badges {
                 continue;
             };
             let block = text
-                .block(&shortened(&counter.name), NAME_STYLE, &[], None)
+                .block(&counter_label(&counter.name), NAME_STYLE, &[], None)
                 .clone();
             wanted.want(&block, self.scale);
             self.names.insert(at, (counter.name.as_str().into(), block));
@@ -210,7 +210,8 @@ impl Badges {
 
 /// `name` as a named counter's badge shows it: whole up to six letters, and otherwise its first
 /// five and an ellipsis (`NamedCounterBadge` in `ui/src/components/Card.tsx`).
-fn shortened(name: &str) -> String {
+#[must_use]
+pub fn counter_label(name: &str) -> String {
     if name.chars().count() > 6 {
         name.chars().take(5).chain(['\u{2026}']).collect()
     } else {

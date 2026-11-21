@@ -178,7 +178,7 @@ pub(crate) fn rezoom(
 /// stand (`lands_in_order`) with each linked to the one before it with its name, and apart from
 /// them the cards that lie under one of them. A row with no cards under its permanents, as
 /// nearly every row is, keeps `cards` uncopied.
-fn prepared<'a, 'b>(
+pub fn prepared<'a, 'b>(
     cards: &'b [&'a ObjectView],
     row: RowName,
     ids: Option<&NameIds<'_>>,

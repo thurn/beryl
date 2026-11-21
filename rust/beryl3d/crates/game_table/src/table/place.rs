@@ -15,7 +15,7 @@ pub use indexed::arrival;
 pub use policy::PileRules;
 mod row;
 pub(crate) use row::{RowFits, rezoom, zooms};
-pub use row::{Zooms, blocked, blocking_rows};
+pub use row::{Zooms, blocked, blocking_rows, prepared as prepare_row};
 use row::{battlefield_row, row_of};
 mod under;
 pub use under::{host_slot, names_host};
@@ -168,7 +168,7 @@ pub(crate) fn place_zones(zones: &Zones, rules: Rules<'_>) -> Placement {
         zooms: zooms(zones, &piles, rules),
         ..Placement::default()
     };
-    for (group, objects) in Group::ALL.into_iter().zip(all_members(zones)) {
+    for (group, objects) in Group::ALL.into_iter().zip(zone_members(zones)) {
         lay(
             group,
             &objects,
@@ -200,8 +200,8 @@ pub(crate) fn place_reusing(
     let (piles, known_piles) = (zones.pile_rules(), known_zones.pile_rules());
     placement.zooms = zooms(zones, &piles, rules);
     let zoomed = placement.zooms != zooms(known_zones, &known_piles, rules);
-    let groups = Group::ALL.into_iter().zip(all_members(zones));
-    for ((group, objects), was) in groups.zip(all_members(known_zones)) {
+    let groups = Group::ALL.into_iter().zip(zone_members(zones));
+    for ((group, objects), was) in groups.zip(zone_members(known_zones)) {
         let same = objects.len() == was.len()
             && objects.iter().zip(&was).all(|(a, b)| a == b)
             && (group != Group::Stack || zones.stack == known_zones.stack)
@@ -642,7 +642,7 @@ pub(crate) fn members<'a>(zones: &Zones<'a>, group: Group) -> Vec<&'a ObjectView
 
 /// The objects of every group, by `Group::index`, each in the order `members` gives, reading each
 /// list of `zones` once rather than once for each group.
-fn all_members<'a>(zones: &Zones<'a>) -> Vec<Vec<&'a ObjectView>> {
+pub fn zone_members<'a>(zones: &Zones<'a>) -> Vec<Vec<&'a ObjectView>> {
     let mut all: Vec<Vec<&'a ObjectView>> = Group::ALL.iter().map(|_| Vec::new()).collect();
     for side in [Side::You, Side::Opponent] {
         let piles = zones.piles[side_index(side)];

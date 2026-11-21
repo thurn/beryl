@@ -13,9 +13,11 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import subprocess
 import zlib
 from collections.abc import Iterable
 from dataclasses import dataclass
+from pathlib import Path
 
 from . import paths
 
@@ -139,3 +141,58 @@ def names_seen(entries: list[Entry], names: Iterable[str]) -> dict[str, set[str]
     partial.write_text(json.dumps(kept))
     os.replace(partial, kept_file)
     return seen
+
+
+# Spec moments are derived by playing the card scenarios, so the corpus check
+# reads the pack index rather than trying to predict their names from source.
+CORPUS_INPUTS = [
+    "rust/cards/**",
+    "rust/crates/**",
+    "rust/Cargo.lock",
+    "data/card-store.tsv",
+    "data/set-groups.json",
+    "ui/fixtures.json",
+    "docs/sample-decks/**",
+]
+
+
+def corpus_errors(text: str, names: set[str]) -> list[str]:
+    """Reject any line that does not name an entry in the current recordings pack."""
+    return [
+        f"data/beryl3d/corpus.txt:{line}: no recording named {name!r}"
+        for line, name in enumerate(text.splitlines(), 1)
+        if name not in names
+    ]
+
+
+def check_corpus(repo: Path) -> list[str]:
+    """Check the corpus against the current recorder, including derived spec names."""
+    workspace: Path = repo / "rust" / "beryl3d"
+    path = repo / "data" / "beryl3d" / "corpus.txt"
+
+    def run(command: list[str]) -> str:
+        return subprocess.run(
+            command, cwd=workspace, check=True, text=True, capture_output=True
+        ).stdout
+
+    try:
+        text = path.read_text(encoding="utf-8")
+        run(
+            [
+                "cargo",
+                "build",
+                "--locked",
+                "-q",
+                "--profile",
+                "test",
+                "-p",
+                "beryl_record",
+            ]
+        )
+        exe = "record.exe" if os.name == "nt" else "record"
+        current = Path(run([str(workspace / "target" / "debug" / exe)]).strip())
+        return corpus_errors(text, {entry.name for entry in read(current.read_bytes())})
+    except subprocess.CalledProcessError as error:
+        return [f"could not read the current recordings pack: {error.stderr.strip()}"]
+    except (OSError, ValueError) as error:
+        return [str(error)]

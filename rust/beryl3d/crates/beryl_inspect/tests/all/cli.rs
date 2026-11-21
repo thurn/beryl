@@ -438,3 +438,33 @@ fn timeline_names_the_nearest_recordings_for_a_wrong_name() {
     let message = refused(&["timeline", "verbs-zone"]);
     assert!(message.contains("verbs-zones"), "{message}");
 }
+
+#[test]
+fn default_interface_run_lists_the_corpus_and_standalone_scenes() {
+    use std::collections::BTreeSet;
+
+    let corpus = beryl_test_files::read_to_string("data/beryl3d/corpus.txt").unwrap();
+    let default = ok(&["test", "--list"]);
+    let all = ok(&["test", "--all", "--list"]);
+    let names = |text: &str| {
+        text.lines()
+            .map(|test| {
+                test.trim_start_matches("b3d:")
+                    .rsplitn(3, '/')
+                    .last()
+                    .unwrap()
+                    .to_owned()
+            })
+            .collect::<BTreeSet<_>>()
+    };
+    let selected = names(&default);
+    let available = names(&all);
+    assert!(selected.is_subset(&available));
+    assert!(corpus.lines().all(|name| selected.contains(name)));
+    assert!(selected.contains(RECORDING));
+    assert!(selected.iter().any(|name| name.starts_with("stress-")));
+    if let Some(omitted) = available.difference(&selected).next() {
+        let prefix_listing = ok(&["test", omitted, "--list"]);
+        assert!(names(&prefix_listing).contains(omitted));
+    }
+}

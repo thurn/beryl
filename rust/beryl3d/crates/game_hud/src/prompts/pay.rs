@@ -4,7 +4,7 @@
 //! Pay: until then those permanents are outlined as anything else that may be picked. A click
 //! on a permanent where it lies picks it or takes it back, through the table's pointer.
 
-use beryl_protocol::prompt::{ButtonId, Marked, PromptView, Purpose, ShapeBody};
+use beryl_protocol::prompt::{ButtonId, Marked, PromptView};
 use beryl_protocol::script::Mark;
 
 use super::bar::bar;
@@ -21,13 +21,7 @@ use kit_ui::element::Element;
     reason = "every shape returns an `Option`: a built shape may show nothing in the flat layer"
 )]
 pub(super) fn screen(prompt: &PromptView, input: &HudIn) -> Option<Element> {
-    let left = match &prompt.body {
-        ShapeBody::Pay { cost, left } if !(prompt.is(Purpose::Mana) && left == cost) => {
-            Some(left.as_str())
-        }
-        _ => None,
-    };
-    Some(bar(prompt, input, left, None))
+    Some(bar(prompt, input, None))
 }
 
 /// Whether `button` is the one whose hover shows what the payment would tap: Auto Pay.

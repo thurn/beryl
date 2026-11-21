@@ -70,13 +70,13 @@ FRAME_LIMITS = "frame-limits"
 # beryl3d-bench machine, and the scaling check compares two boards' counts.
 FRAME_COUNTS = "b3d-frame-counts:boards"
 
-# The source rules of tools/src/beryl_tools/beryl3d/purity.py, by check name.
 SOURCE_RULES: dict[str, Callable[[Path], list[str]]] = {
     "scene-purity": purity.scene_purity,
     "levels": purity.levels,
     "lints-match": purity.lints_match,
     "data-names": purity.data_names,
     "scene-literals": purity.scene_literals,
+    "corpus": pack.check_corpus,
 }
 
 
@@ -304,7 +304,7 @@ def interface_list(family: str) -> list[Listed]:
     board, which `beryl_inspect` makes with no recording, reads none. [`FRAME_LIMITS`] reads
     every test's."""
     cards = cards_by_recording()
-    tests = test_names()
+    tests = test_names("--all")
     checks = [Listed(f"{family}:{t}", cards.get(recording_of(t), [])) for t in tests]
     if family == "b3d-interface":
         every = sorted({c for t in tests for c in cards.get(recording_of(t), [])})
@@ -386,8 +386,7 @@ def interface_run(family: str, checks: list[str], switches: list[str]) -> list[R
     results: list[Result] = []
     for prefix in prefixes:
         command = [str(DEBUG / "b3d"), "test", "--json", *switches]
-        if prefix:
-            command.insert(2, prefix)
+        command.insert(2, prefix or "--all")
         done = run_out(command)
         try:
             output = json.loads(done.stdout)
@@ -656,9 +655,6 @@ def source_run(checks: list[str]) -> list[Result]:
     return results
 
 
-# The command line.
-
-
 # The families whose `list` runs `record` or reads the recordings pack, which the `b3d` product
 # makes. An Ignite daemon builds a family's `needs` before its `list`, but daemons older than
 # that ran `list` first, and in a freshly leased tree it failed because
@@ -728,7 +724,10 @@ LISTS: dict[str, Callable[[], list[Listed]]] = {
     "b3d-clippy": lambda: [
         Listed(f"b3d-clippy:{n}", [f"crate:{n}"]) for n in packages()
     ],
-    "b3d-source": lambda: [Listed(f"b3d-source:{n}") for n in SOURCE_RULES],
+    "b3d-source": lambda: [
+        Listed(f"b3d-source:{n}", pack.CORPUS_INPUTS if n == "corpus" else [])
+        for n in SOURCE_RULES
+    ],
     "b3d-interface": lambda: interface_list("b3d-interface"),
     "b3d-every-tick": lambda: interface_list("b3d-every-tick"),
     "b3d-gate": gate_list,

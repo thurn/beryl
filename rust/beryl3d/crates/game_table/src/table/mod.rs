@@ -40,9 +40,8 @@ pub use place::{
     Group, NO_GROUP, PileRules, Zones, Zooms, arrival, blocked, blocking_rows, host_slot,
 };
 pub use place::{Placement, ROWS, Rest, Rows, Scroll, Scroller, place};
-pub use place::{names_host, stack_slots};
-pub use rows::RowWindow;
-pub use rows::{NameIds, RowChange, reposed};
+pub use place::{names_host, prepare_row, stack_slots, zone_members};
+pub use rows::{Beneath, Groups, NameIds, RowChange, RowWindow, SameName, grouped, reposed};
 pub use scene::{ABILITY_IDS, Motion, Table, Turn};
 pub use scene::{Objects, PileCount, ability_track};
 pub use shown::{Moves, Relaid};

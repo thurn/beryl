@@ -33,7 +33,7 @@ use kit_ui::widgets::{icon_button, icons};
 )]
 pub(super) fn screen(prompt: &PromptView, input: &HudIn) -> Option<Element> {
     let ShapeBody::Divide { left, shares, .. } = &prompt.body else {
-        return Some(bar(prompt, input, None, None));
+        return Some(bar(prompt, input, None));
     };
     let left = *left;
     let controls = (shares.iter()).filter_map(|&share| {
@@ -43,7 +43,7 @@ pub(super) fn screen(prompt: &PromptView, input: &HudIn) -> Option<Element> {
             share_control(share, left)
         }
     });
-    Some(bar(prompt, input, Some(&left.to_string()), None).children(controls.flatten()))
+    Some(bar(prompt, input, None).children(controls.flatten()))
 }
 
 /// The control over a recipient that is an object: a column centred on it of the button that

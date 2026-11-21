@@ -6,7 +6,7 @@ complete by the first few items still missing. The items come from:
 
 - the recordings: each fixture of `ui/fixtures.json` and each card spec moment is done when
   every interface test of it passes, from both seats in every desktop and phone window
-  (`just b3d test --json` and `--phone-only --json`), no test of it has a fault allowed by
+  (`just b3d test --all --json` and `--phone-only --json`), no test of it has a fault allowed by
   `data/beryl3d/test-faults.json`, and no key of `data/beryl3d/timeline-parity.json` names it;
 - `data/beryl3d/parity.json`, which names a recording for each verb, effect and mark of
   `data/ui-conventions.json`, maps each skill to the job it does for a client, each web screen
@@ -361,15 +361,22 @@ def read_conventions() -> dict[str, Json]:
 
 
 def run_tests(phone: bool) -> Json:
-    """`just b3d test --json`, or its phone windows', as the `test` command runs it."""
-    command = [*BY, "b3d", "test", *(["--phone-only"] if phone else []), "--json"]
+    """`just b3d test --all --json`, or its phone windows', as the `test` command runs it."""
+    command = [
+        *BY,
+        "b3d",
+        "test",
+        "--all",
+        *(["--phone-only"] if phone else []),
+        "--json",
+    ]
     done = subprocess.run(command, stdout=subprocess.PIPE, text=True, check=False)
     return last_json(done.stdout)
 
 
 def read_results(folder: Path | None) -> Results:
     """The interface tests' results: from `desktop.json` and `phone.json` in `folder`, the two
-    `b3d test --json` outputs, or else from running both."""
+    `b3d test --all --json` outputs, or else from running both."""
     results = Results()
     for phone, name in ((False, "desktop.json"), (True, "phone.json")):
         if folder is None:
@@ -439,7 +446,7 @@ def parity_arguments(parser: argparse.ArgumentParser) -> None:
         "--results",
         type=Path,
         help="read the tests' results from desktop.json and phone.json here, the outputs of"
-        " `b3d test --json` and `b3d test --phone-only --json`, instead of running them",
+        " `b3d test --all --json` and `b3d test --all --phone-only --json`, instead of running them",
     )
 
 

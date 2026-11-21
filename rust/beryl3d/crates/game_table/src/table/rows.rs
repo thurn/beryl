@@ -20,8 +20,7 @@ mod names;
 mod single;
 pub use change::RowChange;
 use face::faced;
-pub use names::NameIds;
-pub(super) use names::SameName;
+pub use names::{NameIds, SameName};
 use single::{beyond_right, lay_single_cards, spacing, window_size};
 
 /// One card of a laid-out row: its pose, and whether it is drawn.
@@ -156,14 +155,14 @@ impl RowRules<'_> {
 /// lies under: the other cards of a merged permanent and the cards a permanent holds in exile,
 /// which peek out to its left, and the Auras and Equipment attached to it, which peek out to
 /// its right, as the web interface's `tuck` draws them.
-pub(super) struct Beneath<'a> {
+pub struct Beneath<'a> {
     cards: Vec<(ObjectId, &'a ObjectView)>,
 }
 
 impl<'a> Beneath<'a> {
     /// The cards of `under` that lie under one of `permanents`, each with the permanent it lies
     /// under.
-    pub(super) fn new(under: Vec<&'a ObjectView>, permanents: &[&'a ObjectView]) -> Self {
+    pub fn new(under: Vec<&'a ObjectView>, permanents: &[&'a ObjectView]) -> Self {
         let find = |slot: ObjectId| permanents.iter().copied().find(|p| p.slot == slot);
         let cards = under
             .into_iter()
@@ -174,7 +173,7 @@ impl<'a> Beneath<'a> {
 
     /// The cards under the permanent in `host` that peek out to its left (`left`) or to its
     /// right, in the order the row lists them.
-    fn of(&self, host: ObjectId, left: bool) -> impl Iterator<Item = &'a ObjectView> + '_ {
+    pub fn of(&self, host: ObjectId, left: bool) -> impl Iterator<Item = &'a ObjectView> + '_ {
         self.cards
             .iter()
             .filter(move |(holder, card)| *holder == host && peeks_left(card) == left)
@@ -236,7 +235,7 @@ fn peeks_left(card: &ObjectView) -> bool {
 }
 
 /// A row's cards gathered into groups laid out side by side.
-enum Groups<'a, 'b> {
+pub enum Groups<'a, 'b> {
     /// Each card a group of its own.
     Single(&'b [&'a ObjectView]),
     /// Each group's cards a run of `cards`, its top card first; `ends` holds where each run
@@ -256,7 +255,7 @@ impl<'a> Groups<'a, '_> {
     }
 
     /// The groups, in order.
-    fn iter(&self) -> impl Iterator<Item = &[&'a ObjectView]> {
+    pub fn piles(&self) -> impl Iterator<Item = &[&'a ObjectView]> {
         (0..self.len()).map(|index| match self {
             Groups::Single(cards) => &cards[index..=index],
             Groups::Piles { cards, ends } => {
@@ -269,7 +268,7 @@ impl<'a> Groups<'a, '_> {
 
 /// `cards` gathered into the groups `lay_row` lays out side by side: identical permanents into
 /// piles where the row piles them (`stack_slots`), and each other card alone.
-fn grouped<'a, 'b>(
+pub fn grouped<'a, 'b>(
     (cards, beneath): (&'b [&'a ObjectView], &Beneath<'a>),
     (names, ids, stack_slots): (Option<SameName>, Option<&NameIds<'_>>, Option<&[ObjectId]>),
 ) -> Groups<'a, 'b> {
@@ -303,10 +302,10 @@ pub(super) fn row_length<'a>(
     rules: &RowRules,
 ) -> f32 {
     let groups = grouped((cards, beneath), (names, ids, stack_slots));
-    let widths: f32 = groups.iter().map(|g| group_width(g, beneath, rules)).sum();
+    let widths: f32 = groups.piles().map(|g| group_width(g, beneath, rules)).sum();
     let between: f32 = groups
-        .iter()
-        .zip(groups.iter().skip(1))
+        .piles()
+        .zip(groups.piles().skip(1))
         .map(|(before, after)| rules.gap_between(before[0], after[0]))
         .sum();
     widths + between
@@ -332,12 +331,12 @@ pub(super) fn lay_row<'a>(
         return lay_single_cards(cards, area, y, rules, laid);
     }
     let widths: Vec<f32> = groups
-        .iter()
+        .piles()
         .map(|g| group_width(g, beneath, rules))
         .collect();
     let between: Vec<f32> = groups
-        .iter()
-        .zip(groups.iter().skip(1))
+        .piles()
+        .zip(groups.piles().skip(1))
         .map(|(before, after)| rules.gap_between(before[0], after[0]))
         .collect();
     let full: f32 = widths.iter().sum::<f32>() + between.iter().sum::<f32>();
@@ -349,7 +348,7 @@ pub(super) fn lay_row<'a>(
         }
         let mut left = RowRules::start(area, full);
         let mut height = 0;
-        for (index, (group, width)) in groups.iter().zip(&widths).enumerate() {
+        for (index, (group, width)) in groups.piles().zip(&widths).enumerate() {
             place_group((group, beneath), left, y, &mut height, true, rules, laid);
             left += width + between.get(index).copied().unwrap_or(0.0);
         }
@@ -374,7 +373,7 @@ pub(super) fn lay_row<'a>(
         let first = rules.scroll.min(groups.len() - shown);
         let last_width = widths[first + shown - 1];
         let (mut whole, mut overlapped) = (0.0, 0);
-        for (group, width) in groups.iter().zip(&widths).skip(first).take(shown - 1) {
+        for (group, width) in groups.piles().zip(&widths).skip(first).take(shown - 1) {
             if attached(group) {
                 whole += width;
             } else {
@@ -395,7 +394,7 @@ pub(super) fn lay_row<'a>(
     let mut height = 0;
     let (mut before, mut after) = (0, 0);
     let mut left = area.left;
-    for (index, (group, width)) in groups.iter().zip(&widths).enumerate() {
+    for (index, (group, width)) in groups.piles().zip(&widths).enumerate() {
         let visible = (first..first + shown).contains(&index);
         if index < first {
             before += group.len();
@@ -430,12 +429,12 @@ fn lay_faced<'a>(
     if rules.faces.is_empty() {
         return None;
     }
-    let tops: Vec<&ObjectView> = groups.iter().map(|group| group[0]).collect();
+    let tops: Vec<&ObjectView> = groups.piles().map(|group| group[0]).collect();
     let (order, lefts) = faced(&tops, widths, (area, full), rules)?;
     let mut height = 0;
     for (&index, &left) in order.iter().zip(&lefts) {
         let group = groups
-            .iter()
+            .piles()
             .nth(index)
             .expect("an index of the row's groups");
         place_group((group, beneath), left, y, &mut height, true, rules, laid);

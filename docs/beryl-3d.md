@@ -3269,8 +3269,8 @@ a wrong texture, a blending mistake or a missing glyph.
 
 Interface checks are only worth what they catch before a change lands. This
 section specifies how Beryl 3D runs all of them before every push, in seconds.
-The `beryl3d-interface` lane's `test` step (`just b3d test`) and the sweep's
-`every-tick` step (`just b3d test --every-tick`) run them.
+The `b3d-interface` check runs them at check times, and `b3d-every-tick` runs
+them on every tick.
 
 ### What a test is
 
@@ -3285,8 +3285,9 @@ b3d:verbs-zones/you/2560x1080
 b3d:stress-255/you/393x759
 ```
 
-`just b3d test` runs every test, and `just b3d test <start of a name>` runs
-those that match. A test's name is also an argument to the other commands:
+`just b3d test` runs the corpus and standalone scenes. `just b3d test --all`
+runs every test. A prefix runs the tests whose names begin with it. A test's
+name is also an argument to the other commands:
 `just b3d tree b3d:counterspell/cast/you/1600x900` prints that test's recording
 from its seat at its size.
 
@@ -3420,10 +3421,11 @@ drawn and sampled, but the frame checks do not run on them.
 Checking every tick remains, as the second line:
 
 - **In the sweep**, after a push, the same tests run again with the checks
-  applied on every tick (its `every-tick` step, `just b3d test --every-tick`),
-  held to the same `data/beryl3d/test-faults.json`. This is the exhaustive form.
-  It is not part of slow CI, whose budget of CPU time it would spend several
-  times over (see [Checks and isolation](#checks-and-isolation)).
+  applied on every tick (its `every-tick` step,
+  `just b3d test --all --every-tick`), held to the same
+  `data/beryl3d/test-faults.json`. This is the exhaustive form. It is not part
+  of slow CI, whose budget of CPU time it would spend several times over (see
+  [Checks and isolation](#checks-and-isolation)).
 - **A differential test** holds the two together
   (`beryl_inspect/tests/all/differential.rs`). On a fixed sample of 200 tests,
   drawn with a fixed seed from every test but the stress boards', it plants each
@@ -3495,15 +3497,14 @@ recording takes 0.19 s, most of it hashing the sources.
 
 ### At 50,000 cards
 
-The engine's goal is 50,000 cards. At about three moments a card that is 2.1
-million tests over the full matrix, or roughly 50 minutes of CPU time.
+The engine's goal is 50,000 cards. At three moments a card, testing both seats
+in every desktop and phone window would mean about 2.1 million tests.
 
-- **Before a push** the tests run at one desktop size and one phone size:
-  600,000 tests, about 15 minutes of CPU time, about a minute across the
-  development machine's 18 cores.
-- **In the sweep** they run over the full matrix.
-- **Nothing is chosen by guessing what a change affects.** A change to the
-  client core can break any card's moment, so all of them run.
+`just b3d test` runs the corpus and standalone scenes. The corpus has one
+recording per distinct signature, plus every fixture. `just b3d corpus` shows
+how many recordings share each representative's signature, and `--update` writes
+the selection to `data/beryl3d/corpus.txt`. Use `just b3d test --all` for every
+recording, or pass a recording name to check it directly.
 
 ## Performance gates
 

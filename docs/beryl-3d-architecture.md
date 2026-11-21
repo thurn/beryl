@@ -425,13 +425,14 @@ say only what a program cannot.
 
 - **The interface checks** are generic, as before, with "relations hold" added.
   They run on every story and on the corpus.
-- **The corpus** is one recording for each distinct **signature**. A signature
-  covers what the client can tell apart in a recording: the shape of each view
-  (how many objects in each zone, grouped as the table groups them), each
-  script's verbs and beats, each prompt's shape and its numbers of candidates
-  and buttons, and each text's measured number of lines. Card names and rules
-  text are left out. `data/beryl3d/corpus.txt` names the corpus, and the
-  recordings pack built before a landing holds only those recordings.
+- **The corpus** holds the first recording by name for each distinct
+  **signature**, plus every fixture. A signature covers what the client can tell
+  apart in a recording: the shape of each view (how many objects in each zone,
+  grouped as the table groups them), each script's verbs and beats, each
+  prompt's shape and its numbers of candidates and buttons, and each text's
+  measured number of lines. Card names and rules text are left out.
+  `data/beryl3d/corpus.txt` names the corpus, and the recordings pack built
+  before a landing holds only those recordings.
 - **At the tip**, a job with no deadline records every moment of every card,
   runs the interface checks on all of them, and files a ticket naming any
   signature the corpus lacks, with the command that adds it.

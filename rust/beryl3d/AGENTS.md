@@ -64,8 +64,8 @@ the parity list (docs/beryl-3d.md, "The parity list"): for each kind of item the
 web interface shows (fixtures, card specs, timelines, verbs, effects, marks,
 prompt shapes, screens, UI Conventions entries, tools and launch tests), how
 many Beryl 3D has and the first few it lacks; `--full` names all of them and
-`--json` prints the whole report. It runs `just b3d test` on the desktop and
-phone windows, or reads their `--json` outputs from `--results <dir>`
+`--json` prints the whole report. It runs `just b3d test --all` on the desktop
+and phone windows, or reads their `--json` outputs from `--results <dir>`
 (`desktop.json`, `phone.json`). `just b3d parity --check` fails when
 `data/beryl3d/parity.json` misses a skill directory or a web screen file or
 names something gone; it runs as a repository check on every change.
@@ -102,8 +102,13 @@ through the client with no window or GPU (the `b3d` skill has the details):
   left, moved or changed state.
 - `just b3d check <name>` runs every interface check on every tick, and exits
   with 1 on a fault.
-- `just b3d test [prefix]` runs every interface test whose name starts with the
-  prefix: each recording from each seat in each desktop window, as
+- `just b3d corpus` lists the first recording and count for each distinct
+  signature. `--update` writes their names and every fixture to
+  `data/beryl3d/corpus.txt`. The [game probe guide](crates/game_probe/AGENTS.md)
+  defines the signature.
+- `just b3d test` runs the corpus and the standalone scenes from each seat in
+  each desktop window. `--all` runs the entire pack. A prefix chooses any test
+  whose name starts with it. Tests are named
   `b3d:<recording>/<seat>/<width>x<height>`, which `tree` and `check` also take.
   The 1600x900 window plays at a Retina display's scale and its tests are named
   `<width>x<height>@2` (`pages::RETINA_WINDOWS`). `--phone-only` runs the three

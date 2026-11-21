@@ -354,8 +354,13 @@ OWN_COMMANDS: tuple[Command, ...] = (
         "every interface check on every tick of a recording, and the faults",
     ),
     b3d_command(
+        "corpus",
+        "one name and count for each distinct recording signature",
+        shared=True,
+    ),
+    b3d_command(
         "test",
-        "every interface test whose name starts with a prefix, at its check times",
+        "interface tests for the corpus and stories, or a recording prefix",
         shared=True,
     ),
     b3d_command(

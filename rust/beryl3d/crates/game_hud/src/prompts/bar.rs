@@ -2,10 +2,9 @@
 //! (docs/beryl-3d.md, "Elements"). Its words, which buttons it has and whether each can be
 //! pressed are the session's.
 
-use beryl_protocol::prompt::Click;
 use std::borrow::Cow;
 
-use beryl_protocol::prompt::{ButtonId, PromptButton, PromptView};
+use beryl_protocol::prompt::{ButtonId, Click, PromptButton, PromptView, Purpose, ShapeBody};
 use beryl_protocol::protocol::{Side, Status};
 use glam::Vec2;
 
@@ -37,7 +36,7 @@ use kit_ui::widgets::{self, button, icon_button, icons, primary};
 /// [CR 724.5]: https://yawgatog.com/resources/magic-rules/#R7245
 #[must_use]
 pub fn prompt_bar(prompt: &PromptView, input: &HudIn) -> Element {
-    bar(prompt, input, None, None)
+    bar(prompt, input, None)
 }
 
 /// Controls a prompt adds to its bar, such as a number's steps, and about how large they are
@@ -48,28 +47,29 @@ pub(super) struct Controls {
     pub size: (f32, f32),
 }
 
-/// The prompt bar for `prompt`, as `prompt_bar` draws it, with `after` written in brackets
-/// after what it asks, as the web's `Asks` writes how much of a cost is still to pay, and
-/// `controls` over the turn button, as the web's dock stands a number's steps (`Stepper` in
-/// `ui/src/stage/PromptBar.tsx`).
-pub(super) fn bar(
-    prompt: &PromptView,
-    input: &HudIn,
-    after: Option<&str>,
-    controls: Option<Controls>,
-) -> Element {
-    let acting_for = input.view.is_some_and(|view| {
-        matches!(&view.status, Status::Deciding { decision } if decision.acting_for.is_some())
-    });
-    let asks: Cow<str> = match (acting_for, prompt.title.is_empty()) {
-        (false, _) => Cow::Borrowed(&prompt.title),
+/// The prompt title with the side and any remaining amount the bar displays.
+#[must_use]
+pub fn title(prompt: &PromptView, acting_for: bool) -> Cow<'_, str> {
+    let asks = match (acting_for, prompt.title.is_empty()) {
+        (false, _) => Cow::Borrowed(prompt.title.as_str()),
         (true, true) => Cow::Borrowed("For opponent"),
         (true, false) => Cow::Owned(format!("For opponent: {}", prompt.title)),
     };
-    let asks = match after {
-        Some(after) => Cow::Owned(format!("{asks} ({after})")),
-        None => asks,
-    };
+    match &prompt.body {
+        ShapeBody::Pay { cost, left } if !prompt.is(Purpose::Mana) || left != cost => {
+            Cow::Owned(format!("{asks} ({left})"))
+        }
+        ShapeBody::Divide { left, .. } => Cow::Owned(format!("{asks} ({left})")),
+        _ => asks,
+    }
+}
+
+/// The prompt bar with any controls it puts over the turn button.
+pub(super) fn bar(prompt: &PromptView, input: &HudIn, controls: Option<Controls>) -> Element {
+    let acting_for = input.view.is_some_and(|view| {
+        matches!(&view.status, Status::Deciding { decision } if decision.acting_for.is_some())
+    });
+    let asks = title(prompt, acting_for);
     if input.window.phone() {
         return phone_bar(prompt, input, &asks, controls);
     }

@@ -7,6 +7,7 @@
 //! names what would work.
 
 mod check;
+mod corpus;
 pub mod line;
 mod listing;
 pub mod options;
@@ -62,7 +63,7 @@ impl Printed {
     }
 }
 
-const COMMANDS: [Command; 8] = [
+const COMMANDS: [Command; 9] = [
     Command {
         name: "list",
         summary: "every recording whose name starts with the prefix, with its length and views",
@@ -193,11 +194,33 @@ const COMMANDS: [Command; 8] = [
         run: check::check,
     },
     Command {
+        name: "corpus",
+        summary: "one name and count for each distinct recording signature",
+        argument: "",
+        examples: [
+            ("just b3d corpus", "list the representatives and counts"),
+            (
+                "just b3d corpus --update",
+                "write the representatives and fixtures to the corpus",
+            ),
+        ],
+        spec: Spec {
+            recording: false,
+            values: &[],
+            switches: &[test::UPDATE],
+        },
+        own: &[("--update", "write data/beryl3d/corpus.txt")],
+        run: corpus::corpus,
+    },
+    Command {
         name: "test",
-        summary: "every interface test whose name starts with the prefix, and the faults",
+        summary: "interface tests for the corpus and stories, or a recording prefix",
         argument: " [prefix]",
         examples: [
-            ("just b3d test", "every test, at its check times"),
+            (
+                "just b3d test",
+                "the corpus and stories, at their check times",
+            ),
             (
                 "just b3d test b3d:verbs-zones --every-tick",
                 "one recording's tests, checked on every tick",
@@ -212,9 +235,11 @@ const COMMANDS: [Command; 8] = [
                 test::RAISE,
                 test::PHONE_ONLY,
                 test::LIST,
+                test::ALL,
             ],
         },
         own: &[
+            ("--all", "play every recording in the pack"),
             (
                 "--every-tick",
                 "check every tick instead of the check times, as the sweep does",

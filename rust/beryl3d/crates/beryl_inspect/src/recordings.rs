@@ -76,6 +76,11 @@ pub fn find(name: &str, seat: Seat) -> Result<Arc<[FixtureMessage]>, String> {
     Ok(Arc::clone(parsed().entry(at).or_insert(messages)))
 }
 
+/// The pack's entries in name and seat order, without decoding their messages.
+pub(crate) fn entries() -> Result<&'static [Entry<'static>], String> {
+    Ok(&opened()?.entries)
+}
+
 /// The name and seat of every recording, stress boards included, sorted by name and seat,
 /// without playing any.
 ///
@@ -105,6 +110,11 @@ pub fn listed() -> Result<Vec<String>, String> {
     let mut names: Vec<String> = names()?.into_iter().map(|(name, _)| name).collect();
     names.dedup();
     Ok(names)
+}
+
+/// Whether a named scene is built by the inspector and has no entry in the recordings pack.
+pub(crate) fn standalone(name: &str) -> bool {
+    Board::parse(name).is_some() || screens::NAMES.contains(&name) || name.starts_with("story/")
 }
 
 /// A guess at how long the recording `name` takes to play for `seat`, for running the longest
