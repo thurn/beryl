@@ -24,7 +24,13 @@ fn an_off_platform_defers_its_checks_then_verifies_the_tip_already_on_master() {
     let world = World::new();
     let path = ignite_core::test_files::temp_dir().join("macos.db");
     let pool = Pool::new(local::open(&path).unwrap());
-    let mac = world.ctx("m-1");
+    let mut mac = world.ctx("m-1");
+    // The verifier runs as a Mac even when this test runs on a Windows host.
+    mac.config
+        .machine
+        .entry("jarvis".to_owned())
+        .or_default()
+        .os = Some(Os::Macos);
     let windows = world.ctx("m-2");
     let mut verifier = world.verifier().with_memory(local::open(&path).unwrap());
     let mut macos_check = check("macos", 'a');
