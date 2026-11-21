@@ -6,6 +6,12 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **A permanent could phase in with damage from a previous turn.** Cleanup
+  cleared damage from the battlefield list, which skips phased-out permanents.
+  Cleanup now also clears damage from the phased-out set. The regression
+  `cleanup_removes_damage_from_a_phased_out_permanent` checks that a damaged
+  creature phases in with no marked damage after the previous turn's cleanup.
+
 - **Quicksilver Gargantuan's copy of an animated artifact was reported as 7/7
   after Oko animated the copy.** The current engine applies the copy exception
   in layer 1, then applies Oko's 3/3 in layer 7b. The scenario

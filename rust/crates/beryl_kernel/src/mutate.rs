@@ -147,6 +147,18 @@ impl<L: Layout> State<L> {
             let slot = self.battlefield.as_slice()[i];
             self.object_mut(slot).damage = 0;
         }
+        if !self.phased_out.is_empty() {
+            self.clear_phased_out_damage();
+        }
+    }
+
+    /// Clears damage from the permanents kept outside the battlefield list during phasing.
+    #[cold]
+    #[inline(never)]
+    fn clear_phased_out_damage(&mut self) {
+        for slot in self.phased_out.iter() {
+            self.object_mut(slot).damage = 0;
+        }
     }
 
     /// Removes the damage marked on a permanent, as it regenerates (see [CR 120.6]):

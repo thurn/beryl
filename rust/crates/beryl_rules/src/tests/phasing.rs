@@ -11,6 +11,7 @@ use crate::ids::{CardId, CardIx};
 use crate::profile::Profile;
 use crate::state::{Continuous, Duration, LayerChange, State, TurnStep, Zone, ZoneKey};
 use crate::table::GameTable;
+use crate::turn;
 
 use crate::zone::Place;
 use beryl_card::FaceIx;
@@ -130,6 +131,33 @@ fn a_permanent_phases_in_for_who_controlled_it_as_it_phased_out() {
     settled(&mut g);
     assert_eq!(g.s.controller(bear), g.them);
     assert!(g.s.memos(bear).iter().next().is_none());
+}
+
+/// See [CR 514.2]: "all damage marked on permanents (including phased-out permanents) is removed".
+///
+/// [CR 514.2]: https://yawgatog.com/resources/magic-rules/#R5142
+#[test]
+fn cleanup_removes_damage_from_a_phased_out_permanent() {
+    let mut g = Game::new(Profile::EXACT);
+    let bear = g.give(g.them, "Test Bear", Zone::Battlefield);
+    settled(&mut g);
+    let permanent = g.s.permanent_at(bear).unwrap();
+    let _ = g.s.mark_damage(permanent.into(), permanent, 1, false);
+    g.s.phase_out(g.s.permanents_in(Bitboard::single(bear)))
+        .unwrap();
+    assert!(g.s.phased_out().contains(bear));
+    assert_eq!(g.s.object(bear).damage(), 1);
+
+    g.at(g.me, TurnStep::End);
+    turn::end_step(&mut g.s, &g.t, &mut g.x.events).unwrap();
+    assert_eq!(g.s.turn().step(), TurnStep::Cleanup);
+    assert!(g.s.phased_out().contains(bear));
+
+    turn::begin_turn(&mut g.s, &g.t, &mut g.x.events).unwrap();
+    assert_eq!(g.s.turn().active(), g.them);
+    assert_eq!(g.s.turn().step(), TurnStep::Upkeep);
+    assert_eq!(g.s.permanent_at(bear), Some(permanent));
+    assert_eq!(g.s.object(bear).damage(), 0);
 }
 
 /// A turn-start checkpoint records each permanent by its own card, its counters and what it is
