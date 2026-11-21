@@ -89,7 +89,7 @@ fn a_restarted_dispatcher_does_not_send_a_tell_from_before_the_claim() {
 fn cli_holder(rig: &Rig) -> (std::sync::Arc<crate::clid::FakeCliPool>, &'static str) {
     use super::cli_tests::{cli, reserve, tick};
     let fake = cli(rig, 1);
-    reserve(rig, "T.1", "cli-claude-slot-1", &[]);
+    reserve(rig, "T.1", "reservation-1", &[]);
     tick(rig);
     let worker = "cli-claude-00000001";
     rig.hold(worker, "T.1");

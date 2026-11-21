@@ -362,6 +362,12 @@ pub trait Hub: Send + Sync {
     fn lookup(&self, keys: &[ResultKey]) -> Result<Vec<Option<CachedResult>>>;
     fn store(&self, results: &[NewResult]) -> Result<()>;
     fn next(&self, free: &MachineFree) -> Result<Option<Reservation>>;
+    /// Gives back an unclaimed reservation without changing the ticket or any claim.
+    fn refuse_reservation(&self, _reservation: &Reservation) -> Result<()> {
+        Err(Error::Invalid(
+            "this hub cannot refuse reservations".to_owned(),
+        ))
+    }
     /// `POST /next` with `explain` set: a reservation, or nothing with the hub's reason, for
     /// `ignite status`. A hub that gives no reason answers as [`Hub::next`] does.
     fn next_explained(&self, free: &MachineFree) -> Result<crate::protocol::hub::NextReply> {

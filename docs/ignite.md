@@ -3421,14 +3421,11 @@ with `ignite pool watch`. To work a ticket in a desktop session, run
 
 A provider declares its executable and optional arguments in
 `[pool.cli.<provider>]` and the tiers it offers in `[pool.models.<provider>]`.
-It needs a positive slot count under `[machine.<host>.pool.<provider>]` to take
-tickets on that machine. A machine with no worker slots can still run checks.
-Legacy `mode` keys are accepted and ignored.
+The daemon derives worker room from available memory, the number of workers, and
+a ceiling of twice the machine's logical cores. Legacy machine pool tables are
+accepted for seeding fleet settings during an upgrade.
 
 ```toml
-[machine.jarvis.pool.claude]
-slots = 8
-
 [pool.cli.claude]
 program = "claude"
 
@@ -3449,17 +3446,20 @@ adapter in that module's `ADAPTERS` list. The adapter can also implement
 `digest` to publish readable transcript lines. Configure the provider and its
 tiers with the same `[pool.cli]` and `[pool.models]` tables.
 
-- The daemon keeps each worker's ticket, model, effort, turn number and next
-  prompt in `cli_slots`. The CLI keeps the transcript on disk.
-- The daemon offers a free slot to the hub as `cli-<app>-slot-<k>` after a probe
-  turn succeeds. One extra slot takes only tickets that hold `master` back. The
-  worker that claims a reservation gets a session ID, `cli-<app>-<8 hex>`, which
-  every turn carries in `IGNITE_SESSION`. A lane successor, regression or
-  reverted ticket can resume the earlier worker's transcript.
+- The daemon includes each provider whose probe passed when it asks the hub for
+  work. The hub names the provider in its reservation. The daemon gives back a
+  reservation if that provider went on a CLI hold or has no configured program.
+- Each new worker gets a session ID, `cli-<app>-<8 hex>`, which every turn
+  carries in `IGNITE_SESSION`. The daemon takes the lowest free worker number
+  for the provider and stores the worker's ticket, model, effort, turn number
+  and prompt in `cli_slots`. When the ticket ends, the worker row is removed.
+  Turn history and transcripts let a lane successor, regression or reverted
+  ticket continue an earlier transcript.
 - Three loops follow the pool. `ignite-cli` reads running turns and acts on
   their ends about once a second. `ignite-cli-health` runs probe turns and
   reports CLI holds. `ignite-cli-dispatch` asks the hub for tickets every ten
-  seconds while the machine has worker slots. `ignite doctor` lists all three.
+  seconds. `ignite status` shows the machine's worker room and its limits.
+  `ignite doctor` lists all three loops.
 
 A turn:
 
@@ -3548,9 +3548,9 @@ Messages, usage and repair:
   with the new build, so a release that cannot read an older build's rows is
   rejected before any daemon restarts into it.
 - When the daemon has been down for 15 minutes and `justiciar-needed.json`
-  exists, a machine with a configured CLI provider and worker slots has its
-  monitor start one headless justiciar turn in the main checkout, on the `opus`
-  tier at `high` effort, as session `cli-monitor-justiciar`. Its prompt is
+  exists, a machine with a configured CLI provider has its monitor start one
+  headless justiciar turn in the main checkout, on the `opus` tier at `high`
+  effort, as session `cli-monitor-justiciar`. Its prompt is
   `ignite guide justiciar` with the crash evidence: the monitor's request, the
   newest crash record, and the last 50 lines of the daemon's log and of
   `starts.jsonl`. The turn holds `monitor/justiciar.lock` in the Ignite home and
@@ -3566,10 +3566,10 @@ Messages, usage and repair:
   2,000 characters. The daemon queues new lines in its outbox, so a hub outage
   loses none. It forgets what it queued when it restarts and queues a running
   turn's lines again, which the hub stores once, keyed by session, turn and line
-  number. `ignite pool list` shows each CLI slot's state and each CLI hold, and
-  `ignite doctor` warns when an app in CLI mode has no program on the daemon's
-  `PATH`. Transcripts can hold secrets, so the hub serves them on the Tailscale
-  listener only.
+  number. `ignite pool list` shows each active worker's state and each CLI hold,
+  and `ignite doctor` warns when an app in CLI mode has no program on the
+  daemon's `PATH`. Transcripts can hold secrets, so the hub serves them on the
+  Tailscale listener only.
 
 A CLI worker's `ignite turn-ended` follows the desktop rules with two changes. A
 live process under the session that is not an `ignite` verb does not let the
@@ -4037,10 +4037,8 @@ release ref when Ignite blocks its own landing.
 - Justiciar tickets are offered before every other ticket, whether or not an
   epic is active. So are all the other tickets the hub files by itself, which
   carry the label `hub`.
-- A daemon keeps one worker free for justiciar tickets while its pool has more
-  than one worker, so a pool full of stuck tickets cannot starve the ticket that
-  would free them. In CLI mode that is the one slot above `slots`, which takes
-  only tickets that hold `master` back.
+- The hub may reserve a ticket that holds `master` back at zero worker room
+  while the machine is free of memory pressure.
 - When the hub cannot be reached for 15 minutes, the daemon starts a local CLI
   justiciar without a ticket. The monitor can also start a local CLI justiciar
   when the daemon is down. See [CLI mode](#cli-mode).
@@ -4208,14 +4206,13 @@ This section is a design that is being built. The sections above describe Ignite
 as it runs today, and each is rewritten as its part of this design lands. Until
 then, where they differ, the sections above say what the code does.
 
-Today a person scales Ignite by editing `ignite.toml`: how many build trees,
-reserved cores, gigabytes and worker slots each machine has, which CLI a
-machine's workers run, and which machine and CLI each ticket belongs to. Each of
-those numbers has been wrong at least once. Twelve ticket trees ran out on
-2026-11-18. The trees' disk limit was passed on 2026-11-18 and again on
-2026-11-20. Worker slots are still read once when a daemon starts. Under this
-design Ignite decides those things from what it measures, and the few choices
-that are a person's to make move to the dashboard.
+Before this work, a person scaled Ignite by editing `ignite.toml`: how many
+build trees, reserved cores, gigabytes and worker slots each machine has, which
+CLI a machine's workers run, and which machine and CLI each ticket belongs to.
+Each of those numbers has been wrong at least once. Twelve ticket trees ran out
+on 2026-11-18. The trees' disk limit was passed on 2026-11-18 and again on
+2026-11-20. Under this design Ignite decides those things from what it measures,
+and the few choices that are a person's to make move to the dashboard.
 
 Three words are used below. A **provider** is a coding-agent CLI that runs
 workers, such as `claude` or `codex`; older fields and tables call it an `app`.
@@ -4347,10 +4344,10 @@ names each retired key and reports that Ignite uses the derived value.
   pressed (swap grew a quarter of a gigabyte in a minute, or less than 1 GB is
   free) or while free memory is under one worker's footprint plus 1 GB.
   Otherwise it is up to three, within the ceiling. A worker's footprint is the
-  median peak memory of the machine's last 20 worker turns. The hub's admission
-  by expected cores and projected disk growth (see
-  [Light and heavy tickets](#light-and-heavy-tickets)) is unchanged, and is what
-  usually decides how many tickets a machine holds.
+  median peak memory of the machine's last 20 measured worker turns, with a
+  default of 2,000 MB. The hub's admission by expected cores and projected disk
+  growth (see [Light and heavy tickets](#light-and-heavy-tickets)) is unchanged,
+  and is what usually decides how many tickets a machine holds.
 
 ### The provider mix
 
@@ -5074,10 +5071,11 @@ These show that cores, trees and workers go where the rules say.
 - **No free tree.** Lease every ticket tree and run `ignite start` in one more
   session. Expect a wait that names the reason, no new directory, and no start
   from the pool.
-- **CLI workers.** Configure two slots for a provider and file two ready
-  tickets. Expect `ignite pool list` to show two workers with session IDs
-  starting with `cli-`. Run `ignite pool watch <ticket>` to see messages and
-  tool calls.
+- **CLI workers.** Configure two providers with passing probes and file four
+  ready light tickets. With four free trees and worker room, expect
+  `ignite pool list` to show the four workers. Run `ignite pool watch <ticket>`
+  to see messages and tool calls. After landing each ticket, its worker drops
+  off the list.
 - **A CLI turn killed.** Kill a CLI worker's process mid-turn, then restart the
   daemon. Expect the turn to resume with the interruption message, the ticket
   still held, and no second turn on the transcript.

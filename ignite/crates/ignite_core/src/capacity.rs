@@ -125,9 +125,57 @@ fn disk_budget(total: u64, outside: u64, reserve: u64) -> u64 {
     total.saturating_sub(outside).saturating_sub(reserve)
 }
 
-#[allow(unused_variables)]
+/// Memory left for other processes after starting a worker, in megabytes.
+const WORKER_MEMORY_RESERVE_MB: u64 = 1_024;
+
+/// The largest batch of workers one dispatch step can start.
+pub const WORKER_BATCH: u32 = 3;
+
+/// Why memory prevents more ordinary workers from starting.
+pub fn worker_memory_limited(inputs: &RoomInputs) -> bool {
+    inputs.memory_pressed
+        || inputs
+            .free_memory_mb
+            .is_some_and(|free| free < inputs.worker_mb.saturating_add(WORKER_MEMORY_RESERVE_MB))
+}
+
+/// How many more ordinary workers the daemon can start in one dispatch step.
 pub fn start_room(inputs: &RoomInputs) -> u32 {
-    todo!()
+    if worker_memory_limited(inputs) {
+        return 0;
+    }
+    inputs
+        .ceiling
+        .saturating_sub(inputs.running)
+        .min(WORKER_BATCH)
+}
+
+#[cfg(test)]
+mod room_tests {
+    use super::*;
+
+    #[test]
+    fn worker_room_obeys_memory_and_ceiling() {
+        let mut inputs = RoomInputs {
+            ceiling: 10,
+            running: 5,
+            memory_pressed: false,
+            free_memory_mb: Some(3_024),
+            worker_mb: 2_000,
+        };
+        assert_eq!(start_room(&inputs), 3);
+        inputs.free_memory_mb = Some(3_023);
+        assert_eq!(start_room(&inputs), 0);
+        inputs.free_memory_mb = None;
+        assert_eq!(start_room(&inputs), 3);
+        inputs.running = 9;
+        assert_eq!(start_room(&inputs), 1);
+        inputs.running = 11;
+        assert_eq!(start_room(&inputs), 0);
+        inputs.running = 0;
+        inputs.memory_pressed = true;
+        assert_eq!(start_room(&inputs), 0);
+    }
 }
 
 #[cfg(test)]

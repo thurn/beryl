@@ -424,6 +424,7 @@ pub fn desks(base: &Base, ctx: &Context, machinery: &Machinery) -> Result<Desks>
     let host = Arc::new(desk::DaemonHost {
         trees: machinery.trees.clone(),
         scheduler: machinery.scheduler.clone(),
+        worker_ceiling: base.derived.worker_ceiling,
         queue_recovery: Mutex::default(),
         claims: claims.clone(),
         ctx: ctx.clone(),

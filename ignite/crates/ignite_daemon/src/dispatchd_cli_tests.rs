@@ -1,7 +1,6 @@
 //! CLI workers take reservations, receive messages, and resume when their commands finish.
-//! Each provider keeps an extra slot for tickets that hold `master` back.
 
-use ignite_core::config::{CliProgram, MachinePool};
+use ignite_core::config::CliProgram;
 use ignite_core::protocol::hub::Reservation;
 use ignite_core::traits::Clock;
 
@@ -11,14 +10,14 @@ use super::wake::WAKE;
 use super::*;
 use crate::clid::{FakeCliPool, SessionCheck};
 
-/// Puts `rig`'s Claude app in CLI mode with `slots` slots, through a fake CLI pool.
-pub(super) fn cli(rig: &Rig, slots: u32) -> Arc<FakeCliPool> {
-    cli_with(rig, slots, Arc::new(FakeCliPool::default()))
+/// Configures Claude in the fake pool and sets the machine-wide worker ceiling.
+pub(super) fn cli(rig: &Rig, ceiling: u32) -> Arc<FakeCliPool> {
+    cli_with(rig, ceiling, Arc::new(FakeCliPool::default()))
 }
 
 /// [`cli`] through `fake`, which a restarted rig shares with the one before it, as a restarted
 /// daemon finds the slots its CLI pool wrote to the database.
-pub(super) fn cli_with(rig: &Rig, slots: u32, fake: Arc<FakeCliPool>) -> Arc<FakeCliPool> {
+pub(super) fn cli_with(rig: &Rig, ceiling: u32, fake: Arc<FakeCliPool>) -> Arc<FakeCliPool> {
     let mut config = rig.ctx.config.clone();
     config.pool.cli.insert(
         "claude".to_owned(),
@@ -27,45 +26,27 @@ pub(super) fn cli_with(rig: &Rig, slots: u32, fake: Arc<FakeCliPool>) -> Arc<Fak
             ..CliProgram::default()
         },
     );
-    config
-        .machine
-        .get_mut("local")
-        .unwrap()
-        .pool
-        .insert("claude".to_owned(), MachinePool { slots });
-    rig.dispatcher.set_cli(fake.clone(), "local", &config);
+    lock(&rig.host.worker_capacity).0 = ceiling;
+    rig.dispatcher.set_cli(fake.clone(), &config);
     fake
 }
 
-/// The hub reserves `ticket`, labelled `labels`, for the slot `slot`.
-pub(super) fn reserve(rig: &Rig, ticket: &str, slot: &str, labels: &[&str]) {
+/// The fake hub reserves a Claude worker for the ticket.
+pub(super) fn reserve(rig: &Rig, ticket: &str, key: &str, labels: &[&str]) {
     rig.hub
         .insert_ticket(detail(ticket, "open", None, labels, ""));
+    offer(rig, ticket, "claude", key);
+}
+
+fn offer(rig: &Rig, ticket: &str, provider: &str, key: &str) {
     rig.hub.queue_reservation(Reservation {
-        provider: None,
+        provider: Some(provider.to_owned()),
         ticket: ticket_id(ticket),
         machine: rig.ctx.machine.clone(),
-        session: session(slot),
+        session: session(key),
         expires_at: rig.clock.now().plus_seconds(600.0),
         code: "7f3a".to_owned(),
     });
-}
-
-/// The workers of each request to the hub, and whether it asked only for tickets that hold
-/// `master` back.
-fn asks(rig: &Rig) -> Vec<(Vec<String>, bool)> {
-    rig.hub
-        .asked()
-        .iter()
-        .map(|free| {
-            let workers = free
-                .idle_workers
-                .iter()
-                .map(|w| w.session.as_str().to_owned())
-                .collect();
-            (workers, free.master_only)
-        })
-        .collect()
 }
 
 pub(super) fn tick(rig: &Rig) {
@@ -76,7 +57,7 @@ pub(super) fn tick(rig: &Rig) {
 fn an_app_in_cli_mode_hands_off_through_the_cli_pool_without_a_dispatcher() {
     let rig = rig(&[]);
     let fake = cli(&rig, 2);
-    reserve(&rig, "T.1", "cli-claude-slot-1", &["tier:opus"]);
+    reserve(&rig, "T.1", "reservation-1", &["tier:opus"]);
     tick(&rig);
 
     let begun = fake.begun();
@@ -84,7 +65,7 @@ fn an_app_in_cli_mode_hands_off_through_the_cli_pool_without_a_dispatcher() {
     let (reservation, model, effort) = &begun[0];
     assert_eq!(
         (reservation.ticket.as_str(), reservation.session.as_str()),
-        ("T.1", "cli-claude-slot-1")
+        ("T.1", "reservation-1")
     );
     assert_eq!(reservation.code, "7f3a");
     assert_eq!(
@@ -103,29 +84,14 @@ fn an_app_in_cli_mode_hands_off_through_the_cli_pool_without_a_dispatcher() {
     assert_eq!(rig.state_of("cli-claude-00000001"), "reserved");
     rig.hold("cli-claude-00000001", "T.1");
     assert_eq!(rig.state_of("cli-claude-00000001"), "working");
-    let view = rig.dispatcher.view().unwrap();
-    let idle: Vec<&str> = view
-        .iter()
-        .filter(|w| w.state == "idle")
-        .map(|w| w.session.as_str())
-        .collect();
-    // The sessions fill the lowest slot numbers first.
-    assert_eq!(idle, ["cli-claude-slot-2", "cli-claude-slot-3"]);
+    assert_eq!(rig.dispatcher.view().unwrap().len(), 1);
 
-    // The first request offered both slots and the extra one was asked for alone, for tickets
-    // that hold master back.
-    let asked = asks(&rig);
-    assert_eq!(
-        asked[0],
-        (
-            vec![
-                "cli-claude-slot-1".to_owned(),
-                "cli-claude-slot-2".to_owned()
-            ],
-            false
-        )
-    );
-    assert!(asked.contains(&(vec!["cli-claude-slot-3".to_owned()], true)));
+    let asked = &rig.hub.asked()[0];
+    assert!(asked.idle_workers.is_empty());
+    let room = asked.room.as_ref().unwrap();
+    assert_eq!(room.start, 2);
+    assert_eq!(room.providers.len(), 1);
+    assert_eq!(room.providers[0].name, "claude");
 }
 
 #[test]
@@ -145,27 +111,17 @@ fn configured_providers_offer_their_tiers_and_use_their_effort_defaults() {
             ..CliProgram::default()
         },
     );
-    rig.ctx
-        .config
-        .machine
-        .get_mut("local")
-        .unwrap()
-        .pool
-        .insert("fake".to_owned(), MachinePool { slots: 2 });
-    rig.dispatcher
-        .set_cli(fake.clone(), "local", &rig.ctx.config);
-    reserve(
-        &rig,
-        "T.1",
-        &cli::placeholder("fake", 1).unwrap().to_string(),
-        &[],
-    );
-    reserve(
-        &rig,
+    rig.dispatcher.set_cli(fake.clone(), &rig.ctx.config);
+    rig.hub.insert_ticket(detail("T.1", "open", None, &[], ""));
+    rig.hub.insert_ticket(detail(
         "T.2",
-        &cli::placeholder("fake", 2).unwrap().to_string(),
+        "open",
+        None,
         &["tier:custom", "effort:medium"],
-    );
+        "",
+    ));
+    offer(&rig, "T.1", "fake", "reservation-1");
+    offer(&rig, "T.2", "fake", "reservation-2");
     tick(&rig);
 
     let begun = fake.begun();
@@ -173,8 +129,10 @@ fn configured_providers_offer_their_tiers_and_use_their_effort_defaults() {
     assert_eq!(begun[1].1, "fake-model");
     assert_eq!(rig.dispatcher.cli_apps().collect::<Vec<_>>(), ["fake"]);
     let asks = rig.hub.asked();
-    assert_eq!(asks[0].idle_workers[0].app, "fake");
-    assert_eq!(asks[0].idle_workers[0].models, ["custom"]);
+    let providers = &asks[0].room.as_ref().unwrap().providers;
+    assert_eq!(providers[0].name, "fake");
+    assert_eq!(providers[0].tiers, ["custom"]);
+    assert_eq!(providers[0].model_ids["custom"], "fake-model");
     let efforts: BTreeMap<_, _> = begun
         .iter()
         .map(|(reservation, _, effort)| (reservation.ticket.as_str(), effort.as_deref()))
@@ -186,37 +144,37 @@ fn configured_providers_offer_their_tiers_and_use_their_effort_defaults() {
 }
 
 #[test]
-fn the_extra_slot_takes_only_a_ticket_that_holds_master_back() {
+fn zero_room_allows_the_hub_to_offer_a_ticket_that_holds_master_back() {
     let rig = rig(&[]);
     let fake = cli(&rig, 2);
-    reserve(&rig, "T.1", "cli-claude-slot-1", &[]);
-    reserve(&rig, "T.2", "cli-claude-slot-2", &[]);
+    reserve(&rig, "T.1", "reservation-1", &[]);
+    reserve(&rig, "T.2", "reservation-2", &[]);
     tick(&rig);
     rig.hold("cli-claude-00000001", "T.1");
     rig.hold("cli-claude-00000002", "T.2");
     let before = rig.hub.asked().len();
     tick(&rig);
-    let asked = asks(&rig);
-    assert_eq!(
-        asked[before..],
-        [(vec!["cli-claude-slot-3".to_owned()], true)],
-        "with both slots busy only the extra one is offered, for master's tickets"
+    let asked = rig.hub.asked();
+    assert_eq!(asked.len(), before + 1);
+    assert_eq!(asked[before].room.as_ref().unwrap().start, 0);
+    assert!(!asked[before].master_only);
+    assert!(
+        rig.dispatcher
+            .worker_room_line()
+            .unwrap()
+            .contains("ceiling 2")
     );
 
-    reserve(&rig, "R.1", "cli-claude-slot-3", &["regression"]);
+    reserve(&rig, "R.1", "reservation-3", &["regression"]);
     tick(&rig);
-    assert_eq!(fake.begun()[2].0.session.as_str(), "cli-claude-slot-3");
-    rig.hold("cli-claude-00000003", "R.1");
-    let before = rig.hub.asked().len();
-    tick(&rig);
-    assert_eq!(rig.hub.asked().len(), before, "every slot is busy");
+    assert_eq!(fake.begun()[2].0.session.as_str(), "reservation-3");
 }
 
 #[test]
 fn a_tell_and_a_stall_check_for_a_cli_session_reach_the_cli_pool() {
     let rig = rig(&[]);
     let fake = cli(&rig, 1);
-    reserve(&rig, "T.1", "cli-claude-slot-1", &[]);
+    reserve(&rig, "T.1", "reservation-1", &[]);
     tick(&rig);
     let worker = "cli-claude-00000001";
     rig.hold(worker, "T.1");
@@ -269,7 +227,7 @@ fn a_tell_and_a_stall_check_for_a_cli_session_reach_the_cli_pool() {
 fn a_cli_session_is_woken_as_soon_as_its_verb_ends() {
     let rig = rig(&[]);
     let fake = cli(&rig, 1);
-    reserve(&rig, "T.1", "cli-claude-slot-1", &[]);
+    reserve(&rig, "T.1", "reservation-1", &[]);
     tick(&rig);
     let worker = session("cli-claude-00000001");
     rig.hold(worker.as_str(), "T.1");
@@ -290,27 +248,49 @@ fn a_cli_session_is_woken_as_soon_as_its_verb_ends() {
 }
 
 #[test]
-fn a_start_that_fails_frees_the_slot_for_a_minute() {
+fn a_failed_start_returns_the_reservation_and_backs_off_the_provider() {
     let rig = rig(&[]);
     let fake = cli(&rig, 1);
     fake.refuse(Some("the program is missing"));
-    reserve(&rig, "T.1", "cli-claude-slot-1", &[]);
+    reserve(&rig, "T.1", "reservation-1", &[]);
     tick(&rig);
-    assert_eq!(rig.state_of("cli-claude-slot-1"), "idle");
+    assert!(rig.dispatcher.view().unwrap().is_empty());
+    assert_eq!(rig.hub.refused_reservations()[0].ticket, ticket_id("T.1"));
     let before = rig.hub.asked().len();
     tick(&rig);
-    let asked = asks(&rig);
-    assert!(
-        asked[before..]
-            .iter()
-            .all(|(workers, _)| !workers.contains(&"cli-claude-slot-1".to_owned())),
-        "{asked:?}"
-    );
+    assert_eq!(rig.hub.asked().len(), before);
     fake.refuse(None);
     rig.clock.advance(REFUSED_S + 1.0);
-    reserve(&rig, "T.1", "cli-claude-slot-1", &[]);
+    reserve(&rig, "T.1", "reservation-1", &[]);
     tick(&rig);
     assert_eq!(fake.begun().len(), 1);
+}
+
+#[test]
+fn a_reservation_for_an_unknown_provider_is_returned_without_starting() {
+    let rig = rig(&[]);
+    let fake = cli(&rig, 2);
+    offer(&rig, "T.1", "missing", "reservation-1");
+    tick(&rig);
+    assert_eq!(rig.hub.refused_reservations().len(), 1);
+    assert!(fake.begun().is_empty());
+    assert!(rig.dispatcher.view().unwrap().is_empty());
+}
+
+#[test]
+fn memory_pressure_reports_zero_room() {
+    let rig = rig(&[]);
+    let _fake = cli(&rig, 2);
+    *lock(&rig.host.worker_capacity) = (2, true, Some(8_000));
+    tick(&rig);
+    let asked = rig.hub.asked();
+    let room = asked[0].room.as_ref().unwrap();
+    assert_eq!(room.start, 0);
+    assert!(room.memory_pressed);
+    assert_eq!(
+        rig.dispatcher.worker_room_line().as_deref(),
+        Some("worker room limited by memory")
+    );
 }
 
 #[test]
@@ -341,24 +321,13 @@ fn the_hub_down_justiciar_runs_as_a_cli_session() {
     );
 }
 
-/// Whether any request to the hub offered one of the CLI app's slots.
-fn offered_cli_slots(rig: &Rig, from: usize) -> bool {
-    asks(rig)[from..]
-        .iter()
-        .any(|(workers, _)| workers.iter().any(|w| w.starts_with("cli-claude-slot-")))
-}
-
 #[test]
-fn an_unprobed_or_held_app_offers_no_slots() {
+fn an_unprobed_or_held_provider_is_not_offered() {
     let rig = rig(&[]);
     let fake = cli(&rig, 2);
     fake.set_probed("claude", false);
     tick(&rig);
-    assert!(
-        !offered_cli_slots(&rig, 0),
-        "no slot before a probe passes: {:?}",
-        asks(&rig)
-    );
+    assert!(rig.hub.asked().is_empty());
 
     fake.set_probed("claude", true);
     fake.set_hold(
@@ -371,18 +340,18 @@ fn an_unprobed_or_held_app_offers_no_slots() {
             message: "Invalid API key".to_owned(),
         }),
     );
-    let before = asks(&rig).len();
     tick(&rig);
-    assert!(!offered_cli_slots(&rig, before), "{:?}", asks(&rig));
-    assert!(fake.begun().is_empty());
+    assert!(rig.hub.asked().is_empty());
 
     fake.set_hold("claude", None);
-    let before = asks(&rig).len();
     tick(&rig);
-    assert!(offered_cli_slots(&rig, before), "{:?}", asks(&rig));
+    assert_eq!(
+        rig.hub.asked()[0].room.as_ref().unwrap().providers[0].name,
+        "claude"
+    );
 }
 
-/// A regression reserved for a CLI slot, whose culprit's CLI session ended when it landed, asks
+/// A reserved regression whose culprit's CLI session ended when it landed asks
 /// the CLI pool to resume the culprit's transcript with the regression's hand-off prompt.
 #[test]
 fn a_regression_for_a_cli_slot_names_its_culprit_to_the_cli_pool() {
@@ -396,14 +365,7 @@ fn a_regression_for_a_cli_slot_names_its_culprit_to_the_cli_pool() {
         &["regression", "tier:opus"],
         body,
     ));
-    rig.hub.queue_reservation(Reservation {
-        provider: None,
-        ticket: ticket_id("R"),
-        machine: rig.ctx.machine.clone(),
-        session: session("cli-claude-slot-1"),
-        expires_at: rig.clock.now().plus_seconds(600.0),
-        code: "7f3a".to_owned(),
-    });
+    offer(&rig, "R", "claude", "reservation-1");
     tick(&rig);
 
     assert_eq!(fake.begun().len(), 1);
@@ -418,7 +380,7 @@ fn a_regression_for_a_cli_slot_names_its_culprit_to_the_cli_pool() {
         resume.prompt
     );
     // An ordinary ticket names no culprit.
-    reserve(&rig, "T.2", "cli-claude-slot-2", &["tier:opus"]);
+    reserve(&rig, "T.2", "reservation-2", &["tier:opus"]);
     tick(&rig);
     assert_eq!(fake.resumes().get(1), Some(&None));
 }
@@ -494,8 +456,7 @@ fn a_lost_landing_reply_delivers_the_lane_successor_once_the_cli_turn_ends() {
         [("opus".to_owned(), "codex-model".to_owned())].into(),
     );
     let fake = Arc::new(FakeCliPool::default());
-    rig.dispatcher
-        .set_cli(fake.clone(), "local", &rig.ctx.config);
+    rig.dispatcher.set_cli(fake.clone(), &rig.ctx.config);
     let worker = session("cli-codex-00000001");
     let now = rig.clock.now();
     let http = hub_with_lost_landing_reply(&rig);

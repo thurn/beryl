@@ -133,8 +133,12 @@ pub trait CliPool: Send + Sync {
     fn message(&self, session: &SessionId, text: &str, urgent: bool) -> Result<()>;
     /// Whether the session's turn is running, it is between turns, or it has no slot.
     fn check(&self, session: &SessionId) -> SessionCheck;
-    /// Every slot of `app`, free ones included, ordered by number.
+    /// Current worker rows of `app`, ordered by number.
     fn slots(&self, app: &str) -> Vec<Slot>;
+    /// The median peak memory of a recent worker turn, in megabytes.
+    fn worker_memory_mb(&self) -> u64 {
+        2_000
+    }
     /// `app`'s CLI hold, if it is on one.
     fn held(&self, app: &str) -> Option<Hold>;
     /// Whether `app`'s slots may be offered to the hub: a probe turn has passed since the
@@ -188,6 +192,10 @@ pub trait Turns: Send + Sync {
     fn grew_at(&self, session: &SessionId, turn: u32) -> Option<Timestamp>;
     /// The process ID of the turn's CLI program, whose children [`Host::running_under`] lists.
     fn process(&self, session: &SessionId, turn: u32) -> Option<u32>;
+    fn record_worker_memory(&self, _session: &SessionId, _turn: u32) {}
+    fn worker_memory_mb(&self) -> u64 {
+        2_000
+    }
     /// Ends every process of the turn. Its run then records an exit with no result line.
     fn end(&self, session: &SessionId, turn: u32) -> Result<()>;
 }
@@ -632,11 +640,6 @@ impl CliDaemon {
 impl CliPool for CliDaemon {
     /// Starts the ticket's first turn. A placeholder session takes slot `k` when that slot is
     /// free, or else the lowest free slot of the app: the dispatcher counts busy sessions and
-    /// does not know which slot each one holds. A CLI session (the next ticket of a `lane:`
-    /// chain) keeps its session ID and resumes the transcript its last turn named, once its
-    /// slot is free. A new session given `resume` resumes the culprit's transcript when it has
-    /// one (see `claim`). The dispatcher adds the returned session to the pool.
-    /// A reservation a slot already took is one a restarted dispatcher had not seen begun.
     fn begin(
         &self,
         reservation: &Reservation,
@@ -646,6 +649,7 @@ impl CliPool for CliDaemon {
         fresh: bool,
     ) -> Result<SessionId> {
         let _opening = lock(&self.opening);
+        let _admission = lock(&self.pool.cli_admission);
         let ticket = reservation.ticket.as_str();
         let taken = self.database(|conn| store::by_reservation(conn, ticket, &reservation.code))?;
         if let Some(session) = taken.and_then(|row| row.session) {
@@ -654,11 +658,22 @@ impl CliPool for CliDaemon {
         let named = &reservation.session;
         let (app, preferred, earlier) = if let Some((app, index)) = placeholder(named) {
             (app, index, None)
-        } else if let Some(earlier) = self.earlier_session(named, fresh)? {
-            (earlier.app.clone(), earlier.index, Some(earlier))
+        } else if named.as_str().starts_with("cli-") {
+            let earlier = self
+                .earlier_session(named, fresh)?
+                .ok_or_else(|| Error::Invalid(format!("{named} has no earlier CLI turn")))?;
+            (earlier.app.clone(), 0, Some(earlier))
+        } else if let Some(app) = &reservation.provider {
+            (app.clone(), 0, None)
         } else {
-            return Err(Error::Invalid(format!("{named} is not a CLI slot")));
+            return Err(Error::Invalid(format!("{named} has no CLI provider")));
         };
+        if let Some(hold) = self.held(&app) {
+            return Err(Error::Conflict(format!(
+                "{app} is on a CLI hold ({})",
+                hold.reason.as_str()
+            )));
+        }
         let model = self.app(&app)?.model_for(&app, Some(model))?;
         let session = match &earlier {
             Some(_) => named.clone(),
@@ -741,6 +756,10 @@ impl CliPool for CliDaemon {
             .filter(|r| r.app == app)
             .map(slot_of)
             .collect()
+    }
+
+    fn worker_memory_mb(&self) -> u64 {
+        self.turns.worker_memory_mb()
     }
 
     fn held(&self, app: &str) -> Option<Hold> {

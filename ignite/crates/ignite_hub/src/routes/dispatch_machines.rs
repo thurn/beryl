@@ -15,6 +15,27 @@ use super::{
     Answer, HUB_VERSION, Request, Response, done, failure, sql_failure, store_failure, usage,
 };
 
+/// Refuses only the named reservation. A retry cannot affect a replacement or a claim.
+pub(super) fn refuse_reservation(
+    conn: &Connection,
+    request: &Request,
+    reservation: &ignite_core::protocol::hub::Reservation,
+) -> Answer {
+    super::same_machine(request, &reservation.machine)?;
+    conn.execute(
+        "DELETE FROM reservations
+         WHERE ticket = ?1 AND machine = ?2 AND session = ?3 AND code = ?4",
+        rusqlite::params![
+            reservation.ticket.as_str(),
+            reservation.machine.as_str(),
+            reservation.session.as_str(),
+            reservation.code,
+        ],
+    )
+    .map_err(super::sql_failure)?;
+    Ok(super::done())
+}
+
 /// Adds or updates the machine and answers with its write token. A new machine ID needs no token
 /// and is issued one. A machine ID that already has a token registers again only with that token
 /// as the bearer, so that nobody who can reach the hub can replace another machine's token, and

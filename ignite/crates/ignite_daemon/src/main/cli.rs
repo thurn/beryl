@@ -27,9 +27,9 @@ const HEALTH_STALLS_AFTER: Duration = Duration::from_mins(30);
 /// The name the health loop registers under.
 const HEALTH_LOOP: &str = "ignite-cli-health";
 /// How often the daemon asks for tickets. A step asks the hub for tickets only
-/// while a worker is idle and a ticket tree is free.
+/// while a ticket tree is free.
 const DISPATCH_EVERY: Duration = Duration::from_secs(10);
-/// A dispatch round asks the hub once per group of idle workers and reads each reserved ticket.
+/// A dispatch round asks for a batch of workers and reads each reserved ticket.
 const DISPATCH_STALLS_AFTER: Duration = Duration::from_mins(10);
 /// The name the dispatch loop registers under.
 const DISPATCH_LOOP: &str = "ignite-cli-dispatch";
@@ -93,9 +93,7 @@ pub fn cli_mode(
         Ok(started) => eprintln!("ignite: started {started} CLI turns a stopped daemon recorded"),
         Err(error) => eprintln!("ignite: CLI turns not recovered at start: {error}"),
     }
-    desks
-        .dispatcher
-        .set_cli(daemon.clone(), &base.options.hostname, &base.config);
+    desks.dispatcher.set_cli(daemon.clone(), &base.config);
     Ok(Some(Arc::new(CliMode {
         daemon,
         health,
@@ -120,19 +118,16 @@ impl CliMode {
                 thread::sleep(Duration::from_secs_f64(clid::STEP_S));
             }
         });
-        let (health, apps, dispatcher, ctx) = (
+        let (health, apps, ctx) = (
             self.health.clone(),
             self.providers.clone(),
-            self.dispatcher.clone(),
             self.ctx.clone(),
         );
         parts.start_loop(HEALTH_LOOP, HEALTH_STALLS_AFTER, move |ticker| {
             loop {
                 ticker.round(|| {
-                    // Only the apps in CLI mode now are probed: a probe costs a turn.
                     let running: Vec<_> = apps
                         .iter()
-                        .filter(|(name, _)| dispatcher.cli_enabled(name))
                         .map(|(name, app)| (name.as_str(), app.as_ref()))
                         .collect();
                     health.tick(&ctx, &running);

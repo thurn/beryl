@@ -484,25 +484,19 @@ pub fn lock_held(lock: &Path) -> bool {
     matches!(file.try_lock(), Err(fs::TryLockError::WouldBlock))
 }
 
-/// The first configured CLI app with worker slots and a justiciar model.
+/// The first configured CLI provider with a justiciar model.
 pub fn first_cli_app(
     config: &ignite_core::config::Config,
-    hostname: &str,
     checkout: &Path,
 ) -> Option<JusticiarApp> {
-    config
-        .pool
-        .cli
-        .iter()
-        .filter(|(name, _)| config.machine_pool(hostname, name).slots > 0)
-        .find_map(|(name, program)| {
-            Some(JusticiarApp {
-                name: name.clone(),
-                program: program.clone(),
-                model: config.pool.model_id(name, TIER)?,
-                checkout: checkout.to_path_buf(),
-            })
+    config.pool.cli.iter().find_map(|(name, program)| {
+        Some(JusticiarApp {
+            name: name.clone(),
+            program: program.clone(),
+            model: config.pool.model_id(name, TIER)?,
+            checkout: checkout.to_path_buf(),
         })
+    })
 }
 
 #[cfg(test)]

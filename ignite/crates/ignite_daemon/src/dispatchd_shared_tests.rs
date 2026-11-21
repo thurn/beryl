@@ -295,7 +295,7 @@ fn the_handoff_of_a_ticket_holding_master_back_still_goes_out() {
     sighting(&rig, "cli-claude-00000001", "fail", "boom", 120.0);
     sighting(&rig, "cli-claude-00000002", "fail", "boom", 60.0);
     messages(&rig, &fake);
-    reserve(&rig, "R.2", "cli-claude-slot-3", &["regression"]);
+    reserve(&rig, "R.2", "reservation-3", &["regression"]);
     tick(&rig);
     assert_eq!(fake.begun()[0].0.ticket.as_str(), "R.2");
 }

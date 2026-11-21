@@ -1,5 +1,4 @@
-//! The fleet and hand-off routes: `/machines/register`, `/machines/heartbeat`, `/next`, `/claims`,
-//! `/landed`, `/release`, `/close`, `/pause`, `/session-titles` and `/emergency`.
+//! The fleet and hand-off routes, including reservations, claims and ticket completion.
 //!
 //! Reservations, claims and their release are transactional. A reservation can be claimed
 //! only with its one-time code by its machine, and lapses if unclaimed after ten minutes.
@@ -66,6 +65,7 @@ pub fn handle(conn: &mut Connection, request: &Request, now: Timestamp) -> Optio
         "/machines/register" => false,
         "/machines/heartbeat"
         | "/next"
+        | "/reservations/refuse"
         | "/claims"
         | "/landed"
         | "/release"
@@ -136,6 +136,7 @@ fn route(conn: &mut Connection, request: &Request, now: Timestamp) -> Answer {
             same_machine(request, &parsed.machine)?;
             next(conn, &parsed, now)
         }
+        "/reservations/refuse" => machines::refuse_reservation(conn, request, &body(request)?),
         "/claims" => {
             let value: Value = body(request)?;
             if value.get("summary").is_some() {

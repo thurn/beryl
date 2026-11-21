@@ -446,7 +446,7 @@ fn a_turn_on_the_wrong_model_is_ended_and_its_ticket_released() {
     let releases = lock(&rig.host.releases).clone();
     assert_eq!(releases.len(), 1);
     assert!(releases[0].2.contains("m-2"));
-    assert_eq!(rig.slot().state, SlotState::Free);
+    assert!(rig.daemon.slots("fake").is_empty());
     assert!(rig.asked().is_empty());
     assert_eq!(rig.daemon.hidden_models("fake"), ["m-1".to_owned()]);
     rig.clock.advance(HIDE_MODEL_S);
@@ -709,5 +709,5 @@ fn a_justiciar_session_holds_no_ticket() {
     rig.then(Action::Free);
     rig.daemon.step().unwrap();
     assert!(!rig.asked()[0].1.ticket_held);
-    assert_eq!(rig.slot().state, SlotState::Free);
+    assert!(rig.daemon.slots("fake").is_empty());
 }

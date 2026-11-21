@@ -410,8 +410,7 @@ impl Machine for NativeMachine {
         };
         let checkout = PathBuf::from(fs::read_to_string(home.checkout_file()).ok()?.trim());
         let config = crate::main::read_config(&checkout).ok()?;
-        let hostname = crate::doctor::Host::hostname(&crate::doctor::NativeHost);
-        justiciar::first_cli_app(&config, &hostname, &checkout)
+        justiciar::first_cli_app(&config, &checkout)
     }
 
     fn locked(&self, lock: &Path) -> bool {

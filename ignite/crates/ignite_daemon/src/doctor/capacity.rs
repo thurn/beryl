@@ -30,6 +30,7 @@ pub(super) fn retired_findings(config: &Config, findings: &mut Vec<Finding>) {
             ("floor", machine.floor.is_some()),
             ("express_cores", machine.express_cores.is_some()),
             ("tip_build_cores", machine.tip_build_cores.is_some()),
+            ("pool", !machine.pool.is_empty()),
         ];
         let resources = machine
             .resources

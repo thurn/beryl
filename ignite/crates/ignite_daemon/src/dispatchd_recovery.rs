@@ -17,7 +17,7 @@ const KEY: &str = "cli_dispatch_state";
 struct Snapshot {
     reserved: BTreeMap<SessionId, Reserved>,
     unread: Vec<(Reservation, String)>,
-    refused: BTreeMap<SessionId, Timestamp>,
+    refused: BTreeMap<String, Timestamp>,
     stalls: BTreeMap<SessionId, Stall>,
     released: BTreeMap<SessionId, TicketId>,
     waiting: BTreeMap<SessionId, Timestamp>,
@@ -68,7 +68,6 @@ fn legacy_snapshot(rows: &[ignite_store::local::rows::DispatchEntry]) -> Snapsho
     for row in rows {
         match row.kind.as_str() {
             "reserved" => insert_cli(&mut snapshot.reserved, row),
-            "refused" => insert_cli(&mut snapshot.refused, row),
             "stall" => insert_cli(&mut snapshot.stalls, row),
             "released" => insert_cli(&mut snapshot.released, row),
             "tell" => {

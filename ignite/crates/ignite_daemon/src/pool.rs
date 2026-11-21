@@ -75,6 +75,8 @@ fn store_error(error: &ignite_store::StoreError) -> Error {
 /// The pool's members and pause, in the daemon's local database.
 pub struct Pool {
     conn: Mutex<Connection>,
+    /// Orders new hand-offs with providers entering a CLI hold.
+    pub(crate) cli_admission: Mutex<()>,
     /// The hub's last heartbeat reply said every machine is paused (`ignite pool pause --all`).
     paused_everywhere: AtomicBool,
 }
@@ -83,6 +85,7 @@ impl Pool {
     pub fn new(conn: Connection) -> Pool {
         Pool {
             conn: Mutex::new(conn),
+            cli_admission: Mutex::new(()),
             paused_everywhere: AtomicBool::new(false),
         }
     }
@@ -352,17 +355,16 @@ impl crate::doctor::StatusSection for PauseSection {
         let shared = self.dispatcher.shared_failure();
         let restricted = notice.is_some_and(|notice| notice.state != MachineState::Active);
         let mut lines: Vec<String> = pause.map(str::to_owned).into_iter().chain(state).collect();
-        if !restricted && pause.is_none() && holds.is_empty() && shared.is_none() {
-            // Whether more workers would help: only when the reason is about workers, never
-            // when it is about tickets or cores.
-            if let Some((idle, why)) = self.dispatcher.idle_reason() {
-                let workers = if idle == 1 { "worker" } else { "workers" };
-                lines.push(format!("{idle} idle {workers}: {why}"));
+        let ordinary = !restricted && pause.is_none() && holds.is_empty() && shared.is_none();
+        lines.extend(shared);
+        lines.extend(holds);
+        if ordinary {
+            lines.extend(self.dispatcher.worker_room_line());
+            if let Some((_, why)) = self.dispatcher.idle_reason() {
+                lines.push(why);
             }
             return lines;
         }
-        lines.extend(shared);
-        lines.extend(holds);
         let query = ignite_core::protocol::tickets::TicketQuery {
             label_any: HOLDING_MASTER.iter().map(|l| (*l).to_owned()).collect(),
             ..Default::default()
@@ -389,6 +391,7 @@ impl crate::doctor::StatusSection for PauseSection {
                 }
             }
         }
+        lines.extend(self.dispatcher.worker_room_line());
         lines
     }
 }

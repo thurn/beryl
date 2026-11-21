@@ -80,8 +80,10 @@ fn role_cli_turn() {
 /// The scripted CLI program; `@DIR@` is replaced by the folder it keeps its files in.
 const SCRIPT: &str = r#"#!/bin/sh
 dir='@DIR@'
+while ! mkdir "$dir/count.lock" 2>/dev/null; do sleep 0.01; done
 n=$(( $(cat "$dir/count" 2>/dev/null || echo 0) + 1 ))
 echo $n > "$dir/count"
+rmdir "$dir/count.lock"
 printf '%s\0' "$@" > "$dir/args.$n"
 env > "$dir/env.$n"
 model=''; sid='probe'; prev=''
@@ -106,7 +108,7 @@ struct E2eHost {
 
 impl Host for E2eHost {
     fn free_ticket_trees(&self) -> u32 {
-        1
+        8
     }
     fn free_cores(&self) -> f64 {
         8.0
@@ -219,7 +221,7 @@ struct Rig {
     ctx: Context,
     health: Arc<Health>,
     effects: Arc<Recording>,
-    daemon: CliDaemon,
+    daemon: Arc<CliDaemon>,
     supervisors: Arc<Mutex<Vec<Started>>>,
 }
 
@@ -262,8 +264,6 @@ fn config(program: &Path) -> Config {
         program = "{program}"
         [pool.models.claude]
         light = "{MODEL}"
-        [machine.local.pool.fake]
-        slots = 1
         [pool.cli.fake]
         dialect = "codex"
         program = "{program}"
@@ -316,7 +316,7 @@ impl Rig {
         });
         let host = Arc::new(E2eHost::default());
         let mut rig = Rig {
-            daemon: CliDaemon::new(
+            daemon: Arc::new(CliDaemon::new(
                 CliSetup {
                     checkout: home.clone(),
                     apps: BTreeMap::new(),
@@ -325,7 +325,7 @@ impl Rig {
                 host.clone(),
                 clock.clone(),
                 Arc::new(NoTurns),
-            ),
+            )),
             home,
             cli,
             clock,
@@ -386,14 +386,16 @@ impl Rig {
     /// restarted daemon is built, with `turns` starting its turns.
     fn restart_with(&mut self, turns: Arc<dyn Turns>) {
         let setup = CliSetup::from_config(self.home.clone(), &self.ctx.config);
-        self.daemon = CliDaemon::new(
-            setup,
-            Arc::new(Pool::new(Self::open(&self.home))),
-            self.host.clone(),
-            self.clock.clone(),
-            turns,
-        )
-        .with_effects(self.effects.clone());
+        self.daemon = Arc::new(
+            CliDaemon::new(
+                setup,
+                Arc::new(Pool::new(Self::open(&self.home))),
+                self.host.clone(),
+                self.clock.clone(),
+                turns,
+            )
+            .with_effects(self.effects.clone()),
+        );
     }
 
     fn restart(&mut self) {
@@ -481,7 +483,7 @@ impl Rig {
             provider: Some(provider.to_owned()),
             ticket: TicketId::new(TICKET).unwrap(),
             machine: MachineId::new("m-7f3a").unwrap(),
-            session: SessionId::new(format!("cli-{provider}-slot-1")).unwrap(),
+            session: SessionId::new("reservation-e2e").unwrap(),
             expires_at: self.clock.now().plus_seconds(600.0),
             code: "c0de".to_owned(),
         };

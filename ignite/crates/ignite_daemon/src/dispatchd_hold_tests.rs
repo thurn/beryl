@@ -1,4 +1,4 @@
-//! Fleet notices drive reporting. A daemon still offers its idle workers to the hub.
+//! Fleet notices drive reporting. The hub applies model holds to the providers it is offered.
 
 use ignite_core::fleet::FleetNotice;
 use ignite_core::plan_usage::Hold;
@@ -42,10 +42,12 @@ fn a_fleet_hold_is_reported_but_does_not_filter_workers_at_the_daemon() {
     tick(&rig);
     let free = &rig.hub.asked()[0];
     assert!(!free.master_only);
-    assert!(!free.idle_workers.is_empty());
-    for worker in &free.idle_workers {
-        assert!(worker.models.iter().any(|tier| tier == "opus"));
-        assert!(worker.model_ids["opus"].contains("opus"));
+    assert!(free.idle_workers.is_empty());
+    let providers = &free.room.as_ref().unwrap().providers;
+    assert!(!providers.is_empty());
+    for provider in providers {
+        assert!(provider.tiers.iter().any(|tier| tier == "opus"));
+        assert!(provider.model_ids["opus"].contains("opus"));
     }
 
     let expected = "usage hold: claude · Weekly · Opus";

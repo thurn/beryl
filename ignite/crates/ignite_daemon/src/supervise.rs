@@ -62,7 +62,7 @@ mod cancel;
 mod grants;
 mod hang;
 mod jobserver;
-mod peaks;
+pub(crate) mod peaks;
 mod requests;
 mod retain;
 mod run_verb;

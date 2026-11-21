@@ -22,6 +22,7 @@ pub(super) struct FakeHost {
     pub(super) commands: Mutex<BTreeMap<SessionId, SessionCommand>>,
     pub(super) quiet: Mutex<BTreeMap<SessionId, Timestamp>>,
     pub(super) verbs: Mutex<BTreeMap<SessionId, Vec<RunningVerb>>>,
+    pub(super) worker_capacity: Mutex<(u32, bool, Option<u64>)>,
     pub(super) interrupts: Mutex<Vec<(SessionId, String)>>,
     pub(super) releases: Mutex<Vec<(SessionId, TicketId)>>,
     /// Every release fails, as one at the hub does when the hub is unreachable.
@@ -56,6 +57,10 @@ impl Host for FakeHost {
 
     fn ticket_work_wait(&self) -> f64 {
         *lock(&self.waited)
+    }
+
+    fn worker_capacity(&self) -> (u32, bool, Option<u64>) {
+        *lock(&self.worker_capacity)
     }
 
     fn holders(&self) -> BTreeMap<SessionId, TicketId> {
@@ -169,6 +174,7 @@ pub(super) fn rig_on(workers: &[&str], db: rusqlite::Connection, now: Timestamp)
     };
     let host = Arc::new(FakeHost::default());
     *lock(&host.trees) = 8;
+    lock(&host.worker_capacity).0 = 16;
     *lock(&host.cores) = 10.0;
     *lock(&host.admit) = 15.0;
     let pool = Pool::new(db);
@@ -351,6 +357,7 @@ fn tell_on_a_ticket_nobody_holds_is_only_a_comment() {
 #[test]
 fn the_pool_shows_the_command_each_worker_runs() {
     let rig = rig(&["cli-claude-00000001"]);
+    rig.hold("cli-claude-00000001", "T.1");
     let since = rig.clock.now();
     lock(&rig.host.commands).insert(
         session("cli-claude-00000001"),
@@ -372,7 +379,7 @@ fn a_draining_daemon_asks_the_hub_for_nothing_until_it_stops() {
     use super::cli_tests::{cli, reserve, tick};
     let rig = rig(&[]);
     let fake = cli(&rig, 1);
-    reserve(&rig, "T.1", "cli-claude-slot-1", &[]);
+    reserve(&rig, "T.1", "reservation-1", &[]);
     rig.dispatcher.set_draining(true);
     tick(&rig);
     assert!(rig.hub.asked().is_empty());

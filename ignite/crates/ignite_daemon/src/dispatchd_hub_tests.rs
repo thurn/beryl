@@ -30,7 +30,7 @@ fn no_hub_request_is_made_while_the_state_is_locked() {
     rig.ctx.hub = Arc::new(spy);
 
     // Asking for a ticket and reading it.
-    reserve(&rig, "T.1", "cli-claude-slot-1", &[]);
+    reserve(&rig, "T.1", "reservation-1", &[]);
     tick(&rig);
     // A session finishing its ticket, whose landed files are read.
     rig.hub.insert_ticket(detail(
@@ -96,7 +96,7 @@ fn a_paused_pool_asks_only_for_tickets_holding_master_back() {
         hub: rig.hub.clone(),
         clock: rig.clock.clone(),
     };
-    assert!(status.lines().is_empty(), "nothing to say while not paused");
+    assert_eq!(status.lines(), ["room to start 2 (worker ceiling 2)"]);
     assert_eq!(
         rig.pool(&["pause"], Some("local_operator")).exit,
         Exit::Success
@@ -111,7 +111,7 @@ fn a_paused_pool_asks_only_for_tickets_holding_master_back() {
     );
     hear_fleet_state(&rig);
     // The hub answers a paused machine only with a ticket that holds `master` back.
-    reserve(&rig, "T.1", "cli-claude-slot-1", &["regression"]);
+    reserve(&rig, "T.1", "reservation-1", &["regression"]);
     tick(&rig);
     assert_eq!(fake.begun()[0].0.ticket.as_str(), "T.1");
     let asked = rig.hub.asked();
@@ -167,7 +167,7 @@ fn dispatch_stops_and_resumes_on_heartbeat_without_starting_a_new_daemon() {
             .unwrap();
         hear_fleet_state(&rig);
     };
-    reserve(&rig, "T.1", "cli-claude-slot-1", &[]);
+    reserve(&rig, "T.1", "reservation-1", &[]);
 
     set(MachineState::Off);
     tick(&rig);
@@ -203,20 +203,20 @@ fn a_long_wait_for_cores_asks_only_for_tickets_holding_master_back() {
         "{asked:?}"
     );
     let (idle, why) = rig.dispatcher.idle_reason().unwrap();
-    assert_eq!(idle, 3);
+    assert_eq!(idle, 2);
     assert!(
         why.starts_with("commands have waited 150 s for cores"),
         "{why}"
     );
 
     // A regression still starts.
-    reserve(&rig, "R", "cli-claude-slot-1", &["regression"]);
+    reserve(&rig, "R", "reservation-1", &["regression"]);
     tick(&rig);
     assert_eq!(fake.begun()[0].0.ticket.as_str(), "R");
 
     // Once the wait is short again, ordinary tickets start.
     *lock(&rig.host.waited) = f64::from(BACKLOG_SECONDS) - 1.0;
-    reserve(&rig, "T.1", "cli-claude-slot-2", &[]);
+    reserve(&rig, "T.1", "reservation-2", &[]);
     let before = rig.hub.asked().len();
     tick(&rig);
     assert_eq!(fake.begun()[1].0.ticket.as_str(), "T.1");

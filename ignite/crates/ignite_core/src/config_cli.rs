@@ -2,10 +2,6 @@
 //! in the design document).
 //!
 //! ```toml
-//! # The number of concurrent workers on the machine.
-//! [machine.jarvis.pool.claude]
-//! slots = 8
-//!
 //! # The program and the arguments every turn of the app gets.
 //! [pool.cli.claude]
 //! program = 'claude'
@@ -15,8 +11,8 @@
 
 use serde::{Deserialize, Serialize};
 
-/// `[machine.<host>.pool.<app>]`: how many workers run at once. One slot above
-/// `slots` takes only tickets that hold the master branch back.
+/// Legacy `[machine.<host>.pool.<app>]` settings, read only to seed fleet settings
+/// when upgrading a hub. The daemon derives worker room from the machine.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(from = "MachinePoolConfig")]
 pub struct MachinePool {
@@ -61,7 +57,7 @@ impl CliProgram {
 }
 
 impl super::Config {
-    /// The worker slots configured for `app` on this machine. Missing tables give no slots.
+    /// Legacy worker slots recorded for `app` on this machine.
     pub fn machine_pool(&self, hostname: &str, app: &str) -> MachinePool {
         self.machine(hostname)
             .and_then(|machine| machine.pool.get(app))

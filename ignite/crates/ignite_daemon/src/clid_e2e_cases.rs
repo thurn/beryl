@@ -238,7 +238,7 @@ fn cli_e2e_a_plan_limit_releases_the_ticket_and_starts_the_usage_hold() {
     let releases = rig.releases();
     assert_eq!(releases.len(), 1);
     assert!(releases[0].contains("plan's limit"), "{}", releases[0]);
-    assert_eq!(rig.slot().state, SlotState::Free);
+    assert!(rig.daemon.slots("claude").is_empty());
     assert_eq!(rig.invocations(), 1);
     let pool = Pool::new(Rig::open(&rig.home));
     let rows = pool
@@ -324,7 +324,7 @@ fn cli_e2e_a_passing_probe_retires_a_slot_reassigned_at_the_hub() {
 
     rig.daemon.step().unwrap();
     assert_eq!(rig.daemon.check(&session), SessionCheck::Gone);
-    assert_eq!(rig.slot().state, SlotState::Free);
+    assert!(rig.daemon.slots("claude").is_empty());
     assert!(find_run(&rig.home, &session, 2).is_none());
     assert!(rig.releases().is_empty(), "the new holder keeps its claim");
 }
@@ -350,7 +350,7 @@ fn cli_e2e_a_restarted_daemon_rechecks_the_claim_before_launching_a_recorded_res
     rig.set_hub_claim(&SessionId::new("cli-claude-replacement").unwrap());
     rig.restart();
     rig.daemon.step().unwrap();
-    assert_eq!(rig.slot().state, SlotState::Free);
+    assert!(rig.daemon.slots("claude").is_empty());
     assert!(find_run(&rig.home, &session, 2).is_none());
     assert_eq!(
         rig.daemon.turn_row(&session, 2).unwrap().unwrap().state,
@@ -404,7 +404,7 @@ fn cli_e2e_a_clean_end_holding_the_ticket_gets_the_block_text_once_then_releases
         "{}",
         releases[0]
     );
-    assert_eq!(rig.slot().state, SlotState::Free);
+    assert!(rig.daemon.slots("claude").is_empty());
     assert_eq!(rig.invocations(), 2);
 }
 
@@ -427,4 +427,151 @@ fn cli_e2e_a_hand_off_begun_again_after_a_restart_starts_no_second_turn() {
     rig.open_gate(1);
     rig.wait_turn(&session, 1);
     assert_eq!(turns_of(&rig, &session).len(), 1);
+}
+
+#[test]
+fn cli_e2e_four_workers_on_two_providers_start_with_room_and_leave_at_landing() {
+    use ignite_core::config::Os;
+    use ignite_core::protocol::hub::Landed;
+    use ignite_core::protocol::tickets::LandedWork;
+    use ignite_core::traits::Hub;
+
+    use crate::dispatchd::{Dispatcher, Setup};
+
+    let rig = Rig::new("worker-room");
+    let fake_turn = r#"case "$1" in
+exec)
+    started; hang
+    echo '{"type":"thread.started","thread_id":"fake-room"}'
+    echo '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}'
+    ;;
+*) init; started; hang; result ;;
+esac
+"#;
+    probe_dispatch_providers(&rig);
+
+    let dispatcher = Dispatcher::new(
+        Pool::new(Rig::open(&rig.home)),
+        rig.host.clone(),
+        Setup {
+            os: Os::Macos,
+            families: Vec::new(),
+        },
+    );
+    dispatcher.set_cli(rig.daemon.clone(), &rig.ctx.config);
+    for n in 1..=4 {
+        queue_room_ticket(&rig, n);
+        rig.script(n + 2, fake_turn);
+        rig.fifo(n + 2);
+    }
+
+    assert!(dispatcher.view().unwrap().is_empty());
+    dispatcher.tick(&rig.ctx);
+    let first_batch = dispatcher.view().unwrap();
+    assert_eq!(first_batch.len(), 3);
+    for worker in first_batch {
+        lock(&rig.host.holders).insert(worker.session, worker.ticket.unwrap());
+    }
+    dispatcher.tick(&rig.ctx);
+    for n in 3..=6 {
+        rig.wait_started(n);
+    }
+    let workers = dispatcher.view().unwrap();
+    assert_eq!(workers.len(), 4);
+    for (app, tickets) in [("claude", ["T.1", "T.3"]), ("fake", ["T.2", "T.4"])] {
+        let slots = rig.daemon.slots(app);
+        assert_eq!(
+            slots.iter().map(|slot| slot.index).collect::<Vec<_>>(),
+            [1, 2]
+        );
+        assert_eq!(
+            slots
+                .iter()
+                .map(|slot| slot.ticket.as_ref().unwrap().as_str())
+                .collect::<Vec<_>>(),
+            tickets,
+        );
+    }
+    for worker in &workers {
+        lock(&rig.host.holders).insert(worker.session.clone(), worker.ticket.clone().unwrap());
+    }
+    dispatcher.tick(&rig.ctx);
+    assert!(
+        dispatcher
+            .view()
+            .unwrap()
+            .iter()
+            .all(|worker| worker.state == "working")
+    );
+
+    for worker in &workers {
+        rig.hub
+            .landed(&Landed {
+                ticket: worker.ticket.clone().unwrap(),
+                machine: rig.ctx.machine.clone(),
+                session: worker.session.clone(),
+                work: LandedWork {
+                    commits: vec!["abc1234".parse().unwrap()],
+                    files: Vec::new(),
+                    note: "Landed the test ticket.".to_owned(),
+                },
+                fresh: false,
+                pressure: None,
+                defer_successor: false,
+            })
+            .unwrap();
+        lock(&rig.host.holders).remove(&worker.session);
+    }
+    for n in 3..=6 {
+        rig.open_gate(n);
+    }
+    for worker in &workers {
+        rig.wait_turn(&worker.session, 1);
+    }
+    rig.daemon.step().unwrap();
+    dispatcher.tick(&rig.ctx);
+    assert!(dispatcher.view().unwrap().is_empty());
+    assert!(store::list(&Rig::open(&rig.home)).unwrap().is_empty());
+}
+
+fn probe_dispatch_providers(rig: &Rig) {
+    rig.script(1, "init; say ready; result");
+    rig.script(
+        2,
+        r#"echo '{"type":"thread.started","thread_id":"fake-probe"}'
+echo '{"type":"item.completed","item":{"type":"agent_message","text":"ready"}}'
+echo '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}'
+"#,
+    );
+    let fake = &rig.daemon.app("fake").unwrap().app;
+    rig.health
+        .tick(&rig.ctx, &[("claude", &Claude), ("fake", fake.as_ref())]);
+    assert!(rig.daemon.offers("claude"));
+    assert!(rig.daemon.offers("fake"));
+}
+
+fn queue_room_ticket(rig: &Rig, n: u32) {
+    let provider = if n.is_multiple_of(2) {
+        "fake"
+    } else {
+        "claude"
+    };
+    let ticket = TicketId::new(format!("T.{n}")).unwrap();
+    let key = SessionId::new(format!("reservation-{n}")).unwrap();
+    let detail = serde_json::from_value(serde_json::json!({
+        "id": ticket, "next_child": 1, "title": "Test ticket", "type": "bug",
+        "status": "open", "priority": 2, "created_at": rig.clock.now(),
+        "created_by": "test", "updated_at": rig.clock.now(), "version": 1,
+        "edges": [], "children": [], "ready": true, "blocked_by": [],
+    }))
+    .unwrap();
+    rig.hub.insert_ticket(detail);
+    rig.hub.queue_reservation(Reservation {
+        provider: Some(provider.to_owned()),
+        ticket,
+        machine: rig.ctx.machine.clone(),
+        session: key,
+        expires_at: rig.clock.now().plus_seconds(600.0),
+        code: format!("code-{n}"),
+    });
 }

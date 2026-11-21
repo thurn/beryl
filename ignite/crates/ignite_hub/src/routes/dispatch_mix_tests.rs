@@ -396,3 +396,35 @@ fn an_existing_claim_counts_when_its_worker_reported_the_provider() {
     let machine = machine_room("m-2", 1, &["claude", "codex"]);
     assert_eq!(ask(&mut conn, &machine, at(1.0))["provider"], "codex");
 }
+
+#[test]
+fn refusing_a_reservation_frees_its_ticket_and_a_stale_refusal_is_harmless() {
+    use super::tests::{free, post};
+    use ignite_store::hub;
+
+    let mut conn = hub::open_in_memory().unwrap();
+    let tickets = super::tests::file(&mut conn, &[("ticket", &[], &[])]);
+    let (_, first) = post(&mut conn, "/next", &free("m-1", &["first"]), start());
+    assert_eq!(first["ticket"], tickets[0].as_str());
+    let mut wrong_code = first.clone();
+    wrong_code["code"] = json!("different-code");
+    assert_eq!(
+        post(&mut conn, "/reservations/refuse", &wrong_code, start()).0,
+        200
+    );
+    let (_, still_reserved) = post(&mut conn, "/next", &free("m-2", &["second"]), start());
+    assert!(still_reserved.is_null());
+    assert_eq!(
+        post(&mut conn, "/reservations/refuse", &first, start()).0,
+        200
+    );
+    let (_, second) = post(&mut conn, "/next", &free("m-2", &["second"]), start());
+    assert_eq!(second["ticket"], first["ticket"]);
+    assert_eq!(
+        post(&mut conn, "/reservations/refuse", &first, start()).0,
+        200
+    );
+    let mut claim = super::tests::claim_reserved(&second, "second");
+    claim["machine"] = second["machine"].clone();
+    assert_eq!(post(&mut conn, "/claims", &claim, start()).0, 200);
+}

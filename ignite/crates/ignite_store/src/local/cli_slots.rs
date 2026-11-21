@@ -183,6 +183,18 @@ pub fn list(conn: &Connection) -> Result<Vec<CliSlot>> {
     Ok(slots)
 }
 
+/// Deletes the worker row while keeping its turn and transcript history.
+pub fn remove(conn: &Connection, session: &str) -> Result<()> {
+    conn.execute("DELETE FROM cli_slots WHERE session = ?1", [session])?;
+    Ok(())
+}
+
+/// Clears the empty slot rows left by releases that kept a fixed pool.
+pub fn clear_empty(conn: &Connection) -> Result<()> {
+    conn.execute("DELETE FROM cli_slots WHERE session IS NULL", [])?;
+    Ok(())
+}
+
 /// The slot working `session`, if any.
 pub fn by_session(conn: &Connection, session: &str) -> Result<Option<CliSlot>> {
     let slot = conn

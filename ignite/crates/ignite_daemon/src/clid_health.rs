@@ -294,10 +294,12 @@ impl Health {
             probed_at: None,
             reported: 0,
         };
-        let new = self
-            .pool
-            .with_database(|conn| cli_slots::start_hold(conn, &row))
-            .map_err(|e| store_error(&e))?;
+        let new = {
+            let _admission = super::lock(&self.pool.cli_admission);
+            self.pool
+                .with_database(|conn| cli_slots::start_hold(conn, &row))
+                .map_err(|e| store_error(&e))?
+        };
         if new {
             let hold = hold_of(&row);
             (self.notify)(

@@ -438,6 +438,11 @@ impl Hub for HubClient {
         self.post("/next", free)
     }
 
+    fn refuse_reservation(&self, reservation: &Reservation) -> Result<()> {
+        let _: serde_json::Value = self.post("/reservations/refuse", reservation)?;
+        Ok(())
+    }
+
     fn next_explained(&self, free: &MachineFree) -> Result<ignite_core::protocol::hub::NextReply> {
         let free = MachineFree {
             room: None,

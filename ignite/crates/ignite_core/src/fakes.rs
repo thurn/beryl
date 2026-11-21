@@ -135,6 +135,7 @@ pub struct FakeHub {
     records_down: AtomicBool,
     results: Mutex<HashMap<ResultKey, CachedResult>>,
     reservations: Mutex<VecDeque<Reservation>>,
+    refused: Mutex<Vec<Reservation>>,
     briefs: Mutex<HashMap<TicketId, TicketBrief>>,
     claims: Mutex<Vec<Claim>>,
     landings: Mutex<Vec<Landed>>,
@@ -205,6 +206,11 @@ impl FakeHub {
 
     pub fn set_unreachable(&self, unreachable: bool) {
         self.unreachable.store(unreachable, Ordering::SeqCst);
+    }
+
+    /// Reservations the daemon gave back before claiming.
+    pub fn refused_reservations(&self) -> Vec<Reservation> {
+        lock(&self.refused).clone()
     }
 
     /// Queues a reservation for the next call to `next`.
@@ -405,6 +411,12 @@ impl Hub for FakeHub {
         self.reachable()?;
         lock(&self.asked).push(free.clone());
         Ok(lock(&self.reservations).pop_front())
+    }
+
+    fn refuse_reservation(&self, reservation: &Reservation) -> Result<()> {
+        self.reachable()?;
+        lock(&self.refused).push(reservation.clone());
+        Ok(())
     }
 
     fn claim(&self, claim: &Claim) -> Result<TicketBrief> {

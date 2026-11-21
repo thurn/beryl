@@ -82,6 +82,47 @@ impl Peaks {
     }
 }
 
+/// Measured peaks of the last twenty worker turns, across all providers.
+pub(crate) struct WorkerPeaks {
+    path: PathBuf,
+    samples: Mutex<Vec<(String, u64)>>,
+}
+
+impl WorkerPeaks {
+    pub(crate) fn load(path: PathBuf) -> Self {
+        let samples = fs::read(&path)
+            .ok()
+            .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+            .unwrap_or_default();
+        Self {
+            path,
+            samples: Mutex::new(samples),
+        }
+    }
+
+    pub(crate) fn usual(&self) -> u64 {
+        let samples = self.samples.lock().unwrap_or_else(PoisonError::into_inner);
+        let peaks: Vec<_> = samples.iter().map(|(_, peak)| *peak).collect();
+        median(&peaks).unwrap_or(2_000)
+    }
+
+    /// A daemon can process a turn's end again after a restart. Keep one sample per turn.
+    pub(crate) fn record(&self, turn: String, peak_mb: u64) {
+        if peak_mb == 0 {
+            return;
+        }
+        let mut samples = self.samples.lock().unwrap_or_else(PoisonError::into_inner);
+        if samples.iter().any(|(seen, _)| seen == &turn) {
+            return;
+        }
+        samples.push((turn, peak_mb));
+        if samples.len() > 20 {
+            samples.remove(0);
+        }
+        let _ = write_json(&self.path, &*samples);
+    }
+}
+
 fn median(peaks: &[u64]) -> Option<u64> {
     let mut sorted = peaks.to_vec();
     sorted.sort_unstable();
@@ -91,6 +132,24 @@ fn median(peaks: &[u64]) -> Option<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn worker_peaks_keep_twenty_distinct_turns_across_a_restart() {
+        let dir = ignite_core::test_files::temp_dir()
+            .join(format!("ignite-worker-peaks-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("worker-peaks.json");
+        let peaks = WorkerPeaks::load(path.clone());
+        assert_eq!(peaks.usual(), 2_000);
+        for turn in 0..=20 {
+            peaks.record(format!("worker:{turn}"), 100 + turn);
+        }
+        let restarted = WorkerPeaks::load(path);
+        restarted.record("worker:20".to_owned(), 500);
+        restarted.record("worker:21".to_owned(), 0);
+        assert_eq!(restarted.usual(), 111);
+        fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn the_usual_peak_is_the_median_of_the_last_runs_and_survives_a_restart() {

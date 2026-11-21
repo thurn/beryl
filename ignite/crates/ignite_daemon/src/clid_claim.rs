@@ -31,7 +31,6 @@ const OPEN_ATTEMPTS: u32 = 4;
 /// A CLI session that worked a ticket here before, as its turns recorded it.
 pub(super) struct Earlier {
     pub(super) app: String,
-    pub(super) index: u32,
     turn: i64,
     transcript: Option<String>,
 }
@@ -137,7 +136,6 @@ impl CliDaemon {
         };
         Ok(Some(Earlier {
             app: last.app.clone(),
-            index: u32::try_from(last.slot).unwrap_or(0),
             turn: last.turn,
             transcript: if fresh {
                 None

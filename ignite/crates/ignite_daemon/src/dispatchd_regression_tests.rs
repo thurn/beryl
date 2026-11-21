@@ -17,7 +17,7 @@ fn regression(id: &str, cause: &str) -> TicketDetail {
 /// The hub reserves `ticket`, already in the fake hub, for `worker` on this machine.
 fn reserve_for(rig: &Rig, ticket: &str, worker: &str) {
     rig.hub.queue_reservation(Reservation {
-        provider: None,
+        provider: Some("claude".to_owned()),
         ticket: ticket_id(ticket),
         machine: rig.ctx.machine.clone(),
         session: session(worker),
@@ -30,13 +30,13 @@ fn reserve_for(rig: &Rig, ticket: &str, worker: &str) {
 fn the_culprit_is_chosen_once_an_unread_regression_can_be_read() {
     let rig = rig(&[]);
     let fake = cli(&rig, 2);
-    reserve_for(&rig, "R", "cli-claude-slot-2");
+    reserve_for(&rig, "R", "reservation-2");
     tick(&rig);
     assert!(fake.begun().is_empty());
-    assert_eq!(rig.state_of("cli-claude-slot-2"), "reserved");
+    assert!(rig.dispatcher.view().unwrap().is_empty());
     rig.hub.insert_ticket(regression("R", "T.1"));
     tick(&rig);
-    assert_eq!(fake.begun()[0].0.session.as_str(), "cli-claude-slot-2");
+    assert_eq!(fake.begun()[0].0.session.as_str(), "reservation-2");
     let resume = fake.resumes()[0]
         .clone()
         .expect("culprit transcript requested");
@@ -72,9 +72,9 @@ fn a_reverted_ticket_requests_the_previous_landing_transcript() {
     let rig = rig(&[]);
     let fake = cli(&rig, 2);
     rig.hub.insert_ticket(reverted("T.1"));
-    reserve_for(&rig, "T.1", "cli-claude-slot-2");
+    reserve_for(&rig, "T.1", "reservation-2");
     tick(&rig);
-    assert_eq!(fake.begun()[0].0.session.as_str(), "cli-claude-slot-2");
+    assert_eq!(fake.begun()[0].0.session.as_str(), "reservation-2");
     let resume = fake.resumes()[0]
         .clone()
         .expect("landing transcript requested");

@@ -362,6 +362,7 @@ fn release_unclaimed(served: &Served, trees: &Trees, key: &(TicketId, SessionId)
 pub struct DaemonHost {
     pub trees: Trees,
     pub scheduler: Arc<Scheduler>,
+    pub worker_ceiling: u32,
     /// When the build queue can admit work again after its latest long wait.
     pub queue_recovery: Mutex<QueueRecovery>,
     pub claims: Arc<Claims>,
@@ -414,6 +415,15 @@ impl Host for DaemonHost {
             ignite_core::protocol::Class::Land,
             ignite_core::protocol::Class::Agent,
         ])
+    }
+
+    fn worker_capacity(&self) -> (u32, bool, Option<u64>) {
+        let status = self.scheduler.status();
+        (
+            self.worker_ceiling,
+            status.memory_pressed,
+            status.free_memory_mb,
+        )
     }
 
     fn observe_queue(&self, now: Timestamp) {

@@ -2,9 +2,10 @@
 
 use std::sync::Arc;
 
+use ignite_core::capacity::{RoomInputs, start_room, worker_memory_limited};
 use ignite_core::config::Config;
 use ignite_core::ids::SessionId;
-use ignite_core::protocol::hub::Reservation;
+use ignite_core::protocol::hub::{ProviderOffer, Reservation};
 
 use super::{Dispatcher, Reserved, State};
 use crate::clid::{CliPool, Resume};
@@ -14,23 +15,13 @@ use crate::server::Context;
 /// The worker supervisor and configuration for this machine.
 pub(super) struct CliMode {
     pub(super) pool: Arc<dyn CliPool>,
-    /// The machine's hostname, which names its `[machine.<host>]` table.
-    hostname: String,
     config: Config,
 }
 
-/// One app in CLI mode as a step sees it.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct Layout {
-    pub(super) app: String,
-    /// The slots that take any ticket; slot `slots + 1` takes only tickets that hold `master`
-    /// back.
-    pub(super) slots: u32,
-    /// The tiers the app runs, matched against a ticket's `tier:` label.
-    pub(super) models: Vec<String>,
-    /// Whether the slots are offered to the hub: a probe turn has passed since the daemon
-    /// started and the app is on no CLI hold.
-    pub(super) offered: bool,
+impl CliMode {
+    pub(super) fn can_start(&self, app: &str) -> bool {
+        self.config.cli_program(app).is_some() && self.pool.held(app).is_none()
+    }
 }
 
 /// Work to send to the CLI supervisor once the state is unlocked. A pending start is saved until it runs.
@@ -45,6 +36,10 @@ pub(super) enum Call {
         resume: Option<Resume>,
         #[serde(default)]
         fresh: bool,
+    },
+    Refuse {
+        reservation: Reservation,
+        reason: String,
     },
     /// Queue `text` for the session's next turn. An urgent message (`ignite tell --now`, or an
     /// order from a justiciar) also ends the running turn.
@@ -61,11 +56,6 @@ pub(super) enum Call {
 const PREFIX: &str = "cli-";
 /// What follows the app in a slot's placeholder, `cli-<app>-slot-<k>`.
 const SLOT_INFIX: &str = "-slot-";
-
-/// The placeholder session of slot `index` of `app`.
-pub(super) fn placeholder(app: &str, index: u32) -> Option<SessionId> {
-    SessionId::new(format!("{PREFIX}{app}{SLOT_INFIX}{index}")).ok()
-}
 
 /// The app and slot number of a CLI slot's placeholder, `cli-<app>-slot-<k>`.
 pub(super) fn slot_of(session: &SessionId) -> Option<(&str, u32)> {
@@ -96,15 +86,19 @@ pub(super) fn session_app(session: &SessionId) -> Option<&str> {
     Some(app)
 }
 
-/// Whether `session` is the slot of an app in CLI mode that takes only tickets that hold
-/// `master` back.
-pub(super) fn is_extra_slot(state: &State, session: &SessionId) -> bool {
-    slot_of(session).is_some_and(|(app, index)| {
-        state
-            .cli_layout
-            .iter()
-            .any(|layout| layout.app == app && index == layout.slots + 1)
-    })
+/// A hub-generated reservation ID has no local session yet.
+pub(super) fn is_new_worker(session: &SessionId) -> bool {
+    !is_cli_session(session) && !is_cli_slot(session)
+}
+
+pub(super) fn refuse(ctx: &Context, reservation: &Reservation, reason: &str) {
+    eprintln!("ignite: {} not started: {reason}", reservation.ticket);
+    if let Err(error) = ctx.hub.refuse_reservation(reservation) {
+        eprintln!(
+            "ignite: could not return the reservation of {}: {error}",
+            reservation.ticket
+        );
+    }
 }
 
 /// The tiers the provider offers to the hub, from its model table.
@@ -118,51 +112,86 @@ fn tiers(config: &Config, provider: &str) -> Vec<String> {
 
 impl Dispatcher {
     /// Connects the CLI supervisor to the worker pool.
-    pub fn set_cli(&self, pool: Arc<dyn CliPool>, hostname: &str, config: &Config) {
+    pub fn set_cli(&self, pool: Arc<dyn CliPool>, config: &Config) {
         let _ = self.cli.set(CliMode {
             pool,
-            hostname: hostname.to_owned(),
             config: config.clone(),
         });
     }
 
-    /// Whether the configured app has worker slots on this machine.
-    pub fn cli_enabled(&self, app: &str) -> bool {
-        self.cli.get().is_some_and(|cli| {
-            cli.config.cli_program(app).is_some()
-                && cli.config.machine_pool(&cli.hostname, app).slots > 0
-        })
-    }
-
-    /// The configured providers that can take work on this machine.
+    /// The providers with a configured CLI program.
     pub fn cli_apps(&self) -> impl Iterator<Item = &str> {
         self.cli
             .get()
             .into_iter()
             .flat_map(|cli| cli.config.pool.cli.keys().map(String::as_str))
-            .filter(|app| self.cli_enabled(app))
     }
 
-    /// The slots each app in CLI mode has: `slots` from `ignite.toml`, and one more for tickets
-    /// that hold `master` back. Empty without a CLI pool.
-    pub(super) fn cli_layouts(&self) -> Vec<Layout> {
+    pub(super) fn provider_offers(&self, state: &State) -> Vec<ProviderOffer> {
         let Some(cli) = self.cli.get() else {
             return Vec::new();
         };
         self.cli_apps()
-            .map(|app| Layout {
-                app: app.to_owned(),
-                slots: cli.config.machine_pool(&cli.hostname, app).slots,
-                models: tiers(&cli.config, app),
-                offered: cli.pool.offers(app),
+            .filter(|app| !state.refused.contains_key(*app) && cli.pool.offers(app))
+            .map(|app| {
+                let models = tiers(&cli.config, app);
+                ProviderOffer {
+                    name: app.to_owned(),
+                    model_ids: models
+                        .iter()
+                        .filter_map(|tier| {
+                            cli.config
+                                .pool
+                                .model_id(app, tier)
+                                .map(|id| (tier.clone(), id))
+                        })
+                        .collect(),
+                    tiers: models,
+                    default_model: crate::clid::health::default_model(&cli.config, app),
+                }
             })
             .collect()
     }
 
-    /// Updates the slots offered based on the latest probe results and holds.
-    pub(super) fn update_cli_layout(&self) {
-        let layouts = self.cli_layouts();
-        self.state().cli_layout = layouts;
+    pub(super) fn room_inputs(&self, running: usize) -> RoomInputs {
+        let (ceiling, memory_pressed, free_memory_mb) = self.host.worker_capacity();
+        RoomInputs {
+            ceiling,
+            running: u32::try_from(running).unwrap_or(u32::MAX),
+            memory_pressed,
+            free_memory_mb,
+            worker_mb: self
+                .cli
+                .get()
+                .map_or(2_000, |cli| cli.pool.worker_memory_mb()),
+        }
+    }
+
+    /// Why the machine can or cannot start more workers.
+    pub(crate) fn worker_room_line(&self) -> Option<String> {
+        self.cli.get()?;
+        let holders = self.host.holders();
+        let state = self.state();
+        let running = holders
+            .keys()
+            .filter(|session| is_cli_session(session))
+            .count();
+        let reserved = state
+            .reserved
+            .keys()
+            .filter(|session| !holders.contains_key(*session))
+            .count();
+        let inputs = self.room_inputs(running + reserved);
+        let start = start_room(&inputs);
+        Some(if worker_memory_limited(&inputs) {
+            "worker room limited by memory".to_owned()
+        } else if inputs.ceiling.saturating_sub(inputs.running)
+            <= ignite_core::capacity::WORKER_BATCH
+        {
+            format!("room to start {start} (worker ceiling {})", inputs.ceiling)
+        } else {
+            format!("room to start {start}; memory and worker ceiling allow more")
+        })
     }
 
     /// Carries out the calls queued while the state was locked, and those that carrying them
@@ -232,6 +261,10 @@ impl Dispatcher {
                         state.begins_running.remove(index);
                     }
                 }
+                Call::Refuse {
+                    reservation,
+                    reason,
+                } => refuse(ctx, &reservation, &reason),
                 Call::Message {
                     session,
                     text,
@@ -267,8 +300,14 @@ impl Dispatcher {
         fresh: bool,
     ) {
         let now = ctx.clock.now();
-        // A hand-off saved before a restart may run after its reservation lapsed at the hub,
-        // which would refuse the `ignite start` of its prompt.
+        let reservation = Reservation {
+            provider: is_new_worker(slot).then(|| reserved.app.clone()),
+            ticket: reserved.ticket.clone(),
+            machine: ctx.machine.clone(),
+            session: slot.clone(),
+            expires_at: reserved.expires_at,
+            code: reserved.code.clone().unwrap_or_default(),
+        };
         let stopped = if reserved.expires_at <= now {
             Some("its reservation lapsed")
         } else if crate::fleet_notice::is_off(&self.pool) {
@@ -277,47 +316,10 @@ impl Dispatcher {
             None
         };
         if let Some(reason) = stopped {
-            eprintln!(
-                "ignite: {} not started in {slot}: {reason}",
-                reserved.ticket
-            );
-            let mut state = self.state();
-            if state
-                .reserved
-                .get(slot)
-                .is_some_and(|r| r.ticket == reserved.ticket)
-            {
-                state.reserved.remove(slot);
-            }
+            refuse(ctx, &reservation, reason);
+            Self::drop_placeholder(&mut self.state(), slot, &reserved.ticket);
             return;
         }
-        // A hold starts no turn, so a reservation made just before it began lapses instead.
-        if let Some(hold) = cli.pool.held(&reserved.app) {
-            eprintln!(
-                "ignite: {} not started in {slot}: {} is on a CLI hold ({})",
-                reserved.ticket,
-                reserved.app,
-                hold.reason.as_str()
-            );
-            let mut state = self.state();
-            if state
-                .reserved
-                .get(slot)
-                .is_some_and(|r| r.ticket == reserved.ticket)
-            {
-                state.reserved.remove(slot);
-            }
-            state.refused.insert(slot.clone(), now);
-            return;
-        }
-        let reservation = Reservation {
-            provider: None,
-            ticket: reserved.ticket.clone(),
-            machine: ctx.machine.clone(),
-            session: slot.clone(),
-            expires_at: reserved.expires_at,
-            code: reserved.code.clone().unwrap_or_default(),
-        };
         // The CLI pool resolves a hand-off without a model to the app's configured default.
         let model = reserved.model.clone().unwrap_or_default();
         let started = cli
@@ -326,19 +328,12 @@ impl Dispatcher {
         let session = match started {
             Ok(session) => session,
             Err(error) => {
-                eprintln!(
-                    "ignite: could not start {} in {slot}: {error}",
-                    reserved.ticket
-                );
+                refuse(ctx, &reservation, &error.to_string());
                 let mut state = self.state();
-                if state
-                    .reserved
-                    .get(slot)
-                    .is_some_and(|r| r.ticket == reserved.ticket)
-                {
-                    state.reserved.remove(slot);
+                Self::drop_placeholder(&mut state, slot, &reserved.ticket);
+                if cli.pool.held(&reserved.app).is_none() {
+                    state.refused.insert(reserved.app.clone(), now);
                 }
-                state.refused.insert(slot.clone(), now);
                 return;
             }
         };
@@ -382,11 +377,10 @@ impl Dispatcher {
             return None;
         }
         let cli = self.cli.get()?;
-        let (app, model) = self.cli_layouts().into_iter().find_map(|layout| {
-            let id = ctx.config.pool.model_id(&layout.app, TIER)?;
-            Some((layout.app, id))
-        })?;
-        match cli.pool.begin_justiciar(&app, prompt, &model, EFFORT) {
+        let (app, model) = self
+            .cli_apps()
+            .find_map(|app| Some((app, ctx.config.pool.model_id(app, TIER)?)))?;
+        match cli.pool.begin_justiciar(app, prompt, &model, EFFORT) {
             Ok(session) => {
                 self.state().justiciar = Some((session.clone(), ctx.clock.now()));
                 self.save();

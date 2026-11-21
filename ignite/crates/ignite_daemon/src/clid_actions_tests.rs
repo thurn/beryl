@@ -19,9 +19,15 @@ fn free_ends_the_slot_and_its_session_leaves_the_pool() {
     assert_eq!(end, TurnEnd::Clean);
     assert!(!facts.ticket_held);
     assert_eq!(facts.last_text.as_deref(), Some("landed"));
-    let slot = rig.slot();
-    assert_eq!((slot.state, slot.session), (SlotState::Free, None));
-    assert_eq!(slot.transcript.as_deref(), Some("t-1"));
+    assert!(rig.daemon.slots("fake").is_empty());
+    assert_eq!(
+        rig.daemon
+            .earlier_session(&session, false)
+            .unwrap()
+            .unwrap()
+            .app,
+        "fake"
+    );
     assert!(rig.pool.member(&session).unwrap().is_none());
     assert_eq!(rig.daemon.check(&session), SessionCheck::Gone);
     // The end is applied once.
@@ -44,7 +50,7 @@ fn release_gives_the_ticket_back_with_the_note() {
         lock(&rig.host.releases).clone(),
         [(session.clone(), ticket(), "stuck on the build".to_owned())]
     );
-    assert_eq!(rig.slot().state, SlotState::Free);
+    assert!(rig.daemon.slots("fake").is_empty());
     assert!(rig.pool.member(&session).unwrap().is_none());
 }
 

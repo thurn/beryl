@@ -69,10 +69,10 @@ fn a_tell_delivered_before_a_restart_is_not_delivered_again() {
 /// The reservation for T.1 in CLI slot 1, saved before it starts.
 fn saved_cli_handoff(rig: &Rig) -> Reservation {
     let reservation = Reservation {
-        provider: None,
+        provider: Some("claude".to_owned()),
         ticket: ticket_id("T.1"),
         machine: rig.ctx.machine.clone(),
-        session: session("cli-claude-slot-1"),
+        session: session("reservation-1"),
         expires_at: rig.clock.now().plus_seconds(600.0),
         code: "7f3a".to_owned(),
     };
@@ -115,7 +115,7 @@ fn a_cli_handoff_saved_before_its_begin_ran_starts_one_session_after_a_restart()
     let begun = fake.begun();
     assert_eq!(begun.len(), 1);
     assert_eq!(begun[0].0.code, "7f3a");
-    assert_eq!(begun[0].0.session, session("cli-claude-slot-1"));
+    assert_eq!(begun[0].0.session, session("reservation-1"));
     assert_eq!(reserved_sessions(&restarted), ["cli-claude-00000001"]);
 
     // The hand-off ran, so neither another step nor another restart runs it again.
@@ -138,13 +138,34 @@ fn a_cli_handoff_begun_before_its_session_was_saved_starts_no_second_session() {
     let started = fake
         .begin(&reservation, "opus", Some("high"), None, false)
         .unwrap();
-    assert_eq!(reserved_sessions(&first), ["cli-claude-slot-1"]);
+    assert_eq!(reserved_sessions(&first), ["reservation-1"]);
 
     let restarted = rig_on(&[], file.open(), first.clock.now().plus_seconds(5.0));
     cli_with(&restarted, 2, fake.clone());
     tick(&restarted);
     assert_eq!(fake.begun().len(), 1, "no second session started");
     assert_eq!(reserved_sessions(&restarted), [started.as_str()]);
+}
+
+#[test]
+fn a_provider_held_after_reservation_returns_it_without_parking_a_worker() {
+    let rig = super::tests::rig(&[]);
+    let fake = cli(&rig, 2);
+    let reservation = saved_cli_handoff(&rig);
+    fake.set_hold(
+        "claude",
+        Some(ignite_core::cli::Hold {
+            app: "claude".to_owned(),
+            reason: ignite_core::cli::HoldReason::NotLoggedIn,
+            since: rig.clock.now(),
+            cli_version: None,
+            message: "login expired".to_owned(),
+        }),
+    );
+    tick(&rig);
+    assert!(fake.begun().is_empty());
+    assert!(reserved_sessions(&rig).is_empty());
+    assert_eq!(rig.hub.refused_reservations(), [reservation]);
 }
 
 #[test]

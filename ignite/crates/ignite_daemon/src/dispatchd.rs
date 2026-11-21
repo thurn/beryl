@@ -94,7 +94,11 @@ pub trait Host: Send + Sync {
     /// How long the scheduler's oldest request of ticket work (the `land` and `agent` classes)
     /// has waited for cores, in seconds; zero when none waits.
     fn ticket_work_wait(&self) -> f64;
-    /// Observe the core queue even when all worker slots are busy.
+    /// The worker ceiling, whether memory is pressed, and free memory in megabytes.
+    fn worker_capacity(&self) -> (u32, bool, Option<u64>) {
+        (u32::MAX, false, None)
+    }
+    /// Observe the core queue even when the machine has no room for another worker.
     fn observe_queue(&self, _now: Timestamp) {}
     /// Ask the disk loop to make room for a queued ticket by clearing unused outputs.
     fn reclaim_for_handoff(&self, _target_gb: u64) {}
@@ -182,7 +186,7 @@ struct State {
     reserved: BTreeMap<SessionId, Reserved>,
     /// Reservations whose ticket could not be read yet, to try again on the next tick.
     unread: Vec<(Reservation, String)>,
-    refused: BTreeMap<SessionId, Timestamp>,
+    refused: BTreeMap<String, Timestamp>,
     /// The CLI justiciar started without a ticket and its start time.
     justiciar: Option<(SessionId, Timestamp)>,
     stalls: BTreeMap<SessionId, Stall>,
@@ -197,15 +201,13 @@ struct State {
     tells: BTreeMap<TicketId, u64>,
     /// A step is asking the hub for tickets, with the state unlocked.
     asking_hub: bool,
-    /// How many workers were left idle after the last request for tickets, and why.
+    /// The remaining worker room and the latest reason it was unused.
     idle_reason: Option<(usize, String)>,
     /// Hand-offs, messages and checks for CLI slots and sessions, to carry out once the state
     /// is unlocked (see `cli`).
     cli_calls: Vec<cli::Call>,
     /// The `Begin` calls taken from `cli_calls` that have not finished running (see `cli`).
     begins_running: Vec<cli::Call>,
-    /// The apps in CLI mode at the last step, with their slots (see `cli`).
-    cli_layout: Vec<cli::Layout>,
     /// The shared failure in force, if any (see `shared`).
     shared: shared::Watch,
 }

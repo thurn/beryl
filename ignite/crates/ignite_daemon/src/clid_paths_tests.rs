@@ -142,8 +142,7 @@ fn a_parked_slot_is_freed_when_its_ticket_is_given_back() {
     assert_eq!(rig.slot().state, SlotState::Parked);
     rig.host.holders.lock().unwrap().clear();
     rig.daemon.step().unwrap();
-    let slot = rig.slot();
-    assert_eq!((slot.state, slot.session), (SlotState::Free, None));
+    assert!(rig.daemon.slots("fake").is_empty());
     assert!(rig.pool.member(&session).unwrap().is_none());
     assert_eq!(rig.turns.starts().len(), 1);
 }

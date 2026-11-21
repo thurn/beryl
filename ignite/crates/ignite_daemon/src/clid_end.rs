@@ -48,6 +48,11 @@ impl CliDaemon {
         exit: Option<i32>,
         forced: Option<TurnEnd>,
     ) -> Result<()> {
+        if row.ticket.is_some()
+            && let (Some(session), Ok(number)) = (slot_of(row).session, u32::try_from(turn.turn))
+        {
+            self.turns.record_worker_memory(&session, number);
+        }
         let app = self.app(&row.app)?.app.clone();
         let end = forced.unwrap_or_else(|| app.classify(events, exit));
         let mut slot = slot_of(row);
@@ -245,9 +250,6 @@ impl CliDaemon {
         next.park_reason = None;
         // Only a slot's first turn after a resume falls back to a new transcript.
         next.fallback_prompt = None;
-        if state == SlotState::Free {
-            freed(&mut next);
-        }
         change(&mut next);
         // A turn that printed no line never showed its prompt to the worker, so the messages
         // it carried wait for the next turn again. A slot made free has no next turn.
@@ -261,17 +263,17 @@ impl CliDaemon {
             // The slot's row is keyed by app and number, so it is written only while it still
             // holds this session.
             let current = store::by_session(&transaction, &turn.session)?;
-            if current.is_some() {
-                store::put(&transaction, &next)?;
+            if current.is_some_and(|current| current.turn == turn.turn) {
+                if state == SlotState::Free {
+                    store::remove(&transaction, &turn.session)?;
+                    ignite_store::local::pool::remove(&transaction, &turn.session)?;
+                } else {
+                    store::put(&transaction, &next)?;
+                }
             }
             transaction.commit()?;
             Ok(())
         })?;
-        if state == SlotState::Free
-            && let Some(session) = &slot_of(row).session
-        {
-            self.pool.remove(session)?;
-        }
         Ok(next)
     }
 
@@ -301,33 +303,15 @@ impl CliDaemon {
     /// Frees the slot and removes its pool member if the row is still in the state we checked.
     /// The health loop can move a parked slot to backing off while we check its claim.
     pub(super) fn retire_slot(&self, row: &CliSlot, session: &SessionId) -> Result<()> {
-        let mut next = row.clone();
-        SlotState::Free.as_str().clone_into(&mut next.state);
-        next.since = Some(self.now().to_string());
-        next.park_reason = None;
-        next.resume_at = None;
-        next.next_prompt = None;
-        next.fallback_prompt = None;
-        freed(&mut next);
         self.database(|conn| {
             let transaction = conn.transaction()?;
             let current = store::by_session(&transaction, session.as_str())?;
             if current.is_some_and(|c| c.state == row.state && c.turn == row.turn) {
-                store::put(&transaction, &next)?;
+                store::remove(&transaction, session.as_str())?;
                 ignite_store::local::pool::remove(&transaction, session.as_str())?;
             }
             transaction.commit()?;
             Ok(())
         })
     }
-}
-
-/// Clears what a slot made free keeps of its session. The ticket and transcript stay, for the
-/// next ticket of a `lane:` chain.
-fn freed(row: &mut CliSlot) {
-    row.session = None;
-    row.reservation = None;
-    row.interrupted_in_row = 0;
-    row.block_sent = 0;
-    row.backed_off = 0;
 }

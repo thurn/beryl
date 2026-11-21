@@ -31,6 +31,7 @@ use ignite_core::traits::{CommandSpec, Error, Result};
 
 #[cfg(all(test, unix))]
 use crate::supervise::Started;
+use crate::supervise::{ResultFile, peaks::WorkerPeaks};
 
 use super::start::{Recovery, TurnLauncher, find_run, recover};
 use super::{CliDaemon, Turns, slot_of};
@@ -51,6 +52,7 @@ pub struct SupervisedTurns {
     home: PathBuf,
     /// Held while a turn's run is looked for and started, so one daemon starts it once.
     starting: Mutex<()>,
+    worker_peaks: WorkerPeaks,
     #[cfg(all(test, unix))]
     test_supervisors: Option<Arc<Mutex<Vec<Started>>>>,
 }
@@ -59,6 +61,7 @@ impl SupervisedTurns {
     pub fn new(launcher: TurnLauncher, home: PathBuf) -> SupervisedTurns {
         SupervisedTurns {
             launcher,
+            worker_peaks: WorkerPeaks::load(home.join("runs/worker-peaks.json")),
             home,
             starting: Mutex::new(()),
             #[cfg(all(test, unix))]
@@ -129,6 +132,21 @@ impl Turns for SupervisedTurns {
         fs::read_to_string(path).ok()?.trim().parse().ok()
     }
 
+    fn record_worker_memory(&self, session: &SessionId, turn: u32) {
+        if let Some(result) = self
+            .run_file(session, turn, "result.json")
+            .and_then(|path| fs::read(path).ok())
+            .and_then(|bytes| serde_json::from_slice::<ResultFile>(&bytes).ok())
+        {
+            self.worker_peaks
+                .record(format!("{session}:{turn}"), result.usage.peak_mb);
+        }
+    }
+
+    fn worker_memory_mb(&self) -> u64 {
+        self.worker_peaks.usual()
+    }
+
     fn end(&self, session: &SessionId, turn: u32) -> Result<()> {
         match find_run(&self.home, session, turn) {
             Some(run) => run.end().map_err(|e| Error::Io(e.to_string())),
@@ -144,6 +162,7 @@ impl CliDaemon {
     /// are left to [`CliDaemon::step`]. Returns how many turns with no run this call found and
     /// asked to start. A slot that fails is reported after every other slot was looked at.
     pub fn recover(&self) -> Result<u32> {
+        self.database(|conn| ignite_store::local::cli_slots::clear_empty(conn))?;
         let mut started = 0;
         let mut first = None;
         for row in self.rows()? {

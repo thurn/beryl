@@ -122,21 +122,26 @@ impl CliPool for FakeCliPool {
         _fresh: bool,
     ) -> Result<SessionId> {
         let name = reservation.session.as_str();
-        let rest = name
-            .strip_prefix("cli-")
-            .ok_or_else(|| Error::Invalid(format!("{} is not a CLI slot", reservation.session)))?;
         let slot = super::placeholder(&reservation.session);
-        let app = slot
-            .as_ref()
-            .map(|(app, _)| app.as_str())
-            .or_else(|| rest.rsplit_once('-').map(|(app, _)| app))
-            .ok_or_else(|| Error::Invalid(format!("{} is not a CLI slot", reservation.session)))?;
+        let app = reservation
+            .provider
+            .as_deref()
+            .or_else(|| slot.as_ref().map(|(app, _)| app.as_str()))
+            .or_else(|| {
+                name.strip_prefix("cli-")?
+                    .rsplit_once('-')
+                    .map(|(app, _)| app)
+            })
+            .ok_or_else(|| Error::Invalid(format!("{name} has no CLI provider")))?;
         if let Some(error) = lock(&self.refuse).clone() {
             return Err(Error::Io(error));
         }
         let key = (reservation.ticket.to_string(), reservation.code.clone());
         if let Some(session) = lock(&self.taken).get(&key) {
             return Ok(session.clone());
+        }
+        if self.held(app).is_some() {
+            return Err(Error::Conflict(format!("{app} is on a CLI hold")));
         }
         lock(&self.resumes).push(resume.cloned());
         let mut begun = lock(&self.begun);
@@ -145,7 +150,7 @@ impl CliPool for FakeCliPool {
             model.to_owned(),
             effort.map(str::to_owned),
         ));
-        let session = if slot.is_some() {
+        let session = if slot.is_some() || !name.starts_with("cli-") {
             SessionId::new(format!("cli-{app}-{:08x}", begun.len()))
                 .map_err(|e| Error::Invalid(e.to_string()))?
         } else {
