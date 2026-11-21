@@ -12,13 +12,11 @@ use beryl_card::effect::build::{draw, you};
 use beryl_card::{Cost, CostPart};
 
 use super::LAND;
-use super::cast::{Game, index_of};
+use super::cast::Game;
 use crate::card::{Ability, CardDef, Face, ObjectAbility, Types};
 use crate::replacement::event::Event;
 use crate::state::Zone;
-use crate::{
-    CardTable, DecisionKind, Decklist, Opt, Outcome, Profile, Replay, Scratch, Step, next,
-};
+use crate::{CardTable, Decklist, Opt, Outcome, Profile, Replay, Scratch, Step, next};
 
 /// "Pay 3 life: Draw a card."
 static BLOODLETTER: CardDef = CardDef {
