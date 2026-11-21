@@ -365,20 +365,29 @@ fn down_twice_and_return_presses_the_third_row_of_a_menu() {
             .iter()
             .any(|draw| draw.tint == color::MENU_ACTIVE)
     );
-    assert_eq!(layer.navigate(&key(KeyCode::ArrowDown)), Navigation::Moved);
-    assert_eq!(layer.navigate(&key(KeyCode::ArrowDown)), Navigation::Moved);
     assert_eq!(
-        layer.navigate(&key(KeyCode::Enter)),
+        layer.navigate(&key(KeyCode::ArrowDown), true),
+        Navigation::Moved
+    );
+    assert_eq!(
+        layer.navigate(&key(KeyCode::ArrowDown), true),
+        Navigation::Moved
+    );
+    assert_eq!(
+        layer.navigate(&key(KeyCode::Enter), true),
         Navigation::Press(Action::new(ChooseItem("Exile".to_owned())))
     );
     // Down from the last row goes round to the first, and Escape closes the menu.
-    assert_eq!(layer.navigate(&key(KeyCode::ArrowDown)), Navigation::Moved);
     assert_eq!(
-        layer.navigate(&key(KeyCode::Enter)),
+        layer.navigate(&key(KeyCode::ArrowDown), true),
+        Navigation::Moved
+    );
+    assert_eq!(
+        layer.navigate(&key(KeyCode::Enter), true),
         Navigation::Press(Action::new(ChooseItem("Tap".to_owned())))
     );
     assert_eq!(
-        layer.close_press(),
+        layer.close_press(true),
         Some(Action::new(kit_ui::layout::DismissMenu))
     );
 }

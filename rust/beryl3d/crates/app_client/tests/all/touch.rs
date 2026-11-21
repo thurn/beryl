@@ -200,6 +200,31 @@ fn a_tap_uses_a_card_the_prompt_can_use_and_shows_any_other_whole() {
 }
 
 #[test]
+fn the_settings_sheet_blocks_taps_on_cards_and_cancels_an_in_progress_press() {
+    use app_screens::screens::settings::Message;
+    use kit_ui::element::Action;
+
+    let mut client = paying();
+    let frame = client.frame(16 * MS);
+    let at = on(frame, "Counterspell");
+    let (_, slot) = card(frame, "Counterspell");
+
+    client.handle(finger(1, PointerPhase::Down, at));
+    client.dispatch(&Action::new(Message::Open));
+    client.frame(32 * MS);
+    client.handle(finger(1, PointerPhase::Up, at));
+    tap(&mut client, 1, at);
+    client.frame(48 * MS);
+    assert!(clicks(&mut client).is_empty());
+
+    client.dispatch(&Action::new(Message::Close));
+    client.frame(64 * MS);
+    tap(&mut client, 1, at);
+    client.frame(80 * MS);
+    assert_eq!(clicks(&mut client), vec![Click::On { on: object(slot) }]);
+}
+
+#[test]
 fn a_finger_held_still_shows_its_card_once_and_its_lift_does_nothing() {
     let mut client = paying();
     let frame = client.frame(16 * MS).clone();

@@ -108,6 +108,7 @@ pub(super) fn overlay(state: &State, input: Inputs) -> Element {
     // The screen's top element may be no larger than the prompt bar.
     let mut overlay = column()
         .name("bug report")
+        .modal()
         .background([0; 4])
         .border(([0; 4], 0.0))
         .width(window.width)

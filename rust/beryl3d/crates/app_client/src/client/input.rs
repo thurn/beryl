@@ -164,6 +164,7 @@ impl Client {
 
     pub(super) fn cancel_gesture(&mut self) {
         self.routes.router.cancel();
+        self.show.pointer_mut().cancel();
         self.end_control();
     }
 
@@ -208,7 +209,6 @@ impl Client {
     }
 
     fn cancel_interaction(&mut self) {
-        self.show.pointer_mut().cancel();
         self.routes.scrolling.cancel();
         self.cancel_gesture();
         if self.features.table_mut().sweep.take().is_some() {
@@ -243,9 +243,9 @@ impl Client {
             self.dismiss_menu();
             return;
         }
-        // A frozen table takes no gesture of its own; the flat layer's buttons still work.
-        let frozen = self.table_frozen();
-        if !frozen && self.manual_point(point) {
+        // Sheets and a frozen table leave only the flat layer's controls available.
+        let table = self.features.sheet.is_none() && !self.table_frozen();
+        if table && self.manual_point(point) {
             if pointer.phase == PointerPhase::Down {
                 self.suppress_press();
             }
@@ -261,7 +261,7 @@ impl Client {
         if self.slide(&pointer) {
             self.routes.scrolling.cancel();
         } else {
-            self.press_flat(point, true);
+            self.press_flat(point, table);
         }
         let hovered = self.hover_flat(&pointer);
         // The pointer on a payment's Auto Pay, or a touch held on it, marks what it would tap.
@@ -433,17 +433,18 @@ impl Client {
     /// Navigation, scrolling and editing can consume a key without returning an action.
     fn focused_key(&mut self, key: Key) -> Option<KeyResponse<Action>> {
         if self.bug_key(key)
-            || self.table_overlay_key(key)
+            || (self.features.sheet.is_none() && self.table_overlay_key(key))
             || (self.layer.edited_id().is_some() && self.field_key(key))
         {
             return Some(KeyResponse::Handled);
         }
         if key.code == KeyCode::Tab {
             self.features.rows_mut().update(RowMessage::Focus(None));
-            self.layer.move_focus(!key.modifiers.shift);
+            self.layer
+                .move_focus(!key.modifiers.shift, self.features.layer_open);
             return Some(KeyResponse::Handled);
         }
-        match self.layer.navigate(&key) {
+        match self.layer.navigate(&key, self.features.layer_open) {
             Navigation::Press(action) => return Some(KeyResponse::Action(action)),
             Navigation::Moved => return Some(KeyResponse::Handled),
             Navigation::Ignored => {}
@@ -454,7 +455,10 @@ impl Client {
             _ => None,
         };
         if let Some(up) = arrow
-            && self.layer.focused_slider().is_some()
+            && self
+                .layer
+                .focused_slider(self.features.layer_open)
+                .is_some()
         {
             return Some(
                 self.nudge(up)
@@ -465,7 +469,10 @@ impl Client {
             return Some(KeyResponse::Handled);
         }
         if key.phase == KeyPhase::Down && key.code == KeyCode::Enter {
-            return self.layer.focused_press().map(KeyResponse::Action);
+            return self
+                .layer
+                .focused_press(self.features.layer_open)
+                .map(KeyResponse::Action);
         }
         None
     }
@@ -476,7 +483,7 @@ impl Client {
         if first && key.code == KeyCode::Escape && self.table_escape() {
             return Some(KeyResponse::Handled);
         }
-        if let Some(action) = self.layer.shortcut(&key, mac) {
+        if let Some(action) = self.layer.shortcut(&key, mac, self.features.layer_open) {
             // While a context menu is open, its keys move through its rows. Table
             // commands take each key once even when the host sends repeats.
             let table_key = matches!(
@@ -492,7 +499,10 @@ impl Client {
             }
         }
         if first && key.code == KeyCode::Escape {
-            return self.layer.close_press().map(KeyResponse::Action);
+            return self
+                .layer
+                .close_press(self.features.layer_open)
+                .map(KeyResponse::Action);
         }
         let bug_report = if self.features.screen == Screen::Table {
             "Cmd+Shift+B"
@@ -519,7 +529,7 @@ impl Client {
     /// as the left and right keys move a focused range input; `None` with no slider focused
     /// or at the end it would move past.
     fn nudge(&self, up: bool) -> Option<Action> {
-        let action = self.layer.focused_slider()?;
+        let action = self.layer.focused_slider(self.features.layer_open)?;
         let setting = slider_setting(&action)?;
         let level = setting.level()?;
         let to = if up {

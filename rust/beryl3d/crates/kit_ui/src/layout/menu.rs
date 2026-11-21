@@ -53,13 +53,16 @@ impl Layer {
     /// or the last row when the list itself has the focus; the right arrow, or Return on a row
     /// with a submenu, opens the submenu on its first row; the left arrow in a submenu goes back
     /// to its row; and Return on any other row presses it. A disabled row is passed over.
-    pub fn navigate(&mut self, key: &Key) -> Navigation {
+    pub fn navigate(&mut self, key: &Key, open: bool) -> Navigation {
         let Some(focused) = self.focused else {
             return Navigation::Ignored;
         };
-        let Some(screen) = &self.screen else {
+        let Some(screen) = self.keyboard_root(open) else {
             return Navigation::Ignored;
         };
+        if screen.input_node(focused, open).is_none() {
+            return Navigation::Ignored;
+        }
         let mut path = Vec::new();
         if !path_to(screen, focused, &mut path) {
             return Navigation::Ignored;
@@ -198,7 +201,7 @@ impl Layer {
     pub(super) fn menus_shown(&mut self) {
         let row = self.submenu.filter(|&row| self.find(row).is_some());
         self.open_submenu(row);
-        let first = self.screen.as_ref().and_then(menu_in).and_then(|menu| {
+        let first = self.keyboard_root(true).and_then(menu_in).and_then(|menu| {
             let holds = self.focused.is_some_and(|id| menu.find(id).is_some());
             (!holds)
                 .then(|| rows_of(menu).first().map(|row| row.id))

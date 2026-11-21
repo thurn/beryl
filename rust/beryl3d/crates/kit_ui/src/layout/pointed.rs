@@ -5,11 +5,8 @@
 
 use glam::Vec2;
 
-use super::{
-    Layer, Node, element,
-    write::{self, moved},
-};
-use crate::element::{Action, Display};
+use super::{Layer, Node, write::moved};
+use crate::element::{Action, Overflow};
 use crate::input::Rect;
 use kit_base::geometry::plane::Zoom;
 use kit_frame::frame::{ElementId, Role};
@@ -26,8 +23,7 @@ impl Layer {
     /// The first value `want` gives for an element at `point`, asking the innermost first:
     /// the floats drawn over the screen, the last drawn first, then the screen, without what
     /// waits for the table to settle (`Element::waits`) unless the layer is `open`, then the
-    /// floats drawn under it. While the screen shows
-    /// a child drawn over the floats (`write::over_floats`), only that child is asked. An element is at
+    /// floats drawn under it. A visible modal overlay owns the input. An element is at
     /// `point` where it is drawn: moved by its own transition and by the scroll of the elements
     /// it is in, and inside the box of every element it is in that clips or scrolls. As in CSS,
     /// a child that overflows a box that does neither is drawn outside it, and takes presses
@@ -47,8 +43,7 @@ impl Layer {
             clip: Option<Rect>,
             test: &dyn Fn(Area, (&'a Node, Rect)) -> Option<T>,
         ) -> Option<T> {
-            if node.element.style.display == element::Display::None || (node.element.waits && !open)
-            {
+            if !node.accepts_input(open) {
                 return None;
             }
             let origin = origin + node.translation();
@@ -56,7 +51,7 @@ impl Layer {
             let zoom = node.zoom(zoom, rect);
             let rect = zoom.rect(rect);
             let inside = origin - node.scroll;
-            let clips = node.element.style.overflow != element::Overflow::Visible;
+            let clips = node.element.style.overflow != Overflow::Visible;
             let inside_clip = if clips {
                 Some(Area::clip(rect, clip))
             } else {
@@ -73,18 +68,8 @@ impl Layer {
         hit_test(
             point,
             |test| {
-                // The screen's children drawn over the floats (`write::over_floats`) filter what is under
-                // them, and are modal: while one is shown, nothing else is searched.
-                let modal_child =
-                    |child: &&Node| write::over_floats(child) && (open || !child.element.waits);
-                let modal = (self.screen.as_ref())
-                    .filter(|node| node.children.iter().any(|child| modal_child(&child)));
-                if let Some(node) = modal {
-                    return (node.children.iter().rev())
-                        .filter(modal_child)
-                        .find_map(|child| {
-                            visit(child, (child.corner()?, open, Zoom::IDENTITY), None, test)
-                        });
+                if let Some(modal) = self.input_modal(open) {
+                    return visit(modal, (modal.corner()?, open, Zoom::IDENTITY), None, test);
                 }
                 let floats = |under: bool| {
                     (self.floats.iter().rev())
@@ -140,7 +125,7 @@ impl Layer {
             origin: Vec2,
             zoom: Zoom,
         ) -> Option<(&'a Node, Rect)> {
-            if node.element.style.display == Display::None || (node.element.waits && !open) {
+            if !node.accepts_input(open) {
                 return None;
             }
             let origin = origin + node.translation();
@@ -169,8 +154,8 @@ impl Layer {
 
     /// The press of the focused element, if it is an enabled slider.
     #[must_use]
-    pub fn focused_slider(&self) -> Option<Action> {
-        self.slider(self.focused?).map(|(press, _)| press)
+    pub fn focused_slider(&self, open: bool) -> Option<Action> {
+        self.focused_node(open).and_then(slider)
     }
 }
 

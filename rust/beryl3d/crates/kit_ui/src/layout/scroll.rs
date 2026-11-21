@@ -45,7 +45,7 @@ impl Layer {
             open: bool,
             parent: Option<(ElementId, Vec2)>,
         ) -> Option<(ElementId, Vec2)> {
-            if node.element.style.display == Display::None || (node.element.waits && !open) {
+            if !node.accepts_input(open) {
                 return None;
             }
             let here = node
@@ -61,6 +61,9 @@ impl Layer {
                 .find_map(|child| find(child, focused, key, step_points, open, nearest))
         }
         let focused = self.focused?;
+        if let Some(modal) = self.input_modal(open) {
+            return find(modal, focused, key, step_points, open, None);
+        }
         self.screen
             .iter()
             .chain(self.floats.iter().map(|float| &float.node))

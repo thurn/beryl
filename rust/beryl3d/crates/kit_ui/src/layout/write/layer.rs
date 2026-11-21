@@ -3,7 +3,7 @@
 use glam::Vec2;
 
 use super::super::{Layer, float::Float, panel::Chain};
-use super::{Drawing, FaceLayers, Look, children, over_floats, own_filter};
+use super::{Drawing, FaceLayers, Look, above_floats, children, over_floats, own_filter};
 use kit_base::geometry::plane::{ScreenPlane, Zoom};
 use kit_frame::frame::{Anchored, ElementId, FrameBuilder, StateBits};
 
@@ -11,8 +11,7 @@ impl Layer {
     /// Writes the flat layer into `builder`, on the plane `camera` puts in front of the table:
     /// the floats drawn under the screen (`FloatId::under_screen`), the screen, leaving out what
     /// waits for the table to settle (`Element::waits`) unless the layer is `open`, then every
-    /// other float, then the screen's children that filter what is drawn under them
-    /// (`over_floats`).
+    /// other float, then the modal overlays and other children with backdrop filters.
     pub fn write(&self, builder: &mut FrameBuilder, camera: &ScreenPlane, open: bool) {
         self.write_with(builder, camera, open, None);
     }
@@ -90,12 +89,12 @@ impl Layer {
             return;
         };
         for (child, departing) in children(node, false)
-            .filter(|(child, _)| over_floats(child) && (open || !child.element.waits))
+            .filter(|(child, _)| above_floats(child) && (open || !child.element.waits))
         {
             let Some(point) = child.corner() else {
                 continue;
             };
-            if !departing {
+            if !departing && over_floats(child) {
                 builder.backdrop(&child.element.style.filter, self.window.scale);
             }
             let look = Look {

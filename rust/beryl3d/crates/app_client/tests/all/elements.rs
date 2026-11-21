@@ -106,7 +106,7 @@ fn an_element_anchored_to_a_card_the_table_does_not_show_is_not_drawn() {
 }
 
 /// A key pressed with `modifiers`.
-fn key(code: KeyCode, modifiers: Modifiers) -> Input {
+pub(super) fn key(code: KeyCode, modifiers: Modifiers) -> Input {
     Input::Device(DeviceInput::Key(Key {
         code,
         phase: KeyPhase::Down,

@@ -226,7 +226,7 @@ impl Layer {
     ) {
         for (child, departing) in children(node, inside.departing) {
             // `write_with` writes these after the floats.
-            if top && !inside.departing && over_floats(child) {
+            if top && !inside.departing && above_floats(child) {
                 continue;
             }
             let mut look = inside;
@@ -732,7 +732,12 @@ fn corners(rect: Rect) -> [Vec2; 4] {
     ]
 }
 
-/// Whether `node`, a child of a top element, is written over the floats: an anchored element
+/// Visible modal overlays are painted in front of regular screen contents and floats.
+pub(super) fn above_floats(node: &Node) -> bool {
+    node.element.anchor.is_some() && (node.element.modal || over_floats(node))
+}
+
+/// Whether `node`, a child of a top element, is painted with a backdrop filter: an anchored element
 /// with a backdrop filter (`Style::backdrop`), which filters the floats with the rest of what is
 /// drawn under it. Only the screen's are written; a float's are not written at all.
 pub(super) fn over_floats(node: &Node) -> bool {

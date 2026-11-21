@@ -189,12 +189,15 @@ impl Client {
                     return true;
                 }
                 if self.layer.edited_id().is_some() && key.code != KeyCode::Tab {
-                    return false;
+                    self.field_key(key);
+                    return true;
                 }
                 match key.code {
-                    KeyCode::Tab => self.layer.move_focus(!key.modifiers.shift),
+                    KeyCode::Tab => self
+                        .layer
+                        .move_focus(!key.modifiers.shift, self.features.layer_open),
                     KeyCode::Enter if first => {
-                        if let Some(press) = self.layer.focused_press() {
+                        if let Some(press) = self.layer.focused_press(self.features.layer_open) {
                             self.dispatch(&press);
                         }
                     }

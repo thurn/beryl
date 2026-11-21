@@ -13,7 +13,7 @@ use beryl_protocol::protocol::{CardType, Side, ZoneName};
 use beryl_protocol::script::{Act, Table as Played, time_script};
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use glam::Vec2;
-use kit_frame::frame::{Frame, StateBits, Wake};
+use kit_frame::frame::{Frame, Role, StateBits, Wake};
 use kit_probe::agent::{TreeOptions, tree};
 use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{
@@ -168,6 +168,78 @@ fn over_a_prompt_the_report_covers_the_whole_window() {
         .find(|line| line.contains("region \"bug report\""))
         .unwrap_or_else(|| panic!("the report shows: {printed}"));
     assert!(line.contains(" 0,0 1440x900"), "{line}");
+}
+
+#[test]
+fn the_report_keeps_mouse_and_keyboard_input_off_the_frozen_prompt() {
+    use super::elements::key;
+    use super::flat_layer::{centre, client, deciding, find, pointer, prompt};
+
+    let mut client = client();
+    client.handle(deciding(prompt("Pay {1}{U}")));
+    let frame = client.frame(0);
+    let cancel = centre(frame, find(frame, Role::Button, "Cancel"));
+    client.handle(key(
+        KeyCode::B,
+        Modifiers {
+            command: true,
+            ..Modifiers::default()
+        },
+    ));
+    client.frame(1);
+    client.frame(2);
+    client.frame(3);
+    client.handle(key(KeyCode::Enter, Modifiers::default()));
+    let frame = client.frame(4);
+    find(frame, Role::Field, "description");
+
+    client.handle(pointer(PointerPhase::Down, cancel));
+    client.handle(pointer(PointerPhase::Up, cancel));
+    assert_eq!(client.next_command(), None, "the report owns the click");
+
+    for now in 5..15 {
+        client.handle(key(KeyCode::Tab, Modifiers::default()));
+        let frame = client.frame(now);
+        let cancel = &frame.resolved[find(frame, Role::Button, "Cancel")];
+        assert!(!cancel.state.has(StateBits::FOCUSED), "the report owns Tab");
+    }
+}
+
+#[test]
+fn editing_the_report_over_a_table_menu_keeps_focus_in_the_description() {
+    use super::elements::key;
+    use super::manual::{client_at_table, middle, pointer, table_view};
+    use kit_ui::input::TextChange;
+
+    let (mut client, frame) = client_at_table(&table_view());
+    let card = middle(&frame, Role::Card, "Serra Angel");
+    client.handle(pointer(PointerPhase::Down, card, Button::Secondary));
+    let frame = client.frame(1);
+    assert!(
+        frame
+            .resolved
+            .iter()
+            .any(|node| node.role == Role::MenuItem)
+    );
+
+    client.handle(key(
+        KeyCode::B,
+        Modifiers {
+            shift: true,
+            command: true,
+            ..Modifiers::default()
+        },
+    ));
+    client.frame(2);
+    client.frame(3);
+    client.frame(4);
+    client.handle(key(KeyCode::Enter, Modifiers::default()));
+    for words in ["Could ", "not untap"] {
+        client.handle(Input::Device(DeviceInput::Text(TextChange::Insert(
+            words.to_owned(),
+        ))));
+    }
+    assert_eq!(client.field("description").text, "Could not untap");
 }
 
 #[test]

@@ -114,6 +114,8 @@ pub struct Element {
     /// played out (the layer's `open`). The open prompt waits so, as the web interface's prompt
     /// opens when its view has played out, while the rest of the screen stays up.
     pub waits: bool,
+    /// A top-level overlay that owns input while it is visible.
+    pub modal: bool,
     /// Where it stands if it is placed at a point of the window or on a scene object rather
     /// than in its parent's layout. It is laid out at its content's size (`layout::anchor`).
     pub anchor: Option<Anchor>,
@@ -145,6 +147,7 @@ impl Element {
             selected: false,
             primary: false,
             waits: false,
+            modal: false,
             anchor: None,
             shows: None,
             show: None,
@@ -168,6 +171,7 @@ impl Element {
             && self.selected == other.selected
             && self.primary == other.primary
             && self.waits == other.waits
+            && self.modal == other.modal
             && self.anchor == other.anchor
             && self.shows == other.shows
             && self.show == other.show
@@ -197,6 +201,13 @@ impl Element {
     #[must_use]
     pub fn waits(mut self) -> Self {
         self.waits = true;
+        self
+    }
+
+    /// Gives this overlay's controls exclusive access to input.
+    #[must_use]
+    pub fn modal(mut self) -> Self {
+        self.modal = true;
         self
     }
 

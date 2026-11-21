@@ -84,6 +84,7 @@ pub(super) fn game_over(state: &State, input: &Inputs) -> Element {
     ];
     let mut screen = holder()
         .name("game over screen")
+        .modal()
         // The web's dialog takes every press over the table, so the scrim does too.
         .child(backdrop(input.window.size).passes(false))
         .child(result(input, outcome))

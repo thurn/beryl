@@ -25,8 +25,8 @@ use kit_probe::agent::{Context, Rule};
 use kit_ui::element::{Action, floats, row, text};
 use kit_ui::input::Input as DeviceInput;
 use kit_ui::input::{
-    AssetReady, Button, GlyphCell, Insets, Modifiers, Pointer, PointerKind, PointerPhase, Size,
-    Tier,
+    AssetReady, Button, GlyphCell, Insets, KeyCode, Modifiers, Pointer, PointerKind, PointerPhase,
+    Size, Tier,
 };
 use kit_ui::layout::{FloatLook, Layer};
 
@@ -579,6 +579,20 @@ fn a_prompt_opens_only_once_its_view_has_played_out() {
         None,
         "a hidden button takes no press"
     );
+
+    // A full pass through Tab order keeps focus on a control the player can see.
+    let elements = client.last_frame().resolved.len();
+    for _ in 0..elements {
+        client.handle(super::elements::key(KeyCode::Tab, Modifiers::default()));
+        let frame = client.frame(200 * MS);
+        assert!(
+            frame
+                .resolved
+                .iter()
+                .any(|node| node.state.has(StateBits::FOCUSED)),
+            "Tab reached a control that is hidden while the draw plays"
+        );
+    }
 
     // Once the card has landed, the bar is drawn and its buttons take presses.
     let frame = client.frame(500 * MS);
