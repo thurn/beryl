@@ -7,7 +7,7 @@
 //! players can be expected to see the cards' faces." The zone moves keep what a zone tells
 //! every player ([`crate::zone`]); these are the other ways a player learns or forgets a card.
 //!
-//! Implements: CR 701.20a
+//! Implements: CR 701.20a, CR 701.20e
 
 use crate::bitboard::Bitboard;
 use crate::chance;
@@ -30,10 +30,13 @@ impl<L: Layout> State<L> {
         sink.note(Event::Reveal { player, slot });
     }
 
-    /// `player` looks at the cards in `cards` and from then on knows them: a library and a
-    /// hand are hidden zones
+    /// `player` looks at the cards and remembers them. [CR 701.20e]: "the card is shown only
+    /// to the specified player." A player who controls their decisions can also see the cards
+    /// (see CR 724.4). A library and a hand are hidden zones
     /// (see [CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002)), "zones in which not
     /// all players can be expected to see the cards' faces."
+    ///
+    /// [CR 701.20e]: https://yawgatog.com/resources/magic-rules/#R70120e
     pub fn look(&mut self, sink: &mut Sink<L>, player: Seat, cards: Bitboard<L::Slot>) {
         chance::settle_all(self, sink, cards);
         self.knowledge[player.index()] |= cards;

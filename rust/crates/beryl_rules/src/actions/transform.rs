@@ -1,8 +1,7 @@
-//! Transform ([CR 701.27](https://yawgatog.com/resources/magic-rules/#R70127)), and a card
-//! put onto the battlefield transformed
+//! Cards put onto the battlefield transformed
 //! ([CR 712.11a](https://yawgatog.com/resources/magic-rules/#R71211a)).
 //!
-//! Implements: CR 701.27, CR 712.11a
+//! Implements: CR 712.11a
 
 use beryl_card::Objects;
 

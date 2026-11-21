@@ -15,6 +15,9 @@ heavy command.
 - `crates/beryl_app` is the Tauri shell: the window, IPC commands,
   `tauri.conf.json`, capabilities and icons. `docs/engine-architecture.md` §16
   describes the other crates.
+- `crates/beryl_kernel/src/lib.rs` describes the state and mutator contract.
+  `crates/beryl_rules/src/lib.rs` maps rules to their modules. Use
+  `just citations coverage` to see which rules lack an ownership declaration.
 - `crates/beryl_protocol` owns the shared views, scripts and IPC definitions,
   including the manual table commands in `src/ipc/table.rs`.
   `crates/beryl_card_records` supplies shared printing and art records.

@@ -409,6 +409,26 @@ information. The root `lib.rs` keeps the crate contract.
 | 20. Casting and payment tests                                                                                                   | `tests/`                            | `tests/{any_target.rs,banned.rs,cast.rs,casting.rs,chosen.rs,life_costs.rs,payment.rs,remembered_mana.rs,spell_copies.rs,spell_costs.rs}`                                                                                                                                                                                                                   |
 | 21. Combat, library, and other tests                                                                                            | `tests/`                            | `tests/{combat.rs,effects.rs,game.rs,graveyard_return.rs,library.rs,mulligan.rs,phasing.rs,regeneration.rs,rules.rs,trackers.rs}`, `tests/combat/keywords.rs`                                                                                                                                                                                               |
 
+**Where to implement the remaining rules.** This map gives a rule its first
+place to look. Declare only the rules the code there implements. A type or
+characteristic belongs to the card vocabulary, its stored value to the kernel,
+and its game procedure to the rules module that performs it.
+
+| Comprehensive Rules | Home in the engine                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 100–104             | Game format, setup and outcomes in `game/` and the kernel's game table and initial state. The interpreter handles APNAP choices (CR 101.4).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| 105–114, 200–213    | Characteristics in `beryl_card`, with queries in the kernel and derived characteristics in `continuous/layers/`. Mana goes to `mana/`, spells and abilities to `stack/`, and permanents, tokens and emblems to `zones/`. Printed illustrations and other information below the text box are printing metadata.                                                                                                                                                                                                                                                                                                                       |
+| 115–118             | Target and cost choices in `casting/`. The engine offers priority and routes special actions to their implementation, such as land play or turning a permanent face up.                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| 119–123             | Life in `game/life.rs`, damage in `combat/damage.rs`, draws and counters in `zones/`, and sticker placement in `objects/` if added.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| 300–315             | Type and subtype vocabulary in `beryl_card`. Spell timing and loyalty activation go to `casting/`. Attachments go to `actions/attach.rs` and `replacement/enchant.rs`. Attacking and protecting battles go to `combat/`. Put the state and procedures for dungeons and variant objects in `zones/` and the corresponding game procedures in `game/`.                                                                                                                                                                                                                                                                                 |
+| 400–408             | Zone identity in the kernel and zone-specific behavior in `zones/`. Stack order is in `stack/`. A rule that carries information across a move belongs to the procedure using it, such as a trigger or casting permission.                                                                                                                                                                                                                                                                                                                                                                                                            |
+| 500–514             | Turn structure in `turn/`. Combat owns its steps (CR 506–511), phasing at untap stays in `objects/phasing.rs`, and the kernel queues extra turns.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| 600–616             | Casting and loyalty activation in `casting/`, triggered abilities and resolution in `stack/`, and mana abilities in `mana/`. Static abilities and continuous effects go to `continuous/`, linked abilities and one-shot object changes to `objects/`, and replacement and prevention to `replacement/`. Effect execution, choices and last-known information go to `interpret/`.                                                                                                                                                                                                                                                     |
+| 700–706             | General effect choices in `interpret/`, keyword actions in `actions/`, keyword abilities beside the procedures they change or in `keywords/`, turn-based actions in the owning step, state-based actions in `sba.rs`, and coin flips and die rolls in `actions/` using the kernel's chance API.                                                                                                                                                                                                                                                                                                                                      |
+| 707–723             | Card shapes in `beryl_card` and characteristics in the kernel. Copies, face-down objects, flip and meld go to `objects/`, with individual keyword actions under `actions/`. Spell-side choices for split, Adventure, prototype and Omen belong in `casting/`. Sagas, Classes, Cases, levelers and Station use the turn, activation, trigger, layer, counter and state-based procedures each rule modifies. Substitute cards are printing and deck data. Attractions use a supplementary deck in `game/` and a step action in `turn/`. Preparation's designation belongs to the object and its casting permission goes to `casting/`. |
+| 724–734             | Player control, shortcut decisions and illegal-action recovery in the engine. Ending a turn goes to `turn/`, restart and subgames to `game/`, and merging to `objects/`. The monarch, initiative and day/night use game state, with their changes applied by `actions/` or the relevant turn step. Rad counters use `zones/counters.rs` and the precombat main step.                                                                                                                                                                                                                                                                 |
+| 800–811, 900–905    | Variant setup and participation in `game/` and the kernel's format. Variant changes to turn order, combat, zone movement or priority belong to the module that performs each procedure.                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+
 **The division (P11).** The files move first. A chain of four tickets takes the
 rows of the rules' table in order (6 to 8, 9 to 11, 12 to 15, then 16). Each
 moves its files to their rule-owned places with `Implements:` headers and takes
@@ -726,7 +746,8 @@ exporter investigation on each card.
 ### F. The shape of a game
 
 `Format` is a `const` value the `GameTable` holds and the kernel and rules read,
-in place of numbers written into `new.rs`, `start.rs` and `turn.rs`:
+in place of numbers in the kernel's `new.rs` and the rules' `game/start.rs` and
+`turn/mod.rs`:
 
 ```rust
 pub struct Format {
@@ -749,9 +770,10 @@ impl Format { pub const CONSTRUCTED: Format = ..; }
 - Only `Format::CONSTRUCTED` exists, and what subgames and restarts need of it
   (section G).
 - `Seat` stays a two-value enum and `PerSeat` a two-entry array. `Format::seats`
-  is read where a count was written as `2` (`chance::flip`'s `below(2)` for the
-  starting player, the pass count), so that the places a third seat would break
-  are the ones the compiler already lists (`two_player.rs`).
+  is read where a count was written as `2` (`State::deal`'s `below(2)` in the
+  kernel's `new.rs` for the starting player, the pass count), so that the places
+  a third seat would break are the ones the compiler already lists
+  (`two_player.rs`).
 - `sba::end` stops assuming the game ends when one player loses: it asks the
   format whether the players left are one side. With two seats the answer is
   what it was.
@@ -763,9 +785,9 @@ document, and the documentation ticket moves it to the architecture document.
 
 ### G. Turn and game structure
 
-**The turn as a plan.** `turn::next_step` is a `match` over thirteen steps, and
-several readers compare steps with `<` (`stops.rs`, `mana/lookahead.rs`, the
-engine's `Limit`, `next_in_step`'s `(turn, step)` pair). The kernel's `Turn`
+**The turn as a plan.** `next_step` in `turn/mod.rs` matches thirteen steps, and
+several readers compare steps with `<` (`turn/stops.rs`, `mana/lookahead.rs`,
+the engine's `Limit`, `next_in_step`'s `(turn, step)` pair). The kernel's `Turn`
 gains the rest of this turn as a plan: a short queue of steps still to come,
 filled from `Format::turn` as the turn begins.
 
@@ -836,15 +858,15 @@ before it began, so a cast that had committed anything would be lost or doubled.
 Today's `Effect::MayCast` therefore only records an offer, made once the
 resolution has finished, of one card.
 
-The cast's steps (`cast/steps.rs`: announce, choose targets, compute the total
-cost, pay) become functions that take each answer from an answer source:
+The cast's steps (`casting/steps.rs`: announce, choose targets, compute the
+total cost, pay) become functions that take each answer from an answer source:
 
 - at priority the source is `Pending::Casting`, one committed step an answer, as
   now, so a rollout's decisions and the count do not change;
 - inside a resolution the source is the resolution's own record
-  (`Resolution::answer`), so the whole cast is part of the transaction and is
-  replayed with it. The new spell goes on the stack above the resolving entry,
-  and the body continues with its next instruction.
+  (`Resolution::answer` in `resolution.rs`), so the whole cast is part of the
+  transaction and is replayed with it. The new spell goes on the stack above the
+  resolving entry, and the body continues with its next instruction.
 
 `Effect::MayCast` loses the rule that it must be the last instruction
 (`Malformed::Cast`) and may offer a set of cards. The record holds 32 answers in
@@ -856,9 +878,9 @@ cost, pay) become functions that take each answer from an answer source:
   cast it without paying its mana cost, put the rest on the bottom in a random
   order.
 - **Panglacial Wurm** adds a way to cast to the search's own question.
-  `choices::pick_or_end` offers `Opt::Cast` for a card of the searched library
-  whose definition says it may be cast while its owner searches, and the search
-  goes on after the cast.
+  `interpret::choices::pick_or_end` offers `Opt::Cast` for a card of the
+  searched library whose definition says it may be cast while its owner
+  searches, and the search goes on after the cast.
 - **Knowledge Pool** and **Possibility Storm** are triggers on a spell cast from
   a hand that exile it and cast another, free. They need the cast trigger to
   know the zone the spell was cast from.
@@ -891,10 +913,11 @@ is a quality instead of the keyword.
 
 ### I. Card shapes, face-down cards and cards outside the game
 
-A `CardDef` already holds one or two faces, casting already loops over faces and
-the protocol's cast decision already carries a face. Nothing says what kind of
-two-faced card a card is, only a test card uses a second castable face, and the
-engine cannot turn a permanent over.
+A `CardDef` already holds one or two faces, `casting/legal.rs` already loops
+over faces and the protocol's cast decision already carries a face. Only a test
+card uses a second castable face. `actions/transform.rs` can return an exiled
+card with its back face up. Turning an existing permanent in place still needs
+an implementation.
 
 **A shape on the definition.** `CardDef` gains `shape: Shape`, generated from
 the card store's `layout` with the faces:
@@ -907,20 +930,20 @@ pub enum Shape { Single, Transforming, Modal, Split { fuse: bool }, Adventure,
 `check` refuses a face count the shape does not allow. The rules read the shape
 where they branch on it; nothing infers it from `Face::transformed`.
 
-| Shape or structure                                                        | What it needs                                                                                                                                                                                                       | Keystone                  |
-| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
-| Split ([CR 709.4](https://yawgatog.com/resources/magic-rules/#R7094))     | Off the stack, `State::copiable` answers with both halves combined: two names, both sets of types and colors, the sum of the mana values. On the stack it is the half that was cast.                                | Fire // Ice               |
-| Fuse                                                                      | A casting option that casts both halves as one spell: one cost, the left half's instructions then the right's.                                                                                                      | Wear // Tear              |
-| Adventure ([CR 716.3](https://yawgatog.com/resources/magic-rules/#R7163)) | Cast as the Adventure face; as it resolves it is exiled with a permission to cast the creature from exile.                                                                                                          | Bonecrusher Giant         |
-| Prepared ([CR 723.1](https://yawgatog.com/resources/magic-rules/#R7231))  | A designation on the permanent, kept as a memo; while it has it, its controller may cast a copy of the back face's spell, which removes the designation.                                                            | Adventurous Eater         |
-| Modal double-faced                                                        | A real card for the path the test card "Test Stupor" uses, and oracle exporters that can cast a chosen face.                                                                                                        | Valakut Awakening         |
-| Transforming, flip                                                        | `actions::transform` and `actions::flip` turn a permanent in place: the face changes, the object and its incarnation do not, and it gets no new timestamp. An `Effect::Transform` instruction.                      | Delver of Secrets, Erayo  |
-| Meld                                                                      | Two permanents leave to exile and return as one object whose definition is the melded card, with both cards under it as merged permanents keep theirs (`Memo::PartOf`). It splits into its cards when it leaves.    | Gisela, the Broken Blade  |
-| Saga ([CR 715.2](https://yawgatog.com/resources/magic-rules/#R7152))      | `Ability::chapter(n)`: a triggered ability on the lore counter reaching `n`. A lore counter as it enters and after each draw step is a turn-based action; sacrifice after the last chapter is a state-based action. | The Eldest Reborn         |
-| Class ([CR 717.3](https://yawgatog.com/resources/magic-rules/#R7173))     | `Ability::level(n, cost)`: an activated ability at sorcery speed that sets the level, and abilities that exist from a level.                                                                                        | Wizard Class              |
-| Case ([CR 720.3](https://yawgatog.com/resources/magic-rules/#R7203))      | A "to solve" condition checked at the controller's end step, a solved designation as a memo, and abilities that exist once solved.                                                                                  | Case of the Crimson Pulse |
-| Leveler ([CR 711.2](https://yawgatog.com/resources/magic-rules/#R7112))   | Level up as an activated ability that adds a level counter; abilities and power and toughness that hold for a range of level counters, as static abilities with a condition.                                        | Student of Warfare        |
-| Prototype ([CR 719.3](https://yawgatog.com/resources/magic-rules/#R7193)) | A casting option that gives the spell, and the permanent it becomes, another cost, color, power and toughness, as copiable values.                                                                                  | Arcane Proxy              |
+| Shape or structure                                                        | What it needs                                                                                                                                                                                                                                                                                                                                         | Keystone                  |
+| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| Split ([CR 709.4](https://yawgatog.com/resources/magic-rules/#R7094))     | Off the stack, `State::copiable` answers with both halves combined: two names, both sets of types and colors, the sum of the mana values. On the stack it is the half that was cast.                                                                                                                                                                  | Fire // Ice               |
+| Fuse                                                                      | A casting option that casts both halves as one spell: one cost, the left half's instructions then the right's.                                                                                                                                                                                                                                        | Wear // Tear              |
+| Adventure ([CR 716.3](https://yawgatog.com/resources/magic-rules/#R7163)) | Cast as the Adventure face; as it resolves it is exiled with a permission to cast the creature from exile.                                                                                                                                                                                                                                            | Bonecrusher Giant         |
+| Prepared ([CR 723.1](https://yawgatog.com/resources/magic-rules/#R7231))  | A designation on the permanent, kept as a memo; while it has it, its controller may cast a copy of the back face's spell, which removes the designation.                                                                                                                                                                                              | Adventurous Eater         |
+| Modal double-faced                                                        | A real card for the path the test card "Test Stupor" uses, and oracle exporters that can cast a chosen face.                                                                                                                                                                                                                                          | Valakut Awakening         |
+| Transforming, flip                                                        | Add in-place operations to `actions/transform.rs` and a new `actions/flip.rs` to turn a permanent in place: the face changes, the object and its incarnation do not, and it gets no new timestamp. An `Effect::Transform` instruction.                                                                                                                | Delver of Secrets, Erayo  |
+| Meld                                                                      | Two permanents leave to exile and return as one object whose definition is the melded card, with both cards under it as merged permanents keep theirs (`Memo::PartOf`). It splits into its cards when it leaves.                                                                                                                                      | Gisela, the Broken Blade  |
+| Saga ([CR 715.2](https://yawgatog.com/resources/magic-rules/#R7152))      | `Ability::chapter(n)`: a triggered ability on the lore counter reaching `n`. Entry adds a lore counter through a replacement in `replacement/`. `turn/mod.rs` adds lore at the start of precombat main, and `sba.rs` sacrifices a Saga with lore at or above its final chapter number once none of its chapter abilities are waiting or on the stack. | The Eldest Reborn         |
+| Class ([CR 717.3](https://yawgatog.com/resources/magic-rules/#R7173))     | `Ability::level(n, cost)`: an activated ability at sorcery speed that sets the level, and abilities that exist from a level.                                                                                                                                                                                                                          | Wizard Class              |
+| Case ([CR 720.3](https://yawgatog.com/resources/magic-rules/#R7203))      | A "to solve" condition checked at the controller's end step, a solved designation as a memo, and abilities that exist once solved.                                                                                                                                                                                                                    | Case of the Crimson Pulse |
+| Leveler ([CR 711.2](https://yawgatog.com/resources/magic-rules/#R7112))   | Level up as an activated ability that adds a level counter; abilities and power and toughness that hold for a range of level counters, as static abilities with a condition.                                                                                                                                                                          | Student of Warfare        |
+| Prototype ([CR 719.3](https://yawgatog.com/resources/magic-rules/#R7193)) | A casting option that gives the spell, and the permanent it becomes, another cost, color, power and toughness, as copiable values.                                                                                                                                                                                                                    | Arcane Proxy              |
 
 **Face-down spells**
 ([CR 708.2](https://yawgatog.com/resources/magic-rules/#R7082)).
@@ -943,11 +966,10 @@ multiset of card indices. They have no slots.
   the pool as a card, not a token, and is removed from the multiset.
 - A companion
   ([CR 702.139a](https://yawgatog.com/resources/magic-rules/#R702139a)) is
-  declared before the game: the starting procedure asks each player with a
-  sideboard card whose companion condition their deck meets, as a decision
-  before the mulligans. The condition is a `Filter` over the deck's cards,
-  checked by the table. Putting it into the hand is a special action that costs
-  {3}.
+  declared before the game: `game/start.rs` asks each player with a sideboard
+  card whose companion condition their deck meets, as a decision before the
+  mulligans. The condition is a `Filter` over the deck's cards, checked by the
+  table. Putting it into the hand is a special action that costs {3}.
 - Scenarios set a sideboard with `.sideboard(P0, &[..])`. The session's
   best-of-three match and sideboarding between games are not part of this plan.
 

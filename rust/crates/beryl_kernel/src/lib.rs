@@ -6,7 +6,8 @@
 //! zone-move and chance chokepoints, the invariants, and the records, decisions and events
 //! that pass between it and the rules. It depends on `beryl_card` alone and holds no rule of
 //! the game's flow: turns, priority, casting, mana, combat, layers, triggers and the
-//! interpreter are `beryl_engine`'s, which reaches the state through the API below.
+//! interpreter are `beryl_rules`'s, which reaches the state through the API below.
+//! Kernel modules group stored state and declare rules their operations enforce.
 //! [`Layout`] names no rules type: what the rules keep once per layout they read through
 //! [`layout::PerLayout`].
 //!

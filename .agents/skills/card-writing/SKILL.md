@@ -175,8 +175,9 @@ Keep the card out of staging until the check passes.
 
 Before deciding that a mechanic is missing, search
 `rust/crates/beryl_card/src` for its key words or Comprehensive Rules number
-and read similar cards. A compile or assertion error alone does not
-establish a gap. Escalate if no existing composition expresses the clause.
+and read similar cards. The module map in
+`rust/crates/beryl_rules/src/lib.rs` points to the rules implementation.
+A compile or assertion error alone does not establish a gap. Escalate if no existing composition expresses the clause.
 
 Add an entry to `data/card-escalations.json` in card-name order. Use the
 card's exact name and the unsupported ability's Oracle text.

@@ -1,6 +1,6 @@
-//! Flipping a coin ([CR 705](https://yawgatog.com/resources/magic-rules/#R705)).
+//! Flipping a coin for a win-or-lose result.
 //!
-//! Implements: CR 705
+//! Implements: CR 705.2
 
 use beryl_card::Players;
 

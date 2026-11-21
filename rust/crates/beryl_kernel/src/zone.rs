@@ -5,7 +5,7 @@
 //! They are mutators of [`State`] (the crate's contract, "Mutators"), and the only code that
 //! writes the zones' membership and order.
 //!
-//! Implements: CR 400.7
+//! Implements: CR 400.7, CR 701.20d
 
 use crate::bitboard::Bitboard;
 use crate::chance;
@@ -304,7 +304,7 @@ impl<L: Layout> State<L> {
     /// Deals the identities of the cards in `slots`, all in one library, anew among those slots
     /// with `rng`, and every player forgets them: the slots are public handles (architecture §13),
     /// so this is how cards come to be in an order no player knows. Each becomes a new object
-    /// (see [CR 701.20d]): "If cards in a player's library are shuffled or otherwise reordered, any
+    /// ([CR 701.20d]): "If cards in a player's library are shuffled or otherwise reordered, any
     /// revealed cards that are reordered stop being revealed and become new objects."
     ///
     /// [CR 701.20d]: https://yawgatog.com/resources/magic-rules/#R70120d

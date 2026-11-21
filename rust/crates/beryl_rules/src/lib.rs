@@ -135,7 +135,7 @@
 //!   permanents and mutate (see CR 607, see CR 610, see CR 707, see CR 702.26, see CR 702.140).
 //! - [`actions`] implements keyword actions and coin flips (see CR 701, see CR 705).
 //! - [`keywords`] implements flashback (see CR 702.34).
-//! - `engine/` builds decisions, advances the game to the next decision and applies answers
+//! - `engine.rs` and `engine/` build decisions, advance the game and apply answers
 //!   (see CR 117). `sba.rs` checks and performs state-based actions (see CR 704).
 //! - `interpret/` reads effect data and carries out its instructions, including choices
 //!   made during resolution (see CR 608.2c, see CR 608.2d, see CR 608.2f, see CR 608.2h).
