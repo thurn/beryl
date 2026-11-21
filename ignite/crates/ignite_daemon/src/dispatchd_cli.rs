@@ -203,16 +203,21 @@ impl Dispatcher {
         None
     }
 
+    /// Apps in effective CLI mode, including apps that are not offering slots.
+    pub fn cli_apps(&self) -> impl Iterator<Item = &'static str> + '_ {
+        APPS.into_iter()
+            .filter(|app| self.mode(app).0 == PoolMode::Cli)
+    }
+
     /// The slots each app in CLI mode has: `slots` from `ignite.toml`, and one more for tickets
     /// that hold `master` back. Empty without a CLI pool.
     pub(super) fn cli_layouts(&self) -> Vec<Layout> {
         let Some(cli) = self.cli.get() else {
             return Vec::new();
         };
-        APPS.iter()
-            .filter(|app| self.mode(app).0 == PoolMode::Cli)
+        self.cli_apps()
             .map(|app| Layout {
-                app: (*app).to_owned(),
+                app: app.to_owned(),
                 slots: cli.config.machine_pool(&cli.hostname, app).slots,
                 models: tiers(&cli.config, app),
                 offered: cli.pool.offers(app),

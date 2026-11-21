@@ -186,6 +186,7 @@ impl Parts {
                     machine: ctx.machine.clone(),
                     version,
                     workers: dispatcher.view().unwrap_or_default(),
+                    cli_apps: dispatcher.cli_apps().map(str::to_owned).collect(),
                     families: current_families(&ctx.repo, &hostname),
                 })?;
                 *hub_version.borrow_mut() = Some(reply.hub_version);

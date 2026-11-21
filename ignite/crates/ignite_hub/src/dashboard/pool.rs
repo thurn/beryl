@@ -135,10 +135,18 @@ pub(crate) fn options(
     private: bool,
     now: Timestamp,
 ) -> Result<PageOptions, ReadError> {
-    let mut machines = conn.prepare("SELECT id, name FROM machines ORDER BY name, id")?;
+    let mut machines = conn.prepare(
+        "SELECT id, name, cli_apps, EXISTS (SELECT 1 FROM pauses WHERE machine = machines.id)
+         FROM machines ORDER BY name, id",
+    )?;
     let machines = machines
         .query_map([], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, bool>(3)?,
+            ))
         })?
         .collect::<Result<Vec<_>, _>>()?;
     let mut statement = conn.prepare(
@@ -148,7 +156,9 @@ pub(crate) fn options(
          WHERE w.machine = ?1 ORDER BY w.session",
     )?;
     let mut body = String::new();
-    for (id, name) in &machines {
+    for (id, name, cli_apps, paused) in &machines {
+        let cli_apps: Vec<String> =
+            serde_json::from_str(cli_apps).map_err(|error| ReadError(error.to_string()))?;
         let workers = statement
             .query_map([id], |row| {
                 Ok(Worker {
@@ -164,9 +174,9 @@ pub(crate) fn options(
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
-        let dispatchers: Vec<String> = workers
+        let mut dispatchers: Vec<String> = workers
             .iter()
-            .filter(|worker| worker.role == "dispatcher")
+            .filter(|worker| worker.role == "dispatcher" && !cli_apps.contains(&worker.app))
             .map(|worker| {
                 c::dot(
                     dispatcher_tone(&worker.state),
@@ -175,6 +185,13 @@ pub(crate) fn options(
                 )
             })
             .collect();
+        dispatchers.extend(cli_apps.iter().map(|app| {
+            if *paused {
+                c::dot(Tone::Amber, &format!("{app} CLI paused"), None)
+            } else {
+                c::dot(Tone::Muted, &format!("{app} CLI"), None)
+            }
+        }));
         let dispatchers = if dispatchers.is_empty() {
             c::dot(Tone::Red, "No dispatcher", None)
         } else {

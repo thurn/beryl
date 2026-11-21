@@ -46,9 +46,11 @@ pub fn register(conn: &Connection, machine: &MachineRegister, now: Timestamp) ->
 pub fn heartbeat(conn: &mut Connection, heartbeat: &Heartbeat, now: Timestamp) -> Result<()> {
     let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
     let machine = heartbeat.machine.as_str();
+    let cli_apps = serde_json::to_string(&heartbeat.cli_apps)
+        .map_err(|e| StoreError::Invalid(e.to_string()))?;
     let seen = tx.execute(
-        "UPDATE machines SET last_seen = ?2, version = ?3 WHERE id = ?1",
-        params![machine, now.to_string(), heartbeat.version],
+        "UPDATE machines SET last_seen = ?2, version = ?3, cli_apps = ?4 WHERE id = ?1",
+        params![machine, now.to_string(), heartbeat.version, cli_apps],
     )?;
     if seen == 0 {
         return Err(StoreError::Invalid(format!("unknown machine {machine}")));
@@ -133,7 +135,7 @@ pub fn idle_since(conn: &Connection, session: &str) -> Result<Option<String>> {
 /// Every machine, ordered by name.
 pub fn machines(conn: &Connection) -> Result<Vec<rows::Machine>> {
     let mut statement = conn.prepare(
-        "SELECT id, name, os, cores, memory_mb, families, version, last_seen
+        "SELECT id, name, os, cores, memory_mb, families, version, last_seen, cli_apps
          FROM machines ORDER BY name, id",
     )?;
     let machines = statement
@@ -147,6 +149,7 @@ pub fn machines(conn: &Connection) -> Result<Vec<rows::Machine>> {
                 families: row.get(5)?,
                 version: row.get(6)?,
                 last_seen: row.get(7)?,
+                cli_apps: row.get(8)?,
             })
         })?
         .collect::<std::result::Result<_, _>>()?;
@@ -438,16 +441,20 @@ mod tests {
                 worker("local_a", "working", Some("Tq44s.1")),
                 worker("local_b", "idle", None),
             ],
+            cli_apps: vec!["codex".into()],
             families: None,
         };
         heartbeat(&mut conn, &beat, clock.now()).unwrap();
         assert_eq!(workers(&conn, "m-7f3a").unwrap().len(), 2);
+        assert_eq!(machines(&conn).unwrap()[0].cli_apps, r#"["codex"]"#);
         clock.advance(30.0);
         beat.workers = vec![worker("local_b", "stalled", None)];
+        beat.cli_apps.clear();
         heartbeat(&mut conn, &beat, clock.now()).unwrap();
         let now = workers(&conn, "m-7f3a").unwrap();
         assert_eq!(now.len(), 1);
         assert_eq!(now[0].state, "stalled");
+        assert_eq!(machines(&conn).unwrap()[0].cli_apps, "[]");
         assert_eq!(
             machines(&conn).unwrap()[0].last_seen,
             "2026-11-17T14:00:30.000Z"
@@ -465,6 +472,7 @@ mod tests {
             machine: "m-7f3a".parse().unwrap(),
             version: "d97ed0e".into(),
             workers: vec![],
+            cli_apps: vec![],
             families: Some(vec!["unit".to_owned(), "platform".to_owned()]),
         };
         heartbeat(&mut conn, &beat, clock.now()).unwrap();
@@ -482,6 +490,7 @@ mod tests {
             machine: "m-unknown".parse().unwrap(),
             version: "x".into(),
             workers: vec![],
+            cli_apps: vec![],
             families: None,
         };
         assert!(heartbeat(&mut conn, &beat, clock().now()).is_err());
@@ -559,6 +568,7 @@ mod tests {
             machine: "m-7f3a".parse().unwrap(),
             version: "d97ed0e".into(),
             workers: vec![running, worker("local_2", "idle", None)],
+            cli_apps: vec![],
             families: None,
         };
         heartbeat(&mut conn, &beat, clock.now()).unwrap();

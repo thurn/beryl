@@ -93,6 +93,9 @@ pub struct Heartbeat {
     pub machine: MachineId,
     pub version: String,
     pub workers: Vec<WorkerState>,
+    /// Apps the daemon dispatches in CLI mode, even when they offer no slots.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cli_apps: Vec<String>,
     /// The check families the machine's `ignite.toml` lists for it now, empty for every
     /// family, which replace the list it registered with. `None` from a daemon that predates
     /// the field, which leaves the list the hub holds.

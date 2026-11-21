@@ -30,7 +30,7 @@ fn page(conn: &Connection, path: &str) -> String {
     body
 }
 
-/// Two machines: `jarvis` (macOS) is reporting with an unpaused dispatcher and two workers;
+/// `jarvis` (macOS) is reporting with an unpaused dispatcher and three workers;
 /// `cygnus` (Windows) reports, but its pool is paused. `multivac` has no dispatcher.
 fn seeded() -> Connection {
     let conn = hub::open_in_memory().unwrap();
@@ -40,7 +40,7 @@ fn seeded() -> Connection {
 
 fn seed(conn: &Connection) {
     conn.execute_batch(
-        "INSERT INTO machines VALUES
+        "INSERT INTO machines (id, name, os, cores, memory_mb, families, version, last_seen) VALUES
            ('m-j', 'jarvis', 'macos', 18, 65536, '[]', 'abc1234', '2026-11-17T11:59:30.000Z'),
            ('m-c', 'cygnus', 'windows', 16, 32768, '[]', 'abc1234', '2026-11-17T11:59:00.000Z'),
            ('m-m', 'multivac', 'macos', 12, 32768, '[]', 'abc1234', '2026-11-17T11:58:00.000Z');
@@ -194,6 +194,44 @@ fn the_first_line_lists_what_needs_a_person() {
     assert!(first.contains("The regression in kernel-test"));
     assert!(first.contains("No machine can run"));
     assert!(first.contains("plan9/claude"));
+}
+
+#[test]
+fn a_cli_pool_needs_no_desktop_dispatcher_even_when_it_has_no_workers() {
+    let mut conn = seeded();
+    let now = Timestamp::parse(NOW).unwrap();
+    let mut beat = ignite_core::protocol::hub::Heartbeat {
+        machine: "m-m".parse().unwrap(),
+        version: "abc1234".to_owned(),
+        workers: Vec::new(),
+        cli_apps: vec!["codex".to_owned()],
+        families: None,
+    };
+    hub::fleet::heartbeat(&mut conn, &beat, now).unwrap();
+
+    let pool = |conn: &Connection| {
+        let body = page(conn, "/pool");
+        let machine = &body[body.find(">multivac").unwrap()..];
+        machine[..machine.find("</section>").unwrap()].to_owned()
+    };
+    let body = page(&conn, "/");
+    assert!(!body.contains("multivac has no dispatcher"));
+    assert!(body.contains("cygnus's pool is paused"));
+    assert!(pool(&conn).contains("codex CLI"));
+    assert!(!pool(&conn).contains("No dispatcher"));
+
+    conn.execute("INSERT INTO pauses (machine, at) VALUES ('m-m', ?1)", [NOW])
+        .unwrap();
+    assert!(page(&conn, "/").contains("multivac's pool is paused"));
+    assert!(pool(&conn).contains("codex CLI paused"));
+
+    hub::fleet::heartbeat(&mut conn, &beat, now.plus_seconds(-601.0)).unwrap();
+    assert!(page(&conn, "/").contains("multivac has not reported"));
+
+    beat.cli_apps.clear();
+    hub::fleet::heartbeat(&mut conn, &beat, now).unwrap();
+    assert!(page(&conn, "/").contains("multivac has no dispatcher"));
+    assert!(pool(&conn).contains("No dispatcher"));
 }
 
 #[test]

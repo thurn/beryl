@@ -125,38 +125,46 @@ fn person_items(conn: &Connection, root: &str) -> Result<Vec<(Tone, String)>, Re
 /// A machine that stopped reporting, has no dispatcher, or has paused its pool.
 fn machine_items(conn: &Connection, now: Timestamp) -> Result<Vec<(Tone, String)>, ReadError> {
     let mut found = Vec::new();
-    let mut machines =
-        conn.prepare("SELECT id, name, os, last_seen FROM machines ORDER BY name")?;
+    let mut machines = conn.prepare(
+        "SELECT id, name, last_seen, json_array_length(cli_apps) > 0,
+                EXISTS (SELECT 1 FROM pauses WHERE machine = machines.id)
+         FROM machines ORDER BY name",
+    )?;
     let machines = machines
         .query_map([], |row| {
             Ok((
                 row.get::<_, String>(0)?,
                 row.get::<_, String>(1)?,
                 row.get::<_, String>(2)?,
-                row.get::<_, String>(3)?,
+                row.get::<_, bool>(3)?,
+                row.get::<_, bool>(4)?,
             ))
         })?
         .collect::<Result<Vec<_>, _>>()?;
-    let mut dispatchers =
-        conn.prepare("SELECT state FROM workers WHERE machine = ?1 AND role = 'dispatcher'")?;
-    for (id, name, _, last_seen) in &machines {
+    let mut dispatchers = conn.prepare(
+        "SELECT w.state FROM workers w JOIN machines m ON m.id = w.machine
+         WHERE w.machine = ?1 AND w.role = 'dispatcher'
+           AND w.app NOT IN (SELECT value FROM json_each(m.cli_apps))",
+    )?;
+    for (id, name, last_seen, has_cli, paused) in machines {
         let states = dispatchers
-            .query_map([id], |row| row.get::<_, String>(0))?
+            .query_map([&id], |row| row.get::<_, String>(0))?
             .collect::<Result<Vec<_>, _>>()?;
-        let silent = seconds_since(now, Some(last_seen)).is_none_or(|s| s > MACHINE_SILENT_SECONDS);
+        let silent =
+            seconds_since(now, Some(&last_seen)).is_none_or(|s| s > MACHINE_SILENT_SECONDS);
         if silent {
             found.push((
                 Tone::Red,
                 format!(
                     "{} has not reported for {}",
-                    esc(name),
-                    age(now, Some(last_seen))
+                    esc(&name),
+                    age(now, Some(&last_seen))
                 ),
             ));
-        } else if states.iter().all(|state| state == "down") {
-            found.push((Tone::Red, format!("{} has no dispatcher", esc(name))));
-        } else if states.iter().any(|state| state == "paused") {
-            found.push((Tone::Amber, format!("{}'s pool is paused", esc(name))));
+        } else if !has_cli && states.iter().all(|state| state == "down") {
+            found.push((Tone::Red, format!("{} has no dispatcher", esc(&name))));
+        } else if paused || states.iter().any(|state| state == "paused") {
+            found.push((Tone::Amber, format!("{}'s pool is paused", esc(&name))));
         }
     }
 

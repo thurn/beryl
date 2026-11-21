@@ -80,6 +80,7 @@ crate::tables! {
         families: String,
         version: String,
         last_seen: String,
+        cli_apps: String,
     }
 
     Worker = "workers" {
