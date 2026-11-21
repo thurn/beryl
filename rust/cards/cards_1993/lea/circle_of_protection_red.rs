@@ -104,5 +104,43 @@ pub mod scenarios {
                 ME.picks(Card::BloodMoon),
                 ME.tapped(Card::Plains, 1),
             ]),
+        // Snapcaster Mage's trigger names the Bolt while it's still a card in the graveyard.
+        Scenario::new("Circle of Protection: Red can choose a Bolt referred to by a trigger")
+            .interaction(&[BOLT, Card::SnapcasterMage])
+            .at(2, P1, TurnStep::PrecombatMain)
+            .battlefield(P0, &[COP, Card::Plains])
+            .battlefield(P1, &[GIANT, Card::Island, Card::Island])
+            .hand(P1, &[Card::SnapcasterMage])
+            .graveyard(P1, &[BOLT])
+            .actions(&[
+                THEM.casts(Card::SnapcasterMage),
+                Resolve,
+                THEM.passes(),
+                ME.activates(COP, 0),
+                ME.deciding(DecisionKind::ChooseObject, 2),
+                ME.picks(BOLT),
+                Resolve,
+                THEM.has(Zone::Graveyard, BOLT, 1),
+            ]),
+        // Choose the Goblin while it's a spell. It can attack that turn because it has haste.
+        Scenario::new("Circle of Protection: Red shields against the permanent a spell becomes")
+            .interaction(&[Card::RagingGoblin])
+            .at(2, P1, TurnStep::PrecombatMain)
+            .battlefield(P0, &[COP, Card::Plains])
+            .battlefield(P1, &[GIANT, Card::Mountain])
+            .hand(P1, &[Card::RagingGoblin])
+            .actions(&[
+                THEM.casts(Card::RagingGoblin),
+                ME.activates(COP, 0),
+                ME.deciding(DecisionKind::ChooseObject, 2),
+                ME.picks(Card::RagingGoblin),
+                Resolve,
+                advance_to(2, TurnStep::BeginningOfCombat),
+                THEM.passes(),
+                THEM.attacks_with(Card::RagingGoblin),
+                THEM.done_attacking(),
+                advance_to(2, TurnStep::EndOfCombat),
+                ME.life(20),
+            ]),
     ];
 }

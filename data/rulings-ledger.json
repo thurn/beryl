@@ -184,7 +184,10 @@
     {
       "published_at": "2004-10-04",
       "hash": "c066d7fe22be",
-      "untestable": "The Bolt and Blood Moon scenarios cover spells and permanents. by-ptc7.2.11 tracks sources referred to on the stack and shields on spells that become permanents."
+      "scenario": [
+        "Circle of Protection: Red can choose a Bolt referred to by a trigger",
+        "Circle of Protection: Red shields against the permanent a spell becomes"
+      ]
     }
   ],
   "Containment Priest": [

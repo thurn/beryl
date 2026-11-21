@@ -513,7 +513,7 @@ fn enter_battlefield<L: Layout>(
     sink: &mut Sink<L>,
     entry: &StackEntry<L>,
 ) -> Result<(), Full> {
-    let slot = entry.object().expect("a spell's card").slot;
+    let spell = entry.spell().expect("a spell's card");
     let face = t.def(entry.card()).face(entry.face());
     let mut how = Entry {
         controller: Some(entry.controller()),
@@ -543,9 +543,13 @@ fn enter_battlefield<L: Layout>(
         s,
         t,
         sink,
-        Bitboard::single(slot),
+        Bitboard::single(spell.slot),
         Zone::Battlefield,
         Reason::Resolve,
         how,
-    )
+    )?;
+    if s.has_prevention_shields() {
+        s.carry_spell_shields(spell);
+    }
+    Ok(())
 }

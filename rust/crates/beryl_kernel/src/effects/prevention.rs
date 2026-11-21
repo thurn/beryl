@@ -43,9 +43,8 @@ pub struct Shield<L: Layout = Small> {
 /// [CR 609.7a]: https://yawgatog.com/resources/magic-rules/#R6097a
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ChosenSource<L: Layout = Small> {
-    /// The source as it was chosen. Once it has changed zones it is a new object
-    /// (see [CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)), which the shield
-    /// does not prevent damage from.
+    /// The source as it was chosen, or the permanent it became if chosen as a permanent spell
+    /// ([`State::carry_spell_shields`]).
     pub object: ObjectRef<L>,
     /// The face of the shield's card, and its ability (none for the face's spell), that made
     /// the shield: the filter it holds is what the source must still pass as it would deal
@@ -107,6 +106,45 @@ pub struct ShieldAt<L: Layout = Small> {
 }
 
 impl<L: Layout> State<L> {
+    /// The objects named by waiting replacement and prevention effects.
+    pub fn replacement_references(&self) -> impl Iterator<Item = ObjectRef<L>> + '_ {
+        self.effects
+            .of(Kinds::MOVE | Kinds::PREVENTION)
+            .iter()
+            .filter_map(|effect| {
+                if let Payload::Move(_) = effect.payload {
+                    effect.affected.as_object()
+                } else {
+                    effect.chosen_shield_source()
+                }
+            })
+    }
+
+    /// Changes the source of each shield that named `spell` if it became a permanent.
+    /// See [CR 400.7c]: "Prevention effects that apply to damage from a permanent spell on the
+    /// stack continue to apply to damage from the permanent that spell becomes."
+    ///
+    /// [CR 400.7c]: https://yawgatog.com/resources/magic-rules/#R4007c
+    #[cold]
+    #[inline(never)]
+    pub fn carry_spell_shields(&mut self, spell: ObjectRef<L>) {
+        let permanent = self.object_ref(spell.slot);
+        if spell.incarnation.checked_add(1) != Some(permanent.incarnation)
+            || self.permanent(permanent).is_none()
+        {
+            return;
+        }
+        for effect in self.effects.entries.as_mut_slice() {
+            if let Payload::Prevent(Shield {
+                from: Some(source), ..
+            }) = &mut effect.payload
+                && source.object == spell
+            {
+                source.object = permanent;
+            }
+        }
+    }
+
     /// Whether a prevention shield is on any player or permanent: one AND, which is all that
     /// damage in a game with no shield pays for them.
     #[inline]
@@ -169,5 +207,15 @@ impl<L: Layout> State<L> {
         });
         self.settle_ended(done);
         prevented
+    }
+}
+
+impl<L: Layout> ContinuousEffect<L> {
+    pub(super) fn chosen_shield_source(&self) -> Option<ObjectRef<L>> {
+        if let Payload::Prevent(shield) = self.payload {
+            shield.from.map(|chosen| chosen.object)
+        } else {
+            None
+        }
     }
 }

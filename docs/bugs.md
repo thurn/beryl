@@ -6,6 +6,15 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **Circle of Protection: Red skipped Lightning Bolt in a graveyard while
+  Snapcaster Mage's trigger targeted it.** The choice looked only at permanents
+  and spells, and a shield for a permanent spell lost track of its source as the
+  spell resolved. The Circle now offers objects referred to by pending spells,
+  abilities and effects when those references still name the current object. A
+  shield follows its chosen permanent spell onto the battlefield. The Circle's
+  Snapcaster Mage and Raging Goblin scenarios check the offered sources and the
+  damage prevented after the spell resolves.
+
 - **A spell could not escape using the card sacrificed or discarded to cast
   it.** The cast check counted graveyard cards before paying any costs. The
   casting steps now pay sacrifices and discards first and check what actually

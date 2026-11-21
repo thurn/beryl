@@ -518,18 +518,18 @@ impl<L: Layout> StackEntry<L> {
         }
     }
 
-    /// The slots it names ([`State::named`]): its spell's card or its ability's source,
-    /// its targets, and the object a triggered ability triggered on.
+    /// Its spell's card or ability's source, its object targets, and the object it triggered on.
     #[inline]
-    fn names(&self) -> Bitboard<L::Slot> {
+    pub fn object_references(&self) -> impl Iterator<Item = ObjectRef<L>> + '_ {
         let objects = [self.object(), self.info().and_then(|info| info.object)];
         let targets = self.targets.iter().filter_map(|target| target.as_object());
-        objects
-            .into_iter()
-            .flatten()
-            .chain(targets)
-            .map(|r| r.slot)
-            .collect()
+        objects.into_iter().flatten().chain(targets)
+    }
+
+    /// The slots it names ([`State::named`]).
+    #[inline]
+    fn names(&self) -> Bitboard<L::Slot> {
+        self.object_references().map(|r| r.slot).collect()
     }
 }
 
@@ -553,11 +553,16 @@ pub struct PendingTrigger<L: Layout = Small> {
 }
 
 impl<L: Layout> PendingTrigger<L> {
+    /// Its source and the object its event names.
+    #[inline]
+    pub fn object_references(&self) -> impl Iterator<Item = ObjectRef<L>> {
+        [self.of.source, self.info.object].into_iter().flatten()
+    }
+
     /// The slots it names ([`State::named`]): its source and the object it triggered on.
     #[inline]
     fn names(&self) -> Bitboard<L::Slot> {
-        let objects = [self.of.source, self.info.object].into_iter().flatten();
-        objects.map(|r| r.slot).collect()
+        self.object_references().map(|r| r.slot).collect()
     }
 }
 

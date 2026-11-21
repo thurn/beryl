@@ -37,11 +37,15 @@ impl<L: Layout> Store<L> for Effects<L> {
         objects | self.sets.all()
     }
 
-    /// None: an effect is about what it affects, alone or as a member of a set, and keeps
-    /// the card it came from and not that card's object ([`ContinuousEffect::source`]).
+    /// Sources chosen for prevention shields. A shield distinguishes its chosen object from
+    /// an otherwise interchangeable object, even when both have the same characteristics.
     #[inline]
     fn names(&self) -> Bitboard<L::Slot> {
-        Bitboard::EMPTY
+        self.of(Kinds::PREVENTION)
+            .iter()
+            .filter_map(ContinuousEffect::chosen_shield_source)
+            .map(|source| source.slot)
+            .collect()
     }
 
     fn forget(&mut self, slot: L::Slot) -> Ended {

@@ -14,9 +14,9 @@ use crate::ids::Seat;
 use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
 use crate::state::{
-    ChosenSource, Continuous, Duration, ObjectRef, Shield, State, Subject, ZoneKey,
+    ChosenSource, Continuous, Duration, ObjectRef, PendingTrigger, Shield, StackEntry, Subject,
+    ZoneKey,
 };
-use crate::table::GameTable;
 use crate::{choices, continuous, replace, rule_change};
 
 /// Deals `amount` damage from `source` to a player or a permanent, combat damage with
@@ -169,10 +169,9 @@ pub(crate) fn instruction<L: Layout>(
 /// of the recipients until end of turn, players in turn order and then permanents in the
 /// order they entered the battlefield ([CR 615.3]): "Such effects last until they're used up
 /// or their duration has expired." For "a [filter] source of your choice" the controller
-/// chooses the source first, among the permanents and the spells on the stack the filter
-/// accepts ([CR 609.7a]): "The source is chosen when the effect is created." With none to
-/// choose there is nothing for a shield to prevent damage from, and none begins. The outcome
-/// is the permanents shielded.
+/// chooses the source first, among the eligible objects the filter accepts ([CR 609.7a]):
+/// "The source is chosen when the effect is created." With none to choose, no shield begins.
+/// The outcome is the permanents shielded.
 ///
 /// [CR 615.3]: https://yawgatog.com/resources/magic-rules/#R6153
 /// [CR 609.7a]: https://yawgatog.com/resources/magic-rules/#R6097a
@@ -185,15 +184,13 @@ pub(crate) fn prevent_instruction<L: Layout>(
     let chosen = match from {
         None => None,
         Some(filter) => {
-            let controller = run.resolution().controller();
             let (game, resolution) = run.resolving();
+            let controller = resolution.controller();
             let words = resolution.words(game);
-            let game = run.game();
-            let candidates = sources(game.state(), game.table(), filter, controller, &words);
+            let candidates = sources(game, &resolution.entry, filter, controller, &words);
             if candidates.is_empty() {
                 return Ok(Outcome::NOTHING);
             }
-            let (game, resolution) = run.resolving();
             let prompt = Prompt::new(Purpose::Choose);
             let slot = choices::pick(game, resolution, controller, candidates, prompt)?;
             Some(ChosenSource {
@@ -234,21 +231,38 @@ pub(crate) fn prevent_instruction<L: Layout>(
     Ok(Outcome::acted_on(shielded.slots()))
 }
 
-/// The sources of damage `filter` accepts, read for `you` through `words`, that a player may
-/// choose
+/// The eligible damage sources `filter` accepts, read for `you` through `words`
 /// ([CR 609.7a]): "they may choose a permanent; a spell on the stack (including a permanent
-/// spell)". An object an ability on the stack names is a permanent or has left its zone, and
-/// a source that has left its zone is a new object (CR 400.7) that its damage does not come
-/// from, so these are all a shield can be chosen for.
+/// spell); any object referred to by an object on the stack, by a replacement or prevention
+/// effect that's waiting to apply, or by a delayed triggered ability that's waiting to trigger".
+/// Include the resolving entry, which the engine takes off its stack queue to run its body.
+/// A slot-based choice can show only a current object. A stale reference never nominates the
+/// new object in its slot (see CR 400.7).
 ///
 /// [CR 609.7a]: https://yawgatog.com/resources/magic-rules/#R6097a
 fn sources<L: Layout>(
-    s: &State<L>,
-    t: &GameTable,
+    game: &Game<'_, L>,
+    resolving: &StackEntry<L>,
     filter: &Filter,
     you: Seat,
     words: &Words,
 ) -> Bitboard<L::Slot> {
-    let permanents: Bitboard<L::Slot> = s.battlefield().iter().copied().collect();
-    (permanents | s.zone(ZoneKey::Stack)).filter(|slot| filter.matches(s, t, slot, you, words))
+    let s = game.state();
+    let mut candidates: Bitboard<L::Slot> = s.battlefield().iter().copied().collect();
+    candidates |= s.zone(ZoneKey::Stack);
+    let referred = s
+        .stack()
+        .iter()
+        .chain(std::iter::once(resolving))
+        .flat_map(StackEntry::object_references)
+        .chain(
+            s.delayed()
+                .iter()
+                .flat_map(PendingTrigger::object_references),
+        )
+        .chain(s.replacement_references());
+    for object in referred.filter(|&object| s.is_current(object)) {
+        candidates.insert(object.slot);
+    }
+    filter.select(s, game.table(), candidates, you, words)
 }
