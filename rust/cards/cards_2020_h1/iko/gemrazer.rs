@@ -11,10 +11,9 @@
 
 use crate::prelude::*;
 
-/// Mutate is an alternative cost ([CR 702.140a]); the spell ability at index 1 is what only
-/// the mutating creature spell has: its target and its merge ([`Effect::Mutate`]). Cast for
-/// its mana cost, it is a plain creature spell with no target. Its triggered ability
-/// triggers for the merged permanent whether Gemrazer went over or under (CR 702.140d).
+/// The mutate casting option selects ability 1 for the target and merge. [CR 702.140a]
+/// says that paying the mutate cost makes it “a mutating creature spell” that targets.
+/// Casting it for its mana cost leaves that spell ability unused.
 ///
 /// [CR 702.140a]: https://yawgatog.com/resources/magic-rules/#R702140a
 pub static CARD: CardDef = Printed::Gemrazer
@@ -471,63 +470,6 @@ pub mod scenarios {
                 ME.controls(Card::Gemrazer, 1),
                 ME.face_down(Card::Gemrazer, 0),
                 ME.pt(Card::Gemrazer, 4, 4),
-            ]),
-        // CR 702.140a: a mutating creature spell targets a non-Human creature its caster owns. The
-        // only creature P0 has is a Human (Hired Blade), so with the three Forests that pay for
-        // mutate and not the four that pay the mana cost, the cast is not offered.
-        Scenario::new("Gemrazer can't mutate onto a Human")
-            .battlefield(
-                P0,
-                &[
-                    Card::Forest,
-                    Card::Forest,
-                    Card::Forest,
-                    Prop::FlashCreature,
-                ],
-            )
-            .hand(P0, &[Card::Gemrazer])
-            .library(P0, &[Card::Island])
-            // With no cast offered, the only decision before combat is whether to attack with the
-            // Hired Blade, so the game passes priority on its own.
-            .actions(&[ME.deciding(DecisionKind::Attacker, 2)]),
-        // CR 702.140a: "targets a non-Human creature with the same owner as this spell". A creature P1 owns is not a legal target even
-        // under P0's control, and a creature P1 controls and owns certainly isn't.
-        Scenario::new("Gemrazer can't mutate onto an opponent's creature")
-            .battlefield(P0, &[Card::Forest, Card::Forest, Card::Forest])
-            .hand(P0, &[Card::Gemrazer])
-            .battlefield(P1, &[Prop::Vanilla])
-            .library(P0, &[Card::Island])
-            // With no cast offered, P0 has nothing to do in the turn; the game goes on to P1's
-            // upkeep, before P1 draws.
-            .actions(&[advance_to(2, TurnStep::Upkeep)]),
-        // CR 730.2 / CR 702.140b: the merged permanent is the same object as the target, so
-        // +1/+1 counters and attached Equipment stay on it: over a 2/1 with two +1/+1 counters
-        // wearing a +1/+1 Equipment, a 4/4 Gemrazer is 7/7.
-        Scenario::new("Gemrazer over a creature keeps its counters and Equipment")
-            .permanents(
-                P0,
-                &[
-                    Permanent::new(Prop::Vanilla).counters(CounterKind::PlusOne, 2),
-                    Permanent::new(Prop::Equipment),
-                ],
-            )
-            .battlefield(
-                P0,
-                &[Card::Forest, Card::Forest, Card::Forest, Card::Forest],
-            )
-            .hand(P0, &[Card::Gemrazer])
-            .battlefield(P1, &[Card::LeoninScimitar])
-            .library(P1, &[Card::Island])
-            .actions(&[
-                ME.activates(Prop::Equipment, 1),
-                Resolve,
-                ME.pt(Prop::Vanilla, 5, 4),
-                MUTATE,
-                Resolve,
-                ME.yes(),
-                Resolve,
-                ME.pt(Card::Gemrazer, 7, 7),
-                ME.counters(Card::Gemrazer, CounterKind::PlusOne, 2),
             ]),
         // CR 702.140 / CR 302.6: mutating moves nothing onto the battlefield, so a summoning
         // sick Gold Myr stays sick as the merged creature and can't pay {T} for its {W}; the

@@ -11,16 +11,11 @@
 use crate::prelude::*;
 use crate::tokens::TREASURE;
 
-/// The second ability is a replacement effect ([CR 614.1a]): "Effects that use the word
-/// 'instead' are replacement effects." It replaces each opponent's draws but the first one they
-/// draw in each of their draw steps ([CR 504.1]): "First, the active player draws a card." The
-/// opponent draws nothing, and the rest of what had them draw still happens. Two Hullbreachers
-/// of one player make one Treasure for one draw: once one has replaced the draw, there is no
-/// draw left for the other ([CR 614.5]).
+/// Two Hullbreachers under the same player's control create a single Treasure for one
+/// draw. Once the first replaces the draw, the event no longer matches the second.
+/// [CR 614.6] says “If an event is replaced, it never happens.”
 ///
-/// [CR 614.1a]: https://yawgatog.com/resources/magic-rules/#R6141a
-/// [CR 504.1]: https://yawgatog.com/resources/magic-rules/#R5041
-/// [CR 614.5]: https://yawgatog.com/resources/magic-rules/#R6145
+/// [CR 614.6]: https://yawgatog.com/resources/magic-rules/#R6146
 pub static CARD: CardDef = Printed::Hullbreacher
     .keywords(Keywords::FLASH)
     .abilities(&[

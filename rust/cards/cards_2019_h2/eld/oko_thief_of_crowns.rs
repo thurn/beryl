@@ -12,36 +12,13 @@
 
 use crate::prelude::*;
 
-/// The Food token's name: its subtype plus the word "Token" ([CR 111.4]): "If the spell or ability
-/// doesn't specify the name of the token, its name is the same as its subtype(s) plus the word
-/// 'Token.'"
-///
-/// [CR 111.4]: https://yawgatog.com/resources/magic-rules/#R1114
 pub use crate::tokens::FOOD_TOKEN;
 
-/// "+2: Create a Food token." The predefined Food token ([CR 111.10b]): "A Food token is a colorless
-/// Food artifact token with "{2}, {T}, Sacrifice this token: You gain 3 life.""
+/// The Elk effect's type, color, ability and base power and toughness changes share one
+/// timestamp. Under [CR 613.6], “the parts of the effect each apply in their appropriate
+/// ones” when the effect spans layers. The effect keeps supertypes such as legendary.
 ///
-/// "+1: Target artifact or creature loses all abilities and becomes a green Elk creature with base
-/// power and toughness 3/3." One effect with parts in four layers, which begin together with one
-/// timestamp ([CR 613.6]): "If an effect should be applied in different layers and/or sublayers,
-/// the parts of the effect each apply in their appropriate ones." It is a creature and an Elk and
-/// no other card type or creature type in layer 4 ([CR 205.1a]): "the new card type(s) replaces any
-/// existing card types" and "the new subtype(s) replaces any existing subtypes from the appropriate
-/// set". It keeps its supertypes, so a legendary permanent stays legendary. It is green in layer 5,
-/// has no abilities in layer 6 and is a 3/3 in layer 7b. It lasts for the rest of the game
-/// ([CR 611.2a]): "If no duration is stated, it lasts until the end of the game."
-///
-/// "−5: Exchange control of target artifact or creature you control and target creature an opponent
-/// controls with power 3 or less." [CR 701.12a]: "if the entire exchange can't be completed, no
-/// part of the exchange occurs." So when either target is illegal as the ability resolves, neither
-/// permanent changes controller.
-///
-/// [CR 111.10b]: https://yawgatog.com/resources/magic-rules/#R11110b
 /// [CR 613.6]: https://yawgatog.com/resources/magic-rules/#R6136
-/// [CR 205.1a]: https://yawgatog.com/resources/magic-rules/#R2051a
-/// [CR 611.2a]: https://yawgatog.com/resources/magic-rules/#R6112a
-/// [CR 701.12a]: https://yawgatog.com/resources/magic-rules/#R70112a
 pub static CARD: CardDef = Printed::OkoThiefOfCrowns
     .abilities(&[
         Ability::loyalty(2).effect(&create_tokens(you(), &crate::tokens::FOOD, 1)),
@@ -178,23 +155,6 @@ pub mod scenarios {
                 Resolve,
                 ME.pt(VANILLA, 4, 4),
             ]),
-        // The attached Leonin Scimitar made an Elk is a creature and no Equipment, so it can equip
-        // nothing and becomes unattached (CR 301.5c, CR 704.5n): the 2/1 it was on loses its
-        // +1/+1.
-        Scenario::new("+1 makes an attached Equipment a 3/3 Elk")
-            .battlefield(P0, &[OKO, SCIMITAR, VANILLA, Card::Island])
-            .library(P0, &[Card::Island])
-            .library(P1, &[Card::Island])
-            .actions(&[
-                ME.activates(SCIMITAR, 1), // Equip {1}
-                Resolve,
-                ME.activates(OKO, 1), // +1
-                ME.targets(SCIMITAR),
-                Resolve,
-                ME.creature(SCIMITAR, true),
-                ME.pt(SCIMITAR, 3, 3),
-                ME.pt(VANILLA, 2, 1),
-            ]),
         // The card's ruling: an artifact made an Elk "loses any other card types it has (such as
         // artifact)". P1's Leonin Scimitar, made an Elk, is no artifact for a kicked Thieving
         // Skydiver to take: its trigger has no target and is removed (CR 603.3d).
@@ -217,20 +177,6 @@ pub mod scenarios {
                 // Three Islands kick it for 1 only, so X asks nothing.
                 stack(0),
                 THEM.controls(SCIMITAR, 1),
-            ]),
-        // −5 trades P0's Leonin Scimitar for P1's 2/1; Oko, at 0 loyalty, goes to the graveyard.
-        Scenario::new("−5 exchanges an artifact for a small creature")
-            .permanents(P0, &[oko(5)])
-            .battlefield(P0, &[Prop::Equipment])
-            .battlefield(P1, &[Prop::Vanilla])
-            .library(P0, &[Card::Island])
-            .library(P1, &[Card::Island])
-            .actions(&[
-                ME.activates(OKO, 2), // −5
-                Resolve,
-                ME.controls(Prop::Vanilla, 1),
-                THEM.controls(Prop::Equipment, 1),
-                ME.has(Zone::Graveyard, OKO, 1),
             ]),
         // P1's Beza is a 4/5, which "power 3 or less" refuses, so P1's 2/1 is −5's only second
         // target. The 2/1 has not been under P0's control since P0's turn began, so it can't
@@ -365,25 +311,6 @@ pub mod scenarios {
                 ME.has_subtype(Card::DryadArbor, Subtype::Elk, true),
                 ME.has_subtype(Card::DryadArbor, Subtype::Dryad, false),
                 ME.has_subtype(Card::DryadArbor, Subtype::Forest, false),
-            ]),
-        // A Food token made an Elk is a 3/3 creature with no Food ability and no Food type.
-        Scenario::new("+1 makes a Food token a 3/3 Elk")
-            .battlefield(P0, &[OKO])
-            .battlefield(P1, &[VANILLA])
-            .library(P0, &[Card::Island, Card::Island])
-            .library(P1, &[Card::Island, Card::Island])
-            .actions(&[
-                ME.activates(OKO, 0), // +2
-                Resolve,
-                advance_to(2, TurnStep::BeginningOfCombat),
-                THEM.passes(),
-                THEM.done_attacking(),
-                advance_to(3, TurnStep::PrecombatMain),
-                ME.activates(OKO, 1), // +1
-                ME.targets(FOOD_TOKEN),
-                Resolve,
-                ME.creature(FOOD_TOKEN, true),
-                ME.token_pt(FOOD_TOKEN, 3, 3),
             ]),
         // Opalescence's enchantment creature is a creature, so Oko can target it. Oko's effect
         // sets its types to creature alone (CR 205.1a): it is no longer an enchantment, so

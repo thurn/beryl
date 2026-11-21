@@ -10,31 +10,11 @@
 
 use crate::prelude::*;
 
-/// The instructions in order ([CR 608.2c]): "The controller of the spell or ability follows its
-/// instructions in the order written."
+/// The life-total restriction also prevents paying life, even for a cost such as Force of
+/// Will's alternative cost. Under [CR 119.8], “a cost that involves having that player pay
+/// life can't be paid.”
 ///
-/// "Your life total can't change" and "you gain protection from everything" are rule changes on
-/// the controller ([CR 613.11]: "Some continuous effects affect game rules rather than
-/// objects."), lasting until their next turn begins. While the first is in force they neither
-/// gain nor lose life, and can't pay life ([CR 119.8]): "a cost that involves having that player
-/// pay life can't be paid." The second is [CR 702.16j]: "A permanent or player with protection
-/// from everything ... can't be targeted by spells or abilities and can't be enchanted by Auras.
-/// ... All damage that would be dealt to such a permanent or player is prevented."
-///
-/// "All permanents you control phase out" ([CR 702.26b]): each is treated as though it does not
-/// exist until its controller's next untap step ([CR 502.1]), and what is attached to it phases
-/// out with it ([CR 702.26g]).
-///
-/// Exiled last, Teferi's Protection is not put into a graveyard as the final part of its
-/// resolution: it is no longer on the stack.
-///
-/// [CR 608.2c]: https://yawgatog.com/resources/magic-rules/#R6082c
-/// [CR 613.11]: https://yawgatog.com/resources/magic-rules/#R61311
 /// [CR 119.8]: https://yawgatog.com/resources/magic-rules/#R1198
-/// [CR 702.16j]: https://yawgatog.com/resources/magic-rules/#R70216j
-/// [CR 702.26b]: https://yawgatog.com/resources/magic-rules/#R70226b
-/// [CR 502.1]: https://yawgatog.com/resources/magic-rules/#R5021
-/// [CR 702.26g]: https://yawgatog.com/resources/magic-rules/#R70226g
 pub static CARD: CardDef = Printed::TeferisProtection
     .abilities(&[Ability::spell().effect(&sequence(&[
         change_rule(

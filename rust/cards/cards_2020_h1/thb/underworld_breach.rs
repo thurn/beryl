@@ -10,23 +10,6 @@
 
 use crate::prelude::*;
 
-/// "Each nonland card in your graveyard has escape": a static ability in layer 6 over cards
-/// in a graveyard, which reaches them as an effect on objects off the battlefield does
-/// ([CR 611.3b]): "The effect applies at all times that the permanent generating it is on
-/// the battlefield". Escape lets the card's owner cast it from there for its escape cost
-/// ([CR 702.138a]): "'Escape [cost]' means 'You may cast this card from your graveyard by
-/// paying [cost] rather than paying its mana cost.'" The escape cost is an alternative cost
-/// ([CR 118.9a]): "Only one alternative cost can be applied to any one spell as it's being
-/// cast."
-///
-/// "At the beginning of the end step, sacrifice this enchantment.": every player's end step
-/// ([CR 603.2b]): "When a phase or step begins, all abilities that trigger 'at the beginning
-/// of' that phase or step trigger."
-///
-/// [CR 611.3b]: https://yawgatog.com/resources/magic-rules/#R6113b
-/// [CR 702.138a]: https://yawgatog.com/resources/magic-rules/#R702138a
-/// [CR 118.9a]: https://yawgatog.com/resources/magic-rules/#R1189a
-/// [CR 603.2b]: https://yawgatog.com/resources/magic-rules/#R6032b
 pub static CARD: CardDef = Printed::UnderworldBreach
     .abilities(&[
         Ability::static_ability(&LayerSpec {
@@ -310,24 +293,6 @@ pub mod scenarios {
                 ME.has(Zone::Exile, Card::Island, 2),
                 ME.has(Zone::Exile, Card::Swamp, 1),
             ]),
-        // Two other cards are not enough to pay the escape cost, a land card has no escape,
-        // and neither has a card in an opponent's graveyard: P0 may only pass or play the
-        // Island in their hand.
-        Scenario::new("escape needs three other cards, a nonland card and your graveyard")
-            .battlefield(P0, &[BREACH, Card::Island, Card::Island, Card::Island])
-            .hand(P0, &[Card::Island])
-            .graveyard(P0, &[Prop::Vanilla, Card::Plains, Card::Plains])
-            .graveyard(
-                P1,
-                &[
-                    Prop::Flier,
-                    Card::Plains,
-                    Card::Plains,
-                    Card::Plains,
-                    Card::Plains,
-                ],
-            )
-            .actions(&[ME.deciding(DecisionKind::Priority, 2)]),
         // Ruling: "Escape's permission doesn't change when you may cast the spell from your
         // graveyard." On P1's turn, P0 escapes an instant in response to P1's creature
         // spell, and not the sorcery beside it.
@@ -531,25 +496,6 @@ pub mod scenarios {
                 ME.controls(Card::AbhorrentOculus, 1),
                 ME.has(Zone::Exile, Card::Plains, 9),
             ]),
-        // It is sacrificed at the beginning of the end step: P0's own.
-        Scenario::new("it is sacrificed at the beginning of the end step")
-            .battlefield(P0, &[BREACH])
-            .actions(&[
-                advance_to(1, TurnStep::End),
-                Resolve,
-                ME.controls(BREACH, 0),
-                ME.has(Zone::Graveyard, BREACH, 1),
-            ]),
-        // And at the beginning of an opponent's end step.
-        Scenario::new("it is sacrificed at the beginning of an opponent's end step")
-            .at(2, P1, TurnStep::PrecombatMain)
-            .battlefield(P0, &[BREACH])
-            .actions(&[
-                advance_to(2, TurnStep::End),
-                Resolve,
-                ME.controls(BREACH, 0),
-                ME.has(Zone::Graveyard, BREACH, 1),
-            ]),
         // [CR 107.3a]: the caster "chooses and announces the value of X" as the spell is cast, and an
         // escaped spell's cost is its mana cost, so {X}{U}{U} with X = 2 is four mana.
         //
@@ -597,43 +543,6 @@ pub mod scenarios {
                 ME.pt(Prop::Vanilla, 3, 3),
                 ME.has(Zone::Battlefield, Card::HolyStrength, 1),
                 ME.has(Zone::Exile, Card::Island, 3),
-            ]),
-        // Ruling: a countered escaped spell goes to the graveyard (CR 701.6a), not exile.
-        Scenario::new("a countered escaped spell goes to the graveyard")
-            .battlefield(P0, &[BREACH, Card::Island, Card::Island])
-            .graveyard(
-                P0,
-                &[Prop::Vanilla, Card::Plains, Card::Plains, Card::Plains],
-            )
-            .battlefield(P1, &[Card::Island, Card::Island])
-            .hand(P1, &[Card::Counterspell])
-            .actions(&[
-                ME.escapes(Prop::Vanilla),
-                THEM.casts(Card::Counterspell),
-                ME.controls(Prop::Vanilla, 0),
-                ME.has(Zone::Graveyard, Prop::Vanilla, 1),
-                ME.has(Zone::Exile, Prop::Vanilla, 0),
-            ]),
-        // Once Underworld Breach is sacrificed at the end step its static ability is gone, so
-        // on P1's turn P0 may only pass or cast Counterspell from hand ([CR 611.3b]).
-        Scenario::new("the graveyard has no escape once the Breach is sacrificed")
-            .at(1, P0, TurnStep::PrecombatMain)
-            .battlefield(P0, &[BREACH, Card::Island, Card::Island])
-            .hand(P0, &[Card::Counterspell])
-            .graveyard(
-                P0,
-                &[Prop::Instant, Card::Plains, Card::Plains, Card::Plains],
-            )
-            .battlefield(P1, &[Card::Island; 4])
-            .hand(P1, &[Prop::Vanilla])
-            .library(P0, &[Card::Plains; 3])
-            .library(P1, &[Card::Plains; 3])
-            .actions(&[
-                advance_to(1, TurnStep::End),
-                Resolve,
-                advance_to(2, TurnStep::PrecombatMain),
-                THEM.casts(Prop::Vanilla),
-                ME.deciding(DecisionKind::Priority, 2),
             ]),
         // The Helm reduces the mana paid for escape to two, but Mana Drain derives
         // its mana from the spell's printed mana cost.

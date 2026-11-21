@@ -9,7 +9,6 @@
 
 use crate::prelude::*;
 
-/// "While your library has no cards in it", "if your library has no cards in it".
 const LIBRARY_IS_EMPTY: Condition = Condition::Compare(
     Amount::Count(&Objects::All {
         zone: Zone::Library,
@@ -19,28 +18,17 @@ const LIBRARY_IS_EMPTY: Condition = Condition::Compare(
     Amount::Fixed(0),
 );
 
-/// "You win the game".
 static YOU_WIN: Effect = win_game(you());
 
-/// "+1: Target player mills two cards. Draw a card." In order ([CR 608.2c]), so milling himself
-/// empty, Jace draws from an empty library and his controller wins instead. [CR 701.17b]: "A player
-/// can't mill a number of cards greater than the number of cards in their library."
+/// Jace can spend his last eight loyalty on the −8. The loyalty cost leaves him at zero,
+/// so [CR 704.5i] puts him “into its owner's graveyard.” The second sentence of the ability
+/// can still win before [CR 704.5b] checks whether his controller “attempted to draw a
+/// card from a library with no cards in it.”
 ///
-/// "−8: Draw seven cards. Then if your library has no cards in it, you win the game." Jace with
-/// exactly eight loyalty is gone by then (CR 704.5i), and his controller draws what is left and
-/// wins on the second sentence; the attempt to draw from the empty library loses only when
-/// state-based actions are next checked ([CR 704.5b]), by when the game is over ([CR 104.2b]): "An
-/// effect may state that a player wins the game."
-///
-/// [CR 608.2c]: https://yawgatog.com/resources/magic-rules/#R6082c
-/// [CR 701.17b]: https://yawgatog.com/resources/magic-rules/#R70117b
+/// [CR 704.5i]: https://yawgatog.com/resources/magic-rules/#R7045i
 /// [CR 704.5b]: https://yawgatog.com/resources/magic-rules/#R7045b
-/// [CR 104.2b]: https://yawgatog.com/resources/magic-rules/#R1042b
 pub static CARD: CardDef = Printed::JaceWielderOfMysteries
     .abilities(&[
-        // A replacement effect ([CR 614.1a](https://yawgatog.com/resources/magic-rules/#R6141a)):
-        // "Effects that use the word 'instead' are replacement effects." The draw
-        // machinery offers it each draw, an empty library or not (CR 614.11).
         Ability::replacing(&Replacement::draws(Players::You))
             .only_if(&LIBRARY_IS_EMPTY)
             .effect(&YOU_WIN),

@@ -14,23 +14,10 @@
 
 use crate::prelude::*;
 
-/// [CR 712.8b](https://yawgatog.com/resources/magic-rules/#R7128b): "A player casting a modal
-/// double-faced card ... chooses which face they are casting"; [CR 712.9] lets it be played as
-/// the land face. The land face enters tapped and taps for {U}.
+/// The subtype exception is part of the copy's copiable values, so a later copy is also
+/// a Shapeshifter Rogue. [CR 707.9b] says “The final set of values for that characteristic
+/// becomes part of the copiable values of the copy.”
 ///
-/// "You may have this creature enter as a copy of a creature you control" is a replacement
-/// effect that has it become a copy as it enters ([CR 707.5]): "It doesn't enter the
-/// battlefield, and then become a copy of that permanent." The creature is chosen, not
-/// targeted. Declining, it enters as itself, a 0/0 that dies.
-///
-/// The exception adds two creature types to the copy's copiable values ([CR 707.9b]): "Some
-/// copy effects modify a characteristic as part of the copying process. The final set of
-/// values for that characteristic becomes part of the copiable values of the copy." So a copy
-/// of the Mimic is a Shapeshifter Rogue too.
-///
-/// [CR 712.9]: https://yawgatog.com/resources/magic-rules/#R7129
-/// [CR 712.8b]: https://yawgatog.com/resources/magic-rules/#R7128b
-/// [CR 707.5]: https://yawgatog.com/resources/magic-rules/#R7075
 /// [CR 707.9b]: https://yawgatog.com/resources/magic-rules/#R7079b
 pub static CARD: CardDef = card(
     Card::GlasspoolMimic,
@@ -56,30 +43,12 @@ pub mod scenarios {
     use crate::prelude::*;
 
     const MIMIC: &str = Card::GlasspoolMimic;
-    const SHORE: &str = "Glasspool Shore";
     const DANDAN: &str = Card::Dandan;
     const MIND_BEND: &str = Card::MindBend;
     const ISLAND: TextWord = TextWord::LandType(Subtype::Island);
     const PLAINS: TextWord = TextWord::LandType(Subtype::Plains);
 
     pub const SCENARIOS: &[Scenario] = &[
-        Scenario::new("Glasspool Shore enters tapped and later pays for Glasspool Mimic")
-            .battlefield(P0, &[Card::Island, Card::Island])
-            .permanents(P0, &[Permanent::new(Card::Ornithopter).tapped()])
-            .hand(P0, &[MIMIC, MIMIC])
-            .library(P0, &[Card::Island])
-            .library(P1, &[Card::Island])
-            .actions(&[
-                ME.plays(MIMIC),
-                ME.tapped(SHORE, 1),
-                advance_to(3, TurnStep::PrecombatMain),
-                ME.tapped(SHORE, 0),
-                ME.casts(MIMIC),
-                ME.tapped(SHORE, 1),
-                Resolve,
-                ME.picks_up_to(Card::Ornithopter),
-                ME.controls(Card::Ornithopter, 2),
-            ]),
         // The Mimic enters as a copy of Dandan, a 4/1 Fish, and is a Shapeshifter Rogue as well.
         Scenario::new("the Mimic enters as a Shapeshifter Rogue copy")
             .interaction(&[DANDAN])

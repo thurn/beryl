@@ -9,32 +9,17 @@
 
 use crate::prelude::*;
 
-/// Planeswalkers' loyalty abilities ([CR 606.3]): "A player may activate a loyalty ability of a
-/// permanent they control any time they have priority and the stack is empty during a main phase of
-/// their turn, but only if no player has previously activated a loyalty ability of that permanent
-/// that turn."
+/// An opponent's flash spell still has to wait for sorcery timing. [CR 101.2] says
+/// “the ‘can't’ effect takes precedence” when one effect allows what another forbids.
 ///
-/// "Each opponent can cast spells only any time they could cast a sorcery."
-///
-/// "You may cast sorcery spells as though they had flash." [CR 702.8a]: "'Flash' means 'You may
-/// play this card any time you could cast an instant.'" A change to a rule for one player
-/// ([CR 613.11]: "Some continuous effects affect game rules rather than objects.").
-///
-/// [CR 606.3]: https://yawgatog.com/resources/magic-rules/#R6063
-/// [CR 702.8a]: https://yawgatog.com/resources/magic-rules/#R7028a
-/// [CR 613.11]: https://yawgatog.com/resources/magic-rules/#R61311
+/// [CR 101.2]: https://yawgatog.com/resources/magic-rules/#R1012
 pub static CARD: CardDef = Printed::TeferiTimeRaveler
     .abilities(&[
-        // A prohibition the casting machine reads: a "can't" beats a "can"
-        // ([CR 101.2](https://yawgatog.com/resources/magic-rules/#R1012)), so even a
-        // spell with flash waits for sorcery timing.
         Ability::rule_change(&RuleChange {
             players: Players::EachOpponent,
             what: Governed::CastSpells(Filter::Any),
             when: When::OnlyAsSorcery,
         }),
-        // "+1: Until your next turn, you may cast sorcery spells as though they had
-        // flash." It ends as its controller's next turn begins.
         Ability::loyalty(1).effect(&change_rule(
             &RuleChange {
                 players: Players::You,
@@ -43,10 +28,6 @@ pub static CARD: CardDef = Printed::TeferiTimeRaveler
             },
             Duration::UntilYourNextTurn,
         )),
-        // "−3: Return up to one target artifact, creature, or enchantment to its owner's
-        // hand. Draw a card." With no target chosen it still draws; with its one target
-        // illegal, it doesn't resolve at all
-        // ([CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)).
         Ability::loyalty(-3)
             .target(
                 &TargetSpec::permanent(Filter::Types(
