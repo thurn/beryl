@@ -28,8 +28,10 @@ use crate::routes::{Request, Response};
 enum Route {
     /// `/`.
     Home,
-    /// One of the fleet pages (`available`, `machines`, `pool`, `epics`, `landings`, `tips`, `finds`).
+    /// A page listed in the dashboard's navigation.
     Fleet(&'static str),
+    /// The old address of the Fleet page.
+    MachinesRedirect,
     /// `/pool/session/<id>`: the first address of a CLI worker's transcript, which redirects to
     /// the transcript under the session's ticket.
     PoolSession(String),
@@ -41,7 +43,7 @@ enum Route {
     Ticket(String),
 }
 
-/// The fleet page that `path` (`/machines`, with an optional trailing slash) names.
+/// The fleet page that `path` (`/fleet`, with an optional trailing slash) names.
 fn fleet_page(path: &str) -> Option<&'static str> {
     let name = path.strip_prefix('/')?;
     let name = name.strip_suffix('/').unwrap_or(name);
@@ -54,6 +56,9 @@ fn fleet_page(path: &str) -> Option<&'static str> {
 fn route(path: &str) -> Option<Route> {
     if path == "/" {
         return Some(Route::Home);
+    }
+    if matches!(path, "/machines" | "/machines/") {
+        return Some(Route::MachinesRedirect);
     }
     if let Some(page) = fleet_page(path) {
         return Some(Route::Fleet(page));
@@ -283,8 +288,8 @@ pub struct Site<'a> {
     /// HTML shown at the left of every page's header in place of the name "Ignite"; see
     /// `HubServer::wordmark`.
     pub wordmark: Option<&'a str>,
-    /// Whether ticket pages carry the controls that edit the ticket: only on the private
-    /// listener, for a request from a Tailscale user (see `crate::auth`).
+    /// Whether pages carry edit controls. Only requests from Tailscale users on the private
+    /// listener can edit (see `crate::auth`).
     pub editable: bool,
     /// Whether this is the private listener. A transcript can hold secrets, so the worker
     /// session page is served only there; the public copy answers 404 for it. Ticket images
@@ -352,10 +357,11 @@ fn serve_pages(
                 Ok(options) => page_reply(&options, if_none_match, head),
             }
         }
+        Route::MachinesRedirect => redirect("/fleet", &request.query),
         Route::Fleet(page) => {
             let built = match page {
                 available::PATH => available::options(conn, &root, &seq, now),
-                "machines" => machines::options(conn, &root, &seq, now),
+                "fleet" => machines::options(conn, &root, &seq, now, editable.then_some(project)),
                 "pool" => pool::options(conn, &root, &seq, private, now),
                 "epics" => pool::epics(conn, &root, &seq, now),
                 "landings" => landings::options(conn, &root, &seq, now),

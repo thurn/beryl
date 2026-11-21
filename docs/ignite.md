@@ -4254,7 +4254,11 @@ provider usage and holds, and the last 20 changes. Use
 state. Add `--disk-cap-gb <n>` to set its cap or `--disk-cap-gb auto` to clear
 it. Use `ignite fleet provider <name>` with `--on` or `--off`, `--share <n>`, or
 `--stop-percent <n>` to set a provider's policy. The operator or the justiciar
-makes these edits. The Fleet page will offer the same controls.
+makes these edits. The dashboard's Fleet page at `/fleet` lists each registered
+machine, its recent work and trees, and the last 20 settings changes. On the
+private dashboard through Tailscale, change a machine's state or disk cap
+directly on that page. Leave the cap empty for automatic. The public dashboard
+shows the saved settings.
 
 The hub stores settings under `fleet` in its database. On its first start
 without fleet settings, it seeds them from `ignite.toml`. Machines with a CLI
@@ -4268,7 +4272,8 @@ actor or a private dashboard request with a Tailscale login and the
 `X-Ignite-Dashboard` header. The request carries the settings and the version
 the operator read. A successful write returns the saved settings, and HTTP 409
 returns the current settings when the supplied version is stale. The CLI
-reapplies its edit to the current settings and retries once. Each saved change
+reapplies its edit to the current settings and retries once. The dashboard
+reloads with a message when another change was saved first. Each saved change
 records who made it, when, what changed and the resulting settings.
 
 Each heartbeat reply carries this machine's state and disk cap, the fleet

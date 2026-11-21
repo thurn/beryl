@@ -616,7 +616,7 @@ fn a_configured_wordmark_replaces_the_brand_and_the_home_page_has_no_crumb() {
         home.contains(&format!("href=\"/\">{wordmark}</a></nav>")),
         "{home}"
     );
-    for target in ["/TQ44S.7.24", "/machines", "/no-such-ticket"] {
+    for target in ["/TQ44S.7.24", "/fleet", "/no-such-ticket"] {
         let other = page(target);
         assert!(other.contains(wordmark), "{target}: {other}");
         assert!(!other.contains(">Ignite<"), "{target}: {other}");

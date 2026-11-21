@@ -24,7 +24,7 @@ pub const MACHINE_SILENT_SECONDS: f64 = 600.0;
 /// The fleet pages, as `(path after the project home, label)`.
 pub const PAGES: [(&str, &str); 7] = [
     ("available", "Available"),
-    ("machines", "Machines"),
+    ("fleet", "Fleet"),
     ("pool", "Pool"),
     ("epics", "Epics"),
     ("landings", "Landings"),

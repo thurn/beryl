@@ -19,12 +19,13 @@ const STYLES: [&str; 6] = [
     include_str!("../../static/css/5-edit.css"),
     include_str!("../../static/css/6-spend.css"),
 ];
-/// The scripts, served as one file: cirrus itself and its data cards, ticket editing, then the
-/// theme choice.
-const SCRIPTS: [&str; 5] = [
+/// The scripts, served as one file: Cirrus, data cards, ticket and fleet editing, session
+/// transcripts and the theme choice.
+const SCRIPTS: [&str; 6] = [
     include_str!("../../static/cirrus.js"),
     include_str!("../../static/datacard.js"),
     include_str!("../../static/edit.js"),
+    include_str!("../../static/fleet.js"),
     include_str!("../../static/session.js"),
     include_str!("../../static/theme.js"),
 ];

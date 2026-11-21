@@ -1,15 +1,42 @@
-//! The fleet pages (machines, pool, epics, landings, tips and finds) and the line at the top of
+//! The dashboard pages (fleet, pool, epics, landings, tips and finds) and the line at the top of
 //! the home page, rendered from a seeded hub database at a fixed time.
+
+use std::io::{Read, Write};
+use std::net::{SocketAddr, TcpStream};
 
 use rusqlite::Connection;
 
-use ignite_core::fleet::MachineState;
+use ignite_core::config::Config;
+use ignite_core::fleet::{FleetSettings, FleetUpdate, MachineSetting, MachineState};
 use ignite_core::time::Timestamp;
 use ignite_hub::dashboard::serve::serve;
 use ignite_hub::routes::Request;
+use ignite_hub::server::HubServer;
 use ignite_store::hub;
 
 const NOW: &str = "2026-11-17T12:00:00.000Z";
+const FLEET_CONFIG: &str = r#"
+[repository]
+remote = "origin"
+staging = "staging"
+master = "master"
+trees = "trees"
+checks = "checks"
+
+[hub]
+url = "http://127.0.0.1:0"
+project = "proj"
+
+[gate]
+threshold = 0.004
+cap = 400
+
+[machine.fixture]
+os = "macos"
+ticket_trees = 1
+landing_trees = 1
+floor = { batch = 1, tip = 1 }
+"#;
 
 fn get(conn: &Connection, path: &str) -> (u16, String) {
     let request = Request {
@@ -107,7 +134,7 @@ fn seed(conn: &Connection) {
 fn every_fleet_page_renders_from_a_seeded_database() {
     let conn = seeded();
     for (path, expected) in [
-        ("/machines", "jarvis"),
+        ("/fleet", "jarvis"),
         ("/pool", "local_long"),
         ("/epics", "Active epic"),
         ("/landings", "Landed task"),
@@ -122,6 +149,9 @@ fn every_fleet_page_renders_from_a_seeded_database() {
             "{path} lacks the page links"
         );
     }
+    let fleet = page(&conn, "/fleet");
+    assert!(fleet.contains("agent 3 (2 core-minutes)"));
+    assert!(fleet.contains("tree-01"));
     // A trailing slash is the same page; an unknown name is looked up as a
     // ticket and is a 404, and a path with several segments is no dashboard route.
     assert!(page(&conn, "/pool/").contains("local_long"));
@@ -141,7 +171,7 @@ fn every_fleet_page_renders_from_a_seeded_database() {
 fn pages_render_when_the_hub_is_empty() {
     let conn = hub::open_in_memory().unwrap();
     for path in [
-        "/machines",
+        "/fleet",
         "/pool",
         "/epics",
         "/landings",
@@ -154,6 +184,160 @@ fn pages_render_when_the_hub_is_empty() {
     let home = page(&conn, "/");
     assert!(!home.contains("id=\"attention\""));
     assert!(home.contains("href=\"/pool\""));
+}
+
+#[test]
+fn the_old_machines_address_redirects_to_fleet() {
+    let conn = seeded();
+    for path in ["/machines", "/machines/"] {
+        let request = Request {
+            method: "GET".to_owned(),
+            path: path.to_owned(),
+            query: vec![("tab".to_owned(), "current work".to_owned())],
+            writer: None,
+            body: Vec::new(),
+            headers: Vec::new(),
+        };
+        let reply = serve(&conn, &request, "proj", Timestamp::parse(NOW).unwrap()).unwrap();
+        assert_eq!(reply.status, 308);
+        assert_eq!(
+            reply.headers.first(),
+            Some(&("Location", "/fleet?tab=current%20work".to_owned()))
+        );
+    }
+}
+
+fn browser_request(address: SocketAddr, method: &str, path: &str, body: &str) -> (u16, String) {
+    let mut stream = TcpStream::connect(address).unwrap();
+    let marker = if method == "PUT" {
+        "X-Ignite-Dashboard: 1\r\n"
+    } else {
+        ""
+    };
+    write!(
+        stream,
+        "{method} {path} HTTP/1.0\r\nHost: hub\r\nConnection: close\r\n\
+         Tailscale-User-Login: operator@example.com\r\n{marker}\
+         Content-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
+        body.len()
+    )
+    .unwrap();
+    let mut reply = String::new();
+    stream.read_to_string(&mut reply).unwrap();
+    let (headers, body) = reply.split_once("\r\n\r\n").unwrap();
+    (
+        headers.split(' ').nth(1).unwrap().parse().unwrap(),
+        body.to_owned(),
+    )
+}
+
+fn machine_settings<'a>(page: &'a str, name: &str) -> &'a str {
+    let start = page
+        .find(&format!("data-fleet-machine=\"{name}\""))
+        .unwrap();
+    let end = page[start..].find("</dl>").unwrap();
+    &page[start..start + end]
+}
+
+#[test]
+fn fleet_settings_are_editable_only_on_the_private_listener() {
+    let config = Config::parse("ignite.toml", FLEET_CONFIG).unwrap();
+    let server = HubServer {
+        config,
+        listen: "127.0.0.1:0".to_owned(),
+        database: ignite_core::test_files::temp_dir().join("fleet.sqlite"),
+        wordmark: None,
+    };
+    let mut conn = hub::open(&server.database).unwrap();
+    seed(&conn);
+    let private = server.start().unwrap();
+    let public = server.start_read_only().unwrap();
+    let now = Timestamp::parse(NOW).unwrap();
+    let mut settings = hub::fleet_settings::settings(&conn).unwrap();
+    settings.machines.extend([
+        (
+            "cygnus".to_owned(),
+            MachineSetting {
+                state: MachineState::ChecksOnly,
+                disk_cap_gb: Some(250),
+            },
+        ),
+        (
+            "multivac".to_owned(),
+            MachineSetting {
+                state: MachineState::Off,
+                disk_cap_gb: None,
+            },
+        ),
+    ]);
+    let original_version = settings.version;
+    let hub::fleet_settings::PutOutcome::Stored(mut settings) = hub::fleet_settings::put(
+        &mut conn,
+        original_version,
+        settings,
+        "seed@example.com",
+        now,
+    )
+    .unwrap() else {
+        panic!("seeding the fleet settings conflicted");
+    };
+
+    let (status, private_page) = browser_request(private.address(), "GET", "/fleet", "");
+    assert_eq!(status, 200);
+    assert!(private_page.contains(r#"data-api="/proj/api/fleet""#));
+    assert!(private_page.contains(&format!("&quot;version&quot;:{}", settings.version)));
+    for (name, state, cap) in [
+        ("jarvis", "active", ""),
+        ("cygnus", "checks-only", "250"),
+        ("multivac", "off", ""),
+    ] {
+        let section = machine_settings(&private_page, name);
+        assert_eq!(section.matches(" checked").count(), 1, "{name}");
+        assert!(
+            section.contains(&format!(r#"value="{state}" checked"#)),
+            "{name}"
+        );
+        assert!(
+            section.contains(&format!(r#"value="{cap}" placeholder="Automatic""#)),
+            "{name}"
+        );
+    }
+
+    let (status, public_page) = browser_request(public.address(), "GET", "/fleet", "");
+    assert_eq!(status, 200);
+    assert!(machine_settings(&public_page, "cygnus").contains(">250<"));
+    assert!(machine_settings(&public_page, "multivac").contains(">Automatic<"));
+    assert!(!public_page.contains("data-fleet-field"));
+    assert!(!public_page.contains("data-settings="));
+
+    settings.machines.insert(
+        "cygnus".to_owned(),
+        MachineSetting {
+            state: MachineState::ChecksOnly,
+            disk_cap_gb: None,
+        },
+    );
+    let body = serde_json::to_string(&FleetUpdate {
+        version: settings.version,
+        settings,
+    })
+    .unwrap();
+    let (status, saved) = browser_request(private.address(), "PUT", "/proj/api/fleet", &body);
+    assert_eq!(status, 200);
+    let saved: FleetSettings = serde_json::from_str(&saved).unwrap();
+    assert_eq!(saved.version, original_version + 2);
+    assert_eq!(saved.machine("cygnus").disk_cap_gb, None);
+    let (status, updated) = browser_request(private.address(), "GET", "/fleet", "");
+    assert_eq!(status, 200);
+    assert!(machine_settings(&updated, "cygnus").contains(r#"value="" placeholder="Automatic""#));
+    assert!(updated.contains(
+        r#"c-timeline-actor">operator</span>machine cygnus: checks-only, disk cap auto"#
+    ));
+    assert!(updated.contains(r#"datetime="2026-11-17T12:00:00.000Z""#));
+    assert!(!updated.contains("@example.com"));
+
+    private.stop();
+    public.stop();
 }
 
 #[test]

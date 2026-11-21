@@ -585,3 +585,20 @@ details[open] > summary > .c-tool-chevron {
   align-items: center;
   font-size: var(--text-sm);
 }
+
+/* Fleet settings place the state and disk cap beside each other when there is room. */
+.c-fleet-settings {
+  margin-bottom: var(--space-5);
+}
+
+.c-fleet-settings > .c-meta {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+}
+
+.c-fleet-settings .c-edit-form {
+  max-width: 12rem;
+}
+
+.c-fleet-settings .c-muted {
+  flex-basis: 100%;
+}
