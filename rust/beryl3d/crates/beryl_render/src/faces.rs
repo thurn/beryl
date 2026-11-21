@@ -175,6 +175,13 @@ impl FaceArray {
         self.filled.iter().filter(|filled| **filled).count()
     }
 
+    pub(crate) fn layer_uploaded(&self, layer: u16) -> bool {
+        self.filled
+            .get(usize::from(layer))
+            .copied()
+            .unwrap_or(false)
+    }
+
     fn write_levels(&self, queue: &wgpu::Queue, index: u16, levels: &[Vec<u8>]) -> bool {
         for (level, bytes) in (0..self.levels).zip(levels) {
             let shape = Level::of(self.format, self.size, level);

@@ -9,10 +9,11 @@ use app_client::Client;
 use app_client::Input;
 use app_client::command::Request;
 use app_client::settings::Graphics;
-use beryl_render::{Picture, Readback};
+use beryl_render::{Picture, Readback, Renderer};
 use kit_frame::frame::{Frame, Wake};
 use kit_ui::input::Tier;
 
+use crate::assets::Assets;
 use crate::rate::{Paced, RateRule, Step, Thresholds};
 
 /// A source of display ticks: a display link on macOS, winit's redraw requests elsewhere, a
@@ -49,16 +50,15 @@ pub trait Draw {
         None
     }
 
-    /// Hands what `client` wants of the platform's assets (glyphs and card faces) to the
-    /// host's workers, and gives `client` what they have finished. Called before each frame,
-    /// so that the frame draws what has arrived, and after it, so that what the frame found
-    /// missing is asked for even when the client then wants no more frames. It never waits; a
-    /// worker that finishes something wakes the host. A host with no workers does nothing.
-    fn assets(&mut self, _client: &mut Client, _when: When) {}
+    /// The renderer the shared frame loop uploads assets to. A test that only counts frames
+    /// can leave it out.
+    fn renderer(&mut self) -> Option<&mut Renderer> {
+        None
+    }
 }
 
-/// Which of a frame's two calls to `Draw::assets` this is. Uploads limited to so many a frame
-/// (`Renderer::upload_waiting`) are made only before it.
+/// Which side of a frame the asset service is advancing on. The renderer's per-frame face
+/// upload allowance is used only before the frame.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum When {
     BeforeFrame,
@@ -209,6 +209,7 @@ pub struct FrameLoop<T> {
     client: Client,
     ticks: T,
     feed: Box<dyn Feed>,
+    assets: Option<Assets>,
     /// Where the client's clock stops, in nanoseconds since it started (`--pause-at`).
     pause: Option<u64>,
     /// Whether a frame has been drawn at the pause, after which only an input draws another.
@@ -242,6 +243,7 @@ impl<T: Ticks> FrameLoop<T> {
             client,
             ticks,
             feed: Box::new(NoFeed),
+            assets: None,
             pause: None,
             drawn_at_pause: false,
             input_since: false,
@@ -255,6 +257,17 @@ impl<T: Ticks> FrameLoop<T> {
             #[cfg(feature = "drive")]
             live: Vec::new(),
             readbacks: Vec::new(),
+        }
+    }
+
+    pub(crate) fn with_assets(mut self, assets: Assets) -> Self {
+        self.assets = Some(assets);
+        self
+    }
+
+    pub(crate) fn low_memory(&mut self, renderer: &mut Renderer) {
+        if let Some(assets) = &mut self.assets {
+            assets.low_memory(renderer);
         }
     }
 
@@ -361,7 +374,7 @@ impl<T: Ticks> FrameLoop<T> {
         #[cfg(feature = "drive")]
         self.play_live(now, clock);
         self.feed.before(&mut self.client, clock);
-        draw.assets(&mut self.client, When::BeforeFrame);
+        self.deliver_assets(draw, When::BeforeFrame);
         // What the frame needs of the scripts to come is compiled before it, outside the frame's
         // own time: the frame allocates nothing, and compiling does.
         self.client.prepare(clock);
@@ -374,7 +387,7 @@ impl<T: Ticks> FrameLoop<T> {
         {
             self.readbacks.push(readback);
         }
-        draw.assets(&mut self.client, When::AfterFrame);
+        self.deliver_assets(draw, When::AfterFrame);
         let since_last = self.last.map(|last| now.saturating_sub(last));
         let hz = self.hz;
         let step = self.pace(since_last, client, shown);
@@ -394,6 +407,12 @@ impl<T: Ticks> FrameLoop<T> {
         }
         self.feed.after(&mut self.client, &ticked);
         Some(ticked)
+    }
+
+    fn deliver_assets(&mut self, draw: &mut impl Draw, when: When) {
+        if let (Some(assets), Some(renderer)) = (&mut self.assets, draw.renderer()) {
+            assets.deliver(&mut self.client, renderer, when);
+        }
     }
 
     /// Called when the event loop has handled every waiting event and is about to sleep: runs

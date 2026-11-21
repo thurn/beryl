@@ -1,22 +1,6 @@
-//! Glyphs and card faces for the hosts that draw frames as they come: the desktop, windowless
-//! and phone hosts (docs/beryl-3d.md, "Text", "Card faces" and "Threads").
-//!
-//! Text: the client lays text out without waiting for its glyphs and lists the glyphs no atlas
-//! page holds (`Client::wanted_glyphs`). `Glyphs` hands them to `beryl_assets`' glyph worker,
-//! which rasterizes them on its own thread, and uploads each page the worker finishes before
-//! the next frame, telling the client where its glyphs landed (`Input::Assets`). The worker
-//! wakes the host when a page is ready, so a still table draws the new text at once.
-//!
-//! Card faces (`Faces`): whenever the client's active face list changes (a match's
-//! `Input::Cards`, or the component gallery opening or closing), the renderer's face arrays are
-//! made for it and `beryl_assets`' workers prepare every face of it at board size. Each face
-//! they finish is held by the renderer (`Renderer::hold`) and uploaded as a frame allows
-//! (`Renderer::upload_waiting`), and the client is told where it landed. Faces a card being
-//! read needs at full size (`Client::wanted_faces`) go to the same workers, and so do the scans
-//! downloaded late, which replace a drawn frame only while the table is still.
-//!
-//! The headless host does the same, but waits for the workers before each picture
-//! (`Headless`), so that a picture never lacks a glyph or a face.
+//! One asset service for every rendering host. It hands the client's glyph, icon and face
+//! requests to the workers, then hands back the cells and layers the renderer uploaded.
+//! Live hosts advance the service around each frame. Pictures wait for the same deliveries.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -26,10 +10,10 @@ use app_client::Client;
 use app_client::Input;
 use beryl_art::{ArtCache, Origins};
 use beryl_assets::glyphs::{GlyphWorker, prepare_latin};
-use beryl_assets::{Config, Format, Prepared, Preparer, default_workers};
+use beryl_assets::{Config, FULL_LAYERS, Format, Full, Prepared, Preparer, default_workers};
 use beryl_render::Renderer;
 use kit_frame::frame::Wake;
-use kit_ui::input::{AssetReady, FaceSize};
+use kit_ui::input::{AssetReady, FaceId, FaceSize};
 
 use crate::frames::When;
 
@@ -76,76 +60,43 @@ impl Scans {
     }
 }
 
-/// The glyph worker of a host, and the pages it has finished.
-pub(crate) struct Glyphs {
-    worker: GlyphWorker,
+/// The workers and their deliveries to one renderer and client.
+pub struct Assets {
+    glyphs: GlyphWorker,
     pages: Receiver<Prepared>,
-    /// The physical pixels to a point that the Latin glyphs and the icons were asked for at.
-    scale: f32,
-}
-
-impl Glyphs {
-    /// Starts the worker and asks it for the Latin glyphs and every icon at `scale` physical
-    /// pixels to a point, before the first frame needs them. The worker calls `wake` after it
-    /// sends each page.
-    pub(crate) fn start(scale: f32, wake: impl Fn() + Send + 'static) -> Self {
-        let (out, pages) = mpsc::channel();
-        let worker = GlyphWorker::spawn(out, wake, crate::threads::asset_thread);
-        worker.icons(scale);
-        worker.prepare(prepare_latin(scale));
-        Self {
-            worker,
-            pages,
-            scale,
-        }
-    }
-
-    /// Asks again for the Latin glyphs and the icons when the display's scale has changed, as
-    /// when the window moves to a display of another density.
-    pub(crate) fn rescale(&mut self, scale: f32) {
-        if (scale - self.scale).abs() > f32::EPSILON {
-            self.scale = scale;
-            self.worker.icons(scale);
-            self.worker.prepare(prepare_latin(scale));
-        }
-    }
-
-    /// Asks the worker for the glyphs the client's last frame lacked, and uploads every page it
-    /// has finished, giving the client each page's glyphs or icons. It never waits.
-    pub(crate) fn deliver(&mut self, client: &mut Client, renderer: &mut Renderer) {
-        self.worker.request(client.wanted_glyphs());
-        while let Ok(prepared) = self.pages.try_recv() {
-            if renderer.upload_page(&prepared) {
-                client.handle(Input::Assets(prepared.ready));
-            }
-        }
-    }
-}
-
-/// The asset workers that prepare the client's card faces, and the face list the renderer's
-/// arrays were last made for.
-pub struct Faces {
-    preparer: Preparer,
-    /// Calls the host's wake, so that held faces get frames to be uploaded in.
-    wake: Arc<dyn Fn() + Send + Sync>,
-    /// Whether the active list the arrays were made for is the gallery's, and its number
-    /// (`game_table::faces::Faces::number`).
-    active: Option<(bool, u64)>,
-    /// Where the workers send the faces of the active list.
+    scale: Option<f32>,
+    faces: Preparer,
     results: Option<Receiver<Prepared>>,
-    /// The client's wake right after its last frame: whether that frame was animating. Read
-    /// then, because every input the client takes afterwards, the nudge that asks for the next
-    /// frame among them, sets its wake to `Now` until that frame is made.
+    /// Whether the current list belongs to the gallery, and its number.
+    active: Option<(bool, u64)>,
+    /// Owners of uploaded full-size layers. An assignment alone doesn't mean it was uploaded.
+    full: [Option<FaceId>; FULL_LAYERS],
+    /// The wake before a nudge or another input sets the client's wake to `Now`.
     after_frame: Wake,
+    wake: Arc<dyn Fn() + Send + Sync>,
 }
 
-impl Faces {
-    /// Starts the workers, which read scans from `scans` and download the ones it lacks from
-    /// `origins` (`beryl_art::SCRYFALL` in the app). A worker calls `wake` after it sends a
-    /// face, and the host calls it again after each frame while faces wait to be uploaded.
-    pub fn start(scans: &Scans, origins: Origins, wake: impl Fn() + Send + Sync + 'static) -> Self {
+impl Assets {
+    /// Starts the asset workers. The host's `wake` asks its event loop for a frame after a
+    /// delivery or while face uploads are queued.
+    pub fn start(
+        renderer: &mut Renderer,
+        scans: &Scans,
+        origins: Origins,
+        wake: impl Fn() + Send + Sync + 'static,
+    ) -> Self {
+        renderer.upload_page(&beryl_assets::light::prepared());
         let wake: Arc<dyn Fn() + Send + Sync> = Arc::new(wake);
-        let preparer = Preparer::new(Config {
+        let (out, pages) = mpsc::channel();
+        let glyphs = GlyphWorker::spawn(
+            out,
+            {
+                let wake = Arc::clone(&wake);
+                move || wake()
+            },
+            crate::threads::asset_thread,
+        );
+        let faces = Preparer::new(Config {
             art: Arc::new(ArtCache::new(scans.art.clone(), origins)),
             faces_dir: scans.faces.clone(),
             workers: default_workers(),
@@ -153,73 +104,217 @@ impl Faces {
             start: crate::threads::asset_thread,
         });
         Self {
-            preparer,
-            wake,
-            active: None,
+            glyphs,
+            pages,
+            scale: None,
+            faces,
             results: None,
+            active: None,
+            full: [None; FULL_LAYERS],
             after_frame: Wake::Never,
+            wake,
         }
     }
 
-    /// Before a frame: makes the renderer's face arrays when the client's active face list has
-    /// changed, hands the workers the faces wanted at full size, holds every face they have
-    /// finished and uploads what the frame allows, telling the client where each landed. After
-    /// a frame it only asks: uploads are limited per frame, so they are made once. While faces
-    /// are held it wakes the host, so that a still table keeps getting frames to upload them in.
-    /// It never waits.
+    pub(crate) fn live(renderer: &mut Renderer, wake: impl Fn() + Send + Sync + 'static) -> Self {
+        Self::start(renderer, &Scans::app(), beryl_art::SCRYFALL, wake)
+    }
+
+    /// Advances the service without waiting on a worker. In a live frame, card faces are
+    /// uploaded only before the frame, at the rate the renderer allows.
     pub fn deliver(&mut self, client: &mut Client, renderer: &mut Renderer, when: When) {
-        let gallery = client.showing_gallery();
-        let active = (gallery, client.face_layers().number());
-        // A match's list is empty until its card records arrive; the arrays wait for them.
-        if self.active != Some(active) && !client.faces().faces().is_empty() {
-            self.switch(client, renderer, active);
-        }
-        if self.active.is_none() {
-            return;
-        }
-        // The full-size faces a match asks for are its own, so the gallery leaves them asked
-        // for until the match's list is active again.
-        if !gallery {
-            let wanted: Vec<_> = client.wanted_faces().collect();
-            for face in wanted {
-                self.preparer.full(face);
-            }
-        }
-        if let Some(results) = &self.results {
-            for prepared in results.try_iter() {
-                renderer.hold(prepared);
-            }
-        }
         if when == When::AfterFrame {
             self.after_frame = client.wake();
-        } else {
-            for ready in renderer.upload_waiting(self.after_frame) {
-                client.handle(Input::Assets(for_list(ready, gallery)));
+        }
+        self.request_text(client);
+        self.prepare_faces(client, renderer);
+        // Match requests stay queued while the gallery's arrays are active.
+        if self.active.is_some_and(|(gallery, _)| !gallery) {
+            let wanted = client.wanted_faces().collect::<Vec<_>>();
+            for face in wanted {
+                self.request_full(client, face);
             }
         }
-        if when == When::AfterFrame && renderer.waiting() > 0 {
-            (self.wake)();
+        self.receive_faces(renderer);
+        if when == When::AfterFrame {
+            if renderer.waiting() > 0 {
+                (self.wake)();
+            }
+        } else {
+            self.upload_text(client, renderer, |_| {});
+            self.upload_faces(client, renderer, self.after_frame);
         }
     }
 
-    /// Makes the renderer's arrays for the client's active list and queues its every face.
-    fn switch(&mut self, client: &mut Client, renderer: &mut Renderer, active: (bool, u64)) {
-        let list = client.faces();
+    pub(crate) fn low_memory(&mut self, renderer: &mut Renderer) {
+        self.faces.forget_full();
+        self.full.fill(None);
+        // Keep board deliveries that were already sent and discard the old full-size ones.
+        self.receive_faces(renderer);
+        renderer.low_memory();
+    }
+
+    /// Waits for the picture's current requests before drawing, with the same workers and
+    /// uploads as a live frame. The replay driver retains atlas deliveries across seeks.
+    #[cfg(feature = "headless")]
+    pub(crate) fn settle(
+        &mut self,
+        client: &mut Client,
+        renderer: &mut Renderer,
+        mut remember_atlas: impl FnMut(AssetReady),
+    ) {
+        use std::time::Duration;
+
+        // Detect a hung worker or an encoder that never produced a result.
+        const FACE_WAIT: Duration = Duration::from_mins(2);
+
+        self.request_text(client);
+        self.glyphs.flush();
+        self.upload_text(client, renderer, |ready| remember_atlas(ready.clone()));
+        self.prepare_faces(client, renderer);
+        let Some((gallery, _)) = self.active else {
+            return;
+        };
+        // A backward seek creates a new client. Board layers keep their contents in the
+        // renderer and can be announced again without decoding any pictures.
+        let count = client.faces().faces().len();
+        for index in 0..count {
+            let layer = index as u16;
+            let face = FaceId(layer);
+            if client.face_layers().board_layer_of(face).is_none()
+                && renderer.layer_uploaded(FaceSize::Board, layer)
+            {
+                client.handle(Input::Assets(for_list(
+                    AssetReady::Face {
+                        face,
+                        size: FaceSize::Board,
+                        layer,
+                    },
+                    gallery,
+                )));
+            }
+        }
+        let mut wanted = Vec::new();
+        if !gallery {
+            // A picture can wait for only as many full-size faces as fit at once.
+            let faces = client.wanted_faces().take(FULL_LAYERS).collect::<Vec<_>>();
+            for face in faces {
+                if self.request_full(client, face) {
+                    wanted.push(face);
+                }
+            }
+        }
+        self.receive_faces(renderer);
+        while renderer.uploaded(FaceSize::Board) < count
+            || wanted
+                .iter()
+                .any(|&face| client.face_layers().full_layer_of(face).is_none())
+            || renderer.waiting() > 0
+        {
+            if renderer.waiting() == 0 {
+                let Some(prepared) = self
+                    .results
+                    .as_ref()
+                    .and_then(|faces| faces.recv_timeout(FACE_WAIT).ok())
+                else {
+                    break;
+                };
+                renderer.hold(prepared);
+                self.receive_faces(renderer);
+            }
+            self.upload_faces(client, renderer, Wake::Never);
+        }
+    }
+
+    fn request_text(&mut self, client: &mut Client) {
+        let scale = client.surface_scale();
+        if self
+            .scale
+            .is_none_or(|previous| (scale - previous).abs() > f32::EPSILON)
+        {
+            self.scale = Some(scale);
+            self.glyphs.icons(scale);
+            self.glyphs.prepare(prepare_latin(scale));
+        }
+        self.glyphs.request(client.wanted_glyphs());
+    }
+
+    fn upload_text(
+        &self,
+        client: &mut Client,
+        renderer: &mut Renderer,
+        mut delivered: impl FnMut(&AssetReady),
+    ) {
+        for prepared in self.pages.try_iter() {
+            if renderer.upload_page(&prepared) {
+                delivered(&prepared.ready);
+                client.handle(Input::Assets(prepared.ready));
+            }
+        }
+    }
+
+    fn prepare_faces(&mut self, client: &mut Client, renderer: &mut Renderer) {
+        let active = (client.showing_gallery(), client.face_layers().number());
+        // A match's list is empty until its card records arrive.
+        if self.active == Some(active) || client.faces().faces().is_empty() {
+            return;
+        }
+        let list = client.faces().faces();
         let format = Format::choose(&renderer.formats());
-        let names: Vec<&str> = (list.faces().iter())
+        let names: Vec<&str> = list
+            .iter()
             .map(|face| face.names.first().map_or("", String::as_str))
             .collect();
         renderer.set_faces(&names, format);
-        self.results = Some(self.preparer.prepare_match(list.faces(), &[format]));
+        self.results = Some(self.faces.prepare_match(list, &[format]));
+        self.full.fill(None);
         if !active.0 {
             client.face_arrays_made();
         }
         self.active = Some(active);
     }
+
+    fn request_full(&mut self, client: &mut Client, face: FaceId) -> bool {
+        let Some(request) = self.faces.full(face) else {
+            return false;
+        };
+        if let Full::Kept { layer } = request
+            && self.full[usize::from(layer)] == Some(face)
+        {
+            client.handle(Input::Assets(AssetReady::Face {
+                face,
+                size: FaceSize::Full,
+                layer,
+            }));
+        }
+        true
+    }
+
+    fn receive_faces(&self, renderer: &mut Renderer) {
+        if let Some(results) = &self.results {
+            for prepared in results.try_iter() {
+                renderer.hold(prepared);
+            }
+        }
+    }
+
+    fn upload_faces(&mut self, client: &mut Client, renderer: &mut Renderer, wake: Wake) {
+        let gallery = self.active.is_some_and(|(gallery, _)| gallery);
+        for ready in renderer.upload_waiting(wake) {
+            if let AssetReady::Face {
+                face,
+                size: FaceSize::Full,
+                layer,
+            } = ready
+            {
+                self.full[usize::from(layer)] = Some(face);
+            }
+            client.handle(Input::Assets(for_list(ready, gallery)));
+        }
+    }
 }
 
-/// A face's `AssetReady` as the client's active list knows it: the gallery's board-size faces
-/// are its own, so that they never overwrite where the match's faces are.
+/// Routes the gallery's faces to its own list, keeping their layers out of the match's list.
 fn for_list(ready: AssetReady, gallery: bool) -> AssetReady {
     match ready {
         AssetReady::Face {

@@ -278,6 +278,16 @@ impl Preparer {
         Some(Full::Queued { layer, evicted })
     }
 
+    /// Drops full-size assignments when the renderer frees their array. On return no
+    /// worker can send another delivery from the old assignments.
+    pub fn forget_full(&mut self) {
+        let _sending = self.shared.send.lock();
+        for slot in &self.shared.slots {
+            slot.store(0, Ordering::SeqCst);
+        }
+        self.slots = Slots::default();
+    }
+
     fn send(&self, job: Job) {
         if let Some(jobs) = &self.jobs {
             // The workers end only when `jobs` drops, so a send cannot fail.

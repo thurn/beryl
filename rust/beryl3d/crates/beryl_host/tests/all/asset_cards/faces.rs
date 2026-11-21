@@ -42,10 +42,10 @@ const NOWHERE: Origins<'static> = Origins {
 const HANG: Duration = Duration::from_secs(120);
 
 /// A directory of its own for one test, emptied first and removed when dropped.
-struct Scratch(PathBuf);
+pub(super) struct Scratch(pub(super) PathBuf);
 
 impl Scratch {
-    fn new(name: &str) -> Self {
+    pub(super) fn new(name: &str) -> Self {
         let dir = std::env::temp_dir().join(format!("beryl_assets-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
@@ -70,7 +70,7 @@ fn preparer(dir: &Path) -> Preparer {
 }
 
 /// A plain 672 by 936 JPEG, the size of Scryfall's large scans.
-fn scan() -> Vec<u8> {
+pub(super) fn scan() -> Vec<u8> {
     let picture = image::RgbImage::from_pixel(672, 936, image::Rgb([40, 90, 160]));
     let mut bytes = Vec::new();
     image::codecs::jpeg::JpegEncoder::new(&mut bytes)

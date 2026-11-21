@@ -12,7 +12,6 @@ use std::time::{Duration, Instant};
 use app_client::Client;
 use app_client::Input;
 use app_client::command::Request;
-use beryl_assets::light;
 use beryl_render::{Presented, Renderer, Surface};
 use kit_frame::frame::Frame;
 use kit_ui::input::Lifecycle;
@@ -23,10 +22,10 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{Window, WindowId};
 
-use crate::assets::{Faces, Glyphs, Scans};
+use crate::assets::Assets;
 use crate::clipboard::Clipboard;
 use crate::events::Translator;
-use crate::frames::{Chosen, Draw, Feed, FrameLoop, Opened, Opening, Shown, Sleep, Ticks, When};
+use crate::frames::{Chosen, Draw, Feed, FrameLoop, Opened, Opening, Shown, Sleep, Ticks};
 use crate::inbox::Inbox;
 
 /// What the window is (decision C15: the faster choice is the default).
@@ -165,7 +164,7 @@ pub fn is_fullscreen_key(key: PhysicalKey, control: bool, command: bool) -> bool
 
 struct App<S> {
     options: Options,
-    /// Wakes the event loop from the glyph worker's thread when it finishes a page.
+    /// Wakes the event loop when an asset worker finishes a delivery.
     wake: Inbox,
     /// Where the display link sends its ticks.
     #[cfg(target_os = "macos")]
@@ -199,8 +198,6 @@ struct Screen {
     window: Arc<Window>,
     /// How long each finished frame is held back before it is shown (`Options::slow_gpu`).
     slow_gpu: Duration,
-    glyphs: Glyphs,
-    faces: Faces,
 }
 
 impl Draw for Screen {
@@ -231,10 +228,8 @@ impl Draw for Screen {
         Some(self.renderer.read_back_frame(frame, &self.surface))
     }
 
-    fn assets(&mut self, client: &mut Client, when: When) {
-        self.glyphs.rescale(self.window.scale_factor() as f32);
-        self.glyphs.deliver(client, &mut self.renderer);
-        self.faces.deliver(client, &mut self.renderer, when);
+    fn renderer(&mut self) -> Option<&mut Renderer> {
+        Some(&mut self.renderer)
     }
 }
 
@@ -295,7 +290,12 @@ impl<S: FnOnce(&mut Renderer, Opening) -> Chosen> App<S> {
         let size = window.inner_size();
         let (mut renderer, surface) =
             Renderer::for_window(Arc::clone(&window), size.width, size.height)?;
-        renderer.upload_page(&light::prepared());
+        let assets = Assets::live(&mut renderer, {
+            let wake = self.wake.clone();
+            move || {
+                wake.send(Input::Nudge);
+            }
+        });
         let display_hz = self.display_hz(&window);
         let chosen = self.setup.take().map_or(Chosen::BASELINE, |setup| {
             setup(
@@ -320,6 +320,7 @@ impl<S: FnOnce(&mut Renderer, Opening) -> Chosen> App<S> {
         let fixed = matches!(pacer, Pacer::Redraw(_));
         let frames = FrameLoop::new(client, pacer)
             .with_feed(feed)
+            .with_assets(assets)
             .paused_at(self.options.pause_at);
         let frames = if fixed {
             frames.fixed_at(display_hz, chosen.tier_can_drop())
@@ -342,18 +343,6 @@ impl<S: FnOnce(&mut Renderer, Opening) -> Chosen> App<S> {
                 surface,
                 window: Arc::clone(&window),
                 slow_gpu: self.options.slow_gpu,
-                glyphs: Glyphs::start(window.scale_factor() as f32, {
-                    let wake = self.wake.clone();
-                    move || {
-                        wake.send(Input::Nudge);
-                    }
-                }),
-                faces: Faces::start(&Scans::app(), beryl_art::SCRYFALL, {
-                    let wake = self.wake.clone();
-                    move || {
-                        wake.send(Input::Nudge);
-                    }
-                }),
             },
             translator,
             clipboard: Clipboard::default(),
@@ -438,7 +427,7 @@ impl<S: FnOnce(&mut Renderer, Opening) -> Chosen> ApplicationHandler<UserEvent> 
 
     fn memory_warning(&mut self, _event_loop: &ActiveEventLoop) {
         if let Some(running) = &mut self.running {
-            running.screen.renderer.low_memory();
+            running.frames.low_memory(&mut running.screen.renderer);
             running
                 .frames
                 .handle(Input::Lifecycle(Lifecycle::LowMemory));

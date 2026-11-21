@@ -586,10 +586,8 @@ impl Page {
         self.client.handle(input);
     }
 
-    /// Sets the client up and gives it the recording's first views. The driver acts as a host
-    /// whose asset workers have every face ready at the start: it gives the client the
-    /// recording's card records, then every face of the list the client made from them
-    /// (`FaceList::all_ready`).
+    /// Gives the client the recording's initial inputs and views. Text tools supply stub atlas
+    /// cells and face layers. A host that draws supplies the actual uploads.
     fn begin(&mut self) {
         if self.records {
             self.client.record();
@@ -608,9 +606,11 @@ impl Page {
         });
         if let Some(cards) = &self.cards {
             self.give(Input::Cards(Box::new(CardRecords::clone(cards))));
-            let ready: Vec<AssetReady> = self.client.faces().all_ready().collect();
-            for ready in ready {
-                self.give(Input::Assets(ready));
+            if self.stub_atlas {
+                let ready: Vec<AssetReady> = self.client.faces().all_ready().collect();
+                for ready in ready {
+                    self.give(Input::Assets(ready));
+                }
             }
         }
         if self.stub_atlas {
@@ -628,7 +628,7 @@ impl Page {
         for lobby in self.recording.lobbies() {
             self.give(Input::Lobby(Box::new(lobby)));
         }
-        if self.client.showing_gallery() {
+        if self.stub_atlas && self.client.showing_gallery() {
             let ready: Vec<_> = self.client.faces().all_ready().collect();
             for asset in ready {
                 if let AssetReady::Face { face, layer, .. } = asset {

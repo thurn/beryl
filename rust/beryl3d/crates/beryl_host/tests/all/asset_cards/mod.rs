@@ -2,6 +2,7 @@
 
 mod faces;
 mod frame;
+mod hosts;
 
 use beryl_card_records::{CardRecordsRequest, TokenMakers, card_records, record};
 use game_table::faces::FaceList;

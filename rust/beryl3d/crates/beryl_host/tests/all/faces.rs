@@ -1,16 +1,17 @@
-//! `Faces`, the card face workers of the live hosts, with a real renderer and an empty scan
+//! Face uploads through the asset service, with a real renderer and an empty scan
 //! cache, so that every face is drawn as Beryl's frame and none is downloaded. Each test waits
 //! on the wake the workers call after sending a face, never on the clock.
 
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver};
+use std::time::Duration;
 
 use app_client::Input;
 use app_client::Press;
 use app_client::{Client, Config};
 use app_screens::screens::Screen;
 use beryl_art::Origins;
-use beryl_host::{Faces, Scans, When};
+use beryl_host::{Assets, Scans, When};
 use beryl_protocol::card_records::CardRecords;
 use beryl_render::{Limits, Renderer};
 use game_table::faces::CARD_BACK;
@@ -26,8 +27,8 @@ const NOWHERE: Origins<'static> = Origins {
 struct Host {
     client: Client,
     renderer: Renderer,
-    faces: Faces,
-    /// One message each time a worker sent a face, or `Faces` woke the host after a frame.
+    assets: Assets,
+    /// One message each time a worker sent a face, or the service woke the host after a frame.
     wakes: Receiver<()>,
     dir: PathBuf,
     /// The client's clock, a frame further on each `frame`.
@@ -40,13 +41,14 @@ impl Host {
             std::env::temp_dir().join(format!("beryl-host-faces-{}-{name}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let (woke, wakes) = mpsc::channel();
-        let faces = Faces::start(&Scans::in_dir(&dir), NOWHERE, move || {
+        let mut renderer = Renderer::headless(Limits::Default).expect("a GPU adapter and device");
+        let assets = Assets::start(&mut renderer, &Scans::in_dir(&dir), NOWHERE, move || {
             let _ = woke.send(());
         });
         Self {
             client: Client::new(Config::LARGEST),
-            renderer: Renderer::headless(Limits::Default).expect("a GPU adapter and device"),
-            faces,
+            renderer,
+            assets,
             wakes,
             dir,
             now: 0,
@@ -54,7 +56,7 @@ impl Host {
     }
 
     fn deliver(&mut self, when: When) {
-        self.faces
+        self.assets
             .deliver(&mut self.client, &mut self.renderer, when);
     }
 
@@ -66,7 +68,7 @@ impl Host {
         self.deliver(When::AfterFrame);
     }
 
-    /// Makes frames until `done`, waiting between them for a worker or for the nudge `Faces`
+    /// Makes frames until `done`, waiting between them for a worker or for the nudge the service
     /// gives while faces wait, as a host's event loop does.
     fn until(&mut self, done: impl Fn(&Client) -> bool) {
         loop {
@@ -74,11 +76,17 @@ impl Host {
             if done(&self.client) {
                 return;
             }
-            self.wakes.recv().expect("the workers wake the host");
+            self.wait_for_delivery();
             // A host's wake reaches the client as an input, which leaves its wake `Now` until
             // the next frame: the uploads must not take that for an animating table.
             self.client.handle(Input::Nudge);
         }
+    }
+
+    fn wait_for_delivery(&self) {
+        self.wakes
+            .recv_timeout(Duration::from_mins(2))
+            .expect("the workers wake the host");
     }
 
     fn board_layer(&self, face: FaceId) -> Option<u16> {
@@ -137,10 +145,10 @@ fn held_faces_are_uploaded_one_a_frame_before_it() {
     let count = host.client.faces().faces().len();
     assert!(count > 2, "the gallery lists {count} faces");
     assert_eq!(host.renderer.waiting(), 0);
-    for _ in 0..count {
-        host.wakes.recv().expect("a worker sends each face");
+    while host.renderer.waiting() < count {
+        host.wait_for_delivery();
+        host.deliver(When::AfterFrame);
     }
-    host.deliver(When::AfterFrame);
     assert_eq!(host.renderer.waiting(), count);
     let landed = |host: &Host| {
         (0..count)

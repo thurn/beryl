@@ -8,13 +8,12 @@ use std::time::{Duration, Instant};
 
 use app_client::Client;
 use app_client::Input;
-use beryl_assets::light;
 use beryl_render::{Limits, Renderer, Target};
 use kit_frame::frame::Frame;
 use kit_ui::input::{Insets, Size};
 
-use crate::assets::{Faces, Glyphs, Scans};
-use crate::frames::{Chosen, Draw, Feed, FrameLoop, Opened, Opening, Shown, Sleep, Ticks, When};
+use crate::assets::{Assets, Scans};
+use crate::frames::{Chosen, Draw, Feed, FrameLoop, Opened, Opening, Shown, Sleep, Ticks};
 use crate::inbox::Inbox;
 
 /// How the windowless host draws.
@@ -40,6 +39,7 @@ pub struct Windowless {
     options: WindowlessOptions,
     sender: Sender<Input>,
     receiver: Receiver<Input>,
+    scans: Option<(Scans, beryl_art::Origins<'static>)>,
     #[cfg(feature = "drive")]
     drive: Option<crate::drive::Drive>,
 }
@@ -52,9 +52,17 @@ impl Windowless {
             options,
             sender,
             receiver,
+            scans: None,
             #[cfg(feature = "drive")]
             drive: None,
         }
+    }
+
+    /// Reads card scans from these caches and origins.
+    #[must_use]
+    pub fn with_scans(mut self, scans: Scans, origins: beryl_art::Origins<'static>) -> Self {
+        self.scans = Some((scans, origins));
+        self
     }
 
     /// The same host playing `drive` on the display's clock, ending the run after its last
@@ -86,9 +94,16 @@ impl Windowless {
         mut feed: Box<dyn Feed>,
         setup: impl FnOnce(&mut Renderer, Opening) -> Chosen,
     ) -> Result<(), String> {
+        let wake = self.inbox();
         let options = self.options;
         let mut renderer = Renderer::headless(Limits::Default)?;
-        renderer.upload_page(&light::prepared());
+        let wake = move || {
+            wake.send(Input::Nudge);
+        };
+        let assets = match self.scans {
+            Some((scans, origins)) => Assets::start(&mut renderer, &scans, origins, wake),
+            None => Assets::live(&mut renderer, wake),
+        };
         let opening = opening(&options);
         let chosen = setup(&mut renderer, opening);
         let target = Target::offscreen(&renderer, opening.width, opening.height);
@@ -106,6 +121,7 @@ impl Windowless {
         // does, so that `--slow-gpu` shows the rule at work in a run with no window.
         let frames = FrameLoop::new(client, timer)
             .with_feed(feed)
+            .with_assets(assets)
             .paused_at(options.pause_at)
             .paced(options.hz, chosen.tier_can_drop())
             .with_tier(chosen);
@@ -117,22 +133,10 @@ impl Windowless {
             scale: options.scale,
             safe_area: Insets::default(),
         });
-        // The host waits on its own channel, so a nudge down it wakes the loop.
-        let wake = Inbox::new(self.sender.clone(), || true);
-        let faces = Faces::start(&Scans::app(), beryl_art::SCRYFALL, {
-            let wake = wake.clone();
-            move || {
-                wake.send(Input::Nudge);
-            }
-        });
         let mut screen = Offscreen {
-            faces,
             renderer,
             target,
             slow_gpu: options.slow_gpu,
-            glyphs: Glyphs::start(options.scale, move || {
-                wake.send(Input::Nudge);
-            }),
         };
         let started = Instant::now();
         let end = options.end_after.map(|end| started + end);
@@ -230,8 +234,6 @@ struct Offscreen {
     renderer: Renderer,
     target: Target,
     slow_gpu: Duration,
-    glyphs: Glyphs,
-    faces: Faces,
 }
 
 impl Draw for Offscreen {
@@ -251,9 +253,8 @@ impl Draw for Offscreen {
         Some(self.renderer.read_back(&self.target))
     }
 
-    fn assets(&mut self, client: &mut Client, when: When) {
-        self.glyphs.deliver(client, &mut self.renderer);
-        self.faces.deliver(client, &mut self.renderer, when);
+    fn renderer(&mut self) -> Option<&mut Renderer> {
+        Some(&mut self.renderer)
     }
 }
 

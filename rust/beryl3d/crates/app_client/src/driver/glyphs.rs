@@ -22,9 +22,8 @@ use kit_ui::widgets::icons::{ORB, atlas_size};
 const STUB_PAGE: u16 = 1;
 
 impl Page {
-    /// The same page at its start, with no stub atlas: a host that draws, such as the headless
-    /// one, rasterizes the glyphs the client wants (`wanted_glyphs`) and the icons, and gives
-    /// them (`give_glyphs`). Until it does, the client's text and icons draw nothing.
+    /// The same page at its start, with the atlas and face layers empty until a host that
+    /// draws supplies its uploads.
     #[must_use]
     pub fn with_host_atlas(mut self) -> Self {
         if self.stub_atlas {
@@ -61,15 +60,20 @@ impl Page {
         self.give(Input::Assets(ready));
     }
 
-    /// The faces the client asked for at full size since the last call, each once: what a host
-    /// hands its asset workers (`Client::wanted_faces`).
+    /// The full-size faces the client asked for since the last call, each once.
     pub fn wanted_faces(&mut self) -> Vec<FaceId> {
         self.client.wanted_faces().collect()
     }
 
-    /// Gives the client a face's `AssetReady::Face`, once the host has uploaded it.
+    /// Gives the client an uploaded face's layer.
     pub fn give_face(&mut self, ready: AssetReady) {
         self.give(Input::Assets(ready));
+    }
+
+    /// Gives the drawing host the replay's client and the atlas deliveries it retains across
+    /// backward seeks. Record each atlas delivery only after the renderer accepts its page.
+    pub fn host_assets(&mut self) -> (&mut client::Client, &mut Vec<AssetReady>) {
+        (&mut self.client, &mut self.glyphs)
     }
 }
 

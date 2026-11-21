@@ -12,15 +12,14 @@ use std::time::Instant;
 use app_client::Client;
 use app_client::Input;
 use app_client::command::Request;
-use beryl_assets::light;
 #[cfg(feature = "headless")]
 use beryl_render::Target;
 use beryl_render::{Native, Presented, Renderer, Surface};
 use kit_frame::frame::{Frame, Wake};
 use kit_ui::input::{Insets, Key, Lifecycle, Pointer, Size, TextChange};
 
-use crate::assets::{Faces, Glyphs, Scans};
-use crate::frames::{Chosen, Draw, Feed, FrameLoop, Opened, Shown, Ticks, When};
+use crate::assets::Assets;
+use crate::frames::{Chosen, Draw, Feed, FrameLoop, Opened, Shown, Ticks};
 use crate::inbox::Inbox;
 
 /// What the platform does when an input arrives from another thread: it asks for a frame
@@ -135,7 +134,6 @@ impl Phone {
             }
             State::Running(mut running) => {
                 let Running { frames, screen } = &mut *running;
-                screen.glyphs.rescale(scale);
                 let attached = match &mut screen.output {
                     Output::Surface(Some(surface)) => {
                         screen.renderer.resize(surface, width, height);
@@ -200,19 +198,6 @@ impl Phone {
         output: Output,
         size: Input,
     ) {
-        renderer.upload_page(&light::prepared());
-        let scale = match size {
-            Input::Surface { scale, .. } => scale,
-            _ => 1.0,
-        };
-        let wake = |inbox: &Inbox| {
-            let inbox = inbox.clone();
-            move || {
-                inbox.send(Input::Nudge);
-            }
-        };
-        let glyphs = Glyphs::start(scale, wake(&self.inbox));
-        let faces = Faces::start(&Scans::app(), beryl_art::SCRYFALL, wake(&self.inbox));
         feed.opened(&Opened {
             display_hz: self.display_hz,
             adapter: renderer.adapter().to_owned(),
@@ -223,17 +208,18 @@ impl Phone {
         let chosen = Chosen::BASELINE;
         let mut frames = FrameLoop::new(client, Platform::default())
             .with_feed(feed)
+            .with_assets(Assets::live(&mut renderer, {
+                let inbox = self.inbox.clone();
+                move || {
+                    inbox.send(Input::Nudge);
+                }
+            }))
             .paced(self.display_hz, chosen.tier_can_drop())
             .with_tier(chosen);
         frames.handle(size);
         self.state = State::Running(Box::new(Running {
             frames,
-            screen: Screen {
-                renderer,
-                output,
-                glyphs,
-                faces,
-            },
+            screen: Screen { renderer, output },
         }));
     }
 
@@ -256,7 +242,7 @@ impl Phone {
         if lifecycle == Lifecycle::LowMemory
             && let State::Running(running) = &mut self.state
         {
-            running.screen.renderer.low_memory();
+            running.frames.low_memory(&mut running.screen.renderer);
         }
         self.give(Input::Lifecycle(lifecycle));
     }
@@ -392,8 +378,6 @@ impl Ticks for Platform {
 struct Screen {
     renderer: Renderer,
     output: Output,
-    glyphs: Glyphs,
-    faces: Faces,
 }
 
 /// What frames are drawn in.
@@ -433,8 +417,7 @@ impl Draw for Screen {
         }
     }
 
-    fn assets(&mut self, client: &mut Client, when: When) {
-        self.glyphs.deliver(client, &mut self.renderer);
-        self.faces.deliver(client, &mut self.renderer, when);
+    fn renderer(&mut self) -> Option<&mut Renderer> {
+        Some(&mut self.renderer)
     }
 }

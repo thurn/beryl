@@ -296,6 +296,12 @@ impl Renderer {
         self.faces[face_array(size)].filled()
     }
 
+    /// Whether the array holds an uploaded face in this layer.
+    #[must_use]
+    pub fn layer_uploaded(&self, size: FaceSize, layer: u16) -> bool {
+        self.faces[face_array(size)].layer_uploaded(layer)
+    }
+
     /// Frees what can be made again when the platform says memory is low (docs/beryl-3d.md,
     /// "Hosts": "Low memory"): the full-size face array, which the next full-size upload makes
     /// again, empty, and the full-size faces waiting to be uploaded. The client forgets its

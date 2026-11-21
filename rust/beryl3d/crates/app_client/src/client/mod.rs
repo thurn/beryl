@@ -715,6 +715,12 @@ impl Client {
         self.commands.pop_front()
     }
 
+    /// Physical pixels per logical point, used to prepare icons and prewarm text for the surface.
+    #[must_use]
+    pub fn surface_scale(&self) -> f32 {
+        self.window.scale
+    }
+
     /// The glyphs that laid-out text needs and no atlas page holds yet. Each is returned once.
     /// The host hands them to the rasterizer.
     pub fn wanted_glyphs(&mut self) -> impl Iterator<Item = GlyphKey> + '_ {
