@@ -10,10 +10,10 @@
 //! - Upkeep, when `master` has not moved for [`MASTER_LAG_SECONDS`] although commits landed
 //!   on `staging` ([`master_lag`]). Tip verification is the only thing that moves `master`, so
 //!   when it is stuck, for any reason, nothing reaches `master` and no fix to Ignite itself is
-//!   released from it. While open regression tickets explain the stall, upkeep tells them
-//!   instead of filing a ticket, so the sessions already fixing the failing checks hear how
-//!   long `master` has waited ([`tell_regressions`]). It files nothing for a stuck landing whose
-//!   ticket a worker closed less than [`MASTER_LAG_SECONDS`] ago.
+//!   released from it. Upkeep tells regression tickets whose work is progressing how long
+//!   `master` has waited, and files a justiciar ticket for each whose work has stalled.
+//!   A stuck landing whose justiciar ticket was closed less than [`MASTER_LAG_SECONDS`] ago
+//!   gives that worker's fix time to reach the verified branch.
 //! - The dispatch routes, when different sessions have released one ticket
 //!   ([`ignite_store::hub::releases::HOLD_AFTER_SESSIONS`] of them) and the hub stops offering
 //!   it ([`released_repeatedly`]). Each worker met an obstacle in the ticket itself, so a
@@ -37,19 +37,26 @@ use ignite_core::protocol::tickets::{
 };
 use ignite_core::time::Timestamp;
 use ignite_store::hub::batch::{self, BatchOutcome};
+use ignite_store::hub::feed;
 use ignite_store::hub::releases::Releases;
-use ignite_store::hub::{feed, tickets, tips};
+use ignite_store::hub::tickets;
 use ignite_store::{Result, StoreError};
 
 use super::filing::{self, Author, Change, Filed, Filing, UPKEEP};
-use super::parse_time;
 use super::signature::Signature;
+use super::{
+    parse_time,
+    regression_stalls::{self, Stall},
+};
 
 /// The label of a justiciar ticket.
 pub const LABEL: &str = "justiciar";
 
 /// The subject of the signature [`master_lag`] files under.
 pub const MASTER_LAG_SUBJECT: &str = "master-lag";
+
+/// The prefix of subjects identifying regression tickets whose handling has stalled.
+pub(super) const REGRESSION_STALL_SUBJECT: &str = "regression-stall:";
 
 /// The model tier a justiciar ticket asks for.
 const TIER: &str = "tier:opus";
@@ -170,21 +177,6 @@ const TELL_KEY: &str = "tell";
 /// How often a tell is tried when other writes keep coming between its read and its write.
 const ATTEMPTS: usize = 8;
 
-/// The open regression tickets of checks that are still failing. Every tip that holds a
-/// failing landing fails its check, so these tickets explain why `master` has not moved, and
-/// their workers are already fixing them.
-fn covering_regressions(conn: &Connection) -> Result<Vec<String>> {
-    let mut select = conn.prepare(
-        "SELECT DISTINCT r.ticket FROM regressions r JOIN tickets t ON t.id = r.ticket
-         WHERE r.state != ?1 AND t.status != 'closed'
-         ORDER BY r.ticket",
-    )?;
-    let tickets = select
-        .query_map([tips::FIXED], |row| row.get(0))?
-        .collect::<rusqlite::Result<Vec<String>>>()?;
-    Ok(tickets)
-}
-
 /// Tells each regression ticket in `tickets` that `master` has waited for the stuck landing
 /// `landing`, once per landing: a comment, with [`TELL_KEY`] set to its number so the session
 /// working the ticket gets it as a message. A ticket nobody holds keeps the comment for
@@ -299,8 +291,9 @@ fn recently_closed_for(conn: &Connection, landing: &str, now: Timestamp) -> Resu
 }
 
 /// Files a justiciar ticket when a landing has waited [`MASTER_LAG_SECONDS`] for `master`.
-/// When open regression tickets explain the stall it tells them instead, and when a worker
-/// closed a ticket about the same stuck landing within that time it does nothing.
+/// When open regression tickets explain the stall, it tells the ones making progress and
+/// escalates the ones that stalled. A recently closed master-lag ticket gives its fix time to
+/// reach the verified branch.
 pub fn master_lag(conn: &mut Connection, now: Timestamp) -> Result<Vec<Filed>> {
     let Some((landed_at, ticket)) = oldest_unverified_landing(conn, now)? else {
         return Ok(Vec::new());
@@ -310,16 +303,24 @@ pub fn master_lag(conn: &mut Connection, now: Timestamp) -> Result<Vec<Filed>> {
         return Ok(Vec::new());
     }
     let minutes = waited / 60.0;
-    let regressions = covering_regressions(conn)?;
+    let regressions = regression_stalls::open(conn, now)?;
     if !regressions.is_empty() {
+        let mut filed = Vec::new();
+        let mut progressing = Vec::new();
+        for (regression, stall) in regressions {
+            if let Some(stall) = stall {
+                filed.push(file_regression_stall(conn, &regression, stall, now)?);
+            } else {
+                progressing.push(regression);
+            }
+        }
         let text = format!(
             "`master` has not moved for {minutes:.0} minutes: ticket {ticket} landed on \
-             `staging` at {landed_at} and no tip since has been verified. The open regression \
-             tickets ({}) explain why, so Ignite filed no justiciar ticket: fixing them is what \
-             moves `master`.",
-            regressions.join(", ")
+             `staging` at {landed_at} and no tip since has been verified. This regression \
+             ticket is still making progress. Fixing its failing checks will help move `master`."
         );
-        return tell_regressions(conn, &regressions, &ticket, &text, now);
+        filed.extend(tell_regressions(conn, &progressing, &ticket, &text, now)?);
+        return Ok(filed);
     }
     if recently_closed_for(conn, &ticket, now)? {
         return Ok(Vec::new());
@@ -345,6 +346,28 @@ pub fn master_lag(conn: &mut Connection, now: Timestamp) -> Result<Vec<Filed>> {
         released: true,
     };
     Ok(vec![filing::file(conn, UPKEEP, &filing, now)?])
+}
+
+fn file_regression_stall(
+    conn: &mut Connection,
+    regression: &str,
+    stall: Stall,
+    now: Timestamp,
+) -> Result<Filed> {
+    let reason = stall.reason();
+    let body = format!(
+        "Regression ticket {regression} is holding back `master`. {reason}\n\n\
+         Read `ignite guide justiciar`, then check the regression's history, the worker if one \
+         holds it, and the tip verification results."
+    );
+    let filing = Filing {
+        signature: Signature::of_subject(&format!("{REGRESSION_STALL_SUBJECT}{regression}"), LABEL),
+        evidence: reason,
+        fields: fields(format!("Handling of regression {regression} stalled"), body),
+        deps: Vec::new(),
+        released: true,
+    };
+    filing::file(conn, UPKEEP, &filing, now)
 }
 
 /// Files the justiciar ticket for `ticket`, which different sessions released and which the hub

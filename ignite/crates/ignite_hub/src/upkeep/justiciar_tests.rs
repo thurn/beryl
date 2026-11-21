@@ -1,13 +1,18 @@
 //! Justiciar tickets from reports and from a `master` that stopped moving.
 
-use ignite_core::ids::MachineId;
-use ignite_core::protocol::hub::JusticiarReport;
-use ignite_core::protocol::tickets::{Status, TicketType};
+use ignite_core::fakes::FakeClock;
+use ignite_core::ids::{CheckName, Commit, InputHash, MachineId};
+use ignite_core::protocol::hub::{JusticiarReport, ResultKey, TipFailure, TipState, TipVerified};
+use ignite_core::protocol::tickets::{CULPRIT_HANDOFF_KEY, Operation, Status, TicketType};
+use ignite_core::time::Timestamp;
 use ignite_core::traits::Clock;
-use ignite_store::hub;
+use ignite_store::hub::{self, tips};
+use rusqlite::{Connection, params};
+use serde_json::json;
 
 use super::filing::{Change, UPKEEP};
 use super::justiciar::{self, MASTER_LAG_SECONDS};
+use super::regression_stalls::{FALLBACK_AGE_SECONDS, INACTIVE_SECONDS, UNCLAIMED_SECONDS};
 use super::tests::{all_tickets, apply, comment_count, create, start, ticket};
 
 fn crash(machine: &str, host: &str, evidence: &str, on_machine: bool) -> JusticiarReport {
@@ -188,36 +193,26 @@ fn an_open_regression_ticket_is_told_once_per_stuck_landing_instead_of_a_new_tic
     let clock = start();
     let mut conn = hub::open_in_memory().unwrap();
     landing(&mut conn, &clock);
-    let regression = apply(
-        &mut conn,
-        vec![create("pytest fails", TicketType::Bug, None, &[])],
-        clock.now(),
-    );
-    conn.execute(
-        "INSERT INTO regressions (check_name, ticket, first_bad, last_good, state)
-         VALUES ('pytest', ?1, 'bbbbbbb', 'aaaaaaa', 'open')",
-        [&regression[0]],
-    )
-    .unwrap();
     clock.advance(MASTER_LAG_SECONDS + 60.0);
+    let regression = regression(&mut conn, &clock);
     let told = justiciar::master_lag(&mut conn, clock.now()).unwrap();
     assert_eq!(told.len(), 1);
-    assert_eq!(told[0].ticket, regression[0]);
+    assert_eq!(told[0].ticket, regression);
     assert_eq!(told[0].change, Change::Commented);
     assert_eq!(lag_tickets(&conn, &clock), 0);
-    let held = ticket(&conn, &regression[0]);
+    let held = ticket(&conn, &regression);
     // The daemon holding the ticket delivers the comment with this number to its session.
     assert_eq!(held.metadata.get("tell"), Some(&serde_json::json!(1)));
-    assert_eq!(comment_count(&conn, &regression[0]), 1);
+    assert_eq!(comment_count(&conn, &regression), 1);
 
     // Later passes about the same stuck landing tell it nothing more.
-    clock.advance(600.0);
+    clock.advance(UNCLAIMED_SECONDS - 1.0);
     let again = justiciar::master_lag(&mut conn, clock.now()).unwrap();
     assert_eq!(again[0].change, Change::Unchanged);
-    assert_eq!(comment_count(&conn, &regression[0]), 1);
+    assert_eq!(comment_count(&conn, &regression), 1);
 
     // Once the regression ticket is closed, a lag that remains is no longer explained.
-    close(&mut conn, &regression[0], &clock.now().to_string());
+    close(&mut conn, &regression, &clock.now().to_string());
     let filed = justiciar::master_lag(&mut conn, clock.now()).unwrap();
     assert_eq!(filed[0].change, Change::Created);
     assert_eq!(lag_tickets(&conn, &clock), 1);
@@ -266,4 +261,364 @@ fn a_closed_ticket_for_an_earlier_landing_does_not_hold_back_a_new_stall() {
     let second = justiciar::master_lag(&mut conn, clock.now()).unwrap();
     assert_eq!(second.len(), 1);
     assert_ne!(second[0].ticket, first[0].ticket);
+}
+
+fn regression(conn: &mut Connection, clock: &FakeClock) -> String {
+    let ids = apply(
+        conn,
+        vec![create("pytest fails", TicketType::Bug, None, &[])],
+        clock.now(),
+    );
+    conn.execute(
+        "INSERT INTO regressions (check_name, ticket, first_bad, last_good, state)
+         VALUES ('quality:unit', ?1, 'bbbbbbb', 'aaaaaaa', 'open')",
+        [&ids[0]],
+    )
+    .unwrap();
+    ids[0].clone()
+}
+
+fn claim(conn: &mut Connection, ticket: &str, now: Timestamp) -> String {
+    apply(
+        conn,
+        vec![Operation::Claim {
+            id: ticket.to_owned(),
+        }],
+        now,
+    );
+    let actor: String = conn
+        .query_row(
+            "SELECT assignee FROM tickets WHERE id = ?1",
+            [ticket],
+            |row| row.get(0),
+        )
+        .unwrap();
+    actor
+}
+
+fn handoff(conn: &mut Connection, ticket: &str, result: serde_json::Value, now: Timestamp) {
+    apply(
+        conn,
+        vec![Operation::Update {
+            id: ticket.to_owned(),
+            set: None,
+            add_labels: Vec::new(),
+            remove_labels: Vec::new(),
+            set_meta: [(CULPRIT_HANDOFF_KEY.to_owned(), result)].into(),
+            unset_meta: Vec::new(),
+        }],
+        now,
+    );
+}
+
+fn record(
+    conn: &Connection,
+    ticket: &str,
+    holder: &str,
+    now: Timestamp,
+    verb: &str,
+    outcome: &str,
+) {
+    conn.execute(
+        "INSERT INTO records (ticket, session, at, verb, machine, class, queued_s, wall_s, cpu_s,
+                              peak_mb, outcome, ignite)
+         VALUES (?1, ?2, ?3, ?4, 'machine', 'agent', 0, 0, 0, 0, ?5, 'test')",
+        params![ticket, holder, now.to_string(), verb, outcome],
+    )
+    .unwrap();
+}
+
+fn escalate(conn: &mut Connection, clock: &FakeClock, regression: &str, reason: &str) -> String {
+    let filed = justiciar::master_lag(conn, clock.now()).unwrap();
+    assert_eq!(filed.len(), 1);
+    assert_eq!(filed[0].change, Change::Created);
+    let emergency = ticket(conn, &filed[0].ticket);
+    assert_eq!(emergency.status, Status::Open);
+    assert_eq!(emergency.priority, 0);
+    assert!(
+        emergency
+            .labels
+            .iter()
+            .any(|label| label == justiciar::LABEL)
+    );
+    assert!(emergency.body.contains(regression));
+    assert!(emergency.body.contains(reason), "{}", emergency.body);
+    emergency.id.to_string()
+}
+
+#[test]
+fn a_regression_waiting_for_a_claim_escalates_and_clears_when_work_starts() {
+    use super::clearing::{HOLD_SECONDS, close_cleared};
+
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    landing(&mut conn, &clock);
+    clock.advance(MASTER_LAG_SECONDS + 1.0);
+    let regression = regression(&mut conn, &clock);
+    clock.advance(UNCLAIMED_SECONDS - 1.0);
+    assert_eq!(
+        justiciar::master_lag(&mut conn, clock.now()).unwrap()[0].ticket,
+        regression
+    );
+
+    clock.advance(1.0);
+    let emergency = escalate(&mut conn, &clock, &regression, "without a claim");
+    let again = justiciar::master_lag(&mut conn, clock.now()).unwrap();
+    assert_eq!(again[0].ticket, emergency);
+    assert_eq!(again[0].change, Change::Unchanged);
+    assert!(close_cleared(&mut conn, clock.now()).unwrap().is_empty());
+
+    let holder = claim(&mut conn, &regression, clock.now());
+    assert!(close_cleared(&mut conn, clock.now()).unwrap().is_empty());
+    clock.advance(HOLD_SECONDS);
+    record(&conn, &regression, &holder, clock.now(), "check", "pass");
+    assert_eq!(close_cleared(&mut conn, clock.now()).unwrap(), [emergency]);
+}
+
+#[test]
+fn a_regression_whose_holder_stops_recording_activity_escalates() {
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    landing(&mut conn, &clock);
+    let regression = regression(&mut conn, &clock);
+    let holder = claim(&mut conn, &regression, clock.now());
+    clock.advance(MASTER_LAG_SECONDS + 1.0);
+    record(&conn, &regression, &holder, clock.now(), "test", "pass");
+
+    clock.advance(INACTIVE_SECONDS - 1.0);
+    assert_eq!(
+        justiciar::master_lag(&mut conn, clock.now()).unwrap()[0].ticket,
+        regression
+    );
+    clock.advance(1.0);
+    escalate(
+        &mut conn,
+        &clock,
+        &regression,
+        "holder last recorded activity",
+    );
+
+    clock.advance(1.0);
+    apply(
+        &mut conn,
+        vec![Operation::Comment {
+            id: regression.clone(),
+            text: "Working on this".to_owned(),
+        }],
+        clock.now(),
+    );
+    assert_eq!(
+        justiciar::master_lag(&mut conn, clock.now()).unwrap()[0].ticket,
+        regression
+    );
+}
+
+fn finish_tip(conn: &Connection, clock: &FakeClock, commit: &str, check: &str, contains: &[&str]) {
+    tips::verified(
+        conn,
+        &TipVerified {
+            commit: Commit::new(commit).unwrap(),
+            machine: MachineId::new("m-1").unwrap(),
+            state: TipState::Failed,
+            regression_passes: None,
+            failure: Some(TipFailure {
+                checks: vec![ResultKey {
+                    check: CheckName::new(check).unwrap(),
+                    hash: InputHash::new("a".repeat(64)).unwrap(),
+                    platform: None,
+                }],
+                unverified_commits: contains
+                    .iter()
+                    .map(|sha| Commit::new(*sha).unwrap())
+                    .collect(),
+            }),
+        },
+        clock.now(),
+    )
+    .unwrap();
+}
+
+fn fix_attempt(conn: &Connection, regression: &str, clock: &FakeClock, sha: &str) {
+    crate::routes::dispatch::set_columns(
+        conn,
+        regression,
+        "worker",
+        &[(
+            "landed",
+            json!({"commits": [sha], "files": ["tests.rs"], "note": "fix attempt"}),
+        )],
+        clock.now(),
+    )
+    .unwrap();
+}
+
+#[test]
+fn only_separate_landed_fixes_verified_to_fail_the_same_check_escalate() {
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    landing(&mut conn, &clock);
+    clock.advance(MASTER_LAG_SECONDS + 1.0);
+    let regression = regression(&mut conn, &clock);
+    claim(&mut conn, &regression, clock.now());
+
+    clock.advance(1.0);
+    fix_attempt(&conn, &regression, &clock, "cafe");
+    finish_tip(&conn, &clock, "cafe", "quality:unit", &[]);
+    finish_tip(&conn, &clock, "cafe1", "quality:unit", &["cafe"]);
+    assert_eq!(
+        justiciar::master_lag(&mut conn, clock.now()).unwrap()[0].ticket,
+        regression
+    );
+
+    clock.advance(1.0);
+    fix_attempt(&conn, &regression, &clock, "babe");
+    finish_tip(&conn, &clock, "babe", "quality:other", &[]);
+    finish_tip(&conn, &clock, "ca1f", "quality:unit", &[]);
+    assert_eq!(
+        justiciar::master_lag(&mut conn, clock.now()).unwrap()[0].ticket,
+        regression
+    );
+
+    finish_tip(&conn, &clock, "face", "quality:unit", &["cafe", "babe"]);
+    escalate(&mut conn, &clock, &regression, "2 separate fixes landed");
+}
+
+#[test]
+fn a_regression_outlying_the_historical_lifetime_escalates_even_with_recent_activity() {
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    landing(&mut conn, &clock);
+    let regression = regression(&mut conn, &clock);
+    clock.advance(FALLBACK_AGE_SECONDS - 1.0);
+    claim(&mut conn, &regression, clock.now());
+    assert_eq!(
+        justiciar::master_lag(&mut conn, clock.now()).unwrap()[0].ticket,
+        regression
+    );
+
+    clock.advance(1.0);
+    escalate(&mut conn, &clock, &regression, "historical 90th-percentile");
+}
+
+#[test]
+fn a_holder_who_resumed_the_culprit_gets_time_until_it_falls_back() {
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    landing(&mut conn, &clock);
+    let regression = regression(&mut conn, &clock);
+    let holder = claim(&mut conn, &regression, clock.now());
+    handoff(
+        &mut conn,
+        &regression,
+        json!({"session": holder, "note": "Resumed the culprit's transcript from an earlier ticket"}),
+        clock.now(),
+    );
+
+    clock.advance(FALLBACK_AGE_SECONDS + 1.0);
+    assert_eq!(
+        justiciar::master_lag(&mut conn, clock.now()).unwrap()[0].ticket,
+        regression
+    );
+
+    handoff(
+        &mut conn,
+        &regression,
+        json!({"session": holder, "resumed": false, "note": "Started fresh after a failed resume"}),
+        clock.now(),
+    );
+    escalate(&mut conn, &clock, &regression, "historical 90th-percentile");
+}
+
+#[test]
+fn a_regression_escalation_clears_when_a_tip_passes() {
+    use super::clearing::{HOLD_SECONDS, close_cleared};
+
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    landing(&mut conn, &clock);
+    let regression = regression(&mut conn, &clock);
+    clock.advance(MASTER_LAG_SECONDS + 1.0);
+    let emergency = escalate(&mut conn, &clock, &regression, "without a claim");
+
+    verify(&conn, "abcd", &clock.now().to_string());
+    assert!(
+        !close_cleared(&mut conn, clock.now())
+            .unwrap()
+            .contains(&emergency)
+    );
+    clock.advance(HOLD_SECONDS);
+    assert!(
+        close_cleared(&mut conn, clock.now())
+            .unwrap()
+            .contains(&emergency)
+    );
+}
+
+#[test]
+fn recent_culprit_resumes_set_the_age_threshold_when_there_are_enough() {
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    landing(&mut conn, &clock);
+    for lifetime in 1..=20 {
+        let sample = apply(
+            &mut conn,
+            vec![create("earlier regression", TicketType::Bug, None, &[])],
+            clock.now(),
+        );
+        let holder = "earlier-worker";
+        handoff(
+            &mut conn,
+            &sample[0],
+            json!({"session": holder, "resumed": true}),
+            clock.now(),
+        );
+        conn.execute(
+            "UPDATE tickets SET status = 'closed', labels = '[\"regression\"]',
+                                closed_at = ?1, session = ?2 WHERE id = ?3",
+            params![
+                clock
+                    .now()
+                    .plus_seconds(60.0 * f64::from(lifetime))
+                    .to_string(),
+                holder,
+                sample[0]
+            ],
+        )
+        .unwrap();
+    }
+    clock.advance(MASTER_LAG_SECONDS + 1.0);
+    let regression = regression(&mut conn, &clock);
+    claim(&mut conn, &regression, clock.now());
+
+    clock.advance(18.0 * 60.0 - 1.0);
+    assert_eq!(
+        justiciar::master_lag(&mut conn, clock.now()).unwrap()[0].ticket,
+        regression
+    );
+    clock.advance(1.0);
+    escalate(&mut conn, &clock, &regression, "historical 90th-percentile");
+}
+
+#[test]
+fn a_verified_tip_that_did_not_run_the_regression_check_leaves_its_stall_open() {
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    let regression = regression(&mut conn, &clock);
+    clock.advance(1.0);
+    tips::verified(
+        &conn,
+        &TipVerified {
+            commit: Commit::new("caf1").unwrap(),
+            machine: MachineId::new("m-1").unwrap(),
+            state: TipState::Verified,
+            regression_passes: Some(Vec::new()),
+            failure: None,
+        },
+        clock.now(),
+    )
+    .unwrap();
+    clock.advance(1.0);
+    landing(&mut conn, &clock);
+    clock.advance(MASTER_LAG_SECONDS);
+    escalate(&mut conn, &clock, &regression, "without a claim");
 }

@@ -252,6 +252,7 @@ fn verified(commit: &str, checks: &[&str]) -> TipVerified {
         machine: "m-1".parse().unwrap(),
         state: TipState::Verified,
         regression_passes: Some(checks.iter().map(|check| key(check)).collect()),
+        failure: None,
     }
 }
 

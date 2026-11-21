@@ -226,8 +226,8 @@ pub trait Effects: Send + Sync {
         let _ = (app, reason, message, cli_version);
     }
     /// Reports how a regression or reverted ticket was handed to a worker.
-    fn handoff(&self, slot: &Slot, note: &str) {
-        let _ = (slot, note);
+    fn handoff(&self, slot: &Slot, note: &str, resumed: bool) {
+        let _ = (slot, note, resumed);
     }
     /// Reports a parked slot, or a release that needs a person's attention.
     fn report(&self, slot: &Slot, report: &str) {

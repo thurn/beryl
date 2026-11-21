@@ -432,6 +432,9 @@ pub struct TipVerified {
     /// daemons sent only the tip's state.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub regression_passes: Option<Vec<ResultKey>>,
+    /// Present on a failed round from a daemon that records which checks failed at this tip.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub failure: Option<TipFailure>,
 }
 
 /// `POST /tips/waiting`: a tip has waited an hour for checks that only a machine running

@@ -26,7 +26,7 @@ use ignite_store::hub::{fleet, fleet_settings, rows, tickets, tip_rounds};
 
 use super::filing::{CHECKS_KEY, FAULT_KEY, SIGHTED_KEY, strings};
 use super::stuck::{self, StuckNow, TIP_WAIT_SECONDS};
-use super::{justiciar, parse_time};
+use super::{justiciar, parse_time, regression_stalls};
 use crate::routes::tip_rounds as rounds_route;
 
 /// How many tip rounds in a row, all after the last sighting, must be quick before a slow-round
@@ -96,6 +96,7 @@ pub struct World {
     /// The machines that stored a check result in the last [`TIP_WAIT_SECONDS`].
     working: BTreeSet<String>,
     master_lagging: bool,
+    stalled_regressions: BTreeSet<String>,
     /// The newest rounds, newest first.
     rounds: Vec<TipRound>,
 }
@@ -111,13 +112,23 @@ impl World {
             )
             .optional()?
             .is_some();
+        let master_lagging = justiciar::master_lagging(conn, now)?;
+        let stalled_regressions = if master_lagging {
+            regression_stalls::open(conn, now)?
+                .into_iter()
+                .filter_map(|(ticket, stall)| stall.map(|_| ticket))
+                .collect()
+        } else {
+            BTreeSet::new()
+        };
         Ok(World {
             stuck: stuck::stuck_now(conn, now)?,
             machines: fleet::machines(conn)?,
             settings: fleet_settings::settings(conn)?,
             tip_waiting,
             working: stuck::working_machines(conn, now)?,
-            master_lagging: justiciar::master_lagging(conn, now)?,
+            master_lagging,
+            stalled_regressions,
             rounds: tip_rounds::recent(conn, QUICK_ROUNDS)?,
         })
     }
@@ -179,6 +190,16 @@ pub fn verdict(
         category if category == justiciar::LABEL && subject == justiciar::MASTER_LAG_SUBJECT => {
             present_unless(world.master_lagging, &|| {
                 Ok("`master` moved: no landing has waited two hours for it since.".to_owned())
+            })
+        }
+        category if category == justiciar::LABEL => {
+            let Some(regression) = subject.strip_prefix(justiciar::REGRESSION_STALL_SUBJECT) else {
+                return Ok(Verdict::Unwatched);
+            };
+            present_unless(world.stalled_regressions.contains(regression), &|| {
+                Ok(format!(
+                    "regression ticket {regression} is no longer stalled while `master` waits."
+                ))
             })
         }
         category if INCOMPLETE.contains(&category) => checks_reported(conn, ticket, fault, sighted),

@@ -343,7 +343,8 @@ impl CliDaemon {
                 continue;
             }
             if let Some(note) = &row.handoff_note {
-                self.effects.handoff(&slot_of(&row), note);
+                self.effects
+                    .handoff(&slot_of(&row), note, row.fallback_prompt.is_some());
             }
             if let Some((turn, _)) = first {
                 row.turn = turn.turn;

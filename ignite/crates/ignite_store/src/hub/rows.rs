@@ -200,6 +200,8 @@ crate::tables! {
         state: String,
         /// JSON: the result keys that passed for open regressions.
         regression_passes: Option<String>,
+        /// JSON: the check keys and commits of a failed tip.
+        failure: Option<String>,
     }
 
     TipClaim = "tip_claims" {

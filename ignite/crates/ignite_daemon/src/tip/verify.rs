@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use ignite_core::config::Os;
 use ignite_core::ids::{CheckName, Commit};
 use ignite_core::protocol::Outcome;
-use ignite_core::protocol::hub::{ResultKey, TipState, TipVerified};
+use ignite_core::protocol::hub::{ResultKey, TipFailure, TipState, TipVerified};
 use ignite_core::traits::{Push, Result};
 
 use super::coverage::{Required, Scope};
@@ -32,6 +32,7 @@ impl TipVerifier {
                 machine: ctx.machine.clone(),
                 state: TipState::Verified,
                 regression_passes: Some(Vec::new()),
+                failure: None,
             })?;
             return Ok(TipOutcome::Verified);
         }
@@ -223,17 +224,22 @@ impl TipVerifier {
                 }
                 self.save(ctx);
             }
+            let checks = names_of(&failed);
             if last != tip {
+                let unverified_commits =
+                    ignite_git::refs::commits_between(&ctx.repo, last, tip).unwrap_or_default();
                 ctx.hub.tip_verified(&TipVerified {
                     commit: tip.clone(),
                     machine: ctx.machine.clone(),
                     state: TipState::Failed,
                     regression_passes: None,
+                    failure: Some(TipFailure {
+                        checks: failed.iter().map(|check| check.key.clone()).collect(),
+                        unverified_commits,
+                    }),
                 })?;
             }
-            return Ok(TipOutcome::Failed {
-                checks: names_of(&failed),
-            });
+            return Ok(TipOutcome::Failed { checks });
         }
         if !waiting.is_empty() {
             let flagged = self.flag_missing_machines(ctx, tip, elsewhere);
@@ -329,6 +335,7 @@ impl TipVerifier {
             machine: ctx.machine.clone(),
             state: TipState::Verified,
             regression_passes: Some(regression_passes),
+            failure: None,
         })?;
         self.waiting_since.clear();
         self.flagged.clear();

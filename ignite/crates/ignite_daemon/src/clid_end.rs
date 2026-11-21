@@ -75,7 +75,7 @@ impl CliDaemon {
                 r.resume_at = Some(now);
                 r.handoff_note = Some(note.to_owned());
             })?;
-            self.effects.handoff(&slot, note);
+            self.effects.handoff(&slot, note, false);
             return self.start_next(&next);
         }
         let facts = self.facts(row, turn, &end, events)?;

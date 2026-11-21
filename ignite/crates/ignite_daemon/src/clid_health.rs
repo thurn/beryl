@@ -700,7 +700,7 @@ impl Effects for HealthEffects {
         }
     }
 
-    fn handoff(&self, slot: &Slot, note: &str) {
+    fn handoff(&self, slot: &Slot, note: &str, resumed: bool) {
         use ignite_core::protocol::tickets::{BatchRequest, CULPRIT_HANDOFF_KEY, Operation};
 
         let (Some(ticket), Some(session)) = (&slot.ticket, &slot.session) else {
@@ -715,7 +715,7 @@ impl Effects for HealthEffects {
                 remove_labels: Vec::new(),
                 set_meta: std::collections::BTreeMap::from([(
                     CULPRIT_HANDOFF_KEY.to_owned(),
-                    serde_json::json!({"session": session, "note": note}),
+                    serde_json::json!({"session": session, "note": note, "resumed": resumed}),
                 )]),
                 unset_meta: Vec::new(),
             }],

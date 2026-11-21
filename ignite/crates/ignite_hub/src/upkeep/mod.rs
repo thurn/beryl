@@ -45,6 +45,7 @@ pub mod justiciar;
 pub mod machines;
 pub mod missed;
 pub mod offline;
+mod regression_stalls;
 pub mod regressions;
 pub mod reverted;
 pub mod schedules;
@@ -61,6 +62,8 @@ mod guard_tests;
 mod justiciar_tests;
 #[cfg(test)]
 mod missed_tests;
+#[cfg(test)]
+mod regression_stalls_replay;
 #[cfg(test)]
 mod reverted_tests;
 #[cfg(test)]

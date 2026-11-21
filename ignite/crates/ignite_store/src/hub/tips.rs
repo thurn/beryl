@@ -100,6 +100,12 @@ pub fn verified(conn: &Connection, verified: &TipVerified, now: Timestamp) -> Re
         .map(serde_json::to_string)
         .transpose()
         .map_err(|error| StoreError::Invalid(error.to_string()))?;
+    let failure = verified
+        .failure
+        .as_ref()
+        .map(serde_json::to_string)
+        .transpose()
+        .map_err(|error| StoreError::Invalid(format!("a tip's failed checks: {error}")))?;
     conn.execute(
         "UPDATE tips SET state = ?2, verified = CASE WHEN ?3 THEN ?4 ELSE NULL END,
          regression_passes = CASE
@@ -110,13 +116,16 @@ pub fn verified(conn: &Connection, verified: &TipVerified, now: Timestamp) -> Re
              SELECT value FROM json_each(regression_passes)
              UNION SELECT value FROM json_each(?5)
            ))
-         END WHERE commit_sha = ?1",
+         END,
+         failure = CASE WHEN ?2 = 'failed' THEN coalesce(?6, failure) END
+         WHERE commit_sha = ?1",
         params![
             verified.commit.as_str(),
             tip_state_text(verified.state),
             finished,
             now.to_string(),
             passes,
+            failure,
         ],
     )?;
     if finished {
@@ -373,6 +382,7 @@ mod tests {
             machine: MachineId::new("m-1").unwrap(),
             state: TipState::Verified,
             regression_passes: None,
+            failure: None,
         };
         verified(&conn, &done, at(50.0)).unwrap();
         let state = |commit: &str| -> String {
@@ -404,6 +414,7 @@ mod tests {
             machine: MachineId::new("m-1").unwrap(),
             state: TipState::Verified,
             regression_passes: None,
+            failure: None,
         };
         verified(&conn, &done, at(40.0)).unwrap();
         assert_eq!(

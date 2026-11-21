@@ -15,6 +15,14 @@ pub struct ResultKey {
     pub platform: Option<Os>,
 }
 
+/// The checks a failed tip still fails and the commits it verified.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TipFailure {
+    pub checks: Vec<ResultKey>,
+    /// Commits in this tip that were outside the verified branch when the round began.
+    pub unverified_commits: Vec<Commit>,
+}
+
 /// A cached outcome.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CachedResult {
