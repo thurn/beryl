@@ -4,31 +4,25 @@
 
 use beryl_engine::TurnStep;
 use beryl_scenario::{P0, P1, Scenario};
-use beryl_scenario_types::{ME, Resolve, THEM, advance_to, ends_in_draw, wins};
+use beryl_scenario_types::{ME, Resolve, THEM, advance_to, wins};
 
 use crate::{names, props};
 
-const HARPY: &str = names::BLOOD_TOLL_HARPY;
-const HARPY_SETUP: Scenario = Scenario::setup()
-    .hand(P0, &[HARPY])
-    .battlefield(P0, &[names::SWAMP; 3]);
+const BOLT: &str = names::LIGHTNING_BOLT;
+const BOLT_SETUP: Scenario = Scenario::setup()
+    .hand(P0, &[BOLT])
+    .battlefield(P0, &[names::MOUNTAIN]);
 
-/// A player with zero life loses, and if both players reach zero simultaneously the game
-/// ends in a draw.
+/// A player loses when their life reaches zero or falls below it.
 pub const ZERO_LIFE: &[Scenario] = &[
-    HARPY_SETUP
-        .titled("losing life to zero on your own turn loses the game")
-        .life(P0, 1)
-        .actions(&[ME.casts(HARPY), Resolve, Resolve, wins(THEM)]),
-    HARPY_SETUP
-        .titled("losing life to zero on the opponent's turn loses the game")
-        .life(P1, 1)
-        .actions(&[ME.casts(HARPY), Resolve, Resolve, wins(ME)]),
-    HARPY_SETUP
-        .titled("both players reaching zero life at once draws the game")
-        .life(P0, 1)
-        .life(P1, 1)
-        .actions(&[ME.casts(HARPY), Resolve, Resolve, ends_in_draw()]),
+    BOLT_SETUP
+        .titled("a player at zero life loses during their own turn")
+        .life(P0, 3)
+        .actions(&[ME.casts(BOLT), ME.targets_player(ME), Resolve, wins(THEM)]),
+    BOLT_SETUP
+        .titled("a player at zero life loses during the opponent's turn")
+        .life(P1, 3)
+        .actions(&[ME.casts(BOLT), ME.targets_player(THEM), Resolve, wins(ME)]),
     Scenario::new("combat damage can reduce the losing player's life below zero")
         .life(P1, 1)
         .battlefield(P0, &[props::VANILLA.card])

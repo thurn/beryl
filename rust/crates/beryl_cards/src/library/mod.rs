@@ -202,11 +202,7 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
         names::DARK_DEPTHS,
         replacement::ENTERS_WITH_COUNTERS,
     ),
-    (
-        "state_based",
-        names::BLOOD_TOLL_HARPY,
-        state_based::ZERO_LIFE,
-    ),
+    ("state_based", names::LIGHTNING_BOLT, state_based::ZERO_LIFE),
     (
         "tokens",
         names::ADELINE_RESPLENDENT_CATHAR,
