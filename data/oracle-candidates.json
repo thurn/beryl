@@ -1,0 +1,283 @@
+{
+  "sources": {
+    "LightningBoltTest.testDamageOpponent": {
+      "oracle": "xmage",
+      "commit": "987fd4e9c73e9f113e235f8d8f98628f2d391667",
+      "path": "Mage.Tests/src/test/java/org/mage/test/cards/abilities/oneshot/damage/LightningBoltTest.java",
+      "method": "testDamageOpponent",
+      "lines": "14-L24",
+      "fingerprint": "b37b9d8a6aca10b64d0c02d4f012fbddd1a77ed6fe2167c4097f334daa16edc7",
+      "helpers": [
+        "Mage.Tests/src/test/java/org/mage/test/serverside/base/CardTestPlayerBase.java"
+      ]
+    },
+    "LightningBoltTest.testDamageSmallCreature": {
+      "oracle": "xmage",
+      "commit": "987fd4e9c73e9f113e235f8d8f98628f2d391667",
+      "path": "Mage.Tests/src/test/java/org/mage/test/cards/abilities/oneshot/damage/LightningBoltTest.java",
+      "method": "testDamageSmallCreature",
+      "lines": "40-L50",
+      "fingerprint": "b37b9d8a6aca10b64d0c02d4f012fbddd1a77ed6fe2167c4097f334daa16edc7",
+      "helpers": [
+        "Mage.Tests/src/test/java/org/mage/test/serverside/base/CardTestPlayerBase.java"
+      ]
+    },
+    "PortableHoleTest.opponentsPermanentisExiled": {
+      "oracle": "xmage",
+      "commit": "987fd4e9c73e9f113e235f8d8f98628f2d391667",
+      "path": "Mage.Tests/src/test/java/org/mage/test/cards/single/afr/PortableHoleTest.java",
+      "method": "opponentsPermanentisExiled",
+      "lines": "15-L26",
+      "fingerprint": "cccb824847ce5ea3143e2860b8e57500be38a70e9e54fc1c61a6012407f117ac",
+      "helpers": [
+        "Mage.Tests/src/test/java/org/mage/test/serverside/base/CardTestPlayerBase.java"
+      ]
+    },
+    "CleverImpersonatorTest.testCopyPlaneswalker": {
+      "oracle": "xmage",
+      "commit": "987fd4e9c73e9f113e235f8d8f98628f2d391667",
+      "path": "Mage.Tests/src/test/java/org/mage/test/cards/copy/CleverImpersonatorTest.java",
+      "method": "testCopyPlaneswalker",
+      "lines": "54-L83",
+      "fingerprint": "ac43d1aa2be5d26320c3f460c1b9873472aa662d23673a2b81ec81dcb7c41c66",
+      "helpers": [
+        "Mage.Tests/src/test/java/org/mage/test/serverside/base/CardTestPlayerBase.java"
+      ]
+    },
+    "TokenCopyTest.testCopyTransformedDFC": {
+      "oracle": "xmage",
+      "commit": "987fd4e9c73e9f113e235f8d8f98628f2d391667",
+      "path": "Mage.Tests/src/test/java/org/mage/test/cards/copy/TokenCopyTest.java",
+      "method": "testCopyTransformedDFC",
+      "lines": "100-L115",
+      "fingerprint": "a33849d2a6dfae8da6050c91afb2296cae19d95acf79a1f1bbdf6a059af44894",
+      "helpers": [
+        "Mage.Tests/src/test/java/org/mage/test/serverside/base/CardTestPlayerBase.java"
+      ]
+    }
+  },
+  "candidates": [
+    {
+      "id": "LightningBoltTest.testDamageOpponent",
+      "sources": [
+        "LightningBoltTest.testDamageOpponent"
+      ],
+      "cards": [
+        {
+          "card": "Lightning Bolt"
+        },
+        {
+          "card": "Mountain"
+        }
+      ],
+      "setup": [
+        "hand",
+        "battlefield"
+      ],
+      "actions": [
+        "cast",
+        "target player",
+        "resolve",
+        "advance to step"
+      ],
+      "assertions": [
+        "life total"
+      ],
+      "witness": "The caster stays at 20 life and their opponent drops to 17."
+    },
+    {
+      "id": "LightningBoltTest.testDamageSmallCreature",
+      "sources": [
+        "LightningBoltTest.testDamageSmallCreature"
+      ],
+      "cards": [
+        {
+          "card": "Lightning Bolt"
+        },
+        {
+          "card": "Mountain"
+        },
+        {
+          "card": "Sejiri Merfolk"
+        }
+      ],
+      "setup": [
+        "hand",
+        "battlefield"
+      ],
+      "actions": [
+        "cast",
+        "target creature",
+        "resolve",
+        "advance to step"
+      ],
+      "assertions": [
+        "controlled count by name"
+      ],
+      "witness": "The opponent controls zero Sejiri Merfolk after Lightning Bolt resolves."
+    },
+    {
+      "id": "PortableHoleTest.opponentsPermanentisExiled",
+      "sources": [
+        "PortableHoleTest.opponentsPermanentisExiled"
+      ],
+      "cards": [
+        {
+          "card": "Grizzly Bears"
+        },
+        {
+          "card": "Plains"
+        },
+        {
+          "card": "Portable Hole"
+        }
+      ],
+      "setup": [
+        "hand",
+        "battlefield"
+      ],
+      "actions": [
+        "cast",
+        "choose a triggered ability's target",
+        "resolve",
+        "advance to step"
+      ],
+      "assertions": [
+        "zone count by name"
+      ],
+      "witness": "The opponent owns one Grizzly Bears in exile."
+    },
+    {
+      "id": "CleverImpersonatorTest.testCopyPlaneswalker",
+      "sources": [
+        "CleverImpersonatorTest.testCopyPlaneswalker"
+      ],
+      "cards": [
+        {
+          "card": "Balduvian Bears"
+        },
+        {
+          "card": "Clever Impersonator"
+        },
+        {
+          "card": "Island"
+        },
+        {
+          "card": "Liliana, Heretical Healer",
+          "face": "Liliana, Defiant Necromancer"
+        }
+      ],
+      "setup": [
+        "hand",
+        "battlefield",
+        "transformed permanent"
+      ],
+      "actions": [
+        "cast",
+        "choose copy",
+        "activate the copied planeswalker and resolve both discard choices",
+        "advance to step"
+      ],
+      "assertions": [
+        "zone count by name",
+        "controlled count by name",
+        "loyalty counters"
+      ],
+      "witness": "Both players control Liliana. The original has three loyalty and the copy has five after its +2 ability."
+    },
+    {
+      "id": "TokenCopyTest.testCopyTransformedDFC",
+      "sources": [
+        "TokenCopyTest.testCopyTransformedDFC"
+      ],
+      "cards": [
+        {
+          "card": "Kessig Prowler",
+          "face": "Sinuous Predator"
+        },
+        {
+          "card": "Rite of Replication"
+        },
+        {
+          "card": "Tropical Island"
+        }
+      ],
+      "setup": [
+        "hand",
+        "battlefield"
+      ],
+      "actions": [
+        "activate a transform ability and wait for the stack before casting in the same step",
+        "cast",
+        "target creature",
+        "advance to step"
+      ],
+      "assertions": [
+        "zone count by name",
+        "controlled count by name",
+        "exact battlefield mana value",
+        "checkProwlers distinguishes same-controller objects by copy and transformation flags"
+      ],
+      "witness": "The original transformed Sinuous Predator has mana value 1 and the token copy has mana value 0. The helper also checks both objects' power, toughness, colors, subtypes and transformation."
+    },
+    {
+      "id": "clever-impersonator-copies-transformed-jace",
+      "sources": [
+        "CleverImpersonatorTest.testCopyPlaneswalker",
+        "TokenCopyTest.testCopyTransformedDFC"
+      ],
+      "cards": [
+        {
+          "card": "Clever Impersonator"
+        },
+        {
+          "card": "Island"
+        },
+        {
+          "card": "Jace, Vryn's Prodigy",
+          "face": "Jace, Telepath Unbound"
+        }
+      ],
+      "setup": [
+        "hand",
+        "battlefield",
+        "transformed permanent"
+      ],
+      "actions": [
+        "cast",
+        "resolve",
+        "choose copy"
+      ],
+      "assertions": [
+        "controlled count by name",
+        "exact battlefield mana value"
+      ],
+      "witness": "Uses transformed Jace in place of Liliana and reads the two objects on opposite controllers. The original has mana value 2 and the nontoken copy has mana value 0.",
+      "adaptation": {
+        "scenario": "Clever Impersonator / Clever Impersonator copies transformed Jace",
+        "required_assertions": [
+          {
+            "assert": "ManaValue",
+            "object": {
+              "zone": "Battlefield",
+              "player": 1,
+              "name": "Jace, Telepath Unbound",
+              "index": 0
+            },
+            "value": 2
+          },
+          {
+            "assert": "ManaValue",
+            "object": {
+              "zone": "Battlefield",
+              "player": 0,
+              "name": "Jace, Telepath Unbound",
+              "index": 0
+            },
+            "value": 0
+          }
+        ]
+      }
+    }
+  ]
+}

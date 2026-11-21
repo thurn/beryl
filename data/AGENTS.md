@@ -74,6 +74,10 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
   gets the rules wrong, each with its rules citation. Never edit it by hand:
   `just card diverge` writes an entry, only when the other oracle agrees with
   Beryl, and the `divergences` check holds each entry to the pinned rules.
+- `oracle-candidates.json`: reviewed upstream test fixtures and their card and
+  scenario requirements, reported by `by oracle-candidates`. Each source names
+  its pinned test and supporting files. An adaptation names its Beryl scenario
+  and the assertions that carry the original test's observation.
 - `oracle-exporter-gaps.json`: generated scenarios that an oracle's exporter
   can't express, which are reported as unsupported.
 - `card-leaves-allowlist.json`: the crates that may depend on `beryl_cards` or a

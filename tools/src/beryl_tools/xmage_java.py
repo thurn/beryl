@@ -305,6 +305,11 @@ def assertion_code(a: Json, player: Callable[[object], str]) -> str:
         return f"assertPtIn({who}, Zone.{zone}, {name}, {a['power']}, {a['toughness']})"
     if what == "PermanentState":
         return permanent_assertion(a, player)
+    if what == "ManaValue":
+        ref = cast(Json, a["object"])
+        if ref["zone"] != "Battlefield":
+            raise Unsupported("a mana value assertion outside the battlefield")
+        return f"assertPermanentManaValue({snapshot_ref(ref, player)}, {a['value']})"
     if what == "StackObject":
         controller = player(a["controller"])
         spell = str(a["spell"]).lower()

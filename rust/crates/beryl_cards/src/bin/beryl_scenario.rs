@@ -20,6 +20,9 @@
 //! prints a line per scenario and a count of each kind, and exits 1 when any fails or a
 //! generated run could not be played, and 2 when no card has that name.
 //!
+//! `beryl_scenario inventory` lists the runtime card definitions and their face names,
+//! including definitions generated from the store.
+//!
 //! `beryl_scenario generated --card NAME` reports which
 //! definition mutations survive the card's generated scenarios, as JSON for card check.
 
@@ -33,7 +36,7 @@ use beryl_scenario::Scenario;
 const SEED: u64 = 1;
 
 const USAGE: &str = "usage: beryl_scenario dump [PATH] [--generated N] [--seed S] [--card NAME]... \
-                     | run --card NAME | generated --card NAME | render [--json] [NAME]...";
+                     | run --card NAME | generated --card NAME | render [--json] [NAME]... | inventory";
 
 fn usage() -> ExitCode {
     eprintln!("{USAGE}");
@@ -70,6 +73,7 @@ fn main() -> ExitCode {
         args.drain(i..i + 2);
     }
     match (args.as_slice(), named.as_slice()) {
+        ([command], []) if command == "inventory" => inventory(),
         ([run], [card]) if run == "run" => run_card(card),
         ([generated], [card]) if generated == "generated" => generated_card(card),
         ([dump], _) if dump == "dump" => {
@@ -211,6 +215,21 @@ fn generated_card(name: &str) -> ExitCode {
             "cut": cut,
         })
     );
+    ExitCode::SUCCESS
+}
+
+fn inventory() -> ExitCode {
+    let table = &beryl_cards::CARDS;
+    let cards: Vec<_> = table
+        .cards()
+        .iter()
+        .chain(table.from_store())
+        .map(|def| {
+            let faces: Vec<_> = def.face_ixs().map(|face| def.face_name(face)).collect();
+            serde_json::json!({"name": def.name, "faces": faces})
+        })
+        .collect();
+    println!("{}", serde_json::json!(cards));
     ExitCode::SUCCESS
 }
 

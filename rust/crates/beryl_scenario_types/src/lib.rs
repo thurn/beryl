@@ -24,8 +24,8 @@ pub use player::{ME, Player, Resolve, THEM, advance_to, ends_in_draw, stack, win
 /// Everything a card file's scenarios module uses: `use beryl_scenario_types::prelude::*;`.
 pub mod prelude {
     pub use crate::{
-        Action, Assertion, ME, P0, P1, Permanent, Pick, Player, Resolve, Scenario, THEM,
-        advance_to, ends_in_draw, stack, wins,
+        Action, Assertion, ME, P0, P1, Permanent, Pick, Player, Resolve, Scenario, SnapshotRef,
+        THEM, advance_to, ends_in_draw, stack, wins,
     };
     pub use beryl_card::{CounterKind, DecisionKind, ManaColor, TurnStep, Zone};
 }
@@ -484,6 +484,11 @@ pub enum Assertion {
     PermanentState {
         object: SnapshotRef,
         state: PermanentState,
+    },
+    /// The exact mana value of the battlefield permanent identified by `object`.
+    ManaValue {
+        object: SnapshotRef,
+        value: u8,
     },
     /// A spell or ability, counted from the top (zero). An ability is named by its source.
     StackObject {

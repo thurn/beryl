@@ -187,6 +187,11 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
     ("mana", names::MANA_DRAIN, mana::SCENARIOS),
     (
         "replacement",
+        names::CLEVER_IMPERSONATOR,
+        replacement::COPIES_TRANSFORMED_PERMANENT,
+    ),
+    (
+        "replacement",
         names::DARK_DEPTHS,
         replacement::ENTERS_WITH_COUNTERS,
     ),

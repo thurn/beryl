@@ -666,3 +666,41 @@ def test_a_draw_is_checked_once_the_game_has_run_and_a_win_is_unsupported() -> N
     }
     with pytest.raises(card_facts.Unsupported, match="a Win outcome assertion"):
         xmage_java.outcome_lines(win)
+
+
+def test_exact_mana_values_keep_each_snapshot_controllers_identity() -> None:
+    entry = next(
+        e for e in json.loads(FIXTURE.read_text()) if e["card"] == "Mana Drain"
+    )
+    name = "Jace, Telepath Unbound"
+    entry["actions"] = [
+        {
+            "action": "Assert",
+            "assertion": {
+                "assert": "ManaValue",
+                "object": {
+                    "zone": "Battlefield",
+                    "player": seat,
+                    "name": name,
+                    "index": 0,
+                },
+                "value": value,
+            },
+        }
+        for seat, value in [(1, 2), (0, 0)]
+    ]
+    entry["trace"] = [entry["trace"][0]] * 3
+    export = xmage_export.export_one(
+        entry, 1, xmage_java.Faces.load(card_store.STORE), XMAGE_CARDS
+    )
+    assert not export.unsupported
+    assert not export.skipped
+    for player, value in [("playerA", 2), ("playerB", 0)]:
+        expression = f'assertPermanentManaValue(snapshotObject({player}, Zone.BATTLEFIELD, "{name}", 0), {value})'
+        assert any(expression in line for line in export.body)
+
+    entry["trace"][0] = {**entry["trace"][0], "kind": "ChooseUpTo"}
+    export = xmage_export.export_one(
+        entry, 1, xmage_java.Faces.load(card_store.STORE), XMAGE_CARDS
+    )
+    assert export.skipped == ["ManaValue: in the middle of a ChooseUpTo decision"]

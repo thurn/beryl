@@ -466,3 +466,31 @@ def test_a_source_of_restricted_mana_is_tapped_for_the_mana_beryl_made() -> None
     trace[2]["mana"] = []
     with pytest.raises(Unsupported):
         forge.taps(cast, actions, trace, 0, cards, set())
+
+
+def test_exact_mana_values_reach_the_harness_with_both_snapshot_references() -> None:
+    entry = next(e for e in dumped() if e["card"] == "Jace, Vryn's Prodigy")
+    facts = [
+        {
+            "assert": "ManaValue",
+            "object": {
+                "zone": "Battlefield",
+                "player": seat,
+                "name": "Jace, Telepath Unbound",
+                "index": 0,
+            },
+            "value": value,
+        }
+        for seat, value in [(1, 2), (0, 0)]
+    ]
+    entry["actions"] = [{"action": "Assert", "assertion": a} for a in facts]
+    entry.pop("trace", None)
+    entry.pop("snapshot", None)
+    scenarios, skipped = forge.export([entry], card_store.STORE)
+    assert skipped == []
+    assert steps(scenarios[0]) == [{"op": "assert", "assertion": a} for a in facts]
+
+    cast(Json, facts[0]["object"])["zone"] = "Graveyard"
+    scenarios, skipped = forge.export([entry], card_store.STORE)
+    assert scenarios == []
+    assert skipped[0]["reason"] == "a mana value assertion outside the battlefield"

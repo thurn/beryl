@@ -1187,6 +1187,11 @@ public final class BerylForgeHarness {
                         expected = a.get("power").getAsInt() + "/" + a.get("toughness").getAsInt();
                         actual = card.getNetPower() + "/" + card.getNetToughness();
                     }
+                    case "ManaValue" -> {
+                        Card permanent = snapshotObject(a.getAsJsonObject("object"));
+                        expected = a.get("value").getAsInt();
+                        actual = permanent.getCMC();
+                    }
                     case "PermanentState" -> {
                         checkPermanentState(a);
                         return;

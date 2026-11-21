@@ -288,6 +288,10 @@ def check(target: Card, no_oracles: bool) -> int:
                 print(outcome.output.rstrip())
             print(f"card check: {target.name} failed at {name}")
             return 1
+        if name == "oracles" and outcome.status == "pass":
+            from . import oracle_discovery
+
+            oracle_discovery.card_diagnostics(target.name)
     print(f"card check: {target.name} passed")
     return 0
 

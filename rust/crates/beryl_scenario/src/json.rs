@@ -397,6 +397,11 @@ enum AssertionDef {
         #[serde(with = "PermanentStateDef")]
         state: PermanentState,
     },
+    ManaValue {
+        #[serde(with = "SnapshotRefDef")]
+        object: SnapshotRef,
+        value: u8,
+    },
     StackObject {
         depth: u16,
         name: &'static str,

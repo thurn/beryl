@@ -340,6 +340,10 @@ def step(action: JsonObject, cards: Cards, purpose: object = None) -> JsonObject
             if zone is None:
                 raise Unsupported(f"an assert about the {assertion['zone']} zone")
             assertion["zone"] = zone
+        if assertion["assert"] == "ManaValue":
+            ref = cast(JsonObject, assertion["object"])
+            if ref["zone"] != "Battlefield":
+                raise Unsupported("a mana value assertion outside the battlefield")
         if assertion["assert"] == "Counters":
             assertion["kind"] = COUNTERS[cast(str, assertion["kind"])]
         if assertion["assert"] == "Mana":

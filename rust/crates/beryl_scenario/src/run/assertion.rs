@@ -103,6 +103,10 @@ impl Runner {
                 let actual = self.permanent_state(self.snapshot_permanent(object)?);
                 (format!("{actual:?}"), format!("{state:?}"))
             }
+            Assertion::ManaValue { object, value } => {
+                let slot = self.snapshot_permanent(object)?;
+                (s.mana_value(&self.t, slot).to_string(), value.to_string())
+            }
             _ => unreachable!("an assertion about permanents"),
         })
     }
@@ -199,7 +203,8 @@ impl Runner {
             | Assertion::Creature { .. }
             | Assertion::Subtype { .. }
             | Assertion::Counters { .. }
-            | Assertion::PermanentState { .. } => {
+            | Assertion::PermanentState { .. }
+            | Assertion::ManaValue { .. } => {
                 // Control and characteristics are layer results, up to date only at an open
                 // decision.
                 if let Step::Over(o) = position {

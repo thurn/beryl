@@ -189,8 +189,8 @@ circle-of-protection-red/prevents-damage-only-to-its-controller
 circle-of-protection-red/shields-against-the-permanent-a-spell-becomes
 circle-of-protection-red/stops-main
 circle-of-protection-red/stops-their-end
+clever-impersonator/copies-transformed-jace-0
 clever-impersonator/generated-1-cast-from-hand
-clever-impersonator/generated-1-cast-from-hand-0
 clever-impersonator/generated-10-cast-from-hand-with-a-creature-of-ones-own
 clever-impersonator/generated-11-cast-from-hand-with-a-creature-of-ones-own
 clever-impersonator/generated-2-cast-from-hand

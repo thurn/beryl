@@ -560,6 +560,11 @@ public abstract class BerylScenarioTest extends CardTestPlayerBase {
                         + " in " + zone + " at index " + index));
     }
 
+    protected void assertPermanentManaValue(MageObject object, int expected) {
+        Permanent permanent = (Permanent) object;
+        Assert.assertEquals("mana value of " + permanent.getName(), expected, permanent.getManaValue());
+    }
+
     // Beryl's keyword flags have these XMage ability classes. Other abilities are outside
     // the snapshot's vocabulary, including the intrinsic mana abilities of basic land types.
     private static final Map<String, Class<? extends Ability>> SNAPSHOT_KEYWORDS = new HashMap<>();
