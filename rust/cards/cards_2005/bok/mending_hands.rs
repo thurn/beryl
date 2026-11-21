@@ -7,18 +7,8 @@
 
 use crate::prelude::*;
 
-/// It is in no deck: it was implemented for scenarios that need a prevention shield of an
-/// amount, such as Furnace of Rath's, where the order of a shield and a doubling changes how much
-/// damage is dealt.
-///
-/// "Prevent the next 4 damage that would be dealt to any target this turn." A shield of an amount
-/// ([CR 615.7]): "Each 1 damage that would be dealt to the “shielded” permanent or player is
-/// prevented. Preventing 1 damage reduces the remaining shield by 1." It lasts until it is used up
-/// or the turn ends ([CR 615.3]): "Such effects last until they're used up or their duration has
-/// expired."
-///
-/// [CR 615.7]: https://yawgatog.com/resources/magic-rules/#R6157
-/// [CR 615.3]: https://yawgatog.com/resources/magic-rules/#R6153
+/// Implemented for scenarios where the order of a prevention shield and a damage doubler
+/// changes how much damage is dealt.
 pub static CARD: CardDef = Printed::MendingHands
     .abilities(&[Ability::spell()
         .target(&TargetSpec::any_target())

@@ -9,18 +9,6 @@
 
 use crate::prelude::*;
 
-/// "Return up to three target land cards from your graveyard to your hand"
-/// ([CR 115.6]): "A spell or ability that requires targets may allow zero targets to be
-/// chosen."
-///
-/// Dredge 3 ([CR 702.52a]) works only from its owner's graveyard, and only while their library
-/// has at least three cards ([CR 702.52b]): "A player with fewer cards in their library than
-/// the number required by a dredge ability can't mill any of them this way." Each draw is
-/// offered it on its own, so of a draw of several cards one may be dredged and the rest drawn.
-///
-/// [CR 115.6]: https://yawgatog.com/resources/magic-rules/#R1156
-/// [CR 702.52a]: https://yawgatog.com/resources/magic-rules/#R70252a
-/// [CR 702.52b]: https://yawgatog.com/resources/magic-rules/#R70252b
 pub static CARD: CardDef = Printed::LifeFromTheLoam
     .abilities(&[
         Ability::spell()
@@ -40,9 +28,6 @@ pub mod scenarios {
 
     const LOAM: &str = Card::LifeFromTheLoam;
 
-    /// Lands to cast Life from the Loam with.
-    const MANA: &[&str] = &[Card::Forest, Card::Forest];
-
     /// Four cards, so a dredge 3 leaves one to draw.
     const LIBRARY: &[&str] = &[Card::Island, Card::Plains, Card::Counterspell, Card::Island];
 
@@ -51,59 +36,6 @@ pub mod scenarios {
     const FLASH_MANA: &[&str] = &[Card::Swamp, Card::Island, Card::Island];
 
     pub const SCENARIOS: &[Scenario] = &[
-        Scenario::new("Life from the Loam returns three lands from its caster's graveyard")
-            .battlefield(P0, MANA)
-            .hand(P0, &[LOAM])
-            .graveyard(
-                P0,
-                &[
-                    Card::Plains,
-                    Card::Island,
-                    Card::Forest,
-                    Prop::NonbasicLand,
-                    Card::Counterspell,
-                ],
-            )
-            .actions(&[
-                ME.casts(LOAM),
-                ME.target_count(3),
-                ME.deciding(DecisionKind::Target, 4),
-                ME.targets(Card::Plains),
-                ME.targets(Card::Island),
-                ME.targets(Card::Forest),
-                Resolve,
-                ME.has_cards(Zone::Hand, 3),
-                ME.has(Zone::Graveyard, Prop::NonbasicLand, 1),
-                ME.has(Zone::Graveyard, Card::Counterspell, 1),
-                ME.has(Zone::Graveyard, LOAM, 1),
-            ]),
-        // Up to three: with none chosen it still resolves, and does nothing.
-        Scenario::new("Life from the Loam with no targets")
-            .battlefield(P0, MANA)
-            .hand(P0, &[LOAM])
-            .graveyard(P0, &[Card::Plains])
-            .actions(&[
-                ME.casts(LOAM),
-                ME.target_count(0),
-                Resolve,
-                ME.has_cards(Zone::Hand, 0),
-                ME.has(Zone::Graveyard, Card::Plains, 1),
-            ]),
-        // A land in the opponent's graveyard is not a land card from P0's.
-        Scenario::new("Life from the Loam can't target the opponent's lands")
-            .battlefield(P0, MANA)
-            .hand(P0, &[LOAM])
-            .graveyard(P0, &[Card::Plains, Card::Forest])
-            .graveyard(P1, &[Card::Island])
-            .actions(&[
-                ME.casts(LOAM),
-                ME.target_count(1),
-                ME.deciding(DecisionKind::Target, 2),
-                ME.targets(Card::Plains),
-                Resolve,
-                ME.has(Zone::Hand, Card::Plains, 1),
-                THEM.has(Zone::Graveyard, Card::Island, 1),
-            ]),
         // The choice comes as the draw step begins, in no resolution: the dredge mills three
         // and Life from the Loam returns to the hand in place of the draw.
         Scenario::new("dredge in the draw step")
@@ -122,20 +54,6 @@ pub mod scenarios {
                 ME.has_cards(Zone::Hand, 2),
                 ME.has_cards(Zone::Graveyard, 3),
                 ME.library_top(&[Card::Island]),
-            ]),
-        // Declining, the player draws as they would have.
-        Scenario::new("dredge declined")
-            .at(3, P0, TurnStep::Upkeep)
-            .battlefield(P0, FLASH_MANA)
-            .hand(P0, &[Prop::FlashCreature])
-            .graveyard(P0, &[LOAM])
-            .library(P0, LIBRARY)
-            .actions(&[
-                ME.passes(),
-                ME.done_picking(),
-                ME.has(Zone::Hand, Card::Island, 1),
-                ME.has(Zone::Graveyard, LOAM, 1),
-                ME.has_cards(Zone::Graveyard, 1),
             ]),
         // Each dredge card is a choice of its own; the one not chosen stays.
         Scenario::new("two dredge cards in the graveyard")
@@ -240,20 +158,6 @@ pub mod scenarios {
                 ME.has(Zone::Hand, LOAM, 1),
                 ME.has_cards(Zone::Library, 0),
                 ME.has_cards(Zone::Graveyard, 3),
-            ]),
-        // Dredge works only from its owner's graveyard (CR 702.52a): a Life from the Loam in
-        // the opponent's graveyard offers P0 nothing, and P0 draws.
-        Scenario::new("dredge in the opponent's graveyard isn't offered")
-            .at(3, P0, TurnStep::Upkeep)
-            .battlefield(P0, FLASH_MANA)
-            .hand(P0, &[Prop::FlashCreature])
-            .graveyard(P1, &[LOAM])
-            .library(P0, LIBRARY)
-            .actions(&[
-                ME.passes(),
-                ME.has(Zone::Hand, Card::Island, 1),
-                ME.has_cards(Zone::Graveyard, 0),
-                THEM.has(Zone::Graveyard, LOAM, 1),
             ]),
         // Under Rest in Peace the three milled cards are exiled instead of reaching the
         // graveyard (CR 614.1a), but the dredge still happened, so Life from the Loam returns

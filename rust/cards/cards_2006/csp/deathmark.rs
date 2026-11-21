@@ -7,7 +7,7 @@
 
 use crate::prelude::*;
 
-/// Destroys a green or white creature. Implemented for text-change scenarios.
+/// Implemented for scenarios that change color words.
 pub static CARD: CardDef = Printed::Deathmark
     .abilities(&[Ability::spell()
         .target(&TargetSpec::permanent(Filter::All(&[

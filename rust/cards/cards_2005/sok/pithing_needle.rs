@@ -9,21 +9,9 @@
 
 use crate::prelude::*;
 
-/// "As this artifact enters, choose a card name." A replacement effect of its own entering
-/// ([CR 614.12a]): "If a replacement effect that modifies how a permanent enters the
-/// battlefield requires a choice, that choice is made before the permanent enters the
-/// battlefield." The names offered are those of the game's cards, and "another card" for
-/// every other name, which stops nothing in this game.
+/// The restriction covers loyalty abilities ([CR 606.4]) and abilities activated from
+/// zones such as the hand. An ability already on the stack still resolves.
 ///
-/// "Activated abilities of sources with the chosen name can't be activated unless they're mana
-/// abilities." A rule change for every player ([CR 602.5]): "A player can't begin to activate
-/// an ability that's prohibited from being activated." Loyalty abilities are activated
-/// abilities ([CR 606.4]): "The cost to activate a loyalty ability of a permanent is to put on
-/// or remove from that permanent a certain number of loyalty counters, as shown by the
-/// loyalty symbol in the ability's cost." Abilities already on the stack are not affected.
-///
-/// [CR 614.12a]: https://yawgatog.com/resources/magic-rules/#R61412a
-/// [CR 602.5]: https://yawgatog.com/resources/magic-rules/#R6025
 /// [CR 606.4]: https://yawgatog.com/resources/magic-rules/#R6064
 pub static CARD: CardDef = Printed::PithingNeedle
     .abilities(&[

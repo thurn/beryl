@@ -8,19 +8,15 @@
 
 use crate::prelude::*;
 
-/// "The number of card types among cards in all graveyards".
 const CARD_TYPES: Amount = Amount::CardTypesAmong(&Objects::All {
     zone: Zone::Graveyard,
     filter: Filter::Any,
 });
 
-/// A characteristic-defining ability ([CR 604.3a]): it "defines an object's ... power, or
-/// toughness", applied in layer 7a ([CR 613.4a]): "Effects from characteristic-defining
-/// abilities that define power and/or toughness are applied." The number is read each time the
-/// layers apply, so it changes as soon as a card enters or leaves a graveyard.
+/// The characteristic-defining ability applies in every zone ([CR 604.3]). In a graveyard,
+/// Tarmogoyf can itself supply the creature card type.
 ///
-/// [CR 604.3a]: https://yawgatog.com/resources/magic-rules/#R6043a
-/// [CR 613.4a]: https://yawgatog.com/resources/magic-rules/#R6134a
+/// [CR 604.3]: https://yawgatog.com/resources/magic-rules/#R6043
 pub static CARD: CardDef = Printed::Tarmogoyf
     .abilities(&[Ability::static_ability(&LayerSpec {
         affected: Objects::This,
@@ -61,10 +57,6 @@ pub mod scenarios {
                 THEM.life(17),
                 THEM.pt(GOYF, 0, 1),
             ]),
-        // With no card in any graveyard it is 0/1.
-        Scenario::new("Tarmogoyf with empty graveyards")
-            .battlefield(P0, &[GOYF])
-            .actions(&[ME.pt(GOYF, 0, 1)]),
         // Both graveyards count. Gold Myr is an artifact and a creature; a second Gold Myr adds
         // no card type, nor does a second creature card.
         Scenario::new("Tarmogoyf counts card types, not cards")

@@ -10,14 +10,10 @@
 
 use crate::prelude::*;
 
-/// "As long as this artifact is untapped, each spell that would cost less than three mana to
-/// cast costs three mana to cast." A rule change for every player that sets a minimum total
-/// cost. It affects the total cost directly, so it applies after every increase and
-/// reduction ([CR 601.2f]): "Once the total cost is determined, any effects that directly
-/// affect the total cost are applied." It counts the whole total, X at its value, so a
-/// spell cast without paying its mana cost costs three; the difference is generic mana. "As
-/// long as this artifact is untapped" is the ability's condition. It leaves the spell's mana value
-/// as it was.
+/// Trinisphere applies after cost increases and reductions ([CR 601.2f]): "Once the total
+/// cost is determined, any effects that directly affect the total cost are applied."
+/// If the total includes X, count its chosen value. Even a spell cast without paying its
+/// mana cost needs three mana when its total would otherwise be zero.
 ///
 /// [CR 601.2f]: https://yawgatog.com/resources/magic-rules/#R6012f
 pub static CARD: CardDef = Printed::Trinisphere
