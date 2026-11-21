@@ -3338,9 +3338,9 @@ The hub backs up its database hourly and exports it daily, as the service does
 now. It keeps the newest 6 snapshots and the newest of each day for 7 days, and
 removes any staging directory a restart left behind: each snapshot is a whole
 copy of a database of several gigabytes, on the disk the build trees use. Those
-backups sit on the hub's own disk, so every daemon also keeps a
-ticket mirror: an append-only copy of every version of every ticket, in
-`mirror.db` beside its own database.
+backups sit on the hub's own disk, so every daemon also keeps a ticket mirror:
+an append-only copy of every version of every ticket, in `mirror.db` beside its
+own database.
 
 - An empty mirror notes the hub's feed position, then copies every ticket
   through `GET /export`, one page of 200 a round. Afterwards it long-polls the
