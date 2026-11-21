@@ -9,7 +9,7 @@ use ignite_core::protocol::hub::{IdleWorker, MachineFree, NextReply, Reservation
 use ignite_core::protocol::tickets::TicketDetail;
 use ignite_core::time::Timestamp;
 
-use super::{Dispatcher, REFUSED_S, Reserved, State, cli, feed, label, shared, tier_for, workers};
+use super::{Dispatcher, REFUSED_S, Reserved, State, cli, feed, label, shared, workers};
 use crate::clid::Resume;
 use crate::pool::Member;
 use crate::server::Context;
@@ -231,8 +231,8 @@ impl Dispatcher {
     /// left idle and why, or `None` when every one got a ticket.
     fn ask_for_work(&self, ctx: &Context, asking: Asking) -> (Vec<Offer>, Option<(usize, String)>) {
         let Asking {
-            idle,
-            extra,
+            idle: mut free,
+            mut extra,
             mut trees,
             master_only,
             backlog,
@@ -241,11 +241,6 @@ impl Dispatcher {
         // While ticket work waits long for cores, only a ticket that holds `master` back starts:
         // the pool asks as a paused pool does.
         let master_only = master_only || backlog.is_some() || shared.is_some();
-        let offered = |member: Member| {
-            let models = offered_models(&ctx.config.pool, &member.app, &member.models);
-            (member, models)
-        };
-        let mut free: Vec<_> = idle.into_iter().map(offered).collect();
         let mut offers = Vec::new();
         let mut why = self.ask_group(ctx, &mut free, &mut trees, master_only, &mut offers);
         if let Some(waited) = backlog
@@ -263,7 +258,6 @@ impl Dispatcher {
         }
         // The extra CLI slots are asked last, so that a ticket that holds `master` back goes to
         // an ordinary slot while one is free.
-        let mut extra: Vec<_> = extra.into_iter().map(offered).collect();
         if !extra.is_empty() {
             let extra_why = self.ask_group(ctx, &mut extra, &mut trees, true, &mut offers);
             if free.is_empty() && !extra.is_empty() {
@@ -283,7 +277,7 @@ impl Dispatcher {
     fn ask_group(
         &self,
         ctx: &Context,
-        group: &mut Vec<(Member, Vec<String>)>,
+        group: &mut Vec<Member>,
         trees: &mut u32,
         master_only: bool,
         offers: &mut Vec<Offer>,
@@ -299,11 +293,12 @@ impl Dispatcher {
                 os: self.setup.os,
                 idle_workers: group
                     .iter()
-                    .map(|(m, models)| IdleWorker {
+                    .map(|m| IdleWorker {
                         session: m.session.clone(),
                         app: m.app.clone(),
-                        models: models.clone(),
-                        model_ids: models
+                        models: m.models.clone(),
+                        model_ids: m
+                            .models
                             .iter()
                             .filter_map(|tier| {
                                 ctx.config
@@ -342,14 +337,11 @@ impl Dispatcher {
                     break;
                 }
             };
-            let Some(index) = group
-                .iter()
-                .position(|(m, _)| m.session == reservation.session)
-            else {
+            let Some(index) = group.iter().position(|m| m.session == reservation.session) else {
                 "the hub reserved a ticket for a worker that is not idle".clone_into(&mut why);
                 break;
             };
-            let (worker, _) = group.remove(index);
+            let worker = group.remove(index);
             *trees -= 1;
             let detail = ctx.hub.ticket(&reservation.ticket).ok();
             offers.push((reservation, worker.app, detail));
@@ -434,9 +426,8 @@ fn handoff_details(
     detail: &TicketDetail,
 ) -> Option<Reserved> {
     let labels = &detail.ticket.labels;
-    let tier = tier_for(labels, app);
-    // A tier with no model ID cannot be started on this app.
-    let model = match &tier {
+    // Untiered tickets use the provider's default. A requested tier needs a model ID.
+    let model = match label(labels, "tier:") {
         Some(tier) => Some(config.pool.model_id(app, tier)?),
         None => None,
     };
@@ -450,61 +441,4 @@ fn handoff_details(
             .to_owned(),
         app: app.to_owned(),
     })
-}
-
-/// The tiers the hub is told a worker of `app` runs. A model the app has no ID for cannot be
-/// set, so the hub is not told the worker runs it and offers no ticket that needs it. A member
-/// added without a list, as a Codex worker is, runs every tier its app's `[pool.models.<app>]`
-/// table names, so that a ticket routed to that app is not held back by its `tier:` label.
-fn offered_models(
-    pool: &ignite_core::config::PoolConfig,
-    app: &str,
-    listed: &[String],
-) -> Vec<String> {
-    if listed.is_empty() {
-        return pool
-            .models
-            .get(app)
-            .map(|table| table.keys().cloned().collect())
-            .unwrap_or_default();
-    }
-    listed
-        .iter()
-        .filter(|tier| pool.model_id(app, tier).is_some())
-        .cloned()
-        .collect()
-}
-
-#[cfg(test)]
-mod offered_models_tests {
-    use super::offered_models;
-    use ignite_core::config::PoolConfig;
-    use std::collections::BTreeMap;
-
-    #[test]
-    fn a_worker_without_a_list_runs_every_tier_of_its_app() {
-        let table = |pairs: &[(&str, &str)]| -> BTreeMap<String, String> {
-            pairs
-                .iter()
-                .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
-                .collect()
-        };
-        let pool = PoolConfig {
-            models: BTreeMap::from([
-                (
-                    "claude".to_owned(),
-                    table(&[("opus", "o"), ("sonnet", "s")]),
-                ),
-                (
-                    "codex".to_owned(),
-                    table(&[("opus", "sol"), ("sonnet", "sol")]),
-                ),
-            ]),
-            ..PoolConfig::default()
-        };
-        assert_eq!(offered_models(&pool, "codex", &[]), ["opus", "sonnet"]);
-        let listed = ["opus".to_owned(), "light".to_owned()];
-        assert_eq!(offered_models(&pool, "claude", &listed), ["opus"]);
-        assert!(offered_models(&pool, "other", &[]).is_empty());
-    }
 }

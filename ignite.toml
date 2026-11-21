@@ -207,10 +207,9 @@ opus = "gpt-6.2-sol"
 sonnet = "gpt-6.2-sol"
 light = "gpt-6.2-sol"
 
-# CLI mode (docs/ignite.md, "CLI mode"): the daemon runs each worker turn itself as `claude -p`
-# or `codex exec`. A program here gives the app an adapter on every machine, so `ignite pool mode`
-# can switch it without a restart; the machine tables below choose which machines actually use it.
-# The flags let a headless turn run tools with nobody there to answer a permission prompt.
+# The daemon runs each worker turn with the configured program and CLI adapter. Set
+# `dialect` when the provider name differs from the adapter name. The machine tables
+# below give each provider its worker slots. See "CLI mode" in docs/ignite.md.
 [pool.cli.claude]
 program = "claude"
 args = ["--dangerously-skip-permissions"]

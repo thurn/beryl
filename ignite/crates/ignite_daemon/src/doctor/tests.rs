@@ -239,10 +239,20 @@ fn a_healthy_machine_has_no_problems() {
 }
 
 #[test]
-fn doctor_warns_about_a_claude_tier_with_no_model_id() {
+fn doctor_warns_when_a_configured_provider_has_no_model_tiers() {
     let mut config = config();
+    for provider in ["fake", "limited"] {
+        config.pool.cli.insert(
+            provider.to_owned(),
+            ignite_core::config::CliProgram {
+                program: "fake-cli".to_owned(),
+                dialect: Some("codex".to_owned()),
+                ..Default::default()
+            },
+        );
+    }
     config.pool.models.insert(
-        "claude".to_owned(),
+        "limited".to_owned(),
         [("opus".to_owned(), "an-id".to_owned())].into(),
     );
     let findings = diagnose(&DoctorInput {
@@ -262,22 +272,22 @@ fn doctor_warns_about_a_claude_tier_with_no_model_id() {
         .collect();
     assert_eq!(lines.len(), 1, "{lines:?}");
     assert!(lines[0].starts_with("WARNING"), "{lines:?}");
-    assert!(lines[0].contains("`sonnet`, `light`"), "{lines:?}");
-    assert!(!lines[0].contains("`opus`"), "{lines:?}");
+    assert!(lines[0].contains("[pool.models.fake]"), "{lines:?}");
 }
 
 #[test]
 fn doctor_warns_when_an_app_in_cli_mode_has_no_program_on_the_path() {
     let mut config = config();
     config.pool.cli.insert(
-        "claude".to_owned(),
+        "fake".to_owned(),
         ignite_core::config::CliProgram {
-            program: "claude-not-installed".to_owned(),
-            args: Vec::new(),
+            program: "fake-not-installed".to_owned(),
+            dialect: Some("codex".to_owned()),
+            ..Default::default()
         },
     );
     config.machine.get_mut("testbox").unwrap().pool.insert(
-        "claude".to_owned(),
+        "fake".to_owned(),
         ignite_core::config::MachinePool {
             mode: ignite_core::config::PoolMode::Cli,
             slots: 2,
@@ -300,7 +310,7 @@ fn doctor_warns_when_an_app_in_cli_mode_has_no_program_on_the_path() {
         .collect();
     assert_eq!(lines.len(), 1, "{lines:?}");
     assert!(lines[0].starts_with("WARNING"), "{lines:?}");
-    assert!(lines[0].contains("claude-not-installed"), "{lines:?}");
+    assert!(lines[0].contains("fake-not-installed"), "{lines:?}");
 }
 
 #[test]

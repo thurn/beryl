@@ -1,21 +1,17 @@
 //! Connects the CLI worker supervisors to the daemon’s launch, health and ticket loops.
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
 use ignite_core::cli::CliApp;
-use ignite_core::cli::claude::Claude;
-use ignite_core::cli::codex::Codex;
-use ignite_core::config::Config;
 use ignite_core::traits::Result;
 
 use super::assemble::{Base, Desks, Machinery};
 use super::loops::Parts;
-use crate::clid::health::{Health, HealthEffects, default_model};
+use crate::clid::health::{Health, HealthEffects};
 use crate::clid::start::TurnLauncher;
-use crate::clid::{self, CliAppSetup, CliDaemon, CliSetup, SupervisedTurns};
+use crate::clid::{self, CliDaemon, CliSetup, SupervisedTurns};
 use crate::dispatchd::Dispatcher;
 use crate::pool::Pool;
 use crate::server::Context;
@@ -38,19 +34,11 @@ const DISPATCH_STALLS_AFTER: Duration = Duration::from_mins(10);
 /// The name the dispatch loop registers under.
 const DISPATCH_LOOP: &str = "ignite-cli-dispatch";
 
-/// The adapter of each app that `config` gives a CLI program, by name.
-fn adapters(config: &Config) -> Vec<Arc<dyn CliApp>> {
-    let all: [Arc<dyn CliApp>; 2] = [Arc::new(Claude), Arc::new(Codex)];
-    all.into_iter()
-        .filter(|app| config.cli_program(app.name()).is_some())
-        .collect()
-}
-
 /// The CLI pool and what its loops need.
 pub struct CliMode {
     daemon: Arc<CliDaemon>,
     health: Arc<Health>,
-    apps: Vec<Arc<dyn CliApp>>,
+    providers: Vec<(String, Arc<dyn CliApp>)>,
     dispatcher: Arc<Dispatcher>,
     ctx: Context,
 }
@@ -64,12 +52,17 @@ pub fn cli_mode(
     machinery: &Machinery,
     desks: &Desks,
 ) -> Result<Option<Arc<CliMode>>> {
-    let apps = adapters(&base.config);
-    if apps.is_empty() {
+    let checkout = base.options.repo.clone();
+    let setup = CliSetup::from_config(checkout.clone(), &base.config);
+    if setup.apps.is_empty() {
         return Ok(None);
     }
+    let providers = setup
+        .apps
+        .iter()
+        .map(|(name, setup)| (name.clone(), setup.app.clone()))
+        .collect();
     let home = base.options.home.root.clone();
-    let checkout = base.options.repo.clone();
     let pool = Arc::new(Pool::new(base.open()?));
     // Turns start without the scheduler: the CLI program itself uses little CPU, and the
     // builds and checks it asks for take their cores through Ignite's verbs.
@@ -87,21 +80,6 @@ pub fn cli_mode(
         home,
         base.options.hostname.clone(),
     ));
-    let setup = CliSetup {
-        checkout,
-        apps: apps
-            .iter()
-            .filter_map(|app| {
-                let program = base.config.cli_program(app.name())?.clone();
-                let setup = CliAppSetup {
-                    app: app.clone(),
-                    program,
-                    default_model: default_model(&base.config, app.name()),
-                };
-                Some((app.name().to_owned(), setup))
-            })
-            .collect::<BTreeMap<_, _>>(),
-    };
     let daemon = Arc::new(
         CliDaemon::new(setup, pool, desks.host.clone(), base.clock.clone(), turns)
             .with_effects(Arc::new(HealthEffects {
@@ -121,7 +99,7 @@ pub fn cli_mode(
     Ok(Some(Arc::new(CliMode {
         daemon,
         health,
-        apps,
+        providers,
         dispatcher: desks.dispatcher.clone(),
         ctx: ctx.clone(),
     })))
@@ -144,7 +122,7 @@ impl CliMode {
         });
         let (health, apps, dispatcher, ctx) = (
             self.health.clone(),
-            self.apps.clone(),
+            self.providers.clone(),
             self.dispatcher.clone(),
             self.ctx.clone(),
         );
@@ -152,10 +130,10 @@ impl CliMode {
             loop {
                 ticker.round(|| {
                     // Only the apps in CLI mode now are probed: a probe costs a turn.
-                    let running: Vec<&dyn CliApp> = apps
+                    let running: Vec<_> = apps
                         .iter()
-                        .filter(|app| dispatcher.cli_enabled(app.name()))
-                        .map(AsRef::as_ref)
+                        .filter(|(name, _)| dispatcher.cli_enabled(name))
+                        .map(|(name, app)| (name.as_str(), app.as_ref()))
                         .collect();
                     health.tick(&ctx, &running);
                     Ok(())
@@ -163,12 +141,11 @@ impl CliMode {
                 thread::sleep(HEALTH_EVERY);
             }
         });
-        let (apps, dispatcher, ctx) =
-            (self.apps.clone(), self.dispatcher.clone(), self.ctx.clone());
+        let (dispatcher, ctx) = (self.dispatcher.clone(), self.ctx.clone());
         parts.start_loop(DISPATCH_LOOP, DISPATCH_STALLS_AFTER, move |ticker| {
             loop {
                 ticker.round(|| {
-                    if apps.iter().any(|app| dispatcher.cli_enabled(app.name())) {
+                    if dispatcher.cli_apps().next().is_some() {
                         dispatcher.tick(&ctx);
                     }
                     Ok(())

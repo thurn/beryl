@@ -58,6 +58,10 @@ impl CliApp for Claude {
         command
     }
 
+    fn digest(&self, output: &str) -> Vec<super::digest::Entry> {
+        super::digest::claude(output)
+    }
+
     fn read(&self, output: &str) -> TurnEvents {
         let mut events = TurnEvents::default();
         for line in output.lines() {

@@ -54,6 +54,10 @@ impl CliApp for Codex {
         command
     }
 
+    fn digest(&self, output: &str) -> Vec<super::digest::Entry> {
+        super::digest::codex(output)
+    }
+
     fn read(&self, output: &str) -> TurnEvents {
         let mut events = TurnEvents::default();
         for line in output.lines() {

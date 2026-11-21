@@ -43,7 +43,6 @@ mod work;
 #[path = "dispatchd_workers.rs"]
 mod workers;
 
-pub use cli::APPS;
 pub use cli_view::digest_text;
 pub use stall::RunningVerb;
 pub use tell::TellVerb;
@@ -229,16 +228,6 @@ pub fn hub_exit(error: &Error) -> Exit {
         Error::Unreachable(_) => Exit::Unreachable,
         Error::Conflict(_) => Exit::Conflict,
         _ => Exit::Usage,
-    }
-}
-
-/// The tier a ticket runs on: its `tier:` label, or `sonnet` for a Claude worker and nothing for
-/// a Codex one, which uses its app's own default model.
-fn tier_for(labels: &[String], app: &str) -> Option<String> {
-    match label(labels, "tier:") {
-        Some(tier) => Some(tier.to_owned()),
-        None if app == "claude" => Some("sonnet".to_owned()),
-        None => None,
     }
 }
 

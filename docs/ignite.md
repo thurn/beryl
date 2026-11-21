@@ -3418,9 +3418,10 @@ with `ignite pool watch`. To work a ticket in a desktop session, run
 
 ### CLI mode
 
-A provider needs a program under `[pool.cli.<app>]` and a positive slot count
-under `[machine.<host>.pool.<app>]` to take tickets on a machine. A machine with
-no worker slots can still run checks.
+A provider declares its executable and optional arguments in
+`[pool.cli.<provider>]` and the tiers it offers in `[pool.models.<provider>]`.
+It needs a positive slot count under `[machine.<host>.pool.<provider>]` to take
+tickets on that machine. A machine with no worker slots can still run checks.
 
 ```toml
 [machine.jarvis.pool.claude]
@@ -3428,7 +3429,23 @@ slots = 8
 
 [pool.cli.claude]
 program = "claude"
+
+[pool.models.claude]
+sonnet = "claude-sonnet-5-5"
 ```
+
+The provider's name identifies its sessions, probes, and model table. It uses
+ASCII letters, digits, hyphens, or underscores, with `-slot` reserved as a
+suffix for slot IDs. The optional `dialect` in `[pool.cli.<provider>]` selects
+the adapter that builds commands and reads CLI events. It defaults to the
+provider's name. A provider with its own executable and models can set
+`dialect = "codex"` to reuse the Codex adapter.
+
+To add a dialect, add a file under `ignite/crates/ignite_core/src/cli/` that
+implements `CliApp::name`, `command`, `read`, and `classify`, and register the
+adapter in that module's `ADAPTERS` list. The adapter can also implement
+`digest` to publish readable transcript lines. Configure the provider and its
+tiers with the same `[pool.cli]` and `[pool.models]` tables.
 
 - The daemon keeps each worker's ticket, model, effort, turn number and next
   prompt in `cli_slots`. The CLI keeps the transcript on disk.
@@ -3671,8 +3688,9 @@ that machine take it, such as `jarvis/claude` or `cygnus/codex`.
 - `ignite release --needs <machine>` makes that machine the owner,
   `--needs <os>` records the system the work needs, and `--needs person` sets
   the ticket aside for a person.
-- Each app's workers run the tiers its `[pool.models.<app>]` table names. Codex
-  runs every tier on `gpt-6.2-sol`.
+- Each provider offers the tiers its `[pool.models.<provider>]` table names. A
+  ticket without a tier uses the provider's configured `sonnet` model when
+  present, or the model used for its health probe.
 
 The hub reserves the ticket for that machine in the same request, so two
 machines never take one ticket. What happens next:

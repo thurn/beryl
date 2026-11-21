@@ -4,13 +4,21 @@ use std::fs::{self, File};
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 
-use ignite_core::cli::codex::read_session_usage;
-use ignite_core::cli::{TurnEvents, UsageSample};
-use ignite_core::config::home_dir;
+use ignite_core::cli::codex::{Codex, read_session_usage};
+use ignite_core::cli::{CliApp, TurnEvents, UsageSample};
+use ignite_core::config::{Config, home_dir};
 use ignite_core::time::Timestamp;
 
 use super::Health;
 use crate::server::Context;
+
+/// Whether this provider uses the dialect that records usage in a Codex rollout.
+pub(super) fn uses_codex_rollout(config: &Config, provider: &str) -> bool {
+    config
+        .cli_program(provider)
+        .map_or(provider, |program| program.dialect(provider))
+        == Codex.name()
+}
 
 impl Health {
     pub(super) fn record_codex_usage(
@@ -20,7 +28,7 @@ impl Health {
         events: &TurnEvents,
         started: Option<Timestamp>,
     ) -> Option<Vec<UsageSample>> {
-        if provider != "codex" {
+        if !uses_codex_rollout(&ctx.config, provider) {
             return None;
         }
         let thread = events.transcript.as_deref()?;

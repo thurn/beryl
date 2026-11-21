@@ -6,6 +6,46 @@ use super::*;
 /// A turn's first line and then a wait for the gate, with the FIFO told the turn runs.
 const HELD: &str = "init; started; hang; say done; result\n";
 
+#[test]
+fn cli_e2e_a_configured_provider_runs_a_ticket_with_an_existing_dialect() {
+    let rig = Rig::new("provider");
+    let turn = r#"cat <<'JSON'
+{"type":"thread.started","thread_id":"fake-transcript"}
+{"type":"item.completed","item":{"type":"agent_message","text":"done"}}
+{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}
+JSON
+"#;
+    rig.script(1, turn);
+    rig.script(2, turn);
+
+    assert!(!rig.daemon.offers("fake"));
+    let adapter = &rig.daemon.app("fake").unwrap().app;
+    rig.health.tick(&rig.ctx, &[("fake", adapter.as_ref())]);
+    assert!(rig.daemon.offers("fake"));
+    assert!(!rig.daemon.offers("claude"));
+
+    let session = rig.begin_on("fake", "");
+    assert!(session.as_str().starts_with("cli-fake-"));
+    rig.wait_turn(&session, 1);
+    rig.daemon.step().unwrap();
+
+    assert_eq!(rig.ends(), [TurnEnd::Clean]);
+    assert_eq!(&rig.args(2)[..4], ["exec", "--json", "-m", "fake-model"]);
+    assert!(
+        rig.prompt(2)
+            .contains("ignite start T.1 --reservation c0de")
+    );
+    let slot = &rig.daemon.slots("fake")[0];
+    assert_eq!(slot.transcript.as_deref(), Some("fake-transcript"));
+    let (_, lines) = rig
+        .daemon
+        .session_digest(session.as_str())
+        .unwrap()
+        .unwrap();
+    assert_eq!(lines[0].text, "done");
+    assert_eq!(lines[1].text, "completed");
+}
+
 /// Every turn of `session` and how each ended, in order.
 fn turns_of(rig: &Rig, session: &SessionId) -> Vec<(i64, String, Option<String>)> {
     let conn = Rig::open(&rig.home);
@@ -237,7 +277,7 @@ fn cli_e2e_a_refusal_holds_the_app_and_a_passing_probe_resumes_the_slot() {
     // The probe is due five minutes into the hold; it runs as invocation 2 and passes.
     rig.clock.advance(super::super::health::PROBE_EVERY_S + 1.0);
     let claude: &dyn CliApp = &Claude;
-    rig.health.tick(&rig.ctx, &[claude]);
+    rig.health.tick(&rig.ctx, &[("claude", claude)]);
     assert_eq!(rig.invocations(), 2);
     assert!(rig.args(2).contains(&MODEL.to_owned()));
     assert!(rig.daemon.held("claude").is_none());
@@ -278,7 +318,7 @@ fn cli_e2e_a_passing_probe_retires_a_slot_reassigned_at_the_hub() {
         Some(&TicketId::new(TICKET).unwrap())
     );
     rig.clock.advance(super::super::health::PROBE_EVERY_S + 1.0);
-    rig.health.tick(&rig.ctx, &[&Claude]);
+    rig.health.tick(&rig.ctx, &[("claude", &Claude)]);
     assert_eq!(rig.invocations(), 2);
     assert!(rig.daemon.held("claude").is_none());
 
@@ -299,7 +339,7 @@ fn cli_e2e_a_restarted_daemon_rechecks_the_claim_before_launching_a_recorded_res
     assert_eq!(rig.slot().state, SlotState::Parked);
 
     rig.clock.advance(super::super::health::PROBE_EVERY_S + 1.0);
-    rig.health.tick(&rig.ctx, &[&Claude]);
+    rig.health.tick(&rig.ctx, &[("claude", &Claude)]);
     rig.restart_with(Arc::new(FailFirst {
         inner: rig.turns(),
         failed: AtomicBool::new(false),

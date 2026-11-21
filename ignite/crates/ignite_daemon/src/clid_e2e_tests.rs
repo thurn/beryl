@@ -1,5 +1,5 @@
 //! CLI mode end to end: a real [`CliDaemon`] over a database file, its turns started by a real
-//! `SupervisedLauncher` through [`SupervisedTurns`], read by the real Claude adapter and decided
+//! `SupervisedLauncher` through [`SupervisedTurns`], read by the registered CLI adapters and decided
 //! by the real `decide`, with the clock faked.
 //!
 //! The supervisor and `ignite internal cli-turn` are this test binary run again with one of the
@@ -168,6 +168,9 @@ impl Effects for Recording {
     fn hold(&self, app: &str, reason: HoldReason, message: &str, cli_version: Option<&str>) {
         self.inner.hold(app, reason, message, cli_version);
     }
+    fn probed(&self, app: &str) -> bool {
+        self.inner.probed(app)
+    }
     fn claim_is_current(&self, session: &SessionId, ticket: &TicketId) -> Result<bool> {
         self.inner.claim_is_current(session, ticket)
     }
@@ -256,11 +259,18 @@ fn config(program: &Path) -> Config {
         ticket_trees = 1
         landing_trees = 1
         [pool.cli.claude]
-        program = "{}"
+        program = "{program}"
         [pool.models.claude]
         light = "{MODEL}"
+        [machine.local.pool.fake]
+        slots = 1
+        [pool.cli.fake]
+        dialect = "codex"
+        program = "{program}"
+        [pool.models.fake]
+        custom = "fake-model"
         "#,
-        program.display()
+        program = program.display()
     );
     Config::parse("ignite.toml", &text).unwrap()
 }
@@ -375,18 +385,7 @@ impl Rig {
     /// Replaces the daemon with a new one over the same database and Ignite home, as a
     /// restarted daemon is built, with `turns` starting its turns.
     fn restart_with(&mut self, turns: Arc<dyn Turns>) {
-        let program = self.ctx.config.cli_program("claude").unwrap().clone();
-        let setup = CliSetup {
-            checkout: self.home.clone(),
-            apps: BTreeMap::from([(
-                "claude".to_owned(),
-                CliAppSetup {
-                    app: Arc::new(Claude),
-                    program,
-                    default_model: self.ctx.config.pool.model_id("claude", "sonnet"),
-                },
-            )]),
-        };
+        let setup = CliSetup::from_config(self.home.clone(), &self.ctx.config);
         self.daemon = CliDaemon::new(
             setup,
             Arc::new(Pool::new(Self::open(&self.home))),
@@ -451,7 +450,11 @@ impl Rig {
 
     /// Begins the ticket on slot 1, as `ignite start` would claim it, and returns its session.
     fn begin(&self) -> SessionId {
-        let session = self.try_begin().unwrap();
+        self.begin_on("claude", MODEL)
+    }
+
+    fn begin_on(&self, provider: &str, model: &str) -> SessionId {
+        let session = self.try_begin_on(provider, model).unwrap();
         lock(&self.host.holders).insert(session.clone(), TicketId::new(TICKET).unwrap());
         self.set_hub_claim(&session);
         session
@@ -470,16 +473,20 @@ impl Rig {
     }
 
     fn try_begin(&self) -> Result<SessionId> {
+        self.try_begin_on("claude", MODEL)
+    }
+
+    fn try_begin_on(&self, provider: &str, model: &str) -> Result<SessionId> {
         let reservation = Reservation {
-            provider: None,
+            provider: Some(provider.to_owned()),
             ticket: TicketId::new(TICKET).unwrap(),
             machine: MachineId::new("m-7f3a").unwrap(),
-            session: SessionId::new("cli-claude-slot-1").unwrap(),
-            expires_at: "2026-11-20T12:00:00.000Z".parse().unwrap(),
+            session: SessionId::new(format!("cli-{provider}-slot-1")).unwrap(),
+            expires_at: self.clock.now().plus_seconds(600.0),
             code: "c0de".to_owned(),
         };
         self.daemon
-            .begin(&reservation, MODEL, Some("high"), None, false)
+            .begin(&reservation, model, Some("high"), None, false)
     }
 
     /// Blocks until the supervisor of turn `turn` of `session` has exited.

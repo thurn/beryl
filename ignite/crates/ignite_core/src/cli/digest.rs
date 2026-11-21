@@ -1,6 +1,5 @@
 //! The digest of a CLI turn: its `output.log` boiled down to the lines a person following the
-//! worker wants to read. Each app prints its own events, so [`claude`] and [`codex`] each read
-//! theirs, and [`of`] picks by the app's name.
+//! worker wants to read. Each adapter reads the events of its own dialect.
 //!
 //! A digest line is one of:
 //!
@@ -44,14 +43,9 @@ impl Entry {
     }
 }
 
-/// The digest of `output` as the app named `app` prints it; empty for an app this build does not
-/// know.
-pub fn of(app: &str, output: &str) -> Vec<Entry> {
-    match app {
-        "claude" => claude(output),
-        "codex" => codex(output),
-        _ => Vec::new(),
-    }
+/// The digest of `output` in the named dialect, or an empty digest for an unknown dialect.
+pub fn of(dialect: &str, output: &str) -> Vec<Entry> {
+    super::adapter(dialect).map_or_else(Vec::new, |app| app.digest(output))
 }
 
 /// The position the next entry pushed onto `entries` will have.
@@ -83,7 +77,7 @@ fn cut_result(text: &str) -> String {
 }
 
 /// The digest of a `claude -p --output-format stream-json` stream.
-pub fn claude(output: &str) -> Vec<Entry> {
+pub(super) fn claude(output: &str) -> Vec<Entry> {
     let mut entries = Vec::new();
     // The ID of each tool call the digest shows, with its entry's position.
     let mut calls: Vec<(String, u32)> = Vec::new();
@@ -165,7 +159,7 @@ fn claude_result(content: &Value) -> String {
 }
 
 /// The digest of a `codex exec --json` stream.
-pub fn codex(output: &str) -> Vec<Entry> {
+pub(super) fn codex(output: &str) -> Vec<Entry> {
     let mut entries = Vec::new();
     // Items whose start already produced a tool line, with that line's position, so that their
     // completion adds only the result.

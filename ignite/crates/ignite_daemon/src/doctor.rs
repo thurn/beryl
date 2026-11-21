@@ -648,54 +648,51 @@ pub fn diagnose(input: &DoctorInput) -> Vec<Finding> {
     findings
 }
 
-/// A warning for each tier a Claude worker can run that `[pool.models.claude]` has no model ID
-/// for. No ticket naming that tier is handed to a Claude worker, so it would wait for a Codex one.
-fn model_findings(config: &Config) -> Option<Finding> {
-    let missing: Vec<&str> = crate::pool::CLAUDE_MODELS
-        .into_iter()
-        .filter(|tier| config.pool.model_id("claude", tier).is_none())
-        .collect();
-    (!missing.is_empty()).then(|| {
-        Finding::warning(
-            "models",
-            format!(
-                "[pool.models.claude] in ignite.toml has no model ID for {}, so no ticket \
-                 with that tier is handed to a Claude worker.",
-                missing
-                    .iter()
-                    .map(|tier| format!("`{tier}`"))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-            "add the missing tiers to [pool.models.claude] with the model IDs the desktop \
-             app's session tool accepts",
-        )
-    })
+/// Warns when a configured provider has no model tiers to offer the hub.
+fn model_findings(config: &Config) -> impl Iterator<Item = Finding> + '_ {
+    config
+        .pool
+        .cli
+        .keys()
+        .filter(|app| {
+            config
+                .pool
+                .models
+                .get(*app)
+                .is_none_or(std::collections::BTreeMap::is_empty)
+        })
+        .map(|app| {
+            Finding::warning(
+                "models",
+                format!("[pool.models.{app}] names no models, so {app} offers no tiers."),
+                format!("add the tiers and CLI model IDs to [pool.models.{app}]"),
+            )
+        })
 }
 
 /// A warning for each app in CLI mode on this machine whose program is not on the `PATH` the
 /// daemon runs with: every turn of the app would fail to start, and the app would go on a CLI
 /// hold.
 fn cli_findings(config: &Config, host: &dyn Host, hostname: &str) -> Vec<Finding> {
-    crate::dispatchd::APPS
-        .into_iter()
-        .filter(|app| config.machine_pool(hostname, app).slots > 0)
-        .filter_map(|app| {
-            let program = config.cli_program(app)?;
-            host.tool_path(&program.program).is_none().then(|| {
-                Finding::warning(
-                    "cli",
-                    format!(
-                        "{app} is in CLI mode on this machine, but its program `{}` is not on \
-                         the daemon's PATH, so no turn can start.",
-                        program.program
-                    ),
-                    format!(
-                        "install `{}` or put its folder on the PATH of the daemon's service",
-                        program.program
-                    ),
-                )
-            })
+    config
+        .pool
+        .cli
+        .iter()
+        .filter(|(app, _)| config.machine_pool(hostname, app).slots > 0)
+        .filter(|(_, program)| host.tool_path(&program.program).is_none())
+        .map(|(app, program)| {
+            Finding::warning(
+                "cli",
+                format!(
+                    "{app} is in CLI mode on this machine, but its program `{}` is not on \
+                     the daemon's PATH, so no turn can start.",
+                    program.program
+                ),
+                format!(
+                    "install `{}` or put its folder on the PATH of the daemon's service",
+                    program.program
+                ),
+            )
         })
         .collect()
 }

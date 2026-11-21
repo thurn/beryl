@@ -82,6 +82,7 @@ fn rig(name: &str) -> Rig {
         ticket_trees = 1
         landing_trees = 1
         [pool.cli.fake]
+        dialect = "claude"
         program = "fake-cli"
         args = ["--yes"]
         [pool.models.fake]
@@ -149,7 +150,7 @@ impl Rig {
     }
 
     fn tick(&self) {
-        self.health.tick(&self.ctx, &[&self.app]);
+        self.health.tick(&self.ctx, &[("fake", &self.app)]);
     }
 
     fn passing_probe(&self) {
@@ -596,7 +597,7 @@ fn the_loops_effects_reach_health() {
 
     rig.advance(PROBE_EVERY_S);
     rig.passing_probe();
-    health.tick(&rig.ctx, &[&rig.app]);
+    health.tick(&rig.ctx, &[("fake", &rig.app)]);
     assert!(effects.probed("fake"));
     assert!(health.offers("fake"));
 }

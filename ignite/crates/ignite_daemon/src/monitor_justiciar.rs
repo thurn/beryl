@@ -27,9 +27,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use ignite_core::cli::claude::Claude;
-use ignite_core::cli::codex::Codex;
-use ignite_core::cli::{CliApp, TurnSpec};
+use ignite_core::cli::{TurnSpec, adapter};
 use ignite_core::config::CliProgram;
 use ignite_core::time::Timestamp;
 use serde::{Deserialize, Serialize};
@@ -176,15 +174,6 @@ pub fn decide(incident: &mut Incident, seen: &Seen, now: Timestamp) -> Option<St
     })
 }
 
-/// The adapter for the app called `name`, if this build has one.
-pub fn adapter(name: &str) -> Option<Box<dyn CliApp>> {
-    match name {
-        "claude" => Some(Box::new(Claude)),
-        "codex" => Some(Box::new(Codex)),
-        _ => None,
-    }
-}
-
 fn folder(home: &Home) -> PathBuf {
     home.root.join("monitor")
 }
@@ -285,9 +274,9 @@ pub fn prompt(turn: u32, resumed: bool, evidence: &str) -> String {
 }
 
 /// The transcript ID that turn `turn`'s log names, if it has been written.
-fn transcript_of(home: &Home, app: &str, turn: u32) -> Option<String> {
+fn transcript_of(home: &Home, dialect: &str, turn: u32) -> Option<String> {
     let text = fs::read_to_string(log_path(home, turn)).ok()?;
-    adapter(app)?.read(&text).transcript
+    adapter(dialect)?.read(&text).transcript
 }
 
 /// This run's part for the justiciar, after the rest of the monitor has run: `answered` says
@@ -302,12 +291,13 @@ pub fn run(home: &Home, machine: &dyn Machine, answered: bool, now: Timestamp) -
     } else {
         machine
             .justiciar_app()
-            .filter(|app| adapter(&app.name).is_some())
+            .filter(|app| adapter(app.program.dialect(&app.name)).is_some())
     };
-    let transcript = match (&incident.app, turn_running || incident.turns == 0) {
-        (Some(name), false) => transcript_of(home, name, incident.turns),
-        _ => None,
-    };
+    let transcript = app.as_ref().and_then(|app| {
+        (!turn_running && incident.turns > 0 && incident.app.as_ref() == Some(&app.name))
+            .then(|| transcript_of(home, app.program.dialect(&app.name), incident.turns))
+            .flatten()
+    });
     let seen = Seen {
         answered,
         needed: home.root.join("justiciar-needed.json").exists(),
@@ -357,7 +347,9 @@ fn start(
     transcript: Option<String>,
     lock: &Path,
 ) -> String {
-    let Some((app, adapter)) = app.and_then(|app| Some((app, adapter(&app.name)?))) else {
+    let Some((app, adapter)) =
+        app.and_then(|app| Some((app, adapter(app.program.dialect(&app.name))?)))
+    else {
         return "no CLI app to start the headless justiciar with".to_owned();
     };
     let resumed = transcript.is_some();

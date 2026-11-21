@@ -294,6 +294,37 @@ fn the_cli_pool_tables_parse_and_default_to_desktop_mode() {
     assert!(Config::parse("ignite.toml", &format!("{DOCUMENT_EXAMPLES}{bad_mode}")).is_err());
 }
 
+#[test]
+fn cli_dialects_default_to_the_provider_name_and_must_be_registered() {
+    let tables = r#"
+[pool.cli.codex]
+program = "codex"
+[pool.cli.fake]
+program = "fake-cli"
+dialect = "codex"
+"#;
+    let text = format!("{DOCUMENT_EXAMPLES}{tables}");
+    let config = Config::parse("ignite.toml", &text).unwrap();
+    let codex = config.cli_program("codex").unwrap();
+    let fake = config.cli_program("fake").unwrap();
+    assert_eq!(codex.dialect("codex"), "codex");
+    assert_eq!(fake.dialect("fake"), "codex");
+
+    let error = Config::parse(
+        "ignite.toml",
+        &text.replace("dialect = \"codex\"", "dialect = \"unknown\""),
+    )
+    .unwrap_err();
+    assert_eq!(error.key, "pool.cli.fake.dialect");
+
+    let error = Config::parse(
+        "ignite.toml",
+        &text.replace("pool.cli.fake", "pool.cli.fake-slot"),
+    )
+    .unwrap_err();
+    assert_eq!(error.key, "pool.cli.fake-slot");
+}
+
 /// One family that must pass on macOS and Windows, beside one that may pass anywhere.
 const PLATFORM_FAMILIES: &str = r#"
 [family.platform]

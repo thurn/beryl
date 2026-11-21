@@ -35,16 +35,16 @@ fn cut(text: &str) -> String {
     kept
 }
 
-/// The digest of turn `turn` of `session`, from the text of its `output.log` as `app` prints it.
+/// The digest of turn `turn` of `session`, from the text of its `output.log` in the CLI dialect.
 /// Only whole lines of `output` count, so a line the CLI is still writing is read next time.
 pub fn digest(
-    app: &str,
+    dialect: &str,
     output: &str,
     session: &SessionId,
     ticket: Option<&TicketId>,
     turn: u32,
 ) -> Vec<TranscriptLine> {
-    app_digest::of(app, read::whole_lines(output))
+    app_digest::of(dialect, read::whole_lines(output))
         .into_iter()
         .zip(0..)
         .map(|(entry, index)| TranscriptLine {
@@ -61,6 +61,15 @@ pub fn digest(
 }
 
 impl CliDaemon {
+    /// Finds the dialect of a configured provider. Older logs can still be read by name
+    /// when a built-in provider no longer has a configuration table.
+    fn dialect<'a>(&'a self, provider: &'a str) -> &'a str {
+        self.setup
+            .apps
+            .get(provider)
+            .map_or(provider, |setup| setup.program.dialect(provider))
+    }
+
     /// Queues the lines of the turn's digest that were not queued before, in the outbox. A
     /// daemon with no machine to name (see [`CliDaemon::with_machine`]) queues nothing. A
     /// failure to queue is reported and the lines are tried again at the next look.
@@ -75,7 +84,7 @@ impl CliDaemon {
         let Some(machine) = self.machine.clone() else {
             return;
         };
-        let lines = digest(app, output, session, ticket, turn);
+        let lines = digest(self.dialect(app), output, session, ticket, turn);
         let key = (session.clone(), turn);
         let done = lock(&self.sent).get(&key).copied().unwrap_or(0);
         if lines.len() <= done {
@@ -142,7 +151,13 @@ impl CliDaemon {
             let number = u32::try_from(turn.turn).unwrap_or(0);
             let text = self.turns.output(&session, number).unwrap_or_default();
             let ticket = turn.ticket.as_deref().and_then(|t| TicketId::new(t).ok());
-            lines.extend(digest(&turn.app, &text, &session, ticket.as_ref(), number));
+            lines.extend(digest(
+                self.dialect(&turn.app),
+                &text,
+                &session,
+                ticket.as_ref(),
+                number,
+            ));
         }
         Ok(Some((session, lines)))
     }

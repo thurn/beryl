@@ -24,7 +24,7 @@ pub(super) fn cli_with(rig: &Rig, slots: u32, fake: Arc<FakeCliPool>) -> Arc<Fak
         "claude".to_owned(),
         CliProgram {
             program: "claude".to_owned(),
-            args: Vec::new(),
+            ..CliProgram::default()
         },
     );
     config.machine.get_mut("local").unwrap().pool.insert(
@@ -130,15 +130,20 @@ fn an_app_in_cli_mode_hands_off_through_the_cli_pool_without_a_dispatcher() {
 }
 
 #[test]
-fn codex_cli_handoffs_use_the_configured_effort_unless_the_ticket_overrides_it() {
+fn configured_providers_offer_their_tiers_and_use_their_effort_defaults() {
     let fake = Arc::new(FakeCliPool::default());
     let mut rig = rig(&[]);
-    rig.ctx.config.pool.default_effort = [("codex".to_owned(), "high".to_owned())].into();
+    rig.ctx.config.pool.default_effort = [("fake".to_owned(), "high".to_owned())].into();
+    rig.ctx.config.pool.models.insert(
+        "fake".to_owned(),
+        [("custom".to_owned(), "fake-model".to_owned())].into(),
+    );
     rig.ctx.config.pool.cli.insert(
-        "codex".to_owned(),
+        "fake".to_owned(),
         CliProgram {
-            program: "codex".to_owned(),
-            args: Vec::new(),
+            program: "fake-cli".to_owned(),
+            dialect: Some("codex".to_owned()),
+            ..CliProgram::default()
         },
     );
     rig.ctx
@@ -148,7 +153,7 @@ fn codex_cli_handoffs_use_the_configured_effort_unless_the_ticket_overrides_it()
         .unwrap()
         .pool
         .insert(
-            "codex".to_owned(),
+            "fake".to_owned(),
             MachinePool {
                 mode: PoolMode::Desktop,
                 slots: 2,
@@ -159,19 +164,24 @@ fn codex_cli_handoffs_use_the_configured_effort_unless_the_ticket_overrides_it()
     reserve(
         &rig,
         "T.1",
-        &cli::placeholder("codex", 1).unwrap().to_string(),
+        &cli::placeholder("fake", 1).unwrap().to_string(),
         &[],
     );
     reserve(
         &rig,
         "T.2",
-        &cli::placeholder("codex", 2).unwrap().to_string(),
-        &["effort:medium"],
+        &cli::placeholder("fake", 2).unwrap().to_string(),
+        &["tier:custom", "effort:medium"],
     );
     tick(&rig);
 
     let begun = fake.begun();
     assert_eq!(begun.len(), 2);
+    assert_eq!(begun[1].1, "fake-model");
+    assert_eq!(rig.dispatcher.cli_apps().collect::<Vec<_>>(), ["fake"]);
+    let asks = rig.hub.asked();
+    assert_eq!(asks[0].idle_workers[0].app, "fake");
+    assert_eq!(asks[0].idle_workers[0].models, ["custom"]);
     let efforts: BTreeMap<_, _> = begun
         .iter()
         .map(|(reservation, _, effort)| (reservation.ticket.as_str(), effort.as_deref()))

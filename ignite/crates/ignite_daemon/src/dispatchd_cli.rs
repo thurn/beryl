@@ -8,11 +8,8 @@ use ignite_core::protocol::hub::Reservation;
 
 use super::{Dispatcher, Reserved, State};
 use crate::clid::{CliPool, Resume};
-use crate::pool::{CLAUDE_MODELS, Member};
+use crate::pool::Member;
 use crate::server::Context;
-
-/// The apps a machine may run.
-pub const APPS: [&str; 2] = ["claude", "codex"];
 
 /// The worker supervisor and configuration for this machine.
 pub(super) struct CliMode {
@@ -75,7 +72,7 @@ pub(super) fn slot_of(session: &SessionId) -> Option<(&str, u32)> {
     let (app, index) = session
         .as_str()
         .strip_prefix(PREFIX)?
-        .split_once(SLOT_INFIX)?;
+        .rsplit_once(SLOT_INFIX)?;
     Some((app, index.parse().ok()?))
 }
 
@@ -110,14 +107,13 @@ pub(super) fn is_extra_slot(state: &State, session: &SessionId) -> bool {
     })
 }
 
-/// The tiers `app` runs: its `[pool.models.<app>]` table's, or for Claude without one, every
-/// Claude tier. An empty list leaves the choice to `offered_models` (see `work`).
-fn tiers(config: &Config, app: &str) -> Vec<String> {
-    match config.pool.models.get(app) {
-        Some(table) => table.keys().cloned().collect(),
-        None if app == "claude" => CLAUDE_MODELS.iter().map(|m| (*m).to_owned()).collect(),
-        None => Vec::new(),
-    }
+/// The tiers the provider offers to the hub, from its model table.
+fn tiers(config: &Config, provider: &str) -> Vec<String> {
+    config
+        .pool
+        .models
+        .get(provider)
+        .map_or_else(Vec::new, |models| models.keys().cloned().collect())
 }
 
 impl Dispatcher {
@@ -139,8 +135,12 @@ impl Dispatcher {
     }
 
     /// The configured providers that can take work on this machine.
-    pub fn cli_apps(&self) -> impl Iterator<Item = &'static str> + '_ {
-        APPS.into_iter().filter(|app| self.cli_enabled(app))
+    pub fn cli_apps(&self) -> impl Iterator<Item = &str> {
+        self.cli
+            .get()
+            .into_iter()
+            .flat_map(|cli| cli.config.pool.cli.keys().map(String::as_str))
+            .filter(|app| self.cli_enabled(app))
     }
 
     /// The slots each app in CLI mode has: `slots` from `ignite.toml`, and one more for tickets

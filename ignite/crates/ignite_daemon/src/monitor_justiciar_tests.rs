@@ -12,6 +12,7 @@ fn claude() -> JusticiarApp {
         program: CliProgram {
             program: "claude".to_owned(),
             args: vec!["--dangerously-skip-permissions".to_owned()],
+            dialect: None,
         },
         model: "claude-opus".to_owned(),
         checkout: PathBuf::from("/repo"),
@@ -159,7 +160,14 @@ fn a_machine_with_no_cli_app_starts_nothing_and_writes_nothing() {
 fn a_daemon_that_stays_down_gets_a_turn_then_a_resume_and_recovery_ends_the_incident() {
     let home = home();
     let mut machine = FakeMachine::new(false, false);
-    machine.cli_app = Some(claude());
+    machine.cli_app = Some(JusticiarApp {
+        name: "fake".to_owned(),
+        program: CliProgram {
+            dialect: Some("claude".to_owned()),
+            ..claude().program
+        },
+        ..claude()
+    });
     // Failing since 0 s; the repair is asked for at 960 s, and the turn starts in that run.
     let mut started_at = None;
     for run in 0..9 {
@@ -204,7 +212,7 @@ fn a_daemon_that_stays_down_gets_a_turn_then_a_resume_and_recovery_ends_the_inci
     let done = run_once(&home, &machine, at(1200.0));
     assert_eq!(
         done,
-        ["resumed the headless justiciar with claude, turn 2 of 6"]
+        ["resumed the headless justiciar with fake, turn 2 of 6"]
     );
     let second = machine.turns.borrow()[1].clone();
     assert!(second.command.join(" ").contains("--resume t-abc"));

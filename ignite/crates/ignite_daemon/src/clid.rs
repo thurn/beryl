@@ -321,7 +321,7 @@ fn placeholder(session: &SessionId) -> Option<(String, u32)> {
     let (app, index) = session
         .as_str()
         .strip_prefix("cli-")?
-        .split_once("-slot-")?;
+        .rsplit_once("-slot-")?;
     Some((app.to_owned(), index.parse().ok()?))
 }
 
@@ -571,7 +571,7 @@ impl CliDaemon {
             app: row.app.clone(),
             program: setup.program.program.clone(),
             args: setup.program.args.clone(),
-            model: setup.model_for(row.model.as_deref())?.to_owned(),
+            model: setup.model_for(&row.app, row.model.as_deref())?.to_owned(),
             effort: row.effort.clone(),
             transcript: row.transcript.clone(),
             new_transcript: if row.transcript.is_none() {
@@ -659,7 +659,7 @@ impl CliPool for CliDaemon {
         } else {
             return Err(Error::Invalid(format!("{named} is not a CLI slot")));
         };
-        let model = self.app(&app)?.model_for(Some(model))?;
+        let model = self.app(&app)?.model_for(&app, Some(model))?;
         let session = match &earlier {
             Some(_) => named.clone(),
             None => Self::new_session(&app)?,

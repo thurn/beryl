@@ -148,6 +148,10 @@ pub(super) fn rig_on(workers: &[&str], db: rusqlite::Connection, now: Timestamp)
         [machine.local]
         ticket_trees = 4
         landing_trees = 1
+        [pool.models.claude]
+        opus = "opus"
+        sonnet = "sonnet"
+        light = "light"
     "#;
     let clock = Arc::new(FakeClock::new(now));
     let hub = Arc::new(FakeHub::default());

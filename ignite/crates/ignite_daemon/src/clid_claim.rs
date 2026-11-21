@@ -36,16 +36,38 @@ pub(super) struct Earlier {
     transcript: Option<String>,
 }
 
+impl super::CliSetup {
+    /// Resolves each configured provider to its adapter and default model.
+    pub fn from_config(checkout: std::path::PathBuf, config: &ignite_core::config::Config) -> Self {
+        let apps = config
+            .pool
+            .cli
+            .iter()
+            .filter_map(|(name, program)| {
+                let setup = super::CliAppSetup {
+                    app: ignite_core::cli::adapter(program.dialect(name))?,
+                    program: program.clone(),
+                    default_model: super::health::default_model(config, name),
+                };
+                Some((name.clone(), setup))
+            })
+            .collect();
+        Self { checkout, apps }
+    }
+}
+
 impl super::CliAppSetup {
     /// Older workers could store an empty model for a ticket without a tier. Use the same
     /// configured default for those workers when they retry and for new untiered hand-offs.
-    pub(super) fn model_for<'a>(&'a self, model: Option<&'a str>) -> Result<&'a str> {
+    pub(super) fn model_for<'a>(
+        &'a self,
+        provider: &str,
+        model: Option<&'a str>,
+    ) -> Result<&'a str> {
         model
             .filter(|model| !model.is_empty())
             .or(self.default_model.as_deref())
-            .ok_or_else(|| {
-                Error::Invalid(format!("no CLI model configured for {}", self.app.name()))
-            })
+            .ok_or_else(|| Error::Invalid(format!("no CLI model configured for {provider}")))
     }
 }
 

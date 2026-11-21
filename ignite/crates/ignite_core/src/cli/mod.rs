@@ -9,6 +9,8 @@
 //! Nothing about a session lives in the daemon's memory: a [`Slot`] is a row of the daemon's
 //! database, and a turn's events are read again from its `output.log` whenever the daemon looks.
 
+use std::sync::{Arc, LazyLock};
+
 use serde::{Deserialize, Serialize};
 
 use crate::ids::{SessionId, TicketId};
@@ -318,9 +320,22 @@ pub struct Facts {
     pub last_text: Option<String>,
 }
 
-/// One CLI program, such as `claude` or `codex`.
+static ADAPTERS: LazyLock<Vec<Arc<dyn CliApp>>> =
+    LazyLock::new(|| vec![Arc::new(claude::Claude), Arc::new(codex::Codex)]);
+
+/// The adapter for a CLI dialect supported by this build.
+pub fn adapter(dialect: &str) -> Option<Arc<dyn CliApp>> {
+    ADAPTERS.iter().find(|app| app.name() == dialect).cloned()
+}
+
+/// The dialects a provider can select in `[pool.cli.<provider>]`.
+pub fn dialects() -> impl Iterator<Item = &'static str> {
+    ADAPTERS.iter().map(|app| app.name())
+}
+
+/// One CLI's command-line and event format. Multiple providers can use the same adapter.
 pub trait CliApp: Send + Sync {
-    /// The app's name, as in `[pool.cli.<app>]`.
+    /// The dialect name, used to select this adapter.
     fn name(&self) -> &'static str;
     /// The program and every argument of one turn.
     fn command(&self, spec: &TurnSpec) -> Vec<String>;
@@ -330,6 +345,10 @@ pub trait CliApp: Send + Sync {
     /// How a turn ended, from its events and its exit code (`None` when a signal ended it or no
     /// exit was recorded).
     fn classify(&self, events: &TurnEvents, exit: Option<i32>) -> TurnEnd;
+    /// Human-readable transcript lines for the pool watch and dashboard.
+    fn digest(&self, _output: &str) -> Vec<digest::Entry> {
+        Vec::new()
+    }
 }
 
 #[cfg(test)]

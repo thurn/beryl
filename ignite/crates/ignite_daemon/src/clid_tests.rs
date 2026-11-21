@@ -238,6 +238,7 @@ impl Rig {
                     program: CliProgram {
                         program: "fake-cli".to_owned(),
                         args: vec!["--yes".to_owned()],
+                        dialect: None,
                     },
                     default_model: Some("default-model".to_owned()),
                 },

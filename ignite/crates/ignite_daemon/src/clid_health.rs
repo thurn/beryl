@@ -44,6 +44,7 @@ use ignite_core::traits::{CommandSpec, Error, Result};
 use ignite_store::local::rows::{CliHold, PlanUsage};
 use ignite_store::local::{cli_slots, plan_usage};
 
+use self::codex_usage::uses_codex_rollout;
 use super::Effects;
 use crate::pool::Pool;
 use crate::server::Context;
@@ -345,8 +346,7 @@ impl Health {
     }
 
     /// Runs one probe turn of `app` in the Ignite home and waits for it.
-    pub fn probe(&self, ctx: &Context, app: &dyn CliApp) -> Probe {
-        let name = app.name();
+    fn probe(&self, ctx: &Context, name: &str, app: &dyn CliApp) -> Probe {
         let failed = |reason, message: String| Probe::Failed {
             end: TurnEnd::Hold { reason, message },
         };
@@ -423,9 +423,8 @@ impl Health {
 
     /// Probes `app` and acts on the result: a pass ends its hold, if any, and lets its slots be
     /// offered; a failure starts a hold, or records the probe's time on the one it is on.
-    pub fn probe_and_apply(&self, ctx: &Context, app: &dyn CliApp) -> Probe {
-        let name = app.name();
-        let outcome = self.probe(ctx, app);
+    fn probe_and_apply(&self, ctx: &Context, name: &str, app: &dyn CliApp) {
+        let outcome = self.probe(ctx, name, app);
         let now = ctx.clock.now();
         match &outcome {
             Probe::Passed => match self.end_hold(name, now) {
@@ -446,21 +445,19 @@ impl Health {
                     .with_database(|conn| cli_slots::hold_probed(conn, name, &at));
             }
         }
-        outcome
     }
 
     /// One round for the apps in CLI mode, `apps`: probes each app that has not passed a probe
     /// since the daemon started and each held app whose probe is due, then sends each hold's
     /// justiciar report that the hub has not yet taken. A probe runs a whole turn, so a round
     /// can take a minute.
-    pub fn tick(&self, ctx: &Context, apps: &[&dyn CliApp]) {
+    pub fn tick(&self, ctx: &Context, apps: &[(&str, &dyn CliApp)]) {
         let now = ctx.clock.now();
         let rows = self
             .pool
             .with_database(|conn| cli_slots::holds(conn))
             .unwrap_or_default();
-        for app in apps {
-            let name = app.name();
+        for &(name, app) in apps {
             let row = rows.iter().find(|row| row.app == name);
             let due = match row {
                 None => !self.probed().contains(name),
@@ -473,7 +470,7 @@ impl Health {
                 }
             };
             if due {
-                self.probe_and_apply(ctx, *app);
+                self.probe_and_apply(ctx, name, app);
             }
         }
         self.report_holds(ctx);
@@ -553,11 +550,12 @@ impl Health {
         samples: &[UsageSample],
         now: Timestamp,
     ) -> Result<()> {
+        let uses_rollout = uses_codex_rollout(&ctx.config, provider);
         let window = window.map_or_else(
             || {
                 samples
                     .iter()
-                    .filter(|sample| provider != "codex" || sample.utilization >= 1.0)
+                    .filter(|sample| !uses_rollout || sample.utilization >= 1.0)
                     .max_by(|a, b| a.utilization.total_cmp(&b.utilization))
                     .map_or_else(|| "five_hour".to_owned(), |s| s.window.clone())
             },

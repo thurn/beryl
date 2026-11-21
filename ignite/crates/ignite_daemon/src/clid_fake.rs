@@ -122,11 +122,14 @@ impl CliPool for FakeCliPool {
         _fresh: bool,
     ) -> Result<SessionId> {
         let name = reservation.session.as_str();
-        let placeholder = name.split_once("-slot-").is_some();
-        let app = name
+        let rest = name
             .strip_prefix("cli-")
-            .and_then(|rest| rest.split_once("-slot-").or_else(|| rest.rsplit_once('-')))
-            .map(|(app, _)| app)
+            .ok_or_else(|| Error::Invalid(format!("{} is not a CLI slot", reservation.session)))?;
+        let slot = super::placeholder(&reservation.session);
+        let app = slot
+            .as_ref()
+            .map(|(app, _)| app.as_str())
+            .or_else(|| rest.rsplit_once('-').map(|(app, _)| app))
             .ok_or_else(|| Error::Invalid(format!("{} is not a CLI slot", reservation.session)))?;
         if let Some(error) = lock(&self.refuse).clone() {
             return Err(Error::Io(error));
@@ -142,7 +145,7 @@ impl CliPool for FakeCliPool {
             model.to_owned(),
             effort.map(str::to_owned),
         ));
-        let session = if placeholder {
+        let session = if slot.is_some() {
             SessionId::new(format!("cli-{app}-{:08x}", begun.len()))
                 .map_err(|e| Error::Invalid(e.to_string()))?
         } else {

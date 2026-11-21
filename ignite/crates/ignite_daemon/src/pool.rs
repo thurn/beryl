@@ -16,14 +16,11 @@ use rusqlite::Connection;
 use crate::dispatchd::{Dispatcher, hub_exit};
 use crate::server::{Context, Verb};
 
-/// The model tiers a Claude worker runs, matched against a ticket's `tier:` label.
-pub const CLAUDE_MODELS: [&str; 3] = ["opus", "sonnet", "light"];
-
 /// One pool member as the daemon uses it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Member {
     pub session: SessionId,
-    /// `claude` or `codex`.
+    /// The provider name from `[pool.cli.<provider>]`.
     pub app: String,
     /// The app confirmed the session is gone.
     pub down: bool,
