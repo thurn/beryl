@@ -3378,9 +3378,15 @@ ignite ticket update MAB12 --every 2d
   a copy is live is skipped, so the next copy is filed at the first due time
   after that copy closes.
 - A copy is an ordinary task, filed `open` so the pool may be offered it at
-  once. It takes the meta-ticket's title, body, acceptance, design, labels,
-  priority, owner and cores at the moment it is filed, so an edit to the
+  once. It takes the meta-ticket's title, body, acceptance, design, notes,
+  labels, priority, owner and cores at the moment it is filed, so an edit to the
   meta-ticket changes every later copy and none already filed.
+- The notes are how one copy leaves something for the next. A copy starts with
+  the notes the meta-ticket held when the copy was filed, and before it closes
+  it replaces them with `ignite ticket update <meta-ticket> --notes-file <file>`
+  (the meta-ticket is the copy's parent). The body says what every copy does;
+  the notes say what earlier copies found, so they are rewritten to stay short
+  and are never a log that grows with each copy.
 - The meta-ticket itself is never ready or offered to a worker, and closing its
   last live copy does not close it. Deferring it pauses the schedule, reopening
   it resumes the schedule, and closing it retires the schedule.
@@ -4760,9 +4766,10 @@ asked for.
 
 ## Improvement tickets
 
-Improvement tickets are how the workflow gets better without a scheduled agent
-or a separate role. A rule over the records files each one with an estimate of
-what it would save, and the dispatcher guarantees them workers.
+Improvement tickets are how the workflow gets better without a separate role. A
+rule over the records files each one with an estimate of what it would save, and
+the dispatcher guarantees them workers. A rule finds the waste that a query can
+name. What takes judgement to find is the work of a [patrol](#patrols).
 
 A **rule** is a query that finds a source of waste and names a subject, a cost
 and a saving per week. The efficiency dashboard's findings are rules already.
@@ -4833,6 +4840,65 @@ project already requires of changes made to save time or tokens. Seven days
 later the hub comments on the ticket with the rule's measure for the subject
 before and after. A ticket about compile cost also records a rebuild count
 before and after, which does not depend on load.
+
+## Patrols
+
+A patrol is a scheduled ticket (see [Scheduled tickets](#scheduled-tickets))
+whose copies, called rounds, study the records for one kind of waste and file
+tickets for what they find. A rule can only report what its query counts. A
+round can ask why: why one stage of delivery got slower, which instruction
+agents keep misreading, why a fault cost a day before anything noticed it.
+
+A round analyzes and files, and implements nothing. A meta-ticket has one live
+copy at a time, so a round that stayed open to land a fix would hold back the
+rounds after it.
+
+- **What a round files.** A few tickets at most, each filed `open` under no
+  epic, with the label `patrol:<name>`. Each states the problem as measured, its
+  cause with the evidence, the change, and one named metric from
+  `just efficiency metrics` with its value now and the direction it should move.
+  The change lands with an entry in `data/efficiency-changes.json` that names
+  the same metric, so `just efficiency changes` can compare the metric before
+  and after.
+- **What a round remembers.** A patrol's memory is in the ticket system, in two
+  places.
+  - The tickets it filed. `ignite ticket list --label patrol:<name> --all` lists
+    them. When one has landed and enough tickets have landed since to compare, a
+    later round records the result on it as a label, `verdict:worked`,
+    `verdict:no-effect` or `verdict:worse`, with a comment that gives the metric
+    before and after. A ticket closed without landing gets `verdict:dropped`.
+  - The meta-ticket's notes, which each round rewrites: the metrics at each
+    recent round, the tickets not yet judged, what worked, what did not and the
+    best explanation why, and the causes that were looked at and not filed. The
+    notes are a summary of fixed length. The labelled tickets are the full
+    history.
+- **A patrol is not how a fault gets noticed.** `master` falling behind,
+  oversubscribed cores, a full disk and a failing check are for the justiciar
+  (see [The justiciar](#the-justiciar)), the regression tickets and the daemon's
+  own repairs. A round does not fix, report or watch a fault that is happening
+  now. Such faults are a patrol's subject only as a pattern: when the records
+  show that one kind of fault keeps costing throughput, the round asks why the
+  mechanism that should have caught it did not, or caught it late, and files a
+  ticket that changes that mechanism.
+- **What a patrol leaves to people.** The size of the pool, the model tier of a
+  kind of work and the pauses for plan usage are set by a person. A round
+  reports in the notes when one of them limits throughput and files no ticket to
+  change it.
+
+The **velocity patrol** is the first. Its measure is the time from a ticket
+being opened to its change being verified on `master`, and how often landed work
+had to be repaired:
+
+| Stage                  | Metric                                                 |
+| ---------------------- | ------------------------------------------------------ |
+| Opened to verified     | `bead.lead-minutes`                                    |
+| Opened to claimed      | `ignite.worker-wait-percent`                           |
+| Claimed to landed      | `ignite.cycle-minutes`                                 |
+| The landing gate       | `ignite.gate-seconds`, `ignite.gate-wait-seconds`      |
+| Landed to verified     | `ignite.master-lag-minutes`                            |
+| Repairs to landed work | `ignite.escapes-per-100-landings`, `bead.rework-share` |
+
+What a ticket costs in tokens is not the velocity patrol's subject.
 
 ## Rebuild counts
 
