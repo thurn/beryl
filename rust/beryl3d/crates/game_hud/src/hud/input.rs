@@ -9,12 +9,14 @@ use crate::inspect::Viewed;
 use crate::inspect::{inspector::Inspected, revealed::RevealedFace};
 use crate::navigation::Sheet;
 use game_table::faces::FaceList;
+use game_table::profiles::Profile;
 use game_table::table::Window;
 
 /// The game view, playback state and UI state that the HUD reads.
 #[derive(Clone, Copy, Debug)]
 pub struct HudIn<'a> {
     pub window: Window,
+    pub profile: Profile<'a>,
     pub view: Option<&'a PlayerView>,
     pub played: Option<&'a PlayerView>,
     pub turn: Option<Turn>,

@@ -23,8 +23,8 @@
 
 use glam::{Vec2, Vec3};
 
-use super::pile::lift;
-use super::{CARD_HEIGHT, CARD_WIDTH, Camera, LAYER, RowArea, Window};
+use crate::table::pile::lift;
+use crate::table::{CARD_HEIGHT, CARD_WIDTH, Camera, LAYER, RowArea, Window};
 use kit_base::data::space::layout::desktop::web as data;
 use kit_base::pose::Pose;
 

@@ -14,7 +14,6 @@
 use beryl_protocol::protocol::{RowName, Side};
 use glam::{Vec2, Vec3};
 
-use game_play::art::orb;
 use game_play::hud::counts::{index, points};
 use game_table::table::{ROWS, Rows, Scroller, Table, row_area};
 use kit_base::data::space::layout::desktop::ROW_COUNT_GAP;
@@ -114,11 +113,12 @@ fn place(scroller: Scroller, right: bool, table: &Table) -> Option<(Vec2, Vec2)>
             let [left, right_end] =
                 [area.left, area.right].map(|x| camera.to_screen(Vec3::new(x, y, 0.0)));
             let (mut point, anchor) = beside(left.x, right_end.x, left.y)?;
-            if layout.phone.is_none() {
+            if layout.bands.is_none() {
                 // A crowded lands row can end at the life orb. Keep its count outside
                 // the orb and step stops, rather than printing it through that furniture.
                 let life = points(layout.players[index(side)].life, camera.window.size);
-                let half = Vec2::new(size::ORB_WIDTH, size::ORB_HEIGHT) * orb::DESKTOP_SCALE / 2.0;
+                let half =
+                    Vec2::new(size::ORB_WIDTH, size::ORB_HEIGHT) * layout.play.life.orb_scale / 2.0;
                 let half_line = type_style::BODY.size * type_style::BODY.line_height / 2.0;
                 if (point.y - life.y).abs() < half.y + half_line {
                     let half_width = size::STEPS_WIDTH / 2.0;
@@ -133,7 +133,7 @@ fn place(scroller: Scroller, right: bool, table: &Table) -> Option<(Vec2, Vec2)>
         }
         Scroller::Stack => {
             let (low, high) = table.stack_bounds()?;
-            if layout.phone.is_some() {
+            if layout.centred_stack_line().is_some() {
                 beside(low.x, high.x, f32::midpoint(low.y, high.y))
             } else if right {
                 Some((

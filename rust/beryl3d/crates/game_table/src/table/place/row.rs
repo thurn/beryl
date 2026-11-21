@@ -8,14 +8,15 @@ use super::{
     Group, PileRules, Placement, ROWS, Rest, Rules, Zones, host_slot, lay, members, row_index,
     side_index,
 };
+use crate::profiles::web_fit;
 use crate::table::rows::{Beneath, NameIds, RowWindow, SameName, grouped};
 use crate::table::{
-    CARD_HEIGHT, CARD_WIDTH, Camera, FittedRow, Layout, RowArea, row_area, web_fit,
+    CARD_HEIGHT, CARD_WIDTH, Camera, FittedRow, Layout, RowArea, RowZoom, row_area,
 };
 use glam::{Quat, Vec3};
 use kit_frame::frame::Place;
 use kit_scene::hit::CELL;
-use kit_space::arrange::row::{self as solver, Row, ScaleLimit};
+use kit_space::arrange::row::{self as solver, Row};
 
 /// The limits of a row for one layout and camera, independent of its cards and scroll offset.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -96,14 +97,9 @@ impl Zooms {
     /// row down to `ZOOM_LEAST`; here either back row stops at `LEAST_BACK_ZOOM` and past it
     /// crowds and scrolls, since a land at a zoom of 0.3 is about 28 points wide, too narrow to
     /// leave the reachable check's 24-point square inside its slanted edges.
-    fn of_fits(fits: [[f32; 3]; 2]) -> Self {
-        use kit_base::data::space::layout::desktop::LEAST_BACK_ZOOM;
-        use kit_base::data::space::layout::desktop::web::{BACK_ROW_PULL, ZOOM_LEAST};
-        let back = Some(ScaleLimit {
-            minimum: LEAST_BACK_ZOOM,
-            shared_minimum: BACK_ROW_PULL,
-        });
-        let rows = solver::linked_scales(fits, ZOOM_LEAST, [None, back, back]);
+    fn of_fits(fits: [[f32; 3]; 2], limits: RowZoom) -> Self {
+        let back = Some(limits.back);
+        let rows = solver::linked_scales(fits, limits.minimum, [None, back, back]);
         Self { rows, fits }
     }
 }
@@ -143,9 +139,9 @@ pub(crate) fn rezoom(
     changed: impl Fn(Side, RowName) -> bool,
 ) -> Zooms {
     let (layout, _, _, fits, ids, _) = rules;
-    if layout.fitted.is_none() {
+    let Some(limits) = layout.row_zoom else {
         return Zooms::default();
-    }
+    };
     let fit = |side: Side, row: RowName| {
         if !changed(side, row) {
             return known.fits[side_index(side)][row_index(row)];
@@ -158,7 +154,10 @@ pub(crate) fn rezoom(
         let groups = grouped((&cards, &beneath), (names, ids, piles.for_group(group)));
         container.fit(groups.solver_groups(&beneath, layout, &[]))
     };
-    Zooms::of_fits([Side::You, Side::Opponent].map(|side| ROWS.map(|row| fit(side, row))))
+    Zooms::of_fits(
+        [Side::You, Side::Opponent].map(|side| ROWS.map(|row| fit(side, row))),
+        limits,
+    )
 }
 
 /// The cards of a row as the row solver takes them: the row's permanents, lands in the order they

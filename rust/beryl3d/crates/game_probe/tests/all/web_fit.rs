@@ -3,7 +3,7 @@
 
 use beryl_protocol::protocol::{CardType, Combat, ObjectId, Side, ZoneName};
 use beryl_protocol::testing::ViewBuilder;
-use game_table::table::{DESKTOP, Scroll, Window, place};
+use game_table::table::{Scroll, Window, place};
 use glam::Vec2;
 use kit_ui::input::{Insets, Size};
 
@@ -42,7 +42,9 @@ fn desktop_cards_land_on_the_web_interfaces_boxes() {
         (land(Side::You, "Plains", true), YOUR_SECOND_TAPPED),
     ];
     let view = builder.build();
-    let layout = DESKTOP.for_window(window);
+    let layout =
+        game_table::profiles::Profile::for_window(&crate::test_data::data().profiles, window)
+            .layout();
     let camera = layout.fit(window);
     let placement = place(
         &view,
@@ -100,7 +102,9 @@ fn a_blocker_stands_across_from_its_attacker() {
         scale: 2.0,
         safe_area: Insets::default(),
     };
-    let layout = DESKTOP.for_window(window);
+    let layout =
+        game_table::profiles::Profile::for_window(&crate::test_data::data().profiles, window)
+            .layout();
     let camera = layout.fit(window);
     for defender in [Side::Opponent, Side::You] {
         let attacker_side = if defender == Side::You {

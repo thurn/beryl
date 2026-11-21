@@ -82,7 +82,6 @@ fn an_element_anchored_to_a_card_the_table_does_not_show_is_not_drawn() {
     let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
     let table = Table::new(
         crate::test_data::data(),
-        game_table::table::DESKTOP,
         game_table::table::Window::default(),
     );
     layer.write(&mut builder, &table.camera().screen_plane(), true);

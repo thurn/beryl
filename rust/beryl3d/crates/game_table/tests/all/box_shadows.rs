@@ -34,7 +34,6 @@ fn outer_shadows_go_under_the_panel_and_inset_ones_over_it() {
         &mut builder,
         &Table::new(
             crate::test_data::data(),
-            game_table::table::DESKTOP,
             game_table::table::Window::default(),
         )
         .camera()

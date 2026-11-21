@@ -47,6 +47,7 @@ pub struct ScreenIn<'a> {
     /// The screen the client is on, which a sheet opens over.
     pub screen: Screen,
     pub window: Window,
+    pub profile: game_table::profiles::Profile<'a>,
     /// The latest view of the game, if one has started.
     pub view: Option<&'a PlayerView>,
     /// The latest view whose script has played out, which the table shows at rest. The web
@@ -118,6 +119,7 @@ impl<'a> ScreenIn<'a> {
     pub fn hud(&self) -> HudIn<'a> {
         HudIn {
             window: self.window,
+            profile: self.profile,
             view: self.view,
             played: self.played,
             turn: self.turn,

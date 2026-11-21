@@ -709,7 +709,7 @@ fn lay(
     let (layout, camera, scroll, fits, ids, lift) = rules;
     match group {
         Group::Pile { side, zone } => {
-            if zone == ZoneName::Exile && layout.phone.is_some() {
+            if zone == ZoneName::Exile && !layout.style.show_exile {
                 lay_unseen_exile(placement, objects, side, (layout, camera));
             } else {
                 lay_pile(placement, objects, (side, zone), (layout, camera));

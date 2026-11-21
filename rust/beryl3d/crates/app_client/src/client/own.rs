@@ -379,13 +379,12 @@ impl Client {
     pub(super) fn prepare_counts(&mut self) {
         let targets = self.targets(true);
         self.counts.passes = self.screen == app_screens::screens::Screen::Game;
-        self.counts.phone = self.window.phone();
         self.counts.pools = self.screen != app_screens::screens::Screen::Table;
         (self.counts).prepare(
             &mut self.layer,
             self.show.counts(),
             self.show.coming_counts(),
-            targets,
+            (targets, self.show.table().layout().play.life.text),
         );
     }
 

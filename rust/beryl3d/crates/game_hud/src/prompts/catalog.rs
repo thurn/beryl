@@ -9,7 +9,7 @@ use glam::Vec2;
 
 use super::{Shown, Steps, prompt_bar};
 use crate::hud::HudIn;
-use game_table::table::{TraySpace, phone_bands};
+use game_table::table::TraySpace;
 use kit_base::tokens::{color, size, type_style};
 use kit_frame::frame::Role;
 use kit_ui::element::{Align, Anchor, Element, Justify, column};
@@ -41,11 +41,11 @@ pub(super) fn own(_shown: Option<Shown>, _was: Option<Shown>, _steps: &mut Steps
 /// in the tray's space of the desktop layout as `.stage-choose` centres it, with the one `chosen`
 /// lit.
 fn entries_column(entries: &[String], chosen: Option<u16>, input: &HudIn) -> Element {
-    let (space, _) = TraySpace::DESKTOP.on_window(input.window.size);
+    let (space, _) = TraySpace::REFERENCE.on_window(input.window.size);
     // A phone gives the column the opponent's half of the table, down to the middle band, and
     // keeps every entry as tall as a finger, scrolling the list where they do not fit
     // (`.phone-board .stage-entries` in `ui/src/mobile/phone.css`).
-    let bands = phone_bands(input.window);
+    let bands = input.profile.bands();
     let space = bands.map_or(space, |bands| Rect {
         x: bands.left,
         y: bands.opponent_back.top,

@@ -217,7 +217,7 @@ impl Client {
             frame: Frame::with_capacity(config.elements, config.draws, config.name_bytes),
             inputs: Vec::new(),
             window,
-            show: Show::new(Table::new(data, game_table::table::DESKTOP, window)),
+            show: Show::new(Table::new(data, window)),
             layer: Layer::new(),
             counts: CountFloats::default(),
             piles: PileCounts::default(),

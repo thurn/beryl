@@ -36,7 +36,7 @@ const ENDS_WEIGHT: u16 = 600;
 const ENDS_MOST: f32 = size::ORDER_ENDS_MOST;
 
 /// The tray's space on the desktop layout, where the row lies.
-const SPACE: TraySpace = TraySpace::DESKTOP;
+const SPACE: TraySpace = TraySpace::REFERENCE;
 
 /// What the flat layer shows for `prompt`: the shade over the table, the waiting triggers in
 /// their row with the session's words for its two ends under it, and the prompt bar. The item

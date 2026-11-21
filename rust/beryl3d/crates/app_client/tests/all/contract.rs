@@ -226,6 +226,9 @@ mod milestone_three {
     use kit_scene::Feature;
     use kit_ui::widgets::Fields;
 
+    static TUNING: std::sync::OnceLock<std::sync::Arc<kit_base::data::Data>> =
+        std::sync::OnceLock::new();
+
     static FIELDS: Fields = Fields::new();
 
     static TABLE: game_manual::manual::TableState = game_manual::manual::TableState::new();
@@ -239,6 +242,10 @@ mod milestone_three {
         ScreenIn {
             screen: Screen::Game,
             window: Window::default(),
+            profile: game_table::profiles::Profile::for_window(
+                &TUNING.get_or_init(crate::test_data::data).profiles,
+                Window::default(),
+            ),
             view: None,
             played: None,
             turn: None,

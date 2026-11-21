@@ -19,7 +19,7 @@
 //! to the camera, so that the tray keeps its size and place on screen at any window shape.
 //!
 //! The phone's space is the web's `phoneTray` (`ui/src/stage/phone.ts`), measured in logical
-//! points (a stage as tall as the window) from the phone's bands (`table::phone::tray`). Its
+//! points (a stage as tall as the window) from the phone's bands (`Profile::tray`). Its
 //! cards keep `TraySpace::least_step` apart wherever they overlap, so that each card beneath
 //! keeps a square of the phone's touch target uncovered: a fan or a pile closes up no further
 //! than that, and lies in rows that overlap where one row has no room.
@@ -28,7 +28,7 @@ use beryl_protocol::protocol::ObjectId;
 use glam::{Quat, Vec2};
 
 use super::{CARD_HEIGHT, CARD_WIDTH, Camera};
-use kit_base::data::space::layout::desktop::tray as data;
+use crate::profiles::tray_tuning as data;
 use kit_base::pose::Pose;
 use kit_ui::input::{Rect, Size};
 
@@ -69,7 +69,7 @@ pub struct TraySpace {
 
 impl TraySpace {
     /// The desktop layout's, from `layout.desktop.tray`.
-    pub const DESKTOP: Self = Self {
+    pub const REFERENCE: Self = Self {
         stage_height: data::STAGE_HEIGHT,
         y: data::Y,
         height: data::HEIGHT,

@@ -9,7 +9,8 @@ pub use lines::{LogKind, LogLine, Names, counter_name, learn_names, listed, log_
 
 use std::convert::Infallible;
 
-use game_table::table::{Window, phone_bands};
+use game_table::profiles::phone::phone_bands;
+use game_table::table::Window;
 use kit_scene::{Context, Feature};
 use kit_ui::element::Element;
 

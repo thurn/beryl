@@ -383,7 +383,6 @@ fn a_title_too_long_for_its_box_fails_text_fits() {
         &mut builder,
         &Table::new(
             crate::test_data::data(),
-            game_table::table::DESKTOP,
             game_table::table::Window::default(),
         )
         .camera()
@@ -597,7 +596,6 @@ pub(super) fn write_layer(layer: &mut Layer, open: bool) -> Frame {
         &mut builder,
         &Table::new(
             crate::test_data::data(),
-            game_table::table::DESKTOP,
             game_table::table::Window::default(),
         )
         .camera()

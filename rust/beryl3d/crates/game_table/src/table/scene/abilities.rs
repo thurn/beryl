@@ -138,10 +138,11 @@ impl Table {
             .flatten();
         let face = source.and_then(|_| plate.or_else(|| faces.board_layer(name)));
         // The phone layout draws the battlefield frame here too, as the web interface's does.
-        let full = (source.filter(|_| !self.camera.window.phone())).and_then(|_| match plate {
-            Some(_) => faces.plate_full_layers(name, *triggered, *nth),
-            None => faces.full_layers_named(name),
-        });
+        let full =
+            (source.filter(|_| self.layout.style.full_card_faces)).and_then(|_| match plate {
+                Some(_) => faces.plate_full_layers(name, *triggered, *nth),
+                None => faces.full_layers_named(name),
+            });
         let state = if under_way { StateBits::MOVING } else { 0 };
         let mut look = Look::new(object.pose, face, full, state, false);
         let on = Subject::Ability { id };

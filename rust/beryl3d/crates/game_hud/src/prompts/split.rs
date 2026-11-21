@@ -19,7 +19,7 @@ use glam::Vec2;
 
 use super::{Piles, Shown, Steps, prompt_bar, tray};
 use crate::hud::HudIn;
-use game_table::table::{DESKTOP, tray_boxes};
+use game_table::table::tray_boxes;
 use kit_base::data::audit;
 use kit_base::tokens::{color, size, type_style};
 use kit_text::text::TypeStyle;
@@ -42,7 +42,7 @@ pub(super) fn screen(prompt: &PromptView, input: &HudIn) -> Option<Element> {
     let (ShapeBody::Split { piles }, Some(held)) = (&prompt.body, Piles::of(prompt)) else {
         return Some(bar);
     };
-    let space = DESKTOP.tray_for(input.window);
+    let space = input.profile.tray();
     let size = input.window.size;
     let per_point = space.stage_height / size.height;
     let heading = space.heading / per_point;

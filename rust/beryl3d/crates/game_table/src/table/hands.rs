@@ -137,3 +137,23 @@ fn fan_rests(
         .collect();
     arrange(&container, &items, camera, scroll)
 }
+
+/// The top edge on the window, in logical points, of the viewer's hand at the resting places
+/// `rests` give (each a place, a pose and whether it is visible), before any card is held up in
+/// a tray; infinity for an empty hand. Allocates nothing.
+pub(super) fn hand_top(camera: &Camera, rests: impl Iterator<Item = (Place, Pose, bool)>) -> f32 {
+    let mut top = f32::INFINITY;
+    for (place, pose, visible) in rests {
+        if visible
+            && let Place::Card {
+                zone: ZoneName::Hand,
+                side: Side::You,
+                ..
+            } = place
+        {
+            let corners = camera.card_box(&pose).0;
+            top = corners.iter().fold(top, |top, corner| top.min(corner.y));
+        }
+    }
+    top
+}

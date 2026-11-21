@@ -124,11 +124,6 @@ pub struct Turn {
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Held {
-    #[serde(deserialize_with = "vector")]
-    pub ndc: Vec2,
-    #[serde(deserialize_with = "positive")]
-    pub size: f32,
-    pub phone: HeldPhone,
     #[serde(deserialize_with = "positive")]
     pub depth: f32,
     #[serde(deserialize_with = "interior")]
@@ -139,15 +134,6 @@ pub struct Held {
     pub lean: f32,
     pub turn: Turn,
     pub bow: Bowing,
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
-#[serde(deny_unknown_fields)]
-pub struct HeldPhone {
-    #[serde(deserialize_with = "positive")]
-    pub size: f32,
-    #[serde(deserialize_with = "fraction")]
-    pub foot: f32,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]

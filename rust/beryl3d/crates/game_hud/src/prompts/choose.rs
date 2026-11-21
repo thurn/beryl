@@ -21,7 +21,7 @@ use super::bar::{Controls, bar};
 use super::{Shown, Steps, marks, ways};
 use crate::hud::HudIn;
 use game_table::faces::FaceList;
-use game_table::table::{CARD_HEIGHT, CARD_WIDTH, DESKTOP};
+use game_table::table::{CARD_HEIGHT, CARD_WIDTH};
 use kit_base::data::space::hud::phone::CHARACTER_WIDTH;
 use kit_base::tokens::{color, ratio, size, space, type_style};
 use kit_frame::frame::Role;
@@ -162,7 +162,7 @@ fn ways_row(prompt: &PromptView, input: &HudIn) -> Option<Element> {
         return None;
     }
     let faces: Vec<Option<FaceId>> = way_faces(prompt, input).collect();
-    let space = DESKTOP.tray_for(input.window);
+    let space = input.profile.tray();
     let (tray, per_stage) = space.on_window(input.window.size);
     #[expect(clippy::cast_precision_loss, reason = "a card has a few ways")]
     let count = ways.len() as f32;

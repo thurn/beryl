@@ -3,7 +3,7 @@
 use glam::Vec2;
 
 use super::{LIST, LogEntry, LogKind, Message};
-use game_table::table::PhoneBands;
+use game_table::profiles::TableBands;
 use kit_base::data::space::hud::{LOG_BUTTON_TOP, LOG_LEFT, LOG_TOP, phone as data};
 use kit_base::tokens::{color, size, space, type_style};
 use kit_ui::element::{Align, Anchor, Element, Justify, column, holder, row as flex_row, text};
@@ -85,7 +85,7 @@ fn row(entry: &LogEntry, before: usize, (last, first): (bool, bool)) -> Element 
 /// `ui/src/stage/PhoneChrome.tsx`): the column's width, between the opponent's strip and the hand,
 /// with its heading and a button that closes it over the list, which scrolls to its foot as the
 /// desktop's does.
-pub(super) fn phone(entries: &[LogEntry], bands: &PhoneBands) -> Element {
+pub(super) fn phone(entries: &[LogEntry], bands: &TableBands) -> Element {
     // Below the opponent's strip, so that the menu button stays clear of it.
     let margin = data::SHEET_MARGIN;
     let top = bands.opponent_strip.bottom() + margin;

@@ -39,48 +39,74 @@
       "hand_shown": 0.66,
       "hand_top": 8
     },
-    "piles": {
-      "you": {
-        "width": 48,
-        "x": [32, 84, 136]
+    "banded": {
+      "piles": {
+        "you": {
+          "width": 48,
+          "x": [32, 84, 136]
+        },
+        "opponent": {
+          "width": 40,
+          "x": [28, 72, 116],
+          "below_safe": 30
+        }
       },
-      "opponent": {
-        "width": 40,
-        "x": [28, 72, 116],
-        "below_safe": 30
-      }
+      "stack": {
+        "width": 68,
+        "step": 52,
+        "count_room": 32,
+        "depth": 400,
+        "step_depth": 1.5
+      },
+      "hand": {
+        "depth": 300,
+        "step_depth": 1.5,
+        "fan_radius": 14,
+        "gap": 4,
+        "bias_degrees": 0.6
+      },
+      "opponent_hand": {
+        "width": 24,
+        "step": 14,
+        "rise": -2,
+        "right": 56,
+        "room": 5,
+        "depth": 320,
+        "step_depth": 1.5,
+        "fan_radius": 36.217
+      },
+      "tray": {
+        "inset": 4,
+        "most": 104,
+        "least": 54,
+        "gap": 6,
+        "heading": 18,
+        "least_step": 52
+      },
+      "dock_gap": 6,
+      "button_height": 44
+    }
+  },
+  "table_style": {
+    "show_exile": false,
+    "show_pile_sides": false,
+    "show_copy_labels": false,
+    "full_card_faces": false,
+    "hand_away": 0,
+    "far_shade": false,
+    "tuck_rise": false
+  },
+  "play": {
+    "held_draw": {
+      "kind": "over_rest",
+      "size": 1.57,
+      "foot": 0.25
     },
-    "stack": {
-      "width": 68,
-      "step": 52,
-      "count_room": 32,
-      "depth": 400,
-      "step_depth": 1.5
-    },
-    "hand": {
-      "depth": 300,
-      "step_depth": 1.5,
-      "fan_radius": 14,
-      "gap": 4,
-      "bias_degrees": 0.6
-    },
-    "opponent_hand": {
-      "width": 24,
-      "step": 14,
-      "rise": -2,
-      "right": 56,
-      "room": 5,
-      "depth": 320,
-      "step_depth": 1.5,
-      "fan_radius": 36.217
-    },
-    "tray": {
-      "inset": 4,
-      "most": 104,
-      "least": 54,
-      "gap": 6,
-      "heading": 18,
-      "least_step": 52
+    "life": {
+      "orb_scale": 0.5,
+      "text": "title",
+      "opening_hides_viewer": true,
+      "change": "around_total"
     }
   },
   "slots": {
@@ -146,13 +172,10 @@
   "settings_quick_action_min_width": 84,
   "legacy": {
     "hud.phone": {
-      "orb_scale": 0.5,
-      "button_height": 44,
       "button_text": 18,
       "button_padding": 12,
       "character_width": 0.55,
       "overlap": 4,
-      "dock_gap": 6,
       "asked_gap": 4,
       "pill_text": 16,
       "pill_padding": 10,

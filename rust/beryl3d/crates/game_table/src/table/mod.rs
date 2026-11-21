@@ -16,8 +16,7 @@ pub use hands::HandFits;
 pub mod lifted;
 mod look;
 mod own;
-pub mod phone;
-mod pile;
+pub(crate) mod pile;
 mod place;
 mod revealed;
 mod rows;
@@ -27,16 +26,18 @@ mod shown;
 mod stack;
 mod tray;
 mod tray_layout;
-mod web_fit;
 
 use beryl_protocol::protocol::{Side, ZoneName};
 use glam::Vec2;
 
+use crate::profiles::TableBands;
+pub use crate::profiles::{FittedPiles, FittedRow, FittedRows, REFERENCE};
 pub use clearance::row_area;
-use kit_space::camera::DESKTOP_CAMERA;
+use kit_base::data::profiles::Play;
+pub use kit_base::data::profiles::TableStyle;
+use kit_base::geometry::Rect;
 pub use kit_space::camera::{Camera, CameraData};
 pub use look::{Dress, Look};
-pub use phone::{PhoneBands, phone_bands};
 pub use pile::{PILE_IDS, PileShown, pile_name};
 pub use place::{
     Group, NO_GROUP, PileRules, Zones, Zooms, arrival, blocked, blocking_rows, host_slot,
@@ -47,11 +48,11 @@ pub use rows::{Beneath, Groups, NameIds, RowChange, RowWindow, SameName, grouped
 pub use scene::{ABILITY_IDS, Motion, Table, Turn};
 pub use scene::{Objects, PileCount, ability_track};
 pub use shown::{Moves, Relaid};
+pub(crate) use stack::{CentredStack, StackPlacement};
 pub use stack::{OnStack, on_stack};
 pub use tray_layout::{
     Across, Held, Second, TrayKind, TrayPoses, TraySpace, landing, tray, tray_area, tray_boxes,
 };
-pub use web_fit::{FittedPiles, FittedRow, FittedRows};
 
 use kit_base::data::space;
 use kit_base::tokens::type_style;
@@ -59,8 +60,6 @@ use kit_frame::frame::Place;
 
 /// Half the line height of a life total in logical points.
 pub const HALF_LIFE: f32 = type_style::TITLE.size * type_style::TITLE.line_height / 2.0;
-
-pub use kit_ui::orb::DESKTOP_SCALE as ORB_DESKTOP_SCALE;
 
 pub use kit_base::geometry::{CARD_HEIGHT, CARD_WIDTH, Window};
 /// The height between two cards lying one on the other, in a pile or an overlapped row.
@@ -203,167 +202,71 @@ pub struct Layout {
     pub pile_scale: [f32; 2],
     /// The space the cards a prompt holds up are laid out in.
     pub tray: TraySpace,
-    pub stack: StackData,
+    pub(crate) stack: StackPlacement,
+    /// Minimum reachable square for cards and controls, in logical points.
+    pub target: f32,
+    pub style: TableStyle,
+    pub play: Play,
     pub hand: HandData,
     pub opponent_hand: HandData,
     /// The viewer's anchors, then the opponent's.
     pub players: [PlayerAnchor; 2],
-    /// On the phone layout, where the stack's items stand in the middle band, which replaces
-    /// `stack`; none on the desktop.
-    pub phone: Option<phone::PhoneStack>,
-    /// On the phone layout, the bands of the window from the opponent's strip to the viewer's
-    /// hand, which the flat layer's furniture stands in; none on the desktop.
-    pub bands: Option<phone::PhoneBands>,
-    /// On the desktop layout fitted to a window (`for_window`), each side's battlefield rows
-    /// fitted to where the web interface draws them (`web_fit`), which replace `creatures`,
-    /// `lands` and `others`; none otherwise.
-    pub fitted: Option<web_fit::FittedRows>,
+    /// The window bands used by features that follow the table.
+    pub bands: Option<TableBands>,
+    pub(crate) camera_area: Option<Rect>,
+    pub(crate) life_dock: Option<LifeDock>,
+    /// Revealed cards' centre in normalized device coordinates and height as a fraction of
+    /// the window's height.
+    pub(crate) revealed: (Vec2, f32),
+    /// Battlefield rows fitted to a screen reference, if the profile supplies one.
+    pub(crate) row_zoom: Option<RowZoom>,
+    pub fitted: Option<FittedRows>,
     /// On the desktop layout fitted to a window, the piles fitted to where the web interface
     /// draws them (`web_fit::piles`), which replace `piles` and set `pile_scale`; none
     /// otherwise.
-    pub fitted_piles: Option<web_fit::FittedPiles>,
+    pub fitted_piles: Option<FittedPiles>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct RowZoom {
+    pub minimum: f32,
+    pub back: kit_space::arrange::row::ScaleLimit,
+}
+
+/// Space for raising the life total over a hand that spills out of its band.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct LifeDock {
+    pub gap: f32,
+    pub middle: f32,
+    pub top: f32,
+}
+
+impl LifeDock {
+    pub(crate) fn anchor(self, window: Window, hand_top: f32) -> PlayerAnchor {
+        let raised = hand_top - self.gap - HALF_LIFE;
+        let lowest_clear = self.top + HALF_LIFE;
+        let y = self.middle.min(raised.max(lowest_clear));
+        let life = Vec2::new(0.0, 1.0 - y / window.size.height * 2.0);
+        PlayerAnchor { life, pool: life }
+    }
 }
 
 impl Layout {
-    /// The layout a window of this shape takes: this one on a desktop window, with its
-    /// battlefield rows fitted to where the web interface draws them in that window
-    /// (`web_fit`), and the phone layout fitted to `window` when its shorter side is under 500
-    /// points (`Window::phone`).
+    /// The window line the horizontal stack scrolls along, in logical points from the top.
     #[must_use]
-    pub fn for_window(&self, window: Window) -> Layout {
-        if window.phone() {
-            return phone::layout(window);
-        }
-        let camera = self.fit(window);
-        let piles = web_fit::piles(window, &camera);
-        Layout {
-            fitted: Some(web_fit::rows(window, &camera)),
-            fitted_piles: Some(piles),
-            pile_scale: piles.scale,
-            ..*self
+    pub fn centred_stack_line(&self) -> Option<f32> {
+        match self.stack {
+            StackPlacement::Anchored(_) => None,
+            StackPlacement::Centred(stack) => Some(stack.middle),
         }
     }
 
-    /// The space the cards a prompt holds up lie in on `window`: this layout's on a desktop
-    /// window, and the phone's (`phone::tray`) on a phone, without making the rest of the
-    /// phone layout.
-    #[must_use]
-    pub fn tray_for(&self, window: Window) -> TraySpace {
-        if window.phone() {
-            phone::tray(window)
-        } else {
-            self.tray
-        }
-    }
-
-    /// This layout's camera fitted to `window`: its required rectangle inside the safe area on
-    /// the desktop, and inside the battlefield's part of it on the phone (`phone::battlefield`).
+    /// Fits the camera's required rectangle in its region of the window.
     #[must_use]
     pub fn fit(&self, window: Window) -> Camera {
-        if self.phone.is_some() {
-            Camera::fit_inside(self.camera, window, phone::battlefield(window))
-        } else {
-            Camera::fit(self.camera, window)
-        }
+        self.camera_area.map_or_else(
+            || Camera::fit(self.camera, window),
+            |area| Camera::fit_inside(self.camera, window, area),
+        )
     }
 }
-
-use space::layout::desktop;
-
-/// A `RowArea` from the object of the same name in `layout.desktop`.
-macro_rules! row_area {
-    ($name:ident, $centred:expr) => {
-        RowArea {
-            y: desktop::$name::Y,
-            left: desktop::$name::LEFT,
-            right: desktop::$name::RIGHT,
-            centre: if $centred {
-                Some((desktop::$name::LEFT + desktop::$name::RIGHT) / 2.0)
-            } else {
-                None
-            },
-        }
-    };
-}
-
-/// A `HandData` from the object of the same name in `space-constants.json`.
-macro_rules! hand_data {
-    ($name:ident) => {
-        HandData {
-            depth: space::$name::DEPTH,
-            step_depth: space::$name::STEP_DEPTH,
-            height: space::$name::HEIGHT,
-            edge: space::$name::EDGE,
-            fan_radius: space::$name::FAN_RADIUS,
-            spacing: space::$name::SPACING,
-            room: space::$name::ROOM,
-            bias_degrees: space::$name::BIAS_DEGREES,
-            across: 0.0,
-            ceiling: f32::INFINITY,
-        }
-    };
-}
-
-/// The desktop layout, built from `layout.desktop`, `hand`, `opponent_hand` and `stack` in
-/// `space-constants.json`. The camera's pitch and field of view are solved by `just b3d camera-fit` from
-/// the cards measured in Arena's recordings, `data/beryl3d/camera-fit.json`.
-pub const DESKTOP: Layout = Layout {
-    camera: DESKTOP_CAMERA,
-    strip: desktop::STRIP,
-    creatures: row_area!(creatures, true),
-    lands: row_area!(lands, false),
-    others: row_area!(others, false),
-    gap: desktop::GAP,
-    pile_step: desktop::PILE_STEP,
-    beneath_step: desktop::BENEATH_STEP,
-    // The web interface's `PILES` (`ui/src/game/pileLook.ts`): the middle of each top card as
-    // `pileLook` draws it on the 1600 by 900 stage, converted as `x / 800 - 1` and `1 - y / 450`.
-    piles: [
-        [
-            desktop::piles::you::LIBRARY,
-            desktop::piles::you::GRAVEYARD,
-            desktop::piles::you::EXILE,
-        ],
-        [
-            desktop::piles::opponent::LIBRARY,
-            desktop::piles::opponent::GRAVEYARD,
-            desktop::piles::opponent::EXILE,
-        ],
-    ],
-    // The web draws a pile's card 80 stage pixels wide on the viewer's side and 82 on the
-    // opponent's (`PILES[side].width`), against 128 for a creature (`CREATURE_WIDTH` in
-    // `ui/src/game/placement.ts`); a creature here is a card at its printed size.
-    pile_scale: [desktop::piles::you::SCALE, desktop::piles::opponent::SCALE],
-    tray: TraySpace::DESKTOP,
-    stack: StackData {
-        depth: space::stack::DEPTH,
-        step_depth: space::stack::STEP_DEPTH,
-        height: space::stack::HEIGHT,
-        right: space::stack::RIGHT,
-        foot: space::stack::FOOT,
-        top: space::stack::TOP,
-        step: space::stack::STEP,
-        reach: space::stack::REACH,
-        lean: space::stack::LEAN,
-        spare: space::stack::SPARE,
-    },
-    hand: hand_data!(hand),
-    opponent_hand: hand_data!(opponent_hand),
-    // The web interface's anchors (`anchors` in `ui/src/stage/desktop.ts`): `life(side).middle`
-    // and `pool(side)` on its 1600 by 900 stage, each point converted as `x / 800 - 1` and
-    // `1 - y / 450`.
-    players: [
-        PlayerAnchor {
-            life: Vec2::new(0.000_179, -0.496_672),
-            pool: Vec2::new(-0.861_25, -0.186_667),
-        },
-        PlayerAnchor {
-            life: Vec2::new(0.000_179, 0.769_995),
-            pool: Vec2::new(-0.802_5, 0.503_728),
-        },
-    ],
-    phone: None,
-    bands: None,
-    fitted: None,
-    fitted_piles: None,
-};

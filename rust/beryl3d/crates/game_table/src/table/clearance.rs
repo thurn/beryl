@@ -2,7 +2,7 @@
 
 use beryl_protocol::protocol::{RowName, Side};
 use glam::{Vec2, Vec3};
-use kit_base::{data::audit, tokens::size};
+use kit_base::tokens::size;
 use kit_scene::hit::CELL;
 
 use super::{CARD_HEIGHT, CARD_WIDTH, Camera, Layout, RowArea, stack};
@@ -46,7 +46,7 @@ fn clear_of_life(
     row: RowName,
     (area, y): (RowArea, f32),
 ) -> RowArea {
-    if layout.phone.is_some() || row == RowName::Creatures {
+    if layout.life_dock.is_some() || row == RowName::Creatures {
         return area;
     }
     let window = camera.window.size;
@@ -55,8 +55,8 @@ fn clear_of_life(
         f32::midpoint(anchor.x, 1.0) * window.width,
         f32::midpoint(1.0, -anchor.y) * window.height,
     );
-    let half_height = size::ORB_HEIGHT * super::ORB_DESKTOP_SCALE / 2.0;
-    let half_width = (size::ORB_WIDTH * super::ORB_DESKTOP_SCALE).max(size::STEPS_WIDTH) / 2.0;
+    let half_height = size::ORB_HEIGHT * layout.play.life.orb_scale / 2.0;
+    let half_width = (size::ORB_WIDTH * layout.play.life.orb_scale).max(size::STEPS_WIDTH) / 2.0;
     // The band an untapped card of the row stands across, the taller of its two.
     let height = |along: f32| camera.to_screen(Vec3::new(0.0, y + along, 0.0)).y;
     let (near, far) = (height(-CARD_HEIGHT / 2.0), height(CARD_HEIGHT / 2.0));
@@ -94,18 +94,15 @@ fn left_of_stack((layout, camera): (&Layout, &Camera), side: Side, row: RowName)
         Side::You => area.y,
         Side::Opponent => -area.y,
     };
-    // The phone's stack stands about the middle band, not at the window's right, so no row
-    // ends short of it.
-    if layout.phone.is_some() {
+    let Some((stack_min, stack_max)) = stack::reservation(layout, camera) else {
         return (area, y);
-    }
-    let (stack_min, stack_max) = stack::reservation(&layout.stack, camera);
+    };
     // The band a tapped card of the row lies across, the narrower of its two.
     let height = |along: f32| camera.to_screen(Vec3::new(0.0, y + along, 0.0)).y;
     let (near, far) = (height(-CARD_WIDTH / 2.0), height(CARD_WIDTH / 2.0));
     let uncovered = (stack_min.y - near.min(far)).max(near.max(far) - stack_max.y);
     // The reachable check finds an uncovered square only in whole cells of its grid.
-    if uncovered >= audit::TARGET_POINTS + 2.0 * CELL {
+    if uncovered >= layout.target + 2.0 * CELL {
         return (area, y);
     }
     // Along a line of the table at one height, a point's place across the screen is linear in
@@ -138,7 +135,7 @@ mod tests {
     use beryl_protocol::protocol::{RowName, Side};
 
     use super::row_area;
-    use crate::table::{CARD_HEIGHT, Camera, DESKTOP, ORB_DESKTOP_SCALE, Window};
+    use crate::table::{CARD_HEIGHT, Camera, REFERENCE, Window};
     use kit_ui::input::Size;
 
     const ROWS: [RowName; 3] = [RowName::Creatures, RowName::Lands, RowName::Others];
@@ -148,18 +145,18 @@ mod tests {
             size: Size { width, height },
             ..Window::default()
         };
-        Camera::fit(DESKTOP.camera, window)
+        Camera::fit(REFERENCE.camera, window)
     }
 
     /// On the phone sizes the stack's reach lies left of every row's start. A cut there once
     /// ended the creatures' row left of its left limit, so its cards collapsed into one pile.
     #[test]
-    fn phone_rows_keep_room_for_a_tapped_card() {
+    fn narrow_rows_keep_room_for_a_tapped_card() {
         for (width, height) in [(393.0, 759.0), (375.0, 647.0), (430.0, 932.0)] {
             let camera = camera(width, height);
             for side in [Side::You, Side::Opponent] {
                 for row in ROWS {
-                    let (area, _) = row_area((&DESKTOP, &camera), side, row);
+                    let (area, _) = row_area((&REFERENCE, &camera), side, row);
                     assert!(
                         area.right - area.left >= CARD_HEIGHT,
                         "{width}x{height} {side:?} {row:?}: {} to {}",
@@ -173,13 +170,13 @@ mod tests {
 
     /// On the desktop the stack stands beside the creatures' row, which still ends left of it.
     #[test]
-    fn desktop_creatures_end_left_of_the_stack() {
+    fn creatures_end_left_of_the_stack_column() {
         for (width, height) in [(1440.0, 900.0), (1600.0, 900.0)] {
             let camera = camera(width, height);
             for side in [Side::You, Side::Opponent] {
-                let (area, _) = row_area((&DESKTOP, &camera), side, RowName::Creatures);
+                let (area, _) = row_area((&REFERENCE, &camera), side, RowName::Creatures);
                 assert!(
-                    area.right < DESKTOP.creatures.right,
+                    area.right < REFERENCE.creatures.right,
                     "{width}x{height} {side:?}"
                 );
                 assert!(
@@ -194,7 +191,7 @@ mod tests {
     /// window, with a planeswalker on the other side of the orb's middle. On every desktop size
     /// each back row's part now ends, on screen, clear of the stops either side of the orb.
     #[test]
-    fn desktop_back_rows_clear_the_life_orb() {
+    fn back_rows_clear_the_life_orb() {
         use glam::Vec3;
 
         use kit_base::tokens::size;
@@ -206,15 +203,16 @@ mod tests {
             (1920.0, 1080.0),
         ] {
             let camera = camera(width, height);
-            let life_x = f32::midpoint(DESKTOP.players[0].life.x, 1.0) * width;
-            let half = (size::ORB_WIDTH * ORB_DESKTOP_SCALE).max(size::STEPS_WIDTH) / 2.0;
+            let life_x = f32::midpoint(REFERENCE.players[0].life.x, 1.0) * width;
+            let half =
+                (size::ORB_WIDTH * REFERENCE.play.life.orb_scale).max(size::STEPS_WIDTH) / 2.0;
             let screen = |row, x: f32| {
-                let (_, y) = row_area((&DESKTOP, &camera), Side::You, row);
+                let (_, y) = row_area((&REFERENCE, &camera), Side::You, row);
                 [-CARD_HEIGHT / 2.0, CARD_HEIGHT / 2.0]
                     .map(|along| camera.to_screen(Vec3::new(x, y + along, 0.0)).x)
             };
-            let (lands, _) = row_area((&DESKTOP, &camera), Side::You, RowName::Lands);
-            let (others, _) = row_area((&DESKTOP, &camera), Side::You, RowName::Others);
+            let (lands, _) = row_area((&REFERENCE, &camera), Side::You, RowName::Lands);
+            let (others, _) = row_area((&REFERENCE, &camera), Side::You, RowName::Others);
             for x in screen(RowName::Lands, lands.right) {
                 assert!(
                     x <= life_x - half + 0.01,

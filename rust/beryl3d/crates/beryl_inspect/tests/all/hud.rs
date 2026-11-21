@@ -84,7 +84,8 @@ fn pay_default(width: f32, height: f32) -> Page {
 
 #[test]
 fn both_orbs_hold_the_life_totals_of_the_view() {
-    use game_play::art::orb::{DESKTOP_SCALE, face_offset};
+    use game_play::art::orb::face_offset;
+    use kit_ui::orb::DESKTOP_SCALE;
     let mut page = pay_default(1600.0, 900.0);
     for (side, orb, total) in [
         (Side::You, "region \"your orb\"", "player \"You 20\""),

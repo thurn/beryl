@@ -9,7 +9,7 @@ use beryl_protocol::protocol::{Side, Why, ZoneName};
 use beryl_protocol::script::{Act, Step, StepTiming};
 use beryl_protocol::testing::{ViewBuilder, object, script, step, timing};
 use game_play::play::parts::{STEPS_PER_ADVANCE, compile_in_parts};
-use game_table::table::{DESKTOP, Table};
+use game_table::table::Table;
 use kit_frame::frame::Wake;
 use kit_ui::input::{Insets, Size};
 
@@ -43,7 +43,7 @@ fn compiles_in_parts(
     (beats, per_beat): (usize, usize),
     frames: usize,
 ) {
-    let table = Table::new(crate::test_data::data(), DESKTOP, window(1440.0, 900.0));
+    let table = Table::new(crate::test_data::data(), window(1440.0, 900.0));
     let times: Vec<u64> = (0..420).map(|frame| frame * 50 * MS / 3).collect();
     let in_time = compile_in_parts(&table, (before, after), (&times, 0));
     let parts = compile_in_parts(&table, (before, after), (&times, STEPS_PER_ADVANCE));

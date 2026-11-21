@@ -53,8 +53,9 @@ use std::f32::consts::PI;
 use super::{Interval, StepIn, StepOut};
 use beryl_protocol::script::Subject;
 use game_table::table::Camera;
+use kit_base::data::profiles::HeldDraw;
+use kit_base::data::space;
 use kit_base::data::verbs::{Bowing, Fly, Front};
-use kit_base::data::{audit, space};
 use kit_base::pose::{Bow, Curve, Lift, Pose, Segment, Shape};
 
 pub const BUILT: bool = true;
@@ -195,43 +196,41 @@ fn room((from, to): (Pose, Pose), camera: &Camera) -> f32 {
         .fold(f32::INFINITY, f32::min)
 }
 
-/// Where the viewer's drawn card is held up to be read, for a card that rests at `rest` in
-/// the hand, placed relative to the camera as the hand is. On the desktop it is upright beside
-/// the stack, `held.size` times as tall as a card of the hand (the web's `beside` in
-/// `ui/src/stage/desktop.ts`). On the phone, whose narrow table has no room beside the stack,
-/// it is upright over where it will lie, `held.phone.size` times as tall as that card on the
-/// window, its foot `held.phone.foot` of the way down it (the web's `drawn`). Either is moved
-/// back inside the window's safe area where it would leave part of the card outside.
+/// Where a drawn card is held up to be read. A fixed position uses the hand's card height.
+/// A position above the resting card uses that card's projected height. The pose is moved
+/// inside the safe area if any corner would fall outside.
 fn held_place(step: &StepIn<'_>, rest: Pose) -> Pose {
     let held = &step.verbs.fly.held;
     let camera = step.places.camera();
+    let layout = step.places.layout();
     let size = camera.window.size;
-    let (mut ndc, height) = if camera.window.phone() {
-        let (corners, _) = camera.card_box(&rest);
-        let low = corners
-            .iter()
-            .copied()
-            .reduce(Vec2::min)
-            .unwrap_or_default();
-        let high = corners
-            .iter()
-            .copied()
-            .reduce(Vec2::max)
-            .unwrap_or_default();
-        let tall = (high.y - low.y) * held.phone.size;
-        let middle = Vec2::new(
-            f32::midpoint(low.x, high.x),
-            low.y + (high.y - low.y) * held.phone.foot - tall / 2.0,
-        );
-        (
-            Vec2::new(
-                middle.x / (size.width / 2.0) - 1.0,
-                1.0 - middle.y / (size.height / 2.0),
-            ),
-            tall / size.height,
-        )
-    } else {
-        (held.ndc, step.places.layout().hand.height * held.size)
+    let (mut ndc, height) = match layout.play.held_draw {
+        HeldDraw::Fixed { ndc, size } => (ndc, layout.hand.height * size),
+        HeldDraw::OverRest { size: scale, foot } => {
+            let (corners, _) = camera.card_box(&rest);
+            let low = corners
+                .iter()
+                .copied()
+                .reduce(Vec2::min)
+                .unwrap_or_default();
+            let high = corners
+                .iter()
+                .copied()
+                .reduce(Vec2::max)
+                .unwrap_or_default();
+            let tall = (high.y - low.y) * scale;
+            let middle = Vec2::new(
+                f32::midpoint(low.x, high.x),
+                low.y + (high.y - low.y) * foot - tall / 2.0,
+            );
+            (
+                Vec2::new(
+                    middle.x / (size.width / 2.0) - 1.0,
+                    1.0 - middle.y / (size.height / 2.0),
+                ),
+                tall / size.height,
+            )
+        }
     };
     let place = |ndc: Vec2| camera.screen_pose(ndc, held.depth, Quat::IDENTITY, height);
     let mut pose = place(ndc);
@@ -541,7 +540,11 @@ pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
             ..between
         },
     };
-    let segment = kept_in_window(Segment { turning, ..segment }, step.places.camera());
+    let segment = kept_in_window(
+        Segment { turning, ..segment },
+        step.places.camera(),
+        step.places.layout().target,
+    );
     out.segment(subject, segment);
 }
 
@@ -561,7 +564,7 @@ const PUSHED_FROM: f32 = 0.2;
 /// its ends lie at very different depths, so that line curves above the top edge on the window.
 /// A segment whose card stays inside comes back as it was. Only straight and bowed paths are
 /// pushed, since the others already keep to the window by their own rules.
-fn kept_in_window(segment: Segment, camera: &Camera) -> Segment {
+fn kept_in_window(segment: Segment, camera: &Camera, target: f32) -> Segment {
     let [right, up, back] = camera.axes();
     let mut bow = match segment.shape {
         Shape::Line => Bow {
@@ -583,11 +586,7 @@ fn kept_in_window(segment: Segment, camera: &Camera) -> Segment {
     let (size, insets) = (camera.window.size, camera.window.safe_area);
     // Half the square of a card the "on screen" check holds inside the safe area, so that the
     // centre kept that far in leaves the whole square in.
-    let margin = if camera.window.phone() {
-        audit::PHONE_TARGET_POINTS
-    } else {
-        audit::TARGET_POINTS
-    } / 2.0;
+    let margin = target / 2.0;
     // The moments looked at, each as the card's centre with no bow and the share of the bow it
     // has there, found once, since a push changes only the bow's offset. They are spread evenly
     // over the easing curve's own parameter rather than over time, which takes no search for

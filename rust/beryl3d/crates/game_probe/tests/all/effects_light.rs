@@ -4,7 +4,7 @@
 
 use beryl_protocol::script::{Curve, Edge, StepEffect, StepTiming, Subject};
 use game_play::play::Show;
-use game_table::table::{DESKTOP, Table};
+use game_table::table::Table;
 use glam::Vec3;
 use kit_frame::frame::{Frame, Material};
 
@@ -38,11 +38,7 @@ fn started(effects: Vec<StepEffect>) -> Show {
         effects,
         ..timings[0].clone()
     };
-    let mut show = Show::new(Table::new(
-        crate::test_data::data(),
-        DESKTOP,
-        window(1600.0, 900.0),
-    ));
+    let mut show = Show::new(Table::new(crate::test_data::data(), window(1600.0, 900.0)));
     show.push(Box::new(start), Vec::new());
     show.push(Box::new(after), timings);
     let mut buffer = empty_frame();

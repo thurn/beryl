@@ -233,7 +233,7 @@ impl Groups<'_, '_> {
                     .find_map(|&(key, x)| (key == face.slot).then_some(x)),
                 tucks,
                 // Keeping tucks level on compact rows keeps them clear of adjacent rows.
-                tuck_rise: if face.types.contains(&CardType::Land) || layout.phone.is_some() {
+                tuck_rise: if face.types.contains(&CardType::Land) || !layout.style.tuck_rise {
                     0.0
                 } else {
                     layout.beneath_step.y * CARD_HEIGHT

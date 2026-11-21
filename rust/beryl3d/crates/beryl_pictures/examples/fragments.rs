@@ -24,7 +24,7 @@ use beryl_inspect::gate::{self, BOARDS, Playback};
 use beryl_inspect::pages;
 use beryl_protocol::protocol::Side;
 use beryl_render::{Limits, Renderer, Target};
-use game_table::table::{Camera, DESKTOP, Window};
+use game_table::table::{Camera, REFERENCE, Window};
 use kit_frame::frame::{Frame, FrameBuilder};
 use kit_probe::agent::Layout;
 use kit_probe::driver::Duration;
@@ -120,7 +120,7 @@ fn backdrop_panel(renderer: &mut Renderer, tier: Tier) -> Value {
     let mut layer = Layer::new();
     layer.resize(window);
     layer.show(Some(board));
-    let camera = Camera::fit(DESKTOP.camera, window);
+    let camera = Camera::fit(REFERENCE.camera, window);
     let mut frame = Frame::with_capacity(8, 8, 64);
     let mut builder = FrameBuilder::new(&mut frame, tier);
     builder.camera(camera.view_projection);

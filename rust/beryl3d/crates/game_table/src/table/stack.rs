@@ -8,10 +8,29 @@ use glam::{Quat, Vec2};
 
 use super::place::{Placement, Rest, turn};
 use super::{CARD_HEIGHT, CARD_WIDTH, Camera, Layout, RowWindow, StackData, Table};
-use kit_base::data::audit;
 use kit_base::pose::Pose;
 use kit_frame::frame::Place;
 use kit_space::arrange::{AnchoredCascade, Cascade, CascadeLayout};
+
+/// The fitted stack's cascade region and the depth of its cards.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum StackPlacement {
+    Anchored(StackData),
+    Centred(CentredStack),
+}
+
+/// A single, scrolling row about the column's middle, measured in logical points.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct CentredStack {
+    pub middle: f32,
+    pub height: f32,
+    pub step: f32,
+    pub left: f32,
+    pub right: f32,
+    pub count_room: f32,
+    pub depth: f32,
+    pub step_depth: f32,
+}
 
 /// An item of the stack as placement reads it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -78,11 +97,10 @@ pub(super) fn place_stack(
 ) {
     let count = stack.len();
     let (arranged, units) = arrange(layout, camera, (count, scroll));
-    let (depth, step_depth) = layout
-        .phone
-        .map_or((layout.stack.depth, layout.stack.step_depth), |phone| {
-            (phone.depth, phone.step_depth)
-        });
+    let (depth, step_depth) = match layout.stack {
+        StackPlacement::Anchored(data) => (data.depth, data.step_depth),
+        StackPlacement::Centred(data) => (data.depth, data.step_depth),
+    };
     let before = count - arranged.window.first - arranged.window.shown;
     placement.rows.stack = RowWindow::new(
         count,
@@ -164,24 +182,27 @@ fn arrange(
     camera: &Camera,
     items: (usize, usize),
 ) -> (CascadeLayout, ProjectedUnits) {
-    if let Some(data) = layout.phone {
-        let placed = Cascade {
-            direction: Vec2::NEG_X,
-            step: data.step,
+    match &layout.stack {
+        StackPlacement::Centred(data) => {
+            let placed = Cascade {
+                direction: Vec2::NEG_X,
+                step: data.step,
+            }
+            .centred(
+                (data.left, data.right, data.middle),
+                Vec2::new(data.height * (CARD_WIDTH / CARD_HEIGHT), data.height),
+                (layout.target, data.count_room),
+                items,
+            );
+            (placed, ProjectedUnits::Points)
         }
-        .centred(
-            (data.left, data.right, data.middle),
-            Vec2::new(data.width(), data.height),
-            (audit::PHONE_TARGET_POINTS, data.count_room),
-            items,
-        );
-        (placed, ProjectedUnits::Points)
-    } else {
-        let (cascade, region, target) = anchored(&layout.stack, camera);
-        (
-            cascade.anchored(region, target, items),
-            ProjectedUnits::HalfWindowHeight,
-        )
+        StackPlacement::Anchored(data) => {
+            let (cascade, region, target) = anchored(data, camera, layout.target);
+            (
+                cascade.anchored(region, target, items),
+                ProjectedUnits::HalfWindowHeight,
+            )
+        }
     }
 }
 
@@ -205,12 +226,12 @@ impl Table {
 
 /// Fit the camera-facing region in units of half the window height, with its front
 /// card anchored at the right and enough extra room on the left to wrap a tall stack.
-fn anchored(data: &StackData, camera: &Camera) -> (Cascade, AnchoredCascade, f32) {
+fn anchored(data: &StackData, camera: &Camera, target: f32) -> (Cascade, AnchoredCascade, f32) {
     let window = camera.window;
     let units = 2.0 / window.size.height;
     let aspect = window.size.width / window.size.height;
     let size = Vec2::new(CARD_WIDTH / CARD_HEIGHT, 1.0) * data.height * 2.0;
-    let target = audit::TARGET_POINTS * units;
+    let target = target * units;
     (
         Cascade {
             direction: Vec2::new(-data.lean, 1.0),
@@ -230,9 +251,12 @@ fn anchored(data: &StackData, camera: &Camera) -> (Cascade, AnchoredCascade, f32
 }
 
 /// The stack's steady clearance rectangle in logical points, from top left to bottom right.
-pub(super) fn reservation(data: &StackData, camera: &Camera) -> (Vec2, Vec2) {
-    let (cascade, region, _) = anchored(data, camera);
-    to_screen_bounds(camera, cascade.reservation(region))
+pub(super) fn reservation(layout: &Layout, camera: &Camera) -> Option<(Vec2, Vec2)> {
+    let StackPlacement::Anchored(data) = &layout.stack else {
+        return None;
+    };
+    let (cascade, region, _) = anchored(data, camera, layout.target);
+    Some(to_screen_bounds(camera, cascade.reservation(region)))
 }
 
 fn to_screen_bounds(camera: &Camera, (low, high): (Vec2, Vec2)) -> (Vec2, Vec2) {

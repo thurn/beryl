@@ -309,13 +309,13 @@ impl Name<'_> {
 }
 
 /// Where a card's badges go: the card's pose, the band they are drawn in and their opacity,
-/// and whether the table takes the phone layout, whose cards wear no copy label.
+/// and whether a group of identical cards shows its copy label.
 #[derive(Clone, Copy)]
 pub(super) struct On {
     pub pose: Pose,
     pub band: Band,
     pub opacity: f32,
-    pub phone: bool,
+    pub show_copy_label: bool,
 }
 
 impl Badges {
@@ -385,7 +385,7 @@ impl Badges {
         // counters.
         let mut x = -corner.x + data::counter::LEFT * em();
         let end = corner.x - data::counter::RIGHT * em();
-        if let Some(line) = self.tags.copy(object).filter(|_| !on.phone) {
+        if let Some(line) = self.tags.copy(object).filter(|_| on.show_copy_label) {
             let width = self.copy_label(line, x, (card, on), builder);
             if width > 0.0 {
                 x += width + data::counter::GAP * em();

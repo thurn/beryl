@@ -10,7 +10,21 @@ pub(super) fn legacy(data: &Path, space: &mut Value, audit: &mut Value) {
         let path = data.join("profiles").join(format!("{name}.json"));
         println!("cargo:rerun-if-changed={}", path.display());
         let mut data: Value = serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap();
-        insert(space, &format!("layout.{name}"), data["table"].take());
+        // Export the values still used by the HUD and solver tests at their original paths.
+        let mut table = data["table"].take();
+        if let Some(mut banded) = table.as_object_mut().unwrap().remove("banded") {
+            for key in ["piles", "stack"] {
+                table[key] = banded[key].take();
+            }
+            let hud = &mut data["legacy"]["hud.phone"];
+            for key in ["dock_gap", "button_height"] {
+                hud[key] = banded[key].take();
+            }
+        }
+        if name == "phone" {
+            data["legacy"]["hud.phone"]["orb_scale"] = data["play"]["life"]["orb_scale"].take();
+        }
+        insert(space, &format!("layout.{name}"), table);
         for (path, value) in data["legacy"].as_object_mut().unwrap() {
             insert(space, path, value.take());
         }

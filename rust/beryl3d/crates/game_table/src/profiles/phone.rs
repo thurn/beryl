@@ -31,18 +31,16 @@
 //!   the web's places in points, converted for each window when the layout is made
 //!   (`layout`), never on the frame path.
 
-use beryl_protocol::protocol::{Side, ZoneName};
+use beryl_protocol::protocol::Side;
 use glam::{Vec2, Vec3};
 
-use super::tray_layout::{Across, Second};
-use super::{
-    CARD_HEIGHT, CARD_WIDTH, Camera, CameraData, DESKTOP, HandData, Layout, PlayerAnchor, RowArea,
-    TraySpace, Window,
+use super::{REFERENCE, row};
+use crate::table::{
+    Across, CARD_HEIGHT, CARD_WIDTH, Camera, CameraData, CentredStack, HandData, Layout, LifeDock,
+    PlayerAnchor, Second, StackPlacement, TraySpace, Window,
 };
+use kit_base::data::profiles::{Banded, Bands, ProfileData};
 use kit_base::data::space::layout::phone as data;
-use kit_base::data::{audit, profiles::Bands};
-use kit_base::pose::Pose;
-use kit_frame::frame::Place;
 use kit_scene::hit::CELL;
 use kit_ui::input::Rect;
 
@@ -75,12 +73,12 @@ impl Band {
     }
 }
 
-/// The phone layout's bands, top to bottom, which the game screen lays its controls in. The
+/// The table's bands, top to bottom, which the game screen lays its controls in. The
 /// strips and the hand band are the web interface's. The battlefield's bands are where the
 /// camera shows each row, split halfway between neighbouring rows, so they follow the table at
 /// any window size.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct PhoneBands {
+pub struct TableBands {
     /// The opponent's piles, life total and hand.
     pub opponent_strip: Band,
     /// The opponent's lands and other permanents.
@@ -104,7 +102,7 @@ pub struct PhoneBands {
 /// The bands do not depend on what the view holds: the middle keeps room for the stack while
 /// it is empty.
 #[must_use]
-pub fn phone_bands(window: Window) -> Option<PhoneBands> {
+pub fn phone_bands(window: Window) -> Option<TableBands> {
     window.phone().then(|| {
         bands(&Camera::fit_inside(
             camera_data(),
@@ -190,7 +188,7 @@ pub(crate) fn battlefield_with(window: Window, sizes: Bands) -> Rect {
 }
 
 /// The bands, seen through `camera`, the phone camera fitted to its window.
-fn bands(camera: &Camera) -> PhoneBands {
+fn bands(camera: &Camera) -> TableBands {
     bands_with(camera, BANDS, data::creatures::Y, data::lands::Y)
 }
 
@@ -199,7 +197,7 @@ pub(crate) fn bands_with(
     sizes: Bands,
     creatures_y: f32,
     lands_y: f32,
-) -> PhoneBands {
+) -> TableBands {
     let window = camera.window;
     let field = camera.area;
     let on_screen = |y: f32| camera.to_screen(Vec3::new(0.0, y, 0.0)).y;
@@ -218,7 +216,7 @@ pub(crate) fn bands_with(
     ];
     let hand = hand_height(window, sizes);
     let (left, right) = column(window, sizes);
-    PhoneBands {
+    TableBands {
         opponent_strip: Band::between(window.safe_area.top, lines[0]),
         opponent_back: Band::between(lines[0], lines[1]),
         opponent_creatures: Band::between(lines[1], lines[2]),
@@ -232,47 +230,16 @@ pub(crate) fn bands_with(
     }
 }
 
-/// Where the stack's items stand on the phone, in the middle band, as the web interface's
-/// `anchors(...).stack` puts them: side by side about the column's middle, the top item at the
-/// right and in front.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct PhoneStack {
-    /// The middle of the band, in logical points from the window's top edge.
-    pub middle: f32,
-    /// An item's height on screen, in logical points.
-    pub height: f32,
-    /// How far apart the items' middles stand, across, in logical points.
-    pub step: f32,
-    /// The column's left and right edges, in logical points.
-    pub left: f32,
-    pub right: f32,
-    /// The room kept at each end of a stack too long for one row, for the count of the items
-    /// scrolled off that end, in logical points.
-    pub count_room: f32,
-    /// How far in front of the eye the bottom item stands, and how much nearer each item stands
-    /// than the one beneath it, in millimetres.
-    pub depth: f32,
-    pub step_depth: f32,
-}
-
-impl PhoneStack {
-    /// An item's width on screen, in logical points.
-    #[must_use]
-    pub fn width(&self) -> f32 {
-        self.height * RATIO
-    }
-}
-
 /// How tall a stack item stands on the phone, in logical points, with its middle at `middle`:
 /// the web interface's size, 68 points wide, unless that would leave a tapped creature in
 /// either side's row less than a press can reach. Each creature must keep a strip the phone's
 /// touch target tall and a cell of the hit test's grid more at each edge, between the item and
 /// its far edge, so that the rows can stay where they are while a spell is on the stack.
-fn stack_height(camera: &Camera, middle: f32) -> f32 {
-    let uncovered = audit::PHONE_TARGET_POINTS + 2.0 * CELL;
+fn stack_height(camera: &Camera, middle: f32, (width, row_y, target): (f32, f32, f32)) -> f32 {
+    let uncovered = target + 2.0 * CELL;
     // A tapped card lies across its row, so its height on the table is a card's width.
     let half = CARD_WIDTH / 2.0;
-    let reach = [data::creatures::Y, -data::creatures::Y]
+    let reach = [row_y, -row_y]
         .map(|row| {
             let far = [row - half, row + half]
                 .map(|y| (camera.to_screen(Vec3::new(0.0, y, 0.0)).y - middle).abs())
@@ -282,7 +249,7 @@ fn stack_height(camera: &Camera, middle: f32) -> f32 {
         })
         .into_iter()
         .fold(f32::INFINITY, f32::min);
-    (data::stack::WIDTH / RATIO).min(2.0 * reach)
+    (width / RATIO).min(2.0 * reach)
 }
 
 /// A point of `window`, in logical points from its top left corner, in normalized device
@@ -295,7 +262,7 @@ fn ndc(window: Window, x: f32, y: f32) -> Vec2 {
 /// Where each pile lies and how large its cards are, by side, the viewer's first: in each
 /// player's strip from its left, the library first, as the web's `pileSpot` puts them, the
 /// opponent's clear of the top safe inset.
-fn piles(camera: &Camera, bands: &PhoneBands) -> ([[Vec2; 3]; 2], [f32; 2]) {
+fn piles(camera: &Camera, bands: &TableBands, data: Banded) -> ([[Vec2; 3]; 2], [f32; 2]) {
     let window = camera.window;
     let inset = window.safe_area;
     let pile_y = [
@@ -303,10 +270,10 @@ fn piles(camera: &Camera, bands: &PhoneBands) -> ([[Vec2; 3]; 2], [f32; 2]) {
         bands
             .opponent_strip
             .middle()
-            .max(inset.top + data::piles::opponent::BELOW_SAFE),
+            .max(inset.top + data.piles.opponent.below_safe),
     ];
-    let pile_x = [data::piles::you::X, data::piles::opponent::X];
-    let pile_width = [data::piles::you::WIDTH, data::piles::opponent::WIDTH];
+    let pile_x = [data.piles.you.x, data.piles.opponent.x];
+    let pile_width = [data.piles.you.width, data.piles.opponent.width];
     let piles: [[Vec2; 3]; 2] = std::array::from_fn(|side| {
         let x = pile_x[side];
         [x.x, x.y, x.z].map(|x| ndc(window, inset.left + x, pile_y[side]))
@@ -324,30 +291,35 @@ fn piles(camera: &Camera, bands: &PhoneBands) -> ([[Vec2; 3]; 2], [f32; 2]) {
 /// hand of several rows that rose higher would cover the lands and other permanents, and then
 /// the creatures, past what a press can reach; the cards that do not fit under this ceiling
 /// scroll instead.
-fn hand_ceiling(camera: &Camera) -> f32 {
+fn hand_ceiling(camera: &Camera, lands_y: f32, target: f32) -> f32 {
     // A tapped card lies across its row, so its far edge is half a card's width from the row's
     // middle, toward the opponent.
     let far = camera
-        .to_screen(Vec3::new(0.0, data::lands::Y + CARD_WIDTH / 2.0, 0.0))
+        .to_screen(Vec3::new(0.0, lands_y + CARD_WIDTH / 2.0, 0.0))
         .y;
-    far + audit::PHONE_TARGET_POINTS + 2.0 * CELL
+    far + target + 2.0 * CELL
 }
 
 /// The viewer's hand: cards a quarter of the column wide, at most 100 points, 4 points apart
 /// while they have room, their top edges 8 points under the hand band's top (`placeHand`), and
 /// in rows no higher than `ceiling` points from the window's top (`hand_ceiling`).
-fn your_hand(window: Window, bands: &PhoneBands, ceiling: f32) -> HandData {
+fn your_hand(
+    window: Window,
+    bands: &TableBands,
+    ceiling: f32,
+    (data, sizes): (Banded, Bands),
+) -> HandData {
     let width = bands.right - bands.left;
-    let wide = hand_width(width, BANDS);
+    let wide = hand_width(width, sizes);
     HandData {
-        depth: data::hand::DEPTH,
-        step_depth: data::hand::STEP_DEPTH,
+        depth: data.hand.depth,
+        step_depth: data.hand.step_depth,
         height: wide / RATIO / window.size.height,
-        edge: ndc(window, 0.0, bands.hand.top + data::bands::HAND_TOP).y,
-        fan_radius: data::hand::FAN_RADIUS,
-        spacing: (wide + data::hand::GAP) / wide,
+        edge: ndc(window, 0.0, bands.hand.top + sizes.hand_top).y,
+        fan_radius: data.hand.fan_radius,
+        spacing: (wide + data.hand.gap) / wide,
         room: (width - wide) / wide,
-        bias_degrees: data::hand::BIAS_DEGREES,
+        bias_degrees: data.hand.bias_degrees,
         across: ndc(window, f32::midpoint(bands.left, bands.right), 0.0).x,
         ceiling: ndc(window, 0.0, ceiling).y,
     }
@@ -359,19 +331,19 @@ fn your_hand(window: Window, bands: &PhoneBands, ceiling: f32) -> HandData {
 /// notch and the status bar, so here they stand 2 points under the strip's top
 /// (`opponent_hand.rise` is -2), which keeps the raised corners of the fan's tilted cards
 /// inside the safe area too.
-fn opponent_hand(window: Window, bands: &PhoneBands) -> HandData {
-    let theirs = data::opponent_hand::WIDTH;
-    let fan = theirs * (data::opponent_hand::ROOM + 1.0);
-    let right = window.size.width - window.safe_area.right - data::opponent_hand::RIGHT;
-    let foot = bands.opponent_strip.top - data::opponent_hand::RISE + theirs / RATIO;
+fn opponent_hand(window: Window, bands: &TableBands, data: Banded) -> HandData {
+    let theirs = data.opponent_hand.width;
+    let fan = theirs * (data.opponent_hand.room + 1.0);
+    let right = window.size.width - window.safe_area.right - data.opponent_hand.right;
+    let foot = bands.opponent_strip.top - data.opponent_hand.rise + theirs / RATIO;
     HandData {
-        depth: data::opponent_hand::DEPTH,
-        step_depth: data::opponent_hand::STEP_DEPTH,
+        depth: data.opponent_hand.depth,
+        step_depth: data.opponent_hand.step_depth,
         height: theirs / RATIO / window.size.height,
         edge: ndc(window, 0.0, foot).y,
-        fan_radius: data::opponent_hand::FAN_RADIUS,
-        spacing: data::opponent_hand::STEP / theirs,
-        room: data::opponent_hand::ROOM,
+        fan_radius: data.opponent_hand.fan_radius,
+        spacing: data.opponent_hand.step / theirs,
+        room: data.opponent_hand.room,
         bias_degrees: 0.0,
         across: ndc(window, right - fan / 2.0, 0.0).x,
         ceiling: f32::INFINITY,
@@ -385,28 +357,22 @@ fn opponent_hand(window: Window, bands: &PhoneBands) -> HandData {
 /// and the phase in it stay clear. Its
 /// cards are at most as wide as a card of the hand, and keep `least_step` apart, as the stack's
 /// items do, so that each card beneath keeps a square of the touch target uncovered.
-#[must_use]
-pub fn tray(window: Window) -> TraySpace {
-    tray_in(window, &phone_bands(window).unwrap_or_default())
-}
-
-fn tray_in(window: Window, bands: &PhoneBands) -> TraySpace {
-    use data::tray as shape;
-    use kit_base::data::space::hud::phone as hud;
-    let top = bands.opponent_back.top + shape::INSET;
-    let foot = bands.middle.bottom() + shape::INSET;
+pub(super) fn tray_in(window: Window, bands: &TableBands, data: Banded, sizes: Bands) -> TraySpace {
+    let shape = data.tray;
+    let top = bands.opponent_back.top + shape.inset;
+    let foot = bands.middle.bottom() + shape.inset;
     // The prompt's buttons stand on the dock's line while it holds cards up (`prompts::bar`):
     // the strip's middle, or over the top of the hand where it reaches higher. A hand with more
     // cards than one fan holds stands its back row in the strip, its top `HAND_TOP` over the
     // strip's top edge.
-    let (button, gap) = (hud::BUTTON_HEIGHT, hud::DOCK_GAP);
-    let hand_top = bands.your_strip.top - data::bands::HAND_TOP;
+    let (button, gap) = (data.button_height, data.dock_gap);
+    let hand_top = bands.your_strip.top - sizes.hand_top;
     let dock = bands.your_strip.middle().min(hand_top - gap - button / 2.0);
     let buttons = dock - button / 2.0 - gap;
     TraySpace {
         stage_height: window.size.height,
         y: top,
-        height: bands.middle.top - shape::INSET - top,
+        height: bands.middle.top - shape.inset - top,
         across: Across::Column {
             left: bands.left,
             width: bands.right - bands.left,
@@ -415,31 +381,13 @@ fn tray_in(window: Window, bands: &PhoneBands) -> TraySpace {
             y: foot,
             height: buttons - foot,
         }),
-        most: shape::MOST,
-        least: shape::LEAST,
-        gap: shape::GAP,
-        least_step: shape::LEAST_STEP,
-        heading: shape::HEADING,
-        depth: DESKTOP.tray.depth,
+        most: shape.most,
+        least: shape.least,
+        gap: shape.gap,
+        least_step: shape.least_step,
+        heading: shape.heading,
+        depth: REFERENCE.tray.depth,
     }
-}
-
-/// The viewer's life total's anchor on a phone `window` whose bands are `bands`, while the top
-/// edge of their hand at rest is `hand_top` points from the window's top: the middle of their
-/// strip, or higher, the dock's gap over the hand, where the hand reaches higher. A hand with
-/// more cards than one fan holds stands its back row in the strip, and a total in the strip's
-/// middle would stand on that row's uncovered part and split it into pieces too narrow to
-/// press. The prompt's dock rises over the hand the same way (`prompts::bar`). A hand of three
-/// rows or more reaches over the viewer's lands, and a total over it would stand on their
-/// creatures, so the total rises only as far as it stays clear of the creatures' row.
-#[must_use]
-pub fn your_life(window: Window, bands: &PhoneBands, hand_top: f32) -> PlayerAnchor {
-    use kit_base::data::space::hud::phone::DOCK_GAP;
-    let half = super::HALF_LIFE;
-    let middle = bands.your_strip.middle();
-    let raised = hand_top - DOCK_GAP - half;
-    let lowest_clear = bands.your_back.top + half;
-    life_anchor(window, middle.min(raised.max(lowest_clear)))
 }
 
 /// A life total's anchor on a phone `window`, across the window's middle at `y` points from its
@@ -450,82 +398,68 @@ fn life_anchor(window: Window, y: f32) -> PlayerAnchor {
     PlayerAnchor { life, pool: life }
 }
 
-/// The phone layout for `window`, whose hands, piles, stack and anchors are converted from the
-/// web interface's places in points to this window's normalized device coordinates.
-#[must_use]
-pub fn layout(window: Window) -> Layout {
-    let camera_data = camera_data();
-    let camera = Camera::fit_inside(camera_data, window, battlefield(window));
-    let bands = bands(&camera);
-    let (piles, pile_scale) = piles(&camera, &bands);
-    // Each life total in the middle of its player's strip, until the table raises the viewer's
-    // over a hand of several rows (`your_life`).
-    let anchor = |strip: Band| life_anchor(window, strip.middle());
-    let stack = PhoneStack {
-        middle: bands.middle.middle(),
-        height: stack_height(&camera, bands.middle.middle()),
-        step: data::stack::STEP,
+/// Fits the table inside the bands, with its stack between the creatures' rows.
+pub(super) fn layout(profile: &ProfileData, window: Window, data: Banded) -> Layout {
+    let table = &profile.table;
+    let sizes = table.bands.expect("validated banded table");
+    let area = battlefield_with(window, sizes);
+    let camera = Camera::fit_inside(table.camera, window, area);
+    let bands = bands_with(&camera, sizes, table.creatures.y, table.lands.y);
+    let (piles, pile_scale) = piles(&camera, &bands, data);
+    let target = profile.checks.target_points;
+    let middle = bands.middle.middle();
+    let stack = CentredStack {
+        middle,
+        height: stack_height(
+            &camera,
+            middle,
+            (data.stack.width, table.creatures.y, target),
+        ),
+        step: data.stack.step,
         left: bands.left,
         right: bands.right,
-        count_room: data::stack::COUNT_ROOM,
-        depth: data::stack::DEPTH,
-        step_depth: data::stack::STEP_DEPTH,
+        count_room: data.stack.count_room,
+        depth: data.stack.depth,
+        step_depth: data.stack.step_depth,
     };
-    let row = |y: f32, left: f32, right: f32, centred: bool| RowArea {
-        y,
-        left,
-        right,
-        centre: centred.then_some(f32::midpoint(left, right)),
-    };
+    let anchor = |strip: Band| life_anchor(window, strip.middle());
     Layout {
-        camera: camera_data,
-        strip: data::STRIP,
-        creatures: row(
-            data::creatures::Y,
-            data::creatures::LEFT,
-            data::creatures::RIGHT,
-            true,
-        ),
-        lands: row(data::lands::Y, data::lands::LEFT, data::lands::RIGHT, false),
-        others: row(
-            data::others::Y,
-            data::others::LEFT,
-            data::others::RIGHT,
-            false,
-        ),
-        gap: data::GAP,
-        pile_step: data::PILE_STEP,
-        beneath_step: DESKTOP.beneath_step,
+        camera: table.camera,
+        camera_area: Some(area),
+        strip: table.strip,
+        creatures: row(table.creatures, true),
+        lands: row(table.lands, false),
+        others: row(table.others, false),
+        gap: table.gap,
+        pile_step: table.pile_step,
+        beneath_step: REFERENCE.beneath_step,
         piles,
         pile_scale,
-        tray: tray_in(window, &bands),
-        stack: DESKTOP.stack,
-        hand: your_hand(window, &bands, hand_ceiling(&camera)),
-        opponent_hand: opponent_hand(window, &bands),
+        tray: tray_in(window, &bands, data, sizes),
+        stack: StackPlacement::Centred(stack),
+        hand: your_hand(
+            window,
+            &bands,
+            hand_ceiling(&camera, table.lands.y, target),
+            (data, sizes),
+        ),
+        opponent_hand: opponent_hand(window, &bands, data),
         players: [anchor(bands.your_strip), anchor(bands.opponent_strip)],
-        phone: Some(stack),
+        life_dock: Some(LifeDock {
+            gap: data.dock_gap,
+            middle: bands.your_strip.middle(),
+            top: bands.your_back.top,
+        }),
+        revealed: (
+            piles[1][2],
+            data.piles.opponent.width / CARD_WIDTH * CARD_HEIGHT / window.size.height,
+        ),
+        style: profile.table_style,
+        play: profile.play,
+        target,
         bands: Some(bands),
+        row_zoom: None,
         fitted: None,
         fitted_piles: None,
     }
-}
-
-/// The top edge on the window, in logical points, of the viewer's hand at the resting places
-/// `rests` give (each a place, a pose and whether it is visible), before any card is held up in
-/// a tray; infinity for an empty hand. Allocates nothing.
-pub(super) fn hand_top(camera: &Camera, rests: impl Iterator<Item = (Place, Pose, bool)>) -> f32 {
-    let mut top = f32::INFINITY;
-    for (place, pose, visible) in rests {
-        if visible
-            && let Place::Card {
-                zone: ZoneName::Hand,
-                side: Side::You,
-                ..
-            } = place
-        {
-            let corners = camera.card_box(&pose).0;
-            top = corners.iter().fold(top, |top, corner| top.min(corner.y));
-        }
-    }
-    top
 }

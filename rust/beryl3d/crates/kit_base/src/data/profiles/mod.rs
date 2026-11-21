@@ -5,8 +5,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use glam::{Vec2, Vec3};
 use serde::{Deserialize, Deserializer};
 
-use super::tuning::{nonnegative, positive, read};
+use super::tuning::{fraction, nonnegative, positive, read, vector};
 use crate::geometry::{Insets, Size, Window};
+
+mod banded;
+pub use banded::Banded;
 
 /// The space a feature has for its content.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
@@ -77,6 +80,7 @@ pub struct Table {
     pub lands: Row,
     pub others: Row,
     pub bands: Option<Bands>,
+    pub banded: Option<Banded>,
     #[serde(deserialize_with = "positive")]
     pub strip: f32,
     #[serde(deserialize_with = "nonnegative")]
@@ -87,6 +91,88 @@ pub struct Table {
     /// to move to the profile API.
     #[serde(flatten)]
     pub containers: BTreeMap<String, serde_json::Value>,
+}
+
+/// Table presentation choices independent of container geometry.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "the profile can configure these presentation choices independently"
+)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct TableStyle {
+    pub show_exile: bool,
+    pub show_pile_sides: bool,
+    pub show_copy_labels: bool,
+    pub full_card_faces: bool,
+    /// The distance below the opening hand's usual position, in points on the reference stage.
+    #[serde(deserialize_with = "nonnegative")]
+    pub hand_away: f32,
+    pub far_shade: bool,
+    /// Whether overlaps lift successive nonland permanents away from the viewer.
+    pub tuck_rise: bool,
+}
+
+/// Where the draw verb holds a card up for the viewer to read.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum HeldDraw {
+    Fixed {
+        #[serde(deserialize_with = "positive")]
+        size: f32,
+        #[serde(deserialize_with = "vector")]
+        ndc: Vec2,
+    },
+    OverRest {
+        #[serde(deserialize_with = "positive")]
+        size: f32,
+        #[serde(deserialize_with = "fraction")]
+        foot: f32,
+    },
+}
+
+/// The text style of a life total.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum LifeText {
+    Title,
+    Life,
+}
+
+impl LifeText {
+    #[must_use]
+    pub const fn style(self) -> crate::typography::TypeStyle {
+        match self {
+            Self::Title => crate::tokens::type_style::TITLE,
+            Self::Life => crate::tokens::type_style::LIFE,
+        }
+    }
+}
+
+/// Where animated gains and losses begin relative to the life display.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum LifeChange {
+    AroundTotal,
+    BesideOrb,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct Life {
+    #[serde(deserialize_with = "positive")]
+    pub orb_scale: f32,
+    pub text: LifeText,
+    pub opening_hides_viewer: bool,
+    pub change: LifeChange,
+}
+
+/// The layout-dependent settings used by playback.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct Play {
+    pub held_draw: HeldDraw,
+    pub life: Life,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
@@ -153,6 +239,8 @@ pub struct ProfileData {
     pub size_class: SizeClass,
     shorter_side_below: Option<f32>,
     pub table: Table,
+    pub table_style: TableStyle,
+    pub play: Play,
     pub checks: Checks,
     pub slots: BTreeMap<String, SlotSpec>,
     pub settings_quick_action_min_width: Option<f32>,
@@ -262,6 +350,9 @@ impl ProfileData {
             {
                 return Err(format!("invalid table.{name} geometry"));
             }
+        }
+        if self.table.bands.is_some() != self.table.banded.is_some() {
+            return Err("table.bands and table.banded must be supplied together".to_owned());
         }
         for (name, slot) in &self.slots {
             if slot.region != Region::SafeArea && self.table.bands.is_none() {

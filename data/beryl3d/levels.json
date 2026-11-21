@@ -68,7 +68,7 @@
   "cap_lines": 12000,
   "cap_allowances": {
     "game_play": {
-      "lines": 12483,
+      "lines": 12479,
       "reason": "The verbs use playback's step inputs and outputs, and playback invokes the verbs. Light and pointer handling read playback's scene and tracks. The arrangement and feature ports replace those dependencies before separating the code."
     }
   },
@@ -87,19 +87,17 @@
     "rust/beryl3d/crates/beryl_inspect/src/stress.rs": 1
   },
   "profile_words": {
-    "app_client": 182,
+    "app_client": 120,
     "app_screens": 67,
     "beryl_3d": 35,
     "beryl_host": 21,
-    "beryl_inspect": 112,
-    "beryl_pictures": 11,
+    "beryl_inspect": 109,
+    "beryl_pictures": 7,
     "beryl_render": 4,
-    "game_hud": 147,
-    "game_manual": 103,
-    "game_play": 29,
-    "game_probe": 142,
-    "game_table": 117,
-    "kit_base": 9,
+    "game_hud": 118,
+    "game_manual": 102,
+    "game_probe": 123,
+    "kit_base": 6,
     "kit_probe": 26,
     "kit_space": 25,
     "kit_ui": 7

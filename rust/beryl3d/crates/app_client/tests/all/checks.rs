@@ -397,7 +397,6 @@ fn a_flight_back_to_where_it_started_rests_in_place() {
     };
     let table = Table::new(
         crate::test_data::data(),
-        game_table::table::DESKTOP,
         game_table::table::Window::default(),
     );
     let camera = table.camera();

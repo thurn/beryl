@@ -15,7 +15,7 @@ use beryl_protocol::protocol::{PlayerView, Side, Step};
 use glam::Vec2;
 
 use crate::hud::HudIn;
-use game_table::table::PhoneBands;
+use game_table::profiles::TableBands;
 use kit_base::data::space::hud::phone as data;
 use kit_base::tokens::{color, shadow};
 use kit_frame::frame::Role;
@@ -50,7 +50,7 @@ pub static NOTHING: Occupied = Occupied {
 /// on the line. Heights are compared across the whole width, since the pill is centred and only
 /// as wide as its words.
 #[must_use]
-pub fn asked_top(bands: &PhoneBands, occupied: &Occupied, height: f32) -> f32 {
+pub fn asked_top(bands: &TableBands, occupied: &Occupied, height: f32) -> f32 {
     let line = bands.middle.top + (bands.middle.height - height) / 2.0;
     let gap = data::ASKED_GAP;
     let taken = || (occupied.cards.iter()).map(|card| (card.y, card.y + card.height));
@@ -75,7 +75,7 @@ pub fn asked_top(bands: &PhoneBands, occupied: &Occupied, height: f32) -> f32 {
 /// points.
 #[must_use]
 pub fn clear_at_right(
-    bands: &PhoneBands,
+    bands: &TableBands,
     occupied: &Occupied,
     (width, height): (f32, f32),
     top: f32,
@@ -96,7 +96,7 @@ pub fn clear_at_right(
 /// The menu's button, at the right end of the opponent's strip: it opens the settings, which
 /// hold the log and the bug report (`MenuButton` in `ui/src/mobile/chrome.tsx`).
 #[must_use]
-pub fn menu(bands: &PhoneBands, press: Action) -> Element {
+pub fn menu(bands: &TableBands, press: Action) -> Element {
     let mut button = icon_button(icons::MENU, "Menu");
     button.press = Some(press);
     button.anchor = Some(Anchor::Point(
@@ -111,7 +111,7 @@ pub fn menu(bands: &PhoneBands, press: Action) -> Element {
 /// stack holds anything; and full control's mark at the band's right end while it is on. Neither
 /// takes a press: the phase is shown, and full control is set in the settings.
 #[must_use]
-pub fn middle(view: &PlayerView, full_control: bool, bands: &PhoneBands) -> Element {
+pub fn middle(view: &PlayerView, full_control: bool, bands: &TableBands) -> Element {
     let yours = view.turn.active == Side::You;
     let side = f32::from(icons::PHASE_SIDE);
     let line = bands.middle.middle();
@@ -159,7 +159,7 @@ pub fn middle(view: &PlayerView, full_control: bool, bands: &PhoneBands) -> Elem
 
 /// The left and right edges of the phase icon in the middle band: centred while the stack is
 /// empty, and at the band's left while it holds anything.
-fn phase_edges(stack_empty: bool, bands: &PhoneBands) -> (f32, f32) {
+fn phase_edges(stack_empty: bool, bands: &TableBands) -> (f32, f32) {
     let side = f32::from(icons::PHASE_SIDE);
     let left = if stack_empty {
         f32::midpoint(bands.left, bands.right) - side / 2.0
@@ -172,7 +172,7 @@ fn phase_edges(stack_empty: bool, bands: &PhoneBands) -> (f32, f32) {
 /// The left and right edges of the phase icon `middle` draws for the screen `input` builds, or
 /// an empty span at the column's left where it draws none.
 #[must_use]
-pub fn phase_span(input: &HudIn, bands: &PhoneBands) -> (f32, f32) {
+pub fn phase_span(input: &HudIn, bands: &TableBands) -> (f32, f32) {
     input.view.map_or((bands.left, bands.left), |view| {
         phase_edges(view.stack.is_empty(), bands)
     })

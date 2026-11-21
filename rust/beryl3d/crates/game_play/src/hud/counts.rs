@@ -22,6 +22,7 @@ use glam::Vec2;
 use crate::art::orb;
 pub(crate) use game_table::table::HALF_LIFE;
 use game_table::table::Layout;
+use kit_base::data::profiles::{Life, LifeChange, LifeText};
 use kit_base::data::{
     Data,
     effect::{Effects, NumberOrigin},
@@ -128,8 +129,7 @@ pub struct CountFloats {
     /// on the game screen, where the phone's hand stands behind it, but not on the manual
     /// table, whose commands act on the total under the pointer.
     pub passes: bool,
-    /// Whether the window has the phone layout, where a total is drawn smaller, on a smaller orb.
-    pub phone: bool,
+
     /// Whether each player's unspent mana is shown: not on the manual table, whose own row of
     /// mana and counters stands there (`manual::pools`).
     pub pools: bool,
@@ -148,7 +148,7 @@ impl CountFloats {
         layer: &mut Layer,
         counts: &Counts,
         coming: impl Iterator<Item = (&'a [CountChange], &'a PlayerView)>,
-        targets: [bool; 2],
+        (targets, style): ([bool; 2], LifeText),
     ) {
         // What each player's floats will show, as the scripts play out.
         let mut lives: [Vec<i32>; 2] = Default::default();
@@ -180,7 +180,7 @@ impl CountFloats {
             layer.forget_prepared(id, |key| {
                 (lives[at].iter()).any(|&life| {
                     [false, true]
-                        .map(|t| total_key(life, t, self.passes, self.phone))
+                        .map(|t| total_key(life, t, self.passes, style))
                         .contains(&key)
                 })
             });
@@ -189,9 +189,9 @@ impl CountFloats {
                     if target && !targets[at] {
                         continue;
                     }
-                    let (passes, phone) = (self.passes, self.phone);
-                    layer.prepare(id, total_key(life, target, passes, phone), || {
-                        life_total((side, name), Some(life), (target, passes, phone))
+                    let passes = self.passes;
+                    layer.prepare(id, total_key(life, target, passes, style), || {
+                        life_total((side, name), Some(life), (target, passes, style))
                             .expect("a total")
                     });
                 }
@@ -232,14 +232,13 @@ impl CountFloats {
         size: Size,
         (visible, targets, dimmed): (bool, [bool; 2], bool),
     ) {
-        let (passes, phone) = (self.passes, self.phone);
+        let passes = self.passes;
+        let life_style = layout.play.life;
+        let style = life_style.text;
         for (side, name) in [(Side::You, "You"), (Side::Opponent, "Opponent")] {
             let at = index(side);
             let target = targets[at];
-            // The phone's opening hides the orbs, and the totals with them
-            // (`screens::game_phone`). The desktop's coin and the words saying who starts stand
-            // over the opponent's total, as the web's coin covers it.
-            let hidden = dimmed && (phone || side == Side::Opponent);
+            let hidden = dimmed && (life_style.opening_hides_viewer || side == Side::Opponent);
             let counts = counts.player(side).filter(|_| visible && !hidden);
             let effect = effects
                 .iter()
@@ -260,10 +259,10 @@ impl CountFloats {
                 show(
                     layer,
                     id,
-                    want.life.map(|(life, t, p)| total_key(life, t, p, phone)),
+                    want.life.map(|(life, t, p)| total_key(life, t, p, style)),
                     || {
                         want.life.and_then(|(life, t, p)| {
-                            life_total((side, name), Some(life), (t, p, phone))
+                            life_total((side, name), Some(life), (t, p, style))
                         })
                     },
                 );
@@ -283,7 +282,7 @@ impl CountFloats {
             *shown = want;
             let anchor = &layout.players[at];
             // The web centres the total on the orb's core, a few points off its art's middle.
-            let units = orb::SCALES[usize::from(phone)];
+            let units = life_style.orb_scale;
             let life = points(anchor.life, size) + Vec2::new(0.0, orb::face_offset(side) * units);
             // Under the opening's backdrop the total is dimmed as the orb under it is.
             let opacity = if dimmed {
@@ -311,7 +310,13 @@ impl CountFloats {
             if let Some(number) = effect.number {
                 layer.set_float_look(
                     floats::LIFE_CHANGE[at],
-                    change_look(number, life, effect.tint, phone, data.verbs.count.drift),
+                    change_look(
+                        number,
+                        life,
+                        effect.tint,
+                        life_style,
+                        data.verbs.count.drift,
+                    ),
                 );
             }
         }
@@ -342,32 +347,26 @@ fn change_look(
     number: NumberLook,
     life: Vec2,
     tint: Option<[u8; 4]>,
-    phone: bool,
+    style: Life,
     drift: f32,
 ) -> FloatLook {
-    // The web positions the loss from the orb art's bottom (14 points in), and the
-    // gain from its top (4 points in), rather than from the total's line box.
-    let half = orb::ART[3] * orb::SCALES[usize::from(phone)] / 2.0;
-    let height = type_style::TITLE.size * type_style::TITLE.line_height;
     let drift = drift * number.drift;
     let above = number.origin == NumberOrigin::Above;
-    let (offset, anchor) = if phone && above {
-        (-HALF_LIFE + drift, Vec2::new(0.5, 1.0))
-    } else if phone {
-        (HALF_LIFE + drift, Vec2::new(0.5, 0.0))
-    } else if above {
-        (
-            -half + size::LIFE_CHANGE_TOP - GAIN_CLEARANCE + drift,
-            Vec2::new(1.0, 0.0),
-        )
-    } else {
-        (
-            half - size::LIFE_CHANGE_BOTTOM - height + drift,
-            Vec2::new(1.0, 0.0),
-        )
+    let (left, offset, anchor) = match style.change {
+        LifeChange::AroundTotal if above => (0.0, -HALF_LIFE + drift, Vec2::new(0.5, 1.0)),
+        LifeChange::AroundTotal => (0.0, HALF_LIFE + drift, Vec2::new(0.5, 0.0)),
+        LifeChange::BesideOrb => {
+            // Measure the gain from the top of the orb art and the loss from its bottom.
+            let half = orb::ART[3] * style.orb_scale / 2.0;
+            let height = type_style::TITLE.size * type_style::TITLE.line_height;
+            let offset = if above {
+                -half + size::LIFE_CHANGE_TOP - GAIN_CLEARANCE + drift
+            } else {
+                half - size::LIFE_CHANGE_BOTTOM - height + drift
+            };
+            (size::LIFE_CHANGE_LEFT, offset, Vec2::new(1.0, 0.0))
+        }
     };
-    // Ending left of the orb keeps the change clear of the Combat banner.
-    let left = if phone { 0.0 } else { size::LIFE_CHANGE_LEFT };
     number.place(life + Vec2::new(-left, offset), anchor, tint)
 }
 
@@ -386,10 +385,12 @@ fn show(
     }
 }
 
-/// The key a life total is prepared under, as a target of a prompt's or not, and on the phone
-/// layout or not.
-fn total_key(life: i32, target: bool, passes: bool, phone: bool) -> u64 {
-    life_key(life) | u64::from(target) << 32 | u64::from(passes) << 33 | u64::from(phone) << 34
+/// The key for a life total, including its interaction and text style.
+fn total_key(life: i32, target: bool, passes: bool, style: LifeText) -> u64 {
+    life_key(life)
+        | u64::from(target) << 32
+        | u64::from(passes) << 33
+        | u64::from(style == LifeText::Title) << 34
 }
 
 /// The key a life total or a change of one is prepared under.
@@ -423,16 +424,12 @@ fn pool_key(pool: ManaPool) -> u64 {
 fn life_total(
     (side, name): (Side, &str),
     life: Option<i32>,
-    (target, passes, phone): (bool, bool, bool),
+    (target, passes, style): (bool, bool, LifeText),
 ) -> Option<Element> {
     let life = life?;
     let mut element = Element::new(Role::Player)
         .name(&format!("{name} {life}"))
-        .style(if phone {
-            type_style::TITLE
-        } else {
-            type_style::LIFE
-        })
+        .style(style.style())
         .color(color::LIFE)
         .background([0; 4])
         .border(([0; 4], 0.0));

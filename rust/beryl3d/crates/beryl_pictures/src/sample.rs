@@ -46,7 +46,7 @@ use std::sync::mpsc::{self, Receiver};
 use beryl_assets::Prepared;
 use beryl_assets::glyphs::GlyphWorker;
 use beryl_assets::light;
-use game_table::table::{Camera, DESKTOP, Window};
+use game_table::table::{Camera, REFERENCE, Window};
 use kit_frame::frame::{Frame, FrameBuilder};
 use kit_text::text::TypeStyle;
 use kit_text::text::fonts::Font;
@@ -491,7 +491,7 @@ impl Drawer {
             }
         }
         self.give(&mut layer);
-        let camera = Camera::fit(DESKTOP.camera, window);
+        let camera = Camera::fit(REFERENCE.camera, window);
         let mut frame = Frame::with_capacity(16, 16, 64);
         let mut builder = FrameBuilder::new(&mut frame, Tier::Enhanced);
         builder.camera(camera.view_projection);

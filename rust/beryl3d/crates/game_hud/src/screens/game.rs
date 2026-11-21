@@ -10,7 +10,6 @@ use super::{game_over, opening};
 use crate::hud::{HudIn, full_control, phone, players, steps};
 use crate::inspect::viewer;
 use crate::prompts;
-use game_table::table::phone_bands;
 use kit_base::tokens::ratio;
 use kit_ui::element::{Action, Anchor, Element, Shortcuts, holder, row};
 
@@ -104,7 +103,7 @@ fn waiting(input: &HudIn) -> Option<Element> {
 /// the screen is an empty region at the window's corner that draws nothing and covers no card.
 #[must_use]
 pub fn game_phone(input: &HudIn, log: Option<Element>, menu: Action) -> Element {
-    let bands = phone_bands(input.window).unwrap_or_default();
+    let bands = input.profile.bands().unwrap_or_default();
     let opening = opening::shown(input);
     let prompt = waiting(input);
     let middle = input

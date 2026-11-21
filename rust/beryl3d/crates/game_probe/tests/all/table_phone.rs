@@ -5,8 +5,8 @@
 use beryl_protocol::protocol::{CardType, ObjectId, RowName, Side, ZoneName};
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use game_play::play::Show;
-use game_table::table::phone::{Band, battlefield, layout};
-use game_table::table::{DESKTOP, Held, Table, TrayKind, Window, phone_bands};
+use game_table::profiles::phone::{Band, battlefield};
+use game_table::table::{Held, REFERENCE, Table, TrayKind, Window};
 use glam::Vec2;
 use kit_frame::frame::{Frame, Place, Resolved, Role};
 use kit_probe::agent::checks::{on_screen, reachable};
@@ -56,7 +56,7 @@ fn uneven(width: f32, height: f32) -> Window {
 fn frame_in(window: Window, view: &ViewBuilder) -> Frame {
     let mut view = view.clone();
     view.script(ScriptBuilder::reset().build());
-    let mut show = Show::new(Table::new(crate::test_data::data(), DESKTOP, window));
+    let mut show = Show::new(Table::new(crate::test_data::data(), window));
     show.push(Box::new(view.update()), Vec::new());
     frame(&mut show, &mut Frame::with_capacity(4096, 4096, 65_536), 0)
 }
@@ -214,11 +214,10 @@ fn the_bands_follow_one_another_without_overlapping() {
             for band in order {
                 assert!(band.height > 0.0, "{window:?}: {band:?}");
             }
-            let stack = layout(window).phone.expect("the phone stack");
-            assert!(
-                (stack.middle - bands.middle.middle()).abs() < 0.01,
-                "{window:?}"
-            );
+            let middle = layout(window)
+                .centred_stack_line()
+                .expect("the phone stack");
+            assert!((middle - bands.middle.middle()).abs() < 0.01, "{window:?}");
         }
     }
     assert_eq!(phone_bands(Window::default()), None);
@@ -424,7 +423,7 @@ fn the_viewers_life_total_rises_over_a_hand_that_reaches_into_its_strip() {
         for (width, height) in PHONES {
             let window = phone(width, height);
             let bands = phone_bands(window).expect("a phone window");
-            let mut show = Show::new(Table::new(crate::test_data::data(), DESKTOP, window));
+            let mut show = Show::new(Table::new(crate::test_data::data(), window));
             show.push(Box::new(view.update()), Vec::new());
             let frame = frame(&mut show, &mut Frame::with_capacity(4096, 4096, 65_536), 0);
             let hand = Place::Card {
@@ -616,7 +615,7 @@ fn a_resize_in_mid_flight_into_and_between_phone_layouts_keeps_the_pose() {
     ] {
         let (start, cards) = before();
         let (drawn, timings) = draw(&start, cards);
-        let mut show = Show::new(Table::new(crate::test_data::data(), DESKTOP, from));
+        let mut show = Show::new(Table::new(crate::test_data::data(), from));
         show.push(Box::new(start), Vec::new());
         show.push(Box::new(drawn.clone()), timings);
         let mut scratch = empty_frame();
@@ -633,7 +632,7 @@ fn a_resize_in_mid_flight_into_and_between_phone_layouts_keeps_the_pose() {
                 && (was.scale - now.scale).abs() < 1e-5,
             "{from:?} to {to:?}: the card does not jump: {was:?} became {now:?}"
         );
-        assert_eq!(show.table().layout().phone.is_some(), to.phone());
+        assert_eq!(show.table().layout().bands.is_some(), to.phone());
         frame(&mut show, &mut scratch, 400 * MS);
         // The view the show ends on lists the drawn card last in the hand, as it rests.
         let shown = &show.shown().expect("the draw is shown").view;
@@ -653,18 +652,18 @@ fn a_resize_in_mid_flight_into_and_between_phone_layouts_keeps_the_pose() {
 
 #[test]
 fn a_desktop_window_keeps_the_desktop_layout_with_its_rows_fitted() {
-    let table = Table::new(crate::test_data::data(), DESKTOP, Window::default());
-    let fitted = DESKTOP.for_window(Window::default());
+    let table = Table::new(crate::test_data::data(), Window::default());
+    let fitted = layout(Window::default());
     assert_eq!(*table.layout(), fitted);
-    assert!(fitted.phone.is_none() && fitted.fitted.is_some());
-    assert_eq!(fitted.camera, DESKTOP.camera);
-    assert!(DESKTOP.for_window(phone(393.0, 759.0)).phone.is_some());
+    assert!(fitted.bands.is_none() && fitted.fitted.is_some());
+    assert_eq!(fitted.camera, REFERENCE.camera);
+    assert!(layout(phone(393.0, 759.0)).bands.is_some());
 }
 
 /// The box on the window of each card of `held` held up in a tray on `window`, in logical
 /// points, and how far it stands from the eye.
 fn tray_boxes_on(window: Window, held: &Held) -> Vec<(Vec2, Vec2, f32)> {
-    let table = Table::new(crate::test_data::data(), DESKTOP, window);
+    let table = Table::new(crate::test_data::data(), window);
     let camera = table.camera();
     (table.tray_poses(held).cards.iter())
         .map(|(_, pose)| {
@@ -846,4 +845,12 @@ fn a_crowded_row_leaves_an_attached_aura_a_square_to_press() {
             "{width}x{height}"
         );
     }
+}
+
+fn phone_bands(window: Window) -> Option<game_table::profiles::TableBands> {
+    game_table::profiles::Profile::for_window(&crate::test_data::data().profiles, window).bands()
+}
+
+fn layout(window: Window) -> game_table::table::Layout {
+    game_table::profiles::Profile::for_window(&crate::test_data::data().profiles, window).layout()
 }

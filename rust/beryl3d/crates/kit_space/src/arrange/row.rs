@@ -183,7 +183,7 @@ impl Row {
 
 /// Both the smallest scale this row will take and the smallest scale it can demand
 /// of the other rows. A value of zero allows the row to demand its whole fit.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ScaleLimit {
     pub minimum: f32,
     pub shared_minimum: f32,

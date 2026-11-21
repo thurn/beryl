@@ -43,10 +43,7 @@ impl Client {
             self.viewing.result_aside = false;
         }
         let feature_inputs = ViewInputs {
-            profile: game_table::profiles::Profile::for_window(
-                &self.show.table().data().profiles,
-                self.window,
-            ),
+            profile: self.show.table().profile(),
             screen: self.screen,
             window: self.window,
             has_view: view.is_some(),
@@ -69,7 +66,7 @@ impl Client {
         // On the desktop the hand and the stack show cards' full frames, as the web interface
         // does; on the phone the battlefield frame.
         let read_whole = view
-            .filter(|_| !input.window.phone())
+            .filter(|_| input.profile.data().table_style.full_card_faces)
             .map(|view| self.show.faces().list().read_whole(view));
         // The settings sheet takes the screen's place in the flat
         // layer; the bug report is drawn over the screen. Before a game has a view and with no
@@ -99,7 +96,9 @@ impl Client {
         // While the opening shows the hand, the table's hand waits below the window, as the web's
         // desktop board holds it away under the opening, a sheet open over it or not; the
         // phone's board does not.
-        if !self.window.phone() && self.show.hold_hand_away(away, self.window) {
+        if self.show.table().layout().style.hand_away > 0.0
+            && self.show.hold_hand_away(away, self.window)
+        {
             self.prepare_resized();
         }
         self.layer
@@ -138,6 +137,7 @@ impl Client {
         ScreenIn {
             screen: self.screen,
             window: self.window,
+            profile: self.show.table().profile(),
             view: self.show.latest().map(|update| &update.view),
             played: self.show.shown().map(|update| &update.view),
             turn: self.viewing.turn,

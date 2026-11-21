@@ -151,6 +151,28 @@
       }
     }
   },
+  "table_style": {
+    "show_exile": true,
+    "show_pile_sides": true,
+    "show_copy_labels": true,
+    "full_card_faces": true,
+    "hand_away": 420,
+    "far_shade": true,
+    "tuck_rise": true
+  },
+  "play": {
+    "held_draw": {
+      "kind": "fixed",
+      "size": 1.3,
+      "ndc": [0.422, 0.0]
+    },
+    "life": {
+      "orb_scale": 0.95693785,
+      "text": "life",
+      "opening_hides_viewer": false,
+      "change": "beside_orb"
+    }
+  },
   "slots": {
     "settings.sheet": {
       "region": "safe_area",

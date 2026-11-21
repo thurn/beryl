@@ -13,7 +13,7 @@ use beryl_protocol::Seat;
 use beryl_protocol::protocol::{Side, ZoneName};
 use beryl_protocol::script::Verb;
 use game_play::play::Show;
-use game_table::table::{DESKTOP, Rest, Table, Window};
+use game_table::table::{Rest, Table, Window};
 use kit_base::pose::Pose;
 use kit_frame::frame::{Frame, FrameBuilder, Place, Wake};
 use kit_probe::agent::tree::line;
@@ -130,11 +130,7 @@ fn unplaced((name, seat): &(String, Seat)) -> Option<String> {
     let views = recording(name, side)
         .and_then(|recording| recording.views())
         .unwrap_or_else(|why| panic!("{why}"));
-    let mut show = Show::new(Table::new(
-        crate::test_data::data(),
-        DESKTOP,
-        Window::default(),
-    ));
+    let mut show = Show::new(Table::new(crate::test_data::data(), Window::default()));
     for update in views {
         let timings = timings(&update);
         show.push(Box::new(update), timings);
@@ -173,7 +169,7 @@ fn after_each_verbs_zones_script_every_object_rests_at_its_placement() {
             scale: 1.0,
             safe_area: Insets::default(),
         };
-        let mut show = Show::new(Table::new(crate::test_data::data(), DESKTOP, window));
+        let mut show = Show::new(Table::new(crate::test_data::data(), window));
         let mut frame = Frame::with_capacity(4096, 8192, 65_536);
         let mut now = 0;
         for (index, update) in views.into_iter().enumerate() {

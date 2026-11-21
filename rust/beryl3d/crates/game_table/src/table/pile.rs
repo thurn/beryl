@@ -185,7 +185,7 @@ fn fit(
 
 /// How far a pile card `scale` times its printed size and leaning back by `tilt` stands above
 /// where it would lie flat, so that its near edge stays where a flat card's lies.
-pub(super) fn lift(scale: f32, tilt: f32) -> f32 {
+pub(crate) fn lift(scale: f32, tilt: f32) -> f32 {
     CARD_HEIGHT / 2.0 * scale * tilt.sin()
 }
 
@@ -356,7 +356,7 @@ impl Table {
             else {
                 continue;
             };
-            if self.layout().phone.is_none() {
+            if self.layout().style.show_pile_sides {
                 write_side(builder, self.camera(), pile, side);
             }
             // A pile writes no element over its top card while a prompt holds that card up in

@@ -1340,7 +1340,7 @@ its own line of sight, nearer or farther:
 - A wider window then shows more table cloth at the sides, and a narrower one
   moves the camera back.
 
-The phone layout (`table::phone`, `layout.phone` in `space-constants.json`)
+The phone layout (`game_table::profiles` and `data/beryl3d/profiles/phone.json`)
 follows the web interface's portrait bands (`phoneLayout` in
 `ui/src/mobile/layout.ts`): the opponent's strip under the top safe inset, the
 battlefield, the viewer's strip and the hand, which runs off the window's
@@ -1437,7 +1437,7 @@ flight start exactly where the card was.
   shear closes the difference. Near the screen's middle, where the web's card
   barely leans, the trapezoid's near edge alone is up to 3 points wider than the
   web's card, and no shear narrows it. The phone layout keeps its own rows
-  (`table::phone`), and has not been fitted to the web's.
+  (`game_table::profiles`), and has not been fitted to the web's.
 - **Some cards lie under a permanent, in its row**, as the web interface tucks
   them: the other cards of a merged permanent and the cards a permanent holds in
   exile peek out to its left, and the Auras and Equipment attached to it,
@@ -1994,10 +1994,10 @@ window.
 - **Two layouts.** The desktop layout and the phone layout are separate screen
   functions sharing their widgets, as the web interface's two layouts share its
   drawing code. The phone layout is used when the window's shorter side is under
-  500 points, and the desktop layout otherwise. One selector decides it,
-  `agent::Layout::for_size`, which the screens, the table and the interface
-  checks all ask. Each screen's public function calls its portrait alternate
-  itself, so the game screen and the others change apart.
+  500 points, and the desktop layout otherwise. The profile selector
+  `Profiles::for_size` uses the window's logical size. The selected profile
+  supplies the table's camera and containers and the playback settings for held
+  draws and life changes.
 - **Portrait screens.** The start screen and the testing screen are one column
   over the safe area, the gutter in from its sides and foot (`flat.phone` in
   `data/beryl3d/space-constants.json`): the opponents' list takes the room the
@@ -2014,15 +2014,15 @@ window.
 - **Minimum sizes.** On the phone layout a check holds every touch target to at
   least 44 by 44 points and every line of text to at least 11 points.
 - **The phone's game screen** (`screens::game::game_phone`) places the desktop's
-  pieces in the table's bands (`table::phone_bands`), with sizes from
-  `hud.phone` in `space-constants.json`:
+  pieces in the table's bands (`Profile::bands`), with sizes from the phone
+  profile:
   - Each orb is centred in its player's strip, drawn at half the desktop's size.
     When the viewer's hand needs more than one row, its back row stands in the
     viewer's strip, and a total in the strip's middle would split that row's
     uncovered part into pieces too narrow to press. The table then raises the
     viewer's total and orb over the hand's top, as the dock rises, but never
-    onto the viewer's creatures (`table::phone::your_life`). Streaks and strikes
-    at the viewer aim where the total stands.
+    onto the viewer's creatures. Streaks and strikes at the viewer aim where the
+    total stands.
   - A menu button at the right end of the opponent's strip opens the settings,
     which hold the Log and Report bug buttons. The log opens as a sheet below
     the opponent's strip. The phone shows no gear, log column or step stops.

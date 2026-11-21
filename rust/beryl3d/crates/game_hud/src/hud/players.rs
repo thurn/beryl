@@ -25,8 +25,8 @@ use glam::Vec2;
 
 use crate::hud::HudIn;
 use game_play::art::orb;
-use game_table::table::phone::strip;
-use game_table::table::{DESKTOP, Window};
+use game_table::profiles::phone::strip;
+use game_table::table::{REFERENCE, Window};
 use kit_base::data::space::hud::incoming as badge;
 use kit_text::text::TypeStyle;
 use kit_text::text::fonts::Font;
@@ -55,7 +55,7 @@ pub fn orb_centre(side: Side, window: Window) -> Vec2 {
     if window.phone() {
         return Vec2::new(window.size.width / 2.0, strip(window, side).middle());
     }
-    points(DESKTOP.players[index(side)].life, window.size)
+    points(REFERENCE.players[index(side)].life, window.size)
 }
 
 /// The name of `side`'s orb in the tree, by which the "marks on their things" check finds the

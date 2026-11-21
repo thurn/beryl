@@ -134,7 +134,7 @@ fn a_yes_or_no_holds_its_card_up_and_its_yes_sends_the_first_option() {
     client.frame(MS);
     client.frame(5_000 * MS);
     let frame = client.frame(10_000 * MS);
-    let (tray, _) = TraySpace::DESKTOP.on_window(SIZE);
+    let (tray, _) = TraySpace::REFERENCE.on_window(SIZE);
     let held = card_centre(frame, card);
     assert!(
         (tray.x..tray.x + tray.width).contains(&held.x)

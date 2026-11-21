@@ -10,9 +10,7 @@ use glam::{Quat, Vec3};
 
 use super::look::Look;
 use super::scene::{Table, face_of};
-use super::{CARD_HEIGHT, CARD_WIDTH};
 use crate::faces::Faces;
-use kit_base::data::space::layout::phone;
 use kit_base::data::space::revealed;
 use kit_base::pose::{Curve, Interval, Segment, Shape};
 use kit_frame::frame::{ElementId, FrameBuilder, Place, REVEALED_FACE, Role, StateBits};
@@ -54,16 +52,7 @@ impl Table {
             step: Vec3::new(revealed::STEP, 0.0, -1.0),
         }
         .limited(count, revealed::REACH);
-        // On the phone the pile lies in the opponent's strip beside their graveyard, at a
-        // pile's size, where the phone leaves the third pile's place free (docs/ui-conventions.md,
-        // "The phone").
-        let window = self.camera().window;
-        let (at, height) = if self.layout().phone.is_some() {
-            let pile = phone::piles::opponent::WIDTH / CARD_WIDTH * CARD_HEIGHT;
-            (self.layout().piles[1][2], pile / window.size.height)
-        } else {
-            (revealed::AT, revealed::HEIGHT)
-        };
+        let (at, height) = self.layout().revealed;
         for (index, (slot, begins)) in revealed.enumerate() {
             let Some(shown) = self.revealed(slot) else {
                 continue;

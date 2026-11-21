@@ -11,7 +11,7 @@ use glam::Vec2;
 use super::Piles;
 use crate::hud::HudIn;
 use crate::hud::phone::{Occupied, asked_top, clear_at_right, phase_span};
-use game_table::table::{PhoneBands, phone_bands};
+use game_table::profiles::TableBands;
 use kit_base::data::space::hud::phone as data;
 use kit_base::tokens::{color, shadow, size, space, type_style};
 use kit_text::text::TypeStyle;
@@ -225,7 +225,7 @@ fn phone_bar(
     asks: &str,
     controls: Option<Controls>,
 ) -> Element {
-    let bands = phone_bands(input.window).unwrap_or_default();
+    let bands = input.profile.bands().unwrap_or_default();
     let ways = || super::ways(prompt).map(|way| way.id);
     let buttons: Vec<&PromptButton> = (prompt.buttons.iter())
         .filter(|button_view| !ways().any(|id| id == button_view.id))
@@ -343,7 +343,7 @@ enum Stacked {
 /// The middle band's ends, where the dock or the stacked buttons stand instead of over a
 /// permanent of the viewer's back row.
 struct RightEnd<'a> {
-    bands: &'a PhoneBands,
+    bands: &'a TableBands,
     occupied: &'a Occupied,
     /// Whether the prompt shows something over the table, which the middle band then lies under.
     held: bool,
@@ -458,7 +458,7 @@ enum PillPlace {
 /// The pill that says what a prompt asks, `asks`, at `place`: a fixed width, so that a long
 /// question is laid out on as many lines as it takes. It lets the pointer through, so it never
 /// covers a card the prompt picks.
-fn pill(asks: &str, place: PillPlace, bands: &PhoneBands, occupied: &Occupied) -> Element {
+fn pill(asks: &str, place: PillPlace, bands: &TableBands, occupied: &Occupied) -> Element {
     let style = TypeStyle {
         size: data::PILL_TEXT,
         ..type_style::TITLE
@@ -568,7 +568,7 @@ pub fn waiting(input: &HudIn) -> Option<Element> {
     // that would cover a permanent of the viewer's back row and the label is too wide for the
     // middle band beside the phase icon, it narrows to the room there, and its words shrink to
     // fit, as a button's do.
-    let bands = phone_bands(input.window).unwrap_or_default();
+    let bands = input.profile.bands().unwrap_or_default();
     let right_end = RightEnd {
         bands: &bands,
         occupied: input.occupied,

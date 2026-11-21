@@ -490,7 +490,6 @@ fn a_moved_float_allocates_nothing() {
     let mut frame = Frame::with_capacity(64, 256, 1024);
     let table = Table::new(
         crate::test_data::data(),
-        game_table::table::DESKTOP,
         game_table::table::Window::default(),
     );
     let before = ALLOCATIONS.load(Ordering::Relaxed);
@@ -577,7 +576,6 @@ fn a_transition_allocates_nothing() {
     )));
     let table = Table::new(
         crate::test_data::data(),
-        game_table::table::DESKTOP,
         game_table::table::Window::default(),
     );
     let mut frame = Frame::with_capacity(64, 256, 1024);

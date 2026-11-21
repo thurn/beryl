@@ -11,6 +11,7 @@ use std::f32::consts::FRAC_PI_4;
 use glam::{Affine3A, Quat, Vec2, Vec3};
 
 use super::badges;
+use super::hands::hand_top;
 use super::look::{Dress, Look};
 use super::own::{self, Fights};
 use super::pile::PileShown;
@@ -19,8 +20,9 @@ use super::shadows::Floors;
 use super::shown::Shown;
 use super::tray::TrayMotion;
 use super::tray_layout::Held;
-use super::{CARD_HEIGHT, CARD_WIDTH, Camera, Layout, PlayerAnchor, Window, phone, takes_pointer};
+use super::{CARD_HEIGHT, CARD_WIDTH, Camera, Layout, PlayerAnchor, Window, takes_pointer};
 use crate::faces::{CARD_BACK, Faces};
+use crate::profiles::Profile;
 use kit_base::data::Data;
 use kit_base::pose::{Interval, Pose};
 use kit_frame::frame::{
@@ -39,9 +41,6 @@ mod scroll;
 pub use motion::PileCount;
 pub use motion::{Motion, Turn};
 
-/// How far below the window's bottom edge the viewer's hand waits while it is held away, in
-/// points of the web's stage (`HAND_AWAY` in `ui/src/game/handLayout.ts`).
-const HAND_AWAY: f32 = kit_base::data::space::shown::opening::HAND_AWAY;
 /// The height of the web's desktop stage, in points (`STAGE` in `ui/src/game/perspective.ts`).
 const WEB_STAGE_HEIGHT: f32 = 900.0;
 
@@ -123,9 +122,7 @@ pub fn ability_track(tracks: &[(u32, Track)], id: u32) -> Option<&Track> {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Table {
     data: Arc<Data>,
-    /// The layout the table was made with, which a desktop window takes.
-    base: Layout,
-    /// The window's layout, chosen by `Layout::for_window`.
+    /// The selected profile fitted to the window.
     layout: Layout,
     camera: Camera,
     row_fits: RowFits,
@@ -170,13 +167,12 @@ impl PartialEq for Placed {
 
 impl Table {
     #[must_use]
-    pub fn new(data: Arc<Data>, base: Layout, window: Window) -> Self {
+    pub fn new(data: Arc<Data>, window: Window) -> Self {
         let window = data.profiles.resolve_window(window);
-        let layout = base.for_window(window);
+        let layout = Profile::for_window(&data.profiles, window).layout();
         let camera = layout.fit(window);
         Self {
             data,
-            base,
             layout,
             row_fits: RowFits::new(&layout, &camera),
             camera,
@@ -192,6 +188,12 @@ impl Table {
             prompt_covers: false,
             hand_away: false,
         }
+    }
+
+    /// The selected profile before its table geometry is fitted.
+    #[must_use]
+    pub fn profile(&self) -> Profile<'_> {
+        Profile::for_window(&self.data.profiles, self.camera.window)
     }
 
     pub fn data(&self) -> &Arc<Data> {
@@ -246,12 +248,12 @@ impl Table {
     /// recomputes every resting place.
     pub fn resize(&mut self, window: Window, view: Option<&PlayerView>) {
         let window = self.data.profiles.resolve_window(window);
-        self.layout = self.base.for_window(window);
-        if self.hand_away && self.layout.phone.is_none() {
+        self.layout = Profile::for_window(&self.data.profiles, window).layout();
+        if self.hand_away {
             // The web lays the desktop's hand out on a stage 900 points tall, whose height is
             // the whole of normalized device coordinates' 2, so its `HAND_AWAY` points lower
             // the fan's edge by that share of 2.
-            self.layout.hand.edge -= 2.0 * HAND_AWAY / WEB_STAGE_HEIGHT;
+            self.layout.hand.edge -= 2.0 * self.layout.style.hand_away / WEB_STAGE_HEIGHT;
         }
         self.camera = self.layout.fit(window);
         self.row_fits = RowFits::new(&self.layout, &self.camera);
@@ -341,11 +343,14 @@ impl Table {
     pub fn apply(&mut self, view: &PlayerView) {
         let numbers = std::mem::take(&mut self.objects.numbers);
         let placement = self.placement(view, &numbers);
-        let rests = placement.rests.iter().flatten();
-        self.raise_life(phone::hand_top(
-            &self.camera,
-            rests.map(|rest| (rest.place, rest.pose, rest.visible)),
-        ));
+        if let Some(dock) = self.layout.life_dock {
+            let rests = placement.rests.iter().flatten();
+            let top = hand_top(
+                &self.camera,
+                rests.map(|rest| (rest.place, rest.pose, rest.visible)),
+            );
+            self.layout.players[0] = dock.anchor(self.camera.window, top);
+        }
         let placement = self.with_held(placement);
         self.objects = Self::objects_for(view, numbers, &placement);
     }
@@ -354,22 +359,15 @@ impl Table {
     /// The cards a prompt holds up stay in its tray.
     pub fn swap_objects(&mut self, objects: &mut Objects) {
         std::mem::swap(&mut self.objects, objects);
-        let rests = self.objects.cards.iter().flatten();
-        self.raise_life(phone::hand_top(
-            &self.camera,
-            rests.map(|object| (object.place, object.pose, object.visible)),
-        ));
-        self.rehold();
-    }
-
-    /// On the phone layout, puts the viewer's life total over their hand where the hand's top
-    /// edge, `hand_top` points from the window's top, reaches into their strip
-    /// (`phone::your_life`). Streaks and strikes at the viewer aim where the table's layout puts
-    /// the total, so they follow it.
-    fn raise_life(&mut self, hand_top: f32) {
-        if let Some(bands) = self.layout.bands {
-            self.layout.players[0] = phone::your_life(self.camera.window, &bands, hand_top);
+        if let Some(dock) = self.layout.life_dock {
+            let rests = self.objects.cards.iter().flatten();
+            let top = hand_top(
+                &self.camera,
+                rests.map(|object| (object.place, object.pose, object.visible)),
+            );
+            self.layout.players[0] = dock.anchor(self.camera.window, top);
         }
+        self.rehold();
     }
 
     /// Writes a resolved element and a draw record for every visible card, with a contact
@@ -451,7 +449,8 @@ impl Table {
             Vec3::new(0.0, 0.0, CLOTH_HEIGHT),
         );
         let mut tabletop = Draw::tabletop(cloth, [255; 4]);
-        if let Some((centre, radius)) = super::far_shade::place(self.camera.window) {
+        if self.layout.style.far_shade {
+            let (centre, radius) = super::far_shade::place(self.camera.window);
             tabletop = tabletop.with_far_shade(centre, radius);
         }
         builder.draw(Band::Opaque, tabletop);
@@ -591,9 +590,9 @@ impl Table {
         // The desktop hand and stack show the full frame. The phone uses the board frame
         // (`scanOrFrame` in `ui/src/mobile/faces.tsx`).
         let full = (matches!(shown.zone, ZoneName::Hand | ZoneName::Stack)
-            && !self.camera.window.phone())
-        .then(|| faces.full_layers_of_object(shown))
-        .flatten();
+            && self.layout.style.full_card_faces)
+            .then(|| faces.full_layers_of_object(shown))
+            .flatten();
         // A copy beneath the top card peeks out too little to be pressed by itself.
         // A pile is pressed through its top card. The tray makes only its own cards pressable.
         let interactive = state & StateBits::FACE_DOWN == 0
@@ -678,7 +677,7 @@ impl Table {
                 Band::TableMarks
             },
             opacity: look.pose.opacity,
-            phone: self.camera.window.phone(),
+            show_copy_label: self.layout.style.show_copy_labels,
         }
     }
 

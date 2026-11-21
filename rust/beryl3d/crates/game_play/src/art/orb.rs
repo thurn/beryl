@@ -5,7 +5,7 @@ use beryl_protocol::protocol::Side;
 use kit_ui::orb::{self, Orientation};
 use kit_ui::widgets::icons::LayeredIcon;
 
-pub use kit_ui::orb::{ART, BEZEL, CORE_RX, CORE_RY, DESKTOP_SCALE, SCALES};
+pub use kit_ui::orb::{ART, BEZEL, CORE_RX, CORE_RY, SCALES};
 
 const fn orientation(side: Side) -> Orientation {
     match side {

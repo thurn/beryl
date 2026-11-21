@@ -24,7 +24,6 @@ fn write(layer: &mut Layer) -> Frame {
         &mut builder,
         &Table::new(
             crate::test_data::data(),
-            game_table::table::DESKTOP,
             game_table::table::Window::default(),
         )
         .camera()

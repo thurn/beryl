@@ -9,7 +9,7 @@ use beryl_protocol::protocol::{
 use beryl_protocol::script::{Act, Fact, StepTiming, Subject};
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, object, timing};
 use game_play::play::Show;
-use game_table::table::{DESKTOP, Table, Window};
+use game_table::table::{Table, Window};
 use kit_frame::frame::{Frame, FrameBuilder};
 use kit_ui::input::{Insets, Size, Tier};
 
@@ -27,11 +27,7 @@ pub fn window(width: f32, height: f32) -> Window {
 
 /// A show at 1440 by 900.
 pub fn show() -> Show {
-    Show::new(Table::new(
-        crate::test_data::data(),
-        DESKTOP,
-        window(1440.0, 900.0),
-    ))
+    Show::new(Table::new(crate::test_data::data(), window(1440.0, 900.0)))
 }
 
 /// A frame with room for every record these tables need.

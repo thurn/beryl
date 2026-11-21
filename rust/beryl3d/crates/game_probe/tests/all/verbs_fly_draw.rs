@@ -321,9 +321,14 @@ fn a_card_drawn_alone_is_held_up_beside_the_stack() {
     let step = span(&show, slot);
     let camera = show.table().camera();
     let size = camera.window.size;
+    let kit_base::data::profiles::HeldDraw::Fixed { ndc, .. } =
+        show.table().layout().play.held_draw
+    else {
+        panic!("the reference profile holds a draw at a fixed position");
+    };
     let place = Vec2::new(
-        f32::midpoint(held.ndc.x, 1.0) * size.width,
-        f32::midpoint(1.0, -held.ndc.y) * size.height,
+        f32::midpoint(ndc.x, 1.0) * size.width,
+        f32::midpoint(1.0, -ndc.y) * size.height,
     );
     let rest = on_screen(&show, pose_at(&segments, step.1));
     let way = rest - place;

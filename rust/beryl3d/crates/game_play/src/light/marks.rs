@@ -352,7 +352,7 @@ pub(crate) fn player_half(scene: &Scene<'_>, scale: f32) -> Vec2 {
 fn player_face_offset(scene: &Scene<'_>, side: Side, scale: f32) -> f32 {
     let table = scene.table();
     let window = table.camera().window;
-    let points = orb::face_offset(side) * orb::SCALES[usize::from(window.phone())];
+    let points = orb::face_offset(side) * table.layout().play.life.orb_scale;
     let millimetres_per_point =
         scale * CARD_HEIGHT / table.layout().hand.height / window.size.height;
     points * millimetres_per_point

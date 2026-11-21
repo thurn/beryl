@@ -1,8 +1,9 @@
 //! Counts lines with the bundled fonts at the widths used by the window profiles.
 
 use game_hud::hud::log::{LogKind, LogLine};
+use game_table::profiles::phone::phone_bands;
+use game_table::table::Window;
 use game_table::table::badges::{NAME_STYLE, counter_label};
-use game_table::table::{Window, phone_bands};
 use kit_base::data::space::hud::phone;
 use kit_base::data::space::layout::desktop::inspector;
 use kit_base::tokens::{size, space, type_style};
