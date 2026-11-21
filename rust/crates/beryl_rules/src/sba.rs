@@ -54,6 +54,13 @@ pub(crate) fn check<L: Layout>(
         s.end_game(Outcome::Stalled(StallReason::StateBasedIterations));
         return Ok(true);
     }
+    // CR 704.3 checks all conditions before performing any actions. Detaching Equipment
+    // can change a creature's toughness, so classify lethal damage before detaching it.
+    let lethal = if s.has_regeneration_shields() {
+        destroyed_for_damage(s, t, graveyard)
+    } else {
+        Bitboard::EMPTY
+    };
     if !loose.is_empty() {
         for index in 0..s.battlefield().len() {
             let slot = s.battlefield()[index];
@@ -74,11 +81,9 @@ pub(crate) fn check<L: Layout>(
     // A creature with lethal damage is destroyed (CR 704.5g), so its destruction is proposed
     // to the replacement effects of destruction: a regeneration shield replaces it
     // ([CR 614.8](https://yawgatog.com/resources/magic-rules/#R6148)): "Regeneration is a
-    // destruction-replacement effect." With no shield on any permanent, one bit test.
-    if s.has_regeneration_shields() {
-        let lethal = destroyed_for_damage(s, t, graveyard);
-        let allowed = Regeneration::Allowed;
-        let destroyed = replace::destruction(s, t, sink, lethal, allowed)?;
+    // destruction-replacement effect."
+    if !lethal.is_empty() {
+        let destroyed = replace::destruction(s, t, sink, lethal, Regeneration::Allowed)?;
         graveyard &= !(lethal & !destroyed);
     }
     // "As a single event": the one batch below is every action of this check that has an

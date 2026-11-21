@@ -4,16 +4,36 @@
 //!
 //! [CR 701.19a]: https://yawgatog.com/resources/magic-rules/#R70119a
 
-use beryl_card::Regeneration;
+use beryl_card::{Objects, Regeneration};
 
-use super::events::{game, put, resolve_all, with_game};
+use super::events::{BEAR, game, put, resolve_all, with_game};
+use super::{LAND, begin};
 use crate::actions::destroy::{destroy, destroy_all};
 use crate::actions::sacrifice::sacrifice;
 use crate::bitboard::Bitboard;
+use crate::card::{
+    Ability, CardDef, Face, LayerSpec, Modification, Subtype, SubtypeWords, Subtypes, Types,
+};
 use crate::continuous;
 use crate::ids::{Seat, Slot};
 use crate::state::{Continuous, Duration, LayerChange, State, Zone};
-use crate::{GameTable, Scratch};
+use crate::{CardTable, GameTable, Profile, Scratch};
+
+/// An Equipment that gives the equipped creature +1/-1.
+static EQUIPMENT: CardDef = CardDef {
+    name: "Test Clamp",
+    faces: &[Face {
+        types: Types::ARTIFACT,
+        subtypes: SubtypeWords::new(Subtypes::of(&[Subtype::Equipment])),
+        abilities: &[Ability::static_ability(&LayerSpec {
+            affected: Objects::AttachedTo,
+            condition: None,
+            modifications: &[Modification::ModifyPt(1, -1)],
+        })],
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
 
 /// A Test Bear (2/2) of the starting player's on the battlefield with one regeneration shield.
 fn shielded_bear() -> (GameTable, State, Scratch, Seat, Slot) {
@@ -55,6 +75,50 @@ fn a_shield_saves_a_creature_with_lethal_damage_and_removes_the_damage() {
     // check finds nothing more.
     resolve_all(&t, &mut s, &mut x);
     assert_eq!(s.object(bear).zone(), Zone::Battlefield);
+    assert_eq!(s.object(bear).damage(), 0);
+    assert!(s.object(bear).is_tapped());
+    assert!(!s.is_shielded(bear_ref));
+}
+
+#[test]
+fn regeneration_uses_toughness_before_equipment_detaches() {
+    static CARDS: CardTable = CardTable::new(&[&LAND, &BEAR, &EQUIPMENT]);
+    let deck = &[(1, "Test Bear"), (1, "Test Clamp"), (18, "Test Land")];
+    let t = GameTable::new(&CARDS, [deck, deck]).unwrap();
+    let mut s = State::new(&t, 7, Profile::EXACT).unwrap();
+    begin(&t, &mut s);
+    let p = s.turn().starting_player();
+    let mut x = Scratch::new();
+    let bear = put(&t, &mut s, &mut x, p, "Test Bear");
+    let equipment = put(&t, &mut s, &mut x, p, "Test Clamp");
+    let bear_ref = s.object_ref(bear);
+    let bear_permanent = s.permanent(bear_ref).unwrap();
+    let equipment_permanent = s.permanent_at(equipment).unwrap();
+    with_game(&t, &mut s, &mut x, bear, |game, resolution| {
+        let shield = Continuous::Regeneration(bear_ref);
+        continuous::start(game, resolution, shield, Duration::EndOfTurn).unwrap();
+        game.state.attach(equipment_permanent, bear_permanent);
+        continuous::start_on_set(
+            game,
+            resolution,
+            Bitboard::single(equipment),
+            &[
+                LayerChange::AddTypes(Types::CREATURE),
+                LayerChange::SetBasePt(2, 2),
+            ],
+            Duration::EndOfTurn,
+        )
+        .unwrap();
+    });
+    assert_eq!(s.derived(bear).toughness, 1);
+    let _ = s.mark_damage(bear_ref, bear_permanent, 1, false);
+
+    // The damage is lethal when the check begins. The Equipment becoming unattached and
+    // regeneration replacing destruction are both results of that check (CR 704.3).
+    resolve_all(&t, &mut s, &mut x);
+    assert_eq!(s.object(equipment).attached_to(), None);
+    assert_eq!(s.object(bear).zone(), Zone::Battlefield);
+    assert_eq!(s.derived(bear).toughness, 2);
     assert_eq!(s.object(bear).damage(), 0);
     assert!(s.object(bear).is_tapped());
     assert!(!s.is_shielded(bear_ref));

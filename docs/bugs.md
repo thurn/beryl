@@ -6,6 +6,16 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **A game could panic when Equipment became unattached as a creature took
+  lethal damage.** The state-based check detached the Equipment before it
+  classified lethal damage for regeneration. Detaching had invalidated the
+  cached characteristics and could change toughness. The check now classifies
+  lethal damage before applying any of its actions. The regression
+  `regeneration_uses_toughness_before_equipment_detaches` checks that a creature
+  regenerates when the damage is lethal at the start of the check and its
+  toughness rises after detachment. The debug assertion on derived reads still
+  catches attempts to use invalidated characteristics.
+
 - **Beryl 3D drew no arrows, and attackers wore a dull salmon smear instead of a
   chevron.** The scene listed every target arrow, source line and line of combat
   (`just b3d tree` showed them), but `png` drew none. `light::arrows` wrote each

@@ -174,7 +174,7 @@ static EMBLEM_LAND: CardDef = CardDef {
     tokens: &[&EMBLEM],
 };
 
-static BEAR: CardDef = CardDef {
+pub(super) static BEAR: CardDef = CardDef {
     name: "Test Bear",
     faces: &[Face {
         types: Types::CREATURE,
