@@ -11,8 +11,4 @@ workspace = true
 [dependencies]
 glam.workspace = true
 arrayvec.workspace = true
-beryl_protocol.workspace = true
 kit_base.workspace = true
-kit_text.workspace = true
-kit_frame.workspace = true
-kit_ui.workspace = true

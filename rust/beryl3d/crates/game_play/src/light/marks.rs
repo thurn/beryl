@@ -17,7 +17,7 @@
 use std::f32::consts::FRAC_PI_2;
 
 use beryl_protocol::protocol::Side;
-use beryl_protocol::script::{Curve as Named, Mark, Subject};
+use beryl_protocol::script::{Mark, Subject};
 use glam::{Affine3A, Quat, Vec2, Vec3};
 
 use super::{Lit, MarkSpan, Open, Span};
@@ -25,7 +25,7 @@ use crate::art::orb;
 use crate::play::Scene;
 use game_table::table::{ABILITY_IDS, CARD_HEIGHT, CARD_WIDTH, Look};
 use kit_base::data::space::light;
-use kit_base::pose::Pose;
+use kit_base::pose::{Curve, Pose};
 use kit_base::tokens::color;
 use kit_frame::frame::{
     Band, Draw, ElementId, FrameBuilder, Ring, Ringed, StateBits, box_shadow_reach, rows, sprites,
@@ -33,26 +33,9 @@ use kit_frame::frame::{
 use kit_ui::element::Shadow;
 use kit_ui::layout::shape_radius;
 
-/// How far through its coming and going an open mark is at `now`, from 0 (not seen) to 1
-/// (whole). It comes up over the interval it began over and goes over the one it ended over.
-/// Only `eligible` and `paying` take time to come up, and both ease out (the `mark` verb's
-/// cases in `data/ui-conventions.json`); every other mark, and every end, takes none, so one
-/// curve serves them all.
+/// Only eligible and paying marks fade in. Both use the same ease-out curve.
 fn shown(open: &Open, now: u64) -> f32 {
-    let through = |from: u64, to: u64| {
-        if now >= to {
-            1.0
-        } else if now <= from {
-            0.0
-        } else {
-            #[expect(clippy::cast_precision_loss, reason = "a fade's share of its time")]
-            let share = (now - from) as f32 / (to - from) as f32;
-            kit_space::motion::named_curve(Named::EaseOut).ease(share)
-        }
-    };
-    let up = through(open.begins.from, open.begins.to);
-    let down = open.ends.map_or(0.0, |ends| through(ends.from, ends.to));
-    up * (1.0 - down)
+    kit_space::motion::visibility(open.begins, open.ends, Curve::EASE_OUT, now)
 }
 
 /// Whether the mark of `open` stands at `now`: from the moment it begins, the light coming up

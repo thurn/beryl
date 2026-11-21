@@ -2363,12 +2363,8 @@ name = "kit_space"
 version = "0.1.0"
 dependencies = [
  "arrayvec",
- "beryl_protocol",
  "glam",
  "kit_base",
- "kit_frame",
- "kit_text",
- "kit_ui",
 ]
 
 [[package]]

@@ -72,7 +72,7 @@
       "reason": "Placement and drawing still share the same zone data. Moving faces into a separate crate would add a crate for one lookup and leave placement and drawing near the cap. The camera and web fitting still share placement types with the zones. The arrangement and feature ports separate these callers."
     },
     "game_play": {
-      "lines": 12649,
+      "lines": 12648,
       "reason": "The verbs use playback's step inputs and outputs, and playback invokes the verbs. Light and pointer handling read playback's scene and tracks. The arrangement and feature ports replace those dependencies before separating the code."
     }
   },
@@ -81,7 +81,7 @@
     "kit_text": 0,
     "kit_frame": 4,
     "kit_ui": 4,
-    "kit_space": 1,
+    "kit_space": 0,
     "kit_fx": 4,
     "kit_scene": 0,
     "kit_probe": 2

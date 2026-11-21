@@ -3,3 +3,5 @@
 pub mod motion;
 
 pub mod camera;
+
+pub mod arrange;

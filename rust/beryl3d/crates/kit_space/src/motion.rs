@@ -3,20 +3,24 @@
 //! segments and the same time give the same pose, however the frames before it went.
 
 use arrayvec::ArrayVec;
-use beryl_protocol::script::Curve as Named;
-use kit_base::pose::{Curve, Follows, Pose, Segment};
+use kit_base::pose::{Curve, Follows, Interval, Pose, Segment};
 
-/// The curve a step's timing names. These are the curves the web interface's `CURVES`
-/// (`ui/src/stage/timing.ts`) maps the same names to: `motion`'s `easeIn`, `easeOut` and
-/// `easeInOut`, which are CSS's.
+/// The visible fraction of a fade that comes in over `begins` and goes out over `ends`.
+/// A zero-length interval changes immediately at its end.
 #[must_use]
-pub const fn named_curve(curve: Named) -> Curve {
-    match curve {
-        Named::Linear => Curve::LINEAR,
-        Named::EaseIn => Curve::EASE_IN,
-        Named::EaseOut => Curve::EASE_OUT,
-        Named::EaseInOut => Curve::EASE_IN_OUT,
-    }
+pub fn visibility(begins: Interval, ends: Option<Interval>, curve: Curve, now: u64) -> f32 {
+    let through = |interval: Interval| {
+        if now >= interval.to {
+            1.0
+        } else if now <= interval.from {
+            0.0
+        } else {
+            #[expect(clippy::cast_precision_loss, reason = "a fade's share of its time")]
+            let share = (now - interval.from) as f32 / (interval.to - interval.from) as f32;
+            curve.ease(share)
+        }
+    };
+    through(begins) * (1.0 - ends.map_or(0.0, through))
 }
 
 /// An object's pose at `t`, from its `segments` sorted by start. The latest segment that has

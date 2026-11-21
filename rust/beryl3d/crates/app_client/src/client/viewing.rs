@@ -218,7 +218,7 @@ impl Client {
                         reason = "a step lasts well under a second"
                     )]
                     let length = (entry.timing.duration * NS_PER_MS) as u64;
-                    (length, kit_space::motion::named_curve(entry.timing.curve))
+                    (length, game_play::named_curve(entry.timing.curve))
                 })
         };
         // The kept opening hand drops from the opening screen into the hand in about an eighth

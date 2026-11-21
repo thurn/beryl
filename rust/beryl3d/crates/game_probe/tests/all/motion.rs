@@ -8,9 +8,9 @@
 use beryl_protocol::protocol::{ObjectId, Side, ZoneName};
 use beryl_protocol::script::{Act, Curve as Named, Room, Step, StepTiming, Subject};
 use game_play::beat::{Laid, Opens, beat};
+use game_play::named_curve;
 use game_probe::testing::object;
 use kit_base::pose::Curve;
-use kit_space::motion::named_curve;
 
 #[test]
 fn named_script_curves_use_the_corresponding_pose_curves() {
