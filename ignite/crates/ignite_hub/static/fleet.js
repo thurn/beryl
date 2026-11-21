@@ -23,19 +23,27 @@
         const input = event.target;
         if (!(input instanceof HTMLInputElement) || !input.dataset.fleetField) return;
         const context = editor();
-        const machine = input.closest("[data-fleet-machine]");
-        if (!context?.contains(machine) || context.classList.contains("c-editing")) return;
+        const row = input.closest("[data-fleet-machine], [data-fleet-provider]");
+        if (!context?.contains(row) || context.classList.contains("c-editing")) return;
         if (!input.reportValidity()) return;
 
         const settings = JSON.parse(context.dataset.settings);
-        const name = machine.dataset.fleetMachine;
+        const provider = row.hasAttribute("data-fleet-provider");
+        const group = provider ? "providers" : "machines";
+        const name = provider ? row.dataset.fleetProvider : row.dataset.fleetMachine;
         const field = input.dataset.fleetField;
-        const current = Object.hasOwn(settings.machines, name)
-            ? settings.machines[name]
-            : { state: "active", disk_cap_gb: null };
-        const value = input.type === "number"
-            ? (input.value === "" ? null : input.valueAsNumber)
-            : input.value;
+        const entries = settings[group];
+        const current = Object.hasOwn(entries, name)
+            ? entries[name]
+            : provider
+                ? Object.fromEntries([...row.querySelectorAll("[data-fleet-field]")].map((control) => [
+                    control.dataset.fleetField,
+                    control.type === "checkbox" ? control.defaultChecked : Number(control.defaultValue),
+                ]))
+                : { state: "active", disk_cap_gb: null };
+        let value = input.value;
+        if (input.type === "number") value = input.value === "" ? null : input.valueAsNumber;
+        if (input.type === "checkbox") value = input.checked;
         if (current[field] === value) return;
 
         const controls = context.querySelectorAll("[data-fleet-field]");
@@ -51,7 +59,7 @@
                     version: settings.version,
                     settings: {
                         ...settings,
-                        machines: { ...settings.machines, [name]: { ...current, [field]: value } },
+                        [group]: { ...entries, [name]: { ...current, [field]: value } },
                     },
                 }),
             });
@@ -71,12 +79,14 @@
             if (context.isConnected) showMessage(context, "The hub could not be reached.");
         }
         // Restore the saved value so the operator can repeat the edit.
-        if (field === "state") {
-            const previous = [...machine.querySelectorAll('input[data-fleet-field="state"]')]
-                .find((radio) => radio.value === current.state);
+        if (input.type === "radio") {
+            const previous = [...row.querySelectorAll('input[data-fleet-field="state"]')]
+                .find((radio) => radio.value === current[field]);
             previous.checked = true;
+        } else if (input.type === "checkbox") {
+            input.checked = current[field];
         } else {
-            input.value = current.disk_cap_gb ?? "";
+            input.value = current[field] ?? "";
         }
         for (const control of controls) control.disabled = false;
         context.classList.remove("c-editing");

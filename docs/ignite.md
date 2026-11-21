@@ -4241,10 +4241,20 @@ state. Add `--disk-cap-gb <n>` to set its cap or `--disk-cap-gb auto` to clear
 it. Use `ignite fleet provider <name>` with `--on` or `--off`, `--share <n>`, or
 `--stop-percent <n>` to set a provider's policy. The operator or the justiciar
 makes these edits. The dashboard's Fleet page at `/fleet` lists each registered
-machine, its recent work and trees, and the last 20 settings changes. On the
-private dashboard through Tailscale, change a machine's state or disk cap
-directly on that page. Leave the cap empty for automatic. The public dashboard
-shows the saved settings.
+machine, its recent work and trees, and the last 20 settings changes. It also
+lists configured providers and those reported by machines. Each enabled share is
+shown as a percentage of the total enabled share. An enabled provider with a
+share of zero is on standby. Workers now compares the number of tickets in
+progress with the number the configured share would give at the current fleet
+total. Each provider shows the latest usage for each plan window, with a mark at
+the stop percentage and the window's reset time. The page also shows active
+holds, where affected work goes, and each machine's CLI probe status when
+capacity reports are available.
+
+On the private dashboard through Tailscale, change a machine's state or disk
+cap, or change a provider's on/off switch, share or stop percentage. Leave a
+machine's cap empty for automatic. The public dashboard shows the saved
+settings.
 
 The hub stores settings under `fleet` in its database. On its first start
 without fleet settings, it seeds them from `ignite.toml`. Machines with a CLI

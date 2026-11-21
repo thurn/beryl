@@ -602,3 +602,68 @@ details[open] > summary > .c-tool-chevron {
 .c-fleet-settings .c-muted {
   flex-basis: 100%;
 }
+
+.c-fleet-provider {
+  padding: var(--space-4) var(--space-3);
+}
+
+#providers > .c-rows > li + li {
+  border-top: 1px solid var(--hairline);
+}
+
+.c-fleet-provider > .c-meta {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr));
+}
+
+.c-fleet-provider .c-edit-form {
+  width: 5rem;
+}
+
+.c-fleet-provider .c-row-main {
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+}
+
+.c-fleet-provider .c-row-trailing {
+  min-width: 0;
+  max-width: 55%;
+  overflow-wrap: anywhere;
+}
+
+.c-fleet-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+}
+
+.c-fleet-switch input {
+  accent-color: var(--accent);
+}
+
+.c-fleet-holds {
+  margin-block: var(--space-3);
+}
+
+.c-fleet-holds p {
+  margin-block: var(--space-1);
+}
+
+.c-fleet-holds .c-dot {
+  white-space: normal;
+}
+
+.c-fleet-meter {
+  position: relative;
+  width: 5rem;
+  height: 0.5rem;
+}
+
+.c-fleet-meter::after {
+  position: absolute;
+  inset-block: 0;
+  left: clamp(0px, var(--fleet-stop), calc(100% - 2px));
+  width: 2px;
+  background: var(--ink);
+  content: "";
+}

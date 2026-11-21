@@ -10,6 +10,7 @@ use ignite_core::fleet::{
 };
 use ignite_core::time::Timestamp;
 use ignite_store::hub::fleet_settings::{self, PutOutcome};
+use ignite_store::hub::rows::Machine;
 use ignite_store::hub::{fleet, provider_usage};
 use ignite_store::{Result, StoreError};
 
@@ -33,14 +34,26 @@ fn view(conn: &mut Connection, now: Timestamp) -> Result<FleetView> {
     // A read-only snapshot keeps the settings, audit log and holds consistent while
     // allowing operators to write from other connections.
     let snapshot = conn.transaction_with_behavior(TransactionBehavior::Deferred)?;
-    let settings = fleet_settings::settings(&snapshot)?;
-    let changes = fleet_settings::changes(&snapshot, 20)?;
-    let machines = fleet::machines(&snapshot)?
-        .into_iter()
+    let machines = fleet::machines(&snapshot)?;
+    let view = view_in_snapshot(&snapshot, &machines, now)?;
+    snapshot.commit()?;
+    Ok(view)
+}
+
+/// Read the same Fleet data for the API and the dashboard, inside the caller's snapshot.
+pub(crate) fn view_in_snapshot(
+    conn: &Connection,
+    machines: &[Machine],
+    now: Timestamp,
+) -> Result<FleetView> {
+    let settings = fleet_settings::settings(conn)?;
+    let changes = fleet_settings::changes(conn, 20)?;
+    let machines = machines
+        .iter()
         .map(|machine| {
             Ok(FleetMachine {
                 id: machine.id.parse().map_err(invalid)?,
-                name: machine.name,
+                name: machine.name.clone(),
                 os: match machine.os.as_str() {
                     "macos" => Os::Macos,
                     "windows" => Os::Windows,
@@ -52,9 +65,8 @@ fn view(conn: &mut Connection, now: Timestamp) -> Result<FleetView> {
             })
         })
         .collect::<Result<Vec<_>>>()?;
-    let usage = provider_usage::latest(&snapshot)?;
-    let holds = provider_usage::held(&snapshot, &settings, now)?;
-    snapshot.commit()?;
+    let usage = provider_usage::latest(conn)?;
+    let holds = provider_usage::held(conn, &settings, now)?;
     Ok(FleetView {
         settings,
         changes,

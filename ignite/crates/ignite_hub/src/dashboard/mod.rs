@@ -28,3 +28,5 @@ pub mod spend_view;
 pub mod status;
 pub mod ticket;
 pub mod tips;
+
+mod fleet_providers;

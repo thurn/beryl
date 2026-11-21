@@ -7,7 +7,10 @@ use std::net::{SocketAddr, TcpStream};
 use rusqlite::Connection;
 
 use ignite_core::config::Config;
-use ignite_core::fleet::{FleetSettings, FleetUpdate, MachineSetting, MachineState};
+use ignite_core::fleet::{
+    FleetSettings, FleetUpdate, FleetView, MachineSetting, MachineState, ProviderSample,
+    ProviderSetting,
+};
 use ignite_core::time::Timestamp;
 use ignite_hub::dashboard::serve::{Site, serve, serve_with};
 use ignite_hub::routes::Request;
@@ -249,6 +252,125 @@ fn machine_settings<'a>(page: &'a str, name: &str) -> &'a str {
     &page[start..start + end]
 }
 
+fn provider_row<'a>(page: &'a str, name: &str) -> &'a str {
+    let (_, row) = page
+        .split_once(&format!("data-fleet-provider=\"{name}\""))
+        .unwrap();
+    row.split("</section>")
+        .next()
+        .unwrap()
+        .split("data-fleet-provider=")
+        .next()
+        .unwrap()
+}
+
+fn configure_providers(settings: &mut FleetSettings) {
+    for (name, enabled, share, stop_percent) in [
+        ("claude", true, 12, 90),
+        ("codex", true, 12, 95),
+        ("disabled", false, 100, 99),
+    ] {
+        settings.providers.insert(
+            name.to_owned(),
+            ProviderSetting {
+                enabled,
+                share,
+                stop_percent,
+            },
+        );
+    }
+}
+
+fn assert_provider_controls(body: &str) {
+    let codex = provider_row(body, "codex");
+    for expected in [
+        r#"aria-label="codex enabled" checked"#,
+        r#"data-fleet-field="share" aria-label="codex share""#,
+        r#"data-fleet-field="stop_percent""#,
+        ">50%<",
+    ] {
+        assert!(codex.contains(expected), "expected {expected} in {codex}");
+    }
+}
+
+fn assert_machine_controls(body: &str) {
+    for (name, state, cap) in [
+        ("jarvis", "active", ""),
+        ("cygnus", "checks-only", "250"),
+        ("multivac", "off", ""),
+    ] {
+        let section = machine_settings(body, name);
+        assert_eq!(section.matches(" checked").count(), 1, "{name}");
+        assert!(
+            section.contains(&format!(r#"value="{state}" checked"#)),
+            "{name}"
+        );
+        assert!(
+            section.contains(&format!(r#"value="{cap}" placeholder="Automatic""#)),
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn fleet_renders_provider_shares_usage_holds_and_workers() {
+    let mut conn = seeded();
+    let now = Timestamp::parse(NOW).unwrap();
+    conn.execute_batch(
+        r#"UPDATE machines SET cli_apps = '["claude","standby"]' WHERE name = 'jarvis';
+           UPDATE tickets SET provider = 'claude' WHERE id IN ('e1.1', 'e1.5');
+           UPDATE tickets SET session = 'local_short' WHERE id = 'e1.2';"#,
+    )
+    .unwrap();
+    let mut settings = hub::fleet_settings::settings(&conn).unwrap();
+    configure_providers(&mut settings);
+    hub::fleet_settings::put(&mut conn, settings.version, settings, "operator", now).unwrap();
+    let reset = "2026-11-17T14:00:00.000Z";
+    for (ago, window, percent_used) in [
+        (60.0, "5-hour", 91.0),
+        (10.0, "5-hour", 92.0),
+        (20.0, "Weekly · all models", 40.0),
+    ] {
+        hub::provider_usage::record(
+            &conn,
+            &ProviderSample {
+                machine: "m-j".parse().unwrap(),
+                provider: "claude".to_owned(),
+                at: now.plus_seconds(-ago),
+                status: "ok".to_owned(),
+                label: Some(window.to_owned()),
+                percent_used: Some(percent_used),
+                resets_at: Some(reset.to_owned()),
+                note: None,
+            },
+        )
+        .unwrap();
+    }
+
+    let body = page(&conn, "/fleet");
+    assert_eq!(body.matches("data-fleet-provider=").count(), 4);
+    let claude = provider_row(&body, "claude");
+    for expected in [
+        "50%",
+        "90%",
+        "2 of 1 by share",
+        "Held until",
+        "5-hour at 92%",
+        "datetime=\"2026-11-17T14:00:00.000Z\"",
+        "Share can go to codex.",
+        "--fleet-stop:90%",
+        "width:92%",
+        "Weekly · all models",
+        "Not reported",
+    ] {
+        assert!(claude.contains(expected), "expected {expected} in {claude}");
+    }
+    assert!(!claude.contains("91%"));
+    assert!(provider_row(&body, "codex").contains("0 of 1 by share"));
+    assert!(provider_row(&body, "disabled").contains(">Off<"));
+    assert!(provider_row(&body, "standby").contains(">Standby<"));
+}
+
 #[test]
 fn fleet_settings_are_editable_only_on_the_private_listener() {
     let config = Config::parse("ignite.toml", FLEET_CONFIG).unwrap();
@@ -264,6 +386,7 @@ fn fleet_settings_are_editable_only_on_the_private_listener() {
     let public = server.start_read_only().unwrap();
     let now = Timestamp::parse(NOW).unwrap();
     let mut settings = hub::fleet_settings::settings(&conn).unwrap();
+    configure_providers(&mut settings);
     settings.machines.extend([
         (
             "cygnus".to_owned(),
@@ -296,22 +419,8 @@ fn fleet_settings_are_editable_only_on_the_private_listener() {
     assert_eq!(status, 200);
     assert!(private_page.contains(r#"data-api="/proj/api/fleet""#));
     assert!(private_page.contains(&format!("&quot;version&quot;:{}", settings.version)));
-    for (name, state, cap) in [
-        ("jarvis", "active", ""),
-        ("cygnus", "checks-only", "250"),
-        ("multivac", "off", ""),
-    ] {
-        let section = machine_settings(&private_page, name);
-        assert_eq!(section.matches(" checked").count(), 1, "{name}");
-        assert!(
-            section.contains(&format!(r#"value="{state}" checked"#)),
-            "{name}"
-        );
-        assert!(
-            section.contains(&format!(r#"value="{cap}" placeholder="Automatic""#)),
-            "{name}"
-        );
-    }
+    assert_provider_controls(&private_page);
+    assert_machine_controls(&private_page);
 
     let (status, public_page) = browser_request(public.address(), "GET", "/fleet", "");
     assert_eq!(status, 200);
@@ -327,6 +436,7 @@ fn fleet_settings_are_editable_only_on_the_private_listener() {
             disk_cap_gb: None,
         },
     );
+    settings.providers.get_mut("codex").unwrap().share = 36;
     let body = serde_json::to_string(&FleetUpdate {
         version: settings.version,
         settings,
@@ -337,9 +447,17 @@ fn fleet_settings_are_editable_only_on_the_private_listener() {
     let saved: FleetSettings = serde_json::from_str(&saved).unwrap();
     assert_eq!(saved.version, original_version + 2);
     assert_eq!(saved.machine("cygnus").disk_cap_gb, None);
+    assert_eq!(
+        fleet_view(public.address())
+            .settings
+            .provider("codex")
+            .share,
+        36
+    );
     let (status, updated) = browser_request(private.address(), "GET", "/fleet", "");
     assert_eq!(status, 200);
     assert!(machine_settings(&updated, "cygnus").contains(r#"value="" placeholder="Automatic""#));
+    assert!(provider_row(&updated, "codex").contains(">75%<"));
     assert!(updated.contains(
         r#"c-timeline-actor">operator</span>machine cygnus: checks-only, disk cap auto"#
     ));
@@ -348,6 +466,12 @@ fn fleet_settings_are_editable_only_on_the_private_listener() {
 
     private.stop();
     public.stop();
+}
+
+fn fleet_view(address: SocketAddr) -> FleetView {
+    let (status, reply) = browser_request(address, "GET", "/proj/api/fleet", "");
+    assert_eq!(status, 200);
+    serde_json::from_str(&reply).unwrap()
 }
 
 #[test]

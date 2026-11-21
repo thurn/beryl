@@ -5,18 +5,20 @@
 
 use rusqlite::Connection;
 
-use ignite_core::fleet::{FleetSettings, MachineSetting, MachineState};
+use ignite_core::fleet::{FleetChange, FleetSettings, MachineSetting, MachineState};
 use ignite_core::time::Timestamp;
-use ignite_store::hub::{fleet, fleet_settings, rows::Machine};
+use ignite_store::hub::{fleet, rows::Machine};
+
+use crate::routes::fleet::view_in_snapshot;
 
 use super::attention::{MACHINE_SILENT_SECONDS, age, frame, seconds_since};
 use super::components::{self as c, PageOptions, Tone, esc};
 use super::data::ReadError;
+use super::fleet_providers;
 use super::references::{display_id, ticket_url};
 
 /// Commands newer than this count toward a machine's work by class.
 const RECENT_SECONDS: f64 = 86_400.0;
-const RECENT_CHANGES: u32 = 20;
 
 fn state_label(state: MachineState) -> &'static str {
     match state {
@@ -82,8 +84,7 @@ fn machine_settings(machine: &Machine, setting: MachineSetting, editable: bool) 
     )
 }
 
-fn change_log(conn: &Connection) -> Result<String, ReadError> {
-    let changes = fleet_settings::changes(conn, RECENT_CHANGES)?;
+fn change_log(changes: &[FleetChange]) -> String {
     let body = if changes.is_empty() {
         c::empty("No fleet settings have changed.")
     } else {
@@ -97,7 +98,7 @@ fn change_log(conn: &Connection) -> Result<String, ReadError> {
             )
         }))
     };
-    Ok(c::section("Recent changes", &body, None, None, 2))
+    c::section("Recent changes", &body, None, None, 2)
 }
 
 fn editor(project: &str, settings: &FleetSettings, body: &str) -> Result<String, ReadError> {
@@ -227,8 +228,10 @@ pub(crate) fn options(
     editor_project: Option<&str>,
 ) -> Result<PageOptions, ReadError> {
     let snapshot = conn.unchecked_transaction()?;
-    let settings = fleet_settings::settings(&snapshot)?;
     let machines = fleet::machines(&snapshot)?;
+    let view = view_in_snapshot(&snapshot, &machines, now)?;
+    let settings = &view.settings;
+    let editable = editor_project.is_some();
     let mut body = String::new();
     for machine in &machines {
         body += &machine_section(
@@ -237,16 +240,17 @@ pub(crate) fn options(
             now,
             machine,
             settings.machine(&machine.name),
-            editor_project.is_some(),
+            editable,
         )?;
     }
     if machines.is_empty() {
         body = c::empty("No machine has registered.");
     }
-    body += &change_log(&snapshot)?;
+    body = fleet_providers::section(&snapshot, &view, &machines, editable)? + &body;
+    body += &change_log(&view.changes);
     snapshot.commit()?;
     if let Some(project) = editor_project {
-        body = editor(project, &settings, &body)?;
+        body = editor(project, settings, &body)?;
     }
     Ok(frame(root, seq, "fleet", "", &body))
 }
