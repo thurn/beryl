@@ -1,7 +1,11 @@
 //! Delivers hub messages to CLI workers and builds prompts for regressions and reverted tickets.
 
-use ignite_core::ids::{SessionId, TicketId};
-use ignite_core::protocol::tickets::{Status, TicketDetail};
+use ignite_core::ids::{MachineId, SessionId, TicketId};
+use ignite_core::protocol::tickets::{
+    CULPRIT_AFFINITY_KEY, CulpritAffinity, REVERTED_KEY, Status, TicketDetail, regression_culprit,
+};
+
+use crate::clid::Resume;
 
 use super::{Reserved, State, cli, start_arguments, tell};
 
@@ -50,23 +54,49 @@ pub(super) fn deliver_tell(state: &mut State, holder: &SessionId, detail: &Ticke
     });
 }
 
-/// The ticket whose worker should take `detail` because it holds the change's context: for a
-/// ticket whose landing was reverted, the ticket itself; for a regression, the ticket on its
-/// `caused-by` line. `None` for any other ticket.
-pub(super) fn cause(detail: &TicketDetail) -> Option<TicketId> {
-    if detail.ticket.metadata.contains_key("reverted") {
-        Some(detail.ticket.id.clone())
-    } else if detail.ticket.labels.iter().any(|l| l == "regression") {
-        caused_by(&detail.ticket.body)
+/// The transcript a regression or reverted ticket should use, when available.
+pub(super) fn handoff(
+    detail: &TicketDetail,
+    reserved: &Reserved,
+    machine: &MachineId,
+) -> Option<Resume> {
+    let ticket = &detail.ticket;
+    let reverted = ticket.metadata.contains_key(REVERTED_KEY);
+    let culprit = if reverted {
+        Some(ticket.id.clone())
+    } else if ticket.labels.iter().any(|label| label == "regression") {
+        regression_culprit(ticket)
     } else {
-        None
-    }
+        return None;
+    };
+    let affinity = ticket
+        .metadata
+        .get(CULPRIT_AFFINITY_KEY)
+        .and_then(|value| serde_json::from_value::<CulpritAffinity>(value.clone()).ok());
+    let fresh_reason = affinity
+        .filter(|pin| pin.landing.machine != *machine)
+        .map(|pin| {
+            format!(
+                "the transcript is on {}",
+                pin.machine_label.trim_start_matches("machine:")
+            )
+        });
+    let prompt = match &culprit {
+        Some(_) if reverted => reverted_prompt(detail, reserved),
+        Some(culprit) => regression_prompt(reserved, &ticket.title, culprit),
+        None => String::new(),
+    };
+    Some(Resume {
+        culprit,
+        prompt,
+        fresh_reason,
+    })
 }
 
-/// The hand-off prompt of `reserved`, a regression, for the worker whose last ticket caused it.
-pub(super) fn regression_prompt(reserved: &Reserved, title: &str) -> String {
+/// The hand-off prompt of `reserved`, a regression, for the worker whose landing caused it.
+fn regression_prompt(reserved: &Reserved, title: &str, culprit: &TicketId) -> String {
     format!(
-        "{} is a regression caused by your last ticket: {title}. Run `ignite start {}` and fix \
+        "{} is a regression caused by your landing of {culprit}: {title}. Run `ignite start {}` and fix \
          it.",
         reserved.ticket,
         start_arguments(reserved)
@@ -75,11 +105,11 @@ pub(super) fn regression_prompt(reserved: &Reserved, title: &str) -> String {
 
 /// The hand-off prompt of `reserved`, a ticket whose landing a tip round reverted, for the
 /// worker that landed it. It names the checks that did not build.
-pub(super) fn reverted_prompt(detail: &TicketDetail, reserved: &Reserved) -> String {
+fn reverted_prompt(detail: &TicketDetail, reserved: &Reserved) -> String {
     let checks = detail
         .ticket
         .metadata
-        .get("reverted")
+        .get(REVERTED_KEY)
         .and_then(|m| m.get("checks"))
         .and_then(serde_json::Value::as_array)
         .map(|checks| {
@@ -96,34 +126,4 @@ pub(super) fn reverted_prompt(detail: &TicketDetail, reserved: &Reserved) -> Str
         reserved.ticket,
         start_arguments(reserved)
     )
-}
-
-/// The prompt that hands `detail` to the worker whose ticket caused it: the reverted ticket's
-/// or the regression's.
-pub(super) fn culprit_prompt(detail: &TicketDetail, reserved: &Reserved) -> String {
-    if detail.ticket.metadata.contains_key("reverted") {
-        reverted_prompt(detail, reserved)
-    } else {
-        regression_prompt(reserved, &detail.ticket.title)
-    }
-}
-
-/// The ticket named on a regression's `caused-by <ticket>` line.
-pub(super) fn caused_by(body: &str) -> Option<TicketId> {
-    body.lines()
-        .find_map(|line| line.strip_prefix("caused-by "))
-        .and_then(|rest| rest.split_whitespace().next())
-        .and_then(|id| TicketId::new(id).ok())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_culprit_is_the_ticket_on_the_caused_by_line() {
-        let body = "Regression: x\ncaused-by Tw8gv.21.73 (commit 5e1b0aa)\nfirst bad 5e1b0aa";
-        assert_eq!(caused_by(body).unwrap().as_str(), "Tw8gv.21.73");
-        assert_eq!(caused_by("first bad 5e1b0aa"), None);
-    }
 }

@@ -18,18 +18,18 @@ use serde_json::{Value, json};
 
 use ignite_core::protocol::hub::Reverted;
 use ignite_core::protocol::tickets::{
-    BatchRequest, EdgeKind, Operation, Status, TicketFields, TicketType,
+    BatchRequest, EdgeKind, Operation, REVERTED_KEY, Status, TicketFields, TicketType,
 };
 use ignite_core::time::Timestamp;
 use ignite_store::hub::batch::{self, BatchOutcome};
 use ignite_store::hub::{edges, tickets};
 use ignite_store::{Result, StoreError};
 
+use super::culprit_affinity;
 use super::filing::{self, Author};
 use super::regressions::OUTPUT_LINES;
 
-/// The ticket metadata key that holds what a tip round reverted.
-pub const KEY: &str = "reverted";
+pub use ignite_core::protocol::tickets::REVERTED_KEY as KEY;
 
 /// The ticket metadata key that holds the number of the comment `ignite tell` delivers.
 const TELL_KEY: &str = "tell";
@@ -59,7 +59,7 @@ pub fn file(
             if repeated {
                 return Ok(ticket.id.to_string());
             }
-            Some(ticket.id.to_string())
+            Some(ticket)
         }
     };
     let meta = json!({
@@ -68,7 +68,12 @@ pub fn file(
         "checks": report.checks.iter().map(ToString::to_string).collect::<Vec<_>>(),
     });
     match &existing {
-        Some(id) => {
+        Some(ticket) => {
+            let id = ticket.id.to_string();
+            let pin = culprit_affinity::for_repair(conn, ticket, Some(ticket), ticket.needs_os)?;
+            let mut set_meta = BTreeMap::from([(REVERTED_KEY.to_owned(), meta)]);
+            let (add_labels, remove_labels, unset_meta) =
+                culprit_affinity::update(ticket, pin, &mut set_meta);
             ops.push(Operation::Reopen { id: id.clone() });
             ops.push(Operation::Update {
                 id: id.clone(),
@@ -77,16 +82,16 @@ pub fn file(
                     assignee: Some(None),
                     ..TicketFields::default()
                 }),
-                add_labels: Vec::new(),
-                remove_labels: Vec::new(),
-                set_meta: BTreeMap::from([(KEY.to_owned(), meta)]),
-                unset_meta: Vec::new(),
+                add_labels,
+                remove_labels,
+                set_meta,
+                unset_meta,
             });
             ops.push(Operation::Comment {
                 id: id.clone(),
                 text: text.clone(),
             });
-            ops.extend(tell_dependents(conn, id, report)?);
+            ops.extend(tell_dependents(conn, &id, report)?);
         }
         None => ops.push(Operation::Create {
             fields: TicketFields {
@@ -122,9 +127,10 @@ pub fn file(
         ops,
     };
     match batch::apply_automatic(conn, &request, author.actor, author.machine, now)? {
-        BatchOutcome::Applied(reply) => {
-            Ok(existing.unwrap_or_else(|| reply.results[0].id.to_string()))
-        }
+        BatchOutcome::Applied(reply) => Ok(existing.map_or_else(
+            || reply.results[0].id.to_string(),
+            |ticket| ticket.id.to_string(),
+        )),
         BatchOutcome::Conflict(conflict) => Err(StoreError::Rejected(format!(
             "filing the revert of {revert} conflicted at operation {}",
             conflict.failed

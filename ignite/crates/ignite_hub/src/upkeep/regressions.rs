@@ -14,8 +14,8 @@
 //!   regression ticket is already being worked, and never when [`OPEN_TICKETS`] are open; then
 //!   it is added to the open ticket that needs the same operating system, else the one with the
 //!   fewest checks.
-//! - A check whose regression ticket is still open keeps it, and a second failure changes
-//!   nothing.
+//! - A check whose regression ticket is still open keeps it. A later report can set its
+//!   confirmed culprit and tell the current worker.
 //! - When the fix has landed and closed the ticket but the check still fails, the ticket is
 //!   reopened with the new output and no assignee, so that dispatch offers it to a worker
 //!   again, unless the rules above add the check to an open ticket. The reopen also clears the
@@ -32,15 +32,17 @@ use std::fmt::Write as _;
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 use serde_json::{Value, json};
 
-use ignite_core::protocol::hub::{FoundBy, RegressionReport};
+use ignite_core::protocol::hub::RegressionReport;
 use ignite_core::protocol::tickets::{
-    BatchRequest, Dependency, EdgeKind, Operation, Status, TicketFields, TicketType,
+    BatchRequest, CAUSED_BY_KEY, CULPRIT_AFFINITY_KEY, CulpritAffinity, Dependency, EdgeKind,
+    Operation, Status, Ticket, TicketFields, TicketType, regression_culprit,
 };
 use ignite_core::time::Timestamp;
 use ignite_store::hub::batch::{self, BatchOutcome};
-use ignite_store::hub::{tickets, tips};
+use ignite_store::hub::{edges, fleet, tickets, tips};
 use ignite_store::{Result, StoreError};
 
+use super::culprit_affinity;
 use super::filing::{self, Author};
 use crate::routes::dispatch::set_columns;
 
@@ -54,6 +56,9 @@ pub const OPEN_TICKETS: usize = 3;
 /// ticket, so that only tips seen after that can clear it (see `super::clearing`).
 pub const ADDED_KEY: &str = "ignite_regression_added_at";
 
+/// The check whose confirmed culprit supplies the transcript when several checks share a ticket.
+const CULPRIT_CHECK_KEY: &str = "culprit_check";
+
 /// What filing a regression did.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Outcome {
@@ -61,6 +66,8 @@ pub enum Outcome {
     Reopened,
     /// The check was added to an open regression ticket.
     Added,
+    /// A later report recorded the culprit on the open ticket.
+    Attributed,
     /// The check's regression ticket is still open.
     Unchanged,
 }
@@ -72,8 +79,9 @@ pub fn file(
     report: &RegressionReport,
     now: Timestamp,
 ) -> Result<(String, Outcome)> {
+    let mut tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
     let check = report.check.as_str();
-    let existing: Option<String> = conn
+    let existing: Option<String> = tx
         .query_row(
             "SELECT ticket FROM regressions WHERE check_name = ?1",
             params![check],
@@ -83,189 +91,257 @@ pub fn file(
     let closed = match &existing {
         None => None,
         Some(ticket) => {
-            let loaded = tickets::load(conn, ticket)?;
-            if !loaded.as_ref().is_some_and(|t| t.status == Status::Closed) {
-                name_gate_culprit(conn, author, report, ticket, now)?;
+            let Some(loaded) = tickets::load(&tx, ticket)? else {
                 return Ok((ticket.clone(), Outcome::Unchanged));
-            }
-            Some((ticket.clone(), loaded))
-        }
-    };
-    let open = open_tickets(conn)?;
-    let target = pick(conn, &open, report)?;
-    let (ops, outcome) = match (&target, closed) {
-        (Some(target), _) => (added(conn, target, author, report, now)?, Outcome::Added),
-        (None, None) => (
-            vec![create(report, filing::origin(conn, author.machine)?)],
-            Outcome::Created,
-        ),
-        (None, Some((ticket, loaded))) => {
-            // Upkeep closes a regression whose check passed on a later tip (`clearing`); the
-            // check failing again then is not a failed fix.
-            let cleared = loaded
-                .and_then(|t| t.close_reason)
-                .is_some_and(|reason| reason.starts_with(super::clearing::CLOSE_PREFIX));
-            let again = if cleared {
-                "The check fails again after Ignite closed this ticket because a later tip passed."
-            } else {
-                "The check still fails after the fix."
             };
-            let ops = vec![
-                Operation::Reopen { id: ticket.clone() },
-                // The session that closed the ticket is still its assignee, and dispatch
-                // offers no ticket that has one, so without this nobody works it again.
-                Operation::Update {
-                    id: ticket.clone(),
-                    set: Some(TicketFields {
-                        assignee: Some(None),
-                        ..TicketFields::default()
-                    }),
-                    add_labels: Vec::new(),
-                    remove_labels: Vec::new(),
-                    set_meta: BTreeMap::new(),
-                    unset_meta: Vec::new(),
-                },
-                Operation::Comment {
-                    id: ticket,
-                    text: format!("{again}\n\n{}", details(report)),
-                },
-            ];
-            (ops, Outcome::Reopened)
+            if loaded.status != Status::Closed {
+                let outcome = update_open(&mut tx, &loaded, author, report, now)?;
+                tx.commit()?;
+                return Ok((ticket.clone(), outcome));
+            }
+            Some(loaded)
         }
     };
-    let request = BatchRequest {
-        preconditions: Vec::new(),
-        ops,
-    };
-    let ticket = match batch::apply_automatic(conn, &request, author.actor, author.machine, now)? {
-        BatchOutcome::Applied(reply) => target.unwrap_or_else(|| reply.results[0].id.to_string()),
-        BatchOutcome::Conflict(conflict) => {
-            return Err(StoreError::Rejected(format!(
-                "filing the regression of {check} conflicted at operation {}",
-                conflict.failed
-            )));
+    let open = open_tickets(&tx)?;
+    let target = pick(&tx, &open, report)?;
+    let mut write_at = now;
+    let (ops, outcome) = match (&target, closed) {
+        (Some(target), _) => {
+            let mut ops = added(&tx, target, author, report, now)?;
+            if let Some(ticket) = tickets::load(&tx, target)?
+                && regression_culprit(&ticket).is_none()
+            {
+                write_at = ticket.claimed_at.map_or(now, |claimed| now.max(claimed));
+                // Attribution goes first so its notification names its own comment number.
+                let mut with_attribution = attribution(&tx, &ticket, author, report, false)?;
+                with_attribution.append(&mut ops);
+                ops = with_attribution;
+            }
+            (ops, Outcome::Added)
         }
+        (None, None) => {
+            let pin = affinity(&tx, report, None)?;
+            let origin = filing::origin(&tx, author.machine)?;
+            (vec![create(report, origin, pin)], Outcome::Created)
+        }
+        (None, Some(ticket)) => (reopen(&tx, &ticket, author, report)?, Outcome::Reopened),
     };
+    let created = apply(&mut tx, author, check, ops, write_at)?;
+    let ticket = target.unwrap_or_else(|| created.expect("filing had an operation"));
     if outcome == Outcome::Reopened {
         let cleared =
             ["session", "tree", "machine", "claimed_at"].map(|column| (column, Value::Null));
-        set_columns(conn, &ticket, author.actor, &cleared, now)?;
+        set_columns(&tx, &ticket, author.actor, &cleared, now)?;
     }
     if outcome == Outcome::Added && existing.is_some() {
-        conn.execute(
+        tx.execute(
             "UPDATE regressions SET ticket = ?2 WHERE check_name = ?1",
             params![check, ticket],
         )?;
     }
     if existing.is_some() && outcome != Outcome::Created {
         // The store reopens only a regression marked fixed, with the new commits.
-        tips::regression_fixed(conn, check)?;
+        tips::regression_fixed(&tx, check)?;
     }
-    tips::regression(conn, report, &ticket)?;
-    if outcome == Outcome::Added {
-        name_gate_culprit(conn, author, report, &ticket, now)?;
-    }
-    if outcome != Outcome::Unchanged {
-        // A landing found the failure before tip verification did. Recording why must not
-        // keep the regression from being filed.
-        if let Err(error) = super::missed::record(conn, author, report, &ticket, now) {
-            eprintln!("ignite-hub: why tip verification missed {check} was not recorded: {error}");
-        }
+    tips::regression(&tx, report, &ticket)?;
+    tx.commit()?;
+    // A landing found the failure before tip verification did. Recording why must not
+    // keep the regression from being filed.
+    if let Err(error) = super::missed::record(conn, author, report, &ticket, now) {
+        eprintln!("ignite-hub: why tip verification missed {check} was not recorded: {error}");
     }
     Ok((ticket, outcome))
 }
 
-/// A tip round or another gate can file while a gate is searching. When its ticket has no
-/// culprit, record the new result on the body the dispatcher reads and tell a worker that
-/// already claimed it. An existing culprit still owns the dispatch of a grouped ticket.
-fn name_gate_culprit(
-    conn: &mut Connection,
+fn update_open(
+    tx: &mut rusqlite::Transaction<'_>,
+    ticket: &Ticket,
     author: Author,
     report: &RegressionReport,
-    id: &str,
     now: Timestamp,
-) -> Result<()> {
-    let Some(cause) = report
-        .caused_by
-        .as_ref()
-        .filter(|_| report.found_by == FoundBy::Landing)
-    else {
-        return Ok(());
-    };
-    // Keep the assignment and the comment number stable until the tell commits.
-    let mut tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-    let Some(ticket) = tickets::load(&tx, id)? else {
-        return Ok(());
-    };
-    if ticket.status == Status::Closed
-        || ticket
-            .body
-            .lines()
-            .any(|line| line.starts_with("caused-by "))
-    {
-        return Ok(());
+) -> Result<Outcome> {
+    let ops = attribution(tx, ticket, author, report, false)?;
+    if ops.is_empty() {
+        return Ok(Outcome::Unchanged);
     }
-    let comment = format!(
-        "The culprit search for {} finished.
+    let check = report.check.as_str();
+    tx.execute(
+        "UPDATE regressions SET first_bad = ?2, last_good = ?3 WHERE check_name = ?1",
+        params![check, report.first_bad.as_str(), report.last_good.as_str()],
+    )?;
+    // The report may have waited for the transaction that claimed the ticket.
+    let now = ticket.claimed_at.map_or(now, |claimed| now.max(claimed));
+    apply(tx, author, check, ops, now)?;
+    Ok(Outcome::Attributed)
+}
 
-{}",
-        report.check,
-        details(report)
-    );
-    let mut metadata = BTreeMap::new();
-    if ticket.status == Status::InProgress && ticket.assignee.is_some() {
-        let number: i64 = tx.query_row(
-            "SELECT COALESCE(MAX(n), 0) + 1 FROM comments WHERE ticket = ?1",
-            [id],
-            |row| row.get(0),
-        )?;
-        metadata.insert("tell".to_owned(), json!(number));
-    }
-    let body = if ticket.title == format!("Regression: {}", report.check) {
-        details(report)
+fn reopen(
+    conn: &Connection,
+    ticket_data: &Ticket,
+    author: Author,
+    report: &RegressionReport,
+) -> Result<Vec<Operation>> {
+    let ticket = ticket_data.id.to_string();
+    // Upkeep closes a regression whose check passed on a later tip (`clearing`); the
+    // check failing again then is not a failed fix.
+    let cleared = ticket_data
+        .close_reason
+        .as_deref()
+        .is_some_and(|reason| reason.starts_with(super::clearing::CLOSE_PREFIX));
+    let again = if cleared {
+        "The check fails again after Ignite closed this ticket because a later tip passed."
     } else {
-        format!(
-            "caused-by  {cause} (commit {}, for {})
-
-{}",
-            report.first_bad, report.check, ticket.body
-        )
+        "The check still fails after the fix."
     };
     let mut ops = vec![
-        Operation::Comment {
-            id: id.to_owned(),
-            text: comment,
-        },
+        Operation::Reopen { id: ticket.clone() },
+        // The session that closed the ticket is still its assignee, and dispatch
+        // offers no ticket that has one, so without this nobody works it again.
         Operation::Update {
-            id: id.to_owned(),
+            id: ticket.clone(),
             set: Some(TicketFields {
-                body: Some(body),
+                assignee: Some(None),
                 ..TicketFields::default()
             }),
             add_labels: Vec::new(),
             remove_labels: Vec::new(),
-            set_meta: metadata,
+            set_meta: BTreeMap::new(),
             unset_meta: Vec::new(),
         },
+        Operation::Comment {
+            id: ticket,
+            text: format!("{again}\n\n{}", details(report)),
+        },
     ];
-    if id != cause.as_str() && ignite_store::hub::edges::kind(&tx, id, cause.as_str())?.is_none() {
-        ops.push(Operation::DepAdd {
-            id: id.to_owned(),
-            on: cause.to_string(),
-            kind: Some(EdgeKind::DiscoveredFrom),
-        });
+    ops.extend(attribution(conn, ticket_data, author, report, cleared)?);
+    Ok(ops)
+}
+
+fn apply(
+    tx: &mut rusqlite::Transaction<'_>,
+    author: Author,
+    check: &str,
+    ops: Vec<Operation>,
+    now: Timestamp,
+) -> Result<Option<String>> {
+    if ops.is_empty() {
+        return Ok(None);
     }
     let request = BatchRequest {
         preconditions: Vec::new(),
         ops,
     };
-    let now = ticket.claimed_at.map_or(now, |claimed| now.max(claimed));
-    match batch::apply_in(&mut tx, &request, author.actor, author.machine, now)? {
-        BatchOutcome::Applied(_) => tx.commit().map_err(Into::into),
-        BatchOutcome::Conflict(_) => Err(StoreError::Rejected(format!(
-            "recording the culprit on {id} conflicted"
+    match batch::apply_automatic_in(tx, &request, author.actor, author.machine, now)? {
+        BatchOutcome::Applied(reply) => Ok(Some(reply.results[0].id.to_string())),
+        BatchOutcome::Conflict(conflict) => Err(StoreError::Rejected(format!(
+            "filing the regression of {check} conflicted at operation {}",
+            conflict.failed
         ))),
     }
+}
+
+fn affinity(
+    conn: &Connection,
+    report: &RegressionReport,
+    repair: Option<&Ticket>,
+) -> Result<Option<CulpritAffinity>> {
+    let Some(id) = &report.caused_by else {
+        return Ok(None);
+    };
+    let Some(culprit) = tickets::load(conn, id.as_str())? else {
+        return Ok(None);
+    };
+    let needed_os = repair.map_or(report.platform, |ticket| ticket.needs_os);
+    culprit_affinity::for_repair(conn, &culprit, repair, needed_os)
+}
+
+/// Updates an existing ticket when a later report confirms the culprit. Returns any open
+/// reservation to the queue so the dispatcher starts from the updated attribution.
+fn attribution(
+    conn: &Connection,
+    ticket: &Ticket,
+    author: Author,
+    report: &RegressionReport,
+    cleared: bool,
+) -> Result<Vec<Operation>> {
+    if report.caused_by.is_none() && !cleared {
+        return Ok(Vec::new());
+    }
+    // Several failing checks can share the ticket. Once a check supplies the transcript, other
+    // checks' reports must not repeatedly change its routing or invalidate its reservations.
+    if ticket.status != Status::Closed
+        && let Some(check) = ticket
+            .metadata
+            .get(CULPRIT_CHECK_KEY)
+            .and_then(Value::as_str)
+        && check != report.check.as_str()
+    {
+        return Ok(Vec::new());
+    }
+    let cause_changed = regression_culprit(ticket) != report.caused_by;
+    let pin = affinity(conn, report, Some(ticket))?;
+    let pin_changed = culprit_affinity::affinity(ticket) != pin;
+    let cause = json!(report.caused_by);
+    if ticket.metadata.get(CAUSED_BY_KEY) == Some(&cause) && !pin_changed {
+        return Ok(Vec::new());
+    }
+    let id = ticket.id.to_string();
+    if (cause_changed || pin_changed) && ticket.status == Status::Open {
+        fleet::release_reservation(conn, &id)?;
+    }
+    let mut ops = Vec::new();
+    let mut set_meta = BTreeMap::from([
+        (CAUSED_BY_KEY.to_owned(), cause),
+        (
+            CULPRIT_CHECK_KEY.to_owned(),
+            json!(report.caused_by.as_ref().map(|_| &report.check)),
+        ),
+        (filing::FILERS_KEY.to_owned(), json!(filers(ticket, author))),
+    ]);
+    if let Some(culprit) = &report.caused_by
+        && cause_changed
+    {
+        ops.push(Operation::Comment {
+            id: id.clone(),
+            text: format!(
+                "The culprit search for {} finished.\n\n{}",
+                report.check,
+                details(report)
+            ),
+        });
+        if ticket.id != *culprit && edges::kind(conn, &id, culprit.as_str())?.is_none() {
+            ops.push(Operation::DepAdd {
+                id: id.clone(),
+                on: culprit.to_string(),
+                kind: Some(EdgeKind::DiscoveredFrom),
+            });
+        }
+        if ticket.status == Status::InProgress && ticket.assignee.is_some() {
+            let n: u32 = conn.query_row(
+                "SELECT COALESCE(MAX(n), 0) + 1 FROM comments WHERE ticket = ?1",
+                [&id],
+                |row| row.get(0),
+            )?;
+            set_meta.insert("tell".to_owned(), json!(n));
+        }
+    }
+    let (add_labels, remove_labels, unset_meta) =
+        culprit_affinity::update(ticket, pin, &mut set_meta);
+    let set = ((cause_changed || cleared)
+        && ticket.title == format!("Regression: {}", report.check))
+    .then(|| TicketFields {
+        body: Some(details(report)),
+        ..TicketFields::default()
+    });
+    ops.push(Operation::Update {
+        id,
+        set,
+        add_labels,
+        remove_labels,
+        set_meta,
+        unset_meta,
+    });
+    Ok(ops)
 }
 
 /// Marks fixed each regression whose ticket is closed and whose check has passed since the
@@ -345,16 +421,8 @@ fn added(
     report: &RegressionReport,
     now: Timestamp,
 ) -> Result<Vec<Operation>> {
-    let mut filers = Vec::new();
-    if let Some(ticket) = tickets::load(conn, target)? {
-        filers = filing::strings(&ticket.metadata, filing::FILERS_KEY);
-        if filers.is_empty() {
-            filers.push(ticket.created_by);
-        }
-    }
-    if !filers.iter().any(|filer| filer == author.actor) {
-        filers.push(author.actor.to_owned());
-    }
+    let filers =
+        tickets::load(conn, target)?.map_or_else(Vec::new, |ticket| filers(&ticket, author));
     let text = format!(
         "Another check fails: {check}. Failing checks are grouped on as few regression tickets \
          as can be (at most {OPEN_TICKETS}), so it is added to this one. This ticket is done \
@@ -381,7 +449,22 @@ fn added(
     ])
 }
 
-fn create(report: &RegressionReport, origin: Option<String>) -> Operation {
+fn filers(ticket: &Ticket, author: Author) -> Vec<String> {
+    let mut filers = filing::strings(&ticket.metadata, filing::FILERS_KEY);
+    if filers.is_empty() {
+        filers.push(ticket.created_by.clone());
+    }
+    if !filers.iter().any(|filer| filer == author.actor) {
+        filers.push(author.actor.to_owned());
+    }
+    filers
+}
+
+fn create(
+    report: &RegressionReport,
+    origin: Option<String>,
+    pin: Option<CulpritAffinity>,
+) -> Operation {
     let mut linked: Vec<String> = report.caused_by.iter().map(ToString::to_string).collect();
     for suspect in &report.suspects {
         let suspect = suspect.to_string();
@@ -400,7 +483,16 @@ fn create(report: &RegressionReport, origin: Option<String>) -> Operation {
         "regression".to_owned(),
         format!("check:{}", report.check.family()),
     ];
-    labels.extend(origin);
+    labels
+        .extend(origin.filter(|label| pin.as_ref().is_none_or(|pin| pin.machine_label != *label)));
+    let mut metadata = BTreeMap::from([(CAUSED_BY_KEY.to_owned(), json!(report.caused_by))]);
+    if report.caused_by.is_some() {
+        metadata.insert(CULPRIT_CHECK_KEY.to_owned(), json!(report.check));
+    }
+    if let Some(pin) = pin {
+        labels.push(pin.machine_label.clone());
+        metadata.insert(CULPRIT_AFFINITY_KEY.to_owned(), json!(pin));
+    }
     Operation::Create {
         fields: TicketFields {
             title: Some(format!("Regression: {}", report.check)),
@@ -411,6 +503,7 @@ fn create(report: &RegressionReport, origin: Option<String>) -> Operation {
             ticket_type: Some(TicketType::Bug),
             priority: Some(0),
             labels: Some(labels),
+            metadata: Some(metadata),
             needs_os: Some(report.platform),
             fallback: Some(true),
             ..TicketFields::default()

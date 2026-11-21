@@ -36,6 +36,7 @@ fn read_slot(row: &Row<'_>) -> rusqlite::Result<CliSlot> {
         block_sent: row.get("block_sent")?,
         backed_off: row.get("backed_off")?,
         fallback_prompt: row.get("fallback_prompt")?,
+        handoff_note: row.get("handoff_note")?,
     })
 }
 
@@ -90,7 +91,7 @@ pub fn put(conn: &Connection, slot: &CliSlot) -> Result<()> {
     conn.execute(
         &format!(
             "INSERT OR REPLACE INTO cli_slots ({}) VALUES \
-             (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)",
+             (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)",
             columns(CliSlot::COLUMNS)
         ),
         params![
@@ -113,6 +114,7 @@ pub fn put(conn: &Connection, slot: &CliSlot) -> Result<()> {
             slot.block_sent,
             slot.backed_off,
             slot.fallback_prompt,
+            slot.handoff_note,
         ],
     )?;
     Ok(())
@@ -152,11 +154,9 @@ pub fn record_landed(conn: &Connection, landed: &CliLanded, expired_before: &str
     Ok(())
 }
 
-/// Removes and returns the record of `ticket` landing from a CLI slot, if there is one. A
-/// record is used at most once, so two regressions never resume the same transcript at once.
-pub fn take_landed(conn: &mut Connection, ticket: &str) -> Result<Option<CliLanded>> {
-    let transaction = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-    let landed = transaction
+/// Reads a landing's transcript record. Any number of later repairs can use it.
+pub fn landed(conn: &Connection, ticket: &str) -> Result<Option<CliLanded>> {
+    Ok(conn
         .query_row(
             &format!(
                 "SELECT {} FROM cli_landed WHERE ticket = ?1",
@@ -165,10 +165,7 @@ pub fn take_landed(conn: &mut Connection, ticket: &str) -> Result<Option<CliLand
             [ticket],
             read_landed,
         )
-        .optional()?;
-    transaction.execute("DELETE FROM cli_landed WHERE ticket = ?1", [ticket])?;
-    transaction.commit()?;
-    Ok(landed)
+        .optional()?)
 }
 
 /// Every slot, ordered by app and number.
@@ -552,6 +549,7 @@ mod tests {
             block_sent: 0,
             backed_off: 0,
             fallback_prompt: None,
+            handoff_note: None,
         }
     }
 
@@ -630,15 +628,15 @@ mod tests {
     }
 
     #[test]
-    fn a_landed_ticket_is_taken_once_and_old_records_are_pruned() {
-        let mut conn = open_in_memory().unwrap();
+    fn a_landed_ticket_can_be_read_repeatedly_and_old_records_are_pruned() {
+        let conn = open_in_memory().unwrap();
         let old = landed("T.1", "2026-11-19T11:00:00.000Z");
         record_landed(&conn, &old, "2026-11-19T00:00:00.000Z").unwrap();
         let new = landed("T.2", "2026-11-20T12:00:00.000Z");
         record_landed(&conn, &new, "2026-11-19T12:00:00.000Z").unwrap();
-        assert_eq!(take_landed(&mut conn, "T.1").unwrap(), None);
-        assert_eq!(take_landed(&mut conn, "T.2").unwrap(), Some(new));
-        assert_eq!(take_landed(&mut conn, "T.2").unwrap(), None);
+        assert_eq!(super::landed(&conn, "T.1").unwrap(), None);
+        assert_eq!(super::landed(&conn, "T.2").unwrap(), Some(new.clone()));
+        assert_eq!(super::landed(&conn, "T.2").unwrap(), Some(new));
     }
 
     #[test]

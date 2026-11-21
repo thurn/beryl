@@ -31,7 +31,9 @@ use ignite_core::fleet::{FleetSettings, MachineState};
 use ignite_core::ids::{MachineId, SessionId, TicketId};
 use ignite_core::pins::Pins;
 use ignite_core::protocol::hub::{MachineFree, Reservation};
-use ignite_core::protocol::tickets::{LandedWork, Saving, Status, Ticket, TicketType};
+use ignite_core::protocol::tickets::{
+    LandedWork, REVERTED_KEY, Saving, Status, Ticket, TicketType,
+};
 use ignite_core::shares::{self, EpicDemand, Group, Unit};
 use ignite_core::time::Timestamp;
 use ignite_store::hub::{fleet, fleet_settings, provider_usage, releases, tickets};
@@ -511,7 +513,7 @@ impl Snapshot {
             let Some(ticket) = self.offered(ticket) else {
                 continue;
             };
-            let pins = pins::effective(conn, id.as_str(), ticket.fallback, &self.heard)?;
+            let pins = pins::effective(conn, &ticket, &self.heard)?;
             let candidate = self.ready_ticket(ticket, pins, history, landed, &mut memo, now);
             if fallback.is_some_and(|fallback| !fallback.allows(&candidate)) {
                 continue;
@@ -532,6 +534,7 @@ impl Snapshot {
     /// started by name skips these rules, because `/claims` does not ask the queue.
     fn offered(&self, ticket: Ticket) -> Option<Ticket> {
         let filed_by_hub = self.regressions.contains(ticket.id.as_str())
+            || ticket.metadata.contains_key(REVERTED_KEY)
             || ticket
                 .labels
                 .iter()

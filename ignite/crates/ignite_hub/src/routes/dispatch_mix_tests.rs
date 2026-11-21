@@ -428,3 +428,192 @@ fn refusing_a_reservation_frees_its_ticket_and_a_stale_refusal_is_harmless() {
     claim["machine"] = second["machine"].clone();
     assert_eq!(post(&mut conn, "/claims", &claim, start()).0, 200);
 }
+
+fn repair_world() -> (Connection, ignite_core::ids::TicketId) {
+    let mut conn = open_in_memory().unwrap();
+    super::tests::register(&mut conn);
+    let machine = json!({"machine": "m-2", "name": "remote", "os": "macos",
+                         "cores": 8, "memory_mb": 16384, "families": [], "version": "v"});
+    assert_eq!(
+        post(&mut conn, "/machines/register", &machine, start()).0,
+        200
+    );
+    let culprit = file(&mut conn, &[("culprit landing", &[], &[])]).remove(0);
+    let session = "cli-codex-12345678";
+    let claim = super::tests::claim(culprit.as_str(), session);
+    assert_eq!(post(&mut conn, "/claims", &claim, start()).0, 200);
+    assert_eq!(
+        post(
+            &mut conn,
+            "/landed",
+            &landed(culprit.as_str(), session, "done"),
+            start()
+        )
+        .0,
+        200
+    );
+    // With no transcript to consider, the mix would give the ticket to Claude.
+    set_mix(&mut conn, [100, 0, 0], false);
+    (conn, culprit)
+}
+
+fn file_repair(
+    conn: &mut Connection,
+    culprit: Option<&ignite_core::ids::TicketId>,
+    now: Timestamp,
+) -> String {
+    use crate::upkeep::{filing::Author, regressions};
+    use ignite_core::protocol::hub::{FoundBy, RegressionReport};
+
+    let report = RegressionReport {
+        check: "rust:a".parse().unwrap(),
+        first_bad: if culprit.is_some() {
+            "3a9e4c1"
+        } else {
+            "abcdef1"
+        }
+        .parse()
+        .unwrap(),
+        last_good: "abcdef0".parse().unwrap(),
+        caused_by: culprit.cloned(),
+        output: "check failed".to_owned(),
+        suspects: Vec::new(),
+        platform: None,
+        search: None,
+        found_by: FoundBy::Landing,
+        detected_at: Some("abcdef1".parse().unwrap()),
+    };
+    let author = Author {
+        actor: "m-2",
+        machine: "m-2",
+    };
+    regressions::file(conn, author, &report, now).unwrap().0
+}
+
+#[test]
+fn a_late_culprit_reroutes_an_unclaimed_regression_to_its_machine_and_provider() {
+    use ignite_core::protocol::tickets::CAUSED_BY_KEY;
+    use ignite_store::hub::tickets;
+
+    let (mut conn, culprit) = repair_world();
+    let id = file_repair(&mut conn, None, at(1.0));
+    let original = ask(&mut conn, &machine_room("m-2", 1, &["claude"]), at(2.0));
+    assert_eq!(original["ticket"], id);
+    assert_eq!(file_repair(&mut conn, Some(&culprit), at(3.0)), id);
+    let mut stale_claim = claim_reserved(&original, "cli-claude-12345678");
+    stale_claim["machine"] = json!("m-2");
+    assert_eq!(post(&mut conn, "/claims", &stale_claim, at(4.0)).0, 409);
+    let ticket = tickets::load(&conn, &id).unwrap().unwrap();
+    assert_eq!(ticket.metadata[CAUSED_BY_KEY], json!(culprit));
+    assert!(ticket.labels.iter().any(|label| label == "machine:jarvis"));
+
+    let nearby = machine_room("m-1", 1, &["claude", "codex"]);
+    let elsewhere = machine_room("m-2", 1, &["claude"]);
+    assert_eq!(
+        ask(&mut conn, &elsewhere, at(1799.0))["ticket"],
+        Value::Null
+    );
+    let resumed = ask(&mut conn, &nearby, at(1799.0));
+    assert_eq!(resumed["ticket"], id);
+    assert_eq!(resumed["provider"], "codex");
+    assert_eq!(
+        post(&mut conn, "/reservations/refuse", &resumed, at(1799.0)).0,
+        200
+    );
+
+    // The last ask is not a heartbeat. At 30 minutes the original provider is no longer required.
+    let fresh = ask(&mut conn, &elsewhere, at(1800.0));
+    assert_eq!(fresh["ticket"], id);
+    assert_eq!(fresh["provider"], "claude");
+}
+
+#[test]
+fn a_late_culprit_tells_the_worker_that_already_claimed_the_ticket() {
+    use ignite_core::protocol::tickets::{CAUSED_BY_KEY, Status};
+    use ignite_store::hub::tickets;
+
+    let (mut conn, culprit) = repair_world();
+    let id = file_repair(&mut conn, None, at(1.0));
+    let reservation = ask(&mut conn, &machine_room("m-2", 1, &["claude"]), at(2.0));
+    let worker = "cli-claude-12345678";
+    let mut claim = claim_reserved(&reservation, worker);
+    claim["machine"] = json!("m-2");
+    assert_eq!(post(&mut conn, "/claims", &claim, at(3.0)).0, 200);
+    assert_eq!(file_repair(&mut conn, Some(&culprit), at(4.0)), id);
+    // Retrying the same evidence produces no extra message.
+    assert_eq!(file_repair(&mut conn, Some(&culprit), at(5.0)), id);
+
+    let ticket = tickets::load(&conn, &id).unwrap().unwrap();
+    assert_eq!(ticket.status, Status::InProgress);
+    assert_eq!(ticket.assignee.as_deref(), Some(worker));
+    assert_eq!(ticket.metadata[CAUSED_BY_KEY], json!(culprit));
+    let comments = tickets::comments(&conn, &id).unwrap();
+    let tells: Vec<_> = comments
+        .iter()
+        .filter(|c| c.text.contains("The culprit search"))
+        .collect();
+    assert_eq!(tells.len(), 1);
+    let tell = tells[0];
+    assert_eq!(ticket.metadata["tell"], json!(tell.n));
+    assert!(tell.text.contains(culprit.as_str()));
+}
+
+#[test]
+fn a_reverted_cli_landing_keeps_its_routing_until_it_lands_again() {
+    use crate::upkeep::{filing::Author, reverted};
+    use ignite_core::protocol::hub::Reverted;
+    use ignite_core::protocol::tickets::{CULPRIT_AFFINITY_KEY, REVERTED_KEY};
+    use ignite_core::tipround::CulpritSearch;
+    use ignite_store::hub::tickets;
+
+    let (mut conn, culprit) = repair_world();
+    let report = Reverted {
+        ticket: Some(culprit.clone()),
+        landed: vec!["3a9e4c1".parse().unwrap()],
+        revert: "c0dec01".parse().unwrap(),
+        checks: vec!["rust:a".parse().unwrap()],
+        output: "failed to build".to_owned(),
+        search: CulpritSearch::OneCandidate,
+        machine: "remote".to_owned(),
+    };
+    let author = Author {
+        actor: "m-2",
+        machine: "m-2",
+    };
+    let id = reverted::file(&mut conn, author, &report, at(1.0)).unwrap();
+    let elsewhere = ask(&mut conn, &machine_room("m-2", 1, &["claude"]), at(2.0));
+    assert_eq!(elsewhere["ticket"], Value::Null);
+    let nearby = ask(
+        &mut conn,
+        &machine_room("m-1", 1, &["claude", "codex"]),
+        at(3.0),
+    );
+    assert_eq!(nearby["ticket"], id);
+    assert_eq!(nearby["provider"], "codex");
+    let worker = "cli-codex-12345679";
+    assert_eq!(
+        post(
+            &mut conn,
+            "/claims",
+            &claim_reserved(&nearby, worker),
+            at(4.0)
+        )
+        .0,
+        200
+    );
+    assert_eq!(
+        post(
+            &mut conn,
+            "/landed",
+            &landed(&id, worker, "repaired"),
+            at(5.0)
+        )
+        .0,
+        200
+    );
+
+    let ticket = tickets::load(&conn, &id).unwrap().unwrap();
+    assert!(!ticket.labels.iter().any(|label| label == "machine:jarvis"));
+    assert!(!ticket.metadata.contains_key(CULPRIT_AFFINITY_KEY));
+    assert!(!ticket.metadata.contains_key(REVERTED_KEY));
+}

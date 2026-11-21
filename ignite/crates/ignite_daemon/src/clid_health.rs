@@ -700,6 +700,31 @@ impl Effects for HealthEffects {
         }
     }
 
+    fn handoff(&self, slot: &Slot, note: &str) {
+        use ignite_core::protocol::tickets::{BatchRequest, CULPRIT_HANDOFF_KEY, Operation};
+
+        let (Some(ticket), Some(session)) = (&slot.ticket, &slot.session) else {
+            return;
+        };
+        let request = BatchRequest {
+            preconditions: Vec::new(),
+            ops: vec![Operation::Update {
+                id: ticket.to_string(),
+                set: None,
+                add_labels: Vec::new(),
+                remove_labels: Vec::new(),
+                set_meta: std::collections::BTreeMap::from([(
+                    CULPRIT_HANDOFF_KEY.to_owned(),
+                    serde_json::json!({"session": session, "note": note}),
+                )]),
+                unset_meta: Vec::new(),
+            }],
+        };
+        if let Err(error) = self.ctx.hub.batch(&request) {
+            eprintln!("ignite: the hand-off of {ticket} was not recorded: {error}");
+        }
+    }
+
     fn hold(&self, app: &str, reason: HoldReason, message: &str, cli_version: Option<&str>) {
         let now = self.ctx.clock.now();
         if let Err(error) = self

@@ -36,6 +36,7 @@ pub mod attachments;
 pub mod backup;
 pub mod clearing;
 mod clearing_kinds;
+pub(crate) mod culprit_affinity;
 pub mod explore;
 pub mod filing;
 pub mod flaky;

@@ -261,6 +261,7 @@ crate::tables! {
         /// While the slot's first turn resumes another session's transcript, the prompt that
         /// starts the ticket again on a new transcript if that turn does not end cleanly.
         fallback_prompt: Option<String>,
+        handoff_note: Option<String>,
     }
 
     /// One turn of a CLI session.

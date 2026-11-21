@@ -232,7 +232,11 @@ impl PoolVerb {
         }
         lines.extend(self.dispatcher.cli_lines(ctx.clock.now()));
         for worker in &view {
-            lines.push(format_worker(worker));
+            let mut line = format_worker(worker);
+            if let Some(note) = self.dispatcher.handoff_note(&worker.session) {
+                let _ = write!(line, "  {note}");
+            }
+            lines.push(line);
         }
         if view.is_empty() {
             lines.push("the pool is empty".to_owned());

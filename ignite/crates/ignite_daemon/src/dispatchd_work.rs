@@ -369,10 +369,7 @@ impl Dispatcher {
             });
             return;
         };
-        let resume = feed::cause(&detail).map(|culprit| Resume {
-            culprit,
-            prompt: feed::culprit_prompt(&detail, &reserved),
-        });
+        let resume = feed::handoff(&detail, &reserved, &ctx.machine);
         Self::begin_in_slot(state, slot, reserved, resume, false);
     }
 

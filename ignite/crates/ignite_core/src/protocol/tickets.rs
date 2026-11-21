@@ -49,6 +49,52 @@ pub enum Status {
     PendingApproval,
 }
 
+/// The regression ticket's confirmed culprit, stored as a ticket ID.
+pub const CAUSED_BY_KEY: &str = "caused_by";
+/// The original landing's machine and provider, recorded on the ticket when it lands.
+pub const CLI_LANDING_KEY: &str = "cli_landing";
+/// Temporary routing for a regression or a reopened landing.
+pub const CULPRIT_AFFINITY_KEY: &str = "culprit_affinity";
+/// The result of the latest attempt to continue the culprit's transcript.
+pub const CULPRIT_HANDOFF_KEY: &str = "culprit_handoff";
+/// The revert that reopened a ticket.
+pub const REVERTED_KEY: &str = "reverted";
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CliLanding {
+    pub machine: MachineId,
+    pub provider: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CulpritAffinity {
+    pub landing: CliLanding,
+    pub machine_label: String,
+    /// True when Ignite added this label and may remove it when the repair lands.
+    pub added_label: bool,
+}
+
+/// Reads a confirmed culprit, including tickets filed before attribution had a metadata key.
+pub fn regression_culprit(ticket: &Ticket) -> Option<TicketId> {
+    let id = match ticket.metadata.get(CAUSED_BY_KEY) {
+        Some(value) => value.as_str()?,
+        None => ticket
+            .body
+            .lines()
+            .find_map(|line| line.strip_prefix("caused-by "))?
+            .split_whitespace()
+            .next()?,
+    };
+    TicketId::new(id).ok()
+}
+
+/// The provider encoded in a worker session ID, `cli-<provider>-<8 hex>`.
+pub fn cli_provider(session: &SessionId) -> Option<&str> {
+    let (provider, suffix) = session.as_str().strip_prefix("cli-")?.rsplit_once('-')?;
+    (!provider.is_empty() && suffix.len() == 8 && suffix.bytes().all(|b| b.is_ascii_hexdigit()))
+        .then_some(provider)
+}
+
 /// What one ticket landed, which the next ticket's `ignite start` prints.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LandedWork {

@@ -3,8 +3,6 @@
 //! Reservations, claims and their release are transactional. A reservation can be claimed
 //! only with its one-time code by its machine, and lapses if unclaimed after ten minutes.
 
-use std::collections::BTreeMap;
-
 use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use serde::de::DeserializeOwned;
 use serde_json::{Map, Value, json};
@@ -19,7 +17,8 @@ use ignite_core::protocol::hub::{
     NextReply, Pause, Release, SessionTitle, TicketBrief,
 };
 use ignite_core::protocol::tickets::{
-    BatchRequest, Operation, OperationResult, Status, Ticket, TicketFields,
+    BatchRequest, CLI_LANDING_KEY, CliLanding, Operation, OperationResult, Status, Ticket,
+    TicketFields, cli_provider,
 };
 use ignite_core::time::Timestamp;
 use ignite_store::StoreError;
@@ -44,6 +43,10 @@ mod mix;
 
 #[path = "dispatch_releases.rs"]
 mod counting;
+
+#[path = "dispatch_closing.rs"]
+mod closing;
+use closing::closing;
 
 pub use queue::{named_files, resolve_named_file, view};
 
@@ -405,6 +408,18 @@ fn landed(conn: &mut Connection, landed: &Landed, now: Timestamp) -> Answer {
         })
         .map_err(sql_failure)?;
     fleet::lapse(&tx, now).map_err(|e| store_failure(&e))?;
+    let mut metadata = ticket.metadata;
+    if let Some(app) = cli_provider(&landed.session) {
+        metadata.insert(
+            CLI_LANDING_KEY.to_owned(),
+            json!(CliLanding {
+                machine: landed.machine.clone(),
+                provider: provider.as_deref().unwrap_or(app).to_owned(),
+            }),
+        );
+    } else {
+        metadata.remove(CLI_LANDING_KEY);
+    }
     let work = serde_json::to_value(&landed.work).map_err(|e| failure(500, &e.to_string()))?;
     set_columns(
         &tx,
@@ -413,6 +428,7 @@ fn landed(conn: &mut Connection, landed: &Landed, now: Timestamp) -> Answer {
         &[
             ("landed", work),
             ("landed_at", json!(now)),
+            ("metadata", json!(metadata)),
             ("provider", Value::Null),
         ],
         now,
@@ -484,34 +500,6 @@ fn close(conn: &mut Connection, close: &Close, now: Timestamp) -> Answer {
     findings::close_ticket(&tx, id, now).map_err(|e| store_failure(&e))?;
     tx.commit().map_err(sql_failure)?;
     Ok(done())
-}
-
-/// The operations that close `ticket` with `reason` and forget its saved branch, which the
-/// closing session deletes from the remote.
-fn closing(ticket: &Ticket, reason: &str) -> Vec<Operation> {
-    let mut ops = Vec::new();
-    // A landing applies the work again after a tip round reverted it, so `reverted` is done.
-    let stale: Vec<String> = [SAVED_BRANCH, crate::upkeep::reverted::KEY]
-        .into_iter()
-        .filter(|key| ticket.metadata.contains_key(*key))
-        .map(str::to_owned)
-        .collect();
-    if !stale.is_empty() {
-        ops.push(Operation::Update {
-            id: ticket.id.as_str().to_owned(),
-            set: None,
-            add_labels: Vec::new(),
-            remove_labels: Vec::new(),
-            set_meta: BTreeMap::new(),
-            unset_meta: stale,
-        });
-    }
-    ops.push(Operation::Close {
-        id: ticket.id.as_str().to_owned(),
-        reason: reason.to_owned(),
-        include_ready: false,
-    });
-    ops
 }
 
 /// Gives a ticket back to the queue with the note as a comment, records the branch its work was

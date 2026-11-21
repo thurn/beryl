@@ -7,7 +7,7 @@ use ignite_core::fakes::ScriptedTurn;
 
 use super::*;
 
-const REGRESSION_PROMPT: &str = "R.1 is a regression caused by your last ticket: x. Run \
+const REGRESSION_PROMPT: &str = "R.1 is a regression caused by your landing of T.1: x. Run \
                                  `ignite start R.1 --reservation c0de` and fix it.";
 const FRESH_PROMPT: &str = "Run `ignite start R.1 --reservation c0de` and follow what it prints.";
 
@@ -24,23 +24,23 @@ fn land_t1(rig: &Rig) -> SessionId {
 /// Begins the regression R.1, caused by T.1, on slot 1 with the regression's own model and
 /// effort.
 fn begin_regression(rig: &Rig) -> SessionId {
-    begin_regression_with(rig, "c0de")
+    begin_regression_with(rig, "R.1", "c0de").unwrap()
 }
 
 /// [`begin_regression`] under the reservation code `code`.
-fn begin_regression_with(rig: &Rig, code: &str) -> SessionId {
+fn begin_regression_with(rig: &Rig, id: &str, code: &str) -> Result<SessionId> {
     let resume = Resume {
-        culprit: ticket(),
+        culprit: Some(ticket()),
+        fresh_reason: None,
         prompt: REGRESSION_PROMPT.to_owned(),
     };
     let reservation = Reservation {
         provider: None,
         code: code.to_owned(),
-        ..reservation("R.1", 1)
+        ..reservation(id, 1)
     };
     rig.daemon
         .begin(&reservation, "m-1", Some("low"), Some(&resume), false)
-        .unwrap()
 }
 
 fn has_resume(command: &CommandSpec) -> bool {
@@ -52,6 +52,7 @@ fn a_regression_resumes_the_culprits_transcript_within_24_hours() {
     let rig = Rig::new();
     let culprit = land_t1(&rig);
     rig.clock.advance(23.0 * 3600.0);
+    rig.push(clean("first repair"));
     let session = begin_regression(&rig);
     assert_ne!(session, culprit);
     let starts = rig.turns.starts();
@@ -71,11 +72,16 @@ fn a_regression_resumes_the_culprits_transcript_within_24_hours() {
     let row = rig.row(&session);
     assert_eq!(row.effort.as_deref(), Some("low"));
     assert_eq!(row.ticket.as_deref(), Some("R.1"));
-    // The record is used once: a second regression of the same culprit starts fresh.
-    let other = begin_regression_with(&rig, "f00d");
+    assert!(row.handoff_note.unwrap().contains("Resumed"));
+    // A second regression waits while the transcript is in use.
+    assert!(matches!(begin_regression_with(&rig, "R.2", "f00d"),
+                     Err(Error::Conflict(message)) if message == CULPRIT_BUSY));
+    rig.then(Action::Free);
+    rig.daemon.step().unwrap();
+    let other = begin_regression_with(&rig, "R.2", "f00d").unwrap();
     let starts = rig.turns.starts();
     assert_eq!(starts[2].0, other.as_str());
-    assert!(!has_resume(&starts[2].2));
+    assert!(has_resume(&starts[2].2));
 }
 
 #[test]
@@ -83,10 +89,16 @@ fn a_regression_whose_culprit_landed_over_24_hours_ago_starts_fresh() {
     let rig = Rig::new();
     land_t1(&rig);
     rig.clock.advance(25.0 * 3600.0);
-    begin_regression(&rig);
+    let session = begin_regression(&rig);
     let starts = rig.turns.starts();
     assert_eq!(starts.len(), 2);
     assert!(!has_resume(&starts[1].2));
+    assert!(
+        rig.daemon
+            .handoff_note(&session)
+            .unwrap()
+            .contains("expired")
+    );
     assert_eq!(
         starts[1].2.args.last().map(String::as_str),
         Some(FRESH_PROMPT)
@@ -118,6 +130,7 @@ fn a_refused_resume_is_followed_by_one_fresh_start() {
     assert!(lock(&rig.effects.holds).is_empty());
     let row = rig.row(&session);
     assert_eq!(row.fallback_prompt, None);
+    assert!(row.handoff_note.unwrap().contains("resumed first turn"));
     // The fresh turn runs on; nothing starts again.
     rig.daemon.step().unwrap();
     assert_eq!(rig.turns.starts().len(), 3);

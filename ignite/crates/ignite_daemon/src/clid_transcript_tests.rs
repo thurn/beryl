@@ -152,6 +152,7 @@ fn the_digest_carries_the_model_and_effort_of_the_session_slot() {
                     block_sent: 0,
                     backed_off: 0,
                     fallback_prompt: None,
+                    handoff_note: None,
                 },
             )
         })

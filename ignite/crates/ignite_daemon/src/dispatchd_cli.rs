@@ -6,9 +6,10 @@ use ignite_core::capacity::{RoomInputs, start_room, worker_memory_limited};
 use ignite_core::config::Config;
 use ignite_core::ids::SessionId;
 use ignite_core::protocol::hub::{ProviderOffer, Reservation};
+use ignite_core::traits::Error;
 
 use super::{Dispatcher, Reserved, State};
-use crate::clid::{CliPool, Resume};
+use crate::clid::{CULPRIT_BUSY, CliPool, Resume};
 use crate::pool::Member;
 use crate::server::Context;
 
@@ -331,7 +332,9 @@ impl Dispatcher {
                 refuse(ctx, &reservation, &error.to_string());
                 let mut state = self.state();
                 Self::drop_placeholder(&mut state, slot, &reserved.ticket);
-                if cli.pool.held(&reserved.app).is_none() {
+                let transcript_busy = matches!(error, Error::Conflict(ref message)
+                    if message == CULPRIT_BUSY);
+                if !transcript_busy && cli.pool.held(&reserved.app).is_none() {
                     state.refused.insert(reserved.app.clone(), now);
                 }
                 return;
@@ -360,6 +363,10 @@ impl Dispatcher {
             state.reserved.remove(slot);
         }
         state.reserved.insert(session, reserved);
+    }
+
+    pub(crate) fn handoff_note(&self, session: &SessionId) -> Option<String> {
+        self.cli.get()?.pool.handoff_note(session)
     }
 
     /// Starts a local justiciar when the hub is unreachable and one is not already on duty.

@@ -575,3 +575,55 @@ fn queue_room_ticket(rig: &Rig, n: u32) {
         code: format!("code-{n}"),
     });
 }
+
+#[test]
+fn cli_e2e_two_repairs_resume_the_same_transcript_with_a_restart_between_them() {
+    let mut rig = Rig::new("culprit-resume");
+    let original = rig.begin();
+    rig.wait_turn(&original, 1);
+    lock(&rig.host.holders).remove(&original);
+    rig.daemon.step().unwrap();
+    assert_eq!(rig.daemon.check(&original), SessionCheck::Gone);
+
+    let first = rig.args(1);
+    let transcript = &first[first.iter().position(|arg| arg == "--session-id").unwrap() + 1];
+    let start = |rig: &Rig, id: &str| {
+        let ticket = TicketId::new(id).unwrap();
+        let reservation = Reservation {
+            provider: Some("claude".to_owned()),
+            ticket: ticket.clone(),
+            machine: rig.ctx.machine.clone(),
+            session: SessionId::new("reservation-e2e").unwrap(),
+            expires_at: rig.clock.now().plus_seconds(600.0),
+            code: format!("code-{id}"),
+        };
+        let resume = Resume {
+            culprit: Some(TicketId::new(TICKET).unwrap()),
+            fresh_reason: None,
+            prompt: format!("Repair {ticket}"),
+        };
+        rig.daemon
+            .begin(&reservation, MODEL, Some("high"), Some(&resume), false)
+    };
+
+    rig.script(2, HELD);
+    rig.fifo(2);
+    let repair = start(&rig, "R.1").unwrap();
+    rig.wait_started(2);
+    rig.restart();
+    rig.daemon.recover().unwrap();
+    assert!(matches!(start(&rig, "R.2"), Err(Error::Conflict(reason)) if reason == CULPRIT_BUSY));
+    rig.open_gate(2);
+    rig.wait_turn(&repair, 1);
+    rig.daemon.step().unwrap();
+
+    let later = start(&rig, "R.2").unwrap();
+    rig.wait_turn(&later, 1);
+    for invocation in [2, 3] {
+        assert!(
+            rig.args(invocation)
+                .windows(2)
+                .any(|args| args == ["--resume", transcript])
+        );
+    }
+}

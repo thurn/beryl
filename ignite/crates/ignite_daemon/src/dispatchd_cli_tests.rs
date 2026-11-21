@@ -370,11 +370,11 @@ fn a_regression_for_a_cli_slot_names_its_culprit_to_the_cli_pool() {
 
     assert_eq!(fake.begun().len(), 1);
     let resume = fake.resumes()[0].clone().expect("the culprit is named");
-    assert_eq!(resume.culprit.as_str(), "T.1");
+    assert_eq!(resume.culprit.unwrap().as_str(), "T.1");
     assert!(
         resume
             .prompt
-            .starts_with("R is a regression caused by your last ticket")
+            .starts_with("R is a regression caused by your landing of T.1")
             && resume.prompt.contains("ignite start R --reservation 7f3a"),
         "{}",
         resume.prompt

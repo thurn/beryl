@@ -146,6 +146,11 @@ pub const MIGRATIONS: &[Migration] = &[
         sql: include_str!("schema_23.sql"),
         code: None,
     },
+    Migration {
+        version: 24,
+        sql: include_str!("schema_24.sql"),
+        code: None,
+    },
 ];
 
 pub fn open(path: &Path) -> Result<Connection> {

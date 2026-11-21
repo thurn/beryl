@@ -2,7 +2,9 @@
 //! resumes the transcript of the ticket that caused it when available.
 
 use ignite_core::protocol::hub::Reservation;
+use ignite_core::protocol::tickets::{CAUSED_BY_KEY, CULPRIT_AFFINITY_KEY};
 use ignite_core::traits::Clock;
+use serde_json::json;
 
 use super::cli_tests::{cli, tick};
 use super::tests::{Rig, detail, rig, session, ticket_id};
@@ -40,7 +42,7 @@ fn the_culprit_is_chosen_once_an_unread_regression_can_be_read() {
     let resume = fake.resumes()[0]
         .clone()
         .expect("culprit transcript requested");
-    assert_eq!(resume.culprit.as_str(), "T.1");
+    assert_eq!(resume.culprit.unwrap().as_str(), "T.1");
     assert!(resume.prompt.contains("--reservation 7f3a"));
 }
 
@@ -78,7 +80,7 @@ fn a_reverted_ticket_requests_the_previous_landing_transcript() {
     let resume = fake.resumes()[0]
         .clone()
         .expect("landing transcript requested");
-    assert_eq!(resume.culprit.as_str(), "T.1");
+    assert_eq!(resume.culprit.unwrap().as_str(), "T.1");
     let prompt = resume.prompt;
     assert!(
         prompt.contains(
@@ -88,4 +90,87 @@ fn a_reverted_ticket_requests_the_previous_landing_transcript() {
         "{prompt}"
     );
     assert_eq!(rig.state_of("cli-claude-00000001"), "reserved");
+}
+
+#[test]
+fn a_regression_uses_attribution_from_a_later_report() {
+    let rig = rig(&[]);
+    let fake = cli(&rig, 2);
+    let mut reported = regression("R", "T.1");
+    reported
+        .ticket
+        .metadata
+        .insert(CAUSED_BY_KEY.to_owned(), json!("T.2"));
+    rig.hub.insert_ticket(reported);
+    reserve_for(&rig, "R", "reservation-2");
+
+    tick(&rig);
+
+    let resumes = fake.resumes();
+    let resume = resumes[0].as_ref().unwrap();
+    assert_eq!(resume.culprit, Some(ticket_id("T.2")));
+    assert!(resume.prompt.contains("landing of T.2"));
+    assert!(resume.fresh_reason.is_none());
+}
+
+#[test]
+fn a_reservation_on_another_machine_explains_why_it_starts_fresh() {
+    let rig = rig(&[]);
+    let fake = cli(&rig, 2);
+    let mut reported = regression("R", "T.1");
+    reported.ticket.metadata.insert(
+        CULPRIT_AFFINITY_KEY.to_owned(),
+        json!({
+            "landing": {"machine": "m-away", "provider": "codex"},
+            "machine_label": "machine:remote",
+            "added_label": true,
+        }),
+    );
+    rig.hub.insert_ticket(reported);
+    reserve_for(&rig, "R", "reservation-2");
+
+    tick(&rig);
+
+    let resumes = fake.resumes();
+    let resume = resumes[0].as_ref().unwrap();
+    assert_eq!(
+        resume.fresh_reason.as_deref(),
+        Some("the transcript is on remote")
+    );
+}
+
+#[test]
+fn the_worker_already_holding_a_regression_receives_the_late_attribution() {
+    use super::tell_tests::claimed;
+
+    let rig = rig(&[]);
+    let fake = cli(&rig, 1);
+    let mut unknown = regression("R", "T.1");
+    unknown.ticket.body.clear();
+    rig.hub.insert_ticket(unknown);
+    reserve_for(&rig, "R", "reservation-1");
+    tick(&rig);
+    let worker = "cli-claude-00000001";
+    rig.hold(worker, "R");
+    tick(&rig);
+    rig.dispatcher.poll_feed(&rig.ctx, 0).unwrap();
+
+    let attribution = "The culprit search for rust:a identified T.1 (commit 5e1b0aa).";
+    let mut attributed = claimed(
+        "R",
+        worker,
+        &[(1, "2027-01-02T00:00:00.000Z", attribution)],
+        "2027-01-01T00:00:00.000Z",
+    );
+    attributed
+        .ticket
+        .metadata
+        .insert(CAUSED_BY_KEY.to_owned(), json!("T.1"));
+    rig.hub.insert_ticket(attributed);
+    rig.hub.push_change("ticket", Some(ticket_id("R")));
+    rig.dispatcher.poll_feed(&rig.ctx, 0).unwrap();
+
+    assert_eq!(fake.sent().len(), 1);
+    assert_eq!(fake.sent()[0].session, session(worker));
+    assert!(fake.sent()[0].text.contains(attribution));
 }

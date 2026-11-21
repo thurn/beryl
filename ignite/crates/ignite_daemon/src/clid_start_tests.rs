@@ -182,6 +182,7 @@ impl Fixture {
                 block_sent: 0,
                 backed_off: 0,
                 fallback_prompt: None,
+                handoff_note: None,
             },
         )
         .unwrap();

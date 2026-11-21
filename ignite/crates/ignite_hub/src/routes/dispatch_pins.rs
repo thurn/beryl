@@ -5,6 +5,7 @@ use std::collections::HashSet;
 use rusqlite::Connection;
 
 use ignite_core::pins::Pins;
+use ignite_core::protocol::tickets::Ticket;
 use ignite_core::time::Timestamp;
 use ignite_store::Result;
 use ignite_store::hub::{fleet, pins};
@@ -15,12 +16,24 @@ const FALLBACK_SECONDS: f64 = 30.0 * 60.0;
 /// Resolve each inherited pin. Only the machine restriction can expire.
 pub(super) fn effective(
     conn: &Connection,
-    ticket: &str,
-    can_fall_back: bool,
+    ticket: &Ticket,
     heard: &HashSet<String>,
 ) -> Result<Pins> {
-    let mut pins = pins::of(conn, ticket)?;
-    if can_fall_back
+    let mut pins = pins::of(conn, ticket.id.as_str())?;
+    if let Some(affinity) = crate::upkeep::culprit_affinity::affinity(ticket)
+        && ticket.labels.contains(&affinity.machine_label)
+        && let Some(machine) = affinity.machine_label.strip_prefix("machine:")
+    {
+        if heard.contains(&machine.to_ascii_lowercase()) {
+            pins.machine = Some(machine.to_owned());
+            pins.provider = Some(affinity.landing.provider);
+        } else {
+            // The transcript stays on the original machine. Any fallback worker starts fresh.
+            pins.machine = None;
+        }
+        return Ok(pins);
+    }
+    if ticket.fallback
         && pins
             .machine
             .as_ref()

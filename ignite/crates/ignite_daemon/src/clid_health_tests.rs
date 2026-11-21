@@ -190,6 +190,7 @@ impl Rig {
             block_sent: 0,
             backed_off: 0,
             fallback_prompt: None,
+            handoff_note: None,
         };
         self.pool
             .with_database(|conn| cli_slots::put(conn, &slot))

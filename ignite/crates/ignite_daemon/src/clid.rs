@@ -95,9 +95,14 @@ pub const LANDED_KEEP_S: f64 = 24.0 * 3600.0;
 /// from a slot of the same app in the last 24 hours, and starts fresh otherwise.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Resume {
-    pub culprit: TicketId,
+    pub culprit: Option<TicketId>,
     pub prompt: String,
+    #[serde(default)]
+    pub fresh_reason: Option<String>,
 }
+
+/// A hand-off should be retried once the transcript's current worker finishes.
+pub(crate) const CULPRIT_BUSY: &str = "the culprit's transcript is still in use";
 
 /// Whether a CLI session has a slot and a running turn.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -135,6 +140,11 @@ pub trait CliPool: Send + Sync {
     fn check(&self, session: &SessionId) -> SessionCheck;
     /// Current worker rows of `app`, ordered by number.
     fn slots(&self, app: &str) -> Vec<Slot>;
+    /// How this worker started a regression or reverted ticket.
+    fn handoff_note(&self, _session: &SessionId) -> Option<String> {
+        None
+    }
+
     /// The median peak memory of a recent worker turn, in megabytes.
     fn worker_memory_mb(&self) -> u64 {
         2_000
@@ -214,6 +224,10 @@ pub trait Effects: Send + Sync {
     /// Puts `app` on a CLI hold.
     fn hold(&self, app: &str, reason: HoldReason, message: &str, cli_version: Option<&str>) {
         let _ = (app, reason, message, cli_version);
+    }
+    /// Reports how a regression or reverted ticket was handed to a worker.
+    fn handoff(&self, slot: &Slot, note: &str) {
+        let _ = (slot, note);
     }
     /// Reports a parked slot, or a release that needs a person's attention.
     fn report(&self, slot: &Slot, report: &str) {
@@ -638,8 +652,6 @@ impl CliDaemon {
 }
 
 impl CliPool for CliDaemon {
-    /// Starts the ticket's first turn. A placeholder session takes slot `k` when that slot is
-    /// free, or else the lowest free slot of the app: the dispatcher counts busy sessions and
     fn begin(
         &self,
         reservation: &Reservation,
@@ -648,54 +660,13 @@ impl CliPool for CliDaemon {
         resume: Option<&Resume>,
         fresh: bool,
     ) -> Result<SessionId> {
-        let _opening = lock(&self.opening);
-        let _admission = lock(&self.pool.cli_admission);
-        let ticket = reservation.ticket.as_str();
-        let taken = self.database(|conn| store::by_reservation(conn, ticket, &reservation.code))?;
-        if let Some(session) = taken.and_then(|row| row.session) {
-            return SessionId::new(session).map_err(|e| Error::Invalid(e.to_string()));
-        }
-        let named = &reservation.session;
-        let (app, preferred, earlier) = if let Some((app, index)) = placeholder(named) {
-            (app, index, None)
-        } else if named.as_str().starts_with("cli-") {
-            let earlier = self
-                .earlier_session(named, fresh)?
-                .ok_or_else(|| Error::Invalid(format!("{named} has no earlier CLI turn")))?;
-            (earlier.app.clone(), 0, Some(earlier))
-        } else if let Some(app) = &reservation.provider {
-            (app.clone(), 0, None)
-        } else {
-            return Err(Error::Invalid(format!("{named} has no CLI provider")));
-        };
-        if let Some(hold) = self.held(&app) {
-            return Err(Error::Conflict(format!(
-                "{app} is on a CLI hold ({})",
-                hold.reason.as_str()
-            )));
-        }
-        let model = self.app(&app)?.model_for(&app, Some(model))?;
-        let session = match &earlier {
-            Some(_) => named.clone(),
-            None => Self::new_session(&app)?,
-        };
-        let prompt = handoff_prompt(&reservation.ticket, &reservation.code);
-        let resume = resume.filter(|_| earlier.is_none());
-        let row = self.claim_slot(&app, preferred, &session, model, effort, prompt, earlier)?;
-        let row = CliSlot {
-            ticket: Some(reservation.ticket.to_string()),
-            reservation: Some(reservation.code.clone()),
-            ..row
-        };
-        let row = match resume {
-            Some(resume) => self.resume_culprit(row, resume)?,
-            None => row,
-        };
-        self.open_slot(row)?;
-        Ok(session)
+        self.begin_ticket(reservation, model, effort, resume, fresh)
     }
 
-    /// Starts a session with no ticket in the app's lowest free slot.
+    fn handoff_note(&self, session: &SessionId) -> Option<String> {
+        self.row(session).ok().flatten()?.handoff_note
+    }
+
     fn begin_justiciar(
         &self,
         app: &str,

@@ -103,6 +103,17 @@ pub fn apply_in(
     apply_in_as(transaction, batch, actor, machine, now, Filer::Person)
 }
 
+/// Like [`apply_automatic`], inside a caller's transaction.
+pub fn apply_automatic_in(
+    transaction: &mut Transaction,
+    batch: &BatchRequest,
+    actor: &str,
+    machine: &str,
+    now: Timestamp,
+) -> Result<BatchOutcome> {
+    apply_in_as(transaction, batch, actor, machine, now, Filer::Ignite)
+}
+
 fn apply_in_as(
     transaction: &mut Transaction,
     batch: &BatchRequest,

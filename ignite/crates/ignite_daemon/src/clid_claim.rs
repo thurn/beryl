@@ -8,7 +8,8 @@
 //! model and transcript go into `cli_landed` ([`CliDaemon::record_landed`]). For 24 hours, a
 //! new session of the same app whose hand-off names that ticket as its culprit resumes the
 //! transcript, under its own Ignite session ID, with the regression's hand-off prompt and the
-//! regression's model and effort ([`CliDaemon::resume_culprit`]). A record is used once.
+//! regression's model and effort ([`CliDaemon::resume_culprit`]). A later repair can use the
+//! same record after that worker finishes.
 //!
 //! The transcript's files belong to the CLI, which may prune them, so a resume can fail. The
 //! slot then keeps the plain hand-off prompt in `fallback_prompt`: if the resumed first turn
@@ -17,12 +18,16 @@
 
 use ignite_core::cli::{SlotState, TurnEnd};
 use ignite_core::ids::SessionId;
+use ignite_core::protocol::hub::Reservation;
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{Error, Result};
 use ignite_store::local::cli_slots as store;
 use ignite_store::local::rows::{CliLanded, CliSlot};
 
-use super::{CliDaemon, CliPool, LANDED_KEEP_S, Resume, hex, random_bytes, slot_of};
+use super::{
+    CULPRIT_BUSY, CliDaemon, CliPool, LANDED_KEEP_S, Resume, handoff_prompt, hex, random_bytes,
+    slot_of,
+};
 
 /// How many slots [`CliDaemon::open_slot`] tries before it gives up: each failed try means
 /// another hand-off took the slot first.
@@ -71,6 +76,64 @@ impl super::CliAppSetup {
 }
 
 impl CliDaemon {
+    /// Starts the ticket's first turn. A placeholder session takes slot `k` when that slot is
+    /// free, or else the lowest free slot of the app.
+    pub(super) fn begin_ticket(
+        &self,
+        reservation: &Reservation,
+        model: &str,
+        effort: Option<&str>,
+        resume: Option<&Resume>,
+        fresh: bool,
+    ) -> Result<SessionId> {
+        let _opening = super::lock(&self.opening);
+        let _admission = super::lock(&self.pool.cli_admission);
+        let ticket = reservation.ticket.as_str();
+        let taken = self.database(|conn| store::by_reservation(conn, ticket, &reservation.code))?;
+        if let Some(session) = taken.and_then(|row| row.session) {
+            return SessionId::new(session).map_err(|e| Error::Invalid(e.to_string()));
+        }
+        let named = &reservation.session;
+        let (app, preferred, earlier) = if let Some((app, index)) = super::placeholder(named) {
+            (app, index, None)
+        } else if named.as_str().starts_with("cli-") {
+            let earlier = self
+                .earlier_session(named, fresh)?
+                .ok_or_else(|| Error::Invalid(format!("{named} has no earlier CLI turn")))?;
+            (earlier.app.clone(), 0, Some(earlier))
+        } else if let Some(app) = &reservation.provider {
+            (app.clone(), 0, None)
+        } else {
+            return Err(Error::Invalid(format!("{named} has no CLI provider")));
+        };
+        if let Some(hold) = self.held(&app) {
+            return Err(Error::Conflict(format!(
+                "{app} is on a CLI hold ({})",
+                hold.reason.as_str()
+            )));
+        }
+        let model = self.app(&app)?.model_for(&app, Some(model))?;
+        let session = match &earlier {
+            Some(_) => named.clone(),
+            None => Self::new_session(&app)?,
+        };
+        let prompt = handoff_prompt(&reservation.ticket, &reservation.code);
+        let resume = resume.filter(|_| earlier.is_none());
+        let row = self.claim_slot(&app, preferred, &session, model, effort, prompt, earlier)?;
+        let row = CliSlot {
+            ticket: Some(reservation.ticket.to_string()),
+            reservation: Some(reservation.code.clone()),
+            ..row
+        };
+        let row = match resume {
+            Some(resume) => self.resume_culprit(row, resume)?,
+            None => row,
+        };
+        self.open_slot(row)?;
+        Ok(session)
+    }
+
+    /// Starts a session with no ticket in the app's lowest free slot.
     /// Checks the hub before a continuation after a hold, including when a daemon restart
     /// left the next turn recorded without a supervisor. The old local lease can outlive
     /// the hub's claim.
@@ -134,14 +197,21 @@ impl CliDaemon {
         let Some(last) = turns.last() else {
             return Ok(None);
         };
+        let mut transcript = (!fresh)
+            .then(|| turns.iter().rev().find_map(|t| t.transcript.clone()))
+            .flatten();
+        if let Some(id) = transcript.as_deref()
+            && self
+                .rows()?
+                .iter()
+                .any(|row| uses_transcript(row, &last.app, id))
+        {
+            transcript = None;
+        }
         Ok(Some(Earlier {
             app: last.app.clone(),
             turn: last.turn,
-            transcript: if fresh {
-                None
-            } else {
-                turns.iter().rev().find_map(|t| t.transcript.clone())
-            },
+            transcript,
         }))
     }
 
@@ -168,10 +238,32 @@ impl CliDaemon {
     /// `resume.prompt` when that ticket landed from a slot of the same app within
     /// [`LANDED_KEEP_S`]; otherwise `row` as it is. A resumed slot keeps its plain hand-off
     /// prompt as the fallback for a first turn that does not end cleanly.
-    pub(super) fn resume_culprit(&self, row: CliSlot, resume: &Resume) -> Result<CliSlot> {
-        let landed = self.database(|conn| store::take_landed(conn, resume.culprit.as_str()))?;
+    pub(super) fn resume_culprit(&self, mut row: CliSlot, resume: &Resume) -> Result<CliSlot> {
+        let fresh = |row: CliSlot, reason: &str| CliSlot {
+            handoff_note: Some(format!("Started fresh: {reason}")),
+            ..row
+        };
+        if let Some(reason) = &resume.fresh_reason {
+            return Ok(fresh(row, reason));
+        }
+        let Some(culprit) = &resume.culprit else {
+            return Ok(fresh(row, "the search has not identified the culprit"));
+        };
+        let slots = self.rows()?;
+        if slots.iter().any(|slot| {
+            slot.app == row.app
+                && slot.ticket.as_deref() == Some(culprit.as_str())
+                && slot.session.is_some()
+        }) {
+            // The hub can see a landing before the supervisor has saved its transcript.
+            return Err(Error::Conflict(CULPRIT_BUSY.to_owned()));
+        }
+        let landed = self.database(|conn| store::landed(conn, culprit.as_str()))?;
         let Some(landed) = landed else {
-            return Ok(row);
+            return Ok(fresh(
+                row,
+                &format!("no retained CLI transcript for {culprit} on this machine"),
+            ));
         };
         let oldest = self.now().plus_seconds(-LANDED_KEEP_S);
         let recent = landed
@@ -179,15 +271,34 @@ impl CliDaemon {
             .as_deref()
             .and_then(|t| Timestamp::parse(t).ok())
             .is_some_and(|at| at >= oldest);
-        match landed.transcript {
-            Some(transcript) if recent && landed.app == row.app => Ok(CliSlot {
-                transcript: Some(transcript),
-                fallback_prompt: row.next_prompt.clone(),
-                next_prompt: Some(resume.prompt.clone()),
-                ..row
-            }),
-            _ => Ok(row),
+        if !recent {
+            return Ok(fresh(
+                row,
+                &format!("the retained transcript for {culprit} has expired"),
+            ));
         }
+        if landed.app != row.app {
+            return Ok(fresh(
+                row,
+                &format!("the culprit landed with {}", landed.app),
+            ));
+        }
+        let Some(transcript) = landed.transcript else {
+            return Ok(fresh(
+                row,
+                &format!("{culprit} landed without a CLI transcript"),
+            ));
+        };
+        if slots
+            .iter()
+            .any(|slot| uses_transcript(slot, &row.app, &transcript))
+        {
+            return Err(Error::Conflict(CULPRIT_BUSY.to_owned()));
+        }
+        row.transcript = Some(transcript);
+        row.fallback_prompt = row.next_prompt.replace(resume.prompt.clone());
+        row.handoff_note = Some(format!("Resumed the culprit's transcript from {culprit}"));
+        Ok(row)
     }
 
     /// Slot `preferred` of `app` if it is free, or else the lowest free one, or else one
@@ -230,6 +341,9 @@ impl CliDaemon {
             if !claimed {
                 row.slot = self.free_index(&row.app, 0)?;
                 continue;
+            }
+            if let Some(note) = &row.handoff_note {
+                self.effects.handoff(&slot_of(&row), note);
             }
             if let Some((turn, _)) = first {
                 row.turn = turn.turn;
@@ -292,6 +406,11 @@ impl CliDaemon {
             block_sent: 0,
             backed_off: 0,
             fallback_prompt: None,
+            handoff_note: None,
         })
     }
+}
+
+fn uses_transcript(row: &CliSlot, app: &str, transcript: &str) -> bool {
+    row.session.is_some() && row.app == app && row.transcript.as_deref() == Some(transcript)
 }

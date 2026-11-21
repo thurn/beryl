@@ -2981,23 +2981,20 @@ no landing recorded it files a new P0 ticket with the same text. A second report
 of the same revert commit changes nothing, and a landing of the ticket clears
 `reverted`. A session already holding a ticket that depends on the reopened one
 is told, as `ignite tell` tells it, to release that ticket, which is handed out
-again when the reopened one lands. The daemon offers the reopened ticket to the
-idle worker whose last ticket it was ("your landing of <ticket> was reverted:
-the tip did not build with it"), and the brief of `ignite start` prints a
-`reverted` line with the revert commit, the checks and that command. A report
-the hub does not take is kept in the verifier's memory and sent again at the
-start of the next round. Another build check that failed with the same landing
-is covered by the same revert once it passes at that revert commit.
+again when the reopened one lands. A reopened CLI landing is offered on the
+machine and provider that ran the landing, as for a regression. The worker
+resumes that transcript with the revert details. The brief of `ignite start`
+prints a `reverted` line with the revert commit, the checks and the command to
+apply the work again. If the hub misses the report, the verifier sends it again
+at the start of the next round. Another build check that failed with the same
+landing is covered by the same revert once it passes at that revert commit.
 
 ### Regression tickets
 
 The hub then files a **regression ticket**, or adds the check to one already
 open. A landing whose gate finds a check failing at the tip it was rebased onto
 searches before filing, so dispatch can use the result as soon as the ticket
-opens (see [Landing](#landing)). If another report opened the ticket while the
-gate was searching, the hub records the first culprit it learns of and tells the
-worker already holding the ticket. A regression is an ordinary P0 ticket that
-any worker can take:
+opens (see [Landing](#landing)). The ticket has priority P0:
 
 ```text
 TK3FC  P0 bug  regression  check:rust
@@ -3009,18 +3006,22 @@ rerun: ignite test family_corpora_never_change
 output (last 40 lines; whole output on jarvis at ...)
 ```
 
-- It links to the ticket whose commit caused it. When the search ended with a
-  range, it links to every ticket in the range.
-- It names the operating system the check failed on, and records that system
-  when the check is not portable. The regression is pinned to the machine that
-  found it (see [Machine and provider pins](#machine-and-provider-pins)).
-- It goes first in the dispatch order, and the hub alone decides which machine
-  works it: it reserves the ticket for a machine under a one-time code, as it
-  does any ticket. A reservation's code may be used by any session of that
-  machine, so when the worker that landed the culprit is idle there, the
-  machine's daemon hands the reservation to that session, which still holds the
-  context, without clearing it. A daemon never points a worker at a regression
-  the hub has not reserved for its machine, since the hub refuses that start.
+- It links to the ticket whose landing caused it and records that ticket in its
+  metadata. When a search ends with a range, the ticket links to every landing
+  in the range. A later report can set the culprit. If a worker has already
+  claimed the ticket, it receives the new attribution through the same mechanism
+  as `ignite tell`.
+- It records the operating system when the check is not portable. For a CLI
+  culprit landing, the hub pins the repair to the machine that ran it if that
+  machine can run the check, and asks for the same provider. Otherwise the
+  regression keeps its usual machine pin. After 30 minutes without a report from
+  the pinned machine, another machine that can run the check may take it. The
+  provider of the original landing is required only on the original machine (see
+  [Machine and provider pins](#machine-and-provider-pins)).
+- It goes first in the dispatch order. The hub reserves it for a machine under a
+  one-time code. On the culprit's machine and provider, the daemon tries to
+  resume the original transcript under a new Ignite session. A worker that takes
+  over elsewhere starts a new transcript.
 - Failing checks share as few tickets as they can. One bad landing often fails
   several checks, and when each check had a ticket and a worker of its own, most
   of those workers closed their ticket as fixed by another. A check is added to
@@ -3461,7 +3462,10 @@ tiers with the same `[pool.cli]` and `[pool.models]` tables.
   for the provider and stores the worker's ticket, model, effort, turn number
   and prompt in `cli_slots`. When the ticket ends, the worker row is removed.
   Turn history and transcripts let a lane successor, regression or reverted
-  ticket continue an earlier transcript.
+  ticket continue an earlier transcript. A CLI landing keeps its transcript
+  available for repairs for 24 hours. Repairs from the same landing can use it
+  in sequence. If the transcript cannot be resumed, the worker starts fresh.
+  `ignite pool list` and the ticket's history show the hand-off and its reason.
 - Three loops follow the pool. `ignite-cli` reads running turns and acts on
   their ends about once a second. `ignite-cli-health` runs probe turns and
   reports CLI holds. `ignite-cli-dispatch` asks the hub for tickets every ten
@@ -3479,11 +3483,11 @@ A turn:
   so a turn is never started twice.
 - The supervisor's command, `ignite internal cli-turn`, takes
   `sessions/<session>/lock` in the Ignite home, waiting while another turn holds
-  it, and then becomes the CLI program, which keeps the lock until it exits. Two
-  turns on one transcript are therefore impossible whatever a daemon decides. It
-  also records the last turn it ran in `sessions/<session>/turn` and refuses a
-  turn that is not newer, so even two supervisors started for one turn run the
-  program once.
+  it, and then becomes the CLI program, which keeps the lock until it exits. A
+  repair waits if another worker still uses its culprit's transcript. The
+  supervisor records the last turn it ran in `sessions/<session>/turn` and
+  refuses a turn that is not newer. If two supervisors start for the same turn,
+  only one runs the program.
 - At start, a daemon looks for the run whose `spec.json` names each recorded
   turn. No run means the turn never started, so it starts it. A run whose lock
   is held is running, one with `result.json` has ended, and one with a free lock
@@ -5061,8 +5065,13 @@ These show that each kind of failure goes where the design sends it.
   `master` held at the previous commit; other landings unaffected and the check
   shown as `known-failing` in their gates. Land the fix and expect `master` to
   move.
-- **The culprit's session.** Repeat while the worker that landed the break has
-  no new ticket. Expect the CLI worker to resume the earlier transcript.
+- **The culprit's transcript.** File a regression without a culprit, then report
+  the same check with the culprit identified. Expect the hub to reserve it on
+  the original machine and provider, and the worker to resume the earlier
+  transcript. Another repair for the same landing can resume it after that
+  worker finishes. If another worker claimed the regression before the search
+  finished, expect it to receive the new attribution. If the original machine is
+  silent for 30 minutes, expect a worker on another machine to start fresh.
 - **A flaky check.** Add a check that fails every other run. Expect the first
   flake recorded and passed over, the second on a later commit to switch the
   check off on both machines, and one P3 ticket quoting both failures.

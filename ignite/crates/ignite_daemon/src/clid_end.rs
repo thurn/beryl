@@ -68,11 +68,14 @@ impl CliDaemon {
         {
             self.effects.ended(&slot, &end, events);
             let now = self.now().to_string();
+            let note = "Started fresh: the resumed first turn did not finish cleanly";
             let next = self.close(row, turn, &end, exit, SlotState::BackingOff, |r| {
                 r.transcript = None;
                 r.next_prompt = Some(fallback.clone());
                 r.resume_at = Some(now);
+                r.handoff_note = Some(note.to_owned());
             })?;
+            self.effects.handoff(&slot, note);
             return self.start_next(&next);
         }
         let facts = self.facts(row, turn, &end, events)?;
