@@ -267,16 +267,37 @@ fn scrolling_a_large_pile_moves_its_cards_and_clips_cards_that_leave_the_grid() 
             .collect()
     };
     let top = cards(frame);
+    let card = frame
+        .resolved
+        .iter()
+        .filter(|element| element.role == Role::Card && element.clip.is_some())
+        .min_by(|a, b| {
+            kit_scene::hit::bounds(a)
+                .y
+                .total_cmp(&kit_scene::hit::bounds(b).y)
+        })
+        .expect("a card takes its clip from the grid");
+    let clip = card.clip.unwrap();
+    let bounds = kit_scene::hit::bounds(card);
+    let half_row = bounds.y - clip.y + bounds.height / 2.0;
+    let id = card.id;
+    let roll = |distance: f32| {
+        Input::Pointer(Pointer {
+            id: 0,
+            kind: PointerKind::Mouse,
+            phase: PointerPhase::Wheel,
+            position: at,
+            button: Button::None,
+            wheel: Vec2::new(0.0, -distance),
+            modifiers: Modifiers::default(),
+        })
+    };
     assert!(!top.is_empty());
-    client.handle(Input::Pointer(Pointer {
-        id: 0,
-        kind: PointerKind::Mouse,
-        phase: PointerPhase::Wheel,
-        position: at,
-        button: Button::None,
-        wheel: Vec2::new(0.0, -10_000.0),
-        modifiers: Modifiers::default(),
-    }));
+    client.handle(roll(half_row));
+    let frame = client.frame(1_005_000_000);
+    assert_clipped_card(frame, id, clip);
+
+    client.handle(roll(10_000.0));
     let end = cards(client.frame(1_010_000_000));
     assert!(!end.is_empty());
     assert!(
@@ -287,4 +308,25 @@ fn scrolling_a_large_pile_moves_its_cards_and_clips_cards_that_leave_the_grid() 
         end.iter().any(|id| !top.contains(id)),
         "new cards scrolled into view"
     );
+}
+
+/// The same rectangle cuts the card in drawing and in the manual viewer's hit test.
+fn assert_clipped_card(frame: &Frame, id: kit_frame::frame::ElementId, clip: kit_ui::input::Rect) {
+    use game_manual::manual::viewers::card_at;
+    use glam::Vec2;
+
+    let card = frame.resolved.iter().find(|card| card.id == id).unwrap();
+    let bounds = kit_scene::hit::bounds(card);
+    assert!(bounds.y < clip.y && bounds.y + bounds.height > clip.y);
+    assert!((0..frame.resolved.len()).any(|at| frame.shown_by(at as u32) == Some(id)));
+    assert!(frame.draws.iter().enumerate().any(|(at, draw)| {
+        frame.band(at) == Some(kit_frame::frame::Band::LayerCards)
+            && draw.clip() > 0
+            && frame.clips[usize::from(draw.clip())]
+                == kit_base::geometry::zoom_rect(clip, (Vec2::ZERO, 2.0))
+    }));
+    let shown = |slot: ObjectId| u32::from(slot.0) == id.0;
+    let x = bounds.x + bounds.width / 2.0;
+    assert!(card_at(frame, Vec2::new(x, clip.y + 5.0), shown).is_some());
+    assert!(card_at(frame, Vec2::new(x, clip.y - 5.0), shown).is_none());
 }

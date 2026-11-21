@@ -12,7 +12,7 @@ use crate::beat::Laid;
 use crate::light::Lit;
 use game_table::table::{CARD_WIDTH, Held, Moves, TrayPoses};
 use kit_base::pose::{Curve, Pose};
-use kit_ui::input::Rect;
+use kit_scene::ShowPlacement;
 
 impl Show {
     /// The latest view, which says where each object lies, and the spans the table shows, for
@@ -34,10 +34,9 @@ impl Show {
         self.table.lift(held, poses, over, curve);
     }
 
-    /// Shows each card `boxes` names in its box of the flat layer, and no other
-    /// (`Table::show_in`).
-    pub fn show_in(&mut self, boxes: &[(ObjectId, Rect, bool)], moves: Moves, covered: bool) {
-        self.table.show_in(boxes, moves, covered);
+    /// Places the objects that the active screen shows.
+    pub fn place_shows(&mut self, placements: &[ShowPlacement], moves: Moves, covered: bool) {
+        self.table.place_shows(placements, moves, covered);
     }
 
     /// Covers the table for the open prompt or uncovers it (`Table::cover_for_prompt`).

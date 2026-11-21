@@ -7,7 +7,7 @@
 //! them. The life orbs and the step stops stand under the backdrop, which dims them, as the
 //! web's overlay is drawn over its `Hud`.
 //!
-//! The cards are the hand's scene objects (`Shown::Object`): the table moves each from the hand
+//! The cards are the hand's scene objects (`Show`): the table moves each from the hand
 //! into its box and back (`table::shown`), so no card is drawn at the hand while the opening is
 //! shown. A put-on-bottom pick clicks the cards in the row (`Click::On`); the session marks each
 //! one picked as selected, and the row shows it in a slot.
@@ -39,11 +39,10 @@ use kit_base::data::space::flat::opening as metrics;
 use kit_base::data::space::flat::phone::opening as phone;
 use kit_base::data::space::flat::phone::{ACTION_GAP, ACTION_HEIGHT, GUTTER};
 use kit_base::tokens::{color, size, type_style};
-use kit_frame::frame::Role;
+use kit_frame::frame::{ElementId, Role};
+use kit_scene::Show;
 use kit_text::text::TypeStyle;
-use kit_ui::element::{
-    Action, Align, Anchor, Element, Justify, Overflow, Shown, column, row, text,
-};
+use kit_ui::element::{Action, Align, Anchor, Element, Justify, Overflow, column, row, text};
 use kit_ui::widgets::screen::backdrop;
 use kit_ui::widgets::{button, primary};
 
@@ -248,7 +247,7 @@ pub fn present(shown: &Presentation, window: Window) -> Element {
     }
     if shown.hand_hidden {
         // The cards' boxes lie outside this empty strip's clip, so the table draws none of
-        // them (`Layer::shown_objects`), and the strip takes no room, as the web's empty
+        // them through their Show relations, and the strip takes no room, as the web's empty
         // `.opening-hand` takes none.
         hand_row = row()
             .name("hand held")
@@ -387,7 +386,7 @@ fn card_box(view: &PlayerView, slot: ObjectId, width: f32) -> Element {
         .name(&format!("{name} #{}", slot.0))
         .width(width)
         .height(width * CARD_HEIGHT / CARD_WIDTH);
-    element.shows = Some(Shown::Object(Subject::Object { slot }));
+    element.show = Some(Show::object(ElementId(u32::from(slot.0))));
     element
 }
 

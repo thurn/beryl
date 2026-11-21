@@ -38,7 +38,7 @@ use game_probe::driver::{OPEN, RECORDINGS};
 pub const PREFIX: &str = "screen/";
 
 /// The name of every screen recording.
-pub const NAMES: [&str; 13] = [
+pub const NAMES: [&str; 14] = [
     "screen/start",
     "screen/start-tables",
     "screen/lobby",
@@ -48,6 +48,7 @@ pub const NAMES: [&str; 13] = [
     "screen/table-opening",
     "screen/table-left",
     "screen/table-search",
+    "screen/table-pile-scroll",
     "screen/gallery",
     "screen/testing",
     "screen/settings",
@@ -100,47 +101,7 @@ pub fn messages(name: &str) -> Option<Vec<FixtureMessage>> {
         _ => vec![opened],
     };
     let mut view = if table_screen(opened) {
-        let mut builder = testing::ViewBuilder::sample();
-        // UI Conventions, "Inspecting a face-down manual card": each side has a face-down
-        // card on the battlefield, which the table stands after its other permanents. The
-        // viewer knows their own, so its name is in the view and pointing at it shows its face;
-        // the opponent's has no name, so pointing at it shows nothing.
-        for (side, name) in [(Side::You, "Serra Angel"), (Side::Opponent, "")] {
-            let card = builder.card(ZoneName::Battlefield, side, name);
-            card.name = (!name.is_empty()).then(|| name.to_owned());
-            card.facing = Facing::Down;
-        }
-        let mut view = builder.build();
-        if opened == "table-assists" {
-            marks(&mut view);
-        }
-        add_note(&mut view);
-        let mut table = testing::table(&view);
-        // A few log lines, so that the checks see the log at the table's left with its undo
-        // and rewind buttons.
-        table.log = [
-            (1, "Shuffled your library.", false),
-            (2, "Drew 7 cards.", false),
-            (3, "Drew a card.", true),
-        ]
-        .map(|(n, text, undoable)| LogLine {
-            n,
-            by: "You".to_owned(),
-            text: text.to_owned(),
-            struck: false,
-            undoable,
-            blocked_by: Vec::new(),
-        })
-        .into();
-        if opened == "table-assists" {
-            assists(&view, &mut table);
-        }
-        guided_or_linked(opened, &mut table);
-        if opened == "table-search" {
-            searched(&mut view);
-        }
-        view.table = Some(table);
-        view
+        table_view(opened)
     } else {
         PlayerView::neutral(PlayerState::neutral(20), PlayerState::neutral(20))
     };
@@ -196,6 +157,66 @@ pub fn messages(name: &str) -> Option<Vec<FixtureMessage>> {
         })
     }));
     Some(messages)
+}
+
+/// The sample table and the extra cards or state the requested screen needs.
+fn table_view(opened: &str) -> PlayerView {
+    let mut builder = testing::ViewBuilder::sample();
+    // UI Conventions, "Inspecting a face-down manual card": each side has a face-down
+    // card on the battlefield, which the table stands after its other permanents. The
+    // viewer knows their own, so its name is in the view and pointing at it shows its face;
+    // the opponent's has no name, so pointing at it shows nothing.
+    for (side, name) in [(Side::You, "Serra Angel"), (Side::Opponent, "")] {
+        let card = builder.card(ZoneName::Battlefield, side, name);
+        card.name = (!name.is_empty()).then(|| name.to_owned());
+        card.facing = Facing::Down;
+    }
+    if opened == "table-pile-scroll" {
+        for name in [
+            "Serra Angel",
+            "Island",
+            "Counterspell",
+            "Pacifism",
+            "Plains",
+        ]
+        .into_iter()
+        .cycle()
+        .take(40)
+        {
+            builder.card(ZoneName::Graveyard, Side::You, name);
+        }
+    }
+    let mut view = builder.build();
+    if opened == "table-assists" {
+        marks(&mut view);
+    }
+    add_note(&mut view);
+    let mut table = testing::table(&view);
+    // A few log lines, so that the checks see the log at the table's left with its undo
+    // and rewind buttons.
+    table.log = [
+        (1, "Shuffled your library.", false),
+        (2, "Drew 7 cards.", false),
+        (3, "Drew a card.", true),
+    ]
+    .map(|(n, text, undoable)| LogLine {
+        n,
+        by: "You".to_owned(),
+        text: text.to_owned(),
+        struck: false,
+        undoable,
+        blocked_by: Vec::new(),
+    })
+    .into();
+    if opened == "table-assists" {
+        assists(&view, &mut table);
+    }
+    guided_or_linked(opened, &mut table);
+    if opened == "table-search" {
+        searched(&mut view);
+    }
+    view.table = Some(table);
+    view
 }
 
 /// The recorded answers of `screen/start-tables`: two saved tables, a hosted one and the last

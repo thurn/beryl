@@ -4,7 +4,7 @@
 //! and right arrow keys move the highlighted card along the row, Done puts the cards on the
 //! library in that order and Cancel leaves them where they were. This is the web's
 //! `LibraryOrder` (`ui/src/table/LibraryOrder.tsx`). Each card is its scene object shown in a
-//! box of the flat layer (`Shown::Object`), so the table lifts it into the tray and lets it go
+//! box of the flat layer (`Show`), so the table lifts it into the tray and lets it go
 //! with the tray's own timing, as the pile viewer's cards move.
 
 use beryl_protocol::PlayerView;

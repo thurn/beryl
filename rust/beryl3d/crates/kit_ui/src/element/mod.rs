@@ -27,7 +27,7 @@ pub use transition::{Presence, Property, Timing, Transition};
 use crate::input::{FaceId, FaceSize};
 use crate::widgets::icons::LayeredIcon;
 use crate::widgets::{FieldState, IconId};
-use kit_frame::frame::Role;
+use kit_frame::frame::{Role, Show};
 
 /// Where an element stands when it is placed at a point of the window rather than in its
 /// parent's layout. The second vector says which point of the element's box lies there: (0, 0)
@@ -67,9 +67,6 @@ pub enum Shown {
     Face(FaceId, FaceSize),
     /// A tapped card face, drawn flat with its long side horizontal.
     TappedFace(FaceId, FaceSize),
-    /// The scene object itself, placed in the element's box, so that it looks and moves as it
-    /// does on the table.
-    Object(Subject),
     /// An icon `size` logical points on a side, centred in the element's content box and
     /// tinted with its text color.
     Icon(IconId, u16),
@@ -114,8 +111,10 @@ pub struct Element {
     /// Where it stands if it is placed at a point of the window or on a scene object rather
     /// than in its parent's layout. It is laid out at its content's size (`layout::anchor`).
     pub anchor: Option<Anchor>,
-    /// A face or a scene object shown in its box: the furniture and cards track.
+    /// Flat artwork shown in this element's box.
     pub shows: Option<Shown>,
+    /// A table object the scene tree places in this element's box.
+    pub show: Option<Show>,
     /// The keyboard shortcuts the screen answers, given on its top element.
     pub shortcuts: Shortcuts,
     /// For a text field, what it holds and where its caret is (`widgets::field`), from which
@@ -142,6 +141,7 @@ impl Element {
             waits: false,
             anchor: None,
             shows: None,
+            show: None,
             shortcuts: Shortcuts::default(),
             field: None,
             children: Vec::new(),
@@ -164,6 +164,7 @@ impl Element {
             && self.waits == other.waits
             && self.anchor == other.anchor
             && self.shows == other.shows
+            && self.show == other.show
             && self.shortcuts == other.shortcuts
             && self.field == other.field
     }

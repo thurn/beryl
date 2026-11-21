@@ -1,6 +1,6 @@
 //! The viewer that shows cards from a pile, such as a graveyard, or the Revealed Cards pile.
 //!
-//! A pile's cards are its scene objects (`Shown::Object`): each box of the viewer's grid shows
+//! A pile's cards are its scene objects (`Show`): each box of the viewer's grid shows
 //! one, and the table moves the card from its pile into the box and back (`table::shown`), so
 //! that it is the same card on the table and in the viewer. The faces of the Revealed Cards
 //! pile are second elements, not scene objects, so its viewer draws them flat (`Shown::Face`).
@@ -9,7 +9,6 @@ use crate::hud::GamePress;
 use crate::inspect::Viewed;
 use beryl_protocol::PlayerView;
 use beryl_protocol::protocol::{ObjectId, Side, ZoneName};
-use beryl_protocol::script::Subject;
 use glam::Vec2;
 
 use super::revealed::{REVEALED, RevealedFace};
@@ -19,7 +18,8 @@ use game_table::faces::{CARD_BACK, FaceList};
 use game_table::table::{CARD_HEIGHT, CARD_WIDTH, pile_name};
 use kit_base::data::space::flat::gallery as metrics;
 use kit_base::tokens::{color, size, space, type_style};
-use kit_frame::frame::Role;
+use kit_frame::frame::{ElementId, Role};
+use kit_scene::Show;
 use kit_ui::element::{
     Align, Anchor, Element, Overflow, Shown, TextAlign, Track, column, row, text,
 };
@@ -182,7 +182,7 @@ pub fn object_box(view: &PlayerView, slot: ObjectId) -> Element {
         .and_then(|object| object.name.as_deref())
         .unwrap_or("card");
     let mut element = card_box(&format!("{name} #{}", slot.0));
-    element.shows = Some(Shown::Object(Subject::Object { slot }));
+    element.show = Some(Show::object(ElementId(u32::from(slot.0))));
     element
 }
 

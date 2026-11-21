@@ -622,7 +622,7 @@ impl Table {
                     face_of(faces, &shown_view.objects[resting.view_index as usize])
                 })
         };
-        // A card shown in a box (`held_at`) is drawn there whole, and its effects at the place
+        // A card shown in a box (`held_at`) is drawn there, and its effects at the place
         // the table holds it.
         let effects_on_card = if held_at.is_some() {
             &[][..]
@@ -697,6 +697,7 @@ impl Table {
         let transform = look.pose.transform();
         let shown =
             role == Role::Card && (self.shown.holds(id.0 as usize) || self.in_tray(id.0 as usize));
+        let clip = shown.then(|| self.shown_clip(id)).flatten();
         let at = builder.resolved(
             name,
             Resolved {
@@ -709,7 +710,7 @@ impl Table {
                 corners: self.camera.card_corners(transform),
                 depth: self.camera.depth(look.pose.position),
                 opacity: look.pose.opacity,
-                clip: None,
+                clip,
                 interactive: look.interactive,
                 state: StateBits(look.state | if shown { StateBits::SHOWN } else { 0 }),
                 face: look.face,
@@ -738,6 +739,15 @@ impl Table {
         } else {
             Band::RaisedMarks
         };
+        let scissor = clip
+            .and_then(|rect| {
+                let scale = self.camera.window.scale;
+                builder.scissor(kit_base::geometry::zoom_rect(
+                    rect,
+                    (glam::Vec2::ZERO, scale),
+                ))
+            })
+            .unwrap_or(0);
         builder.draw(
             band,
             Draw::card(
@@ -748,7 +758,8 @@ impl Table {
                 back,
                 look.dissolve,
                 look.whiten,
-            ),
+            )
+            .with_clip(scissor),
         );
         at
     }

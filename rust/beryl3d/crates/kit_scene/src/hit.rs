@@ -398,7 +398,8 @@ fn never_catches(role: Role) -> bool {
 }
 
 /// Whether `point` is inside the element's quadrilateral and its clip.
-fn within(element: &Resolved, point: Vec2) -> bool {
+#[must_use]
+pub fn within(element: &Resolved, point: Vec2) -> bool {
     if let Some(clip) = element.clip
         && !(point.x >= clip.x
             && point.y >= clip.y

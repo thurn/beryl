@@ -14,11 +14,11 @@ use glam::{Vec2, Vec3};
 use serde_json::Value;
 
 use super::commands::seat_of;
-use super::viewers::inside;
 use game_table::table::{Camera, Layout};
 use kit_base::data::space::flat::table::drop as data;
 use kit_base::tokens::{color, ratio, type_style};
 use kit_frame::frame::{Frame, Place, Role, StateBits};
+use kit_scene::hit::within;
 use kit_ui::element::{Align, Anchor, Element, Justify, column, text};
 use kit_ui::input::Rect;
 
@@ -78,7 +78,7 @@ fn under(frame: &Frame, at: Vec2, held: &[ObjectId], view: &PlayerView) -> Optio
         };
         if !matches!(element.role, Role::Card | Role::Pile)
             || element.state.0 & StateBits::HELD != 0
-            || !inside(&element.corners, at)
+            || !within(element, at)
         {
             continue;
         }

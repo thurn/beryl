@@ -1,6 +1,6 @@
 //! The viewer of a pile's cards (`inspect::viewer`) and the Revealed Cards pill
 //! (`inspect::revealed`): which pile's viewer is open, the cards shown in its boxes, which the
-//! table moves there and back (`Table::show_in`), and the pill, shown whenever the Revealed Cards
+//! table moves there and back (its Show relations), and the pill, shown whenever the Revealed Cards
 //! pile holds a face.
 
 use beryl_protocol::PlayerView;
@@ -17,8 +17,8 @@ use game_table::table::{Moves, Relaid, Window};
 use kit_base::data::space::shown::opening;
 use kit_base::pose::Curve;
 use kit_frame::frame::Place;
+use kit_scene::{ShowPlacement, Tree};
 use kit_ui::element::{Element, floats};
-use kit_ui::input::Rect;
 use kit_ui::layout::FloatLook;
 
 /// Nanoseconds in a millisecond, as the session's step timings are written in milliseconds.
@@ -37,7 +37,7 @@ pub(super) struct Viewing {
     /// The faces of the Revealed Cards pile as its viewer was last opened.
     pub(super) revealed: Vec<RevealedFace>,
     /// The boxes the screen shows cards in, kept so that finding them allocates nothing.
-    boxes: Vec<(ObjectId, Rect, bool)>,
+    placements: Vec<ShowPlacement>,
     /// Which of the pill's keys is shown, if any.
     pill: Option<u64>,
     /// Whether the screen shows the opening hand (`screens::opening`), as it was laid out last
@@ -207,7 +207,7 @@ impl Client {
     /// and back (`OwnStep::TrayLifts` and `OwnStep::TrayLetGo`), the steps a client makes
     /// itself that carry cards off the table to be looked at.
     pub(super) fn place_shown(&mut self) {
-        self.layer.shown_objects(&mut self.viewing.boxes);
+        Tree::screen_shows(&self.layer, &mut self.viewing.placements);
         let timing = |step: OwnStep| {
             (self.own_timings.entries.iter())
                 .find(|entry| entry.step == step)
@@ -253,7 +253,8 @@ impl Client {
             && matches!(self.screen, Screen::Game | Screen::Table))
             || self.guided_start()
             || self.table_frozen();
-        self.show.show_in(&self.viewing.boxes, moves, covered);
+        self.show
+            .place_shows(&self.viewing.placements, moves, covered);
     }
 
     /// Lays the Revealed Cards pill out ahead, so that a frame only shows it, once `view`'s
@@ -430,7 +431,7 @@ impl Client {
 
     /// Whether the open viewer shows the card in `slot` in one of its boxes.
     pub(super) fn viewer_shows(&self, slot: ObjectId) -> bool {
-        (self.viewing.boxes.iter()).any(|(shown, ..)| *shown == slot)
+        (self.viewing.placements.iter()).any(|shown| shown.object.0 == u32::from(slot.0))
     }
 
     /// Whether the open prompt lists what it asks about over the table on a shade of its own

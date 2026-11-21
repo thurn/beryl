@@ -2,7 +2,7 @@
 //! of a graveyard and an exile pile open its viewer, the card browser of `inspect::viewer`, as
 //! the web's `TableViewers` (`ui/src/table/viewers.ts`) opens a `TablePileViewer`, and the
 //! table's look commands open a library's once the table takes the look (`Look`). Each card in
-//! the viewer is its scene object shown in a box (`Shown::Object`), and a right click on one
+//! the viewer is its scene object shown in a box (`Show`), and a right click on one
 //! opens that card's context menu, with the commands of a card in a pile, as the web's viewer
 //! cards carry the table's commands.
 //!
@@ -358,25 +358,9 @@ pub fn opens_on_press(zone: ZoneName) -> bool {
 #[must_use]
 pub fn card_at(frame: &Frame, point: Vec2, shown: impl Fn(ObjectId) -> bool) -> Option<Target> {
     (frame.resolved.iter().rev())
-        .filter(|element| element.role == Role::Card && inside(&element.corners, point))
+        .filter(|element| element.role == Role::Card && kit_scene::hit::within(element, point))
         .find_map(|element| {
             let slot = ObjectId(u16::try_from(element.id.0).ok()?);
             shown(slot).then_some(Target::Card(slot))
         })
-}
-
-/// Whether `point` lies inside the quadrilateral `corners`, given in order round its edge.
-#[must_use]
-pub fn inside(corners: &[Vec2; 4], point: Vec2) -> bool {
-    // The point is inside when it lies on the same side of every edge, or on an edge.
-    let sides = (0..4).map(|index| {
-        let (a, b) = (corners[index], corners[(index + 1) % 4]);
-        (b - a).perp_dot(point - a)
-    });
-    let (mut left, mut right) = (false, false);
-    for cross in sides {
-        left |= cross > 0.0;
-        right |= cross < 0.0;
-    }
-    !(left && right)
 }

@@ -8,7 +8,7 @@ use beryl_assets::light;
 use beryl_render::{BACK_LAYER, Limits, Renderer, Target};
 use glam::camera::rh::{proj::directx, view::look_at_mat4};
 use glam::{Affine3A, Mat4, Quat, Vec2, Vec3};
-use kit_base::geometry::{CARD_HEIGHT, CARD_WIDTH, Window};
+use kit_base::geometry::{CARD_HEIGHT, CARD_WIDTH, Rect, Window};
 use kit_frame::frame::{Band, DRAWS, Draw, Frame, FrameBuilder, sprites};
 use kit_space::camera::{Camera, DESKTOP_CAMERA};
 use kit_ui::input::{FaceSize, Tier};
@@ -629,6 +629,43 @@ fn a_shake_moves_the_table_and_not_the_flat_layer() {
                     "{limits:?} at ({x}, {row})"
                 );
             }
+        }
+    }
+}
+
+/// A table-space card shown over a screen panel can be halfway through the panel's clip.
+#[test]
+fn a_shown_card_draws_only_inside_its_elements_clip() {
+    let background = [30, 70, 110];
+    for limits in BOTH {
+        let mut renderer = renderer(limits);
+        for tier in [Tier::Baseline, Tier::Enhanced] {
+            let mut frame = Frame::with_capacity(0, 2, 0);
+            let mut builder = FrameBuilder::new(&mut frame, tier);
+            builder.camera(overhead());
+            let clip = builder
+                .scissor(Rect {
+                    x: 0.0,
+                    y: 100.0,
+                    width: 200.0,
+                    height: 100.0,
+                })
+                .unwrap();
+            builder.draw(
+                Band::Layer,
+                rectangle(Vec2::ZERO, Vec2::splat(200.0), 0.0, background),
+            );
+            builder.draw(Band::LayerCards, card(Vec3::Z, 1, [255; 4]).with_clip(clip));
+            let frame = builder.finish();
+            let mut target = Target::offscreen(&renderer, 200, 200);
+            renderer.render(frame, &mut target);
+            let picture = Picture {
+                pixels: renderer.read(&target),
+                width: 200,
+            };
+            let panel = picture.at(40, 80);
+            assert_eq!(picture.at(100, 80), panel, "{limits:?} {tier:?}");
+            assert_ne!(picture.at(100, 120), panel, "{limits:?} {tier:?}");
         }
     }
 }

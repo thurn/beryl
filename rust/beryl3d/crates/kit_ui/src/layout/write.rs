@@ -170,6 +170,9 @@ impl Layer {
                 note: kit_frame::frame::NameRef::default(),
             },
         );
+        if !look.departing {
+            node.record_show(index, builder);
+        }
         let mask = mask_of(node);
         if builder.looking() {
             let ink = ink(node, state, look.tint);
@@ -344,7 +347,7 @@ impl Layer {
                 }
                 return;
             }
-            Some(Shown::Object(_)) | None => return,
+            None => return,
         };
         let draw = if clip > 0 { draw.with_clip(clip) } else { draw };
         builder.draw(Band::Layer, draw);
@@ -494,8 +497,14 @@ pub(super) fn clip_inside(
         height: 0.0,
         ..rect
     });
-    let entry = builder.clip(scaled(cut, scale)).unwrap_or(0);
+    let pixels = scaled(cut, scale);
     let mask = look.clip.and_then(|(_, outer)| builder.mask_of(outer));
+    let entry = if mask.is_some() {
+        builder.clip(pixels)
+    } else {
+        builder.scissor(pixels)
+    }
+    .unwrap_or(0);
     if let (Some((rect, angle, gradient)), true) = (mask, entry > 0) {
         builder.mask(entry, rect, angle, gradient);
     }

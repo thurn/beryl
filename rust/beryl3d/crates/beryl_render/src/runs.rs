@@ -25,7 +25,7 @@ pub struct Run {
     pub mesh: u8,
     /// A `TextureArray` value.
     pub array: u8,
-    /// An entry of `Frame::clips`, or 0 for the whole target.
+    /// An entry of `Frame::clips` in any pass, or 0 for the whole target.
     pub clip: u8,
     /// The records drawn, as a range of `Frame::draws`.
     pub records: Range<u32>,

@@ -1,4 +1,4 @@
-//! Cards shown in the flat layer's boxes (`Shown::Object`), such as the viewer's grid of a
+//! Cards shown in the flat layer's boxes (`Show`), such as the viewer's grid of a
 //! pile's cards: the boxes the flat layer laid them out in, and each card's move into its box and
 //! back to where the table rests it. A card in a box is still its one scene object, so it is the
 //! same card on the table and in the viewer.
@@ -10,21 +10,25 @@
 //! `ui/src/game/Piles.tsx`). While anything covers the table, such as the viewer's darkened
 //! backdrop, no card of the table takes a press.
 
-use beryl_protocol::protocol::ObjectId;
-
 use super::scene::SceneObject;
 use super::{Camera, Table};
 use kit_base::data::space::shown::DEPTH;
 use kit_base::pose::between;
 use kit_base::pose::{Curve, Pose};
+use kit_frame::frame::ElementId;
+use kit_scene::{
+    ShowPlacement,
+    hit::{contains, intersection},
+};
 use kit_ui::input::Rect;
 
-/// A box that shows a card: where the card stands in it, and whether it is drawn there (false
-/// for a box scrolled partly or wholly out of the element that clips it).
+/// Where a card stands in the box that shows it and how much of that box is visible.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct InBox {
     pose: Pose,
     visible: bool,
+    clip: Option<Rect>,
+    clipped_at_rest: bool,
 }
 
 /// A card's move into its box or out of it: where it was drawn as the move began, the move's
@@ -108,31 +112,36 @@ pub struct Relaid {
 }
 
 impl Table {
-    /// Shows each card `boxes` names in its box, a rectangle of the window in logical points
-    /// that is drawn if its flag says so, and no other card. A card new to a box moves into it
-    /// from where it is drawn now, and a card no box shows any more moves back to where it
-    /// rests, each as `moves` says, from the next frame. A card whose box moved glides there
-    /// from where it is drawn now as `moves.relaid` says, or, with none, as a scroll moves it,
-    /// stands at once in its new place. `covered` says whether the flat layer covers the table,
-    /// so that no card takes a press.
-    pub fn show_in(&mut self, boxes: &[(ObjectId, Rect, bool)], moves: Moves, covered: bool) {
+    /// Applies the scene tree's Show placements to the cards' presentation poses. A card
+    /// moves into its new box from where it is drawn now. When its box goes away it moves back
+    /// to its resting pose. Both moves start at the next frame and take their timing from
+    /// `moves`. A card whose box moved takes its new position immediately unless
+    /// `moves.relaid` gives it a glide. When `covered` is set, the table takes no presses.
+    pub fn place_shows(&mut self, boxes: &[ShowPlacement], moves: Moves, covered: bool) {
         self.shown.covered = covered;
         let now = self.shown.now;
         self.shown.moves.retain(|(_, moving)| moving.running(now));
         let gone: Vec<usize> = (self.shown.boxes.iter())
             .map(|&(slot, _)| slot)
-            .filter(|&slot| !boxes.iter().any(|(card, ..)| usize::from(card.0) == slot))
+            .filter(|&slot| !boxes.iter().any(|card| card.object.0 as usize == slot))
             .collect();
         for slot in gone {
             let drawn = self.drawn_in_box(slot, now);
             self.shown.boxes.retain(|&(card, _)| card != slot);
             self.start_move(slot, drawn, moves.back);
         }
-        for &(card, rect, visible) in boxes {
-            let slot = usize::from(card.0);
+        for &ShowPlacement {
+            object,
+            bounds: rect,
+            clip,
+        } in boxes
+        {
+            let slot = object.0 as usize;
             let in_box = InBox {
                 pose: box_pose(self.camera(), rect),
-                visible,
+                visible: clip.is_none_or(|clip| intersection(clip, rect).is_some()),
+                clip,
+                clipped_at_rest: clip.is_some_and(|clip| !contains(clip, rect)),
             };
             if let Some(index) = (self.shown.boxes.iter()).position(|(shown, _)| *shown == slot) {
                 let was = self.shown.boxes[index].1;
@@ -208,12 +217,12 @@ impl Table {
             Some(in_box) => match (moving, share) {
                 (Some(moving), Some(share)) => {
                     object.pose = between(&moving.from, &in_box.pose, share);
-                    object.visible = true;
+                    object.visible = in_box.visible;
                     true
                 }
                 (Some(moving), None) if waiting => {
                     object.pose = moving.from;
-                    object.visible = true;
+                    object.visible = in_box.visible;
                     true
                 }
                 _ => {
@@ -236,6 +245,22 @@ impl Table {
                 _ => false,
             },
         }
+    }
+
+    /// The clip of a shown card. Cards flying in from the board or gliding across the
+    /// opening screen may cross the clip on their way to a fully visible box.
+    pub(super) fn shown_clip(&self, id: ElementId) -> Option<Rect> {
+        let slot = id.0 as usize;
+        let in_box = self.shown.in_box(slot)?;
+        if !in_box.clipped_at_rest
+            && self
+                .shown
+                .moving(slot)
+                .is_some_and(|moving| moving.running(self.shown.now))
+        {
+            return None;
+        }
+        in_box.clip
     }
 
     /// Whether a box shows the card in `slot`.

@@ -7,7 +7,9 @@ mod draw;
 mod look;
 mod order;
 mod paint;
+mod relations;
 mod rings;
+pub use relations::{NodeRef, Show};
 pub mod text;
 mod undrawn;
 
@@ -363,6 +365,8 @@ pub const NAME_BYTES: usize = ELEMENTS * 32;
 pub struct Frame {
     /// Capacity set at startup, cleared each frame.
     pub resolved: Vec<Resolved>,
+    /// Screen element indexes with a Show relation, in registration order, and their targets.
+    shows: Vec<(u32, ElementId)>,
     /// Every resolved element's name, end to end.
     pub names: String,
     /// In drawing order.
@@ -445,6 +449,16 @@ pub struct TextLine {
 }
 
 impl Frame {
+    /// The table object that the screen element `element` shows.
+    #[must_use]
+    pub fn shown_by(&self, element: u32) -> Option<ElementId> {
+        let at = self
+            .shows
+            .binary_search_by_key(&element, |&(index, _)| index)
+            .ok()?;
+        Some(self.shows[at].1)
+    }
+
     /// An empty frame with room for `elements` resolved elements, `draws` records and
     /// `name_bytes` bytes of names, so that building a frame within those sizes allocates
     /// nothing.
@@ -452,6 +466,7 @@ impl Frame {
     pub fn with_capacity(elements: usize, draws: usize, name_bytes: usize) -> Self {
         Self {
             resolved: Vec::with_capacity(elements),
+            shows: Vec::with_capacity(elements),
             names: String::with_capacity(name_bytes),
             draws: Vec::with_capacity(draws),
             opaque: 0,
@@ -531,6 +546,7 @@ impl<'a> FrameBuilder<'a> {
     /// Starts a frame drawn in `tier`.
     pub fn new(frame: &'a mut Frame, tier: Tier) -> Self {
         frame.resolved.clear();
+        frame.shows.clear();
         frame.names.clear();
         frame.draws.clear();
         frame.opaque = 0;
@@ -578,6 +594,11 @@ impl<'a> FrameBuilder<'a> {
         self.frame.resolved.push(element);
         self.owner = index(self.frame.resolved.len() - 1);
         self.owner
+    }
+
+    /// Records the Show relation declared by the screen element.
+    pub fn shows(&mut self, element: u32, object: ElementId) {
+        self.frame.shows.push((element, object));
     }
 
     /// The centre of the table's element `id` as written so far (`Frame::centre`).

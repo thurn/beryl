@@ -6,6 +6,9 @@ use glam::Vec2;
 use kit_base::{geometry::Rect, pose::Pose};
 use kit_frame::frame::{ElementId, Frame, Resolved, Role, StateBits};
 
+pub use kit_frame::frame::{NodeRef, Show};
+use kit_ui::layout::Layer;
+
 use crate::hit::bounds;
 
 /// A node's geometry in either table or screen space.
@@ -31,20 +34,6 @@ impl Space {
             Self::Table { bounds, .. } | Self::Screen { bounds } => bounds,
         }
     }
-}
-
-/// A reference that can be resolved again after a tree rebuild.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum NodeRef {
-    /// An id supplied by a node's owner, which must keep it across rebuilds.
-    /// Legacy arrow locator ids are positions in their frame's list.
-    Id(ElementId),
-    /// An immediate child with this role and name, or a root if `parent` is absent.
-    Named {
-        parent: Option<Box<Self>>,
-        role: Role,
-        name: String,
-    },
 }
 
 /// A way to select nodes whose screen boxes a keep-clear placement must avoid.
@@ -76,12 +65,6 @@ pub struct KeepClear {
     pub of: Vec<NodeQuery>,
     /// Candidate slots in descending order of preference.
     pub places: Vec<SlotRef>,
-}
-
-/// Displays a table object in this node's box, cut to the node's clip.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Show {
-    pub object: NodeRef,
 }
 
 /// The scene's paint bands, in back-to-front order. The renderer's passes also account
@@ -121,7 +104,7 @@ pub struct Node<'a> {
 impl<'a> Node<'a> {
     /// Reads a node registered by the frame builder. The frame owns its name.
     #[must_use]
-    fn from_resolved(frame: &'a Frame, element: &Resolved) -> Self {
+    fn from_resolved(frame: &'a Frame, index: u32, element: &Resolved) -> Self {
         let bounds = bounds(element);
         let space = match element.pose {
             Some(pose) => Space::Table { pose, bounds },
@@ -144,7 +127,7 @@ impl<'a> Node<'a> {
             band,
             anchor: None,
             keep_clear: None,
-            show: None,
+            show: frame.shown_by(index).map(Show::object),
         }
     }
 }
@@ -191,14 +174,15 @@ impl<'a> Tree<&'a Frame> {
         self.nodes
             .resolved
             .iter()
-            .map(|element| Node::from_resolved(self.nodes, element))
+            .enumerate()
+            .map(|(index, element)| Node::from_resolved(self.nodes, index as u32, element))
     }
 
     /// The node at this index in registration order.
     #[must_use]
     pub fn node(&self, index: u32) -> Option<Node<'a>> {
         let element = self.nodes.resolved.get(index as usize)?;
-        Some(Node::from_resolved(self.nodes, element))
+        Some(Node::from_resolved(self.nodes, index, element))
     }
 }
 
@@ -275,5 +259,30 @@ impl<'a> Tree<Vec<Node<'a>>> {
     /// When the index is outside the current tree.
     pub fn set_space(&mut self, index: u32, space: Space) {
         self.nodes[index as usize].space = space;
+    }
+}
+
+/// A Show relation resolved against the active screen layout.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ShowPlacement {
+    pub object: ElementId,
+    pub bounds: Rect,
+    pub clip: Option<Rect>,
+}
+
+impl Tree {
+    /// Resolves the active screen's Show declarations after layout or scrolling. The object
+    /// keeps its resting pose, even when the declaring element is currently outside its clip.
+    pub fn screen_shows(layer: &Layer, placements: &mut Vec<ShowPlacement>) {
+        placements.clear();
+        layer.visit_shows(|show, bounds, clip| {
+            if let Some(object) = show.object_id() {
+                placements.push(ShowPlacement {
+                    object,
+                    bounds,
+                    clip,
+                });
+            }
+        });
     }
 }
