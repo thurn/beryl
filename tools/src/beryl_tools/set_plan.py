@@ -258,7 +258,7 @@ def bead_lines(code: str, plan: Plan) -> Iterator[str]:
             "Review the missing clause against Beryl's vocabulary and the Comprehensive Rules. "
             f"Some cards also have other unresolved clauses. {examples}",
         )
-    for tier, label in (("drafted", "tier:haiku"), ("composed", "tier:sonnet")):
+    for tier, label in (("drafted", "tier:light"), ("composed", "tier:sonnet")):
         names = plan.tiers[tier]
         for index in range(0, len(names), BATCH_SIZE):
             cards = ", ".join(names[index : index + BATCH_SIZE])

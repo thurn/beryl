@@ -149,7 +149,7 @@ def test_list_and_plan_partition_a_sets_first_printings(
     assert [command[-1] for command in commands] == [
         "tier:opus",
         "tier:opus",
-        "tier:haiku",
+        "tier:light",
         "tier:sonnet",
     ]
     assert "Largest vocabulary groups" in output.err

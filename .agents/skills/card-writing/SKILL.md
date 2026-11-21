@@ -40,7 +40,7 @@ Use the classification from `just set plan <code>`.
 | Tier | Work |
 | --- | --- |
 | `store` | Beryl builds the card from its store record. |
-| `drafted` | `tier:haiku` checks the complete draft. |
+| `drafted` | `tier:light` checks the complete draft. |
 | `composed` | `tier:sonnet` fills gaps using the existing vocabulary. |
 | `vocabulary` | One `tier:opus` ticket per group that needs the same new vocabulary entry. |
 | `mechanism` | A `tier:opus` design ticket for the missing engine support. |
