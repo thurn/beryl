@@ -193,7 +193,7 @@ impl Client {
         match self.screen {
             Screen::Table => {
                 self.features.sheet.is_none()
-                    && self.manual.menu.is_none()
+                    && self.features.menu().is_none()
                     && (self.show.latest()).is_some_and(|update| update.view.table.is_some())
             }
             Screen::Game => {
@@ -222,7 +222,7 @@ impl Client {
         self.show.pointer_mut().cancel();
         self.scrolling.cancel();
         self.end_gesture();
-        if self.manual.sweep.take().is_some() {
+        if self.features.table_mut().sweep.take().is_some() {
             self.show_screen();
         }
         self.layer.point_at(None, None);

@@ -1,0 +1,458 @@
+//! Mounts the table's features and maps effects to the client and session.
+
+use std::convert::Infallible;
+
+use beryl_protocol::protocol::{Answer, TableAction};
+use game_manual::features::{
+    ask, context_menu, library_order, lobby, log, palette, proposals, table, tokens,
+};
+use game_manual::manual::{ask::dock_anchor, assists::proposal_anchor, link, opening};
+use kit_ui::widgets::FieldState;
+
+use super::{Client, Features, Mounted, Placement, Screen, SessionCommand, ViewInputs, update};
+use kit_ui::element::Element;
+
+pub(super) use game_manual::features::{
+    ask::AskPrompt, context_menu::ContextMenu, library_order::OrderTray, lobby::LobbyScreen,
+    log::TableLog, palette::CommandList, proposals::ProposalPanel, table::TableScreen,
+    tokens::TokenSearch,
+};
+
+pub(super) const TABLE: &str = "manual-table";
+pub(super) const LOBBY: &str = "table-lobby";
+pub(super) const MENU: &str = "table-context-menu";
+pub(super) const PALETTE: &str = "table-command-list";
+pub(super) const ASK: &str = "table-ask";
+pub(super) const TOKENS: &str = "table-token-search";
+pub(super) const ORDER: &str = "table-library-order";
+pub(super) const TABLE_LOG: &str = "table-log";
+pub(super) const PROPOSALS: &str = "table-proposals";
+
+impl Features {
+    fn edit_overlay<'a, F: kit_scene::Feature + 'static>(
+        slots: &'a mut super::Slots,
+        id: &'static str,
+    ) -> &'a mut F::State {
+        let slot = Self::slot::<F>(slots, id);
+        slot.invalidate_view();
+        slot.state_mut()
+    }
+
+    pub(crate) fn table(&self) -> &table::State {
+        self.state_of::<TableScreen>(TABLE)
+    }
+
+    pub(crate) fn table_mut(&mut self) -> &mut table::State {
+        Self::slot::<TableScreen>(&mut self.slots, TABLE).state_mut()
+    }
+
+    pub(crate) fn menu(&self) -> &context_menu::State {
+        self.state_of::<ContextMenu>(MENU)
+    }
+
+    pub(in crate::client) fn clear_menu(&mut self) {
+        Self::slot::<ContextMenu>(&mut self.slots, MENU).update(&context_menu::Message::Close);
+    }
+
+    pub(crate) fn palette(&self) -> &palette::State {
+        self.state_of::<CommandList>(PALETTE)
+    }
+
+    pub(crate) fn palette_mut(&mut self) -> &mut palette::State {
+        Self::edit_overlay::<CommandList>(&mut self.slots, PALETTE)
+    }
+
+    pub(crate) fn ask(&self) -> &ask::State {
+        self.state_of::<AskPrompt>(ASK)
+    }
+
+    pub(crate) fn ask_mut(&mut self) -> &mut ask::State {
+        Self::edit_overlay::<AskPrompt>(&mut self.slots, ASK)
+    }
+
+    pub(crate) fn tokens(&self) -> &tokens::State {
+        self.state_of::<TokenSearch>(TOKENS)
+    }
+
+    pub(crate) fn tokens_mut(&mut self) -> &mut tokens::State {
+        Self::edit_overlay::<TokenSearch>(&mut self.slots, TOKENS)
+    }
+
+    pub(crate) fn order(&self) -> &library_order::State {
+        self.state_of::<OrderTray>(ORDER)
+    }
+
+    pub(crate) fn order_mut(&mut self) -> &mut library_order::State {
+        Self::edit_overlay::<OrderTray>(&mut self.slots, ORDER)
+    }
+
+    pub(crate) fn lobby(&self) -> &lobby::State {
+        self.state_of::<LobbyScreen>(LOBBY)
+    }
+
+    pub(crate) fn overlay_open(&self) -> bool {
+        self.palette().is_some()
+            || self.ask().is_some()
+            || self.tokens().search.is_some()
+            || self.tokens().custom.is_some()
+            || self.order().is_some()
+            || self.table().quitting
+    }
+
+    pub(crate) fn close_overlay(&mut self) {
+        *self.palette_mut() = None;
+        *self.ask_mut() = None;
+        *self.tokens_mut() = tokens::State::default();
+        *self.order_mut() = None;
+        self.table_mut().quitting = false;
+    }
+}
+
+impl Client {
+    pub(in crate::client) fn update_lobby(&mut self, message: &lobby::Message) -> bool {
+        update::<LobbyScreen>(self, LOBBY, message)
+    }
+
+    pub(in crate::client) fn update_table_log(&mut self, message: &log::Message) {
+        update::<TableLog>(self, TABLE_LOG, message);
+    }
+
+    pub(in crate::client) fn update_palette(&mut self, message: &palette::Message) {
+        update::<CommandList>(self, PALETTE, message);
+    }
+
+    pub(in crate::client) fn update_tokens(&mut self, message: &tokens::Message) -> bool {
+        update::<TokenSearch>(self, TOKENS, message)
+    }
+
+    pub(in crate::client) fn update_order(&mut self, message: &library_order::Message) -> bool {
+        update::<OrderTray>(self, ORDER, message)
+    }
+
+    pub(in crate::client) fn update_table_menu(&mut self, message: &context_menu::Message) -> bool {
+        update::<ContextMenu>(self, MENU, message)
+    }
+}
+
+impl Mounted for TableScreen {
+    fn mounted_view<'a>(
+        features: &'a mut Features,
+        id: &'static str,
+        inputs: ViewInputs<'_>,
+    ) -> Option<&'a Element> {
+        let log = features.view(Placement::TableLog, inputs);
+        let proposals = features.view(Placement::TableProposals, inputs);
+        let menu = features.view(Placement::TableMenu, inputs);
+        let overlay = features.view(Placement::TableOverlay, inputs);
+        let overlay_open = features.overlay_open();
+        let link_error = features.lobby().lobby.link_error.clone();
+        Some(
+            Features::slot::<Self>(&mut features.slots, id).view(table::Inputs {
+                hud: *inputs.hud,
+                fields: inputs.fields,
+                bindings: inputs.bindings,
+                link_error: link_error.as_deref(),
+                log,
+                proposals,
+                menu,
+                overlay,
+                overlay_open,
+            }),
+        )
+    }
+
+    fn command(client: &mut Client, answer: Answer) {
+        client.send_answer(answer);
+    }
+
+    fn request(client: &mut Client, request: table::Request) -> bool {
+        match request {
+            table::Request::Shortcut(index, shift) => client.table_key(index, shift),
+            table::Request::Step { at, active } => {
+                if let Some(update) = client.show.latest() {
+                    let id = game_manual::manual::turn::step_command(&update.view, at, active);
+                    client.run_table_command(id, game_manual::manual::Target::Table);
+                }
+            }
+            table::Request::Next => {
+                client.run_table_command("phase.next", game_manual::manual::Target::Table);
+            }
+            table::Request::Counter { side, at, add } => {
+                let pressed = if add {
+                    table::Message::Counter { side, at }
+                } else {
+                    table::Message::CounterRemove { side, at }
+                };
+                client.adjust_counter(side, at, add, pressed);
+            }
+            table::Request::Quit => client.requests.push_back(crate::command::Request::Quit),
+            table::Request::CloseOverlay => client.close_table_overlay(),
+            table::Request::SortCard(card) => {
+                let answer = client.show.latest().and_then(|update| {
+                    game_manual::manual::assists::sort_answer(&update.view, card)
+                });
+                if let Some(answer) = answer {
+                    client.send_answer(answer);
+                }
+            }
+            table::Request::Leave => client.leave_table(),
+            table::Request::Viewer(control) => client.viewer_control(control),
+        }
+        false
+    }
+}
+
+impl Mounted for LobbyScreen {
+    fn mounted_view<'a>(
+        features: &'a mut Features,
+        id: &'static str,
+        inputs: ViewInputs<'_>,
+    ) -> Option<&'a Element> {
+        let view = features.lobby_view.as_ref();
+        Some(
+            Features::slot::<Self>(&mut features.slots, id).view(lobby::Inputs {
+                window: inputs.window,
+                column: inputs.profile.screen_column(),
+                fields: inputs.fields,
+                view,
+            }),
+        )
+    }
+
+    fn command(client: &mut Client, command: lobby::Command) {
+        client.commands.push_back(match command {
+            lobby::Command::Change(change) => SessionCommand::TableLobby(change),
+            lobby::Command::SavedTables => SessionCommand::TableSaved,
+            lobby::Command::Host(name) => SessionCommand::TableHost { name },
+            lobby::Command::Join { invite, name } => SessionCommand::TableJoin { invite, name },
+            lobby::Command::Resume(id) => SessionCommand::TableResume(id),
+            lobby::Command::SavedDecks => SessionCommand::DeckList,
+            lobby::Command::Import(request) => SessionCommand::DeckImport(request),
+        });
+    }
+
+    fn request(client: &mut Client, request: lobby::Request) -> bool {
+        match request {
+            lobby::Request::OpenLobby => {
+                client.features.lobby_view = None;
+                client.update_start(&app_screens::screens::start::Message::Leave);
+                client.screen = Screen::Lobby;
+                client.change_sheet(None);
+            }
+            lobby::Request::Leave => client.leave_table(),
+            lobby::Request::ClearFields(fields) => {
+                for field in fields {
+                    client.layer.set_field(field, FieldState::default());
+                }
+            }
+        }
+        false
+    }
+}
+
+impl Mounted for ContextMenu {
+    fn mounted_view<'a>(
+        features: &'a mut Features,
+        id: &'static str,
+        inputs: ViewInputs<'_>,
+    ) -> Option<&'a Element> {
+        let slot = Features::slot::<Self>(&mut features.slots, id);
+        slot.state().as_ref()?;
+        let face = context_menu::sheet_face(slot.state(), inputs.hud);
+        Some(slot.view(context_menu::Inputs {
+            window: inputs.window,
+            profile: inputs.profile,
+            face,
+        }))
+    }
+
+    fn command(_: &mut Client, command: Infallible) {
+        match command {}
+    }
+
+    fn request(client: &mut Client, (act, target): Self::Request) -> bool {
+        client.give(act, target, false);
+        false
+    }
+}
+
+impl Mounted for CommandList {
+    fn mounted_view<'a>(
+        features: &'a mut Features,
+        id: &'static str,
+        inputs: ViewInputs<'_>,
+    ) -> Option<&'a Element> {
+        let slot = Features::slot::<Self>(&mut features.slots, id);
+        slot.state().as_ref()?;
+        Some(slot.view(palette::Inputs {
+            fields: inputs.fields,
+            window: inputs.window.size,
+        }))
+    }
+
+    fn command(_: &mut Client, command: Infallible) {
+        match command {}
+    }
+
+    fn request(client: &mut Client, request: palette::Message) -> bool {
+        let shift = client.features.table().modifiers.shift;
+        match request {
+            palette::Message::Choose(at) => client.run_palette_row(usize::from(at), shift),
+            palette::Message::CancelCapture => client.stop_capture(None),
+            palette::Message::Close => client.layer.focus(None),
+            palette::Message::Query(_) | palette::Message::Highlight(_) => {}
+        }
+        false
+    }
+}
+
+impl Mounted for AskPrompt {
+    fn mounted_view<'a>(
+        features: &'a mut Features,
+        id: &'static str,
+        inputs: ViewInputs<'_>,
+    ) -> Option<&'a Element> {
+        let slot = Features::slot::<Self>(&mut features.slots, id);
+        let open = slot.state().as_ref()?;
+        let anchor = dock_anchor(open, inputs.profile, inputs.hud.placement_scene);
+        Some(slot.view(ask::Inputs {
+            fields: inputs.fields,
+            window: inputs.window,
+            profile: inputs.profile,
+            anchor,
+        }))
+    }
+
+    fn command(_: &mut Client, command: Infallible) {
+        match command {}
+    }
+
+    fn request(client: &mut Client, request: ask::Message) -> bool {
+        match request {
+            ask::Message::Confirm => client.confirm_ask(),
+            ask::Message::Step(up) => client.step_ask(up),
+            ask::Message::Suggestion(at) => client.ask_suggestion(at),
+            ask::Message::Close => client.layer.focus(None),
+        }
+        false
+    }
+}
+
+impl Mounted for TokenSearch {
+    fn mounted_view<'a>(
+        features: &'a mut Features,
+        id: &'static str,
+        inputs: ViewInputs<'_>,
+    ) -> Option<&'a Element> {
+        let slot = Features::slot::<Self>(&mut features.slots, id);
+        if slot.state().custom.is_none() {
+            inputs.view?;
+            slot.state().search.as_ref()?;
+        }
+        Some(slot.view(tokens::Inputs {
+            view: inputs.view,
+            fields: inputs.fields,
+            window: inputs.window.size,
+        }))
+    }
+
+    fn command(client: &mut Client, text: String) {
+        client.commands.push_back(SessionCommand::CardSearch(text));
+    }
+
+    fn request(client: &mut Client, request: tokens::Message) -> bool {
+        let shift = client.features.table().modifiers.shift;
+        match request {
+            tokens::Message::Choose(at) => client.choose_token(usize::from(at), shift),
+            tokens::Message::Create => client.create_custom(shift),
+            tokens::Message::Close => client.layer.focus(None),
+            _ => {}
+        }
+        false
+    }
+}
+
+impl Mounted for OrderTray {
+    fn mounted_view<'a>(
+        features: &'a mut Features,
+        id: &'static str,
+        inputs: ViewInputs<'_>,
+    ) -> Option<&'a Element> {
+        let slot = Features::slot::<Self>(&mut features.slots, id);
+        slot.state().as_ref()?;
+        Some(slot.view(library_order::Inputs {
+            view: inputs.view?,
+            window: inputs.window.size,
+        }))
+    }
+
+    fn command(_: &mut Client, command: Infallible) {
+        match command {}
+    }
+
+    fn request(client: &mut Client, request: library_order::Request) -> bool {
+        match request {
+            library_order::Request::Done(order) => client.order_done(&order),
+            library_order::Request::ClearFocus => client.layer.focus(None),
+        }
+        false
+    }
+}
+
+impl Mounted for TableLog {
+    fn mounted_view<'a>(
+        features: &'a mut Features,
+        id: &'static str,
+        inputs: ViewInputs<'_>,
+    ) -> Option<&'a Element> {
+        let view = inputs.view?;
+        let lines = &view.table.as_ref()?.log;
+        if lines.is_empty() || link::frozen(view) || opening::prompt(view).is_some() {
+            return None;
+        }
+        let folded_at = inputs.profile.slot("manual.log").map(|slot| slot.rect);
+        Some(Features::slot::<Self>(&mut features.slots, id).view(log::Inputs { lines, folded_at }))
+    }
+
+    fn command(client: &mut Client, command: TableAction) {
+        client.send_table(vec![command]);
+    }
+
+    fn request(_: &mut Client, request: Infallible) -> bool {
+        match request {}
+    }
+}
+
+impl Mounted for ProposalPanel {
+    fn mounted_view<'a>(
+        features: &'a mut Features,
+        id: &'static str,
+        inputs: ViewInputs<'_>,
+    ) -> Option<&'a Element> {
+        let proposals = &inputs.view?.table.as_ref()?.proposals;
+        if proposals.is_empty() {
+            return None;
+        }
+        let slot = Features::slot::<Self>(&mut features.slots, id);
+        let anchor = proposal_anchor(
+            proposals,
+            *slot.state(),
+            inputs.profile,
+            inputs.hud.placement_scene,
+        );
+        Some(slot.view(proposals::Inputs {
+            proposals,
+            window: inputs.window,
+            profile: inputs.profile,
+            anchor,
+        }))
+    }
+
+    fn command(client: &mut Client, answer: Answer) {
+        client.send_answer(answer);
+    }
+
+    fn request(_: &mut Client, request: Infallible) -> bool {
+        match request {}
+    }
+}

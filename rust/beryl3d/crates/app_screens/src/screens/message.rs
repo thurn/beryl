@@ -7,4 +7,5 @@ pub enum ScreenPress {
     GalleryMenu(GalleryMenu),
     GalleryQuery(Option<GalleryQuery>),
     DismissMenu,
+    GalleryMenuChoice,
 }

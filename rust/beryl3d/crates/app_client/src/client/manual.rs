@@ -15,68 +15,16 @@ use crate::command::SessionCommand;
 use app_screens::screens::Screen;
 use beryl_protocol::ipc::TableActReply;
 use beryl_protocol::protocol::{Answer, LinkState, ObjectId, Side, TableAction, ZoneName};
-use game_manual::manual::lobby::Lobby;
+use game_manual::features::{context_menu, lobby, log, table::Message as TableMessage};
 use game_manual::manual::menus::{self, Act};
 use game_manual::manual::tokens::TokenChoice;
 use game_manual::manual::viewers::{self, Look, ViewerControl};
-use game_manual::manual::{
-    self, Context, Pending, Pressed, Sent, TablePress, TableState, Target, commands, pools,
-};
+use game_manual::manual::{self, Context, Pending, Pressed, Sent, Target, commands, pools};
 use game_play::pointer::refusal::Shake;
 use kit_ui::input::{Button, Pointer, PointerPhase};
-use kit_ui::widgets::BACK;
 
 /// The most table actions the client remembers sending without an answer.
 const PENDING: usize = 64;
-
-/// What the client keeps of the manual table: what the table shows over itself
-/// (`TableState`, which `Manual` derefs to), the keys held at the last press, and the lobby.
-#[derive(Debug, Default)]
-pub(super) struct Manual {
-    pub(super) state: TableState,
-    /// Whether Cmd (Control off the Mac) was held at the last press of the pointer, which
-    /// makes a click on a card add it to the selection or take it out.
-    pub(super) meta: bool,
-    pub(super) lobby: Lobby,
-    /// The start screen's ways onto a table: its open form, the saved tables and the last
-    /// table's failure to open (`client::entries`).
-    pub(super) entries: app_screens::screens::TableEntries,
-    /// Whether the table refused an action, or the open decision a click on a card, since the
-    /// last frame, which then plays the refusal sound, as the web's `shakeRefusal` plays it for
-    /// every refused table action and `useRefusal` for every refused click.
-    pub(super) refused: bool,
-    /// The card or button whose press is sending table actions, while `table_click` or
-    /// `adjust_counter` sends them, which `send_table` records as where each action came from.
-    clicked: Option<Pressed>,
-    /// The flat-layer button shaking because the table refused the action its press sent, and
-    /// how far along the shake is (`Client::shake_button`).
-    shaking: Option<(Action, Shake)>,
-}
-
-impl std::ops::Deref for Manual {
-    type Target = TableState;
-
-    fn deref(&self) -> &TableState {
-        &self.state
-    }
-}
-
-impl std::ops::DerefMut for Manual {
-    fn deref_mut(&mut self) -> &mut TableState {
-        &mut self.state
-    }
-}
-
-impl Manual {
-    /// The refusal sound, once for a refusal since the last frame, as the web's
-    /// `shakeRefusal` plays it.
-    pub(super) fn take_refusal(&mut self) -> Option<kit_frame::frame::Sound> {
-        std::mem::take(&mut self.refused).then(|| kit_frame::frame::Sound {
-            id: game_play::sound::id("no"),
-            theirs: false,
-        })
-    }
-}
 
 impl Client {
     /// An update arrived: it keeps the session it came from, which stop and concede commands
@@ -96,16 +44,19 @@ impl Client {
         if (update.view.table.as_ref())
             .is_some_and(|table| matches!(table.link, LinkState::Connected { .. }))
         {
-            self.manual.lobby.link_error = None;
+            self.update_lobby(&lobby::Message::LinkError(None));
         }
-        game_manual::manual::selection::keep(&mut self.manual.state.selection, &update.view);
-        if (self.manual.picking).is_some_and(|pick| {
+        game_manual::manual::selection::keep(
+            &mut self.features.table_mut().selection,
+            &update.view,
+        );
+        if (self.features.table().picking).is_some_and(|pick| {
             !game_manual::manual::selection::actionable(&update.view, pick.from)
         }) {
-            self.manual.picking = None;
+            self.features.table_mut().picking = None;
         }
-        self.manual.menu = None;
-        self.manual.close_overlay();
+        self.features.clear_menu();
+        self.features.close_overlay();
         if matches!(self.screen, Screen::Start | Screen::Game) {
             self.screen = Screen::Table;
         }
@@ -123,9 +74,9 @@ impl Client {
             && let Some((_, action, _)) = self
                 .layer
                 .press_at(pointer.position, self.features.layer_open)
-            && let Some(&TablePress::Counter { side, at }) = action.downcast_ref()
+            && let Some(&TableMessage::Counter { side, at }) = action.downcast_ref()
         {
-            self.adjust_counter(side, at, false, TablePress::Counter { side, at });
+            self.adjust_counter(side, at, false, TableMessage::Counter { side, at });
             return true;
         }
         self.open_table_menu_at(pointer.position)
@@ -134,7 +85,7 @@ impl Client {
     /// Adds one to the counter at `at` of `side`'s row of mana and player counters, or removes
     /// one unless `add` (`manual::pools`), unless the table is frozen. `pressed` is the button
     /// that was pressed, which shakes if the table refuses.
-    pub(super) fn adjust_counter(&mut self, side: Side, at: u8, add: bool, pressed: TablePress) {
+    pub(super) fn adjust_counter(&mut self, side: Side, at: u8, add: bool, pressed: TableMessage) {
         if self.table_frozen() {
             return;
         }
@@ -150,9 +101,9 @@ impl Client {
         let mut values = commands::Values::new();
         values.insert("text", name.into());
         let actions = commands::actions_with(command, Target::Life(side), view, &values);
-        self.manual.clicked = Some(Pressed::Button(pressed));
+        self.features.table_mut().clicked = Some(Pressed::Button(pressed));
         self.send_table(actions);
-        self.manual.clicked = None;
+        self.features.table_mut().clicked = None;
     }
 
     /// A click on the card in `slot` on the table, one that picked nothing up, as the web's
@@ -166,7 +117,7 @@ impl Client {
         if self.screen != Screen::Table {
             return false;
         }
-        if self.manual.meta {
+        if self.features.table().modifiers.meta {
             self.table_select(slot);
             return true;
         }
@@ -176,7 +127,7 @@ impl Client {
         let Some(object) = view.objects.iter().find(|object| object.slot == slot) else {
             return true;
         };
-        let shift = self.manual.shift;
+        let shift = self.features.table().modifiers.shift;
         let viewed = self.features.viewer().open().is_some() && self.viewer_shows(slot);
         let card = Target::Card(slot);
         let side = object.zone_side.unwrap_or(object.owner);
@@ -190,9 +141,9 @@ impl Client {
             ZoneName::Library => ("library.draw", Target::Pile(side, ZoneName::Library)),
             _ => return true,
         };
-        self.manual.clicked = Some(Pressed::Card(slot));
+        self.features.table_mut().clicked = Some(Pressed::Card(slot));
         self.run_table_command(id, target);
-        self.manual.clicked = None;
+        self.features.table_mut().clicked = None;
         true
     }
 
@@ -211,39 +162,13 @@ impl Client {
         let target =
             (self.viewer_card_at(at)).unwrap_or_else(|| manual::target_at(&self.frame, at));
         let menu = menus::open(target, view, at, &self.table_context());
-        self.manual.menu = Some(menu);
+        self.update_table_menu(&context_menu::Message::Open(menu));
         self.show_screen();
         true
     }
 
-    /// The `row`th row of the open context menu was pressed: it closes, and the row's command
-    /// is given to what the menu was opened on. On the phone's sheet, a row with a submenu
-    /// instead shows that submenu's rows in the sheet, and `BACK` shows the menu's rows again, as
-    /// the web's menu pages do.
-    pub(super) fn press_table_menu(&mut self, row: u16) {
-        let opens_in_sheet = self.show.table().profile().slot("manual.menu").is_some();
-        let Some(menu) = &mut self.manual.menu else {
-            return;
-        };
-        let folder = (menu.groups.iter().flat_map(|group| &group.rows))
-            .nth(usize::from(row))
-            .is_some_and(|row| !row.submenu.is_empty());
-        if opens_in_sheet && (row == BACK || folder) {
-            menu.page = (row != BACK).then_some(row);
-            self.show_screen();
-            return;
-        }
-        if let Some(menu) = self.manual.menu.take()
-            && let Some(act) = menu.acts.into_iter().nth(usize::from(row))
-        {
-            self.give(act, menu.target, false);
-        }
-        self.show_screen();
-    }
-
-    /// Closes the open context menu.
     pub(super) fn close_table_menu(&mut self) {
-        if self.manual.menu.take().is_some() {
+        if self.update_table_menu(&context_menu::Message::Close) {
             self.show_screen();
         }
     }
@@ -276,7 +201,7 @@ impl Client {
         });
         let on_pointer = command.id.starts_with("life.")
             || matches!(command.id, "selection.row" | "selection.column");
-        let current = match self.manual.state.selection.first() {
+        let current = match self.features.table().selection.first() {
             Some(&slot) if !on_pointer => Target::Card(slot),
             _ => pointed,
         };
@@ -295,9 +220,9 @@ impl Client {
         // The Quit key asks first, as the web's `TableCommands` sends it to `quit`; Leave
         // table in a menu leaves at once.
         if command.id == "table.leave" {
-            self.manual.menu = None;
-            self.manual.close_overlay();
-            self.manual.quitting = true;
+            self.features.clear_menu();
+            self.features.close_overlay();
+            self.features.table_mut().quitting = true;
             self.show_screen();
             return;
         }
@@ -330,8 +255,8 @@ impl Client {
         Context {
             mac: self.platform == Platform::Mac,
             bindings: &self.settings.bindings,
-            last_token: self.manual.last_token.as_ref(),
-            selected: &self.manual.state.selection,
+            last_token: self.features.table().last_token.as_ref(),
+            selected: &self.features.table().selection,
             viewer_open: self.features.viewer().open().is_some(),
             whole_library: self.whole_library_open(),
         }
@@ -347,12 +272,12 @@ impl Client {
                 (_, Some(token), _) => Sent::Token(token),
                 (_, None, Some(look)) => Sent::Look(look),
                 (TableAction::Undo { .. } | TableAction::Rewind { .. }, None, None) => {
-                    self.manual.blocked.clear();
+                    self.update_table_log(&log::Message::ClearBlocked);
                     Sent::History
                 }
                 _ => Sent::Other,
             };
-            let from = self.manual.clicked;
+            let from = self.features.table().clicked;
             self.remember(Pending { sent, from });
             self.commands.push_back(SessionCommand::TableAct(action));
         }
@@ -372,10 +297,10 @@ impl Client {
     fn remember(&mut self, pending: Pending) {
         // A driver that never answers, such as a recording's, would otherwise make the list
         // grow for as long as the table is open.
-        if self.manual.pending.len() >= PENDING {
-            self.manual.pending.pop_front();
+        if self.features.table().pending.len() >= PENDING {
+            self.features.table_mut().pending.pop_front();
         }
-        self.manual.pending.push_back(pending);
+        self.features.table_mut().pending.push_back(pending);
     }
 
     /// Whether the table on screen shows the guided start's opening (`manual::opening`).
@@ -397,11 +322,14 @@ impl Client {
     /// Advances the shake of a refused button to the frame at `now` and moves the flat layer's
     /// elements that take its press. Returns whether it is still shaking.
     pub(super) fn shake_button(&mut self, now: u64) -> bool {
-        let Some((button, shake)) = &mut self.manual.shaking else {
+        if self.features.table().shaking.is_none() {
+            return false;
+        }
+        let Some((button, shake)) = &mut self.features.table_mut().shaking else {
             return false;
         };
         if !shake.advance(now) {
-            self.manual.shaking = None;
+            self.features.table_mut().shaking = None;
             self.layer.shake(None);
             return false;
         }
@@ -418,32 +346,30 @@ impl Client {
     pub(super) fn take_table_reply(&mut self, reply: TableActReply) {
         let refused = matches!(reply, TableActReply::Refused(_));
         if refused {
-            self.manual.refused = true;
+            self.features.table_mut().refused = true;
         }
-        let Some(Pending { sent, from }) = self.manual.pending.pop_front() else {
+        let Some(Pending { sent, from }) = self.features.table_mut().pending.pop_front() else {
             return;
         };
         match from.filter(|_| refused && !self.table_frozen()) {
             Some(Pressed::Card(slot)) => self.show.pointer_mut().refuse(usize::from(slot.0)),
             Some(Pressed::Button(button)) => {
-                self.manual.shaking = Some((Action::new(button), Shake::new()));
+                self.features.table_mut().shaking = Some((Action::new(button), Shake::new()));
             }
             None => {}
         }
         match (sent, reply) {
             (Sent::Token(token), TableActReply::Ok { .. }) => {
-                self.manual.last_token = Some(token);
+                self.features.table_mut().last_token = Some(token);
             }
             (Sent::Look(look), TableActReply::Ok { .. }) => {
                 self.open_look(look);
                 return;
             }
             (Sent::History, TableActReply::Refused(refused)) => {
-                let blocked = refused.blocked_by.unwrap_or_default();
-                if !blocked.is_empty() {
-                    self.manual.blocked = blocked;
-                    self.manual.log_open = true;
-                }
+                self.update_table_log(&log::Message::Blocked(
+                    refused.blocked_by.unwrap_or_default(),
+                ));
             }
             _ => return,
         }
@@ -477,12 +403,13 @@ impl Client {
 
     /// Leaves the table, from the table or its lobby, and shows the start screen.
     pub(super) fn leave_table(&mut self) {
-        self.manual.menu = None;
-        self.manual.close_overlay();
-        self.manual.state.selection.clear();
-        self.manual.picking = None;
-        self.manual.mana_sheet = None;
-        self.manual.lobby = Lobby::new();
+        self.features.clear_menu();
+        self.features.close_overlay();
+        self.features.table_mut().selection.clear();
+        self.features.table_mut().picking = None;
+        self.features.table_mut().mana_sheet = None;
+        self.update_lobby(&lobby::Message::Reset);
+        self.features.lobby_view = None;
         self.commands.push_back(SessionCommand::TableLeave);
         self.screen = Screen::Start;
         self.change_sheet(None);
@@ -496,13 +423,14 @@ impl Client {
     fn open_look(&mut self, look: Look) {
         let side = look.side;
         self.view(Some(Viewed::Pile(side, ZoneName::Library)));
-        self.manual.viewer.look = Some(look);
+        self.features.table_mut().viewer.look = Some(look);
         self.show_screen();
     }
 
     /// Whether the open viewer shows a search of a whole library its player may shuffle.
     fn whole_library_open(&self) -> bool {
-        (self.show.latest()).is_some_and(|update| self.manual.viewer.can_shuffle(&update.view))
+        (self.show.latest())
+            .is_some_and(|update| self.features.table().viewer.can_shuffle(&update.view))
     }
 
     /// Does what a client command does to the open viewer (`ViewerControl`). With no viewer
@@ -515,11 +443,11 @@ impl Client {
             ViewerControl::Close => self.dismiss_viewer(),
             ViewerControl::Search => self.layer.focus_field(viewers::SEARCH),
             ViewerControl::Group => {
-                self.manual.viewer.grouped = !self.manual.viewer.grouped;
+                self.features.table_mut().viewer.grouped = !self.features.table().viewer.grouped;
                 self.show_screen();
             }
             ViewerControl::Sort(sort) => {
-                self.manual.viewer.sort = sort;
+                self.features.table_mut().viewer.sort = sort;
                 self.show_screen();
             }
             ViewerControl::Finish { shuffle } => {
@@ -535,10 +463,10 @@ impl Client {
     /// `TablePileViewer` does, and closing a library's viewer ends the look. Any other viewer
     /// closes.
     pub(super) fn dismiss_viewer(&mut self) {
-        if self.screen != Screen::Table || self.manual.viewer.look.is_none() {
+        if self.screen != Screen::Table || self.features.table().viewer.look.is_none() {
             self.view(None);
-        } else if self.whole_library_open() && !self.manual.viewer.confirming {
-            self.manual.viewer.confirming = true;
+        } else if self.whole_library_open() && !self.features.table().viewer.confirming {
+            self.features.table_mut().viewer.confirming = true;
             self.show_screen();
         } else {
             self.close_library(false);
@@ -550,7 +478,7 @@ impl Client {
     /// the viewer.
     fn close_library(&mut self, shuffle: bool) {
         let shuffled = shuffle && self.whole_library_open();
-        let Some(look) = self.manual.viewer.look.take() else {
+        let Some(look) = self.features.table_mut().viewer.look.take() else {
             return;
         };
         let Some(view) = self.show.latest().map(|update| &update.view) else {

@@ -6,7 +6,7 @@
 
 use glam::Vec2;
 
-use super::TablePress;
+use crate::features::table::Message as TableMessage;
 use kit_base::tokens::{color, size, space, type_style};
 use kit_ui::element::{Align, Anchor, Element, column, row, text};
 use kit_ui::input::Size;
@@ -17,8 +17,8 @@ use kit_ui::widgets::{button, primary};
 pub fn question(window: Size) -> Element {
     let buttons = row()
         .gap(space::M)
-        .child(button("Cancel").name("close").on_press(TablePress::Close))
-        .child(primary("Quit").on_press(TablePress::Quit));
+        .child(button("Cancel").name("close").on_press(TableMessage::Close))
+        .child(primary("Quit").on_press(TableMessage::Quit));
     let mut panel = column()
         .name("quit")
         .gap(space::L)

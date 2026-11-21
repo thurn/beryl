@@ -8,7 +8,7 @@
 //! computer's network, as the web's browser build hosts one, and the form offers no choice of
 //! connection.
 
-use crate::manual::LobbyPress;
+use crate::features::lobby::{EntryMessage, Message};
 use beryl_protocol::ipc::SavedTable;
 
 use crate::manual::commands::COMMANDS;
@@ -86,7 +86,6 @@ pub fn entries(
             button
         }
     };
-    let press = |press: LobbyPress| press;
     let mut buttons = (if layout.is_some() { column() } else { row() })
         .name("manual tables")
         .gap(space::M)
@@ -97,15 +96,15 @@ pub fn entries(
         });
     if layout.is_none() {
         buttons = buttons.child(action(
-            button("Host a table").on_press(press(LobbyPress::Host)),
+            button("Host a table").on_press(Message::Entry(EntryMessage::Host)),
         ));
     }
     buttons = buttons
         .child(action(
-            button("Join a table").on_press(press(LobbyPress::Join)),
+            button("Join a table").on_press(Message::Entry(EntryMessage::Join)),
         ))
         .child(action(
-            button("Solo table").on_press(press(LobbyPress::Solo)),
+            button("Solo table").on_press(Message::Entry(EntryMessage::Solo)),
         ));
     let mut shown = vec![buttons];
     shown.extend(entries.mode.map(|mode| form(fields, mode, layout)));
@@ -120,7 +119,7 @@ pub fn entries(
                 .gap(space::M)
                 .align_items(Align::Center)
                 .child(text(&names).style(BODY).color(color::TYPE).grow(1.0))
-                .child(button("Resume table").on_press(press(LobbyPress::Resume(at))))
+                .child(button("Resume table").on_press(Message::Entry(EntryMessage::Resume(at))))
         });
         shown.push(
             column()
@@ -154,18 +153,17 @@ fn form(fields: &Fields, mode: EntryMode, layout: Option<ScreenColumn>) -> Eleme
         field.style.shrink = 0.0;
         [text(label).style(LABEL).color(color::TEXT_DIM), field]
     };
-    let name_ok = !fields.get(NAME).text.trim().is_empty();
+    let name = fields.get(NAME).text.trim().to_owned();
+    let invite = fields.get(INVITE).text.trim().to_owned();
+    let name_ok = !name.is_empty();
     let (label, ready) = match mode {
         EntryMode::Host => ("Host", name_ok),
-        EntryMode::Join => (
-            "Join",
-            name_ok && !fields.get(INVITE).text.trim().is_empty(),
-        ),
+        EntryMode::Join => ("Join", name_ok && !invite.is_empty()),
     };
     let open = primary(label)
         .enabled(ready)
-        .on_press(LobbyPress::OpenTable);
-    let cancel = button("Cancel").on_press(LobbyPress::CancelEntry);
+        .on_press(Message::Entry(EntryMessage::OpenTable { name, invite }));
+    let cancel = button("Cancel").on_press(Message::Entry(EntryMessage::CancelEntry));
     let buttons = if let Some(layout) = layout {
         column()
             .gap(space::M)
@@ -200,7 +198,7 @@ fn form(fields: &Fields, mode: EntryMode, layout: Option<ScreenColumn>) -> Eleme
 pub fn with_host_key(mut screen: Element) -> Element {
     for command in COMMANDS.iter().filter(|command| command.id == "lobby.host") {
         for key in command.key.iter().chain(command.key_aliases) {
-            screen = screen.shortcut(key.mac, LobbyPress::Host);
+            screen = screen.shortcut(key.mac, Message::Entry(EntryMessage::Host));
         }
     }
     screen

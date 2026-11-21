@@ -2,8 +2,8 @@
 
 use beryl_protocol::protocol::ZoneName;
 
-use super::TablePress;
 use super::viewers::{PileViewer, SEARCH, Sort, sections};
+use crate::features::table::Message as TableMessage;
 use game_hud::hud::viewer::Message;
 use game_hud::hud::{HudIn, piles::pile_cards};
 use game_hud::inspect::Viewed;
@@ -16,7 +16,7 @@ use kit_ui::widgets::{Fields, button, field, primary};
 
 /// The viewer the manual table shows, if one is open, as the web's `TablePileViewer` shows it:
 /// a pile's viewer, or a library's while the table lets the viewer look at it
-/// (`TableState::viewer`), has a row of controls over its cards: the search field, "Group by
+/// (`table::State::viewer`), has a row of controls over its cards: the search field, "Group by
 /// type" and the sort, which lists the cards in the pile's order, by name or by mana value
 /// (`manual::viewers::sections`). Closing a search of a whole library first asks whether to
 /// shuffle it: Shuffle, the highlighted choice, and Don't shuffle take the Close button's
@@ -48,8 +48,8 @@ pub(crate) fn table_viewer(input: &HudIn, fields: &Fields, state: &PileViewer) -
     let count = count_words(cards.len(), zone == ZoneName::Library, top_first);
     let actions = if state.confirming && state.can_shuffle(view) {
         vec![
-            primary("Shuffle").on_press(TablePress::ViewerFinish(true)),
-            button("Don't shuffle").on_press(TablePress::ViewerFinish(false)),
+            primary("Shuffle").on_press(TableMessage::ViewerFinish(true)),
+            button("Don't shuffle").on_press(TableMessage::ViewerFinish(false)),
         ]
     } else {
         vec![button("Close").name("close").on_press(Message::Close)]
@@ -82,7 +82,7 @@ fn controls(fields: &Fields, state: &PileViewer) -> Element {
     "Search".clone_into(&mut search.placeholder);
     let group = button("Group by type")
         .selected(state.grouped)
-        .on_press(TablePress::ViewerGroup);
+        .on_press(TableMessage::ViewerGroup);
     let group = if state.grouped {
         group.color(color::EMBER)
     } else {
@@ -90,7 +90,7 @@ fn controls(fields: &Fields, state: &PileViewer) -> Element {
     };
     let sort = button(state.sort.label())
         .name("Sort")
-        .on_press(TablePress::ViewerSort(state.sort.next()));
+        .on_press(TableMessage::ViewerSort(state.sort.next()));
     row()
         .name("controls")
         .width(size::OVERLAY_MAIN)

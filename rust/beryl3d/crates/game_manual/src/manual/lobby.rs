@@ -34,13 +34,11 @@ pub const ASSISTS: [(Assist, &str); 5] = [
     (Assist::AbilityMenus, "Ability menus"),
 ];
 
-/// What the client keeps of the lobby: its latest state, once the session has sent one, and
-/// what went wrong with the last change, if anything; the name of the deck the viewer loaded,
+/// What went wrong with the last lobby change, if anything; the name of the deck the viewer loaded,
 /// which the lobby's state does not carry; and the deck picker and the sideboard swap, while
 /// they are open.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Lobby {
-    pub view: Option<LobbyView>,
     pub error: Option<&'static str>,
     /// The failure the linked table last reported (`TableEvent::Error`), such as a guest with
     /// another version of Beryl, until the connection is up again.
@@ -61,7 +59,6 @@ impl Lobby {
     #[must_use]
     pub const fn new() -> Self {
         Self {
-            view: None,
             error: None,
             link_error: None,
             deck_name: None,
@@ -72,20 +69,18 @@ impl Lobby {
             sideboard: false,
         }
     }
+}
 
-    /// The viewer's own seat of the lobby, once one has arrived.
-    #[must_use]
-    pub fn own(&self) -> Option<&LobbySeat> {
-        let view = self.view.as_ref()?;
-        view.seats.iter().find(|seat| seat.seat == view.you)
-    }
+/// The viewer's own seat of a lobby, if one has arrived.
+#[must_use]
+pub fn own(view: &LobbyView) -> Option<&LobbySeat> {
+    view.seats.iter().find(|seat| seat.seat == view.you)
+}
 
-    /// Whether the viewer is the host, who sets the game and starts it. The host sits in seat 0,
-    /// as at a solo table.
-    #[must_use]
-    pub fn hosting(&self) -> bool {
-        self.view.as_ref().is_some_and(|view| view.you.0 == 0)
-    }
+/// Whether the viewer is the host, who sets the game and starts it.
+#[must_use]
+pub fn hosting(view: &LobbyView) -> bool {
+    view.you.0 == 0
 }
 
 /// What the deck picker says when the session could not list or read a deck: the reason the

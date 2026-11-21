@@ -7,11 +7,11 @@
 //! box of the flat layer (`Show`), so the table lifts it into the tray and lets it go
 //! with the tray's own timing, as the pile viewer's cards move.
 
+use crate::features::library_order::Message as LibraryOrderMessage;
 use beryl_protocol::PlayerView;
 use beryl_protocol::protocol::{ObjectId, Side, TableAction};
 use beryl_protocol::script::Subject;
 
-use super::TablePress;
 use super::commands::seat_of;
 use game_hud::inspect::viewer::object_box;
 use kit_base::tokens::size;
@@ -98,11 +98,15 @@ pub fn tray(order: &LibraryOrder, view: &PlayerView, window: Size) -> Element {
                 let at_u16 = u16::try_from(at).unwrap_or(u16::MAX);
                 let mut card = object_box(view, slot)
                     .selected(at == order.highlight)
-                    .on_press(TablePress::OrderCard(at_u16));
+                    .on_press(LibraryOrderMessage::Card(at_u16));
                 card.focus = true;
                 card
             }));
-    let done = primary("Done").name("done").on_press(TablePress::OrderDone);
-    let cancel = button("Cancel").name("close").on_press(TablePress::Close);
+    let done = primary("Done")
+        .name("done")
+        .on_press(LibraryOrderMessage::Done);
+    let cancel = button("Cancel")
+        .name("close")
+        .on_press(LibraryOrderMessage::Close);
     overlay(window, (TITLE, None), None, cards, vec![done, cancel])
 }

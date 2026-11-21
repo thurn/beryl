@@ -233,9 +233,7 @@ mod milestone_three {
 
     static FIELDS: Fields = Fields::new();
 
-    static TABLE: game_manual::manual::TableState = game_manual::manual::TableState::new();
     static ENTRIES: screens::TableEntries = screens::TableEntries::new();
-    static LOBBY: game_manual::manual::lobby::Lobby = game_manual::manual::lobby::Lobby::new();
 
     use super::super::flat_layer::{client, deciding, decision, find, prompt};
 
@@ -253,7 +251,6 @@ mod milestone_three {
             prompt,
             full_control: settings.full_control,
             stops: settings.stops,
-            bindings: &settings.bindings,
             sheet: None,
             spinning: false,
             gallery: screens::GalleryState::default(),
@@ -262,9 +259,7 @@ mod milestone_three {
             faces: None,
             viewing: None,
             revealed: &[],
-            table: &TABLE,
             carried: None,
-            lobby: &LOBBY,
             placement_scene: None,
         }
     }
@@ -294,6 +289,29 @@ mod milestone_three {
                         window: input.window,
                         column: input.profile.screen_column(),
                         filter: FieldState::default(),
+                    },
+                ),
+                Screen::Lobby => game_manual::features::lobby::LobbyScreen::view(
+                    &game_manual::features::lobby::State::default(),
+                    game_manual::features::lobby::Inputs {
+                        window: input.window,
+                        column: input.profile.screen_column(),
+                        fields: &FIELDS,
+                        view: None,
+                    },
+                ),
+                Screen::Table => game_manual::features::table::TableScreen::view(
+                    &game_manual::features::table::State::default(),
+                    game_manual::features::table::Inputs {
+                        hud: input.hud(),
+                        fields: &FIELDS,
+                        bindings: &settings.bindings,
+                        link_error: None,
+                        log: None,
+                        proposals: None,
+                        menu: None,
+                        overlay: None,
+                        overlay_open: false,
                     },
                 ),
                 _ => screens::screen(&input, Furniture::default(), None, None)

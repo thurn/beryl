@@ -10,13 +10,14 @@
 //! `CommandList` (`ui/src/table/TablePalette.tsx`, `CommandList.tsx`) with `match`
 //! (`filter.ts`).
 
+use crate::features::palette::Message as PaletteMessage;
 use beryl_protocol::PlayerView;
 use beryl_protocol::protocol::{Side, ZoneName};
 use glam::Vec2;
 
 use super::commands;
 use super::menus::{self, Act};
-use super::{Context, TablePress, Target};
+use super::{Context, Target};
 use kit_base::tokens::{color, size, space, type_style};
 use kit_frame::frame::Role;
 use kit_ui::element::{Align, Anchor, Element, Overflow, column, row, text};
@@ -250,7 +251,7 @@ pub fn panel(palette: &Palette, fields: &Fields, window: Size) -> Element {
             row_view.label,
             (row_view.detail, row_view.key.as_deref()),
             at == palette.highlight,
-            TablePress::Palette(at_u16),
+            PaletteMessage::Choose(at_u16),
         ));
     }
     if matched.is_empty() {
@@ -259,7 +260,7 @@ pub fn panel(palette: &Palette, fields: &Fields, window: Size) -> Element {
     let capture = palette.capturing.then(|| {
         kit_ui::widgets::button("Press a key · Esc cancels")
             .name("capture")
-            .on_press(TablePress::CancelCapture)
+            .on_press(PaletteMessage::CancelCapture)
     });
     let notice = (palette.notice.as_deref()).map(|words| text(words).color(color::TEXT_DIM));
     let metrics = kit_base::data::space::flat::table::palette::WIDTH;
@@ -304,7 +305,7 @@ pub(super) fn list_row(
     label: &str,
     (detail, key): (Option<&str>, Option<&str>),
     active: bool,
-    press: TablePress,
+    press: impl Clone + PartialEq + std::fmt::Debug + 'static,
 ) -> Element {
     let hint = |words: &str, name: &str| {
         text(words)

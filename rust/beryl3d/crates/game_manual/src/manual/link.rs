@@ -10,7 +10,7 @@ use beryl_protocol::PlayerView;
 use beryl_protocol::protocol::LinkState;
 use glam::Vec2;
 
-use super::TablePress;
+use crate::features::table::Message as TableMessage;
 use game_hud::hud::notices::step_banner;
 use kit_base::data::space::flat::table::link::{TOP, TOP_SHARE, WIDTH};
 use kit_base::tokens::{color, size, space, type_style};
@@ -51,7 +51,7 @@ pub fn banner(view: &PlayerView, window: Size, top: f32, error: Option<&str>) ->
         .background(color::PANEL)
         .border((color::METAL, size::BORDER));
     let lobby =
-        (table.link == LinkState::Left).then(|| button("Lobby").on_press(TablePress::Leave));
+        (table.link == LinkState::Left).then(|| button("Lobby").on_press(TableMessage::Leave));
     let mut shown = column()
         .name("connection")
         .align_items(Align::Center)

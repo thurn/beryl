@@ -11,10 +11,10 @@
 //! corner lies over the opponent's lands there. This is the web's `TableLog`
 //! (`ui/src/table/TableLog.tsx`), which is the game's `LogPanel` with the table's lines.
 
+use crate::features::log::Message as LogMessage;
 use beryl_protocol::protocol::{LogLine, TableAction};
 use glam::Vec2;
 
-use super::TablePress;
 use super::commands;
 use kit_base::geometry::Rect;
 use kit_base::tokens::{color, size, space, type_style};
@@ -54,7 +54,7 @@ pub fn log(
         return None;
     }
     let name = if open { "Hide log" } else { "Show log" };
-    let toggle = |button: Element| button.selected(open).on_press(TablePress::ToggleLog);
+    let toggle = |button: Element| button.selected(open).on_press(LogMessage::Toggle);
     let lines = || {
         let mut list = column()
             .name("lines")
@@ -130,12 +130,12 @@ fn line(line: &LogLine, blocks: bool) -> Element {
         .children(undoable.then(|| {
             button("Undo")
                 .name("Undo")
-                .on_press(TablePress::Undo(line.n))
+                .on_press(LogMessage::Undo(line.n))
         }))
         .child(
             button(rewind_label)
                 .name(rewind_label)
-                .on_press(TablePress::Rewind(line.n)),
+                .on_press(LogMessage::Rewind(line.n)),
         );
     let shown = column()
         .name(&format!("line {}", line.n))

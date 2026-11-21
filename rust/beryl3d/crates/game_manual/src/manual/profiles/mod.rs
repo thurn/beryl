@@ -10,7 +10,7 @@ use kit_base::tokens::{size, space, type_style};
 use kit_ui::element::{Anchor, Element, row};
 use kit_ui::widgets::button;
 
-use super::TablePress;
+use crate::features::ask::Message;
 
 /// On a phone the field and its step buttons share a row above the two actions, and the
 /// common counters take two rows of three, as in the web table's phone form.
@@ -20,8 +20,7 @@ pub(super) fn ask_dock(
     field: Element,
     actions: [Element; 2],
     suggestions: Option<&[&str]>,
-    (bands, metrics): (TableBands, &Banded),
-    layout: Option<&PlacementScene>,
+    (bands, metrics, anchor): (TableBands, &Banded, Option<Anchor>),
 ) -> Element {
     const SUGGESTIONS_PER_ROW: u8 = 3;
     let width = bands.right - bands.left;
@@ -53,7 +52,7 @@ pub(super) fn ask_dock(
                 .extend(names.iter().enumerate().map(|(at, name)| {
                     let at = u8::try_from(line * columns + at).unwrap_or(u8::MAX);
                     control(
-                        button(name).on_press(TablePress::AskSuggestion(at)),
+                        button(name).on_press(Message::Suggestion(at)),
                         width_per_column,
                     )
                 }));
@@ -70,7 +69,22 @@ pub(super) fn ask_dock(
         .child(fields)
         .children(common)
         .child(actions);
-    let extra = if suggestions.is_some() {
+    dock.anchor = anchor;
+    dock
+}
+
+/// Places the ask prompt and records the table objects the dock must clear.
+pub(super) fn ask_anchor(
+    bands: TableBands,
+    metrics: &Banded,
+    has_suggestions: bool,
+    layout: Option<&PlacementScene>,
+) -> Anchor {
+    let width = bands.right - bands.left;
+    let padding = space::M;
+    let gap = metrics.dock_gap;
+    let high = metrics.button_height;
+    let extra = if has_suggestions {
         2.0 * (high + gap)
     } else {
         0.0
@@ -99,8 +113,7 @@ pub(super) fn ask_dock(
             )
         })
         .map_or(upper, |(_, placed)| placed);
-    dock.anchor = Some(Anchor::Point(Vec2::new(placed.x, placed.y), Vec2::ZERO));
-    dock
+    Anchor::Point(Vec2::new(placed.x, placed.y), Vec2::ZERO)
 }
 
 /// A proposal tries the corner, then the space above the viewer’s strip.

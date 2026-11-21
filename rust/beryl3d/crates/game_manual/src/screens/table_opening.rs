@@ -15,7 +15,7 @@ use beryl_protocol::PlayerView;
 use beryl_protocol::protocol::{ObjectId, TablePrompt};
 use glam::Vec2;
 
-use crate::manual::TablePress;
+use crate::features::table::Message as TableMessage;
 use crate::manual::opening::{OpeningPress, prompt};
 use game_hud::screens::opening::{Presentation, present};
 use game_table::profiles::Profile;
@@ -26,20 +26,20 @@ use kit_ui::widgets::{button, primary};
 
 /// The press on a card of the opening hand: it goes on the bottom, or comes back.
 fn bottom(slot: ObjectId) -> Action {
-    Action::new(TablePress::Opening(OpeningPress::Bottom(slot)))
+    Action::new(TableMessage::Opening(OpeningPress::Bottom(slot)))
 }
 
 /// A button that sends `press`, the primary button if `first`.
 fn answer(label: &str, press: OpeningPress, first: bool) -> Element {
     let widget = if first { primary } else { button };
-    widget(label).on_press(TablePress::Opening(press))
+    widget(label).on_press(TableMessage::Opening(press))
 }
 
 /// The guided start's screen and its buttons, which stand beside it rather than in it so that
 /// they never inherit its passing the pointer through; empty while the viewer has no prompt of
 /// it open.
 #[must_use]
-pub(super) fn table_opening(
+pub(crate) fn table_opening(
     view: Option<&PlayerView>,
     window: Window,
     profile: Profile<'_>,

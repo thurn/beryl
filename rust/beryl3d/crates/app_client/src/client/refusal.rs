@@ -43,7 +43,7 @@ impl Client {
         let message = Message::Refused(decision.id, refused.clone());
         self.features.inspector_mut().update(message);
         // The manual table's refusals play the same sound (`Manual::take_refusal`).
-        self.manual.refused = true;
+        self.features.table_mut().refused = true;
         true
     }
 

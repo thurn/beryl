@@ -10,15 +10,24 @@ use super::features::{Placement, ViewInputs};
 
 use crate::command::{Request, SessionCommand};
 use app_screens::screens::{self, Screen, ScreenIn, Sheet, bug_report};
+use game_hud::hud::HudIn;
 use game_hud::hud::inspector::Message as Inspect;
 use game_hud::hud::placement_scene::PlacementScene;
 use game_hud::hud::rows::Message as RowMessage;
 use game_hud::screens::game::Furniture;
-use game_manual::manual::TableCommand;
+use game_manual::features::{context_menu, table::Message as TableMessage};
 use game_table::faces::{FaceList, Faces};
 use kit_ui::element::{Action, Element, floats};
-use kit_ui::input::{AssetReady, FaceSize};
+use kit_ui::input::{AssetReady, FaceId, FaceSize};
 use kit_ui::layout::FloatLook;
+
+struct MountedViews {
+    sheet: Option<Element>,
+    screen: Option<Element>,
+    log: Option<Element>,
+    result: Option<Element>,
+    menu_face: Option<FaceId>,
+}
 
 impl Client {
     /// Rebuilds the flat layer's screen, or the sheet open over it, from what the client holds
@@ -39,40 +48,21 @@ impl Client {
         self.refresh_screen_state();
         let under_visible = sheet != Some(Sheet::Settings) && !self.bug_hides_screen();
         let furniture = self.game_furniture(under_visible);
-        let view = self.show.latest().map(|update| &update.view);
-        let feature_inputs = ViewInputs {
-            profile: self.show.table().profile(),
-            screen: self.screen,
-            window: self.window,
-            view,
-            session: self.session,
-            fields: self.layer.fields(),
-            entries: &self.manual.entries,
-            faces: self.show.faces().list(),
-            game_over: view.is_some_and(|view| matches!(view.status, Status::Over { .. })),
-            settings: self.settings.screen(),
-        };
-        let sheet_view =
-            sheet.and_then(|sheet| self.features.view(Placement::Sheet(sheet), feature_inputs));
-        let log = (under_visible && self.screen == Screen::Game)
-            .then(|| self.features.view(Placement::GameLog, feature_inputs))
-            .flatten();
-        let mounted_screen = under_visible
-            .then(|| {
-                self.features
-                    .view(Placement::Screen(self.screen), feature_inputs)
-            })
-            .flatten();
-        let result = (under_visible && self.screen == Screen::Game)
-            .then(|| self.features.view(Placement::GameOver, feature_inputs))
-            .flatten();
         let placement_scene = self.placement_scene();
+        let MountedViews {
+            sheet: sheet_view,
+            screen: mounted_screen,
+            log,
+            result,
+            menu_face,
+        } = self.mounted_views(under_visible, placement_scene.as_ref());
+        let view = self.show.latest().map(|update| &update.view);
         let input = ScreenIn {
             placement_scene: placement_scene.as_ref(),
             ..self.screen_in()
         };
         let mut full = game_hud::prompts::faces(&input.hud());
-        full.extend(screens::sheet_face(&input));
+        full.extend(menu_face);
         // On the desktop the hand and the stack show cards' full frames, as the web interface
         // does; on the phone the battlefield frame.
         let read_whole = view
@@ -195,6 +185,78 @@ impl Client {
         screens::screen(input, furniture, log, result)
     }
 
+    /// Builds registered views while their inputs are borrowed from the client.
+    fn mounted_views(
+        &mut self,
+        under_visible: bool,
+        placement_scene: Option<&PlacementScene>,
+    ) -> MountedViews {
+        let sheet = self.features.sheet;
+        let view = self.show.latest().map(|update| &update.view);
+        let played = self.show.shown().map(|update| &update.view);
+        let profile = self.show.table().profile();
+        let revealed = if self.screen == Screen::Table {
+            self.features.viewer().revealed().to_vec()
+        } else {
+            Vec::new()
+        };
+        let hud = HudIn {
+            window: self.window,
+            profile,
+            view,
+            played,
+            turn: self.features.steps().turn,
+            prompt: None,
+            stops: beryl_protocol::StopsSetting {
+                full_control: self.settings.full_control,
+                ..self.settings.stops
+            },
+            sheet,
+            inspected: None,
+            faces: Some(self.show.faces().list()),
+            viewing: self.features.viewer().open(),
+            revealed: &revealed,
+            carried: self.gesture.carried(),
+            spinning: self.opening.spinning(self.now),
+            placement_scene,
+        };
+        let menu_face = context_menu::sheet_face(self.features.menu(), &hud);
+        let feature_inputs = ViewInputs {
+            profile,
+            screen: self.screen,
+            window: self.window,
+            view,
+            session: self.session,
+            fields: self.layer.fields(),
+            hud: &hud,
+            bindings: &self.settings.bindings,
+            faces: self.show.faces().list(),
+            game_over: view.is_some_and(|view| matches!(view.status, Status::Over { .. })),
+            settings: self.settings.screen(),
+        };
+        let sheet_view =
+            sheet.and_then(|sheet| self.features.view(Placement::Sheet(sheet), feature_inputs));
+        let log = (under_visible && self.screen == Screen::Game)
+            .then(|| self.features.view(Placement::GameLog, feature_inputs))
+            .flatten();
+        let mounted_screen = under_visible
+            .then(|| {
+                self.features
+                    .view(Placement::Screen(self.screen), feature_inputs)
+            })
+            .flatten();
+        let result = (under_visible && self.screen == Screen::Game)
+            .then(|| self.features.view(Placement::GameOver, feature_inputs))
+            .flatten();
+        MountedViews {
+            sheet: sheet_view,
+            screen: mounted_screen,
+            log,
+            result,
+            menu_face,
+        }
+    }
+
     /// Everything the screen functions read, from what the client holds now. The inspector sets
     /// `inspected` on it; nothing else differs between the screen and the inspector.
     pub(super) fn screen_in(&self) -> ScreenIn<'_> {
@@ -214,7 +276,6 @@ impl Client {
                 .filter(|_| !self.opening.spinning(self.now)),
             full_control: self.settings.full_control,
             stops: self.settings.stops,
-            bindings: &self.settings.bindings,
             sheet: self.features.sheet,
             gallery: self.gallery,
             fields: self.layer.fields(),
@@ -222,9 +283,7 @@ impl Client {
             faces: Some(self.faces()),
             viewing: self.features.viewer().open(),
             revealed: self.features.viewer().revealed(),
-            table: &self.manual.state,
             carried: self.gesture.carried(),
-            lobby: &self.manual.lobby,
             spinning: self.opening.spinning(self.now),
             placement_scene: None,
         }
@@ -301,7 +360,7 @@ impl Client {
         // `table.undo` command, as the web's `Table` passes it to `GameBoard`.
         let undo = match self.screen {
             Screen::Table => game_manual::manual::commands::command("table.undo")
-                .map(|(index, _)| Action::new(TableCommand(index, false))),
+                .map(|(index, _)| Action::new(TableMessage::Shortcut(index, false))),
             _ => self
                 .undoable()
                 .map(|_| Action::new(game_hud::prompts::bar::Message::Undo)),

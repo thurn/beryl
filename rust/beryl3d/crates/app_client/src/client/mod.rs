@@ -6,7 +6,6 @@
 mod bug;
 mod carry;
 mod editing;
-mod entries;
 mod event;
 pub(crate) use crate::command::{Reply, Request, SessionCommand};
 pub use event::Input;
@@ -45,10 +44,9 @@ mod manual_overlays;
 mod own;
 mod press;
 mod profiles;
-mod scrolling;
-pub use press::{Dismiss, Press};
 mod refusal;
 mod screen;
+mod scrolling;
 mod stops;
 mod table_pointer;
 mod touch;
@@ -131,8 +129,6 @@ pub struct Client {
     /// Whether the host has said memory is low (`Lifecycle::LowMemory`), which fixes the tier at
     /// Baseline.
     low_memory: bool,
-    /// What the manual table shows over itself (`manual`).
-    manual: manual::Manual,
     /// The fingers on a touch screen (`touch`).
     touch: Touch,
 }
@@ -169,7 +165,6 @@ impl Client {
             commands: VecDeque::new(),
             tier: Tier::Baseline,
             low_memory: false,
-            manual: manual::Manual::default(),
             touch: Touch::default(),
         }
     }
@@ -376,7 +371,9 @@ impl Client {
         // The flat layer is placed for the table's camera, so the frame takes it even when no
         // game view writes the table, as on the start screen (the "layer drawn" check).
         builder.camera(self.show.table().camera().view_projection);
-        builder.sounds(self.manual.take_refusal());
+        if self.features.table().refused {
+            builder.sounds(self.features.table_mut().take_refusal());
+        }
         self.show.frame(table_now, &mut builder);
         // Elements anchored to a card, an ability or a player stand where the table drew it.
         let table = self.show.table();

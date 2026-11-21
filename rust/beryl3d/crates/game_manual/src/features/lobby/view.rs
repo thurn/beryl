@@ -9,14 +9,14 @@
 //! (`lobby_phone`), every control at least a finger's 44 points, since the web interface has no
 //! phone lobby to follow.
 
-use crate::manual::LobbyPress;
-use beryl_protocol::ipc::LobbyView;
+use super::Message;
 use beryl_protocol::ipc::decks::SavedDeck;
+use beryl_protocol::ipc::{LobbyChange, LobbyView};
 
 use crate::manual::commands::{COMMANDS, Scope};
 use crate::manual::lobby::{
     ASSISTS, DECK_NAME, DECKLIST, DeckPanel, Lobby, STARTING_HAND_SIZE, STARTING_LIFE,
-    asked_settings, unreadable,
+    asked_settings, hosting, own, swapped, toggled, unreadable,
 };
 use game_table::table::Window;
 use kit_base::tokens::type_style::{START_LABEL as LABEL, START_TITLE as TITLE};
@@ -30,11 +30,47 @@ use kit_ui::widgets::screen::{ScreenColumn, whole_window};
 use kit_ui::widgets::start_panel::{PANEL_PADDING, check_square, checkbox, panel_look, small};
 use kit_ui::widgets::{FieldState, Fields, button, field, primary};
 
-/// The manual lobby's state and text fields for the current window.
-pub struct LobbyIn<'a> {
+/// Inputs from the window and the layer's field editor.
+#[derive(Clone, Copy)]
+pub struct Inputs<'a> {
     pub window: Window,
-    pub profile: game_table::profiles::Profile<'a>,
-    pub lobby: &'a Lobby,
+    pub column: Option<ScreenColumn>,
+    pub fields: &'a Fields,
+    pub view: Option<&'a LobbyView>,
+}
+
+pub type ViewKey = (
+    Window,
+    Option<ScreenColumn>,
+    [FieldState; 4],
+    Option<LobbyView>,
+);
+
+pub(super) fn key(input: &Inputs<'_>) -> ViewKey {
+    (
+        input.window,
+        input.column,
+        [DECK_NAME, DECKLIST, STARTING_LIFE, STARTING_HAND_SIZE].map(|name| input.fields.get(name)),
+        input.view.cloned(),
+    )
+}
+
+pub(super) fn render(lobby: &Lobby, input: Inputs<'_>) -> Element {
+    render_lobby(&LobbyIn {
+        window: input.window,
+        column: input.column,
+        lobby,
+        fields: input.fields,
+        view: input.view,
+    })
+}
+
+/// The manual lobby's state and text fields for the current window.
+struct LobbyIn<'a> {
+    pub window: Window,
+    column: Option<ScreenColumn>,
+    lobby: &'a Lobby,
+    view: Option<&'a LobbyView>,
     pub fields: &'a Fields,
 }
 
@@ -63,8 +99,8 @@ const LABEL_LINE: f32 = PANEL_LABEL.size * PANEL_LABEL.line_height;
 /// What the flat layer shows on the lobby screen. Until the session sends the lobby, only the
 /// heading.
 #[must_use]
-pub fn lobby(input: &LobbyIn) -> Element {
-    if let Some(layout) = input.profile.screen_column() {
+fn render_lobby(input: &LobbyIn) -> Element {
+    if let Some(layout) = input.column {
         return lobby_column(input, layout);
     }
     // `.start-panel.lobby-panel`: wider than the start screen's panel, with its sections
@@ -88,7 +124,7 @@ pub fn lobby(input: &LobbyIn) -> Element {
         .align_items(Align::Center)
         .justify_content(Justify::Center)
         .child(panel);
-    shortcuts(whole_window(input.window.size, screen), input.lobby)
+    shortcuts(whole_window(input.window.size, screen), input.view)
 }
 
 /// The lobby on a phone: the panel's sections in one column over the safe area, which scrolls
@@ -98,10 +134,7 @@ pub fn lobby(input: &LobbyIn) -> Element {
 fn lobby_column(input: &LobbyIn, layout: ScreenColumn) -> Element {
     let content = column().name("lobby column").gap(layout.metrics.start.gap);
     let content = sections(content, input, Fit::Column(layout));
-    shortcuts(
-        layout.scrolling("lobby", input.window, content),
-        input.lobby,
-    )
+    shortcuts(layout.scrolling("lobby", input.window, content), input.view)
 }
 
 /// Which window the lobby is laid out for.
@@ -158,24 +191,24 @@ fn sections(holder: Element, input: &LobbyIn, fit: Fit) -> Element {
         .align_items(Align::Center)
         .justify_content(Justify::SpaceBetween)
         .child(text("Table").style(TITLE).color(color::GOLD))
-        .child(button("Leave table").on_press(LobbyPress::Leave));
+        .child(button("Leave table").on_press(Message::Leave));
     let mut holder = holder.child(heading);
-    if let Some(view) = &lobby.view {
+    if let Some(view) = input.view {
         holder = holder
             .children(summary(view, fit))
             .child(deck(lobby, view, fit))
             .children(lobby.picker.map(|panel| picker(lobby, panel, input, fit)))
             .children(sideboard(lobby, view, fit))
             .child(assists(view, fit))
-            .child(if lobby.hosting() {
+            .child(if hosting(view) {
                 settings(view, input, fit)
             } else {
                 settings_summary(view, fit)
             })
             .child(match fit {
                 // `.lobby-start` stands in the middle of the panel.
-                Fit::Regular => start(lobby, view).align_self(Align::Center),
-                Fit::Column(_) => fit.action(start(lobby, view)),
+                Fit::Regular => start(view).align_self(Align::Center),
+                Fit::Column(_) => fit.action(start(view)),
             });
     }
     if let Some(error) = lobby.error {
@@ -192,20 +225,25 @@ fn sections(holder: Element, input: &LobbyIn, fit: Fit) -> Element {
 /// panel, which Beryl 3D does not have), 'Unload deck' unloads a loaded deck and 'Sideboard'
 /// opens or closes its sideboard swap, 'Ready' marks a guest with a deck ready or not, and
 /// 'Leave table' leaves. Written as the Mac's bindings, as the table's are.
-fn shortcuts(mut screen: Element, lobby: &Lobby) -> Element {
-    let loaded = lobby.own().is_some_and(|own| own.loaded);
+fn shortcuts(mut screen: Element, view: Option<&LobbyView>) -> Element {
+    let own = view.and_then(own);
+    let loaded = own.is_some_and(|own| own.loaded);
     for command in COMMANDS {
         let press = match command.id {
-            "lobby.change_deck" if command.scope == Scope::Lobby => LobbyPress::Change,
-            "lobby.paste_deck" => LobbyPress::Paste,
-            "lobby.unload_deck" if loaded => LobbyPress::Unload,
-            "lobby.sideboard" if loaded => LobbyPress::Sideboard,
-            "lobby.ready" if loaded && !lobby.hosting() => LobbyPress::Ready,
-            "table.leave" => LobbyPress::Leave,
+            "lobby.change_deck" if command.scope == Scope::Lobby => Message::Change,
+            "lobby.paste_deck" => Message::Paste,
+            "lobby.unload_deck" if loaded => Message::Unload,
+            "lobby.sideboard" if loaded => Message::Sideboard,
+            "lobby.ready" if loaded && view.is_some_and(|view| !hosting(view)) => {
+                Message::ChangeLobby(LobbyChange::Ready {
+                    ready: !own.is_some_and(|own| own.ready),
+                })
+            }
+            "table.leave" => Message::Leave,
             _ => continue,
         };
         for key in command.key.iter().chain(command.key_aliases) {
-            screen = screen.shortcut(key.mac, press);
+            screen = screen.shortcut(key.mac, press.clone());
         }
     }
     screen
@@ -323,7 +361,7 @@ fn summary(view: &LobbyView, fit: Fit) -> Option<Element> {
 /// the buttons that change it, open its sideboard swap and unload it, and the names the table
 /// could not read as cards.
 fn deck(lobby: &Lobby, view: &LobbyView, fit: Fit) -> Element {
-    let own = lobby.own();
+    let own = own(view);
     let loaded = own.is_some_and(|own| own.loaded);
     // On the desktop, `.lobby-panel h2` and the counts under it in the panel's own type.
     let (heading, counts_style, counts_color) = match fit {
@@ -349,16 +387,16 @@ fn deck(lobby: &Lobby, view: &LobbyView, fit: Fit) -> Element {
     }
     let actions = (fit.group("deck actions"))
         .gap(size::LOBBY_SECTION_GAP)
-        .child(fit.action(button("Change").on_press(LobbyPress::Change)))
+        .child(fit.action(button("Change").on_press(Message::Change)))
         .child(
             fit.action(
                 button("Sideboard")
                     .enabled(loaded)
                     .selected(lobby.sideboard && loaded)
-                    .on_press(LobbyPress::Sideboard),
+                    .on_press(Message::Sideboard),
             ),
         )
-        .children(loaded.then(|| fit.action(button("Unload deck").on_press(LobbyPress::Unload))));
+        .children(loaded.then(|| fit.action(button("Unload deck").on_press(Message::Unload))));
     // On the desktop the deck's section has no legend (`section.lobby-section`), and its rows
     // keep to their own widths.
     let holder = match fit {
@@ -393,7 +431,7 @@ fn picker(lobby: &Lobby, panel: DeckPanel, input: &LobbyIn, fit: Fit) -> Element
             .child(
                 (fit.group("picker actions"))
                     .gap(space::M)
-                    .child(fit.action(button("Paste decklist").on_press(LobbyPress::Paste))),
+                    .child(fit.action(button("Paste decklist").on_press(Message::Paste))),
             ),
         DeckPanel::Paste => {
             let name = input.fields.get(DECK_NAME);
@@ -415,7 +453,10 @@ fn picker(lobby: &Lobby, panel: DeckPanel, input: &LobbyIn, fit: Fit) -> Element
                         primary("Import")
                             .align_self(Align::Start)
                             .enabled(ready && !lobby.importing)
-                            .on_press(LobbyPress::Import),
+                            .on_press(Message::Import {
+                                name: name.text.trim().to_owned(),
+                                text: list.text,
+                            }),
                     ),
                 )
         }
@@ -428,7 +469,7 @@ fn picker(lobby: &Lobby, panel: DeckPanel, input: &LobbyIn, fit: Fit) -> Element
             button("Close")
                 .align_self(Align::Start)
                 .enabled(!lobby.importing)
-                .on_press(LobbyPress::ClosePicker),
+                .on_press(Message::ClosePicker),
         ),
     )
 }
@@ -440,7 +481,7 @@ fn saved_deck(at: u16, saved: &SavedDeck, fit: Fit) -> Element {
     (fit.group(&format!("saved {}", saved.deck.name)))
         .gap(size::LOBBY_GAP)
         .align_items(Align::Center)
-        .child(fit.action(button(&saved.deck.name).on_press(LobbyPress::Pick(at))))
+        .child(fit.action(button(&saved.deck.name).on_press(Message::Pick(at))))
         .child(text(&counts).style(BODY).color(color::TEXT_DIM))
 }
 
@@ -448,7 +489,7 @@ fn saved_deck(at: u16, saved: &SavedDeck, fit: Fit) -> Element {
 /// the sideboard's, each with its count and a small button that moves one copy to the other,
 /// and 'Done'.
 fn sideboard(lobby: &Lobby, view: &LobbyView, fit: Fit) -> Option<Element> {
-    if !lobby.sideboard || !lobby.own().is_some_and(|own| own.loaded) {
+    if !lobby.sideboard || !own(view).is_some_and(|own| own.loaded) {
         return None;
     }
     let mut swap = fit.section("Sideboard swap");
@@ -465,7 +506,9 @@ fn sideboard(lobby: &Lobby, view: &LobbyView, fit: Fit) -> Option<Element> {
             };
             let move_one = fit
                 .least(small(button(label)))
-                .on_press(LobbyPress::Swap { from_side, at })
+                .on_press(Message::ChangeLobby(
+                    swapped(view, from_side, at).expect("the card is in the deck"),
+                ))
                 .name(&format!("Move {name} to {to}"));
             swap = swap.child(
                 row()
@@ -488,7 +531,7 @@ fn sideboard(lobby: &Lobby, view: &LobbyView, fit: Fit) -> Option<Element> {
             fit.action(
                 button("Done")
                     .align_self(Align::Start)
-                    .on_press(LobbyPress::Sideboard),
+                    .on_press(Message::Sideboard),
             ),
         ),
     )
@@ -506,9 +549,9 @@ fn assists(view: &LobbyView, fit: Fit) -> Element {
             .align_self(Align::Stretch),
         Fit::Column(_) => fit.group("assist switches"),
     };
-    for (at, (assist, label)) in (0u8..).zip(ASSISTS) {
+    for (assist, label) in ASSISTS {
         let on = view.assists.contains(&assist);
-        let press = LobbyPress::Assist(at);
+        let press = Message::ChangeLobby(toggled(view, assist));
         boxes = boxes.child(match fit {
             Fit::Regular => switch(label, on, press),
             Fit::Column(_) => fit.least(checkbox(label, on).on_press(press)),
@@ -524,7 +567,7 @@ fn assists(view: &LobbyView, fit: Fit) -> Element {
 /// One of the desktop's assists (`.lobby-assists label`): a 12-point checkbox and its label,
 /// across its whole column. On the web the label holds the checkbox, so the label's words fill
 /// the column, starting past the checkbox, and the checkbox stands over their start.
-fn switch(label: &str, on: bool, press: LobbyPress) -> Element {
+fn switch(label: &str, on: bool, press: Message) -> Element {
     let side = size::LOBBY_SWITCH_BOX;
     let mut words = text(label)
         .style(PANEL_LABEL)
@@ -586,10 +629,12 @@ fn settings(view: &LobbyView, input: &LobbyIn, fit: Fit) -> Element {
     let mut hand = input.fields.get(STARTING_HAND_SIZE);
     life.placeholder = current.starting_life.to_string();
     hand.placeholder = current.starting_hand_size.to_string();
-    let changed = matches!(asked_settings(current, &life.text, &hand.text), Ok(Some(_)));
+    let change = asked_settings(current, &life.text, &hand.text)
+        .ok()
+        .flatten();
     let save = button("Save settings")
-        .enabled(changed)
-        .on_press(LobbyPress::SaveSettings);
+        .enabled(change.is_some())
+        .on_press(Message::SaveSettings(change));
     if fit == Fit::Regular {
         // `.lobby-actions`: the two fields, who plays first and 'Save settings' in one row,
         // along its bottom.
@@ -727,15 +772,17 @@ fn first_name(view: &LobbyView) -> String {
 
 /// The host's 'Start', enabled when the table can start, or the guest's 'Ready', enabled once
 /// their deck is loaded and selected while they are ready.
-fn start(lobby: &Lobby, view: &LobbyView) -> Element {
-    if lobby.hosting() {
+fn start(view: &LobbyView) -> Element {
+    if hosting(view) {
         return primary("Start")
             .enabled(view.can_start)
-            .on_press(LobbyPress::Start);
+            .on_press(Message::ChangeLobby(LobbyChange::Start));
     }
-    let own = lobby.own();
+    let own = own(view);
     primary("Ready")
         .enabled(own.is_some_and(|own| own.loaded))
         .selected(own.is_some_and(|own| own.ready))
-        .on_press(LobbyPress::Ready)
+        .on_press(Message::ChangeLobby(LobbyChange::Ready {
+            ready: !own.is_some_and(|own| own.ready),
+        }))
 }

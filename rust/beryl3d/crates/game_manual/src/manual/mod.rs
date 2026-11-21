@@ -37,6 +37,7 @@ use beryl_protocol::ipc::TableSoloRequest;
 use beryl_protocol::protocol::{ObjectId, Side, ZoneName};
 use glam::Vec2;
 
+use crate::features::table::Message as TableMessage;
 use bindings::Bindings;
 use commands::AppliesTo;
 use kit_frame::frame::{Frame, Place, Role};
@@ -81,128 +82,6 @@ impl<'a> Context<'a> {
     }
 }
 
-/// A press on something the table shows over itself.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TablePress {
-    /// The `n`th row the command list shows.
-    Palette(u16),
-    /// The ask prompt's confirm button.
-    AskConfirm,
-    /// The ask prompt's plus, or its minus if `false`.
-    AskStep(bool),
-    /// The `n`th common counter name of the ask prompt (`ask::COUNTER_SUGGESTIONS`), which
-    /// confirms it with that name.
-    AskSuggestion(u8),
-    /// The `n`th row the token search shows.
-    Token(u16),
-    /// The `n`th card of the library order tray, which moves it to the top.
-    OrderCard(u16),
-    /// The library order tray's Done.
-    OrderDone,
-    /// Undo the log's line `n`.
-    Undo(u32),
-    /// Rewind the table to the moment after the log's line `n`.
-    Rewind(u32),
-    /// Open or fold the log.
-    ToggleLog,
-    /// Open the proposal panel for the proposal with this id, or fold it if `None`, on a phone,
-    /// where it is folded to a button (`assists::proposals`).
-    ToggleProposals(Option<u32>),
-    /// The custom token form's color `n` of `tokens::COLORS`, turned on or off.
-    CustomColor(u8),
-    /// The custom token form's Create token.
-    CustomCreate,
-    /// Stop waiting for a key to bind to the command list's highlighted row.
-    CancelCapture,
-    /// The icon at `at` of a step track, in the active player's rows if `active`
-    /// (`turn::step_command`).
-    Step { at: u8, active: bool },
-    /// The Next button, which advances to the next phase.
-    Next,
-    /// The counter at `at` of `side`'s row of mana and player counters, which adds one
-    /// (`pools`).
-    Counter { side: Side, at: u8 },
-    /// The minus button beside that counter in the phone's sheet, which removes one.
-    CounterRemove { side: Side, at: u8 },
-    /// Open the phone's sheet of `side`'s mana and counters, or close it (`pools::sheet`).
-    ManaSheet(Option<Side>),
-    /// Quit's question was answered Quit.
-    Quit,
-    /// Close the command list, ask prompt, token search, custom token form or order tray.
-    Close,
-    /// Turn the line `line` of the proposal `id` on or off (`assists::proposals`).
-    ProposalLine { id: u32, line: u32, on: bool },
-    /// Apply the checked lines of the proposal `id`, as it stood at `revision`.
-    ApplyProposal { id: u32, revision: u32 },
-    /// Apply the state nudge whose label has this id (`assists::labels`).
-    Label(u32),
-    /// A card of the sorting tray (`assists::sort_answer`).
-    SortCard(ObjectId),
-    /// The sorting tray's Done.
-    SortDone,
-    /// The sorting tray's Cancel.
-    SortCancel,
-    /// A button or card of the guided start.
-    Opening(opening::OpeningPress),
-    /// Leave the table, from the banner of a table the other player left.
-    Leave,
-    /// The pile viewer's "Group by type", which turns grouping on or off.
-    ViewerGroup,
-    /// The pile viewer's sort, which lists its cards in this order.
-    ViewerSort(viewers::Sort),
-    /// Close the search of a whole library, shuffling it first if `true` (Shuffle) or not
-    /// (Don't shuffle).
-    ViewerFinish(bool),
-}
-
-/// What the client keeps of the manual table: the open context menu, command list, ask
-/// prompt, token search, custom token form and library order tray, each if any (at most one of
-/// the last five is open), whether the log is open, the log lines that stopped the last undo,
-/// the last token made, the table actions sent and not yet answered, and whether Shift was held
-/// at the last press of the pointer, which runs a command list row's shifted form. Also the selected
-/// cards, the rectangle a sweep has drawn so far (from where it began to the pointer), the
-/// command waiting for the object or player it acts toward, where the held card would land, and
-/// the selected permanent the selection's summary stands over.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct TableState {
-    pub menu: Option<menus::OpenMenu>,
-    pub palette: Option<palette::Palette>,
-    pub ask: Option<ask::Ask>,
-    pub tokens: Option<tokens::TokenSearch>,
-    pub custom: Option<tokens::CustomToken>,
-    pub order: Option<order::LibraryOrder>,
-    pub log_open: bool,
-    /// The id of the first proposal the panel was opened for on a phone, where it is folded to
-    /// a button until it is opened (`assists::proposals`). A proposal with another id finds it
-    /// folded again.
-    pub proposals_open: Option<u32>,
-    /// The numbers of the log lines whose actions stopped the last undo or rewind, which the
-    /// log highlights (`blocked` in the web's `TableLogControls`).
-    pub blocked: Vec<u32>,
-    /// The token the table last made at the player's asking (`#lastToken` in the web's
-    /// `TableCommands`).
-    pub last_token: Option<TokenChoice>,
-    /// For each table action sent and not yet answered, oldest first, what the client does
-    /// with the table's answer to it.
-    pub pending: std::collections::VecDeque<Pending>,
-    pub shift: bool,
-    pub selection: Vec<ObjectId>,
-    pub sweep: Option<(Vec2, Vec2)>,
-    pub picking: Option<arrows::Pick>,
-    pub landing: Option<drop::Destination>,
-    /// The highest selected permanent on the window, which the selection's summary stands
-    /// over (`selection::highest`).
-    pub summary_over: Option<ObjectId>,
-    /// Whether the Quit key asked whether to leave the table and quit (`quit`).
-    pub quitting: bool,
-    /// What the open pile viewer shows beyond its pile: a library look, its sort and grouping,
-    /// and whether it asks to shuffle (`viewers::PileViewer`).
-    pub viewer: viewers::PileViewer,
-    /// Whose mana and counters the phone's sheet shows, while it is open (`pools::sheet`). A
-    /// new view leaves it open, so that a player adding mana sees the count change.
-    pub mana_sheet: Option<Side>,
-}
-
 /// What a table action the client sent asks of the table's answer to it: to remember the
 /// token it makes once the table takes it, to show the log lines that stop an undo or a rewind
 /// the table refuses, to open the library viewer of a look the table takes, or nothing.
@@ -220,9 +99,9 @@ pub enum Sent {
 pub enum Pressed {
     /// The card in this slot.
     Card(ObjectId),
-    /// The flat-layer button a `TablePress` is the press of: a mana or player counter, or the
+    /// The flat-layer button a `TableMessage` is the press of: a mana or player counter, or the
     /// minus button beside one.
-    Button(TablePress),
+    Button(TableMessage),
 }
 
 /// A table action sent and not yet answered: what its answer asks of the client, and the
@@ -231,60 +110,6 @@ pub enum Pressed {
 pub struct Pending {
     pub sent: Sent,
     pub from: Option<Pressed>,
-}
-
-impl TableState {
-    /// Nothing shown over the table, and the log folded.
-    #[must_use]
-    pub const fn new() -> Self {
-        Self {
-            menu: None,
-            palette: None,
-            ask: None,
-            tokens: None,
-            custom: None,
-            order: None,
-            log_open: false,
-            proposals_open: None,
-            blocked: Vec::new(),
-            last_token: None,
-            pending: std::collections::VecDeque::new(),
-            shift: false,
-            selection: Vec::new(),
-            sweep: None,
-            picking: None,
-            landing: None,
-            summary_over: None,
-            quitting: false,
-            viewer: viewers::PileViewer::new(),
-            mana_sheet: None,
-        }
-    }
-
-    /// Whether the command list, ask prompt, token search, custom token form, order tray or
-    /// Quit's question is open, which takes the keys from the table.
-    #[must_use]
-    pub fn overlay_open(&self) -> bool {
-        self.palette.is_some()
-            || self.ask.is_some()
-            || self.tokens.is_some()
-            || self.custom.is_some()
-            || self.order.is_some()
-            || self.quitting
-    }
-
-    /// Closes the command list, ask prompt, token search, custom token form, order tray and
-    /// Quit's question. Returns whether one was open.
-    pub fn close_overlay(&mut self) -> bool {
-        let open = self.overlay_open();
-        self.palette = None;
-        self.ask = None;
-        self.tokens = None;
-        self.custom = None;
-        self.order = None;
-        self.quitting = false;
-        open
-    }
 }
 
 /// What a command acts on: a card, a pile (a library, graveyard or exile), a hand, a life
@@ -391,51 +216,3 @@ pub fn target_at(frame: &Frame, point: Vec2) -> Target {
 pub fn solo_request() -> TableSoloRequest {
     serde_json::from_str(commands::SOLO_REQUEST).expect("the sample deck is a solo request")
 }
-
-/// What a `Press::Lobby` does (`screens::lobby`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum LobbyPress {
-    /// Open a solo table's lobby, from the start screen.
-    Solo,
-    /// Open the start screen's form for hosting a table.
-    Host,
-    /// Open the start screen's form for joining a table.
-    Join,
-    /// Close the start screen's host or join form.
-    CancelEntry,
-    /// Host or join a table with what the open form holds.
-    OpenTable,
-    /// Resume the saved table at this index of the start screen's list.
-    Resume(u16),
-    /// Open the deck picker on the saved decks ('Change').
-    Change,
-    /// Open the deck picker on the field a decklist is pasted into ('Paste decklist').
-    Paste,
-    /// Load the saved deck at this index of the deck picker's list.
-    Pick(u16),
-    /// Read the pasted decklist, save it under the name typed and load it ('Import').
-    Import,
-    /// Close the deck picker.
-    ClosePicker,
-    /// Open the sideboard swap, or close it.
-    Sideboard,
-    /// Move one copy of the card at index `at` of the loaded deck's main deck to its sideboard,
-    /// or with `from_side`, of its sideboard to its main deck.
-    Swap { from_side: bool, at: u16 },
-    /// Unload the loaded deck.
-    Unload,
-    /// Mark the guest ready, or no longer ready.
-    Ready,
-    /// Turn the assist at this index of `manual::lobby::ASSISTS` on or off.
-    Assist(u8),
-    /// Ask for the starting life and hand size the host's fields hold.
-    SaveSettings,
-    /// Start the table's game.
-    Start,
-    /// Leave the table and go back to the start screen.
-    Leave,
-}
-
-/// A shortcut for a manual table command. The flag indicates Shift.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct TableCommand(pub u16, pub bool);

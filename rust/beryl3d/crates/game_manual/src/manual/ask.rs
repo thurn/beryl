@@ -8,13 +8,14 @@
 //! (`ui/src/table/AskPrompt.tsx`), with `parse`, `parse_stats` and the bounds of `ask.ts` and
 //! the per-command starts and labels of `TableCommands.run` (`ui/src/table/TableMenu.tsx`).
 
+use crate::features::ask::Message as AskMessage;
 use beryl_protocol::PlayerView;
 use beryl_protocol::protocol::{Answer, Side, TableAction, TableObjectRef, ZoneName};
 use glam::Vec2;
 use serde_json::Value;
 
+use super::Target;
 use super::commands::{self, Asks, COMMANDS, Command, Values};
-use super::{TablePress, Target};
 use game_hud::hud::placement_scene::PlacementScene;
 use game_table::profiles::Profile;
 use kit_base::tokens::{color, size, space};
@@ -518,6 +519,22 @@ pub fn suggestions(ask: &Ask) -> Option<&'static [&'static str]> {
     (command.id == "counter.add_named").then_some(&COUNTER_SUGGESTIONS[..])
 }
 
+/// Places the phone's ask prompt before its element is built or reused.
+#[must_use]
+pub fn dock_anchor(
+    ask: &Ask,
+    profile: Profile<'_>,
+    layout: Option<&PlacementScene>,
+) -> Option<Anchor> {
+    let (bands, metrics) = profile.bands().zip(profile.data().table.banded.as_ref())?;
+    Some(super::profiles::ask_anchor(
+        bands,
+        metrics,
+        suggestions(ask).is_some(),
+        layout,
+    ))
+}
+
 /// The ask prompt in the dock at the lower right of a window of `window`'s size: Cancel, Add
 /// counter's common counter names, the field with a minus and a plus beside a number or stats,
 /// and the confirm button.
@@ -527,7 +544,7 @@ pub fn dock(
     fields: &Fields,
     window: Window,
     profile: Profile<'_>,
-    layout: Option<&PlacementScene>,
+    anchor: Option<Anchor>,
 ) -> Element {
     let state = fields.get(&ask.field);
     let text = &state.text;
@@ -537,15 +554,15 @@ pub fn dock(
             button(sign)
                 .name(name)
                 .enabled(value.is_some() && next != *text)
-                .on_press(TablePress::AskStep(by.is_positive()))
+                .on_press(AskMessage::Step(by.is_positive()))
         })
     };
     let input = field(&ask.field, &state);
     let confirm = primary(&ask.label(text))
         .name("confirm")
         .enabled(value.is_some())
-        .on_press(TablePress::AskConfirm);
-    let cancel = button("Cancel").name("close").on_press(TablePress::Close);
+        .on_press(AskMessage::Confirm);
+    let cancel = button("Cancel").name("close").on_press(AskMessage::Close);
     let minus = step(-1, "−", "Less");
     let plus = step(1, "+", "More");
     let panel = column()
@@ -560,8 +577,7 @@ pub fn dock(
             input,
             [cancel, confirm],
             suggestions(ask),
-            banded,
-            layout,
+            (banded.0, banded.1, anchor),
         );
     }
     let controls = row()
@@ -582,7 +598,7 @@ pub fn dock(
                 let at = u8::try_from(at).unwrap_or(u8::MAX);
                 button(name)
                     .min_width(0.0)
-                    .on_press(TablePress::AskSuggestion(at))
+                    .on_press(AskMessage::Suggestion(at))
             }))
     });
     let mut dock = panel

@@ -11,11 +11,10 @@ use glam::Vec2;
 use super::commands::{self, Asks, Command, Entry, Values};
 use super::{Context, Target, viewers};
 
+use crate::features::context_menu::Message;
 use beryl_protocol::script::Subject;
-use kit_ui::widgets::{MenuGroup, MenuId, MenuRow};
-
-/// The id of the table's context menu, which its rows' presses (`Press::Menu`) carry.
-pub const MENU: MenuId = MenuId(1);
+use kit_ui::element::Action;
+use kit_ui::widgets::{MenuGroup, MenuPage, MenuRow};
 
 /// What giving a command does: send these table actions, leave the table, open the ask prompt
 /// for the command at this index of `COMMANDS` (`super::ask`), open the token search for it
@@ -106,9 +105,7 @@ pub fn act(
     }
 }
 
-/// An open context menu: where it opened, on what, its title and rows, and what each row
-/// does, in the order `widgets::menu` numbers the rows (every row of every group, then the
-/// rows of each submenu).
+/// An open context menu and the phone page it shows.
 #[derive(Clone, Debug, PartialEq)]
 pub struct OpenMenu {
     pub at: Vec2,
@@ -117,14 +114,11 @@ pub struct OpenMenu {
     /// Whose the target is, under the title (`whose`).
     pub whose: String,
     pub groups: Vec<MenuGroup>,
-    pub acts: Vec<Act>,
-    /// On the phone's sheet, the number of the row whose submenu the sheet shows in place of
-    /// the menu's rows (`widgets::sheet_menu`).
-    pub page: Option<u16>,
+    pub page: Option<MenuPage>,
 }
 
 /// A run of a menu's rows under one heading, or none, each with what it does.
-type Section<'a> = (Option<&'a str>, Vec<(MenuRow, Act)>);
+type Section<'a> = (Option<&'a str>, Vec<MenuRow>);
 
 /// The groups whose name the web shows no heading for: they are separated only by a line.
 const UNHEADED: [&str; 8] = [
@@ -152,7 +146,6 @@ pub fn open(target: Target, view: &PlayerView, at: Vec2, context: &Context) -> O
     entries.sort_by_key(|entry| entry.menu.map_or(0, |menu| menu.order));
     // Each section: its heading, its rows with what each does, and its submenus' rows.
     let mut sections: Vec<Section> = Vec::new();
-    let mut submenu_acts: Vec<Vec<Act>> = Vec::new();
     let mut folders: Vec<(usize, usize, &str)> = Vec::new();
     for entry in &entries {
         let Some(placement) = entry.menu else {
@@ -174,47 +167,34 @@ pub fn open(target: Target, view: &PlayerView, at: Vec2, context: &Context) -> O
         });
         for (mut row, act) in rows {
             row.enabled = act != Act::Nothing;
+            row.action = Some(Action::new(Message::Choose { target, act }));
             match placement.submenu {
                 Some(folder) => {
                     let rows = &mut sections[section].1;
                     let found =
                         (folders.iter()).position(|&(s, _, name)| s == section && name == folder);
                     let folder_index = found.unwrap_or_else(|| {
-                        rows.push((MenuRow::new(folder), Act::Nothing));
-                        submenu_acts.push(Vec::new());
+                        rows.push(MenuRow::new(folder));
                         folders.push((section, rows.len() - 1, folder));
                         folders.len() - 1
                     });
                     let at = folders[folder_index].1;
-                    rows[at].0.submenu.push(row);
-                    submenu_acts[folder_index].push(act);
+                    rows[at].submenu.push(row);
                 }
-                None => sections[section].1.push((row, act)),
+                None => sections[section].1.push(row),
             }
         }
     }
-    let mut groups = Vec::new();
-    let mut acts = Vec::new();
-    for (_, rows) in sections {
-        let mut group = MenuGroup::default();
-        for (row, act) in rows {
-            group.rows.push(row);
-            acts.push(act);
-        }
-        groups.push(group);
-    }
-    // Then the rows of the submenus. Folders are made in the order they stand in the menu,
-    // since sections and their rows are only ever added at the end.
-    for acts_of_folder in submenu_acts {
-        acts.extend(acts_of_folder);
-    }
+    let groups = sections
+        .into_iter()
+        .map(|(_, rows)| MenuGroup { rows })
+        .collect();
     OpenMenu {
         at,
         target,
         title: title(target, view),
         whose: whose(target, view),
         groups,
-        acts,
         page: None,
     }
 }

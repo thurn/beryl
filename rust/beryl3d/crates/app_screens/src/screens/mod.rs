@@ -13,7 +13,6 @@ pub use gallery::{GalleryMenu, GalleryQuery, GalleryState};
 pub use game_manual::screens::table_entries::{
     COULD_NOT_OPEN, EntryMode, INVITE, NAME, TableEntries,
 };
-use game_manual::screens::{lobby, table};
 
 pub use game_hud::hud::steps::steps as game_steps;
 pub use game_hud::navigation::{Screen, Sheet};
@@ -31,9 +30,6 @@ use game_hud::hud::HudIn;
 use game_hud::hud::placement_scene::PlacementScene;
 use game_hud::inspect::inspector::Inspected;
 use game_hud::inspect::revealed::RevealedFace;
-use game_manual::manual::TableState;
-use game_manual::manual::bindings::Bindings;
-use game_manual::manual::lobby::Lobby;
 use game_table::faces::FaceList;
 use game_table::table::Window;
 use kit_ui::element::{Action, Element};
@@ -62,8 +58,6 @@ pub struct ScreenIn<'a> {
     pub full_control: bool,
     /// Where the player stops with the stack empty.
     pub stops: StopsSetting,
-    /// The player's key bindings for the manual table.
-    pub bindings: &'a Bindings,
     /// The sheet open over the screen, if any.
     pub sheet: Option<Sheet>,
     /// Which samples are open in the gallery.
@@ -78,14 +72,9 @@ pub struct ScreenIn<'a> {
     pub viewing: Option<Viewed>,
     /// The faces of the Revealed Cards pile, the first revealed first, which its viewer lists.
     pub revealed: &'a [RevealedFace],
-    /// What the manual table shows over itself: its context menu, command list, ask prompt,
-    /// token search and library order tray, and whether its log is open.
-    pub table: &'a TableState,
     /// The item of an order prompt's row that the pointer carries along it, which a float draws
     /// in its place (`Client::carry_item`).
     pub carried: Option<Subject>,
-    /// The manual table's lobby (`manual::lobby`).
-    pub lobby: &'a Lobby,
     /// Whether the opening still shows the coin flip it began with, holding back who starts and
     /// the open decision (`opening::opening`).
     pub spinning: bool,
@@ -118,24 +107,9 @@ impl<'a> ScreenIn<'a> {
             placement_scene: self.placement_scene,
         }
     }
-    fn table_input(&self) -> table::TableIn<'a> {
-        table::TableIn {
-            hud: self.hud(),
-            fields: self.fields,
-            bindings: self.bindings,
-            table: self.table,
-            lobby: self.lobby,
-        }
-    }
 }
 
-/// The face that needs a full image for the manual table's menu, when it previews a card.
-#[must_use]
-pub fn sheet_face(input: &ScreenIn) -> Option<kit_ui::input::FaceId> {
-    table::sheet_face(&input.table_input())
-}
-
-/// Composes the game, lobby, table and gallery routes.
+/// Composes the game and gallery routes.
 #[must_use]
 pub fn screen(
     input: &ScreenIn,
@@ -144,7 +118,7 @@ pub fn screen(
     result: Option<Element>,
 ) -> Option<Element> {
     Some(match input.screen {
-        Screen::Start | Screen::Testing => return None,
+        Screen::Start | Screen::Testing | Screen::Lobby | Screen::Table => return None,
         Screen::Game => game::game(
             &input.hud(),
             furniture,
@@ -152,13 +126,6 @@ pub fn screen(
             result,
             Action::new(settings::Message::Open),
         ),
-        Screen::Lobby => lobby::lobby(&lobby::LobbyIn {
-            window: input.window,
-            profile: input.profile,
-            lobby: input.lobby,
-            fields: input.fields,
-        }),
-        Screen::Table => table::table(&input.table_input()),
         Screen::Gallery => gallery::gallery(input),
     })
 }

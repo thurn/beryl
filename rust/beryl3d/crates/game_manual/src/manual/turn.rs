@@ -12,7 +12,7 @@
 use beryl_protocol::protocol::{PlayerView, Side, TableAction, TablePhase};
 use glam::Vec2;
 
-use super::TablePress;
+use crate::features::table::Message as TableMessage;
 use game_table::table::Window;
 use kit_ui::element::{Anchor, Element};
 use kit_ui::widgets::primary;
@@ -148,7 +148,7 @@ pub fn next(
     use game_hud::prompts::bar::{captioned, captioned_dock, dock_sized, turn_action};
     use kit_ui::layout::{DOCK_BOTTOM, DOCK_RIGHT};
     let size = window.size;
-    let button = primary("Next").on_press(TablePress::Next);
+    let button = primary("Next").on_press(TableMessage::Next);
     let caption = caption(next_phase(phase));
     let (mut action, corner) = if let Some(slot) = profile.slot("manual.next") {
         let rect = slot.rect;

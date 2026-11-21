@@ -7,13 +7,13 @@
 //! token, and Shift makes it face down. This is the web's `TokenSearch` and `CustomToken`
 //! (`ui/src/table/TokenSearch.tsx`), with the deck's tokens as its related tokens.
 
+use crate::features::tokens::Message as TokensMessage;
 use beryl_protocol::PlayerView;
 use beryl_protocol::ipc::decks::{CardSearchHit, CardSearchRequest, CardTokenLink};
 use glam::Vec2;
 
 use serde_json::Value;
 
-use super::TablePress;
 use super::ask::parse;
 use super::palette::list_row;
 use kit_base::tokens::{color, size, space, type_style};
@@ -203,7 +203,7 @@ pub fn panel(search: &TokenSearch, view: &PlayerView, fields: &Fields, window: S
             choice.label(),
             (detail, None),
             at == search.highlight,
-            TablePress::Token(at_u16),
+            TokensMessage::Choose(at_u16),
         ));
     }
     let text_typed = search.query.trim();
@@ -355,7 +355,7 @@ pub fn custom_panel(form: &CustomToken, fields: &Fields, window: Size) -> Elemen
         let mut toggle = button(word).name(word).selected(on);
         toggle.role = Role::Toggle;
         let at = u8::try_from(at).unwrap_or(u8::MAX);
-        toggle.on_press(TablePress::CustomColor(at))
+        toggle.on_press(TokensMessage::Color(at))
     });
     let stats = row()
         .name("stats")
@@ -366,12 +366,16 @@ pub fn custom_panel(form: &CustomToken, fields: &Fields, window: Size) -> Elemen
         .name("footer")
         .gap(space::M)
         .justify_content(kit_ui::element::Justify::End)
-        .child(button("Cancel").name("close").on_press(TablePress::Close))
+        .child(
+            button("Cancel")
+                .name("close")
+                .on_press(TokensMessage::Close),
+        )
         .child(
             primary("Create token")
                 .name("confirm")
                 .enabled(form.choice(fields).is_some())
-                .on_press(TablePress::CustomCreate),
+                .on_press(TokensMessage::Create),
         );
     let mut panel = column()
         .name("Custom token")

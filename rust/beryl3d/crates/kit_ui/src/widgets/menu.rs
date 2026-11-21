@@ -8,26 +8,25 @@
 
 use glam::Vec2;
 
-use crate::element::{Align, Anchor, Element, column, row, text};
+use crate::element::{Action, Align, Anchor, Element, column, row, text};
 use kit_base::tokens::{color, shadow, size, type_style};
 use kit_frame::frame::Role;
 
-/// The selected row of an open menu.
+/// The folder whose contents are shown on the phone.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct MenuChoice(pub MenuId, pub u16);
-
-/// Which menu is open, so that a press on a row (`MenuChoice`) says whose row it was.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct MenuId(pub u16);
+pub struct MenuPage {
+    group: usize,
+    row: usize,
+}
 
 /// The rows of a menu between two dividers.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct MenuGroup {
     pub rows: Vec<MenuRow>,
 }
 
 /// One row of a menu.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct MenuRow {
     pub label: String,
     /// The words of the key that does the same, shown at the row's end, as
@@ -37,6 +36,8 @@ pub struct MenuRow {
     pub checked: bool,
     /// Whether a press on the row does anything now.
     pub enabled: bool,
+    /// The owning feature’s message for choosing this item.
+    pub action: Option<Action>,
     /// The rows of the submenu it opens, if any. A row with a submenu sends no press of its
     /// own: it opens the submenu.
     pub submenu: Vec<MenuRow>,
@@ -51,53 +52,33 @@ impl MenuRow {
             key: None,
             checked: false,
             enabled: true,
+            action: None,
             submenu: Vec::new(),
         }
     }
 }
 
-/// The menu `id` titled `title`, with `whose` under the title (whose the card or pile is, or
-/// nothing), and its rows in `groups`: a list named by its title whose rows are menu items
-/// named by their labels. A press on a row sends `MenuChoice(id, n)`, where `n` counts the
-/// menu's rows from 0 over all its groups, and then the rows of its submenus, in order, after
-/// the last of them.
+/// A list of grouped items whose presses send the actions supplied with each row.
 #[must_use]
-pub fn menu(id: MenuId, title: &str, whose: &str, groups: &[MenuGroup]) -> Element {
-    build(id, (title, whose), groups, false, None)
+pub fn menu(title: &str, whose: &str, groups: &[MenuGroup]) -> Element {
+    build((title, whose), groups, None)
 }
 
-/// The press of the Back row of a sheet menu showing a submenu's rows (`sheet_menu`), which
-/// no row of a menu has.
-pub const BACK: u16 = u16::MAX;
-
-/// `menu` as the phone's bottom sheet shows it (`Menu.tsx`'s pages): a row with a submenu
-/// presses `MenuChoice(id, n)` like any row, and opens no list beside the menu. With `page`
-/// set to the number of such a row, the sheet instead holds a Back row, pressing
-/// `MenuChoice(id, BACK)`, and the rows of that row's submenu, numbered as `menu` numbers
-/// them.
+/// A phone menu. A folder opens a page in the same sheet, and Back returns to the groups.
 #[must_use]
 pub fn sheet_menu(
-    id: MenuId,
     title: &str,
     whose: &str,
     groups: &[MenuGroup],
-    page: Option<u16>,
+    page: Option<MenuPage>,
+    navigate: fn(Option<MenuPage>) -> Action,
 ) -> Element {
-    build(id, (title, whose), groups, true, page)
+    build((title, whose), groups, Some((page, navigate)))
 }
 
-/// The panel of `menu` and `sheet_menu`, the latter if `sheet` is set, under the title and
-/// the dim line that says whose the target is (`Menu.tsx`'s `table-menu-title`).
-fn build(
-    id: MenuId,
-    (title, whose): (&str, &str),
-    groups: &[MenuGroup],
-    sheet: bool,
-    page: Option<u16>,
-) -> Element {
-    let rows = groups.iter().map(|group| group.rows.len()).sum::<usize>();
-    let mut next = 0;
-    let mut next_nested = u16::try_from(rows).unwrap_or(u16::MAX);
+type Sheet = (Option<MenuPage>, fn(Option<MenuPage>) -> Action);
+
+fn build((title, whose): (&str, &str), groups: &[MenuGroup], sheet: Option<Sheet>) -> Element {
     let mut heading = text(title).style(type_style::MENU_TITLE).color(color::TEXT);
     heading.style.padding = [
         size::MENU_TITLE_PADDING_TOP,
@@ -106,7 +87,7 @@ fn build(
         size::MENU_TITLE_PADDING_SIDE,
     ];
     let mut panel = panel(title).child(heading);
-    if sheet {
+    if sheet.is_some() {
         panel.style.box_shadow = shadow::SHEET.to_vec();
     }
     if !whose.is_empty() {
@@ -121,27 +102,25 @@ fn build(
         ];
         panel = panel.child(line);
     }
-    if let Some(page) = page.filter(|_| sheet) {
-        // The rows of the submenu of row `page` take their numbers after those of the
-        // submenus before it.
-        for (folder, row) in groups.iter().flat_map(|group| &group.rows).enumerate() {
-            if folder == usize::from(page) {
-                let mut deeper = u16::MAX;
-                let back = menu_row(id, &MenuRow::new("Back"), &mut 0, &mut deeper, true)
-                    .on_press(MenuChoice(id, BACK));
-                panel = panel.child(divider(0, "page")).child(back);
-                for child in &row.submenu {
-                    panel = panel.child(menu_row(id, child, &mut next_nested, &mut deeper, true));
-                }
-                return panel;
-            }
-            next_nested += u16::try_from(row.submenu.len()).unwrap_or(0);
-        }
+    if let Some((Some(page), navigate)) = sheet
+        && let Some(folder) = groups
+            .get(page.group)
+            .and_then(|group| group.rows.get(page.row))
+    {
+        let mut back = MenuRow::new("Back");
+        back.action = Some(navigate(None));
+        return panel
+            .child(divider(0, "page"))
+            .child(menu_row(&back, None))
+            .children(folder.submenu.iter().map(|row| menu_row(row, None)));
     }
-    for (index, group) in groups.iter().enumerate() {
-        panel = panel.child(divider(index, &format!("group {index}")));
-        for row in &group.rows {
-            panel = panel.child(menu_row(id, row, &mut next, &mut next_nested, sheet));
+    for (group, items) in groups.iter().enumerate() {
+        panel = panel.child(divider(group, &format!("group {group}")));
+        for (row, item) in items.rows.iter().enumerate() {
+            let page = sheet
+                .filter(|_| !item.submenu.is_empty())
+                .map(|(_, navigate)| navigate(Some(MenuPage { group, row })));
+            panel = panel.child(menu_row(item, page));
         }
     }
     panel
@@ -183,15 +162,8 @@ fn panel(name: &str) -> Element {
     panel
 }
 
-/// The menu item for `row`. A row without a submenu, or any row if `flat`, presses `MenuChoice(id, *next)`, taking
-/// that number; a row with one opens it, whose rows take numbers from `*nested` on.
-fn menu_row(
-    id: MenuId,
-    row_view: &MenuRow,
-    next: &mut u16,
-    nested: &mut u16,
-    flat: bool,
-) -> Element {
+/// A folder shows its desktop submenu or sends the phone’s page action.
+fn menu_row(row_view: &MenuRow, page: Option<Action>) -> Element {
     let enabled = row_view.enabled;
     let hint = if row_view.submenu.is_empty() {
         row_view.key.clone()
@@ -232,19 +204,15 @@ fn menu_row(
     // A press on a row highlights it, and a row with a submenu, which has no press, can still
     // be highlighted by the keys.
     item.focus = true;
-    if row_view.submenu.is_empty() || flat {
-        item = item.on_press(MenuChoice(id, *next));
+    if row_view.submenu.is_empty() {
+        item.press.clone_from(&row_view.action);
+    } else if let Some(page) = page {
+        item.press = Some(page);
     } else {
-        // A submenu has no submenus of its own (`Menu.tsx` opens one level), so the numbers a
-        // row of it would give a deeper one are not kept.
-        let mut deeper = u16::MAX;
-        let mut submenu = panel(&row_view.label);
-        for child in &row_view.submenu {
-            submenu = submenu.child(menu_row(id, child, nested, &mut deeper, false));
-        }
+        let mut submenu =
+            panel(&row_view.label).children(row_view.submenu.iter().map(|row| menu_row(row, None)));
         submenu.anchor = Some(Anchor::Submenu);
         item = item.child(submenu);
     }
-    *next += 1;
     item
 }

@@ -18,7 +18,7 @@ use kit_ui::element::Action;
 use kit_ui::element::{Gradient, describe, row, text};
 use kit_ui::input::{IconCell, Insets, Key, KeyCode, KeyPhase, Modifiers, PointerPhase, Size};
 use kit_ui::layout::{Layer, Navigation};
-use kit_ui::widgets::{self, MenuGroup, MenuId, MenuRow, icons};
+use kit_ui::widgets::{self, MenuGroup, MenuRow, icons};
 
 use super::flat_layer::{
     centre, client, context, deciding, edges, fill_glyphs, find, pointer, prompt, write_layer,
@@ -281,8 +281,8 @@ fn a_focused_slider_moves_by_5_under_the_arrow_keys_and_is_drawn_held_while_pres
     );
 }
 
-/// The menu every menu test opens.
-const MENU: MenuId = MenuId(7);
+#[derive(Clone, Debug, PartialEq)]
+struct ChooseItem(String);
 
 /// A key going down, with no modifiers held.
 fn key(code: KeyCode) -> Key {
@@ -295,9 +295,13 @@ fn key(code: KeyCode) -> Key {
 
 /// One group of rows with `labels`, the second of which opens a submenu if `submenu`.
 fn groups(labels: &[&str], submenu: bool) -> Vec<MenuGroup> {
-    let mut rows: Vec<MenuRow> = labels.iter().map(|label| MenuRow::new(label)).collect();
+    let item = |label: &str| MenuRow {
+        action: Some(Action::new(ChooseItem(label.to_owned()))),
+        ..MenuRow::new(label)
+    };
+    let mut rows: Vec<MenuRow> = labels.iter().map(|label| item(label)).collect();
     if submenu {
-        rows[1].submenu = vec![MenuRow::new("Face up"), MenuRow::new("Face down")];
+        rows[1].submenu = vec![item("Face up"), item("Face down")];
     }
     vec![MenuGroup { rows }]
 }
@@ -305,7 +309,7 @@ fn groups(labels: &[&str], submenu: bool) -> Vec<MenuGroup> {
 #[test]
 fn a_context_menu_by_the_right_edge_stays_8_points_inside_and_its_submenu_opens_left() {
     let mut layer = Layer::new();
-    let menu = widgets::menu(MENU, "Island", "", &groups(&["Tap", "Play", "Exile"], true));
+    let menu = widgets::menu("Island", "", &groups(&["Tap", "Play", "Exile"], true));
     // 4 points from the right edge of the 1440-point window.
     let at = Vec2::new(1436.0, 300.0);
     layer.show(Some(
@@ -344,12 +348,7 @@ fn a_context_menu_by_the_right_edge_stays_8_points_inside_and_its_submenu_opens_
 #[test]
 fn down_twice_and_return_presses_the_third_row_of_a_menu() {
     let mut layer = Layer::new();
-    let menu = widgets::menu(
-        MENU,
-        "Island",
-        "",
-        &groups(&["Tap", "Untap", "Exile"], false),
-    );
+    let menu = widgets::menu("Island", "", &groups(&["Tap", "Untap", "Exile"], false));
     layer.show(Some(
         row()
             .name("table")
@@ -369,13 +368,13 @@ fn down_twice_and_return_presses_the_third_row_of_a_menu() {
     assert_eq!(layer.navigate(&key(KeyCode::ArrowDown)), Navigation::Moved);
     assert_eq!(
         layer.navigate(&key(KeyCode::Enter)),
-        Navigation::Press(Action::new(widgets::MenuChoice(MENU, 2)))
+        Navigation::Press(Action::new(ChooseItem("Exile".to_owned())))
     );
     // Down from the last row goes round to the first, and Escape closes the menu.
     assert_eq!(layer.navigate(&key(KeyCode::ArrowDown)), Navigation::Moved);
     assert_eq!(
         layer.navigate(&key(KeyCode::Enter)),
-        Navigation::Press(Action::new(widgets::MenuChoice(MENU, 0)))
+        Navigation::Press(Action::new(ChooseItem("Tap".to_owned())))
     );
     assert_eq!(
         layer.close_press(),

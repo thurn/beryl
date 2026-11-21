@@ -2,7 +2,7 @@
 //! table: a click acts" and "Manual counters and untap flags"), as the web's `ManaPool` stands
 //! them beside a life orb when it is given `adjust` (`ui/src/components/Player.tsx`): all six
 //! mana symbols, each with its amount once it has any, then each named counter the player has,
-//! as its name and count. A click on one adds one (`TablePress::Counter`) and a right click
+//! as its name and count. A click on one adds one (`TableMessage::Counter`) and a right click
 //! removes one, as the web's `registerPlayers` (`ui/src/table/players.ts`) sends them. The
 //! opponent's row takes clicks only at a table of two seats, as the web's `Chrome` gives it
 //! `adjust`; at a solo table it shows only the mana and counters they have, as a game does. They
@@ -19,7 +19,7 @@ use beryl_protocol::PlayerView;
 use beryl_protocol::protocol::{ManaPool, PlayerState, Side};
 use glam::Vec2;
 
-use super::TablePress;
+use crate::features::table::Message as TableMessage;
 use game_play::hud::counts::{index, points};
 use game_table::profiles::Profile;
 use game_table::table::{REFERENCE, Window};
@@ -124,7 +124,7 @@ fn mana_button(
                 .style(type_style::BUTTON)
                 .passes(true),
         )
-        .on_press(TablePress::ManaSheet(Some(side)));
+        .on_press(TableMessage::ManaSheet(Some(side)));
     element.anchor = Some(Anchor::Point(at, Vec2::new(1.0, 0.5)));
     Some(element)
 }
@@ -148,7 +148,7 @@ pub fn sheet(view: &PlayerView, side: Side, profile: Profile<'_>) -> Option<Elem
         .child(
             button("Done")
                 .min_width(metrics.mana_done_width)
-                .on_press(TablePress::ManaSheet(None)),
+                .on_press(TableMessage::ManaSheet(None)),
         );
     let mut grid = Element::new(kit_frame::frame::Role::Region)
         .gap(space::S)
@@ -166,10 +166,10 @@ pub fn sheet(view: &PlayerView, side: Side, profile: Profile<'_>) -> Option<Elem
             let remove = counter(&format!("Remove {name}"), "\u{2212}", true)
                 .min_width(size::ICON_BUTTON)
                 .min_height(size::ICON_BUTTON)
-                .on_press(TablePress::CounterRemove { side, at });
+                .on_press(TableMessage::CounterRemove { side, at });
             row()
                 .gap(space::S)
-                .child(add.on_press(TablePress::Counter { side, at }))
+                .child(add.on_press(TableMessage::Counter { side, at }))
                 .child(remove)
         },
     ));
@@ -218,7 +218,7 @@ fn pool(player: &PlayerState, side: Side, window: Size, adjust: bool) -> Element
                     let button =
                         counter_cell(&format!("{name} counter: {count}"), &words, mana, adjust);
                     if adjust {
-                        button.on_press(TablePress::Counter { side, at })
+                        button.on_press(TableMessage::Counter { side, at })
                     } else {
                         button
                     }

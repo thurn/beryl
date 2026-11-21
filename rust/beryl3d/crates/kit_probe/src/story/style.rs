@@ -5,7 +5,7 @@ use std::fmt;
 use kit_base::paint::{Gradient, Shadow, Stop};
 use kit_frame::frame::{Role, StateBits};
 use kit_ui::element::Element;
-use kit_ui::widgets::{self, FieldState, MenuGroup, MenuId, MenuRow, icons};
+use kit_ui::widgets::{self, FieldState, MenuGroup, MenuRow, icons};
 
 use super::Node;
 use super::parse::number;
@@ -213,7 +213,8 @@ impl Widget {
                 let mut row = MenuRow::new(words);
                 row.checked = selected;
                 row.enabled = !bits.has(StateBits::DISABLED);
-                widgets::menu(MenuId(0), name, "", &[MenuGroup { rows: vec![row] }])
+                row.action = Some(kit_ui::element::Action::new(()));
+                widgets::menu(name, "", &[MenuGroup { rows: vec![row] }])
             }
 
             Self::Slider => {

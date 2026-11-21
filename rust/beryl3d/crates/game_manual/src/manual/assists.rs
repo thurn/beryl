@@ -16,6 +16,7 @@
 //!   `TablePromptView`, `ui/src/table/TablePromptView.tsx`). Done is enabled once every card is
 //!   placed, and Cancel leaves the cards where they were.
 
+use crate::features::proposals::Message as ProposalsMessage;
 use beryl_protocol::PlayerView;
 use beryl_protocol::protocol::{
     Answer, LabelView, ObjectId, PileName, ProposalView, Side, TablePrompt, TargetRef, ZoneName,
@@ -25,7 +26,7 @@ use game_hud::hud::placement_scene::PlacementScene;
 
 use glam::Vec2;
 
-use super::TablePress;
+use crate::features::table::Message as TableMessage;
 use game_hud::inspect::viewer::object_box;
 use game_table::profiles::Profile;
 use game_table::table::Window;
@@ -54,7 +55,7 @@ pub fn proposals(
     opened: Option<u32>,
     window: Window,
     profile: Profile<'_>,
-    layout: Option<&PlacementScene>,
+    anchor: Option<Anchor>,
 ) -> Option<Element> {
     let first = proposals.first()?.id;
     let mut panel = column()
@@ -89,7 +90,7 @@ pub fn proposals(
     heading.style.padding = [0.0, space::M, 0.0, space::M];
     let heading = heading
         .selected(open)
-        .on_press(TablePress::ToggleProposals((!open).then_some(first)));
+        .on_press(ProposalsMessage::Toggle((!open).then_some(first)));
     if !open {
         let mut folded = heading;
         folded.anchor = Some(corner);
@@ -104,11 +105,30 @@ pub fn proposals(
                 .iter()
                 .map(|each| proposal(each, Some(target)).align_self(Align::Stretch)),
         );
-    panel.anchor = profile
-        .bands()
-        .and_then(|bands| super::profiles::proposal_slot(proposals, rect, bands, layout, target))
-        .or(Some(corner));
+    panel.anchor = anchor.or(Some(corner));
     Some(panel)
+}
+
+/// Places an open phone panel and records its clearance from the table.
+#[must_use]
+pub fn proposal_anchor(
+    proposals: &[ProposalView],
+    opened: Option<u32>,
+    profile: Profile<'_>,
+    layout: Option<&PlacementScene>,
+) -> Option<Anchor> {
+    let first = proposals.first()?;
+    if opened != Some(first.id) {
+        return None;
+    }
+    let rect = profile.slot("manual.proposals")?.rect;
+    super::profiles::proposal_slot(
+        proposals,
+        rect,
+        profile.bands()?,
+        layout,
+        profile.data().checks.target_points,
+    )
 }
 
 /// One proposal's section, its controls as tall as a touch needs on a `phone`.
@@ -119,7 +139,7 @@ fn proposal(proposal: &ProposalView, target: Option<f32>) -> Element {
             Side::You => "yours",
             Side::Opponent => "theirs",
         };
-        let press = TablePress::ProposalLine {
+        let press = ProposalsMessage::Line {
             id,
             line: line.id,
             on: !line.on,
@@ -133,7 +153,7 @@ fn proposal(proposal: &ProposalView, target: Option<f32>) -> Element {
         .name("Apply")
         .align_self(Align::Start)
         .enabled(proposal.lines.iter().any(|line| line.on))
-        .on_press(TablePress::ApplyProposal { id, revision });
+        .on_press(ProposalsMessage::Apply { id, revision });
     column()
         .name(&proposal.title)
         .gap(space::S)
@@ -187,7 +207,7 @@ pub fn labels(labels: &[LabelView], view: &PlayerView, profile: Profile<'_>) -> 
                 .children(group.into_iter().map(|label| {
                     touch(small(button(&label.text)), target)
                         .name(&label.text)
-                        .on_press(TablePress::Label(label.id))
+                        .on_press(TableMessage::Label(label.id))
                 }));
             // In the compact layout the label straddles the card's top edge. This leaves
             // room to press both the card and the one above it. Larger cards have room
@@ -225,7 +245,7 @@ pub fn sort_tray(view: &PlayerView, window: Size) -> Option<Element> {
     else {
         return None;
     };
-    let card = |slot: ObjectId| object_box(view, slot).on_press(TablePress::SortCard(slot));
+    let card = |slot: ObjectId| object_box(view, slot).on_press(TableMessage::SortCard(slot));
     let unplaced = (cards.iter().copied())
         .filter(|slot| !placed.iter().any(|pile| pile.contains(slot)))
         .map(card);
@@ -259,10 +279,10 @@ pub fn sort_tray(view: &PlayerView, window: Size) -> Option<Element> {
     let done = primary("Done")
         .name("done")
         .enabled(ready)
-        .on_press(TablePress::SortDone);
+        .on_press(TableMessage::SortDone);
     let cancel = button("Cancel")
         .name("close")
-        .on_press(TablePress::SortCancel);
+        .on_press(TableMessage::SortCancel);
     Some(overlay(
         window,
         (title, None),

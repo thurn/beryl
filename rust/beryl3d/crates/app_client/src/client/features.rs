@@ -13,6 +13,7 @@ use app_screens::screens::{self, GalleryState, Screen, Sheet};
 use app_screens::settings::ScreenSettings;
 use beryl_protocol::prompt::{Click, PromptView};
 use beryl_protocol::{PlayerView, SessionId};
+use game_hud::hud::HudIn;
 use game_hud::hud::banner::Banner;
 use game_hud::hud::counts::CountFloats;
 use game_hud::hud::full_control::{self, FullControl};
@@ -27,7 +28,7 @@ use game_hud::prompts::{self, bar::PromptBar};
 
 mod prompt;
 use game_hud::screens::game_over::{self, GameOver};
-use game_manual::screens::table_entries::TableEntries;
+use game_manual::manual::bindings::Bindings;
 use game_table::faces::{FaceList, Faces};
 use game_table::profiles::Profile;
 use game_table::table::Window;
@@ -37,6 +38,12 @@ use kit_ui::layout::FieldChange;
 use kit_ui::widgets::{FieldState, Fields};
 
 use super::{Client, SessionCommand};
+
+mod manual;
+use manual::{
+    ASK, AskPrompt, CommandList, ContextMenu, LOBBY, LobbyScreen, MENU, ORDER, OrderTray, PALETTE,
+    PROPOSALS, ProposalPanel, TABLE, TABLE_LOG, TOKENS, TableLog, TableScreen, TokenSearch,
+};
 
 const SETTINGS: &str = "settings";
 const START: &str = "start";
@@ -80,6 +87,15 @@ const REGISTRY: &[Registration] = &[
     Registration::prompt::<prompts::Pay>("prompt-pay", Placement::Shape("pay")),
     Registration::prompt::<prompts::Declare>("prompt-declare", Placement::Shape("declare")),
     Registration::prompt::<prompts::Candidates>("prompt-candidates", Placement::Candidates),
+    Registration::of::<TableScreen>(TABLE, Placement::Screen(Screen::Table)),
+    Registration::of::<LobbyScreen>(LOBBY, Placement::Screen(Screen::Lobby)),
+    Registration::of::<ContextMenu>(MENU, Placement::TableMenu),
+    Registration::of::<CommandList>(PALETTE, Placement::TableOverlay),
+    Registration::of::<AskPrompt>(ASK, Placement::TableOverlay),
+    Registration::of::<TokenSearch>(TOKENS, Placement::TableOverlay),
+    Registration::of::<OrderTray>(ORDER, Placement::TableOverlay),
+    Registration::of::<TableLog>(TABLE_LOG, Placement::TableLog),
+    Registration::of::<ProposalPanel>(PROPOSALS, Placement::TableProposals),
 ];
 
 /// Locations in the flat layer's composition that take a registered feature.
@@ -92,6 +108,10 @@ pub(super) enum Placement {
     PromptBar,
     Shape(&'static str),
     Candidates,
+    TableMenu,
+    TableOverlay,
+    TableLog,
+    TableProposals,
 }
 
 /// App inputs available to mounts. Each feature receives only the inputs it reads.
@@ -103,7 +123,8 @@ pub(super) struct ViewInputs<'a> {
     pub view: Option<&'a PlayerView>,
     pub session: Option<SessionId>,
     pub fields: &'a Fields,
-    pub entries: &'a TableEntries,
+    pub hud: &'a HudIn<'a>,
+    pub bindings: &'a Bindings,
     pub faces: &'a FaceList,
     pub game_over: bool,
     pub settings: ScreenSettings,
@@ -167,6 +188,7 @@ pub(super) struct Features {
     pub layer_open: bool,
     /// The route of the open sheet, shared by the settings and bug report.
     pub sheet: Option<Sheet>,
+    pub lobby_view: Option<beryl_protocol::ipc::LobbyView>,
     /// Narration derived from the ordered session views, including views no
     /// longer available from playback. It is an input to the game log.
     pub log_history: Logged,
@@ -185,6 +207,7 @@ impl Default for Features {
             prompts: prompts::router::Router::default(),
             layer_open: false,
             sheet: None,
+            lobby_view: None,
             log_history: Logged::default(),
             frame_times: BTreeSet::new(),
             focus_after_show: None,
@@ -342,10 +365,10 @@ impl Features {
     }
 
     pub fn view(&mut self, placement: Placement, inputs: ViewInputs<'_>) -> Option<Element> {
-        let entry = REGISTRY
+        REGISTRY
             .iter()
-            .find(|entry| entry.placement == Some(placement))?;
-        (entry.view)(self, entry.id, inputs).cloned()
+            .filter(|entry| entry.placement == Some(placement))
+            .find_map(|entry| (entry.view)(self, entry.id, inputs).cloned())
     }
 
     pub fn state(&self, id: &str) -> Option<String> {
@@ -513,6 +536,7 @@ impl Mounted for StartScreen {
             .recordings
             .is_empty();
         let in_progress = start::in_progress(inputs.view);
+        let entries = features.lobby().entries.clone();
         Some(
             Features::slot::<Self>(&mut features.slots, id).view(start::Inputs {
                 window: inputs.window,
@@ -521,7 +545,7 @@ impl Mounted for StartScreen {
                 session: inputs.session.filter(|_| in_progress),
                 has_recordings,
                 fields: inputs.fields,
-                entries: inputs.entries,
+                entries: &entries,
             }),
         )
     }

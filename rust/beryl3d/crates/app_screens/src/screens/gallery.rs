@@ -20,7 +20,7 @@ use kit_ui::element::{
     Action, Align, Anchor, Element, Justify, Overflow, Shown, TextAlign, column, row, text,
 };
 use kit_ui::input::{FaceId, FaceSize};
-use kit_ui::widgets::{MenuGroup, MenuId, MenuRow, button, context_menu, icons, menu, primary};
+use kit_ui::widgets::{MenuGroup, MenuRow, button, context_menu, icons, menu, primary};
 
 /// A context menu sample opened in the gallery.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -44,8 +44,6 @@ pub struct GalleryState {
     pub menu: Option<(GalleryMenu, Vec2)>,
     pub query: Option<GalleryQuery>,
 }
-
-const MENU_ID: MenuId = MenuId(1);
 
 /// The component library at `#/gallery` in the web interface.
 pub fn gallery(input: &ScreenIn) -> Element {
@@ -528,13 +526,13 @@ fn example_menu(kind: GalleryMenu) -> Element {
             .iter()
             .map(|&(label, key)| MenuRow {
                 key: (!key.is_empty()).then(|| key.to_owned()),
+                action: Some(Action::new(ScreenPress::GalleryMenuChoice)),
                 ..MenuRow::new(label)
             })
             .collect(),
     };
     if kind == GalleryMenu::Permanent {
         return menu(
-            MENU_ID,
             "Beast",
             "Token creature · yours",
             &[
@@ -567,7 +565,6 @@ fn example_menu(kind: GalleryMenu) -> Element {
     ])
     .rows;
     menu(
-        MENU_ID,
         "Library",
         "53 cards · yours",
         &[

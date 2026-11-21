@@ -7,10 +7,15 @@
 //! of these is open at a time; opening one closes the others.
 
 use beryl_protocol::ipc::decks::CardSearchHit;
-use beryl_protocol::protocol::{Answer, ObjectId, Side};
+use beryl_protocol::protocol::{ObjectId, Side};
 
 use super::Client;
-use crate::command::{Request, SessionCommand};
+use crate::command::Request;
+use game_manual::features::{
+    library_order, palette::Message as PaletteMessage, table::Message as TableMessage,
+    tokens::Message as TokenMessage,
+};
+use game_manual::manual::Target;
 use game_manual::manual::ask::{self, Ask, Confirmed};
 use game_manual::manual::bindings::binding_for;
 use game_manual::manual::commands::{self, COMMANDS, Values};
@@ -18,9 +23,6 @@ use game_manual::manual::menus;
 use game_manual::manual::order::LibraryOrder;
 use game_manual::manual::palette::{self, Palette, RESET, RESET_NOTICE};
 use game_manual::manual::tokens::{self, Choice, CustomToken, TokenChoice, TokenSearch};
-use game_manual::manual::turn::step_command;
-use game_manual::manual::viewers::ViewerControl;
-use game_manual::manual::{TablePress, Target, assists, log};
 use kit_ui::input::{Key, KeyCode, KeyPhase};
 use kit_ui::widgets::FieldState;
 
@@ -33,7 +35,7 @@ impl Client {
         };
         let palette = Palette::open(target, view, &self.table_context(), settings);
         self.over(palette::FIELD, FieldState::default());
-        self.manual.palette = Some(palette);
+        *self.features.palette_mut() = Some(palette);
         self.show_screen();
         self.layer.focus_field(palette::FIELD);
     }
@@ -52,7 +54,7 @@ impl Client {
     /// down if `face_down`.
     pub(super) fn open_tokens(&mut self, index: u16, face_down: bool) {
         self.over(tokens::FIELD, FieldState::default());
-        self.manual.tokens = Some(TokenSearch::open(index, face_down));
+        self.update_tokens(&TokenMessage::Open(TokenSearch::open(index, face_down)));
         self.show_screen();
         self.layer.focus_field(tokens::FIELD);
     }
@@ -61,15 +63,17 @@ impl Client {
     /// library: what putting several cards on a library at once opens.
     pub fn order_library(&mut self, side: Side, cards: Vec<ObjectId>) {
         self.over("", FieldState::default());
-        self.manual.order = Some(LibraryOrder::new(side, cards));
+        self.update_order(&library_order::Message::Open(LibraryOrder::new(
+            side, cards,
+        )));
         self.show_screen();
     }
 
     /// Closes whatever the table shows over itself, and starts the field named `field` holding
     /// `state`.
     fn over(&mut self, field: &str, state: FieldState) {
-        self.manual.menu = None;
-        self.manual.close_overlay();
+        self.features.clear_menu();
+        self.features.close_overlay();
         self.layer.focus(None);
         if !field.is_empty() {
             self.layer.set_field(field, state);
@@ -80,7 +84,7 @@ impl Client {
     pub(super) fn show_ask(&mut self, ask: Ask) {
         self.over(&ask.field, ask.field_state());
         let name = ask.field.clone();
-        self.manual.ask = Some(ask);
+        *self.features.ask_mut() = Some(ask);
         self.show_screen();
         self.layer.focus_field(&name);
     }
@@ -88,128 +92,29 @@ impl Client {
     /// Keeps what the command list's or the token search's field holds as its query, and asks
     /// the store for tokens matching a token search's new query.
     pub(super) fn follow_table_query(&mut self) {
-        if let Some(open) = &mut self.manual.palette {
-            open.set_query(&self.layer.fields().get(palette::FIELD).text);
+        if self.features.palette().is_some() {
+            self.update_palette(&PaletteMessage::Query(
+                self.layer.fields().get(palette::FIELD).text,
+            ));
         }
-        if let Some(open) = &mut self.manual.tokens {
-            let query = self.layer.fields().get(tokens::FIELD).text;
-            open.set_query(&query);
-            if let Some(text) = open.wants(&query) {
-                open.asked = Some(text.clone());
-                self.commands.push_back(SessionCommand::CardSearch(text));
-            }
+        if self.features.tokens().search.is_some() {
+            self.update_tokens(&TokenMessage::Query(
+                self.layer.fields().get(tokens::FIELD).text,
+            ));
         }
     }
 
     /// The store found `hits` for the token search's `text`.
     pub(super) fn take_token_hits(&mut self, text: String, hits: Vec<CardSearchHit>) {
-        if let Some(open) = &mut self.manual.tokens {
-            open.answer = Some((text, hits));
+        if self.update_tokens(&TokenMessage::Found(text, hits)) {
             self.show_screen();
         }
     }
 
-    /// A press on something the table shows over itself.
-    pub(super) fn table_press(&mut self, press: TablePress) {
-        let shift = self.manual.shift;
-        match press {
-            TablePress::Palette(at) => self.run_palette_row(usize::from(at), shift),
-            TablePress::AskConfirm => self.confirm_ask(),
-            TablePress::AskStep(up) => self.step_ask(up),
-            TablePress::AskSuggestion(at) => {
-                let suggested = (self.manual.ask.as_ref())
-                    .and_then(ask::suggestions)
-                    .and_then(|names| names.get(usize::from(at)));
-                if let Some(&name) = suggested {
-                    self.confirm_ask_with(name);
-                }
-            }
-            TablePress::Token(at) => self.choose_token(usize::from(at), shift),
-            TablePress::OrderCard(at) => {
-                if let Some(order) = &mut self.manual.order {
-                    order.shift(usize::from(at), 0);
-                }
-                self.show_screen();
-            }
-            TablePress::OrderDone => self.order_done(),
-            TablePress::Undo(entry) => self.send_table(vec![log::undo(entry)]),
-            TablePress::Rewind(entry) => self.send_table(vec![log::rewind(entry)]),
-            TablePress::ToggleLog => {
-                self.manual.log_open = !self.manual.log_open;
-                self.show_screen();
-            }
-            TablePress::ToggleProposals(open) => {
-                self.manual.proposals_open = open;
-                self.show_screen();
-            }
-            TablePress::CustomColor(at) => {
-                if let Some(color) = (self.manual.custom.as_mut())
-                    .and_then(|form| form.colors.get_mut(usize::from(at)))
-                {
-                    *color = !*color;
-                }
-                self.show_screen();
-            }
-            TablePress::CustomCreate => self.create_custom(shift),
-            TablePress::CancelCapture => self.stop_capture(None),
-            TablePress::Step { at, active } => {
-                let Some(view) = self.show.latest().map(|update| &update.view) else {
-                    return;
-                };
-                let id = step_command(view, at, active);
-                self.run_table_command(id, Target::Table);
-            }
-            TablePress::Counter { side, at } => self.adjust_counter(side, at, true, press),
-            TablePress::CounterRemove { side, at } => self.adjust_counter(side, at, false, press),
-            TablePress::ManaSheet(side) => {
-                self.manual.mana_sheet = side;
-                self.show_screen();
-            }
-            TablePress::Quit => {
-                self.manual.quitting = false;
-                self.requests.push_back(crate::command::Request::Quit);
-                self.show_screen();
-            }
-            TablePress::Next => self.run_table_command("phase.next", Target::Table),
-            TablePress::Close => {
-                self.manual.close_overlay();
-                self.layer.focus(None);
-                self.show_screen();
-            }
-            TablePress::ProposalLine { id, line, on } => {
-                self.send_answer(Answer::ProposalLine { id, line, on });
-            }
-            TablePress::ApplyProposal { id, revision } => {
-                // The panel folds again once its proposal is applied.
-                self.manual.proposals_open = None;
-                self.send_answer(Answer::ApplyProposal { id, revision });
-                self.show_screen();
-            }
-            TablePress::Label(id) => self.send_answer(Answer::ApplyLabel { id }),
-            TablePress::SortCard(card) => {
-                let view = self.show.latest().map(|update| &update.view);
-                if let Some(answer) = view.and_then(|view| assists::sort_answer(view, card)) {
-                    self.send_answer(answer);
-                }
-            }
-            TablePress::SortDone => self.send_answer(Answer::Done),
-            TablePress::SortCancel => self.send_answer(Answer::Cancel),
-            TablePress::Opening(press) => {
-                for answer in press.answers() {
-                    self.send_answer(answer);
-                }
-            }
-            TablePress::Leave => self.leave_table(),
-            TablePress::ViewerGroup => {
-                self.viewer_control(ViewerControl::Group);
-            }
-            TablePress::ViewerSort(sort) => {
-                self.viewer_control(ViewerControl::Sort(sort));
-            }
-            TablePress::ViewerFinish(shuffle) => {
-                self.viewer_control(ViewerControl::Finish { shuffle });
-            }
-        }
+    pub(super) fn close_table_overlay(&mut self) {
+        self.features.close_overlay();
+        self.layer.focus(None);
+        self.show_screen();
     }
 
     /// A key while the command list, ask prompt, token search or order tray is open: Escape
@@ -218,13 +123,13 @@ impl Client {
     /// and right keys move the tray's highlighted card. Returns whether the key means nothing
     /// else; every other key goes on to the focused field.
     pub(super) fn table_overlay_key(&mut self, key: Key) -> bool {
-        if !self.manual.overlay_open() || key.phase == KeyPhase::Up {
+        if !self.features.overlay_open() || key.phase == KeyPhase::Up {
             return false;
         }
         let first = key.phase == KeyPhase::Down;
         if self
-            .manual
-            .palette
+            .features
+            .palette()
             .as_ref()
             .is_some_and(|open| open.capturing)
         {
@@ -237,47 +142,50 @@ impl Client {
         match key.code {
             KeyCode::Escape => {
                 if first {
-                    self.table_press(TablePress::Close);
+                    self.close_table_overlay();
                 }
             }
             KeyCode::Enter => {
                 if !first {
                     return true;
                 }
-                if let Some(open) = &self.manual.palette {
+                if let Some(open) = self.features.palette() {
                     if key.modifiers.alt {
                         self.start_capture();
                     } else {
                         self.run_palette_row(open.highlight, shift);
                     }
-                } else if self.manual.ask.is_some() {
+                } else if self.features.ask().is_some() {
                     self.confirm_ask();
-                } else if let Some(open) = &self.manual.tokens {
+                } else if let Some(open) = &self.features.tokens().search {
                     self.choose_token(open.highlight, shift);
-                } else if self.manual.custom.is_some() {
+                } else if self.features.tokens().custom.is_some() {
                     self.create_custom(shift);
-                } else if self.manual.quitting {
-                    self.table_press(TablePress::Quit);
+                } else if self.features.table().quitting {
+                    self.press(&kit_ui::element::Action::new(TableMessage::Quit));
                 } else {
-                    self.order_done();
+                    self.update_order(&library_order::Message::Done);
+                    self.show_screen();
                 }
             }
             KeyCode::ArrowUp | KeyCode::ArrowDown
-                if self.manual.palette.is_some() || self.manual.tokens.is_some() =>
+                if self.features.palette().is_some() || self.features.tokens().search.is_some() =>
             {
                 let down = key.code == KeyCode::ArrowDown;
                 let view = self.show.latest().map(|update| &update.view);
-                if let Some(open) = &mut self.manual.palette {
-                    open.move_highlight(down);
-                } else if let (Some(open), Some(view)) = (&mut self.manual.tokens, view) {
+                if self.features.palette().is_some() {
+                    self.update_palette(&PaletteMessage::Highlight(down));
+                } else if let (Some(open), Some(view)) =
+                    (&mut self.features.tokens_mut().search, view)
+                {
                     open.move_highlight(down, view);
                 }
                 self.show_screen();
             }
-            KeyCode::ArrowLeft | KeyCode::ArrowRight if self.manual.order.is_some() => {
-                if let Some(order) = &mut self.manual.order {
-                    order.nudge(key.code == KeyCode::ArrowRight);
-                }
+            KeyCode::ArrowLeft | KeyCode::ArrowRight if self.features.order().is_some() => {
+                self.update_order(&library_order::Message::Nudge(
+                    key.code == KeyCode::ArrowRight,
+                ));
                 self.show_screen();
             }
             _ => return false,
@@ -287,17 +195,17 @@ impl Client {
 
     /// Runs the `at`th row the command list shows, or its shifted form if `shift`, and closes
     /// the list.
-    fn run_palette_row(&mut self, at: usize, shift: bool) {
-        let Some(open) = self.manual.palette.take() else {
+    pub(super) fn run_palette_row(&mut self, at: usize, shift: bool) {
+        let Some(open) = self.features.palette_mut().take() else {
             return;
         };
         let query = self.layer.fields().get(palette::FIELD).text;
         let Some(row) = open.matched(&query).get(at).map(|row| (*row).clone()) else {
-            self.manual.palette = Some(open);
+            *self.features.palette_mut() = Some(open);
             return;
         };
         if row.command == RESET {
-            self.manual.palette = Some(open);
+            *self.features.palette_mut() = Some(open);
             self.settings.bindings.reset();
             self.bindings_changed(RESET_NOTICE.to_owned());
             return;
@@ -315,17 +223,29 @@ impl Client {
     /// Confirms the ask prompt with what its field holds: opens the command's next prompt, or
     /// sends what the command makes and closes the prompt. Nothing while the field holds no
     /// value.
-    fn confirm_ask(&mut self) {
-        let Some(ask) = &self.manual.ask else {
+    pub(super) fn confirm_ask(&mut self) {
+        let Some(ask) = self.features.ask() else {
             return;
         };
         let text = self.layer.fields().get(&ask.field).text;
         self.confirm_ask_with(&text);
     }
 
+    pub(super) fn ask_suggestion(&mut self, at: u8) {
+        let suggested = self
+            .features
+            .ask()
+            .as_ref()
+            .and_then(ask::suggestions)
+            .and_then(|names| names.get(usize::from(at)));
+        if let Some(&name) = suggested {
+            self.confirm_ask_with(name);
+        }
+    }
+
     /// Confirms the ask prompt as if its field held `text`.
     fn confirm_ask_with(&mut self, text: &str) {
-        let Some(ask) = self.manual.ask.clone() else {
+        let Some(ask) = self.features.ask().clone() else {
             return;
         };
         let Some(view) = self.show.latest().map(|update| &update.view) else {
@@ -334,13 +254,13 @@ impl Client {
         match ask.confirm(text, view) {
             Some(Confirmed::Next(next)) => self.show_ask(*next),
             Some(Confirmed::Send(actions)) => {
-                self.manual.ask = None;
+                *self.features.ask_mut() = None;
                 self.layer.focus(None);
                 self.send_table(actions);
                 self.show_screen();
             }
             Some(Confirmed::Answer(answer)) => {
-                self.manual.ask = None;
+                *self.features.ask_mut() = None;
                 self.layer.focus(None);
                 self.send_answer(answer);
                 self.show_screen();
@@ -350,8 +270,8 @@ impl Client {
     }
 
     /// The ask prompt's plus, or its minus if not `up`: the field takes the next value.
-    fn step_ask(&mut self, up: bool) {
-        let Some(ask) = &self.manual.ask else {
+    pub(super) fn step_ask(&mut self, up: bool) {
+        let Some(ask) = self.features.ask() else {
             return;
         };
         let name = ask.field.clone();
@@ -376,8 +296,8 @@ impl Client {
 
     /// Makes the token of the `at`th row of the token search, face down if `shift` or if the
     /// search was opened so, and closes the search; the custom token's row asks for its name.
-    fn choose_token(&mut self, at: usize, shift: bool) {
-        let Some(open) = self.manual.tokens.clone() else {
+    pub(super) fn choose_token(&mut self, at: usize, shift: bool) {
+        let Some(open) = self.features.tokens().search.clone() else {
             return;
         };
         let Some(view) = self.show.latest().map(|update| &update.view) else {
@@ -409,8 +329,7 @@ impl Client {
         values.insert("face_down", face_down.into());
         let command = &COMMANDS[usize::from(command)];
         let actions = commands::actions_with(command, Target::Table, view, &values);
-        self.manual.tokens = None;
-        self.manual.custom = None;
+        self.update_tokens(&TokenMessage::Reset);
         self.layer.focus(None);
         self.send_table(actions);
         self.show_screen();
@@ -423,15 +342,15 @@ impl Client {
         for name in tokens::CUSTOM_FIELDS {
             self.layer.set_field(name, FieldState::default());
         }
-        self.manual.custom = Some(CustomToken::open(command, face_down));
+        self.update_tokens(&TokenMessage::Custom(CustomToken::open(command, face_down)));
         self.show_screen();
         self.layer.focus_field(tokens::NAME);
     }
 
     /// Makes the token the custom token form describes, face down if `shift` or if the search
     /// was opened so; nothing while the form describes none.
-    fn create_custom(&mut self, shift: bool) {
-        let Some(form) = self.manual.custom.clone() else {
+    pub(super) fn create_custom(&mut self, shift: bool) {
+        let Some(form) = self.features.tokens().custom.clone() else {
             return;
         };
         if let Some(choice) = form.choice(self.layer.fields()) {
@@ -443,7 +362,7 @@ impl Client {
     /// command, with the field no longer taking keys. Nothing on the row that resets the keys,
     /// which no key can be bound to.
     fn start_capture(&mut self) {
-        let Some(open) = &mut self.manual.palette else {
+        let Some(open) = self.features.palette_mut() else {
             return;
         };
         let query = self.layer.fields().get(palette::FIELD).text;
@@ -468,7 +387,7 @@ impl Client {
         let Some(binding) = binding_for(&key, self.mac()) else {
             return;
         };
-        let Some(open) = &self.manual.palette else {
+        let Some(open) = self.features.palette() else {
             return;
         };
         let query = self.layer.fields().get(palette::FIELD).text;
@@ -496,8 +415,8 @@ impl Client {
 
     /// Stops waiting for a key to bind; a binding made says so in `notice`, and the bindings
     /// are saved.
-    fn stop_capture(&mut self, notice: Option<String>) {
-        if let Some(open) = &mut self.manual.palette {
+    pub(super) fn stop_capture(&mut self, notice: Option<String>) {
+        if let Some(open) = self.features.palette_mut() {
             open.capturing = false;
         }
         if let Some(notice) = notice {
@@ -514,7 +433,7 @@ impl Client {
         let context = self.table_context();
         let view = self.show.latest().map(|update| &update.view);
         let rows = view.map(|view| {
-            let mut rebuilt = self.manual.palette.clone();
+            let mut rebuilt = self.features.palette().clone();
             if let Some(open) = &mut rebuilt {
                 open.refresh(view, &context);
             }
@@ -522,7 +441,7 @@ impl Client {
         });
         if let Some(Some(mut open)) = rows {
             open.notice = Some(notice);
-            self.manual.palette = Some(open);
+            *self.features.palette_mut() = Some(open);
         }
         self.requests
             .push_back(Request::SaveSettings(self.settings.clone()));
@@ -531,14 +450,10 @@ impl Client {
     }
 
     /// Puts the order tray's cards on the library in its order and closes it.
-    fn order_done(&mut self) {
-        let Some(order) = self.manual.order.take() else {
-            return;
-        };
+    pub(super) fn order_done(&mut self, order: &LibraryOrder) {
         if let Some(view) = self.show.latest().map(|update| &update.view) {
             let actions = order.actions(view);
             self.send_table(actions);
         }
-        self.show_screen();
     }
 }

@@ -126,7 +126,7 @@ impl Client {
                 return;
             }
         }
-        self.manual.viewer = game_manual::manual::viewers::PileViewer::new();
+        self.features.table_mut().viewer = game_manual::manual::viewers::PileViewer::new();
         self.layer.set_field(
             game_manual::manual::viewers::SEARCH,
             kit_ui::widgets::FieldState::default(),

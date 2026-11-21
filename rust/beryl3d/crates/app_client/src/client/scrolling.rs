@@ -27,8 +27,8 @@ impl Client {
         matches!(self.screen, Screen::Game | Screen::Table)
             && self.features.sheet.is_none()
             && self.features.viewer().open().is_none()
-            && self.manual.menu.is_none()
-            && !self.manual.overlay_open()
+            && self.features.menu().is_none()
+            && !self.features.overlay_open()
             && !self.table_frozen()
     }
 

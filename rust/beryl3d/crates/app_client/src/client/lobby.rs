@@ -1,220 +1,77 @@
-//! The manual table's lobby on the client's side (docs/manual-multiplayer.md, "Setup and match
-//! flow"), as the web's `Lobby` drives it: the start screen's 'Solo table' opens a solo table's
-//! lobby, each control sends a `LobbyChange` as `SessionCommand::TableLobby`, and the session's
-//! `Input::Lobby` brings the lobby's new state. The deck picker asks the session for the saved
-//! decks (`SessionCommand::DeckList`) or to read a pasted decklist
-//! (`SessionCommand::DeckImport`), and loads the deck it gets back. The lobby gives way to the table when its game
-//! starts, and the table goes back to the lobby when a game ends.
+//! Adapts lobby events and replies from the session to feature messages.
 
+use app_screens::screens::{COULD_NOT_OPEN, Screen};
 use beryl_protocol::SessionError;
-use beryl_protocol::ipc::decks::{DeckImportReply, DeckImportRequest, SavedDeck};
-use beryl_protocol::ipc::{LobbyChange, LobbySettings, LobbyUpdate, TableRefused};
-use game_manual::manual::LobbyPress;
+use beryl_protocol::ipc::decks::{DeckImportReply, SavedDeck};
+use beryl_protocol::ipc::{LobbyUpdate, TableRefused};
+use game_manual::features::{
+    context_menu,
+    lobby::{EntryMessage, Message},
+};
 
 use super::Client;
-use crate::command::SessionCommand;
-
-use app_screens::screens::Screen;
-use game_manual::manual::lobby::{self, DeckPanel};
-use kit_ui::widgets::FieldState;
+use crate::command::Reply;
 
 impl Client {
-    /// Carries out a press of one of the lobby's controls, or the start screen's 'Solo table'.
-    pub(super) fn press_lobby(&mut self, press: LobbyPress) {
-        let lobby = &self.manual.lobby;
-        let view = lobby.view.as_ref();
-        let loaded = lobby.own().is_some_and(|own| own.loaded);
-        let change = match press {
-            LobbyPress::Host
-            | LobbyPress::Join
-            | LobbyPress::CancelEntry
-            | LobbyPress::OpenTable
-            | LobbyPress::Resume(_) => return self.press_entry(press),
-            LobbyPress::Solo => {
-                self.manual.entries.error = None;
-                self.open_lobby();
-                LobbyChange::Solo
-            }
-            LobbyPress::Change => return self.open_picker(DeckPanel::Saved),
-            LobbyPress::Paste => return self.open_picker(DeckPanel::Paste),
-            LobbyPress::ClosePicker => {
-                self.manual.lobby.picker = None;
-                return self.show_screen();
-            }
-            LobbyPress::Pick(at) => {
-                let Some(saved) = lobby.saved.get(usize::from(at)) else {
-                    return;
-                };
-                return self.load_deck(saved.deck.clone());
-            }
-            LobbyPress::Import => return self.import_deck(),
-            LobbyPress::Sideboard if loaded => {
-                self.manual.lobby.sideboard = !lobby.sideboard;
-                return self.show_screen();
-            }
-            LobbyPress::Swap { from_side, at } => {
-                let Some(change) = view.and_then(|view| lobby::swapped(view, from_side, at)) else {
-                    return;
-                };
-                change
-            }
-            LobbyPress::Unload if loaded => {
-                self.manual.lobby.deck_name = None;
-                self.manual.lobby.sideboard = false;
-                LobbyChange::LoadDeck {
-                    main: Vec::new(),
-                    side: Vec::new(),
-                }
-            }
-            LobbyPress::Ready if loaded && !lobby.hosting() => LobbyChange::Ready {
-                ready: !lobby.own().is_some_and(|own| own.ready),
-            },
-            LobbyPress::Assist(at) => {
-                let (Some(view), Some((assist, _))) = (view, lobby::ASSISTS.get(usize::from(at)))
-                else {
-                    return;
-                };
-                lobby::toggled(view, *assist)
-            }
-            LobbyPress::SaveSettings => {
-                let Some(settings) = view.and_then(|view| self.asked_settings(view.settings))
-                else {
-                    return;
-                };
-                // The fields empty again, to show the settings the lobby comes back with.
-                self.layer
-                    .set_field(lobby::STARTING_LIFE, FieldState::default());
-                self.layer
-                    .set_field(lobby::STARTING_HAND_SIZE, FieldState::default());
-                LobbyChange::Settings { settings }
-            }
-            LobbyPress::Start if view.is_some_and(|view| view.can_start) => LobbyChange::Start,
-            LobbyPress::Leave => return self.leave_table(),
-            LobbyPress::Sideboard | LobbyPress::Unload | LobbyPress::Ready | LobbyPress::Start => {
-                return;
-            }
+    pub(super) fn ask_saved_tables(&mut self) {
+        self.update_lobby(&Message::Entry(EntryMessage::StartVisible(
+            self.screen == Screen::Start,
+        )));
+    }
+
+    pub(super) fn take_entry_reply(&mut self, reply: Reply) {
+        let message = match reply {
+            Reply::TableSaved(saved) => EntryMessage::SavedTables(saved),
+            Reply::TableOpen(Ok(())) => EntryMessage::TableOpened,
+            Reply::TableOpen(Err(reason)) => return self.table_failed(reason),
+            _ => return,
         };
-        self.send_lobby(change);
-    }
-
-    /// Sends the lobby `change` and shows the lobby until the table answers.
-    fn send_lobby(&mut self, change: LobbyChange) {
-        self.manual.lobby.error = None;
-        self.commands.push_back(SessionCommand::TableLobby(change));
+        self.update_lobby(&Message::Entry(message));
         self.show_screen();
     }
 
-    /// Opens the deck picker on `panel`. The saved decks' panel asks the session for them.
-    fn open_picker(&mut self, panel: DeckPanel) {
-        let lobby = &mut self.manual.lobby;
-        lobby.picker = Some(panel);
-        lobby.deck_error = None;
-        if panel == DeckPanel::Saved {
-            lobby.saved.clear();
-            self.commands.push_back(SessionCommand::DeckList);
+    pub(super) fn table_failed(&mut self, reason: String) {
+        if self.opening_table() {
+            self.screen = Screen::Start;
         }
+        self.update_lobby(&Message::Entry(EntryMessage::EntryError(reason)));
         self.show_screen();
     }
 
-    /// Sends the pasted decklist to be read and saved under the name typed, once both fields
-    /// hold something and no decklist is being read already.
-    fn import_deck(&mut self) {
-        let name = self
-            .layer
-            .fields()
-            .get(lobby::DECK_NAME)
-            .text
-            .trim()
-            .to_owned();
-        let text = self.layer.fields().get(lobby::DECKLIST).text;
-        if name.is_empty() || text.trim().is_empty() || self.manual.lobby.importing {
-            return;
-        }
-        self.manual.lobby.importing = true;
-        self.manual.lobby.deck_error = None;
-        (self.commands).push_back(SessionCommand::DeckImport(DeckImportRequest {
-            name,
-            text: Some(text),
-            cod: None,
-        }));
+    pub(super) fn table_error(&mut self, reason: String) {
+        let message = if self.screen == Screen::Start || self.opening_table() {
+            Message::Entry(EntryMessage::EntryError(reason))
+        } else {
+            Message::LinkError(Some(reason))
+        };
+        self.update_lobby(&message);
         self.show_screen();
     }
 
-    /// Loads `deck` at the table, keeps its name to show, and closes the picker.
-    fn load_deck(&mut self, deck: DeckImportReply) {
-        self.layer
-            .set_field(lobby::DECK_NAME, FieldState::default());
-        self.layer.set_field(lobby::DECKLIST, FieldState::default());
-        let lobby = &mut self.manual.lobby;
-        lobby.deck_name = Some(deck.name);
-        lobby.picker = None;
-        lobby.importing = false;
-        lobby.sideboard = false;
-        self.send_lobby(LobbyChange::LoadDeck {
-            main: deck.main,
-            side: deck.side,
-        });
-    }
-
-    /// The session listed the saved decks, which the picker shows if it is still open on them.
-    pub(super) fn take_saved_decks(&mut self, saved: Result<Vec<SavedDeck>, SessionError>) {
-        let lobby = &mut self.manual.lobby;
-        if lobby.picker != Some(DeckPanel::Saved) {
-            return;
-        }
-        match saved {
-            Ok(saved) => lobby.saved = saved,
-            Err(error) => lobby.deck_error = Some(lobby::deck_error(&error)),
-        }
-        self.show_screen();
-    }
-
-    /// The session read a pasted decklist and saved it: the table loads it. Or it could not,
-    /// and the picker says why.
-    pub(super) fn take_imported_deck(&mut self, imported: Result<DeckImportReply, SessionError>) {
-        if !self.manual.lobby.importing {
-            return;
-        }
-        match imported {
-            Ok(deck) => self.load_deck(deck),
-            Err(error) => {
-                let lobby = &mut self.manual.lobby;
-                lobby.importing = false;
-                lobby.deck_error = Some(lobby::deck_error(&error));
+    pub(super) fn take_lobby_reply(
+        &mut self,
+        reply: Result<Option<Box<LobbyUpdate>>, TableRefused>,
+    ) {
+        match reply {
+            Ok(Some(update)) => self.take_lobby(*update),
+            Ok(None) => {}
+            Err(_) if self.opening_table() => self.table_failed(COULD_NOT_OPEN.to_owned()),
+            Err(_) => {
+                self.update_lobby(&Message::Refused);
                 self.show_screen();
             }
         }
     }
 
-    /// The settings the host's fields ask for, if they can be read and ask for a change.
-    fn asked_settings(&self, current: LobbySettings) -> Option<LobbySettings> {
-        let life = self.layer.fields().get(lobby::STARTING_LIFE).text;
-        let hand = self.layer.fields().get(lobby::STARTING_HAND_SIZE).text;
-        lobby::asked_settings(current, &life, &hand).ok().flatten()
-    }
-
-    /// Shows the lobby screen with no lobby yet, which arrives as `Input::Lobby`.
-    pub(super) fn open_lobby(&mut self) {
-        self.update_start(&app_screens::screens::start::Message::Leave);
-        self.manual.lobby = lobby::Lobby::new();
-        self.screen = Screen::Lobby;
-        self.change_sheet(None);
-    }
-
-    /// The lobby changed. A lobby with a state is kept, and shown in place of the table when a
-    /// game there has ended. No state means the table's game has started: the lobby gives way
-    /// to the table.
     pub(super) fn take_lobby(&mut self, update: LobbyUpdate) {
         match update.view {
             Some(view) => {
-                // Both players at the table means the guest's connection is up, which ends the
-                // failure the table last reported, as the web's `useTableLink` clears it.
                 if view.seats.len() > 1 && view.seats.iter().all(|seat| seat.name.is_some()) {
-                    self.manual.lobby.link_error = None;
+                    self.update_lobby(&Message::LinkError(None));
                 }
-                self.manual.lobby.view = Some(view);
+                self.features.lobby_view = Some(view);
                 if self.screen == Screen::Table {
-                    self.manual.menu = None;
+                    self.update_table_menu(&context_menu::Message::Close);
                     self.screen = Screen::Lobby;
                 }
             }
@@ -224,14 +81,19 @@ impl Client {
         self.show_screen();
     }
 
-    /// The table refused a change of its lobby: the lobby says so, as the web's does. A refusal
-    /// of the 'Solo table' press, before any lobby has arrived, is a table that did not open:
-    /// the start screen comes back and says so, as the web's `TableEntries` does.
-    pub(super) fn lobby_refused(&mut self, _: &TableRefused) {
-        if self.screen == Screen::Lobby && self.manual.lobby.view.is_none() {
-            return self.table_failed(app_screens::screens::COULD_NOT_OPEN.to_owned());
+    pub(super) fn take_saved_decks(&mut self, saved: Result<Vec<SavedDeck>, SessionError>) {
+        if self.update_lobby(&Message::SavedDecks(saved)) {
+            self.show_screen();
         }
-        self.manual.lobby.error = Some("Could not update the lobby.");
-        self.show_screen();
+    }
+
+    pub(super) fn take_imported_deck(&mut self, imported: Result<DeckImportReply, SessionError>) {
+        if self.update_lobby(&Message::ImportedDeck(imported)) {
+            self.show_screen();
+        }
+    }
+
+    fn opening_table(&self) -> bool {
+        self.screen == Screen::Lobby && self.features.lobby_view.is_none()
     }
 }

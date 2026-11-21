@@ -5,4 +5,4 @@ pub mod command;
 pub mod driver;
 pub mod settings;
 
-pub use client::{Client, Config, Dismiss, Input, Press};
+pub use client::{Client, Config, Input};

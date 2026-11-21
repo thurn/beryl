@@ -8,7 +8,7 @@ use beryl_protocol::script::Subject;
 use glam::Vec2;
 
 use super::gesture::{Gesture, Release};
-use super::{Client, Dismiss, Input, Platform, Press};
+use super::{Client, Input, Platform};
 use app_screens::screens::settings::{Message as SettingsMessage, slider_setting};
 use app_screens::screens::{Screen, Sheet};
 use game_hud::hud::rows::Message as RowMessage;
@@ -64,7 +64,7 @@ impl Client {
         }
         self.show.pointer_mut().handle(&pointer);
         if pointer.phase == PointerPhase::Down {
-            self.manual.shift = pointer.modifiers.shift;
+            self.features.table_mut().modifiers.shift = pointer.modifiers.shift;
         }
         // The mouse is followed whatever is asked, so that an arrow to the pointer that a
         // prompt opens under it starts there. A touch has no pointer to follow.
@@ -83,7 +83,7 @@ impl Client {
                 .layer
                 .outside_menu(pointer.position, self.features.layer_open)
         {
-            self.dispatch_press(&Press::Dismiss(Dismiss::Menu));
+            self.dismiss_menu();
             return;
         }
         // A frozen table takes no gesture of its own; the flat layer's buttons still work.
@@ -296,11 +296,11 @@ impl Client {
             // A table command's key acts once for each press, not again as it repeats. While a
             // context menu is open it does nothing, and the menu's own keys move through its
             // rows.
-            let table_key = press
-                .downcast_ref::<game_manual::manual::TableCommand>()
-                .is_some()
-                || matches!(press.downcast_ref::<Press>(), Some(Press::Command(..)));
-            let free = self.manual.menu.is_none() && !self.manual.overlay_open();
+            let table_key = matches!(
+                press.downcast_ref::<game_manual::features::table::Message>(),
+                Some(game_manual::features::table::Message::Shortcut(..))
+            );
+            let free = self.features.menu().is_none() && !self.features.overlay_open();
             if !table_key || (first && free) {
                 return Some(press);
             }
