@@ -125,9 +125,8 @@ pub fn in_tree(root: &Path, checks: &Path) -> Result<Option<Manifest>, String> {
 }
 
 /// The families that the `ignite.toml` at `root` lists for the machine `hostname`: `None` when
-/// there is no such file or it declares no `[machine.<hostname>]`, and `Some(None)` when it
-/// declares the machine with no `families` list, which means every family. A file that cannot
-/// be read or parsed is an error.
+/// there is no such file, and `Some(None)` when the file has no `families` list for this
+/// machine, which means every family. A file that cannot be read or parsed is an error.
 ///
 /// The check runner reads this from each tree it opens, so a tree that adds a family to this
 /// machine runs it there, and the heartbeat reads it from the main checkout, so the hub shows
@@ -144,9 +143,11 @@ pub fn machine_families(
     };
     let (config, _unknown) =
         Config::parse_with_unknown(&path.to_string_lossy(), &text).map_err(|e| e.to_string())?;
-    Ok(config
-        .machine(hostname)
-        .map(|machine| machine.families.clone()))
+    Ok(Some(
+        config
+            .machine(hostname)
+            .and_then(|machine| machine.families.clone()),
+    ))
 }
 
 /// Reads the main checkout's manifests again and hands any change to the daemon's components.

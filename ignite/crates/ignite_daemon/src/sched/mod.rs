@@ -13,8 +13,8 @@
 //! - One command takes at most two thirds of the cores. Within a class, a request that has
 //!   waited [`AGED_SECONDS`] goes first, then the smallest; each gets what it asked for before
 //!   the next gets anything (see `ledger/order.rs`).
-//! - `tip` and `batch` have floors (`floor` in a machine's table of `ignite.toml`) that higher
-//!   classes cannot take while the class has work running or waiting.
+//! - `tip` and `batch` have derived floors that higher classes cannot take while the class
+//!   has work running or waiting.
 //! - Each named resource is held by at most its capacity of grants at once. A resource the
 //!   machine does not declare has capacity 1.
 //! - CPU busy beyond what Ignite uses belongs to processes outside Ignite and is not granted.
@@ -65,7 +65,9 @@ use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError, Weak};
 use std::thread;
 use std::time::Duration;
 
-use ignite_core::config::{Floor, Machine};
+use ignite_core::capacity::{Derived, MachineFacts, resource_slots};
+use ignite_core::config::{Config, Floor, Machine};
+use ignite_core::manifest::{Manifest, Platforms};
 use ignite_core::protocol::Class;
 use ignite_core::traits::Clock;
 use ignite_os::hostcpu::HostCpu;
@@ -186,28 +188,53 @@ pub struct Limits {
 }
 
 impl Limits {
-    /// The limits of a machine declared in `ignite.toml` with `cores` logical cores. The
+    /// The limits of a machine with measured logical and physical core counts. The
     /// machine's `express_cores` are left out: the express lane runs its commands on them
     /// itself, so a saturated or broken scheduler can never hold them (see
     /// `crate::land::express`). The machine's `tip_build_cores` are left out too: only
     /// requests with `Reserve::TipBuild` are granted them. At least one core is always left to
     /// hand out, and the express lane's cores come before the tip reserve's on a small machine.
-    pub fn for_machine(machine: &Machine, cores: u32) -> Self {
+    pub fn for_machine(
+        config: &Config,
+        machine: &Machine,
+        manifest: &Manifest,
+        facts: &MachineFacts,
+        derived: &Derived,
+    ) -> Self {
+        let cores = facts.logical_cores;
         let handed_out = cores
-            .saturating_sub(machine.express_cores)
-            .saturating_sub(machine.tip_build_cores)
+            .saturating_sub(derived.express_cores)
+            .saturating_sub(derived.tip_build_cores)
             .max(1);
-        let tip_build = machine.tip_build_cores.min(
+        let tip_build = derived.tip_build_cores.min(
             cores
-                .saturating_sub(machine.express_cores)
+                .saturating_sub(derived.express_cores)
                 .saturating_sub(handed_out),
         );
+        let mut resources = machine.resources.clone();
+        for (name, resource) in &config.resources {
+            resources.remove(name);
+            if manifest.families.iter().any(|(family_name, declared)| {
+                let family = &declared.family;
+                family.resources.contains(name)
+                    && machine
+                        .families
+                        .as_ref()
+                        .is_none_or(|list| list.contains(family_name))
+                    && match &family.platforms {
+                        Platforms::Any(_) => true,
+                        Platforms::Each(platforms) => platforms.contains(&facts.os),
+                    }
+            }) {
+                resources.insert(name.clone(), resource_slots(cores, resource.per_core));
+            }
+        }
         Self {
             cores: handed_out,
             reserved: cores.saturating_sub(handed_out),
             tip_build,
-            floor: machine.floor,
-            resources: machine.resources.clone(),
+            floor: derived.floor,
+            resources,
         }
     }
 

@@ -169,7 +169,10 @@ impl World {
 
     /// A daemon for `machine`, declared in `ignite.toml`, over its own clone.
     pub fn daemon(&self, machine: &str) -> Arc<Daemon> {
-        let repo = self.checkout(machine);
+        self.daemon_from(machine, self.checkout(machine))
+    }
+
+    pub fn daemon_from(&self, machine: &str, repo: PathBuf) -> Arc<Daemon> {
         let home = Home {
             root: self.root.join(format!("home-{machine}")),
         };

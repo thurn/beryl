@@ -83,7 +83,7 @@ landing_trees = 1
         assert!((config.land.max_base_age_hours - 12.0).abs() < f64::EPSILON);
         assert!(!config.revert.broken_build);
         assert_eq!(config.repository.green, None);
-        assert_eq!(config.machine["one"].tip_build_cores, 0);
+        assert_eq!(config.machine["one"].tip_build_cores, None);
     }
 
     #[test]
@@ -96,7 +96,7 @@ landing_trees = 1
         let (config, unknown) = Config::parse_with_unknown("ignite.toml", &text).unwrap();
         assert!(unknown.is_empty(), "{unknown:?}");
         assert_eq!(config.repository.green.as_deref(), Some("green"));
-        assert_eq!(config.machine["one"].tip_build_cores, 4);
+        assert_eq!(config.machine["one"].tip_build_cores, Some(4));
         assert_eq!(config.land.mode, super::LandMode::Verdict);
         assert!((config.land.max_base_age_hours - 6.0).abs() < f64::EPSILON);
         assert!(config.revert.broken_build);

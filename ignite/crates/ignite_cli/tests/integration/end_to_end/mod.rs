@@ -10,10 +10,38 @@ mod world;
 use std::process::Command;
 use std::sync::Arc;
 
+use ignite_core::capacity::{MachineFacts, derive};
+use ignite_core::config::Os;
 use ignite_core::protocol::tickets::Status;
 use ignite_daemon::tip::TipOutcome;
+use ignite_os::hostcpu::HostCpu;
 
 use world::{World, ask, commit, detail, start, ticket};
+
+#[test]
+fn the_daemon_starts_without_machine_configuration() {
+    let world = World::new("defaults");
+    let repo = world.checkout("alpha");
+    let config = repo.join("ignite.toml");
+    let text = std::fs::read_to_string(&config).unwrap();
+    let (without_machines, _) = text.split_once("[machine.alpha]").unwrap();
+    std::fs::write(config, without_machines).unwrap();
+    let daemon = world.daemon_from("alpha", repo);
+    assert!(daemon.ctx.config.machine.is_empty());
+    let trees = daemon.options.repo.join(".trees");
+    let expected = derive(&MachineFacts {
+        os: Os::current().unwrap(),
+        physical_cores: ignite_os::Native.physical_cores(),
+        logical_cores: ignite_os::Native.cores(),
+        memory_mb: 0,
+        disk_total_gb: 0,
+    })
+    .landing_trees;
+    for index in 1..=expected {
+        assert!(trees.join(format!("landing-{index}")).is_dir());
+    }
+    assert!(!trees.join(format!("landing-{}", expected + 1)).exists());
+}
 
 /// A Codex thread uses the real executable to start, test and land a ticket over the daemon's
 /// socket. The commit reaches `staging`, the ticket closes with its note, and `master` moves

@@ -1,9 +1,5 @@
 //! Capacity derived from machine measurements and reported to the hub.
 //!
-//! The tickets for derived core reserves, tree disk budgets and worker room implement
-//! their respective functions here.
-
-#![allow(unused_variables)]
 
 use std::collections::BTreeMap;
 
@@ -68,13 +64,40 @@ pub struct ProviderCapacity {
 }
 
 pub fn derive(facts: &MachineFacts) -> Derived {
-    todo!()
+    let physical = facts.physical_cores;
+    let express_cores = round_div(physical, 6).clamp(2, 4);
+    Derived {
+        express_cores,
+        tip_build_cores: round_div(physical, 5).clamp(2, 6),
+        floor: Floor {
+            batch: round_div(physical, 3).max(2),
+            tip: 2,
+        },
+        landing_trees: express_cores,
+        worker_ceiling: facts.logical_cores.saturating_mul(2),
+    }
 }
 
+/// Round to the nearest integer, with halves rounding up.
+fn round_div(value: u32, divisor: u32) -> u32 {
+    value / divisor + u32::from(value % divisor >= divisor.div_ceil(2))
+}
+
+/// Capacity for a resource whose configuration gives slots per logical core.
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+pub fn resource_slots(logical_cores: u32, per_core: f64) -> u32 {
+    (f64::from(logical_cores) * per_core).floor().max(1.0) as u32
+}
+
+#[allow(unused_variables)]
 pub fn disk_budget_gb(disk_total_gb: u64, outside_gb: u64, cap_gb: Option<u32>) -> u64 {
     todo!()
 }
 
+#[allow(unused_variables)]
 pub fn start_room(inputs: &RoomInputs) -> u32 {
     todo!()
 }
+
+#[cfg(test)]
+mod tests;

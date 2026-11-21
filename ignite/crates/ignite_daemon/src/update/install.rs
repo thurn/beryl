@@ -20,7 +20,7 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use ignite_core::config::{Config, Machine, Os};
+use ignite_core::config::{Config, Os};
 use ignite_core::ids::{Commit, MachineId};
 use ignite_core::protocol::client::{Exit, Reply, Request};
 use ignite_core::protocol::hub::{MachineRegister, MachineRegistered};
@@ -132,17 +132,6 @@ impl Handoff for ProcessHandoff {
     }
 }
 
-/// The machine's table in `ignite.toml`.
-fn declared<'c>(deps: &InstallDeps, config: &'c Config) -> Result<&'c Machine> {
-    let name = deps.host.hostname();
-    config.machine(&name).ok_or_else(|| {
-        Error::Invalid(format!(
-            "this machine is called {name:?} but ignite.toml declares no [machine.{name}]; \
-             add one and run `ignite install` again"
-        ))
-    })
-}
-
 /// Whether two paths name the same file, following links.
 fn same_file(a: &Path, b: &Path) -> bool {
     match (
@@ -158,7 +147,6 @@ fn same_file(a: &Path, b: &Path) -> bool {
 /// executable, it then registers the machine and installs the login services itself
 /// ([`finish_install`]); otherwise it hands those steps to the stored executable.
 pub fn install(deps: &InstallDeps, config: &Config, head: &Commit) -> Result<Outcome> {
-    declared(deps, config)?;
     let built = deps.builder.build(head)?;
     let executable = deps.store.store(head, &built)?;
     deps.store.point_current_at(head)?;
@@ -172,7 +160,8 @@ pub fn install(deps: &InstallDeps, config: &Config, head: &Commit) -> Result<Out
 /// services for the stored build of `head`. The services go last, so a failed install leaves
 /// no daemon.
 pub fn finish_install(deps: &InstallDeps, config: &Config, head: &Commit) -> Result<Installed> {
-    let declared = declared(deps, config)?;
+    let hostname = deps.host.hostname();
+    let declared = config.machine(&hostname);
     if !deps.store.has(head) {
         return Err(Error::Invalid(format!(
             "the build of {head} is not stored; run `ignite install` again"
@@ -183,13 +172,18 @@ pub fn finish_install(deps: &InstallDeps, config: &Config, head: &Commit) -> Res
     let registered = deps.registrar.register(
         &MachineRegister {
             machine: identity.machine.clone(),
-            name: deps.host.hostname(),
-            os: declared.os.or_else(Os::current).ok_or_else(|| {
-                Error::Invalid("this operating system is not supported".to_owned())
-            })?,
+            name: hostname,
+            os: declared
+                .and_then(|machine| machine.os)
+                .or_else(Os::current)
+                .ok_or_else(|| {
+                    Error::Invalid("this operating system is not supported".to_owned())
+                })?,
             cores: deps.host.cores(),
             memory_mb: deps.host.memory_mb(),
-            families: declared.families.clone().unwrap_or_default(),
+            families: declared
+                .and_then(|machine| machine.families.clone())
+                .unwrap_or_default(),
             version: head.as_str().to_owned(),
         },
         known_token.as_deref(),

@@ -220,6 +220,11 @@ args = ["--dangerously-bypass-approvals-and-sandbox", "-c", "mcp_servers.playwri
 claim_seconds = 60
 seconds = 300
 
+# Headless WebKit runs at a higher priority than builds, so limit pages across all trees to
+# half the logical cores on machines that run browser checks.
+[resources.browser-pages]
+per_core = 0.5
+
 # The Mac Studio that runs the hub.
 [machine.jarvis]
 os = "macos"

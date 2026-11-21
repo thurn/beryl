@@ -55,12 +55,12 @@ fn parses_the_document_examples() {
     assert_eq!(config.improvement, Improvement::default());
     assert_eq!(config.rules, Rules::default());
     let jarvis = config.machine("jarvis").unwrap();
-    assert_eq!((jarvis.ticket_trees, jarvis.landing_trees), (24, 3));
+    assert_eq!((jarvis.ticket_trees, jarvis.landing_trees), (24, Some(3)));
     assert_eq!(jarvis.resources["browser-pages"], 9);
     assert_eq!(jarvis.families, None);
     let cygnus = config.machine("cygnus").unwrap();
     assert_eq!(cygnus.os, Some(Os::Windows));
-    assert_eq!(cygnus.floor, Floor { batch: 8, tip: 2 });
+    assert_eq!(cygnus.floor, Some(Floor { batch: 8, tip: 2 }));
     assert_eq!(config.rebuild[1].name, "one-card");
 }
 
@@ -88,7 +88,7 @@ fn the_express_lane_covers_a_landing_only_when_every_changed_file_matches() {
     assert!(!express.covers(&paths(&["ignite/crates/a.rs", "rust/Cargo.toml"])));
     assert!(!express.covers(&[]));
     assert_eq!(express.families, ["ignite"]);
-    assert_eq!(config.machine["jarvis"].express_cores, 0);
+    assert_eq!(config.machine["jarvis"].express_cores, None);
 }
 
 #[test]
@@ -151,12 +151,12 @@ fn syntax_errors_still_name_the_file() {
 
 #[test]
 fn semantic_errors_name_the_key() {
-    let text = DOCUMENT_EXAMPLES.replace("landing_trees = 2", "landing_trees = 0");
+    let text = DOCUMENT_EXAMPLES.replace("ticket_trees = 6", "ticket_trees = 0");
     let error = Config::parse("ignite.toml", &text).unwrap_err();
-    assert_eq!(error.key, "machine.cygnus.landing_trees");
+    assert_eq!(error.key, "machine.cygnus.ticket_trees");
     assert_eq!(
         error.to_string(),
-        "ignite.toml: machine.cygnus.landing_trees: must be above zero"
+        "ignite.toml: machine.cygnus.ticket_trees: must be above zero"
     );
     let text = DOCUMENT_EXAMPLES.replace("name = \"one-card\"", "name = \"kernel-body\"");
     assert_eq!(

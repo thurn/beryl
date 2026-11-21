@@ -4,12 +4,12 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
-use ignite_core::config::Floor;
+use ignite_core::config::{Floor, Os};
 use ignite_core::fakes::FakeClock;
 use ignite_core::protocol::Class;
 use ignite_core::traits::Reserve;
 
-use super::{FakeHost, T0, ask, at, limits};
+use super::{FakeHost, T0, ask, at, derived_limits, limits};
 use crate::sched::{Adoption, GrantRequest, Ledger, Limits, Scheduler};
 
 /// 28 logical cores: 24 shared and 4 kept for the tip round's builds.
@@ -29,34 +29,18 @@ fn tip_build(cores: u32) -> GrantRequest {
     }
 }
 
-fn machine(express: u32, tip: u32) -> ignite_core::config::Machine {
-    let config = ignite_core::config::Config::parse(
-        "ignite.toml",
-        &format!(
-            "[repository]\nremote = \"origin\"\nstaging = \"s\"\nmaster = \"m\"\n\
-             trees = \"t\"\nchecks = \"c\"\n[hub]\nurl = \"http://h\"\nproject = \"p\"\n\
-             [gate]\nthreshold = 1.0\n[machine.m]\nticket_trees = 1\nlanding_trees = 1\n\
-             express_cores = {express}\ntip_build_cores = {tip}\n"
-        ),
-    )
-    .unwrap();
-    config.machine["m"].clone()
-}
-
 #[test]
 fn the_tip_reserve_is_left_out_of_the_cores_handed_out() {
-    let limits = Limits::for_machine(&machine(3, 4), 18);
+    let limits = derived_limits(Os::Macos, 18, 18);
     assert_eq!(
         (limits.cores, limits.reserved, limits.tip_build),
         (11, 7, 4)
     );
     assert_eq!(limits.machine_cores(), 18);
     // At least one core is handed out, and the express lane's cores come first.
-    let small = Limits::for_machine(&machine(3, 4), 6);
-    assert_eq!((small.cores, small.reserved, small.tip_build), (1, 5, 2));
-    // No tip reserve gives today's numbers.
-    let none = Limits::for_machine(&machine(3, 0), 18);
-    assert_eq!((none.cores, none.reserved, none.tip_build), (15, 3, 0));
+    let small = derived_limits(Os::Macos, 4, 4);
+    assert_eq!((small.cores, small.reserved, small.tip_build), (1, 3, 1));
+    assert_eq!(small.machine_cores(), 4);
 }
 
 /// Every shared core is granted to agent work and the rest of the machine is busy outside

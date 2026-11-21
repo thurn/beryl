@@ -671,8 +671,7 @@ fn retry_bind<T>(window: Duration, start: impl Fn() -> std::io::Result<T>) -> Re
 /// The families the main checkout's `ignite.toml` lists for this machine now, empty for every
 /// family, for the heartbeat to report: the hub otherwise holds the list the machine registered
 /// with, however its `ignite.toml` changed since. `None`, which leaves the hub's list, when the
-/// file cannot be read or parsed (such as halfway through a merge) or no longer declares the
-/// machine.
+/// file cannot be read or parsed (such as halfway through a merge).
 fn current_families(repo: &std::path::Path, hostname: &str) -> Option<Vec<String>> {
     crate::manifests::machine_families(repo, hostname)
         .ok()

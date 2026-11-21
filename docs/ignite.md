@@ -675,25 +675,24 @@ How the executable is installed and kept current:
   reports a version this daemon doesn't have, the daemon starts one build on a
   thread of its own in `update/update-tree` with a one-hour hang limit; only one
   runs at a time. The build runs as the daemon's own child process on the
-  machine's `express_cores`, borrowing whatever cores are free when it starts up
+  machine's express reserve, borrowing whatever cores are free when it starts up
   to 12 in all, and logs to `update/build.log`. Before 2026-11-19 it was a
   supervised `agent` command, which waited up to 7.5 minutes for the scheduler's
-  cores under load and then compiled on one core. A machine with no express
-  cores still runs it that way. The sender loop never waits for it: each round
-  it looks whether the build has finished and shows "building release <commit>"
-  as its step meanwhile, and the next heartbeat after it finishes restarts the
-  daemon into it, or takes it on without a restart as above. A failed build is
-  logged once and not retried until another commit is wanted. A daemon that
-  restarts mid-build waits for Cargo's lock before it resets the update tree.
+  cores under load and then compiled on one core. The sender loop never waits
+  for it: each round it looks whether the build has finished and shows "building
+  release <commit>" as its step meanwhile, and the next heartbeat after it
+  finishes restarts the daemon into it, or takes it on without a restart as
+  above. A failed build is logged once and not retried until another commit is
+  wanted. A daemon that restarts mid-build waits for Cargo's lock before it
+  resets the update tree.
 - Before the daemon restarts into a new release, the release thread runs the new
   executable's selftest, `bin/<commit>/ignite internal selftest`, the same way
   as the build, on one express core (`update/selftest.log`). It parses
-  `ignite.toml` and every check manifest as the daemon does at start, requires
-  this machine's `[machine.<host>]` table, and applies the build's migrations to
-  a copy of `daemon.db`. `bin/current` points at the build only after it passes.
-  A build that fails is added to `bin/rejected`, so no daemon updates to it, and
-  is reported once to the justiciar; the daemon stays on its own build until the
-  release ref moves.
+  `ignite.toml` and every check manifest as the daemon does at start and applies
+  the build's migrations to a copy of `daemon.db`. `bin/current` points at the
+  build only after it passes. A build that fails is added to `bin/rejected`, so
+  no daemon updates to it, and is reported once to the justiciar; the daemon
+  stays on its own build until the release ref moves.
 - A restart on Windows starts the new executable with `IGNITE_RESTART_FROM` set
   to the old daemon's process ID, and the old daemon exits once the new one has
   logged its start in `starts.jsonl`. The new daemon waits up to 30 seconds for
@@ -711,10 +710,8 @@ How the executable is installed and kept current:
   12; see [Landing](#landing)), `repository.green` (unset by default; it must
   differ from `staging` and `master`), which gives tip rounds a build step (see
   [Tip verification](#tip-verification)), `[revert] broken_build` (default
-  false; see [A broken build is reverted](#a-broken-build-is-reverted)), and
-  each machine's `tip_build_cores` (default 0; see
-  [Cores, memory and shared resources](#cores-memory-and-shared-resources)).
-  Their defaults keep every landing checked on the exact tip.
+  false; see [A broken build is reverted](#a-broken-build-is-reverted)). Their
+  defaults keep every landing checked on the exact tip.
 - A setting in `ignite.toml` takes effect when the process that uses it next
   starts and reads the file from the main checkout. `ignite.toml` is not
   Ignite's source, so a change to it builds no release and restarts nothing.
@@ -723,15 +720,15 @@ How the executable is installed and kept current:
   `ignite check` and tip round once the daemon has fast-forwarded the main
   checkout to the change, which it does every 30 seconds while the checkout has
   no local edits. The daemon reads it only when it starts, and it alone uses
-  `repository.green` for `ignite start` and `ignite sync`, `tip_build_cores` for
-  its scheduler's limits, and the refs the main checkout fast-forwards. Those
-  take effect at the daemon's next restart, which the next release that changes
-  the daemon's code brings about. That restart waits until the main checkout
-  holds the release (see [Processes](#processes)), so a release that changes
-  `ignite.toml` and the daemon's code together restarts the daemon onto the new
-  file. Nothing reloads the daemon's copy. A verb process and its daemon can
-  therefore disagree for a while: a tip round that reads `green` from the file
-  pushes the ref even while the daemon still starts tickets at the tip.
+  `repository.green` for `ignite start` and `ignite sync`, resource definitions
+  for its scheduler's limits, and the refs the main checkout fast-forwards.
+  Those take effect at the daemon's next restart, which the next release that
+  changes the daemon's code brings about. That restart waits until the main
+  checkout holds the release (see [Processes](#processes)), so a release that
+  changes `ignite.toml` and the daemon's code together restarts the daemon onto
+  the new file. Nothing reloads the daemon's copy. A verb process and its daemon
+  can therefore disagree for a while: a tip round that reads `green` from the
+  file pushes the ref even while the daemon still starts tickets at the tip.
 - A verdict is keyed by the tree ID of every file in the ticket tree, committed
   or not, the merge base of the tree's `HEAD` with the tip as the checkout last
   fetched it, and `verdict_settings`, a digest of the `[gate]` section that
@@ -1027,10 +1024,11 @@ Each machine has a fixed number of trees of two kinds:
 # ignite.toml, per machine
 [machine.jarvis]
 ticket_trees = 24
-landing_trees = 3
 trees_disk_gb = 250
-express_cores = 3   # see Express landings
 ```
+
+The daemon starts with two ticket trees if `ticket_trees` is absent and derives
+the landing-tree count from the machine's physical cores.
 
 Rules for trees:
 
@@ -1152,10 +1150,11 @@ Rules for trees:
   trees held 1,800 GB under a 250 GB limit with nearly every tree leased, and
   the disk filled because only free trees were swept. The daemon logs what it
   deleted and how much it freed.
-- Lowering `ticket_trees` or `landing_trees` removes the trees above the new
-  count: the disk loop deletes each one's worktree, build directories and row
-  once it is free. A session that held one keeps working in it until it releases
-  the tree, and no lease or prebuild takes it again.
+- A lower `ticket_trees` setting or a lower derived landing-tree count removes
+  the trees above the new count: the disk loop deletes each one's worktree,
+  build directories and row once it is free. A session that held one keeps
+  working in it until it releases the tree, and no lease or prebuild takes it
+  again.
 - Releasing a tree first saves what it holds, then resets it to a clean checkout
   and keeps its build directories. See [Releasing work](#releasing-work).
 - Releasing also ends every process whose working directory or executable is
@@ -1416,17 +1415,16 @@ Rules for cores:
   builds the Python environment most families list their checks with, used at
   most 1.2 CPU-seconds in 82 runs but had waited up to 726 s for a core.
 
-- A machine's `express_cores` are never granted: they are kept for the express
-  lane's commands, which run outside the scheduler (see
-  [Express landings](#express-landings)).
+- A machine's derived express reserve is kept for the express lane's commands,
+  which run outside the scheduler (see [Express landings](#express-landings)).
 
-- A machine's `tip_build_cores` (default 0) are kept for the build checks of a
-  tip round, whose commands carry `Reserve::TipBuild` in their `CommandSpec`.
-  These checks decide when `green` moves, and every new ticket waits on `green`.
-  On 2026-11-19, 8,053 of 9,692 commands started on one core, and every command
-  of the slowest landing ran on one, because a higher class does not take cores
+- A machine's derived tip build reserve is kept for the build checks of a tip
+  round, whose commands carry `Reserve::TipBuild` in their `CommandSpec`. These
+  checks decide when `green` moves, and every new ticket waits on `green`. On
+  2026-11-19, 8,053 of 9,692 commands started on one core, and every command of
+  the slowest landing ran on one, because a higher class does not take cores
   from the running grants of a lower one. So the scheduler leaves the reserve
-  out of the cores it shares, as it does `express_cores`:
+  out of the cores it shares, as it does the express reserve:
 
   - A request with `Reserve::TipBuild` takes up to all of the reserve that no
     other such grant holds and starts at once, whatever the shared cores and the
@@ -1447,8 +1445,7 @@ Rules for cores:
   - The reserve's cores come back when the grant is released, also for a grant a
     restarted daemon took over, whose `spec.json` grant names the reserve.
   - The `cores` line of `ignite status` says how many cores are kept for tip
-    builds and how many of them are in use. With `tip_build_cores = 0` nothing
-    changes.
+    builds and how many of them are in use.
 
   The `reserve` field is left out of `spec.json` and of the host protocol when
   it is unset, so daemons of older and newer releases still read each other's
@@ -1456,8 +1453,7 @@ Rules for cores:
 
   This repository keeps 4 of jarvis's 18 cores for tip builds beside its 3
   express cores, and 2 on multivac (10 cores) and cygnus (20 threads) beside
-  their 2 express cores. The daemon reads the reserve when it starts, so a
-  change to it takes effect at the daemon's next restart.
+  their 2 express cores. The daemon derives the reserves at startup.
 
 - Classes are enforced by what the daemon grants, never by the operating
   system's priority. Work run at low priority on this machine once got almost no
@@ -1489,11 +1485,17 @@ engines, the benchmark virtual machines. A check family names the **resources**
 it needs, and the daemon holds each to its capacity:
 
 ```toml
+[resources.browser-pages]
+per_core = 0.5
+
 [machine.jarvis.resources]
-browser-pages = 9
 oracle = 1
 bench-vm = 1
 ```
+
+Use `per_core` for a resource that scales with logical cores. The scheduler
+rounds down and keeps at least one slot on machines that can run checks using
+the resource. A resource with a fixed count goes in the machine's table.
 
 A long experiment registers the same way, so the scheduler counts its cores:
 
@@ -2467,9 +2469,6 @@ commands = [
 ]
 families = ["ignite", "ignite-lint"]
 inert = ["docs/ignite.md", "data/efficiency-changes.json"]
-
-[machine.jarvis]
-express_cores = 3
 ```
 
 - A landing whose every changed file matches `paths` runs `commands` in order,
@@ -2479,24 +2478,24 @@ express_cores = 3
   end of the command's output.
 - The commands run as the daemon's own processes, never through a supervisor or
   the scheduler, with `CARGO_BUILD_JOBS`, `RUST_TEST_THREADS`,
-  `NEXTEST_TEST_THREADS` and `IGNITE_CORES` set to the machine's
-  `express_cores`. The scheduler leaves those cores out of what it hands out, so
-  a saturated or broken scheduler cannot hold them. While an express run goes,
-  the scheduler also sees its CPU as load outside Ignite and hands out that much
+  `NEXTEST_TEST_THREADS` and `IGNITE_CORES` set to the machine's express
+  reserve. The scheduler leaves those cores out of what it hands out, so a
+  saturated or broken scheduler cannot hold them. While an express run goes, the
+  scheduler also sees its CPU as load outside Ignite and hands out that much
   less.
 - When a run starts it also asks the scheduler, without waiting, for the cores
   that are free at that moment, as a `land` grant of up to 12 cores in all
-  counting `express_cores`, and sets the four variables to the total. Cores of
-  the tip reserve (`tip_build_cores`) that no tip build holds count as free. On
-  2026-11-18 eight landings queued behind a lane of 3 cores while the scheduler
-  had granted none of its 15 cores; a run took about 164 s on 3 cores under load
-  and about 65 s on 12. The reserved cores stay the floor: when nothing is free,
-  or the daemon cannot be asked, the run uses `express_cores` and does not wait.
-  The extra grant is released when the run ends, and the scheduler may reclaim
-  it for a higher class like any other grant. A landing runs in a verb process,
-  so it borrows through the host protocol (`host-borrow-cores` and
-  `host-return-cores`, version 2), and the daemon releases a grant its handle
-  still holds when the handle ends. The `express` line names the cores used.
+  counting the express reserve, and sets the four variables to the total. Cores
+  of the tip reserve that no tip build holds count as free. On 2026-11-18 eight
+  landings queued behind a lane of 3 cores while the scheduler had granted none
+  of its 15 cores; a run took about 164 s on 3 cores under load and about 65 s
+  on 12. The reserved cores stay the floor: when nothing is free, or the daemon
+  cannot be asked, the run uses its reserve and does not wait. The extra grant
+  is released when the run ends, and the scheduler may reclaim it for a higher
+  class like any other grant. A landing runs in a verb process, so it borrows
+  through the host protocol (`host-borrow-cores` and `host-return-cores`,
+  version 2), and the daemon releases a grant its handle still holds when the
+  handle ends. The `express` line names the cores used.
 - The build commands still compile on every core of the machine
   (`--jobs default`, `--build-jobs default`), and the tests run on as many
   threads (`--test-threads=num-cpus`), whatever the four variables say. Every
@@ -2525,7 +2524,7 @@ express_cores = 3
   broken tip.
 - A run that passes is remembered for an hour in the daemon's database, by the
   git tree ID of what it checked and a digest of the `[express]` section and the
-  machine's `express_cores`. A later run of a tree with the same tree ID and
+  machine's express reserve. A later run of a tree with the same tree ID and
   section, as when `ignite land` follows `ignite check` at an unmoved tip, skips
   the commands, and its `express` line says "passed for this tree 4 min ago". An
   edit to `[express]` or an hour's wait runs the commands again. On 2026-11-18
@@ -2647,8 +2646,8 @@ express_cores = 3
   by its declared inputs instead of being listed, so a change to Ignite alone
   selects the `ignite` and `ignite-lint` families and the always-set families,
   and builds nothing for the game.
-- A machine whose `express_cores` is 0, or a repository with no `[express]` or
-  no release ref, sends every landing through the gate.
+- A repository with no `[express]` or no release ref sends every landing through
+  the gate.
 - The integration ref's lease and the push are the same as for any landing.
 
 ### Formatting at landing
@@ -2725,16 +2724,16 @@ How a daemon verifies a tip:
 
 - With `repository.green` set, the build checks (the checks of families declared
   `builds = true`) are outside the budget and run first, before any other check
-  of the round, on the cores the machine sets aside for them
-  (`tip_build_cores`). When every build check of the tip has a pass, run or
-  cached, and none waits, the round pushes the tip to `green` and goes on with
-  its other checks; whatever they find, `green` stays. A refused push is fine
-  when `green` already holds the tip. A failing build check is blamed like any
-  failure and ends the round as failed without running its other checks, and
-  `green` and `master` both stay. With `green` unset a round has no build step.
-  The main checkout fast-forwards its local `green` with `staging` and `master`,
-  and `ignite status` shows beside the tip round which commit `green` is at and
-  how many commits it is behind the tip.
+  of the round, on the cores the machine sets aside for them. When every build
+  check of the tip has a pass, run or cached, and none waits, the round pushes
+  the tip to `green` and goes on with its other checks; whatever they find,
+  `green` stays. A refused push is fine when `green` already holds the tip. A
+  failing build check is blamed like any failure and ends the round as failed
+  without running its other checks, and `green` and `master` both stay. With
+  `green` unset a round has no build step. The main checkout fast-forwards its
+  local `green` with `staging` and `master`, and `ignite status` shows beside
+  the tip round which commit `green` is at and how many commits it is behind the
+  tip.
 
 - It claims those checks from the hub in batches, so two machines do not run the
   same ones, then runs them in the `tip` class. Each family is listed once per
@@ -3750,7 +3749,7 @@ tickets run beside expensive ones.
   far.
 - A ticket is admitted when that total plus its own figure is within the
   machine's `admit_cores`: every core its scheduler hands out, which is its
-  cores less its `express_cores`. On jarvis, with 18 cores and 3 express cores,
+  cores less its express reserve. On jarvis, with 18 cores and 3 express cores,
   that is 15. It is not a setting, because the scheduler already makes every
   heavy command wait for cores; admission only keeps the expected load of the
   tickets in progress within what the machine has.
@@ -4149,15 +4148,14 @@ do. The hub is the one shared point.
 [machine.cygnus]
 os = "windows"
 ticket_trees = 3
-landing_trees = 2
 families = ["rust", "doctests", "clippy", "rust-format", "ignite", "source"]
-floor = { batch = 4, tip = 2 }
 ```
 
 `families` lists the check families the machine can run, here the Rust tests and
 doctests, clippy, Rust formatting, Ignite's own tests and the source rules (the
-full list is in `ignite.toml`). A machine with no such list can run every
-family.
+full list is in `ignite.toml`). A machine with no such list can run every family
+supported on its operating system. A machine with no configuration table uses
+its native operating system and the same default family selection.
 
 What is shared, and what is not:
 
@@ -4314,10 +4312,11 @@ Reserves and counts are fractions of the machine. `P` is its physical cores and
 | Browser pages (`per_core = 0.5`)   | L / 2, rounded down       | 9         | 5 (was 4) | none   |
 | Most workers at once (the ceiling) | 2 × L                     | 36        | 20        | 40     |
 
-The formulas use physical cores because they then give the values that were set
-by hand on all three machines, except the three marked. A key left in
-`ignite.toml` is ignored: an override would keep the static configuration alive,
-and a wrong formula is fixed by a landing to Ignite, which deploys in minutes.
+The daemon derives the reserves, floors and landing-tree count at startup.
+Cygnus has no browser page slots because its checks do not request them. Old
+reserves, floors, landing-tree counts and per-machine resource counts replaced
+by `per_core` may remain in `ignite.toml` during the rollout. `ignite doctor`
+names each retired key and reports that Ignite uses the derived value.
 
 - **Ticket trees have no count.** A lease that finds no free tree creates one. A
   tree that has been free for 24 hours is removed, except the newest two free

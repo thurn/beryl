@@ -106,6 +106,7 @@ fn healthy_host() -> FakeHost {
             "/repo/trees/tree-01",
             "/repo/trees/tree-02",
             "/repo/trees/landing-1",
+            "/repo/trees/landing-2",
         ]
         .map(PathBuf::from)
         .to_vec(),
@@ -225,7 +226,12 @@ fn doctor_does_not_probe_a_hub_it_cannot_reach() {
 }
 
 fn all_trees() -> FakeTrees {
-    FakeTrees(vec![tree("tree-01"), tree("tree-02"), tree("landing-1")])
+    FakeTrees(vec![
+        tree("tree-01"),
+        tree("tree-02"),
+        tree("landing-1"),
+        tree("landing-2"),
+    ])
 }
 
 #[test]
@@ -236,6 +242,9 @@ fn a_healthy_machine_has_no_problems() {
     let reply = report(&findings);
     assert_eq!(reply.exit, Exit::Success);
     assert!(reply.text.ends_with("healthy"));
+    assert!(reply.text.contains(
+        "machine.testbox.landing_trees in ignite.toml is retired. Ignite uses the derived value."
+    ));
 }
 
 #[test]
@@ -502,7 +511,10 @@ fn status_counts_only_the_declared_trees_and_names_the_others() {
     };
     assert_eq!(
         section.lines(),
-        ["3 of 3 present", "not in ignite.toml: switch-rebase"]
+        [
+            "3 of 3 present",
+            "outside the configured tree set: switch-rebase"
+        ]
     );
 }
 
@@ -529,6 +541,7 @@ fn doctor_warns_about_directories_under_the_trees_folder_it_does_not_own() {
             "tree-01",
             "tree-02",
             "landing-1",
+            "landing-2",
             "switch-rebase",
             "slot-01",
         ],
@@ -552,7 +565,7 @@ fn doctor_warns_about_directories_under_the_trees_folder_it_does_not_own() {
     assert!(
         findings
             .iter()
-            .any(|f| f.line() == "ok       trees     3 trees present.")
+            .any(|f| f.line() == "ok       trees     4 trees present.")
     );
     let reply = report(&findings);
     assert_eq!(reply.exit, Exit::Success);

@@ -45,7 +45,13 @@ fn write_manifest(repo: &Path, text: &str) {
 fn reload_at(repo: &Path) -> (Reload, TreeConfig) {
     let config = Config::parse("ignite.toml", CONFIG).unwrap();
     let manifest = crate::main::read_manifest(repo, &config).unwrap();
-    let tree_config = TreeConfig::new(repo, &config, "local", &manifest).unwrap();
+    let tree_config = TreeConfig::new(
+        repo,
+        &config,
+        config.machine("local").unwrap(),
+        2,
+        &manifest,
+    );
     let clock = Arc::new(FakeClock::new(Timestamp::EPOCH));
     let trees = Trees::new(
         tree_config.clone(),

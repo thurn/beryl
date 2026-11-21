@@ -127,12 +127,7 @@ impl Daemon {
             version: base.options.version.clone(),
             hostname: base.options.hostname.clone(),
             feed_wait_s: base.options.feed_wait_s,
-            update: Arc::new(self_update(
-                &base,
-                &machinery.launcher,
-                &machinery.scheduler,
-                &machinery.trees,
-            )),
+            update: Arc::new(self_update(&base, &machinery.scheduler, &machinery.trees)),
             health: health.clone(),
             reporter: Arc::new(crate::justiciar::Reporter::new(
                 base.options.home.root.clone(),
@@ -192,23 +187,17 @@ impl Daemon {
 /// Updates this daemon to new releases: builds them in `update/update-tree` in the home
 /// folder, apart from the build trees, and restarts with [`ExecRestart`]. The build and its
 /// selftest run on the machine's express cores, borrowing free cores from `scheduler` (see
-/// [`crate::update::direct`]), or as supervised commands through `launcher` on a machine with
-/// no express cores.
+/// [`crate::update::direct`]).
 fn self_update(
     base: &assemble::Base,
-    launcher: &Arc<dyn ignite_core::traits::Launcher>,
     scheduler: &Arc<crate::sched::Scheduler>,
     trees: &crate::trees::Trees,
 ) -> selfupdate::SelfUpdate {
     let options = &base.options;
     let update = options.home.root.join("update");
     let express = |log: &str| -> Arc<dyn ignite_core::traits::Launcher> {
-        let cores = base.declared.express_cores;
-        if cores == 0 {
-            return launcher.clone();
-        }
         Arc::new(crate::update::direct::ExpressLauncher {
-            cores,
+            cores: base.derived.express_cores,
             lender: Some(Arc::new(crate::land::express::SchedulerLender(
                 scheduler.clone(),
             ))),

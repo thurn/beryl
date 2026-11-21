@@ -13,7 +13,12 @@ use ignite_core::config::Machine;
 
 use super::{DoctorInput, Finding, TreeInfo, configured_tree_names};
 
-pub(super) fn findings(input: &DoctorInput, machine: &Machine, findings: &mut Vec<Finding>) {
+pub(super) fn findings(
+    input: &DoctorInput,
+    machine: &Machine,
+    landing_trees: u32,
+    findings: &mut Vec<Finding>,
+) {
     let dir = input.repo.join(&input.config.repository.trees);
     let restart = "restart the daemon, which creates the trees it is missing";
     if !input.host.path_exists(&dir) {
@@ -24,7 +29,6 @@ pub(super) fn findings(input: &DoctorInput, machine: &Machine, findings: &mut Ve
         ));
         return;
     }
-    let declared = machine.ticket_trees + machine.landing_trees;
     match input.trees.trees() {
         Err(error) => findings.push(Finding::problem(
             "trees",
@@ -35,10 +39,9 @@ pub(super) fn findings(input: &DoctorInput, machine: &Machine, findings: &mut Ve
             ),
         )),
         Ok(trees) => {
-            let configured = configured_tree_names(machine.ticket_trees, machine.landing_trees);
-            // A directory under the trees folder that ignite.toml does not declare is not one
-            // of the machine's trees: it is not counted, but it is named, since Ignite neither
-            // uses nor cleans it.
+            let configured = configured_tree_names(machine.ticket_trees, landing_trees);
+            let expected = configured.len();
+            // Name directories outside the set Ignite expects, since it never uses them.
             let foreign: BTreeSet<String> = trees
                 .iter()
                 .map(|t| t.name.clone())
@@ -50,7 +53,7 @@ pub(super) fn findings(input: &DoctorInput, machine: &Machine, findings: &mut Ve
                 findings.push(Finding::warning(
                     "trees",
                     format!(
-                        "{} holds directories that are not trees in ignite.toml: {}.",
+                        "{} holds directories that are outside this machine's tree set: {}.",
                         dir.display(),
                         names.join(", ")
                     ),
@@ -77,10 +80,10 @@ pub(super) fn findings(input: &DoctorInput, machine: &Machine, findings: &mut Ve
                 }
             }
             let present = trees.len() - missing;
-            if present < usize::try_from(declared).unwrap_or(usize::MAX) && missing == 0 {
+            if present < expected && missing == 0 {
                 findings.push(Finding::problem(
                     "trees",
-                    format!("{present} of the {declared} trees in ignite.toml exist."),
+                    format!("{present} of the {expected} expected trees exist."),
                     restart,
                 ));
             } else if missing == 0 {

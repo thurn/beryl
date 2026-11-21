@@ -5,8 +5,11 @@ use std::io;
 use std::sync::Mutex;
 use std::thread;
 
-use windows_sys::Win32::Foundation::FILETIME;
-use windows_sys::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
+use windows_sys::Win32::Foundation::{ERROR_INSUFFICIENT_BUFFER, FILETIME};
+use windows_sys::Win32::System::SystemInformation::{
+    GetLogicalProcessorInformation, GlobalMemoryStatusEx, MEMORYSTATUSEX, RelationProcessorCore,
+    SYSTEM_LOGICAL_PROCESSOR_INFORMATION,
+};
 use windows_sys::Win32::System::Threading::GetSystemTimes;
 
 use super::{HostCpu, NATIVE_WINDOW, no_reading};
@@ -28,6 +31,10 @@ impl HostMeter {
 impl HostCpu for HostMeter {
     fn cores(&self) -> u32 {
         Native.cores()
+    }
+
+    fn physical_cores(&self) -> u32 {
+        Native.physical_cores()
     }
 
     fn busy(&self) -> io::Result<f64> {
@@ -58,6 +65,10 @@ impl HostCpu for Native {
         thread::available_parallelism().map_or(1, |cores| cores.get() as u32)
     }
 
+    fn physical_cores(&self) -> u32 {
+        physical_cores().unwrap_or_else(|| self.cores())
+    }
+
     /// Reads the times twice, [`NATIVE_WINDOW`] apart, because `Native` keeps no state.
     /// A caller that reads repeatedly uses a [`HostMeter`].
     fn busy(&self) -> io::Result<f64> {
@@ -79,6 +90,36 @@ impl HostCpu for Native {
         // out anything in use, like the inactive pages counted on macOS.
         Ok(status.ullAvailPhys / (1024 * 1024))
     }
+}
+
+fn physical_cores() -> Option<u32> {
+    let mut records = Vec::<SYSTEM_LOGICAL_PROCESSOR_INFORMATION>::new();
+    let record_size = size_of::<SYSTEM_LOGICAL_PROCESSOR_INFORMATION>();
+    let mut bytes = 0;
+    loop {
+        let buffer = if records.is_empty() {
+            std::ptr::null_mut()
+        } else {
+            records.as_mut_ptr()
+        };
+        // SAFETY: `bytes` is writable. The buffer is null for the size query, then holds at
+        // least the supplied number of bytes in aligned records.
+        if unsafe { GetLogicalProcessorInformation(buffer, &raw mut bytes) } != 0 {
+            break;
+        }
+        if io::Error::last_os_error().raw_os_error() != Some(ERROR_INSUFFICIENT_BUFFER as i32) {
+            return None;
+        }
+        records.resize_with(
+            (bytes as usize).div_ceil(record_size),
+            SYSTEM_LOGICAL_PROCESSOR_INFORMATION::default,
+        );
+    }
+    let cores = records[..bytes as usize / record_size]
+        .iter()
+        .filter(|record| record.Relationship == RelationProcessorCore)
+        .count() as u32;
+    (cores != 0).then_some(cores)
 }
 
 fn system_times() -> io::Result<Times> {
@@ -147,6 +188,7 @@ mod tests {
     #[test]
     fn the_machine_has_cores_and_free_memory() {
         assert!(Native.cores() >= 1);
+        assert!((1..=Native.cores()).contains(&physical_cores().unwrap()));
         assert!(Native.free_memory_mb().unwrap() > 0);
     }
 }

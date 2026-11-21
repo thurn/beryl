@@ -32,6 +32,10 @@ fn no_reading() -> io::Error {
 pub trait HostCpu {
     /// Logical cores.
     fn cores(&self) -> u32;
+    /// Physical cores, falling back to the logical count when topology is unavailable.
+    fn physical_cores(&self) -> u32 {
+        self.cores()
+    }
     /// The fraction of all cores busy since the previous call, from 0 to 1. An error means
     /// there is no reading: it is the first call, or the counters did not move since the
     /// previous one, so an answer of "0" would be a guess. Only one thread may sample a

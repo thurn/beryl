@@ -17,17 +17,16 @@ fn tempdir() -> PathBuf {
     dir
 }
 
-/// A repository with a small `ignite.toml` and one check manifest, and the machine it declares.
+/// A repository with a small `ignite.toml` and one check manifest.
 /// The real `ignite.toml` and manifests are parsed by `ignite_core`'s tests; reading them here
 /// would make every test of this crate rerun whenever a check manifest changes.
-fn repository() -> (PathBuf, String) {
+fn repository() -> PathBuf {
     let repo = tempdir();
     std::fs::write(
         repo.join("ignite.toml"),
         "[repository]\nremote = \"origin\"\nstaging = \"staging\"\nmaster = \"master\"\n\
          trees = \".trees\"\nchecks = \"manifests\"\n\n[hub]\nurl = \"https://hub\"\n\
-         project = \"p\"\n\n[gate]\nthreshold = 0.1\ncap = 10\n\n[machine.m]\nticket_trees = 1\n\
-         landing_trees = 1\nfloor = { batch = 1, tip = 1 }\n",
+         project = \"p\"\n\n[gate]\nthreshold = 0.1\ncap = 10\n",
     )
     .unwrap();
     let checks = repo.join("manifests");
@@ -38,7 +37,7 @@ fn repository() -> (PathBuf, String) {
          list = \"l\"\nrun = \"r\"\ninputs = [\"src/**\"]\n",
     )
     .unwrap();
-    (repo, "m".to_owned())
+    repo
 }
 
 fn home_with_database() -> Home {
@@ -54,44 +53,37 @@ fn home_with_database() -> Home {
 
 #[test]
 fn a_repository_that_parses_and_a_database_that_migrates_pass() {
-    let (repo, machine) = repository();
+    let repo = repository();
     let home = home_with_database();
-    check(&repo, &home, &machine).unwrap();
+    check(&repo, &home).unwrap();
 }
 
 #[test]
 fn a_machine_with_no_database_yet_passes() {
-    let (repo, machine) = repository();
+    let repo = repository();
     let home = Home { root: tempdir() };
-    check(&repo, &home, &machine).unwrap();
+    check(&repo, &home).unwrap();
     assert!(!home.root.join("daemon.db").exists());
 }
 
 #[test]
 fn a_manifest_that_does_not_parse_fails() {
-    let (repo, machine) = repository();
+    let repo = repository();
     std::fs::write(repo.join("manifests/broken.toml"), "[family.x\nnot toml").unwrap();
-    let error = check(&repo, &home_with_database(), &machine).unwrap_err();
+    let error = check(&repo, &home_with_database()).unwrap_err();
     assert!(error.contains("broken.toml"), "{error}");
 }
 
 #[test]
 fn an_ignite_toml_that_does_not_parse_fails() {
-    let (repo, machine) = repository();
+    let repo = repository();
     std::fs::write(repo.join("ignite.toml"), "[repository\n").unwrap();
-    assert!(check(&repo, &home_with_database(), &machine).is_err());
-}
-
-#[test]
-fn a_machine_the_repository_does_not_declare_fails() {
-    let (repo, _) = repository();
-    let error = check(&repo, &home_with_database(), "no-such-machine").unwrap_err();
-    assert!(error.contains("no-such-machine"), "{error}");
+    assert!(check(&repo, &home_with_database()).is_err());
 }
 
 #[test]
 fn a_database_newer_than_the_build_fails_and_is_not_changed() {
-    let (repo, machine) = repository();
+    let repo = repository();
     let home = home_with_database();
     let live = home.root.join("daemon.db");
     {
@@ -104,14 +96,14 @@ fn a_database_newer_than_the_build_fails_and_is_not_changed() {
         .unwrap();
     }
     let before = std::fs::read(&live).unwrap();
-    let error = check(&repo, &home, &machine).unwrap_err();
+    let error = check(&repo, &home).unwrap_err();
     assert!(error.contains("migrations fail"), "{error}");
     assert_eq!(std::fs::read(&live).unwrap(), before);
 }
 
 #[test]
 fn a_cli_slot_with_an_undecodable_state_fails_and_is_not_changed() {
-    let (repo, machine) = repository();
+    let repo = repository();
     let home = home_with_database();
     let live = home.root.join("daemon.db");
     {
@@ -122,7 +114,7 @@ fn a_cli_slot_with_an_undecodable_state_fails_and_is_not_changed() {
         )
         .unwrap();
     }
-    let error = check(&repo, &home, &machine).unwrap_err();
+    let error = check(&repo, &home).unwrap_err();
     assert!(
         error.contains("cli_slots") && error.contains("slot 3") && error.contains("dreaming"),
         "{error}"

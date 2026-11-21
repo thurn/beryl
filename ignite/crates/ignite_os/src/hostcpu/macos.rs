@@ -31,6 +31,10 @@ impl HostCpu for HostMeter {
         Native.cores()
     }
 
+    fn physical_cores(&self) -> u32 {
+        Native.physical_cores()
+    }
+
     fn busy(&self) -> io::Result<f64> {
         let now = cpu_ticks()?;
         let mut previous = self
@@ -72,6 +76,26 @@ impl HostCpu for HostMeter {
 impl HostCpu for Native {
     fn cores(&self) -> u32 {
         thread::available_parallelism().map_or(1, |cores| cores.get() as u32)
+    }
+
+    fn physical_cores(&self) -> u32 {
+        let mut cores = 0u32;
+        let mut size = size_of::<u32>();
+        // SAFETY: the name is NUL-terminated and `cores` holds the supplied number of bytes.
+        let result = unsafe {
+            libc::sysctlbyname(
+                c"hw.physicalcpu".as_ptr(),
+                (&raw mut cores).cast(),
+                &raw mut size,
+                std::ptr::null_mut(),
+                0,
+            )
+        };
+        if result == 0 && size == size_of::<u32>() && cores > 0 {
+            cores
+        } else {
+            self.cores()
+        }
     }
 
     /// Reads the counters twice, [`NATIVE_WINDOW`] apart, because `Native` keeps no state.
@@ -244,6 +268,7 @@ mod tests {
     #[test]
     fn the_machine_has_cores_and_free_memory() {
         assert!(Native.cores() >= 1);
+        assert!((1..=Native.cores()).contains(&Native.physical_cores()));
         assert!(Native.free_memory_mb().unwrap() > 0);
         // Swap may be zero, but it can be read.
         Native.swap_used_mb().unwrap();

@@ -2,7 +2,7 @@
 //!
 //! Ignite's code names no path, branch or tool of any one repository. The remote, the names of
 //! the integration and release branches, where build trees live, where check manifests live,
-//! each machine's capacity, the landing gate's values and the rebuild edits all come from here.
+//! fixed resources, the landing gate's values and the rebuild edits all come from here.
 //! Every table refuses keys it does not know, so a misspelt key is an error, not a default.
 
 use std::collections::BTreeMap;
@@ -80,7 +80,11 @@ pub struct Config {
     #[serde(default)]
     pub pool: PoolConfig,
     /// Machines by hostname.
+    #[serde(default)]
     pub machine: BTreeMap<String, Machine>,
+    /// Shared resource capacities derived from each machine's logical cores.
+    #[serde(default)]
+    pub resources: BTreeMap<String, Resource>,
     /// Edits whose rebuild cost `ignite rebuild` measures.
     #[serde(default)]
     pub rebuild: Vec<RebuildEdit>,
@@ -450,34 +454,48 @@ impl PoolConfig {
     }
 }
 
-/// One machine's declared capacity.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Resource {
+    pub per_core: f64,
+}
+
+/// Overrides for one machine.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Machine {
     /// The operating system, when the declaration states it.
     pub os: Option<Os>,
     pub ticket_trees: u32,
-    pub landing_trees: u32,
     /// The disk the trees may use, in gigabytes.
     pub trees_disk_gb: Option<u32>,
     /// The check families the machine can run; `None` means every family.
     pub families: Option<Vec<String>>,
-    /// Cores per machine that higher classes cannot take.
-    #[serde(default)]
-    pub floor: Floor,
     /// Scarce resources by name, with each one's capacity.
-    #[serde(default)]
     pub resources: BTreeMap<String, u32>,
-    /// Cores the scheduler never hands out, kept for the express lane's commands (see
-    /// [`Express`]). Zero turns the express lane off on the machine.
-    #[serde(default)]
-    pub express_cores: u32,
-    /// Cores the scheduler never hands out to other requests, kept for the build checks of a
-    /// tip round. Zero reserves none.
-    #[serde(default)]
-    pub tip_build_cores: u32,
+    // Retired capacity settings are read only by `doctor`.
+    pub landing_trees: Option<u32>,
+    pub floor: Option<Floor>,
+    pub express_cores: Option<u32>,
+    pub tip_build_cores: Option<u32>,
     /// `[machine.<host>.pool.<app>]`: the worker slots on this machine for each provider.
-    #[serde(default)]
     pub pool: BTreeMap<String, MachinePool>,
+}
+
+impl Default for Machine {
+    fn default() -> Self {
+        Self {
+            os: None,
+            ticket_trees: 2,
+            landing_trees: None,
+            trees_disk_gb: None,
+            families: None,
+            floor: None,
+            resources: BTreeMap::new(),
+            express_cores: None,
+            tip_build_cores: None,
+            pool: BTreeMap::new(),
+        }
+    }
 }
 
 /// Cores reserved for the `batch` and `tip` classes.
@@ -562,13 +580,14 @@ impl Config {
     /// it has one, names the family, and which runs `os` when `os` is given. A machine whose
     /// operating system is not declared counts only when `os` is `None`.
     pub fn runs_family(&self, os: Option<Os>, family: &str) -> bool {
-        self.machine.values().any(|machine| {
-            os.is_none_or(|os| machine.os == Some(os))
-                && machine
-                    .families
-                    .as_ref()
-                    .is_none_or(|list| list.iter().any(|f| f == family))
-        })
+        self.machine.is_empty()
+            || self.machine.values().any(|machine| {
+                os.is_none_or(|os| machine.os == Some(os))
+                    && machine
+                        .families
+                        .as_ref()
+                        .is_none_or(|list| list.iter().any(|f| f == family))
+            })
     }
 
     /// Each family in `manifest` that no declared machine can run on a platform it must pass
@@ -700,21 +719,20 @@ impl Config {
                 return fail("metrics.export", "must contain {out}");
             }
         }
-        if self.machine.is_empty() {
-            return fail("machine", "declares no machine");
-        }
         self.validate_pool()?;
         self.validate_cli()?;
+        for (name, resource) in &self.resources {
+            if !resource.per_core.is_finite() || resource.per_core < 0.0 {
+                return fail(
+                    &format!("resources.{name}.per_core"),
+                    "must be finite and nonnegative",
+                );
+            }
+        }
         for (name, machine) in &self.machine {
             if machine.ticket_trees == 0 {
                 return fail(
                     &format!("machine.{name}.ticket_trees"),
-                    "must be above zero",
-                );
-            }
-            if machine.landing_trees == 0 {
-                return fail(
-                    &format!("machine.{name}.landing_trees"),
                     "must be above zero",
                 );
             }

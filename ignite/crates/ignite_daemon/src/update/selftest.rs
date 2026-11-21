@@ -91,8 +91,7 @@ impl Selftest for SupervisedSelftest {
 pub fn command(cwd: &Path) -> i32 {
     let home = Home::from_env();
     let repo = crate::main::checkout(cwd, &home);
-    let hostname = crate::doctor::Host::hostname(&crate::doctor::NativeHost);
-    match check(&repo, &home, &hostname) {
+    match check(&repo, &home) {
         Ok(()) => {
             let versions: Vec<String> = HOST_PROTOCOL_VERSIONS
                 .iter()
@@ -110,12 +109,9 @@ pub fn command(cwd: &Path) -> i32 {
 }
 
 /// What a starting daemon would read, without starting one.
-fn check(repo: &Path, home: &Home, hostname: &str) -> std::result::Result<(), String> {
+fn check(repo: &Path, home: &Home) -> std::result::Result<(), String> {
     let config = crate::main::read_config(repo).map_err(|e| e.to_string())?;
     crate::main::read_manifest(repo, &config)?;
-    if config.machine(hostname).is_none() {
-        return Err(format!("ignite.toml declares no [machine.{hostname}]"));
-    }
     migrate_a_copy(&home.root.join("daemon.db"))
 }
 

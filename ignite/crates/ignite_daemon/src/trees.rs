@@ -47,7 +47,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
 use crate::manifests::Live;
-use ignite_core::config::Config;
+use ignite_core::config::{Config, Machine};
 use ignite_core::ids::{Commit, Handle, SessionId, TicketId, TreeId};
 use ignite_core::manifest::Manifest;
 use ignite_core::traits::{BuildResult, Builds, Clock, Error, Result};
@@ -109,12 +109,15 @@ impl TreeConfig {
         format!("{}{ticket}", self.saved)
     }
 
-    pub fn new(repo: &Path, config: &Config, hostname: &str, manifest: &Manifest) -> Result<Self> {
-        let machine = config
-            .machine(hostname)
-            .ok_or_else(|| Error::Invalid(format!("ignite.toml declares no machine {hostname}")))?;
+    pub fn new(
+        repo: &Path,
+        config: &Config,
+        machine: &Machine,
+        landing_trees: u32,
+        manifest: &Manifest,
+    ) -> Self {
         let (keep, prebuild, prebuild_outputs) = Self::products(manifest);
-        Ok(TreeConfig {
+        TreeConfig {
             repo: repo.to_path_buf(),
             dir: repo.join(&config.repository.trees),
             remote: config.repository.remote.clone(),
@@ -130,14 +133,14 @@ impl TreeConfig {
             .flatten()
             .collect(),
             ticket_trees: machine.ticket_trees,
-            landing_trees: machine.landing_trees,
+            landing_trees,
             disk_limit: machine
                 .trees_disk_gb
                 .map(|gb| u64::from(gb) * 1_000_000_000),
             keep: keep.into(),
             prebuild: prebuild.into(),
             prebuild_outputs: prebuild_outputs.into(),
-        })
+        }
     }
 
     /// Every tree this machine has, ticket trees first: `tree-01`… and `landing-1`….

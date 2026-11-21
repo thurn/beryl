@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 use rusqlite::Connection;
 
+use ignite_core::capacity::{Derived, MachineFacts, derive};
 use ignite_core::config::{Config, Machine, Os};
 use ignite_core::ids::MachineId;
 use ignite_core::manifest::Manifest;
@@ -16,7 +17,6 @@ use ignite_core::protocol::hub::MachineRegister;
 use ignite_core::time::SystemClock;
 use ignite_core::traits::{Builds, Clock, Error, Git, Hub, Launcher, Result};
 use ignite_git::GitCli;
-use ignite_os::hostcpu::HostCpu;
 
 use super::{DaemonOptions, TreeSetup, desk, loops};
 use crate::adopt::AdoptingLauncher;
@@ -56,6 +56,7 @@ pub struct Base {
     /// replaces when those in the main checkout change (see `crate::manifests`).
     pub live: crate::manifests::LiveManifest,
     pub declared: Machine,
+    pub derived: Derived,
     pub os: Os,
     pub machine: MachineId,
     pub token: String,
@@ -69,25 +70,22 @@ pub struct Base {
 }
 
 impl Base {
-    /// Reads `ignite.toml` and the manifests, finds this machine in them and registers it with
-    /// the hub if it has no token yet.
+    /// Reads the configuration, measures the machine and registers it with the hub if needed.
     pub fn read(options: DaemonOptions) -> Result<Base> {
         let repo = options.repo.clone();
         let config = super::read_config(&repo)?;
         let manifest = super::read_manifest(&repo, &config).map_err(Error::Invalid)?;
         let declared = config
             .machine(&options.hostname)
-            .ok_or_else(|| {
-                let name = &options.hostname;
-                Error::Invalid(format!("ignite.toml declares no [machine.{name}]"))
-            })?
-            .clone();
+            .cloned()
+            .unwrap_or_default();
         let os = declared
             .os
             .or_else(Os::current)
             .ok_or_else(|| Error::Invalid("this operating system is not supported".into()))?;
+        let facts = doctor::machine_facts(&NativeHost, os);
         options.home.create()?;
-        let (machine, token) = identity(&options, &config, os, declared.families.as_deref())?;
+        let (machine, token) = identity(&options, &config, &facts, declared.families.as_deref())?;
         // The daemon and every verb process read the token again after a 401, since an
         // `ignite install` meanwhile may have saved another one.
         let client = Arc::new(
@@ -99,7 +97,8 @@ impl Base {
             repo: repo.clone(),
             remote: config.repository.remote.clone(),
         });
-        let limits = Limits::for_machine(&declared, ignite_os::Native.cores().max(1));
+        let derived = derive(&facts);
+        let limits = Limits::for_machine(&config, &declared, &manifest, &facts, &derived);
         Ok(Base {
             trees_dir: repo.join(&config.repository.trees),
             options,
@@ -107,6 +106,7 @@ impl Base {
             live: manifest.clone().into(),
             manifest,
             declared,
+            derived,
             os,
             machine,
             token,
@@ -211,7 +211,13 @@ pub fn machinery(base: &Base, setup: TreeSetup) -> Result<Machinery> {
     );
     builds.rejoin(unfinished, &reset);
     let repo = &base.options.repo;
-    let tree_config = TreeConfig::new(repo, &base.config, &base.options.hostname, &base.manifest)?;
+    let tree_config = TreeConfig::new(
+        repo,
+        &base.config,
+        &base.declared,
+        base.derived.landing_trees,
+        &base.manifest,
+    );
     let trees = Trees::new(
         tree_config,
         base.open()?,
@@ -301,7 +307,7 @@ pub fn checking_with(
         express: MachineExpress::for_config(
             &base.config,
             &base.options.repo,
-            base.declared.express_cores,
+            base.derived.express_cores,
             Some(Arc::new(Mutex::new(base.open()?))),
             &base.clock,
             Some(lender),
@@ -346,7 +352,13 @@ pub fn verb_side(
     idle_host: impl FnOnce(LiveHost) -> Box<dyn IdleHost>,
 ) -> Result<(Context, Vec<LongVerb>)> {
     let repo = &base.options.repo;
-    let tree_config = TreeConfig::new(repo, &base.config, &base.options.hostname, &base.manifest)?;
+    let tree_config = TreeConfig::new(
+        repo,
+        &base.config,
+        &base.declared,
+        base.derived.landing_trees,
+        &base.manifest,
+    );
     let trees = Trees::new(
         tree_config,
         base.open()?,
@@ -605,7 +617,7 @@ fn status_sections(base: &Base, parts: &loops::Parts) -> Vec<Box<dyn StatusSecti
         Arc::new(move || scheduler.status())
     };
     let configured =
-        doctor::configured_tree_names(base.declared.ticket_trees, base.declared.landing_trees);
+        doctor::configured_tree_names(base.declared.ticket_trees, base.derived.landing_trees);
     vec![
         Box::new(CoresSection(status.clone())),
         Box::new(AdmissionSection(status)),
@@ -660,7 +672,7 @@ fn green_at(base: &Base, parts: &loops::Parts) -> Option<doctor::GreenAt> {
 fn identity(
     options: &DaemonOptions,
     config: &Config,
-    os: Os,
+    facts: &MachineFacts,
     families: Option<&[String]>,
 ) -> Result<(MachineId, String)> {
     let file = options.home.identity();
@@ -673,9 +685,9 @@ fn identity(
         .register(&MachineRegister {
             machine: identity.machine.clone(),
             name: options.hostname.clone(),
-            os,
-            cores: doctor::Host::cores(&NativeHost),
-            memory_mb: doctor::Host::memory_mb(&NativeHost),
+            os: facts.os,
+            cores: facts.logical_cores,
+            memory_mb: facts.memory_mb,
             families: families.map(<[String]>::to_vec).unwrap_or_default(),
             version: options.version.clone(),
         })

@@ -16,6 +16,7 @@ use ignite_core::ids::{Commit, Seq};
 use ignite_core::manifest::{Manifest, Platforms};
 use ignite_core::protocol::client::{Exit, Reply, Request};
 use ignite_core::traits::Result;
+use ignite_os::hostcpu::HostCpu;
 use serde_json::json;
 
 use crate::loop_health::LoopHealth;
@@ -23,6 +24,7 @@ use crate::sched;
 use crate::server::{Context, Verb};
 use crate::update::ExecutableStore;
 
+mod capacity;
 pub mod listener;
 mod loops;
 mod mirror;
@@ -33,16 +35,20 @@ mod trees;
 
 pub use tip_round::{GreenAt, TipRoundSection};
 
+pub(crate) use capacity::machine_facts;
 pub use loops::LoopsSection;
 pub use running::{ExecutableOf, RunningSection};
 
-/// The most lines `status` and `doctor` print.
+/// The most lines `status` prints.
 const MAX_LINES: usize = 40;
 
 /// Facts about the machine that need the operating system.
 pub trait Host {
     fn hostname(&self) -> String;
     fn cores(&self) -> u32;
+    fn physical_cores(&self) -> u32 {
+        self.cores()
+    }
     fn memory_mb(&self) -> u64;
     /// Gigabytes free on the disk that holds `path`.
     fn disk_free_gb(&self, path: &Path) -> Option<u64>;
@@ -99,7 +105,11 @@ impl Host for NativeHost {
     }
 
     fn cores(&self) -> u32 {
-        std::thread::available_parallelism().map_or(1, |n| u32::try_from(n.get()).unwrap_or(1))
+        ignite_os::Native.cores()
+    }
+
+    fn physical_cores(&self) -> u32 {
+        ignite_os::Native.physical_cores()
     }
 
     fn memory_mb(&self) -> u64 {
@@ -367,7 +377,10 @@ impl StatusSection for TreesSection {
                 );
                 if !extra.is_empty() {
                     let names: Vec<&str> = extra.iter().map(String::as_str).collect();
-                    lines.push(format!("not in ignite.toml: {}", names.join(", ")));
+                    lines.push(format!(
+                        "outside the configured tree set: {}",
+                        names.join(", ")
+                    ));
                 }
                 lines
             }
@@ -626,24 +639,24 @@ pub fn diagnose(input: &DoctorInput) -> Vec<Finding> {
     findings.extend(model_findings(input.config));
     findings.extend(cli_findings(input.config, input.host, &hostname));
 
-    let Some(machine) = input.config.machine(&hostname) else {
-        findings.push(Finding::problem(
-            "machine",
-            format!("ignite.toml declares no [machine.{hostname}]."),
-            format!("add a [machine.{hostname}] table with its trees and run `ignite install`"),
-        ));
-        return findings;
-    };
+    let default = Machine::default();
+    let machine = input.config.machine(&hostname).unwrap_or(&default);
+    let os = machine
+        .os
+        .or_else(Os::current)
+        .expect("Ignite runs on macOS or Windows");
+    let facts = machine_facts(input.host, os);
+    let derived = ignite_core::capacity::derive(&facts);
     findings.push(Finding::ok(
         "machine",
         format!(
-            "{hostname}, {} cores, {} MB memory.",
-            input.host.cores(),
-            input.host.memory_mb()
+            "{hostname}, {} physical cores, {} logical cores, {} MB memory.",
+            facts.physical_cores, facts.logical_cores, facts.memory_mb
         ),
     ));
 
-    trees::findings(input, machine, &mut findings);
+    capacity::retired_findings(input.config, &mut findings);
+    trees::findings(input, machine, derived.landing_trees, &mut findings);
     family_findings(input, machine, &mut findings);
     findings
 }
@@ -866,7 +879,7 @@ pub fn report(findings: &[Finding]) -> Reply {
             (_, true) => Exit::Unreachable,
             _ => Exit::CheckFailed,
         },
-        text: cut(&text),
+        text,
         json: Some(json!({"findings": findings.iter().map(|f| json!({
             "ok": f.ok, "warning": f.warning, "label": f.label, "text": f.text, "fix": f.fix,
         })).collect::<Vec<_>>()})),

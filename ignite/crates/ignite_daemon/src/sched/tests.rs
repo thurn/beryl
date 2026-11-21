@@ -3,8 +3,10 @@ use std::io;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-use ignite_core::config::Floor;
+use ignite_core::capacity::{MachineFacts, derive};
+use ignite_core::config::{Config, Floor, Os};
 use ignite_core::fakes::FakeClock;
+use ignite_core::manifest::Manifest;
 use ignite_core::protocol::Class;
 use ignite_core::time::Timestamp;
 use ignite_os::hostcpu::HostCpu;
@@ -52,25 +54,78 @@ fn granted_cores(ledger: &Ledger) -> u32 {
     ledger.status().granted
 }
 
-#[test]
-fn the_express_cores_are_never_handed_out() {
-    let config = ignite_core::config::Config::parse(
+fn capacity_config() -> Config {
+    Config::parse(
         "ignite.toml",
-        "[repository]\nremote = \"origin\"\nstaging = \"s\"\nmaster = \"m\"\n\
-         trees = \"t\"\nchecks = \"c\"\n[hub]\nurl = \"http://h\"\nproject = \"p\"\n\
-         [gate]\nthreshold = 1.0\n[machine.m]\nticket_trees = 1\nlanding_trees = 1\n\
-         express_cores = 4\n",
+        r#"
+        [repository]
+        remote = "origin"
+        staging = "s"
+        master = "m"
+        trees = "t"
+        checks = "c"
+        [hub]
+        url = "http://h"
+        project = "p"
+        [gate]
+        threshold = 1.0
+        [resources.browser-pages]
+        per_core = 0.5
+        [machine.m]
+        express_cores = 0
+        tip_build_cores = 0
+        floor = { batch = 99, tip = 99 }
+        resources = { browser-pages = 99, oracle = 2 }
+        "#,
     )
+    .unwrap()
+}
+
+fn derived_limits(os: Os, physical_cores: u32, logical_cores: u32) -> Limits {
+    let config = capacity_config();
+    let facts = MachineFacts {
+        os,
+        physical_cores,
+        logical_cores,
+        memory_mb: 0,
+        disk_total_gb: 0,
+    };
+    let manifest = Manifest::from_files(&[(
+        "ui.toml".into(),
+        r#"
+        [family.ui]
+        kind = "regression"
+        adapter = "jsonl"
+        platforms = ["macos"]
+        list = "list"
+        run = "run"
+        inputs = ["src"]
+        resources = ["browser-pages"]
+        "#
+        .into(),
+    )])
     .unwrap();
-    let machine = &config.machine["m"];
-    let limits = Limits::for_machine(machine, 18);
-    assert_eq!((limits.cores, limits.reserved), (14, 4));
-    // The machine's busy fraction is still read against all 18.
-    assert_eq!(limits.machine_cores(), 18);
-    // At least one core is left to hand out, whatever the machine reserves.
-    let small = Limits::for_machine(machine, 4);
-    assert_eq!((small.cores, small.reserved), (1, 3));
-    assert_eq!(small.machine_cores(), 4);
+    Limits::for_machine(
+        &config,
+        &config.machine["m"],
+        &manifest,
+        &facts,
+        &derive(&facts),
+    )
+}
+
+#[test]
+fn scheduler_uses_derived_floors_and_page_slots_for_available_checks() {
+    for (os, physical, logical, batch, pages) in [
+        (Os::Macos, 18, 18, 6, Some(9)),
+        (Os::Macos, 10, 10, 3, Some(5)),
+        (Os::Windows, 12, 20, 4, None),
+    ] {
+        let limits = derived_limits(os, physical, logical);
+        assert_eq!(limits.floor, Floor { batch, tip: 2 });
+        assert_eq!(limits.resources.get("browser-pages").copied(), pages);
+        assert_eq!(limits.resources["oracle"], 2);
+    }
 }
 
 /// Sharing the cores evenly among every waiting request ran each of eighteen commands on about

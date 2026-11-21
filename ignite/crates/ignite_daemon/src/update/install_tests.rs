@@ -442,7 +442,7 @@ fn install_fails_with_a_nonzero_exit_when_the_service_does_not_load() {
 }
 
 #[test]
-fn install_refuses_a_machine_that_ignite_toml_does_not_declare() {
+fn install_uses_native_defaults_for_a_machine_without_a_table() {
     struct Other;
     impl Host for Other {
         fn hostname(&self) -> String {
@@ -467,9 +467,14 @@ fn install_refuses_a_machine_that_ignite_toml_does_not_declare() {
     let fx = Fixture::new("stranger");
     let head = commit("1234abc");
     let running = fx.store.path(&head);
-    let error = install(&fx.deps(&Other, &running), &config(), &head).unwrap_err();
-    assert!(error.to_string().contains("[machine.stranger]"), "{error}");
-    assert!(fx.builder.built.borrow().is_empty());
+    let Outcome::Installed(_) = install(&fx.deps(&Other, &running), &config(), &head).unwrap()
+    else {
+        panic!("expected an installation");
+    };
+    let requests = fx.registrar.requests.borrow();
+    assert_eq!(requests[0].name, "stranger");
+    assert_eq!(Some(requests[0].os), Os::current());
+    assert!(requests[0].families.is_empty());
 }
 
 fn register_request() -> MachineRegister {
