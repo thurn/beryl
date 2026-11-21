@@ -4809,6 +4809,14 @@ Rules for filing:
 - A rule measures what the work costs now, never how much a number grew. Code
   that gets larger as features are added files nothing unless agents pay for it
   often enough to clear the minimum.
+- A session that has measured a source of waste can file an improvement itself,
+  as a patrol's round does:
+  `ignite ticket create --saving agent-hours:12 --labels improvement` files the
+  ticket with the session's own estimate of the saving a week, in `dollars`,
+  `agent-hours` or `core-hours`. The estimate is recorded under the rule
+  `estimate`, and the ticket takes the share like any other improvement. The hub
+  adds no comment seven days after it lands, because no rule found the waste and
+  so none can measure it again.
 - A rule can be listed as report-only. `tier-gap`, which compares model tiers,
   is report-only, because the choice of model stays with people.
 - `never-caught` never names a check on the protected list in `ignite.toml`: the
@@ -4854,12 +4862,19 @@ copy at a time, so a round that stayed open to land a fix would hold back the
 rounds after it.
 
 - **What a round files.** A few tickets at most, each filed `open` under no
-  epic, with the label `patrol:<name>`. Each states the problem as measured, its
-  cause with the evidence, the change, and one named metric from
-  `just efficiency metrics` with its value now and the direction it should move.
-  The change lands with an entry in `data/efficiency-changes.json` that names
-  the same metric, so `just efficiency changes` can compare the metric before
-  and after.
+  epic, with the labels `improvement` and `patrol:<name>`. Each states the
+  problem as measured, its cause with the evidence, the change, and one named
+  metric from `just efficiency metrics` with its value now and the direction it
+  should move. The change lands with an entry in `data/efficiency-changes.json`
+  that names the same metric, so `just efficiency changes` can compare the
+  metric before and after.
+- **What a round estimates.** Each ticket is filed with the round's estimate of
+  what the change would save a week (`--saving`, see
+  [Improvement tickets](#improvement-tickets)), worked out in the ticket's body
+  from the measurements. The estimate makes the ticket an improvement, so it
+  takes the improvement share of hand-offs and does not wait behind the epics. A
+  cause whose estimate is under the minimum for filing is recorded in the notes
+  and not filed.
 - **What a round remembers.** A patrol's memory is in the ticket system, in two
   places.
   - The tickets it filed. `ignite ticket list --label patrol:<name> --all` lists
