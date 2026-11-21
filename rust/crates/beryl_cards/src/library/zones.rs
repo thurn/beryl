@@ -91,3 +91,20 @@ pub const RETURN_FROM_GRAVEYARD: &[Scenario] =
                 ME.has(Zone::Graveyard, names::BLOODGHAST, 0),
             ]),
     ];
+
+/// Declining to pay life modifies how the land enters the battlefield.
+/// [CR 614.12] "Some replacement effects modify how a permanent enters the battlefield."
+///
+/// [CR 614.12]: https://yawgatog.com/resources/magic-rules/#R61412
+pub const DECLINE_LIFE_TO_ENTER_UNTAPPED: &[Scenario] =
+    &[
+        Scenario::new("Soporific Springs: no life paid, it enters tapped")
+            .hand(P0, &[names::SINK_INTO_STUPOR])
+            .library(P1, &[names::PLAINS])
+            .actions(&[
+                ME.plays(names::SINK_INTO_STUPOR),
+                ME.no(),
+                ME.life(20),
+                ME.tapped("Soporific Springs", 1),
+            ]),
+    ];

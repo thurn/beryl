@@ -121,6 +121,13 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
         continuous::ABILITIES_IN_TIMESTAMP_ORDER,
     ),
     ("costs", names::THIRST_FOR_DISCOVERY, costs::SCENARIOS),
+    (
+        "costs",
+        names::THRILL_OF_POSSIBILITY,
+        costs::DISCARD_TO_CAST,
+    ),
+    ("costs", names::VILLAGE_RITES, costs::SACRIFICE_TO_CAST),
+    ("costs", names::SPARAS_HEADQUARTERS, costs::CYCLING),
     ("damage", names::MANA_CRYPT, damage::SCENARIOS),
     (
         "delayed_triggers",
@@ -197,6 +204,11 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
     ),
     ("zones", names::BLOODGHAST, zones::RETURN_FROM_GRAVEYARD),
     ("zones", names::ELITE_SPELLBINDER, zones::LOOK_AT),
+    (
+        "zones",
+        names::SINK_INTO_STUPOR,
+        zones::DECLINE_LIFE_TO_ENTER_UNTAPPED,
+    ),
 ];
 
 /// The scenarios by the card that has the effect, as a card's own are listed

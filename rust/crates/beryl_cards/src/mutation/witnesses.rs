@@ -8,8 +8,8 @@ use crate::{names::*, props::Prop, tokens::*};
 
 pub(super) fn for_card(card: &'static str) -> Vec<Scenario> {
     match card {
-        DRESS_DOWN | FIEND_HUNTER | PORTABLE_HOLE | SNAPCASTER_MAGE | SPELLSEEKER
-        | SUPPLY_RUNNERS | TRINKET_MAGE | WORLDGORGER_DRAGON => {
+        DRESS_DOWN | FIEND_HUNTER | PORTABLE_HOLE | SNAPCASTER_MAGE | TRINKET_MAGE
+        | WORLDGORGER_DRAGON => {
             let mut out = vec![other_permanent_enters(card)];
             if card == WORLDGORGER_DRAGON {
                 out.push(EXILE_DRAGON);
@@ -20,7 +20,7 @@ pub(super) fn for_card(card: &'static str) -> Vec<Scenario> {
         CAVERN_OF_SOULS => vec![CAVERN],
         AANGS_ICEBERG => vec![WATERBEND],
         SUBTLETY => vec![COUNTERED_EVOKE],
-        SPARAS_HEADQUARTERS | TUNDRA => vec![no_black_mana(card)],
+        TUNDRA => vec![no_black_mana(card)],
         BLOODGHAST => vec![HASTE],
         CHAINS_OF_MEPHISTOPHELES => vec![FIRST_DISCARD],
         GET_LOST => vec![tapped_cost(GET_LOST, MAP_TOKEN)],
