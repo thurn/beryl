@@ -335,3 +335,40 @@ pub(crate) const TEXT_CHANGE_INVALIDATES_TARGET: Scenario =
             ME.controls(props::VANILLA.card, 1),
             THEM.has(Zone::Graveyard, names::DEATHMARK, 1),
         ]);
+
+/// An anthem applies to each creature its controller controls, including creatures that
+/// enter after it. Two anthems each give their bonus.
+pub const ANTHEM: &[Scenario] =
+    &[
+        Scenario::new("Anthems apply to your current and later creatures")
+            .battlefield(P0, &ANTHEM_BATTLEFIELD)
+            .battlefield(P1, &[props::VANILLA.card])
+            .hand(
+                P0,
+                &[
+                    names::GLORIOUS_ANTHEM,
+                    names::GLORIOUS_ANTHEM,
+                    props::FLIER.card,
+                ],
+            )
+            .actions(&[
+                ME.casts(names::GLORIOUS_ANTHEM),
+                Resolve,
+                ME.pt(props::VANILLA.card, 3, 2),
+                THEM.pt(props::VANILLA.card, 2, 1),
+                ME.casts(props::FLIER.card),
+                Resolve,
+                ME.pt(props::FLIER.card, 4, 2),
+                ME.casts(names::GLORIOUS_ANTHEM),
+                Resolve,
+                ME.pt(props::VANILLA.card, 4, 3),
+                ME.pt(props::FLIER.card, 5, 3),
+                THEM.pt(props::VANILLA.card, 2, 1),
+            ]),
+    ];
+
+const ANTHEM_BATTLEFIELD: [&str; 10] = {
+    let mut cards = [names::PLAINS; 10];
+    cards[0] = props::VANILLA.card;
+    cards
+};

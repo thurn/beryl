@@ -158,3 +158,35 @@ pub const GRAVEYARD_RETURN: &[Scenario] = &[
             ME.controls(names::BLOODGHAST, 0),
         ]),
 ];
+
+/// What happens when a player pays or cannot afford the life payment.
+pub const PAY_LIFE_TO_ENTER_UNTAPPED: &[Scenario] = &[
+    Scenario::new("Soporific Springs enters untapped after its controller pays life")
+        .hand(P0, &[names::SINK_INTO_STUPOR])
+        .library(P1, &[names::PLAINS])
+        .actions(&[
+            ME.plays(names::SINK_INTO_STUPOR),
+            ME.yes(),
+            ME.life(17),
+            ME.controls("Soporific Springs", 1),
+            ME.tapped("Soporific Springs", 0),
+        ]),
+    Scenario::new("Soporific Springs enters tapped when its controller cannot pay")
+        .life(P0, 2)
+        .hand(P0, &[names::SINK_INTO_STUPOR, names::ISLAND])
+        .library(P1, &[names::PLAINS])
+        .actions(&[
+            ME.plays(names::SINK_INTO_STUPOR),
+            ME.life(2),
+            ME.tapped("Soporific Springs", 1),
+        ]),
+];
+
+/// A land with an unconditional replacement enters tapped when played.
+pub const ENTERS_TAPPED: &[Scenario] = &[Scenario::new("Spara's Headquarters enters tapped")
+    .hand(P0, &[names::SPARAS_HEADQUARTERS])
+    .library(P1, &[names::PLAINS])
+    .actions(&[
+        ME.plays(names::SPARAS_HEADQUARTERS),
+        ME.tapped(names::SPARAS_HEADQUARTERS, 1),
+    ])];

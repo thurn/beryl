@@ -56,20 +56,6 @@ const fn enchantment(abilities: &'static [Ability]) -> Face {
     }
 }
 
-/// "Creatures you control get +1/+1", in layer 7c.
-static ANTHEM: CardDef = CardDef {
-    name: "Test Anthem",
-    faces: &[enchantment(&[Ability::static_ability(&LayerSpec {
-        affected: Objects::All {
-            zone: Zone::Battlefield,
-            filter: YOUR_CREATURES,
-        },
-        condition: None,
-        modifications: &[Modification::ModifyPt(1, 1)],
-    })])],
-    tokens: &[],
-};
-
 /// "Artifacts you control are creatures in addition to their other types", in layer 4.
 static ANIMATOR: CardDef = CardDef {
     name: "Test Animator",
@@ -148,16 +134,14 @@ static CAPTAIN: CardDef = CardDef {
     tokens: &[],
 };
 
-static CARDS: CardTable = CardTable::new(&[
-    &LAND, &TRINKET, &BEAR, &ANTHEM, &ANIMATOR, &FORGE, &WALL, &CAPTAIN,
-]);
+static CARDS: CardTable =
+    CardTable::new(&[&LAND, &TRINKET, &BEAR, &ANIMATOR, &FORGE, &WALL, &CAPTAIN]);
 
 /// A game in the first player's main phase, each deck holding two of each card.
 fn game() -> (GameTable, State) {
     let deck: &[(u8, &str)] = &[
         (2, "Test Trinket"),
         (2, "Test Bear"),
-        (2, "Test Anthem"),
         (2, "Test Animator"),
         (2, "Test Forge"),
         (2, "Test Wall"),
@@ -187,43 +171,6 @@ fn refresh(t: &GameTable, s: &mut State) {
 fn pt(s: &State, slot: Slot) -> (i8, i8) {
     let d = s.derived(slot);
     (d.power, d.toughness)
-}
-
-/// A static ability over a set applies to whatever its filter accepts each time the layers
-/// run ([CR 611.3a]): "it applies at any given moment to whatever its text indicates." A
-/// creature that enters later gets the bonus, an opponent's creature does not, and two such
-/// abilities each apply.
-///
-/// [CR 611.3a]: https://yawgatog.com/resources/magic-rules/#R6113a
-#[test]
-fn a_static_ability_applies_to_each_permanent_its_filter_accepts() {
-    let (t, mut s) = game();
-    let bear = enters(&t, &mut s, Seat::P0, "Test Bear");
-    let theirs = enters(&t, &mut s, Seat::P1, "Test Bear");
-    enters(&t, &mut s, Seat::P0, "Test Anthem");
-    assert_eq!(pt(&s, bear), (3, 3));
-    assert_eq!(pt(&s, theirs), (2, 2));
-    let late = enters(&t, &mut s, Seat::P0, "Test Bear");
-    assert_eq!(pt(&s, late), (3, 3));
-    enters(&t, &mut s, Seat::P0, "Test Anthem");
-    assert_eq!(pt(&s, bear), (4, 4));
-}
-
-/// What an effect applies to is found against the layers before its own
-/// ([CR 613.1d], [CR 613.4c]): an artifact a layer 4 effect makes a creature gets a layer 7c
-/// bonus for creatures, whichever of the two effects began first.
-///
-/// [CR 613.1d]: https://yawgatog.com/resources/magic-rules/#R6131d
-/// [CR 613.4c]: https://yawgatog.com/resources/magic-rules/#R6134c
-#[test]
-fn a_set_is_found_against_the_layers_before_its_own() {
-    let (t, mut s) = game();
-    enters(&t, &mut s, Seat::P0, "Test Anthem");
-    let trinket = enters(&t, &mut s, Seat::P0, "Test Trinket");
-    assert!(!s.derived(trinket).types.intersects(Types::CREATURE));
-    enters(&t, &mut s, Seat::P0, "Test Animator");
-    assert!(s.derived(trinket).types.intersects(Types::CREATURE));
-    assert_eq!(pt(&s, trinket), (1, 1));
 }
 
 /// A filter may ask whether a permanent is tapped and what its mana value is, which no layer

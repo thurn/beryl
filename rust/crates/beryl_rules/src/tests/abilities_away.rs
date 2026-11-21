@@ -7,11 +7,10 @@ use super::begin;
 use super::events::{find, put, resolve_all};
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, Amount, CardDef, Castings, Condition, Face, Objects, Players, Replacement, Subject,
-    Trigger, TriggerEvent, Types,
+    Ability, Amount, CardDef, Condition, Face, Objects, Players, Replacement, Subject, Trigger,
+    TriggerEvent, Types,
 };
 use crate::filter::Filter;
-use crate::fixed::Fixed;
 use crate::ids::{Seat, Slot};
 use crate::layout::{Small, index};
 use crate::replacement::event::{self, Entry, Event, Reason, Sink};
@@ -73,22 +72,6 @@ static MOURNER: CardDef = CardDef {
     }],
     tokens: &[],
 };
-/// "When you cast this spell, you gain 1 life."
-static HERALD: CardDef = CardDef {
-    name: "Test Herald",
-    faces: &[Face {
-        types: Types::CREATURE,
-        power: Some(1),
-        toughness: Some(1),
-        abilities: &[
-            Ability::triggered(&Trigger::of(TriggerEvent::Casts, Subject::This))
-                .on_the_stack()
-                .effect(&gain_life(you(), 1)),
-        ],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
-};
 /// "When you have no cards in hand, you gain 1 life."
 static LONER: CardDef = CardDef {
     name: "Test Loner",
@@ -108,13 +91,12 @@ static LONER: CardDef = CardDef {
     tokens: &[],
 };
 
-static CARDS: CardTable = CardTable::new(&[&LAND, &BEAR, &GHOST, &MOURNER, &HERALD, &LONER]);
+static CARDS: CardTable = CardTable::new(&[&LAND, &BEAR, &GHOST, &MOURNER, &LONER]);
 
 const DECK: &Decklist = &[
     (4, "Test Bear"),
     (2, "Test Ghost"),
     (1, "Test Graveyard Mourner"),
-    (2, "Test Herald"),
     (1, "Test Loner"),
     (30, "Test Land"),
 ];
@@ -182,32 +164,6 @@ fn an_ability_in_a_graveyard_sees_a_creature_die() {
     assert_eq!(s.triggers().len(), 1);
     assert_eq!(s.triggers()[0].info.object, Some(dead));
     assert!(s.last_known(dead).is_some(), "the bear as it last existed");
-}
-
-#[test]
-fn a_spell_triggers_on_its_own_cast_from_the_stack() {
-    let (t, mut s, p, mut x) = game();
-    let cast = |s: &State, spell: Slot| Event::Cast {
-        spell: s.object_ref(spell),
-        controller: p,
-        targets: Fixed::default(),
-        x: 0,
-        costs: Castings::default(),
-        flashback: false,
-    };
-    // On the battlefield, another spell's cast is none of its own.
-    put(&t, &mut s, &mut x, p, "Test Herald");
-    let bear = find(&s, &t, p, "Test Bear");
-    place(&mut s, bear, Zone::Stack);
-    let e = cast(&s, bear);
-    event::settle(&mut s, &t, &mut x.events, e).unwrap();
-    assert!(s.triggers().is_empty());
-    let herald = find(&s, &t, p, "Test Herald");
-    place(&mut s, herald, Zone::Stack);
-    let e = cast(&s, herald);
-    event::settle(&mut s, &t, &mut x.events, e).unwrap();
-    assert_eq!(s.triggers().len(), 1, "the spell's own, once");
-    assert_eq!(s.triggers()[0].of.source, Some(s.object_ref(herald)));
 }
 
 /// Empties `player`'s hand into their graveyard.

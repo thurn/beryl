@@ -26,6 +26,7 @@ pub mod linked;
 pub mod mana;
 pub mod replacement;
 pub mod tokens;
+pub mod triggers;
 pub mod turn;
 pub mod zones;
 
@@ -121,6 +122,7 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
         continuous::SETTING_LAND_TYPES,
     ),
     ("continuous", names::DRYAD_ARBOR, continuous::LAND_CREATURE),
+    ("continuous", names::GLORIOUS_ANTHEM, continuous::ANTHEM),
     (
         "continuous",
         names::VIGILANCE,
@@ -139,6 +141,16 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
         "delayed_triggers",
         names::TEFERI_HERO_OF_DOMINARIA,
         delayed_triggers::SCENARIOS,
+    ),
+    (
+        "delayed_triggers",
+        names::MANA_DRAIN,
+        delayed_triggers::NEXT_MAIN_PHASE,
+    ),
+    (
+        "delayed_triggers",
+        names::FLICKERWISP,
+        delayed_triggers::RETURN_TO_OWNER,
     ),
     (
         "emblems",
@@ -207,6 +219,13 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
         tokens::ATTACKING,
     ),
     ("tokens", names::FRACTURED_IDENTITY, tokens::COPIES),
+    ("triggers", names::THIEVING_SKYDIVER, triggers::X_FROM_SPELL),
+    (
+        "triggers",
+        names::OVERLORD_OF_THE_MISTMOORS,
+        triggers::CONTROLLERS_END_STEP,
+    ),
+    ("triggers", names::DRESS_DOWN, triggers::OPPONENTS_STEP),
     ("turn", names::MINDSLAVER, turn::CONTROLLED_TURN),
     ("turn", names::ISLAND, turn::FIRST_DRAW),
     ("turn", names::ISLAND, turn::LAND_PLAY),
@@ -224,6 +243,12 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
         names::SINK_INTO_STUPOR,
         zones::DECLINE_LIFE_TO_ENTER_UNTAPPED,
     ),
+    (
+        "zones",
+        names::SINK_INTO_STUPOR,
+        zones::PAY_LIFE_TO_ENTER_UNTAPPED,
+    ),
+    ("zones", names::SPARAS_HEADQUARTERS, zones::ENTERS_TAPPED),
 ];
 
 /// The scenarios by the card that has the effect, as a card's own are listed

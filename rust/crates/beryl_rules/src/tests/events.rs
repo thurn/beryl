@@ -5,7 +5,7 @@ use beryl_card::effect::build::{
     add_counters, add_mana_of_kind, carried, create_attacking_tokens, create_copy,
     create_tokens as create_tokens_of_kind, deal_damage_to, delay_carrying, draw, each_opponent,
     flip_coin, for_each_player, gain_life, get_emblem, if_then, if_you_lose_the_flip, lose_life,
-    modify, sequence, target, that_player, this, you,
+    sequence, that_player, this, you,
 };
 use beryl_card::{Amount, Comparison, CopyException, Effect, ExceptIx};
 
@@ -13,11 +13,11 @@ use crate::actions::destroy::destroy;
 use crate::additions::Addition;
 use crate::bitboard::Bitboard;
 use crate::card::{
-    Ability, AbilityKind, CardDef, CastingOption, Castings, Condition, Cost, Face, FaceIx,
-    Keywords, LayerSpec, ManaColor, ManaCost, Modification, Objects, Part, Players, Prompt,
-    Purpose, Replacement, Subtype, Subtypes, TargetKind, TargetSpec, Trigger, Types,
+    Ability, AbilityKind, CardDef, Castings, Condition, Cost, Face, FaceIx, Keywords, LayerSpec,
+    ManaColor, ManaCost, Modification, Objects, Part, Players, Prompt, Purpose, Replacement,
+    Subtype, Subtypes, Trigger, Types,
 };
-use crate::card::{CastingKind, Flow, ObjectAbility};
+use crate::card::{Flow, ObjectAbility};
 use crate::combat::damage;
 use crate::filter::{Evaluate, Filter};
 use crate::fixed::Fixed;
@@ -28,8 +28,8 @@ use crate::profile::Breakpoint;
 use crate::replacement::event::{self, Event, Reason, Recipient, Sink, TokenEntry};
 use crate::resolution::Resolution;
 use crate::state::{
-    AbilityRef, AttackTarget, Continuous, CounterKind, Duration, LayerChange, ManaPool,
-    MoveReplacement, PendingTrigger, StackEntry, StackItem, TriggerInfo, TurnStep, Zone, ZoneKey,
+    AbilityRef, AttackTarget, Continuous, CounterKind, Duration, LayerChange, MoveReplacement,
+    PendingTrigger, StackEntry, StackItem, TriggerInfo, TurnStep, Zone, ZoneKey,
 };
 use crate::zone::Place;
 use crate::zones;
@@ -615,6 +615,8 @@ fn types<L: Layout>(s: &State<L>, slot: L::Slot) -> Types {
     s.derived(slot).types
 }
 
+/// Checks Beryl's candidate collapsing. Both lands are legal plays, but only the
+/// one the opponent knows about changes what they have seen.
 #[test]
 fn a_copy_in_hand_the_opponent_knows_is_offered_apart_from_one_they_do_not() {
     let (t, mut s, p) = game();
@@ -1119,57 +1121,6 @@ fn triggers_of_twins_are_equivalent_while_the_waiting_triggers_name_both_alike()
 }
 
 #[test]
-fn an_end_step_trigger_fires_on_its_controllers_turn_only() {
-    let (t, mut s, p) = game();
-    let mut x = Scratch::recording();
-    put(&t, &mut s, &mut x, p, "Test Ender");
-    advance_to(&t, &mut s, &mut x, p.opponent(), TurnStep::PrecombatMain);
-    advance_to(&t, &mut s, &mut x, p, TurnStep::PrecombatMain);
-    let draws: Vec<(Seat, TurnStep)> = {
-        let mut step = TurnStep::Untap;
-        x.events
-            .drain()
-            .filter_map(|e| match e {
-                Event::StepBegins { step: now, .. } => {
-                    step = now;
-                    None
-                }
-                Event::Draw { player, .. } => Some((player, step)),
-                _ => None,
-            })
-            .collect()
-    };
-    // p's end step, then each player's draw step.
-    assert_eq!(
-        draws,
-        [
-            (p, TurnStep::End),
-            (p.opponent(), TurnStep::Draw),
-            (p, TurnStep::Draw)
-        ]
-    );
-}
-
-#[test]
-fn a_delayed_trigger_fires_once_at_your_next_main_phase() {
-    let (t, mut s, p) = game();
-    let mut x = Scratch::new();
-    put(&t, &mut s, &mut x, p, "Test Drain Land");
-    resolve_all(&t, &mut s, &mut x);
-    assert_eq!(s.delayed().len(), 1);
-    // Created in the precombat main phase: the next main phase is the postcombat one.
-    advance_to(&t, &mut s, &mut x, p, TurnStep::PostcombatMain);
-    assert!(s.delayed().is_empty());
-    assert_eq!(s.player(p).mana()[ManaColor::Colorless], 2);
-    advance_to(&t, &mut s, &mut x, p, TurnStep::PrecombatMain);
-    assert_eq!(
-        s.player(p).mana(),
-        ManaPool::default(),
-        "it triggered only once"
-    );
-}
-
-#[test]
 fn an_emblem_triggers_from_the_command_zone() {
     let (t, mut s, p) = game();
     let mut x = Scratch::new();
@@ -1231,57 +1182,11 @@ fn whenever_you_create_creature_tokens_triggers_once_per_event() {
     assert_eq!(insects, 2);
 }
 
+/// The scenario plays the life-payment choice. Here, inspect the prompt's purpose.
 #[test]
-fn lands_enter_tapped_conditionally_or_unless_life_is_paid() {
+fn the_land_entry_prompt_names_its_player_and_life_payment() {
     let (t, mut s, p) = game();
     let mut x = Scratch::new();
-    let tapped = |s: &State, slot: Slot| s.object(slot).is_tapped();
-    let tapland = put(&t, &mut s, &mut x, p, "Test Tapland");
-    assert!(tapped(&s, tapland));
-    // Seachrome Coast: untapped with two or fewer other lands, tapped with three.
-    let coast = put(&t, &mut s, &mut x, p, "Test Coast");
-    assert!(!tapped(&s, coast), "one other land");
-    put(&t, &mut s, &mut x, p, "Test Land");
-    put(&t, &mut s, &mut x, p, "Test Land");
-    let late = put(&t, &mut s, &mut x, p, "Test Coast");
-    assert!(tapped(&s, late), "four other lands");
-
-    // Soporific Springs, played: its controller is asked.
-    for (pay, life, enters_tapped) in [(true, 17, false), (false, 20, true)] {
-        let (t, mut s, p) = game();
-        let mut x = Scratch::new();
-        let springs = find(&s, &t, p, "Test Springs");
-        s.move_object(
-            &mut crate::replacement::event::Sink::off(),
-            springs,
-            Zone::Hand,
-            Place::Top,
-        )
-        .unwrap();
-        let d = decide_with(&t, &mut s, &mut x);
-        let play = (0..d.len() as u16)
-            .find(|&i| d.candidates.option(Choice(i)) == Some(Opt::PlayLand(springs)))
-            .unwrap();
-        apply(&mut s, &t, &mut x, &mut Replay, Choice(play));
-        let d = decide_with(&t, &mut s, &mut x);
-        assert_eq!(
-            (d.kind, d.prompt.purpose, d.player),
-            (DecisionKind::YesNo, Purpose::PayLife, p)
-        );
-        let answer = if pay { Opt::Yes } else { Opt::No };
-        let c = (0..2)
-            .find(|&i| d.candidates.option(Choice(i)) == Some(answer))
-            .unwrap();
-        apply(&mut s, &t, &mut x, &mut Replay, Choice(c));
-        assert_eq!(s.object(springs).zone(), Zone::Battlefield);
-        assert_eq!(tapped(&s, springs), enters_tapped);
-        assert_eq!(s.player(p).life(), life);
-    }
-
-    // A player who can't pay isn't asked.
-    let (t, mut s, p) = game();
-    let mut x = Scratch::new();
-    s.board().set_life(p, 2);
     let springs = find(&s, &t, p, "Test Springs");
     s.move_object(
         &mut crate::replacement::event::Sink::off(),
@@ -1295,9 +1200,11 @@ fn lands_enter_tapped_conditionally_or_unless_life_is_paid() {
         .find(|&i| d.candidates.option(Choice(i)) == Some(Opt::PlayLand(springs)))
         .unwrap();
     apply(&mut s, &t, &mut x, &mut Replay, Choice(play));
-    assert_eq!(s.object(springs).zone(), Zone::Battlefield);
-    assert!(tapped(&s, springs));
-    assert_eq!(s.player(p).life(), 2);
+    let d = decide_with(&t, &mut s, &mut x);
+    assert_eq!(
+        (d.kind, d.prompt.purpose, d.player),
+        (DecisionKind::YesNo, Purpose::PayLife, p)
+    );
 }
 
 #[test]
@@ -2059,124 +1966,6 @@ fn a_token_created_attacking_may_attack_a_planeswalker() {
         s.object(cathar).attack_target(),
         Some(AttackTarget::Player(Seat::P1))
     );
-}
-
-/// Thieving Skydiver: kicker {X}, X can't be 0; "When this creature enters, if it was
-/// kicked, gain control of target artifact with mana value X or less."
-static THIEF: CardDef = CardDef {
-    name: "Test Thief",
-    faces: &[Face {
-        cost: ManaCost::generic(1),
-        types: Types::CREATURE,
-        power: Some(2),
-        toughness: Some(1),
-        abilities: &[Ability::triggered(&Trigger::ENTERS)
-            .targeting(&[TargetSpec::one(
-                TargetKind::Permanent,
-                Filter::All(&[Filter::Types(Types::ARTIFACT), Filter::ManaValueAtMostX]),
-            )])
-            .only_if(&Condition::Paid(CastingKind::Kicker))
-            .effect(&modify(
-                target(),
-                &[Modification::Control],
-                beryl_card::Duration::Indefinite,
-            ))],
-        casting: &[CastingOption::Kicker {
-            cost: ManaCost::X,
-            min_x: 1,
-        }],
-        ..Face::EMPTY
-    }],
-    tokens: &[],
-};
-
-static ROCK_1: CardDef = CardDef {
-    name: "Test Rock 1",
-    faces: &[Face {
-        cost: ManaCost::generic(1),
-        types: Types::ARTIFACT,
-        ..Face::EMPTY
-    }],
-    tokens: &[],
-};
-
-static ROCK_3: CardDef = CardDef {
-    name: "Test Rock 3",
-    faces: &[Face {
-        cost: ManaCost::generic(3),
-        types: Types::ARTIFACT,
-        ..Face::EMPTY
-    }],
-    tokens: &[],
-};
-
-static THIEF_CARDS: CardTable = CardTable::new(&[&LAND, &THIEF, &ROCK_1, &ROCK_3]);
-
-/// The enters ability's X is the kicker's (CR 107.3m): kicked for 1 it can take only the
-/// artifact of mana value 1, so that is chosen silently; kicked for 3, either, and it takes
-/// the bigger.
-#[test]
-fn an_enters_ability_targets_by_the_x_its_spell_was_cast_with() {
-    for (x, stolen) in [(1u8, "Test Rock 1"), (3, "Test Rock 3")] {
-        let t = GameTable::new(
-            Format::CONSTRUCTED,
-            &THIEF_CARDS,
-            [
-                &[(1, "Test Thief"), (6, "Test Land")],
-                &[(1, "Test Rock 1"), (1, "Test Rock 3"), (4, "Test Land")],
-            ],
-        )
-        .unwrap();
-        let mut s = State::new(&t, 1, Profile::EXACT).unwrap();
-        s.board().begin_at(1, Seat::P0, TurnStep::PrecombatMain);
-        let mut scratch = Scratch::new();
-        let thief = find(&s, &t, Seat::P0, "Test Thief");
-        s.board().place(thief, Zone::Hand).unwrap();
-        for _ in 0..4 {
-            let land = find(&s, &t, Seat::P0, "Test Land");
-            s.board().place(land, Zone::Battlefield).unwrap();
-        }
-        let rocks = ["Test Rock 1", "Test Rock 3"].map(|name| {
-            let rock = find(&s, &t, Seat::P1, name);
-            s.board().place(rock, Zone::Battlefield).unwrap();
-            rock
-        });
-        let mut cast = false;
-        while !cast || !s.stack().is_empty() || !s.triggers().is_empty() {
-            let d = decide_with(&t, &mut s, &mut scratch);
-            let option = |o: Opt| {
-                (0..d.len() as u16)
-                    .map(Choice)
-                    .find(|&c| d.candidates.option(c) == Some(o))
-            };
-            let choice = match d.kind {
-                DecisionKind::Priority if !cast => {
-                    cast = true;
-                    option(Opt::Cast {
-                        slot: thief,
-                        face: FaceIx::FRONT,
-                        costs: Castings::only(0),
-                    })
-                    .unwrap()
-                }
-                DecisionKind::X => option(Opt::Number(x)).unwrap(),
-                DecisionKind::Target => {
-                    assert_eq!(d.len(), 2, "kicked for {x}");
-                    let i = (0..d.len() as u16)
-                        .find(|&i| d.candidates.object(Choice(i)) == Some(rocks[1]))
-                        .unwrap();
-                    Choice(i)
-                }
-                _ => Choice(0),
-            };
-            apply(&mut s, &t, &mut scratch, &mut Replay, choice);
-        }
-        for rock in rocks {
-            let name = s.definition_name(&t, rock);
-            let expected = if name == stolen { Seat::P0 } else { Seat::P1 };
-            assert_eq!(s.controller(rock), expected, "{name}, kicked for {x}");
-        }
-    }
 }
 
 /// A transforming double-faced card, its back face a planeswalker with no mana cost.

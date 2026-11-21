@@ -4,7 +4,7 @@
 use beryl_card::effect::build::{gain_life, you};
 
 use super::begin;
-use super::events::{advance_to, put, resolve_all};
+use super::events::{put, resolve_all};
 use crate::bitboard::Bitboard;
 use crate::card::{
     Ability, CardDef, Castings, Face, Players, Subject, Subtype, Subtypes, Trigger, TriggerEvent,
@@ -65,6 +65,14 @@ static KNIGHT: CardDef = CardDef {
     }],
     tokens: &[],
 };
+static ARTIFACT: CardDef = CardDef {
+    name: "Test Artifact",
+    faces: &[Face {
+        types: Types::ARTIFACT,
+        ..Face::EMPTY
+    }],
+    tokens: &[],
+};
 // "Whenever an opponent casts a spell".
 listener!(
     HECKLER,
@@ -76,12 +84,6 @@ listener!(
     PURIST,
     "Test Purist",
     Trigger::casts(Players::You, Filter::Not(&Filter::Types(Types::CREATURE)))
-);
-// "At the beginning of each player's upkeep".
-listener!(
-    SANCTUARY,
-    "Test Sanctuary",
-    Trigger::step(TurnStep::Upkeep, Players::EachPlayer)
 );
 // "At the beginning of each of your main phases".
 listener!(
@@ -126,8 +128,8 @@ static MOURNER: CardDef = CardDef {
 };
 
 static CARDS: CardTable = CardTable::new(&[
-    &LAND, &BEAR, &KNIGHT, &HECKLER, &PURIST, &SANCTUARY, &METRONOME, &ARCHIVE, &MARSHAL,
-    &KEEPSAKE, &MOURNER,
+    &LAND, &BEAR, &KNIGHT, &HECKLER, &PURIST, &ARTIFACT, &METRONOME, &ARCHIVE, &MARSHAL, &KEEPSAKE,
+    &MOURNER,
 ]);
 
 const DECK: &Decklist = &[
@@ -135,7 +137,7 @@ const DECK: &Decklist = &[
     (2, "Test Knight"),
     (1, "Test Heckler"),
     (1, "Test Purist"),
-    (1, "Test Sanctuary"),
+    (1, "Test Artifact"),
     (1, "Test Metronome"),
     (1, "Test Archive"),
     (1, "Test Marshal"),
@@ -198,38 +200,29 @@ fn a_cast_trigger_reads_its_subject_of_the_spell() {
     let creature = cast(&t, &s, p, "Test Bear");
     event::settle(&mut s, &t, &mut x.events, creature).unwrap();
     assert!(s.triggers().is_empty(), "a creature spell");
-    let artifact = cast(&t, &s, p, "Test Sanctuary");
+    let artifact = cast(&t, &s, p, "Test Artifact");
     event::settle(&mut s, &t, &mut x.events, artifact).unwrap();
     assert_eq!(s.triggers().len(), 1);
-    let theirs = cast(&t, &s, p.opponent(), "Test Sanctuary");
+    let theirs = cast(&t, &s, p.opponent(), "Test Artifact");
     event::settle(&mut s, &t, &mut x.events, theirs).unwrap();
     assert_eq!(s.triggers().len(), 1, "not an opponent's");
 }
 
+/// Both main-phase events match an ordinary trigger for its controller.
 #[test]
-fn a_step_trigger_for_each_player_fires_in_every_turn() {
-    let (t, mut s, p) = game();
-    let q = p.opponent();
-    let mut x = Scratch::new();
-    put(&t, &mut s, &mut x, p, "Test Sanctuary");
-    advance_to(&t, &mut s, &mut x, q, TurnStep::PrecombatMain);
-    assert_eq!(s.player(p).life(), 21, "the opponent's upkeep");
-    advance_to(&t, &mut s, &mut x, p, TurnStep::PrecombatMain);
-    assert_eq!(s.player(p).life(), 22, "and its controller's");
-}
-
-#[test]
-fn a_main_phase_trigger_fires_in_both_main_phases_of_a_turn() {
+fn a_main_phase_trigger_matches_its_controllers_main_phase_events() {
     let (t, mut s, p) = game();
     let mut x = Scratch::new();
     put(&t, &mut s, &mut x, p, "Test Metronome");
-    advance_to(&t, &mut s, &mut x, p, TurnStep::PostcombatMain);
-    assert_eq!(s.player(p).life(), 21);
-    // The opponent's two main phases are none of its controller's.
-    advance_to(&t, &mut s, &mut x, p.opponent(), TurnStep::PostcombatMain);
-    assert_eq!(s.player(p).life(), 21);
-    advance_to(&t, &mut s, &mut x, p, TurnStep::PostcombatMain);
-    assert_eq!(s.player(p).life(), 23);
+    for step in [TurnStep::PrecombatMain, TurnStep::PostcombatMain] {
+        for active in [p.opponent(), p] {
+            let event = Event::StepBegins { step, active };
+            event::settle(&mut s, &t, &mut x.events, event).unwrap();
+            assert_eq!(s.triggers().len(), usize::from(active == p));
+            resolve_all(&t, &mut s, &mut x);
+        }
+    }
+    assert_eq!(s.player(p).life(), 22);
 }
 
 #[test]
