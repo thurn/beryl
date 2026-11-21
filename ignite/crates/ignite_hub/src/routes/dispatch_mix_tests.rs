@@ -263,6 +263,7 @@ fn ordinary_work_waits_for_pending_reservations_and_regressions_bypass_room() {
     );
     let mut machine = machine_room("m-1", 1, &["claude", "codex"]);
     let first = ask(&mut conn, &machine, start());
+    assert_ne!(first["master_blocker"], json!(true));
     let reply = ask(&mut conn, &machine, at(1.0));
     assert!(
         reply["nothing"]
@@ -289,7 +290,17 @@ fn ordinary_work_waits_for_pending_reservations_and_regressions_bypass_room() {
             .contains("memory pressure")
     );
     machine["room"]["memory_pressed"] = json!(false);
-    assert_eq!(ask(&mut conn, &machine, at(3.0))["ticket"], fix.as_str());
+    let repair = ask(&mut conn, &machine, at(3.0));
+    assert_eq!(repair["ticket"], fix.as_str());
+    assert_eq!(repair["master_blocker"], json!(true));
+    let stored = ignite_store::hub::fleet::reservation_for_worker(
+        &conn,
+        "m-1",
+        repair["session"].as_str().unwrap(),
+    )
+    .unwrap()
+    .unwrap();
+    assert!(stored.master_blocker);
 }
 
 #[test]

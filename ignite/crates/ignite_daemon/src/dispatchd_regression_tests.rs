@@ -19,6 +19,7 @@ fn regression(id: &str, cause: &str) -> TicketDetail {
 /// The hub reserves `ticket`, already in the fake hub, for `worker` on this machine.
 fn reserve_for(rig: &Rig, ticket: &str, worker: &str) {
     rig.hub.queue_reservation(Reservation {
+        master_blocker: false,
         provider: Some("claude".to_owned()),
         ticket: ticket_id(ticket),
         machine: rig.ctx.machine.clone(),

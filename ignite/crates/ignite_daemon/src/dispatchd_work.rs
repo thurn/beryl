@@ -216,7 +216,7 @@ impl Dispatcher {
             .keys()
             .filter(|session| cli::is_cli_session(session))
             .count();
-        let inputs = self.room_inputs(running);
+        let inputs = self.room_inputs(running, 0);
         let room = Room {
             start: start_room(&inputs),
             providers,
@@ -359,6 +359,7 @@ impl Dispatcher {
                     model: None,
                     effort: String::new(),
                     app: app.to_owned(),
+                    master_blocker: reservation.master_blocker,
                 },
             );
             state.unread.push((reservation.clone(), app.to_owned()));
@@ -384,12 +385,12 @@ impl Dispatcher {
         fresh: bool,
     ) {
         state.reserved.insert(slot.clone(), reserved.clone());
-        state.cli_calls.push(cli::Call::Begin {
+        state.cli_calls.push(cli::Call::Begin(cli::Begin {
             slot: slot.clone(),
             reserved,
             resume,
             fresh,
-        });
+        }));
     }
 
     /// Removes the placeholder reservation of `ticket` for `session`, left while the ticket's
@@ -427,13 +428,28 @@ fn handoff_details(
             .unwrap_or_else(|| config.pool.default_effort(app))
             .to_owned(),
         app: app.to_owned(),
+        master_blocker: reservation.master_blocker,
     })
 }
 
 #[cfg(test)]
 mod tests {
     use crate::dispatchd::cli_tests::{cli, reserve};
-    use crate::dispatchd::tests::{lock, rig, ticket_id};
+    use crate::dispatchd::tests::{Rig, lock, rig, ticket_id};
+
+    fn queue_offers(rig: &Rig, set_master_blocker: bool) {
+        let asking = rig
+            .dispatcher
+            .plan_asking(&mut rig.dispatcher.state())
+            .expect("the machine initially has worker room");
+        let (offers, _) = rig.dispatcher.ask_for_work(&rig.ctx, asking);
+        assert!(!offers.is_empty());
+        let mut state = rig.dispatcher.state();
+        for (mut reservation, app, detail) in offers {
+            reservation.master_blocker = set_master_blocker;
+            super::Dispatcher::queue_handoff(&rig.ctx, &mut state, &reservation, &app, detail);
+        }
+    }
 
     #[test]
     fn a_reservation_is_returned_when_memory_pressure_changes_after_planning() {
@@ -451,5 +467,63 @@ mod tests {
         assert!(offers.is_empty());
         assert!(fake.begun().is_empty());
         assert_eq!(rig.hub.refused_reservations()[0].ticket, ticket_id("T.1"));
+    }
+
+    #[test]
+    fn a_queued_ordinary_start_leaves_room_for_a_worker_and_the_system() {
+        let rig = rig(&[]);
+        let fake = cli(&rig, 2);
+        reserve(&rig, "T.1", "reservation-1", &[]);
+        queue_offers(&rig, false);
+
+        *lock(&rig.host.worker_capacity) = (2, false, Some(3_023));
+        rig.dispatcher.run_cli_calls(&rig.ctx);
+
+        assert!(fake.begun().is_empty());
+        assert_eq!(rig.hub.refused_reservations()[0].ticket, ticket_id("T.1"));
+    }
+
+    #[test]
+    fn a_queued_master_blocker_can_bypass_ordinary_room_only_without_pressure() {
+        for memory_pressed in [false, true] {
+            let rig = rig(&[]);
+            let fake = cli(&rig, 2);
+            reserve(&rig, "R.1", "reservation-1", &[]);
+            queue_offers(&rig, true);
+
+            *lock(&rig.host.worker_capacity) = (2, memory_pressed, Some(2_000));
+            rig.dispatcher.run_cli_calls(&rig.ctx);
+
+            assert_eq!(fake.begun().len(), usize::from(!memory_pressed));
+            assert_eq!(
+                rig.hub.refused_reservations().len(),
+                usize::from(memory_pressed)
+            );
+        }
+    }
+
+    #[test]
+    fn queued_starts_in_a_batch_cannot_spend_the_same_footprint_twice() {
+        let rig = rig(&[]);
+        let fake = cli(&rig, 3);
+        for (ticket, key) in [
+            ("T.1", "reservation-1"),
+            ("T.2", "reservation-2"),
+            ("T.3", "reservation-3"),
+        ] {
+            reserve(&rig, ticket, key, &[]);
+        }
+        queue_offers(&rig, false);
+
+        // The memory sample stays unchanged after the first launch. Only one footprint fits.
+        *lock(&rig.host.worker_capacity) = (3, false, Some(3_024));
+        rig.dispatcher.run_cli_calls(&rig.ctx);
+
+        assert_eq!(fake.begun().len(), 1);
+        assert_eq!(fake.begun()[0].0.ticket, ticket_id("T.1"));
+        let refused = rig.hub.refused_reservations();
+        assert_eq!(refused.len(), 2);
+        assert_eq!(refused[0].ticket, ticket_id("T.2"));
+        assert_eq!(refused[1].ticket, ticket_id("T.3"));
     }
 }

@@ -85,13 +85,16 @@ impl CliDaemon {
         effort: Option<&str>,
         resume: Option<&Resume>,
         fresh: bool,
-    ) -> Result<SessionId> {
+        admit: &mut dyn FnMut() -> bool,
+    ) -> Result<Option<SessionId>> {
         let _opening = super::lock(&self.opening);
         let _admission = super::lock(&self.pool.cli_admission);
         let ticket = reservation.ticket.as_str();
         let taken = self.database(|conn| store::by_reservation(conn, ticket, &reservation.code))?;
         if let Some(session) = taken.and_then(|row| row.session) {
-            return SessionId::new(session).map_err(|e| Error::Invalid(e.to_string()));
+            return SessionId::new(session)
+                .map(Some)
+                .map_err(|e| Error::Invalid(e.to_string()));
         }
         let named = &reservation.session;
         let (app, preferred, earlier) = if let Some((app, index)) = super::placeholder(named) {
@@ -129,8 +132,11 @@ impl CliDaemon {
             Some(resume) => self.resume_culprit(row, resume)?,
             None => row,
         };
+        if !admit() {
+            return Ok(None);
+        }
         self.open_slot(row)?;
-        Ok(session)
+        Ok(Some(session))
     }
 
     /// Starts a session with no ticket in the app's lowest free slot.

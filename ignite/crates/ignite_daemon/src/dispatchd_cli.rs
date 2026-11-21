@@ -1,11 +1,13 @@
 //! Starts CLI workers for hub reservations and delivers checks and messages to them.
 
-use std::sync::Arc;
+use std::collections::BTreeSet;
+use std::sync::{Arc, PoisonError};
 
-use ignite_core::capacity::{RoomInputs, start_room, worker_memory_limited};
+use ignite_core::capacity::{RoomInputs, start_room, worker_memory_room};
 use ignite_core::config::Config;
 use ignite_core::ids::SessionId;
 use ignite_core::protocol::hub::{ProviderOffer, Reservation};
+use ignite_core::time::Timestamp;
 use ignite_core::traits::Error;
 
 use super::{Dispatcher, Reserved, State};
@@ -25,19 +27,20 @@ impl CliMode {
     }
 }
 
+/// A queued start for a new worker, or for a lane successor in an existing session.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub(super) struct Begin {
+    pub(super) slot: SessionId,
+    pub(super) reserved: Reserved,
+    pub(super) resume: Option<Resume>,
+    #[serde(default)]
+    pub(super) fresh: bool,
+}
+
 /// Work to send to the CLI supervisor once the state is unlocked. A pending start is saved until it runs.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(super) enum Call {
-    /// Start a session for `reserved` in the slot whose placeholder is `slot`, or, when `slot`
-    /// is a CLI session (the next ticket of a `lane:` chain), in that session's slot. With
-    /// `resume`, the session may resume the transcript of the worker whose ticket caused it.
-    Begin {
-        slot: SessionId,
-        reserved: Reserved,
-        resume: Option<Resume>,
-        #[serde(default)]
-        fresh: bool,
-    },
+    Begin(Begin),
     Refuse {
         reservation: Reservation,
         reason: String,
@@ -50,7 +53,9 @@ pub(super) enum Call {
         urgent: bool,
     },
     /// Check whether the worker still has a running turn.
-    Check { session: SessionId },
+    Check {
+        session: SessionId,
+    },
 }
 
 /// The start of every CLI session and slot placeholder.
@@ -154,11 +159,12 @@ impl Dispatcher {
             .collect()
     }
 
-    pub(super) fn room_inputs(&self, running: usize) -> RoomInputs {
+    pub(super) fn room_inputs(&self, running: usize, starting: usize) -> RoomInputs {
         let (ceiling, memory_pressed, free_memory_mb) = self.host.worker_capacity();
         RoomInputs {
             ceiling,
             running: u32::try_from(running).unwrap_or(u32::MAX),
+            starting: u32::try_from(starting).unwrap_or(u32::MAX),
             memory_pressed,
             free_memory_mb,
             worker_mb: self
@@ -182,13 +188,17 @@ impl Dispatcher {
             .keys()
             .filter(|session| !holders.contains_key(*session))
             .count();
-        let inputs = self.room_inputs(running + reserved);
+        let inputs = self.room_inputs(running, reserved);
         let start = start_room(&inputs);
-        Some(if worker_memory_limited(&inputs) {
+        let memory_room = worker_memory_room(&inputs);
+        let ceiling_room = inputs
+            .ceiling
+            .saturating_sub(inputs.running.saturating_add(inputs.starting));
+        Some(if memory_room == 0 {
             "worker room limited by memory".to_owned()
-        } else if inputs.ceiling.saturating_sub(inputs.running)
-            <= ignite_core::capacity::WORKER_BATCH
-        {
+        } else if memory_room <= ceiling_room && memory_room < ignite_core::capacity::WORKER_BATCH {
+            format!("room to start {start} (limited by memory)")
+        } else if ceiling_room <= ignite_core::capacity::WORKER_BATCH {
             format!("room to start {start} (worker ceiling {})", inputs.ceiling)
         } else {
             format!("room to start {start}; memory and worker ceiling allow more")
@@ -200,28 +210,32 @@ impl Dispatcher {
     ///
     /// A `Begin` stays in `begins_running`, which is saved, until it has run and moved its
     /// reservation to the new session. A daemon that dies before then runs it again after its
-    /// restart, and [`CliPool::begin`] returns the session it already started, if it did.
+    /// restart, and [`CliPool::begin_if`] returns the session it already started, if it did.
     ///
     /// A restored start waits for the CLI pool to be attached or its reservation to lapse.
     pub(super) fn run_cli_calls(&self, ctx: &Context) {
+        let _running = self
+            .cli_calls_running
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        let mut started = BTreeSet::new();
         loop {
             let calls = {
                 let mut state = self.state();
                 let mut calls = std::mem::take(&mut state.cli_calls);
                 if self.cli.get().is_none() {
                     let now = ctx.clock.now();
-                    let (begins, rest): (Vec<Call>, Vec<Call>) = calls
-                        .into_iter()
-                        .partition(|c| matches!(c, Call::Begin { .. }));
+                    let (begins, rest): (Vec<Call>, Vec<Call>) =
+                        calls.into_iter().partition(|c| matches!(c, Call::Begin(_)));
                     state.cli_calls = begins
                         .into_iter()
-                        .filter(|c| {
-                            matches!(c, Call::Begin { reserved, .. } if reserved.expires_at > now)
-                        })
+                        .filter(
+                            |c| matches!(c, Call::Begin(begin) if begin.reserved.expires_at > now),
+                        )
                         .collect();
                     calls = rest;
                 }
-                let begins = calls.iter().filter(|c| matches!(c, Call::Begin { .. }));
+                let begins = calls.iter().filter(|c| matches!(c, Call::Begin(_)));
                 state.begins_running.extend(begins.cloned());
                 calls
             };
@@ -229,12 +243,12 @@ impl Dispatcher {
                 break;
             }
             self.save();
-            self.run_cli_batch(ctx, calls);
+            self.run_cli_batch(ctx, calls, &mut started);
         }
         self.save();
     }
 
-    fn run_cli_batch(&self, ctx: &Context, calls: Vec<Call>) {
+    fn run_cli_batch(&self, ctx: &Context, calls: Vec<Call>, started: &mut BTreeSet<SessionId>) {
         let Some(cli) = self.cli.get() else {
             eprintln!(
                 "ignite: {} calls for CLI sessions were dropped: this daemon runs no CLI turns",
@@ -244,19 +258,10 @@ impl Dispatcher {
         };
         for call in calls {
             match call {
-                Call::Begin {
-                    slot,
-                    reserved,
-                    resume,
-                    fresh,
-                } => {
-                    let call = Call::Begin {
-                        slot: slot.clone(),
-                        reserved: reserved.clone(),
-                        resume: resume.clone(),
-                        fresh,
-                    };
-                    self.begin(ctx, cli, &slot, reserved, resume.as_ref(), fresh);
+                Call::Begin(ref begin) => {
+                    if let Some(session) = self.begin(ctx, cli, begin, started) {
+                        started.insert(session);
+                    }
                     let mut state = self.state();
                     if let Some(index) = state.begins_running.iter().position(|c| *c == call) {
                         state.begins_running.remove(index);
@@ -288,19 +293,21 @@ impl Dispatcher {
         }
     }
 
-    /// Starts a session for `reserved` in `slot`. The session joins the pool as a single-use
-    /// worker and takes the reservation, so stall checks, messages and tells reach it. A start
-    /// that fails frees the slot for a retry after one minute. Its reservation lapses at the hub.
+    /// Starts a reserved session or recovers a recorded one, then adds it to the pool
+    /// as a single-use worker so stall checks, messages and tells reach it.
     fn begin(
         &self,
         ctx: &Context,
         cli: &CliMode,
-        slot: &SessionId,
-        reserved: Reserved,
-        resume: Option<&Resume>,
-        fresh: bool,
-    ) {
-        let now = ctx.clock.now();
+        begin: &Begin,
+        started: &BTreeSet<SessionId>,
+    ) -> Option<SessionId> {
+        let Begin {
+            slot,
+            reserved,
+            resume,
+            fresh,
+        } = begin;
         let reservation = Reservation {
             provider: is_new_worker(slot).then(|| reserved.app.clone()),
             ticket: reserved.ticket.clone(),
@@ -308,26 +315,28 @@ impl Dispatcher {
             session: slot.clone(),
             expires_at: reserved.expires_at,
             code: reserved.code.clone().unwrap_or_default(),
+            master_blocker: reserved.master_blocker,
         };
-        let stopped = if reserved.expires_at <= now {
-            Some("its reservation lapsed")
-        } else if crate::fleet_notice::is_off(&self.pool) {
-            Some("this machine is off")
-        } else {
-            None
-        };
-        if let Some(reason) = stopped {
-            refuse(ctx, &reservation, reason);
-            Self::drop_placeholder(&mut self.state(), slot, &reserved.ticket);
-            return;
-        }
-        // The CLI pool resolves a hand-off without a model to the app's configured default.
-        let model = reserved.model.clone().unwrap_or_default();
-        let started = cli
-            .pool
-            .begin(&reservation, &model, Some(&reserved.effort), resume, fresh);
-        let session = match started {
-            Ok(session) => session,
+        let mut refusal = None;
+        let result = cli.pool.begin_if(
+            &reservation,
+            reserved.model.as_deref().unwrap_or_default(),
+            Some(&reserved.effort),
+            resume.as_ref(),
+            *fresh,
+            &mut || {
+                refusal = self.start_refusal(ctx.clock.now(), reserved, started);
+                refusal.is_none()
+            },
+        );
+        let now = ctx.clock.now();
+        let session = match result {
+            Ok(Some(session)) => session,
+            Ok(None) => {
+                refuse(ctx, &reservation, refusal.expect("the start was refused"));
+                Self::drop_placeholder(&mut self.state(), slot, &reserved.ticket);
+                return None;
+            }
             Err(error) => {
                 refuse(ctx, &reservation, &error.to_string());
                 let mut state = self.state();
@@ -337,7 +346,7 @@ impl Dispatcher {
                 if !transcript_busy && cli.pool.held(&reserved.app).is_none() {
                     state.refused.insert(reserved.app.clone(), now);
                 }
-                return;
+                return None;
             }
         };
         if !matches!(self.pool.member(&session), Ok(Some(_))) {
@@ -362,7 +371,57 @@ impl Dispatcher {
         {
             state.reserved.remove(slot);
         }
-        state.reserved.insert(session, reserved);
+        state.reserved.insert(session.clone(), reserved.clone());
+        Some(session)
+    }
+
+    fn start_refusal(
+        &self,
+        now: Timestamp,
+        reserved: &Reserved,
+        started: &BTreeSet<SessionId>,
+    ) -> Option<&'static str> {
+        if reserved.expires_at <= now {
+            return Some("its reservation lapsed");
+        }
+        if crate::fleet_notice::is_off(&self.pool) {
+            return Some("this machine is off");
+        }
+        let holders = self.host.holders();
+        let running = holders
+            .keys()
+            .filter(|session| is_cli_session(session) && !started.contains(*session))
+            .count();
+        let state = self.state();
+        let pending = state
+            .reserved
+            .iter()
+            .filter(|(session, reservation)| {
+                is_cli_session(session)
+                    && reservation.expires_at > now
+                    && !holders.contains_key(*session)
+                    && !started.contains(*session)
+                    // A lane continuation can be queued under a real session ID.
+                    && !state.cli_calls.iter().chain(&state.begins_running).any(|call| {
+                        matches!(call, Call::Begin(begin) if begin.slot == **session
+                            && begin.reserved.code == reservation.code)
+                    })
+            })
+            .count();
+        drop(state);
+        // Keep counting this batch's launches even if a worker has already claimed its ticket.
+        let inputs = self.room_inputs(running, pending + started.len());
+        if inputs.memory_pressed {
+            Some("memory pressure prevents another worker from starting")
+        } else if reserved.master_blocker {
+            None
+        } else if worker_memory_room(&inputs) == 0 {
+            Some("there is not enough available memory to start another worker")
+        } else if start_room(&inputs) == 0 {
+            Some("the machine is at its worker ceiling")
+        } else {
+            None
+        }
     }
 
     pub(crate) fn handoff_note(&self, session: &SessionId) -> Option<String> {

@@ -485,17 +485,26 @@ impl Rig {
         self.try_begin_on("claude", MODEL)
     }
 
-    fn try_begin_on(&self, provider: &str, model: &str) -> Result<SessionId> {
-        let reservation = Reservation {
+    fn reservation(&self, provider: &str) -> Reservation {
+        Reservation {
+            master_blocker: false,
             provider: Some(provider.to_owned()),
             ticket: TicketId::new(TICKET).unwrap(),
             machine: MachineId::new("m-7f3a").unwrap(),
             session: SessionId::new("reservation-e2e").unwrap(),
             expires_at: self.clock.now().plus_seconds(600.0),
             code: "c0de".to_owned(),
-        };
-        self.daemon
-            .begin(&reservation, model, Some("high"), None, false)
+        }
+    }
+
+    fn try_begin_on(&self, provider: &str, model: &str) -> Result<SessionId> {
+        self.daemon.begin(
+            &self.reservation(provider),
+            model,
+            Some("high"),
+            None,
+            false,
+        )
     }
 
     /// Blocks until the supervisor of turn `turn` of `session` has exited.

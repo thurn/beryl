@@ -292,6 +292,9 @@ pub struct Reservation {
     /// The provider the hub chose, if the daemon asked with worker room.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub provider: Option<String>,
+    /// The hub admitted this ticket as a master blocker. It may start at zero ordinary room.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub master_blocker: bool,
 }
 
 /// `POST /claims`: `ignite start` turning a reservation (or nothing) into a claim.

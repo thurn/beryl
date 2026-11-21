@@ -113,14 +113,19 @@ impl FakeCliPool {
 }
 
 impl CliPool for FakeCliPool {
-    fn begin(
+    fn begin_if(
         &self,
         reservation: &Reservation,
         model: &str,
         effort: Option<&str>,
         resume: Option<&Resume>,
         _fresh: bool,
-    ) -> Result<SessionId> {
+        admit: &mut dyn FnMut() -> bool,
+    ) -> Result<Option<SessionId>> {
+        let key = (reservation.ticket.to_string(), reservation.code.clone());
+        if let Some(session) = lock(&self.taken).get(&key) {
+            return Ok(Some(session.clone()));
+        }
         let name = reservation.session.as_str();
         let slot = super::placeholder(&reservation.session);
         let app = reservation
@@ -136,12 +141,11 @@ impl CliPool for FakeCliPool {
         if let Some(error) = lock(&self.refuse).clone() {
             return Err(Error::Io(error));
         }
-        let key = (reservation.ticket.to_string(), reservation.code.clone());
-        if let Some(session) = lock(&self.taken).get(&key) {
-            return Ok(session.clone());
-        }
         if self.held(app).is_some() {
             return Err(Error::Conflict(format!("{app} is on a CLI hold")));
+        }
+        if !admit() {
+            return Ok(None);
         }
         lock(&self.resumes).push(resume.cloned());
         let mut begun = lock(&self.begun);
@@ -158,7 +162,7 @@ impl CliPool for FakeCliPool {
         };
         lock(&self.checks).insert(session.clone(), SessionCheck::Idle);
         lock(&self.taken).insert(key, session.clone());
-        Ok(session)
+        Ok(Some(session))
     }
 
     fn message(&self, session: &SessionId, text: &str, urgent: bool) -> Result<()> {
@@ -223,6 +227,7 @@ mod tests {
     fn the_fake_begins_sessions_and_answers_checks() {
         let pool = FakeCliPool::default();
         let reservation = Reservation {
+            master_blocker: false,
             provider: None,
             ticket: TicketId::new("T.1").unwrap(),
             machine: MachineId::new("m-1").unwrap(),
@@ -243,6 +248,7 @@ mod tests {
             pool.begin(
                 &Reservation {
                     session: stranger,
+                    code: "other".to_owned(),
                     ..reservation
                 },
                 "opus",

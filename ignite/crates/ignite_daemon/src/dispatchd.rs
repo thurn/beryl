@@ -169,6 +169,8 @@ struct Reserved {
     model: Option<String>,
     effort: String,
     app: String,
+    #[serde(default)]
+    master_blocker: bool,
 }
 
 /// A working session that went silent, or whose command is stuck.
@@ -228,6 +230,8 @@ pub struct Dispatcher {
     saved: Mutex<Option<String>>,
     /// The local CLI supervisor, attached during startup.
     cli: OnceLock<cli::CliMode>,
+    /// One batch at a time may admit starts against local worker room.
+    cli_calls_running: Mutex<()>,
 }
 
 /// The exit code for an error from the hub or the store.
@@ -261,6 +265,7 @@ impl Dispatcher {
             setup,
             saved: Mutex::default(),
             cli: OnceLock::new(),
+            cli_calls_running: Mutex::default(),
         }
     }
 

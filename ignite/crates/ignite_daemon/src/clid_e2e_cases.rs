@@ -420,7 +420,15 @@ fn cli_e2e_a_hand_off_begun_again_after_a_restart_starts_no_second_turn() {
     // that died in between asks again for the same reservation.
     rig.restart();
     rig.daemon.recover().unwrap();
-    assert_eq!(rig.try_begin().unwrap(), session);
+    let recovered = rig.daemon.begin_if(
+        &rig.reservation("claude"),
+        MODEL,
+        Some("high"),
+        None,
+        false,
+        &mut || panic!("a recorded start must skip new-worker admission"),
+    );
+    assert_eq!(recovered.unwrap(), Some(session.clone()));
     assert_eq!(rig.invocations(), 1, "no second turn started");
     assert_eq!(rig.daemon.slots("claude").len(), 1);
 
@@ -567,6 +575,7 @@ fn queue_room_ticket(rig: &Rig, n: u32) {
     .unwrap();
     rig.hub.insert_ticket(detail);
     rig.hub.queue_reservation(Reservation {
+        master_blocker: false,
         provider: Some(provider.to_owned()),
         ticket,
         machine: rig.ctx.machine.clone(),
@@ -590,6 +599,7 @@ fn cli_e2e_two_repairs_resume_the_same_transcript_with_a_restart_between_them() 
     let start = |rig: &Rig, id: &str| {
         let ticket = TicketId::new(id).unwrap();
         let reservation = Reservation {
+            master_blocker: false,
             provider: Some("claude".to_owned()),
             ticket: ticket.clone(),
             machine: rig.ctx.machine.clone(),

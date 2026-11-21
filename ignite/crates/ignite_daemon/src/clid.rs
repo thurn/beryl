@@ -125,6 +125,18 @@ pub trait CliPool: Send + Sync {
     /// turn may resume the culprit's transcript instead (see [`Resume`]). Returns the session,
     /// which the dispatcher adds to the pool as a single-use worker. A reservation (its ticket
     /// and code) that a slot already took returns that slot's session and starts nothing.
+    /// The admission callback runs only for a new start, just before it is recorded. A refusal
+    /// leaves no slot and returns `Ok(None)`.
+    fn begin_if(
+        &self,
+        reservation: &Reservation,
+        model: &str,
+        effort: Option<&str>,
+        resume: Option<&Resume>,
+        fresh: bool,
+        admit: &mut dyn FnMut() -> bool,
+    ) -> Result<Option<SessionId>>;
+    #[cfg(test)]
     fn begin(
         &self,
         reservation: &Reservation,
@@ -132,7 +144,10 @@ pub trait CliPool: Send + Sync {
         effort: Option<&str>,
         resume: Option<&Resume>,
         fresh: bool,
-    ) -> Result<SessionId>;
+    ) -> Result<SessionId> {
+        self.begin_if(reservation, model, effort, resume, fresh, &mut || true)
+            .map(|session| session.expect("the start was admitted"))
+    }
     /// Queues `text` for the session's next turn. An urgent message (`tell --now`, or an order
     /// from a justiciar) ends the running turn and resumes with it.
     fn message(&self, session: &SessionId, text: &str, urgent: bool) -> Result<()>;
@@ -652,15 +667,16 @@ impl CliDaemon {
 }
 
 impl CliPool for CliDaemon {
-    fn begin(
+    fn begin_if(
         &self,
         reservation: &Reservation,
         model: &str,
         effort: Option<&str>,
         resume: Option<&Resume>,
         fresh: bool,
-    ) -> Result<SessionId> {
-        self.begin_ticket(reservation, model, effort, resume, fresh)
+        admit: &mut dyn FnMut() -> bool,
+    ) -> Result<Option<SessionId>> {
+        self.begin_ticket(reservation, model, effort, resume, fresh, admit)
     }
 
     fn handoff_note(&self, session: &SessionId) -> Option<String> {

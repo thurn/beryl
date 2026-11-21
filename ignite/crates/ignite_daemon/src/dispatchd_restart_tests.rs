@@ -6,7 +6,7 @@ use ignite_core::protocol::hub::Reservation;
 use ignite_core::traits::Clock;
 
 use super::cli_tests::{cli, cli_with, tick};
-use super::tests::{Rig, START, rig_on, session, ticket_id};
+use super::tests::{Rig, START, lock, rig_on, session, ticket_id};
 use super::*;
 use crate::clid::CliPool;
 
@@ -69,6 +69,7 @@ fn a_tell_delivered_before_a_restart_is_not_delivered_again() {
 /// The reservation for T.1 in CLI slot 1, saved before it starts.
 fn saved_cli_handoff(rig: &Rig) -> Reservation {
     let reservation = Reservation {
+        master_blocker: false,
         provider: Some("claude".to_owned()),
         ticket: ticket_id("T.1"),
         machine: rig.ctx.machine.clone(),
@@ -83,6 +84,7 @@ fn saved_cli_handoff(rig: &Rig) -> Reservation {
         model: Some("opus".to_owned()),
         effort: "high".to_owned(),
         app: "claude".to_owned(),
+        master_blocker: reservation.master_blocker,
     };
     let mut state = rig.dispatcher.state();
     Dispatcher::begin_in_slot(&mut state, &reservation.session, reserved, None, false);
@@ -142,8 +144,10 @@ fn a_cli_handoff_begun_before_its_session_was_saved_starts_no_second_session() {
 
     let restarted = rig_on(&[], file.open(), first.clock.now().plus_seconds(5.0));
     cli_with(&restarted, 2, fake.clone());
+    *lock(&restarted.host.worker_capacity) = (2, true, Some(512));
     tick(&restarted);
     assert_eq!(fake.begun().len(), 1, "no second session started");
+    assert!(restarted.hub.refused_reservations().is_empty());
     assert_eq!(reserved_sessions(&restarted), [started.as_str()]);
 }
 

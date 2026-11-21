@@ -129,6 +129,7 @@ crate::tables! {
         code: String,
         after_landing: Option<String>,
         provider: Option<String>,
+        master_blocker: bool,
     }
 
     /// A machine's latest `POST /next`: the `MachineFree` it sent as JSON, and the answer.

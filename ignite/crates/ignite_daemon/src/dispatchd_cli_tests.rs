@@ -39,7 +39,12 @@ pub(super) fn reserve(rig: &Rig, ticket: &str, key: &str, labels: &[&str]) {
 }
 
 fn offer(rig: &Rig, ticket: &str, provider: &str, key: &str) {
+    queue_offer(rig, ticket, provider, key, false);
+}
+
+fn queue_offer(rig: &Rig, ticket: &str, provider: &str, key: &str, master_blocker: bool) {
     rig.hub.queue_reservation(Reservation {
+        master_blocker,
         provider: Some(provider.to_owned()),
         ticket: ticket_id(ticket),
         machine: rig.ctx.machine.clone(),
@@ -165,7 +170,8 @@ fn zero_room_allows_the_hub_to_offer_a_ticket_that_holds_master_back() {
             .contains("ceiling 2")
     );
 
-    reserve(&rig, "R.1", "reservation-3", &["regression"]);
+    rig.hub.insert_ticket(detail("R.1", "open", None, &[], ""));
+    queue_offer(&rig, "R.1", "claude", "reservation-3", true);
     tick(&rig);
     assert_eq!(fake.begun()[2].0.session.as_str(), "reservation-3");
 }
@@ -291,6 +297,44 @@ fn memory_pressure_reports_zero_room() {
         rig.dispatcher.worker_room_line().as_deref(),
         Some("worker room limited by memory")
     );
+}
+
+#[test]
+fn retrying_an_unread_reservation_rechecks_worker_memory() {
+    let rig = rig(&[]);
+    let fake = cli(&rig, 2);
+    *lock(&rig.host.worker_capacity) = (2, false, Some(8_000));
+    offer(&rig, "T.1", "claude", "reservation-1");
+    tick(&rig);
+    assert!(fake.begun().is_empty());
+    assert!(rig.hub.refused_reservations().is_empty());
+
+    rig.hub.insert_ticket(detail("T.1", "open", None, &[], ""));
+    *lock(&rig.host.worker_capacity) = (2, false, Some(3_023));
+    tick(&rig);
+    assert!(fake.begun().is_empty());
+    assert_eq!(rig.hub.refused_reservations()[0].ticket, ticket_id("T.1"));
+}
+
+#[test]
+fn a_started_worker_holds_its_footprint_while_its_claim_is_pending() {
+    let rig = rig(&[]);
+    let fake = cli(&rig, 3);
+    *lock(&rig.host.worker_capacity) = (3, false, Some(3_024));
+    reserve(&rig, "T.1", "reservation-1", &[]);
+    tick(&rig);
+    assert_eq!(fake.begun().len(), 1);
+
+    reserve(&rig, "T.2", "reservation-2", &[]);
+    tick(&rig);
+    assert_eq!(fake.begun().len(), 1);
+    assert_eq!(rig.hub.refused_reservations()[0].ticket, ticket_id("T.2"));
+
+    // The claim makes the worker visible to the running count. No startup debit remains.
+    rig.hold("cli-claude-00000001", "T.1");
+    reserve(&rig, "T.2", "reservation-3", &[]);
+    tick(&rig);
+    assert_eq!(fake.begun()[1].0.ticket, ticket_id("T.2"));
 }
 
 #[test]

@@ -36,6 +36,8 @@ pub struct Floor {
 pub struct RoomInputs {
     pub ceiling: u32,
     pub running: u32,
+    /// Starts whose footprint may still be missing from the free-memory sample.
+    pub starting: u32,
     pub memory_pressed: bool,
     pub free_memory_mb: Option<u64>,
     pub worker_mb: u64,
@@ -138,22 +140,29 @@ const WORKER_MEMORY_RESERVE_MB: u64 = 1_024;
 /// The largest batch of workers one dispatch step can start.
 pub const WORKER_BATCH: u32 = 3;
 
-/// Why memory prevents more ordinary workers from starting.
-pub fn worker_memory_limited(inputs: &RoomInputs) -> bool {
-    inputs.memory_pressed
-        || inputs
-            .free_memory_mb
-            .is_some_and(|free| free < inputs.worker_mb.saturating_add(WORKER_MEMORY_RESERVE_MB))
+/// How many more worker footprints fit after reserving memory for the system and pending starts.
+pub fn worker_memory_room(inputs: &RoomInputs) -> u32 {
+    if inputs.memory_pressed {
+        return 0;
+    }
+    let Some(free) = inputs.free_memory_mb else {
+        return u32::MAX;
+    };
+    if free < WORKER_MEMORY_RESERVE_MB {
+        return 0;
+    }
+    let worker_room = (free - WORKER_MEMORY_RESERVE_MB)
+        .checked_div(inputs.worker_mb)
+        .unwrap_or(u64::MAX);
+    u32::try_from(worker_room.saturating_sub(u64::from(inputs.starting))).unwrap_or(u32::MAX)
 }
 
 /// How many more ordinary workers the daemon can start in one dispatch step.
 pub fn start_room(inputs: &RoomInputs) -> u32 {
-    if worker_memory_limited(inputs) {
-        return 0;
-    }
     inputs
         .ceiling
-        .saturating_sub(inputs.running)
+        .saturating_sub(inputs.running.saturating_add(inputs.starting))
+        .min(worker_memory_room(inputs))
         .min(WORKER_BATCH)
 }
 
@@ -166,11 +175,17 @@ mod room_tests {
         let mut inputs = RoomInputs {
             ceiling: 10,
             running: 5,
+            starting: 0,
             memory_pressed: false,
             free_memory_mb: Some(3_024),
             worker_mb: 2_000,
         };
-        assert_eq!(start_room(&inputs), 3);
+        assert_eq!(start_room(&inputs), 1);
+        inputs.free_memory_mb = Some(5_024);
+        assert_eq!(start_room(&inputs), 2);
+        inputs.starting = 1;
+        assert_eq!(start_room(&inputs), 1);
+        inputs.starting = 0;
         inputs.free_memory_mb = Some(3_023);
         assert_eq!(start_room(&inputs), 0);
         inputs.free_memory_mb = None;

@@ -199,6 +199,7 @@ fn dispatch_ready(
                     kind: ticket.kind,
                     session: None,
                     provider: Some(provider.to_owned()),
+                    master_blocker: held::holds_master(ticket),
                 })
             });
         }
@@ -210,10 +211,7 @@ fn dispatch_ready(
             &last_files,
             |worker, ticket| usage::blocking_hold(&holds, worker, ticket).is_none(),
         )?;
-        let kind = ready
-            .iter()
-            .find(|ticket| ticket.id == handoff.ticket)
-            .map_or(TicketKind::Ordinary, |ticket| ticket.kind);
+        let ticket = ready.iter().find(|ticket| ticket.id == handoff.ticket);
         let provider = free
             .idle_workers
             .iter()
@@ -221,9 +219,10 @@ fn dispatch_ready(
             .map(|worker| worker.app.clone());
         Some(Candidate {
             ticket: handoff.ticket,
-            kind,
+            kind: ticket.map_or(TicketKind::Ordinary, |ticket| ticket.kind),
             session: Some(handoff.session),
             provider,
+            master_blocker: ticket.is_some_and(held::holds_master),
         })
     };
     match capacity.choose(&mut ready, pick) {
@@ -308,6 +307,7 @@ pub fn chain_next(
         kind: next.kind,
         session: Some(session.clone()),
         provider: (!app.is_empty()).then_some(app),
+        master_blocker: held::holds_master(next),
     };
     reserve(conn, machine, candidate, now).map(Some)
 }
@@ -317,6 +317,7 @@ struct Candidate {
     kind: TicketKind,
     session: Option<SessionId>,
     provider: Option<String>,
+    master_blocker: bool,
 }
 
 fn reserve(
@@ -334,6 +335,7 @@ fn reserve(
     };
     let reservation = Reservation {
         provider: candidate.provider,
+        master_blocker: candidate.master_blocker,
         ticket: candidate.ticket,
         machine: machine.clone(),
         session,

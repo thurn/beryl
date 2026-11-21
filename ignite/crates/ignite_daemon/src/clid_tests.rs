@@ -323,6 +323,7 @@ fn ticket() -> TicketId {
 
 fn reservation(ticket: &str, slot: u32) -> Reservation {
     Reservation {
+        master_blocker: false,
         provider: None,
         ticket: TicketId::new(ticket).unwrap(),
         machine: MachineId::new("m-1").unwrap(),

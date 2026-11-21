@@ -1,0 +1,1 @@
+ALTER TABLE reservations ADD COLUMN master_blocker INTEGER NOT NULL DEFAULT 0;

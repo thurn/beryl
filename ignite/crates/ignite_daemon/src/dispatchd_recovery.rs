@@ -122,7 +122,7 @@ impl Dispatcher {
                     .begins_running
                     .iter()
                     .chain(&state.cli_calls)
-                    .filter(|call| matches!(call, cli::Call::Begin { .. }))
+                    .filter(|call| matches!(call, cli::Call::Begin(_)))
                     .cloned()
                     .collect(),
                 justiciar: state.justiciar.clone(),

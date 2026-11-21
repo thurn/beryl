@@ -241,6 +241,11 @@ pub const MIGRATIONS: &[Migration] = &[
         sql: include_str!("tip_failure.sql"),
         code: None,
     },
+    Migration {
+        version: 39,
+        sql: include_str!("reservation_master_blocker.sql"),
+        code: None,
+    },
 ];
 
 /// Opens (creating if needed) and migrates the hub's database.
