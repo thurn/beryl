@@ -276,6 +276,7 @@ fn gate_world(changed: &[&str]) -> World {
             startup_cpu_s: None,
             family: "unit".to_owned(),
             family_rate: 0.5,
+            runs: None,
             checks: vec![stats],
         },
     );

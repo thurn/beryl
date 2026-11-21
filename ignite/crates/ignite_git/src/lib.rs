@@ -41,6 +41,10 @@ impl Git for GitCli {
         changed::between(&self.repo, from, to)
     }
 
+    fn commit_paths(&self, commit: &Commit) -> Result<Vec<String>> {
+        changed::in_commit(&self.repo, commit)
+    }
+
     fn rebase_onto(&self, tree: &Path, tip: &Commit) -> Result<Rebase> {
         rebase::onto(tree, tip)
     }

@@ -2017,9 +2017,10 @@ already compiled, as Enact's worktrees did: a product the tree has built before
 is simply rebuilt incrementally, and its build time is printed on its own line.
 A product the tree has never built is not built for the gate, and the checks
 that need it are left to tip verification, unless they are in the always set,
-the change edits them, or the landing fixes their regression. A tree has built a
-product when the daemon built it there, or when the product's output directories
-are in the tree and not empty.
+the change edits them, the landing fixes their regression, or they recently
+caught a product bug in an area the change touches. A tree has built a product
+when the daemon built it there, or when the product's output directories are in
+the tree and not empty.
 
 ### The always set
 
@@ -2064,13 +2065,13 @@ change edits its own file, and for the ticket that fixes it.
 
 ### Scores
 
-Every other regression check gets a **score** for a given change: how likely it
-is to fail on a change like this one, divided by what it costs to run.
+Each regression check scored for a change gets a **score**: how likely it is to
+catch a product bug on a change like this one, divided by what it costs to run.
 
 ```text
-score(check, change) = P(fail | areas the change touches) / cost(check)
+score(check, change) = P(product catch | areas the change touches) / cost(check)
 
-P     = (failures after changes to these areas + 20 x family rate)
+P     = (product catches after changes to these areas + 20 x family rate)
         / (runs after changes to these areas + 20)
 cost  = median instructions of its last 20 runs, in billions
 ```
@@ -2087,15 +2088,23 @@ The parts:
   checks meets zero checks, kept between zero and what the cheapest tenth of its
   commands cost. The gate charges a family's start-up once, when it first runs
   one of the family's checks; a check chosen by score pays it out of the budget.
-- A failure counts when a later change made the check pass again, whether that
-  change fixed product code or updated the check. Either way the landing needed
-  another edit. Flaky failures do not count.
-- The family rate is the family's overall share of runs that failed. It stands
-  in for 20 runs, so a check with few runs starts from its family's record.
+- Scores use the product fixes recorded when tickets close (see
+  [Regression tickets](#regression-tickets)). Each catch counts in the areas of
+  its first bad commit. A catch with no known area contributes to the family
+  rate. Recorded runs still count toward the denominator, including runs whose
+  failures were never classified, whose fix changed only tests, or whose ticket
+  closed without a fix.
+- The family rate is the family's overall share of runs that caught a product
+  bug. It stands in for 20 runs, so a check with few runs starts from its
+  family's record.
 - A check that has never run scores as certain to fail, at its family's median
   cost, so new checks run first.
 - A check whose own file the change edits always runs, outside the budget. The
   agent's new regression test is never skipped.
+- A check with a product outcome in the previous 14 days runs outside the budget
+  for changes that touch an area of its first bad commit. It still uses the
+  result cache, and a check with an open regression is handled as known failing.
+  The window starts when the fix ticket closes.
 - Checks that have failed in exactly the same runs are scored as one check, with
   their summed cost.
 - A cost known only in CPU seconds, from Windows or from history imported at the
@@ -2136,20 +2145,22 @@ seconds = 60           # of running checks per landing, builds not counted
   instructions and run in tip verification. So is a family whose listing needs
   such a product when no listing of it is kept: it is not listed at all.
 - The budget counts only checks chosen by score. The always set, the checks the
-  change edits and the regression being fixed are outside it.
+  change edits, the regression being fixed, and recent product catches in the
+  change's areas are outside it.
 - The budget is a ceiling, not a target: the threshold stops a landing from
   spending its 60 seconds on checks unlikely to find anything, so a small change
   lands in a few seconds.
 - The threshold is set by replaying history: the largest threshold at which the
-  gate would still have run 95% of the regression checks that caught something
-  in the previous 14 days. `ignite gate replay` repeats the calculation from
-  Ignite's own records in the hub's database, which it opens read-only, and also
-  prints what 95% of those gates would have spent, to compare with the budget.
-  Only a commit changes the values.
+  gate would still have run 95% of the recorded product catches in the previous
+  14 days by score. `ignite gate replay` repeats the calculation from Ignite's
+  own records in the hub's database, which it opens read-only, and also prints
+  what 95% of those gates would have spent, to compare with the budget. Only a
+  commit changes the values.
 - A check's score changes as its record does, so checks move across the
   threshold by themselves. No ticket is filed to move one.
 
-`ignite check --plan` prints what the gate would run and why:
+`ignite check --plan` prints what the gate would run and why. Each check
+selected for a recent product catch gets a `recent` line.
 
 ```text
 $ ignite check --plan

@@ -136,6 +136,7 @@ fn hub_records_become_gate_checks_without_switched_off_checks_or_left_out_famili
             startup_cpu_s: None,
             family: "rust".to_owned(),
             family_rate: 0.1,
+            runs: None,
             checks: vec![
                 stats("rust:old", CheckState::On, Some(2.0), "cpu_s"),
                 stats("rust:new", CheckState::Uncached, None, ""),
@@ -147,6 +148,7 @@ fn hub_records_become_gate_checks_without_switched_off_checks_or_left_out_famili
             startup_cpu_s: None,
             family: "fmt".to_owned(),
             family_rate: 0.0,
+            runs: None,
             checks: vec![stats("fmt:all", CheckState::On, Some(1.0), "instructions")],
         },
     ];

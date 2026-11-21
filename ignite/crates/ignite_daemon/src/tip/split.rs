@@ -265,6 +265,7 @@ fn split_by<'a>(
             checks: &candidates,
             unbuilt: &unbuilt,
             landing: None,
+            recent_product_catches: &std::collections::BTreeSet::new(),
             paid: &paid,
             billions_per_cpu_second: BILLIONS_PER_CPU_SECOND,
         },

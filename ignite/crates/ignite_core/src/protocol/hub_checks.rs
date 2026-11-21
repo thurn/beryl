@@ -196,6 +196,10 @@ pub struct CheckStatsReply {
     pub family: String,
     /// The family's failure rate over all its runs.
     pub family_rate: f64,
+    /// Run counts across all areas, even when the response includes only selected areas.
+    /// Absent on hubs that report only the original, unclassified failure rates.
+    #[serde(default)]
+    pub runs: Option<u64>,
     pub checks: Vec<CheckStats>,
     /// What starting one of the family's commands costs, in billions of instructions and in CPU
     /// seconds, estimated from its recent runs (`score::startup`); `None` while unknown. The

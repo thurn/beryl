@@ -35,6 +35,25 @@ pub fn between(repo: &Path, from: &Commit, to: &Commit) -> Result<Vec<String>> {
     Ok(paths)
 }
 
+/// The paths one commit changed against its first parent, or added in a root commit.
+pub fn in_commit(repo: &Path, commit: &Commit) -> Result<Vec<String>> {
+    let out = cmd::run(
+        repo,
+        [
+            "show",
+            "--format=",
+            "--diff-merges=first-parent",
+            "--root",
+            "--name-only",
+            "--no-renames",
+            "-z",
+            commit.as_str(),
+            "--",
+        ],
+    )?;
+    Ok(out.split_terminator('\0').map(str::to_owned).collect())
+}
+
 /// One commit and the paths it changed against its first parent.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CommitPaths {

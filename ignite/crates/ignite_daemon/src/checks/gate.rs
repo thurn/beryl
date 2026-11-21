@@ -7,8 +7,8 @@
 //! `ignite check` runs no second slice of checks, and its seconds convert at the rate the
 //! gates of the last hour achieved (see [`super::spent`]). It builds no product its tree has never built for a check chosen by score: a
 //! family whose listing needs such a product, and that has no kept listing, is not listed at
-//! all unless it is in the always set or holds the check of the regression being landed, and
-//! its checks are left to tip verification. The output prints the seconds spent building and
+//! all unless it is in the always set or holds a check required for a regression fix or recent
+//! product catch. Otherwise its checks are left to tip verification. The output prints the seconds spent building and
 //! the seconds spent running checks on lines of their own.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -23,7 +23,7 @@ use ignite_core::protocol::hub::CachedResult;
 
 use super::plan;
 use super::time_lines::{Stopwatch, listed_line, slow_line, took_line};
-use super::verbs::{changed_paths, counts, failure_lines, gate_view_of, open_regressions, unbuilt};
+use super::verbs::{changed_paths, counts, failure_lines, gate_view_of, unbuilt};
 use super::{CheckRun, Checks, Keyed, OpenTree, RunOptions};
 use crate::server::Context;
 
@@ -204,11 +204,12 @@ impl Checks {
             .families()
             .filter(|(_, f)| f.kind == Kind::Regression)
             .collect();
-        let (among, left_out) = self.scope(ctx, tree, &regression, &changed);
+        let catches = plan::GateCatches::read(self, ctx, tree, &changed);
+        let (among, left_out) = self.scope(ctx, tree, &regression, &changed, &catches.recent);
         run.out_of_scope = left_out;
         let scoped: Vec<String> = among.iter().map(|(name, _)| (*name).to_owned()).collect();
         let (among, carried) = match carried {
-            Some(carried) => self.carry(ctx, tree, among, carried),
+            Some(carried) => self.carry(ctx, tree, among, carried, &catches.recent),
             None => (among, Vec::new()),
         };
         run.stage(ctx, "finding the scope", scoping);
@@ -223,15 +224,15 @@ impl Checks {
             };
         }
         // A family listed even if that builds a product the tree has never built: one in the
-        // always set for this change, or one holding the check whose regression this fixes.
+        // always set for this change, or one holding a required regression check.
         let listing = Stopwatch::start(ctx);
-        let fixing = fixing(ctx, options);
+        let required = required_families(&catches, options);
         let unbuilt = unbuilt(ctx, tree, among.iter().map(|(_, family)| *family));
-        let listed = |name: &str, f: &Family| f.always_for(&changed) || fixing.contains(name);
         let mut prepared =
             self.prepare_gate(ctx, tree, &among, options, &mut run, &|name, family| {
                 let needs = family.list_needs.as_ref().unwrap_or(&family.needs);
-                needs.iter().any(|need| unbuilt.contains(need)) && !listed(name, family)
+                let required = family.always_for(&changed) || required.contains(name);
+                !required && needs.iter().any(|need| unbuilt.contains(need))
             });
         for family in &mut prepared {
             family.keep(|_| true, &mut run);
@@ -247,7 +248,7 @@ impl Checks {
         }
         let planning = Stopwatch::start(ctx);
         let hits = self.lookup(&prepared, options);
-        let mut view = gate_view_of(self, ctx, tree, &prepared, &hits, &changed);
+        let mut view = gate_view_of(self, ctx, tree, &prepared, &hits, &changed, catches);
         landing_view(&mut view, options, excused);
         let gate_plan = self.remember_choice(ctx, &changed, view.plan(&ctx.config.gate));
         // The products never built before the gate started, so the `build` line can name a
@@ -386,12 +387,13 @@ impl Checks {
         tree: &OpenTree,
         among: Vec<(&'a str, &'a Family)>,
         carried: &Carried,
+        recent: &BTreeSet<CheckName>,
     ) -> (Vec<(&'a str, &'a Family)>, Vec<String>) {
         let (judged, new): (Vec<_>, Vec<_>) = among
             .iter()
             .copied()
             .partition(|(name, _)| carried.families.iter().any(|f| f == name));
-        let (touched, untouched) = self.scope(ctx, tree, &judged, &carried.moved);
+        let (touched, untouched) = self.scope(ctx, tree, &judged, &carried.moved, recent);
         let again = among
             .into_iter()
             .filter(|(name, _)| {
@@ -415,12 +417,18 @@ impl GateRun {
     }
 }
 
-/// The families holding a check whose open regression ticket is the one being landed.
-fn fixing(ctx: &Context, options: &RunOptions) -> BTreeSet<String> {
-    open_regressions(ctx)
-        .into_iter()
-        .filter(|(_, ticket)| options.ticket.as_ref() == Some(ticket))
-        .map(|(check, _)| check.family().to_owned())
+/// The families holding a required check, for a regression fix or a recent product catch.
+fn required_families<'a>(
+    catches: &'a plan::GateCatches,
+    options: &RunOptions,
+) -> BTreeSet<&'a str> {
+    catches
+        .regressions
+        .iter()
+        .filter(|(_, ticket)| options.ticket.as_ref() == Some(*ticket))
+        .map(|(check, _)| check)
+        .chain(&catches.recent)
+        .map(CheckName::family)
         .collect()
 }
 

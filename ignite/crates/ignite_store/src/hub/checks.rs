@@ -300,6 +300,7 @@ pub fn stats(conn: &Connection, family: &str) -> Result<CheckStatsReply> {
     Ok(CheckStatsReply {
         family: family.to_owned(),
         family_rate,
+        runs: Some(all_runs),
         checks,
         startup_billions: startup.billions,
         startup_cpu_s: startup.cpu_s,

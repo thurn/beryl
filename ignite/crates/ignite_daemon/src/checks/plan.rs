@@ -11,9 +11,9 @@ use ignite_core::ids::{CheckName, TicketId};
 use ignite_core::inputs::{self, CrateGraph};
 use ignite_core::manifest::{Family, Kind};
 use ignite_core::protocol::hub::{CachedResult, CheckState, CheckStats, CheckStatsReply};
-use ignite_core::score::{self, AreaRecord, Cost};
+use ignite_core::score::{self, AreaRecord, Cost, ProductCatch};
 
-use super::Prepared;
+use super::{Checks, OpenTree, Prepared};
 use crate::server::Context;
 
 /// How many entries `ignite check --plan` lists under `top`.
@@ -44,14 +44,75 @@ pub(crate) fn areas(changed: &[String], graph: &CrateGraph) -> Vec<String> {
     areas.into_iter().collect()
 }
 
+/// Product catches for one planning pass. Read before listing so a required check's family
+/// can be brought into scope and listed even if it needs a cold build.
+pub(super) struct GateCatches {
+    pub areas: Vec<String>,
+    pub records: Vec<ProductCatch>,
+    pub recent: BTreeSet<CheckName>,
+    pub regressions: BTreeMap<CheckName, TicketId>,
+}
+
+impl GateCatches {
+    pub(super) fn read(
+        checks: &Checks,
+        ctx: &Context,
+        tree: &OpenTree,
+        changed: &[String],
+    ) -> Self {
+        let areas = areas(changed, &tree.graph);
+        let now = ctx.clock.now();
+        let records = product_catches(checks, ctx, tree);
+        let regressions = super::verbs::open_regressions(ctx);
+        let recent = records
+            .iter()
+            .filter(|catch| catch.applies(&areas, now) && !regressions.contains_key(&catch.check))
+            .map(|catch| catch.check.clone())
+            .collect();
+        Self {
+            areas,
+            records,
+            recent,
+            regressions,
+        }
+    }
+}
+
+fn product_catches(checks: &Checks, ctx: &Context, tree: &OpenTree) -> Vec<ProductCatch> {
+    checks.history.product_fixes().map_or_else(
+        |error| {
+            eprintln!("ignite: no product catch history from the hub: {error}");
+            Vec::new()
+        },
+        |fixes| score::product_catches(fixes, &tree.graph, ctx.git.as_ref(), ctx.clock.now()),
+    )
+}
+
+/// Reads check records and uses only product catches in their failure counts.
+pub(super) fn scoring_stats<'a>(
+    checks: &Checks,
+    families: impl Iterator<Item = &'a str>,
+    areas: &[String],
+    catches: &[ProductCatch],
+) -> BTreeMap<String, CheckStatsReply> {
+    let mut stats = super::sources::stats_of(checks.history.as_ref(), families, areas);
+    for reply in stats.values_mut() {
+        score::use_product_catches(reply, catches, areas);
+    }
+    stats
+}
+
 /// Everything the gate is chosen from, for one tree.
 pub(crate) struct GateView {
     pub areas: Vec<String>,
     pub checks: Vec<GateCheck>,
     /// The hub's record of each check, where it has one.
     pub stats: BTreeMap<CheckName, CheckStats>,
+    /// Families whose scores use the classified outcome history.
+    product_scored: BTreeSet<String>,
     /// The ticket being landed, whose own regression's check must run in this gate.
     pub landing: Option<TicketId>,
+    pub recent_product_catches: BTreeSet<CheckName>,
     /// Build products the tree has never built.
     pub unbuilt: BTreeSet<String>,
     /// Billions of instructions per second of wall time that the gate's check commands
@@ -115,7 +176,13 @@ impl GateView {
             areas,
             checks: Vec::new(),
             stats: BTreeMap::new(),
+            product_scored: stats
+                .values()
+                .filter(|reply| reply.runs.is_some())
+                .map(|reply| reply.family.clone())
+                .collect(),
             landing: None,
+            recent_product_catches: BTreeSet::new(),
             unbuilt: BTreeSet::new(),
             rate: ClassRates::default().land(),
             paid: BTreeSet::new(),
@@ -164,6 +231,7 @@ impl GateView {
                 checks: &self.checks,
                 unbuilt: &self.unbuilt,
                 landing: self.landing.as_ref(),
+                recent_product_catches: &self.recent_product_catches,
                 paid: &self.paid,
                 billions_per_cpu_second: score::BILLIONS_PER_CPU_SECOND,
             },
@@ -177,6 +245,9 @@ impl GateView {
             Why::Always => "in the always set".to_owned(),
             Why::Edited => "edited by this change".to_owned(),
             Why::Fixes => "fixes its regression".to_owned(),
+            Why::RecentProductCatch => {
+                "product bug in this area, fixed in the last 14 days".to_owned()
+            }
             Why::Scored => {
                 let Some(stats) = self.stats.get(&planned.check) else {
                     return "never run".to_owned();
@@ -203,6 +274,9 @@ impl GateView {
                         p(a).total_cmp(&p(b))
                     });
                 match worst {
+                    Some(a) if self.product_scored.contains(planned.check.family()) => {
+                        format!("{} product catches in {} runs", a.failures, a.runs)
+                    }
                     Some(a) => format!("{} of {} runs failed", a.failures, a.runs),
                     None => format!("family rate {rate}"),
                 }
@@ -233,7 +307,8 @@ impl super::Checks {
         let (view, tree) = self.open(ctx, tree)?;
         let areas = areas(changed, &tree.graph);
         let families = checks.iter().map(|(_, f)| f.as_str());
-        let stats = super::sources::stats_of(self.history.as_ref(), families, &areas);
+        let catches = product_catches(self, ctx, &tree);
+        let stats = scoring_stats(self, families, &areas, &catches);
         let regressions = super::verbs::open_regressions(ctx);
         let scored = checks
             .iter()
@@ -363,6 +438,10 @@ pub(crate) fn plan_lines(view: &GateView, plan: &GatePlan, gate: &Gate) -> Vec<(
         .filter(|p| p.why != Why::Always)
         .collect();
     let cached = plan.cached.iter().filter(|p| p.why != Why::Always).count();
+    let mut recent: Vec<_> = gated
+        .iter()
+        .filter(|p| p.why == Why::RecentProductCatch)
+        .collect();
     let mut lines = Vec::new();
     if !always.is_empty() {
         let names: Vec<&str> = always.iter().map(|p| short_name(&p.check)).collect();
@@ -372,12 +451,16 @@ pub(crate) fn plan_lines(view: &GateView, plan: &GatePlan, gate: &Gate) -> Vec<(
         ));
     }
     lines.push(budget_line(&view.budget(gate)));
+    let selected = if recent.is_empty() {
+        format!("above {}", gate.threshold)
+    } else {
+        "selected".to_owned()
+    };
     lines.push((
         "gate".to_owned(),
         format!(
-            "{} checks above {}; {cached} cached, {} to run, about {} billion",
+            "{} checks {selected}; {cached} cached, {} to run, about {} billion",
             gated.len(),
-            gate.threshold,
             gated.len() - cached,
             billions_text(plan.scored_cost + plan.forced_cost)
         ),
@@ -427,7 +510,18 @@ pub(crate) fn plan_lines(view: &GateView, plan: &GatePlan, gate: &Gate) -> Vec<(
             format!("{} checks have open regressions", plan.known_failing.len()),
         ));
     }
-    lines.extend(top_lines(view, &gated));
+    recent.sort_by_key(|p| &p.check);
+    lines.extend(recent.into_iter().map(|p| {
+        (
+            "recent".to_owned(),
+            format!("{}  {}", p.check, view.reason(p)),
+        )
+    }));
+    let top: Vec<_> = gated
+        .into_iter()
+        .filter(|p| p.why != Why::RecentProductCatch)
+        .collect();
+    lines.extend(top_lines(view, &top));
     lines
 }
 

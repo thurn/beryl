@@ -15,6 +15,7 @@ use super::lock;
 pub struct FakeGit {
     objects: Mutex<BTreeMap<String, Oid>>,
     changes: Mutex<HashMap<(Commit, Commit), Vec<String>>>,
+    commit_paths: Mutex<HashMap<Commit, Vec<String>>>,
     tips: Mutex<HashMap<String, Commit>>,
     rebase: Mutex<Option<Rebase>>,
     pushes: Mutex<Vec<(PathBuf, Commit, String)>>,
@@ -56,6 +57,11 @@ impl FakeGit {
     pub fn set_changed(&self, from: &Commit, to: &Commit, paths: &[&str]) {
         let paths = paths.iter().map(|p| (*p).to_owned()).collect();
         lock(&self.changes).insert((from.clone(), to.clone()), paths);
+    }
+
+    pub fn set_commit_paths(&self, commit: &Commit, paths: &[&str]) {
+        let paths = paths.iter().map(|path| (*path).to_owned()).collect();
+        lock(&self.commit_paths).insert(commit.clone(), paths);
     }
 
     pub fn set_tip(&self, branch: &str, commit: Commit) {
@@ -153,6 +159,13 @@ impl Git for FakeGit {
             .get(&(from.clone(), to.clone()))
             .cloned()
             .unwrap_or_default())
+    }
+
+    fn commit_paths(&self, commit: &Commit) -> Result<Vec<String>> {
+        lock(&self.commit_paths)
+            .get(commit)
+            .cloned()
+            .ok_or_else(|| Error::NotFound(commit.to_string()))
     }
 
     fn rebase_onto(&self, _tree: &Path, tip: &Commit) -> Result<Rebase> {

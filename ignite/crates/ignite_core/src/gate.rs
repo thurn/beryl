@@ -5,7 +5,8 @@
 //!
 //! - The always set (checks in a family marked `always = true`) is looked up or run on every
 //!   landing, outside the threshold and the budget.
-//! - A check whose own file the change edits always runs, also outside the budget.
+//! - A check whose own file the change edits, or that recently caught a product bug in one of
+//!   the change's areas, runs outside the budget.
 //! - A check with an open regression ticket is left out and reported as known to fail, unless
 //!   the ticket being landed is that regression's, in which case it must run, outside the
 //!   budget. This holds in the always set too, unless the change edits the check's own file.
@@ -21,7 +22,7 @@
 //!   budget ([`Budget`]).
 //! - Checks in one group (checks that failed in exactly the same runs) are scored as one check
 //!   with their summed cost, and are chosen or left together.
-//!   A member that must run anyway (always, edited or being fixed) leaves its group first.
+//!   A member that must run anyway leaves its group first.
 //! - A chosen check whose result is cached is answered from the cache and costs nothing against
 //!   the budget, unless an earlier gate of the same change chose it by score
 //!   ([`GateInput::paid`]). That gate already spent the change's budget on it, so the check
@@ -91,6 +92,8 @@ pub struct GateInput<'a> {
     pub unbuilt: &'a BTreeSet<String>,
     /// The ticket being landed.
     pub landing: Option<&'a TicketId>,
+    /// Checks with a recent product catch in an area this change touches.
+    pub recent_product_catches: &'a BTreeSet<CheckName>,
     /// The checks an earlier gate of the same change chose by score. The budget belongs
     /// to the change, not to each gate: such a check, when cached, still counts against it.
     pub paid: &'a BTreeSet<CheckName>,
@@ -108,6 +111,8 @@ pub enum Why {
     Edited,
     /// The ticket being landed is this check's regression ticket.
     Fixes,
+    /// The check recently caught a product bug in an area this change touches.
+    RecentProductCatch,
     /// Its score is at or above the threshold and it fit within the budget.
     Scored,
 }
@@ -223,6 +228,8 @@ pub fn plan(input: &GateInput<'_>, budget: &Budget) -> GatePlan {
                 plan.known_failing
                     .push((check.check.clone(), ticket.clone()));
             }
+        } else if input.recent_product_catches.contains(&check.check) {
+            must_run.push((check, Why::RecentProductCatch));
         } else {
             scored.push(check);
         }

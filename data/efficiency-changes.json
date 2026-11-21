@@ -764,5 +764,10 @@
     "label": "Commands for regressions and master-lag justiciar tickets get shared cores before queued feature work, reducing the wait to verify fixes that hold master back.",
     "metric": "ignite.master-lag-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Ignite runs checks with recent product catches before landing changes in the culprit's areas, so tip verification has fewer product regressions to repair.",
+    "metric": "ignite.escapes-per-100-landings",
+    "expect": "down"
   }
 ]

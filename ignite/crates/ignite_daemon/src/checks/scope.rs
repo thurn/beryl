@@ -38,6 +38,7 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
+use ignite_core::ids::CheckName;
 use ignite_core::inputs;
 use ignite_core::manifest::{Adapter, Family, InputPattern};
 
@@ -47,14 +48,18 @@ use crate::server::Context;
 impl Checks {
     /// Splits `families` into those `changed` can affect, in order, and the names of those it
     /// cannot.
-    pub(crate) fn scope<'a>(
+    /// A recent product catch brings its family into scope even if the declared inputs
+    /// of the family are unaffected.
+    pub(super) fn scope<'a>(
         &self,
         ctx: &Context,
         tree: &OpenTree,
         families: &[(&'a str, &'a Family)],
         changed: &[String],
+        recent: &BTreeSet<CheckName>,
     ) -> (Vec<(&'a str, &'a Family)>, Vec<String>) {
         let kept = self.kept_listings(ctx, tree, families);
+        let required: BTreeSet<_> = recent.iter().map(CheckName::family).collect();
         let express_only = ctx
             .config
             .express
@@ -64,6 +69,7 @@ impl Checks {
         let mut left_out = Vec::new();
         for &(name, family) in families {
             let in_scope = match kept.get(name) {
+                _ if required.contains(name) => true,
                 // A family without a kept listing cannot be judged from what its checks
                 // printed. When the express paths cover the whole change, the family's
                 // declared inputs are judged instead, unless it is in the always set, whose

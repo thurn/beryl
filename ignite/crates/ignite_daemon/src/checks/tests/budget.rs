@@ -67,6 +67,7 @@ fn candidates_costing_three_budgets_run_the_best_third_and_land() {
             startup_cpu_s: None,
             family: "unit".to_owned(),
             family_rate: 0.01,
+            runs: None,
             checks: (0..9u32)
                 .map(|i| stats(&names[i as usize], 9 - i, 350.0))
                 .collect(),
@@ -170,6 +171,7 @@ fn always_when_leaves_a_costly_lint_to_the_tip_for_other_changes() {
                 startup_cpu_s: None,
                 family: "unit".to_owned(),
                 family_rate: 0.0,
+                runs: None,
                 checks: vec![stats("unit:lint", 0, 2000.0)],
             },
         );
@@ -206,6 +208,7 @@ fn a_second_gate_of_the_same_change_spends_no_second_budget() {
             startup_cpu_s: None,
             family: "unit".to_owned(),
             family_rate: 0.01,
+            runs: None,
             checks: (0..9u32)
                 .map(|i| stats(&names[i as usize], 9 - i, 350.0))
                 .collect(),
@@ -247,6 +250,7 @@ fn a_gate_after_a_failed_gate_of_the_same_change_spends_no_second_budget() {
             startup_cpu_s: None,
             family: "unit".to_owned(),
             family_rate: 0.01,
+            runs: None,
             checks: (0..9u32)
                 .map(|i| stats(&names[i as usize], 9 - i, 350.0))
                 .collect(),

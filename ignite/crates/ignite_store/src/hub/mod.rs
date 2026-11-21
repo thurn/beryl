@@ -3,7 +3,6 @@
 pub mod attachments;
 pub mod batch;
 pub mod capital_ids;
-pub mod catches;
 pub mod check_state;
 pub mod checks;
 pub mod cycles;

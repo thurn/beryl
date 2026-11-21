@@ -68,6 +68,7 @@ fn plan_landing(
         checks,
         unbuilt,
         landing,
+        recent_product_catches: &BTreeSet::new(),
         paid: &paid,
         billions_per_cpu_second: BILLIONS_PER_CPU_SECOND,
     };
@@ -420,6 +421,7 @@ fn checks_an_earlier_gate_of_the_change_chose_still_count_when_cached() {
         checks: &checks,
         unbuilt: &unbuilt,
         landing: None,
+        recent_product_catches: &BTreeSet::new(),
         paid: &paid,
         billions_per_cpu_second: BILLIONS_PER_CPU_SECOND,
     };
@@ -462,6 +464,7 @@ fn a_cached_check_is_answered_when_earlier_charges_passed_the_budget() {
         checks: &checks,
         unbuilt: &unbuilt,
         landing: None,
+        recent_product_catches: &BTreeSet::new(),
         paid: &paid,
         billions_per_cpu_second: BILLIONS_PER_CPU_SECOND,
     };

@@ -251,6 +251,10 @@ impl CheckHistory for FakeHistory {
         Ok(self.fixes.get(check).cloned().unwrap_or_default())
     }
 
+    fn product_fixes(&self) -> Result<Vec<ignite_core::protocol::hub::CheckFix>> {
+        Ok(self.fixes.values().flatten().cloned().collect())
+    }
+
     fn stats(&self, family: &str) -> Result<CheckStatsReply> {
         Ok(self
             .replies
@@ -261,6 +265,7 @@ impl CheckHistory for FakeHistory {
                 startup_cpu_s: None,
                 family: family.to_owned(),
                 family_rate: 0.0,
+                runs: None,
                 checks: Vec::new(),
             }))
     }

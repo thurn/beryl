@@ -1,8 +1,8 @@
-//! Check scores: the chance a check fails after a change, per billion instructions it costs.
+//! Check scores: the chance a check catches a product bug after a change, per billion instructions it costs.
 //!
 //! ```text
-//! score(check, change) = P(fail | areas the change touches) / cost(check)
-//! P     = (failures after changes to these areas + 20 x family rate)
+//! score(check, change) = P(product catch | areas the change touches) / cost(check)
+//! P     = (product catches after changes to these areas + 20 x family rate)
 //!         / (runs after changes to these areas + 20)
 //! cost  = median instructions of its last 20 runs, in billions
 //! ```
@@ -18,6 +18,125 @@
 //! The family rate stands in for 20 runs, so a check with few runs of its own starts from its
 //! family's record. A change that touches several areas takes the largest P among them. See
 //! "Scores" in `docs/ignite.md`; [`crate::gate`] chooses checks by these scores.
+
+use std::collections::{BTreeMap, BTreeSet};
+
+use crate::ids::{CheckName, Commit};
+use crate::inputs::{self, CrateGraph};
+use crate::protocol::hub::{AreaStats, CheckFix, CheckStatsReply, FixOutcome};
+use crate::time::Timestamp;
+use crate::traits::Git;
+
+/// How long a recorded product catch makes a check mandatory in its culprit's areas.
+pub const RECENT_PRODUCT_CATCH_SECONDS: f64 = 14.0 * 86_400.0;
+
+/// One check whose failure led to a product fix, with the areas of its first bad commit.
+#[derive(Debug, PartialEq, Eq)]
+pub struct ProductCatch {
+    pub check: CheckName,
+    pub at: Timestamp,
+    /// An empty string represents an unknown area and contributes only to the family rate.
+    pub areas: Vec<String>,
+}
+
+/// Resolves each culprit once. When a ticket reopens and fixes the same check and culprit
+/// again, use its latest product outcome and count the catch once.
+pub fn product_catches(
+    fixes: Vec<CheckFix>,
+    graph: &CrateGraph,
+    git: &dyn Git,
+    now: Timestamp,
+) -> Vec<ProductCatch> {
+    let mut fixes = fixes;
+    fixes.sort_unstable_by_key(|fix| std::cmp::Reverse(fix.at));
+    let mut seen = BTreeSet::new();
+    let mut by_commit = BTreeMap::<Commit, Vec<String>>::new();
+    fixes
+        .into_iter()
+        .filter(|fix| fix.outcome == FixOutcome::Product && fix.at <= now)
+        .filter_map(|fix| {
+            let areas = if let Some(commit) = fix.first_bad {
+                if !seen.insert((fix.check.clone(), commit.clone())) {
+                    return None;
+                }
+                by_commit
+                    .entry(commit.clone())
+                    .or_insert_with(|| {
+                        let paths = git.commit_paths(&commit).unwrap_or_default();
+                        let areas: BTreeSet<_> = paths
+                            .iter()
+                            .map(|path| inputs::area(path, graph).to_string())
+                            .collect();
+                        areas.into_iter().collect()
+                    })
+                    .clone()
+            } else {
+                Vec::new()
+            };
+            Some(ProductCatch {
+                check: fix.check,
+                at: fix.at,
+                areas: if areas.is_empty() {
+                    vec![String::new()]
+                } else {
+                    areas
+                },
+            })
+        })
+        .collect()
+}
+
+impl ProductCatch {
+    /// Whether this catch is recent and its culprit shares an area with the change.
+    pub fn applies(&self, areas: &[String], now: Timestamp) -> bool {
+        self.at >= now.plus_seconds(-RECENT_PRODUCT_CATCH_SECONDS)
+            && self.areas.iter().any(|area| areas.contains(area))
+    }
+}
+
+/// Uses classified catches as the failure counts and keeps the recorded run counts.
+/// Tip failures can have no area counts, so each catch establishes at least one run there.
+/// An older hub's reply lacks the total needed to recompute its family rate.
+pub fn use_product_catches(
+    reply: &mut CheckStatsReply,
+    catches: &[ProductCatch],
+    areas: &[String],
+) {
+    let Some(runs) = reply.runs else {
+        return;
+    };
+    let mut by_check: BTreeMap<&CheckName, BTreeMap<&str, u32>> = BTreeMap::new();
+    let mut family_catches = 0_u64;
+    for catch in catches.iter().filter(|c| c.check.family() == reply.family) {
+        let counts = by_check.entry(&catch.check).or_default();
+        for area in &catch.areas {
+            family_catches += 1;
+            if areas.is_empty() || areas.contains(area) {
+                *counts.entry(area).or_default() += 1;
+            }
+        }
+    }
+    let runs = runs.max(family_catches);
+    reply.family_rate = if runs == 0 {
+        0.0
+    } else {
+        family_catches as f64 / runs as f64
+    };
+    for check in &mut reply.checks {
+        let mut catches = by_check.remove(&check.check).unwrap_or_default();
+        for area in &mut check.areas {
+            area.failures = catches.remove(area.area.as_str()).unwrap_or_default();
+            area.runs = area.runs.max(area.failures);
+        }
+        check
+            .areas
+            .extend(catches.into_iter().map(|(area, count)| AreaStats {
+                area: area.to_owned(),
+                runs: count,
+                failures: count,
+            }));
+    }
+}
 
 /// How many runs the family rate stands in for.
 pub const PRIOR_RUNS: f64 = 20.0;

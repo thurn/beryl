@@ -50,6 +50,7 @@ fn seeded() -> World {
         startup_cpu_s: None,
         family: family.to_owned(),
         family_rate: 0.02,
+        runs: None,
         checks,
     };
     let mut history = FakeHistory::default();
@@ -176,6 +177,148 @@ top      rust:game_rules/tests/entering.rs::*      0.91  edited by this change
         world.launcher.commands("runner").is_empty(),
         "the plan runs nothing"
     );
+}
+
+fn recent_catch_world() -> World {
+    let area = "game_rules/tests/";
+    let culprit: Commit = "abc1111".parse().unwrap();
+    let unrelated: Commit = "abc2222".parse().unwrap();
+    let window = ignite_core::score::RECENT_PRODUCT_CATCH_SECONDS;
+    let cases = [
+        (
+            "recent",
+            FixOutcome::Product,
+            -window + 60.0,
+            &culprit,
+            2_000.0,
+        ),
+        (
+            "expired",
+            FixOutcome::Product,
+            -window - 60.0,
+            &culprit,
+            2_000.0,
+        ),
+        ("unrelated", FixOutcome::Product, -60.0, &unrelated, 2_000.0),
+        ("test-only", FixOutcome::TestOnly, -60.0, &culprit, 1.0),
+        ("no-fix", FixOutcome::None, -60.0, &culprit, 1.0),
+    ];
+    let mut history = FakeHistory::default();
+    let mut stats = Vec::new();
+    let mut listing = Vec::new();
+    for (check, outcome, at, commit, cost) in cases {
+        let check = name(&format!("unit:{check}"));
+        history.fixes.insert(
+            check.to_string(),
+            vec![CheckFix {
+                check: check.clone(),
+                ticket: "ABCD".parse().unwrap(),
+                at: Timestamp::EPOCH.plus_seconds(at),
+                outcome,
+                source: FixSource::Regression,
+                first_bad: Some(commit.clone()),
+                fixing_commit: None,
+            }],
+        );
+        listing.push(serde_json::json!({ "check": check }).to_string());
+        stats.push(CheckStats {
+            check,
+            family: "unit".to_owned(),
+            state: CheckState::On,
+            areas: vec![AreaStats {
+                area: area.to_owned(),
+                runs: 100,
+                failures: 30,
+            }],
+            median_cost: Some(cost),
+            unit: "instructions".to_owned(),
+        });
+    }
+    history.replies.insert(
+        "unit".to_owned(),
+        CheckStatsReply {
+            family: "unit".to_owned(),
+            family_rate: 0.30,
+            runs: Some(500),
+            checks: stats,
+            startup_billions: None,
+            startup_cpu_s: None,
+        },
+    );
+    let world = world(
+        r#"
+[product.deps]
+build = "make deps"
+inputs = ["src"]
+outputs = ["out"]
+
+[family.unit]
+kind = "regression"
+adapter = "jsonl"
+platforms = "any"
+needs = ["deps"]
+list = "lister"
+run = "runner {checks}"
+inputs = ["src"]
+"#,
+        &["game_rules/tests/one.rs"],
+        history,
+    );
+    world
+        .git
+        .set_commit_paths(&culprit, &["game_rules/tests/other.rs"]);
+    world
+        .git
+        .set_commit_paths(&unrelated, &["game_rules/src/other.rs"]);
+    *world.launcher.listing.lock().unwrap() = listing.join("\n");
+    world
+}
+
+#[test]
+fn recent_product_catches_run_outside_the_budget_and_other_outcomes_do_not_raise_scores() {
+    let world = recent_catch_world();
+    let tree = TreeId::new("tree-01").unwrap();
+    let gated = world.checks.gate(&world.ctx, &tree, &options(false));
+    assert!(gated.run.passed(), "{:?}", gated.run);
+    let budget = gated.budget.unwrap();
+    assert_eq!(budget.forced, (1, 2_000.0));
+    assert!(budget.billions() < budget.forced.1);
+    assert_eq!(budget.scored, (0, 0.0));
+    assert_eq!(gated.left, 4);
+    assert_eq!(
+        world.launcher.commands("runner"),
+        [vec!["runner".to_owned(), "unit:recent".to_owned()]]
+    );
+
+    let reply = CheckVerb {
+        checks: world.checks.clone(),
+        express: None,
+    }
+    .run(
+        &world.ctx,
+        &Request {
+            verb: "check".to_owned(),
+            args: vec!["--plan".to_owned()],
+            cwd: world.dir.clone(),
+            session: None,
+            wait_s: 1,
+            pid: None,
+        },
+    );
+    assert_eq!(reply.exit, Exit::Success);
+    assert!(
+        reply
+            .text
+            .contains("recent   unit:recent  product bug in this area"),
+        "{}",
+        reply.text
+    );
+    let json = reply.json.unwrap();
+    assert_eq!(
+        json["recent_product_catches"],
+        serde_json::json!(["unit:recent"])
+    );
+    assert_eq!(json["tip"], 4);
 }
 
 #[test]
@@ -330,6 +473,7 @@ fn tip_verification_lists_the_regression_checks_the_hub_has_not_switched_off() {
             startup_cpu_s: None,
             family: "unit".to_owned(),
             family_rate: 0.0,
+            runs: None,
             checks: vec![off],
         },
     );
@@ -362,6 +506,7 @@ fn a_scored_check_carries_its_familys_start_up() {
     let reply = |billions: Option<f64>, cpu_s: Option<f64>| CheckStatsReply {
         family: "unit".to_owned(),
         family_rate: 0.0,
+        runs: None,
         checks: Vec::new(),
         startup_billions: billions,
         startup_cpu_s: cpu_s,

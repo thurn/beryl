@@ -98,6 +98,9 @@ pub trait CheckHistory: Send + Sync {
     /// `GET /checks/fix-outcomes?check=`.
     fn fix_outcomes(&self, check: &str) -> Result<Vec<CheckFix>>;
 
+    /// `GET /checks/fix-outcomes?outcome=product`.
+    fn product_fixes(&self) -> Result<Vec<CheckFix>>;
+
     /// [`CheckHistory::stats`] with each check's runs and failures in `areas` only, or in every
     /// area when `areas` is empty. The family's failure rate still counts every area. The gate
     /// scores a check by the areas its change touches, and the `rust` family's record in every
@@ -179,6 +182,13 @@ impl CheckHistory for HubHistory {
             "{}/checks/fix-outcomes?check={}",
             self.base,
             encoded(check)
+        ))
+    }
+
+    fn product_fixes(&self) -> Result<Vec<CheckFix>> {
+        self.get(&format!(
+            "{}/checks/fix-outcomes?outcome=product",
+            self.base
         ))
     }
 }

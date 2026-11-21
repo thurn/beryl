@@ -1,12 +1,9 @@
 //! `ignite gate replay`: the gate's threshold worked out from history. See "Where regression
 //! checks run" in `docs/ignite.md`.
 //!
-//! - A **catch** is a failure of a regression check that a later change made pass again, read
-//!   from Ignite's own records in the hub's database ([`ignite_store::hub::catches`]): failures
-//!   in the result cache fixed before their ticket landed, and fixed regressions found at a tip.
-//!   The database is opened read-only, so a binary newer than the running hub never migrates
-//!   it. Families in the always set or of kind exploration, and checks that are switched off,
-//!   are left out.
+//! - A **catch** is a recorded product fix for a regression check. Its change is the first
+//!   bad commit, when known. The hub database is opened read-only. Families in the always set
+//!   or of kind exploration, and checks that are switched off, are left out.
 //! - Each catch is scored as the gate would have scored its check for the change that failed,
 //!   from the check records the hub holds now, less the catch itself: the hub's counts include
 //!   the failure being replayed, which would make every catch look likelier than the gate could
@@ -38,7 +35,7 @@ use ignite_core::gate::{GateCheck, GateInput, GatePlan, History, Why, plan};
 use ignite_core::manifest::Kind;
 use ignite_core::protocol::client::{Exit, Reply};
 use ignite_core::protocol::hub::{CheckState, CheckStatsReply};
-use ignite_core::score::{AreaRecord, BILLIONS_PER_CPU_SECOND, Cost};
+use ignite_core::score::{self, AreaRecord, BILLIONS_PER_CPU_SECOND, Cost};
 use ignite_core::time::{SystemClock, Timestamp};
 use ignite_core::traits::Clock;
 use ignite_store::import::runlog::Catch;
@@ -230,6 +227,7 @@ fn plan_for(areas: &[String], checks: &[GateCheck], gate: &Budget) -> GatePlan {
         checks,
         unbuilt: &no_builds,
         landing: None,
+        recent_product_catches: &BTreeSet::new(),
         paid: &paid,
         billions_per_cpu_second: BILLIONS_PER_CPU_SECOND,
     };
@@ -327,7 +325,7 @@ pub fn report(found: &Replay, days: u32) -> Reply {
     let percent = |kept: usize| 100.0 * kept as f64 / found.catches as f64;
     let threshold = found.threshold();
     let chosen = found.chosen();
-    let mut text = format!("{} catches in the last {days} days", found.catches);
+    let mut text = format!("{} product catches in the last {days} days", found.catches);
     if found.unscored > 0 {
         let _ = write!(
             text,
@@ -383,14 +381,15 @@ pub fn report(found: &Replay, days: u32) -> Reply {
 
 pub fn run(command: &GateCommand, dir: &Path) -> Reply {
     let GateCommand::Replay { days, hub } = command;
-    let since = SystemClock.now().plus_seconds(-f64::from(*days) * 86_400.0);
-    match load(dir, hub, since) {
+    let now = SystemClock.now();
+    let since = now.plus_seconds(-f64::from(*days) * 86_400.0);
+    match load(dir, hub, since, now) {
         Ok((catches, checks)) => match replay(&catches, &checks) {
             Some(found) => report(&found, *days),
             None => Reply::text(
                 Exit::Usage,
                 format!(
-                    "no catch in the last {days} days has a scored check ({} catches found)",
+                    "no product catch in the last {days} days has a scored check ({} catches found)",
                     catches.len()
                 ),
             ),
@@ -401,7 +400,12 @@ pub fn run(command: &GateCommand, dir: &Path) -> Reply {
 
 /// The catches since `since` and the hub's regression checks, outside the families the
 /// manifest marks exploration or always. Reads the hub's database without changing it.
-fn load(dir: &Path, hub: &Path, since: Timestamp) -> Result<(Vec<Catch>, Vec<GateCheck>), String> {
+fn load(
+    dir: &Path,
+    hub: &Path,
+    since: Timestamp,
+    now: Timestamp,
+) -> Result<(Vec<Catch>, Vec<GateCheck>), String> {
     let root = ignite_git::tracked::toplevel(dir).map_err(|e| e.to_string())?;
     let config_path = root.join(CONFIG_FILE);
     let text = std::fs::read_to_string(&config_path)
@@ -418,23 +422,31 @@ fn load(dir: &Path, hub: &Path, since: Timestamp) -> Result<(Vec<Catch>, Vec<Gat
     let graph = crate_graph(&root, &tracked)?;
     let conn =
         ignite_store::hub::open_read_only(hub).map_err(|e| format!("{}: {e}", hub.display()))?;
-    let catches = ignite_store::hub::catches::since(&conn, since, &graph)
-        .map_err(|e| e.to_string())?
-        .into_iter()
-        .filter(|c| !left_out.contains(family_of(&c.check)))
+    let git = ignite_git::GitCli {
+        repo: root,
+        remote: config.repository.remote,
+    };
+    let fixes = ignite_store::hub::fix_outcomes::products(&conn).map_err(|e| e.to_string())?;
+    let products = score::product_catches(fixes, &graph, &git, now);
+    let catches = products
+        .iter()
+        .filter(|c| c.at >= since && !left_out.contains(c.check.family()))
+        .map(|c| Catch {
+            check: c.check.to_string(),
+            at: c.at,
+            areas: c.areas.clone(),
+        })
         .collect();
     let families =
         ignite_store::hub::checks::regression_families(&conn).map_err(|e| e.to_string())?;
     let mut replies = Vec::with_capacity(families.len());
     for family in &families {
-        replies.push(ignite_store::hub::checks::stats(&conn, family).map_err(|e| e.to_string())?);
+        let mut reply =
+            ignite_store::hub::checks::stats(&conn, family).map_err(|e| e.to_string())?;
+        score::use_product_catches(&mut reply, &products, &[]);
+        replies.push(reply);
     }
     Ok((catches, gate_checks(&replies, &left_out)))
-}
-
-/// The family a check's name starts with: the part before its first `:`.
-fn family_of(check: &str) -> &str {
-    check.split_once(':').map_or(check, |(family, _)| family)
 }
 
 #[cfg(test)]

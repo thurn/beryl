@@ -23,11 +23,11 @@ fn report(name: &str) -> RegressionReport {
     }
 }
 
-fn history(conn: &mut Connection, check: &str, now: Timestamp) -> Vec<CheckFix> {
+fn history(conn: &mut Connection, query: (&str, &str), now: Timestamp) -> Vec<CheckFix> {
     let request = Request {
         method: "GET".to_owned(),
         path: "/checks/fix-outcomes".to_owned(),
-        query: vec![("check".to_owned(), check.to_owned())],
+        query: vec![(query.0.to_owned(), query.1.to_owned())],
         writer: None,
         body: Vec::new(),
         headers: Vec::new(),
@@ -79,7 +79,7 @@ fn closing_regressions_records_every_check_and_each_close_once() {
             200
         );
         for check in [&a.check, &b.check] {
-            let fixes = history(&mut conn, check.as_str(), at(4.0));
+            let fixes = history(&mut conn, ("check", check.as_str()), at(4.0));
             assert_eq!(
                 fixes,
                 vec![CheckFix {
@@ -104,15 +104,24 @@ fn closing_regressions_records_every_check_and_each_close_once() {
             );
             let close = json!({"ticket": ticket, "machine": "m-1", "session": "b", "reason": "already fixed"});
             assert_eq!(post(&mut conn, "/close", &close, at(7.0)).0, 200);
-            let fixes = history(&mut conn, a.check.as_str(), at(8.0));
+            let fixes = history(&mut conn, ("check", a.check.as_str()), at(8.0));
             assert_eq!(fixes.len(), 2);
             assert_eq!(fixes[0].outcome, FixOutcome::None);
             assert_eq!(fixes[0].fixing_commit, None);
             assert_eq!(fixes[1].outcome, FixOutcome::Product);
             let cutoff = at(8.0).plus_seconds(fix_outcomes::HISTORY_DAYS * 86_400.0);
-            assert!(history(&mut conn, a.check.as_str(), cutoff).is_empty());
+            assert!(history(&mut conn, ("check", a.check.as_str()), cutoff).is_empty());
         }
     }
+    let now = at(8.0).plus_seconds(fix_outcomes::HISTORY_DAYS * 86_400.0);
+    let products = history(&mut conn, ("outcome", "product"), now);
+    let checks: Vec<_> = products.iter().map(|fix| fix.check.as_str()).collect();
+    assert_eq!(checks, ["unit:a0", "unit:b0"]);
+    assert!(
+        products
+            .iter()
+            .all(|fix| fix.outcome == FixOutcome::Product)
+    );
 }
 
 #[test]

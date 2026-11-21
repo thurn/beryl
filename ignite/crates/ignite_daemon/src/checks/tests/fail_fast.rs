@@ -80,6 +80,7 @@ fn history(family: &str, checks: &[&str], cost: f64) -> CheckStatsReply {
         startup_cpu_s: None,
         family: family.to_owned(),
         family_rate: 0.1,
+        runs: None,
         checks: checks
             .iter()
             .map(|check| CheckStats {

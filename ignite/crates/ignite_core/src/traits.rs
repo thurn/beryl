@@ -270,6 +270,10 @@ pub trait Git: Send + Sync {
     fn object_ids(&self, tree: &Path, paths: &[String]) -> Result<Vec<(String, Oid)>>;
     /// The paths that differ between two commits.
     fn changed(&self, from: &Commit, to: &Commit) -> Result<Vec<String>>;
+    /// The paths a commit changed against its first parent.
+    fn commit_paths(&self, _commit: &Commit) -> Result<Vec<String>> {
+        Err(git_not_supported("read the paths a commit changed"))
+    }
     fn rebase_onto(&self, tree: &Path, tip: &Commit) -> Result<Rebase>;
     fn push(&self, tree: &Path, commit: &Commit, branch: &str) -> Result<Push>;
     /// The remote branch's newest commit.

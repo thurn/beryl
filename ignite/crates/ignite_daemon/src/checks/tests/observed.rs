@@ -1,6 +1,8 @@
 //! Observed reads: a Rust test's hash covers the files its build was observed to read and the
 //! files it opened at run time, with no manifest entry naming them, and no file it did not read.
 
+use std::collections::BTreeSet;
+
 use super::*;
 
 /// A Rust test family whose product names a data file the tests never read, so that it rebuilds
@@ -156,7 +158,13 @@ fn a_change_to_an_included_file_keeps_the_family_in_scope() {
             .open(&world.ctx, &TreeId::new("tree-01").unwrap())
             .unwrap()
             .1;
-        let (affected, _) = checks.scope(&world.ctx, &tree, &families, &[changed.to_owned()]);
+        let (affected, _) = checks.scope(
+            &world.ctx,
+            &tree,
+            &families,
+            &[changed.to_owned()],
+            &BTreeSet::new(),
+        );
         assert_eq!(!affected.is_empty(), in_scope, "{changed}");
     }
 }
@@ -270,7 +278,13 @@ fn a_change_to_an_opened_file_keeps_the_family_in_scope() {
         .unwrap()
         .1;
     for (changed, in_scope) in [("data/opened.json", true), ("data/unread.json", false)] {
-        let (affected, _) = checks.scope(&world.ctx, &tree, &families, &[changed.to_owned()]);
+        let (affected, _) = checks.scope(
+            &world.ctx,
+            &tree,
+            &families,
+            &[changed.to_owned()],
+            &BTreeSet::new(),
+        );
         assert_eq!(!affected.is_empty(), in_scope, "{changed}");
     }
 }

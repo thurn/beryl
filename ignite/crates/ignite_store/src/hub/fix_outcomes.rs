@@ -72,13 +72,35 @@ pub fn between(
     end: Timestamp,
     check: Option<&CheckName>,
 ) -> Result<Vec<CheckFix>> {
-    let all = "SELECT close_seq, check_name, ticket, at, outcome, source, first_bad, fixing_commit
-               FROM check_fix_outcomes WHERE at BETWEEN ?1 AND ?2";
-    let query = match check {
-        Some(_) => format!("{all} AND check_name = ?3 ORDER BY at DESC, close_seq DESC, source"),
-        None => format!("{all} ORDER BY at DESC, close_seq DESC, check_name, source"),
-    };
-    let mut query = conn.prepare(&query)?;
+    let all = format!("{SELECT} WHERE at BETWEEN ?1 AND ?2");
+    let start = start.to_string();
+    let end = end.to_string();
+    match check {
+        Some(check) => read(
+            conn,
+            &format!("{all} AND check_name = ?3 {ORDER}"),
+            params![start, end, check.as_str()],
+        ),
+        None => read(conn, &format!("{all} {ORDER}"), params![start, end]),
+    }
+}
+
+/// All recorded product fixes, for scores and threshold replay.
+pub fn products(conn: &Connection) -> Result<Vec<CheckFix>> {
+    read(
+        conn,
+        &format!("{SELECT} WHERE outcome = 'product' {ORDER}"),
+        [],
+    )
+}
+
+const SELECT: &str =
+    "SELECT close_seq, check_name, ticket, at, outcome, source, first_bad, fixing_commit
+     FROM check_fix_outcomes";
+const ORDER: &str = "ORDER BY at DESC, close_seq DESC, check_name, source";
+
+fn read(conn: &Connection, sql: &str, args: impl rusqlite::Params) -> Result<Vec<CheckFix>> {
+    let mut query = conn.prepare(sql)?;
     let read = |row: &rusqlite::Row<'_>| {
         Ok(rows::CheckFixOutcome {
             close_seq: row.get(0)?,
@@ -91,12 +113,7 @@ pub fn between(
             fixing_commit: row.get(7)?,
         })
     };
-    let start = start.to_string();
-    let end = end.to_string();
-    let rows = match check {
-        Some(check) => query.query_map(params![start, end, check.as_str()], read)?,
-        None => query.query_map(params![start, end], read)?,
-    };
+    let rows = query.query_map(args, read)?;
     rows.map(|row| decode(&row?)).collect()
 }
 

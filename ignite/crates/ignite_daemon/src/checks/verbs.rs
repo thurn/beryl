@@ -156,20 +156,30 @@ impl Verb for CheckVerb {
             .collect();
         let mut run = CheckRun::default();
         // Without the changed paths nothing can be left out of scope.
-        let among = match changed_paths(&checks, ctx, &tree) {
-            Ok(changed) => {
-                let (among, left_out) = checks.scope(ctx, &tree, &regression, &changed);
-                run.out_of_scope = left_out;
-                among
-            }
-            Err(_) => regression,
+        let changed = changed_paths(&checks, ctx, &tree);
+        let catches =
+            plan::GateCatches::read(&checks, ctx, &tree, changed.as_deref().unwrap_or_default());
+        let among = if let Ok(changed) = &changed {
+            let (among, left_out) = checks.scope(ctx, &tree, &regression, changed, &catches.recent);
+            run.out_of_scope = left_out;
+            among
+        } else {
+            regression
         };
         let mut prepared = checks.prepare_among(ctx, &tree, &among, &options, &mut run);
         for family in &mut prepared {
             family.keep(|_| true, &mut run);
         }
         let hits = checks.lookup(&prepared, &options);
-        let view = gate_view(&checks, ctx, &tree, &prepared, &hits);
+        let view = gate_view_of(
+            &checks,
+            ctx,
+            &tree,
+            &prepared,
+            &hits,
+            &changed.unwrap_or_default(),
+            catches,
+        );
         let gate_plan = view.plan(&ctx.config.gate);
         let mut lines = plan::plan_lines(&view, &gate_plan, &ctx.config.gate);
         lines.extend(failure_lines(&run));
@@ -187,6 +197,9 @@ impl Verb for CheckVerb {
                 "rate": view.rate,
                 "scored_cost": gate_plan.scored_cost,
                 "forced_cost": gate_plan.forced_cost,
+                "recent_product_catches": gate_plan.run.iter().chain(&gate_plan.cached)
+                    .filter(|p| p.why == ignite_core::gate::Why::RecentProductCatch)
+                    .map(|p| p.check.as_str()).collect::<Vec<_>>(),
                 "out_of_scope": run.out_of_scope,
             })),
             handle: None,
@@ -316,7 +329,8 @@ fn gate_view(
     hits: &[Option<CachedResult>],
 ) -> GateView {
     let changed = changed_paths(checks, ctx, tree).unwrap_or_default();
-    gate_view_of(checks, ctx, tree, prepared, hits, &changed)
+    let catches = plan::GateCatches::read(checks, ctx, tree, &changed);
+    gate_view_of(checks, ctx, tree, prepared, hits, &changed, catches)
 }
 
 /// The paths the tree changes since its branch left the integration branch.
@@ -340,14 +354,22 @@ pub(super) fn gate_view_of(
     prepared: &[Prepared],
     hits: &[Option<CachedResult>],
     changed: &[String],
+    catches: plan::GateCatches,
 ) -> GateView {
-    let areas = plan::areas(changed, &tree.graph);
     let families = prepared.iter().map(|p| p.family.as_str());
-    let stats = super::sources::stats_of(checks.history.as_ref(), families, &areas);
+    let stats = plan::scoring_stats(checks, families, &catches.areas, &catches.records);
     let manifest = &checks.settings.manifest;
     let family = |name: &str| manifest.families.get(name).map(|d| &d.family);
-    let regressions = open_regressions(ctx);
-    let mut view = GateView::new(prepared, hits, family, &stats, &regressions, changed, areas);
+    let mut view = GateView::new(
+        prepared,
+        hits,
+        family,
+        &stats,
+        &catches.regressions,
+        changed,
+        catches.areas,
+    );
+    view.recent_product_catches = catches.recent;
     view.unbuilt = unbuilt(ctx, tree, prepared.iter().filter_map(|p| family(&p.family)));
     // The rate of the gates of the last hour on this daemon, or the hub's for the day, and the
     // checks the change's last gate chose (see `spent`).

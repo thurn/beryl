@@ -343,9 +343,17 @@ fn fixes(conn: &Connection, request: &Request, now: Timestamp) -> Result<Respons
         .map(|(_, value)| value.parse())
         .transpose()
         .map_err(|error| failure(400, &format!("{error}")))?;
-    let since = now.plus_seconds(-fix_outcomes::HISTORY_DAYS * 86_400.0);
-    let fixes = fix_outcomes::between(conn, since, now, check.as_ref())
-        .map_err(|error| store_failure(&error))?;
+    let products = request
+        .query
+        .iter()
+        .any(|(key, value)| key == "outcome" && value == "product");
+    let fixes = if products && check.is_none() {
+        fix_outcomes::products(conn)
+    } else {
+        let since = now.plus_seconds(-fix_outcomes::HISTORY_DAYS * 86_400.0);
+        fix_outcomes::between(conn, since, now, check.as_ref())
+    }
+    .map_err(|error| store_failure(&error))?;
     Ok(Response::json(200, &json!(fixes)))
 }
 
