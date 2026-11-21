@@ -4,7 +4,11 @@
 //! [`Behavior::Data`] is effect data: [`run`] carries out its instructions with the
 //! library's functions, and [`scene`] reads its expressions. The data is the same for every
 //! layout; only the interpreter is compiled for each.
+//!
+//! Implements: CR 101.4, CR 608.2c
 
+pub(crate) mod catalog;
+pub mod choices;
 mod run;
 mod scene;
 
@@ -59,7 +63,7 @@ fn data<'a, L: Layout>(
 
 /// Carries out the instructions of a replacement of draws in place of `player`'s draw, as a
 /// resolution carries out instructions, with `player` as "that player"
-/// ([CR 614.1a](https://yawgatog.com/resources/magic-rules/#R6141a)): "Effects that use the
+/// (see [CR 614.1a](https://yawgatog.com/resources/magic-rules/#R6141a)): "Effects that use the
 /// word 'instead' are replacement effects." The card table holds only such replacements whose
 /// body is data (`beryl_kernel::replacement::instead_of_drawing`).
 pub(crate) fn instead_of_drawing<'a, L: Layout>(
@@ -89,7 +93,7 @@ pub(crate) fn finish<L: Layout>(game: &mut Game<'_, L>, flow: Flow) -> Result<bo
 }
 
 /// Carries out a mana ability whose costs are paid, making mana of the kind `color` its
-/// activator chose ([CR 605.3b](https://yawgatog.com/resources/magic-rules/#R6053b)): "An
+/// activator chose (see [CR 605.3b](https://yawgatog.com/resources/magic-rules/#R6053b)): "An
 /// activated mana ability doesn't go on the stack, so it can't be targeted, countered, or
 /// otherwise responded to. Rather, it resolves immediately after it is activated."
 ///
@@ -122,7 +126,7 @@ pub(crate) fn mana_ability<L: Layout>(
         sink.note_from(source, added);
         return layers::refresh(s, t, sink);
     }
-    // A mana ability never asks a question, and has no targets (CR 605.1a).
+    // A mana ability never asks a question, and has no targets (see CR 605.1a).
     let activation = activation();
     let mut resolution = Resolution::of_trigger(&activation, ability);
     resolution.mana = color;
@@ -139,7 +143,7 @@ pub(crate) fn mana_ability<L: Layout>(
 }
 
 /// Whether a triggered ability's intervening "if" holds, or it has none
-/// ([CR 603.4](https://yawgatog.com/resources/magic-rules/#R6034)): "When the trigger event
+/// (see [CR 603.4](https://yawgatog.com/resources/magic-rules/#R6034)): "When the trigger event
 /// occurs, the ability checks whether the stated condition is true. The ability triggers only
 /// if it is; otherwise it does nothing. If the ability triggers, it checks the stated
 /// condition again as it resolves."
@@ -158,7 +162,7 @@ pub(crate) fn intervening_if<L: Layout>(
 /// and its controller as "you". `ability` names it among the permanent's abilities
 /// ([`crate::state::State::abilities`]): one of the face that is up, or one of a card under a
 /// merged permanent, which is read as that card's ability, as its triggered abilities are
-/// ([CR 702.140e]): "A mutated permanent has all abilities of each card and token that
+/// (see [CR 702.140e]): "A mutated permanent has all abilities of each card and token that
 /// represents it."
 ///
 /// # Panics
@@ -219,7 +223,7 @@ pub(crate) fn names_nothing<L: Layout>(
     slot: L::Slot,
     objects: Objects,
 ) -> bool {
-    // CR 607.2a: a linked ability finds only the cards exiled with its own source.
+    // See CR 607.2a: a linked ability finds only the cards exiled with its own source.
     if objects == Objects::ExiledWithThis {
         return s.exiled_with(slot).is_empty();
     }
@@ -329,8 +333,8 @@ pub(crate) fn condition_holds<L: Layout>(
 }
 
 /// Whether `condition` holds for a triggered ability, read for its source as "this" and its
-/// controller as "you", before it is on the stack: an intervening "if" (CR 603.4) or a state
-/// trigger's condition (CR 603.8).
+/// controller as "you", before it is on the stack: an intervening "if" (see CR 603.4) or a state
+/// trigger's condition (see CR 603.8).
 pub(crate) fn holds<L: Layout>(
     s: &State<L>,
     t: &GameTable,

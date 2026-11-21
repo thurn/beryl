@@ -1,6 +1,8 @@
 //! [`Resolution`]: the spell or ability that is resolving, and the record its questions are
-//! answered from (the crate's contract, "Resolution"; architecture §7.3). The questions
-//! themselves are [`crate::choices`]'.
+//! answered from (the crate's contract, "Resolution"; architecture §7.3). The functions in
+//! [`crate::interpret::choices`] build those questions.
+//!
+//! Implements: none. Stores a resolution and manages replay of its answers.
 
 use crate::card::{Ability, CastingIx, ManaColor, Stop, Words};
 use crate::casting;
@@ -25,12 +27,12 @@ pub struct Resolution<'a, L: Layout = Small> {
     pub(crate) entry: StackEntry<L>,
     pub(crate) ability: &'static Ability,
     /// Its targets that were legal as the resolution began, settled once for the whole effect
-    /// ([CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)): "If the spell or
+    /// (see [CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)): "If the spell or
     /// ability specifies targets, it checks whether the targets are still legal."
     pub(crate) legal: TargetPlaces,
     /// Where questions go: an inline source answers them, anything else pauses the
     /// resolution. The answers given so far, which a run takes first, are the sink's
-    /// ([`crate::asking`]): a replacement effect's choice below a body is answered from the
+    /// ([`beryl_kernel::asking`]): a replacement effect's choice below a body is answered from the
     /// same record, in the order the questions come.
     answers: Option<&'a mut dyn Answers<L>>,
     /// The question that paused this run.
@@ -38,7 +40,7 @@ pub struct Resolution<'a, L: Layout = Small> {
     /// For a mana ability that can produce more than one kind of mana, the kind its
     /// activator chose.
     pub(crate) mana: ManaColor,
-    /// A card the effect lets a player cast as it finishes resolving (CR 608.2g).
+    /// A card the effect lets a player cast as it finishes resolving (see CR 608.2g).
     pub(crate) offer: Option<(ObjectRef<L>, Seat, bool)>,
 }
 
@@ -64,7 +66,7 @@ impl<'a, L: Layout> Resolution<'a, L> {
 
     /// The resolution of `ability` as what `trigger` describes, with no targets and no
     /// answer source: a question pauses it. A mana ability resolves so, never having been
-    /// on the stack ([CR 605.3b](https://yawgatog.com/resources/magic-rules/#R6053b)).
+    /// on the stack (see [CR 605.3b](https://yawgatog.com/resources/magic-rules/#R6053b)).
     pub(crate) fn of_trigger(trigger: &PendingTrigger<L>, ability: &'static Ability) -> Self {
         let entry = StackEntry {
             // Never on the stack: its words are its source's as they are now.
@@ -101,7 +103,7 @@ impl<'a, L: Layout> Resolution<'a, L> {
     }
 
     /// The player who controls the spell or ability
-    /// ([CR 608.2c](https://yawgatog.com/resources/magic-rules/#R6082c)): "The controller of
+    /// (see [CR 608.2c](https://yawgatog.com/resources/magic-rules/#R6082c)): "The controller of
     /// the spell or ability follows its instructions in the order written."
     pub fn controller(&self) -> Seat {
         self.entry.controller()
@@ -124,7 +126,7 @@ impl<'a, L: Layout> Resolution<'a, L> {
     }
 
     /// The target chosen at `place` if it is legal now, `None` if it was not chosen or is
-    /// illegal ([CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)): "Illegal
+    /// illegal (see [CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)): "Illegal
     /// targets, if any, won't be affected by parts of a resolving spell's effect for which
     /// they're illegal."
     pub fn target(&self, game: &Game<'_, L>, place: TargetPlace) -> Option<Target<L>> {
@@ -143,7 +145,7 @@ impl<'a, L: Layout> Resolution<'a, L> {
         self.target(game, place).and_then(Target::as_player)
     }
 
-    /// The answer to the question `d`, which [`crate::choices`] made of a prompt (§7.3). A
+    /// The answer to the question `d`, which [`crate::interpret::choices`] made of a prompt (§7.3). A
     /// question with one answer is answered silently, except under [`Stops::Forced`].
     /// Otherwise the choice record answers it, or an inline source does, or the resolution
     /// pauses here. Once the game is over, as when a player won it mid-resolution, it asks
@@ -171,7 +173,7 @@ impl<'a, L: Layout> Resolution<'a, L> {
     }
 
     /// The answer to `d`, a hidden pick of one of its object options or of none
-    /// ([`crate::choices::hidden_pick`]): never answered silently, and recorded as the slot
+    /// ([`crate::interpret::choices::hidden_pick`]): never answered silently, and recorded as the slot
     /// picked ([`crate::state::Resolving`], "Hidden picks"), so that a run in a state where
     /// the question has other candidates still reads the card picked.
     pub(crate) fn answer_hidden(
@@ -212,7 +214,7 @@ impl<'a, L: Layout> Resolution<'a, L> {
             }
             game.state.count_decision();
             // A body builds its questions for the player each belongs to; the player
-            // controlling them answers (CR 724.5, `engine::controlled`).
+            // controlling them answers (see CR 724.5, `engine::controlled`).
             let answer = if game.state.turn().controller().is_some() {
                 crate::stack::resolve::answer_controlled(game.state, game.state, answers, d)
             } else {

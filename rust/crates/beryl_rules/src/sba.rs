@@ -1,4 +1,6 @@
 //! State-based actions (architecture §8.4).
+//!
+//! Implements: CR 104.2a, CR 104.3a, CR 104.4a, CR 704.3, CR 704.5a, CR 704.5b, CR 704.5d, CR 704.5e, CR 704.5f, CR 704.5g, CR 704.5i, CR 704.5j, CR 704.5m, CR 704.5n
 
 use crate::PlayerSet;
 
@@ -40,7 +42,7 @@ pub(crate) fn check<L: Layout>(
         return Ok(true);
     }
     layers::refresh(s, t, sink)?;
-    // State triggers are no state-based actions (CR 603.8: "Note that state triggers aren't the
+    // State triggers are no state-based actions (see CR 603.8: "Note that state triggers aren't the
     // same as state-based actions."), but they are found at the same moments.
     crate::stack::trigger::match_states(s, t)?;
     let (mut graveyard, tokens, legendary) = doomed(s, t);
@@ -80,7 +82,7 @@ pub(crate) fn check<L: Layout>(
     }
     // A creature with lethal damage is destroyed (CR 704.5g), so its destruction is proposed
     // to the replacement effects of destruction: a regeneration shield replaces it
-    // ([CR 614.8](https://yawgatog.com/resources/magic-rules/#R6148)): "Regeneration is a
+    // (see [CR 614.8](https://yawgatog.com/resources/magic-rules/#R6148)): "Regeneration is a
     // destruction-replacement effect."
     if !lethal.is_empty() {
         let destroyed = replacement::destruction(s, t, sink, lethal, Regeneration::Allowed)?;
@@ -154,7 +156,7 @@ fn doomed<L: Layout>(s: &State<L>, t: &GameTable) -> Doomed<L> {
         }
         let o = s.object(slot);
         let types = d.types;
-        // CR 702.12b: indestructible permanents "ignore the state-based action that checks
+        // See CR 702.12b: indestructible permanents "ignore the state-based action that checks
         // for lethal damage".
         let dies = types.contains(Types::CREATURE)
             && (d.toughness <= 0
@@ -211,7 +213,7 @@ fn destroyed_for_damage<L: Layout>(
 /// ([CR 704.5n](https://yawgatog.com/resources/magic-rules/#R7045n)): "If an Equipment or
 /// Fortification is attached to an illegal permanent or to a player, it becomes unattached
 /// from that permanent or player. It remains on the battlefield." What may be equipped is
-/// `attach::may_equip`'s (CR 301.5c). An Equipment whose creature left the battlefield is
+/// `attach::may_equip`'s (see CR 301.5c). An Equipment whose creature left the battlefield is
 /// already attached to nothing (`zone::leave` detaches it).
 #[inline]
 fn loose_equipment<L: Layout>(s: &State<L>, t: &GameTable) -> Bitboard<L::Slot> {
@@ -233,7 +235,7 @@ fn attached_illegally<L: Layout>(s: &State<L>, t: &GameTable) -> Bitboard<L::Slo
             continue;
         };
         // An Aura's is CR 704.5m's, above. An Equipment that lost the subtype is an object
-        // that may equip nothing (CR 301.5c).
+        // that may equip nothing (see CR 301.5c).
         if t.subtypes().has(Subtype::Aura).of(d.subtypes) {
             continue;
         }
@@ -295,7 +297,7 @@ pub(crate) fn end_game<L: Layout>(
 }
 
 /// Ends the game as an effect has each of `losers` lose it
-/// ([CR 104.3e](https://yawgatog.com/resources/magic-rules/#R1043e)): "An effect may state
+/// (see [CR 104.3e](https://yawgatog.com/resources/magic-rules/#R1043e)): "An effect may state
 /// that a player loses the game." With none of them, nothing ends.
 pub(crate) fn lose_game<L: Layout>(
     s: &mut State<L>,
@@ -338,7 +340,7 @@ fn end<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, causes: &Causes<L>) {
     sink.apart();
 }
 
-/// The name of the permanent in `slot`: its face up's (CR 712.6c, 712.6d).
+/// The name of the permanent in `slot`: its face up's (see CR 712.6c, 712.6d).
 fn name<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> &'static str {
     s.definition(slot).name(t)
 }

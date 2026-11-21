@@ -1,6 +1,8 @@
 //! An ability's Rust body, for what effect data cannot say (the crate's contract, "Custom
 //! bodies"): the escape hatch. A card's static data holds one concrete function
 //! for each storage [`Layout`], which [`custom_body`] makes of the one generic definition.
+//!
+//! Implements: none. Adapts custom card bodies to the supported state layouts.
 
 use core::marker::PhantomData;
 

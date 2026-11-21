@@ -19,7 +19,7 @@ use crate::state::{
     ChosenSource, Continuous, Duration, ObjectRef, PendingTrigger, Shield, StackEntry, Subject,
     ZoneKey,
 };
-use crate::{choices, continuous, continuous::rule_change, replacement};
+use crate::{continuous, continuous::rule_change, interpret::choices, replacement};
 
 /// Deals `amount` damage from `source` to a player or a permanent, combat damage with
 /// `combat` ([CR 120.3](https://yawgatog.com/resources/magic-rules/#R1203)). A permanent that

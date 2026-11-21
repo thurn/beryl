@@ -68,6 +68,8 @@
 //! How many questions an effect asks, in what order and with which candidates is part of
 //! every save and every rollout, which replay the answers by their place. A change to any of
 //! the three is a change of the save format.
+//!
+//! Implements: CR 608.2d
 
 use beryl_card::{ChosenKind, Effect, Objects, Place, Zone};
 use beryl_kernel::chosen::ChosenValue;
@@ -108,7 +110,7 @@ fn option<L: Layout>(
 }
 
 /// Asks `player` for a value of `kind`: a color, a creature type or a card name, one entry of
-/// the catalog [`crate::chosen`] numbers, about the objects `about`. The whole of a
+/// the catalog [`crate::interpret::catalog`] numbers, about the objects `about`. The whole of a
 /// [`Shape::Catalog`].
 pub fn catalog<L: Layout>(
     game: &mut Game<'_, L>,
@@ -117,9 +119,12 @@ pub fn catalog<L: Layout>(
     kind: ChosenKind,
     about: Bitboard<L::Slot>,
 ) -> Result<ChosenValue<L>, Stop> {
-    let d = crate::chosen::decision(game.table, player, kind, about)?;
+    let d = crate::interpret::catalog::decision(game.table, player, kind, about)?;
     let c = resolution.answer(game, &d)?;
-    Ok(crate::chosen::value(kind, d.candidates.option(c)))
+    Ok(crate::interpret::catalog::value(
+        kind,
+        d.candidates.option(c),
+    ))
 }
 
 /// Asks `player` for one of the values of `kind` that `keep` takes, by number, as `prompt`
@@ -135,9 +140,13 @@ pub fn catalog_among<L: Layout>(
     keep: impl Fn(u8) -> bool,
 ) -> Result<ChosenValue<L>, Stop> {
     debug_assert!(prompt.shape() == Shape::Catalog, "{prompt:?} is no catalog");
-    let d = crate::chosen::decision_among(game.table, player, kind, prompt, about, keep)?;
+    let d =
+        crate::interpret::catalog::decision_among(game.table, player, kind, prompt, about, keep)?;
     let c = resolution.answer(game, &d)?;
-    Ok(crate::chosen::value(kind, d.candidates.option(c)))
+    Ok(crate::interpret::catalog::value(
+        kind,
+        d.candidates.option(c),
+    ))
 }
 
 /// Asks `player` yes or no, as `prompt` says, about the objects `about`: the cards the
@@ -297,7 +306,7 @@ pub fn may_pick<L: Layout>(
 
 /// Asks `player` for a target of a copy of a spell as it is made: `kept`, the target it has,
 /// listed first, or one of `others`, the new targets it may have instead
-/// ([CR 707.10c](https://yawgatog.com/resources/magic-rules/#R70710c)): "The player may leave
+/// (see [CR 707.10c](https://yawgatog.com/resources/magic-rules/#R70710c)): "The player may leave
 /// any number of the targets unchanged, even if those targets would be illegal." A target spec
 /// that can choose players lists them by seat, then any abilities on the stack, the top first,
 /// then any objects in the candidate order, as the casting machine lists a target's options.
@@ -346,7 +355,7 @@ pub(crate) fn retarget<L: Layout>(
 
 /// Asks `player` what the objects `aimed`, chosen already, are aimed at, one of `targets`:
 /// the aim of a [`Shape::Declare`] with nothing left to declare. A resolution aims only
-/// attackers ([CR 508.4](https://yawgatog.com/resources/magic-rules/#R5084)): "If a creature
+/// attackers (see [CR 508.4](https://yawgatog.com/resources/magic-rules/#R5084)): "If a creature
 /// is put onto the battlefield attacking, its controller chooses which defending player,
 /// planeswalker a defending player controls, or battle a defending player protects it's
 /// attacking as it enters the battlefield". Returns the one chosen.
@@ -368,9 +377,9 @@ pub fn aim<L: Layout>(
 
 /// Asks `player` for one answer of a [`Shape::Pay`], among `options`: at [`Part::Plan`] a
 /// whole payment the engine worked out, and otherwise the next step of one made by hand
-/// ([CR 608.2g](https://yawgatog.com/resources/magic-rules/#R6082g)): "If an effect gives a
+/// (see [CR 608.2g](https://yawgatog.com/resources/magic-rules/#R6082g)): "If an effect gives a
 /// player the option to pay mana, they may activate mana abilities before taking that
-/// action." Returns the one chosen ([`crate::costs`] pays with it).
+/// action." Returns the one chosen ([`crate::casting::payment`] pays with it).
 pub fn pay<L: Layout>(
     game: &mut Game<'_, L>,
     resolution: &mut Resolution<'_, L>,

@@ -38,7 +38,7 @@ use crate::profile::Stops;
 use crate::replacement::event::{Entry, ReplacementKind, Sink};
 use crate::state::{AbilityMask, CounterKind, MoveReplacement, ObjectRef, State, Zone};
 use crate::table::{Capability, GameTable};
-use crate::{chosen, interpret};
+use crate::{interpret, interpret::catalog};
 use beryl_kernel::copiable::additions::Addition;
 use beryl_kernel::query::Copiable;
 
@@ -709,9 +709,9 @@ fn choose_value<L: Layout>(
     player: Seat,
     kind: ChosenKind,
 ) -> Result<ChosenValue<L>, Full> {
-    let d = chosen::decision(t, player, kind, Bitboard::single(slot))?;
+    let d = catalog::decision(t, player, kind, Bitboard::single(slot))?;
     let c = answer(s, sink, &d)?;
-    Ok(chosen::value(kind, d.candidates.option(c)))
+    Ok(catalog::value(kind, d.candidates.option(c)))
 }
 
 /// The kind of value the face `face` chooses as it enters, if it chooses one

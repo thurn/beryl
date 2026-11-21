@@ -1,18 +1,9 @@
-// New enum variants must be classified by each reader, and values must fit the receiving
-// representation in either state layout. Cargo requires the rest of the workspace lint
-// settings to be inherited as a unit, so the rules add these lints here.
-#![deny(
-    clippy::wildcard_enum_match_arm,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::cast_precision_loss
-)]
-
 //! Beryl's rules: turns, priority, casting, mana, combat, layers, triggers and the interpreter
 //! of effect data, over the kernel's state (`beryl_kernel`) and the card vocabulary
 //! (`beryl_card`). `docs/engine-architecture.md` is the design; section numbers in these docs
 //! refer to it.
+//!
+//! Implements: none. Documents the rules library contract.
 //!
 //! The rules are a state machine that never calls the AI: [`next`] advances a
 //! [`State`](state::State) until a player must decide or the game ends, and [`apply`] consumes
@@ -43,7 +34,7 @@
 //! and nothing else. A library function that changes the game takes `&mut Game`, makes its
 //! change through the kernel's mutators and sends the event through the pipeline
 //! (architecture §8.2), so triggers, replacement effects, the layers and the sink see it.
-//! Given an object that has changed zones since, it does nothing to it (CR 400.7). A function
+//! Given an object that has changed zones since, it does nothing to it (see CR 400.7). A function
 //! that only reads takes the state and the table, as the kernel's queries do
 //! ([`zones::library::top`]).
 //!
@@ -70,27 +61,27 @@
 //! ## Resolution
 //!
 //! A [`Resolution`] is one spell or ability resolving: its source, controller, card and
-//! ability, its targets and which of them were legal as it began (CR 608.2b), the costs paid
+//! ability, its targets and which of them were legal as it began (see CR 608.2b), the costs paid
 //! for it, X, what triggered it, and the record its questions are answered from. It also
 //! carries what a resolution leaves for the engine: the question it paused at, and a card it
-//! lets a player cast as it finishes (CR 608.2g).
+//! lets a player cast as it finishes (see CR 608.2g).
 //!
 //! A library function takes a resolution beside the game only when what it does makes sense
 //! only while something resolves: it reads the source or the controller, or it asks. Destroy
 //! takes none; scry takes one.
 //!
-//! A choice made while resolving (CR 608.2d) is asked through [`choices`], which has the
-//! functions for each shape of prompt and is the one module that makes a resolution's
+//! A choice made while resolving (see CR 608.2d) is asked through [`interpret::choices`],
+//! which has the functions for each shape of prompt and is the one module that makes a resolution's
 //! question into a decision. A question the record cannot answer pauses the resolution,
 //! which is run again from the top with the answers so far (§7.3). So a function asks the
 //! same questions, in the same order, with the same options, every time it runs: a save and
-//! a rollout replay the answers, and a change to any of the three breaks them. [`choices`]
-//! says how an effect that needs several answers asks them.
+//! a rollout replay the answers, and a change to any of the three breaks them.
+//! [`interpret::choices`] says how an effect that needs several answers asks them.
 //!
 //! The kind of mana an [`Effect::AddMana`](beryl_card::Effect::AddMana) adds comes from, in
-//! order: the choice of a mana ability's activator (CR 605.3b), which the resolution carries;
+//! order: the choice of a mana ability's activator (see CR 605.3b), which the resolution carries;
 //! the one kind of a set that names one; and for a set of several outside a mana ability, a
-//! question asked as the effect is applied (CR 608.2d). The first is
+//! question asked as the effect is applied (see CR 608.2d). The first is
 //! [`Effect::AddMana`](beryl_card::Effect::AddMana), a mana ability's alone, and the second
 //! [`Effect::AddManaOfKind`](beryl_card::Effect::AddManaOfKind), a spell's or any other
 //! ability's; the third comes with its question, when a card first needs it.
@@ -124,11 +115,30 @@
 //! A library module is named for the rule it implements, so a rule number or the words on a
 //! card find the file.
 //!
-//! | Rules | Module | Built, and to come |
-//! | --- | --- | --- |
-//! | CR 701, keyword actions | `actions/`, a file for each, named as the rules name it | [`actions::counter`], [`actions::destroy`], [`actions::discard`], [`actions::exile`], [`actions::explore`], [`actions::fateseal`], [`actions::manifest`], [`actions::manifest_dread`], [`actions::mill`], [`actions::regenerate`], [`actions::reveal`], [`actions::sacrifice`], [`actions::scry`], [`actions::search`], [`actions::shuffle`], [`actions::tap`] (tap and untap), [`actions::transform`] |
-//! | CR 702, keyword abilities | `keywords/`, a file for each | [`keywords::flashback`]; kicker |
-//! | any other rule | a module named for the rule's title | [`game::ending`] the game (CR 104), [`mana`], which the engine's payment solver shares (CR 106), [`zones::tokens`] (CR 111), [`zones::emblems`] (CR 114), [`casting::payment`] (CR 118), [`game::life`] (CR 119), [`combat::damage`] (CR 120), [`zones::drawing`] (CR 121), [`zones::counters`] (CR 122), [`zones`] (CR 400), [`zones::library`] (CR 401), [`stack`] (CR 405), [`casting::start`] for spells an effect allows (CR 601), [`stack::delayed_triggers`] (CR 603.7), [`objects::linked`] abilities (CR 607), [`choices`] made while resolving (CR 608.2d), [`objects::one_shot`] effects (CR 610), [`continuous`] effects (CR 611), [`actions::coins`] (CR 705); [`objects::copy`] (CR 707) |
+//! - [`game`] starts and ends games and changes life totals (see CR 103, see CR 104, see CR 119).
+//! - [`turn`] advances phases and steps and handles their turn-based actions (see CR 500,
+//!   see CR 502, see CR 504, see CR 514, see CR 703).
+//! - [`casting`] handles land play, casting spells, activating abilities, selecting targets
+//!   and paying costs (see CR 115, see CR 116, see CR 118, see CR 601, see CR 602).
+//! - [`mana`] handles pools, mana abilities and the payment solver (see CR 106, see CR 605).
+//! - [`stack`] orders the stack, puts triggered abilities on it and resolves its top entry
+//!   (see CR 405, see CR 603, see CR 608).
+//! - [`continuous`] applies continuous effects, text changes and layers (see CR 611,
+//!   see CR 612, see CR 613).
+//! - [`replacement`] applies replacement and prevention effects, including protection
+//!   (see CR 614, see CR 615, see CR 616, see CR 702.16).
+//! - [`combat`] handles combat steps and damage (see CR 506, see CR 508, see CR 509,
+//!   see CR 510, see CR 511, see CR 120).
+//! - [`zones`] moves objects between zones and handles libraries, drawing, tokens, emblems
+//!   and counters (see CR 400, see CR 401, see CR 111, see CR 114, see CR 121, see CR 122).
+//! - [`objects`] handles copies, linked abilities, one-shot effects, phasing, face-down
+//!   permanents and mutate (see CR 607, see CR 610, see CR 707, see CR 702.26, see CR 702.140).
+//! - [`actions`] implements keyword actions and coin flips (see CR 701, see CR 705).
+//! - [`keywords`] implements flashback (see CR 702.34).
+//! - `engine/` builds decisions, advances the game to the next decision and applies answers
+//!   (see CR 117). `sba.rs` checks and performs state-based actions (see CR 704).
+//! - `interpret/` reads effect data and carries out its instructions, including choices
+//!   made during resolution (see CR 608.2c, see CR 608.2d, see CR 608.2f, see CR 608.2h).
 //!
 //! A module holds, in this order:
 //!
@@ -152,14 +162,14 @@
 //!
 //! ## The engine's own rules
 //!
-//! `continuous::layers` (CR 613) recomputes every permanent's characteristics one layer at a
-//! time. Its submodules handle dependencies (CR 613.8), static abilities granted in layer 6,
-//! and a permanent's prospective characteristics as it enters (CR 614.12).
+//! `continuous::layers` (see CR 613) recomputes every permanent's characteristics one layer at a
+//! time. Its submodules handle dependencies (see CR 613.8), static abilities granted in layer 6,
+//! and a permanent's prospective characteristics as it enters (see CR 614.12).
 //! `replacement` proposes moves, damage, draws and destructions, then applies the replacement
-//! and prevention effects in the order of CR 616.1. `replacement::protection` checks protection
-//! (CR 702.16) for targeting, attachment and blocking. `stack::trigger` (CR 603) matches events,
-//! look-back triggers (CR 603.10a) and state triggers (CR 603.8) against the card table's
-//! listeners. `sba` handles state-based actions (CR 704). A library function that changes
+//! and prevention effects in the required order (see CR 616.1). `replacement::protection` checks protection
+//! (see CR 702.16) for targeting, attachment and blocking. `stack::trigger` (see CR 603) matches events,
+//! look-back triggers (see CR 603.10a) and state triggers (see CR 603.8) against the card table's
+//! listeners. `sba` handles state-based actions (see CR 704). A library function that changes
 //! the game sends its event through `replacement::event::settle`, which refreshes the layers,
 //! matches triggers and records the event.
 //!
@@ -207,12 +217,21 @@
 //! when the first is needed: a trait whose method reads the state, and a `const fn` beside
 //! [`custom_body`].
 
+// New enum variants must be classified by each reader, and values must fit the receiving
+// representation in either state layout. Cargo requires the rest of the workspace lint
+// settings to be inherited as a unit, so the rules add these lints here.
+#![deny(
+    clippy::wildcard_enum_match_arm,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss
+)]
+
 pub mod actions;
 mod bodies;
 pub mod card;
 pub mod casting;
-pub mod choices;
-mod chosen;
 pub mod combat;
 pub mod continuous;
 pub mod coverage;
@@ -262,6 +281,7 @@ pub use engine::{
     next_within, observe, paused_events, refusal, view,
 };
 pub use game::Game;
+pub use interpret::choices;
 pub use keywords::flashback::paid as flashback_paid;
 pub use mana::mana_contribution;
 pub use reference::check_references;

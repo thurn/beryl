@@ -4,7 +4,9 @@
 //! The question offers one [`Opt::Number`] per value, numbered as [`ChosenValue::candidates`]
 //! numbers them, so a recorded answer names the same value in every run that asks it. A
 //! permanent asks it as it enters ([`crate::replacement`]); a resolving spell or ability asks it
-//! through [`crate::choices::catalog`].
+//! through [`crate::interpret::choices::catalog`].
+//!
+//! Implements: none. Builds and decodes catalog decisions.
 
 use beryl_card::ChosenKind;
 use beryl_kernel::chosen::ChosenValue;

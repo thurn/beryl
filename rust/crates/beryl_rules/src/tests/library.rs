@@ -15,7 +15,7 @@ use crate::state::{ObjectRef, StackEntry, StackItem, TargetPlaces, TurnStep, Zon
 use crate::zone::Place;
 use crate::{
     Choice, Decision, DecisionKind, GameTable, Opt, PlayerSet, Profile, Scratch, State,
-    actions::coins, choices, zones::library, zones::tokens,
+    actions::coins, interpret::choices, zones::library, zones::tokens,
 };
 use beryl_card::effect::build::{scry, you};
 use beryl_kernel::two_player::TwoPlayerSeat as _;

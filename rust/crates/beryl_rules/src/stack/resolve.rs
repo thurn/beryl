@@ -11,7 +11,7 @@
 //! and it runs again from the start. An inline answer source runs every body once on the
 //! state itself.
 //!
-//! Implements: CR 608.2, CR 608.3
+//! Implements: CR 608.2b, CR 608.2m, CR 608.2n, CR 608.3
 
 use crate::bitboard::Bitboard;
 use crate::card::{Ability, AbilityKind, CastingOption, Face};

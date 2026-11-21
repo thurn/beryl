@@ -5,6 +5,8 @@
 //! effect it is, and what that resolution has done so far ([`Registers`]). Reading changes
 //! nothing, so the same reader serves an ability as it triggers, where there is no
 //! resolution yet, and as it resolves.
+//!
+//! Implements: CR 107.1b, CR 109.5, CR 608.2h
 
 use beryl_card::{Amount, CastingKind, Condition, Objects, Players, SpecIx, Types, Words};
 
@@ -73,7 +75,7 @@ impl<L: Layout> Outcome<L> {
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct Known<L: Layout> {
     pub(crate) controller: Seat,
-    /// Its copiable values ([CR 707.2](https://yawgatog.com/resources/magic-rules/#R7072)),
+    /// Its copiable values (see [CR 707.2](https://yawgatog.com/resources/magic-rules/#R7072)),
     /// which a copy of it made after it left has.
     pub(crate) copiable: Option<Copiable<L>>,
     pub(crate) power: i8,
@@ -87,7 +89,7 @@ pub(crate) struct Known<L: Layout> {
 pub(crate) struct Registers<L: Layout> {
     /// The targets that were legal as the resolution began, by their places in the entry's
     /// list
-    /// ([CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)): "If the spell or
+    /// (see [CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)): "If the spell or
     /// ability specifies targets, it checks whether the targets are still legal" as it
     /// begins to resolve, and "Illegal targets, if any, won't be affected by parts of a
     /// resolving spell's effect for which they're illegal."
@@ -160,7 +162,7 @@ impl<L: Layout> Scene<'_, L> {
 
     /// The targets among [`Scene::targets`] the effect has moved, as they were last known.
     /// One an instruction set out to move and could not, as when what would have exiled it
-    /// had left first (CR 610.3b), is still what [`Scene::objects`] names, and is not here.
+    /// had left first (see CR 610.3b), is still what [`Scene::objects`] names, and is not here.
     pub(crate) fn moved(&self, objects: Objects) -> impl Iterator<Item = &Known<L>> + '_ {
         let spec = match objects {
             Objects::Target(spec) => Some(spec),
@@ -207,7 +209,7 @@ impl<L: Layout> Scene<'_, L> {
     }
 
     /// The objects `objects` names that are where they were: one that has changed zones is
-    /// a new object ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)), which
+    /// a new object (see [CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)), which
     /// only [`Objects::Those`] follows.
     pub(crate) fn objects(&self, objects: Objects) -> Bitboard<L::Slot> {
         let s = self.s;
@@ -224,7 +226,7 @@ impl<L: Layout> Scene<'_, L> {
                 .filter(|&object| s.is_current(object))
                 .map(|object| object.slot)
                 .collect(),
-            // CR 303.4b: "The object or player an Aura is attached to is called enchanted."
+            // See CR 303.4b: "The object or player an Aura is attached to is called enchanted."
             // Asked of the source where it is now: once it has left the battlefield it is
             // attached to nothing.
             Objects::AttachedTo => self
@@ -238,7 +240,7 @@ impl<L: Layout> Scene<'_, L> {
             Objects::TriggeredOn => (self.subject.info.object)
                 .filter(|&object| s.is_current(object))
                 .map_or(Bitboard::EMPTY, |object| Bitboard::single(object.slot)),
-            // CR 603.7c: "if that object is no longer in the zone it's expected to be in at
+            // See CR 603.7c: "if that object is no longer in the zone it's expected to be in at
             // the time the delayed triggered ability resolves, the ability won't affect it."
             // A delayed ability carries its object in the place a trigger keeps what its
             // event was about, and one that has changed zones is no longer current.
@@ -248,7 +250,7 @@ impl<L: Layout> Scene<'_, L> {
             Objects::TriggeredOnIn(zone) => (self.subject.info.object)
                 .filter(|&object| s.is_current(object) && s.object(object.slot).zone() == zone)
                 .map_or(Bitboard::EMPTY, |object| Bitboard::single(object.slot)),
-            // CR 607.2a: "The second ability refers only to cards in the exile zone that
+            // See CR 607.2a: "The second ability refers only to cards in the exile zone that
             // were put there as a result of an instruction to exile them in the first
             // ability." An ability of an object that has left still refers to the cards
             // that object exiled, so its slot is asked whether or not it is current.
@@ -269,7 +271,7 @@ impl<L: Layout> Scene<'_, L> {
                 zone: zone @ (Zone::Library | Zone::Hand | Zone::Graveyard),
                 filter: Filter::Whose(&Players::You),
             } => s.zone(ZoneKey::Of(self.you(), zone)),
-            // CR 400.1: "Each player has their own library, hand, and graveyard."
+            // See CR 400.1: "Each player has their own library, hand, and graveyard."
             Objects::InZoneOf {
                 zone,
                 players,
@@ -282,7 +284,7 @@ impl<L: Layout> Scene<'_, L> {
                 }
                 filter.select_x(s, self.t, within, self.you(), &self.words(), self.x)
             }
-            // CR 400.1: "Each player has their own library, hand, and graveyard."
+            // See CR 400.1: "Each player has their own library, hand, and graveyard."
             Objects::CardsIn { players, zones } => {
                 let mut cards = Bitboard::EMPTY;
                 for player in self.players(*players).in_seat_order() {
@@ -305,7 +307,7 @@ impl<L: Layout> Scene<'_, L> {
                 };
                 filter.select_x(s, self.t, within, self.you(), &self.words(), self.x)
             }
-            // CR 611.3b: the cards in every zone, the spells and the permanents.
+            // See CR 611.3b: the cards in every zone, the spells and the permanents.
             Objects::Everywhere(filter) => {
                 let mut within: Bitboard<L::Slot> = s.battlefield().iter().copied().collect();
                 within |= casting::spells(s);
@@ -315,7 +317,7 @@ impl<L: Layout> Scene<'_, L> {
                 filter.select_x(s, self.t, within, self.you(), &self.words(), self.x)
             }
             // "Each other creature": the set without the ability's source. A source that has
-            // changed zones since is a new object (CR 400.7), which is "other".
+            // changed zones since is a new object (see CR 400.7), which is "other".
             Objects::Other(objects) => {
                 let mut others = self.objects(*objects);
                 if let Some(source) = self.subject.of.source.filter(|&o| s.is_current(o)) {
@@ -332,9 +334,9 @@ impl<L: Layout> Scene<'_, L> {
             // CR 109.5: "The words 'you' and 'your' on an object refer to the object's
             // controller".
             Players::You => PlayerSet::only(self.you()),
-            // CR 102.2: "In a two-player game, a player's opponent is the other player."
+            // See CR 102.2: "In a two-player game, a player's opponent is the other player."
             Players::EachOpponent => self.s.opponents_of(self.you()),
-            // CR 102.1: "A player is one of the people in the game."
+            // See CR 102.1: "A player is one of the people in the game."
             Players::EachPlayer => self.s.players(),
             Players::Target(spec) => {
                 let mut who = PlayerSet::NOBODY;
@@ -363,7 +365,7 @@ impl<L: Layout> Scene<'_, L> {
                 }
                 who
             }
-            // CR 108.3: "The owner of a card in the game is the player who started the game
+            // See CR 108.3: "The owner of a card in the game is the player who started the game
             // with it in their deck." A slot keeps its owner through every move.
             Players::OwnerOf(objects) => {
                 let mut who = self
@@ -379,7 +381,7 @@ impl<L: Layout> Scene<'_, L> {
                 }
                 who
             }
-            // CR 102.1: everyone in the game, but them.
+            // See CR 102.1: everyone in the game, but them.
             Players::EachOther(players) => {
                 let mut who = self.s.players();
                 for player in self.players(*players).in_seat_order() {
@@ -400,11 +402,11 @@ impl<L: Layout> Scene<'_, L> {
     }
 
     /// The controller of one of [`Objects::Those`]: of a permanent or a spell, its controller
-    /// ([CR 108.4](https://yawgatog.com/resources/magic-rules/#R1084)): "A card doesn't have
+    /// (see [CR 108.4](https://yawgatog.com/resources/magic-rules/#R1084)): "A card doesn't have
     /// a controller unless that card represents a permanent or spell". Of a card anywhere
     /// else that the last instruction to move any set out to move, the player who controlled
     /// it as that instruction did ([`Registers::controlled`], CR 608.2h), and of any other
-    /// its owner (CR 108.4a).
+    /// its owner (see CR 108.4a).
     fn controller(&self, slot: L::Slot) -> Seat {
         let s = self.s;
         let now = s.controller(slot);
@@ -487,7 +489,7 @@ impl<L: Layout> Scene<'_, L> {
             Amount::Count(objects) => self.objects(*objects).count().cast_signed(),
             Amount::Times(n, amount) => i32::from(n) * self.value(*amount),
             Amount::Plus(n, amount) => self.value(*amount) + i32::from(n),
-            // CR 300.1: each card type once, among the cards: a token is none (CR 108.2).
+            // See CR 300.1: each card type once, among the cards: a token is none (see CR 108.2).
             // A union of types, the same in any order the cards are read.
             Amount::CardTypesAmong(objects) => {
                 let types = self
@@ -498,7 +500,7 @@ impl<L: Layout> Scene<'_, L> {
                     });
                 types.0.count_ones().cast_signed()
             }
-            // CR 119.1: a player's life total, which may be below zero.
+            // See CR 119.1: a player's life total, which may be below zero.
             Amount::Life(players) => {
                 let who = self.players(players);
                 let players = who.in_seat_order();
@@ -566,7 +568,7 @@ impl<L: Layout> Scene<'_, L> {
             }
             Condition::Token(names) => self.is_a_token(names),
             // "If it's on the battlefield": of the ability's source, still the object it was
-            // (CR 400.7).
+            // (see CR 400.7).
             Condition::OnBattlefield(names) => {
                 let objects = self.objects(names);
                 !objects.is_empty() && objects.all(|slot| self.s.object(slot).on_battlefield())
@@ -590,7 +592,7 @@ impl<L: Layout> Scene<'_, L> {
                 !objects.is_empty()
                     && objects.all(|slot| self.s.tracked(Tracker::EnteredThisTurn, slot))
             }
-            // CR 504.1: whether each of the players has drawn a card in their own draw step
+            // See CR 504.1: whether each of the players has drawn a card in their own draw step
             // this turn, counted in a game with a card that asks
             // (`beryl_kernel`'s `Capability::DrewInDrawStep`).
             Condition::DrewInDrawStep(players) => {
@@ -608,7 +610,7 @@ impl<L: Layout> Scene<'_, L> {
     /// Whether there is an object `names` names and every one is a token. The ability's own
     /// source that has left the battlefield is read as it last was there, from the last-known
     /// information an ability that triggered on its leaving kept ([`State::last_known`])
-    /// ([CR 603.10a](https://yawgatog.com/resources/magic-rules/#R60310a)): "Some zone-change
+    /// (see [CR 603.10a](https://yawgatog.com/resources/magic-rules/#R60310a)): "Some zone-change
     /// triggers look back in time."
     fn is_a_token(&self, names: Objects) -> bool {
         let objects = self.objects(names);
@@ -626,11 +628,11 @@ impl<L: Layout> Scene<'_, L> {
     }
 
     /// Whether the spell was cast with this kind of cost, or the permanent's spell was
-    /// ([CR 702.33d](https://yawgatog.com/resources/magic-rules/#R70233d)): "If a spell's
+    /// (see [CR 702.33d](https://yawgatog.com/resources/magic-rules/#R70233d)): "If a spell's
     /// controller declares the intention to pay any of that spell's kicker costs, that spell
     /// has been 'kicked.'" A permanent remembers each kind its spell paid
     /// ([`entered_with`]); none is overloaded, as only an instant or sorcery has overload
-    /// ([CR 702.96a](https://yawgatog.com/resources/magic-rules/#R70296a)).
+    /// (see [CR 702.96a](https://yawgatog.com/resources/magic-rules/#R70296a)).
     fn paid(&self, kind: CastingKind) -> bool {
         if let Some(costs) = self.costs {
             let face = self.t.def(self.subject.of.card).face(self.subject.of.face);

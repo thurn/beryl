@@ -1,5 +1,7 @@
 //! The engine loop: `next` advances to the next decision, `apply` consumes one answer
 //! (architecture §3, §7).
+//!
+//! Implements: CR 117.1, CR 117.3, CR 117.4, CR 117.5
 
 use crate::casting::land::play_land;
 use crate::decision::{Answers, Choice, Decision, DecisionKind, Opt, Outcome, StallReason, Step};
@@ -37,10 +39,10 @@ pub fn view<'a, L: Layout>(s: &'a State<L>, t: &GameTable, x: &'a mut Scratch<L>
 }
 
 /// `player` concedes, ending the game, unless it is over already
-/// ([CR 104.3a](https://yawgatog.com/resources/magic-rules/#R1043a)): "A player can concede the
+/// (see [CR 104.3a](https://yawgatog.com/resources/magic-rules/#R1043a)): "A player can concede the
 /// game at any time. A player who concedes leaves the game immediately. That player loses the
 /// game." Their opponent, the one player left, wins
-/// ([CR 104.2a](https://yawgatog.com/resources/magic-rules/#R1042a)): "A player still in the
+/// (see [CR 104.2a](https://yawgatog.com/resources/magic-rules/#R1042a)): "A player still in the
 /// game wins the game if that player's opponents have all left the game."
 pub fn concede<L: Layout>(s: &mut State<L>, x: &mut Scratch<L>, player: Seat) {
     if s.outcome().is_none() {
@@ -114,7 +116,7 @@ pub fn observe<'a, L: Layout>(
 /// silently, so a player whose only legal action is to pass passes silently. Under smart stops
 /// a player away from a stop passes silently too (§15).
 ///
-/// [CR 704.3](https://yawgatog.com/resources/magic-rules/#R7043): "If any state-based actions
+/// See [CR 704.3](https://yawgatog.com/resources/magic-rules/#R7043): "If any state-based actions
 /// are performed as a result of a check, the check is repeated; otherwise all triggered
 /// abilities that are waiting to be put on the stack are put on the stack, then the check is
 /// repeated." Waiting triggers come before priority as decisions of their own, one pick at a
@@ -143,7 +145,7 @@ pub fn next<L: Layout>(
 /// receives priority at the beginning of most steps and phases, after any turn-based actions
 /// (such as drawing a card during the draw step; see rule 703) have been dealt with". The
 /// untap step is never seen on its own, as it ends at once
-/// ([CR 502.4](https://yawgatog.com/resources/magic-rules/#R5024)): "No player receives
+/// (see [CR 502.4](https://yawgatog.com/resources/magic-rules/#R5024)): "No player receives
 /// priority during the untap step".
 pub fn next_in_step<L: Layout>(
     s: &mut State<L>,
@@ -295,7 +297,7 @@ fn advance<L: Layout>(
             }
             if s.turn().cleanup_check() {
                 s.set_cleanup_check(false);
-                // CR 514.3a: with no state-based actions and no waiting triggers, no player
+                // See CR 514.3a: with no state-based actions and no waiting triggers, no player
                 // receives priority and the turn ends.
                 if s.triggers().is_empty() {
                     stall_if_full(turn::begin_turn(s, t, &mut x.events), s);
@@ -437,13 +439,13 @@ fn stall_if_full<L: Layout>(done: Result<(), Full>, s: &mut State<L>) {
 /// mana abilities' effects, which open scopes of their own.
 ///
 /// A player's own action is taking a special action
-/// ([CR 116.1](https://yawgatog.com/resources/magic-rules/#R1161): "Special actions are
+/// (see [CR 116.1](https://yawgatog.com/resources/magic-rules/#R1161): "Special actions are
 /// actions a player may take when they have priority that don't use the stack."), activating
 /// a mana ability, or any step of casting a spell, activating an ability
-/// ([CR 602.2b](https://yawgatog.com/resources/magic-rules/#R6022b): "The remainder of the
+/// (see [CR 602.2b](https://yawgatog.com/resources/magic-rules/#R6022b): "The remainder of the
 /// process for activating an ability is identical to the process for casting a spell listed
 /// in rules 601.2b-i.") or putting a triggered ability on the stack
-/// ([CR 603.3b](https://yawgatog.com/resources/magic-rules/#R6033b): "each player, in APNAP
+/// (see [CR 603.3b](https://yawgatog.com/resources/magic-rules/#R6033b): "each player, in APNAP
 /// order, puts each triggered ability they control ... on the stack in any order they
 /// choose"), which names that spell or ability: the top of the stack once it is there, the
 /// place above the top as it is put there.
@@ -451,10 +453,10 @@ fn stall_if_full<L: Layout>(done: Result<(), Full>, s: &mut State<L>) {
 /// Every other answer is the game's and opens no scope: passing priority resolves the top of
 /// the stack or ends the step, declaring attackers and blockers and dealing combat damage are
 /// turn-based actions
-/// ([CR 703.1](https://yawgatog.com/resources/magic-rules/#R7031): "Turn-based actions are
+/// (see [CR 703.1](https://yawgatog.com/resources/magic-rules/#R7031): "Turn-based actions are
 /// game actions that happen automatically when certain steps or phases begin, or when each
 /// step and phase ends."), as is the cleanup step's discard, the legend rule is a
-/// state-based action, and the mulligans are the game's procedure for starting (CR 103).
+/// state-based action, and the mulligans are the game's procedure for starting (see CR 103).
 ///
 /// No resolution is under way while a decision is carried out as a player's action, so a
 /// place on the stack is the state's index there ([`StackIx`]).
@@ -494,7 +496,7 @@ fn perform_priority<L: Layout>(
         | Opt::TurnFaceUp(_)
         | Opt::Mana { .. } => {
             // An action other than passing: no loop through it is one of mandatory actions
-            // (CR 104.4b).
+            // (see CR 104.4b).
             s.note_choice();
             act(s, &mut x.events, player, Some(option));
             let done = take_action(s, t, x, player, option);
@@ -586,7 +588,7 @@ fn perform<L: Layout>(
     let object = || d.candidates.object(c).expect("an object choice");
     let option = || d.candidates.option(c).expect("an option choice");
     // A choice among several means no loop through this moment is one of mandatory actions
-    // (CR 104.4b; [`crate::stack::resolve::resolve`]). A priority action other than passing is
+    // (see CR 104.4b; [`crate::stack::resolve::resolve`]). A priority action other than passing is
     // noted where it is taken ([`perform_priority`]).
     if d.kind != DecisionKind::Priority && d.len() > 1 {
         s.note_choice();
@@ -653,7 +655,7 @@ fn perform<L: Layout>(
         | DecisionKind::ChooseObject
         | DecisionKind::ChooseUpTo => unreachable!("answered through the pending state"),
         DecisionKind::PlayOrDraw => {
-            // Of two: with more players the chooser names who takes the first turn (CR 103.1).
+            // Of two: with more players the chooser names who takes the first turn (see CR 103.1).
             let starting = if option() == Opt::Play {
                 d.player
             } else {

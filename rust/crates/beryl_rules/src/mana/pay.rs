@@ -691,7 +691,8 @@ pub(crate) fn activate_chosen<L: Layout>(
     slot: L::Slot,
     opt: Option<Opt<L>>,
 ) -> Result<(), Full> {
-    let ChosenValue::Color(colors) = crate::chosen::value(ChosenKind::Color, opt) else {
+    let ChosenValue::Color(colors) = crate::interpret::catalog::value(ChosenKind::Color, opt)
+    else {
         unreachable!("a color among a color's candidates");
     };
     activate(s, t, sink, slot, ManaColor::ALL[lowest_kind(colors.0)])

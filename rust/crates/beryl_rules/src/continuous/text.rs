@@ -9,9 +9,9 @@
 use beryl_card::{ChosenKind, Objects, Prompt, Purpose, TextWord, Zone};
 
 use crate::card::Stop;
-use crate::choices;
 use crate::continuous::lasting;
 use crate::continuous::layers;
+use crate::interpret::choices;
 use crate::interpret::{Outcome, Run};
 use crate::layout::{Layout, Queue};
 use crate::state::Continuous;

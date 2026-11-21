@@ -6,8 +6,8 @@ use beryl_card::{Objects, Prompt, Purpose, prompt};
 
 use crate::bitboard::Bitboard;
 use crate::card::Stop;
-use crate::choices;
 use crate::continuous::layers;
+use crate::interpret::choices;
 use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
 use crate::replacement::event::Event;

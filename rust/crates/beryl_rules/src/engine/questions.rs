@@ -1,4 +1,6 @@
 //! The engine's open decision and the legal actions it can offer.
+//!
+//! Implements: CR 608.2g, CR 712.9, CR 724.5
 
 use crate::bitboard::Bitboard;
 use crate::card::{ChosenKind, FaceIx, Prompt, Purpose, Types};
@@ -15,8 +17,8 @@ use crate::state::{Pending, State};
 use crate::table::GameTable;
 use crate::turn::paused_step;
 use crate::{
-    casting, chosen, combat, continuous::arrival_timestamps, mana, objects::face_down, sba,
-    stack::resolve, stack::trigger, turn,
+    casting, combat, continuous::arrival_timestamps, interpret::catalog, mana, objects::face_down,
+    sba, stack::resolve, stack::trigger, turn,
 };
 
 use super::{act, collapse};
@@ -93,7 +95,7 @@ pub(crate) fn decision<L: Layout>(
         )?
         .about(Bitboard::single(slot))),
         // The question is about the permanent whose mana ability is being activated.
-        Pending::ManaColor { slot, .. } => chosen::decision(
+        Pending::ManaColor { slot, .. } => catalog::decision(
             t,
             s.controller(slot),
             ChosenKind::Color,
@@ -101,7 +103,7 @@ pub(crate) fn decision<L: Layout>(
         ),
         // The question is about the land entering.
         Pending::EnterChoosing { slot, kind, .. } => {
-            chosen::decision(t, s.object(slot).owner(), kind, Bitboard::single(slot))
+            catalog::decision(t, s.object(slot).owner(), kind, Bitboard::single(slot))
         }
         Pending::DeclareAttackers { attacker } => combat::attack_decision(s, t, attacker),
         Pending::DeclareBlockers { blocker } => combat::block_decision(s, t, blocker),
@@ -178,12 +180,12 @@ fn priority_decision<L: Layout>(s: &State<L>, t: &GameTable) -> Result<Decision<
 /// Whether `d` is a priority decision whose only action is passing, but for activating mana
 /// abilities on their own: the engine answers it as a lone pass where it would one, as floating
 /// mana that nothing else can spend now changes nothing
-/// ([CR 106.4](https://yawgatog.com/resources/magic-rules/#R1064): "Each player's mana pool
+/// (see [CR 106.4](https://yawgatog.com/resources/magic-rules/#R1064): "Each player's mana pool
 /// empties at the end of each step and phase").
 ///
 /// So is a priority whose other actions are activations that would do nothing, for the player
-/// offered them quietly ([`crate::Profile::quiet_pointless`]): paying a cost for no effect is
-/// legal ([CR 602.2](https://yawgatog.com/resources/magic-rules/#R6022)), but no reason to stop.
+/// offered them quietly ([`crate::profile::Profile::quiet_pointless`]): paying a cost for no effect is
+/// legal (see [CR 602.2](https://yawgatog.com/resources/magic-rules/#R6022)), but no reason to stop.
 pub(super) fn only_idle<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>) -> bool {
     let floats = s.profile().floats_for(d.player);
     let quiet = s.profile().quiet_pointless == Some(d.player);
@@ -236,9 +238,9 @@ pub(crate) fn land_face<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -
 /// nearly legal way of playing it breaks. None if one way is legal. It reads what their
 /// priority's candidates do, so it tells them nothing they don't know.
 ///
-/// [CR 305.1](https://yawgatog.com/resources/magic-rules/#R3051): "A player who has priority
+/// See [CR 305.1](https://yawgatog.com/resources/magic-rules/#R3051): "A player who has priority
 /// may play a land card from their hand during a main phase of their turn when the stack is
-/// empty." [CR 305.2](https://yawgatog.com/resources/magic-rules/#R3052): "A player can
+/// empty." See [CR 305.2](https://yawgatog.com/resources/magic-rules/#R3052): "A player can
 /// normally play one land during their turn".
 pub fn refusal<L: Layout>(
     obs: Observation<'_, L>,

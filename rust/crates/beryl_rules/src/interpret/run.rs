@@ -6,6 +6,8 @@
 //! that does, and otherwise on each permanent in the order they entered the battlefield, an
 //! order the game can see (slots are none: the deal puts cards in them at random). Either
 //! way the events of such an instruction are kept as one group ([`at_once`]).
+//!
+//! Implements: CR 608.2f
 
 use beryl_card::{Effect, Objects, Players};
 use beryl_kernel::reference::{Permanent, Permanents};
@@ -30,7 +32,7 @@ use crate::stack::delayed_triggers;
 use crate::state::TriggeredAbility;
 use crate::state::{AbilityRef, PendingTrigger, StackItem, State, Zone, placed};
 use crate::zones::{self, counters, drawing, emblems, library, tokens};
-use crate::{choices, combat::damage, continuous, continuous::layers, mana};
+use crate::{combat::damage, continuous, continuous::layers, interpret::choices, mana};
 
 /// One resolution of an ability written as data: the game, what is resolving in it, and
 /// what it keeps between instructions.
@@ -136,7 +138,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
                 }
                 return Ok(());
             }
-            // CR 608.2h: "the answer is determined only once, when the effect is applied."
+            // See CR 608.2h: "the answer is determined only once, when the effect is applied."
             Effect::If {
                 condition,
                 then,
@@ -149,7 +151,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
                 };
                 return self.carry_out_or_nothing(branch);
             }
-            // CR 608.2d: "If an effect of a spell or ability offers any choices ..., the
+            // See CR 608.2d: "If an effect of a spell or ability offers any choices ..., the
             // player announces these while applying the effect."
             Effect::May { player, effect } => {
                 return choices::may_instruction(self, player, effect);
@@ -471,7 +473,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     }
 
     /// The permanents among the objects `objects` names
-    /// ([CR 110.1](https://yawgatog.com/resources/magic-rules/#R1101)): "A permanent is a
+    /// (see [CR 110.1](https://yawgatog.com/resources/magic-rules/#R1101)): "A permanent is a
     /// card or token on the battlefield."
     pub(crate) fn permanents(&self, objects: Objects) -> Permanents<L> {
         self.state().permanents_in(self.scene().objects(objects))
@@ -484,7 +486,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
     }
 
     /// Notes who controls each of `leaving`, and what is known of the targets among them,
-    /// before the effect moves them, for the instructions after (CR 608.2h): "the effect
+    /// before the effect moves them, for the instructions after (see CR 608.2h): "the effect
     /// uses the object's last known information."
     ///
     /// A controller is read through the layers, which an instruction before may have
@@ -512,7 +514,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
 
     /// The outcome of an instruction that moved `permanents` off the battlefield: those that
     /// left it, as they are now
-    /// ([CR 400.7j](https://yawgatog.com/resources/magic-rules/#R4007j)): "If an effect
+    /// (see [CR 400.7j](https://yawgatog.com/resources/magic-rules/#R4007j)): "If an effect
     /// causes an object to move to a public zone, other parts of that effect can find that
     /// object."
     pub(crate) fn left_the_battlefield(&self, permanents: Bitboard<L::Slot>) -> Outcome<L> {
@@ -543,7 +545,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
 ///
 /// Not so the instructions of several steps (a search and its shuffle, a look and what is
 /// done with each card), those that take whole other actions (casting a spell), nor draws
-/// ([CR 121.2](https://yawgatog.com/resources/magic-rules/#R1212)): "Cards may only be drawn
+/// (see [CR 121.2](https://yawgatog.com/resources/magic-rules/#R1212)): "Cards may only be drawn
 /// one at a time. If a player is instructed to draw multiple cards, that player performs
 /// that many individual card draws." A move of several cards those make is still one event,
 /// which the move itself says (`event::move_batch`).

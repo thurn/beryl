@@ -6,6 +6,8 @@
 //! - The layer results and the caches found with them, against a recompute from scratch.
 //! - Payability: the prefilter, the cached funds and the solver's plans, against a matching
 //!   of each mana symbol to a unit of mana from the pool or a mana ability read off the cards.
+//!
+//! Implements: none. Checks optimized implementations against reference calculations.
 
 use crate::bitboard::Bitboard;
 use crate::card::{AbilityKind, CostAction, CostPart, Keywords, ManaCost, Types};
@@ -64,7 +66,7 @@ pub fn check_references<L: Layout>(s: &State<L>, t: &GameTable) -> Result<(), Vi
 
 /// The layer results, the listeners, the players' rules and the knowledge the layers give,
 /// against a recompute from base
-/// ([CR 613.1](https://yawgatog.com/resources/magic-rules/#R6131)):
+/// (see [CR 613.1](https://yawgatog.com/resources/magic-rules/#R6131)):
 /// "The values of an object's characteristics are determined by starting with the actual
 /// object ... Then all applicable continuous effects are applied in a series of layers".
 /// A chokepoint that changes a layer input without marking the results dirty leaves them
@@ -180,7 +182,7 @@ fn check_payments<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Resul
 
 /// Whether `player` can pay the mana cost of each card in their hand for casting it, as the
 /// prefilter, the cached funds and the solver say, against [`reference_pays`] with the
-/// restricted mana that spell accepts among the units ([CR 106.6]): "Some spells or
+/// restricted mana that spell accepts among the units (see [CR 106.6]): "Some spells or
 /// abilities that produce mana restrict how that mana can be spent". Only in a game whose
 /// cards make restricted mana: in any other, a payment for a spell is one for nothing, which
 /// [`check_payments`] checks.
@@ -262,15 +264,15 @@ type Units = Fixed<u8, UNITS>;
 /// kinds it may be: their floating mana, and one tap of each untapped permanent they control
 /// with a mana ability whose only costs are {T} and perhaps sacrificing it, read from its face
 /// up. Mana whose spending is restricted counts only where its restriction accepts the spell
-/// being paid for ([CR 106.6]), so never for a cost of no spell. `None` where a
+/// being paid for (see [CR 106.6]), so never for a cost of no spell. `None` where a
 /// permanent's mana abilities make different amounts, which units cannot say, or where there
 /// are more than [`UNITS`].
 ///
-/// [CR 605.1a](https://yawgatog.com/resources/magic-rules/#R6051a): "An activated ability is
+/// See [CR 605.1a](https://yawgatog.com/resources/magic-rules/#R6051a): "An activated ability is
 /// a mana ability if it meets all of the following criteria: it doesn't require a target ...,
 /// it could add mana to a player's mana pool when it resolves, it's not a loyalty ability ...,
 /// and its cost and effect don't move any card to or from a library."
-/// [CR 302.6](https://yawgatog.com/resources/magic-rules/#R3026): "A creature's activated
+/// See [CR 302.6](https://yawgatog.com/resources/magic-rules/#R3026): "A creature's activated
 /// ability with the tap symbol or the untap symbol in its activation cost can't be activated
 /// unless the creature has been under its controller's control continuously since their most
 /// recent turn began."
@@ -307,10 +309,10 @@ fn reference_units<L: Layout>(
         {
             continue;
         }
-        // The intrinsic mana abilities of its basic land types make one mana each (CR 305.6).
+        // The intrinsic mana abilities of its basic land types make one mana each (see CR 305.6).
         let mut kinds = s.intrinsic_mana(t, slot);
         let mut amount = (kinds != 0).then_some(1);
-        // A permanent that lost the ability has none to tap (CR 613.1f).
+        // A permanent that lost the ability has none to tap (see CR 613.1f).
         for (_, a) in s.abilities(t, slot) {
             // {T}, or {T} and sacrificing it, and nothing else.
             let tap_only = a.cost().mana.is_zero()
@@ -321,7 +323,7 @@ fn reference_units<L: Layout>(
                         CostPart::This(CostAction::Tap | CostAction::Sacrifice)
                     )
                 });
-            // Restricted mana pays only for what its restriction accepts (CR 106.6).
+            // Restricted mana pays only for what its restriction accepts (see CR 106.6).
             if a.kind() != AbilityKind::Mana
                 || !tap_only
                 || !spendable(s, t, paying, slot, a)
@@ -347,7 +349,7 @@ fn reference_units<L: Layout>(
 /// Whether the mana that the mana ability `a` of the permanent in `slot` makes may be spent on
 /// what `paying` is for: any mana but restricted mana, and restricted mana that its
 /// restriction accepts, as read of the creature type the permanent chose
-/// ([CR 106.6](https://yawgatog.com/resources/magic-rules/#R1066)).
+/// (see [CR 106.6](https://yawgatog.com/resources/magic-rules/#R1066)).
 fn spendable<L: Layout>(
     s: &State<L>,
     t: &GameTable,
@@ -368,7 +370,7 @@ fn spendable<L: Layout>(
 }
 
 /// Whether `player` meets a mana ability's "Activate only if you control" condition
-/// ([CR 602.5](https://yawgatog.com/resources/magic-rules/#R6025)).
+/// (see [CR 602.5](https://yawgatog.com/resources/magic-rules/#R6025)).
 fn controls<L: Layout>(
     s: &State<L>,
     t: &GameTable,
@@ -386,7 +388,7 @@ fn controls<L: Layout>(
 /// Whether `units` pay `cost`: each colored or colorless symbol matched to a distinct unit
 /// that may be its kind (augmenting paths), and enough units left for the generic part.
 ///
-/// [CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h): "The player pays the total
+/// See [CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h): "The player pays the total
 /// cost. ... Partial payments are not allowed."
 fn reference_pays(units: &[u8], cost: ManaCost) -> bool {
     let count: usize = cost.symbols.iter().map(|&n| usize::from(n)).sum();

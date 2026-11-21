@@ -6,9 +6,9 @@ use beryl_card::{Amount, Players, prompt};
 
 use crate::bitboard::Bitboard;
 use crate::card::{Prompt, Purpose, Stop};
-use crate::choices;
 use crate::game::Game;
 use crate::ids::Seat;
+use crate::interpret::choices;
 use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
 use crate::resolution::Resolution;

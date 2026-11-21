@@ -21,6 +21,8 @@
 //! script and browser checks, compiled the rules, the engine, every card crate and the CLI a
 //! second time: 68 crates and 45 s after a fresh worktree's test build. Keying the record on
 //! `debug_assertions` makes it the same in every debug build.
+//!
+//! Implements: none. Records which card definitions and instructions were exercised.
 
 /// Notes that the ability, casting option or instruction at `what`, a `'static` part of a
 /// card definition, did what it says. Identity is the address: card definitions are statics.

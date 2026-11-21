@@ -1,17 +1,1 @@
-[
-  "rust/crates/beryl_rules/src/bodies.rs",
-  "rust/crates/beryl_rules/src/card.rs",
-  "rust/crates/beryl_rules/src/choices.rs",
-  "rust/crates/beryl_rules/src/chosen.rs",
-  "rust/crates/beryl_rules/src/coverage.rs",
-  "rust/crates/beryl_rules/src/engine.rs",
-  "rust/crates/beryl_rules/src/engine/questions.rs",
-  "rust/crates/beryl_rules/src/interpret/mod.rs",
-  "rust/crates/beryl_rules/src/interpret/run.rs",
-  "rust/crates/beryl_rules/src/interpret/scene.rs",
-  "rust/crates/beryl_rules/src/lib.rs",
-  "rust/crates/beryl_rules/src/reference.rs",
-  "rust/crates/beryl_rules/src/resolution.rs",
-  "rust/crates/beryl_rules/src/sba.rs",
-  "rust/crates/beryl_rules/src/scratch.rs"
-]
+[]

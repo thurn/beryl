@@ -382,9 +382,13 @@ module implements.
 
 `cast/` becomes `casting/`, `layers/` moves to `continuous/layers/`, and
 `replace/` becomes `replacement/`. `stack/trigger/` holds the trigger matcher.
-`engine.rs` stays beside `engine/`, and owns priority where it advances or
-passes it. The interpreter and decision helpers cite the steps they call through
-to. The root `lib.rs` keeps the crate contract.
+`engine.rs` stays beside `engine/` and owns priority. `engine/questions.rs`
+handles a cast offered during resolution, choosing a land face and decisions
+made under another player's control. `sba.rs` performs state-based actions and
+ends games after concessions or simultaneous losses. The stack resolver owns
+target legality and the final steps of resolution. `interpret/` owns instruction
+order, simultaneous effects, choices during resolution and reading last-known
+information. The root `lib.rs` keeps the crate contract.
 
 | Pass                                                                                                                            | Destination                         | Existing source files                                                                                                                                                                                                                                                                                                                                       |
 | ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

@@ -3,6 +3,8 @@
 //!
 //! Every definition type is `'static` table data shared by all threads. `State` never holds
 //! one; it stores game-table indices (§6.4) and ability indices instead.
+//!
+//! Implements: none. Re-exports card vocabulary and defines resolution results.
 
 use crate::fixed::Full;
 

@@ -6,10 +6,10 @@ use beryl_card::{Amount, Players};
 
 use crate::bitboard::Bitboard;
 use crate::card::{Prompt, Purpose, Stop};
-use crate::choices;
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
+use crate::interpret::choices;
 use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
 use crate::replacement::event::Reason;
