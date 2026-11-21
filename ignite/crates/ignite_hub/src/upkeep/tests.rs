@@ -11,13 +11,14 @@ use ignite_core::protocol::hub::{
     NewResult, RegressionReport, ResultKey, TipWaiting,
 };
 use ignite_core::protocol::tickets::{
-    BatchRequest, Dependency, Operation, Status, Ticket, TicketFields, TicketQuery, TicketType,
+    BatchRequest, Dependency, EdgeKind, Operation, Status, Ticket, TicketFields, TicketQuery,
+    TicketType,
 };
 use ignite_core::time::Timestamp;
 use ignite_core::tipround::CulpritSearch;
 use ignite_core::traits::Clock;
 use ignite_store::hub::batch::{self, BatchOutcome};
-use ignite_store::hub::{self, checks, fleet, results, rows, tickets, tips};
+use ignite_store::hub::{self, checks, edges, fleet, results, rows, tickets, tips};
 
 use super::filing::{Change, UPKEEP};
 use super::{Upkeep, backup, regressions, stuck};
@@ -471,16 +472,13 @@ fn a_stuck_epic_is_reported_once() {
         vec![create("Epic", TicketType::Epic, None, &[])],
         clock.now(),
     );
-    apply(
+    let inside = apply(
         &mut conn,
-        vec![create(
-            "Inside",
-            TicketType::Task,
-            Some(&epic[0]),
-            &[&outside[0]],
-        )],
+        vec![create("Inside", TicketType::Task, Some(&epic[0]), &[])],
         clock.now(),
     );
+    // Upkeep still handles external dependencies saved before the batch began refusing them.
+    edges::add(&conn, &inside[0], &outside[0], EdgeKind::Blocks).unwrap();
     // The ticket it waits on is ready, so the epic is not stuck.
     assert!(
         upkeep

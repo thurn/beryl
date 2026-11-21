@@ -310,6 +310,16 @@ pub enum EdgeKind {
     DiscoveredFrom,
 }
 
+impl EdgeKind {
+    /// Whether this kind of edge can keep a ticket from being ready.
+    pub const fn blocks(self) -> bool {
+        matches!(
+            self,
+            Self::Blocks | Self::ConditionalBlocks | Self::WaitsFor
+        )
+    }
+}
+
 /// `src` depends on `dst`.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Edge {

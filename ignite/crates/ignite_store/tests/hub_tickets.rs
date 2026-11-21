@@ -8,7 +8,8 @@ mod common;
 use serde_json::json;
 
 use common::{Hub, create, create_with, pair};
-use ignite_core::protocol::tickets::Status;
+use ignite_core::protocol::tickets::{EdgeKind, Status};
+use ignite_store::StoreError;
 use ignite_store::hub::{edges, tickets};
 
 #[test]
@@ -674,4 +675,70 @@ fn a_ticket_filed_beside_the_filers_unlanded_ticket_depends_on_it() {
         json!([create("Mine", Some(&epic), json!({}))]),
     );
     assert!(none.is_empty());
+}
+
+#[test]
+fn an_epic_cannot_gain_an_external_prerequisite_during_filing_or_after_release() {
+    let mut hub = Hub::new();
+    let external = hub.ids(json!([create("External", None, json!({}))]))[0].clone();
+    let filed = hub.post(json!([
+        create(
+            "Epic",
+            None,
+            json!({"type": "epic", "status": "pending_approval"})
+        ),
+        create_with(
+            "Dependent",
+            Some("$0"),
+            json!({}),
+            json!({"deps": [{"on": external}]}),
+        ),
+    ]));
+    assert!(matches!(filed, Err(StoreError::Rejected(message)) if message.contains(&external)));
+    assert_eq!(hub.list(json!({})), [external.clone()]);
+
+    let ids = hub.ids(json!([
+        create("Epic", None, json!({"type": "epic", "status": "open"})),
+        create("Dependent", Some("$0"), json!({})),
+        {"op": "dep_add", "id": "$1", "on": external, "kind": "related"},
+    ]));
+    let dependent = &ids[1];
+    let edited = hub.post(json!([
+        {"op": "update", "id": dependent, "set": {"title": "Changed"}},
+        {"op": "dep_add", "id": dependent, "on": external, "kind": "waits-for"},
+    ]));
+    assert!(matches!(edited, Err(StoreError::Rejected(message)) if message.contains(&ids[0])));
+    let shown = hub.show(dependent);
+    assert_eq!(shown.ticket.title, "Dependent");
+    assert_eq!(shown.edges[0].kind, EdgeKind::Related);
+    assert!(shown.ready);
+}
+
+#[test]
+fn a_pending_epic_with_a_legacy_external_dependency_cannot_be_released() {
+    let mut hub = Hub::new();
+    let ids = hub.ids(json!([
+        create("Outside", None, json!({})),
+        create(
+            "Epic",
+            None,
+            json!({"type": "epic", "status": "pending_approval"})
+        ),
+        create(
+            "Dependent",
+            Some("$1"),
+            json!({"status": "pending_approval"})
+        ),
+    ]));
+    let (outside, epic, dependent) = (&ids[0], &ids[1], &ids[2]);
+    edges::add(&hub.conn, dependent, outside, EdgeKind::Blocks).unwrap();
+    let release = json!({"op": "update", "id": epic, "set": {"status": "open"}});
+    let result = hub.post(json!([release]));
+    assert!(matches!(result, Err(StoreError::Rejected(message)) if message.contains(dependent)));
+    assert_eq!(hub.show(epic).ticket.status, Status::PendingApproval);
+    hub.batch(json!([
+        {"op": "dep_remove", "id": dependent, "on": outside},
+        release,
+    ]));
+    assert_eq!(hub.show(epic).ticket.status, Status::Open);
 }

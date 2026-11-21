@@ -185,14 +185,17 @@ fn an_epic_waiting_on_a_moving_epic_is_not_stuck() {
     );
     let phase = apply(
         &mut conn,
-        vec![create("Phase", TicketType::Epic, None, &[&milestone[0]])],
+        vec![create("Phase", TicketType::Epic, None, &[])],
         clock.now(),
     );
     let last = apply(
         &mut conn,
-        vec![create("Last phase", TicketType::Epic, None, &[&phase[0]])],
+        vec![create("Last phase", TicketType::Epic, None, &[])],
         clock.now(),
     );
+    // Restore the external dependencies as they would appear in an older database.
+    edges::add(&conn, &phase[0], &milestone[0], EdgeKind::Blocks).unwrap();
+    edges::add(&conn, &last[0], &phase[0], EdgeKind::Blocks).unwrap();
     let work = apply(
         &mut conn,
         vec![

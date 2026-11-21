@@ -22,16 +22,17 @@ use serde_json::{Map, Value, json};
 
 use ignite_core::ids::{Seq, TicketId};
 use ignite_core::protocol::tickets::{
-    BatchConflict, BatchReply, BatchRequest, Dependency, EdgeKind, FeedChange, Operation,
-    OperationResult, Precondition, Status, Ticket, TicketFields, TicketType,
+    BatchConflict, BatchReply, BatchRequest, Dependency, FeedChange, Operation, OperationResult,
+    Precondition, Status, Ticket, TicketFields, TicketType,
 };
 use ignite_core::time::Timestamp;
 
 use crate::hub::fix_outcomes::{self, LandingFix};
-use crate::hub::{cycles, edges, feed, findings, tickets};
+use crate::hub::{feed, findings, tickets};
 use crate::{Result, StoreError};
 
 mod ancestors;
+mod epic_dependencies;
 mod fields;
 mod moves;
 pub(crate) mod roots;
@@ -578,6 +579,10 @@ impl<'a> Run<'a> {
         if was_meta && matches!(fields.every_hours, Some(None)) {
             return rejected("A meta-ticket needs a schedule (every_hours)");
         }
+        let changes_epic = fields.ticket_type.is_some_and(|kind| {
+            (kind == TicketType::Epic) != (ticket.ticket_type == TicketType::Epic)
+        });
+        let original_id = &ticket.id;
         // A new parent, or `"parent": null` to detach, gives the ticket a new ID.
         let moved;
         let ticket = match &fields.parent {
@@ -593,18 +598,14 @@ impl<'a> Run<'a> {
         if let Some(metadata) = metadata {
             changes.insert("metadata".to_owned(), json!(metadata));
         }
+        let releasing_epic = ticket.ticket_type == TicketType::Epic
+            && ticket.status == Status::PendingApproval
+            && fields.status == Some(Status::Open);
         let was_closed = ticket.status == Status::Closed;
+        let closing = !was_closed && fields.status == Some(Status::Closed);
         match fields.status {
-            Some(Status::Closed) if !was_closed => {
+            Some(Status::Closed) if closing => {
                 changes.insert("closed_at".to_owned(), self.at.clone());
-                self.save(ticket, changes)?;
-                let (closed, filed) = self.close_ancestors(ticket.id.as_str(), None)?;
-                return Ok(OperationResult {
-                    id: ticket.id.clone(),
-                    closed,
-                    filed,
-                    ready: None,
-                });
             }
             Some(status) if was_closed && status != Status::Closed => {
                 changes.insert("closed_at".to_owned(), Value::Null);
@@ -613,10 +614,20 @@ impl<'a> Run<'a> {
             _ => {}
         }
         self.save(ticket, changes)?;
+        if changes_epic || &ticket.id != original_id {
+            self.check_epic_dependencies(ticket.id.as_str(), false)?;
+        } else if releasing_epic {
+            self.check_epic_dependencies(ticket.id.as_str(), true)?;
+        }
+        let (closed, filed) = if closing {
+            self.close_ancestors(ticket.id.as_str(), None)?
+        } else {
+            (Vec::new(), Vec::new())
+        };
         Ok(OperationResult {
             id: ticket.id.clone(),
-            closed: Vec::new(),
-            filed: Vec::new(),
+            closed,
+            filed,
             ready: None,
         })
     }
@@ -691,35 +702,6 @@ impl<'a> Run<'a> {
                 Value::Object(change.clone()).to_string()
             ],
         )?;
-        Ok(())
-    }
-
-    /// Adds or removes `id` depends on `on`. Adding an edge that exists with another kind
-    /// changes its kind; removing with a kind removes only an edge of that kind.
-    fn dependency(&mut self, id: &str, on: &str, kind: Option<EdgeKind>, remove: bool) -> Step<()> {
-        let dst = self.ticket(on)?.id.to_string();
-        let existing = edges::kind(self.conn, id, &dst)?;
-        if remove {
-            if existing.is_none() || kind.is_some_and(|k| Some(k) != existing) {
-                return Ok(());
-            }
-            edges::remove(self.conn, id, &dst)?;
-        } else {
-            let kind = kind.unwrap_or_default();
-            if existing == Some(kind) {
-                return Ok(());
-            }
-            if id == dst {
-                return rejected(format!("{id} cannot depend on itself"));
-            }
-            if !matches!(kind, EdgeKind::Related | EdgeKind::DiscoveredFrom) {
-                cycles::check(self.conn, id, &dst)?;
-            }
-            edges::add(self.conn, id, &dst, kind)?;
-        }
-        self.seq += 1;
-        self.changed.insert(id.to_owned());
-        self.changed.insert(dst);
         Ok(())
     }
 }

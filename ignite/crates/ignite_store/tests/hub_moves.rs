@@ -22,7 +22,7 @@ fn a_moved_ticket_takes_its_new_parents_next_number_and_keeps_its_old_id_as_an_a
         create("Below the moved one", Some("$3"), json!({})),
         create("Depends on the moved one", None, json!({})),
         {"op": "dep_add", "id": "$5", "on": "$3"},
-        {"op": "dep_add", "id": "$4", "on": "$2"},
+        {"op": "dep_add", "id": "$4", "on": "$2", "kind": "related"},
         {"op": "comment", "id": "$3", "text": "Before the move"},
     ]));
     let [old_epic, new_epic, moved, below, dependent] =
@@ -131,4 +131,29 @@ fn naming_the_parent_a_ticket_already_has_changes_nothing() {
         .remove(0);
     assert_eq!(same, ids[1]);
     assert_eq!(hub.show(&ids[0]).ticket.next_child, 2);
+}
+
+#[test]
+fn moving_either_end_of_an_internal_dependency_outside_the_epic_is_refused() {
+    let mut hub = Hub::new();
+    let ids = hub.ids(json!([
+        create("Epic", None, json!({"type": "epic"})),
+        create("Dependent", Some("$0"), json!({})),
+        create("Prerequisite", Some("$0"), json!({})),
+        create("Other epic", None, json!({"type": "epic"})),
+        {"op": "dep_add", "id": "$1", "on": "$2"},
+    ]));
+    let [epic, dependent, prerequisite, other, ..] = &ids[..] else {
+        panic!("unexpected IDs: {ids:?}")
+    };
+    for id in [dependent, prerequisite] {
+        let result = hub.post(json!([{"op": "update", "id": id, "set": {"parent": other}}]));
+        assert!(
+            matches!(result, Err(StoreError::Rejected(message)) if message.contains("outside epic"))
+        );
+        assert_eq!(hub.show(id).ticket.id.as_str(), id);
+    }
+    assert_eq!(hub.show(epic).children.len(), 2);
+    assert!(hub.show(other).children.is_empty());
+    assert_eq!(hub.blocked_by(dependent), [common::pair(prerequisite, 2)]);
 }

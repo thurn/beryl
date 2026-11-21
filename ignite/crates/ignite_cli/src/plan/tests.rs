@@ -2,7 +2,8 @@
 
 use std::collections::{BTreeSet, HashSet};
 
-use ignite_core::protocol::tickets::{Edge, Ticket};
+use ignite_core::protocol::client::Exit;
+use ignite_core::protocol::tickets::{Edge, EdgeKind, Status, Ticket, TicketType};
 use serde_json::json;
 
 use super::Graphs;
@@ -41,7 +42,11 @@ fn report(tickets: &[Ticket], edges: &[Edge], ready: &[String]) -> Vec<String> {
         providers: &["claude".to_owned()].into(),
         repository: None,
     }
-    .report()
+    .reply()
+    .text
+    .lines()
+    .map(str::to_owned)
+    .collect()
 }
 
 #[test]
@@ -161,7 +166,9 @@ fn a_dependency_on_an_epic_a_report_with_dependents_and_a_moved_ticket_each_get_
         providers: &["claude".to_owned()].into(),
         repository: None,
     }
-    .report();
+    .reply()
+    .text;
+    let lines: Vec<_> = lines.lines().collect();
     assert_eq!(
         lines[2..],
         [
@@ -210,9 +217,62 @@ fn a_files_line_names_files_short_paths_resolve_and_missing_paths_are_reported()
         providers: &["claude".to_owned()].into(),
         repository: Some(&repository),
     }
-    .report();
+    .reply()
+    .text;
+    let lines: Vec<_> = lines.lines().collect();
     assert_eq!(
         lines[2..],
         ["missing file   .2 names tools/gone.py, which does not exist"]
+    );
+}
+
+#[test]
+fn a_plan_with_an_external_blocker_fails_and_names_the_edge() {
+    let mut epic = ticket(EPIC, "", "", &[]);
+    epic.ticket_type = TicketType::Epic;
+    let mut nested = ticket(&id(1), EPIC, "", &[]);
+    nested.ticket_type = TicketType::Epic;
+    let work = ticket("ig9a.1.1", &id(1), "`a.rs`", &[]);
+    let sibling = ticket(&id(2), EPIC, "`a.rs`", &[]);
+    let mut finished = ticket(&id(3), EPIC, "`a.rs`", &[]);
+    finished.status = Status::Closed;
+    let outside = ticket("TOTHER", "", "", &[]);
+    let unrelated = ticket("TNEAR", "", "", &[]);
+    let tickets = [nested, work, sibling, finished];
+    let mut everything = tickets.to_vec();
+    everything.extend([epic, outside, unrelated]);
+    let mut edges = vec![
+        edge("ig9a.1.1", &id(2)),
+        Edge {
+            kind: EdgeKind::Related,
+            ..edge("ig9a.1.1", "TNEAR")
+        },
+        edge(&id(3), "TOTHER"),
+        edge("TNEAR", &id(2)),
+    ];
+    let reply = |edges: &[Edge]| {
+        Graphs {
+            epic: EPIC,
+            tickets: &tickets,
+            everything: &everything,
+            edges,
+            ready: &HashSet::new(),
+            machines: &BTreeSet::new(),
+            providers: &BTreeSet::new(),
+            repository: None,
+        }
+        .reply()
+    };
+    assert_eq!(reply(&edges).exit, Exit::Success);
+    edges.push(edge("ig9a.1.1", "TOTHER"));
+    let failed = reply(&edges);
+    assert_eq!(failed.exit, Exit::CheckFailed);
+    assert_eq!(
+        failed
+            .text
+            .lines()
+            .filter(|line| line.starts_with("external edge"))
+            .collect::<Vec<_>>(),
+        ["external edge  Tig9a.1.1 depends on TOTHER outside epic Tig9a"]
     );
 }

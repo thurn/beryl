@@ -384,7 +384,7 @@ pub enum PoolCommand {
 
 #[derive(Debug, Subcommand)]
 pub enum PlanCommand {
-    /// Report the graph's shape: chains, suspect edges, tickets that name no files.
+    /// Report the epic's graph and fail on blocking dependencies outside the plan.
     Check { epic: String },
 }
 

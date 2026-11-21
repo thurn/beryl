@@ -4239,8 +4239,12 @@ are optional. A short path such as `beryl_scene/src/lib.rs` stands for the one
 tracked file whose path ends in it. A named file that does not exist is listed,
 since it is either a typo or a file the ticket creates.
 
-The command only reports. It exits with code 0 whatever it finds, and the
-planner decides what to change.
+A blocking dependency outside the outermost epic fails `ignite plan check` with
+exit code 2. A prerequisite must share the epic so the pool schedules it with
+that plan. The hub rejects ticket creation, dependency edits, and moves that put
+a blocking dependency outside the epic. It also refuses to release a pending
+epic with an existing external blocker. Use a `related` link for outside
+context. Other plan check findings remain advisory.
 
 A review is a ticket like any other, with the label `review`, that depends on
 the tickets it reviews. A planner files one where a change is large or risky.

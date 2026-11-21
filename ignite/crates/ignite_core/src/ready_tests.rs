@@ -1,6 +1,6 @@
 use super::*;
 use crate::ids::Seq;
-use crate::protocol::tickets::TicketType;
+use crate::protocol::tickets::{EdgeKind, TicketType};
 
 fn id(text: &str) -> TicketId {
     text.parse().unwrap()

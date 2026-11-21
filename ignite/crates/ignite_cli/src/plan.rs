@@ -1,10 +1,8 @@
 //! `ignite plan check <epic>`: the shape of an epic's ticket graph. It reports the ticket count
 //! and how many are ready at the start, the longest chain, dependencies between tickets that
 //! name no file in common, tickets that name no files, paths a ticket names that the repository
-//! does not hold, `lane:` groups that are not chains, and four problems that stall a run: a ticket no registered machine can take, a dependency placed
-//! on an epic, a `report` ticket with dependents and a ticket moved in from another open epic.
-//!
-//! The command only reports and always exits with code 0.
+//! does not hold, `lane:` groups that are not chains, and problems that stall a run. It fails
+//! when a blocking dependency leaves the outermost epic.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
@@ -12,7 +10,7 @@ use ignite_core::fleet::FleetView;
 use ignite_core::ids::TicketId;
 use ignite_core::pins::{Pins, from_labels};
 use ignite_core::protocol::client::{Exit, Reply};
-use ignite_core::protocol::tickets::{Edge, EdgeKind, Graph, Status, Ticket};
+use ignite_core::protocol::tickets::{Edge, Graph, Status, Ticket, TicketType};
 use serde_json::{Value, json};
 
 use ignite_hub::routes::dispatch::{named_files, resolve_named_file};
@@ -63,7 +61,7 @@ fn load(epic: &str) -> Result<Reply, Failure> {
             Ok(Repository { root, tracked })
         })
         .ok();
-    let report = Graphs {
+    Ok(Graphs {
         epic: &epic_id,
         tickets: &tickets,
         everything: &everything,
@@ -73,15 +71,7 @@ fn load(epic: &str) -> Result<Reply, Failure> {
         providers: &providers,
         repository: repository.as_ref(),
     }
-    .report();
-    let lines = report.join("\n");
-    let reply_json = json!({"epic": prefixed(&epic_id), "lines": report});
-    Ok(Reply {
-        exit: Exit::Success,
-        text: lines,
-        json: Some(reply_json),
-        handle: None,
-    })
+    .reply())
 }
 
 fn epic_name(epic: &Value) -> &str {
@@ -124,7 +114,7 @@ struct Repository {
 }
 
 impl Graphs<'_> {
-    fn report(&self) -> Vec<String> {
+    fn reply(&self) -> Reply {
         let live: Vec<&Ticket> = self
             .tickets
             .iter()
@@ -132,6 +122,12 @@ impl Graphs<'_> {
             .collect();
         let ids: HashSet<&str> = live.iter().map(|t| t.id.as_str()).collect();
         let deps = self.dependencies(&ids);
+        let external = self.external_edges(&live);
+        let exit = if external.is_empty() {
+            Exit::Success
+        } else {
+            Exit::CheckFailed
+        };
         let mut missing: Vec<(&str, Vec<String>)> = Vec::new();
         let files: HashMap<&str, Vec<String>> = live
             .iter()
@@ -154,6 +150,7 @@ impl Graphs<'_> {
             &format!("{}, ready at the start {ready}", live.len()),
         ));
         lines.push(row("longest chain", &self.chain(&live, &deps)));
+        lines.extend(external);
         lines.extend(self.suspect_edges(&deps, &files));
         lines.extend(self.nameless(&live, &files));
         lines.extend(missing.iter().map(|(id, absent)| {
@@ -172,13 +169,18 @@ impl Graphs<'_> {
         lines.extend(self.epic_edges(&ids));
         lines.extend(self.reports(&live, &ids));
         lines.extend(self.moved_in(&live));
-        lines
+        Reply {
+            exit,
+            text: lines.join("\n"),
+            json: Some(json!({"epic": prefixed(self.epic), "lines": lines})),
+            handle: None,
+        }
     }
 
     /// Each live ticket's blocking dependencies on other live tickets of the epic, in order.
     fn dependencies<'a>(&'a self, ids: &HashSet<&str>) -> BTreeMap<&'a str, Vec<&'a str>> {
         let mut deps: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
-        for edge in self.edges.iter().filter(|edge| blocks(edge.kind)) {
+        for edge in self.edges.iter().filter(|edge| edge.kind.blocks()) {
             if ids.contains(edge.src.as_str()) && ids.contains(edge.dst.as_str()) {
                 deps.entry(edge.src.as_str())
                     .or_default()
@@ -186,6 +188,58 @@ impl Graphs<'_> {
             }
         }
         deps
+    }
+
+    /// A prerequisite outside the outermost epic cannot share its worker allocation.
+    fn external_edges(&self, live: &[&Ticket]) -> Vec<String> {
+        let by_id: HashMap<_, _> = self
+            .everything
+            .iter()
+            .map(|ticket| (ticket.id.as_str(), ticket))
+            .collect();
+        let mut sources = HashSet::new();
+        for ticket in live.iter().copied().chain(by_id.get(self.epic).copied()) {
+            let mut current = Some(ticket);
+            while let Some(node) = current.filter(|node| sources.insert(node.id.as_str())) {
+                current = node
+                    .parent
+                    .as_ref()
+                    .and_then(|parent| by_id.get(parent.as_str()).copied());
+            }
+        }
+        let outer_epic = |id: &str| {
+            let mut current = by_id.get(id).copied();
+            let mut seen = HashSet::new();
+            let mut epic = None;
+            while let Some(node) = current.filter(|node| seen.insert(node.id.as_str())) {
+                if node.ticket_type == TicketType::Epic {
+                    epic = Some(node.id.as_str());
+                }
+                current = node
+                    .parent
+                    .as_ref()
+                    .and_then(|parent| by_id.get(parent.as_str()).copied());
+            }
+            epic
+        };
+        self.edges
+            .iter()
+            .filter(|edge| edge.kind.blocks() && sources.contains(edge.src.as_str()))
+            .filter_map(|edge| {
+                let epic = outer_epic(edge.src.as_str())?;
+                (outer_epic(edge.dst.as_str()) != Some(epic)).then(|| {
+                    row(
+                        "external edge",
+                        &format!(
+                            "{} depends on {} outside epic {}",
+                            prefixed(edge.src.as_str()),
+                            prefixed(edge.dst.as_str()),
+                            prefixed(epic)
+                        ),
+                    )
+                })
+            })
+            .collect()
     }
 
     /// The ticket as printed: its ID after the epic's, such as `.12`, or in full with a `T`.
@@ -354,7 +408,7 @@ impl Graphs<'_> {
             .filter_map(|ticket| ticket.parent.as_ref().map(TicketId::as_str))
             .collect();
         let mut lines = Vec::new();
-        for edge in self.edges.iter().filter(|edge| blocks(edge.kind)) {
+        for edge in self.edges.iter().filter(|edge| edge.kind.blocks()) {
             if ids.contains(edge.src.as_str()) && parents.contains(edge.dst.as_str()) {
                 lines.push(row(
                     "epic edge",
@@ -379,7 +433,7 @@ impl Graphs<'_> {
             let dependents: Vec<&str> = self
                 .edges
                 .iter()
-                .filter(|edge| blocks(edge.kind) && edge.dst == ticket.id)
+                .filter(|edge| edge.kind.blocks() && edge.dst == ticket.id)
                 .map(|edge| edge.src.as_str())
                 .filter(|src| ids.contains(src))
                 .collect();
@@ -428,14 +482,6 @@ impl Graphs<'_> {
 
 fn row(label: &str, text: &str) -> String {
     format!("{label:<LABEL_WIDTH$}{text}")
-}
-
-/// Whether an edge of this kind holds its source back.
-fn blocks(kind: EdgeKind) -> bool {
-    matches!(
-        kind,
-        EdgeKind::Blocks | EdgeKind::ConditionalBlocks | EdgeKind::WaitsFor
-    )
 }
 
 /// The longest chain ending at `id`, listed from `id` back to the ticket that needs nothing.

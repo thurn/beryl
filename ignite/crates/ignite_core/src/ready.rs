@@ -16,7 +16,7 @@
 use std::collections::{BTreeMap, HashMap};
 
 use crate::ids::TicketId;
-use crate::protocol::tickets::{Blocker, Edge, EdgeKind, Status, Ticket, TicketType};
+use crate::protocol::tickets::{Blocker, Edge, Status, Ticket, TicketType};
 use crate::time::Timestamp;
 
 /// The tickets and edges that readiness depends on, indexed once so that many tickets can be
@@ -101,7 +101,7 @@ impl<'a> Readiness<'a> {
         }
         let dependencies = |source: &TicketId, rule: u8, push: &mut dyn FnMut(&TicketId, u8)| {
             for edge in self.outgoing.get(source).into_iter().flatten() {
-                if blocking_kind(edge.kind) && self.blocks(&edge.dst) {
+                if edge.kind.blocks() && self.blocks(&edge.dst) {
                     push(&edge.dst, rule);
                 }
             }
@@ -134,10 +134,6 @@ impl<'a> Readiness<'a> {
 
 fn is_live(ticket: &Ticket) -> bool {
     ticket.status != Status::Closed
-}
-
-fn blocking_kind(kind: EdgeKind) -> bool {
-    !matches!(kind, EdgeKind::Related | EdgeKind::DiscoveredFrom)
 }
 
 /// What holds each live ticket back; an empty list means ready. `tickets` must hold every live
