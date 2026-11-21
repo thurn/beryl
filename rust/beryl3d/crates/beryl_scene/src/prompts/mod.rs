@@ -423,7 +423,7 @@ impl<'a> Steps<'a> {
         let curve = (self.timings.entries.iter())
             .find(|entry| entry.step == step)
             .map_or(Curve::EASE_OUT, |entry| {
-                crate::motion::named_curve(entry.timing.curve)
+                kit_space::motion::named_curve(entry.timing.curve)
             });
         self.tray = Some((step, over, curve));
     }

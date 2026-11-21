@@ -3,8 +3,8 @@
 use beryl_protocol::script::Subject;
 
 use super::{Camera, badges::Badges};
-use crate::effects::EffectRun;
-pub use crate::effects::card::Look;
+use kit_fx::effects::EffectRun;
+pub use kit_fx::effects::card::Look;
 
 /// What changes how the cards are drawn in a frame, beside their poses: the effects playing,
 /// the marks shown, the pointer, and the time.

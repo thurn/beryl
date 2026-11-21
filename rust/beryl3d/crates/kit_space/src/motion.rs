@@ -160,7 +160,7 @@ impl Track {
     }
 
     /// Appends to a track already cut to the start of `segment`.
-    pub(crate) fn append(&mut self, segment: Segment) {
+    pub fn append(&mut self, segment: Segment) {
         debug_assert!(
             self.segments()
                 .last()

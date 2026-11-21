@@ -504,7 +504,7 @@ struct Grid {
 /// The largest side of a cell, in logical points, and the most cuts a grid makes along one
 /// axis to keep to it. A slanted edge through a cell leaves the cell out of the free area, so
 /// beside each such edge the grid can miss up to a cell of an element's uncovered area.
-pub(crate) const CELL: f32 = 4.0;
+pub const CELL: f32 = 4.0;
 const MOST_CUTS: f32 = 64.0;
 
 impl Grid {

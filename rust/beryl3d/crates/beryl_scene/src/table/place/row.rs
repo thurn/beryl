@@ -8,7 +8,6 @@ use super::{
     Group, PileRules, Placement, ROWS, Rest, Rules, Zones, host_slot, lay, members, row_index,
     side_index,
 };
-use crate::agent::hit;
 use crate::table::rows::{
     Beneath, Laid, NameIds, RowRules, SameName, lay_row, least_strip, row_length,
 };
@@ -17,6 +16,7 @@ use crate::table::{
 };
 use glam::{Quat, Vec3};
 use kit_frame::frame::Place;
+use kit_scene::hit::CELL;
 
 /// The limits of a row for one layout and camera, independent of its cards and scroll offset.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -36,7 +36,7 @@ impl RowFits {
             ROWS.map(|row| {
                 let (area, y) = row_area((layout, camera), side, row);
                 // The reachable check can miss one grid cell at either edge of the strip.
-                let strip = least_strip(camera, area, y, layout.strip + 2.0 * hit::CELL);
+                let strip = least_strip(camera, area, y, layout.strip + 2.0 * CELL);
                 RowFit { area, y, strip }
             })
         }))

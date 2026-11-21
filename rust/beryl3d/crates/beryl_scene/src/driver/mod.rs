@@ -39,10 +39,13 @@ pub use recording::{Answer, OPEN, RECORDINGS, Recording, Responses, plays_on};
 
 use self::cues::Cues;
 use self::moment::{moment_distance, offset_from};
-use crate::agent::{self, Context, Fault, Layout, TreeOptions, locate, uncovered};
+use crate::agent::game_checks;
 use crate::faces::FaceList;
 use crate::play::record::Plant;
 use kit_frame::frame::{Frame, Sound, StateBits, Wake};
+use kit_probe::agent::tree::locator_of;
+use kit_probe::agent::{Context, Fault, Layout, TreeOptions, locate, tree};
+use kit_scene::hit::{bounds, uncovered};
 use kit_ui::input::{
     AssetReady, Button, Insets, Modifiers, Pointer, PointerKind, PointerPhase, Size, Tier,
 };
@@ -297,7 +300,7 @@ impl Page {
     /// The tree printout of the present frame.
     pub fn tree(&mut self) -> String {
         let frame = self.frame();
-        agent::tree(frame, &TreeOptions::default()).expect("the whole tree needs no locator")
+        tree(frame, &TreeOptions::default()).expect("the whole tree needs no locator")
     }
 
     /// The element `locator` names in the present frame.
@@ -325,7 +328,7 @@ impl Page {
                     role: element.role,
                     name: frame.name(element.name).to_owned(),
                     place: element.place,
-                    rect: agent::hit::bounds(element),
+                    rect: bounds(element),
                     interactive: element.interactive,
                     state: element.state,
                 })
@@ -337,7 +340,7 @@ impl Page {
     /// The faults every interface check finds in the present frame.
     pub fn faults(&mut self) -> Vec<Fault> {
         let context = self.context();
-        agent::game_checks::check(self.frame(), &context)
+        game_checks::check(self.frame(), &context)
     }
 
     /// Runs every interface check on the present frame.
@@ -546,7 +549,7 @@ impl Page {
         let moving: Vec<String> = (0..frame.resolved.len() as u32)
             .filter(|&index| frame.resolved[index as usize].state.has(StateBits::MOVING))
             .take(3)
-            .map(|index| agent::tree::locator_of(frame, index))
+            .map(|index| locator_of(frame, index))
             .collect();
         out.push_str(", animating");
         if !moving.is_empty() {

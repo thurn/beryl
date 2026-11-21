@@ -8,11 +8,11 @@ use glam::{Quat, Vec2, Vec3};
 
 use super::place::{Placement, Rest, turn};
 use super::{CARD_HEIGHT, CARD_WIDTH, Camera, Layout, RowArea, StackData};
-use crate::agent::hit;
 use kit_base::data::audit;
 use kit_base::pose::Pose;
 use kit_base::tokens::size;
 use kit_frame::frame::Place;
+use kit_scene::hit::CELL;
 
 /// An item of the stack as placement reads it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -246,7 +246,7 @@ fn left_of_stack((layout, camera): (&Layout, &Camera), side: Side, row: RowName)
     let (near, far) = (height(-CARD_WIDTH / 2.0), height(CARD_WIDTH / 2.0));
     let uncovered = (stack_top - near.min(far)).max(near.max(far) - stack_foot);
     // The reachable check finds an uncovered square only in whole cells of its grid.
-    if uncovered >= audit::TARGET_POINTS + 2.0 * hit::CELL {
+    if uncovered >= audit::TARGET_POINTS + 2.0 * CELL {
         return (area, y);
     }
     let middle = column(data, camera);

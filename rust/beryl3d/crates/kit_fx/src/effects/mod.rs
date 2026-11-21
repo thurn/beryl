@@ -82,7 +82,7 @@ impl Effect {
     }
 
     /// Whether this changes the face or material of a card, or draws its settle burst.
-    pub(crate) fn on_card(self) -> bool {
+    pub fn on_card(self) -> bool {
         matches!(
             self,
             Self::Settle | Self::Dissolve | Self::Dim | Self::Blanch | Self::Cover

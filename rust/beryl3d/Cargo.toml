@@ -38,6 +38,8 @@ license = "Apache-2.0"
 [workspace.dependencies]
 # The protocol types still carried by the scene and its frame records.
 beryl_protocol = { path = "../crates/beryl_protocol" }
+# Stores a bounded track without initializing or cloning its unused segment slots.
+arrayvec = "0.7.8"
 # Lets the renderer upload draw records as bytes without hand-written unsafe casts.
 bytemuck = { version = "1.25.2", features = ["derive"] }
 # Vector and matrix math for poses and the camera, in place of hand-written math.

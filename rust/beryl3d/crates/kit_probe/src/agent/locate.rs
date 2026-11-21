@@ -9,9 +9,9 @@
 
 use std::fmt;
 
-use super::hit::is_within;
 use super::tree::locator_of;
 use kit_frame::frame::{Frame, Role};
+use kit_scene::hit::is_within;
 
 /// How many elements an error lists.
 const LISTED: usize = 5;

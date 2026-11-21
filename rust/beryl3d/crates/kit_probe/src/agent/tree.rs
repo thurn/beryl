@@ -7,9 +7,9 @@ use std::fmt::Write;
 use beryl_protocol::protocol::{RowName, Side, ZoneName};
 
 use super::fault::rect_text;
-use super::hit::{bounds, covered};
 use super::locate::{LocateError, locate};
 use kit_frame::frame::{Frame, Place, Resolved, Role, StateBits};
+use kit_scene::hit::{bounds, covered};
 
 /// A place holding more cards than this prints only its first `SHOWN` and a count.
 const MOST: usize = 12;

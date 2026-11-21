@@ -22,8 +22,8 @@ use super::playing::{Waiting, timings_of};
 use super::tray::about;
 use crate::beat::{Laid, lay};
 use crate::light::{ArrowSpan, Lit, MarkSpan, Span};
-use crate::motion::Track;
 use crate::verbs::{Follows, StepTime};
+use kit_space::motion::Track;
 
 impl Show {
     /// How many scripts were laid out again as they started, for tests: a script with no step

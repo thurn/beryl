@@ -7,7 +7,7 @@ use client::Input;
 use glam::Vec2;
 
 use super::{DRAG_MOVES, DRAG_STEP, Page, point};
-use crate::agent::uncovered;
+use kit_scene::hit::uncovered;
 use kit_ui::input::{Button, Modifiers, Pointer, PointerKind, PointerPhase};
 
 impl Page {

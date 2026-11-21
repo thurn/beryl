@@ -5,10 +5,10 @@ use beryl_protocol::protocol::{PlayerView, StackItem, ZoneName};
 use beryl_protocol::script::{Act, Subject};
 
 use super::{ABILITY_IDS, Motion, SceneObject, Table, ability_track};
-use crate::effects;
 use crate::faces::Faces;
 use crate::table::look::{Dress, Look};
 use kit_frame::frame::{ElementId, FrameBuilder, Place, Role, StateBits};
+use kit_fx::effects;
 
 impl Table {
     /// Writes each ability on the stack as a card: those of the view the table shows, and

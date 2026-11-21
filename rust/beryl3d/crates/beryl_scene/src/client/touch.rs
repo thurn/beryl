@@ -20,11 +20,11 @@ use beryl_protocol::script::Subject;
 use glam::Vec2;
 
 use super::Client;
-use crate::agent::hit;
 use crate::pointer::takes_pointer;
 use crate::pointer::touch::Landed;
 use crate::screens::Screen;
 use kit_frame::frame::Role;
+use kit_scene::hit::hit;
 use kit_ui::input::{Pointer, PointerPhase};
 
 /// What the client makes of a finger's event (`Client::hear_touch`).

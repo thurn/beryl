@@ -25,6 +25,10 @@ A program here that spreads work over threads sizes them with
 - `kit_text`: text shaping, line breaking and glyph requests.
 - `kit_frame`: the resolved elements and draw records for one frame.
 - `kit_ui`: elements, styles, widgets, flat layout and device input types.
+- `kit_space`: motion tracks and the poses they give at a time.
+- `kit_fx`: effect runs, card looks, light, particles and camera shake.
+- `kit_scene`: hit testing and element coverage.
+- `kit_probe`: tree printouts, locators and frame checks.
 - `beryl_scene`: game views and animation as pure data. It re-exports the
   toolkit modules so callers can continue using their existing paths. The
   toolkit and scene use no GPU, window, clock or thread (`scene-purity`).

@@ -15,12 +15,12 @@
 use beryl_protocol::protocol::{Side, ZoneName};
 use glam::Vec2;
 
-use crate::agent::hit;
 use crate::table::{RowWindow, Scroller, Table};
 use kit_base::data::space::pointer::{
     DRAG_THRESHOLD_POINTS, SCROLL_STEP_POINTS, WHEEL_NOTCH_POINTS,
 };
 use kit_frame::frame::{Frame, Place, Role};
+use kit_scene::hit::hit;
 use kit_ui::input::{Button, Pointer, PointerPhase};
 
 /// A line of cards to scroll, and the group that should be the first in view.

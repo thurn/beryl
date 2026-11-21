@@ -9,12 +9,12 @@ use super::compile::nanoseconds;
 use super::index::{self, Index};
 use super::record::{Cause, SegmentRecord};
 use crate::beat::Laid;
-use crate::motion::{Track, named_curve};
 use crate::table::lifted::Look;
 use crate::table::{Group, HandFits, NameIds, PileRules, Placement, Rest, Table, Zones};
 use crate::verbs::{self, Interval};
 use kit_base::pose::{Curve, Pose, Segment};
 use kit_frame::frame::Place;
+use kit_space::motion::{Track, named_curve};
 
 mod abilities;
 mod counts;

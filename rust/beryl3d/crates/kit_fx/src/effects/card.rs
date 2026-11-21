@@ -110,7 +110,7 @@ pub fn look(runs: &[EffectRun], on: Subject, now: u64, earlier_face: Option<u16>
 }
 
 /// Like `look`, taking the earlier face only if a cover effect shows it.
-pub(crate) fn look_with_face(
+pub fn look_with_face(
     runs: &[EffectRun],
     on: Subject,
     now: u64,

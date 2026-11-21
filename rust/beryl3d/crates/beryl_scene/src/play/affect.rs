@@ -2,8 +2,8 @@
 
 use super::relay::settle;
 use super::{LIGHTS, Playing};
-use crate::effects::EffectRun;
 use crate::verbs::Interval;
+use kit_fx::effects::EffectRun;
 
 impl Playing {
     /// Adds each of its effect runs not added yet to `effects`, in real time: as the script

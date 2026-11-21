@@ -46,7 +46,7 @@ mod tray;
 mod turn;
 mod wake;
 
-pub use crate::effects::Reach;
+pub use kit_fx::effects::Reach;
 pub use scene::Scene;
 pub use tray::PlacedLetGo;
 pub use turn::TurnChange;
@@ -66,7 +66,6 @@ use self::compile::{Compiled, bit, compile};
 use self::hand_order::HandOrder;
 use self::playing::{Playing, Waiting, timings_of};
 use self::record::{Plant, ScriptRecord};
-use crate::effects::{self, EffectRun};
 use crate::faces::Faces;
 use crate::hud::counts::Counts;
 use crate::light::{self, Lit};
@@ -77,6 +76,7 @@ use crate::table::{CARD_HEIGHT, CARD_WIDTH, Dress, Table, ability_track};
 use kit_base::data::space::catch_up;
 use kit_base::pose::Pose;
 use kit_frame::frame::FrameBuilder;
+use kit_fx::effects::{self, EffectRun};
 use kit_text::text::{Glyphs, Text};
 
 /// How many spans, streaks and effects the show holds before holding more allocates.

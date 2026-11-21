@@ -3,9 +3,9 @@
 //! a hand goes to its new place within a frame, still fading (`regroup_fade`).
 
 use super::super::record::SegmentRecord;
-use crate::motion::Track;
 use crate::verbs::{self, Interval};
 use kit_base::pose::{Fade, Pose, Segment, Shape};
+use kit_space::motion::Track;
 
 /// How long a card fading in where it rests takes to go to its new place, in nanoseconds: one
 /// frame at 60 Hz. The web stage moves it between one frame and the next; a slide that short

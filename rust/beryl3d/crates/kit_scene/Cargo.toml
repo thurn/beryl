@@ -9,6 +9,7 @@ publish = false
 workspace = true
 
 [dependencies]
+glam.workspace = true
 kit_base.workspace = true
 kit_text.workspace = true
 kit_frame.workspace = true

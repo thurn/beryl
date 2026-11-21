@@ -20,12 +20,12 @@ use beryl_protocol::script::Subject;
 use glam::Vec2;
 
 use crate::art::orb;
-use crate::effects::{Effect, EffectRun};
 pub(crate) use crate::table::HALF_LIFE;
 use crate::table::Layout;
 use kit_base::data::space::verbs::count::DRIFT;
 use kit_base::tokens::{color, size, type_style};
 use kit_frame::frame::Role;
+use kit_fx::effects::{Effect, EffectRun};
 use kit_ui::element::{Align, Element, FloatId, Span, TextAlign, floats, holder, text};
 use kit_ui::input::Size;
 use kit_ui::layout::{FloatLook, Layer};

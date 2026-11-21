@@ -4,7 +4,7 @@
 use beryl_protocol::protocol::PlayerView;
 
 use super::Objects;
-use crate::motion::Track;
+use kit_space::motion::Track;
 
 /// What moves while a script plays: a track for each object that moves, by slot, and for each
 /// ability that moves, by number; the time on the script's clock; and the scene objects at

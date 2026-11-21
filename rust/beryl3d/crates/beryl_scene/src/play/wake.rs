@@ -2,8 +2,8 @@
 //! when something moves).
 
 use super::Show;
-use crate::motion::Track;
 use kit_frame::frame::Wake;
+use kit_space::motion::Track;
 
 impl Show {
     /// When the next frame is needed: now while a segment, streak, effect, notice, span's fade,

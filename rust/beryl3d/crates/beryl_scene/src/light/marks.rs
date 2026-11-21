@@ -47,7 +47,7 @@ fn shown(open: &Open, now: u64) -> f32 {
         } else {
             #[expect(clippy::cast_precision_loss, reason = "a fade's share of its time")]
             let share = (now - from) as f32 / (to - from) as f32;
-            crate::motion::named_curve(Named::EaseOut).ease(share)
+            kit_space::motion::named_curve(Named::EaseOut).ease(share)
         }
     };
     let up = through(open.begins.from, open.begins.to);

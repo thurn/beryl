@@ -532,7 +532,6 @@ dependencies = [
 name = "beryl_scene"
 version = "0.1.0"
 dependencies = [
- "arrayvec",
  "beryl_card_records",
  "beryl_protocol",
  "beryl_scene",
@@ -540,6 +539,10 @@ dependencies = [
  "glam",
  "kit_base",
  "kit_frame",
+ "kit_fx",
+ "kit_probe",
+ "kit_scene",
+ "kit_space",
  "kit_text",
  "kit_ui",
  "self_cell",
@@ -2284,6 +2287,8 @@ dependencies = [
 name = "kit_fx"
 version = "0.1.0"
 dependencies = [
+ "beryl_protocol",
+ "glam",
  "kit_base",
  "kit_frame",
  "kit_space",
@@ -2295,6 +2300,8 @@ dependencies = [
 name = "kit_probe"
 version = "0.1.0"
 dependencies = [
+ "beryl_protocol",
+ "glam",
  "kit_base",
  "kit_frame",
  "kit_fx",
@@ -2308,6 +2315,7 @@ dependencies = [
 name = "kit_scene"
 version = "0.1.0"
 dependencies = [
+ "glam",
  "kit_base",
  "kit_frame",
  "kit_fx",
@@ -2320,6 +2328,9 @@ dependencies = [
 name = "kit_space"
 version = "0.1.0"
 dependencies = [
+ "arrayvec",
+ "beryl_protocol",
+ "glam",
  "kit_base",
  "kit_frame",
  "kit_text",

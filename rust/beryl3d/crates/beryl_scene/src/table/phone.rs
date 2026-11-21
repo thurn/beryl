@@ -39,11 +39,11 @@ use super::{
     CARD_HEIGHT, CARD_WIDTH, Camera, CameraData, DESKTOP, HandData, Layout, PlayerAnchor, RowArea,
     RowWindow, TraySpace, Window,
 };
-use crate::agent::hit::CELL;
 use kit_base::data::audit;
 use kit_base::data::space::layout::phone as data;
 use kit_base::pose::Pose;
 use kit_frame::frame::Place;
+use kit_scene::hit::CELL;
 use kit_ui::input::Rect;
 
 /// A card's width over its height, the web interface's `RATIO`.

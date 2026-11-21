@@ -7,13 +7,13 @@ use std::collections::BTreeMap;
 use glam::{Vec2, Vec4};
 
 use super::fault::{Context, Fault, Layout, Rule, Subject};
-use super::hit::{
-    Overlaps, bounds, contains, covering, has_free_rect, hit, intersection, is_within,
-    painted_over, visible_bounds,
-};
 use super::tree::locator_of;
 use kit_base::data::audit;
 use kit_frame::frame::{Draw, Frame, Missing, Place, REVEALED_FACE, Ring, Ringed, Role, StateBits};
+use kit_scene::hit::{
+    Overlaps, bounds, contains, covering, has_free_rect, hit, intersection, is_within,
+    painted_over, visible_bounds,
+};
 use kit_ui::input::{Rect, Size};
 
 /// The most covering elements a "reachable" fault names.

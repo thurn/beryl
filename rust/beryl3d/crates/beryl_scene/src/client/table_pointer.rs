@@ -8,8 +8,8 @@ use beryl_protocol::protocol::{ObjectId, Side, ZoneName};
 use glam::Vec2;
 
 use super::{Client, Platform};
-use crate::agent::hit;
 use kit_base::data::space::pointer::DRAG_THRESHOLD_POINTS;
+use kit_scene::hit::hit;
 
 use crate::manual::arrows::{self, Pick};
 use crate::manual::drop::{self, Area, End};

@@ -36,10 +36,10 @@ use beryl_protocol::ipc::TableSoloRequest;
 use beryl_protocol::protocol::{ObjectId, Side, ZoneName};
 use glam::Vec2;
 
-use crate::agent::hit;
 use bindings::Bindings;
 use commands::AppliesTo;
 use kit_frame::frame::{Frame, Place, Role};
+use kit_scene::hit::hit;
 use tokens::TokenChoice;
 
 /// What the client knows beyond the table's view that decides which commands it offers and

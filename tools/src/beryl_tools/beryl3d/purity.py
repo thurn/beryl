@@ -14,9 +14,17 @@ from typing import NamedTuple, TypedDict, cast
 from .. import paths
 
 SCENE = "beryl_scene"
-SCENE_CRATES: frozenset[str] = frozenset(
-    {SCENE, "kit_base", "kit_frame", "kit_text", "kit_ui"}
-)
+TOOLKIT_CRATES: set[str] = {
+    "kit_base",
+    "kit_text",
+    "kit_frame",
+    "kit_ui",
+    "kit_space",
+    "kit_fx",
+    "kit_scene",
+    "kit_probe",
+}
+SCENE_CRATES: set[str] = TOOLKIT_CRATES | {SCENE}
 RENDER = "beryl_render"
 INSPECT = "beryl_inspect"
 # Scene and toolkit code must be deterministic and independent of the host. These `std`
@@ -53,24 +61,18 @@ ATOMIC: re.Pattern[str] = re.compile(r"(?<![\w:])Atomic[A-Z]\w*")
 # A path into `std`, or a braced group of them: `std::time`, `std::{fs, collections::X}`.
 STD_PATH: re.Pattern[str] = re.compile(r"\bstd\s*::\s*(\{|[a-z_]+)")
 # Dependencies used by the scene or toolkit must preserve frame determinism.
-SCENE_DEPENDENCIES: frozenset[str] = frozenset(
-    {
-        "arrayvec",
-        "self_cell",
-        "smallbox",  # Inline storage for action messages.
-        "beryl_protocol",
-        "bytemuck",
-        "glam",
-        "taffy",
-        "parley",
-        "kit_base",
-        "kit_frame",
-        "kit_text",
-        "kit_ui",
-        "serde",
-        "serde_json",
-    }
-)
+SCENE_DEPENDENCIES: set[str] = TOOLKIT_CRATES | {
+    "arrayvec",
+    "self_cell",
+    "smallbox",  # Inline storage for action messages.
+    "beryl_protocol",
+    "bytemuck",
+    "glam",
+    "taffy",
+    "parley",
+    "serde",
+    "serde_json",
+}
 # What beryl_inspect's manifest may not name: the inspector reads a scene with no GPU.
 INSPECT_BANNED: tuple[str, ...] = (
     "beryl_render",

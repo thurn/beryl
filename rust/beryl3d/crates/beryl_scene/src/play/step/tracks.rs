@@ -4,9 +4,9 @@
 use beryl_protocol::protocol::StackItem;
 use beryl_protocol::script::Table as Played;
 
-use crate::motion::Track;
 use crate::table::Placement;
 use kit_base::pose::Segment;
+use kit_space::motion::Track;
 
 /// Adds `segment` to the track of the object in `slot`, growing `tracks` to hold it.
 pub(crate) fn add(tracks: &mut Vec<Track>, slot: usize, segment: Segment) {

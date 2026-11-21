@@ -10,6 +10,17 @@ import pytest
 from beryl_tools.beryl3d import purity
 
 CRATES = "rust/beryl3d/crates"
+SCENE_CRATES = (
+    "beryl_scene",
+    "kit_base",
+    "kit_text",
+    "kit_frame",
+    "kit_ui",
+    "kit_space",
+    "kit_fx",
+    "kit_scene",
+    "kit_probe",
+)
 LINTS = '[workspace.lints.rust]\nwarnings = "deny"\n'
 
 
@@ -18,9 +29,7 @@ def write(root: Path, rel: str, text: str) -> None:
     (root / rel).write_text(text)
 
 
-@pytest.mark.parametrize(
-    "crate", ("beryl_scene", "kit_base", "kit_text", "kit_frame", "kit_ui")
-)
+@pytest.mark.parametrize("crate", SCENE_CRATES)
 def test_the_scene_names_no_clock_and_a_comment_may(tmp_path: Path, crate: str) -> None:
     scene = f"{CRATES}/{crate}/src/lib.rs"
     write(tmp_path, scene, "// std::time is banned here.\nuse glam::Vec3;\n")
@@ -107,9 +116,7 @@ def test_the_scene_names_no_clock_however_it_is_imported(tmp_path: Path) -> None
     assert "names AtomicU32" in found
 
 
-@pytest.mark.parametrize(
-    "crate", ("beryl_scene", "kit_base", "kit_text", "kit_frame", "kit_ui")
-)
+@pytest.mark.parametrize("crate", SCENE_CRATES)
 def test_the_scene_depends_only_on_listed_crates(tmp_path: Path, crate: str) -> None:
     manifest = f"{CRATES}/{crate}/Cargo.toml"
     write(tmp_path, manifest, '[dependencies]\nglam = "0.34"\n')

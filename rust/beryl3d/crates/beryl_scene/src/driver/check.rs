@@ -12,14 +12,16 @@ use std::collections::BTreeSet;
 use beryl_protocol::script::{Edge, Verb};
 
 use super::{DriverError, Name, Page};
-use crate::agent::checks::{KeptArrow, arrows_held, keep_arrows, lines_hold};
+use crate::agent::game_checks;
 use crate::agent::steps::{self, Found, Sample, card_of, sample, step_nanoseconds};
-use crate::agent::tree::locator_of;
-use crate::agent::{self, Fault, Subject, hit::bounds};
 use crate::play::record::{Plant, Planted, ScriptRecord};
 use crate::table::Camera;
 use kit_base::data::audit;
 use kit_frame::frame::Frame;
+use kit_probe::agent::checks::{KeptArrow, arrows_held, keep_arrows, lines_hold};
+use kit_probe::agent::tree::locator_of;
+use kit_probe::agent::{self, Fault, Rule, Subject};
+use kit_scene::hit::bounds;
 use kit_ui::input::Rect;
 
 /// One step of a script, as `Page::steps` lists it.
@@ -169,7 +171,7 @@ impl Page {
             let size = page.size;
             let frame = page.frame();
             if checked.contains(&t) {
-                faults.extend(agent::game_checks::check(frame, &context));
+                faults.extend(game_checks::check(frame, &context));
                 tally.frame(frame, context.layout);
                 tally.lines(&kept, frame);
                 if arrows_held(&kept, frame) > 0 {
@@ -214,7 +216,7 @@ impl Page {
             if let Some(message) = steps::step_shown(record, step.from, step.to, &step.samples) {
                 let elements: Vec<Subject> = step.subject.clone().into_iter().collect();
                 let found = Found {
-                    rule: agent::Rule::StepShown,
+                    rule: Rule::StepShown,
                     slots: record.subject.into_iter().collect(),
                     at: step.from,
                     message,
@@ -246,7 +248,7 @@ impl Page {
     ) -> bool {
         let context = self.context();
         let frame = self.frame();
-        let mut faults = agent::game_checks::check(frame, &context);
+        let mut faults = game_checks::check(frame, &context);
         let held = arrows_held(kept, frame) > 0;
         if held {
             faults.extend(lines_hold(kept, frame, &context));

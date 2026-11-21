@@ -31,7 +31,8 @@ impl Judged {
         self.0[rule.index()]
     }
 
-    pub(super) fn add(&mut self, rule: Rule, elements: usize) {
+    /// Counts one frame or script for `rule` if it judged any `elements`.
+    pub fn add(&mut self, rule: Rule, elements: usize) {
         if elements > 0 {
             let count = &mut self.0[rule.index()];
             count.frames += 1;

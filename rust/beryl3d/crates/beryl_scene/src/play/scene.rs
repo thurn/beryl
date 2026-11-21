@@ -5,8 +5,8 @@ use beryl_protocol::protocol::Side;
 use beryl_protocol::script::Subject;
 
 use super::Show;
-use crate::effects::Reach;
 use crate::table::{Table, ability_track};
+use kit_fx::effects::Reach;
 
 /// The show as a frame draws it, for the writers of light and effects to ask where things are.
 #[derive(Clone, Copy)]

@@ -7,9 +7,9 @@ use std::collections::BTreeSet;
 
 use super::checks::{fault, interactive, subject};
 use super::fault::{Context, Fault, Rule};
-use super::hit::{intersection, is_within, painted_over, visible_bounds};
 use kit_base::data::audit;
 use kit_frame::frame::{Frame, Place, Role};
+use kit_scene::hit::{intersection, is_within, painted_over, visible_bounds};
 use kit_ui::input::Rect;
 
 /// How far two boxes may reach into each other and not count as overlapping, in logical

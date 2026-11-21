@@ -290,7 +290,7 @@ fn trail(
 }
 
 /// A sprite's quad at `at`, `length` long along `tangent` and `width` across it, facing `eye`.
-pub(crate) fn quad(at: Vec3, tangent: Vec3, eye: Vec3, length: f32, width: f32) -> Affine3A {
+pub fn quad(at: Vec3, tangent: Vec3, eye: Vec3, length: f32, width: f32) -> Affine3A {
     let facing = (eye - at).normalize_or(Vec3::Z);
     let across = facing.cross(tangent).normalize_or(Vec3::Y);
     let normal = tangent.cross(across);

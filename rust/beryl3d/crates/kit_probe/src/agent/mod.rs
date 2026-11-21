@@ -1,0 +1,15 @@
+//! Frame inspection tools for tree printouts, locators and interface checks
+//! (docs/beryl-3d.md, "The agent interface" and "Interface checks").
+//! Each operation reads only frames and options.
+
+pub mod checks;
+pub mod fault;
+pub mod judged;
+pub mod locate;
+pub mod text_overlap;
+pub mod tree;
+
+pub use fault::{Context, Fault, Layout, Rule, Subject};
+pub use judged::{Count, Judged};
+pub use locate::{LocateError, locate};
+pub use tree::{TreeOptions, tree};

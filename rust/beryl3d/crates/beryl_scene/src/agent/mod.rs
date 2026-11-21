@@ -1,20 +1,8 @@
-//! What the agent tools and the interface checks read from a frame (docs/beryl-3d.md, "The
-//! agent interface" and "Interface checks"): the tree printout, locators, hit testing and the
-//! checks. Every function here is a function of frames and options alone; nothing here plays
-//! a recording or runs the client.
+//! The scene's game checks and compatibility exports for frame inspection.
 
-pub mod checks;
-pub mod fault;
 pub mod game_checks;
-pub mod hit;
-pub mod judged;
-pub mod locate;
 pub mod steps;
-pub mod text_overlap;
-pub mod tree;
 
-pub use fault::{Context, Fault, Layout, Rule, Subject};
-pub use hit::{hit, uncovered};
-pub use judged::{Count, Judged};
-pub use locate::{LocateError, locate};
-pub use tree::{TreeOptions, tree};
+pub use kit_probe::agent::*;
+pub use kit_scene::hit;
+pub use kit_scene::hit::{hit, uncovered};

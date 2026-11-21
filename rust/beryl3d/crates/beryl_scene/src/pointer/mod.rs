@@ -24,7 +24,6 @@ pub mod touch;
 use beryl_protocol::protocol::{Side, ZoneName};
 use glam::{Mat3, Quat, Vec2};
 
-use crate::agent::hit;
 use crate::play::compile::Compiled;
 pub use crate::table::takes_pointer;
 use crate::table::{CARD_HEIGHT, Camera, Look, PILE_IDS};
@@ -33,6 +32,7 @@ use kit_base::data::space::pointer as data;
 use kit_base::pose::between;
 use kit_base::pose::{Curve, Pose, Segment};
 use kit_frame::frame::{ElementId, Frame, Lifted, Place, Role, StateBits};
+use kit_scene::hit::hit;
 use kit_ui::input::{self, PointerKind, PointerPhase};
 use refusal::Shake;
 

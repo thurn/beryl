@@ -18,16 +18,16 @@ use super::record::{MoveKey, Plant, Planted, SegmentRecord, StepRecord};
 use super::relay::settle;
 use super::step::{Motion, add, numbers_of};
 use crate::beat::{Laid, beat};
-use crate::effects::{Effect, EffectRun};
 use crate::hud::counts::CountChange;
 use crate::light::{MarkSpan, Span, SpanChange, StreakRun};
-use crate::motion::{Track, named_curve};
 use crate::notice::NoticeRun;
 use crate::play::TurnChange;
 use crate::sound::{SoundRun, Sounds};
 use crate::table::{Objects, PileCount, Table, Turn};
 use crate::verbs::{self, Interval};
 use kit_base::pose::{Pose, Segment};
+use kit_fx::effects::{Effect, EffectRun};
+use kit_space::motion::{Track, named_curve};
 
 /// A script laid out in time, ready to start.
 #[derive(Clone, Debug, Default)]

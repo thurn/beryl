@@ -8,11 +8,11 @@ use beryl_protocol::protocol::{Why, ZoneName};
 use beryl_protocol::script::{Act, Verb};
 use glam::Vec3;
 
-use crate::effects::EffectRun;
-use crate::motion::pose_at;
 use crate::sound::Cue;
 use crate::verbs::{Follows, StepTime};
 use kit_base::pose::{Pose, Segment};
+use kit_fx::effects::EffectRun;
+use kit_space::motion::pose_at;
 
 /// One step of a script, as it was laid out. Times are on the script's own clock, in
 /// nanoseconds.
