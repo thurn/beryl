@@ -8,10 +8,12 @@ use kit_base::pose::Pose;
 
 use crate::camera::Camera;
 
+mod cascade;
 mod layout;
 mod press;
 pub mod row;
 
+pub use cascade::{AnchoredCascade, Cascade, CascadeLayout};
 use layout::Layout;
 
 /// The available rectangle in table space. The rotation takes the region's local right,
@@ -103,6 +105,45 @@ pub enum Policy {
     Grid { columns: usize, gap: Vec2 },
     /// A single rectangle centred in the region.
     Spot,
+}
+
+/// A pile advances one layer at a time in the caller's local coordinate system.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Pile {
+    pub step: Vec3,
+}
+
+impl Pile {
+    /// Keep the total displacement in the plane within `reach`. Depth advances
+    /// independently, even when all the layers have the same position in the plane.
+    #[must_use]
+    pub fn limited(self, count: usize, reach: f32) -> Self {
+        let distance = self.step.truncate().length();
+        let gaps = count.saturating_sub(1).max(1) as f32;
+        let across = if distance > 0.0 && distance * gaps > reach {
+            self.step.truncate() * (reach / (distance * gaps))
+        } else {
+            self.step.truncate()
+        };
+        Self {
+            step: across.extend(self.step.z),
+        }
+    }
+
+    /// The offset from the first card's rest to this layer's rest.
+    #[must_use]
+    pub fn offset(self, layer: usize) -> Vec3 {
+        self.step * layer as f32
+    }
+
+    /// Rest a layer above, below or beside the anchored card, with the same facing.
+    #[must_use]
+    pub fn pose(self, first: Pose, layer: usize) -> Pose {
+        Pose {
+            position: first.position + self.offset(layer),
+            ..first
+        }
+    }
 }
 
 /// Which overflow steps a container allows. A scale of 1 disables shrinking.

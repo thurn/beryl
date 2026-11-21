@@ -5,7 +5,7 @@ use kit_base::geometry::{GroupWindow, ScrollAxis};
 
 use super::press::{self, PressArea, Quad};
 use super::{
-    Alignment, Camera, Cluster, Container, Edge, Item, Overflow, Placed, Policy, Pose, Solved,
+    Alignment, Camera, Cluster, Container, Edge, Item, Overflow, Pile, Placed, Policy, Pose, Solved,
 };
 
 /// Bisection of projected strips and layout scale. Twelve steps resolve a typical item
@@ -122,7 +122,6 @@ impl<'a> Layout<'a> {
         let mut end = 0;
         let pile = matches!(self.container.policy, Policy::Pile { .. });
         let offset = match self.container.policy {
-            Policy::Pile { offset } => offset,
             Policy::Row { tuck_step, .. } => tuck_step,
             _ => Vec2::ZERO,
         };
@@ -140,7 +139,14 @@ impl<'a> Layout<'a> {
                     start += 1;
                     (start, -1.0)
                 };
-                let centre = offset * Vec2::new(side, 1.0) * (depth as f32 * scale);
+                let centre = match self.container.policy {
+                    Policy::Pile { offset } => Pile {
+                        step: (offset * scale).extend(0.0),
+                    }
+                    .offset(depth)
+                    .truncate(),
+                    _ => offset * Vec2::new(side, 1.0) * (depth as f32 * scale),
+                };
                 (index, rectangle(index, centre))
             })
             .collect();

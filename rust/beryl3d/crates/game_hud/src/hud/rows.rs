@@ -1,7 +1,7 @@
 //! The number of cards scrolled off each end of a battlefield row, the viewer's hand or the
 //! stack, shown as a float of the flat layer by that end, as "+12" (`floats::ROW_COUNT`,
 //! `floats::HAND_COUNT` and `floats::STACK_COUNT`; docs/beryl-3d.md, "Floats"). A row's count
-//! stands just outside its end, and the stack's in the room the phone keeps beside its row. The
+//! stands just outside its end. The stack's counts sit outside its visible window. The
 //! hand's stand over the hand's top corners, since a hand that scrolls fills the window from
 //! side to side. A line with no cards off an end shows no count there. Arena's recordings show
 //! no board large enough to scroll, so this is listed among the behaviors not seen in Arena.
@@ -16,7 +16,7 @@ use glam::{Vec2, Vec3};
 
 use game_play::art::orb;
 use game_play::hud::counts::{index, points};
-use game_table::table::{Camera, Layout, ROWS, Rows, Scroller, Table, row_area};
+use game_table::table::{ROWS, Rows, Scroller, Table, row_area};
 use kit_base::data::space::layout::desktop::ROW_COUNT_GAP;
 use kit_base::tokens::{size, type_style};
 use kit_ui::element::{Element, FloatId, floats, text};
@@ -65,8 +65,6 @@ impl RowCounts {
     /// Shows each row end's count as `table` shows the view at rest, or none unless `visible`.
     /// Lays nothing out and allocates nothing for what `prepare` laid out.
     pub fn write(&mut self, layer: &mut Layer, table: &Table, visible: bool) {
-        let layout = table.layout();
-        let camera = table.camera();
         for index in 0..COUNTS {
             let (scroller, right) = end_of(index);
             let want = Some(count_in(table.rows(), index)).filter(|&count| visible && count > 0);
@@ -81,8 +79,7 @@ impl RowCounts {
             if want.is_none() {
                 continue;
             }
-            let Some((point, anchor)) = place(scroller, right, (layout, camera), table.rows())
-            else {
+            let Some((point, anchor)) = place(scroller, right, table) else {
                 continue;
             };
             layer.set_float_look(
@@ -98,14 +95,10 @@ impl RowCounts {
 }
 
 /// Where the count of the cards off `scroller`'s `right` or left end stands, in logical points,
-/// and the anchor of the float there, as `layout` and `camera` show `rows`. `None` for a line
-/// the layout gives no room for a count.
-fn place(
-    scroller: Scroller,
-    right: bool,
-    (layout, camera): (&Layout, &Camera),
-    rows: &Rows,
-) -> Option<(Vec2, Vec2)> {
+/// and the anchor of the float there, for the table at rest.
+fn place(scroller: Scroller, right: bool, table: &Table) -> Option<(Vec2, Vec2)> {
+    let layout = table.layout();
+    let camera = table.camera();
     // Beside the end, on the line's middle: the left count ends a gap before the line starts,
     // and the right count starts a gap after it ends.
     let beside = |left: f32, right_end: f32, y: f32| {
@@ -139,15 +132,17 @@ fn place(
             Some((point, anchor))
         }
         Scroller::Stack => {
-            let data = layout.phone?;
-            let shown = rows.stack.shown().max(1);
-            #[expect(
-                clippy::cast_precision_loss,
-                reason = "a stack holds far fewer than 2^24 items"
-            )]
-            let half = (shown as f32 - 1.0) / 2.0 * data.step + data.width() / 2.0;
-            let middle = f32::midpoint(data.left, data.right);
-            beside(middle - half, middle + half, data.middle)
+            let (low, high) = table.stack_bounds()?;
+            if layout.phone.is_some() {
+                beside(low.x, high.x, f32::midpoint(low.y, high.y))
+            } else if right {
+                Some((
+                    Vec2::new(high.x, high.y + ROW_COUNT_GAP),
+                    Vec2::new(1.0, 0.0),
+                ))
+            } else {
+                Some((Vec2::new(high.x, low.y - ROW_COUNT_GAP), Vec2::ONE))
+            }
         }
         Scroller::Hand => {
             // Over the corners of the column at the hand's top edge, inside it.

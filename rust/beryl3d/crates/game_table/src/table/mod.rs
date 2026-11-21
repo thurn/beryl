@@ -9,6 +9,7 @@
 mod anchors;
 pub use anchors::spot_of;
 pub mod badges;
+mod clearance;
 pub mod far_shade;
 mod hands;
 pub use hands::HandFits;
@@ -31,6 +32,7 @@ mod web_fit;
 use beryl_protocol::protocol::{Side, ZoneName};
 use glam::Vec2;
 
+pub use clearance::row_area;
 use kit_space::camera::DESKTOP_CAMERA;
 pub use kit_space::camera::{Camera, CameraData};
 pub use look::{Dress, Look};
@@ -45,7 +47,7 @@ pub use rows::{Beneath, Groups, NameIds, RowChange, RowWindow, SameName, grouped
 pub use scene::{ABILITY_IDS, Motion, Table, Turn};
 pub use scene::{Objects, PileCount, ability_track};
 pub use shown::{Moves, Relaid};
-pub use stack::{OnStack, on_stack, row_area};
+pub use stack::{OnStack, on_stack};
 pub use tray_layout::{
     Across, Held, Second, TrayKind, TrayPoses, TraySpace, landing, tray, tray_area, tray_boxes,
 };

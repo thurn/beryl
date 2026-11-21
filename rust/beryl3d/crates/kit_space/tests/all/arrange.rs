@@ -514,3 +514,51 @@ impl Seed {
         low + (high - low) * (self.next() as f32 / ((1 << 24) as f32))
     }
 }
+
+#[test]
+fn a_wrapped_cascade_scrolls_when_its_press_squares_fill_the_region() {
+    use kit_space::arrange::{AnchoredCascade, Cascade};
+
+    let region = AnchoredCascade {
+        foot: Vec2::new(350.0, 0.0),
+        ceiling: 160.0,
+        left: 0.0,
+        size: Vec2::new(90.0, 126.0),
+        reach: 100.0,
+        pitch: 30.0,
+        least_scale: 0.4,
+    };
+    let cascade = Cascade {
+        direction: Vec2::new(-1.0, 1.0),
+        step: 35.0,
+    };
+    let first = cascade.anchored(region, 24.0, (200, 0));
+    assert_eq!(first.overflow, Overflow::Scrolled);
+    assert!(first.window.shown > 1);
+    assert!(first.item(0).1);
+
+    let last = cascade.anchored(region, 24.0, (200, usize::MAX));
+    assert_eq!(last.window.first, 200 - first.window.shown);
+    assert!(last.item(199).1);
+    assert!(!last.item(0).1);
+    assert_eq!(last.item(0).0, last.item(last.window.first).0);
+
+    for result in [first, last] {
+        let (low, high) = result.bounds().expect("the window shows cards");
+        assert!(low.x >= region.left && low.y >= region.foot.y);
+        assert!(high.y <= region.ceiling);
+        assert!(result.size.min_element() >= 24.0);
+        let indices = result.window.first..result.window.first + result.window.shown;
+        for (offset, index) in indices.clone().enumerate() {
+            let at = result.item(index).0;
+            // The upper left square of each face lies outside every face in front of it.
+            let corner = at + Vec2::new(-result.size.x, result.size.y) / 2.0;
+            for ahead in indices.clone().take(offset) {
+                let front = result.item(ahead).0;
+                let low = front - result.size / 2.0;
+                let high = front + result.size / 2.0;
+                assert!(corner.x + 24.0 <= low.x || corner.y - 24.0 >= high.y);
+            }
+        }
+    }
+}

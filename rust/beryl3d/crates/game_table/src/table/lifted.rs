@@ -171,7 +171,7 @@ pub(crate) fn lay(
             // 1.95 times the pile's width in a flat group at the screen's top right; Beryl 3D
             // follows Arena, which lays them at library size on the table beside the library
             // (UI Conventions, "Cards the opponent looks at").
-            let scale = super::pile::pile_scale(layout, side);
+            let scale = super::pile::nominal_scale(layout, side);
             let beside = match side {
                 Side::You => beside,
                 Side::Opponent => -beside,

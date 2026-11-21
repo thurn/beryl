@@ -21,13 +21,10 @@ mod under;
 pub use under::{host_slot, names_host};
 
 use super::hands::{HandFits, hand};
-use super::pile::{
-    PileShown, lay_pile, lay_unseen_exile, pile_base, pile_card_scale, pile_scale, pile_skew,
-    pile_tilt,
-};
+use super::pile::{PileShown, lay_pile, lay_unseen_exile};
 use super::rows::{NameIds, RowWindow, face_up};
-use super::stack::{OnStack, on_stack, place_stack, spells, stack_pose};
-use super::{Camera, Layout, lifted, phone};
+use super::stack::{OnStack, on_stack, place_stack, spells};
+use super::{Camera, Layout, lifted};
 use kit_base::data::verbs::Lift;
 use kit_base::pose::Pose;
 use kit_frame::frame::Place;
@@ -713,27 +710,9 @@ fn lay(
     match group {
         Group::Pile { side, zone } => {
             if zone == ZoneName::Exile && layout.phone.is_some() {
-                lay_unseen_exile(
-                    placement,
-                    objects,
-                    side,
-                    (
-                        pile_base(layout, camera, (side, ZoneName::Graveyard), 0),
-                        pile_scale(layout, side),
-                    ),
-                );
+                lay_unseen_exile(placement, objects, side, (layout, camera));
             } else {
-                let at = pile_base(layout, camera, (side, zone), objects.len());
-                let scale = pile_card_scale(layout, camera, (side, zone), objects.len());
-                let tilt = pile_tilt(layout, side);
-                let skew = pile_skew(layout, (side, zone));
-                lay_pile(
-                    placement,
-                    objects,
-                    (side, zone),
-                    (at, scale, tilt, skew),
-                    layout.fitted_piles.map(|_| camera),
-                );
+                lay_pile(placement, objects, (side, zone), (layout, camera));
             }
         }
         Group::Hand(side) => {
@@ -761,18 +740,12 @@ fn lay(
                 (ids, piles.for_group(group)),
             );
         }
-        Group::Stack => match &layout.phone {
-            Some(data) => {
-                let window = phone::stack_window(zones.stack.len(), scroll.stack, data);
-                placement.rows.stack = window;
-                place_stack(placement, objects, &zones.stack, |index, _| {
-                    phone::stack_pose(index, window, data, camera)
-                });
-            }
-            None => place_stack(placement, objects, &zones.stack, |index, count| {
-                (stack_pose(index, count, &layout.stack, camera), true)
-            }),
-        },
+        Group::Stack => place_stack(
+            placement,
+            objects,
+            &zones.stack,
+            (layout, camera, scroll.stack),
+        ),
     }
     lifted::lay(
         zones.handling.as_ref(),

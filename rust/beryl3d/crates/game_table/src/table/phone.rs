@@ -26,18 +26,18 @@
 //!   the band is tall enough, as at 393 by 759 and 430 by 932, and is smaller where it is not
 //!   (`stack_height`), 51 points wide at 375 by 647, so that a tapped creature, 56 points tall
 //!   there, keeps an uncovered strip a press can reach. The items stand in one row, and a stack
-//!   too long for it scrolls as a battlefield row does (`stack_window`).
+//!   too long for it scrolls as a battlefield row does (`kit_space::arrange::Cascade`).
 //! - Hands, piles, the stack and the players' anchors are placed relative to the camera, at
 //!   the web's places in points, converted for each window when the layout is made
 //!   (`layout`), never on the frame path.
 
 use beryl_protocol::protocol::{Side, ZoneName};
-use glam::{Quat, Vec2, Vec3};
+use glam::{Vec2, Vec3};
 
 use super::tray_layout::{Across, Second};
 use super::{
     CARD_HEIGHT, CARD_WIDTH, Camera, CameraData, DESKTOP, HandData, Layout, PlayerAnchor, RowArea,
-    RowWindow, TraySpace, Window,
+    TraySpace, Window,
 };
 use kit_base::data::space::layout::phone as data;
 use kit_base::data::{audit, profiles::Bands};
@@ -261,63 +261,6 @@ impl PhoneStack {
     pub fn width(&self) -> f32 {
         self.height * RATIO
     }
-}
-
-/// Which items of a stack of `count` are in view on the phone, scrolled `from_top` items down
-/// from its top. The items stand in one row across the column, `step` apart, so each item
-/// beneath keeps a strip at least the phone's touch target wide at its left. A stack too long
-/// for the row shows as many of its items as fit beside room at each end for the count of the
-/// items off it, and scrolls as a battlefield row does: rows of items stacked over the
-/// battlefield would cover the creatures' rows past what a press can reach.
-#[must_use]
-pub(super) fn stack_window(count: usize, from_top: usize, data: &PhoneStack) -> RowWindow {
-    let fits = |room: f32| {
-        #[expect(
-            clippy::cast_possible_truncation,
-            clippy::cast_sign_loss,
-            reason = "the quotient is small and positive"
-        )]
-        let more = (room.max(0.0) / data.step) as usize;
-        more + 1
-    };
-    let room = data.right - data.left - data.width();
-    let all = fits(room);
-    let shown = if count <= all {
-        count
-    } else {
-        fits(room - 2.0 * data.count_room)
-    };
-    let last = count - shown;
-    let first = last - from_top.min(last);
-    RowWindow::new(count, first, shown, (first, last - first))
-}
-
-/// Where the item at `index`, bottom first, of a stack whose `window` is in view stands on the
-/// phone, and whether it is drawn: in view, side by side about the column's middle; out of
-/// view, undrawn at the nearer end of the row.
-pub(super) fn stack_pose(
-    index: usize,
-    window: RowWindow,
-    data: &PhoneStack,
-    camera: &Camera,
-) -> (Pose, bool) {
-    let size = camera.window.size;
-    let (first, shown) = (window.first(), window.shown().max(1));
-    let visible = (first..first + shown).contains(&index);
-    let at = index.clamp(first, first + shown - 1) - first;
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "a stack holds far fewer than 2^24 items"
-    )]
-    let (place, middle, depth) = (
-        at as f32,
-        (shown as f32 - 1.0) / 2.0,
-        data.depth - index as f32 * data.step_depth,
-    );
-    let x = f32::midpoint(data.left, data.right) + (place - middle) * data.step;
-    let ndc = ndc(camera.window, x, data.middle);
-    let pose = camera.screen_pose(ndc, depth, Quat::IDENTITY, data.height / size.height);
-    (pose, visible)
 }
 
 /// How tall a stack item stands on the phone, in logical points, with its middle at `middle`:

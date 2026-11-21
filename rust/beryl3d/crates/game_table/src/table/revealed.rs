@@ -6,7 +6,7 @@
 //! card's own, which lies where the table has it.
 
 use beryl_protocol::protocol::{ObjectId, ObjectView};
-use glam::{Quat, Vec2};
+use glam::{Quat, Vec3};
 
 use super::look::Look;
 use super::scene::{Table, face_of};
@@ -16,6 +16,7 @@ use kit_base::data::space::layout::phone;
 use kit_base::data::space::revealed;
 use kit_base::pose::{Curve, Interval, Segment, Shape};
 use kit_frame::frame::{ElementId, FrameBuilder, Place, REVEALED_FACE, Role, StateBits};
+use kit_space::arrange::Pile;
 
 impl Table {
     /// Keeps `object`, the record of a card held up to be read, for the Revealed Cards pile to
@@ -47,8 +48,12 @@ impl Table {
         if count == 0 {
             return;
         }
-        #[expect(clippy::cast_precision_loss, reason = "a handful of faces")]
-        let step = revealed::STEP.min(revealed::REACH / (count.max(2) - 1) as f32);
+        // Later faces lie nearer the eye so they cover the ones underneath. The x and y
+        // offsets are in normalized device coordinates, and depth is in millimetres.
+        let pile = Pile {
+            step: Vec3::new(revealed::STEP, 0.0, -1.0),
+        }
+        .limited(count, revealed::REACH);
         // On the phone the pile lies in the opponent's strip beside their graveyard, at a
         // pile's size, where the phone leaves the third pile's place free (docs/ui-conventions.md,
         // "The phone").
@@ -63,12 +68,10 @@ impl Table {
             let Some(shown) = self.revealed(slot) else {
                 continue;
             };
-            #[expect(clippy::cast_precision_loss, reason = "a handful of faces")]
-            let index = index as f32;
-            // Each later face lies a little nearer the eye, so that it covers the one under it.
+            let offset = pile.offset(index);
             let rest = self.camera().screen_pose(
-                at + Vec2::X * step * index,
-                revealed::DEPTH - index,
+                at + offset.truncate(),
+                revealed::DEPTH + offset.z,
                 Quat::IDENTITY,
                 height,
             );
