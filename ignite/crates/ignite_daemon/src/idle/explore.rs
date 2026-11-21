@@ -1,6 +1,6 @@
 //! Exploration: checks nobody has played, from each exploration family's `next` command, run in
-//! a landing tree at the verified commit. A failure becomes a report to the hub, which files a
-//! P2 bug labelled `found-by:<family>` or comments on the open one with the same signature.
+//! a landing tree at the verified commit. The hub collects failures in a small set of P2
+//! tickets awaiting approval.
 
 use std::collections::BTreeSet;
 use std::fs;

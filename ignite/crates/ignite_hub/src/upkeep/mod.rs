@@ -29,8 +29,8 @@
 //! machine's failure ([`machines::disagreement`]). The dashboard asks [`machines::unassignable`]
 //! for tickets that no machine can take.
 //!
-//! Every ticket the hub files by itself is matched against earlier ones by a signature
-//! ([`signature`], [`filing`]), so a repeated fault adds a comment and never a second ticket.
+//! Automatic tickets match earlier faults by signature ([`signature`], [`filing`]).
+//! Exploration findings also share a limited set of tickets waiting for approval.
 
 pub mod attachments;
 pub mod backup;

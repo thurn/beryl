@@ -1,6 +1,7 @@
 //! Filing a ticket the hub writes by itself, matched against earlier ones by signature.
 //!
 //! - An open ticket with the same signature gets a comment instead of a second ticket.
+//!   Exploration reports share a small set of tickets while they wait for approval.
 //! - Each report carries an `evidence` string that names the sighting, such as a commit or an
 //!   input hash. A report whose evidence the ticket already holds changes nothing, so a pass of
 //!   upkeep that sees the same fault again, or a daemon that sends a report twice, adds nothing.
@@ -84,6 +85,9 @@ pub const HUB_LABEL: &str = "hub";
 /// How many sightings a ticket remembers.
 const SIGHTINGS_KEPT: usize = 50;
 
+/// How many exploration tickets may wait for approval across all check families.
+const PENDING_EXPLORATION_LIMIT: usize = 3;
+
 /// How often a lookup and write is tried when other writes keep coming between them.
 const ATTEMPTS: usize = 8;
 
@@ -136,11 +140,13 @@ struct Match {
     id: String,
     closed: bool,
     pending: bool,
+    labels: Vec<String>,
     sightings: Vec<String>,
     metadata: BTreeMap<String, Value>,
 }
 
-/// Files `filing`: a comment on the open ticket with its signature, or a new ticket.
+/// Files `filing` on a matching live ticket, or starts a new one. Exploration findings are
+/// grouped by check family before approval and can share tickets across families.
 pub fn file(
     conn: &mut Connection,
     author: Author,
@@ -150,10 +156,27 @@ pub fn file(
     let key = filing.signature.key();
     let body = filing.fields.body.clone().unwrap_or_default();
     let origin = origin(conn, author.machine)?;
+    let family_label = (filing.signature.category == "found")
+        .then(|| format!("found-by:{}", filing.signature.subject));
     for _ in 0..ATTEMPTS {
         let seq = feed::current(conn)?;
-        let matches = matching(conn, &key)?;
-        let live = matches.iter().find(|m| !m.closed);
+        let matches;
+        let live = if let Some(label) = &family_label {
+            matches = exploration_matches(conn)?;
+            if let Some(seen) = matches
+                .iter()
+                .find(|m| saw_exploration(m, &filing.evidence, &key))
+            {
+                return Ok(Filed {
+                    ticket: seen.id.clone(),
+                    change: Change::Unchanged,
+                });
+            }
+            pending_exploration(&matches, label)
+        } else {
+            matches = matching(conn, &key)?;
+            matches.iter().find(|m| !m.closed)
+        };
         let (ops, change) = match live {
             Some(open) if open.sightings.contains(&filing.evidence) => {
                 return Ok(Filed {
@@ -163,6 +186,9 @@ pub fn file(
             }
             Some(open) => {
                 let release = filing.released && open.pending;
+                let added_family = family_label
+                    .as_ref()
+                    .filter(|label| !open.labels.contains(label));
                 let ops = vec![
                     Operation::Comment {
                         id: open.id.clone(),
@@ -170,11 +196,13 @@ pub fn file(
                     },
                     Operation::Update {
                         id: open.id.clone(),
-                        set: release.then(|| TicketFields {
-                            status: Some(Status::Open),
+                        set: (release || added_family.is_some()).then(|| TicketFields {
+                            status: release.then_some(Status::Open),
+                            title: added_family
+                                .map(|_| "Investigate exploration findings".to_owned()),
                             ..TicketFields::default()
                         }),
-                        add_labels: Vec::new(),
+                        add_labels: added_family.into_iter().cloned().collect(),
                         remove_labels: Vec::new(),
                         set_meta: sighting_meta(open, filing, author, now),
                         // The fault is seen again, so any clear spell upkeep was timing ends.
@@ -183,7 +211,7 @@ pub fn file(
                 ];
                 (ops, Change::Commented)
             }
-            None => match matches.first() {
+            None => match matches.first().filter(|m| m.closed) {
                 Some(newest) if auto_closed_within(newest, now) => {
                     (reopen(newest, filing, author, now), Change::Reopened)
                 }
@@ -487,22 +515,66 @@ fn sightings_meta(mut sightings: Vec<String>) -> BTreeMap<String, Value> {
 
 /// Every ticket with this signature, newest first.
 fn matching(conn: &Connection, key: &str) -> Result<Vec<Match>> {
-    let mut select = conn.prepare_cached(
-        "SELECT id, status, metadata FROM tickets
-         WHERE json_extract(metadata, '$.ignite_signature') = ?1
-         ORDER BY created_at DESC, id DESC",
-    )?;
+    load_matches(
+        conn,
+        "json_extract(metadata, '$.ignite_signature') = ?1",
+        key,
+    )
+}
+
+/// Released tickets only participate in retry detection. Their scope stays fixed after approval.
+fn exploration_matches(conn: &Connection) -> Result<Vec<Match>> {
+    load_matches(
+        conn,
+        "status != 'closed' AND json_extract(metadata, '$.ignite_fault.category') = ?1",
+        "found",
+    )
+}
+
+/// Older exploration tickets stored the replay and commit without the diagnostic signature.
+fn saw_exploration(ticket: &Match, evidence: &str, key: &str) -> bool {
+    let legacy = evidence.split_once(':').map(|(_, replay)| replay);
+    let same_fault = ticket.metadata.get(SIGNATURE_KEY).and_then(Value::as_str) == Some(key);
+    ticket
+        .sightings
+        .iter()
+        .any(|seen| seen == evidence || (same_fault && Some(seen.as_str()) == legacy))
+}
+
+/// Keep a family together while a pending ticket covers it. When all slots are occupied,
+/// put a new family on the ticket with the fewest recorded sightings.
+fn pending_exploration<'a>(matches: &'a [Match], family_label: &str) -> Option<&'a Match> {
+    let pending = matches.iter().filter(|ticket| ticket.pending);
+    pending
+        .clone()
+        .find(|ticket| ticket.labels.iter().any(|label| label == family_label))
+        .or_else(|| {
+            (pending.clone().count() >= PENDING_EXPLORATION_LIMIT)
+                .then(|| pending.min_by_key(|ticket| ticket.sightings.len()))
+                .flatten()
+        })
+}
+
+fn load_matches(conn: &Connection, condition: &str, value: &str) -> Result<Vec<Match>> {
+    let mut select = conn.prepare_cached(&format!(
+        "SELECT id, status, labels, metadata FROM tickets
+         WHERE {condition}
+         ORDER BY created_at DESC, id DESC"
+    ))?;
     let rows = select
-        .query_map(params![key], |row| {
+        .query_map(params![value], |row| {
             Ok((
                 row.get::<_, String>(0)?,
                 row.get::<_, String>(1)?,
-                row.get::<_, Option<String>>(2)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, Option<String>>(3)?,
             ))
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     rows.into_iter()
-        .map(|(id, status, metadata)| {
+        .map(|(id, status, labels, metadata)| {
+            let labels = serde_json::from_str(&labels)
+                .map_err(|error| StoreError::Invalid(format!("labels of {id}: {error}")))?;
             let metadata: BTreeMap<String, Value> = match metadata {
                 Some(json) => serde_json::from_str(&json)
                     .map_err(|error| StoreError::Invalid(format!("metadata of {id}: {error}")))?,
@@ -512,6 +584,7 @@ fn matching(conn: &Connection, key: &str) -> Result<Vec<Match>> {
                 closed: status == "closed",
                 pending: status == "pending_approval",
                 id,
+                labels,
                 sightings: strings(&metadata, SIGHTINGS_KEY),
                 metadata,
             })

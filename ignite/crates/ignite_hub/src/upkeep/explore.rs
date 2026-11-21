@@ -1,9 +1,5 @@
-//! Exploration finds: a failed exploration check is product work. It files an ordinary P2 bug
-//! labelled `found-by:<family>` with the steps to replay it, or adds a comment to the open
-//! ticket with the same signature.
-//!
-//! The signature's subject is the family, not the check: an exploration check is one seed or
-//! scenario, and two seeds that hit the same fault are one bug.
+//! Exploration findings share P2 tickets while they wait for approval. Each report keeps
+//! its own check, commit, replay command, and output so a worker can investigate each one.
 
 use rusqlite::Connection;
 
@@ -26,19 +22,28 @@ pub fn find(
     let check = find.check.as_str();
     let family = find.check.family();
     let body = format!(
-        "The exploration check {check} failed at commit {}.\n\n\
+        "The exploration check {check} failed at commit {} on {}.\n\n\
          replay: {}\n\n\
          output (last {OUTPUT_LINES} lines):\n{}",
         find.commit,
+        find.host,
         find.replay,
         tail(&find.output, OUTPUT_LINES)
     );
+    let signature = Signature::of_output(family, "found", "", &find.output, &find.host);
+    // Two runs of a check on one commit can fail in different ways.
+    let evidence = format!("{}:{}@{}", signature.key(), find.replay, find.commit);
     let filing = Filing {
-        signature: Signature::of_output(family, "found", "", &find.output, &find.host),
-        evidence: format!("{}@{}", find.replay, find.commit),
+        signature,
+        evidence,
         fields: TicketFields {
-            title: Some(format!("Found by {family}: {check}")),
+            title: Some(format!("Investigate {family} findings")),
             body: Some(body),
+            acceptance: Some(
+                "Review the finding in the description and each report in the comments. \
+                 Record which findings reproduce, what was fixed, and any follow-up needed."
+                    .to_owned(),
+            ),
             ticket_type: Some(TicketType::Bug),
             priority: Some(2),
             labels: Some(vec![format!("found-by:{family}")]),
@@ -49,3 +54,6 @@ pub fn find(
     };
     filing::file(conn, author, &filing, now)
 }
+
+#[cfg(test)]
+mod tests;

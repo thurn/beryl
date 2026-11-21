@@ -7,8 +7,8 @@ use ignite_core::fakes::FakeClock;
 use ignite_core::ids::{CheckName, Commit, InputHash, MachineId, RecordId, TicketId};
 use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::{
-    AuditReport, CheckState, ExplorationFind, FlakyReport, FoundBy, IncompleteReason,
-    IncompleteReport, MachineRegister, NewResult, RegressionReport, ResultKey, TipWaiting,
+    AuditReport, CheckState, FlakyReport, FoundBy, IncompleteReason, IncompleteReport,
+    MachineRegister, NewResult, RegressionReport, ResultKey, TipWaiting,
 };
 use ignite_core::protocol::tickets::{
     BatchRequest, Dependency, Operation, Status, Ticket, TicketFields, TicketQuery, TicketType,
@@ -20,7 +20,7 @@ use ignite_store::hub::batch::{self, BatchOutcome};
 use ignite_store::hub::{self, checks, fleet, results, rows, tickets, tips};
 
 use super::filing::{Change, UPKEEP};
-use super::{Upkeep, backup, explore, regressions, stuck};
+use super::{Upkeep, backup, regressions, stuck};
 
 pub(super) fn start() -> FakeClock {
     FakeClock::new(Timestamp::parse("2026-11-17T12:00:00Z").unwrap())
@@ -453,54 +453,6 @@ fn a_check_is_switched_off_on_its_second_flaky_record_and_not_its_first() {
     let report = upkeep.pass(&mut conn, clock.now()).unwrap();
     assert!(report.checks_switched_off.is_empty() && report.tickets_filed.is_empty());
     assert_eq!(all_tickets(&conn, clock.now()).len(), 1);
-}
-
-fn find(replay: &str, line: u32, host: &str) -> ExplorationFind {
-    ExplorationFind {
-        check: CheckName::new(format!("fuzz:seed-{replay}")).unwrap(),
-        machine: MachineId::new("m-1").unwrap(),
-        host: host.to_owned(),
-        commit: Commit::new("abcd").unwrap(),
-        replay: format!("ignite test fuzz:seed-{replay}"),
-        output: format!(
-            "thread 'main' (4411) panicked at src/combat.rs:{line}:7:\n\
-             assertion failed: blockers <= 2\n on {host}"
-        ),
-    }
-}
-
-#[test]
-fn two_finds_with_one_signature_give_one_ticket_and_one_comment() {
-    let clock = start();
-    let mut conn = hub::open_in_memory().unwrap();
-    let first = explore::find(&mut conn, UPKEEP, &find("17", 210, "jarvis"), clock.now()).unwrap();
-    assert_eq!(first.change, Change::Created);
-    assert!(first.ticket.starts_with('A'), "{}", first.ticket);
-    clock.advance(60.0);
-    let second =
-        explore::find(&mut conn, UPKEEP, &find("94", 214, "multivac"), clock.now()).unwrap();
-    assert_eq!(
-        (second.ticket.as_str(), second.change),
-        (first.ticket.as_str(), Change::Commented)
-    );
-    // The same find sent again changes nothing.
-    let repeat =
-        explore::find(&mut conn, UPKEEP, &find("94", 214, "multivac"), clock.now()).unwrap();
-    assert_eq!(repeat.change, Change::Unchanged);
-
-    let filed = ticket(&conn, &first.ticket);
-    assert_eq!(filed.priority, 2);
-    assert_eq!(filed.labels, vec!["found-by:fuzz", "hub"]);
-    assert!(filed.body.contains("replay: ignite test fuzz:seed-17"));
-    assert_eq!(comment_count(&conn, &first.ticket), 1);
-    assert_eq!(all_tickets(&conn, clock.now()).len(), 1);
-
-    // A fault that returns after its ticket closed gets a new ticket naming the old one.
-    close(&mut conn, &first.ticket, clock.now());
-    let returned =
-        explore::find(&mut conn, UPKEEP, &find("5", 300, "jarvis"), clock.now()).unwrap();
-    assert_eq!(returned.change, Change::Created);
-    assert!(ticket(&conn, &returned.ticket).body.contains(&first.ticket));
 }
 
 #[test]

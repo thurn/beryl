@@ -3077,9 +3077,12 @@ nobody else wants, and what they find is product work.
 - They run only in the `idle` class.
 - An exploration family declares a `next` command that produces checks nobody
   has played, such as new scenario seeds.
-- A failure files an ordinary bug ticket at P2 with the label
-  `found-by:<family>` and the steps to replay it. A failure with the same
-  signature as an open ticket adds a comment.
+- Up to three P2 exploration tickets wait for approval at once. A failure joins
+  the pending ticket for its check family when one exists. If all three slots
+  are filled, a new family joins the ticket with the fewest recorded findings.
+  Each ticket carries a `found-by:<family>` label for every family it covers.
+  The description and comments record the individual findings and replay steps.
+  Approving a ticket frees a slot and fixes the set of findings for its worker.
 - No exploration failure blocks a landing, holds `master` or starts a culprit
   search.
 
