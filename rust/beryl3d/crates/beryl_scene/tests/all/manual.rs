@@ -8,11 +8,12 @@ use beryl_protocol::ipc::decks::{CardSearchHit, CardTokenLink};
 use beryl_protocol::ipc::{TableActReply, TableRefusalReason, TableRefused};
 use beryl_protocol::protocol::{LogLine, ObjectId, Side, TableAction, TableArrow, ZoneName};
 use beryl_protocol::script::{Act, Arrow, Span as Edge, Step, Subject};
+use beryl_scene::Input;
 use beryl_scene::command::{Reply, Request, SessionCommand};
 use beryl_scene::frame::{Frame, Role, StateBits, Wake};
 use beryl_scene::input::{
-    Button, Input, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase,
-    Size, TextChange,
+    Button, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase, Size,
+    TextChange,
 };
 use beryl_scene::manual::bindings::Bindings;
 use beryl_scene::manual::commands::{AppliesTo, commands_for};

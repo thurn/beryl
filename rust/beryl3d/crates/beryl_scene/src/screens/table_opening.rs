@@ -16,7 +16,7 @@ use beryl_protocol::protocol::{ObjectId, TablePrompt};
 use glam::Vec2;
 
 use super::opening::{Presentation, present};
-use crate::element::{Align, Anchor, Element, Press, column, row};
+use crate::element::{Action, Align, Anchor, Element, column, row};
 use crate::manual::TablePress;
 use crate::manual::opening::{OpeningPress, prompt};
 use crate::table::Window;
@@ -25,14 +25,14 @@ use crate::widgets::screen::phone_action;
 use crate::widgets::{button, primary};
 
 /// The press on a card of the opening hand: it goes on the bottom, or comes back.
-fn bottom(slot: ObjectId) -> Press {
-    Press::Table(TablePress::Opening(OpeningPress::Bottom(slot)))
+fn bottom(slot: ObjectId) -> Action {
+    Action::new(TablePress::Opening(OpeningPress::Bottom(slot)))
 }
 
 /// A button that sends `press`, the primary button if `first`.
 fn answer(label: &str, press: OpeningPress, first: bool) -> Element {
     let widget = if first { primary } else { button };
-    widget(label).on_press(Press::Table(TablePress::Opening(press)))
+    widget(label).on_press(TablePress::Opening(press))
 }
 
 /// The guided start's screen and its buttons, which stand beside it rather than in it so that
@@ -113,7 +113,7 @@ fn pieces(view: &PlayerView, window: Window) -> Option<(Element, Element)> {
                 slots: usize::from(to_bottom.unwrap_or(0)).max(chosen.len()),
                 actions: buttons.len(),
                 waiting: false,
-                press: picking.then_some(bottom as fn(ObjectId) -> Press),
+                press: picking.then_some(bottom as fn(ObjectId) -> Action),
                 choice: &[],
             };
             (present(&shown, window), buttons, false)

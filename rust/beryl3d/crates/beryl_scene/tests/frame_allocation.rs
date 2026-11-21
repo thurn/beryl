@@ -20,15 +20,17 @@ use beryl_protocol::protocol::{
     PowerToughness, SessionId, Side, Status, ZoneName,
 };
 use beryl_protocol::script::{Act, Mark, Notice, Subject, Tally};
+use beryl_scene::Input;
 use beryl_scene::element::{Anchor, floats, row, text};
 use beryl_scene::frame::{Frame, FrameBuilder, Material, Place, Role, StateBits};
 use beryl_scene::input::{
-    AssetReady, Button, GlyphCell, Input, Insets, Modifiers, Pointer, PointerKind, PointerPhase,
-    Size, Tier,
+    AssetReady, Button, GlyphCell, Insets, Modifiers, Pointer, PointerKind, PointerPhase, Size,
+    Tier,
 };
-use beryl_scene::layout::{FloatLook, Layer, spot_of};
+use beryl_scene::layout::{FloatLook, Layer};
 use beryl_scene::light::{MarkSpan, Span};
 use beryl_scene::table::Table;
+use beryl_scene::table::spot_of;
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder};
 use beryl_scene::verbs::Interval;
 use beryl_scene::{Client, Config};
@@ -486,7 +488,7 @@ fn a_moved_float_allocates_nothing() {
         },
     );
     let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
-    layer.write(&mut builder, table.camera(), false);
+    layer.write(&mut builder, &table.camera().screen_plane(), false);
     let elements = builder.finish().resolved.len();
     let after = ALLOCATIONS.load(Ordering::Relaxed);
     assert_eq!(elements, 1, "the frame holds the float");
@@ -519,7 +521,7 @@ fn an_anchored_element_allocates_nothing() {
         let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
         show.frame(now, &mut builder);
         layer.follow(|subject| spot_of(&builder, show.table(), subject));
-        layer.write(&mut builder, show.table().camera(), true);
+        layer.write(&mut builder, &show.table().camera().screen_plane(), true);
         builder.finish();
         let after = ALLOCATIONS.load(Ordering::Relaxed);
         // The first frames take the scripts and lay out the table's cards.
@@ -553,7 +555,7 @@ fn a_transition_allocates_nothing() {
         let before = ALLOCATIONS.load(Ordering::Relaxed);
         let moving = layer.tick(now).moving;
         let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
-        layer.write(&mut builder, table.camera(), true);
+        layer.write(&mut builder, &table.camera().screen_plane(), true);
         builder.finish();
         let after = ALLOCATIONS.load(Ordering::Relaxed);
         assert!(moving, "the transitions last past {now}");

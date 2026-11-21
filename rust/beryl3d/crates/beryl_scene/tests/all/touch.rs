@@ -11,15 +11,14 @@ use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::prompt::{ButtonId, Click, ClickRequest, Marked};
 use beryl_protocol::protocol::{CardType, ObjectId, Side, Status, ZoneName};
 use beryl_protocol::script::{Mark, Subject};
+use beryl_scene::Input;
 use beryl_scene::agent::{hit, uncovered};
 use beryl_scene::command::{Request, SessionCommand};
 use beryl_scene::driver::Recording;
 use beryl_scene::frame::{
     ElementId, Frame, FrameBuilder, NameRef, Place, Resolved, Role, StateBits,
 };
-use beryl_scene::input::{
-    Button, Input, Insets, Modifiers, Pointer, PointerKind, PointerPhase, Tier,
-};
+use beryl_scene::input::{Button, Insets, Modifiers, Pointer, PointerKind, PointerPhase, Tier};
 use beryl_scene::input::{Rect, Size};
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder, table};
 use beryl_scene::{Client, Config};

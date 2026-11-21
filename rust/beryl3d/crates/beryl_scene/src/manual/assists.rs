@@ -24,7 +24,7 @@ use beryl_protocol::script::Subject;
 use glam::Vec2;
 
 use super::TablePress;
-use crate::element::{Align, Anchor, Element, Press, column, row, text};
+use crate::element::{Align, Anchor, Element, column, row, text};
 use crate::input::Size;
 use crate::inspect::viewer::object_box;
 use crate::table::Window;
@@ -87,9 +87,7 @@ pub fn proposals(
     heading.style.padding = [0.0, space::M, 0.0, space::M];
     let heading = heading
         .selected(open)
-        .on_press(Press::Table(TablePress::ToggleProposals(
-            (!open).then_some(first),
-        )));
+        .on_press(TablePress::ToggleProposals((!open).then_some(first)));
     if !open {
         let mut folded = heading;
         folded.anchor = Some(corner);
@@ -116,11 +114,11 @@ fn proposal(proposal: &ProposalView, phone: bool) -> Element {
             Side::You => "yours",
             Side::Opponent => "theirs",
         };
-        let press = Press::Table(TablePress::ProposalLine {
+        let press = TablePress::ProposalLine {
             id,
             line: line.id,
             on: !line.on,
-        });
+        };
         touch(
             checkbox(&format!("{} · {whose}", line.text), line.on).on_press(press),
             phone,
@@ -130,7 +128,7 @@ fn proposal(proposal: &ProposalView, phone: bool) -> Element {
         .name("Apply")
         .align_self(Align::Start)
         .enabled(proposal.lines.iter().any(|line| line.on))
-        .on_press(Press::Table(TablePress::ApplyProposal { id, revision }));
+        .on_press(TablePress::ApplyProposal { id, revision });
     column()
         .name(&proposal.title)
         .gap(space::S)
@@ -182,7 +180,7 @@ pub fn labels(labels: &[LabelView], view: &PlayerView, phone: bool) -> Vec<Eleme
                 .children(group.into_iter().map(|label| {
                     touch(small(button(&label.text)), phone)
                         .name(&label.text)
-                        .on_press(Press::Table(TablePress::Label(label.id)))
+                        .on_press(TablePress::Label(label.id))
                 }));
             // On a phone the row straddles the card's top edge, reaching
             // `labels.phone_overlap` points into the card, so that both the card and the one
@@ -223,8 +221,7 @@ pub fn sort_tray(view: &PlayerView, window: Size) -> Option<Element> {
     else {
         return None;
     };
-    let card =
-        |slot: ObjectId| object_box(view, slot).on_press(Press::Table(TablePress::SortCard(slot)));
+    let card = |slot: ObjectId| object_box(view, slot).on_press(TablePress::SortCard(slot));
     let unplaced = (cards.iter().copied())
         .filter(|slot| !placed.iter().any(|pile| pile.contains(slot)))
         .map(card);
@@ -258,10 +255,10 @@ pub fn sort_tray(view: &PlayerView, window: Size) -> Option<Element> {
     let done = primary("Done")
         .name("done")
         .enabled(ready)
-        .on_press(Press::Table(TablePress::SortDone));
+        .on_press(TablePress::SortDone);
     let cancel = button("Cancel")
         .name("close")
-        .on_press(Press::Table(TablePress::SortCancel));
+        .on_press(TablePress::SortCancel);
     Some(overlay(
         window,
         (title, None),

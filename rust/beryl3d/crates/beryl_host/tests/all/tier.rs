@@ -4,10 +4,12 @@
 
 use beryl_host::rate::Step;
 use beryl_host::{Chosen, Draw, FrameLoop, Shown, Ticks};
+use beryl_scene::Input;
+use beryl_scene::Press;
 use beryl_scene::data::space::frame_rate;
-use beryl_scene::element::Press;
+use beryl_scene::element::Action;
 use beryl_scene::frame::Frame;
-use beryl_scene::input::{Button, Input, Modifiers, Pointer, PointerKind, PointerPhase, Tier};
+use beryl_scene::input::{Button, Modifiers, Pointer, PointerKind, PointerPhase, Tier};
 use beryl_scene::settings::{Graphics, Setting};
 use beryl_scene::{Client, Config};
 use glam::Vec2;
@@ -150,7 +152,7 @@ fn a_fixed_rate_still_drops_the_tier_and_never_steps_the_rate() {
 fn set(frames: &mut FrameLoop<AnyTicks>, graphics: Graphics) {
     frames
         .client()
-        .press(&Press::Setting(Setting::Graphics(graphics)));
+        .press(&Action::new(Press::Setting(Setting::Graphics(graphics))));
     while frames.next_request().is_some() {}
 }
 

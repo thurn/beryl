@@ -27,7 +27,6 @@ use beryl_protocol::script::Subject;
 use beryl_scene::agent::checks::{ring_outer, ring_rect};
 use beryl_scene::agent::hit::bounds;
 use beryl_scene::agent::tree::{locator_of, place_word};
-use beryl_scene::effects::Effect;
 use beryl_scene::element::{Border, Extent, Filter, Gradient, Length, Shadow, Shape};
 use beryl_scene::frame::{
     EffectLook, ElementLook, Frame, LookPaint, LookShadow, Place, REVEALED_FACE, Resolved, Ring,
@@ -289,10 +288,10 @@ fn card_transform(element: &Resolved) -> Value {
 /// What an effect is on, as the web's dump names it: a card's slot, `a<id>` for an ability, a
 /// player's side, or `table` for a shake.
 fn subject(effect: &EffectLook) -> Value {
-    if effect.effect == Effect::Shake {
+    let Some(on) = effect.on else {
         return Value::from("table");
-    }
-    match effect.on {
+    };
+    match on {
         Subject::Object { slot } => json!(slot.0),
         Subject::Ability { id } => Value::from(format!("a{id}")),
         Subject::Player { player: Side::You } => Value::from("you"),
@@ -307,7 +306,7 @@ fn subject(effect: &EffectLook) -> Value {
 /// shake's model is only its offset, which is its box's corner.
 fn effect_box(frame: &Frame, effect: &EffectLook, size: Size) -> Vec<Value> {
     let m = effect.model;
-    if effect.effect == Effect::Shake {
+    if effect.on.is_none() {
         return vec![round(m[3]), round(m[7]), round(0.0), round(0.0)];
     }
     // The camera's matrix by columns, applied by hand: this crate takes `glam` only for its
@@ -346,7 +345,7 @@ fn effect_records(frame: &Frame, size: Size, elements: usize) -> Vec<Value> {
     (frame.looks.effects.iter().enumerate())
         .map(|(at, effect)| {
             let on = subject(effect);
-            let name = effect.effect.name();
+            let name = effect.name;
             json!({
                 "key": format!("effect \"{name}\" on {}", on.as_str().map_or_else(|| on.to_string(), str::to_owned)),
                 "role": "effect",

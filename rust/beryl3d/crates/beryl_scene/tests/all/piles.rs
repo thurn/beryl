@@ -6,8 +6,9 @@ use crate::common::{MS, empty_frame, frame, show, window};
 use beryl_protocol::GameUpdate;
 use beryl_protocol::protocol::{ObjectId, Side, Why, ZoneName};
 use beryl_protocol::script::Act;
+use beryl_scene::Input;
 use beryl_scene::frame::{Frame, Role};
-use beryl_scene::input::{Input, Insets, Size};
+use beryl_scene::input::{Insets, Size};
 use beryl_scene::motion::pose_at;
 use beryl_scene::pose::{Pose, Segment};
 use beryl_scene::table::{

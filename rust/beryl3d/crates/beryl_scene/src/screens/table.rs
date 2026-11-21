@@ -9,12 +9,13 @@
 //! the other seat's connection is down, the banner that says so (`manual::link`). Only the solo
 //! table can be opened: the web interface's host and join screens come later.
 
+use crate::manual::TableCommand;
 use beryl_protocol::protocol::Facing;
 use glam::Vec2;
 
 use crate::data::space::flat::{MENU_EDGE, sheet};
 use crate::data::space::pointer::DRAG_THRESHOLD_POINTS;
-use crate::element::{Align, Element, Overflow, Press, Shown, column};
+use crate::element::{Action, Align, Element, Overflow, Shown, column};
 use crate::frame::Role;
 use crate::hud::{HudIn, players, steps};
 use crate::input::{FaceId, FaceSize};
@@ -41,7 +42,7 @@ pub(super) struct TableIn<'a> {
 }
 
 /// What the flat layer shows on the table: a region with no box of its own, which answers every
-/// key of a table command with `Press::Command`, the log, and the open context menu, command
+/// key of a table command with `TableCommand`, the log, and the open context menu, command
 /// list, ask prompt, token search, custom token form or order tray, if any.
 ///
 /// A command's keys are the one the player bound to it, or else its own and its aliases from
@@ -67,7 +68,7 @@ pub(super) fn table(input: &TableIn) -> Element {
             continue;
         }
         for key in input.bindings.keys(command) {
-            screen = screen.shortcut(key, Press::Command(index, false));
+            screen = screen.shortcut(key, TableCommand(index, false));
         }
     }
     // With Shift held and no binding of its own, a token command's key makes its token face
@@ -82,7 +83,7 @@ pub(super) fn table(input: &TableIn) -> Element {
         }
         for key in input.bindings.keys(command) {
             if !key.split('+').any(|part| part == "Shift") {
-                screen = screen.shortcut(&format!("Shift+{key}"), Press::Command(index, true));
+                screen = screen.shortcut(&format!("Shift+{key}"), TableCommand(index, true));
             }
         }
     }
@@ -185,7 +186,7 @@ fn table_steps(input: &HudIn) -> Option<Element> {
         lit,
         input.window,
         |at, active| {
-            Press::Table(crate::manual::TablePress::Step {
+            Action::new(crate::manual::TablePress::Step {
                 #[expect(clippy::cast_possible_truncation, reason = "twelve icons")]
                 at: at as u8,
                 active,

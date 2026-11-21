@@ -14,13 +14,13 @@
 //! over the whole window, so that the screen's own elements are kept as they were and none
 //! of them fades in again in the picture.
 
+use crate::screens::BugPress;
+use crate::screens::ScreenPress;
 use glam::Vec2;
 
 use super::ScreenIn;
 use crate::data::space::flat::phone::bug as metrics;
-use crate::element::{
-    Align, Anchor, BugPress, Element, Justify, Position, Press, TextAlign, column, row, text,
-};
+use crate::element::{Align, Anchor, Element, Justify, Position, TextAlign, column, row, text};
 use crate::frame::Role;
 use crate::input::{Insets, Rect};
 use crate::text::TypeStyle;
@@ -291,7 +291,9 @@ fn describe(
         description.style.max_height = Some(metrics::DESCRIPTION_MOST);
     }
     let submit = primary(if saving { "Saving…" } else { "Submit" });
-    let mut submit = submit.enabled(ready).on_press(Press::Bug(BugPress::Save));
+    let mut submit = submit
+        .enabled(ready)
+        .on_press(ScreenPress::Bug(BugPress::Save));
     // `size="small"`: shorter, with smaller type, and only as wide as its label.
     submit.style.height = Some(size::BUTTON_HEIGHT * ratio::SMALL_SCALE);
     submit.style.text.size = type_style::BUTTON.size * ratio::SMALL_SCALE;
@@ -407,7 +409,7 @@ fn ai_box(on: bool) -> Element {
         .selected(on)
         .gap(size::BUG_AI_GAP)
         .align_items(Align::Center)
-        .on_press(Press::Bug(BugPress::Ai))
+        .on_press(ScreenPress::Bug(BugPress::Ai))
         .child(check)
         .child(text("AI play").style(HINT).color(color::TEXT_DIM))
 }
@@ -453,10 +455,14 @@ fn tools(choosing: bool, phone: Option<Insets>) -> Element {
             tool(
                 widgets::icons::WHOLE,
                 "Whole window",
-                Press::Bug(BugPress::Whole),
+                ScreenPress::Bug(BugPress::Whole),
             )
         }))
-        .child(tool(widgets::icons::CLOSE, "Close", Press::Sheet(None)));
+        .child(tool(
+            widgets::icons::CLOSE,
+            "Close",
+            ScreenPress::Sheet(None),
+        ));
     pill.style.padding = [size::BUG_TOOLS_PADDING; 4];
     pill.style.box_shadow = shadow::BUG_TOOLS.to_vec();
     pill

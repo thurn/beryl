@@ -6,7 +6,7 @@
 use glam::Vec2;
 
 use super::{Layer, Node, write::moved};
-use crate::element::{Display, Press};
+use crate::element::{Action, Display};
 use crate::frame::{ElementId, Role};
 use crate::input::Rect;
 
@@ -22,7 +22,7 @@ impl Layer {
     /// The enabled slider at `point`, leaving out what waits for the table unless the layer is `open`: its id, its press and its box
     /// on the window.
     #[must_use]
-    pub fn slider_at(&self, point: Vec2, open: bool) -> Option<(ElementId, Press, Rect)> {
+    pub fn slider_at(&self, point: Vec2, open: bool) -> Option<(ElementId, Action, Rect)> {
         self.hit(point, open, |node, origin| {
             slider(node).map(|press| (node.id, press, node.rect_at(origin)))
         })
@@ -30,7 +30,7 @@ impl Layer {
 
     /// The press and the box on the window of the enabled slider `id`, if the screen shows it.
     #[must_use]
-    pub fn slider(&self, id: ElementId) -> Option<(Press, Rect)> {
+    pub fn slider(&self, id: ElementId) -> Option<(Action, Rect)> {
         /// `id`'s node in `node`'s tree, whose top left corner stands at `origin`, with the
         /// corner of the tree it is laid out in.
         fn search(node: &Node, id: ElementId, origin: Vec2) -> Option<(&Node, Vec2)> {
@@ -59,13 +59,13 @@ impl Layer {
 
     /// The press of the focused element, if it is an enabled slider.
     #[must_use]
-    pub fn focused_slider(&self) -> Option<Press> {
+    pub fn focused_slider(&self) -> Option<Action> {
         self.slider(self.focused?).map(|(press, _)| press)
     }
 }
 
 /// The press of `node` if it is an enabled slider.
-fn slider(node: &Node) -> Option<Press> {
+fn slider(node: &Node) -> Option<Action> {
     let element = &node.element;
     (element.role == Role::Slider && element.enabled)
         .then(|| element.press.clone())

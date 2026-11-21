@@ -36,6 +36,8 @@ serde_json = "1.0.154"
 # Holds a script being compiled over frames beside the updates it borrows, in place of a
 # hand-written self-referential struct, which `unsafe_code = "deny"` forbids.
 self_cell = "1.3.0"
+# Keeps common actions inline while allowing an element to carry any message type.
+smallbox.workspace = true
 
 [dev-dependencies]
 # Opens repository files and records each read, so Ignite reruns the tests when one changes.

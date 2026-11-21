@@ -2,9 +2,10 @@
 //! gives, in logical points, on a window at 2 pixels per point.
 
 use beryl_host::{LINE_POINTS, Translator, is_fullscreen_key};
+use beryl_scene::Input;
 use beryl_scene::input::{
-    Button, Input, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase,
-    Size, TextChange,
+    Button, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase, Size,
+    TextChange,
 };
 use glam::Vec2;
 use winit::dpi::{PhysicalPosition, PhysicalSize};

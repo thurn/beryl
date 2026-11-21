@@ -12,7 +12,7 @@ use beryl_scene::art::orb;
 use beryl_scene::input::{AssetReady, IconCell};
 use beryl_scene::widgets::IconId;
 use beryl_scene::widgets::icon_shadows;
-use beryl_scene::widgets::icons::{COUNT, GEAR, ORB};
+use beryl_scene::widgets::icons::{GEAR, ORB};
 
 /// Only catches a hung worker; a page normally arrives in milliseconds.
 const HANG: Duration = Duration::from_mins(1);
@@ -58,7 +58,8 @@ fn texels(pixels: &[u8], cell: &IconCell) -> Vec<u8> {
 fn every_icon_id_has_artwork_in_the_order_of_the_ids() {
     // The ids from `ORB` on are the layers of the life orbs' art (`beryl_assets::orb`).
     assert_eq!(ALL.len(), usize::from(ORB));
-    assert_eq!(COUNT, ORB + orb::ICONS);
+    let last_orb = orb::icon(orb::SIDES[1], orb::LAYERS.len() - 1);
+    assert_eq!(last_orb.0 + 1, ORB + orb::ICONS);
     for (id, artwork) in (0..ORB).zip(&ALL) {
         assert_eq!(artwork.icon, IconId(id), "the artwork at index {id}");
     }

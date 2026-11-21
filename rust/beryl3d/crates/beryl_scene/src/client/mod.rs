@@ -7,6 +7,9 @@ mod bug;
 mod carry;
 mod editing;
 mod entries;
+mod event;
+pub(crate) use crate::command::{Reply, Request, SessionCommand};
+pub use event::Input;
 mod gesture;
 
 use std::collections::VecDeque;
@@ -16,9 +19,7 @@ use beryl_protocol::protocol::{DecisionId, SessionId, Side, Status};
 use beryl_protocol::script::{OwnTimings, Verb, own_timings};
 use beryl_protocol::{AgentView, StartRequest, StopsSetting};
 
-use crate::command::{Reply, Request, SessionCommand};
-use crate::element::{Dismiss, Press};
-use crate::faces::{FaceList, Faces};
+use crate::faces::{CARD_BACK, FaceList, Faces};
 use crate::frame::{self, ElementId, Frame, FrameBuilder, Sound, Wake};
 use crate::hud::banner::Banner;
 use crate::hud::counts::CountFloats;
@@ -26,7 +27,7 @@ use crate::hud::log::Log;
 use crate::hud::notices::NoticeFloats;
 use crate::hud::piles::PileCounts;
 use crate::hud::rows::RowCounts;
-use crate::input::{FaceId, GlyphKey, Input, Lifecycle, Tier};
+use crate::input::{FaceId, FaceSize, GlyphKey, Lifecycle, Tier};
 use crate::layout::{self, Layer};
 use crate::play::Show;
 use crate::play::record::{Plant, ScriptRecord};
@@ -45,6 +46,9 @@ mod lobby;
 mod manual;
 mod manual_overlays;
 mod own;
+mod press;
+pub use crate::screens::BugPress;
+pub use press::{Dismiss, Press};
 mod refusal;
 mod screen;
 mod stops;
@@ -54,7 +58,6 @@ mod touch;
 mod viewing;
 
 use inspect::Inspector;
-use stops::toggled;
 use viewing::Viewing;
 
 /// The platform a host runs on, as far as the client cares: where `Cmd` in a shortcut means
@@ -446,7 +449,7 @@ impl Client {
         // Elements anchored to a card, an ability or a player stand where the table drew it.
         let table = self.show.table();
         self.layer
-            .follow(|subject| layout::spot_of(&builder, table, subject));
+            .follow(|subject| crate::table::spot_of(&builder, table, subject));
         // Each total shows what `prepare` laid out, over the opening too, as the web's does.
         self.counts.write(
             &mut self.layer,
@@ -479,7 +482,20 @@ impl Client {
             Some(self.show.faces())
         };
         // While scripts play only what waits for the table (`Element::waits`) is left out.
-        (self.layer).write_with(&mut builder, self.show.table().camera(), self.open, faces);
+        let face_layers = |face, size| match size {
+            FaceSize::Board => faces?.board_layer_of(face),
+            FaceSize::Full => faces?.full_layer_of(face),
+        };
+        let layers = faces.map(|_| layout::FaceLayers {
+            back: CARD_BACK,
+            layer: &face_layers,
+        });
+        self.layer.write_with(
+            &mut builder,
+            &self.show.table().camera().screen_plane(),
+            self.open,
+            layers.as_ref(),
+        );
         builder.finish();
         self.placed_let_go();
         // The element a press under the mouse would reach is drawn `hovered`. A press on a card
@@ -538,92 +554,6 @@ impl Client {
             self.show_screen();
         } else {
             self.place_shown();
-        }
-    }
-
-    /// Carries out what a press on an element means: a command for the session, a request of
-    /// the host, or a change of screen, sheet or settings. Every `Press` is interpreted here
-    /// and nowhere else.
-    pub fn press(&mut self, press: &Press) {
-        match *press {
-            Press::Button(button) => self.click(Click::Button { button }),
-            Press::Prompt(click) => self.click(click),
-            Press::Open(screen) => {
-                self.first_view_opens = None;
-                self.screen = screen;
-                self.gallery = GalleryState::default();
-                if screen == Screen::Gallery {
-                    self.gallery_faces
-                        .get_or_insert_with(|| Faces::new(screens::gallery_faces()));
-                }
-                self.set_sheet(None);
-            }
-            Press::Sheet(sheet) => self.set_sheet(sheet),
-            Press::Setting(setting) => self.set(setting),
-            Press::Stop { step, theirs } => {
-                let stops = &mut self.settings.stops;
-                let set = if theirs {
-                    &mut stops.theirs
-                } else {
-                    &mut stops.yours
-                };
-                *set = toggled(*set, step);
-                self.save_stops();
-            }
-            // The first press only asks to confirm, as the web's `ConcedeButton` does.
-            Press::Concede if self.concede == Concede::Asks => {
-                self.concede = Concede::Confirms;
-                self.show_screen();
-            }
-            Press::Concede => {
-                self.press(&Press::Sheet(None));
-                if let Some(session) = self.session {
-                    self.commands.push_back(SessionCommand::Concede(session));
-                }
-            }
-            Press::Start => self.start_game(),
-            Press::Agent(agent) => {
-                self.start.agent = Some(agent);
-                self.show_screen();
-            }
-            Press::FairDeal => {
-                self.start.fair = !self.start.fair;
-                self.show_screen();
-            }
-            Press::ExportBugs => self.requests.push_back(Request::ExportBugs),
-            Press::Replay { recording } => self.replay(recording),
-            Press::Seat(seat) => self.set_seat(seat),
-            Press::Focus(id) => self.layer.focus(Some(id)),
-            Press::Field(id, ref text) => self.keep_field(id, text),
-            Press::View(viewed) => self.view(Some(viewed)),
-            Press::Dismiss(Dismiss::Viewer) => self.dismiss_viewer(),
-            Press::Bug(press) => self.bug_press(press),
-            Press::Dismiss(Dismiss::Revealed) => self.dismiss_revealed(),
-            Press::GalleryMenu(kind) => {
-                let at = self.owned.mouse.unwrap_or_else(|| {
-                    glam::Vec2::new(self.window.size.width, self.window.size.height) / 2.0
-                });
-                self.gallery.menu = Some((kind, at));
-                self.show_screen();
-            }
-            Press::GalleryQuery(query) => {
-                self.gallery.query = query;
-                self.show_screen();
-            }
-            Press::Menu(crate::manual::menus::MENU, row) => self.press_table_menu(row),
-            Press::Log => self.toggle_log(),
-            Press::Result(shown) => self.show_result(shown),
-            Press::Undo => self.undo(),
-            Press::Menu(..) => {}
-            Press::Dismiss(Dismiss::Menu) => {
-                if self.gallery.menu.take().is_some() {
-                    self.show_screen();
-                }
-                self.close_table_menu();
-            }
-            Press::Command(index, shift) => self.table_key(index, shift),
-            Press::Lobby(press) => self.press_lobby(press),
-            Press::Table(press) => self.table_press(press),
         }
     }
 

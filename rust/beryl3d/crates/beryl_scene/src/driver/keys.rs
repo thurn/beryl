@@ -2,8 +2,10 @@
 //! answering what the client asks of the platform.
 
 use super::{KeyChord, Page};
+use crate::client;
 use crate::element::Chord;
-use crate::input::{Input, Key, KeyCode, KeyPhase, TextChange};
+use crate::input::{Key, KeyCode, KeyPhase, TextChange};
+use client::{Input, Request};
 
 impl Page {
     /// Presses the field `locator` names and types `text` at its caret, as a desktop host
@@ -48,7 +50,7 @@ impl Page {
     }
 
     /// The next thing the client asked of the platform, if any.
-    pub fn next_request(&mut self) -> Option<crate::command::Request> {
+    pub fn next_request(&mut self) -> Option<Request> {
         self.client.next_request()
     }
 

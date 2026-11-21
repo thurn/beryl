@@ -171,8 +171,8 @@ pub fn write(
                 look.pose.position,
             );
             builder.effect(EffectLook {
-                effect,
-                on,
+                name: effect.name(),
+                on: Some(on),
                 // A record's model is its transform as `Draw` lays it out.
                 model: Draw::glow(face, [0; 4], sprites::BURST, 0.0).model,
                 opacity: strength * look.pose.opacity,

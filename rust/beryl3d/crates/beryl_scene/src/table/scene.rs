@@ -100,10 +100,7 @@ impl Objects {
     }
 }
 
-/// The id of the resolved element of the ability numbered `number`: past every card's and
-/// every flat-layer element's. The numbers a table made from a view alone gives count down from
-/// `u32::MAX`, and are folded into the same range.
-pub const ABILITY_IDS: u32 = 1 << 20;
+pub use crate::frame::ABILITY_IDS;
 
 /// The track of the ability numbered `id` in `tracks`, sorted by number, if it has one.
 pub(crate) fn ability_track(tracks: &[(u32, Track)], id: u32) -> Option<&Track> {

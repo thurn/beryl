@@ -17,7 +17,7 @@ use glam::Vec2;
 
 use super::{Layer, Node};
 use crate::data::space::flat::transition::MS;
-use crate::element::Press;
+use crate::element::Action;
 use crate::pose::Curve;
 
 /// A node's transition, from where and how opaque it was toward where its layout puts it and
@@ -98,7 +98,7 @@ impl Layer {
     /// from the next frame on, or stops shaking with `None`, as the web's `shakeRefusal` moves
     /// a refused button. It lays nothing out and allocates nothing, so the client calls it on
     /// every frame of the shake.
-    pub fn shake(&mut self, shaken: Option<(&Press, f32)>) {
+    pub fn shake(&mut self, shaken: Option<(&Action, f32)>) {
         self.shaken = shaken.map(|(press, across)| (press.clone(), across));
     }
 

@@ -3,15 +3,18 @@
 
 use beryl_protocol::prompt::{ButtonId, Click, ClickRequest};
 use beryl_protocol::script::Subject;
+use beryl_scene::Input;
+use beryl_scene::Press;
 use beryl_scene::command::{Request, SessionCommand};
 use beryl_scene::element::{
-    Anchor, Chord, Display, Element, Overflow, Position, Press, Track, column, row, text,
+    Anchor, Chord, Display, Element, Overflow, Position, Track, column, row, text,
 };
 use beryl_scene::frame::{ElementId, Frame, FrameBuilder, Role, StateBits};
-use beryl_scene::input::{Input, Key, KeyCode, KeyPhase, Modifiers, Tier};
-use beryl_scene::layout::{Layer, spot_of};
+use beryl_scene::input::{Key, KeyCode, KeyPhase, Modifiers, Tier};
+use beryl_scene::layout::Layer;
 use beryl_scene::pose::Curve;
 use beryl_scene::table::Table;
+use beryl_scene::table::spot_of;
 use glam::Vec2;
 
 use crate::common::{MS, before, empty_frame, show, three_beats, window};
@@ -23,7 +26,11 @@ fn write(layer: &mut Layer) -> Frame {
     let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
     let (layout_nodes, text_runs) = layer.take_work();
     builder.layout_work(layout_nodes, text_runs);
-    layer.write(&mut builder, Table::default().camera(), true);
+    layer.write(
+        &mut builder,
+        &Table::default().camera().screen_plane(),
+        true,
+    );
     builder.finish().clone()
 }
 
@@ -153,7 +160,7 @@ fn an_element_anchored_to_a_card_stays_on_it_while_it_flies() {
         layer.follow(|subject| spot_of(&builder, show.table(), subject));
         let (layout_nodes, text_runs) = layer.take_work();
         assert_eq!((layout_nodes, text_runs), (0, 0), "no layout at {now}");
-        layer.write(&mut builder, show.table().camera(), true);
+        layer.write(&mut builder, &show.table().camera().screen_plane(), true);
         let frame = builder.finish();
         let card = card.expect("the table draws the Plains");
         let [x, y, width, height] = find(frame, Role::Text, "Plains").1;

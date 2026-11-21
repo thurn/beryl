@@ -25,24 +25,26 @@ mod style;
 mod tip;
 mod write;
 
+pub use write::FaceLayers;
+
 use taffy::{
     AlignContent, AlignItems, AvailableSpace, Dimension, Display, FlexDirection, LengthPercentage,
     NodeId, TaffyTree, compute_leaf_layout,
 };
 
-pub use anchor::{Spot, spot_of};
+pub use anchor::Spot;
 pub use edit::{Edit, Edited};
 pub use float::FloatLook;
-pub use menu::Navigation;
+pub use menu::{DismissMenu, Navigation};
 pub use motion::{Ticked, transition_nanoseconds};
 pub use tip::TIP_PREFIX;
 
 use float::{Float, Prepared};
 
-use crate::element::{self, Element, Press};
+use crate::element::{self, Action, Element};
 use crate::frame::{ElementId, Role};
+use crate::geometry::Window;
 use crate::input::{Rect, Size};
-use crate::table::Window;
 use crate::text::{Block, Glyphs, Text, TypeStyle};
 use crate::widgets::icons::Icons;
 
@@ -145,7 +147,7 @@ pub struct Layer {
     pointed: Option<ElementId>,
     /// The press whose elements are shaken, and how far across the screen they are moved now, in
     /// logical points (`Layer::shake`).
-    shaken: Option<(Press, f32)>,
+    shaken: Option<(Action, f32)>,
     /// The tooltip the pointer is resting toward, if any (`tip`).
     tip: Option<tip::Resting>,
 }
@@ -289,7 +291,7 @@ impl Layer {
     /// What waits for the table to settle (`Element::waits`) is searched only while the layer
     /// is `open`, that is while it is drawn.
     #[must_use]
-    pub fn press_at(&self, point: glam::Vec2, open: bool) -> Option<(ElementId, Press, bool)> {
+    pub fn press_at(&self, point: glam::Vec2, open: bool) -> Option<(ElementId, Action, bool)> {
         self.hit(point, open, |node, _| {
             let element = &node.element;
             (element.press.clone()).map(|press| (node.id, press, element.enabled))
@@ -712,8 +714,7 @@ fn has_panel(role: Role, top: bool) -> bool {
 #[cfg(test)]
 mod tests {
     use super::FIRST_ID;
-    use crate::frame::LAYER_ELEMENTS;
-    use crate::table::ABILITY_IDS;
+    use crate::frame::{ABILITY_IDS, LAYER_ELEMENTS};
 
     #[test]
     fn no_flat_layer_id_reaches_the_abilities_ids() {

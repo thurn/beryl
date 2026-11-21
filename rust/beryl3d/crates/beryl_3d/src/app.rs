@@ -9,9 +9,10 @@ use std::rc::Rc;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 use beryl_host::{Desktop, WindowMode};
 use beryl_host::{Feed, Inbox, Opened, Ticked, Windowless, WindowlessOptions};
+use beryl_scene::Input;
 use beryl_scene::command::Request;
 use beryl_scene::frame::Wake;
-use beryl_scene::input::{Input, Lifecycle, Size};
+use beryl_scene::input::{Lifecycle, Size};
 use beryl_scene::{Client, Config};
 #[cfg(feature = "tools")]
 use beryl_session::protocol::Side;

@@ -4,11 +4,12 @@
 //! manual tables' entries (`table_entries`) and the export of bug reports, and the sound button in
 //! the corner.
 
+use crate::screens::ScreenPress;
 use beryl_protocol::AgentView;
 use beryl_protocol::protocol::Status;
 
 use super::{Screen, ScreenIn, Sheet};
-use crate::element::{Align, Border, Element, Justify, Position, Press, column, row, text};
+use crate::element::{Align, Border, Element, Justify, Position, column, row, text};
 use crate::frame::Role;
 use crate::text::TypeStyle;
 use crate::tokens::{color, ratio, size, space, type_style};
@@ -164,7 +165,7 @@ pub fn start(input: &ScreenIn) -> Element {
         .child(list("Opponent", rows).gap(space::S).max_height(room));
     let seed_row = seed_row(&seed_state, seed_ok);
     let buttons = buttons(going_on, form.confirming, startable);
-    let export = small(button("Export Bug Reports")).on_press(Press::ExportBugs);
+    let export = small(button("Export Bug Reports")).on_press(ScreenPress::ExportBugs);
     let export_tip = tooltip(
         "Includes screenshots, replays, and logs",
         "Export Bug Reports",
@@ -238,17 +239,17 @@ impl Chosen {
 /// which lists the recordings, T opens the testing screen.
 fn with_keys(screen: Element, input: &ScreenIn, going_on: bool) -> Element {
     let enter = if going_on {
-        Press::Open(Screen::Game)
+        ScreenPress::Open(Screen::Game)
     } else {
-        Press::Start
+        ScreenPress::Start
     };
     let screen = screen
         .shortcut("Enter", enter)
-        .shortcut("G", Press::Open(Screen::Gallery));
+        .shortcut("G", ScreenPress::Open(Screen::Gallery));
     if input.recordings.is_empty() {
         screen
     } else {
-        screen.shortcut("T", Press::Open(Screen::Testing))
+        screen.shortcut("T", ScreenPress::Open(Screen::Testing))
     }
 }
 
@@ -272,7 +273,7 @@ fn start_phone(input: &ScreenIn) -> Element {
         .width(target)
         .height(target)
         .radius(target / 2.0)
-        .on_press(Press::Sheet(Some(Sheet::Settings)));
+        .on_press(ScreenPress::Sheet(Some(Sheet::Settings)));
     let corner = row()
         .name("sound corner")
         .height(metrics::CORNER)
@@ -305,7 +306,7 @@ fn start_phone(input: &ScreenIn) -> Element {
     }
     let fair = fair_box(form.fair).min_height(metrics::FIELD).shrink(0.0);
     let (start, back) = start_buttons(going_on, form.confirming, startable);
-    let export = button("Export Bug Reports").on_press(Press::ExportBugs);
+    let export = button("Export Bug Reports").on_press(ScreenPress::ExportBugs);
     let content = column()
         .name("start column")
         .gap(metrics::GAP)
@@ -382,14 +383,15 @@ fn start_buttons(going_on: bool, confirming: bool, startable: bool) -> (Element,
     } else {
         primary(label)
     };
-    let back = going_on.then(|| primary("Return to Game").on_press(Press::Open(Screen::Game)));
-    (start.enabled(startable).on_press(Press::Start), back)
+    let back =
+        going_on.then(|| primary("Return to Game").on_press(ScreenPress::Open(Screen::Game)));
+    (start.enabled(startable).on_press(ScreenPress::Start), back)
 }
 
 /// The sound button in the window's corner (`SoundCorner`), which opens the settings.
 fn corner() -> Element {
-    let sound =
-        icon_button(widgets::icons::SPEAKER, "Sound").on_press(Press::Sheet(Some(Sheet::Settings)));
+    let sound = icon_button(widgets::icons::SPEAKER, "Sound")
+        .on_press(ScreenPress::Sheet(Some(Sheet::Settings)));
     row()
         .name("sound corner")
         .position(Position::Absolute)
@@ -471,7 +473,7 @@ fn agent_row(agent: &AgentView, at: u16, chosen: bool, phone: bool) -> Element {
         .gap(size::START_AGENT_GAP)
         .radius(size::START_AGENT_RADIUS)
         .align_items(Align::Start)
-        .on_press(Press::Agent(at))
+        .on_press(ScreenPress::Agent(at))
         .child(dot)
         .child(words);
     element.style.padding = if phone {
@@ -505,5 +507,5 @@ fn agent_row(agent: &AgentView, at: u16, chosen: bool, phone: bool) -> Element {
 
 /// The "Fair deal" box (`.start-fair`): a checkbox and its label, which a press turns on or off.
 fn fair_box(on: bool) -> Element {
-    checkbox("Fair deal", on).on_press(Press::FairDeal)
+    checkbox("Fair deal", on).on_press(ScreenPress::FairDeal)
 }

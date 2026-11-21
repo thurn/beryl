@@ -12,11 +12,12 @@ use beryl_protocol::protocol::{
     DecisionId, DecisionView, Kind, LossReason, OutcomeView, SessionId, Side, Status, ZoneName,
 };
 use beryl_protocol::{AgentView, StartRequest};
+use beryl_scene::Input;
 use beryl_scene::agent::{Layout, Rule};
 use beryl_scene::command::Request;
 use beryl_scene::driver::{Page, Recording};
 use beryl_scene::frame::StateBits;
-use beryl_scene::input::{Input, Insets, Rect, Size};
+use beryl_scene::input::{Insets, Rect, Size};
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder};
 
 /// The three phone windows the interface tests play.

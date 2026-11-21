@@ -3,11 +3,11 @@
 //! input a dropped connection freezes until the table's next view.
 
 use beryl_protocol::protocol::{Answer, LinkState, TablePrompt};
+use beryl_scene::Input;
 use beryl_scene::command::SessionCommand;
 use beryl_scene::frame::{Frame, Role};
 use beryl_scene::input::{
-    Button, Input, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase,
-    Size,
+    Button, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase, Size,
 };
 use beryl_scene::manual::opening::prompt;
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder, table};

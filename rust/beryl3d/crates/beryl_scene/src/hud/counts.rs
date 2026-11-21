@@ -22,7 +22,7 @@ use glam::Vec2;
 use crate::art::orb;
 use crate::data::space::verbs::count::DRIFT;
 use crate::effects::{Effect, EffectRun};
-use crate::element::{Align, Element, FloatId, Press, Span, TextAlign, floats, holder, text};
+use crate::element::{Align, Element, FloatId, Span, TextAlign, floats, holder, text};
 use crate::frame::Role;
 use crate::input::Size;
 use crate::layout::{FloatLook, Layer};
@@ -450,9 +450,9 @@ fn life_total(
     // of the phone's hand that stands behind it.
     if target {
         element = element
-            .on_press(Press::Prompt(Click::On {
+            .on_press(Click::On {
                 on: Subject::Player { player: side },
-            }))
+            })
             .min_width(size::ICON_BUTTON)
             .min_height(size::ICON_BUTTON)
             .text_align(TextAlign::Center);

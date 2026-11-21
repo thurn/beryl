@@ -4,7 +4,11 @@
 //! against its element's box into the stop offsets and geometry the renderer draws
 //! (`Gradient::resolve`), as CSS Images 3 places them.
 
+mod decoration;
+
 use glam::Vec2;
+
+pub use decoration::{Border, DropLayer, DropLayers, MOST_DROP_SHADOWS, Shadow};
 
 /// A gradient length: logical points, or a percentage of a length the gradient gives it (the
 /// gradient line's for a stop, the box's side for a radial gradient's size or centre).

@@ -12,7 +12,7 @@ use glam::Vec2;
 use super::Client;
 use super::gesture::Gesture;
 use crate::data::space::pointer::DRAG_THRESHOLD_POINTS;
-use crate::element::{Press, floats};
+use crate::element::floats;
 use crate::input::{Button, Pointer, PointerPhase};
 use crate::layout::FloatLook;
 use crate::prompts::order;
@@ -108,15 +108,15 @@ impl Client {
         if !matches!(prompt.body, ShapeBody::Order { .. }) {
             return None;
         }
-        match self.layer.press_at(point, self.open)? {
+        let (_, action, enabled) = self.layer.press_at(point, self.open)?;
+        match (action.downcast_ref::<Click>()?, enabled) {
             (
-                _,
-                Press::Prompt(Click::Drop {
+                Click::Drop {
                     on: on @ Subject::Ability { .. },
                     ..
-                }),
+                },
                 true,
-            ) => Some(on),
+            ) => Some(*on),
             _ => None,
         }
     }

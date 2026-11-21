@@ -3,12 +3,13 @@
 
 use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::protocol::Side;
+use beryl_scene::Input;
 use beryl_scene::agent::{Layout, Rule};
 use beryl_scene::command::Request;
 use beryl_scene::driver::{Duration, Page, Recording};
 use beryl_scene::frame::Material;
 use beryl_scene::input::{
-    Button, Input, KeyCode, Modifiers, Pointer, PointerKind, PointerPhase, Size, TextChange,
+    Button, KeyCode, Modifiers, Pointer, PointerKind, PointerPhase, Size, TextChange,
 };
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder};
 use beryl_scene::tokens::color;

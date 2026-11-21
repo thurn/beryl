@@ -3,13 +3,14 @@
 //! table moves there and back (`Table::show_in`), and the pill, shown whenever the Revealed Cards
 //! pile holds a face.
 
+use crate::inspect::Viewed;
 use beryl_protocol::PlayerView;
 use beryl_protocol::protocol::{Declaration, ObjectId, Side, Step, StopsSetting, ZoneName};
 use beryl_protocol::script::{Act, OwnStep, Turn};
 
 use super::Client;
 use crate::data::space::shown::opening;
-use crate::element::{Element, Viewed, floats};
+use crate::element::{Element, floats};
 use crate::frame::Place;
 use crate::input::Rect;
 use crate::inspect::revealed::{self, RevealedFace};

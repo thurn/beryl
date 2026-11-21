@@ -13,3 +13,6 @@ pub mod piles;
 pub mod players;
 pub mod rows;
 pub mod steps;
+
+mod message;
+pub use message::GamePress;

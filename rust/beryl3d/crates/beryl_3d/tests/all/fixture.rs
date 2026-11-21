@@ -5,7 +5,8 @@
 use std::path::PathBuf;
 
 use beryl_3d::fixture::{self, Fixture};
-use beryl_scene::input::{Input, Insets, Size};
+use beryl_scene::Input;
+use beryl_scene::input::{Insets, Size};
 use beryl_scene::{Client, Config};
 
 /// A sixtieth of a second, in nanoseconds: the ticks of a 60 Hz display.

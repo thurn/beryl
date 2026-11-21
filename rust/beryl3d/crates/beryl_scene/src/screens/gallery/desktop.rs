@@ -15,6 +15,7 @@ use beryl_protocol::protocol::Side;
 use glam::Vec2;
 
 use super::face;
+use crate::art::orb::artwork;
 use crate::data::space::flat::gallery::desktop as at;
 use crate::element::{Border, Element, Overflow, Position, Shown, TextAlign, holder, text};
 use crate::faces::{CARD_BACK, FaceList};
@@ -497,11 +498,7 @@ fn player_zones(faces: &FaceList) -> Element {
         // (`--orb: 0.74px`), so it is centred on the web's orb.
         let middle = at::ORBS[index] + at::ORB / 2.0;
         let mut orb = Element::new(Role::Region).name(&format!("{name} orb"));
-        orb.shows = Some(Shown::Orb {
-            side,
-            active,
-            scale: 0,
-        });
+        orb.shows = Some(Shown::Layers(artwork(side, active, 0)));
         panel = panel
             .child(place(orb, [middle - art / 2.0, art]))
             .child(words(

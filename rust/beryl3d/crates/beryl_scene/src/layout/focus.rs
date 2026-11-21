@@ -1,12 +1,12 @@
 //! Keyboard focus (docs/beryl-3d.md, "Elements"): one element of the screen at a time takes
-//! the keys. A press on an element with `focus: true` or a `Press::Focus` gives it the focus,
+//! the keys. A press on an element with `focus: true` or a focus message gives it the focus,
 //! Tab and Shift+Tab move it among the focusable elements in tree order, as a browser moves it
 //! among buttons and fields, and Return presses the focused element.
 
 use glam::Vec2;
 
 use super::{Layer, Node};
-use crate::element::{Display, Press};
+use crate::element::{Action, Display};
 use crate::frame::ElementId;
 use crate::input::Key;
 
@@ -89,7 +89,7 @@ impl Layer {
 
     /// What pressing the focused element means, if it is enabled and has a press.
     #[must_use]
-    pub fn focused_press(&self) -> Option<Press> {
+    pub fn focused_press(&self) -> Option<Action> {
         let id = self.focused?;
         let node = self.find(id)?;
         (node.element.enabled)
@@ -101,8 +101,8 @@ impl Layer {
     /// last enabled element named `close` on the screen, the close button of the sheet drawn
     /// over the rest.
     #[must_use]
-    pub fn close_press(&self) -> Option<Press> {
-        fn search(node: &Node) -> Option<Press> {
+    pub fn close_press(&self) -> Option<Action> {
+        fn search(node: &Node) -> Option<Action> {
             if node.element.style.display == Display::None {
                 return None;
             }
@@ -118,7 +118,7 @@ impl Layer {
 
     /// The press the screen's top element gives `key` as a shortcut, on the Mac if `mac`.
     #[must_use]
-    pub fn shortcut(&self, key: &Key, mac: bool) -> Option<Press> {
+    pub fn shortcut(&self, key: &Key, mac: bool) -> Option<Action> {
         let screen = self.screen.as_ref()?;
         screen.element.shortcuts.press_for(key, mac).cloned()
     }

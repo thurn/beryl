@@ -5,13 +5,15 @@
 //! whenever the pile holds a face (`floats::REVEALED`), laid out once ahead of time, and not a
 //! piece of the game screen.
 
+use crate::hud::GamePress;
+use crate::inspect::Viewed;
 use beryl_protocol::protocol::{ObjectId, Side};
 use glam::Vec2;
 
 use crate::data::space::hud::phone::REVEALED_WIDTH;
 use crate::data::space::layout::phone::bands::OPPONENT_STRIP;
 use crate::data::space::revealed as data;
-use crate::element::{Align, Dismiss, Element, Press, Shown, Viewed, row};
+use crate::element::{Align, Element, Shown, row};
 use crate::frame::Role;
 use crate::input::{FaceId, Size};
 use crate::table::phone::strip;
@@ -39,14 +41,14 @@ pub struct RevealedFace {
 #[must_use]
 pub fn revealed() -> Element {
     let mut pill = button(REVEALED)
-        .on_press(Press::View(Viewed::Revealed))
+        .on_press(GamePress::View(Viewed::Revealed))
         .height(size::PILL_HEIGHT)
         .min_width(0.0)
         .style(type_style::PILL);
     pill.style.padding = [0.0, size::PILL_PADDING, 0.0, size::PILL_PADDING];
     let mut cross = Element::new(Role::Button)
         .name("Dismiss")
-        .on_press(Press::Dismiss(Dismiss::Revealed))
+        .on_press(GamePress::DismissRevealed)
         .width(size::PILL_CROSS)
         .height(size::PILL_CROSS)
         .background(color::ICON_BUTTON)
@@ -68,7 +70,7 @@ pub fn revealed() -> Element {
 pub fn phone_pile() -> Element {
     Element::new(Role::Button)
         .name(REVEALED)
-        .on_press(Press::View(Viewed::Revealed))
+        .on_press(GamePress::View(Viewed::Revealed))
         .width(REVEALED_WIDTH)
         .height(OPPONENT_STRIP)
         .background([0; 4])

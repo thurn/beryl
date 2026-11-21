@@ -10,6 +10,7 @@
 //! (`PileViewer`, `sections`), and closing a search of a whole library asks whether to shuffle
 //! it first (UI Conventions, "Manual table pile viewers").
 
+use crate::inspect::Viewed;
 use beryl_protocol::PlayerView;
 use beryl_protocol::protocol::{ObjectId, Side, TableAction, ZoneName};
 use glam::Vec2;
@@ -17,7 +18,7 @@ use serde_json::{Value, json};
 
 use super::Target;
 use super::commands::seat_of;
-use crate::element::Viewed;
+
 use crate::faces::FaceList;
 use crate::frame::{Frame, Role};
 use crate::hud::piles::pile_cards;

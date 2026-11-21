@@ -20,7 +20,11 @@ const GOLD: [u8; 4] = [228, 162, 66, 255];
 fn write(layer: &mut Layer) -> Frame {
     let mut frame = Frame::with_capacity(64, 256, 1024);
     let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
-    layer.write(&mut builder, Table::default().camera(), true);
+    layer.write(
+        &mut builder,
+        &Table::default().camera().screen_plane(),
+        true,
+    );
     builder.finish().clone()
 }
 

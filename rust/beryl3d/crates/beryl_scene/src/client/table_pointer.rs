@@ -3,13 +3,14 @@
 //! clicking what a command acts toward (`manual::arrows`), and the marks and arrow these draw on
 //! each frame.
 
+use crate::inspect::Viewed;
 use beryl_protocol::protocol::{ObjectId, Side, ZoneName};
 use glam::Vec2;
 
 use super::{Client, Platform};
 use crate::agent::hit;
 use crate::data::space::pointer::DRAG_THRESHOLD_POINTS;
-use crate::element::Viewed;
+
 use crate::frame::{Place, Role};
 use crate::input::{Button, Pointer, PointerPhase};
 use crate::manual::arrows::{self, Pick};

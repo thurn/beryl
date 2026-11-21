@@ -8,10 +8,10 @@
 use glam::Vec2;
 
 use crate::element::Shadow;
+use crate::frame::text::faded;
 use crate::frame::{Band, Draw, FrameBuilder, Missing, box_shadow_reach};
+use crate::geometry::plane::ScreenPlane;
 use crate::input::Rect;
-use crate::table::Camera;
-use crate::text::faded;
 use crate::widgets::icons::Icons;
 use crate::widgets::{IconId, icon_shadows};
 
@@ -38,7 +38,7 @@ pub(super) fn write_box_shadows(
     cast: &ShadowBox,
     inset: bool,
     builder: &mut FrameBuilder,
-    camera: &Camera,
+    camera: &ScreenPlane,
 ) {
     for shadow in shadows.iter().rev().filter(|s| s.inset == inset) {
         if shadow.color[3] == 0 {
@@ -124,7 +124,7 @@ pub(super) fn write_icon_shadows(
     (scale, opacity): (f32, f32),
     clip: u8,
     builder: &mut FrameBuilder,
-    camera: &Camera,
+    camera: &ScreenPlane,
 ) -> Option<Missing> {
     if shadows.is_empty() {
         return None;

@@ -21,7 +21,7 @@ use super::bar::{Controls, bar};
 use super::{Shown, Steps, marks, ways};
 use crate::data::space::hud::phone::CHARACTER_WIDTH;
 use crate::element::{
-    Align, Anchor, Direction, Element, Justify, Press, Shown as Showing, column, row, text,
+    Align, Anchor, Direction, Element, Justify, Shown as Showing, column, row, text,
 };
 use crate::faces::FaceList;
 use crate::frame::Role;
@@ -96,7 +96,7 @@ fn stepper(prompt: &PromptView) -> Option<Controls> {
     let step = |to: Option<u8>, icon, name: &str| {
         let element = icon_button(icon, name).enabled(to.is_some());
         match to {
-            Some(n) => element.on_press(Press::Prompt(Click::Number { n, on: None })),
+            Some(n) => element.on_press(Click::Number { n, on: None }),
             None => element,
         }
     };
@@ -241,7 +241,7 @@ fn way_element(way: &PromptButton, face: Option<FaceId>, width: f32) -> Element 
         .children(faces)
         .child(label)
         .enabled(way.enabled)
-        .on_press(Press::Button(way.id))
+        .on_press(Click::Button { button: way.id })
 }
 
 /// The face the way `id` of using `object` shows, as the web's `Way` draws it: the face a spell

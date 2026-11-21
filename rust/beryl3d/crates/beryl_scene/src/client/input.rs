@@ -8,16 +8,17 @@ use beryl_protocol::script::Subject;
 use glam::Vec2;
 
 use super::gesture::{Gesture, Release};
-use super::{Client, Platform};
+use super::{Client, Dismiss, Input, Platform, Press};
 use crate::agent::hit;
-use crate::element::{Chord, Dismiss, Press};
+use crate::element::{Action, Chord};
 use crate::frame::{ElementId, Place, Role};
-use crate::input::{Button, Input, Key, KeyCode, KeyPhase, Pointer, PointerKind, PointerPhase};
+use crate::input::{Button, Key, KeyCode, KeyPhase, Pointer, PointerKind, PointerPhase};
 use crate::layout::{Edit, Navigation};
 use crate::pointer::Hold;
 use crate::pointer::rows::scroller_of;
 use crate::prompts;
-use crate::screens::{Screen, Sheet};
+use crate::screens::{Screen, ScreenPress, Sheet};
+use crate::settings::Setting;
 use crate::table::{self, Scroller};
 use crate::widgets::{STEP, level_at};
 
@@ -47,7 +48,7 @@ impl Client {
             }
         }
         if heard.is_some_and(|heard| heard.report) && !self.bug_open() {
-            self.press(&Press::Sheet(Some(Sheet::BugReport)));
+            self.dispatch_press(&Press::Sheet(Some(Sheet::BugReport)));
         }
     }
 
@@ -75,7 +76,7 @@ impl Client {
             && pointer.button == Button::Primary
             && self.layer.outside_menu(pointer.position, self.open)
         {
-            self.press(&Press::Dismiss(Dismiss::Menu));
+            self.dispatch_press(&Press::Dismiss(Dismiss::Menu));
             return;
         }
         // A frozen table takes no gesture of its own; the flat layer's buttons still work.
@@ -92,18 +93,20 @@ impl Client {
         }
         let hovered = self.hover_flat(&pointer);
         // The pointer on a payment's Auto Pay, or a touch held on it, marks what it would tap.
-        let suggesting = match (&self.prompt, &hovered) {
-            (Some((_, prompt)), Some((_, Press::Button(button), true))) => {
-                prompts::shows(prompt, *button)
-            }
-            _ => false,
+        let suggesting = if let (Some((_, prompt)), Some((_, action, true))) =
+            (&self.prompt, &hovered)
+            && let Some(Click::Button { button }) = action.downcast_ref::<Click>()
+        {
+            prompts::shows(prompt, *button)
+        } else {
+            false
         };
         self.suggest(suggesting);
     }
 
     /// Tells the flat layer which element a press under `pointer` would reach, which it draws
     /// hovered, and which one is held down, and returns the first with its press.
-    pub(super) fn hover_flat(&mut self, pointer: &Pointer) -> Option<(ElementId, Press, bool)> {
+    pub(super) fn hover_flat(&mut self, pointer: &Pointer) -> Option<(ElementId, Action, bool)> {
         let gone = matches!(pointer.phase, PointerPhase::Cancel | PointerPhase::Leave)
             || (pointer.kind == PointerKind::Touch && pointer.phase == PointerPhase::Up);
         let hovered = (!gone)
@@ -144,12 +147,12 @@ impl Client {
             _ => return false,
         };
         let (press, rect) = at;
-        if let Press::Setting(setting) = press
+        if let Some(setting) = press.downcast_ref::<Setting>()
             && let Some(level) = setting.level()
         {
             let to = level_at(pointer.position.x, rect.x, rect.width);
             if to != level {
-                self.press(&Press::Setting(setting.at_level(to)));
+                self.dispatch_press(&Press::Setting(setting.at_level(to)));
             }
         }
         true
@@ -229,7 +232,7 @@ impl Client {
                                 == Some(pile) =>
                     {
                         if !self.table_library_clicked(pile) {
-                            self.press(&Press::View(pile));
+                            self.dispatch_press(&Press::View(pile));
                         }
                     }
                     Some(Release::Element(pressed))
@@ -323,7 +326,7 @@ impl Client {
     /// What `key` presses, in the order `key` describes, after it has moved the focus or the
     /// highlighted row of a list or menu if it does that instead; a key that means none of
     /// these is kept for the next frame.
-    fn key_press(&mut self, key: Key) -> Option<Press> {
+    fn key_press(&mut self, key: Key) -> Option<Action> {
         let mac = self.platform == Platform::Mac;
         let first = key.phase == KeyPhase::Down;
         if first && key.code == KeyCode::Escape && self.table_escape() {
@@ -333,7 +336,10 @@ impl Client {
             // A table command's key acts once for each press, not again as it repeats. While a
             // context menu is open it does nothing, and the menu's own keys move through its
             // rows.
-            let table_key = matches!(press, Press::Command(..));
+            let table_key = press
+                .downcast_ref::<crate::manual::TableCommand>()
+                .is_some()
+                || matches!(press.downcast_ref::<Press>(), Some(Press::Command(..)));
             let free = self.manual.menu.is_none() && !self.manual.overlay_open();
             if !table_key || (first && free) {
                 return Some(press);
@@ -373,14 +379,14 @@ impl Client {
             "Cmd+B"
         };
         if first && Chord::parse(bug_report, mac) == Some(Chord::of(&key)) {
-            return Some(Press::Sheet(Some(Sheet::BugReport)));
+            return Some(Action::new(ScreenPress::Sheet(Some(Sheet::BugReport))));
         }
         // The platform's undo takes back an answer, as the web's `StageBoard` lets it.
         if first
             && self.screen == Screen::Game
             && Chord::parse("Cmd+Z", mac) == Some(Chord::of(&key))
         {
-            return Some(Press::Undo);
+            return Some(Action::new(ScreenPress::Undo));
         }
         self.inputs.push(Input::Key(key));
         None
@@ -389,17 +395,16 @@ impl Client {
     /// The press that moves the focused slider's level up a step, or down one if not `up`,
     /// as the left and right keys move a focused range input; `None` with no slider focused
     /// or at the end it would move past.
-    fn nudge(&self, up: bool) -> Option<Press> {
-        let Press::Setting(setting) = self.layer.focused_slider()? else {
-            return None;
-        };
+    fn nudge(&self, up: bool) -> Option<Action> {
+        let action = self.layer.focused_slider()?;
+        let setting = action.downcast_ref::<Setting>()?;
         let level = setting.level()?;
         let to = if up {
             level.saturating_add(STEP).min(100)
         } else {
             level.saturating_sub(STEP)
         };
-        (to != level).then_some(Press::Setting(setting.at_level(to)))
+        (to != level).then(|| Action::new(setting.at_level(to)))
     }
 
     /// Whether a press may pick up the card in `slot`, resting at `place`: a card the open

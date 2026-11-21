@@ -21,9 +21,7 @@ use glam::Vec2;
 
 use super::TablePress;
 use crate::data::space::hud::phone as data;
-use crate::element::{
-    Align, Anchor, Display, Element, Justify, Press, Track, column, holder, row, text,
-};
+use crate::element::{Align, Anchor, Display, Element, Justify, Track, column, holder, row, text};
 use crate::hud::counts::{index, points};
 use crate::input::Size;
 use crate::table::{DESKTOP, Window, phone_bands};
@@ -109,7 +107,7 @@ fn mana_button(player: &PlayerState, side: Side, adjust: bool, at: Vec2) -> Opti
                 .style(type_style::BUTTON)
                 .passes(true),
         )
-        .on_press(Press::Table(TablePress::ManaSheet(Some(side))));
+        .on_press(TablePress::ManaSheet(Some(side)));
     element.anchor = Some(Anchor::Point(at, Vec2::new(1.0, 0.5)));
     Some(element)
 }
@@ -132,7 +130,7 @@ pub fn sheet(view: &PlayerView, window: Window, side: Side) -> Option<Element> {
         .child(
             button("Done")
                 .min_width(data::BUTTON_MIN_WIDTH)
-                .on_press(Press::Table(TablePress::ManaSheet(None))),
+                .on_press(TablePress::ManaSheet(None)),
         );
     let mut grid = Element::new(crate::frame::Role::Region)
         .gap(space::S)
@@ -150,10 +148,10 @@ pub fn sheet(view: &PlayerView, window: Window, side: Side) -> Option<Element> {
             let remove = counter(&format!("Remove {name}"), "\u{2212}", true)
                 .min_width(size::ICON_BUTTON)
                 .min_height(size::ICON_BUTTON)
-                .on_press(Press::Table(TablePress::CounterRemove { side, at }));
+                .on_press(TablePress::CounterRemove { side, at });
             row()
                 .gap(space::S)
-                .child(add.on_press(Press::Table(TablePress::Counter { side, at })))
+                .child(add.on_press(TablePress::Counter { side, at }))
                 .child(remove)
         },
     ));
@@ -204,7 +202,7 @@ fn pool(player: &PlayerState, side: Side, window: Size, adjust: bool) -> Element
                     let button =
                         desktop_counter(&format!("{name} counter: {count}"), &words, mana, adjust);
                     if adjust {
-                        button.on_press(Press::Table(TablePress::Counter { side, at }))
+                        button.on_press(TablePress::Counter { side, at })
                     } else {
                         button
                     }

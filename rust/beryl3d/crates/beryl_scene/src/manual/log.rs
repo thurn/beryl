@@ -16,7 +16,7 @@ use glam::Vec2;
 
 use super::TablePress;
 use super::commands;
-use crate::element::{Align, Anchor, Element, Overflow, Press, column, holder, row, text};
+use crate::element::{Align, Anchor, Element, Overflow, column, holder, row, text};
 use crate::frame::Role;
 use crate::table::Window;
 use crate::tokens::{color, size, space, type_style};
@@ -54,11 +54,7 @@ pub fn log(
         return None;
     }
     let name = if open { "Hide log" } else { "Show log" };
-    let toggle = |button: Element| {
-        button
-            .selected(open)
-            .on_press(Press::Table(TablePress::ToggleLog))
-    };
+    let toggle = |button: Element| button.selected(open).on_press(TablePress::ToggleLog);
     let lines = || {
         let mut list = column()
             .name("lines")
@@ -139,12 +135,12 @@ fn line(line: &LogLine, blocks: bool) -> Element {
         .children(undoable.then(|| {
             button("Undo")
                 .name("Undo")
-                .on_press(Press::Table(TablePress::Undo(line.n)))
+                .on_press(TablePress::Undo(line.n))
         }))
         .child(
             button(rewind_label)
                 .name(rewind_label)
-                .on_press(Press::Table(TablePress::Rewind(line.n))),
+                .on_press(TablePress::Rewind(line.n)),
         );
     let shown = column()
         .name(&format!("line {}", line.n))

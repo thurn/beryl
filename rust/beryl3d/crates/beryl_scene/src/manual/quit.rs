@@ -7,7 +7,7 @@
 use glam::Vec2;
 
 use super::TablePress;
-use crate::element::{Align, Anchor, Element, Press, column, row, text};
+use crate::element::{Align, Anchor, Element, column, row, text};
 use crate::input::Size;
 use crate::tokens::{color, size, space, type_style};
 use crate::widgets::{button, primary};
@@ -17,12 +17,8 @@ use crate::widgets::{button, primary};
 pub fn question(window: Size) -> Element {
     let buttons = row()
         .gap(space::M)
-        .child(
-            button("Cancel")
-                .name("close")
-                .on_press(Press::Table(TablePress::Close)),
-        )
-        .child(primary("Quit").on_press(Press::Table(TablePress::Quit)));
+        .child(button("Cancel").name("close").on_press(TablePress::Close))
+        .child(primary("Quit").on_press(TablePress::Quit));
     let mut panel = column()
         .name("quit")
         .gap(space::L)

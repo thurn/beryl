@@ -2,11 +2,12 @@
 //! each card from its face's layer once the face has arrived (docs/beryl-3d.md, "Card faces").
 
 use beryl_card_records::{CardRecords, TokenMakers, card_records_among};
+use beryl_scene::Input;
 use beryl_scene::agent::checks::blank_cards;
 use beryl_scene::agent::{Context, Layout, Rule};
 use beryl_scene::faces::{CARD_BACK, FaceList};
 use beryl_scene::frame::{Frame, Material, Role, TextureArray};
-use beryl_scene::input::{AssetReady, FaceId, FaceSize, Input, Insets, Lifecycle, Size, Tier};
+use beryl_scene::input::{AssetReady, FaceId, FaceSize, Insets, Lifecycle, Size, Tier};
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder};
 use beryl_scene::{Client, Config};
 

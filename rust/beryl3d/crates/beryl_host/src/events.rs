@@ -3,9 +3,10 @@
 //! position, so a binding stays on the same key under any keyboard layout, and a key Beryl does
 //! not bind is dropped.
 
+use beryl_scene::Input;
 use beryl_scene::input::{
-    Button, Input, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase,
-    Size, TextChange,
+    Button, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase, Size,
+    TextChange,
 };
 use glam::Vec2;
 use winit::dpi::{PhysicalPosition, PhysicalSize};

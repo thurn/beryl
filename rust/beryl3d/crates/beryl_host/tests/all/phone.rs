@@ -6,8 +6,9 @@
 
 use beryl_host::phone::{Platform, due};
 use beryl_host::{Draw, FrameLoop, NoFeed, Phone, Shown};
+use beryl_scene::Input;
 use beryl_scene::frame::{Frame, Wake};
-use beryl_scene::input::{Button, Input, Lifecycle, Modifiers, Pointer, PointerKind, PointerPhase};
+use beryl_scene::input::{Button, Lifecycle, Modifiers, Pointer, PointerKind, PointerPhase};
 use beryl_scene::{Client, Config};
 use glam::Vec2;
 

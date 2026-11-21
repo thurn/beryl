@@ -26,12 +26,13 @@ pub use crate::navigation::{Screen, Sheet};
 pub use crate::sound::Music;
 pub use settings::{Concede, GEAR_INSET, corner};
 
+use crate::inspect::Viewed;
 use beryl_protocol::prompt::PromptView;
 use beryl_protocol::protocol::{OutcomeView, Side, Status};
 use beryl_protocol::script::{Subject, Turn};
 use beryl_protocol::{AgentView, PlayerView, StopsSetting};
 
-use crate::element::{Element, Viewed};
+use crate::element::Element;
 use crate::faces::FaceList;
 use crate::hud::phone::Occupied;
 use crate::hud::{HudIn, log::LogEntry};
@@ -208,3 +209,6 @@ pub fn music(screen: Screen, view: Option<&PlayerView>) -> Option<Music> {
         },
     })
 }
+
+mod message;
+pub use message::{BugPress, ScreenPress};

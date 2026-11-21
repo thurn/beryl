@@ -32,14 +32,14 @@ pub enum Layout {
 
 impl Layout {
     /// The shorter side, in logical points, below which a window uses the phone layout.
-    pub const PHONE_BELOW_POINTS: f32 = crate::table::window::PHONE_BELOW_POINTS;
+    pub const PHONE_BELOW_POINTS: f32 = crate::geometry::PHONE_BELOW_POINTS;
 
     /// The layout for a window of this logical size: `Phone` when its shorter side is under
     /// `PHONE_BELOW_POINTS`, so a phone held sideways is still a phone, and `Desktop` at or above
     /// it. Logical points do not depend on the screen's pixel density.
     #[must_use]
     pub fn for_size(size: Size) -> Self {
-        if crate::table::window::uses_phone_layout(size) {
+        if crate::geometry::phone_size(size) {
             Self::Phone
         } else {
             Self::Desktop

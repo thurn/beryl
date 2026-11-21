@@ -5,20 +5,22 @@
 //! while it has the focus the left and right keys move it by 5 (`Client::point` and
 //! `Client::key`).
 
-use crate::element::{Align, Element, Position, Press, row};
+use crate::element::{Align, Element, Position, row};
 use crate::frame::Role;
-use crate::settings::Setting;
 use crate::tokens::{color, ratio, size};
 
 /// How far a level moves for one step of a drag or one key: the web range input's `step` of
 /// 0.05.
 pub const STEP: u8 = 5;
 
-/// A slider named `name` for `setting`, which holds the level it shows. A drag sends
-/// `Press::Setting` with the same setting at the level dragged to.
+/// A slider showing `level`, carrying the message its owner uses to identify it.
 #[must_use]
-pub fn slider(name: &str, setting: Setting) -> Element {
-    let value = f32::from(setting.level().unwrap_or(0).min(100)) / ratio::PERCENT;
+pub fn slider<T: Clone + PartialEq + std::fmt::Debug + 'static>(
+    name: &str,
+    level: u8,
+    message: T,
+) -> Element {
+    let value = f32::from(level.min(100)) / ratio::PERCENT;
     let track = size::SLIDER_WIDTH;
     let thumb = size::SLIDER_THUMB;
     let mut element = Element::new(Role::Slider)
@@ -26,7 +28,7 @@ pub fn slider(name: &str, setting: Setting) -> Element {
         .width(track)
         .height(size::ICON_BUTTON)
         .align_items(Align::Center)
-        .on_press(Press::Setting(setting))
+        .on_press(message)
         .child(
             row()
                 .name("track")

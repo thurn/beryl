@@ -1,10 +1,11 @@
 //! Text in the flat layer: styled spans, inline mana symbols, and glyphs drawn from their old
 //! size while the display's scale changes.
 
+use beryl_scene::Input;
 use beryl_scene::agent::checks::text_fits;
 use beryl_scene::element::Span;
 use beryl_scene::frame::{Frame, Material, Role};
-use beryl_scene::input::{AssetReady, GlyphCell, Input, Insets, Size};
+use beryl_scene::input::{AssetReady, GlyphCell, Insets, Size};
 use beryl_scene::text::fonts::Font;
 use beryl_scene::text::{Block, Glyphs, Text, TypeStyle, shaped_words};
 use glam::Vec2;

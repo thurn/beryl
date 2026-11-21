@@ -25,8 +25,9 @@ use std::time::Instant;
 
 use beryl_host::Ticked;
 use beryl_host::rate::Step;
+use beryl_scene::Input;
 use beryl_scene::frame::SoundId;
-use beryl_scene::input::{Input, Lifecycle, Modifiers, TextChange};
+use beryl_scene::input::{Lifecycle, Modifiers, TextChange};
 use beryl_scene::sound::NAMES;
 use serde::{Deserialize, Serialize};
 

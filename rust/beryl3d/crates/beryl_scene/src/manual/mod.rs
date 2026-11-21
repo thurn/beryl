@@ -390,3 +390,51 @@ pub fn target_at(frame: &Frame, point: Vec2) -> Target {
 pub fn solo_request() -> TableSoloRequest {
     serde_json::from_str(commands::SOLO_REQUEST).expect("the sample deck is a solo request")
 }
+
+/// What a `Press::Lobby` does (`screens::lobby`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LobbyPress {
+    /// Open a solo table's lobby, from the start screen.
+    Solo,
+    /// Open the start screen's form for hosting a table.
+    Host,
+    /// Open the start screen's form for joining a table.
+    Join,
+    /// Close the start screen's host or join form.
+    CancelEntry,
+    /// Host or join a table with what the open form holds.
+    OpenTable,
+    /// Resume the saved table at this index of the start screen's list.
+    Resume(u16),
+    /// Open the deck picker on the saved decks ('Change').
+    Change,
+    /// Open the deck picker on the field a decklist is pasted into ('Paste decklist').
+    Paste,
+    /// Load the saved deck at this index of the deck picker's list.
+    Pick(u16),
+    /// Read the pasted decklist, save it under the name typed and load it ('Import').
+    Import,
+    /// Close the deck picker.
+    ClosePicker,
+    /// Open the sideboard swap, or close it.
+    Sideboard,
+    /// Move one copy of the card at index `at` of the loaded deck's main deck to its sideboard,
+    /// or with `from_side`, of its sideboard to its main deck.
+    Swap { from_side: bool, at: u16 },
+    /// Unload the loaded deck.
+    Unload,
+    /// Mark the guest ready, or no longer ready.
+    Ready,
+    /// Turn the assist at this index of `manual::lobby::ASSISTS` on or off.
+    Assist(u8),
+    /// Ask for the starting life and hand size the host's fields hold.
+    SaveSettings,
+    /// Start the table's game.
+    Start,
+    /// Leave the table and go back to the start screen.
+    Leave,
+}
+
+/// A shortcut for a manual table command. The flag indicates Shift.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TableCommand(pub u16, pub bool);

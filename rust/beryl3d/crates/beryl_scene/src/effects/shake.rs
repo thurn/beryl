@@ -21,12 +21,12 @@ pub fn write(runs: &[EffectRun], now: u64, scale: f32, builder: &mut FrameBuilde
     builder.shake(moved);
     let points = moved / scale;
     // Two runs at once move the picture once, by their sum, so one record stands for both.
-    if let Some(run) = runs.iter().find(|run| {
+    if runs.iter().any(|run| {
         run.effect == Effect::Shake && run.start <= now && now < run.start + run.duration
     }) {
         builder.effect(EffectLook {
-            effect: Effect::Shake,
-            on: run.on,
+            name: Effect::Shake.name(),
+            on: None,
             model: [
                 1.0, 0.0, 0.0, points.x, 0.0, 1.0, 0.0, points.y, 0.0, 0.0, 1.0, 0.0,
             ],

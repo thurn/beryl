@@ -8,11 +8,12 @@ use std::str::FromStr;
 
 use beryl_inspect::pages::page;
 use beryl_protocol::protocol::Side;
+use beryl_scene::Input;
 use beryl_scene::agent::Layout;
 use beryl_scene::driver::{Duration, Moment, Page};
 use beryl_scene::frame::StateBits;
 use beryl_scene::input::{
-    Button, Input, KeyCode, Modifiers, Pointer, PointerKind, PointerPhase, Rect, Size,
+    Button, KeyCode, Modifiers, Pointer, PointerKind, PointerPhase, Rect, Size,
 };
 use glam::Vec2;
 

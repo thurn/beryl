@@ -2,10 +2,13 @@
 //! slider that saves a level, concede only in a game, and Escape that closes it.
 
 use beryl_scene::Client;
+use beryl_scene::Press;
 use beryl_scene::command::Request;
-use beryl_scene::element::Press;
+use beryl_scene::element::Action;
+
+use beryl_scene::Input;
 use beryl_scene::frame::{Role, StateBits};
-use beryl_scene::input::{Input, Key, KeyCode, KeyPhase, Modifiers, PointerPhase};
+use beryl_scene::input::{Key, KeyCode, KeyPhase, Modifiers, PointerPhase};
 use beryl_scene::screens::Screen;
 use beryl_scene::tokens::size;
 use glam::Vec2;
@@ -60,7 +63,9 @@ fn the_gear_opens_the_settings_sheet() {
 #[test]
 fn dragging_the_music_slider_saves_the_new_level() {
     let mut client = in_game();
-    client.press(&Press::Sheet(Some(beryl_scene::screens::Sheet::Settings)));
+    client.press(&Action::new(Press::Sheet(Some(
+        beryl_scene::screens::Sheet::Settings,
+    ))));
     let frame = client.frame(1);
     let slider = find(frame, Role::Slider, "Music");
     let (left, _, right, _) = edges(frame, slider);
@@ -96,7 +101,7 @@ fn concede_asks_to_confirm_and_closing_the_sheet_puts_it_back() {
     assert!(names.contains(&"Confirm Concede".to_owned()), "{names:?}");
 
     // Closing the sheet puts the confirmation back.
-    client.press(&Press::Sheet(None));
+    client.press(&Action::new(Press::Sheet(None)));
     click(&mut client, Role::Button, "Settings");
     let names = controls(&mut client);
     assert!(names.contains(&"Concede".to_owned()), "{names:?}");
@@ -113,8 +118,10 @@ fn concede_asks_to_confirm_and_closing_the_sheet_puts_it_back() {
 #[test]
 fn concede_is_absent_on_the_start_screen() {
     let mut client = in_game();
-    client.press(&Press::Open(Screen::Start));
-    client.press(&Press::Sheet(Some(beryl_scene::screens::Sheet::Settings)));
+    client.press(&Action::new(Press::Open(Screen::Start)));
+    client.press(&Action::new(Press::Sheet(Some(
+        beryl_scene::screens::Sheet::Settings,
+    ))));
     let names = controls(&mut client);
     assert!(names.contains(&"Music".to_owned()));
     assert!(!names.contains(&"Concede".to_owned()), "{names:?}");
@@ -147,8 +154,12 @@ fn saved(client: &mut Client) -> Option<beryl_scene::settings::Settings> {
 fn the_graphics_row_shows_the_saved_value() {
     use beryl_scene::settings::{Graphics, Setting};
     let mut client = in_game();
-    client.press(&Press::Setting(Setting::Graphics(Graphics::Enhanced)));
-    client.press(&Press::Sheet(Some(beryl_scene::screens::Sheet::Settings)));
+    client.press(&Action::new(Press::Setting(Setting::Graphics(
+        Graphics::Enhanced,
+    ))));
+    client.press(&Action::new(Press::Sheet(Some(
+        beryl_scene::screens::Sheet::Settings,
+    ))));
     let frame = client.frame(1);
     let selected = |name: &str| {
         frame.resolved[find(frame, Role::Button, name)]

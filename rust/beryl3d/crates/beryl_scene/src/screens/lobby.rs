@@ -9,12 +9,12 @@
 //! (`lobby_phone`), every control at least a finger's 44 points, since the web interface has no
 //! phone lobby to follow.
 
+use crate::manual::LobbyPress;
 use beryl_protocol::ipc::LobbyView;
 use beryl_protocol::ipc::decks::SavedDeck;
 
 use crate::element::{
-    Align, Border, Display, Element, Justify, LobbyPress, Overflow, Position, Press, Track, column,
-    row, text,
+    Align, Border, Display, Element, Justify, Overflow, Position, Track, column, row, text,
 };
 use crate::frame::Role;
 use crate::manual::commands::{COMMANDS, Scope};
@@ -159,7 +159,7 @@ fn sections(holder: Element, input: &LobbyIn, fit: Fit) -> Element {
         .align_items(Align::Center)
         .justify_content(Justify::SpaceBetween)
         .child(text("Table").style(TITLE).color(color::GOLD))
-        .child(button("Leave table").on_press(Press::Lobby(LobbyPress::Leave)));
+        .child(button("Leave table").on_press(LobbyPress::Leave));
     let mut holder = holder.child(heading);
     if let Some(view) = &lobby.view {
         holder = holder
@@ -206,7 +206,7 @@ fn shortcuts(mut screen: Element, lobby: &Lobby) -> Element {
             _ => continue,
         };
         for key in command.key.iter().chain(command.key_aliases) {
-            screen = screen.shortcut(key.mac, Press::Lobby(press));
+            screen = screen.shortcut(key.mac, press);
         }
     }
     screen
@@ -348,21 +348,18 @@ fn deck(lobby: &Lobby, view: &LobbyView, fit: Fit) -> Element {
         let counts = format!("{} main · {} sideboard", own.main_count, own.side_count);
         words = words.child(text(&counts).style(counts_style).color(counts_color));
     }
-    let actions =
-        (fit.group("deck actions"))
-            .gap(size::LOBBY_SECTION_GAP)
-            .child(fit.action(button("Change").on_press(Press::Lobby(LobbyPress::Change))))
-            .child(
-                fit.action(
-                    button("Sideboard")
-                        .enabled(loaded)
-                        .selected(lobby.sideboard && loaded)
-                        .on_press(Press::Lobby(LobbyPress::Sideboard)),
-                ),
-            )
-            .children(loaded.then(|| {
-                fit.action(button("Unload deck").on_press(Press::Lobby(LobbyPress::Unload)))
-            }));
+    let actions = (fit.group("deck actions"))
+        .gap(size::LOBBY_SECTION_GAP)
+        .child(fit.action(button("Change").on_press(LobbyPress::Change)))
+        .child(
+            fit.action(
+                button("Sideboard")
+                    .enabled(loaded)
+                    .selected(lobby.sideboard && loaded)
+                    .on_press(LobbyPress::Sideboard),
+            ),
+        )
+        .children(loaded.then(|| fit.action(button("Unload deck").on_press(LobbyPress::Unload))));
     // On the desktop the deck's section has no legend (`section.lobby-section`), and its rows
     // keep to their own widths.
     let holder = match fit {
@@ -394,9 +391,11 @@ fn picker(lobby: &Lobby, panel: DeckPanel, input: &LobbyIn, fit: Fit) -> Element
                     .zip(&lobby.saved)
                     .map(|(at, saved)| saved_deck(at, saved, fit)),
             )
-            .child((fit.group("picker actions")).gap(space::M).child(
-                fit.action(button("Paste decklist").on_press(Press::Lobby(LobbyPress::Paste))),
-            )),
+            .child(
+                (fit.group("picker actions"))
+                    .gap(space::M)
+                    .child(fit.action(button("Paste decklist").on_press(LobbyPress::Paste))),
+            ),
         DeckPanel::Paste => {
             let name = input.fields.get(DECK_NAME);
             let mut list = input.fields.get(DECKLIST);
@@ -417,7 +416,7 @@ fn picker(lobby: &Lobby, panel: DeckPanel, input: &LobbyIn, fit: Fit) -> Element
                         primary("Import")
                             .align_self(Align::Start)
                             .enabled(ready && !lobby.importing)
-                            .on_press(Press::Lobby(LobbyPress::Import)),
+                            .on_press(LobbyPress::Import),
                     ),
                 )
         }
@@ -430,7 +429,7 @@ fn picker(lobby: &Lobby, panel: DeckPanel, input: &LobbyIn, fit: Fit) -> Element
             button("Close")
                 .align_self(Align::Start)
                 .enabled(!lobby.importing)
-                .on_press(Press::Lobby(LobbyPress::ClosePicker)),
+                .on_press(LobbyPress::ClosePicker),
         ),
     )
 }
@@ -442,7 +441,7 @@ fn saved_deck(at: u16, saved: &SavedDeck, fit: Fit) -> Element {
     (fit.group(&format!("saved {}", saved.deck.name)))
         .gap(size::LOBBY_GAP)
         .align_items(Align::Center)
-        .child(fit.action(button(&saved.deck.name).on_press(Press::Lobby(LobbyPress::Pick(at)))))
+        .child(fit.action(button(&saved.deck.name).on_press(LobbyPress::Pick(at))))
         .child(text(&counts).style(BODY).color(color::TEXT_DIM))
 }
 
@@ -467,7 +466,7 @@ fn sideboard(lobby: &Lobby, view: &LobbyView, fit: Fit) -> Option<Element> {
             };
             let move_one = fit
                 .least(small(button(label)))
-                .on_press(Press::Lobby(LobbyPress::Swap { from_side, at }))
+                .on_press(LobbyPress::Swap { from_side, at })
                 .name(&format!("Move {name} to {to}"));
             swap = swap.child(
                 row()
@@ -490,7 +489,7 @@ fn sideboard(lobby: &Lobby, view: &LobbyView, fit: Fit) -> Option<Element> {
             fit.action(
                 button("Done")
                     .align_self(Align::Start)
-                    .on_press(Press::Lobby(LobbyPress::Sideboard)),
+                    .on_press(LobbyPress::Sideboard),
             ),
         ),
     )
@@ -510,7 +509,7 @@ fn assists(view: &LobbyView, fit: Fit) -> Element {
     };
     for (at, (assist, label)) in (0u8..).zip(ASSISTS) {
         let on = view.assists.contains(&assist);
-        let press = Press::Lobby(LobbyPress::Assist(at));
+        let press = LobbyPress::Assist(at);
         boxes = boxes.child(match fit {
             Fit::Desktop => switch(label, on, press),
             Fit::Phone => fit.least(checkbox(label, on).on_press(press)),
@@ -526,7 +525,7 @@ fn assists(view: &LobbyView, fit: Fit) -> Element {
 /// One of the desktop's assists (`.lobby-assists label`): a 12-point checkbox and its label,
 /// across its whole column. On the web the label holds the checkbox, so the label's words fill
 /// the column, starting past the checkbox, and the checkbox stands over their start.
-fn switch(label: &str, on: bool, press: Press) -> Element {
+fn switch(label: &str, on: bool, press: LobbyPress) -> Element {
     let side = size::LOBBY_SWITCH_BOX;
     let mut words = text(label)
         .style(DESKTOP_LABEL)
@@ -591,7 +590,7 @@ fn settings(view: &LobbyView, input: &LobbyIn, fit: Fit) -> Element {
     let changed = matches!(asked_settings(current, &life.text, &hand.text), Ok(Some(_)));
     let save = button("Save settings")
         .enabled(changed)
-        .on_press(Press::Lobby(LobbyPress::SaveSettings));
+        .on_press(LobbyPress::SaveSettings);
     if fit == Fit::Desktop {
         // `.lobby-actions`: the two fields, who plays first and 'Save settings' in one row,
         // along its bottom.
@@ -733,11 +732,11 @@ fn start(lobby: &Lobby, view: &LobbyView) -> Element {
     if lobby.hosting() {
         return primary("Start")
             .enabled(view.can_start)
-            .on_press(Press::Lobby(LobbyPress::Start));
+            .on_press(LobbyPress::Start);
     }
     let own = lobby.own();
     primary("Ready")
         .enabled(own.is_some_and(|own| own.loaded))
         .selected(own.is_some_and(|own| own.ready))
-        .on_press(Press::Lobby(LobbyPress::Ready))
+        .on_press(LobbyPress::Ready)
 }

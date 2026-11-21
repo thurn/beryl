@@ -2,8 +2,9 @@
 //! permanent's outline, the attacker's wedge and the blocker's crescent.
 
 use beryl_protocol::protocol::{CardType, Combat, ObjectId, Side, ZoneName};
+use beryl_scene::Input;
 use beryl_scene::frame::{Band, Draw, Frame, Material, Sprite, sprites};
-use beryl_scene::input::{Input, Insets, Size};
+use beryl_scene::input::{Insets, Size};
 use beryl_scene::table::{CARD_HEIGHT, CARD_WIDTH};
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder};
 use beryl_scene::{Client, Config};

@@ -59,6 +59,7 @@ SCENE_DEPENDENCIES: frozenset[str] = frozenset(
     {
         "arrayvec",
         "self_cell",
+        "smallbox",  # Inline storage for action messages.
         "beryl_protocol",
         "bytemuck",
         "glam",

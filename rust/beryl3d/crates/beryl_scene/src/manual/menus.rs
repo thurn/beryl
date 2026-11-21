@@ -3,13 +3,14 @@
 //! (`ui/src/table/menuRows.ts`) lays them out, in order of placement, in groups, with rows
 //! that share a submenu folded under one row, each with its key at its end.
 
+use crate::inspect::Viewed;
 use beryl_protocol::PlayerView;
 use beryl_protocol::protocol::{Answer, Side, TableAction, TableObjectRef, ZoneName};
 use glam::Vec2;
 
 use super::commands::{self, Asks, Command, Entry, Values};
 use super::{Context, Target, viewers};
-use crate::element::Viewed;
+
 use crate::widgets::{MenuGroup, MenuId, MenuRow};
 use beryl_protocol::script::Subject;
 

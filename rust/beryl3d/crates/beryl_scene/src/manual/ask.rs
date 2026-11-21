@@ -15,7 +15,7 @@ use serde_json::Value;
 
 use super::commands::{self, Asks, COMMANDS, Command, Values};
 use super::{TablePress, Target};
-use crate::element::{Align, Anchor, Element, Press, column, row};
+use crate::element::{Align, Anchor, Element, column, row};
 use crate::input::Size;
 use crate::tokens::{color, size, space};
 use crate::widgets::{FieldState, Fields, button, field, primary};
@@ -529,17 +529,15 @@ pub fn dock(ask: &Ask, fields: &Fields, window: Size) -> Element {
             button(sign)
                 .name(name)
                 .enabled(value.is_some() && next != *text)
-                .on_press(Press::Table(TablePress::AskStep(by.is_positive())))
+                .on_press(TablePress::AskStep(by.is_positive()))
         })
     };
     let input = field(&ask.field, &state).min_width(size::BUTTON_MIN_WIDTH);
     let confirm = primary(&ask.label(text))
         .name("confirm")
         .enabled(value.is_some())
-        .on_press(Press::Table(TablePress::AskConfirm));
-    let cancel = button("Cancel")
-        .name("close")
-        .on_press(Press::Table(TablePress::Close));
+        .on_press(TablePress::AskConfirm);
+    let cancel = button("Cancel").name("close").on_press(TablePress::Close);
     let controls = row()
         .gap(space::M)
         .align_items(Align::Center)
@@ -558,7 +556,7 @@ pub fn dock(ask: &Ask, fields: &Fields, window: Size) -> Element {
                 let at = u8::try_from(at).unwrap_or(u8::MAX);
                 button(name)
                     .min_width(0.0)
-                    .on_press(Press::Table(TablePress::AskSuggestion(at)))
+                    .on_press(TablePress::AskSuggestion(at))
             }))
     });
     let mut dock = column()

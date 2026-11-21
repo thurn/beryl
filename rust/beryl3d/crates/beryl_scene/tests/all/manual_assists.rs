@@ -8,11 +8,12 @@ use beryl_protocol::protocol::{
     Answer, AssistsView, LabelView, ObjectId, PileName, ProposalLine, ProposalView, Side,
     TableAbilityOption, TableCardCommands, TableFlowOption, TablePrompt, TargetRef, ZoneName,
 };
+use beryl_scene::Input;
 use beryl_scene::command::SessionCommand;
 use beryl_scene::frame::{Frame, Role, StateBits};
 use beryl_scene::input::{
-    Button, Input, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase,
-    Size, TextChange,
+    Button, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase, Size,
+    TextChange,
 };
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder, table};
 use beryl_scene::{Client, Config};

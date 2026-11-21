@@ -10,19 +10,19 @@ use glam::Vec2;
 
 use super::{Layer, Node};
 use crate::data::space::flat::MENU_EDGE;
-use crate::element::{Anchor, Dismiss, Display, Press};
+use crate::element::{Action, Anchor, Display};
 use crate::frame::{ElementId, Role};
 use crate::input::{Key, KeyCode, KeyPhase, Rect, Size};
 
 /// What a key did to the list or menu that has the focus (`Layer::navigate`).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Navigation {
     /// The key means nothing to a list, or no list has the focus.
     Ignored,
     /// It moved the highlighted row, or opened or closed a submenu.
     Moved,
     /// It pressed the highlighted row, which means this.
-    Press(Press),
+    Press(Action),
 }
 
 /// What a key or the pointer changes in a list or menu: the row to focus, the list to scroll
@@ -43,6 +43,10 @@ enum Submenu {
     /// Every submenu closes.
     Close,
 }
+
+/// An Escape press that asks the owner of the open menu to dismiss it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DismissMenu;
 
 impl Layer {
     /// Takes `key` for the list or menu the focused element is in, or that has the focus
@@ -152,8 +156,8 @@ impl Layer {
     }
 
     /// The press Escape sends while a context menu is open: one that closes it.
-    pub(super) fn menu_close_press(&self) -> Option<Press> {
-        self.menu_open().then_some(Press::Dismiss(Dismiss::Menu))
+    pub(super) fn menu_close_press(&self) -> Option<Action> {
+        self.menu_open().then(|| Action::new(DismissMenu))
     }
 
     /// The pointer has come onto the menu row `id`, as the web's `onPointerEnter` on a row

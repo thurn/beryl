@@ -11,7 +11,7 @@
 /// `drop-shadow()`s give it.
 #[allow(clippy::doc_markdown)]
 pub mod shadow {
-    use crate::element::Shadow;
+    use crate::paint::Shadow;
 
     include!(concat!(env!("OUT_DIR"), "/tokens/shadow.rs"));
 }
@@ -19,7 +19,7 @@ pub mod shadow {
 /// Gradients, each as CSS's `linear-gradient()` or `radial-gradient()` gives it.
 #[allow(clippy::doc_markdown)]
 pub mod gradient {
-    use crate::element::{Extent, Gradient, Length, Stop};
+    use crate::paint::{Extent, Gradient, Length, Stop};
 
     include!(concat!(env!("OUT_DIR"), "/tokens/gradient.rs"));
 }
@@ -33,8 +33,8 @@ pub mod space {
 /// Type styles.
 #[allow(clippy::doc_markdown)]
 pub mod type_style {
-    use crate::text::TypeStyle;
-    use crate::text::fonts::Font;
+    use crate::typography::TypeStyle;
+    use crate::typography::fonts::Font;
 
     include!(concat!(env!("OUT_DIR"), "/tokens/type_style.rs"));
 }

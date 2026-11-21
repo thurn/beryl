@@ -17,7 +17,7 @@ use glam::Vec2;
 
 use super::bar::bar;
 use super::{Shown, Steps, begin_spans, end_spans, mark_spans, target_arrows};
-use crate::element::{Align, Anchor, Element, Press, TextAlign, column, text};
+use crate::element::{Align, Anchor, Element, TextAlign, column, text};
 use crate::hud::HudIn;
 use crate::light::Span;
 use crate::tokens::{color, size, space, type_style};
@@ -124,7 +124,7 @@ fn steps(Share { on, amount }: Share, left: u8, side: f32) -> (Element, Element)
             .radius(side / 2.0)
             .enabled(to.is_some());
         match to {
-            Some(n) => button.on_press(Press::Prompt(Click::Number { n, on: Some(on) })),
+            Some(n) => button.on_press(Click::Number { n, on: Some(on) }),
             None => button,
         }
     };

@@ -6,10 +6,9 @@
 //! feature, so no system font is ever found or used: a character no bundled font has is drawn
 //! as the font's missing-character glyph.
 
-pub mod fonts;
+pub use crate::typography::{TypeStyle, fonts};
 pub mod glyphs;
 mod symbols;
-mod write;
 
 use std::borrow::Cow;
 use std::collections::BTreeMap;
@@ -22,43 +21,9 @@ use parley::{
     VerticalAlign,
 };
 
-use crate::element::Span;
-use crate::input::Rect;
+use crate::geometry::Rect;
 use fonts::Font;
 pub use glyphs::{Glyphs, blurred as blurred_glyph_key, key as glyph_key};
-pub(crate) use write::faded;
-pub use write::{BlockLook, write_block};
-
-/// How a run of text looks: its font, weight, whether it is italic, size in logical points and
-/// line height as a multiple of its size.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct TypeStyle {
-    pub font: Font,
-    /// The CSS weight, from 100 to 900. The bundled text fonts are variable, so any weight is
-    /// drawn from the one file; the serif face picks its regular or bold file ([`Font::face`]).
-    pub weight: u16,
-    /// Whether it is italic (CSS `font-style: italic`). Only the serif face has italic files,
-    /// and only where it is Times New Roman ([`Font::face`]); other fonts are drawn upright.
-    pub italic: bool,
-    pub size: f32,
-    pub line_height: f32,
-    /// Extra space after every letter, in logical points (CSS `letter-spacing`).
-    pub letter_spacing: f32,
-}
-
-impl TypeStyle {
-    /// The style as a key that orders and compares exactly.
-    fn key(self) -> StyleKey {
-        StyleKey {
-            font: self.font,
-            weight: self.weight,
-            italic: self.italic,
-            size: self.size.to_bits(),
-            line_height: self.line_height.to_bits(),
-            letter_spacing: self.letter_spacing.to_bits(),
-        }
-    }
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 struct StyleKey {
@@ -68,6 +33,20 @@ struct StyleKey {
     size: u32,
     line_height: u32,
     letter_spacing: u32,
+}
+
+impl From<TypeStyle> for StyleKey {
+    /// The style as a key that orders and compares exactly.
+    fn from(style: TypeStyle) -> Self {
+        StyleKey {
+            font: style.font,
+            weight: style.weight,
+            italic: style.italic,
+            size: style.size.to_bits(),
+            line_height: style.line_height.to_bits(),
+            letter_spacing: style.letter_spacing.to_bits(),
+        }
+    }
 }
 
 /// A styled span as a key that orders and compares exactly.
@@ -280,12 +259,12 @@ impl Text {
     ) -> &Block {
         let key = (
             text.to_owned(),
-            style.key(),
+            style.into(),
             (spans.iter())
                 .map(|span| SpanKey {
                     start: span.range.start,
                     end: span.range.end,
-                    style: span.style.key(),
+                    style: span.style.into(),
                     color: span.color,
                 })
                 .collect(),
@@ -648,4 +627,14 @@ fn font_style(style: TypeStyle) -> FontStyle {
 /// A bundled font's bytes as the shared buffer fontique reads.
 fn file_data(data: &'static [u8]) -> std::sync::Arc<dyn AsRef<[u8]> + Send + Sync> {
     std::sync::Arc::new(data)
+}
+
+/// A styled run of an element's text.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Span {
+    /// The run's bytes in the element's `text`.
+    pub range: Range<u32>,
+    pub style: TypeStyle,
+    /// The run's color in place of the element's own.
+    pub color: Option<[u8; 4]>,
 }

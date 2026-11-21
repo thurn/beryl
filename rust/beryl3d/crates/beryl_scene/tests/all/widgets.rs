@@ -3,14 +3,15 @@
 //! drag sets, a context menu and its submenu kept inside the window, the keys in a menu, a
 //! tooltip that waits for the pointer to rest, and a long list that scrolls.
 
+use beryl_scene::Input;
+use beryl_scene::Press;
 use beryl_scene::agent::checks::{on_screen, phone_sizes, reachable, text_fits};
 use beryl_scene::agent::{Layout, Rule};
 use beryl_scene::command::Request;
-use beryl_scene::element::{Gradient, Press, describe, row, text};
+use beryl_scene::element::Action;
+use beryl_scene::element::{Gradient, describe, row, text};
 use beryl_scene::frame::{Frame, Material, RADIAL, Role, StateBits, Wake};
-use beryl_scene::input::{
-    IconCell, Input, Insets, Key, KeyCode, KeyPhase, Modifiers, PointerPhase, Size,
-};
+use beryl_scene::input::{IconCell, Insets, Key, KeyCode, KeyPhase, Modifiers, PointerPhase, Size};
 use beryl_scene::layout::{Layer, Navigation};
 use beryl_scene::settings::Setting;
 use beryl_scene::table::Window;
@@ -211,9 +212,11 @@ fn dragging_a_slider_to_its_middle_sets_the_level_to_50() {
     let mut client = client();
     client.frame(0);
     let music = Setting::Music(35);
-    (client.layer_mut()).show(Some(
-        row().name("sound").child(widgets::slider("Music", music)),
-    ));
+    (client.layer_mut()).show(Some(row().name("sound").child(widgets::slider(
+        "Music",
+        music.level().unwrap(),
+        music,
+    ))));
     let frame = client.frame(1);
     let slider = find(frame, Role::Slider, "Music");
     let (left, _, right, _) = edges(frame, slider);
@@ -237,11 +240,11 @@ fn dragging_a_slider_to_its_middle_sets_the_level_to_50() {
 fn a_focused_slider_moves_by_5_under_the_arrow_keys_and_is_drawn_held_while_pressed() {
     let mut client = client();
     client.frame(0);
-    (client.layer_mut()).show(Some(
-        row()
-            .name("sound")
-            .child(widgets::slider("Effects", Setting::Effects(100))),
-    ));
+    (client.layer_mut()).show(Some(row().name("sound").child(widgets::slider(
+        "Effects",
+        100,
+        Setting::Effects(100),
+    ))));
     let frame = client.frame(1);
     let slider = find(frame, Role::Slider, "Effects");
     let (_, _, right, _) = edges(frame, slider);
@@ -362,17 +365,17 @@ fn down_twice_and_return_presses_the_third_row_of_a_menu() {
     assert_eq!(layer.navigate(&key(KeyCode::ArrowDown)), Navigation::Moved);
     assert_eq!(
         layer.navigate(&key(KeyCode::Enter)),
-        Navigation::Press(Press::Menu(MENU, 2))
+        Navigation::Press(Action::new(widgets::MenuChoice(MENU, 2)))
     );
     // Down from the last row goes round to the first, and Escape closes the menu.
     assert_eq!(layer.navigate(&key(KeyCode::ArrowDown)), Navigation::Moved);
     assert_eq!(
         layer.navigate(&key(KeyCode::Enter)),
-        Navigation::Press(Press::Menu(MENU, 0))
+        Navigation::Press(Action::new(widgets::MenuChoice(MENU, 0)))
     );
     assert_eq!(
         layer.close_press(),
-        Some(Press::Dismiss(beryl_scene::element::Dismiss::Menu))
+        Some(Action::new(beryl_scene::layout::DismissMenu))
     );
 }
 

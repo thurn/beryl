@@ -12,7 +12,7 @@ use glam::Vec2;
 
 use super::TablePress;
 use crate::data::space::flat::table::link::{PHONE_TOP, TOP, TOP_SHARE, WIDTH};
-use crate::element::{Align, Anchor, Element, Press, column, text};
+use crate::element::{Align, Anchor, Element, column, text};
 use crate::hud::notices::step_banner;
 use crate::input::Size;
 use crate::tokens::{color, size, space, type_style};
@@ -50,8 +50,8 @@ pub fn banner(view: &PlayerView, window: Size, top: f32, error: Option<&str>) ->
         .width(width)
         .background(color::PANEL)
         .border((color::METAL, size::BORDER));
-    let lobby = (table.link == LinkState::Left)
-        .then(|| button("Lobby").on_press(Press::Table(TablePress::Leave)));
+    let lobby =
+        (table.link == LinkState::Left).then(|| button("Lobby").on_press(TablePress::Leave));
     let mut shown = column()
         .name("connection")
         .align_items(Align::Center)

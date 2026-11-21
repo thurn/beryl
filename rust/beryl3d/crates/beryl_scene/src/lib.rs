@@ -3,6 +3,7 @@
 
 pub mod agent;
 pub mod art;
+pub mod atlas;
 pub mod beat;
 mod client;
 pub mod command;
@@ -13,6 +14,7 @@ pub mod effects;
 pub mod element;
 pub mod faces;
 pub mod frame;
+pub mod geometry;
 pub mod hud;
 pub mod input;
 pub mod inspect;
@@ -22,6 +24,7 @@ pub mod manual;
 pub mod motion;
 pub mod navigation;
 pub mod notice;
+pub mod paint;
 pub mod play;
 pub mod pointer;
 pub mod pose;
@@ -36,7 +39,8 @@ pub mod table;
 pub mod testing;
 pub mod text;
 pub mod tokens;
+pub mod typography;
 pub mod verbs;
 pub mod widgets;
 
-pub use client::{Client, Config};
+pub use client::{BugPress, Client, Config, Dismiss, Input, Press};

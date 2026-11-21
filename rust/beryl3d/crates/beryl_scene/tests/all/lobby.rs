@@ -6,11 +6,11 @@
 use beryl_protocol::SessionError;
 use beryl_protocol::ipc::decks::{DeckImportReply, DeckImportRequest, SavedDeck};
 use beryl_protocol::ipc::{LobbyChange, LobbyUpdate, TableRefusalReason, TableRefused};
+use beryl_scene::Input;
 use beryl_scene::command::{Reply, SessionCommand};
 use beryl_scene::frame::{Frame, Role};
 use beryl_scene::input::{
-    Button, Input, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase,
-    Size,
+    Button, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase, Size,
 };
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder, lobby, table};
 use beryl_scene::{Client, Config};

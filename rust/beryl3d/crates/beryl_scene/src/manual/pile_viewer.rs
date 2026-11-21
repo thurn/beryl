@@ -4,8 +4,10 @@ use beryl_protocol::protocol::ZoneName;
 
 use super::TablePress;
 use super::viewers::{PileViewer, SEARCH, Sort, sections};
-use crate::element::{Align, Dismiss, Element, Overflow, Press, Viewed, column, row, text};
+use crate::element::{Align, Element, Overflow, column, row, text};
+use crate::hud::GamePress;
 use crate::hud::{HudIn, piles::pile_cards};
+use crate::inspect::Viewed;
 use crate::inspect::viewer::{
     self, cards, count_words, grid, object_box, pile_title, viewer_dialog,
 };
@@ -46,14 +48,14 @@ pub(crate) fn table_viewer(input: &HudIn, fields: &Fields, state: &PileViewer) -
     let count = count_words(cards.len(), zone == ZoneName::Library, top_first);
     let actions = if state.confirming && state.can_shuffle(view) {
         vec![
-            primary("Shuffle").on_press(Press::Table(TablePress::ViewerFinish(true))),
-            button("Don't shuffle").on_press(Press::Table(TablePress::ViewerFinish(false))),
+            primary("Shuffle").on_press(TablePress::ViewerFinish(true)),
+            button("Don't shuffle").on_press(TablePress::ViewerFinish(false)),
         ]
     } else {
         vec![
             button("Close")
                 .name("close")
-                .on_press(Press::Dismiss(Dismiss::Viewer)),
+                .on_press(GamePress::DismissViewer),
         ]
     };
     let content = column()
@@ -81,7 +83,7 @@ fn controls(fields: &Fields, state: &PileViewer) -> Element {
     "Search".clone_into(&mut search.placeholder);
     let group = button("Group by type")
         .selected(state.grouped)
-        .on_press(Press::Table(TablePress::ViewerGroup));
+        .on_press(TablePress::ViewerGroup);
     let group = if state.grouped {
         group.color(color::EMBER)
     } else {
@@ -89,7 +91,7 @@ fn controls(fields: &Fields, state: &PileViewer) -> Element {
     };
     let sort = button(state.sort.label())
         .name("Sort")
-        .on_press(Press::Table(TablePress::ViewerSort(state.sort.next())));
+        .on_press(TablePress::ViewerSort(state.sort.next()));
     row()
         .name("controls")
         .width(size::OVERLAY_MAIN)

@@ -6,8 +6,7 @@
 use beryl_protocol::script::Subject;
 
 use super::FrameBuilder;
-use crate::effects::Effect;
-use crate::element::{Border, Filter, Gradient, Shadow};
+use crate::paint::{Border, Filter, Gradient, Shadow};
 use crate::text::TypeStyle;
 
 /// How each flat-layer element of a frame was drawn, and its shadows.
@@ -35,8 +34,8 @@ pub struct Looks {
 /// total is tinted.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EffectLook {
-    pub effect: Effect,
-    pub on: Subject,
+    pub name: &'static str,
+    pub on: Option<Subject>,
     pub model: [f32; 12],
     pub opacity: f32,
 }

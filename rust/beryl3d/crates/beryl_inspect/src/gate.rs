@@ -15,10 +15,11 @@
 use beryl_protocol::GameUpdate;
 use beryl_protocol::card_records::CardRecords;
 use beryl_protocol::protocol::{SessionId, Side};
+use beryl_scene::Input;
 use beryl_scene::agent::Layout;
 use beryl_scene::driver::{Page, plays_on};
 use beryl_scene::frame::{Frame, Wake, Work};
-use beryl_scene::input::{AssetReady, Input, Insets, Pointer, Size, Tier};
+use beryl_scene::input::{AssetReady, Insets, Pointer, Size, Tier};
 use beryl_scene::{Client, Config};
 
 use crate::pages::recording;

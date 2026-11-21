@@ -3,8 +3,9 @@
 //! paused clock draws one frame at the pause and no other until an input arrives.
 
 use beryl_host::{Draw, FrameLoop, Shown, Sleep, Ticks};
+use beryl_scene::Input;
 use beryl_scene::frame::Frame;
-use beryl_scene::input::{Button, Input, Modifiers, Pointer, PointerKind, PointerPhase};
+use beryl_scene::input::{Button, Modifiers, Pointer, PointerKind, PointerPhase};
 use beryl_scene::{Client, Config};
 use glam::Vec2;
 

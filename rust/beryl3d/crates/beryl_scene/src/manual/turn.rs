@@ -13,7 +13,7 @@ use beryl_protocol::protocol::{PlayerView, Side, TableAction, TablePhase};
 use glam::Vec2;
 
 use super::TablePress;
-use crate::element::{Anchor, Element, Press};
+use crate::element::{Anchor, Element};
 use crate::table::Window;
 use crate::widgets::primary;
 
@@ -144,7 +144,7 @@ pub fn next(phase: TablePhase, window: Window) -> Element {
     use crate::layout::{DOCK_BOTTOM, DOCK_RIGHT};
     use crate::prompts::bar::{captioned, desktop_dock, dock_sized, turn_action};
     let size = window.size;
-    let button = primary("Next").on_press(Press::Table(TablePress::Next));
+    let button = primary("Next").on_press(TablePress::Next);
     let caption = caption(next_phase(phase));
     let (mut action, inset) = if window.phone() {
         let edge = crate::data::space::flat::table::EDGE;

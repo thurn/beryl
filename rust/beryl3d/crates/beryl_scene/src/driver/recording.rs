@@ -12,6 +12,8 @@
 //! recorded `table_host`, `table_join` or `table_resume` response whose value is a
 //! `TableConnectionError` (`{"reason": ...}`) is that command failing.
 
+use crate::client;
+use client::{Press, Reply, SessionCommand};
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::Arc;
 
@@ -27,8 +29,6 @@ use beryl_protocol::{AgentView, CandidateIndex};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::command::{Reply, SessionCommand};
-use crate::element::Press;
 use crate::navigation::{Screen, Sheet};
 
 /// One recording's messages for one seat: the session's views, as `game-update` events, and

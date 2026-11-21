@@ -6,9 +6,10 @@
 //! printed size, 63 by 88, centred on the origin in the plane z = 0 with its face toward +z,
 //! so a pose's scale of 1 is a card's real size.
 
+mod anchors;
+pub use anchors::spot_of;
 pub mod badges;
 mod camera;
-pub(crate) use camera::zoom_rect;
 pub mod far_shade;
 mod hands;
 pub(crate) use hands::HandFits;
@@ -27,7 +28,6 @@ mod stack;
 mod tray;
 mod tray_layout;
 mod web_fit;
-pub(crate) mod window;
 
 use beryl_protocol::protocol::{Side, ZoneName};
 use glam::Vec2;
@@ -51,7 +51,6 @@ pub use tray_layout::{
     Across, Held, Second, TrayKind, TrayPoses, TraySpace, landing, tray, tray_area, tray_boxes,
 };
 pub use web_fit::{FittedPiles, FittedRow, FittedRows};
-pub use window::Window;
 
 use crate::data::space;
 use crate::frame::Place;
@@ -64,9 +63,7 @@ pub(crate) const HALF_LIFE: f32 = type_style::TITLE.size * type_style::TITLE.lin
 /// `--orb: calc(1px / 1.045)` (`.table .life-orb`, `ui/src/screens/styles/table.css`).
 pub const ORB_DESKTOP_SCALE: f32 = 1.0 / 1.045;
 
-/// A card's printed width and height (`card` in `space.json`).
-pub const CARD_WIDTH: f32 = space::card::WIDTH;
-pub const CARD_HEIGHT: f32 = space::card::HEIGHT;
+pub use crate::geometry::{CARD_HEIGHT, CARD_WIDTH, Window};
 /// The height between two cards lying one on the other, in a pile or an overlapped row.
 pub const LAYER: f32 = space::card::LAYER;
 

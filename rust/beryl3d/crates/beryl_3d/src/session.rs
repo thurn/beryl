@@ -26,8 +26,8 @@ use beryl_protocol::ipc::{
     Platform, TableHostRequest, TableHostSettings, TableJoinRequest, TableLink, TableLobbyRequest,
     TableResumeRequest,
 };
+use beryl_scene::Input;
 use beryl_scene::command::{Reply, SessionCommand};
-use beryl_scene::input::Input;
 use beryl_scene::manual::tokens;
 use beryl_session::ai::AgentMove;
 use beryl_session::card_records::{CardRecords, CardRecordsRequest, card_records};

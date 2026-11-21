@@ -8,9 +8,10 @@
 //! computer's network, as the web's browser build hosts one, and the form offers no choice of
 //! connection.
 
+use crate::manual::LobbyPress;
 use beryl_protocol::ipc::SavedTable;
 
-use crate::element::{Align, Element, LobbyPress, Press, column, row, text};
+use crate::element::{Align, Element, column, row, text};
 use crate::manual::commands::COMMANDS;
 use crate::text::TypeStyle;
 use crate::tokens::type_style::START_LABEL as LABEL;
@@ -81,7 +82,7 @@ pub fn entries(entries: &TableEntries, fields: &Fields, phone: bool) -> Vec<Elem
             button
         }
     };
-    let press = |press: LobbyPress| Press::Lobby(press);
+    let press = |press: LobbyPress| press;
     let mut buttons = (if phone { column() } else { row() })
         .name("manual tables")
         .gap(space::M)
@@ -155,8 +156,8 @@ fn form(fields: &Fields, mode: EntryMode, phone: bool) -> Element {
     };
     let open = primary(label)
         .enabled(ready)
-        .on_press(Press::Lobby(LobbyPress::OpenTable));
-    let cancel = button("Cancel").on_press(Press::Lobby(LobbyPress::CancelEntry));
+        .on_press(LobbyPress::OpenTable);
+    let cancel = button("Cancel").on_press(LobbyPress::CancelEntry);
     let buttons = if phone {
         column()
             .gap(space::M)
@@ -191,7 +192,7 @@ fn form(fields: &Fields, mode: EntryMode, phone: bool) -> Element {
 pub fn with_host_key(mut screen: Element) -> Element {
     for command in COMMANDS.iter().filter(|command| command.id == "lobby.host") {
         for key in command.key.iter().chain(command.key_aliases) {
-            screen = screen.shortcut(key.mac, Press::Lobby(LobbyPress::Host));
+            screen = screen.shortcut(key.mac, LobbyPress::Host);
         }
     }
     screen

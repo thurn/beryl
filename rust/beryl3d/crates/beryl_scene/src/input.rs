@@ -1,100 +1,9 @@
-//! What a host hands the client core: session updates, pointer and key events, a new surface,
-//! finished assets and platform events. Everything here is plain data with no time of its own
-//! (docs/beryl-3d.md, "Hosts" and "Determinism").
+//! Pointer, keyboard, and asset data used by the client and its controls.
 
-use beryl_protocol::card_records::CardRecords;
-use beryl_protocol::ipc::LobbyUpdate;
-use beryl_protocol::{AgentView, GameUpdate};
 use glam::Vec2;
 
-use crate::command::Reply;
-use crate::settings::Settings;
-use crate::widgets::IconId;
-
-/// One thing that has happened, passed to `Client::handle`.
-#[derive(Clone, Debug, PartialEq)]
-pub enum Input {
-    /// A view from the session, boxed because it is far larger than every other input.
-    Update(Box<GameUpdate>),
-    /// The card store's records of every card and token the match can show, from which the
-    /// client makes the match's list of faces (`Client::faces`) when the match loads. Boxed
-    /// because it is far larger than every other input.
-    Cards(Box<CardRecords>),
-    /// The drawing surface's size in logical points, how many physical pixels make one point,
-    /// and the part of it that system bars and rounded corners leave clear.
-    Surface {
-        size: Size,
-        scale: f32,
-        safe_area: Insets,
-    },
-    /// A mouse, touch or pen event.
-    Pointer(Pointer),
-    Key(Key),
-    /// Text typed into the focused field, or its native field's new contents on a phone.
-    Text(TextChange),
-    /// The platform's clipboard held this text when the client asked for it
-    /// (`Request::Paste`): it is inserted at the focused field's caret.
-    Paste(String),
-    /// A face, or an atlas page of glyphs or icons, is ready on the GPU.
-    Assets(AssetReady),
-    /// The app was suspended or resumed, or the system is low on memory.
-    Lifecycle(Lifecycle),
-    /// Which platform the host runs on, sent once at startup: whether `Cmd` in a shortcut
-    /// means the Command key, as on the Mac, or Control. Until it arrives the client takes the
-    /// Mac's.
-    Platform {
-        mac: bool,
-    },
-    /// The visual tier to draw in.
-    Tier(Tier),
-    /// The session's answer to a `SessionCommand`.
-    Reply(Reply),
-    /// The manual table's lobby changed (`TableEvent::Lobby`): its new state, or no lobby once
-    /// the table's game has started. Boxed because it is far larger than most inputs.
-    Lobby(Box<LobbyUpdate>),
-    /// The linked table reported a failure (`TableEvent::Error`): the other player has a
-    /// different version of Beryl, or the connection ended with a reason.
-    TableError(String),
-    /// The player's saved settings, which the host hands over at startup.
-    Settings(Settings),
-    /// The agents a person may play, in the order they are offered (`beryl_session::agents`).
-    /// The client shows the start screen when they arrive before any view of a game.
-    Agents(Vec<AgentView>),
-    /// The names of the recordings the testing screen lists, sorted. Only a tools build of the
-    /// app sends it, so a release build's client has no testing screen to go to.
-    Recordings(Vec<String>),
-    /// The bug report asked for with `Request::SaveBug` was written, or why it was not.
-    BugSaved(Result<(), String>),
-    /// Nothing changes. A thread other than the host's sends it to wake a host that sleeps until
-    /// an event, so that the host looks at what the thread left for it (`Feed::wake`).
-    Nudge,
-}
-
-/// A rectangle with its top left corner at (`x`, `y`). It is in logical points unless the field
-/// holding it says otherwise (a frame's clips are in physical pixels).
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct Rect {
-    pub x: f32,
-    pub y: f32,
-    pub width: f32,
-    pub height: f32,
-}
-
-/// A size in logical points.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct Size {
-    pub width: f32,
-    pub height: f32,
-}
-
-/// How far in from each edge of the surface its clear area starts, in logical points.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct Insets {
-    pub top: f32,
-    pub right: f32,
-    pub bottom: f32,
-    pub left: f32,
-}
+pub use crate::atlas::{FaceId, FaceSize, GlyphCell, GlyphKey, IconCell, Tier};
+pub use crate::geometry::{Insets, Rect, Size};
 
 /// A mouse, touch or pen event. It carries no time: what it starts begins at the `now` of the
 /// next frame.
@@ -276,73 +185,9 @@ pub enum AssetReady {
     Icons { page: u16, cells: Vec<IconCell> },
 }
 
-/// Where one rasterized icon lies in its atlas page.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct IconCell {
-    pub icon: IconId,
-    /// The size the icon is drawn at, in logical points: the side of its square box.
-    pub size: u16,
-    /// The icon's square cell in texels, `[x, y, width, height]`, rasterized at the display's
-    /// scale, so `size` times the scale texels wide, or for a shadow's cell the size
-    /// `widgets::icon_shadows::stage_side` gives.
-    pub rect: [u16; 4],
-    /// 0 for the icon itself, or which of the cells its drop shadows are drawn from this is
-    /// (`widgets::icon_shadows::code`): one shadow of one chain of `icon_shadows::CHAINS`.
-    pub shadow: u8,
-}
-
-/// Where one rasterized glyph lies in its atlas page, and where its picture sits against the
-/// glyph's pen position.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct GlyphCell {
-    pub key: GlyphKey,
-    /// The glyph's rectangle in texels, `[x, y, width, height]`.
-    pub rect: [u16; 4],
-    /// The rectangle's top left corner relative to the pen position on the baseline, in
-    /// physical pixels, with y down: a glyph that rises above the baseline has a negative y.
-    pub bearing: [i16; 2],
-}
-
-/// An index into the list of faces the client made when the match loaded (`faces::FaceList`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct FaceId(pub u16);
-
-/// Which texture array a face is baked for: board size (256 by 360) or full size.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum FaceSize {
-    Board,
-    Full,
-}
-
-/// One glyph of one bundled font at one weight and one size in physical pixels, sharp or
-/// blurred for a drop shadow.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct GlyphKey {
-    /// The index in `text::fonts::ALL` of the font file the glyph is drawn from
-    /// (`Font::face`).
-    pub font: u8,
-    /// The CSS weight the variable font is drawn at.
-    pub weight: u16,
-    pub glyph: u16,
-    /// 0 for the glyph itself, or the standard deviation of the Gaussian its coverage is
-    /// blurred with, in quarters of a physical pixel: the shape of a drop shadow
-    /// (`Style::drop_shadow`). A blurred cell is larger than the glyph's by three deviations
-    /// on every side, and its bearing says so. It comes before `size` so that one blur's sizes
-    /// of a glyph sort together (`Glyphs::nearest`).
-    pub blur: u8,
-    pub size: u16,
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Lifecycle {
     Suspended,
     Resumed,
     LowMemory,
-}
-
-/// The two visual tiers, which differ only in shading.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Tier {
-    Baseline,
-    Enhanced,
 }

@@ -2,178 +2,27 @@
 //! style, text, what a press on them means, and children. Screens are plain functions that
 //! return elements; the client keeps the tree they return and lays it out (`layout`).
 
+mod action;
 mod keys;
-pub mod paint;
+
+pub use crate::paint;
+pub use action::Action;
 mod style;
 
-use std::ops::Range;
-
-use beryl_protocol::prompt::{ButtonId, Click};
-use beryl_protocol::protocol::{Side, Step, ZoneName};
 use beryl_protocol::script::Subject;
 use glam::Vec2;
 
 pub use keys::{Chord, Shortcuts, describe};
-pub use paint::{Extent, Filter, Gradient, Length, Shape, Stop};
-pub use style::{
-    Align, Border, Direction, Display, DropLayer, DropLayers, Justify, MOST_DROP_SHADOWS, Overflow,
-    Position, Shadow, Style, TextAlign, Track,
+pub use paint::{
+    Border, DropLayer, DropLayers, Extent, Filter, Gradient, Length, MOST_DROP_SHADOWS, Shadow,
+    Shape, Stop,
 };
+pub use style::{Align, Direction, Display, Justify, Overflow, Position, Style, TextAlign, Track};
 
-use crate::frame::{ElementId, Role};
+use crate::frame::Role;
 use crate::input::{FaceId, FaceSize};
-use crate::screens::{Screen, Sheet};
-use crate::settings::Setting;
-use crate::text::TypeStyle;
-use crate::widgets::{FieldState, IconId, MenuId};
-
-/// What a press on an element means. A value, not a closure, so that an unchanged element
-/// compares equal and a test can print it. `Client::press` turns it into a `SessionCommand`, a
-/// `Request` or a change of screen, sheet or settings, adding what a screen function does not
-/// know, such as the open decision's id.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Press {
-    /// One of the open prompt's buttons.
-    Button(ButtonId),
-    /// Any click on the open prompt other than a button: a card, an ability or a player, a
-    /// number, a catalog entry, or a card dropped into a pile.
-    Prompt(Click),
-    /// Go to a screen.
-    Open(Screen),
-    /// Open a sheet over the screen, or close the open one.
-    Sheet(Option<Sheet>),
-    /// Change a setting.
-    Setting(Setting),
-    /// Turn the stop at `step` on or off, on the player's own turns or, if `theirs`, on the
-    /// opponent's.
-    Stop { step: Step, theirs: bool },
-    /// Concede the game.
-    Concede,
-    /// Start a game with what the start screen holds: the chosen opponent, the seed and the
-    /// fair-deal box. With a game in progress the first press asks to confirm, and the next
-    /// concedes that game before starting the new one.
-    Start,
-    /// Choose the `n`th agent the host listed (`Input::Agents`), counting from 0, as the
-    /// opponent of the next game.
-    Agent(u16),
-    /// Turn the start screen's fair-deal box on or off.
-    FairDeal,
-    /// Save every bug report to one file (`Request::ExportBugs`).
-    ExportBugs,
-    /// Replay the `recording`th recording the host listed (`Input::Recordings`), counting
-    /// from 0, from the seat the testing screen's toggle shows.
-    Replay { recording: u16 },
-    /// Set the seat the testing screen replays recordings from.
-    Seat(Side),
-    /// A row of an open menu, counting from 0 over all its groups.
-    Menu(MenuId, u16),
-    /// Open one of the gallery's example context menus.
-    GalleryMenu(crate::screens::GalleryMenu),
-    /// Show one of the gallery's example command searches, or close its preview.
-    GalleryQuery(Option<crate::screens::GalleryQuery>),
-    /// Give the keys to an element, such as a text field.
-    Focus(ElementId),
-    /// The text field `ElementId` now holds this text: an edit made in it, which
-    /// `Client::press` keeps in the field's `FieldState`.
-    Field(ElementId, String),
-    /// Close something shown over the screen.
-    Dismiss(Dismiss),
-    /// Open the viewer of a pile's cards, as a press on a pile does.
-    View(Viewed),
-    /// Give the manual table's command at this index of `manual::commands::COMMANDS` to what
-    /// the pointer is on, as a key of the table does. The flag is whether Shift made the key's
-    /// token face down.
-    Command(u16, bool),
-    /// Something the manual table shows over itself: its command list, ask prompt, token
-    /// search, library order tray or log.
-    Table(crate::manual::TablePress),
-    /// One of the bug report's controls.
-    Bug(BugPress),
-    /// One of the manual table's lobby controls.
-    Lobby(LobbyPress),
-    /// Open the folded game log, or close it (`hud::log`).
-    Log,
-    /// Show the ended game's result over the table, or put it aside to see the battlefield
-    /// (`screens::game_over`).
-    Result(bool),
-    /// Take back the viewer's latest answer that can be taken back (`Client::undo`).
-    Undo,
-}
-
-/// What a `Press::Lobby` does (`screens::lobby`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum LobbyPress {
-    /// Open a solo table's lobby, from the start screen.
-    Solo,
-    /// Open the start screen's form for hosting a table.
-    Host,
-    /// Open the start screen's form for joining a table.
-    Join,
-    /// Close the start screen's host or join form.
-    CancelEntry,
-    /// Host or join a table with what the open form holds.
-    OpenTable,
-    /// Resume the saved table at this index of the start screen's list.
-    Resume(u16),
-    /// Open the deck picker on the saved decks ('Change').
-    Change,
-    /// Open the deck picker on the field a decklist is pasted into ('Paste decklist').
-    Paste,
-    /// Load the saved deck at this index of the deck picker's list.
-    Pick(u16),
-    /// Read the pasted decklist, save it under the name typed and load it ('Import').
-    Import,
-    /// Close the deck picker.
-    ClosePicker,
-    /// Open the sideboard swap, or close it.
-    Sideboard,
-    /// Move one copy of the card at index `at` of the loaded deck's main deck to its sideboard,
-    /// or with `from_side`, of its sideboard to its main deck.
-    Swap { from_side: bool, at: u16 },
-    /// Unload the loaded deck.
-    Unload,
-    /// Mark the guest ready, or no longer ready.
-    Ready,
-    /// Turn the assist at this index of `manual::lobby::ASSISTS` on or off.
-    Assist(u8),
-    /// Ask for the starting life and hand size the host's fields hold.
-    SaveSettings,
-    /// Start the table's game.
-    Start,
-    /// Leave the table and go back to the start screen.
-    Leave,
-}
-
-/// What a `Press::Bug` does (`screens::bug_report`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum BugPress {
-    /// Report the whole window instead of a region dragged out over it.
-    Whole,
-    /// Turn the "AI play" box on or off.
-    Ai,
-    /// Save the report with the description typed.
-    Save,
-}
-
-/// What the viewer shows the cards of (`inspect::viewer`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Viewed {
-    /// `side`'s library, graveyard or exile.
-    Pile(Side, ZoneName),
-    /// The faces of the Revealed Cards pile.
-    Revealed,
-}
-
-/// What a `Press::Dismiss` closes.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Dismiss {
-    /// The cards an opponent's effect revealed.
-    Revealed,
-    /// The open menu.
-    Menu,
-    /// The browser of a pile's cards.
-    Viewer,
-}
+use crate::widgets::icons::LayeredIcon;
+use crate::widgets::{FieldState, IconId};
 
 /// Where an element stands when it is placed at a point of the window rather than in its
 /// parent's layout. The second vector says which point of the element's box lies there: (0, 0)
@@ -219,20 +68,11 @@ pub enum Shown {
     /// An icon `size` logical points on a side, centred in the element's content box and
     /// tinted with its text color.
     Icon(IconId, u16),
-    /// `side`'s life orb (`art::orb`), lit as the active player's if `active`, its art filling
-    /// the element's content box at `art::orb::SCALES[scale]` points to a unit.
-    Orb { side: Side, active: bool, scale: u8 },
+    /// A stack of icons whose cells share the element's content box.
+    Layers(LayeredIcon),
 }
 
-/// A styled run of an element's text.
-#[derive(Clone, Debug, PartialEq)]
-pub struct Span {
-    /// The run's bytes in the element's `text`.
-    pub range: Range<u32>,
-    pub style: TypeStyle,
-    /// The run's color in place of the element's own.
-    pub color: Option<[u8; 4]>,
-}
+pub use crate::text::Span;
 
 /// A node of the flat layer's tree.
 #[derive(Clone, Debug, PartialEq)]
@@ -250,7 +90,7 @@ pub struct Element {
     pub text: Option<String>,
     /// Runs of `text` styled apart from the rest, laid out in one paragraph with it.
     pub spans: Vec<Span>,
-    pub press: Option<Press>,
+    pub press: Option<Action>,
     /// Whether a press does anything now.
     pub enabled: bool,
     /// Whether it takes keys: a press on it gives it the focus (`layout::focus`).
@@ -349,16 +189,22 @@ impl Element {
     }
 
     #[must_use]
-    pub fn on_press(mut self, press: Press) -> Self {
-        self.press = Some(press);
+    pub fn on_press<T: Clone + PartialEq + std::fmt::Debug + 'static>(mut self, press: T) -> Self {
+        self.press = Some(Action::new(press));
         self
     }
 
     /// Answers the shortcut `binding`, written as the web interface writes one (`keys`), with
     /// `press`. Only the screen's top element's shortcuts are answered.
     #[must_use]
-    pub fn shortcut(mut self, binding: &str, press: Press) -> Self {
-        self.shortcuts.0.push((binding.to_owned(), press));
+    pub fn shortcut<T: Clone + PartialEq + std::fmt::Debug + 'static>(
+        mut self,
+        binding: &str,
+        press: T,
+    ) -> Self {
+        self.shortcuts
+            .0
+            .push((binding.to_owned(), Action::new(press)));
         self
     }
 

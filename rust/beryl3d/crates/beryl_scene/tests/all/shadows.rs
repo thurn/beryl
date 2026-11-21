@@ -4,8 +4,9 @@
 use beryl_protocol::GameUpdate;
 use beryl_protocol::protocol::{CardType, Side, Why, ZoneName};
 use beryl_protocol::script::Act;
+use beryl_scene::Input;
 use beryl_scene::frame::{BANDS, Band, Draw, Frame, Material};
-use beryl_scene::input::{Input, Insets, Size, Tier};
+use beryl_scene::input::{Insets, Size, Tier};
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder, object, timing};
 use beryl_scene::{Client, Config};
 

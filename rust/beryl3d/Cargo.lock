@@ -538,6 +538,7 @@ dependencies = [
  "self_cell",
  "serde",
  "serde_json",
+ "smallbox",
  "taffy",
 ]
 
@@ -3769,6 +3770,12 @@ checksum = "bdd58c3c93c3d278ca835519292445cb4b0d4dc59ccfdf7ceadaab3f8aeb4038"
 dependencies = [
  "version_check",
 ]
+
+[[package]]
+name = "smallbox"
+version = "0.8.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e8d91712aabb2e735436c02f70d990d8b2241f42dd092a973694e198ea95fc93"
 
 [[package]]
 name = "smallvec"

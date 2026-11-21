@@ -5,11 +5,12 @@ use beryl_protocol::prompt::{ButtonId, Click, ClickReply, ClickRequest};
 use beryl_protocol::protocol::{Side, Status, Why, ZoneName};
 use beryl_protocol::script::{Act, Subject};
 use beryl_protocol::{CandidateIndex, DecisionId, SessionId};
+use beryl_scene::Input;
 use beryl_scene::agent::Layout;
 use beryl_scene::command::{Reply, SessionCommand};
 use beryl_scene::driver::{Action, Duration, KeyChord, Moment, Name, Page, Recording, Responses};
 use beryl_scene::frame::StateBits;
-use beryl_scene::input::{Input, KeyCode, PointerPhase, Size};
+use beryl_scene::input::{KeyCode, PointerPhase, Size};
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder, timing};
 use glam::Vec2;
 

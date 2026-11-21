@@ -7,7 +7,8 @@
 use super::{Screen, ScreenIn, Sheet};
 use crate::data::space::flat::phone::GUTTER;
 use crate::data::space::hud::phone::BUTTON_MIN_WIDTH as PHONE_BUTTON;
-use crate::element::{Align, Element, Justify, Overflow, Position, Press, column, row, text};
+use crate::element::{Action, Align, Element, Justify, Overflow, Position, column, row, text};
+use crate::screens::ScreenPress;
 use crate::settings::{Graphics, Setting};
 use crate::tokens::{color, size, space, type_style};
 use crate::widgets::{button, icon_button, icons, primary, slider, toggle};
@@ -39,18 +40,26 @@ pub const GEAR_INSET: f32 = size::SETTINGS_GEAR_INSET;
 /// `undo` holds the press it sends, with no gap kept for a button left out. This is the web's `Corner` and `UndoButton`
 /// (`ui/src/game/Corner.tsx`). The web hides its bug button while the report is open.
 #[must_use]
-pub fn corner(bug: bool, undo: Option<Press>) -> Element {
+pub fn corner(bug: bool, undo: Option<Action>) -> Element {
     // Clear, as `element::holder` is: a float's top element is otherwise drawn on a panel.
     column()
         .name("corner")
         .background([0; 4])
         .border(([0; 4], 0.0))
         .gap(size::CORNER_GAP)
-        .child(icon_button(icons::GEAR, "Settings").on_press(Press::Sheet(Some(Sheet::Settings))))
+        .child(
+            icon_button(icons::GEAR, "Settings")
+                .on_press(ScreenPress::Sheet(Some(Sheet::Settings))),
+        )
         .children(bug.then(|| {
-            icon_button(icons::BUG, "Report bug").on_press(Press::Sheet(Some(Sheet::BugReport)))
+            icon_button(icons::BUG, "Report bug")
+                .on_press(ScreenPress::Sheet(Some(Sheet::BugReport)))
         }))
-        .children(undo.map(|press| icon_button(icons::UNDO, "Undo").on_press(press)))
+        .children(undo.map(|press| {
+            let mut button = icon_button(icons::UNDO, "Undo");
+            button.press = Some(press);
+            button
+        }))
 }
 
 /// What the flat layer shows for the sheet: the panel in the middle of the window.
@@ -67,13 +76,13 @@ pub fn settings(input: &ScreenIn) -> Element {
         if muted { "Unmute" } else { "Mute" },
         muted,
     )
-    .on_press(Press::Setting(Setting::Muted(!muted)));
+    .on_press(Setting::Muted(!muted));
     let levels = column()
         .gap(space::S)
         .child(level("Music", Setting::Music(settings.music)))
         .child(level("Effects", Setting::Effects(settings.effects)));
     let full_control = toggle(icons::FULL_CONTROL, "Full control", settings.full_control)
-        .on_press(Press::Setting(Setting::FullControl(!settings.full_control)));
+        .on_press(Setting::FullControl(!settings.full_control));
     let window = input.window;
     let safe = window.safe_area;
     // On a phone the panel keeps inside the safe area, the gutter in from its sides, and is no
@@ -99,7 +108,7 @@ pub fn settings(input: &ScreenIn) -> Element {
                 .align_items(Align::Center)
                 .justify_content(Justify::SpaceBetween)
                 .child(text("Settings").style(type_style::TITLE))
-                .child(icon_button(icons::CLOSE, "close").on_press(Press::Sheet(None))),
+                .child(icon_button(icons::CLOSE, "close").on_press(ScreenPress::Sheet(None))),
         )
         .child(
             row()
@@ -126,11 +135,15 @@ pub fn settings(input: &ScreenIn) -> Element {
         panel = panel.child(
             row()
                 .gap(space::M)
-                .child(button("Log").min_width(PHONE_BUTTON).on_press(Press::Log))
+                .child(
+                    button("Log")
+                        .min_width(PHONE_BUTTON)
+                        .on_press(ScreenPress::Log),
+                )
                 .child(
                     button("Report bug")
                         .min_width(PHONE_BUTTON)
-                        .on_press(Press::Sheet(Some(Sheet::BugReport))),
+                        .on_press(ScreenPress::Sheet(Some(Sheet::BugReport))),
                 ),
         );
     }
@@ -142,7 +155,7 @@ pub fn settings(input: &ScreenIn) -> Element {
         } else {
             button("Concede")
         };
-        panel = panel.child(concede.on_press(Press::Concede));
+        panel = panel.child(concede.on_press(ScreenPress::Concede));
     }
     panel = panel.child(credits());
     let mut sheet = column()
@@ -181,7 +194,7 @@ fn graphics(chosen: Graphics, phone: bool) -> Element {
         element
             .min_width(0.0)
             .selected(graphics == chosen)
-            .on_press(Press::Setting(Setting::Graphics(graphics)))
+            .on_press(Setting::Graphics(graphics))
     };
     let choices = [
         choice("Automatic", Graphics::Automatic),
@@ -210,7 +223,7 @@ fn level(label: &str, setting: Setting) -> Element {
         .gap(space::M)
         .align_items(Align::Center)
         .child(text(label))
-        .child(slider(label, setting))
+        .child(slider(label, setting.level().unwrap_or(0), setting))
 }
 
 /// Who made the music and sounds, each author with their license and their packs.

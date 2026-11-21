@@ -4,11 +4,11 @@
 
 use glam::Vec2;
 
-use super::{Client, Platform};
+use super::{Client, Input, Platform, Press};
 use crate::command::Request;
-use crate::element::Press;
+
 use crate::frame::ElementId;
-use crate::input::{Input, Key, KeyCode, Pointer, TextChange};
+use crate::input::{Key, KeyCode, Pointer, TextChange};
 use crate::layout::Edit;
 use crate::widgets::FieldState;
 
@@ -63,7 +63,7 @@ impl Client {
         if let Some(text) = edited.text
             && let Some(id) = self.layer.edited_id()
         {
-            self.press(&Press::Field(id, text));
+            self.dispatch_press(&Press::Field(id, text));
         }
         if let Some(copied) = edited.copy {
             self.requests.push_back(Request::Copy(copied));

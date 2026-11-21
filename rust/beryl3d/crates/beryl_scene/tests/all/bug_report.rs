@@ -7,13 +7,14 @@ use beryl_protocol::GameUpdate;
 use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::protocol::{CardType, Side, ZoneName};
 use beryl_protocol::script::{Act, Table as Played, time_script};
+use beryl_scene::Input;
 use beryl_scene::agent::{Layout, TreeOptions, tree};
 use beryl_scene::command::Request;
 use beryl_scene::driver::{Duration, Page, Recording};
 use beryl_scene::frame::{Frame, StateBits, Wake};
 use beryl_scene::input::{
-    Button, Input, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase,
-    Rect, Size,
+    Button, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase, Rect,
+    Size,
 };
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder};
 use beryl_scene::{Client, Config};

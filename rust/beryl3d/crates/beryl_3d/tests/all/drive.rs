@@ -6,9 +6,10 @@
 use beryl_3d::fixture::Fixture;
 use beryl_3d::load;
 use beryl_host::{Class, Draw, Drive, Feed, FrameLoop, Shown, Ticked, Ticks};
+use beryl_scene::Input;
 use beryl_scene::agent::{TreeOptions, tree};
 use beryl_scene::frame::{Frame, Wake};
-use beryl_scene::input::{Input, Insets, Size};
+use beryl_scene::input::{Insets, Size};
 use beryl_scene::{Client, Config};
 use beryl_session::protocol::Side;
 

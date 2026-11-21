@@ -168,8 +168,8 @@ fn record(builder: &mut FrameBuilder<'_>, run: &EffectRun, pose: &Pose, half: Ve
     let size = (half * 2.0 * scale).extend(1.0);
     let model = Affine3A::from_scale_rotation_translation(size, pose.rotation, above(pose));
     builder.effect(EffectLook {
-        effect: run.effect,
-        on: run.on,
+        name: run.effect.name(),
+        on: Some(run.on),
         model: Draw::glow(model, [0; 4], sprites::HALO, progress).model,
         opacity,
     });

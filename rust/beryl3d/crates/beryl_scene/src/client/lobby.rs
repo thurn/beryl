@@ -6,13 +6,14 @@
 //! (`SessionCommand::DeckImport`), and loads the deck it gets back. The lobby gives way to the table when its game
 //! starts, and the table goes back to the lobby when a game ends.
 
+use crate::manual::LobbyPress;
 use beryl_protocol::SessionError;
 use beryl_protocol::ipc::decks::{DeckImportReply, DeckImportRequest, SavedDeck};
 use beryl_protocol::ipc::{LobbyChange, LobbySettings, LobbyUpdate, TableRefused};
 
 use super::Client;
 use crate::command::SessionCommand;
-use crate::element::LobbyPress;
+
 use crate::manual::lobby::{self, DeckPanel};
 use crate::screens::Screen;
 use crate::widgets::FieldState;

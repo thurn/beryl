@@ -9,12 +9,13 @@ use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::prompt::{ButtonId, Click, ClickRequest};
 use beryl_protocol::protocol::{Side, ZoneName};
 use beryl_scene::Client;
+use beryl_scene::Input;
 use beryl_scene::agent::checks::{on_screen, overlap, phone_sizes, reachable};
 use beryl_scene::agent::{Context, Fault, Layout};
 use beryl_scene::command::SessionCommand;
 use beryl_scene::driver::{Duration, Page, Recording};
 use beryl_scene::frame::{Frame, Role};
-use beryl_scene::input::{Input, Insets, PointerPhase, Size};
+use beryl_scene::input::{Insets, PointerPhase, Size};
 use beryl_scene::table::{Window, phone_bands};
 use beryl_scene::testing::ViewBuilder;
 

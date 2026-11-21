@@ -6,9 +6,7 @@ use std::collections::BTreeMap;
 use crate::frame::Sprite;
 use crate::input::IconCell;
 
-/// An icon of the flat layer.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct IconId(pub u16);
+pub use crate::atlas::IconId;
 
 pub const GEAR: IconId = IconId(0);
 pub const BUG: IconId = IconId(1);
@@ -78,9 +76,6 @@ pub const fn atlas_size(icon: IconId) -> u16 {
     }
 }
 
-/// How many icons there are: every id is below this.
-pub const COUNT: u16 = ORB + crate::art::orb::ICONS;
-
 /// The step icons from id 11, filled and outlined in turn, offset by `outlined`.
 const fn steps(outlined: u16) -> [IconId; 12] {
     let mut ids = [IconId(0); 12];
@@ -128,4 +123,39 @@ impl Icons {
     pub fn shadow(&self, icon: IconId, size: u16, shadow: u8) -> Option<Sprite> {
         self.table.get(&(icon, size, shadow)).copied()
     }
+}
+
+/// One layer of an icon assembled from several atlas cells.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct IconLayer {
+    pub icon: IconId,
+    /// The cell's rectangle in artwork units.
+    pub view: [f32; 4],
+    pub color: [u8; 4],
+    /// Draw this layer only when the icon is highlighted.
+    pub highlight: bool,
+}
+
+/// An icon whose atlas cells are drawn in order, each at its own box in the artwork.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LayeredIcon {
+    pub layers: &'static [IconLayer],
+    /// The artwork's top left corner, relative to the origin of its layers.
+    pub origin: [f32; 2],
+    /// Logical points per artwork unit.
+    pub scale: f32,
+    pub highlighted: bool,
+}
+
+/// The width in logical points of a cell `units` wide drawn at `scale` points to a unit: a
+/// whole number of points, the size an icon is keyed by.
+#[must_use]
+pub fn cell_width(units: f32, scale: f32) -> u16 {
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "a cell is a few hundred points wide"
+    )]
+    let width = (units * scale).round().max(1.0) as u16;
+    width
 }

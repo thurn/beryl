@@ -9,13 +9,13 @@ use std::str::FromStr;
 use beryl_inspect::pages::{page, recording};
 use beryl_protocol::DecisionId;
 use beryl_protocol::protocol::{ObjectView, RefusalView, Side, Status};
+use beryl_scene::Input;
 use beryl_scene::agent::Layout;
 use beryl_scene::command::SessionCommand;
 use beryl_scene::driver::{Duration, Moment, Page};
 use beryl_scene::frame::{Frame, Role, Wake};
 use beryl_scene::input::{
-    Button, Input, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase,
-    Size,
+    Button, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase, Size,
 };
 use beryl_scene::{Client, Config, sound};
 use glam::Vec2;

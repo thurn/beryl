@@ -10,15 +10,17 @@ use beryl_protocol::protocol::{
     DecisionId, DecisionView, Kind, SessionId, Side, Status, Why, ZoneName,
 };
 use beryl_protocol::script::Act;
+use beryl_scene::Input;
+use beryl_scene::Press;
 use beryl_scene::agent::checks::text_fits;
 use beryl_scene::agent::tree::{TreeOptions, tree};
 use beryl_scene::agent::{Context, Layout, Rule};
 use beryl_scene::command::{Reply, SessionCommand};
-use beryl_scene::element::{Press, floats, row, text};
+use beryl_scene::element::{Action, floats, row, text};
 use beryl_scene::frame::{Frame, FrameBuilder, Material, Place, Role, StateBits};
 use beryl_scene::input::{
-    AssetReady, Button, GlyphCell, Input, Insets, Modifiers, Pointer, PointerKind, PointerPhase,
-    Size, Tier,
+    AssetReady, Button, GlyphCell, Insets, Modifiers, Pointer, PointerKind, PointerPhase, Size,
+    Tier,
 };
 use beryl_scene::layout::{FloatLook, Layer};
 use beryl_scene::table::Table;
@@ -372,7 +374,11 @@ fn a_title_too_long_for_its_box_fails_text_fits() {
     ));
     let mut frame = Frame::with_capacity(16, 16, 1024);
     let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
-    layer.write(&mut builder, Table::default().camera(), true);
+    layer.write(
+        &mut builder,
+        &Table::default().camera().screen_plane(),
+        true,
+    );
     let frame = builder.finish();
     let faults = text_fits(frame, &context());
     assert!(!faults.is_empty());
@@ -599,7 +605,11 @@ pub(super) fn write_layer(layer: &mut Layer, open: bool) -> Frame {
     let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
     let (layout_nodes, text_runs) = layer.take_work();
     builder.layout_work(layout_nodes, text_runs);
-    layer.write(&mut builder, Table::default().camera(), open);
+    layer.write(
+        &mut builder,
+        &Table::default().camera().screen_plane(),
+        open,
+    );
     builder.finish().clone()
 }
 
@@ -743,7 +753,7 @@ fn a_float_with_a_press_takes_presses_and_one_without_does_not() {
     let id = frame.resolved[find(&frame, Role::Text, "20")].id;
     assert_eq!(
         layer.press_at(at, false),
-        Some((id, Press::Button(ButtonId::Auto), true)),
+        Some((id, Action::new(Press::Button(ButtonId::Auto)), true)),
         "a kept float keeps its look and takes presses with no prompt open"
     );
 }

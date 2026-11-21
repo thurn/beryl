@@ -7,9 +7,10 @@ use std::time::Instant;
 
 use beryl_render::{Picture, Readback};
 use beryl_scene::Client;
+use beryl_scene::Input;
 use beryl_scene::command::Request;
 use beryl_scene::frame::{Frame, Wake};
-use beryl_scene::input::{Input, Tier};
+use beryl_scene::input::Tier;
 use beryl_scene::settings::Graphics;
 
 use crate::rate::{Paced, RateRule, Step, Thresholds};

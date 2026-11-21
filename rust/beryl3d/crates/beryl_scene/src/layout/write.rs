@@ -5,7 +5,6 @@
 
 use std::borrow::Cow;
 
-use beryl_protocol::protocol::Side;
 use glam::{Affine3A, Vec2, Vec3};
 
 use super::edit::Marks;
@@ -13,14 +12,20 @@ use super::float::Float;
 use super::panel::{Chain, look_of, mask_of, panel, write_box, write_mask};
 use super::shadows::write_icon_shadows;
 use super::{Layer, Node, text_top};
-use crate::art::orb;
 use crate::element::{Display, Element, Overflow, Shown, TextAlign};
-use crate::faces::{CARD_BACK, Faces};
+use crate::frame::text::{BlockLook, faded, write_block};
 use crate::frame::{Band, Draw, FrameBuilder, Missing, NameRef, Place, Resolved, Role, StateBits};
+use crate::geometry::{CARD_HEIGHT, CARD_WIDTH, plane::ScreenPlane, zoom_rect};
 use crate::input::{FaceId, FaceSize, Rect};
-use crate::table::{CARD_HEIGHT, CARD_WIDTH, Camera, zoom_rect};
-use crate::text::{self, BlockLook, faded};
+use crate::text;
 use crate::tokens::color;
+use crate::widgets::icons::{LayeredIcon, cell_width};
+
+/// Looks up texture layers for faces shown in the flat layer.
+pub struct FaceLayers<'a> {
+    pub back: FaceId,
+    pub layer: &'a dyn Fn(FaceId, FaceSize) -> Option<u16>,
+}
 
 /// How a node and everything under it is drawn: where its tree's top left corner stands, how
 /// opaque it is, the color of its text, the clip it is drawn under, whether the pointer goes
@@ -35,7 +40,7 @@ pub(super) struct Look<'a> {
     pub(super) clip: Option<(Rect, u8)>,
     /// It or an element over it lets the pointer through (`Style::passes`).
     passes: bool,
-    faces: Option<&'a Faces>,
+    faces: Option<&'a FaceLayers<'a>>,
     /// The filter functions of it and the elements over it (`Style::filter`).
     pub(super) filters: Chain,
     /// Whether what waits for the table to settle is drawn (`Element::waits`).
@@ -60,7 +65,7 @@ impl Layer {
     /// waits for the table to settle (`Element::waits`) unless the layer is `open`, then every
     /// other float, then the screen's children that filter what is drawn under them
     /// (`over_floats`).
-    pub fn write(&self, builder: &mut FrameBuilder, camera: &Camera, open: bool) {
+    pub fn write(&self, builder: &mut FrameBuilder, camera: &ScreenPlane, open: bool) {
         self.write_with(builder, camera, open, None);
     }
 
@@ -69,9 +74,9 @@ impl Layer {
     pub fn write_with(
         &self,
         builder: &mut FrameBuilder,
-        camera: &Camera,
+        camera: &ScreenPlane,
         open: bool,
-        faces: Option<&Faces>,
+        faces: Option<&FaceLayers<'_>>,
     ) {
         let write_float = |float: &Float, builder: &mut FrameBuilder| {
             let rect = float.node.rect;
@@ -173,7 +178,7 @@ impl Layer {
         top: bool,
         mut look: Look<'_>,
         builder: &mut FrameBuilder,
-        camera: &Camera,
+        camera: &ScreenPlane,
     ) -> Option<u32> {
         if node.element.style.display == Display::None || (node.element.waits && !look.open) {
             return None;
@@ -295,7 +300,7 @@ impl Layer {
         state: StateBits,
         look: Look<'_>,
         builder: &mut FrameBuilder,
-        camera: &Camera,
+        camera: &ScreenPlane,
     ) {
         let clip = look.clip.map_or(0, |(_, entry)| entry);
         let content = moved(node.content, look.point);
@@ -358,13 +363,8 @@ impl Layer {
                 }
                 draw
             }
-            Some(Shown::Orb {
-                side,
-                active,
-                scale,
-            }) => {
-                let missing =
-                    self.write_orb((side, active, scale), content, look, clip, builder, camera);
+            Some(Shown::Layers(icon)) => {
+                let missing = self.write_icon_layers(icon, content, look, clip, builder, camera);
                 if let Some(missing) = missing {
                     builder.undrawn(index, missing);
                 }
@@ -376,32 +376,30 @@ impl Layer {
         builder.draw(Band::Layer, draw);
     }
 
-    /// Writes the layers of `side`'s life orb (`art::orb::LAYERS`) in order, its art's box
-    /// filling `content`. Each layer's cell is centred where its box lies in the art, so that a
-    /// cell a whole number of points wide is off by under half a point at its edges. Returns the
-    /// first layer the atlas holds no cell for, which draws nothing.
-    fn write_orb(
+    /// Writes the cells of a layered icon in art order. Each cell is centred in its artwork
+    /// box, so rounding its width to whole points moves its edges by under half a point.
+    /// Returns the first cell missing from the atlas.
+    fn write_icon_layers(
         &self,
-        (side, active, scale): (Side, bool, u8),
+        icon: LayeredIcon,
         content: Rect,
         look: Look<'_>,
         clip: u8,
         builder: &mut FrameBuilder,
-        camera: &Camera,
+        camera: &ScreenPlane,
     ) -> Option<Missing> {
-        let units = orb::SCALES[usize::from(scale)];
-        let [left, top, ..] = orb::ART;
+        let units = icon.scale;
+        let [left, top] = icon.origin;
         let mut missing = None;
-        for (at, layer) in orb::LAYERS.iter().enumerate() {
-            if layer.active && !active {
+        for layer in icon.layers {
+            if layer.highlight && !icon.highlighted {
                 continue;
             }
-            let [x, y, w, h] = layer.views[orb::seat(side)];
-            let width = orb::cell_width(w, units);
-            let icon = orb::icon(side, at);
-            let Some(sprite) = self.icons.get(icon, width) else {
+            let [x, y, w, h] = layer.view;
+            let width = cell_width(w, units);
+            let Some(sprite) = self.icons.get(layer.icon, width) else {
                 missing.get_or_insert(Missing::Icon {
-                    icon: icon.0,
+                    icon: layer.icon.0,
                     size: width,
                 });
                 continue;
@@ -440,7 +438,7 @@ impl Layer {
         state: StateBits,
         look: Look<'_>,
         builder: &mut FrameBuilder,
-        camera: &Camera,
+        camera: &ScreenPlane,
     ) {
         let Some(block) = &node.block else {
             return;
@@ -501,7 +499,7 @@ impl Layer {
             clip: look.clip.map_or(0, |(_, entry)| entry),
             shadows: &element.style.drop_shadow,
         };
-        let missing = text::write_block(builder, block, origin, &block_look);
+        let missing = write_block(builder, block, origin, &block_look);
         if missing > 0 {
             builder.undrawn(index, Missing::Glyphs(missing));
         }
@@ -542,7 +540,7 @@ fn write_marks(
     behind: bool,
     look: Look,
     builder: &mut FrameBuilder,
-    camera: &Camera,
+    camera: &ScreenPlane,
 ) {
     // A field's text starts at the top of its content box, as `write_text` draws it.
     let origin = look.point + Vec2::new(node.content.x, node.content.y);
@@ -571,20 +569,21 @@ fn write_marks(
 /// The record that draws `face` flat in the box `transform` takes the unit square to: a card
 /// with the `Card` material, from its full-size layer when `size` asks for one and it has
 /// landed, and otherwise from its board-size layer, enlarged. `None` while it has neither.
-fn face_draw(faces: &Faces, face: FaceId, size: FaceSize, transform: Affine3A) -> Option<Draw> {
+fn face_draw(
+    faces: &FaceLayers<'_>,
+    face: FaceId,
+    size: FaceSize,
+    transform: Affine3A,
+) -> Option<Draw> {
     let full = match size {
-        FaceSize::Full => faces.full_layer_of(face),
+        FaceSize::Full => (faces.layer)(face, FaceSize::Full),
         FaceSize::Board => None,
     };
     let (size, layer) = match full {
         Some(layer) => (FaceSize::Full, layer),
-        None => (FaceSize::Board, faces.board_layer_of(face)?),
+        None => (FaceSize::Board, (faces.layer)(face, FaceSize::Board)?),
     };
-    let back = match size {
-        FaceSize::Full => faces.full_layer_of(CARD_BACK),
-        FaceSize::Board => faces.board_layer_of(CARD_BACK),
-    }
-    .unwrap_or(0);
+    let back = (faces.layer)(faces.back, size).unwrap_or(0);
     // The card mesh is a card's size in millimetres about its middle; the box is the unit square.
     let card = Affine3A::from_scale(Vec3::new(1.0 / CARD_WIDTH, 1.0 / CARD_HEIGHT, 1.0));
     Some(Draw::card(

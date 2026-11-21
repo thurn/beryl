@@ -10,9 +10,10 @@ use beryl_protocol::prompt::{
 use beryl_protocol::protocol::{
     Candidate, CandidateView, DecisionView, Kind, ObjectId, SessionId, Side, Status, ZoneName,
 };
+use beryl_scene::Input;
 use beryl_scene::command::SessionCommand;
 use beryl_scene::frame::{Frame, Role, StateBits};
-use beryl_scene::input::{Input, Insets, PointerPhase, Size};
+use beryl_scene::input::{Insets, PointerPhase, Size};
 use beryl_scene::table::TraySpace;
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder};
 use beryl_scene::{Client, Config};

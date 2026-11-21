@@ -19,11 +19,12 @@ use std::collections::VecDeque;
 use std::path::Path;
 
 use beryl_scene::Client;
+use beryl_scene::Input;
 use beryl_scene::agent::{locate, uncovered};
 use beryl_scene::driver::{Action, Duration, point as written_point};
 use beryl_scene::frame::Wake;
 use beryl_scene::input::{
-    Button, Input, Key, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase, TextChange,
+    Button, Key, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase, TextChange,
 };
 use glam::Vec2;
 

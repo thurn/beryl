@@ -10,13 +10,13 @@ use super::shadows::{ShadowBox, write_box_shadows};
 use super::write::{Look, clip_inside, intersection, scaled};
 use crate::element::paint::{blur_of, filtered};
 use crate::element::{Border, Filter, Gradient, Shadow, Shape, Shown, Stop};
+use crate::frame::text::faded;
 use crate::frame::{
     Band, Draw, ElementLook, FrameBuilder, Role, SIDE_BOTTOM, SIDE_LEFT, SIDE_RIGHT, SIDE_TOP,
     StateBits, gradient_reach,
 };
+use crate::geometry::plane::ScreenPlane;
 use crate::input::Rect;
-use crate::table::Camera;
-use crate::text::faded;
 use crate::tokens::{color, shadow, size};
 
 /// The most filter functions an element and its ancestors apply together; any past these, the
@@ -264,7 +264,7 @@ pub(super) fn write_box(
     rect: Rect,
     look: &Look,
     builder: &mut FrameBuilder,
-    camera: &Camera,
+    camera: &ScreenPlane,
 ) {
     let style = &node.element.style;
     let shadows = box_shadows(node, state);
@@ -328,7 +328,7 @@ fn write_panel(
     rect: Rect,
     look: &Look,
     builder: &mut FrameBuilder,
-    camera: &Camera,
+    camera: &ScreenPlane,
 ) {
     let paint = |color: [u8; 4]| faded(look.filters.color(color), look.opacity);
     let clip = look.clip.map_or(0, |(_, entry)| entry);
@@ -339,7 +339,7 @@ fn write_panel(
     // The top side's two clips, left of the legend and right of it, each cut to the clip the
     // element is under.
     let opening = legend.map(|legend| {
-        let scale = camera.window.scale;
+        let scale = camera.scale();
         let left = Rect {
             width: legend.left.max(0.0),
             ..rect
@@ -415,7 +415,7 @@ fn write_gradient(
     radius: f32,
     look: &Look,
     builder: &mut FrameBuilder,
-    camera: &Camera,
+    camera: &ScreenPlane,
 ) {
     let size = Vec2::new(rect.width, rect.height);
     let resolved = gradient

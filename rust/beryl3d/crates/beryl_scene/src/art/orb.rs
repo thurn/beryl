@@ -18,7 +18,7 @@
 //! gradient becomes coverage that fades along it: the bezel's four colors are four layers, each
 //! opaque where the next one up starts and fading out where it ends, so that each pixel shows
 //! the blend of the two colors its gradient runs between. A blur is drawn into the coverage too.
-//! The game screen draws an orb as one element showing `Shown::Orb`, whose layers the flat layer
+//! The game screen draws an orb as one element showing `Shown::Layers`, whose layers the flat layer
 //! draws from these cells (`layout::write`).
 
 use beryl_protocol::protocol::Side;
@@ -26,7 +26,7 @@ use glam::Vec2;
 
 use crate::tokens::size;
 use crate::widgets::IconId;
-use crate::widgets::icons::ORB;
+use crate::widgets::icons::{IconLayer, LayeredIcon, ORB};
 
 /// The view box of the web's orb art: its left, top, width and height, about the orb's middle.
 pub const ART: [f32; 4] = [-136.0, -57.0, 272.0, 116.0];
@@ -362,18 +362,44 @@ pub const fn icon(side: Side, at: usize) -> IconId {
     IconId(ORB + (seat(side) * LAYERS.len() + at) as u16)
 }
 
-/// The width in logical points of a cell `units` wide drawn at `scale` points to a unit: a
-/// whole number of points, the size an icon is keyed by.
-#[must_use]
-pub fn cell_width(units: f32, scale: f32) -> u16 {
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "a cell is a few hundred points wide"
-    )]
-    let width = (units * scale).round().max(1.0) as u16;
-    width
+const fn icon_layers(side: Side) -> [IconLayer; LAYERS.len()] {
+    let mut layers = [IconLayer {
+        icon: IconId(0),
+        view: [0.0; 4],
+        color: [0; 4],
+        highlight: false,
+    }; LAYERS.len()];
+    let mut at = 0;
+    while at < LAYERS.len() {
+        let layer = &LAYERS[at];
+        layers[at] = IconLayer {
+            icon: icon(side, at),
+            view: layer.views[seat(side)],
+            color: layer.color,
+            highlight: layer.active,
+        };
+        at += 1;
+    }
+    layers
 }
+
+/// The art filling an orb's box, lit if its seat is active.
+#[must_use]
+pub fn artwork(side: Side, active: bool, scale: u8) -> LayeredIcon {
+    const VIEWER: [IconLayer; LAYERS.len()] = icon_layers(Side::You);
+    const OPPONENT: [IconLayer; LAYERS.len()] = icon_layers(Side::Opponent);
+    LayeredIcon {
+        layers: match side {
+            Side::You => &VIEWER,
+            Side::Opponent => &OPPONENT,
+        },
+        origin: [ART[0], ART[1]],
+        scale: SCALES[usize::from(scale)],
+        highlighted: active,
+    }
+}
+
+pub use crate::widgets::icons::cell_width;
 
 /// The height in units of the top of the core's box on `side`'s orb, from which the bezel's
 /// gradient runs down: the opponent's core is mirrored about the orb's middle.

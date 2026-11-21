@@ -8,6 +8,7 @@ mod look;
 mod order;
 mod paint;
 mod rings;
+pub mod text;
 mod undrawn;
 
 use beryl_protocol::protocol::{RowName, Side, ZoneName};
@@ -23,14 +24,18 @@ pub use paint::{GRADIENTS, GradientEntry, MaskEntry, PaintTable, Paints};
 pub use rings::{LIFTED, Lifted, RINGS, Ring, Ringed};
 pub use undrawn::{Missing, Undrawn};
 
-use crate::element::Shadow;
-use crate::input::{Rect, Tier};
+use crate::atlas::Tier;
+use crate::geometry::Rect;
+use crate::paint::Shadow;
 
 /// A card's element id is its object's slot in the view, and the face of that card in the
 /// Revealed Cards pile's is `REVEALED_FACE` more. A flat-layer element's is given when it first
 /// enters the tree, and kept while it stays.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ElementId(pub u32);
+
+/// The first reserved id in the range used for stack abilities, above all card and UI ids.
+pub const ABILITY_IDS: u32 = 1 << 20;
 
 /// The first element id of the arrows: an arrow's id is this plus its index among the open
 /// spans.

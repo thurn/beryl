@@ -1,11 +1,13 @@
 //! Clocked host inputs, extra time between views of synthetic recordings, and when each view
 //! was given.
 
+use crate::client;
+use client::Input;
 use std::sync::Arc;
 
 use super::{Duration, Page, REPLY_DELAY, STILL_LIMIT};
 use crate::frame::Wake;
-use crate::input::{Input, Pointer};
+use crate::input::Pointer;
 
 #[derive(Default)]
 pub(super) struct Cues {

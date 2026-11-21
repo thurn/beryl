@@ -9,8 +9,9 @@ use std::time::{Duration, Instant};
 use beryl_assets::light;
 use beryl_render::{Limits, Renderer, Target};
 use beryl_scene::Client;
+use beryl_scene::Input;
 use beryl_scene::frame::Frame;
-use beryl_scene::input::{Input, Insets, Size};
+use beryl_scene::input::{Insets, Size};
 
 use crate::assets::{Faces, Glyphs, Scans};
 use crate::frames::{Chosen, Draw, Feed, FrameLoop, Opened, Opening, Shown, Sleep, Ticks, When};

@@ -9,9 +9,11 @@ use beryl_art::Origins;
 use beryl_host::{Faces, Scans, When};
 use beryl_protocol::card_records::CardRecords;
 use beryl_render::{Limits, Renderer};
-use beryl_scene::element::Press;
+use beryl_scene::Input;
+use beryl_scene::Press;
+use beryl_scene::element::Action;
 use beryl_scene::faces::CARD_BACK;
-use beryl_scene::input::{FaceId, Input};
+use beryl_scene::input::FaceId;
 use beryl_scene::screens::Screen;
 use beryl_scene::{Client, Config};
 
@@ -114,10 +116,11 @@ fn every_face_list_given_is_prepared_even_one_equal_to_the_last() {
 fn the_gallerys_faces_never_land_in_the_matchs() {
     let mut host = Host::new("gallery");
     host.client.handle(no_records());
-    host.client.press(&Press::Open(Screen::Gallery));
+    host.client
+        .press(&Action::new(Press::Open(Screen::Gallery)));
     assert!(host.client.showing_gallery());
     host.until(|client| client.face_layers().board_layer_of(FaceId(0)).is_some());
-    host.client.press(&Press::Open(Screen::Start));
+    host.client.press(&Action::new(Press::Open(Screen::Start)));
     assert!(!host.client.showing_gallery());
     assert_eq!(host.board_layer(CARD_BACK), None);
 }
@@ -128,7 +131,8 @@ fn the_gallerys_faces_never_land_in_the_matchs() {
 #[test]
 fn held_faces_are_uploaded_one_a_frame_before_it() {
     let mut host = Host::new("held");
-    host.client.press(&Press::Open(Screen::Gallery));
+    host.client
+        .press(&Action::new(Press::Open(Screen::Gallery)));
     host.deliver(When::AfterFrame);
     let count = host.client.faces().faces().len();
     assert!(count > 2, "the gallery lists {count} faces");

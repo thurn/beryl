@@ -7,11 +7,12 @@ use std::cell::Cell;
 
 use beryl_inspect::pages::recording;
 use beryl_protocol::protocol::Side;
+use beryl_scene::Input;
 use beryl_scene::driver::{REPLY_DELAY, TICK, plays_on};
 use beryl_scene::frame::Role;
 use beryl_scene::frame::Wake;
 use beryl_scene::input::Size;
-use beryl_scene::input::{Button, Input, Insets, Modifiers, Pointer, PointerKind, PointerPhase};
+use beryl_scene::input::{Button, Insets, Modifiers, Pointer, PointerKind, PointerPhase};
 use beryl_scene::{Client, Config};
 use glam::Vec2;
 

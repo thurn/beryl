@@ -143,8 +143,8 @@ fn a_common_counter_name_adds_that_counter() {
 #[test]
 fn a_refused_click_shakes_the_card_clicked_and_an_accepted_one_does_not() {
     use beryl_protocol::ipc::{TableActReply, TableRefusalReason, TableRefused};
+    use beryl_scene::Input;
     use beryl_scene::command::Reply;
-    use beryl_scene::input::Input;
 
     const MS: u64 = 1_000_000;
     let view = table_view();
@@ -198,8 +198,8 @@ fn a_refused_click_shakes_the_card_clicked_and_an_accepted_one_does_not() {
 #[test]
 fn a_refused_counter_press_shakes_that_button_and_an_accepted_one_does_not() {
     use beryl_protocol::ipc::{TableActReply, TableRefusalReason, TableRefused};
+    use beryl_scene::Input;
     use beryl_scene::command::Reply;
-    use beryl_scene::input::Input;
 
     const MS: u64 = 1_000_000;
     let view = table_view();

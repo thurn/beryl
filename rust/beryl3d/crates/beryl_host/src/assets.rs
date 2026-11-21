@@ -27,8 +27,9 @@ use beryl_assets::glyphs::{GlyphWorker, prepare_latin};
 use beryl_assets::{Config, Format, Prepared, Preparer, default_workers};
 use beryl_render::Renderer;
 use beryl_scene::Client;
+use beryl_scene::Input;
 use beryl_scene::frame::Wake;
-use beryl_scene::input::{AssetReady, FaceSize, Input};
+use beryl_scene::input::{AssetReady, FaceSize};
 
 use crate::frames::When;
 

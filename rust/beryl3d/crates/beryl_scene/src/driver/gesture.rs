@@ -2,11 +2,13 @@
 //! drag between two points, let go or held; and the point of the window an action on a locator
 //! acts at.
 
+use crate::client;
+use client::Input;
 use glam::Vec2;
 
 use super::{DRAG_MOVES, DRAG_STEP, Page, point};
 use crate::agent::uncovered;
-use crate::input::{Button, Input, Modifiers, Pointer, PointerKind, PointerPhase};
+use crate::input::{Button, Modifiers, Pointer, PointerKind, PointerPhase};
 
 impl Page {
     /// Where an action on `locator`'s element happens: the centre of its largest uncovered

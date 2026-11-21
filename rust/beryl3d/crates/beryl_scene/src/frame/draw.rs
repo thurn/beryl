@@ -6,9 +6,9 @@
 
 use glam::{Affine3A, Vec2};
 
-use crate::element::Shadow;
-use crate::element::paint::Geometry;
-use crate::input::FaceSize;
+use crate::atlas::FaceSize;
+use crate::paint::Geometry;
+use crate::paint::Shadow;
 
 /// One shape to draw. 80 bytes, laid out as the renderer's instance buffer expects.
 #[repr(C)]
@@ -94,7 +94,7 @@ pub mod sprites {
     use glam::Vec2;
 
     use super::Sprite;
-    use crate::table::{CARD_HEIGHT, CARD_WIDTH};
+    use crate::geometry::{CARD_HEIGHT, CARD_WIDTH};
 
     /// The atlas page that holds them.
     pub const PAGE: u16 = 0;

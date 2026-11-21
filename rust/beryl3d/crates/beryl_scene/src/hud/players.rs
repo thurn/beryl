@@ -88,7 +88,7 @@ pub fn core_box(side: Side, art: Rect) -> Rect {
 }
 
 /// `side`'s orb as `view` shows it: one element the size of the web's orb art, showing the art
-/// (`Shown::Orb`).
+/// (`Shown::Layers`).
 fn orb(view: &PlayerView, side: Side, window: Window) -> Element {
     let active = view.turn.active == side;
     let life = match side {
@@ -110,11 +110,7 @@ fn orb(view: &PlayerView, side: Side, window: Window) -> Element {
             incoming(view, side)
                 .map(|damage| incoming_text(damage, life, side, width * units, window.phone())),
         );
-    element.shows = Some(Shown::Orb {
-        side,
-        active,
-        scale,
-    });
+    element.shows = Some(Shown::Layers(orb::artwork(side, active, scale)));
     // On a phone the table raises the viewer's total over a hand of several rows
     // (`table::phone::your_life`), so the orb follows the player's anchor on every frame.
     let middle = Vec2::new(0.5, 0.5);

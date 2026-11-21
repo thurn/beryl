@@ -30,7 +30,11 @@ fn outer_shadows_go_under_the_panel_and_inset_ones_over_it() {
     layer.show(Some(holder().child(panel)));
     let mut frame = Frame::with_capacity(16, 16, 64);
     let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
-    layer.write(&mut builder, Table::default().camera(), true);
+    layer.write(
+        &mut builder,
+        &Table::default().camera().screen_plane(),
+        true,
+    );
     let frame = builder.finish();
     let drawn: Vec<(u8, u16)> = (frame.draws.iter())
         .filter(|draw| {

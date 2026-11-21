@@ -6,7 +6,7 @@
 //!
 //! - An icon is filled where the player stops with the stack empty in that player's turns
 //!   (`Settings::stops`), outlined and dimmer where they do not. A press on it sends
-//!   `Press::Stop`, which sets or clears that stop.
+//!   `GamePress::Stop`, which sets or clears that stop.
 //! - No player gets priority in the untap step or, normally, in cleanup, so those two are never
 //!   stops: their icons are dimmer still and take no press. [CR 502.4]: "No player receives
 //!   priority during the untap step, so no spells can be cast or resolved and no abilities can
@@ -28,12 +28,13 @@
 //! [CR 502.4]: https://yawgatog.com/resources/magic-rules/#R5024
 //! [CR 514.3]: https://yawgatog.com/resources/magic-rules/#R5143
 
+use crate::hud::GamePress;
 use beryl_protocol::protocol::{Side, Step, StepSet};
 use glam::Vec2;
 
 use super::players::face_centre;
 use crate::data::space::hud::{STEP_FIXED, STEP_OFF};
-use crate::element::{Anchor, Display, Element, Press, Shadow, Shown, Track, holder};
+use crate::element::{Action, Anchor, Display, Element, Shadow, Shown, Track, holder};
 use crate::frame::Role;
 use crate::hud::HudIn;
 use crate::table::Window;
@@ -137,7 +138,7 @@ pub(crate) fn table_tracks(
     active: Side,
     lit: usize,
     window: Window,
-    press: fn(usize, bool) -> Press,
+    press: fn(usize, bool) -> Action,
 ) -> Element {
     holder().name("steps").children([
         rows(Side::You, (Mode::Table { lit, press }, active), window),
@@ -153,7 +154,7 @@ enum Mode {
     Stops(StepSet, Option<Step>),
     Table {
         lit: usize,
-        press: fn(usize, bool) -> Press,
+        press: fn(usize, bool) -> Action,
     },
 }
 
@@ -279,7 +280,7 @@ fn icon(at: usize, whose: &str, side: Side, set: StepSet, current: Option<Step>)
         .width(size::STEP)
         .height(size::STEP)
         .selected(on)
-        .on_press(Press::Stop {
+        .on_press(GamePress::Stop {
             step: last_step,
             theirs: side == Side::Opponent,
         })
@@ -289,7 +290,7 @@ fn icon(at: usize, whose: &str, side: Side, set: StepSet, current: Option<Step>)
 /// The manual step track icon at `at`, lit if `here`. Every icon is a toggle, as the
 /// web's track is a `.step-toggle` button round each icon. An unlit step that never stops a
 /// game (Untap and Cleanup) is faded further, as the web's `.step-fixed` is.
-fn track_icon(at: usize, whose: &str, here: bool, press: Press) -> Element {
+fn track_icon(at: usize, whose: &str, here: bool, press: Action) -> Element {
     let name = format!("{whose} {}", STEP_STOPS[at].label);
     let faded = if STEP_STOPS[at].steps.is_empty() {
         STEP_FIXED
@@ -308,11 +309,12 @@ fn track_icon(at: usize, whose: &str, here: bool, press: Press) -> Element {
         if here { 1.0 } else { faded },
         here,
     );
-    Element::new(Role::Toggle)
+    let mut icon = Element::new(Role::Toggle)
         .name(&name)
         .width(size::STEP)
         .height(size::STEP)
         .selected(here)
-        .on_press(press)
-        .children([glyph])
+        .children([glyph]);
+    icon.press = Some(press);
+    icon
 }

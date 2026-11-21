@@ -12,18 +12,18 @@
 //!
 //! Not built yet: the web's small icon beside the reason.
 
+use crate::hud::GamePress;
 use beryl_protocol::protocol::{Culprit, LossReason, OutcomeView, Side, Stall, Status};
 use glam::Vec2;
 
 use crate::data::space::flat::phone::game_over as metrics;
 use crate::data::space::flat::phone::opening::NARROW_BELOW;
 use crate::data::space::flat::phone::{ACTION_GAP, GUTTER};
-use crate::element::{Align, Anchor, Element, Filter, Justify, Press, Shown, column, holder, text};
+use crate::element::{Align, Anchor, Element, Filter, Justify, Shown, column, holder, text};
 use crate::faces::FaceList;
 use crate::frame::Role;
 use crate::hud::HudIn;
 use crate::input::FaceSize;
-use crate::navigation::Screen;
 use crate::table::{CARD_HEIGHT, CARD_WIDTH};
 use crate::text::TypeStyle;
 use crate::tokens::{color, ratio, size, space, type_style};
@@ -95,12 +95,12 @@ pub fn game_over(input: &HudIn) -> Option<Element> {
     let Ended(outcome) = shown(input)?;
     let title = result_title(outcome);
     if input.result_aside {
-        let back = button(&format!("Back to {title}")).on_press(Press::Result(true));
+        let back = button(&format!("Back to {title}")).on_press(GamePress::Result(true));
         return Some(dock(input, vec![back]));
     }
     let buttons = vec![
-        button("View Battlefield").on_press(Press::Result(false)),
-        primary("New Game").on_press(Press::Open(Screen::Start)),
+        button("View Battlefield").on_press(GamePress::Result(false)),
+        primary("New Game").on_press(GamePress::OpenStart),
     ];
     let mut screen = holder()
         .name("game over screen")

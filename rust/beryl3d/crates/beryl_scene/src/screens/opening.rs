@@ -27,6 +27,7 @@
 //! Not built yet: the web's face-down hand while the viewer has declared a mulligan.
 
 use beryl_protocol::PlayerView;
+use beryl_protocol::prompt::Click;
 use beryl_protocol::prompt::{PromptButton, PromptView, Purpose};
 use beryl_protocol::protocol::{CardHandling, Declaration, ObjectId, Side, Status, ZoneName};
 use beryl_protocol::script::{Mark, Subject};
@@ -35,7 +36,7 @@ use glam::Vec2;
 use crate::data::space::flat::opening as metrics;
 use crate::data::space::flat::phone::opening as phone;
 use crate::data::space::flat::phone::{ACTION_GAP, ACTION_HEIGHT, GUTTER};
-use crate::element::{Align, Anchor, Element, Justify, Overflow, Press, Shown, column, row, text};
+use crate::element::{Action, Align, Anchor, Element, Justify, Overflow, Shown, column, row, text};
 use crate::frame::Role;
 use crate::hud::HudIn;
 use crate::table::{CARD_HEIGHT, CARD_WIDTH, Window};
@@ -186,7 +187,7 @@ pub(crate) struct Presentation<'a> {
     pub slots: usize,
     pub actions: usize,
     pub waiting: bool,
-    pub press: Option<fn(ObjectId) -> Press>,
+    pub press: Option<fn(ObjectId) -> Action>,
     /// The buttons shown side by side under the title (`.opening-choice`): the first is
     /// primary and stands rightmost, as in Arena.
     pub choice: &'a [PromptButton],
@@ -210,11 +211,9 @@ pub(crate) fn present(shown: &Presentation, window: Window) -> Element {
         Sizes::DESKTOP
     };
     let card = |slot: ObjectId, width: f32| {
-        let card = card_box(view, slot, width);
-        match shown.press {
-            Some(press) => card.on_press(press(slot)),
-            None => card,
-        }
+        let mut card = card_box(view, slot, width);
+        card.press = shown.press.map(|press| press(slot));
+        card
     };
     let mut coin = row().name("coin").height(sizes.coin_height);
     coin.style.margin = [0.0, 0.0, sizes.coin_gap, 0.0];
@@ -317,7 +316,7 @@ fn choice(buttons: &[PromptButton]) -> Option<Element> {
             widget(&view.label)
                 .min_width(size::BUTTON_WIDTH)
                 .enabled(view.enabled)
-                .on_press(Press::Button(view.id))
+                .on_press(Click::Button { button: view.id })
         })),
     )
 }

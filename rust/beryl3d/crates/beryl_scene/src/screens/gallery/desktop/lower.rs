@@ -1,11 +1,12 @@
 //! The gallery's lower panels, `04 Cards & states` to `09 Command list`, placed as `desktop`
 //! places the upper ones.
 
+use crate::screens::ScreenPress;
 use glam::{Vec2, Vec3};
 
 use super::super::{GalleryMenu, GalleryQuery, example_button, face};
 use super::{Words, apart, at, caption_at, flat_face, panel, place, rule, words};
-use crate::element::{Border, Element, Press, Shadow, Shown, TextAlign, holder};
+use crate::element::{Border, Element, Shadow, Shown, TextAlign, holder};
 use crate::faces::{CARD_BACK, FaceList};
 use crate::frame::Role;
 use crate::input::FaceSize;
@@ -317,7 +318,7 @@ pub(super) fn menus(available: bool) -> Element {
             size::BUTTON_MIN_WIDTH
         };
         panel = panel.child(place(
-            example_button(label, Press::GalleryMenu(kind), available),
+            example_button(label, ScreenPress::GalleryMenu(kind), available),
             [
                 at::MENU_BUTTONS[index],
                 Vec2::new(width, size::BUTTON_HEIGHT),
@@ -336,7 +337,7 @@ pub(super) fn commands(available: bool) -> Element {
     let mut panel = panel(8);
     for (index, (label, query)) in samples.into_iter().enumerate() {
         panel = panel.child(place(
-            example_button(label, Press::GalleryQuery(Some(query)), available),
+            example_button(label, ScreenPress::GalleryQuery(Some(query)), available),
             [
                 at::COMMAND_BUTTONS[index],
                 Vec2::new(size::BUTTON_MIN_WIDTH, size::BUTTON_HEIGHT),

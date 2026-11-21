@@ -17,7 +17,7 @@ use glam::Vec2;
 use super::commands;
 use super::menus::{self, Act};
 use super::{Context, TablePress, Target};
-use crate::element::{Align, Anchor, Element, Overflow, Press, column, row, text};
+use crate::element::{Align, Anchor, Element, Overflow, column, row, text};
 use crate::frame::Role;
 use crate::input::Size;
 use crate::tokens::{color, size, space, type_style};
@@ -250,7 +250,7 @@ pub fn panel(palette: &Palette, fields: &Fields, window: Size) -> Element {
             row_view.label,
             (row_view.detail, row_view.key.as_deref()),
             at == palette.highlight,
-            Press::Table(TablePress::Palette(at_u16)),
+            TablePress::Palette(at_u16),
         ));
     }
     if matched.is_empty() {
@@ -259,7 +259,7 @@ pub fn panel(palette: &Palette, fields: &Fields, window: Size) -> Element {
     let capture = palette.capturing.then(|| {
         crate::widgets::button("Press a key · Esc cancels")
             .name("capture")
-            .on_press(Press::Table(TablePress::CancelCapture))
+            .on_press(TablePress::CancelCapture)
     });
     let notice = (palette.notice.as_deref()).map(|words| text(words).color(color::TEXT_DIM));
     let metrics = crate::data::space::flat::table::palette::WIDTH;
@@ -304,7 +304,7 @@ pub(super) fn list_row(
     label: &str,
     (detail, key): (Option<&str>, Option<&str>),
     active: bool,
-    press: Press,
+    press: TablePress,
 ) -> Element {
     let hint = |words: &str, name: &str| {
         text(words)

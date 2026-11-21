@@ -14,9 +14,10 @@ use beryl_assets::light;
 use beryl_render::Target;
 use beryl_render::{Native, Presented, Renderer, Surface};
 use beryl_scene::Client;
+use beryl_scene::Input;
 use beryl_scene::command::Request;
 use beryl_scene::frame::{Frame, Wake};
-use beryl_scene::input::{Input, Insets, Key, Lifecycle, Pointer, Size, TextChange};
+use beryl_scene::input::{Insets, Key, Lifecycle, Pointer, Size, TextChange};
 
 use crate::assets::{Faces, Glyphs, Scans};
 use crate::frames::{Chosen, Draw, Feed, FrameLoop, Opened, Shown, Ticks, When};

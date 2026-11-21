@@ -8,7 +8,7 @@ use beryl_protocol::prompt::{Click, PromptView, ShapeBody};
 use glam::Vec2;
 
 use super::{Shown, Steps, prompt_bar};
-use crate::element::{Align, Anchor, Element, Justify, Press, column};
+use crate::element::{Align, Anchor, Element, Justify, column};
 use crate::frame::Role;
 use crate::hud::HudIn;
 use crate::input::Rect;
@@ -98,5 +98,5 @@ fn entry(words: &str, index: u16, chosen: bool) -> Element {
         .border((rim, size::TRAY_PILE_BORDER))
         .color(color::TEXT)
         .selected(chosen)
-        .on_press(Press::Prompt(Click::Entry { index }))
+        .on_press(Click::Entry { index })
 }

@@ -18,7 +18,7 @@ use beryl_protocol::script::Subject;
 use glam::Vec2;
 
 use super::{Shown, Steps, prompt_bar};
-use crate::element::{Anchor, Element, Justify, Press, Shown as Showing, row, text};
+use crate::element::{Anchor, Element, Justify, Shown as Showing, row, text};
 use crate::faces::FaceList;
 use crate::frame::Role;
 use crate::hud::HudIn;
@@ -114,7 +114,7 @@ fn item(
     .width(cell.width)
     .height(cell.height)
     .radius(size::ORDER_ITEM_RADIUS)
-    .on_press(Press::Prompt(Click::Drop { on, pile: 0, at: 0 }))
+    .on_press(Click::Drop { on, pile: 0, at: 0 })
 }
 
 /// The open decision's candidate that the item `on` of an order names: the order's items are

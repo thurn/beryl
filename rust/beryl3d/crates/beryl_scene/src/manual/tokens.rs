@@ -16,7 +16,7 @@ use serde_json::Value;
 use super::TablePress;
 use super::ask::parse;
 use super::palette::list_row;
-use crate::element::{Align, Anchor, Element, Overflow, Press, column, row, text};
+use crate::element::{Align, Anchor, Element, Overflow, column, row, text};
 use crate::frame::Role;
 use crate::input::Size;
 use crate::tokens::{color, size, space, type_style};
@@ -203,7 +203,7 @@ pub fn panel(search: &TokenSearch, view: &PlayerView, fields: &Fields, window: S
             choice.label(),
             (detail, None),
             at == search.highlight,
-            Press::Table(TablePress::Token(at_u16)),
+            TablePress::Token(at_u16),
         ));
     }
     let text_typed = search.query.trim();
@@ -355,7 +355,7 @@ pub fn custom_panel(form: &CustomToken, fields: &Fields, window: Size) -> Elemen
         let mut toggle = button(word).name(word).selected(on);
         toggle.role = Role::Toggle;
         let at = u8::try_from(at).unwrap_or(u8::MAX);
-        toggle.on_press(Press::Table(TablePress::CustomColor(at)))
+        toggle.on_press(TablePress::CustomColor(at))
     });
     let stats = row()
         .name("stats")
@@ -366,16 +366,12 @@ pub fn custom_panel(form: &CustomToken, fields: &Fields, window: Size) -> Elemen
         .name("footer")
         .gap(space::M)
         .justify_content(crate::element::Justify::End)
-        .child(
-            button("Cancel")
-                .name("close")
-                .on_press(Press::Table(TablePress::Close)),
-        )
+        .child(button("Cancel").name("close").on_press(TablePress::Close))
         .child(
             primary("Create token")
                 .name("confirm")
                 .enabled(form.choice(fields).is_some())
-                .on_press(Press::Table(TablePress::CustomCreate)),
+                .on_press(TablePress::CustomCreate),
         );
     let mut panel = column()
         .name("Custom token")

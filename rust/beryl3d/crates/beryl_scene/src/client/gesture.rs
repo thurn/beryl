@@ -5,11 +5,12 @@
 //! and `Client::end_gesture` ends it in one place: on the release, Cancel or Leave, the next
 //! press, a change of screen or sheet, and a resize.
 
+use crate::inspect::Viewed;
 use glam::Vec2;
 
 use super::Client;
 use super::carry::Carry;
-use crate::element::Viewed;
+
 use crate::frame::ElementId;
 
 /// What letting the pointer go where it went down does.

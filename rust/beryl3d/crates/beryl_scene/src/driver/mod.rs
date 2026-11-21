@@ -20,6 +20,8 @@ mod moment;
 mod playthrough;
 mod recording;
 
+use crate::client;
+use client::{Client, Config, Input, SessionCommand};
 use std::fmt::{self, Write};
 use std::sync::Arc;
 
@@ -38,14 +40,12 @@ pub use recording::{Answer, OPEN, RECORDINGS, Recording, Responses, plays_on};
 use self::cues::Cues;
 use self::moment::{moment_distance, offset_from};
 use crate::agent::{self, Context, Fault, Layout, TreeOptions, locate, uncovered};
-use crate::command::SessionCommand;
 use crate::faces::FaceList;
 use crate::frame::{Frame, Sound, StateBits, Wake};
 use crate::input::{
-    AssetReady, Button, Input, Insets, Modifiers, Pointer, PointerKind, PointerPhase, Size, Tier,
+    AssetReady, Button, Insets, Modifiers, Pointer, PointerKind, PointerPhase, Size, Tier,
 };
 use crate::play::record::Plant;
-use crate::{Client, Config};
 
 /// How long after the table comes to rest a recorded reply is given.
 pub const REPLY_DELAY: Duration = Duration::from_millis(400);
@@ -626,7 +626,7 @@ impl Page {
             self.give(Input::Recordings(names));
         }
         for press in self.recording.opens() {
-            self.client.press(&press);
+            self.client.dispatch_press(&press);
         }
         for lobby in self.recording.lobbies() {
             self.give(Input::Lobby(Box::new(lobby)));

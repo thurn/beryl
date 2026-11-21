@@ -4,11 +4,12 @@
 use beryl_protocol::ipc::{CONCEDE, ConcedeRequest, FixtureMessage, LIST_AGENTS, START_GAME};
 use beryl_protocol::protocol::{Side, Status};
 use beryl_protocol::{AgentView, SessionId, StartRequest};
+use beryl_scene::Input;
 use beryl_scene::agent::{self, Layout, TreeOptions};
 use beryl_scene::command::{Reply, Request};
 use beryl_scene::driver::{OPEN, Page, Recording};
 use beryl_scene::frame::StateBits;
-use beryl_scene::input::{Input, Insets, Size};
+use beryl_scene::input::{Insets, Size};
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder};
 use beryl_scene::{Client, Config};
 

@@ -5,10 +5,11 @@
 use beryl_card_records::{TokenMakers, card_records_among};
 use beryl_protocol::ipc::TableActReply;
 use beryl_protocol::protocol::{CardType, ObjectId, Side, TableAction, ZoneName};
+use beryl_scene::Input;
 use beryl_scene::command::{Reply, SessionCommand};
 use beryl_scene::faces::FaceList;
 use beryl_scene::frame::{Frame, Role};
-use beryl_scene::input::{Input, Insets, Key, KeyCode, KeyPhase, Modifiers, Size};
+use beryl_scene::input::{Insets, Key, KeyCode, KeyPhase, Modifiers, Size};
 use beryl_scene::manual::viewers::{Section, Sort, sections};
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder, table};
 use beryl_scene::{Client, Config};

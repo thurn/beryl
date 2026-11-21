@@ -5,6 +5,8 @@
 //! that it is the same card on the table and in the viewer. The faces of the Revealed Cards
 //! pile are second elements, not scene objects, so its viewer draws them flat (`Shown::Face`).
 
+use crate::hud::GamePress;
+use crate::inspect::Viewed;
 use beryl_protocol::PlayerView;
 use beryl_protocol::protocol::{ObjectId, Side, ZoneName};
 use beryl_protocol::script::Subject;
@@ -13,8 +15,7 @@ use glam::Vec2;
 use super::revealed::{REVEALED, RevealedFace};
 use crate::data::space::flat::gallery as metrics;
 use crate::element::{
-    Align, Anchor, Dismiss, Element, Overflow, Press, Shown, TextAlign, Track, Viewed, column, row,
-    text,
+    Align, Anchor, Element, Overflow, Shown, TextAlign, Track, column, row, text,
 };
 use crate::faces::{CARD_BACK, FaceList};
 use crate::frame::Role;
@@ -44,7 +45,7 @@ pub fn viewer(input: &HudIn) -> Option<Element> {
         }
     };
     let count = boxes.len();
-    let close = icon_button(icons::CLOSE, "close").on_press(Press::Dismiss(Dismiss::Viewer));
+    let close = icon_button(icons::CLOSE, "close").on_press(GamePress::DismissViewer);
     Some(viewer_dialog(
         input.window.size,
         (&title, &count_text(count, input.viewing?)),

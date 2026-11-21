@@ -2,6 +2,7 @@
 //! (docs/beryl-3d.md, "Elements"). Its words, which buttons it has and whether each can be
 //! pressed are the session's.
 
+use beryl_protocol::prompt::Click;
 use std::borrow::Cow;
 
 use beryl_protocol::prompt::{ButtonId, PromptButton, PromptView};
@@ -10,9 +11,7 @@ use glam::Vec2;
 
 use super::Piles;
 use crate::data::space::hud::phone as data;
-use crate::element::{
-    Align, Anchor, Element, Position, Press, TextAlign, column, holder, row, text,
-};
+use crate::element::{Align, Anchor, Element, Position, TextAlign, column, holder, row, text};
 use crate::hud::HudIn;
 use crate::hud::phone::{Occupied, asked_top, clear_at_right, phase_span};
 use crate::table::{PhoneBands, phone_bands};
@@ -98,7 +97,9 @@ pub(super) fn bar(
             dock_sized(
                 button(&button_view.label)
                     .enabled(button_view.enabled)
-                    .on_press(Press::Button(button_view.id)),
+                    .on_press(Click::Button {
+                        button: button_view.id,
+                    }),
             )
         })
         .collect();
@@ -111,7 +112,7 @@ pub(super) fn bar(
                 dock_sized(
                     primary(&forward.label)
                         .enabled(forward.enabled)
-                        .on_press(Press::Button(forward.id)),
+                        .on_press(Click::Button { button: forward.id }),
                 ),
                 pass_on,
                 &forward.caption,
@@ -158,7 +159,9 @@ pub(crate) fn turn_action(
         // edge the dock's gap left of the turn button's left edge.
         widgets::pass_on(&button_view.label, height)
             .enabled(button_view.enabled)
-            .on_press(Press::Button(button_view.id))
+            .on_press(Click::Button {
+                button: button_view.id,
+            })
             .position(Position::Absolute)
             .inset([Some(0.0), None, None, Some(-(height + gap))])
     });
@@ -437,7 +440,9 @@ fn dock(forward: Option<&PromptButton>, pass_on: Option<&PromptButton>) -> Eleme
                 .box_shadow(Vec::new())
                 .drop_shadow(shadow::PASS_ON.to_vec())
                 .enabled(button_view.enabled)
-                .on_press(Press::Button(button_view.id))
+                .on_press(Click::Button {
+                    button: button_view.id,
+                })
         }))
 }
 
@@ -519,7 +524,9 @@ fn phone_button(button_view: &PromptButton) -> Element {
     phone_sized(
         widget(&button_view.label)
             .enabled(button_view.enabled)
-            .on_press(Press::Button(button_view.id)),
+            .on_press(Click::Button {
+                button: button_view.id,
+            }),
     )
 }
 

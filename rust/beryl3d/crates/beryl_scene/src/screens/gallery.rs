@@ -6,12 +6,13 @@ mod samples;
 
 pub(crate) use samples::faces;
 
+use crate::screens::ScreenPress;
 use glam::Vec2;
 
 use super::{Screen, ScreenIn};
 use crate::data::space::flat::gallery as metrics;
 use crate::element::{
-    Align, Anchor, Dismiss, Element, Justify, Overflow, Press, Shown, TextAlign, column, row, text,
+    Action, Align, Anchor, Element, Justify, Overflow, Shown, TextAlign, column, row, text,
 };
 use crate::faces::{CARD_BACK, FaceList};
 use crate::frame::Role;
@@ -116,11 +117,11 @@ pub fn gallery(input: &ScreenIn) -> Element {
         .shortcut(
             "Escape",
             if opened.is_some() {
-                Press::Dismiss(Dismiss::Menu)
+                ScreenPress::DismissMenu
             } else if query.is_some() {
-                Press::GalleryQuery(None)
+                ScreenPress::GalleryQuery(None)
             } else {
-                Press::Open(Screen::Start)
+                ScreenPress::Open(Screen::Start)
             },
         );
     // The gallery fills the safe area. The game screen's root reserves room for its dock.
@@ -178,13 +179,13 @@ fn on_desktop(input: &ScreenIn, faces: &FaceList, width: f32, height: f32) -> El
 
 /// What Escape does on the gallery: closes an open menu, then the command list's preview, then
 /// goes back to the start screen.
-fn escape(state: GalleryState) -> Press {
+fn escape(state: GalleryState) -> ScreenPress {
     if state.menu.is_some() {
-        Press::Dismiss(Dismiss::Menu)
+        ScreenPress::DismissMenu
     } else if state.query.is_some() {
-        Press::GalleryQuery(None)
+        ScreenPress::GalleryQuery(None)
     } else {
-        Press::Open(Screen::Start)
+        ScreenPress::Open(Screen::Start)
     }
 }
 
@@ -523,14 +524,14 @@ fn context_menus(available: bool) -> Element {
                 ("Library", GalleryMenu::Library),
                 ("Bottom-right corner", GalleryMenu::Corner),
             ]
-            .map(|(label, kind)| example_button(label, Press::GalleryMenu(kind), available)),
+            .map(|(label, kind)| example_button(label, ScreenPress::GalleryMenu(kind), available)),
         ),
     )
 }
 
-fn example_button(label: &str, press: Press, available: bool) -> Element {
+fn example_button(label: &str, press: ScreenPress, available: bool) -> Element {
     let mut button = button(label);
-    button.press = available.then_some(press);
+    button.press = available.then(|| Action::new(press));
     button
 }
 
@@ -603,7 +604,9 @@ fn commands(query: Option<GalleryQuery>, available: bool) -> Element {
             ("Two groups", GalleryQuery::Top),
             ("No matches", GalleryQuery::Untap),
         ]
-        .map(|(label, query)| example_button(label, Press::GalleryQuery(Some(query)), available)),
+        .map(|(label, query)| {
+            example_button(label, ScreenPress::GalleryQuery(Some(query)), available)
+        }),
     );
     section("Command list")
         .child(buttons)

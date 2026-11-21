@@ -6,18 +6,19 @@
 //! - The lines are made as each view arrives (`Logged::take`), from the difference between that
 //!   view and the ones before: its events, and the names of the cards seen so far.
 //! - The log is always folded to an icon button at the window's top left, which opens and closes
-//!   it in its column (`Press::Log`), as the stage's `<GameLog folded>` does
+//!   it in its column (`GamePress::Log`), as the stage's `<GameLog folded>` does
 //!   (`ui/src/stage/Chrome.tsx`).
 
 mod lines;
 
 pub use lines::{LogKind, LogLine, Names, counter_name, learn_names, listed, log_lines};
 
+use crate::hud::GamePress;
 use beryl_protocol::protocol::{PlayerView, Status};
 use glam::Vec2;
 
 use crate::data::space::hud::{LOG_BUTTON_TOP, LOG_LEFT, LOG_TOP};
-use crate::element::{Anchor, Element, Press, holder, text};
+use crate::element::{Anchor, Element, holder, text};
 use crate::hud::HudIn;
 use crate::tokens::{color, size, type_style};
 use crate::widgets::{icon_button, icons, list};
@@ -111,7 +112,7 @@ pub fn log(input: &HudIn) -> Option<Element> {
     };
     let mut button = icon_button(icons::LOG, name)
         .selected(input.log_open)
-        .on_press(Press::Log);
+        .on_press(GamePress::Log);
     button.anchor = Some(Anchor::Point(
         Vec2::new(LOG_LEFT, LOG_BUTTON_TOP),
         Vec2::ZERO,

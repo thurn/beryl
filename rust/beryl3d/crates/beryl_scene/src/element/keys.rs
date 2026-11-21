@@ -4,7 +4,7 @@
 //! modifiers before the last `+`, then one key's name, matched by the physical key and every
 //! modifier held. `Cmd` is the Command key on the Mac and Control elsewhere.
 
-use super::Press;
+use super::Action;
 use crate::input::{Key, KeyCode, Modifiers};
 
 /// A physical key with the modifiers held with it: what a binding names and a key event
@@ -178,12 +178,12 @@ fn key_named(name: &str, mac: bool) -> Option<KeyCode> {
 /// press it means. The bindings are read when a key arrives, so one table serves the Mac and
 /// other platforms.
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct Shortcuts(pub Vec<(String, Press)>);
+pub struct Shortcuts(pub Vec<(String, Action)>);
 
 impl Shortcuts {
     /// The press the first binding that `key` presses means, on the Mac if `mac`.
     #[must_use]
-    pub fn press_for(&self, key: &Key, mac: bool) -> Option<&Press> {
+    pub fn press_for(&self, key: &Key, mac: bool) -> Option<&Action> {
         let chord = Chord::of(key);
         (self.0.iter())
             .find(|(binding, _)| Chord::parse(binding, mac) == Some(chord))

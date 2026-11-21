@@ -5,9 +5,10 @@
 //! step stops stand clear of it as the web's grid places them.
 
 use beryl_protocol::protocol::Side;
+use beryl_scene::Input;
 use beryl_scene::art::orb::{self, LAYERS};
 use beryl_scene::frame::{Frame, Material, Role, StateBits};
-use beryl_scene::input::{AssetReady, IconCell, Input};
+use beryl_scene::input::{AssetReady, IconCell};
 use glam::{Vec2, Vec4};
 
 use super::flat_layer::{client, deciding, edges, find, prompt};

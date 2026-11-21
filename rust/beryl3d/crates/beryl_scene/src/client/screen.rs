@@ -8,13 +8,14 @@ use glam::Vec2;
 use super::Client;
 
 use crate::command::{Request, SessionCommand};
-use crate::element::{Press, floats};
+use crate::element::{Action, floats};
 use crate::faces::{FaceList, Faces};
 use crate::hud::phone::Occupied;
 use crate::input::Rect;
 use crate::input::{AssetReady, FaceSize};
 use crate::layout::FloatLook;
-use crate::screens::{self, Screen, ScreenIn, Sheet, StartForm};
+use crate::manual::TableCommand;
+use crate::screens::{self, Screen, ScreenIn, ScreenPress, Sheet, StartForm};
 
 impl Client {
     /// Rebuilds the flat layer's screen, or the sheet open over it, from what the client holds
@@ -148,7 +149,7 @@ impl Client {
         }
     }
 
-    /// Shows the ended game's result over the table, or puts it aside (`Press::Result`).
+    /// Shows the ended game's result over the table, or puts it aside (`GamePress::Result`).
     pub(super) fn show_result(&mut self, shown: bool) {
         self.viewing.result_aside = !shown;
         self.show_screen();
@@ -270,8 +271,8 @@ impl Client {
         // `table.undo` command, as the web's `Table` passes it to `GameBoard`.
         let undo = match self.screen {
             Screen::Table => crate::manual::commands::command("table.undo")
-                .map(|(index, _)| Press::Command(index, false)),
-            _ => self.undoable().map(|_| Press::Undo),
+                .map(|(index, _)| Action::new(TableCommand(index, false))),
+            _ => self.undoable().map(|_| Action::new(ScreenPress::Undo)),
         };
         let bug = !self.bug_open();
         let on_table = matches!(self.screen, Screen::Game | Screen::Table);

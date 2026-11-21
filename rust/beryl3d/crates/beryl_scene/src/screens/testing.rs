@@ -1,18 +1,19 @@
 //! The testing screen: every recording the host listed (`Input::Recordings`), a field that
 //! narrows the list to the names containing what is typed in it, and a toggle for the seat a
 //! recording is replayed from. A press on a recording asks the host to replay it from its start
-//! (`Press::Replay`). Only a tools build of the app lists recordings, and the start screen
+//! (`ScreenPress::Replay`). Only a tools build of the app lists recordings, and the start screen
 //! offers the way here (the key T) only once some are listed.
 //!
 //! The web interface's testing screen (`Testing` in `ui/src/screens/Testing.tsx`) lists cards
 //! with spec moments under the title "Scenarios", filters them with a field whose placeholder
 //! is "Find a card", and names the seats "You" and "Them"; this screen uses those words.
 
+use crate::screens::ScreenPress;
 use beryl_protocol::protocol::Side;
 
 use super::ScreenIn;
 use crate::data::space::flat::phone;
-use crate::element::{Align, Element, Justify, Press, column, row, text};
+use crate::element::{Align, Element, Justify, column, row, text};
 use crate::frame::Role;
 use crate::tokens::{color, size, space, type_style};
 use crate::widgets::screen::phone_screen;
@@ -98,7 +99,7 @@ fn seat_toggle(seat: Side) -> Element {
         (button(THEIRS), Side::Opponent)
     };
     toggle.role = Role::Toggle;
-    toggle.selected(theirs).on_press(Press::Seat(next))
+    toggle.selected(theirs).on_press(ScreenPress::Seat(next))
 }
 
 /// The row of the `index`th recording, named `name`, which replays it when pressed.
@@ -116,7 +117,7 @@ fn recording_row(index: u16, name: &str, phone: bool) -> Element {
         .min_height(least)
         .shrink(0.0)
         .align_items(Align::Center)
-        .on_press(Press::Replay { recording: index });
+        .on_press(ScreenPress::Replay { recording: index });
     if phone {
         // The name is a text element of its own, which is measured at the width it is drawn
         // at, so a name that breaks onto more lines makes the row as tall as its lines.

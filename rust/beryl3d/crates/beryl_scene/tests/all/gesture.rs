@@ -5,10 +5,13 @@
 use beryl_protocol::prompt::{ButtonId, Click, ClickRequest, PromptButton, ShapeBody};
 use beryl_protocol::script::Subject;
 use beryl_scene::Client;
+use beryl_scene::Input;
+use beryl_scene::Press;
 use beryl_scene::command::{Request, SessionCommand};
-use beryl_scene::element::{Press, row, text};
+use beryl_scene::element::Action;
+use beryl_scene::element::{row, text};
 use beryl_scene::frame::{Role, StateBits};
-use beryl_scene::input::{Button, Input, Modifiers, Pointer, PointerKind, PointerPhase};
+use beryl_scene::input::{Button, Modifiers, Pointer, PointerKind, PointerPhase};
 use beryl_scene::screens::Sheet;
 use beryl_scene::widgets;
 use glam::Vec2;
@@ -50,7 +53,7 @@ fn clicks(client: &mut Client) -> Vec<Click> {
 fn a_drag_from_a_slider_let_go_on_a_button_sets_the_slider_and_presses_nothing() {
     let mut client = client();
     client.handle(deciding(prompt("Pay {1}{U}")));
-    client.press(&Press::Sheet(Some(Sheet::Settings)));
+    client.press(&Action::new(Press::Sheet(Some(Sheet::Settings))));
     let frame = client.frame(1);
     let slider = find(frame, Role::Slider, "Music");
     let (left, _, right, _) = edges(frame, slider);

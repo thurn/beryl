@@ -13,7 +13,7 @@ use beryl_protocol::script::Subject;
 
 use super::TablePress;
 use super::commands::seat_of;
-use crate::element::{Element, Press, row};
+use crate::element::{Element, row};
 use crate::input::Size;
 use crate::inspect::viewer::object_box;
 use crate::tokens::size;
@@ -98,15 +98,11 @@ pub fn tray(order: &LibraryOrder, view: &PlayerView, window: Size) -> Element {
                 let at_u16 = u16::try_from(at).unwrap_or(u16::MAX);
                 let mut card = object_box(view, slot)
                     .selected(at == order.highlight)
-                    .on_press(Press::Table(TablePress::OrderCard(at_u16)));
+                    .on_press(TablePress::OrderCard(at_u16));
                 card.focus = true;
                 card
             }));
-    let done = primary("Done")
-        .name("done")
-        .on_press(Press::Table(TablePress::OrderDone));
-    let cancel = button("Cancel")
-        .name("close")
-        .on_press(Press::Table(TablePress::Close));
+    let done = primary("Done").name("done").on_press(TablePress::OrderDone);
+    let cancel = button("Cancel").name("close").on_press(TablePress::Close);
     overlay(window, (TITLE, None), None, cards, vec![done, cancel])
 }

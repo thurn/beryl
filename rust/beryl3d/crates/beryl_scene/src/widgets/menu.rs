@@ -8,11 +8,15 @@
 
 use glam::Vec2;
 
-use crate::element::{Align, Anchor, Element, Press, column, row, text};
+use crate::element::{Align, Anchor, Element, column, row, text};
 use crate::frame::Role;
 use crate::tokens::{color, shadow, size, type_style};
 
-/// Which menu is open, so that a press on a row (`Press::Menu`) says whose row it was.
+/// The selected row of an open menu.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MenuChoice(pub MenuId, pub u16);
+
+/// Which menu is open, so that a press on a row (`MenuChoice`) says whose row it was.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct MenuId(pub u16);
 
@@ -54,7 +58,7 @@ impl MenuRow {
 
 /// The menu `id` titled `title`, with `whose` under the title (whose the card or pile is, or
 /// nothing), and its rows in `groups`: a list named by its title whose rows are menu items
-/// named by their labels. A press on a row sends `Press::Menu(id, n)`, where `n` counts the
+/// named by their labels. A press on a row sends `MenuChoice(id, n)`, where `n` counts the
 /// menu's rows from 0 over all its groups, and then the rows of its submenus, in order, after
 /// the last of them.
 #[must_use]
@@ -67,9 +71,9 @@ pub fn menu(id: MenuId, title: &str, whose: &str, groups: &[MenuGroup]) -> Eleme
 pub const BACK: u16 = u16::MAX;
 
 /// `menu` as the phone's bottom sheet shows it (`Menu.tsx`'s pages): a row with a submenu
-/// presses `Press::Menu(id, n)` like any row, and opens no list beside the menu. With `page`
+/// presses `MenuChoice(id, n)` like any row, and opens no list beside the menu. With `page`
 /// set to the number of such a row, the sheet instead holds a Back row, pressing
-/// `Press::Menu(id, BACK)`, and the rows of that row's submenu, numbered as `menu` numbers
+/// `MenuChoice(id, BACK)`, and the rows of that row's submenu, numbered as `menu` numbers
 /// them.
 #[must_use]
 pub fn sheet_menu(
@@ -124,7 +128,7 @@ fn build(
             if folder == usize::from(page) {
                 let mut deeper = u16::MAX;
                 let back = menu_row(id, &MenuRow::new("Back"), &mut 0, &mut deeper, true)
-                    .on_press(Press::Menu(id, BACK));
+                    .on_press(MenuChoice(id, BACK));
                 panel = panel.child(divider(0, "page")).child(back);
                 for child in &row.submenu {
                     panel = panel.child(menu_row(id, child, &mut next_nested, &mut deeper, true));
@@ -178,7 +182,7 @@ fn panel(name: &str) -> Element {
     panel
 }
 
-/// The menu item for `row`. A row without a submenu, or any row if `flat`, presses `Press::Menu(id, *next)`, taking
+/// The menu item for `row`. A row without a submenu, or any row if `flat`, presses `MenuChoice(id, *next)`, taking
 /// that number; a row with one opens it, whose rows take numbers from `*nested` on.
 fn menu_row(
     id: MenuId,
@@ -228,7 +232,7 @@ fn menu_row(
     // be highlighted by the keys.
     item.focus = true;
     if row_view.submenu.is_empty() || flat {
-        item = item.on_press(Press::Menu(id, *next));
+        item = item.on_press(MenuChoice(id, *next));
     } else {
         // A submenu has no submenus of its own (`Menu.tsx` opens one level), so the numbers a
         // row of it would give a deeper one are not kept.

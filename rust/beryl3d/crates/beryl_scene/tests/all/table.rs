@@ -4,11 +4,12 @@ use beryl_protocol::protocol::{
     CardType, ObjectId, PlayerView, RowName, Side, StackItem, TargetRef, ZoneName,
 };
 use beryl_protocol::script::Reset;
+use beryl_scene::Input;
 use beryl_scene::agent::checks::{duplicates, reachable};
 use beryl_scene::agent::tree::{TreeOptions, tree};
 use beryl_scene::agent::{Context, Layout};
 use beryl_scene::frame::{Frame, Place, Role};
-use beryl_scene::input::{Input, Insets, Size};
+use beryl_scene::input::{Insets, Size};
 use beryl_scene::pose::Pose;
 use beryl_scene::table::{
     ABILITY_IDS, CARD_HEIGHT, CARD_WIDTH, Camera, DESKTOP, Scroll, Window, place,

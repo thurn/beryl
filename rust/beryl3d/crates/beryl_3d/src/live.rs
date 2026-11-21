@@ -18,8 +18,8 @@ use std::sync::{Arc, Mutex};
 use beryl_host::{Drive, Inbox};
 use beryl_render::Picture;
 use beryl_scene::Client;
+use beryl_scene::Input;
 use beryl_scene::agent::{TreeOptions, tree};
-use beryl_scene::input::Input;
 
 /// What a request is answered with: the text after `ok`, or the reason for `error`.
 type Answer = Result<String, String>;

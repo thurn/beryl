@@ -5,8 +5,8 @@
 //! whose entry every record already names in its flags. Building the table allocates nothing.
 
 use super::{CLIPS, FrameBuilder};
-use crate::element::paint::{MOST_STOPS, Resolved};
-use crate::input::Rect;
+use crate::geometry::Rect;
+use crate::paint::{MOST_STOPS, Resolved};
 
 /// How many gradients a frame's table holds. Elements whose gradients resolve to the same stops
 /// share an entry.

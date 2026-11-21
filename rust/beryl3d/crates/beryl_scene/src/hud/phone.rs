@@ -11,15 +11,15 @@
 //! - Where the pill with what a prompt asks stands (`asked_top`), which the prompt bar's phone
 //!   composition reads (`prompts::prompt_bar`).
 
+use crate::hud::GamePress;
 use beryl_protocol::protocol::{PlayerView, Side, Step};
 use glam::Vec2;
 
 use crate::data::space::hud::phone as data;
-use crate::element::{Align, Anchor, Element, Justify, Press, Shown, column, row, text};
+use crate::element::{Align, Anchor, Element, Justify, Shown, column, row, text};
 use crate::frame::Role;
 use crate::hud::HudIn;
 use crate::input::Rect;
-use crate::navigation::Sheet;
 use crate::table::PhoneBands;
 use crate::tokens::{color, shadow, size, space, type_style};
 use crate::widgets::{icon_button, icons};
@@ -100,7 +100,7 @@ pub fn clear_at_right(
 /// hold the log and the bug report (`MenuButton` in `ui/src/mobile/chrome.tsx`).
 #[must_use]
 pub fn menu(bands: &PhoneBands) -> Element {
-    let mut button = icon_button(icons::MENU, "Menu").on_press(Press::Sheet(Some(Sheet::Settings)));
+    let mut button = icon_button(icons::MENU, "Menu").on_press(GamePress::OpenSettings);
     button.anchor = Some(Anchor::Point(
         Vec2::new(bands.right, bands.opponent_strip.middle()),
         Vec2::new(1.0, 0.5),
@@ -216,7 +216,7 @@ pub fn log_sheet(input: &HudIn, bands: &PhoneBands) -> Option<Element> {
         .align_items(Align::Center)
         .justify_content(Justify::SpaceBetween)
         .child(text("Log").style(type_style::TITLE))
-        .child(icon_button(icons::CLOSE, "Close log").on_press(Press::Log));
+        .child(icon_button(icons::CLOSE, "Close log").on_press(GamePress::Log));
     let list = log::panel(input.log)
         .grow(1.0)
         .shrink(1.0)

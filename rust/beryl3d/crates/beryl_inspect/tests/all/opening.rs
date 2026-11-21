@@ -8,14 +8,13 @@ use beryl_inspect::pages::{page, recording};
 use beryl_protocol::prompt::{Click, ClickRequest};
 use beryl_protocol::protocol::{ObjectId, Side, Status};
 use beryl_protocol::script::Subject;
+use beryl_scene::Input;
 use beryl_scene::agent::Layout;
 use beryl_scene::agent::fault::Rule;
 use beryl_scene::command::SessionCommand;
 use beryl_scene::driver::{Mode, Moment, Page};
 use beryl_scene::frame::{Role, Wake};
-use beryl_scene::input::{
-    Button, Input, Insets, Modifiers, Pointer, PointerKind, PointerPhase, Size,
-};
+use beryl_scene::input::{Button, Insets, Modifiers, Pointer, PointerKind, PointerPhase, Size};
 use beryl_scene::{Client, Config};
 
 const SIZE: Size = Size {

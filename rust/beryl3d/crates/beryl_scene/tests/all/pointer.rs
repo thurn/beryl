@@ -4,12 +4,13 @@
 use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::protocol::{CardType, Side, Why, ZoneName};
 use beryl_protocol::script::Act;
+use beryl_scene::Input;
 use beryl_scene::agent::Layout;
 use beryl_scene::agent::checks::reachable;
 use beryl_scene::agent::fault::Context;
 use beryl_scene::driver::{Duration, Page, Recording};
 use beryl_scene::frame::{Frame, Role, StateBits};
-use beryl_scene::input::{Button, Input, Insets, Modifiers, Pointer, PointerKind, PointerPhase};
+use beryl_scene::input::{Button, Insets, Modifiers, Pointer, PointerKind, PointerPhase};
 use beryl_scene::input::{Rect, Size};
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder, timing};
 use beryl_scene::{Client, Config};

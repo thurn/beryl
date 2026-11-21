@@ -6,12 +6,12 @@
 
 use glam::Vec2;
 
-use super::glyphs::{Glyphs, blurred, key};
-use super::{Block, PlacedGlyph};
-use crate::element::{DropLayers, Shadow};
-use crate::frame::{Band, Draw, FrameBuilder, Sprite};
-use crate::input::{GlyphKey, Rect};
-use crate::table::Camera;
+use super::{Band, Draw, FrameBuilder, Sprite};
+use crate::atlas::GlyphKey;
+use crate::geometry::{Rect, plane::ScreenPlane};
+use crate::paint::{DropLayers, Shadow};
+use crate::text::glyphs::{Glyphs, blurred, key};
+use crate::text::{Block, PlacedGlyph};
 
 /// How a block of text is drawn.
 #[derive(Clone, Copy, Debug)]
@@ -26,7 +26,7 @@ pub struct BlockLook<'a> {
     /// Where the rasterizer put each glyph.
     pub glyphs: &'a Glyphs,
     /// The camera whose flat-layer plane the glyphs are drawn on.
-    pub camera: &'a Camera,
+    pub camera: &'a ScreenPlane,
     /// The clip rectangle the glyphs are drawn under (`FrameBuilder::clip`), or 0 for none.
     pub clip: u8,
     /// The drop shadows the glyphs cast (`Style::drop_shadow`), whose layers (`DropLayers`)

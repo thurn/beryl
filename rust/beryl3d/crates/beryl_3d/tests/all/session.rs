@@ -11,9 +11,10 @@ use beryl_3d::session::{self, Session};
 use beryl_host::{Class, Draw, FrameLoop, Inbox, Shown, Ticks};
 use beryl_protocol::ipc::decks::DeckImportRequest;
 use beryl_protocol::ipc::{LobbyChange, LobbyUpdate};
+use beryl_scene::Input;
 use beryl_scene::command::{Reply, SessionCommand};
 use beryl_scene::frame::Frame;
-use beryl_scene::input::{Input, Lifecycle};
+use beryl_scene::input::Lifecycle;
 use beryl_scene::{Client, Config};
 use beryl_session::{SessionError, SessionId};
 

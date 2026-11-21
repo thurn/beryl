@@ -4,9 +4,10 @@
 
 use beryl_protocol::StopsSetting;
 use beryl_protocol::protocol::{CardType, GameEvent, SessionId, Side, Step, ZoneName};
+use beryl_scene::Input;
 use beryl_scene::command::{Request, SessionCommand};
 use beryl_scene::frame::{Frame, Role, StateBits};
-use beryl_scene::input::{Input, PointerPhase};
+use beryl_scene::input::PointerPhase;
 use beryl_scene::testing::ViewBuilder;
 
 use beryl_protocol::prompt::ButtonId;

@@ -10,9 +10,9 @@
 
 use glam::Vec2;
 
-use super::{Client, Platform};
+use super::{BugPress, Client, Platform};
 use crate::command::Request;
-use crate::element::{BugPress, Chord};
+use crate::element::Chord;
 use crate::frame::Wake;
 use crate::input::{Button, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerPhase, Rect};
 use crate::screens::{BugForm, BugStage, CLICK, DESCRIPTION, Sheet, span};

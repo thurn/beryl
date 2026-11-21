@@ -4,7 +4,7 @@
 use glam::Vec2;
 
 use super::{ABILITIES, ElementId, Frame, OBJECTS};
-use crate::element::Shadow;
+use crate::paint::Shadow;
 use beryl_protocol::protocol::Side;
 use beryl_protocol::script::Mark;
 

@@ -4,12 +4,14 @@
 //! reaches the session as `SessionCommand::TableAct`, and the table's next view comes back as
 //! `Input::Update`, as a game's does. What the table shows over itself is `manual_overlays`.
 
+use crate::element::Action;
+use crate::inspect::Viewed;
 use beryl_protocol::GameUpdate;
 use glam::Vec2;
 
 use super::{Client, Platform};
 use crate::command::SessionCommand;
-use crate::element::{Press, Viewed};
+
 use crate::input::{Button, Pointer, PointerPhase};
 use crate::manual::lobby::Lobby;
 use crate::manual::menus::{self, Act};
@@ -48,7 +50,7 @@ pub(super) struct Manual {
     clicked: Option<Pressed>,
     /// The flat-layer button shaking because the table refused the action its press sent, and
     /// how far along the shake is (`Client::shake_button`).
-    shaking: Option<(TablePress, Shake)>,
+    shaking: Option<(Action, Shake)>,
 }
 
 impl std::ops::Deref for Manual {
@@ -118,8 +120,8 @@ impl Client {
             return false;
         }
         if self.screen == Screen::Table
-            && let Some((_, Press::Table(TablePress::Counter { side, at }), _)) =
-                self.layer.press_at(pointer.position, self.open)
+            && let Some((_, action, _)) = self.layer.press_at(pointer.position, self.open)
+            && let Some(&TablePress::Counter { side, at }) = action.downcast_ref()
         {
             self.adjust_counter(side, at, false, TablePress::Counter { side, at });
             return true;
@@ -400,8 +402,7 @@ impl Client {
             self.layer.shake(None);
             return false;
         }
-        self.layer
-            .shake(Some((&Press::Table(*button), shake.offset(now))));
+        self.layer.shake(Some((button, shake.offset(now))));
         true
     }
 
@@ -421,7 +422,9 @@ impl Client {
         };
         match from.filter(|_| refused && !self.table_frozen()) {
             Some(Pressed::Card(slot)) => self.show.pointer_mut().refuse(usize::from(slot.0)),
-            Some(Pressed::Button(button)) => self.manual.shaking = Some((button, Shake::new())),
+            Some(Pressed::Button(button)) => {
+                self.manual.shaking = Some((Action::new(button), Shake::new()));
+            }
             None => {}
         }
         match (sent, reply) {

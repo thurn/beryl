@@ -7,7 +7,7 @@ use glam::camera::rh::{proj::directx, view::look_at_mat4};
 use glam::{Affine3A, Mat3, Mat4, Quat, Vec2, Vec3};
 
 use super::{CARD_HEIGHT, CARD_WIDTH, Window};
-use crate::input::Rect;
+use crate::geometry::{Rect, plane::ScreenPlane};
 use crate::pose::Pose;
 
 /// A layout's camera, as data.
@@ -51,8 +51,6 @@ pub struct Camera {
     pub view_projection: Mat4,
     inverse_view: Mat4,
     tan_half: f32,
-    /// The point of the window the flat layer is scaled about, and the scale (`zoomed`).
-    zoom: (Vec2, f32),
 }
 
 impl Camera {
@@ -87,7 +85,6 @@ impl Camera {
             view_projection: Mat4::IDENTITY,
             inverse_view: Mat4::IDENTITY,
             tan_half: (data.fov_degrees.to_radians() / 2.0).tan(),
-            zoom: (Vec2::ZERO, 1.0),
         };
         let (mut low, mut high) = (NEAREST, FARTHEST);
         for _ in 0..FIT_STEPS {
@@ -275,48 +272,20 @@ impl Camera {
         Affine3A::from_mat4(self.inverse_view) * local
     }
 
-    /// This camera with the flat layer scaled by `scale` about `pivot`, a point of the window in
-    /// logical points, as CSS `scale` scales an element about its centre.
+    /// The flat plane the camera projects screen elements onto.
     #[must_use]
-    pub fn zoomed(self, pivot: Vec2, scale: f32) -> Self {
-        Self {
-            zoom: (pivot, scale),
-            ..self
-        }
+    pub fn screen_plane(&self) -> ScreenPlane {
+        ScreenPlane::new(
+            Affine3A::from_mat4(self.inverse_view),
+            self.window,
+            self.tan_half * LAYER_DEPTH,
+            LAYER_DEPTH,
+        )
     }
 
-    /// The transform that lays the unit quad over `rect`, in logical points from the window's
-    /// top left corner, on the flat layer's plane (docs/beryl-3d.md, "The frame": one projection
-    /// serves the table and the flat layer).
+    /// The transform that lays the unit quad over `rect` on the flat drawing plane.
     #[must_use]
     pub fn layer_transform(&self, rect: Rect) -> Affine3A {
-        let rect = zoom_rect(rect, self.zoom);
-        let size = self.window.size;
-        let half_height = self.tan_half * LAYER_DEPTH;
-        let half_width = half_height * size.width / size.height;
-        let centre = Vec2::new(
-            (rect.x + rect.width / 2.0) / size.width * 2.0 - 1.0,
-            1.0 - (rect.y + rect.height / 2.0) / size.height * 2.0,
-        );
-        let local = Affine3A::from_scale_rotation_translation(
-            Vec3::new(
-                rect.width / size.width * 2.0 * half_width,
-                rect.height / size.height * 2.0 * half_height,
-                1.0,
-            ),
-            Quat::IDENTITY,
-            Vec3::new(centre.x * half_width, centre.y * half_height, -LAYER_DEPTH),
-        );
-        Affine3A::from_mat4(self.inverse_view) * local
-    }
-}
-
-/// `rect` scaled by `zoom`'s scale about its point.
-pub(crate) fn zoom_rect(rect: Rect, (pivot, scale): (Vec2, f32)) -> Rect {
-    Rect {
-        x: pivot.x + (rect.x - pivot.x) * scale,
-        y: pivot.y + (rect.y - pivot.y) * scale,
-        width: rect.width * scale,
-        height: rect.height * scale,
+        self.screen_plane().layer_transform(rect)
     }
 }

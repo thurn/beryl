@@ -468,7 +468,7 @@ impl Drawer {
         let mut frame = Frame::with_capacity(16, 16, 64);
         let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
         builder.camera(camera.view_projection);
-        layer.write(&mut builder, &camera, true);
+        layer.write(&mut builder, &camera.screen_plane(), true);
         let frame = builder.finish();
         let pixels = |points: f32| (points * scale).round().max(1.0) as u32;
         let (width, height) = (pixels(sample.window.width), pixels(sample.window.height));

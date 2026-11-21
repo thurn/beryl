@@ -69,6 +69,9 @@ app_client = { path = "crates/app_client" }
 # Fitting rows and piles to the web interface's positions; deleted at the switch.
 scaffold_web = { path = "crates/scaffold_web" }
 
+# Stores small erased action messages inline, in place of allocating each control's message.
+smallbox = "0.8.8"
+
 [workspace.lints.rust]
 unsafe_code = "deny"
 # Every warning is an error, in every build: clippy only checks a debug build with every feature

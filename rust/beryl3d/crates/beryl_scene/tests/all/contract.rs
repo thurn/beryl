@@ -5,11 +5,12 @@
     reason = "the constructors copy their arguments, so the values are exact"
 )]
 
+use beryl_scene::Input;
 use beryl_scene::command::Reply;
 use beryl_scene::element::Shadow;
 use beryl_scene::frame::{Draw, Frame, Material, Sprite, Wake};
 use beryl_scene::input::{
-    Button, FaceSize, Input, Insets, Modifiers, Pointer, PointerKind, PointerPhase, Size,
+    Button, FaceSize, Insets, Modifiers, Pointer, PointerKind, PointerPhase, Size,
 };
 use beryl_scene::{Client, Config};
 use glam::{Affine3A, Vec2, Vec3};
@@ -207,8 +208,10 @@ mod milestone_three {
     use beryl_protocol::prompt::{ButtonId, Click, ClickRequest, PromptView, ShapeBody};
     use beryl_protocol::protocol::{LossReason, OutcomeView, Side, Status};
     use beryl_protocol::script::Arrow;
+    use beryl_scene::Press;
     use beryl_scene::command::{Request, SessionCommand};
-    use beryl_scene::element::Press;
+    use beryl_scene::element::Action;
+
     use beryl_scene::prompts;
     use beryl_scene::screens::{self, BugForm, Music, Screen, ScreenIn, Sheet, StartForm};
     use beryl_scene::settings::{Setting, Settings};
@@ -358,7 +361,7 @@ mod milestone_three {
     fn a_button_press_clicks_the_open_prompt() {
         let mut client = client();
         client.handle(deciding(prompt("Pay {1}{U}")));
-        client.press(&Press::Button(ButtonId::Auto));
+        client.press(&Action::new(Press::Button(ButtonId::Auto)));
         assert_eq!(
             client.next_command(),
             Some(SessionCommand::Click(ClickRequest {
@@ -375,7 +378,7 @@ mod milestone_three {
     fn a_setting_press_asks_for_the_settings_to_be_saved() {
         let mut client = client();
         while client.next_request().is_some() {}
-        client.press(&Press::Setting(Setting::Music(40)));
+        client.press(&Action::new(Press::Setting(Setting::Music(40))));
         let Some(Request::SaveSettings(saved)) = client.next_request() else {
             panic!("the first request saves the settings");
         };
@@ -391,7 +394,9 @@ mod milestone_three {
         assert_eq!(settings.graphics, Graphics::Baseline);
         let mut client = client();
         while client.next_request().is_some() {}
-        client.press(&Press::Setting(Setting::Graphics(Graphics::Enhanced)));
+        client.press(&Action::new(Press::Setting(Setting::Graphics(
+            Graphics::Enhanced,
+        ))));
         let Some(Request::SaveSettings(saved)) = client.next_request() else {
             panic!("the first request saves the settings");
         };

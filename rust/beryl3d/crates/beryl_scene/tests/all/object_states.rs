@@ -4,11 +4,12 @@
 //! checks run on it.
 
 use beryl_protocol::protocol::{CardType, ObjectId, Side, Status, ZoneName};
+use beryl_scene::Input;
 use beryl_scene::agent::checks::{duplicates, on_screen, reachable};
 use beryl_scene::agent::tree::{TreeOptions, tree};
 use beryl_scene::agent::{Context, Layout};
 use beryl_scene::frame::{Frame, Place, Resolved, Role, StateBits};
-use beryl_scene::input::{Input, Insets, Size};
+use beryl_scene::input::{Insets, Size};
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder};
 
 use super::flat_layer::{client, deciding, prompt};

@@ -5,8 +5,8 @@ use beryl_protocol::script::{Subject, Turn};
 use beryl_protocol::{PlayerView, StopsSetting};
 
 use super::{log::LogEntry, phone::Occupied};
-use crate::element::Viewed;
 use crate::faces::FaceList;
+use crate::inspect::Viewed;
 use crate::inspect::{inspector::Inspected, revealed::RevealedFace};
 use crate::navigation::Sheet;
 use crate::table::Window;
