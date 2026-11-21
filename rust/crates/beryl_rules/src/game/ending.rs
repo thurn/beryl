@@ -6,11 +6,11 @@
 use beryl_card::Players;
 
 use crate::PlayerSet;
-use crate::event::LossCause;
 use crate::game::Game;
 use crate::ids::Seat;
 use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
+use crate::replacement::event::LossCause;
 use crate::resolution::Resolution;
 use crate::sba;
 

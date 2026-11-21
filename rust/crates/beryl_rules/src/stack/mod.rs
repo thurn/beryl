@@ -1,18 +1,28 @@
 //! The stack ([CR 405](https://yawgatog.com/resources/magic-rules/#R405)): what is known of a
-//! spell on it, and a spell leaving it without resolving.
+//! spell on it, and a spell leaving it without resolving. A spell has the characteristics
+//! of its associated card ([CR 405.4]): "Each spell has all the characteristics of the card
+//! associated with it."
+//!
+//! Implements: CR 405
+//!
+//! [CR 405.4]: https://yawgatog.com/resources/magic-rules/#R4054
+
+pub mod delayed_triggers;
+pub(crate) mod resolve;
+pub(crate) mod trigger;
 
 use crate::bitboard::Bitboard;
 use crate::casting;
-use crate::event::Reason;
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::layout::{Layout, Queue};
+use crate::replacement::event::Reason;
 use crate::state::{ObjectRef, StackEntry, Zone};
 use crate::zones;
 
 /// Takes the spells among `objects` off the stack, for an effect that moves their cards to
 /// `to` without their resolving, and exiles those that are exiled instead
-/// ([`crate::replace::exiled_instead`]). Returns the objects still to move.
+/// ([`crate::replacement::exiled_instead`]). Returns the objects still to move.
 pub(crate) fn unstack<L: Layout>(
     game: &mut Game<'_, L>,
     objects: Bitboard<L::Slot>,
@@ -28,9 +38,9 @@ pub(crate) fn unstack<L: Layout>(
     Ok(objects & !flashback)
 }
 
-/// Removes the spells in `objects` and returns the ones that go to exile instead. For
-/// example, [CR 702.34a] says "If the flashback cost was paid, exile this card instead of
-/// putting it anywhere else any time it would leave the stack."
+/// Removes the spells in `objects` and returns the ones that go to exile instead, including
+/// spells cast for their flashback cost (see [CR 702.34a]): "If the flashback cost was paid,
+/// exile this card instead of putting it anywhere else any time it would leave the stack."
 ///
 /// [CR 702.34a]: https://yawgatog.com/resources/magic-rules/#R70234a
 #[cold]
@@ -63,7 +73,7 @@ fn remove_spells<L: Layout>(
         let taken = (game.state)
             .take_off_stack(game.table, game.sink, stack_spell)?
             .is_some();
-        if taken && crate::replace::exiled_instead(game.state, spell, to) {
+        if taken && crate::replacement::exiled_instead(game.state, spell, to) {
             flashback.insert(slot);
         }
     }

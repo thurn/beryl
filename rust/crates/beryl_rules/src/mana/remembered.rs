@@ -16,11 +16,11 @@
 use beryl_card::{AbilityIx, Behavior, Effect, ManaRestriction, Players};
 
 use crate::card::{Face, FaceIx, ManaColor};
-use crate::event::Sink;
+use crate::continuous::rule_change;
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small};
-use crate::rule_change;
+use crate::replacement::event::Sink;
 use beryl_kernel::chosen::ChosenValue;
 use beryl_kernel::mana_memory::{RememberedMana, RestrictionId};
 
@@ -265,7 +265,7 @@ pub(super) fn add<L: Layout>(
     let player = s.controller(source.slot);
     let added = s.add_remembered_mana(player, Some(source), mana)?;
     sink.note_from(Some(source), added);
-    crate::layers::refresh(s, t, sink)
+    crate::continuous::layers::refresh(s, t, sink)
 }
 
 /// Spends the mana that remembers at `index` in `player`'s pool on what `paying` is for. Its

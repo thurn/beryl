@@ -9,14 +9,14 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{AbilityKind, CostAction, CostPart, Keywords, ManaCost, Types};
-use crate::event::Sink;
+use crate::continuous::layers;
 use crate::filter::Evaluate;
 use crate::fixed::Fixed;
 use crate::ids::{Seat, SlotId};
 use crate::invariants::{At, Violation};
-use crate::layers;
 use crate::layout::{Layout, Queue, Table};
 use crate::mana::{self, Funds, Paying};
+use crate::replacement::event::Sink;
 use crate::state::State;
 use crate::table::{Capability, GameTable};
 use beryl_kernel::chosen::ChosenValue;

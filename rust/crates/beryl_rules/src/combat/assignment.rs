@@ -9,10 +9,10 @@ use crate::card::{Keywords, Prompt, Purpose};
 use crate::damage;
 use crate::decision::{Candidates, Choice, Decision, DecisionKind, OPTIONS, Opt};
 use crate::engine::collapse;
-use crate::event::{Recipient, Sink};
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::layout::{Layout, Queue, Small};
+use crate::replacement::event::{Recipient, Sink};
 use crate::state::{AttackTarget, BATTLEFIELD, CombatRole, ObjectRef, Pending, State, TurnStep};
 use crate::table::GameTable;
 

@@ -4,19 +4,19 @@ use beryl_card::{Keywords, Objects, Regeneration};
 use beryl_kernel::reference::{Permanent, Permanents};
 
 use crate::bitboard::Bitboard;
-use crate::event::{self, Entry, Reason};
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
-use crate::replace;
+use crate::replacement;
+use crate::replacement::event::{self, Entry, Reason};
 use crate::state::{State, Zone};
 
 /// Destroys a permanent ([CR 701.8a](https://yawgatog.com/resources/magic-rules/#R7018a)):
 /// "To destroy a permanent, move it from the battlefield to its owner's graveyard." One that
 /// has left the battlefield since is not destroyed (CR 400.7), nor is one with indestructible
 /// ([`indestructible`]). A regeneration shield on it replaces the destruction
-/// ([`replace::destruction`]).
+/// ([`replacement::destruction`]).
 #[inline]
 pub fn destroy<L: Layout>(game: &mut Game<'_, L>, object: Permanent<L>) -> Result<(), Full> {
     let Some(object) = game.state().current(object) else {
@@ -29,7 +29,7 @@ pub fn destroy<L: Layout>(game: &mut Game<'_, L>, object: Permanent<L>) -> Resul
         return Ok(());
     }
     let allowed = Regeneration::Allowed;
-    if replace::destruction(game.state, game.table, game.sink, one, allowed)?.is_empty() {
+    if replacement::destruction(game.state, game.table, game.sink, one, allowed)?.is_empty() {
         return Ok(());
     }
     let (to, reason) = (Zone::Graveyard, Reason::Destroy);
@@ -40,7 +40,7 @@ pub fn destroy<L: Layout>(game: &mut Game<'_, L>, object: Permanent<L>) -> Resul
 /// does: one event, so "whenever one or more" abilities see them together. Those with
 /// indestructible stay ([`indestructible`]). Unless `regeneration` forbids it, a
 /// regeneration shield replaces the destruction of the permanent it is on
-/// ([`replace::destruction`]).
+/// ([`replacement::destruction`]).
 #[inline]
 pub fn destroy_all<L: Layout>(
     game: &mut Game<'_, L>,
@@ -50,7 +50,7 @@ pub fn destroy_all<L: Layout>(
     let permanents = permanents.slots();
     let permanents = permanents & !indestructible(game.state(), permanents);
     let (s, t, sink) = (&mut *game.state, game.table, &mut *game.sink);
-    let permanents = replace::destruction(s, t, sink, permanents, regeneration)?;
+    let permanents = replacement::destruction(s, t, sink, permanents, regeneration)?;
     let (to, reason) = (Zone::Graveyard, Reason::Destroy);
     let entry = Entry::default();
     event::move_batch(

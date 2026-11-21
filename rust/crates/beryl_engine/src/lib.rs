@@ -20,7 +20,8 @@ pub use beryl_kernel::{
 // The rules' modules, among them `layout` and `profile`: the kernel's layouts and restriction
 // profiles, with the rules' stops beside the profiles. A card file with a Rust body takes the
 // rules library, `CustomBody` and `custom_body` from `beryl_rules` itself.
-pub use beryl_rules::{card, coverage, event, layout, profile};
+pub use beryl_rules::replacement::event;
+pub use beryl_rules::{card, coverage, layout, profile};
 
 pub use beryl_kernel::Misfit;
 pub use beryl_kernel::invariants::{At, Violation};

@@ -5,12 +5,12 @@
 use beryl_card::{Amount, Players};
 
 use crate::bitboard::Bitboard;
+use crate::continuous::rule_change;
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
 use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
-use crate::rule_change;
 use crate::state::State;
 use crate::table::GameTable;
 

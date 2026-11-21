@@ -6,10 +6,10 @@ use crate::bitboard::Bitboard;
 use crate::card::{
     Ability, AbilityKind, CostAction, Face, Keywords, ManaCost, Rewrite, Timing, Types,
 };
+use crate::continuous::rule_change;
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small, Table};
-use crate::rule_change;
 use crate::state::{State, TurnStep};
 use crate::table::{GameTable, ManaFace};
 
@@ -172,7 +172,7 @@ fn enters_untapped<L: Layout>(s: &State<L>, player: Seat, face: &Face) -> bool {
         .all(|r| match r.rewrite {
             Rewrite::EntersTapped => false,
             Rewrite::EntersTappedUnlessFewLands(n) => {
-                // As [`crate::replace::entering`] counts them: every land is another land.
+                // As [`crate::replacement::entering`] counts them: every land is another land.
                 s.battlefield()
                     .iter()
                     .filter(|&&p| {

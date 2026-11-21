@@ -12,13 +12,13 @@ use beryl_card::{Amount, Condition, Effect, Objects, Players, Zone};
 
 use crate::bodies::Bodies;
 use crate::card::{Ability, Behavior, Flow, ManaColor, ObjectAbility, Stop};
-use crate::event::Sink;
+use crate::continuous::layers;
 use crate::filter::Filter;
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
-use crate::layers;
 use crate::layout::Layout;
+use crate::replacement::event::Sink;
 use crate::resolution::Resolution;
 use crate::state::TriggeredAbility;
 use crate::state::{AbilityRef, PendingTrigger, State, Tracker, TriggerInfo, ZoneKey};
@@ -61,7 +61,7 @@ fn data<'a, L: Layout>(
 /// resolution carries out instructions, with `player` as "that player"
 /// ([CR 614.1a](https://yawgatog.com/resources/magic-rules/#R6141a)): "Effects that use the
 /// word 'instead' are replacement effects." The card table holds only such replacements whose
-/// body is data (`crate::replacement::instead_of_drawing`).
+/// body is data (`beryl_kernel::replacement::instead_of_drawing`).
 pub(crate) fn instead_of_drawing<'a, L: Layout>(
     game: &mut Game<'a, L>,
     resolution: &mut Resolution<'a, L>,
@@ -98,7 +98,7 @@ pub(crate) fn finish<L: Layout>(game: &mut Game<'_, L>, flow: Flow) -> Result<bo
 /// payment. `activation` describes the ability for any other.
 ///
 /// What it does is the effect of an ability of its source, where its costs were its
-/// controller's doing ([`Cause::Object`](crate::event::Cause::Object)). The mana added
+/// controller's doing ([`Cause::Object`](crate::replacement::event::Cause::Object)). The mana added
 /// directly is tagged so as it is noted, which opens no scope.
 #[inline]
 pub(crate) fn mana_ability<L: Layout>(

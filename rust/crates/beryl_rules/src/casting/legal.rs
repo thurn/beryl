@@ -12,6 +12,7 @@ use crate::card::{
     Ability, AbilityIx, AbilityKind, Castings, CostAction, CostPart, Face, FaceIx, Keywords,
     ManaCost, ObjectAbility, Timing, Types,
 };
+use crate::continuous::rule_change;
 use crate::decision::{Candidates, OPTIONS, Opt, Refusal};
 use crate::engine::collapse;
 use crate::fixed::Full;
@@ -19,7 +20,6 @@ use crate::game::life;
 use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Small};
 use crate::mana::{self, Funds};
-use crate::rule_change;
 use crate::state::{RuleKind, State, Tracker, Zone, ZoneKey};
 use crate::table::{Capability, GameTable};
 

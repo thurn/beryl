@@ -2,25 +2,27 @@
 //! of objects outside the battlefield that work where they are, as events happen and as
 //! permanents leave, the triggered abilities that copy exceptions give the permanents that
 //! are copies, and those of the cards under a merged permanent.
+//!
+//! Implements: none. Matches triggers under the rules declared by its parent module.
 
 use super::{ability, about, away, enqueue, fires, times};
 use crate::card::FaceAbility;
-use crate::event::{Event, EventKind};
 use crate::fixed::Full;
 use crate::layout::{Layout, Queue};
+use crate::replacement::event::{Event, EventKind};
 use crate::state::{Flag, State, TriggerInfo, TriggeredAbility, Zone};
 use crate::table::GameTable;
 use beryl_kernel::listener;
 
 /// Matches `e`, an event of kind `k`, against the triggered abilities that copy exceptions give
 /// the permanents that are copies ([`Copiable::given_abilities`]), in the order of the
-/// battlefield ([CR 707.9a]): "This ability becomes part of the copiable values for the copy,
+/// battlefield (see [CR 707.9a]): "This ability becomes part of the copiable values for the copy,
 /// along with any other abilities that were copied." No face of a copy's definition lists such
 /// an ability, so the table's listeners do not hold it. Out of line: only a game with a card
 /// whose exception gives one looks ([`Capability::GivesTriggers`]).
 ///
 /// It matches the triggered abilities of the faces of the cards under a merged permanent too
-/// ([`Copiable::merged_faces`]), from the table's listeners of those faces ([CR 702.140e]): "A
+/// ([`Copiable::merged_faces`]), from the table's listeners of those faces (see [CR 702.140e]): "A
 /// mutated permanent has all abilities of each card and token that represents it." Only a game
 /// with mutate has them ([`Capability::Merges`]).
 ///
@@ -80,7 +82,7 @@ pub(super) fn match_given<L: Layout>(
 /// [`super::match_look_back`] for the triggered abilities of the cards under a merged
 /// permanent ([`Copiable::merged_faces`]), as the permanent `left` leaves for `to`: a card
 /// under it that says "when this creature dies" sees the permanent die, once, however many
-/// cards it is made of ([CR 731.3]): "If a merged permanent leaves the battlefield, one
+/// cards it is made of (see [CR 731.3]): "If a merged permanent leaves the battlefield, one
 /// permanent leaves the battlefield". As the permanent is now, just before it leaves (CR 603.10a).
 /// Out of line: only a game with mutate looks ([`Capability::Merges`]).
 ///
@@ -103,7 +105,7 @@ pub(super) fn look_back_merged<L: Layout>(
         let source = s.object_ref(slot);
         let controller = s.controller(slot);
         let words = s.words_of(slot);
-        // CR 700.4: dying is going to a graveyard.
+        // see CR 700.4: dying is going to a graveyard.
         let kinds = [
             (EventKind::Dies, to == Zone::Graveyard),
             (EventKind::Leaves, true),
@@ -194,7 +196,7 @@ pub(super) fn look_back_away<L: Layout>(
                 player: s.controller(left),
                 amount: 0,
             };
-            // CR 700.4: dying is going to a graveyard.
+            // see CR 700.4: dying is going to a graveyard.
             let kinds = [
                 (EventKind::Dies, to == Zone::Graveyard),
                 (EventKind::Leaves, true),

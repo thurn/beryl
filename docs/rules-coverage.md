@@ -279,20 +279,20 @@ then counters (7c), then the rules static abilities change (CR 613.11)
   and no land type change, says when the card's facts still hold.
 - **Dependencies** (landed with the same cards). In a layer with two or more
   effects, A depends on B when applying B changes whether A exists, what A
-  applies to, or what A does to it (`layers/dependency.rs`). Each `LayerChange`
-  declares what it writes (`LayerChange::writes`) among `Characteristics`, and
-  each listed effect what it reads: its filter and "as long as", its counted
-  amount, and, for a static ability, whether its permanent has lost it. Gaining
-  and losing abilities are apart, and no filter reads power, toughness or
-  abilities, so a layer whose effects write only those is never searched and a
-  WU mirror game runs no trial. For a pair that might depend, B is applied to
-  the results, A's existence, set and change are compared, and the rows are put
-  back. The effect applied next is the earliest by timestamp that depends on
-  nothing still waiting; with every one waiting, the earliest in a loop; the
-  order is found again after each application. A static ability's existence is
-  asked as its effect comes up, not at the head of its layer. The cards'
-  characteristic-defining abilities are all in layer 7a, where nothing else
-  applies, so CR 613.8a's (c) needs no code.
+  applies to, or what A does to it (`continuous/layers/dependency.rs`). Each
+  `LayerChange` declares what it writes (`LayerChange::writes`) among
+  `Characteristics`, and each listed effect what it reads: its filter and "as
+  long as", its counted amount, and, for a static ability, whether its permanent
+  has lost it. Gaining and losing abilities are apart, and no filter reads
+  power, toughness or abilities, so a layer whose effects write only those is
+  never searched and a WU mirror game runs no trial. For a pair that might
+  depend, B is applied to the results, A's existence, set and change are
+  compared, and the rows are put back. The effect applied next is the earliest
+  by timestamp that depends on nothing still waiting; with every one waiting,
+  the earliest in a loop; the order is found again after each application. A
+  static ability's existence is asked as its effect comes up, not at the head of
+  its layer. The cards' characteristic-defining abilities are all in layer 7a,
+  where nothing else applies, so CR 613.8a's (c) needs no code.
 - **Timestamps** (CR 613.7). An Aura or Equipment gets a new one as it becomes
   attached, and a permanent as it turns face up (both already built). The `u16`
   counter is renumbered by rank, out of line, before it would run out
@@ -305,15 +305,15 @@ then counters (7c), then the rules static abilities change (CR 613.11)
   copies the state, moves the entering object onto the battlefield in the copy
   as its entry says, and runs the recompute there, so every effect finds the
   object as it finds any permanent and the real state is never changed. The
-  replacement pipeline (`replace::entering`, `replace::life_to_enter`) asks for
-  it only for an object whose face has a replacement of its entering, and only
-  when an effect in force removes abilities or the face has a static ability of
-  its own (`layers::entering::lost_entering`), so other games pay one flag test.
-  Under Blood Moon a land that would ask for life as it enters is a Mountain
-  with no such ability, and enters untapped. A recompute over the battlefield's
-  rows plus one scratch row was the first design; it would have needed every
-  filter and layer read to know about a row that is not a permanent, and the
-  copy costs nothing in a game that never asks.
+  replacement pipeline (`replacement::entering`, `replacement::life_to_enter`)
+  asks for it only for an object whose face has a replacement of its entering,
+  and only when an effect in force removes abilities or the face has a static
+  ability of its own (`continuous::layers::lost_entering`), so other games pay
+  one flag test. Under Blood Moon a land that would ask for life as it enters is
+  a Mountain with no such ability, and enters untapped. A recompute over the
+  battlefield's rows plus one scratch row was the first design; it would have
+  needed every filter and layer read to know about a row that is not a
+  permanent, and the copy costs nothing in a game that never asks.
 - **What makes the cache stale** (landed with Tarmogoyf). A static ability may
   read something no layer writes, as Tarmogoyf's characteristic-defining ability
   reads the graveyards. Each face's static abilities declare such inputs
@@ -331,9 +331,9 @@ then counters (7c), then the rules static abilities change (CR 613.11)
 - **A granted static ability** (landed with Opalescence). An ability granted in
   layer 6 whose effect belongs to an earlier layer is found only after that
   layer has run. The recompute then runs the layers once more with the abilities
-  the run before found granted (`layers/granted.rs`), until a run finds the same
-  ones, at most three runs. A granted ability's effect has its permanent's
-  timestamp and comes after the face's own abilities.
+  the run before found granted (`continuous/layers/granted.rs`), until a run
+  finds the same ones, at most three runs. A granted ability's effect has its
+  permanent's timestamp and comes after the face's own abilities.
   `Capability::GrantsLayerEffect` says whether any card of the game grants a
   static ability with a continuous effect, so other games run the layers once.
   The card table refuses a granted ability whose amount the layers read as they
@@ -404,21 +404,22 @@ Built so far (by-bajq.3.1):
   for, and the card table refuses the rest. Optional replacements and
   replacements that work outside the battlefield are refused until the choice of
   CR 616.1 is built.
-- `beryl_rules/src/replace.rs` holds every replacement. A move is proposed as
-  `replace::Move` (object, from, to, how it enters); `replace::moving` decides
-  where it goes, collecting the Effects store's move entries and the static
-  abilities of permanents (gated by `ReplacementKind::Move` in the layers' mask)
-  and applying candidates until none is left (CR 616.1f). Candidates that put
-  the object into the same zone are one. A self-replacement effect is applied by
-  the instruction that proposes the move, so the loop needs no class of its own
-  for it, and no rewrite of a move belongs to CR 616.1b to 616.1d yet. Where two
-  candidates differ, a `debug_assert` marks the choice that by-bajq.3.2 builds.
-  The entering object's own replacements are applied after its destination is
-  settled: they only change how it enters and never conflict with one another or
-  with a change of destination.
-- A draw keeps `drawing::draw`'s loop of single draws and asks `replace::draw`
-  before each. Damage gets its proposal with prevention (by-bajq.3.9), the first
-  replacement of damage.
+- `beryl_rules/src/replacement/mod.rs` holds every replacement. A move is
+  proposed as `replacement::Move` (object, from, to, how it enters);
+  `replacement::moving` decides where it goes, collecting the Effects store's
+  move entries and the static abilities of permanents (gated by
+  `ReplacementKind::Move` in the layers' mask) and applying candidates until
+  none is left (CR 616.1f). Candidates that put the object into the same zone
+  are one. A self-replacement effect is applied by the instruction that proposes
+  the move, so the loop needs no class of its own for it, and no rewrite of a
+  move belongs to CR 616.1b to 616.1d yet. Where two candidates differ, a
+  `debug_assert` marks the choice that by-bajq.3.2 builds. The entering object's
+  own replacements are applied after its destination is settled: they only
+  change how it enters and never conflict with one another or with a change of
+  destination.
+- A draw keeps `drawing::draw`'s loop of single draws and asks
+  `replacement::draw` before each. Damage gets its proposal with prevention
+  (by-bajq.3.9), the first replacement of damage.
 
 Built by by-bajq.3.2:
 
@@ -428,12 +429,12 @@ Built by by-bajq.3.2:
   optional replacement and the first that works from a graveyard; the card table
   says whether any card of a game has it (`Capability::Dredge`), and a draw then
   looks in the drawing player's graveyard before each single draw.
-- The flag is `replace::may_ask`, found when a step ends or a resolution begins
-  rather than kept in the state: a dredge card in a graveyard with enough cards
-  in its owner's library. A game without dredge pays one AND. A dredge card that
-  reaches a graveyard in the same run that would offer it is not offered there
-  (the run cannot pause, so the optional replacement is declined); no card of
-  the pool makes that happen yet.
+- The flag is `replacement::may_ask`, found when a step ends or a resolution
+  begins rather than kept in the state: a dredge card in a graveyard with enough
+  cards in its owner's library. A game without dredge pays one AND. A dredge
+  card that reaches a graveyard in the same run that would offer it is not
+  offered there (the run cannot pause, so the optional replacement is declined);
+  no card of the pool makes that happen yet.
 - The answers of a run that may pause are in the sink (`beryl_kernel::asking`),
   so a choice can stop the run from any depth: the code that asked returns
   `Full`, and whoever opened the run tells a stop from a capacity running out. A
@@ -444,17 +445,17 @@ Built by by-bajq.3.2:
   inline source answers each question as the run stops and the run starts again,
   so rollouts with a live choice also run on the copy.
 - Two replacements of a move into different zones are still not a choice: no
-  card yet puts an object anywhere but exile, so `replace::destination` keeps
-  its `debug_assert`. Combat damage meets no replacement until damage has its
-  proposal (by-bajq.3.9); damage dealt as a combat damage step begins is that
-  step's turn-based action, so its choices will pause the same way.
+  card yet puts an object anywhere but exile, so `replacement::destination`
+  keeps its `debug_assert`. Combat damage meets no replacement until damage has
+  its proposal (by-bajq.3.9); damage dealt as a combat damage step begins is
+  that step's turn-based action, so its choices will pause the same way.
 
 Built by by-bajq.3.9:
 
-- Damage is proposed before it is dealt (`replace::Damage`: source, recipient,
-  amount, combat, and whether it can be prevented), and `replace::damage`
-  applies its prevention. The only prevention yet is protection; shields and
-  doubling (by-bajq.3.10) join the same function.
+- Damage is proposed before it is dealt (`replacement::Damage`: source,
+  recipient, amount, combat, and whether it can be prevented), and
+  `replacement::damage` applies its prevention. The only prevention yet is
+  protection; shields and doubling (by-bajq.3.10) join the same function.
 - Protection is a layer-6 change (`LayerChange::AddProtection`, from
   `Modification::AddProtection`) into `Derived::protection`. Colors are the only
   quality (`beryl_card::Protection`); "the color of your choice" is chosen as
@@ -462,10 +463,11 @@ Built by by-bajq.3.9:
   same question a color chosen as a permanent enters asks.
 - The gate is a bit of the state's replacement mask, `Replaces::PROTECTION`, set
   by the layers when an effect that gives protection applied:
-  `State::protection` is one AND without it. `beryl_rules/src/protection.rs`
-  reads it for targets (`casting/targets.rs`, as they are chosen and as the
-  spell or ability resolves), Auras (`sba.rs`, CR 704.5m), Equipment
-  (`attach::may_equip_in`, CR 704.5n) and blockers (`combat::can_block`).
+  `State::protection` is one AND without it.
+  `beryl_rules/src/replacement/protection.rs` reads it for targets
+  (`casting/targets.rs`, as they are chosen and as the spell or ability
+  resolves), Auras (`sba.rs`, CR 704.5m), Equipment (`attach::may_equip_in`, CR
+  704.5n) and blockers (`combat::can_block`).
 - No printed protection exists yet: a face's keywords have no parameter, so a
   card with "protection from red" adds it to the face when its first card comes.
 
@@ -473,15 +475,15 @@ Built by by-bajq.3.4 (Chains of Mephistopheles, Notion Thief):
 
 - "Except the first one they draw in each of their draw steps" is part of what a
   replacement of draws replaces, not a condition: `Replaced::Draw` carries
-  `Draws::Each` or `Draws::ExceptFirstInDrawStep`, which `replace::draw` reads
-  from the `DrewInDrawStep` count. A condition could not say it, since the
+  `Draws::Each` or `Draws::ExceptFirstInDrawStep`, which `replacement::draw`
+  reads from the `DrewInDrawStep` count. A condition could not say it, since the
   ability's condition is read for its controller and knows no drawing player.
 - `Rewrite::Instead` of a draw may be any data body (`Instead::Instructions`),
   carried out as a resolution would, with "that player" the drawing player.
   `beryl_card`'s check allows `Players::ThatPlayer` in such a body. A card with
-  one adds `ReplacementKind::DrawInstructions`, which `replace::may_ask` reads
-  from the card table: its instructions may ask (a discard), so in a game with
-  such a card each resolution and step runs on the copy.
+  one adds `ReplacementKind::DrawInstructions`, which `replacement::may_ask`
+  reads from the card table: its instructions may ask (a discard), so in a game
+  with such a card each resolution and step runs on the copy.
 - CR 614.5 is the sink's `applied` list: the replacements that have applied to
   the draw being made or to a draw that replaced it. A draw made by their
   instructions skips them and is offered to the others, so two Chains each apply
@@ -506,16 +508,16 @@ Built by by-bajq.3.10:
 - Doubling is `Replacement::multiplies_damage` (`Replaced::Damage`,
   `Rewrite::Multiply`), a static ability of a permanent gated by
   `ReplacementKind::Damage` (Furnace of Rath).
-- `replace::damage` (`beryl_rules/src/replace/damage.rs`) is the loop of CR
-  616.1 for damage: protection, shields and multipliers, each applying once (CR
-  614.5). One that prevents all the damage applies first without asking, and
+- `replacement::damage` (`beryl_rules/src/replacement/damage.rs`) is the loop of
+  CR 616.1 for damage: protection, shields and multipliers, each applying once
+  (CR 614.5). One that prevents all the damage applies first without asking, and
   shields of an amount apply earliest first; the one question is a multiplier
   against a shield of an amount, asked of the affected player as `Replace`
   (`ChooseObject`, the shield's card or the permanent). A card that replaces
   damage adds `ReplacementKind::Damage` to the card table's mask, which turns on
-  `replace::may_ask`, so resolutions and combat damage can pause for it.
-- Regeneration's shields are applied by `replace::destruction`, the destruction
-  proposal that `actions::destroy` and the lethal-damage SBA make.
+  `replacement::may_ask`, so resolutions and combat damage can pause for it.
+- Regeneration's shields are applied by `replacement::destruction`, the
+  destruction proposal that `actions::destroy` and the lethal-damage SBA make.
 - Not built: damage that can't be prevented skips every prevention (no card
   makes damage unpreventable yet), and a permanent spell chosen as a source is
   not followed onto the battlefield (CR 609.7a's last sentence).
@@ -543,8 +545,8 @@ Built by by-bajq.3.10:
   views) take a permanent's layer result, which is the query's answer for a
   permanent. Lifelink and `Amount::CardTypesAmong`, which read objects in any
   zone, ask the query. A rule change's filter over a spell not yet cast
-  (`rule_change::accepts`) reads the card's face: no effect of the cards reaches
-  a card being cast through it yet.
+  (`continuous::rule_change::accepts`) reads the card's face: no effect of the
+  cards reaches a card being cast through it yet.
 - **Which abilities an object has** is answered by one kernel query that yields
   its face's abilities it has not lost and those granted to it (by-bajq.4.2), so
   a grant to a card in a graveyard (Underworld Breach) is one more source of
@@ -594,10 +596,10 @@ Built by by-bajq.3.10:
   (`Purpose::NewWord`), both in the catalog prompt shape. Layer 3 is no pass of
   the layers: a word is read through `words_of` wherever it is read, and the
   layer 1 values of a permanent whose type line reads otherwise are rewritten
-  before layer 4 (`beryl_rules/src/layers/text.rs`): its subtypes, its
-  landwalks, and for a land whose basic land types changed, the intrinsic mana
-  of the new types and the loss of a written mana ability of the old ones (a
-  Forest that reads "Island" taps for {U}). A permanent spell's changes are
+  before layer 4 (`beryl_rules/src/continuous/layers/text.rs`): its subtypes,
+  its landwalks, and for a land whose basic land types changed, the intrinsic
+  mana of the new types and the loss of a written mana ability of the old ones
+  (a Forest that reads "Island" taps for {U}). A permanent spell's changes are
   carried onto the battlefield by the zone move (CR 400.7a). A prevention shield
   keeps the color words of the text it was made from
   (`beryl_card::ColorChanges`, two bytes), since its payload has no room for a
@@ -659,9 +661,9 @@ Built by by-bajq.3.10:
   choice is not a target. The other replacements of entering are then found
   against the copy.
 - **As built** (by-bajq.6.2, 2026-11-15). `Rewrite::EnterAsCopy` (a filter and
-  an optional exception) is applied first in `replace::entering`: the entering
-  object's controller chooses a permanent or declines, the copied values (with
-  their additions, and the copier's exception after them) wait in
+  an optional exception) is applied first in `replacement::entering`: the
+  entering object's controller chooses a permanent or declines, the copied
+  values (with their additions, and the copier's exception after them) wait in
   `Sink::copies`, and the face they give is the one the other replacements of
   entering are read from, so a copy of Painter's Servant chooses a color. The
   copy effect starts as the permanent arrives (`State::enter_as_copy`), before
@@ -748,9 +750,10 @@ Built by by-bajq.3.10:
   the sources a `Named` names, with or without mana abilities, under
   `When::Never` (built for Pithing Needle). A filter has no permanent to read a
   memo from, so the sources are `Named::Chosen`, not a filter: the name the
-  permanent that makes the rule chose. The check (`rule_change::cant_activate`,
-  last in `casting::legal::activatable`) finds the makers only once the kind is
-  in force, and compares each one's chosen name with the source's copiable name.
+  permanent that makes the rule chose. The check
+  (`continuous::rule_change::cant_activate`, last in
+  `casting::legal::activatable`) finds the makers only once the kind is in
+  force, and compares each one's chosen name with the source's copiable name.
 - **A chosen value** is a memo of the permanent: a name, a color, a creature
   type. It is chosen as the permanent enters, through the replacement pipeline,
   in the `Catalog` prompt shape (built by by-bajq.3.3: `Rewrite::Choose`,
@@ -809,10 +812,10 @@ Built by by-bajq.3.10:
   ability starts at most one rule change, and Teferi's Protection makes both.
   The gain and loss of life (`life::gain`, `life::lose`), damage to a player,
   the payment of life (`life::can_pay`), the targeting check and the damage
-  prevention each ask `rule_change::life_can_change` or
-  `rule_change::protected_from_everything`, one AND while no card in the game
-  makes such a change. Damage to a player whose life can't change is dealt and
-  changes no life total. An Aura attached to a player is not built.
+  prevention each ask `continuous::rule_change::life_can_change` or
+  `continuous::rule_change::protected_from_everything`, one AND while no card in
+  the game makes such a change. Damage to a player whose life can't change is
+  dealt and changes no life total. An Aura attached to a player is not built.
 
 ### 7. Stack and object identity
 
@@ -838,7 +841,7 @@ Built by by-bajq.3.10:
   paragraph, so it is a delayed triggered ability that waits for its source to
   leave (`delayed_triggers::fire_on_leaving`). An Aura entering other than as a
   resolving Aura spell chooses what it enchants (CR 303.4f,
-  `replace::enchants`), or stays where it is (CR 303.4g).
+  `replacement::enchants`), or stays where it is (CR 303.4g).
 - **Mandatory loops** (CR 104.4b, built). The engine counts resolutions in a row
   in which no player chose among several answers, other than by passing priority
   (`State::note_resolution`, `State::note_choice`). Past eight, it compares a

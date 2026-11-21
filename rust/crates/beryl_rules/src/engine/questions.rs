@@ -4,17 +4,20 @@ use crate::bitboard::Bitboard;
 use crate::card::{ChosenKind, FaceIx, Prompt, Purpose, Types};
 use crate::casting::land::{enter_from_hand, enter_or_choose};
 use crate::decision::{Answers, Candidates, Choice, Decision, DecisionKind, OPTIONS, Opt, Refusal};
-use crate::event::Sink;
 use crate::fixed::Full;
 use crate::game::start;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, index};
 use crate::observation::Observation;
+use crate::replacement::event::Sink;
 use crate::scratch::Scratch;
 use crate::state::{Pending, State};
 use crate::table::GameTable;
 use crate::turn::paused_step;
-use crate::{casting, chosen, combat, entered, face_down, mana, resolve, sba, trigger, turn};
+use crate::{
+    casting, chosen, combat, continuous::arrival_timestamps, face_down, mana, sba, stack::resolve,
+    stack::trigger, turn,
+};
 
 use super::{act, collapse};
 
@@ -80,7 +83,7 @@ pub(crate) fn decision<L: Layout>(
             let kind = DecisionKind::ChooseObject;
             Ok(Decision::objects(p, kind, collapse(s, group), keep))
         }
-        Pending::OrderEntered { group } => Ok(entered::decision(s, group)),
+        Pending::OrderEntered { group } => Ok(arrival_timestamps::decision(s, group)),
         // The question is about the land entering, for this much life.
         Pending::EnterPayingLife { slot, life } => Ok(options(
             s.object(slot).owner(),
@@ -352,7 +355,7 @@ pub(super) fn perform_machine<L: Layout>(
             }
         }
         Pending::OrderEntered { group } => {
-            entered::pick(s, group, d.candidates.object(c).expect("an object choice"))
+            arrival_timestamps::pick(s, group, d.candidates.object(c).expect("an object choice"))
         }
         Pending::None
         | Pending::PlayOrDraw { .. }

@@ -5,13 +5,13 @@
 use crate::PlayerSet;
 use crate::bitboard::Bitboard;
 use crate::card::{Abilities, Ability, TargetKind, TargetSpec, Words};
-use crate::event::Sink;
+use crate::continuous::rule_change;
 use crate::filter::{self, Evaluate, Filter};
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small};
-use crate::protection;
-use crate::rule_change;
+use crate::replacement::event::Sink;
+use crate::replacement::protection;
 use crate::state::{
     AbilityTarget, CastKind, CastStep, Casting, StackEntry, StackItem, State, Target, TargetPlace,
     Zone, placed,

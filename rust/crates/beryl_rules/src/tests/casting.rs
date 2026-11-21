@@ -5,8 +5,8 @@ use super::cast::{Game, PONDER, REMOVAL, SORCERIES_AS_FLASH, cast, index_of};
 use super::events::with_game;
 use crate::card::{CastingKind, Castings, FaceIx, ManaColor, ObjectAbility, SpecIx, Takes};
 use crate::continuous;
-use crate::event::{self, Reason};
 use crate::ids::Slot;
+use crate::replacement::event::{self, Reason};
 use crate::state::{CounterKind, Duration, ManaPool, Pending, Tracker, TurnStep, Zone, ZoneKey};
 use crate::zone::Place;
 use crate::{Candidates, Choice, DecisionKind, Opt, Profile};
@@ -105,10 +105,15 @@ fn a_spell_whose_targets_all_became_illegal_does_not_resolve() {
         bear
     );
     // The bear leaves and comes back: a new object (CR 400.7), so an illegal target.
-    g.s.move_object(&mut crate::event::Sink::off(), bear, Zone::Hand, Place::Top)
-        .unwrap();
     g.s.move_object(
-        &mut crate::event::Sink::off(),
+        &mut crate::replacement::event::Sink::off(),
+        bear,
+        Zone::Hand,
+        Place::Top,
+    )
+    .unwrap();
+    g.s.move_object(
+        &mut crate::replacement::event::Sink::off(),
         bear,
         Zone::Battlefield,
         Place::Top,
@@ -823,11 +828,16 @@ fn a_paused_body_answers_each_question_with_the_card_first_chosen() {
     lands.sort_unstable();
     let [seen, mine, drawn] = [lands[0], lands[1], lands[2]];
     for slot in [seen, mine] {
-        g.s.move_object(&mut crate::event::Sink::off(), slot, Zone::Hand, Place::Top)
-            .unwrap();
+        g.s.move_object(
+            &mut crate::replacement::event::Sink::off(),
+            slot,
+            Zone::Hand,
+            Place::Top,
+        )
+        .unwrap();
     }
     g.s.move_object(
-        &mut crate::event::Sink::off(),
+        &mut crate::replacement::event::Sink::off(),
         drawn,
         Zone::Library,
         Place::Top,

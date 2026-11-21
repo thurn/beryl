@@ -3,20 +3,22 @@
 
 use crate::casting::land::play_land;
 use crate::decision::{Answers, Choice, Decision, DecisionKind, Opt, Outcome, StallReason, Step};
-use crate::event::{Cause, Sink, StackIx, Tagged};
 use crate::fixed::Full;
 use crate::game::start;
 use crate::ids::Seat;
 use crate::layout::Layout;
 use crate::observation::Observation;
 use crate::profile::{self, Stops};
+use crate::replacement::event::{Cause, Sink, StackIx, Tagged};
 #[cfg(debug_assertions)]
 use crate::scratch::assert_sound;
 pub use crate::scratch::{Counts, Scratch};
 use crate::state::{Pending, State, TurnStep};
 use crate::table::GameTable;
 use crate::turn::paused_step;
-use crate::{casting, combat, face_down, layers, mana, resolve, sba, trigger, turn};
+use crate::{
+    casting, combat, continuous::layers, face_down, mana, sba, stack::resolve, stack::trigger, turn,
+};
 
 mod questions;
 
@@ -45,7 +47,12 @@ pub fn concede<L: Layout>(s: &mut State<L>, x: &mut Scratch<L>, player: Seat) {
             player,
             entry: None,
         });
-        sba::end_game(s, &mut x.events, player, crate::event::LossCause::Concede);
+        sba::end_game(
+            s,
+            &mut x.events,
+            player,
+            crate::replacement::event::LossCause::Concede,
+        );
         x.events.leave();
     }
 }
@@ -578,7 +585,7 @@ fn perform<L: Layout>(
     let object = || d.candidates.object(c).expect("an object choice");
     let option = || d.candidates.option(c).expect("an option choice");
     // A choice among several means no loop through this moment is one of mandatory actions
-    // (CR 104.4b; [`crate::resolve::resolve`]). A priority action other than passing is
+    // (CR 104.4b; [`crate::stack::resolve::resolve`]). A priority action other than passing is
     // noted where it is taken ([`perform_priority`]).
     if d.kind != DecisionKind::Priority && d.len() > 1 {
         s.note_choice();
@@ -682,7 +689,7 @@ fn pass<L: Layout>(
         return Ok(());
     }
     if s.stack().is_empty() {
-        if crate::replace::may_ask(t) {
+        if crate::replacement::may_ask(t) {
             paused_step::end_step(s, t, x, a)
         } else {
             turn::end_step(s, t, &mut x.events)

@@ -13,14 +13,14 @@ use crate::card::{
     Ability, CardDef, Face, FaceIx, LayerSpec, Modification, Replacement, Subtype, SubtypeWords,
     Subtypes, Supertypes, TargetKind, TargetSpec, Types,
 };
-use crate::event::{self, Entry, Reason, Sink};
+use crate::continuous::layers::entering::as_it_would_exist;
 use crate::filter::Filter;
 use crate::ids::Seat;
-use crate::layers::entering::as_it_would_exist;
+use crate::replacement::event::{self, Entry, Reason, Sink};
 use crate::rng::SplitMix64;
 use crate::scratch::Scratch;
 use crate::state::{TurnStep, Zone};
-use crate::{CardTable, GameTable, Observation, Profile, State, layers};
+use crate::{CardTable, GameTable, Observation, Profile, State, continuous::layers};
 
 use super::events::{find, put};
 
@@ -239,7 +239,7 @@ fn an_entering_replacement_the_permanent_would_lose_does_not_apply() {
     let springs = find(&s, &t, Seat::P0, "Test Springs");
     let entry = Entry::default();
     assert_eq!(
-        crate::replace::life_to_enter(&s, &t, springs, entry),
+        crate::replacement::life_to_enter(&s, &t, springs, entry),
         Ok(None)
     );
     let life = s.player(Seat::P0).life();

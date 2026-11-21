@@ -15,9 +15,9 @@ use super::LAND;
 use super::cast::{BEAR, Game};
 use super::events::with_game;
 use crate::card::{Ability, CardDef, Face, Players, TargetSpec, Trigger, Types};
-use crate::event::{self, Reason, TokenEntry};
 use crate::filter::Filter;
 use crate::ids::Slot;
+use crate::replacement::event::{self, Reason, TokenEntry};
 use crate::resolution::Resolution;
 use crate::state::{Duration, TurnStep, Zone};
 use crate::{CardTable, Choice, DecisionKind, Decklist, Profile, continuous, tokens, zones};
@@ -76,9 +76,9 @@ fn with_game_at(
     source: Slot,
     body: impl FnOnce(&mut crate::game::Game, &mut Resolution),
 ) {
-    crate::layers::refresh(&mut g.s, &g.t, &mut g.x.events).unwrap();
+    crate::continuous::layers::refresh(&mut g.s, &g.t, &mut g.x.events).unwrap();
     with_game(&g.t, &mut g.s, &mut g.x, source, body);
-    crate::layers::refresh(&mut g.s, &g.t, &mut g.x.events).unwrap();
+    crate::continuous::layers::refresh(&mut g.s, &g.t, &mut g.x.events).unwrap();
 }
 
 /// A game in the starting player's precombat main phase. Each player has a land in hand,

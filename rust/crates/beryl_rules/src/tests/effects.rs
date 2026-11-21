@@ -16,11 +16,11 @@ use crate::card::{
     Ability, FaceAbility, FaceIx, Modification, Part, Place, Players, Prompt, Purpose, SpecIx,
     Takes, TargetKind, TargetSpec, Types,
 };
-use crate::event::{self, Event, Reason};
 use crate::filter::Filter;
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::{Seat, Slot};
+use crate::replacement::event::{self, Event, Reason};
 use crate::resolution::Resolution;
 use crate::state::{
     AbilityRef, CounterKind, ObjectRef, StackEntry, StackItem, Target, TurnStep, Zone, ZoneKey,
@@ -83,7 +83,7 @@ fn run(
     for &target in targets {
         entry.targets.push(target).unwrap();
     }
-    let legal = crate::resolve::legal_targets(s, t, &entry, ability);
+    let legal = crate::stack::resolve::legal_targets(s, t, &entry, ability);
     let mut resolution = Resolution::new(entry, ability, legal, None);
     x.events.asking.begin(answers, false).unwrap();
     let mut game = Game::new(s, t, &mut x.events);
@@ -628,7 +628,7 @@ fn a_copy_of_a_target_is_a_token_with_its_copiable_values() {
 
 /// The permanent's power and toughness after continuous effects, as they are now.
 fn size(t: &GameTable, s: &mut State, x: &mut Scratch, slot: Slot) -> (i8, i8) {
-    crate::layers::refresh(s, t, &mut x.events).unwrap();
+    crate::continuous::layers::refresh(s, t, &mut x.events).unwrap();
     (s.derived(slot).power, s.derived(slot).toughness)
 }
 

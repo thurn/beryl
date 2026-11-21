@@ -3,12 +3,12 @@
 use beryl_card::{Amount, Players};
 
 use crate::bitboard::Bitboard;
-use crate::event::Reason;
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
 use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
+use crate::replacement::event::Reason;
 use crate::state::{Zone, ZoneKey};
 use crate::{library, zones};
 

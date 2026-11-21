@@ -384,20 +384,20 @@ fixed in the same session. Newest first.
   the cards under it.** Gemrazer cast for its mutate cost over Hullbreacher made
   no Treasure when an opponent drew an extra card, and over Bloodghast the
   merged creature could still block, though a mutated permanent has every
-  ability of each card that represents it (CR 702.140e). `replace::statics`
+  ability of each card that represents it (CR 702.140e). `replacement::statics`
   dropped every ability other than `ObjectAbility::Own`, the per-permanent "may
   replace" tests read only the top face's mask, and the object rule change
-  readers in `rule_change.rs` read only the top face's rules
+  readers in `continuous/rule_change.rs` read only the top face's rules
   (`Definition::rules`), because each kept an `AbilityIx` on the permanent's own
   face as an ability's identity. Fixed: a replacement's source
   (`Source::Ability`, `Key::Ability`, `DrawReplacement::index`, `Sink::applied`)
   and a rule change's maker (`maker_of`) are named by `ObjectAbility`,
-  `replace::may_replace` and `rule_change::object_rules` add the faces under a
-  merged permanent (`State::merged_faces_now`), and `static_condition_holds`
-  reads a merged ability's condition as its own card's. Prevention: an ability's
-  identity is `ObjectAbility`, never an `AbilityIx`; a reader that narrows it to
-  `Own` with a `let ... else` should say in a comment which other kinds the card
-  table refuses.
+  `replacement::may_replace` and `continuous::rule_change::object_rules` add the
+  faces under a merged permanent (`State::merged_faces_now`), and
+  `static_condition_holds` reads a merged ability's condition as its own card's.
+  Prevention: an ability's identity is `ObjectAbility`, never an `AbilityIx`; a
+  reader that narrows it to `Own` with a `let ... else` should say in a comment
+  which other kinds the card table refuses.
 
 - **A merged permanent lost the activated, mana and static abilities of the
   cards under it.** Gemrazer cast for its mutate cost over Drudge Skeletons
@@ -409,12 +409,12 @@ fixed in the same session. Newest first.
   `State::abilities` yields `ObjectAbility::Merged(place, index)` for each
   ability of a card under the permanent, activation and the mana solver take
   them, and the layers list their static abilities, masks and player rule
-  changes (`layers/merged.rs`). Static replacement abilities and object rule
-  changes from under a merged permanent are still not read: those readers name
-  an ability by its index on the permanent's own face. Prevention: every reader
-  of an object's abilities goes through `State::abilities`; a reader that walks
-  a face itself, or keeps an `AbilityIx` as an ability's identity, misses each
-  new place abilities come from.
+  changes (`continuous/layers/merged.rs`). Static replacement abilities and
+  object rule changes from under a merged permanent are still not read: those
+  readers name an ability by its index on the permanent's own face. Prevention:
+  every reader of an object's abilities goes through `State::abilities`; a
+  reader that walks a face itself, or keeps an `AbilityIx` as an ability's
+  identity, misses each new place abilities come from.
 
 - **Phasing out a permanent that entered this turn could panic.** The tracker
   check looked for the permanent in the battlefield zone set, which omits
@@ -478,11 +478,11 @@ fixed in the same session. Newest first.
   Found and fixed while adding Animate Dead, whose enchant ability changes on
   the battlefield: `attach::may_enchant` asks every enchant ability the Aura has
   now (CR 702.5c) and CR 303.4d, the state-based action and the attach
-  instruction both ask it, and `replace::enchants` makes the CR 303.4f choice.
-  Prevention: a rule with a general condition ("an illegal object") is written
-  in general and not narrowed to the cards of the day; a doc comment that says
-  "the one implemented card does X, so" marks code to revisit when a second card
-  arrives.
+  instruction both ask it, and `replacement::enchants` makes the CR 303.4f
+  choice. Prevention: a rule with a general condition ("an illegal object") is
+  written in general and not narrowed to the cards of the day; a doc comment
+  that says "the one implemented card does X, so" marks code to revisit when a
+  second card arrives.
 
 - **Storm copied nothing once its spell was countered.** With Brain Freeze or
   Tendrils of Agony on the stack, countering the spell in response to its storm
@@ -579,7 +579,7 @@ fixed in the same session. Newest first.
 
 - Jace, Wielder of Mysteries' +1 aimed at its controller milled Life from the
   Loam, and the draw that followed in the same resolution was not offered dredge
-  3\. `replace::may_ask`, read as a resolution or a step's turn-based actions
+  3\. `replacement::may_ask`, read as a resolution or a step's turn-based actions
   begin, held only while a dredge card already sat in a graveyard. A run that
   began with it false ran on the committed state, which cannot pause, so the
   dredge choice it met later took its first candidate, declining. Fixed by
@@ -628,11 +628,11 @@ fixed in the same session. Newest first.
   for the player drawing, which was right only while a draw replacement could
   replace nothing but its own controller's draws. Widening `Replaced::Draw` to
   name whose draws it replaces broke that unstated assumption; a unit test for
-  the new case found it before it landed. Prevention: `replace::draw` returns
-  the replacement's controller beside what happens instead, so the reader of
-  those players has the right player in hand and no other to choose. A function
-  that reads `Players` should take the player they are read for from the source
-  of the ability, never from the event it is about.
+  the new case found it before it landed. Prevention: `replacement::draw`
+  returns the replacement's controller beside what happens instead, so the
+  reader of those players has the right player in hand and no other to choose. A
+  function that reads `Players` should take the player they are read for from
+  the source of the ability, never from the event it is about.
 
 - Five card definitions did less than their Oracle text said, and every check
   passed. Thieving Skydiver stole an Equipment without attaching it to itself

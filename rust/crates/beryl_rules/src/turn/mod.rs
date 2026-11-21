@@ -6,15 +6,15 @@ pub(crate) mod paused_step;
 pub(crate) mod stops;
 
 use crate::combat;
+use crate::continuous::layers;
 use crate::decision::{Outcome, StallReason};
 use crate::drawing;
-use crate::event::{self, Reason, Sink};
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
-use crate::layers;
 use crate::layout::Layout;
 use crate::phasing;
+use crate::replacement::event::{self, Reason, Sink};
 use crate::state::{Duration, Pending, State, TurnStep, Zone, ZoneKey};
 use crate::table::GameTable;
 

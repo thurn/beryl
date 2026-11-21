@@ -2,12 +2,12 @@
 
 use beryl_card::{Objects, Players};
 
-use crate::event::{Event, Reason};
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
 use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
+use crate::replacement::event::{Event, Reason};
 use crate::state::Zone;
 use crate::zones;
 

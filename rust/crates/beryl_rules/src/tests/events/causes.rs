@@ -12,9 +12,9 @@ use crate::card::{
     Ability, CardDef, Cost, CostPart, Face, ManaCost, Players, TargetKind, TargetSpec, Trigger,
     Types,
 };
-use crate::event::{Cause, Event, Reason, StackIx, Tagged};
 use crate::filter::Filter;
 use crate::ids::{Seat, Slot};
+use crate::replacement::event::{Cause, Event, Reason, StackIx, Tagged};
 use crate::state::{StackEntry, TurnStep, Zone};
 use crate::tests::LAND;
 use crate::tests::cast::{Game, cast, index_of};

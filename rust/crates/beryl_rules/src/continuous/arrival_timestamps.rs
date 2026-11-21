@@ -1,4 +1,4 @@
-//! The timestamps of permanents that enter the battlefield together ([CR 613.7m]): "If two or
+//! The timestamps of permanents that enter the battlefield together (see [CR 613.7m]): "If two or
 //! more objects would receive a timestamp simultaneously, such as by entering a zone
 //! simultaneously or becoming attached simultaneously, their relative timestamps are
 //! determined in APNAP order (see rule 101.4). Objects controlled by the active player (or
@@ -20,15 +20,17 @@
 //! trigger on the batch are matched with the batch's order, and a batch moved while another
 //! question is open (as a cost being paid) keeps the batch's order without asking.
 //!
+//! Implements: none. Orders simultaneous arrivals using the kernel's timestamp rules.
+//!
 //! [CR 613.7m]: https://yawgatog.com/resources/magic-rules/#R6137m
 
 use crate::bitboard::Bitboard;
 use crate::card::{Prompt, Purpose};
+use crate::continuous::layers;
 use crate::decision::{Decision, DecisionKind};
 use crate::engine::collapse;
 use crate::fixed::Full;
 use crate::ids::Seat;
-use crate::layers;
 use crate::layout::{Layout, Queue};
 use crate::state::{Pending, State, Zone};
 use crate::table::GameTable;

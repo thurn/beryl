@@ -10,11 +10,11 @@ use crate::card::{
     Ability, Amount, CardDef, Castings, Condition, Face, Objects, Players, Replacement, Subject,
     Trigger, TriggerEvent, Types,
 };
-use crate::event::{self, Entry, Event, Reason, Sink};
 use crate::filter::Filter;
 use crate::fixed::Fixed;
 use crate::ids::{Seat, Slot};
 use crate::layout::{Small, index};
+use crate::replacement::event::{self, Entry, Event, Reason, Sink};
 use crate::state::{StackItem, Zone, ZoneKey};
 use crate::table::TableError;
 use crate::zone::Place;
@@ -227,7 +227,7 @@ fn a_state_trigger_does_not_trigger_again_while_waiting_or_on_the_stack() {
         crate::sba::check(&mut s, &t, &mut x.events).unwrap();
         assert_eq!(s.triggers().len(), 1, "once while it waits");
     }
-    crate::trigger::put_on_stack(&mut s, &t, &mut x.events, index::<Small>(0)).unwrap();
+    crate::stack::trigger::put_on_stack(&mut s, &t, &mut x.events, index::<Small>(0)).unwrap();
     crate::sba::check(&mut s, &t, &mut x.events).unwrap();
     assert!(s.triggers().is_empty(), "nor while it is on the stack");
     assert!(matches!(

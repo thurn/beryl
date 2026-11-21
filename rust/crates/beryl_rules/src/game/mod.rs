@@ -7,9 +7,9 @@ pub mod ending;
 pub mod life;
 pub(crate) mod start;
 
-use crate::event::{self, Event, Sink};
 use crate::fixed::Full;
 use crate::layout::{Layout, Small};
+use crate::replacement::event::{self, Event, Sink};
 use crate::state::State;
 use crate::table::GameTable;
 

@@ -4,10 +4,10 @@
 //! Implements: CR 307.1
 
 use crate::card::{Ability, Face, FaceAbility, Keywords, ObjectAbility, Types};
+use crate::continuous::rule_change;
 use crate::definition::Definition;
 use crate::ids::Seat;
 use crate::layout::Layout;
-use crate::rule_change;
 use crate::state::{StackEntry, State, TurnStep, Zone};
 use crate::table::GameTable;
 

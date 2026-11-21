@@ -10,9 +10,9 @@ use super::events::{find, put, resolve_all};
 use crate::card::{
     Ability, CardDef, Face, Objects, Players, Subject, Trigger, TriggerEvent, Types,
 };
-use crate::event::{self, Reason, Sink};
 use crate::filter::Filter;
 use crate::ids::{Seat, Slot};
+use crate::replacement::event::{self, Reason, Sink};
 use crate::state::Zone;
 use crate::zone::Place;
 use crate::{CardTable, Decklist, GameTable, Profile, Scratch, State};

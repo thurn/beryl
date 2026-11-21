@@ -16,7 +16,6 @@ use crate::bitboard::Bitboard;
 use crate::card::{Flow, ManaCost, Part, Players, Prompt, Purpose, Stop};
 use crate::choices;
 use crate::decision::{OPTIONS, Opt};
-use crate::event::Event;
 use crate::filter::Evaluate;
 use crate::game::Game;
 use crate::ids::Seat;
@@ -24,6 +23,7 @@ use crate::interpret::{Run, no_primitive};
 use crate::layout::{Layout, Queue, index};
 use crate::mana;
 use crate::profile::Payment;
+use crate::replacement::event::Event;
 use crate::resolution::Resolution;
 use crate::state::{Zone, ZoneKey};
 

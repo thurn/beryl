@@ -17,7 +17,10 @@ use crate::filter::Filter;
 use crate::game::Game;
 use crate::ids::{Seat, Slot};
 use crate::state::{TurnStep, Zone, ZoneKey};
-use crate::{CardTable, GameTable, Outcome, Profile, Scratch, State, drawing, layers, rule_change};
+use crate::{
+    CardTable, GameTable, Outcome, Profile, Scratch, State, continuous::layers,
+    continuous::rule_change, drawing,
+};
 
 use super::LAND;
 use super::events::{find, with_game};
@@ -124,7 +127,7 @@ fn a_defined_power_is_any_amount_the_layers_read_as_they_apply() {
     let enters = |s: &mut State, player, card| {
         let slot = find(s, &t, player, card);
         s.board().place(slot, Zone::Battlefield).unwrap();
-        layers::refresh(s, &t, &mut crate::event::Sink::off()).unwrap();
+        layers::refresh(s, &t, &mut crate::replacement::event::Sink::off()).unwrap();
         slot
     };
     let smith = enters(&mut s, Seat::P0, "Test Smith");
@@ -220,7 +223,7 @@ fn with_permanent_of(cards: &'static CardTable, card: &'static str) -> (GameTabl
     s.board().begin_at(1, Seat::P0, TurnStep::PrecombatMain);
     let permanent = find(&s, &t, Seat::P0, card);
     s.board().place(permanent, Zone::Battlefield).unwrap();
-    layers::refresh(&mut s, &t, &mut crate::event::Sink::off()).unwrap();
+    layers::refresh(&mut s, &t, &mut crate::replacement::event::Sink::off()).unwrap();
     (t, s, permanent)
 }
 
@@ -614,7 +617,7 @@ fn granted_by(granter: &'static str) -> (State, GameTable, Slot) {
     let source = find(&s, &t, Seat::P0, granter);
     for slot in [smith, source] {
         s.board().place(slot, Zone::Battlefield).unwrap();
-        layers::refresh(&mut s, &t, &mut crate::event::Sink::off()).unwrap();
+        layers::refresh(&mut s, &t, &mut crate::replacement::event::Sink::off()).unwrap();
     }
     (s, t, smith)
 }

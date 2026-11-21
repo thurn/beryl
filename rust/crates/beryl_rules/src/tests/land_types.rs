@@ -13,15 +13,15 @@ use beryl_card::{
 use crate::additions::Addition;
 use crate::bitboard::Bitboard;
 use crate::card::{Ability, CardDef, Face, LayerSpec, Modification, Subtype, Subtypes, Types};
-use crate::event::Sink;
-use crate::event::TokenEntry;
 use crate::filter::Filter;
 use crate::ids::{Seat, Slot};
+use crate::replacement::event::Sink;
+use crate::replacement::event::TokenEntry;
 use crate::state::{
     AbilityRef, Continuous, Duration, LayerChange, StackEntry, StackItem, TriggerInfo, TurnStep,
     Zone,
 };
-use crate::{CardTable, GameTable, Profile, State, layers, reference};
+use crate::{CardTable, GameTable, Profile, State, continuous::layers, reference};
 use crate::{Scratch, tokens};
 
 use super::events::{find, with_game};

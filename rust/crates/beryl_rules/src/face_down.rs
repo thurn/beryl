@@ -11,12 +11,12 @@ use crate::bitboard::Bitboard;
 use crate::card::{FaceIx, ManaCost, Part, Prompt, Purpose, Types};
 use crate::decision::{Candidates, Decision, DecisionKind, OPTIONS, Opt};
 use crate::engine::collapse;
-use crate::event::Sink;
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, index};
 use crate::mana;
 use crate::profile::Payment;
+use crate::replacement::event::Sink;
 use crate::state::{Pending, State};
 use crate::table::GameTable;
 

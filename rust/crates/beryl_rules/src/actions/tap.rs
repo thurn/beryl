@@ -5,12 +5,12 @@ use beryl_card::{Amount, Objects, Players};
 use crate::bitboard::Bitboard;
 use crate::card::{Prompt, Purpose, Stop};
 use crate::choices;
-use crate::event;
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
 use crate::interpret::{Outcome, Run};
 use crate::layout::{Layout, Queue};
+use crate::replacement::event;
 use crate::resolution::Resolution;
 use crate::state::ObjectRef;
 

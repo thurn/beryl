@@ -1,6 +1,6 @@
 //! Whether the order of the timestamps of permanents that entered the battlefield together
 //! could change the layer results, so that their controller is asked for it
-//! ([CR 613.7m]): "Objects controlled by the active player ... have an earlier relative
+//! (see [CR 613.7m]): "Objects controlled by the active player ... have an earlier relative
 //! timestamp in the order of that player's choice". A choice that cannot change anything is
 //! not asked.
 //!
@@ -10,9 +10,11 @@
 //! give the same result in either order ([`LayerChange::commutes_with`]), because timestamp
 //! order alone decides which of them applies last.
 //!
+//! Implements: none. Determines whether relative timestamps can change layer results.
+//!
 //! [CR 613.7m]: https://yawgatog.com/resources/magic-rules/#R6137m
 
-use super::{apply, elsewhere};
+use super::{apply, other_zones};
 use crate::card::{AbilityIx, Layer};
 use crate::layout::Layout;
 use crate::state::{Characteristics, LayerChange, State, read_layer};
@@ -87,14 +89,13 @@ fn parts<'a, L: Layout>(
                 .map(move |(&modification, part)| {
                     // As the layers list it, "the chosen color" read from the permanent, so
                     // that only a part with an amount is left to read as it applies.
-                    let change = elsewhere::resolve(s, slot, modification, you, &words).unwrap_or(
-                        LayerChange::Read {
+                    let change = other_zones::resolve(s, slot, modification, you, &words)
+                        .unwrap_or(LayerChange::Read {
                             layer: read_layer(modification),
                             face: face_ix,
                             ability: AbilityIx::new(n),
                             part,
-                        },
-                    );
+                        });
                     let amount = apply::amount_reads(spec, change);
                     Part {
                         layer: change.layer(),

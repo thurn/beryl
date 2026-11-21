@@ -250,7 +250,7 @@ fn a_library_token_cannot_make_a_draw_eligible_for_dredge() {
     let excess = u8::try_from(state.library(player).len() - 2).unwrap();
     state.draw_n(&mut scratch.events, player, excess).unwrap();
     assert_eq!(
-        crate::replace::dredges(&state, &table, player).sole(),
+        crate::replacement::dredges(&state, &table, player).sole(),
         Some(dredger)
     );
 
@@ -265,7 +265,7 @@ fn a_library_token_cannot_make_a_draw_eligible_for_dredge() {
     state
         .move_object(&mut scratch.events, token, Zone::Library, Place::Top)
         .unwrap();
-    assert!(crate::replace::dredges(&state, &table, player).is_empty());
+    assert!(crate::replacement::dredges(&state, &table, player).is_empty());
 
     let mut game = Game::new(&mut state, &table, &mut scratch.events);
     crate::drawing::draw(&mut game, player, 1).unwrap();

@@ -11,9 +11,9 @@
 //! The replacements come from three places: an entry of the Effects store on the object
 //! ([`MoveReplacement`]), a static ability of a permanent ([`Replaced`]), and the entering
 //! object's own abilities. The card table holds only replacements this module has code for
-//! ([`crate::replacement::check`]).
+//! ([`beryl_kernel::replacement::check`]).
 //!
-//! Implements: CR 614, CR 616
+//! Implements: CR 614.1, CR 614.5, CR 614.6, CR 614.12, CR 616.1
 //!
 //! [CR 614.1]: https://yawgatog.com/resources/magic-rules/#R6141
 //! [CR 614.6]: https://yawgatog.com/resources/magic-rules/#R6146
@@ -26,16 +26,16 @@ use crate::bitboard::Bitboard;
 use crate::card::{
     Ability, AbilityIx, AbilityKind, ObjectAbility, Replaced, Replacement, Rewrite, Types,
 };
+use crate::continuous::layers;
 use crate::decision::{Candidates, Choice, Decision, DecisionKind, OPTIONS, Opt};
-use crate::event::{Entry, ReplacementKind, Sink};
 use crate::filter::Evaluate;
 use crate::fixed::{Fixed, Full};
 use crate::game::Game;
 use crate::game::life;
 use crate::ids::Seat;
-use crate::layers;
 use crate::layout::{Layout, Queue};
 use crate::profile::Stops;
+use crate::replacement::event::{Entry, ReplacementKind, Sink};
 use crate::state::{AbilityMask, CounterKind, MoveReplacement, ObjectRef, State, Zone};
 use crate::table::{Capability, GameTable};
 use crate::{chosen, interpret};
@@ -49,6 +49,8 @@ pub(crate) use destruction::destruction;
 
 mod draws;
 mod enchant;
+pub mod event;
+pub(crate) mod protection;
 
 pub(crate) use draws::{DrawReplacement, draw, dredge, dredges};
 pub(crate) use enchant::{Enchants, enchants};
@@ -66,7 +68,7 @@ pub(crate) struct Move<L: Layout> {
     /// It moves as its spell resolves: a permanent spell becoming a permanent
     /// (see [CR 608.3a]): "If the object that's resolving has no targets, it becomes a permanent
     /// and enters the battlefield". Only that resolution moves objects for
-    /// [`crate::event::Reason::Resolve`], so a card put onto the battlefield by an effect
+    /// [`crate::replacement::event::Reason::Resolve`], so a card put onto the battlefield by an effect
     /// "wasn't cast", whichever zone it left. It is not in [`Entry`], which a batch of moves
     /// holds 128 of.
     ///

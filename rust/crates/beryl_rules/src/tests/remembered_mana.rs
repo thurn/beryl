@@ -12,8 +12,8 @@ use beryl_kernel::chosen::ChosenValue;
 use crate::card::{
     Ability, CardDef, Face, FaceIx, ManaColor, ManaCost, ManaSet, Replacement, Types,
 };
-use crate::event::Sink;
 use crate::mana::{self, Paying};
+use crate::replacement::event::Sink;
 use crate::{Bitboard, CardTable, GameTable, Opt, Profile, Replay, State};
 
 use super::begin;

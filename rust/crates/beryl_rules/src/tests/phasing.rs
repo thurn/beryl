@@ -6,9 +6,9 @@
 
 use super::cast::Game;
 use crate::bitboard::Bitboard;
-use crate::event::Sink;
 use crate::ids::{CardId, CardIx};
 use crate::profile::Profile;
+use crate::replacement::event::Sink;
 use crate::state::{Continuous, Duration, LayerChange, State, TurnStep, Zone, ZoneKey};
 use crate::table::GameTable;
 use crate::turn;
@@ -18,7 +18,7 @@ use beryl_card::FaceIx;
 
 /// Brings the layer results up to date and checks every invariant of the state.
 fn settled(g: &mut Game) {
-    crate::layers::refresh(&mut g.s, &g.t, &mut g.x.events).unwrap();
+    crate::continuous::layers::refresh(&mut g.s, &g.t, &mut g.x.events).unwrap();
     check(&g.s, &g.t);
 }
 

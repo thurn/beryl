@@ -14,7 +14,7 @@ use beryl_card::{Cost, CostPart};
 use super::LAND;
 use super::cast::{Game, index_of};
 use crate::card::{Ability, CardDef, Face, ObjectAbility, Types};
-use crate::event::Event;
+use crate::replacement::event::Event;
 use crate::state::Zone;
 use crate::{
     CardTable, DecisionKind, Decklist, Opt, Outcome, Profile, Replay, Scratch, Step, next,

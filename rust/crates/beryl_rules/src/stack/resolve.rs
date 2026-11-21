@@ -1,4 +1,4 @@
-//! Resolving the top of the stack (CR 608), and transactional replay for bodies that pause
+//! Resolving the top of the stack (see CR 608), and transactional replay for bodies that pause
 //! (architecture §7.3).
 //!
 //! [CR 405.5](https://yawgatog.com/resources/magic-rules/#R4055): "When all players pass in
@@ -10,17 +10,19 @@
 //! `pending` with the record, over the unchanged pre-resolution state; the answer is appended
 //! and it runs again from the start. An inline answer source runs every body once on the
 //! state itself.
+//!
+//! Implements: CR 608.2, CR 608.3
 
 use crate::bitboard::Bitboard;
 use crate::card::{Ability, AbilityKind, CastingOption, Face};
 use crate::casting::{self, entry_ability};
 use crate::chance;
 use crate::decision::{Answers, Choice, Decision, Outcome, StallReason};
-use crate::event::{self, Entry, Event, Reason, Sink, Tagged};
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::layout::{Layout, Queue, index};
 use crate::observation::Observation;
+use crate::replacement::event::{self, Entry, Event, Reason, Sink, Tagged};
 use crate::resolution::Resolution;
 use crate::scratch::Scratch;
 use crate::state::{
@@ -28,14 +30,14 @@ use crate::state::{
     hidden_pick_answer, placed,
 };
 use crate::table::GameTable;
-use crate::{interpret, replace};
+use crate::{interpret, replacement};
 
 /// Resolves the top of the stack, or continues a paused resolution with its record.
 ///
-/// While a replacement effect's choice can come up ([`replace::may_ask`]), as a dredge for a
+/// While a replacement effect's choice can come up ([`replacement::may_ask`]), as a dredge for a
 /// card the body draws, every body runs on the copy, since any may meet it. So does every
 /// resolution of a game with a card that chooses a value as it enters
-/// ([`replace::resolution_may_ask`]): a permanent spell, or a body that puts a permanent onto
+/// ([`replacement::resolution_may_ask`]): a permanent spell, or a body that puts a permanent onto
 /// the battlefield, may meet that choice. An inline source
 /// then answers each question as the run stops at it, and the body runs again with the
 /// answer recorded: the record holds a replacement's choice and the body's own questions in
@@ -43,7 +45,7 @@ use crate::{interpret, replace};
 ///
 /// A resolution that finishes with no choice made since the state was last the same is a
 /// loop of mandatory actions, and the game is a draw
-/// ([CR 104.4b](https://yawgatog.com/resources/magic-rules/#R1044b)): "If a game ...
+/// (see [CR 104.4b](https://yawgatog.com/resources/magic-rules/#R1044b)): "If a game ...
 /// somehow enters a "loop" of mandatory actions, repeating a sequence of events with no way
 /// to stop, the game is a draw." [`State::note_resolution`] finds it.
 pub(crate) fn resolve<L: Layout>(
@@ -89,7 +91,7 @@ fn resolve_top<L: Layout>(
         | Pending::EnterChoosing { .. }
         | Pending::ManaColor { .. } => Default::default(),
     };
-    let may_ask = replace::resolution_may_ask(t);
+    let may_ask = replacement::resolution_may_ask(t);
     // The source is asked first: whether an ability written as data asks is read from its
     // effect, which a rollout's inline source never needs.
     if !may_ask && (a.inline() || !ability.is_some_and(Ability::asks)) {
@@ -161,7 +163,7 @@ fn resolve_on_copy<L: Layout>(
         }
         keep_what_was_seen(s, spare, chance::replaying(sink));
         // While the question is open no one holds priority; the finished resolution gives
-        // it to the active player (CR 117.3b).
+        // it to the active player (see CR 117.3b).
         s.reset_passes();
         s.pause_resolution(record, question, hidden);
         return Ok(());
@@ -186,7 +188,7 @@ pub(crate) fn answer_inline<L: Layout>(
         s.note_choice();
     }
     // A body builds its questions for the player each belongs to; the player controlling
-    // them answers (CR 724.5, `engine::controlled`).
+    // them answers (see CR 724.5, `engine::controlled`).
     let c = if s.turn().controller().is_some() {
         answer_controlled(s, paused, a, question)
     } else {
@@ -323,7 +325,7 @@ pub(crate) fn legal_targets<L: Layout>(
 }
 
 /// Whether a triggered ability's intervening "if" no longer holds as it resolves
-/// ([CR 603.4](https://yawgatog.com/resources/magic-rules/#R6034)): "If the ability triggers,
+/// (see [CR 603.4](https://yawgatog.com/resources/magic-rules/#R6034)): "If the ability triggers,
 /// it checks the stated condition again as it resolves. If the condition isn't true at that
 /// time, the ability is removed from the stack and does nothing."
 fn condition_fails<L: Layout>(
@@ -347,7 +349,7 @@ fn condition_fails<L: Layout>(
 /// ([`crate::asking`]).
 ///
 /// Everything it does is the resolving spell's or ability's doing, down to its leaving the
-/// stack ([`Cause::Effect`](crate::event::Cause::Effect)). It opens the sink's scope as it
+/// stack ([`Cause::Effect`](crate::replacement::event::Cause::Effect)). It opens the sink's scope as it
 /// takes the entry off the stack and returns with it open, however it ends: the caller
 /// closes it ([`unwind`]), so that the question comes back through no frame of its own.
 ///
@@ -412,14 +414,14 @@ fn body<L: Layout>(
     let face = t.def(entry.card()).face(entry.face());
     // CR 608.2b: "If all its targets, for every instance of the word "target," are now
     // illegal, the spell or ability doesn't resolve." One that chose no targets is not
-    // targeted (CR 115.6) and resolves.
+    // targeted (see CR 115.6) and resolves.
     let legal = ability.map_or(TargetPlaces::NONE, |ability| {
         legal_targets(s, t, entry, ability)
     });
     let spell = entry.spell();
     let mutating = spell.is_some() && mutating(face, entry);
     if mutating && legal.is_empty() {
-        // CR 702.140b: "As a mutating creature spell begins resolving, if its target is
+        // see CR 702.140b: "As a mutating creature spell begins resolving, if its target is
         // illegal, it ceases to be a mutating creature spell and continues resolving as a
         // creature spell and will be put onto the battlefield under the control of the spell's
         // controller."
@@ -480,14 +482,14 @@ fn body<L: Layout>(
     // resolve, it will continue to resolve fully.").
     sink.resolved();
     s.settle_captured_words();
-    // CR 117.3b: "The active player receives priority after a spell or ability (other than a
+    // see CR 117.3b: "The active player receives priority after a spell or ability (other than a
     // mana ability) resolves."
     s.give_priority(s.turn().active());
     Ok(None)
 }
 
 /// Whether `entry`, a spell of the face `face`, is a mutating creature spell: one cast for
-/// its mutate cost ([CR 702.140a]): "If you do, it becomes a mutating creature spell". Its
+/// its mutate cost (see [CR 702.140a]): "If you do, it becomes a mutating creature spell". Its
 /// spell ability merges it with its target as it resolves ([`beryl_card::Effect::Mutate`]).
 ///
 /// [CR 702.140a]: https://yawgatog.com/resources/magic-rules/#R702140a
@@ -504,7 +506,7 @@ fn mutating<L: Layout>(face: &Face, entry: &StackEntry<L>) -> bool {
 /// control of the spell's controller." [CR 608.3c](https://yawgatog.com/resources/magic-rules/#R6083c):
 /// "If the object that's resolving is an Aura spell, it becomes a permanent and is put onto the
 /// battlefield under the control of the spell's controller attached to the player or object it
-/// was targeting." [CR 712.10](https://yawgatog.com/resources/magic-rules/#R71210): "a
+/// was targeting." see [CR 712.10](https://yawgatog.com/resources/magic-rules/#R71210): "a
 /// resolving double-faced spell that becomes a permanent is put onto the battlefield with the
 /// same face up that was face up on the stack."
 fn enter_battlefield<L: Layout>(

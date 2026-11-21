@@ -7,9 +7,9 @@ use crate::bitboard::Bitboard;
 use crate::card::{Ability, Castings, FaceIx, ManaCost, Prompt, Purpose, Stop, Types};
 use crate::casting::payment as costs;
 use crate::decision::Candidates;
-use crate::event::{self, Event, Reason};
 use crate::game::Game;
 use crate::ids::{Seat, Slot, SlotId};
+use crate::replacement::event::{self, Event, Reason};
 use crate::resolution::Resolution;
 use crate::state::{ObjectRef, StackEntry, StackItem, TargetPlaces, TurnStep, Zone, ZoneKey};
 use crate::zone::Place;
@@ -46,7 +46,7 @@ fn resolving<T>(
     x.events.asking.begin(answers, false).unwrap();
     let result = act(&mut Game::new(s, t, &mut x.events), &mut resolution);
     x.events.asking.end();
-    crate::layers::refresh(s, t, &mut x.events).unwrap();
+    crate::continuous::layers::refresh(s, t, &mut x.events).unwrap();
     (result, resolution.question.take())
 }
 
@@ -197,7 +197,7 @@ fn any_card_is_manifested_for_any_player() {
         .expect("a card in hand");
     let mut game = Game::new(&mut s, &t, &mut x.events);
     manifest::manifest(&mut game, card, p.opponent()).unwrap();
-    crate::layers::refresh(&mut s, &t, &mut x.events).unwrap();
+    crate::continuous::layers::refresh(&mut s, &t, &mut x.events).unwrap();
     let o = s.object(card);
     assert_eq!((o.zone(), o.face()), (Zone::Battlefield, FaceIx::DOWN));
     assert_eq!((o.owner(), s.controller(card)), (p, p.opponent()));

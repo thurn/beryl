@@ -3,7 +3,7 @@
 //! A resolving "regenerate" creates a regeneration shield: an entry of the Effects store on
 //! the permanent, lasting until end of turn. The shield is a replacement effect of
 //! destruction ([CR 614.8]): "Regeneration is a destruction-replacement effect." Each
-//! destruction is proposed to [`crate::replace::destruction`], which applies the shields: a
+//! destruction is proposed to [`crate::replacement::destruction`], which applies the shields: a
 //! destruction by an effect ([`super::destroy`]) and the state-based destruction of a
 //! creature with lethal damage (`sba`). A sacrifice and a creature with toughness 0 are not
 //! destroyed, so no shield applies to them.

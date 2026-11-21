@@ -1,5 +1,7 @@
 //! What one continuous effect does as its layer applies: what it applies to, found against
 //! the results of the layers before it, and the change it makes to each.
+//!
+//! Implements: CR 613.4
 
 use beryl_kernel::derive::Rederive;
 use beryl_kernel::static_ability::{self, LayerResults, NoResults};
@@ -17,7 +19,7 @@ use crate::state::{AbilityMask, Characteristics, Derived, GrantRef, LayerChange,
 use crate::table::GameTable;
 
 /// Who reads a static ability as its layer applies: the controller of its permanent as the
-/// layers so far left it ("you", [CR 109.5]: "For a static ability, this is the current
+/// layers so far left it ("you", see [CR 109.5]: "For a static ability, this is the current
 /// controller of the object it's on"), and the text changes its color words and subtypes are
 /// read through ([`beryl_kernel::State::words_of`]).
 ///
@@ -192,7 +194,7 @@ fn read<L: Layout>(
 /// series of layers".
 ///
 /// "You" is the controller of the permanent with the ability as the layers so far left it
-/// ([CR 109.5]): "For a static ability, this is the current controller of the object it's
+/// (see [CR 109.5]): "For a static ability, this is the current controller of the object it's
 /// on."
 ///
 /// [CR 611.3a]: https://yawgatog.com/resources/magic-rules/#R6113a
@@ -375,7 +377,7 @@ fn modify<L: Layout>(
         // CR 613.1d: "Layer 4: Type-changing effects are applied. These include effects that
         // change an object's card type, subtype, and/or supertype."
         LayerChange::AddTypes(types) => d.types = d.types.union(types),
-        // CR 205.1a: "Some effects set an object's card type. In most such cases, the new
+        // see CR 205.1a: "Some effects set an object's card type. In most such cases, the new
         // card type(s) replaces any existing card types. ... If an object's card type is
         // removed, the subtypes correlated with that card type will remain if they are also
         // the subtypes of a card type the object currently has; otherwise, they are also
@@ -388,7 +390,7 @@ fn modify<L: Layout>(
             d.types = types;
             d.subtypes = d.subtypes.of_types(t.subtypes(), types);
         }
-        // CR 305.7: "If a land gains one or more land types in addition to its own, it keeps
+        // see CR 305.7: "If a land gains one or more land types in addition to its own, it keeps
         // its land types and rules text, and it gains the new land types and mana
         // abilities." A basic land type it already has gives it nothing more.
         LayerChange::AddSubtype(subtype) => {
@@ -400,14 +402,14 @@ fn modify<L: Layout>(
             }
             d.subtypes = d.subtypes.with(t.subtypes(), subtype);
         }
-        // CR 205.1a: "when an effect sets one or more of an object's subtypes, the new
+        // see CR 205.1a: "when an effect sets one or more of an object's subtypes, the new
         // subtype(s) replaces any existing subtypes from the appropriate set (creature types,
         // land types, artifact types, enchantment types, planeswalker types, or spell types)."
         LayerChange::SetSubtype(subtype) => {
             let kept = d.subtypes.without_types(t.subtypes(), subtype.card_type());
             d.subtypes = kept.with(t.subtypes(), subtype);
         }
-        // CR 305.7: "If an effect sets a land's subtype to one or more of the basic land
+        // see CR 305.7: "If an effect sets a land's subtype to one or more of the basic land
         // types, the land no longer has its old land type. It loses all abilities generated
         // from its rules text, its old land types, and any copiable effects affecting that
         // land, and it gains the appropriate mana ability for each new basic land type." Its
@@ -430,7 +432,7 @@ fn modify<L: Layout>(
         // effects, and effects that say an object can't have an ability are applied."
         LayerChange::AddKeywords(k) => d.keywords = d.keywords.union(k),
         LayerChange::AddProtection(colors) => d.protection = d.protection.union(colors),
-        // CR 702.138a: escape "functions while the card with escape is in a player's
+        // see CR 702.138a: escape "functions while the card with escape is in a player's
         // graveyard", so a permanent that has it gets nothing a rule reads.
         LayerChange::GrantEscape => {}
         LayerChange::Grant(grant) => {
@@ -483,7 +485,7 @@ fn modify<L: Layout>(
 /// The value of an amount a static ability's part reads as its layer applies, for the
 /// reader `by` of the ability: of the permanents as layers 2 to 6
 /// left them, so a count sees each one's final types and controller. "Its mana value" is
-/// that of `member`, the permanent the part changes ([CR 202.3]): "The mana value of an
+/// that of `member`, the permanent the part changes (see [CR 202.3]): "The mana value of an
 /// object is a number equal to the total amount of mana in its mana cost, regardless of
 /// color." No layer changes it. The card table has only amounts read this way
 /// (`beryl_kernel`'s `static_ability::read_amounts`).

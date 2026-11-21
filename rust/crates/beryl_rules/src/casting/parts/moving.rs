@@ -4,11 +4,11 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{Castings, CostAction, CostPart, Face, Measure};
-use crate::event::Sink;
 use crate::fixed::Full;
 use crate::game::life;
 use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue};
+use crate::replacement::event::Sink;
 use crate::state::{PayingObjects, StackEntry, StackItem, State, Zone};
 use crate::table::GameTable;
 

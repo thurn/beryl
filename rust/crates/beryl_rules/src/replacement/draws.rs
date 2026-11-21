@@ -2,6 +2,8 @@
 //! which apply to a draw, and the drawing player's choice among them ([CR 616.1]). Dredge,
 //! which works from a graveyard, is [`dredge`].
 //!
+//! Implements: CR 614.11, CR 702.52a
+//!
 //! [CR 616.1]: https://yawgatog.com/resources/magic-rules/#R6161
 
 use beryl_card::prompt::Purpose;
@@ -12,25 +14,25 @@ use crate::bitboard::Bitboard;
 use crate::card::{
     Ability, AbilityIx, FaceAbility, FaceIx, ObjectAbility, Replaced, Replacement, Rewrite,
 };
+use crate::continuous::layers;
 use crate::decision::{Candidates, Decision, DecisionKind, OPTIONS, Opt};
-#[cfg(doc)]
-use crate::event::Sink;
-use crate::event::{LossCause, Reason, ReplacementKind};
 use crate::filter;
 use crate::fixed::{Fixed, Full};
 use crate::game::Game;
 use crate::ids::Seat;
-use crate::layers;
 use crate::layout::{Layout, Queue};
-use crate::replacement;
+#[cfg(doc)]
+use crate::replacement::event::Sink;
+use crate::replacement::event::{LossCause, Reason, ReplacementKind};
 use crate::state::{Count, ObjectRef, State, TurnStep, Zone, ZoneKey};
 use crate::table::GameTable;
 use crate::{actions, zones};
+use beryl_kernel::replacement;
 
 /// A replacement of draws by a static ability of a permanent ([`Replaced::Draw`]) that applies
 /// to a draw: the permanent, the ability's place among the permanent's abilities (one of a card
 /// under a merged permanent among them), the ability and the permanent's controller, for whom
-/// the players it names are read (CR 109.5).
+/// the players it names are read (see CR 109.5).
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct DrawReplacement<L: Layout> {
     pub permanent: L::Slot,
@@ -54,7 +56,7 @@ impl<L: Layout> DrawReplacement<L> {
 
     /// The card whose ability it is, that card's face and the ability's index on it: the
     /// permanent's face that is up, or, for an ability of a card under a merged permanent,
-    /// that card ([CR 702.140e]): "A mutated permanent has all abilities of each card and token
+    /// that card (see [CR 702.140e]): "A mutated permanent has all abilities of each card and token
     /// that represents it."
     ///
     /// [CR 702.140e]: https://yawgatog.com/resources/magic-rules/#R702140e
@@ -180,7 +182,7 @@ fn choose_draw_replacement<L: Layout>(
 
 /// Whether a replacement of `player`'s draws that replaces those `draws` replaces the one they
 /// would make now. Every draw but the first one they draw in their own draw step
-/// ([CR 504.1]): "First, the active player draws a card." That is the count of cards they
+/// (see [CR 504.1]): "First, the active player draws a card." That is the count of cards they
 /// have drawn in their draw step this turn, which counts only cards drawn: a draw that was
 /// replaced never happened ([CR 614.6]), so the next one is still the first.
 ///

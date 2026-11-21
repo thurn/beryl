@@ -12,9 +12,9 @@ use super::decide;
 use super::events::find;
 use crate::bitboard::Bitboard;
 use crate::card::{Ability, CardDef, Face, LayerSpec, Modification, Purpose, Types};
-use crate::event::{self, Entry, Reason, Sink};
 use crate::filter::Filter;
 use crate::ids::{Seat, Slot};
+use crate::replacement::event::{self, Entry, Reason, Sink};
 use crate::state::{Pending, TurnStep, Zone};
 use crate::{CardTable, Choice, DecisionKind, GameTable, Profile, Replay, Scratch, State, apply};
 
@@ -133,7 +133,7 @@ fn the_controller_orders_permanents_that_entered_together_when_it_matters() {
             .unwrap();
         apply(&mut s, &t, &mut Scratch::new(), &mut Replay, Choice(choice));
         assert_eq!(*s.pending(), Pending::None, "{first} then {last}");
-        crate::layers::refresh(&mut s, &t, &mut Sink::off()).unwrap();
+        crate::continuous::layers::refresh(&mut s, &t, &mut Sink::off()).unwrap();
         assert!(
             s.object(pick).timestamp() < s.object(if pick == red { blue } else { red }).timestamp()
         );

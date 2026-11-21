@@ -1,6 +1,8 @@
-//! Text-changing effects of resolving spells and abilities ([CR 612.1]): "Some continuous
+//! Text-changing effects of resolving spells and abilities (see [CR 612.1]): "Some continuous
 //! effects change an object’s text." The Effects store keeps each, and every reader of a
 //! word reads it through the object's words (`beryl_kernel`'s `effects::text`).
+//!
+//! Implements: CR 612.2
 //!
 //! [CR 612.1]: https://yawgatog.com/resources/magic-rules/#R6121
 
@@ -9,8 +11,8 @@ use beryl_card::{ChosenKind, Objects, Prompt, Purpose, TextWord, Zone};
 use crate::card::Stop;
 use crate::choices;
 use crate::continuous::lasting;
+use crate::continuous::layers;
 use crate::interpret::{Outcome, Run};
-use crate::layers;
 use crate::layout::{Layout, Queue};
 use crate::state::Continuous;
 
@@ -18,7 +20,7 @@ use crate::state::Continuous;
 /// replacing all instances of one color word with another or one basic land type with
 /// another [duration]". The outcome is the objects changed.
 ///
-/// The controller chooses the words as it resolves ([CR 608.2d]): "If an effect of a spell or
+/// The controller chooses the words as it resolves (see [CR 608.2d]): "If an effect of a spell or
 /// ability offers any choices other than choices already made as part of casting the spell,
 /// activating the ability, or otherwise putting the spell or ability on the stack, the player
 /// announces these while applying the effect." Any of the ten words may be replaced, one the
@@ -28,7 +30,7 @@ use crate::state::Continuous;
 /// correct way".
 ///
 /// Each object is a spell on the stack or a permanent, with an effect of its own: the text
-/// changes on one object compose by their timestamps ([CR 613.7]), and those on another never
+/// changes on one object compose by their timestamps (see [CR 613.7]), and those on another never
 /// meet them, so whether the objects' effects share a timestamp changes nothing.
 ///
 /// [CR 608.2d]: https://yawgatog.com/resources/magic-rules/#R6082d

@@ -117,8 +117,13 @@ pub(super) fn to_hand(t: &GameTable, s: &mut State, player: Seat, name: &str) ->
     let slot = (crate::tests::fixture_slots(s.zone(ZoneKey::Of(player, Zone::Library))))
         .find(|&slot| s.definition_name(t, slot) == name)
         .unwrap();
-    s.move_object(&mut crate::event::Sink::off(), slot, Zone::Hand, Place::Top)
-        .unwrap();
+    s.move_object(
+        &mut crate::replacement::event::Sink::off(),
+        slot,
+        Zone::Hand,
+        Place::Top,
+    )
+    .unwrap();
     slot
 }
 

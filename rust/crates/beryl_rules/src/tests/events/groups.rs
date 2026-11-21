@@ -8,8 +8,8 @@ use crate::card::{
     Ability, CardDef, CostPart, Face, ManaCost, Players, Subtype, Subtypes, TargetKind, TargetSpec,
     Trigger, Types,
 };
-use crate::event::{Event, Reason, Recipient, Tag};
 use crate::filter::Filter;
+use crate::replacement::event::{Event, Reason, Recipient, Tag};
 use crate::state::Zone;
 use crate::tests::LAND;
 use crate::tests::cast::{Game, cast, index_of};

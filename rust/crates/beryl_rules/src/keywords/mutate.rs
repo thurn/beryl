@@ -5,11 +5,11 @@ use beryl_card::{Objects, Prompt, Purpose, prompt};
 use crate::bitboard::Bitboard;
 use crate::card::Stop;
 use crate::choices;
-use crate::event::Event;
+use crate::continuous::layers;
 use crate::interpret::{Outcome, Run};
-use crate::layers;
 use crate::layout::Layout;
-use crate::trigger;
+use crate::replacement::event::Event;
+use crate::stack::trigger;
 
 /// [`Effect::Mutate`](beryl_card::Effect::Mutate): the mutating creature spell merges with
 /// its target, `objects` ([CR 702.140c]): "As a mutating creature spell resolves, if its

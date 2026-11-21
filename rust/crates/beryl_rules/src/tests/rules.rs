@@ -2,10 +2,10 @@
 
 use super::{DUAL, LANDS, MIXED, begin, decide, table};
 use crate::card::{ManaColor, Players, Purpose, Types};
-use crate::event::Sink;
 use crate::filter::{Evaluate, Filter};
 use crate::game::Game;
 use crate::ids::{CardIx, Seat, Slot};
+use crate::replacement::event::Sink;
 use crate::resolution::Resolution;
 use crate::state::{AbilityRef, PendingTrigger, Zone, ZoneKey};
 use crate::zone::Place;
@@ -22,14 +22,14 @@ fn two_legends(s: &mut State) -> (Seat, Slot, Slot) {
     let lib = s.library(p);
     let (a, b) = (lib[0], lib[1]);
     s.move_object(
-        &mut crate::event::Sink::off(),
+        &mut crate::replacement::event::Sink::off(),
         a,
         Zone::Battlefield,
         Place::Top,
     )
     .unwrap();
     s.move_object(
-        &mut crate::event::Sink::off(),
+        &mut crate::replacement::event::Sink::off(),
         b,
         Zone::Battlefield,
         Place::Top,
@@ -83,14 +83,14 @@ fn the_legend_rule_tells_apart_legends_with_different_owners() {
     let mine = s.library(p)[0];
     let stolen = s.library(p.opponent())[0];
     s.move_object(
-        &mut crate::event::Sink::off(),
+        &mut crate::replacement::event::Sink::off(),
         mine,
         Zone::Battlefield,
         Place::Top,
     )
     .unwrap();
     s.move_object(
-        &mut crate::event::Sink::off(),
+        &mut crate::replacement::event::Sink::off(),
         stolen,
         Zone::Battlefield,
         Place::Top,
@@ -115,7 +115,7 @@ fn a_card_put_into_a_hand_is_known_to_its_owner_alone() {
     let from_library = s.library(p)[0];
     assert!(!s.knows(p, from_library));
     s.move_object(
-        &mut crate::event::Sink::off(),
+        &mut crate::replacement::event::Sink::off(),
         from_library,
         Zone::Hand,
         Place::Top,
@@ -125,14 +125,14 @@ fn a_card_put_into_a_hand_is_known_to_its_owner_alone() {
     // A card returned from the battlefield was seen by everyone on its way.
     let from_battlefield = s.library(p)[0];
     s.move_object(
-        &mut crate::event::Sink::off(),
+        &mut crate::replacement::event::Sink::off(),
         from_battlefield,
         Zone::Battlefield,
         Place::Top,
     )
     .unwrap();
     s.move_object(
-        &mut crate::event::Sink::off(),
+        &mut crate::replacement::event::Sink::off(),
         from_battlefield,
         Zone::Hand,
         Place::Top,
@@ -176,7 +176,7 @@ fn a_shuffle_rebinds_identities_and_clears_knowledge() {
     for &slot in &hand {
         assert!(s.knows(p, slot));
         s.move_object(
-            &mut crate::event::Sink::off(),
+            &mut crate::replacement::event::Sink::off(),
             slot,
             Zone::Library,
             Place::Top,

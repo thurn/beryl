@@ -1,5 +1,7 @@
 //! The rules the permanents' static abilities change for each player, found after every
 //! layer has applied.
+//!
+//! Implements: CR 613.11
 
 use beryl_kernel::derive::Rederive;
 
@@ -13,9 +15,9 @@ use crate::table::{Capability, GameTable};
 /// The rules the permanents' static abilities change for each player, by seat ([CR 613.11]): "Some
 /// continuous effects affect game rules rather than objects. ... These effects are applied after
 /// all other continuous effects have been applied." So control is settled: "each opponent" and
-/// "you" in such an ability are read for the permanent's controller as layer 2 left it ([CR 109.5]:
+/// "you" in such an ability are read for the permanent's controller as layer 2 left it (see [CR 109.5]:
 /// "For a static ability, this is the current controller of the object it's on."). A face-down
-/// permanent has no abilities ([CR 708.2]), which its copiable values answer for.
+/// permanent has no abilities (see [CR 708.2]), which its copiable values answer for.
 ///
 /// Out of line: only a recompute with such a permanent on the battlefield comes here.
 ///
@@ -42,7 +44,7 @@ pub(super) fn player_rules<L: Layout>(s: &Rederive<'_, L>, t: &GameTable) -> Per
 
 /// Adds to `rules` those that the faces of the cards under the merged permanent at
 /// battlefield position `i` change, if it is one: a merged permanent has every ability of
-/// each card that represents it ([CR 702.140e]). Out of line: only a copy in a game with a
+/// each card that represents it (see [CR 702.140e]). Out of line: only a copy in a game with a
 /// card that merges comes here.
 ///
 /// [CR 702.140e]: https://yawgatog.com/resources/magic-rules/#R702140e

@@ -11,9 +11,9 @@ use crate::card::{
     Ability, CardDef, Face, Keywords, ObjectAbility, Objects, Part, Players, Prompt, Purpose,
     RuleChange, Subtype, Subtypes, Trigger, Types,
 };
-use crate::event::Event;
 use crate::ids::{Seat, Slot};
 use crate::profile::{Breakpoint, stops_for};
+use crate::replacement::event::Event;
 use crate::state::{AttackTarget, CounterKind, Zone, ZoneKey};
 use crate::zone::Place;
 use crate::{
@@ -240,7 +240,7 @@ impl Game {
     fn put_slot(&mut self, slot: Slot) -> Slot {
         self.s
             .move_object(
-                &mut crate::event::Sink::off(),
+                &mut crate::replacement::event::Sink::off(),
                 slot,
                 Zone::Battlefield,
                 Place::Top,
@@ -688,7 +688,7 @@ fn an_attacker_stays_blocked_when_its_blocker_leaves() {
     // Stop after blockers are declared and remove the blocker (CR 506.4, 509.1h).
     stop_at(&mut g, TurnStep::DeclareBlockers);
     g.s.move_object(
-        &mut crate::event::Sink::off(),
+        &mut crate::replacement::event::Sink::off(),
         bear,
         Zone::Graveyard,
         Place::Top,
@@ -712,7 +712,7 @@ fn an_attacker_whose_planeswalker_left_deals_no_damage() {
     let target = |g: &Game| g.s.object(ogre).attack_target();
     assert_eq!(target(&g), Some(AttackTarget::Planeswalker(walker)));
     g.s.move_object(
-        &mut crate::event::Sink::off(),
+        &mut crate::replacement::event::Sink::off(),
         walker,
         Zone::Graveyard,
         Place::Top,
@@ -737,7 +737,7 @@ fn combat_goes_on_when_every_declared_attacker_is_removed() {
     g.pick(DecisionKind::Attacker, Opt::Attack(bear));
     stop_at(&mut g, TurnStep::DeclareAttackers);
     g.s.move_object(
-        &mut crate::event::Sink::off(),
+        &mut crate::replacement::event::Sink::off(),
         bear,
         Zone::Graveyard,
         Place::Top,

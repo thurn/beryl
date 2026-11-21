@@ -6,11 +6,11 @@ use beryl_card::Objects;
 
 use crate::bitboard::Bitboard;
 use crate::card::FaceIx;
-use crate::event::{self, Entry, Reason};
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::interpret::{Outcome, Run};
 use crate::layout::{Layout, Queue};
+use crate::replacement::event::{self, Entry, Reason};
 use crate::state::{ObjectRef, Zone};
 use crate::zones;
 

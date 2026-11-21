@@ -16,12 +16,12 @@ use crate::filter::{Evaluate, Filter};
 use crate::ids::Seat;
 use crate::layout::{Layout, PerPlayer, Table};
 use crate::query::Copiable;
+use crate::stack::trigger::entered_with;
 use crate::state::{
     AbilityRef, AbilityTarget, Count, CountersHeld, PendingTrigger, State, TARGETS, Target,
     TargetPlace, TargetPlaces, Tracker, Zone, ZoneKey, placed,
 };
 use crate::table::GameTable;
-use crate::trigger::entered_with;
 
 /// What the instruction before did (`beryl_card`'s `effect` module, "What the instruction
 /// before did"): the objects it acted on, as they are now, how many or how much it did, and

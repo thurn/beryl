@@ -10,11 +10,11 @@ use crate::card::{
     Ability, CardDef, Castings, Face, Players, Subject, Subtype, Subtypes, Trigger, TriggerEvent,
     Types,
 };
-use crate::event::{self, Entry, Event, Reason};
 use crate::filter::Filter;
 use crate::fixed::Fixed;
 use crate::ids::Seat;
 use crate::ids::Slot;
+use crate::replacement::event::{self, Entry, Event, Reason};
 use crate::state::{TurnStep, Zone, ZoneKey};
 use crate::zone::Place;
 use crate::{CardTable, Decklist, GameTable, Profile, Scratch, State};

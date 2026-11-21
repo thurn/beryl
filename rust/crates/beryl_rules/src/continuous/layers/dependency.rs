@@ -14,6 +14,8 @@
 //! ([CR 613.8a], (c)): the cards' only ones define power and toughness, in layer 7a, where
 //! no other effect applies.
 //!
+//! Implements: CR 613.8
+//!
 //! [CR 613.8]: https://yawgatog.com/resources/magic-rules/#R6138
 //! [CR 613.8a]: https://yawgatog.com/resources/magic-rules/#R6138a
 

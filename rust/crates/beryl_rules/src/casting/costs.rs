@@ -5,9 +5,9 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{CastingOption, Castings, Face, ManaCost};
+use crate::continuous::rule_change;
 use crate::ids::Seat;
 use crate::layout::Layout;
-use crate::rule_change;
 use crate::state::{Casting, PayingObjects, Pending, StackEntry, StackItem, State};
 use crate::table::GameTable;
 

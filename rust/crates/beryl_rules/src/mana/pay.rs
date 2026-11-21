@@ -8,10 +8,10 @@ use crate::card::{
     ObjectAbility, Types,
 };
 use crate::decision::{Candidates, OPTIONS, Opt};
-use crate::event::{self, Sink};
 use crate::fixed::Full;
 use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Table};
+use crate::replacement::event::{self, Sink};
 use crate::state::{AbilityRef, Pending, PendingTrigger, State, TriggeredAbility, Zone, ZoneKey};
 use crate::table::{Capability, GameTable, is_instant_mana, is_sacrificed, is_simple};
 use beryl_kernel::chosen::ChosenValue;

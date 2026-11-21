@@ -3,11 +3,11 @@
 
 use beryl_card::Objects;
 
-use crate::event::Reason;
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
+use crate::replacement::event::Reason;
 use crate::state::{Memo, ObjectRef, Zone};
 use crate::zones;
 
@@ -16,7 +16,7 @@ use crate::zones;
 /// cause an object to change zones 'until' a specified event occurs. A second one-shot
 /// effect is created immediately after the specified event. This second one-shot effect
 /// returns the object to its previous zone." The move that takes `until` off the battlefield
-/// makes that second effect ([`crate::event`]).
+/// makes that second effect ([`crate::replacement::event`]).
 ///
 /// [CR 610.3b](https://yawgatog.com/resources/magic-rules/#R6103b): "If a resolving
 /// triggered ability creates the initial one-shot effect that causes the object to change

@@ -7,7 +7,7 @@ use crate::filter::Evaluate;
 use crate::game::Game;
 use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
-use crate::protection;
+use crate::replacement::protection;
 use crate::state::State;
 use crate::table::GameTable;
 

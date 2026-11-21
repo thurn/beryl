@@ -19,13 +19,13 @@ use crate::card::{
 };
 use crate::card::{CastingKind, Flow, ObjectAbility};
 use crate::damage;
-use crate::event::{self, Event, Reason, Recipient, Sink, TokenEntry};
 use crate::filter::{Evaluate, Filter};
 use crate::fixed::Fixed;
 use crate::game::Game;
 use crate::ids::{Seat, Slot};
 use crate::layout::Small;
 use crate::profile::Breakpoint;
+use crate::replacement::event::{self, Event, Reason, Recipient, Sink, TokenEntry};
 use crate::resolution::Resolution;
 use crate::state::{
     AbilityRef, AttackTarget, Continuous, CounterKind, Duration, LayerChange, ManaPool,
@@ -497,8 +497,13 @@ fn game_with_seed(seed: u64) -> (GameTable, State, Seat) {
         let land = crate::tests::fixture_slots(s.zone(ZoneKey::Of(player, Zone::Library)))
             .find(|&slot| s.definition_name(&t, slot) == "Test Land")
             .unwrap();
-        s.move_object(&mut crate::event::Sink::off(), land, Zone::Hand, Place::Top)
-            .unwrap();
+        s.move_object(
+            &mut crate::replacement::event::Sink::off(),
+            land,
+            Zone::Hand,
+            Place::Top,
+        )
+        .unwrap();
     }
     let p = s.turn().starting_player();
     (t, s, p)
@@ -619,8 +624,13 @@ fn a_copy_in_hand_the_opponent_knows_is_offered_apart_from_one_they_do_not() {
         .take(2)
         .collect();
     for &land in &lands {
-        s.move_object(&mut crate::event::Sink::off(), land, Zone::Hand, Place::Top)
-            .unwrap();
+        s.move_object(
+            &mut crate::replacement::event::Sink::off(),
+            land,
+            Zone::Hand,
+            Place::Top,
+        )
+        .unwrap();
     }
     let plays = |s: &mut State, x: &mut Scratch| {
         let d = decide_with(&t, s, x);
@@ -643,8 +653,13 @@ fn an_enters_trigger_resolves_after_the_land_is_played() {
     let (t, mut s, p) = game();
     let mut x = Scratch::recording();
     let land = find(&s, &t, p, "Test Gain Land");
-    s.move_object(&mut crate::event::Sink::off(), land, Zone::Hand, Place::Top)
-        .unwrap();
+    s.move_object(
+        &mut crate::replacement::event::Sink::off(),
+        land,
+        Zone::Hand,
+        Place::Top,
+    )
+    .unwrap();
     let d = decide_with(&t, &mut s, &mut x);
     let play = (0..d.len() as u16)
         .find(|&i| d.candidates.option(Choice(i)) == Some(Opt::PlayLand(land)))
@@ -1032,7 +1047,10 @@ fn a_player_orders_their_own_triggers_only_when_they_differ() {
 
 /// The triggers a player chooses the next from, of those waiting.
 fn firsts(s: &State) -> usize {
-    crate::trigger::next_to_stack(s).expect("a trigger").1.len()
+    crate::stack::trigger::next_to_stack(s)
+        .expect("a trigger")
+        .1
+        .len()
 }
 
 /// Waiting triggers name their own sources, so they are compared by renaming one's to the
@@ -1233,7 +1251,7 @@ fn lands_enter_tapped_conditionally_or_unless_life_is_paid() {
         let mut x = Scratch::new();
         let springs = find(&s, &t, p, "Test Springs");
         s.move_object(
-            &mut crate::event::Sink::off(),
+            &mut crate::replacement::event::Sink::off(),
             springs,
             Zone::Hand,
             Place::Top,
@@ -1265,7 +1283,7 @@ fn lands_enter_tapped_conditionally_or_unless_life_is_paid() {
     s.board().set_life(p, 2);
     let springs = find(&s, &t, p, "Test Springs");
     s.move_object(
-        &mut crate::event::Sink::off(),
+        &mut crate::replacement::event::Sink::off(),
         springs,
         Zone::Hand,
         Place::Top,
@@ -1342,7 +1360,7 @@ fn an_aura_makes_a_vehicle_artifact_with_crew_and_crewing_makes_it_a_creature() 
     let bear = put(&t, &mut s, &mut x, p, "Test Bear");
     let aura = put(&t, &mut s, &mut x, p, "Test Reconfiguration");
     s.board().attach(aura, bear);
-    crate::layers::refresh(&mut s, &t, &mut x.events).unwrap();
+    crate::continuous::layers::refresh(&mut s, &t, &mut x.events).unwrap();
     let d = s.derived(bear);
     assert_eq!(d.types, Types::ARTIFACT);
     assert!(d.subtypes.contains(t.subtypes(), Subtype::Vehicle));
@@ -1364,7 +1382,7 @@ fn an_aura_makes_a_vehicle_artifact_with_crew_and_crewing_makes_it_a_creature() 
     // A land loses its land types with its land type (CR 205.1a), and keeps the Vehicle.
     let land = put(&t, &mut s, &mut x, p, "Test Land");
     s.board().attach(aura, land);
-    crate::layers::refresh(&mut s, &t, &mut x.events).unwrap();
+    crate::continuous::layers::refresh(&mut s, &t, &mut x.events).unwrap();
     let subtypes = s.derived(land).subtypes;
     assert_eq!(
         subtypes.iter(t.subtypes()).collect::<Vec<_>>(),
@@ -1374,7 +1392,7 @@ fn an_aura_makes_a_vehicle_artifact_with_crew_and_crewing_makes_it_a_creature() 
     assert_eq!(granted(&s, bear), vec![], "no longer granted crew");
     assert!(!s.has(bear, ObjectAbility::Granted(0)));
     s.board().attach(aura, bear);
-    crate::layers::refresh(&mut s, &t, &mut x.events).unwrap();
+    crate::continuous::layers::refresh(&mut s, &t, &mut x.events).unwrap();
     // Crewed: an artifact creature until end of turn, by a later timestamp.
     let r = s.object_ref(bear);
     with_game(&t, &mut s, &mut x, bear, |game, resolution| {
@@ -1400,7 +1418,7 @@ fn an_aura_whose_permanent_leaves_is_attached_to_nothing_and_goes_to_the_graveya
     let bear = put(&t, &mut s, &mut x, p, "Test Bear");
     let aura = put(&t, &mut s, &mut x, p, "Test Reconfiguration");
     s.board().attach(aura, bear);
-    crate::layers::refresh(&mut s, &t, &mut x.events).unwrap();
+    crate::continuous::layers::refresh(&mut s, &t, &mut x.events).unwrap();
     let r = s.object_ref(bear);
     with_game(&t, &mut s, &mut x, aura, |game, _| {
         destroy(game, game.state().permanent(r).unwrap()).unwrap();
@@ -1419,14 +1437,14 @@ fn an_aura_whose_permanent_leaves_is_attached_to_nothing_and_goes_to_the_graveya
     let mut x = Scratch::new();
     let aura = find(&s, &t, p, "Test Reconfiguration");
     s.board().place(aura, Zone::Battlefield).unwrap();
-    crate::layers::refresh(&mut s, &t, &mut x.events).unwrap();
+    crate::continuous::layers::refresh(&mut s, &t, &mut x.events).unwrap();
     let mut token = Bitboard::EMPTY;
     with_game(&t, &mut s, &mut x, aura, |game, resolution| {
         token = create_tokens(game, resolution, &MAP, 1, TokenEntry::default());
     });
     let token = token.sole().unwrap();
     s.board().attach(aura, token);
-    crate::layers::refresh(&mut s, &t, &mut x.events).unwrap();
+    crate::continuous::layers::refresh(&mut s, &t, &mut x.events).unwrap();
     let r = s.object_ref(token);
     with_game(&t, &mut s, &mut x, aura, |game, _| {
         destroy(game, game.state().permanent(r).unwrap()).unwrap();
@@ -1648,7 +1666,7 @@ fn a_permanent_with_something_attached_is_not_interchangeable_with_its_twin() {
     let mut x = Scratch::new();
     let ([first, second], attachment) = twins(&t, &mut s, &mut x, p);
     s.board().attach(attachment, first);
-    crate::layers::refresh(&mut s, &t, &mut x.events).unwrap();
+    crate::continuous::layers::refresh(&mut s, &t, &mut x.events).unwrap();
     assert_eq!(s.signature(first), s.signature(second));
     assert!(!crate::engine::interchangeable(&s, first, second));
 }
@@ -1902,7 +1920,7 @@ fn reading_derived_after_a_raw_change_without_a_refresh_panics() {
     let (t, mut s, p) = game();
     let bear = find(&s, &t, p, "Test Bear");
     s.move_object(
-        &mut crate::event::Sink::off(),
+        &mut crate::replacement::event::Sink::off(),
         bear,
         Zone::Battlefield,
         Place::Top,
@@ -2215,7 +2233,7 @@ fn a_transformed_permanent_has_its_front_faces_mana_value() {
         &crate::card::Words::NONE
     ));
     let mut x = Scratch::new();
-    crate::layers::refresh(&mut s, &t, &mut x.events).unwrap();
+    crate::continuous::layers::refresh(&mut s, &t, &mut x.events).unwrap();
     let mut copy = None;
     with_game(&t, &mut s, &mut x, prodigy, |game, _| {
         let values = game.state().copiable(prodigy);

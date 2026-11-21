@@ -11,7 +11,7 @@ use crate::card::{Ability, CardDef, Face, Types};
 use crate::filter::Filter;
 use crate::ids::Seat;
 use crate::state::{TurnStep, Zone};
-use crate::{CardTable, GameTable, Profile, State, layers, rule_change};
+use crate::{CardTable, GameTable, Profile, State, continuous::layers, continuous::rule_change};
 
 use super::LAND;
 use super::events::find;
@@ -76,7 +76,7 @@ fn with_permanent_of(card: &'static str) -> (GameTable, State) {
     s.board().begin_at(1, Seat::P0, TurnStep::PrecombatMain);
     let permanent = find(&s, &t, Seat::P0, card);
     s.board().place(permanent, Zone::Battlefield).unwrap();
-    layers::refresh(&mut s, &t, &mut crate::event::Sink::off()).unwrap();
+    layers::refresh(&mut s, &t, &mut crate::replacement::event::Sink::off()).unwrap();
     (t, s)
 }
 

@@ -9,19 +9,19 @@ use crate::bitboard::Bitboard;
 use crate::card::{CastingIx, ObjectAbility, Part, Prompt, Purpose, TargetSpec};
 use crate::decision::{Candidates, Decision, DecisionKind, OPTIONS, Opt};
 use crate::engine::collapse;
-use crate::event::{self, Event, EventKind, Reason, Sink};
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::keywords::flashback;
 use crate::layout::{Layout, Queue, index};
 use crate::mana;
 use crate::profile::Payment;
+use crate::replacement::event::{self, Event, EventKind, Reason, Sink};
+use crate::stack::trigger;
 use crate::state::{
     AbilityRef, CastKind, CastStep, Casting, Count, Pending, StackEntry, StackItem, State, Target,
     Tracker, Zone,
 };
 use crate::table::{Capability, GameTable};
-use crate::trigger;
 
 use super::costs::{spent_by_entry, total_cost, x_range_start};
 use super::parts;

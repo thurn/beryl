@@ -2,19 +2,21 @@
 //! regeneration ([CR 614.8]): "Regeneration is a destruction-replacement effect. The word
 //! “instead” doesn't appear on the card but is implicit in the definition of regeneration."
 //!
+//! Implements: CR 614.8
+//!
 //! [CR 614.8]: https://yawgatog.com/resources/magic-rules/#R6148
 
 use crate::bitboard::Bitboard;
-use crate::event::{self, Sink};
 use crate::fixed::Full;
 use crate::layout::{Layout, Queue};
+use crate::replacement::event::{self, Sink};
 use crate::state::{ObjectRef, State};
 use crate::table::GameTable;
 use beryl_card::Regeneration;
 
 /// Of `permanents`, which a destruction would put into their owners' graveyards, those still
 /// destroyed after its replacement effects: a regeneration shield saves each permanent it is
-/// on ([`regenerate_any`]), unless `regeneration` forbids it ([CR 701.19c]): effects that say a
+/// on ([`regenerate_any`]), unless `regeneration` forbids it (see [CR 701.19c]): effects that say a
 /// permanent can't be regenerated "cause regeneration shields to not be applied." With no
 /// shield on any permanent, one AND.
 ///
@@ -55,7 +57,7 @@ fn regenerate_any<L: Layout>(
     Ok(shielded)
 }
 
-/// Uses up a shield on `object` in place of destroying it ([CR 701.19a]): "The next time
+/// Uses up a shield on `object` in place of destroying it (see [CR 701.19a]): "The next time
 /// [permanent] would be destroyed this turn, instead remove all damage marked on it and its
 /// controller taps it. If it's an attacking or blocking creature, remove it from combat."
 /// The tap is the one event: removing damage and leaving combat have none.

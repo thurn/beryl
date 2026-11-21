@@ -113,7 +113,7 @@
 //! `discarded-push` check). The engine turns `Full` into the stall in one place, where the
 //! resolution ends (`interpret::finish`).
 //!
-//! A replacement effect's choice (`replace`) can come up in code that is no resolution's and
+//! A replacement effect's choice (`replacement`) can come up in code that is no resolution's and
 //! returns `Result<T, Full>`, as the draw step's draw does. It stops the run as a `Full`
 //! too, keeping its question in the sink (`beryl_kernel::asking`); the code that opened the
 //! run, a resolution or the end of a step, tells the stop from a capacity running out by
@@ -128,7 +128,7 @@
 //! | --- | --- | --- |
 //! | CR 701, keyword actions | `actions/`, a file for each, named as the rules name it | [`actions::counter`], [`actions::destroy`], [`actions::discard`], [`actions::exile`], [`actions::explore`], [`actions::fateseal`], [`actions::manifest`], [`actions::manifest_dread`], [`actions::mill`], [`actions::regenerate`], [`actions::reveal`], [`actions::sacrifice`], [`actions::scry`], [`actions::search`], [`actions::shuffle`], [`actions::tap`] (tap and untap), [`actions::transform`] |
 //! | CR 702, keyword abilities | `keywords/`, a file for each | [`keywords::flashback`]; kicker |
-//! | any other rule | a module named for the rule's title | [`game::ending`] the game (CR 104), [`mana`], which the engine's payment solver shares (CR 106), [`tokens`] (CR 111), [`emblems`] (CR 114), [`casting::payment`] (CR 118), [`game::life`] (CR 119), [`damage`] (CR 120), [`drawing`] (CR 121), [`counters`] (CR 122), [`zones`] (CR 400), [`library`] (CR 401), [`stack`] (CR 405), [`casting::start`] for spells an effect allows (CR 601), [`delayed_triggers`] (CR 603.7), [`linked`] abilities (CR 607), [`choices`] made while resolving (CR 608.2d), [`one_shot`] effects (CR 610), [`continuous`] effects (CR 611), [`coins`] (CR 705); copies (CR 707) |
+//! | any other rule | a module named for the rule's title | [`game::ending`] the game (CR 104), [`mana`], which the engine's payment solver shares (CR 106), [`tokens`] (CR 111), [`emblems`] (CR 114), [`casting::payment`] (CR 118), [`game::life`] (CR 119), [`damage`] (CR 120), [`drawing`] (CR 121), [`counters`] (CR 122), [`zones`] (CR 400), [`library`] (CR 401), [`stack`] (CR 405), [`casting::start`] for spells an effect allows (CR 601), [`stack::delayed_triggers`] (CR 603.7), [`linked`] abilities (CR 607), [`choices`] made while resolving (CR 608.2d), [`one_shot`] effects (CR 610), [`continuous`] effects (CR 611), [`coins`] (CR 705); copies (CR 707) |
 //!
 //! A module holds, in this order:
 //!
@@ -152,17 +152,16 @@
 //!
 //! ## The engine's own rules
 //!
-//! The engine's modules are private and follow the same naming: `layers` (CR 613), the
-//! recompute of every permanent's characteristics one layer at a time, with `layers/dependency`
-//! (CR 613.8), `layers/granted` (static abilities granted in layer 6) and `layers/entering`
-//! (a permanent as it would exist, CR 614.12); `replace` (CR 614 to 616), where each
-//! replaceable happening is built as a typed proposal (`replace::Move`, `replace::Damage`, one
-//! card drawn, a destruction) before it changes the state, and the replacement and prevention
-//! effects that apply rewrite it, in the order of CR 616.1; `protection` (CR 702.16), read for
-//! targets, Auras, Equipment and blockers; `trigger` (CR 603), which matches events, look-back
-//! (CR 603.10a) and state triggers (CR 603.8) against the listeners the card table found; and
-//! `sba` (CR 704). A library function that changes the game sends its event through
-//! `event::settle`, which refreshes the layers, matches triggers and records it.
+//! `continuous::layers` (CR 613) recomputes every permanent's characteristics one layer at a
+//! time. Its submodules handle dependencies (CR 613.8), static abilities granted in layer 6,
+//! and a permanent's prospective characteristics as it enters (CR 614.12).
+//! `replacement` proposes moves, damage, draws and destructions, then applies the replacement
+//! and prevention effects in the order of CR 616.1. `replacement::protection` checks protection
+//! (CR 702.16) for targeting, attachment and blocking. `stack::trigger` (CR 603) matches events,
+//! look-back triggers (CR 603.10a) and state triggers (CR 603.8) against the card table's
+//! listeners. `sba` handles state-based actions (CR 704). A library function that changes
+//! the game sends its event through `replacement::event::settle`, which refreshes the layers,
+//! matches triggers and records the event.
 //!
 //! Each of these is reached through a mask: the kinds of event the game's cards listen to or
 //! replace ([`GameTable::listens_any`](table::GameTable::listens_any),
@@ -220,45 +219,36 @@ pub mod continuous;
 pub mod counters;
 pub mod coverage;
 pub mod damage;
-pub mod delayed_triggers;
 pub mod drawing;
 pub mod emblems;
 mod engine;
-mod entered;
-pub mod event;
 mod face_down;
 pub mod game;
 mod interpret;
 pub mod keywords;
-mod layers;
 pub mod library;
 pub mod linked;
 pub mod mana;
 pub mod one_shot;
 mod phasing;
-mod protection;
 mod reference;
-mod replace;
+pub mod replacement;
 pub mod resolution;
-mod resolve;
-mod rule_change;
 mod sba;
 mod scratch;
 pub mod stack;
-mod text;
 pub mod tokens;
-mod trigger;
 mod turn;
 pub mod zones;
 
 // The game state and everything that writes it are the kernel's (`beryl_kernel`).
 // The rules name its modules as their own and export none of them whole: a caller reads the
 // kernel from the kernel, or from the facade. What the rules do export of it stands beside
-// items of their own, in `layout`, `profile` and `event`.
+// items of their own, in `layout`, `profile` and `replacement::event`.
 pub(crate) use beryl_kernel::copiable::additions;
 pub(crate) use beryl_kernel::{
     PlayerSet, bitboard, chance, decision, definition, filter, fixed, ids, invariants, observation,
-    query, replacement, state, static_ability, table, zone,
+    query, state, static_ability, table, zone,
 };
 
 /// The kernel's storage layouts.
@@ -276,6 +266,7 @@ pub mod profile {
 pub use bodies::{CustomBody, custom_body};
 pub use casting::{cost_being_cast, payable_responses, pointless, target_takes};
 pub use combat::preferred_damage;
+pub use continuous::layers::rederive;
 pub use drawing::wins_instead_of_drawing;
 pub use engine::{
     Counts, Scratch, apply, apply_decided, concede, interchangeable, next, next_in_step,
@@ -283,7 +274,6 @@ pub use engine::{
 };
 pub use game::Game;
 pub use keywords::flashback::paid as flashback_paid;
-pub use layers::rederive;
 pub use mana::mana_contribution;
 pub use reference::check_references;
 pub use resolution::Resolution;

@@ -5,13 +5,13 @@
 use crate::bitboard::Bitboard;
 use crate::card::{FaceIx, Subtype, Types};
 use crate::damage;
-use crate::event::{self, Event, Reason, Recipient};
 use crate::game::Game;
 use crate::ids::{Seat, SlotId};
+use crate::replacement::event::{self, Event, Reason, Recipient};
 use crate::state::{Continuous, CounterKind, Duration, LayerChange, Shield, Subject, Zone};
 use crate::{
-    GameTable, Large, Layout, Outcome, Replay, Scratch, StallReason, State, Step, layers, next,
-    trigger,
+    GameTable, Large, Layout, Outcome, Replay, Scratch, StallReason, State, Step,
+    continuous::layers, next, stack::trigger,
 };
 
 use super::events::{find, game};

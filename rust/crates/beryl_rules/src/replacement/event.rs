@@ -4,7 +4,9 @@
 //! A primitive performs its mutation through here: zone changes get replacement effects,
 //! look-back trigger matching with last-known information, execution, a layer refresh, then
 //! trigger matching and the sink; every other event is executed by its primitive and then
-//! [`settle`]d the same way. The replacement effects are applied by [`replace`].
+//! [`settle`]d the same way. The replacement effects are applied by [`replacement`].
+//!
+//! Implements: none. Coordinates replacement, mutation, and trigger matching for events.
 
 pub use beryl_kernel::cause::{Cause, StackIx, Tag};
 pub use beryl_kernel::event::{
@@ -17,14 +19,14 @@ use beryl_kernel::mutate::Arrival;
 
 use crate::bitboard::Bitboard;
 use crate::card::{CastingKinds, FaceIx, Subtype};
+use crate::continuous::layers;
 use crate::fixed::Full;
 use crate::ids::Seat;
-use crate::layers;
 use crate::layout::{Layout, Queue, Small};
-use crate::replace;
+use crate::replacement;
+use crate::stack::trigger;
 use crate::state::{CounterKind, Memo, ObjectRef, State, Tracker, Zone};
 use crate::table::{Capability, GameTable};
-use crate::trigger;
 use crate::zone::Place;
 
 /// How a permanent enters, as decided by whatever puts it onto the battlefield, before the
@@ -33,7 +35,7 @@ use crate::zone::Place;
 pub(crate) struct Entry<L: Layout = Small> {
     pub tapped: bool,
     /// Put onto the battlefield attacking this player
-    /// ([CR 508.4](https://yawgatog.com/resources/magic-rules/#R5084)).
+    /// (see [CR 508.4](https://yawgatog.com/resources/magic-rules/#R5084)).
     pub attacking: Option<Seat>,
     /// Under this player's control rather than its owner's.
     pub controller: Option<Seat>,
@@ -45,10 +47,10 @@ pub(crate) struct Entry<L: Layout = Small> {
     pub pay_life: bool,
     /// What its spell was cast with that its abilities read, which it enters remembering
     /// ([`Memo`]): the kinds of cost paid, such as a kicker cost, and the value of X
-    /// ([CR 107.3m](https://yawgatog.com/resources/magic-rules/#R1073m)).
+    /// (see [CR 107.3m](https://yawgatog.com/resources/magic-rules/#R1073m)).
     pub paid: CastingKinds,
     pub x: u8,
-    /// The object an Aura spell attaches to as it resolves (CR 608.3c).
+    /// The object an Aura spell attaches to as it resolves (see CR 608.3c).
     pub attach: Option<L::Slot>,
 }
 
@@ -87,7 +89,7 @@ pub(crate) fn arrive<L: Layout>(
 }
 
 /// Starts the copy effect of the permanent that just arrived in `slot`, if it chose to enter as
-/// a copy ([`Sink::copies`]), before the layers or any trigger look at it ([CR 707.5]): "It
+/// a copy ([`Sink::copies`]), before the layers or any trigger look at it (see [CR 707.5]): "It
 /// doesn't enter the battlefield, and then become a copy of that permanent. ... Also, any
 /// enters-the-battlefield triggered abilities of the copy will have a chance to trigger."
 ///
@@ -155,23 +157,23 @@ pub(crate) fn move_one<L: Layout>(
 
 /// Moves a set of objects to one zone simultaneously, through the whole pipeline (§8.2).
 ///
-/// 1. Each move is proposed ([`replace::Move`]), and replacement effects decide the object's
-///    destination and how a permanent enters ([`replace::moving`]). The events are those of
+/// 1. Each move is proposed ([`replacement::Move`]), and replacement effects decide the object's
+///    destination and how a permanent enters ([`replacement::moving`]). The events are those of
 ///    the moves as replaced, so a creature exiled instead of being put into a graveyard did
 ///    not die.
 /// 2. Leaves-the-battlefield abilities look back in time
-///    ([CR 603.10a](https://yawgatog.com/resources/magic-rules/#R60310a)): they are matched
+///    (see [CR 603.10a](https://yawgatog.com/resources/magic-rules/#R60310a)): they are matched
 ///    against the objects as they were, before any of the batch moves, with last-known
 ///    information captured for their bodies.
 /// 3. The moves execute.
 /// 4. Layers are recomputed, then enters abilities are matched against the objects as they
 ///    are on the battlefield, and discard abilities against each card discarded
-///    ([CR 603.6a](https://yawgatog.com/resources/magic-rules/#R6036a)): "Each time an event
+///    (see [CR 603.6a](https://yawgatog.com/resources/magic-rules/#R6036a)): "Each time an event
 ///    puts one or more permanents onto the battlefield, all permanents on the battlefield
 ///    (including the newcomers) are checked for any enters-the-battlefield triggers that
 ///    match the event."
 /// 5. Objects exiled "until" a permanent in the batch left the battlefield return, as one
-///    more simultaneous batch ([CR 610.3](https://yawgatog.com/resources/magic-rules/#R6103)):
+///    more simultaneous batch (see [CR 610.3](https://yawgatog.com/resources/magic-rules/#R6103)):
 ///    "A second one-shot effect is created immediately after the specified event. This
 ///    second one-shot effect returns the object to its previous zone."
 ///
@@ -227,15 +229,15 @@ fn move_ordered<L: Layout, const N: usize>(
     entry: Entry<L>,
 ) -> Result<(), Full> {
     // Each move as replaced: the object, where it was, where it goes and how it enters. A
-    // tuple rather than a `replace::Move`: the queue is filled with defaults first, and
-    // filling it with `replace::Move`s cost the rollout benchmark 1% more instructions.
+    // tuple rather than a `replacement::Move`: the queue is filled with defaults first, and
+    // filling it with `replacement::Move`s cost the rollout benchmark 1% more instructions.
     let mut moves: L::Queue<PreparedMove<L>, N> = Default::default();
     let mut returning = Bitboard::EMPTY;
     // Whether the game has an Aura, which may choose what it enchants as it enters and may be
     // attached to a card in a graveyard: a game with none asks neither below.
     let auras = t.subtypes().has(Subtype::Aura).possible();
     let mut prepare = |s: &mut State<L>, slot| {
-        let proposal = replace::Move {
+        let proposal = replacement::Move {
             slot,
             from: s.object(slot).zone(),
             to,
@@ -274,7 +276,7 @@ fn move_ordered<L: Layout, const N: usize>(
         from,
         to,
         reason,
-        // [CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002): "Public zones
+        // see [CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002): "Public zones
         // are zones in which all players can see the cards' faces" including the stack.
         // Keep the end chosen for a spell, even when the library was empty.
         library_top: match (from, to, place) {
@@ -289,7 +291,7 @@ fn move_ordered<L: Layout, const N: usize>(
     for each in moves.iter() {
         let &(slot, from, dest, entry) = each;
         if dest == Zone::Battlefield && entry.pay_life {
-            replace::pay_life_to_enter(s, t, sink, slot, entry)?;
+            replacement::pay_life_to_enter(s, t, sink, slot, entry)?;
         }
         if auras && from == Zone::Graveyard {
             unattach_from(s, slot);
@@ -311,14 +313,14 @@ fn move_ordered<L: Layout, const N: usize>(
     }
     layers::refresh(s, t, sink)?;
     if arrived.len() > 1 {
-        crate::entered::order(s, t, arrived.as_slice())?;
+        crate::continuous::arrival_timestamps::order(s, t, arrived.as_slice())?;
         layers::refresh(s, t, sink)?;
     }
     for &(slot, from, dest, _) in moves.iter() {
         trigger::match_event(s, t, &changed(s.object_ref(slot), from, dest))?;
     }
     if !returning.is_empty() {
-        // CR 610.3c: "An object returned to the battlefield this way returns under its
+        // see CR 610.3c: "An object returned to the battlefield this way returns under its
         // owner's control unless otherwise specified."
         sink.together_with_last();
         let returned = move_batch(
@@ -348,26 +350,26 @@ fn prepare_move<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
-    proposal: replace::Move<L>,
+    proposal: replacement::Move<L>,
     auras: bool,
 ) -> Result<Option<PreparedMove<L>>, Full> {
-    let replace::Move { slot, from, .. } = proposal;
-    // CR 111.8: "A token that has left the battlefield can't move to another zone or
+    let replacement::Move { slot, from, .. } = proposal;
+    // see CR 111.8: "A token that has left the battlefield can't move to another zone or
     // come back onto the battlefield. If such a token would change zones, it remains in
     // its current zone instead." A token on the stack is a copy of a spell, which leaves
     // it as a spell does: onto the battlefield as a token as it resolves
-    // ([CR 608.3f](https://yawgatog.com/resources/magic-rules/#R6083f)), or to where a
-    // card would go, where the state-based check ends it (CR 704.5e).
+    // (see [CR 608.3f](https://yawgatog.com/resources/magic-rules/#R6083f)), or to where a
+    // card would go, where the state-based check ends it (see CR 704.5e).
     if s.object(slot).is_token() && !matches!(from, Zone::Battlefield | Zone::Nowhere | Zone::Stack)
     {
         return Ok(None);
     }
-    let mut m = replace::moving(s, t, sink, proposal)?;
+    let mut m = replacement::moving(s, t, sink, proposal)?;
     if auras && m.to == Zone::Battlefield && m.entry.attach.is_none() {
-        match replace::enchants(s, t, sink, slot, m.entry)? {
-            replace::Enchants::NotAnAura => {}
-            replace::Enchants::Object(host) => m.entry.attach = Some(host),
-            replace::Enchants::Nothing => {
+        match replacement::enchants(s, t, sink, slot, m.entry)? {
+            replacement::Enchants::NotAnAura => {}
+            replacement::Enchants::Object(host) => m.entry.attach = Some(host),
+            replacement::Enchants::Nothing => {
                 sink.copies.retain(|&(copier, _)| copier != slot);
                 if from != Zone::Stack {
                     s.end_exiled_until(slot);
@@ -414,8 +416,8 @@ fn prepare_entries<L: Layout, const N: usize>(
 
 /// Unattaches each Aura attached to the card in `slot`, which is leaving a graveyard, as
 /// Animate Dead is attached while its enters ability waits. The object the card becomes is
-/// new ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)), so the Aura is
-/// attached to nothing, and goes to the graveyard as a state-based action (CR 704.5m) unless
+/// new (see [CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)), so the Aura is
+/// attached to nothing, and goes to the graveyard as a state-based action (see CR 704.5m) unless
 /// an instruction attaches it again.
 #[cold]
 #[inline(never)]
@@ -431,10 +433,10 @@ fn unattach_from<L: Layout>(s: &mut State<L>, slot: L::Slot) {
 
 /// Taps or untaps a permanent.
 ///
-/// [CR 701.26a](https://yawgatog.com/resources/magic-rules/#R70126a): "To tap a permanent,
+/// see [CR 701.26a](https://yawgatog.com/resources/magic-rules/#R70126a): "To tap a permanent,
 /// turn it sideways from an upright position. Only untapped permanents can be tapped."
 ///
-/// [CR 701.26b](https://yawgatog.com/resources/magic-rules/#R70126b): "To untap a permanent,
+/// see [CR 701.26b](https://yawgatog.com/resources/magic-rules/#R70126b): "To untap a permanent,
 /// rotate it back to the upright position from a sideways position. Only tapped permanents
 /// can be untapped."
 // Inline: every mana payment taps through here, and out of line it cost the rollout

@@ -3,7 +3,7 @@
 //!
 //! The question offers one [`Opt::Number`] per value, numbered as [`ChosenValue::candidates`]
 //! numbers them, so a recorded answer names the same value in every run that asks it. A
-//! permanent asks it as it enters ([`crate::replace`]); a resolving spell or ability asks it
+//! permanent asks it as it enters ([`crate::replacement`]); a resolving spell or ability asks it
 //! through [`crate::choices::catalog`].
 
 use beryl_card::ChosenKind;

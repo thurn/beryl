@@ -9,6 +9,8 @@
 //! appropriate zone." Such an effect's parts are listed with the layers' other effects, in
 //! the order they apply, so those parts are what the kernel keeps, in the same order.
 //!
+//! Implements: none. Lists the parts of static effects that reach other zones under CR 611.3.
+//!
 //! [CR 611.3b]: https://yawgatog.com/resources/magic-rules/#R6113b
 
 use beryl_kernel::derive::Rederive;

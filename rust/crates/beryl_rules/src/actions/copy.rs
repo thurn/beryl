@@ -24,7 +24,6 @@ use crate::card::Stop;
 use crate::casting::{self, entry_ability};
 use crate::choices;
 use crate::decision::Opt;
-use crate::event::{self, Reason};
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
@@ -32,6 +31,7 @@ use crate::ids::SlotId;
 use crate::interpret::{Outcome, Run};
 use crate::layout::{Layout, Queue};
 use crate::query::Copiable;
+use crate::replacement::event::{self, Reason};
 use crate::resolution::Resolution;
 use crate::state::{AbilityTarget, ObjectRef, StackEntry, StackItem, Target, TargetPlace, Zone};
 

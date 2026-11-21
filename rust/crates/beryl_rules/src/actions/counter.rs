@@ -4,12 +4,12 @@ use beryl_card::Objects;
 
 use crate::bitboard::Bitboard;
 use crate::casting;
-use crate::event::Reason;
+use crate::continuous::rule_change;
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
-use crate::rule_change;
+use crate::replacement::event::Reason;
 use crate::state::{ObjectRef, StackEntry, State, Zone};
 
 /// Counters a spell ([CR 701.6a](https://yawgatog.com/resources/magic-rules/#R7016a)):

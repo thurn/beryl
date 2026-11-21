@@ -5,7 +5,6 @@ use beryl_card::{Amount, Filter, Keywords, Prevention, Prompt, Recipients, Words
 
 use crate::bitboard::Bitboard;
 use crate::card::Stop;
-use crate::event::Recipient;
 use crate::filter::Evaluate;
 use crate::fixed::Full;
 use crate::game::Game;
@@ -13,11 +12,12 @@ use crate::game::life;
 use crate::ids::Seat;
 use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
+use crate::replacement::event::Recipient;
 use crate::state::{
     ChosenSource, Continuous, Duration, ObjectRef, PendingTrigger, Shield, StackEntry, Subject,
     ZoneKey,
 };
-use crate::{choices, continuous, replace, rule_change};
+use crate::{choices, continuous, continuous::rule_change, replacement};
 
 /// Deals `amount` damage from `source` to a player or a permanent, combat damage with
 /// `combat` ([CR 120.3](https://yawgatog.com/resources/magic-rules/#R1203)). A permanent that
@@ -34,7 +34,7 @@ use crate::{choices, continuous, replace, rule_change};
 /// that creature."
 ///
 /// The damage is proposed first and its replacement and prevention effects applied
-/// ([`replace::damage`]); damage they prevent is not dealt, and no lifelink comes of it.
+/// ([`replacement::damage`]); damage they prevent is not dealt, and no lifelink comes of it.
 /// Returns how much was dealt, after them ([CR 615.1]): prevention effects "apply to damage
 /// and modify how much damage, if any, is dealt", so "damage dealt this way" counts none
 /// that was prevented.
@@ -51,20 +51,20 @@ pub fn deal<L: Layout>(
     if amount == 0 {
         return Ok(0);
     }
-    let proposal = replace::Damage {
+    let proposal = replacement::Damage {
         source,
         to,
         amount,
         combat,
         preventable: true,
     };
-    let replace::Damage {
+    let replacement::Damage {
         source,
         to,
         amount,
         combat,
         ..
-    } = replace::damage(game, proposal)?;
+    } = replacement::damage(game, proposal)?;
     if amount == 0 {
         return Ok(0);
     }

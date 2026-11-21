@@ -13,9 +13,9 @@
 use beryl_kernel::query::Copiable;
 
 use crate::card::Face;
-use crate::event::{self, Entry, Sink};
 use crate::fixed::Full;
 use crate::layout::Layout;
+use crate::replacement::event::{self, Entry, Sink};
 use crate::state::{Derived, State, Zone};
 use crate::table::GameTable;
 use crate::zone::Place;

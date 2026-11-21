@@ -2,18 +2,20 @@
 //! modify it ([CR 616.1]): protection, prevention shields from the Effects store, and static
 //! abilities that multiply damage.
 //!
+//! Implements: CR 615.6, CR 615.9, CR 615.12, CR 702.16e, CR 702.16j
+//!
 //! [CR 616.1]: https://yawgatog.com/resources/magic-rules/#R6161
 
 use crate::card::{Ability, AbilityKind, Effect, ObjectAbility, Replaced, Replacement, Rewrite};
+use crate::continuous::rule_change;
 use crate::decision::{Decision, DecisionKind, OPTIONS, Opt};
-use crate::event::{Recipient, ReplacementKind};
 use crate::filter::Evaluate;
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue};
-use crate::protection;
-use crate::rule_change;
+use crate::replacement::event::{Recipient, ReplacementKind};
+use crate::replacement::protection;
 use crate::state::{ChosenSource, ObjectRef, ShieldAt, State, Subject, Zone, ZoneKey};
 use crate::table::GameTable;
 
@@ -27,7 +29,7 @@ pub(crate) struct Damage<L: Layout> {
     pub source: ObjectRef<L>,
     pub to: Recipient<L>,
     pub amount: u8,
-    /// It is combat damage ([CR 510.2]).
+    /// It is combat damage (see [CR 510.2]).
     ///
     /// [CR 510.2]: https://yawgatog.com/resources/magic-rules/#R5102
     pub combat: bool,
@@ -101,13 +103,13 @@ enum Key<S> {
 /// What an effect that applies does to the damage.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum Change {
-    /// Prevents all of it: protection, or a shield for the next time ([CR 615.8]): "These
+    /// Prevents all of it: protection, or a shield for the next time (see [CR 615.8]): "These
     /// effects prevent the next instance of damage from that source, regardless of how much
     /// damage that is."
     ///
     /// [CR 615.8]: https://yawgatog.com/resources/magic-rules/#R6158
     PreventAll,
-    /// Prevents up to what is left of a shield of an amount ([CR 615.7]).
+    /// Prevents up to what is left of a shield of an amount (see [CR 615.7]).
     ///
     /// [CR 615.7]: https://yawgatog.com/resources/magic-rules/#R6157
     PreventSome,

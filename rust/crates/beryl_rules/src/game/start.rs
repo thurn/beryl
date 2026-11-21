@@ -2,10 +2,10 @@
 //!
 //! Implements: CR 103.1, CR 103.5
 
-use crate::event::Sink;
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::Layout;
+use crate::replacement::event::Sink;
 use crate::state::{MulliganStatus, Pending, State, Zone};
 use crate::table::GameTable;
 use crate::turn;

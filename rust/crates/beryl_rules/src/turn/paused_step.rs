@@ -4,7 +4,7 @@
 //! Implements: none. Replays turn-based actions when a replacement effect asks for a choice.
 //!
 //! The turn-based actions of a step are carried out as it begins, where no resolution is open
-//! to pause. While such a choice can come up ([`crate::replace::may_ask`]), the step begins on the
+//! to pause. While such a choice can come up ([`crate::replacement::may_ask`]), the step begins on the
 //! state itself, so players see it begin, and its turn-based actions run as a paused
 //! resolution's body does (architecture §7.3): on the scratch copy of the state, with the
 //! answers recorded so far. A question the record cannot answer discards the copy, and waits
@@ -17,17 +17,17 @@
 
 use crate::bitboard::Bitboard;
 use crate::decision::{Answers, Decision};
-use crate::event::{Sink, Tagged};
 use crate::fixed::Full;
 use crate::layout::{Layout, Queue};
+use crate::replacement::event::{Sink, Tagged};
 use crate::scratch::Scratch;
 use crate::state::{Pending, State};
 use crate::table::GameTable;
-use crate::{chance, resolve, turn};
+use crate::{chance, stack::resolve, turn};
 
 /// Ends the current step and begins the next ([`turn::end_step`]), running the next step's
 /// turn-based actions so that they can pause: the caller's way while a replacement effect's
-/// choice can come up ([`crate::replace::may_ask`]).
+/// choice can come up ([`crate::replacement::may_ask`]).
 #[cold]
 #[inline(never)]
 pub(crate) fn end_step<L: Layout>(

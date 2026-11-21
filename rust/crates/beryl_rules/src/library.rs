@@ -7,13 +7,13 @@ use crate::bitboard::Bitboard;
 use crate::card::{Part, Prompt, Purpose, Stop};
 use crate::casting;
 use crate::choices;
-use crate::event::{self, Entry, Event, Reason};
 use crate::filter::Evaluate;
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
 use crate::interpret::{Outcome, Run};
 use crate::layout::{Layout, Queue};
+use crate::replacement::event::{self, Entry, Event, Reason};
 use crate::resolution::Resolution;
 use crate::state::{ObjectRef, State, Zone, ZoneKey};
 use crate::zone::Place;
@@ -37,7 +37,7 @@ pub fn top<L: Layout>(s: &State<L>, player: Seat, n: u8) -> Bitboard<L::Slot> {
 /// cards in it, the player puts that card on the bottom of that library."
 ///
 /// A spell leaves the stack without resolving, or is exiled instead
-/// ([`crate::replace::exiled_instead`]). A card already in the library moves within it and
+/// ([`crate::replacement::exiled_instead`]). A card already in the library moves within it and
 /// stays the object it was, so whoever knew it still does.
 pub fn put_into<L: Layout>(
     game: &mut Game<'_, L>,

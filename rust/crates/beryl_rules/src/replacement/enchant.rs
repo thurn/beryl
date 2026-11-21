@@ -5,6 +5,8 @@
 //! enchant as the Aura enters the battlefield. The player must choose a legal object or player
 //! according to the Aura's enchant ability and any other applicable effects."
 //!
+//! Implements: CR 303.4f, CR 303.4g
+//!
 //! [CR 303.4f]: https://yawgatog.com/resources/magic-rules/#R3034f
 
 use beryl_card::Prompt;
@@ -14,11 +16,11 @@ use super::{answer, selected_copy};
 use crate::actions::attach;
 use crate::bitboard::Bitboard;
 use crate::card::{Subtype, Words};
+use crate::continuous::layers;
 use crate::decision::{Decision, DecisionKind};
-use crate::event::{Entry, Sink};
 use crate::fixed::Full;
-use crate::layers;
 use crate::layout::Layout;
+use crate::replacement::event::{Entry, Sink};
 use crate::state::{State, Zone};
 use crate::table::GameTable;
 

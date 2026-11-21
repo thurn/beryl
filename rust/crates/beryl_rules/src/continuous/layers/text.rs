@@ -3,6 +3,8 @@
 //! are applied." Its static abilities are read through the same words wherever the layers
 //! read them ([`super::reader`]).
 //!
+//! Implements: none. Applies the text changes that layer 3 reads.
+//!
 //! [CR 613.1c]: https://yawgatog.com/resources/magic-rules/#R6131c
 
 use crate::state::AbilityMask as _;
@@ -56,13 +58,13 @@ pub(super) fn reader<L: Layout>(s: &Rederive<'_, L>, a: &Apply<L>) -> Option<app
 }
 
 /// Reads the type line and landwalk keywords of the permanent at battlefield index `i`, whose
-/// face is `face`, through its words ([CR 612.1]): "This can apply to any words or symbols
+/// face is `face`, through its words (see [CR 612.1]): "This can apply to any words or symbols
 /// printed on that object, but generally affects only that object’s rules text (which appears
 /// in its text box) and/or the text that appears in its type line." Nothing while no word of
 /// its type line reads otherwise, as in every game without a text change.
 ///
 /// A land whose basic land types change has the intrinsic mana ability of each new one
-/// ([CR 305.6]): "An object with the land card type and a basic land type has the intrinsic
+/// (see [CR 305.6]): "An object with the land card type and a basic land type has the intrinsic
 /// ability “{T}: Add [mana symbol],” even if the text box doesn't actually contain that
 /// text". A mana ability its face writes out for a basic land type it no longer has is that
 /// type's intrinsic ability, which went with the type, so it is gone: a Forest whose
@@ -106,7 +108,7 @@ fn type_line<L: Layout>(
     }
     let slot = s.battlefield()[i];
     let read = t.subtypes().of(face.subtypes.read(&words));
-    // A copy keeps the subtypes its exceptions add (CR 707.9b): they are not words of the
+    // A copy keeps the subtypes its exceptions add (see CR 707.9b): they are not words of the
     // type line the copy took.
     let subtypes = if s.object(slot).flags().has(Flag::Copy) {
         s.copiable(slot).with_excepted_subtypes(t, read)

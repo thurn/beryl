@@ -9,12 +9,12 @@
 use beryl_card::{AbilityIx, Amount, Colors, Keywords, ManaColor, ManaSet, Objects, Trigger};
 
 use crate::card::{Ability, CardDef, Face, LayerSpec, Modification, Types};
-use crate::event::EventKind;
 use crate::filter::Filter;
 use crate::fixed::Full;
 use crate::ids::{Seat, Slot};
+use crate::replacement::event::EventKind;
 use crate::state::{Continuous, Duration, LayerChange, TurnStep, Zone};
-use crate::{CardTable, GameTable, Profile, State, layers, reference};
+use crate::{CardTable, GameTable, Profile, State, continuous::layers, reference};
 
 use super::LAND;
 use super::events::find;
@@ -181,7 +181,7 @@ fn enters(t: &GameTable, s: &mut State, player: Seat, card: &str) -> Slot {
 }
 
 fn refresh(t: &GameTable, s: &mut State) {
-    layers::refresh(s, t, &mut crate::event::Sink::off()).unwrap();
+    layers::refresh(s, t, &mut crate::replacement::event::Sink::off()).unwrap();
     reference::check_references(s, t).unwrap();
 }
 
@@ -318,6 +318,6 @@ fn losing_more_abilities_than_the_mask_names_stalls() {
     enters(&t, &mut s, Seat::P0, "Test Hydra");
     let plain = find(&s, &t, Seat::P0, "Test Plain");
     s.board().place(plain, Zone::Battlefield).unwrap();
-    let refreshed = layers::refresh(&mut s, &t, &mut crate::event::Sink::off());
+    let refreshed = layers::refresh(&mut s, &t, &mut crate::replacement::event::Sink::off());
     assert_eq!(refreshed, Err(Full));
 }

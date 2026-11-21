@@ -4,9 +4,9 @@
 use super::cast::{Game, cast};
 use crate::bitboard::Bitboard;
 use crate::card::{ManaColor, ManaCost};
-use crate::event::Sink;
 use crate::ids::Slot;
 use crate::mana::{self, Units};
+use crate::replacement::event::Sink;
 use crate::rng::SplitMix64;
 use crate::state::{ManaPool, TurnStep, Zone};
 use crate::{DecisionKind, Opt, Payment, Profile};
@@ -82,7 +82,7 @@ fn offering_payments_with_a_full_pool_does_not_wrap_remaining_mana() {
     let mut pool = ManaPool::default();
     pool[color] = u8::MAX;
     g.s.board().set_mana(g.me, pool);
-    crate::layers::refresh(&mut g.s, &g.t, &mut Sink::default()).unwrap();
+    crate::continuous::layers::refresh(&mut g.s, &g.t, &mut Sink::default()).unwrap();
 
     let plans = mana::plans(
         &g.s,
@@ -409,7 +409,7 @@ fn the_solver_pays_exactly_the_costs_brute_force_can_pay() {
         }
         g.s.board().set_mana(g.me, pool);
         let pool = pool.amounts();
-        crate::layers::refresh(&mut g.s, &g.t, &mut Sink::default()).unwrap();
+        crate::continuous::layers::refresh(&mut g.s, &g.t, &mut Sink::default()).unwrap();
         let cost = ManaCost::new(
             rng.below(4) as u8,
             [rng.below(3) as u8, rng.below(3) as u8, 0, 0, 0, 0],

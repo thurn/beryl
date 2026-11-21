@@ -7,12 +7,12 @@ use beryl_kernel::reference::{Cards, ZoneMark};
 use crate::bitboard::Bitboard;
 use crate::card::FaceIx;
 use crate::casting;
-use crate::event::{self, Entry, Reason};
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
 use crate::interpret::{Outcome, Run};
 use crate::layout::{Layout, Queue};
+use crate::replacement::event::{self, Entry, Reason};
 use crate::stack;
 use crate::state::{CounterKind, Memo, ObjectRef, Zone};
 use crate::zone::Place;
@@ -80,7 +80,7 @@ pub fn exile_cards_for_cost<Z: ZoneMark, L: Layout>(
 }
 
 /// Returns a spell or a permanent to its owner's hand (CR 400.3). A spell leaves the stack
-/// without resolving, or is exiled instead ([`crate::replace::exiled_instead`]).
+/// without resolving, or is exiled instead ([`crate::replacement::exiled_instead`]).
 pub fn return_to_hand<L: Layout>(game: &mut Game<'_, L>, object: ObjectRef<L>) -> Result<(), Full> {
     if !game.state.is_current(object) {
         return Ok(());

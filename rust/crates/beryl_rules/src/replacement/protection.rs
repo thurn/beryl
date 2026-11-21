@@ -1,20 +1,22 @@
-//! Protection ([CR 702.16]): what a permanent with protection from a quality is safe from.
+//! Protection (see [CR 702.16]): what a permanent with protection from a quality is safe from.
 //!
 //! A permanent's protection is part of its layer results (`Derived::protection`), given in
 //! layer 6 by the effects that grant it. Colors are the only quality the engine has yet
 //! ([`beryl_card::Protection`]). Each of the four parts of the ability is read where the rule
 //! it changes is:
 //!
-//! - damage ([CR 702.16e]), a prevention effect applied to the damage proposal
-//!   ([`crate::replace::damage`]);
+//! - damage (see [CR 702.16e]), a prevention effect applied to the damage proposal
+//!   ([`crate::replacement::damage`]);
 //! - targets ([CR 702.16b]), as they are chosen and again as the spell or ability resolves
-//!   ([`crate::cast`]'s candidates);
-//! - Auras and Equipment ([CR 702.16c], [CR 702.16d]), as state-based actions
+//!   ([`crate::casting::targets`]'s candidates);
+//! - Auras and Equipment (see [CR 702.16c] and see [CR 702.16d]), as state-based actions
 //!   ([`crate::sba`]);
 //! - blockers ([CR 702.16f]), as blocks are declared ([`crate::combat`]).
 //!
 //! While no effect gives protection, the layers leave [`Replaces::PROTECTION`] clear and each
 //! test here is one AND ([`State::protection`]).
+//!
+//! Implements: CR 702.16a, CR 702.16b, CR 702.16f
 //!
 //! [CR 702.16]: https://yawgatog.com/resources/magic-rules/#R70216
 //! [CR 702.16b]: https://yawgatog.com/resources/magic-rules/#R70216b
@@ -22,7 +24,7 @@
 //! [CR 702.16d]: https://yawgatog.com/resources/magic-rules/#R70216d
 //! [CR 702.16e]: https://yawgatog.com/resources/magic-rules/#R70216e
 //! [CR 702.16f]: https://yawgatog.com/resources/magic-rules/#R70216f
-//! [`Replaces::PROTECTION`]: crate::event::Replaces::PROTECTION
+//! [`Replaces::PROTECTION`]: crate::replacement::event::Replaces::PROTECTION
 
 use beryl_card::Colors;
 

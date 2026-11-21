@@ -17,10 +17,10 @@ use crate::card::{
     TargetKind, TargetSpec, Trigger, Types,
 };
 use crate::casting::start as casting;
-use crate::event::Reason;
 use crate::filter::{Evaluate, Filter};
 use crate::game;
 use crate::ids::{Seat, Slot};
+use crate::replacement::event::Reason;
 use crate::resolution::Resolution;
 use crate::state::{CounterKind, Pending, TargetPlace, TurnStep, Zone, ZoneKey};
 use crate::zone::Place;
@@ -646,7 +646,7 @@ impl Game {
             // Any order: the test puts what it needs back on top.
             for slot in crate::tests::fixture_slots(s.zone(ZoneKey::Of(p, Zone::Hand))) {
                 s.move_object(
-                    &mut crate::event::Sink::off(),
+                    &mut crate::replacement::event::Sink::off(),
                     slot,
                     Zone::Library,
                     Place::Bottom,
@@ -674,7 +674,12 @@ impl Game {
             .find(|&&slot| self.s.definition_name(&self.t, slot) == name)
             .unwrap_or_else(|| panic!("no {name} left in the library"));
         self.s
-            .move_object(&mut crate::event::Sink::off(), slot, zone, Place::Top)
+            .move_object(
+                &mut crate::replacement::event::Sink::off(),
+                slot,
+                zone,
+                Place::Top,
+            )
             .unwrap();
         if zone == Zone::Battlefield {
             let loyalty = self.s.copiable(slot).face(&self.t).loyalty;
@@ -699,7 +704,7 @@ impl Game {
             .unwrap_or_else(|| panic!("no {name} left in the library"));
         self.s
             .move_object(
-                &mut crate::event::Sink::off(),
+                &mut crate::replacement::event::Sink::off(),
                 slot,
                 Zone::Library,
                 Place::Top,
@@ -766,7 +771,7 @@ impl Game {
 
     /// The open decision as it stands, without advancing past a silent pass.
     pub fn current(&mut self) -> Decision {
-        crate::layers::refresh(&mut self.s, &self.t, &mut self.x.events).unwrap();
+        crate::continuous::layers::refresh(&mut self.s, &self.t, &mut self.x.events).unwrap();
         crate::engine::decision(&self.s, &self.t, &mut self.x.events).unwrap()
     }
 

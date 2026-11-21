@@ -1,15 +1,17 @@
 //! Rule changes: what the rules ask of the rule changes in force, whether a static ability
 //! or a resolved effect makes them
-//! ([CR 613.11](https://yawgatog.com/resources/magic-rules/#R61311)): "Some continuous
+//! (see [CR 613.11](https://yawgatog.com/resources/magic-rules/#R61311)): "Some continuous
 //! effects affect game rules rather than objects."
 //!
 //! A rule change is data (`beryl_card`'s `RuleChange`), which a game numbers
 //! (`beryl_kernel`'s `rule_changes`). The set in force for a player is kept current with
-//! the layers ([`crate::layers`]) and by the Effects store, and the card table has the set
+//! the layers ([`crate::continuous::layers`]) and by the Effects store, and the card table has the set
 //! of each kind a check here asks about, so asking while none of that kind is in force is
 //! one AND and walks nothing. Only when one is does a check read what it says: the spells
 //! its filter accepts, or its condition. Which permanent makes a change is found only to
 //! tell a player why.
+//!
+//! Implements: none. Reads rule changes after continuous effects have applied.
 
 use beryl_card::{Governed, ManaCost, PlayerRules, RuleChange, SpellCost};
 use beryl_kernel::chosen::ChosenValue;
@@ -26,7 +28,7 @@ use crate::table::{Capability, GameTable};
 /// Whether a rule change in force has `player` cast the spell `face` would be only when
 /// they could cast a sorcery, as a static ability "Each opponent can cast spells only any
 /// time they could cast a sorcery." does each opponent. A prohibition beats a permission
-/// ([CR 101.2](https://yawgatog.com/resources/magic-rules/#R1012)): "When a rule or effect
+/// (see [CR 101.2](https://yawgatog.com/resources/magic-rules/#R1012)): "When a rule or effect
 /// allows or directs something to happen, and another effect states that it can't happen,
 /// the "can't" effect takes precedence."
 #[inline]
@@ -41,7 +43,7 @@ pub(crate) fn cast_only_as_sorcery<L: Layout>(
 
 /// Whether a rule change in force lets `player` cast the spell `face` would be any time
 /// they could cast an instant, as "You may cast sorcery spells as though they had flash."
-/// does ([CR 702.8a](https://yawgatog.com/resources/magic-rules/#R7028a)).
+/// does (see [CR 702.8a](https://yawgatog.com/resources/magic-rules/#R7028a)).
 #[inline]
 pub(crate) fn cast_as_instant<L: Layout>(
     s: &State<L>,
@@ -53,7 +55,7 @@ pub(crate) fn cast_as_instant<L: Layout>(
 }
 
 /// Whether `player`'s life total can change: no rule change in force says it can't, as "Until
-/// your next turn, your life total can't change" does ([CR 119.7], [CR 119.8]). One AND while
+/// your next turn, your life total can't change" does (see [CR 119.7], see [CR 119.8]). One AND while
 /// no card in the game makes a change to players. Every gain and loss of life and every
 /// payment of life asks here.
 ///
@@ -64,7 +66,7 @@ pub(crate) fn life_can_change<L: Layout>(s: &State<L>, t: &GameTable, player: Se
     !player_rule(s, t, player, PlayerRules::LIFE_CANT_CHANGE)
 }
 
-/// Whether `player` has protection from everything ([CR 702.16j]): "Such a permanent or player
+/// Whether `player` has protection from everything (see [CR 702.16j]): "Such a permanent or player
 /// can't be targeted by spells or abilities and can't be enchanted by Auras. ... All damage
 /// that would be dealt to such a permanent or player is prevented." One AND while no card in
 /// the game makes a change to players.
@@ -197,9 +199,9 @@ fn accepts_composed(filter: Filter, face: &Face) -> bool {
 
 /// The rule changes in force that keep `player` from activating the activated abilities,
 /// other than mana abilities, of some sources, as "Activated abilities of sources with the
-/// chosen name can't be activated unless they're mana abilities." does ([CR 602.5]): "A
+/// chosen name can't be activated unless they're mana abilities." does (see [CR 602.5]): "A
 /// player can't begin to activate an ability that's prohibited from being activated." A
-/// prohibition beats a permission ([CR 101.2]): "When a rule or effect allows or directs
+/// prohibition beats a permission (see [CR 101.2]): "When a rule or effect allows or directs
 /// something to happen, and another effect states that it can't happen, the "can't" effect
 /// takes precedence." While none is in force, one AND and nothing else to ask; while one is,
 /// [`named_by_a_maker`] says which sources it stops.
@@ -236,11 +238,11 @@ pub(crate) fn unprohibited<L: Layout>(
 /// activated abilities other than mana abilities. A rule change is numbered once for the
 /// game, and what it stops depends on the name each permanent that makes it chose, so the
 /// makers are found and their names read. The source's name is read from its copiable
-/// values ([CR 707.2]): a token copy of a card has the card's name, and a face-down permanent
-/// has none ([CR 708.2a]): it "becomes a 2/2 face-down creature with no text, no name, no
+/// values (see [CR 707.2]): a token copy of a card has the card's name, and a face-down permanent
+/// has none (see [CR 708.2a]): it "becomes a 2/2 face-down creature with no text, no name, no
 /// subtypes, and no mana cost." A permanent that chose "another card" names no card of the
 /// game. "Each opponent" and "you" are read for the
-/// maker's controller ([CR 109.5]): "For a static ability, this is the current controller of
+/// maker's controller (see [CR 109.5]): "For a static ability, this is the current controller of
 /// the object it's on."
 ///
 /// [CR 707.2]: https://yawgatog.com/resources/magic-rules/#R7072
@@ -271,8 +273,9 @@ fn named_by_a_maker<L: Layout>(
 }
 
 /// Whether the loyalty abilities of the permanent in `slot` may be activated any time its
-/// controller could cast an instant, where [CR 606.3] has "during a main phase of their
-/// turn": by a static ability of its own whose condition holds ([`own_rule_holds`]).
+/// controller could cast an instant, through a static ability of its own whose condition
+/// holds ([`own_rule_holds`]). The usual timing is "during a main phase of their turn"
+/// (see [CR 606.3]).
 ///
 /// [CR 606.3]: https://yawgatog.com/resources/magic-rules/#R6063
 #[inline]
@@ -281,8 +284,8 @@ pub(crate) fn loyalty_as_instant<L: Layout>(s: &State<L>, t: &GameTable, slot: L
 }
 
 /// Whether the creature in `slot` can't block, as "This creature can't block." says
-/// ([CR 509.1a]): "The defending player chooses which creatures they control, if any, will
-/// block." A prohibition beats a permission ([CR 101.2]): "When a rule or effect allows or
+/// (see [CR 509.1a]): "The defending player chooses which creatures they control, if any, will
+/// block." A prohibition beats a permission (see [CR 101.2]): "When a rule or effect allows or
 /// directs something to happen, and another effect states that it can't happen, the
 /// "can't" effect takes precedence." Made by a static ability of its own whose condition
 /// holds ([`own_rule_holds`]).
@@ -296,7 +299,7 @@ pub(crate) fn cant_block<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) 
 
 /// Whether the creature in `slot` can't attack, because it can attack no defending player and
 /// no planeswalker one controls, as "This creature can't attack unless defending player
-/// controls an Island." says of a defending player with no Island ([CR 508.1c]): "The
+/// controls an Island." says of a defending player with no Island (see [CR 508.1c]): "The
 /// active player checks each creature they control to see whether it's affected by any
 /// restrictions (effects that say a creature can't attack, or that it can't attack unless
 /// some condition is met)." Made by a static ability of its own whose condition holds. Asked
@@ -319,7 +322,7 @@ pub(crate) fn attacks_restricted(t: &GameTable) -> bool {
 
 /// Whether the creature in `slot` can't attack `defending` ([`cant_attack`]). The permanents
 /// the defending player must control are read for the creature's controller, through the
-/// words of the creature's text ([CR 612.1]): "This can apply to any words or symbols printed
+/// words of the creature's text (see [CR 612.1]): "This can apply to any words or symbols printed
 /// on that object, but generally affects only that object’s rules text". So a creature whose
 /// "Island" reads as "Swamp" can attack only a player who controls a Swamp.
 ///
@@ -351,11 +354,11 @@ fn attack_forbidden<L: Layout>(
     })
 }
 
-/// Whether the spell `spell` can't be countered ([CR 701.6a]): "To counter a spell or ability
+/// Whether the spell `spell` can't be countered (see [CR 701.6a]): "To counter a spell or ability
 /// means to cancel it, removing it from the stack." A prohibition beats what would counter
-/// it ([CR 101.2]): "When a rule or effect allows or directs something to happen, and another
+/// it (see [CR 101.2]): "When a rule or effect allows or directs something to happen, and another
 /// effect states that it can't happen, the "can't" effect takes precedence." Its own static
-/// ability may say so, or the mana spent on it ([CR 106.6]): "Some spells or abilities that
+/// ability may say so, or the mana spent on it (see [CR 106.6]): "Some spells or abilities that
 /// produce mana ... have an additional effect that affects the spell or ability that mana is
 /// spent on". One test while no card of the game says it.
 ///
@@ -404,7 +407,7 @@ fn countered_never<L: Layout>(
 }
 
 /// Whether a static ability of the permanent in `slot` whose condition holds makes a rule
-/// change of `kind`, one asked of the permanent with the ability ([CR 604.1]): "Static
+/// change of `kind`, one asked of the permanent with the ability (see [CR 604.1]): "Static
 /// abilities do something all the time rather than being activated or triggered." With no
 /// such rule change among the game's cards one test, and with none on this permanent two.
 ///
@@ -429,7 +432,7 @@ fn own_rule_holds<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot, kind: R
 }
 
 /// The rule changes the static abilities of the permanent in `slot` make: those of the face
-/// that is up and, of a merged permanent, those of the cards under it ([CR 702.140e]): "A
+/// that is up and, of a merged permanent, those of the cards under it (see [CR 702.140e]): "A
 /// mutated permanent has all abilities of each card and token that represents it." The faces
 /// under it are read only in a game with a card that merges.
 ///
@@ -506,8 +509,8 @@ pub(crate) fn spell_cost<L: Layout>(
 /// [`spell_cost`] while the game's cards make a change of what a spell costs: each
 /// permanent whose static ability makes one of `rules` for `player`, whose condition holds
 /// and whose filter accepts the spell changes it. "Each opponent" and "you" are read for
-/// the permanent's controller ([CR 109.5]): "For a static ability, this is the current
-/// controller of the object it's on." The changes apply in the order of [CR 601.2f]: "The
+/// the permanent's controller (see [CR 109.5]): "For a static ability, this is the current
+/// controller of the object it's on." Casting applies these changes in order (see [CR 601.2f]): "The
 /// total cost is the mana cost or alternative cost (as determined in rule 601.2b), plus all
 /// additional costs and cost increases, and minus all cost reductions. If multiple cost
 /// reductions apply, the player may apply them in any order. If the mana component of the
@@ -606,7 +609,7 @@ fn in_a_scene<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot, id: RuleId)
 /// `player`'s casting the spell `face` would be, if one does and not a resolved effect
 /// alone. "Each opponent" and "you" in the ability are read for the permanent's controller
 /// after continuous effects
-/// ([CR 109.5](https://yawgatog.com/resources/magic-rules/#R1095)): "For a static ability,
+/// (see [CR 109.5](https://yawgatog.com/resources/magic-rules/#R1095)): "For a static ability,
 /// this is the current controller of the object it's on."
 pub(crate) fn maker<L: Layout>(
     s: &State<L>,

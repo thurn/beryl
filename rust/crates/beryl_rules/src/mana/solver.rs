@@ -4,10 +4,10 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::ManaCost;
-use crate::event::Sink;
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, Small, Table};
+use crate::replacement::event::Sink;
 use crate::state::State;
 use crate::table::GameTable;
 

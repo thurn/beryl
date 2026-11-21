@@ -17,7 +17,6 @@ use crate::card::{
 use crate::counters;
 use crate::decision::{Candidates, Decision, DecisionKind, OPTIONS, Opt};
 use crate::engine::{collapse, collapse_in_order};
-use crate::event::{self, Reason, Sink};
 use crate::filter::Evaluate;
 use crate::fixed::Full;
 use crate::game::Game;
@@ -25,6 +24,7 @@ use crate::game::life;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue};
 use crate::mana::{self, Funds};
+use crate::replacement::event::{self, Reason, Sink};
 use crate::state::{
     CastKind, CastStep, Casting, CounterKind, PayingObjects, Pending, StackEntry, StackItem, State,
     Zone, ZoneKey,

@@ -5,13 +5,13 @@ use crate::PlayerSet;
 use crate::actions::attach;
 use crate::bitboard::Bitboard;
 use crate::card::{Keywords, Subtype, Supertypes, Types};
+use crate::continuous::layers;
 use crate::decision::{Outcome, StallReason};
-use crate::event::{self, Entry, Event, LossCause, Reason, Sink};
 use crate::fixed::Full;
 use crate::ids::Seat;
-use crate::layers;
 use crate::layout::{Layout, PerPlayer, Table};
-use crate::replace;
+use crate::replacement;
+use crate::replacement::event::{self, Entry, Event, LossCause, Reason, Sink};
 use crate::state::{Pending, State, Zone};
 use crate::table::GameTable;
 use beryl_card::Regeneration;
@@ -42,7 +42,7 @@ pub(crate) fn check<L: Layout>(
     layers::refresh(s, t, sink)?;
     // State triggers are no state-based actions (CR 603.8: "Note that state triggers aren't the
     // same as state-based actions."), but they are found at the same moments.
-    crate::trigger::match_states(s, t)?;
+    crate::stack::trigger::match_states(s, t)?;
     let (mut graveyard, tokens, legendary) = doomed(s, t);
     let loose = loose_equipment(s, t);
     let legends = legend_group_in(s, t, &legendary, Bitboard::EMPTY).is_some();
@@ -83,7 +83,7 @@ pub(crate) fn check<L: Layout>(
     // ([CR 614.8](https://yawgatog.com/resources/magic-rules/#R6148)): "Regeneration is a
     // destruction-replacement effect."
     if !lethal.is_empty() {
-        let destroyed = replace::destruction(s, t, sink, lethal, Regeneration::Allowed)?;
+        let destroyed = replacement::destruction(s, t, sink, lethal, Regeneration::Allowed)?;
         graveyard &= !(lethal & !destroyed);
     }
     // "As a single event": the one batch below is every action of this check that has an

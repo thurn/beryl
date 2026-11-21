@@ -7,14 +7,14 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{Keywords, Part, Prompt, Purpose, Types};
+use crate::continuous::rule_change;
 use crate::decision::{Candidates, Decision, DecisionKind, OPTIONS, Opt};
 use crate::engine::collapse;
-use crate::event::{self, Event, Sink};
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue};
-use crate::protection;
-use crate::rule_change;
+use crate::replacement::event::{self, Event, Sink};
+use crate::replacement::protection;
 use crate::state::{AttackTarget, CombatRole, Pending, State, TurnStep};
 use crate::table::GameTable;
 

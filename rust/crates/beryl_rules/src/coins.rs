@@ -4,12 +4,12 @@ use beryl_card::Players;
 
 use crate::bitboard::Bitboard;
 use crate::chance;
-use crate::event::Event;
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
 use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
+use crate::replacement::event::Event;
 use crate::state::ObjectRef;
 
 /// `player` flips a coin for an effect of `source`. Returns whether they won the flip

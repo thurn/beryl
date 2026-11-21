@@ -9,9 +9,6 @@ use crate::bitboard::Bitboard;
 use crate::card::Replaced;
 use crate::card::{Ability, Stop};
 use crate::decision::{Answers, Choice, Decision};
-#[cfg(doc)]
-use crate::event::Sink;
-use crate::event::{Event, ReplacementKind};
 use crate::filter;
 use crate::fixed::Full;
 use crate::game::Game;
@@ -20,21 +17,23 @@ use crate::ids::Seat;
 use crate::interpret::{self, Outcome, Run};
 use crate::layout::{Layout, Queue};
 use crate::observation::Observation;
-use crate::replace;
-use crate::replace::DrawReplacement;
-use crate::replacement::{self, Instead};
+#[cfg(doc)]
+use crate::replacement::event::Sink;
+use crate::replacement::event::{Event, ReplacementKind};
+use crate::replacement::{self, DrawReplacement};
 use crate::resolution::Resolution;
 use crate::state::TriggeredAbility;
 use crate::state::{AbilityRef, Count, PendingTrigger, TriggerInfo, TurnStep, Zone, ZoneKey};
 use crate::table::Capability;
+use beryl_kernel::replacement::{self as card_replacement, Instead};
 
 /// A player draws cards, one at a time ([CR 121.2]): "If a player is instructed to draw multiple
 /// cards, that player performs that many individual card draws." The event counts the cards
 /// actually drawn, if any.
 ///
 /// Each draw is offered first to the dredge abilities of cards in the player's graveyard
-/// ([`replace::dredge`]), which the player may choose one of, then to the replacement effects of
-/// permanents ([`Replaced::Draw`], [`replace::draw`]), an empty library or not ([CR 614.11]):
+/// ([`replacement::dredge`]), which the player may choose one of, then to the replacement effects of
+/// permanents ([`Replaced::Draw`], [`replacement::draw`]), an empty library or not ([CR 614.11]):
 /// "Some effects replace card draws. These effects are applied even if no cards could be drawn
 /// because there are no cards in the affected player's library." What happens instead follows
 /// the cards drawn before it ([`instead`]). Where it ends the game, the draws left are never
@@ -63,12 +62,12 @@ pub fn draw<L: Layout>(game: &mut Game<'_, L>, player: Seat, cards: u8) -> Resul
             left -= 1;
             // A dredge mills and moves cards, events of their own after the cards drawn
             // before it, so the draws so far are settled first.
-            if dredge && !replace::dredges(game.state, game.table, player).is_empty() {
+            if dredge && !replacement::dredges(game.state, game.table, player).is_empty() {
                 if drawn > 0 {
                     let cards = std::mem::take(&mut drawn);
                     game.settle(Event::Draw { player, cards })?;
                 }
-                if replace::dredge(game, player)? {
+                if replacement::dredge(game, player)? {
                     dredged = true;
                     break;
                 }
@@ -79,7 +78,7 @@ pub fn draw<L: Layout>(game: &mut Game<'_, L>, player: Seat, cards: u8) -> Resul
                 .unwrap_or(table_replacements)
                 .replaces(ReplacementKind::Draw)
             {
-                replaced = replace::draw(game, player)?;
+                replaced = replacement::draw(game, player)?;
                 if replaced.is_some() {
                     break;
                 }
@@ -136,7 +135,7 @@ fn instead<L: Layout>(
         (s.players()).filter(move |who| filter::is_for(&players, who, controller))
     };
     // The card table holds only draw replacements the engine can do.
-    match replacement::instead_of_drawing(replacement.ability) {
+    match card_replacement::instead_of_drawing(replacement.ability) {
         Ok(Instead::Win(players)) => {
             let cause = replacement.cause(s, game.table);
             ending::win_for(game, named(players), cause);
@@ -217,9 +216,9 @@ impl<L: Layout> Answers<L> for FirstAnswer {
 /// Whether `ability` has its controller win the game rather than draw a card, whatever its
 /// condition: what a player may count on once that condition holds.
 pub fn wins_instead_of_drawing(ability: &Ability) -> bool {
-    replacement::replaces_draws(ability)
+    card_replacement::replaces_draws(ability)
         && matches!(
-            replacement::instead_of_drawing(ability),
+            card_replacement::instead_of_drawing(ability),
             Ok(Instead::Win(Players::You))
         )
 }

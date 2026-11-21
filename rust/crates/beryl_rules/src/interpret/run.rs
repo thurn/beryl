@@ -29,7 +29,9 @@ use crate::state::TriggeredAbility;
 use crate::state::{AbilityRef, PendingTrigger, StackItem, State, Zone, placed};
 use crate::zones;
 use crate::{choices, coins, continuous, counters, damage, drawing};
-use crate::{delayed_triggers, emblems, layers, library, linked, mana, one_shot, tokens};
+use crate::{
+    continuous::layers, emblems, library, linked, mana, one_shot, stack::delayed_triggers, tokens,
+};
 
 /// One resolution of an ability written as data: the game, what is resolving in it, and
 /// what it keeps between instructions.
@@ -369,7 +371,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
                 duration,
             } => continuous::instruction(self, objects, modifications, duration)?,
             Effect::ChangeText { objects, duration } => {
-                crate::text::instruction(self, objects, duration)?
+                crate::continuous::text::instruction(self, objects, duration)?
             }
             Effect::ExchangeControl(first, second) => {
                 continuous::exchange_instruction(self, first, second)?

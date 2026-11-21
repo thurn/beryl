@@ -11,8 +11,8 @@ use beryl_card::{Effect, TargetSpec};
 use super::LAND;
 use super::cast::{BEAR, Game, cast};
 use crate::card::{Ability, CardDef, Face, Types};
-use crate::event::{self, Reason};
 use crate::ids::Slot;
+use crate::replacement::event::{self, Reason};
 use crate::state::{Continuous, Duration, Shield, Subject, Zone};
 use crate::{CardTable, DecisionKind, Decklist, Opt, Profile};
 

@@ -4,10 +4,10 @@
 
 use crate::bitboard::Bitboard;
 use crate::engine::land_face;
-use crate::event::{self, Entry, Reason, Sink};
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::Layout;
+use crate::replacement::event::{self, Entry, Reason, Sink};
 use crate::state::{Pending, State, Zone};
 use crate::table::GameTable;
 
@@ -39,7 +39,7 @@ pub(crate) fn play_land<L: Layout>(
         face,
         ..Entry::default()
     };
-    match crate::replace::life_to_enter(s, t, slot, entry)? {
+    match crate::replacement::life_to_enter(s, t, slot, entry)? {
         Some(life) if crate::game::life::can_pay(s, t, player, life) => {
             s.ask(Pending::EnterPayingLife { slot, life });
             Ok(())
@@ -61,7 +61,7 @@ pub(crate) fn enter_or_choose<L: Layout>(
         face: land_face(s, t, slot).expect("a land face"),
         ..Entry::default()
     };
-    match crate::replace::chosen_to_enter(s, t, slot, entry)? {
+    match crate::replacement::chosen_to_enter(s, t, slot, entry)? {
         Some(kind) => {
             s.ask(Pending::EnterChoosing {
                 slot,

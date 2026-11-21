@@ -1,13 +1,15 @@
 //! Derived characteristics: continuous effects applied in layers, recomputed from base when
-//! dirty (architecture §9, decision D5, CR 613).
+//! dirty (see CR 613).
+//!
+//! Implements: CR 611.3, CR 612.3, CR 613.1, CR 613.2a, CR 613.3, CR 613.6
 
 mod apply;
 mod copied;
 mod dependency;
-mod elsewhere;
 pub(crate) mod entering;
 mod granted;
 mod merged;
+mod other_zones;
 mod player_rules;
 mod text;
 mod together;
@@ -25,10 +27,10 @@ use crate::card::{
     Ability, AbilityIx, Colors, FaceIx, GrantIx, Layer, LayerSpec, Modification, Objects, Words,
 };
 use crate::decision::{Outcome, StallReason};
-use crate::event::{Listens, Replaces, Sink};
 use crate::fixed::Full;
 use crate::ids::CardId;
 use crate::layout::{Layout, Queue, index};
+use crate::replacement::event::{Listens, Replaces, Sink};
 use crate::state::{
     AbilityMask, Derived, Flag, GrantRef, LayerChange, LockedIn, Permanents, Rules, State, Zone,
     read_layer,
@@ -45,7 +47,7 @@ enum Target<L: Layout> {
     /// of its battlefield, however many permanents that holds.
     Position(L::Index),
     /// Each permanent the effect locked in as it began that is still the object it was
-    /// ([CR 611.2c]): "the set of objects it affects is determined when that continuous effect
+    /// (see [CR 611.2c]): "the set of objects it affects is determined when that continuous effect
     /// begins. After that point, the set won't change."
     ///
     /// [CR 611.2c]: https://yawgatog.com/resources/magic-rules/#R6112c
@@ -89,7 +91,7 @@ struct Apply<L: Layout> {
 }
 
 impl<L: Layout> Apply<L> {
-    /// Where it comes among the effects ([CR 613.7]): "Within a layer or sublayer, determining
+    /// Where it comes among the effects (see [CR 613.7]): "Within a layer or sublayer, determining
     /// which order effects are applied in is usually done using a timestamp system." Static
     /// abilities of permanents that share a timestamp apply in the order of the permanents they
     /// change. An effect on a set needs no such order: it has a timestamp of its own, and one
@@ -189,7 +191,7 @@ pub(crate) fn over_or_refreshed<L: Layout>(
 
 /// The kinds of event the permanents on the battlefield have triggered abilities for, and the
 /// kinds their static abilities replace (with whether one changes a rule for players), in one
-/// pass. A face-down permanent has none of either, whichever card it is ([CR 708.2a]): it has "no
+/// pass. A face-down permanent has none of either, whichever card it is (see [CR 708.2a]): it has "no
 /// text, no name, no subtypes, and no mana cost". So it counts for nothing
 /// ([`crate::query::Copiable::may_listen`]), and masking or determinizing its hidden identity
 /// leaves both unchanged.
@@ -244,11 +246,11 @@ pub(crate) fn listening<L: Layout>(
 /// that means the values of the characteristics defined by the effect that created it. Then all
 /// applicable continuous effects are applied in a series of layers in the following order".
 ///
-/// Within a layer, effects apply in timestamp order ([CR 613.7]): "An effect with an earlier
+/// Within a layer, effects apply in timestamp order (see [CR 613.7]): "An effect with an earlier
 /// timestamp is applied before an effect with a later timestamp." A characteristic-defining ability
 /// defines power alone and sits in layer 7a with no other effect, so "apply effects from
 /// characteristic-defining abilities first" (CR 613.3) holds by the layer order. An effect
-/// that depends on another in its layer waits for it ([CR 613.8], [`dependency`]).
+/// that depends on another in its layer waits for it (see [CR 613.8], [`dependency`]).
 ///
 /// The layers apply one at a time: every effect of a layer is applied to every permanent
 /// before any effect of the next. A static ability whose set is chosen by a filter, or whose
@@ -357,7 +359,7 @@ fn apply_layers<L: Layout>(
     for i in 0..s.battlefield().len() {
         let slot = s.battlefield()[i];
         // Layer 1: the copiable values (CR 613.2a). A copy's are those of what it copies,
-        // with the exceptions it was made with (CR 707.9b).
+        // with the exceptions it was made with (see CR 707.9b).
         let what = s.definition(slot);
         let f = what.face(t);
         // One test of the flag, read before the write; a copy's values are found out of line.
@@ -447,7 +449,7 @@ fn apply_layers<L: Layout>(
         None => apply::counters(s),
     }
     let applying = list.as_ref().map_or(&[][..], |l| l.as_slice());
-    listed = listed.and(elsewhere::reach(s, t, applying));
+    listed = listed.and(other_zones::reach(s, t, applying));
     (listed, applied)
 }
 
@@ -571,15 +573,16 @@ fn list_static<L: Layout>(
         debug_assert_ne!(modification, Modification::Control);
         // An amount read as its layer applies is named by the ability that says it. The card
         // table refuses a granted ability with one (`Unapplied::GrantedAmount`).
-        let change = elsewhere::resolve(s, slot, modification, you, &words).unwrap_or_else(|| {
-            debug_assert_eq!(on.order & GRANTED, 0);
-            LayerChange::Read {
-                layer: read_layer(modification),
-                face: on.face,
-                ability: AbilityIx::new(on.order & !merged::MERGED),
-                part,
-            }
-        });
+        let change =
+            other_zones::resolve(s, slot, modification, you, &words).unwrap_or_else(|| {
+                debug_assert_eq!(on.order & GRANTED, 0);
+                LayerChange::Read {
+                    layer: read_layer(modification),
+                    face: on.face,
+                    ability: AbilityIx::new(on.order & !merged::MERGED),
+                    part,
+                }
+            });
         let pushed = list.get_or_insert_with(Default::default).push(Apply {
             layer: change.layer(),
             timestamp: o.timestamp(),
@@ -759,7 +762,7 @@ fn resolved_effects<L: Layout>(
                 Target::Position(index::<L>(position))
             }
             // One effect on the permanents it locked in, with its one timestamp
-            // ([CR 613.7](https://yawgatog.com/resources/magic-rules/#R6137)); the members
+            // (see [CR 613.7](https://yawgatog.com/resources/magic-rules/#R6137)); the members
             // are read as it applies.
             Permanents::Set(set) => Target::Set(set),
         };

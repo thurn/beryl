@@ -214,7 +214,7 @@ impl<'a, L: Layout> Resolution<'a, L> {
             // A body builds its questions for the player each belongs to; the player
             // controlling them answers (CR 724.5, `engine::controlled`).
             let answer = if game.state.turn().controller().is_some() {
-                crate::resolve::answer_controlled(game.state, game.state, answers, d)
+                crate::stack::resolve::answer_controlled(game.state, game.state, answers, d)
             } else {
                 answers.answer(Observation::new(game.state, d.player), d)
             };

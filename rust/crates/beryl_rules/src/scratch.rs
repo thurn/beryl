@@ -3,11 +3,11 @@
 
 #[cfg(debug_assertions)]
 use crate::decision::{Outcome, StallReason};
-use crate::event::Sink;
 use crate::layout::{Layout, Small};
 use crate::profile::Profile;
 #[cfg(debug_assertions)]
 use crate::reference::check_references;
+use crate::replacement::event::Sink;
 use crate::state::State;
 #[cfg(debug_assertions)]
 use crate::table::GameTable;

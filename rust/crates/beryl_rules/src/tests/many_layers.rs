@@ -12,7 +12,7 @@ use crate::card::{Ability, CardDef, Face, LayerSpec, Modification, Types};
 use crate::filter::Filter;
 use crate::ids::{Seat, Slot};
 use crate::state::{Duration, LayerChange, TurnStep, Zone};
-use crate::{CardTable, GameTable, Profile, State, layers, reference};
+use crate::{CardTable, GameTable, Profile, State, continuous::layers, reference};
 
 use super::LAND;
 use super::events::find;
@@ -96,7 +96,7 @@ fn game() -> (GameTable, State) {
 }
 
 fn refresh(t: &GameTable, s: &mut State) {
-    layers::refresh(s, t, &mut crate::event::Sink::off()).unwrap();
+    layers::refresh(s, t, &mut crate::replacement::event::Sink::off()).unwrap();
     reference::check_references(s, t).unwrap();
 }
 

@@ -3,11 +3,11 @@
 use beryl_card::Objects;
 
 use crate::bitboard::Bitboard;
-use crate::event::Reason;
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
+use crate::replacement::event::Reason;
 use crate::state::{ObjectRef, Zone};
 use crate::zones;
 

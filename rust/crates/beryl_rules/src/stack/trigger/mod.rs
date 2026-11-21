@@ -1,5 +1,7 @@
-//! Triggered abilities: matching events, putting them on the stack in APNAP order, delayed
-//! triggers, and resolving them (architecture §8.3, CR 603).
+//! Triggered abilities: matching events and state, and putting waiting triggers on the
+//! stack in APNAP order (architecture §8.3).
+//!
+//! Implements: CR 603.2, CR 603.3, CR 603.4, CR 603.6a, CR 603.8, CR 603.10
 
 use std::cell::OnceCell;
 
@@ -7,13 +9,13 @@ use crate::bitboard::Bitboard;
 use crate::card::{
     Ability, AbilityIx, CastingKind, FaceAbility, FaceIx, Subject, Trigger, TriggerEvent, Words,
 };
-use crate::event::{Event, EventKind, Listens, Recipient, Sink};
+use crate::continuous::layers;
 use crate::filter::{Evaluate, Filter, is_for};
 use crate::fixed::Full;
 use crate::ids::{CardId, Seat};
-use crate::layers;
 use crate::layout::{Layout, Queue, index};
 use crate::query::Copiable;
+use crate::replacement::event::{Event, EventKind, Listens, Recipient, Sink};
 use crate::state::TriggeredAbility;
 use crate::state::{
     AbilityRef, Count, ObjectRef, PendingTrigger, StackEntry, StackItem, State, TriggerInfo,
@@ -21,7 +23,7 @@ use crate::state::{
 };
 use crate::table::{Capability, GameTable};
 
-mod elsewhere;
+mod other_zones;
 
 /// The ability a pending trigger or stack entry names: one of the face's own, or one of its
 /// grants that a copy exception gives ([`Copiable::given_abilities`]).
@@ -40,7 +42,7 @@ pub(crate) fn ability(
 /// nothing ([`GameTable::zones_away`]), and a game with one reads the zones' membership, which the
 /// zone move keeps, and the table, so the state keeps no set of its own.
 ///
-/// [CR 113.6b](https://yawgatog.com/resources/magic-rules/#R1136b): "An ability that states which
+/// see [CR 113.6b](https://yawgatog.com/resources/magic-rules/#R1136b): "An ability that states which
 /// zones it functions in functions only from those zones."
 pub(crate) fn away<L: Layout>(s: &State<L>, t: &GameTable) -> Bitboard<L::Slot> {
     let zones = t.zones_away();
@@ -69,20 +71,19 @@ pub(crate) fn away<L: Layout>(s: &State<L>, t: &GameTable) -> Bitboard<L::Slot> 
     })
 }
 
-/// Matches an executed event against every triggered ability that listens to its kind: those of the
-/// permanents on the battlefield, then those of the objects in other zones whose abilities work
-/// there ([`away`]), and of the players' emblems ([CR 114.4]: "Abilities of emblems function in the
-/// command zone"), then the delayed triggers waiting for a step.
+/// Matches an event against listeners on the battlefield, in other zones ([`away`]), and on
+/// emblems (see [CR 114.4]: "Abilities of emblems function in the command zone"), then checks
+/// delayed triggers waiting for a step. For entries ([CR 603.6a]): "all permanents on the
+/// battlefield (including the newcomers) are checked for any enters-the-battlefield triggers".
 ///
-/// The game's table has each card's triggered abilities under the kind of event they listen
-/// to ([`GameTable::listeners`]), so an event reads only those of its kind, and where no
-/// card of the game has one the whole check is an AND
-/// ([`GameTable::listens_any`]).
+/// [`GameTable::listeners`] indexes triggers by event kind. With no listeners for that kind,
+/// the whole check is an AND ([`GameTable::listens_any`]).
 ///
 /// [CR 603.2](https://yawgatog.com/resources/magic-rules/#R6032): "Whenever a game event or game
 /// state matches a triggered ability's trigger event, that ability automatically triggers."
 ///
 /// [CR 114.4]: https://yawgatog.com/resources/magic-rules/#R1144
+/// [CR 603.6a]: https://yawgatog.com/resources/magic-rules/#R6036a
 pub(crate) fn match_event<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
@@ -113,7 +114,7 @@ pub(crate) fn match_event<L: Layout>(
                 let controller = s.controller(slot);
                 let (card, face) = what.record(t);
                 for l in t.listeners(card, face, k) {
-                    // CR 613.1f: a permanent that lost the ability has no trigger to match.
+                    // see CR 613.1f: a permanent that lost the ability has no trigger to match.
                     if !s.has_ability(slot, l.ability) {
                         continue;
                     }
@@ -129,9 +130,9 @@ pub(crate) fn match_event<L: Layout>(
         // The table counts the kinds that copy exceptions' triggered abilities listen to among
         // those that work away from a face of the battlefield's definitions.
         if t.listens_away().intersects(mask) {
-            elsewhere::match_away(s, t, k, e)?;
+            other_zones::match_away(s, t, k, e)?;
             if t.can(Capability::GivesTriggers) || t.can(Capability::Merges) {
-                elsewhere::match_given(s, t, k, e)?;
+                other_zones::match_given(s, t, k, e)?;
             }
         }
         // Triggers wait in the order found, which the queue of them keeps: by seat.
@@ -206,7 +207,7 @@ fn counted(count: u32) -> u8 {
     u8::try_from(count).unwrap_or(u8::MAX)
 }
 
-/// Whether a trigger waiting for the beginning of a step or phase waits for `step` ([CR 500.6]):
+/// Whether a trigger waiting for the beginning of a step or phase waits for `step` (see [CR 500.6]):
 /// "When a phase or step begins, any abilities that trigger 'at the beginning of' that phase or
 /// step trigger."
 ///
@@ -214,7 +215,7 @@ fn counted(count: u32) -> u8 {
 fn begins(event: TriggerEvent, step: TurnStep) -> bool {
     match event {
         TriggerEvent::Step(at) => at == step,
-        // CR 505.1: "There are two main phases in a turn."
+        // see CR 505.1: "There are two main phases in a turn."
         TriggerEvent::MainPhase => {
             matches!(step, TurnStep::PrecombatMain | TurnStep::PostcombatMain)
         }
@@ -259,7 +260,7 @@ fn fires<L: Layout>(
     let about = |object: ObjectRef<L>| about(s, t, trigger.subject, this, you, &words, object);
     match (trigger.event, e) {
         // The amount is the X its spell was cast with
-        // ([CR 107.3m](https://yawgatog.com/resources/magic-rules/#R1073m)): "If an object's
+        // (see [CR 107.3m](https://yawgatog.com/resources/magic-rules/#R1073m)): "If an object's
         // enters-the-battlefield triggered ability ... refers to X, and the spell that became
         // that object as it resolved had a value of X chosen for any of its costs, the value
         // of X for that ability is the same as the value of X for that spell".
@@ -319,7 +320,7 @@ fn fires<L: Layout>(
 }
 
 /// The number of other spells cast before the spell just cast this turn, by every player, which
-/// a "when you cast" ability keeps as it triggers, for storm ([CR 702.40a]): "copy it for each
+/// a "when you cast" ability keeps as it triggers, for storm (see [CR 702.40a]): "copy it for each
 /// other spell that was cast before it this turn." The spell itself was counted as it became
 /// cast, before its Cast event. Zero in a game that keeps no count of spells cast.
 ///
@@ -382,7 +383,7 @@ fn how_many<L: Layout>(
 /// Each leaving permanent that some ability triggered on keeps its last-known information
 /// ([`State::record_last_known`]) for the abilities to read once it has left.
 ///
-/// A permanent dies as it goes to a graveyard, whatever its types ([CR 700.4]): "The term dies
+/// A permanent dies as it goes to a graveyard, whatever its types (see [CR 700.4]): "The term dies
 /// means 'is put into a graveyard from the battlefield.'" A filter such as "a creature" is read
 /// against the layer results, so a permanent that is no longer a creature does not die as one.
 ///
@@ -395,14 +396,14 @@ pub(crate) fn match_look_back<L: Layout>(
     leaving: impl Iterator<Item = (L::Slot, Zone)> + Clone,
 ) -> Result<(), Full> {
     if !s.delayed().is_empty() {
-        crate::delayed_triggers::fire_on_leaving(s, t, leaving.clone())?;
+        crate::stack::delayed_triggers::fire_on_leaving(s, t, leaving.clone())?;
     }
     let mask = Listens::event(EventKind::Dies) | Listens::event(EventKind::Leaves);
     if !t.listens_anywhere().intersects(mask) {
         return Ok(());
     }
     if t.listens_away().intersects(mask) {
-        elsewhere::look_back_away(s, t, leaving.clone())?;
+        other_zones::look_back_away(s, t, leaving.clone())?;
     }
     // In a game with mutate, a card under a merged permanent may listen where no permanent's
     // face does.
@@ -426,7 +427,7 @@ pub(crate) fn match_look_back<L: Layout>(
             let controller = s.controller(slot);
             let words = s.words_of(slot);
             let (card, face) = what.record(t);
-            // CR 700.4: dying is going to a graveyard.
+            // see CR 700.4: dying is going to a graveyard.
             let kinds = [
                 (EventKind::Dies, to == Zone::Graveyard),
                 (EventKind::Leaves, true),
@@ -470,7 +471,7 @@ pub(crate) fn match_look_back<L: Layout>(
             }
         }
         if merges {
-            elsewhere::look_back_merged(s, t, left, to)?;
+            other_zones::look_back_merged(s, t, left, to)?;
         }
         if s.triggers().len() > waiting
             && let Some(permanent) = s.permanent(object)
@@ -616,7 +617,7 @@ fn enqueue<L: Layout>(
     s.queue_trigger(pending)
 }
 
-/// Fires the delayed triggers waiting for this step, each once ([CR 603.7b]).
+/// Fires the delayed triggers waiting for this step, each once (see [CR 603.7b]).
 ///
 /// [CR 603.7b]: https://yawgatog.com/resources/magic-rules/#R6037b
 fn fire_delayed<L: Layout>(
@@ -757,7 +758,7 @@ pub(crate) fn put_on_stack<L: Layout>(
     index: L::Index,
 ) -> Result<(), Full> {
     let tr = s.take_trigger(index.into());
-    // An enters ability's X is its spell's (CR 107.3m), captured as it triggered.
+    // An enters ability's X is its spell's (see CR 107.3m), captured as it triggered.
     let entering = ability(t, tr.of.card, tr.of.face, tr.of.ability.get())
         .trigger()
         .is_some_and(|trigger| trigger.is_this(TriggerEvent::Enters));
@@ -774,7 +775,7 @@ pub(crate) fn put_on_stack<L: Layout>(
     crate::casting::target_trigger(s, t, sink)
 }
 
-/// Creates a delayed triggered ability ([CR 603.7]).
+/// Creates a delayed triggered ability (see [CR 603.7]).
 ///
 /// [CR 603.7]: https://yawgatog.com/resources/magic-rules/#R6037
 pub(crate) fn delay<L: Layout>(s: &mut State<L>, trigger: PendingTrigger<L>) -> Result<(), Full> {

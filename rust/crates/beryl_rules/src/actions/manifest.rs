@@ -3,11 +3,11 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::FaceIx;
-use crate::event::{self, Entry, Reason};
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
 use crate::layout::Layout;
+use crate::replacement::event::{self, Entry, Reason};
 use crate::state::Zone;
 
 /// Manifests the card in `card` for `player`, from whatever zone it is in

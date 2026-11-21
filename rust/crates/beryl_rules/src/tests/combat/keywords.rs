@@ -3,7 +3,7 @@
 
 use super::{Game, options, stop_at};
 use crate::actions::destroy::destroy;
-use crate::event::Sink;
+use crate::replacement::event::Sink;
 use crate::state::Zone;
 use crate::zone::Place;
 use crate::{Choice, DecisionKind, Opt, Replay, TurnStep, apply};
