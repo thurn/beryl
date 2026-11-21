@@ -1,4 +1,5 @@
 use super::*;
+use crate::continuous::Duration;
 use crate::cost::CastingKind;
 use crate::effect::build::{
     add_mana, carried_object, counter_and_exile, deal_damage_to, deal_damage_to_any_target, delay,

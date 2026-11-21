@@ -33,7 +33,25 @@ impl Scope<'_> {
                         Err(Malformed::Lost)
                     }
                 }
-                _ => self.modification(&modifications[i]),
+                Modification::Control
+                | Modification::AddTypes(_)
+                | Modification::RemoveTypes(_)
+                | Modification::SetTypes(_)
+                | Modification::AddSubtypeWord(_)
+                | Modification::SetSubtypeWord(_)
+                | Modification::SetLandTypeWords(_)
+                | Modification::AddKeywords(_)
+                | Modification::Grant(_)
+                | Modification::SetPower(_)
+                | Modification::SetPt(..)
+                | Modification::ModifyPt(..)
+                | Modification::LoseAllAbilities
+                | Modification::SetColorWords(_)
+                | Modification::AddColorWords(_)
+                | Modification::SetBasePt(..)
+                | Modification::SwitchPt
+                | Modification::AddProtection(_)
+                | Modification::GrantEscape => self.modification(&modifications[i]),
             };
             checked = both(checked, part);
             i += 1;
@@ -53,7 +71,23 @@ impl Scope<'_> {
             // A resolving effect names an ability of its own permanent's face only of that
             // permanent (`resolved_modifications`).
             Modification::LoseAbility(_) => Err(Malformed::Lost),
-            _ => Ok(()),
+            Modification::Control
+            | Modification::AddTypes(_)
+            | Modification::RemoveTypes(_)
+            | Modification::SetTypes(_)
+            | Modification::AddSubtypeWord(_)
+            | Modification::SetSubtypeWord(_)
+            | Modification::SetLandTypeWords(_)
+            | Modification::AddKeywords(_)
+            | Modification::Grant(_)
+            | Modification::ModifyPt(..)
+            | Modification::LoseAllAbilities
+            | Modification::SetColorWords(_)
+            | Modification::AddColorWords(_)
+            | Modification::AddChosenColor
+            | Modification::SwitchPt
+            | Modification::AddProtection(_)
+            | Modification::GrantEscape => Ok(()),
         }
     }
 }
