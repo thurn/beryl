@@ -60,7 +60,6 @@ fn status(rig: &Rig) -> Vec<String> {
         dispatcher: rig.dispatcher.clone(),
         hub: rig.hub.clone(),
         clock: rig.clock.clone(),
-        usage_hold_percent: 99,
     }
     .lines()
 }

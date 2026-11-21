@@ -125,7 +125,6 @@ pub(super) fn file_under(
     (epic, ids)
 }
 
-/// Registers the machine `m-1`, which every request in these tests is written as.
 pub(super) fn register(conn: &mut Connection) {
     let register = json!({"machine": "m-1", "name": "jarvis", "os": "macos", "cores": 18,
                           "memory_mb": 65536, "families": [], "version": "d97ed0e"});
@@ -143,6 +142,8 @@ pub(super) fn free(machine: &str, sessions: &[&str]) -> Value {
                 session: s.parse().unwrap(),
                 app: "claude".into(),
                 models: vec!["opus".into(), "sonnet".into()],
+                model_ids: std::collections::BTreeMap::new(),
+                default_model: None,
             })
             .collect(),
         free_ticket_trees: 4,

@@ -16,6 +16,8 @@ fn machine() -> MachineFree {
             session: SessionId::new("local_a").unwrap(),
             app: "claude".to_owned(),
             models: vec!["opus".to_owned(), "sonnet".to_owned()],
+            model_ids: std::collections::BTreeMap::new(),
+            default_model: None,
         }],
         free_ticket_trees: 4,
         free_cores: 1.0,

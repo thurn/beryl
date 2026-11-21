@@ -17,6 +17,7 @@ use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 use serde::de::DeserializeOwned;
 use serde_json::json;
 
+use ignite_core::fleet::ProviderSample;
 use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::{
     AuditReport, ExplorationFind, FlakyReport, IncompleteReport, JusticiarReport, LandingsReply,
@@ -26,7 +27,7 @@ use ignite_core::protocol::hub::{
 };
 use ignite_core::time::Timestamp;
 use ignite_store::StoreError;
-use ignite_store::hub::{checks, records, results, ticket_spend, tips};
+use ignite_store::hub::{checks, provider_usage, records, results, ticket_spend, tips};
 
 use super::{Request, Response};
 use crate::upkeep::filing::Author;
@@ -439,6 +440,11 @@ fn import_metrics(
             )
             .map_err(|e| store_failure(&e.into()))?;
         for row in &request.rows {
+            if request.source == "plan_usage"
+                && let Some(sample) = provider_sample(request, row)
+            {
+                provider_usage::record(&tx, &sample).map_err(|e| store_failure(&e))?;
+            }
             stored += insert
                 .execute(params![
                     request.machine.as_str(),
@@ -452,6 +458,27 @@ fn import_metrics(
     }
     tx.commit().map_err(|e| store_failure(&e.into()))?;
     Ok(Response::json(200, &json!({ "stored": stored })))
+}
+
+/// Older daemons only measured Claude. Their synthetic limit rows did not identify the
+/// provider that ran out, so keep those rows in metrics without starting a hold.
+fn provider_sample(request: &MetricsImport, row: &serde_json::Value) -> Option<ProviderSample> {
+    let provider = row["provider"].as_str();
+    let note = row["note"].as_str();
+    let status = row["status"].as_str()?;
+    if status != "limit" && note == Some("a CLI turn reached the plan's limit") {
+        return None;
+    }
+    Some(ProviderSample {
+        provider: provider.unwrap_or("claude").to_owned(),
+        at: Timestamp::parse(row["at"].as_str()?).ok()?,
+        machine: request.machine.clone(),
+        status: status.to_owned(),
+        label: row["window"].as_str().map(str::to_owned),
+        percent_used: row["percent_used"].as_f64(),
+        resets_at: row["resets_at"].as_str().map(str::to_owned),
+        note: note.map(str::to_owned),
+    })
 }
 
 #[cfg(test)]

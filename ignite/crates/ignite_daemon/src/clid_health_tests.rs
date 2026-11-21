@@ -18,7 +18,7 @@ use ignite_store::local::{cli_slots, plan_usage};
 
 use super::*;
 use crate::clid::Effects;
-use crate::dispatchd::{usage_holds, usage_report};
+use crate::dispatchd::usage_report;
 
 const START: &str = "2026-11-20T12:00:00Z";
 
@@ -350,47 +350,63 @@ fn no_slot_is_offered_before_the_first_probe_passes() {
 }
 
 #[test]
-fn a_plan_limit_end_makes_usage_holds_report_a_hold() {
+fn a_codex_plan_limit_stores_a_codex_sample_and_uses_no_claude_reset() {
     let rig = rig("plan-limit");
-    let threshold = rig.ctx.config.pool.usage_hold_percent;
-    assert!(usage_holds(&rig.pool, threshold, rig.now()).is_empty());
-
     let resets = rig.now().plus_seconds(7200.0).to_string();
-    let events = TurnEvents {
-        usage: vec![UsageSample {
-            window: "five_hour".to_owned(),
-            utilization: 1.0,
-            resets_at: Some(resets.clone()),
-            status: Some("rejected".to_owned()),
-        }],
-        ..TurnEvents::default()
+    let samples = [UsageSample {
+        window: "five_hour".to_owned(),
+        utilization: 0.4,
+        resets_at: Some(resets.clone()),
+        status: None,
+    }];
+    rig.health
+        .record_usage(&rig.ctx, "claude", &samples, rig.now())
+        .unwrap();
+    let effects = HealthEffects {
+        health: Arc::new(Health::new(
+            rig.pool.clone(),
+            rig.dir.join("home"),
+            "jarvis".to_owned(),
+        )),
+        ctx: rig.ctx.clone(),
     };
-    rig.health
-        .plan_limit(&rig.ctx, Some("five_hour"), &events, rig.now())
-        .unwrap();
-    let holds = usage_holds(&rig.pool, threshold, rig.now());
-    assert_eq!(holds.len(), 1, "{holds:?}");
-    assert_eq!(holds[0].label, "5-hour");
-    assert_eq!(holds[0].resets_at.as_deref(), Some(resets.as_str()));
-    // The hold ends when the window resets.
-    assert!(usage_holds(&rig.pool, threshold, rig.now().plus_seconds(7201.0)).is_empty());
-
-    // A limit that names no window and no reset still holds, for an hour.
-    let rig = self::rig("plan-limit-unknown");
-    rig.health
-        .plan_limit(&rig.ctx, None, &TurnEvents::default(), rig.now())
-        .unwrap();
-    let holds = usage_holds(&rig.pool, threshold, rig.now());
-    assert_eq!(holds.len(), 1);
-    assert!((holds[0].percent_used - 100.0).abs() < f64::EPSILON);
-    assert!(
-        usage_holds(
-            &rig.pool,
-            threshold,
-            rig.now().plus_seconds(UNKNOWN_RESET_S)
-        )
-        .is_empty()
+    let slot = Slot {
+        app: "codex".to_owned(),
+        index: 1,
+        session: None,
+        ticket: None,
+        state: SlotState::Running,
+        turn: 1,
+        transcript: None,
+        model: None,
+        effort: None,
+        since: None,
+    };
+    effects.ended(
+        &slot,
+        &TurnEnd::PlanLimit { window: None },
+        &TurnEvents::default(),
     );
+
+    let rows = rig
+        .pool
+        .with_database(|conn| plan_usage::latest(conn))
+        .unwrap();
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0].provider, "claude");
+    assert_eq!(rows[0].resets_at.as_deref(), Some(resets.as_str()));
+    assert_eq!(rows[0].percent_used, Some(40.0));
+    assert_eq!(rows[1].provider, "codex");
+    assert_eq!(rows[1].label.as_deref(), Some("5-hour"));
+    assert_eq!(rows[1].percent_used, Some(100.0));
+    assert_eq!(
+        rows[1].resets_at,
+        Some(rig.now().plus_seconds(UNKNOWN_RESET_S).to_string())
+    );
+    assert_eq!(rig.hub.metrics_imports()[1].rows[0]["provider"], "codex");
+    let report = usage_report(&rig.pool, rig.now()).text;
+    assert!(report.contains("claude · 5-hour 40%"), "{report}");
+    assert!(report.contains("codex · 5-hour 100%"), "{report}");
 }
 
 #[test]
@@ -411,7 +427,7 @@ fn a_seven_day_sample_at_0_81_is_stored_as_weekly_all_models_at_81_percent() {
         },
     ];
     rig.health
-        .record_usage(&rig.ctx, &samples, rig.now())
+        .record_usage(&rig.ctx, "claude", &samples, rig.now())
         .unwrap();
     let rows = rig
         .pool
@@ -428,24 +444,23 @@ fn a_seven_day_sample_at_0_81_is_stored_as_weekly_all_models_at_81_percent() {
         .find(|row| row.label.as_deref() == Some("Weekly · Opus"))
         .unwrap();
     assert_eq!(opus.note.as_deref(), Some("CLI status allowed_warning"));
-    let report = usage_report(&rig.pool, rig.now(), 99);
+    let report = usage_report(&rig.pool, rig.now());
     assert!(
         report.text.contains("Weekly · all models 81%"),
         "{}",
         report.text
     );
 
-    // Posted to the hub as the dispatcher's samples are, and stored once however often the
-    // turn's log is read.
+    // A second observation can supersede a higher sample from another machine.
     let imports = rig.hub.metrics_imports();
     assert_eq!(imports.len(), 1);
     assert_eq!(imports[0].source, "plan_usage");
     assert_eq!(imports[0].rows.len(), 2);
     rig.advance(5.0);
     rig.health
-        .record_usage(&rig.ctx, &samples, rig.now())
+        .record_usage(&rig.ctx, "claude", &samples, rig.now())
         .unwrap();
-    assert_eq!(rig.hub.metrics_imports().len(), 1);
+    assert_eq!(rig.hub.metrics_imports().len(), 2);
 }
 
 #[test]
@@ -555,8 +570,13 @@ fn the_loops_effects_reach_health() {
         },
         &events,
     );
-    let holds = usage_holds(&rig.pool, 99, rig.now());
-    assert_eq!(holds[0].label, "Weekly · all models");
+    let rows = rig
+        .pool
+        .with_database(|conn| plan_usage::latest(conn))
+        .unwrap();
+    assert_eq!(rows[0].provider, "fake");
+    assert_eq!(rows[0].label.as_deref(), Some("Weekly · all models"));
+    assert_eq!(rows[0].percent_used, Some(100.0));
     let queued = rig
         .pool
         .with_database(|conn| crate::outbox::flush(conn, rig.hub.as_ref()))

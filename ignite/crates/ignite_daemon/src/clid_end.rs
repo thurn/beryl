@@ -50,10 +50,18 @@ impl CliDaemon {
     ) -> Result<()> {
         let app = self.app(&row.app)?.app.clone();
         let end = forced.unwrap_or_else(|| app.classify(events, exit));
+        let mut slot = slot_of(row);
+        // The turn was recorded before launching the process. A rollout can be written
+        // before the supervisor returns and the slot is marked running.
+        slot.since = turn
+            .started_at
+            .as_deref()
+            .and_then(|at| Timestamp::parse(at).ok())
+            .or(slot.since);
         if let Some(fallback) = &row.fallback_prompt
             && end != TurnEnd::Clean
         {
-            self.effects.ended(&slot_of(row), &end, events);
+            self.effects.ended(&slot, &end, events);
             let now = self.now().to_string();
             let next = self.close(row, turn, &end, exit, SlotState::BackingOff, |r| {
                 r.transcript = None;
@@ -64,7 +72,7 @@ impl CliDaemon {
         }
         let facts = self.facts(row, turn, &end, events)?;
         let action = (self.rules.decide)(&slot_of(row), &end, &facts);
-        self.effects.ended(&slot_of(row), &end, events);
+        self.effects.ended(&slot, &end, events);
         self.apply(row, turn, &end, exit, &facts, &action, events)
     }
 

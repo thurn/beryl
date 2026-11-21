@@ -129,10 +129,11 @@ fn machine_fits(free: &MachineFree, ticket: &ReadyTicket) -> bool {
 /// The idle worker that gets the ticket: of those that suit it, the one whose last ticket shared
 /// the most files with it, then the first listed. `last_files` gives each session's last
 /// ticket's files; a session missing from it shares none.
-pub fn pick_worker(
+fn pick_worker(
     free: &MachineFree,
     ticket: &ReadyTicket,
     last_files: &[(SessionId, Vec<String>)],
+    eligible: impl Fn(&IdleWorker) -> bool,
 ) -> Option<SessionId> {
     let shared = |worker: &IdleWorker| {
         last_files
@@ -143,7 +144,11 @@ pub fn pick_worker(
             })
     };
     let mut best: Option<(&IdleWorker, usize)> = None;
-    for worker in free.idle_workers.iter().filter(|w| suits(free, w, ticket)) {
+    for worker in free
+        .idle_workers
+        .iter()
+        .filter(|w| suits(free, w, ticket) && eligible(w))
+    {
         let score = shared(worker);
         if best.is_none_or(|(_, top)| score > top) {
             best = Some((worker, score));
@@ -201,6 +206,28 @@ pub fn next_for(
     improvements: Option<Unit>,
     last_files: &[(SessionId, Vec<String>)],
 ) -> Option<Handoff> {
+    next_for_with(free, ready, epic_order, improvements, last_files, |_, _| {
+        true
+    })
+}
+
+/// Applies the hub's additional worker eligibility rules without changing dispatch order.
+pub fn next_for_with(
+    free: &MachineFree,
+    ready: &[ReadyTicket],
+    epic_order: &[Group],
+    improvements: Option<Unit>,
+    last_files: &[(SessionId, Vec<String>)],
+    eligible: impl Fn(&IdleWorker, &ReadyTicket) -> bool,
+) -> Option<Handoff> {
+    let worker_for = |ticket: &ReadyTicket| {
+        pick_worker(free, ticket, last_files, |worker| eligible(worker, ticket)).map(|session| {
+            Handoff {
+                ticket: ticket.id.clone(),
+                session,
+            }
+        })
+    };
     let mut justiciar: Vec<&ReadyTicket> = ready
         .iter()
         .filter(|t| t.labels.iter().any(|l| l == JUSTICIAR))
@@ -210,12 +237,7 @@ pub fn next_for(
         return justiciar
             .into_iter()
             .filter(|ticket| machine_fits(free, ticket))
-            .find_map(|ticket| {
-                pick_worker(free, ticket, last_files).map(|session| Handoff {
-                    ticket: ticket.id.clone(),
-                    session,
-                })
-            });
+            .find_map(worker_for);
     }
     let mut regressions: Vec<&ReadyTicket> = ready
         .iter()
@@ -237,12 +259,7 @@ pub fn next_for(
         .chain(improvements)
         .chain(groups)
         .filter(|ticket| machine_fits(free, ticket))
-        .find_map(|ticket| {
-            pick_worker(free, ticket, last_files).map(|session| Handoff {
-                ticket: ticket.id.clone(),
-                session,
-            })
-        })
+        .find_map(worker_for)
 }
 
 /// The next ticket of a `lane:` chain, for the session that just finished one of its tickets:

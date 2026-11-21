@@ -34,7 +34,7 @@ use ignite_store::local::rows::CheckSighting;
 use super::health::{Health, HealthEffects};
 use super::start::{TurnLauncher, find_run};
 use super::*;
-use crate::dispatchd::{RunningVerb, SessionCommand, usage_holds};
+use crate::dispatchd::{RunningVerb, SessionCommand};
 use crate::server::Context;
 use crate::supervise::{Started, SupervisedLauncher};
 

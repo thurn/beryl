@@ -201,11 +201,11 @@ fn cli_e2e_a_plan_limit_releases_the_ticket_and_starts_the_usage_hold() {
     assert_eq!(rig.slot().state, SlotState::Free);
     assert_eq!(rig.invocations(), 1);
     let pool = Pool::new(Rig::open(&rig.home));
-    let percent = rig.ctx.config.pool.usage_hold_percent;
-    assert!(
-        !usage_holds(&pool, percent, rig.clock.now()).is_empty(),
-        "the 100% sample holds Claude hand-offs"
-    );
+    let rows = pool
+        .with_database(|conn| ignite_store::local::plan_usage::latest(conn))
+        .unwrap();
+    assert_eq!(rows[0].provider, "claude");
+    assert_eq!(rows[0].percent_used, Some(100.0));
 }
 
 #[test]

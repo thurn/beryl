@@ -11,12 +11,17 @@
 //! - `turn.failed` carries `error.message`; a bare `error` event carries `message`. Both hold
 //!   either plain text or a JSON string `{"status":400,"error":{"code":..,"message":..}}`.
 //!
-//! Codex names no model and no plan utilization in its events, so `TurnEvents::model` and
-//! `TurnEvents::usage` stay empty. Recorded streams are in `codex_fixtures/`.
+//! Codex names no model or plan utilization on stdout. Its local session transcript carries
+//! rate-limit snapshots separately. Recorded streams and a session excerpt are in
+//! `codex_fixtures/`.
+
+use std::io::BufRead;
 
 use serde_json::Value;
 
-use super::{CliApp, HoldReason, TokenCounts, TurnEnd, TurnEvents, TurnSpec};
+use crate::time::Timestamp;
+
+use super::{CliApp, HoldReason, TokenCounts, TurnEnd, TurnEvents, TurnSpec, UsageSample};
 
 /// The `codex` program, run as `codex exec --json`.
 #[derive(Clone, Copy, Debug, Default)]
@@ -121,6 +126,57 @@ impl CliApp for Codex {
             _ => TurnEnd::Interrupted,
         }
     }
+}
+
+/// The last plan snapshot written during this turn. A resumed session also contains older
+/// turns, whose samples must not renew or lift a hold.
+pub fn read_session_usage(
+    session: impl BufRead,
+    started: Timestamp,
+) -> Option<(Timestamp, Vec<UsageSample>)> {
+    session
+        .lines()
+        .map_while(Result::ok)
+        .filter(|line| line.contains("\"token_count\""))
+        .filter_map(|line| {
+            let row: Value = serde_json::from_str(&line).ok()?;
+            if row["type"] != "event_msg" || row["payload"]["type"] != "token_count" {
+                return None;
+            }
+            let at = Timestamp::parse(row["timestamp"].as_str()?).ok()?;
+            if at < started {
+                return None;
+            }
+            let limits = &row["payload"]["rate_limits"];
+            if limits["limit_id"].as_str().is_some_and(|id| id != "codex") {
+                return None;
+            }
+            let samples: Vec<_> = [&limits["primary"], &limits["secondary"]]
+                .into_iter()
+                .filter_map(usage_window)
+                .collect();
+            (!samples.is_empty()).then_some((at, samples))
+        })
+        .max_by_key(|(at, _)| *at)
+}
+
+fn usage_window(window: &Value) -> Option<UsageSample> {
+    let used_percent = window["used_percent"].as_f64()?;
+    let minutes = window["window_minutes"].as_u64().filter(|&n| n > 0)?;
+    let window_name = match minutes {
+        300 => "five_hour".to_owned(),
+        10_080 => "seven_day".to_owned(),
+        _ => format!("{minutes}-minute"),
+    };
+    Some(UsageSample {
+        window: window_name,
+        utilization: used_percent / 100.0,
+        resets_at: window["resets_at"]
+            .as_i64()
+            .and_then(|seconds| seconds.checked_mul(1000))
+            .map(|ms| Timestamp::from_millis(ms).to_string()),
+        status: None,
+    })
 }
 
 /// Codex prints a fatal `thread/start` error before emitting events when a required MCP
@@ -263,6 +319,32 @@ mod tests {
     fn end(output: &str, exit: Option<i32>) -> TurnEnd {
         let events = Codex.read(output);
         Codex.classify(&events, exit)
+    }
+
+    #[test]
+    fn a_codex_rollout_reports_only_the_latest_snapshot_from_this_turn() {
+        let session = include_str!("codex_fixtures/session_usage.jsonl");
+        let cutoff = Timestamp::parse("2026-01-02T08:00:30Z").unwrap();
+        let (at, samples) = read_session_usage(session.as_bytes(), cutoff).unwrap();
+        assert_eq!(at, Timestamp::parse("2026-01-02T08:01:00.250Z").unwrap());
+        assert_eq!(
+            samples,
+            [
+                UsageSample {
+                    window: "five_hour".to_owned(),
+                    utilization: 0.30,
+                    resets_at: Some(Timestamp::from_millis(1_767_360_000_000).to_string()),
+                    status: None,
+                },
+                UsageSample {
+                    window: "seven_day".to_owned(),
+                    utilization: 0.12,
+                    resets_at: Some(Timestamp::from_millis(1_768_000_000_000).to_string()),
+                    status: None,
+                },
+            ]
+        );
+        assert!(read_session_usage(session.as_bytes(), at.plus_seconds(1.0)).is_none());
     }
 
     #[test]

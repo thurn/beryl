@@ -19,6 +19,8 @@ fn worker(name: &str, app: &str, models: &[&str]) -> IdleWorker {
         session: session(name),
         app: app.to_owned(),
         models: models.iter().map(|m| (*m).to_owned()).collect(),
+        model_ids: std::collections::BTreeMap::new(),
+        default_model: None,
     }
 }
 

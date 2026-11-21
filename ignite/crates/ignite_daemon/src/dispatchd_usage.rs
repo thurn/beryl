@@ -5,7 +5,9 @@ use std::fmt::Write as _;
 use serde_json::{Value, json};
 
 use ignite_core::ids::MachineId;
-use ignite_core::plan_usage::{self as hold_rule, Hold};
+use std::collections::BTreeMap;
+
+use ignite_core::plan_usage::{Hold, parse_resets_at};
 use ignite_core::protocol::client::{Exit, Reply};
 use ignite_core::protocol::hub::MetricsImport;
 use ignite_core::time::Timestamp;
@@ -18,9 +20,9 @@ use crate::pool::Pool;
 /// The source under which samples are posted to the hub's metrics.
 pub const SOURCE: &str = "plan_usage";
 
-fn metrics_row(row: &PlanUsage, threshold: u32) -> Value {
+fn metrics_row(row: &PlanUsage) -> Value {
     json!({
-        "holds": row.percent_used.is_some_and(|p| p >= f64::from(threshold)),
+        "provider": row.provider,
         "at": row.at,
         "status": row.status,
         "window": row.label,
@@ -57,13 +59,11 @@ fn ago(now: Timestamp, at: &str) -> String {
     }
 }
 
-/// Posts every sample row the hub has not acknowledged, and marks them posted. `threshold` is
-/// `[pool] usage_hold_percent`, which says whether each row holds.
+/// Posts every sample row the hub has not acknowledged, and marks it posted.
 pub fn post_usage(
     pool: &Pool,
     hub: &dyn Hub,
     machine: &MachineId,
-    threshold: u32,
 ) -> ignite_core::traits::Result<()> {
     let store_error = |e: ignite_store::StoreError| ignite_core::traits::Error::Io(e.to_string());
     let waiting = pool
@@ -75,67 +75,56 @@ pub fn post_usage(
     hub.metrics(&MetricsImport {
         machine: machine.clone(),
         source: SOURCE.to_owned(),
-        rows: waiting
-            .iter()
-            .map(|row| metrics_row(row, threshold))
-            .collect(),
+        rows: waiting.iter().map(metrics_row).collect(),
     })?;
     let ids: Vec<i64> = waiting.iter().map(|row| row.id).collect();
     pool.with_database(|conn| plan_usage::mark_posted(conn, &ids))
         .map_err(store_error)
 }
 
-/// The windows of the plan whose newest sample holds Claude hand-offs at `now`, given the
-/// threshold `[pool] usage_hold_percent`. A database that cannot be read holds nothing: the
-/// samples are a guard against running out, not a gate that a fault should close.
-pub fn usage_holds(pool: &Pool, threshold: u32, now: Timestamp) -> Vec<Hold> {
-    pool.with_database(|conn| plan_usage::latest(conn))
-        .unwrap_or_default()
-        .iter()
-        .filter_map(|row| {
-            hold_rule::hold(
-                row.label.as_deref()?,
-                row.percent_used,
-                row.resets_at.as_deref(),
-                threshold,
-                now,
-            )
-        })
-        .collect()
+/// The hub's most recently reported holds. A cached hold expires at its reset even if
+/// the daemon has lost contact with the hub.
+pub fn usage_holds(pool: &Pool, now: Timestamp) -> BTreeMap<String, Vec<Hold>> {
+    let mut holds = crate::fleet_notice::current(pool).unwrap_or_default().holds;
+    holds.retain(|_, windows| {
+        windows.retain(|hold| {
+            hold.resets_at
+                .as_deref()
+                .and_then(parse_resets_at)
+                .is_none_or(|at| at > now)
+        });
+        !windows.is_empty()
+    });
+    holds
 }
 
-/// The line `ignite pool list`, `ignite pool usage` and `ignite status` print for a hold.
-pub fn hold_line(hold: &Hold) -> String {
-    let which = match &hold.family {
-        Some(family) => format!("Claude hand-offs on {family} models"),
-        None => "Claude hand-offs".to_owned(),
-    };
-    format!(
-        "usage hold: {}; {which} wait, except tickets that hold master back, one at a time, \
-         until a sample is lower or the window resets",
-        hold.describe()
-    )
+/// The lines `ignite pool list`, `ignite pool usage` and `ignite status` print for holds.
+pub fn hold_lines(holds: &BTreeMap<String, Vec<Hold>>) -> impl Iterator<Item = String> + '_ {
+    holds.iter().flat_map(|(provider, windows)| {
+        windows
+            .iter()
+            .map(move |hold| format!("usage hold: {provider} · {}", hold.describe()))
+    })
 }
 
-/// `ignite pool usage`: the usage hold, if any, then the newest sample of each window of the
-/// plan, its age and when the window resets, and the newest sample that had no windows if it is
-/// newer still.
-pub fn usage_report(pool: &Pool, now: Timestamp, threshold: u32) -> Reply {
+/// `ignite pool usage`: the fleet's holds and the newest samples this machine has seen.
+pub fn usage_report(pool: &Pool, now: Timestamp) -> Reply {
     let rows = match pool.with_database(|conn| plan_usage::latest(conn)) {
         Ok(rows) => rows,
         Err(error) => return Reply::text(Exit::Usage, error.to_string()),
     };
-    if rows.is_empty() {
-        return Reply::text(
-            Exit::Success,
-            "no plan usage sample yet: a Claude dispatcher takes one before hand-offs and every \
-             15 minutes, and each Claude turn in CLI mode reports one",
-        );
+    let holds = usage_holds(pool, now);
+    if rows.is_empty() && holds.is_empty() {
+        return Reply::text(Exit::Success, "no plan usage samples or fleet holds yet");
     }
-    let holds = usage_holds(pool, threshold, now);
-    let mut lines: Vec<String> = holds.iter().map(hold_line).collect();
+    let mut lines: Vec<String> = hold_lines(&holds).collect();
     lines.extend(rows.iter().map(|row| {
-        let mut line = format!("{:<32} {}", describe(row), ago(now, &row.at));
+        let mut line = format!(
+            "{} · {:<32} {}",
+            row.provider,
+            describe(row),
+            ago(now, &row.at)
+        );
         if let Some(resets) = &row.resets_at {
             let _ = write!(line, ", resets {resets}");
         }

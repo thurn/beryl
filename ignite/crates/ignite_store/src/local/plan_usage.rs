@@ -1,7 +1,4 @@
-//! Samples of the Claude plan's usage, one row per window (see `schema_19.sql`). The daemon
-//! writes them when its dispatcher reports what the desktop app's `get_usage` returned, sends
-//! the rows the hub has not acknowledged, and `ignite pool usage` reads the latest of each
-//! window.
+//! Samples of plan usage, stored locally until the hub acknowledges them.
 
 use rusqlite::{Connection, Row, TransactionBehavior, params};
 
@@ -86,27 +83,23 @@ pub fn mark_posted(conn: &mut Connection, ids: &[i64]) -> Result<()> {
     Ok(())
 }
 
-/// The newest row of each window, ordered by label, followed by the newest sample that had no
-/// windows if it is newer than every window's row.
+/// The newest row of each provider's windows, followed by its newest row without windows
+/// if that row is newer than every window for that provider.
 pub fn latest(conn: &Connection) -> Result<Vec<PlanUsage>> {
     let mut statement = conn.prepare(&format!(
-        "SELECT {COLUMNS} FROM plan_usage p WHERE label IS NOT NULL AND id = \
-         (SELECT MAX(id) FROM plan_usage q WHERE q.label = p.label) ORDER BY label"
+        "WITH ranked AS (
+            SELECT {COLUMNS},
+                   ROW_NUMBER() OVER (PARTITION BY provider, label ORDER BY at DESC, id DESC) AS window_rank,
+                   ROW_NUMBER() OVER (PARTITION BY provider ORDER BY at DESC, id DESC) AS provider_rank
+            FROM plan_usage
+         )
+         SELECT {COLUMNS} FROM ranked
+         WHERE window_rank = 1 AND (label IS NOT NULL OR provider_rank = 1)
+         ORDER BY provider, label NULLS LAST"
     ))?;
-    let mut found: Vec<PlanUsage> = statement
+    Ok(statement
         .query_map([], read)?
-        .collect::<rusqlite::Result<_>>()?;
-    let newest_window = found.iter().map(|row| row.id).max().unwrap_or(0);
-    let mut statement = conn.prepare(&format!(
-        "SELECT {COLUMNS} FROM plan_usage WHERE label IS NULL AND id > ?1 \
-         ORDER BY id DESC LIMIT 1"
-    ))?;
-    found.extend(
-        statement
-            .query_map(params![newest_window], read)?
-            .collect::<rusqlite::Result<Vec<_>>>()?,
-    );
-    Ok(found)
+        .collect::<rusqlite::Result<_>>()?)
 }
 
 /// When the newest sample was taken, if there is one.

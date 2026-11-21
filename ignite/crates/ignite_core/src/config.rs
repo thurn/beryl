@@ -413,9 +413,7 @@ pub struct PoolConfig {
     /// a ticket goes to any worker.
     #[serde(default)]
     pub default_owner: Option<crate::owner::Owner>,
-    /// The percentage of a Claude plan window at which the machine stops handing out Claude
-    /// tickets other than those that hold `master` back, until a newer sample is lower or the
-    /// window resets (see `crate::plan_usage`).
+    /// The old pool-wide percentage, used only to seed fleet settings on first run.
     #[serde(default = "default_hold_percent")]
     pub usage_hold_percent: u32,
     /// `[pool.cli.<app>]`: the program each app's CLI turns run, by app.

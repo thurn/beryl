@@ -15,9 +15,9 @@
 //!   app is held. A probe that succeeds ends the hold so parked slots can start their next
 //!   turn after checking that their ticket claims are still current.
 //! - A turn that ended at the plan's limit stores a 100% sample of the window, so the usage hold
-//!   of `dispatchd_usage.rs` stops Claude hand-offs until the window resets.
-//! - Every usage sample a turn reports becomes a row of `plan_usage`, named as `get_usage` names
-//!   its windows, and goes to the hub as the desktop dispatcher's samples do.
+//!   at the hub stops affected hand-offs for that provider until the window resets.
+//! - Claude streams usage samples during a turn. Codex saves them to its session transcript.
+//!   The daemon stores both as rows of `plan_usage` and sends them to the hub.
 //! - Each turn's cost and token counts go to the hub's metrics under [`TURN_SOURCE`], with its
 //!   ticket, through the outbox, so none is lost while the hub is down.
 //!
@@ -64,6 +64,9 @@ pub const PROBE_TIERS: [&str; 4] = ["light", "haiku", "sonnet", "opus"];
 /// guess costs an hour at most.
 pub const UNKNOWN_RESET_S: f64 = 3600.0;
 
+#[path = "clid_codex_usage.rs"]
+mod codex_usage;
+
 /// The start of the `park_reason` the loop gives a slot that a CLI hold parked (see `end`).
 const HOLD_PARK_PREFIX: &str = "CLI hold (";
 /// What `decide` says when it parks a turn that would have started during a hold.
@@ -95,8 +98,8 @@ pub fn parked_by_hold(reason: Option<&str>) -> bool {
 
 /// The label `get_usage` gives the window the CLI calls `window`: `seven_day` is
 /// "Weekly · all models", `five_hour` is "5-hour", `seven_day_<family>` is
-/// "Weekly · <Family>", and any other window keeps its own name, which holds every Claude
-/// hand-off (see `ignite_core::plan_usage`).
+/// "Weekly · <Family>", and any other window keeps its own name, which holds every hand-off for its
+/// provider (see `ignite_core::plan_usage`).
 pub fn window_label(window: &str) -> String {
     match window {
         "seven_day" => "Weekly · all models".to_owned(),
@@ -118,7 +121,12 @@ fn percent(utilization: f64) -> f64 {
 }
 
 /// The `plan_usage` rows of a turn's usage samples, one per sample.
-pub fn usage_rows(samples: &[UsageSample], machine: &str, now: Timestamp) -> Vec<PlanUsage> {
+fn usage_rows(
+    provider: &str,
+    samples: &[UsageSample],
+    machine: &str,
+    now: Timestamp,
+) -> Vec<PlanUsage> {
     samples
         .iter()
         .map(|sample| PlanUsage {
@@ -135,7 +143,7 @@ pub fn usage_rows(samples: &[UsageSample], machine: &str, now: Timestamp) -> Vec
                 .filter(|status| *status != "allowed")
                 .map(|status| format!("CLI status {status}")),
             posted: 0,
-            provider: "claude".to_owned(),
+            provider: provider.to_owned(),
         })
         .collect()
 }
@@ -151,6 +159,14 @@ pub fn probe_model(config: &Config, app: &str) -> Option<String> {
         .find_map(|tier| table.get(*tier))
         .or_else(|| table.values().next())
         .cloned()
+}
+
+/// The model a worker uses for an untiered ticket.
+pub fn default_model(config: &Config, app: &str) -> Option<String> {
+    config
+        .pool
+        .model_id(app, "sonnet")
+        .or_else(|| probe_model(config, app))
 }
 
 fn store_error(error: &ignite_store::StoreError) -> Error {
@@ -363,6 +379,7 @@ impl Health {
                 format!("{} could not be made: {error}", cwd.display()),
             );
         }
+        let started = ctx.clock.now();
         let result = ctx.launcher.run(&CommandSpec {
             args: app.command(&spec),
             cwd,
@@ -377,10 +394,13 @@ impl Health {
             reserve: None,
         });
         let output = std::fs::read_to_string(&result.output).unwrap_or_default();
-        let events = app.read(&output);
+        let mut events = app.read(&output);
         let now = ctx.clock.now();
-        if let Err(error) = self.record_usage(ctx, &events.usage, now) {
+        if let Err(error) = self.record_usage(ctx, name, &events.usage, now) {
             eprintln!("ignite: usage of a {name} probe not stored: {error}");
+        }
+        if let Some(samples) = self.record_codex_usage(ctx, name, &events, Some(started)) {
+            events.usage = samples;
         }
         let end = if result.hung {
             TurnEnd::Interrupted
@@ -390,7 +410,9 @@ impl Health {
         match end {
             TurnEnd::Clean => Probe::Passed,
             TurnEnd::PlanLimit { window } => {
-                if let Err(error) = self.plan_limit(ctx, window.as_deref(), &events, now) {
+                if let Err(error) =
+                    self.plan_limit(ctx, name, window.as_deref(), &events.usage, now)
+                {
                     eprintln!("ignite: plan-limit sample of a {name} probe not stored: {error}");
                 }
                 Probe::Passed
@@ -504,15 +526,16 @@ impl Health {
     }
 
     /// Stores the usage samples of a turn as `plan_usage` rows and posts every row the hub has
-    /// not acknowledged. A sample equal to its window's newest row (the same percentage and
-    /// reset) adds nothing, so reading a turn's log again stores nothing new.
+    /// not acknowledged. The reader supplies each newly observed sample, even when its
+    /// percentage matches an older local sample: another machine may have sent a higher one.
     pub fn record_usage(
         &self,
         ctx: &Context,
+        provider: &str,
         samples: &[UsageSample],
         now: Timestamp,
     ) -> Result<()> {
-        let rows = usage_rows(samples, ctx.machine.as_str(), now);
+        let rows = usage_rows(provider, samples, ctx.machine.as_str(), now);
         self.store_samples(ctx, rows, now)
     }
 
@@ -521,18 +544,20 @@ impl Health {
     /// window, else the window's newest stored row's if it is still ahead, else
     /// [`UNKNOWN_RESET_S`] from `now`. A limit that named no window is stored for the window
     /// the turn's samples show most used, else as "5-hour", which holds every hand-off.
-    pub fn plan_limit(
+    /// For Codex, an unnamed limit only uses a sampled window when the reading reached 100%.
+    fn plan_limit(
         &self,
         ctx: &Context,
+        provider: &str,
         window: Option<&str>,
-        events: &TurnEvents,
+        samples: &[UsageSample],
         now: Timestamp,
     ) -> Result<()> {
         let window = window.map_or_else(
             || {
-                events
-                    .usage
+                samples
                     .iter()
+                    .filter(|sample| provider != "codex" || sample.utilization >= 1.0)
                     .max_by(|a, b| a.utilization.total_cmp(&b.utilization))
                     .map_or_else(|| "five_hour".to_owned(), |s| s.window.clone())
             },
@@ -540,8 +565,7 @@ impl Health {
         );
         let label = window_label(&window);
         let ahead = |text: &str| parse_resets_at(text).is_some_and(|at| at > now);
-        let from_turn = events
-            .usage
+        let from_turn = samples
             .iter()
             .rev()
             .filter(|s| s.window == window)
@@ -552,7 +576,9 @@ impl Health {
                 .with_database(|conn| plan_usage::latest(conn))
                 .unwrap_or_default()
                 .into_iter()
-                .find(|row| row.label.as_deref() == Some(label.as_str()))
+                .find(|row| {
+                    row.provider == provider && row.label.as_deref() == Some(label.as_str())
+                })
                 .and_then(|row| row.resets_at)
                 .filter(|text| ahead(text))
         };
@@ -563,35 +589,21 @@ impl Health {
             id: 0,
             at: now.to_string(),
             machine: ctx.machine.as_str().to_owned(),
-            status: "ok".to_owned(),
+            status: "limit".to_owned(),
             label: Some(label),
             percent_used: Some(100.0),
             resets_at: Some(resets_at),
             note: Some("a CLI turn reached the plan's limit".to_owned()),
             posted: 0,
-            provider: "claude".to_owned(),
+            provider: provider.to_owned(),
         };
         self.store_samples(ctx, vec![row], now)
     }
 
     fn store_samples(&self, ctx: &Context, rows: Vec<PlanUsage>, now: Timestamp) -> Result<()> {
-        let newest = self
-            .pool
-            .with_database(|conn| plan_usage::latest(conn))
-            .map_err(|e| store_error(&e))?;
-        let fresh: Vec<PlanUsage> = rows
-            .into_iter()
-            .filter(|row| {
-                !newest.iter().any(|old| {
-                    old.label == row.label
-                        && old.percent_used == row.percent_used
-                        && old.resets_at == row.resets_at
-                })
-            })
-            .collect();
-        // A turn reports a window several times; only its last report of each is new.
+        // The reader may see several reports of the same window in one batch.
         let mut last: Vec<PlanUsage> = Vec::new();
-        for row in fresh {
+        for row in rows {
             last.retain(|kept| kept.label != row.label);
             last.push(row);
         }
@@ -601,12 +613,7 @@ impl Health {
         self.pool
             .with_database(|conn| plan_usage::insert(conn, &last, now))
             .map_err(|e| store_error(&e))?;
-        crate::dispatchd::post_usage(
-            &self.pool,
-            ctx.hub.as_ref(),
-            &ctx.machine,
-            ctx.config.pool.usage_hold_percent,
-        )
+        crate::dispatchd::post_usage(&self.pool, ctx.hub.as_ref(), &ctx.machine)
     }
 }
 
@@ -657,21 +664,26 @@ pub struct HealthEffects {
 }
 
 impl Effects for HealthEffects {
-    fn usage(&self, _slot: &Slot, samples: &[UsageSample]) {
+    fn usage(&self, slot: &Slot, samples: &[UsageSample]) {
         let now = self.ctx.clock.now();
-        if let Err(error) = self.health.record_usage(&self.ctx, samples, now) {
+        if let Err(error) = self.health.record_usage(&self.ctx, &slot.app, samples, now) {
             eprintln!("ignite: CLI usage samples not stored: {error}");
         }
     }
 
     fn ended(&self, slot: &Slot, end: &TurnEnd, events: &TurnEvents) {
         let now = self.ctx.clock.now();
-        if let TurnEnd::PlanLimit { window } = end
-            && let Err(error) = self
-                .health
-                .plan_limit(&self.ctx, window.as_deref(), events, now)
-        {
-            eprintln!("ignite: the plan-limit sample was not stored: {error}");
+        let codex = self
+            .health
+            .record_codex_usage(&self.ctx, &slot.app, events, slot.since);
+        if let TurnEnd::PlanLimit { window } = end {
+            let samples = codex.as_deref().unwrap_or(&events.usage);
+            if let Err(error) =
+                self.health
+                    .plan_limit(&self.ctx, &slot.app, window.as_deref(), samples, now)
+            {
+                eprintln!("ignite: the plan-limit sample was not stored: {error}");
+            }
         }
         if let Some(session) = &slot.session
             && let Err(error) = record_turn(

@@ -1,25 +1,12 @@
-//! The usage hold: what the samples of the Claude plan's usage say about whether a machine may
-//! hand out Claude tickets.
-//!
-//! When a window of the plan runs out, every running worker fails mid-ticket, and tickets handed
-//! out after that cannot run at all. So once the newest sample of a window is at or above
-//! `[pool] usage_hold_percent` and the window has not yet reset, the machine hands out no Claude
-//! ticket except those that hold `master` back, as a paused machine does. Unlike a person's
-//! `ignite pool pause`, the hold ends by itself: a newer sample below the threshold replaces the
-//! one that held, and a window whose `resetsAt` has passed holds nothing.
-//!
-//! A window named for one model family, such as "Weekly · Fable", holds only hand-offs whose
-//! model ID contains that family's name. Any other window ("Weekly · all models", "5-hour") holds
-//! every Claude hand-off. Codex has no such plan, so its hand-offs are never held.
-//!
-//! The daemon and the hub's dashboard both use this module, so they always agree on which
-//! window holds.
+//! When the newest sample of a plan window reaches the provider's stop percentage, the hub
+//! holds hand-offs until a lower sample arrives or the window resets. A window named for a
+//! model family holds only hand-offs on models in that family.
 
 use serde::{Deserialize, Serialize};
 
 use crate::time::Timestamp;
 
-/// The threshold `[pool] usage_hold_percent` takes when `ignite.toml` does not set it.
+/// The default stop percentage of a provider.
 pub const DEFAULT_HOLD_PERCENT: u32 = 99;
 
 /// One window of the plan whose newest sample holds hand-offs.
@@ -98,7 +85,9 @@ pub fn parse_resets_at(text: &str) -> Option<Timestamp> {
     if let Ok(at) = Timestamp::parse(text) {
         return Some(at);
     }
-    if let Ok(number) = text.parse::<f64>() {
+    if let Ok(number) = text.parse::<f64>()
+        && number.is_finite()
+    {
         // Milliseconds pass 10^12 in 2001; seconds will not for thousands of years.
         let millis = if number > 1e12 {
             number
@@ -110,7 +99,7 @@ pub fn parse_resets_at(text: &str) -> Option<Timestamp> {
     }
     // An offset of `±HH:MM` after the time.
     let split = text.len().checked_sub(6)?;
-    let (body, offset) = text.split_at(split);
+    let (body, offset) = text.split_at_checked(split)?;
     let sign = match offset.as_bytes().first()? {
         b'+' => 1.0,
         b'-' => -1.0,

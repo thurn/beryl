@@ -48,7 +48,7 @@ pub use cli_view::digest_text;
 pub use stall::RunningVerb;
 pub use tell::TellVerb;
 pub use turn::TurnEndedVerb;
-pub use usage::{hold_line, post_usage, usage_holds, usage_report};
+pub use usage::{hold_lines, post_usage, usage_holds, usage_report};
 
 /// Seconds a worker that refused a hand-off is left alone.
 pub const REFUSED_S: f64 = 60.0;

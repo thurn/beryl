@@ -375,57 +375,55 @@ fn tips_count_the_checks_tip_verification_missed_by_family() {
     assert!(!body.contains("unit:old"), "{body}");
 }
 
-/// A machine whose newest sample of a plan window holds hand-offs is named on the first line
-/// until the window resets or a newer sample of that window does not hold.
+/// The dashboard names the provider, window, percentage and reset for fleet holds.
 #[test]
-fn the_first_line_names_a_machine_on_a_usage_hold() {
+fn the_first_line_names_a_provider_on_a_usage_hold() {
     let conn = seeded();
-    let sample = |at: &str, window: &str, percent: f64, holds: bool, resets: &str| {
-        let data = serde_json::json!({
-            "holds": holds, "at": at, "status": "ok", "window": window,
-            "percent_used": percent, "resets_at": resets, "note": null,
-        });
-        conn.execute(
-            "INSERT INTO metrics (machine, source, data, at) VALUES ('m-j', 'plan_usage', ?1, ?2)",
-            rusqlite::params![data.to_string(), at],
+    let sample = |at: &str, window: &str, percent: f64, resets: &str| {
+        hub::provider_usage::record(
+            &conn,
+            &ignite_core::fleet::ProviderSample {
+                machine: "m-j".parse().unwrap(),
+                provider: "codex".to_owned(),
+                at: at.parse().unwrap(),
+                status: "ok".to_owned(),
+                label: Some(window.to_owned()),
+                percent_used: Some(percent),
+                resets_at: Some(resets.to_owned()),
+                note: None,
+            },
         )
         .unwrap();
     };
     sample(
-        "2026-11-17T11:00:00.000Z",
+        "2026-11-17T11:00:00Z",
         "5-hour",
         99.4,
-        true,
         "2026-11-17T14:00:00Z",
     );
     sample(
-        "2026-11-17T11:00:00.000Z",
+        "2026-11-17T11:00:00Z",
         "Weekly · all models",
         40.0,
-        false,
         "2026-11-20T00:00:00Z",
     );
-    // A window that held but has since reset.
     sample(
-        "2026-11-16T11:00:00.000Z",
+        "2026-11-16T11:00:00Z",
         "Weekly · Fable",
         100.0,
-        true,
         "2026-11-17T08:00:00Z",
     );
     let body = page(&conn, "/");
     assert!(
-        body.contains("jarvis is on a usage hold (5-hour at 99%, resets 2026-11-17T14:00:00Z)"),
+        body.contains("codex is on a usage hold (5-hour at 99%, resets 2026-11-17T14:00:00Z)"),
         "{body}"
     );
     assert!(!body.contains("Fable at"), "{body}");
 
-    // A newer sample of the window is lower, so the hold has ended.
     sample(
-        "2026-11-17T11:30:00.000Z",
+        "2026-11-17T11:30:00Z",
         "5-hour",
         20.0,
-        false,
         "2026-11-17T14:00:00Z",
     );
     assert!(!page(&conn, "/").contains("usage hold"));

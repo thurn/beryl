@@ -228,11 +228,6 @@ impl Dispatcher {
     /// Asks the hub for tickets while workers are idle and ticket trees are free, and reads
     /// each reserved ticket. Runs with the state unlocked. Also returns how many workers are
     /// left idle and why, or `None` when every one got a ticket.
-    ///
-    /// While the machine is on a usage hold (see `ignite_core::plan_usage`), a Claude worker is
-    /// not offered the tiers whose model a held window counts. A Claude worker left with no tier
-    /// is asked for separately, only for the tickets that hold `master` back, which the hub gives
-    /// a machine one at a time, as it does for a paused machine.
     fn ask_for_work(&self, ctx: &Context, asking: Asking) -> (Vec<Offer>, Option<(usize, String)>) {
         let Asking {
             idle,
@@ -245,37 +240,11 @@ impl Dispatcher {
         // While ticket work waits long for cores, only a ticket that holds `master` back starts:
         // the pool asks as a paused pool does.
         let master_only = master_only || backlog.is_some() || shared.is_some();
-        let holds = super::usage_holds(
-            &self.pool,
-            ctx.config.pool.usage_hold_percent,
-            ctx.clock.now(),
-        );
-        let mut free = Vec::new();
-        let mut held = Vec::new();
-        for member in idle {
+        let offered = |member: Member| {
             let models = offered_models(&ctx.config.pool, &member.app, &member.models);
-            if member.app != "claude" || holds.is_empty() {
-                free.push((member, models));
-                continue;
-            }
-            let open: Vec<String> = models
-                .iter()
-                .filter(|tier| {
-                    let id = ctx
-                        .config
-                        .pool
-                        .model_id(&member.app, tier)
-                        .unwrap_or_else(|| (*tier).clone());
-                    !holds.iter().any(|hold| hold.holds_model(&id))
-                })
-                .cloned()
-                .collect();
-            if open.is_empty() {
-                held.push((member, models));
-            } else {
-                free.push((member, open));
-            }
-        }
+            (member, models)
+        };
+        let mut free: Vec<_> = idle.into_iter().map(offered).collect();
         let mut offers = Vec::new();
         let mut why = self.ask_group(ctx, &mut free, &mut trees, master_only, &mut offers);
         if let Some(waited) = backlog
@@ -291,38 +260,18 @@ impl Dispatcher {
         {
             why = format!("{reason} ({why})");
         }
-        if !held.is_empty() {
-            let held_why = self.ask_group(ctx, &mut held, &mut trees, true, &mut offers);
-            if !held.is_empty() {
-                let windows: Vec<String> = holds
-                    .iter()
-                    .map(ignite_core::plan_usage::Hold::describe)
-                    .collect();
-                why = format!(
-                    "the machine is on a usage hold ({}), so only tickets that hold master back \
-                     start ({held_why})",
-                    windows.join("; ")
-                );
-            }
-        }
         // The extra CLI slots are asked last, so that a ticket that holds `master` back goes to
         // an ordinary slot while one is free.
-        let mut extra: Vec<(Member, Vec<String>)> = extra
-            .into_iter()
-            .map(|member| {
-                let models = offered_models(&ctx.config.pool, &member.app, &member.models);
-                (member, models)
-            })
-            .collect();
+        let mut extra: Vec<_> = extra.into_iter().map(offered).collect();
         if !extra.is_empty() {
             let extra_why = self.ask_group(ctx, &mut extra, &mut trees, true, &mut offers);
-            if free.is_empty() && held.is_empty() && !extra.is_empty() {
+            if free.is_empty() && !extra.is_empty() {
                 why = format!(
                     "only tickets that hold master back go to the extra CLI slot ({extra_why})"
                 );
             }
         }
-        let idle_left = free.len() + held.len() + extra.len();
+        let idle_left = free.len() + extra.len();
         let left = (idle_left > 0).then_some((idle_left, why));
         (offers, left)
     }
@@ -350,6 +299,16 @@ impl Dispatcher {
                         session: m.session.clone(),
                         app: m.app.clone(),
                         models: models.clone(),
+                        model_ids: models
+                            .iter()
+                            .filter_map(|tier| {
+                                ctx.config
+                                    .pool
+                                    .model_id(&m.app, tier)
+                                    .map(|id| (tier.clone(), id))
+                            })
+                            .collect(),
+                        default_model: crate::clid::health::default_model(&ctx.config, &m.app),
                     })
                     .collect(),
                 free_ticket_trees: *trees,

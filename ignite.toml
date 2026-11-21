@@ -189,12 +189,6 @@ protected = ["app", "ui-smoke", "clippy", "pyre", "ui-types", "source"]
 # 2026-11-20 macOS work went to the Windows PC that way.
 [pool]
 default_owner = "jarvis/codex"
-# At this percentage of a Claude plan window, a machine stops handing out Claude tickets other
-# than those that hold `master` back, until a newer sample is lower or the window resets
-# (docs/ignite.md, "The pool"). When the plan ran out, every running worker failed mid-ticket.
-# A median ticket uses about 0.06 to 0.14% of the weekly limit and the busiest day used about
-# 1.6% an hour, so 99% leaves room for the tickets already running.
-usage_hold_percent = 99
 
 # A ticket's `effort:` label overrides this default. Apps without an entry use medium.
 [pool.default_effort]

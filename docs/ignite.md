@@ -3404,11 +3404,14 @@ with `ignite pool watch`. To work a ticket in a desktop session, run
 - `ignite pool pause` limits the local machine to tickets that hold `master`
   back. `ignite pool pause --all` stops all new starts. Use `ignite pool resume`
   or `ignite pool resume --all` to resume work.
-- `ignite pool usage` shows the latest Claude plan samples. When a window
-  reaches `[pool] usage_hold_percent`, the machine only starts the affected
-  tiers for tickets that hold `master` back. A family-specific window holds only
-  that model family. A newer sample below the threshold or the window's reset
-  ends the hold. `ignite status` and `ignite pool list` also show the hold.
+- `ignite pool usage` names the provider of each locally observed plan window
+  and shows the fleet's holds. When a window reaches the provider's
+  `stop_percent` in fleet settings, the hub stops new hand-offs for the affected
+  models on every machine. A newer sample below the threshold or the window's
+  reset ends the hold. `ignite status` and `ignite pool list` show holds from
+  the latest hub heartbeat. The old `[pool] usage_hold_percent` key supplies the
+  initial defaults when the hub first creates fleet settings. Existing fleet
+  settings take effect at the next reservation.
 - The pool carries on across epics.
 
 ### CLI mode
@@ -3515,8 +3518,10 @@ Messages, usage and repair:
   waits while a `land` of the session has begun its push. An ordinary `tell`
   waits for the turn's end.
 - Every `rate_limit_event` of a Claude turn is a sample of the plan's usage, so
-  the daemon can report usage while workers run. Each turn's cost and token
-  counts go to the hub with its ticket.
+  the daemon can report usage while workers run. When a Codex turn ends, the
+  daemon reads the latest rate-limit snapshot from that turn in the Codex
+  session transcript. Each turn's cost and token counts go to the hub with its
+  ticket.
 - Every column of the CLI tables and every field of JSON kept in them has a
   default, and the release selftest decodes every row of the copied database
   with the new build, so a release that cannot read an older build's rows is
@@ -4340,7 +4345,8 @@ plan window, and holds a provider while a window is at or above its stop
 percentage, until a newer sample is lower or the window resets. A window named
 for one model family holds only that family's models. A turn that ends at the
 plan's limit counts as a sample of 100% for that turn's provider. A provider
-whose CLI reports no usage figures is held only by such an end.
+whose CLI reports no usage figures is held only by such an end. A plan-limit end
+with no known reset holds the window for one hour.
 
 Failover is the mix's rules applied to a held provider: its share drops out, the
 other providers divide the work, and it takes its share again when the hold

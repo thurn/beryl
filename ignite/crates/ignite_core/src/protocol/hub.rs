@@ -9,6 +9,8 @@
 //! - Records: `POST /records`, `POST /metrics/import`.
 //! - Listings: `POST /listings/lookup`, `POST /listings/store`.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
 use super::tickets::{LandedWork, Ticket};
@@ -134,6 +136,12 @@ pub struct IdleWorker {
     pub app: String,
     /// The model tiers the worker's app can run, such as `opus` or `sonnet`.
     pub models: Vec<String>,
+    /// The IDs behind these tiers, so the hub can match a family-specific plan window.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub model_ids: BTreeMap<String, String>,
+    /// The model ID an untiered ticket will run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_model: Option<String>,
 }
 
 /// `POST /next`: what a machine has free.

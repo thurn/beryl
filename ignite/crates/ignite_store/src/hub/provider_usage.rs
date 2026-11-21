@@ -12,7 +12,8 @@ use ignite_core::time::Timestamp;
 use super::rows;
 use crate::{Result, StoreError};
 
-/// Keeps the sample if this window has no newer reading from any machine.
+/// Keeps the newest reading from any machine. A limit end takes precedence over a
+/// utilization reading at the same millisecond, so the end can supply a missing reset.
 pub fn record(conn: &Connection, sample: &ProviderSample) -> Result<()> {
     conn.execute(
         "INSERT INTO provider_usage (provider, at, machine, status, label, percent_used, resets_at, note) \
@@ -20,7 +21,9 @@ pub fn record(conn: &Connection, sample: &ProviderSample) -> Result<()> {
          ON CONFLICT(provider, (label IS NULL), coalesce(label, '')) DO UPDATE SET \
            at = excluded.at, machine = excluded.machine, status = excluded.status, \
            percent_used = excluded.percent_used, resets_at = excluded.resets_at, note = excluded.note \
-         WHERE excluded.at > provider_usage.at",
+         WHERE excluded.at > provider_usage.at OR
+           (excluded.at = provider_usage.at AND excluded.status = 'limit'
+             AND provider_usage.status != 'limit')",
         params![
             sample.provider, sample.at.to_string(), sample.machine.as_str(), sample.status,
             sample.label, sample.percent_used, sample.resets_at, sample.note,

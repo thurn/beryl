@@ -182,6 +182,12 @@ impl Parts {
                 let version = update
                     .version()
                     .map_or_else(|| version.clone(), |commit| commit.to_string());
+                let pool = dispatcher.pool();
+                if let Err(error) =
+                    crate::dispatchd::post_usage(pool, ctx.hub.as_ref(), &ctx.machine)
+                {
+                    crate::hubclient::HUB_WRITES.failed("plan usage not sent", &error);
+                }
                 let reply = client.heartbeat(&Heartbeat {
                     capacity: None,
                     machine: ctx.machine.clone(),
@@ -190,6 +196,11 @@ impl Parts {
                     cli_apps: dispatcher.cli_apps().map(str::to_owned).collect(),
                     families: current_families(&ctx.repo, &hostname),
                 })?;
+                if let Some(notice) = &reply.fleet
+                    && let Err(error) = crate::fleet_notice::store(pool, notice)
+                {
+                    eprintln!("ignite: fleet notice not saved: {error}");
+                }
                 *hub_version.borrow_mut() = Some(reply.hub_version);
                 dispatcher
                     .pool()

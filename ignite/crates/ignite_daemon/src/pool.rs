@@ -192,7 +192,6 @@ impl Verb for PoolVerb {
             Some((&"usage", [])) => Ok(crate::dispatchd::usage_report(
                 self.dispatcher.pool(),
                 ctx.clock.now(),
-                ctx.config.pool.usage_hold_percent,
             )),
             Some(_) => Err(Error::Invalid(
                 "usage: ignite pool list | pause [--all] | resume [--all] | usage \
@@ -225,15 +224,8 @@ impl PoolVerb {
                     .to_owned(),
             );
         }
-        lines.extend(
-            crate::dispatchd::usage_holds(
-                pool,
-                ctx.config.pool.usage_hold_percent,
-                ctx.clock.now(),
-            )
-            .iter()
-            .map(crate::dispatchd::hold_line),
-        );
+        let holds = crate::dispatchd::usage_holds(pool, ctx.clock.now());
+        lines.extend(crate::dispatchd::hold_lines(&holds));
         if let Some(shared) = self.dispatcher.shared_failure() {
             lines.push(format!("shared   {shared}"));
         }
@@ -339,8 +331,6 @@ pub struct PauseSection {
     pub dispatcher: Arc<Dispatcher>,
     pub hub: Arc<dyn ignite_core::traits::Hub>,
     pub clock: Arc<dyn ignite_core::traits::Clock>,
-    /// `[pool] usage_hold_percent` from `ignite.toml`.
-    pub usage_hold_percent: u32,
 }
 
 impl crate::doctor::StatusSection for PauseSection {
@@ -350,11 +340,8 @@ impl crate::doctor::StatusSection for PauseSection {
 
     fn lines(&self) -> Vec<String> {
         let pool = self.dispatcher.pool();
-        let holds: Vec<String> =
-            crate::dispatchd::usage_holds(pool, self.usage_hold_percent, self.clock.now())
-                .iter()
-                .map(crate::dispatchd::hold_line)
-                .collect();
+        let holds = crate::dispatchd::usage_holds(pool, self.clock.now());
+        let holds: Vec<String> = crate::dispatchd::hold_lines(&holds).collect();
         let pause = if pool.paused_everywhere() {
             Some(
                 "paused on every machine: nothing is handed off, not even the tickets that hold \
