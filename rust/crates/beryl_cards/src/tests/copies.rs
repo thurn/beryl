@@ -24,6 +24,43 @@ use crate::{CARDS, names};
 const STAGE: &str = "Thespian's Stage";
 const DEPTHS: &str = "Dark Depths";
 
+#[test]
+fn a_power_toughness_copy_exception_omits_the_defining_ability_from_later_copies() {
+    let scenario = super::scenarios_of(names::QUICKSILVER_GARGANTUAN)
+        .iter()
+        .find(|scenario| scenario.name == "the Gargantuan copies Tarmogoyf as a 7/7")
+        .unwrap();
+    let (table, _) = beryl_scenario::position(&CARDS, scenario).unwrap();
+    let mut last = None;
+    beryl_scenario::watch(&CARDS, scenario, |state, _| last = Some(*state))
+        .unwrap_or_else(|error| panic!("{error}"));
+    let state = last.unwrap();
+    for (card, base_pt, pt, abilities) in [
+        (names::TARMOGOYF, (0, 1), (2, 3), 1),
+        (names::QUICKSILVER_GARGANTUAN, (7, 7), (7, 7), 0),
+        (names::GLASSPOOL_MIMIC, (7, 7), (7, 7), 0),
+    ] {
+        let slot = state
+            .battlefield()
+            .iter()
+            .copied()
+            .find(|&slot| state.definition_name(&table, slot) == card)
+            .unwrap();
+        assert_eq!(state.name(&table, slot), names::TARMOGOYF);
+        let values = state.copiable(slot);
+        assert_eq!((values.power(&table), values.toughness(&table)), base_pt);
+        assert_eq!(
+            (state.power(&table, slot), state.toughness(&table, slot)),
+            pt
+        );
+        assert_eq!(state.abilities(&table, slot).count(), abilities);
+        assert_eq!(
+            state.has_ability(slot, beryl_card::AbilityIx::new(0)),
+            abilities > 0
+        );
+    }
+}
+
 /// Under [CR 712.6d], "If a permanent is copying the back face of a nonmodal double-faced
 /// permanent (even if the object representing that copy is itself a double-faced permanent),
 /// the mana value of that permanent is 0."

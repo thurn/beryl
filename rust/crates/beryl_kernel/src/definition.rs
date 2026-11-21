@@ -7,8 +7,8 @@
 //! effect on it among them ([`crate::copiable::additions`]), which it reads behind a flag of the object.
 //! Most readers want only what the card table keeps for each definition and face: the face's
 //! printed characteristics and abilities, the facts the scans read, the masks of what it may
-//! listen to or replace, its name, its key. None of those is changed by an exception, which
-//! sets values the layers apply (see [CR 707.9b]): "Some copy effects modify a characteristic as
+//! listen to or replace, its name, its key. Exceptions are read separately when the layers
+//! apply them (see [CR 707.9b]): "Some copy effects modify a characteristic as
 //! part of the copying process. The final set of values for that characteristic becomes part
 //! of the copiable values of the copy." So those readers ask [`State::definition`], which is
 //! the object's fields and nothing else, and pay nothing for copies: asking
@@ -16,11 +16,13 @@
 //!
 //! [CR 707.9b]: https://yawgatog.com/resources/magic-rules/#R7079b
 
-use beryl_card::{AbilityKind, Colors, Face, FaceIx, Supertypes};
+use beryl_card::{AbilityIx, AbilityKind, Colors, Face, FaceIx, Supertypes};
 
+use crate::copiable::defines_pt;
 use crate::event::{Listens, Replaces};
+use crate::fixed::Full;
 use crate::layout::{Layout, Small};
-use crate::object::{Derived, Flag, GrantRef};
+use crate::object::{AbilityMask, Derived, Flag, GrantRef};
 use crate::query::{Copiable, DefinitionKey};
 use crate::rule_changes::Rules;
 use crate::state::State;
@@ -144,29 +146,45 @@ impl<L: Layout> State<L> {
     /// toughness, colors and subtypes of its copiable values, which hold its exceptions
     /// ([`State::copiable_pt`], [`State::copiable_colors`], [`State::copy_subtypes`], [`State::copy_supertypes`]), and the
     /// activated abilities they give ([`State::copy_grants`]), with the keywords of the faces
-    /// of a merged permanent's other cards ([`Copiable::merged_faces`]). A permanent with no
-    /// copy effect
-    /// keeps `printed`, so the layers test the flag once and come here only for a copy.
+    /// of a merged permanent's other cards ([`Copiable::merged_faces`]). The mask of
+    /// absent abilities starts with any CDA omitted by a power and toughness exception
+    /// ([`Copiable::omits_pt_definitions`]).
+    ///
+    /// # Errors
+    ///
+    /// [`Full`] if an omitted ability's index does not fit the layout's ability mask.
     #[cold]
     #[inline(never)]
-    pub fn copy_layer_one(&self, t: &GameTable, slot: L::Slot, printed: Derived<L>) -> Derived<L> {
-        let (power, toughness) = self.excepted_pt(t, slot);
+    pub fn copy_layer_one(
+        &self,
+        t: &GameTable,
+        slot: L::Slot,
+        printed: &mut Derived<L>,
+    ) -> Result<(), Full> {
+        let values = self.copiable(slot);
+        let pt = values.excepted_pt(t);
         // see CR 702.140e: "A mutated permanent has all abilities of each card and token that
         // represents it", its keywords among them.
-        let keywords = (self.copiable(slot).merged_faces(t))
+        let keywords = values
+            .merged_faces(t)
             .fold(printed.keywords, |k, (card, face)| {
                 k.union(t.def(card).face(face).keywords)
             });
-        Derived {
-            power,
-            toughness,
-            colors: self.excepted_colors(t, slot),
-            subtypes: self.copy_subtypes(t, slot),
-            supertypes: self.copy_supertypes(t, slot),
-            granted: self.copy_grants(t, slot),
-            keywords,
-            ..printed
+        printed.colors = values.colors(t);
+        printed.subtypes = values.excepted_subtypes(t);
+        printed.supertypes = values.excepted_supertypes(t);
+        printed.granted = self.copy_grants(t, slot);
+        printed.keywords = keywords;
+        if let Some((power, toughness)) = pt {
+            printed.power = power;
+            printed.toughness = toughness;
+            for (ability, index) in values.face(t).abilities.iter().zip(0u8..) {
+                if defines_pt(ability) {
+                    printed.lost = printed.lost.with(AbilityIx::new(index)).ok_or(Full)?;
+                }
+            }
         }
+        Ok(())
     }
 
     /// The colors of the copiable values of the object in `slot` ([`Copiable::colors`]): what

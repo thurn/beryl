@@ -10,7 +10,7 @@
 //! [CR 613.7a]: https://yawgatog.com/resources/magic-rules/#R6137a
 //! [`State::abilities`]: crate::state::State::abilities
 
-use beryl_kernel::derive::Rederive;
+use beryl_kernel::{copiable::defines_pt, derive::Rederive};
 
 use crate::card::{Ability, FaceIx};
 use crate::definition::Definition;
@@ -41,12 +41,15 @@ pub(super) fn list<L: Layout>(
     let slot = s.battlefield()[i];
     let mut listed = Ok(());
     let mut merged = false;
-    for (card, face) in s.copiable(slot).merged_faces(t) {
+    for (card, face, omits_pt) in s.copiable(slot).merged_faces_with_pt_omission(t) {
         merged = true;
         for (ability, n) in t.def(card).face(face).abilities.iter().zip(0u8..) {
             let Some(spec) = ability.layer() else {
                 continue;
             };
+            if omits_pt && defines_pt(ability) {
+                continue;
+            }
             debug_assert!(n < MERGED, "a face of fewer than 64 abilities");
             let on = Listed {
                 at: i,

@@ -2,6 +2,7 @@
 //! dirty (architecture §9, decision D5, CR 613).
 
 mod apply;
+mod copied;
 mod dependency;
 mod elsewhere;
 pub(crate) mod entering;
@@ -352,6 +353,7 @@ fn apply_layers<L: Layout>(
     let mut list: Option<Applying<L>> = None;
     let mut listed = Ok(());
     let mut merged = false;
+    let mut omitted = false;
     for i in 0..s.battlefield().len() {
         let slot = s.battlefield()[i];
         // Layer 1: the copiable values (CR 613.2a). A copy's are those of what it copies,
@@ -374,8 +376,11 @@ fn apply_layers<L: Layout>(
             lost: Default::default(),
         };
         if copy {
-            let printed = s.results()[i];
-            s.results()[i] = s.copy_layer_one(t, slot, printed);
+            let (omits_ability, is_merged, full) = copied::list(s, t, &mut list, i);
+            omitted |= omits_ability;
+            merged |= is_merged;
+            listed = listed.and(full);
+            continue;
         }
         for (ability, n) in f.abilities.iter().zip(0..) {
             let Some(spec) = ability.layer() else {
@@ -389,11 +394,6 @@ fn apply_layers<L: Layout>(
                 face,
             };
             listed = listed.and(list_static(s, &mut list, on, ability, spec));
-        }
-        if copy && t.can(Capability::Merges) {
-            let (is_merged, full) = merged::list(s, t, &mut list, i);
-            merged |= is_merged;
-            listed = listed.and(full);
         }
     }
     for &GrantedTo { at, grant } in slice::<L>(granted) {
@@ -420,7 +420,7 @@ fn apply_layers<L: Layout>(
     };
     listed = listed.and(resolved_effects(s, &mut list));
     let mut applied = Applied {
-        removed: text.removed,
+        removed: text.removed || omitted,
         land_types: text.land_types || merged,
         protection: false,
     };

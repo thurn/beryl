@@ -48,13 +48,17 @@ impl<L: Layout> State<L> {
     #[inline(never)]
     fn defined_pt(&self, t: &GameTable, slot: L::Slot) -> (i8, i8) {
         let (mut power, mut toughness) = self.copiable_pt(t, slot);
+        let values = self.copiable(slot);
+        if values.omits_pt_definitions(t) {
+            return (power, toughness);
+        }
         // see CR 108.4a: "If anything asks for the controller of a card that doesn't have one
         // (because it's not a permanent or spell), use its owner instead." The query answers
         // that, and a count of "creatures you control" counts its owner's.
         let you = self.controller(slot);
         let words = self.words_of(slot);
         let number = |amount| i8::try_from(self.defined(t, amount, you, &words)).unwrap_or(i8::MAX);
-        for ability in self.copiable(slot).face(t).abilities {
+        for ability in values.face(t).abilities {
             let Some(spec) = ability.layer() else {
                 continue;
             };

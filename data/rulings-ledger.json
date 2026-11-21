@@ -1154,7 +1154,9 @@
     {
       "published_at": "2011-06-01",
       "hash": "fbf17eb54d64",
-      "untestable": "by-ptc7.2.15 tracks the Tarmogoyf scenario. Beryl keeps the copied ability and makes the Gargantuan 2/3 instead of 7/7."
+      "scenario": [
+        "the Gargantuan copies Tarmogoyf as a 7/7"
+      ]
     }
   ],
   "Rest in Peace": [

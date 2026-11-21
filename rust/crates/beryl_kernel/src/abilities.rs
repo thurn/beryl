@@ -16,6 +16,7 @@
 
 use beryl_card::{Ability, AbilityIx, FaceIx, ObjectAbility};
 
+use crate::copiable::defines_pt;
 use crate::layout::Layout;
 use crate::object::{Flag, GrantRef};
 use crate::query::Copiable;
@@ -127,8 +128,14 @@ impl<L: Layout> State<L> {
         let ObjectAbility::Merged(place, index) = ability else {
             return None;
         };
-        let (card, face) = self.merged_values(t, slot)?.merged_face(place)?;
+        let (card, face, omits_pt) = self
+            .merged_values(t, slot)?
+            .merged_faces_with_pt_omission(t)
+            .nth(usize::from(place))?;
         let a = t.def(card).face(face).abilities.get(index.index())?;
+        if omits_pt && defines_pt(a) {
+            return None;
+        }
         Some((card, face, index, a))
     }
 
@@ -201,6 +208,16 @@ impl<L: Layout> Abilities<'_, L> {
             {
                 let index = AbilityIx::new(self.index);
                 self.index += 1;
+                if defines_pt(ability)
+                    && self
+                        .state
+                        .copiable(self.slot)
+                        .merged_faces_with_pt_omission(self.table)
+                        .nth(usize::from(self.place - 1))
+                        .is_some_and(|(_, _, omits_pt)| omits_pt)
+                {
+                    continue;
+                }
                 return Some((ObjectAbility::Merged(self.place - 1, index), ability));
             }
             let next = self.state.copiable(self.slot).merged_face(self.place);

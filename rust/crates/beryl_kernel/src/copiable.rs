@@ -1,10 +1,11 @@
 //! Copiable values: a definition, the face of it that is up, and the copy exceptions that
 //! made them ([`crate::copiable::additions`]). [`crate::query`] asks them of an object.
-//! Implements: CR 205.3d, CR 707.2, CR 707.9a, CR 707.9b, CR 708.2a
+//! Implements: CR 205.3d, CR 707.2, CR 707.9a, CR 707.9b, CR 707.9d, CR 708.2a
 //!
 
 use beryl_card::{
-    Ability, AbilityKind, Colors, CopyChange, Face, FaceIx, GrantIx, Supertypes, Words,
+    Ability, AbilityKind, Colors, CopyChange, Face, FaceIx, GrantIx, Modification, Supertypes,
+    Words,
 };
 
 pub mod additions;
@@ -162,6 +163,19 @@ fn read_colors<C: CardId>(addition: Addition<C>, t: &GameTable, words: &Words) -
 /// [CR 113.3b]: https://yawgatog.com/resources/magic-rules/#R1133b
 fn interchangeable(ability: &Ability) -> bool {
     matches!(ability.kind(), AbilityKind::Activated | AbilityKind::Mana)
+}
+
+/// Whether this ability defines power or toughness (see [CR 604.3a]): it "defines an
+/// object’s colors, subtypes, power, or toughness". The card table admits these modifications
+/// only on the object itself with no condition.
+///
+/// [CR 604.3a]: https://yawgatog.com/resources/magic-rules/#R6043a
+pub fn defines_pt(ability: &Ability) -> bool {
+    ability.layer().is_some_and(|spec| {
+        spec.modifications
+            .iter()
+            .any(|m| matches!(m, Modification::SetPower(_) | Modification::SetPt(..)))
+    })
 }
 
 impl<L: Layout> Copiable<L> {
@@ -451,6 +465,27 @@ impl<L: Layout> Copiable<L> {
             .map(|addition| (addition.card(), addition.face()))
     }
 
+    /// Merged faces with whether each lost its power or toughness CDA when it was copied
+    /// ([`Copiable::omits_pt_definitions`]). An exception omits the abilities already
+    /// present when the copy is made. A subsequent merge can still add abilities.
+    pub fn merged_faces_with_pt_omission(
+        self,
+        t: &GameTable,
+    ) -> impl Iterator<Item = (L::Card, FaceIx, bool)> {
+        let last_pt = self.last_pt_exception(t).map(|(place, _)| place);
+        let additions = self.additions;
+        (0..additions.len())
+            .filter_map(move |place| additions.as_ref()[place].map(|addition| (place, addition)))
+            .filter(|(_, addition)| addition.is_every_ability())
+            .map(move |(place, addition)| {
+                (
+                    addition.card(),
+                    addition.face(),
+                    last_pt.is_some_and(|last| place < last),
+                )
+            })
+    }
+
     /// The card and face at `place` among [`Copiable::merged_faces`], counting from 0.
     #[inline]
     pub fn merged_face(self, place: u8) -> Option<(L::Card, FaceIx)> {
@@ -637,7 +672,7 @@ impl<L: Layout> Copiable<L> {
     /// 707.9b): "The final set of values for that characteristic becomes part of the copiable
     /// values of the copy." For values with no exception, one test.
     #[inline]
-    fn excepted_pt(self, t: &GameTable) -> Option<(i8, i8)> {
+    pub(crate) fn excepted_pt(self, t: &GameTable) -> Option<(i8, i8)> {
         if self.additions.is_empty() {
             None
         } else {
@@ -649,11 +684,28 @@ impl<L: Layout> Copiable<L> {
     #[cold]
     #[inline(never)]
     fn pt_of_additions(self, t: &GameTable) -> Option<(i8, i8)> {
+        self.last_pt_exception(t).map(|(_, pt)| pt)
+    }
+
+    /// A copy that sets power and toughness omits the printed abilities that define either
+    /// value ([CR 707.9d]): "any characteristic-defining ability (see rule 604.3) of the
+    /// object being copied that defines that characteristic is not copied." Keeping the
+    /// exception in the copiable values also keeps those abilities out of subsequent copies.
+    ///
+    /// [CR 707.9d]: https://yawgatog.com/resources/magic-rules/#R7079d
+    #[must_use]
+    pub fn omits_pt_definitions(self, t: &GameTable) -> bool {
+        self.excepted_pt(t).is_some()
+    }
+
+    /// The last power and toughness exception and its position among the additions.
+    fn last_pt_exception(self, t: &GameTable) -> Option<(usize, (i8, i8))> {
         self.additions
             .iter()
-            .flat_map(|addition| addition.changes(t))
-            .fold(None, |pt, change| match *change {
-                CopyChange::PowerToughness(power, toughness) => Some((power, toughness)),
+            .enumerate()
+            .flat_map(|(place, addition)| addition.changes(t).iter().map(move |c| (place, c)))
+            .fold(None, |pt, (place, change)| match *change {
+                CopyChange::PowerToughness(power, toughness) => Some((place, (power, toughness))),
                 CopyChange::Colors(_)
                 | CopyChange::AddSubtype(_)
                 | CopyChange::WithoutSupertypes(_)

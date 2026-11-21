@@ -34,6 +34,8 @@ pub mod scenarios {
     const GARGANTUAN: &str = Card::QuicksilverGargantuan;
     const BEZA: &str = Card::BezaTheBoundingSpring;
     const PAINTER: &str = Card::PaintersServant;
+    const GOYF: &str = Card::Tarmogoyf;
+    const MIMIC: &str = Card::GlasspoolMimic;
 
     /// P0, at 10 life against P1's 20, holds Quicksilver Gargantuan and seven Islands; P1
     /// controls `permanents`.
@@ -156,5 +158,23 @@ pub mod scenarios {
             ME.pt(Prop::Vanilla, 7, 7),
             ME.has_subtype(Prop::Vanilla, Subtype::Illusion, true),
         ]),
+        copying("the Gargantuan copies Tarmogoyf as a 7/7", &[GOYF])
+            .interaction(&[GOYF, MIMIC])
+            .battlefield(P0, &[Card::Island; 10])
+            .hand(P0, &[GARGANTUAN, MIMIC])
+            .graveyard(P1, &[Card::Plains, Card::LightningBolt])
+            .actions(&[
+                THEM.pt(GOYF, 2, 3),
+                ME.casts(GARGANTUAN),
+                Resolve,
+                ME.picks_up_to(GOYF),
+                ME.pt(GOYF, 7, 7),
+                ME.casts(MIMIC),
+                Resolve,
+                ME.picks_up_to(GOYF),
+                ME.controls(GOYF, 2),
+                ME.has_subtype(GOYF, Subtype::Rogue, true),
+                THEM.pt(GOYF, 2, 3),
+            ]),
     ];
 }

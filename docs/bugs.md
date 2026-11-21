@@ -15,6 +15,14 @@ fixed in the same session. Newest first.
   Snapcaster Mage and Raging Goblin scenarios check the offered sources and the
   damage prevented after the spell resolves.
 
+- **Quicksilver Gargantuan became 2/3 when it copied a 2/3 Tarmogoyf.** The 7/7
+  copy exception set the copy's power and toughness. The copied
+  characteristic-defining ability then overwrote both values. The exception now
+  omits the ability from the copy's copiable values. The regression
+  `a_power_toughness_copy_exception_omits_the_defining_ability_from_later_copies`
+  checks that the Gargantuan and a Glasspool Mimic copying it are both 7/7 and
+  have no copy of the ability.
+
 - **A spell could not escape using the card sacrificed or discarded to cast
   it.** The cast check counted graveyard cards before paying any costs. The
   casting steps now pay sacrifices and discards first and check what actually
