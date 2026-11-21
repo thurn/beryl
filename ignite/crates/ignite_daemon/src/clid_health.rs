@@ -12,8 +12,8 @@
 //! - A probe turn is a one-word turn on the cheapest tier of `[pool.models.<app>]`, run in the
 //!   Ignite home and never in the checkout. One runs for every app in CLI mode when the daemon
 //!   starts, before the app's slots are first offered, and one every [`PROBE_EVERY_S`] while the
-//!   app is held. A probe that succeeds ends the hold and makes every slot the hold parked start
-//!   its next turn.
+//!   app is held. A probe that succeeds ends the hold so parked slots can start their next
+//!   turn after checking that their ticket claims are still current.
 //! - A turn that ended at the plan's limit stores a 100% sample of the window, so the usage hold
 //!   of `dispatchd_usage.rs` stops Claude hand-offs until the window resets.
 //! - Every usage sample a turn reports becomes a row of `plan_usage`, named as `get_usage` names
@@ -38,6 +38,7 @@ use ignite_core::ids::{SessionId, TicketId};
 use ignite_core::plan_usage::parse_resets_at;
 use ignite_core::protocol::Class;
 use ignite_core::protocol::hub::{JusticiarReport, MetricsImport};
+use ignite_core::protocol::tickets::Status;
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{CommandSpec, Error, Result};
 use ignite_store::local::rows::{CliHold, PlanUsage};
@@ -295,10 +296,10 @@ impl Health {
         Ok(new)
     }
 
-    /// Ends `app`'s hold and makes every slot the hold parked start its next turn: each goes to
-    /// `backing_off` with its resume time at `now`, keeping its ticket. A slot whose last turn
-    /// printed nothing gets that turn's prompt again; one with no prompt waiting is told its
-    /// last turn failed. Returns how many slots were resumed.
+    /// Ends `app`'s hold and queues the slots it parked. Each goes to `backing_off` with its
+    /// resume time at `now`, keeping its park reason so the next turn checks its claim.
+    /// A slot whose last turn printed nothing gets that turn's prompt again. A slot with no
+    /// prompt waiting is told its last turn failed. Returns how many slots were queued.
     pub fn end_hold(&self, app: &str, now: Timestamp) -> Result<u32> {
         self.probed().insert(app.to_owned());
         self.pool
@@ -318,7 +319,6 @@ impl Health {
                     SlotState::BackingOff.as_str().clone_into(&mut slot.state);
                     slot.resume_at = Some(now.to_string());
                     slot.since = Some(now.to_string());
-                    slot.park_reason = None;
                     cli_slots::put(conn, &slot)?;
                     resumed += 1;
                 }
@@ -407,7 +407,7 @@ impl Health {
         match &outcome {
             Probe::Passed => match self.end_hold(name, now) {
                 Ok(resumed) if resumed > 0 => {
-                    eprintln!("ignite: a {name} probe passed; {resumed} parked slots resume");
+                    eprintln!("ignite: a {name} probe passed; {resumed} parked slots queued");
                 }
                 Ok(_) => {}
                 Err(error) => eprintln!("ignite: the {name} CLI hold was not ended: {error}"),
@@ -698,6 +698,17 @@ impl Effects for HealthEffects {
 
     fn probed(&self, app: &str) -> bool {
         self.health.probed().contains(app)
+    }
+
+    fn claim_is_current(&self, session: &SessionId, ticket: &TicketId) -> Result<bool> {
+        match self.ctx.hub.ticket(ticket) {
+            Ok(detail) => Ok(detail.ticket.status == Status::InProgress
+                && detail.ticket.assignee.as_deref() == Some(session.as_str())
+                && detail.ticket.session.as_ref() == Some(session)
+                && detail.ticket.machine.as_ref() == Some(&self.ctx.machine)),
+            Err(Error::NotFound(_)) => Ok(false),
+            Err(error) => Err(error),
+        }
     }
 }
 

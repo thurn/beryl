@@ -242,6 +242,12 @@ fn cli_e2e_a_refusal_holds_the_app_and_a_passing_probe_resumes_the_slot() {
     assert!(rig.args(2).contains(&MODEL.to_owned()));
     assert!(rig.daemon.held("claude").is_none());
 
+    rig.hub.set_unreachable(true);
+    assert!(matches!(rig.daemon.step(), Err(Error::Unreachable(_))));
+    assert_eq!(rig.slot().state, SlotState::BackingOff);
+    assert!(find_run(&rig.home, &session, 2).is_none());
+    rig.hub.set_unreachable(false);
+
     rig.daemon.step().unwrap();
     rig.wait_turn(&session, 2);
     assert_eq!(rig.invocations(), 3, "the parked slot resumed");
@@ -252,6 +258,64 @@ fn cli_e2e_a_refusal_holds_the_app_and_a_passing_probe_resumes_the_slot() {
         rig.prompt(3)
     );
     assert!(rig.releases().is_empty());
+}
+
+#[test]
+fn cli_e2e_a_passing_probe_retires_a_slot_reassigned_at_the_hub() {
+    let rig = Rig::new("reassigned");
+    rig.script(1, "exit 1\n");
+    let session = rig.begin();
+    rig.wait_turn(&session, 1);
+    rig.daemon.step().unwrap();
+    assert_eq!(rig.slot().state, SlotState::Parked);
+    assert!(rig.daemon.held("claude").is_some());
+
+    // The hub reassigned the ticket while the old worker's local tree still shows it leased.
+    let new_holder = SessionId::new("cli-claude-replacement").unwrap();
+    rig.set_hub_claim(&new_holder);
+    assert_eq!(
+        rig.host.holders().get(&session),
+        Some(&TicketId::new(TICKET).unwrap())
+    );
+    rig.clock.advance(super::super::health::PROBE_EVERY_S + 1.0);
+    rig.health.tick(&rig.ctx, &[&Claude]);
+    assert_eq!(rig.invocations(), 2);
+    assert!(rig.daemon.held("claude").is_none());
+
+    rig.daemon.step().unwrap();
+    assert_eq!(rig.daemon.check(&session), SessionCheck::Gone);
+    assert_eq!(rig.slot().state, SlotState::Free);
+    assert!(find_run(&rig.home, &session, 2).is_none());
+    assert!(rig.releases().is_empty(), "the new holder keeps its claim");
+}
+
+#[test]
+fn cli_e2e_a_restarted_daemon_rechecks_the_claim_before_launching_a_recorded_resume() {
+    let mut rig = Rig::new("reassigned-after-recording");
+    rig.script(1, "exit 1\n");
+    let session = rig.begin();
+    rig.wait_turn(&session, 1);
+    rig.daemon.step().unwrap();
+    assert_eq!(rig.slot().state, SlotState::Parked);
+
+    rig.clock.advance(super::super::health::PROBE_EVERY_S + 1.0);
+    rig.health.tick(&rig.ctx, &[&Claude]);
+    rig.restart_with(Arc::new(FailFirst {
+        inner: rig.turns(),
+        failed: AtomicBool::new(false),
+    }));
+    assert!(rig.daemon.step().is_err());
+    assert_eq!(rig.slot().state, SlotState::Starting);
+
+    rig.set_hub_claim(&SessionId::new("cli-claude-replacement").unwrap());
+    rig.restart();
+    rig.daemon.step().unwrap();
+    assert_eq!(rig.slot().state, SlotState::Free);
+    assert!(find_run(&rig.home, &session, 2).is_none());
+    assert_eq!(
+        rig.daemon.turn_row(&session, 2).unwrap().unwrap().state,
+        "ended"
+    );
 }
 
 #[test]

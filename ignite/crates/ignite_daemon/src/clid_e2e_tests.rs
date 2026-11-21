@@ -168,6 +168,9 @@ impl Effects for Recording {
     fn hold(&self, app: &str, reason: HoldReason, message: &str, cli_version: Option<&str>) {
         self.inner.hold(app, reason, message, cli_version);
     }
+    fn claim_is_current(&self, session: &SessionId, ticket: &TicketId) -> Result<bool> {
+        self.inner.claim_is_current(session, ticket)
+    }
 }
 
 /// Turns whose first start fails after the turn was recorded, as a daemon that dies between the
@@ -209,6 +212,7 @@ struct Rig {
     cli: PathBuf,
     clock: Arc<FakeClock>,
     host: Arc<E2eHost>,
+    hub: Arc<FakeHub>,
     ctx: Context,
     health: Arc<Health>,
     effects: Arc<Recording>,
@@ -272,12 +276,13 @@ impl Rig {
         let health = Arc::new(
             Health::new(pool, home.clone(), "local".to_owned()).with_notify(Box::new(|_, _| {})),
         );
+        let hub = Arc::new(FakeHub::default());
         let ctx = Context {
             config: config(&program),
             repo: home.clone(),
             machine: MachineId::new("m-7f3a").unwrap(),
             clock: clock.clone(),
-            hub: Arc::new(FakeHub::default()),
+            hub: hub.clone(),
             git: Arc::new(FakeGit::default()),
             launcher: Arc::new(Self::supervised(&home)),
             builds: Arc::new(FakeBuilds::default()),
@@ -307,6 +312,7 @@ impl Rig {
             cli,
             clock,
             host,
+            hub,
             ctx,
             health,
             effects,
@@ -437,7 +443,20 @@ impl Rig {
     fn begin(&self) -> SessionId {
         let session = self.try_begin().unwrap();
         lock(&self.host.holders).insert(session.clone(), TicketId::new(TICKET).unwrap());
+        self.set_hub_claim(&session);
         session
+    }
+
+    fn set_hub_claim(&self, session: &SessionId) {
+        let detail = serde_json::from_value(serde_json::json!({
+            "id": TICKET, "next_child": 1, "title": "Test ticket", "type": "bug",
+            "status": "in_progress", "priority": 2, "assignee": session, "session": session,
+            "machine": self.ctx.machine, "created_at": self.clock.now(), "created_by": "test",
+            "updated_at": self.clock.now(), "version": 1, "edges": [], "children": [],
+            "ready": false, "blocked_by": [],
+        }))
+        .unwrap();
+        self.hub.insert_ticket(detail);
     }
 
     fn try_begin(&self) -> Result<SessionId> {

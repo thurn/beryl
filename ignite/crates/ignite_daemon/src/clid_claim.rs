@@ -15,14 +15,14 @@
 //! ends as anything but a clean turn, the ticket starts again at once on a new transcript (see
 //! `end`), so a failed resume costs the regression one turn start and nothing more.
 
-use ignite_core::cli::SlotState;
+use ignite_core::cli::{SlotState, TurnEnd};
 use ignite_core::ids::SessionId;
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{Error, Result};
 use ignite_store::local::cli_slots as store;
 use ignite_store::local::rows::{CliLanded, CliSlot};
 
-use super::{CliDaemon, CliPool, LANDED_KEEP_S, Resume, hex, random_bytes};
+use super::{CliDaemon, CliPool, LANDED_KEEP_S, Resume, hex, random_bytes, slot_of};
 
 /// How many slots [`CliDaemon::open_slot`] tries before it gives up: each failed try means
 /// another hand-off took the slot first.
@@ -50,6 +50,51 @@ impl super::CliAppSetup {
 }
 
 impl CliDaemon {
+    /// Checks the hub before a continuation after a hold, including when a daemon restart
+    /// left the next turn recorded without a supervisor. The old local lease can outlive
+    /// the hub's claim.
+    pub(super) fn retire_if_claim_lost(&self, row: &CliSlot) -> Result<bool> {
+        if !super::health::parked_by_hold(row.park_reason.as_deref()) {
+            return Ok(false);
+        }
+        let slot = slot_of(row);
+        if let (Some(session), Some(ticket)) = (&slot.session, &slot.ticket)
+            && !self.effects.claim_is_current(session, ticket)?
+        {
+            if slot.state == SlotState::Starting
+                && let Some(turn) = self.turn_row(session, slot.turn)?
+            {
+                self.close(
+                    row,
+                    &turn,
+                    &TurnEnd::Interrupted,
+                    None,
+                    SlotState::Free,
+                    |_| {},
+                )?;
+            } else {
+                self.retire_slot(row, session)?;
+            }
+            return Ok(true);
+        }
+        Ok(false)
+    }
+
+    /// Records and starts the next turn with its prompt and every undelivered message.
+    pub(super) fn start_next(&self, row: &CliSlot) -> Result<()> {
+        if self.held(&row.app).is_some() || self.retire_if_claim_lost(row)? {
+            return Ok(());
+        }
+        let Some((turn, deliver)) = self.next_turn(row)? else {
+            return Ok(());
+        };
+        self.database(|conn| store::record_turn_start(conn, &turn, &deliver))?;
+        let mut row = row.clone();
+        row.turn = turn.turn;
+        SlotState::Starting.as_str().clone_into(&mut row.state);
+        self.launch(&row)
+    }
+
     /// What the turns of `session`, a CLI session whose slot has been freed, say about it;
     /// `None` when it never ran a turn here. A session that still holds a slot cannot take
     /// another ticket until its turn has ended and the slot is free.

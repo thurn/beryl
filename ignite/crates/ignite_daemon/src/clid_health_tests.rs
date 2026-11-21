@@ -310,7 +310,7 @@ fn a_successful_probe_ends_the_hold_and_unparks_its_slots() {
                 .unwrap()
                 .contains("ignite status")
         );
-        assert_eq!(slot.park_reason, None);
+        assert!(parked_by_hold(slot.park_reason.as_deref()));
     }
     // A slot parked for a reason other than the hold waits for a person.
     assert_eq!(slots[2].state, "parked");

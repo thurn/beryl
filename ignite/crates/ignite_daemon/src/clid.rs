@@ -226,6 +226,11 @@ pub trait Effects: Send + Sync {
         let _ = app;
         true
     }
+    /// Whether the hub still assigns this ticket to the session. An error defers recovery.
+    fn claim_is_current(&self, session: &SessionId, ticket: &TicketId) -> Result<bool> {
+        let _ = (session, ticket);
+        Ok(true)
+    }
 }
 
 /// [`Effects`] that do nothing.
@@ -463,6 +468,9 @@ impl CliDaemon {
         match slot.state {
             SlotState::Starting => {
                 if self.turns.recover(&session, slot.turn) == Recovery::NotStarted {
+                    if self.held(&row.app).is_some() || self.retire_if_claim_lost(row)? {
+                        return Ok(());
+                    }
                     self.launch(row)
                 } else {
                     self.mark_running(row)?;
@@ -495,7 +503,8 @@ impl CliDaemon {
         let turn = row.turn;
         self.database(|conn| {
             conn.execute(
-                "UPDATE cli_slots SET state = 'running' WHERE session = ?1 AND turn = ?2 \
+                "UPDATE cli_slots SET state = 'running', park_reason = NULL \
+                 WHERE session = ?1 AND turn = ?2 \
                  AND state = 'starting'",
                 rusqlite::params![session, turn],
             )?;
@@ -506,22 +515,6 @@ impl CliDaemon {
             )?;
             Ok(())
         })
-    }
-
-    /// Records the slot's next turn as starting, with the prompt it waits to start with and
-    /// every undelivered message, then starts it. Does nothing while the app is on a CLI hold.
-    fn start_next(&self, row: &CliSlot) -> Result<()> {
-        if self.held(&row.app).is_some() {
-            return Ok(());
-        }
-        let Some((turn, deliver)) = self.next_turn(row)? else {
-            return Ok(());
-        };
-        self.database(|conn| store::record_turn_start(conn, &turn, &deliver))?;
-        let mut row = row.clone();
-        row.turn = turn.turn;
-        SlotState::Starting.as_str().clone_into(&mut row.state);
-        self.launch(&row)
     }
 
     /// The slot's next turn, not yet recorded, and the IDs of the messages it delivers: its

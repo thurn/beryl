@@ -29,6 +29,7 @@
 //! prompt, and no hold, park or release follows from that end.
 
 use ignite_core::cli::{Action, Facts, PreviousAnswer, SlotState, TurnEnd, TurnEvents};
+use ignite_core::ids::SessionId;
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{Error, Result};
 use ignite_store::local::cli_slots as store;
@@ -271,12 +272,8 @@ impl CliDaemon {
     /// resumes parked slots, so a slot parked for an end `decide` could not place would
     /// otherwise stay taken for good.
     ///
-    /// Left alone: a slot a CLI hold parked, which the hold's end resumes (its first turn may
-    /// not have run `ignite start` yet, so its session holds no ticket tree, and freeing it
-    /// would drop the hand-off); a slot with no ticket (a justiciar), left for a person; and a
-    /// state this build does not know, which only reads as parked. The row is written only if
-    /// it is still parked, and the session leaves the pool only if it was: the health loop
-    /// can resume the slot meanwhile.
+    /// A slot parked by a CLI hold gets its claim checked at the hub when the hold ends.
+    /// A slot with no ticket and an unrecognized slot state are left alone.
     pub(super) fn free_if_released(&self, row: &CliSlot) -> Result<()> {
         if row.state != SlotState::Parked.as_str()
             || super::health::parked_by_hold(row.park_reason.as_deref())
@@ -290,27 +287,30 @@ impl CliDaemon {
         if self.host.holders().get(session) == Some(ticket) {
             return Ok(());
         }
+        self.retire_slot(row, session)
+    }
+
+    /// Frees the slot and removes its pool member if the row is still in the state we checked.
+    /// The health loop can move a parked slot to backing off while we check its claim.
+    pub(super) fn retire_slot(&self, row: &CliSlot, session: &SessionId) -> Result<()> {
         let mut next = row.clone();
         SlotState::Free.as_str().clone_into(&mut next.state);
         next.since = Some(self.now().to_string());
         next.park_reason = None;
+        next.resume_at = None;
         next.next_prompt = None;
         next.fallback_prompt = None;
         freed(&mut next);
-        let written = self.database(|conn| {
+        self.database(|conn| {
             let transaction = conn.transaction()?;
             let current = store::by_session(&transaction, session.as_str())?;
-            let parked = current.is_some_and(|c| c.state == SlotState::Parked.as_str());
-            if parked {
+            if current.is_some_and(|c| c.state == row.state && c.turn == row.turn) {
                 store::put(&transaction, &next)?;
+                ignite_store::local::pool::remove(&transaction, session.as_str())?;
             }
             transaction.commit()?;
-            Ok(parked)
-        })?;
-        if written {
-            self.pool.remove(session)?;
-        }
-        Ok(())
+            Ok(())
+        })
     }
 }
 
