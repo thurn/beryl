@@ -188,7 +188,7 @@ protected = ["app", "ui-smoke", "clippy", "pyre", "ui-types", "source"]
 # from a session whose machine the hub could not name had no owner and went to any worker, and on
 # 2026-11-20 macOS work went to the Windows PC that way.
 [pool]
-default_owner = "jarvis/claude"
+default_owner = "jarvis/codex"
 # At this percentage of a Claude plan window, a machine stops handing out Claude tickets other
 # than those that hold `master` back, until a newer sample is lower or the window resets
 # (docs/ignite.md, "The pool"). When the plan ran out, every running worker failed mid-ticket.
@@ -203,7 +203,7 @@ opus = "claude-opus-5-5"
 sonnet = "claude-sonnet-5-5"
 light = "claude-sonnet-5-5"
 
-# Codex runs every tier on the model ID accepted by the desktop thread tool.
+# Codex runs every tier on GPT-6.2 Sol in both CLI and desktop mode.
 [pool.models.codex]
 opus = "gpt-6.2-sol"
 sonnet = "gpt-6.2-sol"
@@ -268,12 +268,9 @@ express_cores = 3
 # lane and the release build (docs/ignite.md, "Cores, memory and shared resources").
 tip_build_cores = 4
 
-# Claude workers run as headless CLI turns started by the daemon instead of desktop sessions, so
-# no dispatcher session has to stay alive and nothing but the daemon can leave the pool stuck.
-# `slots` is the number of Claude workers `ignite pool list` showed on this machine when the
-# switch was made (15). Codex stays in `desktop` mode here and on every other machine until its
-# probe turn passes; `ignite pool mode codex cli` switches it by hand.
-[machine.jarvis.pool.claude]
+# Jarvis runs headless Codex workers and offers their slots after the GPT-6.2 Sol probe passes.
+# Keep the 15 regular slots used by the previous Claude pool.
+[machine.jarvis.pool.codex]
 mode = "cli"
 slots = 15
 

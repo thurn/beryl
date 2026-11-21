@@ -3905,8 +3905,8 @@ that machine take it, such as `jarvis/claude` or `cygnus/codex`.
 - A ticket's owner is its own `owner` field or, when that is empty, its nearest
   ancestor's, so changing an epic's owner moves its tickets. A ticket with
   neither goes to the default owner, `[pool] default_owner` in `ignite.toml`
-  (`jarvis/claude` here). Only a hub with no default owner configured offers
-  such a ticket to any worker.
+  (`jarvis/codex` here). Only a hub with no default owner configured offers such
+  a ticket to any worker.
 - A ticket a person or a session files goes where its line's owner, or the
   default owner, says, whichever machine filed it. It reaches another machine
   only when it, or an ancestor, names that machine as its owner, with `--owner`
