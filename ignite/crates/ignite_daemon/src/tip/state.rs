@@ -30,6 +30,7 @@ use crate::server::Context;
 pub(super) struct Memory {
     since: Seq,
     settled: Option<Commit>,
+    fleet_version: Option<u64>,
     reported: Vec<ResultKey>,
     deferred: Vec<CheckName>,
     waiting_since: Vec<(Os, Timestamp)>,
@@ -89,12 +90,15 @@ impl TipVerifier {
         self
     }
 
+    pub(super) fn fleet_notice(&self) -> Option<ignite_core::fleet::FleetNotice> {
+        let saved = self.saved.as_ref()?;
+        let conn = saved.conn.lock().unwrap_or_else(PoisonError::into_inner);
+        crate::fleet_notice::read(&conn)
+    }
+
     pub(super) fn machine_is_off(&self) -> bool {
-        self.saved.as_ref().is_some_and(|saved| {
-            let conn = saved.conn.lock().unwrap_or_else(PoisonError::into_inner);
-            crate::fleet_notice::read(&conn)
-                .is_some_and(|notice| notice.state == ignite_core::fleet::MachineState::Off)
-        })
+        self.fleet_notice()
+            .is_some_and(|notice| notice.state == ignite_core::fleet::MachineState::Off)
     }
 
     pub(super) fn require_machine_on(&self) -> ignite_core::traits::Result<()> {
@@ -109,6 +113,7 @@ impl TipVerifier {
     fn restore(&mut self, memory: Memory) {
         self.since = memory.since;
         self.settled = memory.settled;
+        self.fleet_version = memory.fleet_version;
         self.reported = set(memory.reported);
         self.deferred = set(memory.deferred);
         self.waiting_since = memory.waiting_since.into_iter().collect::<BTreeMap<_, _>>();
@@ -129,6 +134,7 @@ impl TipVerifier {
         Memory {
             since: self.since,
             settled: self.settled.clone(),
+            fleet_version: self.fleet_version,
             reported: listed(self.reported.iter().cloned()),
             deferred: listed(self.deferred.iter().cloned()),
             waiting_since: self.waiting_since.iter().map(|(o, t)| (*o, *t)).collect(),

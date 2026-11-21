@@ -294,6 +294,7 @@
     let refreshing = false;
     let pendingTickets = new Set();
     let pendingStatus = false;
+    let pendingAttention = false;
     let resync = false;
 
     // An open editor (edit.js) holds back live updates until it closes and sends
@@ -356,15 +357,15 @@
 
     async function flushChanges() {
         if (refreshing || navigating || suspended || editing()) return;
-        const tickets = resync || (home() ? pendingTickets.size > 0 : [...pendingTickets].some(watching));
+        // Attention is at the top of the ticket board, outside the status panel.
+        const tickets = resync || (home()
+            ? pendingTickets.size > 0 || pendingAttention
+            : [...pendingTickets].some(watching));
         const status = home() && pendingStatus;
-        if (!tickets && !status) {
-            pendingTickets.clear();
-            pendingStatus = false;
-            return;
-        }
         pendingTickets.clear();
         pendingStatus = false;
+        pendingAttention = false;
+        if (!tickets && !status) return;
         const catchingUp = resync;
         const cursor = since;
         resync = false;
@@ -419,6 +420,7 @@
             if (tickets.length) pages.clear();
             for (const change of tickets) pendingTickets.add(change.ticket);
             pendingStatus ||= batch.changes.some((change) => change.kind !== "ticket");
+            pendingAttention ||= batch.changes.some((change) => change.kind === "attention");
         }
         flushChanges();
     }

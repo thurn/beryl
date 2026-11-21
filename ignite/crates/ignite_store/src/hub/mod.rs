@@ -33,6 +33,7 @@ pub mod schedules;
 pub mod session_titles;
 pub mod ticket_spend;
 pub mod tickets;
+pub mod tip_coverage;
 pub mod tip_misses;
 pub mod tip_rounds;
 pub mod tips;

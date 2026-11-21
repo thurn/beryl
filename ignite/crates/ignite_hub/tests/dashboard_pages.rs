@@ -658,3 +658,89 @@ fn an_epic_lists_its_milestones_in_plan_order() {
         assert!(at(pair[0]) < at(pair[1]), "{} before {}", pair[0], pair[1]);
     }
 }
+
+#[test]
+fn attention_names_the_first_tip_with_deferred_platform_checks() {
+    use ignite_core::config::Os;
+    use ignite_core::fleet::MachineState;
+    use ignite_core::ids::Commit;
+    use ignite_core::tipround::{DeferredPlatform, PlatformVerification, TipCoverageUpdate};
+    use ignite_store::hub::{fleet_settings, tip_coverage};
+
+    let mut dashboard = Hub {
+        conn: hub::open_in_memory().unwrap(),
+    };
+    dashboard
+        .conn
+        .execute(
+            "INSERT INTO machines (id, name, os, cores, memory_mb, families, version, last_seen)
+         VALUES ('m-c', 'cygnus', 'windows', 4, 4096, '[]', 'abc1234', ?1)",
+            [NOW],
+        )
+        .unwrap();
+    let now = Timestamp::parse(NOW).unwrap();
+    fleet_settings::set_machine_state(
+        &mut dashboard.conn,
+        "m-c",
+        MachineState::Off,
+        "operator",
+        now,
+    )
+    .unwrap();
+    let missing = PlatformVerification {
+        through: Commit::new("ccc1234").unwrap(),
+        deferred: Some(DeferredPlatform {
+            since: Commit::new("bbb1234").unwrap(),
+            last_good: Commit::new("aaa1234").unwrap(),
+        }),
+    };
+    let defer = TipCoverageUpdate {
+        platform: Os::Windows,
+        expected: None,
+        replacement: missing.clone(),
+    };
+    assert!(tip_coverage::update(&mut dashboard.conn, &defer).unwrap());
+    let warning = "windows checks have not run since bbb1234";
+    assert!(
+        dashboard
+            .text("/")
+            .contains(&format!("{warning}: cygnus is off"))
+    );
+
+    fleet_settings::set_machine_state(
+        &mut dashboard.conn,
+        "m-c",
+        MachineState::ChecksOnly,
+        "operator",
+        now,
+    )
+    .unwrap();
+    let unverified = "windows checks have been unverified since bbb1234";
+    assert!(dashboard.text("/").contains(unverified));
+    let before = hub::feed::current(&dashboard.conn).unwrap();
+    assert!(
+        tip_coverage::update(
+            &mut dashboard.conn,
+            &TipCoverageUpdate {
+                platform: Os::Windows,
+                expected: Some(missing.clone()),
+                replacement: PlatformVerification {
+                    through: missing.through,
+                    deferred: None
+                },
+            }
+        )
+        .unwrap()
+    );
+    assert!(!dashboard.text("/?fragment=all").contains(unverified));
+
+    let changes = hub::feed::since(&dashboard.conn, before, 20)
+        .unwrap()
+        .changes;
+    assert_eq!(changes.len(), 1);
+    assert_eq!(changes[0].kind, "attention");
+
+    // A deferred round that finished late must leave the successful verification in place.
+    assert!(!tip_coverage::update(&mut dashboard.conn, &defer).unwrap());
+    assert!(!dashboard.text("/?fragment=all").contains(unverified));
+}

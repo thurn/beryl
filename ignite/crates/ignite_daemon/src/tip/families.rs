@@ -24,6 +24,7 @@ use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use ignite_core::config::Os;
 use ignite_core::ids::{CheckName, Commit};
 use ignite_core::protocol::hub::TipClaim;
 use ignite_core::tipround::{self, TipCosts, TipCostsRequest};
@@ -53,6 +54,8 @@ struct Round<'a> {
     /// with work under way: the next round is what moves `master` now, and the checks left
     /// over are in the next tip's set.
     after_master: bool,
+    /// Platform-specific families claim separate batches on each operating system.
+    platforms: BTreeMap<&'a str, Os>,
     queue: Mutex<VecDeque<FamilyBatches>>,
     /// How many families have been started.
     started: Mutex<usize>,
@@ -127,7 +130,10 @@ impl Round<'_> {
     fn ask(&self, family: &str, batch: u32) -> bool {
         let claim = TipClaim {
             commit: self.tip.clone(),
-            family: family.to_owned(),
+            family: match self.platforms.get(family) {
+                Some(os) => format!("{family}@{os}"),
+                None => family.to_owned(),
+            },
             batch,
             machine: self.ctx.machine.clone(),
         };
@@ -189,6 +195,10 @@ impl TipVerifier {
             ctx,
             tip,
             after_master,
+            platforms: to_run
+                .iter()
+                .filter_map(|check| Some((check.family.as_str(), check.key.platform?)))
+                .collect(),
             queue: Mutex::new(by_family(batches(&self.listed, to_run, &costs)).into()),
             started: Mutex::new(0),
             in_flight: AtomicUsize::new(0),

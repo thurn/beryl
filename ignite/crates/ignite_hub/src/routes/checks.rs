@@ -27,7 +27,9 @@ use ignite_core::protocol::hub::{
 };
 use ignite_core::time::Timestamp;
 use ignite_store::StoreError;
-use ignite_store::hub::{checks, provider_usage, records, results, ticket_spend, tips};
+use ignite_store::hub::{
+    checks, provider_usage, records, results, ticket_spend, tip_coverage, tips,
+};
 
 use super::{Request, Response};
 use crate::upkeep::filing::Author;
@@ -40,10 +42,21 @@ const BILLION: f64 = 1e9;
 pub fn handle(conn: &mut Connection, request: &Request, now: Timestamp) -> Option<Response> {
     let (method, writes) = match request.path.as_str() {
         "/results/lookup" | "/landings/lookup" => ("POST", false),
-        "/checks/stats" | "/regressions/open" => ("GET", false),
-        "/results/store" | "/flaky" | "/tips/claim" | "/tips/verified" | "/regressions"
-        | "/reverted" | "/records" | "/metrics/import" | "/incomplete" | "/audits" | "/finds"
-        | "/justiciar" | "/tips/waiting" => ("POST", true),
+        "/checks/stats" | "/regressions/open" | "/tips/coverage" => ("GET", false),
+        "/results/store"
+        | "/flaky"
+        | "/tips/claim"
+        | "/tips/verified"
+        | "/regressions"
+        | "/reverted"
+        | "/records"
+        | "/metrics/import"
+        | "/incomplete"
+        | "/audits"
+        | "/finds"
+        | "/justiciar"
+        | "/tips/waiting"
+        | "/tips/coverage/update" => ("POST", true),
         _ => return None,
     };
     if request.method != method {
@@ -66,6 +79,18 @@ fn route(conn: &mut Connection, request: &Request, now: Timestamp) -> Result<Res
         }
         "/checks/stats" => stats(conn, request),
         "/regressions/open" => open_regressions(conn),
+        "/tips/coverage" => {
+            let coverage = tip_coverage::get(conn).map_err(|e| store_failure(&e))?;
+            Ok(Response::json(200, &json!(coverage)))
+        }
+        "/tips/coverage/update" => {
+            let updated =
+                tip_coverage::update(conn, &body(request)?).map_err(|error| match error {
+                    StoreError::Rejected(reason) => failure(409, &reason),
+                    other => store_failure(&other),
+                })?;
+            Ok(Response::json(200, &json!(updated)))
+        }
         "/tips/claim" => {
             let claim: TipClaim = body(request)?;
             let reply = tips::claim(conn, &claim, now).map_err(|e| store_failure(&e))?;

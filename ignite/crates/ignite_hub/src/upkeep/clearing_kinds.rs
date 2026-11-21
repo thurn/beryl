@@ -17,11 +17,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use rusqlite::{Connection, OptionalExtension, params};
 use serde_json::Value;
 
+use ignite_core::fleet::{FleetSettings, MachineState};
 use ignite_core::protocol::tickets::{Status, Ticket};
 use ignite_core::time::Timestamp;
 use ignite_core::tipround::{OVERHEAD_SHARE, TipRound};
 use ignite_store::Result;
-use ignite_store::hub::{fleet, rows, tickets, tip_rounds};
+use ignite_store::hub::{fleet, fleet_settings, rows, tickets, tip_rounds};
 
 use super::filing::{CHECKS_KEY, FAULT_KEY, SIGHTED_KEY, strings};
 use super::stuck::{self, StuckNow, TIP_WAIT_SECONDS};
@@ -89,6 +90,7 @@ impl Fault {
 pub struct World {
     stuck: StuckNow,
     machines: Vec<rows::Machine>,
+    settings: FleetSettings,
     /// Some tip has waited [`TIP_WAIT_SECONDS`] or more for verification.
     tip_waiting: bool,
     /// The machines that stored a check result in the last [`TIP_WAIT_SECONDS`].
@@ -112,6 +114,7 @@ impl World {
         Ok(World {
             stuck: stuck::stuck_now(conn, now)?,
             machines: fleet::machines(conn)?,
+            settings: fleet_settings::settings(conn)?,
             tip_waiting,
             working: stuck::working_machines(conn, now)?,
             master_lagging: justiciar::master_lagging(conn, now)?,
@@ -193,13 +196,23 @@ fn status_of(conn: &Connection, id: &str) -> Result<Option<Status>> {
 /// sighting, and either no tip has waited an hour since or the machine is running checks: it
 /// stored a result within the hour, so a tip waits only because a round takes long.
 fn unreachable(world: &World, subject: &str, sighted: Timestamp) -> Verdict {
-    if let Some(machine) = world.machines.iter().find(|machine| {
-        let named = match subject.strip_prefix("os:") {
+    let named = world
+        .machines
+        .iter()
+        .filter(|machine| match subject.strip_prefix("os:") {
             Some(os) => machine.os == os,
             None => machine.id == subject,
-        };
-        named && world.working.contains(&machine.id)
-    }) {
+        });
+    let on =
+        |machine: &&rows::Machine| world.settings.machine(&machine.name).state != MachineState::Off;
+    if named.clone().next().is_some() && !named.clone().any(|machine| on(&machine)) {
+        return Verdict::Cleared("the machines the tip waited on were turned off.".to_owned());
+    }
+    let mut enabled = named.filter(on);
+    if let Some(machine) = enabled
+        .clone()
+        .find(|machine| world.working.contains(&machine.id))
+    {
         return Verdict::Cleared(format!(
             "machine {} stored a check result within the hour, so it is running the tip's \
              checks.",
@@ -209,14 +222,8 @@ fn unreachable(world: &World, subject: &str, sighted: Timestamp) -> Verdict {
     if world.tip_waiting {
         return Verdict::Present;
     }
-    let back = world
-        .machines
-        .iter()
-        .filter(|machine| match subject.strip_prefix("os:") {
-            Some(os) => machine.os == os,
-            None => machine.id == subject,
-        })
-        .find(|machine| parse_time(&machine.last_seen).is_ok_and(|seen| seen > sighted));
+    let back =
+        enabled.find(|machine| parse_time(&machine.last_seen).is_ok_and(|seen| seen > sighted));
     match back {
         Some(machine) => Verdict::Cleared(format!(
             "machine {} reported at {} and no tip has waited an hour for verification since.",

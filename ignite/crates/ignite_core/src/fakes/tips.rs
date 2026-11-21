@@ -4,7 +4,9 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Mutex;
 
 use crate::ids::Commit;
-use crate::tipround::{TipCosts, TipCostsRequest, TipRound, TipRoundFiled};
+use crate::tipround::{
+    TipCosts, TipCostsRequest, TipCoverage, TipCoverageUpdate, TipRound, TipRoundFiled,
+};
 use crate::traits::Result;
 
 use super::{FakeHub, lock};
@@ -17,12 +19,34 @@ pub(super) struct FakeTips {
     /// The costs given for each tip and family, frozen at the first request.
     frozen: Mutex<HashMap<(Commit, String), TipCosts>>,
     rounds: Mutex<Vec<TipRound>>,
+    coverage: Mutex<TipCoverage>,
     /// The open improvement ticket a slow round filed, if any.
     open_ticket: Mutex<Option<String>>,
     filed: Mutex<u32>,
 }
 
 impl FakeHub {
+    pub fn set_tip_coverage(&self, coverage: TipCoverage) {
+        *lock(&self.tips.coverage) = coverage;
+    }
+
+    pub(super) fn fake_tip_coverage(&self) -> Result<TipCoverage> {
+        self.reachable()?;
+        Ok(lock(&self.tips.coverage).clone())
+    }
+
+    pub(super) fn fake_update_tip_coverage(&self, update: &TipCoverageUpdate) -> Result<bool> {
+        self.reachable()?;
+        let mut coverage = lock(&self.tips.coverage);
+        if coverage.platforms.get(&update.platform) != update.expected.as_ref() {
+            return Ok(false);
+        }
+        coverage
+            .platforms
+            .insert(update.platform, update.replacement.clone());
+        Ok(true)
+    }
+
     /// Records a check's cost in CPU seconds, as stored results do at the real hub.
     pub fn set_check_cost(&self, check: &str, cost: f64) {
         lock(&self.tips.check_costs).insert(check.to_owned(), cost);

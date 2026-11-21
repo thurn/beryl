@@ -5,7 +5,9 @@ use ignite_core::config::{Config, Os};
 use ignite_core::fakes::{FakeBuilds, FakeClock, FakeGit, FakeHub, FakeLauncher};
 use ignite_core::ids::{CheckName, Commit, InputHash, MachineId, RecordId, SessionId, TicketId};
 use ignite_core::protocol::Outcome;
-use ignite_core::protocol::hub::{IncompleteReason, Landed, NewResult, ResultKey, TipClaim};
+use ignite_core::protocol::hub::{
+    IncompleteReason, Landed, NewResult, ResultKey, TipClaim, TipState,
+};
 use ignite_core::protocol::tickets::LandedWork;
 use ignite_core::time::Timestamp;
 use ignite_core::tipround::UNMEASURED_BATCH;
@@ -703,6 +705,7 @@ fn an_output_path_in_a_cached_result_is_printed_and_not_opened() {
 }
 
 mod budget;
+mod coverage;
 mod culprit;
 mod green;
 mod memory;

@@ -2757,7 +2757,8 @@ How a daemon verifies a tip:
   waiting on that build, not as unreported.
 
 - A tip left waiting (for incomplete checks, or checks another machine holds) is
-  verified again after ten minutes, or at once when a newer tip arrives.
+  verified again after ten minutes, or at once when a newer tip arrives or fleet
+  settings change.
 
 - A round that has started runs to its end. When a newer tip arrives meanwhile,
   the round is not restarted: its results are cached by input, and the next
@@ -2768,8 +2769,10 @@ How a daemon verifies a tip:
   cache passed, the daemon moves `master` to the tip. A check switched off as
   flaky is not part of the set. An `incomplete` check, or one with a cached
   failure, holds `master`. So do checks only another platform's machines can
-  run, and families that cannot be listed: after the move no round would run
-  them.
+  run, and families that cannot be listed. When all registered machines on a
+  required platform are off, the round defers that platform's outstanding checks
+  and can move `master`. See
+  [Tip verification and machines that are off](#tip-verification-and-machines-that-are-off).
 
 - The same round then runs the checks past the budget, in the `tip` class, on
   whatever cores are free. A failure among them is reported as a regression,
@@ -4452,12 +4455,18 @@ choice can be explained in a sentence and every constant can be measured.
 
 ### Tip verification and machines that are off
 
-A tip round does not wait for checks that must pass on a platform all of whose
-machines are off. `master` moves without them, and `ignite status` and the
-dashboard's first line say since which commit that platform's checks have not
-run. When such a machine is switched back to active or checks only, its next
-round verifies the current tip, and a failure files a regression ticket as
-usual. The hub files no ticket about waiting for a machine that is off.
+A tip round defers outstanding checks that must pass separately on a platform
+when all its registered machines are off. After the other required checks pass,
+the hub records the deferral and `master` can move. `ignite status` and the
+dashboard's first line name the first tip with deferred checks, even if more
+tips advance while the platform is off.
+
+When a machine is switched back to active or checks only, its next round
+verifies the current tip, even if `master` already points to it. A failure files
+a regression ticket whose culprit search starts at the last commit before the
+first deferral. Once the platform verifies a tip, the warning clears. The hub
+skips filing wait tickets for off machines and closes existing tickets about
+waiting for them.
 
 ### Pool commands and dashboard
 

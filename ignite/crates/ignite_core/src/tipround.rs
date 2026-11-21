@@ -29,8 +29,61 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
+use crate::config::Os;
 use crate::ids::{CheckName, Commit, MachineId};
 use crate::time::Timestamp;
+
+/// The commits that bound a platform's unverified changes.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeferredPlatform {
+    /// The first tip ready to advance with a deferral.
+    pub since: Commit,
+    /// Where master was before that deferral, for the returning round's culprit search.
+    pub last_good: Commit,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlatformVerification {
+    pub through: Commit,
+    /// Empty when this platform verified the tip at `through`.
+    pub deferred: Option<DeferredPlatform>,
+}
+
+/// `GET /tips/coverage`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TipCoverage {
+    pub platforms: BTreeMap<Os, PlatformVerification>,
+    /// Machines on platforms where every registered machine is off.
+    pub off_machines: BTreeMap<Os, Vec<String>>,
+}
+
+impl TipCoverage {
+    pub fn warnings(&self) -> impl Iterator<Item = String> + '_ {
+        self.platforms
+            .iter()
+            .filter_map(|(platform, verification)| {
+                let gap = verification.deferred.as_ref()?;
+                let since = &gap.since;
+                Some(match self.off_machines.get(platform) {
+                    Some(machines) => {
+                        let names = machines.join(", ");
+                        let verb = if machines.len() == 1 { "is" } else { "are" };
+                        format!("{platform} checks have not run since {since}: {names} {verb} off")
+                    }
+                    None => format!("{platform} checks have been unverified since {since}"),
+                })
+            })
+    }
+}
+
+/// `POST /tips/coverage/update`: replace a platform's coverage only if it still matches the read.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TipCoverageUpdate {
+    pub platform: Os,
+    pub expected: Option<PlatformVerification>,
+    pub replacement: PlatformVerification,
+}
 
 /// How many checks the first claim of a family with no recorded cost holds. Each later claim
 /// of that family holds twice as many as the one before.

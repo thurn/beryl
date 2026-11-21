@@ -17,6 +17,10 @@ pub(super) struct FakeFleet {
 }
 
 impl FakeHub {
+    pub fn set_fleet_notice(&self, machine: MachineId, notice: FleetNotice) {
+        lock(&self.fleet.notices).insert(machine, notice);
+    }
+
     pub fn fleet_notice(&self, machine: &MachineId) -> Option<FleetNotice> {
         lock(&self.fleet.notices).get(machine).cloned()
     }

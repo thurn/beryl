@@ -1,7 +1,10 @@
 //! Versioned fleet settings and their change log.
 
+use std::collections::BTreeMap;
+
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 
+use ignite_core::config::Os;
 use ignite_core::fleet::{FleetChange, FleetSettings, MachineState, summary};
 use ignite_core::time::Timestamp;
 
@@ -20,6 +23,29 @@ pub enum PutOutcome {
 /// The current settings. Version zero means the fleet has yet to be seeded.
 pub fn settings(conn: &Connection) -> Result<FleetSettings> {
     Ok(meta::get(conn, KEY)?.unwrap_or_default())
+}
+
+/// Each platform with registered machines, all of which are explicitly off.
+pub fn off_machines(
+    conn: &Connection,
+    settings: &FleetSettings,
+) -> Result<BTreeMap<Os, Vec<String>>> {
+    let mut platforms: BTreeMap<Os, Vec<_>> = BTreeMap::new();
+    for machine in fleet::machines(conn)? {
+        let os = match machine.os.as_str() {
+            "macos" => Os::Macos,
+            "windows" => Os::Windows,
+            _ => continue,
+        };
+        platforms.entry(os).or_default().push(machine.name);
+    }
+    platforms.retain(|_, machines| {
+        machines.sort();
+        machines
+            .iter()
+            .all(|name| settings.machine(name).state == MachineState::Off)
+    });
+    Ok(platforms)
 }
 
 /// Applies a change and records it together, or returns the settings that replaced the

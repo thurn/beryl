@@ -283,7 +283,10 @@ impl Parts {
         self.start_loop("ignite-tip", TIP_STALLS_AFTER, move |ticker| {
             loop {
                 let round = ticker.round(|| match tips.turn(&ctx, wait_s) {
-                    Ok(Some((_, TipOutcome::Verified))) => {
+                    Ok(Some((
+                        _,
+                        TipOutcome::Verified | TipOutcome::VerifiedWithDeferrals { .. },
+                    ))) => {
                         if let Err(error) = update.after_master_moved() {
                             eprintln!("ignite: the new release was not built: {error}");
                         }

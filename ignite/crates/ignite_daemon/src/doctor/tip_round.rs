@@ -32,6 +32,10 @@ impl StatusSection for TipRoundSection {
             Ok(None) => "none recorded".to_owned(),
             Err(error) => format!("the hub did not answer: {error}"),
         }];
+        match self.hub.tip_coverage() {
+            Ok(coverage) => lines.extend(coverage.warnings()),
+            Err(error) => lines.push(format!("platform coverage: {error}")),
+        }
         if let Some(green) = &self.green {
             lines.push(green_line(green()));
         }
@@ -62,6 +66,35 @@ mod tests {
             green,
         }
         .lines()
+    }
+
+    #[test]
+    fn status_names_the_first_deferred_commit_and_off_machine() {
+        use ignite_core::config::Os;
+        use ignite_core::tipround::{DeferredPlatform, PlatformVerification, TipCoverage};
+
+        let hub = Arc::new(FakeHub::default());
+        hub.set_tip_coverage(TipCoverage {
+            platforms: [(
+                Os::Windows,
+                PlatformVerification {
+                    through: Commit::new("ccc1234").unwrap(),
+                    deferred: Some(DeferredPlatform {
+                        since: Commit::new("bbb1234").unwrap(),
+                        last_good: Commit::new("aaa1234").unwrap(),
+                    }),
+                },
+            )]
+            .into(),
+            off_machines: [(Os::Windows, vec!["cygnus".to_owned()])].into(),
+        });
+        assert_eq!(
+            TipRoundSection { hub, green: None }.lines(),
+            [
+                "none recorded",
+                "windows checks have not run since bbb1234: cygnus is off",
+            ]
+        );
     }
 
     #[test]

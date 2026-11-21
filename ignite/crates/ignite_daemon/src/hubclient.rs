@@ -37,7 +37,10 @@ use ignite_core::protocol::tickets::{
     BatchReply, BatchRequest, FeedBatch, ImportReply, ImportRequest, Lease, LeaseBusy, LeaseOp,
     LeaseReply, Ticket, TicketDetail, TicketQuery, WholeTicket,
 };
-use ignite_core::tipround::{LastTipRound, TipCosts, TipCostsRequest, TipRound, TipRoundFiled};
+use ignite_core::tipround::{
+    LastTipRound, TipCosts, TipCostsRequest, TipCoverage, TipCoverageUpdate, TipRound,
+    TipRoundFiled,
+};
 use ignite_core::traits::{Error, Hub, Result};
 
 use crate::update::IdentityFile;
@@ -527,6 +530,17 @@ impl Hub for HubClient {
 
     fn tip_claim(&self, claim: &TipClaim) -> Result<TipClaimReply> {
         self.post("/tips/claim", claim)
+    }
+
+    fn tip_coverage(&self) -> Result<TipCoverage> {
+        match self.get("/tips/coverage", &[]) {
+            Err(Error::NotFound(_)) => Ok(TipCoverage::default()),
+            reply => reply,
+        }
+    }
+
+    fn update_tip_coverage(&self, update: &TipCoverageUpdate) -> Result<bool> {
+        self.post("/tips/coverage/update", update)
     }
 
     fn tip_verified(&self, verified: &TipVerified) -> Result<()> {

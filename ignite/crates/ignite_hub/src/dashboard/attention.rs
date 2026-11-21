@@ -8,7 +8,7 @@ use rusqlite::Connection;
 
 use ignite_core::fleet::{FleetSettings, MachineState};
 use ignite_core::time::Timestamp;
-use ignite_store::hub::{fleet, fleet_settings};
+use ignite_store::hub::{fleet, fleet_settings, tip_coverage};
 
 use super::common::{SITE_ICONS, brand};
 use super::components::{self as c, Feed, PageOptions, Tone, esc};
@@ -314,6 +314,11 @@ pub fn items(
 ) -> Result<Vec<(Tone, String)>, ReadError> {
     let mut found = person_items(conn, root)?;
     let settings = fleet_settings::settings(conn)?;
+    found.extend(
+        tip_coverage::get(conn)?
+            .warnings()
+            .map(|line| (Tone::Amber, esc(&line))),
+    );
     found.extend(machine_items(conn, &settings, now)?);
     found.extend(usage_items(conn, now)?);
     found.extend(regression_items(conn, &settings, root, now)?);

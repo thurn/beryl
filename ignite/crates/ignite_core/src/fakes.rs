@@ -26,7 +26,9 @@ use crate::protocol::tickets::{
     TicketQuery, WholeTicket,
 };
 use crate::time::Timestamp;
-use crate::tipround::{TipCosts, TipCostsRequest, TipRound, TipRoundFiled};
+use crate::tipround::{
+    TipCosts, TipCostsRequest, TipCoverage, TipCoverageUpdate, TipRound, TipRoundFiled,
+};
 use crate::traits::{Clock, CommandSpec, Error, Hub, Launcher, Result, RunResult};
 
 mod builds;
@@ -554,6 +556,14 @@ impl Hub for FakeHub {
             granted,
             expires_at: None,
         })
+    }
+
+    fn tip_coverage(&self) -> Result<TipCoverage> {
+        self.fake_tip_coverage()
+    }
+
+    fn update_tip_coverage(&self, update: &TipCoverageUpdate) -> Result<bool> {
+        self.fake_update_tip_coverage(update)
     }
 
     fn tip_verified(&self, verified: &TipVerified) -> Result<()> {

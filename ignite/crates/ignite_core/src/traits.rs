@@ -27,7 +27,9 @@ use crate::protocol::tickets::{
     TicketDetail, TicketQuery, WholeTicket,
 };
 use crate::time::Timestamp;
-use crate::tipround::{TipCosts, TipCostsRequest, TipRound, TipRoundFiled};
+use crate::tipround::{
+    TipCosts, TipCostsRequest, TipCoverage, TipCoverageUpdate, TipRound, TipRoundFiled,
+};
 
 /// Why an operation behind one of these traits failed.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -407,6 +409,14 @@ pub trait Hub: Send + Sync {
     fn tip_claim(&self, claim: &TipClaim) -> Result<TipClaimReply>;
     /// Sets a tip's verification state (`POST /tips/verified`).
     fn tip_verified(&self, verified: &TipVerified) -> Result<()>;
+    /// The platforms' verification coverage (`GET /tips/coverage`).
+    fn tip_coverage(&self) -> Result<TipCoverage> {
+        Ok(TipCoverage::default())
+    }
+    /// Updates coverage, with `false` when another round changed it (`POST /tips/coverage/update`).
+    fn update_tip_coverage(&self, _update: &TipCoverageUpdate) -> Result<bool> {
+        Err(not_supported("update tip coverage"))
+    }
     /// Reports a regression; the hub files or reopens its ticket (`POST /regressions`).
     fn regression(&self, report: &RegressionReport) -> Result<RegressionFiled>;
     /// Every check with an open regression and the open ticket that holds it, including checks

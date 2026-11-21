@@ -124,6 +124,7 @@ impl TipVerifier {
         tip: &Commit,
         check: &TipCheck,
         output: Option<&str>,
+        allow_revert: bool,
     ) -> Result<()> {
         if !check.runnable || self.reported.contains(&check.key) {
             return Ok(());
@@ -159,7 +160,7 @@ impl TipVerifier {
             format!("the landings could not be read: {error}")
         });
         // A build check broken by one landing is reverted instead, when `revert` allows it.
-        if let Ok(Some(found)) = &culprit {
+        if allow_revert && let Ok(Some(found)) = &culprit {
             match self.try_revert(ctx, tip, check, found, output) {
                 Handled::Reverted => {
                     self.reported.insert(check.key.clone());

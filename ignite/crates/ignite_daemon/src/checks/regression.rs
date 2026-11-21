@@ -66,7 +66,7 @@ impl Checks {
                 family: name.to_owned(),
                 message,
                 reportable,
-                platforms: other_platforms(family, reportable),
+                platforms: required_platforms(family),
             };
             if let Some((_, output)) = run.incomplete_families.iter().find(|(f, _)| f == name) {
                 set.unlisted.push(unlisted(format!(
@@ -104,7 +104,7 @@ impl Checks {
                         broken.message.as_deref().unwrap_or_default()
                     ),
                     reportable: runs_here,
-                    platforms: other_platforms(family, runs_here),
+                    platforms: required_platforms(family),
                 });
             }
             // Without the hub's record every check counts as on, which can only hold `master`
@@ -171,12 +171,10 @@ impl Checks {
     }
 }
 
-/// The operating systems whose machines can run a family this machine does not run: those it
-/// names, when it names some. Empty for a family that runs here, whose trouble is this
-/// machine's own, and for a family that passes on any platform.
-fn other_platforms(family: &Family, runs_here: bool) -> Vec<Os> {
+/// The operating systems that each need a pass, or an empty list for a portable family.
+fn required_platforms(family: &Family) -> Vec<Os> {
     match &family.platforms {
-        Platforms::Each(list) if !runs_here => list.clone(),
-        _ => Vec::new(),
+        Platforms::Each(list) => list.clone(),
+        Platforms::Any(_) => Vec::new(),
     }
 }

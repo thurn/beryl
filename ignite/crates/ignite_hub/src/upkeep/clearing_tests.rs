@@ -704,3 +704,28 @@ fn a_loop_ticket_closes_once_an_edge_of_the_loop_is_removed() {
     let reason = ticket(&conn, &repair).close_reason.unwrap();
     assert!(reason.contains("no longer wait on one another"), "{reason}");
 }
+
+#[test]
+fn turning_off_a_machine_closes_its_waiting_ticket_while_the_tip_still_waits() {
+    use ignite_core::fleet::MachineState;
+    use ignite_store::hub::fleet_settings;
+
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    let mut upkeep = Upkeep::new(None).unwrap();
+    fleet::register(&conn, &machine("m-2", "multivac"), clock.now()).unwrap();
+    clock.advance(60.0);
+    tips::seen(&conn, "abcd", clock.now()).unwrap();
+    clock.advance(3_700.0);
+    let waiting = upkeep.pass(&mut conn, clock.now()).unwrap().tickets_filed;
+    assert_eq!(waiting.len(), 1);
+
+    fleet_settings::set_machine_state(&mut conn, "m-2", MachineState::Off, "operator", clock.now())
+        .unwrap();
+    assert_eq!(
+        passes(&mut conn, &mut upkeep, &clock, 2.0 * HOLD_SECONDS),
+        waiting
+    );
+    let reason = ticket(&conn, &waiting[0]).close_reason.unwrap();
+    assert!(reason.contains("turned off"), "{reason}");
+}

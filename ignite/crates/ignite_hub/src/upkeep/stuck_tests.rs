@@ -484,3 +484,62 @@ fn a_tip_waiting_on_a_family_no_machine_runs_files_a_ticket_naming_it() {
     );
     assert!(filed.body.contains("families"), "{}", filed.body);
 }
+
+#[test]
+fn upkeep_skips_waiting_tickets_for_an_off_platform() {
+    use super::{filing::UPKEEP, stuck};
+    use ignite_core::config::Os;
+    use ignite_core::fleet::MachineState;
+    use ignite_core::ids::{CheckName, Commit, MachineId};
+    use ignite_core::protocol::hub::{MachineRegister, TipWaiting};
+
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    hub::fleet::register(
+        &conn,
+        &MachineRegister {
+            machine: MachineId::new("m-w").unwrap(),
+            name: "cygnus".to_owned(),
+            os: Os::Windows,
+            cores: 4,
+            memory_mb: 4096,
+            families: Vec::new(),
+            version: "abc1234".to_owned(),
+        },
+        clock.now(),
+    )
+    .unwrap();
+    hub::fleet_settings::set_machine_state(
+        &mut conn,
+        "m-w",
+        MachineState::Off,
+        "operator",
+        clock.now(),
+    )
+    .unwrap();
+
+    clock.advance(60.0);
+    let tip = Commit::new("abcd").unwrap();
+    hub::tips::seen(&conn, tip.as_str(), clock.now()).unwrap();
+    clock.advance(3_700.0);
+    let waiting = TipWaiting {
+        commit: tip,
+        machine: MachineId::new("m-m").unwrap(),
+        platform: Os::Windows,
+        checks: vec![CheckName::new("app:smoke").unwrap()],
+        waited_s: 3_700.0,
+        unrunnable: Vec::new(),
+    };
+
+    assert!(
+        stuck::tips_waiting(&mut conn, clock.now())
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        stuck::tip_waiting(&mut conn, UPKEEP, &waiting, clock.now())
+            .unwrap()
+            .is_empty()
+    );
+    assert!(all_tickets(&conn, clock.now()).is_empty());
+}

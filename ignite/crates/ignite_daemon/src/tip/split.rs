@@ -77,6 +77,7 @@ impl TipVerifier {
         tip: &Commit,
         to_run: &[&'a TipCheck],
         recheck: &[&'a TipCheck],
+        catching_up: bool,
     ) -> Split<'a> {
         let builds = self.build_families(ctx);
         let is_build = |check: &&TipCheck| builds.contains(&check.family);
@@ -84,7 +85,7 @@ impl TipVerifier {
             to_run.iter().copied().partition(is_build);
         let (build_recheck, recheck): (Vec<&TipCheck>, Vec<&TipCheck>) =
             recheck.iter().copied().partition(is_build);
-        let mut split = self.split_rest(ctx, last, tip, &to_run, &recheck);
+        let mut split = self.split_rest(ctx, last, tip, &to_run, &recheck, catching_up);
         split.build = build;
         split.build_recheck = build_recheck;
         split
@@ -98,6 +99,7 @@ impl TipVerifier {
         tip: &Commit,
         to_run: &[&'a TipCheck],
         recheck: &[&'a TipCheck],
+        catching_up: bool,
     ) -> Split<'a> {
         let unbudgeted = || Split {
             build: Vec::new(),
@@ -108,7 +110,7 @@ impl TipVerifier {
             budget: None,
             after_keys: HashSet::new(),
         };
-        if to_run.is_empty() && recheck.is_empty() {
+        if catching_up || (to_run.is_empty() && recheck.is_empty()) {
             return unbudgeted();
         }
         let asked: Vec<&TipCheck> = to_run.iter().chain(recheck).copied().collect();
@@ -175,7 +177,7 @@ impl TipVerifier {
                 continue;
             }
             let output = run.output.clone();
-            if let Err(error) = self.blame(ctx, last, tip, check, output.as_deref()) {
+            if let Err(error) = self.blame(ctx, last, tip, check, output.as_deref(), true) {
                 eprintln!(
                     "ignite: regression of {} not reported: {error}",
                     check.check

@@ -705,3 +705,52 @@ fn a_check_only_known_from_a_stored_result_is_registered_and_can_be_switched_off
         "uncached"
     );
 }
+
+#[test]
+fn tip_coverage_accepts_a_deferral_only_while_its_platform_is_off() {
+    use ignite_core::config::Os;
+    use ignite_core::fleet::MachineState;
+    use ignite_core::protocol::hub::MachineRegister;
+
+    let hub = TestHub::start("coverage");
+    let machine = MachineId::new("m-w").unwrap();
+    hub::fleet::register(
+        &hub.conn.lock().unwrap(),
+        &MachineRegister {
+            machine: machine.clone(),
+            name: "cygnus".to_owned(),
+            os: Os::Windows,
+            cores: 4,
+            memory_mb: 4096,
+            families: Vec::new(),
+            version: "abc1234".to_owned(),
+        },
+        at(50.0),
+    )
+    .unwrap();
+    let defer = json!({
+        "platform": "windows",
+        "expected": null,
+        "replacement": {
+            "through": "bbb1234",
+            "deferred": { "since": "bbb1234", "last_good": "aaa1234" },
+        }
+    });
+    let update = "/tips/coverage/update";
+    assert_eq!(hub.send("POST", update, Some(&defer), false).0, 401);
+    assert_eq!(hub.send("POST", update, Some(&defer), true).0, 409);
+
+    hub::fleet_settings::set_machine_state(
+        &mut hub.conn.lock().unwrap(),
+        machine.as_str(),
+        MachineState::Off,
+        "operator",
+        at(60.0),
+    )
+    .unwrap();
+    assert_eq!(hub.post(update, &defer), json!(true));
+    let (status, coverage) = hub.send("GET", "/tips/coverage", None, false);
+    assert_eq!(status, 200);
+    assert_eq!(coverage["platforms"]["windows"], defer["replacement"]);
+    assert_eq!(coverage["off_machines"]["windows"], json!(["cygnus"]));
+}

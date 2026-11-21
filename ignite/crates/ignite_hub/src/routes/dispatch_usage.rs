@@ -1,12 +1,11 @@
 //! The hub's provider holds for dispatch and heartbeat replies.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use rusqlite::Connection;
 
-use ignite_core::config::Os;
 use ignite_core::dispatch::{Handoff, ReadyTicket, label};
-use ignite_core::fleet::{FleetNotice, MachineState};
+use ignite_core::fleet::FleetNotice;
 use ignite_core::plan_usage::{Hold, model_for_tier};
 use ignite_core::protocol::hub::{IdleWorker, MachineFree};
 use ignite_core::time::Timestamp;
@@ -21,26 +20,15 @@ pub(super) fn notice(conn: &Connection, machine: &str, now: Timestamp) -> Result
     let settings = fleet_settings::settings(conn)?;
     let name = fleet::name_of(conn, machine)?.unwrap_or_else(|| machine.to_owned());
     let machine = settings.machine(&name);
-    let mut platforms = BTreeSet::new();
-    let mut enabled_platforms = BTreeSet::new();
-    for known in fleet::machines(conn)? {
-        let os = match known.os.as_str() {
-            "macos" => Os::Macos,
-            "windows" => Os::Windows,
-            _ => continue,
-        };
-        platforms.insert(os);
-        if settings.machine(&known.name).state != MachineState::Off {
-            enabled_platforms.insert(os);
-        }
-    }
     Ok(FleetNotice {
         version: settings.version,
         state: machine.state,
         state_actor: fleet_settings::state_actor(conn, &name)?,
         disk_cap_gb: machine.disk_cap_gb,
         holds: provider_usage::held(conn, &settings, now)?,
-        off_platforms: &platforms - &enabled_platforms,
+        off_platforms: fleet_settings::off_machines(conn, &settings)?
+            .into_keys()
+            .collect(),
     })
 }
 

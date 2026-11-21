@@ -21,6 +21,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use rusqlite::{Connection, params};
 
+use ignite_core::fleet::MachineState;
 use ignite_core::ids::{CheckName, TicketId};
 use ignite_core::pins::machine_label;
 use ignite_core::protocol::hub::{AuditReport, CheckState, TipWaiting};
@@ -29,7 +30,7 @@ use ignite_core::protocol::tickets::{
 };
 use ignite_core::time::Timestamp;
 use ignite_store::Result;
-use ignite_store::hub::{checks, fleet, session_titles, tickets};
+use ignite_store::hub::{checks, fleet, fleet_settings, session_titles, tickets};
 
 use super::filing::{self, Author, Filed, Filing, UPKEEP};
 use super::regressions::OUTPUT_LINES;
@@ -116,7 +117,11 @@ pub fn tips_waiting(conn: &mut Connection, now: Timestamp) -> Result<Vec<Filed>>
     };
     let seen = parse_time(&seen)?;
     let mut filed = Vec::new();
+    let settings = fleet_settings::settings(conn)?;
     for machine in fleet::machines(conn)? {
+        if settings.machine(&machine.name).state == MachineState::Off {
+            continue;
+        }
         let last_seen = parse_time(&machine.last_seen)?;
         if last_seen >= seen {
             continue;
@@ -154,6 +159,17 @@ pub fn tips_waiting(conn: &mut Connection, now: Timestamp) -> Result<Vec<Filed>>
 /// How many of a waiting tip's checks its ticket lists by name.
 const LISTED_CHECKS: usize = 20;
 
+fn listed_checks(checks: &[CheckName]) -> String {
+    let mut checks: Vec<&str> = checks.iter().map(CheckName::as_str).collect();
+    let more = checks.len().saturating_sub(LISTED_CHECKS);
+    checks.truncate(LISTED_CHECKS);
+    let mut listed = checks.join("\n- ");
+    if more > 0 {
+        listed = format!("{listed}\n- and {more} more");
+    }
+    listed
+}
+
 /// Files one ticket for each machine running the platform a tip has waited an hour for, or one
 /// saying no such machine is registered, or, when the report names families no machine of the
 /// platform runs, one naming those families. A machine shares its ticket with [`tips_waiting`], so
@@ -166,14 +182,12 @@ pub fn tip_waiting(
     report: &TipWaiting,
     now: Timestamp,
 ) -> Result<Vec<Filed>> {
-    let os = report.platform.as_str();
-    let mut checks: Vec<&str> = report.checks.iter().map(CheckName::as_str).collect();
-    let more = checks.len().saturating_sub(LISTED_CHECKS);
-    checks.truncate(LISTED_CHECKS);
-    let mut listed = checks.join("\n- ");
-    if more > 0 {
-        listed = format!("{listed}\n- and {more} more");
+    let settings = fleet_settings::settings(conn)?;
+    if fleet_settings::off_machines(conn, &settings)?.contains_key(&report.platform) {
+        return Ok(Vec::new());
     }
+    let os = report.platform.as_str();
+    let listed = listed_checks(&report.checks);
     let waited = format!(
         "Tip {} has waited {:.0} minutes for checks that only a {os} machine can run, and \
          `master` stays where it is until they pass. Machine {} is waiting.",
@@ -184,7 +198,9 @@ pub fn tip_waiting(
     let labels = vec!["fleet".to_owned()];
     let machines: Vec<_> = fleet::machines(conn)?
         .into_iter()
-        .filter(|machine| machine.os == os)
+        .filter(|machine| {
+            machine.os == os && settings.machine(&machine.name).state != MachineState::Off
+        })
         .collect();
     let working = working_machines(conn, now)?;
     let filings: Vec<Filing> = if !report.unrunnable.is_empty() {
