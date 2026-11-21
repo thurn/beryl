@@ -15,7 +15,7 @@ use game_play::sound;
 use serde_json::Value;
 
 use super::options::{self, Options, Usage, seat_word, side_of};
-use super::{Printed, open};
+use super::{Printed, open_recording};
 use crate::{pack, pages, recordings, runner};
 
 /// The switch that prints every recording and seat to a file.
@@ -121,7 +121,7 @@ pub(super) fn timeline(options: &Options) -> Result<Printed, Usage> {
         return all(options);
     }
     // Opens the page to check the name and the seat, with the same messages as `info` gives.
-    open(options)?;
+    open_recording(options)?;
     let mut out = format!("{}\n", options.command_line());
     for text in lines(options.name(), options.seat, options.layout)? {
         let _ = writeln!(out, "{text}");

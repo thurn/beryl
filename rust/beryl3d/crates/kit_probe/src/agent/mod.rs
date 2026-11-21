@@ -5,6 +5,7 @@
 pub mod checks;
 pub mod fault;
 pub mod judged;
+pub mod line;
 pub mod locate;
 pub mod text_overlap;
 pub mod tree;

@@ -14,18 +14,20 @@ mod film;
 mod font;
 mod pixels;
 mod sample;
+mod scene;
 
 use std::fmt::Write;
 use std::io::Write as _;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use beryl_host::{Headless, Scans};
+use beryl_host::Scans;
 use beryl_inspect::cli::{self, Options, Ran, Spec, Usage, options};
 use beryl_inspect::recordings;
 use kit_probe::agent::{TreeOptions, tree};
 use kit_scene::hit::is_within;
 use kit_ui::input::Rect;
+use scene::{PictureScene, SceneHost};
 
 /// Why a command did not draw: its command line was wrong, or the machine could not.
 pub(crate) enum Error {
@@ -317,10 +319,15 @@ fn help(command: &Command) -> String {
 
 /// The recording `options` names, played in the window, seat and tier they give, with a
 /// renderer made with full limits, which draws the Enhanced tier where the GPU allows it.
-pub(crate) fn open(options: &Options) -> Result<Headless, Error> {
-    let page = cli::open(options)?.with_tier(options.tier);
-    Headless::new(page, options.size.width, options.size.height, &Scans::app())
-        .map_err(|why| Error::Failed(format!("no GPU to draw with: {why}")))
+pub(crate) fn open(options: &Options) -> Result<SceneHost, Error> {
+    let scene = cli::open(options)?.with_tier(options.tier);
+    SceneHost::new(
+        PictureScene(scene),
+        options.size.width,
+        options.size.height,
+        &Scans::app(),
+    )
+    .map_err(|why| Error::Failed(format!("no GPU to draw with: {why}")))
 }
 
 /// The directory pictures are written to, `$BERYL_CACHE/b3d/out`, which is made if needed.
@@ -397,7 +404,7 @@ pub(crate) fn cut(pixels: &[u8], stride: u32, region: Region) -> Vec<u8> {
 }
 
 /// The element `locator` names in the present frame, as a box around it.
-pub(crate) fn crop_of(head: &mut Headless, locator: &str, scale: f32) -> Result<Region, Usage> {
+pub(crate) fn crop_of(head: &mut SceneHost, locator: &str, scale: f32) -> Result<Region, Usage> {
     let size = head.size();
     let element = head
         .page()

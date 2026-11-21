@@ -216,6 +216,21 @@ impl Layer {
         }
     }
 
+    /// The screen's kept node ids, in the element tree's depth-first order.
+    pub fn element_ids(&self) -> Vec<ElementId> {
+        fn visit(node: &Node, ids: &mut Vec<ElementId>) {
+            ids.push(node.id);
+            for child in &node.children {
+                visit(child, ids);
+            }
+        }
+        let mut ids = Vec::new();
+        if let Some(screen) = &self.screen {
+            visit(screen, &mut ids);
+        }
+        ids
+    }
+
     /// Whether a screen is shown: false until the first `show` of one, and after `show(None)`.
     #[must_use]
     pub fn showing(&self) -> bool {

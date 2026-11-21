@@ -32,3 +32,5 @@ mod screens;
 mod specs;
 mod stress;
 mod tiers;
+
+mod stories;

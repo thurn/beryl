@@ -77,7 +77,10 @@ fn plantings() -> Vec<Planting> {
     let tests: Vec<Test> = runner::tests("", Windows::Desktop)
         .expect("the recordings pack opens")
         .into_iter()
-        .filter(|test| beryl_inspect::stress::Board::parse(&test.recording).is_none())
+        .filter(|test| {
+            !test.recording.starts_with("story/")
+                && beryl_inspect::stress::Board::parse(&test.recording).is_none()
+        })
         .collect();
     let mut random = Random(SEED);
     let mut drawn: Vec<usize> = Vec::new();

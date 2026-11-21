@@ -37,7 +37,7 @@ pub use frames::{
     Chosen, Draw, Feed, FrameLoop, NoFeed, Opened, Opening, Shown, Sleep, Ticked, Ticks, When,
 };
 #[cfg(feature = "headless")]
-pub use headless::Headless;
+pub use headless::{Headless, HeadlessPage};
 pub use inbox::Inbox;
 pub use phone::{Phone, Wakeup};
 pub use threads::{

@@ -159,7 +159,7 @@ fn element(body: &str) -> Result<Element, String> {
 }
 
 /// The name up to its closing quote, unescaped, and what follows it.
-fn quoted_name(text: &str) -> Option<(String, &str)> {
+pub(crate) fn quoted_name(text: &str) -> Option<(String, &str)> {
     let mut name = String::new();
     let mut escaped = false;
     for (at, c) in text.char_indices() {

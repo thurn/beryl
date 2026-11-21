@@ -12,5 +12,7 @@ pub mod pack;
 pub mod pages;
 pub mod recordings;
 pub mod runner;
+pub mod scene;
 pub mod screens;
+mod stories;
 pub mod stress;

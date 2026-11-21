@@ -7,6 +7,7 @@
 pub mod card;
 pub mod light;
 pub mod particles;
+pub mod preview;
 pub mod shake;
 
 use beryl_protocol::script::Subject;
@@ -106,4 +107,18 @@ pub struct EffectRun {
     pub duration: u64,
     pub curve: Curve,
     pub step: usize,
+}
+
+impl EffectRun {
+    /// Runs one effect on the preview's single surface, using the same drawing code as play.
+    fn preview(effect: Effect, duration: u64) -> Self {
+        Self {
+            effect,
+            on: Subject::Ability { id: 0 },
+            start: 0,
+            duration,
+            curve: Curve::LINEAR,
+            step: 0,
+        }
+    }
 }

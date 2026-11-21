@@ -8,7 +8,7 @@
 
 mod check;
 mod corpus;
-pub mod line;
+pub use kit_probe::agent::line;
 mod listing;
 pub mod options;
 mod records;
@@ -23,7 +23,8 @@ use app_client::driver::{Moment, Page};
 pub use options::{Options, Spec, Tier, Usage};
 pub use view::position_line;
 
-use crate::{pages, recordings};
+use crate::scene::Scene;
+use crate::{pages, recordings, stories};
 
 /// What a command printed and the status it exits with: 0 when it ran, 1 when a check found a
 /// fault, 2 when the command line was wrong, and 3 when the recordings pack is missing
@@ -413,7 +414,28 @@ fn help(command: &Command) -> String {
 }
 
 /// The recording `options` names, in the window, seat and scale they give, at its start.
-pub fn open(options: &Options) -> Result<Page, Usage> {
+pub fn open(options: &Options) -> Result<Scene, Usage> {
+    if options.name().starts_with(stories::PREFIX) {
+        Scene::open(
+            options.name(),
+            options.seat,
+            options.layout,
+            options.size,
+            options.scale,
+        )
+        .map_err(Usage)
+    } else {
+        open_recording(options).map(|page| Scene::Recording(Box::new(page)))
+    }
+}
+
+fn open_recording(options: &Options) -> Result<Page, Usage> {
+    if options.name().starts_with(stories::PREFIX) {
+        return Err(Usage(format!(
+            "{} reads a recording; use tree, check, png or film with a toolkit story",
+            options.command
+        )));
+    }
     options::known(options.name(), options.seat)?;
     let page = pages::page(options.name(), options.seat, options.layout, options.size);
     let page = page.map_err(Usage)?.with_scale(options.scale);
@@ -426,7 +448,7 @@ pub fn open(options: &Options) -> Result<Page, Usage> {
 ///
 /// When the recording has no such moment, or the moment lies past the recording's end; the
 /// message names the moments it has.
-pub fn time_of(page: &mut Page, options: &Options, moment: &Moment) -> Result<u64, Usage> {
+pub fn time_of(page: &mut Scene, options: &Options, moment: &Moment) -> Result<u64, Usage> {
     let info = format!("`just b3d info {}` lists its moments", options.name());
     let time = page
         .time_of(moment)
@@ -450,7 +472,7 @@ pub fn time_of(page: &mut Page, options: &Options, moment: &Moment) -> Result<u6
 ///
 /// When the moment is wrong (see [`time_of`]), or an action's locator names no single
 /// uncovered element.
-pub fn seek_and_act(page: &mut Page, options: &Options, moment: &Moment) -> Result<(), Usage> {
+pub fn seek_and_act(page: &mut Scene, options: &Options, moment: &Moment) -> Result<(), Usage> {
     let time = time_of(page, options, moment)?;
     page.seek(&Moment::At(app_client::driver::Duration(time)))
         .map_err(|error| Usage(error.to_string()))?;
@@ -458,7 +480,7 @@ pub fn seek_and_act(page: &mut Page, options: &Options, moment: &Moment) -> Resu
 }
 
 /// Does each of `options`' actions in order.
-pub fn act(page: &mut Page, options: &Options) -> Result<(), Usage> {
+pub fn act(page: &mut Scene, options: &Options) -> Result<(), Usage> {
     for action in &options.actions {
         page.try_act(action)
             .map_err(|error| Usage(format!("--do: {error}")))?;

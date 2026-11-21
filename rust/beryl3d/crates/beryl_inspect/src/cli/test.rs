@@ -521,7 +521,7 @@ fn log(outcomes: &[Outcome], failing: &BTreeSet<String>) {
 
 /// The error for a prefix no test's name starts with, naming the nearest recordings.
 fn nothing_matches(prefix: &str) -> Result<Usage, Usage> {
-    let names = crate::recordings::names().map_err(Usage)?;
+    let names = crate::scene::names(prefix.trim_start_matches(runner::PREFIX)).map_err(Usage)?;
     let mut unique: Vec<&str> = names.iter().map(|(n, _)| n.as_str()).collect();
     unique.dedup();
     let wanted = runner::full_name(prefix);

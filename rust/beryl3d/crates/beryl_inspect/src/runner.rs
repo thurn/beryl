@@ -108,10 +108,20 @@ impl Outcome {
 /// When the pack cannot be built or read.
 pub fn tests(filter: &str, windows: Windows) -> Result<Vec<Test>, String> {
     let filter = full_name(filter);
-    let windows = windows.windows();
+    let prefix = filter.strip_prefix(PREFIX).unwrap_or_default();
+    let recording_windows = windows.windows();
     let mut tests = Vec::new();
-    for (recording, seat) in recordings::names()? {
-        for window in &windows {
+    for (recording, seat) in crate::scene::names(prefix)? {
+        let story_windows = recording.starts_with(crate::stories::PREFIX).then(|| {
+            let layout = crate::stories::open(&recording)
+                .map_or(Layout::Desktop, |story| story.header.layout);
+            match (layout, windows) {
+                (Layout::Desktop, Windows::Phone) => Vec::new(),
+                (Layout::Desktop, _) => Windows::Desktop.windows(),
+                (Layout::Phone, _) => Windows::Phone.windows(),
+            }
+        });
+        for window in story_windows.as_deref().unwrap_or(&recording_windows) {
             let test = Test {
                 recording: recording.clone(),
                 seat: side_of(seat),
@@ -156,7 +166,11 @@ pub fn run_until(tests: &[Test], mode: Mode, stop: Option<Instant>) -> Vec<Outco
             Side::You => Seat::P0,
             Side::Opponent => Seat::P1,
         };
-        std::cmp::Reverse(recordings::weight(&test.recording, seat))
+        std::cmp::Reverse(if test.recording.starts_with(crate::stories::PREFIX) {
+            usize::MAX
+        } else {
+            recordings::weight(&test.recording, seat)
+        })
     });
     let mut outcomes: Vec<Option<Outcome>> = (0..tests.len()).map(|_| None).collect();
     let played = each(&order, |&at| {
@@ -172,7 +186,21 @@ pub fn run_until(tests: &[Test], mode: Mode, stop: Option<Instant>) -> Vec<Outco
 /// Plays one test.
 fn play(test: Test, mode: Mode) -> Outcome {
     let started = Instant::now();
-    let ran = caught(|| test.page().map(|mut page| page.check_all(mode))).and_then(|ran| ran);
+    let ran = caught(|| {
+        if test.recording.starts_with(crate::stories::PREFIX) {
+            crate::scene::Scene::open(
+                &test.recording,
+                test.seat,
+                test.layout(),
+                test.size,
+                test.scale,
+            )
+            .map(|mut scene| scene.check_all(mode))
+        } else {
+            test.page().map(|mut page| page.check_all(mode))
+        }
+    })
+    .and_then(|ran| ran);
     let (faults, frames, judged, error) = match ran {
         Ok(checked) => {
             let mut judged = checked.judged;

@@ -1,6 +1,7 @@
 //! Actions and moments a driver reads from text.
 
 mod action;
+pub mod atlas;
 mod moment;
 
 pub use action::{Action, KeyChord, key_code, point};

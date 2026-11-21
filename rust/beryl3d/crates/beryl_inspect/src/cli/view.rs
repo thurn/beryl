@@ -3,13 +3,15 @@
 use std::collections::BTreeMap;
 use std::fmt::Write;
 
-use app_client::driver::{Duration, Moment, Name, Offset, Page};
+use app_client::driver::{Duration, Moment, Name, Offset};
 use kit_frame::frame::{Frame, Role};
 use kit_probe::agent::fault::rect_text;
 use kit_probe::agent::tree::{line as tree_line, place_word};
 use kit_probe::agent::{TreeOptions, tree as tree_text};
 use kit_scene::hit::bounds;
 use serde_json::{Value, json};
+
+use crate::scene::Scene;
 
 use super::line::{Element, Line};
 use super::options::{Options, Usage};
@@ -20,10 +22,13 @@ const MOST_CHANGES: usize = 60;
 
 /// The line `tree` prints under the command: where in the recording the page is and how many
 /// elements are on screen, as `view 6 of 36, t=1500ms, animating, 48 elements`.
-pub fn position_line(page: &mut Page) -> String {
+pub fn position_line(page: &mut Scene) -> String {
     let (view, views, animating) = page.position();
     let now = page.now();
     let elements = page.frame().resolved.len();
+    if matches!(page, Scene::Story(_)) {
+        return format!("story, t={}ms, {elements} elements", milliseconds(now));
+    }
     let state = if animating { "animating" } else { "at rest" };
     format!(
         "view {view} of {views}, t={}ms, {state}, {elements} elements",
@@ -89,7 +94,7 @@ const FRAME_NANOSECONDS: u64 = 1_000_000_000 / 60;
 /// `view_given_ms` is when the client was given the latest view, and `views_given_ms` when each
 /// view so far was given. With `--to`, one such object a line for each frame from `--at` to that
 /// moment, 1/60 s apart, each with its `frame` number and its time `t_ms` to the microsecond.
-fn records(page: &mut Page, options: &Options) -> Result<Printed, Usage> {
+fn records(page: &mut Scene, options: &Options) -> Result<Printed, Usage> {
     page.set_looking(true);
     let Some(to) = options.value("--to") else {
         return Ok(Printed::text(format!(
@@ -124,7 +129,7 @@ fn records(page: &mut Page, options: &Options) -> Result<Printed, Usage> {
 
 /// The present moment's records as `tree --records` prints them; `frame`, for a frame of a
 /// span, adds its number and its exact time.
-fn record_value(page: &mut Page, options: &Options, frame: Option<u64>) -> Value {
+fn record_value(page: &mut Scene, options: &Options, frame: Option<u64>) -> Value {
     let (view, views, animating) = page.position();
     let now = page.now();
     let given = page.view_given_at();

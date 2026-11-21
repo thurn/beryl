@@ -22,15 +22,43 @@ const NOWHERE: Origins<'static> = Origins {
     backs: "http://127.0.0.1:9",
 };
 
-/// A recording played for one seat in one window, and the renderer that draws it.
-pub struct Headless {
-    page: Page,
+/// A scene that can supply frames and receive the assets they need.
+pub trait HeadlessPage: Sized {
+    #[must_use]
+    fn with_host_atlas(self) -> Self;
+    fn scale(&self) -> f32;
+    fn frame(&mut self) -> &Frame;
+    fn prepare_assets(&mut self, assets: &mut Assets, renderer: &mut Renderer);
+}
+
+impl HeadlessPage for Page {
+    fn with_host_atlas(self) -> Self {
+        self.with_host_atlas()
+    }
+
+    fn scale(&self) -> f32 {
+        self.scale()
+    }
+
+    fn frame(&mut self) -> &Frame {
+        self.frame()
+    }
+
+    fn prepare_assets(&mut self, assets: &mut Assets, renderer: &mut Renderer) {
+        let (client, atlas) = self.host_assets();
+        assets.settle(client, renderer, |ready| atlas.push(ready));
+    }
+}
+
+/// A scene played in one window, and the renderer that draws it.
+pub struct Headless<P = Page> {
+    page: P,
     renderer: Renderer,
     target: Target,
     assets: Assets,
 }
 
-impl Headless {
+impl<P: HeadlessPage> Headless<P> {
     /// Draws `page`, whose window is `width` by `height` logical points, at the page's scale
     /// ([`Page::with_scale`]), with its card faces read from `scans`. Its glyphs and icons are
     /// rasterized at that scale, as the desktop host's are, so a picture at scale 2 shows what a
@@ -39,7 +67,7 @@ impl Headless {
     /// # Errors
     ///
     /// When there is no GPU adapter or device.
-    pub fn new(page: Page, width: f32, height: f32, scans: &Scans) -> Result<Self, String> {
+    pub fn new(page: P, width: f32, height: f32, scans: &Scans) -> Result<Self, String> {
         let page = page.with_host_atlas();
         let scale = page.scale();
         let mut renderer = Renderer::headless(Limits::Default)?;
@@ -56,13 +84,12 @@ impl Headless {
 
     fn prepare(&mut self) {
         self.page.frame();
-        let (client, atlas) = self.page.host_assets();
-        self.assets
-            .settle(client, &mut self.renderer, |delivery| atlas.push(delivery));
+        self.page
+            .prepare_assets(&mut self.assets, &mut self.renderer);
     }
 
-    /// The recording being played, to read or to act on.
-    pub fn page(&mut self) -> &mut Page {
+    /// The scene being played, to read or to act on.
+    pub fn page(&mut self) -> &mut P {
         &mut self.page
     }
 
@@ -70,15 +97,6 @@ impl Headless {
     #[must_use]
     pub fn size(&self) -> (u32, u32) {
         (self.target.width, self.target.height)
-    }
-
-    /// Moves the recording to `moment`.
-    ///
-    /// # Errors
-    ///
-    /// When the recording has no such moment.
-    pub fn seek(&mut self, moment: &Moment) -> Result<(), DriverError> {
-        self.page.seek(moment)
     }
 
     /// The frame at the present moment, as the client builds it.
@@ -131,5 +149,16 @@ impl Headless {
         let frame = self.page.frame();
         self.renderer.render(frame, &mut self.target);
         self.renderer.write_png(&self.target, path)
+    }
+}
+
+impl Headless<Page> {
+    /// Moves the recording to `moment`.
+    ///
+    /// # Errors
+    ///
+    /// When the recording has no such moment.
+    pub fn seek(&mut self, moment: &Moment) -> Result<(), DriverError> {
+        self.page.seek(moment)
     }
 }

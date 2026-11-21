@@ -2927,6 +2927,14 @@ These four are written one way everywhere.
   action. A drive script is a file of them. The running app's socket reads them.
   The test driver's methods have the same names.
 
+### Toolkit stories
+
+`just b3d list story/` lists the scenes authored in the toolkit crates. Their
+names work with `tree`, `info`, `diff`, `png`, `film`, `check` and `test`. A
+story's header gives its default size and layout. The interface tests check each
+story in its profile's windows. See the
+[story grammar](../rust/beryl3d/crates/kit_probe/AGENTS.md#toolkit-stories).
+
 ### What is printed
 
 The tree's first line is the command that prints it again, and its second says

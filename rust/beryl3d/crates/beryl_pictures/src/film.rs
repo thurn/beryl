@@ -2,7 +2,7 @@
 
 use std::fmt::Write;
 
-use beryl_host::Headless;
+use crate::scene::SceneHost;
 use beryl_inspect::cli::{self, Options, Usage};
 use game_probe::driver::{Duration, Moment, Name, Offset};
 use kit_frame::frame::StateBits;
@@ -135,11 +135,11 @@ fn frame_width(options: &Options) -> Result<Option<u32>, Usage> {
 /// Plays the recording to `from` and acts, then runs the clock to each of `times` and calls
 /// `visit` with the frame's index.
 fn walk(
-    head: &mut Headless,
+    head: &mut SceneHost,
     options: &Options,
     from: &Moment,
     times: &[u64],
-    mut visit: impl FnMut(&mut Headless, u64, usize) -> Result<(), Error>,
+    mut visit: impl FnMut(&mut SceneHost, u64, usize) -> Result<(), Error>,
 ) -> Result<(), Error> {
     cli::seek_and_act(head.page(), options, from)?;
     for (index, &time) in times.iter().enumerate() {
@@ -151,7 +151,7 @@ fn walk(
 }
 
 /// What is moving in the present frame, as a line's text.
-fn moving(head: &mut Headless) -> String {
+fn moving(head: &mut SceneHost) -> String {
     let frame = head.frame();
     let names: Vec<String> = frame
         .resolved

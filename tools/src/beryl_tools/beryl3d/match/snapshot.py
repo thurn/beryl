@@ -576,7 +576,11 @@ def test_targets(prefix: str, at: str) -> list[Target] | None:
         printed = compare.b3d(["test", "--all", "--list", *phone])
         if printed is None:
             return None
-        names += [name for name in printed.split() if name.startswith(prefix)]
+        names += [
+            name
+            for name in printed.split()
+            if name.startswith(prefix) and not name.startswith("b3d:story/")
+        ]
     if not names:
         print(f"match: no test's name starts with {prefix!r}", file=sys.stderr)
         return None

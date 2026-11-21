@@ -10,8 +10,8 @@ use kit_probe::agent::tree::locator_of;
 use serde_json::{Value, json};
 
 use super::options::{self, Options, Usage, quote, seat_word, side_of};
-use super::{Printed, milliseconds, open};
-use crate::recordings;
+use super::{Printed, milliseconds, open, open_recording};
+use crate::{scene, stories};
 
 /// How many moments `info` prints before it cuts the rest, unless `--full`, so that with its
 /// header and its closing lines it prints at most 100.
@@ -30,9 +30,9 @@ pub(super) fn list(options: &Options) -> Result<Printed, Usage> {
             )));
         }
     };
-    let listed = recordings::list(prefix).map_err(Usage)?;
+    let listed = scene::list(prefix).map_err(Usage)?;
     if listed.is_empty() {
-        let names = recordings::names().map_err(Usage)?;
+        let names = scene::names(prefix).map_err(Usage)?;
         let mut unique: Vec<&str> = names.iter().map(|(n, _)| n.as_str()).collect();
         unique.dedup();
         return Err(Usage(format!(
@@ -61,6 +61,9 @@ pub(super) fn list(options: &Options) -> Result<Printed, Usage> {
         return Ok(Printed::text(format!("{value}\n")));
     }
     let mut out = format!("{}\n", options.command_line());
+    let includes_story = listed
+        .iter()
+        .any(|row| row.name.starts_with(stories::PREFIX));
     let shown = if options.switch("--full") {
         listed.len()
     } else {
@@ -74,6 +77,10 @@ pub(super) fn list(options: &Options) -> Result<Printed, Usage> {
     for row in &listed[..shown] {
         let seat = format!("--seat {}", seat_word(side_of(row.seat)));
         let length = match (&row.failure, row.length_ms) {
+            (Some(why), _) if row.name.starts_with(stories::PREFIX) => why.clone(),
+            (None, Some(ms)) if row.name.starts_with(stories::PREFIX) => {
+                format!("{ms}ms, toolkit story")
+            }
             (Some(why), _) => format!("not recorded: {why}"),
             (None, Some(ms)) => format!("{ms}ms, {} views", row.views),
             (None, None) => format!("does not play, {} views", row.views),
@@ -94,8 +101,13 @@ pub(super) fn list(options: &Options) -> Result<Printed, Usage> {
     }
     let _ = writeln!(
         out,
-        "{} recordings. `just b3d info <name>` lists one's moments.",
-        listed.len()
+        "{} {}. `just b3d info <name>` lists one's moments.",
+        listed.len(),
+        if includes_story {
+            "scenes"
+        } else {
+            "recordings"
+        }
     );
     Ok(Printed::text(out))
 }
@@ -110,7 +122,10 @@ struct Listed {
 }
 
 pub(super) fn info(options: &Options) -> Result<Printed, Usage> {
-    let mut page = open(options)?;
+    if options.name().starts_with(stories::PREFIX) {
+        return story_info(options);
+    }
+    let mut page = open_recording(options)?;
     let moments = page.moments();
     let steps = page.steps();
     let views = moments
@@ -272,4 +287,30 @@ fn prompt_rows(page: &mut Page, prompts: &[(Name, u64)]) -> Result<Vec<Listed>, 
         });
     }
     Ok(listed)
+}
+
+fn story_info(options: &Options) -> Result<Printed, Usage> {
+    let mut page = open(options)?;
+    let moments = page.moments();
+    if options.json {
+        let rows: Vec<Value> = moments
+            .iter()
+            .map(|(name, at)| json!({ "moment": name.to_string(), "t_ms": milliseconds(at.0) }))
+            .collect();
+        let checks: Vec<u64> = page.check_times().into_iter().map(milliseconds).collect();
+        let end = moments.last().map_or(0, |(_, at)| milliseconds(at.0));
+        return Ok(Printed::text(format!(
+            "{}\n",
+            json!({
+                "command": options.command_line(), "recording": options.name(),
+                "views": 0, "prompts": 0, "steps": 0, "end_ms": end,
+                "moments": rows, "check_times_ms": checks,
+            })
+        )));
+    }
+    let mut out = format!("{}\n", options.command_line());
+    for (name, at) in moments {
+        let _ = writeln!(out, "{name}  {}ms", milliseconds(at.0));
+    }
+    Ok(Printed::text(out))
 }

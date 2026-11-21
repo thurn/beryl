@@ -13,7 +13,7 @@ use beryl_assets::glyphs::{GlyphWorker, prepare_latin};
 use beryl_assets::{Config, FULL_LAYERS, Format, Full, Prepared, Preparer, default_workers};
 use beryl_render::Renderer;
 use kit_frame::frame::Wake;
-use kit_ui::input::{AssetReady, FaceId, FaceSize};
+use kit_ui::input::{AssetReady, FaceId, FaceSize, GlyphKey};
 
 use crate::frames::When;
 
@@ -226,8 +226,26 @@ impl Assets {
         }
     }
 
+    /// Waits for a toolkit scene's glyphs and icons, then delivers the assets uploaded
+    /// to the renderer. The scene supplies its scale and glyph requests directly.
+    #[cfg(feature = "headless")]
+    pub fn settle_glyphs(
+        &mut self,
+        renderer: &mut Renderer,
+        scale: f32,
+        wanted: impl IntoIterator<Item = GlyphKey>,
+        deliver: impl FnMut(AssetReady),
+    ) {
+        self.request_glyphs(scale, wanted);
+        self.glyphs.flush();
+        self.upload_glyphs(renderer, deliver);
+    }
+
     fn request_text(&mut self, client: &mut Client) {
-        let scale = client.surface_scale();
+        self.request_glyphs(client.surface_scale(), client.wanted_glyphs());
+    }
+
+    fn request_glyphs(&mut self, scale: f32, wanted: impl IntoIterator<Item = GlyphKey>) {
         if self
             .scale
             .is_none_or(|previous| (scale - previous).abs() > f32::EPSILON)
@@ -236,7 +254,7 @@ impl Assets {
             self.glyphs.icons(scale);
             self.glyphs.prepare(prepare_latin(scale));
         }
-        self.glyphs.request(client.wanted_glyphs());
+        self.glyphs.request(wanted);
     }
 
     fn upload_text(
@@ -245,10 +263,16 @@ impl Assets {
         renderer: &mut Renderer,
         mut delivered: impl FnMut(&AssetReady),
     ) {
+        self.upload_glyphs(renderer, |ready| {
+            delivered(&ready);
+            client.handle(Input::Assets(ready));
+        });
+    }
+
+    fn upload_glyphs(&self, renderer: &mut Renderer, mut deliver: impl FnMut(AssetReady)) {
         for prepared in self.pages.try_iter() {
             if renderer.upload_page(&prepared) {
-                delivered(&prepared.ready);
-                client.handle(Input::Assets(prepared.ready));
+                deliver(prepared.ready);
             }
         }
     }

@@ -3,12 +3,13 @@
 //! button, a glyph record for each glyph a page holds (`text::write_block`), and the boxes of
 //! the text's lines. It reads only what `Client::handle` laid out, and allocates nothing.
 
+mod layer;
+
 use std::borrow::Cow;
 
 use glam::{Affine3A, Vec2, Vec3};
 
 use super::edit::Marks;
-use super::float::Float;
 use super::panel::{Chain, look_of, mask_of, panel, write_box, write_mask};
 use super::shadows::write_icon_shadows;
 use super::{Layer, Node, text_top};
@@ -22,7 +23,7 @@ use kit_base::geometry::{
 use kit_base::tokens::color;
 use kit_frame::frame::text::{BlockLook, faded, write_block};
 use kit_frame::frame::{
-    Band, Draw, FrameBuilder, Missing, NameRef, Place, Resolved, Role, StateBits,
+    Band, Draw, ElementId, FrameBuilder, Missing, NameRef, Place, Resolved, Role, StateBits,
 };
 use kit_text::text;
 
@@ -64,6 +65,12 @@ fn children(node: &Node, departing: bool) -> impl Iterator<Item = (&Node, bool)>
         .chain(node.children.iter().map(move |child| (child, departing)))
 }
 
+#[derive(Clone, Copy)]
+struct Drawing<'a, Preview> {
+    camera: &'a ScreenPlane,
+    preview: Preview,
+}
+
 /// Whether `element`, drawn as `look` in `rect`, takes a press. An element scrolled out of its
 /// clip cannot be pressed, and one wholly transparent, as at the first frame it fades in, cannot
 /// be seen to be. A text field takes a press, which gives it the focus, though it has no `Press`.
@@ -77,111 +84,6 @@ fn takes_press(element: &Element, look: &Look<'_>, rect: Rect) -> bool {
 }
 
 impl Layer {
-    /// Writes the flat layer into `builder`, on the plane `camera` puts in front of the table:
-    /// the floats drawn under the screen (`FloatId::under_screen`), the screen, leaving out what
-    /// waits for the table to settle (`Element::waits`) unless the layer is `open`, then every
-    /// other float, then the screen's children that filter what is drawn under them
-    /// (`over_floats`).
-    pub fn write(&self, builder: &mut FrameBuilder, camera: &ScreenPlane, open: bool) {
-        self.write_with(builder, camera, open, None);
-    }
-
-    /// `write`, drawing each face an element shows (`Shown::Face`) from the layers `faces`
-    /// gives it. With no faces, such an element draws no face.
-    pub fn write_with(
-        &self,
-        builder: &mut FrameBuilder,
-        camera: &ScreenPlane,
-        open: bool,
-        faces: Option<&FaceLayers<'_>>,
-    ) {
-        let write_float = |float: &Float, builder: &mut FrameBuilder| {
-            let rect = float.node.rect;
-            let corner = float.corner();
-            let zoom = Zoom::around(
-                corner + Vec2::new(rect.width, rect.height) / 2.0,
-                float.look.scale,
-            );
-            let camera = camera.with_zoom(zoom);
-            let look = Look {
-                point: float.corner(),
-                opacity: float.look.opacity,
-                tint: float.look.tint,
-                clip: None,
-                passes: false,
-                faces,
-                filters: Chain::default(),
-                open,
-                zoom,
-                departing: false,
-            };
-            self.write_node(&float.node, u32::MAX, true, look, builder, &camera);
-        };
-        // Two passes over the floats rather than a partition, which would allocate every frame.
-        for float in (self.floats.iter()).filter(|float| float.id.under_screen()) {
-            write_float(float, builder);
-        }
-        let mut screen = None;
-        let roots = self
-            .departing
-            .iter()
-            .map(|node| (node, true))
-            .chain(self.screen.iter().map(|node| (node, false)));
-        for (node, departing) in roots {
-            let point = match node.element.anchor {
-                Some(_) => node.corner(),
-                None => Some(Vec2::ZERO),
-            };
-            if let Some(point) = point {
-                let look = Look {
-                    point,
-                    opacity: 1.0,
-                    tint: None,
-                    clip: None,
-                    passes: false,
-                    faces,
-                    filters: Chain::default(),
-                    open,
-                    zoom: Zoom::IDENTITY,
-                    departing,
-                };
-                let written = self.write_node(node, u32::MAX, true, look, builder, camera);
-                if !departing {
-                    screen = written.map(|index| (node, index));
-                }
-            }
-        }
-        for float in (self.floats.iter()).filter(|float| !float.id.under_screen()) {
-            write_float(float, builder);
-        }
-        let Some((node, index)) = screen else {
-            return;
-        };
-        for (child, departing) in children(node, false)
-            .filter(|(child, _)| over_floats(child) && (open || !child.element.waits))
-        {
-            let Some(point) = child.corner() else {
-                continue;
-            };
-            if !departing {
-                builder.backdrop(&child.element.style.filter, self.window.scale);
-            }
-            let look = Look {
-                point,
-                opacity: node.opacity(),
-                tint: None,
-                clip: None,
-                passes: node.element.style.passes,
-                faces,
-                filters: Chain::default().inner(own_filter(&node.element)),
-                open,
-                zoom: Zoom::IDENTITY,
-                departing,
-            };
-            self.write_node(child, index, false, look, builder, camera);
-        }
-    }
-
     /// How far a refused press shakes `node` across the screen (`Layer::shake`): every element
     /// that takes that press moves, with what is under it.
     fn shake_of(&self, node: &Node) -> Vec2 {
@@ -206,7 +108,7 @@ impl Layer {
         top: bool,
         mut look: Look<'_>,
         builder: &mut FrameBuilder,
-        camera: &ScreenPlane,
+        drawing: Drawing<'_, impl Fn(ElementId) -> StateBits + Copy>,
     ) -> Option<u32> {
         if node.element.style.display == Display::None || (node.element.waits && !look.open) {
             return None;
@@ -217,7 +119,8 @@ impl Layer {
         look.point += node.translation();
         look.filters = look.filters.inner(own_filter(&node.element));
         let element = &node.element;
-        let mut state = self.state(node);
+        let mut state = StateBits(self.state(node).0 | (drawing.preview)(node.id).0);
+        let camera = drawing.camera;
         if look.passes {
             state.0 |= StateBits::PASSES;
         }
@@ -298,7 +201,13 @@ impl Layer {
             }
             inside.point -= node.scroll;
         }
-        self.write_children(node, (index, top), inside, builder, camera);
+        self.write_children(
+            node,
+            (index, top),
+            inside,
+            builder,
+            Drawing { camera, ..drawing },
+        );
         Some(index)
     }
 
@@ -309,7 +218,7 @@ impl Layer {
         (index, top): (u32, bool),
         inside: Look<'_>,
         builder: &mut FrameBuilder,
-        camera: &ScreenPlane,
+        drawing: Drawing<'_, impl Fn(ElementId) -> StateBits + Copy>,
     ) {
         for (child, departing) in children(node, inside.departing) {
             // `write_with` writes these after the floats.
@@ -328,7 +237,7 @@ impl Layer {
                 look.point = corner;
                 look.clip = None;
             }
-            self.write_node(child, index, false, look, builder, camera);
+            self.write_node(child, index, false, look, builder, drawing);
         }
     }
 

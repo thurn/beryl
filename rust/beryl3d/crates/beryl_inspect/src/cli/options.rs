@@ -16,7 +16,7 @@ use beryl_protocol::protocol::Side;
 use kit_probe::agent::Layout;
 use kit_ui::input::Size;
 
-use crate::recordings;
+use crate::{recordings, stories};
 
 /// Why a command line cannot be run. Its message says what was expected; the program exits
 /// with status 2.
@@ -138,6 +138,7 @@ impl Options {
         };
         let mut positional = Vec::new();
         let mut at = 0;
+        let mut layout_given = false;
         while at < args.len() {
             let arg = &args[at];
             at += 1;
@@ -175,6 +176,7 @@ impl Options {
                 String::new()
             };
             options.set(flag, value, takes_value)?;
+            layout_given |= flag == "--layout";
         }
         let mut positional = positional.into_iter();
         if spec.recording {
@@ -186,7 +188,15 @@ impl Options {
                     "{command} needs a recording's name; `just b3d list` lists them"
                 )));
             };
-            options.recording = Some(options.test_name(&name)?);
+            let scene = options.test_name(&name)?;
+            if scene.starts_with(stories::PREFIX) && !name.starts_with("b3d:") && !layout_given {
+                let header = stories::open(&scene).map_err(Usage)?.header;
+                if !options.sized {
+                    options.size = header.window;
+                }
+                options.layout = header.layout;
+            }
+            options.recording = Some(scene);
         }
         options.rest = positional.collect();
         Ok(options)
@@ -230,6 +240,8 @@ impl Options {
             let _ = write!(out, " --seat {}", self.seat_word());
             if self.layout == Layout::Phone {
                 out.push_str(" --layout phone");
+            } else if name.starts_with(stories::PREFIX) {
+                out.push_str(" --layout desktop");
             }
             let _ = write!(out, " --size {}", size_text(self.size));
             if (self.scale - 1.0).abs() > f32::EPSILON {
