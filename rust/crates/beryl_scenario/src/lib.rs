@@ -93,6 +93,10 @@ pub struct Position {
     pub graveyard_cards: [usize; 2],
     /// Bottom first.
     pub stack: Vec<StackItem>,
+    /// The card the topmost ability returns directly to the battlefield. Its own entry
+    /// replacement may ask a question while that ability resolves.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub returning: Option<&'static str>,
     /// At the question of a new target for a copy of a spell, the target the copy has now,
     /// which Beryl offers first ([CR 707.10c]): "The player may leave any number of the targets
     /// unchanged". An oracle asks whether to change it before it asks for the new one.

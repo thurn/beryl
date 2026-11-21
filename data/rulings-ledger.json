@@ -222,7 +222,12 @@
     {
       "published_at": "2021-03-19",
       "hash": "8737e516e828",
-      "untestable": "The Opalescence scenario covers a noncreature entering as a creature. by-ptc7.2.12 tracks the converse: Beryl exiles an uncast Clever Impersonator before it can copy a noncreature permanent."
+      "scenario": [
+        "an enchantment Opalescence would make a creature is exiled",
+        "a creature entering as a noncreature copy returns through Containment Priest",
+        "a creature entering as a creature copy is exiled by Containment Priest",
+        "a creature declining to copy is exiled by Containment Priest"
+      ]
     }
   ],
   "Crystal Spray": [

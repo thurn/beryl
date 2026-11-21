@@ -31,7 +31,42 @@ pub mod scenarios {
 
     const PRIEST: &str = Card::ContainmentPriest;
     const WISP: &str = Card::Flickerwisp;
+    const IMPERSONATOR: &str = Card::CleverImpersonator;
     const SPIRIT_TOKEN: &str = "Spirit Token";
+
+    const fn flicker_impersonator(name: &'static str) -> Scenario {
+        const PERMANENTS: &[Permanent] = &[
+            // XMage adds setup counters in the first main phase. Keep the 0/0 alive until then.
+            Permanent::new(Card::GloriousAnthem),
+            Permanent::new(IMPERSONATOR).counters(CounterKind::PlusOne, 1),
+            Permanent::new(Prop::Equipment),
+            Permanent::new(Card::Plains),
+            Permanent::new(Card::Plains),
+            Permanent::new(Card::Plains),
+        ];
+        Scenario::new(name)
+            .interaction(&[WISP, IMPERSONATOR, Card::GloriousAnthem])
+            .permanents(P0, PERMANENTS)
+            .hand(P0, &[WISP])
+            .battlefield(P1, &[Prop::Vanilla, PRIEST])
+            .library(P0, &[Card::Plains])
+            .library(P1, &[Card::Plains])
+    }
+
+    const fn flicker_and_choose(choice: Action, after: &[Action; 2]) -> [Action; 10] {
+        [
+            ME.casts(WISP),
+            Resolve,
+            ME.targets(IMPERSONATOR),
+            Resolve,
+            ME.has(Zone::Exile, IMPERSONATOR, 1),
+            advance_to(1, TurnStep::End),
+            Resolve,
+            choice,
+            after[0],
+            after[1],
+        ]
+    }
 
     pub const SCENARIOS: &[Scenario] = &[
         // The Priest is the opponent's, and replaces every player's creatures entering. Flickerwisp
@@ -98,6 +133,46 @@ pub mod scenarios {
                 THEM.controls(Card::GloriousAnthem, 0),
                 THEM.has(Zone::Exile, Card::GloriousAnthem, 1),
             ]),
+        flicker_impersonator(
+            "a creature entering as a noncreature copy returns through Containment Priest",
+        )
+        .actions(
+            &const {
+                flicker_and_choose(
+                    ME.picks_up_to(Prop::Equipment),
+                    &[
+                        ME.controls(Prop::Equipment, 2),
+                        ME.has(Zone::Exile, IMPERSONATOR, 0),
+                    ],
+                )
+            },
+        ),
+        flicker_impersonator(
+            "a creature entering as a creature copy is exiled by Containment Priest",
+        )
+        .actions(
+            &const {
+                flicker_and_choose(
+                    ME.picks_up_to(Prop::Vanilla),
+                    &[
+                        ME.controls(Prop::Vanilla, 0),
+                        ME.has(Zone::Exile, IMPERSONATOR, 1),
+                    ],
+                )
+            },
+        ),
+        flicker_impersonator("a creature declining to copy is exiled by Containment Priest")
+            .actions(
+                &const {
+                    flicker_and_choose(
+                        ME.done_picking(),
+                        &[
+                            ME.controls(IMPERSONATOR, 0),
+                            ME.has(Zone::Exile, IMPERSONATOR, 1),
+                        ],
+                    )
+                },
+            ),
         // The Priest is not on the battlefield as it returns, so its ability does not exile it.
         Scenario::new("Containment Priest returning is not exiled by itself")
             .interaction(&[WISP])

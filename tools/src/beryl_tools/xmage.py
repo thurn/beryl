@@ -571,10 +571,11 @@ class Exporter:
             if self.last_answer != (source, kind):
                 self.emit(f'setOptionalChoice({who}, {self.at(p)}, "No");')
         self.last_answer = (source, kind)
+        copy_source = p.returning or source
         if (
             kind == "ChooseUpTo"
-            and source is not None
-            and self.cards.enters_as_copy(source)
+            and copy_source is not None
+            and self.cards.enters_as_copy(copy_source)
         ):
             # XMage asks whether to copy, then which permanent.
             if card is None:

@@ -278,5 +278,26 @@
     "scenario": "Animate Dead can't attach to a creature with protection from black",
     "cr": "CR 702.16c (https://yawgatog.com/resources/magic-rules/#R70216c): \"A permanent or player with protection can't be enchanted by Auras that have the stated quality. Such Auras attached to the permanent or player with protection will be put into their owners' graveyards as a state-based action. (See rule 704, 'State-Based Actions.')\"",
     "reason": "In the XMage scenario, Animate Dead is absent immediately after the Aura spell resolves. It can enchant White Knight in the graveyard. Protection from black stops the Aura from enchanting the Knight once it is a permanent."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Containment Priest",
+    "scenario": "a creature entering as a noncreature copy returns through Containment Priest",
+    "cr": "CR 616.1c (https://yawgatog.com/resources/magic-rules/#R6161c): \"If any of the replacement and/or prevention effects would cause an object to become a copy of another object as it enters the battlefield, one of them must be chosen. If not, proceed to rule 616.1d.\"",
+    "reason": "XMage checks the uncopied card for Containment Priest and exiles it before asking about Clever Impersonator's copy effect. Choosing Leonin Scimitar should make the incoming permanent a noncreature and let it enter."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Containment Priest",
+    "scenario": "a creature entering as a creature copy is exiled by Containment Priest",
+    "cr": "CR 616.1c (https://yawgatog.com/resources/magic-rules/#R6161c): \"If any of the replacement and/or prevention effects would cause an object to become a copy of another object as it enters the battlefield, one of them must be chosen. If not, proceed to rule 616.1d.\"",
+    "reason": "XMage exiles the uncopied Clever Impersonator without offering the copy choice. The controller should be allowed to choose the creature copy before Containment Priest exiles it."
+  },
+  {
+    "oracle": "xmage",
+    "card": "Containment Priest",
+    "scenario": "a creature declining to copy is exiled by Containment Priest",
+    "cr": "CR 616.1c (https://yawgatog.com/resources/magic-rules/#R6161c): \"If any of the replacement and/or prevention effects would cause an object to become a copy of another object as it enters the battlefield, one of them must be chosen. If not, proceed to rule 616.1d.\"",
+    "reason": "XMage exiles Clever Impersonator without asking whether to copy a permanent. Containment Priest should exile it after the controller declines the copy or chooses to copy a creature."
   }
 ]

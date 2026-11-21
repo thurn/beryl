@@ -212,11 +212,11 @@ fn an_object_would_be_a_creature_only_because_of_an_effect() {
     let (t, mut s) = game();
     let mut x = Scratch::new();
     let moon = find(&s, &t, Seat::P0, "Test Moon");
-    let before = as_it_would_exist(&s, &t, moon, Entry::default()).unwrap();
+    let before = as_it_would_exist(&s, &t, moon, Entry::default(), None).unwrap();
     assert!(!before.types.intersects(Types::CREATURE));
     put(&t, &mut s, &mut x, Seat::P0, "Test Opal");
     let unchanged = s;
-    let after = as_it_would_exist(&s, &t, moon, Entry::default()).unwrap();
+    let after = as_it_would_exist(&s, &t, moon, Entry::default(), None).unwrap();
     assert!(
         after
             .types

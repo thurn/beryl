@@ -6,6 +6,14 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **Containment Priest exiled Clever Impersonator before it could copy an
+  artifact.** The engine decided whether to redirect the move using the
+  Impersonator's original type line. It now asks for the copy first and checks
+  the remaining entry replacements against the resulting permanent. If a
+  replacement redirects the move, the chosen copiable values are discarded.
+  Containment Priest's scenarios check the copy choice and final zone when the
+  Impersonator copies an artifact, copies a creature, or declines to copy.
+
 - **Circle of Protection: Red skipped Lightning Bolt in a graveyard while
   Snapcaster Mage's trigger targeted it.** The choice looked only at permanents
   and spells, and a shield for a permanent spell lost track of its source as the

@@ -13,6 +13,8 @@
 //! object's own abilities. The card table holds only replacements this module has code for
 //! ([`crate::replacement::check`]).
 //!
+//! Implements: CR 614, CR 616
+//!
 //! [CR 614.1]: https://yawgatog.com/resources/magic-rules/#R6141
 //! [CR 614.6]: https://yawgatog.com/resources/magic-rules/#R6146
 
@@ -62,7 +64,7 @@ pub(crate) struct Move<L: Layout> {
     /// How it enters, if it is put onto the battlefield.
     pub entry: Entry<L>,
     /// It moves as its spell resolves: a permanent spell becoming a permanent
-    /// ([CR 608.3a]): "If the object that's resolving has no targets, it becomes a permanent
+    /// (see [CR 608.3a]): "If the object that's resolving has no targets, it becomes a permanent
     /// and enters the battlefield". Only that resolution moves objects for
     /// [`crate::event::Reason::Resolve`], so a card put onto the battlefield by an effect
     /// "wasn't cast", whichever zone it left. It is not in [`Entry`], which a batch of moves
@@ -72,10 +74,11 @@ pub(crate) struct Move<L: Layout> {
     pub cast: bool,
 }
 
-/// Applies the replacement effects of a move to `proposal`: where the object goes
-/// ([`destination`]), then, for a permanent that enters, how it enters ([`entering`]). A
-/// value the permanent chooses as it enters is asked through `sink`'s record of answers, and
-/// kept in `sink` until the permanent has entered ([`Sink::chosen`]).
+/// Applies the replacement effects of a move to `proposal`. If any effect could redirect
+/// the move, [`moving_with_replacements`] checks it against the chosen copy before deciding
+/// where the object goes. A permanent that still enters gets its own remaining entry
+/// replacements ([`entering`]). The answers are read through `sink` so a paused move can
+/// reach the same choices on replay.
 #[inline]
 pub(crate) fn moving<L: Layout>(
     s: &State<L>,
@@ -83,9 +86,19 @@ pub(crate) fn moving<L: Layout>(
     sink: &mut Sink<L>,
     mut proposal: Move<L>,
 ) -> Result<Move<L>, Full> {
-    proposal.to = destination(s, t, &proposal)?;
+    let statics = s
+        .replacing()
+        .is_some_and(|r| r.replaces(ReplacementKind::Move));
+    if statics
+        || s.move_replacements(s.object_ref(proposal.slot))
+            .next()
+            .is_some()
+    {
+        return moving_with_replacements(s, t, sink, proposal, statics);
+    }
     if proposal.to == Zone::Battlefield {
-        proposal.entry = entering(s, t, sink, proposal.slot, proposal.entry)?;
+        let copied = entering_copy(s, t, sink, &proposal)?;
+        proposal.entry = entering(s, t, sink, proposal.slot, proposal.entry, copied)?;
     }
     Ok(proposal)
 }
@@ -103,12 +116,10 @@ enum Source<S> {
     Ability(S, ObjectAbility),
 }
 
-/// The most replacements one move can meet: the scratch lists of [`destination`] hold this
-/// many.
+/// The most replacements one move can meet: [`moving_with_replacements`] holds this many.
 const MOST: usize = 16;
 
-/// The zone the object of `proposal`, about to be put into its `to`, goes to after the
-/// replacement effects that apply to it, read while the layer results are current.
+/// Applies the replacements that can redirect the move while the layer results are current.
 ///
 /// Applying them follows [CR 616.1]: "If two or more replacement and/or prevention effects are
 /// attempting to modify the way an event affects an object or player, the affected object's
@@ -121,48 +132,41 @@ const MOST: usize = 16;
 /// Effects that would put the object into the same zone are one candidate, applied together:
 /// which of two Rest in Peace exiles a card makes no difference. A self-replacement effect
 /// ([CR 616.1a]), such as "counter it; if it is countered this way, exile it instead", was
-/// applied by the instruction that asked for the move, before it got here. No replacement of a
-/// move changes control, copies or turns a face (CR 616.1b to 616.1d), so every candidate here
-/// is of [CR 616.1e]: "Any of the applicable replacement and/or prevention effects may be
-/// chosen." Where two candidates differ, they are applied in the order they are found, which
-/// no card of a game makes happen yet.
-///
-/// With no replacement of a move on the battlefield or on the object, it is one AND and an
-/// empty search of the Effects store.
+/// applied by the instruction that asked for the move, before it got here. An entry copy is
+/// chosen before the first collection for a move to the battlefield ([CR 616.1c]): "If any
+/// of the replacement and/or prevention effects would cause an object to become a copy of
+/// another object as it enters the battlefield, one of them must be chosen." No replacement
+/// changes control or turns a face (CR 616.1b and 616.1d). Apply the remaining candidates
+/// under [CR 616.1e]: "Any of the applicable replacement and/or prevention effects may be chosen."
+/// Where two candidates differ, they are applied in the order they are found, which no card
+/// of a game makes happen yet.
 ///
 /// [`Full`] past [`MOST`] replacements.
 ///
 /// [CR 616.1]: https://yawgatog.com/resources/magic-rules/#R6161
 /// [CR 616.1f]: https://yawgatog.com/resources/magic-rules/#R6161f
 /// [CR 616.1a]: https://yawgatog.com/resources/magic-rules/#R6161a
+/// [CR 616.1c]: https://yawgatog.com/resources/magic-rules/#R6161c
 /// [CR 616.1e]: https://yawgatog.com/resources/magic-rules/#R6161e
-#[inline]
-fn destination<L: Layout>(s: &State<L>, t: &GameTable, proposal: &Move<L>) -> Result<Zone, Full> {
-    let statics = s
-        .replacing()
-        .is_some_and(|r| r.replaces(ReplacementKind::Move));
-    if !statics
-        && s.move_replacements(s.object_ref(proposal.slot))
-            .next()
-            .is_none()
-    {
-        return Ok(proposal.to);
-    }
-    replaced_destination(s, t, proposal, statics)
-}
-
-/// [`destination`] once some replacement of a move may apply: the loop of CR 616.1.
 #[inline(never)]
-fn replaced_destination<L: Layout>(
+fn moving_with_replacements<L: Layout>(
     s: &State<L>,
     t: &GameTable,
-    proposal: &Move<L>,
+    sink: &mut Sink<L>,
+    mut proposal: Move<L>,
     statics: bool,
-) -> Result<Zone, Full> {
-    let (slot, mut to) = (proposal.slot, proposal.to);
+) -> Result<Move<L>, Full> {
+    let slot = proposal.slot;
     let object = s.object_ref(slot);
     let mut applied: Fixed<Option<Source<L::Slot>>, MOST> = Fixed::new();
+    let mut checked_copy = false;
+    let mut copied = None;
     loop {
+        let to = proposal.to;
+        if to == Zone::Battlefield && !checked_copy {
+            copied = entering_copy(s, t, sink, &proposal)?;
+            checked_copy = true;
+        }
         let mut found: Fixed<Option<(Source<L::Slot>, Zone)>, MOST> = Fixed::new();
         let mut add = |source, instead| {
             if applied.as_slice().contains(&Some(source)) {
@@ -181,11 +185,11 @@ fn replaced_destination<L: Layout>(
                 add(Source::Ability(permanent, ability), instead)?;
             }
             if to == Zone::Battlefield {
-                entering_destinations(s, t, proposal, &mut add)?;
+                entering_destinations(s, t, &proposal, copied, &mut add)?;
             }
         }
         let Some(&Some((_, instead))) = found.as_slice().first() else {
-            return Ok(to);
+            break;
         };
         debug_assert!(
             found.iter().flatten().all(|&(_, zone)| zone == instead),
@@ -196,13 +200,17 @@ fn replaced_destination<L: Layout>(
                 applied.push(Some(source))?;
             }
         }
-        to = instead;
+        proposal.to = instead;
     }
+    if proposal.to == Zone::Battlefield {
+        proposal.entry = entering(s, t, sink, proposal.slot, proposal.entry, copied)?;
+    }
+    Ok(proposal)
 }
 
 /// Where an entry of the Effects store puts an object that would be put into `to`, if it
 /// applies: "exile it instead" of a graveyard, or a flashback cost's, which exiles the spell
-/// wherever else it would go ([CR 702.34a]): "If the flashback cost was paid, exile this card
+/// wherever else it would go (see [CR 702.34a]): "If the flashback cost was paid, exile this card
 /// instead of putting it anywhere else any time it would leave the stack."
 ///
 /// [CR 702.34a]: https://yawgatog.com/resources/magic-rules/#R70234a
@@ -221,7 +229,7 @@ fn effect_destination(r: MoveReplacement, to: Zone) -> Option<Zone> {
 /// so the cheap tests go in `pick`.
 ///
 /// Those of the face that is up come first, then those of the cards under a merged permanent
-/// ([CR 702.140e]): "A mutated permanent has all abilities of each card and token that
+/// (see [CR 702.140e]): "A mutated permanent has all abilities of each card and token that
 /// represents it." The card table refuses a card that grants a replacement effect
 /// (`TableError::Granted`), so none is granted.
 ///
@@ -306,14 +314,15 @@ fn static_destinations<'a, L: Layout>(
 }
 
 /// Offers to `add` each static ability of a permanent that replaces the object of `proposal`
-/// entering the battlefield as its `entry` says, with the zone it goes to instead, in the order
-/// of the battlefield: "If a nontoken creature would enter and it wasn't cast, exile it
-/// instead." The filter is read for the permanent's controller, of the object as it would
-/// exist on the battlefield ([CR 614.12]): "To determine which replacement effects apply and
-/// how they apply, check the characteristics of the permanent as it would exist on the
-/// battlefield". An enchantment that another effect would make a creature there is a
-/// creature. A permanent entering is not yet on the battlefield, so its own such ability does
-/// not replace its entering, nor that of anything entering with it.
+/// entering the battlefield as its `entry` says and with the chosen copy applied, with the zone
+/// it goes to instead, in battlefield order: "If a nontoken creature would enter and it
+/// wasn't cast, exile it instead." The filter uses the permanent's controller and the
+/// entering object's characteristics as it would exist on the battlefield ([CR 614.12]):
+/// "To determine which replacement effects apply and how they apply, check the characteristics
+/// of the permanent as it would exist on the battlefield". An enchantment that another effect
+/// would make a creature there is a creature. The replacement comes from a permanent already
+/// on the battlefield. A permanent entering cannot use such an ability on itself or another
+/// object entering with it.
 ///
 /// The state as it would be with the object entered is made only for an ability left to ask
 /// ([`layers::entered`]); [`Full`] if making it, or `add`, ran out of room.
@@ -323,6 +332,7 @@ fn entering_destinations<L: Layout>(
     s: &State<L>,
     t: &GameTable,
     proposal: &Move<L>,
+    copied: Option<Copiable<L>>,
     mut add: impl FnMut(Source<L::Slot>, Zone) -> Result<(), Full>,
 ) -> Result<(), Full> {
     let Move {
@@ -344,7 +354,7 @@ fn entering_destinations<L: Layout>(
             _ => None,
         };
         for (ability, a, (objects, instead)) in statics(s, t, p, enters) {
-            let passes = layers::entered(s, t, slot, entry, None, |as_it_would_exist| {
+            let passes = layers::entered(s, t, slot, entry, copied, |as_it_would_exist| {
                 objects.matches(as_it_would_exist, t, slot, controller, &words)
             })?;
             if !passes {
@@ -357,10 +367,9 @@ fn entering_destinations<L: Layout>(
     Ok(())
 }
 
-/// Applies the permanent's own replacement effects that modify how it enters (CR 614.12):
-/// first one that has it enter as a copy, then the others, found against the copy
-/// ([`copy_to_enter`]). Then
-/// they "check the characteristics of the permanent as it would exist on the battlefield".
+/// Applies the permanent's remaining entry replacements (CR 614.12). These effects
+/// "check the characteristics of the permanent as it would exist on the battlefield",
+/// including any copy already chosen for the move ([`copy_to_enter`]).
 /// One it would not have there does not apply ([`layers::lost_entering`]): under an effect
 /// that makes nonbasic lands Mountains, a land that would enter tapped unless its controller
 /// paid life enters untapped, and no life is paid. Each changes only how it enters and none
@@ -368,7 +377,7 @@ fn entering_destinations<L: Layout>(
 /// the permanent enters ([CR 614.12a]): "If a replacement effect that modifies how a permanent
 /// enters the battlefield requires a choice, that choice is made before the permanent enters
 /// the battlefield." Then the planeswalker's intrinsic one
-/// ([CR 306.5b]): "A planeswalker has the intrinsic ability 'This permanent enters with a
+/// (see [CR 306.5b]): "A planeswalker has the intrinsic ability 'This permanent enters with a
 /// number of loyalty counters on it equal to its printed loyalty number.'"
 ///
 /// [CR 306.5b]: https://yawgatog.com/resources/magic-rules/#R3065b
@@ -379,22 +388,16 @@ fn entering<L: Layout>(
     sink: &mut Sink<L>,
     slot: L::Slot,
     mut entry: Entry<L>,
+    copied: Option<Copiable<L>>,
 ) -> Result<Entry<L>, Full> {
     let o = s.object(slot);
     let controller = entry.controller.unwrap_or(o.owner());
-    let mut face = s.copiable(slot).turned(entry.face).face(t);
+    let face = copied.map_or_else(
+        || s.copiable(slot).turned(entry.face).face(t),
+        |v| v.face(t),
+    );
     // Found at the first replacement of entering: most permanents have none.
     let mut lost = None;
-    if t.can(Capability::ChoosesAsEnters)
-        && let Some(copy) = copy_to_enter(s, t, sink, slot, controller, entry)?
-    {
-        sink.copies.push((slot, copy))?;
-        entry.face = copy.record(t).1;
-        face = copy.face(t);
-        // What the copy would lose is not found yet: no card of the pool removes abilities
-        // from a permanent as it enters.
-        lost = Some(L::AbilityMask::default());
-    }
     let mut pays_life = false;
     for (ability, n) in face.abilities.iter().zip(0..) {
         let Some(replacement) = ability.replacement() else {
@@ -405,7 +408,7 @@ fn entering<L: Layout>(
         }
         let lost = match lost {
             Some(lost) => lost,
-            None => *lost.insert(layers::lost_entering(s, t, slot, entry, face)?),
+            None => *lost.insert(layers::lost_entering(s, t, slot, entry, face, copied)?),
         };
         if lost.contains(AbilityIx::new(n)) {
             continue;
@@ -456,24 +459,43 @@ fn entering<L: Layout>(
     if let Some(loyalty) = face.loyalty {
         entry.counters = Some((CounterKind::Loyalty, loyalty));
     }
+    if let Some(values) = copied {
+        sink.copies.push((slot, values))?;
+        entry.face = values.record(t).1;
+    }
     Ok(entry)
 }
 
+/// The copy choice is possible only in games whose card table has one.
+#[inline]
+fn entering_copy<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+    proposal: &Move<L>,
+) -> Result<Option<Copiable<L>>, Full> {
+    if !t.can(Capability::ChoosesAsEnters) {
+        return Ok(None);
+    }
+    copy_to_enter(s, t, sink, proposal.slot, proposal.entry)
+}
+
 /// The copiable values the object in `slot` enters as a copy of, if it has a replacement that
-/// may have it enter as one and its controller `player` chooses a permanent
+/// may have it enter as one and its prospective controller chooses a permanent
 /// ([`Rewrite::EnterAsCopy`]): those of the chosen permanent, with their own exceptions, and
-/// the exception of the ability after them ([CR 707.9b]): "The final set of values for that
+/// the exception of the ability after them (see [CR 707.9b]): "The final set of values for that
 /// characteristic becomes part of the copiable values of the copy." So a copy of a copy takes
-/// what the copied permanent copied ([CR 707.3]): "Objects that copy the object will use the
+/// what the copied permanent copied (see [CR 707.3]): "Objects that copy the object will use the
 /// new copiable values."
 ///
 /// The choice comes before the other replacements of entering ([CR 616.1c]): "If any of the
 /// replacement and/or prevention effects would cause an object to become a copy of another
 /// object as it enters the battlefield, one of them must be chosen." It is a choice made before
 /// the permanent enters ([CR 614.12a]), among the permanents on the battlefield the filter
-/// accepts, read for `player`: none of a batch entering with it, which are not there yet. The
-/// permanent is not targeted, so hexproof and protection do not stop it. Declining is choosing
-/// none, and the object enters as itself.
+/// accepts, read for that controller. Objects entering in the same batch are still off the
+/// battlefield. The permanent is chosen without a target, so hexproof and protection do not
+/// stop it. If the controller declines, remaining replacements see the object's uncopied
+/// characteristics.
 ///
 /// [CR 707.9b]: https://yawgatog.com/resources/magic-rules/#R7079b
 /// [CR 707.3]: https://yawgatog.com/resources/magic-rules/#R7073
@@ -486,7 +508,6 @@ fn copy_to_enter<L: Layout>(
     t: &GameTable,
     sink: &mut Sink<L>,
     slot: L::Slot,
-    player: Seat,
     entry: Entry<L>,
 ) -> Result<Option<Copiable<L>>, Full> {
     let values = s.copiable(slot).turned(entry.face);
@@ -510,9 +531,10 @@ fn copy_to_enter<L: Layout>(
     else {
         return Ok(None);
     };
-    if layers::lost_entering(s, t, slot, entry, face)?.contains(AbilityIx::new(n)) {
+    if layers::lost_entering(s, t, slot, entry, face, None)?.contains(AbilityIx::new(n)) {
         return Ok(None);
     }
+    let player = entry.controller.unwrap_or(s.object(slot).owner());
     let words = crate::card::Words::NONE;
     let mut options = <L::Queue<Opt<L>, OPTIONS>>::default();
     options.push(Opt::Done)?;
@@ -570,7 +592,7 @@ fn life_asked(face: &crate::card::Face) -> Option<(AbilityIx, u8)> {
 }
 
 /// Pays the life an "unless you pay N life" entering replacement asks for
-/// ([CR 119.4]): "If a player pays life, the payment is subtracted from their life total; in
+/// (see [CR 119.4]): "If a player pays life, the payment is subtracted from their life total; in
 /// other words, the player loses that much life."
 ///
 /// [CR 119.4]: https://yawgatog.com/resources/magic-rules/#R1194
@@ -616,7 +638,7 @@ pub(crate) fn life_to_enter<L: Layout>(
     let Some((ability, life)) = life_asked(face) else {
         return Ok(None);
     };
-    let lost = layers::lost_entering(s, t, slot, entry, face)?;
+    let lost = layers::lost_entering(s, t, slot, entry, face, None)?;
     Ok((!lost.contains(ability)).then_some(life))
 }
 
@@ -637,7 +659,7 @@ pub(crate) fn exiled_instead<L: Layout>(s: &State<L>, object: ObjectRef<L>, to: 
 ///
 /// It holds in every game with a card that has dredge, wherever that card is. Dredge works
 /// from the graveyard as the draw happens
-/// ([CR 702.52a]), and the same run can put a dredge card there before it draws, as an
+/// (see [CR 702.52a]), and the same run can put a dredge card there before it draws, as an
 /// ability that mills two cards and then draws one does. A replacement of draws by
 /// instructions ([`ReplacementKind::DrawInstructions`]) may ask too ("discards a card"), and
 /// the drawing player chooses the order of it and another replacement of the draw ([`draw`]),
@@ -645,11 +667,10 @@ pub(crate) fn exiled_instead<L: Layout>(s: &State<L>, object: ObjectRef<L>, to: 
 /// during the run. So does a game with a card whose static ability replaces damage
 /// ([`ReplacementKind::Damage`]): the player dealt the damage chooses its order against a
 /// prevention shield of an amount ([`damage`]). A game whose cards have none of these pays two
-/// ANDs. Two replacements of a move
-/// that would put an object into different zones would be a choice too, but no card yet puts
-/// one anywhere but exile, so [`destination`] has nothing to choose between. Two replacements
-/// of a draw that each end the game, of permanents of different players, would differ too: no
-/// card of the pool makes that happen, and the choice then takes its first candidate.
+/// ANDs. Two replacements of a move that send an object to different zones would be a choice
+/// too, but every card with such a replacement sends it to exile. Two replacements of the
+/// same draw that give different players the win would also differ. With the current card
+/// pool this cannot happen, and the engine takes the first candidate if it does.
 ///
 /// [CR 616.1]: https://yawgatog.com/resources/magic-rules/#R6161
 /// [CR 702.52a]: https://yawgatog.com/resources/magic-rules/#R70252a
@@ -721,7 +742,7 @@ pub(crate) fn chosen_to_enter<L: Layout>(
     let Some((ability, kind)) = chooses(face) else {
         return Ok(None);
     };
-    let lost = layers::lost_entering(s, t, slot, entry, face)?;
+    let lost = layers::lost_entering(s, t, slot, entry, face, None)?;
     Ok((!lost.contains(ability)).then_some(kind))
 }
 

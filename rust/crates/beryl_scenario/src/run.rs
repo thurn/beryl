@@ -502,6 +502,7 @@ impl Runner {
                     .count()
             }),
             stack,
+            returning: self.returning_card(),
             kept,
             flips,
             taps,
