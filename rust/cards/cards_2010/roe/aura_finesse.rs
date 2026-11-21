@@ -8,7 +8,9 @@
 
 use crate::prelude::*;
 
-/// Moves an Aura and draws a card. The Aura's enchant ability still limits where it can attach.
+/// The Aura's enchant ability still limits where it can attach ([CR 701.3b]).
+///
+/// [CR 701.3b]: https://yawgatog.com/resources/magic-rules/#R7013b
 pub static CARD: CardDef = Printed::AuraFinesse
     .abilities(&[Ability::spell()
         .targeting(&[

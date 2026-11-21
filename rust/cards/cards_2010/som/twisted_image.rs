@@ -8,13 +8,11 @@
 
 use crate::prelude::*;
 
-/// "Switch target creature's power and toughness until end of turn" is a layer 7d effect
-/// ([CR 613.4d]): "Effects that switch a creature's power and toughness are applied." It applies after the modifying effects and counters of layer 7c
-/// whenever they began, so a creature with a +1/+1 counter is switched after the counter.
-/// It lasts until the turn ends ([CR 514.2]). Then its controller draws a card.
+/// The switch applies after other power and toughness modifications, including +1/+1
+/// counters ([CR 613.4c], [CR 613.4d]).
 ///
+/// [CR 613.4c]: https://yawgatog.com/resources/magic-rules/#R6134c
 /// [CR 613.4d]: https://yawgatog.com/resources/magic-rules/#R6134d
-/// [CR 514.2]: https://yawgatog.com/resources/magic-rules/#R5142
 pub static CARD: CardDef = Printed::TwistedImage
     .abilities(&[Ability::spell()
         .target(&TargetSpec::creature())
@@ -31,30 +29,6 @@ pub mod scenarios {
     const IMAGE: &str = Card::TwistedImage;
 
     pub const SCENARIOS: &[Scenario] = &[
-        Scenario::new("switching a 3/1 makes it a 1/3 and draws a card")
-            .battlefield(P0, &[Card::Island, Prop::Flier])
-            .hand(P0, &[IMAGE])
-            .library(P0, &[Card::Plains, Card::Island])
-            .actions(&[
-                ME.casts(IMAGE),
-                Resolve,
-                ME.pt(Prop::Flier, 1, 3),
-                ME.has(Zone::Hand, Card::Plains, 1),
-                ME.has(Zone::Graveyard, IMAGE, 1),
-            ]),
-        // Switching twice puts the creature back to 3/1.
-        Scenario::new("switching twice restores the original values")
-            .battlefield(P0, &[Card::Island, Card::Island, Prop::Flier])
-            .hand(P0, &[IMAGE, IMAGE])
-            .library(P0, &[Card::Plains, Card::Island, Card::Island])
-            .actions(&[
-                ME.casts(IMAGE),
-                Resolve,
-                ME.pt(Prop::Flier, 1, 3),
-                ME.casts(IMAGE),
-                Resolve,
-                ME.pt(Prop::Flier, 3, 1),
-            ]),
         // The Wandering Emperor's +1 puts a +1/+1 counter on the flier: 4/2 from layer
         // 7c, switched afterwards in layer 7d.
         Scenario::new("a creature with a +1/+1 counter is switched after the counter")

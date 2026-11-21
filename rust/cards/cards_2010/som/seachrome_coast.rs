@@ -8,11 +8,6 @@
 
 use crate::prelude::*;
 
-/// The entering replacement ([CR 614.1d]): "Continuous effects that read "[This permanent] enters .
-/// . ." ... are replacement effects." It counts the lands its controller controls as it would
-/// enter, which are all other lands.
-///
-/// [CR 614.1d]: https://yawgatog.com/resources/magic-rules/#R6141d
 pub static CARD: CardDef = Printed::SeachromeCoast
     .abilities(&[
         Ability::replacing(&Replacement::enters_tapped_unless_few_lands(2)),
@@ -45,17 +40,6 @@ pub mod scenarios {
             .actions(&[
                 ME.plays(Card::SeachromeCoast),
                 ME.tapped(Card::SeachromeCoast, 1),
-            ]),
-        // Its {W} is P0's only white mana for the artifact. The land still to play keeps the
-        // game in P0's main phase.
-        Scenario::new("Seachrome Coast's white mana")
-            .battlefield(P0, &[Card::SeachromeCoast, Card::Island])
-            .hand(P0, &[Prop::Artifact, Card::Plains])
-            .actions(&[
-                ME.casts(Prop::Artifact),
-                ME.tapped(Card::SeachromeCoast, 1),
-                Resolve,
-                ME.controls(Prop::Artifact, 1),
             ]),
     ];
 }

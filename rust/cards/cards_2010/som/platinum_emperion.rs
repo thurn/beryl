@@ -8,16 +8,10 @@
 
 use crate::prelude::*;
 
-/// "Your life total can't change" is a rule change on its controller ([CR 613.11]: "Some continuous
-/// effects affect game rules rather than objects."). They can't gain life ([CR 119.7]) or lose
-/// life ([CR 119.8]): "If an effect says that a player can't lose life, that player can't make an
-/// exchange such that the player's life total would become lower ... In addition, a cost that
-/// involves having that player pay life can't be paid." Damage is still dealt to them, so it still
-/// has its other results, such as lifelink's gain.
+/// Damage is still dealt to its controller and can have other results, such as the source's
+/// controller gaining life from lifelink ([CR 120.3f]).
 ///
-/// [CR 613.11]: https://yawgatog.com/resources/magic-rules/#R61311
-/// [CR 119.7]: https://yawgatog.com/resources/magic-rules/#R1197
-/// [CR 119.8]: https://yawgatog.com/resources/magic-rules/#R1198
+/// [CR 120.3f]: https://yawgatog.com/resources/magic-rules/#R1203f
 pub static CARD: CardDef = Printed::PlatinumEmperion
     .abilities(&[Ability::rule_change(&RuleChange {
         players: Players::You,

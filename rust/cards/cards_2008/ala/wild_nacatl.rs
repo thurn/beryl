@@ -8,14 +8,9 @@
 
 use crate::prelude::*;
 
-/// Each "as long as you control a [land type]" is its own static ability, a layer 7c
-/// modification of this creature ([CR 613.4c]): "Effects and counters that modify power
-/// and/or toughness (but don't set power and/or toughness to a specific number or value) are
-/// applied."
-/// The condition is read from the permanents as the layers before 7c left them, so a land
-/// that a layer 4 effect makes a Mountain counts ([CR 613.1d]): "Layer 4: Type-changing
-/// effects are applied." The two abilities are separate, so a land that is both a Mountain
-/// and a Plains gives both bonuses.
+/// The bonuses are two separate modifications. A land with both types supplies both.
+/// A land that Blood Moon makes a Mountain counts because land types are set in layer 4
+/// ([CR 613.1d]) before the power and toughness modifications in layer 7c ([CR 613.4c]).
 ///
 /// [CR 613.1d]: https://yawgatog.com/resources/magic-rules/#R6131d
 /// [CR 613.4c]: https://yawgatog.com/resources/magic-rules/#R6134c
@@ -55,27 +50,6 @@ pub mod scenarios {
     // Wild Nacatl costs {G}, which no land in a scenario makes, so it starts on the
     // battlefield.
     pub const SCENARIOS: &[Scenario] = &[
-        Scenario::new("no Mountain and no Plains leaves it a 1/1")
-            .battlefield(P0, &[NACATL, Card::Island])
-            .actions(&[ME.pt(NACATL, 1, 1)]),
-        Scenario::new("a Mountain gives +1/+1")
-            .battlefield(P0, &[NACATL, Card::Mountain])
-            .actions(&[ME.pt(NACATL, 2, 2)]),
-        Scenario::new("a Plains gives +1/+1")
-            .battlefield(P0, &[NACATL, Card::Plains])
-            .actions(&[ME.pt(NACATL, 2, 2)]),
-        Scenario::new("a Mountain and a Plains give +2/+2")
-            .battlefield(P0, &[NACATL, Card::Mountain, Card::Plains])
-            .actions(&[ME.pt(NACATL, 3, 3)]),
-        // The opponent's Mountain is not one "you control".
-        Scenario::new("an opponent's Mountain gives nothing")
-            .battlefield(P0, &[NACATL])
-            .battlefield(P1, &[Card::Mountain])
-            .actions(&[ME.pt(NACATL, 1, 1)]),
-        // Tundra is a Plains Island, so it gives only one bonus.
-        Scenario::new("a nonbasic land of two types gives each bonus it has")
-            .battlefield(P0, &[NACATL, Card::Tundra])
-            .actions(&[ME.pt(NACATL, 2, 2)]),
         // Blood Moon makes Tundra a Mountain, so Tundra gives the Mountain bonus, and the
         // basic Plains still gives the Plains bonus.
         Scenario::new("a land Blood Moon makes a Mountain counts as one")

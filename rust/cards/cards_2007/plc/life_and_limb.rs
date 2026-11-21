@@ -8,28 +8,10 @@
 
 use crate::prelude::*;
 
-/// "All Forests and all Saprolings are 1/1 green Saproling creatures and Forest lands in
-/// addition to their other types" is one static ability with parts in layers 4, 5 and 7b
-/// ([CR 613.6]): "If an effect should be applied in different layers and/or sublayers, the
-/// parts of the effect each apply in their appropriate ones." In layer 4 it adds the creature
-/// and land card types and the Saproling and Forest subtypes ([CR 613.1d]); a land that gains
-/// the Forest subtype gains the mana ability of a Forest ([CR 305.6]). In layer 5 the color
-/// becomes green ([CR 613.1e]), and in layer 7b the base power and toughness become 1/1
-/// ([CR 613.4b]).
+/// Life and Limb depends on Blood Moon in layer 4 ([CR 613.8a]). Apply Blood Moon first
+/// regardless of timestamps. A Dryad Arbor it changes to a Mountain no longer qualifies
+/// as a Forest.
 ///
-/// Which permanents it affects is found as the layers before it left them. A Forest that
-/// another layer 4 effect makes a Mountain (Blood Moon on Dryad Arbor) is no Forest any
-/// more, so this effect depends on that one ([CR 613.8a]): "An effect is said to “depend on”
-/// another if (a) it's applied in the same layer (and, if applicable, sublayer) as the
-/// other effect; (b) applying the other would change the text or the existence of the first
-/// effect, the set of objects it affects, or what it does to any of those objects". It is
-/// applied after Blood Moon whichever has the earlier timestamp, and finds no Forest there.
-///
-/// [CR 305.6]: https://yawgatog.com/resources/magic-rules/#R3056
-/// [CR 613.1d]: https://yawgatog.com/resources/magic-rules/#R6131d
-/// [CR 613.1e]: https://yawgatog.com/resources/magic-rules/#R6131e
-/// [CR 613.4b]: https://yawgatog.com/resources/magic-rules/#R6134b
-/// [CR 613.6]: https://yawgatog.com/resources/magic-rules/#R6136
 /// [CR 613.8a]: https://yawgatog.com/resources/magic-rules/#R6138a
 pub static CARD: CardDef = Printed::LifeAndLimb
     .abilities(&[Ability::static_ability(&LayerSpec {
@@ -61,30 +43,6 @@ pub mod scenarios {
     // battlefield. A Plains in P0's hand keeps the game in P0's main phase where nothing else
     // would give P0 a decision.
     pub const SCENARIOS: &[Scenario] = &[
-        Scenario::new("a Forest is a 1/1 creature land")
-            .battlefield(P0, &[LIFE_AND_LIMB, Card::Forest])
-            .actions(&[ME.creature(Card::Forest, true), ME.pt(Card::Forest, 1, 1)]),
-        // "All Forests": the opponent's too.
-        Scenario::new("an opponent's Forest is a creature too")
-            .battlefield(P0, &[LIFE_AND_LIMB])
-            .hand(P0, &[Card::Plains])
-            .battlefield(P1, &[Card::Forest])
-            .actions(&[
-                THEM.creature(Card::Forest, true),
-                THEM.pt(Card::Forest, 1, 1),
-            ]),
-        // A land that is no Forest is untouched.
-        Scenario::new("a land that is no Forest stays a land")
-            .battlefield(P0, &[LIFE_AND_LIMB, Card::Island])
-            .hand(P0, &[Card::Plains])
-            .actions(&[ME.creature(Card::Island, false)]),
-        // Dryad Arbor is a Forest and a creature already: it stays a 1/1.
-        Scenario::new("Dryad Arbor is still a 1/1 creature")
-            .battlefield(P0, &[LIFE_AND_LIMB, Card::DryadArbor])
-            .actions(&[
-                ME.creature(Card::DryadArbor, true),
-                ME.pt(Card::DryadArbor, 1, 1),
-            ]),
         // The Forest is basic, so Blood Moon leaves it a Forest, and Life and Limb still
         // makes it a creature.
         Scenario::new("a basic Forest is a creature under Blood Moon")

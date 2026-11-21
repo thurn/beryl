@@ -7,19 +7,11 @@
 
 use crate::prelude::*;
 
-/// "You may have this creature enter as a copy of any creature on the battlefield" is a
-/// replacement effect that has it become a copy as it enters ([CR 707.5]): "An object that
-/// enters the battlefield 'as a copy' or 'that's a copy' of another object becomes a copy as it
-/// enters the battlefield." The creature is chosen, not targeted, so hexproof does not stop it.
+/// The fixed 7/7 is part of the copy's copiable values ([CR 707.9b]). A characteristic-defining
+/// ability for power or toughness, such as Tarmogoyf's, "is not copied" ([CR 707.9d]).
 ///
-/// "Except it's 7/7" is part of the copy's copiable values ([CR 707.9b]): "The final set of
-/// values for that characteristic becomes part of the copiable values of the copy." So a copy
-/// of the Gargantuan is 7/7 too.
-///
-/// It stands in for Phyrexian Metamorph, whose Phyrexian mana the vocabulary cannot say.
-///
-/// [CR 707.5]: https://yawgatog.com/resources/magic-rules/#R7075
 /// [CR 707.9b]: https://yawgatog.com/resources/magic-rules/#R7079b
+/// [CR 707.9d]: https://yawgatog.com/resources/magic-rules/#R7079d
 pub static CARD: CardDef = Printed::QuicksilverGargantuan
     .abilities(&[Ability::replacing(&Replacement::enter_as_copy(
         &Filter::Types(Types::CREATURE),
@@ -159,7 +151,7 @@ pub mod scenarios {
             ME.has_subtype(Prop::Vanilla, Subtype::Illusion, true),
         ]),
         copying("the Gargantuan copies Tarmogoyf as a 7/7", &[GOYF])
-            .interaction(&[GOYF, MIMIC])
+            .interaction(&[GOYF, MIMIC, Card::LightningBolt])
             .battlefield(P0, &[Card::Island; 10])
             .hand(P0, &[GARGANTUAN, MIMIC])
             .graveyard(P1, &[Card::Plains, Card::LightningBolt])

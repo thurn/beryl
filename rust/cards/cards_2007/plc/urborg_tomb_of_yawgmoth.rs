@@ -7,18 +7,9 @@
 
 use crate::prelude::*;
 
-/// "Each land is a Swamp in addition to its other land types" gives each land on the
-/// battlefield, its own included, the land type Swamp in layer 4, and with it the Swamp's
-/// mana ability ([CR 305.7]): "If a land gains one or more land types in addition to its own,
-/// it keeps its land types and rules text, and it gains the new land types and mana
-/// abilities." Urborg has no mana ability of its own: it taps for {B} as a Swamp.
+/// Urborg gets its own black mana ability from becoming a Swamp. Blood Moon removes
+/// Urborg's ability, so it applies first regardless of timestamps ([CR 613.8b]).
 ///
-/// An effect that sets a land's land types, as Blood Moon's, removes this ability from Urborg
-/// and so applies first whatever the timestamps ([CR 613.8b]): "An effect dependent on one or
-/// more other effects waits to apply until just after all of those effects have been
-/// applied."
-///
-/// [CR 305.7]: https://yawgatog.com/resources/magic-rules/#R3057
 /// [CR 613.8b]: https://yawgatog.com/resources/magic-rules/#R6138b
 pub static CARD: CardDef = Printed::UrborgTombOfYawgmoth
     .abilities(&[Ability::static_ability(&LayerSpec {

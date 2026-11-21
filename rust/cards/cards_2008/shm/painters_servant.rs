@@ -9,21 +9,11 @@
 
 use crate::prelude::*;
 
-/// "As this creature enters, choose a color" is a replacement effect that asks as the
-/// creature enters ([CR 614.12a]): "If a replacement effect that modifies how a permanent
-/// enters the battlefield requires a choice, that choice is made before the permanent enters
-/// the battlefield."
+/// The color effect applies to cards outside the battlefield, including in libraries and
+/// exile, and to spells on the stack. It also applies to a spell copy, which is a spell
+/// ([CR 707.10]).
 ///
-/// The second ability is one layer 5 effect on every object but abilities on the stack
-/// ([CR 613.1e]): "Layer 5: Color-changing effects are applied." The permanents get it from
-/// the layers. A card in any other zone and a spell get it when their colors are read, which
-/// is when it applies to them ([CR 611.3b]): "The effect applies at all times that the
-/// permanent generating it is on the battlefield or the object generating it is in the
-/// appropriate zone."
-///
-/// [CR 614.12a]: https://yawgatog.com/resources/magic-rules/#R61412a
-/// [CR 613.1e]: https://yawgatog.com/resources/magic-rules/#R6131e
-/// [CR 611.3b]: https://yawgatog.com/resources/magic-rules/#R6113b
+/// [CR 707.10]: https://yawgatog.com/resources/magic-rules/#R70710
 pub static CARD: CardDef = Printed::PaintersServant
     .abilities(&[
         Ability::replacing(&Replacement::choose_as_enters(ChosenKind::Color)),
