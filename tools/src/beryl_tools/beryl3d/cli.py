@@ -28,10 +28,12 @@ from . import (
     camera,
     clear_save,
     compare,
+    corpus,
     gate,
     live,
     match,
     motion_film,
+    pack,
     parity,
     paths,
     perf,
@@ -157,9 +159,10 @@ def program(name: str) -> Path:
 # The status `b3d` and `b3d-render` exit with when the recordings pack for the present sources
 # is missing (`beryl_inspect::recordings::MISSING_STATUS`).
 MISSING_PACK = 3
+PACK_ENV: str = pack.PACK_ENV
 
 
-def record(*, stdout: TextIO | None = None) -> int:
+def record(*selection: str, stdout: TextIO | None = None) -> int:
     """Builds the recordings pack for the present sources with the `record` program of
     `beryl_record` if it is missing. `b3d` does not link the engine that records, so that it
     links and starts fast after an edit (docs/beryl-3d.md, 'Edit-to-output time'). It prints
@@ -169,14 +172,103 @@ def record(*, stdout: TextIO | None = None) -> int:
         return built
     # Cargo refreshes the top-level copy even when it compiles nothing. Use the linker's
     # file so a warm invocation does not pay macOS's first-run check again (`linked`).
-    line = [str(linked("record"))]
+    line = [str(linked("record")), *selection]
     return subprocess.run(
         line, cwd=paths.WORKSPACE, check=False, stdout=stdout
     ).returncode
 
 
-def run_record(_args: argparse.Namespace) -> int:
+def record_arguments(parser: argparse.ArgumentParser) -> None:
+    selection = parser.add_mutually_exclusive_group()
+    selection.add_argument(
+        "--all", action="store_true", help="record the entire catalog"
+    )
+    selection.add_argument("--prefix", help="record names matching this prefix")
+    selection.add_argument(
+        "--cards", nargs="+", help="record these cards' spec moments"
+    )
+
+
+def run_record(args: argparse.Namespace) -> int:
+    if args.all:
+        return record("--all")
+    if args.prefix is not None:
+        return record("--prefix", args.prefix)
+    if args.cards is not None:
+        return record("--cards", *args.cards)
     return record()
+
+
+# The valued options may precede the recording in the native CLI.
+RECORDING_OPTIONS = {
+    "--seat",
+    "--layout",
+    "--size",
+    "--scale",
+    "--tier",
+    "--at",
+    "--do",
+    "--from",
+    "--to",
+    "--within",
+    "--role",
+    "--crop",
+    "--frames",
+    "--every",
+    "--stop-after",
+    "--only",
+}
+
+
+def pack_selection(arguments: list[str]) -> tuple[str, ...]:
+    """The recorder arguments for an explicit local request, or the default corpus."""
+    if not arguments or "--help" in arguments or "-h" in arguments:
+        return ()
+    command, *args = arguments
+    if (
+        command == "test"
+        and "--all" in args
+        or command == "timeline"
+        and "--all" in args
+    ):
+        return ("--all",)
+    if command == "corpus":
+        return () if "--snapshot" in args or "--against" in args else ("--all",)
+    positionals: list[str] = []
+    only = ""
+    remaining = iter(args)
+    for arg in remaining:
+        flag, eq, value = arg.partition("=")
+        if flag in RECORDING_OPTIONS:
+            value = value if eq else next(remaining, "")
+            if flag == "--only":
+                only = value
+        elif not arg.startswith("--"):
+            positionals.append(arg)
+    if command == "export" and not only:
+        return ("--all",)
+    name = only if command == "export" else next(iter(positionals), "")
+    if command == "list":
+        return ("--prefix", name) if name else ("--all",)
+    if command == "test" and name:
+        return ("--prefix", name)
+    if command in {
+        "info",
+        "tree",
+        "diff",
+        "check",
+        "timeline",
+        "png",
+        "film",
+        "export",
+    }:
+        if name.startswith("b3d:"):
+            name = name.removeprefix("b3d:").rsplit("/", 2)[0]
+        if "/" in name and not name.startswith("story/"):
+            names = (paths.DATA / "corpus.txt").read_text().splitlines()
+            if name not in names:
+                return ("--prefix", f"{name}/")
+    return ()
 
 
 def linked(name: str) -> Path:
@@ -215,18 +307,52 @@ def run_program(
     CPU when that is not set (`beryl_inspect::runner::threads`), and a `want` of 1 limits it
     to one thread. When it says the recordings pack is missing, builds the pack and runs it
     again."""
+    return launch_program(name, arguments, binary, want=want).returncode
+
+
+def launch_program(
+    name: str,
+    arguments: list[str],
+    binary: Path | None = None,
+    *,
+    want: int = 0,
+    capture: bool = False,
+    recorder: Path | None = None,
+) -> subprocess.CompletedProcess[str]:
+    """Run an inspector command against its local selection, if it requests one."""
     line: list[str] = [str(binary or linked(name)), *arguments]
-    env: dict[str, str] | None = {**os.environ, CORES_ENV: str(want)} if want else None
+    env: dict[str, str] = (
+        {**os.environ, CORES_ENV: str(want)} if want else dict(os.environ)
+    )
+    selection = () if PACK_ENV in env else pack_selection(arguments)
+    if selection:
+        if recorder is None:
+            built = shared_build()
+            if built:
+                return subprocess.CompletedProcess[str](line, built, "", "")
+            recorder = linked("record")
+        try:
+            env[PACK_ENV] = str(pack.record(recorder, *selection))
+        except subprocess.CalledProcessError as error:
+            return subprocess.CompletedProcess[str](line, error.returncode, "", "")
 
-    def launch() -> int:
-        return subprocess.run(line, env=env, check=False).returncode
+    def launch() -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            line, env=env, capture_output=capture, text=True, check=False
+        )
 
-    code = launch()
-    if code != MISSING_PACK:
-        return code
-    recorded = record()
-    if recorded != 0:
-        return recorded
+    done = launch()
+    if done.returncode != MISSING_PACK or PACK_ENV in env:
+        return done
+    if recorder is None:
+        recorded = record()
+        if recorded:
+            return subprocess.CompletedProcess[str](line, recorded, "", "")
+    else:
+        try:
+            pack.record(recorder)
+        except subprocess.CalledProcessError as error:
+            return subprocess.CompletedProcess[str](line, error.returncode, "", "")
     return launch()
 
 
@@ -254,7 +380,14 @@ def run_shared_b3d(command: str) -> Callable[[argparse.Namespace], int]:
         built = shared_build()
         if built != 0:
             return built
-        return run_program("b3d", [command, *args.arguments], program("b3d"))
+        if command == "corpus" and "--sweep" in args.arguments:
+            return corpus.run(args.arguments, program("b3d"), program("record"))
+        return launch_program(
+            "b3d",
+            [command, *args.arguments],
+            program("b3d"),
+            recorder=program("record"),
+        ).returncode
 
     return run
 
@@ -446,6 +579,7 @@ OWN_COMMANDS: tuple[Command, ...] = (
             ),
         ),
         run_record,
+        record_arguments,
     ),
     Command(
         "clippy",

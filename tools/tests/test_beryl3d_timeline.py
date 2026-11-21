@@ -200,7 +200,7 @@ def test_parity_reuses_the_binary_built_and_leaves_no_files(
         return 0
 
     def run(command: list[str], **_options: Any) -> subprocess.CompletedProcess[str]:
-        if command == [str(tmp_path / "record")]:
+        if command == [str(tmp_path / "record"), "--all"]:
             return subprocess.CompletedProcess[str](command, 0, "recordings.bin\n", "")
         if command == [str(tmp_path / "b3d"), "export", str(exported)]:
             (exported / "r.you.json").write_text("{}")

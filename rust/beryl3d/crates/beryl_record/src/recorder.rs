@@ -1,7 +1,8 @@
 //! `beryl_cli`'s recorders, which make the web interface's fixtures and card spec moments, run
 //! for every recording the pack holds.
 
-use std::path::PathBuf;
+use std::collections::BTreeSet;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -27,6 +28,75 @@ static CATALOG: Catalog = Catalog {
 /// `beryl_cli`'s recorders, reading the fixture definitions in the repository at `root`.
 pub struct Cli {
     pub root: PathBuf,
+    pub selection: Selection,
+}
+
+/// Which fixtures and card spec moments an invocation records.
+pub enum Selection {
+    Corpus(BTreeSet<String>),
+    All,
+    Prefix(String),
+    Cards(BTreeSet<String>),
+}
+
+impl Selection {
+    pub fn parse(root: &Path, arguments: &[String]) -> Result<Self, String> {
+        match arguments {
+            [] => beryl_inspect::corpus::names(root).map(Self::Corpus),
+            [all] if all == "--all" => Ok(Self::All),
+            [switch, prefix] if switch == "--prefix" && !prefix.is_empty() => {
+                Ok(Self::Prefix(prefix.trim_start_matches("b3d:").to_owned()))
+            }
+            [switch, cards @ ..] if switch == "--cards" => {
+                Ok(Self::Cards(cards.iter().cloned().collect()))
+            }
+            _ => Err("usage: record [--all | --prefix <recording> | --cards <card>...]".into()),
+        }
+    }
+
+    fn fixture(&self, name: &str) -> bool {
+        match self {
+            Self::All | Self::Corpus(_) => true,
+            Self::Prefix(prefix) => matches_prefix(name, prefix),
+            Self::Cards(_) => false,
+        }
+    }
+
+    fn card(&self, spec: &specs::Spec) -> bool {
+        match self {
+            Self::All => true,
+            Self::Corpus(names) => {
+                let prefix = format!("{}/", spec.slug);
+                names
+                    .range(prefix.clone()..)
+                    .next()
+                    .is_some_and(|name| name.starts_with(&prefix))
+            }
+            Self::Prefix(prefix) => {
+                spec.slug.starts_with(prefix.as_str())
+                    || prefix
+                        .strip_prefix(&spec.slug)
+                        .is_some_and(|rest| rest.starts_with('/'))
+            }
+            Self::Cards(cards) => cards.contains(spec.card),
+        }
+    }
+
+    fn moment(&self, name: &str) -> bool {
+        match self {
+            Self::Corpus(names) => names.contains(name),
+            Self::Prefix(prefix) => matches_prefix(name, prefix),
+            Self::All | Self::Cards(_) => true,
+        }
+    }
+}
+
+/// A test prefix may extend past the recording's name into the seat and window.
+fn matches_prefix(name: &str, prefix: &str) -> bool {
+    name.starts_with(prefix)
+        || prefix
+            .strip_prefix(name)
+            .is_some_and(|rest| rest.starts_with('/'))
 }
 
 /// One recording still to make.
@@ -55,11 +125,30 @@ impl Recorder for Cli {
                 Vec::new()
             }
         };
-        let cards: Vec<&specs::Spec> = specs::cards(&CATALOG).iter().collect();
-        // Plays every candidate moment of every card, which decides which are kept.
-        specs::generate(&cards);
+        let mut cards: Vec<&specs::Spec> = specs::cards(&CATALOG)
+            .iter()
+            .filter(|spec| self.selection.card(spec))
+            .collect();
+        // A specific spec can also come from a card implemented directly by the store.
+        if let Selection::Prefix(prefix) = &self.selection
+            && let Some((slug, _)) = prefix.split_once('/')
+            && cards.is_empty()
+            && let Some(spec) = specs::spec(&CATALOG, slug)
+        {
+            cards.push(spec);
+        }
+        // Play only the selected cards' candidates to discover their available moments.
+        let next = AtomicUsize::new(0);
+        beryl_inspect::runner::spread(cards.len(), &next, || {
+            while let Some(spec) = cards.get(next.fetch_add(1, Ordering::Relaxed)) {
+                spec.moments();
+            }
+        });
         let mut jobs = Vec::new();
-        for def in &definitions {
+        for def in definitions
+            .iter()
+            .filter(|def| self.selection.fixture(def.name()))
+        {
             match def.seats() {
                 Ok(seats) => jobs.extend(seats.into_iter().map(|seat| Job::Fixture(def, seat))),
                 Err(why) => done.push(Recorded {
@@ -71,7 +160,12 @@ impl Recorder for Cli {
         }
         for spec in &cards {
             for moment in spec.moments() {
-                jobs.extend(View::ALL.map(|view| Job::Moment(&spec.slug, moment, view)));
+                if self
+                    .selection
+                    .moment(&format!("{}/{}", spec.slug, moment.name))
+                {
+                    jobs.extend(View::ALL.map(|view| Job::Moment(&spec.slug, moment, view)));
+                }
             }
         }
         let recorded = Mutex::new(done);

@@ -248,25 +248,35 @@ pub fn status(message: &str, otherwise: u8) -> u8 {
     }
 }
 
-/// The path of the pack for the present sources, whether or not it has been built.
+/// The environment variable selecting a pack made by `record` for a local command.
+pub const PACK_ENV: &str = "BERYL_B3D_PACK";
+
+/// The path of the corpus pack for the present sources, whether or not it has been built.
 fn current() -> Result<PathBuf, String> {
-    let root = root();
-    let files = pack::sources::sources(&root)?;
-    let hash = pack::sources::hash(&root, &files)?;
+    if let Some(path) = std::env::var_os(PACK_ENV) {
+        return Ok(path.into());
+    }
+    let hash = pack_hash(&[])?;
     Ok(pack::path(&pack::cache_dir(), &hash))
 }
 
-/// Builds the pack for the present sources with `recorder` if it is missing, and returns its
-/// path.
+fn pack_hash(selection: &[String]) -> Result<String, String> {
+    let root = root();
+    let mut files = pack::sources::sources(&root)?;
+    if selection.is_empty() {
+        files.push(crate::corpus::PATH.into());
+    }
+    pack::sources::selection_hash(&root, &files, selection)
+}
+
+/// Builds the selected pack with `recorder` if it is missing. An empty selection
+/// identifies the checked-in corpus pack used by default.
 ///
 /// # Errors
 ///
 /// When the sources cannot be read or the pack cannot be written.
-pub fn build(recorder: &dyn Recorder) -> Result<PathBuf, String> {
-    let root = root();
-    let files = pack::sources::sources(&root)?;
-    let hash = pack::sources::hash(&root, &files)?;
-    pack::ensure(&pack::cache_dir(), &hash, recorder)
+pub fn build(selection: &[String], recorder: &dyn Recorder) -> Result<PathBuf, String> {
+    pack::ensure(&pack::cache_dir(), &pack_hash(selection)?, recorder)
 }
 
 fn open() -> Result<Opened, String> {

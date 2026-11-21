@@ -305,7 +305,7 @@ def interface_list(family: str) -> list[Listed]:
     board, which `beryl_inspect` makes with no recording, reads none. [`FRAME_LIMITS`] reads
     every test's."""
     cards = cards_by_recording()
-    tests = test_names("--all")
+    tests = test_names()
     checks = [Listed(f"{family}:{t}", cards.get(recording_of(t), [])) for t in tests]
     if family == "b3d-interface":
         every = sorted({c for t in tests for c in cards.get(recording_of(t), [])})
@@ -387,7 +387,7 @@ def interface_run(family: str, checks: list[str], switches: list[str]) -> list[R
     results: list[Result] = []
     for prefix in prefixes:
         command = [str(DEBUG / "b3d"), "test", "--json", *switches]
-        command.insert(2, prefix or "--all")
+        command[2:2] = [prefix] if prefix else []
         done = run_out(command)
         try:
             output = json.loads(done.stdout)
@@ -672,11 +672,8 @@ LIST_NEEDS_BUILD: frozenset[str] = frozenset(
     }
 )
 
-# The web-match families are in beryl3d_match.py, which loads the match tools, and
-# `b3d-timeline-drift` in beryl3d_timeline_drift.py, which plays the web interface's timeline.
-# Each is imported when its family runs, so the other families do not declare those modules.
 
-
+# Import family-specific adapters only when their family runs.
 def web_match_list() -> list[Listed]:
     from . import beryl3d_match
 
@@ -708,7 +705,6 @@ def frame_trend_run(checks: list[str]) -> list[Result]:
 
 
 def next_checks(family: str) -> list[dict[str, str]]:
-    """The checks of the exploration family `family` to play now."""
     if family == "b3d-web-drift":
         from . import beryl3d_match
 
@@ -767,6 +763,10 @@ def main(args: list[str]) -> int:
             for entry in beryl3d_frame_trend.next_checks():
                 print(json.dumps(entry), flush=True)
             return 0
+        case ["b3d-corpus", *rest]:
+            from .beryl3d_corpus import main as corpus_main
+
+            return corpus_main(rest, DEBUG)
         case [family, "list"] if family in LISTS:
             if family in LIST_NEEDS_BUILD and not (DEBUG / "record").is_file():
                 built = build(to_stderr=True)

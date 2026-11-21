@@ -9,12 +9,25 @@ mod recorder;
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
+    let arguments: Vec<_> = std::env::args().skip(1).collect();
+    if arguments == ["--help"] || arguments == ["-h"] {
+        println!("just b3d record [--all | --prefix <recording> | --cards <card>...]");
+        println!("With no arguments, record the checked-in corpus and every fixture.");
+        return ExitCode::SUCCESS;
+    }
     if let Err(why) = beryl_inspect::data::checkout() {
         eprintln!("record: {why}");
         return ExitCode::FAILURE;
     }
     let root = beryl_inspect::recordings::root();
-    match beryl_inspect::recordings::build(&recorder::Cli { root }) {
+    let selection = match recorder::Selection::parse(&root, &arguments) {
+        Ok(selection) => selection,
+        Err(why) => {
+            eprintln!("record: {why}");
+            return ExitCode::FAILURE;
+        }
+    };
+    match beryl_inspect::recordings::build(&arguments, &recorder::Cli { root, selection }) {
         Ok(path) => {
             println!("{}", path.display());
             ExitCode::SUCCESS

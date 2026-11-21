@@ -20,6 +20,9 @@
     "tools/src/beryl_tools/beryl3d/camera.py": [
       "data/beryl3d/camera-fit.json"
     ],
+    "tools/src/beryl_tools/beryl3d/cli.py": [
+      "data/beryl3d/corpus.txt"
+    ],
     "tools/src/beryl_tools/beryl3d/gate.py": [
       "data/beryl3d/budgets.json"
     ],

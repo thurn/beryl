@@ -226,10 +226,16 @@ const COMMANDS: [Command; 10] = [
         ],
         spec: Spec {
             recording: false,
-            values: &[],
+            values: &[corpus::SNAPSHOT, corpus::AGAINST],
             switches: &[test::UPDATE],
         },
-        own: &[("--update", "write data/beryl3d/corpus.txt")],
+        own: &[
+            ("--update", "write data/beryl3d/corpus.txt"),
+            (
+                "--sweep [--crate <crate>]",
+                "check all card spec moments, one crate at a time",
+            ),
+        ],
         run: corpus::corpus,
     },
     Command {

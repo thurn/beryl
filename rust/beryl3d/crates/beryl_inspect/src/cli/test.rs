@@ -99,9 +99,11 @@ pub(super) fn test(options: &Options) -> Result<Printed, Usage> {
     let outcomes = runner::run_until(&tests, mode, stop);
     let seconds = started.elapsed().as_secs_f64();
     let deferred = tests.len() - outcomes.len();
-    // The median and allowlist are defined over the full desktop pack.
-    let every_test = all && prefix.is_empty() && deferred == 0 && desktop;
-    let over = limits.map_or_else(Vec::new, |limits| limits.over(&outcomes, every_test));
+    // Check the median for a complete desktop matrix. Only the full pack may drop
+    // allowlist entries for recordings that were not played.
+    let complete = prefix.is_empty() && deferred == 0 && desktop;
+    let every_test = all && complete;
+    let over = limits.map_or_else(Vec::new, |limits| limits.over(&outcomes, complete));
     let mut changes = None;
     if let Some(listed) = listed.as_mut().filter(|_| options.switch(UPDATE)) {
         let done = listed.update(&outcomes, every_test, options.switch(RAISE));

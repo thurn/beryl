@@ -13,11 +13,14 @@ use std::path::{Path, PathBuf};
 
 /// The files and directories outside the crates that a recording depends on, from the root of
 /// the repository.
-const DATA: [&str; 4] = [
+const DATA: [&str; 7] = [
     "ui/fixtures.json",
     "docs/sample-decks",
     "data/ui-conventions.json",
     "data/card-store.tsv",
+    "data/set-groups.json",
+    "rust/beryl3d/crates/beryl_record/src",
+    "rust/beryl3d/Cargo.lock",
 ];
 
 /// The crates outside Beryl 3D that `beryl_record` depends on, whose path dependencies the
@@ -141,8 +144,26 @@ fn walk(path: &Path, files: &mut BTreeSet<PathBuf>) -> Result<(), String> {
 ///
 /// When a file cannot be read.
 pub fn hash(root: &Path, files: &[PathBuf]) -> Result<String, String> {
+    selection_hash(root, files, &[])
+}
+
+/// Hashes a pack's source files and the ordered arguments selecting its recordings.
+///
+/// # Errors
+///
+/// When a source file cannot be read.
+pub fn selection_hash(
+    root: &Path,
+    files: &[PathBuf],
+    selection: &[String],
+) -> Result<String, String> {
     let mut hash = Fnv::default();
     hash.write(&super::VERSION.to_le_bytes());
+    hash.write(&(selection.len() as u64).to_le_bytes());
+    for argument in selection {
+        hash.write(&(argument.len() as u64).to_le_bytes());
+        hash.write(argument.as_bytes());
+    }
     for file in files {
         let path = root.join(file);
         let bytes = std::fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))?;

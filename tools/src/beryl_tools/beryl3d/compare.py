@@ -94,10 +94,7 @@ def b3d(arguments: list[str], build: bool = True) -> str | None:
     built = ["build", "-q", "-p", "beryl_inspect", "--bin", "b3d"]
     if build and cli.quick_build(built) != 0:
         return None
-    line = [str(cli.linked("b3d")), *arguments]
-    done = subprocess.run(line, capture_output=True, text=True, check=False)
-    if done.returncode == cli.MISSING_PACK and cli.record() == 0:
-        done = subprocess.run(line, capture_output=True, text=True, check=False)
+    done = cli.launch_program("b3d", arguments, capture=True)
     if done.returncode != 0:
         sys.stderr.write(done.stdout + done.stderr)
         return None

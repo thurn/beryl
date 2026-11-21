@@ -26,6 +26,14 @@ use self::words::Words;
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct Signature(Vec<u8>);
 
+impl Signature {
+    /// The exact encoded shape, for comparing independently built recording packs.
+    #[must_use]
+    pub fn into_bytes(self) -> Vec<u8> {
+        self.0
+    }
+}
+
 /// Measures the shapes in a recording's messages for the given desktop and phone windows.
 /// The measurement cache is reused between recordings, but each recording starts a new log.
 pub struct Measure {

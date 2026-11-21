@@ -23,7 +23,6 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import subprocess
 import sys
 import time
 from dataclasses import dataclass, field
@@ -141,12 +140,7 @@ def run_built(name: str, arguments: list[str]) -> str:
     """
     from . import cli
 
-    line = [str(cli.linked(name)), *arguments]
-    done = subprocess.run(line, capture_output=True, text=True, check=False)
-    if done.returncode == cli.MISSING_PACK:
-        if cli.record() != 0:
-            raise SystemExit(1)
-        done = subprocess.run(line, capture_output=True, text=True, check=False)
+    done = cli.launch_program(name, arguments, capture=True)
     if done.returncode != 0:
         sys.stderr.write(done.stderr)
         raise SystemExit(done.returncode)

@@ -105,7 +105,13 @@ through the client with no window or GPU (the `b3d` skill has the details):
 - `just b3d corpus` lists the first recording and count for each distinct
   signature. `--update` writes their names and every fixture to
   `data/beryl3d/corpus.txt`. The [game probe guide](crates/game_probe/AGENTS.md)
-  defines the signature.
+  defines the signature. `--sweep` checks every card spec moment from both seats
+  in each profile's first window and reports signatures missing from the corpus.
+  It saves each completed card crate's result so the same command can resume an
+  interrupted sweep. Use `--crate <crate>` to run one part.
+- `just b3d record` builds the corpus pack used by Ignite. A named spec or a
+  test prefix can build a separate pack on demand. `just b3d record --all`
+  explicitly builds the full pack.
 - `just b3d test` runs the corpus and the standalone scenes from each seat in
   each desktop window. `--all` runs the entire pack. A prefix chooses any test
   whose name starts with it. Tests are named

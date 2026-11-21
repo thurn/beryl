@@ -5,7 +5,7 @@
 //! test driver by name ([`pages`]). [`cli`] is the text commands of `just b3d`.
 
 pub mod cli;
-mod corpus;
+pub mod corpus;
 pub mod data;
 pub mod faults;
 pub mod gate;

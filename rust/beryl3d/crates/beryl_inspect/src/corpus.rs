@@ -2,10 +2,9 @@
 
 use std::collections::{BTreeSet, HashMap};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use beryl_protocol::Seat;
-use game_probe::signature::{Measure, Signature};
+use game_probe::signature::Measure;
 use serde_json::Value;
 
 use crate::pages::Windows;
@@ -17,16 +16,28 @@ pub(crate) struct Representative<'a> {
     pub count: usize,
 }
 
+pub(crate) const PATH: &str = "data/beryl3d/corpus.txt";
+
 fn path() -> PathBuf {
-    recordings::root().join("data/beryl3d/corpus.txt")
+    recordings::root().join(PATH)
+}
+
+/// Reads the names of the default corpus from a checkout.
+///
+/// # Errors
+///
+/// When the list cannot be read.
+pub fn names(root: &Path) -> Result<BTreeSet<String>, String> {
+    let path = root.join(PATH);
+    let text = fs::read_to_string(&path).map_err(|error| format!("{}: {error}", path.display()))?;
+    Ok(text.lines().map(str::to_owned).collect())
 }
 
 /// The sorted recording names in the checked-in corpus, checked against the pack.
 pub(crate) fn read() -> Result<BTreeSet<String>, String> {
     let path = path();
-    let text = fs::read_to_string(&path).map_err(|error| format!("{}: {error}", path.display()))?;
     let available = recordings::entries()?;
-    let mut names: BTreeSet<_> = text.lines().map(str::to_owned).collect();
+    let mut names = names(&recordings::root())?;
     names.extend(fixtures()?);
     for name in &names {
         if available
@@ -60,23 +71,37 @@ pub(crate) fn fixtures() -> Result<BTreeSet<String>, String> {
         .collect()
 }
 
-/// Groups pack entries by the ordered pair of signatures for their recorded seats. The pack
-/// is sorted by name and seat, so insertion chooses the first name in each group.
-pub(crate) fn representatives() -> Result<Vec<Representative<'static>>, String> {
+/// The exact signature of a recording, with each seat's shape in seat order.
+pub(crate) type Shape = Vec<(u8, Vec<u8>)>;
+
+/// Measures each recording in the selected pack. Retaining failures by name lets a sweep
+/// report other missing signatures even when one recording cannot be decoded.
+type Measured = (&'static str, Result<Shape, String>);
+
+pub(crate) fn shapes() -> Result<Vec<Measured>, String> {
     let windows = Windows::All.windows();
     let mut measure = Measure::new(crate::data::checkout_ref()?, &windows);
-    let mut groups = HashMap::<Vec<(Seat, Signature)>, Representative<'_>>::new();
-    for entries in recordings::entries()?.chunk_by(|a, b| a.name == b.name) {
-        let name = entries[0].name;
-        let mut signatures = Vec::new();
-        for entry in entries {
-            let signature = pack::messages(entry)
-                .and_then(|messages| measure.recording(&messages))
-                .map_err(|error| format!("{name} seat {}: {error}", entry.seat))?;
-            signatures.push((entry.seat(), signature));
-        }
+    Ok(recordings::entries()?
+        .chunk_by(|a, b| a.name == b.name)
+        .map(|entries| {
+            let shape = entries.iter().map(|entry| {
+                pack::messages(entry)
+                    .and_then(|messages| measure.recording(&messages))
+                    .map(|signature| (entry.seat, signature.into_bytes()))
+                    .map_err(|error| format!("{} seat {}: {error}", entry.name, entry.seat))
+            });
+            (entries[0].name, shape.collect())
+        })
+        .collect())
+}
+
+/// Groups the selected pack by signature. The pack is sorted by name and seat, so insertion
+/// chooses the first name in each group.
+pub(crate) fn representatives() -> Result<Vec<Representative<'static>>, String> {
+    let mut groups = HashMap::<Shape, Representative<'_>>::new();
+    for (name, shape) in shapes()? {
         let representative = groups
-            .entry(signatures)
+            .entry(shape?)
             .or_insert(Representative { name, count: 0 });
         representative.count += 1;
     }

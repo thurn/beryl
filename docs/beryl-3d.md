@@ -3512,8 +3512,13 @@ in every desktop and phone window would mean about 2.1 million tests.
 `just b3d test` runs the corpus and standalone scenes. The corpus has one
 recording per distinct signature, plus every fixture. `just b3d corpus` shows
 how many recordings share each representative's signature, and `--update` writes
-the selection to `data/beryl3d/corpus.txt`. Use `just b3d test --all` for every
-recording, or pass a recording name to check it directly.
+the selection to `data/beryl3d/corpus.txt`. Landing checks record those names
+and every fixture. A named spec or a test prefix records its selection into a
+separate cached pack. `just b3d corpus --sweep` checks each card crate's
+recordings from both seats in each profile's first window and reports signatures
+missing from the corpus. Each completed part is saved so the sweep can resume.
+Use `just b3d test --all` for every recording, or pass a recording name to check
+it directly.
 
 ## Performance gates
 

@@ -82,8 +82,8 @@ def test_interface_tests_run_the_shared_builds_b3d(
     monkeypatch.setattr(cli.subprocess, "run", program)
     monkeypatch.setattr(cli, "linked", lambda name: Path("/linked") / name)
     monkeypatch.setattr(cli, "program", lambda name: Path("/built") / name)
-    assert cli.main(["test", "verbs-"]) == 0
-    assert ran == [cli.SHARED_BUILD, ["/built/b3d", "test", "verbs-"]]
+    assert cli.main(["test"]) == 0
+    assert ran == [cli.SHARED_BUILD, ["/built/b3d", "test"]]
 
 
 def test_a_missing_pack_is_recorded_and_the_command_run_again(
@@ -104,13 +104,13 @@ def test_a_missing_pack_is_recorded_and_the_command_run_again(
     monkeypatch.setattr(cli.subprocess, "run", program)
     monkeypatch.setattr(cli, "linked", lambda name: Path("/linked") / name)
     monkeypatch.setattr(cli, "program", lambda name: Path("/built") / name)
-    assert cli.main(["list"]) == 0
+    assert cli.main(["tree", "verbs-zones"]) == 0
     assert ran == [
         ["build", "-q", "-p", "beryl_inspect", "--bin", "b3d"],
-        ["/linked/b3d", "list"],
+        ["/linked/b3d", "tree", "verbs-zones"],
         cli.SHARED_BUILD,
         ["/linked/record"],
-        ["/linked/b3d", "list"],
+        ["/linked/b3d", "tree", "verbs-zones"],
     ]
 
 
@@ -307,3 +307,40 @@ def test_parallel_builds_reuse_a_build_and_a_canceled_holder_releases_it(
             for pipe in (child.stdin, child.stdout):
                 if pipe is not None:
                     pipe.close()
+
+
+def test_a_named_spec_uses_a_cached_local_pack(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    selected: Path = tmp_path / "recordings-spec.bin"
+    launched: list[list[str]] = []
+
+    def program(
+        command: list[str], env: dict[str, str], **_kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        launched.append(command)
+        assert env[cli.PACK_ENV] == str(selected)
+        return subprocess.CompletedProcess(command, 0)
+
+    recorded: list[tuple[str, ...]] = []
+
+    def record(_binary: Path, *selection: str) -> Path:
+        recorded.append(selection)
+        return selected
+
+    monkeypatch.delenv(cli.PACK_ENV, raising=False)
+    monkeypatch.setattr(cli, "shared_build", lambda: 0)
+    monkeypatch.setattr(cli, "linked", lambda name: Path("/linked") / name)
+    monkeypatch.setattr(cli.pack, "record", record)
+    monkeypatch.setattr(cli.paths, "DATA", tmp_path)
+    (tmp_path / "corpus.txt").write_text("counterspell/other-moment\n")
+    monkeypatch.setattr(cli.subprocess, "run", program)
+    name = "counterspell/cast"
+    args = ["tree", "--seat", "opponent", name]
+    assert cli.run_program("b3d", args) == 0
+    assert launched == [["/linked/b3d", *args]]
+    assert recorded == [("--prefix", f"{name}/")]
+    assert cli.pack_selection(["test", "b3d:counterspell/"]) == (
+        "--prefix",
+        "b3d:counterspell/",
+    )

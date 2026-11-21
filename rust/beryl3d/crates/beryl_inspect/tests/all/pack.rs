@@ -211,10 +211,17 @@ fn two_processes_at_once_leave_one_whole_file() {
 /// and data folders itself, so the folders it lists are opened through the helper, which makes
 /// them inputs of the test.
 fn root() -> PathBuf {
-    for folder in ["rust/crates", "rust/cards", "docs/sample-decks", "data"] {
+    for folder in [
+        "rust/crates",
+        "rust/cards",
+        "rust/beryl3d/crates/beryl_record/src",
+        "docs/sample-decks",
+        "data",
+    ] {
         beryl_test_files::read_dir(folder).unwrap();
     }
     beryl_test_files::read("ui/fixtures.json").unwrap();
+    beryl_test_files::read("rust/beryl3d/Cargo.lock").unwrap();
     beryl_test_files::root().unwrap().canonicalize().unwrap()
 }
 
@@ -229,7 +236,12 @@ fn the_sources_are_the_recorder_and_its_data_and_not_the_client() {
     assert!(has("rust/crates/beryl_session/src/lib.rs"));
     assert!(files.iter().any(|f| f.starts_with("rust/cards")));
     assert!(files.iter().any(|f| f.starts_with("docs/sample-decks")));
-    assert!(!files.iter().any(|f| f.starts_with("rust/beryl3d")));
+    assert!(has("rust/beryl3d/crates/beryl_record/src/recorder.rs"));
+    assert!(
+        !files
+            .iter()
+            .any(|f| f.starts_with("rust/beryl3d/crates/beryl_inspect"))
+    );
 }
 
 #[test]
@@ -246,4 +258,75 @@ fn a_changed_byte_in_the_fixture_definitions_changes_the_hash() {
     bytes[middle] ^= 1;
     std::fs::write(&file, &bytes).unwrap();
     assert_ne!(before, sources::hash(&dir, &listed).unwrap());
+}
+
+#[test]
+fn the_corpus_and_an_on_demand_pack_are_separate() {
+    use std::collections::BTreeSet;
+
+    let debug = std::env::current_exe()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .to_owned();
+    let record = |arguments: &[&str]| {
+        let output = Command::new(debug.join("record"))
+            .args(arguments)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        PathBuf::from(String::from_utf8(output.stdout).unwrap().trim())
+    };
+    let corpus = record(&[]);
+    let bytes = std::fs::read(corpus).unwrap();
+    let available: BTreeSet<_> = pack::read(&bytes)
+        .unwrap()
+        .iter()
+        .map(|entry| entry.name)
+        .collect();
+    let fixtures: serde_json::Value =
+        serde_json::from_slice(&beryl_test_files::read("ui/fixtures.json").unwrap()).unwrap();
+    let listed = beryl_test_files::read_to_string("data/beryl3d/corpus.txt").unwrap();
+    let expected: BTreeSet<_> = listed
+        .lines()
+        .chain(
+            fixtures["fixtures"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|fixture| fixture["name"].as_str().unwrap()),
+        )
+        .collect();
+    assert_eq!(available, expected);
+
+    // An explicit request makes a separate, reusable pack with just that recording.
+    let name = "aangs-iceberg/lands-tapped";
+    let selected = record(&["--prefix", name]);
+    assert_eq!(selected, record(&["--prefix", name]));
+    let bytes = std::fs::read(&selected).unwrap();
+    let entries = pack::read(&bytes).unwrap();
+    assert_eq!(
+        entries
+            .iter()
+            .map(|entry| (entry.name, entry.seat()))
+            .collect::<Vec<_>>(),
+        [(name, Seat::P0), (name, Seat::P1)]
+    );
+    let output = Command::new(debug.join("b3d"))
+        .args(["tree", name])
+        .env(beryl_inspect::recordings::PACK_ENV, selected)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(String::from_utf8(output.stdout).unwrap().contains("view "));
 }

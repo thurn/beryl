@@ -395,40 +395,35 @@ def out(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
     )
 
 
-def b3d(arguments: list[str]) -> str:
-    """Runs the `b3d` binary built by `pack_name` and returns its output.
-    Building `beryl_inspect` on its own resolves a different set of Cargo features and
-    leaves a second build in the target directory."""
-    from . import cli
+def b3d(arguments: list[str], recordings: Path) -> str:
+    """Runs the shared inspector against the same pack as the web export."""
+    from . import cli, pack
 
     line = [str(cli.program("b3d")), *arguments]
-    done = out(line)
-    if done.returncode == cli.MISSING_PACK:
-        if cli.record() != 0:
-            raise SystemExit(1)
-        done = out(line)
+    done = out(line, env={**os.environ, pack.PACK_ENV: str(recordings)})
     if done.returncode != 0:
         sys.stderr.write(done.stderr)
         raise SystemExit(done.returncode)
     return done.stdout
 
 
-def pack_name() -> str:
-    """Builds the shared binaries and returns the recordings pack's name."""
+def recordings_pack(fixtures_only: bool) -> Path:
+    """Builds the shared binaries and chooses the corpus or complete pack."""
     from . import cli
 
     if cli.shared_build() != 0:
         raise SystemExit(1)
-    done = out([str(cli.program("record"))], cwd=paths.WORKSPACE)
+    selection = [] if fixtures_only else ["--all"]
+    done = out([str(cli.program("record")), *selection], cwd=paths.WORKSPACE)
     if done.returncode != 0:
         sys.stderr.write(done.stderr)
         raise SystemExit(done.returncode)
-    return Path(done.stdout.strip().splitlines()[-1]).name
+    return Path(done.stdout.strip().splitlines()[-1])
 
 
-def export(directory: Path) -> list[tuple[str, str]]:
+def export(directory: Path, recordings: Path) -> list[tuple[str, str]]:
     """Writes the recordings to `directory` and returns the recording and seat of each."""
-    b3d(["export", str(directory)])
+    b3d(["export", str(directory)], recordings)
     found: list[tuple[str, str]] = []
     for file in sorted(directory.glob("*.json")):
         stem, seat = file.name.removesuffix(".json").rsplit(".", 1)
@@ -482,11 +477,11 @@ def prune_web_cache(directory: Path, now: float | None = None) -> None:
             file.unlink(missing_ok=True)
 
 
-def native_lines() -> list[str]:
+def native_lines(recordings: Path) -> list[str]:
     """Beryl 3D's timeline of every recording and seat, from its own file. One run for all is
     faster than a run for each recording, since each start of the program is checked by macOS
     before it runs."""
-    printed = b3d(["timeline", "--all"]).splitlines()
+    printed = b3d(["timeline", "--all"], recordings).splitlines()
     # The first line is the command that prints it again, the second the file, which is
     # deleted once read: every run writes a new one.
     file = Path(printed[1])
@@ -585,17 +580,17 @@ def report(found: list[Difference], web_command: str) -> str:
 
 
 def run_parity(args: argparse.Namespace) -> int:
-    pack = pack_name()
+    recordings = recordings_pack(args.fixtures)
     directory = Path(tempfile.mkdtemp(prefix="b3d-parity-"))
     try:
-        return parity(args, pack, directory)
+        return parity(args, recordings, directory)
     finally:
         shutil.rmtree(directory, ignore_errors=True)
 
 
-def parity(args: argparse.Namespace, pack: str, directory: Path) -> int:
-    names = export(directory)
-    web_all = web_lines(pack, directory)
+def parity(args: argparse.Namespace, recordings: Path, directory: Path) -> int:
+    names = export(directory, recordings)
+    web_all = web_lines(recordings.name, directory)
     selected = [
         (n, s)
         for n, s in names
@@ -612,7 +607,7 @@ def parity(args: argparse.Namespace, pack: str, directory: Path) -> int:
         }
         count = write_copies(web, names_written, prune=not args.prefix)
         print(f"wrote the committed web timelines of {count} fixtures to {WEB_COPIES}")
-    native = parse(native_lines())
+    native = parse(native_lines(recordings))
     found = differences(web, native, scope)
     allowed = load_allowlist()
     # The exported recordings are deleted when the run ends, so the command exports them again.

@@ -23,6 +23,21 @@ from . import paths
 
 # The pack format this reader knows, `beryl_inspect::pack::VERSION`.
 VERSION = 2
+PACK_ENV = "BERYL_B3D_PACK"
+
+
+def record(binary: Path, *selection: str) -> Path:
+    """Build the selected pack and read the path the recorder prints."""
+    done = subprocess.run(
+        [str(binary), *selection],
+        cwd=paths.WORKSPACE,
+        stdout=subprocess.PIPE,
+        text=True,
+        check=False,
+    )
+    if done.returncode:
+        raise subprocess.CalledProcessError(done.returncode, done.args)
+    return Path(done.stdout.strip().splitlines()[-1])
 
 
 @dataclass(frozen=True)
@@ -148,6 +163,8 @@ def names_seen(entries: list[Entry], names: Iterable[str]) -> dict[str, set[str]
 CORPUS_INPUTS = [
     "rust/cards/**",
     "rust/crates/**",
+    "rust/beryl3d/crates/beryl_record/**",
+    "data/beryl3d/corpus.txt",
     "rust/Cargo.lock",
     "data/card-store.tsv",
     "data/set-groups.json",
