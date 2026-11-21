@@ -6,6 +6,14 @@
       "Animate Dead: when ~ enters , if it's on the battlefield , [-it-] {+~+} loses \" enchant creature card in a graveyard \" and gains \" enchant creature put onto the battlefield with ~ [-.-] \" return enchanted creature card to the battlefield under your control [-and-] {+.+} attach ~ to it . when ~ leaves the battlefield , that [-creature's-] {+permanent's+} controller sacrifices it ."
     ]
   },
+  "Ashen Rider": {
+    "reason": "wording",
+    "note": "The renderer prints separate enters and dies triggers. Each of those events triggers the same mandatory exile of one target permanent.",
+    "diff": [
+      "Ashen Rider: when ~ enters [-or dies-] , exile target permanent .",
+      "Ashen Rider: {+when ~ dies , exile target permanent .+}"
+    ]
+  },
   "Beza, the Bounding Spring": {
     "reason": "wording",
     "note": "Oracle puts each instruction before its condition (\"create a Treasure token if an opponent controls more lands than you\"); the renderer puts the condition first. Same four intervening-if clauses.",
