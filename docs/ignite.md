@@ -4488,6 +4488,227 @@ A machine lists a family it does not run only to key the checks other machines
 run. It keeps that listing, or its failure, for the family's current inputs, so
 a family it cannot build is not tried again on every tip round.
 
+## Dynamic scaling
+
+This section is a design that is being built. The sections above describe Ignite
+as it runs today, and each is rewritten as its part of this design lands. Until
+then, where they differ, the sections above say what the code does.
+
+Today a person scales Ignite by editing `ignite.toml`: how many build trees,
+reserved cores, gigabytes and worker slots each machine has, which CLI a
+machine's workers run, and which machine and CLI each ticket belongs to. Each of
+those numbers has been wrong at least once. Twelve ticket trees ran out on
+2026-11-18. The trees' disk limit was passed on 2026-11-18 and again on
+2026-11-20. Worker slots are still read once when a daemon starts. Under this
+design Ignite decides those things from what it measures, and the few choices
+that are a person's to make move to the dashboard.
+
+Three words are used below. A **provider** is a coding-agent CLI that runs
+workers, such as `claude` or `codex`; older fields and tables call it an `app`.
+A **worker** is one headless CLI session holding one ticket. **Fleet settings**
+are the choices a person makes on the dashboard.
+
+### Where each kind of value lives
+
+| Kind                  | Where it lives                                   | Examples                                                                                                                  |
+| --------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| A measured fact       | The daemon measures it and reports it to the hub | Cores, memory, disk size and free space, load from outside Ignite, tree sizes, whether a provider's CLI answers           |
+| A derived value       | A pure function of the measured facts            | Core reserves, floors, tree counts, the trees' disk budget, browser page slots, how many more workers may start           |
+| A person's intent     | Fleet settings in the hub's database             | Each machine's state and disk cap; each provider's share, whether it is on, and its stop percentage                       |
+| A reviewed definition | `ignite.toml`                                    | A provider's program, arguments and models; the check families a machine can run; devices a machine has a fixed number of |
+
+`ignite.toml` loses `ticket_trees`, `landing_trees`, `trees_disk_gb`, `floor`,
+`express_cores`, `tip_build_cores`, the `[machine.<name>.pool.<app>]` tables,
+`[pool] default_owner`, `[pool] usage_hold_percent` and the per-machine
+`browser-pages` count. A machine needs no `[machine.<name>]` table unless it
+lists `families` or devices. A provider's program and arguments stay in the file
+because they are command lines that run with no sandbox, so they change by a
+reviewed landing and never from a web page.
+
+### Fleet settings
+
+A person edits fleet settings on the dashboard's Fleet page or with
+`ignite fleet`. The hub stores them with a version number and a log of every
+change, and sends each daemon its part in the reply to every heartbeat, about
+every 10 seconds. A daemon keeps the last reply on disk, so a restart or a hub
+outage changes nothing.
+
+Each machine has a state and an optional disk cap:
+
+- **Active**: the machine takes tickets and verifies tips.
+- **Checks only**: it verifies tips, and takes a ticket only when the ticket
+  holds `master` back and no active machine can take it. A machine running long
+  experiments is kept in this state.
+- **Off**: it asks for no ticket, claims no tip check and runs no idle work. It
+  still sends heartbeats and updates itself, so it can return.
+- The **disk cap** is an upper bound, in gigabytes, on what the machine's build
+  trees may hold. Left empty, the derived budget below applies alone.
+
+Each provider has three settings:
+
+- **On or off.** A provider that is off gets no work.
+- **Share**, a weight. The dashboard shows it as a percentage of the total of
+  the providers that are on. A provider that is on with a share of 0 is a
+  standby: it gets work only when no provider with a share can take it.
+- **Stop percentage**: how much of a plan window may be used before the provider
+  is held (see [Usage and failover](#usage-and-failover)). It starts at 99. A
+  lower figure keeps part of the plan for a person's own sessions, which use the
+  same plan.
+
+`ignite pool pause` and `ignite pool resume` on one machine set it to checks
+only and active. `ignite pool pause --all` still stops every hand-off.
+
+### Derived capacity
+
+Reserves and counts are fractions of the machine. `P` is its physical cores and
+`L` its logical cores, which differ only on cygnus (12 and 20).
+
+| Value                              | Formula                   | jarvis    | multivac  | cygnus |
+| ---------------------------------- | ------------------------- | --------- | --------- | ------ |
+| Express cores                      | round(P / 6), from 2 to 4 | 3         | 2         | 2      |
+| Cores kept for tip builds          | round(P / 5), from 2 to 6 | 4         | 2         | 2      |
+| Floor of the `tip` class           | 2                         | 2         | 2         | 2      |
+| Floor of the `batch` class         | round(P / 3), at least 2  | 6 (was 8) | 3 (was 2) | 4      |
+| Landing trees                      | round(P / 6), from 2 to 4 | 3         | 2         | 2      |
+| Browser pages (`per_core = 0.5`)   | L / 2, rounded down       | 9         | 5 (was 4) | none   |
+| Most workers at once (the ceiling) | 2 × L                     | 36        | 20        | 40     |
+
+The formulas use physical cores because they then give the values that were set
+by hand on all three machines, except the three marked. A key left in
+`ignite.toml` is ignored: an override would keep the static configuration alive,
+and a wrong formula is fixed by a landing to Ignite, which deploys in minutes.
+
+- **Ticket trees have no count.** A lease that finds no free tree creates one. A
+  tree that has been free for 24 hours is removed, except the newest two free
+  trees, which stay so that a new lease has a build to copy.
+- **The trees' disk budget** is the disk's size, less what the disk holds apart
+  from the trees, less a reserve of 50 GB or a tenth of the disk if that is
+  more. The machine's disk cap lowers it. The sweeps described under
+  [Build trees](#build-trees) hold the trees under the budget.
+- **Worker room replaces slots.** Each time a daemon asks the hub for work it
+  says how many more workers it will start now. That is none while memory is
+  pressed (swap grew a quarter of a gigabyte in a minute, or less than 1 GB is
+  free) or while free memory is under one worker's footprint plus 1 GB.
+  Otherwise it is up to three, within the ceiling. A worker's footprint is the
+  median peak memory of the machine's last 20 worker turns. The hub's admission
+  by expected cores and projected disk growth (see
+  [Light and heavy tickets](#light-and-heavy-tickets)) is unchanged, and is what
+  usually decides how many tickets a machine holds.
+
+### The provider mix
+
+The hub chooses the provider when it reserves a ticket for a machine. A daemon
+no longer offers slots that belong to one provider. It says which providers'
+CLIs have passed their probe on the machine, and the reservation names the one
+to run.
+
+Among the providers that are on, not held, present on the asking machine, able
+to run the ticket's `tier:` and allowed by its pin, the hub picks in this order:
+
+1. Of those with a share: the one with the fewest tickets in progress per unit
+   of share, counted across every machine.
+2. If there is none, of the standbys: the one with the fewest tickets in
+   progress.
+3. If there is still none, the ticket is not offered to this machine, and the
+   reason names each provider and why it cannot take the ticket.
+
+A change to the shares takes effect at the next reservation. Workers already
+running finish on the provider they started on.
+
+### Usage and failover
+
+Every machine uses one plan per provider, so a usage sample from any machine
+counts for all of them. The hub keeps the newest sample of each provider and
+plan window, and holds a provider while a window is at or above its stop
+percentage, until a newer sample is lower or the window resets. A window named
+for one model family holds only that family's models. A turn that ends at the
+plan's limit counts as a sample of 100% for that turn's provider. A provider
+whose CLI reports no usage figures is held only by such an end.
+
+Failover is the mix's rules applied to a held provider: its share drops out, the
+other providers divide the work, and it takes its share again when the hold
+ends. With the pool at 100% Claude and Codex on as a standby, Codex takes the
+work when Claude's weekly window reaches the stop percentage, and Claude takes
+it back at the reset.
+
+Ignite does not pace a plan to last until its reset. Pacing would need a
+forecast of use that is poor on a busy day, and the share a person set would
+often not be the share in effect. Total work is about the same either way while
+another provider has room.
+
+### Pins replace owners
+
+A ticket has no owner. An unpinned ticket goes to any machine and provider that
+can run it. Two labels are hard constraints, read from the ticket or from its
+nearest ancestor that has one:
+
+- `machine:<name>`: only that machine takes the ticket.
+- `provider:<name>`: only that provider runs it. A pin outranks the shares, but
+  not a provider that is off or held.
+
+The hub pins the tickets it files about one machine's fault, such as a
+regression that only reproduces there. Such a ticket that holds `master` back
+still falls back to any machine of the same system when its machine has been
+silent for 30 minutes. `ignite release --needs <machine>` adds the pin, and
+`ignite ticket create --automatic` pins a ticket to the machine that ran the
+command. `--owner` and `[pool] default_owner` are deleted.
+
+### Placement
+
+Dispatch stays a pull: a machine with room asks, and the hub answers. What
+changes is the question the hub answers, from "can this ticket run here?" to
+"should it?".
+
+Each daemon reports its capacity with every heartbeat: cores admitted and free,
+worker room, free memory, free disk and the disk budget, how long commands have
+waited for cores, and the build outputs that each of its trees holds. The hub
+uses a report for 60 seconds.
+
+For a ticket and a machine, the hub estimates the seconds until the ticket's
+first build is current there. That is the machine's wait for cores, plus 1,000
+CPU-seconds for each build output the ticket's files need that no tree on the
+machine holds, divided by the machine's free cores. A cold build of one output
+measured 947 to 1,390 CPU-seconds, against about 6 after a copy from a tree that
+holds it. A leased tree counts, since a lease can copy from it. A ticket that
+compiles nothing costs only the wait.
+
+When a machine asks, it takes the next ticket in dispatch's order if its
+estimate is within 30 seconds of the lowest among the active machines with room,
+or if the ticket was first passed over at least 60 seconds ago, or if no other
+machine can take it. Otherwise the hub offers it the ticket after that, and the
+reason names the better machine. Ties go to the machine with more of its cores
+free. Regressions, justiciar tickets, pinned tickets and the next ticket of a
+`lane:` chain skip placement.
+
+Keeping similar work together needs no rule of its own. A machine already
+working an area holds that area's build outputs, so it has the lowest estimate
+for the next ticket there.
+
+One figure in seconds was chosen over a weighted sum of scores so that every
+choice can be explained in a sentence and every constant can be measured.
+
+### Tip verification and machines that are off
+
+A tip round does not wait for checks that must pass on a platform all of whose
+machines are off. `master` moves without them, and `ignite status` and the
+dashboard's first line say since which commit that platform's checks have not
+run. When such a machine is switched back to active or checks only, its next
+round verifies the current tip, and a failure files a regression ticket as
+usual. The hub files no ticket about waiting for a machine that is off.
+
+### The desktop dispatcher is deleted
+
+Every worker is a headless CLI process that the daemon runs (see
+[CLI mode](#cli-mode)). The dispatcher session, `ignite dispatch`,
+`ignite pool init`, `add`, `remove` and `mode`, the hooks, clearing a worker and
+reading its model back, rotation and the `mode` setting are deleted. A person's
+own desktop session still works a ticket with `ignite start <ticket>` and sets
+its own title.
+
+A provider is one adapter in Ignite's code, which builds a turn's command line
+and reads the CLI's event stream, plus its tables in `ignite.toml`. Adding a
+provider adds one file and those tables.
+
 ## Records and metrics
 
 Ignite improves the workflow from what it records, so the record of every
