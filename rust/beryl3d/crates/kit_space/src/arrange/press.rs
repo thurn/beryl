@@ -23,19 +23,29 @@ impl<T, const CAPACITY: usize> Buffer<T, CAPACITY> {
         }
     }
 
+    #[inline]
     fn push(&mut self, value: T) {
         if let Some(heap) = &mut self.heap {
             heap.push(value);
         } else if let Err(full) = self.inline.try_push(value) {
-            let mut heap = Vec::with_capacity(CAPACITY * 2);
-            heap.extend(self.inline.drain(..));
-            heap.push(full.element());
-            self.heap = Some(heap);
+            self.spill(full.element());
         }
+    }
+
+    #[cold]
+    fn spill(&mut self, value: T) {
+        let mut heap = Vec::with_capacity(CAPACITY * 2);
+        heap.extend(self.inline.drain(..));
+        heap.push(value);
+        self.heap = Some(heap);
     }
 
     fn as_slice(&self) -> &[T] {
         self.heap.as_deref().unwrap_or(&self.inline)
+    }
+
+    fn as_mut_slice(&mut self) -> &mut [T] {
+        self.heap.as_deref_mut().unwrap_or(&mut self.inline)
     }
 }
 
@@ -81,10 +91,18 @@ impl HalfPlane {
         self.inward.dot(point) >= self.limit
     }
 
+    fn strictly_contains(self, point: Vec2) -> bool {
+        self.inward.dot(point) > self.limit
+    }
+
     fn clip(self, polygon: &[Vec2]) -> Polygon {
         let mut result = Polygon::new();
-        for (a, b) in edges(polygon) {
-            let from = self.inward.dot(a) - self.limit;
+        let Some((&first, rest)) = polygon.split_first() else {
+            return result;
+        };
+        let mut a = first;
+        let mut from = self.inward.dot(first) - self.limit;
+        for &b in rest.iter().chain(std::iter::once(&first)) {
             let to = self.inward.dot(b) - self.limit;
             if from >= 0.0 {
                 result.push(a);
@@ -92,6 +110,8 @@ impl HalfPlane {
             if (from < 0.0) != (to < 0.0) {
                 result.push(a.lerp(b, from / (from - to)));
             }
+            a = b;
+            from = to;
         }
         result
     }
@@ -108,42 +128,85 @@ pub(super) fn strip(camera: &Camera, region: Region, at: Vec2, direction: Vec2) 
     )
 }
 
-fn edges(polygon: &[Vec2]) -> impl Iterator<Item = (Vec2, Vec2)> + '_ {
-    polygon
-        .iter()
-        .copied()
-        .zip(polygon.iter().copied().cycle().skip(1))
+pub(super) struct Quad {
+    corners: [Vec2; 4],
+    pub(super) bounds: Bounds,
+    planes: [HalfPlane; 4],
 }
 
+/// The outline of a screen-facing item. The local x axis points along its bottom edge.
 #[derive(Clone, Copy)]
-pub(super) struct Quad(pub [Vec2; 4]);
+pub(super) struct Rectangle {
+    pub(super) centre: Vec2,
+    pub(super) half: Vec2,
+    pub(super) axis: Vec2,
+}
+
+impl Rectangle {
+    fn corners(self) -> [Vec2; 4] {
+        let x = self.axis * self.half.x;
+        let y = -self.axis.perp() * self.half.y;
+        [
+            self.centre - x - y,
+            self.centre + x - y,
+            self.centre + x + y,
+            self.centre - x + y,
+        ]
+    }
+
+    pub(super) fn quad(self) -> Quad {
+        let corners = self.corners();
+        let x = self.axis;
+        let y = -x.perp();
+        let normals = [y, -x, -y, x];
+        let planes = std::array::from_fn(|index| HalfPlane {
+            inward: normals[index],
+            limit: normals[index].dot(corners[index]),
+        });
+        Quad::with_planes(corners, planes)
+    }
+}
 
 impl Quad {
-    pub(super) fn has_area(self) -> bool {
-        let [a, b, c, d] = self.0;
+    pub(super) fn new(corners: [Vec2; 4]) -> Self {
+        let centre = corners.iter().copied().sum::<Vec2>() / 4.0;
+        let planes =
+            std::array::from_fn(|i| HalfPlane::edge(corners[i], corners[(i + 1) % 4], centre));
+        Self::with_planes(corners, planes)
+    }
+
+    fn with_planes(corners: [Vec2; 4], planes: [HalfPlane; 4]) -> Self {
+        let [a, b, c, d] = corners;
+        Self {
+            corners,
+            bounds: Bounds {
+                min: a.min(b).min(c.min(d)),
+                max: a.max(b).max(c.max(d)),
+            },
+            planes,
+        }
+    }
+
+    pub(super) fn has_area(&self) -> bool {
+        let [a, b, c, d] = self.corners;
         (c - a).perp_dot(d - b).abs() > f32::EPSILON
     }
 
-    fn planes(self) -> impl Iterator<Item = HalfPlane> {
-        let centre = self.0.iter().copied().sum::<Vec2>() / 4.0;
-        (0..4).map(move |i| HalfPlane::edge(self.0[i], self.0[(i + 1) % 4], centre))
+    fn along(&self, axis: Vec2) -> (f32, f32) {
+        let [a, b, c, d] = self.corners.map(|point| point.dot(axis));
+        (a.min(b).min(c.min(d)), a.max(b).max(c.max(d)))
     }
+}
 
-    fn along(self, axis: Vec2) -> (f32, f32) {
-        self.0
-            .map(|point| point.dot(axis))
-            .into_iter()
-            .fold((f32::INFINITY, f32::NEG_INFINITY), |(lo, hi), point| {
-                (lo.min(point), hi.max(point))
-            })
-    }
+#[derive(Clone, Copy)]
+pub(super) struct Bounds {
+    min: Vec2,
+    max: Vec2,
+}
 
-    pub(super) fn bounds_overlap(self, other: Self) -> bool {
-        [Vec2::X, Vec2::Y].into_iter().all(|axis| {
-            let (lo, hi) = self.along(axis);
-            let (other_lo, other_hi) = other.along(axis);
-            lo < other_hi && other_lo < hi
-        })
+impl Bounds {
+    pub(super) fn overlaps(self, other: Self) -> bool {
+        self.min.cmplt(other.max).all() && other.min.cmplt(self.max).all()
     }
 }
 
@@ -151,7 +214,7 @@ pub(super) fn safe_area(camera: &Camera) -> Quad {
     let inset = camera.window.safe_area;
     let size = camera.window.size;
     let (x, y) = (size.width - inset.right, size.height - inset.bottom);
-    Quad([
+    Quad::new([
         Vec2::new(inset.left, inset.top),
         Vec2::new(x, inset.top),
         Vec2::new(x, y),
@@ -169,25 +232,57 @@ pub(super) struct PressArea {
 }
 
 impl PressArea {
-    pub(super) fn new(item: Quad, screen: Quad, side: f32) -> Self {
-        let axis = ((item.0[1] - item.0[0]) + (item.0[2] - item.0[3])).normalize_or_zero();
+    pub(super) fn new(item: &Quad, screen: &Quad, side: f32) -> Self {
+        let [a, b, c, d] = item.corners;
+        let axis = ((b - a) + (c - d)).normalize_or_zero();
         let mut area = Self {
-            centres: item.0.into_iter().collect(),
+            centres: item.corners.into_iter().collect(),
             axes: [axis, axis.perp()],
             half: side / 2.0,
         };
-        for plane in item.planes().chain(screen.planes()) {
-            area.centres = area.eroded(plane).clip(area.centres.as_slice());
-        }
+        area.clip_to(&item.planes);
+        area.clip_to(&screen.planes);
         area
     }
 
+    /// A square aligned with a screen-facing rectangle fits at every centre of the rectangle
+    /// inset by half the square's side, plus clearance. Only the window still needs clipping.
+    pub(super) fn in_rectangle(rectangle: Rectangle, screen: &Quad, side: f32) -> Self {
+        let half = side / 2.0;
+        let inset = Rectangle {
+            half: rectangle.half - Vec2::splat(half + CLEARANCE),
+            ..rectangle
+        };
+        let centres = if inset.half.cmpge(Vec2::ZERO).all() {
+            inset.corners().into_iter().collect()
+        } else {
+            Polygon::new()
+        };
+        let mut area = Self {
+            centres,
+            axes: [rectangle.axis, rectangle.axis.perp()],
+            half,
+        };
+        area.clip_to(&screen.planes);
+        area
+    }
+
+    fn clip_to(&mut self, planes: &[HalfPlane; 4]) {
+        for &plane in planes {
+            let centres = self.centres.as_slice();
+            if centres.is_empty() {
+                break;
+            }
+            let plane = self.eroded(plane);
+            if !centres.iter().all(|&centre| plane.contains(centre)) {
+                self.centres = plane.clip(centres);
+            }
+        }
+    }
+
     fn radius(&self, axis: Vec2) -> f32 {
-        self.axes
-            .iter()
-            .map(|way| axis.dot(*way).abs())
-            .sum::<f32>()
-            * (self.half + CLEARANCE)
+        let [x, y] = self.axes;
+        (axis.dot(x).abs() + axis.dot(y).abs()) * (self.half + CLEARANCE)
     }
 
     fn eroded(&self, mut plane: HalfPlane) -> HalfPlane {
@@ -203,9 +298,15 @@ impl PressArea {
             .any(|&centre| strip.contains(centre))
     }
 
-    pub(super) fn witness(&self, blockers: impl Iterator<Item = Quad>) -> Option<[Vec2; 4]> {
-        let forbidden: Buffer<_, 12> = blockers.map(|quad| self.forbidden(quad)).collect();
-        let centre = uncovered(self.centres.as_slice(), forbidden.as_slice())?;
+    pub(super) fn witness<'a>(
+        &self,
+        blockers: impl Iterator<Item = &'a Quad>,
+    ) -> Option<[Vec2; 4]> {
+        if self.centres.as_slice().is_empty() {
+            return None;
+        }
+        let mut forbidden: Buffer<_, 12> = blockers.map(|quad| self.forbidden(quad)).collect();
+        let centre = uncovered(self.centres.as_slice(), forbidden.as_mut_slice())?;
         let [x, y] = self.axes.map(|axis| axis * self.half);
         Some([
             centre - x - y,
@@ -218,33 +319,39 @@ impl PressArea {
     /// The centres for which the square overlaps the blocker. Two convex polygons intersect
     /// when their projections overlap on the normals of both polygons. Each such overlap is a
     /// constraint on the square's centre, giving the forbidden polygon.
-    fn forbidden(&self, blocker: Quad) -> [HalfPlane; 8] {
+    fn forbidden(&self, blocker: &Quad) -> [HalfPlane; 8] {
         let expand = |mut plane: HalfPlane| {
             plane.limit -= self.radius(plane.inward);
             plane
         };
         let [x, y] = self.axes;
-        let mut bounds = [x, y, -x, -y].map(|inward| HalfPlane {
+        // Reversing an axis negates its upper bound, so each corner only needs one projection
+        // onto each of the square's axes.
+        let (left, right) = blocker.along(x);
+        let (bottom, top) = blocker.along(y);
+        // These four normals already follow the square axes. They all have the same radius.
+        let radius = self.radius(x);
+        let bound = |inward, limit| HalfPlane {
             inward,
-            limit: blocker.along(inward).0,
-        });
-        for plane in &mut bounds {
-            *plane = expand(*plane);
-        }
-        let mut edges = blocker.planes().map(expand);
-        std::array::from_fn(|i| {
-            if i < bounds.len() {
-                bounds[i]
-            } else {
-                edges.next().expect("a quad has four edges")
-            }
-        })
+            limit: limit - radius,
+        };
+        let [first, second, third, fourth] = blocker.planes.map(expand);
+        [
+            bound(x, left),
+            bound(y, bottom),
+            bound(-x, -right),
+            bound(-y, -top),
+            first,
+            second,
+            third,
+            fourth,
+        ]
     }
 }
 
 /// Find a centre outside all the forbidden polygons. For each obstacle, its outside is the
 /// union of the outsides of its edges. Keep those pieces and discard their common inside.
-fn uncovered(polygon: &[Vec2], forbidden: &[[HalfPlane; 8]]) -> Option<Vec2> {
+fn uncovered(polygon: &[Vec2], forbidden: &mut [[HalfPlane; 8]]) -> Option<Vec2> {
     if polygon.is_empty() {
         return None;
     }
@@ -257,24 +364,44 @@ fn uncovered(polygon: &[Vec2], forbidden: &[[HalfPlane; 8]]) -> Option<Vec2> {
     else {
         return Some(centre);
     };
-    // Earlier blockers excluded the centre, but can still cover the other pieces.
-    let (obstacle, rest) = forbidden
-        .split_first()
-        .expect("an obstacle covers the centre");
-    if first > 0
-        && obstacle
-            .iter()
-            .any(|plane| polygon.iter().all(|&point| plane.outside().contains(point)))
+    // A convex blocker containing every vertex leaves no valid centre anywhere in the polygon.
+    if polygon
+        .iter()
+        .all(|&point| !excludes(&forbidden[first], point))
     {
-        return uncovered(polygon, rest);
+        return None;
     }
-    let mut inside: Polygon = polygon.iter().copied().collect();
-    for plane in obstacle {
-        let outside = plane.outside().clip(inside.as_slice());
+    // A narrow exposed strip often includes a vertex. Try those before splitting polygons.
+    if let Some(point) = polygon
+        .iter()
+        .copied()
+        .find(|&point| forbidden.iter().all(|planes| excludes(planes, point)))
+    {
+        return Some(point);
+    }
+    // Split along a blocker that covers the centre. The other blockers still apply to each
+    // piece, but need not be split first merely because they were drawn sooner.
+    forbidden.swap(0, first);
+    let (obstacle, rest) = forbidden
+        .split_first_mut()
+        .expect("an obstacle covers the centre");
+    let mut inside: Option<Polygon> = None;
+    for plane in obstacle.iter().copied() {
+        let points = inside.as_ref().map_or(polygon, Polygon::as_slice);
+        let outside = plane.outside();
+        // A plane that never meets the polygon leaves only one piece. Keep exact edge
+        // contacts in the clipping path because they can contain a valid centre.
+        if points.iter().all(|&point| plane.strictly_contains(point)) {
+            continue;
+        }
+        if points.iter().all(|&point| outside.strictly_contains(point)) {
+            return uncovered(points, rest);
+        }
+        let outside = outside.clip(points);
         if let Some(point) = uncovered(outside.as_slice(), rest) {
             return Some(point);
         }
-        inside = plane.clip(inside.as_slice());
+        inside = Some(plane.clip(points));
     }
     None
 }

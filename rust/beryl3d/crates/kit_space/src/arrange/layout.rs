@@ -229,8 +229,8 @@ impl<'a> Layout<'a> {
         {
             return Err(FitError::Unreachable);
         }
-        let quad = Quad(corners.map(|point| self.camera.to_screen(point)));
-        (quad.has_area() && quad.bounds_overlap(self.screen))
+        let quad = Quad::new(corners.map(|point| self.camera.to_screen(point)));
+        (quad.has_area() && quad.bounds.overlaps(self.screen.bounds))
             .then_some(Surface {
                 index,
                 pose,
@@ -248,7 +248,7 @@ impl<'a> Layout<'a> {
         if !self.items[surface.index].pressable || target <= 0.0 {
             return 0.0;
         }
-        let area = PressArea::new(surface.quad, self.screen, target);
+        let area = PressArea::new(&surface.quad, &self.screen, target);
         let (mut low, mut high) = (0.0, whole);
         for _ in 0..FIT_STEPS {
             let middle = f32::midpoint(low, high);
@@ -319,9 +319,9 @@ impl<'a> Layout<'a> {
             if self.items[face.index].pressable && target > 0.0 {
                 let blockers = in_front
                     .iter()
-                    .filter(|other| other.quad.bounds_overlap(face.quad))
-                    .map(|other| other.quad);
-                let square = PressArea::new(face.quad, self.screen, target)
+                    .map(|other| &other.quad)
+                    .filter(|other| other.bounds.overlaps(face.quad.bounds));
+                let square = PressArea::new(&face.quad, &self.screen, target)
                     .witness(blockers)
                     .ok_or(FitError::Unreachable)?;
                 face.press_square = Some(square);

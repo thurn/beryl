@@ -39,6 +39,7 @@ pub struct Camera {
     pub view: Mat4,
     pub view_projection: Mat4,
     inverse_view: Mat4,
+    inverse_rotation: Quat,
     tan_half: f32,
 }
 
@@ -73,6 +74,7 @@ impl Camera {
             view: Mat4::IDENTITY,
             view_projection: Mat4::IDENTITY,
             inverse_view: Mat4::IDENTITY,
+            inverse_rotation: Quat::IDENTITY,
             tan_half: (data.fov_degrees.to_radians() / 2.0).tan(),
         };
         let (mut low, mut high) = (NEAREST, FARTHEST);
@@ -86,6 +88,7 @@ impl Camera {
             }
         }
         camera.set_distance(high);
+        camera.inverse_rotation = Quat::from_mat4(&camera.inverse_view);
         camera
     }
 
@@ -172,7 +175,7 @@ impl Camera {
         );
         Pose {
             position: self.inverse_view.transform_point3(local),
-            rotation: Quat::from_mat4(&self.inverse_view) * rotation,
+            rotation: self.inverse_rotation * rotation,
             scale: height * 2.0 * depth * self.tan_half / CARD_HEIGHT,
             ..Pose::default()
         }

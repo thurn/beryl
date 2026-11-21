@@ -374,14 +374,18 @@ pub fn lean((row, zoom): (&FittedRow, f32), camera: &Camera, pose: Pose, tapped:
     // A card at rest is face up or face down, which outlines the same shape. It is measured face
     // up, so that a card placed face up and turned over later gets the shear it would have been
     // placed with face down, to the last bit.
+    let flat = Pose {
+        shear: 0.0,
+        turn: 0.0,
+        ..pose
+    };
+    let transform = flat.transform();
     let span = |shear: f32, moved: f32| {
-        let pose = Pose {
-            shear,
-            position: pose.position + Vec3::X * moved,
-            turn: 0.0,
-            ..pose
-        };
-        let corners = camera.card_corners(pose.transform());
+        // Each trial sets the table-space shear and x offset of the same face. Reuse its
+        // rotation, scale and local skew, and move the centre after shearing around it.
+        let mut trial = Pose { shear, ..flat }.sheared(transform);
+        trial.translation.x += moved;
+        let corners = camera.card_corners(trial);
         corners
             .iter()
             .fold((f32::MAX, f32::MIN, f32::MAX), |(l, r, t), c| {

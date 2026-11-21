@@ -3,7 +3,7 @@
 use glam::{Quat, Vec2};
 use kit_base::geometry::{CARD_HEIGHT, GroupWindow, ScrollAxis};
 
-use super::press::{PressArea, Quad, safe_area};
+use super::press::{PressArea, Quad, Rectangle, safe_area};
 use super::{Camera, Container, Item, Overflow, Placed, Pose, Solved};
 
 /// A screen-facing fan whose anchor is the inner edge of the middle item in the front row.
@@ -63,6 +63,7 @@ pub(super) fn arrange(
     let mut first = 0;
     let mut shown = 0;
     let mut placed = Vec::new();
+    let mut projected = Vec::new();
     let mut overflow = Overflow::FullSize;
     if count > 0 {
         // All items in a hand have the same footprint. The capacity bound avoids retrying
@@ -73,12 +74,14 @@ pub(super) fn arrange(
             } else {
                 0
             };
-            if let Some((layout, overlapped)) =
-                fit.rows(&items[start..start + visible], container.limits.overlap)
-            {
+            if let Some(overlapped) = fit.rows(
+                &items[start..start + visible],
+                container.limits.overlap,
+                &mut placed,
+                &mut projected,
+            ) {
                 first = start;
                 shown = visible;
-                placed = layout;
                 if overlapped {
                     overflow = Overflow::Overlapped;
                 }
@@ -164,14 +167,25 @@ impl Fit<'_> {
         columns.saturating_mul(rows)
     }
 
-    fn rows(&self, items: &[Item], overlap: bool) -> Option<(Vec<Placed>, bool)> {
+    fn rows(
+        &self,
+        items: &[Item],
+        overlap: bool,
+        placed: &mut Vec<Placed>,
+        projected: &mut Vec<(Rectangle, Quad)>,
+    ) -> Option<bool> {
         let count = items.len();
+        let measure = self.target > 0.0 && items.iter().any(|item| item.pressable);
         let max_rows = if self.strip > 0.0 && !self.fan.inverted {
             count
         } else {
             1
         };
         for rows in 1..=max_rows {
+            // Even with no tilt, each back row needs the press strip and the margin.
+            if rows > 1 && (rows - 1) as f32 * (self.strip + self.margin) > self.room.y {
+                break;
+            }
             let columns = count.div_ceil(rows);
             let spacing = self.spacing(columns, overlap);
             if self.strip > 0.0 && spacing > self.widest(columns) {
@@ -181,7 +195,12 @@ impl Fit<'_> {
             if rows > 1 && (rows - 1) as f32 * rise > self.room.y {
                 continue;
             }
-            let mut placed = Vec::with_capacity(count);
+            placed.clear();
+            placed.reserve(count);
+            projected.clear();
+            if measure {
+                projected.reserve(count);
+            }
             let mut parts = items;
             let mut overlapped = rows > 1 && rise < self.fan.height * 2.0;
             for row in 0..rows {
@@ -193,11 +212,12 @@ impl Fit<'_> {
                 let middle = (length as f32 - 1.0) / 2.0;
                 overlapped |= length > 1 && spacing < self.width;
                 for (column, item) in row_items.iter().enumerate() {
-                    let pose = self.pose(
+                    let pose = self.place(
                         item,
                         (column as f32 - middle) * spacing,
                         above,
                         placed.len(),
+                        measure.then_some(&mut *projected),
                     );
                     placed.push(Placed {
                         key: item.key,
@@ -209,10 +229,11 @@ impl Fit<'_> {
                     });
                 }
             }
-            if self.witness(items, &mut placed) {
-                return Some((placed, overlapped));
+            if !measure || self.witness(items, placed, projected) {
+                return Some(overlapped);
             }
         }
+        placed.clear();
         None
     }
 
@@ -254,7 +275,14 @@ impl Fit<'_> {
         self.strip + 2.0 * spacing * self.slant(columns, spacing) + self.margin
     }
 
-    fn pose(&self, item: &Item, x: f32, rise: f32, layer: usize) -> Pose {
+    fn place(
+        &self,
+        item: &Item,
+        x: f32,
+        rise: f32,
+        layer: usize,
+        projected: Option<&mut Vec<(Rectangle, Quad)>>,
+    ) -> Pose {
         let radius = (self.fan.radius * self.width).max(f32::EPSILON);
         let along = x.clamp(-radius, radius);
         let sink = radius - (radius * radius - along * along).max(0.0).sqrt();
@@ -265,13 +293,29 @@ impl Fit<'_> {
         };
         let angle = -up * ((along / radius).asin() + self.fan.bias);
         let height = self.fan.height * item.size.y / self.height.max(f32::EPSILON);
+        let rotation = Vec2::from_angle(angle);
         let centre = Vec2::new(x, self.ndc.y - up * (sink - rise))
-            + Vec2::from_angle(angle).rotate(Vec2::new(0.0, -up * height));
+            + rotation.rotate(Vec2::new(0.0, -up * height));
         let window = self.camera.window.size;
         let ndc = Vec2::new(
             centre.x / (window.width / window.height) + self.ndc.x,
             centre.y,
         );
+        if let Some(projected) = projected {
+            // The fan lies in the camera's plane. Its centre, height and rotation already
+            // describe its four corners on screen, regardless of the depth of this layer.
+            let centre = Vec2::new(
+                f32::midpoint(ndc.x, 1.0) * window.width,
+                f32::midpoint(1.0, -ndc.y) * window.height,
+            );
+            let half = item.size * (height * window.height / (2.0 * item.size.y));
+            let rectangle = Rectangle {
+                centre,
+                half,
+                axis: rotation * Vec2::new(up, -up),
+            };
+            projected.push((rectangle, rectangle.quad()));
+        }
         // Preserve the normal plane spacing, then approach a quarter of the anchor depth so an
         // unusually deep fan still keeps every layer in front of the previous one.
         let step = self.fan.depth_step * layer as f32;
@@ -285,38 +329,21 @@ impl Fit<'_> {
         pose
     }
 
-    fn witness(&self, items: &[Item], placed: &mut [Placed]) -> bool {
-        if self.target <= 0.0 || !items.iter().any(|item| item.pressable) {
-            return true;
-        }
-        let quads: Vec<_> = items
-            .iter()
-            .zip(placed.iter())
-            .map(|(item, placed)| {
-                let half = item.size / 2.0;
-                let transform = placed.pose.transform();
-                Quad(
-                    [
-                        (-half.x, -half.y),
-                        (half.x, -half.y),
-                        (half.x, half.y),
-                        (-half.x, half.y),
-                    ]
-                    .map(|(x, y)| {
-                        self.camera
-                            .to_screen(transform.transform_point3(Vec2::new(x, y).extend(0.0)))
-                    }),
-                )
-            })
-            .collect();
+    fn witness(
+        &self,
+        items: &[Item],
+        placed: &mut [Placed],
+        projected: &[(Rectangle, Quad)],
+    ) -> bool {
         for (index, (item, placed)) in items.iter().zip(placed).enumerate() {
             if item.pressable {
-                let quad = quads[index];
-                let over = quads[index + 1..]
+                let (rectangle, quad) = &projected[index];
+                let over = projected[index + 1..]
                     .iter()
-                    .copied()
-                    .filter(|other| other.bounds_overlap(quad));
-                placed.press_square = PressArea::new(quad, self.safe, self.target).witness(over);
+                    .map(|(_, other)| other)
+                    .filter(|other| other.bounds.overlaps(quad.bounds));
+                placed.press_square =
+                    PressArea::in_rectangle(*rectangle, &self.safe, self.target).witness(over);
                 if placed.press_square.is_none() {
                     return false;
                 }
