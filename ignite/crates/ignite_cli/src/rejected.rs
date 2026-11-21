@@ -11,6 +11,7 @@ use clap::CommandFactory;
 use clap::error::{ContextKind, ContextValue, ErrorKind};
 
 use ignite_core::ids::SessionId;
+use ignite_core::protocol::client::Exit;
 use ignite_core::protocol::hub::RejectedCommand;
 
 use crate::args::Cli;
@@ -32,7 +33,24 @@ pub fn exit(error: &clap::Error, raw: &[String]) -> ! {
             send(&hub, &command);
         }
     }
+    if let Some(hint) = owner_replacement(error) {
+        let _ = error.print();
+        eprintln!("{hint}");
+        std::process::exit(i32::from(Exit::Usage.code()));
+    }
     error.exit()
+}
+
+pub(crate) fn owner_replacement(error: &clap::Error) -> Option<&'static str> {
+    match error.get(ContextKind::InvalidArg) {
+        Some(ContextValue::String(arg))
+            if error.kind() == ErrorKind::UnknownArgument
+                && arg.split('=').next() == Some("--owner") =>
+        {
+            Some("Use machine:<name> and provider:<name> labels to pin a ticket.")
+        }
+        _ => None,
+    }
 }
 
 /// Sends `command` once, and ignores whatever happens.

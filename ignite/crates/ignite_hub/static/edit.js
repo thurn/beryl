@@ -32,14 +32,16 @@
         document.querySelector(`.c-editable[data-field="${CSS.escape(field)}"]`);
     const rawOf = (unit) =>
         unit.querySelector(":scope > .c-edit-source")?.content.textContent ?? "";
+    const templateJson = (unit, className) =>
+        JSON.parse(unit.querySelector(`template.${className}`).content.textContent);
 
     class Conflict extends Error {}
 
-    async function send(ops, guarded = false) {
+    async function send(ops, version) {
         const ctx = context();
         if (!ctx) throw new Error("This page cannot edit tickets.");
         const body = { ops };
-        if (guarded) body.if = [{ id: ctx.dataset.ticket, version: Number(ctx.dataset.version) }];
+        if (version !== undefined) body.if = [{ id: ctx.dataset.ticket, version: Number(version) }];
         let response;
         try {
             response = await fetch(ctx.dataset.api, {
@@ -106,15 +108,11 @@
         return el;
     }
 
-    // The control for a value of `kind`, starting at `raw`. A `choice` value lists its options in
-    // `data-choices`, one `value=label` line each.
+    // The control for a value of `kind`, starting at `raw`.
     function control(kind, raw, label, unit) {
         switch (kind) {
             case "choice": {
-                const options = (unit.dataset.choices ?? "").split("\n").map((line) => {
-                    const at = line.indexOf("=");
-                    return [line.slice(0, at), line.slice(at + 1)];
-                });
+                const options = templateJson(unit, "c-edit-choices");
                 const el = select(options, raw);
                 el.setAttribute("aria-label", label);
                 return el;
@@ -160,7 +158,7 @@
     const words = (text) => text.split(/[\s,]+/).filter(Boolean);
 
     // The batch operations that set `field` of `kind` from `raw` to `value`.
-    function operations(field, kind, raw, value) {
+    function operations(field, kind, raw, value, unit) {
         const id = context().dataset.ticket;
         switch (kind) {
             case "line":
@@ -169,8 +167,12 @@
             case "priority":
                 return [{ op: "update", id, set: { priority: Number(value) } }];
             case "choice":
-                // The empty choice clears the field.
-                return [{ op: "update", id, set: { [field]: value || null } }];
+                return [{
+                    op: "update",
+                    id,
+                    add_labels: value ? [value] : [],
+                    remove_labels: templateJson(unit, "c-edit-pin-labels").filter((label) => label !== value),
+                }];
             case "labels": {
                 const before = new Set(words(raw));
                 const after = new Set(words(value));
@@ -210,14 +212,18 @@
         const error = element("div", { className: "c-edit-error", role: "alert" });
         const form = element("form", { className: "c-edit-form" }, [input, error]);
         const section = unit.closest("section[data-edit-empty]");
+        let closing = false;
         const close = () => {
+            // Removing a focused select can fire its blur handler before removal completes.
+            if (closing) return;
+            closing = true;
             form.remove();
             unit.classList.remove("c-editing");
             if (section && !rawOf(unit).trim()) {
                 section.hidden = true;
                 document.querySelector(`[data-add="${CSS.escape(field)}"]`)?.removeAttribute("hidden");
             }
-            flush(false);
+            flush(kind === "choice" && Boolean(form.dataset.conflict));
         };
         const save = async () => {
             const value = input.value;
@@ -227,10 +233,20 @@
             }
             error.textContent = "";
             form.querySelectorAll("button, input, select, textarea").forEach((el) => (el.disabled = true));
+            // Both label changes must apply to the ticket whose pins this dropdown showed.
+            let version;
+            if (kind === "choice") version = context().dataset.renderedVersion;
+            else if (GUARDED.has(kind) && !form.dataset.conflict) version = context().dataset.version;
             try {
-                await send(operations(field, kind, raw, value), GUARDED.has(kind) && !form.dataset.conflict);
+                await send(operations(field, kind, raw, value, unit), version);
             } catch (failure) {
                 form.querySelectorAll("button, input, select, textarea").forEach((el) => (el.disabled = false));
+                if (kind === "choice" && failure instanceof Conflict) {
+                    form.dataset.conflict = "1";
+                    input.value = raw;
+                    error.textContent = "This ticket changed. Close the menu and try again.";
+                    return;
+                }
                 if (failure instanceof Conflict) form.dataset.conflict = "1";
                 error.textContent = failure.message;
                 input.focus();

@@ -3653,8 +3653,16 @@ A `machine:<name>` label pins a ticket to a machine. A `provider:<name>` label
 pins it to a coding-agent CLI, such as `codex`. Each pin is inherited
 independently from the nearest ancestor that sets it. An unpinned ticket can go
 to any eligible worker. When a ticket has multiple labels of the same kind, the
-first nonempty one applies. The ticket page shows its effective pins, and its
-Labels editor changes its own pins.
+first nonempty one applies. The ticket page shows the effective values in its
+Machine and Provider rows and marks inherited pins. The dropdowns list
+registered machines and known providers. Choosing None clears the ticket's own
+pin, so any pin from an ancestor applies again.
+
+Use `ignite ticket create --labels machine:<name>,provider:<name>` when filing a
+pinned ticket. On an existing ticket, `ignite ticket update --add-label` and
+`--remove-label` change its labels. `ignite ticket show` and `list` print pins
+with the other labels. `ignite plan check` warns when an effective pin names a
+machine or provider unknown to the fleet.
 
 - `ignite ticket create --automatic` adds a machine pin for the filing machine
   unless the ticket already has one. The hub pins the tickets it files about a
@@ -3667,7 +3675,7 @@ Labels editor changes its own pins.
   requirement and any provider pin.
 - The hub migrates saved owners to labels on upgrade. For example,
   `jarvis/codex` becomes `machine:jarvis` and `provider:codex`. Existing pins
-  take precedence. Older clients can still send the retired owner field.
+  take precedence.
 - Each provider offers the tiers its `[pool.models.<provider>]` table names. A
   ticket without a tier uses the provider's configured `sonnet` model when
   present, or the model used for its health probe.

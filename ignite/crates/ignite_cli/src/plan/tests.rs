@@ -117,13 +117,15 @@ fn unknown_machine_and_provider_pins_are_reported() {
             &["machine:jarvis", "provider:claude"],
         ),
         ticket(&id(3), EPIC, "`a.rs`", &["needs:person"]),
+        ticket("ig9a.1.1", &id(1), "`a.rs`", &["provider:CLAUDE"]),
     ];
     let lines = report(&tickets, &[], &[]);
     assert_eq!(
         lines[2..],
         [
             "no machine     .1 is pinned to cygnus, which the fleet does not know",
-            "no provider    .1 is pinned to codex, which the fleet does not know"
+            "no provider    .1 is pinned to codex, which the fleet does not know",
+            "no machine     .1.1 is pinned to cygnus, which the fleet does not know",
         ]
     );
 }

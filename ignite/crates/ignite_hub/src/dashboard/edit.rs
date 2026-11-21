@@ -29,7 +29,7 @@ const PENCIL: &str = "<svg viewBox=\"0 0 16 16\" aria-hidden=\"true\" \
 /// expects, and where the batch goes.
 pub fn context(project: &str, ticket: &str, version: u64) -> String {
     format!(
-        "<div id=\"c-edit\" hidden data-ticket=\"{}\" data-version=\"{version}\" data-api=\"/{}/api/batch\"></div>",
+        "<div id=\"c-edit\" hidden data-ticket=\"{}\" data-version=\"{version}\" data-rendered-version=\"{version}\" data-api=\"/{}/api/batch\"></div>",
         esc(ticket),
         esc(project)
     )
@@ -45,7 +45,7 @@ pub fn pencil(field: &str, label: &str) -> String {
 }
 
 /// A value the script can edit: `view` is its HTML, `raw` its text as the editor starts with,
-/// and `kind` one of `line`, `markdown`, `priority`, `status`, `labels` or `count`. `block`
+/// and `kind` one of `line`, `markdown`, `priority`, `status`, `labels`, `count` or `choice`. `block`
 /// values (text sections) are a `div`, others a `span`.
 pub fn unit(field: &str, kind: &str, view: &str, raw: &str, block: bool) -> String {
     let tag = if block { "div" } else { "span" };
@@ -60,6 +60,25 @@ pub fn unit(field: &str, kind: &str, view: &str, raw: &str, block: bool) -> Stri
 /// A rail value with its pencil after it.
 pub fn property(field: &str, label: &str, kind: &str, view: &str, raw: &str) -> String {
     unit(field, kind, view, raw, false) + &pencil(field, label)
+}
+
+/// A dropdown whose choices are labels. An empty value removes the ticket's local pin.
+pub(super) fn choice_property(
+    field: &str,
+    label: &str,
+    view: &str,
+    raw: &str,
+    choices: &[(String, String)],
+    labels: &[&str],
+) -> String {
+    let choices = serde_json::json!(choices);
+    let labels = serde_json::json!(labels);
+    let view = format!(
+        "{view}<template class=\"c-edit-choices\">{}</template><template class=\"c-edit-pin-labels\">{}</template>",
+        esc(&choices.to_string()),
+        esc(&labels.to_string())
+    );
+    property(field, label, "choice", &view, raw)
 }
 
 /// A Markdown text section whose heading carries a pencil, built like

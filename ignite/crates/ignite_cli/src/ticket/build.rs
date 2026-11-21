@@ -22,29 +22,6 @@ fn shared_fields(fields: &mut Fields, args: &TicketFieldArgs) -> Result<()> {
     put(fields, "max_workers", args.max_workers);
     put(fields, "cores", args.cores);
     put(fields, "every_hours", args.every);
-    if let Some(owner) = &args.owner {
-        // `default` is the old spelling, from when an unowned ticket followed a default owner.
-        let value = if owner == "none" || owner == "default" {
-            Value::Null
-        } else {
-            let owner = owner.trim();
-            let is_name = |name: &str| {
-                !name.is_empty()
-                    && name
-                        .bytes()
-                        .all(|byte| byte.is_ascii_alphanumeric() || b"-_".contains(&byte))
-            };
-            let valid = owner.split_once('/').map_or_else(
-                || is_name(owner),
-                |(machine, provider)| is_name(machine) && is_name(provider),
-            );
-            if !valid {
-                return Err(usage("write <machine> or <machine>/<provider>"));
-            }
-            json!(owner.to_ascii_lowercase())
-        };
-        fields.insert("owner".to_owned(), value);
-    }
     Ok(())
 }
 
@@ -303,7 +280,6 @@ mod tests {
             allocation: None,
             max_workers: None,
             cores: None,
-            owner: None,
             every: None,
             saving: None,
         }
@@ -358,19 +334,6 @@ mod tests {
         // A file that cannot be read is a usage error, never an update that clears the notes.
         std::fs::remove_file(&path).unwrap();
         assert!(update("MAB12", &noted, &no_changes()).is_err());
-    }
-
-    #[test]
-    fn the_legacy_owner_wire_field_is_retained() {
-        let owned = |owner: &str| TicketFieldArgs {
-            owner: Some(owner.to_owned()),
-            ..no_fields()
-        };
-        let set = create("x", &owned("Cygnus/Codex"), &[], &[], None).unwrap();
-        assert_eq!(set["fields"]["owner"], "cygnus/codex");
-        assert!(create("x", &owned("a b"), &[], &[], None).is_err());
-        let cleared = update("t1", &owned("default"), &no_changes()).unwrap();
-        assert_eq!(cleared["set"]["owner"], Value::Null);
     }
 
     fn no_changes() -> Changes<'static> {

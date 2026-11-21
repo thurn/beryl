@@ -62,8 +62,8 @@ pub enum Command {
         #[arg(short = 'm', long = "message")]
         note: Option<String>,
         /// What the ticket needs: `person` (which needs a note) sets it aside for a person, an
-        /// operating system such as `windows` records the system it needs. A machine name
-        /// pins the ticket to that machine.
+        /// operating system such as `windows` records the required system. A machine name sets
+        /// the `machine:<name>` label, replacing any machine pin on the ticket.
         #[arg(long)]
         needs: Option<String>,
     },
@@ -434,9 +434,6 @@ pub struct TicketFieldArgs {
     /// The cores the ticket is expected to use.
     #[arg(long)]
     pub cores: Option<f64>,
-    /// Deprecated compatibility flag. Use `machine:` and `provider:` labels for routing.
-    #[arg(long)]
-    pub owner: Option<String>,
     /// Make it a meta-ticket, a template the hub copies into a new child ticket on this
     /// schedule: hours (`6` or `6h`) or days (`2d`). A copy is filed when the meta-ticket is
     /// created and then at each due time, never while an earlier copy is still open. On create
@@ -458,7 +455,7 @@ pub enum TicketCommand {
         title: String,
         #[command(flatten)]
         fields: TicketFieldArgs,
-        /// Comma-separated labels.
+        /// Comma-separated labels. Use `machine:<name>` and `provider:<name>` to pin work.
         #[arg(long, value_delimiter = ',')]
         labels: Vec<String>,
         /// Comma-separated tickets the new one depends on. The hub also adds a dependency on each
@@ -480,9 +477,8 @@ pub enum TicketCommand {
         /// pool is never offered it until a person or an agent reviewing it releases it.
         #[arg(long)]
         pending: bool,
-        /// Filed by a program, such as a check or a script, not by a person or a session's own
-        /// judgement: pins the ticket to the machine running this command unless it has an
-        /// explicit machine pin.
+        /// File from a program such as a check or script. Adds a `machine:<name>` label for
+        /// the machine running this command if the ticket has no machine pin.
         #[arg(long)]
         automatic: bool,
         /// An image file to attach once the ticket is filed (repeatable). The text can show it

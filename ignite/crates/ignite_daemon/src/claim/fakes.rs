@@ -66,7 +66,6 @@ pub fn ticket(id_text: &str, title: &str, body: &str) -> Ticket {
         landed_at: None,
         landed: None,
         saving: None,
-        owner: None,
         needs_os: None,
         fallback: false,
         every_hours: None,

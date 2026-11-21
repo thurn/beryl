@@ -101,7 +101,8 @@ fn a_tailscale_user_edits_tickets_on_the_private_listener_only() {
     };
 
     let create = json!([{"op": "create", "fields": {
-        "title": "Edit me", "type": "task", "status": "pending_approval"}}]);
+        "title": "Edit me", "type": "task", "status": "pending_approval",
+        "labels": ["machine:old", "machine:older", "provider:codex", "tier:sonnet"]}}]);
     let (status, reply) = batch(private.address(), BROWSER, create.clone());
     assert_eq!(status, 200, "{reply}");
     let reply: Value = serde_json::from_str(&reply).unwrap();
@@ -128,9 +129,11 @@ fn a_tailscale_user_edits_tickets_on_the_private_listener_only() {
     );
     assert_eq!(status, 401);
 
-    // Release it, raise its priority and comment, as the page's controls do.
+    // Release it, raise its priority, replace its machine pin and comment.
     let edits = json!([
         {"op": "update", "id": id, "set": {"status": "open", "priority": 0}},
+        {"op": "update", "id": id, "add_labels": ["machine:m1"],
+         "remove_labels": ["machine:old", "machine:older"]},
         {"op": "comment", "id": id, "text": "Released from the dashboard"},
     ]);
     assert_eq!(batch(private.address(), BROWSER, edits).0, 200);
@@ -144,6 +147,10 @@ fn a_tailscale_user_edits_tickets_on_the_private_listener_only() {
     let detail: Value = serde_json::from_str(&detail).unwrap();
     assert_eq!(detail["status"], "open", "{detail}");
     assert_eq!(detail["priority"], 0);
+    assert_eq!(
+        detail["labels"],
+        json!(["provider:codex", "tier:sonnet", "machine:m1"])
+    );
     // The edit is recorded under the login's name, never the whole address, since the public
     // listener shows the changelog.
     assert!(!detail.to_string().contains("example.com"), "{detail}");

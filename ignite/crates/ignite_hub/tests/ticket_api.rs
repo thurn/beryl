@@ -747,7 +747,7 @@ fn automatic_filing_adds_a_machine_pin_and_preserves_explicit_pins() {
         load(&automatic, 0)["labels"],
         json!(["provider:codex", "machine:cygnus"])
     );
-    assert_eq!(load(&automatic, 0)["owner"], Value::Null);
+    assert!(load(&automatic, 0).get("owner").is_none());
     assert_eq!(load(&automatic, 1)["labels"], json!(["machine:jarvis"]));
 
     let manual = hub.post(

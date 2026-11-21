@@ -6,7 +6,9 @@ use std::net::{SocketAddr, TcpStream};
 
 use serde_json::{Value, json};
 
-use ignite_core::config::Config;
+use ignite_core::config::{Config, Os};
+use ignite_core::protocol::hub::MachineRegister;
+use ignite_core::time::Timestamp;
 use ignite_hub::server::HubServer;
 
 const CONFIG: &str = r#"
@@ -30,6 +32,12 @@ opus = "o"
 
 [pool.models.codex]
 opus = "sol"
+
+[pool.cli.claude]
+program = "claude"
+
+[pool.cli.codex]
+program = "codex"
 
 [machine.jarvis]
 os = "macos"
@@ -90,6 +98,25 @@ fn ticket_properties_show_effective_pins_and_cards_show_own_pins() {
     let public = server.start_read_only().unwrap();
     let private = server.start().unwrap();
 
+    let conn = ignite_store::hub::open(&server.database).unwrap();
+    for (name, os) in [("jarvis", Os::Macos), ("cygnus", Os::Windows)] {
+        ignite_store::hub::fleet::register(
+            &conn,
+            &MachineRegister {
+                machine: format!("m-{name}").parse().unwrap(),
+                name: name.to_owned(),
+                os,
+                cores: 8,
+                memory_mb: 8_192,
+                families: Vec::new(),
+                version: "test".to_owned(),
+            },
+            Timestamp::EPOCH,
+        )
+        .unwrap();
+    }
+    drop(conn);
+
     // An epic pins both values. Its child overrides only the provider.
     let create = json!({"ops": [
         {"op": "create", "fields": {"title": "Windows work", "type": "epic",
@@ -109,11 +136,16 @@ fn ticket_properties_show_effective_pins_and_cards_show_own_pins() {
     let id = |n: usize| reply["results"][n]["id"].as_str().unwrap().to_owned();
 
     let (_, child) = send(public.address(), "GET", &format!("/{}", id(1)), &[], "");
-    assert!(child.contains("Machine pin") && child.contains("Provider pin"));
+    assert!(child.contains("<dt>Machine</dt>") && child.contains("<dt>Provider</dt>"));
     assert!(child.contains("cygnus <span class=\"c-muted\">inherited</span>"));
     assert!(child.contains("claude"));
     let (_, loose) = send(public.address(), "GET", &format!("/{}", id(2)), &[], "");
-    assert!(loose.contains("Any machine") && loose.contains("Any provider"));
+    assert_eq!(
+        loose
+            .matches("<dd><span class=\"c-muted\">None</span></dd>")
+            .count(),
+        2
+    );
     let (_, home) = send(public.address(), "GET", "/", &[], "");
     assert!(home.contains(">cygnus</span>") && home.contains(">codex</span>"));
 
@@ -123,6 +155,17 @@ fn ticket_properties_show_effective_pins_and_cards_show_own_pins() {
         &format!("/{}", id(1)),
         &BROWSER[..1],
         "",
+    );
+    for field in ["machine", "provider"] {
+        assert!(editable.contains(&format!("data-field=\"{field}\" data-kind=\"choice\"")));
+        assert!(editable.contains(&format!("data-edit=\"{field}\"")));
+    }
+    assert!(editable.contains("[&quot;&quot;,&quot;None&quot;]"));
+    assert!(editable.contains("[&quot;machine:jarvis&quot;,&quot;jarvis&quot;]"));
+    assert!(editable.contains("[&quot;provider:codex&quot;,&quot;codex&quot;]"));
+    assert!(editable.contains("class=\"c-edit-source\">provider:claude</template>"));
+    assert!(
+        editable.contains("class=\"c-edit-pin-labels\">[&quot;provider:claude&quot;]</template>")
     );
     assert!(editable.contains("data-field=\"labels\""));
     assert!(!editable.contains("data-field=\"owner\""));

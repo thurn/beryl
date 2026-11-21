@@ -35,7 +35,7 @@ pub fn page(
     root: &str,
     project: &str,
     data: &TicketData,
-    effective_pins: &ignite_core::pins::Pins,
+    pin_properties: [(String, String); 2],
     seq: &str,
     (editable, private): (bool, bool),
 ) -> PageOptions {
@@ -373,24 +373,7 @@ pub fn page(
             assignee_view(card.assignee.as_deref(), &card.id, root, private),
         ),
     ];
-    properties.extend([
-        (
-            "Machine pin".into(),
-            pins::property(
-                effective_pins.machine.as_deref(),
-                "Any machine",
-                card.pins.machine.is_none(),
-            ),
-        ),
-        (
-            "Provider pin".into(),
-            pins::property(
-                effective_pins.provider.as_deref(),
-                "Any provider",
-                card.pins.provider.is_none(),
-            ),
-        ),
-    ]);
+    properties.extend(pin_properties);
     if editable && card.ticket_type == "epic" {
         for (label, field, value) in [
             ("Allocation", "workers", ticket.workers),
@@ -625,12 +608,12 @@ pub(crate) fn options(
         return Ok(None);
     };
     let data = ticket_data(conn, project, row)?;
-    let effective_pins = ignite_store::hub::pins::of(conn, id)?;
+    let pin_properties = pins::properties(conn, id, &data.ticket.labels, editable)?;
     Ok(Some(page(
         root,
         project,
         &data,
-        &effective_pins,
+        pin_properties,
         seq,
         (editable, private),
     )))

@@ -138,13 +138,6 @@ pub struct TicketFields {
         skip_serializing_if = "Option::is_none"
     )]
     pub cores: Option<Option<f64>>,
-    /// Retired routing field accepted from older clients.
-    #[serde(
-        default,
-        deserialize_with = "present",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub owner: Option<Option<String>>,
     #[serde(
         default,
         deserialize_with = "present",
@@ -238,9 +231,6 @@ pub struct Ticket {
     pub landed: Option<LandedWork>,
     #[serde(default)]
     pub saving: Option<Saving>,
-    /// Retired routing field retained for wire compatibility.
-    #[serde(default)]
-    pub owner: Option<String>,
     /// The operating system the work must happen on.
     #[serde(default)]
     pub needs_os: Option<Os>,

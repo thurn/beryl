@@ -463,7 +463,6 @@ impl<'a> Run<'a> {
         );
         let mut row = tickets::to_object(&ticket);
         changes.remove("parent");
-        changes.remove("owner"); // Accepted from old clients until they drop the field.
         row.extend(changes);
         let columns: Vec<&String> = row.keys().collect();
         self.conn.execute(
@@ -616,7 +615,6 @@ impl<'a> Run<'a> {
             unreachable!("ticket fields serialize to an object")
         };
         changes.remove("parent");
-        changes.remove("owner"); // Accepted from old clients until they drop the field.
         if let Some(labels) = &fields.labels {
             changes.insert("labels".to_owned(), json!(dedupe(labels.clone())));
         }

@@ -746,7 +746,6 @@ pub(crate) fn blank(
         landed_at: None,
         landed: None,
         saving: None,
-        owner: None,
         needs_os: None,
         fallback: false,
         every_hours: None,

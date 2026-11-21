@@ -101,6 +101,49 @@ impl Drop for Fixture {
 
 /// `--workers` is the old name of `--allocation`, kept so older scripts still work.
 #[test]
+fn create_and_update_reject_the_owner_flag_with_pin_guidance() {
+    use clap::Parser;
+
+    for args in [
+        &[
+            "ignite",
+            "ticket",
+            "create",
+            "New ticket",
+            "--owner",
+            "host",
+        ][..],
+        &["ignite", "ticket", "update", "Tabc", "--owner=host"],
+    ] {
+        let error = crate::args::Cli::try_parse_from(args).unwrap_err();
+        assert_eq!(error.kind(), clap::error::ErrorKind::UnknownArgument);
+        let hint = crate::rejected::owner_replacement(&error).unwrap();
+        assert!(hint.contains("machine:<name>") && hint.contains("provider:<name>"));
+
+        let help = crate::args::Cli::try_parse_from(args[..3].iter().copied().chain(["--help"]))
+            .unwrap_err();
+        assert_eq!(help.kind(), clap::error::ErrorKind::DisplayHelp);
+        assert!(!help.to_string().contains("--owner"));
+    }
+}
+
+#[test]
+fn show_and_list_print_pins_among_the_labels() {
+    let hub = Fixture::new("pin-labels");
+    let created = hub.json("create Pinned --labels machine:host,provider:codex,tier:sonnet");
+    let id = created["results"][0]["id"].as_str().unwrap();
+    for reply in [hub.run(&format!("show {id}")), hub.run("list")] {
+        assert_eq!(reply.exit, Exit::Success);
+        assert!(
+            reply
+                .text
+                .contains("[machine:host, provider:codex, tier:sonnet]")
+        );
+        assert!(!reply.text.contains("owner:"));
+    }
+}
+
+#[test]
 fn workers_still_sets_an_epics_allocation() {
     let hub = Fixture::new("allocation-alias");
     let epic = hub.json("create Epic --type epic --allocation 3");
