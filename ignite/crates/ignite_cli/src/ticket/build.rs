@@ -21,6 +21,14 @@ fn shared_fields(fields: &mut Fields, args: &TicketFieldArgs) -> Result<()> {
     put(fields, "workers", args.allocation);
     put(fields, "max_workers", args.max_workers);
     put(fields, "cores", args.cores);
+    for (field, minutes) in [
+        ("estimate_minutes", args.estimate_minutes),
+        ("unfiled_minutes", args.unfiled_minutes),
+    ] {
+        if let Some(minutes) = minutes {
+            fields.insert(field.to_owned(), json!((minutes > 0).then_some(minutes)));
+        }
+    }
     put(fields, "every_hours", args.every);
     Ok(())
 }
@@ -280,6 +288,8 @@ mod tests {
             allocation: None,
             max_workers: None,
             cores: None,
+            estimate_minutes: None,
+            unfiled_minutes: None,
             every: None,
             saving: None,
         }
@@ -354,6 +364,8 @@ mod tests {
             allocation: Some(3),
             max_workers: Some(5),
             cores: Some(2.5),
+            estimate_minutes: Some(45),
+            unfiled_minutes: Some(180),
             ..no_fields()
         };
         let op = create(
@@ -369,7 +381,8 @@ mod tests {
             json!({
                 "op": "create", "parent": "Tig9a",
                 "fields": {"title": "Split", "priority": 1, "workers": 3, "max_workers": 5,
-                           "cores": 2.5, "labels": ["tier:opus"]},
+                           "cores": 2.5, "estimate_minutes": 45, "unfiled_minutes": 180,
+                           "labels": ["tier:opus"]},
                 "deps": [{"on": "a"}, {"on": "b", "kind": "blocks"},
                          {"on": "c", "kind": "related"}],
             })
@@ -390,12 +403,13 @@ mod tests {
         };
         let fields = TicketFieldArgs {
             parent: Some(String::new()),
+            unfiled_minutes: Some(0),
             ..no_fields()
         };
         assert_eq!(
             update("t1", &fields, &changes).unwrap(),
             json!({"op": "update", "id": "t1", "add_labels": ["x"],
-                   "set": {"status": "blocked", "assignee": null, "parent": null}})
+                   "set": {"status": "blocked", "assignee": null, "parent": null, "unfiled_minutes": null}})
         );
         let nothing = Changes {
             title: None,

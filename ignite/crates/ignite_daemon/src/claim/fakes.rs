@@ -58,6 +58,8 @@ pub fn ticket(id_text: &str, title: &str, body: &str) -> Ticket {
         version: Seq(0),
         workers: None,
         max_workers: None,
+        estimate_minutes: None,
+        unfiled_minutes: None,
         cores: None,
         machine: None,
         session: None,

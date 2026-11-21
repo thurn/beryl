@@ -8,9 +8,10 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 
 use ignite_core::protocol::tickets::Status;
+use ignite_core::work_estimate::WorkRemaining;
 
 use super::components::{self as c, Icons, Tone};
-use super::data::{Card, Progress};
+use super::data::Card;
 use super::references::display_id;
 
 /// Where the site icons are served from, relative to the hub's root.
@@ -196,20 +197,15 @@ fn uuid_head(name: &str) -> Option<String> {
     .then(|| groups[0].to_owned())
 }
 
-/// A progress bar of a ticket's descendants, if it has any.
-pub fn children_progress(count: Option<&Progress>) -> String {
-    let Some(count) = count else {
-        return String::new();
-    };
-    let todo = count.total.saturating_sub(count.closed + count.working);
-    c::progress(
-        count.closed,
-        count.total,
-        Some(&format!(
-            "{} closed, {} in progress, {todo} to do",
-            count.closed, count.working
-        )),
-    )
+/// The percentage of estimated work that is closed, with a breakdown on hover or focus.
+pub fn work_progress(forecast: Option<&WorkRemaining>) -> String {
+    forecast.map_or_else(String::new, |work| {
+        let percent = work.percent_complete().map_or_else(
+            || r#"<span aria-label="Completion estimate unavailable">—</span>"#.to_owned(),
+            |percent| format!(r#"<span aria-label="{percent}% complete">{percent}%</span>"#),
+        );
+        c::tip(&percent, &work.breakdown())
+    })
 }
 
 /// The name in the header and page titles. The dashboard is the hub's root, so no project name

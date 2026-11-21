@@ -163,6 +163,20 @@ pub struct TicketFields {
         skip_serializing_if = "Option::is_none"
     )]
     pub defer_until: Option<Option<Timestamp>>,
+    /// Agent minutes to do this ticket's own work. Null clears the estimate.
+    #[serde(
+        default,
+        deserialize_with = "present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub estimate_minutes: Option<Option<u32>>,
+    /// Agent minutes reserved for work that has yet to be filed. Null clears the reserve.
+    #[serde(
+        default,
+        deserialize_with = "present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub unfiled_minutes: Option<Option<u32>>,
     /// The epic's target number of workers.
     #[serde(
         default,
@@ -259,6 +273,10 @@ pub struct Ticket {
     pub version: Seq,
     #[serde(default)]
     pub workers: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub estimate_minutes: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unfiled_minutes: Option<u32>,
     #[serde(default)]
     pub max_workers: Option<u32>,
     #[serde(default)]

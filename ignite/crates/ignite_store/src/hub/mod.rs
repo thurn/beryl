@@ -257,6 +257,11 @@ pub const MIGRATIONS: &[Migration] = &[
         sql: include_str!("machine_snapshots.sql"),
         code: None,
     },
+    Migration {
+        version: 42,
+        sql: include_str!("work_estimates.sql"),
+        code: None,
+    },
 ];
 
 /// Opens (creating if needed) and migrates the hub's database.

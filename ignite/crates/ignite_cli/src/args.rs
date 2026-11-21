@@ -434,6 +434,12 @@ pub struct TicketFieldArgs {
     /// The cores the ticket is expected to use.
     #[arg(long)]
     pub cores: Option<f64>,
+    /// Estimated agent minutes for this ticket's own work. Use 0 to clear it.
+    #[arg(long)]
+    pub estimate_minutes: Option<u32>,
+    /// Estimated agent minutes for work that has yet to be filed. Use 0 to clear it.
+    #[arg(long)]
+    pub unfiled_minutes: Option<u32>,
     /// Make it a meta-ticket, a template the hub copies into a new child ticket on this
     /// schedule: hours (`6` or `6h`) or days (`2d`). A copy is filed when the meta-ticket is
     /// created and then at each due time, never while an earlier copy is still open. On create

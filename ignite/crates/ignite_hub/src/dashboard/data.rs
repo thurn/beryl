@@ -1,4 +1,4 @@
-//! What the ticket views read from the hub database: ticket cards, progress counts and
+//! What the ticket views read from the hub database: ticket cards, work estimates and
 //! everything a ticket's page shows.
 // Pages are built from many small fragments; building them with `format!` reads better than
 // the allocation-free forms these lints suggest.
@@ -12,6 +12,7 @@ use serde_json::Value;
 use ignite_core::protocol::tickets::{EdgeKind, Status};
 use ignite_core::schedule;
 use ignite_core::time::Timestamp;
+use ignite_core::work_estimate::WorkRemaining;
 use ignite_store::hub::{edges, schedules, tickets};
 
 use super::references::{mentions, ticket_paths};
@@ -63,14 +64,8 @@ pub struct HomeCard {
     pub machine: Option<String>,
 }
 
-/// How many descendants of a ticket are closed, in progress and in all.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Progress {
-    pub id: String,
-    pub closed: u64,
-    pub working: u64,
-    pub total: u64,
-}
+/// The forecast for each ticket with a reserve or descendants.
+pub type Forecasts = HashMap<String, WorkRemaining>;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CommentRow {
@@ -173,36 +168,52 @@ fn labels_of(text: &str) -> Vec<String> {
     serde_json::from_str(text).unwrap_or_default()
 }
 
-/// The descendant counts of each of `ids`; tickets without descendants have no entry.
-pub fn progress(conn: &Connection, ids: &[String]) -> Result<Vec<Progress>, ReadError> {
+/// Sums the work on each requested ticket and its descendants. Follow the current parent,
+/// since a ticket can move. Closing a review drops its own effort and leaves its unfiled reserve
+/// until the follow-up work is accounted for.
+fn forecasts(conn: &Connection, ids: &[String]) -> Result<Forecasts, ReadError> {
     let wanted = serde_json::to_string(ids).unwrap_or_default();
     let mut statement = conn.prepare(
-        "WITH RECURSIVE descendants(root, id, status) AS (
-           SELECT wanted.value, t.id, t.status
-           FROM json_each(?1) AS wanted JOIN tickets t ON t.parent = wanted.value
+        "WITH RECURSIVE descendants(root, id) AS (
+           SELECT value, value FROM json_each(?1)
            UNION ALL
-           SELECT d.root, t.id, t.status FROM descendants d JOIN tickets t ON t.parent = d.id
+           SELECT d.root, t.id FROM descendants d JOIN tickets t ON t.parent = d.id
+         ), effort AS (
+           SELECT d.root, t.estimate_minutes, t.status = 'closed' AS closed,
+                  t.type NOT IN ('epic', 'milestone', 'meta') AS actionable,
+                  CASE WHEN t.type != 'meta' THEN COALESCE(t.unfiled_minutes, 0) ELSE 0 END AS unfiled
+           FROM descendants d JOIN tickets t ON t.id = d.id
          )
-         SELECT root, COUNT(*), SUM(status = 'closed'), SUM(status = 'in_progress')
-         FROM descendants GROUP BY root ORDER BY root",
+         SELECT root,
+                SUM(CASE WHEN actionable AND closed THEN COALESCE(estimate_minutes, 0) ELSE 0 END),
+                SUM(actionable AND closed AND estimate_minutes IS NULL),
+                SUM(CASE WHEN actionable AND NOT closed THEN COALESCE(estimate_minutes, 0) ELSE 0 END),
+                SUM(unfiled) AS reserved,
+                SUM(actionable AND NOT closed AND estimate_minutes IS NULL)
+         FROM effort GROUP BY root
+         HAVING reserved > 0 OR (COUNT(*) > 1 AND SUM(actionable) > 0)",
     )?;
     let rows = statement.query_map([wanted], |row| {
-        let count = |index: usize| {
+        let size = |index: usize| {
             row.get::<_, i64>(index)
-                .map(|n| u64::try_from(n).unwrap_or(0))
+                .map(|value| u64::try_from(value).unwrap_or_default())
         };
-        Ok(Progress {
-            id: row.get(0)?,
-            total: count(1)?,
-            closed: count(2)?,
-            working: count(3)?,
-        })
+        Ok((
+            row.get(0)?,
+            WorkRemaining {
+                closed_minutes: size(1)?,
+                unestimated_closed: size(2)?,
+                filed_minutes: size(3)?,
+                unfiled_minutes: size(4)?,
+                unestimated: size(5)?,
+            },
+        ))
     })?;
     Ok(rows.collect::<Result<_, _>>()?)
 }
 
-/// The open tickets the home page can show, most recently updated first, with their progress.
-pub fn home_data(conn: &Connection) -> Result<(Vec<HomeCard>, Vec<Progress>), ReadError> {
+/// The open tickets the home page can show, most recently updated first, with their forecasts.
+pub fn home_data(conn: &Connection) -> Result<(Vec<HomeCard>, Forecasts), ReadError> {
     let mut statement = conn.prepare(&format!(
         "SELECT {CARD_FIELDS}, labels,
                 (SELECT m.name FROM workers w JOIN machines m ON m.id = w.machine
@@ -221,8 +232,7 @@ pub fn home_data(conn: &Connection) -> Result<(Vec<HomeCard>, Vec<Progress>), Re
     let mut cards: Vec<HomeCard> = rows.collect::<Result<_, _>>()?;
     cards.sort_by(|left, right| by_recency(&left.card, &right.card));
     let ids: Vec<String> = cards.iter().map(|card| card.card.id.clone()).collect();
-    let counts = progress(conn, &ids)?;
-    Ok((cards, counts))
+    Ok((cards, forecasts(conn, &ids)?))
 }
 
 /// A set that keeps the order its members arrived in.
@@ -256,7 +266,7 @@ pub struct TicketData {
     pub watched: Vec<String>,
     /// `Blocked by`, `Blocking` and `Related`, each with the IDs in it.
     pub groups: Vec<(&'static str, Vec<String>)>,
-    pub counts: Vec<Progress>,
+    pub forecasts: Forecasts,
     /// Whether the ticket or any ticket under it has efficiency windows, which the page shows
     /// in its efficiency section (see [`super::spend`]).
     pub spend: bool,
@@ -458,8 +468,11 @@ pub fn ticket_data(
     let references: Vec<Card> = statement
         .query_map(params![wanted], card)?
         .collect::<Result<_, _>>()?;
-    let reference_ids: Vec<String> = references.iter().map(|card| card.id.clone()).collect();
-    let counts = progress(conn, &reference_ids)?;
+    let mut forecast_ids = ids.members.clone();
+    if !ids.seen.contains(&id) {
+        forecast_ids.push(id.clone());
+    }
+    let forecasts = forecasts(conn, &forecast_ids)?;
     let groups = sections
         .into_iter()
         .map(|(name, set)| (name, set.members))
@@ -473,7 +486,7 @@ pub fn ticket_data(
         references,
         watched: ids.members,
         groups,
-        counts,
+        forecasts,
         spend: super::spend::exists(conn, &super::spend::subtree(conn, &id)?),
         next_copy: next_copy(conn, &ticket)?,
         releases: ignite_store::hub::releases::of(conn, &id)?,

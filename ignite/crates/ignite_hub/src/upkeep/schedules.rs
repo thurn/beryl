@@ -64,6 +64,8 @@ fn copy_of(meta: &Ticket) -> Operation {
             priority: Some(meta.priority),
             labels: Some(meta.labels.clone()),
             cores: meta.cores.map(Some),
+            estimate_minutes: meta.estimate_minutes.map(Some),
+            unfiled_minutes: meta.unfiled_minutes.map(Some),
             needs_os: meta.needs_os.map(Some),
             fallback: Some(meta.fallback),
             ..TicketFields::default()

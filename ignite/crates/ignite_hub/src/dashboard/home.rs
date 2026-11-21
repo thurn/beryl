@@ -4,8 +4,6 @@
 // the allocation-free forms these lints suggest.
 #![allow(clippy::format_collect, clippy::format_push_string)]
 
-use std::collections::HashMap;
-
 use rusqlite::Connection;
 
 use ignite_core::protocol::tickets::Status;
@@ -13,10 +11,10 @@ use ignite_core::time::Timestamp;
 
 use super::attention;
 use super::common::{
-    SITE_ICONS, brand, children_progress, status_dot, ticket_heading, worker_unlinked,
+    SITE_ICONS, brand, status_dot, ticket_heading, work_progress, worker_unlinked,
 };
 use super::components::{self as c, Feed, PageOptions, Tone, esc};
-use super::data::{HomeCard, Progress, ReadError, home_data};
+use super::data::{Forecasts, HomeCard, ReadError, home_data};
 use super::references::ticket_url;
 use crate::upkeep::filing::HUB_LABEL;
 use crate::upkeep::justiciar;
@@ -60,11 +58,7 @@ fn machine_label(hostname: &str) -> String {
 
 /// Builds the home page for the project at `root`, at feed position `seq`.
 #[allow(clippy::too_many_lines)]
-pub fn page(root: &str, cards: &[HomeCard], counts: &[Progress], seq: &str) -> PageOptions {
-    let progress: HashMap<&str, &Progress> = counts
-        .iter()
-        .map(|count| (count.id.as_str(), count))
-        .collect();
+pub fn page(root: &str, cards: &[HomeCard], forecasts: &Forecasts, seq: &str) -> PageOptions {
     let mut active: Vec<&HomeCard> = Vec::new();
     let mut epics: Vec<&HomeCard> = Vec::new();
     let mut scheduled: Vec<&HomeCard> = Vec::new();
@@ -114,7 +108,7 @@ pub fn page(root: &str, cards: &[HomeCard], counts: &[Progress], seq: &str) -> P
             });
             let foot = format!(
                 "{state}{kind}{}{assignee}<span class=\"c-card-time\">{}</span>",
-                children_progress(progress.get(card.id.as_str()).copied()),
+                work_progress(forecasts.get(&card.id)),
                 c::time(Some(&card.updated_at), "")
             );
             c::card(
@@ -237,8 +231,8 @@ pub(crate) fn options(
     seq: &str,
     now: Timestamp,
 ) -> Result<PageOptions, ReadError> {
-    let (cards, counts) = home_data(conn)?;
-    let mut options = page(root, &cards, &counts, seq);
+    let (cards, forecasts) = home_data(conn)?;
+    let mut options = page(root, &cards, &forecasts, seq);
     let attention = attention::line(conn, root, now)?;
     options.body = attention + &options.body;
     Ok(options)

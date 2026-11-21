@@ -1,8 +1,8 @@
 //! `ignite plan check <epic>`: the shape of an epic's ticket graph. It reports the ticket count
-//! and how many are ready at the start, the longest chain, dependencies between tickets that
-//! name no file in common, tickets that name no files, paths a ticket names that the repository
-//! does not hold, `lane:` groups that are not chains, and problems that stall a run. It fails
-//! when a blocking dependency leaves the outermost epic.
+//! and how many are ready at the start, the longest chain, the estimated effort remaining,
+//! dependencies between tickets that name no file in common, tickets that name no files,
+//! paths that the repository does not hold, `lane:` groups that are not chains, and problems
+//! that stall a run. It fails when a blocking dependency leaves the outermost epic.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
@@ -11,6 +11,7 @@ use ignite_core::ids::TicketId;
 use ignite_core::pins::{Pins, from_labels};
 use ignite_core::protocol::client::{Exit, Reply};
 use ignite_core::protocol::tickets::{Edge, Graph, Status, Ticket, TicketType};
+use ignite_core::work_estimate::{WorkRemaining, needs_estimate};
 use serde_json::{Value, json};
 
 use ignite_hub::routes::dispatch::{named_files, resolve_named_file};
@@ -150,6 +151,7 @@ impl Graphs<'_> {
             &format!("{}, ready at the start {ready}", live.len()),
         ));
         lines.push(row("longest chain", &self.chain(&live, &deps)));
+        lines.extend(self.forecast(&live));
         lines.extend(external);
         lines.extend(self.suspect_edges(&deps, &files));
         lines.extend(self.nameless(&live, &files));
@@ -175,6 +177,27 @@ impl Graphs<'_> {
             json: Some(json!({"epic": prefixed(self.epic), "lines": lines})),
             handle: None,
         }
+    }
+
+    fn forecast(&self, live: &[&Ticket]) -> Vec<String> {
+        let mut remaining = WorkRemaining::default();
+        for ticket in self.tickets.iter().chain(
+            self.everything
+                .iter()
+                .find(|ticket| ticket.id.as_str() == self.epic),
+        ) {
+            remaining.include(ticket);
+        }
+        let mut lines = vec![row("agent effort", &remaining.summary())];
+        let missing: Vec<&str> = live
+            .iter()
+            .filter(|ticket| needs_estimate(ticket))
+            .map(|ticket| ticket.id.as_str())
+            .collect();
+        if !missing.is_empty() {
+            lines.push(row("needs estimate", &self.list(&missing, "and")));
+        }
+        lines
     }
 
     /// Each live ticket's blocking dependencies on other live tickets of the epic, in order.

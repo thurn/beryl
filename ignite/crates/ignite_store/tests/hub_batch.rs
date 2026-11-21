@@ -63,6 +63,51 @@ fn checks_each_precondition_and_reports_the_one_that_failed() {
 }
 
 #[test]
+fn a_batch_replaces_a_reserve_with_sized_tickets_or_preserves_it_if_filing_fails() {
+    let mut hub = Hub::new();
+    let ids = hub.ids(json!([
+        create(
+            "Implementation",
+            None,
+            json!({"type": "epic", "status": "open"})
+        ),
+        create(
+            "Review",
+            Some("$0"),
+            json!({"estimate_minutes": 30, "unfiled_minutes": 600})
+        ),
+    ]));
+    let (epic, review) = (&ids[0], &ids[1]);
+    let replacement = json!([
+        {"op": "update", "id": review, "set": {"unfiled_minutes": null}},
+        create("Implementation follow-up", Some(epic), json!({"estimate_minutes": 0})),
+    ]);
+    assert!(matches!(
+        hub.post(replacement),
+        Err(StoreError::Rejected(_))
+    ));
+    assert_eq!(hub.show(review).ticket.unfiled_minutes, Some(600));
+
+    let version = hub.show(review).ticket.version.0;
+    let reply = hub.batch_if(
+        json!([
+            {"op": "update", "id": review, "set": {"unfiled_minutes": null}},
+            create("Implementation follow-up", Some(epic), json!({"estimate_minutes": 550})),
+            {"op": "close", "id": review, "reason": "Review complete"},
+        ]),
+        json!([{"id": review, "version": version}]),
+    );
+    let stored = hub.show(review).ticket;
+    assert_eq!(stored.estimate_minutes, Some(30));
+    assert_eq!(stored.unfiled_minutes, None);
+    assert_eq!(stored.status, Status::Closed);
+    let follow_up = hub.show(reply.results[1].id.as_str()).ticket;
+    assert_eq!(follow_up.estimate_minutes, Some(550));
+    assert_eq!(follow_up.status, Status::Open);
+    assert_eq!(hub.show(epic).ticket.status, Status::Open);
+}
+
+#[test]
 fn of_two_simultaneous_claims_one_wins_and_one_conflicts() {
     let dir =
         ignite_core::test_files::temp_dir().join(format!("ignite-claims-{}", std::process::id()));

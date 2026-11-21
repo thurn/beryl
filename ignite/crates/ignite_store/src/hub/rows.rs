@@ -47,6 +47,8 @@ crate::tables! {
         every_hours: Option<i64>,
         /// The provider chosen for the ticket's current claim.
         provider: Option<String>,
+        estimate_minutes: Option<i64>,
+        unfiled_minutes: Option<i64>,
     }
 
     FleetChange = "fleet_changes" {

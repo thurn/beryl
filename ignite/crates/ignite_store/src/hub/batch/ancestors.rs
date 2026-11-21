@@ -107,8 +107,8 @@ impl Run<'_> {
                 "Every other child of epic {id} is closed. Measure the epic's acceptance, \
                  quoted below, and record the numbers on {id} as a comment.\n\
                  - If it holds, close this ticket, which closes {id}.\n\
-                 - If it does not, file the missing work as children of {id}, then close this \
-                 ticket. When that work closes, another verify ticket is filed.\n\n\
+                 - If it does not, file the missing work as children of {id} with agent-minute \
+                 estimates, then close this ticket. When that work closes, another verify ticket is filed.\n\n\
                  {id}'s acceptance:\n{}",
                 epic.acceptance.trim()
             )),

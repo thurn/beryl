@@ -39,7 +39,7 @@ pub(crate) const TICKET_COLUMNS: &str = "id, parent, next_child, title, body, ac
     type, status, priority, assignee, last, labels, metadata, defer_until, close_reason, \
     created_at, created_by, updated_at, closed_at, version, workers, max_workers, cores, \
     machine, session, tree, claimed_at, landed_at, landed, saving, needs_os, fallback, \
-    every_hours, provider";
+    every_hours, provider, estimate_minutes, unfiled_minutes";
 
 /// One ticket, found by ID or by any alias, with its edges, children and readiness.
 pub fn get(
@@ -738,6 +738,8 @@ pub(crate) fn blank(
         version,
         workers: None,
         max_workers: None,
+        estimate_minutes: None,
+        unfiled_minutes: None,
         cores: None,
         machine: None,
         session: None,

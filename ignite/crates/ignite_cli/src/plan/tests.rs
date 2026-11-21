@@ -30,6 +30,13 @@ fn id(n: u32) -> String {
 }
 
 fn report(tickets: &[Ticket], edges: &[Edge], ready: &[String]) -> Vec<String> {
+    full_report(tickets, edges, ready)
+        .into_iter()
+        .filter(|line| !line.starts_with("agent effort") && !line.starts_with("needs estimate"))
+        .collect()
+}
+
+fn full_report(tickets: &[Ticket], edges: &[Edge], ready: &[String]) -> Vec<String> {
     let ready: HashSet<String> = ready.iter().cloned().collect();
     let machines: BTreeSet<String> = ["jarvis"].map(str::to_owned).into();
     Graphs {
@@ -47,6 +54,27 @@ fn report(tickets: &[Ticket], edges: &[Edge], ready: &[String]) -> Vec<String> {
     .lines()
     .map(str::to_owned)
     .collect()
+}
+
+#[test]
+fn the_forecast_includes_closed_reviews_reserves_and_flags_missing_leaf_estimates() {
+    let mut review = ticket(&id(1), EPIC, "Review the next phase", &[]);
+    review.status = Status::Closed;
+    review.estimate_minutes = Some(15);
+    review.unfiled_minutes = Some(240);
+    let mut build = ticket(&id(2), EPIC, "Implement the first phase", &[]);
+    build.estimate_minutes = Some(90);
+    let mut phase = ticket(&id(3), EPIC, "Phase two", &[]);
+    phase.ticket_type = TicketType::Milestone;
+    let verify = ticket(&id(4), EPIC, "Verify the outcome", &[]);
+    let lines = full_report(&[review, build, phase, verify], &[], &[]);
+    assert_eq!(
+        lines[2..4],
+        [
+            "agent effort   5h 30m estimated left · 4h unfiled · 1 unestimated ticket",
+            "needs estimate .4",
+        ]
+    );
 }
 
 #[test]
@@ -170,7 +198,7 @@ fn a_dependency_on_an_epic_a_report_with_dependents_and_a_moved_ticket_each_get_
     .text;
     let lines: Vec<_> = lines.lines().collect();
     assert_eq!(
-        lines[2..],
+        lines[4..],
         [
             "epic edge      .4 depends on the epic .1; depend on the ticket that needs its result",
             "report         .2 is labeled report, and .3 and .1.1 depend on it",
@@ -221,7 +249,7 @@ fn a_files_line_names_files_short_paths_resolve_and_missing_paths_are_reported()
     .text;
     let lines: Vec<_> = lines.lines().collect();
     assert_eq!(
-        lines[2..],
+        lines[4..],
         ["missing file   .2 names tools/gone.py, which does not exist"]
     );
 }

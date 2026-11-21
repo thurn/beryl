@@ -12,13 +12,12 @@ use serde_json::Value;
 use ignite_core::protocol::tickets::Status;
 
 use super::common::{
-    PRIORITY_NAMES, SITE_ICONS, brand, children_progress, person, priority_chip, status_dot,
-    ticket_heading, worker,
+    PRIORITY_NAMES, SITE_ICONS, brand, person, priority_chip, status_dot, ticket_heading,
+    work_progress, worker,
 };
 use super::components::{self as c, Feed, PageOptions, Tone, esc};
 use super::data::{
-    Card, NextCopy, Progress, ReadError, TicketData, TicketRow, by_attention, ticket_data,
-    ticket_row,
+    Card, NextCopy, ReadError, TicketData, TicketRow, by_attention, ticket_data, ticket_row,
 };
 use super::edit;
 use super::history::timeline;
@@ -46,15 +45,11 @@ pub fn page(
         comments,
         history,
         groups,
-        counts,
+        forecasts,
         ..
     } = data;
     let card = &ticket.card;
     let display = display_id(&card.id);
-    let progress: HashMap<&str, &Progress> = counts
-        .iter()
-        .map(|count| (count.id.as_str(), count))
-        .collect();
     let references: HashMap<&str, &Card> = data
         .references
         .iter()
@@ -71,14 +66,13 @@ pub fn page(
         let key = format!("hc-{}", card.id);
         let mut templates = templates.borrow_mut();
         if !templates.iter().any(|(name, _)| *name == key) {
-            let count = progress.get(card.id.as_str());
-            let bar = count.map_or(String::new(), |count| {
-                c::progress(count.closed, count.total, None)
+            let remaining = forecasts.get(&card.id).map_or_else(String::new, |work| {
+                format!("<span>{}</span>", esc(&work.breakdown()))
             });
             let html = c::template(
                 &key,
                 &format!(
-                    "{}<div class=\"c-hovercard-title\">{}</div><div class=\"c-hovercard-meta\">{}<span>{}</span>{bar}</div>",
+                    "{}<div class=\"c-hovercard-title\">{}</div><div class=\"c-hovercard-meta\">{}<span>{}</span>{remaining}</div>",
                     ticket_heading(card),
                     esc(&card.title),
                     status_dot(card.status, true),
@@ -147,8 +141,7 @@ pub fn page(
         );
         c::row(
             &label,
-            &(children_progress(progress.get(card.id.as_str()).copied())
-                + &priority_chip(i64::from(card.priority))),
+            &(work_progress(forecasts.get(&card.id)) + &priority_chip(i64::from(card.priority))),
             Some(&ticket_url(root, &card.id)),
         )
     };
@@ -374,6 +367,9 @@ pub fn page(
         ),
     ];
     properties.extend(pin_properties);
+    if let Some(work) = data.forecasts.get(&card.id) {
+        properties.push(("Complete".into(), work_progress(Some(work))));
+    }
     if editable && card.ticket_type == "epic" {
         for (label, field, value) in [
             ("Allocation", "workers", ticket.workers),

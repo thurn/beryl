@@ -25,6 +25,14 @@ impl Run<'_> {
         if matches!(fields.every_hours, Some(Some(0))) {
             return rejected("every_hours must be at least 1");
         }
+        for (field, minutes) in [
+            ("estimate_minutes", fields.estimate_minutes),
+            ("unfiled_minutes", fields.unfiled_minutes),
+        ] {
+            if minutes == Some(Some(0)) {
+                return rejected(format!("{field} must be positive or null"));
+            }
+        }
         if let Some(saving) = &fields.saving
             && (ignite_core::shares::Unit::parse(&saving.unit).is_none()
                 || !saving.amount.is_finite()

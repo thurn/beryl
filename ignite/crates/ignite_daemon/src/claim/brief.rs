@@ -247,6 +247,14 @@ pub fn render(brief: &TicketBrief, tree: &TreeView) -> String {
             format!("{} {}", working(ticket), title_of(Some(brief), &ticket.id)),
         ));
     }
+    for (label, minutes) in [
+        ("estimate", ticket.estimate_minutes),
+        ("unfiled", ticket.unfiled_minutes),
+    ] {
+        if let Some(minutes) = minutes {
+            rows.push((label, format!("{minutes} agent minutes")));
+        }
+    }
     let files = tree_files(ticket, tree.path);
     for (i, file) in files.iter().take(MAX_FILES).enumerate() {
         rows.push((if i == 0 { "files" } else { "" }, file.clone()));

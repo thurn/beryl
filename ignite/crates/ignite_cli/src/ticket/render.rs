@@ -84,6 +84,14 @@ pub fn detail(ticket: &Value) -> String {
     if !aliases.is_empty() {
         out.push(format!("formerly: {}", aliases.join(", ")));
     }
+    for (label, field) in [
+        ("estimate", "estimate_minutes"),
+        ("unfiled", "unfiled_minutes"),
+    ] {
+        if let Some(minutes) = ticket[field].as_u64() {
+            out.push(format!("{label}: {minutes} agent minutes"));
+        }
+    }
     if let Some(hours) = ticket["every_hours"].as_u64() {
         out.push(format!(
             "every: {hours}h (a meta-ticket; each copy is filed under it)"

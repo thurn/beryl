@@ -149,13 +149,57 @@ fn the_home_page_lists_the_open_tickets_with_progress() {
         "Incidents",
         "href=\"/TQ44S.7.24\"",
         "class=\"c-mono\">TQ44S</",
-        "4792/4795",
+        "2 unestimated tickets",
+        "4792 unestimated closed tickets",
+        "Completion estimate unavailable",
         "<title>Tickets · Ignite</title>",
         "<meta name=\"cirrus-root\" content=\"/\">",
         "data-feed-seq=\"4993\"",
     ] {
         assert!(home.contains(expected), "{expected}");
     }
+}
+
+#[test]
+fn epic_percentage_counts_unfiled_work_and_discloses_the_estimate_on_hover() {
+    let mut hub = seeded();
+    hub.conn
+        .execute_batch(
+            "DELETE FROM tickets WHERE parent = 'TQ44S' AND status = 'closed' AND id NOT IN (
+                 SELECT id FROM tickets WHERE parent = 'TQ44S' AND status = 'closed' ORDER BY id LIMIT 9
+             );
+             UPDATE tickets SET estimate_minutes = 10 WHERE parent = 'TQ44S' AND status = 'closed';
+             UPDATE tickets SET estimate_minutes = 30, unfiled_minutes = 600 WHERE id = 'TQ44S.7.24';
+             UPDATE tickets SET estimate_minutes = 50 WHERE id = 'TQ44S.7.24.1';",
+        )
+        .unwrap();
+
+    let home = hub.text("/");
+    assert!(
+        home.contains(
+            "1h 30m estimated closed · 11h 20m estimated left · 10h unfiled (agent time)"
+        )
+    );
+    assert!(home.contains(">11%</span>"));
+    let milestone = hub.text("/TQ44S.7");
+    assert!(
+        milestone
+            .contains("0m estimated closed · 11h 20m estimated left · 10h unfiled (agent time)")
+    );
+    assert!(milestone.contains(">0%</span>"));
+
+    hub.batch(&json!({"op": "close", "id": "TQ44S.7.24", "reason": "Review complete"}));
+    assert!(
+        hub.text("/TQ44S.7")
+            .contains("30m estimated closed · 10h 50m estimated left · 10h unfiled")
+    );
+    hub.batch(&json!({"op": "update", "id": "TQ44S.7.24", "set": {"unfiled_minutes": null}}));
+    assert!(hub.text("/TQ44S.7").contains(">37%</span>"));
+
+    hub.batch(&json!({"op": "update", "id": "TQ44S.7.24.1", "set": {"estimate_minutes": null}}));
+    let milestone = hub.text("/TQ44S.7");
+    assert!(milestone.contains("30m estimated closed · 1 unestimated ticket"));
+    assert!(milestone.contains("Completion estimate unavailable"));
 }
 
 #[test]
@@ -404,17 +448,20 @@ fn pages_revalidate_only_when_their_content_changes() {
     assert!(
         String::from_utf8(progressed.body)
             .unwrap()
-            .contains("4791/4795")
+            .contains("3 unestimated tickets · 4791 unestimated closed tickets")
     );
 
-    // Moving a ticket out of its epic changes the counts of every ancestor.
+    // Moving a ticket out of its epic changes the forecast of every ancestor.
     hub.conn
         .execute(
             "UPDATE tickets SET parent = NULL WHERE id = 'TQ44S.7.24'",
             [],
         )
         .unwrap();
-    assert!(hub.text("/").contains("4791/4793"));
+    assert!(
+        hub.text("/")
+            .contains("1 unestimated ticket · 4791 unestimated closed tickets")
+    );
 }
 
 #[test]

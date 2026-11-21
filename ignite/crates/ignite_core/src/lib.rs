@@ -38,5 +38,6 @@ pub mod time;
 pub mod tipround;
 pub mod traits;
 pub mod verdict;
+pub mod work_estimate;
 
 pub use protocol::hub::verdict_settings;
