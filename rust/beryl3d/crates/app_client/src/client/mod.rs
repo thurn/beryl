@@ -48,6 +48,7 @@ mod manual;
 mod manual_overlays;
 mod own;
 mod press;
+mod profiles;
 mod scrolling;
 pub use app_screens::screens::BugPress;
 pub use press::{Dismiss, Press};

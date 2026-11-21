@@ -25,6 +25,7 @@ pub mod order;
 pub mod palette;
 pub(crate) mod pile_viewer;
 pub mod pools;
+mod profiles;
 pub mod quit;
 pub mod selection;
 pub mod tokens;

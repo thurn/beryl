@@ -384,7 +384,7 @@ fn the_marks_check_faults_an_outline_moved_off_its_card_or_narrower_than_it() {
         for (how, broken) in [("moved", moved), ("narrowed", narrowed)] {
             let faults = marks_on(&broken, &context);
             assert_eq!(faults.len(), 1, "the {how} outline at {} ms", t / MS);
-            assert_eq!(faults[0].rule, Rule::MarksOn);
+            assert_eq!(faults[0].rule, Rule::RelationsHold);
         }
         checked += 1;
     }

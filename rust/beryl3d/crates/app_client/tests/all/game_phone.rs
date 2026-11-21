@@ -16,7 +16,7 @@ use beryl_protocol::testing::ViewBuilder;
 use game_table::profiles::phone::phone_bands;
 use game_table::table::Window;
 use kit_frame::frame::{Frame, Role};
-use kit_probe::agent::checks::{on_screen, overlap, phone_sizes, reachable};
+use kit_probe::agent::checks::{keep_clear, on_screen, overlap, phone_sizes, reachable};
 use kit_probe::agent::{Context, Fault, Layout};
 use kit_ui::input::{Insets, PointerPhase, Size};
 
@@ -210,6 +210,14 @@ fn stacked_buttons_stand_in_the_middle_band_when_a_permanent_lies_under_them() {
         .map(|fault| fault.message)
         .collect();
     assert_eq!(covered, Vec::<String>::new());
+    assert!(
+        frame
+            .clearances
+            .iter()
+            .any(|placement| placement.name == "stacked prompt controls"
+                && !placement.avoided.is_empty())
+    );
+    assert!(keep_clear(frame, &context).is_empty());
 }
 
 /// The viewer paying a cost, with a hand of one card and the spells `stack` on the stack, and

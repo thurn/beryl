@@ -193,7 +193,7 @@ fn a_resize_in_mid_flight_keeps_the_pose_and_arrives_at_the_new_place() {
     let card = usize::from(cards.top.0);
     // The show lists the drawn card last in the hand, where the session's view lists it by
     // slot, first, so where it rests is read from the show.
-    let old_place = show.latest_rest(card);
+    let old_place = show.latest_objects().card_pose(card);
 
     frame(&mut show, &mut scratch, 150 * MS);
     let was = show.pose(card, 150 * MS).expect("the card is drawn");
@@ -207,7 +207,7 @@ fn a_resize_in_mid_flight_keeps_the_pose_and_arrives_at_the_new_place() {
             && (was.turn - now.turn).abs() < 1e-5,
         "the card does not jump: {was:?} became {now:?}"
     );
-    let new_place = show.latest_rest(card);
+    let new_place = show.latest_objects().card_pose(card);
     assert_ne!(old_place, new_place, "the hand moved with the window");
     let later = show.pose(card, 300 * MS);
     assert_ne!(later, Some(was), "the card goes on moving");
@@ -266,7 +266,9 @@ fn the_hand_regroups_in_the_time_its_room_gives_whatever_the_draw_takes() {
     assert_eq!(held.len(), 3, "three cards were in the hand");
     // The show lists the drawn card last in the hand, where the session's view lists it by
     // slot, first, so where each card rests is read from the show.
-    let rests = |slot: beryl_protocol::protocol::ObjectId| show.latest_rest(usize::from(slot.0));
+    let rests = |slot: beryl_protocol::protocol::ObjectId| {
+        show.latest_objects().card_pose(usize::from(slot.0))
+    };
     let moved = held
         .iter()
         .filter(|&&slot| show.pose(usize::from(slot.0), 0) != rests(slot))
@@ -607,7 +609,8 @@ fn a_card_fading_into_the_hand_stands_at_its_new_place_when_room_is_made() {
 
     let top = usize::from(cards.top.0);
     let rest = show
-        .latest_rest(top)
+        .latest_objects()
+        .card_pose(top)
         .expect("the first card rests in the hand");
     let before_room = show.pose(top, 80 * MS).expect("the first card is drawn");
     assert_ne!(

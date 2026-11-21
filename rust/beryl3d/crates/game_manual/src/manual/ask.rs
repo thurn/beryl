@@ -15,9 +15,11 @@ use serde_json::Value;
 
 use super::commands::{self, Asks, COMMANDS, Command, Values};
 use super::{TablePress, Target};
+use game_hud::hud::placement_scene::PlacementScene;
+use game_table::profiles::TableBands;
 use kit_base::tokens::{color, size, space};
 use kit_ui::element::{Align, Anchor, Element, column, row};
-use kit_ui::input::Size;
+use kit_ui::input::Window;
 use kit_ui::widgets::{FieldState, Fields, button, field, primary};
 
 /// The most and least a stat or a life total may be (`MAX_INT` and `MIN_INT` in
@@ -520,7 +522,13 @@ pub fn suggestions(ask: &Ask) -> Option<&'static [&'static str]> {
 /// counter's common counter names, the field with a minus and a plus beside a number or stats,
 /// and the confirm button.
 #[must_use]
-pub fn dock(ask: &Ask, fields: &Fields, window: Size) -> Element {
+pub fn dock(
+    ask: &Ask,
+    fields: &Fields,
+    window: Window,
+    bands: Option<TableBands>,
+    layout: Option<&PlacementScene>,
+) -> Element {
     let state = fields.get(&ask.field);
     let text = &state.text;
     let value = ask.read(text);
@@ -532,19 +540,37 @@ pub fn dock(ask: &Ask, fields: &Fields, window: Size) -> Element {
                 .on_press(TablePress::AskStep(by.is_positive()))
         })
     };
-    let input = field(&ask.field, &state).min_width(size::BUTTON_MIN_WIDTH);
+    let input = field(&ask.field, &state);
     let confirm = primary(&ask.label(text))
         .name("confirm")
         .enabled(value.is_some())
         .on_press(TablePress::AskConfirm);
     let cancel = button("Cancel").name("close").on_press(TablePress::Close);
+    let minus = step(-1, "−", "Less");
+    let plus = step(1, "+", "More");
+    let panel = column()
+        .name("ask")
+        .background(color::PANEL)
+        .border((color::METAL, size::BORDER))
+        .radius(size::PANEL_RADIUS);
+    if let Some(bands) = bands {
+        return super::profiles::ask_dock(
+            panel,
+            [minus, plus],
+            input,
+            [cancel, confirm],
+            suggestions(ask),
+            bands,
+            layout,
+        );
+    }
     let controls = row()
         .gap(space::M)
         .align_items(Align::Center)
         .child(cancel)
-        .children(step(-1, "−", "Less"))
-        .child(input)
-        .children(step(1, "+", "More"))
+        .children(minus)
+        .child(input.min_width(size::BUTTON_MIN_WIDTH))
+        .children(plus)
         .child(confirm);
     // The common counter names stand in a row of small buttons above the field, as the web's
     // `.table-ask-suggestions` does.
@@ -559,18 +585,14 @@ pub fn dock(ask: &Ask, fields: &Fields, window: Size) -> Element {
                     .on_press(TablePress::AskSuggestion(at))
             }))
     });
-    let mut dock = column()
-        .name("ask")
+    let mut dock = panel
         .gap(space::M)
         .padding(space::L)
         .align_items(Align::End)
-        .background(color::PANEL)
-        .border((color::METAL, size::BORDER))
-        .radius(size::PANEL_RADIUS)
         .children(common)
         .child(controls);
     let inset = kit_base::data::space::flat::table::EDGE;
-    let corner = Vec2::new(window.width - inset, window.height - inset);
+    let corner = Vec2::new(window.size.width - inset, window.size.height - inset);
     dock.anchor = Some(Anchor::Point(corner, Vec2::ONE));
     dock
 }

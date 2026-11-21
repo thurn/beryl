@@ -10,10 +10,13 @@ use glam::Vec2;
 
 use super::Piles;
 use crate::hud::HudIn;
-use crate::hud::phone::{Occupied, asked_top, clear_at_right, phase_span};
+use crate::hud::phone::phase_edges;
+use crate::hud::placement_scene::{Group, PlacementScene, inset, rect};
 use game_table::profiles::TableBands;
 use kit_base::data::space::hud::phone as data;
+use kit_base::geometry::Rect;
 use kit_base::tokens::{color, shadow, size, space, type_style};
+use kit_scene::{Candidate, NodeQuery};
 use kit_text::text::TypeStyle;
 use kit_ui::element::{Align, Anchor, Element, Position, TextAlign, column, holder, row, text};
 use kit_ui::widgets::{self, button, icon_button, icons, primary};
@@ -70,8 +73,8 @@ pub(super) fn bar(prompt: &PromptView, input: &HudIn, controls: Option<Controls>
         matches!(&view.status, Status::Deciding { decision } if decision.acting_for.is_some())
     });
     let asks = title(prompt, acting_for);
-    if input.window.phone() {
-        return phone_bar(prompt, input, &asks, controls);
+    if let Some(bands) = input.profile.bands() {
+        return phone_bar(prompt, input, &asks, controls, bands);
     }
     let title = (!asks.is_empty()).then(|| {
         text(&asks)
@@ -215,7 +218,7 @@ pub fn captioned(pressed: Element, caption: &str) -> Element {
 ///   pill is narrowed to the room between them.
 /// - What it asks, `asks`, is a pill on the middle band's line, as Arena writes it across the
 ///   middle of its table, or at the nearest height clear of every card where one lies on that
-///   line (`hud::phone::asked_top`). While the prompt holds cards up, or lists what it asks
+///   line. While the prompt holds cards up, or lists what it asks
 ///   about over the table, the table lies under a shade and the pill stands over the strip,
 ///   beside the stacked buttons. The pill lets the pointer through, so it never covers a card
 ///   the prompt picks.
@@ -224,8 +227,8 @@ fn phone_bar(
     input: &HudIn,
     asks: &str,
     controls: Option<Controls>,
+    bands: TableBands,
 ) -> Element {
-    let bands = input.profile.bands().unwrap_or_default();
     let ways = || super::ways(prompt).map(|way| way.id);
     let buttons: Vec<&PromptButton> = (prompt.buttons.iter())
         .filter(|button_view| !ways().any(|id| id == button_view.id))
@@ -241,28 +244,24 @@ fn phone_bar(
         .filter(|button_view| Some(button_view.id) != pass_on.map(|b| b.id));
     let gap = data::DOCK_GAP;
     let height = data::BUTTON_HEIGHT;
-    let strip = bands.your_strip;
     let held_up = Piles::of(prompt).is_some();
     let held = held_up || super::covers_table(prompt);
-    let right_end = RightEnd {
-        bands: &bands,
-        occupied: input.occupied,
-        held,
-        phase: phase_span(input, &bands),
-    };
-    let mut taken: Option<f32> = None;
-    let mut middle = right_end.dock_line(input.occupied.hand_top, 0.0).0;
+    let slots = PromptSlots::new(input, &bands, held);
+    let mut beside_right = 0.0;
+    let mut beside_left = 0.0;
+    let mut dock_bottom = slots.dock_bottom();
     let dock = (forward.is_some() || pass_on.is_some()).then(|| {
         let mut dock = dock(forward, pass_on);
         let width =
             forward.map_or(0.0, |b| button_width(&b.label) + gap) + pass_on.map_or(0.0, |_| height);
-        let moved;
-        (middle, moved) = right_end.dock_line(input.occupied.hand_top, width);
-        if moved {
-            taken = Some(width);
+        let (placed, slot) = slots.dock("dock", width, None);
+        if slot != 0 {
+            beside_right = width;
+        } else {
+            dock_bottom = placed.y + placed.height;
         }
         dock.anchor = Some(Anchor::Point(
-            Vec2::new(bands.right, middle),
+            Vec2::new(bands.right, placed.y + height / 2.0),
             Vec2::new(1.0, 0.5),
         ));
         dock
@@ -274,53 +273,47 @@ fn phone_bar(
         .align_items(Align::Stretch)
         .children(controls.map(|controls| controls.element))
         .children(others.clone().map(phone_button));
-    let over = if held_up && forward.is_none() && pass_on.is_none() {
-        middle + height / 2.0
-    } else if taken.is_some() {
-        strip.top - gap
+    let over = if held_up && dock.is_none() {
+        dock_bottom
+    } else if beside_right > 0.0 {
+        bands.your_strip.top - gap
     } else {
-        (middle - height / 2.0).min(strip.top) - gap
+        (dock_bottom - height).min(bands.your_strip.top) - gap
     };
-    let stacked = more.children.len();
-    let size = others
-        .map(|b| (button_width(&b.label), height))
-        .chain(controls_size)
-        .fold((data::BUTTON_MIN_WIDTH, -gap), |(width, tall), (w, h)| {
-            (width.max(w), tall + h + gap)
-        });
-    let mut taken_left = None;
-    let place = (stacked > 0)
-        .then(|| right_end.stacked(size, over - size.1, taken))
-        .flatten();
-    match place {
-        Some(Stacked::Left) => taken_left = Some(size.0),
-        Some(Stacked::Right(right, _)) => taken = Some(bands.right - right + size.0),
-        None => {}
-    }
-    let (more_right, more_bottom) = match place {
-        Some(Stacked::Left) => (bands.left + size.0, bands.middle.middle() + size.1 / 2.0),
-        Some(Stacked::Right(right, top)) => (right, top + size.1),
-        None => (bands.right, over),
-    };
-    more.anchor = Some(Anchor::Point(
-        Vec2::new(more_right, more_bottom),
-        Vec2::new(1.0, 1.0),
-    ));
-    let more = (stacked > 0).then_some(more);
-    let pill = (!asks.is_empty()).then(|| {
-        let place = match (held, taken, taken_left) {
-            (true, ..) => PillPlace::Over(over),
-            // Between buttons at both ends the room left is too narrow for the words on one
-            // line, and a second line would reach over the creatures' rows, so the pill stays
-            // centred at its full width, under the buttons where they meet, as the web's
-            // centred pill stands beside its buttons.
-            (false, None, None) | (false, Some(_), Some(_)) => PillPlace::Middle,
-            (false, right, left) => PillPlace::Beside {
-                left: left.unwrap_or(0.0),
-                right: right.unwrap_or(0.0),
-            },
+    let more = (!more.children.is_empty()).then(|| {
+        let (width, tall) = others
+            .map(|b| (button_width(&b.label), height))
+            .chain(controls_size)
+            .fold((data::BUTTON_MIN_WIDTH, -gap), |(width, tall), (w, h)| {
+                (width.max(w), tall + h + gap)
+            });
+        let beside = if beside_right > 0.0 {
+            beside_right + gap
+        } else {
+            0.0
         };
-        pill(asks, place, &bands, input.occupied)
+        let strip = rect(bands.right - width, over - tall, width, tall);
+        let middle_right = slots.middle(bands.right - beside - width, width, tall);
+        let middle_left = slots.middle(bands.left, width, tall);
+        let (slot, placed) = slots.place(
+            "stacked prompt controls",
+            strip,
+            [middle_right, middle_left],
+        );
+        match slot {
+            1 => beside_right = bands.right - placed.x,
+            2 => beside_left = placed.width,
+            _ => {}
+        }
+        more.anchor = Some(Anchor::Point(
+            Vec2::new(placed.x + placed.width, placed.y + placed.height),
+            Vec2::ONE,
+        ));
+        more
+    });
+    let pill = (!asks.is_empty()).then(|| {
+        let place = PillPlace::beside_controls(held, over, beside_left, beside_right);
+        pill(asks, place, &slots)
     });
     // The pill comes first, so that the buttons are drawn over it where they meet.
     holder()
@@ -330,95 +323,105 @@ fn phone_bar(
         .children(dock)
 }
 
-/// Where the stacked buttons stand in the middle band, instead of over the strip.
-#[derive(Clone, Copy)]
-enum Stacked {
-    /// At the band's left end.
-    Left,
-    /// With their right edge at this distance from the window's left, and their top at this
-    /// height: at the band's right end, or beside the dock there.
-    Right(f32, f32),
-}
-
-/// The middle band's ends, where the dock or the stacked buttons stand instead of over a
-/// permanent of the viewer's back row.
-struct RightEnd<'a> {
+/// Builds the strip and middle-band candidates for a phone prompt.
+struct PromptSlots<'a> {
     bands: &'a TableBands,
-    occupied: &'a Occupied,
-    /// Whether the prompt shows something over the table, which the middle band then lies under.
+    scene: Option<&'a PlacementScene>,
     held: bool,
-    /// The left and right edges of the phase icon in the middle band, which a box moved there
-    /// keeps clear of, since the icon is drawn over the flat layer's buttons.
     phase: (f32, f32),
 }
 
-impl RightEnd<'_> {
-    /// The line the middle of a row of buttons `width` wide stands on at the column's right end,
-    /// as the dock does, while the top edge of the viewer's hand at rest is `hand_top` points
-    /// from the window's top: the middle of the viewer's strip; or higher, the dock's gap over
-    /// the hand, where the hand's back row stands in the strip, so that the buttons leave each
-    /// card of that row a strip to press; or, where the raised row would stand over a permanent
-    /// of the viewer's back row, at the middle band's right end if it fits there (`moved`). It
-    /// says too whether the row stands in the middle band. A `width` of nothing gives the
-    /// raised line, never moved.
-    fn dock_line(&self, hand_top: Option<f32>, width: f32) -> (f32, bool) {
+impl<'a> PromptSlots<'a> {
+    fn new(input: &HudIn<'a>, bands: &'a TableBands, held: bool) -> Self {
+        Self {
+            bands,
+            scene: input.placement_scene,
+            held,
+            phase: input.view.map_or((bands.left, bands.left), |view| {
+                phase_edges(view.stack.is_empty(), bands)
+            }),
+        }
+    }
+
+    fn dock_bottom(&self) -> f32 {
+        let bottom = self.bands.your_strip.middle() + data::BUTTON_HEIGHT / 2.0;
+        self.scene
+            .into_iter()
+            .flat_map(|scene| scene.group(Group::Hand))
+            .map(|card| card.y - data::DOCK_GAP)
+            .fold(bottom, f32::min)
+    }
+
+    fn dock(&self, name: &'static str, width: f32, narrow: Option<f32>) -> (Rect, usize) {
+        let bottom = self.dock_bottom();
         let height = data::BUTTON_HEIGHT;
-        let strip = self.bands.your_strip.middle();
-        let middle = hand_top.map_or(strip, |top| strip.min(top - data::DOCK_GAP - height / 2.0));
-        if width > 0.0
-            && middle < strip
-            && let Some(top) = self.moved((width, height), middle - height / 2.0)
-        {
-            return (top + height / 2.0, true);
-        }
-        (middle, false)
+        let strip = rect(self.bands.right - width, bottom - height, width, height);
+        let raised = bottom < self.bands.your_strip.middle() + height / 2.0;
+        let middle = |width| {
+            raised
+                .then(|| self.middle(self.bands.right - width, width, height))
+                .flatten()
+        };
+        let (slot, placed) = self.place(name, strip, [middle(width), narrow.and_then(middle)]);
+        (placed, slot)
     }
 
-    /// The top of a box `size` large at the middle band's right end, when at the column's right
-    /// end with its top at `top` it would stand over a permanent, and it fits in the band where
-    /// no stack item lies; `None` where it stays at `top`.
-    fn moved(&self, size: (f32, f32), top: f32) -> Option<f32> {
-        self.moved_to(size, top, self.bands.right)
-    }
-
-    /// Where the stacked buttons, a box `size` large, stand in the middle band, when over the
-    /// strip at the column's right end with their top at `top` they would stand over a
-    /// permanent of the viewer's back row: at the band's right end, or beside the dock where
-    /// the dock already takes `taken` points there, or else at its left end. `None` where they
-    /// stay over the strip.
-    fn stacked(&self, size: (f32, f32), top: f32, taken: Option<f32>) -> Option<Stacked> {
-        let beside = self.bands.right - taken.map_or(0.0, |taken| taken + data::DOCK_GAP);
-        if let Some(moved) = self.moved_to(size, top, beside) {
-            return Some(Stacked::Right(beside, moved));
-        }
-        self.moved_to(size, top, self.bands.left + size.0)
-            .map(|_| Stacked::Left)
-    }
-
-    /// As `moved`, for a box whose right edge stands at `right` in the middle band, beside
-    /// whatever already stands between it and the band's right end. The box must stay inside
-    /// the column and clear of the phase icon. A box may be a point taller than the band and its
-    /// overlaps, since its size is an estimate on the generous side: a number's stepper with a
-    /// cost under its value, 52 points tall, then still fits in the 44-point band at 375 by 647
-    /// that the creatures' rows leave, as the check that it is clear of every card confirms.
-    fn moved_to(&self, size: (f32, f32), top: f32, right: f32) -> Option<f32> {
-        let middle = self.bands.middle.middle() - size.1 / 2.0;
-        let (left, gap) = (right - size.0, data::DOCK_GAP);
+    /// A control may reach a few points past the band, where the table's card piles do too.
+    fn middle(&self, left: f32, width: f32, height: f32) -> Option<Rect> {
         let (phase_left, phase_right) = self.phase;
+        let gap = data::DOCK_GAP;
         (!self.held
-            && size.1 <= self.bands.middle.height + 2.0 * data::OVERLAP + 1.0
+            && height <= self.bands.middle.height + 2.0 * data::OVERLAP + 1.0
             && left >= self.bands.left
-            && (right + gap <= phase_left || left - gap >= phase_right)
-            && !clear_at_right(self.bands, self.occupied, size, top, 0.0)
-            && clear_at_right(
-                self.bands,
-                self.occupied,
-                size,
-                middle,
-                self.bands.right - right,
-            ))
-        .then_some(middle)
+            && (left + width + gap <= phase_left || left - gap >= phase_right))
+            .then(|| {
+                rect(
+                    left,
+                    self.bands.middle.middle() - height / 2.0,
+                    width,
+                    height,
+                )
+            })
     }
+
+    fn place<const N: usize>(
+        &self,
+        name: &'static str,
+        strip: Rect,
+        middle: [Option<Rect>; N],
+    ) -> (usize, Rect) {
+        let Some(scene) = self.scene else {
+            return (0, strip);
+        };
+        let of = if self.held {
+            Vec::new()
+        } else {
+            let mut of = table_rows();
+            of.push(PlacementScene::phase_query());
+            of
+        };
+        let candidates: Vec<_> = std::iter::once(Some(strip))
+            .chain(middle)
+            .enumerate()
+            .filter_map(|(index, bounds)| Some((index, bounds?)))
+            .collect();
+        // The first candidate is also the fallback on a crowded board, where the buttons
+        // must stay available even when no place can clear the table.
+        let boxes = candidates
+            .iter()
+            .map(|&(_, bounds)| inset(bounds, data::OVERLAP));
+        scene
+            .place(name, of, boxes)
+            .map_or((0, strip), |(index, _)| candidates[index])
+    }
+}
+
+fn table_rows() -> Vec<NodeQuery> {
+    vec![
+        Group::YourRows.children(),
+        Group::TheirRows.children(),
+        Group::Stack.children(),
+    ]
 }
 
 /// The dock: the button a prompt puts forward, drawn as the primary button, and the one that
@@ -455,18 +458,30 @@ enum PillPlace {
     Over(f32),
 }
 
+impl PillPlace {
+    fn beside_controls(held: bool, over: f32, left: f32, right: f32) -> Self {
+        if held {
+            Self::Over(over)
+        } else if (left > 0.0) == (right > 0.0) {
+            // Buttons at both ends can leave too little room to wrap the pill without covering a row.
+            Self::Middle
+        } else {
+            Self::Beside { left, right }
+        }
+    }
+}
+
 /// The pill that says what a prompt asks, `asks`, at `place`: a fixed width, so that a long
 /// question is laid out on as many lines as it takes. It lets the pointer through, so it never
 /// covers a card the prompt picks.
-fn pill(asks: &str, place: PillPlace, bands: &TableBands, occupied: &Occupied) -> Element {
+fn pill(asks: &str, place: PillPlace, slots: &PromptSlots<'_>) -> Element {
     let style = TypeStyle {
         size: data::PILL_TEXT,
         ..type_style::TITLE
     };
     let padding = data::PILL_PADDING;
-    let pill_height = style.size * style.line_height + padding;
-    let width = bands.right - bands.left;
-    // The room taken at each end of the column, with the gap beside it.
+    let height = style.size * style.line_height + padding;
+    let bands = slots.bands;
     let room = |taken: f32| {
         if taken > 0.0 {
             taken + data::DOCK_GAP
@@ -479,26 +494,103 @@ fn pill(asks: &str, place: PillPlace, bands: &TableBands, occupied: &Occupied) -
         PillPlace::Beside { left, right } => (room(left), room(right)),
         PillPlace::Over(_) => (0.0, room(data::BUTTON_MIN_WIDTH)),
     };
+    let width = bands.right - bands.left - left - right;
+    let x = bands.left + left;
+    let line = bands.middle.top + (bands.middle.height - height) / 2.0;
+    let top = match place {
+        PillPlace::Over(bottom) => bottom - height,
+        _ => line,
+    };
+    let mut bounds = rect(x, top, width, height);
+    if let Some(scene) = slots.scene {
+        if matches!(place, PillPlace::Over(_)) {
+            scene.place("prompt pill", Vec::new(), [bounds.into()]);
+        } else {
+            bounds = pill_slot(scene, bands, bounds, slots.phase.1);
+        }
+    }
     let mut pill = text(asks)
         .style(style)
         .text_align(TextAlign::Center)
-        .width(width - left - right)
-        .min_height(pill_height)
+        .width(bounds.width)
+        .min_height(height)
         .background(color::PANEL)
-        .radius(pill_height / 2.0)
+        .radius(height / 2.0)
         .enter(&kit_ui::widgets::screen::SCREEN_INSTANT)
         .passes(true);
     pill.style.padding = [padding / 2.0, padding, padding / 2.0, padding];
-    let top = || asked_top(bands, occupied, pill_height);
     pill.anchor = Some(match place {
-        PillPlace::Over(over) => Anchor::Point(Vec2::new(bands.left, over), Vec2::new(0.0, 1.0)),
-        PillPlace::Beside { .. } => Anchor::Point(Vec2::new(bands.left + left, top()), Vec2::ZERO),
-        PillPlace::Middle => Anchor::Point(
-            Vec2::new(f32::midpoint(bands.left, bands.right), top()),
-            Vec2::new(0.5, 0.0),
-        ),
+        PillPlace::Over(over) => Anchor::Point(Vec2::new(bands.left, over), Vec2::Y),
+        _ => Anchor::Point(Vec2::new(bounds.x, bounds.y), Vec2::ZERO),
     });
     pill
+}
+
+/// Tries the full prompt width at the nearest quiet height. When cards fill the middle of
+/// the board from top to bottom, the pill can use the space to either side of those cards.
+fn pill_slot(
+    scene: &PlacementScene,
+    bands: &TableBands,
+    preferred: Rect,
+    phase_right: f32,
+) -> Rect {
+    let gap = data::ASKED_GAP;
+    let height = preferred.height;
+    let cards: Vec<_> = [Group::YourRows, Group::TheirRows, Group::Stack]
+        .into_iter()
+        .flat_map(|group| scene.group(group))
+        .collect();
+    let mut tops = vec![preferred.y];
+    tops.extend(
+        cards
+            .iter()
+            .flat_map(|card| [card.y + card.height + gap, card.y - gap - height])
+            .filter(|&top| top >= bands.opponent_back.top && top + height <= bands.your_strip.top),
+    );
+    tops.sort_by(|a, b| (a - preferred.y).abs().total_cmp(&(b - preferred.y).abs()));
+    let full_width = tops.into_iter().map(|y| Candidate {
+        bounds: Rect { y, ..preferred },
+        clearance: rect(
+            bands.left,
+            y - gap,
+            bands.right - bands.left,
+            height + 2.0 * gap,
+        ),
+    });
+
+    let end = preferred.x + preferred.width;
+    // A narrower pill can wrap. Reserve an extra line when finding its horizontal slot.
+    let tall = 2.0 * height - data::PILL_PADDING;
+    let (left, right) = cards
+        .iter()
+        .filter(|card| {
+            card.y < preferred.y + tall + gap && card.y + card.height > preferred.y - gap
+        })
+        .fold((end, preferred.x), |(left, right), card| {
+            (left.min(card.x), right.max(card.x + card.width))
+        });
+    let start = preferred.x.max(phase_right + gap);
+    let room = [((right + gap).max(start), end), (start, left - gap)];
+    let beside = room
+        .into_iter()
+        .filter(|(left, right)| right - left >= data::BUTTON_MIN_WIDTH)
+        .map(|(left, right)| {
+            let bounds = rect(left, preferred.y, right - left, height);
+            let clearance = inset(
+                Rect {
+                    height: tall,
+                    ..bounds
+                },
+                -gap,
+            );
+            Candidate {
+                bounds,
+                clearance: clearance.clearance,
+            }
+        });
+    scene
+        .place("prompt pill", table_rows(), full_width.chain(beside))
+        .map_or(preferred, |(_, bounds)| bounds)
 }
 
 /// About how wide a phone button with `label` is drawn, from the count of its characters, at
@@ -561,34 +653,33 @@ pub fn waiting(input: &HudIn) -> Option<Element> {
         return None;
     }
     let label = button(OPPONENTS_TURN).enabled(false);
-    if !input.window.phone() {
+    let Some(bands) = input.profile.bands() else {
         return Some(desktop_dock().child(turn_action(dock_sized(label), None, "")));
-    }
+    };
     // It stands where the dock would, raised over a hand whose back row stands in the strip. Where
     // that would cover a permanent of the viewer's back row and the label is too wide for the
-    // middle band beside the phase icon, it narrows to the room there, and its words shrink to
-    // fit, as a button's do.
-    let bands = input.profile.bands().unwrap_or_default();
-    let right_end = RightEnd {
-        bands: &bands,
-        occupied: input.occupied,
-        held: false,
-        phase: phase_span(input, &bands),
-    };
-    let (hand_top, wide) = (input.occupied.hand_top, button_width(OPPONENTS_TURN));
-    let room = bands.right - right_end.phase.1 - data::DOCK_GAP;
-    let (mut middle, moved) = right_end.dock_line(hand_top, wide);
-    let mut narrowed = None;
-    if !moved && (data::BUTTON_MIN_WIDTH..wide).contains(&room) {
-        let (line, fits) = right_end.dock_line(hand_top, room);
-        if fits {
-            (middle, narrowed) = (line, Some(room));
-        }
-    }
+    // middle band beside the phase icon or stack, it narrows to the room there and shrinks its
+    // words to fit.
+    let slots = PromptSlots::new(input, &bands, false);
+    let wide = button_width(OPPONENTS_TURN);
+    let line = bands.middle.middle();
+    let half = data::BUTTON_HEIGHT / 2.0;
+    let occupied_right = slots
+        .scene
+        .into_iter()
+        .flat_map(|scene| scene.group(Group::Stack))
+        .filter(|item| item.y < line + half && item.y + item.height > line - half)
+        .map(|item| item.x + item.width)
+        .fold(slots.phase.1, f32::max);
+    let room = bands.right - occupied_right - data::DOCK_GAP;
+    let narrow = (data::BUTTON_MIN_WIDTH..wide)
+        .contains(&room)
+        .then_some(room);
+    let (placed, slot) = slots.dock(OPPONENTS_TURN, wide, narrow);
     let mut label = phone_sized(label);
-    label.style.width = narrowed;
+    label.style.width = narrow.filter(|_| slot == 2);
     label.anchor = Some(Anchor::Point(
-        Vec2::new(bands.right, middle),
+        Vec2::new(bands.right, placed.y + placed.height / 2.0),
         Vec2::new(1.0, 0.5),
     ));
     Some(holder().name("prompt").child(label))

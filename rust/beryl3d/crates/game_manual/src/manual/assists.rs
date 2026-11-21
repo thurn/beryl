@@ -21,6 +21,8 @@ use beryl_protocol::protocol::{
     Answer, LabelView, ObjectId, PileName, ProposalView, Side, TablePrompt, TargetRef, ZoneName,
 };
 use beryl_protocol::script::Subject;
+use game_hud::hud::placement_scene::PlacementScene;
+use game_table::profiles::TableBands;
 use glam::Vec2;
 
 use super::TablePress;
@@ -50,9 +52,10 @@ pub fn proposals(
     proposals: &[ProposalView],
     opened: Option<u32>,
     window: Window,
+    bands: Option<TableBands>,
+    layout: Option<&PlacementScene>,
 ) -> Option<Element> {
     let first = proposals.first()?.id;
-    let phone = window.phone();
     let mut panel = column()
         .name(PROPOSALS)
         .gap(space::M)
@@ -60,7 +63,7 @@ pub fn proposals(
         .background(color::PANEL)
         .border((color::METAL, size::BORDER))
         .radius(size::PANEL_RADIUS);
-    if !phone {
+    if bands.is_none() {
         panel = panel
             .children(proposals.iter().map(|each| proposal(each, false)))
             .width(kit_base::data::space::flat::table::log::WIDTH);
@@ -102,7 +105,11 @@ pub fn proposals(
                 .iter()
                 .map(|each| proposal(each, true).align_self(Align::Stretch)),
         );
-    panel.anchor = Some(corner);
+    panel.anchor = bands
+        .and_then(|bands| {
+            super::profiles::proposal_slot(proposals, window, bands, layout, right, top)
+        })
+        .or(Some(corner));
     Some(panel)
 }
 

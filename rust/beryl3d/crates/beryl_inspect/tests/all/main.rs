@@ -22,6 +22,8 @@ mod opening;
 mod pack;
 mod parity;
 mod pointer_held;
+#[path = "profiles/prompt_placement.rs"]
+mod prompt_placement;
 mod prompts;
 mod prompts_declare;
 mod prompts_divide;

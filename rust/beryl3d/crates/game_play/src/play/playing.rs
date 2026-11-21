@@ -11,7 +11,7 @@ use super::part::Part;
 use crate::hud::counts::Counts;
 use crate::light::{Lit, StreakRun};
 use crate::verbs::Interval;
-use game_table::table::Motion;
+use game_table::table::{Motion, Objects};
 
 /// An update and the timings of its script's steps, compiled to play after the scripts before
 /// it.
@@ -171,6 +171,17 @@ impl Playing {
 }
 
 impl Show {
+    /// The latest view’s resting objects, including any scripts still to play.
+    #[must_use]
+    pub fn latest_objects(&self) -> &Objects {
+        (self.waiting.back().map(|waiting| &waiting.compiled.finals))
+            .or(self
+                .playing
+                .as_ref()
+                .map(|playing| &playing.compiled.finals))
+            .unwrap_or(self.table.objects())
+    }
+
     /// The turn and step the table shows at `now`, in nanoseconds since the client started:
     /// the view's it last showed at rest, changed by each `set` step of the playing script that
     /// has begun a step of the turn by `now`; `None` until the table has shown a view. The web

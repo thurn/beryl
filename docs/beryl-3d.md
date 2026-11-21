@@ -2035,12 +2035,12 @@ window.
     stand in the middle band instead, when they fit there clear of every
     permanent, stack item and the phase icon: the dock at the band's right end,
     and the stacked buttons there, beside the dock, or at the band's left end.
-    The pill is narrowed to the room between them
-    (`hud::phone::clear_at_right`). What the prompt asks is a pill on the middle
-    band's line, or at the nearest height clear of every permanent and stack
-    item (`hud::phone::asked_top`). While the table is shaded, the pill stands
-    over the strip instead. The client measures where cards rest
-    (`hud::phone::Occupied`) when it builds the screen.
+    The pill is narrowed to the room beside the dock and buttons. What the
+    prompt asks is a pill on the middle band's line, or at the nearest height
+    clear of every permanent and stack item. If those cards leave no clear line,
+    the pill can narrow to the space beside them. While the table is shaded, the
+    pill stands over the strip instead. The scene's keep-clear solver checks the
+    candidate slots against the table's projected resting boxes.
   - Life totals that no prompt can pick, and the count labels, let the pointer
     through to the cards behind them. On the manual table a life total still
     takes the pointer, since its commands act on the total under it.
@@ -3212,13 +3212,14 @@ screen, so they cover every card spec that is ever generated.
   them inside the window. The layer is placed for the table's camera, so a frame
   that was not given that camera, as the start screen once was when no game was
   going on, draws its whole layer off screen and shows a black window.
-- **Marks on their things.** Each mark's outline is centred on the card, ability
-  or life total it rings, within 2 points, and the line it is drawn along goes
+- **Relations hold.** Each mark's outline is centred on the card, ability or
+  life total it rings, within 2 points, and the line it is drawn along goes
   round that thing's box on screen, falling inside it by no more than 2 points.
   The outline is a quad in the table's space, so the check projects it as the
   renderer draws it (`Frame::rings`), where the other checks read only the
   elements. Outlines drawn at seven tenths of their card's width passed every
-  other check before this one.
+  other check before this one. Each keep-clear slot is checked against the
+  resting boxes it must avoid.
 - **Phone sizes.** On the phone layout, touch targets are at least 44 by 44
   points and text at least 11 points.
 - **No jumps.** Where one of an object's segments ends and the next begins, the

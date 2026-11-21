@@ -98,6 +98,11 @@ impl Objects {
         &self.rows
     }
 
+    /// The resting poses of the abilities on the stack.
+    pub fn ability_poses(&self) -> impl Iterator<Item = (u32, Pose)> + '_ {
+        self.abilities.iter().map(|(id, object)| (*id, object.pose))
+    }
+
     /// The scene object of the ability numbered `id`.
     fn ability(&self, id: u32) -> Option<SceneObject> {
         let at = self
@@ -274,6 +279,12 @@ impl Table {
     /// dealt out of sight. Takes effect at the next `resize`.
     pub fn set_hand_away(&mut self, away: bool) {
         self.hand_away = away;
+    }
+
+    /// The table's current resting objects and abilities.
+    #[must_use]
+    pub fn objects(&self) -> &Objects {
+        &self.objects
     }
 
     /// Where the object in `slot` rests in the view the table shows, if it shows it.

@@ -204,3 +204,36 @@ fn a_press_follows_paint_order_across_the_table_and_screen() {
     frame.resolved[panel as usize].opacity = 0.0;
     assert_eq!(hit(&frame, point), Some(moving));
 }
+
+#[test]
+fn keep_clear_uses_the_first_slot_that_clears_the_queried_children() {
+    let mut tree = Tree::default();
+    let group = tree.push(Node::screen(ElementId(1), "cards", Rect::default()));
+    let mut card = Node::screen(ElementId(2), "card", BOX);
+    card.parent = Some(group);
+    tree.push(card);
+    let clear = Rect {
+        x: BOX.x + BOX.width,
+        ..BOX
+    };
+    // Overlapping a node outside the queried group doesn't block this slot.
+    tree.push(Node::screen(ElementId(3), "other", clear));
+    let blocked = tree.add_slot(BOX.into());
+    let preferred = tree.add_slot(clear.into());
+    let spare = tree.add_slot(
+        Rect {
+            y: BOX.y + BOX.height,
+            ..BOX
+        }
+        .into(),
+    );
+    let mut panel = Node::screen(ElementId(4), "panel", Rect::default());
+    panel.keep_clear = Some(KeepClear {
+        of: vec![NodeQuery::Children(NodeRef::Id(ElementId(1)))],
+        places: vec![blocked, preferred, spare],
+    });
+    let index = tree.push(panel);
+    tree.solve(SolvePhase::Handle, |_, _| {});
+    assert_eq!(tree.selected_slot(index), Some(preferred));
+    assert_eq!(tree.nodes()[index as usize].space.screen_bounds(), clear);
+}

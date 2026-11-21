@@ -9,7 +9,7 @@ use kit_frame::frame::{ElementId, Frame, Resolved, Role};
 pub use kit_frame::frame::{NodeRef, PaintBand as Band, Show};
 use kit_ui::layout::Layer;
 
-use crate::hit::bounds;
+use crate::hit::{bounds, intersection};
 
 /// A node's geometry in either table or screen space.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -40,12 +40,29 @@ impl Space {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NodeQuery {
     Node(NodeRef),
+    Children(NodeRef),
     Role(Role),
 }
 
 /// An identifier for a candidate placement supplied by screen layout.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SlotRef(pub u32);
+
+/// A candidate screen box and the portion tested against the avoided nodes.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Candidate {
+    pub bounds: Rect,
+    pub clearance: Rect,
+}
+
+impl From<Rect> for Candidate {
+    fn from(bounds: Rect) -> Self {
+        Self {
+            bounds,
+            clearance: bounds,
+        }
+    }
+}
 
 /// Places a node relative to another node's screen box.
 #[derive(Clone, Debug, PartialEq)]
@@ -83,6 +100,22 @@ pub struct Node<'a> {
 }
 
 impl<'a> Node<'a> {
+    /// A screen region with no parent or relations yet.
+    #[must_use]
+    pub fn screen(id: ElementId, name: &'a str, bounds: Rect) -> Self {
+        Self {
+            id,
+            role: Role::Region,
+            name: Cow::Borrowed(name),
+            parent: None,
+            space: Space::Screen { bounds },
+            band: Band::ScreenPanels,
+            anchor: None,
+            keep_clear: None,
+            show: None,
+        }
+    }
+
     /// Reads a node registered by the frame builder. The frame owns its name.
     #[must_use]
     fn from_resolved(frame: &'a Frame, index: u32, element: &Resolved) -> Self {
@@ -133,13 +166,19 @@ pub enum SolveStep {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Tree<Nodes = Vec<Node<'static>>> {
     nodes: Nodes,
+    slots: Vec<Candidate>,
+    selected: Vec<Option<SlotRef>>,
 }
 
 impl<'a> Tree<&'a Frame> {
     /// Views the registered nodes of a frame without copying their storage.
     #[must_use]
     pub const fn from_frame(frame: &'a Frame) -> Self {
-        Self { nodes: frame }
+        Self {
+            nodes: frame,
+            slots: Vec::new(),
+            selected: Vec::new(),
+        }
     }
 
     /// All registered nodes, in the same order as `Frame::resolved`.
@@ -175,6 +214,7 @@ impl<'a> Tree<Vec<Node<'a>>> {
         let index = u32::try_from(self.nodes.len()).expect("nodes fit u32 indexes");
         assert!(node.parent.is_none_or(|parent| parent < index));
         self.nodes.push(node);
+        self.selected.push(None);
         index
     }
 
@@ -222,6 +262,72 @@ impl<'a> Tree<Vec<Node<'a>>> {
         };
         for &step in steps {
             run(step, self);
+            if step == KeepClear {
+                self.place_clear_nodes();
+            }
+        }
+    }
+
+    /// Registers a screen slot for a subsequent keep-clear pass.
+    ///
+    /// # Panics
+    ///
+    /// If the number of slots exceeds the range of `SlotRef`.
+    pub fn add_slot(&mut self, candidate: Candidate) -> SlotRef {
+        let index = u32::try_from(self.slots.len()).expect("slots fit u32 indexes");
+        self.slots.push(candidate);
+        SlotRef(index)
+    }
+
+    /// The first clear slot selected for a node, or none if every candidate was blocked.
+    #[must_use]
+    pub fn selected_slot(&self, index: u32) -> Option<SlotRef> {
+        self.selected.get(index as usize).copied().flatten()
+    }
+
+    /// The boxes selected by a relation's queries, excluding the node itself.
+    pub fn avoided(&self, index: u32, queries: &[NodeQuery]) -> impl Iterator<Item = Rect> + '_ {
+        let matches: Vec<_> = queries
+            .iter()
+            .map(|query| match query {
+                NodeQuery::Node(reference) => (self.resolve(reference), None, None),
+                NodeQuery::Children(reference) => (None, self.resolve(reference), None),
+                NodeQuery::Role(role) => (None, None, Some(*role)),
+            })
+            .collect();
+        self.nodes
+            .iter()
+            .enumerate()
+            .filter(move |&(at, node)| {
+                at != index as usize
+                    && matches.iter().any(|&(target, parent, role)| {
+                        target.is_some_and(|target| target as usize == at)
+                            || parent.is_some_and(|parent| node.parent == Some(parent))
+                            || role == Some(node.role)
+                    })
+            })
+            .map(|(_, node)| node.space.screen_bounds())
+    }
+
+    fn place_clear_nodes(&mut self) {
+        for index in 0..self.nodes.len() {
+            let Some(relation) = &self.nodes[index].keep_clear else {
+                continue;
+            };
+            let avoided: Vec<_> = self
+                .avoided(u32::try_from(index).expect("node index"), &relation.of)
+                .collect();
+            let choice = relation.places.iter().find_map(|&slot| {
+                let candidate = self.slots.get(slot.0 as usize)?;
+                avoided
+                    .iter()
+                    .all(|&other| intersection(candidate.clearance, other).is_none())
+                    .then_some((slot, candidate.bounds))
+            });
+            self.selected[index] = choice.map(|(slot, _)| slot);
+            if let Some((_, bounds)) = choice {
+                self.nodes[index].space = Space::Screen { bounds };
+            }
         }
     }
 

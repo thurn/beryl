@@ -20,6 +20,7 @@ use glam::Vec2;
 use super::bar::{Controls, bar};
 use super::{Shown, Steps, marks, ways};
 use crate::hud::HudIn;
+use crate::hud::placement_scene::{Group, rect};
 use game_table::faces::FaceList;
 use game_table::table::{CARD_HEIGHT, CARD_WIDTH};
 use kit_base::data::space::hud::phone::CHARACTER_WIDTH;
@@ -178,7 +179,21 @@ fn ways_row(prompt: &PromptView, input: &HudIn) -> Option<Element> {
         .justify_content(Justify::Center)
         .align_items(Align::Center)
         .children(drawn);
-    element.anchor = Some(Anchor::Point(Vec2::new(tray.x, tray.y), Vec2::ZERO));
+    let mut top = tray.y;
+    if let (Some(scene), Some(bands)) = (input.placement_scene, input.profile.bands()) {
+        let above = bands.your_creatures.top - tray.height;
+        let candidates = [top, above]
+            .into_iter()
+            .filter(|&top| top >= bands.opponent_strip.top)
+            .map(|top| rect(tray.x, top, tray.width, tray.height).into());
+        // The choices are shown over a shaded table. Prefer the normal tray, then the
+        // last position above the viewer's front row before using the shaded tray.
+        let avoids = vec![Group::YourRows.children(), Group::Stack.children()];
+        if let Some((_, placed)) = scene.place("ways to use a card", avoids, candidates) {
+            top = placed.y;
+        }
+    }
+    element.anchor = Some(Anchor::Point(Vec2::new(tray.x, top), Vec2::ZERO));
     Some(element)
 }
 

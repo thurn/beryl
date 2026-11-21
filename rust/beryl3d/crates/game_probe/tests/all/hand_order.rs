@@ -20,7 +20,8 @@ fn hand(show: &Show) -> Vec<ObjectId> {
 
 /// Where `slot` rests across the screen, its position's x.
 fn x_of(show: &Show, slot: ObjectId) -> f32 {
-    show.latest_rest(usize::from(slot.0))
+    show.latest_objects()
+        .card_pose(usize::from(slot.0))
         .expect("the card rests on the table")
         .position
         .x

@@ -18,8 +18,12 @@ use glam::Vec2;
 use super::bar::bar;
 use super::{Shown, Steps, begin_spans, end_spans, mark_spans, target_arrows};
 use crate::hud::HudIn;
+use crate::hud::placement_scene::{Group, PlacementScene, inset, rect};
 use game_play::light::Span;
+use kit_base::data::space::hud::phone::OVERLAP;
 use kit_base::tokens::{color, size, space, type_style};
+use kit_frame::frame::ElementId;
+use kit_scene::{Slot, hit::contains};
 use kit_ui::element::{Align, Anchor, Element, TextAlign, column, text};
 use kit_ui::widgets::{icon_button, icons};
 
@@ -37,7 +41,7 @@ pub(super) fn screen(prompt: &PromptView, input: &HudIn) -> Option<Element> {
     };
     let left = *left;
     let controls = (shares.iter()).filter_map(|&share| {
-        if input.window.phone() {
+        if input.profile.bands().is_some() {
             phone_share(share, left, input)
         } else {
             share_control(share, left)
@@ -99,7 +103,36 @@ fn phone_share(share: Share, left: u8, input: &HudIn) -> Option<Vec<Element>> {
         .radius(space::S)
         .height(high)
         .min_width(high);
-    (control.anchor, shown.anchor) = if theirs {
+    let above = input
+        .placement_scene
+        .and_then(|layout| {
+            let card = layout.bounds(ElementId(u32::from(slot.0)))?;
+            let size = size::ICON_BUTTON;
+            let height = 2.0 * size + space::S;
+            let x = card.x + (card.width - size) / 2.0;
+            let above = rect(x, card.y - height, size, height);
+            let below = rect(x, card.y + card.height, size, height);
+            let preferred = if theirs {
+                [above, below]
+            } else {
+                [below, above]
+            };
+            let safe = Slot::safe_area(input.window);
+            let candidates = preferred
+                .into_iter()
+                .filter(|&bounds| contains(safe, bounds))
+                .map(|bounds| inset(bounds, OVERLAP));
+            let avoids = vec![
+                Group::YourRows.children(),
+                Group::TheirRows.children(),
+                Group::Stack.children(),
+                PlacementScene::phase_query(),
+            ];
+            let (_, placed) = layout.place("divide stepper", avoids, candidates)?;
+            Some(placed.y < card.y)
+        })
+        .unwrap_or(theirs);
+    (control.anchor, shown.anchor) = if above {
         (
             Some(Anchor::Above(share.on, 0.0)),
             Some(Anchor::Above(share.on, -high)),

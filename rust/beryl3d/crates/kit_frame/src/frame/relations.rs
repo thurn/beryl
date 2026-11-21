@@ -73,3 +73,11 @@ impl super::Frame {
         })
     }
 }
+
+/// The tested portion of a placed screen slot and the resting boxes it must avoid.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Clearance {
+    pub name: &'static str,
+    pub rect: Rect,
+    pub avoided: Vec<Rect>,
+}

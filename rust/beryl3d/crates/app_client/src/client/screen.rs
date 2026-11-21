@@ -1,7 +1,7 @@
 //! Showing the flat layer's screen or sheet, and the corner's buttons, a float at the game
 //! screen's top right: the gear that opens the settings sheet, the bug button and undo.
 
-use beryl_protocol::protocol::{Side, Status, ZoneName};
+use beryl_protocol::protocol::Status;
 use beryl_protocol::{AgentView, DecisionId};
 use glam::Vec2;
 
@@ -10,11 +10,10 @@ use super::features::{Placement, ViewInputs};
 
 use crate::command::{Request, SessionCommand};
 use app_screens::screens::{self, Screen, ScreenIn, ScreenPress, Sheet, StartForm};
-use game_hud::hud::phone::Occupied;
+use game_hud::hud::placement_scene::PlacementScene;
 use game_manual::manual::TableCommand;
 use game_table::faces::{FaceList, Faces};
 use kit_ui::element::{Action, floats};
-use kit_ui::input::Rect;
 use kit_ui::input::{AssetReady, FaceSize};
 use kit_ui::layout::FloatLook;
 
@@ -56,9 +55,9 @@ impl Client {
         let log = (self.screen == Screen::Game && settings.is_none() && !self.bug_hides_screen())
             .then(|| self.features.view(Placement::GameLog, feature_inputs))
             .flatten();
-        let occupied = self.occupied();
+        let placement_scene = self.placement_scene();
         let input = ScreenIn {
-            occupied: &occupied,
+            placement_scene: placement_scene.as_ref(),
             ..self.screen_in()
         };
         let mut full = game_hud::prompts::faces(&input.hud());
@@ -101,6 +100,9 @@ impl Client {
         {
             self.prepare_resized();
         }
+        self.frame.clearances = placement_scene
+            .map(PlacementScene::into_clearances)
+            .unwrap_or_default();
         self.layer
             .show(shown.map(kit_ui::widgets::screen::with_transitions));
         self.layer.scroll_to_end(game_hud::hud::log::LIST);
@@ -167,7 +169,7 @@ impl Client {
             lobby: &self.manual.lobby,
             result_aside: self.viewing.result_aside,
             spinning: self.viewing.spinning(self.now),
-            occupied: &game_hud::hud::phone::NOTHING,
+            placement_scene: None,
         }
     }
 
@@ -175,40 +177,6 @@ impl Client {
     pub(super) fn show_result(&mut self, shown: bool) {
         self.viewing.result_aside = !shown;
         self.show_screen();
-    }
-
-    /// Where the latest view's cards will rest once every script given so far has played, on
-    /// the phone layout, whose prompt pill and dock keep clear of them; nothing on the desktop.
-    fn occupied(&self) -> Occupied {
-        let Some(update) = self.show.latest().filter(|_| self.window.phone()) else {
-            return Occupied::default();
-        };
-        let camera = self.show.table().camera();
-        let mut occupied = Occupied::default();
-        for object in &update.view.objects {
-            let Some(pose) = self.show.latest_rest(usize::from(object.slot.0)) else {
-                continue;
-            };
-            let corners = camera.card_box(&pose).0;
-            let (mut low, mut high) = (Vec2::splat(f32::MAX), Vec2::splat(f32::MIN));
-            for corner in corners {
-                low = low.min(corner);
-                high = high.max(corner);
-            }
-            match object.zone {
-                ZoneName::Battlefield | ZoneName::Stack => occupied.cards.push(Rect {
-                    x: low.x,
-                    y: low.y,
-                    width: high.x - low.x,
-                    height: high.y - low.y,
-                }),
-                ZoneName::Hand if object.owner == Side::You => {
-                    occupied.hand_top = Some(occupied.hand_top.map_or(low.y, |top| top.min(low.y)));
-                }
-                _ => {}
-            }
-        }
-        occupied
     }
 
     /// The active screen's faces, which the host's asset workers prepare. A match's

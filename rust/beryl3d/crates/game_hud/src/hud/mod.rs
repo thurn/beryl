@@ -8,6 +8,7 @@ pub use input::HudIn;
 pub mod log;
 pub mod phone;
 pub mod piles;
+pub mod placement_scene;
 pub mod players;
 pub mod rows;
 pub mod steps;

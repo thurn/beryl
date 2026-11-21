@@ -103,8 +103,15 @@ pub fn table(input: &TableIn) -> Element {
         )
     });
     let table = view.and_then(|view| view.table.as_ref());
-    let proposals =
-        table.and_then(|table| assists::proposals(&table.proposals, state.proposals_open, window));
+    let proposals = table.and_then(|table| {
+        assists::proposals(
+            &table.proposals,
+            state.proposals_open,
+            window,
+            hud.profile.bands(),
+            hud.placement_scene,
+        )
+    });
     let labels = view
         .zip(table)
         .map(|(view, table)| assists::labels(&table.labels, view, window.phone()))
@@ -203,7 +210,13 @@ fn over(state: &TableState, input: &TableIn) -> Option<Element> {
         return Some(palette::panel(open, input.fields, window));
     }
     if let Some(open) = &state.ask {
-        return Some(ask::dock(open, input.fields, window));
+        return Some(ask::dock(
+            open,
+            input.fields,
+            input.hud.window,
+            input.hud.profile.bands(),
+            input.hud.placement_scene,
+        ));
     }
     if state.quitting {
         return Some(quit::question(window));

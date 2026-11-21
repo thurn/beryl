@@ -8,90 +8,14 @@
 //! - The middle band: the phase icon on its line, at its left while the stack holds anything,
 //!   and full control's mark at its right end, across from the phase.
 //! - The log, as a sheet over the table while it is open.
-//! - Where the pill with what a prompt asks stands (`asked_top`), which the prompt bar's phone
-//!   composition reads (`prompts::prompt_bar`).
-
 use beryl_protocol::protocol::{PlayerView, Side, Step};
 use glam::Vec2;
 
-use crate::hud::HudIn;
 use game_table::profiles::TableBands;
-use kit_base::data::space::hud::phone as data;
 use kit_base::tokens::{color, shadow};
 use kit_frame::frame::Role;
 use kit_ui::element::{Action, Anchor, Element, Shown};
-use kit_ui::input::Rect;
 use kit_ui::widgets::{icon_button, icons};
-
-/// Where the cards of the table rest once every script given so far has played, as the phone's
-/// screen needs them: the boxes of the permanents and the stack's items on the window, and the
-/// top of the viewer's hand, whose back row stands in their strip when the hand holds more cards
-/// than one fan has room for. The client measures them as it builds the screen.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct Occupied {
-    /// The box on the window of each permanent and stack item, in logical points.
-    pub cards: Vec<Rect>,
-    /// The highest top edge of a card in the viewer's hand, in logical points from the
-    /// window's top, if they hold any.
-    pub hand_top: Option<f32>,
-}
-
-/// Nothing measured: the desktop layout, and screens built outside a client.
-pub static NOTHING: Occupied = Occupied {
-    cards: Vec::new(),
-    hand_top: None,
-};
-
-/// Where the top of the pill with what the open prompt asks stands, `height` high, as the web's
-/// `askedTop` (`ui/src/mobile/asked.ts`) puts it: centred on the middle band's line, as Arena
-/// writes what a prompt asks across the middle of its table; or, where a card lies there (an
-/// item on the stack), at the nearest height clear of every permanent and stack item, so that a
-/// pick made on the battlefield shows every card it picks among. With no such height it stays
-/// on the line. Heights are compared across the whole width, since the pill is centred and only
-/// as wide as its words.
-#[must_use]
-pub fn asked_top(bands: &TableBands, occupied: &Occupied, height: f32) -> f32 {
-    let line = bands.middle.top + (bands.middle.height - height) / 2.0;
-    let gap = data::ASKED_GAP;
-    let taken = || (occupied.cards.iter()).map(|card| (card.y, card.y + card.height));
-    let clear = |top: f32| {
-        top >= bands.opponent_back.top
-            && top + height <= bands.your_strip.top
-            && taken().all(|(card_top, card_bottom)| {
-                top + height + gap <= card_top || top >= card_bottom + gap
-            })
-    };
-    std::iter::once(line)
-        .chain(taken().flat_map(|(top, bottom)| [bottom + gap, top - gap - height]))
-        .filter(|&top| clear(top))
-        .min_by(|a, b| (a - line).abs().total_cmp(&(b - line).abs()))
-        .unwrap_or(line)
-}
-
-/// Whether a box `width` by `height` whose right edge stands `beside` points left of the
-/// column's right end, its top at `top`, keeps clear of every permanent and stack item,
-/// allowing `data::OVERLAP` points of overlap on each side, so that a box that fills the middle
-/// band still fits between the creatures' rows, which a token's pile reaches over by a few
-/// points.
-#[must_use]
-pub fn clear_at_right(
-    bands: &TableBands,
-    occupied: &Occupied,
-    (width, height): (f32, f32),
-    top: f32,
-    beside: f32,
-) -> bool {
-    let spare = data::OVERLAP;
-    let end = bands.right - beside;
-    let (left, bottom) = (end - width + spare, top + height - spare);
-    let (right, top) = (end - spare, top + spare);
-    occupied.cards.iter().all(|card| {
-        card.x >= right
-            || card.x + card.width <= left
-            || card.y >= bottom
-            || card.y + card.height <= top
-    })
-}
 
 /// The menu's button, at the right end of the opponent's strip: it opens the settings, which
 /// hold the log and the bug report (`MenuButton` in `ui/src/mobile/chrome.tsx`).
@@ -159,7 +83,7 @@ pub fn middle(view: &PlayerView, full_control: bool, bands: &TableBands) -> Elem
 
 /// The left and right edges of the phase icon in the middle band: centred while the stack is
 /// empty, and at the band's left while it holds anything.
-fn phase_edges(stack_empty: bool, bands: &TableBands) -> (f32, f32) {
+pub fn phase_edges(stack_empty: bool, bands: &TableBands) -> (f32, f32) {
     let side = f32::from(icons::PHASE_SIDE);
     let left = if stack_empty {
         f32::midpoint(bands.left, bands.right) - side / 2.0
@@ -167,15 +91,6 @@ fn phase_edges(stack_empty: bool, bands: &TableBands) -> (f32, f32) {
         bands.left
     };
     (left, left + side)
-}
-
-/// The left and right edges of the phase icon `middle` draws for the screen `input` builds, or
-/// an empty span at the column's left where it draws none.
-#[must_use]
-pub fn phase_span(input: &HudIn, bands: &TableBands) -> (f32, f32) {
-    input.view.map_or((bands.left, bands.left), |view| {
-        phase_edges(view.stack.is_empty(), bands)
-    })
 }
 
 /// The icon of the phase `step` is in, of the web's five (`phaseOf` in `ui/src/mobile/layout.ts`):

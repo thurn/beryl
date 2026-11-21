@@ -38,8 +38,38 @@ pub fn check(
     faults.extend(clips(frame, context));
     faults.extend(layer_drawn(frame, context));
     faults.extend(marks_on(frame, context, ring_target));
+    faults.extend(keep_clear(frame, context));
     faults.extend(phone_sizes(frame, context));
     faults
+}
+
+/// Checks that each selected keep-clear slot respects its declared resting obstacles. The
+/// obstacles are the boxes that layout read, so a card passing through a slot is allowed.
+#[must_use]
+pub fn keep_clear(frame: &Frame, context: &Context) -> Vec<Fault> {
+    frame
+        .clearances
+        .iter()
+        .flat_map(|placement| {
+            placement.avoided.iter().filter_map(move |&other| {
+                intersection(placement.rect, other)?;
+                let control = Subject {
+                    locator: placement.name.to_owned(),
+                    rect: placement.rect,
+                };
+                let covered = Subject {
+                    locator: "resting node".to_owned(),
+                    rect: other,
+                };
+                Some(fault(
+                    Rule::RelationsHold,
+                    context,
+                    format!("{} covers {}", control.describe(), covered.describe()),
+                    vec![control, covered],
+                ))
+            })
+        })
+        .collect()
 }
 
 /// On screen: every interactive element lies inside the window's safe area. A card needs only a
@@ -507,7 +537,7 @@ pub fn marks_on(
         };
         let subject = subject(frame, index);
         faults.push(fault(
-            Rule::MarksOn,
+            Rule::RelationsHold,
             context,
             format!(
                 "the mark on {} ({}) {problem}",

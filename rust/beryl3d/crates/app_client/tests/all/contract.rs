@@ -275,7 +275,7 @@ mod milestone_three {
             carried: None,
             lobby: &LOBBY,
             result_aside: false,
-            occupied: &game_hud::hud::phone::NOTHING,
+            placement_scene: None,
         }
     }
 

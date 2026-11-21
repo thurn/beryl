@@ -30,7 +30,7 @@ use beryl_protocol::{AgentView, PlayerView, StopsSetting};
 use game_hud::inspect::Viewed;
 
 use game_hud::hud::HudIn;
-use game_hud::hud::phone::Occupied;
+use game_hud::hud::placement_scene::PlacementScene;
 use game_hud::inspect::inspector::Inspected;
 use game_hud::inspect::revealed::RevealedFace;
 use game_manual::manual::TableState;
@@ -108,9 +108,8 @@ pub struct ScreenIn<'a> {
     /// Whether the opening still shows the coin flip it began with, holding back who starts and
     /// the open decision (`opening::opening`).
     pub spinning: bool,
-    /// Where the table's cards rest, on the phone layout, which its prompt and dock keep clear
-    /// of (`hud::phone::Occupied`); nothing on the desktop.
-    pub occupied: &'a Occupied,
+    /// The scene used to place controls in the phone layout.
+    pub placement_scene: Option<&'a PlacementScene>,
 }
 
 impl<'a> ScreenIn<'a> {
@@ -136,7 +135,7 @@ impl<'a> ScreenIn<'a> {
             carried: self.carried,
             result_aside: self.result_aside,
             spinning: self.spinning,
-            occupied: self.occupied,
+            placement_scene: self.placement_scene,
         }
     }
     fn table_input(&self) -> table::TableIn<'a> {

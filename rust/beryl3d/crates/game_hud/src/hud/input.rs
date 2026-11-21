@@ -4,7 +4,7 @@ use beryl_protocol::prompt::PromptView;
 use beryl_protocol::script::{Subject, Turn};
 use beryl_protocol::{PlayerView, StopsSetting};
 
-use super::phone::Occupied;
+use super::placement_scene::PlacementScene;
 use crate::inspect::Viewed;
 use crate::inspect::{inspector::Inspected, revealed::RevealedFace};
 use crate::navigation::Sheet;
@@ -31,5 +31,5 @@ pub struct HudIn<'a> {
     pub carried: Option<Subject>,
     pub result_aside: bool,
     pub spinning: bool,
-    pub occupied: &'a Occupied,
+    pub placement_scene: Option<&'a PlacementScene>,
 }

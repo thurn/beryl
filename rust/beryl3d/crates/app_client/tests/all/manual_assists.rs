@@ -368,6 +368,32 @@ fn the_library_menu_scries_after_asking_how_many() {
 }
 
 #[test]
+fn the_ask_keeps_the_field_and_actions_in_the_portrait_window() {
+    for (width, height) in [(393.0, 759.0), (375.0, 647.0)] {
+        let mut client = client_sized(&assisted_view(), width, height);
+        menu(&mut client, 1, Role::Pile, "Your library");
+        press(&mut client, 2, Role::MenuItem, "Scry…");
+        let frame = client.frame(3);
+        for (role, name) in [
+            (Role::Field, "Scry"),
+            (Role::Button, "close"),
+            (Role::Button, "confirm"),
+        ] {
+            let element = find(frame, role, name).expect(name);
+            let bounds = kit_scene::hit::bounds(element);
+            assert!(bounds.x >= 0.0 && bounds.x + bounds.width <= width);
+            assert!(bounds.y >= 0.0 && bounds.y + bounds.height <= height);
+        }
+        assert!(
+            frame
+                .clearances
+                .iter()
+                .any(|placement| placement.name == "manual ask prompt")
+        );
+    }
+}
+
+#[test]
 fn a_cards_menu_offers_the_library_instructions_it_prints() {
     let view = assisted_view();
     let angel = slot_of(&view, ZoneName::Battlefield, Side::You, "Serra Angel");

@@ -10,11 +10,13 @@ mod paint;
 pub mod picking;
 mod relations;
 mod rings;
-pub use relations::{NodeRef, Show};
+pub use relations::{Clearance, NodeRef, Show};
 pub mod text;
 
 pub use order::PaintBand;
 mod undrawn;
+
+use std::sync::Arc;
 
 use beryl_protocol::protocol::{RowName, Side, ZoneName};
 use glam::{Mat4, Vec2};
@@ -434,6 +436,8 @@ pub struct Frame {
     /// Each mark's outline the frame draws, with the thing it rings, for the "marks on their
     /// things" check.
     pub rings: Vec<Ring>,
+    /// The handle-time placements and the resting boxes they must avoid.
+    pub clearances: Arc<[Clearance]>,
     pub load: Load,
     pub work: Work,
     /// How many of `TEXT_RECORDS` the frame's cards have not yet written.
@@ -489,6 +493,7 @@ impl Frame {
             undrawn: Vec::with_capacity(elements),
             lifted: Vec::with_capacity(LIFTED),
             rings: Vec::with_capacity(RINGS),
+            clearances: Arc::default(),
             load: Load::default(),
             work: Work::default(),
             text_room: TEXT_RECORDS,
