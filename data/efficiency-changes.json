@@ -754,5 +754,10 @@
     "label": "Loading the remaining eleven Beryl 3D effects from data lets the inspector replay changes to all 14 effects without recompiling.",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Beryl 3D reloads valid runtime tuning in the running app, so a tuning edit can be checked without restarting and replaying to the same point.",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

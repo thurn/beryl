@@ -348,6 +348,8 @@ pub mod floats {
     /// The word under the opponent's permanent that refused a click by holding the viewer to
     /// sorcery speed (`Client::refusal_frame`).
     pub const REFUSAL: FloatId = FloatId(38);
+    /// A failed reload of the developer tuning files.
+    pub const DATA_ERROR: FloatId = FloatId(39);
 }
 
 #[cfg(test)]

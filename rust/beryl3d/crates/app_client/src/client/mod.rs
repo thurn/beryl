@@ -5,6 +5,7 @@
 
 mod bug;
 mod carry;
+mod data;
 mod editing;
 mod event;
 pub(crate) use crate::command::{Reply, Request, SessionCommand};
@@ -188,6 +189,7 @@ impl Client {
     pub fn handle(&mut self, input: Input) {
         match input {
             Input::Data(data) => self.set_data(data),
+            Input::DataError(_) => self.show_data_error(),
             Input::Update(update) => self.take_game_update(update),
             Input::Reply(Reply::CardSearch(text, hits)) => self.take_token_hits(text, hits),
             Input::Reply(Reply::TableAct(reply)) => self.take_table_reply(reply),
@@ -304,13 +306,6 @@ impl Client {
             .rows_mut()
             .prepare(&mut self.layer, self.show.coming_rows());
         self.show_screen();
-    }
-
-    fn set_data(&mut self, data: Arc<Data>) {
-        if self.data() != &data {
-            self.show.set_data(data);
-            self.resize(self.window);
-        }
     }
 
     /// Takes the tier the host's rate rule chose, unless memory has run low, after which the
@@ -490,6 +485,7 @@ impl Client {
         self.window = window;
         self.show.resize(window);
         self.layer.resize(window);
+        self.place_data_error();
         self.show_gear();
         self.prepare_resized();
         if self.show.badges_mut().shaped() {

@@ -24,6 +24,9 @@ use kit_space::motion::pose_at;
 use kit_ui::input::Size;
 use std::sync::Arc;
 
+#[path = "data_reload.rs"]
+mod data_reload;
+
 /// The cards of each side that the flights move.
 #[derive(Clone, Copy)]
 struct Hands {

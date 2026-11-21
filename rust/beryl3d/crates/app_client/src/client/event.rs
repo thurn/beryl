@@ -16,6 +16,8 @@ use kit_ui::input::{AssetReady, Insets, Key, Lifecycle, Pointer, Size, TextChang
 pub enum Input {
     /// Validated tuning data from the host.
     Data(Arc<Data>),
+    /// The host could not validate an edit. The last valid tuning remains active.
+    DataError(String),
     /// A view from the session, boxed because it is far larger than every other input.
     Update(Box<GameUpdate>),
     /// The card store's records of every card and token the match can show, from which the

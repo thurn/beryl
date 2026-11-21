@@ -7,6 +7,7 @@ mod test_data;
 #[path = "../../../../test_scans.rs"]
 mod test_scans;
 
+mod data_watch;
 mod events;
 mod faces;
 mod frames;

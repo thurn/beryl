@@ -318,6 +318,13 @@ per subject, and `kit_base` reads each into a typed struct once.
 - **A frame looks nothing up by name.** Values are resolved into structs when
   the data arrives.
 
+`just b3d app --watch` loads runtime tuning from `data/beryl3d/` or
+`BERYL3D_DATA`. To watch with no window, run
+`just b3d app --window none --for 3000 --watch`. A valid edit is recorded in the
+frame log and places the table again, recompiling unfinished scripts. If an edit
+fails validation, the app keeps the last valid data and shows a notice until a
+valid edit arrives. The log names the file and the validation error.
+
 Changing how far a card lifts is then an edit to a JSON file and one
 `just b3d png`, with no compile. Verb, audit, pointer, playback and presentation
 tuning already take this path. During the conversion, `space-constants.json`

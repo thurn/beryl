@@ -1,4 +1,4 @@
-//! The embedded tuning shared by the app's client and its startup probe.
+//! The app's embedded tuning and the optional watcher for checkout data.
 
 use std::sync::{Arc, OnceLock};
 
@@ -30,4 +30,49 @@ fn embedded_tuning(name: &str) -> Result<String, String> {
         _ => return Err(format!("{name}: missing embedded tuning")),
     };
     Ok(text.to_owned())
+}
+
+/// A watch began before the initial load, so an edit during startup is noticed too.
+#[cfg(feature = "tools")]
+pub(crate) struct Reload {
+    watch: beryl_host::DataWatch,
+    initial_error: Option<String>,
+}
+
+#[cfg(feature = "tools")]
+pub(crate) fn initial(embedded: Arc<Data>, watch: bool) -> (Arc<Data>, Option<Reload>) {
+    if !watch {
+        return (embedded, None);
+    }
+    let directory = beryl_inspect::data::directory();
+    let watch = beryl_host::DataWatch::new(directory.clone());
+    let (data, initial_error) = match beryl_inspect::data::load(&directory) {
+        Ok(data) => (Arc::new(data), None),
+        Err(error) => (embedded, Some(error)),
+    };
+    (
+        data,
+        Some(Reload {
+            watch,
+            initial_error,
+        }),
+    )
+}
+
+#[cfg(feature = "tools")]
+pub(crate) fn start_watch(
+    reload: Option<Reload>,
+    inbox: beryl_host::Inbox,
+) -> Result<Option<beryl_host::WatchingData>, String> {
+    let Some(reload) = reload else {
+        return Ok(None);
+    };
+    if let Some(error) = reload.initial_error {
+        inbox.send(app_client::Input::DataError(error));
+    }
+    reload
+        .watch
+        .start(inbox, beryl_inspect::data::load)
+        .map(Some)
+        .map_err(|error| format!("could not start the tuning watcher: {error}"))
 }

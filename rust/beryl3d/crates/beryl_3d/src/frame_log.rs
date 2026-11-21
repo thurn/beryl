@@ -220,6 +220,12 @@ pub struct Inputted {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum InputLine {
+    /// Runtime data was read and validated after an edit.
+    DataReloaded {},
+    /// Runtime data failed to load. The client keeps the last valid tuning.
+    DataReloadFailed {
+        error: String,
+    },
     Pointer {
         id: u8,
         kind: String,
@@ -267,6 +273,10 @@ impl InputLine {
     #[must_use]
     pub fn of(input: &Input) -> Option<Self> {
         Some(match input {
+            Input::Data(_) => Self::DataReloaded {},
+            Input::DataError(error) => Self::DataReloadFailed {
+                error: error.clone(),
+            },
             Input::Pointer(pointer) => Self::Pointer {
                 id: pointer.id,
                 kind: format!("{:?}", pointer.kind),

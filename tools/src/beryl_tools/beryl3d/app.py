@@ -4,7 +4,7 @@
 
 The app is built with cargo's `test` profile, as the workspace's tests are: optimized enough to
 measure frames, it shares the dependencies `just b3d cargo-test` built, and the `tools` feature
-gives it `--fixture`, `--pause-at`, `--drive`, `--load`, `--slow-gpu`, `--offer`, `--tier`,
+gives it `--fixture`, `--pause-at`, `--drive`, `--watch`, `--load`, `--slow-gpu`, `--offer`, `--tier`,
 `--probe` and `--agent` with its `--opponent`, `--seed` and `--search-class`, which a release
 build leaves off.
 """
@@ -82,7 +82,11 @@ def app_arguments(parser: argparse.ArgumentParser) -> None:
         help="resume the game of this replay file (a bug report's replay.json), saving none",
     )
     parser.add_argument("--pause-at", help="stop the clock at this moment (1500ms)")
-    parser.add_argument("--for", dest="run_for", help="end the run after this long")
+    parser.add_argument(
+        "--for",
+        dest="run_for",
+        help="end after this long (bare milliseconds or a unit)",
+    )
     parser.add_argument(
         "--scale",
         help="pixels per point with no window (2 on macOS, as on a Retina display)",
@@ -130,6 +134,9 @@ def app_arguments(parser: argparse.ArgumentParser) -> None:
         choices=WINDOWS,
         help="none for an agent and fullscreen for a person, unless given",
     )
+    parser.add_argument(
+        "--watch", action="store_true", help="reload tuning files when they change"
+    )
     parser.add_argument("--no-build", action="store_true")
 
 
@@ -160,6 +167,8 @@ def run_app(args: argparse.Namespace) -> int:
     ):
         if value is not None:
             command += [option, value]
+    if args.watch:
+        command.append("--watch")
     for name in args.offer:
         command += ["--offer", name]
     started_ms = int(time.time() * 1000)

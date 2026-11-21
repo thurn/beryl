@@ -3,10 +3,15 @@
 //! options a release build lacks are not options without `tools`, and read as given with it;
 //! `--replay` names a file that exists.
 
-use std::process::Command;
+use std::fs::{self, File};
+use std::io::{BufRead, BufReader, Read};
+use std::path::Path;
+use std::process::{Command, Stdio};
+use std::time::Duration;
 
 use beryl_3d::frame_log;
 use beryl_3d::options::Options;
+use kit_base::data::profiles;
 
 #[test]
 fn a_fixture_with_no_window_runs_for_its_time_and_logs_its_frames() {
@@ -38,6 +43,88 @@ fn a_fixture_with_no_window_runs_for_its_time_and_logs_its_frames() {
     assert_eq!(log.run.window, "none");
     assert_eq!(log.run.fixture.as_deref(), Some("verbs-zones"));
     let _ = std::fs::remove_file(path);
+}
+
+#[test]
+fn a_paused_windowless_app_logs_one_reload_for_a_touched_data_file() {
+    let directory = std::env::temp_dir().join(format!("b3d-app-watch-{}", std::process::id()));
+    let source = Path::new("data/beryl3d");
+    let effects = source.join("effects");
+    let effect_names = beryl_test_files::read_dir(&effects)
+        .unwrap()
+        .map(|entry| Path::new("effects").join(entry.unwrap().file_name()));
+    for name in beryl_host::TUNING_FILES
+        .into_iter()
+        .chain(profiles::FILES)
+        .map(std::path::PathBuf::from)
+        .chain(effect_names)
+    {
+        let target = directory.join(&name);
+        fs::create_dir_all(target.parent().unwrap()).unwrap();
+        fs::write(target, beryl_test_files::read(source.join(name)).unwrap()).unwrap();
+    }
+    let mut child = Command::new(env!("CARGO_BIN_EXE_beryl3d"))
+        .args([
+            "--fixture",
+            "verbs-zones",
+            "--window",
+            "none",
+            "--for",
+            "3000",
+            "--watch",
+            "--pause-at",
+            "0ms",
+            "--tier",
+            "baseline",
+        ])
+        .env("BERYL3D_DATA", &directory)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("the app starts");
+    let mut stdout = BufReader::new(child.stdout.take().unwrap());
+    let mut text = String::new();
+    loop {
+        let start = text.len();
+        let read = stdout.read_line(&mut text).unwrap();
+        if read == 0 {
+            break;
+        }
+        if text[start..].starts_with(beryl_3d::app::FIRST_SHOWN) {
+            let verbs = File::open(directory.join("verbs.json")).unwrap();
+            let modified = verbs.metadata().unwrap().modified().unwrap();
+            verbs
+                .set_modified(modified - Duration::from_secs(1))
+                .unwrap();
+            break;
+        }
+    }
+    stdout.read_to_string(&mut text).unwrap();
+    let result = child.wait_with_output().unwrap();
+    fs::remove_dir_all(directory).unwrap();
+    assert!(
+        result.status.success(),
+        "{}\n{text}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let path = text
+        .lines()
+        .find_map(|line| line.strip_prefix("frame log: "))
+        .unwrap();
+    let log = frame_log::read(path.as_ref()).unwrap();
+    fs::remove_file(path).unwrap();
+    let reloads: Vec<_> = log
+        .inputs
+        .into_iter()
+        .filter(|input| {
+            matches!(
+                input,
+                frame_log::InputLine::DataReloaded {}
+                    | frame_log::InputLine::DataReloadFailed { .. }
+            )
+        })
+        .collect();
+    assert_eq!(reloads, [frame_log::InputLine::DataReloaded {}]);
 }
 
 #[test]

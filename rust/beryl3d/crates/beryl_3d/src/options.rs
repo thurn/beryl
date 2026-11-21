@@ -65,6 +65,8 @@ pub struct Options {
     pub scale: u8,
     /// The drive script to play: a name in `rust/beryl3d/drive`, or a path.
     pub drive: Option<String>,
+    /// Use the checkout tuning and reload it when it changes (`--watch`).
+    pub watch: bool,
     /// Busy threads to start, and their class (`--load`).
     pub load: Option<(usize, Class)>,
     /// How long each finished frame is held back before it is shown (`--slow-gpu`).
@@ -101,7 +103,7 @@ pub const SEED: u64 = 20_261_114;
 pub const WINDOWLESS_SCALE: u8 = if cfg!(target_os = "macos") { 2 } else { 1 };
 
 /// Whether this build has the options only a debug build has (`--fixture`, `--replay`,
-/// `--pause-at`, `--drive`, `--load`, `--slow-gpu`, `--agent`, `--opponent`, `--seed`,
+/// `--pause-at`, `--drive`, `--watch`, `--load`, `--slow-gpu`, `--agent`, `--opponent`, `--seed`,
 /// `--search-class`, `--offer`, `--tier` and `--probe`).
 pub const TOOLS: bool = cfg!(feature = "tools");
 
@@ -121,6 +123,7 @@ impl Options {
             window: Window::Fullscreen,
             scale: WINDOWLESS_SCALE,
             drive: None,
+            watch: false,
             load: None,
             slow_gpu: None,
             write_fixture: None,
@@ -150,6 +153,7 @@ impl Options {
                 }
                 "--pause-at" if tools => options.pause_at = Some(value()?),
                 "--drive" if tools => options.drive = Some(value()?),
+                "--watch" if tools => options.watch = true,
                 "--load" if tools => options.load = Some(crate::load::parse(&value()?)?),
                 "--slow-gpu" if tools => options.slow_gpu = Some(duration(&value()?)?),
                 "--write-fixture" if tools => options.write_fixture = Some(value()?),
@@ -187,7 +191,13 @@ impl Options {
                         word => return Err(format!("--probe {word}: a verdict is pass or fail")),
                     });
                 }
-                "--for" => options.run_for = Some(duration(&value()?)?),
+                "--for" => {
+                    let text = value()?;
+                    options.run_for = Some(match text.parse::<u64>() {
+                        Ok(ms) => Duration::from_millis(ms),
+                        Err(_) => duration(&text)?,
+                    });
+                }
                 "--scale" => options.scale = scale(&value()?)?,
                 "--window" => {
                     let word = value()?;
@@ -214,7 +224,7 @@ pub fn usage(tools: bool) -> String {
     let mut lines = vec![
         "usage: beryl3d [options]",
         "  --window none|background|foreground|fullscreen   what to open (fullscreen)",
-        "  --for <duration>                                 end the run after this long",
+        "  --for <duration>                                 end after this long (bare milliseconds or a unit)",
         "  --scale <1-4>                                    pixels per point with no window",
     ];
     if tools {
@@ -222,6 +232,7 @@ pub fn usage(tools: bool) -> String {
         lines.push(
             "  --replay <replay.json>                           resume that file's game, saving none",
         );
+        lines.push("  --watch                                          reload tuning files when they change");
         lines.push("  --pause-at <moment>                              stop the clock there");
         lines.push(
             "  --drive <script>                                 play a script of actions, then end",

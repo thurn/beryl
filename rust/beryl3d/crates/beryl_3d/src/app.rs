@@ -183,6 +183,9 @@ impl Feed for AppFeed {
     }
 
     fn input(&mut self, input: &Input) {
+        if let Input::DataError(error) = input {
+            eprintln!("beryl3d: data reload failed: {error}");
+        }
         if let Some(Ok(log)) = self.log.borrow_mut().as_mut() {
             log.input(input);
         }
@@ -535,7 +538,10 @@ pub fn run(options: &Options) -> Result<Finished, String> {
         #[cfg(all(feature = "tools", unix))]
         live: None,
     };
-    let mut client = Client::new(crate::data::embedded()?, Config::LARGEST);
+    let data = crate::data::embedded()?;
+    #[cfg(feature = "tools")]
+    let (data, reload) = crate::data::initial(data, options.watch);
+    let mut client = Client::new(data, Config::LARGEST);
     if let Some(settings) = settings {
         client.handle(Input::Settings(settings));
     }
@@ -558,6 +564,8 @@ pub fn run(options: &Options) -> Result<Finished, String> {
             #[cfg(feature = "tools")]
             let host = host.driven(drive);
             feed.attach(options, host.inbox())?;
+            #[cfg(feature = "tools")]
+            let _watch = crate::data::start_watch(reload, host.inbox())?;
             host.run(client, Box::new(feed), setup)
         }
         // A phone's app is its Swift or Kotlin host, which calls `crate::ffi`.
@@ -581,10 +589,17 @@ pub fn run(options: &Options) -> Result<Finished, String> {
             #[cfg(feature = "tools")]
             let host = host.driven(drive);
             feed.attach(options, host.inbox())?;
+            #[cfg(feature = "tools")]
+            let _watch = crate::data::start_watch(reload, host.inbox())?;
             host.run(client, Box::new(feed), setup)
         }
     };
     let log = log.borrow_mut().take();
+    finish_run(log, hosted)
+}
+
+/// Finishes the frame log after the host exits, keeping the host's error if it failed.
+fn finish_run(log: Option<Logged>, hosted: Result<(), String>) -> Result<Finished, String> {
     if let Err(error) = hosted {
         // The log still gets its summary, so that the frames before the error can be read.
         if let Some(Ok(log)) = log {
