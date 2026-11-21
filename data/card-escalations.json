@@ -1,4 +1,9 @@
 {
+  "Agent of Horizons": {
+    "mechanic": "preventing a creature from being blocked until end of turn",
+    "rule": "CR 509.1b",
+    "text": "{2}{U}: This creature can't be blocked this turn."
+  },
   "Mockingbird": {
     "mechanic": "a filter for mana value at most the mana spent to cast this spell",
     "rule": "CR 601.2h",
