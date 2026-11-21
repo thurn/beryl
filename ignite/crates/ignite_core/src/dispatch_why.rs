@@ -102,6 +102,38 @@ pub fn why_nothing(free: &MachineFree, ready: &[ReadyTicket], epic_order: &[Grou
     )
 }
 
+/// Explain a room-based request using the same order and provider checks as the
+/// selection. Include the first eligible ticket's blockers in the reply.
+pub fn why_nothing_with_room(
+    free: &MachineFree,
+    ready: &[ReadyTicket],
+    epic_order: &[Group],
+    improvements: Option<crate::shares::Unit>,
+    provider_blocker: impl Fn(&ReadyTicket) -> Option<String>,
+) -> String {
+    if ready.is_empty() {
+        return if free.master_only {
+            "the pool is paused and no ticket holds master back".to_owned()
+        } else {
+            "no ready ticket is offered: file tickets, or release an epic".to_owned()
+        };
+    }
+    let ordered = super::order(ready, epic_order, improvements);
+    let machine = free.name.as_deref().unwrap_or(free.machine.as_str());
+    let candidate = ordered
+        .iter()
+        .find(|(ticket, _)| {
+            ticket.pins.admits_machine(machine) && ticket.needs_os.is_none_or(|os| os == free.os)
+        })
+        .or_else(|| ordered.first());
+    if let Some((ticket, _)) = candidate {
+        let reason = blocker_with(free, ticket, || provider_blocker(ticket))
+            .unwrap_or_else(|| "waiting for a worker to start".to_owned());
+        return format!("{} {reason}", ticket.id);
+    }
+    "all ready tickets are in epics at their --max-workers cap".to_owned()
+}
+
 /// [`blocker`]'s reason when the machine asked only for tickets that hold `master` back
 /// (`MachineFree::master_only`), which a pause, a backed-up build queue or a usage hold sets.
 pub const MASTER_ONLY: &str = "only tickets that hold master back start here";
@@ -112,6 +144,29 @@ pub const MASTER_ONLY: &str = "only tickets that hold master back start here";
 /// them, so the first reason is the one to read. `free.free_cores` is the machine's room for
 /// expected cores ([`super::room`]).
 pub fn blocker(free: &MachineFree, ticket: &ReadyTicket) -> Option<String> {
+    blocker_with(free, ticket, || {
+        if let Some(pin) = &ticket.pins.provider
+            && !free
+                .idle_workers
+                .iter()
+                .any(|worker| ticket.pins.admits_provider(&worker.app))
+        {
+            return Some(format!("pinned to provider {pin}"));
+        }
+        if !free.idle_workers.iter().any(|w| suits(free, w, ticket)) {
+            let tier = label(&ticket.labels, "tier:").unwrap_or_default();
+            return Some(format!("no idle worker runs {tier}"));
+        }
+        None
+    })
+}
+
+/// Explain a machine's constraints with its dispatch mode's worker or provider check.
+pub fn blocker_with(
+    free: &MachineFree,
+    ticket: &ReadyTicket,
+    worker_blocker: impl FnOnce() -> Option<String>,
+) -> Option<String> {
     let justiciar = ticket.labels.iter().any(|l| l == JUSTICIAR);
     let machine = free.name.as_deref().unwrap_or(free.machine.as_str());
     if let Some(pin) = &ticket.pins.machine
@@ -127,7 +182,7 @@ pub fn blocker(free: &MachineFree, ticket: &ReadyTicket) -> Option<String> {
     if free.master_only && !justiciar && ticket.kind != TicketKind::Regression {
         return Some(MASTER_ONLY.to_owned());
     }
-    if free.idle_workers.is_empty() {
+    if free.room.is_none() && free.idle_workers.is_empty() {
         return Some("every worker is busy".to_owned());
     }
     if free.free_ticket_trees == 0 {
@@ -136,17 +191,8 @@ pub fn blocker(free: &MachineFree, ticket: &ReadyTicket) -> Option<String> {
     if free.justiciar_only && !justiciar {
         return Some("last idle worker kept for justiciar tickets".to_owned());
     }
-    if let Some(pin) = &ticket.pins.provider
-        && !free
-            .idle_workers
-            .iter()
-            .any(|worker| ticket.pins.admits_provider(&worker.app))
-    {
-        return Some(format!("pinned to provider {pin}"));
-    }
-    if !free.idle_workers.iter().any(|w| suits(free, w, ticket)) {
-        let tier = label(&ticket.labels, "tier:").unwrap_or_default();
-        return Some(format!("no idle worker runs {tier}"));
+    if let Some(reason) = worker_blocker() {
+        return Some(reason);
     }
     if !free.families.is_empty() && !ticket.families.iter().all(|f| free.families.contains(f)) {
         return Some("needs check families this machine cannot run".to_owned());

@@ -220,6 +220,11 @@ pub const MIGRATIONS: &[Migration] = &[
         sql: "",
         code: Some(routing_migrations::owners_to_pins),
     },
+    Migration {
+        version: 35,
+        sql: include_str!("reservation_providers.sql"),
+        code: None,
+    },
 ];
 
 /// Opens (creating if needed) and migrates the hub's database.

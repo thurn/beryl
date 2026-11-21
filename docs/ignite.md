@@ -4338,23 +4338,29 @@ and a wrong formula is fixed by a landing to Ignite, which deploys in minutes.
 
 ### The provider mix
 
-The hub chooses the provider when it reserves a ticket for a machine. A daemon
-no longer offers slots that belong to one provider. It says which providers'
-CLIs have passed their probe on the machine, and the reservation names the one
-to run.
+When a daemon reports worker room, the hub chooses the provider for each
+reservation from the CLIs that passed their probe on that machine. The
+reservation names the provider, and the claim keeps that choice until the ticket
+is released, closed or landed. Older daemons can still send idle workers and
+receive reservations for those sessions.
 
-Among the providers that are on, not held, present on the asking machine, able
-to run the ticket's `tier:` and allowed by its pin, the hub picks in this order:
+The hub considers providers that are enabled, offered on the machine, able to
+run the ticket's tier, free of a usage hold for that model, and allowed by the
+ticket's provider pin. It counts live reservations and claimed tickets across
+every machine.
 
-1. Of those with a share: the one with the fewest tickets in progress per unit
-   of share, counted across every machine.
-2. If there is none, of the standbys: the one with the fewest tickets in
-   progress.
-3. If there is still none, the ticket is not offered to this machine, and the
-   reason names each provider and why it cannot take the ticket.
+1. Among providers with a positive share, the hub chooses the one with the
+   fewest tickets per unit of share. Ties go to the larger share, then by name.
+2. When only standbys can take the ticket, it chooses the one with the fewest
+   tickets, then by name.
+3. When none can take the ticket, the hub skips it on that machine and explains
+   why each provider is unavailable.
 
-A change to the shares takes effect at the next reservation. Workers already
-running finish on the provider they started on.
+A machine's worker room limits its unclaimed reservations. Tickets that hold
+`master` back can bypass the limit while memory is healthy. Changing the shares
+affects the next reservation. An existing reservation keeps its provider, and a
+lane successor stays with the session that finished the previous ticket when its
+provider can still take it.
 
 ### Usage and failover
 

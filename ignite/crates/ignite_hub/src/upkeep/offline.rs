@@ -96,7 +96,8 @@ pub fn release_claims(conn: &mut Connection, now: Timestamp) -> Result<Vec<Strin
             // Someone changed the ticket since it was read; the next pass looks again.
             BatchOutcome::Conflict(_) => continue,
         }
-        let cleared = ["session", "tree", "machine", "claimed_at"].map(|c| (c, Value::Null));
+        let cleared = ["session", "tree", "machine", "claimed_at", "provider"]
+            .map(|column| (column, Value::Null));
         set_columns(&tx, &id, ACTOR, &cleared, now)?;
         tx.execute(
             "UPDATE workers SET ticket = NULL, state = 'idle' WHERE machine = ?1 AND ticket = ?2",

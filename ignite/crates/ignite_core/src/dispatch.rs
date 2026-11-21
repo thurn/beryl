@@ -217,25 +217,30 @@ pub fn next_for_with(
     last_files: &[(SessionId, Vec<String>)],
     eligible: impl Fn(&IdleWorker, &ReadyTicket) -> bool,
 ) -> Option<Handoff> {
-    let worker_for = |ticket: &ReadyTicket| {
+    next_ticket_with(free, ready, epic_order, improvements, |ticket| {
         pick_worker(free, ticket, last_files, |worker| eligible(worker, ticket)).map(|session| {
             Handoff {
                 ticket: ticket.id.clone(),
                 session,
             }
         })
-    };
-    if free.justiciar_only {
-        return justiciar(ready)
-            .into_iter()
-            .filter(|ticket| machine_fits(free, ticket))
-            .find_map(worker_for);
-    }
+    })
+}
+
+/// Select in dispatch order, letting the caller choose either a worker or a provider.
+pub fn next_ticket_with<T>(
+    free: &MachineFree,
+    ready: &[ReadyTicket],
+    epic_order: &[Group],
+    improvements: Option<Unit>,
+    pick: impl Fn(&ReadyTicket) -> Option<T>,
+) -> Option<T> {
     order(ready, epic_order, improvements)
         .into_iter()
+        .filter(|(_, stage)| !free.justiciar_only || *stage == Stage::Justiciar)
         .map(|(ticket, _)| ticket)
         .filter(|ticket| machine_fits(free, ticket))
-        .find_map(worker_for)
+        .find_map(pick)
 }
 
 /// Why a ticket has its place in [`order`].
@@ -307,7 +312,7 @@ pub fn chain_next<'a>(lane: &str, ready: &'a [ReadyTicket]) -> Option<&'a ReadyT
 
 #[path = "dispatch_why.rs"]
 mod why;
-pub use why::{MASTER_ONLY, blocker, why_nothing};
+pub use why::{MASTER_ONLY, blocker, blocker_with, why_nothing, why_nothing_with_room};
 
 #[cfg(test)]
 #[path = "dispatch_tests.rs"]

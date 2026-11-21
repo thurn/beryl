@@ -27,16 +27,17 @@ use ignite_core::admission::{self, Worked};
 use ignite_core::config::Improvement;
 use ignite_core::dispatch::{self, ReadyTicket, TicketKind};
 use ignite_core::dispatch_pressure::{DispatchPressure, HandoffWait};
-use ignite_core::fleet::MachineState;
+use ignite_core::fleet::{FleetSettings, MachineState};
 use ignite_core::ids::{MachineId, SessionId, TicketId};
 use ignite_core::pins::Pins;
 use ignite_core::protocol::hub::{MachineFree, Reservation};
 use ignite_core::protocol::tickets::{LandedWork, Saving, Status, Ticket, TicketType};
 use ignite_core::shares::{self, EpicDemand, Group, Unit};
 use ignite_core::time::Timestamp;
-use ignite_store::hub::{fleet, fleet_settings, releases, tickets};
+use ignite_store::hub::{fleet, fleet_settings, provider_usage, releases, tickets};
 use ignite_store::{Result, StoreError};
 
+use super::{mix, usage};
 use crate::rules;
 
 /// The labels of tickets the hub files itself, which are offered whether or not an epic is
@@ -63,7 +64,7 @@ const NEEDS_PERSON: &str = "needs:person";
 mod pins;
 
 #[path = "dispatch_held.rs"]
-mod held;
+pub(super) mod held;
 use held::Paused;
 
 #[path = "dispatch_capacity.rs"]
@@ -99,7 +100,9 @@ pub fn next(
         };
         return Ok(Err(reason.to_owned().into()));
     }
-    if let Some(reservation) = held::retry_reservation(conn, free, paused)? {
+    if free.room.is_none()
+        && let Some(reservation) = held::retry_reservation(conn, free, paused)?
+    {
         return Ok(Ok(reservation));
     }
     if paused == Paused::MasterOnly && held::holds_one(conn, machine)? {
@@ -140,6 +143,19 @@ pub fn next(
                 .into(),
         ));
     }
+    dispatch_ready(conn, &free, now, &settings, &snapshot, &capacity, ready)
+}
+
+fn dispatch_ready(
+    conn: &Connection,
+    free: &MachineFree,
+    now: Timestamp,
+    settings: &FleetSettings,
+    snapshot: &Snapshot,
+    capacity: &capacity::Capacity<'_>,
+    mut ready: Vec<ReadyTicket>,
+) -> Result<std::result::Result<Reservation, HandoffWait>> {
+    let machine = free.machine.as_str();
     let demand = snapshot.demand(&ready);
     // Improvements go ahead of the epic order and so skip the share, but not a group's
     // `--max-workers` cap.
@@ -151,40 +167,79 @@ pub fn next(
     ready.retain(|ticket| ticket.kind != TicketKind::Improvement || !full.contains(&ticket.epic));
     let epic_order = shares::epic_order(&demand);
     let improvements = improvements_due(conn, machine)?;
-    let last_files = last_files(conn, machine)?;
-    let holds = super::usage::holds(conn, now)?;
-    let handoff = match capacity.choose(&mut ready, |ready| {
-        dispatch::next_for_with(
-            &free,
+    let holds = provider_usage::held(conn, settings, now)?;
+    let room = free
+        .room
+        .as_ref()
+        .map(|room| {
+            let loads = mix::loads(conn, settings, &holds, room, now)?;
+            let pending = mix::pending(conn, machine, now)?;
+            Ok::<_, StoreError>((room, loads, pending))
+        })
+        .transpose()?;
+    let last_files = if room.is_none() {
+        last_files(conn, machine)?
+    } else {
+        Vec::new()
+    };
+    let pick = |ready: &[ReadyTicket]| {
+        if let Some((room, loads, pending)) = &room {
+            return dispatch::next_ticket_with(free, ready, &epic_order, improvements, |ticket| {
+                if !ticket
+                    .pins
+                    .admits_machine(free.name.as_deref().unwrap_or(machine))
+                {
+                    return None;
+                }
+                let provider = mix::choose(loads, room, *pending, ticket).ok()?;
+                Some(Candidate {
+                    ticket: ticket.id.clone(),
+                    kind: ticket.kind,
+                    session: None,
+                    provider: Some(provider.to_owned()),
+                })
+            });
+        }
+        let handoff = dispatch::next_for_with(
+            free,
             ready,
             &epic_order,
             improvements,
             &last_files,
-            |worker, ticket| super::usage::blocking_hold(&holds, worker, ticket).is_none(),
-        )
-    }) {
-        Some(Ok(handoff)) => handoff,
-        Some(Err(reason)) => return Ok(Err(reason)),
-        None => {
-            let reason = dispatch::next_for(&free, &ready, &epic_order, improvements, &last_files)
-                .and_then(|handoff| super::usage::hold_reason(&holds, &free, &ready, &handoff))
-                .unwrap_or_else(|| dispatch::why_nothing(&free, &ready, &epic_order));
-            return Ok(Err(reason.into()));
-        }
+            |worker, ticket| usage::blocking_hold(&holds, worker, ticket).is_none(),
+        )?;
+        let kind = ready
+            .iter()
+            .find(|ticket| ticket.id == handoff.ticket)
+            .map_or(TicketKind::Ordinary, |ticket| ticket.kind);
+        let provider = free
+            .idle_workers
+            .iter()
+            .find(|worker| worker.session == handoff.session)
+            .map(|worker| worker.app.clone());
+        Some(Candidate {
+            ticket: handoff.ticket,
+            kind,
+            session: Some(handoff.session),
+            provider,
+        })
     };
-    let kind = ready
-        .iter()
-        .find(|ticket| ticket.id == handoff.ticket)
-        .map_or(TicketKind::Ordinary, |ticket| ticket.kind);
-    reserve(
-        conn,
-        &handoff.ticket,
-        &free.machine,
-        &handoff.session,
-        kind,
-        now,
-    )
-    .map(Ok)
+    match capacity.choose(&mut ready, pick) {
+        Some(Ok(handoff)) => reserve(conn, &free.machine, handoff, now).map(Ok),
+        Some(Err(reason)) => Ok(Err(reason)),
+        None => {
+            let reason = if let Some((room, loads, pending)) = &room {
+                dispatch::why_nothing_with_room(free, &ready, &epic_order, improvements, |ticket| {
+                    mix::choose(loads, room, *pending, ticket).err()
+                })
+            } else {
+                dispatch::next_for(free, &ready, &epic_order, improvements, &last_files)
+                    .and_then(|handoff| usage::hold_reason(&holds, free, &ready, &handoff))
+                    .unwrap_or_else(|| dispatch::why_nothing(free, &ready, &epic_order))
+            };
+            Ok(Err(reason.into()))
+        }
+    }
 }
 
 /// Lane hand-offs can start ordinary work, so only an Active machine can continue a chain.
@@ -202,6 +257,7 @@ pub fn chain_next(
     lane: &str,
     machine: &MachineId,
     session: &SessionId,
+    provider: Option<&str>,
     now: Timestamp,
     pressure: Option<&DispatchPressure>,
 ) -> Result<Option<Reservation>> {
@@ -212,22 +268,23 @@ pub fn chain_next(
     let history = history(conn, machine.as_str())?;
     let landed = landed_files(conn)?;
     let ready = snapshot.ready_tickets(conn, &history, &landed, now, None)?;
-    // The chain's next ticket goes to the same session only if that session's machine and app
-    // satisfy the next ticket's pins.
-    let app = fleet::workers(conn, machine.as_str())?
-        .into_iter()
-        .find(|worker| worker.session == session.as_str())
-        .map(|worker| worker.app)
-        .unwrap_or_default();
+    // A room-based claim records its provider even if the daemon has not yet
+    // reported the session. Older claims may still need the heartbeat's worker row.
+    let app = match provider {
+        Some(provider) => provider.to_owned(),
+        None => fleet::workers(conn, machine.as_str())?
+            .into_iter()
+            .find(|worker| worker.session == session.as_str())
+            .map(|worker| worker.app)
+            .unwrap_or_default(),
+    };
     let Some(next) = dispatch::chain_next(lane, &ready) else {
         return Ok(None);
     };
     if !pins::allows_continuation(conn, next, machine, &name, &app)? {
         return Ok(None);
     }
-    // A lane continuation carries no model IDs. Return it to ordinary dispatch when its
-    // provider is held so the next request can check the actual model and other providers.
-    if super::usage::holds(conn, now)?.contains_key(&app) {
+    if mix::continuation_blocked(conn, machine.as_str(), &app, next, now)? {
         return Ok(None);
     }
     if let Some(pressure) = pressure
@@ -244,32 +301,56 @@ pub fn chain_next(
     {
         return Ok(None);
     }
-    reserve(conn, &next.id, machine, session, next.kind, now).map(Some)
+    let candidate = Candidate {
+        ticket: next.id.clone(),
+        kind: next.kind,
+        session: Some(session.clone()),
+        provider: (!app.is_empty()).then_some(app),
+    };
+    reserve(conn, machine, candidate, now).map(Some)
+}
+
+struct Candidate {
+    ticket: TicketId,
+    kind: TicketKind,
+    session: Option<SessionId>,
+    provider: Option<String>,
 }
 
 fn reserve(
     conn: &Connection,
-    ticket: &TicketId,
     machine: &MachineId,
-    session: &SessionId,
-    kind: TicketKind,
+    candidate: Candidate,
     now: Timestamp,
 ) -> Result<Reservation> {
+    let code = fleet::reservation_code()?;
+    let session = match candidate.session {
+        Some(session) => session,
+        None => format!("reservation-{}", fleet::reservation_code()?)
+            .parse()
+            .map_err(|error: ignite_core::ids::IdError| StoreError::Invalid(error.to_string()))?,
+    };
     let reservation = Reservation {
-        provider: None,
-        ticket: ticket.clone(),
+        provider: candidate.provider,
+        ticket: candidate.ticket,
         machine: machine.clone(),
-        session: session.clone(),
+        session,
         expires_at: fleet::reservation_expiry(now),
-        code: fleet::reservation_code()?,
+        code,
     };
     fleet::reserve(conn, &reservation)?;
-    let kind = match kind {
+    let kind = match candidate.kind {
         TicketKind::Regression => "regression",
         TicketKind::Improvement => "improvement",
         TicketKind::Ordinary => "product",
     };
-    fleet::record_handoff(conn, machine.as_str(), ticket.as_str(), kind, now)?;
+    fleet::record_handoff(
+        conn,
+        machine.as_str(),
+        reservation.ticket.as_str(),
+        kind,
+        now,
+    )?;
     Ok(reservation)
 }
 

@@ -128,6 +128,7 @@ crate::tables! {
         expires_at: String,
         code: String,
         after_landing: Option<String>,
+        provider: Option<String>,
     }
 
     /// A machine's latest `POST /next`: the `MachineFree` it sent as JSON, and the answer.

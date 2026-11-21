@@ -184,14 +184,15 @@ pub fn workers(conn: &Connection, machine: &str) -> Result<Vec<rows::Worker>> {
 /// first so an expired reservation does not block it.
 pub fn reserve(conn: &Connection, reservation: &Reservation) -> Result<()> {
     conn.execute(
-        "INSERT INTO reservations (ticket, machine, session, expires_at, code)
-         VALUES (?1, ?2, ?3, ?4, ?5)",
+        "INSERT INTO reservations (ticket, machine, session, expires_at, code, provider)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
         params![
             reservation.ticket.as_str(),
             reservation.machine.as_str(),
             reservation.session.as_str(),
             reservation.expires_at.to_string(),
             reservation.code,
+            reservation.provider,
         ],
     )?;
     Ok(())
@@ -205,14 +206,17 @@ pub fn reservation_code() -> Result<String> {
     Ok(format!("{:08x}", u32::from_be_bytes(bytes)))
 }
 
-/// The machine and code of the live reservation of `ticket`, if it has one. The caller runs
+/// The machine, code and provider of the live reservation of `ticket`, if it has one. The caller runs
 /// [`lapse`] first.
-pub fn reservation_of(conn: &Connection, ticket: &str) -> Result<Option<(String, String)>> {
+pub fn reservation_of(
+    conn: &Connection,
+    ticket: &str,
+) -> Result<Option<(String, String, Option<String>)>> {
     Ok(conn
         .query_row(
-            "SELECT machine, code FROM reservations WHERE ticket = ?1",
+            "SELECT machine, code, provider FROM reservations WHERE ticket = ?1",
             [ticket],
-            |row| Ok((row.get(0)?, row.get(1)?)),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
         )
         .optional()?)
 }
@@ -254,22 +258,22 @@ fn read_reservation(
     session: &str,
     after_landing: Option<&str>,
 ) -> Result<Option<Reservation>> {
-    let row: Option<(String, String, String)> = conn
+    let row: Option<(String, String, String, Option<String>)> = conn
         .query_row(
-            "SELECT ticket, expires_at, code FROM reservations
+            "SELECT ticket, expires_at, code, provider FROM reservations
              WHERE machine = ?1 AND session = ?2 AND after_landing IS ?3
              ORDER BY expires_at LIMIT 1",
             params![machine, session, after_landing],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
         )
         .optional()?;
-    let Some((ticket, expires_at, code)) = row else {
+    let Some((ticket, expires_at, code, provider)) = row else {
         return Ok(None);
     };
     let invalid =
         |what: &str, error: String| StoreError::Invalid(format!("reservation {what}: {error}"));
     Ok(Some(Reservation {
-        provider: None,
+        provider,
         ticket: ticket
             .parse()
             .map_err(|e: ignite_core::ids::IdError| invalid("ticket", e.to_string()))?,

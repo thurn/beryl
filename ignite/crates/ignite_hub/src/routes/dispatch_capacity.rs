@@ -3,13 +3,13 @@
 use rusqlite::Connection;
 
 use ignite_core::admission::Worked;
-use ignite_core::dispatch::{Handoff, ReadyTicket};
+use ignite_core::dispatch::ReadyTicket;
 use ignite_core::dispatch_pressure::{Budget, DispatchPressure, HandoffWait};
 use ignite_core::time::Timestamp;
 use ignite_store::Result;
 use ignite_store::hub::{fleet, tickets};
 
-use super::{expected_cores, named_files};
+use super::{Candidate, expected_cores, named_files};
 
 pub(super) struct Capacity<'a> {
     pub cores: Vec<f64>,
@@ -21,8 +21,8 @@ impl Capacity<'_> {
     pub(super) fn choose(
         &self,
         ready: &mut Vec<ReadyTicket>,
-        pick: impl Fn(&[ReadyTicket]) -> Option<Handoff>,
-    ) -> Option<std::result::Result<Handoff, HandoffWait>> {
+        pick: impl Fn(&[ReadyTicket]) -> Option<Candidate>,
+    ) -> Option<std::result::Result<Candidate, HandoffWait>> {
         let preferred = pick(ready)?;
         if let Some(budget) = &self.disk
             && let Some(reason) = ready

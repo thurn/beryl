@@ -150,6 +150,8 @@ pub struct IdleWorker {
 pub struct MachineFree {
     pub machine: MachineId,
     pub os: Os,
+    /// Workers offered by an older daemon. A daemon sending room can omit this list.
+    #[serde(default)]
     pub idle_workers: Vec<IdleWorker>,
     pub free_ticket_trees: u32,
     /// The cores the machine's scheduler has free at this moment. Dispatch tests a ticket's
@@ -197,6 +199,9 @@ pub struct MachineFree {
 pub struct Room {
     pub start: u32,
     pub providers: Vec<ProviderOffer>,
+    /// Memory pressure also blocks tickets that would otherwise bypass `start`.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub memory_pressed: bool,
 }
 
 /// A provider whose CLI has passed its probe on an asking machine.
@@ -204,6 +209,11 @@ pub struct Room {
 pub struct ProviderOffer {
     pub name: String,
     pub tiers: Vec<String>,
+    /// Model IDs make family-specific holds work even when a tier has a different name.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub model_ids: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_model: Option<String>,
 }
 
 /// The hub's answer to `POST /next`: a reservation, or nothing with the reason when the request
@@ -271,6 +281,8 @@ impl<'de> Deserialize<'de> for NextReply {
 pub struct Reservation {
     pub ticket: TicketId,
     pub machine: MachineId,
+    /// The worker session for a lane continuation or older daemon, or a reservation-specific
+    /// identifier when a daemon offers room and has yet to create its worker.
     pub session: SessionId,
     pub expires_at: Timestamp,
     /// The one-time code that the hand-off's `ignite start --reservation <code>` must send to

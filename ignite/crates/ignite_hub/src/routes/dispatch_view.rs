@@ -18,6 +18,7 @@ use ignite_core::dispatch::{self, ReadyTicket, Stage, TicketKind};
 use ignite_core::dispatch_pressure::{BACKLOG_SECONDS, Budget};
 use ignite_core::fleet::MachineState;
 use ignite_core::ids::{MachineId, TicketId};
+use ignite_core::mix::ProviderLoad;
 use ignite_core::plan_usage::Hold;
 use ignite_core::protocol::hub::MachineFree;
 use ignite_core::protocol::tickets::{Status, TicketType};
@@ -26,7 +27,7 @@ use ignite_core::time::Timestamp;
 use ignite_store::Result;
 use ignite_store::hub::{fleet, fleet_settings, machine_asks, tickets};
 
-use super::super::usage;
+use super::super::{mix, usage};
 use super::held::{self, Paused};
 use super::{NEEDS_PERSON, Snapshot, capacity, history, improvements_due, landed_files};
 
@@ -87,7 +88,11 @@ struct Seat<'a> {
     ready: HashMap<TicketId, ReadyTicket>,
     disk: Option<Budget<'a>>,
     /// How many tickets the page has handed it.
-    taken: usize,
+    taken: u32,
+    /// Live room reservations before projecting any of the ready tickets.
+    pending: u32,
+    providers: Vec<ProviderLoad>,
+    stopped: bool,
     /// What to say in place of [`dispatch::MASTER_ONLY`]: why this machine asked only for
     /// tickets that hold `master` back.
     master_reason: String,
@@ -110,9 +115,7 @@ pub fn available(conn: &Connection, now: Timestamp) -> Result<Available> {
     };
     let reserved_sessions: HashSet<String> = snapshot.reserved.values().cloned().collect();
     let asks = asks(conn, &snapshot, &reserved_sessions)?;
-    // Each reporting machine's free state, history and disk pressure, gathered first so that
-    // the disk budgets built below can borrow the pressures.
-    let mut gathered = Vec::new();
+    let mut seats = Vec::new();
     let mut silent = Vec::new();
     let mut improvements = None;
     for (name, id, ask) in &asks {
@@ -125,11 +128,11 @@ pub fn available(conn: &Connection, now: Timestamp) -> Result<Available> {
             });
             continue;
         };
+        let pressure = free.pressure.as_ref();
+        let queue_seconds = pressure.map_or(0, |p| p.queue_seconds);
         let worked = history(conn, id)?;
         let mut free = free.clone();
-        let pressure = free.pressure.take();
-        let queue_seconds = pressure.as_ref().map_or(0, |p| p.queue_seconds);
-        let held_now = capacity::read(conn, id, &worked, &landed, now, None)?;
+        let held_now = capacity::read(conn, id, &worked, &landed, now, pressure)?;
         free.free_cores = dispatch::room(&free, &held_now.cores);
         let state = settings.machine(name).state;
         let paused = held::paused(conn, &free, state)?;
@@ -145,8 +148,13 @@ pub fn available(conn: &Connection, now: Timestamp) -> Result<Available> {
         if improvements.is_none() {
             improvements = improvements_due(conn, id)?;
         }
+        let pending = if free.room.is_some() {
+            mix::pending(conn, id, now)?
+        } else {
+            0
+        };
         let summary = if asked.is_some() {
-            machine_summary(&free, &master_reason, held_now.cores.len())
+            machine_summary(&free, &master_reason, held_now.cores.len(), pending)
         } else {
             format!(
                 "every worker is busy · {} held · has not asked for work, so its free trees and \
@@ -159,32 +167,28 @@ pub fn available(conn: &Connection, now: Timestamp) -> Result<Available> {
             summary,
             asked: asked.clone(),
         });
-        gathered.push((
-            name.clone(),
-            id.clone(),
-            free,
-            worked,
-            pressure,
-            master_reason,
-            state,
-        ));
-    }
-    let mut seats = Vec::new();
-    for (name, id, free, worked, pressure, master_reason, state) in &gathered {
-        let checks_only = *state == MachineState::ChecksOnly;
+        let checks_only = state == MachineState::ChecksOnly;
         let fallback = checks_only
-            .then(|| held::Fallback::load(conn, &settings, &snapshot.heard, free))
+            .then(|| held::Fallback::load(conn, &settings, &snapshot.heard, &free))
             .transpose()?;
-        let ready = snapshot.ready_tickets(conn, worked, &landed, now, fallback.as_ref())?;
-        let disk = capacity::read(conn, id, worked, &landed, now, pressure.as_ref())?.disk;
+        let ready = snapshot.ready_tickets(conn, &worked, &landed, now, fallback.as_ref())?;
+        let providers = free
+            .room
+            .as_ref()
+            .map(|room| mix::loads(conn, &settings, &holds, room, now))
+            .transpose()?
+            .unwrap_or_default();
         seats.push(Seat {
             name: name.clone(),
             start: free.clone(),
-            free: free.clone(),
+            free,
             ready: ready.into_iter().map(|t| (t.id.clone(), t)).collect(),
-            disk,
+            disk: held_now.disk,
             taken: 0,
-            master_reason: master_reason.clone(),
+            pending,
+            providers,
+            stopped: paused == Paused::Everything || holds_one,
+            master_reason,
             checks_only,
             holds: &holds,
         });
@@ -312,7 +316,18 @@ fn hand_out(seats: &mut [Seat], silent: &[String], ticket: &ReadyTicket, stage: 
 fn refusal(seat: &Seat, start: bool, ticket: &ReadyTicket) -> Option<String> {
     let free = if start { &seat.start } else { &seat.free };
     let disk = seat.disk.as_ref();
-    dispatch::blocker(free, ticket)
+    let blocker = if let Some(room) = &free.room {
+        let pending = seat.pending + if start { 0 } else { seat.taken };
+        dispatch::blocker_with(free, ticket, || {
+            if seat.stopped {
+                return Some(seat.master_reason.clone());
+            }
+            mix::choose(&seat.providers, room, pending, ticket).err()
+        })
+    } else {
+        dispatch::blocker(free, ticket).or_else(|| held_by_usage(seat.holds, free, ticket))
+    };
+    blocker
         .map(|reason| {
             if reason == dispatch::MASTER_ONLY {
                 seat.master_reason.clone()
@@ -320,7 +335,6 @@ fn refusal(seat: &Seat, start: bool, ticket: &ReadyTicket) -> Option<String> {
                 reason
             }
         })
-        .or_else(|| held_by_usage(seat.holds, free, ticket))
         .or_else(|| {
             disk.and_then(|budget| budget.blocked(ticket)).map(|wait| {
                 let prefix = format!("{} ", ticket.id);
@@ -427,7 +441,7 @@ fn master_reason(paused: Paused, state: MachineState, queue_seconds: u32) -> Str
     }
 }
 
-fn machine_summary(free: &MachineFree, master_reason: &str, held: usize) -> String {
+fn machine_summary(free: &MachineFree, master_reason: &str, held: usize, pending: u32) -> String {
     let pause = if master_reason.is_empty() {
         String::new()
     } else {
@@ -442,14 +456,22 @@ fn machine_summary(free: &MachineFree, master_reason: &str, held: usize) -> Stri
             )
         },
     );
-    format!(
-        "{pause}{} idle {} · {held} held · {} free {} · {cores}",
-        free.idle_workers.len(),
-        if free.idle_workers.len() == 1 {
-            "worker"
-        } else {
-            "workers"
+    let workers = free.room.as_ref().map_or_else(
+        || {
+            let idle = free.idle_workers.len();
+            let noun = if idle == 1 { "worker" } else { "workers" };
+            format!("{idle} idle {noun}")
         },
+        |room| {
+            if room.memory_pressed {
+                return "memory pressure".to_owned();
+            }
+            let free = room.start.saturating_sub(pending);
+            format!("room to start {free}")
+        },
+    );
+    format!(
+        "{pause}{workers} · {held} held · {} free {} · {cores}",
         free.free_ticket_trees,
         if free.free_ticket_trees == 1 {
             "tree"

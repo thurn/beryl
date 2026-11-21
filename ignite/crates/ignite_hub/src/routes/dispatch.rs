@@ -1,29 +1,8 @@
 //! The fleet and hand-off routes: `/machines/register`, `/machines/heartbeat`, `/next`, `/claims`,
 //! `/landed`, `/release`, `/close`, `/pause`, `/session-titles` and `/emergency`.
 //!
-//! A ticket moves through them like this:
-//!
-//! 1. `POST /next`: a daemon with an idle worker says what its machine has free. The hub picks a
-//!    ticket with `ignite_core::dispatch` and reserves it for that machine and worker in the same
-//!    `IMMEDIATE` transaction, so two machines asking at once never get one ticket. The reply is
-//!    the [`Reservation`] with its one-time code, or `null`. Only tickets under an active epic,
-//!    or filed by the hub itself, are offered, and only tickets that hold `master` back while
-//!    the machine is paused (`POST /pause`); `dispatch_queue.rs` says which.
-//! 2. `POST /claims`: the worker's `ignite start` turns the reservation into a claim held by its
-//!    session and tree. A reserved ticket is claimed only with its reservation's code, by any
-//!    session of the machine it was reserved for, since a hand-off whose worker refuses moves to
-//!    another worker there. A session may also claim by name a ticket nobody holds or has
-//!    reserved, or file and claim an `adhoc` ticket from a summary. The reply is the ticket's
-//!    brief with what each of its dependencies left behind and the branch an earlier release
-//!    saved.
-//! 3. `POST /landed` records the commits, files and note, closes the ticket and frees the
-//!    worker; the reply reserves the next ticket of a `lane:` chain for the same session.
-//!    `POST /release` gives the ticket back to the queue with the note as a comment, the saved
-//!    branch and any `needs:` label. `POST /close` closes a ticket that needs no landing.
-//!
-//! A reservation nobody claimed in 10 minutes lapses at the next `/next` or `/claims`. A ticket
-//! held by another session answers 409, and so does `/landed` or `/release` from a session whose
-//! claim was lost: the client prints that as exit code 3.
+//! Reservations, claims and their release are transactional. A reservation can be claimed
+//! only with its one-time code by its machine, and lapses if unclaimed after ten minutes.
 
 use std::collections::BTreeMap;
 
@@ -60,6 +39,9 @@ mod usage;
 
 #[path = "dispatch_queue.rs"]
 mod queue;
+
+#[path = "dispatch_mix.rs"]
+mod mix;
 
 #[path = "dispatch_releases.rs"]
 mod counting;
@@ -234,7 +216,12 @@ fn next(conn: &mut Connection, free: &MachineFree, now: Timestamp) -> Answer {
     free.name = registered
         .or(free.name)
         .or_else(|| Some(free.machine.to_string()));
-    let answer = queue::next(&tx, &free, now).map_err(|e| store_failure(&e))?;
+    let mut answer = queue::next(&tx, &free, now).map_err(|e| store_failure(&e))?;
+    if free.room.is_none()
+        && let Ok(reservation) = &mut answer
+    {
+        reservation.provider = None;
+    }
     let said = answer.as_ref().map_or_else(
         |wait| wait.reason.clone(),
         |reservation| reservation.ticket.to_string(),
@@ -255,13 +242,8 @@ fn next(conn: &mut Connection, free: &MachineFree, now: Timestamp) -> Answer {
     Ok(Response::json(200, &json!(reply)))
 }
 
-/// Claims `claim.ticket` for its session and tree: a reserved ticket with its reservation's code
-/// from the machine it was reserved for, or, with no code, a ticket nobody else holds or has
-/// reserved. A wrong code, or a code whose reservation lapsed, is refused. A session that
-/// already holds the ticket in progress gets its brief again, so a claim whose reply was lost
-/// can be retried. The checks, the claim
-/// and the record of session and tree are one `IMMEDIATE` transaction, so no other session can
-/// take or drop the reservation in between.
+/// Claims a ticket for the session and tree, or returns the existing brief on retry.
+/// The checks, claim and reservation removal are one `IMMEDIATE` transaction.
 fn claim(conn: &mut Connection, claim: &Claim, now: Timestamp) -> Answer {
     let id = claim.ticket.as_str();
     let mut tx = conn
@@ -283,7 +265,8 @@ fn claim(conn: &mut Connection, claim: &Claim, now: Timestamp) -> Answer {
     }
     let reservation = fleet::reservation_of(&tx, id).map_err(|e| store_failure(&e))?;
     let refused = match (&reservation, &claim.code) {
-        (Some((machine, code)), Some(sent)) => (machine != claim.machine.as_str() || code != sent)
+        (Some((machine, code, _)), Some(sent)) => (machine != claim.machine.as_str()
+            || code != sent)
             .then_some("is reserved under another code"),
         (Some(_), None) => Some(
             "is reserved for a worker that is starting; nobody else can claim it, so take another ticket",
@@ -296,7 +279,8 @@ fn claim(conn: &mut Connection, claim: &Claim, now: Timestamp) -> Answer {
     }
     let ops = vec![Operation::Claim { id: id.to_owned() }];
     apply_in(&mut tx, ops, &claim.session, &claim.machine, now)?;
-    let brief = take(&tx, &claim.ticket, claim, now)?;
+    let provider = reservation.and_then(|(_, _, provider)| provider);
+    let brief = take(&tx, claim, provider.as_deref(), now)?;
     tx.commit().map_err(sql_failure)?;
     Ok(Response::json(200, &json!(brief)))
 }
@@ -328,7 +312,7 @@ fn adhoc(conn: &mut Connection, request: &AdhocClaim, now: Timestamp) -> Answer 
         tree: request.tree.clone(),
         code: None,
     };
-    let brief = take(&tx, &claim.ticket, &claim, now)?;
+    let brief = take(&tx, &claim, None, now)?;
     tx.commit().map_err(sql_failure)?;
     Ok(Response::json(200, &json!(brief)))
 }
@@ -337,23 +321,25 @@ fn adhoc(conn: &mut Connection, request: &AdhocClaim, now: Timestamp) -> Answer 
 /// reservation and returns its brief. Runs in the claim's transaction.
 fn take(
     tx: &Connection,
-    id: &TicketId,
     claim: &Claim,
+    provider: Option<&str>,
     now: Timestamp,
 ) -> Result<TicketBrief, Response> {
+    let id = claim.ticket.as_str();
     set_columns(
         tx,
-        id.as_str(),
+        id,
         claim.session.as_str(),
         &[
             ("session", Value::from(claim.session.as_str())),
             ("tree", Value::from(claim.tree.as_str())),
+            ("provider", json!(provider)),
         ],
         now,
     )
     .map_err(|e| store_failure(&e))?;
-    fleet::release_reservation(tx, id.as_str()).map_err(|e| store_failure(&e))?;
-    brief(tx, id.as_str())
+    fleet::release_reservation(tx, id).map_err(|e| store_failure(&e))?;
+    brief(tx, id)
 }
 
 /// The ticket and what each ticket it depends on left behind.
@@ -412,12 +398,22 @@ fn landed(conn: &mut Connection, landed: &Landed, now: Timestamp) -> Answer {
         return Ok(Response::json(200, &json!(LandedReply { next })));
     }
     holds(&ticket, &landed.session)?;
+    let provider: Option<String> = tx
+        .query_row("SELECT provider FROM tickets WHERE id = ?1", [id], |row| {
+            row.get(0)
+        })
+        .map_err(sql_failure)?;
+    fleet::lapse(&tx, now).map_err(|e| store_failure(&e))?;
     let work = serde_json::to_value(&landed.work).map_err(|e| failure(500, &e.to_string()))?;
     set_columns(
         &tx,
         id,
         landed.session.as_str(),
-        &[("landed", work), ("landed_at", json!(now))],
+        &[
+            ("landed", work),
+            ("landed_at", json!(now)),
+            ("provider", Value::Null),
+        ],
         now,
     )
     .map_err(|e| store_failure(&e))?;
@@ -440,6 +436,7 @@ fn landed(conn: &mut Connection, landed: &Landed, now: Timestamp) -> Answer {
             lane,
             &landed.machine,
             &landed.session,
+            provider.as_deref(),
             now,
             landed.pressure.as_ref(),
         )
@@ -466,6 +463,14 @@ fn close(conn: &mut Connection, close: &Close, now: Timestamp) -> Answer {
         holds(&ticket, &close.session)?;
         let reason = close.reason.trim();
         let reason = if reason.is_empty() { "closed" } else { reason };
+        set_columns(
+            &tx,
+            id,
+            close.session.as_str(),
+            &[("provider", Value::Null)],
+            now,
+        )
+        .map_err(|e| store_failure(&e))?;
         apply_in(
             &mut tx,
             closing(&ticket, reason),
@@ -589,7 +594,8 @@ fn release(conn: &mut Connection, release: &Release, now: Timestamp) -> Answer {
         },
     ];
     apply_in(&mut tx, ops, &release.session, &release.machine, now)?;
-    let cleared = ["session", "tree", "machine", "claimed_at"].map(|column| (column, Value::Null));
+    let cleared = ["session", "tree", "machine", "claimed_at", "provider"]
+        .map(|column| (column, Value::Null));
     set_columns(&tx, id, release.session.as_str(), &cleared, now).map_err(|e| store_failure(&e))?;
     free_worker(&tx, &release.machine, &release.session, None)?;
     let held = counting::count(&tx, &ticket, release, now).map_err(|e| store_failure(&e))?;
@@ -787,3 +793,7 @@ mod release_count_tests;
 #[cfg(test)]
 #[path = "dispatch_usage_tests.rs"]
 mod usage_tests;
+
+#[cfg(test)]
+#[path = "dispatch_mix_tests.rs"]
+mod mix_tests;

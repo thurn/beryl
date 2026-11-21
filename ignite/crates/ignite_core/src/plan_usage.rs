@@ -2,6 +2,8 @@
 //! holds hand-offs until a lower sample arrives or the window resets. A window named for a
 //! model family holds only hand-offs on models in that family.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
 use crate::time::Timestamp;
@@ -38,6 +40,25 @@ impl Hold {
             text.push_str(resets);
         }
         text
+    }
+}
+
+/// Find the actual model behind a ticket's tier for a usage-hold check. Older
+/// offers lack model IDs, so use the tier name and Claude's historical defaults.
+pub fn model_for_tier<'a>(
+    provider: &str,
+    tier: Option<&'a str>,
+    model_ids: &'a BTreeMap<String, String>,
+    default_model: Option<&'a str>,
+) -> &'a str {
+    if let Some(tier) = tier {
+        let fallback = match (provider, tier) {
+            ("claude", "light") => "sonnet",
+            _ => tier,
+        };
+        model_ids.get(tier).map_or(fallback, String::as_str)
+    } else {
+        default_model.unwrap_or(if provider == "claude" { "sonnet" } else { "" })
     }
 }
 

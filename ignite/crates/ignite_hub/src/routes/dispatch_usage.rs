@@ -7,7 +7,7 @@ use rusqlite::Connection;
 use ignite_core::config::Os;
 use ignite_core::dispatch::{Handoff, ReadyTicket, label};
 use ignite_core::fleet::{FleetNotice, MachineState};
-use ignite_core::plan_usage::Hold;
+use ignite_core::plan_usage::{Hold, model_for_tier};
 use ignite_core::protocol::hub::{IdleWorker, MachineFree};
 use ignite_core::time::Timestamp;
 use ignite_store::Result;
@@ -50,18 +50,12 @@ pub(super) fn blocking_hold<'a>(
     ticket: &ReadyTicket,
 ) -> Option<&'a Hold> {
     let windows = holds.get(&worker.app)?;
-    let model = if let Some(tier) = label(&ticket.labels, "tier:") {
-        let fallback = match (worker.app.as_str(), tier) {
-            ("claude", "light") => "sonnet",
-            _ => tier,
-        };
-        worker.model_ids.get(tier).map_or(fallback, String::as_str)
-    } else {
-        worker.default_model.as_deref().unwrap_or({
-            // Older daemons did not advertise model IDs. Claude's untiered tickets use Sonnet.
-            if worker.app == "claude" { "sonnet" } else { "" }
-        })
-    };
+    let model = model_for_tier(
+        &worker.app,
+        label(&ticket.labels, "tier:"),
+        &worker.model_ids,
+        worker.default_model.as_deref(),
+    );
     windows.iter().find(|hold| hold.holds_model(model))
 }
 

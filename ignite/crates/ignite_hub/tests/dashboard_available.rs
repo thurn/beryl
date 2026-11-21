@@ -226,3 +226,30 @@ fn a_checks_only_machine_says_it_takes_only_tickets_that_hold_master_back() {
         "{card}"
     );
 }
+
+#[test]
+fn the_available_page_uses_worker_room_and_explains_provider_constraints() {
+    let conn = seeded();
+    let mut free = free("m-j", &[], 3);
+    free.room = Some(
+        serde_json::from_value(serde_json::json!({
+            "start": 1,
+            "providers": [{"name": "claude", "tiers": ["sonnet"]}]
+        }))
+        .unwrap(),
+    );
+    let now = Timestamp::parse(NOW).unwrap();
+    machine_asks::record(&conn, &free, "nothing", now).unwrap();
+    let body = page(&conn, "/available");
+    assert!(section(&body, "waiting").contains("Next on jarvis"));
+    assert!(body.contains("room to start 1"));
+
+    conn.execute(
+        "UPDATE tickets SET labels = '[\"tier:opus\"]' WHERE id = 'e1.2'",
+        [],
+    )
+    .unwrap();
+    let body = page(&conn, "/available");
+    assert!(body.contains("claude does not run tier opus"));
+    assert!(!section(&body, "waiting").contains("Next on jarvis"));
+}
