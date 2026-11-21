@@ -17,8 +17,9 @@ use glam::Vec2;
 use crate::data::space::hud::phone as data;
 use crate::element::{Align, Anchor, Element, Justify, Press, Shown, column, row, text};
 use crate::frame::Role;
+use crate::hud::HudIn;
 use crate::input::Rect;
-use crate::screens::{ScreenIn, Sheet};
+use crate::navigation::Sheet;
 use crate::table::PhoneBands;
 use crate::tokens::{color, shadow, size, space, type_style};
 use crate::widgets::{icon_button, icons};
@@ -173,7 +174,7 @@ fn phase_edges(stack_empty: bool, bands: &PhoneBands) -> (f32, f32) {
 /// The left and right edges of the phase icon `middle` draws for the screen `input` builds, or
 /// an empty span at the column's left where it draws none.
 #[must_use]
-pub fn phase_span(input: &ScreenIn, bands: &PhoneBands) -> (f32, f32) {
+pub fn phase_span(input: &HudIn, bands: &PhoneBands) -> (f32, f32) {
     input.view.map_or((bands.left, bands.left), |view| {
         phase_edges(view.stack.is_empty(), bands)
     })
@@ -202,7 +203,7 @@ fn phase_icon(step: Step) -> crate::widgets::IconId {
 /// with its heading and a button that closes it over the list, which scrolls to its foot as the
 /// desktop's does.
 #[must_use]
-pub fn log_sheet(input: &ScreenIn, bands: &PhoneBands) -> Option<Element> {
+pub fn log_sheet(input: &HudIn, bands: &PhoneBands) -> Option<Element> {
     input.view?;
     if !input.log_open {
         return None;

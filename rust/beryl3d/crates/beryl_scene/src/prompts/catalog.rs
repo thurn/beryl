@@ -10,8 +10,8 @@ use glam::Vec2;
 use super::{Shown, Steps, prompt_bar};
 use crate::element::{Align, Anchor, Element, Justify, Press, column};
 use crate::frame::Role;
+use crate::hud::HudIn;
 use crate::input::Rect;
-use crate::screens::ScreenIn;
 use crate::table::{TraySpace, phone_bands};
 use crate::tokens::{color, size, type_style};
 use crate::widgets::list;
@@ -24,7 +24,7 @@ use crate::widgets::list;
     clippy::unnecessary_wraps,
     reason = "every shape returns an `Option`: a built shape may show nothing in the flat layer"
 )]
-pub(super) fn screen(prompt: &PromptView, input: &ScreenIn) -> Option<Element> {
+pub(super) fn screen(prompt: &PromptView, input: &HudIn) -> Option<Element> {
     let mut bar = prompt_bar(prompt, input);
     if let ShapeBody::Catalog { entries, chosen } = &prompt.body {
         bar.children.insert(0, super::shade(input));
@@ -40,7 +40,7 @@ pub(super) fn own(_shown: Option<Shown>, _was: Option<Shown>, _steps: &mut Steps
 /// The entries in the session's order, in a scrolling list as wide as its widest entry, centred
 /// in the tray's space of the desktop layout as `.stage-choose` centres it, with the one `chosen`
 /// lit.
-fn entries_column(entries: &[String], chosen: Option<u16>, input: &ScreenIn) -> Element {
+fn entries_column(entries: &[String], chosen: Option<u16>, input: &HudIn) -> Element {
     let (space, _) = TraySpace::DESKTOP.on_window(input.window.size);
     // A phone gives the column the opponent's half of the table, down to the middle band, and
     // keeps every entry as tall as a finger, scrolling the list where they do not fit

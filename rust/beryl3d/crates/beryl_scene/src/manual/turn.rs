@@ -1,7 +1,7 @@
 //! The manual table's turn controls (docs/ui-conventions.md, "Manual table turn controls"), as
 //! the web's `registerTurn` and `nextPhaseLabel` (`ui/src/table/turn.ts`) work them:
 //!
-//! - The step track beside each player's life orb (`hud::steps::table_steps`) lights the
+//! - The step track beside each player's life orb (`screens::table`) lights the
 //!   table's phase in the active player's rows. A press on an icon sets the phase to that
 //!   icon's (`step_command`). Cleanup, which the manual table has no phase for, sets the end
 //!   step. A press on the lit Untap or Draw icon in the viewer's own turn also untaps their

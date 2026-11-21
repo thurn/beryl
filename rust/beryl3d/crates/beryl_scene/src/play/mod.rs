@@ -30,6 +30,7 @@ pub(crate) use compile::nanoseconds;
 mod hand_order;
 mod index;
 mod notices;
+pub(crate) mod opening;
 mod part;
 #[cfg(feature = "driver")]
 pub mod parts;
@@ -42,10 +43,12 @@ mod scroll;
 mod sounds;
 pub(crate) mod step;
 mod tray;
+mod turn;
 mod wake;
 
 pub use scene::{Reach, Scene};
 pub use tray::PlacedLetGo;
+pub use turn::TurnChange;
 
 use std::cell::Cell;
 use std::collections::VecDeque;

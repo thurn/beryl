@@ -68,19 +68,4 @@ mod tests {
             vec![Answer::Pick { option: 1 }, Answer::Done]
         );
     }
-
-    #[test]
-    fn a_choice_that_is_not_the_start_is_no_opening() {
-        let mut view = crate::testing::ViewBuilder::sample().build();
-        let mut table = crate::testing::table(&view);
-        table.prompt = Some(TablePrompt::Choose {
-            title: "Search".to_owned(),
-            options: vec!["One".to_owned()],
-            selected: None,
-        });
-        view.table = Some(table);
-        assert!(prompt(&view).is_none());
-        view.table.as_mut().expect("a table").choosing_first = true;
-        assert!(prompt(&view).is_some());
-    }
 }

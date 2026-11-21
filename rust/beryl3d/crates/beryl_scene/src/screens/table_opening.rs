@@ -11,15 +11,17 @@
 //!
 //! The roll for first is the step banner's (`hud::notices`), which names each seat's die.
 
+use beryl_protocol::PlayerView;
 use beryl_protocol::protocol::{ObjectId, TablePrompt};
 use glam::Vec2;
 
-use super::ScreenIn;
 use super::opening::{Presentation, present};
 use crate::element::{Align, Anchor, Element, Press, column, row};
 use crate::manual::TablePress;
 use crate::manual::opening::{OpeningPress, prompt};
+use crate::table::Window;
 use crate::tokens::{color, size, space};
+use crate::widgets::screen::phone_action;
 use crate::widgets::{button, primary};
 
 /// The press on a card of the opening hand: it goes on the bottom, or comes back.
@@ -37,14 +39,14 @@ fn answer(label: &str, press: OpeningPress, first: bool) -> Element {
 /// they never inherit its passing the pointer through; empty while the viewer has no prompt of
 /// it open.
 #[must_use]
-pub fn table_opening(input: &ScreenIn) -> Vec<Element> {
-    pieces(input).map_or_else(Vec::new, |(shown, actions)| vec![shown, actions])
+pub(super) fn table_opening(view: Option<&PlayerView>, window: Window) -> Vec<Element> {
+    view.and_then(|view| pieces(view, window))
+        .map_or_else(Vec::new, |(shown, actions)| vec![shown, actions])
 }
 
 /// The guided start's screen and its buttons, as `table_opening` returns them.
-fn pieces(input: &ScreenIn) -> Option<(Element, Element)> {
-    let view = input.view?;
-    let phone = super::phone(input);
+fn pieces(view: &PlayerView, window: Window) -> Option<(Element, Element)> {
+    let phone = window.phone();
     let (shown, buttons, middle) = match prompt(view)? {
         TablePrompt::Choose { title, options, .. } => {
             let mut buttons: Vec<Element> = (options.iter().enumerate())
@@ -68,7 +70,7 @@ fn pieces(input: &ScreenIn) -> Option<(Element, Element)> {
                 press: None,
                 choice: &[],
             };
-            (present(&shown, input), buttons, !phone)
+            (present(&shown, window), buttons, !phone)
         }
         TablePrompt::Opening {
             hand,
@@ -114,31 +116,31 @@ fn pieces(input: &ScreenIn) -> Option<(Element, Element)> {
                 press: picking.then_some(bottom as fn(ObjectId) -> Press),
                 choice: &[],
             };
-            (present(&shown, input), buttons, false)
+            (present(&shown, window), buttons, false)
         }
         TablePrompt::Sort { .. } => return None,
     };
     let actions = if middle {
-        middle_row(buttons, input)
+        middle_row(buttons, window)
     } else if phone {
-        phone_dock(buttons, input)
+        phone_dock(buttons, window)
     } else {
-        dock(buttons, input)
+        dock(buttons, window)
     };
     Some((shown, actions))
 }
 
 /// The play or draw buttons side by side in the middle of the window, `.opening-choice`.
-fn middle_row(buttons: Vec<Element>, input: &ScreenIn) -> Element {
+fn middle_row(buttons: Vec<Element>, window: Window) -> Element {
     let mut choice = row().name("choice").gap(space::M).children(buttons);
-    let middle = Vec2::new(input.window.size.width, input.window.size.height) / 2.0;
+    let middle = Vec2::new(window.size.width, window.size.height) / 2.0;
     choice.anchor = Some(Anchor::Point(middle, Vec2::splat(0.5)));
     choice
 }
 
 /// The buttons in the dock at the window's lower right, as the table's ask prompt stands.
-fn dock(buttons: Vec<Element>, input: &ScreenIn) -> Element {
-    let window = input.window.size;
+fn dock(buttons: Vec<Element>, window: Window) -> Element {
+    let window = window.size;
     let mut dock = row()
         .name("opening actions")
         .gap(space::M)
@@ -156,16 +158,15 @@ fn dock(buttons: Vec<Element>, input: &ScreenIn) -> Element {
 
 /// The buttons stacked across the foot of the phone's safe area, as the web's phone dock
 /// stands them.
-fn phone_dock(buttons: Vec<Element>, input: &ScreenIn) -> Element {
+fn phone_dock(buttons: Vec<Element>, window: Window) -> Element {
     use crate::data::space::flat::phone::{ACTION_GAP, GUTTER};
-    let window = input.window;
     let safe = window.safe_area;
     let width = window.size.width - safe.left - safe.right - 2.0 * GUTTER;
     let mut dock = column()
         .name("opening actions")
         .gap(ACTION_GAP)
         .width(width)
-        .children(buttons.into_iter().map(super::phone_action));
+        .children(buttons.into_iter().map(phone_action));
     let foot = Vec2::new(
         safe.left + GUTTER + width / 2.0,
         window.size.height - safe.bottom - GUTTER,

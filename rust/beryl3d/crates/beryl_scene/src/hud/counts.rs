@@ -289,7 +289,7 @@ impl CountFloats {
             });
             // Under the opening's backdrop the total is dimmed as the orb under it is.
             let opacity = if dimmed {
-                1.0 - crate::screens::opening::backdrop_cover(life.y, size.height)
+                1.0 - crate::play::opening::backdrop_cover(life.y, size.height)
             } else {
                 1.0
             };

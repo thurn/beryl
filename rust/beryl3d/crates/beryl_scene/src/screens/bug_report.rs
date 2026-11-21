@@ -151,7 +151,7 @@ pub fn span(a: glam::Vec2, b: glam::Vec2) -> Rect {
 #[must_use]
 pub fn bug_report(under: Option<Element>, input: &ScreenIn) -> Element {
     let window = whole(input);
-    let phone = super::phone(input).then_some(input.window.safe_area);
+    let phone = input.window.phone().then_some(input.window.safe_area);
     let overlay = match &input.bug.stage {
         // Nothing of the report is in the picture.
         BugStage::Capturing { .. } => None,

@@ -20,6 +20,7 @@ pub mod layout;
 pub mod light;
 pub mod manual;
 pub mod motion;
+pub mod navigation;
 pub mod notice;
 pub mod play;
 pub mod pointer;

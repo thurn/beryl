@@ -15,6 +15,7 @@ use crate::data::space::flat::phone;
 use crate::element::{Align, Element, Justify, Press, column, row, text};
 use crate::frame::Role;
 use crate::tokens::{color, size, space, type_style};
+use crate::widgets::screen::phone_screen;
 use crate::widgets::{button, field, list, primary};
 
 /// The name of the field that narrows the list.
@@ -33,7 +34,7 @@ pub fn testing(input: &ScreenIn) -> Element {
     let mut state = input.fields.get(FILTER);
     "Find a card".clone_into(&mut state.placeholder);
     let query = state.text.to_lowercase();
-    let phone = super::phone(input);
+    let phone = input.window.phone();
     let filter = field(FILTER, &state).grow(1.0);
     let rows = (input.recordings.iter())
         .enumerate()
@@ -61,7 +62,13 @@ pub fn testing(input: &ScreenIn) -> Element {
             .child(header)
             .child(filter)
             .child(list(RECORDINGS, rows).grow(1.0).basis(0.0));
-        return super::phone_screen("testing", input, content).background(color::SURFACE);
+        return phone_screen(
+            "testing",
+            input.window.size,
+            input.window.safe_area,
+            content,
+        )
+        .background(color::SURFACE);
     }
     let header = row()
         .name("header")

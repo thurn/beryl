@@ -465,3 +465,16 @@ impl Sounds {
         runs
     }
 }
+
+/// The music that plays.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Music {
+    /// The menu's music, everywhere but in a game and in the gallery.
+    Menu,
+    /// The game's music, while a game goes on.
+    Game,
+    /// The sting for a game the viewer won.
+    Win,
+    /// The sting for a game the viewer did not win.
+    Loss,
+}

@@ -22,10 +22,10 @@ pub use bar::{prompt_bar, waiting};
 pub use tray::Piles;
 
 use crate::element::Element;
+use crate::hud::HudIn;
 use crate::input::FaceId;
 use crate::light::{ArrowSpan, Lit, MarkSpan, Span};
 use crate::pose::Curve;
-use crate::screens::ScreenIn;
 use crate::verbs::Interval;
 
 /// A prompt as the table shows it: its state, and whether the pointer is on the button that
@@ -58,7 +58,7 @@ impl Shown<'_> {
 /// over it, and the cards held up are drawn over the flat layer (`Table::in_tray`), as the web
 /// interface's `TrayUnder` shades the table under them (`shades` in `ui/src/stage/Tray.tsx`).
 #[must_use]
-pub fn screen(prompt: &PromptView, input: &ScreenIn) -> Option<Element> {
+pub fn screen(prompt: &PromptView, input: &HudIn) -> Option<Element> {
     let mut screen = shape_screen(prompt, input)?;
     if Piles::of(prompt).is_some() {
         screen.children.insert(0, shade(input));
@@ -67,7 +67,7 @@ pub fn screen(prompt: &PromptView, input: &ScreenIn) -> Option<Element> {
 }
 
 /// What the flat layer shows for the shape of `prompt`, if anything.
-fn shape_screen(prompt: &PromptView, input: &ScreenIn) -> Option<Element> {
+fn shape_screen(prompt: &PromptView, input: &HudIn) -> Option<Element> {
     match &prompt.body {
         ShapeBody::Pick { .. } | ShapeBody::Candidates => pick::screen(prompt, input),
         ShapeBody::Split { .. } => split::screen(prompt, input),
@@ -83,7 +83,7 @@ fn shape_screen(prompt: &PromptView, input: &ScreenIn) -> Option<Element> {
 }
 
 /// The whole window in the tray's shade (`.stage-tray`), which the pointer goes through.
-fn shade(input: &ScreenIn) -> Element {
+fn shade(input: &HudIn) -> Element {
     let window = input.window.size;
     let mut shade = crate::element::column()
         .name("shade")
@@ -101,7 +101,7 @@ fn shade(input: &ScreenIn) -> Element {
 /// The faces the open prompt shows in the flat layer at full size, which the client asks for
 /// at full size (`Faces::want_full`): those of the ways to use a card (`choose`).
 #[must_use]
-pub fn faces(input: &ScreenIn) -> Vec<FaceId> {
+pub fn faces(input: &HudIn) -> Vec<FaceId> {
     input.prompt.map_or_else(Vec::new, |prompt| {
         choose::way_faces(prompt, input).flatten().collect()
     })

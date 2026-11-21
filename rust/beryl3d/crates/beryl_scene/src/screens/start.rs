@@ -11,7 +11,11 @@ use super::{Screen, ScreenIn, Sheet};
 use crate::element::{Align, Border, Element, Justify, Position, Press, column, row, text};
 use crate::frame::Role;
 use crate::text::TypeStyle;
-use crate::tokens::{color, ratio, shadow, size, space, type_style};
+use crate::tokens::{color, ratio, size, space, type_style};
+use crate::widgets::screen::{phone_action, phone_screen, whole_window};
+use crate::widgets::start_panel::{
+    PANEL_GAP, PANEL_PADDING, PANEL_WIDTH, checkbox, panel_look, small,
+};
 use crate::widgets::{self, FieldState, button, field, icon_button, list, primary, tooltip};
 
 /// The name of the seed's text field.
@@ -24,17 +28,6 @@ const CHEATING: [&str; 2] = ["mcts-omniscient-quick", "pimc18-omniscient-30m-anc
 /// The opponent offered first, the web's `DEFAULT_AGENT`: strong, and answers in about two
 /// seconds.
 const DEFAULT_AGENT: &str = "mcts-hidden";
-
-/// The panel's width and padding (`.start-panel`).
-pub(super) const PANEL_WIDTH: f32 = size::START_PANEL_WIDTH;
-pub(super) const PANEL_PADDING: [f32; 4] = [
-    size::START_PANEL_PADDING_TOP,
-    size::START_PANEL_PADDING_SIDE,
-    size::START_PANEL_PADDING_BOTTOM,
-    size::START_PANEL_PADDING_SIDE,
-];
-pub(super) const PANEL_GAP: f32 = size::START_PANEL_GAP;
-pub(super) const PANEL_RADIUS: f32 = size::PANEL_RADIUS;
 
 /// The height of everything in the window but the opponents' rows: the panel's other contents,
 /// its padding and gaps, and a margin above and below it.
@@ -49,9 +42,8 @@ const SEED_WIDTH: f32 = size::START_SEED_WIDTH;
 /// How far the sound button stands from the window's right and bottom edges (`.sound-corner`).
 const CORNER: f32 = size::START_CORNER;
 
-/// The radio dot's and the fair-deal box's sides.
+/// The opponent radio dot's side.
 const RADIO: f32 = size::START_RADIO;
-const CHECKBOX: f32 = size::CHECKBOX;
 
 /// `.start-title`: bold 38-point serif.
 pub(super) const TITLE: TypeStyle = type_style::START_TITLE;
@@ -135,7 +127,7 @@ pub fn in_progress(view: Option<&beryl_protocol::PlayerView>) -> bool {
 /// recordings (`ScreenIn::recordings`), the key T opens the testing screen.
 #[must_use]
 pub fn start(input: &ScreenIn) -> Element {
-    if super::phone(input) {
+    if input.window.phone() {
         return start_phone(input);
     }
     let form = input.start;
@@ -189,7 +181,11 @@ pub fn start(input: &ScreenIn) -> Element {
         .child(seed_row)
         .child(fair_box(form.fair))
         .child(buttons)
-        .children(super::table_entries::entries(input, false))
+        .children(super::table_entries::entries(
+            input.entries,
+            input.fields,
+            false,
+        ))
         .child(export)
         .child(export_tip);
     let mut panel = panel;
@@ -205,7 +201,7 @@ pub fn start(input: &ScreenIn) -> Element {
         .justify_content(Justify::Center)
         .child(panel)
         .child(corner());
-    let screen = super::whole_window(input, screen);
+    let screen = whole_window(input.window.size, screen);
     super::table_entries::with_host_key(with_keys(screen, input, going_on))
 }
 
@@ -320,12 +316,16 @@ fn start_phone(input: &ScreenIn) -> Element {
         .child(row().name("space").grow(1.0))
         .child(seed_row)
         .child(fair)
-        .child(super::phone_action(start))
-        .children(back.map(super::phone_action))
-        .children(super::table_entries::entries(input, true))
-        .child(super::phone_action(export));
+        .child(phone_action(start))
+        .children(back.map(phone_action))
+        .children(super::table_entries::entries(
+            input.entries,
+            input.fields,
+            true,
+        ))
+        .child(phone_action(export));
     with_keys(
-        super::phone_screen("start", input, content),
+        phone_screen("start", input.window.size, input.window.safe_area, content),
         input,
         going_on,
     )
@@ -505,63 +505,5 @@ fn agent_row(agent: &AgentView, at: u16, chosen: bool, phone: bool) -> Element {
 
 /// The "Fair deal" box (`.start-fair`): a checkbox and its label, which a press turns on or off.
 fn fair_box(on: bool) -> Element {
-    checkbox("Fair deal", on, Press::FairDeal)
-}
-
-/// A checkbox labelled `label`, ticked if `on`, which means `press` when pressed: the start
-/// screen's "Fair deal" box and the lobby's assists.
-pub fn checkbox(label: &str, on: bool, press: Press) -> Element {
-    let check = check_square(CHECKBOX, on);
-    Element::new(Role::Toggle)
-        .name(label)
-        .selected(on)
-        .gap(space::M)
-        .align_items(Align::Center)
-        .on_press(press)
-        .child(check)
-        .child(text(label).style(LABEL).color(color::TEXT_DIM))
-}
-
-/// `panel` in the look of the web's `.start-panel`, which the start and lobby screens share: a
-/// dark face, a bronze border with a lighter top edge, rounded corners, a dark ring inside the
-/// border and a shadow under it.
-pub(super) fn panel_look(panel: Element) -> Element {
-    panel
-        .background(color::START_PANEL)
-        .border(
-            Border::uniform(color::START_PANEL_BORDER, size::BORDER)
-                .side_color(0, color::START_PANEL_BORDER_TOP),
-        )
-        .radius(PANEL_RADIUS)
-        .box_shadow(shadow::START_PANEL.to_vec())
-}
-
-/// The square of a checkbox `side` points wide, with a gold border, ticked if `on`.
-pub(super) fn check_square(side: f32, on: bool) -> Element {
-    row()
-        .name("checkbox")
-        .width(side)
-        .height(side)
-        .radius(size::START_CHECKBOX_RADIUS)
-        .border((color::GOLD, size::BORDER))
-        .align_items(Align::Center)
-        .justify_content(Justify::Center)
-        // No bundled font has a check mark, so a ticked box is filled with a gold square, as the
-        // chosen opponent's radio button is filled with a dot.
-        .children(on.then(|| {
-            row()
-                .name("tick")
-                .width(side / 2.0)
-                .height(side / 2.0)
-                .radius(size::START_TICK_RADIUS)
-                .background(color::GOLD)
-        }))
-}
-
-/// `button` at the web's small size (`button-small`): shorter, with smaller type.
-pub fn small(mut button: Element) -> Element {
-    button.style.height = Some(size::BUTTON_HEIGHT * ratio::SMALL_SCALE);
-    button.style.text.size = type_style::BUTTON.size * ratio::SMALL_SCALE;
-    button.style.min_width = None;
-    button
+    checkbox("Fair deal", on).on_press(Press::FairDeal)
 }

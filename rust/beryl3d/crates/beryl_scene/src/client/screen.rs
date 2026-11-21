@@ -42,7 +42,7 @@ impl Client {
             occupied: &occupied,
             ..self.screen_in()
         };
-        let mut full = crate::prompts::faces(&input);
+        let mut full = crate::prompts::faces(&input.hud());
         full.extend(screens::sheet_face(&input));
         // On the desktop the hand and the stack show cards' full frames, as the web interface
         // does; on the phone the battlefield frame.
@@ -65,8 +65,8 @@ impl Client {
         let opening = under.is_some()
             && self.sheet.is_none()
             && self.screen == Screen::Game
-            && screens::opening::shown(&input);
-        let away = self.screen == Screen::Game && screens::opening::shown(&input);
+            && screens::opening::shown(&input.hud());
+        let away = self.screen == Screen::Game && screens::opening::shown(&input.hud());
         let shown = match self.sheet {
             Some(sheet) => Some(screens::sheet(sheet, under, &input)),
             None => under,

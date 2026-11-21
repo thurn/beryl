@@ -15,8 +15,9 @@ use super::TablePress;
 use super::commands::seat_of;
 use crate::element::{Element, Press, row};
 use crate::input::Size;
-use crate::inspect::viewer::{object_box, overlay};
+use crate::inspect::viewer::object_box;
 use crate::tokens::size;
+use crate::widgets::screen::overlay;
 use crate::widgets::{button, primary};
 
 /// The tray's title.

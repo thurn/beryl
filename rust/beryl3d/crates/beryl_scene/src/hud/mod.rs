@@ -4,6 +4,8 @@
 pub mod banner;
 pub mod counts;
 pub mod full_control;
+mod input;
+pub use input::HudIn;
 pub mod log;
 pub mod notices;
 pub mod phone;

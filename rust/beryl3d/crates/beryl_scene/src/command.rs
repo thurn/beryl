@@ -14,8 +14,8 @@ use beryl_protocol::{DecisionId, SessionError, SessionId, StartRequest, StopsSet
 
 use crate::frame::ElementId;
 use crate::input::{Rect, Size};
-use crate::screens::Music;
 use crate::settings::Settings;
+use crate::sound::Music;
 
 /// One variant for each function of `beryl_session::Sessions` that a player's action calls,
 /// carrying that function's own arguments. The host sends it to the session thread and passes

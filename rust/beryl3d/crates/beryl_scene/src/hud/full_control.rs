@@ -9,8 +9,8 @@ use glam::Vec2;
 
 use crate::element::{Anchor, Element, Shown};
 use crate::frame::Role;
+use crate::hud::HudIn;
 use crate::layout::DOCK_BOTTOM;
-use crate::screens::ScreenIn;
 use crate::tokens::{color, shadow, size, space};
 use crate::widgets::icons;
 
@@ -18,7 +18,7 @@ use crate::widgets::icons;
 /// read from the stops the game holds (`PlayerView::stops`), as the web's game screen reads
 /// `view.stops`.
 #[must_use]
-pub fn full_control(input: &ScreenIn) -> Option<Element> {
+pub fn full_control(input: &HudIn) -> Option<Element> {
     let on = input.view.is_some_and(|view| view.stops.full_control);
     if !on || input.window.phone() {
         return None;

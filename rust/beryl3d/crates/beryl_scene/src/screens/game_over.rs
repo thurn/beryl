@@ -15,17 +15,19 @@
 use beryl_protocol::protocol::{Culprit, LossReason, OutcomeView, Side, Stall, Status};
 use glam::Vec2;
 
-use super::{Screen, ScreenIn};
 use crate::data::space::flat::phone::game_over as metrics;
 use crate::data::space::flat::phone::opening::NARROW_BELOW;
 use crate::data::space::flat::phone::{ACTION_GAP, GUTTER};
 use crate::element::{Align, Anchor, Element, Filter, Justify, Press, Shown, column, holder, text};
 use crate::faces::FaceList;
 use crate::frame::Role;
+use crate::hud::HudIn;
 use crate::input::FaceSize;
+use crate::navigation::Screen;
 use crate::table::{CARD_HEIGHT, CARD_WIDTH};
 use crate::text::TypeStyle;
 use crate::tokens::{color, ratio, size, space, type_style};
+use crate::widgets::screen::{backdrop, phone_action};
 use crate::widgets::{button, primary};
 
 /// The width of the card that ended the game, the web's 230 on the desktop.
@@ -75,7 +77,7 @@ fn reason(outcome: &OutcomeView) -> Option<&'static str> {
 struct Ended<'a>(Option<&'a OutcomeView>);
 
 /// How the game ended, or none while it goes on.
-fn shown<'a>(input: &ScreenIn<'a>) -> Option<Ended<'a>> {
+fn shown<'a>(input: &HudIn<'a>) -> Option<Ended<'a>> {
     match &input.view?.status {
         Status::Over { outcome } => Some(Ended(Some(outcome))),
         Status::Stopped => Some(Ended(None)),
@@ -89,7 +91,7 @@ fn shown<'a>(input: &ScreenIn<'a>) -> Option<Ended<'a>> {
 /// button that brings it back. The holder has no size, so that it covers nothing, and each piece
 /// in it stands at its own point of the window.
 #[must_use]
-pub fn game_over(input: &ScreenIn) -> Option<Element> {
+pub fn game_over(input: &HudIn) -> Option<Element> {
     let Ended(outcome) = shown(input)?;
     let title = result_title(outcome);
     if input.result_aside {
@@ -103,7 +105,7 @@ pub fn game_over(input: &ScreenIn) -> Option<Element> {
     let mut screen = holder()
         .name("game over screen")
         // The web's dialog takes every press over the table, so the scrim does too.
-        .child(super::backdrop(input).passes(false))
+        .child(backdrop(input.window.size).passes(false))
         .child(result(input, outcome))
         .child(dock(input, buttons));
     screen.style.filter = DIMMED.to_vec();
@@ -121,8 +123,8 @@ const DIMMED: [Filter; 3] = [
 
 /// The result's title, why the game ended and the card that ended it, in a column at the
 /// window's middle.
-fn result(input: &ScreenIn, outcome: Option<&OutcomeView>) -> Element {
-    let phone = super::phone(input);
+fn result(input: &HudIn, outcome: Option<&OutcomeView>) -> Element {
+    let phone = input.window.phone();
     // The phone's result is smaller (`.phone-game-over`).
     let (title_style, reason_style, reason_gap) = if phone {
         (
@@ -177,8 +179,8 @@ fn result(input: &ScreenIn, outcome: Option<&OutcomeView>) -> Element {
 /// `ui/src/screens/styles/controls.css`): `right: 39px; bottom: 87px`, its buttons stacked
 /// `--button-gap` apart and as wide as the widest, at least `--button-width`. The web's
 /// `DockButtons` puts its first button at the foot, so `New Game` comes last here.
-fn dock(input: &ScreenIn, buttons: Vec<Element>) -> Element {
-    if super::phone(input) {
+fn dock(input: &HudIn, buttons: Vec<Element>) -> Element {
+    if input.window.phone() {
         return phone_dock(input, buttons);
     }
     let window = input.window;
@@ -208,7 +210,7 @@ const DOCK_WIDTH: f32 = size::BUTTON_WIDTH;
 /// The phone's dock (`.phone-game-over > .dock`): as wide as the window less its gutters, up to
 /// `game_over.dock_width`, standing the gutter above the safe area's foot, with each button as
 /// wide as the dock.
-fn phone_dock(input: &ScreenIn, buttons: Vec<Element>) -> Element {
+fn phone_dock(input: &HudIn, buttons: Vec<Element>) -> Element {
     let window = input.window;
     let safe = window.safe_area;
     let width =
@@ -221,15 +223,15 @@ fn phone_dock(input: &ScreenIn, buttons: Vec<Element>) -> Element {
         .name("game over buttons")
         .width(width)
         .gap(ACTION_GAP)
-        .children(buttons.into_iter().map(super::phone_action));
+        .children(buttons.into_iter().map(phone_action));
     dock.anchor = Some(Anchor::Point(at, Vec2::new(0.5, 1.0)));
     dock
 }
 
 /// The middle of the window or, on the phone, of its safe area.
-fn middle(input: &ScreenIn) -> Vec2 {
+fn middle(input: &HudIn) -> Vec2 {
     let window = input.window;
-    if super::phone(input) {
+    if input.window.phone() {
         let safe = window.safe_area;
         Vec2::new(
             safe.left + (window.size.width - safe.left - safe.right) / 2.0,
@@ -242,8 +244,8 @@ fn middle(input: &ScreenIn) -> Vec2 {
 
 /// The width of the card that ended the game and the gap above it: the web's 230 on the
 /// desktop, and 160 on a phone (140 on one narrower than 393 points).
-fn culprit_size(input: &ScreenIn) -> (f32, f32) {
-    if !super::phone(input) {
+fn culprit_size(input: &HudIn) -> (f32, f32) {
+    if !input.window.phone() {
         (CULPRIT_WIDTH, size::GAME_OVER_CARD_GAP)
     } else if input.window.size.width < NARROW_BELOW {
         (metrics::CARD_NARROW, metrics::CARD_GAP)

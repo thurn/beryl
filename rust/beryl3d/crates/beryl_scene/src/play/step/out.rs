@@ -4,9 +4,9 @@
 use beryl_protocol::script::{Subject, Turn as TurnStep};
 
 use crate::hud::counts::CountChange;
-use crate::hud::steps::TurnChange;
 use crate::light::{SpanChange, StreakRun};
 use crate::notice::NoticeRun;
+use crate::play::TurnChange;
 use crate::pose::{Pose, Segment};
 use crate::table::{PileCount, Turn};
 use crate::verbs::{self, Interval};

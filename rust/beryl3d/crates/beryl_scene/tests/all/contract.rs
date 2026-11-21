@@ -336,8 +336,9 @@ mod milestone_three {
             let mut shaped = prompt("Choose");
             shaped.body = body;
             let input = input(Some(&shaped), &settings);
-            let element = prompts::screen(&shaped, &input).expect("every shape shows its bar");
-            let bar = prompts::prompt_bar(&shaped, &input);
+            let element =
+                prompts::screen(&shaped, &input.hud()).expect("every shape shows its bar");
+            let bar = prompts::prompt_bar(&shaped, &input.hud());
             assert_eq!(element.name, bar.name, "{:?}", shaped.body);
             // A shape may add its own controls to the bar, as a number adds its steps, but
             // keeps the bar's title and buttons in their order.

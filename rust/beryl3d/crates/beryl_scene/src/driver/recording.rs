@@ -29,7 +29,7 @@ use serde_json::Value;
 
 use crate::command::{Reply, SessionCommand};
 use crate::element::Press;
-use crate::screens::{Screen, Sheet};
+use crate::navigation::{Screen, Sheet};
 
 /// One recording's messages for one seat: the session's views, as `game-update` events, and
 /// its responses to commands. Other events are ignored.

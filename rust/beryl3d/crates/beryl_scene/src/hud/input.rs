@@ -1,0 +1,35 @@
+//! Inputs to the furniture and overlays shown over a game.
+
+use beryl_protocol::prompt::PromptView;
+use beryl_protocol::script::{Subject, Turn};
+use beryl_protocol::{PlayerView, StopsSetting};
+
+use super::{log::LogEntry, phone::Occupied};
+use crate::element::Viewed;
+use crate::faces::FaceList;
+use crate::inspect::{inspector::Inspected, revealed::RevealedFace};
+use crate::navigation::Sheet;
+use crate::table::Window;
+
+/// The game view, playback state and UI state that the HUD reads.
+#[derive(Clone, Copy, Debug)]
+pub struct HudIn<'a> {
+    pub window: Window,
+    pub view: Option<&'a PlayerView>,
+    pub played: Option<&'a PlayerView>,
+    pub turn: Option<Turn>,
+    pub prompt: Option<&'a PromptView>,
+    /// The stops and full control preferences used to draw the game controls.
+    pub stops: StopsSetting,
+    pub sheet: Option<Sheet>,
+    pub inspected: Option<&'a Inspected>,
+    pub faces: Option<&'a FaceList>,
+    pub viewing: Option<Viewed>,
+    pub revealed: &'a [RevealedFace],
+    pub carried: Option<Subject>,
+    pub log: &'a [LogEntry],
+    pub log_open: bool,
+    pub result_aside: bool,
+    pub spinning: bool,
+    pub occupied: &'a Occupied,
+}

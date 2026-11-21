@@ -12,23 +12,33 @@
 use beryl_protocol::protocol::Facing;
 use glam::Vec2;
 
-use super::ScreenIn;
 use crate::data::space::flat::{MENU_EDGE, sheet};
 use crate::data::space::pointer::DRAG_THRESHOLD_POINTS;
 use crate::element::{Align, Element, Overflow, Press, Shown, column};
 use crate::frame::Role;
-use crate::hud::{players, steps};
+use crate::hud::{HudIn, players, steps};
 use crate::input::{FaceId, FaceSize};
-use crate::inspect::viewer::table_viewer;
 use crate::manual::Target;
+use crate::manual::bindings::Bindings;
 use crate::manual::commands::{COMMANDS, Scope};
+use crate::manual::lobby::Lobby;
 use crate::manual::menus::{MENU, OpenMenu};
+use crate::manual::pile_viewer::table_viewer;
 use crate::manual::{
     TableState, ask, assists, drop, link, log, opening, order, palette, pools, quit, selection,
     tokens, turn,
 };
 use crate::table::{CARD_HEIGHT, CARD_WIDTH};
-use crate::widgets::{context_menu, menu, sheet_menu};
+use crate::widgets::{Fields, context_menu, menu, sheet_menu};
+
+/// State the manual table reads to build its controls and overlays.
+pub(super) struct TableIn<'a> {
+    pub hud: HudIn<'a>,
+    pub fields: &'a Fields,
+    pub bindings: &'a Bindings,
+    pub table: &'a TableState,
+    pub lobby: &'a Lobby,
+}
 
 /// What the flat layer shows on the table: a region with no box of its own, which answers every
 /// key of a table command with `Press::Command`, the log, and the open context menu, command
@@ -39,12 +49,15 @@ use crate::widgets::{context_menu, menu, sheet_menu};
 /// `Chord::parse` reads `Cmd` as Control and `Option` as Alt elsewhere, and the file's other
 /// bindings differ from the Mac's only in writing those.
 #[must_use]
-pub fn table(input: &ScreenIn) -> Element {
+pub(super) fn table(input: &TableIn) -> Element {
     // The region has no box of its own, since everything in it stands at a point of the
     // window, so the pointer reaches the table's cards around what it shows. It does not pass
     // presses through, which every element in it would inherit.
     let mut screen = column().name("table");
-    let frozen = input.view.is_some_and(link::frozen);
+    let hud = &input.hud;
+    let window = hud.window;
+    let view = hud.view;
+    let frozen = view.is_some_and(link::frozen);
     // A frozen table answers no key of its own (`manual::link`).
     for (index, command) in COMMANDS.iter().enumerate().filter(|_| !frozen) {
         let Ok(index) = u16::try_from(index) else {
@@ -53,7 +66,7 @@ pub fn table(input: &ScreenIn) -> Element {
         if command.scope != Scope::Table {
             continue;
         }
-        for key in input.settings.bindings.keys(command) {
+        for key in input.bindings.keys(command) {
             screen = screen.shortcut(key, Press::Command(index, false));
         }
     }
@@ -67,41 +80,37 @@ pub fn table(input: &ScreenIn) -> Element {
         if command.scope != Scope::Table || !command.id.starts_with("token.") {
             continue;
         }
-        for key in input.settings.bindings.keys(command) {
+        for key in input.bindings.keys(command) {
             if !key.split('+').any(|part| part == "Shift") {
                 screen = screen.shortcut(&format!("Shift+{key}"), Press::Command(index, true));
             }
         }
     }
     let state = input.table;
-    let lines = input
-        .view
+    let lines = view
         .and_then(|view| view.table.as_ref())
         .map(|table| &table.log[..]);
     // A frozen table hides its log, whose undo and rewind are table input, and whose button
     // on the phone stands where the banner does. The guided start's opening covers it.
-    let opening = input
-        .view
-        .is_some_and(|view| opening::prompt(view).is_some());
+    let opening = view.is_some_and(|view| opening::prompt(view).is_some());
     let log = lines.filter(|_| !frozen && !opening).and_then(|lines| {
         log::log(
             lines,
             state.log_open,
             &state.blocked,
-            input.window.phone().then_some(input.window),
+            window.phone().then_some(window),
         )
     });
-    let table = input.view.and_then(|view| view.table.as_ref());
-    let proposals = table
-        .and_then(|table| assists::proposals(&table.proposals, state.proposals_open, input.window));
-    let labels = (input.view.zip(table))
-        .map(|(view, table)| assists::labels(&table.labels, view, input.window.phone()))
+    let table = view.and_then(|view| view.table.as_ref());
+    let proposals =
+        table.and_then(|table| assists::proposals(&table.proposals, state.proposals_open, window));
+    let labels = view
+        .zip(table)
+        .map(|(view, table)| assists::labels(&table.labels, view, window.phone()))
         .unwrap_or_default();
-    let sort = input
-        .view
-        .and_then(|view| assists::sort_tray(view, input.window.size));
+    let sort = view.and_then(|view| assists::sort_tray(view, window.size));
     let open = state.menu.as_ref().map(|open| {
-        if input.window.phone() {
+        if window.phone() {
             bottom_sheet(open, input)
         } else {
             context_menu(open.at, menu(MENU, &open.title, &open.whose, &open.groups))
@@ -113,32 +122,32 @@ pub fn table(input: &ScreenIn) -> Element {
     let landing = state.landing.as_ref().map(drop::target);
     // The summary hides while a sweep is drawn, as the web's hides while selecting, and while
     // the command list, a prompt or the order tray is open over the table, or the table is frozen.
-    let summary = (input.view)
+    let summary = view
         .filter(|_| state.sweep.is_none() && !state.overlay_open() && !frozen)
         .and_then(|view| selection::summary(view, &state.selection, state.summary_over));
-    let window = input.window;
     // The phone's sheet of a player's mana and counters, hidden while the table is frozen.
-    let mana_sheet = (input.view.zip(state.mana_sheet))
+    let mana_sheet = view
+        .zip(state.mana_sheet)
         .filter(|_| !frozen)
         .and_then(|(view, side)| pools::sheet(view, window, side));
-    let connection = input.view.and_then(|view| {
+    let connection = view.and_then(|view| {
         let top = link::top(window.size, window.phone(), window.safe_area.top);
         link::banner(view, window.size, top, input.lobby.link_error.as_deref())
     });
     screen
-        .children(controls(state, input, frozen))
+        .children(controls(state, hud, frozen))
         .children(log)
         .children(summary)
         .children(proposals)
         .children(labels)
         .children(sweep)
         .children(landing)
-        .children(table_viewer(input))
+        .children(table_viewer(hud, input.fields, &state.viewer))
         .children(sort)
         .children(open)
         .children(mana_sheet)
         .children(over(state, input))
-        .children(super::table_opening::table_opening(input))
+        .children(super::table_opening::table_opening(view, window))
         .children(connection)
 }
 
@@ -146,33 +155,49 @@ pub fn table(input: &ScreenIn) -> Element {
 /// none while the guided start's screen covers the table, as the game's opening covers its
 /// controls. The Next button stands in the lower right, where the ask prompt docks, so it gives
 /// way to whatever the table shows over itself, and a `frozen` table shows none.
-fn controls(state: &TableState, input: &ScreenIn, frozen: bool) -> Vec<Element> {
-    if input
-        .view
-        .and_then(crate::manual::opening::prompt)
-        .is_some()
-    {
+fn controls(state: &TableState, input: &HudIn, frozen: bool) -> Vec<Element> {
+    if input.view.and_then(opening::prompt).is_some() {
         return Vec::new();
     }
     let next = (input.view.and_then(|view| view.table.as_ref()))
         .filter(|_| state.menu.is_none() && !state.overlay_open() && !frozen)
         .map(|table| turn::next(table.phase, input.window));
     let pools = (input.view).and_then(|view| pools::pools(view, input.window));
-    [
-        players::players(input),
-        steps::table_steps(input),
-        pools,
-        next,
-    ]
-    .into_iter()
-    .flatten()
-    .collect()
+    [players::players(input), table_steps(input), pools, next]
+        .into_iter()
+        .flatten()
+        .collect()
+}
+
+/// What the manual table shows for the steps: both players' step tracks, on the desktop
+/// layout, while no pile's viewer is open, with the icon of the table's phase lit in the
+/// active player's rows, as the web's `StepStops` stands on the manual table with no stops and
+/// an `onStep`.
+fn table_steps(input: &HudIn) -> Option<Element> {
+    let view = input.view?;
+    let table = view.table.as_ref()?;
+    if input.window.phone() || input.viewing.is_some() {
+        return None;
+    }
+    let lit = turn::icon_of(table.phase);
+    Some(steps::table_tracks(
+        view.turn.active,
+        lit,
+        input.window,
+        |at, active| {
+            Press::Table(crate::manual::TablePress::Step {
+                #[expect(clippy::cast_possible_truncation, reason = "twelve icons")]
+                at: at as u8,
+                active,
+            })
+        },
+    ))
 }
 
 /// The command list, ask prompt, token search, custom token form or order tray the table
 /// shows, if one is open.
-fn over(state: &TableState, input: &ScreenIn) -> Option<Element> {
-    let window = input.window.size;
+fn over(state: &TableState, input: &TableIn) -> Option<Element> {
+    let window = input.hud.window.size;
     if let Some(open) = &state.palette {
         return Some(palette::panel(open, input.fields, window));
     }
@@ -185,7 +210,7 @@ fn over(state: &TableState, input: &ScreenIn) -> Option<Element> {
     if let Some(open) = &state.custom {
         return Some(tokens::custom_panel(open, input.fields, window));
     }
-    let view = input.view?;
+    let view = input.hud.view?;
     if let Some(open) = &state.tokens {
         return Some(tokens::panel(open, view, input.fields, window));
     }
@@ -195,8 +220,8 @@ fn over(state: &TableState, input: &ScreenIn) -> Option<Element> {
 /// The context menu on a phone, as the web's `[data-presentation="sheet"]` menu stands: along
 /// the bottom of the window above its safe area, as wide as the window up to `sheet.max_width`,
 /// scrolling where it is taller than the window, with a card's full face above its rows.
-fn bottom_sheet(open: &OpenMenu, input: &ScreenIn) -> Element {
-    let window = input.window;
+fn bottom_sheet(open: &OpenMenu, input: &TableIn) -> Element {
+    let window = input.hud.window;
     let safe = window.safe_area;
     let width =
         (window.size.width - safe.left - safe.right - 2.0 * MENU_EDGE).min(sheet::MAX_WIDTH);
@@ -217,7 +242,7 @@ fn bottom_sheet(open: &OpenMenu, input: &ScreenIn) -> Element {
 /// The full face of the card the sheet is for, `sheet.preview_width` points wide and centred,
 /// as the web's `.table-menu-preview` shows it; none for a pile, a hand, a life total, the
 /// table, or a card whose face the viewer cannot see.
-fn preview(target: Target, input: &ScreenIn) -> Option<Element> {
+fn preview(target: Target, input: &TableIn) -> Option<Element> {
     let face = preview_face(target, input)?;
     let card = Element {
         shows: Some(Shown::Face(face, FaceSize::Full)),
@@ -232,17 +257,21 @@ fn preview(target: Target, input: &ScreenIn) -> Option<Element> {
 /// The face the phone's bottom sheet shows at full size, which the client asks for at that
 /// size (`Faces::want_full`): that of the face-up card the open menu is for.
 #[must_use]
-pub fn sheet_face(input: &ScreenIn) -> Option<FaceId> {
-    let open = input.table.menu.as_ref().filter(|_| input.window.phone())?;
+pub(super) fn sheet_face(input: &TableIn) -> Option<FaceId> {
+    let open = input
+        .table
+        .menu
+        .as_ref()
+        .filter(|_| input.hud.window.phone())?;
     preview_face(open.target, input)
 }
 
 /// The face of `target` if it is a card whose face the viewer can see.
-fn preview_face(target: Target, input: &ScreenIn) -> Option<FaceId> {
+fn preview_face(target: Target, input: &TableIn) -> Option<FaceId> {
     let Target::Card(slot) = target else {
         return None;
     };
-    let object = (input.view?.objects.iter())
+    let object = (input.hud.view?.objects.iter())
         .find(|object| object.slot == slot && object.facing == Facing::Up)?;
-    input.faces?.find(object.name.as_deref()?)
+    input.hud.faces?.find(object.name.as_deref()?)
 }

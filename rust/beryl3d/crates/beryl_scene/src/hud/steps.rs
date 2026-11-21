@@ -16,12 +16,12 @@
 //! - The rows centre on the orb's core, each side's inner edge 70 points from it, as
 //!   `.turn-controls .step-stops` places them (`ui/src/screens/styles/controls.css`).
 //! - The current step burns gold in the active player's rows. It is the step the table shows
-//!   now (`ScreenIn::turn`), which each `set` step of a script that begins a step of the turn
+//!   now (`HudIn::turn`), which each `set` step of a script that begins a step of the turn
 //!   changes as it begins (`TurnChange`), as the web draws the row from the table it shows
 //!   step by step. Until the table has shown a view, it is the latest view's step.
 //! - On the phone layout the icons are too small to touch, so they are not shown, and they are
 //!   hidden while a pile's viewer is open over the table.
-//! - On the manual table (`table_steps`) the icons are the step track: none is a stop, the
+//! - On the manual table (`table_tracks`) the icons are the step track: none is a stop, the
 //!   table's phase lights in the active player's rows, and a press on an icon sends
 //!   `TablePress::Step`, which sets the phase (`manual::turn`).
 //!
@@ -29,27 +29,16 @@
 //! [CR 514.3]: https://yawgatog.com/resources/magic-rules/#R5143
 
 use beryl_protocol::protocol::{Side, Step, StepSet};
-use beryl_protocol::script::Turn;
 use glam::Vec2;
 
 use super::players::face_centre;
 use crate::data::space::hud::{STEP_FIXED, STEP_OFF};
 use crate::element::{Anchor, Display, Element, Press, Shadow, Shown, Track, holder};
 use crate::frame::Role;
-use crate::manual::TablePress;
-use crate::screens::ScreenIn;
+use crate::hud::HudIn;
 use crate::table::Window;
 use crate::tokens::{color, shadow, size};
 use crate::widgets::icons;
-
-/// A step of the turn that a script's `set` step begins at `at`, on the script's clock.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct TurnChange {
-    pub turn: Turn,
-    pub at: u64,
-    /// The number of the step that wrote it.
-    pub step: usize,
-}
 
 /// One icon of the twelve: its label and the steps a stop at it stops in, or none for a step
 /// that is never a stop. The order is the web's `STEP_STOPS`, which `icons::STEPS` follows.
@@ -115,14 +104,14 @@ const NEVER: [(usize, Step); 2] = [(0, Step::Untap), (11, Step::Cleanup)];
 /// What the game screen shows for the steps: both players' stops, once a game has a view, on
 /// the desktop layout, while no pile's viewer is open.
 #[must_use]
-pub fn steps(input: &ScreenIn) -> Option<Element> {
+pub fn steps(input: &HudIn) -> Option<Element> {
     let view = input.view?;
     // A pile's viewer stands over the table and its controls, and its own buttons sit where
     // the stops beside the viewer's own orb stand.
     if input.window.phone() || input.viewing.is_some() {
         return None;
     }
-    let stops = &input.settings.stops;
+    let stops = input.stops;
     let (active, step) = input
         .turn
         .map_or((view.turn.active, view.turn.step), |turn| {
@@ -143,23 +132,17 @@ pub fn steps(input: &ScreenIn) -> Option<Element> {
     ]))
 }
 
-/// What the manual table shows for the steps: both players' step tracks, on the desktop
-/// layout, while no pile's viewer is open, with the icon of the table's phase lit in the
-/// active player's rows, as the web's `StepStops` stands on the manual table with no stops and
-/// an `onStep`.
-#[must_use]
-pub fn table_steps(input: &ScreenIn) -> Option<Element> {
-    let view = input.view?;
-    let table = view.table.as_ref()?;
-    if input.window.phone() || input.viewing.is_some() {
-        return None;
-    }
-    let lit = crate::manual::turn::icon_of(table.phase);
-    let active = view.turn.active;
-    Some(holder().name("steps").children([
-        rows(Side::You, (Mode::Table(lit), active), input.window),
-        rows(Side::Opponent, (Mode::Table(lit), active), input.window),
-    ]))
+/// The two manual step tracks. The manual table maps each icon press to its phase command.
+pub(crate) fn table_tracks(
+    active: Side,
+    lit: usize,
+    window: Window,
+    press: fn(usize, bool) -> Press,
+) -> Element {
+    holder().name("steps").children([
+        rows(Side::You, (Mode::Table { lit, press }, active), window),
+        rows(Side::Opponent, (Mode::Table { lit, press }, active), window),
+    ])
 }
 
 /// What a player's rows are for: a game's stops, with the steps of their turns that stop and
@@ -168,7 +151,10 @@ pub fn table_steps(input: &ScreenIn) -> Option<Element> {
 #[derive(Clone, Copy)]
 enum Mode {
     Stops(StepSet, Option<Step>),
-    Table(usize),
+    Table {
+        lit: usize,
+        press: fn(usize, bool) -> Press,
+    },
 }
 
 /// `side`'s twelve icons about their orb, for `mode`, in a turn whose active player is
@@ -204,7 +190,9 @@ fn rows(side: Side, (mode, active): (Mode, Side), window: Window) -> Element {
     element.children((0..STEP_STOPS.len()).map(|at| {
         let icon = match mode {
             Mode::Stops(set, current) => icon(at, whose, side, set, current),
-            Mode::Table(lit) => track_icon(at, whose, active, active && at == lit),
+            Mode::Table { lit, press } => {
+                track_icon(at, whose, active && at == lit, press(at, active))
+            }
         };
         icon.grid_column(column_of(at))
             .grid_row(row_of(at))
@@ -298,11 +286,10 @@ fn icon(at: usize, whose: &str, side: Side, set: StepSet, current: Option<Step>)
         .children([glyph])
 }
 
-/// The icon at `at` of a manual table's step track, lit if `here`, which a press sets the phase
-/// to; `active` says whether its rows are the active player's. Every icon is a toggle, as the
+/// The manual step track icon at `at`, lit if `here`. Every icon is a toggle, as the
 /// web's track is a `.step-toggle` button round each icon. An unlit step that never stops a
 /// game (Untap and Cleanup) is faded further, as the web's `.step-fixed` is.
-fn track_icon(at: usize, whose: &str, active: bool, here: bool) -> Element {
+fn track_icon(at: usize, whose: &str, here: bool, press: Press) -> Element {
     let name = format!("{whose} {}", STEP_STOPS[at].label);
     let faded = if STEP_STOPS[at].steps.is_empty() {
         STEP_FIXED
@@ -326,10 +313,6 @@ fn track_icon(at: usize, whose: &str, active: bool, here: bool) -> Element {
         .width(size::STEP)
         .height(size::STEP)
         .selected(here)
-        .on_press(Press::Table(TablePress::Step {
-            #[expect(clippy::cast_possible_truncation, reason = "twelve icons")]
-            at: at as u8,
-            active,
-        }))
+        .on_press(press)
         .children([glyph])
 }

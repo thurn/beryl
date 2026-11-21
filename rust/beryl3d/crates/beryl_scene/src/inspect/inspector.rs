@@ -23,8 +23,8 @@ use crate::data::space::layout::desktop::inspector as data;
 use crate::element::{Element, Shown, column, row, text};
 use crate::faces::FaceList;
 use crate::frame::Role;
+use crate::hud::HudIn;
 use crate::input::{FaceId, FaceSize, Rect};
-use crate::screens::ScreenIn;
 use crate::table::{CARD_HEIGHT, CARD_WIDTH, Window};
 use crate::tokens::{color, size, space, type_style};
 
@@ -51,7 +51,7 @@ const RADIUS: f32 = size::INSPECTOR_RADIUS;
 /// the place `place` gives, with its state beneath it. Nothing when no card is inspected, on the
 /// phone layout, which reads a card another way, or when the view has no such card.
 #[must_use]
-pub fn inspector(input: &ScreenIn) -> Option<Element> {
+pub fn inspector(input: &HudIn) -> Option<Element> {
     let inspected = input.inspected?;
     let place = place(input)?;
     let object = input
@@ -100,7 +100,7 @@ pub fn inspector(input: &ScreenIn) -> Option<Element> {
 /// `InspectRefusal` draws it (`ui/src/game/Piles.tsx`), in the words `refusal_words` gives.
 /// The web's glyph before the words, from the Mana font, is not drawn: the flat layer has no
 /// such icons.
-fn refusal(reason: &RefusalView, input: &ScreenIn, inner: f32) -> Element {
+fn refusal(reason: &RefusalView, input: &HudIn, inner: f32) -> Element {
     let by = match reason {
         RefusalView::Timing { by: Some(by) } => (input.view)
             .and_then(|view| view.objects.iter().find(|object| object.slot == *by))
@@ -145,7 +145,7 @@ pub fn refusal_words(reason: &RefusalView, by: Option<&str>) -> String {
 /// value it chose, the card a copy really is, that it is phased out, its owner when another
 /// player controls it, its power and toughness against the printed ones, its counters, its
 /// damage and summoning sickness, and on the stack, its X and the costs it was cast with.
-fn state(object: &ObjectView, input: &ScreenIn) -> Vec<String> {
+fn state(object: &ObjectView, input: &HudIn) -> Vec<String> {
     let mut lines = Vec::new();
     lines.extend(object.note.clone());
     lines.extend(
@@ -217,7 +217,7 @@ fn state(object: &ObjectView, input: &ScreenIn) -> Vec<String> {
 }
 
 /// The power and toughness printed on the face of the card named `name`, when both are numbers.
-fn printed(input: &ScreenIn, name: &str) -> Option<[i32; 2]> {
+fn printed(input: &HudIn, name: &str) -> Option<[i32; 2]> {
     let list: &FaceList = input.faces?;
     list.get(list.find(name)?)?.printed
 }
@@ -245,7 +245,7 @@ fn paid_word(cost: PaidCost) -> &'static str {
 ///
 /// `None` with no card inspected and on the phone layout.
 #[must_use]
-pub fn place(input: &ScreenIn) -> Option<Placed> {
+pub fn place(input: &HudIn) -> Option<Placed> {
     let inspected = input.inspected?;
     if input.window.phone() {
         return None;

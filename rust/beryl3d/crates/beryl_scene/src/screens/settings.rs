@@ -78,7 +78,7 @@ pub fn settings(input: &ScreenIn) -> Element {
     let safe = window.safe_area;
     // On a phone the panel keeps inside the safe area, the gutter in from its sides, and is no
     // wider than the window leaves.
-    let (width, margin) = if super::phone(input) {
+    let (width, margin) = if input.window.phone() {
         let across = window.size.width - safe.left - safe.right - 2.0 * GUTTER;
         (WIDTH.min(across), GUTTER)
     } else {
@@ -108,7 +108,7 @@ pub fn settings(input: &ScreenIn) -> Element {
                 .child(mute)
                 .child(levels),
         )
-        .child(graphics(settings.graphics, super::phone(input)))
+        .child(graphics(settings.graphics, input.window.phone()))
         .child(
             row()
                 .gap(space::L)

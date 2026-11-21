@@ -23,6 +23,7 @@ pub mod menus;
 pub mod opening;
 pub mod order;
 pub mod palette;
+pub(crate) mod pile_viewer;
 pub mod pools;
 pub mod quit;
 pub mod selection;

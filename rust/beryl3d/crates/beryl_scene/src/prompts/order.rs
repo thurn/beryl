@@ -21,8 +21,8 @@ use super::{Shown, Steps, prompt_bar};
 use crate::element::{Anchor, Element, Justify, Press, Shown as Showing, row, text};
 use crate::faces::FaceList;
 use crate::frame::Role;
+use crate::hud::HudIn;
 use crate::input::{FaceSize, Rect, Size};
-use crate::screens::ScreenIn;
 use crate::table::{CARD_HEIGHT, CARD_WIDTH, TraySpace, tray_area};
 use crate::text::TypeStyle;
 use crate::tokens::{color, size, space, type_style};
@@ -46,7 +46,7 @@ const SPACE: TraySpace = TraySpace::DESKTOP;
     clippy::unnecessary_wraps,
     reason = "every shape returns an `Option`: a built shape may show nothing in the flat layer"
 )]
-pub(super) fn screen(prompt: &PromptView, input: &ScreenIn) -> Option<Element> {
+pub(super) fn screen(prompt: &PromptView, input: &HudIn) -> Option<Element> {
     let bar = prompt_bar(prompt, input);
     let ShapeBody::Order { items } = &prompt.body else {
         return Some(bar);

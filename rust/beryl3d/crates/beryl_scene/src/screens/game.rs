@@ -6,9 +6,9 @@
 
 use glam::Vec2;
 
-use super::{ScreenIn, game_over, opening};
+use super::{game_over, opening};
 use crate::element::{Anchor, Element, Shortcuts, holder, row};
-use crate::hud::{full_control, log, phone, players, steps};
+use crate::hud::{HudIn, full_control, log, phone, players, steps};
 use crate::inspect::viewer;
 use crate::prompts;
 use crate::table::phone_bands;
@@ -18,7 +18,7 @@ use crate::tokens::ratio;
 /// open prompt's element alone, as it has been since the prompt bar was the only thing in the
 /// flat layer; with no prompt open, it is an empty region named "game".
 #[must_use]
-pub fn game(input: &ScreenIn) -> Element {
+pub fn game(input: &HudIn) -> Element {
     // Play or draw stands in the opening, not in the prompt bar.
     let prompt = waiting(input).filter(|_| !opening::choosing_start(input));
     // The orbs, the steps and the log stay up while scripts play, as the web interface's
@@ -76,7 +76,7 @@ fn inert(mut element: Element) -> Element {
 /// under it. The client builds it again on its own as the table reaches a step of the turn
 /// (`Layer::replace`).
 #[must_use]
-pub fn game_steps(input: &ScreenIn) -> Option<Element> {
+pub fn game_steps(input: &HudIn) -> Option<Element> {
     let steps = steps::steps(input)?;
     Some(if opening::shown(input) {
         inert(steps).opacity(ratio::OPENING_HUD_OPACITY)
@@ -87,7 +87,7 @@ pub fn game_steps(input: &ScreenIn) -> Option<Element> {
 
 /// The open prompt, or what the screen shows while the opponent decides, waiting for the table
 /// to settle (`Element::waits`): the web interface's prompt opens once its view has played out.
-fn waiting(input: &ScreenIn) -> Option<Element> {
+fn waiting(input: &HudIn) -> Option<Element> {
     input
         .prompt
         .and_then(|prompt| prompts::screen(prompt, input))
@@ -103,14 +103,14 @@ fn waiting(input: &ScreenIn) -> Option<Element> {
 /// menu opens, and the step stops are not shown. Every piece stands at a point of the window, so
 /// the screen is an empty region at the window's corner that draws nothing and covers no card.
 #[must_use]
-pub fn game_phone(input: &ScreenIn) -> Element {
+pub fn game_phone(input: &HudIn) -> Element {
     let bands = phone_bands(input.window).unwrap_or_default();
     let opening = opening::shown(input);
     let prompt = waiting(input);
     let middle = input
         .view
         .filter(|_| !opening)
-        .map(|view| phone::middle(view, input.settings.full_control, &bands));
+        .map(|view| phone::middle(view, input.stops.full_control, &bands));
     // A prompt that lists what it asks about over the table, such as a catalog's entries, may
     // reach into the middle band. The middle band's furniture then lies under the prompt's shade
     // with the table, so that it is not drawn over the list's buttons, as the web's middle band

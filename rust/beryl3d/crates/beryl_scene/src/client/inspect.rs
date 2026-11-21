@@ -69,8 +69,8 @@ impl Client {
             inspected: self.inspector.shown.as_ref(),
             ..self.screen_in()
         };
-        let element = inspector::inspector(&input);
-        let place = inspector::place(&input);
+        let element = inspector::inspector(&input.hud());
+        let place = inspector::place(&input.hud());
         let shown = element.is_some();
         self.layer.float(floats::INSPECTOR, element);
         if let (true, Some(place)) = (shown, place) {

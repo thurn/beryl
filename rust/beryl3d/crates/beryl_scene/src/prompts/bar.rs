@@ -13,8 +13,8 @@ use crate::data::space::hud::phone as data;
 use crate::element::{
     Align, Anchor, Element, Position, Press, TextAlign, column, holder, row, text,
 };
+use crate::hud::HudIn;
 use crate::hud::phone::{Occupied, asked_top, clear_at_right, phase_span};
-use crate::screens::ScreenIn;
 use crate::table::{PhoneBands, phone_bands};
 use crate::text::TypeStyle;
 use crate::tokens::{color, shadow, size, space, type_style};
@@ -37,7 +37,7 @@ use crate::widgets::{self, button, icon_button, icons, primary};
 ///
 /// [CR 724.5]: https://yawgatog.com/resources/magic-rules/#R7245
 #[must_use]
-pub fn prompt_bar(prompt: &PromptView, input: &ScreenIn) -> Element {
+pub fn prompt_bar(prompt: &PromptView, input: &HudIn) -> Element {
     bar(prompt, input, None, None)
 }
 
@@ -55,7 +55,7 @@ pub(super) struct Controls {
 /// `ui/src/stage/PromptBar.tsx`).
 pub(super) fn bar(
     prompt: &PromptView,
-    input: &ScreenIn,
+    input: &HudIn,
     after: Option<&str>,
     controls: Option<Controls>,
 ) -> Element {
@@ -222,7 +222,7 @@ pub(crate) fn captioned(pressed: Element, caption: &str) -> Element {
 ///   the prompt picks.
 fn phone_bar(
     prompt: &PromptView,
-    input: &ScreenIn,
+    input: &HudIn,
     asks: &str,
     controls: Option<Controls>,
 ) -> Element {
@@ -546,7 +546,7 @@ const OPPONENTS_TURN: &str = "Opponent's Turn";
 /// opponent's orb. The opponent acts while they decide, or while their turn plays on without
 /// the viewer, as the web's `opponentActing` says. `None` at any other time.
 #[must_use]
-pub fn waiting(input: &ScreenIn) -> Option<Element> {
+pub fn waiting(input: &HudIn) -> Option<Element> {
     let view = input.view?;
     let acting = match view.status {
         Status::Thinking => true,

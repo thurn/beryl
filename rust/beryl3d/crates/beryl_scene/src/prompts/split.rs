@@ -20,7 +20,7 @@ use glam::Vec2;
 use super::{Piles, Shown, Steps, prompt_bar, tray};
 use crate::data::audit;
 use crate::element::{Anchor, Element, TextAlign, row, text};
-use crate::screens::ScreenIn;
+use crate::hud::HudIn;
 use crate::table::{DESKTOP, tray_boxes};
 use crate::text::TypeStyle;
 use crate::tokens::{color, size, type_style};
@@ -37,7 +37,7 @@ const LABEL_LEAST: f32 = size::SPLIT_LABEL_LEAST;
     clippy::unnecessary_wraps,
     reason = "every shape returns an `Option`: a built shape may show nothing in the flat layer"
 )]
-pub(super) fn screen(prompt: &PromptView, input: &ScreenIn) -> Option<Element> {
+pub(super) fn screen(prompt: &PromptView, input: &HudIn) -> Option<Element> {
     let bar = prompt_bar(prompt, input);
     let (ShapeBody::Split { piles }, Some(held)) = (&prompt.body, Piles::of(prompt)) else {
         return Some(bar);

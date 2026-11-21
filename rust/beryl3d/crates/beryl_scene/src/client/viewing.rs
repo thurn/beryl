@@ -318,7 +318,7 @@ impl Client {
         let steps = match ahead.iter().position(|(turn, _)| Some(lit(*turn)) == shows) {
             Some(at) => Some(ahead.swap_remove(at).1),
             // A step no script to come named when the client last prepared.
-            None => screens::game_steps(&self.screen_in()),
+            None => screens::game_steps(&self.screen_in().hud()),
         };
         if let Some(steps) = steps {
             self.layer.replace(steps);
@@ -336,7 +336,7 @@ impl Client {
         }
         let from = {
             let input = self.screen_in();
-            let opening = screens::opening::shown(&input);
+            let opening = screens::opening::shown(&input.hud());
             (input.settings.stops, input.window, input.viewing, opening)
         };
         if self.viewing.steps_from != Some(from) {
@@ -369,7 +369,7 @@ impl Client {
                 turn: Some(turn),
                 ..self.screen_in()
             };
-            if let Some(steps) = screens::game_steps(&input) {
+            if let Some(steps) = screens::game_steps(&input.hud()) {
                 self.viewing.steps_ahead.push((turn, steps));
             }
         }

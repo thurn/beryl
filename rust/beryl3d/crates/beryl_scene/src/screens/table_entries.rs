@@ -10,13 +10,13 @@
 
 use beryl_protocol::ipc::SavedTable;
 
-use super::ScreenIn;
-use super::start::LABEL;
 use crate::element::{Align, Element, LobbyPress, Press, column, row, text};
 use crate::manual::commands::COMMANDS;
 use crate::text::TypeStyle;
+use crate::tokens::type_style::START_LABEL as LABEL;
 use crate::tokens::{color, space, type_style};
-use crate::widgets::{button, field, primary};
+use crate::widgets::screen::phone_action;
+use crate::widgets::{Fields, button, field, primary};
 
 /// The name of the host or join form's name field.
 pub const NAME: &str = "table name";
@@ -70,13 +70,12 @@ pub struct TableEntries {
 /// The table buttons, the open form, the saved tables and the last error, laid out for the
 /// desktop's panel or, with `phone`, the phone's column, whose buttons fill its width.
 #[must_use]
-pub fn entries(input: &ScreenIn, phone: bool) -> Vec<Element> {
-    let entries = input.entries;
+pub fn entries(entries: &TableEntries, fields: &Fields, phone: bool) -> Vec<Element> {
     // Three buttons at the usual least width are wider than the desktop panel, so each takes
     // its words' width there, as the web's `.lobby-actions` buttons do.
     let action = |mut button: Element| {
         if phone {
-            super::phone_action(button)
+            phone_action(button)
         } else {
             button.style.min_width = None;
             button
@@ -100,7 +99,7 @@ pub fn entries(input: &ScreenIn, phone: bool) -> Vec<Element> {
             button("Solo table").on_press(press(LobbyPress::Solo)),
         ));
     let mut shown = vec![buttons];
-    shown.extend(entries.mode.map(|mode| form(input, mode, phone)));
+    shown.extend(entries.mode.map(|mode| form(fields, mode, phone)));
     if !entries.saved.is_empty() {
         let rows = (0u16..).zip(&entries.saved).map(|(at, saved)| {
             let names = match &saved.guest {
@@ -139,19 +138,19 @@ pub fn entries(input: &ScreenIn, phone: bool) -> Vec<Element> {
 
 /// The host or join form: the name, the invite code to join, the button that opens the table
 /// once the fields hold what it needs, and Cancel.
-fn form(input: &ScreenIn, mode: EntryMode, phone: bool) -> Element {
+fn form(fields: &Fields, mode: EntryMode, phone: bool) -> Element {
     let labelled = |label: &str, name: &str| {
-        let mut field = field(name, &input.fields.get(name));
+        let mut field = field(name, &fields.get(name));
         field.style.align_self = Some(Align::Stretch);
         field.style.shrink = 0.0;
         [text(label).style(LABEL).color(color::TEXT_DIM), field]
     };
-    let name_ok = !input.fields.get(NAME).text.trim().is_empty();
+    let name_ok = !fields.get(NAME).text.trim().is_empty();
     let (label, ready) = match mode {
         EntryMode::Host => ("Host", name_ok),
         EntryMode::Join => (
             "Join",
-            name_ok && !input.fields.get(INVITE).text.trim().is_empty(),
+            name_ok && !fields.get(INVITE).text.trim().is_empty(),
         ),
     };
     let open = primary(label)
@@ -162,8 +161,8 @@ fn form(input: &ScreenIn, mode: EntryMode, phone: bool) -> Element {
         column()
             .gap(space::M)
             .align_self(Align::Stretch)
-            .child(super::phone_action(open))
-            .child(super::phone_action(cancel))
+            .child(phone_action(open))
+            .child(phone_action(cancel))
     } else {
         row().gap(space::M).child(open).child(cancel)
     };

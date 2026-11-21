@@ -9,6 +9,7 @@ use beryl_scene::input::{
     Button, Input, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase,
     Size,
 };
+use beryl_scene::manual::opening::prompt;
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder, table};
 use beryl_scene::{Client, Config};
 use glam::Vec2;
@@ -209,3 +210,17 @@ fn a_table_the_other_player_left_offers_lobby() {
 
 /// Nanoseconds in a millisecond, the unit of `Client::frame`'s clock.
 const MS: u64 = 1_000_000;
+
+#[test]
+fn a_choice_that_is_not_the_start_is_no_opening() {
+    let mut view = table_view(|table| {
+        table.prompt = Some(TablePrompt::Choose {
+            title: "Search".to_owned(),
+            options: vec!["One".to_owned()],
+            selected: None,
+        });
+    });
+    assert!(prompt(&view).is_none());
+    view.table.as_mut().expect("a table").choosing_first = true;
+    assert!(prompt(&view).is_some());
+}

@@ -18,8 +18,8 @@ use glam::Vec2;
 use super::bar::bar;
 use super::{Shown, Steps, begin_spans, end_spans, mark_spans, target_arrows};
 use crate::element::{Align, Anchor, Element, Press, TextAlign, column, text};
+use crate::hud::HudIn;
 use crate::light::Span;
-use crate::screens::ScreenIn;
 use crate::tokens::{color, size, space, type_style};
 use crate::widgets::{icon_button, icons};
 
@@ -31,7 +31,7 @@ use crate::widgets::{icon_button, icons};
     clippy::unnecessary_wraps,
     reason = "every shape returns an `Option`: a built shape may show nothing in the flat layer"
 )]
-pub(super) fn screen(prompt: &PromptView, input: &ScreenIn) -> Option<Element> {
+pub(super) fn screen(prompt: &PromptView, input: &HudIn) -> Option<Element> {
     let ShapeBody::Divide { left, shares, .. } = &prompt.body else {
         return Some(bar(prompt, input, None, None));
     };
@@ -76,7 +76,7 @@ fn share_control(share: Share, left: u8) -> Option<Vec<Element>> {
 /// go above a card the opponent controls, at the top of the phone's table, and below one the
 /// viewer controls, towards the window's foot, so that neither stands over the middle of the
 /// table, where the prompt bar is.
-fn phone_share(share: Share, left: u8, input: &ScreenIn) -> Option<Vec<Element>> {
+fn phone_share(share: Share, left: u8, input: &HudIn) -> Option<Vec<Element>> {
     let Subject::Object { slot } = share.on else {
         return None;
     };

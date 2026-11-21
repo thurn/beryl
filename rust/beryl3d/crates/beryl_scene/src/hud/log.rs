@@ -18,7 +18,7 @@ use glam::Vec2;
 
 use crate::data::space::hud::{LOG_BUTTON_TOP, LOG_LEFT, LOG_TOP};
 use crate::element::{Anchor, Element, Press, holder, text};
-use crate::screens::ScreenIn;
+use crate::hud::HudIn;
 use crate::tokens::{color, size, type_style};
 use crate::widgets::{icon_button, icons, list};
 
@@ -101,7 +101,7 @@ fn depth(undo_depth: u32) -> usize {
 /// What the game screen shows for the log: nothing before a game has a view; otherwise its
 /// button, with the list below it while it is open.
 #[must_use]
-pub fn log(input: &ScreenIn) -> Option<Element> {
+pub fn log(input: &HudIn) -> Option<Element> {
     input.view?;
     let entries = input.log;
     let name = if input.log_open {

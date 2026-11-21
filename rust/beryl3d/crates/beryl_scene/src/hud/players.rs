@@ -26,8 +26,8 @@ use glam::Vec2;
 use crate::art::orb;
 use crate::data::space::hud::incoming as badge;
 use crate::element::{Anchor, Element, Position, Shadow, Shown, TextAlign, holder, text};
+use crate::hud::HudIn;
 use crate::input::Rect;
-use crate::screens::ScreenIn;
 use crate::table::phone::strip;
 use crate::table::{DESKTOP, Window};
 use crate::text::TypeStyle;
@@ -37,7 +37,7 @@ use super::counts::{index, points};
 
 /// What the game screen shows for the players: both orbs, once a game has a view.
 #[must_use]
-pub fn players(input: &ScreenIn) -> Option<Element> {
+pub fn players(input: &HudIn) -> Option<Element> {
     let view = input.view?;
     Some(
         holder()

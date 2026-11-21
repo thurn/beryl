@@ -62,12 +62,12 @@ pub fn gallery(input: &ScreenIn) -> Element {
     let inset = input.window.safe_area;
     let width = (input.window.size.width - inset.left - inset.right).max(0.0);
     let height = (input.window.size.height - inset.top - inset.bottom).max(0.0);
-    if !super::phone(input) {
+    if !input.window.phone() {
         return on_desktop(input, faces, width, height);
     }
     // On a phone the samples stand in one column the phone's gutter in from the safe area's
     // sides, as the other portrait screens do; the sample rows wrap to that width.
-    let edge = if super::phone(input) {
+    let edge = if input.window.phone() {
         crate::data::space::flat::phone::GUTTER
     } else {
         space::L

@@ -19,8 +19,8 @@ use beryl_protocol::script::Subject;
 
 use super::{Shown, Steps, begin_spans, end_spans, mark_spans, prompt_bar};
 use crate::element::Element;
+use crate::hud::HudIn;
 use crate::light::{ArrowSpan, Span};
-use crate::screens::ScreenIn;
 
 /// What the flat layer shows for `prompt`: the prompt bar. A player the prompt marks is aimed
 /// at by a press on their life total (`CountFloats`).
@@ -28,7 +28,7 @@ use crate::screens::ScreenIn;
     clippy::unnecessary_wraps,
     reason = "every shape returns an `Option`: a built shape may show nothing in the flat layer"
 )]
-pub(super) fn screen(prompt: &PromptView, input: &ScreenIn) -> Option<Element> {
+pub(super) fn screen(prompt: &PromptView, input: &HudIn) -> Option<Element> {
     Some(prompt_bar(prompt, input))
 }
 

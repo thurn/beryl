@@ -12,8 +12,6 @@
 use beryl_protocol::ipc::LobbyView;
 use beryl_protocol::ipc::decks::SavedDeck;
 
-use super::ScreenIn;
-use super::start::{LABEL, PANEL_PADDING, TITLE, check_square, checkbox, panel_look, small};
 use crate::element::{
     Align, Border, Display, Element, Justify, LobbyPress, Overflow, Position, Press, Track, column,
     row, text,
@@ -24,9 +22,20 @@ use crate::manual::lobby::{
     ASSISTS, DECK_NAME, DECKLIST, DeckPanel, Lobby, STARTING_HAND_SIZE, STARTING_LIFE,
     asked_settings, unreadable,
 };
+use crate::table::Window;
 use crate::text::TypeStyle;
+use crate::tokens::type_style::{START_LABEL as LABEL, START_TITLE as TITLE};
 use crate::tokens::{color, size, space, type_style};
-use crate::widgets::{FieldState, button, field, primary};
+use crate::widgets::screen::{phone_action, phone_screen, whole_window};
+use crate::widgets::start_panel::{PANEL_PADDING, check_square, checkbox, panel_look, small};
+use crate::widgets::{FieldState, Fields, button, field, primary};
+
+/// The manual lobby's state and text fields for the current window.
+pub(super) struct LobbyIn<'a> {
+    pub window: Window,
+    pub lobby: &'a Lobby,
+    pub fields: &'a Fields,
+}
 
 /// `.lobby-deck h2` and the section headings: semibold 20-point serif.
 const HEADING: TypeStyle = type_style::LOBBY_HEADING;
@@ -53,8 +62,8 @@ const LABEL_LINE: f32 = DESKTOP_LABEL.size * DESKTOP_LABEL.line_height;
 /// What the flat layer shows on the lobby screen. Until the session sends the lobby, only the
 /// heading.
 #[must_use]
-pub fn lobby(input: &ScreenIn) -> Element {
-    if super::phone(input) {
+pub(super) fn lobby(input: &LobbyIn) -> Element {
+    if input.window.phone() {
         return lobby_phone(input);
     }
     // `.start-panel.lobby-panel`: wider than the start screen's panel, with its sections
@@ -78,19 +87,22 @@ pub fn lobby(input: &ScreenIn) -> Element {
         .align_items(Align::Center)
         .justify_content(Justify::Center)
         .child(panel);
-    shortcuts(super::whole_window(input, screen), input.lobby)
+    shortcuts(whole_window(input.window.size, screen), input.lobby)
 }
 
 /// The lobby on a phone: the panel's sections in one column over the safe area, which scrolls
 /// when it is taller than the window, with no panel around them. Each button spans the column
 /// as the phone's other screens draw their actions, and the switches and fields stand one
 /// above the other, at least 44 points tall.
-fn lobby_phone(input: &ScreenIn) -> Element {
+fn lobby_phone(input: &LobbyIn) -> Element {
     let content = column()
         .name("lobby column")
         .gap(crate::data::space::flat::phone::start::GAP);
     let content = sections(content, input, Fit::Phone);
-    shortcuts(super::phone_screen("lobby", input, content), input.lobby)
+    shortcuts(
+        phone_screen("lobby", input.window.size, input.window.safe_area, content),
+        input.lobby,
+    )
 }
 
 /// Which window the lobby is laid out for.
@@ -106,7 +118,7 @@ impl Fit {
     fn action(self, button: Element) -> Element {
         match self {
             Self::Desktop => button,
-            Self::Phone => super::phone_action(button),
+            Self::Phone => phone_action(button),
         }
     }
 
@@ -139,7 +151,7 @@ impl Fit {
 
 /// `holder` with the heading and, once the session sent the lobby, every section under it, and
 /// the table's error, laid out for `fit`.
-fn sections(holder: Element, input: &ScreenIn, fit: Fit) -> Element {
+fn sections(holder: Element, input: &LobbyIn, fit: Fit) -> Element {
     let lobby = input.lobby;
     let heading = row()
         .name("heading")
@@ -373,7 +385,7 @@ fn deck(lobby: &Lobby, view: &LobbyView, fit: Fit) -> Element {
 /// counts, and the buttons that open the paste field; or the paste field, with the name to
 /// save the deck under, the decklist, and 'Import'. Then why the last deck could not be read,
 /// if it could not, and 'Close'.
-fn picker(lobby: &Lobby, panel: DeckPanel, input: &ScreenIn, fit: Fit) -> Element {
+fn picker(lobby: &Lobby, panel: DeckPanel, input: &LobbyIn, fit: Fit) -> Element {
     let mut picker = fit.section("Choose a deck");
     picker = match panel {
         DeckPanel::Saved => picker
@@ -501,7 +513,7 @@ fn assists(view: &LobbyView, fit: Fit) -> Element {
         let press = Press::Lobby(LobbyPress::Assist(at));
         boxes = boxes.child(match fit {
             Fit::Desktop => switch(label, on, press),
-            Fit::Phone => fit.least(checkbox(label, on, press)),
+            Fit::Phone => fit.least(checkbox(label, on).on_press(press)),
         });
     }
     let mut assists = fit.section("Assists").child(boxes);
@@ -570,7 +582,7 @@ fn setting_field(name: &str, state: &FieldState, width: f32) -> Element {
 /// is enabled while the fields ask for a change. A field that holds something other than a
 /// number of its kind is drawn in ember. Who plays first is shown, not chosen: a solo table has
 /// one seat, and a hosted table, which would have two, is not built yet.
-fn settings(view: &LobbyView, input: &ScreenIn, fit: Fit) -> Element {
+fn settings(view: &LobbyView, input: &LobbyIn, fit: Fit) -> Element {
     let current = view.settings;
     let mut life = input.fields.get(STARTING_LIFE);
     let mut hand = input.fields.get(STARTING_HAND_SIZE);

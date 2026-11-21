@@ -25,8 +25,8 @@ use crate::element::{
 };
 use crate::faces::FaceList;
 use crate::frame::Role;
+use crate::hud::HudIn;
 use crate::input::{FaceId, FaceSize};
-use crate::screens::ScreenIn;
 use crate::table::{CARD_HEIGHT, CARD_WIDTH, DESKTOP};
 use crate::text::TypeStyle;
 use crate::tokens::{color, ratio, size, space, type_style};
@@ -46,7 +46,7 @@ const DIMMED: [crate::element::Filter; 2] = [
     clippy::unnecessary_wraps,
     reason = "every shape returns an `Option`: a built shape may show nothing in the flat layer"
 )]
-pub(super) fn screen(prompt: &PromptView, input: &ScreenIn) -> Option<Element> {
+pub(super) fn screen(prompt: &PromptView, input: &HudIn) -> Option<Element> {
     // The ways stand at a point of the window, outside the bar's flow, so the bar is laid out
     // as it is without them.
     Some(bar(prompt, input, None, stepper(prompt)).children(ways_row(prompt, input)))
@@ -156,7 +156,7 @@ fn stepper_size(value: &str, detail: Option<&str>) -> (f32, f32) {
 /// hold cards up, as the web's `Ways` lays them out: the card once a way, each as wide as the
 /// tray's cards are drawn for that many, over what the session calls the way. Nothing where
 /// the prompt does not choose among a card's ways, or the view does not show the card.
-fn ways_row(prompt: &PromptView, input: &ScreenIn) -> Option<Element> {
+fn ways_row(prompt: &PromptView, input: &HudIn) -> Option<Element> {
     let ways: Vec<&PromptButton> = ways(prompt).collect();
     if ways.is_empty() {
         return None;
@@ -187,7 +187,7 @@ fn ways_row(prompt: &PromptView, input: &ScreenIn) -> Option<Element> {
 /// among a card's ways.
 pub(super) fn way_faces<'a>(
     prompt: &'a PromptView,
-    input: &'a ScreenIn,
+    input: &'a HudIn,
 ) -> impl Iterator<Item = Option<FaceId>> + 'a {
     let about = match &prompt.body {
         ShapeBody::Mode { about } => about.first(),

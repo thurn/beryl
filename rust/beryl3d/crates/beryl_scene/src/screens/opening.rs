@@ -16,7 +16,7 @@
 //! every screen.
 //!
 //! When the opponent won the flip, the opening first shows the flip for `FLIP_MS` however soon
-//! they chose, as the web's coin spins (`ScreenIn::spinning`): the title says who won, the hand
+//! they chose, as the web's coin spins (`HudIn::spinning`): the title says who won, the hand
 //! is dealt out of sight and no button is offered. Until a button is offered, three gold dots
 //! under the title say that the game is waiting, as the web's `.opening-waiting` does.
 //!
@@ -32,15 +32,16 @@ use beryl_protocol::protocol::{CardHandling, Declaration, ObjectId, Side, Status
 use beryl_protocol::script::{Mark, Subject};
 use glam::Vec2;
 
-use super::ScreenIn;
 use crate::data::space::flat::opening as metrics;
 use crate::data::space::flat::phone::opening as phone;
 use crate::data::space::flat::phone::{ACTION_GAP, ACTION_HEIGHT, GUTTER};
 use crate::element::{Align, Anchor, Element, Justify, Overflow, Press, Shown, column, row, text};
 use crate::frame::Role;
+use crate::hud::HudIn;
 use crate::table::{CARD_HEIGHT, CARD_WIDTH, Window};
 use crate::text::TypeStyle;
 use crate::tokens::{color, size, type_style};
+use crate::widgets::screen::backdrop;
 use crate::widgets::{button, primary};
 
 /// The name of the element that holds the whole opening, its backdrop and its group, which
@@ -73,7 +74,7 @@ pub(crate) fn in_opening(view: &PlayerView) -> bool {
 /// The view the opening shows: the latest whose script has played out, while it is in the
 /// opening. The web's `Opening` is drawn from that view, so that its title and hand change only
 /// as the table finishes playing the deal, a mulligan or the new hand, never ahead of it.
-fn opening_view<'a>(input: &ScreenIn<'a>) -> Option<&'a PlayerView> {
+fn opening_view<'a>(input: &HudIn<'a>) -> Option<&'a PlayerView> {
     input.played.filter(|view| in_opening(view))
 }
 
@@ -82,8 +83,8 @@ fn opening_view<'a>(input: &ScreenIn<'a>) -> Option<&'a PlayerView> {
 /// layout (`choosingStart` in `ui/src/screens/Opening.tsx`). While it does, the game screen
 /// leaves the prompt out.
 #[must_use]
-pub(crate) fn choosing_start(input: &ScreenIn) -> bool {
-    !super::phone(input)
+pub(crate) fn choosing_start(input: &HudIn) -> bool {
+    !input.window.phone()
         && !input.spinning
         && opening_view(input).is_some_and(|view| {
             view.turn.starting.is_none()
@@ -96,13 +97,13 @@ pub(crate) fn choosing_start(input: &ScreenIn) -> bool {
 
 /// Whether the game screen shows the opening.
 #[must_use]
-pub fn shown(input: &ScreenIn) -> bool {
+pub fn shown(input: &HudIn) -> bool {
     opening_view(input).is_some()
 }
 
 /// What the game screen shows in the opening, or none once it is over.
 #[must_use]
-pub fn opening(input: &ScreenIn) -> Option<Element> {
+pub fn opening(input: &HudIn) -> Option<Element> {
     let view = opening_view(input)?;
     let you = &view.players.you;
     // While the coin spins, the opening does not show who starts, as the web's `Opening` holds
@@ -161,7 +162,7 @@ pub fn opening(input: &ScreenIn) -> Option<Element> {
                 &[]
             },
         },
-        input,
+        input.window,
     ))
 }
 
@@ -193,18 +194,18 @@ pub(crate) struct Presentation<'a> {
 
 /// The opening `shown` describes, over the dimmed table: the coin, the title, the hand and the
 /// bottom slots, as the web's `OpeningPresentation` lays them out.
-pub(crate) fn present(shown: &Presentation, input: &ScreenIn) -> Element {
+pub(crate) fn present(shown: &Presentation, window: Window) -> Element {
     let Presentation {
         view,
         starting,
         slots,
         ..
     } = *shown;
-    let sizes = if super::phone(input) {
+    let sizes = if window.phone() {
         // Room for both rows while cards move between the hand and the slots, as the web
         // keeps it, and for the prompt's buttons in the dock under them.
         let rows = shown.rows.div_ceil(phone::PER_ROW);
-        Sizes::phone(input.window, rows, slots, shown.actions)
+        Sizes::phone(window, rows, slots, shown.actions)
     } else {
         Sizes::DESKTOP
     };
@@ -255,7 +256,7 @@ pub(crate) fn present(shown: &Presentation, input: &ScreenIn) -> Element {
             .passes(true)
             .child(hand_row);
     }
-    let dots = (shown.waiting && !super::phone(input)).then(waiting);
+    let dots = (shown.waiting && !window.phone()).then(waiting);
     let slots_row = (slots > 0).then(|| {
         let boxes = (0..slots).map(|at| match shown.bottom.get(at) {
             Some(&slot) => card(slot, sizes.slot),
@@ -283,7 +284,7 @@ pub(crate) fn present(shown: &Presentation, input: &ScreenIn) -> Element {
         .children(choice(shown.choice));
     // The flat layer's root puts a screen in its bottom right corner, so the group is anchored
     // below the window's top middle instead, as the web pads `.opening` down from the top.
-    let top = Vec2::new(input.window.size.width / 2.0, sizes.top);
+    let top = Vec2::new(window.size.width / 2.0, sizes.top);
     screen.anchor = Some(Anchor::Point(top, Vec2::new(0.5, 0.0)));
     row()
         .name(SCREEN_NAME)
@@ -291,7 +292,7 @@ pub(crate) fn present(shown: &Presentation, input: &ScreenIn) -> Element {
         // The opening's backdrop is a gradient that leaves the opponent's side of the table
         // clear, in place of the backdrop's flat color.
         .child(
-            super::backdrop(input)
+            backdrop(window.size)
                 .background([0; 4])
                 .background_image(vec![crate::tokens::gradient::OPENING_BACKDROP]),
         )
@@ -349,32 +350,6 @@ fn waiting() -> Element {
         .child(dots);
     buttons.style.margin = [metrics::WAITING_GAP, 0.0, 0.0, 0.0];
     buttons
-}
-
-/// How much of what lies under the opening's backdrop it hides at `y` points down a window
-/// `height` points tall, from 0 to 1: its gradient's opacity there
-/// (`tokens::gradient::OPENING_BACKDROP`, which runs from the window's top to its bottom). A
-/// float drawn over the backdrop, such as a life total, takes the rest as its opacity, so that
-/// it looks dimmed as the web's overlay dims the orb under it.
-#[must_use]
-pub(crate) fn backdrop_cover(y: f32, height: f32) -> f32 {
-    let resolved = crate::tokens::gradient::OPENING_BACKDROP.resolve(Vec2::new(1.0, height));
-    let at = (y / height.max(1.0)).clamp(0.0, 1.0);
-    let alpha = |stop: usize| f32::from(resolved.colors[stop][3]) / f32::from(u8::MAX);
-    let offsets = resolved.offsets;
-    let Some(next) = offsets.iter().position(|&offset| offset >= at) else {
-        return alpha(offsets.len() - 1);
-    };
-    if next == 0 {
-        return alpha(0);
-    }
-    let (from, to) = (offsets[next - 1], offsets[next]);
-    let share = if to > from {
-        (at - from) / (to - from)
-    } else {
-        1.0
-    };
-    alpha(next - 1) + (alpha(next) - alpha(next - 1)) * share
 }
 
 /// The title, as the web's `Opening` words it, given who starts as the opening shows it.

@@ -26,10 +26,11 @@ use glam::Vec2;
 use super::TablePress;
 use crate::element::{Align, Anchor, Element, Press, column, row, text};
 use crate::input::Size;
-use crate::inspect::viewer::{object_box, overlay};
-use crate::screens::{checkbox, small};
+use crate::inspect::viewer::object_box;
 use crate::table::Window;
 use crate::tokens::{color, size, space, type_style};
+use crate::widgets::screen::overlay;
+use crate::widgets::start_panel::{checkbox, small};
 use crate::widgets::{button, primary};
 
 /// The proposal panel's name.
@@ -121,7 +122,7 @@ fn proposal(proposal: &ProposalView, phone: bool) -> Element {
             on: !line.on,
         });
         touch(
-            checkbox(&format!("{} · {whose}", line.text), line.on, press),
+            checkbox(&format!("{} · {whose}", line.text), line.on).on_press(press),
             phone,
         )
     });

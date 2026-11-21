@@ -20,21 +20,21 @@ pub use bug_report::{BugForm, BugStage, CLICK, DESCRIPTION, span};
 pub(crate) use gallery::faces as gallery_faces;
 pub use gallery::{GalleryMenu, GalleryQuery, GalleryState};
 pub use start::{SEED, StartForm, in_progress, seed};
-pub(crate) use start::{checkbox, small};
 pub use table_entries::{COULD_NOT_OPEN, EntryMode, INVITE, NAME, TableEntries};
 
+pub use crate::navigation::{Screen, Sheet};
+pub use crate::sound::Music;
 pub use settings::{Concede, GEAR_INSET, corner};
-pub use table::sheet_face;
 
 use beryl_protocol::prompt::PromptView;
 use beryl_protocol::protocol::{OutcomeView, Side, Status};
 use beryl_protocol::script::{Subject, Turn};
-use beryl_protocol::{AgentView, PlayerView};
+use beryl_protocol::{AgentView, PlayerView, StopsSetting};
 
 use crate::element::{Element, Viewed};
 use crate::faces::FaceList;
-use crate::hud::log::LogEntry;
 use crate::hud::phone::Occupied;
+use crate::hud::{HudIn, log::LogEntry};
 use crate::inspect::inspector::Inspected;
 use crate::inspect::revealed::RevealedFace;
 use crate::manual::TableState;
@@ -42,68 +42,6 @@ use crate::manual::lobby::Lobby;
 use crate::settings::Settings;
 use crate::table::Window;
 use crate::widgets::Fields;
-
-/// A screen of the client: the web interface's routes (`Main` in `ui/src/App.tsx`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Screen {
-    /// The start screen, where a game is started.
-    Start,
-    /// A game, from its opening hand to its end.
-    Game,
-    /// The manual table's lobby, where a table's decks, assists and settings are chosen
-    /// before a game.
-    Lobby,
-    /// The manual table, where both players move cards by hand.
-    Table,
-    /// The card gallery.
-    Gallery,
-    /// The testing screen.
-    Testing,
-}
-
-impl Screen {
-    pub const ALL: [Self; 6] = [
-        Self::Start,
-        Self::Game,
-        Self::Lobby,
-        Self::Table,
-        Self::Gallery,
-        Self::Testing,
-    ];
-
-    /// The screen's name, as `data/beryl3d/screens.json` writes it.
-    #[must_use]
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::Start => "start",
-            Self::Game => "game",
-            Self::Lobby => "lobby",
-            Self::Table => "table",
-            Self::Gallery => "gallery",
-            Self::Testing => "testing",
-        }
-    }
-}
-
-/// A sheet: what opens over a screen and closes again without leaving it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Sheet {
-    Settings,
-    BugReport,
-}
-
-impl Sheet {
-    pub const ALL: [Self; 2] = [Self::Settings, Self::BugReport];
-
-    /// The sheet's name, as `data/beryl3d/screens.json` writes it.
-    #[must_use]
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::Settings => "settings",
-            Self::BugReport => "bug-report",
-        }
-    }
-}
 
 /// Everything a screen function reads.
 #[derive(Clone, Copy, Debug)]
@@ -177,15 +115,63 @@ pub struct ScreenIn<'a> {
     pub occupied: &'a Occupied,
 }
 
+impl<'a> ScreenIn<'a> {
+    /// What the game furniture and inspector read from this screen.
+    #[must_use]
+    pub fn hud(&self) -> HudIn<'a> {
+        HudIn {
+            window: self.window,
+            view: self.view,
+            played: self.played,
+            turn: self.turn,
+            prompt: self.prompt,
+            stops: StopsSetting {
+                full_control: self.settings.full_control,
+                ..self.settings.stops
+            },
+            sheet: self.sheet,
+            inspected: self.inspected,
+            faces: self.faces,
+            viewing: self.viewing,
+            revealed: self.revealed,
+            carried: self.carried,
+            log: self.log,
+            log_open: self.log_open,
+            result_aside: self.result_aside,
+            spinning: self.spinning,
+            occupied: self.occupied,
+        }
+    }
+    fn table_input(&self) -> table::TableIn<'a> {
+        table::TableIn {
+            hud: self.hud(),
+            fields: self.fields,
+            bindings: &self.settings.bindings,
+            table: self.table,
+            lobby: self.lobby,
+        }
+    }
+}
+
+/// The face that needs a full image for the manual table's menu, when it previews a card.
+#[must_use]
+pub fn sheet_face(input: &ScreenIn) -> Option<crate::input::FaceId> {
+    table::sheet_face(&input.table_input())
+}
+
 /// What the flat layer shows on `screen`.
 #[must_use]
 pub fn screen(screen: Screen, input: &ScreenIn) -> Element {
     match screen {
         Screen::Start => start::start(input),
-        Screen::Game if input.window.phone() => game::game_phone(input),
-        Screen::Game => game::game(input),
-        Screen::Lobby => lobby::lobby(input),
-        Screen::Table => table::table(input),
+        Screen::Game if input.window.phone() => game::game_phone(&input.hud()),
+        Screen::Game => game::game(&input.hud()),
+        Screen::Lobby => lobby::lobby(&lobby::LobbyIn {
+            window: input.window,
+            lobby: input.lobby,
+            fields: input.fields,
+        }),
+        Screen::Table => table::table(&input.table_input()),
         Screen::Gallery => gallery::gallery(input),
         Screen::Testing => testing::testing(input),
     }
@@ -199,19 +185,6 @@ pub fn sheet(sheet: Sheet, under: Option<Element>, input: &ScreenIn) -> Element 
         Sheet::Settings => settings::settings(input),
         Sheet::BugReport => bug_report::bug_report(under, input),
     }
-}
-
-/// The music that plays.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Music {
-    /// The menu's music, everywhere but in a game and in the gallery.
-    Menu,
-    /// The game's music, while a game goes on.
-    Game,
-    /// The sting for a game the viewer won.
-    Win,
-    /// The sting for a game the viewer did not win.
-    Loss,
 }
 
 /// The music that plays on `screen` with `view` the latest view of the game, as the web
@@ -234,93 +207,4 @@ pub fn music(screen: Screen, view: Option<&PlayerView>) -> Option<Music> {
             _ => Music::Game,
         },
     })
-}
-
-/// The dimmed table, `.overlay-backdrop`: the whole window in the backdrop's color, which the
-/// pointer goes through. The opening and game over draw it under what they show.
-fn backdrop(input: &ScreenIn) -> Element {
-    let mut backdrop = crate::element::row()
-        .name("scrim")
-        .width(input.window.size.width)
-        .height(input.window.size.height)
-        .background(crate::tokens::color::BACKDROP)
-        .passes(true);
-    backdrop.anchor = Some(crate::element::Anchor::Point(
-        glam::Vec2::ZERO,
-        glam::Vec2::ZERO,
-    ));
-    backdrop
-}
-
-/// `screen` laid over the whole window, as the web's desktop screens fill the page: the flat
-/// layer's root puts a screen in its bottom right corner inside the game screen's dock offsets,
-/// which would centre what the screen holds left of and above the window's middle.
-fn whole_window(input: &ScreenIn, screen: crate::element::Element) -> crate::element::Element {
-    let mut screen = screen
-        .width(input.window.size.width)
-        .height(input.window.size.height);
-    screen.anchor = Some(crate::element::Anchor::Point(
-        glam::Vec2::ZERO,
-        glam::Vec2::ZERO,
-    ));
-    screen
-}
-
-/// Whether the window takes the phone layout, by the selector the interface checks use
-/// (`Layout::for_size`). Each screen's public function asks this and calls its portrait
-/// alternate.
-fn phone(input: &ScreenIn) -> bool {
-    crate::agent::Layout::for_size(input.window.size) == crate::agent::Layout::Phone
-}
-
-/// A portrait screen named `name`, which shows `content` in one column over the safe area: the
-/// screen is clear and anchored over the whole window, and `content` stands inside its safe
-/// area, the gutter in from its sides and foot, at most `phone::COLUMN` wide in the window's
-/// middle. `content` scrolls when it is taller than that, as it is while the system keyboard
-/// shortens the window, so that every action stays in reach; it is cut at the safe area, so
-/// nothing scrolls under the status bar or the home indicator.
-fn phone_screen(
-    name: &str,
-    input: &ScreenIn,
-    content: crate::element::Element,
-) -> crate::element::Element {
-    use crate::data::space::flat::phone::{COLUMN, GUTTER};
-    let window = input.window;
-    let safe = window.safe_area;
-    let across = window.size.width - safe.left - safe.right - 2.0 * GUTTER;
-    let extra = ((across - COLUMN) / 2.0).max(0.0);
-    let mut content = content
-        .grow(1.0)
-        .shrink(1.0)
-        .min_height(0.0)
-        .align_self(crate::element::Align::Stretch)
-        .overflow(crate::element::Overflow::Scroll);
-    content.style.padding = [0.0, GUTTER + extra, GUTTER, GUTTER + extra];
-    let mut screen = crate::element::column()
-        .name(name)
-        .background([0; 4])
-        .border(([0; 4], 0.0))
-        .width(window.size.width)
-        .height(window.size.height)
-        .child(content);
-    screen.style.padding = [safe.top, safe.right, safe.bottom, safe.left];
-    // The flat layer's root puts a screen in its bottom right corner inside the dock's offsets,
-    // so the screen is anchored at the window's top left instead.
-    screen.anchor = Some(crate::element::Anchor::Point(
-        glam::Vec2::ZERO,
-        glam::Vec2::ZERO,
-    ));
-    screen
-}
-
-/// `button` as a phone's action: as wide as its column, `phone::ACTION_HEIGHT` tall, with
-/// larger type, as the web's phone dock draws its buttons (`.phone-opening .dock .button`).
-fn phone_action(mut button: crate::element::Element) -> crate::element::Element {
-    use crate::data::space::flat::phone::{ACTION_HEIGHT, ACTION_TEXT};
-    button.style.height = Some(ACTION_HEIGHT);
-    button.style.text.size = ACTION_TEXT;
-    button.style.min_width = None;
-    button.style.align_self = Some(crate::element::Align::Stretch);
-    button.style.shrink = 0.0;
-    button
 }

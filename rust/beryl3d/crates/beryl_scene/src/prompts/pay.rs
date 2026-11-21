@@ -10,7 +10,7 @@ use beryl_protocol::script::Mark;
 use super::bar::bar;
 use super::{Shown, Steps, marks};
 use crate::element::Element;
-use crate::screens::ScreenIn;
+use crate::hud::HudIn;
 
 /// The prompt bar, with how much of the cost is still to pay after what it asks, as the web's
 /// `Asks` (`ui/src/stage/PromptBar.tsx`) writes it. A mana payment's title already names the
@@ -20,7 +20,7 @@ use crate::screens::ScreenIn;
     clippy::unnecessary_wraps,
     reason = "every shape returns an `Option`: a built shape may show nothing in the flat layer"
 )]
-pub(super) fn screen(prompt: &PromptView, input: &ScreenIn) -> Option<Element> {
+pub(super) fn screen(prompt: &PromptView, input: &HudIn) -> Option<Element> {
     let left = match &prompt.body {
         ShapeBody::Pay { cost, left } if !(prompt.is(Purpose::Mana) && left == cost) => {
             Some(left.as_str())
