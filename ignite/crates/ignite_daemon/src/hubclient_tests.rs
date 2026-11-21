@@ -418,6 +418,35 @@ fn next_reads_nothing_as_no_reservation() {
 }
 
 #[test]
+fn an_explained_ask_carries_the_machines_room() {
+    use ignite_core::protocol::hub::Room;
+    let hub = FakeHttpHub::start(|_, _, _| (200, "null".to_owned()));
+    let free = MachineFree {
+        room: Some(Room {
+            start: 3,
+            providers: Vec::new(),
+            memory_pressed: false,
+        }),
+        machine: MachineId::new("m-1").unwrap(),
+        os: ignite_core::config::Os::Macos,
+        idle_workers: Vec::new(),
+        free_ticket_trees: 1,
+        free_cores: 4.0,
+        admit_cores: None,
+        pressure: None,
+        families: Vec::new(),
+        name: None,
+        justiciar_only: false,
+        master_only: false,
+        explain: false,
+    };
+    hub.client().next_explained(&free).unwrap();
+    let sent: MachineFree = serde_json::from_str(&hub.seen()[0].body).unwrap();
+    assert!(sent.explain);
+    assert_eq!(sent.room, free.room);
+}
+
+#[test]
 fn listings_are_looked_up_and_stored_by_family_and_hash() {
     let hub = FakeHttpHub::start(|_, url, _| {
         if url.ends_with("/listings/lookup") {

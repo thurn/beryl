@@ -447,8 +447,8 @@ impl Hub for HubClient {
     }
 
     fn next_explained(&self, free: &MachineFree) -> Result<ignite_core::protocol::hub::NextReply> {
+        // Keep `room`: a daemon sends no idle workers, so the room is all the hub reserves by.
         let free = MachineFree {
-            room: None,
             explain: true,
             ..free.clone()
         };
