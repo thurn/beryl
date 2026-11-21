@@ -94,7 +94,9 @@ Later sections refer to these by number.
   without a recompile.** Shaders and the primitives that effects are made of
   stay code.
 - **A9. Legibility to agents is held by a generated map and by caps on the
-  guides**, not by prose that is kept current by hand.
+  guides**, not by prose that is kept current by hand. The client-core crate cap
+  prompts a search for a natural seam (see
+  [Levels and crates](#levels-and-crates)).
 - **A10. Everything on screen is a node of one tree, and relations between nodes
   are declared.** A mark is anchored to its card and a prompt dock keeps clear
   of the rows, because the code says so once, and the toolkit solves it.
@@ -149,8 +151,19 @@ Rules, each held by the `levels` check from `data/beryl3d/levels.json`:
 - **A game crate does not depend on an app crate.**
 - **Only `scaffold_web` may cite `ui/src`** or hold a value copied from the web
   interface. No crate but `app_client` depends on it.
-- **No crate of the client core is over 12,000 lines of source.** A crate that
-  reaches the cap is divided, as a file that reaches 800 lines is.
+- **At 12,000 source lines, look for a natural seam in a client-core crate.**
+  Keeping a crate small makes it cheaper to rebuild after an edit and lets its
+  `AGENTS.md` describe the whole crate in at most 60 lines. Crate boundaries
+  prevent import cycles between crates. A natural seam separates a group of
+  modules with a narrow interface to the rest of the crate. Divide the crate
+  only where such a seam exists. Otherwise, when the crate exceeds the default
+  `cap_lines`, keep it together and record its current `lines` under its name in
+  `cap_allowances` in `data/beryl3d/levels.json`. The entry's `reason` names the
+  seams considered and explains why each was rejected. The cap applies only to
+  the Beryl 3D client core. Crates under `rust/crates/` are outside its scope.
+  The line count approximates rebuild cost. Ignite's reported rebuild counts
+  compare edits to one feature, one toolkit crate and one data file with the
+  rebuild count for `beryl_scene` before the division.
 - **The toolkit is tested with no Magic in it.** Its tests and stories build
   rows of plain rectangles and trees of plain elements, so a change to the
   protocol cannot break them.
