@@ -47,6 +47,8 @@ pub enum Hold {
     /// A drag that first goes more up or down than sideways, since one that goes sideways
     /// scrolls the card's hand (`rows`).
     UpOrDown,
+    /// A drag that first goes sideways, since a vertical drag scrolls the tray.
+    Sideways,
 }
 
 impl Grip {
@@ -62,6 +64,7 @@ impl Grip {
                     Hold::Never => false,
                     Hold::Drag => true,
                     Hold::UpOrDown => direction == Direction::Vertical,
+                    Hold::Sideways => direction == Direction::Horizontal,
                 };
         }
     }

@@ -18,11 +18,8 @@
 //! as tall as the window, with bounds from the layout profile. Each card is placed relative
 //! to the camera, so that the tray keeps its size and place on screen at any window shape.
 //!
-//! The phone's space is the web's `phoneTray` (`ui/src/stage/phone.ts`), measured in logical
-//! points (a stage as tall as the window) from the phone's bands (`Profile::tray`). Its
-//! cards keep `TraySpace::least_step` apart wherever they overlap, so that each card beneath
-//! keeps a square of the phone's touch target uncovered: a fan or a pile closes up no further
-//! than that, and lies in rows that overlap where one row has no room.
+//! The phone's tray takes its bands from the layout profile. The toolkit fits the
+//! cards and provides the viewport for rows and columns that scroll.
 
 use beryl_protocol::protocol::ObjectId;
 use glam::{Quat, Vec2};
@@ -32,7 +29,7 @@ use super::Camera;
 use kit_base::data::Card;
 use kit_base::data::profiles::TrayTuning;
 use kit_base::pose::Pose;
-use kit_space::arrange::Grid;
+use kit_space::arrange::screen::{FanShape, ScreenFit, ScreenLayout};
 use kit_ui::input::{Rect, Size};
 
 mod put_back;
@@ -58,12 +55,9 @@ pub struct TraySpace {
     pub least: f32,
     /// Between two cards, and between a box's edge and its cards.
     pub gap: f32,
-    /// The least distance between the left edges of two cards that overlap, and between the top
-    /// edges of two rows that overlap, so that each card beneath keeps a square this size at its
-    /// top left uncovered, where a press reaches it. Zero on the desktop, whose trays have room
-    /// for cards that overlap less than a square of the touch target.
+    /// Extra spacing for overlap in the phone profile, in stage pixels.
     pub least_step: f32,
-    /// The minimum press square of a flat grid, in logical points.
+    /// The minimum press square, in logical points.
     pub grid_target: f32,
     /// The strip over a box's cards that says what the pile is.
     pub heading: f32,
@@ -149,6 +143,7 @@ pub(super) struct TrayGrid {
     pub region: Rect,
     pub limit: f32,
     pub offset: f32,
+    rows: bool,
     pub name: String,
     pub labels: Vec<String>,
 }
@@ -188,7 +183,9 @@ struct Area {
 
 impl Area {
     fn contains(&self, point: Vec2) -> bool {
-        (self.x..=self.x + self.width).contains(&point.x)
+        self.width > 0.0
+            && self.height > 0.0
+            && (self.x..=self.x + self.width).contains(&point.x)
             && (self.y..=self.y + self.height).contains(&point.y)
     }
 }
@@ -202,18 +199,6 @@ struct Spot {
     width: f32,
     turn: f32,
     drawn: usize,
-}
-
-impl Spot {
-    fn flat(x: f32, y: f32, width: f32, drawn: usize) -> Self {
-        Self {
-            x,
-            y,
-            width,
-            turn: 0.0,
-            drawn,
-        }
-    }
 }
 
 /// The space's left edge and width on a stage `stage_width` wide.
@@ -231,162 +216,119 @@ fn across(space: &TraySpace, stage_width: f32) -> (f32, f32) {
     }
 }
 
-/// The widths a card is tried at, the widest first: from `most` down by 8 pixels, and `least`.
-fn widths(space: &TraySpace) -> impl Iterator<Item = f32> + '_ {
-    let mut width = space.most;
-    std::iter::from_fn(move || {
-        if width > space.least {
-            let tried = width;
-            width -= 8.0;
-            Some(tried)
-        } else if width > f32::MIN {
-            width = f32::MIN;
-            Some(space.least)
-        } else {
-            None
+impl TraySpace {
+    fn press(&self) -> f32 {
+        // Leave room for rounding as the camera projects the layout back to the screen.
+        self.grid_target + 0.01
+    }
+
+    fn fit(&self) -> ScreenFit {
+        ScreenFit {
+            aspect: self.card.height / self.card.width,
+            most: self.most,
+            least: self.least,
+            gap: self.gap,
+            press: self.press().max(self.least_step),
         }
-    })
-}
+    }
 
-/// How tall a card `width` wide is, in a tray of `space`.
-fn height_of(space: &TraySpace, width: f32) -> f32 {
-    width * space.card.height / space.card.width
-}
-
-/// Where the `index`th of `count` cards lies along a fan, from -1 at its left end to 1 at its
-/// right; 0 for a fan of one.
-#[expect(clippy::cast_precision_loss, reason = "a tray holds a few dozen cards")]
-fn along(index: usize, count: usize) -> f32 {
-    if count > 1 {
-        index as f32 / (count - 1) as f32 * 2.0 - 1.0
-    } else {
-        0.0
+    fn region(&self, (left, wide): (f32, f32)) -> Rect {
+        Rect {
+            x: left,
+            y: self.y,
+            width: wide.max(0.0),
+            height: self.height.max(0.0),
+        }
     }
 }
 
 /// One pile of cards centred in the tray band.
-fn rows(count: usize, space: &TraySpace, (left, wide): (f32, f32)) -> Laid {
-    let grid = Grid::fit(
-        count,
-        Vec2::new(wide, space.height),
-        space.card.height / space.card.width,
-        space.gap,
-        space.grid_target.max(space.least_step),
-        widths(space),
-    );
+fn rows(count: usize, space: &TraySpace, span: (f32, f32)) -> Laid {
     let mut laid = Laid::of(Vec::with_capacity(count), Vec::new());
-    laid.grid(
-        grid,
-        count,
-        Rect {
-            x: left,
-            y: space.y,
-            width: wide,
-            height: space.height,
-        },
-        true,
-    );
+    laid.grid(space.fit().rows(count, space.region(span)));
     laid
 }
 
 impl Laid {
-    /// Adds one grid and records the viewport that clips it when its rows overflow.
-    fn grid(&mut self, grid: Grid, count: usize, region: Rect, centred: bool) {
+    fn grid(&mut self, layout: ScreenLayout) {
         let start = self.spots.len();
         self.spots.extend(
-            grid.boxes(count, region, centred)
+            layout
+                .items
+                .into_iter()
                 .enumerate()
-                .map(|(index, rect)| Spot::flat(rect.x, rect.y, rect.width, start + index)),
+                .map(|(index, item)| Spot {
+                    x: item.rect.x,
+                    y: item.rect.y,
+                    width: item.rect.width,
+                    turn: item.turn,
+                    drawn: start + index,
+                }),
         );
         self.grids.push(TrayGrid {
             cards: start..self.spots.len(),
-            region,
-            limit: (grid.size(count).y - region.height).max(0.0),
+            region: layout.viewport,
+            limit: layout.scroll,
+            rows: layout.rows,
             offset: 0.0,
             name: String::new(),
             labels: Vec::new(),
         });
     }
-
-    /// The surrounding drop area keeps the room it reserved for this pile even as
-    /// cards move between the piles.
-    fn pile_grid(
-        &mut self,
-        count: usize,
-        space: &TraySpace,
-        region: Rect,
-        (width, pitch): (f32, f32),
-    ) {
-        let grid = Grid::reserved_row(
-            count,
-            region.width,
-            Vec2::new(width, height_of(space, width)),
-            pitch,
-            space.gap,
-            space.grid_target,
-        );
-        self.grid(grid, count, region, false);
-    }
 }
 
-/// Several piles, a box each, side by side about the middle of the space, as the web's
-/// `boxes`. Each box has room for what its pile can come to hold (`rooms`, the web's
-/// `roomsOf`), and its cards lie in a row from its left edge, closed up where they would
-/// overflow it.
+/// Each side-by-side box reserves room for its pile before any cards are dealt into it.
 #[expect(clippy::cast_precision_loss, reason = "a tray holds a few dozen cards")]
 fn boxes(counts: &[usize], rooms: &[usize], space: &TraySpace, (left, wide): (f32, f32)) -> Laid {
-    let (gap, heading) = (space.gap, space.heading);
-    let piles = counts.len() as f32;
-    let between: f32 = rooms.iter().map(|&room| room.max(1) as f32 - 1.0).sum();
-    // What is not a card's own width or the step to the next: the boxes' edges and the gaps
-    // between the boxes.
-    let edges = piles * 2.0 * gap + (piles - 1.0) * gap;
-    let (mut width, mut step) = (space.least, 0.0);
-    for tried in widths(space) {
-        width = tried;
-        step = tried + gap;
-        let whole = piles * tried + between * step + edges;
-        let tall = height_of(space, tried) + heading + 2.0 * gap;
-        if whole <= wide && tall <= space.height {
-            break;
-        }
-        if tried <= space.least && between > 0.0 {
-            step = f32::min(step, (wide - edges - piles * tried) / between);
-        }
-    }
-    let height = height_of(space, width) + heading + 2.0 * gap;
-    let whole = piles * width + between * step + edges;
-    let y = space.y + ((space.height - height) / 2.0).max(0.0);
-    let mut x = left + (wide - whole) / 2.0;
     let mut laid = Laid::of(
         Vec::with_capacity(counts.iter().sum()),
         Vec::with_capacity(counts.len()),
     );
+    if counts.is_empty() {
+        return laid;
+    }
+    let piles = counts.len() as f32;
+    let between: usize = rooms.iter().map(|&room| room.saturating_sub(1)).sum();
+    let edges = 3.0 * piles - 1.0;
+    let gap = space
+        .gap
+        .min(wide / (edges + piles))
+        .min(space.height / 3.0)
+        .max(0.0);
+    let heading = space.heading.min((space.height - 2.0 * gap).max(0.0));
+    let fit = ScreenFit { gap, ..space.fit() };
+    let (width, step) = fit.parallel(
+        Vec2::new(wide - edges * gap, space.height - heading - 2.0 * gap),
+        counts.len(),
+        between,
+    );
+    let card_height = fit.size(width).y;
+    let height = card_height + heading + 2.0 * gap;
+    let whole = piles * width + between as f32 * step + edges * gap;
+    let y = space.y + ((space.height - height) / 2.0).max(0.0);
+    let mut x = left + (wide - whole) / 2.0;
     for (&count, &room) in counts.iter().zip(rooms) {
-        let box_wide = width + (room.max(1) as f32 - 1.0) * step + 2.0 * gap;
+        let inner = width + room.saturating_sub(1) as f32 * step;
         let region = Rect {
             x: x + gap,
             y: y + heading + gap,
-            width: box_wide - 2.0 * gap,
-            height: height_of(space, width),
+            width: inner,
+            height: card_height,
         };
-        laid.pile_grid(count, space, region, (width, step));
+        laid.grid(fit.reserved(count, region, width, step));
+        let box_width = inner + 2.0 * gap;
         laid.boxes.push(Area {
             x,
             y,
-            width: box_wide,
+            width: box_width,
             height,
         });
-        x += box_wide + gap;
+        x += box_width + gap;
     }
     laid
 }
 
-/// Two piles, each a box as wide as the space, the first in its band and the second in
-/// `second`, as the web's `stacked`: each box a row with room for what its pile can come to
-/// hold (`rooms`), its cards no closer than `least_step` while the pile holds no more than
-/// that, at one width for both, no larger than the shorter band holds.
-#[expect(clippy::cast_precision_loss, reason = "a tray holds a few dozen cards")]
+/// Each stacked box takes the full width in its own band.
 fn stacked(
     counts: &[usize],
     rooms: &[usize],
@@ -394,17 +336,18 @@ fn stacked(
     second: Second,
     (left, wide): (f32, f32),
 ) -> Laid {
-    let (gap, heading) = (space.gap, space.heading);
+    let height_limit = space.height.min(second.height).max(0.0);
+    let gap = space.gap.min(wide / 3.0).min(height_limit / 3.0).max(0.0);
+    let heading = space.heading.min(height_limit - 2.0 * gap);
     let inner = wide - 2.0 * gap;
-    let most_room = rooms.iter().copied().max().unwrap_or(1).max(1);
-    let tall = space.height.min(second.height) - heading - 2.0 * gap;
-    // As wide as the room keeps apart, at least the least width, unless the shorter band holds
-    // less: a narrower card is better than one under the prompt's buttons.
-    let width = (inner - space.least_step * (most_room - 1) as f32)
-        .min(space.most)
-        .max(space.least)
-        .min((tall * space.card.width / space.card.height).max(space.least_step));
-    let height = height_of(space, width) + heading + 2.0 * gap;
+    let most_room = rooms.iter().copied().max().unwrap_or(1);
+    let fit = ScreenFit { gap, ..space.fit() };
+    let width = fit.stacked_width(
+        Vec2::new(inner, height_limit - heading - 2.0 * gap),
+        most_room,
+    );
+    let card_height = fit.size(width).y;
+    let height = card_height + heading + 2.0 * gap;
     let bands = [(space.y, space.height), (second.y, second.height)];
     let mut laid = Laid::of(
         Vec::with_capacity(counts.iter().sum()),
@@ -412,14 +355,18 @@ fn stacked(
     );
     for ((&count, &room), (band_y, band_height)) in counts.iter().zip(rooms).zip(bands) {
         let y = band_y + ((band_height - height) / 2.0).max(0.0);
-        let step = Grid::pitch(inner, width, room.max(2), gap);
         let region = Rect {
             x: left + gap,
             y: y + heading + gap,
             width: inner,
-            height: height_of(space, width),
+            height: card_height,
         };
-        laid.pile_grid(count, space, region, (width, step));
+        laid.grid(fit.reserved(
+            count,
+            region,
+            width,
+            fit.reserved_pitch(region, width, room),
+        ));
         laid.boxes.push(Area {
             x: left,
             y,
@@ -430,74 +377,21 @@ fn stacked(
     laid
 }
 
-/// The cards of a pick, `order` in its order, in one fan about the middle of the space, as
-/// large as its height holds and its width takes, as the web's `fan`; each card's spot in the
-/// order of `piles`. Where neighbours that keep `least_step` between them would leave no room
-/// for a card of the least width, the cards lie in rows instead, in the same order.
-#[expect(clippy::cast_precision_loss, reason = "a tray holds a few dozen cards")]
-fn fan(
-    piles: &[Vec<ObjectId>],
-    order: &[ObjectId],
-    space: &TraySpace,
-    (left, wide): (f32, f32),
-) -> Laid {
-    let gap = space.gap;
-    let aspect = space.card.width / space.card.height;
-    let count = order.len().max(1);
-    let across = wide - 2.0 * gap;
-    let tall = (space.height - 2.0 * gap) * aspect;
-    let between = space.least_step * (count - 1) as f32;
-    let width = f32::max(
-        space.least,
-        f32::min(
-            f32::min(
-                tall / (1.0 + space.tuning.fan.drop * aspect),
-                across / (1.0 + space.tuning.fan.step * (count - 1) as f32),
-            ),
-            across - between,
-        ),
-    );
-    if space.least_step > 0.0 && width + between > across {
-        let mut laid = rows(order.len(), space, (left, wide));
-        laid.spots = in_order(piles, order, |index| laid.spots[index]);
-        return laid;
-    }
-    let step = f32::min(
-        space.tuning.fan.step * width,
-        (across - width) / (count.max(2) - 1) as f32,
-    )
-    .max(space.least_step);
-    let height = height_of(space, width);
-    let drop = space.tuning.fan.drop * width;
-    let top = space.y + (space.height - height - drop) / 2.0;
-    let grid = Grid::new(
-        count,
-        Vec2::new(width, height),
-        Vec2::new(step - width, 0.0),
-    );
-    let whole = grid.size(count).x;
-    let region = Rect {
-        x: left + (wide - whole) / 2.0,
-        y: top,
-        width: whole,
-        height: height + drop,
-    };
+/// The dealt order sets the placement and draw order. The result follows pile order.
+fn fan(piles: &[Vec<ObjectId>], order: &[ObjectId], space: &TraySpace, span: (f32, f32)) -> Laid {
     let mut laid = Laid::of(Vec::with_capacity(order.len()), Vec::new());
-    laid.grid(grid, order.len(), region, false);
-    curve_fan(&mut laid.spots, drop, space.tuning.fan.turn);
+    let shape = space.tuning.fan;
+    laid.grid(space.fit().fan(
+        order.len(),
+        space.region(span),
+        FanShape {
+            step: shape.step,
+            drop: shape.drop,
+            turn: shape.turn,
+        },
+    ));
     laid.spots = in_order(piles, order, |index| laid.spots[index]);
     laid
-}
-
-/// Curves a straight grid row into a fan without changing the order of its cards.
-fn curve_fan(spots: &mut [Spot], drop: f32, turn: f32) {
-    let count = spots.len();
-    for (index, spot) in spots.iter_mut().enumerate() {
-        let t = along(index, count);
-        spot.y += drop * t * t;
-        spot.turn = turn * t;
-        spot.drawn = index;
-    }
 }
 
 /// The spot of each card of `piles`, in their order, from `spot`, which gives the spot of the
@@ -624,6 +518,11 @@ pub(super) fn landing_at(
     let mut point = point * per_point;
     let laid = laid_out(held, space, size);
     let pile = laid.boxes.iter().position(|area| area.contains(point))?;
+    let grid = &laid.grids[pile];
+    if grid.region.width <= 0.0 || grid.region.height <= 0.0 {
+        return None;
+    }
+    point.y += (scroll(pile) * per_point).clamp(0.0, grid.limit);
     if let (0, Some(library)) = (pile, laid.library) {
         return Some((
             0,
@@ -632,10 +531,9 @@ pub(super) fn landing_at(
     }
     let first: usize = held.piles[..pile].iter().map(Vec::len).sum();
     let spots = &laid.spots[first..first + held.piles[pile].len()];
-    point.y += scroll(pile) * per_point;
-    let nearest_row = if laid.grids.get(pile).is_some_and(|grid| grid.limit > 0.0) {
+    let nearest_row = if grid.rows {
         spots.iter().map(|spot| spot.y).min_by(|a, b| {
-            let middle = point.y - height_of(&space, spots[0].width) / 2.0;
+            let middle = point.y - space.fit().size(spots[0].width).y / 2.0;
             (a - middle).abs().total_cmp(&(b - middle).abs())
         })
     } else {
@@ -664,7 +562,7 @@ fn screen_pose(
     turn: f32,
     depth: f32,
 ) -> Pose {
-    let height = height_of(space, width);
+    let height = space.fit().size(width).y;
     let centre = Vec2::new(x + width / 2.0, y + height / 2.0);
     let ndc = Vec2::new(
         centre.x / stage_width * 2.0 - 1.0,

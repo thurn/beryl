@@ -188,3 +188,70 @@ fn a_put_back_tray_uses_the_deck_geometry_of_its_own_profile() {
         assert_eq!(table.tray_poses(&held).library.len(), count);
     }
 }
+
+#[test]
+fn a_tray_narrower_than_a_card_keeps_its_cards_and_drops_inside_the_band() {
+    use std::sync::Arc;
+
+    use beryl_protocol::protocol::ObjectId;
+    use game_table::table::{Held, Table, TrayKind, landing, tray_area, tray_boxes};
+    use glam::Vec2;
+    use kit_base::data::profiles::{Profiles, SHIPPED};
+    use kit_scene::hit::{contains, corner_bounds};
+
+    let mut data = (*crate::test_data::data()).clone();
+    let regular = SHIPPED[1]
+        .1
+        .replace("\"half_most\": 650", "\"half_most\": 40");
+    data.profiles = Profiles::parse(&[SHIPPED[0], (SHIPPED[1].0, &regular)], data.card).unwrap();
+    let table = Table::new(Arc::new(data), Window::default());
+    let camera = table.camera();
+    let size = camera.window.size;
+    let space = table.layout().tray;
+    let band = tray_area(space, size);
+    assert!((band.width - 80.0 * size.height / space.stage_height).abs() < 0.01);
+    for kind in [TrayKind::Boxes, TrayKind::PutBack] {
+        let mut held = Held {
+            piles: vec![vec![], vec![]],
+            rooms: vec![Some(1), Some(1)],
+            kind,
+        };
+        let empty = table.tray_poses(&held);
+        assert!(empty.cards.is_empty());
+        let areas = tray_boxes(&held, space, size);
+        assert_eq!(areas.len(), 2);
+        for (pile, area) in areas.iter().enumerate() {
+            assert!(contains(band, *area), "{area:?} is inside {band:?}");
+            let middle = Vec2::new(area.x + area.width / 2.0, area.y + area.height / 2.0);
+            assert_eq!(
+                landing(&held, space, size, middle, ObjectId(1)),
+                Some((pile, 0))
+            );
+        }
+        held.piles[1].push(ObjectId(1));
+        let poses = table.tray_poses(&held);
+        let rect = corner_bounds(camera.card_corners(poses.cards[0].1.transform()));
+        assert!(rect.width > 0.0);
+        assert!(contains(band, rect), "{rect:?} is inside {band:?}");
+        assert!(contains(tray_boxes(&held, space, size)[1], rect));
+        assert_eq!(
+            landing(
+                &held,
+                space,
+                size,
+                Vec2::new(band.x - 1.0, rect.y),
+                ObjectId(1)
+            ),
+            None
+        );
+    }
+
+    let held = Held {
+        piles: vec![vec![ObjectId(1)]],
+        ..Held::default()
+    };
+    let poses = table.tray_poses(&held);
+    let rect = corner_bounds(camera.card_corners(poses.cards[0].1.transform()));
+    assert!(rect.width > 0.0 && rect.width <= band.width + 0.01);
+    assert!(rect.x >= band.x - 0.01);
+}

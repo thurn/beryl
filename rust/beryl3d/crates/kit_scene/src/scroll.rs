@@ -116,7 +116,7 @@ impl<T: Copy + Eq> ScrollGesture<T> {
                     };
                     if !drag.claimed {
                         let axes = view.axes();
-                        if pointer.kind == PointerKind::Touch && !view.is_grouped() {
+                        if pointer.kind == PointerKind::Touch && !view.requires_direction() {
                             // A list follows even a small finger move. Once it moves, lifting
                             // the finger must not press the row that moved with it.
                             if (pointer.position - drag.start) * axes == Vec2::ZERO {

@@ -374,10 +374,17 @@ impl Client {
                         container: Some(place),
                     }) = point.target
                 {
-                    let scrolls = scroller_of(place) == Some(Scroller::Hand)
-                        && self.show.table().row_window(Scroller::Hand).scrolls();
-                    let hold = match (self.holdable(slot, place), scrolls) {
+                    let scene = self.show.table();
+                    let in_tray = scene.in_tray(slot);
+                    let hand_scrolls = !in_tray
+                        && scroller_of(place) == Some(Scroller::Hand)
+                        && scene.row_window(Scroller::Hand).scrolls();
+                    let tray_scrolls = in_tray
+                        && pointer.kind == PointerKind::Touch
+                        && scene.tray_viewport_at(pointer.position).is_some();
+                    let hold = match (self.holdable(slot, place), hand_scrolls) {
                         (false, _) => Hold::Never,
+                        (true, _) if tray_scrolls => Hold::Sideways,
                         (true, false) => Hold::Drag,
                         (true, true) => Hold::UpOrDown,
                     };

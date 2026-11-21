@@ -143,7 +143,7 @@ pub(super) struct Rectangle {
 }
 
 impl Rectangle {
-    fn corners(self) -> [Vec2; 4] {
+    pub(super) fn corners(self) -> [Vec2; 4] {
         let x = self.axis * self.half.x;
         let y = -self.axis.perp() * self.half.y;
         [

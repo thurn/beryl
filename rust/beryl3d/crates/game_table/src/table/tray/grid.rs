@@ -39,11 +39,14 @@ impl Table {
     #[must_use]
     pub fn tray_viewport(&self, index: usize) -> Option<Viewport> {
         let grid = self.tray.grids.get(index).filter(|grid| grid.limit > 0.0)?;
-        Some(Viewport::points(
-            Vec2::Y * grid.offset,
-            Vec2::Y * grid.limit,
-            Vec2::new(grid.region.width, grid.region.height),
-        ))
+        Some(
+            Viewport::points(
+                Vec2::Y * grid.offset,
+                Vec2::Y * grid.limit,
+                Vec2::new(grid.region.width, grid.region.height),
+            )
+            .directional(),
+        )
     }
 
     /// Sets the grid's offset. The clipping rectangle stays in place.

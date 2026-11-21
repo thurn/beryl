@@ -417,3 +417,240 @@ fn a_crowded_tray_scrolls_to_its_last_card_and_clips_the_first_row() {
         Some(reached.id)
     );
 }
+
+#[test]
+fn every_crowded_pick_and_put_back_card_keeps_a_press_target() {
+    use beryl_protocol::prompt::{Marked, Pile, PlaceName};
+    use beryl_protocol::script::{Mark, Subject};
+    use kit_ui::input::PointerKind;
+
+    for (size, kind) in [
+        (SIZE, PointerKind::Mouse),
+        (
+            Size {
+                width: 375.0,
+                height: 647.0,
+            },
+            PointerKind::Touch,
+        ),
+    ] {
+        for put_back in [false, true] {
+            let mut builder = ViewBuilder::sample();
+            builder.script(ScriptBuilder::reset().build());
+            let dealt: Vec<_> = (0..if put_back { 128 } else { 64 })
+                .map(|index| {
+                    builder
+                        .card(
+                            if put_back {
+                                ZoneName::Hand
+                            } else {
+                                ZoneName::Graveyard
+                            },
+                            Side::You,
+                            &format!("Card {index}"),
+                        )
+                        .slot
+                })
+                .collect();
+            // A picked card is in the first pile but still lies in dealt order in
+            // the fan. A put-back has two independently scrolling drop areas.
+            let (into, from) = dealt.split_at(if put_back { 64 } else { 1 });
+            let ids = |cards: &[ObjectId]| {
+                cards
+                    .iter()
+                    .map(|slot| u32::from(slot.0))
+                    .collect::<Vec<_>>()
+            };
+            let body = ShapeBody::Split {
+                piles: vec![
+                    Pile {
+                        label: if put_back { "On top" } else { "Hand" }.to_owned(),
+                        place: Some(if put_back {
+                            PlaceName::OnTop
+                        } else {
+                            PlaceName::Hand
+                        }),
+                        cards: into.to_vec(),
+                        exactly: Some(into.len() as u8),
+                        closed: false,
+                    },
+                    Pile {
+                        label: if put_back { "Hand" } else { "Library" }.to_owned(),
+                        place: (!put_back).then_some(PlaceName::Top),
+                        cards: from.to_vec(),
+                        exactly: None,
+                        closed: false,
+                    },
+                ],
+            };
+            let mut chosen = prompt(Purpose::Move, "Choose cards.", Vec::new(), body);
+            chosen.marks = dealt
+                .iter()
+                .map(|&slot| Marked {
+                    on: Subject::Object { slot },
+                    mark: Mark::Eligible,
+                })
+                .collect();
+            let mut client = client();
+            client.handle(Input::Surface {
+                size,
+                scale: 1.0,
+                safe_area: Insets::default(),
+            });
+            client.handle(Input::Update(Box::new(builder.update())));
+            client.frame(0);
+            client.handle(deciding(&builder, chosen, Vec::new()));
+            client.frame(MS);
+            client.frame(5_000 * MS);
+            let mut now = 10_000 * MS;
+            let side = client.table().profile().data().checks.target_points;
+            let press_target = Size {
+                width: side,
+                height: side,
+            };
+            let groups = if put_back {
+                vec![(ids(into), into[into.len() - 1]), (ids(from), from[0])]
+            } else {
+                vec![(ids(&dealt), from[0])]
+            };
+
+            for (group, first) in groups {
+                assert_tray_press_targets(&mut client, &mut now, press_target, group, first, kind);
+            }
+            if put_back {
+                assert_scrolled_reorder(&mut client, now, press_target, into, kind);
+            }
+        }
+    }
+}
+
+fn assert_tray_press_targets(
+    client: &mut Client,
+    now: &mut u64,
+    press_target: Size,
+    group: Vec<u32>,
+    first: ObjectId,
+    kind: kit_ui::input::PointerKind,
+) {
+    use kit_scene::hit::{Overlaps, bounds, has_free_rect};
+
+    let frame = client.frame(*now);
+    let first = *frame
+        .resolved
+        .iter()
+        .find(|item| item.role == Role::Card && item.id.0 == u32::from(first.0))
+        .expect("the first card is shown");
+    let clip = first
+        .clip
+        .expect("the crowded group has a scrolling viewport");
+    let at = Vec2::new(clip.x + clip.width / 2.0, clip.y + clip.height / 2.0);
+    let mut waiting: std::collections::BTreeSet<_> = group.into_iter().collect();
+    for step in 0..320 {
+        let frame = client.frame(*now);
+        let overlaps = Overlaps::new(frame);
+        for (index, item) in frame.resolved.iter().enumerate() {
+            if item.role == Role::Card
+                && waiting.contains(&item.id.0)
+                && has_free_rect(frame, &overlaps, index as u32, press_target)
+            {
+                waiting.remove(&item.id.0);
+            }
+        }
+        if waiting.is_empty() {
+            roll_tray(client, at, 100_000.0);
+            *now += MS;
+            return;
+        }
+        if step == 0 && kind == kit_ui::input::PointerKind::Touch {
+            let rect = bounds(&first);
+            let start = Vec2::new(rect.x + rect.width / 2.0, rect.y + rect.height / 2.0);
+            let end = start - Vec2::Y * press_target.height;
+            tray_pointer(client, kind, PointerPhase::Down, start);
+            tray_pointer(client, kind, PointerPhase::Move, end);
+            tray_pointer(client, kind, PointerPhase::Cancel, end);
+            *now += MS;
+            let frame = client.frame(*now);
+            assert!(
+                frame
+                    .resolved
+                    .iter()
+                    .find(|item| item.id == first.id)
+                    .is_none_or(|item| bounds(item).y < rect.y)
+            );
+        } else {
+            roll_tray(client, at, press_target.height);
+        }
+        *now += MS;
+    }
+    panic!("no full press square while scrolling for {waiting:?}");
+}
+
+fn roll_tray(client: &mut Client, at: Vec2, distance: f32) {
+    let Input::Pointer(mut wheel) = pointer(PointerPhase::Wheel, at) else {
+        unreachable!("a pointer event");
+    };
+    wheel.wheel = Vec2::new(0.0, -distance);
+    client.handle(Input::Pointer(wheel));
+}
+
+fn assert_scrolled_reorder(
+    client: &mut Client,
+    now: u64,
+    press_target: Size,
+    into: &[ObjectId],
+    kind: kit_ui::input::PointerKind,
+) {
+    use beryl_protocol::script::Subject;
+    use kit_scene::hit::{bounds, free_rect};
+
+    let frame = client.frame(now);
+    let card = |slot: ObjectId| {
+        frame
+            .resolved
+            .iter()
+            .position(|item| item.role == Role::Card && item.id.0 == u32::from(slot.0))
+            .unwrap()
+    };
+    let source = free_rect(frame, card(into[0]) as u32, press_target)
+        .expect("the top card has a press square after scrolling");
+    let target = bounds(&frame.resolved[card(into[2])]);
+    let start = Vec2::new(
+        source.x + source.width / 2.0,
+        source.y + source.height / 2.0,
+    );
+    let end = Vec2::new(
+        target.x + target.width / 2.0,
+        target.y + target.height / 2.0,
+    );
+    // A sideways touch picks up the card. A vertical swipe scrolls.
+    for (phase, position) in [
+        (PointerPhase::Down, start),
+        (PointerPhase::Move, start + Vec2::new(30.0, 2.0)),
+        (PointerPhase::Move, end),
+        (PointerPhase::Up, end),
+    ] {
+        tray_pointer(client, kind, phase, position);
+    }
+    client.frame(now + MS);
+    let command = client.next_command();
+    assert!(
+        matches!(command, Some(SessionCommand::Click(ClickRequest {
+        click: Click::Drop { on: Subject::Object { slot }, pile: 0, at: 3 },
+        ..
+    })) if slot == into[0]),
+        "{kind:?} drop queued {command:?}"
+    );
+}
+
+fn tray_pointer(
+    client: &mut Client,
+    kind: kit_ui::input::PointerKind,
+    phase: PointerPhase,
+    position: Vec2,
+) {
+    let Input::Pointer(mut event) = pointer(phase, position) else {
+        unreachable!("a pointer event");
+    };
+    event.kind = kind;
+    client.handle(Input::Pointer(event));
+}

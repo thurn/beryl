@@ -55,8 +55,8 @@ impl Client {
                 .update(RowMessage::Focus(Some(row)));
             self.layer.focus(None);
         }
-        // A card that has picked up keeps its drag. A sideways drag on a scrolling hand
-        // never picked a card up because its grip used the same threshold and direction.
+        // A card that has picked up keeps its drag. Scroll and pickup use the same
+        // recognized direction when they share a press.
         if rows && pointer.phase == PointerPhase::Move && self.show.pointer().held().is_some() {
             self.routes.scrolling.cancel();
         }
@@ -122,10 +122,23 @@ impl Client {
                 viewport.takes_wheel(delta, self.data().pointer.wheel_notch_points)
             })
         {
+            if wheel.is_none()
+                && pointer.kind == PointerKind::Mouse
+                && let Some(kit_scene::input::Target {
+                    node: Node::Card(slot),
+                    container: Some(place),
+                }) = routed.target
+                && self.holdable(slot, place)
+            {
+                return None;
+            }
             return Some((Target::Tray(index), viewport));
         }
         let element = &self.frame.resolved[routed.hit? as usize];
         let row = scroller_of(element.place).filter(|_| element.role == Role::Card)?;
+        if self.show.table().in_tray(element.id.0 as usize) {
+            return None;
+        }
         let view = row_viewport(self.show.table(), row)?;
         Some((Target::Row(row), view))
     }

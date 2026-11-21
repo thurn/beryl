@@ -3,6 +3,7 @@
 //! Where in the tray each card lies is `tray_layout`'s.
 
 use beryl_protocol::protocol::{ObjectId, PlayerView};
+use glam::Vec2;
 
 use super::scene::SceneObject;
 use super::tray_layout::{Held, TrayGrid, TrayPoses, tray_poses};
@@ -436,7 +437,17 @@ impl Table {
     /// like them over the tray's shade, each showing the card back's layer `back` on its face.
     /// Allocates nothing.
     pub(super) fn write_tray_library(&self, back: u16, builder: &mut FrameBuilder) {
-        for pose in &self.tray.library {
+        if self.tray.library.is_empty() {
+            return;
+        }
+        let clip = self.tray.grids.first().filter(|grid| grid.limit > 0.0);
+        let clip_id = clip.and_then(|grid| builder.clip(grid.region)).unwrap_or(0);
+        for &pose in &self.tray.library {
+            let mut pose = pose;
+            if let Some(grid) = clip {
+                self.camera()
+                    .move_in_screen(&mut pose, -Vec2::Y * grid.offset);
+            }
             let draw = Draw::card(
                 pose.transform(),
                 [255; 4],
@@ -445,7 +456,8 @@ impl Table {
                 back,
                 0.0,
                 0.0,
-            );
+            )
+            .with_clip(clip_id);
             builder.draw(Band::LayerCards, draw);
         }
     }

@@ -14,6 +14,7 @@ pub struct Viewport {
     limit: Vec2,
     page: Vec2,
     grouped: bool,
+    directional: bool,
 }
 
 impl Viewport {
@@ -24,6 +25,7 @@ impl Viewport {
             limit,
             page,
             grouped: false,
+            directional: false,
         }
     }
 
@@ -39,7 +41,21 @@ impl Viewport {
             limit: along * window.last as f32,
             page: along * window.shown as f32,
             grouped: true,
+            directional: false,
         }
+    }
+
+    /// Waits for a drag to choose an axis before scrolling so content can use the
+    /// other axis for its own gesture.
+    #[must_use]
+    pub fn directional(mut self) -> Self {
+        self.directional = true;
+        self
+    }
+
+    #[must_use]
+    pub fn requires_direction(self) -> bool {
+        self.grouped || self.directional
     }
 
     #[must_use]

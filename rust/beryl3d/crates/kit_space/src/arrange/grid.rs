@@ -47,8 +47,9 @@ impl Grid {
         widths: impl Iterator<Item = f32>,
     ) -> Self {
         let count = count.max(1);
+        let limit = region.x.min(region.y / aspect).max(0.0);
         let mut grid = Self::new(1, Vec2::ONE, Vec2::splat(gap));
-        for width in widths {
+        for width in widths.map(|width| width.min(limit)) {
             let card = Vec2::new(width, width * aspect);
             let columns = Self::fitting_columns(region.x, width, gap);
             grid = Self::new(columns.min(count), card, Vec2::splat(gap));
@@ -57,13 +58,17 @@ impl Grid {
             }
         }
         let card = grid.item;
+        let press = press.min(card.x).min(card.y);
         let lines = Self::fitting_columns(region.y, card.y, gap);
         let columns = count.div_ceil(lines);
         let pitch = Self::pitch(region.x, card.x, columns, gap);
         let (columns, pitch) = if pitch < press {
             let max = Self::fitting_columns(region.x, card.x, press - card.x);
             let columns = count.min(max);
-            (columns, Self::pitch(region.x, card.x, columns, gap))
+            (
+                columns,
+                Self::pitch(region.x, card.x, columns, gap).max(press),
+            )
         } else {
             (columns, pitch)
         };
@@ -101,7 +106,7 @@ impl Grid {
         press: f32,
     ) -> Self {
         let pitch = pitch.min(Self::pitch(span, item.x, count, gap));
-        let (columns, pitch) = if pitch < press {
+        let (columns, pitch) = if pitch < press && press > 0.0 {
             let columns = count.min(Self::fitting_columns(span, item.x, press - item.x));
             (columns, pitch.max(press))
         } else {

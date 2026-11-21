@@ -16,6 +16,7 @@ mod lifted;
 mod pile;
 mod press;
 pub mod row;
+pub mod screen;
 
 pub use cascade::{AnchoredCascade, Cascade, CascadeLayout};
 pub use fan::CentredFan;
