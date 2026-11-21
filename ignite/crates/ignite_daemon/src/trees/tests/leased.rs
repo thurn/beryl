@@ -73,7 +73,12 @@ fn over_budget_sweeps_keep_the_working_set_until_the_lease_ends() {
     let trees = all_leased(&f, &[MB, 3 * MB]);
     let tree = id("tree-02");
     let path = trees.config().path(&tree);
+    // A lease's prebuild thread records the tree's build after the seed's mark is gone, so
+    // `wait_until_seeded` does not wait for it. Record it here, as that thread does, so that the
+    // build the sweeps must keep is the same whichever of the two runs first.
+    assert!(trees.build(&tree, &f.tip(), &[]));
     let built = built_commit(&trees, tree.as_str());
+    assert_eq!(built.as_deref(), Some(f.tip().as_str()));
     let forgotten = f.builds.forgotten();
 
     for (cap, available_gb, source) in [
