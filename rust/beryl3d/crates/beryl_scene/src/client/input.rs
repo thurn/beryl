@@ -9,12 +9,12 @@ use glam::Vec2;
 
 use super::gesture::{Gesture, Release};
 use super::{Client, Dismiss, Input, Platform, Press};
-use crate::pointer::Hold;
-use crate::pointer::rows::scroller_of;
 use crate::prompts;
 use crate::screens::{Screen, ScreenPress, Sheet};
 use crate::settings::Setting;
-use crate::table::{self, Scroller};
+use game_play::pointer::Hold;
+use game_play::pointer::rows::scroller_of;
+use game_table::table::{self, Scroller};
 use kit_frame::frame::{ElementId, Place, Role};
 use kit_scene::hit::hit;
 use kit_ui::element::{Action, Chord};

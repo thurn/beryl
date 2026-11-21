@@ -18,7 +18,7 @@ use glam::Vec2;
 use super::bar::bar;
 use super::{Shown, Steps, begin_spans, end_spans, mark_spans, target_arrows};
 use crate::hud::HudIn;
-use crate::light::Span;
+use game_play::light::Span;
 use kit_base::tokens::{color, size, space, type_style};
 use kit_ui::element::{Align, Anchor, Element, TextAlign, column, text};
 use kit_ui::widgets::{icon_button, icons};

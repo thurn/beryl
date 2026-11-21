@@ -20,6 +20,8 @@ SCENE_CRATES = (
     "kit_fx",
     "kit_scene",
     "kit_probe",
+    "game_table",
+    "game_play",
 )
 LINTS = '[workspace.lints.rust]\nwarnings = "deny"\n'
 
@@ -138,7 +140,12 @@ def test_only_the_app_and_the_recorder_depend_on_the_engine(tmp_path: Path) -> N
 
 
 @pytest.mark.parametrize(
-    "source", ("beryl_scene/src/screens/start.rs", "kit_ui/src/widgets/button.rs")
+    "source",
+    (
+        "beryl_scene/src/screens/start.rs",
+        "kit_ui/src/widgets/button.rs",
+        "game_play/src/hud/counts.rs",
+    ),
 )
 def test_elements_take_their_sizes_from_tokens(tmp_path: Path, source: str) -> None:
     path = f"{CRATES}/{source}"

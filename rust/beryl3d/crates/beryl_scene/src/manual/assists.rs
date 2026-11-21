@@ -25,7 +25,7 @@ use glam::Vec2;
 
 use super::TablePress;
 use crate::inspect::viewer::object_box;
-use crate::table::Window;
+use game_table::table::Window;
 use kit_base::tokens::{color, size, space, type_style};
 use kit_ui::element::{Align, Anchor, Element, column, row, text};
 use kit_ui::input::Size;

@@ -20,9 +20,9 @@ use beryl_protocol::script::Subject;
 use glam::Vec2;
 
 use super::Client;
-use crate::pointer::takes_pointer;
-use crate::pointer::touch::Landed;
 use crate::screens::Screen;
+use game_play::pointer::takes_pointer;
+use game_play::pointer::touch::Landed;
 use kit_frame::frame::Role;
 use kit_scene::hit::hit;
 use kit_ui::input::{Pointer, PointerPhase};

@@ -16,9 +16,9 @@ use crate::hud::GamePress;
 use beryl_protocol::protocol::{Culprit, LossReason, OutcomeView, Side, Stall, Status};
 use glam::Vec2;
 
-use crate::faces::FaceList;
 use crate::hud::HudIn;
-use crate::table::{CARD_HEIGHT, CARD_WIDTH};
+use game_table::faces::FaceList;
+use game_table::table::{CARD_HEIGHT, CARD_WIDTH};
 use kit_base::data::space::flat::phone::game_over as metrics;
 use kit_base::data::space::flat::phone::opening::NARROW_BELOW;
 use kit_base::data::space::flat::phone::{ACTION_GAP, GUTTER};

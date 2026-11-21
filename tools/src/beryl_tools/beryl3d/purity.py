@@ -24,7 +24,7 @@ TOOLKIT_CRATES: set[str] = {
     "kit_scene",
     "kit_probe",
 }
-SCENE_CRATES: set[str] = TOOLKIT_CRATES | {SCENE}
+SCENE_CRATES: set[str] = TOOLKIT_CRATES | {SCENE, "game_table", "game_play"}
 RENDER = "beryl_render"
 INSPECT = "beryl_inspect"
 # Scene and toolkit code must be deterministic and independent of the host. These `std`
@@ -61,7 +61,7 @@ ATOMIC: re.Pattern[str] = re.compile(r"(?<![\w:])Atomic[A-Z]\w*")
 # A path into `std`, or a braced group of them: `std::time`, `std::{fs, collections::X}`.
 STD_PATH: re.Pattern[str] = re.compile(r"\bstd\s*::\s*(\{|[a-z_]+)")
 # Dependencies used by the scene or toolkit must preserve frame determinism.
-SCENE_DEPENDENCIES: set[str] = TOOLKIT_CRATES | {
+SCENE_DEPENDENCIES: set[str] = (SCENE_CRATES - {SCENE}) | {
     "arrayvec",
     "self_cell",
     "smallbox",  # Inline storage for action messages.
@@ -307,13 +307,13 @@ def data_names(root: Path) -> list[str]:
     ]
 
 
-# Screens, prompts, widgets, heads-up displays, inspectors and manual elements take their
-# sizes from the design tokens in kit_base (docs/beryl-3d.md, "Elements").
+# Elements take their sizes from kit_base design tokens (docs/beryl-3d.md, "Elements").
 TOKEN_FOLDERS: tuple[tuple[str, str], ...] = (
     (SCENE, "screens"),
     (SCENE, "prompts"),
     ("kit_ui", "widgets"),
     (SCENE, "hud"),
+    ("game_play", "hud"),
     (SCENE, "inspect"),
     (SCENE, "manual"),
 )

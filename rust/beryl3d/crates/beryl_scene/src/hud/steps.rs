@@ -34,7 +34,7 @@ use glam::Vec2;
 
 use super::players::face_centre;
 use crate::hud::HudIn;
-use crate::table::Window;
+use game_table::table::Window;
 use kit_base::data::space::hud::{STEP_FIXED, STEP_OFF};
 use kit_base::tokens::{color, shadow, size};
 use kit_frame::frame::Role;

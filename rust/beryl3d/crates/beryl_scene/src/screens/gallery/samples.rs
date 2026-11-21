@@ -1,6 +1,6 @@
 //! The stand-in cards from `ui/src/screens/samples.ts`, drawn with Beryl's card frame.
 
-use crate::faces::{FaceList, PrintedText};
+use game_table::faces::{FaceList, PrintedText};
 
 const CREATURES: &[(&str, &str, &str, &str, &str, &str)] = &[
     (

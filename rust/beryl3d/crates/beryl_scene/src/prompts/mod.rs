@@ -22,8 +22,8 @@ pub use bar::{prompt_bar, waiting};
 pub use tray::Piles;
 
 use crate::hud::HudIn;
-use crate::light::{ArrowSpan, Lit, MarkSpan, Span};
-use crate::verbs::Interval;
+use game_play::light::{ArrowSpan, Lit, MarkSpan, Span};
+use game_play::verbs::Interval;
 use kit_base::pose::Curve;
 use kit_ui::element::Element;
 use kit_ui::input::FaceId;

@@ -18,7 +18,7 @@ use glam::Vec2;
 use super::opening::{Presentation, present};
 use crate::manual::TablePress;
 use crate::manual::opening::{OpeningPress, prompt};
-use crate::table::Window;
+use game_table::table::Window;
 use kit_base::tokens::{color, size, space};
 use kit_ui::element::{Action, Align, Anchor, Element, column, row};
 use kit_ui::widgets::screen::phone_action;

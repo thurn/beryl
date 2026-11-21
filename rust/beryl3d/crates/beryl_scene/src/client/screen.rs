@@ -8,10 +8,10 @@ use glam::Vec2;
 use super::Client;
 
 use crate::command::{Request, SessionCommand};
-use crate::faces::{FaceList, Faces};
 use crate::hud::phone::Occupied;
 use crate::manual::TableCommand;
 use crate::screens::{self, Screen, ScreenIn, ScreenPress, Sheet, StartForm};
+use game_table::faces::{FaceList, Faces};
 use kit_ui::element::{Action, floats};
 use kit_ui::input::Rect;
 use kit_ui::input::{AssetReady, FaceSize};

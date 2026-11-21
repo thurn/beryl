@@ -19,8 +19,8 @@ use serde_json::{Value, json};
 use super::Target;
 use super::commands::seat_of;
 
-use crate::faces::FaceList;
 use crate::hud::piles::pile_cards;
+use game_table::faces::FaceList;
 use kit_frame::frame::{Frame, Role};
 
 /// The viewer's search field, by its name, which the web gives its search box as its label.

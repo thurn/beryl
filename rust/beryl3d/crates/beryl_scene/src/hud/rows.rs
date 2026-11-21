@@ -14,9 +14,9 @@
 use beryl_protocol::protocol::{RowName, Side};
 use glam::{Vec2, Vec3};
 
-use super::counts::{index, points};
-use crate::art::orb;
-use crate::table::{Camera, Layout, ROWS, Rows, Scroller, Table, row_area};
+use game_play::art::orb;
+use game_play::hud::counts::{index, points};
+use game_table::table::{Camera, Layout, ROWS, Rows, Scroller, Table, row_area};
 use kit_base::data::space::layout::desktop::ROW_COUNT_GAP;
 use kit_base::tokens::{size, type_style};
 use kit_ui::element::{Element, FloatId, floats, text};

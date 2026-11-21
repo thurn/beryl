@@ -18,7 +18,7 @@ use crate::manual::lobby::{
     ASSISTS, DECK_NAME, DECKLIST, DeckPanel, Lobby, STARTING_HAND_SIZE, STARTING_LIFE,
     asked_settings, unreadable,
 };
-use crate::table::Window;
+use game_table::table::Window;
 use kit_base::tokens::type_style::{START_LABEL as LABEL, START_TITLE as TITLE};
 use kit_base::tokens::{color, size, space, type_style};
 use kit_frame::frame::Role;

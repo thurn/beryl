@@ -12,8 +12,8 @@ use beryl_protocol::protocol::ObjectId;
 use beryl_protocol::script::OwnStep;
 
 use super::{Shown, Steps, begin_spans, end_spans, mark_spans, on_table, ways};
-use crate::light::Span;
-use crate::table::{Held, TrayKind};
+use game_play::light::Span;
+use game_table::table::{Held, TrayKind};
 
 /// The cards a prompt holds up, pile by pile, borrowed from its state, so that comparing two
 /// states allocates nothing: one pile or two, how many cards each of two must come to hold,

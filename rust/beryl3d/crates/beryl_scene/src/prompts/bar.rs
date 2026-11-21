@@ -12,7 +12,7 @@ use glam::Vec2;
 use super::Piles;
 use crate::hud::HudIn;
 use crate::hud::phone::{Occupied, asked_top, clear_at_right, phase_span};
-use crate::table::{PhoneBands, phone_bands};
+use game_table::table::{PhoneBands, phone_bands};
 use kit_base::data::space::hud::phone as data;
 use kit_base::tokens::{color, shadow, size, space, type_style};
 use kit_text::text::TypeStyle;

@@ -18,7 +18,7 @@ use beryl_protocol::script::{Mark, Subject};
 
 use super::{Shown, Steps, mark_spans, prompt_bar, target_arrows, tray};
 use crate::hud::HudIn;
-use crate::light::{MarkSpan, Span};
+use game_play::light::{MarkSpan, Span};
 use kit_ui::element::Element;
 
 /// What the flat layer shows for `prompt`: the prompt bar. A player the prompt marks is picked

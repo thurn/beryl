@@ -8,7 +8,14 @@ publish = false
 [lints]
 workspace = true
 
+[features]
+# The driver can prepare a table straight from a recorded view.
+driver = []
+
 [dependencies]
+beryl_protocol.workspace = true
+glam.workspace = true
+self_cell.workspace = true
 kit_base.workspace = true
 kit_text.workspace = true
 kit_frame.workspace = true
@@ -18,3 +25,7 @@ kit_fx.workspace = true
 kit_scene.workspace = true
 kit_probe.workspace = true
 game_table.workspace = true
+
+[build-dependencies]
+# Reads the audio manifest to generate the sound names.
+serde_json.workspace = true

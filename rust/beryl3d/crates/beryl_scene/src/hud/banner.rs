@@ -13,7 +13,7 @@ use beryl_protocol::protocol::{Combat, Kind, PlayerView, Side, Status, Step};
 use glam::Vec2;
 
 use super::players::orb_centre;
-use crate::table::Window;
+use game_table::table::Window;
 use kit_base::data::space::hud::{BANNER, BANNER_GAP};
 use kit_base::tokens::{color, gradient, ratio, shadow, size, type_style};
 use kit_frame::frame::Role;

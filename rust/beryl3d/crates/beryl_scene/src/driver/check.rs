@@ -14,8 +14,8 @@ use beryl_protocol::script::{Edge, Verb};
 use super::{DriverError, Name, Page};
 use crate::agent::game_checks;
 use crate::agent::steps::{self, Found, Sample, card_of, sample, step_nanoseconds};
-use crate::play::record::{Plant, Planted, ScriptRecord};
-use crate::table::Camera;
+use game_play::play::record::{Plant, Planted, ScriptRecord};
+use game_table::table::Camera;
 use kit_base::data::audit;
 use kit_frame::frame::Frame;
 use kit_probe::agent::checks::{KeptArrow, arrows_held, keep_arrows, lines_hold};
@@ -59,7 +59,7 @@ pub struct TimelineStep {
     pub effects: Vec<(String, Edge, Option<f64>)>,
     /// The sounds it asks for (`sound::cues`). A step the client made itself asks for none:
     /// its verbs (`mark`, `point`, `lift`) have no sound in either client.
-    pub sounds: Vec<crate::sound::Cue>,
+    pub sounds: Vec<game_play::sound::Cue>,
     /// Whether the client made the step itself while a prompt was open (`prompts::own`),
     /// rather than the session sending it in a script. Its `view` is then the number of views
     /// given when it played, its `beat` 0, and its times are on the clock of that one beat,

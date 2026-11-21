@@ -19,22 +19,22 @@ use beryl_protocol::protocol::{DecisionId, SessionId, Side, Status};
 use beryl_protocol::script::{OwnTimings, Verb, own_timings};
 use beryl_protocol::{AgentView, StartRequest, StopsSetting};
 
-use crate::faces::{CARD_BACK, FaceList, Faces};
 use crate::hud::banner::Banner;
-use crate::hud::counts::CountFloats;
 use crate::hud::log::Log;
-use crate::hud::notices::NoticeFloats;
 use crate::hud::piles::PileCounts;
 use crate::hud::rows::RowCounts;
-use crate::play::Show;
-use crate::play::record::{Plant, ScriptRecord};
-use crate::pointer::LetGo;
-use crate::pointer::rows::RowGesture;
-use crate::pointer::touch::Touch;
 use crate::prompts;
 use crate::screens::{self, Concede, GalleryState, Music, SEED, Screen, Sheet, StartForm};
 use crate::settings::Settings;
-use crate::table::{Table, Window};
+use game_play::hud::counts::CountFloats;
+use game_play::hud::notices::NoticeFloats;
+use game_play::play::Show;
+use game_play::play::record::{Plant, ScriptRecord};
+use game_play::pointer::LetGo;
+use game_play::pointer::rows::RowGesture;
+use game_play::pointer::touch::Touch;
+use game_table::faces::{CARD_BACK, FaceList, Faces};
+use game_table::table::{Table, Window};
 use kit_frame::frame::{self, ElementId, Frame, FrameBuilder, Sound, Wake};
 use kit_ui::input::{FaceId, FaceSize, GlyphKey, Lifecycle, Tier};
 use kit_ui::layout::{self, Layer};
@@ -449,7 +449,7 @@ impl Client {
         // Elements anchored to a card, an ability or a player stand where the table drew it.
         let table = self.show.table();
         self.layer
-            .follow(|subject| crate::table::spot_of(&builder, table, subject));
+            .follow(|subject| game_table::table::spot_of(&builder, table, subject));
         // Each total shows what `prepare` laid out, over the opening too, as the web's does.
         self.counts.write(
             &mut self.layer,
@@ -525,13 +525,13 @@ impl Client {
 
     /// The spans and streaks the table shows.
     #[must_use]
-    pub fn lit(&self) -> &crate::light::Lit {
+    pub fn lit(&self) -> &game_play::light::Lit {
         self.show.lit()
     }
 
     /// The spans and streaks the table shows, for the marks and arrows a prompt begins and ends
     /// itself, timed by the session's `own_timings`.
-    pub fn lit_mut(&mut self) -> &mut crate::light::Lit {
+    pub fn lit_mut(&mut self) -> &mut game_play::light::Lit {
         self.show.lit_mut()
     }
 
@@ -651,7 +651,7 @@ impl Client {
 
     /// The pointer on the table, for tests that read the held card's lean.
     #[must_use]
-    pub fn pointer(&self) -> &crate::pointer::Pointer {
+    pub fn pointer(&self) -> &game_play::pointer::Pointer {
         self.show.pointer()
     }
 

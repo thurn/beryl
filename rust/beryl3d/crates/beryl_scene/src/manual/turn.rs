@@ -13,7 +13,7 @@ use beryl_protocol::protocol::{PlayerView, Side, TableAction, TablePhase};
 use glam::Vec2;
 
 use super::TablePress;
-use crate::table::Window;
+use game_table::table::Window;
 use kit_ui::element::{Anchor, Element};
 use kit_ui::widgets::primary;
 

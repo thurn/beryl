@@ -13,8 +13,8 @@
 use beryl_protocol::protocol::{ObjectId, ObjectView, PlayerState, PlayerView, Side, ZoneName};
 use glam::Vec2;
 
-use crate::play::Show;
-use crate::table::{PileShown, Table, host_slot, pile_name};
+use game_play::play::Show;
+use game_table::table::{PileShown, Table, host_slot, pile_name};
 use kit_base::data::space::flat::TOOLTIP_GAP;
 use kit_ui::element::{Element, floats};
 use kit_ui::layout::{FloatLook, Layer};

@@ -10,8 +10,8 @@ use crate::inspect::Viewed;
 use beryl_protocol::protocol::{ObjectId, Side};
 use glam::Vec2;
 
-use crate::table::phone::strip;
-use crate::table::{CARD_HEIGHT, CARD_WIDTH, Window};
+use game_table::table::phone::strip;
+use game_table::table::{CARD_HEIGHT, CARD_WIDTH, Window};
 use kit_base::data::space::hud::phone::REVEALED_WIDTH;
 use kit_base::data::space::layout::phone::bands::OPPONENT_STRIP;
 use kit_base::data::space::revealed as data;

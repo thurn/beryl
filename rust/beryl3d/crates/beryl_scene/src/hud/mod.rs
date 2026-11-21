@@ -2,12 +2,10 @@
 //! of the turn, the notices `announce` steps show, the step banner and the game log.
 
 pub mod banner;
-pub mod counts;
 pub mod full_control;
 mod input;
 pub use input::HudIn;
 pub mod log;
-pub mod notices;
 pub mod phone;
 pub mod piles;
 pub mod players;
@@ -16,3 +14,5 @@ pub mod steps;
 
 mod message;
 pub use message::GamePress;
+
+pub use game_play::hud::{counts, notices};

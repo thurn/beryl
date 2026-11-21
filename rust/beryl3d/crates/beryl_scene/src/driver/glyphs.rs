@@ -9,9 +9,9 @@
 //! atlas does not hold.
 
 use super::Page;
-use crate::art::orb;
 use crate::client;
 use client::Input;
+use game_play::art::orb;
 use kit_ui::input::{AssetReady, FaceId, GlyphCell, GlyphKey, IconCell};
 use kit_ui::widgets::IconId;
 use kit_ui::widgets::icon_shadows;

@@ -18,9 +18,9 @@ use beryl_protocol::script::Subject;
 use glam::Vec2;
 
 use super::{Shown, Steps, prompt_bar};
-use crate::faces::FaceList;
 use crate::hud::HudIn;
-use crate::table::{CARD_HEIGHT, CARD_WIDTH, TraySpace, tray_area};
+use game_table::faces::FaceList;
+use game_table::table::{CARD_HEIGHT, CARD_WIDTH, TraySpace, tray_area};
 use kit_base::tokens::{color, size, space, type_style};
 use kit_frame::frame::Role;
 use kit_text::text::TypeStyle;

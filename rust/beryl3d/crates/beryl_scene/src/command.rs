@@ -13,7 +13,7 @@ use beryl_protocol::protocol::{Answer, Side, TableAction};
 use beryl_protocol::{DecisionId, SessionError, SessionId, StartRequest, StopsSetting};
 
 use crate::settings::Settings;
-use crate::sound::Music;
+use game_play::sound::Music;
 use kit_frame::frame::ElementId;
 use kit_ui::input::{Rect, Size};
 

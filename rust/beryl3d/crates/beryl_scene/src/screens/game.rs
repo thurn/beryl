@@ -10,7 +10,7 @@ use super::{game_over, opening};
 use crate::hud::{HudIn, full_control, log, phone, players, steps};
 use crate::inspect::viewer;
 use crate::prompts;
-use crate::table::phone_bands;
+use game_table::table::phone_bands;
 use kit_base::tokens::ratio;
 use kit_ui::element::{Anchor, Element, Shortcuts, holder, row};
 

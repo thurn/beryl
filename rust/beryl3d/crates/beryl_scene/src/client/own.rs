@@ -12,11 +12,11 @@ use beryl_protocol::script::{Arrow, OwnStep, Subject, Verb};
 use glam::Vec2;
 
 use super::Client;
-use crate::hud::notices::NoticeFloats;
-use crate::light::Aim;
-use crate::play::PlacedLetGo;
 use crate::prompts;
-use crate::table::{Held, TrayPoses};
+use game_play::hud::notices::NoticeFloats;
+use game_play::light::Aim;
+use game_play::play::PlacedLetGo;
+use game_table::table::{Held, TrayPoses};
 use kit_base::pose::Pose;
 
 /// What the prompt's own steps depend on besides the prompt, now and when `prompts::own` last

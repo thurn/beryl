@@ -16,7 +16,7 @@ use beryl_protocol::protocol::{PlayerView, Side, Step};
 use glam::Vec2;
 
 use crate::hud::HudIn;
-use crate::table::PhoneBands;
+use game_table::table::PhoneBands;
 use kit_base::data::space::hud::phone as data;
 use kit_base::tokens::{color, shadow, size, space, type_style};
 use kit_frame::frame::Role;

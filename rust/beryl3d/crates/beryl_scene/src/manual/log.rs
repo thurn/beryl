@@ -16,7 +16,7 @@ use glam::Vec2;
 
 use super::TablePress;
 use super::commands;
-use crate::table::Window;
+use game_table::table::Window;
 use kit_base::tokens::{color, size, space, type_style};
 use kit_frame::frame::Role;
 use kit_ui::element::{Align, Anchor, Element, Overflow, column, holder, row, text};

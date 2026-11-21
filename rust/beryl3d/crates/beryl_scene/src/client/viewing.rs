@@ -10,10 +10,10 @@ use beryl_protocol::script::{Act, OwnStep, Turn};
 
 use super::Client;
 use crate::inspect::revealed::{self, RevealedFace};
-use crate::light::Span;
 use crate::screens::{self, Screen, ScreenIn};
-use crate::table::{Moves, Relaid, Window};
-use crate::verbs::Interval;
+use game_play::light::Span;
+use game_play::verbs::Interval;
+use game_table::table::{Moves, Relaid, Window};
 use kit_base::data::space::shown::opening;
 use kit_base::pose::Curve;
 use kit_frame::frame::Place;

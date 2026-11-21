@@ -10,8 +10,8 @@
 use beryl_protocol::script::Verb;
 use glam::{Quat, Vec2};
 
-use crate::play::record::{Cause, ScriptRecord, SegmentRecord, StepRecord};
-use crate::table::Camera;
+use game_play::play::record::{Cause, ScriptRecord, SegmentRecord, StepRecord};
+use game_table::table::Camera;
 use kit_base::data::audit;
 use kit_base::pose::{Pose, Segment};
 use kit_frame::frame::{Frame, Place, Role};

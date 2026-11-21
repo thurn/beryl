@@ -23,7 +23,7 @@ pub use start::{SEED, StartForm, in_progress, seed};
 pub use table_entries::{COULD_NOT_OPEN, EntryMode, INVITE, NAME, TableEntries};
 
 pub use crate::navigation::{Screen, Sheet};
-pub use crate::sound::Music;
+pub use game_play::sound::Music;
 pub use settings::{Concede, GEAR_INSET, corner};
 
 use crate::inspect::Viewed;
@@ -32,7 +32,6 @@ use beryl_protocol::protocol::{OutcomeView, Side, Status};
 use beryl_protocol::script::{Subject, Turn};
 use beryl_protocol::{AgentView, PlayerView, StopsSetting};
 
-use crate::faces::FaceList;
 use crate::hud::phone::Occupied;
 use crate::hud::{HudIn, log::LogEntry};
 use crate::inspect::inspector::Inspected;
@@ -40,7 +39,8 @@ use crate::inspect::revealed::RevealedFace;
 use crate::manual::TableState;
 use crate::manual::lobby::Lobby;
 use crate::settings::Settings;
-use crate::table::Window;
+use game_table::faces::FaceList;
+use game_table::table::Window;
 use kit_ui::element::Element;
 use kit_ui::widgets::Fields;
 

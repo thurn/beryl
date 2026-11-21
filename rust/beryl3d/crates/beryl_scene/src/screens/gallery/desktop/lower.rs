@@ -6,8 +6,8 @@ use glam::{Vec2, Vec3};
 
 use super::super::{GalleryMenu, GalleryQuery, example_button, face};
 use super::{Words, apart, at, caption_at, flat_face, panel, place, rule, words};
-use crate::faces::{CARD_BACK, FaceList};
-use crate::table::{CARD_HEIGHT, CARD_WIDTH};
+use game_table::faces::{CARD_BACK, FaceList};
+use game_table::table::{CARD_HEIGHT, CARD_WIDTH};
 use kit_base::tokens::{color, shadow, size, type_style};
 use kit_frame::frame::Role;
 use kit_ui::element::{Border, Element, Shadow, Shown, TextAlign, holder};

@@ -34,7 +34,7 @@ use beryl_protocol::script::{Mark, Subject};
 use glam::Vec2;
 
 use crate::hud::HudIn;
-use crate::table::{CARD_HEIGHT, CARD_WIDTH, Window};
+use game_table::table::{CARD_HEIGHT, CARD_WIDTH, Window};
 use kit_base::data::space::flat::opening as metrics;
 use kit_base::data::space::flat::phone::opening as phone;
 use kit_base::data::space::flat::phone::{ACTION_GAP, ACTION_HEIGHT, GUTTER};

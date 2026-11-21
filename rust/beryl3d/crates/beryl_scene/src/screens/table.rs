@@ -24,7 +24,7 @@ use crate::manual::{
     TableState, ask, assists, drop, link, log, opening, order, palette, pools, quit, selection,
     tokens, turn,
 };
-use crate::table::{CARD_HEIGHT, CARD_WIDTH};
+use game_table::table::{CARD_HEIGHT, CARD_WIDTH};
 use kit_base::data::space::flat::{MENU_EDGE, sheet};
 use kit_base::data::space::pointer::DRAG_THRESHOLD_POINTS;
 use kit_frame::frame::Role;

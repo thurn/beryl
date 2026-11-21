@@ -19,7 +19,7 @@ use glam::Vec2;
 
 use super::{Piles, Shown, Steps, prompt_bar, tray};
 use crate::hud::HudIn;
-use crate::table::{DESKTOP, tray_boxes};
+use game_table::table::{DESKTOP, tray_boxes};
 use kit_base::data::audit;
 use kit_base::tokens::{color, size, type_style};
 use kit_text::text::TypeStyle;

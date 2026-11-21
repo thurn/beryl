@@ -20,8 +20,8 @@ use beryl_protocol::protocol::{ManaPool, PlayerState, Side};
 use glam::Vec2;
 
 use super::TablePress;
-use crate::hud::counts::{index, points};
-use crate::table::{DESKTOP, Window, phone_bands};
+use game_play::hud::counts::{index, points};
+use game_table::table::{DESKTOP, Window, phone_bands};
 use kit_base::data::space::hud::phone as data;
 use kit_base::tokens::{color, size, space, type_style};
 use kit_ui::element::{Align, Anchor, Display, Element, Justify, Track, column, holder, row, text};

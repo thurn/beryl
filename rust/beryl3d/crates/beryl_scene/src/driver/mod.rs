@@ -40,8 +40,8 @@ pub use recording::{Answer, OPEN, RECORDINGS, Recording, Responses, plays_on};
 use self::cues::Cues;
 use self::moment::{moment_distance, offset_from};
 use crate::agent::game_checks;
-use crate::faces::FaceList;
-use crate::play::record::Plant;
+use game_play::play::record::Plant;
+use game_table::faces::FaceList;
 use kit_frame::frame::{Frame, Sound, StateBits, Wake};
 use kit_probe::agent::tree::locator_of;
 use kit_probe::agent::{Context, Fault, Layout, TreeOptions, locate, tree};
@@ -360,7 +360,7 @@ impl Page {
 
     /// The spans and streaks the table shows now: the marks and arrows among them.
     #[must_use]
-    pub fn lit(&self) -> &crate::light::Lit {
+    pub fn lit(&self) -> &game_play::light::Lit {
         self.client.lit()
     }
 

@@ -10,9 +10,9 @@ use crate::screens::ScreenPress;
 use glam::Vec2;
 
 use super::{Screen, ScreenIn};
-use crate::faces::{CARD_BACK, FaceList};
 use crate::inspect::viewer::scry_sample;
-use crate::table::{CARD_HEIGHT, CARD_WIDTH};
+use game_table::faces::{CARD_BACK, FaceList};
+use game_table::table::{CARD_HEIGHT, CARD_WIDTH};
 use kit_base::data::space::flat::gallery as metrics;
 use kit_base::tokens::{color, shadow, size, space, type_style};
 use kit_frame::frame::Role;

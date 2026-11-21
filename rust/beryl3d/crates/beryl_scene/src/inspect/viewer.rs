@@ -13,10 +13,10 @@ use beryl_protocol::script::Subject;
 use glam::Vec2;
 
 use super::revealed::{REVEALED, RevealedFace};
-use crate::faces::{CARD_BACK, FaceList};
 use crate::hud::HudIn;
 use crate::hud::piles::pile_cards;
-use crate::table::{CARD_HEIGHT, CARD_WIDTH, pile_name};
+use game_table::faces::{CARD_BACK, FaceList};
+use game_table::table::{CARD_HEIGHT, CARD_WIDTH, pile_name};
 use kit_base::data::space::flat::gallery as metrics;
 use kit_base::tokens::{color, size, space, type_style};
 use kit_frame::frame::Role;

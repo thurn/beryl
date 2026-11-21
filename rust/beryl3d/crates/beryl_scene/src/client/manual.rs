@@ -19,10 +19,10 @@ use crate::manual::viewers::{self, Look, ViewerControl};
 use crate::manual::{
     self, Context, Pending, Pressed, Sent, TablePress, TableState, Target, commands, pools,
 };
-use crate::pointer::refusal::Shake;
 use crate::screens::Screen;
 use beryl_protocol::ipc::TableActReply;
 use beryl_protocol::protocol::{Answer, LinkState, ObjectId, Side, TableAction, ZoneName};
+use game_play::pointer::refusal::Shake;
 use kit_ui::input::{Button, Pointer, PointerPhase};
 use kit_ui::widgets::BACK;
 
@@ -72,7 +72,7 @@ impl Manual {
     /// `shakeRefusal` plays it.
     pub(super) fn take_refusal(&mut self) -> Option<kit_frame::frame::Sound> {
         std::mem::take(&mut self.refused).then(|| kit_frame::frame::Sound {
-            id: crate::sound::id("no"),
+            id: game_play::sound::id("no"),
             theirs: false,
         })
     }

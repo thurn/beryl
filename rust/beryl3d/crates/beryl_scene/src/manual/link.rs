@@ -11,7 +11,7 @@ use beryl_protocol::protocol::LinkState;
 use glam::Vec2;
 
 use super::TablePress;
-use crate::hud::notices::step_banner;
+use game_play::hud::notices::step_banner;
 use kit_base::data::space::flat::table::link::{PHONE_TOP, TOP, TOP_SHARE, WIDTH};
 use kit_base::tokens::{color, size, space, type_style};
 use kit_ui::element::{Align, Anchor, Element, column, text};

@@ -13,7 +13,7 @@ use serde_json::Value;
 
 use super::Target;
 use super::commands::{self, COMMANDS, Values, seat_of};
-use crate::light::Aim;
+use game_play::light::Aim;
 
 /// A command waiting for its target: the command, at its index in `COMMANDS`, and the card it
 /// was given to.

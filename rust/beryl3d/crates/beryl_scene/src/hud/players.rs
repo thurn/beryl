@@ -23,17 +23,17 @@ use beryl_protocol::protocol::{Combat, PlayerView, Side, Step};
 use beryl_protocol::script::Subject;
 use glam::Vec2;
 
-use crate::art::orb;
 use crate::hud::HudIn;
-use crate::table::phone::strip;
-use crate::table::{DESKTOP, Window};
+use game_play::art::orb;
+use game_table::table::phone::strip;
+use game_table::table::{DESKTOP, Window};
 use kit_base::data::space::hud::incoming as badge;
 use kit_text::text::TypeStyle;
 use kit_text::text::fonts::Font;
 use kit_ui::element::{Anchor, Element, Position, Shadow, Shown, TextAlign, holder, text};
 use kit_ui::input::Rect;
 
-use super::counts::{index, points};
+use game_play::hud::counts::{index, points};
 
 /// What the game screen shows for the players: both orbs, once a game has a view.
 #[must_use]

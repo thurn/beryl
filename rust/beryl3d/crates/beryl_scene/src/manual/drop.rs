@@ -15,7 +15,7 @@ use serde_json::Value;
 
 use super::commands::seat_of;
 use super::viewers::inside;
-use crate::table::{Camera, Layout};
+use game_table::table::{Camera, Layout};
 use kit_base::data::space::flat::table::drop as data;
 use kit_base::tokens::{color, ratio, type_style};
 use kit_frame::frame::{Frame, Place, Role, StateBits};

@@ -29,9 +29,12 @@ A program here that spreads work over threads sizes them with
 - `kit_fx`: effect runs, card looks, light, particles and camera shake.
 - `kit_scene`: hit testing and element coverage.
 - `kit_probe`: tree printouts, locators and frame checks.
-- `beryl_scene`: game views and animation as pure data. It re-exports the
-  toolkit modules so callers can continue using their existing paths. The
-  toolkit and scene use no GPU, window, clock or thread (`scene-purity`).
+- `game_table`: zone placement, the camera, card faces and table drawing.
+- `game_play`: script playback, verbs, pointer handling, sound cues and the
+  effects, marks and floats that a script controls.
+- `beryl_scene`: the client and its screens. It re-exports toolkit and game
+  modules so callers can continue using their existing paths. The scene, toolkit
+  and game crates use no GPU, window, clock or thread (`scene-purity`).
 - `beryl_render`: draws a scene with wgpu. The only crate that names `wgpu`.
 - `beryl_assets`: decodes and packs card pictures for the renderer.
 - `beryl_host`: the window and event loop (winit) that drive a scene and render

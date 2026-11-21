@@ -27,7 +27,7 @@ SOURCES: tuple[str, ...] = (
     "docs/sample-decks",
     "ui/src/generated",
     "ui/fixtures.json",
-    # `beryl_scene`'s build script reads the sound names from it.
+    # The build scripts of `game_play` and `beryl_scene` read sound names and credits here.
     "ui/src/audio/manifest.json",
 )
 # In the machine: where the sources arrive, and the copy the gates build from.

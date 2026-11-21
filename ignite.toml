@@ -361,7 +361,7 @@ products = ["b3d"]
 [[rebuild]]
 name = "b3d-table-body"
 edit = "append a no-op item to the Beryl 3D battlefield rows module"
-file = "rust/beryl3d/crates/beryl_scene/src/table/rows.rs"
+file = "rust/beryl3d/crates/game_table/src/table/rows.rs"
 append = "\nconst _: () = ();\n"
 products = ["b3d"]
 

@@ -19,9 +19,9 @@ use glam::Vec2;
 
 use super::bar::{Controls, bar};
 use super::{Shown, Steps, marks, ways};
-use crate::faces::FaceList;
 use crate::hud::HudIn;
-use crate::table::{CARD_HEIGHT, CARD_WIDTH, DESKTOP};
+use game_table::faces::FaceList;
+use game_table::table::{CARD_HEIGHT, CARD_WIDTH, DESKTOP};
 use kit_base::data::space::hud::phone::CHARACTER_WIDTH;
 use kit_base::tokens::{color, ratio, size, space, type_style};
 use kit_frame::frame::Role;
