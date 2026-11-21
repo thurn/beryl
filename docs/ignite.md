@@ -4089,14 +4089,14 @@ release ref when Ignite blocks its own landing.
   stalled when the first of these holds, checked in this order:
   1. Two separate fixes have landed for the same check, and tip verification
      still failed that check after each one.
-  1. The ticket has been open without a claim for 10 minutes.
-  1. Its holder has recorded no activity on it for 50 minutes. Activity is a
+  2. The ticket has been open without a claim for 10 minutes.
+  3. Its holder has recorded no activity on it for 50 minutes. Activity is a
      record, a comment or a change to the ticket by the holding session, and the
      claim itself counts.
-  1. The ticket has been open longer than the 90th percentile of the lifetimes
+  4. The ticket has been open longer than the 90th percentile of the lifetimes
      of the last 50 closed regression tickets that were worked by a session
-     resumed from the culprit's transcript. With fewer than 20 such tickets,
-     the limit is 20 hours.
+     resumed from the culprit's transcript. With fewer than 20 such tickets, the
+     limit is 20 hours.
 - A regression ticket held by a session that resumed the culprit's transcript
   (see [Regression tickets](#regression-tickets)) is never stalled, whatever the
   four conditions say, because that session already has the failed change's
