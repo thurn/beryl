@@ -36,6 +36,19 @@ pub(super) struct Earlier {
     transcript: Option<String>,
 }
 
+impl super::CliAppSetup {
+    /// Older workers could store an empty model for a ticket without a tier. Use the same
+    /// configured default for those workers when they retry and for new untiered hand-offs.
+    pub(super) fn model_for<'a>(&'a self, model: Option<&'a str>) -> Result<&'a str> {
+        model
+            .filter(|model| !model.is_empty())
+            .or(self.default_model.as_deref())
+            .ok_or_else(|| {
+                Error::Invalid(format!("no CLI model configured for {}", self.app.name()))
+            })
+    }
+}
+
 impl CliDaemon {
     /// What the turns of `session`, a CLI session whose slot has been freed, say about it;
     /// `None` when it never ran a turn here. A session that still holds a slot cannot take

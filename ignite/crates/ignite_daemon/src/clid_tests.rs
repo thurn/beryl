@@ -239,6 +239,7 @@ impl Rig {
                         program: "fake-cli".to_owned(),
                         args: vec!["--yes".to_owned()],
                     },
+                    default_model: Some("default-model".to_owned()),
                 },
             )]),
         };
@@ -497,6 +498,41 @@ fn a_hung_turn_is_ended_and_treated_as_interrupted() {
     assert_eq!(lock(&rig.turns.ended).clone(), [(session.to_string(), 1)]);
     assert_eq!(rig.asked()[0].0, TurnEnd::Interrupted);
     assert_eq!(rig.asked()[0].1.interrupted_in_row, 1);
+}
+
+#[test]
+fn a_cli_handoff_without_a_model_uses_the_configured_default() {
+    let rig = Rig::new();
+    rig.keep_running(1);
+    let session = rig
+        .daemon
+        .begin(&reservation("T.1", 1), "", None, None)
+        .unwrap();
+    assert_eq!(rig.row(&session).model.as_deref(), Some("default-model"));
+    assert_eq!(
+        rig.turns.starts()[0].2.args[2..4],
+        ["--model", "default-model"]
+    );
+}
+
+#[test]
+fn a_retry_uses_the_configured_default_when_the_saved_model_is_empty() {
+    let rig = Rig::new();
+    *lock(&rig.turns.fail_starts) = 1;
+    let session = rig.try_begin().unwrap();
+    let mut row = rig.row(&session);
+    row.model = Some(String::new());
+    rig.pool
+        .with_database(|conn| store::put(conn, &row))
+        .unwrap();
+
+    rig.keep_running(1);
+    rig.daemon.step().unwrap();
+
+    assert_eq!(
+        rig.turns.starts()[0].2.args[2..4],
+        ["--model", "default-model"]
+    );
 }
 
 #[test]

@@ -262,6 +262,8 @@ pub struct CliAppSetup {
     pub app: Arc<dyn CliApp>,
     /// `[pool.cli.<app>]`.
     pub program: CliProgram,
+    /// The configured model for tickets without a tier.
+    pub default_model: Option<String>,
 }
 
 /// What [`CliDaemon`] is built from.
@@ -585,7 +587,7 @@ impl CliDaemon {
             app: row.app.clone(),
             program: setup.program.program.clone(),
             args: setup.program.args.clone(),
-            model: row.model.clone().unwrap_or_default(),
+            model: setup.model_for(row.model.as_deref())?.to_owned(),
             effort: row.effort.clone(),
             transcript: row.transcript.clone(),
             new_transcript: if row.transcript.is_none() {
@@ -671,7 +673,7 @@ impl CliPool for CliDaemon {
         } else {
             return Err(Error::Invalid(format!("{named} is not a CLI slot")));
         };
-        self.app(&app)?;
+        let model = self.app(&app)?.model_for(Some(model))?;
         let _opening = lock(&self.opening);
         let session = match &earlier {
             Some(_) => named.clone(),

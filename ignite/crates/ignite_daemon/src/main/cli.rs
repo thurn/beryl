@@ -30,7 +30,7 @@ use ignite_core::traits::Result;
 
 use super::assemble::{Base, Desks, Machinery};
 use super::loops::Parts;
-use crate::clid::health::{Health, HealthEffects};
+use crate::clid::health::{Health, HealthEffects, probe_model};
 use crate::clid::start::TurnLauncher;
 use crate::clid::{self, CliAppSetup, CliDaemon, CliSetup, SupervisedTurns};
 use crate::dispatchd::Dispatcher;
@@ -113,6 +113,11 @@ pub fn cli_mode(
                 let setup = CliAppSetup {
                     app: app.clone(),
                     program,
+                    default_model: base
+                        .config
+                        .pool
+                        .model_id(app.name(), "sonnet")
+                        .or_else(|| probe_model(&base.config, app.name())),
                 };
                 Some((app.name().to_owned(), setup))
             })

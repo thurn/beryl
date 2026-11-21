@@ -365,6 +365,7 @@ impl Rig {
                 CliAppSetup {
                     app: Arc::new(Claude),
                     program,
+                    default_model: self.ctx.config.pool.model_id("claude", "sonnet"),
                 },
             )]),
         };

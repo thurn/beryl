@@ -378,7 +378,7 @@ impl Dispatcher {
             expires_at: reserved.expires_at,
             code: reserved.code.clone().unwrap_or_default(),
         };
-        // A ticket with no tier on an app with no default runs on the app's own default model.
+        // The CLI pool resolves a hand-off without a model to the app's configured default.
         let model = reserved.model.clone().unwrap_or_default();
         let started = cli
             .pool
