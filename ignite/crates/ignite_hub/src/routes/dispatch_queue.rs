@@ -214,6 +214,7 @@ fn reserve(
     now: Timestamp,
 ) -> Result<Reservation> {
     let reservation = Reservation {
+        provider: None,
         ticket: ticket.clone(),
         machine: machine.clone(),
         session: session.clone(),

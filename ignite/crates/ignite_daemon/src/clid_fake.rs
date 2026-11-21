@@ -215,6 +215,7 @@ mod tests {
     fn the_fake_begins_sessions_and_answers_checks() {
         let pool = FakeCliPool::default();
         let reservation = Reservation {
+            provider: None,
             ticket: TicketId::new("T.1").unwrap(),
             machine: MachineId::new("m-1").unwrap(),
             session: SessionId::new("cli-claude-slot-1").unwrap(),

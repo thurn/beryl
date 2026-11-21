@@ -266,6 +266,7 @@ impl Rig {
         self.hub
             .insert_ticket(detail(ticket, "open", None, labels, ""));
         self.hub.queue_reservation(Reservation {
+            provider: None,
             ticket: ticket_id(ticket),
             machine: self.ctx.machine.clone(),
             session: session(worker),
@@ -475,6 +476,7 @@ fn a_model_that_reads_back_wrong_fails_the_handoff_without_a_substitute() {
 fn a_handoff_waits_until_its_tickets_model_can_be_read() {
     let rig = rig(&["local_w1"]);
     rig.hub.queue_reservation(Reservation {
+        provider: None,
         ticket: ticket_id("T.1"),
         machine: rig.ctx.machine.clone(),
         session: session("local_w1"),

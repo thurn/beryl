@@ -15,7 +15,10 @@ use crate::{Result, StoreError};
 /// The `meta` key of the routing facts from `ignite.toml`.
 const ROUTING: &str = "routing";
 
-fn get<T: serde::de::DeserializeOwned>(conn: &Connection, key: &str) -> Result<Option<T>> {
+pub(super) fn get<T: serde::de::DeserializeOwned>(
+    conn: &Connection,
+    key: &str,
+) -> Result<Option<T>> {
     let value: Option<String> = conn
         .query_row("SELECT value FROM meta WHERE key = ?1", [key], |row| {
             row.get(0)
@@ -28,7 +31,7 @@ fn get<T: serde::de::DeserializeOwned>(conn: &Connection, key: &str) -> Result<O
         .transpose()
 }
 
-fn put(conn: &Connection, key: &str, value: &impl Serialize) -> Result<()> {
+pub(super) fn put(conn: &Connection, key: &str, value: &impl Serialize) -> Result<()> {
     let json = serde_json::to_string(value)
         .map_err(|e| StoreError::Invalid(format!("meta {key}: {e}")))?;
     conn.execute(

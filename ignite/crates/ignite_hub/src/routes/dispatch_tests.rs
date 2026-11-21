@@ -134,6 +134,7 @@ pub(super) fn register(conn: &mut Connection) {
 
 pub(super) fn free(machine: &str, sessions: &[&str]) -> Value {
     json!(MachineFree {
+        room: None,
         machine: machine.parse().unwrap(),
         os: Os::Macos,
         idle_workers: sessions

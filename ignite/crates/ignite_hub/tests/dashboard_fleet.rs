@@ -203,6 +203,7 @@ fn a_cli_pool_needs_no_desktop_dispatcher_even_when_it_has_no_workers() {
     let mut conn = seeded();
     let now = Timestamp::parse(NOW).unwrap();
     let mut beat = ignite_core::protocol::hub::Heartbeat {
+        capacity: None,
         machine: "m-m".parse().unwrap(),
         version: "abc1234".to_owned(),
         workers: Vec::new(),

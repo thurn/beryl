@@ -13,8 +13,10 @@ use serde::{Deserialize, Serialize};
 
 use super::tickets::{LandedWork, Ticket};
 use super::{Class, Outcome};
+use crate::capacity::CapacityReport;
 use crate::config::Os;
 use crate::dispatch_pressure::DispatchPressure;
+use crate::fleet::FleetNotice;
 use crate::ids::{CheckName, Commit, InputHash, MachineId, RecordId, SessionId, TicketId, TreeId};
 use crate::time::Timestamp;
 
@@ -89,7 +91,7 @@ pub struct SessionTitle {
 }
 
 /// `POST /machines/heartbeat`.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Heartbeat {
     pub machine: MachineId,
     pub version: String,
@@ -102,9 +104,12 @@ pub struct Heartbeat {
     /// the field, which leaves the list the hub holds.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub families: Option<Vec<String>>,
+    /// The machine's current room, queue and build outputs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub capacity: Option<CapacityReport>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct HeartbeatReply {
     /// The Ignite commit the hub runs; a daemon on another version updates before asking for
     /// work.
@@ -117,6 +122,9 @@ pub struct HeartbeatReply {
     /// tickets that hold `master` back are handed off. `ignite status` says so.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub paused_everywhere: bool,
+    /// Fleet settings and provider holds for this machine.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fleet: Option<FleetNotice>,
 }
 
 /// An idle pool member that could take a ticket.
@@ -171,6 +179,22 @@ pub struct MachineFree {
     /// predates it sends none and gets `null`.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub explain: bool,
+    /// How many more workers can start and which providers can run them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub room: Option<Room>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Room {
+    pub start: u32,
+    pub providers: Vec<ProviderOffer>,
+}
+
+/// A provider whose CLI has passed its probe on an asking machine.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProviderOffer {
+    pub name: String,
+    pub tiers: Vec<String>,
 }
 
 /// The hub's answer to `POST /next`: a reservation, or nothing with the reason when the request
@@ -244,6 +268,9 @@ pub struct Reservation {
     /// claim the ticket, so that a hand-off arriving after the ticket went elsewhere claims
     /// nothing.
     pub code: String,
+    /// The provider the hub chose, if the daemon asked with worker room.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
 }
 
 /// `POST /claims`: `ignite start` turning a reservation (or nothing) into a claim.
@@ -331,37 +358,6 @@ pub struct Close {
     pub reason: String,
 }
 
-/// A result cache key. `platform` is `None` for a check with `platforms = "any"`.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct ResultKey {
-    pub check: CheckName,
-    pub hash: InputHash,
-    pub platform: Option<Os>,
-}
-
-/// A cached outcome.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CachedResult {
-    pub key: ResultKey,
-    pub outcome: Outcome,
-    pub machine: MachineId,
-    pub record: RecordId,
-    pub at: Timestamp,
-    /// Where the saved output is, for a failure.
-    pub output: Option<String>,
-}
-
-/// `POST /results/lookup`; the reply holds one entry per key, in order.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct LookupRequest {
-    pub keys: Vec<ResultKey>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct LookupReply {
-    pub results: Vec<Option<CachedResult>>,
-}
-
 // `ResultCost` lives in a file of its own, with its tests, to keep this one short.
 #[path = "hub_cost.rs"]
 mod cost;
@@ -377,153 +373,9 @@ pub use releases::ReleaseCause;
 mod verdicts;
 pub use verdicts::{RevertFiled, Reverted, Verdict, VerdictKey, verdict_settings};
 
-/// One result to store.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct NewResult {
-    pub key: ResultKey,
-    pub outcome: Outcome,
-    pub machine: MachineId,
-    pub record: RecordId,
-    pub output: Option<String>,
-    /// What the check cost on this run. The hub adds it to the check's cost history, so scores
-    /// follow live runs and not only the imported history.
-    #[serde(default)]
-    pub cost: ResultCost,
-    /// The areas of the change the check ran on (see `score`). The hub counts a stored pass or
-    /// failure as one run, and a failure as one failure, in each of them, so a check's failure
-    /// rate per area follows live runs. Empty for a run at the tip, which is no one change.
-    #[serde(default)]
-    pub areas: Vec<String>,
-}
-
-/// `POST /results/store`.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct StoreRequest {
-    pub results: Vec<NewResult>,
-    /// The areas of the change the checks ran on (see `score`). Each stored pass or failure is
-    /// counted as one run, and a failure as one failure, in each of these areas.
-    #[serde(default)]
-    pub areas: Vec<String>,
-}
-
-/// `POST /flaky`: a check failed, then passed at once on the same inputs.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct FlakyReport {
-    pub check: CheckName,
-    pub hash: InputHash,
-    pub commit: Commit,
-    pub machine: MachineId,
-    /// The check's family is in the always set, so the check is never switched off.
-    #[serde(default)]
-    pub always: bool,
-    /// Names the command run in which the check failed, the same for every check that failed
-    /// in that run; empty when unknown. The hub uses it to tell one fault of the machine, which
-    /// makes many checks flake at once, from flaky checks.
-    #[serde(default)]
-    pub command: String,
-    /// The last lines of the failed run's output.
-    #[serde(default)]
-    pub output: String,
-}
-
-/// Whether a check is run and cached.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum CheckState {
-    On,
-    Off,
-    /// Runs, but its results are not reused, after an audit disagreed with the cache.
-    Uncached,
-}
-
-/// Runs and failures of a check after changes to one area.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AreaStats {
-    pub area: String,
-    pub runs: u32,
-    pub failures: u32,
-}
-
-/// One check's record, in `GET /checks/stats?family=`.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct CheckStats {
-    pub check: CheckName,
-    pub family: String,
-    pub state: CheckState,
-    pub areas: Vec<AreaStats>,
-    /// The median of the last 20 costs.
-    pub median_cost: Option<f64>,
-    /// `instructions` (billions) or `cpu_s`.
-    pub unit: String,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct CheckStatsReply {
-    pub family: String,
-    /// The family's failure rate over all its runs.
-    pub family_rate: f64,
-    pub checks: Vec<CheckStats>,
-    /// What starting one of the family's commands costs, in billions of instructions and in CPU
-    /// seconds, estimated from its recent runs (`score::startup`); `None` while unknown. The
-    /// checks' costs leave it out, so the gate charges it once for each family it runs.
-    #[serde(default)]
-    pub startup_billions: Option<f64>,
-    #[serde(default)]
-    pub startup_cpu_s: Option<f64>,
-}
-
-/// `POST /checks/state`: switches a check on or off by hand (`ignite flaky on|off`). The hub
-/// records who did it, and comments on the check's flaky ticket if it has one.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CheckStateChange {
-    pub check: CheckName,
-    /// `on` or `off`; `uncached` is refused, because only an audit sets it.
-    pub state: CheckState,
-    /// Why, in the words of whoever switched it.
-    #[serde(default)]
-    pub note: String,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CheckStateChanged {
-    pub check: CheckName,
-    pub previous: CheckState,
-    pub state: CheckState,
-    /// The flaky ticket the change was recorded on, if the check has one.
-    pub ticket: Option<String>,
-}
-
-/// One switch of a check's state by hand.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct HandSwitch {
-    pub state: CheckState,
-    pub actor: String,
-    pub machine: String,
-    pub at: Timestamp,
-    pub note: String,
-}
-
-/// One check in `GET /checks/flaky`: a check that is switched off, has flaked or was switched
-/// by hand.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct FlakyCheck {
-    pub check: CheckName,
-    pub family: String,
-    pub state: CheckState,
-    /// Flaky records of the check, not counting those from a command in which many checks
-    /// flaked at once (a fault of the machine).
-    pub flaky_records: u32,
-    pub last_flaky: Option<Timestamp>,
-    /// The newest ticket filed for the check's flaky records.
-    pub ticket: Option<String>,
-    /// The last time someone switched it by hand.
-    pub switched: Option<HandSwitch>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct FlakyChecksReply {
-    pub checks: Vec<FlakyCheck>,
-}
+#[path = "hub_checks.rs"]
+mod checks;
+pub use checks::*;
 
 /// `POST /tips/claim`: one batch of one family's checks at one tip.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -909,33 +761,5 @@ pub struct StoredListing {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn record_matches_the_documented_line() {
-        let record: Record = serde_json::from_str(
-            r#"{"machine": "m-7f3a", "ticket": "Tq44s.9.48", "session": "local_c8470108",
-                "tree": "tree-07", "verb": "test", "class": "agent", "family": "b3d-test",
-                "queued_s": 4.1, "wall_s": 58.2, "cpu_s": 301.0, "instructions": 1.21e12,
-                "peak_mb": 2210, "outcome": "fail", "commit": "8c1f2ab", "ignite": "d97ed0e",
-                "at": "2026-11-17T14:12:00.000Z"}"#,
-        )
-        .unwrap();
-        assert_eq!(record.class, Class::Agent);
-        assert_eq!(record.outcome, Some(Outcome::Fail));
-        assert!(record.compile_units.is_empty());
-    }
-
-    #[test]
-    fn portable_result_keys_have_no_platform() {
-        let key = ResultKey {
-            check: "rust:a::b".parse().unwrap(),
-            hash: "0".repeat(64).parse().unwrap(),
-            platform: None,
-        };
-        let value = serde_json::to_value(&key).unwrap();
-        assert_eq!(value["platform"], serde_json::Value::Null);
-        assert_eq!(serde_json::from_value::<ResultKey>(value).unwrap(), key);
-    }
-}
+#[path = "hub_tests.rs"]
+mod tests;

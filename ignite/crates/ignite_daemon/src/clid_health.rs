@@ -135,6 +135,7 @@ pub fn usage_rows(samples: &[UsageSample], machine: &str, now: Timestamp) -> Vec
                 .filter(|status| *status != "allowed")
                 .map(|status| format!("CLI status {status}")),
             posted: 0,
+            provider: "claude".to_owned(),
         })
         .collect()
 }
@@ -568,6 +569,7 @@ impl Health {
             resets_at: Some(resets_at),
             note: Some("a CLI turn reached the plan's limit".to_owned()),
             posted: 0,
+            provider: "claude".to_owned(),
         };
         self.store_samples(ctx, vec![row], now)
     }

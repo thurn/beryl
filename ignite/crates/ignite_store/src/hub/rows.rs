@@ -45,7 +45,31 @@ crate::tables! {
         needs_os: Option<String>,
         fallback: bool,
         every_hours: Option<i64>,
+        /// The provider chosen for the ticket's current claim.
+        provider: Option<String>,
     }
+
+    FleetChange = "fleet_changes" {
+        seq: i64,
+        at: String,
+        actor: String,
+        summary: String,
+        /// JSON: the fleet settings after the change.
+        settings: String,
+    }
+
+    ProviderUsage = "provider_usage" {
+        provider: String,
+        at: String,
+        machine: String,
+        status: String,
+        label: Option<String>,
+        percent_used: Option<f64>,
+        resets_at: Option<String>,
+        note: Option<String>,
+    }
+
+    PlacementDeferral = "placement_deferrals" { ticket: String, first_at: String }
 
     Edge = "edges" { src: String, dst: String, kind: String }
 

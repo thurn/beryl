@@ -440,6 +440,7 @@ impl Hub for HubClient {
 
     fn next_explained(&self, free: &MachineFree) -> Result<ignite_core::protocol::hub::NextReply> {
         let free = MachineFree {
+            room: None,
             explain: true,
             ..free.clone()
         };

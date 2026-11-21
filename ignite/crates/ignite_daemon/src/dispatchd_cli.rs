@@ -391,6 +391,7 @@ impl Dispatcher {
             return;
         }
         let reservation = Reservation {
+            provider: None,
             ticket: reserved.ticket.clone(),
             machine: ctx.machine.clone(),
             session: slot.clone(),

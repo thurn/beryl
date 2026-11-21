@@ -183,6 +183,7 @@ impl Parts {
                     .version()
                     .map_or_else(|| version.clone(), |commit| commit.to_string());
                 let reply = client.heartbeat(&Heartbeat {
+                    capacity: None,
                     machine: ctx.machine.clone(),
                     version,
                     workers: dispatcher.view().unwrap_or_default(),

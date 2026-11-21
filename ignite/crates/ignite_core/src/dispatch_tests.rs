@@ -24,6 +24,7 @@ fn worker(name: &str, app: &str, models: &[&str]) -> IdleWorker {
 
 fn machine(workers: Vec<IdleWorker>) -> MachineFree {
     MachineFree {
+        room: None,
         machine: MachineId::new("jarvis").unwrap(),
         os: Os::Macos,
         idle_workers: workers,

@@ -76,6 +76,7 @@ fn sample_rows(raw: &str, machine: &str, now: Timestamp) -> Vec<PlanUsage> {
         resets_at: None,
         note,
         posted: 0,
+        provider: "claude".to_owned(),
     };
     let parsed = serde_json::from_str::<Value>(raw.trim()).ok();
     let plan = parsed

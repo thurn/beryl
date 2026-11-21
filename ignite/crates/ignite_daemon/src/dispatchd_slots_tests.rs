@@ -29,6 +29,7 @@ fn codex(rig: &Rig, dispatcher: &str, slots: u32) -> Reply {
 fn reserve_for_slot(rig: &Rig, ticket: &str, slot: &str) {
     rig.hub.insert_ticket(detail(ticket, "open", None, &[], ""));
     rig.hub.queue_reservation(Reservation {
+        provider: None,
         ticket: ticket_id(ticket),
         machine: rig.ctx.machine.clone(),
         session: session(slot),

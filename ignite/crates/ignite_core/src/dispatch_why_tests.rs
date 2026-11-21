@@ -9,6 +9,7 @@ use crate::time::Timestamp;
 
 fn machine() -> MachineFree {
     MachineFree {
+        room: None,
         machine: MachineId::new("jarvis").unwrap(),
         os: Os::Macos,
         idle_workers: vec![IdleWorker {

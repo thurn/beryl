@@ -471,6 +471,7 @@ impl Rig {
 
     fn try_begin(&self) -> Result<SessionId> {
         let reservation = Reservation {
+            provider: None,
             ticket: TicketId::new(TICKET).unwrap(),
             machine: MachineId::new("m-7f3a").unwrap(),
             session: SessionId::new("cli-claude-slot-1").unwrap(),

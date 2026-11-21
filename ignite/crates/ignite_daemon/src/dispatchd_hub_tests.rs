@@ -100,6 +100,7 @@ fn dispatch_gives_nothing_once_its_caller_has_stopped_waiting() {
                 // The long poll runs past the request's wait, and a reservation arrives.
                 clock.advance(30.0);
                 hub.queue_reservation(Reservation {
+                    provider: None,
                     ticket: "T.1".parse().unwrap(),
                     machine: machine.clone(),
                     session: session("local_w1"),

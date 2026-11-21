@@ -3,12 +3,14 @@
 
 pub mod admission;
 pub mod budget;
+pub mod capacity;
 pub mod cli;
 pub mod config;
 pub mod dispatch;
 pub mod dispatch_pressure;
 pub mod explore;
 pub mod fakes;
+pub mod fleet;
 pub mod formatting;
 pub mod gate;
 pub mod guide;
@@ -17,8 +19,11 @@ pub mod host;
 pub mod ids;
 pub mod inputs;
 pub mod manifest;
+pub mod mix;
 pub mod output;
 pub mod owner;
+pub mod pins;
+pub mod placement;
 pub mod plan_usage;
 pub mod prime;
 pub mod protocol;

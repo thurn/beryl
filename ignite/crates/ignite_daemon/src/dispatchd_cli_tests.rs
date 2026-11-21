@@ -44,6 +44,7 @@ pub(super) fn reserve(rig: &Rig, ticket: &str, slot: &str, labels: &[&str]) {
     rig.hub
         .insert_ticket(detail(ticket, "open", None, labels, ""));
     rig.hub.queue_reservation(Reservation {
+        provider: None,
         ticket: ticket_id(ticket),
         machine: rig.ctx.machine.clone(),
         session: session(slot),
@@ -484,6 +485,7 @@ fn a_regression_for_a_cli_slot_names_its_culprit_to_the_cli_pool() {
         body,
     ));
     rig.hub.queue_reservation(Reservation {
+        provider: None,
         ticket: ticket_id("R"),
         machine: rig.ctx.machine.clone(),
         session: session("cli-claude-slot-1"),

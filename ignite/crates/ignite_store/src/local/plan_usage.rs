@@ -13,7 +13,8 @@ use crate::local::rows::PlanUsage;
 /// Rows older than this many days are deleted.
 pub const KEEP_DAYS: f64 = 30.0;
 
-const COLUMNS: &str = "id, at, machine, status, label, percent_used, resets_at, note, posted";
+const COLUMNS: &str =
+    "id, at, machine, status, label, percent_used, resets_at, note, posted, provider";
 
 fn read(row: &Row<'_>) -> rusqlite::Result<PlanUsage> {
     Ok(PlanUsage {
@@ -26,6 +27,7 @@ fn read(row: &Row<'_>) -> rusqlite::Result<PlanUsage> {
         resets_at: row.get(6)?,
         note: row.get(7)?,
         posted: row.get(8)?,
+        provider: row.get(9)?,
     })
 }
 
@@ -35,8 +37,8 @@ pub fn insert(conn: &mut Connection, sample: &[PlanUsage], now: Timestamp) -> Re
     let transaction = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
     {
         let mut insert = transaction.prepare(
-            "INSERT INTO plan_usage (at, machine, status, label, percent_used, resets_at, note) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT INTO plan_usage (at, machine, status, label, percent_used, resets_at, note, provider) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         )?;
         for row in sample {
             insert.execute(params![
@@ -46,7 +48,8 @@ pub fn insert(conn: &mut Connection, sample: &[PlanUsage], now: Timestamp) -> Re
                 row.label,
                 row.percent_used,
                 row.resets_at,
-                row.note
+                row.note,
+                row.provider
             ])?;
         }
     }
@@ -128,6 +131,7 @@ mod tests {
             resets_at: None,
             note: None,
             posted: 0,
+            provider: "claude".to_owned(),
         }
     }
 

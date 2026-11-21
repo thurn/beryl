@@ -273,6 +273,7 @@ fn read_reservation(
     let invalid =
         |what: &str, error: String| StoreError::Invalid(format!("reservation {what}: {error}"));
     Ok(Some(Reservation {
+        provider: None,
         ticket: ticket
             .parse()
             .map_err(|e: ignite_core::ids::IdError| invalid("ticket", e.to_string()))?,
@@ -437,6 +438,7 @@ mod tests {
 
     fn reservation(ticket: &str, expires_at: Timestamp) -> Reservation {
         Reservation {
+            provider: None,
             ticket: ticket.parse().unwrap(),
             machine: "m-7f3a".parse().unwrap(),
             session: "local_1".parse().unwrap(),
@@ -466,6 +468,7 @@ mod tests {
         let clock = clock();
         register(&conn, &register_message(), clock.now()).unwrap();
         let mut beat = Heartbeat {
+            capacity: None,
             machine: "m-7f3a".parse().unwrap(),
             version: "d97ed0e".into(),
             workers: vec![
@@ -500,6 +503,7 @@ mod tests {
         let clock = clock();
         register(&conn, &register_message(), clock.now()).unwrap();
         let mut beat = Heartbeat {
+            capacity: None,
             machine: "m-7f3a".parse().unwrap(),
             version: "d97ed0e".into(),
             workers: vec![],
@@ -518,6 +522,7 @@ mod tests {
     fn a_heartbeat_from_an_unregistered_machine_is_refused() {
         let mut conn = hub::open_in_memory().unwrap();
         let beat = Heartbeat {
+            capacity: None,
             machine: "m-unknown".parse().unwrap(),
             version: "x".into(),
             workers: vec![],
@@ -596,6 +601,7 @@ mod tests {
         running.command_since = Some(clock.now());
         running.command_running = true;
         let beat = Heartbeat {
+            capacity: None,
             machine: "m-7f3a".parse().unwrap(),
             version: "d97ed0e".into(),
             workers: vec![running, worker("local_2", "idle", None)],

@@ -27,6 +27,7 @@ fn finished(rig: &Rig, worker: &str, ticket: &str) {
 /// The hub reserves `ticket`, already in the fake hub, for `worker` on this machine.
 fn reserve_for(rig: &Rig, ticket: &str, worker: &str) {
     rig.hub.queue_reservation(Reservation {
+        provider: None,
         ticket: ticket_id(ticket),
         machine: rig.ctx.machine.clone(),
         session: session(worker),

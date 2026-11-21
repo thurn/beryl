@@ -13,10 +13,13 @@ pub mod feed;
 pub mod filer_deps;
 pub mod findings;
 pub mod fleet;
+pub mod fleet_settings;
 pub mod leases;
 pub mod listings;
 pub mod metrics;
 pub mod owners;
+pub mod pins;
+pub mod provider_usage;
 pub mod rates;
 pub mod records;
 pub mod rejected;
@@ -198,6 +201,11 @@ pub const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 31,
         sql: include_str!("reservation_landings.sql"),
+        code: None,
+    },
+    Migration {
+        version: 32,
+        sql: include_str!("fleet_settings.sql"),
         code: None,
     },
 ];

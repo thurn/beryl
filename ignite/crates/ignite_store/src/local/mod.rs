@@ -142,6 +142,11 @@ pub const MIGRATIONS: &[Migration] = &[
         sql: include_str!("schema_22.sql"),
         code: None,
     },
+    Migration {
+        version: 23,
+        sql: include_str!("schema_23.sql"),
+        code: None,
+    },
 ];
 
 pub fn open(path: &Path) -> Result<Connection> {
@@ -201,6 +206,24 @@ mod tests {
             .collect();
         assert_eq!(seqs, [1, 2]);
         assert_eq!(outbox::push(&conn, "record", "{}", "t3").unwrap(), 3);
+    }
+
+    #[test]
+    fn legacy_plan_usage_is_kept_with_the_claude_provider() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        migrate::apply(&mut conn, &MIGRATIONS[..22]).unwrap();
+        conn.execute(
+            "INSERT INTO plan_usage (at, machine, status, label, percent_used) \
+             VALUES ('2026-11-20T12:00:00.000Z', 'm-1', 'ok', '5-hour', 15.0)",
+            [],
+        )
+        .unwrap();
+        migrate::apply(&mut conn, MIGRATIONS).unwrap();
+
+        let rows = plan_usage::unposted(&conn).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].provider, "claude");
+        assert_eq!(rows[0].percent_used, Some(15.0));
     }
 
     /// A database from before trees had owners keeps its trees, each with no owner.

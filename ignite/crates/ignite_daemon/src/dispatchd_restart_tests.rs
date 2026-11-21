@@ -70,6 +70,7 @@ fn a_queued_handoff_and_the_instruction_ids_survive_a_restart() {
         Exit::Success
     );
     let reservation = Reservation {
+        provider: None,
         ticket: ticket_id("T.1"),
         machine: first.ctx.machine.clone(),
         session: session("local_w1"),
@@ -216,6 +217,7 @@ fn a_tell_delivered_before_a_restart_is_not_delivered_again() {
 /// daemon stopped before the `Begin` it queued ran. Returns the reservation the hub made.
 fn saved_cli_handoff(rig: &Rig) -> Reservation {
     let reservation = Reservation {
+        provider: None,
         ticket: ticket_id("T.1"),
         machine: rig.ctx.machine.clone(),
         session: session("cli-claude-slot-1"),

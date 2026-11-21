@@ -33,13 +33,13 @@ use crate::{Result, StoreError};
 /// Columns that hold JSON text.
 const JSON_COLUMNS: &[&str] = &["labels", "metadata", "landed", "saving"];
 
-/// Every column of `tickets` that `Ticket` has a field for, in the order of the schema. `select`
+/// Every column of `tickets`, in the order of the schema. `select`
 /// names them, so a column that a newer build added to the table is never read by an older one.
 pub(crate) const TICKET_COLUMNS: &str = "id, parent, next_child, title, body, acceptance, design, notes, \
     type, status, priority, assignee, last, labels, metadata, defer_until, close_reason, \
     created_at, created_by, updated_at, closed_at, version, workers, max_workers, cores, \
     machine, session, tree, claimed_at, landed_at, landed, saving, owner, needs_os, fallback, \
-    every_hours";
+    every_hours, provider";
 
 /// One ticket, found by ID or by any alias, with its edges, children and readiness.
 pub fn get(

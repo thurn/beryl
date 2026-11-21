@@ -145,6 +145,7 @@ crate::tables! {
         note: Option<String>,
         /// 1 once the row reached the hub.
         posted: i64,
+        provider: String,
     }
 
     /// What the build manager knows about one build product in one tree.

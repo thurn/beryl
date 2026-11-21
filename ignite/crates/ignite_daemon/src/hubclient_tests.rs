@@ -389,6 +389,7 @@ fn the_feed_is_a_long_poll_from_a_position() {
 fn next_reads_nothing_as_no_reservation() {
     let hub = FakeHttpHub::start(|_, _, _| (200, "null".to_owned()));
     let free = MachineFree {
+        room: None,
         machine: MachineId::new("m-1").unwrap(),
         os: ignite_core::config::Os::Macos,
         idle_workers: Vec::new(),

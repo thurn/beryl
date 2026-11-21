@@ -499,6 +499,7 @@ impl Dispatcher {
         let mut why = "no ticket tree is free".to_owned();
         while !group.is_empty() && *trees > 0 {
             let free = MachineFree {
+                room: None,
                 machine: ctx.machine.clone(),
                 os: self.setup.os,
                 idle_workers: group

@@ -298,6 +298,7 @@ fn heartbeat(conn: &mut Connection, beat: &Heartbeat, now: Timestamp) -> Answer 
     Ok(Response::json(
         200,
         &json!(HeartbeatReply {
+            fleet: None,
             // A hub that never recorded its version asks no machine to update.
             hub_version: hub_version.unwrap_or_else(|| beat.version.clone()),
             emergency: emergency::in_force(conn, now).map_err(|e| store_failure(&e))?,

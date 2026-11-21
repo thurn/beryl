@@ -4539,6 +4539,13 @@ change, and sends each daemon its part in the reply to every heartbeat, about
 every 10 seconds. A daemon keeps the last reply on disk, so a restart or a hub
 outage changes nothing.
 
+The hub stores the settings under `fleet` in its database. A write includes the
+version that the operator read. If another write has changed that version, the
+hub returns the current settings and the operator can apply the edit again. Each
+saved change records who made it, when, what changed and the resulting settings.
+Heartbeats and hand-offs accept messages from releases that predate the fleet
+fields.
+
 Each machine has a state and an optional disk cap:
 
 - **Active**: the machine takes tickets and verifies tips.

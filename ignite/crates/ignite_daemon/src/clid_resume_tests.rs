@@ -34,6 +34,7 @@ fn begin_regression_with(rig: &Rig, code: &str) -> SessionId {
         prompt: REGRESSION_PROMPT.to_owned(),
     };
     let reservation = Reservation {
+        provider: None,
         code: code.to_owned(),
         ..reservation("R.1", 1)
     };
