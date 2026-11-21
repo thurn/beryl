@@ -321,14 +321,24 @@ def vm_shell(script: str, vm: str = VM, workdir: str | None = None) -> int:
     return subprocess.run(vm_command(script, vm, workdir), check=False).returncode
 
 
-def locked(script: str, background: bool | None = None) -> str:
+def locked(script: str, background: bool | None = None, *, wait: bool = True) -> str:
     """`script` holding the VM's lock, which the kernel drops when the shell exits, however. A
     run someone waits for holds `VM_TURN` shared while it waits and runs; a low-priority run
     (`background`, by default `vm_host.background`) takes `VM_LOCK` only while it can hold
     `VM_TURN` alone. `flock` hands a freed lock to any waiter, so a worker's `just b3d gate
     --gpu` once waited 66 minutes behind low-priority runs. A run that has started still goes
-    first.
+    first. With `wait=False`, try both locks once without taking a turn ahead of a waiter.
     """
+    if not wait:
+        return f"""exec 8>"{VM_TURN}"
+exec 9>"{VM_LOCK}"
+if flock -n -x 8 && flock -n 9; then
+  flock -u 8
+  {script}
+else
+  echo "bench: the VM is busy; skipping optional counts" >&2
+  false
+fi"""
     if background is None:
         background = vm_host.background()
     if not background:

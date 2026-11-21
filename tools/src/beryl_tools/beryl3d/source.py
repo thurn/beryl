@@ -13,6 +13,7 @@ from __future__ import annotations
 import os
 import subprocess
 import tempfile
+from pathlib import Path
 
 from .. import paths as repo_paths
 from . import paths, vm
@@ -138,29 +139,30 @@ def stream_sources(
     return run
 
 
-def send_pack() -> bool:
-    """Builds the recordings pack for the present sources on this machine, where the engine
-    that plays them builds, and copies it into the VM's `BERYL_CACHE`, [`VM_CACHE`]. Building it
-    in the VM would compile the engine, which exceeds the machine's 4 GiB. The pack is named for
-    a hash of the sources, not of the checkout's path, so a program built in the VM from the
-    sources [`run_with_sources`] sends finds it."""
-    from .cli import (
-        program,
-        shared_build,
-    )  # cli imports gate, which imports this module.
+def send_pack(pack: Path | None = None) -> bool:
+    """Copies the recordings pack into the VM, building it on the host if the caller has not
+    already done so. Its name is a hash of the sources so the program built in the VM from
+    those sources finds it.
+    """
+    if pack is None:
+        from .cli import (
+            program,
+            shared_build,
+        )  # cli imports gate, which imports this module.
 
-    if shared_build() != 0:
-        return False
-    built = subprocess.run(
-        [str(program("record"))],
-        cwd=paths.WORKSPACE,
-        check=False,
-        stdout=subprocess.PIPE,
-        text=True,
-    )
-    lines = built.stdout.split()
-    if built.returncode != 0 or not lines:
-        return False
+        if shared_build() != 0:
+            return False
+        built = subprocess.run(
+            [str(program("record"))],
+            cwd=paths.WORKSPACE,
+            check=False,
+            stdout=subprocess.PIPE,
+            text=True,
+        )
+        lines = built.stdout.splitlines()
+        if built.returncode != 0 or not lines:
+            return False
+        pack = Path(lines[-1])
     directory = f"{VM_CACHE}/b3d"
     make = [
         "limactl",
@@ -172,5 +174,5 @@ def send_pack() -> bool:
         "-c",
         f'mkdir -p "$HOME/{directory}"',
     ]
-    copy = ["limactl", "copy", lines[-1], f"{vm.NAME}:{directory}/"]
+    copy = ["limactl", "copy", str(pack), f"{vm.NAME}:{directory}/"]
     return all(subprocess.run(cmd, check=False).returncode == 0 for cmd in (make, copy))

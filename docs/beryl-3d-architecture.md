@@ -442,9 +442,13 @@ say only what a program cannot.
   beside it, and is changed by a deliberate change that says why. A frame that
   only animates still allocates nothing, which has no budget because the limit
   is zero.
-- **The trend.** The same job records every board's counts for each verified
-  commit, and files a ticket naming the commit when a count rises by more than
-  5% between two measurements or by more than 10% over seven days.
+- **The trend.** An Ignite exploration check records the gated boards at the
+  verified tip. It includes Callgrind instruction counts when the benchmark
+  machine is free. A rise of more than 5% since the previous measurement or more
+  than 10% since the oldest measurement within seven days files a ticket naming
+  the commit. `just b3d trend record` measures the current checkout,
+  `just b3d trend check` checks the saved counts, and `just b3d trend` shows
+  recent measurements from `$BERYL_CACHE/b3d/trend/frames.jsonl`.
 - **Compile cost** is recorded by Ignite's rebuild counts, for an edit to one
   feature, one toolkit crate and one data file. It is a measurement, not a gate.
 

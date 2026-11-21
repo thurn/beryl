@@ -20,6 +20,9 @@
     "tools/src/beryl_tools/beryl3d/camera.py": [
       "data/beryl3d/camera-fit.json"
     ],
+    "tools/src/beryl_tools/beryl3d/gate.py": [
+      "data/beryl3d/budgets.json"
+    ],
     "tools/src/beryl_tools/beryl3d/match/reference.py": [
       "data/beryl3d/match/web/screen_start_you_1600x900@2.json",
       "data/beryl3d/screens.json",

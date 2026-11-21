@@ -704,6 +704,12 @@ def timeline_drift_run(checks: list[str]) -> list[Result]:
     return beryl3d_timeline_drift.run_timeline_drift(checks)
 
 
+def frame_trend_run(checks: list[str]) -> list[Result]:
+    from . import beryl3d_frame_trend
+
+    return beryl3d_frame_trend.run(checks)
+
+
 def next_checks(family: str) -> list[dict[str, str]]:
     """The checks of the exploration family `family` to play now."""
     if family == "b3d-web-drift":
@@ -732,6 +738,7 @@ LISTS: dict[str, Callable[[], list[Listed]]] = {
     # An exploration family's checks come from `next`.
     "b3d-web-drift": lambda: [],
     "b3d-timeline-drift": lambda: [],
+    "b3d-frame-trend": lambda: [],
 }
 
 RUNS: dict[str, Callable[[list[str]], list[Result]]] = {
@@ -746,6 +753,7 @@ RUNS: dict[str, Callable[[list[str]], list[Result]]] = {
     "b3d-web-match": lambda c: web_match_run(c),
     "b3d-web-drift": lambda c: web_drift_run(c),
     "b3d-timeline-drift": timeline_drift_run,
+    "b3d-frame-trend": frame_trend_run,
 }
 
 
@@ -753,6 +761,12 @@ def main(args: list[str]) -> int:
     match args:
         case ["build"]:
             return build()
+        case ["b3d-frame-trend", "list" | "next"]:
+            from . import beryl3d_frame_trend
+
+            for entry in beryl3d_frame_trend.next_checks():
+                print(json.dumps(entry), flush=True)
+            return 0
         case [family, "list"] if family in LISTS:
             if family in LIST_NEEDS_BUILD and not (DEBUG / "record").is_file():
                 built = build(to_stderr=True)

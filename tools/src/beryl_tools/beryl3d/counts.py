@@ -22,8 +22,9 @@ import shlex
 import shutil
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 
-from .. import bench
+from .. import bench, vm_host
 from . import gate, source, vm
 
 # In the machine: the build directory the gate keeps warm between runs.
@@ -139,7 +140,7 @@ def scaling_failures(
     return failed, said
 
 
-def script(boards: list[str]) -> str:
+def script(boards: list[str], *, wait: bool = True) -> str:
     """Provisions the machine, takes in the sources (`source.take_in_script`), builds
     `b3d-frame-counts`, and runs it for every board in `boards` at once under Callgrind,
     printing the lines `parse` reads."""
@@ -190,10 +191,15 @@ rm -rf "$out"
 # Ubuntu's `~/.bash_logout`, whose `clear_console` fails with no terminal and replaces it.
 test "$failed" = 0
 """
-    return vm.provision_script(bench.toolchain()) + bench.locked(work)
+    provision = vm.provision_script(bench.toolchain())
+    if wait:
+        return provision + bench.locked(work)
+    return bench.locked(provision + work, wait=False)
 
 
-def measure(boards: list[str]) -> str | None:
+def measure(
+    boards: list[str], *, wait: bool = True, pack: Path | None = None
+) -> str | None:
     """The machine script's output for `boards`, or `None` when the machine could not count."""
     if platform.machine() not in ("arm64", "aarch64"):
         bench.log("the frame counts are for Apple silicon's arm64; this machine is not")
@@ -201,12 +207,19 @@ def measure(boards: list[str]) -> str | None:
     if shutil.which("limactl") is None:
         bench.log("Lima is missing: brew install lima, then `just b3d vm` once")
         return None
+    if not wait and vm_host.status(vm.NAME) is None:
+        bench.log(f"{vm.NAME} is not configured; skipping optional counts")
+        return None
     if vm.start() != 0:
         return None
-    if not source.send_pack():
+    # Avoid sending the pack when the VM is busy. The count script tries the same
+    # locks again before changing the VM's sources in case another job took a turn.
+    if not wait and bench.vm_shell(bench.locked("true", wait=False), vm.NAME, "/") != 0:
+        return None
+    if not source.send_pack(pack):
         bench.log("the recordings pack could not be built or sent into the machine")
         return None
-    run = source.run_with_sources(script(boards))
+    run = source.run_with_sources(script(boards, wait=wait))
     if run is None:
         return None
     if run.returncode != 0:
@@ -217,8 +230,21 @@ def measure(boards: list[str]) -> str | None:
     return run.stdout
 
 
-def run(boards: list[gate.Board], budgets: gate.Budgets, *, json_output: bool) -> int:
-    stdout = measure([b.name for b in boards])
+def counters(counts: Counted) -> dict[str, float]:
+    return {
+        "worst_frame_instructions": worst(counts)[1],
+        "total_instructions": counts.total,
+    }
+
+
+def run(
+    boards: list[gate.Board],
+    budgets: gate.Budgets,
+    *,
+    json_output: bool,
+    wait: bool = True,
+) -> int:
+    stdout = measure([b.name for b in boards], wait=wait)
     if stdout is None:
         return 2
     found = parse(stdout)
@@ -234,10 +260,7 @@ def run(boards: list[gate.Board], budgets: gate.Budgets, *, json_output: bool) -
                 board.name, counts, budgets["boards"].get(board.name, {}), board.ranked
             )
         )
-        measurements[board.name] = {
-            "worst_frame_instructions": worst(counts)[1],
-            "total_instructions": counts.total,
-        }
+        measurements[board.name] = counters(counts)
     results.append(scaling_failures(found, budgets["scaling"]))
     if json_output:
         print(json.dumps({"boards": measurements}))

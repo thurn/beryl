@@ -655,5 +655,9 @@
         }
       }
     }
+  },
+  "trend": {
+    "adjacent_percent": 5,
+    "weekly_percent": 10
   }
 }

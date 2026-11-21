@@ -233,6 +233,7 @@ def test_gate_results_hold_each_board_to_its_own_limits() -> None:
         },
         "enhanced": {},
         "scaling": {},
+        "trend": {"adjacent_percent": 5, "weekly_percent": 10},
     }
     results = adapter.gate_results(output, ["held", "over", "absent"], budgets)
     assert [(r.check, r.outcome) for r in results] == [

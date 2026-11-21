@@ -42,6 +42,7 @@ from . import (
     stand_in,
     tiers,
     timeline,
+    trend,
     vm,
 )
 from .command import Command
@@ -319,6 +320,7 @@ MODULES: tuple[ModuleType, ...] = (
     parity,
     play,
     perf,
+    trend,
     spec,
     motion_film,
     bug,

@@ -35,10 +35,16 @@ class Scaling(TypedDict):
     limits: dict[str, Budget]
 
 
+class TrendLimits(TypedDict):
+    adjacent_percent: float
+    weekly_percent: float
+
+
 class Budgets(TypedDict):
     boards: dict[str, dict[str, Budget]]
     enhanced: dict[str, Budget]
     scaling: dict[str, Scaling]
+    trend: TrendLimits
 
 
 def read_budgets() -> Budgets:
@@ -306,6 +312,9 @@ def play(names: list[str], *, json_output: bool) -> tuple[list[Board], list[Tier
 
 
 def run_gate(args: argparse.Namespace) -> int:
+    if args.if_free and not args.counts:
+        print("gate: --if-free requires --counts", file=sys.stderr)
+        return 2
     budgets = read_budgets()
     if args.gpu:
         from . import gpu  # It imports `bench`, which Ignite's adapter must not load.
@@ -315,7 +324,7 @@ def run_gate(args: argparse.Namespace) -> int:
     if args.counts:
         from . import counts  # It imports this module.
 
-        return counts.run(boards, budgets, json_output=args.json)
+        return counts.run(boards, budgets, json_output=args.json, wait=not args.if_free)
     particle_budget = budgets["enhanced"].get("particles")
     particles = particle_budget["max"] if particle_budget else None
     lines = failures(boards, budgets["boards"])
@@ -357,4 +366,9 @@ def gate_arguments(parser: argparse.ArgumentParser) -> None:
         "--counts",
         action="store_true",
         help="hold instructions per frame instead, counted under Callgrind in beryl3d-bench",
+    )
+    parser.add_argument(
+        "--if-free",
+        action="store_true",
+        help="with --counts, skip when the count machine is busy or unavailable",
     )

@@ -115,6 +115,7 @@ def test_json_reports_the_measurements_even_when_a_budget_fails(
         "boards": {board.name: board_budgets(board)},
         "enhanced": {"particles": {"max": 5, "why": "test budget"}},
         "scaling": {},
+        "trend": {"adjacent_percent": 5, "weekly_percent": 10},
     }
     monkeypatch.setattr(gate, "read_budgets", lambda: budgets)
     monkeypatch.setattr(
