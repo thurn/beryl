@@ -4,6 +4,7 @@ use ignite_core::config::Config;
 use ignite_core::fakes::{FakeBuilds, FakeClock, FakeGit, FakeHub, FakeLauncher};
 use ignite_core::ids::MachineId;
 use ignite_core::protocol::client::Request;
+use ignite_core::protocol::hub::ReleaseCause;
 use ignite_core::protocol::tickets::Operation;
 use ignite_core::traits::Clock;
 
@@ -106,7 +107,13 @@ impl Host for FakeHost {
     }
 
     /// Releasing frees the session's tree, as the real release does.
-    fn release(&self, session: &SessionId, ticket: &TicketId, _reason: &str) -> Result<()> {
+    fn release(
+        &self,
+        session: &SessionId,
+        ticket: &TicketId,
+        _reason: &str,
+        _cause: ReleaseCause,
+    ) -> Result<()> {
         if *lock(&self.fail_release) {
             return Err(Error::Unreachable("the hub is away".to_owned()));
         }

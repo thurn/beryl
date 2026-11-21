@@ -20,7 +20,8 @@
 //! 6. An interrupted end resumes at once with [`INTERRUPTED_TEXT`], until the
 //!    [`INTERRUPTED_LIMIT`]th in a row with no `ignite` command between them, which releases the
 //!    ticket. The daemon sends the justiciar report that goes with that release.
-//! 7. A plan-limit end releases the ticket. The daemon records the window's 100% sample.
+//! 7. A plan-limit end releases the ticket. The daemon records the window's 100% sample for
+//!    Claude or starts a CLI hold for the affected provider.
 //!
 //! Two guards then apply to what the rules chose:
 //!

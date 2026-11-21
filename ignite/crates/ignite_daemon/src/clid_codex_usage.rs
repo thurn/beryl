@@ -5,20 +5,12 @@ use std::io::BufReader;
 use std::path::{Path, PathBuf};
 
 use ignite_core::cli::codex::{Codex, read_session_usage};
-use ignite_core::cli::{CliApp, TurnEvents, UsageSample};
-use ignite_core::config::{Config, home_dir};
+use ignite_core::cli::{CliApp, TurnEvents};
+use ignite_core::config::home_dir;
 use ignite_core::time::Timestamp;
 
 use super::Health;
 use crate::server::Context;
-
-/// Whether this provider uses the dialect that records usage in a Codex rollout.
-pub(super) fn uses_codex_rollout(config: &Config, provider: &str) -> bool {
-    config
-        .cli_program(provider)
-        .map_or(provider, |program| program.dialect(provider))
-        == Codex.name()
-}
 
 impl Health {
     pub(super) fn record_codex_usage(
@@ -27,22 +19,23 @@ impl Health {
         provider: &str,
         events: &TurnEvents,
         started: Option<Timestamp>,
-    ) -> Option<Vec<UsageSample>> {
-        if !uses_codex_rollout(&ctx.config, provider) {
-            return None;
+    ) {
+        if ctx.config.cli_dialect(provider) != Codex.name() {
+            return;
         }
-        let thread = events.transcript.as_deref()?;
-        let started = started?;
+        let (Some(thread), Some(started)) = (events.transcript.as_deref(), started) else {
+            return;
+        };
         let root = std::env::var_os("CODEX_HOME")
             .filter(|path| !path.is_empty())
             .map(PathBuf::from)
-            .or_else(|| home_dir(|key| std::env::var_os(key)).map(|home| home.join(".codex")))?;
-        let file = rollout(&root.join("sessions"), thread)?;
-        let (at, samples) = read_session_usage(BufReader::new(file), started)?;
-        if let Err(error) = self.record_usage(ctx, provider, &samples, at) {
+            .or_else(|| home_dir(|key| std::env::var_os(key)).map(|home| home.join(".codex")));
+        if let Some(file) = root.and_then(|root| rollout(&root.join("sessions"), thread))
+            && let Some((at, samples)) = read_session_usage(BufReader::new(file), started)
+            && let Err(error) = self.record_usage(ctx, provider, &samples, at)
+        {
             eprintln!("ignite: Codex usage samples not stored: {error}");
         }
-        Some(samples)
     }
 }
 

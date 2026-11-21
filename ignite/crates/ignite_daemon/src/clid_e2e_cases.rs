@@ -237,7 +237,9 @@ fn cli_e2e_a_plan_limit_releases_the_ticket_and_starts_the_usage_hold() {
     );
     let releases = rig.releases();
     assert_eq!(releases.len(), 1);
-    assert!(releases[0].contains("plan's limit"), "{}", releases[0]);
+    let (cause, note) = &releases[0];
+    assert_eq!(*cause, ReleaseCause::PlanLimit);
+    assert!(note.contains("plan's limit"), "{note}");
     assert!(rig.daemon.slots("claude").is_empty());
     assert_eq!(rig.invocations(), 1);
     let pool = Pool::new(Rig::open(&rig.home));
@@ -399,11 +401,9 @@ fn cli_e2e_a_clean_end_holding_the_ticket_gets_the_block_text_once_then_releases
     rig.daemon.step().unwrap();
     let releases = rig.releases();
     assert_eq!(releases.len(), 1);
-    assert!(
-        releases[0].contains("I stopped for the night"),
-        "{}",
-        releases[0]
-    );
+    let (cause, note) = &releases[0];
+    assert_eq!(*cause, ReleaseCause::TakenBack);
+    assert!(note.contains("I stopped for the night"), "{note}");
     assert!(rig.daemon.slots("claude").is_empty());
     assert_eq!(rig.invocations(), 2);
 }

@@ -66,6 +66,7 @@ use ignite_core::cli::decide::{block_text, cut, quoting};
 use ignite_core::ids::{SessionId, TicketId};
 use ignite_core::protocol::client::{Exit, Reply, Request};
 use ignite_core::protocol::hub::JusticiarReport;
+use ignite_core::protocol::hub::ReleaseCause;
 use ignite_core::traits::{Error, Result};
 
 use super::Dispatcher;
@@ -280,7 +281,10 @@ impl Dispatcher {
 
     /// Releases `ticket` from `session` and says what happened, as the reply's first line.
     fn release_ended(&self, session: &SessionId, ticket: &TicketId, reason: &str) -> String {
-        match self.host.release(session, ticket, reason) {
+        match self
+            .host
+            .release(session, ticket, reason, ReleaseCause::TakenBack)
+        {
             Ok(()) => {
                 self.note_released(session, ticket);
                 format!(

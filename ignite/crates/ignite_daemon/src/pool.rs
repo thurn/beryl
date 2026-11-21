@@ -362,6 +362,7 @@ impl crate::doctor::StatusSection for PauseSection {
         let ordinary = !restricted && pause.is_none() && holds.is_empty() && shared.is_none();
         lines.extend(shared);
         lines.extend(holds);
+        lines.extend(self.dispatcher.cli_hold_lines(self.clock.now()));
         if ordinary {
             lines.extend(self.dispatcher.worker_room_line());
             if let Some((_, why)) = self.dispatcher.idle_reason() {

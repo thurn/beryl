@@ -269,6 +269,7 @@ fn a_freed_tree_leaves_no_clock_behind() {
             &session(WORKER),
             &id("Tq.48"),
             "The session is gone.",
+            ReleaseCause::TakenBack,
         )
         .unwrap();
     // The dispatcher took the ticket back, which the hub counts against the ticket.
@@ -293,6 +294,7 @@ fn a_failed_save_keeps_the_ticket_held() {
         &session(WORKER),
         &id("Tq.48"),
         "The session is gone.",
+        ReleaseCause::TakenBack,
     );
     assert!(released.is_err());
     assert!(lock(&world.desk.releases).is_empty());
@@ -335,6 +337,7 @@ fn an_unclaimed_placeholder_tree_is_freed_by_the_dispatchers_release() {
             &session(WORKER),
             &id(placeholder),
             "The session is gone.",
+            ReleaseCause::TakenBack,
         )
         .unwrap();
     assert!(world.claims.holder(TREE.as_ref()).is_none());
@@ -351,6 +354,7 @@ fn a_filed_ticket_the_hub_does_not_know_stays_held() {
         &session(WORKER),
         &id("Tq.48"),
         "The session is gone.",
+        ReleaseCause::TakenBack,
     );
     assert!(released.is_err());
     assert!(world.claims.holder(TREE.as_ref()).is_some());

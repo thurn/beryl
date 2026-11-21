@@ -37,6 +37,13 @@ impl super::Config {
         self.pool.cli.get(app)
     }
 
+    /// The adapter a provider uses, defaulting to the provider's name.
+    #[must_use]
+    pub fn cli_dialect<'a>(&'a self, provider: &'a str) -> &'a str {
+        self.cli_program(provider)
+            .map_or(provider, |program| program.dialect(provider))
+    }
+
     /// Validates provider names, executable names, and CLI dialects.
     pub(super) fn validate_cli(&self) -> Result<(), (String, String)> {
         let fail = |key: String, message: &str| Err((key, message.to_owned()));

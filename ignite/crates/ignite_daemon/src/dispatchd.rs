@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use ignite_core::config::Os;
 use ignite_core::ids::{Seq, SessionId, TicketId};
 use ignite_core::protocol::client::{Exit, Reply};
-use ignite_core::protocol::hub::Reservation;
+use ignite_core::protocol::hub::{ReleaseCause, Reservation};
 use ignite_core::protocol::tickets::TicketDetail;
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{Error, Result};
@@ -122,7 +122,13 @@ pub trait Host: Send + Sync {
     /// Ends the session's `ignite wait` at once with `reply`. Returns whether it was waiting.
     fn interrupt(&self, session: &SessionId, reply: Reply) -> bool;
     /// Gives back the ticket of a session that is gone or idle, keeping its work.
-    fn release(&self, session: &SessionId, ticket: &TicketId, reason: &str) -> Result<()>;
+    fn release(
+        &self,
+        session: &SessionId,
+        ticket: &TicketId,
+        reason: &str,
+        cause: ReleaseCause,
+    ) -> Result<()>;
     /// The title the desktop app shows for the session, or `None` when it cannot be read.
     fn title(&self, session: &SessionId) -> Option<String>;
     /// The live processes under process `root` (the session's own process, as its `Stop` hook

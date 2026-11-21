@@ -1,12 +1,10 @@
-//! CLI mode's health: each app's CLI hold and the probe turn that ends it, the plan-limit sample,
-//! the usage samples a turn reports, and each turn's cost (see "CLI mode" in the design
-//! document).
+//! Tracks CLI holds, probes, plan usage and turn costs.
 //!
 //! - A CLI hold (a row of `cli_holds`) means the app's turns fail for a reason that is not the
 //!   session's own: the CLI is not logged in, refuses the model, is missing, exits before its
-//!   first line, or meets an API error. While an app is held, no turn starts for it
-//!   ([`Health::may_start`]) and its slots are not offered to the hub ([`Health::offers`]). A
-//!   hold never releases a ticket: the slots it stops are parked with their tickets held.
+//!   first line, meets an API error or reaches a plan limit outside the Claude dialect.
+//!   A hold blocks new turns ([`Health::may_start`]) and hand-offs ([`Health::offers`]). Slots
+//!   blocked from starting their next turn are parked with their tickets held.
 //! - Each hold posts one desktop notification when it starts and sends one justiciar report,
 //!   tried again each [`Health::tick`] until the hub takes it.
 //! - A probe turn is a one-word turn on the cheapest tier of `[pool.models.<app>]`, run in the
@@ -14,15 +12,12 @@
 //!   starts, before the app's slots are first offered, and one every [`PROBE_EVERY_S`] while the
 //!   app is held. A probe that succeeds ends the hold so parked slots can start their next
 //!   turn after checking that their ticket claims are still current.
-//! - A turn that ended at the plan's limit stores a 100% sample of the window, so the usage hold
-//!   at the hub stops affected hand-offs for that provider until the window resets.
+//! - A Claude-dialect turn that reaches its plan limit stores a 100% sample for the window,
+//!   so the hub stops affected hand-offs for that provider until the window resets.
 //! - Claude streams usage samples during a turn. Codex saves them to its session transcript.
 //!   The daemon stores both as rows of `plan_usage` and sends them to the hub.
 //! - Each turn's cost and token counts go to the hub's metrics under [`TURN_SOURCE`], with its
 //!   ticket, through the outbox, so none is lost while the hub is down.
-//!
-//! [`HealthEffects`] is how the `ignite-cli` loop reaches all of this: it is the loop's
-//! [`Effects`], and the daemon calls [`Health::tick`] for the probes and reports.
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -44,7 +39,6 @@ use ignite_core::traits::{CommandSpec, Error, Result};
 use ignite_store::local::rows::{CliHold, PlanUsage};
 use ignite_store::local::{cli_slots, plan_usage};
 
-use self::codex_usage::uses_codex_rollout;
 use super::Effects;
 use crate::pool::Pool;
 use crate::server::Context;
@@ -64,6 +58,7 @@ pub const PROBE_TIERS: [&str; 4] = ["light", "haiku", "sonnet", "opus"];
 /// not to hand out tickets that would meet the limit again at once, short enough that a wrong
 /// guess costs an hour at most.
 pub const UNKNOWN_RESET_S: f64 = 3600.0;
+const PLAN_LIMIT_MESSAGE: &str = "The plan's limit was reached.";
 
 #[path = "clid_codex_usage.rs"]
 mod codex_usage;
@@ -396,19 +391,20 @@ impl Health {
             reserve: None,
         });
         let output = std::fs::read_to_string(&result.output).unwrap_or_default();
-        let mut events = app.read(&output);
-        let now = ctx.clock.now();
-        if let Err(error) = self.record_usage(ctx, name, &events.usage, now) {
-            eprintln!("ignite: usage of a {name} probe not stored: {error}");
-        }
-        if let Some(samples) = self.record_codex_usage(ctx, name, &events, Some(started)) {
-            events.usage = samples;
-        }
+        let events = app.read(&output);
         let end = if result.hung {
             TurnEnd::Interrupted
         } else {
             app.classify(&events, result.exit)
         };
+        if matches!(end, TurnEnd::PlanLimit { .. }) && program.dialect(name) != "claude" {
+            return Probe::Failed { end };
+        }
+        let now = ctx.clock.now();
+        if let Err(error) = self.record_usage(ctx, name, &events.usage, now) {
+            eprintln!("ignite: usage of a {name} probe not stored: {error}");
+        }
+        self.record_codex_usage(ctx, name, &events, Some(started));
         match end {
             TurnEnd::Clean => Probe::Passed,
             TurnEnd::PlanLimit { window } => {
@@ -538,12 +534,9 @@ impl Health {
         self.store_samples(ctx, rows, now)
     }
 
-    /// Stores a 100% sample of `window`, the window a turn reached the plan's limit in, so the
-    /// usage hold starts, and posts it. The reset is the one the turn's own samples gave for the
-    /// window, else the window's newest stored row's if it is still ahead, else
-    /// [`UNKNOWN_RESET_S`] from `now`. A limit that named no window is stored for the window
-    /// the turn's samples show most used, else as "5-hour", which holds every hand-off.
-    /// For Codex, an unnamed limit only uses a sampled window when the reading reached 100%.
+    /// Posts a 100% sample for the Claude window that reached its limit. If the turn names no
+    /// window, use its most-used window or default to the five-hour window. Use the reset from
+    /// the turn or the latest stored sample if still ahead, otherwise [`UNKNOWN_RESET_S`].
     fn plan_limit(
         &self,
         ctx: &Context,
@@ -552,12 +545,10 @@ impl Health {
         samples: &[UsageSample],
         now: Timestamp,
     ) -> Result<()> {
-        let uses_rollout = uses_codex_rollout(&ctx.config, provider);
         let window = window.map_or_else(
             || {
                 samples
                     .iter()
-                    .filter(|sample| !uses_rollout || sample.utilization >= 1.0)
                     .max_by(|a, b| a.utilization.total_cmp(&b.utilization))
                     .map_or_else(|| "five_hour".to_owned(), |s| s.window.clone())
             },
@@ -673,17 +664,27 @@ impl Effects for HealthEffects {
 
     fn ended(&self, slot: &Slot, end: &TurnEnd, events: &TurnEvents) {
         let now = self.ctx.clock.now();
-        let codex = self
-            .health
-            .record_codex_usage(&self.ctx, &slot.app, events, slot.since);
-        if let TurnEnd::PlanLimit { window } = end {
-            let samples = codex.as_deref().unwrap_or(&events.usage);
-            if let Err(error) =
-                self.health
-                    .plan_limit(&self.ctx, &slot.app, window.as_deref(), samples, now)
-            {
-                eprintln!("ignite: the plan-limit sample was not stored: {error}");
+        match end {
+            TurnEnd::PlanLimit { window } if self.ctx.config.cli_dialect(&slot.app) == "claude" => {
+                if let Err(error) = self.health.plan_limit(
+                    &self.ctx,
+                    &slot.app,
+                    window.as_deref(),
+                    &events.usage,
+                    now,
+                ) {
+                    eprintln!("ignite: the plan-limit sample was not stored: {error}");
+                }
             }
+            TurnEnd::PlanLimit { .. } => self.hold(
+                &slot.app,
+                HoldReason::PlanLimit,
+                PLAN_LIMIT_MESSAGE,
+                events.cli_version.as_deref(),
+            ),
+            _ => self
+                .health
+                .record_codex_usage(&self.ctx, &slot.app, events, slot.since),
         }
         if let Some(session) = &slot.session
             && let Err(error) = record_turn(
@@ -760,7 +761,8 @@ fn hold_cause(end: &TurnEnd) -> (HoldReason, String) {
             "the probe turn printed no result".to_owned(),
         ),
         TurnEnd::Unknown { why } => (HoldReason::ApiError, format!("probe turn: {why}")),
-        TurnEnd::Clean | TurnEnd::PlanLimit { .. } => (
+        TurnEnd::PlanLimit { .. } => (HoldReason::PlanLimit, PLAN_LIMIT_MESSAGE.to_owned()),
+        TurnEnd::Clean => (
             HoldReason::ApiError,
             "the probe turn passed but was counted as failed".to_owned(),
         ),

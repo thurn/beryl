@@ -4,7 +4,7 @@
 
 use std::fmt::Write as _;
 
-use ignite_core::cli::{Slot, SlotState};
+use ignite_core::cli::{Hold, Slot, SlotState};
 use ignite_core::ids::SessionId;
 use ignite_core::protocol::cli::{TranscriptKind, TranscriptLine};
 use ignite_core::time::Timestamp;
@@ -61,6 +61,16 @@ pub fn digest_text(lines: &[TranscriptLine], after: usize) -> String {
     out.join("\n")
 }
 
+fn describe_hold(hold: &Hold, now: Timestamp) -> String {
+    format!(
+        "hold     {} CLI hold for {} ({}): {}",
+        hold.app,
+        duration(now.seconds_since(hold.since)),
+        hold.reason.as_str(),
+        hold.message
+    )
+}
+
 impl Dispatcher {
     /// One line per slot of each app in CLI mode, and one per CLI hold, as `ignite pool list`
     /// prints them. Empty when no app runs in CLI mode.
@@ -71,12 +81,7 @@ impl Dispatcher {
         let mut lines = Vec::new();
         for app in self.cli_apps() {
             if let Some(hold) = cli.pool.held(app) {
-                lines.push(format!(
-                    "hold     {app} CLI hold for {} ({}): {}",
-                    duration(now.seconds_since(hold.since)),
-                    hold.reason.as_str(),
-                    hold.message
-                ));
+                lines.push(describe_hold(&hold, now));
             }
             for slot in cli.pool.slots(app) {
                 let mut line = format!("slot     {app} {}  {}", slot.index, describe(&slot, now));
@@ -90,6 +95,14 @@ impl Dispatcher {
             }
         }
         lines
+    }
+
+    /// The local CLI holds shown by `ignite status`.
+    pub fn cli_hold_lines(&self, now: Timestamp) -> impl Iterator<Item = String> + '_ {
+        self.cli.get().into_iter().flat_map(move |cli| {
+            self.cli_apps()
+                .filter_map(move |app| cli.pool.held(app).map(|hold| describe_hold(&hold, now)))
+        })
     }
 
     /// The digest of the CLI session `target` names (a session ID or a ticket), from whichever

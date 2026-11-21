@@ -25,6 +25,7 @@ use ignite_core::config::Config;
 use ignite_core::fakes::{FakeBuilds, FakeClock, FakeGit, FakeHub};
 use ignite_core::ids::{MachineId, SessionId, TicketId};
 use ignite_core::protocol::client::Reply;
+use ignite_core::protocol::hub::ReleaseCause;
 use ignite_core::protocol::hub::Reservation;
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{CommandSpec, Result};
@@ -103,7 +104,7 @@ if [ -f "$dir/turn.$n" ]; then . "$dir/turn.$n"; else init; say done; result; fi
 #[derive(Default)]
 struct E2eHost {
     holders: Mutex<BTreeMap<SessionId, TicketId>>,
-    releases: Mutex<Vec<(SessionId, TicketId, String)>>,
+    releases: Mutex<Vec<(ReleaseCause, String)>>,
 }
 
 impl Host for E2eHost {
@@ -134,9 +135,15 @@ impl Host for E2eHost {
     fn interrupt(&self, _session: &SessionId, _reply: Reply) -> bool {
         false
     }
-    fn release(&self, session: &SessionId, ticket: &TicketId, reason: &str) -> Result<()> {
+    fn release(
+        &self,
+        session: &SessionId,
+        _ticket: &TicketId,
+        reason: &str,
+        cause: ReleaseCause,
+    ) -> Result<()> {
         lock(&self.holders).remove(session);
-        lock(&self.releases).push((session.clone(), ticket.clone(), reason.to_owned()));
+        lock(&self.releases).push((cause, reason.to_owned()));
         Ok(())
     }
     fn title(&self, _session: &SessionId) -> Option<String> {
@@ -506,11 +513,8 @@ impl Rig {
         lock(&self.effects.ends).clone()
     }
 
-    fn releases(&self) -> Vec<String> {
-        lock(&self.host.releases)
-            .iter()
-            .map(|(_, _, note)| note.clone())
-            .collect()
+    fn releases(&self) -> Vec<(ReleaseCause, String)> {
+        lock(&self.host.releases).clone()
     }
 }
 

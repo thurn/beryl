@@ -12,6 +12,7 @@ use ignite_core::admission::Worked;
 use ignite_core::dispatch_pressure::{DispatchPressure, QueueRecovery};
 use ignite_core::ids::{Commit, MachineId, SessionId, TicketId, TreeId};
 use ignite_core::protocol::client::{Exit, Reply};
+use ignite_core::protocol::hub::ReleaseCause;
 use ignite_core::protocol::hub::{AdhocClaim, Claim, Close, Release, TicketBrief};
 use ignite_core::protocol::tickets::TicketDetail;
 use ignite_core::time::Timestamp;
@@ -512,9 +513,15 @@ impl Host for DaemonHost {
             .map(|commit| commit.to_string())
     }
 
-    fn release(&self, session: &SessionId, ticket: &TicketId, reason: &str) -> Result<()> {
+    fn release(
+        &self,
+        session: &SessionId,
+        ticket: &TicketId,
+        reason: &str,
+        cause: ReleaseCause,
+    ) -> Result<()> {
         self.claims
-            .release_session(&self.ctx, session, ticket, reason)
+            .release_session(&self.ctx, session, ticket, reason, cause)
     }
 
     fn running_under(&self, root: u32, asker: Option<u32>) -> Option<Vec<u32>> {

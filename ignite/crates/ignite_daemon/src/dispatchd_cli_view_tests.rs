@@ -8,6 +8,7 @@ use ignite_core::traits::Clock;
 use super::cli_tests::cli;
 use super::tests::{rig, session, ticket_id};
 use super::*;
+use crate::doctor::StatusSection;
 
 fn slot(index: u32, state: SlotState, turn: u32, ticket: Option<&str>, since: Timestamp) -> Slot {
     Slot {
@@ -77,6 +78,13 @@ fn pool_list_shows_a_running_a_parked_and_a_free_cli_slot() {
         ]
     );
     assert!(!reply.text.lines().any(|line| line.starts_with("mode ")));
+
+    let status = crate::pool::PauseSection {
+        dispatcher: rig.dispatcher.clone(),
+        hub: rig.hub.clone(),
+        clock: rig.clock.clone(),
+    };
+    assert!(status.lines().iter().any(|line| line == slots[0]));
 }
 
 fn line(turn: u32, index: u32, kind: TranscriptKind, text: &str) -> TranscriptLine {

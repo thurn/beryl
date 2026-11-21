@@ -328,13 +328,13 @@ impl Claims {
 
     /// Gives back `session`'s ticket for the dispatcher, keeping its work on the saved branch:
     /// the note is `reason` followed by what was saved.
-    /// The hub counts the release against the ticket as Ignite taking it back.
     pub fn release_session(
         &self,
         ctx: &Context,
         session: &SessionId,
         ticket: &TicketId,
         reason: &str,
+        cause: ReleaseCause,
     ) -> Result<()> {
         let held = {
             let state = lock(&self.state);
@@ -346,7 +346,7 @@ impl Claims {
         }
         .ok_or_else(|| Error::NotFound(format!("{session} holds no tree for {ticket}")))?;
         let note = |saved: &Saved| format!("{reason} Its work is saved as {}.", saved.branch);
-        match self.give_back(ctx, &held, note, None, None, ReleaseCause::TakenBack) {
+        match self.give_back(ctx, &held, note, None, None, cause) {
             // The ticket is released either way. A tree whose reset failed keeps the ticket's
             // branch until the retry, and the next lease of the ticket frees it (see `trees`).
             Ok(given) => {

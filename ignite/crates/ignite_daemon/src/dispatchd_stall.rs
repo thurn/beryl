@@ -5,6 +5,7 @@ use std::fmt::Write as _;
 use serde::{Deserialize, Serialize};
 
 use ignite_core::ids::{SessionId, TicketId};
+use ignite_core::protocol::hub::ReleaseCause;
 use ignite_core::time::Timestamp;
 
 use super::wake::WAKE;
@@ -165,7 +166,10 @@ impl Dispatcher {
     /// Gives a ticket back, and returns the outcome for the daemon log.
     pub(super) fn release(&self, due: &DueRelease) -> String {
         let (session, ticket, reason) = (&due.session, &due.ticket, due.reason);
-        match self.host.release(session, ticket, reason) {
+        match self
+            .host
+            .release(session, ticket, reason, ReleaseCause::TakenBack)
+        {
             Ok(()) => {
                 self.note_released(session, ticket);
                 format!("released {ticket} from {session}: {reason}")

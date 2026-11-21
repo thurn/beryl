@@ -21,6 +21,7 @@ use std::path::Path;
 
 use ignite_core::cli::{CliApp, SlotState, TurnEnd, TurnEvents};
 use ignite_core::ids::SessionId;
+use ignite_core::protocol::hub::ReleaseCause;
 use ignite_core::traits::{Error, Result};
 use ignite_store::local::cli_slots as store;
 use ignite_store::local::rows::{CliSlot, CliTurn};
@@ -191,7 +192,8 @@ impl CliDaemon {
             row.app
         );
         if let Some(ticket) = &slot.ticket {
-            self.host.release(&session, ticket, &note)?;
+            self.host
+                .release(&session, ticket, &note, ReleaseCause::TakenBack)?;
         }
         let end = TurnEnd::Unknown { why: note };
         self.close(row, turn, &end, None, SlotState::Free, |_| {})

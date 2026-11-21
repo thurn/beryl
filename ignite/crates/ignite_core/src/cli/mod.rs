@@ -178,6 +178,8 @@ pub struct TurnEvents {
 pub enum HoldReason {
     NotLoggedIn,
     ModelRefused,
+    /// The worker reached the plan's limit.
+    PlanLimit,
     /// The program could not be started.
     ProgramMissing,
     /// The program exited before printing its first line.
@@ -194,6 +196,7 @@ impl HoldReason {
         match self {
             HoldReason::NotLoggedIn => "not_logged_in",
             HoldReason::ModelRefused => "model_refused",
+            HoldReason::PlanLimit => "plan_limit",
             HoldReason::ProgramMissing => "program_missing",
             HoldReason::NoFirstLine => "no_first_line",
             HoldReason::ApiError => "api_error",
@@ -205,6 +208,7 @@ impl HoldReason {
         [
             HoldReason::NotLoggedIn,
             HoldReason::ModelRefused,
+            HoldReason::PlanLimit,
             HoldReason::ProgramMissing,
             HoldReason::NoFirstLine,
             HoldReason::ApiError,
@@ -402,6 +406,7 @@ mod tests {
         for reason in [
             HoldReason::NotLoggedIn,
             HoldReason::ModelRefused,
+            HoldReason::PlanLimit,
             HoldReason::ProgramMissing,
             HoldReason::NoFirstLine,
             HoldReason::ApiError,

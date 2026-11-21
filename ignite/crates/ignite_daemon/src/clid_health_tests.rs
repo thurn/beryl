@@ -5,6 +5,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
+use ignite_core::cli::codex::Codex;
 use ignite_core::cli::{HoldReason, TokenCounts, TurnEvents, UsageSample};
 use ignite_core::config::Config;
 use ignite_core::fakes::{
@@ -88,6 +89,10 @@ fn rig(name: &str) -> Rig {
         [pool.models.fake]
         opus = "fake-opus"
         light = "fake-light"
+        [pool.cli.codex]
+        program = "fake-codex"
+        [pool.models.codex]
+        light = "codex-light"
     "#;
     let clock = Arc::new(FakeClock::new(Timestamp::parse(START).unwrap()));
     let hub = Arc::new(FakeHub::default());
@@ -352,26 +357,23 @@ fn no_slot_is_offered_before_the_first_probe_passes() {
 }
 
 #[test]
-fn a_codex_plan_limit_stores_a_codex_sample_and_uses_no_claude_reset() {
+fn a_codex_plan_limit_blocks_only_codex_until_a_probe_passes() {
     let rig = rig("plan-limit");
-    let resets = rig.now().plus_seconds(7200.0).to_string();
-    let samples = [UsageSample {
-        window: "five_hour".to_owned(),
-        utilization: 0.4,
-        resets_at: Some(resets.clone()),
-        status: None,
-    }];
-    rig.health
-        .record_usage(&rig.ctx, "claude", &samples, rig.now())
-        .unwrap();
+    let health = Arc::new(rig.health_clone());
     let effects = HealthEffects {
-        health: Arc::new(Health::new(
-            rig.pool.clone(),
-            rig.dir.join("home"),
-            "jarvis".to_owned(),
-        )),
+        health: health.clone(),
         ctx: rig.ctx.clone(),
     };
+    let apps: [(&str, &dyn CliApp); 2] = [("fake", &rig.app), ("codex", &Codex)];
+    let ready = r#"{"type":"turn.completed","usage":{}}"#;
+    let limit = r#"{"type":"turn.failed","error":{"message":"You have hit your limit"}}"#;
+    rig.passing_probe();
+    rig.launcher
+        .scripted
+        .push(ScriptedTurn::clean(vec![ready.to_owned()]));
+    health.tick(&rig.ctx, &apps);
+    assert!(health.offers("fake") && health.offers("codex"));
+
     let slot = Slot {
         app: "codex".to_owned(),
         index: 1,
@@ -384,31 +386,44 @@ fn a_codex_plan_limit_stores_a_codex_sample_and_uses_no_claude_reset() {
         effort: None,
         since: None,
     };
-    effects.ended(
-        &slot,
-        &TurnEnd::PlanLimit { window: None },
-        &TurnEvents::default(),
+    let events = Codex.read(limit);
+    let end = Codex.classify(&events, Some(1));
+    effects.ended(&slot, &end, &events);
+
+    assert_eq!(health.hold("codex").unwrap().reason, HoldReason::PlanLimit);
+    assert!(!health.may_start("codex"));
+    assert!(!health.offers("codex"));
+    assert!(
+        health.offers("fake"),
+        "the Claude-dialect provider stays eligible"
     );
 
-    let rows = rig
-        .pool
-        .with_database(|conn| plan_usage::latest(conn))
-        .unwrap();
-    assert_eq!(rows.len(), 2);
-    assert_eq!(rows[0].provider, "claude");
-    assert_eq!(rows[0].resets_at.as_deref(), Some(resets.as_str()));
-    assert_eq!(rows[0].percent_used, Some(40.0));
-    assert_eq!(rows[1].provider, "codex");
-    assert_eq!(rows[1].label.as_deref(), Some("5-hour"));
-    assert_eq!(rows[1].percent_used, Some(100.0));
-    assert_eq!(
-        rows[1].resets_at,
-        Some(rig.now().plus_seconds(UNKNOWN_RESET_S).to_string())
+    rig.advance(PROBE_EVERY_S);
+    rig.launcher.scripted.push(ScriptedTurn {
+        lines: vec![limit.to_owned()],
+        exit: Some(1),
+        hung: false,
+    });
+    health.tick(&rig.ctx, &apps);
+    assert_eq!(rig.launcher.scripted.runs().len(), 3);
+    assert!(!health.offers("codex"));
+    assert!(health.offers("fake"));
+    assert!(
+        rig.pool
+            .with_database(|conn| plan_usage::latest(conn))
+            .unwrap()
+            .is_empty()
     );
-    assert_eq!(rig.hub.metrics_imports()[1].rows[0]["provider"], "codex");
-    let report = usage_report(&rig.pool, rig.now()).text;
-    assert!(report.contains("claude · 5-hour 40%"), "{report}");
-    assert!(report.contains("codex · 5-hour 100%"), "{report}");
+    assert!(rig.hub.metrics_imports().is_empty());
+
+    rig.advance(PROBE_EVERY_S);
+    rig.launcher
+        .scripted
+        .push(ScriptedTurn::clean(vec![ready.to_owned()]));
+    health.tick(&rig.ctx, &apps);
+    assert_eq!(rig.launcher.scripted.runs().len(), 4);
+    assert!(health.hold("codex").is_none());
+    assert!(health.may_start("codex") && health.offers("codex"));
 }
 
 #[test]
@@ -579,6 +594,7 @@ fn the_loops_effects_reach_health() {
     assert_eq!(rows[0].provider, "fake");
     assert_eq!(rows[0].label.as_deref(), Some("Weekly · all models"));
     assert_eq!(rows[0].percent_used, Some(100.0));
+    assert!(health.hold("fake").is_none());
     let queued = rig
         .pool
         .with_database(|conn| crate::outbox::flush(conn, rig.hub.as_ref()))

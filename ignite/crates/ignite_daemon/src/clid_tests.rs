@@ -10,6 +10,7 @@ use ignite_core::config::CliProgram;
 use ignite_core::fakes::{FakeCliApp, FakeClock, ScriptedLauncher, ScriptedTurn};
 use ignite_core::ids::{MachineId, SessionId, TicketId};
 use ignite_core::protocol::client::Reply;
+use ignite_core::protocol::hub::ReleaseCause;
 use ignite_core::protocol::hub::Reservation;
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{CommandSpec, Launcher, Result, RunResult};
@@ -152,7 +153,13 @@ impl Host for TestHost {
         lock(&self.interrupts).push(reply.text);
         false
     }
-    fn release(&self, session: &SessionId, ticket: &TicketId, reason: &str) -> Result<()> {
+    fn release(
+        &self,
+        session: &SessionId,
+        ticket: &TicketId,
+        reason: &str,
+        _cause: ReleaseCause,
+    ) -> Result<()> {
         lock(&self.holders).remove(session);
         lock(&self.releases).push((session.clone(), ticket.clone(), reason.to_owned()));
         Ok(())

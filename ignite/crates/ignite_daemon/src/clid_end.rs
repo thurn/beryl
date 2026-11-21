@@ -26,10 +26,11 @@
 //! One end skips `decide`: the first turn of a slot that resumed a culprit's transcript, if it
 //! ends as anything but `Clean`. The resume failed (the transcript is gone, or the CLI refused
 //! it), so the slot starts the ticket again at once on a new transcript with its fallback
-//! prompt, and no hold, park or release follows from that end.
+//! prompt. The fresh turn still waits if the end puts its provider on a CLI hold.
 
 use ignite_core::cli::{Action, Facts, PreviousAnswer, SlotState, TurnEnd, TurnEvents};
 use ignite_core::ids::SessionId;
+use ignite_core::protocol::hub::ReleaseCause;
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{Error, Result};
 use ignite_store::local::cli_slots as store;
@@ -180,7 +181,12 @@ impl CliDaemon {
             }
             Action::Release { note } => {
                 if let (Some(session), Some(ticket)) = (&slot.session, &slot.ticket) {
-                    self.host.release(session, ticket, note)?;
+                    let cause = if matches!(end, TurnEnd::PlanLimit { .. }) {
+                        ReleaseCause::PlanLimit
+                    } else {
+                        ReleaseCause::TakenBack
+                    };
+                    self.host.release(session, ticket, note, cause)?;
                 }
                 self.close(row, turn, end, exit, SlotState::Free, |_| {})?;
             }
