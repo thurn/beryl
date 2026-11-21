@@ -1,0 +1,19 @@
+{
+  "name": "pulse",
+  "target": "subject",
+  "length": "effect",
+  "layers": [
+    {
+      "kind": "ring",
+      "quad": {
+        "scale": 1.4849242,
+        "tint": [255, 226, 170, 204],
+        "fade": { "from": 0, "by": 1 },
+        "record": {
+          "scale": 1,
+          "opacity": { "from": 1, "by": -1 }
+        }
+      }
+    }
+  ]
+}

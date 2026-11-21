@@ -6,25 +6,23 @@
 use beryl_protocol::script::Subject;
 use glam::{Affine3A, Vec2, Vec3};
 
-use super::{Effect, EffectRun, Reach, player};
-use kit_base::data::effect::{Effects, Emitter, Primitive};
-use kit_base::data::space::enhanced::particles::vortex;
+use super::{EffectRun, Reach, player};
+use kit_base::data::effect::{Effects, Emitter, Primitive, Vortex};
 use kit_base::data::space::light::LIFT;
-use kit_base::tokens::color;
 use kit_frame::frame::{Band, Draw, FrameBuilder, PARTICLES, sprites};
 use kit_ui::input::Tier;
 
 #[derive(Clone, Copy)]
 enum Kind<'a> {
     Sweep(&'a Emitter),
-    Vortex,
+    Vortex(&'a Vortex),
 }
 
 impl Kind<'_> {
     fn count(self) -> usize {
         match self {
             Self::Sweep(emitter) => usize::from(emitter.count),
-            Self::Vortex => vortex::COUNT,
+            Self::Vortex(emitter) => usize::from(emitter.count),
         }
     }
 }
@@ -35,39 +33,28 @@ fn emitters<'a>(
     now: u64,
     tier: Tier,
 ) -> impl Iterator<Item = (Subject, Seeds, Kind<'a>, f32)> {
-    runs.iter().flat_map(move |&run| {
-        let object = match run.on {
-            Subject::Object { slot } => Some(slot.0),
-            _ => None,
-        };
-        let definition = effects.get(run.effect.name()).filter(|_| object.is_some());
-        let layers = definition
-            .into_iter()
-            .flat_map(move |definition| player::layers(definition, run, now, tier))
-            .filter_map(|(primitive, progress)| match primitive {
-                Primitive::Particles { emitter } if emitter.count > 0 => {
-                    Some((Kind::Sweep(emitter), progress))
-                }
-                _ => None,
-            });
-        let legacy = (definition.is_none()
-            && tier == Tier::Enhanced
-            && object.is_some()
-            && run.effect == Effect::Blanch)
-            .then_some(Kind::Vortex)
-            .and_then(|kind| Some((kind, run.curve.ease(run.elapsed(now)?))));
-        layers.chain(legacy).map(move |(kind, progress)| {
-            (
-                run.on,
-                Seeds {
-                    object: object.unwrap_or_default(),
-                    step: run.step,
-                },
-                kind,
-                progress,
-            )
+    runs.iter()
+        .filter_map(|&run| {
+            let Subject::Object { slot } = run.on else {
+                return None;
+            };
+            let definition = effects.get(run.effect.name())?;
+            let seeds = Seeds {
+                object: slot.0,
+                step: run.step,
+            };
+            Some((run, definition, seeds))
         })
-    })
+        .flat_map(move |(run, definition, seeds)| {
+            player::layers(definition, run, now, tier).filter_map(move |(primitive, progress)| {
+                let kind = match primitive {
+                    Primitive::Particles { emitter } => Kind::Sweep(emitter),
+                    Primitive::Vortex { emitter } => Kind::Vortex(emitter),
+                    _ => return None,
+                };
+                (kind.count() > 0).then_some((run.on, seeds, kind, progress))
+            })
+        })
 }
 
 /// Writes the visible particle emitters under way at `now` in `Band::Particles`.
@@ -93,7 +80,7 @@ pub fn write(
         for index in 0..kind.count().min(most) {
             let particle = match kind {
                 Kind::Sweep(emitter) => sweep_particle(emitter, &reach, seeds, index, progress),
-                Kind::Vortex => vortex_particle(&reach, seeds, index, progress),
+                Kind::Vortex(emitter) => vortex_particle(emitter, &reach, seeds, index, progress),
             };
             if let Some(draw) = particle {
                 builder.draw(Band::Particles, draw);
@@ -163,11 +150,6 @@ fn lying(reach: &Reach, at: Vec2, size: f32, tint: [u8; 4], age: f32, seed: f32)
     Draw::particle(transform, tint, sprites::DISC, age, seed)
 }
 
-/// A number from `ends.x` to `ends.y`, `share` of the way.
-fn between(ends: Vec2, share: f32) -> f32 {
-    ends.x + (ends.y - ends.x) * share
-}
-
 /// Each row emits at a different point of the layer clock. The index supplies a stable
 /// point along the row, a drift direction, and a size for the particle.
 fn sweep_particle(
@@ -196,23 +178,28 @@ fn sweep_particle(
     ))
 }
 
-/// Vortex particle `index` of a card blanching at `reach`, `progress` of the way through its
-/// run.
-fn vortex_particle(reach: &Reach, seeds: Seeds, index: usize, progress: f32) -> Option<Draw> {
-    let birth = 0.5 * seeds.random(index, 4);
-    let age = age(progress, birth, vortex::LIFE)?;
+/// Emits a particle whose seeded starting point rotates and shrinks toward the center.
+fn vortex_particle(
+    emitter: &Vortex,
+    reach: &Reach,
+    seeds: Seeds,
+    index: usize,
+    progress: f32,
+) -> Option<Draw> {
+    let birth = emitter.birth.at(seeds.random(index, 4));
+    let age = age(progress, birth, emitter.life)?;
     let half = reach.half;
     let start = Vec2::new(
         (2.0 * seeds.random(index, 1) - 1.0) * half.x,
         (2.0 * seeds.random(index, 2) - 1.0) * half.y,
     );
-    let turn = Vec2::from_angle(vortex::TURNS * std::f32::consts::TAU * age);
+    let turn = Vec2::from_angle(emitter.turns * std::f32::consts::TAU * age);
     let left = 1.0 - age;
     Some(lying(
         reach,
         turn.rotate(start) * left,
-        between(vortex::SIZE, seeds.random(index, 3)) * left,
-        color::TRAIL,
+        emitter.size.at(seeds.random(index, 3)) * left,
+        emitter.tint,
         age,
         seeds.random(index, 0),
     ))

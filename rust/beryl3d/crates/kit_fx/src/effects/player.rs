@@ -1,8 +1,9 @@
 //! Samples effect layers on the frame's clock and sends each primitive to its drawing surface.
 
-use glam::{Vec2, Vec3};
+use glam::{Quat, Vec2, Vec3};
 use kit_base::data::effect::{
-    Clock, Definition, Effects, NumberOrigin, Primitive, Quad, Shape, Surface,
+    Clock, Definition, DirectedSprite, Direction, Effects, LightRecord, NumberOrigin, Primitive,
+    Quad, Shape, Surface,
 };
 use kit_frame::frame::{Band, FrameBuilder, Sprite, sprites};
 use kit_ui::{input::Tier, layout::FloatLook};
@@ -62,36 +63,52 @@ pub(super) fn write_light(
     builder: &mut FrameBuilder<'_>,
 ) {
     for (primitive, p) in layers(definition, run, now, builder.tier()) {
+        if !matches!(
+            primitive,
+            Primitive::Sprite { .. }
+                | Primitive::Ring { .. }
+                | Primitive::Burst {
+                    on_surface: false,
+                    ..
+                }
+                | Primitive::Directed { .. }
+                | Primitive::Streak { .. }
+        ) {
+            continue;
+        }
+        let Some(reach) = reach_at(0) else { return };
+        let basic = reach.half * 2.0;
         match primitive {
-            Primitive::Sprite { .. } | Primitive::Ring { .. } | Primitive::Burst { .. } => {
-                let Some(reach) = reach_at(0) else { return };
-                let basic = reach.half * 2.0;
-                let (quad, cell, size) = match primitive {
-                    Primitive::Sprite { shape, quad } => {
-                        let size = if *shape == Shape::Halo {
-                            sprites::halo_size(reach.half)
-                        } else {
-                            basic
-                        };
-                        (quad, sprite(*shape), size)
-                    }
-                    Primitive::Ring { quad } => (quad, sprites::RING, basic),
-                    Primitive::Burst { quad } => {
-                        (quad, sprites::BURST, Vec2::splat(basic.max_element()))
-                    }
-                    _ => unreachable!("only the sprite, ring and burst emit quads"),
+            Primitive::Sprite { shape, quad } => {
+                let size = if *shape == Shape::Halo {
+                    sprites::halo_size(reach.half)
+                } else {
+                    basic
                 };
-                write_quad(quad, cell, size, p, run, reach, builder);
+                write_quad(quad, (sprite(*shape), size), p, run, reach, builder);
             }
+            Primitive::Ring { quad } => {
+                write_quad(quad, (sprites::RING, basic), p, run, reach, builder);
+            }
+            Primitive::Burst {
+                quad,
+                on_surface: false,
+            } => {
+                let size = Vec2::splat(basic.max_element());
+                write_quad(quad, (sprites::BURST, size), p, run, reach, builder);
+            }
+            Primitive::Directed { sprite } => write_directed(sprite, p, run, reach, builder),
             Primitive::Streak {
                 lookback_ms,
                 width,
                 minimum,
                 tint,
                 opacity,
+                record,
             } => {
+                write_record(record.as_ref(), p, run, reach, builder);
                 let before = u64::from(*lookback_ms) * 1_000_000;
-                if let (Some(reach), Some(was)) = (reach_at(0), reach_at(before))
+                if let Some(was) = reach_at(before)
                     && let Some(draw) = light::path_streak(
                         reach,
                         was,
@@ -109,17 +126,28 @@ pub(super) fn write_light(
     }
 }
 
-fn write_quad(
+/// Writes a burst in surface paint order, using the surface's own pose and scale.
+pub(super) fn write_surface_burst(
     quad: &Quad,
-    sprite: Sprite,
-    size: Vec2,
     progress: f32,
     run: EffectRun,
     reach: Reach,
     builder: &mut FrameBuilder<'_>,
 ) {
-    let fade = quad.fade.at(progress).clamp(0.0, 1.0);
-    if let Some(record) = &quad.record {
+    if quad.fade.at(progress) < 1.0 {
+        let size = Vec2::splat(reach.half.max_element() * 2.0);
+        write_quad(quad, (sprites::BURST, size), progress, run, reach, builder);
+    }
+}
+
+fn write_record(
+    record: Option<&LightRecord>,
+    progress: f32,
+    run: EffectRun,
+    reach: Reach,
+    builder: &mut FrameBuilder<'_>,
+) {
+    if let Some(record) = record {
         light::record_as(
             builder,
             &run,
@@ -131,14 +159,66 @@ fn write_quad(
             ),
         );
     }
+}
+
+fn write_quad(
+    quad: &Quad,
+    (sprite, size): (Sprite, Vec2),
+    progress: f32,
+    run: EffectRun,
+    reach: Reach,
+    builder: &mut FrameBuilder<'_>,
+) {
+    let record = if run.on_point() {
+        quad.point_record.as_ref().or(quad.record.as_ref())
+    } else {
+        quad.record.as_ref()
+    };
+    write_record(record, progress, run, reach, builder);
     builder.draw(
         Band::Glows,
         light::lying(
             &reach.pose,
             size * quad.scale.at(progress),
-            quad.tint,
+            light::fade(quad.tint, quad.alpha.at(progress)),
             sprite,
-            fade,
+            quad.fade.at(progress).clamp(0.0, 1.0),
+        ),
+    );
+}
+
+fn write_directed(
+    directed: &DirectedSprite,
+    progress: f32,
+    run: EffectRun,
+    reach: Reach,
+    builder: &mut FrameBuilder<'_>,
+) {
+    use std::f32::consts::{FRAC_PI_2, PI};
+
+    let (axis, angle, along, across) = match directed.direction {
+        Direction::Up => (Vec3::Y, 0.0, reach.half.y, reach.half.x),
+        Direction::Left => (Vec3::NEG_X, FRAC_PI_2, reach.half.x, reach.half.y),
+        Direction::Down => (Vec3::NEG_Y, PI, reach.half.y, reach.half.x),
+        Direction::Right => (Vec3::X, -FRAC_PI_2, reach.half.x, reach.half.y),
+    };
+    let length = along * directed.length.at(progress);
+    let width = 2.0 * across * directed.width.at(progress);
+    let start = (directed.origin * reach.half).extend(0.0);
+    let pose = reach.pose;
+    let transform = glam::Affine3A::from_scale_rotation_translation(
+        Vec3::new(width, length, 1.0),
+        pose.rotation * Quat::from_rotation_z(angle),
+        light::above(&pose) + pose.rotation * start + pose.rotation * axis * (length * 0.5),
+    );
+    write_record(directed.record.as_ref(), progress, run, reach, builder);
+    builder.draw(
+        Band::Glows,
+        kit_frame::frame::Draw::glow(
+            transform,
+            light::fade(directed.tint, directed.alpha.at(progress)),
+            sprite(directed.shape),
+            directed.fade.at(progress).clamp(0.0, 1.0),
         ),
     );
 }

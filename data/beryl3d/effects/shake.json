@@ -1,0 +1,18 @@
+{
+  "name": "shake",
+  "target": "subject",
+  "length": "effect",
+  "layers": [
+    {
+      "kind": "shake",
+      "x": {
+        "cycles": 2,
+        "amplitude": { "from": 6, "by": -6 }
+      },
+      "y": {
+        "cycles": 4,
+        "amplitude": { "from": 2, "by": -2 }
+      }
+    }
+  ]
+}

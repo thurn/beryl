@@ -5,6 +5,7 @@ pub use curve::Scalar;
 
 use std::collections::BTreeMap;
 
+use glam::Vec2;
 use serde::Deserialize;
 
 use super::tuning::read;
@@ -119,6 +120,12 @@ pub enum Primitive {
     },
     Burst {
         quad: Quad,
+        /// Draw with the surface, using its resolved pose and nominal size.
+        #[serde(default)]
+        on_surface: bool,
+    },
+    Directed {
+        sprite: DirectedSprite,
     },
     Streak {
         lookback_ms: u16,
@@ -126,9 +133,13 @@ pub enum Primitive {
         minimum: Scalar,
         tint: [u8; 4],
         opacity: Scalar,
+        record: Option<LightRecord>,
     },
     Particles {
         emitter: Emitter,
+    },
+    Vortex {
+        emitter: Vortex,
     },
     Surface {
         surface: Surface,
@@ -175,8 +186,42 @@ pub struct Quad {
     pub tint: [u8; 4],
     /// How much the draw material fades the light, from 0 (whole) to 1 (gone).
     pub fade: Scalar,
+    /// Multiplier on the tint's alpha, applied before the material fade.
+    #[serde(default = "whole")]
+    pub alpha: Scalar,
     /// The box and opacity used to compare the light to the web element that represents it.
     pub record: Option<LightRecord>,
+    /// A different comparison box for a point anchor, if supplied.
+    pub point_record: Option<LightRecord>,
+}
+
+/// A sprite that starts at a point on the subject and extends in a direction in its plane.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct DirectedSprite {
+    pub shape: Shape,
+    /// The starting point measured in shares of the subject's half extents.
+    #[serde(deserialize_with = "super::tuning::vector")]
+    pub origin: Vec2,
+    pub direction: Direction,
+    /// Length in shares of the subject's half extent along the sprite.
+    pub length: Scalar,
+    /// Width in shares of the subject's full extent across the sprite.
+    pub width: Scalar,
+    pub tint: [u8; 4],
+    pub alpha: Scalar,
+    pub fade: Scalar,
+    pub record: Option<LightRecord>,
+}
+
+/// Which way the sprite's own positive y axis points in the subject's plane.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Direction {
+    Up,
+    Left,
+    Down,
+    Right,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
@@ -202,6 +247,21 @@ pub struct Emitter {
     pub tint: [u8; 4],
 }
 
+/// Particles born across the subject's face that rotate and shrink toward its center.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct Vortex {
+    pub count: u16,
+    /// Birth time sampled by seed.
+    pub birth: Scalar,
+    #[serde(deserialize_with = "super::tuning::positive_fraction")]
+    pub life: f32,
+    pub size: Scalar,
+    #[serde(deserialize_with = "super::tuning::finite")]
+    pub turns: f32,
+    pub tint: [u8; 4],
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(tag = "channel", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Surface {
@@ -210,6 +270,7 @@ pub enum Surface {
     TextTint { color: [u8; 4] },
     Dissolve,
     Opacity,
+    PreviousFace,
 }
 
 /// Which side of an anchor a prepared number starts on.
@@ -222,4 +283,8 @@ pub enum NumberOrigin {
 
 fn one() -> f32 {
     1.0
+}
+
+fn whole() -> Scalar {
+    Scalar::Constant(1.0)
 }

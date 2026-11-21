@@ -1,0 +1,20 @@
+{
+  "name": "flash",
+  "target": "subject",
+  "length": "effect",
+  "layers": [
+    {
+      "kind": "burst",
+      "quad": {
+        "scale": { "from": 2.6, "by": 1.4 },
+        "tint": [255, 246, 222, 217],
+        "fade": { "from": 0, "by": 1 },
+        "alpha": { "remaining_power": 0.4 },
+        "record": {
+          "scale": { "from": 1, "by": 0.08 },
+          "opacity": { "remaining_power": 2 }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "name": "blanch",
+  "target": "subject",
+  "length": "step",
+  "layers": [
+    {
+      "kind": "surface",
+      "surface": { "channel": "whiten" },
+      "amount": { "from": 0, "by": 1, "end": 0.5 },
+      "record": true
+    },
+    {
+      "kind": "surface",
+      "surface": { "channel": "opacity" },
+      "amount": { "from": 1, "by": -1, "start": 0.5 }
+    },
+    {
+      "kind": "vortex",
+      "enhanced_only": true,
+      "emitter": {
+        "count": 128,
+        "birth": { "from": 0, "by": 0.5 },
+        "life": 0.5,
+        "size": { "from": 1, "by": 1 },
+        "turns": 1.5,
+        "tint": [255, 246, 222, 255]
+      }
+    }
+  ]
+}

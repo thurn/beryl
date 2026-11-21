@@ -8,7 +8,6 @@ use beryl_protocol::protocol::{CardType, ObjectId, Side, Why, ZoneName};
 use beryl_protocol::script::{Act, Subject, Table as Played, time_script};
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use game_play::play::Show;
-use kit_base::data::space::enhanced::particles::vortex;
 use kit_frame::frame::{Draw, Frame, FrameBuilder, Material, PARTICLES};
 use kit_fx::effects::Effect;
 use kit_ui::input::Tier;
@@ -159,7 +158,7 @@ fn a_destroyed_card_falls_to_ash_after_it_darkens_and_an_exiled_one_to_a_vortex(
     const DARKENED: f32 = 0.3;
     for (why, effect, most) in [
         (Why::Destroy, Effect::Dissolve, 96),
-        (Why::Exile, Effect::Blanch, vortex::COUNT),
+        (Why::Exile, Effect::Blanch, 128),
     ] {
         let (start, vanished) = angel_leaves(why);
         let (from, duration) = run_of(&start, &vanished, effect);

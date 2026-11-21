@@ -1,0 +1,21 @@
+{
+  "name": "beam",
+  "target": "subject",
+  "length": "effect",
+  "layers": [
+    {
+      "kind": "directed",
+      "sprite": {
+        "shape": "cone",
+        "origin": [-1, 0.3],
+        "direction": "left",
+        "length": { "from": 0.9, "by": 2.7, "end": 0.25, "ease": "out_cubic", "drift": 0.54 },
+        "width": { "from": 0.55, "by": -0.44, "start": 0.3, "end": 0.6 },
+        "tint": [255, 238, 190, 255],
+        "alpha": { "from": 0, "by": 1, "end": 0.1 },
+        "fade": { "from": 0, "by": 1 },
+        "record": { "scale": 1, "opacity": 1 }
+      }
+    }
+  ]
+}

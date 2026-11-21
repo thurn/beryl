@@ -1,15 +1,9 @@
-//! How far the `shake` effect moves the whole picture (docs/beryl-3d.md, "Effects": "`shake`
-//! moves the picture, not the table"): side to side and a little up and down, twice, the second
-//! swing smaller, as the web interface's `.stage[data-shaking]` rule in
-//! `ui/src/stage/effects.css` swings the stage.
-
-use std::f32::consts::PI;
+//! Combines all shake layers into one picture displacement.
 
 use glam::Vec2;
 
 use super::{Effect, EffectRun, player};
 use kit_base::data::effect::{Effects, Primitive};
-use kit_base::data::space::effects::shake;
 use kit_frame::frame::{EffectLook, FrameBuilder};
 use kit_ui::input::Tier;
 
@@ -59,23 +53,9 @@ fn displacement(
                     first.get_or_insert(run.effect);
                 }
             }
-        } else if run.effect == Effect::Shake
-            && let Some(elapsed) = run.elapsed(now)
-        {
-            moved += legacy_offset(run.curve.ease(elapsed)) * scale;
-            first.get_or_insert(run.effect);
         }
     }
     (moved, first)
-}
-
-/// The shake's offset in logical points. Two swings diminish to zero at the end of the run.
-fn legacy_offset(p: f32) -> Vec2 {
-    let left = 1.0 - p;
-    Vec2::new(
-        shake::X * (4.0 * PI * p).sin() * left,
-        shake::Y * (8.0 * PI * p).sin() * left,
-    )
 }
 
 /// How far the runs shake the picture at `now`, in physical pixels.

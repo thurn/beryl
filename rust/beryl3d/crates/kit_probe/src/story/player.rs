@@ -71,7 +71,10 @@ impl Player {
                 ));
                 authored.push(None);
             }
-            Body::Effect(kind, rect) => effect = Some((*kind, *rect)),
+            Body::Effect(kind, rect) => {
+                effect = Some((*kind, *rect));
+                preview::prepare_text(&data.effects, *kind, &mut layer);
+            }
         }
         if effect.is_none() {
             layer.show(Some(canvas));
@@ -231,13 +234,20 @@ impl Player {
                     &plane,
                     &mut builder,
                 );
-            } else {
-                self.layer.write_preview(&mut builder, &plane, &|id| {
-                    self.nodes
-                        .get(&id)
-                        .map_or_else(StateBits::default, |node| node.states)
-                });
+                preview::position_text(
+                    &self.data.effects,
+                    effect,
+                    rect,
+                    self.now,
+                    self.tier,
+                    &mut self.layer,
+                );
             }
+            self.layer.write_preview(&mut builder, &plane, &|id| {
+                self.nodes
+                    .get(&id)
+                    .map_or_else(StateBits::default, |node| node.states)
+            });
             builder.finish();
             for element in &mut self.frame.resolved {
                 if let Some(node) = self.nodes.get(&element.id) {
@@ -355,11 +365,11 @@ fn write_effect(
         y,
         width,
         height,
-    } = preview::position(effect, rect, now);
+    } = preview::position(data, effect, rect, now);
     builder.resolved(
         effect.name(),
         Resolved {
-            id: ElementId(1),
+            id: ElementId(u32::MAX - 1),
             parent: u32::MAX,
             role: Role::Region,
             name: NameRef::default(),
@@ -375,7 +385,7 @@ fn write_effect(
             opacity: 1.0,
             clip: None,
             interactive: false,
-            state: StateBits(if effect == Effect::Trail && now < preview::DURATION {
+            state: StateBits(if now < preview::DURATION && preview::moves(data, effect) {
                 StateBits::MOVING
             } else {
                 0

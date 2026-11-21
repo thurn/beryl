@@ -1,0 +1,16 @@
+{
+  "name": "trail",
+  "target": "subject",
+  "length": "effect",
+  "layers": [
+    {
+      "kind": "streak",
+      "lookback_ms": 70,
+      "width": 0.55,
+      "minimum": 0.5,
+      "tint": [255, 246, 222, 255],
+      "opacity": { "remaining_power": 0.8 },
+      "record": { "scale": 1, "opacity": 1 }
+    }
+  ]
+}

@@ -7,12 +7,9 @@ use glam::Vec2;
 use game_table::table::HALF_LIFE;
 use game_table::table::Layout;
 use kit_base::data::profiles::{Life, LifeChange, LifeText};
-use kit_base::data::{
-    Data,
-    effect::{Effects, NumberOrigin},
-};
+use kit_base::data::{Data, effect::NumberOrigin};
 use kit_base::tokens::{color, size, type_style};
-use kit_fx::effects::{self, Effect, EffectRun, NumberLook, TextLook};
+use kit_fx::effects::{self, EffectRun, NumberLook};
 use kit_ui::element::{Element, FloatId, floats};
 use kit_ui::input::{Size, Tier};
 use kit_ui::layout::{FloatLook, Layer};
@@ -158,7 +155,7 @@ impl CountFloats {
             let effect = effects
                 .iter()
                 .filter(|run| run.on == Subject::Player { player: side })
-                .find_map(|&run| count_look(&data.effects, run, now, tier))
+                .find_map(|&run| effects::text(&data.effects, run, now, tier, color::LIFE))
                 .unwrap_or_default();
             let want = Shown {
                 life: counts.map(|counts| (counts.life, target, passes)),
@@ -236,22 +233,6 @@ impl CountFloats {
             }
         }
     }
-}
-
-/// Samples the effect's text and number using the orb's ordinary text color as the base.
-fn count_look(effects: &Effects, run: EffectRun, now: u64, tier: Tier) -> Option<TextLook> {
-    if run.effect == Effect::Gain && effects.get(run.effect.name()).is_none() {
-        let through = run.elapsed(now)?;
-        return Some(TextLook {
-            tint: Some(color::GAIN),
-            number: Some(NumberLook {
-                origin: NumberOrigin::Above,
-                drift: -through,
-                opacity: 1.0 - through,
-            }),
-        });
-    }
-    effects::text(effects, run, now, tier, color::LIFE)
 }
 
 /// Keep the desktop gain above the position where it overlaps the "Your draw" toggle.

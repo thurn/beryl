@@ -1,0 +1,24 @@
+{
+  "name": "impact",
+  "target": "subject",
+  "length": "effect",
+  "layers": [
+    {
+      "kind": "burst",
+      "quad": {
+        "scale": { "from": 1.5, "by": 0.5 },
+        "tint": [255, 246, 222, 217],
+        "fade": { "from": 0, "by": 1 },
+        "alpha": { "remaining_power": 0.6 },
+        "record": {
+          "scale": { "from": 1, "by": 0.12 },
+          "opacity": { "from": 0.55, "by": -0.55 }
+        },
+        "point_record": {
+          "scale": { "from": 1, "by": 0.9 },
+          "opacity": { "from": 1, "by": -1 }
+        }
+      }
+    }
+  ]
+}

@@ -345,11 +345,16 @@ defaults to 0 through 1, with the run's end excluded. It samples the run's eased
 clock by default. An elapsed clock lets a layer, such as a floating number,
 advance uniformly while light follows the run's easing.
 
-A layer parameter can be a constant, a ramp or a wave. A ramp adds `by` to
-`from` over the interval from `start` to `end`, with optional easing. A wave's
-amplitude uses a ramp. All of these values are typed before playback. The
-shipped definitions for `glow`, `dissolve` and `loss` show how to combine
-sprites, surface changes, emitters, rings and floating numbers.
+A layer parameter can be a constant, a ramp, a two-ramp envelope, a power of the
+remaining time, or a wave. A ramp adds `by` to `from` over the interval from
+`start` to `end`, with optional easing and drift. A wave's amplitude uses a
+ramp. The data store decodes these values before playback.
+
+A burst can follow the resolved surface in its paint order, as in `settle`. A
+directed sprite starts at an offset in the subject's plane, as in `beam`. The
+two particle emitters sweep across a surface or spin toward its center. A
+surface layer can show the previous face while a wash covers it, as in `cover`.
+The stories under `kit_fx/stories/` play the layers on sample surfaces.
 
 ## Toolkit capabilities
 

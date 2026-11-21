@@ -749,5 +749,10 @@
     "label": "Beryl 3D layout edits can reuse renderer and asset-worker builds because both consume shared atlas records and the host supplies artwork to the worker.",
     "metric": "bead.core-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Loading the remaining eleven Beryl 3D effects from data lets the inspector replay changes to all 14 effects without recompiling.",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

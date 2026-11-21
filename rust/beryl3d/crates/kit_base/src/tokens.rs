@@ -77,9 +77,6 @@ pub mod color {
     pub const BLOCK_LINE_CORE: [u8; 4] = [255, 247, 204, 255];
     pub const SOURCE_LINE_CORE: [u8; 4] = [255, 242, 217, 255];
 
-    /// A life total that rises: the `--flare` of the `[data-life] > .stage-effect-gain` rule.
-    pub const GAIN: [u8; 4] = [127, 224, 138, 255];
-
     /// The glow of a streak of white mana: `white` in `TONES` (`ui/src/stage/light.ts`).
     pub const MANA_WHITE: [u8; 4] = [255, 230, 158, 255];
     /// The glow of a streak of blue mana: `blue` in `TONES`.
@@ -95,19 +92,6 @@ pub mod color {
     pub const MANA_COLORLESS: [u8; 4] = [219, 184, 117, 255];
     /// The glow of a streak of damage: `ember` in `TONES`, which `TONE` names for damage.
     pub const DAMAGE: [u8; 4] = [255, 38, 10, 255];
-
-    /// The burst of the `impact` effect: the middle stop of `.stage-effect-impact`'s gradient.
-    pub const IMPACT: [u8; 4] = [255, 196, 120, 255];
-    /// The flare of the `flash` effect: the `--light` of `.stage-effect-flash` at 85% opacity.
-    pub const FLASH: [u8; 4] = [255, 246, 222, 217];
-    /// The cone of the `beam` effect: white warmed toward yellow by `warm` 0.35 in `beamLight`
-    /// (`ui/src/stage/flare.ts`).
-    pub const BEAM: [u8; 4] = [255, 238, 190, 255];
-    /// The ring of the `pulse` effect: the outer shadow of `.stage-effect-pulse`, at its 80%
-    /// opacity.
-    pub const PULSE: [u8; 4] = [255, 226, 170, 204];
-    /// The streak of the `trail` effect: the `--light` of `.stage-effect`, white light.
-    pub const TRAIL: [u8; 4] = [255, 246, 222, 255];
 
     /// The outline of what may be picked: the `--tone` of `.stage-mark-eligible` in
     /// `ui/src/stage/stage.css`.
@@ -143,9 +127,6 @@ pub mod color {
     /// The edge of a permanent its owner does not control: the border of `.card-stolen-edge`
     /// (`ui/src/design/components/card-marks-and-piles.css`).
     pub const OUTLINE: [u8; 4] = STOLEN;
-    /// The burst of light over a permanent that lands (`settle`): the glow of the
-    /// `.stage-effect-settle` rule's `box-shadow` in `ui/src/stage/effects.css`.
-    pub const SETTLE_BURST: [u8; 4] = [255, 226, 170, 217];
 }
 
 /// The colors of mana symbols in text (`text::symbols`): each symbol's disc, and the ink of its

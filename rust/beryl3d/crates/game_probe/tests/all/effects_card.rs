@@ -6,7 +6,6 @@ use beryl_protocol::protocol::ObjectId;
 use beryl_protocol::script::{Edge, StepEffect, Subject};
 use game_table::table::Look;
 use glam::Vec2;
-use kit_base::data::space::effects::{blanch, cover, dim, settle};
 use kit_base::pose::{Curve, Pose};
 use kit_frame::frame::{Frame, Material};
 use kit_fx::effects::{Effect, EffectRun, card, shake};
@@ -102,8 +101,8 @@ fn settle_is_still_then_washes_white_and_back() {
         Effect::Settle,
         &[
             (0.0, 0.0, 0.0, 255, 1.0),
-            (settle::STILL, 0.0, 0.0, 255, 1.0),
-            (settle::WHITE, 0.0, 1.0, 255, 1.0),
+            (0.071, 0.0, 0.0, 255, 1.0),
+            (0.3, 0.0, 1.0, 255, 1.0),
             (0.999, 0.0, 0.0, 255, 1.0),
         ],
     );
@@ -126,12 +125,12 @@ fn dissolve_darkens_holds_and_breaks_up() {
 
 #[test]
 fn dim_darkens_and_fades() {
-    let dark = channel(dim::DARK);
+    let dark = channel(0.35);
     check(
         Effect::Dim,
         &[
             (0.0, 0.0, 0.0, 255, 1.0),
-            (dim::DARKENED, 0.0, 0.0, dark, 1.0 - dim::DARKENED),
+            (0.3, 0.0, 0.0, dark, 1.0 - 0.3),
             (0.999, 0.0, 0.0, dark, 0.0),
         ],
     );
@@ -143,7 +142,7 @@ fn blanch_washes_white_then_fades() {
         Effect::Blanch,
         &[
             (0.0, 0.0, 0.0, 255, 1.0),
-            (blanch::WHITE, 0.0, 1.0, 255, 1.0),
+            (0.5, 0.0, 1.0, 255, 1.0),
             (0.999, 0.0, 1.0, 255, 0.0),
         ],
     );
@@ -155,8 +154,8 @@ fn cover_washes_white_while_the_face_changes_at_half_its_run() {
         Effect::Cover,
         &[
             (0.0, 0.0, 0.0, 255, 1.0),
-            (cover::WHITE, 0.0, 1.0, 255, 1.0),
-            (cover::HELD, 0.0, 1.0, 255, 1.0),
+            (0.4, 0.0, 1.0, 255, 1.0),
+            (0.6, 0.0, 1.0, 255, 1.0),
             (0.999, 0.0, 0.0, 255, 1.0),
         ],
     );

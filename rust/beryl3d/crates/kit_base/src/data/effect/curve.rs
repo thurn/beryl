@@ -13,6 +13,8 @@ pub enum Scalar {
     Constant(#[serde(deserialize_with = "finite")] f32),
     Ramp(Ramp),
     Wave(Wave),
+    Envelope(Envelope),
+    Power(RemainingPower),
 }
 
 impl Scalar {
@@ -21,6 +23,14 @@ impl Scalar {
         match self {
             Self::Constant(value) => *value,
             Self::Ramp(ramp) => ramp.at(progress),
+            Self::Envelope(envelope) => {
+                if progress < envelope.fall.start {
+                    envelope.rise.at(progress)
+                } else {
+                    envelope.fall.at(progress)
+                }
+            }
+            Self::Power(power) => (1.0 - progress).powf(power.remaining_power),
             Self::Wave(wave) => {
                 (std::f32::consts::TAU * wave.cycles * progress).sin() * wave.amplitude.at(progress)
             }
@@ -41,6 +51,8 @@ pub struct Ramp {
     end: f32,
     #[serde(default)]
     ease: Ease,
+    #[serde(default, deserialize_with = "finite")]
+    drift: f32,
 }
 
 impl Ramp {
@@ -52,7 +64,7 @@ impl Ramp {
         } else {
             (progress - self.start) / (self.end - self.start)
         };
-        self.from + self.by * self.ease.at(passed)
+        self.from + self.by * self.ease.at(passed) + self.drift * progress
     }
 }
 
@@ -65,6 +77,7 @@ enum Ease {
     Out,
     InOut,
     OutQuad,
+    OutCubic,
 }
 
 impl Ease {
@@ -75,6 +88,7 @@ impl Ease {
             Self::Out => Curve::EASE_OUT.ease(progress),
             Self::InOut => Curve::EASE_IN_OUT.ease(progress),
             Self::OutQuad => 1.0 - (1.0 - progress) * (1.0 - progress),
+            Self::OutCubic => 1.0 - (1.0 - progress).powi(3),
         }
     }
 }
@@ -85,4 +99,19 @@ pub struct Wave {
     #[serde(deserialize_with = "finite")]
     cycles: f32,
     amplitude: Ramp,
+}
+
+/// Two ramps meeting at the start of the second.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct Envelope {
+    rise: Ramp,
+    fall: Ramp,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct RemainingPower {
+    #[serde(deserialize_with = "super::super::tuning::nonnegative")]
+    remaining_power: f32,
 }

@@ -1,62 +1,16 @@
-//! Draws additive light over the table. The routines for the unported lights follow
-//! `ui/src/stage/effects.css` and
-//! `flaresOf` (`ui/src/stage/flare.ts`), and drawn where the scene has its subject on this
-//! frame, so that a light on a card in flight follows it. A run on a player is at their life
-//! total's anchor. An effect moves nothing.
-//!
-//! Every light lies just over the face of what it is on, `light.lift` millimetres along the
-//! face's normal as a mark does, which the depth test can tell from the face. The values are
-//! `effects` in `data/beryl3d/space-constants.json`, as shares of the card or of the run's time:
-//!
-//! - `impact`: a burst over what was struck, `wide` of its longer half across each way as the
-//!   blow lands and `spread` wider at its end, fading as `(1 - progress)^fade` (`IMPACT` and
-//!   the `impact` branch of `flareLight` in flare.ts). The web also lays the orange gradient of
-//!   `.stage-effect-impact` at 0.55 opacity under that burst, which the white burst hides.
-//! - `flash`: a burst over the spell, `wide` of its longer half across each way at once and
-//!   `spread` wider at its end, fading as `(1 - progress)^fade` (the last branch of
-//!   `flareLight`).
-//!
-//! The bursts are the `BURST` sprite, the web's burst as its painter draws it at its brightest
-//! (`burst` in `beryl_assets::light`). The glow material fades a record by `1 - progress`, so
-//! each burst's tint fades by the rest of its power.
-//! - `beam`: the web's `BEAM`, a cone from the card's side toward the middle of the table, its
-//!   light rising over the first `rise` of its time.
-//! - `pulse`: a ring round the card's frame, through the corners of a card `round` times its
-//!   size.
-//! - `trail`: the web's `TRAIL`, a streak back to where the card was `frames` sixtieths of a
-//!   second ago, `wide` of its longer half across at the card. It is not drawn while the card
-//!   has moved less than `least` of its longer half in that time.
-//!
-//! A record's `params[0]` is the run's eased progress, which the glow material fades the light
-//! by; where the web's light fades or rises otherwise, the tint's opacity carries the rest.
-//!
-//! - `gain`: a green ring round the life orb's face that fades as it grows. The total's text
-//!   is tinted too (`hud::counts`).
-//!
-//! While the frame is built for the match tools, each light is also recorded as an `EffectLook`
-//! with the box and opacity of the web's `.stage-effect` node for it (`node`), not its quad.
+//! Draws additive light just above each subject, following its pose as it moves.
 
 use beryl_protocol::script::Subject;
-use glam::{Affine3A, Quat, Vec2, Vec3};
+use glam::{Affine3A, Vec2, Vec3};
 
-use super::{Effect, EffectRun, Reach, player};
+use super::{EffectRun, Reach, player};
 use kit_base::data::effect::Effects;
-use kit_base::data::space::effects::{beam, flash, impact, pulse, trail};
 use kit_base::data::space::light::LIFT;
 use kit_base::pose::Pose;
-use kit_base::tokens::color;
-use kit_frame::frame::{Band, Draw, EffectLook, FrameBuilder, Sprite, sprites};
+use kit_frame::frame::{Draw, EffectLook, FrameBuilder, Sprite, sprites};
 
-/// How much larger than the life orb's face the quad of a `gain` ring is drawn, so that
-/// the `RING` sprite's line, three quarters of the way out, lies just outside the face, where
-/// the web's ring glows (`[data-life] > .stage-effect` in `ui/src/stage/effects.css`).
-const LIFE_RING: f32 = 1.45;
-
-/// Nanoseconds in one sixtieth of a second, the web stage's frame.
-const FRAME: f32 = 1e9 / 60.0;
-
-/// Writes the records of the runs in `runs` that are light and under way at `now`, one each.
-/// `reach_at` gives the target's pose and size a given number of nanoseconds before the frame.
+/// Writes the table-space light layers. `reach_at` supplies the subject's current pose or
+/// its pose a given number of nanoseconds earlier.
 pub fn write(
     effects: &Effects,
     runs: &[EffectRun],
@@ -75,94 +29,11 @@ pub fn write(
                 eye,
                 builder,
             );
-            continue;
         }
-        if !matches!(
-            run.effect,
-            Effect::Impact
-                | Effect::Flash
-                | Effect::Beam
-                | Effect::Pulse
-                | Effect::Trail
-                | Effect::Gain
-        ) {
-            continue;
-        }
-        // Under way from its start until, not at, its end, as `Show::frame` keeps it.
-        if now < run.start || now >= run.start + run.duration {
-            continue;
-        }
-        let Some(reach) = reach_at(run.on, 0) else {
-            continue;
-        };
-        let half = reach.half;
-        #[expect(
-            clippy::cast_precision_loss,
-            reason = "a time inside an effect that lasts about a second"
-        )]
-        let share = (now - run.start) as f32 / run.duration as f32;
-        let progress = run.curve.ease(share);
-        let pose = reach.pose;
-        // The web sizes a burst by the longer half of what it is on (`flareLight`).
-        let longer = half.x.max(half.y);
-        let draw = match run.effect {
-            Effect::Impact => {
-                let across = 2.0 * longer * (impact::WIDE + impact::SPREAD * progress);
-                lying(
-                    &pose,
-                    Vec2::splat(across),
-                    fade(color::FLASH, (1.0 - progress).powf(impact::FADE - 1.0)),
-                    sprites::BURST,
-                    progress,
-                )
-            }
-            Effect::Flash => {
-                let across = 2.0 * longer * (flash::WIDE + flash::SPREAD * progress);
-                lying(
-                    &pose,
-                    Vec2::splat(across),
-                    fade(color::FLASH, (1.0 - progress).powf(flash::FADE - 1.0)),
-                    sprites::BURST,
-                    progress,
-                )
-            }
-            Effect::Pulse => lying(
-                &pose,
-                half * 2.0 * pulse::ROUND * std::f32::consts::SQRT_2,
-                color::PULSE,
-                sprites::RING,
-                progress,
-            ),
-            Effect::Beam => beam(&pose, half, progress),
-            // Not drawn while the card has hardly moved, but its node is still recorded, as the
-            // web keeps its trail node for the whole run.
-            Effect::Trail => {
-                let Some(draw) = trail(run.on, reach, progress, &reach_at, eye) else {
-                    record(builder, run, &pose, half, progress);
-                    continue;
-                };
-                draw
-            }
-            Effect::Gain => lying(
-                &pose,
-                half * 2.0 * LIFE_RING,
-                color::GAIN,
-                sprites::RING,
-                progress,
-            ),
-            _ => continue,
-        };
-        record(builder, run, &pose, half, progress);
-        builder.draw(Band::Glows, draw);
     }
 }
 
-/// Records `run`, `progress` of the way through on what lies at `pose` with half size `half`,
-/// for the match tools, as the web's node for it (`node`).
-fn record(builder: &mut FrameBuilder<'_>, run: &EffectRun, pose: &Pose, half: Vec2, progress: f32) {
-    record_as(builder, run, pose, half, node(run.effect, run.on, progress));
-}
-
+/// Records the box and opacity of a light's matching web element for comparison tools.
 pub(super) fn record_as(
     builder: &mut FrameBuilder<'_>,
     run: &EffectRun,
@@ -180,29 +51,6 @@ pub(super) fn record_as(
     });
 }
 
-/// How much larger than what it is on, and how opaque, the web's `.stage-effect` node of
-/// `effect` is, `progress` of the way through: the `transform: scale(...)` and `opacity` of its
-/// rule in `ui/src/stage/effects.css`. The web draws these lights on a canvas (`flaresOf` in
-/// `ui/src/stage/flare.ts`) or as box shadows past the node's edge, and its node is only a
-/// record the size of the card, or of the face of a player's life orb. The match tools measure
-/// an effect's motion from that node, so Beryl 3D records the same box and opacity rather than
-/// its light's quad, whose empty margins made every light look far larger than the web's; the
-/// light itself is compared in pixels.
-fn node(effect: Effect, on: Subject, progress: f32) -> (f32, f32) {
-    let rest = 1.0 - progress;
-    let player = matches!(on, Subject::Player { .. });
-    match effect {
-        // `[data-life] > .stage-effect` and `[data-life] > .stage-effect-impact`.
-        Effect::Gain => (1.0 + 0.45 * progress, rest),
-        Effect::Impact if player => (1.0 + 0.9 * progress, rest),
-        Effect::Impact => (1.0 + 0.12 * progress, 0.55 * rest),
-        Effect::Flash => (1.0 + 0.08 * progress, rest * rest),
-        Effect::Pulse => (1.0, rest),
-        // `beam` and `trail` have no rule of their own: the node stands whole over the card.
-        _ => (1.0, 1.0),
-    }
-}
-
 /// A glow record of `sprite`, `size` millimetres large, lying in the plane of the face of
 /// what is at `pose`, just over it.
 pub(super) fn lying(pose: &Pose, size: Vec2, tint: [u8; 4], sprite: Sprite, progress: f32) -> Draw {
@@ -214,7 +62,7 @@ pub(super) fn lying(pose: &Pose, size: Vec2, tint: [u8; 4], sprite: Sprite, prog
 /// The point `light.lift` millimetres over the middle of what is at `pose`, along its face's
 /// normal, as a mark lies, so that a card held up toward the camera has its light in front of
 /// it too.
-fn above(pose: &Pose) -> Vec3 {
+pub(super) fn above(pose: &Pose) -> Vec3 {
     pose.position + pose.rotation * Vec3::Z * LIFT
 }
 
@@ -228,54 +76,6 @@ pub(super) fn fade(tint: [u8; 4], by: f32) -> [u8; 4] {
     )]
     let alpha = (f32::from(alpha) * by.clamp(0.0, 1.0)).round() as u8;
     [red, green, blue, alpha]
-}
-
-/// The cone of a triggered ability's beam, `progress` of the way through: from a point `high`
-/// of its half-height above its middle on its left side, toward the middle of the table, as
-/// `beamLight` in `ui/src/stage/flare.ts` draws it. It grows to `long` of its half-width by
-/// `grown` of its time, and narrows from `wide` of its half-height to each side to `streak` of
-/// that between `thick` and `thin`. The cone sprite's point is at the bottom of its cell and it
-/// opens upward, so the quad's own y axis runs from the side of the card outward.
-fn beam(pose: &Pose, half: Vec2, progress: f32) -> Draw {
-    let grow = 1.0 - (1.0 - (progress / beam::GROWN).clamp(0.0, 1.0)).powi(3);
-    let length = half.x * beam::LONG * (0.25 + 0.75 * grow + 0.15 * progress);
-    let narrow = ((progress - beam::THICK) / (beam::THIN - beam::THICK)).clamp(0.0, 1.0);
-    let across = half.y * beam::WIDE * (1.0 - (1.0 - beam::STREAK) * narrow);
-    let toward = pose.rotation * Vec3::NEG_X;
-    let start = above(pose) + pose.rotation * Vec3::new(-half.x, beam::HIGH * half.y, 0.0);
-    // The quad's y axis runs along the beam and its x axis across it, in the card's plane: the
-    // card's rotation turned a quarter circle about its normal, which takes the quad's y axis
-    // to the card's -x and keeps it facing the same way as the card.
-    let turned = pose.rotation * Quat::from_rotation_z(std::f32::consts::FRAC_PI_2);
-    let transform = Affine3A::from_scale_rotation_translation(
-        Vec3::new(2.0 * across, length, 1.0),
-        turned,
-        start + toward * (length * 0.5),
-    );
-    let tint = fade(color::BEAM, progress / beam::RISE);
-    Draw::glow(transform, tint, sprites::CONE, progress)
-}
-
-/// The streak behind a dashing card, `progress` of the way through: from where `on` was
-/// `trail.frames` sixtieths of a second ago to where it is now (`reach`), brightest at the card
-/// and fading as the run goes, as `flareLight` in `ui/src/stage/flare.ts` draws a trail. None
-/// while the card has hardly moved.
-fn trail(
-    on: Subject,
-    reach: Reach,
-    progress: f32,
-    reach_at: impl Fn(Subject, u64) -> Option<Reach>,
-    eye: Vec3,
-) -> Option<Draw> {
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "a few frames, in nanoseconds"
-    )]
-    let ago = (trail::FRAMES * FRAME) as u64;
-    let was = reach_at(on, ago)?;
-    let tint = fade(color::TRAIL, (1.0 - progress).powf(0.8));
-    path_streak(reach, was, eye, trail::LEAST, trail::WIDE, tint)
 }
 
 pub(super) fn path_streak(

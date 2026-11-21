@@ -1,0 +1,28 @@
+{
+  "name": "settle",
+  "target": "subject",
+  "length": "effect",
+  "layers": [
+    {
+      "kind": "surface",
+      "surface": { "channel": "whiten" },
+      "amount": {
+        "rise": { "from": 0, "by": 1, "start": 0.071, "end": 0.3 },
+        "fall": { "from": 1, "by": -1, "start": 0.3 }
+      },
+      "record": true
+    },
+    {
+      "kind": "burst",
+      "on_surface": true,
+      "quad": {
+        "scale": { "from": 1.32, "by": 1.08, "start": 0.15, "end": 0.36 },
+        "tint": [255, 226, 170, 217],
+        "fade": {
+          "rise": { "from": 1, "by": -1, "start": 0.15, "end": 0.36 },
+          "fall": { "from": 0, "by": 1, "start": 0.36, "end": 0.66 }
+        }
+      }
+    }
+  ]
+}

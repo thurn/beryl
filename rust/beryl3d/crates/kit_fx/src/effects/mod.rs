@@ -10,7 +10,7 @@ pub mod shake;
 
 pub use player::{NumberLook, TextLook, text};
 
-use beryl_protocol::script::Subject;
+use beryl_protocol::{protocol::ObjectId, script::Subject};
 use glam::{Vec2, Vec3};
 use kit_frame::frame::FrameBuilder;
 
@@ -98,15 +98,15 @@ impl Effect {
         }
     }
 
-    /// Whether this changes the face or material of a card, or draws its settle burst.
+    /// Whether this has layers drawn with a surface, using its resolved pose.
     pub fn on_card(self, effects: &Effects) -> bool {
-        if let Some(definition) = effects.get(self.name()) {
-            return definition.layers.iter().any(|layer| {
-                matches!(layer.primitive, Primitive::Surface { surface, .. }
-                    if !matches!(surface, Surface::TextTint { .. }))
-            });
-        }
-        matches!(self, Self::Settle | Self::Dim | Self::Blanch | Self::Cover)
+        effects.get(self.name()).is_some_and(|definition| {
+            definition.layers.iter().any(|layer| match layer.primitive {
+                Primitive::Surface { surface, .. } => !matches!(surface, Surface::TextTint { .. }),
+                Primitive::Burst { on_surface, .. } => on_surface,
+                _ => false,
+            })
+        })
     }
 
     /// The effect named `name` in `data/ui-conventions.json`.
@@ -144,11 +144,16 @@ impl EffectRun {
         Some(fraction)
     }
 
+    /// Whether the anchor represents a point, such as a life total.
+    fn on_point(self) -> bool {
+        matches!(self.on, Subject::Player { .. })
+    }
+
     /// Runs one effect on the preview's single surface, using the same drawing code as play.
     fn preview(effect: Effect, duration: u64) -> Self {
         Self {
             effect,
-            on: Subject::Ability { id: 0 },
+            on: Subject::Object { slot: ObjectId(0) },
             start: 0,
             duration,
             curve: Curve::LINEAR,
