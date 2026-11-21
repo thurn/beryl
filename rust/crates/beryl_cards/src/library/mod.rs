@@ -23,12 +23,19 @@ pub mod keywords;
 pub mod library;
 pub mod linked;
 pub mod mana;
+pub mod replacement;
 pub mod tokens;
+pub mod turn;
 pub mod zones;
 
 /// Every entry's scenarios: the library module, the card that has the effect, and the
 /// scenarios, which the oracles play as that card's.
 pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
+    (
+        "actions::counter",
+        names::MANA_TITHE,
+        actions::counter::UNLESS_PAID,
+    ),
     (
         "actions::counter",
         names::NO_MORE_LIES,
@@ -47,7 +54,17 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
     (
         "actions::fateseal",
         names::JACE_THE_MIND_SCULPTOR,
+        actions::fateseal::TOP_OR_BOTTOM,
+    ),
+    (
+        "actions::fateseal",
+        names::JACE_THE_MIND_SCULPTOR,
         actions::fateseal::SCENARIOS,
+    ),
+    (
+        "actions::search",
+        names::TRINKET_MAGE,
+        actions::search::FIND_AND_REVEAL,
     ),
     (
         "actions::search",
@@ -115,6 +132,12 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
         names::TEFERI_HERO_OF_DOMINARIA,
         emblems::SCENARIOS,
     ),
+    ("library", names::OUST, library::SECOND_FROM_TOP),
+    (
+        "library",
+        names::JACE_THE_MIND_SCULPTOR,
+        library::PUT_BACK_IN_ORDER,
+    ),
     ("library", names::STOCK_UP, library::DIG),
     ("library", names::JACE_THE_MIND_SCULPTOR, library::PUT_BACK),
     ("library", names::SUBTLETY, library::TOP_OR_BOTTOM),
@@ -122,6 +145,11 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
         "keywords::evasion",
         keywords::evasion::FLYER,
         keywords::evasion::SCENARIOS,
+    ),
+    (
+        "keywords::flashback",
+        names::SNAPCASTER_MAGE,
+        keywords::flashback::INSTANT_RESPONSE,
     ),
     (
         "keywords::flashback",
@@ -151,16 +179,23 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
     ("linked", names::CURRENCY_CONVERTER, linked::SCENARIOS),
     ("mana", names::MANA_DRAIN, mana::SCENARIOS),
     (
+        "replacement",
+        names::DARK_DEPTHS,
+        replacement::ENTERS_WITH_COUNTERS,
+    ),
+    (
         "tokens",
         names::ADELINE_RESPLENDENT_CATHAR,
         tokens::ATTACKING,
     ),
     ("tokens", names::FRACTURED_IDENTITY, tokens::COPIES),
+    ("turn", names::MINDSLAVER, turn::CONTROLLED_TURN),
     (
         "zones",
         names::CURRENCY_CONVERTER,
         zones::PUT_INTO_GRAVEYARD,
     ),
+    ("zones", names::BLOODGHAST, zones::RETURN_FROM_GRAVEYARD),
     ("zones", names::ELITE_SPELLBINDER, zones::LOOK_AT),
 ];
 

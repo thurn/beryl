@@ -8,17 +8,7 @@
 
 use crate::prelude::*;
 
-/// "An artifact card with mana value 1 or less".
-///
-/// "You may" covers the whole instruction, the shuffle with it: declining searches nothing and
-/// shuffles nothing. Searching, the player may find nothing ([CR 701.23b]) and shuffles all the
-/// same ([CR 701.24a]): "To shuffle a library ..., randomize the cards within it so that no player
-/// knows their order." The card found is revealed ([CR 701.20a]): "To reveal a card, show that card
-/// to all players for a brief time."
-///
-/// [CR 701.23b]: https://yawgatog.com/resources/magic-rules/#R70123b
-/// [CR 701.24a]: https://yawgatog.com/resources/magic-rules/#R70124a
-/// [CR 701.20a]: https://yawgatog.com/resources/magic-rules/#R70120a
+/// The optional choice wraps the search and its shuffle. Declining skips both.
 pub static CARD: CardDef = Printed::TrinketMage
     .abilities(&[when_enters(&may(
         you(),
@@ -77,22 +67,6 @@ pub mod scenarios {
                 ME.has_cards(Zone::Library, 5),
                 ME.has(Zone::Battlefield, MAGE, 1),
             ]),
-        Scenario::new("Trinket Mage finds Portable Hole")
-            .hand(P0, &[MAGE])
-            .battlefield(P0, &[Card::Island; 3])
-            .library(P0, PROP_LIBRARY)
-            .library(P1, &[Card::Plains])
-            .actions(&[
-                ENTER[0],
-                ENTER[1],
-                ENTER[2],
-                ME.yes(),
-                // Finding nothing or the Hole.
-                ME.deciding(DecisionKind::ChooseUpTo, 2),
-                ME.picks_up_to(Card::PortableHole),
-                ME.has(Zone::Hand, Card::PortableHole, 1),
-                ME.has_cards(Zone::Library, 3),
-            ]),
         Scenario::new("Trinket Mage finds nothing although Mana Crypt is there")
             .interaction(CRYPT_AND_STAFF)
             .hand(P0, &[MAGE])
@@ -108,36 +82,6 @@ pub mod scenarios {
                 ME.has_cards(Zone::Hand, 0),
                 ME.has(Zone::Library, Card::ManaCrypt, 1),
                 ME.has_cards(Zone::Library, 6),
-            ]),
-        // With no artifact of mana value 1 or less there is nothing to choose: the search finds
-        // nothing without a question.
-        Scenario::new("Trinket Mage searches a library without a trinket")
-            .hand(P0, &[MAGE])
-            .battlefield(P0, &[Card::Island; 3])
-            .library(P0, &[Prop::Flier, Card::Oust, Card::Plains])
-            .library(P1, &[Card::Plains])
-            .actions(&[
-                ENTER[0],
-                ENTER[1],
-                ENTER[2],
-                ME.yes(),
-                ME.has_cards(Zone::Hand, 0),
-                ME.has_cards(Zone::Library, 3),
-                stack(0),
-            ]),
-        Scenario::new("Trinket Mage declines to search")
-            .hand(P0, &[MAGE])
-            .battlefield(P0, &[Card::Island; 3])
-            .library(P0, PROP_LIBRARY)
-            .library(P1, &[Card::Plains])
-            .actions(&[
-                ENTER[0],
-                ENTER[1],
-                ENTER[2],
-                ME.no(),
-                ME.has_cards(Zone::Hand, 0),
-                // Unsearched and unshuffled.
-                ME.library_top(PROP_LIBRARY),
             ]),
         // UI regression by-kac: a known library top must not add a separate Search? prompt.
         Scenario::new("Trinket Mage searches with a known library top")

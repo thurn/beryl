@@ -2,7 +2,7 @@
 
 use beryl_engine::{TurnStep, Zone};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
-use beryl_scenario_types::{ME, THEM};
+use beryl_scenario_types::{ME, THEM, advance_to};
 
 use crate::{names, props};
 
@@ -65,3 +65,43 @@ pub const GRAVEYARD: &[Scenario] =
                 ME.has(Zone::Graveyard, names::COUNTERSPELL, 1),
             ]),
     ];
+
+/// A player can spend mana as a counterspell resolves to let their spell resolve.
+pub const UNLESS_PAID: &[Scenario] = &[
+    Scenario::new("Mana Tithe: the controller pays {1}")
+        .battlefield(P0, &[names::PLAINS, names::PLAINS])
+        .hand(P0, &[props::ARTIFACT.card])
+        .battlefield(P1, &[names::PLAINS])
+        .hand(P1, &[names::MANA_TITHE])
+        .actions(&[
+            ME.casts(props::ARTIFACT.card),
+            THEM.casts(names::MANA_TITHE),
+            ME.yes(),
+            ME.has(Zone::Battlefield, props::ARTIFACT.card, 1),
+            ME.tapped(names::PLAINS, 2),
+            THEM.has(Zone::Graveyard, names::MANA_TITHE, 1),
+        ]),
+    Scenario::new("Mana Tithe: lands left after paying for the spell pay {1}")
+        .battlefield(
+            P0,
+            &[
+                names::ISLAND,
+                props::NONBASIC_LAND.card,
+                names::PLAINS,
+                names::PLAINS,
+                names::ISLAND,
+                names::PLAINS,
+            ],
+        )
+        .hand(P0, &[props::PLANESWALKER.card])
+        .battlefield(P1, &[names::PLAINS])
+        .hand(P1, &[names::MANA_TITHE])
+        .actions(&[
+            ME.casts(props::PLANESWALKER.card),
+            THEM.casts(names::MANA_TITHE),
+            ME.yes(),
+            advance_to(1, TurnStep::End),
+            ME.controls(props::PLANESWALKER.card, 1),
+            THEM.has(Zone::Graveyard, names::MANA_TITHE, 1),
+        ]),
+];

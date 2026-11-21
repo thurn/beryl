@@ -2,6 +2,7 @@
 
 use beryl_engine::{DecisionKind, TurnStep, Zone};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
+use beryl_scenario_types::{ME, Resolve, THEM};
 
 use crate::{names, props};
 
@@ -126,5 +127,61 @@ pub const TOP_OR_BOTTOM: &[Scenario] =
                     top: &[names::ISLAND, props::FLIER.card],
                 }),
                 Action::assert(Assertion::Stack { count: 0 }),
+            ]),
+    ];
+
+/// A creature put second from the top moves there on resolution. The target remains
+/// visible on the stack while the other player responds.
+pub const SECOND_FROM_TOP: &[Scenario] = &[
+    Scenario::new("Oust puts the creature second from the top and its controller gains 3")
+        .battlefield(P0, &[names::PLAINS])
+        .hand(P0, &[names::OUST, names::PLAINS])
+        .battlefield(P1, &[props::FLIER.card])
+        .library(P1, &[names::ISLAND, names::PLAINS])
+        .actions(&[
+            ME.casts(names::OUST),
+            THEM.library_top(&[names::ISLAND, props::FLIER.card, names::PLAINS]),
+            THEM.has(Zone::Battlefield, props::FLIER.card, 0),
+            ME.has(Zone::Graveyard, names::OUST, 1),
+            THEM.life(23),
+        ]),
+    Scenario::new("Oust beneath an opposing counterspell")
+        .battlefield(P0, &[names::PLAINS, names::ISLAND, names::ISLAND])
+        .hand(P0, &[names::OUST, props::INSTANT.card, names::PLAINS])
+        .battlefield(P1, &[props::FLIER.card, names::ISLAND, names::ISLAND])
+        .hand(P1, &[props::INSTANT.card])
+        .actions(&[
+            ME.casts(names::OUST),
+            ME.passes(),
+            THEM.casts(props::INSTANT.card),
+            ME.passes(),
+            THEM.controls(props::FLIER.card, 1),
+        ]),
+];
+
+/// Putting selected cards back in order leaves the last selection on top.
+pub const PUT_BACK_IN_ORDER: &[Scenario] =
+    &[
+        Scenario::new("0 draws three and puts two back in the order chosen")
+            .battlefield(P0, &[JACE])
+            .hand(P0, &[props::ARTIFACT.card])
+            .library(
+                P0,
+                &[
+                    names::ISLAND,
+                    names::PLAINS,
+                    props::FLIER.card,
+                    names::ISLAND,
+                ],
+            )
+            .library(P1, &[names::PLAINS])
+            .actions(&[
+                ME.activates(JACE, 1), // 0
+                Resolve,
+                ME.picks(props::ARTIFACT.card),
+                ME.picks(names::ISLAND),
+                ME.library_top(&[names::ISLAND, props::ARTIFACT.card, names::ISLAND]),
+                ME.has_cards(Zone::Hand, 2),
+                ME.has_loyalty(JACE, 3),
             ]),
     ];

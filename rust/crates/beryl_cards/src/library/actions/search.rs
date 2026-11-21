@@ -2,6 +2,7 @@
 
 use beryl_engine::{DecisionKind, Zone};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
+use beryl_scenario_types::{ME, Resolve};
 
 use crate::{names, props};
 
@@ -45,3 +46,30 @@ pub const SCENARIOS: &[Scenario] =
                 }),
             ]),
     ];
+
+/// A successful search reveals the chosen card before moving it to hand. The session
+/// tests replay the cast and search one step at a time.
+pub const FIND_AND_REVEAL: &[Scenario] = &[Scenario::new("Trinket Mage finds Portable Hole")
+    .hand(P0, &[names::TRINKET_MAGE])
+    .battlefield(P0, &[names::ISLAND; 3])
+    .library(
+        P0,
+        &[
+            names::ISLAND,
+            props::ARTIFACT.card,
+            names::OUST,
+            names::PLAINS,
+        ],
+    )
+    .library(P1, &[names::PLAINS])
+    .actions(&[
+        ME.casts(names::TRINKET_MAGE),
+        Resolve,
+        Resolve,
+        ME.yes(),
+        // Finding nothing or the Hole.
+        ME.deciding(DecisionKind::ChooseUpTo, 2),
+        ME.picks_up_to(names::PORTABLE_HOLE),
+        ME.has(Zone::Hand, names::PORTABLE_HOLE, 1),
+        ME.has_cards(Zone::Library, 3),
+    ])];

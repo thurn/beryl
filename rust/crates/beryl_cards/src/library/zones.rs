@@ -2,6 +2,7 @@
 
 use beryl_engine::{DecisionKind, TurnStep, Zone};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
+use beryl_scenario_types::{ME, Resolve};
 
 use crate::names;
 use crate::tokens::TREASURE_TOKEN;
@@ -74,3 +75,19 @@ pub const LOOK_AT: &[Scenario] = &[Scenario::new("Looking at an empty hand finds
             count: 0,
         }),
     ])];
+
+/// A graveyard ability can trigger and return its own card without a source on the
+/// battlefield.
+pub const RETURN_FROM_GRAVEYARD: &[Scenario] =
+    &[
+        Scenario::new("a land entering returns it from the graveyard")
+            .graveyard(P0, &[names::BLOODGHAST])
+            .hand(P0, &[names::SWAMP])
+            .actions(&[
+                ME.plays(names::SWAMP),
+                Resolve,
+                ME.yes(),
+                ME.controls(names::BLOODGHAST, 1),
+                ME.has(Zone::Graveyard, names::BLOODGHAST, 0),
+            ]),
+    ];

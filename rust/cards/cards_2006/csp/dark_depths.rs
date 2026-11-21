@@ -10,30 +10,16 @@
 
 use crate::prelude::*;
 
-/// The token's name, which the effect creating it gives ([CR 111.4]).
-///
-/// [CR 111.4]: https://yawgatog.com/resources/magic-rules/#R1114
 pub const MARIT_LAGE_TOKEN: &str = "Marit Lage";
 
-/// "Marit Lage, a legendary 20/20 black Avatar creature token with flying and indestructible"
 pub static MARIT_LAGE: CardDef = Token::MaritLage
     .keywords(Keywords::FLYING.union(Keywords::INDESTRUCTIBLE))
     .card();
 
-/// "Dark Depths enters with ten ice counters on it" is a replacement effect ([CR 614.1c]):
-/// "Effects that read '[This permanent] enters with . . . ,' ... are replacement effects." A
-/// permanent that becomes a copy of Dark Depths without entering, as Thespian's Stage does,
-/// gets no counters.
-///
-/// "{3}: Remove an ice counter from Dark Depths." With none left it removes nothing (CR 609.3).
-///
-/// "When Dark Depths has no ice counters on it" is a state trigger ([CR 603.8]): "These
-/// abilities trigger as soon as the game state matches the condition. ... A state-triggered
-/// ability doesn’t trigger again until the ability has resolved, has been countered, or has
-/// otherwise left the stack." Its
-/// condition is not checked again as it resolves, so it sacrifices Dark Depths even if a
-/// counter came back. Only a Dark Depths still on the battlefield can be sacrificed, and the
-/// token is created only if it was ("if you do"). Dark Depths has no mana ability.
+/// Thespian's Stage copying Dark Depths is already on the battlefield, so it gets no ice
+/// counters from the enters replacement ([CR 614.1c]). The state trigger does not check
+/// the number of counters again when it resolves ([CR 603.8]). Put the token onto the
+/// battlefield only if Dark Depths was still there to be sacrificed.
 ///
 /// [CR 614.1c]: https://yawgatog.com/resources/magic-rules/#R6141c
 /// [CR 603.8]: https://yawgatog.com/resources/magic-rules/#R6038
@@ -75,24 +61,6 @@ pub mod scenarios {
     }
 
     pub const SCENARIOS: &[Scenario] = &[
-        Scenario::new("it enters with ten ice counters")
-            .hand(P0, &[DEPTHS])
-            .actions(&[ME.plays(DEPTHS), ME.counters(DEPTHS, CounterKind::Ice, 10)]),
-        // The last counter removed, the state trigger triggers at once (CR 603.8): Dark Depths
-        // is sacrificed and Marit Lage created.
-        depths("removing the last ice counter makes Marit Lage", TWO).actions(&[
-            ME.activates(DEPTHS, 1),
-            Resolve,
-            ME.counters(DEPTHS, CounterKind::Ice, 1),
-            stack(0),
-            ME.activates(DEPTHS, 1),
-            Resolve,
-            stack(1),
-            Resolve,
-            ME.has(Zone::Graveyard, DEPTHS, 1),
-            ME.controls(MARIT_LAGE, 1),
-            ME.token_pt(MARIT_LAGE, 20, 20),
-        ]),
         // One Marit Lage: had two been made, the legend rule would put one into the graveyard
         // and Blood Artist's ability would trigger.
         Scenario::new("it makes one Marit Lage")

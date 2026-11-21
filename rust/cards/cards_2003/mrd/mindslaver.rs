@@ -8,17 +8,11 @@
 
 use crate::prelude::*;
 
-/// "{4}, {T}, Sacrifice Mindslaver: You control target player during that player's next turn."
-/// As [CR 724.1] says, "Some cards allow a player to control another player during that player's next
-/// turn. This effect applies to the next turn that the affected player actually takes." The
-/// controller makes every decision of the controlled player that turn ([CR 724.5]: "While
-/// controlling another player, a player makes all choices and decisions the controlled player
-/// is allowed to make or is told to make by the rules or by any objects."), paying with that
-/// player's resources ([CR 724.5a]), and keeps making their own ([CR 724.8]).
+/// An extra turn can be the controlled turn. The effect applies to "the next turn that
+/// the affected player actually takes" ([CR 724.1]). The controller still makes decisions
+/// for themself during that turn ([CR 724.8]).
 ///
 /// [CR 724.1]: https://yawgatog.com/resources/magic-rules/#R7241
-/// [CR 724.5]: https://yawgatog.com/resources/magic-rules/#R7245
-/// [CR 724.5a]: https://yawgatog.com/resources/magic-rules/#R7245a
 /// [CR 724.8]: https://yawgatog.com/resources/magic-rules/#R7248
 pub static CARD: CardDef = Printed::Mindslaver
     .abilities(&[Ability::activated(Cost::of(
@@ -127,30 +121,6 @@ pub mod scenarios {
                 ME.has(Zone::Graveyard, Prop::Flier, 1),
                 ME.life(20),
             ]),
-        // CR 724.1: "The affected player is controlled during the entire turn; the effect
-        // doesn't end until the beginning of the next turn." P1 decides for themself again in
-        // their turn after.
-        slaving("the control ends with the turn").actions(&[
-            ME.activates(MINDSLAVER, 0),
-            ME.targets_player(THEM),
-            Resolve,
-            advance_to(2, TurnStep::PrecombatMain),
-            // Passing, playing P1's Island, or casting P1's Oust.
-            ME.deciding(DecisionKind::Priority, 3),
-            advance_to(2, TurnStep::BeginningOfCombat),
-            ME.passes(),
-            ME.done_attacking(),
-            // In their own turn P0 decides for themself, as ever.
-            advance_to(3, TurnStep::BeginningOfCombat),
-            ME.passes(),
-            ME.done_attacking(),
-            advance_to(4, TurnStep::PrecombatMain),
-            THEM.casts(Prop::Sorcery),
-            THEM.targets(Prop::Vanilla),
-            Resolve,
-            ME.has(Zone::Library, Prop::Vanilla, 1),
-            ME.life(23),
-        ]),
         // CR 724.1a: "Multiple player-controlling effects that affect the same player
         // overwrite each other. The last one to be created is the one that works." P1 answers
         // P0's Mindslaver with their own, on themself: in their turn they decide for themself
