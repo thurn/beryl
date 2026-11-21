@@ -62,8 +62,8 @@ pub enum Command {
         #[arg(short = 'm', long = "message")]
         note: Option<String>,
         /// What the ticket needs: `person` (which needs a note) sets it aside for a person, an
-        /// operating system such as `windows` records the system it needs, and a machine, as
-        /// `<machine>` or `<machine>/<app>`, becomes its owner.
+        /// operating system such as `windows` records the system it needs. A machine name
+        /// pins the ticket to that machine.
         #[arg(long)]
         needs: Option<String>,
     },
@@ -520,9 +520,7 @@ pub struct TicketFieldArgs {
     /// The cores the ticket is expected to use.
     #[arg(long)]
     pub cores: Option<f64>,
-    /// Who works it: `<machine>/<app>` (such as `cygnus/codex`), `<machine>` for any app on that
-    /// machine, or `none` to follow its epic's owner. A ticket with no owner in its line goes to
-    /// `[pool] default_owner` in `ignite.toml`, whichever machine filed it.
+    /// Deprecated compatibility flag. Use `machine:` and `provider:` labels for routing.
     #[arg(long)]
     pub owner: Option<String>,
     /// Make it a meta-ticket, a template the hub copies into a new child ticket on this
@@ -569,9 +567,8 @@ pub enum TicketCommand {
         #[arg(long)]
         pending: bool,
         /// Filed by a program, such as a check or a script, not by a person or a session's own
-        /// judgement: the ticket is owned by the machine that runs this command, unless
-        /// `--owner` names another. A ticket filed without it, and with no owner in its line,
-        /// goes to `[pool] default_owner`.
+        /// judgement: pins the ticket to the machine running this command unless it has an
+        /// explicit machine pin.
         #[arg(long)]
         automatic: bool,
         /// An image file to attach once the ticket is filed (repeatable). The text can show it

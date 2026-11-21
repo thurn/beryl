@@ -40,7 +40,7 @@ crate::tables! {
         landed: Option<String>,
         /// JSON: rule, subject, unit, amount.
         saving: Option<String>,
-        /// `<machine>` or `<machine>/<app>`.
+        /// Retired column kept for the schema and migrated to pins.
         owner: Option<String>,
         needs_os: Option<String>,
         fallback: bool,

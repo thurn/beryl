@@ -9,7 +9,6 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::config::Os;
 use crate::ids::{Commit, MachineId, Seq, SessionId, TicketId, TreeId};
-use crate::owner::Owner;
 use crate::time::Timestamp;
 
 /// A ticket's type.
@@ -139,13 +138,13 @@ pub struct TicketFields {
         skip_serializing_if = "Option::is_none"
     )]
     pub cores: Option<Option<f64>>,
-    /// Who works it; `null` makes it follow its ancestors' owner or the default.
+    /// Retired routing field accepted from older clients.
     #[serde(
         default,
         deserialize_with = "present",
         skip_serializing_if = "Option::is_none"
     )]
-    pub owner: Option<Option<Owner>>,
+    pub owner: Option<Option<String>>,
     #[serde(
         default,
         deserialize_with = "present",
@@ -239,16 +238,13 @@ pub struct Ticket {
     pub landed: Option<LandedWork>,
     #[serde(default)]
     pub saving: Option<Saving>,
-    /// Who works it; `None` takes the nearest ancestor's owner, or any worker when no ancestor
-    /// has one ([`crate::owner`]).
+    /// Retired routing field retained for wire compatibility.
     #[serde(default)]
-    pub owner: Option<Owner>,
-    /// The operating system the work must happen on, which only decides where a ticket that
-    /// holds `master` back may fall back to.
+    pub owner: Option<String>,
+    /// The operating system the work must happen on.
     #[serde(default)]
     pub needs_os: Option<Os>,
-    /// Whether the ticket holds `master` back, so that it may go to another machine when its
-    /// owner's machine goes silent ([`crate::owner::FALLBACK_SECONDS`]).
+    /// Whether a ticket holding `master` back can go elsewhere when its pinned machine goes silent.
     #[serde(default, deserialize_with = "flag")]
     pub fallback: bool,
     /// A meta-ticket's schedule: a copy is due every this many hours ([`crate::schedule`]).

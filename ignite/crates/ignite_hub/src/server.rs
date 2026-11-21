@@ -99,13 +99,6 @@ impl HubServer {
     fn start_with(&self, read_only: bool) -> io::Result<RunningHub> {
         let mut first = hub::open(&self.database).map_err(io::Error::other)?;
         if !read_only {
-            // Routes and upkeep read the machines' operating systems and the pool's apps from the
-            // database, so the facts of this `ignite.toml` replace those of the last start.
-            ignite_store::hub::owners::record_routing(
-                &first,
-                &ignite_core::owner::Routing::from_config(&self.config),
-            )
-            .map_err(io::Error::other)?;
             let now = SystemClock.now();
             routes::fleet::seed(&mut first, &self.config, now).map_err(io::Error::other)?;
             hub::fleet_settings::migrate_pauses(&mut first, now).map_err(io::Error::other)?;

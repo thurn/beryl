@@ -49,8 +49,8 @@ pub struct Card {
     pub priority: u8,
     pub assignee: Option<String>,
     pub updated_at: String,
-    /// The ticket's own owner, `<machine>` or `<machine>/<app>`; `None` follows its ancestors.
-    pub owner: Option<String>,
+    /// The ticket's own pins.
+    pub pins: ignite_core::pins::Pins,
 }
 
 /// A card on the home page, which also needs the labels to place it.
@@ -153,7 +153,7 @@ pub fn by_recency(left: &Card, right: &Card) -> std::cmp::Ordering {
         .then(left.id.cmp(&right.id))
 }
 
-const CARD_FIELDS: &str = "id, parent, title, type, status, priority, assignee, updated_at, owner";
+const CARD_FIELDS: &str = "id, parent, title, type, status, priority, assignee, updated_at, labels";
 
 fn card(row: &Row) -> rusqlite::Result<Card> {
     Ok(Card {
@@ -165,7 +165,7 @@ fn card(row: &Row) -> rusqlite::Result<Card> {
         priority: row.get::<_, i64>(5)?.clamp(0, 255) as u8,
         assignee: row.get(6)?,
         updated_at: row.get(7)?,
-        owner: row.get(8)?,
+        pins: ignite_core::pins::from_labels(&labels_of(&row.get::<_, String>(8)?)),
     })
 }
 

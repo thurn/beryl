@@ -720,7 +720,7 @@ fn writers_report_session_titles_that_the_hub_keeps() {
 }
 
 #[test]
-fn an_automatic_filing_is_owned_by_its_machine_and_a_manual_one_by_nobody() {
+fn automatic_filing_adds_a_machine_pin_and_preserves_explicit_pins() {
     let fixture = Fixture::new("automatic");
     hub::open(&fixture.dir.join("hub.sqlite"))
         .unwrap()
@@ -731,20 +731,28 @@ fn an_automatic_filing_is_owned_by_its_machine_and_a_manual_one_by_nobody() {
         )
         .unwrap();
     let hub = fixture.start();
-    let owner = |filed: &Value| {
-        let id = filed["results"][0]["id"].as_str().unwrap().to_owned();
-        hub.get(&format!("/tickets/{id}")).json()["owner"].clone()
+    let load = |filed: &Value, index: usize| {
+        let id = filed["results"][index]["id"].as_str().unwrap();
+        hub.get(&format!("/tickets/{id}")).json()
     };
     let automatic = hub.post(
         "/batch",
-        &json!({"automatic": true,
-                "ops": [{"op": "create", "fields": {"title": "Count rose"}}]}),
+        &json!({"automatic": true, "ops": [
+            {"op": "create", "fields": {"title": "Count rose", "owner": "jarvis/claude",
+                                        "labels": ["provider:codex"]}},
+            {"op": "create", "fields": {"title": "File elsewhere", "labels": ["machine:jarvis"]}},
+        ]}),
     );
-    assert_eq!(owner(&automatic), "cygnus");
-    // A session's own filing names no owner, so it goes to the default owner.
+    assert_eq!(
+        load(&automatic, 0)["labels"],
+        json!(["provider:codex", "machine:cygnus"])
+    );
+    assert_eq!(load(&automatic, 0)["owner"], Value::Null);
+    assert_eq!(load(&automatic, 1)["labels"], json!(["machine:jarvis"]));
+
     let manual = hub.post(
         "/batch",
         &json!({"ops": [{"op": "create", "fields": {"title": "Port it"}}]}),
     );
-    assert_eq!(owner(&manual), Value::Null);
+    assert_eq!(load(&manual, 0)["labels"], json!([]));
 }

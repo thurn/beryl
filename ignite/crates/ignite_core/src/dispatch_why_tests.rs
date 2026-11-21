@@ -44,7 +44,8 @@ fn ticket(name: &str, cores: f64) -> ReadyTicket {
         families: Vec::new(),
         files: Vec::new(),
         saving: None,
-        destinations: Vec::new(),
+        pins: crate::pins::Pins::default(),
+        needs_os: None,
     }
 }
 
@@ -77,10 +78,10 @@ fn tickets_too_large_for_the_room_left_wait_for_cores() {
 #[test]
 fn tickets_for_another_machine_are_not_for_these_workers() {
     let mut other = ticket("TA", 0.5);
-    other.destinations = vec!["multivac/codex".parse().unwrap()];
+    other.pins.machine = Some("multivac".to_owned());
     assert_eq!(
         why(&machine(), &[other], &ALL),
-        "1 ready ticket, none for this machine's idle workers (another owner or model)"
+        "1 ready ticket, none for this machine: pinned to multivac"
     );
 }
 
@@ -123,12 +124,20 @@ fn blocker_names_the_first_limit_a_person_would_lift() {
     );
     assert_eq!(blocker(&free, &ticket("TA", 0.5)), None);
 
-    let mut owned = ticket("TA", 0.5);
-    owned.destinations = vec![crate::owner::Owner::new("cygnus", Some("codex"))];
+    let mut pinned = ticket("TA", 0.5);
+    pinned.pins.machine = Some("cygnus".to_owned());
+    pinned.pins.provider = Some("codex".to_owned());
     assert_eq!(
-        blocker(&free, &owned).as_deref(),
-        Some("owned by cygnus/codex")
+        blocker(&free, &pinned).as_deref(),
+        Some("pinned to machine cygnus")
     );
+    pinned.pins.machine = None;
+    assert_eq!(
+        blocker(&free, &pinned).as_deref(),
+        Some("pinned to provider codex")
+    );
+    pinned.needs_os = Some(Os::Windows);
+    assert_eq!(blocker(&free, &pinned).as_deref(), Some("needs windows"));
 
     let mut busy = machine();
     busy.idle_workers.clear();

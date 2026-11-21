@@ -14,7 +14,7 @@ fn ticket(id: &str, labels: &[&str]) -> HomeCard {
             priority: 1,
             assignee: None,
             updated_at: "2026-11-17T00:00:00Z".to_owned(),
-            owner: None,
+            pins: ignite_core::pins::Pins::default(),
         },
         labels: labels.iter().map(|label| (*label).to_owned()).collect(),
         machine: None,

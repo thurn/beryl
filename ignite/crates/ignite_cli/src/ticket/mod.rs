@@ -20,7 +20,7 @@ use serde_json::{Value, json};
 
 use crate::args::{DepCommand, TicketCommand};
 use crate::client::session_from_env;
-pub(crate) use http::{Failure, Hub, find_config};
+pub(crate) use http::{Failure, Hub};
 use http::{Result, usage};
 
 /// The metadata key under which `create` saves the title of the Claude desktop session filing

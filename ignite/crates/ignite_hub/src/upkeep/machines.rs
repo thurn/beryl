@@ -2,21 +2,20 @@
 //!
 //! - A failure that one machine stored and another machine then passed on the same inputs
 //!   belongs to the first machine's own state, such as a stale cache or a broken tool. The pass
-//!   replaces the failure in the result cache, and the first machine gets a P1 ticket that it
-//!   owns, so only its workers can work the ticket ([`disagreement`]).
-//! - A live ticket whose owner names a machine or app that `ignite.toml` does not declare can
-//!   never be dispatched. [`unassignable`] lists those tickets for the first line of the
-//!   dashboard. The hub holds no check manifests, so the families a ticket's files bring in are
-//!   not considered.
+//!   replaces the failure in the result cache, and the first machine gets a P1 ticket pinned to it
+//!   ([`disagreement`]).
+//! - [`unassignable`] reports live tickets pinned to an unregistered machine or unknown provider.
+
+use std::collections::BTreeSet;
 
 use rusqlite::{Connection, OptionalExtension, params};
 
-use ignite_core::owner::Owner;
+use ignite_core::pins::machine_label;
 use ignite_core::protocol::hub::ResultKey;
 use ignite_core::protocol::tickets::{TicketFields, TicketType};
 use ignite_core::time::Timestamp;
 use ignite_store::Result;
-use ignite_store::hub::owners;
+use ignite_store::hub::{fleet, fleet_settings, pins};
 
 use super::filing::{self, Author, Filed, Filing};
 use super::signature::Signature;
@@ -73,8 +72,7 @@ pub fn disagreement(
             body: Some(body),
             ticket_type: Some(TicketType::Bug),
             priority: Some(1),
-            labels: Some(vec!["machine".to_owned()]),
-            owner: Some(Some(Owner::new(&failed, None))),
+            labels: Some(vec!["machine".to_owned(), machine_label(&failed)]),
             ..TicketFields::default()
         },
         deps: Vec::new(),
@@ -83,36 +81,52 @@ pub fn disagreement(
     filing::file(conn, author, &filing, now)
 }
 
-/// Every live ticket that no worker can take, with the reason, ordered by ticket: its own owner
-/// names a machine that `ignite.toml` does not declare, or an app the pool does not run. A hub
-/// that has recorded no routing facts reports nothing.
+/// Every live ticket with an unknown machine or provider pin, ordered by ticket.
 pub fn unassignable(conn: &Connection) -> Result<Vec<(String, String)>> {
-    let routing = owners::routing(conn)?;
-    if routing.machines.is_empty() {
-        return Ok(Vec::new());
-    }
+    let machines = fleet::machines(conn)?;
+    let settings = fleet_settings::settings(conn)?;
+    let providers: BTreeSet<String> = settings
+        .providers
+        .into_keys()
+        .chain(machines.iter().flat_map(|machine| {
+            serde_json::from_str::<Vec<String>>(&machine.cli_apps).unwrap_or_default()
+        }))
+        .map(|provider| provider.to_ascii_lowercase())
+        .collect();
     let mut select = conn.prepare(
-        "SELECT id, owner FROM tickets WHERE status != 'closed' AND owner IS NOT NULL ORDER BY id",
+        r#"WITH RECURSIVE pinned(id) AS (
+            SELECT id FROM tickets WHERE labels LIKE '%"machine:%' OR labels LIKE '%"provider:%'
+            UNION
+            SELECT t.id FROM tickets t JOIN pinned p ON t.parent = p.id
+         )
+         SELECT p.id FROM pinned p JOIN tickets t ON t.id = p.id
+         WHERE t.status != 'closed' ORDER BY p.id"#,
     )?;
-    let owned = select
-        .query_map([], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-        })?
-        .collect::<rusqlite::Result<Vec<_>>>()?;
-    Ok(owned
-        .into_iter()
-        .filter_map(|(ticket, owner)| {
-            let reason = match owner.parse::<Owner>() {
-                Err(_) => format!("its owner {owner:?} is not a machine and app"),
-                Ok(parsed) if routing.machine(&parsed.machine).is_none() => {
-                    format!("it is owned by {owner}, a machine ignite.toml does not declare")
-                }
-                Ok(Owner { app: Some(app), .. }) if !routing.apps.contains(&app) => {
-                    format!("it is owned by {owner}, and the pool runs no {app} workers")
-                }
-                Ok(_) => return None,
-            };
-            Some((ticket, reason))
-        })
-        .collect())
+    let ids = select.query_map([], |row| row.get::<_, String>(0))?;
+    let mut stranded = Vec::new();
+    for id in ids {
+        let id = id?;
+        let pins = pins::of(conn, &id)?;
+        let mut reasons = Vec::new();
+        if let Some(machine) = pins.machine
+            && !machines
+                .iter()
+                .any(|entry| entry.name.eq_ignore_ascii_case(&machine))
+        {
+            reasons.push(format!(
+                "pinned to {machine}, which is not a registered machine"
+            ));
+        }
+        if let Some(provider) = pins.provider
+            && !providers.contains(&provider.to_ascii_lowercase())
+        {
+            reasons.push(format!(
+                "pinned to {provider}, which is not a known provider"
+            ));
+        }
+        if !reasons.is_empty() {
+            stranded.push((id, reasons.join("; ")));
+        }
+    }
+    Ok(stranded)
 }

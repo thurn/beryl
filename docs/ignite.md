@@ -1170,10 +1170,6 @@ Rules for trees:
   fast-forwarded to the remote every 30 seconds, on a loop of its own
   (`ignite-main`), and only while that checkout has no local changes. Sessions
   start there and read its instruction files, and nobody works in it.
-- The hub reads its routing facts (each machine's system, the apps and
-  `[pool] default_owner`) from the main checkout's `ignite.toml` at start and
-  again every 30 seconds, so a change to routing takes effect within a minute of
-  landing without restarting the hub.
 
 ### Releasing work
 
@@ -1190,11 +1186,11 @@ work lost at release has to be done again from nothing.
   the last one is unfinished work saved at release.
 - The saved ref is deleted when the ticket lands or closes.
 - `ignite release --needs <what>` also records why the ticket was given back.
-  `--needs <machine>` (or `<machine>/<app>`) makes that machine the ticket's
-  owner, so only its workers take it, and `--needs macos` records the operating
-  system the work needs (see [Owners](#owners)). `--needs person` sets it aside
-  for the person: no worker is handed it, the dashboard lists it, and the note
-  must state the exact need and what was tried.
+  `--needs <machine>` sets the ticket's machine pin, and `--needs macos` records
+  the operating system the work needs (see
+  [Machine and provider pins](#machine-and-provider-pins)). `--needs person`
+  sets it aside for the person: no worker is handed it, the dashboard lists it,
+  and the note must state the exact need and what was tried.
 - A ticket that waits on another ticket's work is released with a dependency on
   that ticket, never held while its session watches `staging`. It is handed out
   again when the other ticket closes.
@@ -3001,8 +2997,8 @@ output (last 40 lines; whole output on jarvis at ...)
 - It links to the ticket whose commit caused it. When the search ended with a
   range, it links to every ticket in the range.
 - It names the operating system the check failed on, and records that system
-  when the check is not portable. It is owned by the machine that found it (see
-  [Owners](#owners)).
+  when the check is not portable. The regression is pinned to the machine that
+  found it (see [Machine and provider pins](#machine-and-provider-pins)).
 - It goes first in the dispatch order, and the hub alone decides which machine
   works it: it reserves the ticket for a machine under a one-time code, as it
   does any ticket. A reservation's code may be used by any session of that
@@ -3226,9 +3222,9 @@ release it first. An import is refused if it would break the rule, and tickets
 moved before the rule existed were renumbered once by a migration.
 
 Labels say what a worker needs to run the ticket: `tier:opus`, `tier:sonnet` or
-`tier:light` names the model it needs, and `lane:<name>` a chain. Which machine
-and app work it is the ticket's owner, a field of its own (see
-[Owners](#owners)). `ignite ticket batch` creates or changes many tickets in one
+`tier:light` names the model it needs, and `lane:<name>` a chain.
+[Machine and provider pins](#machine-and-provider-pins) constrain where the
+ticket runs. `ignite ticket batch` creates or changes many tickets in one
 request that succeeds or fails as a whole.
 
 Every change to anything in Beryl has a ticket. `ignite start "<summary>"` makes
@@ -3241,8 +3237,7 @@ each worker holds and what it is running, the landing queue, the state of tip
 verification, open regressions and each exploration family's finds. Its first
 line shows tickets marked `needs:person`, a machine with a paused pool, the
 tickets that hold `master` back while a pool is paused, an open regression that
-no worker can take, and a ticket owned by a machine or app that `ignite.toml`
-does not declare.
+no worker can take, and tickets pinned to an unknown machine or provider.
 
 The dashboard is at the hub's root and a ticket's page is at `/T<id>` (for
 example `/TBEJE.34`). Only the API is under the project name (`/by/api`). Page
@@ -3376,7 +3371,7 @@ ignite ticket update MAB12 --every 2d
   after that copy closes.
 - A copy is an ordinary task, filed `open` so the pool may be offered it at
   once. It takes the meta-ticket's title, body, acceptance, design, notes,
-  labels, priority, owner and cores at the moment it is filed, so an edit to the
+  labels, priority and cores at the moment it is filed, so an edit to the
   meta-ticket changes every later copy and none already filed.
 - The notes are how one copy leaves something for the next. A copy starts with
   the notes the meta-ticket held when the copy was filed, and before it closes
@@ -3606,12 +3601,13 @@ machine can take:
 
 A machine can take a ticket when all of these hold:
 
-- A pool member that suits the ticket is idle: one of the ticket's owner (see
-  [Owners](#owners)) whose app can run the model the ticket's `tier:` label
-  names. A worker is idle when it holds no ticket.
+- An idle worker satisfies the ticket's
+  [machine and provider pins](#machine-and-provider-pins) and runs the model
+  named by its `tier:` label. A worker is idle when it holds no ticket.
 - A ticket tree is free.
 - The ticket's expected use of cores fits beside the tickets already in progress
   there. See [Light and heavy tickets](#light-and-heavy-tickets).
+- The machine runs the ticket's required operating system, if it has one.
 - The machine can run every check family that the ticket's named files could
   bring into its gate. Cygnus never takes a ticket that names UI files.
 
@@ -3651,43 +3647,27 @@ Not every ticket is offered:
   session starts by name.
 - A ticket marked `needs:person` is never offered.
 
-### Owners
+### Machine and provider pins
 
-Every ticket goes to one owner: a machine and the desktop app whose workers on
-that machine take it, such as `jarvis/claude` or `cygnus/codex`.
+A `machine:<name>` label pins a ticket to a machine. A `provider:<name>` label
+pins it to a coding-agent CLI, such as `codex`. Each pin is inherited
+independently from the nearest ancestor that sets it. An unpinned ticket can go
+to any eligible worker. When a ticket has multiple labels of the same kind, the
+first nonempty one applies. The ticket page shows its effective pins, and its
+Labels editor changes its own pins.
 
-- A ticket's owner is its own `owner` field or, when that is empty, its nearest
-  ancestor's, so changing an epic's owner moves its tickets. A ticket with
-  neither goes to the default owner, `[pool] default_owner` in `ignite.toml`
-  (`jarvis/codex` here). Only a hub with no default owner configured offers such
-  a ticket to any worker.
-- A ticket a person or a session files goes where its line's owner, or the
-  default owner, says, whichever machine filed it. It reaches another machine
-  only when it, or an ancestor, names that machine as its owner, with `--owner`
-  or `ignite release --needs <machine>`.
-- A ticket a program files stays on the machine that filed it. A script or check
-  files with `ignite ticket create --automatic`, which makes the machine running
-  the command the owner (any app there) unless `--owner` names another, as the
-  count trend does.
-- Dispatch offers a ticket only to its owner's workers. An idle worker on
-  another machine or of another app is never offered it, so the other five
-  destinations get only work that is routed to them.
-- The dashboard shows each ticket's owner and where it comes from, and its Owner
-  dropdown lists None and every machine with every app. `ignite ticket create`
-  and `update` take `--owner <machine>/<app>`, or `--owner none` to clear it.
-- An owner may name only a machine (`cygnus`). Then any app's workers on that
-  machine may take it.
-- A ticket the hub files from a machine's report, such as a regression, checks
-  left incomplete, a machine fault or a justiciar report, is owned by that
-  machine alone, because the fault is often reproducible only there. Upkeep's
-  own tickets, such as `master` not moving, have no owner and go to the default
-  owner.
-- A ticket that holds `master` back (each one the hub files released) falls back
-  when its owner's machine has not been heard from for 30 minutes: then any
-  machine that runs the operating system the ticket needs may take it.
-- `ignite release --needs <machine>` makes that machine the owner,
-  `--needs <os>` records the system the work needs, and `--needs person` sets
-  the ticket aside for a person.
+- `ignite ticket create --automatic` adds a machine pin for the filing machine
+  unless the ticket already has one. The hub pins the tickets it files about a
+  specific machine to that machine too.
+- `ignite release --needs <machine>` replaces the ticket's machine pin.
+  `--needs <os>` records the required operating system, and `--needs person`
+  sets the ticket aside for a person.
+- When a ticket holds up `master` and its pinned machine has been silent for 30
+  minutes, it can run on another machine that meets its operating system
+  requirement and any provider pin.
+- The hub migrates saved owners to labels on upgrade. For example,
+  `jarvis/codex` becomes `machine:jarvis` and `provider:codex`. Existing pins
+  take precedence. Older clients can still send the retired owner field.
 - Each provider offers the tiers its `[pool.models.<provider>]` table names. A
   ticket without a tier uses the provider's configured `sonnet` model when
   present, or the model used for its health probe.
@@ -4036,9 +4016,9 @@ release ref when Ignite blocks its own landing.
   worker closed less than two hours ago: the worker either found nothing for
   Ignite to fix or landed a fix that has not yet moved `master`. A stall that
   outlasts that gets a new ticket.
-- A report about one machine, such as its daemon's crash, is owned by that
-  machine, so its pool works it unless the machine goes silent (see
-  [Owners](#owners)).
+- A report about one machine, such as its daemon's crash, is pinned to that
+  machine. It can go elsewhere after the pinned machine goes silent (see
+  [Machine and provider pins](#machine-and-provider-pins)).
 - Justiciar tickets are offered before every other ticket, whether or not an
   epic is active. So are all the other tickets the hub files by itself, which
   carry the label `hub`.
@@ -4405,7 +4385,7 @@ regression that only reproduces there. Such a ticket that holds `master` back
 still falls back to any machine of the same system when its machine has been
 silent for 30 minutes. `ignite release --needs <machine>` adds the pin, and
 `ignite ticket create --automatic` pins a ticket to the machine that ran the
-command. `--owner` and `[pool] default_owner` are deleted.
+command. See [Machine and provider pins](#machine-and-provider-pins).
 
 ### Placement
 

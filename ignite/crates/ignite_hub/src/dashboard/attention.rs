@@ -322,8 +322,7 @@ fn held_items(
     Ok(vec![(tone, format!("{text}: {}", links.join(", ")))])
 }
 
-/// Live tickets that no worker can take, because their owner names a machine or app that
-/// `ignite.toml` does not declare (see `upkeep::machines::unassignable`).
+/// Live tickets pinned to an unknown machine or provider.
 fn stranded_items(conn: &Connection, root: &str) -> Result<Vec<(Tone, String)>, ReadError> {
     let link = |id: &str| c::link(&ticket_url(root, id), &esc(&display_id(id)), None, "");
     Ok(crate::upkeep::machines::unassignable(conn)?

@@ -6,7 +6,7 @@ use ignite_core::fleet::{FleetChange, FleetSettings, MachineState, summary};
 use ignite_core::time::Timestamp;
 
 use super::rows;
-use super::{fleet, owners};
+use super::{fleet, meta};
 use crate::{Result, StoreError};
 
 const KEY: &str = "fleet";
@@ -19,7 +19,7 @@ pub enum PutOutcome {
 
 /// The current settings. Version zero means the fleet has yet to be seeded.
 pub fn settings(conn: &Connection) -> Result<FleetSettings> {
-    Ok(owners::get(conn, KEY)?.unwrap_or_default())
+    Ok(meta::get(conn, KEY)?.unwrap_or_default())
 }
 
 /// Applies a change and records it together, or returns the settings that replaced the
@@ -126,7 +126,7 @@ fn write(
         .ok_or_else(|| StoreError::Invalid("fleet settings version overflow".to_owned()))?;
     let settings_json = serde_json::to_string(&proposed)
         .map_err(|error| StoreError::Invalid(format!("fleet settings: {error}")))?;
-    owners::put(conn, KEY, &proposed)?;
+    meta::put(conn, KEY, &proposed)?;
     conn.execute(
         "INSERT INTO fleet_changes (at, actor, summary, settings) VALUES (?1, ?2, ?3, ?4)",
         params![

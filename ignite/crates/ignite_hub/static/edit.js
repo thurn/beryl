@@ -169,7 +169,7 @@
             case "priority":
                 return [{ op: "update", id, set: { priority: Number(value) } }];
             case "choice":
-                // The empty choice clears the field, such as an owner that then follows the default.
+                // The empty choice clears the field.
                 return [{ op: "update", id, set: { [field]: value || null } }];
             case "labels": {
                 const before = new Set(words(raw));

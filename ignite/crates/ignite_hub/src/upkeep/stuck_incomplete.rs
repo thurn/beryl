@@ -26,7 +26,7 @@ use rusqlite::Connection;
 use serde_json::Value;
 
 use ignite_core::ids::CheckName;
-use ignite_core::owner::Owner;
+use ignite_core::pins::machine_label;
 use ignite_core::protocol::hub::{IncompleteReason, IncompleteReport};
 use ignite_core::protocol::tickets::{TicketFields, TicketType};
 use ignite_core::time::Timestamp;
@@ -71,7 +71,7 @@ pub fn incomplete(
     let family = report.check.family();
     let checks = checks_of(report);
     let cause = cause(report, &checks);
-    let labels = vec![LABEL.to_owned(), format!("check:{family}")];
+    let labels = [LABEL.to_owned(), format!("check:{family}")];
     let evidence = format!("{}@{}", report.commit, report.machine);
     // The checks this cause holds back: once each has a result again, the cause has cleared
     // (see `clearing`).
@@ -82,11 +82,16 @@ pub fn incomplete(
         body: Some(body),
         ticket_type: Some(TicketType::Bug),
         priority: Some(1),
-        labels: Some(labels.clone()),
+        labels: Some(
+            [
+                labels[0].clone(),
+                labels[1].clone(),
+                machine_label(&report.host),
+            ]
+            .into(),
+        ),
         metadata: Some(metadata.clone()),
         needs_os: Some(report.platform),
-        // The machine that saw the checks left without a result works the ticket.
-        owner: Some(Some(Owner::new(&report.host, None))),
         ..TicketFields::default()
     };
     let round_labels = [LABEL, labels[1].as_str()];

@@ -4,13 +4,11 @@ use std::collections::HashSet;
 
 use rusqlite::{Connection, params};
 
-use ignite_core::config::Os;
 use ignite_core::dispatch::{JUSTICIAR, ReadyTicket, TicketKind};
 use ignite_core::fleet::{FleetSettings, MachineState};
-use ignite_core::owner::Owner;
 use ignite_core::protocol::hub::{MachineFree, Reservation};
 use ignite_store::Result;
-use ignite_store::hub::{fleet, pins};
+use ignite_store::hub::fleet;
 
 /// The states of a regression whose check still fails, so that its ticket holds `master` back.
 pub const FAILING: [&str; 2] = ["open", ignite_store::hub::tips::REOPENED];
@@ -42,7 +40,6 @@ pub fn paused(conn: &Connection, free: &MachineFree, state: MachineState) -> Res
 
 pub(super) struct Fallback<'a> {
     free: &'a MachineFree,
-    heard: &'a HashSet<String>,
     active: Vec<(String, String, Vec<String>)>,
 }
 
@@ -50,7 +47,7 @@ impl<'a> Fallback<'a> {
     pub(super) fn load(
         conn: &Connection,
         settings: &FleetSettings,
-        heard: &'a HashSet<String>,
+        heard: &HashSet<String>,
         free: &'a MachineFree,
     ) -> Result<Self> {
         let active = fleet::machines(conn)?
@@ -65,69 +62,30 @@ impl<'a> Fallback<'a> {
                 (machine.name, machine.os, providers)
             })
             .collect();
-        Ok(Self {
-            free,
-            heard,
-            active,
-        })
+        Ok(Self { free, active })
     }
 
     /// An `Active` machine with the needed system and pins takes precedence. Its current load
     /// does not enter this decision. A `ChecksOnly` machine keeps tip verification running while
     /// those workers are busy.
-    pub(super) fn allows(
-        &self,
-        conn: &Connection,
-        ticket: &mut ReadyTicket,
-        needs_os: Option<Os>,
-        may_fall_back: bool,
-    ) -> Result<bool> {
-        if !holds_master(ticket) || needs_os.is_some_and(|os| os != self.free.os) {
-            return Ok(false);
-        }
-        let pins = pins::of(conn, ticket.id.as_str())?;
-        let required_machine = pins
-            .machine
-            .as_deref()
-            .filter(|name| !may_fall_back || self.heard.contains(&name.to_ascii_lowercase()));
-        let required_provider = pins.provider.as_deref();
-        let machine_fits =
-            |name: &str| required_machine.is_none_or(|pin| pin.eq_ignore_ascii_case(name));
-        let worker_fits = |name: &str, provider: &str| {
-            required_provider.is_none_or(|pin| pin.eq_ignore_ascii_case(provider))
-                && (ticket.destinations.is_empty()
-                    || ticket
-                        .destinations
-                        .iter()
-                        .any(|owner| owner.admits(name, provider)))
-        };
+    pub(super) fn allows(&self, ticket: &ReadyTicket) -> bool {
+        let os_fits = |os: &str| ticket.needs_os.is_none_or(|needed| needed.as_str() == os);
         let name = self
             .free
             .name
             .as_deref()
             .unwrap_or(self.free.machine.as_str());
-        if !machine_fits(name)
-            || self.active.iter().any(|(name, os, providers)| {
-                machine_fits(name)
-                    && needs_os.is_none_or(|needed| needed.as_str() == os)
-                    && (worker_fits(name, "") || providers.iter().any(|p| worker_fits(name, p)))
+        holds_master(ticket)
+            && os_fits(self.free.os.as_str())
+            && ticket.pins.admits_machine(name)
+            && !self.active.iter().any(|(name, os, providers)| {
+                ticket.pins.admits_machine(name)
+                    && os_fits(os)
+                    && (ticket.pins.provider.is_none()
+                        || providers
+                            .iter()
+                            .any(|provider| ticket.pins.admits_provider(provider)))
             })
-        {
-            return Ok(false);
-        }
-        // Keep the provider pin on the offer when the asking machine has multiple providers.
-        let destinations: Vec<_> = self
-            .free
-            .idle_workers
-            .iter()
-            .filter(|worker| worker_fits(name, &worker.app))
-            .map(|worker| Owner::new(name, Some(&worker.app)))
-            .collect();
-        if destinations.is_empty() {
-            return Ok(false);
-        }
-        ticket.destinations = destinations;
-        Ok(true)
     }
 }
 

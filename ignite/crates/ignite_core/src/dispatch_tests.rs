@@ -55,13 +55,19 @@ fn ticket(name: &str, epic: Option<&str>) -> ReadyTicket {
         families: Vec::new(),
         files: Vec::new(),
         saving: None,
-        destinations: Vec::new(),
+        pins: crate::pins::Pins::default(),
+        needs_os: None,
     }
 }
 
-fn owned_by(mut t: ReadyTicket, owners: &[&str]) -> ReadyTicket {
-    t.destinations = owners.iter().map(|o| o.parse().unwrap()).collect();
-    t
+fn pinned(mut ticket: ReadyTicket, labels: &[&str]) -> ReadyTicket {
+    ticket.pins = crate::pins::from_labels(
+        &labels
+            .iter()
+            .map(|label| (*label).to_owned())
+            .collect::<Vec<_>>(),
+    );
+    ticket
 }
 
 fn with_labels(mut t: ReadyTicket, labels: &[&str]) -> ReadyTicket {
@@ -266,7 +272,7 @@ fn a_ticket_needs_a_suitable_worker_a_tree_and_its_families() {
     assert_eq!(next_for(&free, &[opus], &ALL, None, &[]), None);
     let mut named = free.clone();
     named.name = Some("jarvis".to_owned());
-    let codex = owned_by(ticket("Tx", None), &["jarvis/codex"]);
+    let codex = pinned(ticket("Tx", None), &["machine:jarvis", "provider:codex"]);
     let answer = next_for(&named, &[codex], &ALL, None, &[]).unwrap();
     assert_eq!(answer.session, session("local_codex"));
 
@@ -283,18 +289,15 @@ fn a_ticket_needs_a_suitable_worker_a_tree_and_its_families() {
     ui.families = vec!["rust".to_owned(), "ui".to_owned()];
     assert_eq!(next_for(&limited, &[ui], &ALL, None, &[]), None);
 
-    // A ticket owned elsewhere is never offered here, however idle this machine is.
-    let on_cygnus = owned_by(sonnet.clone(), &["cygnus/claude"]);
+    // A ticket pinned elsewhere is never offered here, however idle this machine is.
+    let on_cygnus = pinned(sonnet.clone(), &["machine:cygnus", "provider:claude"]);
     assert_eq!(next_for(&named, &[on_cygnus], &ALL, None, &[]), None);
-    // An owner that names only the machine admits any app the hub left unresolved.
-    let on_jarvis = owned_by(sonnet.clone(), &["jarvis"]);
+    // A machine pin by itself admits any provider on that machine.
+    let on_jarvis = pinned(sonnet, &["machine:jarvis"]);
     assert!(next_for(&named, std::slice::from_ref(&on_jarvis), &ALL, None, &[]).is_some());
-    // A machine that does not say its name matches no owner.
-    assert_eq!(next_for(&free, &[on_jarvis], &ALL, None, &[]), None);
-    // A fallback destination admits the ticket on a second machine.
-    let either = owned_by(sonnet.clone(), &["cygnus/codex", "jarvis/claude"]);
-    let answer = next_for(&named, &[either], &ALL, None, &[]).unwrap();
-    assert_eq!(answer.session, session("local_claude"));
+    let mut windows = on_jarvis;
+    windows.needs_os = Some(Os::Windows);
+    assert_eq!(next_for(&named, &[windows], &ALL, None, &[]), None);
 }
 
 #[test]

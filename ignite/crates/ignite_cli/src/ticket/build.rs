@@ -27,8 +27,21 @@ fn shared_fields(fields: &mut Fields, args: &TicketFieldArgs) -> Result<()> {
         let value = if owner == "none" || owner == "default" {
             Value::Null
         } else {
-            let parsed: ignite_core::owner::Owner = owner.parse().map_err(usage)?;
-            json!(parsed.to_string())
+            let owner = owner.trim();
+            let is_name = |name: &str| {
+                !name.is_empty()
+                    && name
+                        .bytes()
+                        .all(|byte| byte.is_ascii_alphanumeric() || b"-_".contains(&byte))
+            };
+            let valid = owner.split_once('/').map_or_else(
+                || is_name(owner),
+                |(machine, provider)| is_name(machine) && is_name(provider),
+            );
+            if !valid {
+                return Err(usage("write <machine> or <machine>/<provider>"));
+            }
+            json!(owner.to_ascii_lowercase())
         };
         fields.insert("owner".to_owned(), value);
     }
@@ -83,7 +96,7 @@ fn dependency(spec: &str) -> Result<Value> {
 
 /// The status of a ticket filed but not yet released for implementation.
 /// `body` marked as filed by a program when `automatic` (`ignite ticket create --automatic`), so
-/// that the hub makes the writer's machine the owner of the tickets it creates.
+/// that the hub pins new tickets to the writer's machine.
 /// It is also marked `independent` when the filer says the tickets need none of its unlanded
 /// work (`--independent`), so that the hub adds no dependency on it.
 pub fn filed(mut body: Value, automatic: bool, independent: bool) -> Value {
@@ -348,7 +361,7 @@ mod tests {
     }
 
     #[test]
-    fn an_owner_is_set_checked_or_cleared() {
+    fn the_legacy_owner_wire_field_is_retained() {
         let owned = |owner: &str| TicketFieldArgs {
             owner: Some(owner.to_owned()),
             ..no_fields()

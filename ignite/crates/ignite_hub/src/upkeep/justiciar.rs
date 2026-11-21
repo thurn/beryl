@@ -30,7 +30,7 @@ use std::fmt::Write as _;
 use rusqlite::{Connection, OptionalExtension};
 use serde_json::Value;
 
-use ignite_core::owner::Owner;
+use ignite_core::pins::machine_label;
 use ignite_core::protocol::hub::JusticiarReport;
 use ignite_core::protocol::tickets::{
     BatchRequest, Operation, Precondition, TicketFields, TicketType,
@@ -88,7 +88,7 @@ pub fn report(
     report: &JusticiarReport,
     now: Timestamp,
 ) -> Result<Filed> {
-    // The ticket is owned by the machine that reported it (see `filing`), and falls back to
+    // The ticket is pinned to the machine that reported it (see `filing`), and falls back to
     // another machine when that one goes silent, since it is filed released.
     let subject = if report.on_machine {
         format!("{}@{}", report.subject, report.machine)
@@ -101,7 +101,10 @@ pub fn report(
     );
     let mut fields = fields(report.title.clone(), body);
     if report.on_machine {
-        fields.owner = Some(Some(Owner::new(&report.host, None)));
+        fields
+            .labels
+            .get_or_insert_with(Vec::new)
+            .push(machine_label(&report.host));
     }
     let filing = Filing {
         signature: Signature::of_subject(&subject, LABEL),

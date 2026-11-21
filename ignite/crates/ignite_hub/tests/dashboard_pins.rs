@@ -1,5 +1,4 @@
-//! Ticket owners on the dashboard: the Owner row and dropdown of a ticket's page, the default
-//! owner in the settings panel, and who may change it.
+//! Effective pins on ticket pages and a ticket's own pins on its card.
 #![allow(clippy::format_collect)]
 
 use std::io::{Read, Write};
@@ -25,9 +24,6 @@ project = "pj"
 [gate]
 threshold = 0.004
 cap = 400
-
-[pool]
-default_owner = "jarvis/claude"
 
 [pool.models.claude]
 opus = "o"
@@ -80,9 +76,9 @@ fn send(
 }
 
 #[test]
-fn owners_show_on_pages_and_a_ticket_without_one_goes_to_the_default_owner() {
+fn ticket_properties_show_effective_pins_and_cards_show_own_pins() {
     let dir = ignite_core::test_files::temp_dir()
-        .join(format!("ignite-dashboard-owners-{}", std::process::id()));
+        .join(format!("ignite-dashboard-pins-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let server = HubServer {
@@ -94,11 +90,11 @@ fn owners_show_on_pages_and_a_ticket_without_one_goes_to_the_default_owner() {
     let public = server.start_read_only().unwrap();
     let private = server.start().unwrap();
 
-    // An epic owned by cygnus/codex, with one child that follows it.
+    // An epic pins both values. Its child overrides only the provider.
     let create = json!({"ops": [
         {"op": "create", "fields": {"title": "Windows work", "type": "epic",
-                                    "owner": "cygnus/codex"}},
-        {"op": "create", "parent": "$0", "fields": {"title": "Port it", "type": "task"}},
+                                    "labels": ["machine:cygnus", "provider:codex"]}},
+        {"op": "create", "parent": "$0", "fields": {"title": "Port it", "type": "task", "labels": ["provider:claude"]}},
         {"op": "create", "fields": {"title": "Anything", "type": "task"}},
     ]});
     let (status, reply) = send(
@@ -112,35 +108,24 @@ fn owners_show_on_pages_and_a_ticket_without_one_goes_to_the_default_owner() {
     let reply: Value = serde_json::from_str(&reply).unwrap();
     let id = |n: usize| reply["results"][n]["id"].as_str().unwrap().to_owned();
 
-    // A child shows its epic's owner. A loose ticket with no owner shows the default owner.
     let (_, child) = send(public.address(), "GET", &format!("/{}", id(1)), &[], "");
-    assert!(child.contains("cygnus · Codex"), "{child}");
-    assert!(child.contains("from "));
+    assert!(child.contains("Machine pin") && child.contains("Provider pin"));
+    assert!(child.contains("cygnus <span class=\"c-muted\">inherited</span>"));
+    assert!(child.contains("claude"));
     let (_, loose) = send(public.address(), "GET", &format!("/{}", id(2)), &[], "");
-    assert!(loose.contains("jarvis · Claude"), "{loose}");
-    assert!(loose.contains("by default"), "{loose}");
-    // The epic's own card in a list carries its owner chip.
+    assert!(loose.contains("Any machine") && loose.contains("Any provider"));
     let (_, home) = send(public.address(), "GET", "/", &[], "");
-    assert!(home.contains("cygnus · Codex"), "{home}");
+    assert!(home.contains(">cygnus</span>") && home.contains(">codex</span>"));
 
-    // On the private listener the Owner row is a dropdown of None and the four pairs.
     let (_, editable) = send(
         private.address(),
         "GET",
-        &format!("/{}", id(2)),
+        &format!("/{}", id(1)),
         &BROWSER[..1],
         "",
     );
-    assert!(
-        editable.contains("data-field=\"owner\" data-kind=\"choice\""),
-        "{editable}"
-    );
-    assert!(editable.contains("=None"));
-    assert!(editable.contains("cygnus/codex=cygnus · Codex"));
-    // The settings panel offers no default owner, and its API is gone.
-    assert!(!editable.contains("data-owners"));
-    let (status, _) = send(public.address(), "GET", "/pj/api/owners", &[], "");
-    assert_eq!(status, 404);
+    assert!(editable.contains("data-field=\"labels\""));
+    assert!(!editable.contains("data-field=\"owner\""));
 
     public.stop();
     private.stop();

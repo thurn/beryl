@@ -6,6 +6,25 @@ pub struct Pins {
     pub provider: Option<String>,
 }
 
+impl Pins {
+    pub fn admits_machine(&self, machine: &str) -> bool {
+        self.machine
+            .as_deref()
+            .is_none_or(|pin| pin.eq_ignore_ascii_case(machine))
+    }
+
+    pub fn admits_provider(&self, provider: &str) -> bool {
+        self.provider
+            .as_deref()
+            .is_none_or(|pin| pin.eq_ignore_ascii_case(provider))
+    }
+}
+
+/// The label for a particular machine, using case-insensitive hostnames.
+pub fn machine_label(name: &str) -> String {
+    format!("machine:{}", name.to_ascii_lowercase())
+}
+
 /// Reads the first nonempty pin of each kind, in the ticket's label order.
 pub fn from_labels(labels: &[String]) -> Pins {
     let pin = |prefix| {

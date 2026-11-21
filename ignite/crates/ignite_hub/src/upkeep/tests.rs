@@ -539,7 +539,7 @@ fn an_incomplete_check_and_a_disagreeing_audit_file_p1_tickets() {
     assert_eq!(held.priority, 1);
     assert!(held.title.contains("multivac"));
     assert_eq!(held.needs_os, Some(Os::Macos));
-    assert_eq!(held.owner, Some("multivac".parse().unwrap()));
+    assert!(held.labels.contains(&"machine:multivac".to_owned()));
 
     list_check(&mut conn, "rust:x");
     let audit = AuditReport {
@@ -600,6 +600,7 @@ fn a_tip_that_waits_an_hour_names_the_silent_machine_once() {
     assert_eq!(report.tickets_filed.len(), 1);
     let filed = ticket(&conn, &report.tickets_filed[0]);
     assert!(filed.title.contains("multivac") && filed.body.contains("abcd"));
+    assert!(filed.labels.contains(&"machine:multivac".to_owned()));
     assert_eq!(filed.priority, 1);
     clock.advance(600.0);
     tips::seen(&conn, "ef01", clock.now()).unwrap();
@@ -650,7 +651,7 @@ fn a_tip_waiting_on_another_platform_names_its_machine_on_one_ticket() {
     assert!(named.body.contains("rust:windows_paths") && named.body.contains("abcd"));
     assert_eq!(named.priority, 1);
     assert_eq!(named.needs_os, Some(Os::Windows));
-    assert_eq!(named.owner, Some("cygnus".parse().unwrap()));
+    assert!(named.labels.contains(&"machine:cygnus".to_owned()));
 
     // A later tip waiting on the same machine adds to its ticket.
     clock.advance(600.0);

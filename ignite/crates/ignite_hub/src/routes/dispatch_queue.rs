@@ -10,8 +10,7 @@
 //!   `ignite.toml`, not at the hub.
 //! - The hub holds no check manifests, so a ticket's families are empty and every machine can
 //!   run them.
-//! - A ticket goes only to workers of its owner or its nearest ancestor's, resolved here into
-//!   its destinations ([`ignite_core::owner::Routing::destinations`]).
+//! - Dispatch resolves machine and provider pins independently through the ticket's ancestors.
 //! - The backlog's ratios for the improvement share come from `crate::rules::backlog`, which
 //!   reads last week's use from `meta`, never from `metrics` inside this transaction.
 //!
@@ -30,12 +29,12 @@ use ignite_core::dispatch::{self, ReadyTicket, TicketKind};
 use ignite_core::dispatch_pressure::{DispatchPressure, HandoffWait};
 use ignite_core::fleet::MachineState;
 use ignite_core::ids::{MachineId, SessionId, TicketId};
-use ignite_core::owner::{FALLBACK_SECONDS, Owner, Routing};
+use ignite_core::pins::Pins;
 use ignite_core::protocol::hub::{MachineFree, Reservation};
 use ignite_core::protocol::tickets::{LandedWork, Saving, Status, Ticket, TicketType};
 use ignite_core::shares::{self, EpicDemand, Group, Unit};
 use ignite_core::time::Timestamp;
-use ignite_store::hub::{fleet, fleet_settings, owners, releases, tickets};
+use ignite_store::hub::{fleet, fleet_settings, releases, tickets};
 use ignite_store::{Result, StoreError};
 
 use crate::rules;
@@ -59,6 +58,9 @@ const HUB_FILED: [&str; 10] = [
 
 /// The label of a ticket set aside for a person, which no machine is offered.
 const NEEDS_PERSON: &str = "needs:person";
+
+#[path = "dispatch_pins.rs"]
+mod pins;
 
 #[path = "dispatch_held.rs"]
 mod held;
@@ -209,24 +211,20 @@ pub fn chain_next(
     let snapshot = Snapshot::load(conn, now)?;
     let history = history(conn, machine.as_str())?;
     let landed = landed_files(conn)?;
-    let mut ready = snapshot.ready_tickets(conn, &history, &landed, now, None)?;
+    let ready = snapshot.ready_tickets(conn, &history, &landed, now, None)?;
     // The chain's next ticket goes to the same session only if that session's machine and app
-    // are among the ticket's destinations; a ticket owned elsewhere waits for its owner.
+    // satisfy the next ticket's pins.
     let app = fleet::workers(conn, machine.as_str())?
         .into_iter()
         .find(|worker| worker.session == session.as_str())
         .map(|worker| worker.app)
         .unwrap_or_default();
-    ready.retain(|ticket| {
-        ticket.destinations.is_empty()
-            || ticket
-                .destinations
-                .iter()
-                .any(|owner| owner.admits(&name, &app))
-    });
     let Some(next) = dispatch::chain_next(lane, &ready) else {
         return Ok(None);
     };
+    if !pins::allows_continuation(conn, next, machine, &name, &app)? {
+        return Ok(None);
+    }
     // A lane continuation carries no model IDs. Return it to ordinary dispatch when its
     // provider is held so the next request can check the actual model and other providers.
     if super::usage::holds(conn, now)?.contains_key(&app) {
@@ -278,7 +276,6 @@ fn reserve(
 /// The parts of a ticket that place it in a group.
 struct Node {
     parent: Option<TicketId>,
-    owner: Option<Owner>,
     workers: Option<u32>,
     max_workers: Option<u32>,
     in_progress: bool,
@@ -293,9 +290,7 @@ struct Snapshot {
     dependents: HashMap<String, Vec<String>>,
     regressions: HashSet<String>,
     ready: Vec<TicketId>,
-    routing: Routing,
-    /// The names, in lower case, of machines heard from in the last [`FALLBACK_SECONDS`]; every
-    /// other machine is silent.
+    /// The names, in lower case, of machines heard from within the fallback interval.
     heard: HashSet<String>,
 }
 
@@ -306,7 +301,7 @@ impl Snapshot {
         // have a parent and so are not loose, would wait for an allocation nobody sets.
         let mut statement = conn.prepare(
             "SELECT id, parent, coalesce(workers, CASE type WHEN 'meta' THEN 1 END), max_workers, \
-             status, owner FROM tickets",
+             status FROM tickets",
         )?;
         let rows = statement.query_map([], |row| {
             Ok((
@@ -315,13 +310,12 @@ impl Snapshot {
                 row.get::<_, Option<u32>>(2)?,
                 row.get::<_, Option<u32>>(3)?,
                 row.get::<_, String>(4)?,
-                row.get::<_, Option<String>>(5)?,
             ))
         })?;
         let mut nodes = HashMap::new();
         let mut live = HashSet::new();
         for row in rows {
-            let (id, parent, workers, max_workers, status, owner) = row?;
+            let (id, parent, workers, max_workers, status) = row?;
             if status != "closed" {
                 live.insert(id.clone());
             }
@@ -329,8 +323,6 @@ impl Snapshot {
                 parse_id(&id)?,
                 Node {
                     parent: parent.as_deref().map(parse_id).transpose()?,
-                    // An owner a newer build wrote in a form this one cannot read is left out.
-                    owner: owner.and_then(|text| text.parse().ok()),
                     workers,
                     max_workers,
                     in_progress: status == "in_progress",
@@ -350,8 +342,7 @@ impl Snapshot {
                 dependents.entry(dst).or_default().push(src);
             }
         }
-        let routing = owners::routing(conn)?;
-        let heard = heard_machines(conn, now)?;
+        let heard = pins::heard_machines(conn, now)?;
         let mut statement =
             conn.prepare("SELECT ticket FROM regressions WHERE state IN (?1, ?2)")?;
         let regressions = statement
@@ -364,7 +355,6 @@ impl Snapshot {
             regressions,
             // A ticket released by two sessions waits for a justiciar (see `releases`).
             ready: releases::offerable(conn, tickets::ready(conn, now)?)?,
-            routing,
             heard,
         })
     }
@@ -413,7 +403,7 @@ impl Snapshot {
 
     /// The ready tickets nobody holds or has reserved that may be offered to some machine,
     /// leaving out epics and milestones, which are containers rather than work. Each carries
-    /// its destinations, which `ignite_core::dispatch` matches against the asking machine.
+    /// its effective pins, which `ignite_core::dispatch` matches against the asking machine.
     fn ready_tickets(
         &self,
         conn: &Connection,
@@ -440,29 +430,14 @@ impl Snapshot {
             let Some(ticket) = self.offered(ticket) else {
                 continue;
             };
-            let needs_os = ticket.needs_os;
-            let may_fall_back = ticket.fallback;
-            let mut candidate = self.ready_ticket(ticket, history, landed, &mut memo, now);
-            if let Some(fallback) = fallback
-                && !fallback.allows(conn, &mut candidate, needs_os, may_fall_back)?
-            {
+            let pins = pins::effective(conn, id.as_str(), ticket.fallback, &self.heard)?;
+            let candidate = self.ready_ticket(ticket, pins, history, landed, &mut memo, now);
+            if fallback.is_some_and(|fallback| !fallback.allows(&candidate)) {
                 continue;
             }
             ready.push(candidate);
         }
         Ok(ready)
-    }
-
-    /// The owners whose workers may take `ticket`.
-    fn destinations(&self, ticket: &Ticket) -> Vec<Owner> {
-        let own = ticket.owner.clone().or_else(|| {
-            self.ancestors(&ticket.id)
-                .find_map(|id| self.nodes.get(&id).and_then(|node| node.owner.clone()))
-        });
-        self.routing
-            .destinations(own.as_ref(), ticket.fallback, ticket.needs_os, |machine| {
-                !self.heard.contains(&machine.to_ascii_lowercase())
-            })
     }
 
     /// The ticket if it may be offered: it is under an active epic, under no epic at all, or
@@ -507,6 +482,7 @@ impl Snapshot {
     fn ready_ticket(
         &self,
         ticket: Ticket,
+        pins: Pins,
         history: &[Worked],
         landed: &[String],
         memo: &mut HashMap<String, u32>,
@@ -525,9 +501,9 @@ impl Snapshot {
         } else {
             TicketKind::Ordinary
         };
-        let destinations = self.destinations(&ticket);
         ReadyTicket {
-            destinations,
+            pins,
+            needs_os: ticket.needs_os,
             kind,
             epic: self.group(&ticket.id),
             priority: ticket.priority,
@@ -699,21 +675,6 @@ fn last_files(conn: &Connection, machine: &str) -> Result<Vec<(SessionId, Vec<St
         last.push((session, files));
     }
     Ok(last)
-}
-
-/// The names, in lower case, of the machines the hub heard from in the last
-/// [`FALLBACK_SECONDS`].
-fn heard_machines(conn: &Connection, now: Timestamp) -> Result<HashSet<String>> {
-    Ok(fleet::machines(conn)?
-        .into_iter()
-        .filter(|machine| {
-            machine
-                .last_seen
-                .parse::<Timestamp>()
-                .is_ok_and(|seen| now.seconds_since(seen) < FALLBACK_SECONDS)
-        })
-        .map(|machine| machine.name.to_ascii_lowercase())
-        .collect())
 }
 
 fn pairs(conn: &Connection, sql: &str) -> Result<Vec<(String, String)>> {

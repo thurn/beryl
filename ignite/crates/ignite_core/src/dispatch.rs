@@ -14,10 +14,9 @@
 //!    longest chain of tickets waiting behind it, then the oldest.
 //!
 //! A machine can take a ticket when it has a free ticket tree, an idle worker that suits the
-//! ticket (its machine and app are one of the ticket's destinations, its owners as the hub
-//! resolved them through [`crate::owner::Routing::destinations`], and its app runs the model of
-//! the `tier:` label), room for the ticket's expected cores ([`room`]), and every check family
-//! the ticket's files could bring into its gate.
+//! ticket (the machine and provider satisfy its pins and the worker runs the model of the
+//! `tier:` label), room for the ticket's expected cores ([`room`]), and the required operating
+//! system and check families.
 //! Among suitable workers, the one whose last ticket shared the most files gets it; dispatch
 //! never waits for a particular worker. Everything here is a pure function of its arguments, so
 //! the same snapshot always gives the same answer.
@@ -25,8 +24,9 @@
 use std::cmp::Ordering;
 
 use crate::admission;
+use crate::config::Os;
 use crate::ids::{SessionId, TicketId};
-use crate::owner::Owner;
+use crate::pins::Pins;
 use crate::protocol::hub::{IdleWorker, MachineFree};
 use crate::shares::{Group, Unit};
 use crate::time::Timestamp;
@@ -63,9 +63,8 @@ pub struct ReadyTicket {
     pub files: Vec<String>,
     /// An improvement ticket's estimated saving per week.
     pub saving: Option<(Unit, f64)>,
-    /// The owners whose workers may take it; one that names no app admits any app on its
-    /// machine. Empty lets any worker take it.
-    pub destinations: Vec<Owner>,
+    pub pins: Pins,
+    pub needs_os: Option<Os>,
 }
 
 /// A ticket and the idle worker it goes to.
@@ -91,16 +90,11 @@ fn queue_order(a: &ReadyTicket, b: &ReadyTicket) -> Ordering {
 }
 
 /// Whether `worker`, on the machine `free` describes, can work `ticket`: its machine and app
-/// are one of the ticket's destinations, and its app runs the model the `tier:` label names.
+/// satisfy its pins, and its app runs the model the `tier:` label names.
 pub fn suits(free: &MachineFree, worker: &IdleWorker, ticket: &ReadyTicket) -> bool {
     let tier = label(&ticket.labels, "tier:").is_none_or(|t| worker.models.iter().any(|m| m == t));
-    let machine = free.name.as_deref().unwrap_or_default();
-    let routed = ticket.destinations.is_empty()
-        || ticket
-            .destinations
-            .iter()
-            .any(|owner| owner.admits(machine, &worker.app));
-    tier && routed
+    let machine = free.name.as_deref().unwrap_or(free.machine.as_str());
+    tier && ticket.pins.admits_machine(machine) && ticket.pins.admits_provider(&worker.app)
 }
 
 /// The cores a machine has room for, which a ticket's expected cores must fit in: its
@@ -123,7 +117,10 @@ fn machine_fits(free: &MachineFree, ticket: &ReadyTicket) -> bool {
         free.families.is_empty() || ticket.families.iter().all(|f| free.families.contains(f));
     let cores = ticket.kind == TicketKind::Regression
         || admission::fits(free.free_cores, ticket.expected_cores);
-    free.free_ticket_trees > 0 && families && cores
+    free.free_ticket_trees > 0
+        && ticket.needs_os.is_none_or(|os| os == free.os)
+        && families
+        && cores
 }
 
 /// The idle worker that gets the ticket: of those that suit it, the one whose last ticket shared

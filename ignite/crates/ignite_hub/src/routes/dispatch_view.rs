@@ -282,21 +282,15 @@ fn hand_out(seats: &mut [Seat], silent: &[String], ticket: &ReadyTicket, stage: 
         machines.push((seat.name.clone(), said));
     }
     for name in silent {
-        let owned = ticket.destinations.is_empty()
-            || ticket
-                .destinations
-                .iter()
-                .any(|owner| owner.machine.eq_ignore_ascii_case(name));
-        let said = if owned {
-            "has not said what it has free".to_owned()
-        } else {
-            let owners: Vec<String> = ticket
-                .destinations
-                .iter()
-                .map(ToString::to_string)
-                .collect();
-            format!("owned by {}", owners.join(", "))
-        };
+        let said = ticket
+            .pins
+            .machine
+            .as_deref()
+            .filter(|_| !ticket.pins.admits_machine(name))
+            .map_or_else(
+                || "has not said what it has free".to_owned(),
+                |pin| format!("pinned to machine {pin}"),
+            );
         machines.push((name.clone(), said));
     }
     machines.sort_by(|a, b| a.0.cmp(&b.0));
@@ -377,17 +371,17 @@ fn take(seat: &mut Seat, ticket: &ReadyTicket) {
 }
 
 /// The reason to show on a ticket no machine takes next: the one most machines give, leaving
-/// out machines that do not own it, unless none does.
+/// out machines excluded by its machine pin, unless all are excluded.
 fn summary(machines: &[(String, String)]) -> String {
-    let owning: Vec<&str> = machines
+    let matching: Vec<&str> = machines
         .iter()
         .map(|(_, reason)| reason.as_str())
-        .filter(|reason| !reason.starts_with("owned by"))
+        .filter(|reason| !reason.starts_with("pinned to machine "))
         .collect();
-    let pool: Vec<&str> = if owning.is_empty() {
+    let pool: Vec<&str> = if matching.is_empty() {
         machines.iter().map(|(_, reason)| reason.as_str()).collect()
     } else {
-        owning
+        matching
     };
     let mut counts: Vec<(&str, usize)> = Vec::new();
     for reason in pool {

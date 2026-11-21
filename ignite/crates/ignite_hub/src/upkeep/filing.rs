@@ -15,23 +15,21 @@
 //! newest sighting came ([`SIGHTED_KEY`]) and, for a fault that holds checks back, which checks
 //! ([`CHECKS_KEY`]).
 //!
-//! Each new ticket is owned by the machine whose report filed it (see `ignite_core::owner`),
-//! unless its filing names another owner; one that upkeep files on its own follows the default
-//! owner. A released ticket also falls back to another machine when its owner goes silent.
+//! Reports filed by a machine pin the new ticket to that machine unless the filing includes
+//! its own machine pin. Tickets that upkeep files on its own can go to any machine.
 //!
-//! A ticket is filed `pending_approval`, so the pool never takes it before a person releases it,
-//! unless its filing says it is [`Filing::released`]: a fault that holds `master` back cannot
-//! wait for a person. A later released sighting releases a ticket still waiting for a person.
+//! A ticket starts at `pending_approval` unless its filing marks it as [`Filing::released`].
+//! A later released sighting releases a ticket still waiting for approval.
 //!
-//! The lookup and the write are fenced by the feed position: if anything else wrote between
-//! them, the write is refused and the lookup is done again.
+//! The lookup and write are fenced by the feed position. If another write changes the feed
+//! between them, the lookup is retried.
 
 use std::collections::BTreeMap;
 
 use rusqlite::{Connection, params};
 use serde_json::Value;
 
-use ignite_core::owner::Owner;
+use ignite_core::pins::{from_labels, machine_label};
 
 use ignite_core::protocol::tickets::{
     BatchRequest, Dependency, Operation, Precondition, Status, TicketFields,
@@ -220,7 +218,7 @@ pub fn file(
                         filing,
                         &key,
                         author,
-                        origin.as_ref(),
+                        origin.as_deref(),
                         previous.map(|m| m.id.as_str()),
                         now,
                     )],
@@ -324,26 +322,28 @@ pub fn release_holding(
     Ok(ids)
 }
 
-/// The owner of a ticket that the machine `machine` (its ID) files: that machine with its home
-/// app. `None` for upkeep itself and for a machine the hub has no registration of.
-pub fn origin(conn: &Connection, machine: &str) -> Result<Option<Owner>> {
+/// The pin for the machine that filed a report, if it is registered.
+pub fn origin(conn: &Connection, machine: &str) -> Result<Option<String>> {
     if machine == UPKEEP.machine {
         return Ok(None);
     }
-    Ok(fleet::name_of(conn, machine)?.map(|name| Owner::new(&name, None)))
+    Ok(fleet::name_of(conn, machine)?.map(|name| machine_label(&name)))
 }
 
 fn create(
     filing: &Filing,
     key: &str,
     author: Author,
-    origin: Option<&Owner>,
+    origin: Option<&str>,
     previous: Option<&str>,
     now: Timestamp,
 ) -> Operation {
     let mut fields = filing.fields.clone();
-    if fields.owner.is_none() {
-        fields.owner = origin.map(|owner| Some(owner.clone()));
+    if let Some(pin) = origin {
+        let labels = fields.labels.get_or_insert_with(Vec::new);
+        if from_labels(labels).machine.is_none() {
+            labels.push(pin.to_owned());
+        }
     }
     if filing.released {
         fields.fallback = Some(true);

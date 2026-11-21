@@ -34,7 +34,7 @@ use serde_json::{Map, Value, json};
 use ignite_core::config::Os;
 use ignite_core::dispatch::label;
 use ignite_core::ids::{MachineId, SessionId, TicketId};
-use ignite_core::owner::Owner;
+use ignite_core::pins::machine_label;
 use ignite_core::protocol::emergency::{EmergencyChange, EmergencyReply};
 use ignite_core::protocol::hub::{
     AdhocClaim, Claim, Close, DependencyNote, Heartbeat, Landed, LandedReply, MachineFree,
@@ -511,7 +511,7 @@ fn closing(ticket: &Ticket, reason: &str) -> Vec<Operation> {
 /// Gives a ticket back to the queue with the note as a comment, records the branch its work was
 /// saved to and, with `needs`, records what it needs: `person` labels it `needs:person`, which
 /// sets it aside for a person; an operating system sets the system it needs; a machine's name
-/// makes that machine its owner (see `ignite_core::owner`). A session may also give back a
+/// pins the ticket to that machine. A session may also give back a
 /// reservation it has not claimed yet. A ticket released by different sessions is held back
 /// for a justiciar (see `dispatch_releases.rs`).
 fn release(conn: &mut Connection, release: &Release, now: Timestamp) -> Answer {
@@ -539,15 +539,33 @@ fn release(conn: &mut Connection, release: &Release, now: Timestamp) -> Answer {
         ..TicketFields::default()
     };
     let mut add_labels = Vec::new();
-    match release.needs.as_deref() {
+    let mut remove_labels = Vec::new();
+    match release.needs.as_deref().map(str::trim) {
         None => {}
         Some("person") => add_labels.push("needs:person".to_owned()),
         Some(needs) => {
             if let Ok(os) = serde_json::from_value::<Os>(Value::String(needs.to_owned())) {
                 set.needs_os = Some(Some(os));
             } else {
-                let owner = needs.parse::<Owner>().map_err(|e| failure(400, &e))?;
-                set.owner = Some(Some(owner));
+                if needs.is_empty()
+                    || !needs
+                        .bytes()
+                        .all(|byte| byte.is_ascii_alphanumeric() || b"-_".contains(&byte))
+                {
+                    return Err(failure(
+                        400,
+                        "write a machine name, an operating system or person",
+                    ));
+                }
+                let label = machine_label(needs);
+                remove_labels.extend(
+                    ticket
+                        .labels
+                        .iter()
+                        .filter(|old| old.starts_with("machine:") && **old != label)
+                        .cloned(),
+                );
+                add_labels.push(label);
             }
         }
     }
@@ -561,7 +579,7 @@ fn release(conn: &mut Connection, release: &Release, now: Timestamp) -> Answer {
             id: id.to_owned(),
             set: Some(set),
             add_labels,
-            remove_labels: Vec::new(),
+            remove_labels,
             set_meta,
             unset_meta: Vec::new(),
         },
@@ -759,8 +777,8 @@ mod pressure_tests;
 mod emergency_tests;
 
 #[cfg(test)]
-#[path = "dispatch_owner_tests.rs"]
-mod owner_tests;
+#[path = "dispatch_pins_tests.rs"]
+mod pins_tests;
 
 #[cfg(test)]
 #[path = "dispatch_release_count_tests.rs"]

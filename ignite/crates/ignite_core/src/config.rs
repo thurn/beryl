@@ -408,11 +408,6 @@ pub struct PoolConfig {
     /// The reasoning effort each app uses for tickets without an `effort:` label.
     #[serde(default)]
     pub default_effort: BTreeMap<String, String>,
-    /// The owner of every ticket that has no owner of its own and no ancestor with one, such
-    /// as `jarvis/claude` (see `crate::owner`). It names a declared machine. Without it such
-    /// a ticket goes to any worker.
-    #[serde(default)]
-    pub default_owner: Option<crate::owner::Owner>,
     /// The old pool-wide percentage, used only to seed fleet settings on first run.
     #[serde(default = "default_hold_percent")]
     pub usage_hold_percent: u32,
@@ -430,7 +425,6 @@ impl Default for PoolConfig {
         PoolConfig {
             models: BTreeMap::new(),
             default_effort: BTreeMap::new(),
-            default_owner: None,
             usage_hold_percent: default_hold_percent(),
             cli: BTreeMap::new(),
         }
@@ -601,7 +595,7 @@ impl Config {
         missing
     }
 
-    /// The `[pool]` table: nonempty model IDs and efforts, and a default owner on a declared machine.
+    /// The `[pool]` table: nonempty model IDs and efforts.
     fn validate_pool(&self) -> Result<(), (String, String)> {
         let fail = |key: &str, message: &str| Err((key.to_owned(), message.to_owned()));
         for (app, table) in &self.pool.models {
@@ -615,14 +609,6 @@ impl Config {
             if effort.trim().is_empty() {
                 return fail(&format!("pool.default_effort.{app}"), "must not be empty");
             }
-        }
-        if let Some(owner) = &self.pool.default_owner
-            && !self
-                .machine
-                .keys()
-                .any(|name| name.eq_ignore_ascii_case(&owner.machine))
-        {
-            return fail("pool.default_owner", "must name a declared machine");
         }
         Ok(())
     }

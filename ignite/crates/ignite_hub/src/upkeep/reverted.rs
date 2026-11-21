@@ -104,8 +104,11 @@ pub fn file(
                 body: Some(text),
                 ticket_type: Some(TicketType::Bug),
                 priority: Some(0),
-                labels: Some(vec!["reverted".to_owned()]),
-                owner: Some(filing::origin(conn, author.machine)?),
+                labels: Some(
+                    std::iter::once("reverted".to_owned())
+                        .chain(filing::origin(conn, author.machine)?)
+                        .collect(),
+                ),
                 metadata: Some(BTreeMap::from([(KEY.to_owned(), meta)])),
                 ..TicketFields::default()
             },

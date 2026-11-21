@@ -18,7 +18,7 @@ pub mod landings;
 pub mod machines;
 pub mod markdown;
 pub mod milestones;
-pub mod owners;
+mod pins;
 pub mod pool;
 pub mod references;
 pub mod serve;

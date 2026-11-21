@@ -15,6 +15,7 @@ use serde::Serialize;
 use serde_json::{Value, json};
 
 use ignite_core::ids::TicketId;
+use ignite_core::pins::{from_labels, machine_label};
 use ignite_core::protocol::tickets::{
     BatchRequest, LeaseOp, LeaseReply, Operation, Status, TicketQuery,
 };
@@ -22,7 +23,7 @@ use ignite_core::time::Timestamp;
 use ignite_store::StoreError;
 use ignite_store::hub::batch::{self, BatchOutcome};
 use ignite_store::hub::{
-    attachments, feed, filer_deps, fleet, leases, owners, releases, session_titles, tickets,
+    attachments, feed, filer_deps, fleet, leases, releases, session_titles, tickets,
 };
 
 use super::{Request, Response};
@@ -96,15 +97,24 @@ fn apply_batch(
     let mut batch: BatchRequest = body(request)?;
     let writer = request.writer.as_ref().expect("checked in handle");
     let raw = serde_json::from_slice::<Value>(&request.body).unwrap_or(Value::Null);
-    if raw.get(AUTOMATIC).and_then(Value::as_bool) == Some(true) {
+    let automatic = raw.get(AUTOMATIC).and_then(Value::as_bool) == Some(true);
+    if automatic {
         let machine =
             fleet::name_of(conn, writer.machine.as_str()).map_err(|e| store_failure(&e))?;
-        owners::add_filing_machine(&mut batch, machine.as_deref());
+        if let Some(machine) = machine {
+            for operation in &mut batch.ops {
+                if let Operation::Create { fields, .. } = operation {
+                    let labels = fields.labels.get_or_insert_with(Vec::new);
+                    if from_labels(labels).machine.is_none() {
+                        labels.push(machine_label(&machine));
+                    }
+                }
+            }
+        }
     }
     // A follow-up filed by a session that holds unlanded work in the same line depends on that
     // work, unless the filer opts out or a program filed it; see `filer_deps`.
     let independent = raw.get(INDEPENDENT).and_then(Value::as_bool) == Some(true);
-    let automatic = raw.get(AUTOMATIC).and_then(Value::as_bool) == Some(true);
     let added = if independent || automatic {
         Vec::new()
     } else {
@@ -190,9 +200,8 @@ pub const INDEPENDENT: &str = "independent";
 pub const FILER_DEPENDENCIES: &str = "filer_dependencies";
 
 /// The key of `POST /batch`'s body that is `true` when a program filed the batch's tickets, such
-/// as a check (`ignite ticket create --automatic`). Each ticket it creates without an owner is
-/// then owned by the writer's machine, as a ticket the hub files from a machine's report is; a
-/// ticket a person or a session files follows its line's owner or the default owner.
+/// as a check (`ignite ticket create --automatic`). The hub adds a pin for the writing machine
+/// to each created ticket without a machine pin of its own.
 pub const AUTOMATIC: &str = "automatic";
 
 /// The key of `POST /batch`'s body holding the title of the session writing, if it has one.

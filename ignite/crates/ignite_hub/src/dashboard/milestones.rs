@@ -88,7 +88,7 @@ mod tests {
             priority: 2,
             assignee: None,
             updated_at: String::new(),
-            owner: None,
+            pins: ignite_core::pins::Pins::default(),
         }
     }
 

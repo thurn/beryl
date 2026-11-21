@@ -79,7 +79,8 @@ fn a_handoff_waiting_for_disk_sweeps_free_trees_while_builds_are_held() {
         families: vec![],
         files: vec![],
         saving: None,
-        destinations: vec![],
+        pins: ignite_core::pins::Pins::default(),
+        needs_os: None,
     };
     let held = [TicketId::new("T.1").unwrap(), TicketId::new("T.2").unwrap()];
     let blocked = || {

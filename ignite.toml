@@ -182,14 +182,6 @@ window = 20
 report_only = ["tier-gap"]
 protected = ["app", "ui-smoke", "clippy", "pyre", "ui-types", "source"]
 
-# Every ticket with no owner of its own and none on an ancestor goes to this owner's workers.
-# Which machine filed a ticket never decides where it goes: a ticket reaches another machine only
-# when it, or an epic above it, names that machine with `--owner`. Before this, a ticket filed
-# from a session whose machine the hub could not name had no owner and went to any worker, and on
-# 2026-11-20 macOS work went to the Windows PC that way.
-[pool]
-default_owner = "jarvis/codex"
-
 # A ticket's `effort:` label overrides this default. Apps without an entry use medium.
 [pool.default_effort]
 codex = "high"

@@ -9,12 +9,6 @@ use super::Graphs;
 
 const EPIC: &str = "ig9a";
 
-fn owned(id: &str, owner: &str) -> Ticket {
-    let mut ticket = ticket(id, EPIC, "`a.rs`", &[]);
-    ticket.owner = Some(owner.parse().unwrap());
-    ticket
-}
-
 fn ticket(id: &str, parent: &str, body: &str, labels: &[&str]) -> Ticket {
     serde_json::from_value(json!({
         "id": id, "parent": (!parent.is_empty()).then_some(parent), "next_child": 1, "title": id, "body": body,
@@ -36,7 +30,7 @@ fn id(n: u32) -> String {
 
 fn report(tickets: &[Ticket], edges: &[Edge], ready: &[String]) -> Vec<String> {
     let ready: HashSet<String> = ready.iter().cloned().collect();
-    let machines: BTreeSet<String> = ["jarvis", "jarvis/claude"].map(str::to_owned).into();
+    let machines: BTreeSet<String> = ["jarvis"].map(str::to_owned).into();
     Graphs {
         epic: EPIC,
         tickets,
@@ -44,6 +38,7 @@ fn report(tickets: &[Ticket], edges: &[Edge], ready: &[String]) -> Vec<String> {
         edges,
         ready: &ready,
         machines: &machines,
+        providers: &["claude".to_owned()].into(),
         repository: None,
     }
     .report()
@@ -107,16 +102,29 @@ fn a_clean_epic_reports_only_its_shape() {
 }
 
 #[test]
-fn a_ticket_that_no_machine_can_take_is_reported_but_known_owners_are_not() {
+fn unknown_machine_and_provider_pins_are_reported() {
     let tickets = [
-        owned(&id(1), "cygnus/codex"),
-        owned(&id(2), "jarvis/claude"),
+        ticket(
+            &id(1),
+            EPIC,
+            "`a.rs`",
+            &["machine:cygnus", "provider:codex"],
+        ),
+        ticket(
+            &id(2),
+            EPIC,
+            "`a.rs`",
+            &["machine:jarvis", "provider:claude"],
+        ),
         ticket(&id(3), EPIC, "`a.rs`", &["needs:person"]),
     ];
     let lines = report(&tickets, &[], &[]);
     assert_eq!(
         lines[2..],
-        ["no machine     .1 is owned by cygnus/codex, which ignite.toml does not declare"]
+        [
+            "no machine     .1 is pinned to cygnus, which the fleet does not know",
+            "no provider    .1 is pinned to codex, which the fleet does not know"
+        ]
     );
 }
 
@@ -148,6 +156,7 @@ fn a_dependency_on_an_epic_a_report_with_dependents_and_a_moved_ticket_each_get_
         edges: &edges,
         ready: &ready,
         machines: &machines,
+        providers: &["claude".to_owned()].into(),
         repository: None,
     }
     .report();
@@ -196,6 +205,7 @@ fn a_files_line_names_files_short_paths_resolve_and_missing_paths_are_reported()
         edges: &edges,
         ready: &ready,
         machines: &machines,
+        providers: &["claude".to_owned()].into(),
         repository: Some(&repository),
     }
     .report();

@@ -8,8 +8,9 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
-use ignite_core::config::Config;
+use ignite_core::fleet::FleetView;
 use ignite_core::ids::TicketId;
+use ignite_core::pins::{Pins, from_labels};
 use ignite_core::protocol::client::{Exit, Reply};
 use ignite_core::protocol::tickets::{Edge, EdgeKind, Graph, Status, Ticket};
 use serde_json::{Value, json};
@@ -17,7 +18,7 @@ use serde_json::{Value, json};
 use ignite_hub::routes::dispatch::{named_files, resolve_named_file};
 
 use crate::args::PlanCommand;
-use crate::ticket::{Failure, Hub, find_config};
+use crate::ticket::{Failure, Hub};
 
 /// The width of the label column.
 const LABEL_WIDTH: usize = 15;
@@ -29,9 +30,6 @@ pub fn run(command: &PlanCommand) -> Reply {
 
 fn load(epic: &str) -> Result<Reply, Failure> {
     let cwd = std::env::current_dir().unwrap_or_default();
-    let (file, text) = find_config(&cwd)?;
-    let config = Config::parse(&file.display().to_string(), &text)
-        .map_err(|error| Failure::new(Exit::Usage, error))?;
     let hub = Hub::load(&cwd, "ignite".to_owned(), |name| std::env::var(name).ok())?;
     let epic = hub.get(&["tickets", epic], &[])?.json()?;
     let epic_id = epic["id"].as_str().unwrap_or(epic_name(&epic)).to_owned();
@@ -45,7 +43,18 @@ fn load(epic: &str) -> Result<Reply, Failure> {
         .map(|ticket| ticket.ticket.id.to_string())
         .collect();
     let everything: Vec<Ticket> = graph.tickets.into_iter().map(|t| t.ticket).collect();
-    let machines = machine_names(&config);
+    let fleet: FleetView = decode(hub.get(&["fleet"], &[])?.json()?)?;
+    let machines = fleet
+        .machines
+        .iter()
+        .map(|machine| machine.name.to_ascii_lowercase())
+        .collect();
+    let providers = fleet
+        .settings
+        .providers
+        .into_keys()
+        .map(|provider| provider.to_ascii_lowercase())
+        .collect();
     // The repository's files, which short paths are resolved against. Without them every named
     // path is taken as it is written.
     let repository = ignite_git::tracked::toplevel(&cwd)
@@ -61,6 +70,7 @@ fn load(epic: &str) -> Result<Reply, Failure> {
         edges: &graph.edges,
         ready: &ready,
         machines: &machines,
+        providers: &providers,
         repository: repository.as_ref(),
     }
     .report();
@@ -82,15 +92,6 @@ fn decode<T: serde::de::DeserializeOwned>(value: Value) -> Result<T, Failure> {
     serde_json::from_value(value).map_err(|error| Failure::new(Exit::Usage, error))
 }
 
-/// The owners a ticket may name (see `ignite_core::owner`): each declared machine alone, which
-/// means any app on it, and with each app the pool runs.
-fn machine_names(config: &Config) -> BTreeSet<String> {
-    let routing = ignite_core::owner::Routing::from_config(config);
-    let mut names: BTreeSet<String> = routing.machines.iter().map(|m| m.name.clone()).collect();
-    names.extend(routing.choices().iter().map(ToString::to_string));
-    names
-}
-
 fn prefixed(id: &str) -> String {
     if id.starts_with(['T', 'E', 'M', 'A', 'B']) {
         id.to_owned()
@@ -108,8 +109,9 @@ struct Graphs<'a> {
     everything: &'a [Ticket],
     edges: &'a [Edge],
     ready: &'a HashSet<String>,
-    /// The owners a ticket may name.
+    /// The fleet names a ticket may pin.
     machines: &'a BTreeSet<String>,
+    providers: &'a BTreeSet<String>,
     /// The repository the named paths are in; `None` when unknown.
     repository: Option<&'a Repository>,
 }
@@ -299,20 +301,44 @@ impl Graphs<'_> {
         lines
     }
 
-    /// A ticket owned by a machine and app that `ignite.toml` does not declare, which no worker
-    /// can take.
+    /// Reports pins that name a machine or provider the fleet does not know.
     fn unplaceable(&self, live: &[&Ticket]) -> Vec<String> {
+        let by_id: HashMap<_, _> = self
+            .everything
+            .iter()
+            .map(|ticket| (ticket.id.as_str(), ticket))
+            .collect();
         live.iter()
-            .filter_map(|ticket| {
-                let owner = ticket.owner.as_ref()?.to_string();
-                (!self.machines.contains(&owner)).then(|| {
-                    row(
-                        "no machine",
+            .flat_map(|ticket| {
+                let mut pins = Pins::default();
+                let mut seen = HashSet::new();
+                let mut current = Some(*ticket);
+                while let Some(node) = current.filter(|node| seen.insert(node.id.as_str())) {
+                    let own = from_labels(&node.labels);
+                    pins.machine = pins.machine.or(own.machine);
+                    pins.provider = pins.provider.or(own.provider);
+                    if pins.machine.is_some() && pins.provider.is_some() {
+                        break;
+                    }
+                    current = node
+                        .parent
+                        .as_ref()
+                        .and_then(|id| by_id.get(id.as_str()).copied());
+                }
+                [
+                    (pins.machine, self.machines, "no machine"),
+                    (pins.provider, self.providers, "no provider"),
+                ]
+                .into_iter()
+                .filter_map(move |(pin, known, heading)| {
+                    let pin = pin.filter(|pin| !known.contains(&pin.to_ascii_lowercase()))?;
+                    Some(row(
+                        heading,
                         &format!(
-                            "{} is owned by {owner}, which ignite.toml does not declare",
+                            "{} is pinned to {pin}, which the fleet does not know",
                             self.short(ticket.id.as_str())
                         ),
-                    )
+                    ))
                 })
             })
             .collect()

@@ -24,7 +24,7 @@ use super::edit;
 use super::history::timeline;
 use super::markdown::render_with_images as render_markdown;
 use super::milestones::is_milestone;
-use super::owners;
+use super::pins;
 use super::references::{display_id, mentions, rewrite_ticket_paths, ticket_url};
 
 /// A ticket's page for the project `project` at `root`, at feed position `seq`. An `editable`
@@ -35,7 +35,7 @@ pub fn page(
     root: &str,
     project: &str,
     data: &TicketData,
-    owner: &owners::OwnerView,
+    effective_pins: &ignite_core::pins::Pins,
     seq: &str,
     (editable, private): (bool, bool),
 ) -> PageOptions {
@@ -373,26 +373,24 @@ pub fn page(
             assignee_view(card.assignee.as_deref(), &card.id, root, private),
         ),
     ];
-    let owner_view = owners::property_view(owner, |id| {
-        references.get(id).map_or_else(
-            || esc(&display_id(id)),
-            |card| hover_link(card, &esc(&display_id(id))),
-        )
-    });
-    properties.push((
-        "Owner".into(),
-        if editable {
-            edit::choice_property(
-                "owner",
-                "Owner",
-                &owner_view,
-                owner.own.as_deref().unwrap_or_default(),
-                &owners::choices(owner),
-            )
-        } else {
-            owner_view
-        },
-    ));
+    properties.extend([
+        (
+            "Machine pin".into(),
+            pins::property(
+                effective_pins.machine.as_deref(),
+                "Any machine",
+                card.pins.machine.is_none(),
+            ),
+        ),
+        (
+            "Provider pin".into(),
+            pins::property(
+                effective_pins.provider.as_deref(),
+                "Any provider",
+                card.pins.provider.is_none(),
+            ),
+        ),
+    ]);
     if editable && card.ticket_type == "epic" {
         for (label, field, value) in [
             ("Allocation", "workers", ticket.workers),
@@ -627,12 +625,12 @@ pub(crate) fn options(
         return Ok(None);
     };
     let data = ticket_data(conn, project, row)?;
-    let owner = owners::view(conn, id)?;
+    let effective_pins = ignite_store::hub::pins::of(conn, id)?;
     Ok(Some(page(
         root,
         project,
         &data,
-        &owner,
+        &effective_pins,
         seq,
         (editable, private),
     )))

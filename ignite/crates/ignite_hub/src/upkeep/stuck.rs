@@ -9,7 +9,7 @@
 //!   are filed released;
 //! - an epic with open tickets of which none is ready or in progress, nor waits (through any
 //!   chain of dependencies and epics) on a ticket that is. A ready ticket that no machine can
-//!   take (its owner names a machine that is not registered, or it is labelled `needs:person`)
+//!   take (it has an unknown pin or is labeled `needs:person`)
 //!   does not count as ready. An epic with a ticket still `pending_approval` is
 //!   waiting for a person, not stuck;
 //! - a loop of tickets that wait on one another and are under no epic;
@@ -22,7 +22,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use rusqlite::{Connection, params};
 
 use ignite_core::ids::{CheckName, TicketId};
-use ignite_core::owner::Owner;
+use ignite_core::pins::machine_label;
 use ignite_core::protocol::hub::{AuditReport, CheckState, TipWaiting};
 use ignite_core::protocol::tickets::{
     Graph, GraphTicket, Status, Ticket, TicketFields, TicketType,
@@ -140,7 +140,7 @@ pub fn tips_waiting(conn: &mut Connection, now: Timestamp) -> Result<Vec<Filed>>
                 body: Some(body),
                 ticket_type: Some(TicketType::Bug),
                 priority: Some(1),
-                labels: Some(vec!["fleet".to_owned()]),
+                labels: Some(vec!["fleet".to_owned(), machine_label(&machine.name)]),
                 ..TicketFields::default()
             },
             deps: Vec::new(),
@@ -231,7 +231,6 @@ pub fn tip_waiting(
                 ticket_type: Some(TicketType::Bug),
                 priority: Some(1),
                 labels: Some(labels),
-                needs_os: Some(Some(report.platform)),
                 ..TicketFields::default()
             },
             deps: Vec::new(),
@@ -255,10 +254,7 @@ pub fn tip_waiting(
                     )),
                     ticket_type: Some(TicketType::Bug),
                     priority: Some(1),
-                    labels: Some(labels.clone()),
-                    // The silent machine's own workers can tell why it stopped reporting; the
-                    // ticket falls back elsewhere once it has been silent long enough.
-                    owner: Some(Some(Owner::new(&machine.name, None))),
+                    labels: Some([labels[0].clone(), machine_label(&machine.name)].into()),
                     needs_os: Some(Some(report.platform)),
                     ..TicketFields::default()
                 },
@@ -297,22 +293,14 @@ const STOPPED_MARK: &str = "⛔";
 /// The label on a ticket for the justiciar to look at.
 const JUSTICIAR: &str = ignite_core::dispatch::JUSTICIAR;
 
-/// The names, in lower case, of the registered machines, which a ticket's owner must name.
-fn machine_names(conn: &Connection) -> Result<BTreeSet<String>> {
-    Ok(fleet::machines(conn)?
-        .into_iter()
-        .map(|machine| machine.name.to_ascii_lowercase())
-        .collect())
-}
-
 /// Files one ticket for each epic whose open tickets are all blocked, one for each loop of
 /// tickets under no epic that wait on one another, and one for each ticket held in progress for
 /// more than six hours. Of nested stuck epics, only the innermost is reported, since the outer
 /// one waits on it.
 pub fn stuck_epics(conn: &mut Connection, now: Timestamp) -> Result<Vec<Filed>> {
     let graph = tickets::graph(conn, false, now)?;
-    let known = machine_names(conn)?;
-    let mut filings: Vec<Filing> = find_stuck(&graph, now, &known)
+    let stranded = super::machines::unassignable(conn)?.into_iter().collect();
+    let mut filings: Vec<Filing> = find_stuck(&graph, now, &stranded)
         .into_iter()
         .map(|(epic, lines)| epic_filing(&epic, &lines))
         .collect();
@@ -336,9 +324,9 @@ pub(super) struct StuckNow {
 /// The epics, loops and held tickets [`stuck_epics`] would file for at `now`.
 pub(super) fn stuck_now(conn: &Connection, now: Timestamp) -> Result<StuckNow> {
     let graph = tickets::graph(conn, false, now)?;
-    let known = machine_names(conn)?;
+    let stranded = super::machines::unassignable(conn)?.into_iter().collect();
     Ok(StuckNow {
-        epics: find_stuck(&graph, now, &known)
+        epics: find_stuck(&graph, now, &stranded)
             .into_iter()
             .map(|(epic, _)| epic)
             .collect(),
@@ -353,25 +341,13 @@ pub(super) fn stuck_now(conn: &Connection, now: Timestamp) -> Result<StuckNow> {
     })
 }
 
-/// Whether some registered machine could take the ticket: it is not set aside for a person, and
-/// its own owner, if it has one, names a registered machine.
-fn takeable(ticket: &Ticket, known: &BTreeSet<String>) -> bool {
-    unmet(ticket, known).is_empty()
-}
-
-/// What a ticket needs that no registered machine gives: a person, or an owner's machine.
-fn unmet(ticket: &Ticket, known: &BTreeSet<String>) -> Vec<String> {
+/// What a waiting ticket requires that the fleet cannot provide.
+fn unmet(ticket: &Ticket, stranded: &BTreeMap<String, String>) -> Vec<String> {
     let mut needs = Vec::new();
     if ticket.labels.iter().any(|label| label == "needs:person") {
         needs.push("a person (needs:person)".to_owned());
     }
-    if let Some(owner) = &ticket.owner
-        && !known.contains(&owner.machine)
-    {
-        needs.push(format!(
-            "its owner {owner}, which is not a registered machine"
-        ));
-    }
+    needs.extend(stranded.get(ticket.id.as_str()).cloned());
     needs
 }
 
@@ -379,7 +355,7 @@ fn unmet(ticket: &Ticket, known: &BTreeSet<String>) -> Vec<String> {
 fn find_stuck(
     graph: &Graph,
     now: Timestamp,
-    known: &BTreeSet<String>,
+    stranded: &BTreeMap<String, String>,
 ) -> Vec<(String, Vec<String>)> {
     let parents: BTreeMap<&str, Option<&str>> = graph
         .tickets
@@ -403,7 +379,8 @@ fn find_stuck(
         .tickets
         .iter()
         .filter(|t| {
-            t.ticket.status == Status::InProgress || (t.ready && takeable(&t.ticket, known))
+            t.ticket.status == Status::InProgress
+                || (t.ready && unmet(&t.ticket, stranded).is_empty())
         })
         .map(|t| t.ticket.id.as_str())
         .collect();
@@ -473,7 +450,7 @@ fn find_stuck(
         .map(|epic| {
             let lines = waiting[epic]
                 .iter()
-                .map(|entry| waiting_line(entry, known))
+                .map(|entry| waiting_line(entry, stranded))
                 .collect();
             ((*epic).to_owned(), lines)
         })
@@ -481,9 +458,9 @@ fn find_stuck(
 }
 
 /// One line saying what a waiting ticket waits on.
-fn waiting_line(entry: &GraphTicket, known: &BTreeSet<String>) -> String {
+fn waiting_line(entry: &GraphTicket, stranded: &BTreeMap<String, String>) -> String {
     let mut by: Vec<String> = entry.blocked_by.iter().map(|b| b.id.to_string()).collect();
-    by.extend(unmet(&entry.ticket, known));
+    by.extend(unmet(&entry.ticket, stranded));
     let by = if by.is_empty() {
         "nothing listed".to_owned()
     } else {

@@ -38,7 +38,7 @@ const JSON_COLUMNS: &[&str] = &["labels", "metadata", "landed", "saving"];
 pub(crate) const TICKET_COLUMNS: &str = "id, parent, next_child, title, body, acceptance, design, notes, \
     type, status, priority, assignee, last, labels, metadata, defer_until, close_reason, \
     created_at, created_by, updated_at, closed_at, version, workers, max_workers, cores, \
-    machine, session, tree, claimed_at, landed_at, landed, saving, owner, needs_os, fallback, \
+    machine, session, tree, claimed_at, landed_at, landed, saving, needs_os, fallback, \
     every_hours, provider";
 
 /// One ticket, found by ID or by any alias, with its edges, children and readiness.

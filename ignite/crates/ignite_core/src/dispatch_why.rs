@@ -34,12 +34,30 @@ pub fn why_nothing(free: &MachineFree, ready: &[ReadyTicket], epic_order: &[Grou
         return "the last idle worker is kept for justiciar tickets, and none is ready".to_owned();
     }
     let for_us: Vec<&ReadyTicket> = candidates
-        .into_iter()
+        .iter()
+        .copied()
         .filter(|t| free.idle_workers.iter().any(|w| suits(free, w, t)))
         .collect();
     if for_us.is_empty() {
+        let machine = free.name.as_deref().unwrap_or(free.machine.as_str());
+        let pin = candidates.iter().find_map(|ticket| {
+            if ticket.pins.admits_machine(machine) {
+                ticket.pins.provider.as_deref().filter(|_| {
+                    !free
+                        .idle_workers
+                        .iter()
+                        .any(|worker| ticket.pins.admits_provider(&worker.app))
+                })
+            } else {
+                ticket.pins.machine.as_deref()
+            }
+        });
+        let reason = pin.map_or_else(
+            || "no idle worker runs the required model".to_owned(),
+            |pin| format!("pinned to {pin}"),
+        );
         return format!(
-            "{} ready {}, none for this machine's idle workers (another owner or model)",
+            "{} ready {}, none for this machine: {reason}",
             ready.len(),
             plural(ready.len())
         );
@@ -59,7 +77,9 @@ pub fn why_nothing(free: &MachineFree, ready: &[ReadyTicket], epic_order: &[Grou
     let runnable: Vec<&ReadyTicket> = in_order
         .into_iter()
         .filter(|t| {
-            free.families.is_empty() || t.families.iter().all(|f| free.families.contains(f))
+            t.needs_os.is_none_or(|os| os == free.os)
+                && (free.families.is_empty()
+                    || t.families.iter().all(|f| free.families.contains(f)))
         })
         .collect();
     let Some(smallest) = runnable
@@ -68,7 +88,7 @@ pub fn why_nothing(free: &MachineFree, ready: &[ReadyTicket], epic_order: &[Grou
         .min_by(f64::total_cmp)
     else {
         return format!(
-            "{} ready {} need check families this machine cannot run",
+            "{} ready {} need an operating system or check families this machine cannot run",
             for_us.len(),
             plural(for_us.len())
         );
@@ -93,26 +113,16 @@ pub const MASTER_ONLY: &str = "only tickets that hold master back start here";
 /// expected cores ([`super::room`]).
 pub fn blocker(free: &MachineFree, ticket: &ReadyTicket) -> Option<String> {
     let justiciar = ticket.labels.iter().any(|l| l == JUSTICIAR);
-    let machine = free.name.as_deref().unwrap_or_default();
-    let routed = |app: &str| {
-        ticket.destinations.is_empty()
-            || ticket
-                .destinations
-                .iter()
-                .any(|owner| owner.admits(machine, app))
-    };
-    let here = ticket.destinations.is_empty()
-        || ticket
-            .destinations
-            .iter()
-            .any(|owner| owner.machine.eq_ignore_ascii_case(machine));
-    if !here {
-        let owners: Vec<String> = ticket
-            .destinations
-            .iter()
-            .map(ToString::to_string)
-            .collect();
-        return Some(format!("owned by {}", owners.join(", ")));
+    let machine = free.name.as_deref().unwrap_or(free.machine.as_str());
+    if let Some(pin) = &ticket.pins.machine
+        && !ticket.pins.admits_machine(machine)
+    {
+        return Some(format!("pinned to machine {pin}"));
+    }
+    if let Some(os) = ticket.needs_os
+        && os != free.os
+    {
+        return Some(format!("needs {}", os.as_str()));
     }
     if free.master_only && !justiciar && ticket.kind != TicketKind::Regression {
         return Some(MASTER_ONLY.to_owned());
@@ -126,8 +136,13 @@ pub fn blocker(free: &MachineFree, ticket: &ReadyTicket) -> Option<String> {
     if free.justiciar_only && !justiciar {
         return Some("last idle worker kept for justiciar tickets".to_owned());
     }
-    if !free.idle_workers.iter().any(|w| routed(&w.app)) {
-        return Some("no idle worker of its owner".to_owned());
+    if let Some(pin) = &ticket.pins.provider
+        && !free
+            .idle_workers
+            .iter()
+            .any(|worker| ticket.pins.admits_provider(&worker.app))
+    {
+        return Some(format!("pinned to provider {pin}"));
     }
     if !free.idle_workers.iter().any(|w| suits(free, w, ticket)) {
         let tier = label(&ticket.labels, "tier:").unwrap_or_default();

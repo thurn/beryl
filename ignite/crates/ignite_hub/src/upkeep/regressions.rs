@@ -1,10 +1,10 @@
 //! Regression tickets: P0 tickets for failing checks, linked to the landings that caused them.
 //!
 //! - A check with no regression gets a new ticket, linked to the culprit's ticket or, when the
-//!   culprit search ended with a range, to every ticket in the range. It is owned by the
+//!   culprit search ended with a range, to every ticket in the range. It is pinned to the
 //!   machine that reported it, and records the operating system of a check that is not
 //!   portable. A regression holds `master` back, so when that machine goes silent it falls back
-//!   to any other machine with that system (see `ignite_core::owner`).
+//!   to any other machine with that system.
 //! - Failures are grouped: a newly failing check is added to an open regression ticket
 //!   ([`Outcome::Added`]) when one holds a check with the same first bad commit, or when one is
 //!   not yet held by a worker, who then gets every check on it. One bad landing often fails
@@ -32,7 +32,6 @@ use std::fmt::Write as _;
 use rusqlite::{Connection, OptionalExtension, params};
 use serde_json::{Value, json};
 
-use ignite_core::owner::Owner;
 use ignite_core::protocol::hub::RegressionReport;
 use ignite_core::protocol::tickets::{
     BatchRequest, Dependency, EdgeKind, Operation, Status, TicketFields, TicketType,
@@ -285,7 +284,7 @@ fn added(
     ])
 }
 
-fn create(report: &RegressionReport, origin: Option<Owner>) -> Operation {
+fn create(report: &RegressionReport, origin: Option<String>) -> Operation {
     let mut linked: Vec<String> = report.caused_by.iter().map(ToString::to_string).collect();
     for suspect in &report.suspects {
         let suspect = suspect.to_string();
@@ -300,10 +299,11 @@ fn create(report: &RegressionReport, origin: Option<Owner>) -> Operation {
             kind: Some(EdgeKind::DiscoveredFrom),
         })
         .collect();
-    let labels = vec![
+    let mut labels = vec![
         "regression".to_owned(),
         format!("check:{}", report.check.family()),
     ];
+    labels.extend(origin);
     Operation::Create {
         fields: TicketFields {
             title: Some(format!("Regression: {}", report.check)),
@@ -314,7 +314,6 @@ fn create(report: &RegressionReport, origin: Option<Owner>) -> Operation {
             ticket_type: Some(TicketType::Bug),
             priority: Some(0),
             labels: Some(labels),
-            owner: Some(origin),
             needs_os: Some(report.platform),
             fallback: Some(true),
             ..TicketFields::default()

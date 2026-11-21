@@ -345,8 +345,7 @@ pub struct Release {
     pub session: SessionId,
     /// The note: why the ticket was given back and the exact state it was left in.
     pub reason: String,
-    /// What the ticket needs that this session lacks, such as `macos`, a machine's name or
-    /// `person`; the hub labels the ticket `needs:<needs>`.
+    /// An operating system, a machine name to pin, or `person` to add `needs:person`.
     #[serde(default)]
     pub needs: Option<String>,
     /// The branch on the remote where the release saved the tree's work.

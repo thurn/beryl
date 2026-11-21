@@ -35,7 +35,7 @@ exists at all.
 
 A ticket that waits (on a clock, logs, a machine) never holds other work.
 Rewrite it to do now what can be done now. Work only another machine can
-do: label it needs:<machine>, release it, remove every edge waiting on it.
+do: label it machine:<machine>, release it, remove every edge waiting on it.
 A waiting worker: ignite tell it what to do; release its ticket once gone.
 
 A deadlock: trace the blocking edges (an unowned, closed or cancelled

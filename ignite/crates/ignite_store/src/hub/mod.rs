@@ -17,8 +17,8 @@ pub mod fleet_settings;
 pub mod leases;
 pub mod listings;
 pub mod machine_asks;
+mod meta;
 pub mod metrics;
-pub mod owners;
 pub mod pins;
 pub mod provider_usage;
 pub mod rates;
@@ -27,6 +27,7 @@ pub mod rejected;
 pub mod releases;
 pub mod renumber;
 pub mod results;
+mod routing_migrations;
 pub mod rows;
 pub mod schedules;
 pub mod session_titles;
@@ -117,7 +118,7 @@ pub const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 14,
         sql: include_str!("owners.sql"),
-        code: Some(owners::retire_labels),
+        code: Some(routing_migrations::retire_labels),
     },
     Migration {
         version: 15,
@@ -214,6 +215,11 @@ pub const MIGRATIONS: &[Migration] = &[
         sql: include_str!("machine_asks.sql"),
         code: None,
     },
+    Migration {
+        version: 34,
+        sql: "",
+        code: Some(routing_migrations::owners_to_pins),
+    },
 ];
 
 /// Opens (creating if needed) and migrates the hub's database.
@@ -256,13 +262,12 @@ mod tests {
         assert_eq!(breaking, [12]);
     }
 
-    /// `select` names the ticket columns, so a column added to `tickets` must be added to the
-    /// list on purpose.
+    /// `select` names the live columns. The retired owner column stays in the schema.
     #[test]
-    fn the_ticket_column_list_is_the_tickets_table() {
+    fn the_ticket_column_list_matches_the_live_columns() {
         let conn = open_in_memory().unwrap();
         let actual: Vec<String> = conn
-            .prepare("SELECT name FROM pragma_table_info('tickets')")
+            .prepare("SELECT name FROM pragma_table_info('tickets') WHERE name != 'owner'")
             .unwrap()
             .query_map([], |row| row.get(0))
             .unwrap()
