@@ -24,10 +24,10 @@ the hub knows the groups and nothing about this project's command kinds.
 A segment carries the command that took most of its seconds in `x`. The hub shows it only on
 its private listener, since commands hold paths.
 
-A Claude window also carries its estimated share of the Claude plan (`plan.py`) when the store
-holds plan usage samples: `plan_percent` of the window `plan_window` (the weekly limit),
-`plan_borrowed` when part of it was priced by an earlier period's factor, and `plan`, the
-same for every window of the plan as `[label, percent, borrowed]`.
+A window also carries its estimated share of the provider's plan (`plan.py`) when the store
+holds enough quota samples. `plan_percent` estimates the share of `plan_window`, and
+`plan_borrowed` says whether it used an earlier period's factor. `plan` lists the estimate
+for each supported quota window as `[label, percent, borrowed]`.
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import kinds, plan as plan_usage, timing
+from . import kinds, plan as plan_usage, timing, tokens
 
 # The most segments one window has in each list.
 MAX_SEGMENTS = 120
@@ -356,22 +356,44 @@ def plan_fields(
     end: str,
 ) -> dict[str, object]:
     """A window's estimated share of the plan, or nothing when it has none."""
-    if key[1] != "claude":
+    provider = key[1]
+    if plan.primary() is None:
+        return {}
+    bounds = (key[0], key[2], start, end)
+    if (
+        provider == "codex"
+        and db.execute(
+            "SELECT 1 FROM requests WHERE host = ? AND provider = 'codex' "
+            "AND transcript = ? AND time >= ? AND time <= ? AND dollars IS NULL LIMIT 1",
+            bounds,
+        ).fetchone()
+    ):
         return {}
     requests = plan_usage.requests_of(
         db,
         "AND host = ? AND transcript = ? AND time >= ? AND time <= ?",
-        (key[0], key[2], start, end),
+        bounds,
+        provider=provider,
     )
+    if provider == "codex" and not requests:
+        return {}
     found = plan.estimates(requests)
     primary = next((e for e in found if e.window == plan.primary()), None)
     if primary is None:
         return {}
+    label = "Codex weekly" if provider == "codex" else primary.window
     return {
         "plan_percent": round(primary.percent, 4),
-        "plan_window": primary.window,
+        "plan_window": label,
         "plan_borrowed": primary.borrowed,
-        "plan": [[e.window, round(e.percent, 4), e.borrowed] for e in found],
+        "plan": [
+            [
+                label if e.window == primary.window else e.window,
+                round(e.percent, 4),
+                e.borrowed,
+            ]
+            for e in found
+        ],
     }
 
 
@@ -380,9 +402,11 @@ def windows(
     host: str,
     since: str | None,
     plan: plan_usage.Plan | None = None,
+    *,
+    codex_plan: plan_usage.Plan | None = None,
 ) -> list[dict[str, object]]:
     """Every ticket window of `host` that ended at or after `since` (all when None), with its
-    share of the plan when `plan` is given."""
+    share of the plan when an estimate is available."""
     table, _ = kinds.load()
     heavy = frozenset(k.kind for k in table if k.heavy)
     rows = db.execute(
@@ -398,8 +422,10 @@ def windows(
     calls: list[tuple[str, str, str]] = []
     commands: dict[str, str] = {}
     kind_of: dict[str, str] = {}
+    plans = {"claude": plan, "codex": codex_plan}
     for provider, session, transcript, start, end, bead in rows:
         key = (host, str(provider), str(transcript))
+        subscription = plans.get(key[1])
         if loaded != key[1:]:
             loaded = (str(provider), str(transcript))
             spans = timing.spans_of(db, *key, heavy)
@@ -426,22 +452,40 @@ def windows(
                 "dollars": [
                     encoded(s, commands, kind_of, True, heavy) for s in dollars
                 ],
-                **(plan_fields(db, plan, key, str(start), str(end)) if plan else {}),
+                **(
+                    plan_fields(db, subscription, key, str(start), str(end))
+                    if subscription
+                    else {}
+                ),
             }
         )
     return found
 
 
+def for_hub(
+    db: sqlite3.Connection, host: str, since: str | None
+) -> list[dict[str, object]]:
+    """Repost windows whose factor can still change as quota samples arrive."""
+    claude = plan_usage.load(db)
+    codex = plan_usage.load_codex(db, host)
+    for subscription in (claude, codex):
+        unsettled = subscription.unsettled_since()
+        if since is not None and unsettled is not None:
+            since = min(since, unsettled)
+    return windows(db, host, since, claude, codex_plan=codex)
+
+
 # Raised whenever a change here changes the segments of windows already sent.
-FORMAT = 3
+FORMAT = 4
 
 
 def derivation() -> str:
     """What every window's segments are derived by: this file's format, the time accounting's
-    version and the command kinds table. When it changes, every window changed with it.
+    version and both the command kinds and price tables. When it changes, every window
+    may have changed with it.
     """
     _, digest = kinds.load()
-    return f"{FORMAT}:{timing.VERSION}:{digest}"
+    return f"{FORMAT}:{timing.VERSION}:{digest}:{tokens.load().digest}"
 
 
 def since_for(marker: Path, since: str | None) -> str | None:

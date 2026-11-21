@@ -52,6 +52,7 @@ TABLES = {
     "ignite_handoffs",
     "ignite_workers",
     "plan_usage",
+    "codex_plan_usage",
 }
 
 

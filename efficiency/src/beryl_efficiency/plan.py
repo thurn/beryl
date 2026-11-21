@@ -1,4 +1,4 @@
-"""Each ticket's estimated share of the Claude subscription plan.
+"""Each ticket's estimated share of a subscription plan.
 
 Nobody could say how much of the plan a ticket used. The store prices every Claude request
 at API rates with its time, and a Claude dispatcher samples the plan's usage (`plan_usage`,
@@ -20,6 +20,10 @@ the two together.
   fitted factor yet (fewer than two samples), the latest earlier period's factor is used and
   the estimate is marked `borrowed`. A request before any period is not priced, and an
   estimate that would include one is unknown rather than too low.
+
+Codex supplies its general weekly quota counter in retained rollouts. Fit those
+samples to one host's requests, spanning at least two percentage points to reduce
+the effect of rounding. Activity outside the host's Beryl logs can add noise.
 """
 
 from __future__ import annotations
@@ -49,6 +53,8 @@ RESET_DROP = 0.5
 # Requests this long before the first sample are loaded, so that a weekly period's first days
 # are priced by its factor.
 LOOKBACK_SECONDS = 8 * 86400.0
+CODEX_WEEKLY = "Weekly"
+CODEX_MINIMUM_RISE = 2.0
 
 # A request as the estimates read it: its time in epoch seconds, model and dollars.
 Spent = tuple[float, str, float]
@@ -138,7 +144,7 @@ def fit(rises: list[tuple[float, float]]) -> tuple[float | None, float | None]:
 
 
 class Spending:
-    """Claude requests in time order, with running sums per model family, so that the dollars
+    """Requests in time order, with running sums per model family, so that the dollars
     between two times are two lookups."""
 
     def __init__(self, requests: list[Spent], families: Iterable[str | None]) -> None:
@@ -160,7 +166,7 @@ class Spending:
         )
 
 
-def split(samples: list[Sample]) -> list[list[Sample]]:
+def split(samples: list[Sample], *, rounded: bool = False) -> list[list[Sample]]:
     """One window's samples, in time order, as periods."""
     found: list[list[Sample]] = []
     for sample in samples:
@@ -171,6 +177,10 @@ def split(samples: list[Sample]) -> list[list[Sample]]:
                 or sample.resets is None
                 or abs(previous.resets - sample.resets) < SAME_RESET_SECONDS
             )
+            # Concurrent Codex requests can report the previous integer quota tick
+            # after a newer one has arrived.
+            if rounded and same_reset and 0 < previous.percent - sample.percent <= 1:
+                continue
             if same_reset and sample.percent >= previous.percent - RESET_DROP:
                 found[-1].append(sample)
                 continue
@@ -178,19 +188,43 @@ def split(samples: list[Sample]) -> list[list[Sample]]:
     return found
 
 
+def sample_pairs(
+    group: list[Sample], minimum_rise: float
+) -> Iterable[tuple[Sample, Sample]]:
+    """Nonoverlapping spans within one quota period."""
+    start = group[0]
+    for end in group[1:]:
+        if minimum_rise == 0 or end.percent - start.percent >= minimum_rise:
+            yield start, end
+            start = end
+
+
 class Plan:
     """The fitted periods of every window of the plan."""
 
-    def __init__(self, samples: dict[str, list[Sample]], requests: list[Spent]) -> None:
+    def __init__(
+        self,
+        samples: dict[str, list[Sample]],
+        requests: list[Spent],
+        *,
+        rounded_percent: bool = False,
+        unpriced: list[float] | None = None,
+    ) -> None:
+        missing = sorted(unpriced or [])
+        minimum_rise = CODEX_MINIMUM_RISE if rounded_percent else 0.0
         self.spending = Spending(requests, [family_of(w) for w in samples] + [None])
         self.periods: dict[str, list[Period]] = {}
         for window, found in samples.items():
             family = family_of(window)
             periods: list[Period] = []
-            for group in split(sorted(found, key=lambda s: s.at)):
+            for group in split(
+                sorted(found, key=lambda s: s.at), rounded=rounded_percent
+            ):
                 rises = [
                     (self.spending.between(a.at, b.at, family), b.percent - a.percent)
-                    for a, b in zip(group, group[1:])
+                    for a, b in sample_pairs(group, minimum_rise)
+                    if bisect.bisect_right(missing, a.at)
+                    == bisect.bisect_right(missing, b.at)
                 ]
                 rises = [(d, r) for d, r in rises if d > 0 or r != 0]
                 factor, spread = fit(rises)
@@ -265,15 +299,19 @@ class Plan:
 
 
 def requests_of(
-    db: sqlite3.Connection, where: str = "", params: tuple[object, ...] = ()
+    db: sqlite3.Connection,
+    where: str = "",
+    params: tuple[object, ...] = (),
+    *,
+    provider: str = "claude",
 ) -> list[Spent]:
-    """Claude requests with dollars, as (time, model, dollars), filtered by `where`."""
+    """The provider's priced requests, as (time, model, dollars), filtered by `where`."""
     return [
         (seconds(str(t)), str(m or ""), float(d))
         for t, m, d in db.execute(
             "SELECT time, model, dollars FROM requests "
-            f"WHERE provider = 'claude' AND dollars > 0 {where}",
-            params,
+            f"WHERE provider = ? AND dollars > 0 {where}",
+            (provider, *params),
         )
     ]
 
@@ -294,6 +332,33 @@ def load(db: sqlite3.Connection) -> Plan:
     first = min(s.at for found in samples.values() for s in found) - LOOKBACK_SECONDS
     since = datetime.fromtimestamp(first, timezone.utc).isoformat(timespec="seconds")
     return Plan(dict(samples), requests_of(db, "AND time >= ?", (since[:19],)))
+
+
+def load_codex(db: sqlite3.Connection, host: str) -> Plan:
+    """Fit the weekly Codex quota samples to the requests collected on this host."""
+    rows = db.execute(
+        "SELECT at, percent_used, resets_at FROM codex_plan_usage WHERE host = ? ORDER BY at",
+        (host,),
+    ).fetchall()
+    if not rows:
+        return Plan({}, [])
+    requests: list[Spent] = []
+    unpriced: list[float] = []
+    for at, model, dollars in db.execute(
+        "SELECT time, model, dollars FROM requests "
+        "WHERE host = ? AND provider = 'codex' AND time > ?",
+        (host, rows[0][0]),
+    ):
+        if dollars is None:
+            unpriced.append(seconds(str(at)))
+        elif dollars > 0:
+            requests.append((seconds(str(at)), str(model or ""), float(dollars)))
+    return Plan(
+        {CODEX_WEEKLY: [Sample(seconds(str(at)), p, reset) for at, p, reset in rows]},
+        requests,
+        rounded_percent=True,
+        unpriced=unpriced,
+    )
 
 
 @dataclass

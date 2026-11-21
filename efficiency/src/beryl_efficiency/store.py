@@ -595,6 +595,18 @@ MIGRATIONS: tuple[str, ...] = (
         PRIMARY KEY (machine, at, window)
     );
     """,
+    """
+    CREATE TABLE codex_plan_usage (
+        host TEXT NOT NULL,
+        at TEXT NOT NULL,
+        percent_used REAL NOT NULL,
+        resets_at INTEGER NOT NULL,
+        PRIMARY KEY (host, at)
+    );
+    -- Replay the retained rollouts once for their newly collected quota samples. The
+    -- request and window rows already in the store are kept, including deleted logs.
+    DELETE FROM sources WHERE source = 'codex';
+    """,
 )
 
 

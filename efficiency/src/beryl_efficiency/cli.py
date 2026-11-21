@@ -33,7 +33,6 @@ from . import (
     machine,
     metrics,
     paths,
-    plan,
     pushes,
     rollups,
     session,
@@ -172,13 +171,7 @@ def run_spend(args: argparse.Namespace) -> Result:
     out = Path(args.out) if args.out else paths.folder() / f"spend-{host}.jsonl"
     db = reader()
     try:
-        found_plan = plan.load(db)
-        # A window's share of the plan changes until its period's factor settles, so the
-        # windows of each window's latest period are sent again.
-        unsettled = found_plan.unsettled_since()
-        if since is not None and unsettled is not None:
-            since = min(since, unsettled)
-        found = spend.windows(db, host, since, found_plan)
+        found = spend.for_hub(db, host, since)
     finally:
         db.close()
     spend.write(found, out)

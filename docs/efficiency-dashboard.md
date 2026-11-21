@@ -262,8 +262,9 @@ The sources use data that other tools already record.
 - **Codex session logs** (`~/.codex/sessions/<date>/rollout-*.jsonl`, and
   `archived_sessions`; compressed `.zst` files are not read). The `session_meta`
   line gives the working directory and each `token_count` event gives the tokens
-  of the last request and the running total. Tool calls and their outputs are
-  timestamped.
+  of the last request and the running total. These events also carry snapshots
+  of the Codex account's weekly quota when available. Tool calls and their
+  outputs are timestamped.
 - **Tickets**, read from Ignite's hub database (`ignite.py`), which replaced
   `tk export` and `tk events`. The hub's ticket rows supply IDs, parents,
   labels, creation, claim and close times, aliases and landed commits. Session
@@ -1112,6 +1113,9 @@ fill those tables now).
   that ran the command.
 - **codex_marks**: the lines of a Codex log that give a request its model and a
   turn its end.
+- **codex_plan_usage**: snapshots of the Codex account's weekly quota from local
+  rollouts, keyed by host and sample time. Account snapshots stay in the local
+  store.
 - **sources**, **ingests** and **settings**: for each source file, the byte
   offset already ingested and a fingerprint of its first bytes; each ingest's
   wall and CPU seconds, bytes and rows; and the command kinds and price tables
@@ -1298,11 +1302,16 @@ without opening this page.
 - Each segment names a colour group (model, checks, tools, Ignite, background,
   agents, queued, and the breaks person and idle), so the hub colours segments
   without knowing this project's command kinds.
+- A window can include an estimated share of its provider's weekly allowance.
+  For Codex, each host fits changes between quota snapshots to the Standard API
+  dollar estimates of its recorded Beryl requests. The fit uses spans covering
+  at least two percentage points of quota and can reuse a previous week's factor
+  until enough new samples arrive. Shared account activity elsewhere can affect
+  the fit.
 - A segment names a command only when it is tool time and the command is of its
   own kind, so a segment coalesced from thinking and a short `grep` never shows
-  the grep. When the time accounting, the command kinds table or the segments'
-  format changes, every window is written again, whatever `--since` says, so the
-  hub's copy follows.
+  the grep. Changes to the time accounting, command kinds, prices or segment
+  format cause every window to be written again, whatever `--since` says.
 - Ignite's daemon runs the command after each export and posts its lines to the
   hub, which keeps the latest post of each window. The page draws the time strip
   and the dollar strip side by side, with a timeline view, a view by kind and,

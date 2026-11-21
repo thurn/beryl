@@ -11,6 +11,7 @@ transcript's id. Lines that matter:
   tokens of the request just made, and `total_token_usage`, the running total. `input_tokens`
   includes the cached part, and `output_tokens` includes reasoning. A request is keyed by the
   running total's `total_tokens`, since Codex sometimes repeats a `token_count` line.
+  The same event can include account-level `rate_limits`, even when it has no request usage.
 - `turn_context` lines name the turn's `model`. `event_msg` payloads `task_complete` and
   `turn_aborted` end a turn, and an `item_completed` for a `UserMessage` is a prompt.
 - `response_item` lines of type `function_call` and `custom_tool_call` are tool calls, ended
@@ -34,6 +35,7 @@ from . import claude, kinds, paths, timing, tokens, windows
 from .ingest import LineSource, Row
 
 PROVIDER = "codex"
+WEEK_MINUTES = 7 * 24 * 60
 # The thread id at the end of a log's file name.
 THREAD: re.Pattern[str] = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$")
 # Where a JavaScript call gives a shell command: `cmd: "..."`, or the same key in JSON.
@@ -114,6 +116,36 @@ def counted(usage: dict[str, object]) -> dict[str, int]:
     }
 
 
+def weekly_sample(host: str, time: str, rate_limits: object) -> list[Row]:
+    """The account's general weekly quota sample, if present in this event."""
+    if not isinstance(rate_limits, dict) or rate_limits.get("limit_id") not in (
+        None,
+        PROVIDER,
+    ):
+        return []
+    for name in ("primary", "secondary"):
+        window = rate_limits.get(name)
+        if not isinstance(window, dict) or window.get("window_minutes") != WEEK_MINUTES:
+            continue
+        percent, reset = window.get("used_percent"), window.get("resets_at")
+        if not isinstance(percent, (int, float)) or not isinstance(reset, int):
+            continue
+        used = float(percent)
+        if 0.0 <= used <= 100.0 and reset > 0:
+            return [
+                (
+                    "codex_plan_usage",
+                    {
+                        "host": host,
+                        "at": time,
+                        "percent_used": used,
+                        "resets_at": reset,
+                    },
+                )
+            ]
+    return []
+
+
 class Rollouts(LineSource):
     """Every Codex log whose working directory is the main checkout or below it."""
 
@@ -192,14 +224,15 @@ class Rollouts(LineSource):
         found: object,
     ) -> list[Row]:
         if found == "token_count":
+            samples = weekly_sample(self.host, time, payload.get("rate_limits"))
             info = payload.get("info")
             if not isinstance(info, dict):
-                return []
+                return samples
             last, total = info.get("last_token_usage"), info.get("total_token_usage")
             if not isinstance(last, dict) or not isinstance(total, dict):
                 raise TypeError("token_count without usage")
             message = str(claude.number(total, "total_tokens"))
-            return [
+            return samples + [
                 (
                     "requests",
                     {**key, "message": message, "time": time, **counted(last)},

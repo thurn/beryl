@@ -6,7 +6,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from beryl_efficiency import cli, codex, ingest, store
+import pytest
+
+from beryl_efficiency import cli, codex, ingest, spend, store
 from tests.legacy_sources import Beads
 from tests.synthetic import CHECKOUT
 from tests.synthetic import bead as bead_record
@@ -84,6 +86,24 @@ class Rollout:
     def finish(self, time: str) -> Rollout:
         return self.add(time, "event_msg", {"type": "task_complete"})
 
+    def quota(self, time: str, percent: int, bucket: str = "codex") -> Rollout:
+        return self.add(
+            time,
+            "event_msg",
+            {
+                "type": "token_count",
+                "rate_limits": {
+                    "limit_id": bucket,
+                    "primary": {"used_percent": 90, "window_minutes": 300},
+                    "secondary": {
+                        "used_percent": percent,
+                        "window_minutes": 10080,
+                        "resets_at": 1794873600,
+                    },
+                },
+            },
+        )
+
     def write(self) -> Path:
         self.path.write_text("\n".join(self.lines) + "\n")
         return self.path
@@ -144,6 +164,67 @@ def test_a_log_of_another_project_is_ignored(tmp_path: Path) -> None:
     db = run(tmp_path)
     found = {r[0] for r in db.execute("SELECT DISTINCT transcript FROM requests")}
     assert found == {THREAD, "01a1dea5-54b3-7821-83db-56ee8875b126"}
+
+
+def test_ticket_spend_reprices_codex_and_estimates_its_weekly_share(
+    tmp_path: Path,
+) -> None:
+    log = (
+        Rollout(tmp_path, THREAD)
+        .turn("2026-11-15T10:00:01.000Z", "gpt-6.2-sol")
+        .quota("2026-11-15T10:00:02.000Z", 20)
+        .shell(
+            "2026-11-15T10:01:00.000Z",
+            "c1",
+            f"{ENACT} start by-a",
+            "2026-11-15T10:01:02.000Z",
+            "{}",
+        )
+        .request("2026-11-15T10:01:05.000Z", 100_000, 100_000, 1000)
+        .quota("2026-11-15T10:01:10.000Z", 20)
+        .quota("2026-11-15T10:01:11.000Z", 19)
+        .shell(
+            "2026-11-15T10:02:00.000Z",
+            "c2",
+            f"{ENACT} close by-a --reason done",
+            "2026-11-15T10:02:02.000Z",
+            "{}",
+        )
+        .request("2026-11-15T10:04:05.000Z", 100_000, 100_000, 1000)
+        .quota("2026-11-15T10:04:10.000Z", 21)
+        .quota("2026-11-15T10:05:00.000Z", 40, bucket="another_limit")
+    )
+    log.write()
+    beads = listing(bead_record("by-a"))
+    db = run(tmp_path, beads)
+    [before] = spend.for_hub(db, HOST, None)
+    # One tick of the account counter is too little to calibrate a ticket.
+    assert "plan_percent" not in before
+    dollars = before["dollars"]
+    assert isinstance(dollars, list)
+    assert sum(s["d"] for s in dollars) == pytest.approx(0.22)
+
+    log.quota("2026-11-15T10:06:00.000Z", 22).write()
+    # An upgrade must backfill samples from already ingested lines and preserve a
+    # request whose log is gone.
+    db.execute("DROP TABLE codex_plan_usage")
+    db.execute(f"PRAGMA user_version = {store.version() - 1}")
+    db.execute(
+        """INSERT INTO requests (host, provider, transcript, message, time)
+        VALUES (?, 'codex', ?, 'old', '2026-11-01T00:00:00.000Z')""",
+        (HOST, OTHER),
+    )
+    db.commit()
+    db.close()
+    db = run(tmp_path, beads)
+    assert db.execute(
+        "SELECT count(*) FROM requests WHERE transcript = ?", (OTHER,)
+    ).fetchone() == (1,)
+    # The ticket's $0.22 was half of the host's spend during a two-point quota rise.
+    [after] = spend.for_hub(db, HOST, "2026-11-15T10:05:00.000Z")
+    assert after["plan_window"] == "Codex weekly"
+    assert after["plan_percent"] == pytest.approx(1.0)
+    assert after["plan_borrowed"] is False
 
 
 def test_windows_are_found_from_the_scripts_shell_commands(tmp_path: Path) -> None:
