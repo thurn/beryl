@@ -1,6 +1,6 @@
 ---
 name: ignite
-description: Start work through Ignite. `/ignite <ticket or small task>` does it in this session; `/ignite <plan or large task>` settles the design and files an epic of tickets for the worker pool; `/ignite sweep` triages stale open tickets. Use when the user invokes /ignite or asks to plan, file or sweep work for Ignite's pool, or asks where to see its fleet settings.
+description: Start work through Ignite. Use /ignite with a ticket or small task to work it here, or with a plan or large task to design and file an epic for the worker pool. Use /ignite sweep to triage stale open tickets. Also use when the user asks to plan, file or sweep work for Ignite's pool or to find its fleet settings.
 ---
 
 # Ignite
@@ -109,6 +109,30 @@ ticket out of another open epic, or before blocking a ticket that another epic
 waits on. A plan once moved a ticket on a stale view and deadlocked an epic it
 never meant to touch.
 
+### Estimate the work
+
+Give every work ticket an `estimate_minutes` in agent minutes. Include the time
+to understand the code, make the change, verify it and fix likely issues. Use
+Agent time from the Efficiency section of a comparable completed ticket when
+available, then adjust for what differs. Use round numbers. A guess of 15, 45 or
+120 minutes for three different tickets is more useful than giving them equal
+weight. Epic and milestone totals come from their work tickets.
+
+A review, spike or planning ticket gets its own estimate. If it will also define
+later work, put a separate rough guess for that work in `unfiled_minutes`.
+Estimate the likely number and size of follow-ups from what you know now. For
+example, a 30-minute review expected to produce about ten 45-minute fixes
+carries `estimate_minutes: 30` and `unfiled_minutes: 450`. Write the assumption
+in the ticket so its worker can revise it. Include substantial final
+verification as a sized ticket in the plan.
+
+Tell the worker filing follow-ups to give each one an estimate and update the
+reserve in the same batch. Use a version precondition on the ticket holding the
+reserve. Set `unfiled_minutes` to the best guess for work still to be filed, or
+to `null` once all expected work is accounted for. File the follow-ups before
+closing the planning ticket. If the review finds no work, clear the reserve and
+record why.
+
 ### Filing
 
 1. Write the batch file in the scratchpad: `{"ops": [...]}`, one `create` per
@@ -119,24 +143,25 @@ never meant to touch.
      {"op": "create", "fields": {"title": "Replay import", "type": "epic",
        "body": "...", "acceptance": "..."}},
      {"op": "create", "parent": "$0", "fields": {"title": "Replay types",
-       "body": "...", "acceptance": "...", "labels": ["tier:opus"]}},
+       "body": "...", "acceptance": "...", "estimate_minutes": 45,
+       "labels": ["tier:opus"]}},
      {"op": "create", "parent": "$0", "deps": [{"on": "$1"}],
-       "fields": {"title": "Read replays", "labels": ["tier:sonnet"]}}
+       "fields": {"title": "Read replays", "estimate_minutes": 90,
+       "labels": ["tier:sonnet"]}}
    ]}
    ```
 
 2. `ignite ticket batch <file>`. It succeeds or fails as a whole.
-3. `ignite plan check <epic>` reports the longest chain, edges between tickets
-   with no files in common, missing file references, lanes whose tickets do
-   not depend on each other, and pins that name an unknown machine or
-   provider. Fix the reported issues with `ignite ticket update` and
-   `ignite ticket dep`, and run it again.
+3. Run `ignite plan check <epic>`. Check the estimated effort and size any
+   tickets listed under `needs estimate`. Fix the graph and file-reference
+   findings with `ignite ticket update` and `ignite ticket dep`, and run it
+   again.
 4. A released epic gets the default allocation of 3 unless it already has an
    allocation. Use `ignite ticket update <epic> --allocation <n>` only when the
    person supplied a weight. Add `--max-workers` only for an epic whose
    tickets conflict when too many run at once.
-5. Give a short summary: the epic, the ticket count, the milestones and what
-   would stop it. Do not wait for approval.
+5. Summarize the epic, milestones, estimated agent hours (including unfiled
+   work) and anything that would stop it. Do not wait for approval.
 
 ## Sweep
 

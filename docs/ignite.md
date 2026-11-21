@@ -4222,12 +4222,14 @@ The `/ignite` skill is how a person starts work. It replaces `/enact` and
   first two kinds and activates what is left.
 
 `ignite plan check` reports the shape of an epic, since dependency chains are
-56% of lead time:
+56% of lead time. It also reports estimated effort left and lists work tickets
+that need an estimate.
 
 ```text
 $ ignite plan check TIG9A
 tickets        41, ready at the start 17
 longest chain  6: TIG9A.1 > .4 > .9 > .15 > .22 > .30
+agent effort   31h estimated left · 6h unfiled
 suspect edge   .12 depends on .7, and they name no file in common
 no files       .19, .27 name no files to read
 missing file   .21 names tools/old.py, which does not exist
@@ -4245,6 +4247,19 @@ that plan. The hub rejects ticket creation, dependency edits, and moves that put
 a blocking dependency outside the epic. It also refuses to release a pending
 epic with an existing external blocker. Use a `related` link for outside
 context. Other plan check findings remain advisory.
+
+Set `--estimate-minutes` when creating or updating a work ticket. Use
+`--unfiled-minutes` for effort expected to become follow-up tickets. These
+figures are agent effort. An in-progress ticket counts at its full estimate
+until it closes. When the follow-ups are filed, replace the reserve with their
+individual estimates in the same batch. A batch uses `estimate_minutes` and
+`unfiled_minutes` in the ticket fields and `null` to clear either. A CLI update
+uses `0` to clear either flag.
+
+The dashboard divides the estimated effort on closed tickets by the whole
+estimated scope, including unfiled work. Hover or focus the percentage for the
+breakdown. When estimates are missing and work remains, a dash takes the place
+of the percentage and the breakdown gives the missing counts.
 
 A review is a ticket like any other, with the label `review`, that depends on
 the tickets it reviews. A planner files one where a change is large or risky.
