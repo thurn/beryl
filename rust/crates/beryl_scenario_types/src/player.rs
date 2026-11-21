@@ -68,6 +68,11 @@ impl Player {
         Action::cast(self.0, card)
     }
 
+    /// Casts the given face or half of `card` with none of its casting options.
+    pub const fn casts_face(self, card: &'static str, face: FaceIx) -> Action {
+        Action::cast_face(self.0, card, face)
+    }
+
     /// Casts `card`'s front face from their graveyard with the escape an effect grants it
     /// (CR 702.138a), with none of its own casting options.
     pub const fn escapes(self, card: &'static str) -> Action {

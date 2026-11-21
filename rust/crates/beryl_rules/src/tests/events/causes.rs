@@ -25,6 +25,7 @@ const CREATURE: Filter = Filter::Types(Types::CREATURE);
 
 static INSECT: CardDef = CardDef {
     name: "Cause Insect",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::CREATURE,
         power: Some(1),
@@ -37,6 +38,7 @@ static INSECT: CardDef = CardDef {
 /// "Draw a card."
 static SAGE: CardDef = CardDef {
     name: "Cause Sage",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         cost: W,
         types: Types::SORCERY,
@@ -49,6 +51,7 @@ static SAGE: CardDef = CardDef {
 /// "Draw a card, then discard a card.": it asks which, with the draw done.
 static LOOT: CardDef = CardDef {
     name: "Cause Loot",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         cost: W,
         types: Types::SORCERY,
@@ -61,6 +64,7 @@ static LOOT: CardDef = CardDef {
 /// "This deals 2 damage to target creature."
 static SHOCK: CardDef = CardDef {
     name: "Cause Shock",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         cost: W,
         types: Types::INSTANT,
@@ -78,6 +82,7 @@ static SHOCK: CardDef = CardDef {
 /// "Counter target spell."
 static DENY: CardDef = CardDef {
     name: "Cause Deny",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         cost: W,
         types: Types::INSTANT,
@@ -92,6 +97,7 @@ static DENY: CardDef = CardDef {
 /// "Counter target spell unless its controller pays {1}."
 static TITHE: CardDef = CardDef {
     name: "Cause Tithe",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         cost: W,
         types: Types::INSTANT,
@@ -109,6 +115,7 @@ static TITHE: CardDef = CardDef {
 
 static BEAR: CardDef = CardDef {
     name: "Cause Bear",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         cost: W,
         types: Types::CREATURE,
@@ -122,6 +129,7 @@ static BEAR: CardDef = CardDef {
 /// "When this enters, create a 1/1 Insect creature token."
 static HATCHER: CardDef = CardDef {
     name: "Cause Hatcher",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         cost: W,
         types: Types::CREATURE,
@@ -140,6 +148,7 @@ static HATCHER: CardDef = CardDef {
 /// "When this enters, destroy target creature an opponent controls."
 static STINGER: CardDef = CardDef {
     name: "Cause Stinger",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         cost: W,
         types: Types::CREATURE,
@@ -159,6 +168,7 @@ static STINGER: CardDef = CardDef {
 /// "{T}, Sacrifice this land: Destroy target land."
 static STRIP: CardDef = CardDef {
     name: "Cause Strip",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::LAND,
         abilities: &[
@@ -177,6 +187,7 @@ static STRIP: CardDef = CardDef {
 /// "When this dies, draw a card."
 static MOURNER: CardDef = CardDef {
     name: "Cause Mourner",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         cost: W,
         types: Types::CREATURE,
@@ -191,6 +202,7 @@ static MOURNER: CardDef = CardDef {
 /// "Destroy target creature."
 static DOOM: CardDef = CardDef {
     name: "Cause Doom",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         cost: W,
         types: Types::INSTANT,

@@ -81,6 +81,7 @@ fn making(def: &'static CardDef, k: usize, made: &'static CardDef) -> &'static C
         .collect();
     leak(CardDef {
         name: def.name,
+        shape: def.shape,
         faces: leak_slice(faces),
         tokens: leak_slice(tokens),
     })
@@ -354,6 +355,7 @@ fn with_face(def: &CardDef, index: usize, face: Face) -> &'static CardDef {
     faces[index] = face;
     leak(CardDef {
         name: def.name,
+        shape: def.shape,
         faces: leak_slice(faces),
         tokens: def.tokens,
     })
@@ -362,22 +364,9 @@ fn with_face(def: &CardDef, index: usize, face: Face) -> &'static CardDef {
 /// `face` with these abilities and granted abilities.
 fn with(face: &Face, abilities: &'static [Ability], grants: &'static [Ability]) -> Face {
     Face {
-        name: face.name,
-        cost: face.cost,
-        supertypes: face.supertypes,
-        types: face.types,
-        subtypes: face.subtypes,
-        colors: face.colors,
-        power: face.power,
-        toughness: face.toughness,
-        loyalty: face.loyalty,
-        keywords: face.keywords,
         abilities,
-        casting: face.casting,
-        transformed: face.transformed,
-        additional_cost: face.additional_cost,
         grants,
-        excepts: face.excepts,
+        ..*face
     }
 }
 

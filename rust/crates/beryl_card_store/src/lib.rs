@@ -48,6 +48,8 @@ pub struct Record {
     pub first_set: Option<String>,
     pub first_released: Option<String>,
     pub layout: String,
+    /// For a meld component, the names of its partner and the result.
+    pub meld: Option<Meld>,
     #[serde(default)]
     pub artist: String,
     /// The image of its back; none for a card whose back is its other face.
@@ -58,6 +60,12 @@ pub struct Record {
     #[serde(default)]
     pub tokens: Vec<TokenLink>,
     pub faces: Vec<Face>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+pub struct Meld {
+    pub with: String,
+    pub into: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]

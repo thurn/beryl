@@ -86,6 +86,7 @@ fn a_permanent_that_leaves_and_returns_entered_this_turn_with_no_loyalty_ability
 /// turn, you gain 10 life."
 static TALLY: CardDef = CardDef {
     name: "Test Tally",
+    shape: beryl_card::definition::Shape::Single,
     tokens: &[],
     faces: &[Face {
         cost: ManaCost::NONE,

@@ -563,6 +563,7 @@ pub(crate) mod fixtures {
     /// turn, [`LOYALTY`], and a loyalty ability of it whose effect starts [`FLASH`].
     pub(crate) static WALKER: CardDef = CardDef {
         name: "Walker",
+        shape: beryl_card::definition::Shape::Single,
         faces: &[Face {
             types: Types::PLANESWALKER,
             loyalty: Some(3),

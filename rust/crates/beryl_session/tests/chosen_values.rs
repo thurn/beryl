@@ -19,6 +19,7 @@ use beryl_session::save::{Act, Chosen};
 
 static NEEDLE: CardDef = CardDef {
     name: "Test Needle",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::ARTIFACT,
         abilities: &[Ability::replacing(&Replacement::choose_as_enters(
@@ -31,6 +32,7 @@ static NEEDLE: CardDef = CardDef {
 
 static CAVERN: CardDef = CardDef {
     name: "Test Cavern",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::LAND,
         abilities: &[Ability::replacing(&Replacement::choose_as_enters(
@@ -43,6 +45,7 @@ static CAVERN: CardDef = CardDef {
 
 static GOBLIN: CardDef = CardDef {
     name: "Test Goblin",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::CREATURE,
         subtypes: beryl_card::SubtypeWords::new(Subtypes::of(&[Subtype::Goblin])),
@@ -55,6 +58,7 @@ static GOBLIN: CardDef = CardDef {
 
 static ELF: CardDef = CardDef {
     name: "Test Elf",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::CREATURE,
         subtypes: beryl_card::SubtypeWords::new(Subtypes::of(&[Subtype::Elf])),
@@ -67,6 +71,7 @@ static ELF: CardDef = CardDef {
 
 static LAND: CardDef = CardDef {
     name: "Test Plain Land",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::LAND,
         ..Face::EMPTY

@@ -18,6 +18,7 @@ use crate::{CardTable, DecisionKind, Decklist, Opt, Profile};
 /// "Test Bolt deals 3 damage to any target", for no mana.
 static BOLT: CardDef = CardDef {
     name: "Test Bolt",
+    shape: beryl_card::definition::Shape::Single,
     tokens: &[],
     faces: &[Face {
         types: Types::INSTANT,
@@ -32,6 +33,7 @@ static BOLT: CardDef = CardDef {
 /// way", for no mana.
 static DRAIN: CardDef = CardDef {
     name: "Test Drain",
+    shape: beryl_card::definition::Shape::Single,
     tokens: &[],
     faces: &[Face {
         types: Types::INSTANT,

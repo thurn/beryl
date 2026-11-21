@@ -311,9 +311,18 @@ def pruned(card: Json) -> Json:
             pruned_face(f) for f in cast(list[Json], card["card_faces"])
         ]
     if "all_parts" in out:
-        # A token lists every card making it; only the parts naming tokens are read.
-        parts = [p for p in cast(list[Json], card["all_parts"]) if makes(p)]
-        out["all_parts"] = [{k: p[k] for k in PART_FIELDS if k in p} for p in parts]
+        # A token lists every card making it. Keep links to tokens and among meld cards.
+        parts: list[Json] = []
+        for part in cast(list[Json], card["all_parts"]):
+            fields: tuple[str, ...]
+            if is_meld_part(part):
+                fields = (*PART_FIELDS, "name")
+            elif makes(part):
+                fields = PART_FIELDS
+            else:
+                continue
+            parts.append({key: part[key] for key in fields if key in part})
+        out["all_parts"] = parts
     return out
 
 
@@ -419,6 +428,27 @@ def makes(part: Json) -> bool:
     return part["component"] == "token" or str(part["type_line"]).startswith("Emblem")
 
 
+def is_meld_part(part: Json) -> bool:
+    return part["component"] in ("meld_part", "meld_result")
+
+
+def meld_links(card: Json) -> Json | None:
+    """The partner and result for a meld component. A meld result has its own face."""
+    if card["layout"] != "meld":
+        return None
+    parts = [p for p in cast(list[Json], card.get("all_parts", [])) if is_meld_part(p)]
+    if len(parts) != 3:
+        raise ValueError(f"{card['name']}: expected three related meld records")
+    result = next(p for p in parts if p["component"] == "meld_result")
+    # Reprints can link to a different printing of the same meld component or result.
+    if result["name"] == card["name"]:
+        return None
+    partner = next(
+        p for p in parts if p["component"] == "meld_part" and p["name"] != card["name"]
+    )
+    return {"with": partner["name"], "into": result["name"]}
+
+
 def made(card: Json) -> list[str]:
     """The Scryfall ids of the tokens and emblems a card makes."""
     out: list[str] = []
@@ -505,6 +535,8 @@ def store_record(
     record["keywords"] = card.get("keywords", [])
     if tokens:
         record["tokens"] = tokens
+    if (meld := meld_links(card)) is not None:
+        record["meld"] = meld
     record["faces"] = faces
     return record
 

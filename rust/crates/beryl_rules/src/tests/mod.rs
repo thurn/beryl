@@ -64,6 +64,7 @@ fn fixture_slots<S: crate::ids::SlotId>(
 
 pub(crate) static LAND: CardDef = CardDef {
     name: "Test Land",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         supertypes: Supertypes::BASIC,
         types: Types::LAND,
@@ -76,6 +77,7 @@ pub(crate) static LAND: CardDef = CardDef {
 
 pub(crate) static DUAL: CardDef = CardDef {
     name: "Test Dual",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::LAND,
         subtypes: crate::card::SubtypeWords::new(Subtypes::of(&[Subtype::Plains, Subtype::Island])),
@@ -90,6 +92,7 @@ pub(crate) static DUAL: CardDef = CardDef {
 
 pub(crate) static LEGEND: CardDef = CardDef {
     name: "Test Legend",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         supertypes: Supertypes::LEGENDARY,
         types: Types::LAND,
@@ -104,6 +107,7 @@ const UNPAYABLE: ManaCost = ManaCost::new(0, [0, 0, 1, 0, 0, 0]);
 /// Nonland cards no test land can pay for: they only sit in hands and libraries.
 pub(crate) static SPELL_A: CardDef = CardDef {
     name: "Test Spell A",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         cost: UNPAYABLE,
         types: Types::SORCERY,
@@ -114,6 +118,7 @@ pub(crate) static SPELL_A: CardDef = CardDef {
 
 pub(crate) static SPELL_B: CardDef = CardDef {
     name: "Test Spell B",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         cost: UNPAYABLE,
         types: Types::INSTANT,

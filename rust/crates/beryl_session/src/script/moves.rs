@@ -180,9 +180,12 @@ impl Builder<'_> {
             return;
         }
         let end = self.after.objects.get(&slot).filter(|_| kept);
-        let name = was.name.clone().or_else(|| end?.name.clone());
+        let Some(known) = was.name.is_some().then_some(was).or(end) else {
+            return;
+        };
         let object = ObjectView {
-            name,
+            name: known.name.clone(),
+            other_face: known.other_face.clone(),
             ..was.clone()
         };
         self.showcase(object, cause);
@@ -285,13 +288,11 @@ impl Builder<'_> {
                     if s == slot && (from == ZoneName::Library || to == ZoneName::Library)
             )
         });
-        let name = match to {
+        let identity = match to {
             ZoneName::Library => None,
-            ZoneName::Hand if owner == Side::Opponent => base.name.clone(),
-            _ => base
-                .name
-                .clone()
-                .or_else(|| end.filter(|_| !reshuffled).and_then(|o| o.name.clone())),
+            ZoneName::Hand if owner == Side::Opponent => Some(base),
+            _ if base.name.is_some() => Some(base),
+            _ => end.filter(|_| !reshuffled),
         };
         let controller = if matches!(to, ZoneName::Stack | ZoneName::Battlefield) {
             base.controller
@@ -299,7 +300,8 @@ impl Builder<'_> {
             owner
         };
         Some(ObjectView {
-            name,
+            name: identity.and_then(|o| o.name.clone()),
+            other_face: identity.and_then(|o| o.other_face.clone()),
             token: base.token,
             ..ObjectView::hidden(slot, to, controller, owner)
         })

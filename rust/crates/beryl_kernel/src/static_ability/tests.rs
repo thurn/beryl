@@ -210,6 +210,7 @@ fn a_granted_ability_cannot_define_power_and_toughness() {
     static FACES: &[Face] = &[Face::EMPTY.grants(&[beryl_card::Ability::static_ability(&SPEC)])];
     let card = CardDef {
         name: "Test",
+        shape: beryl_card::definition::Shape::Single,
         faces: FACES,
         tokens: &[],
     };

@@ -566,7 +566,7 @@ impl Act {
             },
             Opt::Lethal(slot) => Act::Lethal { blocker: obj(slot) },
             Opt::Cast { slot, face, costs } => {
-                let options = s.copiable(slot).turned(face).face(t).casting;
+                let options = s.copiable(slot).turned(t, face).face(t).casting;
                 Act::Cast {
                     card: obj(slot),
                     back: face == beryl_engine::card::FaceIx::BACK,

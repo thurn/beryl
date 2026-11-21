@@ -21,6 +21,7 @@ use beryl_kernel::two_player::TwoPlayerSeat as _;
 
 static LAND: CardDef = CardDef {
     name: "Test Land",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::LAND,
         ..Face::EMPTY
@@ -32,6 +33,7 @@ static LAND: CardDef = CardDef {
 /// battlefield."
 static REVENANT: CardDef = CardDef {
     name: "Test Revenant",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::CREATURE,
         power: Some(2),

@@ -14,7 +14,7 @@ use crate::resolution::Resolution;
 use crate::state::{ObjectRef, StackEntry, StackItem, TargetPlaces, TurnStep, Zone, ZoneKey};
 use crate::zone::Place;
 use crate::{
-    Choice, Decision, DecisionKind, GameTable, Opt, PlayerSet, Profile, Scratch, State,
+    CardTable, Choice, Decision, DecisionKind, GameTable, Opt, PlayerSet, Profile, Scratch, State,
     actions::coins, interpret::choices, zones::library, zones::tokens,
 };
 use beryl_card::effect::build::{scry, you};
@@ -244,6 +244,48 @@ fn any_permanent_is_exiled_and_only_a_double_faced_one_returns_transformed() {
     assert_eq!(s.controller(prodigy), Seat::P0);
     assert!(!s.is_current(was));
     assert_eq!(s.object(land).zone(), Zone::Exile);
+}
+
+#[test]
+fn returning_transformed_keeps_a_flip_card_and_an_instant_back_face_in_exile() {
+    use crate::card::{CardDef, CardShape, Face};
+
+    const FRONT: Face = Face::EMPTY.types(Types::CREATURE).power_toughness(1, 1);
+    static FLIP: CardDef = beryl_card::card_with_shape(
+        "Test Flip",
+        CardShape::Flip,
+        &[
+            FRONT,
+            FRONT
+                .named("Test Flipped")
+                .for_shape(CardShape::Flip, FaceIx::BACK),
+        ],
+    );
+    static MODAL: CardDef = beryl_card::card_with_shape(
+        "Test Modal",
+        CardShape::Modal,
+        &[
+            FRONT,
+            Face::EMPTY.named("Test Instant").types(Types::INSTANT),
+        ],
+    );
+    static CARDS: CardTable = CardTable::new(&[&FLIP, &MODAL]);
+    let t = GameTable::new(
+        Format::CONSTRUCTED,
+        &CARDS,
+        [&[(1, FLIP.name), (1, MODAL.name)], &[]],
+    )
+    .unwrap();
+    let mut s = State::new(&t, 1, Profile::EXACT).unwrap();
+    s.board().begin_at(1, Seat::P0, TurnStep::PrecombatMain);
+    let mut x = Scratch::new();
+    for def in [&FLIP, &MODAL] {
+        let slot = put(&t, &mut s, &mut x, Seat::P0, def.name);
+        let original = s.object_ref(slot);
+        let mut game = Game::new(&mut s, &t, &mut x.events);
+        transform::exile_and_return_transformed(&mut game, original).unwrap();
+        assert_eq!(s.object(slot).zone(), Zone::Exile, "{}", def.name);
+    }
 }
 
 /// [CR 401.7](https://yawgatog.com/resources/magic-rules/#R4017): "If an effect causes a

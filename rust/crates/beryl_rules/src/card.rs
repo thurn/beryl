@@ -8,6 +8,7 @@
 
 use crate::fixed::Full;
 
+pub use beryl_card::definition::Shape as CardShape;
 pub use beryl_card::{
     Abilities, Ability, AbilityIx, AbilityKind, Amount, BasicLandTypes, Behavior, CardDef,
     CastingIx, CastingKind, CastingKinds, CastingOption, Castings, Chosen, ChosenKind, Colors,

@@ -26,6 +26,7 @@ use crate::{CardTable, Choice, DecisionKind, Decklist, Profile, zones};
 /// battlefield under its owner's control at the beginning of the next end step."
 static FLICKERWISP: CardDef = CardDef {
     name: "Test Flickerwisp",
+    shape: beryl_card::definition::Shape::Single,
     tokens: &[],
     faces: &[Face {
         types: Types::CREATURE,

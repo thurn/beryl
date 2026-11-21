@@ -47,6 +47,7 @@ static NONBASIC_LANDS: Objects = Objects::All {
 /// "Nonbasic lands are Mountains."
 static MOON: CardDef = CardDef {
     name: "Test Moon",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[enchantment(&[Ability::static_ability(&LayerSpec {
         affected: NONBASIC_LANDS,
         condition: None,
@@ -59,6 +60,7 @@ static MOON: CardDef = CardDef {
 /// other land types."
 static TOMB: CardDef = CardDef {
     name: "Test Tomb",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::LAND,
         abilities: &[Ability::static_ability(&LayerSpec {
@@ -78,6 +80,7 @@ static TOMB: CardDef = CardDef {
 /// of them remove each other's ability, a loop of dependencies.
 static MOONLAND: CardDef = CardDef {
     name: "Test Moonland",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::LAND,
         abilities: &[Ability::static_ability(&LayerSpec {
@@ -93,6 +96,7 @@ static MOONLAND: CardDef = CardDef {
 /// A 1/1 Forest Dryad land creature whose text writes out no mana ability.
 static ARBOR: CardDef = CardDef {
     name: "Test Arbor",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::LAND.union(Types::CREATURE),
         subtypes: crate::card::SubtypeWords::new(Subtypes::of(&[Subtype::Forest, Subtype::Dryad])),
@@ -108,6 +112,7 @@ static ONE: Amount = Amount::Fixed(1);
 /// "All creatures lose all abilities and have base power and toughness 1/1."
 static HUMBLE: CardDef = CardDef {
     name: "Test Humble",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[enchantment(&[Ability::static_ability(&LayerSpec {
         affected: Objects::All {
             zone: Zone::Battlefield,
@@ -126,6 +131,7 @@ static HUMBLE: CardDef = CardDef {
 /// in the same layer can empty, as Life and Limb's "All Forests" can be.
 static GROVE: CardDef = CardDef {
     name: "Test Grove",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[enchantment(&[Ability::static_ability(&LayerSpec {
         affected: Objects::All {
             zone: Zone::Battlefield,
@@ -140,6 +146,7 @@ static GROVE: CardDef = CardDef {
 /// Phantasmal Image's exception: its copy is "an Illusion in addition to its other types".
 static MIMIC: CardDef = CardDef {
     name: "Test Mimic",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::CREATURE,
         excepts: &[CopyException(&[CopyChange::AddSubtype(Subtype::Illusion)])],

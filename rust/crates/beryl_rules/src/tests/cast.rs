@@ -168,6 +168,7 @@ const DRAW_THEN_DISCARD_TWO: Effect = sequence(&[draw(you(), 1), discard(you(), 
 
 pub(crate) static ISLAND: CardDef = CardDef {
     name: "Test Island",
+    shape: beryl_card::definition::Shape::Single,
     tokens: &[],
     faces: &[Face {
         supertypes: Supertypes::BASIC,
@@ -181,6 +182,7 @@ pub(crate) static ISLAND: CardDef = CardDef {
 /// A mana creature: "{T}: Add {W}."
 pub(crate) static ELF: CardDef = CardDef {
     name: "Test Elf",
+    shape: beryl_card::definition::Shape::Single,
     tokens: &[],
     faces: &[Face {
         cost: mana(0, 1, 0),
@@ -195,6 +197,7 @@ pub(crate) static ELF: CardDef = CardDef {
 /// A sorcery of {U}{U} that draws a card.
 pub(crate) static SAGE: CardDef = CardDef {
     name: "Test Sage",
+    shape: beryl_card::definition::Shape::Single,
     tokens: &[],
     faces: &[Face {
         cost: mana(0, 0, 2),
@@ -206,6 +209,7 @@ pub(crate) static SAGE: CardDef = CardDef {
 
 pub(crate) static CRYPT: CardDef = CardDef {
     name: "Test Crypt",
+    shape: beryl_card::definition::Shape::Single,
     tokens: &[],
     faces: &[Face {
         types: Types::ARTIFACT,
@@ -221,6 +225,7 @@ pub(crate) static CRYPT: CardDef = CardDef {
 /// ([CR 111.10a](https://yawgatog.com/resources/magic-rules/#R11110a)).
 pub(crate) static TREASURE: CardDef = CardDef {
     name: "Test Treasure",
+    shape: beryl_card::definition::Shape::Single,
     tokens: &[],
     faces: &[Face {
         types: Types::ARTIFACT,
@@ -237,6 +242,7 @@ pub(crate) static TREASURE: CardDef = CardDef {
 
 pub(crate) static STRIP: CardDef = CardDef {
     name: "Test Strip",
+    shape: beryl_card::definition::Shape::Single,
     tokens: &[],
     faces: &[Face {
         types: Types::LAND,
@@ -252,6 +258,7 @@ pub(crate) static STRIP: CardDef = CardDef {
 
 pub(crate) static HQ: CardDef = CardDef {
     name: "Test HQ",
+    shape: beryl_card::definition::Shape::Single,
     tokens: &[],
     faces: &[Face {
         types: Types::LAND,
@@ -265,6 +272,7 @@ pub(crate) static HQ: CardDef = CardDef {
 
 pub(crate) static BEAR: CardDef = CardDef {
     name: "Test Bear",
+    shape: beryl_card::definition::Shape::Single,
     tokens: &[],
     faces: &[Face {
         cost: mana(1, 1, 0),
@@ -277,6 +285,7 @@ pub(crate) static BEAR: CardDef = CardDef {
 
 pub(crate) static REMOVAL: CardDef = CardDef {
     name: "Test Removal",
+    shape: beryl_card::definition::Shape::Single,
     tokens: &[],
     faces: &[Face {
         cost: mana(1, 1, 0),
@@ -290,6 +299,7 @@ pub(crate) static REMOVAL: CardDef = CardDef {
 
 pub(crate) static TITHE: CardDef = CardDef {
     name: "Test Tithe",
+    shape: beryl_card::definition::Shape::Single,
     tokens: &[],
     faces: &[Face {
         cost: mana(0, 1, 0),
@@ -303,6 +313,7 @@ pub(crate) static TITHE: CardDef = CardDef {
 
 pub(crate) static LIES: CardDef = CardDef {
     name: "Test Lies",
+    shape: beryl_card::definition::Shape::Single,
     tokens: &[],
     faces: &[Face {
         cost: mana(0, 0, 1),
@@ -316,6 +327,7 @@ pub(crate) static LIES: CardDef = CardDef {
 
 pub(crate) static PONDER: CardDef = CardDef {
     name: "Test Ponder",
+    shape: beryl_card::definition::Shape::Single,
     tokens: &[],
     faces: &[Face {
         cost: mana(0, 0, 1),
@@ -327,6 +339,7 @@ pub(crate) static PONDER: CardDef = CardDef {
 
 pub(crate) static RUMMAGE: CardDef = CardDef {
     name: "Test Rummage",
+    shape: beryl_card::definition::Shape::Single,
     tokens: &[],
     faces: &[Face {
         cost: mana(0, 0, 0),
@@ -338,6 +351,7 @@ pub(crate) static RUMMAGE: CardDef = CardDef {
 
 pub(crate) static FLASHER: CardDef = CardDef {
     name: "Test Flasher",
+    shape: beryl_card::definition::Shape::Single,
     tokens: &[],
     faces: &[Face {
         cost: mana(1, 0, 1),
@@ -351,6 +365,7 @@ pub(crate) static FLASHER: CardDef = CardDef {
 
 pub(crate) static DIVER: CardDef = CardDef {
     name: "Test Diver",
+    shape: beryl_card::definition::Shape::Single,
     tokens: &[],
     faces: &[Face {
         cost: mana(1, 0, 1),
@@ -367,6 +382,7 @@ pub(crate) static DIVER: CardDef = CardDef {
 
 pub(crate) static TRAINER: CardDef = CardDef {
     name: "Test Trainer",
+    shape: beryl_card::definition::Shape::Single,
     tokens: &[],
     faces: &[Face {
         cost: mana(1, 0, 1),
@@ -381,6 +397,7 @@ pub(crate) static TRAINER: CardDef = CardDef {
 
 pub(crate) static OVERLORD: CardDef = CardDef {
     name: "Test Overlord",
+    shape: beryl_card::definition::Shape::Single,
     tokens: &[],
     faces: &[Face {
         cost: mana(3, 1, 0),
@@ -397,6 +414,7 @@ pub(crate) static OVERLORD: CardDef = CardDef {
 
 pub(crate) static STUPOR: CardDef = CardDef {
     name: "Test Stupor",
+    shape: beryl_card::definition::Shape::Modal,
     tokens: &[],
     faces: &[
         Face {
@@ -441,6 +459,7 @@ static LOYALTY_AS_INSTANT: RuleChange = RuleChange {
 
 pub(crate) static RAVELER: CardDef = CardDef {
     name: "Test Raveler",
+    shape: beryl_card::definition::Shape::Single,
     tokens: &[],
     faces: &[Face {
         cost: mana(1, 1, 1),
@@ -464,6 +483,7 @@ pub(crate) static RAVELER: CardDef = CardDef {
 
 pub(crate) static EMPEROR: CardDef = CardDef {
     name: "Test Emperor",
+    shape: beryl_card::definition::Shape::Single,
     tokens: &[],
     faces: &[Face {
         cost: mana(1, 1, 0),
@@ -487,6 +507,7 @@ pub(crate) static EMPEROR: CardDef = CardDef {
 
 pub(crate) static FLASHBACK: CardDef = CardDef {
     name: "Test Flashback",
+    shape: beryl_card::definition::Shape::Single,
     tokens: &[],
     faces: &[Face {
         cost: mana(0, 0, 1),
@@ -506,6 +527,7 @@ pub(crate) static FLASHBACK: CardDef = CardDef {
 
 pub(crate) static SNAPBACK: CardDef = CardDef {
     name: "Test Snapback",
+    shape: beryl_card::definition::Shape::Single,
     tokens: &[],
     faces: &[Face {
         cost: mana(0, 0, 1),
@@ -525,6 +547,7 @@ pub(crate) static SNAPBACK: CardDef = CardDef {
 
 pub(crate) static BOUNCE: CardDef = CardDef {
     name: "Test Bounce",
+    shape: beryl_card::definition::Shape::Single,
     tokens: &[],
     faces: &[Face {
         cost: mana(0, 0, 1),
@@ -538,6 +561,7 @@ pub(crate) static BOUNCE: CardDef = CardDef {
 
 pub(crate) static BINDER: CardDef = CardDef {
     name: "Test Binder",
+    shape: beryl_card::definition::Shape::Single,
     tokens: &[],
     faces: &[Face {
         cost: mana(0, 1, 0),
@@ -554,6 +578,7 @@ pub(crate) static BINDER: CardDef = CardDef {
 
 pub(crate) static LOOTER: CardDef = CardDef {
     name: "Test Looter",
+    shape: beryl_card::definition::Shape::Single,
     tokens: &[],
     faces: &[Face {
         cost: mana(0, 0, 1),
@@ -565,6 +590,7 @@ pub(crate) static LOOTER: CardDef = CardDef {
 
 pub(crate) static STINGER: CardDef = CardDef {
     name: "Test Stinger",
+    shape: beryl_card::definition::Shape::Single,
     tokens: &[],
     faces: &[Face {
         cost: mana(0, 1, 0),

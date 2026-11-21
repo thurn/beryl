@@ -216,7 +216,7 @@ fn ahead<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Ahead<L> {
     // front face up by default" (see [CR 712.8](https://yawgatog.com/resources/magic-rules/#R7128)).
     // A land is played, not cast (see [CR 305.1](https://yawgatog.com/resources/magic-rules/#R3051)).
     let castable = |face: &Face| {
-        !face.transformed
+        face.playable()
             && !face.types.intersects(Types::LAND)
             && (sorcery || instant_speed(s, t, face, player))
     };
@@ -233,7 +233,7 @@ fn ahead<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Ahead<L> {
                 ahead.add(face.cost, None);
             }
             if land_drop
-                && !face.transformed
+                && face.playable()
                 && face.types.intersects(Types::LAND)
                 && enters_untapped(s, player, face)
                 && let ManaFace::Plain { kinds, amount, .. } = t.facts(card, f).mana

@@ -30,6 +30,7 @@ A record:
   (`YYYY-MM-DD`); a token has neither;
 - a card's `tokens`: each token or emblem it makes as `{"name", "scryfall_id"}`, the key and id
   of its record;
+- a meld component's `meld`: the card names of its partner (`with`) and result (`into`);
 - `faces`, each with the characteristics CR 109.3 lists that a printed face carries: `name`,
   `mana_cost`, `type_line` (card types, subtypes and supertypes), `oracle_text` (rules text),
   `colors`, `color_indicator`, `power`, `toughness`, `loyalty`, `defense`, each present when

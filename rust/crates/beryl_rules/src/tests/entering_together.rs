@@ -22,6 +22,7 @@ use beryl_kernel::format::Format;
 /// A 2/2 creature.
 static BEAR: CardDef = CardDef {
     name: "Test Bear",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::CREATURE,
         power: Some(2),
@@ -36,6 +37,7 @@ macro_rules! over_creatures {
     ($name:literal, $modification:expr) => {
         CardDef {
             name: $name,
+            shape: beryl_card::definition::Shape::Single,
             faces: &[Face {
                 types: Types::ENCHANTMENT,
                 abilities: &[Ability::static_ability(&LayerSpec {

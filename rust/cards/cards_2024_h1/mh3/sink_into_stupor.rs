@@ -13,8 +13,9 @@
 
 use crate::prelude::*;
 
-pub static CARD: CardDef = card(
+pub static CARD: CardDef = card_with_shape(
     Card::SinkIntoStupor,
+    PrintedShape::SinkIntoStupor,
     &[
         Printed::SinkIntoStupor.abilities(&[Ability::spell()
             .target(&TargetSpec::one(

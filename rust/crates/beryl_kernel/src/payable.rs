@@ -172,6 +172,7 @@ mod tests {
 
     static FILLER: CardDef = CardDef {
         name: "Filler",
+        shape: beryl_card::definition::Shape::Single,
         faces: &[Face {
             abilities: &[],
             ..Face::EMPTY
@@ -181,6 +182,7 @@ mod tests {
     /// Every part of an activation cost the engine pays, and each cost a spell is cast with.
     static PAID: CardDef = CardDef {
         name: "Paid",
+        shape: beryl_card::definition::Shape::Single,
         faces: &[Face {
             abilities: &[
                 activated(Cost::of(
@@ -209,6 +211,7 @@ mod tests {
     const SACRIFICE_A_CREATURE: CostPart = CostPart::sacrifice(CREATURE);
     static ALTAR: CardDef = CardDef {
         name: "Altar",
+        shape: beryl_card::definition::Shape::Single,
         faces: &[Face {
             abilities: &[activated(Cost::of_parts(&[SACRIFICE_A_CREATURE]))],
             ..Face::EMPTY
@@ -217,11 +220,13 @@ mod tests {
     };
     static MAKER: CardDef = CardDef {
         name: "Maker",
+        shape: beryl_card::definition::Shape::Single,
         faces: &[],
         tokens: &[&ALTAR],
     };
     static RITE: CardDef = CardDef {
         name: "Rite",
+        shape: beryl_card::definition::Shape::Single,
         faces: &[Face {
             additional_cost: &[SACRIFICE_A_CREATURE],
             ..Face::EMPTY
@@ -230,6 +235,7 @@ mod tests {
     };
     static BLOODLETTER: CardDef = CardDef {
         name: "Bloodletter",
+        shape: beryl_card::definition::Shape::Single,
         faces: &[Face {
             abilities: &[activated(Cost::of_parts(&[CostPart::This(
                 CostAction::Reveal,
@@ -240,6 +246,7 @@ mod tests {
     };
     static FORAGER: CardDef = CardDef {
         name: "Forager",
+        shape: beryl_card::definition::Shape::Single,
         faces: &[Face {
             abilities: &[activated(Cost::of_parts(&[CostPart::OneOf(&[
                 Cost::TAP,
@@ -251,6 +258,7 @@ mod tests {
     };
     static TWICE_BENT: CardDef = CardDef {
         name: "Twice Bent",
+        shape: beryl_card::definition::Shape::Single,
         faces: &[Face {
             abilities: &[activated(Cost::of(
                 ManaCost::generic(2),
@@ -262,6 +270,7 @@ mod tests {
     };
     static FILTER_LAND: CardDef = CardDef {
         name: "Filter Land",
+        shape: beryl_card::definition::Shape::Single,
         faces: &[Face {
             abilities: &[Ability::mana(
                 Cost::of(ManaCost::generic(1), &[CostPart::TAP]),
@@ -274,6 +283,7 @@ mod tests {
     /// Its effect reads the creature its crew cost tapped, which the engine does not keep.
     static REMEMBERER: CardDef = CardDef {
         name: "Rememberer",
+        shape: beryl_card::definition::Shape::Single,
         faces: &[Face {
             abilities: &[Ability::crew(1).effect(&Effect::GainLife {
                 player: Players::You,

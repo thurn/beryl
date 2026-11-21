@@ -17,6 +17,7 @@ use crate::{LargeSlot, Seat, Slot};
 
 static BEAR: CardDef = CardDef {
     name: "Test Bear",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::CREATURE,
         power: Some(2),
@@ -30,6 +31,7 @@ static BEAR: CardDef = CardDef {
 /// this turn.
 static WALKER: CardDef = CardDef {
     name: "Test Walker",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::PLANESWALKER,
         loyalty: Some(3),
@@ -47,6 +49,7 @@ static WALKER: CardDef = CardDef {
 /// life": every count read.
 static TALLY: CardDef = CardDef {
     name: "Test Tally",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::SORCERY,
         abilities: &[Ability::spell().effect(&sequence(&[

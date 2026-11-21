@@ -21,6 +21,7 @@ use crate::{CardTable, Decklist, Opt, Outcome, Profile, Replay, Scratch, Step, n
 /// "Pay 3 life: Draw a card."
 static BLOODLETTER: CardDef = CardDef {
     name: "Test Bloodletter",
+    shape: beryl_card::definition::Shape::Single,
     tokens: &[],
     faces: &[Face {
         types: Types::ARTIFACT,

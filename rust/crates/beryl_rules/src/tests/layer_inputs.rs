@@ -28,6 +28,7 @@ static CARD_TYPES: Amount = Amount::CardTypesAmong(&Objects::All {
 /// and its toughness is equal to that number plus 1."
 static GOYF: CardDef = CardDef {
     name: "Test Goyf",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::CREATURE,
         power: Some(0),

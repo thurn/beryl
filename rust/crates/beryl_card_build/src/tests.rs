@@ -5,7 +5,7 @@ mod complete;
 use crate::complete::Group;
 use crate::files::{card_files, set_crates};
 use crate::names::{camel, card_module, constant, constant_of_camel, set_module};
-use crate::printed::{Subtypes, face_source};
+use crate::printed::{Subtypes, face_source, shape_source};
 use crate::store::Store;
 use crate::{Printed, names_source, registry_source, set_crate_source, shared_source};
 
@@ -24,6 +24,29 @@ fn record(kind: &str, name: &str, id: &str, first_set: Option<&str>, faces: &[&s
 /// A face's JSON: its name, type line and the other fields given as JSON.
 fn face(name: &str, type_line: &str, rest: &str) -> String {
     format!("{{\"name\":\"{name}\",\"type_line\":\"{type_line}\",\"side\":\"front\"{rest}}}")
+}
+
+#[test]
+fn printed_defense_and_meld_links_are_read_from_the_store() {
+    let face: beryl_card_store::Face =
+        serde_json::from_str(&face("Test Battle", "Battle", ",\"defense\":\"5\"")).unwrap();
+    let source = face_source(&face, 0, &subtypes()).unwrap();
+    assert!(source.contains(".defense(5)"));
+
+    let record: beryl_card_store::Record = serde_json::from_str(
+        r#"{
+            "name":"Test Meld", "oracle_id":"o", "scryfall_id":"c", "set":"s",
+            "collector_number":"1", "layout":"meld",
+            "meld":{"with":"Test Partner","into":"Test Result"}, "faces":[]
+        }"#,
+    )
+    .unwrap();
+    assert_eq!(
+        shape_source(&record).as_deref(),
+        Some(
+            r#"beryl_card::definition::Shape::Meld { with: "Test Partner", into: "Test Result" }"#
+        ),
+    );
 }
 
 /// The test store, its lines sorted as `just cards` writes them.
@@ -65,7 +88,8 @@ fn store_text() -> String {
                     ",\"mana_cost\":\"{1}{U}\",\"colors\":[\"U\"]",
                 ),
             ],
-        ),
+        )
+        .replace("\"layout\":\"normal\"", "\"layout\":\"split\""),
         "card:Henzie\t{\"alias\":\"Henzie \\\"Toolbox\\\" Torre\",\"scryfall_id\":\"y\"}\n".into(),
         record("card", "Henzie \"Toolbox\" Torre", "y", Some("snc"), &[]),
         "card:Ice\t{\"alias\":\"Fire // Ice\",\"scryfall_id\":\"x\"}\n".into(),
@@ -323,6 +347,7 @@ fn faces_and_tokens_start_from_their_records() {
          .power_toughness(0, 4);",
         "pub const FIRE: beryl_card::Face = beryl_card::Face::EMPTY\n    .cost(",
         "pub const ICE: beryl_card::Face = beryl_card::Face::EMPTY\n    .named(\"Ice\")\n",
+        "pub const Fire: beryl_card::definition::Shape = beryl_card::definition::Shape::Split { fuse: false };",
         "pub const HUMAN_TOKEN: beryl_card::Face = beryl_card::Face::EMPTY\n    \
          .named(\"Human Token\")\n    \
          .types(beryl_card::Types::CREATURE)\n    \
@@ -387,13 +412,12 @@ fn a_changeling_face_is_every_creature_type() {
         "Changeling (This card is every creature type.)",
         "Flying, changeling",
     ] {
-        let source = face_source(&face(text), 0, "normal", &subtypes()).unwrap();
+        let source = face_source(&face(text), 0, &subtypes()).unwrap();
         assert!(source.contains(every), "{text}: {source}");
     }
     let source = face_source(
         &face("Creatures you control have changeling."),
         0,
-        "normal",
         &subtypes(),
     )
     .unwrap();

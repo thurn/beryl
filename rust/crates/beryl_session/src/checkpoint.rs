@@ -355,7 +355,7 @@ impl Checkpoint {
                 let copied = Copiable::<Small>::of_card(game_index(t, copied)?);
                 let values = additions
                     .iter()
-                    .try_fold(copied.turned(b.face.ix()), |values, &a| {
+                    .try_fold(copied.turned(t, b.face.ix()), |values, &a| {
                         values.with_addition(a)
                     })
                     .map_err(full)?;

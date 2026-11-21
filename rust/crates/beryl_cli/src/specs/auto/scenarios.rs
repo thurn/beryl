@@ -331,7 +331,7 @@ fn ways_to_play(def: &'static CardDef) -> bool {
             a.kind() == AbilityKind::Activated
                 && a.cost().does(beryl_engine::card::CostAction::Discard)
         })
-        || def.faces.len() > 1 && !def.faces.iter().skip(1).all(|f| f.transformed)
+        || def.shape.can_cast_back()
 }
 
 /// A scenario's heading: its name, less the card's name it starts with ("Exiles its own

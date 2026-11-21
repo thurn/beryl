@@ -155,6 +155,7 @@ impl Builder<'_> {
         if now.facing != next.facing || now.name.is_some() != next.name.is_some() {
             now.facing = next.facing;
             now.name.clone_from(&next.name);
+            now.other_face.clone_from(&next.other_face);
             now.types.clone_from(&next.types);
             now.keywords.clone_from(&next.keywords);
             now.pt = next.pt;
@@ -355,6 +356,7 @@ fn unknown_in_library(object: &ObjectView) -> ObjectView {
         zone: ZoneName::Library,
         controller: object.owner,
         name: None,
+        other_face: None,
         types: Vec::new(),
         keywords: Vec::new(),
         pt: None,

@@ -395,7 +395,7 @@ fn entering<L: Layout>(
     let o = s.object(slot);
     let controller = entry.controller.unwrap_or(o.owner());
     let face = copied.map_or_else(
-        || s.copiable(slot).turned(entry.face).face(t),
+        || s.copiable(slot).turned(t, entry.face).face(t),
         |v| v.face(t),
     );
     // Found at the first replacement of entering: most permanents have none.
@@ -512,7 +512,7 @@ fn copy_to_enter<L: Layout>(
     slot: L::Slot,
     entry: Entry<L>,
 ) -> Result<Option<Copiable<L>>, Full> {
-    let values = s.copiable(slot).turned(entry.face);
+    let values = s.copiable(slot).turned(t, entry.face);
     let face = values.face(t);
     let Some((n, ability, of, except)) =
         (0u8..)
@@ -612,7 +612,7 @@ pub(crate) fn pay_life_to_enter<L: Layout>(
 ) -> Result<(), Full> {
     let o = s.object(slot);
     let copied = selected_copy(sink, slot);
-    let values = copied.unwrap_or_else(|| s.copiable(slot).turned(entry.face));
+    let values = copied.unwrap_or_else(|| s.copiable(slot).turned(t, entry.face));
     let player = entry.controller.unwrap_or(o.owner());
     if let Some((ability, n)) = life_asked(values.face(t))
         && (copied.is_some() || s.has_ability(slot, ability))
@@ -641,7 +641,7 @@ pub(crate) fn life_to_enter<L: Layout>(
     slot: L::Slot,
     entry: Entry<L>,
 ) -> Result<Option<u8>, Full> {
-    let face = s.copiable(slot).turned(entry.face).face(t);
+    let face = s.copiable(slot).turned(t, entry.face).face(t);
     let Some((ability, life)) = life_asked(face) else {
         return Ok(None);
     };
@@ -746,7 +746,7 @@ pub(crate) fn chosen_to_enter<L: Layout>(
     slot: L::Slot,
     entry: Entry<L>,
 ) -> Result<Option<ChosenKind>, Full> {
-    let face = s.copiable(slot).turned(entry.face).face(t);
+    let face = s.copiable(slot).turned(t, entry.face).face(t);
     let Some((ability, kind)) = chooses(face) else {
         return Ok(None);
     };

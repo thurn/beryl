@@ -23,10 +23,55 @@ fn checked(abilities: &'static [Ability]) -> Checked {
     let face: &'static Face = Box::leak(Box::new(Face::EMPTY.abilities(abilities)));
     CardDef {
         name: "Test",
+        shape: crate::definition::Shape::Single,
         faces: std::slice::from_ref(face),
         tokens: &[],
     }
     .check()
+}
+
+#[test]
+fn the_number_of_faces_must_match_the_printed_shape() {
+    use crate::definition::Shape;
+
+    const FLIP_FACES: &[Face] = &[
+        Face::EMPTY,
+        Face::EMPTY.for_shape(Shape::Flip, crate::FaceIx::BACK),
+    ];
+
+    let define = |shape, faces| CardDef {
+        name: "Test",
+        shape,
+        faces,
+        tokens: &[],
+    };
+    let one = &[Face::EMPTY];
+    let two = &[Face::EMPTY, Face::EMPTY];
+    assert_eq!(
+        define(Shape::Single, &[]).check(),
+        Err(Malformed::ExpectedOneFace)
+    );
+    assert_eq!(
+        define(Shape::Single, two).check(),
+        Err(Malformed::ExpectedOneFace)
+    );
+    assert_eq!(
+        define(Shape::Flip, one).check(),
+        Err(Malformed::ExpectedTwoFaces)
+    );
+    assert_eq!(define(Shape::Flip, two).check(), Err(Malformed::FaceUse));
+    assert_eq!(define(Shape::Flip, FLIP_FACES).check(), Ok(()));
+    assert_eq!(
+        define(
+            Shape::Meld {
+                with: "Partner",
+                into: "Result"
+            },
+            one
+        )
+        .check(),
+        Ok(())
+    );
 }
 
 #[test]

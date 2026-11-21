@@ -16,7 +16,8 @@
 //! So do printed characteristics ([`printed`]): the crate's `printed` module holds a
 //! `Face` constant for each face of its cards and each token its files name as
 //! `printed::token::<CONSTANT>`, and a card file starts each face from one. A file that types a
-//! cost, type, subtype, color, power, toughness, loyalty or face name fails the build.
+//! cost, type, subtype, color, power, toughness, loyalty, defense or face name fails the build.
+//! Cards whose shape differs from a single face take it from `PrintedShape`.
 
 pub mod catalogs;
 pub mod complete;

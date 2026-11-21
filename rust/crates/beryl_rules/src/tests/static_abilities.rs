@@ -63,6 +63,7 @@ const fn power_is(sets: &'static [Modification]) -> LayerSpec {
 /// "This creature's power is equal to twice the number of artifacts you control."
 static SMITH: CardDef = CardDef {
     name: "Test Smith",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[creature(&[Ability::static_ability(&power_is(&[
         Modification::SetPower(&Amount::Times(2, &ARTIFACTS)),
     ]))])],
@@ -73,6 +74,7 @@ static SMITH: CardDef = CardDef {
 /// characteristic-defining, so layer 7b's.
 static MANTLE: CardDef = CardDef {
     name: "Test Mantle",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[creature(&[Ability::static_ability(&LayerSpec {
         affected: Objects::AttachedTo,
         ..power_is(&[Modification::SetPower(&ARTIFACTS)])
@@ -84,6 +86,7 @@ static MANTLE: CardDef = CardDef {
 /// have in hand as they apply.
 static SCHOLAR: CardDef = CardDef {
     name: "Test Scholar",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[creature(&[Ability::static_ability(&power_is(&[
         Modification::SetPower(&Amount::Count(&Objects::All {
             zone: Zone::Hand,
@@ -97,6 +100,7 @@ static SCHOLAR: CardDef = CardDef {
 /// turn": a number locked in as the effect begins.
 static REFORGE: CardDef = CardDef {
     name: "Test Reforge",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::INSTANT,
         abilities: &[Ability::spell().effect(&sequence(&[
@@ -173,6 +177,7 @@ const fn face(abilities: &'static [Ability]) -> Face {
 /// "If you would draw a card, you lose the game instead": no condition, and a loss.
 static DOOM: CardDef = CardDef {
     name: "Test Doom",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[face(&[Ability::replacing(&Replacement::draws(
         Players::You,
     ))
@@ -183,6 +188,7 @@ static DOOM: CardDef = CardDef {
 /// "If you would draw a card, each opponent wins the game instead."
 static GIFT: CardDef = CardDef {
     name: "Test Gift",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[face(&[Ability::replacing(&Replacement::draws(
         Players::You,
     ))
@@ -194,6 +200,7 @@ static GIFT: CardDef = CardDef {
 /// replace again (CR 614.5).
 static WINDFALL: CardDef = CardDef {
     name: "Test Windfall",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[face(&[Ability::replacing(&Replacement::draws(
         Players::You,
     ))
@@ -205,6 +212,7 @@ static WINDFALL: CardDef = CardDef {
 /// no target.
 static FAVOR: CardDef = CardDef {
     name: "Test Favor",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[face(&[Ability::replacing(&Replacement::draws(
         Players::You,
     ))
@@ -317,6 +325,7 @@ static CURFEW_RULE: RuleChange = RuleChange {
 };
 static CURFEW: CardDef = CardDef {
     name: "Test Curfew",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[face(&[makes(&CURFEW_RULE)])],
     tokens: &[],
 };
@@ -329,6 +338,7 @@ static AMBUSH_RULE: RuleChange = RuleChange {
 };
 static AMBUSH: CardDef = CardDef {
     name: "Test Ambush",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[face(&[makes(&AMBUSH_RULE)])],
     tokens: &[],
 };
@@ -342,6 +352,7 @@ static HUSH_RULE: RuleChange = RuleChange {
 };
 static HUSH: CardDef = CardDef {
     name: "Test Hush",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[face(&[
         Ability::activated(beryl_card::Cost::NONE).starting(&HUSH_RULE)
     ])],
@@ -358,6 +369,7 @@ static REGENT_RULE: RuleChange = RuleChange {
 /// "As long as you have no cards in hand": read of its controller's own zone.
 static REGENT: CardDef = CardDef {
     name: "Test Regent",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[face(&[makes(&REGENT_RULE).only_if(&Condition::Compare(
         Amount::Count(&Objects::All {
             zone: Zone::Hand,
@@ -372,6 +384,7 @@ static REGENT: CardDef = CardDef {
 static SLEEPER_RULE: RuleChange = REGENT_RULE;
 static SLEEPER: CardDef = CardDef {
     name: "Test Sleeper",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[face(&[
         makes(&SLEEPER_RULE).only_if(&Condition::Is(Objects::This, Filter::Tapped))
     ])],
@@ -522,6 +535,7 @@ fn a_table_refuses_a_rule_change_the_engine_cannot_check() {
         let abilities: &'static [Ability] = std::slice::from_ref(ability);
         let card: &'static CardDef = Box::leak(Box::new(CardDef {
             name,
+            shape: beryl_card::definition::Shape::Single,
             faces: Box::leak(Box::new([face(abilities)])),
             tokens: &[],
         }));
@@ -581,6 +595,7 @@ const fn granter(abilities: &'static [Ability], grants: &'static [Ability]) -> F
 /// "Creatures have 'This permanent is an artifact in addition to its other types.'"
 static FOUNDRY: CardDef = CardDef {
     name: "Test Foundry",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[granter(
         &[Ability::static_ability(&grants_to(Filter::Types(
             Types::CREATURE,
@@ -594,6 +609,7 @@ static FOUNDRY: CardDef = CardDef {
 /// types.'": a creature granted it is an artifact, and so is not granted it.
 static PARADOX: CardDef = CardDef {
     name: "Test Paradox",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[granter(
         &[Ability::static_ability(&grants_to(Filter::All(&[
             Filter::Types(Types::CREATURE),
@@ -608,6 +624,7 @@ static PARADOX: CardDef = CardDef {
 /// control.'"
 static RECKONER: CardDef = CardDef {
     name: "Test Reckoner",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[granter(
         &[Ability::static_ability(&grants_to(Filter::Types(
             Types::CREATURE,

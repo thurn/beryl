@@ -35,6 +35,7 @@ use beryl_kernel::format::Format;
 /// from there.
 static DREDGER: CardDef = CardDef {
     name: "Test Dredger",
+    shape: beryl_card::definition::Shape::Single,
     tokens: &[],
     faces: &[Face {
         cost: ManaCost::new(1, [0; 6]),
@@ -78,6 +79,7 @@ const CAST_A_SORCERY: Effect = Effect::MayCast {
 /// "You may cast a sorcery card from your hand. Scry 1."
 static CAST_THEN_SCRY: CardDef = CardDef {
     name: "Test Cast and Scry",
+    shape: beryl_card::definition::Shape::Single,
     tokens: &[],
     faces: &[Face {
         types: Types::INSTANT,
@@ -88,6 +90,7 @@ static CAST_THEN_SCRY: CardDef = CardDef {
 
 static CAST_THEN_SCRY_REPEATEDLY: CardDef = CardDef {
     name: "Test Cast and Scry Repeatedly",
+    shape: beryl_card::definition::Shape::Single,
     tokens: &[],
     faces: &[Face {
         types: Types::INSTANT,
@@ -102,6 +105,7 @@ static CAST_THEN_SCRY_REPEATEDLY: CardDef = CardDef {
 /// A spell with X and a target, and a trigger the cast leaves waiting.
 static TARGETED_X: CardDef = CardDef {
     name: "Test Targeted X",
+    shape: beryl_card::definition::Shape::Single,
     tokens: &[],
     faces: &[Face {
         cost: ManaCost {
@@ -166,6 +170,7 @@ impl CustomBody for ManaWithChoice {
 
 static CHOICE_MANA: CardDef = CardDef {
     name: "Test Choice Mana",
+    shape: beryl_card::definition::Shape::Single,
     tokens: &[],
     faces: &[Face {
         types: Types::LAND,

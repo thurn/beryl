@@ -23,6 +23,7 @@ use beryl_kernel::format::Format;
 /// An Equipment that gives the equipped creature +1/-1.
 static EQUIPMENT: CardDef = CardDef {
     name: "Test Clamp",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::ARTIFACT,
         subtypes: SubtypeWords::new(Subtypes::of(&[Subtype::Equipment])),

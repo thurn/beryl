@@ -28,6 +28,7 @@ use super::events::{find, put};
 /// "Nonbasic lands are Mountains."
 static MOON: CardDef = CardDef {
     name: "Test Moon",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::ENCHANTMENT,
         abilities: &[Ability::static_ability(&LayerSpec {
@@ -49,6 +50,7 @@ static MOON: CardDef = CardDef {
 /// "Each enchantment is a creature in addition to its other types."
 static OPAL: CardDef = CardDef {
     name: "Test Opal",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::ENCHANTMENT,
         abilities: &[Ability::static_ability(&LayerSpec {
@@ -67,6 +69,7 @@ static OPAL: CardDef = CardDef {
 /// "As this land enters, you may pay 3 life. If you don't, it enters tapped."
 static SPRINGS: CardDef = CardDef {
     name: "Test Springs",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::LAND,
         abilities: &[
@@ -81,6 +84,7 @@ static SPRINGS: CardDef = CardDef {
 /// "This land enters tapped."
 static TAPLAND: CardDef = CardDef {
     name: "Test Tapland",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         supertypes: Supertypes::BASIC,
         types: Types::LAND,
@@ -96,6 +100,7 @@ static TAPLAND: CardDef = CardDef {
 /// May copy an enchantment as it enters.
 static MIRROR: CardDef = CardDef {
     name: "Test Mirror",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::ARTIFACT,
         abilities: &[Ability::replacing(&Replacement::enter_as_copy(
@@ -110,6 +115,7 @@ static MIRROR: CardDef = CardDef {
 /// Its back face is an Aura with enchant land.
 static SHIFTING_AURA: CardDef = CardDef {
     name: "Test Shifting Aura",
+    shape: beryl_card::definition::Shape::Transforming,
     faces: &[
         Face {
             types: Types::ARTIFACT,
@@ -123,8 +129,8 @@ static SHIFTING_AURA: CardDef = CardDef {
                 TargetKind::Permanent,
                 Filter::Types(Types::LAND),
             ))],
-            transformed: true,
-            ..Face::EMPTY
+
+            ..Face::EMPTY.for_shape(beryl_card::definition::Shape::Transforming, FaceIx::BACK)
         },
     ],
     tokens: &[],

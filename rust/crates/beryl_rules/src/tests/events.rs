@@ -52,6 +52,7 @@ static NO_ABILITY: Ability = Ability::spell();
 
 static GAIN_LAND: CardDef = CardDef {
     name: "Test Gain Land",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::LAND,
         abilities: &[Ability::triggered(&Trigger::ENTERS).effect(&gain_life(you(), 1))],
@@ -62,6 +63,7 @@ static GAIN_LAND: CardDef = CardDef {
 
 static TAPLAND: CardDef = CardDef {
     name: "Test Tapland",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::LAND,
         abilities: &[Ability::replacing(&Replacement::ENTERS_TAPPED)],
@@ -72,6 +74,7 @@ static TAPLAND: CardDef = CardDef {
 
 static COAST: CardDef = CardDef {
     name: "Test Coast",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::LAND,
         abilities: &[Ability::replacing(
@@ -84,6 +87,7 @@ static COAST: CardDef = CardDef {
 
 static SPRINGS: CardDef = CardDef {
     name: "Test Springs",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::LAND,
         abilities: &[Ability::replacing(
@@ -103,6 +107,7 @@ const CRYPT_FLIP: Effect = sequence(&[
 /// Mana Crypt's upkeep trigger, on a land so random games can play it.
 static CRYPT_LAND: CardDef = CardDef {
     name: "Test Crypt Land",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::LAND,
         abilities: &[
@@ -115,6 +120,7 @@ static CRYPT_LAND: CardDef = CardDef {
 
 static WATCHER: CardDef = CardDef {
     name: "Test Watcher",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::LAND,
         abilities: &[
@@ -128,6 +134,7 @@ static WATCHER: CardDef = CardDef {
 
 static ENDER: CardDef = CardDef {
     name: "Test Ender",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::LAND,
         abilities: &[
@@ -141,6 +148,7 @@ static ENDER: CardDef = CardDef {
 /// Mana Drain's delayed trigger, created by a land's enters trigger.
 static DRAIN_LAND: CardDef = CardDef {
     name: "Test Drain Land",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::LAND,
         abilities: &[
@@ -155,6 +163,7 @@ static DRAIN_LAND: CardDef = CardDef {
 
 static EMBLEM: CardDef = CardDef {
     name: "Test Emblem",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         abilities: &[
             Ability::triggered(&Trigger::casts(Players::You, Filter::Any))
@@ -167,6 +176,7 @@ static EMBLEM: CardDef = CardDef {
 
 static EMBLEM_LAND: CardDef = CardDef {
     name: "Test Emblem Land",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::LAND,
         abilities: &[Ability::triggered(&Trigger::ENTERS).effect(&get_emblem(you(), &EMBLEM))],
@@ -177,6 +187,7 @@ static EMBLEM_LAND: CardDef = CardDef {
 
 pub(super) static BEAR: CardDef = CardDef {
     name: "Test Bear",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::CREATURE,
         power: Some(2),
@@ -190,6 +201,7 @@ pub(super) static BEAR: CardDef = CardDef {
 /// copy of it".
 static SPHINX: CardDef = CardDef {
     name: "Test Sphinx",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::CREATURE,
         power: Some(3),
@@ -205,6 +217,7 @@ static SPHINX: CardDef = CardDef {
 /// Thundertrap Trainer stand-in: a creature with an enters trigger, for token copies.
 static TRAINER: CardDef = CardDef {
     name: "Test Trainer",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::CREATURE,
         power: Some(3),
@@ -218,6 +231,7 @@ static TRAINER: CardDef = CardDef {
 
 static RAIDER: CardDef = CardDef {
     name: "Test Raider",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::CREATURE,
         power: Some(2),
@@ -233,6 +247,7 @@ static RAIDER: CardDef = CardDef {
 
 static HUMAN: CardDef = CardDef {
     name: "Test Human",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::CREATURE,
         power: Some(1),
@@ -273,6 +288,7 @@ const A_HUMAN_ATTACKING_THEM: Effect = create_attacking_tokens(you(), &HUMAN, 1,
 /// attack, a 1/1 Human tapped and attacking.
 static ADELINE: CardDef = CardDef {
     name: "Test Adeline",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::CREATURE,
         power: Some(0),
@@ -293,6 +309,7 @@ static ADELINE: CardDef = CardDef {
 
 pub(super) static INSECT: CardDef = CardDef {
     name: "Test Insect",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::CREATURE,
         power: Some(2),
@@ -304,6 +321,7 @@ pub(super) static INSECT: CardDef = CardDef {
 
 static MAP: CardDef = CardDef {
     name: "Test Map",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::ARTIFACT,
         ..Face::EMPTY
@@ -315,6 +333,7 @@ static MAP: CardDef = CardDef {
 /// (impending). It creates two Insects when it enters.
 static OVERLORD: CardDef = CardDef {
     name: "Test Overlord",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::ENCHANTMENT.union(Types::CREATURE),
         subtypes: beryl_card::SubtypeWords::new(Subtypes::of(&[Subtype::Horror, Subtype::Shrine])),
@@ -341,6 +360,7 @@ static OVERLORD: CardDef = CardDef {
 /// tokens. Its second ability makes noncreature tokens, for the test that they don't count.
 static STAFF: CardDef = CardDef {
     name: "Test Staff",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::ARTIFACT,
         abilities: &[
@@ -359,6 +379,7 @@ static STAFF: CardDef = CardDef {
 
 static WALKER: CardDef = CardDef {
     name: "Test Walker",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::PLANESWALKER,
         loyalty: Some(3),
@@ -374,6 +395,7 @@ const CREW: Ability = Ability::activated(Cost::NONE);
 /// all other card types."
 static RECONFIG: CardDef = CardDef {
     name: "Test Reconfiguration",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::ENCHANTMENT,
         subtypes: crate::card::SubtypeWords::new(Subtypes::of(&[Subtype::Aura])),
@@ -425,6 +447,7 @@ impl CustomBody for ExileAnOpposingCreature {
 /// Aang's Iceberg: "exile ... until this leaves the battlefield".
 static ICEBERG: CardDef = CardDef {
     name: "Test Iceberg",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::ARTIFACT,
         abilities: &[
@@ -1875,6 +1898,7 @@ fn random_games_with_triggers_never_read_derived_dirty() {
 /// Adeline's trigger as the card has it: the Human attacks what its controller chooses.
 static CATHAR: CardDef = CardDef {
     name: "Test Cathar",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::CREATURE,
         power: Some(1),
@@ -1972,6 +1996,7 @@ fn a_token_created_attacking_may_attack_a_planeswalker() {
 /// A transforming double-faced card, its back face a planeswalker with no mana cost.
 static PRODIGY: CardDef = CardDef {
     name: "Test Prodigy",
+    shape: beryl_card::definition::Shape::Transforming,
     faces: &[
         Face {
             cost: ManaCost::new(1, [0, 1, 0, 0, 0, 0]),
@@ -1984,8 +2009,8 @@ static PRODIGY: CardDef = CardDef {
             name: "Test Telepath",
             types: Types::PLANESWALKER,
             loyalty: Some(5),
-            transformed: true,
-            ..Face::EMPTY
+
+            ..Face::EMPTY.for_shape(beryl_card::definition::Shape::Transforming, FaceIx::BACK)
         },
     ],
     tokens: &[],

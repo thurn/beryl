@@ -20,6 +20,49 @@ fn named<'a>(view: &'a PlayerView, name: &str) -> Vec<&'a ObjectView> {
         .collect()
 }
 
+#[test]
+fn the_other_face_is_sent_only_for_known_cards() {
+    const JACE: &str = names::JACE_VRYNS_PRODIGY;
+    const BACK: &str = names::JACE_TELEPATH_UNBOUND;
+    const SCENARIO: Scenario = Scenario::new("both faces of a known card")
+        .hand(P0, &[JACE])
+        .permanents(P0, &[Permanent::new(JACE).transformed()]);
+    let (table, mut state) = beryl_scenario::position(&beryl_cards::CARDS, &SCENARIO).unwrap();
+    beryl_engine::rederive(&mut state, &table).unwrap();
+    let [mine, theirs] = [P0, P1].map(|seat| {
+        beryl_session::protocol::player_view(
+            &table,
+            beryl_engine::Observation::new(&state, seat),
+            beryl_session::protocol::Moment::Thinking {
+                resolving: None,
+                decision: None,
+            },
+            beryl_session::StopsSetting::SMART,
+            &[],
+        )
+    });
+
+    let [front] = named(&mine, JACE)[..] else {
+        panic!("one Jace in hand");
+    };
+    assert_eq!(front.zone, ZoneName::Hand);
+    assert_eq!(front.other_face.as_deref(), Some(BACK));
+    let hidden = theirs
+        .objects
+        .iter()
+        .find(|object| object.slot == front.slot)
+        .unwrap();
+    assert!(hidden.name.is_none());
+    assert!(hidden.other_face.is_none());
+    for view in [&mine, &theirs] {
+        let [back] = named(view, BACK)[..] else {
+            panic!("one Jace on the battlefield");
+        };
+        assert_eq!(back.facing, Facing::Up);
+        assert_eq!(back.other_face.as_deref(), Some(JACE));
+    }
+}
+
 /// Gemrazer mutating under Blood Artist leaves Gemrazer's card in the merged zone, and both
 /// seats' views send it as part of the permanent ([CR 731.2b]): "As an object merges with a
 /// permanent, that object leaves its previous zone and becomes part of an object on the

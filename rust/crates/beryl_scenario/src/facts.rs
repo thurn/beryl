@@ -9,8 +9,8 @@ use std::fmt::{Debug, Write};
 
 use beryl_card::{
     Ability, AbilityKind, Amount, BasicLandTypes, Behavior, CardDef, CastingOption, Cost,
-    CostAction, CostPart, Effect, Face, ManaColor, ManaCost, ManaSet, Measure, Modification,
-    Objects, Players, Taken, TargetSpec, Words,
+    CostAction, CostPart, Effect, Face, FaceIx, ManaColor, ManaCost, ManaSet, Measure,
+    Modification, Objects, Players, Taken, TargetSpec, Words,
 };
 use beryl_engine::CardTable;
 use serde::Serialize;
@@ -29,8 +29,7 @@ pub struct CardFacts {
 #[derive(Debug, Serialize)]
 pub struct FaceFacts {
     pub name: &'static str,
-    /// The back face of a transforming double-faced card, never cast; a modal one's back is
-    /// not.
+    /// An alternate face that can't be cast normally. Kept under its original wire name.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub transformed: bool,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -268,12 +267,18 @@ pub fn card_facts(def: &'static CardDef) -> CardFacts {
     CardFacts {
         faces: def
             .face_ixs()
-            .map(|ix| face_facts(def.face_name(ix), def.face(ix)))
+            .map(|ix| {
+                face_facts(
+                    def.face_name(ix),
+                    def.face(ix),
+                    ix == FaceIx::BACK && !def.shape.can_cast_back(),
+                )
+            })
             .collect(),
     }
 }
 
-fn face_facts(name: &'static str, face: &'static Face) -> FaceFacts {
+fn face_facts(name: &'static str, face: &'static Face, transformed: bool) -> FaceFacts {
     let numbered = |prefix: &str, abilities: &'static [Ability]| {
         abilities
             .iter()
@@ -283,7 +288,7 @@ fn face_facts(name: &'static str, face: &'static Face) -> FaceFacts {
     };
     FaceFacts {
         name,
-        transformed: face.transformed,
+        transformed,
         abilities: numbered("Own", face.abilities),
         grants: numbered("Grant", face.grants),
         casting: face

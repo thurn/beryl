@@ -368,7 +368,7 @@ fn option(t: &GameTable, s: &State, o: Opt) -> String {
         Opt::Block(slot) => format!("block with {}", named(slot)),
         Opt::Lethal(slot) => format!("lethal to {}", named(slot)),
         Opt::Cast { slot, face, costs } => {
-            let spell = s.copiable(slot).turned(face);
+            let spell = s.copiable(slot).turned(t, face);
             let mut text = format!("cast {}", spell.name(t));
             for option in costs.paid(spell.face(t)) {
                 text.push_str(match option {

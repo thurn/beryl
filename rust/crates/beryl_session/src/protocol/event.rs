@@ -294,9 +294,11 @@ fn copied<L: Layout>(t: &GameTable, obs: Observation<'_, L>, entry: &StackEntry<
         unreachable!("a copy of a spell is a spell");
     };
     let player = side(obs, entry.controller());
+    let def = t.def(entry.card());
     Copied {
         record: ObjectView {
-            name: Some(t.def(entry.card()).face_name(entry.face()).to_owned()),
+            name: Some(def.face_name(entry.face()).to_owned()),
+            other_face: def.other_face_name(entry.face()).map(str::to_owned),
             token: true,
             ..ObjectView::hidden(slot, ZoneName::Stack, player, player)
         },

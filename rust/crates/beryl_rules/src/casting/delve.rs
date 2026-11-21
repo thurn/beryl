@@ -65,7 +65,7 @@ pub(super) fn delve_pays<L: Layout>(
     cost: ManaCost,
 ) -> bool {
     let cards = delve_candidates(s, t, player, slot);
-    let most = delve_most(s.copiable(slot).turned(face).face(t), costs, cards);
+    let most = delve_most(s.copiable(slot).turned(t, face).face(t), costs, cards);
     let paying = mana::Paying::casting(s, t, slot, face);
     payable_with_substitutes(s, t, funds, cost, most, cards, Bitboard::EMPTY, paying)
 }

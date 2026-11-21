@@ -41,6 +41,7 @@ const fn enchantment(abilities: &'static [Ability]) -> Face {
 /// layers 6 and 7b.
 static HUMBLE: CardDef = CardDef {
     name: "Test Humble",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[enchantment(&[Ability::static_ability(&LayerSpec {
         affected: CREATURES,
         condition: None,
@@ -56,6 +57,7 @@ static HUMBLE: CardDef = CardDef {
 /// toughness 4/4": one effect, in layers 4 and 7b.
 static OPALESCENT: CardDef = CardDef {
     name: "Test Opalescent",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[enchantment(&[Ability::static_ability(&LayerSpec {
         affected: Objects::All {
             zone: Zone::Battlefield,
@@ -73,6 +75,7 @@ static OPALESCENT: CardDef = CardDef {
 /// "Creatures lose all abilities", in layer 6 alone.
 static PLAIN: CardDef = CardDef {
     name: "Test Plain",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[enchantment(&[Ability::static_ability(&LayerSpec {
         affected: CREATURES,
         condition: None,
@@ -85,6 +88,7 @@ static PLAIN: CardDef = CardDef {
 /// ability, a 3/3: each kind of ability Humility removes.
 static KNIGHT: CardDef = CardDef {
     name: "Test Knight",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::CREATURE,
         power: Some(2),
@@ -109,6 +113,7 @@ static KNIGHT: CardDef = CardDef {
 /// colors. It loses its other ability and has its power and toughness switched."
 static ODDITY: CardDef = CardDef {
     name: "Test Oddity",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::CREATURE,
         power: Some(1),
@@ -135,6 +140,7 @@ static ODDITY: CardDef = CardDef {
 /// A creature of seventeen abilities, more than a [`crate::layout::Small`] mask names.
 static HYDRA: CardDef = CardDef {
     name: "Test Hydra",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::CREATURE,
         power: Some(1),

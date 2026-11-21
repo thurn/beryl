@@ -99,6 +99,13 @@ impl<'a, L: Layout> Observation<'a, L> {
         o
     }
 
+    /// The other face of a known card or token whose face is up. This uses the observed
+    /// identity so a hidden card's second face cannot reveal what the card is.
+    pub fn other_face_name(&self, t: &GameTable, slot: L::Slot) -> Option<&'static str> {
+        let card = self.card(slot)?;
+        t.def(card).other_face_name(self.state.object(slot).face)
+    }
+
     /// Who controls an object: for a permanent the layer-2 result, otherwise its base
     /// controller (see [CR 109.4](https://yawgatog.com/resources/magic-rules/#R1094)). Public:
     /// control is never hidden.

@@ -87,6 +87,7 @@ impl ObjectView {
             zone_side: None,
             controller,
             name: None,
+            other_face: None,
             facing: Facing::Up,
             token: false,
             tapped: false,

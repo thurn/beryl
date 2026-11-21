@@ -65,6 +65,7 @@ pub use counter::CounterKind;
 pub use decision::DecisionKind;
 pub use definition::{
     CardDef, FACE_DOWN, FACE_DOWN_COPY, Face, FaceAbility, FaceIx, ObjectAbility, card,
+    card_with_shape,
 };
 pub use effect::{
     Amount, CastTerms, Comparison, Condition, CopyChange, CopyException, Effect, Found,
@@ -99,6 +100,6 @@ pub mod prelude {
         ManaRestriction, ManaSet, Modification, Named, Objects, Place, PlayerRules, Players,
         Prevention, Prompt, Protection, Purpose, PutOnto, Recipients, Replacement, RuleChange,
         SpellCost, Subtype, Subtypes, Supertypes, Taken, TargetKind, TargetSpec, TextWord, Trigger,
-        TriggerEvent, TurnStep, Types, When, Zone, ZoneSet, card, mana,
+        TriggerEvent, TurnStep, Types, When, Zone, ZoneSet, card, card_with_shape, mana,
     };
 }

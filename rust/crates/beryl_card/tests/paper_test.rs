@@ -21,6 +21,7 @@ use beryl_card::{
 /// Clue token. (It's an artifact with '{2}, Sacrifice this token: Draw a card.') / Crew 2"
 static FIRE_NATION_WARSHIP: CardDef = CardDef {
     name: "Fire Nation Warship",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         cost: mana("{3}"),
         types: Types::ARTIFACT,
@@ -39,6 +40,7 @@ static FIRE_NATION_WARSHIP: CardDef = CardDef {
 
 static CLUE: CardDef = CardDef {
     name: "Clue Token",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::ARTIFACT,
         abilities: &[
@@ -54,6 +56,7 @@ static CLUE: CardDef = CardDef {
 /// mana value."
 static SERENE_OFFERING: CardDef = CardDef {
     name: "Serene Offering",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         cost: mana("{1}{W}"),
         types: Types::INSTANT,
@@ -79,6 +82,7 @@ static SERENE_OFFERING: CardDef = CardDef {
 /// the beginning of your end step, you lose 2 life for each card in your hand."
 static DEMONIC_LORE: CardDef = CardDef {
     name: "Demonic Lore",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         cost: mana("{2}{B}"),
         types: Types::ENCHANTMENT,
@@ -103,6 +107,7 @@ const CARDS_IN_YOUR_HAND: Objects = Objects::All {
 /// Azure Drake {3}{U}, Creature — Drake 2/4. "Flying"
 static AZURE_DRAKE: CardDef = CardDef {
     name: "Azure Drake",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         cost: mana("{3}{U}"),
         types: Types::CREATURE,
@@ -119,6 +124,7 @@ static AZURE_DRAKE: CardDef = CardDef {
 /// Human Druid, is the same card in green.
 static FUGITIVE_WIZARD: CardDef = CardDef {
     name: "Fugitive Wizard",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         cost: mana("{U}"),
         types: Types::CREATURE,
@@ -138,6 +144,7 @@ const SACRIFICED: Objects = Objects::Paid(CostAction::Sacrifice);
 /// artifact or land: Draw a card."
 static SLAGDRILL_SCRAPPER: CardDef = CardDef {
     name: "Slagdrill Scrapper",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         cost: mana("{R}"),
         types: Types::ARTIFACT.union(Types::CREATURE),
@@ -162,6 +169,7 @@ static SLAGDRILL_SCRAPPER: CardDef = CardDef {
 /// creature an opponent controls."
 static SEVERED_STRANDS: CardDef = CardDef {
     name: "Severed Strands",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         cost: mana("{1}{B}"),
         types: Types::SORCERY,
@@ -191,6 +199,7 @@ static SEVERED_STRANDS: CardDef = CardDef {
 /// enchantment. / {3}{U}{U}: Counter target enchantment spell."
 static TEFERIS_CARE: CardDef = CardDef {
     name: "Teferi's Care",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         cost: mana("{2}{W}"),
         types: Types::ENCHANTMENT,

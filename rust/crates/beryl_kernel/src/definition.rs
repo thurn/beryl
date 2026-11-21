@@ -47,7 +47,7 @@ impl<L: Layout> Definition<L> {
     /// The card at a game index with its face `face` up.
     #[inline]
     pub const fn of_face(card: L::Card, face: FaceIx) -> Definition<L> {
-        Definition(Copiable::of_card(card).turned(face))
+        Definition(Copiable::of_face(card, face))
     }
 
     /// [`Copiable::face`].

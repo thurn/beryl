@@ -17,6 +17,7 @@ use beryl_kernel::{CardIx, Copiable, GameTable, Observation, Seat, Slot, SlotId,
 
 static SOLDIER: CardDef = CardDef {
     name: "Test Soldier",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::CREATURE,
         power: Some(1),
@@ -28,6 +29,7 @@ static SOLDIER: CardDef = CardDef {
 
 static BEAR: CardDef = CardDef {
     name: "Test Bear",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         cost: ManaCost::new(1, [0, 0, 0, 0, 1, 0]),
         types: Types::CREATURE,
@@ -42,6 +44,7 @@ static BEAR: CardDef = CardDef {
 /// A transforming double-faced card: a creature whose back face is a planeswalker.
 static PRODIGY: CardDef = CardDef {
     name: "Test Prodigy",
+    shape: beryl_card::definition::Shape::Transforming,
     faces: &[
         Face {
             cost: ManaCost::new(1, [0, 1, 0, 0, 0, 0]),
@@ -54,8 +57,8 @@ static PRODIGY: CardDef = CardDef {
             name: "Test Telepath",
             types: Types::PLANESWALKER,
             loyalty: Some(5),
-            transformed: true,
-            ..Face::EMPTY
+
+            ..Face::EMPTY.for_shape(beryl_card::definition::Shape::Transforming, FaceIx::BACK)
         },
     ],
     tokens: &[],
@@ -64,6 +67,7 @@ static PRODIGY: CardDef = CardDef {
 /// A sorcery that costs {X}{R}.
 static BLAST: CardDef = CardDef {
     name: "Test Blast",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         cost: ManaCost {
             generic: 0,
@@ -218,7 +222,7 @@ fn copiable_values_are_the_face_up_or_the_blank_face_down_ones() {
         back.record(&t),
         (t.index_of(&PRODIGY).unwrap(), FaceIx::BACK)
     );
-    assert_eq!(back.turned(FaceIx::FRONT).name(&t), "Test Prodigy");
+    assert_eq!(back.turned(&t, FaceIx::FRONT).name(&t), "Test Prodigy");
 
     // CR 708.2: a face-down permanent's are the blank 2/2's, and say nothing of its card.
     s.board().set_face(bear, FaceIx::DOWN);

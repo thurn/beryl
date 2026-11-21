@@ -272,6 +272,10 @@ pub struct ObjectView {
     /// ([`crate::card_records`]); none for a card the viewer has not seen. A face-down
     /// permanent's controller may look at it (CR 708.5): its card's name, for them.
     pub name: Option<String>,
+    /// The other face of a known multi-face card, when one of its faces is up.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub other_face: Option<String>,
     /// Whether a permanent is face up or face down, part of its status (CR 110.5). A face-down
     /// one is a 2/2 creature with no name or text, whatever its card (CR 708.2a).
     pub facing: Facing,

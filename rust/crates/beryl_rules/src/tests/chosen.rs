@@ -24,6 +24,7 @@ use super::cast::{cast, index_of};
 /// "As this artifact enters, choose a color."
 pub(super) static PAINTER: CardDef = CardDef {
     name: "Test Painter",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::ARTIFACT,
         abilities: &[Ability::replacing(&Replacement::choose_as_enters(
@@ -37,6 +38,7 @@ pub(super) static PAINTER: CardDef = CardDef {
 /// "As this artifact enters, choose a card name."
 pub(super) static NEEDLE: CardDef = CardDef {
     name: "Test Needle",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::ARTIFACT,
         abilities: &[Ability::replacing(&Replacement::choose_as_enters(
@@ -50,6 +52,7 @@ pub(super) static NEEDLE: CardDef = CardDef {
 /// "As this land enters, choose a creature type."
 pub(super) static CAVERN: CardDef = CardDef {
     name: "Test Cavern",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::LAND,
         abilities: &[Ability::replacing(&Replacement::choose_as_enters(
@@ -63,6 +66,7 @@ pub(super) static CAVERN: CardDef = CardDef {
 /// A creature whose type the game numbers, and the token it makes, whose name no card has.
 pub(super) static GOBLIN: CardDef = CardDef {
     name: "Test Goblin",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::CREATURE,
         subtypes: crate::card::SubtypeWords::new(Subtypes::of(&[Subtype::Goblin])),
@@ -75,6 +79,7 @@ pub(super) static GOBLIN: CardDef = CardDef {
 
 static GOBLIN_TOKEN: CardDef = CardDef {
     name: "Test Goblin Token",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::CREATURE,
         subtypes: crate::card::SubtypeWords::new(Subtypes::of(&[Subtype::Goblin])),
@@ -87,6 +92,7 @@ static GOBLIN_TOKEN: CardDef = CardDef {
 
 pub(super) static LAND: CardDef = CardDef {
     name: "Test Plain Land",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::LAND,
         ..Face::EMPTY

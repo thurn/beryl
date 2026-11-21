@@ -12,17 +12,20 @@ use crate::rule_changes::fixtures::{LIMIT, WALKER};
 
 static ALPHA: CardDef = CardDef {
     name: "Alpha",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[],
     tokens: &[],
 };
 static BETA: CardDef = CardDef {
     name: "Beta",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[],
     tokens: &[],
 };
 /// A second definition under Alpha's name.
 static ALPHA_AGAIN: CardDef = CardDef {
     name: "Alpha",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[],
     tokens: &[],
 };
@@ -76,6 +79,7 @@ fn a_card_that_changes_a_rule_for_players_says_so_in_its_mask() {
 /// draw a card" on the back.
 static HERALD: CardDef = CardDef {
     name: "Herald",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[
         Face {
             abilities: &[
@@ -98,6 +102,7 @@ static HERALD: CardDef = CardDef {
 /// has no code to match, on a token a card makes.
 static GREETER: CardDef = CardDef {
     name: "Greeter",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         abilities: &[Ability::triggered(&Trigger::of(
             TriggerEvent::Attacks,
@@ -110,6 +115,7 @@ static GREETER: CardDef = CardDef {
 };
 static HOST: CardDef = CardDef {
     name: "Host",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[],
     tokens: &[&GREETER],
 };
@@ -162,6 +168,7 @@ fn a_table_refuses_a_trigger_the_engine_cannot_match() {
 /// have no code to apply it.
 static ANTHEM: CardDef = CardDef {
     name: "Anthem",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         abilities: &[Ability::static_ability(&LayerSpec {
             affected: Objects::All {
@@ -179,6 +186,7 @@ static ANTHEM: CardDef = CardDef {
 /// only a resolution knows.
 static TOLL: CardDef = CardDef {
     name: "Toll",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         abilities: &[
             Ability::triggered(&Trigger::ENTERS).effect(&Effect::ForEachPlayer {
@@ -200,6 +208,7 @@ static TOLL: CardDef = CardDef {
 /// to other permanents, which no listener of the table matches.
 static HERALDRY: CardDef = CardDef {
     name: "Heraldry",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         abilities: &[Ability::static_ability(&LayerSpec {
             affected: Objects::All {
@@ -249,6 +258,7 @@ fn a_table_refuses_what_the_engine_has_no_code_to_read() {
 /// "Create a Beta token", by a card that lists none, and by one that lists it.
 static MAKER: CardDef = CardDef {
     name: "Maker",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         abilities: &[
             Ability::triggered(&Trigger::ENTERS).effect(&Effect::CreateTokens {
@@ -263,6 +273,7 @@ static MAKER: CardDef = CardDef {
 };
 static LISTING_MAKER: CardDef = CardDef {
     name: "Listing Maker",
+    shape: beryl_card::definition::Shape::Single,
     faces: MAKER.faces,
     tokens: &[&BETA],
 };

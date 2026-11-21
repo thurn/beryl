@@ -3,6 +3,7 @@
 //! Implements: CR 205.3d, CR 707.2, CR 707.9a, CR 707.9b, CR 707.9d, CR 708.2a
 //!
 
+use beryl_card::definition::Shape;
 use beryl_card::{
     Ability, AbilityKind, Colors, CopyChange, Face, FaceIx, GrantIx, Modification, Supertypes,
     Words,
@@ -186,9 +187,14 @@ impl<L: Layout> Copiable<L> {
     /// [CR 712.6a]: https://yawgatog.com/resources/magic-rules/#R7126a
     #[inline]
     pub const fn of_card(card: L::Card) -> Copiable<L> {
+        Self::of_face(card, FaceIx::FRONT)
+    }
+
+    #[inline]
+    pub(crate) const fn of_face(card: L::Card, face: FaceIx) -> Self {
         Copiable {
             card,
-            face: FaceIx::FRONT,
+            face,
             additions: L::Additions::NONE,
             read: ReadColors::NONE,
             component_face: false,
@@ -340,15 +346,23 @@ impl<L: Layout> Copiable<L> {
         )
     }
 
-    /// These values with the face at `face` up instead: the spell a card becomes cast with that
-    /// face (see [CR 712.8b]), or the permanent it becomes entering with it up or down (see [CR 712.11a],
-    /// see CR 708.2).
+    /// The shape of the definition supplying these values, including through a copy effect.
+    pub fn shape(self, t: &GameTable) -> Shape {
+        t.def(self.card).shape
+    }
+
+    /// These values with the face at `face` up instead. A modal card's caster "chooses which
+    /// face they are casting before putting it onto the stack" (see [CR 712.8b]).
+    ///
+    /// # Panics
+    ///
+    /// In debug builds if a request names a printed face this shape does not have.
     ///
     /// [CR 712.8b]: https://yawgatog.com/resources/magic-rules/#R7128b
-    /// [CR 712.11a]: https://yawgatog.com/resources/magic-rules/#R71211a
     #[inline]
     #[must_use]
-    pub const fn turned(self, face: FaceIx) -> Copiable<L> {
+    pub fn turned(self, t: &GameTable, face: FaceIx) -> Copiable<L> {
+        debug_assert!(face == FaceIx::DOWN || usize::from(face.get()) < self.shape(t).face_count());
         Copiable { face, ..self }
     }
 
@@ -518,7 +532,7 @@ impl<L: Layout> Copiable<L> {
         if !top {
             return self.with_addition(Addition::every_ability(card, face));
         }
-        let mut values = Copiable::of_card(card).turned(face);
+        let mut values = Copiable::of_face(card, face);
         if self.face != FaceIx::DOWN {
             values = values.with_addition(Addition::every_ability(self.card, self.face))?;
         }

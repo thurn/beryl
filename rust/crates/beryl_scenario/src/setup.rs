@@ -165,7 +165,7 @@ fn arrange<L: Layout>(
             s.track(t, Tracker::EnteredThisTurn, slot);
             // CR 306.5b: a planeswalker "enters with a number of loyalty counters on it equal
             // to its printed loyalty number."
-            let printed = s.copiable(slot).turned(b.face).face(t).loyalty;
+            let printed = s.copiable(slot).turned(t, b.face).face(t).loyalty;
             let counters = b
                 .counters
                 .map(|c| (c.kind, c.count))

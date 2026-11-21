@@ -121,6 +121,7 @@ fn play(game: &mut Game, mut watch: impl FnMut(&PlayerView, Option<&State<Large>
 /// is an effect of its own. No card of the pool starts that many at once.
 static OPEN_VAULT: CardDef = CardDef {
     name: "Open Vault",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         cost: ManaCost::NONE,
         types: Types::SORCERY,
@@ -285,6 +286,7 @@ static ECHOES: CardDef = chorus("Chorus of Echoes");
 /// A spell to cast for nothing.
 static PEBBLE: CardDef = CardDef {
     name: "Pebble",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         cost: ManaCost::NONE,
         types: Types::ARTIFACT,
@@ -297,6 +299,7 @@ static PEBBLE: CardDef = CardDef {
 const fn chorus(name: &'static str) -> CardDef {
     CardDef {
         name,
+        shape: beryl_card::definition::Shape::Single,
         faces: &[Face {
             cost: ManaCost::NONE,
             types: Types::ARTIFACT,
@@ -424,6 +427,7 @@ const TREASURES: u8 = 90;
 /// makes so many at once; a larger card pool may.
 static HOARD: CardDef = CardDef {
     name: "Hoard",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         cost: ManaCost::NONE,
         types: Types::ARTIFACT,

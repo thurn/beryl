@@ -8,7 +8,7 @@ use crate::catalogs::Catalogs;
 use crate::complete::{self, Group, Keywords, complete_from_store};
 use crate::files::{card_files, set_crates};
 use crate::names::{camel, constant, constant_of_camel};
-use crate::printed::{Subtypes, faces};
+use crate::printed::{Subtypes, faces, shape_source};
 use crate::store::{Record, Store};
 
 /// The constants `text` reads from a module: each `<module>::<CONSTANT>`, where `module` is
@@ -95,7 +95,7 @@ impl {ty} {{
 
 /// The builder calls that would type a printed characteristic of a face in a card file, which
 /// its `printed` constant holds instead.
-const TYPED: [&str; 8] = [
+const TYPED: [&str; 9] = [
     ".cost(",
     ".supertypes(",
     ".types(",
@@ -103,6 +103,7 @@ const TYPED: [&str; 8] = [
     ".colors(",
     ".power_toughness(",
     ".loyalty(",
+    ".defense(",
     ".named(",
 ];
 
@@ -118,6 +119,8 @@ pub struct Printed<'a> {
     pub subtypes: &'a Subtypes,
     /// The `(constant, camel, source)` of each face, in order.
     faces: Vec<(String, String, String)>,
+    /// The source of each non-single shape, keyed by the name of its front face.
+    shapes: Vec<(String, String)>,
     /// The tokens the crate's cards make, as their records link them.
     links: Vec<beryl_card_store::TokenLink>,
     /// The `printed::token::` constants its files use.
@@ -130,6 +133,7 @@ impl<'a> Printed<'a> {
             store,
             subtypes,
             faces: Vec::new(),
+            shapes: Vec::new(),
             links: Vec::new(),
             tokens: Vec::new(),
         }
@@ -137,6 +141,13 @@ impl<'a> Printed<'a> {
 
     /// Adds the faces of `record`, a card with a file in the crate, and the tokens it makes.
     fn card(&mut self, record: &Record) -> Result<(), String> {
+        if let Some(shape) = shape_source(record) {
+            let front = record
+                .faces
+                .first()
+                .ok_or_else(|| format!("{} has no faces", record.name))?;
+            self.shapes.push((camel(&front.name)?, shape));
+        }
         for (name, source) in faces(record, self.subtypes)? {
             let spelled = constant(&name)?;
             if self.faces.iter().any(|(c, _, _)| *c == spelled) {
@@ -247,6 +258,13 @@ impl<'a> Printed<'a> {
             "Printed",
             "beryl_card::Face",
             &faces,
+        ));
+        out.push('\n');
+        out.push_str(&associated_source(
+            "/// Each card's shape where it differs from the default of one face.",
+            "PrintedShape",
+            "beryl_card::definition::Shape",
+            &self.shapes,
         ));
         out.push('\n');
         out.push_str(&associated_source(
@@ -388,7 +406,7 @@ pub fn set_crate_source(
          /// What a card file uses, `use crate::prelude::*;`: the vocabulary, this crate's\n\
          /// names and printed faces, and with the `scenarios` feature the scenario builder.\n\
          pub mod prelude {{\n    \
-         pub use super::{{Card, Printed, Prop, Token}};\n    \
+         pub use super::{{Card, Printed, PrintedShape, Prop, Token}};\n    \
          pub use beryl_card::prelude::*;\n    \
          #[cfg(feature = \"scenarios\")]\n    \
          pub use beryl_scenario_types::prelude::*;\n}}\n\n\

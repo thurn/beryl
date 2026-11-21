@@ -28,6 +28,7 @@ static YOUR_CREATURES: Filter =
 /// An artifact with no abilities: a 0/0 if it becomes a creature.
 static TRINKET: CardDef = CardDef {
     name: "Test Trinket",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::ARTIFACT,
         ..Face::EMPTY
@@ -38,6 +39,7 @@ static TRINKET: CardDef = CardDef {
 /// A 2/2 creature with mana value 0.
 static BEAR: CardDef = CardDef {
     name: "Test Bear",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::CREATURE,
         power: Some(2),
@@ -59,6 +61,7 @@ const fn enchantment(abilities: &'static [Ability]) -> Face {
 /// "Artifacts you control are creatures in addition to their other types", in layer 4.
 static ANIMATOR: CardDef = CardDef {
     name: "Test Animator",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[enchantment(&[Ability::static_ability(&LayerSpec {
         affected: Objects::All {
             zone: Zone::Battlefield,
@@ -73,6 +76,7 @@ static ANIMATOR: CardDef = CardDef {
 /// "Creatures you control are artifacts in addition to their other types", in layer 4.
 static FORGE: CardDef = CardDef {
     name: "Test Forge",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[enchantment(&[Ability::static_ability(&LayerSpec {
         affected: Objects::All {
             zone: Zone::Battlefield,
@@ -87,6 +91,7 @@ static FORGE: CardDef = CardDef {
 /// "Untapped creatures with mana value 0 get +0/+3", whoever controls them.
 static WALL: CardDef = CardDef {
     name: "Test Wall",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[enchantment(&[Ability::static_ability(&LayerSpec {
         affected: Objects::All {
             zone: Zone::Battlefield,
@@ -106,6 +111,7 @@ static WALL: CardDef = CardDef {
 /// an artifact, it gets +0/+1": a 0/3.
 static CAPTAIN: CardDef = CardDef {
     name: "Test Captain",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::CREATURE,
         power: Some(0),

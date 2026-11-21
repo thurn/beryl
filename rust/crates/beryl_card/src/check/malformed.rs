@@ -13,6 +13,12 @@ use crate::{
 /// What is wrong with a definition.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Malformed {
+    /// A single-faced card or meld component defines a different number of faces.
+    ExpectedOneFace,
+    /// A card with an alternate set of printed characteristics lacks exactly two faces.
+    ExpectedTwoFaces,
+    /// A face's generated use does not agree with its definition.
+    FaceUse,
     /// [`Objects::Target`] or [`Players::Target`] of a target its ability does not have, or
     /// of the other kind: an object where the ability targets a player, or a player where it
     /// targets an object ([CR 115.1](https://yawgatog.com/resources/magic-rules/#R1151)).
@@ -107,6 +113,13 @@ impl Malformed {
     /// What is wrong, as the build failure says it.
     pub const fn says(self) -> &'static str {
         match self {
+            Malformed::ExpectedOneFace => {
+                "this printed shape requires exactly one face in the card definition"
+            }
+            Malformed::ExpectedTwoFaces => {
+                "this printed shape requires two faces in the card definition, front first"
+            }
+            Malformed::FaceUse => "use this card's generated printed faces in front-to-back order",
             Malformed::Target => {
                 "an effect names a target its ability does not have, or one of the other kind"
             }

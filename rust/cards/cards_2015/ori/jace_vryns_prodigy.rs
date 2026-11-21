@@ -23,8 +23,9 @@ use crate::prelude::*;
 ///
 /// [CR 608.2c]: https://yawgatog.com/resources/magic-rules/#R6082c
 /// [CR 400.7]: https://yawgatog.com/resources/magic-rules/#R4007
-pub static CARD: CardDef = card(
+pub static CARD: CardDef = card_with_shape(
     Card::JaceVrynsProdigy,
+    PrintedShape::JaceVrynsProdigy,
     &[
         Printed::JaceVrynsProdigy.abilities(&[Ability::activated(Cost::TAP).effect(&sequence(&[
             draw(you(), 1),

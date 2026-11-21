@@ -6,6 +6,13 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **Returning a card transformed could put the wrong face on the battlefield.**
+  The rule used the number of printed faces to identify double-faced cards. It
+  now reads the generated card shape and checks that the back face can be on the
+  battlefield. The regression
+  `returning_transformed_keeps_a_flip_card_and_an_instant_back_face_in_exile`
+  covers a flip card and a modal card whose back face is an instant.
+
 - **A resolution that ran out of capacity could leave events from its scratch
   run.** The engine now truncates those events and restores the event scopes
   when it discards the run. This applies to costs paid while casting a spell

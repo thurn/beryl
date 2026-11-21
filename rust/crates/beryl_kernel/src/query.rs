@@ -134,7 +134,7 @@ impl<L: Layout> State<L> {
                 .saturating_add(cost.x.saturating_mul(entry.x));
         }
         let up = t.def(o.card).face(o.face);
-        if !up.transformed {
+        if !up.uses_front_mana_value() {
             up.cost.mana_value()
         } else if o.is_token() || self.has_copied_face(slot) {
             0

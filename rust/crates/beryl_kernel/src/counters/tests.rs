@@ -15,6 +15,7 @@ use crate::{LargeSlot, Seat, Slot};
 
 static BEAR: CardDef = CardDef {
     name: "Test Bear",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::CREATURE,
         power: Some(2),

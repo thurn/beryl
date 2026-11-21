@@ -262,10 +262,15 @@ impl Action {
 
     /// `player` casts `card`'s front face at priority, with none of its casting options.
     pub const fn cast(player: Seat, card: &'static str) -> Action {
+        Self::cast_face(player, card, FaceIx::FRONT)
+    }
+
+    /// `player` casts one face or half of `card` at priority without casting options.
+    pub const fn cast_face(player: Seat, card: &'static str, face: FaceIx) -> Action {
         Action::Cast {
             player,
             card,
-            face: FaceIx::FRONT,
+            face,
             costs: Castings::NONE,
         }
     }

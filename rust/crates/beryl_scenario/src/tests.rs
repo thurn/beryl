@@ -6,10 +6,12 @@ use beryl_engine::card::{
 };
 use beryl_engine::{CardTable, DecisionKind, Seat, TurnStep, Zone};
 
+use crate::prelude::ME;
 use crate::{Action, Assertion, Ending, P0, P1, Permanent, Pick, Scenario, run, to_json};
 
 static LAND: CardDef = CardDef {
     name: "Test Land",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::LAND,
         subtypes: beryl_card::SubtypeWords::new(Subtypes::of(&[Subtype::Plains])),
@@ -21,6 +23,7 @@ static LAND: CardDef = CardDef {
 
 static OTHER: CardDef = CardDef {
     name: "Other Land",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::LAND,
         ..Face::EMPTY
@@ -30,6 +33,7 @@ static OTHER: CardDef = CardDef {
 
 static BEAR: CardDef = CardDef {
     name: "Test Bear",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         cost: ManaCost::new(1, [1, 0, 0, 0, 0, 0]),
         types: Types::CREATURE,
@@ -42,6 +46,7 @@ static BEAR: CardDef = CardDef {
 
 static CYCLER: CardDef = CardDef {
     name: "Test Cycler",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         cost: ManaCost::generic(5),
         types: Types::SORCERY,
@@ -54,6 +59,7 @@ static CYCLER: CardDef = CardDef {
 /// The basic land `FILLER_LIBRARY` fills a library with when a scenario gives none.
 static ISLAND: CardDef = CardDef {
     name: "Island",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::LAND,
         subtypes: beryl_card::SubtypeWords::new(Subtypes::of(&[Subtype::Island])),
@@ -63,7 +69,20 @@ static ISLAND: CardDef = CardDef {
     tokens: &[],
 };
 
-static CARDS: CardTable = CardTable::new(&[&LAND, &OTHER, &BEAR, &CYCLER, &ISLAND]);
+static MODAL: CardDef = beryl_card::card_with_shape(
+    "Test Modal",
+    beryl_card::definition::Shape::Modal,
+    &[
+        Face::EMPTY.types(Types::LAND),
+        Face::EMPTY
+            .named("Test Modal Back")
+            .cost(ManaCost::generic(1))
+            .types(Types::CREATURE)
+            .power_toughness(2, 2),
+    ],
+);
+
+static CARDS: CardTable = CardTable::new(&[&LAND, &OTHER, &BEAR, &CYCLER, &ISLAND, &MODAL]);
 
 const L: &str = "Test Land";
 /// Nine cards: one too many to keep after playing a land, and two kinds to discard.
@@ -82,6 +101,27 @@ const fn count(player: Seat, zone: Zone, n: u8) -> Action {
 
 fn error(scenario: &Scenario) -> String {
     run(&CARDS, scenario).unwrap_err().to_string()
+}
+
+#[test]
+fn a_scenario_casts_the_chosen_face() {
+    const S: Scenario = Scenario::new("cast the back face")
+        .hand(P0, &["Test Modal"])
+        .battlefield(P0, &[L])
+        .actions(&[
+            ME.casts_face("Test Modal", FaceIx::BACK),
+            Action::Resolve,
+            Action::Assert {
+                assertion: Assertion::Pt {
+                    player: P0,
+                    card: "Test Modal Back",
+                    token: false,
+                    power: 2,
+                    toughness: 2,
+                },
+            },
+        ]);
+    run(&CARDS, &S).unwrap();
 }
 
 #[test]
@@ -513,6 +553,7 @@ fn the_snapshot_keeps_a_spell_on_the_stack_and_unspent_mana() {
     const R: &str = "Test Ritual";
     static RITUAL: CardDef = CardDef {
         name: R,
+        shape: beryl_card::definition::Shape::Single,
         faces: &[Face {
             cost: ManaCost::generic(1),
             types: Types::SORCERY,

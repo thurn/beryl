@@ -154,7 +154,7 @@ fn pays_otherwise<L: Layout>(
 ) -> bool {
     (funds.may_restrict() && restricted_pays(s, t, funds, cost, slot, face))
         || (t.can(Capability::Delve)
-            && delve::delves(s.copiable(slot).turned(face).face(t))
+            && delve::delves(s.copiable(slot).turned(t, face).face(t))
             && delve::delve_pays(s, t, funds, player, slot, face, costs, cost))
 }
 
@@ -181,7 +181,7 @@ fn refused<L: Layout, const TARGETS: bool>(
     from: From,
 ) -> Option<Refusal<L>> {
     let player = now.player;
-    let face = s.copiable(slot).turned(face_index).face(t);
+    let face = s.copiable(slot).turned(t, face_index).face(t);
     if !in_time(s, t, now, face, from) {
         return Some(Refusal::Timing { by: None });
     }
@@ -262,7 +262,7 @@ pub(crate) fn refusal<L: Layout>(
     let mut most = land;
     for f in def.face_ixs() {
         let face = def.face(f);
-        if face.transformed || face.types.intersects(Types::LAND) {
+        if !face.playable() || face.types.intersects(Types::LAND) {
             continue;
         }
         for costs in ways.option_sets(face) {
@@ -277,7 +277,7 @@ pub(crate) fn refusal<L: Layout>(
     // Only sorcery speed, where a face could be cast at instant speed but for the limit.
     if most == Some(Refusal::Timing { by: None }) {
         let instant = (def.face_ixs().map(|f| def.face(f)))
-            .find(|face| !face.transformed && instant_speed(s, t, face, player));
+            .find(|face| face.playable() && instant_speed(s, t, face, player));
         if let Some(face) = instant {
             let limit = RuleKind::CastOnlyAsSorcery;
             most = Some(Refusal::Timing {
@@ -391,7 +391,7 @@ pub(super) fn cast_options<L: Layout, const TARGETS: bool>(
         s.card_def(t, slot).is_some_and(|def| {
             def.face_ixs().any(|f| {
                 let face = def.face(f);
-                !face.transformed && in_time(s, t, now, face, from)
+                face.playable() && in_time(s, t, now, face, from)
             })
         })
     });
@@ -402,7 +402,7 @@ pub(super) fn cast_options<L: Layout, const TARGETS: bool>(
         let ways = Ways::of(s, t, player, slot, from);
         for f in def.face_ixs() {
             let face = def.face(f);
-            if face.transformed {
+            if !face.playable() {
                 continue;
             }
             if ways.plain {
@@ -438,7 +438,7 @@ fn escape_options<L: Layout, const TARGETS: bool>(
     from: From,
     out: &mut L::Queue<Opt<L>, OPTIONS>,
 ) -> Result<(), Full> {
-    let def_face = s.copiable(slot).turned(face).face(t);
+    let def_face = s.copiable(slot).turned(t, face).face(t);
     for costs in option_sets(def_face, true).map(Castings::with_escape) {
         if refused(s, t, now, slot, face, costs, from).is_none() {
             out.push(Opt::Cast { slot, face, costs })?;

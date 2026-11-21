@@ -39,6 +39,7 @@ impl CustomBody for Reorder {
 
 static REORDER: CardDef = CardDef {
     name: "Test Reorder Turn",
+    shape: beryl_card::definition::Shape::Single,
     tokens: &[],
     faces: &[Face {
         types: Types::INSTANT,
@@ -53,6 +54,7 @@ static REORDER: CardDef = CardDef {
 
 static WATCH_DRAWS: CardDef = CardDef {
     name: "Test Draw Watcher",
+    shape: beryl_card::definition::Shape::Single,
     tokens: &[],
     faces: &[Face {
         types: Types::ENCHANTMENT,

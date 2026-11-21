@@ -26,6 +26,7 @@ macro_rules! listener {
     ($name:ident, $text:literal, $trigger:expr) => {
         static $name: CardDef = CardDef {
             name: $text,
+            shape: beryl_card::definition::Shape::Single,
             faces: &[Face {
                 types: Types::ARTIFACT,
                 abilities: &[Ability::triggered(&$trigger).effect(&gain_life(you(), 1))],
@@ -38,6 +39,7 @@ macro_rules! listener {
 
 static LAND: CardDef = CardDef {
     name: "Test Land",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::LAND,
         ..Face::EMPTY
@@ -46,6 +48,7 @@ static LAND: CardDef = CardDef {
 };
 static BEAR: CardDef = CardDef {
     name: "Test Bear",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::CREATURE,
         power: Some(2),
@@ -56,6 +59,7 @@ static BEAR: CardDef = CardDef {
 };
 static KNIGHT: CardDef = CardDef {
     name: "Test Knight",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::CREATURE,
         subtypes: crate::card::SubtypeWords::new(Subtypes::of(&[Subtype::Knight])),
@@ -67,6 +71,7 @@ static KNIGHT: CardDef = CardDef {
 };
 static ARTIFACT: CardDef = CardDef {
     name: "Test Artifact",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::ARTIFACT,
         ..Face::EMPTY
@@ -113,6 +118,7 @@ listener!(
 /// "Whenever a creature dies, you gain 1 life", on a creature, which sees itself die too.
 static MOURNER: CardDef = CardDef {
     name: "Test Mourner",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::CREATURE,
         power: Some(1),

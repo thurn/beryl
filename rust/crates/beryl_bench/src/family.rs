@@ -264,6 +264,7 @@ pub fn stand_in(def: &'static CardDef) -> &'static CardDef {
         .collect();
     Box::leak(Box::new(CardDef {
         name: def.name,
+        shape: def.shape,
         faces: faces.leak(),
         tokens: def.tokens,
     }))

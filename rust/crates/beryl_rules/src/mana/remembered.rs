@@ -65,7 +65,7 @@ impl<L: Layout> Paying<L> {
         if !t.can(Capability::RemembersMana) {
             return Paying::NOTHING;
         }
-        let (card, face) = s.copiable(slot).turned(face).record(t);
+        let (card, face) = s.copiable(slot).turned(t, face).record(t);
         Paying::card(card, face)
     }
 

@@ -64,7 +64,7 @@ pub(crate) fn enchants<L: Layout>(
     entry: Entry<L>,
 ) -> Result<Enchants<L::Slot>, Full> {
     let copied = selected_copy(sink, slot);
-    let values = copied.unwrap_or_else(|| s.copiable(slot).turned(entry.face));
+    let values = copied.unwrap_or_else(|| s.copiable(slot).turned(t, entry.face));
     let face = values.face(t);
     if !face.subtypes.read(&Words::NONE).contains(Subtype::Aura) {
         return Ok(Enchants::NotAnAura);

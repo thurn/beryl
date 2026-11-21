@@ -29,6 +29,7 @@ static TAX_RULE: RuleChange = RuleChange::spell_costs(
 
 static DISCOUNT: CardDef = CardDef {
     name: "Test Discount",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::ARTIFACT,
         abilities: &[Ability::rule_change(&DISCOUNT_RULE)],
@@ -38,6 +39,7 @@ static DISCOUNT: CardDef = CardDef {
 };
 static TAX: CardDef = CardDef {
     name: "Test Tax",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::ARTIFACT,
         abilities: &[Ability::rule_change(&TAX_RULE)],
@@ -50,6 +52,7 @@ static FLOOR_RULE: RuleChange =
     RuleChange::spell_costs(Players::EachPlayer, Filter::Any, SpellCost::AtLeast(3));
 static FLOOR: CardDef = CardDef {
     name: "Test Floor",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::ARTIFACT,
         abilities: &[Ability::rule_change(&FLOOR_RULE)],

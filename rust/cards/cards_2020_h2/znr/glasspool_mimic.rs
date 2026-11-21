@@ -19,8 +19,9 @@ use crate::prelude::*;
 /// becomes part of the copiable values of the copy.”
 ///
 /// [CR 707.9b]: https://yawgatog.com/resources/magic-rules/#R7079b
-pub static CARD: CardDef = card(
+pub static CARD: CardDef = card_with_shape(
     Card::GlasspoolMimic,
+    PrintedShape::GlasspoolMimic,
     &[
         Printed::GlasspoolMimic
             .abilities(&[Ability::replacing(&Replacement::enter_as_copy(

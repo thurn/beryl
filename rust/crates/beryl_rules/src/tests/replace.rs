@@ -32,6 +32,7 @@ use super::events::{put, with_game};
 /// "If a card or token would be put into a graveyard from anywhere, exile it instead."
 static REST: CardDef = CardDef {
     name: "Test Rest",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::ENCHANTMENT,
         abilities: &[Ability::replacing(&Replacement::put_into(
@@ -46,6 +47,7 @@ static REST: CardDef = CardDef {
 
 static BEAR: CardDef = CardDef {
     name: "Test Bear",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::CREATURE,
         power: Some(2),
@@ -58,6 +60,7 @@ static BEAR: CardDef = CardDef {
 /// "If an opponent would draw a card, you win the game instead."
 static WATCH: CardDef = CardDef {
     name: "Test Watch",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::ENCHANTMENT,
         abilities: &[
@@ -71,6 +74,7 @@ static WATCH: CardDef = CardDef {
 /// A move replaced by a rewrite of entering, which the engine has no code for.
 static TANGLE: CardDef = CardDef {
     name: "Test Tangle",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::ENCHANTMENT,
         abilities: &[Ability::replacing(&Replacement {
@@ -85,6 +89,7 @@ static TANGLE: CardDef = CardDef {
 /// "If a card would be put into a graveyard, put it into a graveyard instead": no change.
 static ECHO: CardDef = CardDef {
     name: "Test Echo",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::ENCHANTMENT,
         abilities: &[Ability::replacing(&Replacement::put_into(
@@ -100,6 +105,7 @@ static ECHO: CardDef = CardDef {
 /// "If a nontoken creature would enter and it wasn't cast, exile it instead."
 static PRIEST: CardDef = CardDef {
     name: "Test Priest",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::CREATURE,
         power: Some(2),

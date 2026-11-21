@@ -9,11 +9,66 @@ use crate::index::{AbilityIx, GrantIx};
 use crate::mana::ManaCost;
 use crate::words::SubtypeWords;
 
+/// How a card's printed characteristics are divided. Sagas, Classes, Cases and levelers
+/// have one face with abilities that depend on counters or designations. Prototype is an
+/// alternative way to cast one face. Those differences belong in the card vocabulary.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Shape {
+    #[default]
+    Single,
+    Transforming,
+    Modal,
+    Split {
+        fuse: bool,
+    },
+    Adventure,
+    Prepared,
+    Flip,
+    /// One front face. The partner and the meld result are separate card definitions.
+    Meld {
+        with: &'static str,
+        into: &'static str,
+    },
+}
+
+impl Shape {
+    /// The number of printed faces or sets of alternative characteristics in the definition.
+    pub const fn face_count(self) -> usize {
+        match self {
+            Self::Single | Self::Meld { .. } => 1,
+            Self::Transforming
+            | Self::Modal
+            | Self::Split { .. }
+            | Self::Adventure
+            | Self::Prepared
+            | Self::Flip => 2,
+        }
+    }
+
+    /// Whether the card itself is double-faced, with a different face printed on each side.
+    pub const fn is_double_faced(self) -> bool {
+        matches!(self, Self::Transforming | Self::Modal)
+    }
+
+    /// Whether the second face is normally available as a spell. A player chooses a modal
+    /// face ([CR 712.8b]), a split half ([CR 709.3]), or an Adventure ([CR 716.3]). Only
+    /// copies can use a prepare spell's inset characteristics ([CR 723.3]).
+    ///
+    /// [CR 712.8b]: https://yawgatog.com/resources/magic-rules/#R7128b
+    /// [CR 709.3]: https://yawgatog.com/resources/magic-rules/#R7093
+    /// [CR 716.3]: https://yawgatog.com/resources/magic-rules/#R7163
+    /// [CR 723.3]: https://yawgatog.com/resources/magic-rules/#R7233
+    pub const fn can_cast_back(self) -> bool {
+        matches!(self, Self::Modal | Self::Split { .. } | Self::Adventure)
+    }
+}
+
 /// One card: its name and its faces.
 #[derive(Debug)]
 pub struct CardDef {
     pub name: &'static str,
-    /// One face, or two for double-faced, modal double-faced, split and adventure cards.
+    pub shape: Shape,
+    /// The printed characteristics, front first, with the count fixed by the shape.
     pub faces: &'static [Face],
     /// The tokens and emblems this card can create, so a game's table holds them.
     pub tokens: &'static [&'static CardDef],
@@ -38,6 +93,18 @@ impl CardDef {
     /// Each of its faces' indices, front first.
     pub fn face_ixs(&self) -> impl Iterator<Item = FaceIx> {
         (0..self.faces.len()).map(|i| FaceIx(u8::try_from(i).expect("a few faces")))
+    }
+
+    /// The name of the other printed face when one is up.
+    pub fn other_face_name(&self, up: FaceIx) -> Option<&'static str> {
+        if self.shape.face_count() != 2 {
+            return None;
+        }
+        match up {
+            FaceIx::FRONT => Some(self.face_name(FaceIx::BACK)),
+            FaceIx::BACK => Some(self.face_name(FaceIx::FRONT)),
+            _ => None,
+        }
     }
 
     /// The name of the face at `face`, the name a spell or permanent with that face up has
@@ -98,17 +165,14 @@ pub struct Face {
     pub power: Option<i8>,
     pub toughness: Option<i8>,
     pub loyalty: Option<u8>,
+    pub defense: Option<u8>,
     pub keywords: Keywords,
     pub abilities: &'static [Ability],
     /// The alternative and additional costs it may be cast with, in the order its text lists
     /// them. A stack entry records the ones paid as a [`Castings`] set over this list.
     pub casting: &'static [CastingOption],
-    /// The back face of a transforming double-faced card, which is never cast: "A
-    /// double-faced spell is cast with its front face up by default"
-    /// ([CR 712.8](https://yawgatog.com/resources/magic-rules/#R7128)). Only a modal
-    /// double-faced card lets its caster choose the face
-    /// ([CR 712.8b](https://yawgatog.com/resources/magic-rules/#R7128b)).
-    pub transformed: bool,
+    /// The generated face eligibility and mana-value rule, cached for casting and queries.
+    pub use_of_face: FaceUse,
     /// "As an additional cost to cast this spell, [parts]"
     /// ([CR 118.8](https://yawgatog.com/resources/magic-rules/#R1188)): "An additional cost is
     /// a cost listed in a spell's rules text, or applied to a spell or ability from another
@@ -130,7 +194,52 @@ pub struct Face {
     pub excepts: &'static [CopyException],
 }
 
+/// Rules derived from a card's shape for readers that already have one of its faces.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum FaceUse {
+    Playable,
+    TransformingBack,
+    Alternative,
+}
+
+impl FaceUse {
+    pub(crate) const fn of(shape: Shape, front: bool) -> Self {
+        if front || shape.can_cast_back() {
+            Self::Playable
+        } else if matches!(shape, Shape::Transforming) {
+            Self::TransformingBack
+        } else {
+            Self::Alternative
+        }
+    }
+}
+
 impl Face {
+    /// Applies the definition's generated shape to this face.
+    #[must_use]
+    pub const fn for_shape(self, shape: Shape, face: FaceIx) -> Self {
+        Self {
+            use_of_face: FaceUse::of(shape, face.0 == 0),
+            ..self
+        }
+    }
+
+    /// Whether casting or playing the card can normally choose this face. Timing, cost and
+    /// whether it is a spell or a land are checked separately.
+    #[inline]
+    pub const fn playable(&self) -> bool {
+        matches!(self.use_of_face, FaceUse::Playable)
+    }
+
+    /// Whether the mana value of this face comes from the front face ([CR 712.6d]).
+    ///
+    /// [CR 712.6d]: https://yawgatog.com/resources/magic-rules/#R7126d
+    #[inline]
+    pub const fn uses_front_mana_value(&self) -> bool {
+        matches!(self.use_of_face, FaceUse::TransformingBack)
+    }
+
     /// Whether this face is an instant or a sorcery: its spell resolves by following its
     /// instructions, not by becoming a permanent
     /// ([CR 608.2](https://yawgatog.com/resources/magic-rules/#R6082),
@@ -201,12 +310,12 @@ pub static FACE_DOWN: Face = Face {
 /// the card behind the original.
 pub static FACE_DOWN_COPY: CardDef = CardDef {
     name: "",
+    shape: Shape::Single,
     faces: std::slice::from_ref(&FACE_DOWN),
     tokens: &[],
 };
 
-/// A card of these faces: one, or two for a double-faced, modal double-faced, split or
-/// adventure card. Each face starts from [`Face::EMPTY`]:
+/// A card with one face. Each face starts from [`Face::EMPTY`]:
 ///
 /// ```
 /// use beryl_card::prelude::*;
@@ -241,8 +350,19 @@ pub static FACE_DOWN_COPY: CardDef = CardDef {
 /// );
 /// ```
 pub const fn card(name: &'static str, faces: &'static [Face]) -> CardDef {
+    card_with_shape(name, Shape::Single, faces)
+}
+
+/// A card with the given printed shape and faces.
+///
+/// # Panics
+///
+/// As the definition compiles, if the face count does not match the shape or a face says
+/// something that no game could carry out ([`CardDef::check`]).
+pub const fn card_with_shape(name: &'static str, shape: Shape, faces: &'static [Face]) -> CardDef {
     let card = CardDef {
         name,
+        shape,
         faces,
         tokens: &[],
     };
@@ -322,9 +442,20 @@ impl Face {
         Face { keywords, ..self }
     }
 
+    /// The defense printed on a battle ([CR 210.1]).
+    ///
+    /// [CR 210.1]: https://yawgatog.com/resources/magic-rules/#R2101
+    #[must_use]
+    pub const fn defense(self, defense: u8) -> Face {
+        Face {
+            defense: Some(defense),
+            ..self
+        }
+    }
+
     /// The card of this one face, named as the face is: `Printed::CardName.abilities(..)
     /// .card()`, where the face starts from a card of one face, which its generated
-    /// characteristics name. A card of two faces is built with [`card`].
+    /// characteristics name. A card with a different shape is built with [`card_with_shape`].
     ///
     /// # Panics
     ///
@@ -332,7 +463,7 @@ impl Face {
     pub const fn card(&'static self) -> CardDef {
         assert!(
             !self.name.is_empty(),
-            "a face with no name makes no card: build a card of two faces with `card(..)`"
+            "a face with no name makes no card: use `card_with_shape` for a multi-face card"
         );
         card(self.name, std::slice::from_ref(self))
     }
@@ -368,15 +499,6 @@ impl Face {
     pub const fn excepts(self, excepts: &'static [CopyException]) -> Face {
         Face { excepts, ..self }
     }
-
-    /// The back face of a transforming double-faced card ([`Face::transformed`]).
-    #[must_use]
-    pub const fn transformed(self) -> Face {
-        Face {
-            transformed: true,
-            ..self
-        }
-    }
 }
 
 impl Face {
@@ -391,10 +513,11 @@ impl Face {
         power: None,
         toughness: None,
         loyalty: None,
+        defense: None,
         keywords: Keywords::NONE,
         abilities: &[],
         casting: &[],
-        transformed: false,
+        use_of_face: FaceUse::Playable,
         additional_cost: &[],
         grants: &[],
         excepts: &[],

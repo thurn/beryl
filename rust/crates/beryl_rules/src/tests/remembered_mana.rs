@@ -37,6 +37,7 @@ static CHOSEN_CREATURES: ManaRestriction = ManaRestriction {
 /// only to cast a creature spell of the chosen type, and that spell can't be countered."
 static CAVERN: CardDef = CardDef {
     name: "Test Restricted Cavern",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::LAND,
         abilities: &[

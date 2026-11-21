@@ -195,9 +195,14 @@ fn add_battlefield_objects<L: Layout>(
             let mut view = object_view(t, obs, s);
             if own.is_some() && view.name.as_deref() == top {
                 view.name = own.take().map(str::to_owned);
+                view.other_face = obs
+                    .really(host)
+                    .and_then(|card| t.def(card).other_face_name(FaceIx::FRONT))
+                    .map(str::to_owned);
             } else if hidden && view.name.as_deref() == top {
                 hidden = false;
                 view.name = None;
+                view.other_face = None;
                 view.facing = Facing::Down;
             }
             objects.push(view);
@@ -401,6 +406,7 @@ fn object_view<L: Layout>(t: &GameTable, obs: Observation<'_, L>, slot: L::Slot)
         zone_side: None,
         controller: side(obs, obs.controller(slot)),
         name: name(t, obs, slot).map(str::to_owned),
+        other_face: obs.other_face_name(t, slot).map(str::to_owned),
         facing: if o.face() == FaceIx::DOWN {
             Facing::Down
         } else {

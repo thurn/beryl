@@ -197,22 +197,36 @@ fn is_changeling(face: &Face) -> bool {
         .any(|words| words.trim().eq_ignore_ascii_case("changeling"))
 }
 
-/// The source of a `beryl_card::Face` constant holding `face`'s printed characteristics: the
-/// face at `index` of a card or token of `layout`. A front face takes its card's name, so
-/// only a later face names itself; the back face of a transforming card is never cast
-/// ([CR 712.8](https://yawgatog.com/resources/magic-rules/#R7128)): "A double-faced spell is
-/// cast with its front face up by default."
+/// The generated shape, if it differs from the single face that the ordinary card builder
+/// supplies. A meld result is a separate record with one face.
+pub fn shape_source(record: &Record) -> Option<String> {
+    let variant = match record.layout.as_str() {
+        "transform" | "double_faced_token" => "Transforming".into(),
+        "modal_dfc" => "Modal".into(),
+        "split" => {
+            let fuse = record.keywords.iter().any(|keyword| keyword == "Fuse");
+            format!("Split {{ fuse: {fuse} }}")
+        }
+        "adventure" => "Adventure".into(),
+        "prepare" => "Prepared".into(),
+        "flip" => "Flip".into(),
+        "meld" => {
+            let meld = record.meld.as_ref()?;
+            format!("Meld {{ with: {:?}, into: {:?} }}", meld.with, meld.into)
+        }
+        _ => return None,
+    };
+    Some(format!("beryl_card::definition::Shape::{variant}"))
+}
+
+/// The `beryl_card::Face` source holding a face's printed characteristics. The front of
+/// a multi-face definition takes its card's name, so only a later face names itself.
 ///
 /// # Errors
 ///
 /// When the face has a supertype, card type or subtype the engine lacks, or a power,
 /// toughness or loyalty that is no number, naming the face and what it has.
-pub fn face_source(
-    face: &Face,
-    index: usize,
-    layout: &str,
-    subtypes: &Subtypes,
-) -> Result<String, String> {
+pub fn face_source(face: &Face, index: usize, subtypes: &Subtypes) -> Result<String, String> {
     let name = &face.name;
     let mut out = String::from("beryl_card::Face::EMPTY");
     if index > 0 {
@@ -274,8 +288,11 @@ pub fn face_source(
             .map_err(|_| format!("{name}: no loyalty the engine can hold in {loyalty}"))?;
         write!(out, "\n    .loyalty({value})").unwrap();
     }
-    if index == 1 && layout == "transform" {
-        out.push_str("\n    .transformed()");
+    if let Some(defense) = &face.defense {
+        let value: u8 = defense
+            .parse()
+            .map_err(|_| format!("{name}: no defense the engine can hold in {defense}"))?;
+        write!(out, "\n    .defense({value})").unwrap();
     }
     Ok(out)
 }
@@ -291,7 +308,31 @@ pub fn faces(record: &Record, subtypes: &Subtypes) -> Result<Vec<(String, String
         .iter()
         .enumerate()
         .map(|(i, face)| {
-            let mut source = face_source(face, i, &record.layout, subtypes)?;
+            // A flip card's "color and mana cost don't change if the permanent is flipped"
+            // (CR 710.1c, https://yawgatog.com/resources/magic-rules/#R7101c).
+            let flipped;
+            let face = if i == 1 && record.layout == "flip" {
+                let front = &record.faces[0];
+                flipped = Face {
+                    mana_cost: front.mana_cost.clone(),
+                    colors: front.colors.clone(),
+                    color_indicator: front.color_indicator.clone(),
+                    ..face.clone()
+                };
+                &flipped
+            } else {
+                face
+            };
+            let mut source = face_source(face, i, subtypes)?;
+            if i == 1
+                && let Some(shape) = shape_source(record)
+            {
+                write!(
+                    source,
+                    "\n    .for_shape({shape}, beryl_card::FaceIx::BACK)"
+                )
+                .unwrap();
+            }
             // A card of one face carries its name, which `Face::card` builds the card under.
             if record.faces.len() == 1 {
                 source = source.replacen(

@@ -342,6 +342,10 @@ zoneSide?: Side, controller: Side,
  */
 name: string | null, 
 /**
+ * The other face of a known multi-face card, when one of its faces is up.
+ */
+otherFace?: string, 
+/**
  * Whether a permanent is face up or face down, part of its status (CR 110.5). A face-down
  * one is a 2/2 creature with no name or text, whatever its card (CR 708.2a).
  */

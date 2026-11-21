@@ -217,8 +217,10 @@ pub(super) fn only_idle<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>)
 /// it onto the battlefield." The implemented modal double-faced cards have one land face at most.
 pub(crate) fn land_face<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> Option<FaceIx> {
     let def = s.card_def(t, slot)?;
-    def.face_ixs()
-        .find(|&f| def.face(f).types.intersects(Types::LAND))
+    def.face_ixs().find(|&face| {
+        def.face(face).types.intersects(Types::LAND)
+            && (face == FaceIx::FRONT || def.shape == beryl_card::definition::Shape::Modal)
+    })
 }
 
 /// Why the viewer may neither cast the card in `slot`, from their hand, nor play it as a land

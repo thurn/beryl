@@ -25,6 +25,7 @@ use beryl_kernel::two_player::TwoPlayerSeat as _;
 
 static LAND: CardDef = CardDef {
     name: "Test Land",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::LAND,
         ..Face::EMPTY
@@ -33,6 +34,7 @@ static LAND: CardDef = CardDef {
 };
 static BEAR: CardDef = CardDef {
     name: "Test Bear",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::CREATURE,
         power: Some(2),
@@ -44,6 +46,7 @@ static BEAR: CardDef = CardDef {
 /// "Whenever you draw a card, if this card is in your graveyard, you gain 1 life."
 static GHOST: CardDef = CardDef {
     name: "Test Ghost",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::CREATURE,
         power: Some(1),
@@ -58,6 +61,7 @@ static GHOST: CardDef = CardDef {
 /// "Whenever a creature dies, if this card is in your graveyard, you gain 1 life."
 static MOURNER: CardDef = CardDef {
     name: "Test Graveyard Mourner",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::CREATURE,
         power: Some(1),
@@ -75,6 +79,7 @@ static MOURNER: CardDef = CardDef {
 /// "When you have no cards in hand, you gain 1 life."
 static LONER: CardDef = CardDef {
     name: "Test Loner",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::ARTIFACT,
         abilities: &[Ability::triggered(&Trigger::state(&Condition::Compare(
@@ -210,6 +215,7 @@ fn a_state_trigger_does_not_trigger_again_while_waiting_or_on_the_stack() {
 /// Abilities that say they work where the engine looks for none of their kind.
 static RECLUSE: CardDef = CardDef {
     name: "Test Recluse",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::LAND,
         abilities: &[Ability::replacing(&Replacement::ENTERS_TAPPED).in_graveyard()],
@@ -219,6 +225,7 @@ static RECLUSE: CardDef = CardDef {
 };
 static WANDERER: CardDef = CardDef {
     name: "Test Wanderer",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::ARTIFACT,
         abilities: &[Ability::triggered(&Trigger::draws(Players::You))

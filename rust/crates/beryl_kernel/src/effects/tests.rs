@@ -377,6 +377,7 @@ fn a_permission_and_a_spells_terms_survive_small_to_large_and_back() {
 /// A game of one card, to name a permitted card in a save's words.
 static ONE_CARD: crate::table::CardTable = crate::table::CardTable::new(&[&beryl_card::CardDef {
     name: "Test Card",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[beryl_card::Face::EMPTY],
     tokens: &[],
 }]);

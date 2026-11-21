@@ -25,6 +25,7 @@ const EACH_CREATURE: Objects = Objects::All {
 
 static BEAR: CardDef = CardDef {
     name: "Group Bear",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::CREATURE,
         power: Some(2),
@@ -36,6 +37,7 @@ static BEAR: CardDef = CardDef {
 
 static OGRE: CardDef = CardDef {
     name: "Group Ogre",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::CREATURE,
         power: Some(3),
@@ -47,6 +49,7 @@ static OGRE: CardDef = CardDef {
 
 static AURA: CardDef = CardDef {
     name: "Group Aura",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::ENCHANTMENT,
         subtypes: crate::card::SubtypeWords::new(Subtypes::of(&[Subtype::Aura])),
@@ -58,6 +61,7 @@ static AURA: CardDef = CardDef {
 /// "Destroy all creatures."
 static WRATH: CardDef = CardDef {
     name: "Group Wrath",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         cost: WW,
         types: Types::SORCERY,
@@ -70,6 +74,7 @@ static WRATH: CardDef = CardDef {
 /// "This deals 2 damage to each creature."
 static QUAKE: CardDef = CardDef {
     name: "Group Quake",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         cost: W,
         types: Types::SORCERY,
@@ -85,6 +90,7 @@ static QUAKE: CardDef = CardDef {
 /// "Draw two cards."
 static INSIGHT: CardDef = CardDef {
     name: "Group Insight",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         cost: W,
         types: Types::SORCERY,
@@ -98,6 +104,7 @@ static INSIGHT: CardDef = CardDef {
 /// battlefield."
 static JAILER: CardDef = CardDef {
     name: "Group Jailer",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         cost: W,
         types: Types::CREATURE,
@@ -118,6 +125,7 @@ static JAILER: CardDef = CardDef {
 /// card."
 static DELVER: CardDef = CardDef {
     name: "Group Delver",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         cost: W,
         types: Types::SORCERY,
@@ -131,6 +139,7 @@ static DELVER: CardDef = CardDef {
 /// "Put two cards from your hand on top of your library in any order."
 static STORM: CardDef = CardDef {
     name: "Group Storm",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         cost: W,
         types: Types::SORCERY,

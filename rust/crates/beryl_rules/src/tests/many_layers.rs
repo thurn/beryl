@@ -33,6 +33,7 @@ static ELK: [Modification; 5] = [
 /// power and toughness 3/3": a sorcery, so that the game numbers the subtype Elk.
 static ELKIFY: CardDef = CardDef {
     name: "Test Elkify",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::SORCERY,
         abilities: &[Ability::spell()
@@ -48,6 +49,7 @@ static ELKIFY: CardDef = CardDef {
 /// A legendary white 2/2 Human artifact creature with flying.
 static GOLEM: CardDef = CardDef {
     name: "Test Golem",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::ARTIFACT.union(Types::CREATURE),
         supertypes: Supertypes::LEGENDARY,
@@ -64,6 +66,7 @@ static GOLEM: CardDef = CardDef {
 /// An Equipment: "Equipped creature gets +1/+1 and has vigilance."
 static BANNER: CardDef = CardDef {
     name: "Test Banner",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::ARTIFACT,
         subtypes: crate::card::SubtypeWords::new(Subtypes::of(&[Subtype::Equipment])),

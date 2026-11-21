@@ -1,12 +1,12 @@
 //! Cards put onto the battlefield transformed
 //! ([CR 712.11a](https://yawgatog.com/resources/magic-rules/#R71211a)).
 //!
-//! Implements: CR 712.11a
+//! Implements: CR 712.11a, CR 712.11b
 
 use beryl_card::Objects;
 
 use crate::bitboard::Bitboard;
-use crate::card::FaceIx;
+use crate::card::{FaceIx, Types};
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::interpret::{Outcome, Run};
@@ -50,8 +50,19 @@ pub fn return_transformed<L: Layout>(
         return Ok(());
     }
     let owner = game.state.object(card.slot).owner();
-    let (def, _) = game.state.definition(card.slot).record(game.table);
-    if game.table.def(def).faces.len() < 2 {
+    let values = game.state.copiable(card.slot);
+    if !values.shape(game.table).is_double_faced() {
+        return Ok(());
+    }
+    // CR 712.11b: "If a player is instructed to put a double-faced card onto the
+    // battlefield with an instant or sorcery face up, that card stays in its current zone."
+    // https://yawgatog.com/resources/magic-rules/#R71211b
+    if values
+        .turned(game.table, FaceIx::BACK)
+        .face(game.table)
+        .types
+        .intersects(Types::INSTANT.union(Types::SORCERY))
+    {
         return Ok(());
     }
     let entry = Entry {

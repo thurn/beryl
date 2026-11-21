@@ -29,6 +29,7 @@ macro_rules! creature {
     ($name:ident, $text:literal, $power:literal / $toughness:literal, $keywords:expr) => {
         static $name: CardDef = CardDef {
             name: $text,
+            shape: beryl_card::definition::Shape::Single,
             faces: &[Face {
                 types: Types::CREATURE,
                 power: Some($power),
@@ -56,6 +57,7 @@ creature!(WRAITH, "Wraith", 3 / 3, Keywords::SWAMPWALK);
 /// A land with the subtype Swamp, which a swampwalker's defender may control.
 static SWAMP: CardDef = CardDef {
     name: "Swamp",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::LAND,
         subtypes: crate::card::SubtypeWords::new(Subtypes::of(&[Subtype::Swamp])),
@@ -66,6 +68,7 @@ static SWAMP: CardDef = CardDef {
 
 static WALKER: CardDef = CardDef {
     name: "Walker",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::PLANESWALKER,
         loyalty: Some(3),
@@ -78,6 +81,7 @@ static WALKER: CardDef = CardDef {
 /// you gain 10 life."
 static RAIDER: CardDef = CardDef {
     name: "Raider",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::CREATURE,
         power: Some(2),
@@ -95,6 +99,7 @@ static RAIDER: CardDef = CardDef {
 /// The token Captain creates: a Raider of its own, whose attack trigger must not trigger.
 static RECRUIT: CardDef = CardDef {
     name: "Recruit",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::CREATURE,
         power: Some(1),
@@ -108,6 +113,7 @@ static RECRUIT: CardDef = CardDef {
 /// "Whenever you attack, create a 1/1 Recruit token that's tapped and attacking."
 static CAPTAIN: CardDef = CardDef {
     name: "Captain",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::CREATURE,
         power: Some(1),
@@ -126,6 +132,7 @@ static CAPTAIN: CardDef = CardDef {
 /// A 3/3 Vehicle artifact with crew 3.
 static WAGON: CardDef = CardDef {
     name: "Wagon",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::ARTIFACT,
         subtypes: crate::card::SubtypeWords::new(Subtypes::of(&[Subtype::Vehicle])),
@@ -147,6 +154,7 @@ static CANT_BLOCK: RuleChange = RuleChange {
 /// A 2/1 that can't block.
 static GHOUL: CardDef = CardDef {
     name: "Ghoul",
+    shape: beryl_card::definition::Shape::Single,
     faces: &[Face {
         types: Types::CREATURE,
         power: Some(2),
