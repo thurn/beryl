@@ -9,9 +9,7 @@ use crate::replacement::event::Sink;
 use crate::resolution::Resolution;
 use crate::state::{AbilityRef, PendingTrigger, Zone, ZoneKey};
 use crate::zone::Place;
-use crate::{
-    Choice, DecisionKind, Decklist, Outcome, Profile, Replay, Scratch, State, Step, apply, next,
-};
+use crate::{Choice, DecisionKind, Decklist, Profile, Replay, Scratch, State, apply};
 use beryl_kernel::two_player::TwoPlayerSeat as _;
 
 const LEGENDS: &Decklist = &[(40, "Test Legend")];
@@ -139,25 +137,6 @@ fn a_card_put_into_a_hand_is_known_to_its_owner_alone() {
     )
     .unwrap();
     assert!(s.knows(p, from_battlefield) && s.knows(q, from_battlefield));
-}
-
-#[test]
-fn a_player_at_zero_life_loses_and_two_at_once_draw() {
-    let t = table([LANDS, LANDS]);
-    for (lives, outcome) in [
-        ([0, 20], Outcome::Win(Seat::P1)),
-        ([20, -3], Outcome::Win(Seat::P0)),
-        ([0, 0], Outcome::Draw),
-    ] {
-        let mut s = State::new(&t, 1, Profile::EXACT).unwrap();
-        begin(&t, &mut s);
-        s.board().set_life(Seat::P0, lives[0]);
-        s.board().set_life(Seat::P1, lives[1]);
-        assert_eq!(
-            next(&mut s, &t, &mut Scratch::new(), &mut Replay),
-            Step::Over(outcome)
-        );
-    }
 }
 
 /// The card behind a slot of a deck.

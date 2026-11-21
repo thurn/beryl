@@ -1,29 +1,11 @@
-//! Trample, lifelink, indestructible and landwalk (CR 702.19, 702.15, 702.12, 702.14), with
-//! the test-only creatures of the combat tests.
+//! Combat keyword tests of the damage assignment and destruction paths.
 
 use super::{Game, options, stop_at};
 use crate::actions::destroy::destroy;
 use crate::replacement::event::Sink;
 use crate::state::Zone;
 use crate::zone::Place;
-use crate::{Choice, DecisionKind, Opt, Replay, TurnStep, apply};
-
-#[test]
-fn trample_assigns_lethal_damage_to_a_lone_blocker_and_the_rest_to_the_player() {
-    // A 5/5 trampler blocked by a 2/2: 2 to the Bear, 3 to the player, and no division to
-    // ask about.
-    let mut g = Game::new();
-    let (a, d) = (g.attacker, g.defender());
-    let wurm = g.put(a, "Wurm");
-    let bear = g.put(d, "Bear");
-    g.pass_to_combat();
-    g.pick(DecisionKind::Attacker, Opt::Attack(wurm));
-    g.pick(DecisionKind::Blocker, Opt::Block(bear));
-    g.finish_combat();
-    assert!(!g.on_battlefield(bear));
-    assert_eq!(g.life(d), 17);
-    assert_eq!(g.s.object(wurm).damage(), 2);
-}
+use crate::{DecisionKind, Opt, TurnStep};
 
 #[test]
 fn trample_reaches_the_player_only_once_every_blocker_is_dealt_lethal_damage() {
@@ -73,29 +55,6 @@ fn a_trampler_whose_blockers_all_left_assigns_its_damage_to_the_player() {
 }
 
 #[test]
-fn lifelink_gains_its_controller_the_damage_it_deals() {
-    // Unblocked, the Cleric's 2 damage to the player gains its controller 2 life; blocked, its
-    // damage to the Bear does the same.
-    for blocked in [false, true] {
-        let mut g = Game::new();
-        let (a, d) = (g.attacker, g.defender());
-        let cleric = g.put(a, "Cleric");
-        let bear = g.put(d, "Bear");
-        g.pass_to_combat();
-        g.pick(DecisionKind::Attacker, Opt::Attack(cleric));
-        if blocked {
-            g.pick(DecisionKind::Blocker, Opt::Block(bear));
-        } else {
-            g.pick(DecisionKind::Blocker, Opt::Done);
-        }
-        g.finish_combat();
-        assert_eq!(g.life(a), 22);
-        assert_eq!(g.life(d), if blocked { 20 } else { 18 });
-        assert_eq!(g.on_battlefield(bear), !blocked);
-    }
-}
-
-#[test]
 fn indestructible_survives_lethal_damage_and_destruction() {
     // The Golem blocks a 4/4 and keeps 4 damage on it; an effect that destroys it does
     // nothing.
@@ -116,51 +75,4 @@ fn indestructible_survives_lethal_damage_and_destruction() {
     )
     .unwrap();
     assert!(g.on_battlefield(golem));
-}
-
-#[test]
-fn landwalk_is_unblockable_only_while_the_defender_controls_that_land_type() {
-    // The Wraith has swampwalk. Without a Swamp the defender blocks it with the Bear; with
-    // one, the defender is not asked, and a Swamp of the attacker's changes nothing.
-    for swamp in [false, true] {
-        let mut g = Game::new();
-        let (a, d) = (g.attacker, g.defender());
-        let wraith = g.put(a, "Wraith");
-        g.put(a, "Swamp");
-        let bear = g.put(d, "Bear");
-        if swamp {
-            g.put(d, "Swamp");
-        }
-        g.pass_to_combat();
-        g.pick(DecisionKind::Attacker, Opt::Attack(wraith));
-        if !swamp {
-            g.pick(DecisionKind::Blocker, Opt::Block(bear));
-        }
-        g.finish_combat();
-        assert_eq!(g.life(d), if swamp { 17 } else { 20 });
-        assert_eq!(g.on_battlefield(bear), swamp);
-    }
-}
-
-#[test]
-fn a_creature_that_cant_block_is_never_offered_as_a_blocker() {
-    // CR 509.1a with CR 101.2: the Ghoul's "can't block" leaves the Bear as the only
-    // blocker, and with the Ghoul alone the defender is not asked to block at all.
-    for with_bear in [true, false] {
-        let mut g = Game::new();
-        let (a, d) = (g.attacker, g.defender());
-        let giant = g.put(a, "Giant");
-        g.put(d, "Ghoul");
-        let bear = with_bear.then(|| g.put(d, "Bear"));
-        g.pass_to_combat();
-        g.pick(DecisionKind::Attacker, Opt::Attack(giant));
-        if let Some(bear) = bear {
-            let blockers = g.expect(DecisionKind::Blocker);
-            assert_eq!(options(&blockers), [Opt::Done, Opt::Block(bear)]);
-            let done = Choice(0);
-            apply(&mut g.s, &g.t, &mut g.x, &mut Replay, done);
-        }
-        g.finish_combat();
-        assert_eq!(g.life(d), 16);
-    }
 }

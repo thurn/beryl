@@ -332,15 +332,6 @@ impl Game {
     }
 }
 
-/// "Done", then attacking with each of these creatures, in slot order.
-fn attacks(slots: &[Slot]) -> Vec<Opt> {
-    let mut sorted = slots.to_vec();
-    sorted.sort_unstable();
-    std::iter::once(Opt::Done)
-        .chain(sorted.into_iter().map(Opt::Attack))
-        .collect()
-}
-
 fn options(d: &Decision) -> Vec<Opt> {
     (0..d.len() as u16)
         .map(|i| d.candidates.option(Choice(i)).unwrap())
@@ -348,33 +339,19 @@ fn options(d: &Decision) -> Vec<Opt> {
 }
 
 #[test]
-fn unblocked_attackers_tap_and_deal_damage_to_the_defending_player() {
+fn unblocked_attackers_each_record_a_combat_damage_event() {
     let mut g = Game::new();
-    let (a, d) = (g.attacker, g.defender());
-    let bear = g.put(a, "Bear");
-    let other = g.put(a, "Bear");
-    let ogre = g.put(a, "Ogre");
+    let bear = g.put(g.attacker, "Bear");
+    let other = g.put(g.attacker, "Bear");
     g.pass_to_combat();
-    // Two interchangeable Bears are one candidate (§7.2).
-    let first = g.expect(DecisionKind::Attacker);
-    assert_eq!(options(&first), attacks(&[bear.min(other), ogre]));
     g.pick(DecisionKind::Attacker, Opt::Attack(bear.min(other)));
-    // The defending player controls no planeswalker: no defender choice.
-    let second = g.expect(DecisionKind::Attacker);
-    assert_eq!(options(&second), attacks(&[bear.max(other), ogre]));
     g.pick(DecisionKind::Attacker, Opt::Attack(bear.max(other)));
-    // Once only "done" is left, it is applied silently (§7.2).
-    g.pick(DecisionKind::Attacker, Opt::Done);
-    assert!(g.s.object(bear).is_tapped());
-    assert!(!g.s.object(ogre).is_tapped());
-    g.finish_combat();
-    assert_eq!(g.life(d), 16);
-    assert_eq!(g.life(a), 20);
-    // Combat is over: nothing is attacking any more.
-    assert!(!g.s.object(bear).is_attacking());
-    let damage = g.x.events.events().iter().filter(|e| {
+    stop_at(&mut g, TurnStep::DeclareAttackers);
+    g.s.board().set_step(TurnStep::CombatDamage);
+    crate::combat::begin_damage(&mut g.s, &g.t, &mut g.x.events).unwrap();
+    let damage = g.x.events.events().iter().filter(|event| {
         matches!(
-            e,
+            event,
             Event::Damage {
                 combat: true,
                 amount: 2,
@@ -386,48 +363,29 @@ fn unblocked_attackers_tap_and_deal_damage_to_the_defending_player() {
 }
 
 #[test]
-fn only_untapped_creatures_controlled_since_the_turn_began_attack() {
+fn no_attack_declaration_skips_the_block_and_damage_steps() {
     let mut g = Game::new();
-    let a = g.attacker;
-    let sick = g.put(a, "Bear");
+    let sick = g.put(g.attacker, "Bear");
     g.s.board().set_sick(sick, true);
-    let tapped = g.put(a, "Ogre");
+    let tapped = g.put(g.attacker, "Ogre");
     g.s.board().set_tapped(tapped, true);
-    // Only the defender's creature is ready: the attacking player declares nothing, and with
-    // no attackers the declare blockers and combat damage steps are skipped (CR 508.8).
     g.put(g.defender(), "Bear");
-    g.pass_to_combat();
-    g.finish_combat();
-    let steps = g.steps();
-    assert!(steps.contains(&TurnStep::DeclareAttackers));
-    assert!(!steps.contains(&TurnStep::DeclareBlockers));
-    assert!(!steps.contains(&TurnStep::CombatDamage));
+    g.expect(DecisionKind::Priority);
+    assert!(!crate::combat::can_declare_attackers(&g.s, &g.t));
+    g.s.board().set_step(TurnStep::DeclareAttackers);
+    crate::turn::end_step_before_actions(&mut g.s, &g.t, &mut g.x.events).unwrap();
+    assert_eq!(g.s.turn().step(), TurnStep::EndOfCombat);
 }
 
 #[test]
-fn vigilance_attacks_without_tapping() {
+fn an_attack_target_decision_identifies_the_attacker_being_aimed() {
     let mut g = Game::new();
-    let sentry = g.put(g.attacker, "Sentry");
-    g.pass_to_combat();
-    g.pick(DecisionKind::Attacker, Opt::Attack(sentry));
-    assert!(g.s.object(sentry).is_attacking());
-    assert!(!g.s.object(sentry).is_tapped());
-    g.finish_combat();
-    assert_eq!(g.life(g.defender()), 19);
-}
-
-#[test]
-fn an_attacked_planeswalker_loses_loyalty_and_dies_at_zero() {
-    let mut g = Game::new();
-    let (a, d) = (g.attacker, g.defender());
-    let ogre = g.put(a, "Ogre");
-    let bear = g.put(a, "Bear");
-    let walker = g.put(d, "Walker");
-    g.pass_to_combat();
-    g.pick(DecisionKind::Attacker, Opt::Attack(ogre));
-    // With a planeswalker to attack, the defender is a real choice (CR 508.1b).
-    let target = g.expect(DecisionKind::AttackTarget);
-    // The aim of the same prompt as the pick, about the creature just chosen.
+    let ogre = g.put(g.attacker, "Ogre");
+    let walker = g.put(g.defender(), "Walker");
+    // Refresh characteristics before asking which planeswalker can be attacked.
+    g.expect(DecisionKind::Priority);
+    let target = crate::combat::attack_decision(&g.s, &g.t, Some(ogre)).unwrap();
+    assert_eq!(target.kind, DecisionKind::AttackTarget);
     assert_eq!(
         (target.prompt, target.about),
         (
@@ -439,29 +397,6 @@ fn an_attacked_planeswalker_loses_loyalty_and_dies_at_zero() {
         options(&target),
         vec![Opt::Defender(None), Opt::Defender(Some(walker))]
     );
-    apply(&mut g.s, &g.t, &mut g.x, &mut Replay, Choice(1));
-    g.pick(DecisionKind::Attacker, Opt::Attack(bear));
-    g.pick(DecisionKind::AttackTarget, Opt::Defender(None));
-    g.finish_combat();
-    // 3 damage removes all 3 loyalty counters (CR 120.3c); at 0 loyalty the planeswalker
-    // goes to its owner's graveyard (CR 704.5i). The Bear hit the player.
-    assert_eq!(g.s.object(walker).zone(), Zone::Graveyard);
-    assert_eq!(g.life(d), 18);
-}
-
-#[test]
-fn a_planeswalker_survives_damage_short_of_its_loyalty() {
-    let mut g = Game::new();
-    let (a, d) = (g.attacker, g.defender());
-    let bear = g.put(a, "Bear");
-    let walker = g.put(d, "Walker");
-    g.pass_to_combat();
-    g.pick(DecisionKind::Attacker, Opt::Attack(bear));
-    g.pick(DecisionKind::AttackTarget, Opt::Defender(Some(walker)));
-    g.finish_combat();
-    assert!(g.on_battlefield(walker));
-    assert_eq!(g.s.object(walker).counters().loyalty, 1);
-    assert_eq!(g.life(d), 20);
 }
 
 #[test]
@@ -503,18 +438,6 @@ fn flying_attackers_are_blocked_only_by_flying_or_reach() {
     assert!(g.on_battlefield(bird));
     assert!(g.on_battlefield(spider));
     assert_eq!(g.life(d), 20);
-}
-
-#[test]
-fn a_defender_with_no_legal_block_is_not_asked() {
-    let mut g = Game::new();
-    let (a, d) = (g.attacker, g.defender());
-    let bird = g.put(a, "Bird");
-    g.put(d, "Bear");
-    g.pass_to_combat();
-    g.pick(DecisionKind::Attacker, Opt::Attack(bird));
-    g.finish_combat();
-    assert_eq!(g.life(d), 18);
 }
 
 #[test]
@@ -620,34 +543,16 @@ fn creatures_dying_together_reach_the_graveyard_in_the_order_they_entered() {
 }
 
 #[test]
-fn first_strike_adds_a_damage_step_only_when_present() {
+fn a_first_striker_held_back_does_not_add_a_combat_damage_step() {
     let mut g = Game::new();
-    let (a, d) = (g.attacker, g.defender());
-    let knight = g.put(a, "Knight");
-    let bear = g.put(d, "Bear");
-    g.pass_to_combat();
-    g.pick(DecisionKind::Attacker, Opt::Attack(knight));
-    g.pick(DecisionKind::Blocker, Opt::Block(bear));
-    g.finish_combat();
-    // The Knight kills the Bear before it can strike back.
-    assert!(!g.on_battlefield(bear));
-    assert!(g.on_battlefield(knight));
-    assert_eq!(g.s.object(knight).damage(), 0);
-    let steps = g.steps();
-    let at = |step| steps.iter().position(|&s| s == step).unwrap();
-    assert!(at(TurnStep::DeclareBlockers) < at(TurnStep::FirstStrikeDamage));
-    assert!(at(TurnStep::FirstStrikeDamage) < at(TurnStep::CombatDamage));
-
-    // With no first striker in combat there is one damage step, and both Bears die.
-    let mut g = Game::new();
-    let (a, d) = (g.attacker, g.defender());
-    let bear = g.put(a, "Bear");
-    g.put(a, "Knight");
-    let blocker = g.put(d, "Bear");
+    let bear = g.put(g.attacker, "Bear");
+    g.put(g.attacker, "Knight");
+    let blocker = g.put(g.defender(), "Bear");
     g.pass_to_combat();
     g.pick(DecisionKind::Attacker, Opt::Attack(bear));
     g.pick(DecisionKind::Attacker, Opt::Done);
     g.pick(DecisionKind::Blocker, Opt::Block(blocker));
+    assert!(!crate::combat::first_strike_step(&g.s));
     g.finish_combat();
     assert!(!g.on_battlefield(bear));
     assert!(!g.on_battlefield(blocker));
@@ -674,29 +579,6 @@ fn a_first_striker_deals_no_regular_damage_and_others_deal_theirs_second() {
     assert_eq!(g.s.object(spider).damage(), 2);
     assert_eq!(g.s.object(knight).damage(), 1);
     assert_eq!(g.life(d), 18);
-}
-
-#[test]
-fn an_attacker_stays_blocked_when_its_blocker_leaves() {
-    let mut g = Game::new();
-    let (a, d) = (g.attacker, g.defender());
-    let ogre = g.put(a, "Ogre");
-    let bear = g.put(d, "Bear");
-    g.pass_to_combat();
-    g.pick(DecisionKind::Attacker, Opt::Attack(ogre));
-    g.pick(DecisionKind::Blocker, Opt::Block(bear));
-    // Stop after blockers are declared and remove the blocker (CR 506.4, 509.1h).
-    stop_at(&mut g, TurnStep::DeclareBlockers);
-    g.s.move_object(
-        &mut crate::replacement::event::Sink::off(),
-        bear,
-        Zone::Graveyard,
-        Place::Top,
-    )
-    .unwrap();
-    g.finish_combat();
-    assert_eq!(g.life(d), 20);
-    assert_eq!(g.s.object(ogre).damage(), 0);
 }
 
 #[test]
@@ -790,18 +672,6 @@ fn stop_at(g: &mut Game, step: TurnStep) {
     });
     let d = g.decide();
     assert_eq!((d.kind, g.s.turn().step()), (DecisionKind::Priority, step));
-}
-
-#[test]
-fn attack_and_combat_damage_triggers_fire() {
-    let mut g = Game::new();
-    let (a, d) = (g.attacker, g.defender());
-    let raider = g.put(a, "Raider");
-    g.pass_to_combat();
-    g.pick(DecisionKind::Attacker, Opt::Attack(raider));
-    g.finish_combat();
-    assert_eq!(g.life(a), 31);
-    assert_eq!(g.life(d), 18);
 }
 
 #[test]

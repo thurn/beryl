@@ -2,7 +2,7 @@
 
 use beryl_engine::{DecisionKind, TurnStep, Zone};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
-use beryl_scenario_types::{ME, Resolve};
+use beryl_scenario_types::{ME, Resolve, THEM, advance_to, stack};
 
 use crate::names;
 use crate::tokens::TREASURE_TOKEN;
@@ -108,3 +108,53 @@ pub const DECLINE_LIFE_TO_ENTER_UNTAPPED: &[Scenario] =
                 ME.tapped("Soporific Springs", 1),
             ]),
     ];
+
+/// Returning from a graveyard needs the same object that triggered. A land controlled by
+/// the other player does not trigger the ability.
+pub const GRAVEYARD_RETURN: &[Scenario] = &[
+    Scenario::new("a land entering does not trigger Bloodghast on the battlefield")
+        .battlefield(P0, &[names::BLOODGHAST])
+        .hand(P0, &[names::SWAMP])
+        .actions(&[
+            ME.plays(names::SWAMP),
+            advance_to(1, TurnStep::BeginningOfCombat),
+            ME.passes(),
+            ME.done_attacking(),
+            stack(0),
+            advance_to(1, TurnStep::PostcombatMain),
+            ME.controls(names::BLOODGHAST, 1),
+        ]),
+    Scenario::new("only its owner's land triggers Bloodghast in a graveyard")
+        .at(2, P1, TurnStep::PrecombatMain)
+        .graveyard(P0, &[names::BLOODGHAST])
+        .hand(P0, &[names::SWAMP])
+        .hand(P1, &[names::PLAINS])
+        .library(P0, &[names::ISLAND])
+        .actions(&[
+            THEM.plays(names::PLAINS),
+            advance_to(2, TurnStep::PostcombatMain),
+            ME.has(Zone::Graveyard, names::BLOODGHAST, 1),
+            advance_to(3, TurnStep::PrecombatMain),
+            ME.plays(names::SWAMP),
+            Resolve,
+            ME.yes(),
+            advance_to(3, TurnStep::PostcombatMain),
+            ME.controls(names::BLOODGHAST, 1),
+            ME.tapped(names::BLOODGHAST, 0),
+        ]),
+    Scenario::new("Bloodghast stays in exile when its graveyard trigger resolves")
+        .graveyard(P0, &[names::BLOODGHAST])
+        .hand(P0, &[names::SWAMP])
+        .battlefield(P1, &[names::TORMODS_CRYPT])
+        .actions(&[
+            ME.plays(names::SWAMP),
+            THEM.activates(names::TORMODS_CRYPT, 0),
+            THEM.targets_player(ME),
+            Resolve,
+            Resolve,
+            ME.yes(),
+            advance_to(1, TurnStep::PostcombatMain),
+            ME.has(Zone::Exile, names::BLOODGHAST, 1),
+            ME.controls(names::BLOODGHAST, 0),
+        ]),
+];

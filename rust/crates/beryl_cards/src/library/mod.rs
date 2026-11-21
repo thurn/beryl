@@ -4,12 +4,13 @@
 
 use beryl_scenario::Scenario;
 
-use crate::names;
+use crate::{names, props};
 
 pub mod actions;
 pub mod casting;
 pub mod choices;
 pub mod coins;
+pub mod combat;
 pub mod continuous;
 pub mod costs;
 pub mod damage;
@@ -24,6 +25,7 @@ pub mod library;
 pub mod linked;
 pub mod mana;
 pub mod replacement;
+pub mod state_based;
 pub mod tokens;
 pub mod turn;
 pub mod zones;
@@ -99,6 +101,12 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
     ("casting", names::JACE_VRYNS_PRODIGY, casting::PERMITTED),
     ("choices", names::ELITE_SPELLBINDER, choices::SCENARIOS),
     ("coins", names::MANA_CRYPT, coins::SCENARIOS),
+    ("combat", props::VANILLA.card, combat::DECLARATIONS),
+    ("combat", names::WHITE_KNIGHT, combat::FIRST_STRIKE),
+    ("combat", names::GET_LOST, combat::REMOVED_BLOCKER),
+    ("combat", names::GET_LOST, combat::REMOVED_PLANESWALKER),
+    ("combat", names::GET_LOST, combat::REMOVED_ATTACKERS),
+    ("combat", names::BLOODGHAST, combat::CANNOT_BLOCK),
     (
         "continuous",
         names::TEFERI_TIME_RAVELER,
@@ -202,12 +210,16 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
     ),
     ("tokens", names::FRACTURED_IDENTITY, tokens::COPIES),
     ("turn", names::MINDSLAVER, turn::CONTROLLED_TURN),
+    ("turn", names::ISLAND, turn::FIRST_DRAW),
+    ("turn", names::ISLAND, turn::LAND_PLAY),
+    ("turn", names::PLAINS, turn::CLEANUP),
     (
         "zones",
         names::CURRENCY_CONVERTER,
         zones::PUT_INTO_GRAVEYARD,
     ),
     ("zones", names::BLOODGHAST, zones::RETURN_FROM_GRAVEYARD),
+    ("zones", names::BLOODGHAST, zones::GRAVEYARD_RETURN),
     ("zones", names::ELITE_SPELLBINDER, zones::LOOK_AT),
     (
         "zones",
