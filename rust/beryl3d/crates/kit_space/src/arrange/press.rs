@@ -157,6 +157,21 @@ impl Rectangle {
     pub(super) fn bounds(self) -> Bounds {
         Bounds::of(self.corners())
     }
+
+    pub(super) fn overlaps(self, other: Self) -> bool {
+        let offset = other.centre - self.centre;
+        // A pair of rectangles can be separated only along an axis of one of the faces.
+        [self.axis, self.axis.perp(), other.axis, other.axis.perp()]
+            .into_iter()
+            .all(|axis| offset.dot(axis).abs() < self.extent(axis) + other.extent(axis))
+    }
+
+    fn extent(self, axis: Vec2) -> f32 {
+        self.half.dot(Vec2::new(
+            axis.dot(self.axis).abs(),
+            axis.perp_dot(self.axis).abs(),
+        ))
+    }
 }
 
 impl Quad {

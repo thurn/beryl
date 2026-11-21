@@ -7,8 +7,8 @@ use glam::{Quat, Vec2, Vec3};
 use kit_base::data::profiles::Profiles;
 use kit_base::geometry::{Insets, Rect, Size, Window};
 use kit_space::arrange::{
-    Alignment, CentredFan, Container, Edge, Fan, Group, Item, Limits, Overflow, Policy, Region,
-    Solved, Under, arrange,
+    Alignment, CentredFan, Container, Edge, Fan, Group, Item, Limits, Overflow, Placed, Policy,
+    Region, Solved, Under, arrange,
 };
 use kit_space::camera::Camera;
 
@@ -544,28 +544,95 @@ fn a_centred_fan_keeps_its_cards_within_the_available_width() {
     }
 }
 
+#[test]
+fn a_centred_fan_without_overlap_wraps_and_scrolls_with_disjoint_faces() {
+    for (camera, target) in profiles() {
+        let size = Vec2::new(crate::card().x, crate::card().y);
+        let items = rectangles(8, size);
+        let policy = Policy::Fan(Fan::Centred(CentredFan {
+            height: 2.0 * target / camera.window.size.height * (size.y / size.x),
+            radius: 14.0,
+            step: 0.95,
+            span: 3.35,
+            bias: 0.6_f32.to_radians(),
+            inverted: false,
+            depth_step: 1.5,
+        }));
+        for press_points in [target, 0.0] {
+            let limits = Limits {
+                press_points,
+                scroll: true,
+                ..Limits::default()
+            };
+            let open = container(&camera, policy, limits, Vec2::new(7.5, 0.0) * target);
+            let result = arrange(&open, &items[..3], &camera, 0);
+            assert_eq!(result.overflow, Overflow::FullSize);
+            verify_disjoint(&items[..3], &result, &camera, press_points);
+
+            // Two unturned faces would just fit across, but the arc turns them inward.
+            let tight = container(&camera, policy, limits, Vec2::new(4.01, 0.0) * target);
+            let scrolled = arrange(&tight, &items[..2], &camera, 0);
+            assert_eq!(scrolled.overflow, Overflow::Scrolled);
+            assert_eq!(scrolled.scroll.unwrap().shown, 1);
+            verify_disjoint(&items[..2], &scrolled, &camera, press_points);
+
+            // Only two faces fit across. The available rise fits a second row.
+            let crowded = container(&camera, policy, limits, Vec2::new(5.5, 4.5) * target);
+            let wrapped = arrange(&crowded, &items[..4], &camera, 0);
+            assert_eq!(wrapped.overflow, Overflow::FullSize);
+            verify_disjoint(&items[..4], &wrapped, &camera, press_points);
+
+            for (offset, first) in [(0, 0), (usize::MAX, 4)] {
+                let scrolled = arrange(&crowded, &items, &camera, offset);
+                assert_eq!(scrolled.overflow, Overflow::Scrolled);
+                let window = scrolled.scroll.unwrap();
+                assert_eq!((window.first, window.shown, window.last), (first, 4, 4));
+                assert_eq!((scrolled.before, scrolled.after), (first, 4 - first));
+                verify_disjoint(&items, &scrolled, &camera, press_points);
+            }
+        }
+    }
+}
+
+fn verify_disjoint(items: &[Item], result: &Solved, camera: &Camera, target: f32) {
+    verify(items, result, camera, target);
+    let visible: Vec<_> = items
+        .iter()
+        .zip(&result.items)
+        .filter(|(_, place)| place.in_view)
+        .map(|(item, place)| projected_face(item, place, camera))
+        .collect();
+    assert_eq!(visible.len() + result.before + result.after, items.len());
+    for (index, &face) in visible.iter().enumerate() {
+        for &other in &visible[..index] {
+            assert!(separated(face, other), "{face:?} intersects {other:?}");
+        }
+    }
+}
+
+fn projected_face(item: &Item, place: &Placed, camera: &Camera) -> [Vec2; 4] {
+    let half = item.size / 2.0;
+    [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)].map(|(x, y)| {
+        camera.to_screen(place.pose.transform().transform_point3(Vec3::new(
+            x * half.x,
+            y * half.y,
+            0.0,
+        )))
+    })
+}
+
 fn verify(items: &[Item], result: &Solved, camera: &Camera, target: f32) {
     assert_eq!(items.len(), result.items.len());
     let visible: Vec<_> = items
         .iter()
         .zip(&result.items)
         .filter(|(_, place)| place.in_view)
-        .map(|(item, place)| {
-            let half = item.size / 2.0;
-            let quad = [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)].map(|(x, y)| {
-                camera.to_screen(place.pose.transform().transform_point3(Vec3::new(
-                    x * half.x,
-                    y * half.y,
-                    0.0,
-                )))
-            });
-            (item, place, quad)
-        })
+        .map(|(item, place)| (item, place, projected_face(item, place, camera)))
         .collect();
     for &(item, placed, quad) in &visible {
         assert_eq!(item.key, placed.key);
         let Some(square) = placed.press_square else {
-            assert!(!item.pressable);
+            assert!(!item.pressable || target <= 0.0);
             continue;
         };
         let target_edge = square[1] - square[0];

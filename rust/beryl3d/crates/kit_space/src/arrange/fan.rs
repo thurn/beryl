@@ -65,10 +65,11 @@ pub(super) fn arrange(
     let mut placed = Vec::new();
     let mut projected = Vec::new();
     let mut overflow = Overflow::FullSize;
+    let overlap = container.limits.overlap;
     if count > 0 {
         // All items in a hand have the same footprint. The capacity bound avoids retrying
         // arbitrarily long lists when the region has room for only a few dozen rectangles.
-        for visible in (1..=count.min(fit.capacity())).rev() {
+        for visible in (1..=count.min(fit.capacity(overlap))).rev() {
             let start = if container.limits.scroll {
                 scroll.min(count - visible)
             } else {
@@ -76,7 +77,7 @@ pub(super) fn arrange(
             };
             if let Some(overlapped) = fit.rows(
                 &items[start..start + visible],
-                container.limits.overlap,
+                overlap,
                 &mut placed,
                 &mut projected,
             ) {
@@ -172,18 +173,30 @@ struct Trial {
     clippy::cast_sign_loss
 )]
 impl Fit<'_> {
-    fn capacity(&self) -> usize {
+    fn capacity(&self, overlap: bool) -> usize {
         // Wrapping does not change the width required for a single card.
         if self.width > self.room.x {
             return 0;
         }
-        if self.strip <= 0.0 {
+        if overlap && self.strip <= 0.0 {
             return usize::MAX;
         }
-        let step = self.strip + self.margin;
-        let columns = ((self.room.x - self.width) / step).max(0.0) as usize + 1;
-        let rows = (self.room.y.max(0.0) / step) as usize + 1;
+        let step = if overlap {
+            self.strip + self.margin
+        } else {
+            self.width
+        };
+        let columns = (((self.room.x - self.width) / step).max(0.0) as usize).saturating_add(1);
+        let rows = ((self.room.y.max(0.0) / self.least_rise(overlap)) as usize).saturating_add(1);
         columns.saturating_mul(rows)
+    }
+
+    fn least_rise(&self, overlap: bool) -> f32 {
+        if overlap {
+            self.strip + self.margin
+        } else {
+            2.0 * self.fan.height
+        }
     }
 
     fn rows(
@@ -195,24 +208,30 @@ impl Fit<'_> {
     ) -> Option<bool> {
         let count = items.len();
         let measure = self.target > 0.0 && items.iter().any(|item| item.pressable);
-        let max_rows = if self.strip > 0.0 && !self.fan.inverted {
+        let project = measure || !overlap;
+        let max_rows = if (self.strip > 0.0 || !overlap) && !self.fan.inverted {
             count
         } else {
             1
         };
+        let least_rise = self.least_rise(overlap);
         for rows in 1..=max_rows {
-            // Even with no tilt, each back row needs the press strip and the margin.
-            if rows > 1 && (rows - 1) as f32 * (self.strip + self.margin) > self.room.y {
+            if rows > 1 && (rows - 1) as f32 * least_rise > self.room.y {
                 break;
             }
             let columns = count.div_ceil(rows);
             let spacing = self.spacing(columns, overlap);
             let widest = self.widest(columns);
-            if self.strip > 0.0 && spacing > widest {
+            if (self.strip > 0.0 || !overlap) && spacing > widest {
                 continue;
             }
             let spacing = spacing.min(widest);
-            let rise = self.rise(columns, spacing);
+            let rise = if overlap {
+                self.rise(columns, spacing)
+            } else {
+                self.separated_rise(columns, spacing)
+                    .min(self.room.y / (rows - 1).max(1) as f32)
+            };
             if rows > 1 && (rows - 1) as f32 * rise > self.room.y {
                 continue;
             }
@@ -222,13 +241,18 @@ impl Fit<'_> {
             let short = if full_rows < rows {
                 let length = columns - 1;
                 let spacing = self.spacing(length, overlap).min(self.widest(length));
-                (length, spacing, self.rise(length, spacing))
+                let rise = if overlap {
+                    self.rise(length, spacing)
+                } else {
+                    rise
+                };
+                (length, spacing, rise)
             } else {
                 full
             };
             placed.clear();
             projected.clear();
-            if measure {
+            if project {
                 projected.reserve(count);
             } else {
                 placed.reserve(count);
@@ -244,7 +268,7 @@ impl Fit<'_> {
                 overlapped |= length > 1 && spacing < self.width;
                 for (column, item) in row_items.iter().enumerate() {
                     let pose = self.screen_pose(item, (column as f32 - middle) * spacing, above);
-                    if measure {
+                    if project {
                         let rectangle = self.rectangle(pose, item.size);
                         projected.push(Trial {
                             pose,
@@ -257,19 +281,21 @@ impl Fit<'_> {
                     }
                 }
             }
-            if measure {
-                if !self.witness(items, projected) {
-                    continue;
-                }
-                // The press test uses screen geometry. Construct world poses only for
-                // the trial that leaves every pressable card reachable.
+            if !overlap && !Self::disjoint(projected) {
+                continue;
+            }
+            if measure && !self.witness(items, projected) {
+                continue;
+            }
+            if project {
+                // Construct world poses only after the screen geometry passes the trial.
                 placed.extend(items.iter().zip(projected.iter()).enumerate().map(
                     |(layer, (item, trial))| {
                         self.place(item, trial.pose, layer, trial.press_square)
                     },
                 ));
             }
-            return Some(overlapped);
+            return Some(overlap && overlapped);
         }
         placed.clear();
         None
@@ -282,7 +308,22 @@ impl Fit<'_> {
         let preferred =
             (self.fan.step * self.width).min(self.fan.span * self.width / (columns - 1) as f32);
         if !overlap {
-            return preferred.max(self.width);
+            let widest = self.widest(columns);
+            if self.width > widest {
+                return self.width;
+            }
+            let mut spacing = preferred.max(self.width);
+            // The arc turns each card about its top edge. Two neighbours can lean inwards
+            // by up to a full card height each. Try the room's limit if it is narrower.
+            for _ in 0..4 {
+                let lean = self.lean(columns, spacing).min(std::f32::consts::FRAC_PI_2);
+                spacing =
+                    preferred.max(self.width + 4.0 * self.fan.height * lean.sin() + self.margin);
+                if spacing >= widest {
+                    return widest;
+                }
+            }
+            return spacing;
         }
         if self.strip <= 0.0 {
             return preferred;
@@ -305,20 +346,34 @@ impl Fit<'_> {
         (self.room.x - self.width).max(0.0) / columns.saturating_sub(1).max(1) as f32
     }
 
-    fn slant(&self, columns: usize, spacing: f32) -> f32 {
-        let radius = (self.fan.radius * self.width).max(f32::EPSILON);
+    fn radius(&self) -> f32 {
+        (self.fan.radius * self.width).max(f32::EPSILON)
+    }
+
+    fn lean(&self, columns: usize, spacing: f32) -> f32 {
         let edge = (columns as f32 - 1.0) * spacing / 2.0;
-        ((edge / radius).min(1.0).asin() + self.fan.bias.abs())
-            .min(80.0_f32.to_radians())
-            .tan()
+        (edge / self.radius()).min(1.0).asin() + self.fan.bias.abs()
+    }
+
+    fn slant(&self, columns: usize, spacing: f32) -> f32 {
+        self.lean(columns, spacing).min(80.0_f32.to_radians()).tan()
     }
 
     fn rise(&self, columns: usize, spacing: f32) -> f32 {
         self.strip + 2.0 * spacing * self.slant(columns, spacing) + self.margin
     }
 
+    fn separated_rise(&self, columns: usize, spacing: f32) -> f32 {
+        let radius = self.radius();
+        let edge = ((columns as f32 - 1.0) * spacing / 2.0).min(radius);
+        let sink = radius - (radius * radius - edge * edge).max(0.0).sqrt();
+        let lean = self.lean(columns, spacing).min(std::f32::consts::FRAC_PI_2);
+        // Leave room for the whole face, its tilted corners and the drop at the row's ends.
+        2.0 * self.fan.height + self.width * lean.sin() + sink + self.margin
+    }
+
     fn screen_pose(&self, item: &Item, x: f32, rise: f32) -> ScreenPose {
-        let radius = (self.fan.radius * self.width).max(f32::EPSILON);
+        let radius = self.radius();
         let along = x.clamp(-radius, radius);
         let sink = radius - (radius * radius - along * along).max(0.0).sqrt();
         let (up, turn) = if self.fan.inverted {
@@ -407,5 +462,13 @@ impl Fit<'_> {
             projected = later;
         }
         true
+    }
+
+    fn disjoint(projected: &[Trial]) -> bool {
+        projected.iter().enumerate().all(|(index, trial)| {
+            projected[..index].iter().all(|other| {
+                !trial.bounds.overlaps(other.bounds) || !trial.rectangle.overlaps(other.rectangle)
+            })
+        })
     }
 }
