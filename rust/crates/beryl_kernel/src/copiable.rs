@@ -1,6 +1,6 @@
 //! Copiable values: a definition, the face of it that is up, and the copy exceptions that
 //! made them ([`crate::copiable::additions`]). [`crate::query`] asks them of an object.
-//! Implements: CR 707.2, CR 707.9a, CR 707.9b, CR 708.2a
+//! Implements: CR 205.3d, CR 707.2, CR 707.9a, CR 707.9b, CR 708.2a
 //!
 
 use beryl_card::{
@@ -363,16 +363,24 @@ impl<L: Layout> Copiable<L> {
 
     /// `printed`, the subtypes of the face that is up as some reader takes them, with those
     /// the exceptions add (CR 707.9b). The layers pass the face's subtypes read through the
-    /// permanent's text changes: those change the type line the copy took, and the subtype an
-    /// exception adds stays.
+    /// permanent's text changes. Only subtypes that match the copy's card types in layer 1
+    /// can be added ([CR 205.3d]): "An object can’t gain a subtype that doesn’t correspond
+    /// to one of that object’s types." An animation in layer 4 cannot make the exception apply.
+    ///
+    /// [CR 205.3d]: https://yawgatog.com/resources/magic-rules/#R2053d
     #[cold]
     #[inline(never)]
     pub fn with_excepted_subtypes(self, t: &GameTable, printed: GameSubtypes) -> GameSubtypes {
-        (self.additions.iter())
+        let types = self.face(t).types;
+        self.additions
+            .iter()
             .flat_map(|addition| addition.changes(t))
             .fold(printed, |subtypes, change| match *change {
-                CopyChange::AddSubtype(subtype) => subtypes.with(t.subtypes(), subtype),
-                CopyChange::PowerToughness(..)
+                CopyChange::AddSubtype(subtype) if types.intersects(subtype.card_type()) => {
+                    subtypes.with(t.subtypes(), subtype)
+                }
+                CopyChange::AddSubtype(_)
+                | CopyChange::PowerToughness(..)
                 | CopyChange::Colors(_)
                 | CopyChange::WithoutSupertypes(_)
                 | CopyChange::Has(_) => subtypes,

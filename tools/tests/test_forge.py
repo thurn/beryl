@@ -89,6 +89,33 @@ def test_without_a_trace_flips_are_unknown() -> None:
     assert all("flips" not in s for s in scenarios)
 
 
+def test_forge_advances_to_the_snapshot_after_a_silent_turn_change() -> None:
+    entry = next(e for e in dumped() if e["card"] == "Thieving Skydiver")
+    assertion = {
+        "assert": "Count",
+        "player": 1,
+        "zone": "Hand",
+        "card": None,
+        "count": 1,
+    }
+    entry["actions"] = [
+        {"action": "Resolve"},
+        {"action": "Assert", "assertion": assertion},
+    ]
+    entry["snapshot"] = 1
+    entry["trace"] = [
+        {"kind": "Priority", "turn": turn, "step": "PrecombatMain", "flips": []}
+        for turn in (1, 2)
+    ]
+    scenarios, skipped = forge.export([entry], card_store.STORE)
+    assert skipped == []
+    assert steps(scenarios[0]) == [
+        {"op": "resolve"},
+        {"op": "advance", "turn": 2, "phase": "MAIN1"},
+        {"op": "assert", "assertion": assertion},
+    ]
+
+
 @pytest.mark.parametrize("stack", [[], [{"name": "Dark Depths"}]])
 def test_first_priority_action_records_whether_setup_stack_should_be_empty(
     stack: list[Json],

@@ -249,6 +249,14 @@ def ability_selector(cards: Cards, card: str, how: str, index: int) -> str:
     return " ".join(words)
 
 
+def advance_step(position: JsonObject) -> JsonObject:
+    return {
+        "op": "advance",
+        "turn": position["turn"],
+        "phase": PHASES[cast(str, position["step"])],
+    }
+
+
 def step(action: JsonObject, cards: Cards, purpose: object = None) -> JsonObject | None:
     """One Beryl action as a harness step, or None for an assert left unchecked. `cards`
     describes the scenario's cards. `purpose` is what the prompt of the decision an answer
@@ -292,11 +300,7 @@ def step(action: JsonObject, cards: Cards, purpose: object = None) -> JsonObject
     if kind == "Resolve":
         return {"op": "resolve"}
     if kind == "AdvanceTo":
-        return {
-            "op": "advance",
-            "turn": action["turn"],
-            "phase": PHASES[cast(str, action["step"])],
-        }
+        return advance_step(action)
     if kind == "Answer":
         pick = cast(JsonObject, action["pick"])
         if pick["pick"] == "Plan":
@@ -421,6 +425,29 @@ def replays_plan(action: JsonObject, paid_as_made: bool) -> bool:
     )
 
 
+def advance_to_snapshot(
+    setup: JsonObject,
+    actions: Sequence[JsonObject],
+    trace: Sequence[JsonObject],
+    snapshot: int | None,
+) -> JsonObject | None:
+    """The advance Forge needs when Beryl found its next priority in a later phase."""
+    if snapshot is None or snapshot >= len(trace):
+        return None
+    position = trace[snapshot]
+    if position["kind"] != "Priority":
+        return None
+    previous = setup
+    for i in reversed(range(snapshot)):
+        action = actions[i]
+        if action["action"] != "Assert":
+            previous = action if action["action"] == "AdvanceTo" else trace[i]
+            break
+    if (previous["turn"], previous["step"]) == (position["turn"], position["step"]):
+        return None
+    return advance_step(position)
+
+
 def export(
     entries: Sequence[JsonObject], store: Path
 ) -> tuple[list[JsonObject], list[JsonObject]]:
@@ -446,6 +473,8 @@ def export(
                 as_their_own(a, trace[i].get("decides_for")) if i < len(trace) else a
                 for i, a in enumerate(cast(list[JsonObject], entry["actions"]))
             ]
+            setup = cast(JsonObject, entry["setup"])
+            snapshot_advance = advance_to_snapshot(setup, actions, trace, snapshot)
             for i, action in enumerate(actions):
                 # Include answers Beryl chose silently. Forge can offer more targets or
                 # choose a different X, and needs the final Done for each damage division.
@@ -494,6 +523,8 @@ def export(
                     paid_as_made = any(isinstance(t, dict) for t in tapped) and len(
                         tapped
                     ) == len(payment(action, actions, trace, i))
+                if i == snapshot and snapshot_advance is not None:
+                    steps.append(snapshot_advance)
                 if converted is None:
                     unchecked += 1
                 else:
@@ -521,7 +552,6 @@ def export(
                     ):
                         setup_target = len(steps)
                     steps.append(converted)
-            setup = cast(JsonObject, entry["setup"])
             scenario: JsonObject = {
                 "card": entry["card"],
                 "name": entry["name"],

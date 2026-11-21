@@ -262,6 +262,21 @@ pub mod scenarios {
                 ME.chooses_color(Colors::GREEN),
                 ME.colored(Zone::Battlefield, Card::PaintersServant, Colors::GREEN),
             ]),
+        // The copy has only the land card type in layer 1, so it cannot gain Illusion.
+        // Life and Limb makes it a creature in layer 4.
+        Scenario::new("an Image of an animated Forest gains no Illusion subtype")
+            .interaction(&[Card::LifeAndLimb, Card::SparasHeadquarters])
+            .battlefield(P0, &[Card::Island, Card::Island, Card::LifeAndLimb])
+            .battlefield(P1, &[Card::SparasHeadquarters])
+            .hand(P0, &[IMAGE, Card::Plains])
+            .actions(&[
+                ME.casts(IMAGE),
+                Resolve,
+                ME.picks_up_to(Card::SparasHeadquarters),
+                ME.creature(Card::SparasHeadquarters, true),
+                ME.has_subtype(Card::SparasHeadquarters, Subtype::Saproling, true),
+                ME.has_subtype(Card::SparasHeadquarters, Subtype::Illusion, false),
+            ]),
         // The Gargantuan gains the subtype and sacrifice trigger from the Image it copies.
         Scenario::new("a copy of an Image inherits its Illusion type and sacrifice trigger")
             .interaction(&[MOTHER, GARGANTUAN])

@@ -6,6 +6,13 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **Phantasmal Image became an Illusion when it copied a land animated by Life
+  and Limb.** The copy effect added a creature subtype to a land before the
+  animation made it a creature. Copy exceptions now check the card types the
+  copy has in layer 1. The scenario
+  `an Image of an animated Forest gains no Illusion subtype` checks the copy
+  while Life and Limb animates it.
+
 - **A game could panic when Equipment became unattached as a creature took
   lethal damage.** The state-based check detached the Equipment before it
   classified lethal damage for regeneration. Detaching had invalidated the
