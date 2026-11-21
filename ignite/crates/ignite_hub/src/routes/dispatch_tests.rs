@@ -35,6 +35,16 @@ pub(super) fn post(
     body: &Value,
     now: Timestamp,
 ) -> (u16, Value) {
+    post_with_test_paths(conn, path, body, now, &[])
+}
+
+pub(super) fn post_with_test_paths(
+    conn: &mut Connection,
+    path: &str,
+    body: &Value,
+    now: Timestamp,
+    test_paths: &[String],
+) -> (u16, Value) {
     let machine = body["machine"].as_str().unwrap_or("m-1");
     let request = Request {
         method: "POST".into(),
@@ -47,7 +57,7 @@ pub(super) fn post(
         body: serde_json::to_vec(body).unwrap(),
         headers: Vec::new(),
     };
-    let response = handle(conn, &request, now).expect("a dispatch route");
+    let response = handle(conn, &request, now, test_paths).expect("a dispatch route");
     (
         response.status,
         serde_json::from_slice(&response.body).unwrap(),
@@ -534,7 +544,7 @@ fn writes_need_a_writer_and_other_paths_are_not_ours() {
         headers: Vec::new(),
     };
     let status = |conn: &mut Connection, path: &str, method: &str| {
-        handle(conn, &request(path, method), start()).map(|r| r.status)
+        handle(conn, &request(path, method), start(), &[]).map(|r| r.status)
     };
     assert_eq!(status(&mut conn, "/next", "POST"), Some(401));
     assert_eq!(status(&mut conn, "/claims", "GET"), Some(405));

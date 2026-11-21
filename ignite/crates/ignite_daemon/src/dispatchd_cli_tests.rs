@@ -415,7 +415,7 @@ fn hub_with_lost_landing_reply(rig: &Rig) -> crate::hubclient::tests::FakeHttpHu
         let req = request(method, path, body);
         let mut db = lock(&db);
         let now = clock.now();
-        let response = dispatch::handle(&mut db, &req, now)
+        let response = dispatch::handle(&mut db, &req, now, &[])
             .or_else(|| tickets::handle(&mut db, &req, now))
             .unwrap();
         if path == "/landed" && landing_requests.fetch_add(1, Ordering::SeqCst) < 2 {

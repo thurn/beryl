@@ -11,8 +11,8 @@ use ignite_core::dispatch::label;
 use ignite_core::ids::{MachineId, SessionId, TicketId};
 use ignite_core::protocol::emergency::{EmergencyChange, EmergencyReply};
 use ignite_core::protocol::hub::{
-    AdhocClaim, Claim, Close, DependencyNote, Heartbeat, Landed, LandedReply, MachineFree,
-    NextReply, Pause, Release, SessionTitle, TicketBrief,
+    AdhocClaim, Claim, Close, DependencyNote, FixOutcome, Heartbeat, Landed, LandedReply,
+    MachineFree, NextReply, Pause, Release, SessionTitle, TicketBrief,
 };
 use ignite_core::protocol::tickets::{
     BatchRequest, CLI_LANDING_KEY, CliLanding, Operation, OperationResult, Status, Ticket,
@@ -21,6 +21,7 @@ use ignite_core::protocol::tickets::{
 use ignite_core::time::Timestamp;
 use ignite_store::StoreError;
 use ignite_store::hub::batch::{self, BatchOutcome};
+use ignite_store::hub::fix_outcomes::LandingFix;
 use ignite_store::hub::{
     edges, emergency, feed, findings, fleet, machine_asks, session_titles, tickets,
 };
@@ -60,7 +61,12 @@ pub const SAVED_BRANCH: &str = "saved_branch";
 pub const HUB_VERSION: &str = "hub_version";
 
 /// The response if this module owns the request's path.
-pub fn handle(conn: &mut Connection, request: &Request, now: Timestamp) -> Option<Response> {
+pub fn handle(
+    conn: &mut Connection,
+    request: &Request,
+    now: Timestamp,
+    test_paths: &[String],
+) -> Option<Response> {
     let writes = match request.path.as_str() {
         // A machine registering for the first time has no token yet; registration is how it
         // gets one. One that already has a token must present it (see `register`).
@@ -83,7 +89,7 @@ pub fn handle(conn: &mut Connection, request: &Request, now: Timestamp) -> Optio
     if writes && request.writer.is_none() {
         return Some(failure(401, "writes need a registered machine's token"));
     }
-    Some(route(conn, request, now).unwrap_or_else(|response| response))
+    Some(route(conn, request, now, test_paths).unwrap_or_else(|response| response))
 }
 
 /// The ticket's ID, whichever form it was named in: with or without the leading `T`, or by an
@@ -118,7 +124,12 @@ pub fn set_hub_version(conn: &Connection, version: &str) -> Result<(), StoreErro
 
 type Answer = Result<Response, Response>;
 
-fn route(conn: &mut Connection, request: &Request, now: Timestamp) -> Answer {
+fn route(
+    conn: &mut Connection,
+    request: &Request,
+    now: Timestamp,
+    test_paths: &[String],
+) -> Answer {
     match request.path.as_str() {
         "/machines/register" => machines::register(conn, request, &body(request)?, now),
         "/session-titles" => {
@@ -156,7 +167,7 @@ fn route(conn: &mut Connection, request: &Request, now: Timestamp) -> Answer {
             let mut parsed: Landed = body(request)?;
             same_machine(request, &parsed.machine)?;
             parsed.ticket = canonical(conn, &parsed.ticket)?;
-            landed(conn, &parsed, now)
+            landed(conn, &parsed, now, test_paths)
         }
         "/release" => {
             let mut parsed: Release = body(request)?;
@@ -386,7 +397,7 @@ fn brief(conn: &Connection, id: &str) -> Result<TicketBrief, Response> {
 /// its chain for the same session, all in one `IMMEDIATE` transaction, so an interruption
 /// leaves nothing half done. A repeat returns the same reservation while it can still be used.
 /// It leaves the worker alone because the worker may already be working on another ticket.
-fn landed(conn: &mut Connection, landed: &Landed, now: Timestamp) -> Answer {
+fn landed(conn: &mut Connection, landed: &Landed, now: Timestamp, test_paths: &[String]) -> Answer {
     let id = landed.ticket.as_str();
     let mut tx = conn
         .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -443,10 +454,7 @@ fn landed(conn: &mut Connection, landed: &Landed, now: Timestamp) -> Answer {
         now,
     )
     .map_err(|e| store_failure(&e))?;
-    let reason = landed.work.note.lines().next().unwrap_or("").trim();
-    let reason = if reason.is_empty() { "landed" } else { reason };
-    let ops = closing(&load(&tx, id)?, reason);
-    apply_in(&mut tx, ops, &landed.session, &landed.machine, now)?;
+    close_after_landing(&mut tx, landed, now, test_paths)?;
     free_worker(
         &tx,
         &landed.machine,
@@ -474,6 +482,34 @@ fn landed(conn: &mut Connection, landed: &Landed, now: Timestamp) -> Answer {
     }
     tx.commit().map_err(sql_failure)?;
     Ok(Response::json(200, &json!(LandedReply { next })))
+}
+
+fn close_after_landing(
+    tx: &mut Transaction,
+    landed: &Landed,
+    now: Timestamp,
+    test_paths: &[String],
+) -> Result<(), Response> {
+    let id = landed.ticket.as_str();
+    let reason = landed.work.note.lines().next().unwrap_or("").trim();
+    let reason = if reason.is_empty() { "landed" } else { reason };
+    let request = BatchRequest {
+        preconditions: Vec::new(),
+        ops: closing(&load(tx, id)?, reason),
+    };
+    let fix = LandingFix {
+        outcome: FixOutcome::classify(&landed.work.files, test_paths),
+        commit: landed.work.commits.last().cloned(),
+    };
+    batch_result(batch::apply_landing_in(
+        tx,
+        &request,
+        landed.session.as_str(),
+        landed.machine.as_str(),
+        now,
+        (id, &fix),
+    ))?;
+    Ok(())
 }
 
 /// Closes a ticket that needs no landing (`ignite close`) and frees its worker, in one
@@ -557,7 +593,19 @@ fn apply_in(
         preconditions: Vec::new(),
         ops,
     };
-    match batch::apply_in(tx, &request, session.as_str(), machine.as_str(), now) {
+    batch_result(batch::apply_in(
+        tx,
+        &request,
+        session.as_str(),
+        machine.as_str(),
+        now,
+    ))
+}
+
+fn batch_result(
+    result: Result<BatchOutcome, StoreError>,
+) -> Result<Vec<OperationResult>, Response> {
+    match result {
         Ok(BatchOutcome::Applied(reply)) => Ok(reply.results),
         Ok(BatchOutcome::Conflict(found)) => Err(conflict(
             "another session holds the ticket",
@@ -705,3 +753,7 @@ mod usage_tests;
 #[cfg(test)]
 #[path = "dispatch_mix_tests.rs"]
 mod mix_tests;
+
+#[cfg(test)]
+#[path = "dispatch_fix_outcomes_tests.rs"]
+mod fix_outcomes_tests;

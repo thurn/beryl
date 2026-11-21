@@ -241,6 +241,9 @@ impl Verb for WhyVerb {
             .find(|(_, k)| k.listed.check.as_str() == *wanted);
         let (family, keyed) = match (exact, found.as_slice()) {
             (Some(one), _) | (None, [one]) => *one,
+            (None, []) if !flags.contains(&"--inputs") => {
+                return why_record::outside_a_tree(&checks, wanted, false);
+            }
             (None, []) => return Reply::text(Exit::Usage, format!("no check matches {wanted}")),
             (None, many) => {
                 let names: Vec<&str> = many

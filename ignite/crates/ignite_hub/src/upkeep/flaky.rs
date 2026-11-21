@@ -262,6 +262,8 @@ fn off_filing(check: &str, first: &FlakyRecord, second: &FlakyRecord) -> Filing 
             ticket_type: Some(TicketType::Bug),
             priority: Some(3),
             labels: Some(vec!["flaky".to_owned(), format!("check:{family}")]),
+            // The filed records are linked afterward. A close can already see the check here.
+            metadata: Some([(filing::CHECKS_KEY.to_owned(), serde_json::json!([check]))].into()),
             ..TicketFields::default()
         },
         deps: Vec::new(),
@@ -288,6 +290,8 @@ fn always_filing(check: &str, first: &FlakyRecord, second: &FlakyRecord) -> Fili
             ticket_type: Some(TicketType::Bug),
             priority: Some(1),
             labels: Some(vec!["flaky".to_owned(), format!("check:{family}")]),
+            // The filed records are linked afterward. A close can already see the check here.
+            metadata: Some([(filing::CHECKS_KEY.to_owned(), serde_json::json!([check]))].into()),
             ..TicketFields::default()
         },
         deps: Vec::new(),

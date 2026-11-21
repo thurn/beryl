@@ -1,5 +1,5 @@
 //! The result cache, check and record routes: `/results/lookup`, `/results/store`, `/flaky`,
-//! `/checks/stats`, `/tips/claim`, `/tips/verified`, `/landings/lookup`, `/regressions`, `/reverted`,
+//! `/checks/stats`, `/checks/fix-outcomes`, `/tips/claim`, `/tips/verified`, `/landings/lookup`, `/regressions`, `/reverted`,
 //! `/records`, `/metrics/import`, and the reports that file tickets: `/incomplete`, `/audits`,
 //! `/finds` and `/tips/waiting`.
 //! `/results/store` also files a ticket when a pass replaces another machine's failure.
@@ -9,7 +9,8 @@
 //!
 //! Each route decodes its body with the types of `ignite_core::protocol::hub`, calls the store in
 //! `ignite_store::hub` and encodes the reply. Every route except `/results/lookup`,
-//! `/landings/lookup` and `/checks/stats` changes the database, so it needs an authorized writer (HTTP 401 otherwise).
+//! `/landings/lookup` and the check history reads writes to the database and needs an
+//! authorized writer (HTTP 401 otherwise).
 
 use std::collections::BTreeMap;
 
@@ -28,7 +29,7 @@ use ignite_core::protocol::hub::{
 use ignite_core::time::Timestamp;
 use ignite_store::StoreError;
 use ignite_store::hub::{
-    checks, provider_usage, records, results, ticket_spend, tip_coverage, tips,
+    checks, fix_outcomes, provider_usage, records, results, ticket_spend, tip_coverage, tips,
 };
 
 use super::{Request, Response};
@@ -42,7 +43,9 @@ const BILLION: f64 = 1e9;
 pub fn handle(conn: &mut Connection, request: &Request, now: Timestamp) -> Option<Response> {
     let (method, writes) = match request.path.as_str() {
         "/results/lookup" | "/landings/lookup" => ("POST", false),
-        "/checks/stats" | "/regressions/open" | "/tips/coverage" => ("GET", false),
+        "/checks/stats" | "/checks/fix-outcomes" | "/regressions/open" | "/tips/coverage" => {
+            ("GET", false)
+        }
         "/results/store"
         | "/flaky"
         | "/tips/claim"
@@ -78,6 +81,7 @@ fn route(conn: &mut Connection, request: &Request, now: Timestamp) -> Result<Res
             Ok(done())
         }
         "/checks/stats" => stats(conn, request),
+        "/checks/fix-outcomes" => fixes(conn, request, now),
         "/regressions/open" => open_regressions(conn),
         "/tips/coverage" => {
             let coverage = tip_coverage::get(conn).map_err(|e| store_failure(&e))?;
@@ -328,6 +332,21 @@ fn stats(conn: &Connection, request: &Request) -> Result<Response, Response> {
         }
     }
     Ok(Response::json(200, &json!(reply)))
+}
+
+/// The recent outcomes of one check by name, or of all checks for scoring.
+fn fixes(conn: &Connection, request: &Request, now: Timestamp) -> Result<Response, Response> {
+    let check = request
+        .query
+        .iter()
+        .find(|(key, _)| key == "check")
+        .map(|(_, value)| value.parse())
+        .transpose()
+        .map_err(|error| failure(400, &format!("{error}")))?;
+    let since = now.plus_seconds(-fix_outcomes::HISTORY_DAYS * 86_400.0);
+    let fixes = fix_outcomes::between(conn, since, now, check.as_ref())
+        .map_err(|error| store_failure(&error))?;
+    Ok(Response::json(200, &json!(fixes)))
 }
 
 /// Every check with an open regression and the open ticket that holds it.

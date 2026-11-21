@@ -247,6 +247,9 @@ pub struct Repository {
     /// it is [`DEFAULT_SAVED_PREFIX`], the branch `ignite/<ticket>`.
     #[serde(default)]
     pub saved: Option<String>,
+    /// Paths that count as test files when classifying a landed check fix.
+    #[serde(default)]
+    pub test_paths: Vec<String>,
 }
 
 /// The prefix of a released ticket's saved work when `repository.saved` is unset.

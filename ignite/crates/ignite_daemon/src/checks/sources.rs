@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use ignite_core::ids::{Commit, TreeId};
 use ignite_core::inputs::CrateGraph;
-use ignite_core::protocol::hub::CheckStatsReply;
+use ignite_core::protocol::hub::{CheckFix, CheckStatsReply};
 use ignite_core::traits::{Error, Result};
 
 use crate::build::{DirectoryTrees, TreeFacts};
@@ -95,6 +95,9 @@ pub trait CheckHistory: Send + Sync {
     /// `GET /checks/stats?family=`.
     fn stats(&self, family: &str) -> Result<CheckStatsReply>;
 
+    /// `GET /checks/fix-outcomes?check=`.
+    fn fix_outcomes(&self, check: &str) -> Result<Vec<CheckFix>>;
+
     /// [`CheckHistory::stats`] with each check's runs and failures in `areas` only, or in every
     /// area when `areas` is empty. The family's failure rate still counts every area. The gate
     /// scores a check by the areas its change touches, and the `rust` family's record in every
@@ -168,6 +171,20 @@ impl CheckHistory for HubHistory {
             url.push_str("&area=");
             url.push_str(&encoded(area));
         }
+        self.get(&url)
+    }
+
+    fn fix_outcomes(&self, check: &str) -> Result<Vec<CheckFix>> {
+        self.get(&format!(
+            "{}/checks/fix-outcomes?check={}",
+            self.base,
+            encoded(check)
+        ))
+    }
+}
+
+impl HubHistory {
+    fn get<T: serde::de::DeserializeOwned>(&self, url: &str) -> Result<T> {
         // An agent with a timeout, so that a connection the hub never answers cannot hang the
         // caller (tip verification, the gate) forever.
         let agent = ureq::Agent::new_with_config(
@@ -176,7 +193,7 @@ impl CheckHistory for HubHistory {
                 .build(),
         );
         let mut response = agent
-            .get(&url)
+            .get(url)
             .header("Authorization", &format!("Bearer {}", self.token))
             .call()
             .map_err(|e| Error::Unreachable(e.to_string()))?;

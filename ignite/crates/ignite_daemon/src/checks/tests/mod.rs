@@ -243,9 +243,14 @@ impl TreeSource for FakeTrees {
 #[derive(Default)]
 struct FakeHistory {
     replies: BTreeMap<String, CheckStatsReply>,
+    fixes: BTreeMap<String, Vec<ignite_core::protocol::hub::CheckFix>>,
 }
 
 impl CheckHistory for FakeHistory {
+    fn fix_outcomes(&self, check: &str) -> Result<Vec<ignite_core::protocol::hub::CheckFix>> {
+        Ok(self.fixes.get(check).cloned().unwrap_or_default())
+    }
+
     fn stats(&self, family: &str) -> Result<CheckStatsReply> {
         Ok(self
             .replies

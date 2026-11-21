@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{Outcome, ResultCost};
 use crate::config::Os;
-use crate::ids::{CheckName, Commit, InputHash, MachineId, RecordId};
+use crate::ids::{CheckName, Commit, InputHash, MachineId, RecordId, TicketId};
 use crate::time::Timestamp;
 
 /// A result cache key. `platform` is `None` for a check with `platforms = "any"`.
@@ -85,6 +85,71 @@ pub struct FlakyReport {
     /// The last lines of the failed run's output.
     #[serde(default)]
     pub output: String,
+}
+
+/// What the files in a check's fix changed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum FixOutcome {
+    Product,
+    TestOnly,
+    None,
+}
+
+impl FixOutcome {
+    /// An empty file list means no change. A single product path makes the fix a product fix.
+    pub fn classify(files: &[String], test_paths: &[String]) -> Self {
+        if files.is_empty() {
+            Self::None
+        } else if files.iter().all(|file| {
+            test_paths
+                .iter()
+                .any(|pattern| crate::inputs::path_matches(pattern, file))
+        }) {
+            Self::TestOnly
+        } else {
+            Self::Product
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Product => "product",
+            Self::TestOnly => "test-only",
+            Self::None => "none",
+        }
+    }
+}
+
+/// The kind of ticket that recorded a check's fix.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum FixSource {
+    Regression,
+    Flaky,
+}
+
+impl FixSource {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Regression => "regression",
+            Self::Flaky => "flaky",
+        }
+    }
+}
+
+/// One check's outcome when the ticket that held it closed.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CheckFix {
+    pub check: CheckName,
+    pub ticket: TicketId,
+    pub at: Timestamp,
+    pub outcome: FixOutcome,
+    pub source: FixSource,
+    /// The first bad commit when the ticket closed, for a regression.
+    pub first_bad: Option<Commit>,
+    /// The last commit of the fix that landed, if one was recorded.
+    pub fixing_commit: Option<Commit>,
 }
 
 /// Whether a check is run and cached.

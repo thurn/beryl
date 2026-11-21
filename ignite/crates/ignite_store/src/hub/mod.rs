@@ -12,6 +12,7 @@ pub mod emergency;
 pub mod feed;
 pub mod filer_deps;
 pub mod findings;
+pub mod fix_outcomes;
 pub mod fleet;
 pub mod fleet_settings;
 pub mod leases;
@@ -229,6 +230,11 @@ pub const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 36,
         sql: include_str!("regression_verification.sql"),
+        code: None,
+    },
+    Migration {
+        version: 37,
+        sql: include_str!("fix_outcomes.sql"),
         code: None,
     },
 ];

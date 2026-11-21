@@ -28,6 +28,20 @@ green = "refs/ignite/green"
 # the next `ignite start` of the ticket checks it out (docs/ignite.md, "Releasing work").
 saved = "refs/ignite/tickets/"
 
+# Paths that count as test files when Ignite classifies a landed check fix.
+test_paths = [
+  "**/tests/**",                  # Integration tests and their fixtures and expected outputs.
+  "**/*_tests.rs",                # Rust unit tests in sibling modules.
+  "**/tests.rs",                  # Rust unit tests in a standalone tests module.
+  "ui/**/*.test.ts",              # TypeScript unit tests.
+  "ui/**/*.test.tsx",             # TypeScript unit tests for React components.
+  "tools/tests/**",               # Python tests and fixtures.
+  "ui/fixtures.json",             # Saved game setups used by the UI and spec checks.
+  "ui/shots.json",                # Screens and assertions exercised by the UI checks.
+  "data/beryl3d/timeline/web/**", # Expected UI timelines captured from the web client.
+  "ignite/checks/**",             # Check family declarations and commands.
+]
+
 # Express landings (docs/ignite.md, "Express landings"). On 2026-11-18 every fix to Ignite's own
 # scheduling waited 10 to 30 minutes for `ignite land` in the queue it was fixing, and three were
 # pushed to the release ref (`repository.release`) by hand instead. A landing whose every changed

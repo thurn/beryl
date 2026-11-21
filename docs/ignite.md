@@ -3049,6 +3049,13 @@ output (last 40 lines; whole output on jarvis at ...)
   then runs the check on the new tip. If it still fails, the hub reopens the
   ticket with the new output.
 
+When a regression or flaky-check ticket closes, the hub records an outcome for
+each check on it. A fix is `product` if any landed path is outside
+`repository.test_paths` in `ignite.toml`, `test-only` if every landed path
+matches a test pattern, and `none` if no files landed. Each new close of a
+reopened ticket gets its own record. `ignite why <check>` lists the check's
+recorded outcomes from the last 30 days.
+
 ## Flaky checks
 
 A flaky check costs every agent that meets it, so Ignite stops running one as

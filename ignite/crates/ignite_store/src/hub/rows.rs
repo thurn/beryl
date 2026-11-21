@@ -344,6 +344,18 @@ crate::tables! {
         at: String,
     }
 
+    /// A check's outcome at one ticket close, keyed by the close's history position.
+    CheckFixOutcome = "check_fix_outcomes" {
+        close_seq: i64,
+        check_name: String,
+        ticket: String,
+        at: String,
+        outcome: String,
+        source: String,
+        first_bad: Option<String>,
+        fixing_commit: Option<String>,
+    }
+
     /// Each class's rate of check commands for one day, in billions of instructions per second.
     ClassRate = "class_rates" { day: String, class: String, rate: Option<f64> }
 

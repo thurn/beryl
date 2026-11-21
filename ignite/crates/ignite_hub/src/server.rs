@@ -114,6 +114,7 @@ impl HubServer {
             aliases: self.config.hub.aliases.clone(),
             wordmark: self.wordmark.clone(),
             rules: self.config.rules.clone(),
+            test_paths: self.config.repository.test_paths.clone(),
             database: self.database.clone(),
             attachments: AttachmentFiles::beside(
                 &self.database,
@@ -189,6 +190,7 @@ struct Shared {
     wordmark: Option<String>,
     /// The improvement rules' settings, evaluated when records or efficiency rows arrive.
     rules: Rules,
+    test_paths: Vec<String>,
     database: PathBuf,
     /// The image files attached to tickets, beside the database.
     attachments: AttachmentFiles,
@@ -487,7 +489,7 @@ fn api_route(
         .or_else(|| routes::tip_rounds::handle(conn, request, now))
         .or_else(|| routes::versions::handle(conn, request, now))
         .or_else(|| routes::check_state::handle(conn, request, now))
-        .or_else(|| routes::dispatch::handle(conn, request, now))
+        .or_else(|| routes::dispatch::handle(conn, request, now, &shared.test_paths))
         .or_else(|| routes::commands::handle(conn, request, now))
         .or_else(|| routes::transcripts::handle(conn, request, private, now))
         .unwrap_or_else(|| failure(404, "Unknown route"))

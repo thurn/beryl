@@ -56,6 +56,10 @@ impl Run<'_> {
         let dependents = self.dependents(&renames)?;
         renumber::apply(self.conn, &renames)?;
         for (old_id, new_id) in &renames {
+            self.conn.execute(
+                "UPDATE check_fix_outcomes SET ticket = ?2 WHERE ticket = ?1",
+                [old_id, new_id],
+            )?;
             let mut change = Map::new();
             change.insert("id".to_owned(), json!([old_id, new_id]));
             change.insert(

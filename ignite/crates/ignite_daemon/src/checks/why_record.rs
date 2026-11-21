@@ -1,11 +1,12 @@
 //! The part of `ignite why` that reads only the hub's record of a check: its family, runs,
-//! failures, cost and state. Outside a build tree, `ignite why` prints only this part, since
+//! failures, cost, state and fix outcomes. Outside a build tree, `ignite why` prints only this part, since
 //! listing the checks of a tree and hashing their inputs may build products, and reading a
 //! record must change nothing.
 
+use ignite_core::ids::CheckName;
 use ignite_core::manifest::Kind;
 use ignite_core::protocol::client::{Exit, Reply};
-use ignite_core::protocol::hub::{CheckState, CheckStats};
+use ignite_core::protocol::hub::{CheckFix, CheckState, CheckStats};
 
 use super::Checks;
 use super::verbs::{matches, render};
@@ -60,7 +61,41 @@ pub(super) fn head_lines(
         };
         lines.push(("state".to_owned(), state_text.to_owned()));
     }
+    let label = "fix outcomes (30d)";
+    match checks.history.fix_outcomes(check) {
+        Ok(fixes) if fixes.is_empty() => lines.push((label.to_owned(), "none recorded".to_owned())),
+        Ok(fixes) => lines.extend(fix_lines(fixes)),
+        Err(_) => lines.push((label.to_owned(), "history unavailable".to_owned())),
+    }
     lines
+}
+
+fn fix_lines(fixes: Vec<CheckFix>) -> impl Iterator<Item = (String, String)> {
+    fixes.into_iter().map(|fix| {
+        (
+            "fix outcomes (30d)".to_owned(),
+            format!(
+                "{}  {}  {} ({})",
+                fix.at.day(),
+                fix.outcome.as_str(),
+                fix.ticket,
+                fix.source.as_str()
+            ),
+        )
+    })
+}
+
+/// A check can be removed as part of a fix, leaving only the outcome history.
+fn removed_check(checks: &Checks, wanted: &str) -> Reply {
+    if let Ok(check) = CheckName::new(wanted)
+        && let Ok(fixes) = checks.history.fix_outcomes(check.as_str())
+        && !fixes.is_empty()
+    {
+        let mut lines = vec![("check".to_owned(), wanted.to_owned())];
+        lines.extend(fix_lines(fixes));
+        return Reply::text(Exit::Success, render(&lines));
+    }
+    Reply::text(Exit::Usage, format!("the hub has no record of {wanted}"))
 }
 
 /// `ignite why <check>` from outside any build tree: the record of the one check the hub knows
@@ -92,9 +127,7 @@ pub(super) fn outside_a_tree(checks: &Checks, wanted: &str, inputs: bool) -> Rep
     let (family, stats) = match (exact, found.len()) {
         (Some(index), _) => found.swap_remove(index),
         (None, 1) => found.remove(0),
-        (None, 0) => {
-            return Reply::text(Exit::Usage, format!("the hub has no record of {wanted}"));
-        }
+        (None, 0) => return removed_check(checks, wanted),
         (None, count) => {
             let names: Vec<&str> = found
                 .iter()

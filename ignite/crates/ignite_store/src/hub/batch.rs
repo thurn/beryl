@@ -27,10 +27,12 @@ use ignite_core::protocol::tickets::{
 };
 use ignite_core::time::Timestamp;
 
+use crate::hub::fix_outcomes::{self, LandingFix};
 use crate::hub::{cycles, edges, feed, findings, tickets};
 use crate::{Result, StoreError};
 
 mod ancestors;
+mod fields;
 mod moves;
 pub(crate) mod roots;
 
@@ -82,7 +84,7 @@ fn apply_as(
     filer: Filer,
 ) -> Result<BatchOutcome> {
     let mut transaction = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-    let outcome = apply_in_as(&mut transaction, batch, actor, machine, now, filer)?;
+    let outcome = apply_in_as(&mut transaction, batch, actor, machine, now, filer, None)?;
     if matches!(outcome, BatchOutcome::Applied(_)) {
         transaction.commit()?;
     }
@@ -100,10 +102,30 @@ pub fn apply_in(
     machine: &str,
     now: Timestamp,
 ) -> Result<BatchOutcome> {
-    apply_in_as(transaction, batch, actor, machine, now, Filer::Person)
+    apply_in_as(transaction, batch, actor, machine, now, Filer::Person, None)
 }
 
-/// Like [`apply_automatic`], inside a caller's transaction.
+/// Applies the close batch of a landing and gives its primary ticket credit for the fix.
+pub fn apply_landing_in(
+    transaction: &mut Transaction,
+    batch: &BatchRequest,
+    actor: &str,
+    machine: &str,
+    now: Timestamp,
+    landing: (&str, &LandingFix),
+) -> Result<BatchOutcome> {
+    apply_in_as(
+        transaction,
+        batch,
+        actor,
+        machine,
+        now,
+        Filer::Person,
+        Some(landing),
+    )
+}
+
+/// Applies an automatic filing inside the caller's transaction.
 pub fn apply_automatic_in(
     transaction: &mut Transaction,
     batch: &BatchRequest,
@@ -111,7 +133,7 @@ pub fn apply_automatic_in(
     machine: &str,
     now: Timestamp,
 ) -> Result<BatchOutcome> {
-    apply_in_as(transaction, batch, actor, machine, now, Filer::Ignite)
+    apply_in_as(transaction, batch, actor, machine, now, Filer::Ignite, None)
 }
 
 fn apply_in_as(
@@ -121,10 +143,12 @@ fn apply_in_as(
     machine: &str,
     now: Timestamp,
     filer: Filer,
+    landing: Option<(&str, &LandingFix)>,
 ) -> Result<BatchOutcome> {
     let mut savepoint = transaction.savepoint()?;
     let outcome = {
         let mut run = Run::new(&savepoint, actor, machine, now, filer)?;
+        run.landing = landing;
         run.batch(batch)
             .and_then(|results| Ok((run.finish()?, results)))
     };
@@ -184,6 +208,7 @@ struct Run<'a> {
     machine: &'a str,
     now: Timestamp,
     filer: Filer,
+    landing: Option<(&'a str, &'a LandingFix)>,
     at: Value,
     start: Seq,
     seq: u64,
@@ -208,6 +233,7 @@ impl<'a> Run<'a> {
             machine,
             now,
             filer,
+            landing: None,
             at: json!(now),
             start,
             seq: start.0,
@@ -595,43 +621,6 @@ impl<'a> Run<'a> {
         })
     }
 
-    /// The set fields of an update or create as column changes, checked as the ticket service
-    /// checked them. `parent` is left for the caller, which must resolve it.
-    fn field_changes(fields: &TicketFields) -> Step<Map<String, Value>> {
-        if fields.title.as_deref() == Some("") {
-            return rejected("title must have a value");
-        }
-        if matches!(&fields.assignee, Some(Some(a)) if a.is_empty()) {
-            return rejected("assignee must have a value");
-        }
-        if fields.priority.is_some_and(|p| p > 4) {
-            return rejected("priority must be at most 4");
-        }
-        if fields.last.is_some_and(|l| l > 1) {
-            return rejected("last must be 0 or 1");
-        }
-        if matches!(fields.every_hours, Some(Some(0))) {
-            return rejected("every_hours must be at least 1");
-        }
-        if let Some(saving) = &fields.saving
-            && (ignite_core::shares::Unit::parse(&saving.unit).is_none()
-                || !saving.amount.is_finite()
-                || saving.amount <= 0.0)
-        {
-            return rejected(
-                "a saving needs a unit of dollars, agent-hours or core-hours and an amount above 0",
-            );
-        }
-        let Ok(Value::Object(mut changes)) = serde_json::to_value(fields) else {
-            unreachable!("ticket fields serialize to an object")
-        };
-        changes.remove("parent");
-        if let Some(labels) = &fields.labels {
-            changes.insert("labels".to_owned(), json!(dedupe(labels.clone())));
-        }
-        Ok(changes)
-    }
-
     fn closing(&self, reason: Option<&str>) -> Map<String, Value> {
         object(&[
             ("status", json!(Status::Closed)),
@@ -680,7 +669,13 @@ impl<'a> Run<'a> {
         self.changed.insert(before.id.to_string());
         if patch.get("status") == Some(&json!(Status::Closed)) {
             // Whoever closes the ticket, an improvement's finding for it is then closed too.
-            findings::close_ticket(self.conn, before.id.as_str(), self.now)?;
+            let id = before.id.as_str();
+            findings::close_ticket(self.conn, id, self.now)?;
+            let landing = self
+                .landing
+                .filter(|(ticket, _)| *ticket == id)
+                .map(|(_, fix)| fix);
+            fix_outcomes::record_close(self.conn, id, self.seq as i64, self.now, landing)?;
         }
         Ok(())
     }

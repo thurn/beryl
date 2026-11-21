@@ -1,6 +1,8 @@
 //! The verbs that read the gate's plan and a check's record: `ignite check`, `check --plan`,
 //! `why` and the list of checks tip verification runs, against a seeded history.
 
+use ignite_core::protocol::hub::{CheckFix, FixOutcome, FixSource};
+
 use super::*;
 
 /// A history in which the gate's plan reads as the example under "Where regression checks run"
@@ -51,6 +53,19 @@ fn seeded() -> World {
         checks,
     };
     let mut history = FakeHistory::default();
+    let check = name("script:aura/enters-attached/you");
+    history.fixes.insert(
+        check.to_string(),
+        vec![CheckFix {
+            check,
+            ticket: "ABCD".parse().unwrap(),
+            at: Timestamp::EPOCH,
+            outcome: FixOutcome::TestOnly,
+            source: FixSource::Regression,
+            first_bad: None,
+            fixing_commit: None,
+        }],
+    );
     history
         .replies
         .insert("script".to_owned(), reply("script", script));
@@ -228,6 +243,7 @@ check    script:aura/enters-attached/you
 family   script (regression, any platform)
 record   9 failures in 74 runs; median cost 0.79 billion
 state    on
+fix outcomes (30d) 1970-01-01  test-only  ABCD (regression)
 cache    no result for these inputs
 runs     in the gate: score 0.1266, threshold 0.004
 "
@@ -269,6 +285,7 @@ check    script:aura/enters-attached/you
 family   script (regression, any platform)
 record   9 failures in 74 runs; median cost 0.79 billion
 state    on
+fix outcomes (30d) 1970-01-01  test-only  ABCD (regression)
 runs     depends on the change: run ignite why in a build tree to see the gate's choice
 "
     );

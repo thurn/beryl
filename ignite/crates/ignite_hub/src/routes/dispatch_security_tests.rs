@@ -36,7 +36,7 @@ fn register_as(
             .map(|value| vec![("authorization".to_owned(), value.to_owned())])
             .unwrap_or_default(),
     };
-    let response = handle(conn, &request, start()).unwrap();
+    let response = handle(conn, &request, start(), &[]).unwrap();
     (
         response.status,
         serde_json::from_slice(&response.body).unwrap(),
@@ -92,12 +92,14 @@ fn a_body_naming_another_machine_than_the_token_is_refused() {
         body: serde_json::to_vec(&body).unwrap(),
         headers: Vec::new(),
     };
-    let refused = handle(&mut conn, &request("m-1"), start()).unwrap();
+    let refused = handle(&mut conn, &request("m-1"), start(), &[]).unwrap();
     assert_eq!(refused.status, 403);
     let ticket = tickets::load(&conn, ids[0].as_str()).unwrap().unwrap();
     assert_eq!(ticket.assignee, None);
     assert_eq!(
-        handle(&mut conn, &request("m-2"), at(1.0)).unwrap().status,
+        handle(&mut conn, &request("m-2"), at(1.0), &[])
+            .unwrap()
+            .status,
         200
     );
 }
@@ -195,7 +197,7 @@ fn a_machine_may_pause_itself_or_every_machine_but_not_another_alone() {
             body: serde_json::to_vec(&json!({"machine": machine, "paused": true})).unwrap(),
             headers: Vec::new(),
         };
-        handle(conn, &request, start()).unwrap().status
+        handle(conn, &request, start(), &[]).unwrap().status
     };
     assert_eq!(pause_as(&mut conn, "m-1", json!("m-2")), 403);
     assert_eq!(pause_as(&mut conn, "m-1", json!("m-1")), 200);
