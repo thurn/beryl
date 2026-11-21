@@ -25,7 +25,7 @@ use beryl_cards::decks::WU_CONTROL;
 use beryl_cards::names;
 use beryl_engine::card::{Ability, AbilityIx, AbilityKind, CardDef, CastingOption, Face, Keywords};
 use beryl_engine::{
-    CardIx, Choice, Decision, GameTable, Observation, Outcome, Profile, Replay, Scratch,
+    CardIx, Choice, Decision, Format, GameTable, Observation, Outcome, Profile, Replay, Scratch,
     StallReason, State, Step, Stops, Zone, apply, apply_decided, next, observe, rederive,
 };
 use beryl_search::{Agent, AgentDecision, GreedyAgent, Inline, RolloutPolicy};
@@ -283,7 +283,7 @@ impl InTable {
         let deck = family.deck();
         let cards = family.cards();
         let stand_ins: Vec<&'static CardDef> = cards.iter().map(|&def| stand_in(def)).collect();
-        let t = GameTable::with_extra(&CARDS, [&deck, &deck], &stand_ins)
+        let t = GameTable::with_extra(Format::CONSTRUCTED, &CARDS, [&deck, &deck], &stand_ins)
             .expect("the family's deck makes a table");
         let pairs = cards
             .iter()

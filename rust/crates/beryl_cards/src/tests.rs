@@ -6,8 +6,8 @@ use beryl_engine::card::{
 use beryl_engine::rng::SplitMix64;
 
 use beryl_engine::{
-    Choice, Decision, DecisionKind, GameTable, Observation, Opt, Outcome, Profile, Replay, Scratch,
-    Seat, State, Step, TurnStep, Zone, ZoneKey, apply, next,
+    Choice, Decision, DecisionKind, Format, GameTable, Observation, Opt, Outcome, Profile, Replay,
+    Scratch, Seat, State, Step, TurnStep, Zone, ZoneKey, apply, next,
 };
 
 use crate::{CARDS, decks, names};
@@ -153,7 +153,7 @@ fn a_game_of_the_three_lands_runs_to_decking() {
         (13, names::ISLAND),
         (13, names::TUNDRA),
     ];
-    let t = GameTable::new(&CARDS, [deck, deck]).unwrap();
+    let t = GameTable::new(Format::CONSTRUCTED, &CARDS, [deck, deck]).unwrap();
     let mut s = State::new(&t, 42, Profile::SMART).unwrap();
     let mut x = Scratch::new();
     let choose = |d: &Decision| match d.kind {
@@ -399,7 +399,7 @@ fn a_question_after_a_look_keeps_the_look() {
         (1, names::SPHINX_OF_FALSE_CONCLUSIONS),
         (1, names::ISLAND),
     ];
-    let t = GameTable::new(&CARDS, [p0, p1]).unwrap();
+    let t = GameTable::new(Format::CONSTRUCTED, &CARDS, [p0, p1]).unwrap();
     let mut s = State::new(&t, 1, Profile::EXACT).unwrap();
     s.board().begin_at(1, Seat::P0, TurnStep::PrecombatMain);
     for player in Seat::BOTH {

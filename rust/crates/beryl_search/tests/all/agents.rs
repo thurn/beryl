@@ -4,8 +4,8 @@
 
 use beryl_cards::CARDS;
 use beryl_engine::{
-    Decision, Decklist, GameTable, Outcome, Profile, Replay, Scratch, Small, State, Step, apply,
-    next, observe,
+    Decision, Decklist, Format, GameTable, Outcome, Profile, Replay, Scratch, Small, State, Step,
+    apply, next, observe,
 };
 use beryl_search::{
     AGENTS, AgentDecision, Budget, CardValues, DEEP_SEARCHER, DEEP_SEER, DEEP_SEER_UNANCHORED,
@@ -58,7 +58,7 @@ fn cheap(
 
 #[test]
 fn every_agent_plays_cards_with_no_overlay_entry_to_the_end() {
-    let t = GameTable::new(&CARDS, [VANILLA, VANILLA]).unwrap();
+    let t = GameTable::new(Format::CONSTRUCTED, &CARDS, [VANILLA, VANILLA]).unwrap();
     // The tiers value an untuned card differently (`Knowledge::Tuned` by its face alone), so
     // only the flags show whether the overlay has an entry for it.
     let tuned = CardValues::with(&t, Knowledge::Tuned);
@@ -94,7 +94,7 @@ fn every_agent_plays_cards_with_no_overlay_entry_to_the_end() {
 /// plays it by the family name `.../estimate`, plays a game to its end.
 #[test]
 fn the_derived_only_champion_plays_to_the_end() {
-    let t = GameTable::new(&CARDS, [VANILLA, VANILLA]).unwrap();
+    let t = GameTable::new(Format::CONSTRUCTED, &CARDS, [VANILLA, VANILLA]).unwrap();
     let family = Family {
         knowledge: Knowledge::Estimate,
         ..DEEP_SEARCHER

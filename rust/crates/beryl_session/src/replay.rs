@@ -10,7 +10,7 @@
 use std::path::Path;
 
 use beryl_engine::chance::Random;
-use beryl_engine::{CardTable, GameTable, LargeCardIx, Seat, State, TableError};
+use beryl_engine::{CardTable, Format, GameTable, LargeCardIx, Seat, State, TableError};
 use serde::{Deserialize, Serialize};
 
 use crate::checkpoint::Checkpoint;
@@ -187,8 +187,9 @@ impl ReplayFile {
         });
         let [a, b] = decks;
         let decks = [a?, b?];
-        let table = GameTable::new(cards, [decks[0].as_slice(), decks[1].as_slice()]).map_err(
-            |error| match error {
+        let lists = decks.each_ref().map(Vec::as_slice);
+        let table =
+            GameTable::new(Format::CONSTRUCTED, cards, lists).map_err(|error| match error {
                 TableError::UnknownCard(name) => SessionError::UnknownCard {
                     name: name.to_owned(),
                 },
@@ -230,8 +231,7 @@ impl ReplayFile {
                 TableError::Subtypes { count } => SessionError::Deck {
                     reason: format!("the decks name {count} subtypes, more than a game can number"),
                 },
-            },
-        )?;
+            })?;
         let profile = with_stops(
             beryl_engine::Profile::SMART,
             self.stops,

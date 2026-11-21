@@ -654,7 +654,7 @@ impl Game {
             self.screens = Default::default();
         }
         self.before_cast = None;
-        on_board!(&mut self.board, b => beryl_engine::concede(&mut b.state, &mut b.scratch, self.human));
+        on_board!(&mut self.board, b => beryl_engine::concede(&mut b.state, &self.table, &mut b.scratch, self.human));
         self.replay.log.push(Entry::Concede);
         let outcome = self.board.outcome().expect("a concession ends the game");
         self.at = At::Over {

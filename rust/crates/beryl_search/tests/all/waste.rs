@@ -6,8 +6,8 @@ use beryl_cards::{CARDS, names};
 use beryl_engine::card::{Castings, Purpose};
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{
-    Candidates, DecisionKind, GameTable, Observation, Opt, Profile, Replay, Scratch, State, Step,
-    TurnStep, Zone, next,
+    Candidates, DecisionKind, Format, GameTable, Observation, Opt, Profile, Replay, Scratch, State,
+    Step, TurnStep, Zone, next,
 };
 use beryl_scenario::{Action, Live, P0, P1, Permanent, Scenario};
 use beryl_search::{
@@ -64,7 +64,7 @@ fn waste_evokes_only_for_a_worthwhile_spell() {
 
 #[test]
 fn waste_declines_opposing_permanents_in_softmax_mirrors() {
-    let t = GameTable::new(&CARDS, [WU_CONTROL, WU_CONTROL]).unwrap();
+    let t = GameTable::new(Format::CONSTRUCTED, &CARDS, [WU_CONTROL, WU_CONTROL]).unwrap();
     let mut scratch = Scratch::new();
     let mut choices = 0;
     let mut opposing_offers = 0;

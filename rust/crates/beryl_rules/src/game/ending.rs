@@ -59,7 +59,7 @@ pub(crate) fn win_for<L: Layout>(game: &mut Game<'_, L>, winners: PlayerSet, cau
 /// ended.
 pub(crate) fn lose_for<L: Layout>(game: &mut Game<'_, L>, losers: PlayerSet, cause: LossCause<L>) {
     if game.state.outcome().is_none() {
-        sba::lose_game(game.state, game.sink, losers, cause);
+        sba::lose_game(game.state, game.table.format(), game.sink, losers, cause);
     }
 }
 

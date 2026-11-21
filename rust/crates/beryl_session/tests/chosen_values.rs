@@ -12,7 +12,8 @@ use beryl_engine::state::{Zone, ZoneKey};
 use beryl_engine::table::{CardTable, Decklist};
 use beryl_engine::zone::Place;
 use beryl_engine::{
-    Choice, Decision, DecisionKind, GameTable, Opt, Replay, Scratch, State, Step, apply, next,
+    Choice, Decision, DecisionKind, Format, GameTable, Opt, Replay, Scratch, State, Step, apply,
+    next,
 };
 use beryl_session::save::{Act, Chosen};
 
@@ -112,7 +113,7 @@ fn find(d: &Decision, opt: Opt) -> Choice {
 /// that player's hand and taken: played if a land, cast otherwise, and passed on until the
 /// value it chooses is asked. Returns the question.
 fn asked(deck: &'static Decklist, card: &str) -> (GameTable, State, Decision) {
-    let t = GameTable::new(&CARDS, [deck, deck]).unwrap();
+    let t = GameTable::new(Format::CONSTRUCTED, &CARDS, [deck, deck]).unwrap();
     let mut s = State::new(&t, 11, Profile::EXACT).unwrap();
     let mut x = Scratch::new();
     let mut d = decide(&t, &mut s, &mut x);

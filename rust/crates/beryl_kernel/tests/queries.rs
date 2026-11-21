@@ -7,6 +7,7 @@ use beryl_card::{
 };
 use beryl_kernel::copiable::additions::Addition;
 use beryl_kernel::event::Sink;
+use beryl_kernel::format::Format;
 use beryl_kernel::mutate::Arrival;
 use beryl_kernel::profile::Profile;
 use beryl_kernel::state::{Derived, StackEntry, StackItem};
@@ -79,6 +80,7 @@ static CARDS: CardTable = CardTable::new(&[&BEAR, &PRODIGY, &BLAST]);
 
 fn game() -> (GameTable, State) {
     let t = GameTable::new(
+        Format::CONSTRUCTED,
         &CARDS,
         [
             &[(2, "Test Bear"), (1, "Test Prodigy"), (1, "Test Blast")],

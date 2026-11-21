@@ -4,7 +4,7 @@
 use beryl_card_names::decks::WU_CONTROL;
 use beryl_engine::event::Event;
 use beryl_engine::rng::SplitMix64;
-use beryl_engine::{GameTable, Outcome, Profile, Replay, Scratch, Small, State, Step};
+use beryl_engine::{Format, GameTable, Outcome, Profile, Replay, Scratch, Small, State, Step};
 use beryl_engine::{apply, next, observe, view};
 use beryl_search::{
     Agent, AgentDecision, Budget, Family, GameAgent, LongSearch, Settings, Widening, find_agent,
@@ -15,7 +15,8 @@ use crate::transcript::Transcript;
 
 /// The table every CLI game is played on: the Milestone 1 mirror.
 pub fn mirror(catalog: &Catalog) -> GameTable {
-    GameTable::new(catalog.cards, [WU_CONTROL, WU_CONTROL]).expect("the WU Control mirror's table")
+    GameTable::new(Format::CONSTRUCTED, catalog.cards, [WU_CONTROL, WU_CONTROL])
+        .expect("the WU Control mirror's table")
 }
 
 /// How a game went.

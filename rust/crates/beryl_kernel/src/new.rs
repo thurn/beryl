@@ -5,8 +5,10 @@
 use beryl_card::{TurnStep, Zone};
 
 use crate::bitboard::Bitboard;
+use crate::chance;
 use crate::event::{Listens, Replaces};
 use crate::fit::Misfit;
+use crate::format::{Format, StartingPlayer};
 use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Table};
 use crate::object::{Derived, Object};
@@ -25,9 +27,9 @@ use crate::turn::Turn;
 /// total of 20."
 ///
 /// [CR 103.4]: https://yawgatog.com/resources/magic-rules/#R1034
-fn new_player<L: Layout>() -> Player<L> {
+fn new_player<L: Layout>(format: Format) -> Player<L> {
     Player {
-        life: 20,
+        life: format.starting_life(),
         mana: ManaPool::default(),
         remembered: Default::default(),
         lands_played: 0,
@@ -74,7 +76,8 @@ impl<L: Layout> State<L> {
                 });
             }
         }
-        let mut s: State<L> = State::empty(profile);
+        let format = t.format();
+        let mut s: State<L> = State::empty_in(format, profile);
         s.rng = Rng::new(seed);
         for player in Seat::BOTH {
             let mut cards: L::Deck<L::Card> = Default::default();
@@ -97,16 +100,20 @@ impl<L: Layout> State<L> {
                 s.zones.members[player.index()][Zone::Library.index()].insert(slot);
             }
         }
-        // See CR 103.1: "the players determine which one of them will choose who takes the first
-        // turn ... (flipping a coin, rolling dice, etc.)".
-        let chooser =
-            Seat::new(u8::try_from(s.rng.other.below(2)).expect("the chooser is seat 0 or 1"));
-        s.pending = Pending::PlayOrDraw { chooser };
+        s.pending = match format.starting_player() {
+            StartingPlayer::PlayOrDraw => Pending::PlayOrDraw {
+                chooser: chance::starting_player_chooser(&mut s, format),
+            },
+        };
         Ok(s)
     }
 
     /// A state with no objects, before the game begins.
     pub fn empty(profile: Profile) -> State<L> {
+        Self::empty_in(Format::CONSTRUCTED, profile)
+    }
+
+    fn empty_in(format: Format, profile: Profile) -> State<L> {
         State {
             objects: Table::filled(Object::EMPTY),
             battlefield: Default::default(),
@@ -122,7 +129,7 @@ impl<L: Layout> State<L> {
                 graveyard: Table::filled(Default::default()),
                 next_timestamp: 0,
             },
-            players: Table::from_fn(|_| new_player()),
+            players: Table::from_fn(|_| new_player(format)),
             turn: Turn {
                 number: 0,
                 active: Seat::P0,

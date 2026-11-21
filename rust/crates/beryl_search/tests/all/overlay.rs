@@ -2,7 +2,7 @@
 //! tuned for.
 
 use beryl_cards::{CARDS, decks, names};
-use beryl_engine::{GameTable, LargeCardIx};
+use beryl_engine::{Format, GameTable, LargeCardIx};
 use beryl_search::{CardValues, Knowledge, tuning_mismatches};
 
 #[test]
@@ -15,7 +15,12 @@ fn every_tuning_names_a_card_and_the_abilities_it_was_tuned_for() {
 
 #[test]
 fn tuned_values_are_the_hand_tuned_ones() {
-    let t = GameTable::new(&CARDS, [decks::WU_CONTROL, decks::VINTAGE_WU_CONTROL]).unwrap();
+    let t = GameTable::new(
+        Format::CONSTRUCTED,
+        &CARDS,
+        [decks::WU_CONTROL, decks::VINTAGE_WU_CONTROL],
+    )
+    .unwrap();
     let tuned = CardValues::with(&t, Knowledge::Tuned);
     let estimated = CardValues::with(&t, Knowledge::Estimate);
     let card = |name: &str| {

@@ -23,6 +23,7 @@ use crate::state::{
 };
 use crate::{CardTable, GameTable, Profile, State, continuous::layers, reference};
 use crate::{Scratch, zones::tokens};
+use beryl_kernel::format::Format;
 
 use super::events::{find, with_game};
 use super::{DUAL, LAND};
@@ -164,7 +165,7 @@ fn game() -> (GameTable, State) {
         (2, "Test Grove"),
         (2, "Test Mimic"),
     ];
-    let t = GameTable::new(&CARDS, [deck, deck]).unwrap();
+    let t = GameTable::new(Format::CONSTRUCTED, &CARDS, [deck, deck]).unwrap();
     let mut s = State::new(&t, 3, Profile::EXACT).unwrap();
     s.board().begin_at(1, Seat::P0, TurnStep::PrecombatMain);
     (t, s)

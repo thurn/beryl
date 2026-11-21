@@ -6,8 +6,8 @@ use beryl_cards::{CARDS, names};
 use beryl_engine::card::{Keywords, Types};
 use beryl_engine::state::CounterKind;
 use beryl_engine::{
-    CardIx, DecisionKind, GameTable, Observation, Opt, Profile, Replay, Scratch, State, Step,
-    TurnStep, apply, next, observe,
+    CardIx, DecisionKind, Format, GameTable, Observation, Opt, Profile, Replay, Scratch, State,
+    Step, TurnStep, apply, next, observe,
 };
 use beryl_scenario::{Action, Live, P0, P1, Permanent, Scenario};
 use beryl_search::{CardValues, Family, Knowledge, RolloutPolicy};
@@ -119,7 +119,7 @@ fn hold_recognizes_the_mirrors_draw_activations() {
         (names::JACE_VRYNS_PRODIGY, 0),
     ];
     let deck = abilities.map(|(card, _)| (1, card));
-    let t = GameTable::new(&CARDS, [&deck, &deck]).unwrap();
+    let t = GameTable::new(Format::CONSTRUCTED, &CARDS, [&deck, &deck]).unwrap();
     let values = CardValues::with(&t, Knowledge::Tuned);
     for (name, ability) in abilities {
         let card = t.index_named::<CardIx>(name).unwrap();
@@ -129,7 +129,7 @@ fn hold_recognizes_the_mirrors_draw_activations() {
 
 #[test]
 fn hold_mirror_casts_at_the_opponents_end_step() {
-    let t = GameTable::new(&CARDS, [WU_CONTROL, WU_CONTROL]).unwrap();
+    let t = GameTable::new(Format::CONSTRUCTED, &CARDS, [WU_CONTROL, WU_CONTROL]).unwrap();
     let policy = policy(&t);
     let mut scratch = Scratch::new();
     let mut casts = 0;

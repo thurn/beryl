@@ -5,6 +5,8 @@
 pub(crate) mod paused_step;
 pub(crate) mod stops;
 
+use beryl_kernel::format::{FirstDraw, Format};
+
 use crate::combat;
 use crate::continuous::layers;
 use crate::decision::{Outcome, StallReason};
@@ -17,10 +19,6 @@ use crate::replacement::event::{self, Reason, Sink};
 use crate::state::{Duration, Pending, State, TurnStep, Zone, ZoneKey};
 use crate::table::GameTable;
 use crate::zones::drawing;
-
-/// The maximum hand size ([CR 514.1](https://yawgatog.com/resources/magic-rules/#R5141)),
-/// "normally seven".
-pub(crate) const MAX_HAND_SIZE: u32 = 7;
 
 /// Whether any creature is attacking.
 pub(crate) fn any_attacking<L: Layout>(s: &State<L>) -> bool {
@@ -92,9 +90,12 @@ pub(crate) fn step_actions<L: Layout>(
             return end_step(s, t, sink);
         }
         TurnStep::Draw => {
-            // CR 103.8a: "In a two-player game, the player who plays first skips the draw
+            // See CR 103.8a: "In a two-player game, the player who plays first skips the draw
             // step (see rule 504, "Draw Step") of their first turn."
-            if s.turn().number() > 1 {
+            let skip = match t.format().first_draw() {
+                FirstDraw::SkippedByStartingPlayer => s.turn().is_starting_players_first_turn(),
+            };
+            if !skip {
                 // CR 504.1: "First, the active player draws a card."
                 drawing::draw(&mut Game::new(s, t, sink), active, 1)?;
             }
@@ -104,7 +105,7 @@ pub(crate) fn step_actions<L: Layout>(
         TurnStep::FirstStrikeDamage | TurnStep::CombatDamage => {
             combat::begin_damage(s, t, sink)?;
         }
-        TurnStep::Cleanup => cleanup(s),
+        TurnStep::Cleanup => cleanup(s, t.format()),
         TurnStep::Upkeep
         | TurnStep::PrecombatMain
         | TurnStep::BeginningOfCombat
@@ -215,8 +216,8 @@ fn next_step<L: Layout>(
 /// hand contains more cards than their maximum hand size (normally seven), they discard enough
 /// cards to reduce their hand size to that number." The discards are decisions, one card at a
 /// time; [`finish_cleanup`] follows them.
-fn cleanup<L: Layout>(s: &mut State<L>) {
-    if s.hand_size(s.turn().active()) > MAX_HAND_SIZE {
+fn cleanup<L: Layout>(s: &mut State<L>, format: Format) {
+    if s.hand_size(s.turn().active()) > format.maximum_hand() {
         s.ask(Pending::Discard);
     } else {
         finish_cleanup(s);
@@ -234,7 +235,7 @@ pub(crate) fn cleanup_discard<L: Layout>(
     slot: L::Slot,
 ) -> Result<(), Full> {
     event::move_one(s, t, sink, slot, Zone::Graveyard, Reason::Discard)?;
-    if s.hand_size(s.turn().active()) <= MAX_HAND_SIZE {
+    if s.hand_size(s.turn().active()) <= t.format().maximum_hand() {
         s.settle_question();
         finish_cleanup(s);
     }
@@ -266,14 +267,14 @@ fn finish_cleanup<L: Layout>(s: &mut State<L>) {
 ///
 /// [CR 305.2](https://yawgatog.com/resources/magic-rules/#R3052): "A player can normally play
 /// one land during their turn".
-pub(crate) fn may_play_land<L: Layout>(s: &State<L>, player: Seat) -> bool {
+pub(crate) fn may_play_land<L: Layout>(s: &State<L>, player: Seat, format: Format) -> bool {
     player == s.turn().active()
         && matches!(
             s.turn().step(),
             TurnStep::PrecombatMain | TurnStep::PostcombatMain
         )
         && s.stack().is_empty()
-        && s.player(player).lands_played() < 1
+        && s.player(player).lands_played() < format.lands_each_turn()
 }
 
 /// The cards in a player's hand.

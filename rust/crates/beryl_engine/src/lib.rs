@@ -13,6 +13,7 @@
 
 // The game state and everything that writes it are the kernel's.
 pub use beryl_kernel::copiable::additions;
+pub use beryl_kernel::format::Format;
 pub use beryl_kernel::{
     bitboard, chance, chosen, decision, definition, filter, fixed, ids, observation, query,
     relayout, rng, state, table, two_player, zone,

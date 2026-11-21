@@ -21,8 +21,8 @@ use std::hint::black_box;
 use beryl_cards::CARDS;
 use beryl_cards::decks::WU_CONTROL;
 use beryl_engine::{
-    Answers, Choice, Decision, GameTable, Observation, Outcome, Profile, Replay, Scratch, State,
-    Step, Stops, apply, apply_decided, next, observe,
+    Answers, Choice, Decision, Format, GameTable, Observation, Outcome, Profile, Replay, Scratch,
+    State, Step, Stops, apply, apply_decided, next, observe,
 };
 use beryl_search::{
     Agent, AgentDecision, FrozenExpertAgent, GreedyAgent, Inline, RolloutPolicy, rollout,
@@ -54,7 +54,8 @@ impl Corpus {
     /// Plays the seeded games and cuts their positions. Deterministic: the test
     /// `corpus_never_changes` pins it.
     pub fn new() -> Corpus {
-        let table = GameTable::new(&CARDS, [WU_CONTROL, WU_CONTROL]).expect("the WU mirror");
+        let table = GameTable::new(Format::CONSTRUCTED, &CARDS, [WU_CONTROL, WU_CONTROL])
+            .expect("the WU mirror");
         let mut positions = Vec::new();
         for expert in [true, false] {
             for game in 0..GAMES {

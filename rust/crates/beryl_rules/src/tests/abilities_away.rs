@@ -20,6 +20,7 @@ use crate::table::TableError;
 use crate::zone::Place;
 use crate::{CardTable, Decklist, GameTable, Profile, Scratch, State};
 use beryl_card::Comparison;
+use beryl_kernel::format::Format;
 use beryl_kernel::listener::Unmatched;
 use beryl_kernel::two_player::TwoPlayerSeat as _;
 
@@ -120,7 +121,7 @@ const DECK: &Decklist = &[
 
 /// A game in the starting player's first main phase.
 fn game() -> (GameTable, State, Seat, Scratch) {
-    let t = GameTable::new(&CARDS, [DECK, DECK]).unwrap();
+    let t = GameTable::new(Format::CONSTRUCTED, &CARDS, [DECK, DECK]).unwrap();
     let mut s = State::new(&t, 7, Profile::EXACT).unwrap();
     begin(&t, &mut s);
     let p = s.turn().starting_player();
@@ -277,7 +278,7 @@ static REFUSED: CardTable = CardTable::new(&[&LAND, &RECLUSE, &WANDERER]);
 fn the_table_refuses_an_ability_that_works_where_the_engine_does_not_look() {
     let table = |name: &'static str| {
         let deck: &Decklist = &[(1, name), (39, "Test Land")];
-        GameTable::new(&REFUSED, [deck, deck]).map(|_| ())
+        GameTable::new(Format::CONSTRUCTED, &REFUSED, [deck, deck]).map(|_| ())
     };
     assert_eq!(
         table("Test Recluse"),

@@ -6,14 +6,14 @@ use beryl_cards::{CARDS, names};
 use beryl_engine::card::Words;
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{
-    Choice, GameTable, Opt, Profile, Replay, Scratch, State, Step, apply, next, observe,
+    Choice, Format, GameTable, Opt, Profile, Replay, Scratch, State, Step, apply, next, observe,
 };
 use beryl_search::{RolloutPolicy, Softmax, rollout, soft_rollout};
 
 /// At a temperature near zero the softmax policy plays greedy's game.
 #[test]
 fn a_cold_softmax_is_greedy() {
-    let t = GameTable::new(&CARDS, [WU_CONTROL, WU_CONTROL]).unwrap();
+    let t = GameTable::new(Format::CONSTRUCTED, &CARDS, [WU_CONTROL, WU_CONTROL]).unwrap();
     let policy = RolloutPolicy::new(&t);
     let mut rng = SplitMix64::new(3);
     for seed in 0..4 {
@@ -34,7 +34,7 @@ fn a_cold_softmax_is_greedy() {
 /// greedy, once cast it onto a board of one land.
 #[test]
 fn greedy_holds_a_portable_hole_with_nothing_to_exile() {
-    let t = GameTable::new(&CARDS, [WU_CONTROL, WU_CONTROL]).unwrap();
+    let t = GameTable::new(Format::CONSTRUCTED, &CARDS, [WU_CONTROL, WU_CONTROL]).unwrap();
     let policy = RolloutPolicy::new(&t);
     let hole = CARDS.get(names::PORTABLE_HOLE).unwrap().faces[0].abilities[0].targets()[0];
     let mut x = Scratch::new();

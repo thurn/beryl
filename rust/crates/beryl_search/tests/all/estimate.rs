@@ -3,13 +3,13 @@
 //! They read the values the derived-only tier gives a table's cards ([`Knowledge::Estimate`]).
 
 use beryl_cards::{CARDS, names};
-use beryl_engine::{CardIx, GameTable};
+use beryl_engine::{CardIx, Format, GameTable};
 use beryl_search::{CardValues, Knowledge};
 
 /// The estimated value of each card in `cards`, in order.
 fn values<const N: usize>(cards: [&'static str; N]) -> [i16; N] {
     let deck: Vec<_> = cards.iter().map(|&card| (1, card)).collect();
-    let t = GameTable::new(&CARDS, [&deck, &deck]).unwrap();
+    let t = GameTable::new(Format::CONSTRUCTED, &CARDS, [&deck, &deck]).unwrap();
     let values = CardValues::with(&t, Knowledge::Estimate);
     cards.map(|name| {
         let card = t

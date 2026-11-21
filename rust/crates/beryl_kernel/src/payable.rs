@@ -161,6 +161,7 @@ mod tests {
     };
 
     use super::*;
+    use crate::format::Format;
     use crate::table::{CardTable, GameTable, TableError};
 
     const CREATURE: Filter = Filter::Types(Types::CREATURE);
@@ -296,7 +297,11 @@ mod tests {
     ]);
 
     fn table(card: &'static str) -> Result<GameTable, TableError> {
-        GameTable::new(&CARDS, [&[(4, "Filler")], &[(1, card)]])
+        GameTable::new(
+            Format::CONSTRUCTED,
+            &CARDS,
+            [&[(4, "Filler")], &[(1, card)]],
+        )
     }
 
     #[test]

@@ -11,7 +11,7 @@ use crate::common::widening::{compares_layouts, play_widening};
 use crate::common::{games, seeds};
 use beryl_cards::CARDS;
 use beryl_cards::decks::{fuzz_deck_from, keystone_family};
-use beryl_engine::{GameTable, Outcome, Profile, StallReason, State};
+use beryl_engine::{Format, GameTable, Outcome, Profile, StallReason, State};
 
 /// Plays a family's games: two fuzz decks per game from its cards, a quarter as many games as
 /// the whole fuzzer plays. No game may panic, break an invariant or stall for a reason other
@@ -28,7 +28,12 @@ fn family(name: &str) {
             fuzz_deck_from(seed, &cards),
             fuzz_deck_from(seed.wrapping_add(1 << 32), &cards),
         ];
-        let t = GameTable::new(&CARDS, [decks[0].as_slice(), decks[1].as_slice()]).unwrap();
+        let t = GameTable::new(
+            Format::CONSTRUCTED,
+            &CARDS,
+            [decks[0].as_slice(), decks[1].as_slice()],
+        )
+        .unwrap();
         let profile = if seed.is_multiple_of(2) {
             Profile::EXACT
         } else {
@@ -116,6 +121,7 @@ fn a_dragon_exiling_more_than_small_holds_plays_on_in_large() {
     use beryl_cards::names::{MOUNTAIN, PLAINS, WORLDGORGER_DRAGON};
     use beryl_engine::{Seat, TurnStep, Zone};
     let t = GameTable::new(
+        Format::CONSTRUCTED,
         &CARDS,
         [&[(33, MOUNTAIN), (7, WORLDGORGER_DRAGON)], &[(20, PLAINS)]],
     )

@@ -17,6 +17,7 @@ use crate::ids::{Seat, Slot};
 use crate::replacement::event::{self, Entry, Reason, Sink};
 use crate::state::{Pending, TurnStep, Zone};
 use crate::{CardTable, Choice, DecisionKind, GameTable, Profile, Replay, Scratch, State, apply};
+use beryl_kernel::format::Format;
 
 /// A 2/2 creature.
 static BEAR: CardDef = CardDef {
@@ -72,7 +73,7 @@ fn game() -> (GameTable, State, Slot) {
         (4, "Test Anthem"),
         (4, "Test Spur"),
     ];
-    let t = GameTable::new(&CARDS, [deck, deck]).unwrap();
+    let t = GameTable::new(Format::CONSTRUCTED, &CARDS, [deck, deck]).unwrap();
     let mut s = State::new(&t, 3, Profile::EXACT).unwrap();
     s.board().begin_at(1, Seat::P0, TurnStep::PrecombatMain);
     let bear = find(&s, &t, Seat::P0, "Test Bear");

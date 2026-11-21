@@ -21,6 +21,7 @@ use crate::{
     CardTable, GameTable, Outcome, Profile, Scratch, State, continuous::layers,
     continuous::rule_change, zones::drawing,
 };
+use beryl_kernel::format::Format;
 
 use super::LAND;
 use super::events::{find, with_game};
@@ -121,7 +122,7 @@ static POWER_CARDS: CardTable =
 #[test]
 fn a_defined_power_is_any_amount_the_layers_read_as_they_apply() {
     let deck: &[(u8, &str)] = &[(1, "Test Smith"), (2, "Test Doom"), (7, "Test Land")];
-    let t = GameTable::new(&POWER_CARDS, [deck, deck]).unwrap();
+    let t = GameTable::new(Format::CONSTRUCTED, &POWER_CARDS, [deck, deck]).unwrap();
     let mut s = State::new(&t, 3, Profile::EXACT).unwrap();
     s.board().begin_at(1, Seat::P0, TurnStep::PrecombatMain);
     let enters = |s: &mut State, player, card| {
@@ -151,7 +152,11 @@ fn a_table_refuses_a_set_power_the_engine_cannot_do() {
         ("Test Reforge", Unapplied::SetPower),
         ("Test Scholar", Unapplied::Amount),
     ] {
-        let table = GameTable::new(&POWER_CARDS, [&[(1, card)], &[(1, "Test Land")]]);
+        let table = GameTable::new(
+            Format::CONSTRUCTED,
+            &POWER_CARDS,
+            [&[(1, card)], &[(1, "Test Land")]],
+        );
         assert_eq!(table.err(), Some(TableError::Static { card, unapplied }));
     }
 }
@@ -218,7 +223,7 @@ fn with_permanent(card: &'static str) -> (GameTable, State, Slot) {
 /// [`with_permanent`], of the cards in `cards`.
 fn with_permanent_of(cards: &'static CardTable, card: &'static str) -> (GameTable, State, Slot) {
     let deck: &[(u8, &str)] = &[(1, card), (9, "Test Land")];
-    let t = GameTable::new(cards, [deck, deck]).unwrap();
+    let t = GameTable::new(Format::CONSTRUCTED, cards, [deck, deck]).unwrap();
     let mut s = State::new(&t, 3, Profile::EXACT).unwrap();
     s.board().begin_at(1, Seat::P0, TurnStep::PrecombatMain);
     let permanent = find(&s, &t, Seat::P0, card);
@@ -274,7 +279,11 @@ fn a_draw_replaced_by_draws_is_not_replaced_again() {
 #[test]
 fn a_table_refuses_a_draw_replacement_the_engine_cannot_do() {
     let card = "Test Favor";
-    let table = GameTable::new(&DRAW_CARDS, [&[(1, card)], &[(1, "Test Land")]]);
+    let table = GameTable::new(
+        Format::CONSTRUCTED,
+        &DRAW_CARDS,
+        [&[(1, card)], &[(1, "Test Land")]],
+    );
     assert_eq!(
         table.err(),
         Some(TableError::Replacement {
@@ -518,7 +527,11 @@ fn a_table_refuses_a_rule_change_the_engine_cannot_check() {
         }));
         let cards: &'static [&'static CardDef] = Box::leak(Box::new([&LAND, card]));
         let cards: &'static CardTable = Box::leak(Box::new(CardTable::new(cards)));
-        let table = GameTable::new(cards, [&[(1, *name)], &[(1, "Test Land")]]);
+        let table = GameTable::new(
+            Format::CONSTRUCTED,
+            cards,
+            [&[(1, *name)], &[(1, "Test Land")]],
+        );
         let refused = TableError::Rule {
             card: name,
             unchecked: *unchecked,
@@ -610,7 +623,7 @@ static GRANT_CARDS: CardTable = CardTable::new(&[&LAND, &SMITH, &FOUNDRY, &PARAD
 /// `granter` on the battlefield under their control. Returns the Smith.
 fn granted_by(granter: &'static str) -> (State, GameTable, Slot) {
     let deck: &[(u8, &str)] = &[(1, "Test Smith"), (1, granter), (8, "Test Land")];
-    let t = GameTable::new(&GRANT_CARDS, [deck, deck]).unwrap();
+    let t = GameTable::new(Format::CONSTRUCTED, &GRANT_CARDS, [deck, deck]).unwrap();
     let mut s = State::new(&t, 3, Profile::EXACT).unwrap();
     s.board().begin_at(1, Seat::P0, TurnStep::PrecombatMain);
     let smith = find(&s, &t, Seat::P0, "Test Smith");
@@ -653,7 +666,11 @@ fn the_layers_run_at_most_three_times_for_granted_abilities() {
 #[test]
 fn a_table_refuses_a_granted_ability_that_reads_an_amount() {
     let card = "Test Reckoner";
-    let table = GameTable::new(&GRANT_CARDS, [&[(1, card)], &[(1, "Test Land")]]);
+    let table = GameTable::new(
+        Format::CONSTRUCTED,
+        &GRANT_CARDS,
+        [&[(1, card)], &[(1, "Test Land")]],
+    );
     assert_eq!(
         table.err(),
         Some(TableError::Static {

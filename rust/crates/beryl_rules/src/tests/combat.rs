@@ -21,6 +21,7 @@ use crate::{
     Replay, Scratch, State, Step, TurnStep, apply, next,
 };
 use beryl_card::{Governed, When};
+use beryl_kernel::format::Format;
 use beryl_kernel::two_player::TwoPlayerSeat as _;
 
 /// A vanilla creature card with keywords.
@@ -196,7 +197,7 @@ impl Game {
     }
 
     fn seeded(seed: u64) -> Self {
-        let t = GameTable::new(&CARDS, [DECK, DECK]).unwrap();
+        let t = GameTable::new(Format::CONSTRUCTED, &CARDS, [DECK, DECK]).unwrap();
         let profile = Profile {
             breakpoint: Some(Breakpoint {
                 turn: 1,

@@ -30,6 +30,7 @@ use crate::{
 };
 use crate::{CustomBody, Layout, custom_body};
 use crate::{interpret::choices, zones, zones::drawing};
+use beryl_kernel::format::Format;
 use beryl_kernel::two_player::TwoPlayerSeat as _;
 
 use super::{DUAL, LAND, begin};
@@ -638,7 +639,7 @@ impl Game {
 
     /// A game of `deck` mirrors of the cards in `cards`, with empty hands.
     pub fn with(cards: &'static CardTable, deck: &Decklist, profile: Profile) -> Game {
-        let t = GameTable::new(cards, [deck, deck]).unwrap();
+        let t = GameTable::new(Format::CONSTRUCTED, cards, [deck, deck]).unwrap();
         let mut s = State::new(&t, 5, profile).unwrap();
         begin(&t, &mut s);
         let me = s.turn().starting_player();

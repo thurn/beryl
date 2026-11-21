@@ -9,6 +9,7 @@ use super::*;
 use crate::bitboard::Bitboard;
 use crate::fit::Misfit;
 use crate::fixed::Full;
+use crate::format::Format;
 use crate::ids::SlotId;
 use crate::layout::Large;
 use crate::profile::Profile;
@@ -116,7 +117,7 @@ fn a_full_store_returns_full_and_a_wide_one_grows() {
     }
     assert_eq!(large.effects().len(), EFFECTS + 1);
     assert_eq!(
-        large.fits::<Small>(&GameTable::new(&NO_CARDS, [&[], &[]]).unwrap()),
+        large.fits::<Small>(&GameTable::new(Format::CONSTRUCTED, &NO_CARDS, [&[], &[]]).unwrap()),
         Err(Misfit::ListTooLong {
             list: "the continuous effects",
             len: EFFECTS + 1,
@@ -271,7 +272,7 @@ fn permission(replacement: Option<MoveReplacement>) -> Permission {
 
 #[test]
 fn a_permission_to_cast_ends_with_its_turn_or_with_its_card() {
-    let t = GameTable::new(&ONE_CARD, [&[(1, "Test Card")], &[]]).unwrap();
+    let t = GameTable::new(Format::CONSTRUCTED, &ONE_CARD, [&[(1, "Test Card")], &[]]).unwrap();
     let mut s: State<Small> = State::empty(Profile::EXACT);
     let (this_turn, while_there) = (nth(&s, 1), nth(&s, 2));
     let flashback = permission(Some(MoveReplacement::Flashback));
@@ -382,7 +383,7 @@ static ONE_CARD: crate::table::CardTable = crate::table::CardTable::new(&[&beryl
 
 #[test]
 fn a_checkpoint_says_a_permission_in_the_words_saves_hold() {
-    let t = GameTable::new(&ONE_CARD, [&[(1, "Test Card")], &[]]).unwrap();
+    let t = GameTable::new(Format::CONSTRUCTED, &ONE_CARD, [&[(1, "Test Card")], &[]]).unwrap();
     let mut s: State<Small> = State::empty(Profile::EXACT);
     s.start_effect(
         CardIx::FIRST,
@@ -406,7 +407,7 @@ fn a_checkpoint_says_a_permission_in_the_words_saves_hold() {
 /// A dealt game of sixty of one card a player, and the table it is of.
 fn dealt() -> (GameTable, State<Small>) {
     let deck: &[(u8, &str)] = &[(60, "Test Card")];
-    let t = GameTable::new(&ONE_CARD, [deck, deck]).unwrap();
+    let t = GameTable::new(Format::CONSTRUCTED, &ONE_CARD, [deck, deck]).unwrap();
     let s = State::new(&t, 7, Profile::EXACT).unwrap();
     (t, s)
 }

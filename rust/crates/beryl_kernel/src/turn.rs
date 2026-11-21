@@ -13,7 +13,8 @@ use beryl_card::TurnStep;
 
 use crate::decision::Outcome;
 use crate::event::Event;
-use crate::ids::{Seat, SlotId};
+use crate::format::Format;
+use crate::ids::Seat;
 use crate::layout::{Layout, Table};
 use crate::reference::Permanents;
 use crate::state::{Budgets, State};
@@ -103,6 +104,18 @@ impl Turn {
     #[inline]
     pub fn starting_player(self) -> Seat {
         self.starting_player
+    }
+
+    /// Whether the draw step belongs to the starting player's first turn
+    /// (see [CR 103.8a]: "the player who plays first skips the draw step").
+    ///
+    /// [CR 103.8a]: https://yawgatog.com/resources/magic-rules/#R1038a
+    #[inline]
+    pub fn is_starting_players_first_turn(self) -> bool {
+        // The first turn always begins with the starting player active.
+        debug_assert!(self.number > 0);
+        debug_assert!(self.number > 1 || self.active == self.starting_player);
+        self.number <= 1
     }
 
     /// The step or phase the game is in (see CR 500.1).
@@ -274,9 +287,9 @@ impl<L: Layout> State<L> {
     /// where it is for the rules to resolve the stack's top or end the step
     /// (see [CR 117.4](https://yawgatog.com/resources/magic-rules/#R1174)).
     #[inline]
-    pub fn pass_priority(&mut self) -> bool {
+    pub fn pass_priority(&mut self, format: Format) -> bool {
         self.turn.passes += 1;
-        if usize::from(self.turn.passes) < L::Slot::PLAYERS {
+        if self.turn.passes < format.seats() {
             self.turn.priority = self.next_player(self.turn.priority);
             return false;
         }

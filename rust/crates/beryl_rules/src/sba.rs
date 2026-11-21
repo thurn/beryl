@@ -2,6 +2,8 @@
 //!
 //! Implements: CR 104.2a, CR 104.3a, CR 104.4a, CR 704.3, CR 704.5a, CR 704.5b, CR 704.5d, CR 704.5e, CR 704.5f, CR 704.5g, CR 704.5i, CR 704.5j, CR 704.5m, CR 704.5n
 
+use beryl_kernel::format::Format;
+
 use crate::PlayerSet;
 
 use crate::actions::attach;
@@ -38,7 +40,7 @@ pub(crate) fn check<L: Layout>(
     t: &GameTable,
     sink: &mut Sink<L>,
 ) -> Result<bool, Full> {
-    if check_losses(s, sink) {
+    if check_losses(s, t.format(), sink) {
         return Ok(true);
     }
     layers::refresh(s, t, sink)?;
@@ -257,15 +259,16 @@ fn attached_illegally<L: Layout>(s: &State<L>, t: &GameTable) -> Bitboard<L::Slo
 ///
 /// [CR 104.4a](https://yawgatog.com/resources/magic-rules/#R1044a): "If all the players
 /// remaining in a game lose simultaneously, the game is a draw."
-fn check_losses<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>) -> bool {
+fn check_losses<L: Layout>(s: &mut State<L>, format: Format, sink: &mut Sink<L>) -> bool {
+    let losses = format.losses();
     let mut causes: Causes<L> = Table::filled(None);
     // Each player's cause is their own: the result is the same in any order.
     for player in s.players().in_seat_order() {
         let p = s.player(player);
         // Both may hold at one check: life is named.
-        causes[player.index()] = if p.life() <= 0 {
+        causes[player.index()] = if p.life() <= losses.life {
             Some(LossCause::Life)
-        } else if p.drew_from_empty() {
+        } else if losses.empty_library && p.drew_from_empty() {
             Some(LossCause::Library)
         } else {
             None
@@ -274,7 +277,7 @@ fn check_losses<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>) -> bool {
     if causes.iter().all(Option::is_none) {
         return false;
     }
-    end(s, sink, &causes);
+    end(s, format, sink, &causes);
     true
 }
 
@@ -287,13 +290,14 @@ type Causes<L> = PerPlayer<L, Option<LossCause<L>>>;
 /// the game."
 pub(crate) fn end_game<L: Layout>(
     s: &mut State<L>,
+    format: Format,
     sink: &mut Sink<L>,
     loser: Seat,
     cause: LossCause<L>,
 ) {
     let mut causes: Causes<L> = Table::filled(None);
     causes[loser.index()] = Some(cause);
-    end(s, sink, &causes);
+    end(s, format, sink, &causes);
 }
 
 /// Ends the game as an effect has each of `losers` lose it
@@ -301,6 +305,7 @@ pub(crate) fn end_game<L: Layout>(
 /// that a player loses the game." With none of them, nothing ends.
 pub(crate) fn lose_game<L: Layout>(
     s: &mut State<L>,
+    format: Format,
     sink: &mut Sink<L>,
     losers: PlayerSet,
     cause: LossCause<L>,
@@ -313,7 +318,7 @@ pub(crate) fn lose_game<L: Layout>(
     for loser in losers.in_seat_order() {
         causes[loser.index()] = Some(cause);
     }
-    end(s, sink, &causes);
+    end(s, format, sink, &causes);
 }
 
 /// Ends the game as each player with a cause loses it. The one player left wins
@@ -322,13 +327,15 @@ pub(crate) fn lose_game<L: Layout>(
 /// is a draw ([CR 104.4a](https://yawgatog.com/resources/magic-rules/#R1044a)): "If all the
 /// players remaining in a game lose simultaneously, the game is a draw."
 ///
-/// The game always ends here, which is the two-player game's: with more players a loss
-/// that leaves two or more in the game ends nothing, and they play on.
-fn end<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, causes: &Causes<L>) {
+/// The format determines whether the remaining players constitute one side.
+fn end<L: Layout>(s: &mut State<L>, format: Format, sink: &mut Sink<L>, causes: &Causes<L>) {
     let left = s
         .players()
         .filter(|player| causes[player.index()].is_none());
-    s.end_game(left.sole().map_or(Outcome::Draw, Outcome::Win));
+    let Some(outcome) = format.outcome_after_loss(left) else {
+        return;
+    };
+    s.end_game(outcome);
     // They lose at once: the events of one happening, by seat, kept as one group.
     sink.together();
     for player in s.players().in_seat_order() {

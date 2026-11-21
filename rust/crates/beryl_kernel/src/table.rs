@@ -9,6 +9,7 @@ use beryl_card::{
 };
 
 use crate::event::{Listens, Replaces};
+use crate::format::Format;
 use crate::ids::{CardId, CardIx, LargeCardIx, Seat};
 use crate::layout::{Layout, PerLayout, PerSeat};
 use crate::listener::{self, Listener, Unmatched};
@@ -97,18 +98,12 @@ pub enum TableError {
     Subtypes { count: usize },
 }
 
-/// The cards one game can contain, under dense game-local indices: what `State` stores for
-/// an object's card, in the width its layout gives one ([`CardId`]). Built once per game and
-/// shared, read-only, by every thread searching it, or cloned into an agent that outlives the
-/// borrow.
-///
-/// The table is the same for every layout and holds any number of cards, so it takes a game
-/// index of any width and gives one of whichever width its caller stores. Whether a layout's
-/// index numbers all of them is asked where a state of that layout is made
-/// ([`crate::State::deal`], [`crate::State::try_relayout`]): past there, every index of the
-/// table is one of the layout's.
+/// The format and card indices for a game. Search threads share the table read-only.
+/// The same table serves every layout. [`crate::State::deal`] and
+/// [`crate::State::try_relayout`] check that the layout can represent all its [`CardId`]s.
 #[derive(Clone, Debug)]
 pub struct GameTable {
+    format: Format,
     cards: &'static CardTable,
     defs: Vec<&'static CardDef>,
     /// Each deck as game indices, in decklist order.
@@ -271,14 +266,15 @@ fn listed(def: &CardDef, defs: &[&'static CardDef]) -> Result<(), TableError> {
 }
 
 impl GameTable {
-    /// Assigns game indices in order of first appearance, the first deck before the second,
-    /// then the tokens and emblems those cards can create, then [`FACE_DOWN_COPY`], so the
-    /// same decklists always give the same table.
-    ///
-    /// Decks of any size and any number of distinct cards make a table: whether a game
-    /// between them fits a layout is asked where its state is made ([`crate::State::deal`]).
-    pub fn new(cards: &'static CardTable, decks: PerSeat<&Decklist>) -> Result<Self, TableError> {
-        Self::with_extra(cards, decks, &[])
+    /// Assigns indices in order of first appearance across the decks, then to the tokens
+    /// and emblems they can create, and finally to [`FACE_DOWN_COPY`].
+    /// [`crate::State::deal`] checks whether the decks fit the layout.
+    pub fn new(
+        format: Format,
+        cards: &'static CardTable,
+        decks: PerSeat<&Decklist>,
+    ) -> Result<Self, TableError> {
+        Self::with_extra(format, cards, decks, &[])
     }
 
     /// [`GameTable::new`], with `extra` given game indices after the tokens and before
@@ -286,6 +282,7 @@ impl GameTable {
     /// door ([`crate::board::Board::set_card`]), as the present-cost benchmark puts a stand-in
     /// for each card it takes out of a position. A card already in the table keeps its index.
     pub fn with_extra(
+        format: Format,
         cards: &'static CardTable,
         decks: PerSeat<&Decklist>,
         extra: &[&'static CardDef],
@@ -361,8 +358,8 @@ impl GameTable {
             .iter()
             .flat_map(|d| d.faces)
             .fold(Capability::of(&FACE_DOWN), |c, f| c | Capability::of(f));
-        let listens_away = capability::merged_listen_away(capabilities, listens_away, listens_any);
         Ok(Self {
+            format,
             cards,
             defs,
             decks: indices,
@@ -376,7 +373,7 @@ impl GameTable {
             away_from: away.from,
             works_away: away.zones,
             zones_away,
-            listens_away,
+            listens_away: capability::merged_listen_away(capabilities, listens_away, listens_any),
             listens_anywhere,
             faces,
             face_rules,
@@ -390,6 +387,12 @@ impl GameTable {
             face_subtypes,
             names,
         })
+    }
+
+    /// The format the game follows.
+    #[inline]
+    pub const fn format(&self) -> Format {
+        self.format
     }
 
     /// The numbers of the subtypes the cards of the game name, which a permanent's

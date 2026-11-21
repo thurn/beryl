@@ -13,6 +13,7 @@ use crate::replacement::event::Sink;
 use crate::state::{TurnStep, Zone};
 use crate::zone::Place;
 use crate::{CardTable, GameTable, Profile, State, continuous::layers};
+use beryl_kernel::format::Format;
 
 use super::events::find;
 use super::{LAND, SPELL_A, SPELL_B};
@@ -55,7 +56,7 @@ fn game() -> (GameTable, State) {
         (2, "Test Spell B"),
         (5, "Test Land"),
     ];
-    let t = GameTable::new(&GOYF_CARDS, [deck, deck]).unwrap();
+    let t = GameTable::new(Format::CONSTRUCTED, &GOYF_CARDS, [deck, deck]).unwrap();
     let mut s = State::new(&t, 3, Profile::EXACT).unwrap();
     s.board().begin_at(1, Seat::P0, TurnStep::PrecombatMain);
     layers::refresh(&mut s, &t, &mut Sink::off()).unwrap();

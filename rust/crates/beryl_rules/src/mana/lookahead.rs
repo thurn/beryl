@@ -204,7 +204,7 @@ fn enters_untapped<L: Layout>(s: &State<L>, player: Seat, face: &Face) -> bool {
 fn ahead<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Ahead<L> {
     let mut ahead: Ahead<L> = Ahead::default();
     let sorcery = sorcery_window(s, player);
-    let land_drop = sorcery && s.player(player).lands_played() < 1;
+    let land_drop = sorcery && s.player(player).lands_played() < t.format().lands_each_turn();
     // A transforming card's back face is never cast: "A double-faced spell is cast with its
     // front face up by default" (see [CR 712.8](https://yawgatog.com/resources/magic-rules/#R7128)).
     // A land is played, not cast (see [CR 305.1](https://yawgatog.com/resources/magic-rules/#R3051)).

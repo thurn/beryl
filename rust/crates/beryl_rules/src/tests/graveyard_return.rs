@@ -16,6 +16,7 @@ use crate::replacement::event::{self, Reason, Sink};
 use crate::state::Zone;
 use crate::zone::Place;
 use crate::{CardTable, Decklist, GameTable, Profile, Scratch, State};
+use beryl_kernel::format::Format;
 use beryl_kernel::two_player::TwoPlayerSeat as _;
 
 static LAND: CardDef = CardDef {
@@ -55,7 +56,7 @@ const DECK: &Decklist = &[(4, "Test Revenant"), (36, "Test Land")];
 
 /// A game in the starting player's first main phase.
 fn game() -> (GameTable, State, Seat, Scratch) {
-    let t = GameTable::new(&CARDS, [DECK, DECK]).unwrap();
+    let t = GameTable::new(Format::CONSTRUCTED, &CARDS, [DECK, DECK]).unwrap();
     let mut s = State::new(&t, 7, Profile::EXACT).unwrap();
     begin(&t, &mut s);
     let p = s.turn().starting_player();

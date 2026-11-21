@@ -5,6 +5,7 @@ use beryl_card::{CardDef, Face, Types};
 
 use super::*;
 use crate::event::Sink;
+use crate::format::Format;
 use crate::layout::Large;
 use crate::object::Derived;
 use crate::profile::Profile;
@@ -29,7 +30,12 @@ const KICKED: Memo = Memo::Paid(CastingKinds::NONE.with(CastingKind::Kicker));
 
 /// A game of bears, and `n` of the first player's on the battlefield.
 fn bears(n: usize) -> (GameTable, State, Vec<Slot>) {
-    let t = GameTable::new(&CARDS, [&[(40, "Test Bear")], &[(40, "Test Bear")]]).unwrap();
+    let t = GameTable::new(
+        Format::CONSTRUCTED,
+        &CARDS,
+        [&[(40, "Test Bear")], &[(40, "Test Bear")]],
+    )
+    .unwrap();
     let mut s = State::new(&t, 7, Profile::EXACT).unwrap();
     let slots: Vec<Slot> = s.library(Seat::P0)[..n].to_vec();
     for &slot in &slots {

@@ -9,8 +9,8 @@ use beryl_cards::CARDS;
 use beryl_cards::decks::{VINTAGE_WU_CONTROL, WU_CONTROL, fuzz_deck};
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{
-    Decision, GameTable, Layout, Observation, Outcome, Profile, Replay, Scratch, Seat, State, Step,
-    apply, next, observe,
+    Decision, Format, GameTable, Layout, Observation, Outcome, Profile, Replay, Scratch, Seat,
+    State, Step, apply, next, observe,
 };
 use beryl_search::{Agent, AgentDecision, RandomAgent};
 
@@ -20,7 +20,12 @@ pub mod widening;
 /// smart stops on odd ones.
 pub fn game(seed: u64) -> (GameTable, State) {
     let decks = [fuzz_deck(seed), fuzz_deck(seed.wrapping_add(1 << 32))];
-    let t = GameTable::new(&CARDS, [decks[0].as_slice(), decks[1].as_slice()]).unwrap();
+    let t = GameTable::new(
+        Format::CONSTRUCTED,
+        &CARDS,
+        [decks[0].as_slice(), decks[1].as_slice()],
+    )
+    .unwrap();
     dealt(t, seed)
 }
 
@@ -29,7 +34,12 @@ pub fn game(seed: u64) -> (GameTable, State) {
 /// long it lasts, what it reaches) play these decks, which do not change as cards are written.
 pub fn fixed_game(seed: u64) -> (GameTable, State) {
     dealt(
-        GameTable::new(&CARDS, [WU_CONTROL, VINTAGE_WU_CONTROL]).unwrap(),
+        GameTable::new(
+            Format::CONSTRUCTED,
+            &CARDS,
+            [WU_CONTROL, VINTAGE_WU_CONTROL],
+        )
+        .unwrap(),
         seed,
     )
 }
@@ -48,7 +58,7 @@ fn dealt(t: GameTable, seed: u64) -> (GameTable, State) {
 
 /// The WU Control mirror's table.
 pub fn mirror() -> GameTable {
-    GameTable::new(&CARDS, [WU_CONTROL, WU_CONTROL]).unwrap()
+    GameTable::new(Format::CONSTRUCTED, &CARDS, [WU_CONTROL, WU_CONTROL]).unwrap()
 }
 
 /// A random agent per seat, seeded from the game's seed.

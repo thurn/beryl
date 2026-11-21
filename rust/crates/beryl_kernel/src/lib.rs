@@ -642,14 +642,15 @@
 //! is nothing for a card its viewer does not know. The queries cost what the reads they
 //! replaced did: none caches anything in the state.
 //!
+//! ## Format
+//!
+//! [`format::Format`] defines the seats and teams, starting life and hands, mulligans,
+//! first draw, turn steps, land plays, hand limit, zone ownership, deck roles and losses.
+//! [`GameTable::format`] supplies constant rules so rollouts incur no extra reads.
+//!
 //! ## Players
 //!
-//! Rules code reaches players through sets and orders, never the other player of two.
-//! [`PlayerSet`] is the order-free set (`beryl_card`'s `Players` is the vocabulary's word for
-//! which players an effect names, so the set is not called that): `contains`, `count`,
-//! `is_empty`, [`PlayerSet::any`], [`PlayerSet::filter`], [`PlayerSet::without`] and
-//! [`PlayerSet::sole`], its one member. It does not iterate. The state names the sets and
-//! puts one in order:
+//! Rules code uses the state's sets and orders. [`PlayerSet`] has no order of its own.
 //!
 //! | The rules ask | Query |
 //! | --- | --- |
@@ -664,10 +665,8 @@
 //! | who knows an object's identity | [`State::who_knows`] |
 //! | every object in a zone, whoever owns it (see CR 400.1) | [`State::in_zone`] |
 //!
-//! Seat order is to players what candidate order is to objects: no order of the rules, and
-//! what saves and `rollouts_never_change` see. A walk in it lists players or says in a
-//! comment why its result is the same in any order.
-//!
+//! Saves and `rollouts_never_change` pin seat order. Use it to list players, or document
+//! why the order does not affect the result.
 //! Each of these answers for the two-player game, and its rustdoc cites the rule that
 //! changes the answer with more players: no multiplayer logic is written.
 //! `Seat` has no `opponent`. The shortcut is the trait [`two_player::TwoPlayerSeat`], in
@@ -750,6 +749,7 @@ pub mod event;
 pub mod filter;
 mod fit;
 pub mod fixed;
+pub mod format;
 pub mod ids;
 pub mod invariants;
 mod knowledge;

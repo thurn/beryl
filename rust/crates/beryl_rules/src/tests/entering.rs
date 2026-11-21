@@ -21,6 +21,7 @@ use crate::rng::SplitMix64;
 use crate::scratch::Scratch;
 use crate::state::{TurnStep, Zone};
 use crate::{CardTable, GameTable, Observation, Profile, State, continuous::layers};
+use beryl_kernel::format::Format;
 
 use super::events::{find, put};
 
@@ -142,7 +143,7 @@ fn a_copy_of_a_back_face_aura_enters_attached() {
         (1, "Test Shifting Aura"),
         (1, "Test Tapland"),
     ];
-    let t = GameTable::new(&TABLE, [deck, deck]).unwrap();
+    let t = GameTable::new(Format::CONSTRUCTED, &TABLE, [deck, deck]).unwrap();
     let mut s = State::new(&t, 3, Profile::EXACT).unwrap();
     let mut x = Scratch::new();
     let aura = put(&t, &mut s, &mut x, player, "Test Shifting Aura");
@@ -197,7 +198,7 @@ fn game() -> (GameTable, State) {
         (4, "Test Springs"),
         (4, "Test Tapland"),
     ];
-    let t = GameTable::new(&CARDS, [deck, deck]).unwrap();
+    let t = GameTable::new(Format::CONSTRUCTED, &CARDS, [deck, deck]).unwrap();
     let mut s = State::new(&t, 3, Profile::EXACT).unwrap();
     s.board().begin_at(1, Seat::P0, TurnStep::PrecombatMain);
     layers::refresh(&mut s, &t, &mut Sink::off()).unwrap();

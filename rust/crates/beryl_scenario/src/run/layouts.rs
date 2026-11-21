@@ -154,14 +154,14 @@ fn decision_difference(left: &Decision<Large>, right: &Decision<Large>) -> &'sta
 
 #[cfg(test)]
 mod tests {
-    use beryl_engine::{CardTable, GameTable, Profile, Replay, Scratch, Seat, State, next};
+    use beryl_engine::{CardTable, Format, GameTable, Profile, Replay, Scratch, Seat, State, next};
 
     use super::LayoutComparison;
 
     #[test]
     fn a_layout_mismatch_names_the_first_decision_and_differing_state_field() {
         static CARDS: CardTable = CardTable::new(&[]);
-        let table = GameTable::new(&CARDS, [&[], &[]]).unwrap();
+        let table = GameTable::new(Format::CONSTRUCTED, &CARDS, [&[], &[]]).unwrap();
         let mut small = State::new(&table, 0, Profile::EXACT).unwrap();
         let mut comparison = LayoutComparison::new(&small);
         small.board().set_life(Seat::P0, 12);

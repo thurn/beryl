@@ -4,6 +4,7 @@
 //! Implements: none. The checks validate the engine's internal state.
 
 use crate::bitboard::Bitboard;
+use crate::format::Format;
 use crate::ids::{CardId, Seat, SlotId, SlotPlace};
 use crate::layout::{Layout, Queue, Table};
 use crate::state::{AbilityTarget, Flag, Object, Pending, State, Zone};
@@ -43,7 +44,7 @@ impl<L: Layout> State<L> {
     pub fn check_invariants(&self, t: &GameTable) -> Result<(), Violation> {
         self.check_objects(t)?;
         self.check_zones()?;
-        self.check_players()?;
+        self.check_players(t.format())?;
         self.check_stores(t)?;
         self.check_last_known()?;
         check(
@@ -261,14 +262,13 @@ impl<L: Layout> State<L> {
         Ok(())
     }
 
-    fn check_players(&self) -> Result<(), Violation> {
+    fn check_players(&self, format: Format) -> Result<(), Violation> {
         let t = self.turn;
         // Both players have passed in succession while the top of the stack resolves, and a
         // resolution paused for an answer is still resolving (§7.3).
         let resolving = matches!(self.pending, Pending::Resolving(_));
         check(
-            usize::from(t.passes) < L::Slot::PLAYERS
-                || (usize::from(t.passes) == L::Slot::PLAYERS && resolving),
+            t.passes < format.seats() || (t.passes == format.seats() && resolving),
             "a bad turn",
             None,
         )?;
@@ -279,10 +279,11 @@ impl<L: Layout> State<L> {
         // "If a player attempted to draw a card from a library with no cards in it since the
         // last time state-based actions were checked, that player loses the game."
         if self.outcome.is_none() && self.pending == Pending::None {
+            let losses = format.losses();
             for p in Seat::BOTH {
                 let player = self.player(p);
                 check(
-                    player.life > 0 && !player.drew_from_empty,
+                    player.life > losses.life && !(losses.empty_library && player.drew_from_empty),
                     "a player who has lost has priority",
                     Some(At::Player(p)),
                 )?;

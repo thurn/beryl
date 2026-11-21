@@ -26,6 +26,7 @@ use std::collections::VecDeque;
 
 use crate::bitboard::Bitboard;
 use crate::event::Sink;
+use crate::format::Format;
 use crate::ids::{CardId, LargeCardIx, Seat};
 use crate::layout::Layout;
 use crate::state::{Flag, State, TurnStep, Zone, ZoneKey};
@@ -247,6 +248,15 @@ pub fn settle_all<L: Layout>(s: &mut State<L>, sink: &mut Sink<L>, cards: Bitboa
         settle_but(s, sink, slot, settled);
         settled.insert(slot);
     }
+}
+
+/// Picks a seat to choose who starts (see [CR 103.1]: "the players may use any mutually
+/// agreeable method (flipping a coin, rolling dice, etc.) to do so").
+///
+/// [CR 103.1]: https://yawgatog.com/resources/magic-rules/#R1031
+pub(crate) fn starting_player_chooser<L: Layout>(s: &mut State<L>, format: Format) -> Seat {
+    let seat = s.rng.other.below(u64::from(format.seats()));
+    Seat::new(u8::try_from(seat).expect("the format seats fit in u8"))
 }
 
 /// Flips a coin for `player` and returns whether they won the flip: one draw from the game's

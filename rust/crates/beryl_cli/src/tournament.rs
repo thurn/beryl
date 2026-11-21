@@ -12,7 +12,7 @@ use std::thread;
 use beryl_card_names::decks::KEYSTONE_FAMILIES;
 use beryl_engine::card::CardDef;
 use beryl_engine::rng::SplitMix64;
-use beryl_engine::{GameTable, Outcome, Seat, StallReason};
+use beryl_engine::{Format, GameTable, Outcome, Seat, StallReason};
 use beryl_search::Budget;
 use serde::Serialize;
 
@@ -229,8 +229,12 @@ fn family_table(catalog: &'static Catalog, cards: &[&CardDef], seed: u64) -> Gam
         (catalog.fuzz_deck_from)(seed, cards),
         (catalog.fuzz_deck_from)(seed.wrapping_add(1 << 32), cards),
     ];
-    GameTable::new(catalog.cards, [decks[0].as_slice(), decks[1].as_slice()])
-        .expect("a fuzz deck's table")
+    GameTable::new(
+        Format::CONSTRUCTED,
+        catalog.cards,
+        [decks[0].as_slice(), decks[1].as_slice()],
+    )
+    .expect("a fuzz deck's table")
 }
 
 /// Each pairing's seeds, by `a`'s score over both seats in half points (4 swept, 0 swept by

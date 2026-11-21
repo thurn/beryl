@@ -2,7 +2,7 @@
 //! name and played from a decklist, that no sweep over every card walks.
 
 use beryl_card::Keywords;
-use beryl_engine::{GameTable, State};
+use beryl_engine::{Format, GameTable, State};
 
 use crate::CARDS;
 use crate::library::keywords::evasion::{FLYER, VANILLA};
@@ -40,6 +40,6 @@ fn store_cards_are_apart_from_the_cards_with_files() {
 #[test]
 fn a_decklist_of_store_cards_starts_a_game() {
     let deck = &[(20, crate::names::PLAINS), (20, VANILLA)];
-    let table = GameTable::new(&CARDS, [deck, deck]).unwrap();
+    let table = GameTable::new(Format::CONSTRUCTED, &CARDS, [deck, deck]).unwrap();
     State::new(&table, 1, beryl_engine::Profile::SMART).unwrap();
 }

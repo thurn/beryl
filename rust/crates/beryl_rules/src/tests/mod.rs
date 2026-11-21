@@ -54,6 +54,7 @@ use crate::{
     CardTable, Choice, Decision, DecisionKind, Decklist, GameTable, Observation, Opt, Outcome,
     Replay, Scratch, State, Step, apply, next,
 };
+use beryl_kernel::format::Format;
 
 fn fixture_slots<S: crate::ids::SlotId>(
     set: crate::bitboard::Bitboard<S>,
@@ -127,7 +128,7 @@ pub(crate) const LANDS: &Decklist = &[(40, "Test Land")];
 pub(crate) const MIXED: &Decklist = &[(20, "Test Land"), (20, "Test Spell A")];
 
 pub(crate) fn table(decks: [&Decklist; 2]) -> GameTable {
-    GameTable::new(&CARDS, decks).unwrap()
+    GameTable::new(Format::CONSTRUCTED, &CARDS, decks).unwrap()
 }
 
 pub(crate) fn fingerprint(s: &State) -> u64 {

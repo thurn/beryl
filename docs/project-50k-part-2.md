@@ -747,40 +747,26 @@ exporter investigation on each card.
 
 ### F. The shape of a game
 
-`Format` is a `const` value the `GameTable` holds and the kernel and rules read,
-in place of numbers in the kernel's `new.rs` and the rules' `game/start.rs` and
-`turn/mod.rs`:
+`GameTable` holds the format for one game. The kernel's `new.rs` and the rules'
+`game/start.rs` and `turn/mod.rs` read its defaults. `Format::CONSTRUCTED` is
+the sole value and supplies its rules through constant getters:
 
-```rust
-pub struct Format {
-    pub seats: u8,                       // 2
-    pub teams: Teams,                    // Teams::None
-    pub starting_life: i16,              // 20
-    pub opening_hand: u8,                // 7
-    pub maximum_hand: u8,                // 7
-    pub lands_each_turn: u8,             // 1
-    pub mulligan: Mulligan,              // Mulligan::London
-    pub first_draw: FirstDraw,           // FirstDraw::SkippedByStartingPlayer
-    pub turn: &'static [TurnStep],       // the thirteen steps
-    pub zones: &'static [ZoneRule],      // which zones are per player, which shared
-    pub decks: &'static [DeckRole],      // DeckRole::Library, DeckRole::Sideboard
-    pub loses: Losses,                   // zero life, a draw from an empty library, poison
-}
-impl Format { pub const CONSTRUCTED: Format = ..; }
-```
+- Two seats, with each player on their own side. A random seat chooses play or
+  draw, and the starting player skips their first draw.
+- Starting life of 20, an opening hand and hand limit of seven, the London
+  mulligan, and one land play each turn.
+- The turn's thirteen possible steps, the per-player and shared zones, and the
+  library and sideboard roles of a player's decklists.
+- Loss at zero life or less, when drawing from an empty library, or at ten
+  poison counters. The format records the poison threshold for when the engine
+  tracks poison.
 
-- Only `Format::CONSTRUCTED` exists, and what subgames and restarts need of it
-  (section G).
-- `Seat` stays a two-value enum and `PerSeat` a two-entry array. `Format::seats`
-  is read where a count was written as `2` (`State::deal`'s `below(2)` in the
-  kernel's `new.rs` for the starting player, the pass count), so that the places
-  a third seat would break are the ones the compiler already lists
-  (`two_player.rs`).
-- `sba::end` stops assuming the game ends when one player loses: it asks the
-  format whether the players left are one side. With two seats the answer is
-  what it was.
-- Everything a rollout reads from the format is a `const`, so the WU mirror's
-  count should not move.
+`Seat` and `PerSeat` still represent two seats. The starting-player draw and the
+priority pass count read `Format::seats()`. The format decides whether a loss
+leaves only one side in the game.
+
+The format value takes no space. Rules on a rollout's path compile to constants
+so the WU mirror's instruction count stays the same.
 
 The table of what each other mode would still need is at the end of this
 document, and the documentation ticket moves it to the architecture document.

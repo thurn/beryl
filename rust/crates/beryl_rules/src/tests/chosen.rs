@@ -16,6 +16,7 @@ use crate::{
     Answers, CardTable, Choice, Decision, DecisionKind, GameTable, Opt, Profile, Replay, Seat,
     Slot, State, Step, apply, next,
 };
+use beryl_kernel::format::Format;
 
 use super::begin;
 use super::cast::{cast, index_of};
@@ -105,7 +106,7 @@ pub(super) const DECK: &[(u8, &str)] = &[
 
 /// A game in the starting player's first main phase, with that player.
 fn game() -> (GameTable, State, Seat) {
-    let t = GameTable::new(&CARDS, [DECK, DECK]).unwrap();
+    let t = GameTable::new(Format::CONSTRUCTED, &CARDS, [DECK, DECK]).unwrap();
     let mut s = State::new(&t, 5, Profile::EXACT).unwrap();
     begin(&t, &mut s);
     let p = s.turn().starting_player();

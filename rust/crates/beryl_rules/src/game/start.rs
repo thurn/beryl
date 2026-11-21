@@ -2,6 +2,8 @@
 //!
 //! Implements: CR 103.1, CR 103.5
 
+use beryl_kernel::format::Mulligan;
+
 use crate::fixed::Full;
 use crate::ids::Seat;
 use crate::layout::Layout;
@@ -10,10 +12,6 @@ use crate::state::{MulliganStatus, Pending, State, Zone};
 use crate::table::GameTable;
 use crate::turn;
 use crate::zone::Place;
-
-/// The starting hand size ([CR 103.5](https://yawgatog.com/resources/magic-rules/#R1035)),
-/// "normally seven".
-const STARTING_HAND: u8 = 7;
 
 /// Settles the starting player, then deals opening hands.
 ///
@@ -30,7 +28,7 @@ pub(crate) fn set_starting_player<L: Layout>(
 ) -> Result<(), Full> {
     s.set_starting_player(starting);
     for player in turn_order(s) {
-        s.draw_n(sink, player, STARTING_HAND)?;
+        s.draw_n(sink, player, t.format().opening_hand())?;
     }
     s.ask(Pending::Mulligans);
     advance_mulligans(s, t, sink)
@@ -66,7 +64,7 @@ pub(crate) fn declare<L: Layout>(
 /// mulligan draw a new hand, "then [put] a number of those cards equal to the number of
 /// times that player has taken a mulligan on the bottom of their library in any order", and
 /// "Once a player chooses not to take a mulligan, the remaining cards become that player's
-/// opening hand." Here the player looks at all seven and declares first, and puts cards on
+/// opening hand." Here the player looks at the whole hand and declares first, and puts cards on
 /// the bottom only once they keep, as Arena and tournament play do. Nothing anyone can see
 /// differs: a hand mulliganed again is shuffled away whole, bottomed cards included, and the
 /// bottomed cards are hidden either way.
@@ -106,12 +104,14 @@ fn advance_mulligans<L: Layout>(
     t: &GameTable,
     sink: &mut Sink<L>,
 ) -> Result<(), Full> {
+    let format = t.format();
+    let Mulligan::London = format.mulligan();
+    let opening_hand = format.opening_hand();
     let order = turn_order(s);
     loop {
         for p in order.clone() {
             let player = s.player(p);
-            if player.mulligan() == MulliganStatus::Undeclared
-                && player.mulligans() >= STARTING_HAND
+            if player.mulligan() == MulliganStatus::Undeclared && player.mulligans() >= opening_hand
             {
                 keep(s, p);
             }
@@ -133,7 +133,7 @@ fn advance_mulligans<L: Layout>(
             }
             any = true;
             s.shuffle_opening_hand(sink, p)?;
-            s.draw_n(sink, p, STARTING_HAND)?;
+            s.draw_n(sink, p, opening_hand)?;
             s.count_mulligan(p);
         }
         if !any {

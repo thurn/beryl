@@ -39,6 +39,7 @@ use crate::{
 };
 use crate::{CustomBody, Layout, custom_body};
 use crate::{continuous, objects::linked, objects::one_shot, zones::counters, zones::tokens};
+use beryl_kernel::format::Format;
 use beryl_kernel::two_player::TwoPlayerSeat as _;
 
 use super::{LAND, begin};
@@ -489,7 +490,7 @@ pub(super) fn game() -> (GameTable, State, Seat) {
 /// Each player gets a basic land in hand, so every main phase of theirs is a decision
 /// (passing priority never plays it) and tests can stop there.
 fn game_with_seed(seed: u64) -> (GameTable, State, Seat) {
-    let t = GameTable::new(&CARDS, [DECK, DECK]).unwrap();
+    let t = GameTable::new(Format::CONSTRUCTED, &CARDS, [DECK, DECK]).unwrap();
     let mut s = State::new(&t, seed, Profile::EXACT).unwrap();
     begin(&t, &mut s);
     for player in Seat::BOTH {
@@ -1946,7 +1947,7 @@ fn random_games_with_triggers_never_read_derived_dirty() {
         (4, "Test Drain Land"),
         (4, "Test Emblem Land"),
     ];
-    let t = GameTable::new(&CARDS, [LANDS, LANDS]).unwrap();
+    let t = GameTable::new(Format::CONSTRUCTED, &CARDS, [LANDS, LANDS]).unwrap();
     for seed in 0..20 {
         let mut s = State::new(&t, seed, Profile::EXACT).unwrap();
         let mut rng = crate::rng::SplitMix64::new(seed);
@@ -1984,6 +1985,7 @@ static CATHAR_CARDS: CardTable = CardTable::new(&[&LAND, &WALKER, &CATHAR]);
 #[test]
 fn a_token_created_attacking_may_attack_a_planeswalker() {
     let t = GameTable::new(
+        Format::CONSTRUCTED,
         &CATHAR_CARDS,
         [
             &[(1, "Test Cathar"), (5, "Test Land")],
@@ -2117,6 +2119,7 @@ static THIEF_CARDS: CardTable = CardTable::new(&[&LAND, &THIEF, &ROCK_1, &ROCK_3
 fn an_enters_ability_targets_by_the_x_its_spell_was_cast_with() {
     for (x, stolen) in [(1u8, "Test Rock 1"), (3, "Test Rock 3")] {
         let t = GameTable::new(
+            Format::CONSTRUCTED,
             &THIEF_CARDS,
             [
                 &[(1, "Test Thief"), (6, "Test Land")],
@@ -2206,6 +2209,7 @@ pub(super) static PRODIGY_CARDS: CardTable = CardTable::new(&[&LAND, &PRODIGY]);
 #[test]
 fn a_transformed_permanent_has_its_front_faces_mana_value() {
     let t = GameTable::new(
+        Format::CONSTRUCTED,
         &PRODIGY_CARDS,
         [
             &[(1, "Test Prodigy"), (5, "Test Land")],

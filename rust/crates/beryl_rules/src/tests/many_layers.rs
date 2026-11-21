@@ -13,6 +13,7 @@ use crate::filter::Filter;
 use crate::ids::{Seat, Slot};
 use crate::state::{Duration, LayerChange, TurnStep, Zone};
 use crate::{CardTable, GameTable, Profile, State, continuous::layers, reference};
+use beryl_kernel::format::Format;
 
 use super::LAND;
 use super::events::find;
@@ -89,7 +90,7 @@ fn game() -> (GameTable, State) {
         (2, "Test Banner"),
         (8, "Test Land"),
     ];
-    let t = GameTable::new(&CARDS, [deck, deck]).unwrap();
+    let t = GameTable::new(Format::CONSTRUCTED, &CARDS, [deck, deck]).unwrap();
     let mut s = State::new(&t, 3, Profile::EXACT).unwrap();
     s.board().begin_at(1, Seat::P0, TurnStep::PrecombatMain);
     (t, s)

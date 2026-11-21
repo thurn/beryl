@@ -18,6 +18,7 @@ use crate::replacement::event::{self, Entry, Event, Reason};
 use crate::state::{TurnStep, Zone, ZoneKey};
 use crate::zone::Place;
 use crate::{CardTable, Decklist, GameTable, Profile, Scratch, State};
+use beryl_kernel::format::Format;
 use beryl_kernel::two_player::TwoPlayerSeat as _;
 
 /// A permanent with one triggered ability: "[trigger], you gain 1 life."
@@ -146,7 +147,7 @@ const DECK: &Decklist = &[
 /// A game in the starting player's first main phase, each player with a land in hand so
 /// that every main phase of theirs is a decision.
 fn game() -> (GameTable, State, Seat) {
-    let t = GameTable::new(&CARDS, [DECK, DECK]).unwrap();
+    let t = GameTable::new(Format::CONSTRUCTED, &CARDS, [DECK, DECK]).unwrap();
     let mut s = State::new(&t, 7, Profile::EXACT).unwrap();
     begin(&t, &mut s);
     for player in Seat::BOTH {

@@ -3,7 +3,9 @@
 
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::{CounterKind, Memo, Tracker};
-use beryl_engine::{CardId, CardTable, GameTable, Large, Layout, Profile, Seat, State, Zone};
+use beryl_engine::{
+    CardId, CardTable, Format, GameTable, Large, Layout, Profile, Seat, State, Zone,
+};
 
 use crate::{Failure, Scenario};
 
@@ -93,8 +95,12 @@ fn setup_failure(scenario: &Scenario, message: String) -> Failure {
 
 fn table(cards: &'static CardTable, scenario: &Scenario) -> Result<GameTable, Failure> {
     let decks = decks(scenario);
-    GameTable::new(cards, [decks[0].as_slice(), decks[1].as_slice()])
-        .map_err(|error| setup_failure(scenario, format!("{error:?}")))
+    GameTable::new(
+        Format::CONSTRUCTED,
+        cards,
+        [decks[0].as_slice(), decks[1].as_slice()],
+    )
+    .map_err(|error| setup_failure(scenario, format!("{error:?}")))
 }
 
 /// Every card the setup names, by owner: the decks the game is built from.

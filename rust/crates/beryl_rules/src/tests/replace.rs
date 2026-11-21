@@ -23,6 +23,7 @@ use crate::{
     CardTable, GameTable, Outcome, Profile, Scratch, State, continuous::layers, zones,
     zones::library, zones::tokens,
 };
+use beryl_kernel::format::Format;
 use beryl_kernel::replacement::Unreplaced;
 
 use super::LAND;
@@ -124,7 +125,7 @@ fn game() -> (GameTable, State) {
         (1, "Test Priest"),
         (9, "Test Land"),
     ];
-    let t = GameTable::new(&CARDS, [deck, deck]).unwrap();
+    let t = GameTable::new(Format::CONSTRUCTED, &CARDS, [deck, deck]).unwrap();
     let mut s = State::new(&t, 3, Profile::EXACT).unwrap();
     s.board().begin_at(1, Seat::P0, TurnStep::PrecombatMain);
     layers::refresh(&mut s, &t, &mut Sink::off()).unwrap();
@@ -225,7 +226,11 @@ fn a_draw_replacement_reads_the_current_controller() {
 #[test]
 fn a_table_refuses_a_replacement_of_a_move_the_engine_cannot_do() {
     for card in ["Test Tangle", "Test Echo"] {
-        let table = GameTable::new(&CARDS, [&[(1, card)], &[(1, "Test Land")]]);
+        let table = GameTable::new(
+            Format::CONSTRUCTED,
+            &CARDS,
+            [&[(1, card)], &[(1, "Test Land")]],
+        );
         let unreplaced = Unreplaced::Rewrite;
         assert_eq!(
             table.err(),

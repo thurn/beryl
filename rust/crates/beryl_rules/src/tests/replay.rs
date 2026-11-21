@@ -20,6 +20,7 @@ use crate::{
     Answers, CardTable, Choice, Decision, Decklist, GameTable, Observation, Outcome, Payment,
     Profile, Replay, Scratch, State, Step, apply, next,
 };
+use beryl_kernel::format::Format;
 
 /// A 1/1 with dredge 2, to die or be discarded into a graveyard and offer to replace draws
 /// from there.
@@ -91,7 +92,7 @@ enum Logged {
 
 /// A random game of `decks` with inline answers, under `profile`.
 fn inline_game(decks: Decks, seed: u64, profile: Profile) -> (Vec<Logged>, Outcome) {
-    let t = GameTable::new(decks.0, [decks.1, decks.1]).unwrap();
+    let t = GameTable::new(Format::CONSTRUCTED, decks.0, [decks.1, decks.1]).unwrap();
     let mut s = State::new(&t, seed, profile).unwrap();
     let mut x = Scratch::new();
     let mut answers = Inline {
@@ -138,7 +139,7 @@ fn replay(
     logged: &[Logged],
     outcome: Outcome,
 ) -> Paused {
-    let t = GameTable::new(decks.0, [decks.1, decks.1]).unwrap();
+    let t = GameTable::new(Format::CONSTRUCTED, decks.0, [decks.1, decks.1]).unwrap();
     let mut s = State::new(&t, seed, profile).unwrap();
     let mut x = Scratch::new();
     let mut log = logged.iter();
@@ -239,7 +240,12 @@ fn replacement_choices_replay_to_the_same_state_in_a_step_and_a_resolution() {
 /// actions (CR 111.6) cannot supply the second card for dredge 2.
 #[test]
 fn a_library_token_cannot_make_a_draw_eligible_for_dredge() {
-    let table = GameTable::new(&DREDGE_CARDS, [DREDGE_DECK, DREDGE_DECK]).unwrap();
+    let table = GameTable::new(
+        Format::CONSTRUCTED,
+        &DREDGE_CARDS,
+        [DREDGE_DECK, DREDGE_DECK],
+    )
+    .unwrap();
     let mut state = State::new(&table, 1, Profile::EXACT).unwrap();
     let mut scratch = Scratch::new();
     let player = Seat::P0;

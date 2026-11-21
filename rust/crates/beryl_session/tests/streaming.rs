@@ -8,7 +8,8 @@ use beryl_cards::names;
 use beryl_engine::card::Purpose;
 use beryl_engine::event::{Event, Reason};
 use beryl_engine::{
-    Choice, GameTable, Large, Limits, Profile, Relayout, Replay, Scratch, State, Step, apply, next,
+    Choice, Format, GameTable, Large, Limits, Profile, Relayout, Replay, Scratch, State, Step,
+    apply, next,
 };
 use beryl_session::protocol::{GameEvent, Side, StackItem, Step as TurnStep, ZoneName};
 use beryl_session::replay::Entry;
@@ -233,7 +234,12 @@ fn events_of(begin: &StartGame, log: &[Entry]) -> Vec<Event<Large>> {
             .map(|(n, name)| (*n, CARDS.get(name).unwrap().name))
             .collect::<Vec<_>>()
     });
-    let t = GameTable::new(&CARDS, [decks[0].as_slice(), decks[1].as_slice()]).unwrap();
+    let t = GameTable::new(
+        Format::CONSTRUCTED,
+        &CARDS,
+        [decks[0].as_slice(), decks[1].as_slice()],
+    )
+    .unwrap();
     let profile = with_stops(Profile::SMART, begin.stops, begin.human);
     let mut s = State::new(&t, begin.seed, profile).unwrap();
     let mut x = Scratch::recording();

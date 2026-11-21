@@ -12,6 +12,7 @@ use crate::filter::Filter;
 use crate::ids::Seat;
 use crate::state::{TurnStep, Zone};
 use crate::{CardTable, GameTable, Profile, State, continuous::layers, continuous::rule_change};
+use beryl_kernel::format::Format;
 
 use super::LAND;
 use super::events::find;
@@ -71,7 +72,7 @@ static SORCERY: Face = Face {
 /// A game in which P0 controls `card`.
 fn with_permanent_of(card: &'static str) -> (GameTable, State) {
     let deck: &[(u8, &str)] = &[(1, card), (9, "Test Land")];
-    let t = GameTable::new(&CARDS, [deck, deck]).unwrap();
+    let t = GameTable::new(Format::CONSTRUCTED, &CARDS, [deck, deck]).unwrap();
     let mut s = State::new(&t, 3, Profile::EXACT).unwrap();
     s.board().begin_at(1, Seat::P0, TurnStep::PrecombatMain);
     let permanent = find(&s, &t, Seat::P0, card);

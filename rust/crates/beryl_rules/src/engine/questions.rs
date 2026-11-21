@@ -70,7 +70,7 @@ pub(crate) fn decision<L: Layout>(
         },
         Pending::Discard => {
             let p = s.turn().active();
-            let count = s.hand_size(p).saturating_sub(turn::MAX_HAND_SIZE);
+            let count = s.hand_size(p).saturating_sub(t.format().maximum_hand());
             Ok(Decision::objects(
                 p,
                 DecisionKind::ChooseObject,
@@ -160,7 +160,7 @@ fn priority_decision<L: Layout>(s: &State<L>, t: &GameTable) -> Result<Decision<
         unreachable!("built with options");
     };
     list.push(Opt::Pass)?;
-    if turn::may_play_land(s, player) {
+    if turn::may_play_land(s, player, t.format()) {
         let lands = turn::hand(s, player).filter(|slot| land_face(s, t, slot).is_some());
         Candidates::<L>::extend_options(list, collapse(s, lands), |out, slot| {
             out.push(Opt::PlayLand(slot))
@@ -250,7 +250,7 @@ pub fn refusal<L: Layout>(
     let (s, player) = (obs.shown(), obs.viewer());
     let land = match land_face(s, t, slot) {
         None => None,
-        Some(_) if turn::may_play_land(s, player) => return None,
+        Some(_) if turn::may_play_land(s, player, t.format()) => return None,
         Some(_) if casting::sorcery_timing(s, player) => Some(Refusal::LandPlayed),
         Some(_) => Some(Refusal::Timing { by: None }),
     };

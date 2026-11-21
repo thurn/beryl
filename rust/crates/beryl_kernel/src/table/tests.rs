@@ -7,6 +7,7 @@ use beryl_card::{
 
 use super::*;
 use crate::event::{EventKind, Listens, Replaces};
+use crate::format::Format;
 use crate::rule_changes::fixtures::{LIMIT, WALKER};
 
 static ALPHA: CardDef = CardDef {
@@ -32,16 +33,31 @@ static WALKERS: CardTable = CardTable::new(&[&ALPHA, &WALKER]);
 #[test]
 fn a_game_has_the_capabilities_of_its_cards_and_no_others() {
     let all = [Capability::EnteredThisTurn, Capability::LoyaltyActivated];
-    let plain = GameTable::new(&WALKERS, [&[(4, "Alpha")], &[(4, "Alpha")]]).unwrap();
+    let plain = GameTable::new(
+        Format::CONSTRUCTED,
+        &WALKERS,
+        [&[(4, "Alpha")], &[(4, "Alpha")]],
+    )
+    .unwrap();
     assert!(all.iter().all(|&c| !plain.can(c)));
     // One deck's card is enough: both players' games read the same table.
-    let walker = GameTable::new(&WALKERS, [&[(4, "Alpha")], &[(1, "Walker")]]).unwrap();
+    let walker = GameTable::new(
+        Format::CONSTRUCTED,
+        &WALKERS,
+        [&[(4, "Alpha")], &[(1, "Walker")]],
+    )
+    .unwrap();
     assert!(all.iter().all(|&c| walker.can(c)));
 }
 
 #[test]
 fn a_card_that_changes_a_rule_for_players_says_so_in_its_mask() {
-    let t = GameTable::new(&WALKERS, [&[(4, "Alpha")], &[(1, "Walker")]]).unwrap();
+    let t = GameTable::new(
+        Format::CONSTRUCTED,
+        &WALKERS,
+        [&[(4, "Alpha")], &[(1, "Walker")]],
+    )
+    .unwrap();
     let (alpha, walker) = (CardIx::from_index(0), CardIx::from_index(1));
     assert!(!t.replaces(alpha).changes_player_rules());
     assert_eq!(t.replaces(walker), Replaces::PLAYER_RULE_CHANGE);
@@ -101,7 +117,12 @@ static TRIGGERS: CardTable = CardTable::new(&[&ALPHA, &HERALD, &GREETER, &HOST])
 
 #[test]
 fn an_event_reads_only_the_listeners_of_its_kind_on_the_face_that_is_up() {
-    let t = GameTable::new(&TRIGGERS, [&[(4, "Alpha")], &[(1, "Herald")]]).unwrap();
+    let t = GameTable::new(
+        Format::CONSTRUCTED,
+        &TRIGGERS,
+        [&[(4, "Alpha")], &[(1, "Herald")]],
+    )
+    .unwrap();
     let (alpha, herald) = (CardIx::from_index(0), CardIx::from_index(1));
     let listening = |card, face, kind| -> Vec<u8> {
         t.listeners(card, face, kind)
@@ -132,7 +153,7 @@ fn a_table_refuses_a_trigger_the_engine_cannot_match() {
         unmatched: Unmatched::Subject,
     };
     for deck in [&[(1, "Greeter")], &[(1, "Host")]] {
-        let table = GameTable::new(&TRIGGERS, [&[(4, "Alpha")], deck]);
+        let table = GameTable::new(Format::CONSTRUCTED, &TRIGGERS, [&[(4, "Alpha")], deck]);
         assert_eq!(table.err(), Some(refused.clone()));
     }
 }
@@ -203,8 +224,14 @@ static UNREAD: CardTable = CardTable::new(&[&ALPHA, &ANTHEM, &TOLL, &HERALDRY]);
 /// trigger: no table is built.
 #[test]
 fn a_table_refuses_what_the_engine_has_no_code_to_read() {
-    let refused =
-        |card: &'static str| GameTable::new(&UNREAD, [&[(4, "Alpha")], &[(1, card)]]).err();
+    let refused = |card: &'static str| {
+        GameTable::new(
+            Format::CONSTRUCTED,
+            &UNREAD,
+            [&[(4, "Alpha")], &[(1, card)]],
+        )
+        .err()
+    };
     assert_eq!(
         refused("Anthem"),
         Some(TableError::Static {
@@ -245,7 +272,13 @@ static MAKERS: CardTable = CardTable::new(&[&ALPHA, &MAKER, &LISTING_MAKER]);
 /// game where it happened: no table is built.
 #[test]
 fn a_table_refuses_a_card_that_creates_what_it_does_not_list() {
-    let table = |card: &'static str| GameTable::new(&MAKERS, [&[(4, "Alpha")], &[(1, card)]]);
+    let table = |card: &'static str| {
+        GameTable::new(
+            Format::CONSTRUCTED,
+            &MAKERS,
+            [&[(4, "Alpha")], &[(1, card)]],
+        )
+    };
     assert_eq!(
         table("Maker").err(),
         Some(TableError::Unlisted {

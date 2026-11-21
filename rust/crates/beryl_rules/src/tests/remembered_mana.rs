@@ -15,6 +15,7 @@ use crate::card::{
 use crate::mana::{self, Paying};
 use crate::replacement::event::Sink;
 use crate::{Bitboard, CardTable, GameTable, Opt, Profile, Replay, State};
+use beryl_kernel::format::Format;
 
 use super::begin;
 use super::cast::index_of;
@@ -64,7 +65,7 @@ const DECK: &[(u8, &str)] = &[
 /// the pool empties of it as of any mana.
 #[test]
 fn mana_that_remembers_pays_only_what_its_restriction_accepts() {
-    let t = GameTable::new(&CARDS, [DECK, DECK]).unwrap();
+    let t = GameTable::new(Format::CONSTRUCTED, &CARDS, [DECK, DECK]).unwrap();
     let mut s = State::new(&t, 5, Profile::EXACT).unwrap();
     begin(&t, &mut s);
     let p = s.turn().starting_player();

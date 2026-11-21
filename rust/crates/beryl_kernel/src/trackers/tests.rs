@@ -6,6 +6,7 @@ use beryl_card::{Ability, Amount, CardDef, Condition, Effect, Face, Objects, Typ
 
 use super::*;
 use crate::event::Sink;
+use crate::format::Format;
 use crate::layout::Large;
 use crate::object::Derived;
 use crate::profile::Profile;
@@ -71,7 +72,12 @@ static CARDS: CardTable = CardTable::new(&[&BEAR, &WALKER, &TALLY]);
 fn game(walkers: u8) -> (GameTable, State, [Slot; 2]) {
     let bears: &[(u8, &str)] = &[(40, "Test Bear")];
     let mixed = [(40 - walkers, "Test Bear"), (walkers, "Test Walker")];
-    let t = GameTable::new(&CARDS, [bears, if walkers == 0 { bears } else { &mixed }]).unwrap();
+    let t = GameTable::new(
+        Format::CONSTRUCTED,
+        &CARDS,
+        [bears, if walkers == 0 { bears } else { &mixed }],
+    )
+    .unwrap();
     let mut s = State::new(&t, 7, Profile::EXACT).unwrap();
     let slots = [s.library(Seat::P0)[0], s.library(Seat::P0)[1]];
     for slot in slots {
@@ -226,7 +232,12 @@ fn trackers_survive_small_to_large_and_back() {
 fn counting(reads: bool) -> (GameTable, State) {
     let bears: &[(u8, &str)] = &[(40, "Test Bear")];
     let mixed: &[(u8, &str)] = &[(39, "Test Bear"), (1, "Test Tally")];
-    let t = GameTable::new(&CARDS, [bears, if reads { mixed } else { bears }]).unwrap();
+    let t = GameTable::new(
+        Format::CONSTRUCTED,
+        &CARDS,
+        [bears, if reads { mixed } else { bears }],
+    )
+    .unwrap();
     let s = State::new(&t, 7, Profile::EXACT).unwrap();
     (t, s)
 }

@@ -20,7 +20,9 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use beryl_cards::CARDS;
 use beryl_cards::decks::fuzz_deck;
-use beryl_engine::{Choice, Decision, GameTable, Layout, Observation, Profile, Seat, State};
+use beryl_engine::{
+    Choice, Decision, Format, GameTable, Layout, Observation, Profile, Seat, State,
+};
 use beryl_search::{Agent, AgentDecision};
 use proptest::collection::vec;
 use proptest::prelude::*;
@@ -99,7 +101,12 @@ impl Fuzz {
             fuzz_deck(self.seed),
             fuzz_deck(self.seed.wrapping_add(1 << 32)),
         ];
-        let table = GameTable::new(&CARDS, [decks[0].as_slice(), decks[1].as_slice()]).unwrap();
+        let table = GameTable::new(
+            Format::CONSTRUCTED,
+            &CARDS,
+            [decks[0].as_slice(), decks[1].as_slice()],
+        )
+        .unwrap();
         let state = State::new(&table, self.seed, Profile::SMART).unwrap();
         let random = beryl_search::agent("random").unwrap();
         let stand_in = (random.new)(&table, self.seed, beryl_search::Budget::DEFAULT);

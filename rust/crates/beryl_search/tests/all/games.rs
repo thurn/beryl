@@ -17,9 +17,9 @@ use beryl_engine::filter::Filter;
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::state::Pending;
 use beryl_engine::{
-    CardId, CardIx, CardTable, Choice, Counts, Decision, GameTable, Large, LargeCardIx, LargeSlot,
-    Layout, Misfit, Observation, Outcome, Profile, Relayout, Replay, Scratch, Seat, Slot, SlotId,
-    Small, StallReason, State, Step, Zone, ZoneKey, apply, next, observe,
+    CardId, CardIx, CardTable, Choice, Counts, Decision, Format, GameTable, Large, LargeCardIx,
+    LargeSlot, Layout, Misfit, Observation, Outcome, Profile, Relayout, Replay, Scratch, Seat,
+    Slot, SlotId, Small, StallReason, State, Step, Zone, ZoneKey, apply, next, observe,
 };
 use beryl_search::{Agent, AgentDecision, GreedyAgent, RandomAgent};
 
@@ -134,7 +134,12 @@ fn table_of(cards: usize, seed: u64, fixed: bool) -> GameTable {
             .collect()
     };
     let decks = [deck(seed, 0), deck(seed.wrapping_add(1 << 16), 1)];
-    GameTable::new(&CARDS, [decks[0].as_slice(), decks[1].as_slice()]).unwrap()
+    GameTable::new(
+        Format::CONSTRUCTED,
+        &CARDS,
+        [decks[0].as_slice(), decks[1].as_slice()],
+    )
+    .unwrap()
 }
 
 /// Two decks of 80 cards are more than [`Small`] has slots for, and no rule forbids them
@@ -221,7 +226,12 @@ fn table_of_clones(seed: u64, fixed: bool) -> GameTable {
             .collect()
     };
     let decks = [deck(0), deck(1)];
-    GameTable::new(cards, [decks[0].as_slice(), decks[1].as_slice()]).unwrap()
+    GameTable::new(
+        Format::CONSTRUCTED,
+        cards,
+        [decks[0].as_slice(), decks[1].as_slice()],
+    )
+    .unwrap()
 }
 
 /// A game of more distinct cards than the one byte of [`Small`]'s game index numbers is
@@ -520,7 +530,7 @@ fn a_hidden_pick_redealt_shows_and_asks_the_same() {
         (6, names::GRISELBRAND),
         (6, names::COUNTERSPELL),
     ];
-    let t = GameTable::new(&CARDS, [deck, deck]).unwrap();
+    let t = GameTable::new(Format::CONSTRUCTED, &CARDS, [deck, deck]).unwrap();
     let mut rng = SplitMix64::new(7);
     let (mut reached, mut redealt) = (0, 0);
     for seed in 0..games(6) {
@@ -608,7 +618,12 @@ fn a_color_given_in_every_zone_shows_nothing_hidden() {
             deck
         };
         let decks = [deck(seed), deck(seed.wrapping_add(1 << 32))];
-        let t = GameTable::new(&CARDS, [decks[0].as_slice(), decks[1].as_slice()]).unwrap();
+        let t = GameTable::new(
+            Format::CONSTRUCTED,
+            &CARDS,
+            [decks[0].as_slice(), decks[1].as_slice()],
+        )
+        .unwrap();
         let mut s = State::new(&t, seed, Profile::EXACT).unwrap();
         play(
             &t,

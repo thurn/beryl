@@ -18,6 +18,7 @@ use crate::continuous;
 use crate::ids::{Seat, Slot};
 use crate::state::{Continuous, Duration, LayerChange, State, Zone};
 use crate::{CardTable, GameTable, Profile, Scratch};
+use beryl_kernel::format::Format;
 
 /// An Equipment that gives the equipped creature +1/-1.
 static EQUIPMENT: CardDef = CardDef {
@@ -84,7 +85,7 @@ fn a_shield_saves_a_creature_with_lethal_damage_and_removes_the_damage() {
 fn regeneration_uses_toughness_before_equipment_detaches() {
     static CARDS: CardTable = CardTable::new(&[&LAND, &BEAR, &EQUIPMENT]);
     let deck = &[(1, "Test Bear"), (1, "Test Clamp"), (18, "Test Land")];
-    let t = GameTable::new(&CARDS, [deck, deck]).unwrap();
+    let t = GameTable::new(Format::CONSTRUCTED, &CARDS, [deck, deck]).unwrap();
     let mut s = State::new(&t, 7, Profile::EXACT).unwrap();
     begin(&t, &mut s);
     let p = s.turn().starting_player();

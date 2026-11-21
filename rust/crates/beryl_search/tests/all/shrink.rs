@@ -18,8 +18,8 @@ use crate::common::{first_seed, games};
 use beryl_cards::CARDS;
 use beryl_cards::decks::fuzz_deck;
 use beryl_engine::{
-    Choice, Decision, DecisionKind, GameTable, Profile, Replay, Scratch, Seat, State, Step, Stops,
-    Zone, ZoneKey, apply, next,
+    Choice, Decision, DecisionKind, Format, GameTable, Profile, Replay, Scratch, Seat, State, Step,
+    Stops, Zone, ZoneKey, apply, next,
 };
 use beryl_scenario::{
     Check, Live, Scenario, answer, describe, invariants, script, setup_source, source,
@@ -50,7 +50,12 @@ impl Game {
             fuzz_deck(self.seed),
             fuzz_deck(self.seed.wrapping_add(1 << 32)),
         ];
-        GameTable::new(&CARDS, [decks[0].as_slice(), decks[1].as_slice()]).unwrap()
+        GameTable::new(
+            Format::CONSTRUCTED,
+            &CARDS,
+            [decks[0].as_slice(), decks[1].as_slice()],
+        )
+        .unwrap()
     }
 
     /// Plays the game, calling `visit` at every decision with the choice it takes, and checks

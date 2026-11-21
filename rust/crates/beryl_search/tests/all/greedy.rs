@@ -5,8 +5,9 @@ use crate::common::{fingerprint, mirror, play};
 use beryl_cards::{CARDS, names};
 use beryl_engine::card::{ObjectAbility, Purpose};
 use beryl_engine::{
-    Answers, Candidates, Choice, Decision, DecisionKind, GameTable, Observation, Opt, Outcome,
-    Profile, Replay, Scratch, Seat, Small, State, Step, TurnStep, Zone, apply, next, observe,
+    Answers, Candidates, Choice, Decision, DecisionKind, Format, GameTable, Observation, Opt,
+    Outcome, Profile, Replay, Scratch, Seat, Small, State, Step, TurnStep, Zone, apply, next,
+    observe,
 };
 use beryl_scenario::{Action, Live, P0, P1, Permanent, Scenario};
 use beryl_search::{
@@ -196,7 +197,7 @@ fn a_rollout_scry_keeps_the_card_worth_drawing() {
         (4, ISLAND),
         (1, JACE_THE_MIND_SCULPTOR),
     ];
-    let t = GameTable::new(&CARDS, [&deck, &[(1, PLAINS)]]).unwrap();
+    let t = GameTable::new(Format::CONSTRUCTED, &CARDS, [&deck, &[(1, PLAINS)]]).unwrap();
     let mut s = State::new(&t, 0, Profile::SMART).unwrap();
     s.board().begin_at(3, Seat::P0, TurnStep::PrecombatMain);
     let named = |s: &State, name: &str| {

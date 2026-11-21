@@ -534,6 +534,7 @@ pub(crate) mod fixtures {
         When,
     };
 
+    use crate::format::Format;
     use crate::table::{CardTable, GameTable};
 
     /// "You may cast sorcery spells as though they had flash."
@@ -579,7 +580,7 @@ pub(crate) mod fixtures {
 
     /// The table of a game with a [`WALKER`] in it.
     pub(crate) fn table() -> GameTable {
-        GameTable::new(&WALKERS, [&[(1, "Walker")], &[]]).unwrap()
+        GameTable::new(Format::CONSTRUCTED, &WALKERS, [&[(1, "Walker")], &[]]).unwrap()
     }
 }
 

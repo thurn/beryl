@@ -18,6 +18,7 @@ use crate::{
     actions::coins, interpret::choices, zones::library, zones::tokens,
 };
 use beryl_card::effect::build::{scry, you};
+use beryl_kernel::format::Format;
 use beryl_kernel::two_player::TwoPlayerSeat as _;
 
 use super::events::{CARDS, DECK, INSECT, PRODIGY_CARDS, find, game, put};
@@ -67,7 +68,7 @@ fn tapped(s: &State, slot: Slot) -> bool {
 /// stays in the library when a player looks at or draws its top card (CR 121.1).
 #[test]
 fn top_cards_and_draws_skip_objects_waiting_to_cease_to_exist() {
-    let t = GameTable::new(&CARDS, [DECK, DECK]).unwrap();
+    let t = GameTable::new(Format::CONSTRUCTED, &CARDS, [DECK, DECK]).unwrap();
     let mut s = State::new(&t, 1, Profile::EXACT).unwrap();
     let player = Seat::P0;
     let card = *s.library(player).last().unwrap();
@@ -216,6 +217,7 @@ fn any_card_is_manifested_for_any_player() {
 #[test]
 fn any_permanent_is_exiled_and_only_a_double_faced_one_returns_transformed() {
     let t = GameTable::new(
+        Format::CONSTRUCTED,
         &PRODIGY_CARDS,
         [
             &[(1, "Test Prodigy"), (5, "Test Land")],
@@ -297,7 +299,7 @@ fn any_object_is_put_into_its_owners_library_at_any_position() {
 /// [CR 506.3c](https://yawgatog.com/resources/magic-rules/#R5063c)).
 #[test]
 fn any_tokens_enter_attacking_one_of_the_defending_players_given() {
-    let t = GameTable::new(&CARDS, [DECK, DECK]).unwrap();
+    let t = GameTable::new(Format::CONSTRUCTED, &CARDS, [DECK, DECK]).unwrap();
     let mut s = State::new(&t, 1, Profile::EXACT).unwrap();
     s.board().begin_at(1, Seat::P0, TurnStep::DeclareAttackers);
     let mut x = Scratch::new();

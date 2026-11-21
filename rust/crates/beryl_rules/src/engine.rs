@@ -3,6 +3,8 @@
 //!
 //! Implements: CR 117.1, CR 117.3, CR 117.4, CR 117.5
 
+use beryl_kernel::format::StartingPlayer;
+
 use crate::casting::land::play_land;
 use crate::decision::{Answers, Choice, Decision, DecisionKind, Opt, Outcome, StallReason, Step};
 use crate::fixed::Full;
@@ -44,7 +46,7 @@ pub fn view<'a, L: Layout>(s: &'a State<L>, t: &GameTable, x: &'a mut Scratch<L>
 /// game." Their opponent, the one player left, wins
 /// (see [CR 104.2a](https://yawgatog.com/resources/magic-rules/#R1042a)): "A player still in the
 /// game wins the game if that player's opponents have all left the game."
-pub fn concede<L: Layout>(s: &mut State<L>, x: &mut Scratch<L>, player: Seat) {
+pub fn concede<L: Layout>(s: &mut State<L>, t: &GameTable, x: &mut Scratch<L>, player: Seat) {
     if s.outcome().is_none() {
         x.events.enter(|_| Cause::Player {
             player,
@@ -52,6 +54,7 @@ pub fn concede<L: Layout>(s: &mut State<L>, x: &mut Scratch<L>, player: Seat) {
         });
         sba::end_game(
             s,
+            t.format(),
             &mut x.events,
             player,
             crate::replacement::event::LossCause::Concede,
@@ -655,11 +658,9 @@ fn perform<L: Layout>(
         | DecisionKind::ChooseObject
         | DecisionKind::ChooseUpTo => unreachable!("answered through the pending state"),
         DecisionKind::PlayOrDraw => {
-            // Of two: with more players the chooser names who takes the first turn (see CR 103.1).
-            let starting = if option() == Opt::Play {
-                d.player
-            } else {
-                s.next_player(d.player)
+            let starting = match t.format().starting_player() {
+                StartingPlayer::PlayOrDraw if option() == Opt::Play => d.player,
+                StartingPlayer::PlayOrDraw => s.next_player(d.player),
             };
             start::set_starting_player(s, t, sink, starting)
         }
@@ -688,7 +689,7 @@ fn pass<L: Layout>(
     x: &mut Scratch<L>,
     a: &mut dyn Answers<L>,
 ) -> Result<(), Full> {
-    if !s.pass_priority() {
+    if !s.pass_priority(t.format()) {
         return Ok(());
     }
     if s.stack().is_empty() {
