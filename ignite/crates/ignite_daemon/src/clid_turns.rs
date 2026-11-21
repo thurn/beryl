@@ -18,6 +18,8 @@
 
 use std::fs;
 use std::path::PathBuf;
+#[cfg(all(test, unix))]
+use std::sync::Arc;
 use std::sync::{Mutex, PoisonError};
 use std::thread;
 use std::time::UNIX_EPOCH;
@@ -26,6 +28,9 @@ use ignite_core::cli::SlotState;
 use ignite_core::ids::SessionId;
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{CommandSpec, Error, Result};
+
+#[cfg(all(test, unix))]
+use crate::supervise::Started;
 
 use super::start::{Recovery, TurnLauncher, find_run, recover};
 use super::{CliDaemon, Turns, slot_of};
@@ -46,6 +51,8 @@ pub struct SupervisedTurns {
     home: PathBuf,
     /// Held while a turn's run is looked for and started, so one daemon starts it once.
     starting: Mutex<()>,
+    #[cfg(all(test, unix))]
+    test_supervisors: Option<Arc<Mutex<Vec<Started>>>>,
 }
 
 impl SupervisedTurns {
@@ -54,7 +61,16 @@ impl SupervisedTurns {
             launcher,
             home,
             starting: Mutex::new(()),
+            #[cfg(all(test, unix))]
+            test_supervisors: None,
         }
+    }
+
+    /// Lets an end-to-end test reap its supervisors, including those started before a restart.
+    #[cfg(all(test, unix))]
+    pub(super) fn with_test_supervisors(mut self, supervisors: Arc<Mutex<Vec<Started>>>) -> Self {
+        self.test_supervisors = Some(supervisors);
+        self
     }
 
     fn run_file(&self, session: &SessionId, turn: u32, name: &str) -> Option<PathBuf> {
@@ -84,6 +100,11 @@ impl Turns for SupervisedTurns {
             .ensure(session, turn, &command.args)
             .map_err(|e| Error::Io(format!("turn {turn} of {session} did not start: {e}")))?;
         if let Some(started) = started {
+            #[cfg(all(test, unix))]
+            if let Some(supervisors) = &self.test_supervisors {
+                super::lock(supervisors).push(started);
+                return Ok(());
+            }
             thread::spawn(move || started.wait());
         }
         Ok(())

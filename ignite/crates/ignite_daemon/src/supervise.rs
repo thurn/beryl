@@ -395,6 +395,22 @@ impl Started {
         let _ = self.child.wait();
         self.run.wait()
     }
+
+    #[cfg(all(test, unix))]
+    pub(crate) fn supervisor_pid(&self) -> u32 {
+        self.child.id()
+    }
+
+    /// Ends a test command that might still be waiting and reaps its supervisor.
+    #[cfg(all(test, unix))]
+    pub(crate) fn stop_for_test(mut self) -> io::Result<()> {
+        if self.child.try_wait()?.is_none() && !self.run.dir.join(RESULT).exists() {
+            self.run.kill()?;
+        }
+        self.child.wait()?;
+        self.run.wait();
+        Ok(())
+    }
 }
 
 /// One run directory.

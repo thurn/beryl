@@ -36,7 +36,7 @@ use super::start::{TurnLauncher, find_run};
 use super::*;
 use crate::dispatchd::{RunningVerb, SessionCommand, usage_holds};
 use crate::server::Context;
-use crate::supervise::SupervisedLauncher;
+use crate::supervise::{Started, SupervisedLauncher};
 
 const ROLES: &str = "clid::e2e::";
 const START: i64 = 1_800_000_000_000;
@@ -217,15 +217,23 @@ struct Rig {
     health: Arc<Health>,
     effects: Arc<Recording>,
     daemon: CliDaemon,
+    supervisors: Arc<Mutex<Vec<Started>>>,
 }
 
 impl Drop for Rig {
     fn drop(&mut self) {
-        // Lets every held program finish, so none is left waiting.
-        for n in 1..=20 {
-            let _ = fs::write(self.cli.join(format!("gate.{n}")), "");
-        }
+        // A turn can still be waiting on a gate or FIFO. End it and reap its supervisor
+        // before removing the run files, even if the test failed before opening the gate.
+        let supervisors = std::mem::take(&mut *lock(&self.supervisors));
+        let errors: Vec<_> = supervisors
+            .into_iter()
+            .filter_map(|started| started.stop_for_test().err())
+            .collect();
         let _ = fs::remove_dir_all(&self.home);
+        assert!(
+            errors.is_empty() || std::thread::panicking(),
+            "failed to reap test supervisors: {errors:?}"
+        );
     }
 }
 
@@ -316,6 +324,7 @@ impl Rig {
             ctx,
             health,
             effects,
+            supervisors: Arc::default(),
         };
         rig.restart();
         rig
@@ -360,6 +369,7 @@ impl Rig {
             self.home.clone(),
         );
         SupervisedTurns::new(launcher, self.home.clone())
+            .with_test_supervisors(self.supervisors.clone())
     }
 
     /// Replaces the daemon with a new one over the same database and Ignite home, as a
@@ -492,6 +502,34 @@ impl Rig {
             .map(|(_, _, note)| note.clone())
             .collect()
     }
+}
+
+#[test]
+fn cli_e2e_teardown_reaps_a_supervisor_whose_turn_is_still_waiting() {
+    let rig = Rig::new("teardown");
+    rig.script(1, "init; started; hang; result\n");
+    rig.fifo(1);
+    let session = rig.begin();
+    rig.wait_started(1);
+    assert_eq!(start::recover(&rig.home, &session, 1), Recovery::Running);
+
+    let supervisors = lock(&rig.supervisors);
+    let [started] = supervisors.as_slice() else {
+        panic!("expected one supervisor, found {}", supervisors.len());
+    };
+    let pid = started.supervisor_pid().to_string();
+    drop(supervisors);
+    drop(rig);
+
+    let output = Command::new("/bin/ps")
+        .args(["-p", &pid, "-o", "pid="])
+        .output()
+        .unwrap();
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "supervisor {pid} still exists after teardown: {output:?}"
+    );
 }
 
 /// The placeholder turns of a rig before its first daemon is built.
