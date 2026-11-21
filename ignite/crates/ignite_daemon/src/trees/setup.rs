@@ -4,17 +4,17 @@
 //! tip to reset to needs a fetch, which together took seconds while the daemon did not answer.
 //! So starting is split in two:
 //!
-//! - [`Trees::mark_unfinished`] runs before the daemon serves its socket and touches only the
-//!   local store: every tree that must be created or reset is marked `resetting`, with its lease
-//!   cleared. A `resetting` tree is never leased, so nothing uses it until it is clean.
+//! - [`Trees::mark_unfinished`] looks for unrecorded checkouts and marks trees that need
+//!   creation or a reset. A `resetting` tree cannot be leased until it is clean.
 //! - [`Trees::finish`] creates or resets one marked tree at the tip and frees it, serving the
 //!   first waiter. [`Trees::finish_in_background`] does that for every marked tree on a thread
 //!   of its own, trying again while `git` fails. A lease that arrives meanwhile and finds no
-//!   free tree waits, and is served as each tree is freed.
+//!   free tree and is at its ceiling waits until a tree is freed.
 //!
 //! A daemon that stops again before it has finished leaves the trees `resetting`, and the next
 //! start marks them again ([`super::reset_at_start`]).
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::sync::Arc;
 use std::time::Duration;
@@ -24,7 +24,9 @@ use ignite_core::traits::{Error, Git, Result};
 use ignite_git::worktree;
 use ignite_store::local::{rows, trees as store};
 
-use super::{Trees, park_branch, resets_at_start, store_error};
+use super::{
+    Kind, TreeConfig, Trees, park_branch, resets_at_start, store_error, ticket_tree_number,
+};
 
 /// The first pause before [`Trees::finish_in_background`] tries again; it doubles up to
 /// [`MAX_PAUSE`].
@@ -51,21 +53,33 @@ impl Trees {
         Ok(())
     }
 
-    /// Marks `resetting`, in the local store only, every configured tree that is missing, has no
-    /// row, or was left in the middle of something ([`super::reset_at_start`]), and returns them
-    /// for [`Trees::finish`]. Runs no `git`.
+    /// Marks missing landing trees and unfinished checkouts as resetting. When there are
+    /// unrecorded ticket directories, adopts the repository's parked worktrees among them.
     pub fn mark_unfinished(&self) -> Result<Vec<Unfinished>> {
         let config = &self.inner.config;
         fs::create_dir_all(&config.dir)?;
+        let locked = self.lock();
+        let rows = store::all(&locked.db).map_err(|e| store_error(&e))?;
+        let mut pending: BTreeMap<_, _> = config
+            .configured_landings()
+            .map(|id| (id, Kind::Landing))
+            .collect();
+        for row in &rows {
+            if row.kind == Kind::Ticket.as_str() {
+                pending.insert(super::disk::id_of(row)?, Kind::Ticket);
+            }
+        }
+        for id in config.unrecorded_tickets(&rows)? {
+            pending.insert(id, Kind::Ticket);
+        }
         let mut unfinished = Vec::new();
-        for (id, kind) in config.configured() {
-            let path = config.path(&id);
-            let locked = self.lock();
-            let row = store::get(&locked.db, id.as_str()).map_err(|e| store_error(&e))?;
-            let fresh = !path.join(".git").exists();
+        for (id, kind) in pending {
+            let row = rows.iter().find(|row| row.id == id.as_str());
+            let fresh = !config.path(&id).join(".git").exists();
             let marked = match row {
+                Some(row) if row.state == store::State::Retiring.as_str() => continue,
                 Some(row) if !fresh => {
-                    if !resets_at_start(&locked.db, &row) {
+                    if !resets_at_start(&locked.db, row) {
                         continue;
                     }
                     rows::Tree {
@@ -74,23 +88,11 @@ impl Trees {
                         session: None,
                         branch: None,
                         owner: None,
-                        ..row
+                        ..row.clone()
                     }
                 }
-                // A new checkout, or a tree the store has no row for, holds no build.
-                _ => rows::Tree {
-                    id: id.to_string(),
-                    path: path.display().to_string(),
-                    kind: kind.as_str().to_owned(),
-                    state: store::State::Resetting.as_str().to_owned(),
-                    ticket: None,
-                    session: None,
-                    branch: None,
-                    built_commit: None,
-                    leased_at: None,
-                    last_used: None,
-                    owner: None,
-                },
+                // A new checkout, or a tree the store has no row for, holds no build record.
+                _ => config.resetting_tree(&id, kind),
             };
             store::upsert(&locked.db, &marked).map_err(|e| store_error(&e))?;
             unfinished.push(Unfinished { tree: id, fresh });
@@ -169,5 +171,56 @@ impl Trees {
         if let Err(error) = spawned {
             eprintln!("ignite: cannot start the thread that resets trees: {error}");
         }
+    }
+}
+
+impl TreeConfig {
+    pub(super) fn resetting_tree(&self, id: &TreeId, kind: Kind) -> rows::Tree {
+        rows::Tree {
+            id: id.to_string(),
+            path: self.path(id).display().to_string(),
+            kind: kind.as_str().to_owned(),
+            state: store::State::Resetting.as_str().to_owned(),
+            ticket: None,
+            session: None,
+            branch: None,
+            built_commit: None,
+            leased_at: None,
+            last_used: None,
+            owner: None,
+        }
+    }
+
+    fn unrecorded_tickets(&self, rows: &[rows::Tree]) -> Result<Vec<TreeId>> {
+        let mut candidates = Vec::new();
+        for entry in fs::read_dir(&self.dir)? {
+            let entry = entry?;
+            let Ok(name) = entry.file_name().into_string() else {
+                continue;
+            };
+            if ticket_tree_number(&name).is_some()
+                && !rows.iter().any(|row| row.id == name)
+                && entry.file_type()?.is_dir()
+                && entry.path().join(".git").is_file()
+            {
+                candidates.push(TreeId::new(name).map_err(|e| Error::Invalid(e.to_string()))?);
+            }
+        }
+        if candidates.is_empty() {
+            return Ok(candidates);
+        }
+
+        // An interrupted allocation or a checkout left by an older daemon may have no row.
+        // Check Git's registration and the parking branch before ever resetting its files.
+        let dir = ignite_os::paths::canonicalize(&self.dir)?;
+        let registered = worktree::list(&self.repo)?;
+        candidates.retain(|id| {
+            let path = dir.join(id.as_str());
+            let park = park_branch(id);
+            registered
+                .iter()
+                .any(|tree| tree.path == path && tree.branch.as_deref() == Some(park.as_str()))
+        });
+        Ok(candidates)
     }
 }

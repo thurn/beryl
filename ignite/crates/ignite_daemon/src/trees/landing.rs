@@ -129,7 +129,9 @@ impl Trees {
         let best = rows
             .iter()
             .filter(|row| {
-                row.kind == Kind::Landing.as_str() && row.state == store::State::Free.as_str()
+                row.kind == Kind::Landing.as_str()
+                    && row.state == store::State::Free.as_str()
+                    && self.inner.config.uses(row)
             })
             .filter_map(|row| {
                 let tree = TreeId::new(row.id.clone()).ok()?;
@@ -175,7 +177,9 @@ impl Trees {
         let free: Vec<_> = rows
             .iter()
             .filter(|row| {
-                row.kind == Kind::Landing.as_str() && row.state == store::State::Free.as_str()
+                row.kind == Kind::Landing.as_str()
+                    && row.state == store::State::Free.as_str()
+                    && self.inner.config.uses(row)
             })
             .collect();
         if free.len() <= keep_free {

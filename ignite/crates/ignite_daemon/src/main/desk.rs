@@ -391,10 +391,7 @@ impl DaemonHost {
 
 impl Host for DaemonHost {
     fn free_ticket_trees(&self) -> u32 {
-        self.ticket_trees()
-            .iter()
-            .filter(|tree| tree.state == "free")
-            .count() as u32
+        self.trees.free_ticket_trees().unwrap_or_default()
     }
 
     /// The cores neither Ignite's grants nor outside work are using. A grant that leaves cores

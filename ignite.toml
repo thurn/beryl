@@ -228,10 +228,8 @@ per_core = 0.5
 # The Mac Studio that runs the hub.
 [machine.jarvis]
 os = "macos"
-# 12 ticket trees ran out on 2026-11-18, when queued express landings held every ticket tree and
-# new sessions waited in `ignite start`. A tree costs disk only while it keeps a build, and that
-# disk is bounded by `trees_disk_gb` and the sweep below, not by the number of trees, so a tree
-# without a build costs little. Trees above the count are removed once free.
+# Kept for older daemons that still require a fixed ticket tree count. Current daemons
+# create ticket trees on demand and retire excess free trees.
 ticket_trees = 24
 landing_trees = 3
 # On 2026-11-18 the trees grew to 419 GB under a 400 GB limit while the rest of the disk filled,

@@ -364,7 +364,6 @@ impl Trees {
     /// need) passed it on to be built cold.
     fn donors(&self, tree: &TreeId, tip: &Commit) -> Result<Vec<Donor>> {
         let rows = store::all(&self.lock().db).map_err(|e| store_error(&e))?;
-        let configured = self.inner.config.configured();
         let own = rows
             .iter()
             .find(|row| row.id == tree.as_str())
@@ -373,12 +372,12 @@ impl Trees {
             .iter()
             .filter(|row| row.id != tree.as_str())
             .filter_map(|row| {
-                let kind = configured
-                    .iter()
-                    .find(|(id, _)| id.as_str() == row.id)
-                    .map(|(_, kind)| *kind)?;
+                if !self.inner.config.uses(row) {
+                    return None;
+                }
                 let free = row.state == store::State::Free.as_str();
-                let leased = row.state == store::State::Leased.as_str() && kind == Kind::Ticket;
+                let leased =
+                    row.state == store::State::Leased.as_str() && row.kind == Kind::Ticket.as_str();
                 if !free && !leased {
                     return None;
                 }

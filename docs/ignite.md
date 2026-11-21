@@ -1023,17 +1023,19 @@ Each machine has a fixed number of trees of two kinds:
 ```toml
 # ignite.toml, per machine
 [machine.jarvis]
-ticket_trees = 24
 trees_disk_gb = 250
 ```
 
-The daemon starts with two ticket trees if `ticket_trees` is absent and derives
-the landing-tree count from the machine's physical cores.
+The daemon derives the landing-tree count from the machine's physical cores.
 
 Rules for trees:
 
-- Ignite never builds in a directory outside this set. When every ticket tree is
-  leased, `ignite start` waits and says so, and the daemon starts no ticket.
+- Ignite builds in its managed worktrees. When no ticket tree is free, the lease
+  creates the next available `tree-NN`. The machine can keep up to twice its
+  logical core count plus four ticket trees. At that ceiling, `ignite start`
+  waits for a tree to become free. The daemon advertises existing free trees
+  plus room for new ones to the hub. `ignite doctor` counts the trees present
+  and flags a legacy `ticket_trees` setting if it is still in the configuration.
 - `ignite start` leases a free tree and checks out a branch at the tip. With
   `repository.green` set and the ref present, the start is `green` instead,
   except in two cases. When a dependency of the ticket landed at a commit that
@@ -1150,11 +1152,11 @@ Rules for trees:
   trees held 1,800 GB under a 250 GB limit with nearly every tree leased, and
   the disk filled because only free trees were swept. The daemon logs what it
   deleted and how much it freed.
-- A lower `ticket_trees` setting or a lower derived landing-tree count removes
-  the trees above the new count: the disk loop deletes each one's worktree,
-  build directories and row once it is free. A session that held one keeps
-  working in it until it releases the tree, and no lease or prebuild takes it
-  again.
+- The disk loop retires ticket trees after they have been free for 24 hours,
+  keeping the two most recently used free trees as warm donors. It removes the
+  worktree, its build directories and its local database row. A restart resumes
+  unfinished creations and retirements. Surplus landing trees are retired as
+  soon as they are free.
 - Releasing a tree first saves what it holds, then resets it to a clean checkout
   and keeps its build directories. See [Releasing work](#releasing-work).
 - Releasing also ends every process whose working directory or executable is
@@ -4147,7 +4149,6 @@ do. The hub is the one shared point.
 ```toml
 [machine.cygnus]
 os = "windows"
-ticket_trees = 3
 families = ["rust", "doctests", "clippy", "rust-format", "ignite", "source"]
 ```
 

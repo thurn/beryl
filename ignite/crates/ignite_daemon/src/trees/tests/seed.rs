@@ -26,6 +26,34 @@ fn fake_target(tree: &Path) {
     write(&profile, ".cargo-lock", "");
 }
 
+#[test]
+fn a_newly_created_tree_seeds_from_a_leased_donor() {
+    if !copies_are_clones_here() {
+        return;
+    }
+    let mut f = Fixture::new(0, 1);
+    let mut config = f.trees.config().clone();
+    config.ticket_tree_ceiling = 2;
+    f.trees = Trees::new(
+        config,
+        open_in_memory().unwrap(),
+        f.clock.clone(),
+        f.builds.clone(),
+    );
+
+    let donor = f.lease("T.1", false);
+    fake_target(&donor.path);
+    f.trees.record_build(&donor.tree, &f.tip()).unwrap();
+    let lease = f.lease("T.2", true);
+    super::super::wait_until_seeded(&lease.path).unwrap();
+
+    assert_eq!(lease.tree, id("tree-02"));
+    assert_eq!(
+        fs::read_to_string(lease.path.join("out/debug/deps/libfoo-1.rlib")).unwrap(),
+        "compiled"
+    );
+}
+
 fn modified(path: &Path) -> SystemTime {
     fs::metadata(path).unwrap().modified().unwrap()
 }
@@ -328,6 +356,7 @@ fn a_free_tree_whose_blocks_a_clone_shares_is_kept_and_one_with_its_own_is_clear
     let total = probe.hold_disk(0).unwrap().before;
     assert!(total < 7_000_000, "the clone counts once: {total}");
 
+    probe.release_unsaved(&leased.tree, &f.tip(), None).unwrap();
     let limited = trees_with(&f, builds.clone(), Some(total - 1_000_000));
     let held = match limited.lease(f.request("T.1", false)).unwrap() {
         Lease::Ready(lease) => lease,

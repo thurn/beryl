@@ -75,6 +75,9 @@ fn with_every_tree_leased_the_largest_idle_one_is_cleared() {
     let f = Fixture::new(3, 1);
     let probe = all_leased(&f, None, &[MB, 3 * MB, 2 * MB]);
     let total = probe.hold_disk(0).unwrap().before;
+    for name in ["tree-01", "tree-02", "tree-03"] {
+        probe.release_unsaved(&id(name), &f.tip(), None).unwrap();
+    }
     drop(probe);
     let trees = all_leased(&f, Some(total - 5 * MB as u64 / 2), &[MB, 3 * MB, 2 * MB]);
 

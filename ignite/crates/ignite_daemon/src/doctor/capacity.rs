@@ -17,6 +17,14 @@ pub(crate) fn machine_facts(host: &dyn Host, os: Os) -> MachineFacts {
 
 pub(super) fn retired_findings(config: &Config, findings: &mut Vec<Finding>) {
     for (name, machine) in &config.machine {
+        if machine.ticket_trees.is_some() {
+            findings.push(Finding::ok(
+                "config",
+                format!(
+                    "machine.{name}.ticket_trees in ignite.toml is retired. Ignite creates ticket trees as needed."
+                ),
+            ));
+        }
         let keys = [
             ("landing_trees", machine.landing_trees.is_some()),
             ("floor", machine.floor.is_some()),

@@ -1,69 +1,55 @@
-//! Trees that `ignite.toml` no longer declares are removed once free, and the disk's floor of
-//! free space holds the trees under their current size when no limit would.
+//! The disk loop retires old free trees and sweeps builds when free disk drops below its floor.
 
 use super::*;
 
-/// A row for `tree` in `trees`' store, as the daemon would have written it when `ignite.toml`
-/// still declared the tree.
-fn stored(trees: &Trees, f: &Fixture, tree: &str, state: store::State, session: Option<&str>) {
-    let row = rows::Tree {
-        id: tree.to_owned(),
-        path: f.repo.join(".worktrees").join(tree).display().to_string(),
-        kind: Kind::Ticket.as_str().to_owned(),
-        state: state.as_str().to_owned(),
-        ticket: session.map(|_| "T.9".to_owned()),
-        session: session.map(str::to_owned),
-        branch: None,
-        built_commit: None,
-        leased_at: None,
-        last_used: None,
-        owner: None,
-    };
-    store::upsert(&trees.lock().db, &row).unwrap();
+#[test]
+fn retirement_keeps_the_newest_two_free_trees_and_skips_leases() {
+    let f = Fixture::new(4, 1);
+    let leases: Vec<_> = (1..=4).map(|n| f.lease(&format!("T.{n}"), false)).collect();
+    write(&leases[0].path, "out/big", "discarded");
+    for lease in &leases[..3] {
+        f.trees
+            .release_unsaved(&lease.tree, &f.tip(), None)
+            .unwrap();
+        f.clock.advance(1.0);
+    }
+
+    f.clock.advance(86_396.0);
+    assert!(f.trees.retire_surplus().unwrap().is_empty());
+    f.clock.advance(4.0);
+    assert_eq!(f.trees.retire_surplus().unwrap(), [leases[0].tree.clone()]);
+    assert!(!leases[0].path.exists());
+    assert!(
+        store::get(&f.trees.lock().db, leases[0].tree.as_str())
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(f.builds.forgotten(), [leases[0].tree.clone()]);
+    for lease in &leases[1..] {
+        assert!(lease.path.join(".git").is_file());
+    }
+    assert_eq!(f.trees.free_ticket_trees().unwrap(), 3);
+    assert!(f.trees.retire_surplus().unwrap().is_empty());
 }
 
 #[test]
-fn a_free_undeclared_tree_is_removed_and_a_leased_one_kept_for_its_session() {
-    let f = Fixture::new(3, 1);
-    let worktrees = f.repo.join(".worktrees");
-    for tree in ["tree-02", "tree-03"] {
-        write(&worktrees.join(tree), "out/big", &"x".repeat(10_000));
-    }
-    // The machine now declares one ticket tree.
-    let mut config = f.trees.config().clone();
-    config.ticket_trees = 1;
-    let fewer = Trees::new(
-        config,
-        open_in_memory().unwrap(),
-        Arc::new(FakeClock::new(
-            Timestamp::parse("2026-11-18T00:00:00.000Z").unwrap(),
-        )),
-        f.builds.clone(),
-    );
-    fewer.setup(&f.tip()).unwrap();
-    stored(&fewer, &f, "tree-02", store::State::Free, None);
-    stored(&fewer, &f, "tree-03", store::State::Leased, Some("local_a"));
+fn a_restart_does_not_recreate_a_tree_whose_retirement_removed_its_checkout() {
+    let f = Fixture::new(1, 1);
+    let tree = id("tree-01");
+    let path = f.trees.config().path(&tree);
+    store::set_state(
+        &f.trees.lock().db,
+        tree.as_str(),
+        store::State::Retiring,
+        &f.trees.now(),
+    )
+    .unwrap();
+    worktree::remove(&f.repo, &path).unwrap();
 
-    // The session that holds tree-03 is still in a tree, so it can go on and release it.
-    assert_eq!(
-        fewer.tree_at(&worktrees.join("tree-03/out")),
-        Some(id("tree-03"))
-    );
-
-    assert_eq!(fewer.retire_undeclared().unwrap(), [id("tree-02")]);
-    assert!(!worktrees.join("tree-02").exists());
-    assert!(worktrees.join("tree-03/out/big").exists());
-    let ids: Vec<String> = store::all(&fewer.lock().db)
-        .unwrap()
-        .into_iter()
-        .map(|row| row.id)
-        .collect();
-    assert!(!ids.contains(&"tree-02".to_owned()), "{ids:?}");
-    assert!(ids.contains(&"tree-03".to_owned()), "{ids:?}");
-    assert_eq!(f.builds.forgotten(), [id("tree-02")]);
-    // Nothing else is removed: tree-01 is declared, and tree-03 is still leased.
-    assert!(fewer.retire_undeclared().unwrap().is_empty());
-    assert!(worktrees.join("tree-01/.git").exists());
+    assert!(f.trees.mark_unfinished().unwrap().is_empty());
+    assert_eq!(f.trees.retire_surplus().unwrap(), [tree]);
+    assert!(!path.exists());
+    assert_eq!(f.trees.free_ticket_trees().unwrap(), 1);
 }
 
 #[test]

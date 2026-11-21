@@ -55,7 +55,10 @@ fn parses_the_document_examples() {
     assert_eq!(config.improvement, Improvement::default());
     assert_eq!(config.rules, Rules::default());
     let jarvis = config.machine("jarvis").unwrap();
-    assert_eq!((jarvis.ticket_trees, jarvis.landing_trees), (24, Some(3)));
+    assert_eq!(
+        (jarvis.ticket_trees, jarvis.landing_trees),
+        (Some(24), Some(3))
+    );
     assert_eq!(jarvis.resources["browser-pages"], 9);
     assert_eq!(jarvis.families, None);
     let cygnus = config.machine("cygnus").unwrap();
@@ -151,13 +154,6 @@ fn syntax_errors_still_name_the_file() {
 
 #[test]
 fn semantic_errors_name_the_key() {
-    let text = DOCUMENT_EXAMPLES.replace("ticket_trees = 6", "ticket_trees = 0");
-    let error = Config::parse("ignite.toml", &text).unwrap_err();
-    assert_eq!(error.key, "machine.cygnus.ticket_trees");
-    assert_eq!(
-        error.to_string(),
-        "ignite.toml: machine.cygnus.ticket_trees: must be above zero"
-    );
     let text = DOCUMENT_EXAMPLES.replace("name = \"one-card\"", "name = \"kernel-body\"");
     assert_eq!(
         Config::parse("ignite.toml", &text).unwrap_err().key,

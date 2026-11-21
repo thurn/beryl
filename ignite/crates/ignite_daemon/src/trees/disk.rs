@@ -75,16 +75,17 @@ pub struct DiskReport {
 }
 
 impl Trees {
-    /// The bytes that deleting each configured tree's build directories alone would free: the
+    /// The bytes that deleting each known tree's build directories alone would free: the
     /// bytes they share with clones in another tree are not counted ([`Space`]).
     pub fn disk_usage(&self) -> Vec<(TreeId, u64)> {
         self.measure().own()
     }
 
-    /// Measures every configured tree's build directories together.
+    /// Measures every known tree's build directories together.
     fn measure(&self) -> Space {
         let config = &self.inner.config;
-        Space::measure(config.configured().into_iter().map(|(id, _)| {
+        let rows = store::all(&self.lock().db).unwrap_or_default();
+        Space::measure(rows.iter().filter_map(|row| id_of(row).ok()).map(|id| {
             let path = config.path(&id);
             let dirs = config.keep.get().iter().map(|dir| path.join(dir)).collect();
             (id, dirs)
@@ -266,11 +267,6 @@ impl Trees {
             short
         };
         let config = &self.inner.config;
-        let ticket_trees: HashSet<_> = config
-            .configured()
-            .into_iter()
-            .filter_map(|(id, kind)| (kind == Kind::Ticket).then_some(id))
-            .collect();
         let keep = config.keep.get();
         let mut shared = Vec::new();
         for row in self.free_rows()? {
@@ -279,7 +275,8 @@ impl Trees {
             }
             let id = id_of(&row)?;
             let path = config.path(&id);
-            if !ticket_trees.contains(&id) || !keep.iter().any(|dir| path.join(dir).exists()) {
+            if row.kind != Kind::Ticket.as_str() || !keep.iter().any(|dir| path.join(dir).exists())
+            {
                 continue;
             }
             if !Space::private_enough(keep.iter().map(|dir| path.join(dir)), OWN_BYTES) {

@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use ignite_core::capacity::Derived;
 use ignite_core::fakes::{FakeBuilds, FakeClock};
 use ignite_core::time::Timestamp;
 use ignite_store::local::open_in_memory;
@@ -49,7 +50,13 @@ fn reload_at(repo: &Path) -> (Reload, TreeConfig) {
         repo,
         &config,
         config.machine("local").unwrap(),
-        2,
+        &Derived {
+            express_cores: 2,
+            tip_build_cores: 2,
+            floor: ignite_core::config::Floor::default(),
+            landing_trees: 2,
+            worker_ceiling: 4,
+        },
         &manifest,
     );
     let clock = Arc::new(FakeClock::new(Timestamp::EPOCH));

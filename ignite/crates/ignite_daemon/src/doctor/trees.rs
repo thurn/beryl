@@ -1,4 +1,4 @@
-//! `doctor`'s findings about the build trees: whether the declared trees exist, which
+//! `doctor`'s findings about the build trees: which trees exist, which
 //! directories under the trees folder are not Ignite's, and whether the disk has room for the
 //! trees' budget.
 
@@ -6,12 +6,128 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Mutex, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, SystemTime};
 
 use ignite_core::config::Machine;
+use ignite_core::ids::Commit;
+use ignite_core::traits::Result;
 
-use super::{DoctorInput, Finding, TreeInfo, configured_tree_names};
+use super::{DoctorInput, Finding, Host, StatusSection};
+
+/// One build tree, as the daemon knows it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TreeInfo {
+    pub name: String,
+    pub path: PathBuf,
+    pub head: Option<Commit>,
+}
+
+/// The build trees that exist.
+pub trait TreeSource: Send + Sync {
+    fn trees(&self) -> Result<Vec<TreeInfo>>;
+
+    /// The names of the directories directly under the trees folder, hidden ones left out,
+    /// whether or not git knows them as trees.
+    fn directories(&self) -> Vec<String> {
+        Vec::new()
+    }
+}
+
+/// The trees git has registered under the repository's tree directory. A tree whose directory
+/// was deleted is still registered until `git worktree prune`, which is how `doctor` finds it.
+pub struct GitTrees {
+    pub repo: PathBuf,
+    pub dir: PathBuf,
+}
+
+impl TreeSource for GitTrees {
+    fn trees(&self) -> Result<Vec<TreeInfo>> {
+        Ok(ignite_git::worktree::list(&self.repo)?
+            .into_iter()
+            .filter(|tree| tree.path.starts_with(&self.dir))
+            .map(|tree| TreeInfo {
+                name: tree
+                    .path
+                    .file_name()
+                    .map_or_else(String::new, |n| n.to_string_lossy().into_owned()),
+                path: tree.path,
+                head: tree.head,
+            })
+            .collect())
+    }
+
+    fn directories(&self) -> Vec<String> {
+        let Ok(entries) = std::fs::read_dir(&self.dir) else {
+            return Vec::new();
+        };
+        entries
+            .flatten()
+            .filter(|entry| entry.file_type().is_ok_and(|t| t.is_dir()))
+            .filter_map(|entry| entry.file_name().into_string().ok())
+            .filter(|name| !name.starts_with('.'))
+            .collect()
+    }
+}
+
+/// The names Ignite uses under the build tree directory.
+fn managed_tree(name: &str, landing_trees: u32) -> bool {
+    crate::trees::ticket_tree_number(name).is_some()
+        || (1..=landing_trees).any(|n| name == format!("landing-{n}"))
+}
+
+/// The trees on disk, with missing paths and foreign directories reported separately.
+pub struct TreesSection {
+    pub source: Arc<dyn TreeSource>,
+    pub landing_trees: u32,
+    pub host: Arc<dyn Host + Send + Sync>,
+}
+
+impl StatusSection for TreesSection {
+    fn title(&self) -> &'static str {
+        "trees"
+    }
+
+    fn lines(&self) -> Vec<String> {
+        match self.source.trees() {
+            Err(error) => vec![format!("cannot list trees: {error}")],
+            Ok(trees) => {
+                let known: Vec<&TreeInfo> = trees
+                    .iter()
+                    .filter(|t| managed_tree(&t.name, self.landing_trees))
+                    .collect();
+                // Directories git does not know as trees are named too.
+                let extra: BTreeSet<String> = trees
+                    .iter()
+                    .map(|t| t.name.clone())
+                    .chain(self.source.directories())
+                    .filter(|name| !managed_tree(name, self.landing_trees))
+                    .collect();
+                let missing: Vec<&TreeInfo> = known
+                    .iter()
+                    .copied()
+                    .filter(|t| !self.host.path_exists(&t.path))
+                    .collect();
+                let mut lines = vec![present_count(known.len() - missing.len())];
+                lines.extend(
+                    missing
+                        .iter()
+                        .map(|t| format!("{}: directory is missing", t.name)),
+                );
+                if !extra.is_empty() {
+                    let names: Vec<&str> = extra.iter().map(String::as_str).collect();
+                    lines.push(format!("outside Ignite's tree names: {}", names.join(", ")));
+                }
+                lines
+            }
+        }
+    }
+}
+
+fn present_count(present: usize) -> String {
+    let trees = if present == 1 { "tree" } else { "trees" };
+    format!("{present} {trees} present")
+}
 
 pub(super) fn findings(
     input: &DoctorInput,
@@ -39,21 +155,19 @@ pub(super) fn findings(
             ),
         )),
         Ok(trees) => {
-            let configured = configured_tree_names(machine.ticket_trees, landing_trees);
-            let expected = configured.len();
-            // Name directories outside the set Ignite expects, since it never uses them.
+            // Other directories are reported separately from Ignite's registered trees.
             let foreign: BTreeSet<String> = trees
                 .iter()
                 .map(|t| t.name.clone())
                 .chain(input.trees.directories())
-                .filter(|name| !configured.contains(name))
+                .filter(|name| !managed_tree(name, landing_trees))
                 .collect();
             if !foreign.is_empty() {
                 let names: Vec<&str> = foreign.iter().map(String::as_str).collect();
                 findings.push(Finding::warning(
                     "trees",
                     format!(
-                        "{} holds directories that are outside this machine's tree set: {}.",
+                        "{} holds directories that are outside Ignite's tree names: {}.",
                         dir.display(),
                         names.join(", ")
                     ),
@@ -63,7 +177,7 @@ pub(super) fn findings(
             }
             let trees: Vec<TreeInfo> = trees
                 .into_iter()
-                .filter(|t| configured.contains(&t.name))
+                .filter(|t| managed_tree(&t.name, landing_trees))
                 .collect();
             let mut missing = 0;
             for tree in &trees {
@@ -80,14 +194,8 @@ pub(super) fn findings(
                 }
             }
             let present = trees.len() - missing;
-            if present < expected && missing == 0 {
-                findings.push(Finding::problem(
-                    "trees",
-                    format!("{present} of the {expected} expected trees exist."),
-                    restart,
-                ));
-            } else if missing == 0 {
-                findings.push(Finding::ok("trees", format!("{present} trees present.")));
+            if missing == 0 {
+                findings.push(Finding::ok("trees", format!("{}.", present_count(present))));
             }
         }
     }

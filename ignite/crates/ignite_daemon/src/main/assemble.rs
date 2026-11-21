@@ -215,7 +215,7 @@ pub fn machinery(base: &Base, setup: TreeSetup) -> Result<Machinery> {
         repo,
         &base.config,
         &base.declared,
-        base.derived.landing_trees,
+        &base.derived,
         &base.manifest,
     );
     let trees = Trees::new(
@@ -356,7 +356,7 @@ pub fn verb_side(
         repo,
         &base.config,
         &base.declared,
-        base.derived.landing_trees,
+        &base.derived,
         &base.manifest,
     );
     let trees = Trees::new(
@@ -616,8 +616,6 @@ fn status_sections(base: &Base, parts: &loops::Parts) -> Vec<Box<dyn StatusSecti
         let scheduler = parts.scheduler.clone();
         Arc::new(move || scheduler.status())
     };
-    let configured =
-        doctor::configured_tree_names(base.declared.ticket_trees, base.derived.landing_trees);
     vec![
         Box::new(CoresSection(status.clone())),
         Box::new(AdmissionSection(status)),
@@ -626,7 +624,7 @@ fn status_sections(base: &Base, parts: &loops::Parts) -> Vec<Box<dyn StatusSecti
                 repo: base.options.repo.clone(),
                 dir: base.trees_dir.clone(),
             }),
-            configured,
+            landing_trees: base.derived.landing_trees,
             host: Arc::new(NativeHost),
         }),
         Box::new(crate::emergency::EmergencySection(

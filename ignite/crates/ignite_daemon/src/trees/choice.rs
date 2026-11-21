@@ -169,7 +169,7 @@ mod tests {
             remote: "origin".to_owned(),
             saved: "ignite/".to_owned(),
             branches: Vec::new(),
-            ticket_trees: 1,
+            ticket_tree_ceiling: 1,
             landing_trees: 0,
             disk_limit: None,
             keep: keep.into_iter().collect::<Vec<_>>().into(),

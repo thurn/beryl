@@ -1,56 +1,93 @@
-//! Removing the trees that `ignite.toml` no longer declares.
-//!
-//! Lowering `ticket_trees` or `landing_trees` leaves the trees above the new count on disk with
-//! their build directories, which can be tens of gigabytes each, and in the store. Nothing
-//! leases them again, since a lease picks only among the configured trees, but a session that
-//! held one when the daemon restarted still works in it. So a tree above the count is removed
-//! once it is free: its worktree and build directories are deleted, and then its row.
+//! The disk loop removes surplus ticket trees and landing trees that are no longer configured.
 
 use std::fs;
 
 use ignite_core::ids::TreeId;
 use ignite_core::traits::Result;
 use ignite_git::worktree;
-use ignite_store::local::trees as store;
+use ignite_store::local::{rows, trees as store};
 
 use super::disk::id_of;
-use super::{Trees, store_error};
+use super::{Kind, Trees, store_error};
+
+/// Keep warm donors available when work arrives after a quiet period.
+const FREE_TREE_KEEP: usize = 2;
+/// Keep an unused tree through a day of normal changes in demand.
+const FREE_TREE_RETIRE_HOURS: u32 = 24;
 
 impl Trees {
-    /// The free trees that `ignite.toml` does not declare, removed from disk and from the store.
-    /// A leased tree is left until it is released. Returns the trees removed.
-    pub fn retire_undeclared(&self) -> Result<Vec<TreeId>> {
-        let configured = self.inner.config.configured();
-        let undeclared: Vec<_> = store::all(&self.lock().db)
-            .map_err(|e| store_error(&e))?
-            .into_iter()
-            .filter(|row| !configured.iter().any(|(id, _)| id.as_str() == row.id))
-            .collect();
+    /// Retires free ticket trees older than a day, keeping the newest two free. Retires
+    /// unconfigured landing trees as soon as they are free.
+    pub fn retire_surplus(&self) -> Result<Vec<TreeId>> {
         let mut retired = Vec::new();
-        for row in undeclared {
-            let Some(row) = self.take_for_sweep(&row.id)? else {
-                continue;
-            };
-            let id = id_of(&row)?;
-            let path = self.inner.config.path(&id);
-            if path.join(".git").exists()
-                && let Err(error) = worktree::remove(&self.inner.config.repo, &path)
-            {
-                self.put_back(&row)?;
-                return Err(error);
-            }
-            // `git worktree remove` leaves the ignored build directories behind.
-            if path.exists()
-                && let Err(error) = fs::remove_dir_all(&path)
-            {
-                self.put_back(&row)?;
-                return Err(error.into());
-            }
-            self.inner.builds.forget(&id);
-            store::delete(&self.lock().db, &row.id, store::State::Resetting)
-                .map_err(|e| store_error(&e))?;
-            retired.push(id);
+        while let Some(tree) = self.next_to_retire()? {
+            self.remove_retiring(&tree)?;
+            retired.push(tree);
+        }
+        if !retired.is_empty() {
+            self.serve_waiters();
         }
         Ok(retired)
+    }
+
+    fn next_to_retire(&self) -> Result<Option<TreeId>> {
+        let locked = self.lock();
+        let rows = store::all(&locked.db).map_err(|e| store_error(&e))?;
+        if let Some(row) = rows
+            .iter()
+            .find(|row| row.state == store::State::Retiring.as_str())
+        {
+            return id_of(row).map(Some);
+        }
+        let mut free: Vec<&rows::Tree> = rows
+            .iter()
+            .filter(|row| row.state == store::State::Free.as_str())
+            .collect();
+        let surplus_landing = free
+            .iter()
+            .copied()
+            .find(|row| !self.inner.config.uses(row));
+        let now = self.inner.clock.now();
+        let cutoff = now
+            .plus_seconds(-f64::from(FREE_TREE_RETIRE_HOURS * 3600))
+            .to_string();
+        free.retain(|row| row.kind == Kind::Ticket.as_str());
+        // Rank and mark under the lease lock so a recent lease cannot be mistaken for disuse.
+        free.sort_by_key(|row| (&row.last_used, &row.id));
+        let old_ticket = free
+            .iter()
+            .copied()
+            .take(free.len().saturating_sub(FREE_TREE_KEEP))
+            .find(|row| row.last_used.as_ref().is_some_and(|last| last <= &cutoff));
+        let Some(row) = surplus_landing.or(old_ticket) else {
+            return Ok(None);
+        };
+        let id = id_of(row)?;
+        store::transition(
+            &locked.db,
+            id.as_str(),
+            store::State::Free,
+            store::State::Retiring,
+            &now.to_string(),
+        )
+        .map_err(|e| store_error(&e))?;
+        Ok(Some(id))
+    }
+
+    fn remove_retiring(&self, id: &TreeId) -> Result<()> {
+        let config = &self.inner.config;
+        let path = config.path(id);
+        self.inner.builds.forget(id);
+        if path.join(".git").exists() {
+            worktree::remove(&config.repo, &path)?;
+        }
+        // Git can leave ignored build directories behind. A restart may also have interrupted
+        // this deletion, so the persisted retirement is retried even with no checkout left.
+        if path.exists() {
+            fs::remove_dir_all(path)?;
+        }
+        store::delete(&self.lock().db, id.as_str(), store::State::Retiring)
+            .map_err(|e| store_error(&e))?;
+        Ok(())
     }
 }

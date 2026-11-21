@@ -15,7 +15,6 @@ use ignite_core::config::{Config, Machine, Os};
 use ignite_core::ids::{Commit, Seq};
 use ignite_core::manifest::{Manifest, Platforms};
 use ignite_core::protocol::client::{Exit, Reply, Request};
-use ignite_core::traits::Result;
 use ignite_os::hostcpu::HostCpu;
 use serde_json::json;
 
@@ -38,6 +37,7 @@ pub use tip_round::{GreenAt, TipRoundSection};
 pub(crate) use capacity::machine_facts;
 pub use loops::LoopsSection;
 pub use running::{ExecutableOf, RunningSection};
+pub use trees::{GitTrees, TreeInfo, TreeSource, TreesSection};
 
 /// The most lines `status` prints.
 const MAX_LINES: usize = 40;
@@ -157,61 +157,6 @@ impl Host for NativeHost {
     }
 }
 
-/// One build tree, as the daemon knows it.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TreeInfo {
-    pub name: String,
-    pub path: PathBuf,
-    pub head: Option<Commit>,
-}
-
-/// The build trees that exist.
-pub trait TreeSource: Send + Sync {
-    fn trees(&self) -> Result<Vec<TreeInfo>>;
-
-    /// The names of the directories directly under the trees folder, hidden ones left out,
-    /// whether or not git knows them as trees.
-    fn directories(&self) -> Vec<String> {
-        Vec::new()
-    }
-}
-
-/// The trees git has registered under the repository's tree directory. A tree whose directory
-/// was deleted is still registered until `git worktree prune`, which is how `doctor` finds it.
-pub struct GitTrees {
-    pub repo: PathBuf,
-    pub dir: PathBuf,
-}
-
-impl TreeSource for GitTrees {
-    fn trees(&self) -> Result<Vec<TreeInfo>> {
-        Ok(ignite_git::worktree::list(&self.repo)?
-            .into_iter()
-            .filter(|tree| tree.path.starts_with(&self.dir))
-            .map(|tree| TreeInfo {
-                name: tree
-                    .path
-                    .file_name()
-                    .map_or_else(String::new, |n| n.to_string_lossy().into_owned()),
-                path: tree.path,
-                head: tree.head,
-            })
-            .collect())
-    }
-
-    fn directories(&self) -> Vec<String> {
-        let Ok(entries) = std::fs::read_dir(&self.dir) else {
-            return Vec::new();
-        };
-        entries
-            .flatten()
-            .filter(|entry| entry.file_type().is_ok_and(|t| t.is_dir()))
-            .filter_map(|entry| entry.file_name().into_string().ok())
-            .filter(|name| !name.starts_with('.'))
-            .collect()
-    }
-}
-
 /// Lines of aligned `label  value` text.
 fn columns(rows: &[(String, String)]) -> String {
     let width = rows.iter().map(|(label, _)| label.len()).max().unwrap_or(0);
@@ -319,72 +264,6 @@ impl StatusSection for AdmissionSection {
             )
         }));
         lines
-    }
-}
-
-/// The names of the trees a machine declares: `tree-01`… for its ticket trees and `landing-1`…
-/// for its landing trees.
-pub fn configured_tree_names(ticket_trees: u32, landing_trees: u32) -> Vec<String> {
-    (1..=ticket_trees)
-        .map(|n| format!("tree-{n:02}"))
-        .chain((1..=landing_trees).map(|n| format!("landing-{n}")))
-        .collect()
-}
-
-/// How many of the declared trees exist, which are gone, and which directories under the trees
-/// folder are not declared.
-pub struct TreesSection {
-    pub source: Arc<dyn TreeSource>,
-    /// The declared trees' names ([`configured_tree_names`]); only these are counted.
-    pub configured: Vec<String>,
-    pub host: Arc<dyn Host + Send + Sync>,
-}
-
-impl StatusSection for TreesSection {
-    fn title(&self) -> &'static str {
-        "trees"
-    }
-
-    fn lines(&self) -> Vec<String> {
-        match self.source.trees() {
-            Err(error) => vec![format!("cannot list trees: {error}")],
-            Ok(trees) => {
-                let declared: Vec<&TreeInfo> = trees
-                    .iter()
-                    .filter(|t| self.configured.contains(&t.name))
-                    .collect();
-                // Directories git does not know as trees are named too.
-                let extra: BTreeSet<String> = trees
-                    .iter()
-                    .map(|t| t.name.clone())
-                    .chain(self.source.directories())
-                    .filter(|name| !self.configured.contains(name))
-                    .collect();
-                let missing: Vec<&TreeInfo> = declared
-                    .iter()
-                    .copied()
-                    .filter(|t| !self.host.path_exists(&t.path))
-                    .collect();
-                let mut lines = vec![format!(
-                    "{} of {} present",
-                    declared.len() - missing.len(),
-                    self.configured.len()
-                )];
-                lines.extend(
-                    missing
-                        .iter()
-                        .map(|t| format!("{}: directory is missing", t.name)),
-                );
-                if !extra.is_empty() {
-                    let names: Vec<&str> = extra.iter().map(String::as_str).collect();
-                    lines.push(format!(
-                        "outside the configured tree set: {}",
-                        names.join(", ")
-                    ));
-                }
-                lines
-            }
-        }
     }
 }
 

@@ -9,7 +9,7 @@ use ignite_os::Native;
 use ignite_os::clones::Clones as _;
 use ignite_store::local::trees as store;
 
-use super::super::{Kind, Trees, store_error};
+use super::super::{Kind, Trees, disk::id_of, store_error};
 use super::Seeding;
 use super::swap::{delete, discarded_prefix, set_aside, staging};
 
@@ -33,16 +33,21 @@ impl Trees {
             }
         }
         let mut resumed = Vec::new();
-        for (tree, kind) in config.configured() {
+        let rows = store::all(&self.lock().db).map_err(|e| store_error(&e))?;
+        for row in rows {
+            let tree = id_of(&row)?;
             let path = config.path(&tree);
             if fs::symlink_metadata(staging(&path)).is_err() {
                 continue;
             }
-            let row = store::get(&self.lock().db, tree.as_str()).map_err(|e| store_error(&e))?;
-            let leased = row.is_some_and(|row| row.state == store::State::Leased.as_str());
+            let leased = row.state == store::State::Leased.as_str();
             let at = refs::head(&path);
             match at {
-                Ok(at) if leased && kind == Kind::Ticket && Native.copies_are_clones(&path) => {
+                Ok(at)
+                    if leased
+                        && row.kind == Kind::Ticket.as_str()
+                        && Native.copies_are_clones(&path) =>
+                {
                     eprintln!("ignite: starting {tree}'s seed again, which a restart cut short");
                     let seeding = Seeding::start(path, tree.clone());
                     self.spawn_builds(Some(seeding), &tree, at.clone(), at, Vec::new());

@@ -1,4 +1,5 @@
 use ignite_core::fakes::FakeHub;
+use ignite_core::traits::Result;
 
 use super::listener::WriteProbe as _;
 use super::*;
@@ -63,7 +64,6 @@ fn config() -> Config {
         cap = 10
         [machine.testbox]
         os = "macos"
-        ticket_trees = 2
         landing_trees = 1
         trees_disk_gb = 100
         "#,
@@ -373,6 +373,36 @@ fn a_missing_tree_directory_is_one_problem() {
 }
 
 #[test]
+fn doctor_counts_present_trees_without_using_the_legacy_ticket_tree_count() {
+    let mut config = config();
+    let machine = config.machine.get_mut("testbox").unwrap();
+    machine.ticket_trees = Some(24);
+    let host = healthy_host();
+    let trees = FakeTrees(vec![tree("landing-1")]);
+    let findings = diagnose(&DoctorInput {
+        config: &config,
+        repo: Path::new("/repo"),
+        host: &host,
+        trees: &trees,
+        hub: &FakeHub::default(),
+        probe: &Writable,
+        manifest: Ok(manifest()),
+        version: Commit::new("abc1234").ok(),
+    });
+    assert!(
+        findings
+            .iter()
+            .any(|f| f.label == "trees" && f.text == "1 tree present.")
+    );
+    assert!(
+        findings
+            .iter()
+            .any(|f| f.label == "config" && f.text.contains("ticket_trees"))
+    );
+    assert!(findings.iter().all(|f| f.ok));
+}
+
+#[test]
 fn low_disk_and_missing_tools_are_reported() {
     let mut host = healthy_host();
     host.free_gb = 20;
@@ -495,7 +525,7 @@ fn status_says_how_many_cores_are_kept_for_tip_builds() {
 }
 
 #[test]
-fn status_counts_only_the_declared_trees_and_names_the_others() {
+fn status_counts_ticket_trees_and_names_foreign_directories() {
     let host = healthy_host();
     let mut existing = host.existing.clone();
     existing.push(PathBuf::from("/repo/trees/switch-rebase"));
@@ -506,14 +536,14 @@ fn status_counts_only_the_declared_trees_and_names_the_others() {
             tree("landing-1"),
             tree("switch-rebase"),
         ])),
-        configured: configured_tree_names(2, 1),
+        landing_trees: 1,
         host: Arc::new(FakeHost { existing, ..host }),
     };
     assert_eq!(
         section.lines(),
         [
-            "3 of 3 present",
-            "outside the configured tree set: switch-rebase"
+            "3 trees present",
+            "outside Ignite's tree names: switch-rebase"
         ]
     );
 }
@@ -561,7 +591,7 @@ fn doctor_warns_about_directories_under_the_trees_folder_it_does_not_own() {
     assert!(line.starts_with("WARNING  trees"), "{line}");
     assert!(line.contains("slot-01, switch-rebase."), "{line}");
     assert!(line.contains("To fix: remove them"), "{line}");
-    // The declared trees are all there, so the machine is still healthy.
+    // All registered Ignite trees are present.
     assert!(
         findings
             .iter()

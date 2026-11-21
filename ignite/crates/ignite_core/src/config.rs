@@ -460,12 +460,11 @@ pub struct Resource {
 }
 
 /// Overrides for one machine.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Machine {
     /// The operating system, when the declaration states it.
     pub os: Option<Os>,
-    pub ticket_trees: u32,
     /// The disk the trees may use, in gigabytes.
     pub trees_disk_gb: Option<u32>,
     /// The check families the machine can run; `None` means every family.
@@ -473,29 +472,13 @@ pub struct Machine {
     /// Scarce resources by name, with each one's capacity.
     pub resources: BTreeMap<String, u32>,
     // Retired capacity settings are read only by `doctor`.
+    pub ticket_trees: Option<u32>,
     pub landing_trees: Option<u32>,
     pub floor: Option<Floor>,
     pub express_cores: Option<u32>,
     pub tip_build_cores: Option<u32>,
     /// `[machine.<host>.pool.<app>]`: the worker slots on this machine for each provider.
     pub pool: BTreeMap<String, MachinePool>,
-}
-
-impl Default for Machine {
-    fn default() -> Self {
-        Self {
-            os: None,
-            ticket_trees: 2,
-            landing_trees: None,
-            trees_disk_gb: None,
-            families: None,
-            floor: None,
-            resources: BTreeMap::new(),
-            express_cores: None,
-            tip_build_cores: None,
-            pool: BTreeMap::new(),
-        }
-    }
 }
 
 /// Cores reserved for the `batch` and `tip` classes.
@@ -726,14 +709,6 @@ impl Config {
                 return fail(
                     &format!("resources.{name}.per_core"),
                     "must be finite and nonnegative",
-                );
-            }
-        }
-        for (name, machine) in &self.machine {
-            if machine.ticket_trees == 0 {
-                return fail(
-                    &format!("machine.{name}.ticket_trees"),
-                    "must be above zero",
                 );
             }
         }

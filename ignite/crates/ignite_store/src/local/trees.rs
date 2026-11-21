@@ -17,6 +17,8 @@ pub enum State {
     Landing,
     /// Being reset to a clean checkout after its lease ended.
     Resetting,
+    /// Marked for deletion, which the disk loop resumes after a restart.
+    Retiring,
 }
 
 impl State {
@@ -27,6 +29,7 @@ impl State {
             State::Leased => "leased",
             State::Landing => "landing",
             State::Resetting => "resetting",
+            State::Retiring => "retiring",
         }
     }
 }
@@ -172,8 +175,7 @@ pub fn release(conn: &Connection, id: &str, built_commit: Option<&str>, now: &st
 }
 
 /// Deletes a tree's row if the tree is in `state` right now, as one statement. Returns whether a
-/// row was deleted. A tree that `ignite.toml` no longer declares is deleted this way once it is
-/// free, so a lease that takes it at the same moment wins and the row stays.
+/// row was deleted. Retirement removes the row after removing the tree from disk.
 pub fn delete(conn: &Connection, id: &str, state: State) -> Result<bool> {
     let changed = conn.execute(
         "DELETE FROM trees WHERE id = ?1 AND state = ?2",
@@ -313,7 +315,12 @@ mod tests {
     #[test]
     fn only_a_free_tree_can_be_leased() {
         let conn = open_in_memory().unwrap();
-        for state in [State::Prebuilding, State::Landing, State::Resetting] {
+        for state in [
+            State::Prebuilding,
+            State::Landing,
+            State::Resetting,
+            State::Retiring,
+        ] {
             upsert(&conn, &sample("tree-01")).unwrap();
             set_state(&conn, "tree-01", state, "t").unwrap();
             assert!(!lease(&conn, "tree-01", State::Leased, None, None, None, "t").unwrap());

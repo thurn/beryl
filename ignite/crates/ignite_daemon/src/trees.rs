@@ -1,15 +1,15 @@
-//! Build trees: the machine's fixed set of ticket trees and landing trees, leased by ticket,
+//! Build trees: the machine's ticket trees and landing trees, leased by ticket,
 //! kept built near the tip and held under the machine's disk limit.
 //!
 //! Cargo's incremental builds are only reused at the path they were made at, so each tree keeps
 //! its build directories between tickets, and a compiling lease starts from a copy of the build
-//! of the tree nearest the tip when that is nearer than its own ([`seed`]). Which directories those are comes from the build
-//! products' `outputs` in the check manifests; no directory name is written here. Ignite never
-//! builds anywhere but these trees: when every ticket tree is leased, a caller gets a [`Waiter`]
-//! that says why, and the next release serves it.
+//! of the tree nearest the tip when that is nearer than its own ([`seed`]). The check manifests
+//! name the build output directories. A lease creates a ticket tree when none is free, up to
+//! the worker ceiling plus four. At the ceiling a caller gets a [`Waiter`]. The disk loop
+//! retires surplus trees after a day of disuse.
 //!
 //! A tree's state lives in the daemon's local store (`ignite_store::local::trees`): `free`,
-//! `prebuilding`, `leased`, `landing` or `resetting`. Only a free tree is ever leased.
+//! `prebuilding`, `leased`, `landing`, `resetting` or `retiring`. Only a free tree is ever leased.
 //!
 //! A landing tree leased by a verb with a handle records that handle as its owner. When the
 //! daemon restarts, a landing tree whose owner is still running ([`owner_alive`]) is kept as it
@@ -29,6 +29,7 @@
 mod branch;
 mod choice;
 mod disk;
+mod elastic;
 pub mod head;
 mod landing;
 mod pressure;
@@ -36,6 +37,7 @@ mod reset;
 mod retire;
 mod seed;
 mod setup;
+mod status;
 #[cfg(test)]
 mod tests;
 mod wait;
@@ -47,6 +49,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
 use crate::manifests::Live;
+use ignite_core::capacity::Derived;
 use ignite_core::config::{Config, Machine};
 use ignite_core::ids::{Commit, Handle, SessionId, TicketId, TreeId};
 use ignite_core::manifest::Manifest;
@@ -59,6 +62,7 @@ use rusqlite::Connection;
 use serde::Serialize;
 
 pub use disk::DiskReport;
+pub(crate) use elastic::ticket_tree_number;
 pub use seed::{Seeding, wait_for_seed_on_disk, wait_until_seeded};
 pub use setup::Unfinished;
 use wait::Slot;
@@ -70,6 +74,9 @@ pub const SAVED_TRAILER: &str = "Ignite-Saved: release";
 
 /// How long a process inside a released tree has to exit after `SIGTERM` before `SIGKILL`.
 const GRACE: Duration = Duration::from_secs(3);
+
+/// Leave room for interactive sessions as well as the headless worker pool.
+const EXTRA_TICKET_TREES: u32 = 4;
 
 /// The local branch a tree sits on while no ticket holds it.
 fn park_branch(tree: &TreeId) -> String {
@@ -88,7 +95,7 @@ pub struct TreeConfig {
     pub saved: String,
     /// The main checkout's local branches kept fast-forwarded to the remote.
     pub branches: Vec<String>,
-    pub ticket_trees: u32,
+    pub ticket_tree_ceiling: u32,
     pub landing_trees: u32,
     /// The disk the trees may use, in bytes.
     pub disk_limit: Option<u64>,
@@ -113,7 +120,7 @@ impl TreeConfig {
         repo: &Path,
         config: &Config,
         machine: &Machine,
-        landing_trees: u32,
+        derived: &Derived,
         manifest: &Manifest,
     ) -> Self {
         let (keep, prebuild, prebuild_outputs) = Self::products(manifest);
@@ -132,8 +139,8 @@ impl TreeConfig {
             .into_iter()
             .flatten()
             .collect(),
-            ticket_trees: machine.ticket_trees,
-            landing_trees,
+            ticket_tree_ceiling: derived.worker_ceiling.saturating_add(EXTRA_TICKET_TREES),
+            landing_trees: derived.landing_trees,
             disk_limit: machine
                 .trees_disk_gb
                 .map(|gb| u64::from(gb) * 1_000_000_000),
@@ -143,14 +150,15 @@ impl TreeConfig {
         }
     }
 
-    /// Every tree this machine has, ticket trees first: `tree-01`… and `landing-1`….
-    fn configured(&self) -> Vec<(TreeId, Kind)> {
-        let ticket = (1..=self.ticket_trees).map(|n| (format!("tree-{n:02}"), Kind::Ticket));
-        let landing = (1..=self.landing_trees).map(|n| (format!("landing-{n}"), Kind::Landing));
-        ticket
-            .chain(landing)
-            .map(|(id, kind)| (TreeId::new(id).expect("a tree ID is a token"), kind))
-            .collect()
+    /// Landing trees are created at startup; ticket trees are created by leases.
+    fn configured_landings(&self) -> impl Iterator<Item = TreeId> + '_ {
+        (1..=self.landing_trees)
+            .map(|n| TreeId::new(format!("landing-{n}")).expect("a tree ID is a token"))
+    }
+
+    fn uses(&self, row: &rows::Tree) -> bool {
+        row.kind == Kind::Ticket.as_str()
+            || self.configured_landings().any(|id| id.as_str() == row.id)
     }
 
     fn path(&self, tree: &TreeId) -> PathBuf {
@@ -205,7 +213,7 @@ pub struct LeaseRequest {
 #[derive(Debug)]
 pub enum Lease {
     Ready(TreeLease),
-    /// Every ticket tree is leased; the waiter is served by the next release.
+    /// The machine is at its tree ceiling and every ticket tree is busy.
     Waiting(Waiter),
 }
 
@@ -405,10 +413,10 @@ impl Trees {
     pub fn lease(&self, request: LeaseRequest) -> Result<Lease> {
         let tree = {
             let mut locked = self.lock();
-            if let Some(tree) = self.take_free(&locked, &request)? {
+            if let Some(tree) = self.take_ticket_tree(&locked, &request)? {
                 tree
             } else {
-                let slot = Arc::new(Slot::new(request, self.busy_reason(&locked)?));
+                let slot = Arc::new(Slot::new(request, Self::busy_reason(&locked)?));
                 locked.waiters.push_back(Arc::clone(&slot));
                 return Ok(Lease::Waiting(Waiter::new(slot, self.clone())));
             }
@@ -417,19 +425,15 @@ impl Trees {
         Ok(Lease::Ready(lease))
     }
 
-    /// Picks a free ticket tree for `request` and marks it leased in the store.
-    fn take_free(&self, locked: &Locked, request: &LeaseRequest) -> Result<Option<TreeId>> {
+    /// Picks or creates a ticket tree for `request` and marks it leased in the store.
+    fn take_ticket_tree(&self, locked: &Locked, request: &LeaseRequest) -> Result<Option<TreeId>> {
         let rows = store::all(&locked.db).map_err(|e| store_error(&e))?;
-        let configured = self.inner.config.configured();
         let keep = self.inner.config.keep.get();
         let wanted = choice::wanted(&keep, &request.files);
         let mut free: Vec<(usize, Option<usize>, &rows::Tree)> = rows
             .iter()
             .filter(|row| {
-                row.state == store::State::Free.as_str()
-                    && configured
-                        .iter()
-                        .any(|(id, kind)| id.as_str() == row.id && *kind == Kind::Ticket)
+                row.state == store::State::Free.as_str() && row.kind == Kind::Ticket.as_str()
             })
             .map(|row| {
                 let path = self.inner.config.dir.join(&row.id);
@@ -456,12 +460,17 @@ impl Trees {
                 )
             })
         };
-        let Some((_, _, row)) = chosen else {
-            return Ok(None);
+        let id = if let Some((_, _, row)) = chosen {
+            TreeId::new(row.id.clone()).map_err(|e| Error::Invalid(e.to_string()))?
+        } else {
+            let Some(id) = self.create_ticket_tree(locked, &rows, &request.tip)? else {
+                return Ok(None);
+            };
+            id
         };
         let taken = store::lease(
             &locked.db,
-            &row.id,
+            id.as_str(),
             store::State::Leased,
             Some(request.ticket.as_str()),
             request.session.as_ref().map(SessionId::as_str),
@@ -470,11 +479,9 @@ impl Trees {
         )
         .map_err(|e| store_error(&e))?;
         if !taken {
-            return Err(Error::Conflict(format!("tree {} was taken", row.id)));
+            return Err(Error::Conflict(format!("tree {id} was taken")));
         }
-        Ok(Some(
-            TreeId::new(row.id.clone()).map_err(|e| Error::Invalid(e.to_string()))?,
-        ))
+        Ok(Some(id))
     }
 
     /// How many commits the tip has that a build at `built` lacks; `None` when the tree was
@@ -487,7 +494,7 @@ impl Trees {
     }
 
     /// Why a lease must wait: who holds each ticket tree.
-    fn busy_reason(&self, locked: &Locked) -> Result<String> {
+    fn busy_reason(locked: &Locked) -> Result<String> {
         let rows = store::all(&locked.db).map_err(|e| store_error(&e))?;
         let holders: Vec<String> = rows
             .iter()
@@ -499,7 +506,7 @@ impl Trees {
             .collect();
         Ok(format!(
             "all {} ticket trees are in use ({}); waiting behind {} other tickets",
-            self.inner.config.ticket_trees,
+            holders.len(),
             holders.join(", "),
             locked.waiters.len()
         ))
@@ -629,7 +636,7 @@ impl Trees {
         self.reset_leased(tree, &row, park_at, caller)
     }
 
-    /// Leases free trees to waiters, first come first served, while both remain.
+    /// Serves queued leases in order when a tree becomes available or can be created.
     fn serve_waiters(&self) {
         loop {
             let (slot, tree) = {
@@ -637,12 +644,17 @@ impl Trees {
                 let Some(slot) = locked.waiters.front().cloned() else {
                     return;
                 };
-                match self.take_free(&locked, slot.request()) {
+                match self.take_ticket_tree(&locked, slot.request()) {
                     Ok(Some(tree)) => {
                         locked.waiters.pop_front();
                         (slot, tree)
                     }
-                    Ok(None) | Err(_) => return,
+                    Ok(None) => return,
+                    Err(error) => {
+                        locked.waiters.pop_front();
+                        slot.serve(Err(error));
+                        continue;
+                    }
                 }
             };
             let result = self.check_out(&tree, slot.request());
@@ -684,12 +696,8 @@ impl Trees {
         let tree = {
             let locked = self.lock();
             let rows = store::all(&locked.db).map_err(|e| store_error(&e))?;
-            // A tree `ignite.toml` no longer declares is about to be removed, not built.
-            let configured = self.inner.config.configured();
             let free = |row: &&rows::Tree| {
-                row.kind == Kind::Ticket.as_str()
-                    && row.state == store::State::Free.as_str()
-                    && configured.iter().any(|(id, _)| id.as_str() == row.id)
+                row.kind == Kind::Ticket.as_str() && row.state == store::State::Free.as_str()
             };
             if rows
                 .iter()
@@ -735,86 +743,6 @@ impl Trees {
         self.serve_waiters();
         reset?;
         Ok(built.then_some(tree))
-    }
-
-    /// The tree that holds `path`, if any: a configured tree, or one that `ignite.toml` no
-    /// longer declares but the store still holds, so that a session leased it before the count
-    /// was lowered can go on and release it.
-    pub fn tree_at(&self, path: &Path) -> Option<TreeId> {
-        let real = |p: &Path| ignite_os::paths::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
-        let path = real(path);
-        let stored = store::all(&self.lock().db).unwrap_or_default();
-        self.inner
-            .config
-            .configured()
-            .into_iter()
-            .map(|(id, _)| id)
-            .chain(
-                stored
-                    .into_iter()
-                    .filter_map(|row| TreeId::new(row.id).ok()),
-            )
-            .find(|id| path.starts_with(real(&self.inner.config.path(id))))
-    }
-
-    /// The session that holds a ticket tree's lease.
-    pub fn holder(&self, tree: &TreeId) -> Result<Option<SessionId>> {
-        let row = self.row(tree)?;
-        if row.state != store::State::Leased.as_str() {
-            return Ok(None);
-        }
-        row.session
-            .map(SessionId::new)
-            .transpose()
-            .map_err(|e| Error::Invalid(e.to_string()))
-    }
-
-    /// The fence: a command run from `cwd` inside a tree may go on only for the session that
-    /// holds the tree's lease. Returns the tree, `None` outside every tree, or
-    /// [`Error::Conflict`] (exit code 3) for any other session or a tree not leased to one.
-    pub fn fence(&self, cwd: &Path, session: Option<&SessionId>) -> Result<Option<TreeId>> {
-        let Some(tree) = self.tree_at(cwd) else {
-            return Ok(None);
-        };
-        match (self.holder(&tree)?, session) {
-            (Some(holder), Some(session)) if holder == *session => Ok(Some(tree)),
-            (Some(holder), _) => Err(Error::Conflict(format!(
-                "tree {tree} is leased to session {holder}, not this one"
-            ))),
-            (None, _) => Err(Error::Conflict(format!(
-                "tree {tree} is not leased to any session"
-            ))),
-        }
-    }
-
-    /// The data behind `ignite status` for trees.
-    pub fn status(&self) -> Result<Status> {
-        let locked = self.lock();
-        let rows = store::all(&locked.db).map_err(|e| store_error(&e))?;
-        let configured = self.inner.config.configured();
-        let mut trees = Vec::new();
-        for (id, kind) in configured {
-            let Some(row) = rows.iter().find(|row| row.id == id.as_str()) else {
-                continue;
-            };
-            trees.push(TreeStatus {
-                path: self.inner.config.path(&id),
-                tree: id,
-                kind,
-                state: row.state.clone(),
-                ticket: row.ticket.clone(),
-                session: row.session.clone(),
-                branch: row.branch.clone(),
-                built_commit: row.built_commit.clone(),
-                last_used: row.last_used.clone(),
-            });
-        }
-        let waiting = locked
-            .waiters
-            .iter()
-            .map(|slot| slot.request().ticket.clone())
-            .collect();
-        Ok(Status { trees, waiting })
     }
 
     /// [`TreeConfig::reload`], with manifests read again from the main checkout.

@@ -398,7 +398,7 @@ impl Parts {
     }
 
     /// Holds the trees under their disk limit and the disk above its floor of free space, and
-    /// removes the free trees that `ignite.toml` no longer declares. This is a loop of its own
+    /// retires surplus free trees. This is a loop of its own
     /// because a round of the idle loop waits for its job, which can wait hours for cores, and
     /// the machine is the most likely to fill its disk while it is busy.
     fn spawn_disk(&self) {
@@ -407,20 +407,17 @@ impl Parts {
             loop {
                 ticker.round(|| {
                     let mut failure = None;
-                    crate::steps::step("removing trees ignite.toml no longer declares");
-                    match trees.retire_undeclared() {
+                    crate::steps::step("retiring surplus trees");
+                    match trees.retire_surplus() {
                         Ok(retired) if !retired.is_empty() => {
                             let names: Vec<String> =
                                 retired.iter().map(ToString::to_string).collect();
-                            eprintln!(
-                                "ignite: removed trees ignite.toml no longer declares: {}",
-                                names.join(", ")
-                            );
+                            eprintln!("ignite: retired surplus trees: {}", names.join(", "));
                         }
                         Ok(_) => {}
                         Err(error) => {
-                            eprintln!("ignite: undeclared trees not removed: {error}");
-                            failure = Some(format!("undeclared trees not removed: {error}"));
+                            eprintln!("ignite: surplus trees not retired: {error}");
+                            failure = Some(format!("surplus trees not retired: {error}"));
                         }
                     }
                     if let Err(error) = trees.reclaim_disk_for_handoff() {
