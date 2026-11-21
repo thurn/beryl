@@ -89,6 +89,61 @@ def test_drafts_damage_to_player_or_any_target(
     )
 
 
+def test_translates_an_optional_target_set_and_its_shared_keyword_grant(
+    phase: dict[str, card_store.Json],
+) -> None:
+    spell = cast(list[object], phase["coordinated_assault"]["abilities"])[0]
+    assert phase_draft.ability(spell).expression() == (
+        "Ability::spell()"
+        ".target(&TargetSpec::up_to(2, TargetKind::Permanent, Filter::Types(Types::CREATURE)))"
+        ".effect(&modify(target(), &[Modification::ModifyPt(1, 0), "
+        "Modification::AddKeywords(Keywords::FIRST_STRIKE)], Duration::EndOfTurn))"
+    )
+
+
+def test_translates_an_optional_target_set_without_a_sub_ability(
+    phase: dict[str, card_store.Json],
+) -> None:
+    spell = cast(list[object], phase["dauntless_onslaught"]["abilities"])[0]
+    assert phase_draft.ability(spell).expression() == (
+        "Ability::spell()"
+        ".target(&TargetSpec::up_to(2, TargetKind::Permanent, Filter::Types(Types::CREATURE)))"
+        ".effect(&modify(target(), &[Modification::ModifyPt(2, 2)], Duration::EndOfTurn))"
+    )
+
+
+@pytest.mark.parametrize(
+    "target_range",
+    [
+        {"min": 1, "max": 2},
+        {"min": False, "max": 2},
+        {"min": 0, "max": 3},
+        {"max": 2},
+        {"min": 0, "max": 2, "allow_repeat": True},
+    ],
+)
+def test_refuses_unsupported_optional_target_ranges(
+    phase: dict[str, card_store.Json], target_range: card_store.Json
+) -> None:
+    spell = cast(list[card_store.Json], phase["dauntless_onslaught"]["abilities"])[0]
+    spell["multi_target"] = target_range
+    with pytest.raises(phase_draft.Unsupported, match=r"ability\.multi_target"):
+        phase_draft.ability(spell)
+
+
+def test_refuses_a_second_target_in_the_pump_keyword_grant(
+    phase: dict[str, card_store.Json],
+) -> None:
+    spell = cast(list[card_store.Json], phase["coordinated_assault"]["abilities"])[0]
+    child = cast(card_store.Json, spell["sub_ability"])
+    effect = cast(card_store.Json, child["effect"])
+    effect["target"] = {"type": "Typed", "type_filters": ["Creature"]}
+    with pytest.raises(
+        phase_draft.Unsupported, match=r"pump sub_ability\.effect\.target"
+    ):
+        phase_draft.ability(spell)
+
+
 @pytest.mark.parametrize(
     ("extra", "field"),
     [

@@ -44,8 +44,8 @@ class Node:
     def take(self, key: str, default: object = None) -> object:
         return self.fields.pop(key, default)
 
-    def expect(self, key: str, expected: object) -> None:
-        actual = self.take(key, expected)
+    def expect(self, key: str, expected: object, *, required: bool = False) -> None:
+        actual = self.take(key, None if required else expected)
         if actual != expected:
             group = (
                 node_kind(self.path.replace(" ", "_"), actual) if key == "type" else ""
@@ -110,11 +110,13 @@ class Target:
     kind: str = ""
 
 
-def target(value: object) -> Target:
-    if value is None:
+def target(value: object, up_to: int = 0) -> Target:
+    if value is None and not up_to:
         return Target(players="you()")
     node = Node(value, "target")
     kind = node.take("type")
+    if up_to and kind != "Typed":
+        raise Unsupported("ability.multi_target: expected a typed permanent target")
     result = Target()
     if kind == "Controller":
         result = Target(players="you()")
@@ -131,7 +133,7 @@ def target(value: object) -> Target:
     elif kind == "SelfRef":
         result = Target(objects="this()")
     elif kind == "Typed":
-        result = typed_target(node)
+        result = typed_target(node, up_to)
     else:
         raise Unsupported(
             f"target.type: unsupported value {kind!r}", node_kind("target", kind)
@@ -140,15 +142,15 @@ def target(value: object) -> Target:
     return result
 
 
-def typed_target(node: Node) -> Target:
+def typed_target(node: Node, up_to: int) -> Target:
     types = items(node.take("type_filters"))
     properties = items(node.take("properties", []))
     controller = node.take("controller")
-    if not types and not properties and controller == "Opponent":
+    if not up_to and not types and not properties and controller == "Opponent":
         return Target(
             "TargetSpec::opponent()", players="target_player()", kind="Player"
         )
-    if types == ["Creature"] and not properties and controller is None:
+    if not up_to and types == ["Creature"] and not properties and controller is None:
         return Target("TargetSpec::creature()", "target()", kind="Permanent")
     filters: list[str] = []
     kind = "Spell" if {"type": "InZone", "zone": "Stack"} in properties else "Permanent"
@@ -185,12 +187,17 @@ def typed_target(node: Node) -> Target:
     filter_code = ", ".join(filters)
     if len(filters) > 1:
         filter_code = f"Filter::All(&[{filter_code}])"
-    if kind == "Spell" and not filters:
-        spec = "TargetSpec::spell()"
-    else:
-        spec = f"TargetSpec::one(TargetKind::{kind}, {filter_code or 'Filter::Any'})"
     if kind == "Permanent" and not types:
         raise Unsupported("target.type_filters: no permanent type")
+    filter_code = filter_code or "Filter::Any"
+    if up_to:
+        if kind != "Permanent":
+            raise Unsupported("ability.multi_target: expected a permanent target")
+        spec = f"TargetSpec::up_to({up_to}, TargetKind::Permanent, {filter_code})"
+    elif kind == "Spell" and not filters:
+        spec = "TargetSpec::spell()"
+    else:
+        spec = f"TargetSpec::one(TargetKind::{kind}, {filter_code})"
     return Target(spec, "target()", kind=kind)
 
 
@@ -316,13 +323,17 @@ EFFECT_KINDS: set[str] = (
 )
 
 
-def effect(code: Node, duration: object) -> tuple[str, str]:
+def effect(
+    code: Node, duration: object, up_to: int = 0, keyword: str = ""
+) -> tuple[str, str]:
     kind = code.take("type")
     if not isinstance(kind, str):
         raise Unsupported(f"effect.type: unsupported value {kind!r}")
     if kind not in EFFECT_KINDS:
         raise Unsupported(f"effect.type: unsupported {kind}", node_kind("effect", kind))
-    affected = target(code.take("target"))
+    if up_to and kind != "Pump":
+        raise Unsupported(f"ability.multi_target: unsupported on {kind}")
+    affected = target(code.take("target"), up_to)
     if kind not in ("Pump", "ChangeZone") and duration is not None:
         raise Unsupported(f"ability.duration: unsupported on {kind}")
     if kind in PLAYER_COUNTS and affected.players:
@@ -364,10 +375,10 @@ def effect(code: Node, duration: object) -> tuple[str, str]:
     elif kind == "Pump" and affected.objects and duration == "UntilEndOfTurn":
         power = fixed(code.take("power"), -128, 127)
         toughness = fixed(code.take("toughness"), -128, 127)
-        result = (
-            f"modify({affected.objects}, &[Modification::ModifyPt({power}, {toughness})],"
-            " Duration::EndOfTurn)"
-        )
+        modifications = f"Modification::ModifyPt({power}, {toughness})"
+        if keyword:
+            modifications += f", Modification::AddKeywords(Keywords::{keyword})"
+        result = f"modify({affected.objects}, &[{modifications}], Duration::EndOfTurn)"
     elif kind == "PutCounter" and affected.objects:
         counter_kind = code.take("counter_type")
         if counter_kind not in ("P1P1", "M1M1"):
@@ -430,12 +441,79 @@ class Ability:
         return f"{builder}.effect(&{result})"
 
 
+def optional_target_limit(value: object) -> int:
+    node = Node(value, "ability.multi_target")
+    minimum = node.take("min")
+    maximum = node.take("max")
+    if (
+        type(minimum) is not int
+        or minimum != 0
+        or type(maximum) is not int
+        or maximum != 2
+    ):
+        raise Unsupported("ability.multi_target: expected a range of zero to two")
+    node.finish()
+    return maximum
+
+
+PUMP_KEYWORDS = {"FirstStrike": "FIRST_STRIKE", "Haste": "HASTE", "Trample": "TRAMPLE"}
+
+
+def pump_keyword(value: object) -> str:
+    """Read the keyword clause that shares the pump's targets and duration."""
+    node = Node(value, "pump sub_ability")
+    node.expect("kind", "Spell", required=True)
+    node.expect("duration", "UntilEndOfTurn", required=True)
+    body = Node(node.take("effect"), "pump sub_ability.effect")
+    for key in ("cost", "sub_ability", "target_prompt", "condition"):
+        node.expect(key, None)
+    for key in ("sorcery_speed", "optional_targeting", "optional", "forward_result"):
+        node.expect(key, False)
+    node.take("description")
+    node.finish()
+
+    body.expect("type", "GenericEffect", required=True)
+    body.expect("target", None)
+    body.expect("duration", "UntilEndOfTurn", required=True)
+    statics = items(body.take("static_abilities"))
+    body.finish()
+    if len(statics) != 1:
+        raise Unsupported("pump sub_ability.effect: expected one keyword grant")
+
+    grant = Node(statics[0], "pump keyword")
+    grant.expect("mode", "Continuous", required=True)
+    # Phase uses SelfRef for the subject of the joined "get ... and gain ..." clause.
+    grant.expect("affected", {"type": "SelfRef"}, required=True)
+    for key in ("condition", "affected_zone", "effect_zone"):
+        grant.expect(key, None)
+    grant.expect("active_zones", [])
+    grant.expect("characteristic_defining", False)
+    grant.take("description")
+    modifications = items(grant.take("modifications"))
+    grant.finish()
+    if len(modifications) != 1:
+        raise Unsupported("pump keyword: expected one modification")
+    modification = Node(modifications[0], "pump keyword modification")
+    modification.expect("type", "AddKeyword", required=True)
+    keyword = modification.take("keyword")
+    modification.finish()
+    if not isinstance(keyword, str) or keyword not in PUMP_KEYWORDS:
+        raise Unsupported(f"pump keyword: unsupported {keyword!r}")
+    return PUMP_KEYWORDS[keyword]
+
+
 def ability(value: object, trigger: str = "", parent: bool = False) -> Ability:
     node = Node(value, "ability")
     kind = node.take("kind")
     activation = node.take("cost")
     duration = node.take("duration")
     child = node.take("sub_ability")
+    multi_target = node.take("multi_target")
+    up_to = 0
+    if multi_target is not None:
+        if kind != "Spell" or trigger or parent:
+            raise Unsupported("ability.multi_target: expected a top-level spell")
+        up_to = optional_target_limit(multi_target)
     body = Node(node.take("effect"), "effect")
     node.take("description")
     node.expect("condition", None)
@@ -473,7 +551,17 @@ def ability(value: object, trigger: str = "", parent: bool = False) -> Ability:
         raise Unsupported(
             f"ability.kind: unsupported {kind!r} with this cost or timing"
         )
-    expression, spec = effect(body, duration)
+    keyword = ""
+    if (
+        up_to
+        and child is not None
+        and duration is None
+        and body.fields.get("type") == "Pump"
+    ):
+        keyword = pump_keyword(child)
+        duration = "UntilEndOfTurn"
+        child = None
+    expression, spec = effect(body, duration, up_to, keyword)
     if child is None:
         return Ability(builder, (expression,), spec)
     following = ability(child, parent=True)
