@@ -84,13 +84,13 @@
   "profile_words": {
     "beryl_3d": 35,
     "beryl_host": 21,
-    "beryl_inspect": 109,
+    "beryl_inspect": 107,
     "beryl_pictures": 7,
-    "beryl_render": 4,
+    "beryl_render": 2,
     "game_probe": 117,
     "kit_base": 6,
     "kit_probe": 17,
     "kit_space": 24,
-    "kit_ui": 4
+    "kit_ui": 1
   }
 }

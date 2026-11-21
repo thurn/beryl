@@ -1,5 +1,8 @@
 //! Identifiers and atlas coordinates shared by the client and the renderer.
 
+pub mod artwork;
+pub mod shadows;
+
 /// An icon of the flat layer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct IconId(pub u16);
@@ -66,4 +69,22 @@ pub struct GlyphKey {
 pub enum Tier {
     Baseline,
     Enhanced,
+}
+
+/// What a worker tells the client core when it finishes. The pixels go to the renderer; the
+/// client core learns only where they are.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum AssetReady {
+    /// A face is in a layer of the small or of the full-size texture array.
+    Face {
+        face: FaceId,
+        size: FaceSize,
+        layer: u16,
+    },
+    /// A component gallery sample face is in its board-size texture array.
+    GalleryFace { face: FaceId, layer: u16 },
+    /// Glyphs are in a page of the atlas.
+    Glyphs { page: u16, glyphs: Vec<GlyphCell> },
+    /// Icons are in a page of the atlas.
+    Icons { page: u16, cells: Vec<IconCell> },
 }

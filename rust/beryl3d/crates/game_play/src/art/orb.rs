@@ -1,27 +1,19 @@
-//! The game side selects which orientation of the life orb to draw.
+//! The life-orb coordinates shared by the HUD and the effects anchored to the life total.
 
 use beryl_protocol::protocol::Side;
 
-use kit_ui::orb::{self, Orientation};
-use kit_ui::widgets::icons::LayeredIcon;
+/// The artwork's left, top, width and height, in units relative to its origin.
+pub const ART: [f32; 4] = [-136.0, -57.0, 272.0, 116.0];
 
-pub use kit_ui::orb::{ART, BEZEL, CORE_RX, CORE_RY, SCALES};
+/// The center of the viewer's core, in artwork units below the origin.
+pub const CORE_CY: f32 = -3.0;
 
-const fn orientation(side: Side) -> Orientation {
-    match side {
-        Side::You => Orientation::Upright,
-        Side::Opponent => Orientation::Mirrored,
-    }
-}
-
-/// The art filling an orb's box, lit if its seat is active.
-#[must_use]
-pub fn artwork(side: Side, active: bool, scale: u8) -> LayeredIcon {
-    orb::artwork(orientation(side), active, scale)
-}
-
-/// The offset of the core within the art's box, in art units.
+/// The offset of the life total from the middle of the orb's artwork, in artwork units.
 #[must_use]
 pub fn face_offset(side: Side) -> f32 {
-    orb::face_offset(orientation(side))
+    let middle = ART[1] + ART[3] / 2.0;
+    match side {
+        Side::You => CORE_CY - middle,
+        Side::Opponent => -CORE_CY - middle,
+    }
 }

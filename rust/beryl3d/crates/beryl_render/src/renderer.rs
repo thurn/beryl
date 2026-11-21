@@ -6,8 +6,8 @@
 //! table and untested in the flat layer.
 
 use beryl_assets::{Format, Prepared, dimensions};
+use kit_base::atlas::{AssetReady, FaceSize, Tier};
 use kit_frame::frame::{Frame, TextureArray, Wake};
-use kit_ui::input::{AssetReady, FaceSize, Tier};
 use wgpu::util::DeviceExt;
 
 use crate::atlas::Atlas;

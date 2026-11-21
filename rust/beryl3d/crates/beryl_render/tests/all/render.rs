@@ -8,10 +8,10 @@ use beryl_assets::light;
 use beryl_render::{BACK_LAYER, Limits, Renderer, Target};
 use glam::camera::rh::{proj::directx, view::look_at_mat4};
 use glam::{Affine3A, Mat4, Quat, Vec2, Vec3};
+use kit_base::atlas::{FaceSize, Tier};
 use kit_base::geometry::{CARD_HEIGHT, CARD_WIDTH, Rect, Window};
 use kit_frame::frame::{Band, DRAWS, Draw, Frame, FrameBuilder, sprites};
 use kit_space::camera::{Camera, DESKTOP_CAMERA};
-use kit_ui::input::{FaceSize, Tier};
 
 pub(super) const BOTH: [Limits; 2] = [Limits::Default, Limits::Downlevel];
 /// How far a sampled channel may be from the expected value, out of 255.

@@ -458,7 +458,7 @@ impl Drawer {
     fn new(mut renderer: Renderer, scale: f32) -> Self {
         renderer.upload_page(&light::prepared());
         let (out, pages) = mpsc::channel();
-        let glyphs = GlyphWorker::spawn(out, || {}, || {});
+        let glyphs = beryl_host::spawn_glyph_worker(out, || {});
         glyphs.icons(scale);
         Self {
             renderer,

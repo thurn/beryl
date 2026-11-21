@@ -8,9 +8,9 @@
 //! The glyph worker's pages start at page 1 (`glyphs`), and a host uploads this page before
 //! its first frame.
 
+use kit_base::atlas::AssetReady;
 use kit_base::data::space::light::glow;
 use kit_frame::frame::{Sprite, sprites};
-use kit_ui::input::AssetReady;
 
 use crate::packer::PAGE_SIZE;
 use crate::{Prepared, Upload};

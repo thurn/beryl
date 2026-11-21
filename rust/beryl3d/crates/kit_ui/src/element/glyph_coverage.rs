@@ -1,7 +1,7 @@
 //! Every character a key hint can show has a glyph in the interface font.
 
+use crate::element::describe;
 use kit_text::text::fonts::Font;
-use kit_ui::element::describe;
 use swash::FontRef;
 
 /// Characters known to draw nothing. Empty: key hints spell their modifiers out.

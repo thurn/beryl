@@ -12,12 +12,12 @@
 use app_client::driver::{Moment, Page};
 use beryl_inspect::pages;
 use beryl_protocol::protocol::Side;
+use game_hud::art::orb::Shape;
 use glam::{Vec2, Vec3};
 use kit_frame::frame::{Draw, Frame, Material, RADIAL, Role};
 use kit_probe::agent::Layout;
 use kit_scene::hit;
 use kit_ui::input::{AssetReady, GlyphCell, Rect, Size};
-use kit_ui::orb::Shape;
 
 const WINDOW: Size = Size {
     width: 1600.0,
@@ -409,18 +409,18 @@ fn the_life_orbs_are_drawn_in_the_webs_core_bezel_and_ring() {
         player.contains(&format!("export const BEZEL = {bezel};")),
         "Player.tsx's `BEZEL` is not life-orbs.css's stroke width {bezel}"
     );
-    // The orbs are drawn from `art::orb`'s layers, each an icon cell, not as panels, so the
+    // The orbs are drawn from the HUD's orb layers, each an icon cell, not as panels, so the
     // colours and widths are read from the layers the cells are rasterized from.
-    let layers = &kit_ui::orb::LAYERS;
+    let layers = &game_hud::art::orb::LAYERS;
     let filled_core = layers
         .iter()
         .find(|layer| layer.shape == Shape::Core && layer.paint.stroke.is_none())
         .expect("a layer fills the core");
     assert_eq!(filled_core.color, core, "the core's fill");
     assert!(
-        (kit_ui::orb::BEZEL - bezel).abs() < 0.01,
+        (game_hud::art::orb::BEZEL - bezel).abs() < 0.01,
         "the bezel is {} points wide, not the web's {bezel}",
-        kit_ui::orb::BEZEL
+        game_hud::art::orb::BEZEL
     );
     assert!(
         layers.iter().any(|layer| {

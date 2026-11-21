@@ -349,3 +349,6 @@ pub mod floats {
     /// sorcery speed (`Client::refusal_frame`).
     pub const REFUSAL: FloatId = FloatId(38);
 }
+
+#[cfg(test)]
+mod glyph_coverage;

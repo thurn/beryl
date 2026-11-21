@@ -17,3 +17,7 @@ glam.workspace = true
 parley.workspace = true
 smallbox.workspace = true
 taffy.workspace = true
+
+[dev-dependencies]
+# Checks that a key hint's characters have glyphs in the UI font.
+swash = "=0.2.10"

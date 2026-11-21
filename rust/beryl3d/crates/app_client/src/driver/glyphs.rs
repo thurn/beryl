@@ -11,9 +11,13 @@
 use super::Page;
 use crate::client;
 use client::Input;
-pub(super) use kit_probe::driver::atlas::stub_icons;
-use kit_probe::driver::atlas::{STUB_PAGE, stub_glyph};
-use kit_ui::input::{AssetReady, FaceId, GlyphCell, GlyphKey};
+use game_hud::art::orb;
+use kit_base::atlas::{AssetReady, FaceId, GlyphCell, GlyphKey};
+use kit_probe::driver::atlas::{STUB_PAGE, stub_glyph, stub_icons};
+
+pub(super) fn stub_client_icons(scale: f32) -> AssetReady {
+    stub_icons(scale, orb::atlas_cells())
+}
 
 impl Page {
     /// The same page at its start, with the atlas and face layers empty until a host that

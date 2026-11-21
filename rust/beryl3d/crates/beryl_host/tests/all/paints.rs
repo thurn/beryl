@@ -1,15 +1,12 @@
 //! Offscreen samples of the flat layer's CSS paint capabilities.
 
-use beryl_render::{Renderer, Target};
+use beryl_render::{Limits, Renderer, Target};
+use game_table::table::{Camera, REFERENCE};
+use kit_base::atlas::Tier;
 use kit_base::geometry::{Insets, Size, Window};
 use kit_frame::frame::{Frame, FrameBuilder};
-use kit_space::camera::{Camera, DESKTOP_CAMERA};
 use kit_ui::element::{Element, Filter, Gradient, Position, Stop, holder, row};
-use kit_ui::input::Tier;
 use kit_ui::layout::Layer;
-
-use super::enhanced::{enhanced, within};
-use super::render::Picture;
 
 const BLACK: [u8; 4] = [0, 0, 0, 255];
 const WHITE: [u8; 4] = [255; 4];
@@ -27,7 +24,7 @@ fn picture(
     renderer: &mut Renderer,
     tier: Tier,
     elements: impl IntoIterator<Item = Element>,
-) -> (Picture, u32) {
+) -> (Vec<u8>, u32) {
     let window = Window {
         size_class: None,
         size: Size {
@@ -43,23 +40,23 @@ fn picture(
     layer.show(Some(root.children(elements)));
     let mut frame = Frame::with_capacity(16, 16, 64);
     let mut builder = FrameBuilder::new(&mut frame, tier);
-    let camera = Camera::fit(DESKTOP_CAMERA, window);
+    let camera = Camera::fit(REFERENCE.camera, window);
     builder.camera(camera.view_projection);
     layer.write(&mut builder, &camera.screen_plane(), true);
     let mut target = Target::offscreen(renderer, 200, 120);
     let drawn = renderer.render(builder.finish(), &mut target);
-    (
-        Picture {
-            pixels: renderer.read(&target),
-            width: 200,
-        },
-        drawn.draw_calls,
-    )
+    (renderer.read(&target), drawn.draw_calls)
+}
+
+fn pixel(picture: &[u8], x: usize, y: usize) -> [u8; 3] {
+    let offset = 4 * (200 * y + x);
+    picture[offset..offset + 3].try_into().unwrap()
 }
 
 #[test]
 fn backdrop_blurs_only_the_panel_and_its_contents_draw_sharp() {
-    let mut renderer = enhanced();
+    let mut renderer = Renderer::headless(Limits::Default).expect("a GPU adapter and device");
+    assert!(renderer.enhanced_available(), "the test draws in Enhanced");
     for tier in [Tier::Enhanced, Tier::Baseline] {
         let panel = box_at(60.0, 30.0, 80.0, 60.0)
             .radius(10.0)
@@ -71,15 +68,24 @@ fn backdrop_blurs_only_the_panel_and_its_contents_draw_sharp() {
             [box_at(0.0, 0.0, 100.0, 120.0).background(WHITE), panel],
         );
         assert_eq!(
-            picture.at(99, 16),
+            pixel(&picture, 99, 16),
             [255; 3],
             "above the panel the edge is sharp"
         );
-        assert_eq!(picture.at(100, 16), [0; 3]);
-        assert_eq!(picture.at(60, 30), [255; 3], "the rounded corner is clear");
-        assert!(within(picture.at(72, 52), RED[..3].try_into().unwrap(), 1));
-        let before = picture.at(99, 60);
-        let after = picture.at(100, 60);
+        assert_eq!(pixel(&picture, 100, 16), [0; 3]);
+        assert_eq!(
+            pixel(&picture, 60, 30),
+            [255; 3],
+            "the rounded corner is clear"
+        );
+        assert!(
+            pixel(&picture, 72, 52)
+                .iter()
+                .zip(RED)
+                .all(|(&actual, expected)| actual.abs_diff(expected) <= 1)
+        );
+        let before = pixel(&picture, 99, 60);
+        let after = pixel(&picture, 100, 60);
         if tier == Tier::Enhanced {
             assert!((120..=150).contains(&before[0]), "{before:?}");
             assert!((105..=135).contains(&after[0]), "{after:?}");
@@ -98,7 +104,8 @@ fn backdrop_blurs_only_the_panel_and_its_contents_draw_sharp() {
 
 #[test]
 fn element_blur_mask_and_grayscale_change_pixels() {
-    let mut renderer = enhanced();
+    let mut renderer = Renderer::headless(Limits::Default).expect("a GPU adapter and device");
+    assert!(renderer.enhanced_available(), "the test draws in Enhanced");
     let mask = Gradient::linear(90.0, &[Stop::new([0; 4]), Stop::percent(BLACK, 70.0)]);
     let (picture, _) = picture(
         &mut renderer,
@@ -113,18 +120,18 @@ fn element_blur_mask_and_grayscale_change_pixels() {
                 .filter(vec![Filter::Grayscale(1.0)]),
         ],
     );
-    assert_eq!(picture.at(26, 60), [255; 3]);
+    assert_eq!(pixel(&picture, 26, 60), [255; 3]);
     assert!(
-        (30..=240).contains(&picture.at(11, 60)[0]),
+        (30..=240).contains(&pixel(&picture, 11, 60)[0]),
         "the blur spills beyond the box"
     );
     assert!(
-        picture.at(65, 60)[0] < 5,
+        pixel(&picture, 65, 60)[0] < 5,
         "the mask starts nearly transparent"
     );
-    assert!(picture.at(86, 60)[0] > 90 && picture.at(86, 60)[0] < 160);
-    assert_eq!(picture.at(116, 60), [255; 3]);
-    let gray = picture.at(160, 60);
+    assert!(pixel(&picture, 86, 60)[0] > 90 && pixel(&picture, 86, 60)[0] < 160);
+    assert_eq!(pixel(&picture, 116, 60), [255; 3]);
+    let gray = pixel(&picture, 160, 60);
     assert!(
         (50..65).contains(&gray[0]) && gray == [gray[0]; 3],
         "{gray:?}"

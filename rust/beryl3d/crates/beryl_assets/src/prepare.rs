@@ -24,7 +24,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 
 use beryl_art::{ArtCache, ArtError, Fetch};
-use kit_ui::input::{AssetReady, FaceId, FaceSize};
+use kit_base::atlas::{AssetReady, FaceId, FaceSize};
 
 use crate::cache::{self, CacheKey};
 use crate::encode::{ENCODER_VERSION, Format, Layer, decode, encode};

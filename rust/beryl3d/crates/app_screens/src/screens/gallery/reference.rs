@@ -15,7 +15,7 @@ use beryl_protocol::protocol::Side;
 use glam::Vec2;
 
 use super::face;
-use game_play::art::orb::artwork;
+use game_hud::art::orb::artwork;
 use game_table::faces::{CARD_BACK, FaceList};
 use kit_base::data::space::flat::gallery::reference as at;
 use kit_base::tokens::{color, gradient, shadow, size, type_style};
@@ -485,8 +485,8 @@ fn phase_tracker() -> Element {
 }
 
 fn player_zones(faces: &FaceList) -> Element {
-    let [_, _, art_width, art_height] = game_play::art::orb::ART;
-    let units = game_play::art::orb::SCALES[0];
+    let [_, _, art_width, art_height] = game_hud::art::orb::ART;
+    let units = game_hud::art::orb::SCALES[0];
     let art = Vec2::new(art_width, art_height) * units;
     let orbs = [
         (Side::You, true, "22", "Active"),

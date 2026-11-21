@@ -269,7 +269,6 @@ dependencies = [
  "kit_base",
  "kit_frame",
  "kit_text",
- "kit_ui",
  "parley",
  "swash",
  "tiny-skia",
@@ -420,6 +419,7 @@ dependencies = [
  "beryl_protocol",
  "beryl_render",
  "beryl_test_files",
+ "game_hud",
  "game_probe",
  "game_table",
  "glam",
@@ -428,6 +428,7 @@ dependencies = [
  "kit_frame",
  "kit_probe",
  "kit_scene",
+ "kit_text",
  "kit_ui",
  "libc",
  "ndk-sys",
@@ -435,6 +436,7 @@ dependencies = [
  "objc2-app-kit 0.3.2",
  "objc2-foundation 0.3.2",
  "objc2-quartz-core 0.3.2",
+ "swash",
  "windows-sys 0.61.2",
  "winit",
 ]
@@ -537,7 +539,6 @@ dependencies = [
  "kit_frame",
  "kit_space",
  "kit_text",
- "kit_ui",
  "naga",
  "pollster",
  "serde_json",
@@ -2393,6 +2394,7 @@ dependencies = [
  "kit_text",
  "parley",
  "smallbox",
+ "swash",
  "taffy",
 ]
 

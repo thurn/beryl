@@ -25,8 +25,8 @@ mod paint;
 
 use std::cell::{Cell, RefCell};
 
+use kit_base::atlas::FaceSize;
 use kit_text::text::fonts::Font;
-use kit_ui::input::FaceSize;
 use tiny_skia::{Pixmap, Point, Shader};
 
 pub use back::card_back;

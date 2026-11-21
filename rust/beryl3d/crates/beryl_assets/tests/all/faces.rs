@@ -13,7 +13,7 @@ use beryl_assets::{
     CacheKey, Config, ENCODER_VERSION, FaceText, Format, Full, Layer, MatchFace, MatchFaces,
     Prepared, Preparer, Source, Upload, faces_built_on_this_thread, frames_drawn_on_this_thread,
 };
-use kit_ui::input::{AssetReady, FaceId, FaceSize};
+use kit_base::atlas::{AssetReady, FaceId, FaceSize};
 
 use crate::test_scans::{Scratch, scan};
 

@@ -17,6 +17,9 @@ pub(crate) use desktop::tray_tuning;
 pub use phone::{Band, TableBands};
 pub use web_fit::{FittedPiles, FittedRow, FittedRows};
 
+/// The logical points per unit of life-orb art, in atlas order.
+pub const ORB_SCALES: [f32; 2] = [REFERENCE.play.life.orb_scale, phone::ORB_SCALE];
+
 /// The layout selected for a window. A feature uses its slots and size class to fit its content.
 #[derive(Clone, Copy, Debug)]
 pub struct Profile<'a> {

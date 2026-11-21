@@ -9,8 +9,8 @@ use beryl_assets::{
 use beryl_render::{BACK_LAYER, Limits, Renderer, Target};
 use glam::camera::rh::{proj::directx, view::look_at_mat4};
 use glam::{Affine3A, Vec3};
+use kit_base::atlas::{AssetReady, FaceId, FaceSize, Tier};
 use kit_frame::frame::{Band, Draw, Frame, FrameBuilder, Wake};
-use kit_ui::input::{AssetReady, FaceId, FaceSize, Tier};
 
 const BOTH: [Limits; 2] = [Limits::Default, Limits::Downlevel];
 

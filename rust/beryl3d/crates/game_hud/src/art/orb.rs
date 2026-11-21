@@ -14,26 +14,27 @@
 //!   screen: its bezel is light along its top and its shadow falls below it.
 //!
 //! The flat layer's atlas holds one channel, coverage, so the art is a stack of layers, each one
-//! color with its coverage drawn by `beryl_assets::orb` into an icon cell, painted in order. A
+//! color with its coverage drawn by the glyph worker into an icon cell, painted in order. A
 //! gradient becomes coverage that fades along it: the bezel's four colors are four layers, each
 //! opaque where the next one up starts and fading out where it ends, so that each pixel shows
 //! the blend of the two colors its gradient runs between. A blur is drawn into the coverage too.
 //! The game screen draws an orb as one element showing `Shown::Layers`, whose layers the flat layer
 //! draws from these cells (`layout::write`).
 
+use beryl_protocol::protocol::Side;
 use glam::Vec2;
 
-use crate::widgets::IconId;
-use crate::widgets::icons::{IconLayer, LayeredIcon, ORB};
+use game_play::art::orb::CORE_CY;
+pub use game_play::art::orb::{ART, face_offset};
+use kit_base::atlas::IconId;
+use kit_base::atlas::artwork::{CoverageLayer, CoveragePaint, CoverageRamp, LayerCell};
 use kit_base::tokens::size;
+use kit_ui::art::icons as icon_artwork;
+use kit_ui::widgets::icons::{IconLayer, LayeredIcon, cell_width};
 
-/// The view box of the web's orb art: its left, top, width and height, about the orb's middle.
-pub const ART: [f32; 4] = [-136.0, -57.0, 272.0, 116.0];
-
-/// The core's half width, half height and centre's height: `CORE` in `Player.tsx`.
+/// The core's half width and half height.
 pub const CORE_RX: f32 = size::ORB_WIDTH / 2.0;
 pub const CORE_RY: f32 = size::ORB_HEIGHT / 2.0;
-pub const CORE_CY: f32 = -3.0;
 
 /// The superellipse's exponent: `SQUARENESS`.
 const SQUARENESS: f32 = 2.25;
@@ -41,13 +42,7 @@ const SQUARENESS: f32 = 2.25;
 /// The width of the core's bezel: `BEZEL`, the stroke of `.life-orb-core`.
 pub const BEZEL: f32 = size::ORB_BEZEL;
 
-/// Logical points per unit of life orb art on the desktop. The web's stage uses
-/// `--orb: calc(1px / 1.045)` (`.table .life-orb`, `ui/src/screens/styles/table.css`).
-pub const DESKTOP_SCALE: f32 = 1.0 / 1.045;
-
-/// The scales the art is drawn at: the desktop's and the phone's
-/// (`data::space::hud::phone::ORB_SCALE`).
-pub const SCALES: [f32; 2] = [DESKTOP_SCALE, kit_base::data::space::hud::phone::ORB_SCALE];
+pub use game_table::profiles::ORB_SCALES as SCALES;
 
 /// One outline of the art, in units, as the viewer's orb draws it.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -70,15 +65,6 @@ pub enum Shape {
     Rays,
 }
 
-/// How a layer's shape is painted into coverage.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Paint {
-    pub fill: bool,
-    /// The stroke's width in units, and whether its ends are round (`stroke-linecap: round`)
-    /// rather than cut square.
-    pub stroke: Option<(f32, bool)>,
-}
-
 /// How a layer's coverage fades, as the web's gradient for its color does.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Ramp {
@@ -96,7 +82,7 @@ pub enum Ramp {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Layer {
     pub shape: Shape,
-    pub paint: Paint,
+    pub paint: CoveragePaint,
     pub ramp: Ramp,
     /// The standard deviation of the blur over it, in units, as `feGaussianBlur`'s.
     pub blur: f32,
@@ -111,7 +97,7 @@ pub struct Layer {
     pub views: [[f32; 4]; 2],
 }
 
-const FILL: Paint = Paint {
+const FILL: CoveragePaint = CoveragePaint {
     fill: true,
     stroke: None,
 };
@@ -124,7 +110,7 @@ const RING: Shape = Shape::Rim {
 };
 
 /// The bezel: the core's outline stroked `BEZEL` wide.
-const BEZEL_PAINT: Paint = Paint {
+const BEZEL_PAINT: CoveragePaint = CoveragePaint {
     fill: false,
     stroke: Some((BEZEL, false)),
 };
@@ -140,7 +126,7 @@ const fn oval(cx: f32, cy: f32, rx: f32, ry: f32) -> Shape {
 }
 
 /// A layer with no ramp, blur or drop, which both orbs show.
-const fn plain(shape: Shape, paint: Paint, color: [u8; 4], views: [[f32; 4]; 2]) -> Layer {
+const fn plain(shape: Shape, paint: CoveragePaint, color: [u8; 4], views: [[f32; 4]; 2]) -> Layer {
     Layer {
         shape,
         paint,
@@ -239,7 +225,7 @@ pub const LAYERS: [Layer; 16] = [
                 from: -153.331_34,
                 to: -26.668_66,
             },
-            Paint {
+            CoveragePaint {
                 fill: false,
                 stroke: Some((16.0, false)),
             },
@@ -252,7 +238,7 @@ pub const LAYERS: [Layer; 16] = [
     // under the core and its bezel.
     Layer {
         shape: Shape::Core,
-        paint: Paint {
+        paint: CoveragePaint {
             fill: true,
             stroke: Some((BEZEL, false)),
         },
@@ -296,7 +282,7 @@ pub const LAYERS: [Layer; 16] = [
     blurred(
         plain(
             RING,
-            Paint {
+            CoveragePaint {
                 fill: false,
                 stroke: Some((4.0, true)),
             },
@@ -308,7 +294,7 @@ pub const LAYERS: [Layer; 16] = [
     // `.life-orb-ring`: #ffb444, 3 wide, round ends.
     plain(
         RING,
-        Paint {
+        CoveragePaint {
             fill: false,
             stroke: Some((3.0, true)),
         },
@@ -332,7 +318,7 @@ pub const LAYERS: [Layer; 16] = [
             from: 222.0,
             to: 318.0,
         },
-        Paint {
+        CoveragePaint {
             fill: false,
             stroke: Some((4.0, true)),
         },
@@ -363,11 +349,14 @@ pub const fn seat(side: Orientation) -> usize {
     }
 }
 
+/// The first icon reserved for a life-orb layer, after the widget icons.
+pub const FIRST_ICON: u16 = icon_artwork::COUNT;
+
 /// The icon of layer `at` of `side`'s orb.
 #[must_use]
 pub const fn icon(side: Orientation, at: usize) -> IconId {
     #[expect(clippy::cast_possible_truncation, reason = "sixteen layers")]
-    IconId(ORB + (seat(side) * LAYERS.len() + at) as u16)
+    IconId(FIRST_ICON + (seat(side) * LAYERS.len() + at) as u16)
 }
 
 const fn icon_layers(side: Orientation) -> [IconLayer; LAYERS.len()] {
@@ -393,11 +382,11 @@ const fn icon_layers(side: Orientation) -> [IconLayer; LAYERS.len()] {
 
 /// The art filling an orb's box, lit if its seat is active.
 #[must_use]
-pub fn artwork(side: Orientation, active: bool, scale: u8) -> LayeredIcon {
+pub fn artwork(side: Side, active: bool, scale: u8) -> LayeredIcon {
     const VIEWER: [IconLayer; LAYERS.len()] = icon_layers(Orientation::Upright);
     const OPPONENT: [IconLayer; LAYERS.len()] = icon_layers(Orientation::Mirrored);
     LayeredIcon {
-        layers: match side {
+        layers: match orientation(side) {
             Orientation::Upright => &VIEWER,
             Orientation::Mirrored => &OPPONENT,
         },
@@ -407,7 +396,57 @@ pub fn artwork(side: Orientation, active: bool, scale: u8) -> LayeredIcon {
     }
 }
 
-pub use crate::widgets::icons::cell_width;
+const fn orientation(side: Side) -> Orientation {
+    match side {
+        Side::You => Orientation::Upright,
+        Side::Opponent => Orientation::Mirrored,
+    }
+}
+
+/// Every choice of art scale, orientation and layer, in the order sent to the atlas.
+fn atlas_layers() -> impl Iterator<Item = (Orientation, &'static Layer, LayerCell)> {
+    SCALES.into_iter().flat_map(|units| {
+        ORIENTATIONS.into_iter().flat_map(move |side| {
+            LAYERS.iter().enumerate().map(move |(at, layer)| {
+                let view = layer.views[seat(side)];
+                let cell = LayerCell {
+                    icon: icon(side, at),
+                    view,
+                    size: cell_width(view[2], units),
+                };
+                (side, layer, cell)
+            })
+        })
+    })
+}
+
+/// The atlas dimensions for every orb layer, for a driver that does not rasterize them.
+pub fn atlas_cells() -> impl Iterator<Item = LayerCell> {
+    atlas_layers().map(|(_, _, cell)| cell)
+}
+
+/// Describes the orb layers for the asset worker, in their existing atlas order.
+#[must_use]
+pub fn atlas_artwork() -> Vec<CoverageLayer> {
+    atlas_layers()
+        .map(|(side, layer, cell)| CoverageLayer {
+            cell,
+            outlines: outlines(layer.shape, side),
+            paint: layer.paint,
+            ramp: match layer.ramp {
+                Ramp::None => CoverageRamp::None,
+                Ramp::Down(stops) => CoverageRamp::Vertical {
+                    top: core_top(side),
+                    height: 2.0 * CORE_RY,
+                    stops,
+                },
+                Ramp::Out { whole, gone } => CoverageRamp::Radial { whole, gone },
+            },
+            blur: layer.blur,
+            drop: layer.drop,
+        })
+        .collect()
+}
 
 /// The height in units of the top of the core's box on `side`'s orb, from which the bezel's
 /// gradient runs down: the opponent's core is mirrored about the orb's middle.
@@ -416,18 +455,6 @@ pub fn core_top(side: Orientation) -> f32 {
     match side {
         Orientation::Upright => CORE_CY - CORE_RY,
         Orientation::Mirrored => -CORE_CY - CORE_RY,
-    }
-}
-
-/// How far below the middle of the art's box the middle of `side`'s core is, in units: where
-/// the web centres the life total (`.life-orb-total`'s `top` and `marginTop`) and the step
-/// stops about it. The box's middle is 1 unit below the art's origin.
-#[must_use]
-pub fn face_offset(side: Orientation) -> f32 {
-    let middle = ART[1] + ART[3] / 2.0;
-    match side {
-        Orientation::Upright => CORE_CY - middle,
-        Orientation::Mirrored => -CORE_CY - middle,
     }
 }
 
@@ -443,8 +470,7 @@ pub fn core_point(t: f32) -> Vec2 {
 }
 
 /// The outlines of `shape` on `side`'s orb, in units on the screen, each with whether it is
-/// closed. The opponent's are the viewer's mirrored top to bottom. Called off the frame thread,
-/// when the art is drawn into the atlas.
+/// closed. The opponent's are the viewer's mirrored top to bottom.
 #[must_use]
 pub fn outlines(shape: Shape, side: Orientation) -> Vec<(Vec<Vec2>, bool)> {
     let mut lines = match shape {

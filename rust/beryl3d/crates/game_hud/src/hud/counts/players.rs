@@ -2,7 +2,7 @@
 //! `Thinking` and `Incoming` (`ui/src/components/Player.tsx`, `ui/src/game/Life.tsx`) as the
 //! web's `Hud` places them (`ui/src/stage/Chrome.tsx`).
 //!
-//! - The orb is the web's art (`art::orb`): a dark cushion in a bevelled grey bezel, a gold
+//! - The orb is the web's art (`orb`): a dark cushion in a bevelled grey bezel, a gold
 //!   ring under it toward its player's edge, and the active player's flare. Its art's middle
 //!   is the point where the table's layout puts the player's life total (`Layout::players`),
 //!   which on a phone follows the table as it raises the viewer's total over a hand of several
@@ -23,8 +23,8 @@ use beryl_protocol::protocol::{Combat, PlayerView, Side, Step};
 use beryl_protocol::script::Subject;
 use glam::Vec2;
 
+use super::orb;
 use crate::hud::HudIn;
-use game_play::art::orb;
 use game_table::profiles::Profile;
 use kit_base::data::profiles::{Incoming, SizeClass};
 use kit_base::data::space::hud::incoming as badge;

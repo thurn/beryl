@@ -2,7 +2,7 @@
 
 use glam::Vec2;
 
-pub use kit_base::atlas::{FaceId, FaceSize, GlyphCell, GlyphKey, IconCell, Tier};
+pub use kit_base::atlas::{AssetReady, FaceId, FaceSize, GlyphCell, GlyphKey, IconCell, Tier};
 pub use kit_base::geometry::{Insets, Rect, Size, Window};
 
 /// A mouse, touch or pen event. It carries no time: what it starts begins at the `now` of the
@@ -167,24 +167,6 @@ pub enum TextChange {
     /// The text an input method is composing (winit's `Ime::Preedit`), shown underlined at the
     /// caret and not yet part of the field's text. An empty string ends the composing.
     Preedit(String),
-}
-
-/// What a worker tells the client core when it finishes. The pixels go to the renderer; the
-/// client core learns only where they are.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum AssetReady {
-    /// A face is in a layer of the small or of the full-size texture array.
-    Face {
-        face: FaceId,
-        size: FaceSize,
-        layer: u16,
-    },
-    /// A component gallery sample face is in its board-size texture array.
-    GalleryFace { face: FaceId, layer: u16 },
-    /// Glyphs are in a page of the atlas.
-    Glyphs { page: u16, glyphs: Vec<GlyphCell> },
-    /// Icons are in a page of the atlas.
-    Icons { page: u16, cells: Vec<IconCell> },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -18,11 +18,14 @@
 use super::IconId;
 use super::icons::{FULL_CONTROL, PASS_ON, PHASES, STEPS, STEPS_OUTLINED};
 use crate::element::{MOST_DROP_SHADOWS, Shadow};
+use kit_base::atlas::shadows::ShadowChain;
 use kit_base::tokens::shadow;
+
+pub use kit_base::atlas::shadows::{code, stage_pad, stage_side, stage_step};
 
 /// Every chain of drop shadows (`Style::drop_shadow`) an icon is drawn with, beside the icons
 /// drawn with it, each with the CSS rule it copies.
-pub const CHAINS: [(&[IconId], &[Shadow]); 8] = [
+pub const CHAINS: [ShadowChain; 8] = [
     // `.step-icon` and `.step-current .step-icon` (phase-tracker.css), filled and outlined.
     (&STEPS, &shadow::STEP_ICON),
     (&STEPS_OUTLINED, &shadow::STEP_ICON),
@@ -36,18 +39,6 @@ pub const CHAINS: [(&[IconId], &[Shadow]); 8] = [
     // `.pass-on-face > svg` (controls.css).
     (&[PASS_ON], &shadow::PASS_ON),
 ];
-
-/// The `IconCell::shadow` of the cell of shadow `stage` of chain `chain` of `CHAINS`: never 0,
-/// which is the icon's own cell.
-#[must_use]
-pub const fn code(chain: usize, stage: usize) -> u8 {
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "eight chains of four shadows"
-    )]
-    let code = (1 + chain * MOST_DROP_SHADOWS + stage) as u8;
-    code
-}
 
 /// The shadows of `chain` the cells are drawn for: at most `MOST_DROP_SHADOWS`.
 #[must_use]
@@ -80,67 +71,6 @@ pub fn decode(shadow: u8) -> Option<(usize, usize)> {
     let index = usize::from(shadow.checked_sub(1)?);
     let (chain, stage) = (index / MOST_DROP_SHADOWS, index % MOST_DROP_SHADOWS);
     (chain < CHAINS.len() && stage < shadows(chain).len()).then_some((chain, stage))
-}
-
-/// How many standard deviations a shadow's cell reaches past what casts it: past three, a
-/// Gaussian leaves under a level of 255.
-const REACH_DEVIATIONS: u8 = 3;
-
-/// The side, in physical pixels, of an icon held at `size` points at `scale`, as the glyph
-/// worker rasterizes it.
-#[must_use]
-pub fn icon_pixels(size: u16, scale: f32) -> u16 {
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "a cast from a float saturates, and an icon is far narrower than 65,536 pixels"
-    )]
-    let pixels = (f32::from(size) * scale).round().max(1.0) as u16;
-    pixels
-}
-
-/// How far, in physical pixels at `scale`, the cell of shadow `stage` of `shadows` reaches past
-/// the icon's square on every side: for it and each shadow before it, `REACH_DEVIATIONS`
-/// deviations of its blur and the longer of its offsets.
-#[must_use]
-pub fn stage_pad(shadows: &[Shadow], stage: usize, scale: f32) -> u16 {
-    let points: f32 = (shadows.iter().take(stage + 1))
-        .map(|shadow| {
-            f32::from(REACH_DEVIATIONS) * shadow.drop_sigma() + shadow.x.abs().max(shadow.y.abs())
-        })
-        .sum();
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "a cast from a float saturates, and a shadow reaches far less than 65,536 pixels"
-    )]
-    let pixels = (points * scale).ceil().max(0.0) as u16;
-    pixels
-}
-
-/// The side, in physical pixels, of one texel of the cell of shadow `stage` of `shadows` at
-/// `scale`: half the shadow's deviation, and at least one pixel. The cell is the shadow's blur
-/// of what came before it, so it has no detail finer than that deviation, and the atlas's
-/// linear filtering draws it smooth from fewer texels.
-#[must_use]
-pub fn stage_step(shadows: &[Shadow], stage: usize, scale: f32) -> u16 {
-    let sigma = shadows.get(stage).map_or(0.0, Shadow::drop_sigma);
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "a cast from a float saturates, and a deviation is a few pixels"
-    )]
-    let step = (sigma * scale / 2.0).floor().max(1.0) as u16;
-    step
-}
-
-/// The side, in texels, of the square cell of shadow `stage` of `shadows` cast by an icon held
-/// at `size` points, at `scale`: the icon's square of pixels grown by `stage_pad` on every
-/// side, in texels of `stage_step` pixels, rounded up.
-#[must_use]
-pub fn stage_side(size: u16, shadows: &[Shadow], stage: usize, scale: f32) -> u16 {
-    let pixels = icon_pixels(size, scale).saturating_add(2 * stage_pad(shadows, stage, scale));
-    pixels.div_ceil(stage_step(shadows, stage, scale))
 }
 
 #[cfg(test)]

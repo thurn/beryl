@@ -46,10 +46,6 @@ pub const PHASES: [IconId; 5] = [IconId(35), IconId(36), IconId(37), IconId(38),
 /// The atlas size of a phase tracker icon, in logical points.
 pub const PHASE_SIDE: u16 = 32;
 
-/// The first of the icons that hold the layers of the life orbs' art, one for each layer of
-/// each seat's orb (`art::orb::icon`).
-pub const ORB: u16 = 43;
-
 /// The atlas size of an icon button's glyph and of a step icon, in logical points
 /// (`.icon-button > svg`, icon-button.css).
 pub const BUTTON_SIDE: u16 = 22;
@@ -58,11 +54,8 @@ pub const BUTTON_SIDE: u16 = 22;
 /// controls.css).
 pub const FULL_CONTROL_SIDE: u16 = 28;
 
-/// The one size, in logical points, at which the atlas holds `icon`, an icon below `ORB`: the
-/// size its artwork is drawn at (`beryl_assets::icons::ALL`, whose tests keep the two equal).
-/// An icon asked for at any other size has no cell and draws nothing, which the "drawn" check
-/// reports. The life orbs' layers, from `ORB` on, are held at a size for each of
-/// `art::orb::SCALES` instead.
+/// The size in logical points that the atlas holds for a widget icon. It matches the
+/// icon's artwork in `crate::art::icons::ALL`.
 #[must_use]
 pub const fn atlas_size(icon: IconId) -> u16 {
     if icon.0 == FULL_CONTROL.0 {

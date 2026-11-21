@@ -10,6 +10,8 @@ mod test_scans;
 mod events;
 mod faces;
 mod frames;
+mod icons;
+mod paints;
 mod phone;
 mod threads;
 mod tier;

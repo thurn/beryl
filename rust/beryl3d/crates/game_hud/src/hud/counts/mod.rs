@@ -4,7 +4,6 @@ use beryl_protocol::protocol::{ManaPool, PlayerView, Side};
 use beryl_protocol::script::Subject;
 use glam::Vec2;
 
-use game_play::art::orb;
 use game_table::table::HALF_LIFE;
 use game_table::table::Layout;
 use kit_base::data::profiles::{Life, LifeChange, LifeText};
@@ -19,6 +18,8 @@ use kit_ui::input::{Size, Tier};
 use kit_ui::layout::{FloatLook, Layer};
 
 pub use game_play::hud::counts::{Count, CountChange, Counts, PlayerCounts, index, points};
+
+use crate::art::orb;
 
 mod backdrop;
 pub mod players;

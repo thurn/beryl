@@ -744,5 +744,10 @@
     "label": "Beryl 3D loads audit, pointer, playback and presentation tuning from the checkout, so editing those values no longer recompiles the inspector or picture tool.",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Beryl 3D layout edits can reuse renderer and asset-worker builds because both consume shared atlas records and the host supplies artwork to the worker.",
+    "metric": "bead.core-minutes",
+    "expect": "down"
   }
 ]

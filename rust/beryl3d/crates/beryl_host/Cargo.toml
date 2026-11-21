@@ -20,6 +20,8 @@ drive = ["dep:game_probe"]
 kit_scene.workspace = true
 app_client.workspace = true
 app_screens.workspace = true
+# Supplies the life-orb layer descriptions for the atlas worker.
+game_hud.workspace = true
 game_table.workspace = true
 kit_base.workspace = true
 kit_frame.workspace = true
@@ -37,6 +39,10 @@ game_probe = { workspace = true, optional = true }
 glam = "0.34.3"
 
 [dev-dependencies]
+# Finds glyphs the shared atlas must deliver after its icons and preloaded text.
+kit_text.workspace = true
+# Uses the same font mapper as the glyph worker.
+swash = "=0.2.10"
 # Reads the tuning fixtures and records their paths for Ignite.
 beryl_test_files = { path = "../../../crates/beryl_test_files" }
 # Supplies face records from sample decks to the asset preparation tests.

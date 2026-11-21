@@ -21,13 +21,13 @@ mod faces;
 mod frame;
 pub mod glyphs;
 pub mod icons;
+mod layers;
 pub mod light;
-pub mod orb;
 pub mod packer;
 mod prepare;
 mod svg;
 
-use kit_ui::input::AssetReady;
+use kit_base::atlas::AssetReady;
 
 pub use cache::CacheKey;
 pub use encode::{ENCODER_VERSION, EncodeError, Format, Layer, decode, dimensions, encode};

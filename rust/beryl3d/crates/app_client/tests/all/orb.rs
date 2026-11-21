@@ -6,31 +6,20 @@
 
 use app_client::Input;
 use beryl_protocol::protocol::Side;
+use game_hud::art::orb::{self, LAYERS};
 use glam::{Vec2, Vec4};
 use kit_frame::frame::{Frame, Material, Role, StateBits};
 use kit_ui::input::{AssetReady, IconCell};
-use kit_ui::orb::{self, LAYERS};
 
 use super::flat_layer::{client, deciding, edges, find, prompt};
 
 /// A cell for every layer of the art at every scale, each at its own column of page 1, so that
 /// a draw's `uv` names the layer it draws.
 fn orb_cells() -> Vec<IconCell> {
-    let mut cells = Vec::new();
-    for units in orb::SCALES {
-        for side in orb::ORIENTATIONS {
-            for (at, layer) in LAYERS.iter().enumerate() {
-                let index = cells.len() as u16;
-                cells.push(IconCell {
-                    icon: orb::icon(side, at),
-                    size: orb::cell_width(layer.views[orb::seat(side)][2], units),
-                    rect: [index, 0, 1, 1],
-                    shadow: 0,
-                });
-            }
-        }
-    }
-    cells
+    orb::atlas_cells()
+        .enumerate()
+        .map(|(index, layer)| layer.cell([u16::try_from(index).unwrap(), 0, 1, 1]))
+        .collect()
 }
 
 /// The middle of a flat-layer draw on the screen, in logical points.

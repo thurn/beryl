@@ -11,18 +11,20 @@ use std::collections::BTreeSet;
 use std::sync::mpsc::{self, Receiver, Sender, SyncSender};
 use std::thread::{self, JoinHandle};
 
+use kit_base::atlas::artwork::{Artwork, CoverageLayer};
+use kit_base::atlas::shadows::{self, ShadowChain};
+use kit_base::atlas::{AssetReady, GlyphCell, GlyphKey, IconCell};
+use kit_base::paint::MOST_DROP_SHADOWS;
 use kit_base::tokens::type_style;
 use kit_text::text::fonts::ALL;
 use kit_text::text::glyph_key;
-use kit_ui::input::{AssetReady, GlyphCell, GlyphKey, IconCell};
-use kit_ui::widgets::icon_shadows;
 use swash::FontRef;
 use swash::scale::{Render, ScaleContext, Source};
 use swash::zeno::Format;
 
 use crate::packer::{ATLAS_PAGES, Full, PAGE_SIZE, Shelves};
 use crate::{Prepared, Upload};
-use crate::{blur, icons, orb};
+use crate::{blur, icons, layers};
 
 /// The atlas page the worker fills first. Page 0 holds the shapes of light ([`crate::light`]).
 pub const FIRST_PAGE: u16 = 1;
@@ -70,6 +72,15 @@ pub fn glyphs_rasterized_on_this_thread() -> u64 {
     GLYPHS_RASTERIZED.with(Cell::get)
 }
 
+/// The icon descriptions a host installs for the life of its glyph worker.
+#[derive(Debug, Default)]
+pub struct IconSet {
+    pub icons: Vec<Artwork>,
+    /// Each chain and the icons that cast it, in atlas code order.
+    pub shadows: &'static [ShadowChain],
+    pub layers: Vec<CoverageLayer>,
+}
+
 /// A thread that rasterizes glyphs. Dropping it stops the thread once it has finished what it
 /// was asked.
 #[derive(Debug)]
@@ -84,13 +95,18 @@ impl GlyphWorker {
     /// page to `out` and then calls `wake`, so that a host whose event loop is idle draws the
     /// new glyphs at once.
     #[must_use]
-    pub fn spawn(out: Sender<Prepared>, wake: impl Fn() + Send + 'static, start: fn()) -> Self {
+    pub fn spawn(
+        out: Sender<Prepared>,
+        wake: impl Fn() + Send + 'static,
+        start: fn(),
+        icons: IconSet,
+    ) -> Self {
         let (requests, inbox) = mpsc::channel();
         let thread = thread::Builder::new()
             .name("beryl-glyphs".into())
             .spawn(move || {
                 start();
-                run(&inbox, &out, &wake);
+                run(&inbox, &out, &wake, &icons);
             })
             .expect("the glyph worker's thread starts");
         Self {
@@ -133,7 +149,7 @@ impl GlyphWorker {
         }
     }
 
-    /// Asks for every icon of `kit_ui::widgets::icons` rasterized at `scale` physical
+    /// Asks for the installed icons rasterized at `scale` physical
     /// pixels per point, which a host does before its first frame and again whenever the
     /// display's scale changes. The cells come in an `AssetReady::Icons` that replaces the
     /// client's cells of the old scale, which it draws scaled until then. Asking for the scale
@@ -186,7 +202,7 @@ impl Drop for GlyphWorker {
 /// of requests uploads each page once, sends the pages, and then answers the flushes that were
 /// waiting with them. The icons come first and glyphs asked for ahead of time last, so that
 /// what is on screen has room in the atlas before what may be.
-fn run(inbox: &Receiver<Message>, out: &Sender<Prepared>, wake: &dyn Fn()) {
+fn run(inbox: &Receiver<Message>, out: &Sender<Prepared>, wake: &dyn Fn(), icons: &IconSet) {
     let mut atlas = Atlas::new();
     while let Ok(first) = inbox.recv() {
         let mut keys = Vec::new();
@@ -203,7 +219,7 @@ fn run(inbox: &Receiver<Message>, out: &Sender<Prepared>, wake: &dyn Fn()) {
         }
         let mut prepared = Vec::new();
         if let Some(scale) = scale {
-            prepared.extend(atlas.add_icons(scale));
+            prepared.extend(atlas.add_icons(icons, scale));
         }
         prepared.extend(atlas.add(&keys, LAST_PAGE));
         prepared.extend(atlas.add(&ahead, LAST_PAGE - DEMAND_PAGES));
@@ -309,32 +325,32 @@ impl Atlas {
     /// Rasterizes every icon at `scale` into fresh space of the pages, leaving the cells of
     /// any earlier scale in place, since the client draws those until these arrive, and
     /// returns the pages that changed, each with the icons added to it.
-    fn add_icons(&mut self, scale: f32) -> Vec<Prepared> {
+    fn add_icons(&mut self, catalog: &IconSet, scale: f32) -> Vec<Prepared> {
         if self.icon_scale == Some(scale) {
             return Vec::new();
         }
         self.icon_scale = Some(scale);
-        // Every icon, each layer of the life orbs' art at its own size, and the cells icons'
-        // drop shadows are drawn from (`widgets::icon_shadows`), packed
-        // tallest first, so that each shelf of a page holds cells of about one height: packed in
-        // the order of their ids, the orbs' layers alone left most of six pages empty at three
-        // pixels a point.
+        // Pack tallest cells first so each shelf holds cells of similar height. Packing by
+        // ID left most of six pages empty at three pixels per point.
         let mut rasterized: Vec<(Bitmap, IconCell)> = Vec::new();
-        for artwork in &icons::ALL {
+        for artwork in &catalog.icons {
             let bitmap = icons::rasterize(artwork, scale);
-            rasterized.push((bitmap, icons::cell(artwork, [0; 4], 0)));
+            rasterized.push((bitmap, artwork.cell([0; 4], 0)));
         }
-        for cell in orb::cells() {
-            let bitmap = orb::rasterize(cell, scale);
-            rasterized.push((bitmap, orb::icon_cell(cell, [0; 4])));
+        for layer in &catalog.layers {
+            let bitmap = layers::rasterize(layer, scale);
+            rasterized.push((bitmap, layer.cell.cell([0; 4])));
         }
-        for (chain, (drawn, _)) in icon_shadows::CHAINS.iter().enumerate() {
-            let shadows = icon_shadows::shadows(chain);
-            for artwork in drawn.iter().filter_map(|&icon| icons::artwork(icon)) {
+        for (chain, &(drawn, shadows)) in catalog.shadows.iter().enumerate() {
+            let shadows = &shadows[..shadows.len().min(MOST_DROP_SHADOWS)];
+            for artwork in drawn
+                .iter()
+                .filter_map(|icon| catalog.icons.iter().find(|artwork| artwork.icon == *icon))
+            {
                 let stages = icons::rasterize_shadows(artwork, scale, shadows);
                 for (stage, bitmap) in stages.into_iter().enumerate() {
-                    let code = icon_shadows::code(chain, stage);
-                    rasterized.push((bitmap, icons::cell(artwork, [0; 4], code)));
+                    let code = shadows::code(chain, stage);
+                    rasterized.push((bitmap, artwork.cell([0; 4], code)));
                 }
             }
         }

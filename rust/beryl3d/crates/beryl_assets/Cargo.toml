@@ -11,7 +11,6 @@ workspace = true
 
 [dependencies]
 kit_frame.workspace = true
-kit_ui.workspace = true
 kit_base.workspace = true
 kit_text.workspace = true
 # The scan cache and Scryfall's download queue, shared with the Tauri app.

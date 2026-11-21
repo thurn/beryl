@@ -7,9 +7,7 @@ mod test_scans;
 
 mod faces;
 mod frame;
-mod glyph_coverage;
 mod glyphs;
-mod icons;
 mod light;
 mod literal_glyphs;
 mod packer;

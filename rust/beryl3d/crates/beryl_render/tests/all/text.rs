@@ -6,17 +6,17 @@
 
 use std::sync::mpsc;
 
-use beryl_assets::glyphs::GlyphWorker;
+use beryl_assets::glyphs::{GlyphWorker, IconSet};
 use beryl_assets::packer::PAGE_SIZE;
 use beryl_assets::{Prepared, Upload};
 use beryl_render::{Limits, Renderer, Target};
 use glam::camera::rh::{proj::directx, view::look_at_mat4};
 use glam::{Affine3A, Mat4, Quat, Vec2, Vec3};
+use kit_base::atlas::artwork::{Artwork, Fill, Shape};
+use kit_base::atlas::{AssetReady, GlyphCell, GlyphKey, IconId, Tier};
 use kit_base::geometry::{CARD_HEIGHT, CARD_WIDTH};
 use kit_frame::frame::{Band, Draw, Frame, FrameBuilder, Sprite};
 use kit_text::text::fonts::Font;
-use kit_ui::input::{AssetReady, GlyphCell, GlyphKey, Tier};
-use kit_ui::widgets::icons::GEAR;
 
 const BOTH: [Limits; 2] = [Limits::Default, Limits::Downlevel];
 /// The target's side in pixels.
@@ -96,7 +96,7 @@ fn rasterize(text: &str) -> (Prepared, Vec<GlyphCell>) {
         })
         .collect();
     let (out, pages) = mpsc::channel();
-    let worker = GlyphWorker::spawn(out, || {}, || {});
+    let worker = GlyphWorker::spawn(out, || {}, || {}, IconSet::default());
     worker.request(keys.clone());
     worker.flush();
     let page = pages.try_recv().expect("the worker sent a page");
@@ -258,25 +258,46 @@ fn a_panel_draws_its_fill_and_border_and_leaves_its_corners_untouched() {
 }
 
 #[test]
-fn the_gear_icon_is_tinted_on_its_teeth_and_empty_in_its_hole() {
-    // The gear at four pixels to a point: an 88-pixel cell.
+fn an_icon_is_tinted_on_its_ink_and_empty_in_its_hole() {
+    // A square outline at four pixels to a point, in an 88-pixel cell.
+    const ICON: IconId = IconId(0);
     let (out, pages) = mpsc::channel();
-    let worker = GlyphWorker::spawn(out, || {}, || {});
+    let worker = GlyphWorker::spawn(
+        out,
+        || {},
+        || {},
+        IconSet {
+            icons: vec![Artwork {
+                icon: ICON,
+                size: 22,
+                view: [0.0, 0.0, 24.0, 24.0],
+                shapes: &[Shape {
+                    data: "M2 2H22V22H2Z M6 6H18V18H6Z",
+                    fill: Some(Fill {
+                        ink: 1.0,
+                        even_odd: true,
+                    }),
+                    stroke: None,
+                    rotate: None,
+                }],
+            }],
+            ..IconSet::default()
+        },
+    );
     worker.icons(4.0);
     worker.flush();
-    // The icons and their shadows fill several pages; the gear itself is on one of them.
-    let (page, gear) = pages
+    let (page, icon) = pages
         .try_iter()
         .find_map(|page| {
             let AssetReady::Icons { cells, .. } = &page.ready else {
                 return None;
             };
-            let gear = *cells
+            let icon = *cells
                 .iter()
-                .find(|cell| cell.icon == GEAR && cell.shadow == 0)?;
-            Some((page, gear))
+                .find(|cell| cell.icon == ICON && cell.shadow == 0)?;
+            Some((page, icon))
         })
-        .expect("the worker sent a page with the gear");
+        .expect("the worker sent a page with the icon");
     let (
         AssetReady::Icons { .. },
         Upload::AtlasPage {
@@ -287,15 +308,15 @@ fn the_gear_icon_is_tinted_on_its_teeth_and_empty_in_its_hole() {
     else {
         panic!("only icons were asked for");
     };
-    let [x, y, side, _] = gear.rect;
+    let [x, y, side, _] = icon.rect;
     let coverage = |dx: u16, dy: u16| {
         atlas[usize::from(y + dy) * usize::from(PAGE_SIZE) + usize::from(x + dx)]
     };
-    // A texel the gear covers fully, found along its middle row, and the hole at its centre.
+    // A texel the icon covers fully, found along its middle row, and the hole at its centre.
     let middle = side / 2;
     let inked = (0..side)
         .find(|&dx| coverage(dx, middle) == 255)
-        .expect("the gear's middle row crosses a tooth");
+        .expect("the icon's middle row crosses its outline");
     assert_eq!(coverage(middle, middle), 0, "the hole is empty");
 
     // The cell drawn at one texel to a pixel, its top left corner at (50, 50), in gold.
@@ -304,7 +325,7 @@ fn the_gear_icon_is_tinted_on_its_teeth_and_empty_in_its_hole() {
     let corner = Vec2::splat(50.0);
     let sprite = Sprite {
         page: *number,
-        rect: gear.rect,
+        rect: icon.rect,
     };
     let icon = (
         Band::Layer,
@@ -326,7 +347,7 @@ fn the_gear_icon_is_tinted_on_its_teeth_and_empty_in_its_hole() {
             at(&pixels, screen(inked), screen(middle)),
             gold,
             8,
-            &format!("{limits:?}: a tooth"),
+            &format!("{limits:?}: the outline"),
         );
         assert_near(
             at(&pixels, screen(middle), screen(middle)),

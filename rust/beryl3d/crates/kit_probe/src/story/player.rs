@@ -119,7 +119,7 @@ impl Player {
 
     /// Delivers every requested glyph and the toolkit icons as placeholder cells for checks.
     pub fn stub_atlas(&mut self) {
-        self.give(stub_icons(self.window.scale));
+        self.give(stub_icons(self.window.scale, []));
         let glyphs = self.wanted_glyphs().into_iter().map(stub_glyph).collect();
         self.give(AssetReady::Glyphs {
             page: STUB_PAGE,

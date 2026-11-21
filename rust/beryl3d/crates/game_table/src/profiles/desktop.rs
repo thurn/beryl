@@ -124,7 +124,8 @@ pub const REFERENCE: Layout = Layout {
             size: 1.3,
         },
         life: Life {
-            orb_scale: kit_ui::orb::DESKTOP_SCALE,
+            // The web stage's `--orb: calc(1px / 1.045)`.
+            orb_scale: 1.0 / 1.045,
             text: LifeText::Life,
             opening_hides_viewer: false,
             change: LifeChange::BesideOrb,

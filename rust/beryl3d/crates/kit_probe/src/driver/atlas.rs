@@ -1,10 +1,9 @@
 //! Placeholder glyphs and icons for headless interface checks.
 
-use kit_ui::input::{AssetReady, GlyphCell, GlyphKey, IconCell};
-use kit_ui::orb;
-use kit_ui::widgets::IconId;
+use kit_base::atlas::artwork::LayerCell;
+use kit_base::atlas::{AssetReady, GlyphCell, GlyphKey};
+use kit_ui::art::icons::ALL;
 use kit_ui::widgets::icon_shadows;
-use kit_ui::widgets::icons::{ORB, atlas_size};
 
 /// Page 0 holds the real atlas's shapes of light.
 pub const STUB_PAGE: u16 = 1;
@@ -20,44 +19,25 @@ pub fn stub_glyph(key: GlyphKey) -> GlyphCell {
     }
 }
 
-/// Every icon at its atlas size, the cells its drop shadows are drawn from at `scale`
-/// (`icon_shadows::cells`) at the size a real one has (`icon_shadows::stage_side`), and each
-/// layer of each life orb at its width for each of the orbs' scales, as a host's glyph worker
-/// delivers them before the first frame.
-pub fn stub_icons(scale: f32) -> AssetReady {
-    let sharp = (0..ORB).map(|id| (IconId(id), 0));
-    let mut cells: Vec<IconCell> = sharp
-        .chain(icon_shadows::cells())
-        .map(|(icon, shadow)| {
-            let size = atlas_size(icon);
-            let texels = icon_shadows::decode(shadow).map_or(size, |(chain, stage)| {
-                icon_shadows::stage_side(size, icon_shadows::shadows(chain), stage, scale)
-            });
-            IconCell {
-                icon,
-                size,
-                rect: [0, 0, texels, texels],
-                shadow,
-            }
-        })
-        .collect();
-    for units in orb::SCALES {
-        for side in orb::ORIENTATIONS {
-            for (at, layer) in orb::LAYERS.iter().enumerate() {
-                let [_, _, w, h] = layer.views[orb::seat(side)];
-                let width = orb::cell_width(w, units);
-                let height = orb::cell_width(h, units);
-                cells.push(IconCell {
-                    icon: orb::icon(side, at),
-                    size: width,
-                    rect: [0, 0, width.max(1), height.max(1)],
-                    shadow: 0,
-                });
-            }
-        }
-    }
+/// Placeholder cells with the sizes the worker delivers, including any caller-supplied layers.
+pub fn stub_icons(scale: f32, layers: impl IntoIterator<Item = LayerCell>) -> AssetReady {
+    let sharp = ALL.iter().map(|icon| {
+        let side = icon.side(scale);
+        icon.cell([0, 0, side, side], 0)
+    });
+    let shadows = icon_shadows::cells().map(|(id, code)| {
+        let artwork = &ALL[usize::from(id.0)];
+        let (chain, stage) = icon_shadows::decode(code).expect("a listed shadow");
+        let side =
+            icon_shadows::stage_side(artwork.size, icon_shadows::shadows(chain), stage, scale);
+        artwork.cell([0, 0, side, side], code)
+    });
+    let layers = layers.into_iter().map(|layer| {
+        let [width, height] = layer.texels(scale);
+        layer.cell([0, 0, width, height])
+    });
     AssetReady::Icons {
         page: STUB_PAGE,
-        cells,
+        cells: sharp.chain(shadows).chain(layers).collect(),
     }
 }

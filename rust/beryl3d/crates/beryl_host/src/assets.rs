@@ -4,22 +4,40 @@
 
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::mpsc::{self, Receiver};
+use std::sync::mpsc::{self, Receiver, Sender};
 
 use app_client::Client;
 use app_client::Input;
 use beryl_art::{ArtCache, Origins};
-use beryl_assets::glyphs::{GlyphWorker, prepare_latin};
+use beryl_assets::glyphs::{GlyphWorker, IconSet, prepare_latin};
 use beryl_assets::{
     Config, FULL_LAYERS, FaceText, Format, Full, MatchFace, MatchFaces, Plate, Prepared, Preparer,
     default_workers,
 };
 use beryl_render::Renderer;
+use game_hud::art::orb;
 use game_table::faces::FaceList;
+use kit_base::atlas::{AssetReady, FaceId, FaceSize, GlyphKey};
 use kit_frame::frame::Wake;
-use kit_ui::input::{AssetReady, FaceId, FaceSize, GlyphKey};
+use kit_ui::art::icons as icon_artwork;
+use kit_ui::widgets::icon_shadows;
 
 use crate::frames::When;
+
+/// Starts the glyph worker with the widget icons, their shadows, and the game's artwork.
+#[must_use]
+pub fn spawn_glyph_worker(out: Sender<Prepared>, wake: impl Fn() + Send + 'static) -> GlyphWorker {
+    GlyphWorker::spawn(
+        out,
+        wake,
+        crate::threads::asset_thread,
+        IconSet {
+            icons: icon_artwork::ALL.to_vec(),
+            shadows: &icon_shadows::CHAINS,
+            layers: orb::atlas_artwork(),
+        },
+    )
+}
 
 /// Converts a table's faces into worker inputs in the same [`FaceId`] order.
 #[must_use]
@@ -131,14 +149,10 @@ impl Assets {
         renderer.upload_page(&beryl_assets::light::prepared());
         let wake: Arc<dyn Fn() + Send + Sync> = Arc::new(wake);
         let (out, pages) = mpsc::channel();
-        let glyphs = GlyphWorker::spawn(
-            out,
-            {
-                let wake = Arc::clone(&wake);
-                move || wake()
-            },
-            crate::threads::asset_thread,
-        );
+        let glyphs = spawn_glyph_worker(out, {
+            let wake = Arc::clone(&wake);
+            move || wake()
+        });
         let faces = Preparer::new(Config {
             art: Arc::new(ArtCache::new(scans.art.clone(), origins)),
             faces_dir: scans.faces.clone(),
