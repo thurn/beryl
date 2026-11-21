@@ -199,15 +199,19 @@ impl<L: Layout> Resolving<L> {
     /// The slots the hidden picks recorded so far picked, in the order picked; a pick of
     /// nothing names none.
     pub fn hidden_picks(&self) -> impl Iterator<Item = L::Slot> + '_ {
-        self.record
-            .as_slice()
-            .iter()
-            .enumerate()
-            // `hidden` has a bit for each of the first 32 entries only; a record in the
-            // `Large` layout may grow past them, with no hidden pick there (`record_answer`).
-            .take(usize::try_from(u32::BITS).expect("a bit count fits in usize"))
-            .filter(|&(i, _)| self.hidden & (1 << i) != 0)
-            .filter_map(|(_, &answer)| hidden_pick_of::<L>(answer))
+        self.recorded_answers()
+            .filter(|&(_, hidden)| hidden)
+            .filter_map(|(answer, _)| hidden_pick_of::<L>(answer))
+    }
+
+    /// Each recorded answer and whether it encodes a hidden pick instead of an option index.
+    pub(crate) fn recorded_answers(&self) -> impl Iterator<Item = (L::Index, bool)> + '_ {
+        let mut hidden = self.hidden;
+        self.record.iter().map(move |&answer| {
+            let is_hidden = hidden & 1 != 0;
+            hidden >>= 1;
+            (answer, is_hidden)
+        })
     }
 }
 

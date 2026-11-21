@@ -1193,7 +1193,9 @@
     {
       "published_at": "2004-10-04",
       "hash": "c6418194890f",
-      "untestable": "Beryl asks for simultaneous Aura attachments in card-name order, which can put the nonactive player first. See by-ptc7.2.22."
+      "scenario": [
+        "Show and Tell chooses both Auras before either attachment"
+      ]
     },
     {
       "published_at": "2004-10-04",

@@ -11,7 +11,7 @@ use crate::decision::{Candidates, Opt};
 use crate::ids::{CardId, Seat, SlotId, SlotPlace};
 use crate::layout::{Item, Layout, Queue, Table};
 use crate::object::Object;
-use crate::pending::{Pending, Resolving};
+use crate::pending::{Pending, Resolving, hidden_pick_of};
 use crate::player::Player;
 use crate::relayout::Relayout;
 use crate::stack::StackEntry;
@@ -40,8 +40,8 @@ pub enum Misfit {
     /// The game's table holds more distinct cards, tokens and emblems than the layout's game
     /// index numbers ([`CardId::COUNT`] of its [`Layout::Card`]).
     TooManyCards { cards: usize, indices: usize },
-    /// A recorded answer or an option names a place in a list past what the layout's
-    /// [`Layout::Index`] can name.
+    /// The layout cannot represent a recorded answer or option, or has no matching slot
+    /// for a hidden pick.
     IndexTooWide { index: usize },
 }
 
@@ -250,8 +250,16 @@ impl<L: Layout> State<L> {
             paused.record.len(),
             capacity(|r: &Resolving<M>| &r.record),
         )?;
-        for &answer in paused.record.iter() {
-            named::<L, M>(answer)?;
+        for (answer, hidden) in paused.recorded_answers() {
+            if hidden {
+                if hidden_pick_of::<L>(answer).is_some_and(|slot| slot.to::<M::Slot>().is_none()) {
+                    return Err(Misfit::IndexTooWide {
+                        index: answer.into(),
+                    });
+                }
+            } else {
+                named::<L, M>(answer)?;
+            }
         }
         let Candidates::Options(options) = &paused.question.candidates else {
             return Ok(());

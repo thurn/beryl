@@ -6,6 +6,21 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **Widening a game during Show and Tell could lose the nonactive player's hand
+  pick.** The resolution record held the card's slot index from the smaller
+  layout, which names a different slot in the larger layout. Relayout now
+  converts hidden picks by the card's place in its owner's deck. The Show and
+  Tell layout regression widens the game after both hand picks and compares the
+  remaining choices and committed events.
+
+- **Show and Tell asked the nonactive player where to attach their Aura first.**
+  The engine gathered entry choices in the same card-name order it used to
+  record the moves. It now gathers all entry choices in turn order before moving
+  the cards together. The scenario
+  `Show and Tell chooses both Auras before either attachment` checks the order
+  of the hand picks and attachment choices, and checks that both Auras choose
+  from the battlefield as it was before either entered.
+
 - **Containment Priest exiled Clever Impersonator before it could copy an
   artifact.** The engine decided whether to redirect the move using the
   Impersonator's original type line. It now asks for the copy first and checks

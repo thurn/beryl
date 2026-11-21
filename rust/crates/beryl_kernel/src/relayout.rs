@@ -10,6 +10,7 @@ use crate::decision::{Candidates, Decision, Opt, Refusal, Step};
 use crate::ids::{CardId, SlotId};
 use crate::layout::{Item, Layout, Queue, Table, index};
 use crate::mana_memory::RememberedMana;
+use crate::pending::{hidden_pick_answer, hidden_pick_of};
 mod events;
 
 use crate::state::{
@@ -319,11 +320,21 @@ impl<L: Layout> Relayout for Resolving<L> {
     type In<M: Layout> = Resolving<M>;
 
     fn relayout<M: Layout>(&self) -> Resolving<M> {
+        // Ordinary answers are candidate indices. Hidden picks record a slot, whose index
+        // changes when a layout reserves a different number of slots per deck.
+        let mut record = M::Queue::default();
+        for (answer, hidden) in self.recorded_answers() {
+            let converted = if hidden {
+                hidden_pick_answer::<M>(hidden_pick_of::<L>(answer).map(slot))
+            } else {
+                index::<M>(answer.into())
+            };
+            record.push(converted).expect("the record fits the layout");
+        }
         Resolving {
-            record: queue(self.record.as_slice(), |&i| index::<M>(i.into())),
+            record,
             question: self.question.relayout(),
             knowledge: per_player(&self.knowledge, |&k| bits(k)),
-            // A hidden pick's entry names a slot by its index, the same in every layout.
             hidden: self.hidden,
             asks_hidden: self.asks_hidden,
         }

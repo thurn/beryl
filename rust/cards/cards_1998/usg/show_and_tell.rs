@@ -183,6 +183,37 @@ pub mod scenarios {
                 THEM.controls(Card::HolyStrength, 1),
                 ME.pt(Prop::Vanilla, 3, 3),
             ]),
+        // The October 4, 2004 ruling puts entry choices after both hand picks, with the
+        // active player choosing first. Both Auras choose while the flier is still a creature.
+        Scenario::new("Show and Tell chooses both Auras before either attachment")
+            .interaction(&[Card::SwiftReconfiguration, Card::HolyStrength])
+            .hand(P0, &[SHOW, Card::SwiftReconfiguration])
+            .battlefield(
+                P0,
+                &[
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Prop::Vanilla,
+                    Prop::FlashCreature,
+                ],
+            )
+            .hand(P1, &[Card::HolyStrength])
+            .battlefield(P1, &[Prop::Flier])
+            .actions(&[
+                ME.casts(SHOW),
+                ME.picks_up_to(Card::SwiftReconfiguration),
+                THEM.picks_up_to(Card::HolyStrength),
+                ME.deciding(DecisionKind::ChooseObject, 3),
+                ME.picks(Prop::Flier),
+                THEM.deciding(DecisionKind::ChooseObject, 3),
+                THEM.picks(Prop::Vanilla),
+                ME.controls(Card::SwiftReconfiguration, 1),
+                THEM.controls(Card::HolyStrength, 1),
+                THEM.creature(Prop::Flier, false),
+                THEM.has_subtype(Prop::Flier, Subtype::Vehicle, true),
+                ME.pt(Prop::Vanilla, 3, 3),
+            ]),
         // A permanent that enters as a copy chooses among permanents already on the battlefield,
         // so it can't copy one entering at the same time (CR 614.12). P0's
         // Phantasmal Image has nothing to copy, so it enters as a 0/0 and dies; P1's creature

@@ -23,7 +23,7 @@ use crate::layers;
 use crate::layout::{Layout, Queue, Small};
 use crate::replace;
 use crate::state::{CounterKind, Memo, ObjectRef, State, Tracker, Zone};
-use crate::table::GameTable;
+use crate::table::{Capability, GameTable};
 use crate::trigger;
 use crate::zone::Place;
 
@@ -211,7 +211,10 @@ pub(crate) fn move_batch_to<L: Layout>(
     move_ordered::<L, 128>(s, t, sink, ordered.as_slice(), to, place, reason, entry)
 }
 
-/// Runs the zone-change pipeline for `ordered`, in the order [`move_batch`] describes.
+/// A prepared move: the slot, the old and new zones, and how it enters.
+type PreparedMove<L> = (<L as Layout>::Slot, Zone, Zone, Entry<L>);
+
+/// Runs the zone-change pipeline for `ordered`, in the steps [`move_batch`] describes.
 #[allow(clippy::too_many_arguments)]
 fn move_ordered<L: Layout, const N: usize>(
     s: &mut State<L>,
@@ -226,51 +229,36 @@ fn move_ordered<L: Layout, const N: usize>(
     // Each move as replaced: the object, where it was, where it goes and how it enters. A
     // tuple rather than a `replace::Move`: the queue is filled with defaults first, and
     // filling it with `replace::Move`s cost the rollout benchmark 1% more instructions.
-    let mut moves: L::Queue<(L::Slot, Zone, Zone, Entry<L>), N> = Default::default();
+    let mut moves: L::Queue<PreparedMove<L>, N> = Default::default();
     let mut returning = Bitboard::EMPTY;
     // Whether the game has an Aura, which may choose what it enchants as it enters and may be
     // attached to a card in a graveyard: a game with none asks neither below.
     let auras = t.subtypes().has(Subtype::Aura).possible();
-    for &slot in ordered {
-        let o = *s.object(slot);
-        // CR 111.8: "A token that has left the battlefield can't move to another zone or
-        // come back onto the battlefield. If such a token would change zones, it remains in
-        // its current zone instead." A token on the stack is a copy of a spell, which leaves
-        // it as a spell does: onto the battlefield as a token as it resolves
-        // ([CR 608.3f](https://yawgatog.com/resources/magic-rules/#R6083f)), or to where a
-        // card would go, where the state-based check ends it (CR 704.5e).
-        if o.is_token() && !matches!(o.zone(), Zone::Battlefield | Zone::Nowhere | Zone::Stack) {
-            continue;
-        }
-        let from = o.zone();
+    let mut prepare = |s: &mut State<L>, slot| {
         let proposal = replace::Move {
             slot,
-            from,
+            from: s.object(slot).zone(),
             to,
             entry,
             cast: reason == Reason::Resolve,
         };
-        let mut m = replace::moving(s, t, sink, proposal)?;
-        // An Aura entering other than as a resolving Aura spell chooses what it enchants
-        // (CR 303.4f), and with nothing to choose stays where it is, or goes to its owner's
-        // graveyard from the stack (CR 303.4g).
-        if auras && m.to == Zone::Battlefield && m.entry.attach.is_none() {
-            match replace::enchants(s, t, sink, slot, m.entry)? {
-                replace::Enchants::NotAnAura => {}
-                replace::Enchants::Object(host) => m.entry.attach = Some(host),
-                replace::Enchants::Nothing => {
-                    sink.copies.retain(|&(copier, _)| copier != slot);
-                    if from != Zone::Stack {
-                        s.end_exiled_until(slot);
-                        continue;
-                    }
-                    m.to = Zone::Graveyard;
-                }
-            }
-        }
-        moves.push((m.slot, m.from, m.to, m.entry))?;
-        if o.zone() == Zone::Battlefield {
+        let prepared = prepare_move(s, t, sink, proposal, auras)?;
+        if prepared.is_some() && proposal.from == Zone::Battlefield {
             returning |= s.exiled_until(slot);
+        }
+        Ok(prepared)
+    };
+    if N > 1
+        && to == Zone::Battlefield
+        && entry.controller.is_none()
+        && t.can(Capability::ChoosesAsEnters)
+    {
+        prepare_entries::<L, N>(s, ordered, &mut moves, prepare)?;
+    } else {
+        for &slot in ordered {
+            if let Some(m) = prepare(s, slot)? {
+                moves.push(m)?;
+            }
         }
     }
     // The permanents of the batch, each with where it goes. Read from the moves rather than
@@ -344,6 +332,82 @@ fn move_ordered<L: Layout, const N: usize>(
         );
         sink.apart();
         returned?;
+    }
+    Ok(())
+}
+
+/// Applies the replacements and attachment choices for one move before the batch moves.
+/// For an Aura that enters without a specified attachment, "that player chooses what it will
+/// enchant as the Aura enters the battlefield" (see [CR 303.4f]). If nothing is legal to enchant,
+/// "the Aura remains in its current zone, unless that zone is the stack" (see [CR 303.4g]).
+///
+/// [CR 303.4f]: https://yawgatog.com/resources/magic-rules/#R3034f
+/// [CR 303.4g]: https://yawgatog.com/resources/magic-rules/#R3034g
+#[inline]
+fn prepare_move<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+    proposal: replace::Move<L>,
+    auras: bool,
+) -> Result<Option<PreparedMove<L>>, Full> {
+    let replace::Move { slot, from, .. } = proposal;
+    // CR 111.8: "A token that has left the battlefield can't move to another zone or
+    // come back onto the battlefield. If such a token would change zones, it remains in
+    // its current zone instead." A token on the stack is a copy of a spell, which leaves
+    // it as a spell does: onto the battlefield as a token as it resolves
+    // ([CR 608.3f](https://yawgatog.com/resources/magic-rules/#R6083f)), or to where a
+    // card would go, where the state-based check ends it (CR 704.5e).
+    if s.object(slot).is_token() && !matches!(from, Zone::Battlefield | Zone::Nowhere | Zone::Stack)
+    {
+        return Ok(None);
+    }
+    let mut m = replace::moving(s, t, sink, proposal)?;
+    if auras && m.to == Zone::Battlefield && m.entry.attach.is_none() {
+        match replace::enchants(s, t, sink, slot, m.entry)? {
+            replace::Enchants::NotAnAura => {}
+            replace::Enchants::Object(host) => m.entry.attach = Some(host),
+            replace::Enchants::Nothing => {
+                sink.copies.retain(|&(copier, _)| copier != slot);
+                if from != Zone::Stack {
+                    s.end_exiled_until(slot);
+                    return Ok(None);
+                }
+                m.to = Zone::Graveyard;
+            }
+        }
+    }
+    Ok(Some((m.slot, m.from, m.to, m.entry)))
+}
+
+/// When each permanent enters under its owner's control, prepare the moves by those players
+/// in turn order (see [CR 101.4]): "the active player (the player whose turn it is) makes any
+/// choices required, then the next player in turn order ... makes any choices required".
+/// "Then the actions happen simultaneously." Keep the prepared moves in their original order
+/// so committing the batch still reports the events in game order.
+///
+/// [CR 101.4]: https://yawgatog.com/resources/magic-rules/#R1014
+#[cold]
+#[inline(never)]
+fn prepare_entries<L: Layout, const N: usize>(
+    s: &mut State<L>,
+    ordered: &[L::Slot],
+    moves: &mut L::Queue<PreparedMove<L>, N>,
+    mut prepare: impl FnMut(&mut State<L>, L::Slot) -> Result<Option<PreparedMove<L>>, Full>,
+) -> Result<(), Full> {
+    let mut prepared: L::Queue<Option<PreparedMove<L>>, N> = Default::default();
+    for _ in ordered {
+        prepared.push(None)?;
+    }
+    for player in s.players_in_turn_order(s.players()) {
+        for (&slot, result) in ordered.iter().zip(prepared.as_mut_slice()) {
+            if s.object(slot).owner() == player {
+                *result = prepare(s, slot)?;
+            }
+        }
+    }
+    for &m in prepared.iter().flatten() {
+        moves.push(m)?;
     }
     Ok(())
 }
