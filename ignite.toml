@@ -299,9 +299,11 @@ express_cores = 2
 # Of 10 cores; see jarvis.
 tip_build_cores = 2
 
-# Multivac runs headless Claude workers, with no dispatcher session to keep alive. Keep the three
-# workers the desktop pool had.
-[machine.multivac.pool.claude]
+# Multivac runs headless Codex workers, with no dispatcher session to keep alive, and offers their
+# slots after the GPT-6.2 Sol probe passes. Keep the three workers the desktop pool had. Its
+# `~/.codex/config.toml` must declare a `playwright` MCP server: the shared Codex arguments set
+# `mcp_servers.playwright.required`, and Codex refuses to start when that server is missing.
+[machine.multivac.pool.codex]
 mode = "cli"
 slots = 3
 
