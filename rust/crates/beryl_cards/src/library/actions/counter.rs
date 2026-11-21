@@ -66,7 +66,8 @@ pub const GRAVEYARD: &[Scenario] =
             ]),
     ];
 
-/// A player can spend mana as a counterspell resolves to let their spell resolve.
+/// Mana Tithe offers payment when the targeted spell's controller can afford it.
+/// The review page also uses the unaffordable case to let both players try their casts.
 pub const UNLESS_PAID: &[Scenario] = &[
     Scenario::new("Mana Tithe: the controller pays {1}")
         .battlefield(P0, &[names::PLAINS, names::PLAINS])
@@ -103,5 +104,16 @@ pub const UNLESS_PAID: &[Scenario] = &[
             advance_to(1, TurnStep::End),
             ME.controls(props::PLANESWALKER.card, 1),
             THEM.has(Zone::Graveyard, names::MANA_TITHE, 1),
+        ]),
+    Scenario::new("Mana Tithe: a controller who can't pay isn't asked")
+        .battlefield(P0, &[names::PLAINS])
+        .hand(P0, &[props::ARTIFACT.card])
+        .battlefield(P1, &[names::PLAINS])
+        .hand(P1, &[names::MANA_TITHE])
+        .actions(&[
+            ME.casts(props::ARTIFACT.card),
+            THEM.casts(names::MANA_TITHE),
+            ME.has(Zone::Graveyard, props::ARTIFACT.card, 1),
+            ME.has(Zone::Battlefield, props::ARTIFACT.card, 0),
         ]),
 ];

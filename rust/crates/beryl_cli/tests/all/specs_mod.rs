@@ -85,30 +85,19 @@ fn review_shares_the_payment_choice_and_its_result() {
 
 #[test]
 fn counter_review_starts_before_the_target_spell_is_cast() {
-    use beryl_card_names::names::{MANA_TITHE, PLAINS};
-    use beryl_scenario::{P0, P1};
+    use beryl_card_names::names::MANA_TITHE;
+    const ARTIFACT: &str = beryl_cards::props::ARTIFACT.card;
     use beryl_session::protocol::ZoneName;
 
-    const ARTIFACT: &str = beryl_cards::props::ARTIFACT.card;
-    const SCENARIOS: &[Scenario] = &[Scenario::new("Mana Tithe: the caster cannot pay")
-        .battlefield(P0, &[PLAINS])
-        .hand(P0, &[ARTIFACT])
-        .battlefield(P1, &[PLAINS])
-        .hand(P1, &[MANA_TITHE])
-        .actions(&[Action::cast(P0, ARTIFACT), Action::cast(P1, MANA_TITHE)])];
-    let def = TEST
-        .cards
-        .cards()
+    let spec = spec(&TEST, MANA_TITHE).expect("Mana Tithe has a spec");
+    let counter = spec
+        .checkpoints()
+        .examples
         .iter()
-        .copied()
-        .find(|d| d.name == MANA_TITHE)
-        .unwrap();
-    let checkpoints = auto::checkpoints(&TEST, def, SCENARIOS).examples;
-    let counter = checkpoints
-        .iter()
-        .find(|c| !c.review_casts.is_empty())
-        .expect("a checkpoint with both recorded casts");
+        .find(|c| c.moment.group == "A controller who can't pay isn't asked")
+        .expect("a review example for the controller who cannot pay");
     assert_eq!(counter.first, View::Yours);
+    assert_eq!(counter.review_casts.len(), 2);
 
     let (send, receive) = std::sync::mpsc::channel();
     let casts = std::sync::Mutex::new(counter.review_casts);
