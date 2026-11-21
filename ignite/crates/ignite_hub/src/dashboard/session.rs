@@ -1,6 +1,14 @@
-//! The page `/pool/session/<id>` of a CLI worker, laid out like a conversation in the Claude
-//! desktop app: a compact header with its ticket, app, model, turn and state, the digest of its
+//! The page `/<ticket>/session/<id>`: the transcript of one CLI worker's session on one ticket,
+//! laid out like a conversation in the Claude desktop app. It has a compact header with its
+//! ticket, app, model, turn and state, links to the ticket's other sessions, the digest of the
 //! transcript as the daemon sends it, and a box at the bottom that tells the worker something.
+//! `/<ticket>/session` shows the ticket's latest session, and `/pool/session/<id>`, the page's
+//! first address, redirects to the session's page under the ticket it worked last.
+//!
+//! A ticket can have several sessions (one that gave it up and the next that claimed it, or a
+//! regression's session after its landing broke the build), and along a `lane:` chain one
+//! session works several tickets. Every transcript line names its ticket, so the page shows only
+//! the session's lines on this ticket, and the script skips later lines on another ticket.
 //!
 //! A transcript can hold secrets, so the page is served on the private listener only (see
 //! `Site::private`); the public read-only copy answers 404 for it. The box is shown only on a
@@ -32,20 +40,79 @@ use crate::dashboard::common::SITE_ICONS;
 /// How many lines of the digest the page starts with.
 const INITIAL_LINES: usize = 400;
 
-/// The address of the page of `session`, under the dashboard's `root`.
-pub fn session_url(root: &str, session: &str) -> String {
+/// The address of the page of the ticket's latest session, under the dashboard's `root`.
+pub fn ticket_sessions_url(root: &str, ticket: &str) -> String {
+    format!("{}/session", ticket_url(root, ticket))
+}
+
+/// The address of the page of `session` on `ticket`, under the dashboard's `root`.
+pub fn session_url(root: &str, ticket: &str, session: &str) -> String {
+    format!(
+        "{}/{}",
+        ticket_sessions_url(root, ticket),
+        percent_encode(session)
+    )
+}
+
+/// The page's first address, `/pool/session/<id>`, which redirects to the page under the
+/// session's ticket. A link from a worker that holds no ticket goes there.
+pub fn pool_session_url(root: &str, session: &str) -> String {
     format!("{root}pool/session/{}", percent_encode(session))
 }
 
-/// The page of `session`, or `None` when the hub knows nothing of it: no worker of that name and
-/// no transcript line.
+/// The ticket whose page `/pool/session/<session>` redirects to: the one the worker holds, or
+/// else the ticket of its last line. `None` when the hub knows of neither.
+pub(crate) fn ticket_of(conn: &Connection, session: &str) -> Result<Option<String>, ReadError> {
+    let held: Option<String> = conn
+        .query_row(
+            "SELECT ticket FROM workers WHERE session = ?1 AND ticket IS NOT NULL LIMIT 1",
+            [session],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if held.is_some() {
+        return Ok(held);
+    }
+    Ok(transcripts::last_ticket(conn, session)?.map(|ticket| ticket.to_string()))
+}
+
+/// The sessions of `ticket`, oldest first: those with lines on it, then the CLI worker holding
+/// it if it has sent no line yet.
+pub(crate) fn sessions_of(conn: &Connection, ticket: &str) -> Result<Vec<String>, ReadError> {
+    let mut sessions: Vec<String> = transcripts::sessions_of(conn, ticket)?
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    let holder: Option<String> = conn
+        .query_row(
+            "SELECT session FROM workers WHERE ticket = ?1 AND session LIKE 'cli-%' LIMIT 1",
+            [ticket],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if let Some(holder) = holder.filter(|holder| !sessions.contains(holder)) {
+        sessions.push(holder);
+    }
+    Ok(sessions)
+}
+
+/// The page of `session` on `ticket`, or of the ticket's latest session when `session` is
+/// `None`. `None` when the ticket has no such session.
 pub(crate) fn options(
     conn: &Connection,
     root: &str,
     project: &str,
-    session: &str,
+    ticket: &str,
+    session: Option<&str>,
     editable: bool,
 ) -> Result<Option<PageOptions>, ReadError> {
+    let sessions = sessions_of(conn, ticket)?;
+    let Some(session) = session.map_or_else(|| sessions.last().cloned(), |session| {
+        sessions.iter().find(|known| *known == session).cloned()
+    }) else {
+        return Ok(None);
+    };
+    let session = session.as_str();
     let worker: Option<(String, String, Option<String>)> = conn
         .query_row(
             "SELECT app, state, ticket FROM workers WHERE session = ?1 LIMIT 1",
@@ -53,35 +120,25 @@ pub(crate) fn options(
             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
         )
         .optional()?;
-    let lines = transcripts::tail(conn, session, INITIAL_LINES)?;
-    if worker.is_none() && lines.is_empty() {
-        return Ok(None);
-    }
+    let lines = transcripts::tail_on(conn, session, ticket, INITIAL_LINES)?;
     let last = lines.last();
-    let ticket = worker
-        .as_ref()
-        .and_then(|(_, _, ticket)| ticket.clone())
-        .or_else(|| last.and_then(|line| line.line.ticket.as_ref().map(ToString::to_string)));
     let held = worker
         .as_ref()
-        .is_some_and(|(_, _, ticket)| ticket.is_some());
+        .is_some_and(|(_, _, holds)| holds.as_deref() == Some(ticket));
     let app = worker
         .as_ref()
         .map_or("unknown", |(app, _, _)| app.as_str());
-    let state = worker
-        .as_ref()
-        .map_or("gone", |(_, state, _)| state.as_str());
-    let tier = match &ticket {
-        Some(id) => tier_of(conn, id)?,
-        None => None,
+    // A worker gone on to another ticket along a lane is done with this one.
+    let state = match &worker {
+        Some((_, state, _)) if held => state.as_str(),
+        Some(_) => "done",
+        None => "gone",
     };
-    let ticket_link = ticket.as_ref().map_or_else(
-        || c::muted("no ticket"),
-        |id| c::link(&ticket_url(root, id), &esc(&display_id(id)), None, ""),
-    );
+    let tier = tier_of(conn, ticket)?;
+    let ticket_link = c::link(&ticket_url(root, ticket), &esc(&display_id(ticket)), None, "");
     let tone = match state {
         "down" | "stalled" => Tone::Red,
-        "idle" | "gone" => Tone::Muted,
+        "idle" | "gone" | "done" => Tone::Muted,
         _ => Tone::Green,
     };
     let model = tier.map_or_else(|| c::muted("model unknown"), |tier| esc(&tier));
@@ -89,10 +146,11 @@ pub(crate) fn options(
         || c::muted("no turn yet"),
         |line| format!("turn {}", line.line.turn),
     );
+    let others = session_tabs(root, ticket, &sessions, session);
     let header = format!(
         "<header class=\"c-session-head\"><h1 class=\"c-session-name\">{}</h1>\
          <p class=\"c-session-facts\"><span>{ticket_link}</span><span>{}</span>\
-         <span>{model}</span><span>{turn}</span><span>{}</span></p></header>",
+         <span>{model}</span><span>{turn}</span><span>{}</span></p>{others}</header>",
         c::mono(session),
         esc(app),
         c::dot(tone, state, None),
@@ -107,17 +165,17 @@ pub(crate) fn options(
     );
     let tell = if !editable {
         String::new()
-    } else if ticket.is_some() && held {
+    } else if held {
         tell_box()
     } else {
         "<p class=\"c-session-composer c-muted\">\
-         The worker holds no ticket, so there is nothing to tell it.</p>"
+         This session no longer holds the ticket, so there is nothing to tell it.</p>"
             .to_owned()
     };
     let context = format!(
         "<div id=\"c-session\" hidden data-session=\"{}\" data-ticket=\"{}\" data-api=\"/{}/api\"></div>",
         esc(session),
-        esc(ticket.as_deref().unwrap_or_default()),
+        esc(ticket),
         esc(project)
     );
     let body = format!("<div class=\"c-session\">{header}{transcript}{tell}{context}</div>");
@@ -129,12 +187,33 @@ pub(crate) fn options(
         icons: Some(SITE_ICONS),
         crumbs: vec![
             ("Tickets".to_owned(), Some(root.to_owned())),
-            ("Pool".to_owned(), Some(format!("{root}pool"))),
-            (session.to_owned(), None),
+            (display_id(ticket), Some(ticket_url(root, ticket))),
+            ("Session".to_owned(), None),
         ],
         brand: brand(),
         ..PageOptions::default()
     }))
+}
+
+/// Links to each session of `ticket`, oldest first, with `current` marked; nothing when the
+/// ticket has only one.
+fn session_tabs(root: &str, ticket: &str, sessions: &[String], current: &str) -> String {
+    if sessions.len() < 2 {
+        return String::new();
+    }
+    let tabs: String = sessions
+        .iter()
+        .map(|other| {
+            // `cli-claude-8da43b65` is shown as `8da43b65`.
+            let label = c::mono(other.rsplit('-').next().unwrap_or(other));
+            if other == current {
+                format!("<span class=\"c-session-tab\" aria-current=\"page\">{label}</span>")
+            } else {
+                c::link(&session_url(root, ticket, other), &label, None, "c-session-tab")
+            }
+        })
+        .collect();
+    format!("<nav class=\"c-session-tabs\" aria-label=\"Sessions\">Sessions {tabs}</nav>")
 }
 
 /// The model tier (`sonnet`, `opus`) named by the ticket's `tier:` label.

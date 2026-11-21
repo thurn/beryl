@@ -59,17 +59,16 @@ fn shortened(session: &str) -> String {
     session.chars().take(SHOWN).collect::<String>() + "…"
 }
 
-/// A worker's session ID, shortened. A CLI worker's links to its transcript page on the
-/// private listener, which is the only one that serves it.
-fn session_label(root: &str, private: bool, session: &str) -> String {
+/// A worker's session ID, shortened. A CLI worker's links to its transcript on the ticket it
+/// holds, on the private listener, which is the only one that serves it.
+fn session_label(root: &str, private: bool, session: &str, ticket: Option<&str>) -> String {
     let shown = c::tip(&c::mono(&shortened(session)), session);
     if private && session.starts_with("cli-") {
-        c::link(
-            &super::session::session_url(root, session),
-            &shown,
-            None,
-            "",
-        )
+        let url = ticket.map_or_else(
+            || super::session::pool_session_url(root, session),
+            |ticket| super::session::session_url(root, ticket, session),
+        );
+        c::link(&url, &shown, None, "")
     } else {
         shown
     }
@@ -117,7 +116,7 @@ fn worker_row(root: &str, now: Timestamp, private: bool, worker: &Worker) -> Str
     c::row(
         &(c::dot(tone, &worker.state, None)
             + " "
-            + &session_label(root, private, &worker.session)
+            + &session_label(root, private, &worker.session, worker.ticket.as_deref())
             + &c::muted(" · ")
             + &ticket
             + "<div>"

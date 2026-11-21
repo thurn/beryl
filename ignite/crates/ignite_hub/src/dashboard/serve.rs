@@ -28,8 +28,12 @@ enum Route {
     Home,
     /// One of the fleet pages (`machines`, `pool`, `epics`, `landings`, `tips`, `finds`).
     Fleet(&'static str),
-    /// `/pool/session/<id>`: a CLI worker's transcript, served on the private listener only.
-    Session(String),
+    /// `/pool/session/<id>`: the first address of a CLI worker's transcript, which redirects to
+    /// the transcript under the session's ticket.
+    PoolSession(String),
+    /// `/<ticket>/session` or `/<ticket>/session/<id>`: a CLI worker's transcript on a ticket,
+    /// the ticket's latest when no session is named, served on the private listener only.
+    Session(String, Option<String>),
     /// `/<name>`, with an optional trailing slash: a ticket's page, or a redirect to it from
     /// another name for it.
     Ticket(String),
@@ -54,7 +58,20 @@ fn route(path: &str) -> Option<Route> {
     }
     if let Some(id) = path.strip_prefix("/pool/session/") {
         let id = id.strip_suffix('/').unwrap_or(id);
-        return (!id.is_empty() && !id.contains('/')).then(|| Route::Session(id.to_owned()));
+        return (!id.is_empty() && !id.contains('/')).then(|| Route::PoolSession(id.to_owned()));
+    }
+    if let Some((name, rest)) = path
+        .strip_prefix('/')
+        .and_then(|path| path.split_once("/session"))
+    {
+        let rest = rest.strip_suffix('/').unwrap_or(rest);
+        let session = match rest.strip_prefix('/') {
+            None if rest.is_empty() => None,
+            Some(id) if !id.is_empty() && !id.contains('/') => Some(id.to_owned()),
+            _ => return None,
+        };
+        return (!name.is_empty() && !name.contains('/'))
+            .then(|| Route::Session(name.to_owned(), session));
     }
     // `/tickets/<name>` is the address the dashboard gave a ticket until its pages moved to the
     // root, and `/beads/<id>.html` the address of the first dashboard.
@@ -350,18 +367,11 @@ fn serve_pages(
                 Ok(options) => page_reply(&options, if_none_match, head),
             }
         }
-        Route::Session(id) => {
+        Route::PoolSession(_) | Route::Session(..) => {
             if !private {
                 return Some(not_found(&root, wordmark, head));
             }
-            match session::options(conn, &root, project, &id, editable).map(|o| o.map(brand)) {
-                Err(error) => failed(&error),
-                Ok(None) => not_found(&root, wordmark, head),
-                Ok(Some(options)) if fragment_kind == Some("all") => {
-                    fragment(&seq, regions(&options), head)
-                }
-                Ok(Some(options)) => page_reply(&options, if_none_match, head),
-            }
+            session_reply(conn, request, route, site, (&root, &seq))
         }
         Route::Ticket(name) => {
             let id = match tickets::resolve(conn, &name) {
@@ -391,4 +401,56 @@ fn serve_pages(
             }
         }
     })
+}
+
+/// The reply on the private listener for a session route: the redirect from the page's first
+/// address or from another name of the ticket, or the page of the ticket's session.
+fn session_reply(
+    conn: &Connection,
+    request: &Request,
+    route: Route,
+    site: &Site,
+    (root, seq): (&str, &str),
+) -> Response {
+    let head = request.method.eq_ignore_ascii_case("HEAD");
+    let missing = || not_found(root, site.wordmark, head);
+    let (name, id) = match route {
+        Route::PoolSession(id) => {
+            return match session::ticket_of(conn, &id) {
+                Err(error) => failed(&error),
+                Ok(None) => missing(),
+                Ok(Some(ticket)) => redirect(&session::session_url(root, &ticket, &id), &request.query),
+            };
+        }
+        Route::Session(name, id) => (name, id),
+        _ => return missing(),
+    };
+    let ticket = match tickets::resolve(conn, &name) {
+        Ok(Some(ticket)) => ticket,
+        Ok(None) => return missing(),
+        Err(error) => return failed(&error),
+    };
+    let canonical = match &id {
+        Some(id) => session::session_url(root, ticket.as_str(), id),
+        None => session::ticket_sessions_url(root, ticket.as_str()),
+    };
+    if canonical != request.path {
+        return redirect(&canonical, &request.query);
+    }
+    let built = session::options(conn, root, site.project, ticket.as_str(), id.as_deref(), site.editable);
+    match built {
+        Err(error) => failed(&error),
+        Ok(None) => missing(),
+        Ok(Some(options)) => {
+            let options = PageOptions {
+                wordmark: site.wordmark.map(str::to_owned),
+                ..options
+            };
+            if request.param("fragment") == Some("all") {
+                fragment(seq, regions(&options), head)
+            } else {
+                page_reply(&options, request.header("if-none-match"), head)
+            }
+        }
+    }
 }

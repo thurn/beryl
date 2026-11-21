@@ -287,6 +287,20 @@
   color: var(--ink-3);
 }
 
+.c-session-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+  color: var(--ink-3);
+  font-size: var(--text-sm);
+}
+
+.c-session-tab[aria-current="page"] {
+  color: var(--ink);
+  font-weight: 600;
+}
+
 .c-session > section {
   flex: 1;
 }

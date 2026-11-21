@@ -370,7 +370,7 @@ pub fn page(
         ),
         (
             "Assignee".into(),
-            assignee_view(card.assignee.as_deref(), &card.id, root, editable),
+            assignee_view(card.assignee.as_deref(), &card.id, root, private),
         ),
     ];
     let owner_view = owners::property_view(owner, |id| {
@@ -462,6 +462,12 @@ pub fn page(
                 String::new()
             };
         properties.push(("Releases".into(), view));
+    }
+    if private && !data.sessions.is_empty() {
+        properties.push((
+            "Sessions".into(),
+            sessions_view(&data.sessions, &card.id, root),
+        ));
     }
     properties.push(("Type".into(), esc(&kind)));
     properties.push(("Created".into(), c::time(Some(&ticket.created_at), "")));
@@ -632,14 +638,31 @@ pub(crate) fn options(
     )))
 }
 
-/// The assignee of a ticket. A CLI worker's links to its session page, which only the private
-/// listener serves (`editable` pages come from it).
-fn assignee_view(assignee: Option<&str>, ticket: &str, root: &str, editable: bool) -> String {
+/// The assignee of a ticket. A CLI worker's links to the ticket's session page, which only the
+/// private listener serves.
+fn assignee_view(assignee: Option<&str>, ticket: &str, root: &str, private: bool) -> String {
     let view = worker(assignee, ticket);
     match assignee {
-        Some(session) if editable && session.starts_with("cli-") => {
-            c::link(&super::session::session_url(root, session), &view, None, "")
-        }
+        Some(session) if private && session.starts_with("cli-") => c::link(
+            &super::session::ticket_sessions_url(root, ticket),
+            &view,
+            None,
+            "",
+        ),
         _ => view,
     }
+}
+
+/// The sidebar's link to the ticket's session page: "Transcript" for one session, or how many.
+fn sessions_view(sessions: &[String], ticket: &str, root: &str) -> String {
+    let label = match sessions.len() {
+        1 => "Transcript".to_owned(),
+        count => format!("{count} sessions"),
+    };
+    c::link(
+        &super::session::ticket_sessions_url(root, ticket),
+        &label,
+        None,
+        "",
+    )
 }

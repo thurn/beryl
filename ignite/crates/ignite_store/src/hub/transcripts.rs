@@ -1,7 +1,12 @@
 //! The `transcript_lines` table: the digest of each CLI worker's transcript, which the dashboard
-//! shows at `/pool/session/<id>` and `ignite pool watch` follows.
+//! shows under its ticket at `/<ticket>/session/<id>` and `ignite pool watch` follows.
+//!
+//! A session works one ticket, except along a `lane:` chain, where the same session goes on to
+//! the next ticket. A ticket can have several sessions: one that gave it up and the next that
+//! claimed it, or a regression's session after the ticket's landing broke the build. Every line
+//! names its ticket, so the lines of one session on one ticket are found exactly.
 
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, OptionalExtension, params};
 
 use ignite_core::ids::{MachineId, SessionId, TicketId};
 use ignite_core::protocol::cli::{
@@ -138,6 +143,54 @@ pub fn tail(conn: &Connection, session: &str, count: usize) -> Result<Vec<Stored
         .collect())
 }
 
+/// The sessions that have lines on `ticket`, in the order of their first line.
+pub fn sessions_of(conn: &Connection, ticket: &str) -> Result<Vec<SessionId>> {
+    let mut statement = conn.prepare(
+        "SELECT session FROM transcript_lines WHERE ticket = ?1
+         GROUP BY session ORDER BY MIN(seq)",
+    )?;
+    let rows = statement.query_map([ticket], |row| row.get::<_, String>(0))?;
+    Ok(rows
+        .collect::<rusqlite::Result<Vec<_>>>()?
+        .into_iter()
+        .filter_map(|session| SessionId::new(session).ok())
+        .collect())
+}
+
+/// The ticket of the last line of `session`, or `None` when it has no line with a ticket.
+pub fn last_ticket(conn: &Connection, session: &str) -> Result<Option<TicketId>> {
+    let ticket: Option<String> = conn
+        .query_row(
+            "SELECT ticket FROM transcript_lines WHERE session = ?1 AND ticket IS NOT NULL
+             ORDER BY seq DESC LIMIT 1",
+            [session],
+            |row| row.get(0),
+        )
+        .optional()?;
+    Ok(ticket.and_then(|ticket| TicketId::new(ticket).ok()))
+}
+
+/// The last `count` lines of `session` on `ticket`, oldest first.
+pub fn tail_on(
+    conn: &Connection,
+    session: &str,
+    ticket: &str,
+    count: usize,
+) -> Result<Vec<StoredTranscriptLine>> {
+    let mut statement = conn.prepare(&format!(
+        "SELECT {COLUMNS} FROM (
+           SELECT {COLUMNS} FROM transcript_lines WHERE ticket = ?1 AND session = ?2
+           ORDER BY seq DESC LIMIT ?3)
+         ORDER BY seq"
+    ))?;
+    let rows = statement.query_map(params![ticket, session, count as i64], raw)?;
+    Ok(rows
+        .collect::<rusqlite::Result<Vec<_>>>()?
+        .into_iter()
+        .filter_map(decode)
+        .collect())
+}
+
 /// Deletes lines that arrived more than [`TRANSCRIPT_KEEP_DAYS`] days before `now` and returns
 /// how many.
 pub fn delete_expired(conn: &Connection, now: Timestamp) -> Result<usize> {
@@ -188,6 +241,45 @@ mod tests {
             tail(&conn, "cli-claude-0a1b2c3d", 1).unwrap()[0].line.index,
             1
         );
+    }
+
+    #[test]
+    fn a_ticket_lists_its_sessions_and_each_session_its_lines_on_it() {
+        let conn = crate::hub::open_in_memory().unwrap();
+        let machine = MachineId::new("m-1").unwrap();
+        let now = Timestamp::parse("2026-11-20T06:00:00Z").unwrap();
+        let on = |session: &str, ticket: &str, index: u32| TranscriptLine {
+            session: SessionId::new(session).unwrap(),
+            ticket: Some(TicketId::new(ticket).unwrap()),
+            ..line(1, index, "Read: a.rs")
+        };
+        // The first session gives T.1 up, the second claims it and goes on to T.2 along a lane.
+        let lines = [
+            on("cli-claude-11111111", "T.1", 0),
+            on("cli-claude-22222222", "T.1", 0),
+            on("cli-claude-22222222", "T.1", 1),
+            on("cli-claude-22222222", "T.2", 2),
+        ];
+        append(&conn, &machine, &lines, now).unwrap();
+        let sessions: Vec<String> = sessions_of(&conn, "T.1")
+            .unwrap()
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+        assert_eq!(sessions, ["cli-claude-11111111", "cli-claude-22222222"]);
+        assert_eq!(
+            tail_on(&conn, "cli-claude-22222222", "T.1", 10)
+                .unwrap()
+                .len(),
+            2
+        );
+        assert_eq!(
+            last_ticket(&conn, "cli-claude-22222222")
+                .unwrap()
+                .map(|ticket| ticket.to_string()),
+            Some("T.2".to_owned())
+        );
+        assert!(sessions_of(&conn, "T.3").unwrap().is_empty());
     }
 
     #[test]

@@ -1,8 +1,8 @@
 //! A CLI worker's transcript digest: the hub stores what a machine's daemon appends, including
-//! tool results linked to their calls, the session page carries it with a box that tells the
-//! worker something, a reader can wait for the next line with a long poll, and the public
-//! read-only listener serves neither the route nor the page, because a transcript can hold
-//! secrets.
+//! tool results linked to their calls, the session page under the ticket carries it with a box
+//! that tells the worker something, a ticket with several sessions links each, a reader can wait
+//! for the next line with a long poll, and the public read-only listener serves neither the
+//! route nor the page, because a transcript can hold secrets.
 #![allow(clippy::format_collect)]
 
 use std::io::{Read, Write};
@@ -74,6 +74,14 @@ fn lines() -> Vec<TranscriptLine> {
 
 /// A database with one CLI worker holding a ticket and a few digest lines.
 fn seeded() -> rusqlite::Connection {
+    let conn = held();
+    let now = Timestamp::parse(NOW).unwrap();
+    transcripts::append(&conn, &MachineId::new("m-1").unwrap(), &lines(), now).unwrap();
+    conn
+}
+
+/// A database with one CLI worker holding a ticket, and no digest lines.
+fn held() -> rusqlite::Connection {
     let conn = hub::open_in_memory().unwrap();
     conn.execute_batch(
         "INSERT INTO machines (id, name, os, cores, memory_mb, version, last_seen)
@@ -85,12 +93,21 @@ fn seeded() -> rusqlite::Connection {
          VALUES ('m-1', 'cli-claude-0a1b2c3d', 'claude', 'worker', 'working', 'TT1');",
     )
     .unwrap();
-    let now = Timestamp::parse(NOW).unwrap();
-    transcripts::append(&conn, &MachineId::new("m-1").unwrap(), &lines(), now).unwrap();
     conn
 }
 
 fn page(conn: &rusqlite::Connection, path: &str, private: bool, editable: bool) -> (u16, String) {
+    let (status, _, body) = reply(conn, path, private, editable);
+    (status, body)
+}
+
+/// The status, the `Location` header and the body of a `GET` of `path`.
+fn reply(
+    conn: &rusqlite::Connection,
+    path: &str,
+    private: bool,
+    editable: bool,
+) -> (u16, Option<String>, String) {
     let request = Request {
         method: "GET".to_owned(),
         path: path.to_owned(),
@@ -106,13 +123,22 @@ fn page(conn: &rusqlite::Connection, path: &str, private: bool, editable: bool) 
         private,
     };
     let reply = serve_with(conn, &request, &site, Timestamp::parse(NOW).unwrap()).unwrap();
-    (reply.status, String::from_utf8(reply.body).unwrap())
+    let location = reply
+        .headers
+        .iter()
+        .find(|(name, _)| *name == "Location")
+        .map(|(_, value)| value.clone());
+    (
+        reply.status,
+        location,
+        String::from_utf8(reply.body).unwrap(),
+    )
 }
 
 #[test]
 fn the_session_page_shows_the_lines_and_the_tell_box() {
     let conn = seeded();
-    let (status, html) = page(&conn, &format!("/pool/session/{SESSION}"), true, true);
+    let (status, html) = page(&conn, &format!("/TT1/session/{SESSION}"), true, true);
     assert_eq!(status, 200, "{html}");
     for expected in [
         "Run `ignite start TT1`",
@@ -139,10 +165,31 @@ fn the_session_page_shows_the_lines_and_the_tell_box() {
     // The script renders the lines, so the page has no copy of them as HTML rows.
     assert!(!html.contains("class=\"c-transcript-line\""));
     // Without edit controls the page shows the lines but no box.
-    let (status, html) = page(&conn, &format!("/pool/session/{SESSION}"), true, false);
+    let (status, html) = page(&conn, &format!("/TT1/session/{SESSION}"), true, false);
     assert_eq!(status, 200);
     assert!(html.contains("Reading the files") && !html.contains("data-tell"));
-    // A session the hub has never heard of is 404.
+    // `/<ticket>/session` is the ticket's latest session.
+    let (status, html) = page(&conn, "/TT1/session", true, true);
+    assert_eq!(status, 200);
+    assert!(html.contains("Reading the files") && html.contains(SESSION));
+    // A session that never worked the ticket, and a ticket without sessions, are 404.
+    assert_eq!(
+        page(&conn, "/TT1/session/cli-claude-ffffffff", true, true).0,
+        404
+    );
+    assert_eq!(page(&conn, "/TT2/session", true, true).0, 404);
+}
+
+#[test]
+fn the_first_address_of_a_session_redirects_to_its_ticket() {
+    let conn = seeded();
+    let (status, location, _) = reply(&conn, &format!("/pool/session/{SESSION}"), true, true);
+    assert_eq!(status, 308);
+    assert_eq!(location.as_deref(), Some(format!("/TT1/session/{SESSION}").as_str()));
+    // Another name for the ticket redirects to its own.
+    let (status, location, _) = reply(&conn, "/tt1/session/", true, true);
+    assert_eq!(status, 308);
+    assert_eq!(location.as_deref(), Some("/TT1/session"));
     assert_eq!(
         page(&conn, "/pool/session/cli-claude-ffffffff", true, true).0,
         404
@@ -150,9 +197,51 @@ fn the_session_page_shows_the_lines_and_the_tell_box() {
 }
 
 #[test]
+fn a_ticket_with_two_sessions_links_both_and_shows_each_ones_own_lines() {
+    let conn = held();
+    // An earlier session gave TT1 up; the current one goes on to TT2 along a lane later.
+    let earlier = "cli-claude-99999999";
+    let line = |session: &str, ticket: &str, index, text: &str| TranscriptLine {
+        session: session.parse().unwrap(),
+        ticket: Some(ticket.parse().unwrap()),
+        turn: 1,
+        index,
+        kind: TranscriptKind::Assistant,
+        text: text.to_owned(),
+        at: None,
+        call: None,
+    };
+    let now = Timestamp::parse(NOW).unwrap();
+    let machine = MachineId::new("m-1").unwrap();
+    transcripts::append(&conn, &machine, &[line(earlier, "TT1", 0, "Giving it up")], now).unwrap();
+    transcripts::append(&conn, &machine, &lines(), now).unwrap();
+    transcripts::append(&conn, &machine, &[line(SESSION, "TT2", 9, "On the next ticket")], now)
+        .unwrap();
+
+    let (status, latest) = page(&conn, "/TT1/session", true, true);
+    assert_eq!(status, 200);
+    assert!(latest.contains("Reading the files"), "{latest}");
+    assert!(!latest.contains("Giving it up") && !latest.contains("On the next ticket"));
+    assert!(latest.contains(&format!("href=\"/TT1/session/{earlier}\"")), "{latest}");
+    let (status, first) = page(&conn, &format!("/TT1/session/{earlier}"), true, true);
+    assert_eq!(status, 200);
+    assert!(first.contains("Giving it up") && !first.contains("Reading the files"));
+    // The earlier session no longer holds the ticket, so there is no box to tell it something.
+    assert!(!first.contains("data-tell"));
+    assert!(first.contains(&format!("href=\"/TT1/session/{SESSION}\"")));
+
+    // The ticket's sidebar links its sessions on the private listener only.
+    let (_, ticket) = page(&conn, "/TT1", true, true);
+    assert!(ticket.contains("href=\"/TT1/session\""), "{ticket}");
+    assert!(ticket.contains("2 sessions"), "{ticket}");
+    let (_, public) = page(&conn, "/TT1", false, false);
+    assert!(!public.contains("/TT1/session"));
+}
+
+#[test]
 fn the_pool_page_links_a_cli_worker_on_the_private_listener_only() {
     let conn = seeded();
-    let link = format!("/pool/session/{SESSION}");
+    let link = format!("/TT1/session/{SESSION}");
     assert!(page(&conn, "/pool", true, true).1.contains(&link));
     assert!(!page(&conn, "/pool", false, false).1.contains(&link));
 }
@@ -160,9 +249,15 @@ fn the_pool_page_links_a_cli_worker_on_the_private_listener_only() {
 #[test]
 fn the_session_page_is_a_404_when_the_listener_is_not_private() {
     let conn = seeded();
-    let (status, html) = page(&conn, &format!("/pool/session/{SESSION}"), false, false);
-    assert_eq!(status, 404);
-    assert!(!html.contains("Reading the files"));
+    for path in [
+        format!("/TT1/session/{SESSION}"),
+        "/TT1/session".to_owned(),
+        format!("/pool/session/{SESSION}"),
+    ] {
+        let (status, html) = page(&conn, &path, false, false);
+        assert_eq!(status, 404, "{path}");
+        assert!(!html.contains("Reading the files"));
+    }
 }
 
 /// One request's status code and body.
@@ -262,7 +357,7 @@ fn the_hub_stores_a_line_once_and_the_public_listener_answers_404() {
         send(
             public.address(),
             "GET",
-            &format!("/pool/session/{SESSION}"),
+            &format!("/TT1/session/{SESSION}"),
             &[],
             ""
         )
@@ -280,16 +375,16 @@ fn the_hub_stores_a_line_once_and_the_public_listener_answers_404() {
         .0,
         405
     );
-    // The private listener serves the page for a session that has lines.
-    let (status, html) = send(
+    // The private listener sends the page's first address on to the session's ticket. The
+    // ticket itself is not in this database, so the pages are covered by the tests above.
+    let (status, _) = send(
         private.address(),
         "GET",
         &format!("/pool/session/{SESSION}"),
         &[],
         "",
     );
-    assert_eq!(status, 200);
-    assert!(html.contains("Reading the files"));
+    assert_eq!(status, 308);
 
     public.stop();
     private.stop();

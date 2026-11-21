@@ -3,6 +3,9 @@
 // is the conversation, `#c-transcript-lines` the JSON of the lines the page was served with and
 // `data-after` the position of the last of them.
 //
+// The page shows one session's lines on one ticket. Along a `lane:` chain the same session goes
+// on to the next ticket, so later lines that name another ticket are skipped.
+//
 // The script renders every line itself: what the worker wrote as Markdown, each run of tool
 // calls as one collapsed block with each call's result inside, each prompt as the user's
 // message and each turn's end as a divider. It follows later lines with a long poll on
@@ -308,9 +311,12 @@
                     }
                     delay = RETRY_MIN_MS;
                     const stick = atBottom();
-                    lines = lines.concat(page.lines);
                     after = page.lines[page.lines.length - 1].seq;
                     box.dataset.after = String(after);
+                    const ticket = ctx.dataset.ticket;
+                    const fresh = page.lines.filter((line) => !ticket || line.ticket === ticket);
+                    if (!fresh.length) continue;
+                    lines = lines.concat(fresh);
                     render(box, lines);
                     document.querySelector(".c-transcript-empty")?.setAttribute("hidden", "");
                     if (stick) scrollTo(0, document.documentElement.scrollHeight);

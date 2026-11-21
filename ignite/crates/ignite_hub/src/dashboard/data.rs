@@ -258,6 +258,9 @@ pub struct TicketData {
     pub releases: ignite_store::hub::releases::Releases,
     /// The ticket's image attachments, oldest first, removed ones included.
     pub attachments: Vec<ignite_core::protocol::attachments::Attachment>,
+    /// The CLI worker sessions with a transcript on the ticket, oldest first (see
+    /// [`super::session`]).
+    pub sessions: Vec<String>,
 }
 
 /// When a meta-ticket files its next copy, as its page shows it.
@@ -455,6 +458,7 @@ pub fn ticket_data(
         next_copy: next_copy(conn, &ticket)?,
         releases: ignite_store::hub::releases::of(conn, &id)?,
         attachments: ignite_store::hub::attachments::list(conn, &id)?,
+        sessions: super::session::sessions_of(conn, &id)?,
         ticket,
     })
 }
