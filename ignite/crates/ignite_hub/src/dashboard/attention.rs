@@ -379,18 +379,17 @@ pub fn items(
     Ok(found)
 }
 
-/// The first line of the dashboard: each item that needs a person, or a note that none does.
+/// The dashboard navigation, preceded by any items that need a person.
 pub fn line(conn: &Connection, root: &str, now: Timestamp) -> Result<String, ReadError> {
     let items = items(conn, root, now)?;
-    let body = if items.is_empty() {
-        c::empty("Nothing needs a person.")
-    } else {
-        c::rows(
-            items
-                .iter()
-                .map(|(tone, text)| c::row(&(c::dot(*tone, "", None) + text), "", None)),
-        )
-    };
+    if items.is_empty() {
+        return Ok(nav(root));
+    }
+    let body = c::rows(
+        items
+            .iter()
+            .map(|(tone, text)| c::row(&(c::dot(*tone, "", None) + text), "", None)),
+    );
     Ok(c::section(
         "Needs a person",
         &body,

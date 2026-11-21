@@ -150,7 +150,9 @@ fn pages_render_when_the_hub_is_empty() {
     ] {
         page(&conn, path);
     }
-    assert!(page(&conn, "/").contains("Nothing needs a person."));
+    let home = page(&conn, "/");
+    assert!(!home.contains("id=\"attention\""));
+    assert!(home.contains("href=\"/pool\""));
 }
 
 #[test]
