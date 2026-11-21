@@ -162,8 +162,8 @@ pub const SORCERY_TIMING: &[Scenario] = &[
             ME.controls(SAMBAR, 1),
         ]),
     Scenario::new("A creature without flash waits for the main phase and an empty stack")
-        .at(3, P0, TurnStep::Upkeep)
-        .hand(P0, &[SAMBAR, BLADE])
+        .at(1, P0, TurnStep::Upkeep)
+        .hand(P0, &[SAMBAR, BLADE, names::PLAINS])
         .battlefield(
             P0,
             &[
@@ -176,8 +176,8 @@ pub const SORCERY_TIMING: &[Scenario] = &[
         )
         .actions(&[
             ME.deciding(DecisionKind::Priority, 2), // Pass or cast the flash creature.
-            advance_to(3, TurnStep::PrecombatMain),
-            ME.deciding(DecisionKind::Priority, 4), // Both spells and the drawn land.
+            advance_to(1, TurnStep::PrecombatMain),
+            ME.deciding(DecisionKind::Priority, 4), // Pass, play the land or cast either spell.
             ME.casts(BLADE),
             stack(1),
             ME.deciding(DecisionKind::Priority, 1),
@@ -225,7 +225,6 @@ pub const LEGAL_TARGETS: &[Scenario] = &[
             Resolve,
             THEM.passes(),
             ME.casts(names::GET_LOST),
-            Resolve,
             THEM.has(Zone::Graveyard, SAMBAR, 1),
         ]),
     Scenario::new("A removal spell can choose either player's creature")
@@ -301,24 +300,28 @@ pub const IMPENDING: &[Scenario] =
             ]),
     ];
 
+const TEFERI: &str = names::TEFERI_TIME_RAVELER;
+
 pub const LOYALTY_TIMING: &[Scenario] =
     &[
         Scenario::new("Loyalty costs and timing limit the activations a planeswalker offers")
-            .at(3, P0, TurnStep::Upkeep)
-            .permanents(
-                P0,
-                &[Permanent::new(names::TEFERI_TIME_RAVELER).counters(CounterKind::Loyalty, 2)],
-            )
+            .at(1, P0, TurnStep::Upkeep)
+            .interaction(&[names::LIGHTNING_BOLT])
+            .hand(P0, &[names::LIGHTNING_BOLT, names::ISLAND])
+            .battlefield(P0, &[TEFERI, names::MOUNTAIN])
             .battlefield(P1, &[props::FLIER.card])
             .actions(&[
-                advance_to(3, TurnStep::Upkeep),
-                ME.deciding(DecisionKind::Priority, 1),
-                advance_to(3, TurnStep::PrecombatMain),
-                ME.deciding(DecisionKind::Priority, 3), // Pass, play the drawn land or activate +1.
-                ME.activates(names::TEFERI_TIME_RAVELER, 1),
-                ME.has_loyalty(names::TEFERI_TIME_RAVELER, 3),
+                ME.deciding(DecisionKind::Priority, 2), // Pass or cast Lightning Bolt.
+                ME.casts(names::LIGHTNING_BOLT),
+                ME.targets(TEFERI),
                 Resolve,
-                ME.deciding(DecisionKind::Priority, 2), // Pass or play the land, even with 3 loyalty.
+                ME.has_loyalty(TEFERI, 1),
+                advance_to(1, TurnStep::PrecombatMain),
+                ME.deciding(DecisionKind::Priority, 3), // Pass, play the land or activate +1.
+                ME.activates(TEFERI, 1),
+                ME.has_loyalty(TEFERI, 2),
+                Resolve,
+                ME.deciding(DecisionKind::Priority, 2), // Pass or play the land.
             ]),
     ];
 

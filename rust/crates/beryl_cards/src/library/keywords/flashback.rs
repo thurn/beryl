@@ -95,7 +95,6 @@ pub const RETURN_TO_HAND: &[Scenario] =
                 Resolve,
                 ME.casts(props::SORCERY.card),
                 THEM.casts(names::REPRIEVE),
-                Resolve,
                 ME.has(Zone::Exile, props::SORCERY.card, 1),
                 ME.has(Zone::Hand, props::SORCERY.card, 0),
                 THEM.has(Zone::Graveyard, names::REPRIEVE, 1),

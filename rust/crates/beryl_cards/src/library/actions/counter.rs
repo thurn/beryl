@@ -144,7 +144,6 @@ pub const SAME_NAME: &[Scenario] =
                 ME.deciding(DecisionKind::Target, 2),
                 ME.targets(names::LIGHTNING_BOLT),
                 Resolve,
-                Resolve,
                 stack(0),
                 THEM.has(Zone::Graveyard, names::LIGHTNING_BOLT, 2),
             ]),

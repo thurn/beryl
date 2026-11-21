@@ -93,7 +93,6 @@ pub const ANY_TARGET: &[Scenario] = &[
             THEM.casts(props::REMOVAL.card),
             THEM.targets(FLIER),
             Resolve,
-            Resolve,
             ME.has(Zone::Graveyard, BOLT, 1),
             ME.has(Zone::Hand, FLIER, 1),
             ME.life(20),
