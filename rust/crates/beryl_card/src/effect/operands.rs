@@ -7,7 +7,7 @@
 
 use crate::PutOnto;
 use crate::cost::{Chosen, Cost, CostPart};
-use crate::effect::{Amount, Effect, Objects, Players, Recipients, Taken};
+use crate::effect::{Amount, Branches, Effect, Objects, Players, Recipients, Taken};
 use crate::filter::Filter;
 
 /// The expressions one instruction holds. An instruction that holds other instructions
@@ -289,8 +289,8 @@ impl Effect {
         if self.operands().names_paid() {
             return true;
         }
-        match self {
-            Effect::Sequence(effects) => {
+        match self.branches() {
+            Branches::Sequence(effects) => {
                 let mut i = 0;
                 while i < effects.len() {
                     if effects[i].names_paid() {
@@ -300,7 +300,7 @@ impl Effect {
                 }
                 false
             }
-            Effect::If {
+            Branches::If {
                 condition,
                 then,
                 otherwise,
@@ -312,10 +312,10 @@ impl Effect {
                         None => false,
                     }
             }
-            Effect::May { effect, .. }
-            | Effect::Unless { effect, .. }
-            | Effect::ForEachPlayer { effect, .. } => effect.names_paid(),
-            _ => false,
+            Branches::May(effect)
+            | Branches::Unless(effect, _)
+            | Branches::ForEachPlayer(effect) => effect.names_paid(),
+            Branches::Single => false,
         }
     }
 }

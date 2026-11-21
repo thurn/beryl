@@ -134,7 +134,15 @@ impl Condition {
                 Condition::All(conditions) | Condition::Any(conditions) => {
                     conditions.iter().any(|condition| condition.any(test))
                 }
-                _ => false,
+                Condition::Did
+                | Condition::Paid(_)
+                | Condition::Compare(..)
+                | Condition::Is(..)
+                | Condition::EnteredThisTurn(_)
+                | Condition::OnBattlefield(_)
+                | Condition::Token(_)
+                | Condition::WonFlip
+                | Condition::DrewInDrawStep(_) => false,
             }
     }
 }

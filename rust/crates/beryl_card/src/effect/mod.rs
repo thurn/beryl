@@ -44,6 +44,7 @@ pub use terms::{
     CastTerms, CopyChange, CopyException, Found, LibraryOrder, LibraryPosition, Prevention,
     PutOnto, Taken,
 };
+pub(crate) use traversal::Branches;
 
 use crate::continuous::{Duration, Modification, RuleChange};
 use crate::cost::Cost;
@@ -729,50 +730,6 @@ impl Effect {
             | Effect::LoseGame(_)
             | Effect::ControlPlayer(_)
             | Effect::ExtraTurn(_) => false,
-        }
-    }
-
-    /// The objects its player must choose one of before it does anything else
-    /// ([`Effect::Choose`], not optional): with none of them it does nothing at all, which a
-    /// player about to pay for it can be told ([`crate::Ability::needs`]).
-    pub const fn needs(&self) -> Option<Objects> {
-        match *self {
-            Effect::Choose {
-                among,
-                optional: false,
-                ..
-            } => Some(among),
-            Effect::Sequence([first, ..]) => first.needs(),
-            _ => None,
-        }
-    }
-
-    /// The rule change this starts as it resolves ([`Effect::ChangeRule`]), whichever of its
-    /// instructions does: what its ability names to the game ([`crate::Ability::rule`]).
-    pub const fn starts(&self) -> Option<&'static RuleChange> {
-        match *self {
-            Effect::ChangeRule { rule, .. } => Some(rule),
-            Effect::Sequence(effects) => {
-                let mut i = 0;
-                while i < effects.len() {
-                    if let Some(rule) = effects[i].starts() {
-                        return Some(rule);
-                    }
-                    i += 1;
-                }
-                None
-            }
-            Effect::If {
-                then, otherwise, ..
-            } => match (then.starts(), otherwise) {
-                (Some(rule), _) => Some(rule),
-                (None, Some(otherwise)) => otherwise.starts(),
-                (None, None) => None,
-            },
-            Effect::May { effect, .. }
-            | Effect::Unless { effect, .. }
-            | Effect::ForEachPlayer { effect, .. } => effect.starts(),
-            _ => None,
         }
     }
 }

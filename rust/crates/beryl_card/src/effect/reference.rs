@@ -130,7 +130,19 @@ impl Objects {
         match self {
             Objects::Paid(_) => true,
             Objects::Other(objects) => objects.names_paid(),
-            _ => false,
+            Objects::This
+            | Objects::Target(_)
+            | Objects::AttachedTo
+            | Objects::Those
+            | Objects::TriggeredOn
+            | Objects::TriggeredOnIn(_)
+            | Objects::ExiledWithThis
+            | Objects::PutOntoBattlefieldWithThis
+            | Objects::Carried
+            | Objects::All { .. }
+            | Objects::InZoneOf { .. }
+            | Objects::CardsIn { .. }
+            | Objects::Everywhere(_) => false,
         }
     }
 }
