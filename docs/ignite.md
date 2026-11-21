@@ -2868,12 +2868,12 @@ single listing and the families run at once above, prevent it:
   9,000 checks that cost milliseconds each is one or two commands. A check
   nobody has measured counts as its family's median. A family nobody has
   measured starts at 50 checks a claim and doubles with each claim.
-- **A covered family is not run twice.** `covered_by = "<family>"` on a family
-  says that the named family's checks find every fault this family's find, as
-  `b3d-every-tick` does for `b3d-interface`. The gate may still choose the
-  cheaper family. In tip verification a covered check counts as passed when the
-  check of the same name in the covering family passed on the same inputs, and
-  is run only when the covering family has no such check.
+- **A covering check stands in for a matching check.** `covered_by = "<family>"`
+  says that the named family's checks find every fault the covered family's
+  checks find. Tip verification drops a covered check when a check of the same
+  name and platform reads at least the same inputs. It does this before scoring,
+  so only the covering check's history affects the tip budget. The landing gate
+  scores both families independently.
 - **A round reports where its time went.** Its record holds the minutes spent
   running checks, listing, building and waiting for cores, each summed over the
   families that ran at once, and the minutes during which a family was being

@@ -281,18 +281,15 @@ inputs = [
 # limits under `tests` in data/beryl3d/gates.json, whose median is over every test, so it runs
 # them all.
 #
-# Tip verification runs `b3d-every-tick` in its place (`covered_by`): the every-tick run applies
-# the checks on every tick, so it finds every fault the check times find, and both families list
-# the same tests with the same inputs. Only `b3d-interface:frame-limits`, which `b3d-every-tick`
-# does not list, still runs here at the tip. The landing gate may still choose this cheaper
-# family.
+# Tip verification scores the two families independently. Substituting `b3d-every-tick`
+# discarded the failure history of `b3d-interface` before scoring, so the tip budget deferred
+# the replacement checks for regressions the landing gate was already finding.
 [family.b3d-interface]
 kind = "regression"
 adapter = "jsonl"
 platforms = ["macos"]
 needs = ["python-env", "b3d"]
 grows = true
-covered_by = "b3d-every-tick"
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-interface list"
 # The listing comes from what a built program does, which comments cannot change, so a change
 # that edits only comments keeps the listing and builds nothing to list.
@@ -370,8 +367,7 @@ inputs = [
 ]
 
 # The interface tests with the checks applied on every tick (`just b3d test --every-tick`): the
-# exhaustive form of `b3d-interface`, held to the same list of allowed faults. The every-tick
-# run finds every fault the check times find, which a differential test requires.
+# second way to sample the same recordings, held to the same list of allowed faults.
 [family.b3d-every-tick]
 kind = "regression"
 adapter = "jsonl"
