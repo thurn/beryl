@@ -63,6 +63,7 @@ mod grants;
 mod hang;
 mod jobserver;
 pub(crate) mod peaks;
+mod priority;
 mod requests;
 mod retain;
 mod run_verb;
@@ -73,6 +74,7 @@ pub use grants::{GrantFile, STOP_GRACE_S};
 use hang::{Watchdog, signal_group};
 use jobserver::{Jobserver, read_cores};
 use peaks::Peaks;
+use priority::AgentPriority;
 pub use requests::{request_of, requests_in, unfinished_of_in};
 pub use retain::{KEEP_JUDGED_S, KEEP_S, keep};
 pub use run_verb::{DEFAULT_HANG_LIMIT_S, RunVerb};
@@ -168,6 +170,7 @@ pub struct SupervisedLauncher {
     supervisor: Vec<String>,
     runs: PathBuf,
     scheduler: Option<Arc<Scheduler>>,
+    agent_priority: Option<AgentPriority>,
     next: AtomicU64,
     /// When old run directories were last deleted, in seconds since the Unix epoch.
     pruned: AtomicU64,
@@ -198,6 +201,7 @@ impl SupervisedLauncher {
             cpu: Peaks::load(runs.join("cpu.json")),
             runs,
             scheduler: None,
+            agent_priority: None,
             next: AtomicU64::new(0),
             pruned: AtomicU64::new(0),
             stop_grace_s: STOP_GRACE_S,

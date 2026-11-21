@@ -112,6 +112,7 @@ impl Ledger {
                 reserved: 0,
                 lent: extra,
                 reserve: None,
+                priority_ticket: None,
             },
         );
         Some((id, extra))

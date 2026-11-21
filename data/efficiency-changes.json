@@ -759,5 +759,10 @@
     "label": "Beryl 3D reloads valid runtime tuning in the running app, so a tuning edit can be checked without restarting and replaying to the same point.",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Commands for regressions and master-lag justiciar tickets get shared cores before queued feature work, reducing the wait to verify fixes that hold master back.",
+    "metric": "ignite.master-lag-minutes",
+    "expect": "down"
   }
 ]

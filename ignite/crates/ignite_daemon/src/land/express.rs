@@ -125,6 +125,7 @@ impl CoreLender for SchedulerLender {
             grows: false,
             cores_file: None,
             reserve: None,
+            priority_ticket: None,
         })?;
         Some(Loan {
             grant: grant.id,

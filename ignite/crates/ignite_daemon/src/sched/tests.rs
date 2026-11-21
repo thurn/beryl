@@ -40,6 +40,7 @@ fn ask(class: Class, cores: u32) -> GrantRequest {
         grows: false,
         cores_file: None,
         reserve: None,
+        priority_ticket: None,
     }
 }
 
@@ -432,6 +433,7 @@ fn a_grant_sets_the_thread_counts() {
         resources: Vec::new(),
         queued_s: 0,
         cores_file: Some("/runs/1/cores".into()),
+        priority_ticket: None,
     };
     let env = grant.env();
     for name in [

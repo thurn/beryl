@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use ignite_core::fakes::FakeHub;
 use ignite_core::traits::Result;
 
@@ -479,6 +481,7 @@ fn status_shows_the_sections_its_flags_ask_for() {
         free_memory_mb: Some(2048),
         tip_build: 0,
         tip_build_used: 0,
+        priority_grants: BTreeMap::new(),
         classes: vec![],
         resources: vec![],
     });
@@ -513,7 +516,7 @@ fn status_shows_the_sections_its_flags_ask_for() {
 }
 
 #[test]
-fn status_says_how_many_cores_are_kept_for_tip_builds() {
+fn status_shows_the_tip_reserve_and_grants_with_ticket_priority() {
     let status = Arc::new(|| sched::Status {
         cores: 10,
         outside: 0,
@@ -526,6 +529,7 @@ fn status_says_how_many_cores_are_kept_for_tip_builds() {
         free_memory_mb: None,
         tip_build: 4,
         tip_build_used: 3,
+        priority_grants: BTreeMap::from([(ignite_core::ids::TicketId::new("FIX").unwrap(), 1)]),
         classes: vec![],
         resources: vec![],
     });
@@ -536,6 +540,9 @@ fn status_says_how_many_cores_are_kept_for_tip_builds() {
         "{}",
         plain.text
     );
+    assert!(plain.text.contains(
+        "1 command for FIX granted cores with priority because the ticket holds master back"
+    ));
 }
 
 #[test]

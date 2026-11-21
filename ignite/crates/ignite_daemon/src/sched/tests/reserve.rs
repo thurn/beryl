@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex};
 
 use ignite_core::config::{Floor, Os};
 use ignite_core::fakes::FakeClock;
+use ignite_core::ids::TicketId;
 use ignite_core::protocol::Class;
 use ignite_core::traits::Reserve;
 
@@ -213,6 +214,7 @@ fn an_adopted_tip_build_holds_the_reserve_until_released() {
         memory_mb: None,
         follow: None,
         reserve: Some(Reserve::TipBuild),
+        priority_ticket: None,
     }]);
     assert_eq!(scheduler.status().tip_build_used, 4);
     assert_eq!(scheduler.status().granted, 0);
@@ -274,4 +276,53 @@ fn without_a_reserve_a_tip_build_is_served_first_from_the_shared_cores() {
     assert_eq!(granted[0], (build, 4));
     assert_eq!(ledger.status().tip_build_used, 0);
     assert!(ledger.lend_reserve(None, Class::Land, 4).is_none());
+}
+
+#[test]
+fn master_blocking_work_follows_tip_builds_and_goes_ahead_of_older_agent_work() {
+    let mut ledger = Ledger::new(Limits {
+        floor: Floor::default(),
+        ..with_reserve()
+    });
+    let running = ledger.enqueue(ask(Class::Agent, 16), T0);
+    let finishing = ledger.enqueue(ask(Class::Agent, 8), T0);
+    assert_eq!(ledger.step(T0).granted.len(), 2);
+
+    let feature = ledger.enqueue(ask(Class::Agent, 1), T0);
+    let now = at(super::super::AGED_SECONDS + 1.0);
+    let ticket = TicketId::new("FIX").unwrap();
+    let regression = ledger.enqueue(
+        GrantRequest {
+            priority_ticket: Some(ticket.clone()),
+            ..ask(Class::Agent, 8)
+        },
+        now,
+    );
+    let waiting = ledger.step(now);
+    assert!(waiting.granted.is_empty());
+    assert!(waiting.stop.is_empty());
+    assert!(waiting.resized.is_empty());
+
+    let tip = ledger.enqueue(tip_build(12), now);
+    assert!(ledger.release(finishing));
+    let step = ledger.step(now);
+    assert_eq!(step.granted.len(), 1);
+    assert_eq!((step.granted[0].id, step.granted[0].cores), (tip, 12));
+    assert_eq!(ledger.status().tip_build_used, 4);
+    assert!(ledger.status().priority_grants.is_empty());
+
+    assert!(ledger.release(tip));
+    let step = ledger.step(now);
+    assert_eq!(step.granted.len(), 1);
+    assert_eq!((step.granted[0].id, step.granted[0].cores), (regression, 8));
+    assert!(ledger.holds(running));
+    assert!(!ledger.holds(feature));
+    assert_eq!(
+        ledger.status().priority_grants,
+        BTreeMap::from([(ticket, 1)])
+    );
+
+    assert!(ledger.release(regression));
+    assert_eq!(ledger.step(now).granted[0].id, feature);
+    assert!(ledger.status().priority_grants.is_empty());
 }

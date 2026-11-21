@@ -40,9 +40,9 @@ pub const AGED_SECONDS: f64 = 120.0;
 pub const SMALL_CORES: u32 = 2;
 
 impl Ledger {
-    /// The waiters of `class` in the order they are served at `now`: those that have waited
-    /// [`AGED_SECONDS`] first, by when they were first asked for; then the rest by the cores they
-    /// want, fewest first, and then by when they were first asked for.
+    /// The waiters of `class` in the order they are served at `now`:
+    /// priority requests first, then those that have waited [`AGED_SECONDS`] in arrival order.
+    /// The rest go by the cores they want, fewest first, then by arrival order.
     pub(super) fn served_order(&self, class: Class, now: Timestamp) -> Vec<&Waiter> {
         let mut waiters: Vec<&Waiter> = self
             .waiting
@@ -59,6 +59,10 @@ impl Ledger {
         let tip_build = |w: &Waiter| w.request.reserve == Some(Reserve::TipBuild);
         if tip_build(a) != tip_build(b) {
             return tip_build(b).cmp(&tip_build(a));
+        }
+        let priority = |w: &Waiter| w.request.priority_ticket.is_some();
+        if priority(a) != priority(b) {
+            return priority(b).cmp(&priority(a));
         }
         match (aged(a), aged(b)) {
             (true, false) => Ordering::Less,

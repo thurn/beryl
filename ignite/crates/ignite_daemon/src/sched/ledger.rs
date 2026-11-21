@@ -6,6 +6,7 @@
 
 use std::collections::BTreeMap;
 
+use ignite_core::ids::TicketId;
 use ignite_core::protocol::Class;
 use ignite_core::time::Timestamp;
 use ignite_core::traits::Reserve;
@@ -69,6 +70,7 @@ struct Held {
     /// The reserve the request was made for. A `Reserve::TipBuild` grant is scheduled ahead of
     /// every class ([`Held::rank`]) and never gives cores back for another request.
     reserve: Option<Reserve>,
+    priority_ticket: Option<TicketId>,
 }
 
 impl Held {
@@ -210,9 +212,17 @@ impl Ledger {
                 reserved: 0,
                 lent: 0,
                 reserve: None,
+                priority_ticket: None,
             },
         );
         id
+    }
+
+    /// Restores the ticket whose priority an adopted grant used.
+    pub(super) fn record_priority(&mut self, id: u64, ticket: Option<TicketId>) {
+        if let Some(held) = self.held.get_mut(&id) {
+            held.priority_ticket = ticket;
+        }
     }
 
     /// While draining, `idle` requests start nothing and every `idle` grant is asked to stop,
@@ -584,6 +594,7 @@ impl Ledger {
                 reserved,
                 lent: 0,
                 reserve: waiter.request.reserve,
+                priority_ticket: waiter.request.priority_ticket.clone(),
             },
         );
         Grant {
@@ -592,6 +603,7 @@ impl Ledger {
             resources: waiter.request.resources,
             queued_s,
             cores_file: waiter.request.cores_file,
+            priority_ticket: waiter.request.priority_ticket,
         }
     }
 

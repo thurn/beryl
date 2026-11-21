@@ -1,6 +1,8 @@
 //! What the ledger reports about itself: the scheduler's state for `ignite status`, and the
 //! grants named when they exceed the machine's cores.
 
+use std::collections::BTreeMap;
+
 use ignite_core::protocol::Class;
 
 use super::super::Status;
@@ -46,6 +48,14 @@ impl Ledger {
                     .count() as u32,
             })
             .collect();
+        let mut priority_grants = BTreeMap::new();
+        for ticket in self
+            .held
+            .values()
+            .filter_map(|h| h.priority_ticket.as_ref())
+        {
+            *priority_grants.entry(ticket.clone()).or_default() += 1;
+        }
         Status {
             cores: self.limits.cores,
             outside: self.outside,
@@ -63,6 +73,7 @@ impl Ledger {
             free_memory_mb: self.free_memory_mb,
             tip_build: self.limits.tip_build,
             tip_build_used: self.tip_reserve_used(),
+            priority_grants,
             classes,
             resources,
         }

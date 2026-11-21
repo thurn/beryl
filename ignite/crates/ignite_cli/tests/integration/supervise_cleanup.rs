@@ -13,6 +13,7 @@ use std::thread;
 
 use ignite_core::config::Floor;
 use ignite_core::fakes::FakeClock;
+use ignite_core::ids::TicketId;
 use ignite_core::protocol::Class;
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{CommandSpec, Launcher};
@@ -153,6 +154,7 @@ fn a_restarted_daemon_registers_the_grants_of_commands_still_running() {
     let root = scratch("adopt");
     let run_dir = root.join("runs").join("00000000000000000001-1-0");
     fs::create_dir_all(&run_dir).unwrap();
+    let ticket = TicketId::new("FIX").unwrap();
     let grant = GrantFile {
         class: Class::Agent,
         cores: 3,
@@ -161,6 +163,7 @@ fn a_restarted_daemon_registers_the_grants_of_commands_still_running() {
         follows: false,
         shrinks: false,
         reserve: None,
+        priority_ticket: Some(ticket.clone()),
     };
     fs::write(
         run_dir.join("spec.json"),
@@ -187,6 +190,7 @@ fn a_restarted_daemon_registers_the_grants_of_commands_still_running() {
     launcher.adopt_unfinished();
     let status = scheduler.status();
     assert_eq!(status.granted, 3);
+    assert_eq!(status.priority_grants, BTreeMap::from([(ticket, 1)]));
     let oracle = status
         .resources
         .iter()
@@ -218,6 +222,7 @@ fn an_adopted_grant_keeps_growing_through_its_cores_file() {
         follows: true,
         shrinks: true,
         reserve: None,
+        priority_ticket: None,
     };
     fs::write(
         run_dir.join("spec.json"),

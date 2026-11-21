@@ -10,9 +10,11 @@
 //!
 //! - Five classes in strict order (`land`, `agent`, `tip`, `batch`, `idle`). A lower class starts
 //!   nothing while a higher one has a request waiting for cores.
-//! - One command takes at most two thirds of the cores. Within a class, a request that has
-//!   waited [`AGED_SECONDS`] goes first, then the smallest; each gets what it asked for before
-//!   the next gets anything (see `ledger/order.rs`).
+//! - Within `agent`, commands for regressions and master-lag justiciar tickets are served
+//!   before other agents. The priority changes only the order of queued requests.
+//! - One command takes at most two thirds of the cores. Among requests of equal priority,
+//!   those that waited [`AGED_SECONDS`] go first, then the smallest. Each gets what it asked
+//!   for before the next gets anything (see `ledger/order.rs`).
 //! - `tip` and `batch` have derived floors that higher classes cannot take while the class
 //!   has work running or waiting.
 //! - Each named resource is held by at most its capacity of grants at once. A resource the
@@ -67,6 +69,7 @@ use std::time::Duration;
 
 use ignite_core::capacity::{Derived, MachineFacts, resource_slots};
 use ignite_core::config::{Config, Floor, Machine};
+use ignite_core::ids::TicketId;
 use ignite_core::manifest::{Manifest, Platforms};
 use ignite_core::protocol::Class;
 use ignite_core::traits::Clock;
@@ -110,6 +113,8 @@ pub struct GrantRequest {
     /// no other request is granted, and takes the rest of what it wants from the shared cores in
     /// its class.
     pub reserve: Option<ignite_core::traits::Reserve>,
+    /// The ticket that holds master back, giving this request priority within the agent queue.
+    pub priority_ticket: Option<TicketId>,
 }
 
 /// How an adopted grant keeps following its command after a daemon restart: the cores file its
@@ -133,6 +138,8 @@ pub struct Adoption {
     /// The reserve the grant was made from, if any. An adopted `Reserve::TipBuild` grant holds
     /// the tip reserve's cores again until it is released.
     pub reserve: Option<ignite_core::traits::Reserve>,
+    /// The ticket whose agent priority the original grant used.
+    pub priority_ticket: Option<TicketId>,
 }
 
 /// Cores and resources held until released with [`Scheduler::release`].
@@ -146,6 +153,8 @@ pub struct Grant {
     /// Seconds spent waiting for the grant, recorded apart from the command's own time.
     pub queued_s: u64,
     pub cores_file: Option<PathBuf>,
+    /// The ticket whose priority the grant used.
+    pub priority_ticket: Option<TicketId>,
 }
 
 impl Grant {
@@ -169,18 +178,13 @@ impl Grant {
     }
 }
 
-/// What one machine may hand out.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Limits {
-    /// The logical cores the scheduler hands out.
+    /// The logical cores the scheduler hands out to ordinary requests.
     pub cores: u32,
-    /// The machine's other logical cores, which it never hands out to ordinary requests: the
-    /// express lane's and the tip reserve's (see [`Limits::for_machine`]). Work on them still
-    /// makes the machine busy, so the machine's busy fraction is read against
-    /// [`Limits::machine_cores`], not [`Limits::cores`].
+    /// Express and tip reserve cores, counted in [`Limits::machine_cores`] for CPU load.
     pub reserved: u32,
-    /// Of [`Limits::reserved`], the cores kept for requests with `Reserve::TipBuild`: the build
-    /// checks of a tip round, which decide when the green branch moves.
+    /// The reserved cores for tip-round build checks.
     pub tip_build: u32,
     pub floor: Floor,
     /// Each resource's capacity.
@@ -248,8 +252,7 @@ impl Limits {
         (self.cores * 2 / 3).max(1)
     }
 
-    /// A resource's capacity; one for a resource the machine does not declare, so a family that
-    /// names an unknown resource runs one command at a time rather than never.
+    /// A resource's capacity, defaulting to one when undeclared.
     pub fn capacity(&self, name: &str) -> u32 {
         self.resources.get(name).copied().unwrap_or(1)
     }
@@ -278,6 +281,8 @@ pub struct Status {
     pub tip_build: u32,
     /// Of those, the cores that grants with `Reserve::TipBuild` hold.
     pub tip_build_used: u32,
+    /// Running commands granted with agent queue priority, by ticket.
+    pub priority_grants: BTreeMap<TicketId, u32>,
     pub classes: Vec<ClassStatus>,
     pub resources: Vec<ResourceStatus>,
 }
@@ -300,7 +305,6 @@ pub struct ResourceStatus {
     pub waiting: u32,
 }
 
-/// The thread-safe scheduler the daemon shares among its request threads.
 pub struct Scheduler {
     state: Mutex<State>,
     changed: Condvar,
@@ -464,6 +468,7 @@ impl Scheduler {
                 resources: Vec::new(),
                 queued_s: 0,
                 cores_file: None,
+                priority_ticket: None,
             }),
             (None, None) => None,
         }
@@ -619,6 +624,7 @@ impl Scheduler {
             memory_mb,
             follow,
             reserve: None,
+            priority_ticket: None,
         }]);
         grants.pop().expect("one grant for one adoption")
     }
@@ -649,6 +655,9 @@ impl Scheduler {
             if adoption.reserve == Some(ignite_core::traits::Reserve::TipBuild) {
                 state.ledger.adopt_reserved(id);
             }
+            state
+                .ledger
+                .record_priority(id, adoption.priority_ticket.clone());
             let cores_file = adoption.follow.map(|f| f.cores_file);
             if let Some(file) = &cores_file {
                 state.files.insert(id, file.clone());
@@ -659,6 +668,7 @@ impl Scheduler {
                 resources: adoption.resources,
                 queued_s: 0,
                 cores_file,
+                priority_ticket: adoption.priority_ticket,
             });
         }
         self.advance(&mut state);

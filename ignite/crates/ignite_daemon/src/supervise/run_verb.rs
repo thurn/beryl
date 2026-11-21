@@ -123,7 +123,7 @@ impl Verb for RunVerb {
             cores,
             resources: Vec::new(),
             grows: args.grows,
-            tree: None,
+            tree: ctx.tree.clone(),
             ticket: args.ticket,
             hang_limit_s: Some(args.hang_limit_s),
             reserve: None,

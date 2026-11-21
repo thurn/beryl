@@ -6,6 +6,7 @@ use std::fs;
 use std::sync::Arc;
 use std::thread;
 
+use ignite_core::ids::TicketId;
 use ignite_core::protocol::Class;
 use serde::{Deserialize, Serialize};
 
@@ -40,6 +41,9 @@ pub struct GrantFile {
     /// still parses and one written by this daemon parses in an older one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reserve: Option<ignite_core::traits::Reserve>,
+    /// Agent queue priority, if the command's ticket held master back when it started.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub priority_ticket: Option<TicketId>,
 }
 
 /// A grant that is released when this value is dropped, so that a panic between asking for
@@ -122,6 +126,7 @@ impl SupervisedLauncher {
                         memory_mb: None,
                         follow,
                         reserve: file.reserve,
+                        priority_ticket: file.priority_ticket,
                     });
                     adopted.push((run, class));
                 }
@@ -191,6 +196,7 @@ mod tests {
 
         let reserved = GrantFile {
             reserve: Some(Reserve::TipBuild),
+            priority_ticket: None,
             ..grant
         };
         let text = serde_json::to_string(&reserved).unwrap();

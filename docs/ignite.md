@@ -1324,6 +1324,12 @@ Rules for cores:
 
 - One command takes at most two thirds of the machine's cores.
 
+- Agent commands for a regression or a master-lag justiciar ticket go ahead of
+  other waiting agent commands, even ones that have waited two minutes. Tip
+  builds and landing gates still come first. Queue priority does not interrupt
+  running commands. While a command granted this priority runs, `ignite status`
+  names its ticket in the cores section.
+
 - Within a class, a request that has waited two minutes goes first, in arrival
   order. The others go smallest first, then in arrival order. Each request gets
   all the cores it asked for before the next one gets any. On 2026-11-20, 16 to

@@ -205,11 +205,18 @@ impl StatusSection for CoresSection {
         let (kept, held) = (s.tip_build, s.tip_build_used);
         let tip = (kept > 0).then(|| format!(", {kept} kept for tip builds ({held} in use)"));
         let tip = tip.unwrap_or_default();
-        vec![format!(
+        let mut lines = vec![format!(
             "{} of {} granted to Ignite (using {}, {} counted), {} busy outside it, \
              at most {} per command{tip}{memory}{swap}{pressed}",
             s.granted, s.cores, s.used, s.committed, s.outside, s.max_per_command
-        )]
+        )];
+        lines.extend(s.priority_grants.iter().map(|(ticket, count)| {
+            let commands = if *count == 1 { "command" } else { "commands" };
+            format!(
+                "{count} {commands} for {ticket} granted cores with priority because the ticket holds master back"
+            )
+        }));
+        lines
     }
 }
 

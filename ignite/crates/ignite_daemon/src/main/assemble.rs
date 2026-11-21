@@ -170,7 +170,12 @@ pub fn machinery(base: &Base, setup: TreeSetup) -> Result<Machinery> {
     Scheduler::sample_every(&scheduler);
     let supervised = Arc::new(
         SupervisedLauncher::new(&base.options.ignite, base.home("runs"))
-            .with_scheduler(scheduler.clone()),
+            .with_scheduler(scheduler.clone())
+            .with_agent_priority(
+                base.open()?,
+                base.home(crate::mirror::FILE),
+                base.hub.clone(),
+            ),
     );
     loops::collect_unfinished(&supervised);
     // Commands that a verb cut off by the restart had running are handed back to the verb when

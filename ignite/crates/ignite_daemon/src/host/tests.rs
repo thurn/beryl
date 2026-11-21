@@ -86,6 +86,7 @@ fn grant_request(spec: &CommandSpec) -> GrantRequest {
         grows: false,
         cores_file: None,
         reserve: spec.reserve,
+        priority_ticket: None,
     }
 }
 
