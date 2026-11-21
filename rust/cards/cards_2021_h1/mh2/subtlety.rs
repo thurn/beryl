@@ -89,5 +89,38 @@ pub mod scenarios {
                 THEM.library_top(&[Card::Island, Card::TeferiTimeRaveler]),
                 ME.has(Zone::Graveyard, Card::Subtlety, 1),
             ]),
+        // With mana for its cost and two other blue cards in hand, both casts are offered; evoked,
+        // P0 picks which blue card to exile.
+        Scenario::new("Subtlety with mana and blue cards: cast or evoke, then which card to exile")
+            .at(2, P1, TurnStep::PrecombatMain)
+            .battlefield(P0, &[Card::Island; 4])
+            .hand(
+                P0,
+                &[Card::Subtlety, Prop::UntargetedSpell, Prop::Planeswalker],
+            )
+            .battlefield(P1, &[Card::Plains; 3])
+            .hand(P1, &[Prop::Flier, Card::Plains])
+            .actions(&[
+                THEM.casts(Prop::Flier),
+                // Passing, the cast for mana and the evoke.
+                ME.deciding(DecisionKind::Priority, 3),
+                Action::Cast {
+                    player: P0,
+                    card: Card::Subtlety,
+                    face: FaceIx::FRONT,
+                    costs: Castings::only(0),
+                },
+                ME.deciding(DecisionKind::ChooseObject, 2),
+                ME.picks(Prop::UntargetedSpell),
+                ME.has(Zone::Exile, Prop::UntargetedSpell, 1),
+                Resolve,
+                ME.chooses(DecisionKind::TriggerOrder, Card::Subtlety),
+                ME.target_count(1),
+                Resolve,
+                Resolve,
+                THEM.yes(),
+                THEM.library_top(&[Prop::Flier, Card::Island]),
+                ME.has(Zone::Graveyard, Card::Subtlety, 1),
+            ]),
     ];
 }

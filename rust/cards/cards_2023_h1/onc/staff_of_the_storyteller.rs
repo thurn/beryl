@@ -85,5 +85,18 @@ pub mod scenarios {
                 ME.controls(crate::tokens::INSECT_TOKEN, 2),
                 ME.counters(STAFF, CounterKind::Story, 1),
             ]),
+        // A UI regression: resolving a response must not demand a pass on one's own spell.
+        Scenario::new("Staff resolves after an opposing flash creature")
+            .battlefield(P0, &[Card::Plains, Card::Plains])
+            .hand(P0, &[STAFF, Card::Plains])
+            .battlefield(P1, &[Card::Swamp, Card::Island, Card::Island])
+            .hand(P1, &[Prop::FlashCreature])
+            .library(P0, &[Card::Island])
+            .library(P1, &[Card::Island])
+            .actions(&[
+                ME.casts(STAFF),
+                THEM.casts(Prop::FlashCreature),
+                ME.counters(STAFF, CounterKind::Story, 1),
+            ]),
     ];
 }

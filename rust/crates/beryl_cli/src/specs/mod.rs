@@ -152,30 +152,40 @@ pub fn generate(specs: &[&Spec]) {
     });
 }
 
-/// A card's own scenarios, or the rules library's and the generated scenarios
-/// if it has none. Build and cache the fallback one card at a time.
+/// A card's own scenarios and the rules library's examples for it. Generated
+/// scenarios supplement cards with no scenarios of their own.
 fn scenarios(catalog: &'static Catalog, def: &'static CardDef) -> &'static [Scenario] {
-    static MADE: std::sync::Mutex<Vec<(&'static str, &'static [Scenario])>> =
-        std::sync::Mutex::new(Vec::new());
+    type CardScenarios = (&'static Catalog, &'static str, &'static [Scenario]);
+    static MADE: std::sync::Mutex<Vec<CardScenarios>> = std::sync::Mutex::new(Vec::new());
     let card = def.name;
-    if let Some((_, written)) =
-        ((catalog.scenarios)().iter()).find(|(name, written)| *name == card && !written.is_empty())
-    {
-        return written;
-    }
     let mut made = MADE
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    if let Some(&(_, scenarios)) = made.iter().find(|(name, _)| *name == card) {
+    if let Some(&(_, _, scenarios)) = made
+        .iter()
+        .find(|(source, name, _)| std::ptr::eq(*source, catalog) && *name == card)
+    {
         return scenarios;
     }
-    let mut all: Vec<Scenario> = ((catalog.library_scenarios)().into_iter())
+    let written = (catalog.scenarios)()
+        .iter()
+        .find_map(|&(name, scenarios)| (name == card).then_some(scenarios))
+        .unwrap_or_default();
+    let shared = (catalog.library_scenarios)()
+        .into_iter()
         .filter(|&(name, _)| name == card)
         .flat_map(|(_, scenarios)| scenarios.iter().copied())
-        .collect();
-    all.extend((catalog.derived_scenarios)(def));
-    let scenarios: &'static [Scenario] = all.leak();
-    made.push((def.name, scenarios));
+        .filter(|scenario| written.iter().all(|own| own.name != scenario.name));
+    let mut all: Vec<_> = written.iter().copied().chain(shared).collect();
+    if written.is_empty() {
+        all.extend((catalog.derived_scenarios)(def));
+    }
+    let scenarios: &'static [Scenario] = if !written.is_empty() && all.len() == written.len() {
+        written
+    } else {
+        all.leak()
+    };
+    made.push((catalog, card, scenarios));
     scenarios
 }
 

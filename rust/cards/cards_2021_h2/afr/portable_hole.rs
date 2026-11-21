@@ -93,5 +93,31 @@ pub mod scenarios {
                 THEM.has(Zone::Exile, TWO_DROP, 0),
                 ME.controls(HOLE, 1),
             ]),
+        // P1 answers the trigger by returning the Hole to P0's hand with Sink into Stupor: the
+        // event the exile lasts until has happened, so the two-drop never leaves (CR 610.3b).
+        // P0's instant in hand, with the Islands for it and P1's two-drop to target, gives P0 a
+        // priority to pass between the two resolutions.
+        Scenario::new("Portable Hole gone before its trigger resolves")
+            .battlefield(
+                P0,
+                &[Card::Plains, Card::Island, Card::Island, Card::Island],
+            )
+            .hand(P0, &[HOLE, Prop::Removal])
+            .library(P0, &[Card::Island])
+            .battlefield(P1, &[TWO_DROP, Card::Island, Card::Island, Card::Island])
+            .hand(P1, &[Card::SinkIntoStupor])
+            .actions(&[
+                ME.casts(HOLE),
+                Resolve,
+                stack(1),
+                ME.passes(),
+                THEM.casts(Card::SinkIntoStupor),
+                Resolve,
+                Resolve,
+                stack(0),
+                ME.has(Zone::Hand, HOLE, 1),
+                THEM.has(Zone::Exile, TWO_DROP, 0),
+                THEM.controls(TWO_DROP, 1),
+            ]),
     ];
 }

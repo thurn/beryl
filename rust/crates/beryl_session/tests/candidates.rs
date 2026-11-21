@@ -1,29 +1,24 @@
-//! What each candidate tells the UI beyond its answer (`CandidateView`), as the cards' own
-//! scenarios reach it: the label it shows, and the paragraph of the card an activation's or
-//! a waiting trigger's ability is.
+//! What each candidate tells the UI beyond its answer (`CandidateView`): its label and the
+//! paragraph of the card that contains the activated or triggered ability.
 
 use crate::play;
 
 use beryl_cards::names::{ADELINE_RESPLENDENT_CATHAR, ISLAND, OVERLORD_OF_THE_MISTMOORS};
 use beryl_cards::{CARDS, names};
-use beryl_engine::state::Pending;
+use beryl_engine::state::{CounterKind, Pending};
 use beryl_engine::{Observation, Scratch, TurnStep, view};
-use beryl_scenario::{P0, P1, Permanent, Scenario};
+use beryl_scenario::{Action, P0, P1, Permanent, Scenario};
 use beryl_session::prompt::ButtonId;
 use beryl_session::protocol::ObjectId;
 use beryl_session::protocol::{Candidate, CandidateView, Kind, Moment, StackItem, player_view};
 use beryl_session::{DecisionId, SessionId, Status, StopsSetting};
 use play::Play;
 
-/// Every candidate offered at a decision of `card`'s scenarios, with the name of the object
+/// Every candidate offered at a decision in these scenarios, with the name of the object
 /// it is about, if any.
-fn candidates(card: &str) -> Vec<(CandidateView, Option<String>)> {
-    let (_, scenarios) = beryl_cards::scenarios()
-        .iter()
-        .find(|&&(name, _)| name == card)
-        .expect("the card's scenarios");
+fn candidates(scenarios: &[Scenario]) -> Vec<(CandidateView, Option<String>)> {
     let mut seen = Vec::new();
-    for scenario in *scenarios {
+    for scenario in scenarios {
         beryl_scenario::visit(&CARDS, scenario, |t, s, d| {
             let mut x = Scratch::new();
             let resolving = matches!(s.pending(), Pending::Resolving(_))
@@ -64,7 +59,8 @@ fn candidates(card: &str) -> Vec<(CandidateView, Option<String>)> {
 
 #[test]
 fn a_modal_double_faced_land_is_played_by_its_land_face() {
-    let plays: Vec<_> = candidates(names::SINK_INTO_STUPOR)
+    let scenarios = beryl_cards::library::zones::DECLINE_LIFE_TO_ENTER_UNTAPPED;
+    let plays: Vec<_> = candidates(scenarios)
         .into_iter()
         .filter(|(c, name)| {
             matches!(c.option, Candidate::PlayLand { .. })
@@ -81,17 +77,24 @@ fn a_modal_double_faced_land_is_played_by_its_land_face() {
 
 #[test]
 fn a_loyalty_ability_says_which_of_the_cards_abilities_it_is() {
-    let mut abilities: Vec<_> = candidates(names::JACE_THE_MIND_SCULPTOR)
+    const JACE: &str = names::JACE_THE_MIND_SCULPTOR;
+    const SCENARIO: Scenario = Scenario::new("All four loyalty abilities are available")
+        .permanents(
+            P0,
+            &[Permanent::new(JACE).counters(CounterKind::Loyalty, 12)],
+        )
+        .battlefield(P1, &[ADELINE_RESPLENDENT_CATHAR])
+        .actions(&[Action::pass(P0)]);
+    let mut abilities: Vec<_> = candidates(&[SCENARIO])
         .into_iter()
         .filter(|(c, name)| {
-            matches!(c.option, Candidate::Activate { .. })
-                && name.as_deref() == Some(names::JACE_THE_MIND_SCULPTOR)
+            matches!(c.option, Candidate::Activate { .. }) && name.as_deref() == Some(JACE)
         })
         .map(|(c, _)| (c.nth, c.label))
         .collect();
     abilities.sort();
     abilities.dedup();
-    let label = |cost: &str| format!("{}: {cost}", names::JACE_THE_MIND_SCULPTOR);
+    let label = |cost: &str| format!("{JACE}: {cost}");
     assert_eq!(
         abilities,
         [
