@@ -40,7 +40,7 @@ def test_list_and_plan_partition_a_sets_first_printings(
         spell("Near clause", "Draw two cards."),
         spell("Tokens A", "Create a Cat token."),
         spell("Tokens B", "Create a Bird token."),
-        spell("Unparsed", "Bargain away all memories."),
+        spell("Unparsed", "Scry 2."),
         spell("No shape", "", layout="meld"),
         spell("Escalated", "Draw a card."),
         spell("Census gap", "Bestow {2}.", keywords=["Bestow"]),
@@ -115,7 +115,7 @@ def test_list_and_plan_partition_a_sets_first_printings(
             "tokens a": translation("Create a Cat token.", {"type": "Token"}),
             "tokens b": translation("Create a Bird token.", {"type": "Token"}),
             "unparsed": translation(
-                "Bargain away all memories.", {"type": "OtherEffect"}
+                "Scry 2.", {"type": "Scry", "count": {"type": "Fixed", "value": 2}}
             ),
         },
     )
@@ -134,7 +134,7 @@ def test_list_and_plan_partition_a_sets_first_printings(
         for group in result["vocabulary"]
     ] == [
         ("phase", "effect:Token", ["Tokens A", "Tokens B"]),
-        ("sentence", "bargain away all memories.", ["Unparsed"]),
+        ("sentence", "scry 2.", ["Unparsed"]),
     ]
     assert result["draft_audit"] == {
         "checked": 1,
@@ -168,6 +168,19 @@ def test_bead_commands_batch_twenty_cards_and_quote_shell_text() -> None:
     assert plan.tiers["drafted"][19] in first[first.index("--description") + 1]
     assert plan.tiers["drafted"][20] not in first[first.index("--description") + 1]
     assert plan.tiers["drafted"][20] in last[last.index("--description") + 1]
+
+
+def test_bundled_coverage_seeds_an_empty_cache(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(paths, "cache_root", lambda: tmp_path)
+
+    gaps = phase_data.read_gaps()
+
+    assert isinstance(gaps, set)
+    assert "anger of the gods" in gaps
+    assert "nykthos, shrine to nyx" not in gaps
+    assert (tmp_path / "phase" / "coverage-data.json").is_file()
 
 
 def test_coverage_flags_gaps_in_the_pinned_release(

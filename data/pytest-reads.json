@@ -234,6 +234,10 @@
     "tools/src/beryl_tools/oracles.py": [
       "data/oracle-exporter-gaps.json"
     ],
+    "tools/src/beryl_tools/phase_data.py": [
+      "data/phase-coverage-82bf5613ea79a221.json.gz",
+      "data/phase-data.json"
+    ],
     "tools/src/beryl_tools/scale_workspace.py": [
       "data/card-store.tsv",
       "data/catalogs.json",
