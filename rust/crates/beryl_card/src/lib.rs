@@ -1,3 +1,13 @@
+// Every reader must classify new vocabulary variants, and conversions must preserve the
+// represented value. Cargo makes this crate inherit the workspace lint table as a unit.
+#![deny(
+    clippy::wildcard_enum_match_arm,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss
+)]
+
 //! Beryl's card vocabulary: the types a card definition is written in
 //!.
 //!
