@@ -1,6 +1,8 @@
 //! What a live run records: each check's measured cost in its stored result, an adapter's flaky
 //! report, results of a tree that changed during the run, and the build a `list` waits for.
 
+use std::sync::atomic::AtomicUsize;
+
 use ignite_core::ids::RecordId;
 use ignite_core::protocol::hub::NewResult;
 use ignite_core::traits::BuildResult;
@@ -58,6 +60,37 @@ fn a_result_is_not_stored_when_the_tree_changed_during_the_run() {
         world.checks.cache().lookup(&[before])[0].is_none(),
         "nothing is stored under the hash taken before the edit"
     );
+}
+
+#[test]
+fn a_failure_then_a_pass_on_edited_inputs_is_incomplete() {
+    let world = jsonl_world();
+    world
+        .launcher
+        .script("unit:a", &[Some("fail"), Some("pass")]);
+    let git = world.git.clone();
+    let attempts = AtomicUsize::new(0);
+    *world.launcher.on_run.lock().unwrap() = Some(Box::new(move || {
+        if attempts.fetch_add(1, Ordering::Relaxed) == 1 {
+            git.set_object("src", Oid::new("b".repeat(40)).unwrap());
+        }
+    }));
+    let before = key_of(&world, "unit:a");
+
+    let run = run(&world, &["unit:a"]);
+
+    assert_eq!(outcome(&run, "unit:a"), Outcome::Incomplete);
+    assert!(!run.passed());
+    assert!(
+        run.failures[0]
+            .message
+            .as_deref()
+            .unwrap()
+            .contains("inputs changed")
+    );
+    assert!(world.hub.flaky_reports().is_empty());
+    assert!(world.checks.cache().lookup(&[before])[0].is_none());
+    assert_eq!(cached(&world, "unit:a"), None);
 }
 
 #[test]

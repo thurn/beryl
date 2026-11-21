@@ -2,13 +2,12 @@
 //! retries of an unreported check, the rerun of another machine's cached failure, and storing
 //! and recording what the runs said.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use ignite_core::ids::{CheckName, Commit, RecordId};
-use ignite_core::inputs;
 use ignite_core::manifest::{Adapter, Family};
 use ignite_core::protocol::hub::{
     CachedResult, CompileUnit, FlakyReport, IncompleteReason, NewResult, Record, ResultCost,
@@ -16,6 +15,7 @@ use ignite_core::protocol::hub::{
 use ignite_core::protocol::{Outcome, Usage};
 use ignite_core::traits::{BuildFor, CommandSpec, Error, RunResult};
 
+use super::prepare::moved_inputs;
 use super::units::CompileSpan;
 use crate::build::repair;
 
@@ -386,6 +386,14 @@ impl Checks {
         let moved = moved_inputs(ctx, tree, &finals);
         let areas = self.change_areas(ctx, tree);
         for (keyed, outcome, failure, output, cost, record) in finals {
+            let inputs_moved = keyed.inputs.iter().any(|(path, _)| moved.contains(path));
+            if outcome == Outcome::Flaky && inputs_moved {
+                // The failure and pass may have checked different versions of the files.
+                let check = &keyed.listed.check;
+                let error = Error::Io("inputs changed during the run; run the check again".into());
+                run.finish(check, Outcome::Incomplete, Some(incomplete(check, &error)));
+                continue;
+            }
             if let Some(id) = record
                 && outcome != Outcome::Incomplete
             {
@@ -394,8 +402,7 @@ impl Checks {
             match outcome {
                 // A result whose inputs changed while the check ran says nothing about the
                 // hash it was keyed by, so it is reported to the caller but not stored.
-                Outcome::Pass | Outcome::Fail
-                    if keyed.inputs.iter().any(|(path, _)| moved.contains(path)) => {}
+                Outcome::Pass | Outcome::Fail if inputs_moved => {}
                 // A check whose hash does not cover what it opened says nothing about it either.
                 Outcome::Pass | Outcome::Fail if unkeyed.contains(&keyed.listed.check) => {}
                 Outcome::Pass | Outcome::Fail => stored.push(NewResult {
@@ -737,26 +744,6 @@ fn build_failure(reported: &[Reported], output: &RunResult) -> Option<repair::Co
         .iter()
         .any(|r| matches!(r.outcome, Outcome::Pass | Outcome::Fail | Outcome::Flaky));
     repair::run_failure(ran, output)
-}
-
-/// The input paths of `finals` whose git object IDs differ from the ones their hashes were
-/// computed from: the tree was edited while the checks ran. The inputs are read again in one
-/// request; if that fails, every input counts as moved, because nothing can be vouched for.
-fn moved_inputs(ctx: &Context, tree: &OpenTree, finals: &[Final]) -> BTreeSet<String> {
-    let before: BTreeMap<&str, &str> = finals
-        .iter()
-        .flat_map(|(keyed, ..)| &keyed.inputs)
-        .map(|(path, oid)| (path.as_str(), oid.as_str()))
-        .collect();
-    let paths: Vec<String> = before.keys().map(|p| (*p).to_owned()).collect();
-    match inputs::object_ids(ctx.git.as_ref(), &tree.path, &paths) {
-        Ok(now) => now
-            .into_iter()
-            .filter(|(path, oid)| before.get(path.as_str()) != Some(&oid.as_str()))
-            .map(|(path, _)| path)
-            .collect(),
-        Err(_) => paths.into_iter().collect(),
-    }
 }
 
 /// How many lines of a failed run's output a flaky report carries.

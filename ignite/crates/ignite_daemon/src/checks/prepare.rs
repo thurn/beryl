@@ -4,12 +4,13 @@
 //! ([`on_threads`]); the landing gate lists in two rounds, so a fault found without building
 //! anything stops it before the families that need a product are listed.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::panic::resume_unwind;
 use std::sync::Arc;
 use std::thread;
 
 use ignite_core::ids::CheckName;
+use ignite_core::inputs;
 use ignite_core::manifest::Family;
 use ignite_core::protocol::hub::{CachedResult, ListingKey};
 
@@ -19,8 +20,27 @@ use super::time_lines::Stopwatch;
 
 /// The landing gate's test for a family it leaves unlisted, given its name and declaration.
 pub(crate) type Cold<'a> = &'a dyn Fn(&str, &Family) -> bool;
-use super::{CheckRun, Checks, Keyed, ListError, OpenTree, Prepared, RunOptions};
+use super::{CheckRun, Checks, Final, Keyed, ListError, OpenTree, Prepared, RunOptions};
 use crate::server::Context;
+
+/// Inputs deleted or edited since their check hashes were computed. If Git cannot read the
+/// current object IDs, every input counts as changed.
+pub(super) fn moved_inputs(ctx: &Context, tree: &OpenTree, finals: &[Final]) -> BTreeSet<String> {
+    let mut before: BTreeMap<&str, &str> = finals
+        .iter()
+        .flat_map(|(keyed, ..)| &keyed.inputs)
+        .map(|(path, oid)| (path.as_str(), oid.as_str()))
+        .collect();
+    let paths: Vec<String> = before.keys().map(|path| (*path).to_owned()).collect();
+    if let Ok(now) = inputs::object_ids(ctx.git.as_ref(), &tree.path, &paths) {
+        for (path, oid) in now {
+            if before.get(path.as_str()) == Some(&oid.as_str()) {
+                before.remove(path.as_str());
+            }
+        }
+    }
+    before.into_keys().map(str::to_owned).collect()
+}
 
 impl Checks {
     /// Lists and keys the checks of each family named that this machine runs. A family whose
