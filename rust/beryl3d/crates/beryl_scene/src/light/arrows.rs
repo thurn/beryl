@@ -23,6 +23,7 @@ use super::marks;
 use super::{Lit, Open, Span};
 use crate::data::space::light;
 use crate::data::space::light::glow;
+pub use crate::frame::ARROW_IDS;
 use crate::frame::sprites;
 use crate::frame::{Band, Draw, ElementId, FrameBuilder, Place, Resolved, Role, StateBits};
 use crate::play::{Reach, Scene};
@@ -37,10 +38,6 @@ pub const RIBBON: usize = 20;
 /// How many points along its curve a ribbon's cuts are chosen among. They lie closer together
 /// toward its end, where an arrow's head flares and a line of combat ends in a dart.
 const FINE: usize = 32;
-
-/// The first element id of the arrows: an arrow's id is this plus its index among the open
-/// spans.
-pub const ARROW_IDS: u32 = 1 << 22;
 
 /// How a ribbon is cut along its length (`light.ts` `Cut`): an arrow at a target is a thread at
 /// its tail that swells to a spear head; a line of combat a beam that narrows to a dart; the line

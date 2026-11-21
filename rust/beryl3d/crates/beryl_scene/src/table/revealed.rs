@@ -8,15 +8,14 @@
 use beryl_protocol::protocol::{ObjectId, ObjectView};
 use glam::{Quat, Vec2};
 
-use super::look::{Dress, Look};
+use super::look::Look;
 use super::scene::{Table, face_of};
 use super::{CARD_HEIGHT, CARD_WIDTH};
 use crate::data::space::layout::phone;
 use crate::data::space::revealed;
 use crate::faces::Faces;
 use crate::frame::{ElementId, FrameBuilder, Place, REVEALED_FACE, Role, StateBits};
-use crate::light::{Open, Span};
-use crate::pose::{Curve, Segment, Shape};
+use crate::pose::{Curve, Interval, Segment, Shape};
 
 impl Table {
     /// Keeps `object`, the record of a card held up to be read, for the Revealed Cards pile to
@@ -34,17 +33,17 @@ impl Table {
         self.revealed.get(usize::from(slot.0))?.as_ref()
     }
 
-    /// Writes the faces of the Revealed Cards pile that `dress.lit` shows, each growing into its
-    /// place over the step that held it up. A face that is leaving the pile is no longer drawn.
+    /// Writes the visible faces of the Revealed Cards pile at `now`, each growing into its
+    /// place over the interval that held it up.
     /// Faces come from `faces`, and backs from layer `back`.
     pub(super) fn write_revealed(
         &self,
         faces: &Faces,
-        (back, dress): (u16, &Dress<'_>),
+        (back, now): (u16, u64),
+        revealed: impl Iterator<Item = (ObjectId, Interval)> + Clone,
         builder: &mut FrameBuilder,
     ) {
-        let lying = || dress.lit.open().iter().filter_map(face);
-        let count = lying().count();
+        let count = revealed.clone().count();
         if count == 0 {
             return;
         }
@@ -60,7 +59,7 @@ impl Table {
         } else {
             (revealed::AT, revealed::HEIGHT)
         };
-        for (index, (open, slot)) in lying().enumerate() {
+        for (index, (slot, begins)) in revealed.enumerate() {
             let Some(shown) = self.revealed(slot) else {
                 continue;
             };
@@ -75,10 +74,10 @@ impl Table {
             );
             let growing = Segment {
                 shape: Shape::Grown,
-                ..Segment::between(rest, rest, open.begins, Curve::LINEAR)
+                ..Segment::between(rest, rest, begins, Curve::LINEAR)
             };
             let look = Look {
-                pose: growing.pose_at(dress.now),
+                pose: growing.pose_at(now),
                 tint: [255, 255, 255],
                 dissolve: 0.0,
                 whiten: 0.0,
@@ -95,13 +94,5 @@ impl Table {
             let name = shown.name.as_deref().unwrap_or("");
             self.write_look(name, (id, Role::Card, 1), place, &look, back, builder);
         }
-    }
-}
-
-/// The open span, and its card's slot, if it is a face of the pile that is not leaving it.
-fn face(open: &Open) -> Option<(&Open, ObjectId)> {
-    match open.span {
-        Span::Revealed { slot, .. } if open.ends.is_none() => Some((open, slot)),
-        _ => None,
     }
 }

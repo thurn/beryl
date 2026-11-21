@@ -31,6 +31,7 @@ use crate::input::{self, PointerKind, PointerPhase};
 use crate::motion::between;
 use crate::play::compile::Compiled;
 use crate::pose::{Curve, Pose, Segment};
+pub use crate::table::takes_pointer;
 use crate::table::{CARD_HEIGHT, Camera, Look, PILE_IDS};
 use held::{By, Fall, Grip, Lean};
 use refusal::Shake;
@@ -396,25 +397,6 @@ fn raised(rest: &Pose, camera: &Camera) -> Pose {
         scale: rest.scale * data::RAISE_SCALE * data::NEARER,
         ..*rest
     }
-}
-
-/// Whether a card resting at `place` takes the pointer, once it is face up and the viewer knows
-/// its name: one on the battlefield, on the stack or in the viewer's hand. A pile is one
-/// element, so no card in it does. The table leaves out a face-up card with no name, such as a
-/// copy of a face-down creature, because every interactive element has a name.
-#[must_use]
-pub fn takes_pointer(place: Place) -> bool {
-    matches!(
-        place,
-        Place::Card {
-            zone: ZoneName::Battlefield | ZoneName::Stack,
-            ..
-        } | Place::Card {
-            zone: ZoneName::Hand,
-            side: Side::You,
-            ..
-        }
-    )
 }
 
 /// Finds the card under the pointer in `frame`, the frame just built at `now`, and marks it

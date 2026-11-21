@@ -10,8 +10,17 @@ pub mod particles;
 pub mod shake;
 
 use beryl_protocol::script::Subject;
+use glam::Vec2;
 
-use crate::pose::Curve;
+use crate::pose::{Curve, Pose};
+
+/// Where something is and how large, for the light drawn to or on it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Reach {
+    pub pose: Pose,
+    /// Half its width and height, in millimetres. A player's anchor is a point.
+    pub half: Vec2,
+}
 
 /// One effect, by its name in `data/ui-conventions.json`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

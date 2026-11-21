@@ -8,7 +8,6 @@ use super::{ABILITY_IDS, Motion, SceneObject, Table, ability_track};
 use crate::effects;
 use crate::faces::Faces;
 use crate::frame::{ElementId, FrameBuilder, Place, Role, StateBits};
-use crate::light;
 use crate::table::look::{Dress, Look};
 
 impl Table {
@@ -155,7 +154,7 @@ impl Table {
         };
         let on = Subject::Ability { id };
         effects::card::look(dress.effects, on, dress.now, face, &mut look);
-        light::marks::look(dress.lit, on, dress.now, &mut look);
+        (dress.marks)(on, &mut look);
         effects::card::write(dress.effects, on, dress.now, &look, builder);
         self.write_shadow((None, object.place), &look.pose, under_way, builder);
         self.write_look(

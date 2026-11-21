@@ -10,8 +10,7 @@ use glam::{Quat, Vec3};
 
 use crate::data::space::verbs;
 use crate::data::space::verbs::fly::thrown;
-use crate::pose::{Curve, Pose, Segment, Shape};
-use crate::verbs::Follows;
+use crate::pose::{Curve, Follows, Pose, Segment, Shape};
 
 impl Curve {
     /// CSS's `linear`: progress equals elapsed time.

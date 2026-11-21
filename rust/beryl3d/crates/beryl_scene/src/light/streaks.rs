@@ -25,10 +25,11 @@
 
 use beryl_protocol::protocol::Mana;
 use beryl_protocol::script::{Stream, Subject};
-use glam::{Affine3A, Vec2, Vec3, Vec3Swizzles};
+use glam::{Vec2, Vec3, Vec3Swizzles};
 
 use super::{Lit, StreakRun};
 use crate::data::space::verbs::streak;
+use crate::effects::light::quad;
 use crate::frame::{Band, Draw, FrameBuilder, sprites};
 use crate::play::{Reach, Scene};
 use crate::tokens::color;
@@ -250,17 +251,4 @@ impl Comet {
         let polygon = self.a.distance(self.c) + self.c.distance(self.b);
         f32::midpoint(chord, polygon)
     }
-}
-
-/// A sprite's quad at `at`, `length` long along `tangent` and `width` across it, facing `eye`.
-pub(crate) fn quad(at: Vec3, tangent: Vec3, eye: Vec3, length: f32, width: f32) -> Affine3A {
-    let facing = (eye - at).normalize_or(Vec3::Z);
-    let across = facing.cross(tangent).normalize_or(Vec3::Y);
-    let normal = tangent.cross(across);
-    Affine3A::from_cols(
-        (tangent * length).into(),
-        (across * width).into(),
-        normal.into(),
-        at.into(),
-    )
 }

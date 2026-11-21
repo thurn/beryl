@@ -49,12 +49,10 @@
 use beryl_protocol::script::Subject;
 use glam::{Affine3A, Quat, Vec2, Vec3};
 
-use super::{Effect, EffectRun};
+use super::{Effect, EffectRun, Reach};
 use crate::data::space::effects::{beam, flash, glow, impact, pulse, trail};
 use crate::data::space::light::LIFT;
 use crate::frame::{Band, Draw, EffectLook, FrameBuilder, Sprite, sprites};
-use crate::light::{marks, streaks};
-use crate::play::{Reach, Scene};
 use crate::pose::Pose;
 use crate::tokens::color;
 
@@ -67,8 +65,14 @@ const LIFE_RING: f32 = 1.45;
 const FRAME: f32 = 1e9 / 60.0;
 
 /// Writes the records of the runs in `runs` that are light and under way at `now`, one each.
-/// Allocates nothing.
-pub fn write(runs: &[EffectRun], now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<'_>) {
+/// `reach_at` gives the target's pose and size a given number of nanoseconds before the frame.
+pub fn write(
+    runs: &[EffectRun],
+    now: u64,
+    reach_at: impl Fn(Subject, u64) -> Option<Reach>,
+    eye: Vec3,
+    builder: &mut FrameBuilder<'_>,
+) {
     for run in runs {
         if !matches!(
             run.effect,
@@ -87,13 +91,10 @@ pub fn write(runs: &[EffectRun], now: u64, scene: &Scene<'_>, builder: &mut Fram
         if now < run.start || now >= run.start + run.duration {
             continue;
         }
-        let Some(reach) = scene.reach(run.on) else {
+        let Some(reach) = reach_at(run.on, 0) else {
             continue;
         };
-        let half = match run.on {
-            Subject::Player { .. } => marks::player_half(scene, reach.pose.scale),
-            Subject::Object { .. } | Subject::Ability { .. } => reach.half,
-        };
+        let half = reach.half;
         #[expect(
             clippy::cast_precision_loss,
             reason = "a time inside an effect that lasts about a second"
@@ -139,7 +140,7 @@ pub fn write(runs: &[EffectRun], now: u64, scene: &Scene<'_>, builder: &mut Fram
             // Not drawn while the card has hardly moved, but its node is still recorded, as the
             // web keeps its trail node for the whole run.
             Effect::Trail => {
-                let Some(draw) = trail(run.on, reach, half, progress, scene) else {
+                let Some(draw) = trail(run.on, reach, progress, &reach_at, eye) else {
                     record(builder, run, &pose, half, progress);
                     continue;
                 };
@@ -255,29 +256,48 @@ fn beam(pose: &Pose, half: Vec2, progress: f32) -> Draw {
 /// `trail.frames` sixtieths of a second ago to where it is now (`reach`), brightest at the card
 /// and fading as the run goes, as `flareLight` in `ui/src/stage/flare.ts` draws a trail. None
 /// while the card has hardly moved.
-fn trail(on: Subject, reach: Reach, half: Vec2, progress: f32, scene: &Scene<'_>) -> Option<Draw> {
+fn trail(
+    on: Subject,
+    reach: Reach,
+    progress: f32,
+    reach_at: impl Fn(Subject, u64) -> Option<Reach>,
+    eye: Vec3,
+) -> Option<Draw> {
     #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
         reason = "a few frames, in nanoseconds"
     )]
     let ago = (trail::FRAMES * FRAME) as u64;
-    let was = scene.reach_before(on, ago)?;
-    let longer = half.x.max(half.y);
+    let was = reach_at(on, ago)?;
+    let longer = reach.half.x.max(reach.half.y);
     let (to, from) = (above(&reach.pose), above(&was.pose));
     let way = to - from;
     let length = way.length();
     if length < longer * trail::LEAST {
         return None;
     }
-    let transform = streaks::quad(
+    let transform = quad(
         from + way * 0.5,
         way / length,
-        scene.table().camera().eye,
+        eye,
         length,
         2.0 * longer * trail::WIDE,
     );
     // The whole quad is lit, its head at the card; the web's light fades as `(1 - share)^0.8`.
     let tint = fade(color::TRAIL, (1.0 - progress).powf(0.8));
     Some(Draw::streak(transform, tint, sprites::COMET, 1.0, 1.0))
+}
+
+/// A sprite's quad at `at`, `length` long along `tangent` and `width` across it, facing `eye`.
+pub(crate) fn quad(at: Vec3, tangent: Vec3, eye: Vec3, length: f32, width: f32) -> Affine3A {
+    let facing = (eye - at).normalize_or(Vec3::Z);
+    let across = facing.cross(tangent).normalize_or(Vec3::Y);
+    let normal = tangent.cross(across);
+    Affine3A::from_cols(
+        (tangent * length).into(),
+        (across * width).into(),
+        normal.into(),
+        at.into(),
+    )
 }

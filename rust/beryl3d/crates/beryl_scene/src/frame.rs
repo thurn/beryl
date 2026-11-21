@@ -32,6 +32,10 @@ use crate::input::{Rect, Tier};
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ElementId(pub u32);
 
+/// The first element id of the arrows: an arrow's id is this plus its index among the open
+/// spans.
+pub const ARROW_IDS: u32 = 1 << 22;
+
 /// What a card's element id is raised by for its face in the Revealed Cards pile: the second
 /// element of a card held up to be read, beside the card itself.
 pub const REVEALED_FACE: u32 = 1 << 21;

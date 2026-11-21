@@ -2,9 +2,10 @@
 
 use beryl_protocol::protocol::{RowName, Side, ZoneName};
 use beryl_scene::agent::checks::{
-    KeptArrow, blank_cards, check, duplicates, keep_arrows, lines_hold, named, on_screen, overlap,
+    KeptArrow, blank_cards, duplicates, keep_arrows, lines_hold, named, on_screen, overlap,
     phone_sizes, reachable,
 };
+use beryl_scene::agent::game_checks::check;
 use beryl_scene::agent::locate::LocateError;
 use beryl_scene::agent::text_overlap::text_overlap;
 use beryl_scene::agent::tree::line;

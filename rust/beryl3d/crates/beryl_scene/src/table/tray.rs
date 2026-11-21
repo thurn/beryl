@@ -154,7 +154,7 @@ impl Table {
             // presses.
             _ if self.hand_away() && is_your_hand(place) && !self.in_box(slot) => false,
             Some(_) => self.in_tray(slot),
-            None => !waiting && !self.prompt_covers && crate::pointer::takes_pointer(place),
+            None => !waiting && !self.prompt_covers && super::takes_pointer(place),
         }
     }
 

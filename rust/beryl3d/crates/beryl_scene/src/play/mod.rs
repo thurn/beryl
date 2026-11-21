@@ -46,7 +46,8 @@ mod tray;
 mod turn;
 mod wake;
 
-pub use scene::{Reach, Scene};
+pub use crate::effects::Reach;
+pub use scene::Scene;
 pub use tray::PlacedLetGo;
 pub use turn::TurnChange;
 
@@ -609,23 +610,47 @@ impl Show {
         let dress = Dress {
             effects: &self.card_effects,
             badges: &self.badges,
-            lit: &self.lit,
-            pointer: &self.pointer,
+            marks: &|on, look| light::marks::look(&self.lit, on, now, look),
+            pointer: &|slot, camera, look| {
+                crate::pointer::look(&self.pointer, slot, (now, camera), look);
+            },
             now,
         };
+        let revealed = self.lit.open().iter().filter_map(|open| match open.span {
+            light::Span::Revealed { slot, .. } if open.ends.is_none() => Some((slot, open.begins)),
+            _ => None,
+        });
         self.table
-            .write(shown, motion, &self.faces, &dress, builder);
+            .write(shown, motion, &self.faces, &dress, revealed, builder);
         // The view shown, its scripts played out, asks something other than priority, as the
         // web stage's `#prompt` says: the line from an ability to its source is hidden then.
         let prompt = self.settled()
             && matches!(&shown.status, Status::Deciding { decision }
                 if decision.kind != Kind::Priority);
+        self.write_light_and_effects(now, prompt, builder);
+    }
+
+    /// Draws the script's arrows, marks and effects over the written table.
+    fn write_light_and_effects(&self, now: u64, prompt: bool, builder: &mut FrameBuilder) {
         let scene = Scene::new(self, now);
         light::arrows::write(&self.lit, now, prompt, &scene, builder);
         light::marks::write(&self.lit, now, &scene, builder);
         light::streaks::write(&self.lit, now, &scene, builder);
-        effects::light::write(&self.active_effects, now, &scene, builder);
-        effects::particles::write(&self.active_effects, now, &scene, builder);
+        let light_target = |subject, ago| {
+            let mut reach = scene.reach_before(subject, ago)?;
+            if ago == 0 && matches!(subject, Subject::Player { .. }) {
+                reach.half = light::marks::player_half(&scene, reach.pose.scale);
+            }
+            Some(reach)
+        };
+        effects::light::write(
+            &self.active_effects,
+            now,
+            light_target,
+            self.table.camera().eye,
+            builder,
+        );
+        effects::particles::write(&self.active_effects, now, |on| scene.reach(on), builder);
         let scale = self.table.camera().window.scale;
         effects::shake::write(&self.active_effects, now, scale, builder);
     }

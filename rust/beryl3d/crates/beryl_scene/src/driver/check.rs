@@ -139,7 +139,7 @@ impl Page {
         let found = steps::segment_checks(&history);
         let mut tally = agent::Judged::default();
         for script in &history {
-            tally.script(script);
+            steps::count_script(&mut tally, script);
         }
         let mut judged = judged(&history, played.client.table().camera());
         // The frames that name the objects of the faults the segment checks found.
@@ -169,7 +169,7 @@ impl Page {
             let size = page.size;
             let frame = page.frame();
             if checked.contains(&t) {
-                faults.extend(agent::check(frame, &context));
+                faults.extend(agent::game_checks::check(frame, &context));
                 tally.frame(frame, context.layout);
                 tally.lines(&kept, frame);
                 if arrows_held(&kept, frame) > 0 {
@@ -246,7 +246,7 @@ impl Page {
     ) -> bool {
         let context = self.context();
         let frame = self.frame();
-        let mut faults = agent::check(frame, &context);
+        let mut faults = agent::game_checks::check(frame, &context);
         let held = arrows_held(kept, frame) > 0;
         if held {
             faults.extend(lines_hold(kept, frame, &context));

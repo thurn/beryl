@@ -9,7 +9,6 @@ use std::ops::AddAssign;
 use super::checks::{KeptArrow, arrows_held};
 use super::fault::{Layout, Rule};
 use crate::frame::{Frame, Material, Place, Role, StateBits};
-use crate::play::record::ScriptRecord;
 
 /// What one rule judged.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -32,7 +31,7 @@ impl Judged {
         self.0[rule.index()]
     }
 
-    fn add(&mut self, rule: Rule, elements: usize) {
+    pub(super) fn add(&mut self, rule: Rule, elements: usize) {
         if elements > 0 {
             let count = &mut self.0[rule.index()];
             count.frames += 1;
@@ -40,7 +39,7 @@ impl Judged {
         }
     }
 
-    /// Counts what the frame checks (`agent::check`) judge in `frame`, shown in `layout`. Each
+    /// Counts what the frame checks (`checks::check`) judge in `frame`, shown in `layout`. Each
     /// count follows the filter its check applies before it judges an element.
     pub fn frame(&mut self, frame: &Frame, layout: Layout) {
         let mut interactive = 0;
@@ -117,24 +116,6 @@ impl Judged {
     /// `after`.
     pub fn lines(&mut self, before: &[KeptArrow], after: &Frame) {
         self.add(Rule::LinesHold, arrows_held(before, after));
-    }
-
-    /// Counts what the segment and step checks (`steps::segment_checks`) judge in `script`.
-    pub fn script(&mut self, script: &ScriptRecord) {
-        if script.start.is_none() {
-            return;
-        }
-        self.add(Rule::Jump, script.segments.len());
-        self.add(Rule::RestPlacement, script.slots().len());
-        self.add(Rule::StepTime, script.steps.len());
-        self.add(
-            Rule::Crowded,
-            script
-                .steps
-                .iter()
-                .filter(|step| step.key.is_some())
-                .count(),
-        );
     }
 
     /// Counts one step "every step shown" judged from `samples` frames.

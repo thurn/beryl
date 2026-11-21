@@ -472,7 +472,7 @@ fn tray_in(window: Window, bands: &PhoneBands) -> TraySpace {
 #[must_use]
 pub fn your_life(window: Window, bands: &PhoneBands, hand_top: f32) -> PlayerAnchor {
     use crate::data::space::hud::phone::DOCK_GAP;
-    let half = crate::hud::counts::HALF_LIFE;
+    let half = super::HALF_LIFE;
     let middle = bands.your_strip.middle();
     let raised = hand_top - DOCK_GAP - half;
     let lowest_clear = bands.your_back.top + half;

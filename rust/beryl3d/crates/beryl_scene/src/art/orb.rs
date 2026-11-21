@@ -42,9 +42,7 @@ const SQUARENESS: f32 = 2.25;
 /// The width of the core's bezel: `BEZEL`, the stroke of `.life-orb-core`.
 pub const BEZEL: f32 = size::ORB_BEZEL;
 
-/// Logical points to one unit of the art on the desktop layout: the web's stage draws the orb at
-/// `--orb: calc(1px / 1.045)` (`.table .life-orb`, `ui/src/screens/styles/table.css`).
-pub const DESKTOP_SCALE: f32 = 1.0 / 1.045;
+pub use crate::table::ORB_DESKTOP_SCALE as DESKTOP_SCALE;
 
 /// The scales the art is drawn at: the desktop's and the phone's
 /// (`data::space::hud::phone::ORB_SCALE`).

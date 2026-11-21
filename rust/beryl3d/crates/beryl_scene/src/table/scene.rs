@@ -18,17 +18,17 @@ use super::shadows::Floors;
 use super::shown::Shown;
 use super::tray::TrayMotion;
 use super::tray_layout::Held;
-use super::{CARD_HEIGHT, CARD_WIDTH, Camera, DESKTOP, Layout, PlayerAnchor, Window, phone};
+use super::{
+    CARD_HEIGHT, CARD_WIDTH, Camera, DESKTOP, Layout, PlayerAnchor, Window, phone, takes_pointer,
+};
 use crate::effects;
 use crate::faces::{CARD_BACK, Faces};
 use crate::frame::{
     Band, Draw, ElementId, FrameBuilder, OBJECTS, Place, Resolved, Role, StateBits,
 };
 use crate::input::FaceSize;
-use crate::light;
 use crate::motion::Track;
-use crate::pointer;
-use crate::pose::Pose;
+use crate::pose::{Interval, Pose};
 
 mod abilities;
 mod motion;
@@ -376,13 +376,15 @@ impl Table {
     /// drawn from the board-size layer of its face in `faces`, or layer 0 while that face has
     /// none or the viewer does not know the card's name, and its back from the card back's
     /// layer. How each card looks is then changed by `dress`: the effects on it, the marks on
-    /// it and the pointer, in that order.
+    /// it and the pointer, in that order. `revealed` lists the visible faces in draw order
+    /// with the interval over which each grows into place.
     pub fn write(
         &self,
         view: &PlayerView,
         motion: Option<Motion<'_>>,
         faces: &Faces,
         dress: &Dress<'_>,
+        revealed: impl Iterator<Item = (ObjectId, Interval)> + Clone,
         builder: &mut FrameBuilder,
     ) {
         let back = faces.board_layer_of(CARD_BACK).unwrap_or(0);
@@ -437,7 +439,7 @@ impl Table {
         self.write_piles(builder);
         self.write_tray_library(back, builder);
         self.write_abilities(view, motion, faces, (back, dress), builder);
-        self.write_revealed(faces, (back, dress), builder);
+        self.write_revealed(faces, (back, dress.now), revealed, builder);
         let cloth = Affine3A::from_scale_rotation_translation(
             Vec3::new(CLOTH / CARD_WIDTH, CLOTH / CARD_HEIGHT, 1.0),
             glam::Quat::IDENTITY,
@@ -527,7 +529,7 @@ impl Table {
         let tapped = [resting, last].iter().flatten().any(|object| object.tapped)
             && pose.rotation.angle_between(Quat::IDENTITY) > FRAC_PI_4;
         let place = resting
-            .filter(|rest| !begun && !pointer::takes_pointer(rest.place))
+            .filter(|rest| !begun && !takes_pointer(rest.place))
             .map_or(object.place, |rest| rest.place);
         let object = SceneObject {
             pose,
@@ -623,8 +625,8 @@ impl Table {
             dress.effects
         };
         effects::card::look_with_face(effects_on_card, on, dress.now, earlier_face, &mut look);
-        light::marks::look(dress.lit, on, dress.now, &mut look);
-        pointer::look(dress.pointer, slot, (dress.now, &self.camera), &mut look);
+        (dress.marks)(on, &mut look);
+        (dress.pointer)(slot, &self.camera, &mut look);
         let held = held_at.map_or(look, |pose| Look { pose, ..look });
         effects::card::write(dress.effects, on, dress.now, &held, builder);
         if shown.zone == ZoneName::Battlefield {

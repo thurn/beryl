@@ -337,7 +337,7 @@ impl Page {
     /// The faults every interface check finds in the present frame.
     pub fn faults(&mut self) -> Vec<Fault> {
         let context = self.context();
-        agent::check(self.frame(), &context)
+        agent::game_checks::check(self.frame(), &context)
     }
 
     /// Runs every interface check on the present frame.

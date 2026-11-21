@@ -21,7 +21,11 @@ const MOST_COVERING: usize = 6;
 
 /// Every check that needs one frame, in the doc's order.
 #[must_use]
-pub fn check(frame: &Frame, context: &Context) -> Vec<Fault> {
+pub fn check(
+    frame: &Frame,
+    context: &Context,
+    ring_target: impl Fn(Ringed) -> Option<(u32, Rect)>,
+) -> Vec<Fault> {
     let mut faults = on_screen(frame, context);
     faults.extend(overlap(frame, context));
     faults.extend(reachable(frame, context));
@@ -33,7 +37,7 @@ pub fn check(frame: &Frame, context: &Context) -> Vec<Fault> {
     faults.extend(blank_cards(frame, context));
     faults.extend(clips(frame, context));
     faults.extend(layer_drawn(frame, context));
-    faults.extend(marks_on(frame, context));
+    faults.extend(marks_on(frame, context, ring_target));
     faults.extend(phone_sizes(frame, context));
     faults
 }
@@ -478,26 +482,22 @@ pub fn layer_drawn(frame: &Frame, context: &Context) -> Vec<Fault> {
     )]
 }
 
-/// Marks on their things: each mark's outline (`Frame::rings`) is centred on the card,
-/// ability or life total (the core of the player's orb, `hud::players::core_box`) it rings, within `MARK_POINTS`, and the line it is drawn along
-/// (`sprites::OUTLINE_LINE`) goes round that thing's box on screen, falling inside it by no
-/// more than `MARK_POINTS`. The outline is a quad in the table's space, so it is projected
-/// through `Frame::view_projection` as the renderer draws it, while the thing's box is the one
-/// its element gives. An outline off its card, or narrower than it, breaks the rule. A card
-/// or ability the frame did not draw, and a player whose orb is not on screen, leave nothing
-/// to compare.
+/// Marks on their things: each mark's outline (`Frame::rings`) is centred on its target's box
+/// within `MARK_POINTS`, and its line (`sprites::OUTLINE_LINE`) goes around the box with the
+/// same tolerance. The outline is projected through `Frame::view_projection` as the renderer
+/// draws it. The caller supplies each visible target's element index and box in window points
+/// through `ring_target`.
 #[must_use]
-pub fn marks_on(frame: &Frame, context: &Context) -> Vec<Fault> {
+pub fn marks_on(
+    frame: &Frame,
+    context: &Context,
+    ring_target: impl Fn(Ringed) -> Option<(u32, Rect)>,
+) -> Vec<Fault> {
     let tolerance = audit::MARK_POINTS;
     let mut faults = Vec::new();
     for ring in &frame.rings {
-        let Some(index) = ringed_element(frame, ring.on) else {
+        let Some((index, thing)) = ring_target(ring.on) else {
             continue;
-        };
-        let element = bounds(&frame.resolved[index as usize]);
-        let thing = match ring.on {
-            Ringed::Element(_) => element,
-            Ringed::Player(side) => crate::hud::players::core_box(side, element),
         };
         let line = ring_rect(ring, frame.view_projection, context.size);
         let offset = rect_centre(line) - rect_centre(thing);
@@ -527,24 +527,6 @@ pub fn marks_on(frame: &Frame, context: &Context) -> Vec<Fault> {
         ));
     }
     faults
-}
-
-/// The index in `Frame::resolved` of the element `on` names: a card's or an ability's element
-/// of the table, or the orb of a player's life total in the flat layer.
-fn ringed_element(frame: &Frame, on: Ringed) -> Option<u32> {
-    let found = match on {
-        Ringed::Element(id) => frame
-            .resolved
-            .iter()
-            .position(|element| element.id == id && element.place != Place::Layer),
-        Ringed::Player(side) => {
-            let name = crate::hud::players::orb_name(side);
-            frame.resolved.iter().position(|element| {
-                element.place == Place::Layer && frame.name(element.name) == name
-            })
-        }
-    }?;
-    u32::try_from(found).ok()
 }
 
 /// The rectangle on the window, in logical points, that bounds the line `ring`'s outline is

@@ -26,6 +26,7 @@ use crate::element::{Align, Element, FloatId, Press, Span, TextAlign, floats, ho
 use crate::frame::Role;
 use crate::input::Size;
 use crate::layout::{FloatLook, Layer};
+pub(crate) use crate::table::HALF_LIFE;
 use crate::table::Layout;
 use crate::tokens::{color, size, type_style};
 
@@ -326,11 +327,6 @@ impl CountFloats {
 /// the steps stay up while scripts play, and the number is a transient float, so 2 points do not
 /// show.
 const GAIN_CLEARANCE: f32 = 2.0;
-
-/// How far a line of the title type reaches above and below its middle, in logical points: the
-/// phone's life total, from which the amount it changed by starts, and the space the desktop's
-/// notices leave above a total.
-pub(crate) const HALF_LIFE: f32 = type_style::TITLE.size * type_style::TITLE.line_height / 2.0;
 
 /// The look of the amount a life total at `life` changed by, as the `loss` or `gain` `run`
 /// stands at `now`: from beside the total, it sinks below it for a loss, or rises above it for

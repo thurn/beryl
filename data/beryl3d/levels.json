@@ -69,6 +69,7 @@
   "cap_allowances": {},
   "modules": {
     "agent": "kit_probe",
+    "agent/game_checks.rs": "game_probe",
     "agent/hit.rs": "kit_scene",
     "agent/steps.rs": "game_probe",
     "art": "game_play",
@@ -111,6 +112,7 @@
     "settings": "app_screens",
     "sound": "game_play",
     "table": "game_table",
+    "table/window.rs": "kit_space",
     "testing": "game_probe",
     "text": "kit_text",
     "tokens": "kit_base",
@@ -118,15 +120,10 @@
     "widgets": "kit_ui"
   },
   "upward": {
-    "agent": 3,
-    "effects": 9,
     "element": 6,
     "frame": 21,
     "input": 2,
     "layout": 13,
-    "motion": 1,
-    "pose": 2,
-    "table": 13,
     "text": 15,
     "tokens": 7,
     "widgets": 2

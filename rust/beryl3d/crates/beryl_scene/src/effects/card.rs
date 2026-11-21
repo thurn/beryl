@@ -9,11 +9,35 @@ use beryl_protocol::script::Subject;
 use glam::{Affine3A, Vec3};
 
 use super::{Effect, EffectRun};
+use crate::data::space::card::{HEIGHT as CARD_HEIGHT, WIDTH as CARD_WIDTH};
 use crate::data::space::effects::{blanch, cover, dim, dissolve, settle};
 use crate::data::space::light;
 use crate::frame::{Band, Draw, EffectLook, FrameBuilder, sprites};
-use crate::table::{CARD_HEIGHT, CARD_WIDTH, Look};
+use crate::pose::Pose;
 use crate::tokens::color;
+
+/// How one card is drawn in a frame: made from its pose, face and state, and then changed in
+/// turn by the effects on it, the marks on it and the pointer.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Look {
+    pub pose: Pose,
+    /// Multiplies the face's color.
+    pub tint: [u8; 3],
+    /// How far the card has broken up, from 0 to 1.
+    pub dissolve: f32,
+    /// How far its face is replaced by white light, from 0 to 1.
+    pub whiten: f32,
+    /// The board-size layer of its face, if it has one.
+    pub face: Option<u16>,
+    /// The full-size layers of the same face and of the card back, drawn in place of the
+    /// board-size ones where the web interface draws a card's full frame (in a hand, on the
+    /// stack), once both have landed (`Faces::full_layers`). A face's board-size picture is the
+    /// battlefield frame, without the cost, type line or rules text.
+    pub full: Option<[u16; 2]>,
+    /// `StateBits`.
+    pub state: u16,
+    pub interactive: bool,
+}
 
 /// The runs in `runs` that play on `on` at `now`, each with its eased progress from 0 to 1.
 fn under_way(runs: &[EffectRun], on: Subject, now: u64) -> impl Iterator<Item = (Effect, f32)> {

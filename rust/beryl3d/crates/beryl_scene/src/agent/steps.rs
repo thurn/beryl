@@ -12,6 +12,7 @@ use glam::{Quat, Vec2};
 
 use super::fault::Rule;
 use super::hit::{bounds, covered, hit};
+use super::judged::Judged;
 use crate::data::audit;
 use crate::frame::{Frame, Place, Role};
 use crate::input::{Rect, Size};
@@ -576,4 +577,22 @@ fn distance(a: Pose, b: Pose) -> f32 {
 /// Nanoseconds as whole milliseconds, rounded to the nearest.
 fn milliseconds(nanoseconds: u64) -> u64 {
     (nanoseconds + 500_000) / 1_000_000
+}
+
+/// Counts what the segment and step checks (`steps::segment_checks`) judge in `script`.
+pub fn count_script(tally: &mut Judged, script: &ScriptRecord) {
+    if script.start.is_none() {
+        return;
+    }
+    tally.add(Rule::Jump, script.segments.len());
+    tally.add(Rule::RestPlacement, script.slots().len());
+    tally.add(Rule::StepTime, script.steps.len());
+    tally.add(
+        Rule::Crowded,
+        script
+            .steps
+            .iter()
+            .filter(|step| step.key.is_some())
+            .count(),
+    );
 }

@@ -27,7 +27,9 @@ mod stack;
 mod tray;
 mod tray_layout;
 mod web_fit;
+pub(crate) mod window;
 
+use beryl_protocol::protocol::{Side, ZoneName};
 use glam::Vec2;
 
 pub use camera::{Camera, CameraData};
@@ -49,9 +51,18 @@ pub use tray_layout::{
     Across, Held, Second, TrayKind, TrayPoses, TraySpace, landing, tray, tray_area, tray_boxes,
 };
 pub use web_fit::{FittedPiles, FittedRow, FittedRows};
+pub use window::Window;
 
 use crate::data::space;
-use crate::input::{Insets, Size};
+use crate::frame::Place;
+use crate::tokens::type_style;
+
+/// Half the line height of a life total in logical points.
+pub(crate) const HALF_LIFE: f32 = type_style::TITLE.size * type_style::TITLE.line_height / 2.0;
+
+/// Logical points per unit of life orb art on the desktop. The web's stage uses
+/// `--orb: calc(1px / 1.045)` (`.table .life-orb`, `ui/src/screens/styles/table.css`).
+pub const ORB_DESKTOP_SCALE: f32 = 1.0 / 1.045;
 
 /// A card's printed width and height (`card` in `space.json`).
 pub const CARD_WIDTH: f32 = space::card::WIDTH;
@@ -59,35 +70,23 @@ pub const CARD_HEIGHT: f32 = space::card::HEIGHT;
 /// The height between two cards lying one on the other, in a pile or an overlapped row.
 pub const LAYER: f32 = space::card::LAYER;
 
-/// The window the table is drawn in.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Window {
-    pub size: Size,
-    /// Physical pixels per logical point.
-    pub scale: f32,
-    pub safe_area: Insets,
-}
-
-impl Default for Window {
-    fn default() -> Self {
-        Self {
-            size: Size {
-                width: 1440.0,
-                height: 900.0,
-            },
-            scale: 1.0,
-            safe_area: Insets::default(),
+/// Whether a card resting at `place` takes the pointer, once it is face up and the viewer knows
+/// its name: one on the battlefield, on the stack or in the viewer's hand. A pile is one
+/// element, so no card in it does. The table leaves out a face-up card with no name, such as a
+/// copy of a face-down creature, because every interactive element has a name.
+#[must_use]
+pub fn takes_pointer(place: Place) -> bool {
+    matches!(
+        place,
+        Place::Card {
+            zone: ZoneName::Battlefield | ZoneName::Stack,
+            ..
+        } | Place::Card {
+            zone: ZoneName::Hand,
+            side: Side::You,
+            ..
         }
-    }
-}
-
-impl Window {
-    /// Whether the window takes the phone layout: its shorter side is under 500 points
-    /// (docs/beryl-3d.md, "Sizes"), by the selector the interface checks use.
-    #[must_use]
-    pub fn phone(self) -> bool {
-        crate::agent::Layout::for_size(self.size) == crate::agent::Layout::Phone
-    }
+    )
 }
 
 /// The band of the table one battlefield row lies in, on the viewer's side: the cards' centre

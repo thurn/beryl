@@ -9,7 +9,6 @@ use glam::{Quat, Vec2, Vec3};
 use super::place::{Placement, Rest, turn};
 use super::{CARD_HEIGHT, CARD_WIDTH, Camera, Layout, RowArea, StackData};
 use crate::agent::hit;
-use crate::art::orb;
 use crate::data::audit;
 use crate::frame::Place;
 use crate::pose::Pose;
@@ -194,8 +193,8 @@ fn clear_of_life(
         f32::midpoint(anchor.x, 1.0) * window.width,
         f32::midpoint(1.0, -anchor.y) * window.height,
     );
-    let half_height = size::ORB_HEIGHT * orb::DESKTOP_SCALE / 2.0;
-    let half_width = (size::ORB_WIDTH * orb::DESKTOP_SCALE).max(size::STEPS_WIDTH) / 2.0;
+    let half_height = size::ORB_HEIGHT * super::ORB_DESKTOP_SCALE / 2.0;
+    let half_width = (size::ORB_WIDTH * super::ORB_DESKTOP_SCALE).max(size::STEPS_WIDTH) / 2.0;
     // The band an untapped card of the row stands across, the taller of its two.
     let height = |along: f32| camera.to_screen(Vec3::new(0.0, y + along, 0.0)).y;
     let (near, far) = (height(-CARD_HEIGHT / 2.0), height(CARD_HEIGHT / 2.0));
@@ -384,7 +383,7 @@ mod tests {
 
     use super::row_area;
     use crate::input::Size;
-    use crate::table::{CARD_HEIGHT, Camera, DESKTOP, Window};
+    use crate::table::{CARD_HEIGHT, Camera, DESKTOP, ORB_DESKTOP_SCALE, Window};
 
     const ROWS: [RowName; 3] = [RowName::Creatures, RowName::Lands, RowName::Others];
 
@@ -442,7 +441,6 @@ mod tests {
     fn desktop_back_rows_clear_the_life_orb() {
         use glam::Vec3;
 
-        use crate::art::orb;
         use crate::tokens::size;
 
         for (width, height) in [
@@ -453,7 +451,7 @@ mod tests {
         ] {
             let camera = camera(width, height);
             let life_x = f32::midpoint(DESKTOP.players[0].life.x, 1.0) * width;
-            let half = (size::ORB_WIDTH * orb::DESKTOP_SCALE).max(size::STEPS_WIDTH) / 2.0;
+            let half = (size::ORB_WIDTH * ORB_DESKTOP_SCALE).max(size::STEPS_WIDTH) / 2.0;
             let screen = |row, x: f32| {
                 let (_, y) = row_area((&DESKTOP, &camera), Side::You, row);
                 [-CARD_HEIGHT / 2.0, CARD_HEIGHT / 2.0]

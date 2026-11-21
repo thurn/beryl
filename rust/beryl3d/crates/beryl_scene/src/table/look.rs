@@ -1,42 +1,21 @@
 //! How one card is drawn in a frame (`Look`), and what changes it beside its pose (`Dress`).
 
-use super::badges::Badges;
-use crate::effects::EffectRun;
-use crate::light::Lit;
-use crate::pointer::Pointer;
-use crate::pose::Pose;
+use beryl_protocol::script::Subject;
 
-/// How one card is drawn in a frame: made from its pose, face and state, and then changed in
-/// turn by the effects on it, the marks on it and the pointer.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Look {
-    pub pose: Pose,
-    /// Multiplies the face's color.
-    pub tint: [u8; 3],
-    /// How far the card has broken up, from 0 to 1.
-    pub dissolve: f32,
-    /// How far its face is replaced by white light, from 0 to 1.
-    pub whiten: f32,
-    /// The board-size layer of its face, if it has one.
-    pub face: Option<u16>,
-    /// The full-size layers of the same face and of the card back, drawn in place of the
-    /// board-size ones where the web interface draws a card's full frame (in a hand, on the
-    /// stack), once both have landed (`Faces::full_layers`). A face's board-size picture is the
-    /// battlefield frame, without the cost, type line or rules text.
-    pub full: Option<[u16; 2]>,
-    /// `StateBits`.
-    pub state: u16,
-    pub interactive: bool,
-}
+use super::{Camera, badges::Badges};
+use crate::effects::EffectRun;
+pub use crate::effects::card::Look;
 
 /// What changes how the cards are drawn in a frame, beside their poses: the effects playing,
-/// the spans shown, the pointer, and the time.
-#[derive(Clone, Copy, Debug)]
+/// the marks shown, the pointer, and the time.
+#[derive(Clone, Copy)]
 pub struct Dress<'a> {
     pub effects: &'a [EffectRun],
     /// The numbers the badges on permanents are made of.
     pub badges: &'a Badges,
-    pub lit: &'a Lit,
-    pub pointer: &'a Pointer,
+    /// Applies the marks on the card or ability at the frame's time.
+    pub marks: &'a dyn Fn(Subject, &mut Look),
+    /// Applies the pointer's changes to the card at the frame's time.
+    pub pointer: &'a dyn Fn(usize, &Camera, &mut Look),
     pub now: u64,
 }

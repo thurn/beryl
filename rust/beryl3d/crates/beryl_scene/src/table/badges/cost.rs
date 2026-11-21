@@ -25,7 +25,7 @@ use crate::text::{Block, Glyphs, Text, TypeStyle, glyph_key};
 use crate::tokens::{badge, mana};
 
 use super::super::{CARD_HEIGHT, CARD_WIDTH, Camera};
-use crate::light::arrows::ARROW_IDS;
+use crate::frame::ARROW_IDS;
 
 /// The element id of the cost of the card in slot 0: past the arrows' and the aims'. The cost
 /// of the card in slot `s` is this plus `s`.

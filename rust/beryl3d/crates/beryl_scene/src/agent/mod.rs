@@ -5,6 +5,7 @@
 
 pub mod checks;
 pub mod fault;
+pub mod game_checks;
 pub mod hit;
 pub mod judged;
 pub mod locate;
@@ -12,7 +13,6 @@ pub mod steps;
 pub mod text_overlap;
 pub mod tree;
 
-pub use checks::check;
 pub use fault::{Context, Fault, Layout, Rule, Subject};
 pub use hit::{hit, uncovered};
 pub use judged::{Count, Judged};

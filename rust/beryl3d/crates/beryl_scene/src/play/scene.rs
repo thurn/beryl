@@ -3,19 +3,10 @@
 
 use beryl_protocol::protocol::Side;
 use beryl_protocol::script::Subject;
-use glam::Vec2;
 
 use super::Show;
-use crate::pose::Pose;
+use crate::effects::Reach;
 use crate::table::{Table, ability_track};
-
-/// Where something is and how large, for the light drawn to or on it.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Reach {
-    pub pose: Pose,
-    /// Half its width and height, in millimetres. A player's anchor is a point.
-    pub half: Vec2,
-}
 
 /// The show as a frame draws it, for the writers of light and effects to ask where things are.
 #[derive(Clone, Copy)]

@@ -255,15 +255,12 @@ mod tests {
     use crate::text::Text;
 
     fn permanent(note: Option<&str>, chosen: Option<&str>) -> ObjectView {
-        let mut object = crate::testing::object(
-            ObjectId(1),
-            ZoneName::Battlefield,
-            Side::You,
-            Some("Painter's Servant"),
-        );
-        object.note = note.map(str::to_owned);
-        object.chosen = chosen.map(str::to_owned);
-        object
+        ObjectView {
+            name: Some("Painter's Servant".to_owned()),
+            note: note.map(str::to_owned),
+            chosen: chosen.map(str::to_owned),
+            ..ObjectView::neutral(ObjectId(1), ZoneName::Battlefield, Side::You)
+        }
     }
 
     #[test]

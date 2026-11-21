@@ -32,13 +32,12 @@
 use beryl_protocol::script::Subject;
 use glam::{Affine3A, Vec2, Vec3};
 
-use super::{Effect, EffectRun};
+use super::{Effect, EffectRun, Reach};
 use crate::data::space::effects::dissolve;
 use crate::data::space::enhanced::particles::{ash, vortex};
 use crate::data::space::light::LIFT;
 use crate::frame::{Band, Draw, FrameBuilder, PARTICLES, sprites};
 use crate::input::Tier;
-use crate::play::{Reach, Scene};
 use crate::tokens::color;
 
 /// The most particles a run of `effect` writes, if it writes any.
@@ -61,7 +60,12 @@ fn writes(run: &EffectRun, now: u64) -> bool {
 
 /// Writes the particles of the runs in `runs` under way at `now`, in `Band::Particles`, when
 /// the frame is drawn in the Enhanced tier. Allocates nothing.
-pub fn write(runs: &[EffectRun], now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<'_>) {
+pub fn write(
+    runs: &[EffectRun],
+    now: u64,
+    reach_at: impl Fn(Subject) -> Option<Reach>,
+    builder: &mut FrameBuilder<'_>,
+) {
     if builder.tier() != Tier::Enhanced {
         return;
     }
@@ -79,7 +83,7 @@ pub fn write(runs: &[EffectRun], now: u64, scene: &Scene<'_>, builder: &mut Fram
         let Subject::Object { slot } = run.on else {
             continue;
         };
-        let Some(reach) = scene.reach(run.on) else {
+        let Some(reach) = reach_at(run.on) else {
             continue;
         };
         #[expect(
