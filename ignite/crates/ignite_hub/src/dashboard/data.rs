@@ -126,13 +126,22 @@ fn status_rank(status: Status) -> u8 {
 }
 
 /// Orders cards by what needs attention: working, blocked, open, deferred, pending approval,
-/// closed; then by priority; then the most recently updated first.
+/// closed; then by priority; then the most recently updated first, with ties broken by ticket ID.
 pub fn by_attention(left: &Card, right: &Card) -> std::cmp::Ordering {
     status_rank(left.status)
         .cmp(&status_rank(right.status))
         .then(left.priority.cmp(&right.priority))
         .then(right.updated_at.cmp(&left.updated_at))
-        .then(left.id.cmp(&right.id))
+        .then_with(|| by_ticket_id(left, right))
+}
+
+/// Compares dotted ticket numbers numerically, so `.3` comes before `.28` and `.30`.
+pub(super) fn by_ticket_id(left: &Card, right: &Card) -> std::cmp::Ordering {
+    fn parts(id: &str) -> impl Iterator<Item = (u64, &str)> {
+        id.split('.')
+            .map(|part| (part.parse().unwrap_or(u64::MAX), part))
+    }
+    parts(&left.id).cmp(parts(&right.id))
 }
 
 /// Orders cards with the most recently updated first, ties broken by id. The home page sorts by

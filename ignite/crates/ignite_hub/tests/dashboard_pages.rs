@@ -212,6 +212,27 @@ fn subtasks_come_before_the_description() {
 }
 
 #[test]
+fn subtasks_with_equal_attention_sort_by_ticket_number() {
+    let hub = seeded();
+    for number in [28, 3, 30] {
+        hub.conn
+            .execute(
+                "INSERT INTO tickets (id, parent, title, status, created_at, updated_at, created_by, version)
+                 VALUES (?1, 'TQ44S.7', 'Fixture subtask', 'open', ?2, ?2, 'Sim actor', 4992)",
+                params![format!("TQ44S.7.{number}"), NOW],
+            )
+            .unwrap();
+    }
+    let page = hub.text("/TQ44S.7");
+    let row_position = |number| {
+        let row = format!("class=\"c-row-id c-mono c-hide-narrow\">TQ44S.7.{number}</");
+        page.find(&row).expect("subtask row")
+    };
+    assert!(row_position(3) < row_position(28));
+    assert!(row_position(28) < row_position(30));
+}
+
+#[test]
 fn closed_subtasks_are_listed_without_a_collapsed_group() {
     let hub = seeded();
     // This epic has closed children. They used to sit behind a "<n> closed" disclosure.

@@ -7,7 +7,7 @@
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 
-use super::data::Card;
+use super::data::{Card, by_ticket_id};
 
 /// Whether a child is listed as a milestone rather than a subtask.
 pub fn is_milestone(card: &Card) -> bool {
@@ -60,7 +60,7 @@ fn by_title_number(left: &Card, right: &Card) -> Ordering {
     let key = |card: &Card| title_number(&card.title).unwrap_or(u64::MAX);
     key(left)
         .cmp(&key(right))
-        .then_with(|| id_parts(&left.id).cmp(&id_parts(&right.id)))
+        .then_with(|| by_ticket_id(left, right))
 }
 
 fn title_number(title: &str) -> Option<u64> {
@@ -70,12 +70,6 @@ fn title_number(title: &str) -> Option<u64> {
         .take_while(char::is_ascii_digit)
         .collect();
     digits.parse().ok()
-}
-
-fn id_parts(id: &str) -> Vec<(u64, &str)> {
-    id.split('.')
-        .map(|part| (part.parse().unwrap_or(u64::MAX), part))
-        .collect()
 }
 
 #[cfg(test)]
