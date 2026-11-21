@@ -1117,7 +1117,9 @@
     {
       "published_at": "2011-01-01",
       "hash": "d3d1912543d6",
-      "untestable": "by-ptc7.2.16 tracks the animation scenario. The Gargantuan copies an animated artifact as a noncreature. When Oko animates the copy, Beryl makes it 7/7 instead of 3/3."
+      "scenario": [
+        "Oko makes the Gargantuan's artifact copy a 3/3"
+      ]
     },
     {
       "published_at": "2011-01-01",

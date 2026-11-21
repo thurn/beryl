@@ -6,6 +6,13 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **Quicksilver Gargantuan's copy of an animated artifact was reported as 7/7
+  after Oko animated the copy.** The current engine applies the copy exception
+  in layer 1, then applies Oko's 3/3 in layer 7b. The scenario
+  `Oko makes the Gargantuan's artifact copy a 3/3` checks that the copy enters
+  as a noncreature Portable Hole and becomes a 3/3 Elk after Oko's ability
+  resolves.
+
 - **Widening a game during Show and Tell could lose the nonactive player's hand
   pick.** The resolution record held the card's slot index from the smaller
   layout, which names a different slot in the larger layout. Relayout now
