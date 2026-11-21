@@ -129,10 +129,22 @@ pub const SELF_TARGET: &[Scenario] =
 pub const SAME_NAME: &[Scenario] =
     &[
         Scenario::new("A counterspell offers two same-named spells with different targets")
-            .interaction(&[names::LIGHTNING_BOLT])
-            .battlefield(P0, &[names::ISLAND; 2])
-            .hand(P0, &[names::COUNTERSPELL])
-            .battlefield(P1, &[names::MOUNTAIN; 2])
+            .interaction(&[names::LIGHTNING_BOLT, names::PLATINUM_EMPERION])
+            .battlefield(
+                P0,
+                &[
+                    names::ISLAND,
+                    names::ISLAND,
+                    names::ISLAND,
+                    names::ISLAND,
+                    names::PLATINUM_EMPERION,
+                ],
+            )
+            .hand(P0, &[names::COUNTERSPELL; 2])
+            .battlefield(
+                P1,
+                &[names::MOUNTAIN, names::MOUNTAIN, names::PLATINUM_EMPERION],
+            )
             .hand(P1, &[names::LIGHTNING_BOLT; 2])
             .at(2, P1, TurnStep::PrecombatMain)
             .actions(&[
@@ -142,7 +154,9 @@ pub const SAME_NAME: &[Scenario] =
                 THEM.targets_player(THEM),
                 ME.casts(names::COUNTERSPELL),
                 ME.deciding(DecisionKind::Target, 2),
+                // Both targets have the same outcome if their Bolt resolves.
                 ME.targets(names::LIGHTNING_BOLT),
+                Resolve,
                 Resolve,
                 stack(0),
                 THEM.has(Zone::Graveyard, names::LIGHTNING_BOLT, 2),

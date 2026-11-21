@@ -83,15 +83,17 @@ pub const ANY_TARGET: &[Scenario] = &[
         ME.has(Zone::Graveyard, SAMBAR, 1),
     ]),
     Scenario::new("A damage spell does not resolve after its target is returned")
-        .hand(P0, &[BOLT])
-        .battlefield(P0, &[names::MOUNTAIN, FLIER])
+        .hand(P0, &[BOLT, props::INSTANT.card])
+        .battlefield(P0, &[names::MOUNTAIN, names::ISLAND, names::ISLAND, FLIER])
         .hand(P1, &[props::REMOVAL.card])
         .battlefield(P1, &[names::ISLAND; 3])
         .actions(&[
             ME.casts(BOLT),
             ME.targets(FLIER),
+            ME.passes(),
             THEM.casts(props::REMOVAL.card),
             THEM.targets(FLIER),
+            Resolve,
             Resolve,
             ME.has(Zone::Graveyard, BOLT, 1),
             ME.has(Zone::Hand, FLIER, 1),

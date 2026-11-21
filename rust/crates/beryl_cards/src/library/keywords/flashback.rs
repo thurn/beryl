@@ -85,7 +85,7 @@ pub const RETURN_TO_HAND: &[Scenario] =
         Scenario::new("Returning a spell cast with flashback exiles it instead")
             .interaction(&[names::REPRIEVE])
             .battlefield(P0, &[names::ISLAND, names::ISLAND, names::PLAINS])
-            .hand(P0, &[names::SNAPCASTER_MAGE])
+            .hand(P0, &[names::SNAPCASTER_MAGE, names::ISLAND])
             .graveyard(P0, &[props::SORCERY.card])
             .battlefield(P1, &[names::PLAINS; 2])
             .hand(P1, &[names::REPRIEVE])
