@@ -9,7 +9,7 @@ use rusqlite::Connection;
 use ignite_core::config::Config;
 use ignite_core::fleet::{FleetSettings, FleetUpdate, MachineSetting, MachineState};
 use ignite_core::time::Timestamp;
-use ignite_hub::dashboard::serve::serve;
+use ignite_hub::dashboard::serve::{Site, serve, serve_with};
 use ignite_hub::routes::Request;
 use ignite_hub::server::HubServer;
 use ignite_store::hub;
@@ -39,6 +39,10 @@ floor = { batch = 1, tip = 1 }
 "#;
 
 fn get(conn: &Connection, path: &str) -> (u16, String) {
+    render(conn, path, false)
+}
+
+fn render(conn: &Connection, path: &str, private: bool) -> (u16, String) {
     let request = Request {
         method: "GET".to_owned(),
         path: path.to_owned(),
@@ -47,7 +51,12 @@ fn get(conn: &Connection, path: &str) -> (u16, String) {
         body: Vec::new(),
         headers: Vec::new(),
     };
-    let response = serve(conn, &request, "proj", Timestamp::parse(NOW).unwrap())
+    let site = Site {
+        project: "proj",
+        private,
+        ..Site::default()
+    };
+    let response = serve_with(conn, &request, &site, Timestamp::parse(NOW).unwrap())
         .unwrap_or_else(|| panic!("no dashboard route for {path}"));
     (response.status, String::from_utf8(response.body).unwrap())
 }
@@ -58,11 +67,18 @@ fn page(conn: &Connection, path: &str) -> String {
     body
 }
 
-/// `jarvis` (macOS) is reporting with an unpaused dispatcher and three workers;
-/// `cygnus` (Windows) reports, but its pool is paused. `multivac` has no dispatcher.
+/// Jarvis has three workers. Cygnus runs checks only, and Multivac has no configured provider.
 fn seeded() -> Connection {
-    let conn = hub::open_in_memory().unwrap();
+    let mut conn = hub::open_in_memory().unwrap();
     seed(&conn);
+    hub::fleet_settings::set_machine_state(
+        &mut conn,
+        "cygnus",
+        MachineState::ChecksOnly,
+        "operator",
+        Timestamp::parse(NOW).unwrap(),
+    )
+    .unwrap();
     conn
 }
 
@@ -74,10 +90,9 @@ fn seed(conn: &Connection) {
            ('m-m', 'multivac', 'macos', 12, 32768, '[]', 'abc1234', '2026-11-17T11:58:00.000Z');
          INSERT INTO workers (machine, session, app, role, state, ticket, command, command_since, command_running) VALUES
            ('m-j', 'local_d', 'claude', 'dispatcher', 'idle', NULL, NULL, NULL, 0),
-           ('m-j', 'local_long', 'claude', 'worker', 'working', 'e1.1', 'test', '2026-11-17T11:49:00.000Z', 1),
+           ('m-j', 'cli-claude-long', 'claude', 'worker', 'working', 'e1.1', 'test', '2026-11-17T11:49:00.000Z', 1),
            ('m-j', 'local_short', 'claude', 'worker', 'working', 'e1.2', 'test', '2026-11-17T11:51:00.000Z', 1),
            ('m-j', 'local_quiet', 'claude', 'worker', 'working', 'e1.3', 'land', '2026-11-17T11:40:00.000Z', 0),
-           ('m-c', 'local_cd', 'codex', 'dispatcher', 'paused', NULL, NULL, NULL, 0),
            ('m-m', 'local_mw', 'claude', 'worker', 'idle', NULL, NULL, NULL, 0);
          INSERT INTO tickets (id, parent, title, type, status, labels, notes, workers, machine, tree,
                               claimed_at, created_at, updated_at, created_by, version) VALUES
@@ -130,7 +145,7 @@ fn every_fleet_page_renders_from_a_seeded_database() {
     let conn = seeded();
     for (path, expected) in [
         ("/fleet", "jarvis"),
-        ("/pool", "local_long"),
+        ("/pool", "cli-claude-long"),
         ("/epics", "Active epic"),
         ("/landings", "Landed task"),
         ("/tips", "kernel-test"),
@@ -149,7 +164,7 @@ fn every_fleet_page_renders_from_a_seeded_database() {
     assert!(fleet.contains("tree-01"));
     // A trailing slash is the same page; an unknown name is looked up as a
     // ticket and is a 404, and a path with several segments is no dashboard route.
-    assert!(page(&conn, "/pool/").contains("local_long"));
+    assert!(page(&conn, "/pool/").contains("cli-claude-long"));
     assert_eq!(get(&conn, "/nowhere").0, 404);
     let request = Request {
         method: "GET".to_owned(),
@@ -347,39 +362,43 @@ fn the_pool_marks_a_command_over_ten_minutes_and_a_silent_worker() {
         &body[start..start + end]
     };
     // Began 11 minutes ago and still running: marked. Began 9 minutes ago: not.
-    assert!(row("local_long").contains("Running over 10 minutes"));
+    assert!(row("cli-claude-long").contains("Running over 10 minutes"));
     assert!(!row("local_short").contains("over 10 minutes"));
     // Holds a ticket and last ran a command 20 minutes ago: marked as silent.
     assert!(row("local_quiet").contains("No command for over 10 minutes"));
     // Idle workers with no ticket are never marked.
     assert!(!row("local_mw").contains("minutes"));
-    assert!(row("local_long").contains("ignite test"));
+    assert!(row("cli-claude-long").contains("ignite test"));
+}
+
+#[test]
+fn the_pool_links_cli_transcripts_on_the_private_listener() {
+    let conn = seeded();
+    let link = "href=\"/e1.1/session/cli-claude-long\"";
+    let (status, private) = render(&conn, "/pool", true);
+    assert_eq!(status, 200);
+    assert!(private.contains(link));
+    assert!(!page(&conn, "/pool").contains(link));
+    assert!(!private.contains("local_d"));
+    assert!(!private.contains("dispatcher"));
 }
 
 #[test]
 fn the_first_line_lists_what_needs_a_person() {
     let conn = seeded();
-    assert!(page(&conn, "/").contains("cygnus's pool is paused"));
-    // With every dispatcher down, no worker can take the open regression.
-    conn.execute(
-        "UPDATE workers SET state = 'down' WHERE role = 'dispatcher'",
-        [],
-    )
-    .unwrap();
+    assert!(page(&conn, "/").contains("cygnus is checks-only (set by operator)"));
     let body = page(&conn, "/");
     let first = &body[body.find("id=\"attention\"").expect("an attention section")..];
     let first = &first[..first.find("</section>").unwrap()];
     assert!(first.contains("needs a person: Choose a vendor"), "{first}");
     assert!(first.contains("Pick one by Friday"));
-    assert!(first.contains("multivac has no dispatcher"));
-    assert!(first.contains("cygnus has no dispatcher"));
     assert!(first.contains("The regression in kernel-test"));
     assert!(first.contains("No machine can run"));
     assert!(first.contains("pinned to plan9"));
 }
 
 #[test]
-fn a_cli_pool_needs_no_desktop_dispatcher_even_when_it_has_no_workers() {
+fn a_reporting_cli_pool_can_start_workers_for_a_regression() {
     let mut conn = seeded();
     let now = Timestamp::parse(NOW).unwrap();
     let mut beat = ignite_core::protocol::hub::Heartbeat {
@@ -398,10 +417,10 @@ fn a_cli_pool_needs_no_desktop_dispatcher_even_when_it_has_no_workers() {
         machine[..machine.find("</section>").unwrap()].to_owned()
     };
     let body = page(&conn, "/");
-    assert!(!body.contains("multivac has no dispatcher"));
-    assert!(body.contains("cygnus's pool is paused"));
+    assert!(!body.contains("The regression in kernel-test"));
+    assert!(body.contains("cygnus is checks-only (set by operator)"));
     assert!(pool(&conn).contains("codex CLI"));
-    assert!(!pool(&conn).contains("No dispatcher"));
+    assert!(pool(&conn).contains("No workers."));
 
     hub::fleet_settings::set_machine_state(
         &mut conn,
@@ -411,13 +430,16 @@ fn a_cli_pool_needs_no_desktop_dispatcher_even_when_it_has_no_workers() {
         now,
     )
     .unwrap();
-    assert!(page(&conn, "/").contains("multivac is checks-only (set by operator)"));
+    let home = page(&conn, "/");
+    assert!(home.contains("multivac is checks-only (set by operator)"));
+    assert!(!home.contains("The regression in kernel-test"));
     assert!(pool(&conn).contains("checks-only (set by operator)"));
 
     hub::fleet::heartbeat(&mut conn, &beat, now.plus_seconds(-601.0)).unwrap();
-    assert!(page(&conn, "/").contains("multivac has not reported"));
+    let home = page(&conn, "/");
+    assert!(home.contains("multivac has not reported"));
+    assert!(home.contains("The regression in kernel-test"));
 
-    beat.cli_apps.clear();
     hub::fleet::heartbeat(&mut conn, &beat, now).unwrap();
     hub::fleet_settings::set_machine_state(
         &mut conn,
@@ -427,50 +449,50 @@ fn a_cli_pool_needs_no_desktop_dispatcher_even_when_it_has_no_workers() {
         now,
     )
     .unwrap();
-    let body = page(&conn, "/");
-    assert!(body.contains("multivac is off (set by another operator)"));
-    assert!(!body.contains("multivac has no dispatcher"));
+    let home = page(&conn, "/");
+    assert!(home.contains("multivac is off (set by another operator)"));
+    assert!(home.contains("The regression in kernel-test"));
 
+    beat.cli_apps.clear();
+    hub::fleet::heartbeat(&mut conn, &beat, now).unwrap();
     hub::fleet_settings::set_machine_state(&mut conn, "m-m", MachineState::Active, "operator", now)
         .unwrap();
-    assert!(page(&conn, "/").contains("multivac has no dispatcher"));
+    let home = page(&conn, "/");
+    assert!(home.contains("The regression in kernel-test"));
+    assert!(!home.contains("has no dispatcher"));
     assert!(pool(&conn).contains("active (set by operator)"));
-    assert!(pool(&conn).contains("No dispatcher"));
+    assert!(!pool(&conn).contains("codex CLI"));
 }
 
 #[test]
-fn a_paused_pool_names_the_tickets_holding_master_back() {
-    let conn = seeded();
+fn fleet_limits_name_the_tickets_holding_master_back() {
+    let mut conn = seeded();
+    let now = Timestamp::parse(NOW).unwrap();
     let attention = |conn: &Connection| {
         let body = page(conn, "/");
         let first = &body[body.find("id=\"attention\"").expect("an attention section")..];
         first[..first.find("</section>").unwrap()].to_owned()
     };
-    // cygnus's pool is paused and the regression in kernel-test, ticket r1, is open.
     let first = attention(&conn);
-    assert!(
-        first.contains("master is held back while cygnus's pool is paused"),
-        "{first}"
-    );
-    assert!(first.contains("one worker at a time"), "{first}");
+    assert!(first.contains("Tickets holding master back"), "{first}");
     assert!(first.contains("href=\"/r1\""), "{first}");
     // A pause of every machine hands those tickets to nobody.
-    conn.execute(
-        "INSERT INTO pauses (machine, at) VALUES ('*', '2026-11-17T11:00:00.000Z')",
-        [],
-    )
-    .unwrap();
+    hub::fleet::set_paused_everywhere(&conn, true, now).unwrap();
     let first = attention(&conn);
     assert!(
         first.contains("Hand-offs are paused on every machine, so nobody takes the tickets"),
         "{first}"
     );
-    // With no pool paused, the line is gone.
-    conn.execute_batch(
-        "DELETE FROM pauses; UPDATE workers SET state = 'idle' WHERE state = 'paused';",
+    hub::fleet::set_paused_everywhere(&conn, false, now).unwrap();
+    hub::fleet_settings::set_machine_state(
+        &mut conn,
+        "cygnus",
+        MachineState::Active,
+        "operator",
+        now,
     )
     .unwrap();
-    assert!(!attention(&conn).contains("held back"));
+    assert!(!attention(&conn).contains("Tickets holding master back"));
 }
 
 #[test]

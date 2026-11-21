@@ -20,19 +20,7 @@ pub const NOT_BUILT: &[(&str, &str)] = &[];
 /// tool timeout.
 pub const DEFAULT_WAIT_S: u32 = 540;
 
-/// Seconds a `dispatch` request waits beyond its `--wait`. The daemon answers idle a few
-/// seconds before the request's own wait ends (`CALLER_MARGIN_S` in the daemon's dispatch
-/// verb), so the request has to outlast the wait it asks for.
-pub const DISPATCH_MARGIN_S: u32 = 10;
-
-/// The request's own wait for `ignite dispatch --wait <wait>`. Without it, every request waits
-/// [`DEFAULT_WAIT_S`], and the daemon would cut a longer dispatch wait short.
-pub fn dispatch_request_wait_s(wait: u32) -> u32 {
-    wait.saturating_add(DISPATCH_MARGIN_S)
-}
-
 /// The explicit override and the IDs that the desktop apps use to address their sessions.
-/// Codex hand-offs report the thread ID, so worker commands must use that same ID.
 pub const SESSION_VARIABLES: &[&str] = &[
     "IGNITE_SESSION",
     "CLAUDE_CODE_HOST_SESSION_ID",
@@ -90,7 +78,7 @@ pub fn request(verb: &str, raw: &[String], cwd: PathBuf, session: Option<Session
 /// across a restart of the daemon (see [`crate::reattach`]). A daemon that cannot be reached is
 /// a configuration error.
 pub fn send(request: &Request) -> Reply {
-    deliver(request, None, true).unwrap_or_else(|(socket, cut)| unreachable_daemon(&socket, &cut))
+    deliver(request, None).unwrap_or_else(|(socket, cut)| unreachable_daemon(&socket, &cut))
 }
 
 /// The verbs whose client prints each step as it starts, before the reply.
@@ -110,7 +98,7 @@ pub fn send_showing_steps(request: &Request) -> Reply {
                 .is_ok();
         }
     };
-    deliver(request, Some(&mut show), true)
+    deliver(request, Some(&mut show))
         .unwrap_or_else(|(socket, cut)| unreachable_daemon(&socket, &cut))
 }
 
@@ -119,14 +107,13 @@ pub fn send_showing_steps(request: &Request) -> Reply {
 fn deliver(
     request: &Request,
     progress: Option<&mut dyn FnMut(&str)>,
-    retry_unsent: bool,
 ) -> Result<Reply, (PathBuf, Cut)> {
     let socket = ignite_daemon::server::default_socket();
     let mut daemon = SocketDaemon {
         socket: socket.to_string_lossy().into_owned(),
         started: Instant::now(),
     };
-    crate::reattach::send(&mut daemon, request, progress, retry_unsent).map_err(|cut| (socket, cut))
+    crate::reattach::send(&mut daemon, request, progress).map_err(|cut| (socket, cut))
 }
 
 fn unreachable_daemon(socket: &std::path::Path, cut: &Cut) -> Reply {
@@ -138,18 +125,6 @@ fn unreachable_daemon(socket: &std::path::Path, cut: &Cut) -> Reply {
             cut.error
         ),
     )
-}
-
-/// [`send`], but a daemon that cannot be reached is first offered to `fallback`, whose reply,
-/// if it gives one, is the answer. A daemon that refuses the connection goes to the fallback at
-/// once, which waits by itself; one whose connection drops during the request is tried again.
-pub fn send_or(request: &Request, fallback: impl FnOnce(&Request) -> Option<Reply>) -> Reply {
-    match deliver(request, None, false) {
-        Ok(reply) => reply,
-        Err((socket, cut)) => {
-            fallback(request).unwrap_or_else(|| unreachable_daemon(&socket, &cut))
-        }
-    }
 }
 
 #[cfg(test)]
@@ -181,12 +156,6 @@ mod tests {
         assert_eq!(args_after_verb(&raw, "land"), ["-m", "a note"]);
         let request = request("land", &raw, PathBuf::from("/t"), None);
         assert_eq!(request.wait_s, DEFAULT_WAIT_S);
-    }
-
-    #[test]
-    fn a_dispatch_request_outlasts_its_wait() {
-        assert_eq!(dispatch_request_wait_s(3600), 3610);
-        assert_eq!(dispatch_request_wait_s(u32::MAX), u32::MAX);
     }
 
     #[test]

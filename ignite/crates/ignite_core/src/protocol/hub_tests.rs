@@ -34,6 +34,22 @@ fn fleet_fields_are_optional_on_the_wire() {
 }
 
 #[test]
+fn a_heartbeat_with_the_retired_desktop_role_still_decodes() {
+    let heartbeat: Heartbeat = serde_json::from_str(
+        r#"{"machine":"m-1","version":"old","workers":[
+            {"session":"local_old","app":"claude","role":"dispatcher","state":"idle"},
+            {"session":"cli-claude-12345678","app":"claude","role":"worker","state":"working"}
+        ]}"#,
+    )
+    .unwrap();
+    assert_eq!(heartbeat.workers.len(), 2);
+    for worker in heartbeat.workers {
+        assert_eq!(worker.role, WorkerRole::Worker);
+        assert_eq!(serde_json::to_value(worker).unwrap()["role"], "worker");
+    }
+}
+
+#[test]
 fn record_matches_the_documented_line() {
     let record: Record = serde_json::from_str(
         r#"{"machine": "m-7f3a", "ticket": "Tq44s.9.48", "session": "local_c8470108",

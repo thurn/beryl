@@ -58,41 +58,6 @@ fn land_needs_no_message() {
     assert!(matches!(parsed, Command::Land { note: Some(_) }));
 }
 
-#[test]
-fn a_raw_ack_carries_the_tool_result_as_given() {
-    let line = r#"ignite dispatch ack 4814 raw {"sessionId":"local_a","isRunning":true}"#;
-    let Ok(Cli {
-        command:
-            Command::Dispatch {
-                command: Some(DispatchCommand::Ack { result, reason, .. }),
-                ..
-            },
-        ..
-    }) = Cli::try_parse_from(line.split_whitespace())
-    else {
-        panic!("not ack");
-    };
-    assert_eq!(
-        (result, reason.join(" ")),
-        (
-            AckResult::Raw,
-            r#"{"sessionId":"local_a","isRunning":true}"#.to_owned()
-        )
-    );
-}
-
-#[test]
-fn dispatch_waits_the_default_when_no_wait_is_given() {
-    let command = Cli::try_parse_from(["ignite", "dispatch"]).unwrap().command;
-    assert!(matches!(
-        command,
-        Command::Dispatch {
-            wait: ignite_core::protocol::client::DISPATCH_WAIT_S,
-            command: None,
-        }
-    ));
-}
-
 /// `ignite pool usage` reaches the daemon's `pool` verb, which prints the plan's usage.
 #[test]
 fn parses_pool_usage() {
@@ -103,18 +68,6 @@ fn parses_pool_usage() {
         Command::Pool {
             command: PoolCommand::Usage
         }
-    ));
-}
-
-#[test]
-fn parses_pool_mode() {
-    assert!(matches!(
-        Cli::try_parse_from(["ignite", "pool", "mode", "claude", "config"])
-            .unwrap()
-            .command,
-        Command::Pool {
-            command: PoolCommand::Mode { app, setting }
-        } if app == "claude" && setting == "config"
     ));
 }
 
@@ -169,28 +122,6 @@ fn parses_the_documented_commands() {
     assert_eq!(
         (labels, deps),
         (vec!["tier:opus".to_owned()], vec!["Tig9a.1".to_owned()])
-    );
-    assert!(matches!(
-        parse("ignite dispatch ack 4812 ok"),
-        Command::Dispatch {
-            command: Some(DispatchCommand::Ack { id: 4812, .. }),
-            ..
-        }
-    ));
-    assert!(matches!(
-        parse("ignite dispatch --wait 480"),
-        Command::Dispatch { wait: 480, .. }
-    ));
-    let Command::Dispatch {
-        command: Some(DispatchCommand::Ack { result, reason, .. }),
-        ..
-    } = parse("ignite dispatch ack 4813 failed clear refused")
-    else {
-        panic!("not ack");
-    };
-    assert_eq!(
-        (result, reason.join(" ")),
-        (AckResult::Failed, "clear refused".to_owned())
     );
     assert!(matches!(
         parse("ignite tell --all Skip"),

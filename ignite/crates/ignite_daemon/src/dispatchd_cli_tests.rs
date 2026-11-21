@@ -1,7 +1,7 @@
 //! CLI workers take reservations, receive messages, and resume when their commands finish.
 //! Each provider keeps an extra slot for tickets that hold `master` back.
 
-use ignite_core::config::{CliProgram, MachinePool, PoolMode};
+use ignite_core::config::{CliProgram, MachinePool};
 use ignite_core::protocol::hub::Reservation;
 use ignite_core::traits::Clock;
 
@@ -27,13 +27,12 @@ pub(super) fn cli_with(rig: &Rig, slots: u32, fake: Arc<FakeCliPool>) -> Arc<Fak
             ..CliProgram::default()
         },
     );
-    config.machine.get_mut("local").unwrap().pool.insert(
-        "claude".to_owned(),
-        MachinePool {
-            mode: PoolMode::Cli,
-            slots,
-        },
-    );
+    config
+        .machine
+        .get_mut("local")
+        .unwrap()
+        .pool
+        .insert("claude".to_owned(), MachinePool { slots });
     rig.dispatcher.set_cli(fake.clone(), "local", &config);
     fake
 }
@@ -152,13 +151,7 @@ fn configured_providers_offer_their_tiers_and_use_their_effort_defaults() {
         .get_mut("local")
         .unwrap()
         .pool
-        .insert(
-            "fake".to_owned(),
-            MachinePool {
-                mode: PoolMode::Desktop,
-                slots: 2,
-            },
-        );
+        .insert("fake".to_owned(), MachinePool { slots: 2 });
     rig.dispatcher
         .set_cli(fake.clone(), "local", &rig.ctx.config);
     reserve(

@@ -118,11 +118,9 @@ flaky-checks` for a flaky, hung or never-catching check. Every command prints a 
   a file); a timing on a shared machine is never the gate. File `run X, see Y` after running X.
 - Never work in another session's tree, take its ticket or change another ticket's scope.
 - A `changed` line is an instruction about your ticket. Read it before you continue.
-- The dispatcher, the session that started you, only relays messages from the daemon. It
-  knows nothing about tickets and answers no messages, so never message it. Record a
-  question or blocker on your ticket, tell another ticket's holder with `ignite tell`, or
+- Record a blocker on your ticket, tell another ticket's holder with `ignite tell`, or
   `ignite release` with a note.
-- An emergency order is a dispatcher message starting `Message about <ticket>:`. Check it
+- An emergency order starts with `Message about <ticket>:`. Check it
   with `ignite ticket show <ticket>`: labelled `justiciar`, held by the session it names.
 - The landing note says what changed, what was decided and what a reviewer should look at.
 {title_rule}

@@ -330,12 +330,14 @@ ticket_trees = 8
 landing_trees = 2
 trees_disk_gb = 350
 [machine.multivac.pool.codex]
-mode = "cli"
+mode = "desktop"
 slots = 3
 [machine.cygnus]
 ticket_trees = 3
 landing_trees = 2
 trees_disk_gb = 60
+[machine.cygnus.pool.missing]
+slots = 3
 "#;
     let dir = ignite_core::test_files::temp_dir()
         .join(format!("ignite-fleet-seed-{}", std::process::id()));

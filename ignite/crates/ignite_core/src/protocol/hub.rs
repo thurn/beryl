@@ -50,12 +50,13 @@ pub struct MachineRegistered {
     pub token: String,
 }
 
-/// Whether a session is a worker or a dispatcher.
+/// The role reported in a machine's heartbeat.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum WorkerRole {
+    /// Accept older heartbeats that still report the retired desktop role.
+    #[serde(other)]
     Worker,
-    Dispatcher,
 }
 
 /// One pool member, as its machine reports it.
@@ -98,7 +99,7 @@ pub struct Heartbeat {
     pub machine: MachineId,
     pub version: String,
     pub workers: Vec<WorkerState>,
-    /// Apps the daemon dispatches in CLI mode, even when they offer no slots.
+    /// Providers configured to run workers, even when they offer no slots.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub cli_apps: Vec<String>,
     /// The check families the machine's `ignite.toml` lists for it now, empty for every

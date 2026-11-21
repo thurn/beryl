@@ -288,10 +288,7 @@ fn doctor_warns_when_an_app_in_cli_mode_has_no_program_on_the_path() {
     );
     config.machine.get_mut("testbox").unwrap().pool.insert(
         "fake".to_owned(),
-        ignite_core::config::MachinePool {
-            mode: ignite_core::config::PoolMode::Cli,
-            slots: 2,
-        },
+        ignite_core::config::MachinePool { slots: 2 },
     );
     let findings = diagnose(&DoctorInput {
         config: &config,

@@ -100,48 +100,6 @@ impl Reply {
     }
 }
 
-/// The seconds `ignite dispatch --wait` waits for an instruction by default. The wait ends as
-/// soon as there is something to do, so a longer one delays nothing; it only means fewer `idle`
-/// answers, each of which costs the dispatcher a full request over its context. The dispatcher
-/// runs it as a background command, because a foreground tool call is cut off after 600 s.
-pub const DISPATCH_WAIT_S: u32 = 3600;
-
-/// What a dispatcher is told to do next, printed by `ignite dispatch --wait`.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DispatchInstruction {
-    pub id: u64,
-    #[serde(rename = "do")]
-    pub action: DispatchAction,
-    pub session: Option<SessionId>,
-    /// Clear the session before prompting it.
-    #[serde(default)]
-    pub clear: bool,
-    pub model: Option<String>,
-    pub effort: Option<String>,
-    /// The prompt or message text.
-    pub prompt: Option<String>,
-}
-
-/// The kinds of instruction a dispatcher carries out.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum DispatchAction {
-    /// Clear a worker, set its model and send it a ticket's prompt.
-    Handoff,
-    /// Send text to a live session.
-    Message,
-    /// The wait ended with nothing to do.
-    Idle,
-    /// Ask the app whether a session is running, idle or gone; the acknowledgement carries the
-    /// answer.
-    Check,
-    /// A Codex dispatcher whose context has grown opens a new chat as the dispatcher and stops.
-    Rotate,
-    /// A Claude dispatcher calls the app's `get_usage` tool and acknowledges with what it
-    /// returned, so the daemon can record how much of the Claude plan is used.
-    Usage,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -162,17 +120,5 @@ mod tests {
         assert_eq!(reply.exit, Exit::Running);
         assert_eq!(serde_json::to_value(Exit::Conflict).unwrap(), 3);
         assert!(serde_json::from_str::<Exit>("9").is_err());
-    }
-
-    #[test]
-    fn dispatch_instruction_matches_the_documented_line() {
-        let instruction: DispatchInstruction = serde_json::from_str(
-            r#"{"id": 4812, "do": "handoff", "session": "local_c8470108",
-                "clear": true, "model": "opus", "effort": "high",
-                "prompt": "Run `ignite start Tq44s.9.48` and follow what it prints."}"#,
-        )
-        .unwrap();
-        assert_eq!(instruction.action, DispatchAction::Handoff);
-        assert!(instruction.clear);
     }
 }

@@ -2570,9 +2570,8 @@ express_cores = 3
   (80 columns). Those are all the Markdown files under the express paths, and
   the same files the landing's Markdown rule in `[format]` rewrites, so an
   express pass means the landing's formatters change nothing. On 2026-11-19 a
-  landing's `style: format` commit rewrote
-  `ignite/crates/ignite_cli/src/pool_init/dispatcher.md`, which the old command
-  did not check, so the tree changed and the landing had to run all commands
+  landing's `style: format` commit rewrote a file under `ignite/` that the old
+  command did not check, so the tree changed and the landing ran all commands
   again (87 s). `ignite test ignite:` and `ignite check` run it too, so the
   agent sees the failure before landing.
 - The commands wait while the tree's seed (the copy of another tree's build that
@@ -3417,6 +3416,7 @@ A provider declares its executable and optional arguments in
 `[pool.cli.<provider>]` and the tiers it offers in `[pool.models.<provider>]`.
 It needs a positive slot count under `[machine.<host>.pool.<provider>]` to take
 tickets on that machine. A machine with no worker slots can still run checks.
+Legacy `mode` keys are accepted and ignored.
 
 ```toml
 [machine.jarvis.pool.claude]
@@ -4430,14 +4430,15 @@ run. When such a machine is switched back to active or checks only, its next
 round verifies the current tip, and a failure files a regression ticket as
 usual. The hub files no ticket about waiting for a machine that is off.
 
-### The desktop dispatcher is deleted
+### Pool commands and dashboard
 
 Every worker is a headless CLI process that the daemon runs (see
-[CLI mode](#cli-mode)). The dispatcher session, `ignite dispatch`,
-`ignite pool init`, `add`, `remove` and `mode`, the hooks, clearing a worker and
-reading its model back, rotation and the `mode` setting are deleted. A person's
-own desktop session still works a ticket with `ignite start <ticket>` and sets
-its own title.
+[CLI mode](#cli-mode)). `ignite pool` has five commands: `list`, `pause`,
+`resume`, `usage` and `watch`. The Pool page shows the providers configured on
+each machine, the machine's fleet state, and the workers with their current
+tickets and commands. On the private listener, the worker's session ID opens its
+transcript. A person working from a desktop session can claim a ticket with
+`ignite start <ticket>` and set their own session title.
 
 A provider is one adapter in Ignite's code, which builds a turn's command line
 and reads the CLI's event stream, plus its tables in `ignite.toml`. Adding a

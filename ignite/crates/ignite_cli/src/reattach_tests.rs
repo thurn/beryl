@@ -110,7 +110,7 @@ fn a_command_cut_off_by_a_restart_waits_on_its_handle_and_prints_the_same_reply(
         Answer::Refused,
         Answer::Reply(passed()),
     ]);
-    let reply = send(&mut daemon, &request("test"), None, true).unwrap();
+    let reply = send(&mut daemon, &request("test"), None).unwrap();
     assert_eq!(reply, passed());
     assert_eq!(
         daemon.verbs(),
@@ -123,7 +123,7 @@ fn a_command_cut_off_by_a_restart_waits_on_its_handle_and_prints_the_same_reply(
 #[test]
 fn a_reattached_wait_gives_up_after_five_minutes_and_names_the_handle() {
     let mut daemon = Scripted::new(vec![Answer::Dropped(Some("L-3"))]);
-    let reply = send(&mut daemon, &request("land"), None, true).unwrap();
+    let reply = send(&mut daemon, &request("land"), None).unwrap();
     assert_eq!(reply.exit, Exit::Usage);
     assert!(
         reply
@@ -144,7 +144,7 @@ fn a_read_cut_off_before_a_handle_is_sent_again() {
         Answer::Reply(passed()),
     ]);
     assert_eq!(
-        send(&mut daemon, &request("status"), None, true).unwrap(),
+        send(&mut daemon, &request("status"), None).unwrap(),
         passed()
     );
     assert_eq!(daemon.verbs(), ["status", "status", "status"]);
@@ -153,7 +153,7 @@ fn a_read_cut_off_before_a_handle_is_sent_again() {
 #[test]
 fn work_cut_off_before_a_handle_is_not_sent_again_and_its_outcome_is_unknown() {
     let mut daemon = Scripted::new(vec![Answer::Dropped(None), Answer::Reply(passed())]);
-    let reply = send(&mut daemon, &request("close"), None, true).unwrap();
+    let reply = send(&mut daemon, &request("close"), None).unwrap();
     assert_eq!(reply.exit, Exit::Conflict);
     assert!(reply.text.starts_with("unknown "), "{}", reply.text);
     assert!(reply.text.contains("ignite status"), "{}", reply.text);
@@ -170,28 +170,22 @@ fn a_daemon_that_is_starting_is_sent_the_request_again_and_a_missing_one_fails_a
     let mut steps = Vec::new();
     let mut show = |step: &str| steps.push(step.to_owned());
     assert_eq!(
-        send(&mut daemon, &request("land"), Some(&mut show), true).unwrap(),
+        send(&mut daemon, &request("land"), Some(&mut show)).unwrap(),
         passed()
     );
     assert_eq!(daemon.verbs(), ["land", "land", "land"]);
     assert_eq!(steps.len(), 3);
 
     let mut missing = Scripted::new(vec![Answer::Missing, Answer::Reply(passed())]);
-    let cut = send(&mut missing, &request("land"), None, true).unwrap_err();
+    let cut = send(&mut missing, &request("land"), None).unwrap_err();
     assert_eq!(cut.error.kind(), ErrorKind::NotFound);
     assert_eq!(missing.verbs(), ["land"]);
-
-    // Without retries for an unsent request, a refused connection goes back to the caller (the
-    // dispatcher's fallback waits by itself).
-    let mut refused = Scripted::new(vec![Answer::Refused, Answer::Reply(passed())]);
-    assert!(send(&mut refused, &request("dispatch"), None, false).is_err());
-    assert_eq!(refused.verbs(), ["dispatch"]);
 }
 
 #[test]
 fn a_daemon_that_stays_down_is_given_up_on_after_five_minutes() {
     let mut daemon = Scripted::new(Vec::new());
-    let cut = send(&mut daemon, &request("test"), None, true).unwrap_err();
+    let cut = send(&mut daemon, &request("test"), None).unwrap_err();
     assert_eq!(cut.error.kind(), ErrorKind::ConnectionRefused);
     assert!(daemon.elapsed() >= RETRY_FOR);
 }
@@ -208,15 +202,12 @@ fn a_missing_socket_is_retried_while_a_daemon_is_starting() {
         Answer::Reply(passed()),
     ]);
     daemon.starting = true;
-    assert_eq!(
-        send(&mut daemon, &request("land"), None, true).unwrap(),
-        passed()
-    );
+    assert_eq!(send(&mut daemon, &request("land"), None).unwrap(), passed());
     assert_eq!(daemon.verbs(), ["land", "land", "land", "land"]);
 
     let mut stopped = Scripted::new(vec![Answer::Missing, Answer::Reply(passed())]);
     stopped.starting = false;
-    let cut = send(&mut stopped, &request("land"), None, true).unwrap_err();
+    let cut = send(&mut stopped, &request("land"), None).unwrap_err();
     assert_eq!(cut.error.kind(), ErrorKind::NotFound);
     assert_eq!(stopped.verbs(), ["land"]);
 }
@@ -230,7 +221,7 @@ fn a_reattached_wait_prints_the_verbs_steps_as_the_first_request_did() {
     ]);
     let mut heard = Vec::new();
     let mut progress = |step: &str| heard.push(step.to_owned());
-    let reply = send(&mut daemon, &request("land"), Some(&mut progress), true).unwrap();
+    let reply = send(&mut daemon, &request("land"), Some(&mut progress)).unwrap();
     assert_eq!(reply, passed());
     assert_eq!(daemon.verbs(), ["land", "wait L-6", "wait L-6"]);
     // The scripted daemon passes one step per exchange that asks for them: the waits ask too.
@@ -244,7 +235,7 @@ fn a_daemon_about_to_restart_is_sent_the_request_again() {
         Answer::Refused,
         Answer::Reply(passed()),
     ]);
-    let reply = send(&mut daemon, &request("release"), None, true).unwrap();
+    let reply = send(&mut daemon, &request("release"), None).unwrap();
     assert_eq!(reply, passed());
     assert_eq!(daemon.verbs(), ["release", "release", "release"]);
 }
@@ -262,12 +253,9 @@ fn a_repeatable_verb_survives_a_second_restart_long_after_the_first() {
         Answer::Refused,
         Answer::Reply(passed()),
     ]);
-    let reply = send(&mut daemon, &request("dispatch"), None, true).unwrap();
+    let reply = send(&mut daemon, &request("wait"), None).unwrap();
     assert_eq!(reply, passed());
-    assert_eq!(
-        daemon.verbs(),
-        ["dispatch", "dispatch", "dispatch", "dispatch"]
-    );
+    assert_eq!(daemon.verbs(), ["wait", "wait", "wait", "wait"]);
 }
 
 /// The same for a long verb that is waited on by its handle: each wait the daemon accepts and
@@ -281,7 +269,7 @@ fn a_wait_on_a_handle_survives_a_second_restart_long_after_the_first() {
         Answer::Refused,
         Answer::Reply(passed()),
     ]);
-    let reply = send(&mut daemon, &request("land"), None, true).unwrap();
+    let reply = send(&mut daemon, &request("land"), None).unwrap();
     assert_eq!(reply, passed());
     assert_eq!(daemon.verbs(), ["land", "wait L-9", "wait L-9", "wait L-9"]);
 }

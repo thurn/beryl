@@ -3,15 +3,12 @@
 
 mod args;
 mod client;
-mod dispatch_allowed;
 mod emergency;
-mod fallback;
 mod flaky;
 mod fleet;
 mod import;
 mod manifest;
 mod plan;
-mod pool_init;
 mod pool_watch;
 mod reattach;
 mod rejected;
@@ -26,7 +23,7 @@ use clap::Parser;
 
 use ignite_core::protocol::client::Reply;
 
-use crate::args::{Cli, Command, DispatchCommand, HubCommand, InternalCommand, PoolCommand};
+use crate::args::{Cli, Command, HubCommand, InternalCommand, PoolCommand};
 
 fn main() -> ExitCode {
     let raw: Vec<String> = std::env::args().collect();
@@ -93,21 +90,6 @@ fn answer(cli: &Cli, raw: &[String]) -> Reply {
         Command::Prime => prime(&current_dir()),
         // Answered here: no daemon runs before the first install.
         Command::Install => install(&current_dir()),
-        // Answered here: it only writes files, and works before the daemon runs.
-        Command::Pool {
-            command: PoolCommand::Init { dir },
-        } => pool_init(dir.as_deref(), &current_dir()),
-        // Sent to the daemon here, so that a hook's answer can fall back on the client's own
-        // hand-off while the daemon is down and block the call on any failure.
-        Command::Dispatch {
-            command: Some(DispatchCommand::Allowed { tool, session }),
-            ..
-        } => dispatch_allowed::run(tool.as_deref(), session.as_deref()),
-        // Sent to the daemon here, so that the hook reads its input from stdin.
-        Command::Dispatch {
-            command: Some(DispatchCommand::Cleared { session }),
-            ..
-        } => dispatch_allowed::cleared(session.as_deref()),
         // Answered here, without the daemon: it is what looks after a daemon that is down.
         Command::Monitor => ignite_daemon::monitor::run(),
         // Sent to the daemon here once a second, so that the digest is followed.
@@ -147,20 +129,8 @@ fn answer(cli: &Cli, raw: &[String]) -> Reply {
         _ => {
             let session = client::session_from_env(|name| std::env::var(name).ok())
                 .filter(|_| !client::UNRECORDED_VERBS.contains(&verb));
-            let mut request = client::request(verb, raw, current_dir(), session);
-            if let Command::Dispatch {
-                command: None,
-                wait,
-            } = &cli.command
-            {
-                request.wait_s = client::dispatch_request_wait_s(*wait);
-            }
-            if verb == "dispatch" {
-                // The dispatcher keeps calling while the daemon is down; see `fallback`.
-                let home = ignite_daemon::update::Home::from_env().root;
-                let now = ignite_core::traits::Clock::now(&ignite_core::time::SystemClock);
-                client::send_or(&request, |r| fallback::dispatch(r, &home, now))
-            } else if !cli.json && client::SHOWS_STEPS.contains(&verb) {
+            let request = client::request(verb, raw, current_dir(), session);
+            if !cli.json && client::SHOWS_STEPS.contains(&verb) {
                 client::send_showing_steps(&request)
             } else {
                 client::send(&request)
@@ -174,24 +144,6 @@ fn install(cwd: &std::path::Path) -> Reply {
         Ok((repo, config)) => ignite_daemon::update::install_checkout(&repo, &config),
         Err(failure) => failure.into_reply(),
     }
-}
-
-/// `ignite pool init`. Workers start in the main checkout that `ignite install` recorded, or,
-/// before any install, in the checkout around `cwd`.
-fn pool_init(dir: Option<&std::path::Path>, cwd: &std::path::Path) -> Reply {
-    let recorded = std::fs::read_to_string(ignite_daemon::update::Home::from_env().checkout_file())
-        .ok()
-        .map(|text| std::path::PathBuf::from(text.trim()))
-        .filter(|path| path.is_dir());
-    let checkout = match recorded {
-        Some(checkout) => checkout,
-        None => match config_above(cwd) {
-            Ok((repo, _)) => repo,
-            Err(failure) => return failure.into_reply(),
-        },
-    };
-    let folder = dir.map_or_else(pool_init::default_folder, std::path::Path::to_path_buf);
-    pool_init::run(&folder, &checkout)
 }
 
 /// The checkout holding the nearest `ignite.toml` above `cwd`, and the file parsed.

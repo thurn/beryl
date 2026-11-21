@@ -1,5 +1,6 @@
 //! The `pool` page: each machine's workers with their tickets and the command they run, the
-//! dispatcher's state per app, and the `epics` page with each epic's allocation of workers.
+//! configured providers and the machine's fleet state. The `epics` page shows each epic's worker
+//! allocation.
 // Pages are built from many small fragments; building them with `format!` reads better than
 // the allocation-free forms these lints suggest.
 #![allow(clippy::format_collect, clippy::format_push_string)]
@@ -18,7 +19,6 @@ use super::references::{display_id, ticket_url};
 struct Worker {
     session: String,
     app: String,
-    role: String,
     state: String,
     ticket: Option<String>,
     command: Option<String>,
@@ -39,14 +39,6 @@ pub fn command_flag(
         (true, _, true) => Some("Running over 10 minutes"),
         (false, true, true) => Some("No command for over 10 minutes"),
         _ => None,
-    }
-}
-
-fn dispatcher_tone(state: &str) -> Tone {
-    match state {
-        "down" => Tone::Red,
-        "paused" => Tone::Amber,
-        _ => Tone::Green,
     }
 }
 
@@ -146,10 +138,10 @@ pub(crate) fn options(
         })?
         .collect::<Result<Vec<_>, _>>()?;
     let mut statement = conn.prepare(
-        "SELECT w.session, w.app, w.role, w.state, w.ticket, w.command, w.command_since,
+        "SELECT w.session, w.app, w.state, w.ticket, w.command, w.command_since,
                 w.command_running, t.claimed_at
          FROM workers w LEFT JOIN tickets t ON t.id = w.ticket
-         WHERE w.machine = ?1 ORDER BY w.session",
+         WHERE w.machine = ?1 AND w.role = 'worker' ORDER BY w.session",
     )?;
     let mut body = String::new();
     let settings = fleet_settings::settings(conn)?;
@@ -162,57 +154,34 @@ pub(crate) fn options(
                 Ok(Worker {
                     session: row.get(0)?,
                     app: row.get(1)?,
-                    role: row.get(2)?,
-                    state: row.get(3)?,
-                    ticket: row.get(4)?,
-                    command: row.get(5)?,
-                    command_since: row.get(6)?,
-                    command_running: row.get(7)?,
-                    claimed_at: row.get(8)?,
+                    state: row.get(2)?,
+                    ticket: row.get(3)?,
+                    command: row.get(4)?,
+                    command_since: row.get(5)?,
+                    command_running: row.get(6)?,
+                    claimed_at: row.get(7)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
-        let mut dispatchers: Vec<String> = workers
+        let providers = cli_apps
             .iter()
-            .filter(|worker| worker.role == "dispatcher" && !cli_apps.contains(&worker.app))
-            .map(|worker| {
-                c::dot(
-                    dispatcher_tone(&worker.state),
-                    &format!("{} dispatcher {}", worker.app, worker.state),
-                    None,
-                )
-            })
-            .collect();
-        dispatchers.extend(
-            cli_apps
-                .iter()
-                .map(|app| c::dot(Tone::Muted, &format!("{app} CLI"), None)),
-        );
-        let dispatchers = if dispatchers.is_empty() {
-            c::dot(Tone::Red, "No dispatcher", None)
+            .map(|app| c::dot(Tone::Muted, &format!("{app} CLI"), None))
+            .collect::<Vec<_>>();
+        let status = if providers.is_empty() {
+            format!("<p>{state}</p>")
         } else {
-            dispatchers.join(" ")
+            format!("<p>{state} · {}</p>", providers.join(" "))
         };
-        let members: Vec<&Worker> = workers
-            .iter()
-            .filter(|worker| worker.role == "worker")
-            .collect();
-        let list = if members.is_empty() {
+        let list = if workers.is_empty() {
             c::empty("No workers.")
         } else {
             c::rows(
-                members
+                workers
                     .iter()
                     .map(|worker| worker_row(root, now, private, worker)),
             )
         };
-        body += &c::section(
-            name,
-            &(format!("<p>{state} · {dispatchers}</p>") + &list),
-            Some(members.len()),
-            None,
-            3,
-        );
+        body += &c::section(name, &(status + &list), Some(workers.len()), None, 3);
     }
     if machines.is_empty() {
         body = c::empty("No machine has registered.");

@@ -372,7 +372,7 @@ fn a_session_whose_claim_was_lost_gets_409() {
     }
 }
 
-/// Under Enact, a metadata write by the dispatcher between the reservation and the worker's start
+/// Under Enact, a metadata write by the daemon between the reservation and the worker's start
 /// changed the ticket's version, and the start, which checked that version, failed as if another
 /// owner held the ticket. Here a claim checks only the reservation and the assignee, so a write
 /// that changes neither (a comment and a metadata key, as `ignite tell` writes) cannot fail it.
@@ -401,7 +401,7 @@ fn a_write_between_reservation_and_claim_does_not_fail_the_holders_claim() {
         ],
     };
     assert!(matches!(
-        batch::apply(&mut conn, &write, "dispatcher", "m-1", at(1.0)).unwrap(),
+        batch::apply(&mut conn, &write, "daemon", "m-1", at(1.0)).unwrap(),
         batch::BatchOutcome::Applied(_)
     ));
     assert_ne!(
@@ -419,7 +419,7 @@ fn a_write_between_reservation_and_claim_does_not_fail_the_holders_claim() {
     assert_eq!(
         reply["error"],
         format!(
-            "{id} is reserved for a worker the dispatcher is starting; nobody else can claim it, so take another ticket"
+            "{id} is reserved for a worker that is starting; nobody else can claim it, so take another ticket"
         )
     );
     let (status, brief) = post(

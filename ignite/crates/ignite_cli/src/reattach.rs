@@ -41,7 +41,7 @@ const MAX_PAUSE: Duration = Duration::from_secs(2);
 
 /// The verbs that only read or wait, which are safe to send twice. The daemon gives none of
 /// them a handle.
-pub const REPEATABLE: &[&str] = &["dispatch", "doctor", "status", "stop", "wait"];
+pub const REPEATABLE: &[&str] = &["doctor", "status", "stop", "wait"];
 
 /// The machine's daemon, as the client reaches it.
 pub trait Daemon {
@@ -60,19 +60,17 @@ pub trait Daemon {
 }
 
 /// Sends `req`, keeping its reply across a restart of the daemon. `Err` holds the failure to
-/// reach a daemon that is not running at all (or, without `retry_unsent`, one that refused the
-/// connection), for the caller to report or fall back from.
+/// reach a daemon that did not answer.
 pub fn send(
     daemon: &mut dyn Daemon,
     req: &Request,
     mut progress: Option<&mut dyn FnMut(&str)>,
-    retry_unsent: bool,
 ) -> Result<Reply, Cut> {
     let cut = match exchange(daemon, req, reborrow(&mut progress)) {
         Ok(reply) => return Ok(reply),
         Err(cut) => cut,
     };
-    if !(cut.sent || retry_unsent && starting(daemon, &cut)) {
+    if !(cut.sent || starting(daemon, &cut)) {
         return Err(cut);
     }
     let mut since = daemon.elapsed();

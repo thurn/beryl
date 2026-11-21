@@ -186,14 +186,14 @@ protected = ["app", "ui-smoke", "clippy", "pyre", "ui-types", "source"]
 [pool.default_effort]
 codex = "high"
 
-# The model ID each app's session tool accepts for each `tier:` label. Update the IDs here when
+# The model ID each provider accepts for each `tier:` label. Update the IDs here when
 # a new model is released; tier labels on tickets do not change.
 [pool.models.claude]
 opus = "claude-opus-5-5"
 sonnet = "claude-sonnet-5-5"
 light = "claude-sonnet-5-5"
 
-# Codex runs every tier on GPT-6.2 Sol in both CLI and desktop mode.
+# Codex runs every tier on GPT-6.2 Sol.
 [pool.models.codex]
 opus = "gpt-6.2-sol"
 sonnet = "gpt-6.2-sol"
@@ -284,8 +284,7 @@ express_cores = 2
 # Of 10 cores; see jarvis.
 tip_build_cores = 2
 
-# Multivac runs headless Codex workers, with no dispatcher session to keep alive, and offers their
-# slots after the GPT-6.2 Sol probe passes. Keep the three workers the desktop pool had. Its
+# Multivac offers three Codex slots after the GPT-6.2 Sol probe passes. Its
 # `~/.codex/config.toml` must declare a `playwright` MCP server: the shared Codex arguments set
 # `mcp_servers.playwright.required`, and Codex refuses to start when that server is missing.
 [machine.multivac.pool.codex]
@@ -298,7 +297,7 @@ oracle = 1
 
 # The Windows PC (12 cores, 20 threads, 32 GB) with a 128 GB Dev Drive (ReFS) at D:. No browser,
 # oracle or app families: those need WebKit, the Java oracles, the Lima machines or a desktop
-# window system, which only the Macs have. Its sessions run in the Claude desktop app.
+# window system, which only the Macs have.
 #
 # Trees are seeded as block clones on the Dev Drive, so they share most of their blocks; the
 # limit leaves room on the 128 GB disk for the main checkout and the caches. A tree's Beryl

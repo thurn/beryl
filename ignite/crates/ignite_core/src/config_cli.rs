@@ -2,9 +2,8 @@
 //! in the design document).
 //!
 //! ```toml
-//! # How each app's workers run on this machine: "desktop" (the default) or "cli".
+//! # The number of concurrent workers on the machine.
 //! [machine.jarvis.pool.claude]
-//! mode = "cli"
 //! slots = 8
 //!
 //! # The program and the arguments every turn of the app gets.
@@ -13,48 +12,32 @@
 //! dialect = 'claude' # Optional when it matches the provider name.
 //! args = ["--dangerously-skip-permissions"]
 //! ```
-//!
-//! An app with no `[machine.<host>.pool.<app>]` table runs in desktop mode with no CLI slots, so
-//! a file written before CLI mode existed means what it always meant.
 
 use serde::{Deserialize, Serialize};
 
-/// How one app's workers run on one machine.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum PoolMode {
-    /// A dispatcher session in the desktop app makes the tool calls the daemon asks for.
-    #[default]
-    Desktop,
-    /// The daemon runs each worker itself as a headless CLI process, one process per turn.
-    Cli,
+/// `[machine.<host>.pool.<app>]`: how many workers run at once. One slot above
+/// `slots` takes only tickets that hold the master branch back.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(from = "MachinePoolConfig")]
+pub struct MachinePool {
+    pub slots: u32,
 }
 
-impl PoolMode {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            PoolMode::Desktop => "desktop",
-            PoolMode::Cli => "cli",
+#[derive(Deserialize)]
+struct MachinePoolConfig {
+    #[serde(default)]
+    slots: u32,
+    /// Older machine tables can still carry the retired mode key.
+    #[serde(rename = "mode")]
+    _mode: Option<String>,
+}
+
+impl From<MachinePoolConfig> for MachinePool {
+    fn from(config: MachinePoolConfig) -> Self {
+        Self {
+            slots: config.slots,
         }
     }
-}
-
-impl std::fmt::Display for PoolMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-/// `[machine.<host>.pool.<app>]`: the mode an app runs in on the machine and, in CLI mode, how
-/// many workers run at once. One slot above `slots` takes only tickets that hold the master
-/// branch back.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct MachinePool {
-    #[serde(default)]
-    pub mode: PoolMode,
-    /// CLI workers that run at once; ignored in desktop mode.
-    #[serde(default)]
-    pub slots: u32,
 }
 
 /// `[pool.cli.<app>]`: the program every CLI turn of the app runs and the arguments it always
@@ -78,8 +61,7 @@ impl CliProgram {
 }
 
 impl super::Config {
-    /// How `app` runs on the machine with this hostname: its `[machine.<host>.pool.<app>]`
-    /// table, or desktop mode with no slots when the machine or the table is missing.
+    /// The worker slots configured for `app` on this machine. Missing tables give no slots.
     pub fn machine_pool(&self, hostname: &str, app: &str) -> MachinePool {
         self.machine(hostname)
             .and_then(|machine| machine.pool.get(app))
@@ -92,8 +74,7 @@ impl super::Config {
         self.pool.cli.get(app)
     }
 
-    /// `[pool.cli]` and every machine's `pool` tables: a declared program is not empty, and an
-    /// app in CLI mode has slots and a program.
+    /// Validates provider names, executable names, and CLI dialects.
     pub(super) fn validate_cli(&self) -> Result<(), (String, String)> {
         let fail = |key: String, message: &str| Err((key, message.to_owned()));
         for (app, program) in &self.pool.cli {
@@ -121,25 +102,6 @@ impl super::Config {
                         crate::cli::dialects().collect::<Vec<_>>().join(", ")
                     ),
                 ));
-            }
-        }
-        for (name, machine) in &self.machine {
-            for (app, pool) in &machine.pool {
-                if pool.mode != PoolMode::Cli {
-                    continue;
-                }
-                if pool.slots == 0 {
-                    return fail(
-                        format!("machine.{name}.pool.{app}.slots"),
-                        "must be above zero in cli mode",
-                    );
-                }
-                if !self.pool.cli.contains_key(app) {
-                    return fail(
-                        format!("machine.{name}.pool.{app}.mode"),
-                        "cli mode needs a [pool.cli.<app>] table",
-                    );
-                }
             }
         }
         Ok(())

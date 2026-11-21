@@ -3,7 +3,7 @@
 use rusqlite::{Connection, TransactionBehavior};
 use serde_json::json;
 
-use ignite_core::config::{Config, Os, PoolMode};
+use ignite_core::config::{Config, Os};
 use ignite_core::fleet::{
     FleetMachine, FleetSettings, FleetUpdate, FleetView, MachineSetting, MachineState,
     ProviderSetting,
@@ -108,15 +108,10 @@ fn initial_settings(config: &Config) -> FleetSettings {
     for (name, machine) in &config.machine {
         let mut state = MachineState::ChecksOnly;
         for (provider, pool) in &machine.pool {
-            if pool.mode == PoolMode::Cli {
+            if pool.slots > 0
+                && let Some(provider) = settings.providers.get_mut(provider)
+            {
                 state = MachineState::Active;
-                let provider = settings
-                    .providers
-                    .entry(provider.clone())
-                    .or_insert_with(|| ProviderSetting {
-                        stop_percent,
-                        ..ProviderSetting::default()
-                    });
                 provider.share = provider.share.saturating_add(pool.slots);
             }
         }

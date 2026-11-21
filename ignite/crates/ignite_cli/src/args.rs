@@ -132,22 +132,13 @@ pub enum Command {
     },
     /// Build the executable, register the machine with the hub and start the daemon at login.
     Install,
-    /// Wait for the dispatcher's next instruction, or acknowledge one.
-    #[command(args_conflicts_with_subcommands = true)]
-    Dispatch {
-        #[command(subcommand)]
-        command: Option<DispatchCommand>,
-        /// Seconds to wait for something to do. Run it in the background: a foreground tool
-        /// call is cut off after 600 s.
-        #[arg(long, default_value_t = ignite_core::protocol::client::DISPATCH_WAIT_S)]
-        wait: u32,
-    },
     /// View or edit the fleet's machine and provider settings.
     Fleet {
         #[command(subcommand)]
         command: Option<FleetCommand>,
     },
     /// The machine's pool of worker sessions.
+    #[command(disable_help_subcommand = true)]
     Pool {
         #[command(subcommand)]
         command: PoolCommand,
@@ -354,21 +345,6 @@ pub enum ClassArg {
     Idle,
 }
 
-/// How an instruction ended: `ok` or `failed` for a hand-off or message. `raw` carries what the
-/// app's `get_session` returned, for a `check` or a hand-off's read-back, and the daemon decides
-/// what it means. A Codex dispatcher answers a `check` itself (`unknown` when the lookup failed).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
-pub enum AckResult {
-    Ok,
-    #[value(alias = "fail")]
-    Failed,
-    Raw,
-    Running,
-    Idle,
-    Gone,
-    Unknown,
-}
-
 #[derive(Debug, Subcommand)]
 pub enum ManifestCommand {
     /// Print every input pattern that matches no tracked file and every `crate:` that names
@@ -377,62 +353,9 @@ pub enum ManifestCommand {
 }
 
 #[derive(Debug, Subcommand)]
-pub enum DispatchCommand {
-    /// Report that an instruction was carried out.
-    Ack {
-        id: u64,
-        result: AckResult,
-        /// Why it failed, or the raw `get_session` result.
-        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
-        reason: Vec<String>,
-    },
-    /// Exit 0 only when the current instruction calls for a session tool on a session. With no
-    /// tool, reads a Claude Code hook's JSON from stdin and exits 2 to block the call.
-    Allowed {
-        /// The tool, such as `mcp__ccd_session_mgmt__clear_session`.
-        tool: Option<String>,
-        /// The session it acts on.
-        session: Option<String>,
-    },
-    /// Report that a `clear_session` on a session succeeded. With no session, reads a Claude
-    /// Code `PostToolUse` hook's JSON from stdin.
-    Cleared {
-        /// The session that was cleared.
-        session: Option<String>,
-    },
-}
-
-#[derive(Debug, Subcommand)]
 pub enum PoolCommand {
     /// List the pool's sessions and what each holds.
     List,
-    /// Write the folder a person opens the dispatcher session in (default `~/ignite`).
-    Init {
-        /// The folder to write.
-        #[arg(long)]
-        dir: Option<std::path::PathBuf>,
-    },
-    /// Add sessions to the pool. With `--dispatcher` and no session, adds the calling session.
-    Add {
-        sessions: Vec<String>,
-        /// `claude` or `codex`.
-        #[arg(long)]
-        app: String,
-        /// Add the session as this app's dispatcher on the machine, replacing any earlier one
-        /// and removing the workers that one started.
-        #[arg(long)]
-        dispatcher: bool,
-        /// The model tiers the app runs, comma-separated; by default `opus,sonnet,light` for
-        /// `claude` and none for `codex`.
-        #[arg(long, value_delimiter = ',')]
-        models: Option<Vec<String>>,
-        /// For a Codex dispatcher: how many tickets it may run at once, each in a new chat.
-        /// 0 keeps the count the machine's Codex dispatcher already had.
-        #[arg(long)]
-        slots: Option<u32>,
-    },
-    /// Remove a session from the pool.
-    Remove { session: String },
     /// Stop handing off new tickets; running workers finish.
     Pause {
         /// On every machine.
@@ -444,15 +367,6 @@ pub enum PoolCommand {
         /// On every machine.
         #[arg(long)]
         all: bool,
-    },
-    /// Choose how an app's workers run on this machine: `cli` (headless processes), `desktop`
-    /// (a dispatcher session in the app) or `config` (remove the override so `ignite.toml`
-    /// decides). A ticket in progress finishes as it started.
-    Mode {
-        /// `claude` or `codex`.
-        app: String,
-        #[arg(value_parser = ["cli", "desktop", "config"])]
-        setting: String,
     },
     /// Print the newest sample of each Claude plan window, and the usage hold if one is in
     /// force.
@@ -743,7 +657,6 @@ impl Command {
             Command::Prime => "prime",
             Command::Guide { .. } => "guide",
             Command::Install => "install",
-            Command::Dispatch { .. } => "dispatch",
             Command::Fleet { .. } => "fleet",
             Command::Pool { .. } => "pool",
             Command::Tell { .. } => "tell",

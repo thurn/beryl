@@ -83,10 +83,6 @@ pub fn heartbeat(conn: &mut Connection, heartbeat: &Heartbeat, now: Timestamp) -
     for worker in &heartbeat.workers {
         let files =
             serde_json::to_string(&worker.files).map_err(|e| StoreError::Invalid(e.to_string()))?;
-        let role = match worker.role {
-            ignite_core::protocol::hub::WorkerRole::Worker => "worker",
-            ignite_core::protocol::hub::WorkerRole::Dispatcher => "dispatcher",
-        };
         let entered = match since.get(worker.session.as_str()) {
             Some((state, entered)) if *state == worker.state => entered.clone(),
             _ => now.to_string(),
@@ -100,7 +96,7 @@ pub fn heartbeat(conn: &mut Connection, heartbeat: &Heartbeat, now: Timestamp) -
                 machine,
                 worker.session.as_str(),
                 worker.app,
-                role,
+                "worker",
                 worker.state,
                 worker.ticket.as_ref().map(ToString::to_string),
                 files,

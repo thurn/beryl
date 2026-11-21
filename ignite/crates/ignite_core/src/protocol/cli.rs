@@ -1,6 +1,5 @@
-//! The messages CLI mode adds (see "CLI mode" in the design document): the arguments and
-//! replies of `ignite pool mode`, `ignite pool watch` and `ignite tell --now`, and the hub's
-//! routes that keep a digest of each CLI worker's transcript.
+//! Messages for `ignite pool watch`, `ignite tell --now` and the hub's routes that keep a
+//! digest of each CLI worker's transcript.
 //!
 //! - `POST /transcripts/append` takes a [`TranscriptAppend`] from a registered machine and
 //!   answers a [`TranscriptAppendReply`]. Appending a line twice stores it once: a line is keyed
@@ -13,7 +12,6 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::config::PoolMode;
 use crate::ids::{MachineId, SessionId, TicketId};
 use crate::time::Timestamp;
 
@@ -38,48 +36,6 @@ pub const TOOL_RESULT_CHARS: usize = 400;
 
 /// Days the hub keeps transcript lines.
 pub const TRANSCRIPT_KEEP_DAYS: f64 = 7.0;
-
-/// The last word of `ignite pool mode <app> cli|desktop|config`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum PoolModeSetting {
-    /// Run the app in CLI mode on this machine whatever `ignite.toml` says.
-    Cli,
-    /// Run the app with its desktop dispatcher whatever `ignite.toml` says.
-    Desktop,
-    /// Remove the override, so `ignite.toml` decides again.
-    Config,
-}
-
-impl PoolModeSetting {
-    pub fn parse(word: &str) -> Option<PoolModeSetting> {
-        match word {
-            "cli" => Some(PoolModeSetting::Cli),
-            "desktop" => Some(PoolModeSetting::Desktop),
-            "config" => Some(PoolModeSetting::Config),
-            _ => None,
-        }
-    }
-
-    /// The mode this setting forces; `None` for [`PoolModeSetting::Config`].
-    pub fn mode(self) -> Option<PoolMode> {
-        match self {
-            PoolModeSetting::Cli => Some(PoolMode::Cli),
-            PoolModeSetting::Desktop => Some(PoolMode::Desktop),
-            PoolModeSetting::Config => None,
-        }
-    }
-}
-
-/// The JSON of `ignite pool mode`: the mode an app now runs in on this machine.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PoolModeReply {
-    pub app: String,
-    pub mode: PoolMode,
-    /// Whether the mode comes from an override stored in the daemon's database rather than
-    /// from `ignite.toml`.
-    pub overridden: bool,
-}
 
 /// What one digest line of a transcript shows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -190,15 +146,5 @@ mod tests {
             serde_json::from_value::<StoredTranscriptLine>(value).unwrap(),
             stored
         );
-    }
-
-    #[test]
-    fn pool_mode_words_parse() {
-        assert_eq!(
-            PoolModeSetting::parse("cli").unwrap().mode(),
-            Some(PoolMode::Cli)
-        );
-        assert_eq!(PoolModeSetting::parse("config").unwrap().mode(), None);
-        assert_eq!(PoolModeSetting::parse("tui"), None);
     }
 }

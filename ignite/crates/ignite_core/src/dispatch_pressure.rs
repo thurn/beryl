@@ -167,7 +167,7 @@ impl<'a> Budget<'a> {
         self.committed_gb = self.committed_gb.saturating_add(growth);
     }
 
-    /// The first pressure condition keeping a ticket ready, for the dispatcher status line.
+    /// The first pressure condition keeping a ticket ready, for the pool status line.
     pub fn blocked(&self, ticket: &ReadyTicket) -> Option<HandoffWait> {
         if ticket.labels.iter().any(|label| label == JUSTICIAR) {
             // Emergency work can restore space itself.

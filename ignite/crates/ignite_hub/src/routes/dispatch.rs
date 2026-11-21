@@ -286,7 +286,7 @@ fn claim(conn: &mut Connection, claim: &Claim, now: Timestamp) -> Answer {
         (Some((machine, code)), Some(sent)) => (machine != claim.machine.as_str() || code != sent)
             .then_some("is reserved under another code"),
         (Some(_), None) => Some(
-            "is reserved for a worker the dispatcher is starting; nobody else can claim it, so take another ticket",
+            "is reserved for a worker that is starting; nobody else can claim it, so take another ticket",
         ),
         (None, Some(_)) => Some("has no live reservation with that code"),
         (None, None) => None,

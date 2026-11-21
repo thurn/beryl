@@ -17,7 +17,7 @@ use crate::manifest::RebuildEdit;
 mod cli;
 #[path = "config_land.rs"]
 mod land;
-pub use cli::{CliProgram, MachinePool, PoolMode};
+pub use cli::{CliProgram, MachinePool};
 pub use land::{Land, LandMode, Revert};
 
 /// An operating system a machine runs or a check must pass on.
@@ -475,8 +475,7 @@ pub struct Machine {
     /// tip round. Zero reserves none.
     #[serde(default)]
     pub tip_build_cores: u32,
-    /// `[machine.<host>.pool.<app>]`: how each app's workers run here, by app. An app with no
-    /// table runs in desktop mode (see [`Config::machine_pool`]).
+    /// `[machine.<host>.pool.<app>]`: the worker slots on this machine for each provider.
     #[serde(default)]
     pub pool: BTreeMap<String, MachinePool>,
 }

@@ -145,33 +145,20 @@ fn machine_items(
 ) -> Result<Vec<(Tone, String)>, ReadError> {
     let mut found = Vec::new();
     let mut machines = conn.prepare(
-        "SELECT id, name, last_seen, json_array_length(cli_apps) > 0
+        "SELECT name, last_seen
          FROM machines ORDER BY name",
     )?;
     let machines = machines
         .query_map([], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, bool>(3)?,
-            ))
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
         })?
         .collect::<Result<Vec<_>, _>>()?;
-    let mut dispatchers = conn.prepare(
-        "SELECT w.state FROM workers w JOIN machines m ON m.id = w.machine
-         WHERE w.machine = ?1 AND w.role = 'dispatcher'
-           AND w.app NOT IN (SELECT value FROM json_each(m.cli_apps))",
-    )?;
-    for (id, name, last_seen, has_cli) in machines {
+    for (name, last_seen) in machines {
         let state = settings.machine(&name).state;
         if state != MachineState::Active {
             let label = machine_state(conn, &name, state)?;
             found.push((Tone::Amber, format!("{} is {label}", esc(&name))));
         }
-        let states = dispatchers
-            .query_map([&id], |row| row.get::<_, String>(0))?
-            .collect::<Result<Vec<_>, _>>()?;
         let silent =
             seconds_since(now, Some(&last_seen)).is_none_or(|s| s > MACHINE_SILENT_SECONDS);
         if silent {
@@ -183,13 +170,6 @@ fn machine_items(
                     age(now, Some(&last_seen))
                 ),
             ));
-        } else if state == MachineState::Active
-            && !has_cli
-            && states.iter().all(|state| state == "down")
-        {
-            found.push((Tone::Red, format!("{} has no dispatcher", esc(&name))));
-        } else if state == MachineState::Active && states.iter().any(|state| state == "paused") {
-            found.push((Tone::Amber, format!("{}'s pool is paused", esc(&name))));
         }
     }
 
@@ -212,18 +192,31 @@ fn usage_items(conn: &Connection, now: Timestamp) -> Result<Vec<(Tone, String)>,
         .collect())
 }
 
-/// Open regressions that no worker can take: none exists on a machine with a running
-/// dispatcher.
-fn regression_items(conn: &Connection, root: &str) -> Result<Vec<(Tone, String)>, ReadError> {
+/// Open regressions when no reporting machine can start a CLI worker.
+fn regression_items(
+    conn: &Connection,
+    settings: &FleetSettings,
+    root: &str,
+    now: Timestamp,
+) -> Result<Vec<(Tone, String)>, ReadError> {
+    if !fleet::paused_everywhere(conn)? {
+        let mut candidates = conn.prepare(
+            "SELECT name, last_seen FROM machines WHERE json_array_length(cli_apps) > 0",
+        )?;
+        let candidates = candidates
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        if candidates.iter().any(|(name, last_seen)| {
+            settings.machine(name).state != MachineState::Off
+                && seconds_since(now, Some(last_seen))
+                    .is_some_and(|age| age <= MACHINE_SILENT_SECONDS)
+        }) {
+            return Ok(Vec::new());
+        }
+    }
     let mut found = Vec::new();
-    let takers: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM workers w JOIN machines m ON m.id = w.machine
-         WHERE w.role = 'worker' AND w.state != 'down'
-           AND EXISTS (SELECT 1 FROM workers d WHERE d.machine = w.machine
-                       AND d.role = 'dispatcher' AND d.state NOT IN ('down', 'paused'))",
-        [],
-        |row| row.get(0),
-    )?;
     let mut regressions = conn.prepare(
         "SELECT r.check_name, r.ticket FROM regressions r JOIN tickets t ON t.id = r.ticket
          WHERE r.state IN ('open', 'reopened') AND t.status != 'in_progress'
@@ -234,22 +227,20 @@ fn regression_items(conn: &Connection, root: &str) -> Result<Vec<(Tone, String)>
             Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
         })?
         .collect::<Result<Vec<_>, _>>()?;
-    if takers == 0 {
-        for (check, ticket) in regressions {
-            found.push((
-                Tone::Red,
-                format!(
-                    "The regression in {} ({}) has no worker that can take it",
-                    esc(&check),
-                    c::link(
-                        &ticket_url(root, &ticket),
-                        &esc(&display_id(&ticket)),
-                        None,
-                        ""
-                    )
-                ),
-            ));
-        }
+    for (check, ticket) in regressions {
+        found.push((
+            Tone::Red,
+            format!(
+                "The regression in {} ({}) has no worker that can take it",
+                esc(&check),
+                c::link(
+                    &ticket_url(root, &ticket),
+                    &esc(&display_id(&ticket)),
+                    None,
+                    ""
+                )
+            ),
+        ));
     }
 
     Ok(found)
@@ -263,18 +254,11 @@ fn held_items(
     root: &str,
 ) -> Result<Vec<(Tone, String)>, ReadError> {
     let everywhere = fleet::paused_everywhere(conn)?;
-    let mut legacy = conn.prepare(
-        "SELECT DISTINCT m.name FROM machines m JOIN workers w ON w.machine = m.id
-         WHERE w.role = 'dispatcher' AND w.state = 'paused' ORDER BY m.name",
-    )?;
-    let legacy = legacy
-        .query_map([], |row| row.get::<_, String>(0))?
-        .collect::<Result<Vec<_>, _>>()?;
     let limited = settings
         .machines
         .values()
         .any(|setting| setting.state != MachineState::Active);
-    if !everywhere && !limited && legacy.is_empty() {
+    if !everywhere && !limited {
         return Ok(Vec::new());
     }
     let mut holding = conn.prepare(
@@ -302,22 +286,8 @@ fn held_items(
              master back"
                 .to_owned(),
         )
-    } else if limited {
-        (Tone::Amber, "Tickets holding master back".to_owned())
     } else {
-        let names: Vec<String> = legacy.iter().map(|name| esc(name)).collect();
-        (
-            Tone::Amber,
-            format!(
-                "master is held back while {} paused; a paused pool still hands \
-                 these to one worker at a time",
-                if names.len() == 1 {
-                    format!("{}'s pool is", names[0])
-                } else {
-                    format!("the pools of {} are", names.join(", "))
-                }
-            ),
-        )
+        (Tone::Amber, "Tickets holding master back".to_owned())
     };
     Ok(vec![(tone, format!("{text}: {}", links.join(", ")))])
 }
@@ -346,7 +316,7 @@ pub fn items(
     let settings = fleet_settings::settings(conn)?;
     found.extend(machine_items(conn, &settings, now)?);
     found.extend(usage_items(conn, now)?);
-    found.extend(regression_items(conn, root)?);
+    found.extend(regression_items(conn, &settings, root, now)?);
     found.extend(held_items(conn, &settings, root)?);
     found.extend(stranded_items(conn, root)?);
     Ok(found)
