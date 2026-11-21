@@ -10,12 +10,14 @@ use crate::camera::Camera;
 
 mod cascade;
 mod fan;
+mod grid;
 mod layout;
 mod press;
 pub mod row;
 
 pub use cascade::{AnchoredCascade, Cascade, CascadeLayout};
 pub use fan::CentredFan;
+pub use grid::Grid;
 use layout::Layout;
 
 /// The available rectangle in table space. The rotation takes the region's local right,

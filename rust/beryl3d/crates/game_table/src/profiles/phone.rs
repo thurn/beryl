@@ -318,7 +318,7 @@ pub(super) fn tray_in(
     bands: &TableBands,
     data: Banded,
     sizes: Bands,
-    (tuning, card): (TrayTuning, Card),
+    (tuning, card, grid_target): (TrayTuning, Card, f32),
 ) -> TraySpace {
     let shape = data.tray;
     let top = bands.opponent_back.top + shape.inset;
@@ -347,6 +347,7 @@ pub(super) fn tray_in(
         least: shape.least,
         gap: shape.gap,
         least_step: shape.least_step,
+        grid_target,
         heading: shape.heading,
         tuning,
         card,
@@ -403,7 +404,7 @@ pub(super) fn layout(profile: &ProfileData, window: Window, data: Banded) -> Lay
             &bands,
             data,
             sizes,
-            (table.tray_tuning, table.camera.card),
+            (table.tray_tuning, table.camera.card, target),
         ),
         stack: StackPlacement::Centred(stack),
         hand: your_hand(

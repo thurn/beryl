@@ -3,8 +3,10 @@
 
 use beryl_protocol::protocol::ObjectId;
 use glam::Vec2;
+use kit_base::geometry::Rect;
+use kit_space::arrange::Grid;
 
-use super::{Area, Held, Laid, Spot, TraySpace, along, height_of, rooms_of, widths};
+use super::{Area, Held, Laid, Spot, TraySpace, curve_fan, height_of, rooms_of, widths};
 
 /// Cards put back from the hand (the second pile) onto the library (the first), each pile laid
 /// out for what it can come to hold, as the web's `putBack`: the library at the left of the
@@ -71,53 +73,77 @@ pub(super) fn put_back(held: &Held, space: &TraySpace, (left, wide): (f32, f32))
     } else {
         (shape.turn, shape.drop)
     };
-    let mut spots = Vec::with_capacity(onto.len() + count);
-    // The library's column, the deepest first, while its pile lists the top first.
-    spots.extend((0..onto.len()).map(|index| {
-        let down = onto.len() - 1 - index;
-        let at = (library_x, top + span * down as f32, width);
-        column_spot(at, shape.column_turns, index, down, count + down)
-    }));
-    for index in 0..count {
-        let t = along(index, count);
-        spots.push(Spot {
-            x: start + step * index as f32,
-            y: middle + drop * width * t * t,
-            width,
-            turn: turn * t,
-            drawn: index,
-        });
-    }
-    // Each pile's box spans its band from just over its cards, under its name, to just under
-    // them.
-    let deck = (library.y - space.heading, top + column + gap);
-    let fan = (
-        middle - space.heading - gap,
-        middle + height + drop * width + gap,
+    let mut laid = Laid::of(
+        Vec::with_capacity(onto.len() + count),
+        Vec::with_capacity(2),
     );
-    let strip = |(strip_top, strip_bottom): (f32, f32), x: f32, width: f32| Area {
-        x,
-        y: strip_top,
+    let item = Vec2::new(width, height);
+    let deck_grid = Grid::new(1, item, Vec2::new(0.0, span - height));
+    let deck_region = Rect {
+        x: library_x,
+        y: top,
         width,
-        height: strip_bottom - strip_top,
+        height: column,
     };
-    let boxes = if own.is_some() {
-        vec![strip(deck, left, wide), strip(fan, left, wide)]
-    } else {
+    laid.grid(deck_grid, onto.len(), deck_region, false);
+    laid.spots.reverse();
+    for (index, spot) in laid.spots.iter_mut().enumerate() {
+        let down = onto.len() - 1 - index;
+        *spot = column_spot(
+            (spot.x, spot.y, spot.width),
+            shape.column_turns,
+            index,
+            down,
+            count + down,
+        );
+    }
+    let hand_grid = Grid::new(count, item, Vec2::new(step - width, 0.0));
+    let hand_region = Rect {
+        x: start,
+        y: middle,
+        width: hand_wide,
+        height: height + drop * width,
+    };
+    laid.grid(hand_grid, count, hand_region, false);
+    curve_fan(&mut laid.spots[onto.len()..], drop * width, turn);
+    laid.boxes = drop_areas(
+        (left, wide),
+        (library.y - space.heading, top + column + gap),
+        (
+            middle - space.heading - gap,
+            middle + height + drop * width + gap,
+        ),
+        own.is_none().then_some((library_x + width + hand_x) / 2.0),
+    );
+    laid.library = Some(library);
+    laid.column = deck_grid
+        .boxes(rooms[0], deck_region, false)
+        .map(|rect| rect.y)
+        .collect();
+    laid
+}
+
+/// The drop areas of the two piles. Stacked piles span their respective bands.
+fn drop_areas(
+    (left, wide): (f32, f32),
+    deck: (f32, f32),
+    fan: (f32, f32),
+    split: Option<f32>,
+) -> Vec<Area> {
+    let strip = |(top, bottom): (f32, f32), x, width| Area {
+        x,
+        y: top,
+        width,
+        height: bottom - top,
+    };
+    if let Some(split) = split {
         let both = (deck.0.min(fan.0), deck.1.max(fan.1));
-        let reach = (library_x + width + hand_x) / 2.0;
         vec![
-            strip(both, left, reach - left),
-            strip(both, reach, left + wide - reach),
+            strip(both, left, split - left),
+            strip(both, split, left + wide - split),
         ]
-    };
-    Laid {
-        spots,
-        boxes,
-        library: Some(library),
-        column: (0..rooms[0])
-            .map(|place| top + span * place as f32)
-            .collect(),
+    } else {
+        vec![strip(deck, left, wide), strip(fan, left, wide)]
     }
 }
 

@@ -255,12 +255,13 @@ pub fn sort_tray(view: &PlayerView, window: Size, shape: Card) -> Option<Element
         .name("sort")
         .gap(space::M)
         .align_items(Align::Center)
-        .child(
-            row()
-                .name("unplaced")
-                .gap(size::VIEWER_GAP)
-                .children(unplaced),
-        );
+        .max_height(super::order::tray_height(window))
+        .overflow(kit_ui::element::Overflow::ScrollY)
+        .child(super::order::tray_grid(
+            "unplaced",
+            unplaced.collect(),
+            window,
+        ));
     for (pile, cards) in piles.iter().zip(placed) {
         let name = pile_name(*pile);
         body = body.child(
@@ -269,12 +270,11 @@ pub fn sort_tray(view: &PlayerView, window: Size, shape: Card) -> Option<Element
                 .gap(space::S)
                 .align_items(Align::Center)
                 .child(text(name).style(type_style::BODY).color(color::TEXT_DIM))
-                .child(
-                    row()
-                        .name("cards")
-                        .gap(size::VIEWER_GAP)
-                        .children(cards.iter().copied().map(card)),
-                ),
+                .child(super::order::tray_grid(
+                    "cards",
+                    cards.iter().copied().map(card).collect(),
+                    window,
+                )),
         );
     }
     let ready = placed.iter().map(Vec::len).sum::<usize>() == cards.len();

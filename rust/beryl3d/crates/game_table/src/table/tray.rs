@@ -5,19 +5,19 @@
 use beryl_protocol::protocol::{ObjectId, PlayerView};
 
 use super::scene::SceneObject;
-use super::tray_layout::{Held, TrayPoses, TraySpace, tray_poses};
-use super::{Camera, Placement, Rest, Table};
+use super::tray_layout::{Held, TrayGrid, TrayPoses, tray_poses};
+use super::{Placement, Rest, Table};
 use kit_base::pose::between;
 use kit_base::pose::{Curve, Pose};
 use kit_frame::frame::{Band, Draw, FrameBuilder, OBJECTS};
 use kit_ui::input::FaceSize;
 
+mod grid;
+
 impl Placement {
-    /// Gives each card `held` names its place in the tray instead of its zone's, laid out in
-    /// `space` and seen through `camera`. A card keeps its zone's `Place`, so that a step still
-    /// finds it in its zone, and is drawn, wherever in its zone it lies.
-    pub fn hold(&mut self, held: &Held, space: TraySpace, camera: &Camera) {
-        for (slot, pose) in tray_poses(held, space, camera).cards {
+    /// A card keeps its zone's `Place` so that a script can still find it there.
+    fn hold(&mut self, cards: &[(ObjectId, Pose)]) {
+        for &(slot, pose) in cards {
             if let Some(rest) = self.get(slot).copied() {
                 self.set(
                     slot,
@@ -44,6 +44,7 @@ pub(crate) struct TrayMotion {
     poses: Vec<(ObjectId, Pose)>,
     /// The card backs a put-back's library is drawn with in the tray, the deepest first.
     library: Vec<Pose>,
+    grids: Vec<TrayGrid>,
     zone: Vec<Option<(Pose, bool)>>,
     from: Vec<Option<Pose>>,
     over: Option<(u64, u64)>,
@@ -68,6 +69,7 @@ impl TrayMotion {
         Self {
             poses: Vec::new(),
             library: Vec::new(),
+            grids: Vec::new(),
             zone: vec![None; OBJECTS],
             from: vec![None; OBJECTS],
             over: None,
@@ -78,6 +80,14 @@ impl TrayMotion {
             handed: Vec::new(),
             now: 0,
         }
+    }
+
+    /// A reordering or resize clamps the grid's previous scroll to its new bounds.
+    fn set_grids(&mut self, mut grids: Vec<TrayGrid>) {
+        for (grid, old) in grids.iter_mut().zip(&self.grids) {
+            grid.offset = old.offset.min(grid.limit);
+        }
+        self.grids = grids;
     }
 
     /// How far through the move is at `now`, eased, or `None` once it is over. A move that has
@@ -192,6 +202,7 @@ impl Table {
         let TrayPoses {
             cards: poses,
             library,
+            grids,
         } = poses;
         for &(slot, pose) in &poses {
             let slot = usize::from(slot.0);
@@ -210,6 +221,7 @@ impl Table {
         self.held = Some(held);
         self.tray.poses = poses;
         self.tray.library = library;
+        self.tray.set_grids(grids);
         self.tray.over = Some(over);
         self.tray.waiting = None;
         self.tray.curve = curve;
@@ -249,8 +261,6 @@ impl Table {
         if self.held.take().is_none() {
             return;
         }
-        self.tray.poses.clear();
-        self.tray.library.clear();
         self.tray.letting.clear();
         (self.tray.letting).extend(rests.iter().map(|&(slot, ..)| usize::from(slot.0)));
         for &(slot, pose, visible) in rests {
@@ -264,6 +274,9 @@ impl Table {
             object.visible = visible;
             self.objects.cards[index] = Some(object);
         }
+        self.tray.poses.clear();
+        self.tray.library.clear();
+        self.tray.grids.clear();
         self.tray.over = None;
         self.tray.waiting = Some(Wait { length, script });
         self.tray.curve = curve;
@@ -328,13 +341,16 @@ impl Table {
     /// way at `now`: it is drawn part of the way from where it was as the move began. Returns
     /// whether it moves.
     pub(super) fn tray_look(&self, slot: usize, object: &mut SceneObject, now: u64) -> bool {
-        let (Some(share), Some(Some(from))) =
-            (self.tray.share(now), self.tray.from.get(slot).copied())
-        else {
-            return false;
-        };
-        object.pose = between(&from, &object.pose, share);
-        true
+        let clip = self.tray_grid_rest(slot, object);
+        let moving = self
+            .tray
+            .share(now)
+            .zip(self.tray.from.get(slot).copied().flatten());
+        if let Some((share, from)) = moving {
+            object.pose = between(&from, &object.pose, share);
+        }
+        self.clip_tray_card(object, clip);
+        moving.is_some()
     }
 
     /// Whether a card of the tray moves at `now`. A let-go that waits for its script holds
@@ -372,10 +388,15 @@ impl Table {
     /// `placement` with the cards held up in the tray, where this window lays it out.
     pub(super) fn with_held(&mut self, mut placement: Placement) -> Placement {
         if let Some(held) = &self.held {
-            placement.hold(held, self.layout().tray, self.camera());
-            let TrayPoses { cards, library } = self.tray_poses(held);
+            let TrayPoses {
+                cards,
+                library,
+                grids,
+            } = self.tray_poses(held);
+            placement.hold(&cards);
             self.tray.poses = cards;
             self.tray.library = library;
+            self.tray.set_grids(grids);
         }
         placement
     }

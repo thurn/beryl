@@ -180,6 +180,12 @@ impl Camera {
         }
     }
 
+    /// Moves a pose by logical points along the screen at its current depth.
+    pub fn move_in_screen(&self, pose: &mut Pose, delta: Vec2) {
+        let units = 2.0 * self.depth(pose.position) * self.tan_half / self.window.size.height;
+        pose.position += self.inverse_rotation * Vec3::new(delta.x, -delta.y, 0.0) * units;
+    }
+
     /// A card's corners on screen, in logical points, when a card of the camera's card size is
     /// laid by `transform`:
     /// bottom left, bottom right, top right and top left of its face.

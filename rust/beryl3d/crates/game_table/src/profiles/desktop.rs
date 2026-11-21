@@ -24,7 +24,12 @@ pub(super) fn reference(profile: &ProfileData, data: &Anchored) -> Layout {
         beneath_step: table.beneath_step,
         piles: piles.map(|pile| [pile.library, pile.graveyard, pile.exile]),
         pile_scale: piles.map(|pile| pile.scale),
-        tray: tray(data.tray, table.tray_tuning, table.camera.card),
+        tray: tray(
+            data.tray,
+            table.tray_tuning,
+            table.camera.card,
+            profile.checks.target_points,
+        ),
         stack: StackPlacement::Anchored(stack(data.stack)),
         hand: hand(data.hand),
         opponent_hand: hand(data.opponent_hand),
@@ -45,7 +50,12 @@ pub(super) fn reference(profile: &ProfileData, data: &Anchored) -> Layout {
     }
 }
 
-pub(super) fn tray(data: anchored::Tray, tuning: TrayTuning, card: Card) -> TraySpace {
+pub(super) fn tray(
+    data: anchored::Tray,
+    tuning: TrayTuning,
+    card: Card,
+    grid_target: f32,
+) -> TraySpace {
     TraySpace {
         stage_height: data.stage_height,
         y: data.y,
@@ -59,6 +69,7 @@ pub(super) fn tray(data: anchored::Tray, tuning: TrayTuning, card: Card) -> Tray
         least: data.least,
         gap: data.gap,
         least_step: 0.0,
+        grid_target,
         heading: data.heading,
         tuning,
         card,

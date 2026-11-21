@@ -14,9 +14,10 @@ use beryl_protocol::script::Subject;
 use kit_base::data::Card;
 
 use super::commands::seat_of;
-use game_hud::inspect::viewer::object_box;
+use game_hud::inspect::viewer::{object_box, show_grid};
 use kit_base::tokens::size;
-use kit_ui::element::{Element, row};
+use kit_space::arrange::Grid;
+use kit_ui::element::{Element, Overflow, row};
 use kit_ui::input::Size;
 use kit_ui::widgets::screen::overlay;
 use kit_ui::widgets::{button, primary};
@@ -91,18 +92,22 @@ impl LibraryOrder {
 /// highlighted one marked, Done and Cancel.
 #[must_use]
 pub fn tray(order: &LibraryOrder, view: &PlayerView, (window, shape): (Size, Card)) -> Element {
-    let cards =
-        row()
-            .name("cards")
-            .gap(size::VIEWER_GAP)
-            .children((order.cards.iter().enumerate()).map(|(at, &slot)| {
-                let at_u16 = u16::try_from(at).unwrap_or(u16::MAX);
-                let mut card = object_box(view, slot, shape)
-                    .selected(at == order.highlight)
-                    .on_press(LibraryOrderMessage::Card(at_u16));
-                card.focus = true;
-                card
-            }));
+    let boxes = order
+        .cards
+        .iter()
+        .enumerate()
+        .map(|(at, &slot)| {
+            let at_u16 = u16::try_from(at).unwrap_or(u16::MAX);
+            let mut card = object_box(view, slot, shape)
+                .selected(at == order.highlight)
+                .on_press(LibraryOrderMessage::Card(at_u16));
+            card.focus = true;
+            card
+        })
+        .collect();
+    let cards = tray_grid("cards", boxes, window)
+        .max_height(tray_height(window))
+        .overflow(Overflow::ScrollY);
     let done = primary("Done")
         .name("done")
         .on_press(LibraryOrderMessage::Done);
@@ -110,4 +115,17 @@ pub fn tray(order: &LibraryOrder, view: &PlayerView, (window, shape): (Size, Car
         .name("close")
         .on_press(LibraryOrderMessage::Close);
     overlay(window, (TITLE, None), None, cards, vec![done, cancel])
+}
+
+/// Manual prompt trays share the choice overlay's width, including its header and buttons.
+pub(super) fn tray_grid(name: &str, boxes: Vec<Element>, window: Size) -> Element {
+    let available = size::OVERLAY_MAIN.min(window.width - size::OVERLAY_LEFT);
+    let columns = Grid::fitting_columns(available, size::VIEWER_CARD, size::VIEWER_GAP);
+    show_grid(row().name(name), boxes, columns)
+}
+
+/// The body fits between the choice header and the buttons.
+pub(super) fn tray_height(window: Size) -> f32 {
+    let button = size::BUTTON_HEIGHT + 2.0 * kit_base::tokens::space::L;
+    (window.height - size::OVERLAY_TOP - size::OVERLAY_HEADER - button).max(size::VIEWER_CARD)
 }

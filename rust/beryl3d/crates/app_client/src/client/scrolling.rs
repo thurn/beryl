@@ -20,6 +20,7 @@ use kit_ui::scroll::{ScrollInput, Viewport};
 pub(super) enum Target {
     Element(ElementId),
     Row(Scroller),
+    Tray(usize),
 }
 
 impl Client {
@@ -110,6 +111,13 @@ impl Client {
         {
             return None;
         }
+        if let Some((index, viewport)) = self.show.table().tray_viewport_at(point)
+            && wheel.is_none_or(|delta| {
+                viewport.takes_wheel(delta, self.data().pointer.wheel_notch_points)
+            })
+        {
+            return Some((Target::Tray(index), viewport));
+        }
         let element = &self.frame.resolved[hit(&self.frame, point)? as usize];
         let row = scroller_of(element.place).filter(|_| element.role == Role::Card)?;
         let view = row_viewport(self.show.table(), row)?;
@@ -158,6 +166,7 @@ impl Client {
                     self.place_shown();
                 }
             }
+            Target::Tray(grid) => self.show.scroll_tray(grid, offset.y),
             Target::Row(row) => {
                 #[expect(
                     clippy::cast_possible_truncation,
@@ -178,7 +187,8 @@ fn viewport(target: Target, layer: &Layer, table: &Table, rows: bool) -> Option<
     match target {
         Target::Element(id) => layer.scroll_viewport(id),
         Target::Row(row) if rows => row_viewport(table, row),
-        Target::Row(_) => None,
+        Target::Tray(grid) if rows => table.tray_viewport(grid),
+        Target::Row(_) | Target::Tray(_) => None,
     }
 }
 

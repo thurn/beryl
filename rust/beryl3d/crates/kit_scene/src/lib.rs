@@ -11,3 +11,5 @@ pub use tree::{
     Anchor, Band, Candidate, KeepClear, Node, NodeQuery, NodeRef, ShapeAnchor, Show, ShowPlacement,
     SlotRef, SolvePhase, SolveStep, Space, Tree,
 };
+
+pub mod grid;

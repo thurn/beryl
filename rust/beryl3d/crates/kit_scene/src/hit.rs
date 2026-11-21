@@ -341,16 +341,14 @@ pub fn covered(frame: &Frame, index: u32) -> f32 {
 /// The axis-aligned bounding box of an element's corners, in logical points.
 #[must_use]
 pub fn bounds(element: &Resolved) -> Rect {
-    let min = element
-        .corners
-        .into_iter()
-        .reduce(Vec2::min)
-        .unwrap_or_default();
-    let max = element
-        .corners
-        .into_iter()
-        .reduce(Vec2::max)
-        .unwrap_or_default();
+    corner_bounds(element.corners)
+}
+
+/// The axis-aligned box of four projected corners, in logical points.
+#[must_use]
+pub fn corner_bounds(corners: [Vec2; 4]) -> Rect {
+    let min = corners.into_iter().fold(corners[0], Vec2::min);
+    let max = corners.into_iter().fold(corners[0], Vec2::max);
     Rect {
         x: min.x,
         y: min.y,

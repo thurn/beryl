@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use glam::{Quat, Vec2};
 use kit_base::geometry::{GroupWindow, ScrollAxis};
 
+use super::grid::Cursor;
 use super::press::{self, PressArea, Quad};
 use super::{
     Alignment, Camera, Cluster, Container, Edge, Fan, Item, Overflow, Pile, Placed, Policy, Pose,
@@ -546,7 +547,8 @@ struct Positioner {
     lines: [Line; 2],
     previous_groups: [Option<u64>; 2],
     index: usize,
-    grid: Grid,
+    grid: Cursor,
+    half: Vec2,
 }
 
 impl Positioner {
@@ -582,14 +584,8 @@ impl Positioner {
             ],
             previous_groups: [None; 2],
             index: 0,
-            grid: Grid {
-                left: -half.x,
-                right: half.x,
-                x: -half.x,
-                y: half.y,
-                height: 0.0,
-                column: 0,
-            },
+            grid: Cursor::new(region.size.x),
+            half,
         }
     }
 
@@ -625,8 +621,13 @@ impl Positioner {
     fn place(&mut self, pack: &Pack, group: Option<u64>) -> Vec2 {
         match self.policy {
             Policy::Grid { columns, gap } => {
-                self.grid
-                    .place(pack, columns, gap.max(Vec2::ZERO) * self.scale)
+                let at = self
+                    .grid
+                    .place(pack.size(), columns, gap.max(Vec2::ZERO) * self.scale);
+                Vec2::new(
+                    at.x - self.half.x - pack.low.x,
+                    self.half.y - at.y - pack.high.y,
+                )
             }
             Policy::Spot | Policy::Pile { .. } => Vec2::ZERO,
             _ if self.centred() && self.index == 0 => {
@@ -666,31 +667,5 @@ impl Positioner {
             self.lines[active].advance(step + gap);
         }
         self.index += 1;
-    }
-}
-
-struct Grid {
-    left: f32,
-    right: f32,
-    x: f32,
-    y: f32,
-    height: f32,
-    column: usize,
-}
-
-impl Grid {
-    fn place(&mut self, pack: &Pack, columns: usize, gap: Vec2) -> Vec2 {
-        let size = pack.size();
-        if self.column > 0 && (self.column >= columns.max(1) || self.x + size.x > self.right) {
-            self.x = self.left;
-            self.y -= self.height + gap.y;
-            self.height = 0.0;
-            self.column = 0;
-        }
-        let centre = Vec2::new(self.x - pack.low.x, self.y - pack.high.y);
-        self.x += size.x + gap.x;
-        self.height = self.height.max(size.y);
-        self.column += 1;
-        centre
     }
 }

@@ -15,7 +15,7 @@ use game_hud::hud::rows::Message as RowMessage;
 use game_hud::prompts;
 use game_play::pointer::Hold;
 use game_play::pointer::rows::scroller_of;
-use game_table::table::{self, Scroller};
+use game_table::table::Scroller;
 use kit_frame::frame::{ElementId, Place, Role};
 use kit_scene::hit::hit;
 use kit_ui::element::{Action, Chord};
@@ -406,7 +406,7 @@ impl Client {
 
     /// The card in `slot`, held up in the open prompt's tray of piles, was let go at `at`: if it
     /// lands in a pile that is not closed, the prompt is told it was dropped there, before the
-    /// card it landed in front of (`table::landing`), as the web's `#dropped` does. Let go
+    /// card it landed in front of (`Table::tray_landing`), as the web's `#dropped` does. Let go
     /// outside every box, or in a closed pile, it goes back where it lay and nothing is sent.
     pub(super) fn drop_held(&mut self, slot: usize, at: Vec2) {
         let Some(prompt) = self
@@ -421,12 +421,12 @@ impl Client {
         else {
             return;
         };
-        let (table, size) = (self.show.table(), self.window.size);
+        let table = self.show.table();
         let held = held.held(table.held());
         let Ok(card) = u16::try_from(slot) else {
             return;
         };
-        let landed = table::landing(&held, table.layout().tray, size, at, ObjectId(card));
+        let landed = table.tray_landing(&held, at, ObjectId(card));
         let Some((pile, before)) = landed else {
             return;
         };

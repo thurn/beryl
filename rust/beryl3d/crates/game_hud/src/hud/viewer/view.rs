@@ -19,10 +19,9 @@ use kit_base::data::Card;
 use kit_base::data::presentation::Gallery;
 use kit_base::tokens::{color, size, space, type_style};
 use kit_frame::frame::{ElementId, Role};
-use kit_scene::Show;
-use kit_ui::element::{
-    Align, Anchor, Element, Overflow, Shown, TextAlign, Track, column, row, text,
-};
+use kit_scene::{Show, grid::grid_element};
+use kit_space::arrange::Grid;
+use kit_ui::element::{Align, Anchor, Element, Overflow, Shown, TextAlign, column, row, text};
 use kit_ui::input::{FaceId, FaceSize, Size};
 use kit_ui::widgets::{icon_button, icons};
 
@@ -54,13 +53,16 @@ pub(super) fn dialog(
     };
     let count = boxes.len();
     let close = icon_button(icons::CLOSE, "close").on_press(Message::Close);
+    let available = window.width - 2.0 * space::L;
+    let columns =
+        Grid::fitting_columns(available, size::VIEWER_CARD, size::VIEWER_GAP).min(viewer_columns());
     Some(viewer_dialog(
         (window, centre),
         (&title, &count_text(count, viewing?)),
-        count,
-        size::VIEWER_MIN_WIDTH,
+        count.min(columns),
+        size::VIEWER_MIN_WIDTH.min(window.width),
         Some(close),
-        grid(boxes),
+        scroll_grid(boxes, columns),
         vec![],
     ))
 }
@@ -143,10 +145,14 @@ pub fn count_words(count: usize, library: bool, top_first: bool) -> String {
 /// The scrolling grid of `boxes`, as many columns as the cards fill up to
 /// `size::VIEWER_COLUMNS`, or "Nothing here." for none.
 pub fn grid(boxes: Vec<Element>) -> Element {
+    scroll_grid(boxes, viewer_columns())
+}
+
+fn scroll_grid(boxes: Vec<Element>, columns: usize) -> Element {
     if boxes.is_empty() {
         return text("Nothing here.").color(color::TEXT_DIM);
     }
-    cards(boxes)
+    show_grid(Element::new(Role::List), boxes, columns)
         .name("cards")
         .max_height(size::VIEWER_HEIGHT)
         .overflow(Overflow::Scroll)
@@ -155,20 +161,28 @@ pub fn grid(boxes: Vec<Element>) -> Element {
 
 /// The grid of `boxes`, as many columns as the cards fill up to `size::VIEWER_COLUMNS`.
 pub fn cards(boxes: Vec<Element>) -> Element {
-    #[expect(clippy::cast_precision_loss, reason = "a handful of columns")]
-    let columns = (boxes.len() as f32).min(size::VIEWER_COLUMNS);
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "a few"
-    )]
-    let columns = vec![Track::Points(size::VIEWER_CARD); columns as usize];
-    let mut grid = Element::new(Role::List)
-        .grid_template_columns(columns)
-        .gap(size::VIEWER_GAP)
-        .children(boxes);
-    grid.style.display = kit_ui::element::Display::Grid;
-    grid
+    show_grid(Element::new(Role::List), boxes, viewer_columns())
+}
+
+/// Places standard-size card boxes in the grid used by a viewer or a manual tray.
+pub fn show_grid(element: Element, boxes: Vec<Element>, columns: usize) -> Element {
+    let count = boxes.len();
+    let height = boxes
+        .first()
+        .and_then(|box_| box_.style.height)
+        .unwrap_or(0.0);
+    let size = Vec2::new(size::VIEWER_CARD, height);
+    let grid = Grid::new(columns, size, Vec2::splat(size::VIEWER_GAP));
+    grid_element(element, boxes, grid, grid.size(count).x, false)
+}
+
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "the token holds a column count"
+)]
+fn viewer_columns() -> usize {
+    size::VIEWER_COLUMNS as usize
 }
 
 /// A box of the grid, the shape of `card`, named `name`.

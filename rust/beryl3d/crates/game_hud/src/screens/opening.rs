@@ -40,7 +40,8 @@ use kit_base::data::space::flat::opening as metrics;
 use kit_base::geometry::Rect;
 use kit_base::tokens::{color, size, type_style};
 use kit_frame::frame::{ElementId, Role};
-use kit_scene::Show;
+use kit_scene::{Show, grid::grid_element};
+use kit_space::arrange::Grid;
 use kit_text::text::TypeStyle;
 use kit_ui::element::{Action, Align, Anchor, Element, Justify, Overflow, column, row, text};
 use kit_ui::widgets::screen::backdrop;
@@ -251,26 +252,7 @@ pub fn present(shown: &Presentation, profile: Profile) -> Element {
         .color(color::TEXT)
         .passes(true);
     heading.style.margin = [0.0, 0.0, sizes.title_gap, 0.0];
-    let cards = (shown.hand.iter()).map(|&slot| card(slot, sizes.card));
-    let mut hand_row = row().name("hand").gap(sizes.card_gap).children(cards);
-    if let Some(width) = sizes.hand_width {
-        // The phone's hand wraps in rows of four (`.phone-opening .opening-hand`).
-        hand_row = hand_row
-            .width(width)
-            .wrap(true)
-            .justify_content(Justify::Center);
-    }
-    if shown.hand_hidden {
-        // The cards' boxes lie outside this empty strip's clip, so the table draws none of
-        // them through their Show relations, and the strip takes no room, as the web's empty
-        // `.opening-hand` takes none.
-        hand_row = row()
-            .name("hand held")
-            .height(0.0)
-            .overflow(Overflow::Clip)
-            .passes(true)
-            .child(hand_row);
-    }
+    let hand_row = hand_grid(shown, &sizes, profile.card(), card);
     let dots = (shown.waiting && opening.waiting_dots).then(waiting);
     let slots_row = (slots > 0).then(|| {
         let boxes = (0..slots).map(|at| match shown.bottom.get(at) {
@@ -312,6 +294,41 @@ pub fn present(shown: &Presentation, profile: Profile) -> Element {
                 .background_image(vec![kit_base::tokens::gradient::OPENING_BACKDROP]),
         )
         .child(screen)
+}
+
+/// Shows the hand's scene objects in the opening grid, keeping their boxes while
+/// the coin hides the cards.
+fn hand_grid(
+    shown: &Presentation,
+    sizes: &Sizes,
+    shape: Card,
+    card: impl Fn(ObjectId, f32) -> Element,
+) -> Element {
+    let hand: Vec<_> = shown
+        .hand
+        .iter()
+        .map(|&slot| card(slot, sizes.card))
+        .collect();
+    let item = Vec2::new(sizes.card, sizes.card * shape.height / shape.width);
+    let columns = sizes.hand_columns.unwrap_or(hand.len());
+    let grid = Grid::new(columns, item, Vec2::splat(sizes.card_gap));
+    let width = grid.size(sizes.hand_columns.unwrap_or(hand.len())).x;
+    let mut hand_row = grid_element(row().name("hand"), hand, grid, width, true);
+    if let Some(height) = sizes.hand_height {
+        hand_row = hand_row.max_height(height).overflow(Overflow::ScrollY);
+    }
+    if shown.hand_hidden {
+        // The cards' boxes lie outside this empty strip's clip, so the table draws none of
+        // them through their Show relations, and the strip takes no room, as the web's empty
+        // `.opening-hand` takes none.
+        hand_row = row()
+            .name("hand held")
+            .height(0.0)
+            .overflow(Overflow::Clip)
+            .passes(true)
+            .child(hand_row);
+    }
+    hand_row
 }
 
 /// The play or draw buttons, `.opening-choice`: a row reversed so that the first button stands
@@ -432,8 +449,9 @@ struct Sizes {
     card_gap: f32,
     slot_gap: f32,
     slots_gap: f32,
-    /// The width the hand wraps at, on the phone.
-    hand_width: Option<f32>,
+    /// A limit on the number of hand cards in one row, and the height available for them.
+    hand_columns: Option<usize>,
+    hand_height: Option<f32>,
 }
 
 impl Sizes {
@@ -452,7 +470,8 @@ impl Sizes {
             card_gap: metrics::CARD_GAP,
             slot_gap: metrics::SLOT_GAP,
             slots_gap: metrics::SLOTS_GAP,
-            hand_width: None,
+            hand_columns: None,
+            hand_height: None,
         }
     }
 
@@ -490,18 +509,25 @@ impl Sizes {
             } else {
                 wrapped.no_actions
             };
-        let gaps = rows.saturating_sub(1) as f32 * wrapped.gap
-            + if slots > 0 { wrapped.slots_gap } else { 0.0 };
-        let card_rows = rows as f32 + if slots > 0 { wrapped.slot_scale } else { 0.0 };
         let most = if narrow {
             wrapped.card_most_narrow
         } else {
             wrapped.card_most
         };
-        let across = (room.width - (per_row - 1.0) * wrapped.gap) / per_row;
-        let down =
-            (room.height - header - footer - gaps) * card.width / card.height / card_rows.max(1.0);
-        let card = most.min(across).min(down).max(0.0).floor();
+        let reserved_gap = if slots > 0 { wrapped.slots_gap } else { 0.0 };
+        let card_rows = rows as f32 + if slots > 0 { wrapped.slot_scale } else { 0.0 };
+        let aspect = card.height / card.width;
+        let height = room.height - header - footer - reserved_gap;
+        let row_gaps = rows.saturating_sub(1) as f32 * wrapped.gap;
+        let card = Grid::fitting_width(
+            Vec2::new(room.width, height - row_gaps),
+            Vec2::new(per_row, card_rows),
+            Vec2::new(wrapped.gap, 0.0),
+            aspect,
+        )
+        .min(most)
+        .max(0.0)
+        .floor();
         let slot = if slots > 0 {
             let room = room.width - wrapped.slot_edge;
             (wrapped.slot_scale * card)
@@ -528,7 +554,8 @@ impl Sizes {
             card_gap: wrapped.gap,
             slot_gap: wrapped.gap,
             slots_gap: wrapped.slots_gap,
-            hand_width: Some(per_row * card + (per_row - 1.0) * wrapped.gap),
+            hand_columns: Some(wrapped.per_row.get()),
+            hand_height: Some((height - if slots > 0 { slot * aspect } else { 0.0 }).max(0.0)),
         }
     }
 }

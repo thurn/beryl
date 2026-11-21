@@ -327,3 +327,92 @@ fn no_card_takes_a_press_under_a_catalogs_shade() {
         "a card under the shade takes no press"
     );
 }
+
+#[test]
+fn a_crowded_tray_scrolls_to_its_last_card_and_clips_the_first_row() {
+    let mut builder = ViewBuilder::sample();
+    builder.script(ScriptBuilder::reset().build());
+    let tray: Vec<_> = (0..60)
+        .map(|index| {
+            builder
+                .card(ZoneName::Graveyard, Side::You, &format!("Card {index}"))
+                .slot
+        })
+        .collect();
+    let first = u32::from(tray[0].0);
+    let last = u32::from(tray[59].0);
+    let choose = prompt(
+        Purpose::Move,
+        "Choose a card.",
+        Vec::new(),
+        ShapeBody::Pick {
+            tray,
+            least: 1,
+            most: 1,
+            picked: Vec::new(),
+            warned: Vec::new(),
+        },
+    );
+    let mut client = client();
+    client.handle(Input::Surface {
+        size: Size {
+            width: 375.0,
+            height: 647.0,
+        },
+        scale: 2.0,
+        safe_area: Insets::default(),
+    });
+    client.handle(Input::Update(Box::new(builder.update())));
+    client.frame(0);
+    client.handle(deciding(&builder, choose, Vec::new()));
+    client.frame(MS);
+    client.frame(5_000 * MS);
+    let frame = client.frame(10_000 * MS);
+    let card = |frame: &Frame, id| {
+        frame
+            .resolved
+            .iter()
+            .copied()
+            .find(|card| card.role == Role::Card && card.id.0 == id)
+    };
+    let first_card = card(frame, first).expect("the first row starts in view");
+    assert!(
+        card(frame, last).is_none(),
+        "the last row starts below the viewport"
+    );
+    assert!((0..frame.resolved.len()).any(|at| frame.shown_by(at as u32) == Some(first_card.id)));
+    let rect = kit_scene::hit::bounds(&first_card);
+    let clip = first_card.clip.expect("the tray clips to its viewport");
+    let roll = |distance: f32| {
+        Input::Pointer(kit_ui::input::Pointer {
+            id: 0,
+            kind: kit_ui::input::PointerKind::Mouse,
+            phase: PointerPhase::Wheel,
+            position: Vec2::new(rect.x + rect.width / 2.0, clip.y + clip.height / 2.0),
+            button: kit_ui::input::Button::None,
+            wheel: Vec2::new(0.0, -distance),
+            modifiers: kit_ui::input::Modifiers::default(),
+        })
+    };
+    client.handle(roll(rect.height / 4.0));
+    let frame = client.frame(10_001 * MS);
+    let clipped = card(frame, first).expect("part of the first row is still visible");
+    let point = Vec2::new(rect.x + rect.width / 2.0, clip.y - 1.0);
+    assert_eq!(clipped.clip, Some(clip));
+    assert!(kit_scene::hit::bounds(&clipped).y < point.y);
+    assert!(
+        kit_scene::hit::hit(frame, point)
+            .is_none_or(|at| frame.resolved[at as usize].id != clipped.id)
+    );
+
+    client.handle(roll(10_000.0));
+    let frame = client.frame(10_002 * MS);
+    assert!(card(frame, first).is_none());
+    let reached = card(frame, last).expect("the last card scrolls into view");
+    assert!(reached.interactive);
+    let at = reached.corners.iter().copied().sum::<Vec2>() / 4.0;
+    assert_eq!(
+        kit_scene::hit::hit(frame, at).map(|index| frame.resolved[index as usize].id),
+        Some(reached.id)
+    );
+}

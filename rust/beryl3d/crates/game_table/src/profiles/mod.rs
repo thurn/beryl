@@ -72,14 +72,23 @@ impl<'a> Profile<'a> {
     pub fn tray(self) -> TraySpace {
         let table = &self.data.table;
         if let Some(anchored) = &table.anchored {
-            return desktop::tray(anchored.tray, table.tray_tuning, table.camera.card);
+            return desktop::tray(
+                anchored.tray,
+                table.tray_tuning,
+                table.camera.card,
+                self.data.checks.target_points,
+            );
         }
         phone::tray_in(
             self.window,
             &self.bands().expect("validated banded table"),
             table.banded.expect("validated banded table"),
             table.bands.expect("validated banded table"),
-            (table.tray_tuning, table.camera.card),
+            (
+                table.tray_tuning,
+                table.camera.card,
+                self.data.checks.target_points,
+            ),
         )
     }
 
@@ -93,11 +102,23 @@ impl<'a> Profile<'a> {
                 fallback.anchored.as_ref().map_or_else(
                     || self.tray(),
                     |anchored| {
-                        desktop::tray(anchored.tray, fallback.tray_tuning, table.camera.card)
+                        desktop::tray(
+                            anchored.tray,
+                            fallback.tray_tuning,
+                            table.camera.card,
+                            self.data.checks.target_points,
+                        )
                     },
                 )
             },
-            |anchored| desktop::tray(anchored.tray, table.tray_tuning, table.camera.card),
+            |anchored| {
+                desktop::tray(
+                    anchored.tray,
+                    table.tray_tuning,
+                    table.camera.card,
+                    self.data.checks.target_points,
+                )
+            },
         )
     }
 

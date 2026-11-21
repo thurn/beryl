@@ -34,6 +34,11 @@ impl Show {
         self.table.lift(held, poses, over, curve);
     }
 
+    /// Applies a scroll offset to the tray's grid.
+    pub fn scroll_tray(&mut self, grid: usize, offset: f32) {
+        self.table.scroll_tray(grid, offset);
+    }
+
     /// Places the objects that the active screen shows.
     pub fn place_shows(&mut self, placements: &[ShowPlacement], moves: Moves, covered: bool) {
         self.table.place_shows(placements, moves, covered);

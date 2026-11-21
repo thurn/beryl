@@ -469,6 +469,7 @@ impl Table {
             tabletop = tabletop.with_far_shade(centre, radius);
         }
         builder.draw(Band::Opaque, tabletop);
+        self.write_tray_grids(builder);
     }
 
     /// The object in `slot` as this frame draws it, the view that names it, and whether it is
@@ -713,7 +714,13 @@ impl Table {
         let transform = look.pose.transform();
         let shown =
             role == Role::Card && (self.shown.holds(id.0 as usize) || self.in_tray(id.0 as usize));
-        let clip = shown.then(|| self.shown_clip(id)).flatten();
+        let clip = shown
+            .then(|| {
+                self.shown_clip(id)
+                    .or_else(|| self.tray_clip(id.0 as usize))
+            })
+            .flatten()
+            .filter(|_| look.state & StateBits::HELD == 0);
         let at = builder.resolved(
             name,
             Resolved {
