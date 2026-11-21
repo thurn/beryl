@@ -12,10 +12,13 @@ use super::float::Float;
 use super::panel::{Chain, look_of, mask_of, panel, write_box, write_mask};
 use super::shadows::write_icon_shadows;
 use super::{Layer, Node, text_top};
-use crate::element::{Display, Element, Overflow, Shown, TextAlign};
+use crate::element::{Display, Element, Overflow, Property, Shown, TextAlign};
 use crate::input::{FaceId, FaceSize, Rect};
 use crate::widgets::icons::{LayeredIcon, cell_width};
-use kit_base::geometry::{CARD_HEIGHT, CARD_WIDTH, plane::ScreenPlane, zoom_rect};
+use kit_base::geometry::{
+    CARD_HEIGHT, CARD_WIDTH,
+    plane::{ScreenPlane, Zoom},
+};
 use kit_base::tokens::color;
 use kit_frame::frame::text::{BlockLook, faded, write_block};
 use kit_frame::frame::{
@@ -49,15 +52,27 @@ pub(super) struct Look<'a> {
     open: bool,
     /// The point the float is scaled about and the scale (`FloatLook::scale`), as the camera
     /// draws it: the boxes recorded for the frame are scaled the same way.
-    zoom: (Vec2, f32),
+    zoom: Zoom,
+    departing: bool,
+}
+
+/// Paint outgoing children under their replacements; neither uses the other's layout slot.
+fn children(node: &Node, departing: bool) -> impl Iterator<Item = (&Node, bool)> {
+    node.departing
+        .iter()
+        .map(|child| (child, true))
+        .chain(node.children.iter().map(move |child| (child, departing)))
 }
 
 /// Whether `element`, drawn as `look` in `rect`, takes a press. An element scrolled out of its
 /// clip cannot be pressed, and one wholly transparent, as at the first frame it fades in, cannot
 /// be seen to be. A text field takes a press, which gives it the focus, though it has no `Press`.
 fn takes_press(element: &Element, look: &Look<'_>, rect: Rect) -> bool {
-    (element.press.is_some() || element.focus)
+    !look.departing
+        && (element.press.is_some() || element.focus)
         && look.opacity > 0.0
+        && rect.width > 0.0
+        && rect.height > 0.0
         && look.clip.is_none_or(|(clip, _)| overlaps(clip, rect))
 }
 
@@ -83,11 +98,11 @@ impl Layer {
         let write_float = |float: &Float, builder: &mut FrameBuilder| {
             let rect = float.node.rect;
             let corner = float.corner();
-            let zoom = (
+            let zoom = Zoom::around(
                 corner + Vec2::new(rect.width, rect.height) / 2.0,
                 float.look.scale,
             );
-            let camera = camera.zoomed(zoom.0, zoom.1);
+            let camera = camera.with_zoom(zoom);
             let look = Look {
                 point: float.corner(),
                 opacity: float.look.opacity,
@@ -98,6 +113,7 @@ impl Layer {
                 filters: Chain::default(),
                 open,
                 zoom,
+                departing: false,
             };
             self.write_node(&float.node, u32::MAX, true, look, builder, &camera);
         };
@@ -106,13 +122,17 @@ impl Layer {
             write_float(float, builder);
         }
         let mut screen = None;
-        if let Some(node) = &self.screen {
-            // An anchored screen stands at its corner, and is not drawn while that is unknown.
-            let corner = match node.element.anchor {
+        let roots = self
+            .departing
+            .iter()
+            .map(|node| (node, true))
+            .chain(self.screen.iter().map(|node| (node, false)));
+        for (node, departing) in roots {
+            let point = match node.element.anchor {
                 Some(_) => node.corner(),
                 None => Some(Vec2::ZERO),
             };
-            if let Some(point) = corner {
+            if let Some(point) = point {
                 let look = Look {
                     point,
                     opacity: 1.0,
@@ -122,11 +142,13 @@ impl Layer {
                     faces,
                     filters: Chain::default(),
                     open,
-                    zoom: (Vec2::ZERO, 1.0),
+                    zoom: Zoom::IDENTITY,
+                    departing,
                 };
-                screen = self
-                    .write_node(node, u32::MAX, true, look, builder, camera)
-                    .map(|index| (node, index));
+                let written = self.write_node(node, u32::MAX, true, look, builder, camera);
+                if !departing {
+                    screen = written.map(|index| (node, index));
+                }
             }
         }
         for float in (self.floats.iter()).filter(|float| !float.id.under_screen()) {
@@ -135,12 +157,15 @@ impl Layer {
         let Some((node, index)) = screen else {
             return;
         };
-        let shown = |child: &&Node| over_floats(child) && (open || !child.element.waits);
-        for child in node.children.iter().filter(shown) {
+        for (child, departing) in children(node, false)
+            .filter(|(child, _)| over_floats(child) && (open || !child.element.waits))
+        {
             let Some(point) = child.corner() else {
                 continue;
             };
-            builder.backdrop(&child.element.style.filter, self.window.scale);
+            if !departing {
+                builder.backdrop(&child.element.style.filter, self.window.scale);
+            }
             let look = Look {
                 point,
                 opacity: node.opacity(),
@@ -150,7 +175,8 @@ impl Layer {
                 faces,
                 filters: Chain::default().inner(own_filter(&node.element)),
                 open,
-                zoom: (Vec2::ZERO, 1.0),
+                zoom: Zoom::IDENTITY,
+                departing,
             };
             self.write_node(child, index, false, look, builder, camera);
         }
@@ -187,22 +213,32 @@ impl Layer {
         }
         builder.visit();
         look.opacity *= node.opacity();
-        look.passes |= node.element.style.passes;
+        look.passes |= look.departing || node.element.style.passes;
+        look.point += node.translation();
         look.filters = look.filters.inner(own_filter(&node.element));
         let element = &node.element;
         let mut state = self.state(node);
         if look.passes {
             state.0 |= StateBits::PASSES;
         }
-        // A transition moves the node alone: each node under it has its own. A button held down
-        // sinks a point, as the `.button:active` rule moves it.
+        // The layout slide moves this node alone. A held button sinks a point, as the
+        // `.button:active` rule moves it.
         let sink = if state.has(StateBits::HELD) && sinks(node) {
             Vec2::Y
         } else {
             Vec2::ZERO
         };
         let sink = sink + self.shake_of(node);
-        let rect = moved(node.rect, look.point + node.offset() + sink);
+        let rect = moved(node.paint_rect(), look.point + node.offset() + sink);
+        let scaled_camera;
+        let camera = if node.scaled() {
+            look.zoom = node.zoom(look.zoom, rect);
+            scaled_camera = camera.with_zoom(look.zoom);
+            &scaled_camera
+        } else {
+            camera
+        };
+        let painted = look.zoom.rect(rect);
         // A menu row is drawn highlighted while it has the focus or its submenu is open.
         let active = element.role == Role::MenuItem
             && (state.has(StateBits::FOCUSED) || self.submenu == Some(node.id));
@@ -219,11 +255,11 @@ impl Layer {
                 name: NameRef::default(),
                 place: Place::Layer,
                 pose: None,
-                corners: corners(zoom_rect(rect, look.zoom)),
+                corners: corners(painted),
                 depth: 0.0,
                 opacity: look.opacity,
                 clip: look.clip.map(|(rect, _)| rect),
-                interactive: takes_press(element, &look, rect),
+                interactive: takes_press(element, &look, painted),
                 state,
                 face: None,
                 copies: 1,
@@ -244,7 +280,7 @@ impl Layer {
         }
         // A mask puts the element and everything under it in a clip of its box.
         let masked = (mask.as_ref())
-            .and_then(|mask| write_mask(mask, rect, &look, self.window.scale, builder));
+            .and_then(|mask| write_mask(mask, painted, &look, self.window.scale, builder));
         if masked.is_some() {
             look.clip = masked;
         }
@@ -253,31 +289,35 @@ impl Layer {
             point: look.point + node.offset() + sink,
             ..look
         };
-        let edited = (self.editing.as_ref()).filter(|editing| editing.id == node.id);
-        if let Some(editing) = edited {
-            write_marks(node, &editing.marks, true, shown, builder, camera);
-        }
-        if node.block.is_some() {
-            self.write_text(node, index, state, shown, builder, camera);
-        }
-        self.write_shown(node, index, state, shown, builder, camera);
-        if let Some(editing) = edited {
-            write_marks(node, &editing.marks, false, shown, builder, camera);
-        }
+        self.write_content(node, (index, state), shown, builder, camera);
         let mut inside = look;
         if element.style.overflow != Overflow::Visible {
             // A mask's clip is already the box.
             if masked.is_none() {
-                inside.clip = Some(clip_inside(rect, &look, self.window.scale, builder));
+                inside.clip = Some(clip_inside(painted, &look, self.window.scale, builder));
             }
             inside.point -= node.scroll;
         }
-        for child in &node.children {
+        self.write_children(node, (index, top), inside, builder, camera);
+        Some(index)
+    }
+
+    /// Writes the children in paint order, with each anchor outside the parent's clip.
+    fn write_children(
+        &self,
+        node: &Node,
+        (index, top): (u32, bool),
+        inside: Look<'_>,
+        builder: &mut FrameBuilder,
+        camera: &ScreenPlane,
+    ) {
+        for (child, departing) in children(node, inside.departing) {
             // `write_with` writes these after the floats.
-            if top && over_floats(child) {
+            if top && !inside.departing && over_floats(child) {
                 continue;
             }
             let mut look = inside;
+            look.departing = departing;
             if child.element.anchor.is_some() {
                 let Some(corner) = child.corner() else {
                     continue;
@@ -290,7 +330,29 @@ impl Layer {
             }
             self.write_node(child, index, false, look, builder, camera);
         }
-        Some(index)
+    }
+
+    /// Writes the content over the panel, with the field's selection behind its text and its
+    /// caret above it.
+    fn write_content(
+        &self,
+        node: &Node,
+        (index, state): (u32, StateBits),
+        shown: Look<'_>,
+        builder: &mut FrameBuilder,
+        camera: &ScreenPlane,
+    ) {
+        let edited = (self.editing.as_ref()).filter(|editing| editing.id == node.id);
+        if let Some(editing) = edited {
+            write_marks(node, &editing.marks, true, shown, builder, camera);
+        }
+        if node.block.is_some() {
+            self.write_text(node, index, state, shown, builder, camera);
+        }
+        self.write_shown(node, index, state, shown, builder, camera);
+        if let Some(editing) = edited {
+            write_marks(node, &editing.marks, false, shown, builder, camera);
+        }
     }
 
     /// Writes what `node` shows in its content box (`Shown`), moved, colored and clipped by
@@ -479,14 +541,11 @@ impl Layer {
         for line in &block.lines {
             builder.line(
                 index,
-                zoom_rect(
-                    Rect {
-                        x: origin.x + line.rect.x,
-                        y: origin.y + line.rect.y,
-                        ..line.rect
-                    },
-                    look.zoom,
-                ),
+                look.zoom.rect(Rect {
+                    x: origin.x + line.rect.x,
+                    y: origin.y + line.rect.y,
+                    ..line.rect
+                }),
                 block.base.style.size,
                 origin.y + line.baseline,
                 line.words(&words),
@@ -631,7 +690,7 @@ fn ink(node: &Node, state: StateBits, tint: Option<[u8; 4]>) -> [u8; 4] {
             color::TEXT_FAINT
         };
     }
-    if let Some(color) = element.style.color {
+    if let Some(color) = node.paint_color(Property::Color).or(element.style.color) {
         return color;
     }
     match element.shows {

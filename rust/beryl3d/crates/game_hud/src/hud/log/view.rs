@@ -24,7 +24,8 @@ pub(super) fn desktop(open: bool, entries: &[LogEntry]) -> Element {
         let mut panel = (panel(entries)
             .width(size::LOG_WIDTH)
             .max_height(size::LOG_FOLDED_HEIGHT))
-        .mask(kit_base::tokens::gradient::LOG_MASK);
+        .mask(kit_base::tokens::gradient::LOG_MASK)
+        .enter(&kit_ui::widgets::screen::SCREEN_INSTANT);
         panel.anchor = Some(Anchor::Point(Vec2::new(LOG_LEFT, LOG_TOP), Vec2::ZERO));
         panel
     });

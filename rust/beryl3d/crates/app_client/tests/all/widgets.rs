@@ -409,9 +409,13 @@ fn a_tooltip_shows_after_the_pointer_rests_500_ms_and_not_before() {
     // It stands above the button.
     let (_, _, _, tip_bottom) = edges(frame, tip);
     assert!(tip_bottom <= undo_top);
+    let midway = due + 60_000_000;
+    let frame = client.frame(midway);
+    let opacity = frame.resolved[shown(frame).expect("the tooltip is fading in")].opacity;
+    assert!(opacity > 0.0 && opacity < 1.0);
     // It goes when the pointer leaves the button.
     client.handle(pointer(PointerPhase::Move, Vec2::new(10.0, 10.0)));
-    assert_eq!(shown(client.frame(due + 1)), None);
+    assert_eq!(shown(client.frame(midway + 1)), None);
 }
 
 #[test]

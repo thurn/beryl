@@ -6,8 +6,7 @@
 
 use taffy::{NodeId, TraversePartialTree};
 
-use super::motion::Motion;
-use super::style::taffy_style;
+use super::style::{same_layout, taffy_style};
 use super::{Layer, Node, TextLeaf};
 use crate::element::{Anchor, Element};
 use crate::input::Rect;
@@ -20,23 +19,23 @@ impl Layer {
         let mut node = match old {
             Some(old) if same_identity(&old.element, &element) => old,
             old => {
-                if let Some(old) = old {
-                    self.remove(old);
+                if let Some(old) = old.and_then(|old| self.depart(old)) {
+                    self.departing.push(old);
                 }
                 let children = std::mem::take(&mut element.children);
                 let mut node = self.new_node(&element);
                 element.children = children;
                 self.update(&mut node, element);
-                // A new node of the screen fades in, and its new children with it rather than
-                // each on its own. A node anchored at a point of the window stands there at
-                // once, as a float does, and so do its children. A node that draws nothing of
-                // its own leaves each child to fade in or not on its own.
-                if self.animating {
-                    let anchored = matches!(node.element.anchor, Some(Anchor::Point(..)));
-                    if !node.element.draws_nothing() || anchored {
-                        node.motion = (!anchored).then(Motion::fade_in);
+                if self.animating
+                    && node.element.anchor != Some(Anchor::Tip)
+                    && let Some(enter) = node.element.style.enter
+                {
+                    node.presence(enter, true);
+                    if enter.grouped {
                         for child in &mut node.children {
-                            child.motion = None;
+                            if child.element.style.enter.is_some_and(|spec| spec.grouped) {
+                                child.stop_entrance_fade();
+                            }
                         }
                     }
                 }
@@ -114,7 +113,8 @@ impl Layer {
             scroll_room: glam::Vec2::ZERO,
             scroll: glam::Vec2::ZERO,
             fitted: None,
-            motion: None,
+            tracks: super::motion::Tracks::default(),
+            departing: Vec::new(),
             placed: None,
             shown: false,
         }
@@ -124,17 +124,17 @@ impl Layer {
     /// only what differs.
     fn update(&mut self, node: &mut Node, mut element: Element) {
         let children = std::mem::take(&mut element.children);
-        // A change to how a node looks and not where it stands (a color, its opacity, a
-        // shadow) leaves its layout alone, so that a step icon lighting up in a frame lays out
-        // nothing; laying out a grid allocates. A node with text is laid out again for any
-        // change, since the glyphs it asks for depend on its shadow.
-        if node.element.style != element.style {
-            let style = taffy_style(&element.style);
-            if element.text.is_some() || taffy_style(&node.element.style) != style {
-                self.taffy
-                    .set_style(node.taffy, style)
-                    .expect("the node is in the tree");
-            }
+        let style_changed = node.element.style != element.style;
+        // The step row changes its look inside a frame, so comparing layout must avoid
+        // allocating the grid's track lists. A text shadow change still needs new glyphs.
+        if style_changed
+            && (!same_layout(&node.element.style, &element.style)
+                || (element.text.is_some()
+                    && node.element.style.drop_shadow != element.style.drop_shadow))
+        {
+            self.taffy
+                .set_style(node.taffy, taffy_style(&element.style))
+                .expect("the node is in the tree");
         }
         let text_changed = node.element.text != element.text
             || node.element.style.text != element.style.text
@@ -158,11 +158,8 @@ impl Layer {
         ) {
             node.followed = None;
         }
-        // A kept node of the screen whose opacity changes fades to it from how opaque it is.
-        if self.animating && node.element.style.opacity.to_bits() != element.style.opacity.to_bits()
-        {
-            let opacity = node.opacity();
-            node.transition(glam::Vec2::ZERO, opacity);
+        if style_changed {
+            node.update_tracks(&element.style, element.anchor.is_some(), self.animating);
         }
         // A node that gains or loses its anchor leaves or joins its parent's flow, so its
         // layout is computed again in its new tree.
@@ -174,15 +171,12 @@ impl Layer {
         if !node.element.same_node(&element) {
             node.element = element;
         }
-        self.reconcile_children(node, children);
-        // The children of a node anchored at a point of the window never transition, as a
-        // float's never do: a step stop that dims or a ring that appears beside an orb changes
-        // at once, and keeps the layer from animating while a script plays.
-        if matches!(node.element.anchor, Some(Anchor::Point(..))) {
-            for child in &mut node.children {
-                child.motion = None;
-            }
+        if node.element.anchor == Some(Anchor::Tip)
+            && let Some(enter) = node.element.style.enter
+        {
+            node.tracks.reserve_presence(enter);
         }
+        self.reconcile_children(node, children);
         self.link_children(node);
     }
 
@@ -222,10 +216,21 @@ impl Layer {
                 })
             };
             let kept = found.and_then(|index| old[index].take());
+            let kept = match kept {
+                Some(old) if !same_identity(&old.element, &element) => {
+                    if let Some(old) = self.depart(old) {
+                        node.departing.push(old);
+                    }
+                    None
+                }
+                kept => kept,
+            };
             matched.push(self.reconcile(kept, element));
         }
         for left in old.into_iter().flatten() {
-            self.remove(left);
+            if let Some(left) = self.depart(left) {
+                node.departing.push(left);
+            }
         }
         node.children = matched;
     }

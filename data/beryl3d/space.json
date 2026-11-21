@@ -922,7 +922,8 @@
   },
   "flat": {
     "transition": {
-      "ms": 180
+      "ms": 180,
+      "tooltip_ms": 120
     },
     "tooltip_delay": 500,
     "tooltip_gap": 8,

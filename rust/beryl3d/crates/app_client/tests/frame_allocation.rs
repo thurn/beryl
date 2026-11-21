@@ -248,6 +248,7 @@ fn a_frame_with_a_prompt_bar_allocates_nothing() {
     a_moved_float_allocates_nothing();
     an_anchored_element_allocates_nothing();
     a_transition_allocates_nothing();
+    changing_the_look_of_a_grid_allocates_nothing();
 }
 
 /// The frames of the turn banner: the one that shows it, those that fade it in and out, and
@@ -535,20 +536,29 @@ fn an_anchored_element_allocates_nothing() {
     }
 }
 
-/// The frames while a new element of the screen fades in and a kept one moves to a new place.
+/// The frames while an element enters, another leaves, and a kept one moves to a new place.
 fn a_transition_allocates_nothing() {
+    use kit_ui::element::{Presence, Property, Transition};
+    use kit_ui::widgets::screen::{SCREEN_TIMING, with_transitions};
+
+    const LEAVE: Presence = Presence::fade(SCREEN_TIMING);
+    const SCALE: &[Transition] = &[Transition::new(Property::Scale, SCREEN_TIMING)];
     let mut layer = Layer::new();
-    let screen = |gap: f32| {
+    let screen = |gap: f32, scale: f32| {
         row()
             .name("screen")
             .gap(gap)
             .child(text("Keep"))
-            .child(text("Pass"))
+            .child(text("Pass").scale(scale).transition(SCALE))
     };
-    layer.show(Some(screen(0.0)));
+    layer.show(Some(with_transitions(
+        screen(0.0, 1.0).child(text("Leave").leave(&LEAVE)),
+    )));
     layer.tick(0);
     layer.tick(common::MS * 1_000);
-    layer.show(Some(screen(40.0).child(text("Mulligan"))));
+    layer.show(Some(with_transitions(
+        screen(40.0, 0.8).child(text("Mulligan")),
+    )));
     let table = Table::default();
     let mut frame = Frame::with_capacity(64, 256, 1024);
     for now in (0..12).map(|index| common::MS * (1_000 + index * 16)) {
@@ -561,6 +571,31 @@ fn a_transition_allocates_nothing() {
         assert!(moving, "the transitions last past {now}");
         assert_eq!(after - before, 0, "allocations at {now} in a transition");
     }
+}
+
+/// The step row can change its look from inside a frame, with the same grid geometry.
+fn changing_the_look_of_a_grid_allocates_nothing() {
+    use kit_ui::element::{Display, Track};
+
+    let grid = |opacity| {
+        row()
+            .name("Steps")
+            .display(Display::Grid)
+            .grid_template_columns(vec![Track::Points(40.0)])
+            .grid_template_rows(vec![Track::Points(40.0)])
+            .opacity(opacity)
+    };
+    let mut layer = Layer::new();
+    layer.show(Some(row().child(grid(1.0))));
+    layer.take_work();
+    let next = grid(0.5);
+
+    let before = ALLOCATIONS.load(Ordering::Relaxed);
+    let replaced = layer.replace(next);
+    let after = ALLOCATIONS.load(Ordering::Relaxed);
+    assert!(replaced);
+    assert_eq!(after - before, 0);
+    assert_eq!(layer.take_work(), (0, 0));
 }
 
 /// The frames while a battlefield row slides after a turn of the wheel scrolls it, and the

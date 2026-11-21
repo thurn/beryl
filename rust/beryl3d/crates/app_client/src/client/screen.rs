@@ -96,7 +96,8 @@ impl Client {
         if !self.window.phone() && self.show.hold_hand_away(away, self.window) {
             self.prepare_resized();
         }
-        self.layer.show(shown);
+        self.layer
+            .show(shown.map(kit_ui::widgets::screen::with_transitions));
         self.layer.scroll_to_end(game_hud::hud::log::LIST);
         self.place_shown();
         let read_whole = read_whole

@@ -167,7 +167,10 @@ pub(super) fn panel(node: &Node, top: bool, state: StateBits, active: bool) -> O
     let style = &node.element.style;
     let usual = super::has_panel(node.element.role, top);
     let painted = !style.background_image.is_empty();
-    if !usual && style.background.is_none() && style.border.is_none() && !painted {
+    let background = node
+        .paint_color(crate::element::Property::Background)
+        .or(style.background);
+    if !usual && background.is_none() && style.border.is_none() && !painted {
         return None;
     }
     let (tint, radius, border) = match (usual, top) {
@@ -175,7 +178,7 @@ pub(super) fn panel(node: &Node, top: bool, state: StateBits, active: bool) -> O
         (true, false) => (color::BUTTON, node.rect.height / 2.0, size::BORDER),
         (false, _) => ([0; 4], 0.0, 0.0),
     };
-    let mut tint = style.background.unwrap_or(tint);
+    let mut tint = background.unwrap_or(tint);
     let mut border = style
         .border
         .unwrap_or(Border::uniform(color::METAL, border));

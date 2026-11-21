@@ -48,7 +48,8 @@ impl Node {
     /// not shown now. A node that is not anchored
     /// has no corner of its own: it stands where its parent's layout put it.
     pub(super) fn corner(&self) -> Option<Vec2> {
-        let size = Vec2::new(self.rect.width, self.rect.height);
+        let rect = self.paint_rect();
+        let size = Vec2::new(rect.width, rect.height);
         match self.element.anchor? {
             Anchor::Point(point, at) => Some(point - at * size),
             Anchor::Object(_, at) => self.followed.map(|centre| centre - at * size),

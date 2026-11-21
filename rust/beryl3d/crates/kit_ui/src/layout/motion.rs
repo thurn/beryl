@@ -1,160 +1,416 @@
-//! Transitions of the flat layer's screen (docs/beryl-3d.md, "Elements"): when a kept node's
-//! `opacity` or its laid-out place on the window changes, it moves or fades there over
-//! `flat.transition.ms` in `data/beryl3d/space.json`, eased out as the web interface's action
-//! dock comes in (`dock-in 0.22s ease-out` in `ui/src/screens/styles/controls.css`). A node
-//! that enters the screen fades in over the same; a node that leaves is gone at once.
-//!
-//! What the screen shows at the first frame's time stands at its layout and opacity at once
-//! (`Layer::started`), as the web interface's page shows its first screen whole when it loads:
-//! a screen opened at the start, or the opening with the step stops dimmed under it, is at full
-//! strength from the first frame, not fading in over it.
-//!
-//! A change is found in `Client::handle`, which has no clock, so a transition begins at the
-//! next frame's time (`Layer::tick`), and every frame works out its values from the start and
-//! end alone, allocating nothing. Floats move by their looks instead, and never transition.
+//! Style tracks are created with the new tree and sampled with the client's frame time.
+//! The first frame after reconciliation stamps their start. Sampling leaves the layout alone.
 
-use glam::Vec2;
+use glam::{Vec2, Vec4};
 
 use super::{Layer, Node};
-use crate::element::Action;
-use kit_base::data::space::flat::transition::MS;
-use kit_base::pose::Curve;
+use crate::element::{Action, Presence, Property, Style, Timing};
+use crate::input::Rect;
+use kit_base::geometry::plane::Zoom;
 
-/// A node's transition, from where and how opaque it was toward where its layout puts it and
-/// its style's opacity.
-#[derive(Clone, Copy, Debug)]
-pub(super) struct Motion {
-    /// When it began, in nanoseconds since the client started, once a frame has stamped it.
-    start: Option<u64>,
-    /// How far from its laid-out place it stood when it began.
-    from_offset: Vec2,
-    /// How opaque it was when it began, from 0 to 1.
-    from_opacity: f32,
-    /// Where it stands now, off its laid-out place, as the last frame worked it out.
-    offset: Vec2,
-    /// How opaque it is now, as the last frame worked it out.
-    opacity: f32,
+/// One independently timed property. Opacity and layout slides are kept inline because
+/// screens use them frequently. Other properties reserve storage only when first animated.
+#[derive(Debug, Default)]
+pub(super) struct Tracks {
+    opacity: Option<Track>,
+    placement: Option<Track>,
+    other: Vec<(Property, Track)>,
 }
 
-impl Motion {
-    /// A transition that fades a node in from nothing.
-    pub(super) fn fade_in() -> Self {
-        Self {
+#[derive(Clone, Copy, Debug)]
+struct Track {
+    from: Vec4,
+    to: Vec4,
+    timing: &'static Timing,
+    start: Option<u64>,
+    progress: f32,
+}
+
+impl Track {
+    fn new(from: Vec4, to: Vec4, timing: &'static Timing) -> Option<Self> {
+        (from != to && timing.nanoseconds() != (0, 0)).then_some(Self {
+            from,
+            to,
+            timing,
             start: None,
-            from_offset: Vec2::ZERO,
-            from_opacity: 0.0,
-            offset: Vec2::ZERO,
-            opacity: 0.0,
+            progress: 0.0,
+        })
+    }
+
+    fn current(self) -> Vec4 {
+        self.from + (self.to - self.from) * self.progress
+    }
+
+    /// Returns true until the track has reached its destination.
+    fn advance(&mut self, now: u64, ticked: &mut Ticked) -> bool {
+        let (delay, duration) = self.timing.nanoseconds();
+        if self.start.is_none() {
+            ticked.began = true;
+            ticked.length = ticked.length.max(delay.saturating_add(duration));
         }
+        let start = *self.start.get_or_insert(now);
+        let elapsed = now.saturating_sub(start);
+        if elapsed < delay {
+            return true;
+        }
+        let elapsed = elapsed - delay;
+        if elapsed >= duration {
+            return false;
+        }
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "the fraction of a transition elapsed"
+        )]
+        let fraction = elapsed as f32 / duration as f32;
+        self.progress = self.timing.curve.ease(fraction);
+        true
+    }
+}
+
+impl Tracks {
+    pub(super) fn reserve_presence(&mut self, presence: &Presence) {
+        self.other.reserve(
+            usize::from(presence.translation.is_some()) + usize::from(presence.scale.is_some()),
+        );
+    }
+
+    fn get(&self, property: Property) -> Option<Track> {
+        if property == Property::Opacity {
+            self.opacity
+        } else {
+            self.other
+                .iter()
+                .find_map(|&(key, track)| (key == property).then_some(track))
+        }
+    }
+
+    fn set(&mut self, property: Property, next: Option<Track>) {
+        if property == Property::Opacity {
+            self.opacity = next;
+        } else if let Some(index) = self.other.iter().position(|&(key, _)| key == property) {
+            if let Some(track) = next {
+                self.other[index].1 = track;
+            } else {
+                self.other.swap_remove(index);
+            }
+        } else if let Some(track) = next {
+            self.other.push((property, track));
+        }
+    }
+
+    fn advance(&mut self, now: u64, ticked: &mut Ticked) {
+        for slot in [&mut self.opacity, &mut self.placement] {
+            if slot
+                .as_mut()
+                .is_some_and(|track| !track.advance(now, ticked))
+            {
+                *slot = None;
+            }
+        }
+        self.other
+            .retain_mut(|(_, track)| track.advance(now, ticked));
+        ticked.moving |=
+            self.opacity.is_some() || self.placement.is_some() || !self.other.is_empty();
+    }
+
+    /// A departing node is done when the tracks declared by its leave have ended.
+    fn leaving(&self, leave: &Presence) -> bool {
+        (leave.opacity.is_some() && self.opacity.is_some())
+            || (leave.translation.is_some() && self.get(Property::Translation).is_some())
+            || (leave.scale.is_some() && self.get(Property::Scale).is_some())
+    }
+}
+
+const LOOK_PROPERTIES: [Property; 5] = [
+    Property::Opacity,
+    Property::Translation,
+    Property::Scale,
+    Property::Color,
+    Property::Background,
+];
+
+fn vector(value: Vec2) -> Vec4 {
+    value.extend(0.0).extend(0.0)
+}
+
+fn color(value: [u8; 4]) -> Vec4 {
+    Vec4::from_array(value.map(f32::from))
+}
+
+fn style_value(style: &Style, property: Property) -> Vec4 {
+    match property {
+        Property::Opacity => Vec4::splat(style.opacity),
+        Property::Translation => vector(style.translation),
+        Property::Scale => Vec4::splat(style.scale),
+        Property::Color => color(style.color.unwrap_or(kit_base::tokens::color::TYPE)),
+        Property::Background => color(style.background.unwrap_or([0; 4])),
+        Property::Width => Vec4::splat(style.width.unwrap_or_default()),
+        Property::Height => Vec4::splat(style.height.unwrap_or_default()),
     }
 }
 
 impl Node {
-    /// How far this node stands from its laid-out place now. It moves this node alone.
+    fn property(&self, property: Property) -> Option<Vec4> {
+        self.tracks
+            .get(property)
+            .filter(|track| track.start.is_some())
+            .map(Track::current)
+    }
+
     pub(super) fn offset(&self) -> Vec2 {
-        self.motion
-            .filter(|motion| motion.start.is_some())
-            .map_or(Vec2::ZERO, |motion| motion.offset)
+        self.tracks
+            .placement
+            .filter(|track| track.start.is_some())
+            .map_or(Vec2::ZERO, |track| track.current().truncate().truncate())
     }
 
-    /// How opaque this node is now, from 0 to 1, before its parent's opacity. A transition no
-    /// frame has begun yet shows its end, so a layer written without a clock shows its layout.
     pub(super) fn opacity(&self) -> f32 {
-        self.motion
-            .filter(|motion| motion.start.is_some())
-            .map_or(self.element.style.opacity, |motion| motion.opacity)
+        self.property(Property::Opacity)
+            .map_or(self.element.style.opacity, |value| value.x)
     }
 
-    /// Whether no frame has drawn this node yet: it is fading in from nothing, and no frame has
-    /// begun the fade.
+    pub(super) fn translation(&self) -> Vec2 {
+        self.property(Property::Translation)
+            .map_or(self.element.style.translation, |value| {
+                value.truncate().truncate()
+            })
+    }
+
+    pub(super) fn scale(&self) -> f32 {
+        self.property(Property::Scale)
+            .map_or(self.element.style.scale, |value| value.x)
+    }
+
+    pub(super) fn scaled(&self) -> bool {
+        self.scale().to_bits() != 1.0_f32.to_bits()
+    }
+
+    pub(super) fn zoom(&self, zoom: Zoom, rect: Rect) -> Zoom {
+        let scale = self.scale();
+        if scale.to_bits() == 1.0_f32.to_bits() {
+            zoom
+        } else {
+            let pivot = Vec2::new(rect.x + rect.width / 2.0, rect.y + rect.height / 2.0);
+            zoom.inside(pivot, scale.max(0.0))
+        }
+    }
+
+    pub(super) fn paint_color(&self, property: Property) -> Option<[u8; 4]> {
+        self.property(property).map(|value| {
+            #[expect(
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                reason = "rounded color channels"
+            )]
+            let channels = value
+                .to_array()
+                .map(|channel| channel.round().clamp(0.0, f32::from(u8::MAX)) as u8);
+            channels
+        })
+    }
+
+    /// The border box as painted, with its interpolated dimensions.
+    pub(super) fn paint_rect(&self) -> Rect {
+        Rect {
+            width: self
+                .property(Property::Width)
+                .map_or(self.rect.width, |value| value.x),
+            height: self
+                .property(Property::Height)
+                .map_or(self.rect.height, |value| value.x),
+            ..self.rect
+        }
+    }
+
     pub(super) fn unseen(&self) -> bool {
-        self.motion
-            .is_some_and(|motion| motion.start.is_none() && motion.from_opacity <= 0.0)
+        self.tracks
+            .opacity
+            .is_some_and(|track| track.start.is_none() && track.from.x <= 0.0)
     }
 
-    /// Begins a transition from where the node stands now and how opaque it is now, `moved`
-    /// further from its laid-out place: the change in that place.
-    pub(super) fn transition(&mut self, moved: Vec2, opacity: f32) {
-        let offset = self.offset() + moved;
-        self.motion = Some(Motion {
-            start: None,
-            from_offset: offset,
-            from_opacity: opacity,
-            offset,
-            opacity,
-        });
+    pub(super) fn slide_layout(&mut self, moved: Vec2, timing: &'static Timing) {
+        let from = self.tracks.placement.map_or(Vec4::ZERO, Track::current) + vector(moved);
+        self.tracks.placement = Track::new(from, Vec4::ZERO, timing);
+    }
+
+    pub(super) fn stop_entrance_fade(&mut self) {
+        if self.unseen() {
+            self.tracks.opacity = None;
+        }
+    }
+
+    pub(super) fn update_tracks(&mut self, next: &Style, anchored: bool, animate: bool) {
+        let timing = |property| animate.then(|| timing(next, property, anchored)).flatten();
+        for property in LOOK_PROPERTIES {
+            let old = style_value(&self.element.style, property);
+            let new = style_value(next, property);
+            if old != new {
+                self.change_track(property, old, new, timing(property));
+            }
+        }
+        for property in [Property::Width, Property::Height] {
+            let (old, new) = match property {
+                Property::Width => (self.element.style.width, next.width),
+                _ => (self.element.style.height, next.height),
+            };
+            if old != new {
+                // Layout supplies the resolved destination, including min/max constraints.
+                if let Some(timing) = timing(property) {
+                    let size = if property == Property::Width {
+                        self.rect.width
+                    } else {
+                        self.rect.height
+                    };
+                    let from = self
+                        .tracks
+                        .get(property)
+                        .map_or(Vec4::splat(size), Track::current);
+                    self.tracks.set(
+                        property,
+                        Some(Track {
+                            from,
+                            to: from,
+                            timing,
+                            start: None,
+                            progress: 0.0,
+                        }),
+                    );
+                } else {
+                    self.tracks.set(property, None);
+                }
+            }
+        }
+    }
+
+    pub(super) fn finish_size_tracks(&mut self, size: Vec2) {
+        for (property, value) in [(Property::Width, size.x), (Property::Height, size.y)] {
+            if let Some(track) = self.tracks.get(property)
+                && track.start.is_none()
+            {
+                let next = Vec4::splat(value);
+                self.tracks
+                    .set(property, Track::new(track.from, next, track.timing));
+            }
+        }
+    }
+
+    fn change_track(
+        &mut self,
+        property: Property,
+        old: Vec4,
+        new: Vec4,
+        timing: Option<&'static Timing>,
+    ) {
+        let from = self.tracks.get(property).map_or(old, Track::current);
+        self.tracks.set(
+            property,
+            timing.and_then(|timing| Track::new(from, new, timing)),
+        );
+    }
+
+    pub(super) fn leaving(&self) -> bool {
+        self.element
+            .style
+            .leave
+            .is_some_and(|leave| self.tracks.leaving(leave))
+    }
+
+    /// Starts an enter or leave. A leave starts at the currently displayed values.
+    pub(super) fn presence(&mut self, presence: &'static Presence, entering: bool) {
+        let values = [
+            (Property::Opacity, presence.opacity.map(Vec4::splat)),
+            (Property::Translation, presence.translation.map(vector)),
+            (Property::Scale, presence.scale.map(Vec4::splat)),
+        ];
+        for (property, outside) in values {
+            let Some(outside) = outside else { continue };
+            let inside = style_value(&self.element.style, property);
+            let (from, to) = if entering {
+                (outside, inside)
+            } else {
+                (
+                    self.tracks.get(property).map_or(inside, Track::current),
+                    outside,
+                )
+            };
+            self.tracks
+                .set(property, Track::new(from, to, &presence.timing));
+        }
     }
 }
 
+fn timing(style: &Style, property: Property, anchored: bool) -> Option<&'static Timing> {
+    if matches!(property, Property::Width | Property::Height)
+        && !anchored
+        && style.position != crate::element::Position::Absolute
+    {
+        return None;
+    }
+    style
+        .transition
+        .iter()
+        .find(|spec| spec.property == property)
+        .map(|spec| &spec.timing)
+}
+
 impl Layer {
-    /// Whether the clock has moved past the first frame's time, so that a change of the screen
-    /// transitions. A screen shown before the first frame, or during it (the client builds its
-    /// screen again after ticking the layer, as a view's opening appears), is drawn as laid out.
+    /// Changes before or during the first frame show at their final values.
     pub(super) fn started(&self) -> bool {
         self.ticks.is_some_and(|(first, latest)| latest != first)
     }
 
-    /// Shakes every element that takes `press` across the screen by `across` logical points
-    /// from the next frame on, or stops shaking with `None`, as the web's `shakeRefusal` moves
-    /// a refused button. It lays nothing out and allocates nothing, so the client calls it on
-    /// every frame of the shake.
+    /// Shakes every element that takes `press` across the screen by `across` logical points,
+    /// or stops shaking with `None`. Lays out and allocates nothing.
     pub fn shake(&mut self, shaken: Option<(&Action, f32)>) {
         self.shaken = shaken.map(|(press, across)| (press.clone(), across));
     }
 
-    /// Stamps the transitions found since the last frame with `now`, and works out where every
-    /// node of the screen stands and how opaque it is at `now`. Returns whether any transition
-    /// is still under way, and whether one began at `now`. A tooltip whose wait is over shows
-    /// (`tip`). The client calls it at the start of every frame. Allocates nothing.
+    /// Stamps new tracks and samples the current look. Lays out and allocates nothing.
     pub fn tick(&mut self, now: u64) -> Ticked {
-        fn visit(node: &mut Node, now: u64, began: &mut bool) -> bool {
-            let mut moving = false;
-            if let Some(motion) = &mut node.motion {
-                *began |= motion.start.is_none();
-                let start = *motion.start.get_or_insert(now);
-                // A transition lasts a fraction of a second, far inside f32's exact range.
-                #[expect(clippy::cast_precision_loss, reason = "under a second of nanoseconds")]
-                let elapsed = now.saturating_sub(start) as f32 / 1e6 / MS;
-                if elapsed >= 1.0 {
-                    node.motion = None;
-                } else {
-                    let eased = Curve::EASE_OUT.ease(elapsed);
-                    let to = node.element.style.opacity;
-                    motion.offset = motion.from_offset * (1.0 - eased);
-                    motion.opacity = motion.from_opacity + (to - motion.from_opacity) * eased;
-                    moving = true;
-                }
-            }
-            for child in &mut node.children {
-                moving |= visit(child, now, began);
-            }
-            moving
-        }
         self.ticks = Some((self.ticks.map_or(now, |(first, _)| first), now));
         self.tick_tip(now);
-        let mut began = false;
-        let moving = (self.screen.as_mut()).is_some_and(|node| visit(node, now, &mut began));
-        Ticked { moving, began }
+        let mut ticked = Ticked::default();
+        if let Some(node) = &mut self.screen {
+            advance_node(node, now, &mut ticked);
+        }
+        advance_departures(&mut self.departing, now, &mut ticked);
+        ticked
     }
 }
 
-/// How long a transition of the flat layer's screen lasts, in nanoseconds.
-#[must_use]
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    reason = "a fraction of a second, a whole number of nanoseconds"
-)]
-pub fn transition_nanoseconds() -> u64 {
-    (MS * 1e6) as u64
+fn advance_node(node: &mut Node, now: u64, ticked: &mut Ticked) {
+    node.tracks.advance(now, ticked);
+    for child in &mut node.children {
+        advance_node(child, now, ticked);
+    }
+    advance_departures(&mut node.departing, now, ticked);
+}
+
+fn advance_departures(nodes: &mut Vec<Node>, now: u64, ticked: &mut Ticked) {
+    nodes.retain_mut(|node| {
+        let mut tracks = Ticked::default();
+        node.tracks.advance(now, &mut tracks);
+        if !node.leaving() {
+            return false;
+        }
+        ticked.moving |= tracks.moving;
+        ticked.began |= tracks.began;
+        ticked.length = ticked.length.max(tracks.length);
+        for child in &mut node.children {
+            advance_node(child, now, ticked);
+        }
+        advance_departures(&mut node.departing, now, ticked);
+        true
+    });
 }
 
 /// What `Layer::tick` found.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Ticked {
-    /// Whether a transition of the screen is still under way.
+    /// Whether a transition is still under way.
     pub moving: bool,
-    /// Whether a transition began at this frame: a node entered the screen or its place or
-    /// opacity changed since the last frame.
+    /// Whether a transition began at this frame.
     pub began: bool,
+    /// The longest time until a track started in this frame ends, in nanoseconds.
+    pub length: u64,
 }

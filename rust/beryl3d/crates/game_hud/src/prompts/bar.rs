@@ -486,6 +486,7 @@ fn pill(asks: &str, place: PillPlace, bands: &PhoneBands, occupied: &Occupied) -
         .min_height(pill_height)
         .background(color::PANEL)
         .radius(pill_height / 2.0)
+        .enter(&kit_ui::widgets::screen::SCREEN_INSTANT)
         .passes(true);
     pill.style.padding = [padding / 2.0, padding, padding / 2.0, padding];
     let top = || asked_top(bands, occupied, pill_height);

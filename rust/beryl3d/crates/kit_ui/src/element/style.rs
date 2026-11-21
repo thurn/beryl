@@ -2,8 +2,9 @@
 //! logical points. A field whose doc comment names a track is not laid out or drawn yet: the
 //! element is laid out as if it had its default, until that track builds it.
 
-use super::Element;
 use super::paint::{Filter, Gradient};
+use super::{Element, Presence, Timing, Transition};
+use glam::Vec2;
 use kit_base::tokens::type_style;
 use kit_text::text::TypeStyle;
 
@@ -135,9 +136,20 @@ pub struct Style {
     /// As `grid_column`, for rows.
     pub grid_row: Option<(i16, i16)>,
     pub overflow: Overflow,
-    /// How opaque the element and its children are, from 0 to 1. A change of it on a kept
-    /// element of the screen fades over a transition (`layout::motion`).
+    /// How opaque the element and its children are, from 0 to 1.
     pub opacity: f32,
+    /// A visual offset in logical points. It moves the element and its contents.
+    pub translation: Vec2,
+    /// Uniform visual scale about the element's centre.
+    pub scale: f32,
+    /// How changes to individual properties are drawn. The first entry for a property wins.
+    pub transition: &'static [Transition],
+    /// How this element appears after it joins the tree.
+    pub enter: Option<&'static Presence>,
+    /// How this element departs after it leaves the tree.
+    pub leave: Option<&'static Presence>,
+    /// How a change to the element's layout position is drawn, without moving its children.
+    pub layout_slide: Option<&'static Timing>,
     /// The color of the element's panel in place of the usual one. An element that is not
     /// usually drawn on a panel is drawn on one of this color.
     pub background: Option<[u8; 4]>,
@@ -231,6 +243,12 @@ impl Default for Style {
             grid_row: None,
             overflow: Overflow::Visible,
             opacity: 1.0,
+            translation: Vec2::ZERO,
+            scale: 1.0,
+            transition: &[],
+            enter: None,
+            leave: None,
+            layout_slide: None,
             background: None,
             background_image: Vec::new(),
             background_boxes: Vec::new(),
@@ -280,6 +298,9 @@ setters! {
     grid_template_rows: Vec<Track>,
     overflow: Overflow,
     opacity: f32,
+    translation: Vec2,
+    scale: f32,
+    transition: &'static [Transition],
     radius: f32,
     legend: bool,
     box_shadow: Vec<Shadow>,
@@ -308,6 +329,9 @@ macro_rules! optional_setters {
 
 optional_setters! {
     basis: f32,
+    enter: &'static Presence,
+    leave: &'static Presence,
+    layout_slide: &'static Timing,
     align_items: Align,
     align_self: Align,
     justify_content: Justify,

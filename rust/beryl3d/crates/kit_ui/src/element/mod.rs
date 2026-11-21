@@ -8,6 +8,7 @@ mod keys;
 pub use action::Action;
 pub use kit_base::paint;
 mod style;
+mod transition;
 
 use beryl_protocol::script::Subject;
 use glam::Vec2;
@@ -20,6 +21,8 @@ pub use paint::{
 pub use style::{
     Align, BackgroundBox, Direction, Display, Justify, Overflow, Position, Style, TextAlign, Track,
 };
+
+pub use transition::{Presence, Property, Timing, Transition};
 
 use crate::input::{FaceId, FaceSize};
 use crate::widgets::icons::LayeredIcon;
@@ -238,9 +241,7 @@ pub fn column() -> Element {
 }
 
 /// A region that only holds its children and draws nothing of its own, not even the panel a
-/// screen's top element is drawn on. When it enters the screen, each of its children fades in
-/// on its own (`layout::reconcile`), so that a child anchored at a point of the window stands
-/// there at once.
+/// screen's top element is drawn on.
 #[must_use]
 pub fn holder() -> Element {
     row().background([0; 4]).border(([0; 4], 0.0))

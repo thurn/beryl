@@ -50,9 +50,9 @@ impl Layer {
             }
         }
         let wanted = point.and_then(|point| {
-            self.hit(point, open, |node, origin| {
+            self.hit(point, open, |node, rect| {
                 let tooltip = self.tooltip_of(&node.element.name)?;
-                Some((tooltip, node.rect_at(origin)))
+                Some((tooltip, rect))
             })
         });
         let now = self.tip.map(|tip| tip.tooltip);
@@ -103,6 +103,9 @@ impl Layer {
         if let Some(target) = target {
             let size = Vec2::new(node.rect.width, node.rect.height);
             node.placed = Some(beside(target, size, window));
+            if let Some(enter) = node.element.style.enter {
+                node.presence(enter, true);
+            }
         }
     }
 

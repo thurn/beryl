@@ -2,9 +2,60 @@
 
 use glam::Vec2;
 
-use crate::element::{Align, Anchor, Element, Overflow, TextAlign, column, row, text};
+use crate::element::{
+    Align, Anchor, Element, Overflow, Presence, Property, TextAlign, Timing, Transition, column,
+    row, text,
+};
 use crate::input::{Insets, Size};
+use kit_base::data::space::flat::transition::MS;
+use kit_base::pose::Curve;
 use kit_base::tokens::{color, size, space, type_style};
+
+/// How the game dock and other screen controls have entered and moved in the flat layer.
+pub const SCREEN_TIMING: Timing = Timing::new(MS, 0.0, Curve::EASE_OUT);
+
+pub const SCREEN_FADE: Presence = Presence {
+    grouped: true,
+    ..Presence::fade(SCREEN_TIMING)
+};
+
+/// A fixed overlay, such as the folded log, appears at full opacity with its contents.
+pub const SCREEN_INSTANT: Presence = Presence {
+    grouped: true,
+    ..Presence::new(SCREEN_TIMING)
+};
+
+const SCREEN_OPACITY: &[Transition] = &[Transition::new(Property::Opacity, SCREEN_TIMING)];
+
+/// Declares the animation used by the existing screen and sheet trees. A panel and its
+/// direct children enter together, fixed overlays appear at once, and a transparent holder
+/// leaves each panel inside it to enter on its own.
+#[must_use]
+pub fn with_transitions(mut screen: Element) -> Element {
+    fn declare(element: &mut Element, in_fixed_overlay: bool) {
+        let fixed = matches!(element.anchor, Some(Anchor::Point(..)));
+        if element.style.enter.is_none()
+            || (in_fixed_overlay && element.style.enter == Some(&SCREEN_FADE))
+        {
+            element.style.enter = if fixed || (in_fixed_overlay && !element.draws_nothing()) {
+                Some(&SCREEN_INSTANT)
+            } else if !element.draws_nothing() {
+                Some(&SCREEN_FADE)
+            } else {
+                None
+            };
+        }
+        if !in_fixed_overlay && element.style.transition.is_empty() {
+            element.style.transition = SCREEN_OPACITY;
+        }
+        element.style.layout_slide.get_or_insert(&SCREEN_TIMING);
+        for child in &mut element.children {
+            declare(child, fixed);
+        }
+    }
+    declare(&mut screen, false);
+    screen
+}
 
 /// The dimmed table, `.overlay-backdrop`: the whole window in the backdrop's color, which the
 /// pointer goes through. The opening and game over draw it under what they show.

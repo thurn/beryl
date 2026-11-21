@@ -408,8 +408,10 @@ impl Client {
         if !ticked.began || self.own_record.is_none() {
             return ticked.moving;
         }
-        let length = kit_ui::layout::transition_nanoseconds();
-        self.owned.times.extend([now + length / 2, now + length]);
+        let length = ticked.length;
+        self.owned
+            .times
+            .extend([now.saturating_add(length / 2), now.saturating_add(length)]);
         ticked.moving
     }
 }

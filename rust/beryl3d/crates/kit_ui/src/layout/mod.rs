@@ -36,7 +36,7 @@ pub use anchor::Spot;
 pub use edit::{Edit, Edited};
 pub use float::FloatLook;
 pub use menu::{DismissMenu, Navigation};
-pub use motion::{Ticked, transition_nanoseconds};
+pub use motion::Ticked;
 pub use tip::TIP_PREFIX;
 
 use float::{Float, Prepared};
@@ -44,9 +44,10 @@ use float::{Float, Prepared};
 use crate::element::{self, Action, Element};
 use crate::input::{Rect, Size};
 use crate::widgets::icons::Icons;
-use kit_base::geometry::Window;
+use kit_base::geometry::{Window, plane::Zoom};
 use kit_frame::frame::{ElementId, Role};
 use kit_text::text::{Block, Glyphs, Text, TypeStyle};
+use write::moved;
 
 /// Where the desktop layout anchors a screen: its bottom right corner this far in from the
 /// safe area's, where the web interface's action dock stands (`.dock` in
@@ -98,8 +99,10 @@ struct Node {
     scroll: glam::Vec2,
     /// For text that shrinks to fit (`fit`), the content box width its block was fitted to.
     fitted: Option<f32>,
-    /// The move or fade it is making, if any (`motion`).
-    motion: Option<motion::Motion>,
+    /// Visual tracks sampled on the client's clock.
+    tracks: motion::Tracks,
+    /// Children leaving the tree. Their last layout is kept for painting.
+    departing: Vec<Node>,
     /// For a menu, a submenu or a tooltip, where its top left corner stands on the window, once
     /// it has been placed (`menu`, `tip`).
     placed: Option<glam::Vec2>,
@@ -113,6 +116,7 @@ pub struct Layer {
     /// The window, padded by the safe area: the root every screen is laid out in.
     root: NodeId,
     screen: Option<Node>,
+    departing: Vec<Node>,
     /// The floats, in order of their ids, which is the order they are drawn in.
     floats: Vec<Float>,
     /// Elements laid out ahead for floats, which a frame shows without laying anything out.
@@ -173,6 +177,7 @@ impl Layer {
             taffy,
             root,
             screen: None,
+            departing: Vec::new(),
             floats: Vec::new(),
             prepared: Vec::new(),
             next_id: FIRST_ID,
@@ -224,7 +229,9 @@ impl Layer {
         self.screen = match (old, screen) {
             (old, Some(element)) => Some(self.reconcile(old, element)),
             (Some(old), None) => {
-                self.remove(old);
+                if let Some(old) = self.depart(old) {
+                    self.departing.push(old);
+                }
                 None
             }
             (None, None) => None,
@@ -311,7 +318,7 @@ impl Layer {
         &self,
         point: glam::Vec2,
         open: bool,
-        want: impl Fn(&Node, glam::Vec2) -> Option<T>,
+        want: impl Fn(&Node, Rect) -> Option<T>,
     ) -> Option<T> {
         /// The value at `point` in `node`'s tree, whose top left corner stands at `origin`.
         /// `reach` says whether `point` is inside every clipping element `node` is in: an
@@ -320,25 +327,29 @@ impl Layer {
         fn find<T>(
             node: &Node,
             point: glam::Vec2,
-            (origin, open): (glam::Vec2, bool),
+            (origin, open, zoom): (glam::Vec2, bool, Zoom),
             reach: bool,
-            want: &impl Fn(&Node, glam::Vec2) -> Option<T>,
+            want: &impl Fn(&Node, Rect) -> Option<T>,
         ) -> Option<T> {
             if node.element.style.display == element::Display::None || (node.element.waits && !open)
             {
                 return None;
             }
-            let here = reach && contains(node.rect, point - origin - node.offset());
+            let origin = origin + node.translation();
+            let rect = moved(node.paint_rect(), origin + node.offset());
+            let zoom = node.zoom(zoom, rect);
+            let rect = zoom.rect(rect);
+            let here = reach && rect.width > 0.0 && rect.height > 0.0 && contains(rect, point);
             let inside = origin - node.scroll;
             let clips = node.element.style.overflow != element::Overflow::Visible;
             let reach_inside = if clips { here } else { reach };
             (node.children.iter().rev())
                 .find_map(|child| match child.element.anchor {
                     // An anchored child's tree is laid out from (0, 0), and stands at its corner.
-                    Some(_) => find(child, point, (child.corner()?, open), true, want),
-                    None => find(child, point, (inside, open), reach_inside, want),
+                    Some(_) => find(child, point, (child.corner()?, open, zoom), true, want),
+                    None => find(child, point, (inside, open, zoom), reach_inside, want),
                 })
-                .or_else(|| here.then(|| want(node, origin)).flatten())
+                .or_else(|| here.then(|| want(node, rect)).flatten())
         }
         // The screen's children drawn over the floats (`write::over_floats`) filter what is under
         // them, and are modal: while one is shown, nothing else is searched.
@@ -349,31 +360,65 @@ impl Layer {
         if let Some(node) = modal {
             return (node.children.iter().rev())
                 .filter(modal_child)
-                .find_map(|child| find(child, point, (child.corner()?, open), true, &want));
+                .find_map(|child| {
+                    find(
+                        child,
+                        point,
+                        (child.corner()?, open, Zoom::IDENTITY),
+                        true,
+                        &want,
+                    )
+                });
         }
         let floats = |under: bool| {
             (self.floats.iter().rev())
                 .filter(move |float| float.id.under_screen() == under)
-                .find_map(|float| find(&float.node, point, (float.corner(), open), true, &want))
+                .find_map(|float| {
+                    let corner = float.corner();
+                    let rect = float.node.rect;
+                    let pivot = corner + glam::Vec2::new(rect.width, rect.height) / 2.0;
+                    let zoom = Zoom::around(pivot, float.look.scale);
+                    find(&float.node, point, (corner, open, zoom), true, &want)
+                })
         };
         floats(false)
             .or_else(|| {
                 (self.screen.as_ref()).and_then(|node| match node.element.anchor {
-                    Some(_) => find(node, point, (node.corner()?, open), true, &want),
-                    None => find(node, point, (glam::Vec2::ZERO, open), true, &want),
+                    Some(_) => find(
+                        node,
+                        point,
+                        (node.corner()?, open, Zoom::IDENTITY),
+                        true,
+                        &want,
+                    ),
+                    None => find(
+                        node,
+                        point,
+                        (glam::Vec2::ZERO, open, Zoom::IDENTITY),
+                        true,
+                        &want,
+                    ),
                 })
             })
             .or_else(|| floats(true))
     }
 
     /// Takes `node` and everything under it out of taffy's tree.
-    fn remove(&mut self, node: Node) {
-        for child in node.children {
-            self.remove(child);
+    fn remove_layout(&mut self, node: &Node) {
+        for child in &node.children {
+            self.remove_layout(child);
         }
         self.taffy
             .remove(node.taffy)
             .expect("the node is in the tree");
+    }
+
+    /// Detaches a node from layout immediately, retaining its last boxes if it has a leave.
+    fn depart(&mut self, mut node: Node) -> Option<Node> {
+        self.remove_layout(&node);
+        let presence = node.element.style.leave.filter(|_| self.animating)?;
+        node.presence(presence, false);
+        node.leaving().then_some(node)
     }
 
     /// Computes the layout of whatever changed, and lays out text at its new widths. Does
@@ -497,13 +542,14 @@ impl Layer {
         let resized = node.rect.width.to_bits() != layout.size.width.to_bits()
             || node.rect.height.to_bits() != layout.size.height.to_bits();
         if self.animating
+            && let Some(timing) = node.element.style.layout_slide
             && let Some(was) = node.location
             && was != corner
             && !resized
             && !unseen
             && !at_once
         {
-            node.transition(was - corner, node.opacity());
+            node.slide_layout(was - corner, timing);
         }
         node.location = Some(corner);
         node.rect = Rect {
@@ -512,6 +558,7 @@ impl Layer {
             width: layout.size.width,
             height: layout.size.height,
         };
+        node.finish_size_tracks(glam::Vec2::new(layout.size.width, layout.size.height));
         let (padding, border) = (layout.padding, layout.border);
         node.content = Rect {
             x: corner.x + padding.left + border.left,

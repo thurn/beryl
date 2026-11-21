@@ -322,7 +322,11 @@ fn find_index(frame: &Frame, name: &str) -> usize {
 #[test]
 fn a_fading_node_is_partway_through_its_transition() {
     let mut layer = layer();
-    let screen = |opacity: f32| region("screen").child(text("Fading").opacity(opacity));
+    let screen = |opacity: f32| {
+        kit_ui::widgets::screen::with_transitions(
+            region("screen").child(text("Fading").opacity(opacity)),
+        )
+    };
     layer.show(Some(screen(1.0)));
     layer.tick(0);
     assert!(!layer.tick(1_000 * MS).moving, "the fade in has ended");

@@ -4,16 +4,23 @@
 //! on one line. It may stand anywhere in the screen's tree; the flat layer shows it beside the
 //! element it explains once the pointer has rested there (`layout::tip`).
 
-use crate::element::{Anchor, Element};
+use crate::element::{Anchor, Element, Presence, Timing};
 use crate::layout::TIP_PREFIX;
+use kit_base::data::space::flat::transition::TOOLTIP_MS;
+use kit_base::pose::Curve;
 use kit_base::tokens::{color, shadow, size, type_style};
 use kit_frame::frame::Role;
+
+const ENTER: Presence = Presence::fade(Timing::new(TOOLTIP_MS, 0.0, Curve::EASE_OUT));
 
 /// The tooltip saying `words` about the element named `of`, named `tooltip <of>`. It never
 /// takes a press.
 #[must_use]
 pub fn tooltip(words: &str, of: &str) -> Element {
-    let mut element = tip_label(words.to_owned()).name(&format!("{TIP_PREFIX}{of}"));
+    let mut element = tip_label(words.to_owned())
+        .name(&format!("{TIP_PREFIX}{of}"))
+        .enter(&ENTER)
+        .passes(true);
     element.anchor = Some(Anchor::Tip);
     element
 }

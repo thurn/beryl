@@ -107,7 +107,7 @@ impl Layer {
             }
             (Ok(index), None) => {
                 let float = self.floats.remove(index);
-                self.remove(float.node);
+                self.remove_layout(&float.node);
             }
             (Err(_), None) => {}
         }
@@ -154,7 +154,7 @@ impl Layer {
             let prepared = &self.prepared[index];
             if prepared.id == id && !keep(prepared.key) {
                 let prepared = self.prepared.swap_remove(index);
-                self.remove(prepared.node);
+                self.remove_layout(&prepared.node);
             } else {
                 index += 1;
             }
@@ -212,7 +212,7 @@ impl Layer {
     fn stash(&mut self, id: FloatId, key: Option<u64>, node: Node) {
         match key {
             Some(key) => self.prepared.push(Prepared { id, key, node }),
-            None => self.remove(node),
+            None => self.remove_layout(&node),
         }
     }
 }

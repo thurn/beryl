@@ -8,6 +8,7 @@ use glam::Vec2;
 use super::{Layer, Node, write::moved};
 use crate::element::{Action, Display};
 use crate::input::Rect;
+use kit_base::geometry::plane::Zoom;
 use kit_frame::frame::{ElementId, Role};
 
 impl Layer {
@@ -23,8 +24,8 @@ impl Layer {
     /// on the window.
     #[must_use]
     pub fn slider_at(&self, point: Vec2, open: bool) -> Option<(ElementId, Action, Rect)> {
-        self.hit(point, open, |node, origin| {
-            slider(node).map(|press| (node.id, press, node.rect_at(origin)))
+        self.hit(point, open, |node, rect| {
+            slider(node).map(|press| (node.id, press, rect))
         })
     }
 
@@ -33,19 +34,22 @@ impl Layer {
     pub fn slider(&self, id: ElementId) -> Option<(Action, Rect)> {
         /// `id`'s node in `node`'s tree, whose top left corner stands at `origin`, with the
         /// corner of the tree it is laid out in.
-        fn search(node: &Node, id: ElementId, origin: Vec2) -> Option<(&Node, Vec2)> {
+        fn search(node: &Node, id: ElementId, origin: Vec2, zoom: Zoom) -> Option<(&Node, Rect)> {
             if node.element.style.display == Display::None {
                 return None;
             }
+            let origin = origin + node.translation();
+            let rect = moved(node.paint_rect(), origin + node.offset());
+            let zoom = node.zoom(zoom, rect);
             if node.id == id {
-                return Some((node, origin));
+                return Some((node, zoom.rect(rect)));
             }
             let inside = origin - node.scroll;
             node.children
                 .iter()
                 .find_map(|child| match child.element.anchor {
-                    Some(_) => search(child, id, child.corner()?),
-                    None => search(child, id, inside),
+                    Some(_) => search(child, id, child.corner()?, zoom),
+                    None => search(child, id, inside, zoom),
                 })
         }
         let screen = self.screen.as_ref()?;
@@ -53,8 +57,8 @@ impl Layer {
             Some(_) => screen.corner()?,
             None => Vec2::ZERO,
         };
-        let (node, origin) = search(screen, id, origin)?;
-        slider(node).map(|press| (press, node.rect_at(origin)))
+        let (node, rect) = search(screen, id, origin, Zoom::IDENTITY)?;
+        slider(node).map(|press| (press, rect))
     }
 
     /// The press of the focused element, if it is an enabled slider.
@@ -70,12 +74,4 @@ fn slider(node: &Node) -> Option<Action> {
     (element.role == Role::Slider && element.enabled)
         .then(|| element.press.clone())
         .flatten()
-}
-
-impl Node {
-    /// Its box on the window, with its tree's top left corner at `origin`, moved by its
-    /// transition.
-    pub(super) fn rect_at(&self, origin: Vec2) -> Rect {
-        moved(self.rect, origin + self.offset())
-    }
 }

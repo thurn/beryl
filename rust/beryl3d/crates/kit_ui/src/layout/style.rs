@@ -10,8 +10,36 @@ use taffy::{
 
 use crate::element::{Align, Direction, Display, Justify, Overflow, Position, Style, Track};
 
+/// Whether two styles use the same layout. Compare the track lists without building taffy's
+/// copies, since a grid's paint can change inside a frame without allocating.
+pub(super) fn same_layout(old: &Style, new: &Style) -> bool {
+    old.grid_template_columns == new.grid_template_columns
+        && old.grid_template_rows == new.grid_template_rows
+        && layout_fields(old) == layout_fields(new)
+}
+
 /// An element's style as taffy's.
 pub(super) fn taffy_style(style: &Style) -> taffy::Style {
+    taffy::Style {
+        grid_template_columns: style
+            .grid_template_columns
+            .iter()
+            .copied()
+            .map(track)
+            .collect(),
+        grid_template_rows: style
+            .grid_template_rows
+            .iter()
+            .copied()
+            .map(track)
+            .collect(),
+        ..layout_fields(style)
+    }
+}
+
+/// The layout fields shared by comparison and construction. Grid templates are added only
+/// when taffy needs a new style.
+fn layout_fields(style: &Style) -> taffy::Style {
     let dimension = |value: Option<f32>| value.map_or(Dimension::auto(), Dimension::length);
     let size = |width: Option<f32>, height: Option<f32>| taffy::Size {
         width: dimension(width),
@@ -67,18 +95,6 @@ pub(super) fn taffy_style(style: &Style) -> taffy::Style {
         size: size(style.width, style.height),
         min_size: limits(style.min_width, style.min_height),
         max_size: limits(style.max_width, style.max_height),
-        grid_template_columns: style
-            .grid_template_columns
-            .iter()
-            .copied()
-            .map(track)
-            .collect(),
-        grid_template_rows: style
-            .grid_template_rows
-            .iter()
-            .copied()
-            .map(track)
-            .collect(),
         // An element that clips or scrolls is as large as its own style says, whatever its
         // children need, as in CSS.
         overflow: taffy::Point {
