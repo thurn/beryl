@@ -40,7 +40,6 @@ from . import (
     workspace_hack,
 )
 from .beryl3d import cli as beryl3d_cli
-from .beryl3d import gates_merge
 
 
 def utf8_rerun(argv: list[str] | None) -> int | None:
@@ -131,8 +130,6 @@ def entry() -> int:
     """The `by` command: `main`, after the setup every command first makes sure of. Tests call
     `main`, so that this setup's git commands never meet a test's stand-in for subprocess.
     """
-    # So that a rebase merges data/beryl3d/gates.json's limits as numbers (gates_merge.py).
-    gates_merge.install(paths.REPO)
     # So that a rebase keeps both sides' new entries of data/efficiency-changes.json.
     efficiency_merge.install(paths.REPO)
     return main()

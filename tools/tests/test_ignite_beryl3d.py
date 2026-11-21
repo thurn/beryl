@@ -201,6 +201,7 @@ def test_a_batch_across_recordings_runs_only_its_recordings(
 def frame(index: int, **counts: float) -> dict[str, object]:
     keys = [*gate.COUNTERS, *gate.LOAD, "frame_allocations"]
     every = {c: 1.0 for c in keys}
+    every["frame_allocations"] = 0
     return {"frame": index, "ms": index * 16, "phase": "rest", **every, **counts}
 
 
@@ -220,16 +221,25 @@ def test_gate_results_hold_each_board_to_its_own_limits() -> None:
         }
     )
     board = gate.parse(output)[0]
-    exact = {m.key: gate.number(m.key, m.value) for m in gate.measure(board)}
-    data: dict[str, object] = {
-        "frames": {"held": exact, "over": {**exact, "worst_frame_elements": 2}}
+    held: dict[str, gate.Budget] = {
+        m.key: gate.Budget(max=gate.number(m.key, m.value) + 1, why="test budget")
+        for m in gate.measure(board)
+        if m.key != "frame_allocations"
     }
-    results = adapter.gate_results(output, ["held", "over", "absent"], data)
+    budgets: gate.Budgets = {
+        "boards": {
+            "held": held,
+            "over": {**held, "worst_frame_elements": {"max": 2, "why": "test budget"}},
+        },
+        "enhanced": {},
+        "scaling": {},
+    }
+    results = adapter.gate_results(output, ["held", "over", "absent"], budgets)
     assert [(r.check, r.outcome) for r in results] == [
         ("b3d-gate:held", "pass"),
         ("b3d-gate:over", "fail"),
     ]
-    assert "over its limit 2" in results[1].message
+    assert "over its budget 2" in results[1].message
 
 
 def step(start: float) -> dict[str, object]:

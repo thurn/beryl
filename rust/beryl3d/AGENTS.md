@@ -363,91 +363,20 @@ project, and selects the main lanes.
   ticket). Beryl 3D never edits `data/ui-conventions.json` itself. A
   `beryl_inspect` test checks each key and each recording.
 
-- `data/beryl3d/gates.json`: the audit, frame, tier, material and test gates.
-  Each number under `audit` becomes an `f32` constant in `beryl_scene`'s
-  `data::audit`, named for its key in upper case:
+- `data/beryl3d/gates.json` holds the interface thresholds under `audit`
+  (compiled into `data::audit`), per-material shader limits under `materials`
+  (checked by `shader_cost`), and the interface test frame limits under `tests`
+  (`just b3d test`).
 
-  - `target_points` and `phone_target_points`: the side of the square an
-    interactive card at rest must leave uncovered (the "reachable" check), on
-    the desktop and phone layouts. On the phone layout every interactive
-    flat-layer element must also be at least `phone_target_points` square, and
-    every line of text at least `phone_text_points` (the "phone sizes" check).
-  - `line_end_points` and `line_reshape_points`: how far an arrow's end may move
-    and still be at rest, and how far a control point must move to count as a
-    change of shape (the "lines hold" check).
-  - `mark_points`: how far a mark's outline may sit from the middle of the card,
-    ability or life total it rings, and how far its line may fall inside that
-    thing's box (the "marks on their things" check).
-  - `step_ms`, `step_points`, `seen`, `transparent` and `crowded`: the web stage
-    audit's thresholds, which "every step shown" and "not crowded" use. A step
-    whose verb travels moves its subject at least `step_points` over at least
-    `step_ms`, and the subject is seen in at least `seen` of the frames while it
-    plays, where more opaque than `transparent`. No more than `crowded`
-    different moves begin within `step_ms` in one beat.
-
-  Under `frames.<board>` are the limits `just b3d gate` holds each gated board's
-  work counters, load and allocations to (docs/beryl-3d.md, "Finding the worst
-  frame"). `just b3d gate --update` lowers them to what was measured.
-  `worst_frame_instructions` and `total_instructions` are the instruction-count
-  gate's, counted under Callgrind in `beryl3d-bench` by `just b3d gate --counts`
-  (the `b3d-frame-counts` family, the `b3d-frame-counts` program in
-  `beryl_inspect`), and `--counts --update` lowers them. Never wait for the
-  count gate before pushing: check a change's frame cost with `just b3d gate`
-  and `frame_abba` on the Mac, and leave the counts to Ignite's tip
-  verification, which files a ticket when one moves past its tolerance. Run
-  `--counts` only when a ticket's subject is instruction counts, or when your
-  change raises a work counter's limit because it added work to every board (a
-  new element on every screen, a verb a gated board plays): then it moves the
-  instruction limits in the same commit, since that work moves them too. It
-  takes a few minutes. A `--gpu` or `--counts` run that a session starts shares
-  `beryl3d-bench` with the `b3d-frame-counts` checks (Ignite's `bench-vm`
-  resource) and waits for one that has started. To fix a ticket about a count,
-  run `ignite test b3d-frame-counts` in your tree. A count may pass its limit by
-  the tolerance, 1%, which absorbs inlining and layout shifts from unrelated
-  changes; the work counters' limits have none. A count below its limit (past
-  the tolerance, for instructions) fails too, so that no room is left for a
-  later change to add work back unseen: a change that cuts the work lowers the
-  native limits in the same commit, and the ticket that tip verification files
-  lowers the instruction limits. During the build-out (`BUILD_OUT` in
-  `tools/src/beryl_tools/beryl3d/build_out.py`) the instruction tolerance is 20%
-  and a count below its limit passes, fragments over a board's limit only warn
-  unless they pass the 1.75-screen target, and `scaling` holds `stress-1024`'s
-  counts to at most a fixed multiple of `stress-255`'s, which fails work that
-  grows faster than the board (docs/beryl-3d.md, "During the build-out"). The
-  native gate is the `b3d-gate` family, so a change that moves a native count
-  fails its own landing until it moves the limit in the same commit. A limit
-  rises only when the work itself changed (a new verb, a new element on every
-  screen) or a compiler or dependency upgrade moved the count with no change to
-  Beryl's code, and the commit that raises it gives the old and new numbers. It
-  needs nobody's approval.
-
-  A rebase does not stop on gates.json when two branches both raised the same
-  limits. The repository's `.gitattributes` gives the file to a merge driver,
-  `tools/src/beryl_tools/beryl3d/gates_merge.py`, which `by` names in the git
-  config before every command, so every machine that ran a `just` command has
-  it. The driver merges the three versions key by key: a number only one side
-  changed takes that side's value, and a number both sides changed gets both
-  changes, `base + (ours - base) + (theirs - base)`. Anything else both sides
-  changed differently is a conflict with git's usual markers. The sum is right
-  for totals, but two raises of a `worst_frame_` limit may not add up. The fast
-  check's `just b3d gate` still holds every board to exactly its limit, so a
-  wrong number fails the push instead of landing. Lower it with `--update`, or
-  raise it by hand, with the old and new numbers in the commit body as above.
-
-  Under `materials.<name>` are the most texture samples and naga expressions
-  each material's `shade_` function in `beryl_render`'s shader may take per
-  fragment (the `shader_cost` test), and under
-  `tiers.baseline.fragments.<board>` the most fragments, in screens, any of a
-  gated board's ranked frames may shade, counted in the `beryl3d-bench` machine.
-  `just b3d gate --gpu` holds both, and its `--update` lowers them. They rise by
-  the same rule as the frame limits.
-
-  Under `tests` are the limits on the frames an interface test draws at its
-  check times: `median_frames` over the recorded fixtures' tests (card spec
-  moments are left out, since a card-only push adds them without running Beryl
-  3D's lanes) and `most_frames` for any one. `just b3d test` holds both when it
-  runs every test, and `most_frames` when it runs a prefix's tests. They are set
-  from a measurement and rise by the same rule as the frame limits.
+- `data/beryl3d/budgets.json` holds each board's worst-frame and total work
+  budgets under `boards`, along with its peak draw load, handle allocations, and
+  fragment budgets for both tiers. Each budget has a `max` and a `why`.
+  `just b3d gate` checks native work, `--counts` checks Callgrind instructions
+  and the relative cost of the two stress battlefields, and `--gpu` checks
+  shader cost, fragments and Enhanced draw calls. The VM runs take turns in
+  `beryl3d-bench`. A count at or below its budget passes. A frame allocation
+  always fails. Change a budget deliberately and explain the new ceiling.
+  `--json` prints the measured counts under `boards` for each mode.
 
 - `data/beryl3d/test-faults.json`:
   `{"tests": {"<test name>": {"<rule>": <count>}}}`, the faults each interface

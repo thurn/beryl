@@ -1,6 +1,6 @@
 //! Counts the fragments a tier shades, for `just b3d gate --gpu`
 //! (`tools/src/beryl_tools/beryl3d/gpu.py`), which holds the counts to the limits under
-//! `tiers.<tier>.fragments` in `data/beryl3d/gates.json` (docs/beryl-3d.md, "What is
+//! fragment budgets in `data/beryl3d/budgets.json` (docs/beryl-3d.md, "What is
 //! counted"). The count is the sum over every render pass of a frame: one in Baseline, up to
 //! seven in Enhanced. It needs a GPU adapter with pipeline statistics queries, so it runs in the
 //! `beryl3d-bench` virtual machine on Mesa's software Vulkan driver, whose count is exact.

@@ -2202,9 +2202,9 @@ are pixels actually shaded, counted as the
 }
 ```
 
-Each is a limit on one frame. `fragments` and `blended_area` are in screens, and
-`upload_bytes` is instance data, with room for 4,096 records. The limits are in
-`data/beryl3d/gates.json`.
+Each is a design target for one frame. `fragments` and `blended_area` are in
+screens, and `upload_bytes` is instance data, with room for 4,096 records. The
+current board budgets are in `data/beryl3d/budgets.json`.
 
 The fragment limit is the floor's fill rate turned into a budget. A 2015
 mid-range phone GPU shades roughly 300 to 500 million pixels a second, and a
@@ -2328,35 +2328,21 @@ how large it is or when it moves.**
 - Every layout check and every motion check therefore holds for both tiers at
   once.
 
-The Enhanced tier has its own limits in the gate file, and the automated checks
-draw every gated fixture in it on a device with full limits:
-
-```json
-{
-  "tiers": {
-    "enhanced": { "draw_calls": 32, "fragments": 4.0, "particles": 2000 }
-  }
-}
-```
-
-How the gates hold them:
+The Enhanced tier has budgets in `data/beryl3d/budgets.json`. The automated
+checks draw every gated board in this tier on a device with full limits.
 
 - **Fragments.** `just b3d gate --gpu` draws each gated board's 8 ranked frames
   in both tiers and counts the fragments of every render pass of a frame, one
   pipeline statistics query per pass, summed. An Enhanced frame has up to seven
   passes: the shadow map's (depth only, so it shades none), the multisampled
   main pass, bloom's four and the flat layer's. The four-sample main pass shades
-  a pixel once unless a triangle's edge crosses it, and the count is what the
-  driver reports, not divided by the samples. Each board's worst frame is held
-  to its own measured limit under `tiers.enhanced.fragments.<board>`, which only
-  goes down, and a board over the 4.0-screen target fails whatever its limit.
-- **Draw calls.** The same run fails on any ranked frame that takes more than
-  `tiers.enhanced.draw_calls` calls over all its passes.
-- **Particles.** `just b3d gate` plays every board in Enhanced too, and fails on
-  a frame with more than `tiers.enhanced.particles` particles, or with a
-  different number of resolved elements from the Baseline playback's frame. The
-  Enhanced boards have no work limits of their own under `frames`: the client's
-  work is the same in both tiers except for particles.
+  a pixel once unless a triangle's edge crosses it. The gate reads the driver's
+  count directly and holds it to each board's four-screen budget.
+- **Draw calls.** The same run checks each ranked Enhanced frame's draw calls
+  across all passes against the budget of 32.
+- **Particles.** `just b3d gate` plays every board in Enhanced too. It checks
+  the budget of 2,000 particles and requires the same number of resolved
+  elements as the Baseline playback had at each frame.
 
 Measured on 2026-11-16 by `just b3d gate --gpu` (llvmpipe, LLVM 21.1.8, in
 `beryl3d-bench`, the same on two runs) and `just b3d gate`, the most in any of a
@@ -2634,9 +2620,9 @@ assets: Receiver<AssetReady>,
 
 Why no core is reserved:
 
-- **What drawing needs.** The worst frame is limited to 2 million instructions
-  (see [Performance gates](#performance-gates)). On the floor's slowest CPU,
-  which executes about 1.2 billion instructions a second, that is 1.7
+- **What drawing needs.** The original target was 2 million instructions per
+  frame (see [Performance gates](#performance-gates)). On the floor's slowest
+  CPU, which executes about 1.2 billion instructions a second, that is 1.7
   milliseconds: a tenth of a 16.7 millisecond frame. Most frames need far less.
 - **What reserving costs on a recent iPhone.** It has two fast cores and four
   slow ones, and a fast core does about the work of three slow ones. Reserving
@@ -3581,11 +3567,11 @@ beryl_render's `shader_cost` test counts each material and holds it to
 tests run it too. beryl_render's `fragments` example draws the 8 frames of each
 gated board that `rank` picks in the virtual machine, twice in each tier, and
 the gate fails if the two counts differ or the worst frame's count, in screens,
-is over `tiers.<tier>.fragments.<board>` (during the build-out, only over the
-tier's target, 1.75 screens for Baseline and 4.0 for Enhanced; see "During the
-build-out" and "The Enhanced tier"). A frame's count is the sum over its render
-passes, one query each. Only Vulkan and DirectX 12 offer the pipeline statistics
-query in `wgpu`, so the count cannot be taken on Metal.
+exceeds its budget in `data/beryl3d/budgets.json`. The Baseline budget is 1.75
+screens for most boards and 2.0 for `stress-stack`. The Enhanced budget is 4.0.
+A frame's count is the sum over its render passes, one query each. Only Vulkan
+and DirectX 12 offer the pipeline statistics query in `wgpu`, so the count
+cannot be taken on Metal.
 
 ### What it is held to
 
@@ -3608,106 +3594,32 @@ The gated fixtures are of two kinds.
   - every verb playing at once on 100 objects;
   - a stack of 50 spells and abilities with arrows to their targets.
 
-The limits live in one file of Beryl 3D's own, `data/beryl3d/gates.json`. The
-first board below is played for 1,200 frames, and the tolerance is explained
-after it:
+`data/beryl3d/budgets.json` records every board's ceilings under `boards`. Each
+budget gives a maximum and its derivation. A count at or below the maximum
+passes. A budget change states why the board needs a different ceiling.
 
-```json
-{
-  "frames": {
-    "stress-255": {
-      "worst_frame_instructions": 2000000,
-      "total_instructions": 1450000000,
-      "frame_allocations": 0
-    },
-    "stress-1024": { "worst_frame_instructions": 4000000 }
-  }
-}
-```
+The floor's slowest CPU is a 2015 Android phone's Cortex-A53 class core, at
+about 1.4 GHz and 1.2 billion instructions per second. Its 60 Hz display gives
+it 16.7 milliseconds per frame. The original instruction target reserved half of
+that time, about 10 million instructions, for client work and left the other
+half for the renderer and driver. The original stress targets of 2 million
+instructions for 255 objects and 4 million for 1,024 left more room for cache
+misses. Several boards now exceed those targets. The per-board budgets give
+their measured peaks and the share of the same floor frame time used for each
+ceiling. The largest ceilings are interim limits for stress boards whose client
+work alone already uses more than half the estimated floor frame time.
 
-Where the worst-frame limits come from:
+Count types without a documented ceiling start at their last measured value with
+50% headroom. Baseline fragments use the floor GPU's fill rate. The 50-spell
+stress stack measured 1.885 screens, so its ceiling is two screens within the
+floor's estimated capacity of 2.4. Frame allocations always fail.
 
-- **The floor's slowest CPU** is the 2015 Android phone's: a Cortex-A53 class
-  core at about 1.4 GHz, executing about 1.2 billion instructions a second. The
-  iPhone 6s and the 2013 laptop are several times faster.
-- **The floor's displays refresh 60 times a second.** Every device with a 120 Hz
-  display has a CPU more than five times faster than this one, so the 60 Hz
-  budget on the slowest CPU is the binding one.
-- **Half a frame** at 60 frames a second is 8.3 milliseconds, which is about 10
-  million instructions. The other half is left for the renderer and the GPU
-  driver.
-- **`stress-255` is limited to 2 million**, a fifth of that, leaving a factor of
-  five for cache misses, which instruction counts do not see.
-- **`stress-1024` is limited to 4 million**, leaving a factor of two and a half.
-  A game reaches the larger form only when a board outgrows 255 objects.
-
-Counts are exact, so the tolerance is not for noise. It absorbs the small shifts
-that happen when a change to unrelated code alters how the compiler inlines and
-lays out this code, as the engine's gate does.
-
-The numbers above are targets. The first measurement of the real client replaces
-them, and after that the rule is the engine count gate's:
-
-- **Limits go down.** A limit is lowered whenever a change lowers the count.
-- **A limit rises for two reasons only**, named in the commit with the old and
-  new counts: the work itself changed (a new verb, a new element on every
-  screen), or a compiler or dependency upgrade moved the count with no change to
-  Beryl's code.
-- **No limit waits for anyone.** Neither kind of rise needs the owner's
-  approval. The commit that raises a limit states its reason, and that is the
-  record.
-- **The change that moves a count moves its limit.** The native gate runs in a
-  lane of its own, `beryl3d-gate`, in every fast check of a Beryl 3D change, so
-  a change that moves a work counter, the load or an allocation count fails its
-  own push until it lowers or raises that limit in the same commit. A change
-  that raises a work counter's limit because it added work to every board (a new
-  element on every screen, a verb a gated board plays) also runs
-  `just b3d gate --counts` and moves the instruction limits in the same commit,
-  since that work moves them too. Otherwise the sweep finds the instruction
-  counts past their limits an hour later and files a ticket for another session
-  to re-pin them. On 2026-11-16 nine such tickets were filed in one day, most of
-  them because the native gate, behind the workspace's tests in one lane, had
-  given a result in only 100 of 327 fast checks.
-
-#### During the build-out
-
-While Beryl 3D gains a verb or a screen every hour or so, a 1% tolerance cannot
-tell new work from a regression, so every verb failed the sweep. From 14 to 16
-November 2026 the sweep filed 21 failure tasks for Beryl 3D; the `gpu` step
-failed all 11 of its runs, each settled by raising a limit, and
-`data/beryl3d/gates.json` had 43 commits, most of them raises for a new verb. In
-one failure, text and layout added by new verbs raised the counts by 5 to 66%,
-while a search over every card for every moving card, quadratic in the board,
-raised them several times more. Both looked alike, and the commit that
-recalibrated the limits took the quadratic search in with the new verbs:
-`stress-1024`'s total went from 80.7 to 761.5 million instructions and
-`stress-255`'s from 39.7 to 225.5 million.
-
-So, until `BUILD_OUT` in `tools/src/beryl_tools/beryl3d/build_out.py` is set to
-`False`, the sweep's count gates fail only on what a feature cannot explain:
-
-- **Instruction counts may pass their limits by 20%**, one constant for every
-  board, and a count below its limit passes, or every cut would file a task too.
-  `--counts --update` still lowers the limits.
-- **Fragments over a board's limit are a warning.** Only a frame over the
-  Baseline target of 1.75 screens fails.
-- **The scaling check holds at every velocity.** `stress-1024` is `stress-255`
-  with four times the cards, so the ratio of its instruction counts to
-  `stress-255`'s, under `scaling` in `gates.json`, may not pass a bound set 15%
-  over the ratio measured once the work was linear. Because both boards share a
-  fixed cost (the interface, text and layout), linear work gives a ratio well
-  under four. The quadratic search above gave 3.4 for the totals where the bound
-  is 2.4, so it fails however many verbs land beside it. A verb that adds work
-  for each card raises the ratio a little; its commit may raise the bound with
-  the old and new ratios, and the native `elements` and `placed` counters, which
-  grow with the cards, show whether the new work is per card.
-- **The native gate is unchanged.** Its work counters are exact and cheap, and
-  the commit that raises one explains it.
-
-`BUILD_OUT` goes back to `False` when feature work slows down, and at the latest
-when the owner switches the default client to Beryl 3D (C11). The same commit
-lowers every limit with `--counts --update` and `--gpu --update`, so that the 1%
-tolerance and the fragment limits start from what is measured.
+The scaling check compares the instruction counts for `stress-1024` with
+`stress-255`. Both play the same table, with four times as many cards on the
+larger board. Their ratio must stay within the budgets under `scaling`, set 15%
+above the ratio measured when the work was linear. This caught a search that
+inspected every card for every moving card, even though individual board counts
+had been raised to account for new verbs.
 
 ### Finding the worst frame
 
@@ -3737,11 +3649,9 @@ thousands of measurements, so the gate finds its candidates first.
   native gate, which reads the counters in seconds, keeps seeing the work that
   costs instructions. When it does not, the fix is a counter that sees that
   work.
-- **Only the Beryl 3D sweep runs the count gate.** No change waits for it before
-  pushing, except one that adds work to every board, which moves the instruction
-  limits itself (see above). A session checks a change's frame cost on the Mac
-  with the native gate and the `frame_abba` timing, and a sweep that finds a
-  count past its limit files a ticket like any other sweep failure.
+- **The Beryl 3D sweep runs the count gate.** Run `ignite test b3d-frame-counts`
+  when investigating instruction counts. The native gate and `frame_abba` timing
+  are available on the Mac.
 - **The work counters are also limited natively**, on every tick, in the check
   that runs before each push. That catches most regressions without the virtual
   machine.
@@ -3761,22 +3671,27 @@ pointer moving over the hand, and `stress-stack` waits for the table to rest
 before its last view. It prints every frame's work counters, its load and the
 allocations made inside `Client::frame`, which a counting global allocator sees,
 and the allocations made in `Client::handle` over the board. The gate holds them
-to these limits under `frames.<board>` in `data/beryl3d/gates.json`:
+to the budgets under `boards.<board>` in `data/beryl3d/budgets.json`:
 
 - `worst_frame_<counter>` and `total_<counter>` for each work counter
   (`elements`, `segments`, `records`, `layout_nodes`, `text_runs`, `placed`,
   `steps`);
 - `worst_frame_draw_calls`, `worst_frame_upload_bytes` and
   `worst_frame_blended_area` for the Baseline tier's load;
-- `handle_allocations` over the board, and `frame_allocations`, which is 0.
+- `handle_allocations` over the board.
 
-The counters are exact, so they have no tolerance: one over its limit fails, and
-the report names the board, the frame and the count. `just b3d gate --update`
-lowers each limit to what was measured and never raises one. The allocation gate
-is also a test of `beryl_inspect` (`tests/all/frame_allocation.rs`), which
-prints the backtrace of the first allocation inside a frame.
-`beryl_inspect::gate::rank` gives the 8 frames that the counters rank highest,
-for the instruction-count gate.
+A budget failure names the board, counter, measurement and budget, and gives the
+frame for a peak measurement. The frame allocator check always requires zero
+allocations and prints the backtrace of the first one.
+`beryl_inspect::gate::rank` gives the 8 frames that the counters rank highest
+for the instruction-count and fragment gates.
+
+`just b3d gate --json` prints a `boards` object that maps each board name to its
+measurements, including the per-counter peaks and totals, peak draw load and
+allocation counts. With `--counts`, the object holds peak and total
+instructions. With `--gpu`, it holds fragment and draw counts by tier and also
+reports shader costs under `materials`. A budget failure leaves the measurements
+on standard output and prints diagnostics to standard error.
 
 An element is visited once for each object slot of the table and each node of
 the flat layer that a frame looks at, whether or not it draws it, so a second
@@ -3851,19 +3766,15 @@ call. Three runs gave identical counts.
   own, taffy's are 7,000 (2.0%) and parley's 56,508 (15.8%), or 129,618 (36.3%)
   with the font crates parley calls (harfrust, read-fonts and fontique). Most of
   the rest is the script compile and its allocations.
-- **The 2 million target** is the one the doc gives `stress-255` and the
-  'Threads' section gives every frame. The recorded boards have no limit of
-  their own beyond their measured counts.
-- **The limits have risen since.** By 2026-11-16, after milestone 2's verbs and
-  milestone 3's step banner and log, `frames.<board>.worst_frame_instructions`
-  in `data/beryl3d/gates.json` held `verbs-zones` at 4,816,173, `stress-255` at
-  3,267,119, `stress-1024` at 9,283,180, `stress-verbs` at 2,638,123 and
-  `pay-default` at 1,257,448. The 2 million target is met by `pay-default`,
-  `stress-hand` and `stress-stack` only. `verbs-zones`' worst frame is now frame
-  980 of 1,183, whose `handle` takes a view with a script of 34 steps and places
-  738 objects while compiling it. The worst frames of `verbs-zones`,
-  `stress-255`, `stress-1024` and `stress-verbs` are each a script compiled
-  whole in the `handle` call that receives it.
+- **The measured peaks rose as the client gained features.** By 2026-11-16,
+  after the new verbs, step banner and log, the measured peak was 4,816,173 for
+  `verbs-zones`, and `stress-255` was at 3,267,119, `stress-1024` at 9,283,180,
+  `stress-verbs` at 2,638,123 and `pay-default` at 1,257,448. The 2 million
+  target is met by `pay-default`, `stress-hand` and `stress-stack` only.
+  `verbs-zones`' worst frame is now frame 980 of 1,183, whose `handle` takes a
+  view with a script of 34 steps and places 738 objects while compiling it. The
+  worst frames of `verbs-zones`, `stress-255`, `stress-1024` and `stress-verbs`
+  are each a script compiled whole in the `handle` call that receives it.
 - **Compiling a script over frames halved the stress boards' worst frame.** With
   `Client::prepare` compiling a script that arrives with nothing playing a few
   steps ahead of each frame (see [Threads](#threads)), the frame that receives

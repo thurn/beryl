@@ -223,7 +223,7 @@ fn each_material_is_within_its_limits() {
             match limits[name][key].as_u64() {
                 None => faults.push(format!(
                     "{name}: {key} is {value} with no limit under materials.{name}.{key}; \
-                     `just b3d gate --gpu --update` sets it"
+                     set a limit in data/beryl3d/gates.json"
                 )),
                 Some(limit) if value > limit => {
                     faults.push(format!("{name}: {key} is {value}, over its limit {limit}"));

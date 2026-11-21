@@ -1,7 +1,7 @@
 """`just b3d gate --counts`: reading Callgrind's per-frame counts of a board and holding them to
 their limits."""
 
-from beryl_tools.beryl3d import counts, vm
+from beryl_tools.beryl3d import counts, gate, vm
 
 RANKED = (1, 2)
 
@@ -38,103 +38,44 @@ def test_a_board_missing_a_dump_is_no_count() -> None:
     assert counts.parse(text) == {}
 
 
-def test_the_worst_frame_fails_past_its_tolerance_while_the_total_passes() -> None:
-    limits = {
-        "worst_frame_instructions": 69,
-        "total_instructions": 150,
+def budget(maximum: float) -> gate.Budget:
+    return {"max": maximum, "why": "test budget"}
+
+
+def test_the_worst_frame_fails_one_instruction_over_its_budget() -> None:
+    budgets = {
+        "worst_frame_instructions": budget(69),
+        "total_instructions": budget(150),
     }
-    failed, _ = counts.judge(
-        "stress-255",
-        measured([10, 50, 70, 20]),
-        limits,
-        RANKED,
-        tolerance=1.0,
-        fail_below=True,
-    )
-    assert len(failed) == 1
-    assert "frame 2: worst_frame_instructions 70" in failed[0]
-    within = {**limits, "worst_frame_instructions": 70, "total_instructions": 1000}
     failed, said = counts.judge(
-        "stress-255",
-        measured([10, 50, 70, 20, 849]),
-        {**within, "worst_frame_instructions": 849},
-        (4,),
-        tolerance=1.0,
-        fail_below=True,
+        "stress-255", measured([10, 50, 70, 20]), budgets, RANKED
+    )
+    assert failed == [
+        "stress-255 frame 2: worst_frame_instructions is 70, over its budget 69"
+    ]
+    assert said == ["stress-255 in total: total_instructions is 150, budget 150"]
+
+
+def test_counts_below_their_budgets_pass() -> None:
+    budgets = {
+        "worst_frame_instructions": budget(100),
+        "total_instructions": budget(200),
+    }
+    failed, said = counts.judge(
+        "stress-255", measured([10, 50, 70, 20]), budgets, RANKED
     )
     assert failed == []
     assert len(said) == 2
 
 
 def test_a_frame_the_counters_did_not_rank_fails() -> None:
-    limits = {"worst_frame_instructions": 90, "total_instructions": 220}
-    failed, _ = counts.judge(
-        "stress-255",
-        measured([10, 50, 70, 90]),
-        limits,
-        RANKED,
-        tolerance=1.0,
-        fail_below=True,
-    )
+    budgets = {
+        "worst_frame_instructions": budget(90),
+        "total_instructions": budget(220),
+    }
+    failed, _ = counts.judge("stress-255", measured([10, 50, 70, 90]), budgets, RANKED)
     assert len(failed) == 1
     assert "frame 3 has the most instructions (90)" in failed[0]
-
-
-def test_update_sets_missing_limits_and_never_raises_one() -> None:
-    found = measured([10, 50, 70, 20])
-    limits = counts.lowered("stress-255", found, {})
-    assert limits == {"worst_frame_instructions": 70, "total_instructions": 150}
-    # A board's own tolerance from before build_out.py is dropped.
-    old = {
-        "worst_frame_instructions": 60,
-        "total_instructions": 2000,
-        "tolerance_percent": 1.0,
-    }
-    limits = counts.lowered("stress-255", found, old)
-    assert limits["worst_frame_instructions"] == 60
-    assert limits["total_instructions"] == 150
-    assert "tolerance_percent" not in limits
-
-
-def test_a_count_below_its_limit_past_the_tolerance_fails() -> None:
-    # Room left under a limit lets a later change add the work back without failing.
-    limits = {"worst_frame_instructions": 80, "total_instructions": 150}
-    found = measured([10, 50, 70, 20])
-    failed, _ = counts.judge(
-        "stress-255", found, limits, RANKED, tolerance=1.0, fail_below=True
-    )
-    assert len(failed) == 1
-    assert "worst_frame_instructions 70, -12.50% against the limit 80" in failed[0]
-    assert "--counts --update" in failed[0]
-    # During the build-out a cut passes, or every cut would file a bead.
-    failed, said = counts.judge(
-        "stress-255", found, limits, RANKED, tolerance=20.0, fail_below=False
-    )
-    assert failed == []
-    assert len(said) == 2
-
-
-def test_the_build_out_tolerance_passes_a_new_verb_and_fails_a_jump() -> None:
-    limits = {"worst_frame_instructions": 100, "total_instructions": 200}
-    failed, _ = counts.judge(
-        "stress-255",
-        measured([80, 115]),
-        limits,
-        (1,),
-        tolerance=20.0,
-        fail_below=False,
-    )
-    assert failed == []
-    failed, _ = counts.judge(
-        "stress-255",
-        measured([80, 125]),
-        limits,
-        (1,),
-        tolerance=20.0,
-        fail_below=False,
-    )
-    assert len(failed) == 1
-    assert "over the tolerance of 20.0%" in failed[0]
 
 
 def board(frames: list[int]) -> counts.Counted:
@@ -142,11 +83,13 @@ def board(frames: list[int]) -> counts.Counted:
 
 
 def test_cost_growing_faster_than_the_board_fails_the_scaling_check() -> None:
-    scaling = {
+    scaling: dict[str, gate.Scaling] = {
         "stress-1024": {
             "over": "stress-255",
-            "worst_frame_instructions": 3.5,
-            "total_instructions": 2.5,
+            "limits": {
+                "worst_frame_instructions": budget(3.5),
+                "total_instructions": budget(2.5),
+            },
         }
     }
     small = board([100, 300])

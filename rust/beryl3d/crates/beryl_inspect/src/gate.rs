@@ -1,6 +1,6 @@
 //! The gated boards played natively, frame by frame, for the frame gates (docs/beryl-3d.md,
 //! "Performance gates"). `just b3d gate` holds each frame's work counters and load to the limits
-//! in `data/beryl3d/gates.json`, the allocation gate counts the heap allocations of each
+//! in `data/beryl3d/budgets.json`, the allocation gate counts the heap allocations of each
 //! `Client::frame`, and the instruction-count gate counts every frame's instructions under
 //! Callgrind.
 //!

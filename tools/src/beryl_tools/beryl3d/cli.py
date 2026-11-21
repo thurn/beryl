@@ -18,6 +18,7 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
+from typing import TextIO
 
 from .. import system
 from .. import paths as repo_paths
@@ -157,7 +158,7 @@ def program(name: str) -> Path:
 MISSING_PACK = 3
 
 
-def record() -> int:
+def record(*, stdout: TextIO | None = None) -> int:
     """Builds the recordings pack for the present sources with the `record` program of
     `beryl_record` if it is missing. `b3d` does not link the engine that records, so that it
     links and starts fast after an edit (docs/beryl-3d.md, 'Edit-to-output time'). It prints
@@ -168,7 +169,9 @@ def record() -> int:
     # Cargo refreshes the top-level copy even when it compiles nothing. Use the linker's
     # file so a warm invocation does not pay macOS's first-run check again (`linked`).
     line = [str(linked("record"))]
-    return subprocess.run(line, cwd=paths.WORKSPACE, check=False).returncode
+    return subprocess.run(
+        line, cwd=paths.WORKSPACE, check=False, stdout=stdout
+    ).returncode
 
 
 def run_record(_args: argparse.Namespace) -> int:
@@ -462,7 +465,7 @@ OWN_COMMANDS: tuple[Command, ...] = (
         "gate",
         "plays the gated boards natively and fails on a work count or allocation over its limit",
         (
-            ("just b3d gate", "hold every gated board to data/beryl3d/gates.json"),
+            ("just b3d gate", "hold every gated board to data/beryl3d/budgets.json"),
             (
                 "just b3d gate --gpu",
                 "count shader cost and, in beryl3d-bench, fragments shaded",
@@ -609,7 +612,8 @@ def main(argv: list[str]) -> int:
     if command.passthrough:
         return command.run(argparse.Namespace(arguments=argv[1:]))
     args = parser(command).parse_args(argv[1:])
-    print(shlex.join(["just", "b3d", *argv]), flush=True)
+    stream = sys.stderr if command.name == "gate" and args.json else sys.stdout
+    print(shlex.join(["just", "b3d", *argv]), file=stream, flush=True)
     return command.run(args)
 
 

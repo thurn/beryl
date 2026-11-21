@@ -415,27 +415,21 @@ def gate_list() -> list[Listed]:
     return [Listed(f"b3d-gate:{b}", cards.get(b, [])) for b in gate_boards()]
 
 
-def gate_results(
-    output: str, wanted: list[str], data: dict[str, object]
-) -> list[Result]:
-    """Each wanted board's result from the `gate` program's output, held to the limits under
-    `frames` in data/beryl3d/gates.json and to the Enhanced tier's particles."""
+def gate_results(output: str, wanted: list[str], budgets: gate.Budgets) -> list[Result]:
+    """Each wanted board's result from the `gate` program's output and its budgets."""
     boards = {b.name: b for b in gate.parse(output)}
     enhanced = {t.name: t for t in gate.parse_enhanced(output)}
-    frames = data.get("frames")
-    limits = frames if isinstance(frames, dict) else {}
-    tiers = data.get("tiers")
-    particles = None
-    if isinstance(tiers, dict):
-        particles = (tiers.get("enhanced") or {}).get("particles")
+    particles = budgets["enhanced"].get("particles")
     results: list[Result] = []
     for name in wanted:
         board = boards.get(name)
         if board is None:
             continue
-        lines = gate.failures([board], limits)
+        lines = gate.failures([board], budgets["boards"])
         if name in enhanced:
-            lines += gate.enhanced_failures([board], [enhanced[name]], particles)
+            lines += gate.enhanced_failures(
+                [board], [enhanced[name]], particles["max"] if particles else None
+            )
         outcome = "fail" if lines else "pass"
         results.append(Result(f"b3d-gate:{name}", outcome, "\n".join(lines)))
     return results
@@ -452,7 +446,7 @@ def gate_run(checks: list[str]) -> list[Result]:
     if done.returncode != 0:
         print(done.stderr, file=sys.stderr)
         return []
-    return gate_results(done.stdout, wanted, json.loads(gate.GATES.read_text()))
+    return gate_results(done.stdout, wanted, gate.read_budgets())
 
 
 # Timeline parity of the recorded fixtures.

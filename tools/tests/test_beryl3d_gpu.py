@@ -2,7 +2,7 @@
 
 import json
 
-from beryl_tools.beryl3d import gpu
+from beryl_tools.beryl3d import gate, gpu
 
 
 def output(counts: list[int], pixels: int = 1000) -> str:
@@ -22,45 +22,35 @@ def test_the_worst_frame_is_held_in_screens_rounded_up() -> None:
     assert board.screens() == 566.666667
 
 
-def test_a_board_over_its_limit_names_the_frame() -> None:
+def fragment_budgets(tier: str, maximum: float) -> dict[str, dict[str, gate.Budget]]:
+    return {
+        "stress-255": {
+            f"{tier}_fragment_screens": {"max": maximum, "why": "test budget"}
+        }
+    }
+
+
+def test_a_board_over_its_budget_names_the_frame() -> None:
     boards = gpu.parse_boards(output([1000, 1800]))
-    for loose in (False, True):
-        # 1.8 screens is over the target, so it fails during the build-out too.
-        [line], _ = gpu.fragment_failures(
-            boards, {"stress-255": 1.75}, warn_within_target=loose
-        )
-        assert "stress-255 frame 31" in line
-        assert "1.8 screens (1800), over its limit 1.75" in line
-    assert gpu.fragment_failures(
-        boards, {"stress-255": 1.8}, warn_within_target=False
-    ) == ([], [])
+    [line] = gpu.fragment_failures(
+        boards, fragment_budgets("baseline", 1.75), "baseline"
+    )
+    assert "stress-255 frame 31" in line
+    assert "1.8 screens (1800), over its budget 1.75" in line
 
 
-def test_during_the_build_out_a_board_within_the_target_only_warns() -> None:
+def test_a_board_under_its_budget_passes() -> None:
     boards = gpu.parse_boards(output([1000, 1100]))
-    failed, warned = gpu.fragment_failures(
-        boards, {"stress-255": 1.05}, warn_within_target=True
+    assert (
+        gpu.fragment_failures(boards, fragment_budgets("baseline", 1.75), "baseline")
+        == []
     )
-    assert failed == []
-    [line] = warned
-    assert "1.1 screens (1100), over its limit 1.05, within the target 1.75" in line
-    failed, _ = gpu.fragment_failures(
-        boards, {"stress-255": 1.05}, warn_within_target=False
-    )
-    assert len(failed) == 1
 
 
-def test_a_board_with_no_limit_fails() -> None:
+def test_a_board_with_no_budget_fails() -> None:
     boards = gpu.parse_boards(output([1000]))
-    [line], _ = gpu.fragment_failures(boards, {}, warn_within_target=True)
-    assert "no limit" in line
-
-
-def test_update_lowers_and_never_raises() -> None:
-    boards = gpu.parse_boards(output([1200]))
-    assert gpu.lowered_fragments(boards, {}) == {"stress-255": 1.2}
-    assert gpu.lowered_fragments(boards, {"stress-255": 1.5}) == {"stress-255": 1.2}
-    assert gpu.lowered_fragments(boards, {"stress-255": 1.0}) == {"stress-255": 1.0}
+    [line] = gpu.fragment_failures(boards, {}, "baseline")
+    assert "baseline_fragment_screens is 1.0 screens (1000) with no budget" in line
 
 
 def test_material_counts_are_read_from_the_test_output() -> None:
@@ -71,10 +61,6 @@ def test_material_counts_are_read_from_the_test_output() -> None:
     )
     measured = gpu.parse_materials(text)
     assert measured == {"card": {"expressions": 63, "samples": 1}}
-    lowered = gpu.lowered_materials(
-        measured, {"card": {"expressions": 60, "samples": 2}}
-    )
-    assert lowered == {"card": {"expressions": 60, "samples": 1}}
 
 
 def tiered(counts: list[int], tier: str, draw_calls: int = 20) -> str:
@@ -87,29 +73,18 @@ def tiered(counts: list[int], tier: str, draw_calls: int = 20) -> str:
     return json.dumps(text)
 
 
-def test_an_enhanced_board_over_its_limit_fails() -> None:
-    boards = gpu.parse_boards(tiered([1000, 2500], "enhanced"))
-    [line], _ = gpu.fragment_failures(
-        boards, {"stress-255": 2.4}, warn_within_target=False, tier="enhanced"
+def test_an_enhanced_board_uses_its_own_fragment_budget() -> None:
+    boards = gpu.parse_boards(tiered([1000, 4100], "enhanced"))
+    [line] = gpu.fragment_failures(
+        boards, fragment_budgets("enhanced", 4.0), "enhanced"
     )
     assert line.startswith("stress-255 frame 31 (516 ms, flight) in enhanced:")
-    assert "2.5 screens (2500), over its limit 2.4" in line
-    assert gpu.fragment_failures(
-        boards, {"stress-255": 2.5}, warn_within_target=False, tier="enhanced"
-    ) == ([], [])
+    assert "4.1 screens (4100), over its budget 4.0" in line
 
-
-def test_an_enhanced_board_over_the_target_fails_even_in_the_build_out() -> None:
-    boards = gpu.parse_boards(tiered([4100], "enhanced"))
-    [line], warned = gpu.fragment_failures(
-        boards, {"stress-255": 4.5}, warn_within_target=True, tier="enhanced"
-    )
-    assert "over the target 4.0" in line
-    assert warned == []
-    [line], _ = gpu.fragment_failures(
-        boards, {}, warn_within_target=True, tier="enhanced"
-    )
-    assert "no limit under tiers.enhanced.fragments" in line
+    boards = gpu.parse_boards(tiered([1000, 3900], "enhanced"))
+    budgets = fragment_budgets("baseline", 1.75)
+    budgets["stress-255"].update(fragment_budgets("enhanced", 4.0)["stress-255"])
+    assert gpu.fragment_failures(boards, budgets, "enhanced") == []
 
 
 def test_an_enhanced_frame_over_32_draw_calls_fails() -> None:
@@ -121,7 +96,7 @@ def test_an_enhanced_frame_over_32_draw_calls_fails() -> None:
         gpu.parse_boards(tiered([1000], "enhanced", 33)), 32
     )
     assert line == (
-        "stress-255 frame 30 (500 ms, flight) in enhanced: 33 draw calls, over the limit 32"
+        "stress-255 frame 30 (500 ms, flight) in enhanced: 33 draw calls, over the budget 32"
     )
 
 
@@ -130,9 +105,3 @@ def test_each_tier_is_read_from_its_two_runs() -> None:
     counted = gpu.compare_runs(runs)
     assert [b.worst().fragments for b in counted["baseline"]] == [1000]
     assert [b.worst().fragments for b in counted["enhanced"]] == [2000]
-    assert gpu.lowered_fragments(counted["enhanced"], {"stress-255": 2.5}) == {
-        "stress-255": 2.0
-    }
-    assert gpu.lowered_fragments(counted["enhanced"], {"stress-255": 1.5}) == {
-        "stress-255": 1.5
-    }

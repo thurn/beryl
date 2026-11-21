@@ -1,6 +1,6 @@
 //! Plays the gated boards natively and prints what each frame did as JSON, for `just b3d gate`
 //! (`tools/src/beryl_tools/beryl3d/gate.py`), which holds the numbers to the limits in
-//! `data/beryl3d/gates.json` (docs/beryl-3d.md, "Performance gates").
+//! `data/beryl3d/budgets.json` (docs/beryl-3d.md, "Performance gates").
 //!
 //! For each frame it prints the client core's work counters, the draw list's load, and the heap
 //! allocations made inside `Client::frame`, which a counting global allocator sees. For each

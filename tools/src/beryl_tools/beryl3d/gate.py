@@ -1,47 +1,50 @@
-"""`just b3d gate`: the native frame gate (docs/beryl-3d.md, 'Performance gates'). It plays the
-gated boards with the `gate` binary of `beryl_inspect` and fails on any count over its limit in
-`data/beryl3d/gates.json` under `frames.<board>`, naming the board, the frame and the count.
+"""Play the gated boards and check their frame costs against `data/beryl3d/budgets.json`.
 
-The limits on each board:
+The native gate checks each work counter's worst frame and playback total, the worst Baseline
+draw load, and the allocations made by `Client::handle`. Allocations inside `Client::frame`
+always fail. The Enhanced playback also checks the particle budget and compares its resolved
+element count with Baseline at each frame.
 
-- `worst_frame_<counter>` and `total_<counter>` for each of the client core's work counters
-  (`COUNTERS`): the most in one frame, and the sum over the playback.
-- `worst_frame_<measure>` for the draw list's load (`LOAD`): draw calls, upload bytes and
-  blended area in screens, for the Baseline tier.
-- `handle_allocations`: the heap allocations made in `Client::handle` over the playback.
-- `frame_allocations`: those made in any `Client::frame`, which is always 0.
-
-Every count is exact and the same on every run, so a count over its limit by one fails. So
-does a count under its limit: a change that cut the work lowers the limit in the same commit
-with `--update`, or the room it left would let a later change add the work back unseen.
-`--update` lowers each limit to what was measured and never raises one. A limit rises only by
-hand, when the work itself changed or a compiler or dependency upgrade moved the count, with the
-old and new numbers in the commit body (rust/beryl3d/AGENTS.md).
-
-The gate also plays each board in the Enhanced tier. It holds the worst frame's particles to
-`tiers.enhanced.particles`, and fails on any Enhanced frame whose resolved elements number
-differently from the Baseline playback's at the same frame. The Enhanced boards have no work
-limits of their own: the client's work is the same in both tiers except for particles.
-
-`--gpu` counts the GPU's work instead, the shader cost and fragments under `materials` and
-`tiers.<tier>` (gpu.py).
+`--counts` checks instructions under Callgrind and `--gpu` checks fragments and shader cost.
+`--json` reports the measurements from the selected mode for recording the trend.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import math
 import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TypedDict
 
 from .. import paths as repo_paths
 from . import paths
 
-GATES: Path = repo_paths.REPO / "data" / "beryl3d" / "gates.json"
+BUDGETS: Path = repo_paths.REPO / "data" / "beryl3d" / "budgets.json"
+
+
+class Budget(TypedDict):
+    max: float
+    why: str
+
+
+class Scaling(TypedDict):
+    over: str
+    limits: dict[str, Budget]
+
+
+class Budgets(TypedDict):
+    boards: dict[str, dict[str, Budget]]
+    enhanced: dict[str, Budget]
+    scaling: dict[str, Scaling]
+
+
+def read_budgets() -> Budgets:
+    return json.loads(BUDGETS.read_text())
+
+
 # The client core's work counters (`beryl_scene::frame::Work`).
 COUNTERS: tuple[str, ...] = (
     "elements",
@@ -52,16 +55,8 @@ COUNTERS: tuple[str, ...] = (
     "placed",
     "steps",
 )
-# The draw list's load (`beryl_scene::frame::Load`) and the limit each starts from before its
-# first measurement lowers it.
-LOAD: dict[str, float] = {
-    "draw_calls": 16,
-    "upload_bytes": 327_680,
-    "blended_area": 0.75,
-}
-# Blended area is a fraction of a screen, kept to this many decimal places and rounded up, so
-# that the measurement itself is within the limit written from it.
-AREA_PLACES = 4
+# The draw list's load (`beryl_scene::frame::Load`) held to a budget.
+LOAD = ("draw_calls", "upload_bytes", "blended_area")
 
 
 @dataclass(frozen=True)
@@ -163,7 +158,7 @@ def parse_enhanced(text: str) -> list[Tiered]:
 
 
 def enhanced_failures(
-    boards: list[Board], enhanced: list[Tiered], particles: int | None
+    boards: list[Board], enhanced: list[Tiered], particles: float | None
 ) -> list[str]:
     """One line for each board whose worst Enhanced frame has more than `particles`, and for
     each Enhanced frame whose resolved elements differ in number from Baseline's at the same
@@ -173,14 +168,14 @@ def enhanced_failures(
     for tiered in enhanced:
         name = f"{tiered.name} enhanced"
         if particles is None:
-            lines.append(f"{name}: no limit under tiers.enhanced.particles")
+            lines.append(f"{name}: no budget under enhanced.particles")
         elif tiered.frames:
             m = worst(tiered.frames, "particles")
             assert m.frame
             if m.value > particles:
                 lines.append(
                     f"{name} {m.frame.moment()}: particles is {int(m.value)}, over its"
-                    f" limit {particles}"
+                    f" budget {particles}"
                 )
         board = baseline.get(tiered.name)
         if board is None:
@@ -223,36 +218,29 @@ def measure(board: Board) -> list[Measured]:
     return measured
 
 
-def number(key: str, value: float) -> int | float:
-    """`value` as gates.json keeps it: blended area rounded up to `AREA_PLACES` places, every
-    other count a whole number."""
-    if key.endswith("blended_area"):
-        scale = 10**AREA_PLACES
-        return math.ceil(round(value * scale, 6)) / scale
-    return int(value)
+def number(key: str, value: float) -> float:
+    """Blended area is measured in screens. Every other native count is an integer."""
+    return value if key.endswith("blended_area") else int(value)
 
 
-def failures(boards: list[Board], limits: dict[str, dict[str, Any]]) -> list[str]:
-    """One line for each number over its limit, under it or with no limit, and the backtrace
-    of a frame's first allocation."""
+def failures(boards: list[Board], budgets: dict[str, dict[str, Budget]]) -> list[str]:
+    """One line for each exceeded or missing budget and for any frame allocations."""
     lines: list[str] = []
     for board in boards:
-        board_limits = limits.get(board.name, {})
+        board_budgets = budgets.get(board.name, {})
         for m in measure(board):
-            limit = board_limits.get(m.key)
             where = f"{board.name} {m.frame.moment() if m.frame else 'in total'}"
             shown = number(m.key, m.value)
-            if limit is None:
+            if m.key == "frame_allocations":
+                if shown > 0:
+                    lines.append(f"{where}: frame_allocations is {shown}, must be zero")
+                continue
+            budget = board_budgets.get(m.key)
+            if budget is None:
+                lines.append(f"{where}: {m.key} is {shown} with no budget")
+            elif shown > budget["max"]:
                 lines.append(
-                    f"{where}: {m.key} is {shown} with no limit;"
-                    " `just b3d gate --update` sets it"
-                )
-            elif shown > limit:
-                lines.append(f"{where}: {m.key} is {shown}, over its limit {limit}")
-            elif shown < limit:
-                lines.append(
-                    f"{where}: {m.key} is {shown}, under its limit {limit};"
-                    " `just b3d gate --update` lowers it"
+                    f"{where}: {m.key} is {shown}, over its budget {budget['max']}"
                 )
         if board.first_allocation:
             frame, backtrace = board.first_allocation
@@ -263,24 +251,23 @@ def failures(boards: list[Board], limits: dict[str, dict[str, Any]]) -> list[str
     return lines
 
 
-def lowered(
-    boards: list[Board], limits: dict[str, dict[str, Any]]
-) -> dict[str, dict[str, Any]]:
-    """`limits` with each lowered to what `boards` measured. A missing limit is set from the
-    measurement, or for the load from its starting limit if that is lower. `frame_allocations`
-    is always 0, and no limit rises."""
-    updated = {name: dict(board) for name, board in limits.items()}
-    for board in boards:
-        board_limits = updated.setdefault(board.name, {})
-        for m in measure(board):
-            value = number(m.key, m.value)
-            if m.key == "frame_allocations":
-                board_limits[m.key] = 0
-                continue
-            start = LOAD.get(m.key.removeprefix("worst_frame_"))
-            old = board_limits.get(m.key, start)
-            board_limits[m.key] = value if old is None else min(old, value)
-    return updated
+def report(boards: list[Board], enhanced: list[Tiered]) -> dict[str, dict[str, float]]:
+    """One map of measurements per board, including counters without a budget."""
+    measurements: dict[str, dict[str, float]] = {
+        board.name: {
+            **{m.key: number(m.key, m.value) for m in measure(board)},
+            "worst_frame_instances": int(worst(board.frames, "instances").value),
+            "worst_frame_resolved": int(worst(board.frames, "resolved").value),
+            "frames": len(board.frames),
+        }
+        for board in boards
+    }
+    for tiered in enhanced:
+        measurements[tiered.name].update(
+            enhanced_worst_frame_particles=int(worst(tiered.frames, "particles").value),
+            enhanced_worst_frame_resolved=int(worst(tiered.frames, "resolved").value),
+        )
+    return measurements
 
 
 def summary(board: Board) -> str:
@@ -293,14 +280,14 @@ def summary(board: Board) -> str:
     return f"{board.name}: {len(board.frames)} frames; worst " + ", ".join(parts)
 
 
-def play(names: list[str]) -> tuple[list[Board], list[Tiered]]:
+def play(names: list[str], *, json_output: bool) -> tuple[list[Board], list[Tiered]]:
     """Plays the boards called `names` (every gated board for none) with the `gate` binary, in
     Baseline and in Enhanced."""
     from .cli import program, record  # cli imports this module.
 
     # The gated recorded boards are read from the pack, which only `record` builds. It builds
     # `gate` too, in the build the tests share.
-    recorded = record()
+    recorded = record(stdout=sys.stderr if json_output else None)
     if recorded != 0:
         raise SystemExit(recorded)
     command = [str(program("gate"))]
@@ -319,32 +306,32 @@ def play(names: list[str]) -> tuple[list[Board], list[Tiered]]:
 
 
 def run_gate(args: argparse.Namespace) -> int:
-    data = json.loads(GATES.read_text())
+    budgets = read_budgets()
     if args.gpu:
         from . import gpu  # It imports `bench`, which Ignite's adapter must not load.
 
-        return gpu.run_gpu(list(args.board), args.update, data)
-    boards, enhanced = play(list(args.board))
+        return gpu.run_gpu(list(args.board), budgets, json_output=args.json)
+    boards, enhanced = play(list(args.board), json_output=args.json)
     if args.counts:
         from . import counts  # It imports this module.
 
-        return counts.run(boards, update=args.update)
-    if args.update:
-        data["frames"] = lowered(boards, data.get("frames", {}))
-        GATES.write_text(json.dumps(data, indent=2) + "\n")
-        print(f"wrote {GATES.relative_to(repo_paths.REPO)}")
-    for board in boards:
-        print(summary(board))
-    lines = failures(boards, data.get("frames", {}))
-    particles = data.get("tiers", {}).get("enhanced", {}).get("particles")
+        return counts.run(boards, budgets, json_output=args.json)
+    particle_budget = budgets["enhanced"].get("particles")
+    particles = particle_budget["max"] if particle_budget else None
+    lines = failures(boards, budgets["boards"])
     lines += enhanced_failures(boards, enhanced, particles)
-    for tiered in enhanced:
-        m = worst(tiered.frames, "particles")
-        assert m.frame
-        print(
-            f"{tiered.name} enhanced: worst particles {int(m.value)} at {m.frame.index}"
-            f" (limit {particles})"
-        )
+    if args.json:
+        print(json.dumps({"boards": report(boards, enhanced)}))
+    else:
+        for board in boards:
+            print(summary(board))
+        for tiered in enhanced:
+            m = worst(tiered.frames, "particles")
+            assert m.frame
+            print(
+                f"{tiered.name} enhanced: worst particles {int(m.value)} at {m.frame.index}"
+                f" (budget {particles})"
+            )
     for line in lines:
         print(f"FAIL {line}", file=sys.stderr)
     return 1 if lines else 0
@@ -358,17 +345,15 @@ def gate_arguments(parser: argparse.ArgumentParser) -> None:
         help="play only this board (repeatable); every gated board by default",
     )
     parser.add_argument(
-        "--update",
-        action="store_true",
-        help="lower each limit to what was measured; never raises one",
+        "--json", action="store_true", help="print the measurements as JSON"
     )
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
         "--gpu",
         action="store_true",
-        help="count the GPU's work instead: each material's shader cost, and the fragments"
-        " each board shades, drawn in the beryl3d-bench machine (gpu.py)",
+        help="count shader cost and the fragments each board shades in beryl3d-bench",
     )
-    parser.add_argument(
+    mode.add_argument(
         "--counts",
         action="store_true",
         help="hold instructions per frame instead, counted under Callgrind in beryl3d-bench",

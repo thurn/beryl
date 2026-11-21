@@ -709,5 +709,10 @@
     "label": "The landing gate lists families without building their products when the change cannot alter their listings: listings of families marked `listing_ignores_comments` hash Rust files without comments, a `nextest` family reuses its newest listing for every package whose own files did not change and builds only the changed packages' tests, and clippy, card-text and three browser families list without waiting for their run products",
     "metric": "ignite.gate-seconds",
     "expect": "down"
+  },
+  {
+    "label": "Beryl 3D frame gates use fixed budgets, so ordinary count changes no longer require measuring and editing exact pins in each commit.",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]
