@@ -568,8 +568,8 @@ life-from-the-loam/dredge-with-exactly-three-cards-in-the-library
 life-from-the-loam/dredge-with-too-few-cards-in-the-library
 life-from-the-loam/putting-a-searched-card-into-hand-does-not-offer-dredge
 life-from-the-loam/two-dredge-cards-in-the-graveyard
+lightning-bolt/any-target-includes-both-players-and-both-creatures-0
 lightning-bolt/generated-1-cast-from-hand
-lightning-bolt/generated-1-cast-from-hand-0
 lightning-bolt/generated-2-cast-from-hand
 lightning-bolt/generated-3-cast-from-hand
 lightning-bolt/generated-4-cast-from-hand
@@ -888,6 +888,7 @@ stock-up/takes-two-of-five-and-orders-the-rest-on-the-bottom
 stock-up/takes-two-of-five-and-orders-the-rest-on-the-bottom-0
 stock-up/takes-two-of-five-and-orders-the-rest-on-the-bottom-ask-3
 strip-mine/ability-1
+strip-mine/an-activated-ability-resolves-after-its-source-was-sacrificed-pass
 strip-mine/generated-1-play-from-hand
 strip-mine/generated-10-activate-ability-1-on-the-battlefield-with-a-regeneration-shield
 strip-mine/generated-11-activate-ability-1-on-the-battlefield-with-a-regeneration-shield
@@ -906,7 +907,6 @@ strip-mine/generated-19-activate-ability-1-on-the-battlefield-with-filter-partne
 strip-mine/generated-2-play-from-hand-with-a-regeneration-shield
 strip-mine/generated-2-play-from-hand-with-a-regeneration-shield-pass
 strip-mine/generated-3-activate-ability-1-on-the-battlefield
-strip-mine/generated-3-activate-ability-1-on-the-battlefield-pass
 strip-mine/generated-4-activate-ability-1-on-the-battlefield
 strip-mine/generated-5-activate-ability-1-on-the-battlefield
 strip-mine/generated-6-activate-ability-1-on-the-battlefield
