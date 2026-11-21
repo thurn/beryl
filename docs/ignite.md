@@ -3575,8 +3575,9 @@ tier with no ID in the table is not reported to the hub as one the worker runs,
 so no ticket that names it is handed to a Claude worker, and `ignite doctor`
 warns about each such tier.
 
-The `effort` is the ticket's `effort:` label, or `medium` when it has none. A
-justiciar hand-off is always `high`.
+The ticket's `effort:` label sets the reasoning effort. Without one, Ignite uses
+the app's entry in `[pool.default_effort]`, or `medium` if the app has no entry.
+A justiciar hand-off is always `high`.
 
 1. Clear the session. A session that refuses is still finishing a turn. The
    hand-off fails, the daemon tries another worker, and it comes back to this

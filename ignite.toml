@@ -196,6 +196,10 @@ default_owner = "jarvis/codex"
 # 1.6% an hour, so 99% leaves room for the tickets already running.
 usage_hold_percent = 99
 
+# A ticket's `effort:` label overrides this default. Apps without an entry use medium.
+[pool.default_effort]
+codex = "high"
+
 # The model ID each app's session tool accepts for each `tier:` label. Update the IDs here when
 # a new model is released; tier labels on tickets do not change.
 [pool.models.claude]
