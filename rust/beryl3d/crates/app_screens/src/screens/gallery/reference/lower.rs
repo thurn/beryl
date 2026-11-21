@@ -1,13 +1,14 @@
-//! The gallery's lower panels, `04 Cards & states` to `09 Command list`, placed as `desktop`
-//! places the upper ones.
+//! Places the gallery's lower panels, `04 Cards & states` to `09 Command list`,
+//! using the selected profile's reference layout.
 
 use crate::screens::ScreenPress;
-use glam::{Vec2, Vec3};
+use glam::Vec2;
 
 use super::super::{GalleryMenu, GalleryQuery, example_button, face};
-use super::{Words, apart, at, caption_at, flat_face, panel, place, rule, words};
+use super::{Words, apart, caption_at, flat_face, panel, place, rule, words};
 use game_table::faces::{CARD_BACK, FaceList};
 use game_table::table::{CARD_HEIGHT, CARD_WIDTH};
+use kit_base::data::profiles::GalleryLayout;
 use kit_base::tokens::{color, shadow, size, type_style};
 use kit_frame::frame::Role;
 use kit_ui::element::{Border, Element, Shadow, Shown, TextAlign, holder};
@@ -19,16 +20,22 @@ const STEPPER_DISABLED: [u8; 4] = [111, 106, 100, 255];
 
 /// The box of a field card's face on the web, inside its dark rim, when the card stands at
 /// `point` `width` points wide.
-fn field_face(point: Vec2, width: f32) -> [Vec2; 2] {
+fn field_face(layout: &GalleryLayout, point: Vec2, width: f32) -> [Vec2; 2] {
     let card = Vec2::new(width, width * CARD_HEIGHT / CARD_WIDTH);
-    [point + card * at::FACE_INSET, card * at::FACE_SCALE]
+    [point + card * layout.face_inset, card * layout.face_scale]
 }
 
 /// A field card's face, its corners rounded as the web's frame rounds them.
-fn field_card(faces: &FaceList, name: &str, point: Vec2, width: f32) -> Element {
+fn field_card(
+    layout: &GalleryLayout,
+    faces: &FaceList,
+    name: &str,
+    point: Vec2,
+    width: f32,
+) -> Element {
     place(
-        flat_face(face(faces, name), name).radius(width * at::FACE_RADIUS),
-        field_face(point, width),
+        flat_face(face(faces, name), name).radius(width * layout.face_radius),
+        field_face(layout, point, width),
     )
 }
 
@@ -38,91 +45,98 @@ fn ringed(card: Element, ring: &[Shadow]) -> Element {
     card.box_shadow(ring.to_vec())
 }
 
-pub(super) fn card_states(faces: &FaceList) -> Element {
-    let [colossus, source, target] = at::STATES_CARDS;
-    let width = at::STATES_CARD;
+pub(super) fn card_states(layout: &GalleryLayout, faces: &FaceList) -> Element {
+    let [colossus, source, target] = layout.states_cards;
+    let width = layout.states_card;
     let mut tapped = flat_face(face(faces, "Mountain"), "Mountain");
     tapped.shows = Some(Shown::TappedFace(face(faces, "Mountain"), FaceSize::Board));
     let hand = ["Exile Lance", "Mountain", "Plateau"]
         .into_iter()
-        .zip(at::HAND)
-        .zip(at::HAND_WIDTHS.to_array())
+        .zip(layout.hand)
+        .zip(layout.hand_widths)
         .map(|((name, point), width)| {
             place(
                 flat_face(face(faces, name), &format!("{name} in hand")),
                 [point, Vec2::new(width, width * CARD_HEIGHT / CARD_WIDTH)],
             )
         });
-    panel(3)
-        .child(field_card(faces, "Cinder Colossus", colossus, width))
-        .child(place(tapped, at::TAPPED))
+    panel(layout, 3)
+        .child(field_card(
+            layout,
+            faces,
+            "Cinder Colossus",
+            colossus,
+            width,
+        ))
+        .child(place(tapped, layout.tapped))
         .child(place(
             flat_face(face(faces, "Plains"), "Plains"),
-            at::UNTAPPED,
+            layout.untapped,
         ))
         .child(ringed(
-            field_card(faces, "Gloom Wren", source, width),
+            field_card(layout, faces, "Gloom Wren", source, width),
             &shadow::GALLERY_SOURCE_RING,
         ))
         .child(apart("target").child(ringed(
-            field_card(faces, "Gloom Wren", target, width),
+            field_card(layout, faces, "Gloom Wren", target, width),
             &shadow::GALLERY_TARGET_RING,
         )))
         .children(
             ["Tapped", "Untapped", "Source (gold)", "Target (cyan)"]
                 .into_iter()
-                .zip(at::STATES_CAPTIONS)
-                .map(|(name, point)| caption_at(name, point)),
+                .zip(layout.states_captions)
+                .map(|(name, point)| caption_at(layout, name, point)),
         )
         .children(hand)
 }
 
-pub(super) fn combat(faces: &FaceList) -> Element {
-    let [attacker, blocker] = at::COMBATANTS;
-    let [colossus, beast] = at::STACK_CARDS;
+pub(super) fn combat(layout: &GalleryLayout, faces: &FaceList) -> Element {
+    let [attacker, blocker] = layout.combatants;
+    let [colossus, beast] = layout.stack_cards;
     let ability = faces
         .plate("Cinder Colossus", true, 0)
         .expect("the Colossus has a trigger");
-    panel(4)
+    panel(layout, 4)
         .child(ringed(
-            field_card(faces, "Beast", attacker, at::COMBATANT),
+            field_card(layout, faces, "Beast", attacker, layout.combatant),
             &shadow::GALLERY_ATTACK_RING,
         ))
         .child(ringed(
-            field_card(faces, "Angel", blocker, at::COMBATANT),
+            field_card(layout, faces, "Angel", blocker, layout.combatant),
             &shadow::GALLERY_TARGET_RING,
         ))
         .children(
             ["Attacker · angular", "Blocker · rounded"]
                 .into_iter()
-                .zip(at::COMBAT_CAPTIONS)
-                .map(|(name, point)| caption_at(name, point)),
+                .zip(layout.combat_captions)
+                .map(|(name, point)| caption_at(layout, name, point)),
         )
-        .child(rule(at::COMBAT_RULE))
+        .child(rule(layout.combat_rule))
         .child(field_card(
+            layout,
             faces,
             "Cinder Colossus",
             colossus,
-            at::STACK_CARD,
+            layout.stack_card,
         ))
         .child(place(
             flat_face(ability, "Cinder Colossus ability"),
-            at::ABILITY,
+            layout.ability,
         ))
-        .child(apart("stack").child(field_card(faces, "Beast", beast, at::STACK_CARD)))
+        .child(apart("stack").child(field_card(layout, faces, "Beast", beast, layout.stack_card)))
 }
 
 /// `06 Scry overlay`: the scry overlay over a dimmed table, drawn at 0.35 of its size, as the
 /// web's `.scry-preview` scales `ScryOverlay` down into the panel.
-pub(super) fn scry(faces: &FaceList) -> Element {
+pub(super) fn scry(layout: &GalleryLayout, faces: &FaceList) -> Element {
     let label = |name: &str, index: usize| {
         words(
             name,
             type_style::GALLERY_SCRY_LABEL,
             [255; 4],
             [
-                at::SCRY_LABELS[index],
-                Vec2::new(at::SCRY_LABEL_WIDTHS[index], at::SCRY_LABEL_HEIGHT),
+                layout.scry_labels[index],
+                Vec2::new(layout.scry_label_widths[index], layout.scry_label_height),
             ],
         )
     };
@@ -139,11 +153,12 @@ pub(super) fn scry(faces: &FaceList) -> Element {
             .background([0, 0, 0, 46])
             .border(([242, 236, 225, 115], 2.0))
             .radius(size::GALLERY_SCRY_ZONE_RADIUS),
-        at::SCRY_ZONE,
+        layout.scry_zone,
     );
-    let backs = at::SCRY_BACKS
+    let backs = layout
+        .scry_backs
         .into_iter()
-        .zip(at::SCRY_BACK_SIZES)
+        .zip(layout.scry_back_sizes)
         .zip(["first card back", "second card back"])
         .map(|((point, extent), name)| {
             place(
@@ -153,51 +168,51 @@ pub(super) fn scry(faces: &FaceList) -> Element {
                 [point, extent],
             )
         });
-    panel(5)
+    panel(layout, 5)
         .child(place(
             holder().name("overlay").background(color::BACKDROP),
-            at::SCRY_BACKDROP,
+            layout.scry_backdrop,
         ))
         .child(words(
             "Scry",
             type_style::GALLERY_SCRY_TITLE,
             [254, 253, 251, 255],
-            at::SCRY_TITLE,
+            layout.scry_title,
         ))
         .child(words(
             "Drag cards to put them on the top or bottom of your library.",
             type_style::GALLERY_SCRY_TEXT,
             [255; 4],
-            at::SCRY_INSTRUCTION,
+            layout.scry_instruction,
         ))
         .child(zone)
         .children(backs)
         .child(place(
             flat_face(face(faces, "Island"), "Island"),
-            at::SCRY_BOTTOM,
+            layout.scry_bottom,
         ))
         .child(place(
             flat_face(face(faces, "Quell"), "Quell"),
-            at::SCRY_TOP,
+            layout.scry_top,
         ))
         .child(label("Bottom", 0))
         .child(label("Top", 1))
-        .child(place(small(primary("Done")), at::SCRY_DONE))
-        .child(place(small(button("View Battlefield")), at::SCRY_VIEW))
+        .child(place(small(primary("Done")), layout.scry_done))
+        .child(place(small(button("View Battlefield")), layout.scry_view))
         .child(place(
             flat_face(face(faces, "Foresee"), "Foresee"),
-            at::SCRY_SOURCE,
+            layout.scry_source,
         ))
-        .children(scry_captions())
+        .children(scry_captions(layout))
 }
 
 /// The captions under the scry overlay: its three parts, then the backdrop under them.
-fn scry_captions() -> impl Iterator<Item = Element> {
+fn scry_captions(layout: &GalleryLayout) -> impl Iterator<Item = Element> {
     let widths = [
-        at::SCRY_CAPTION_WIDTHS[0].x,
-        at::SCRY_CAPTION_WIDTHS[0].y,
-        at::SCRY_CAPTION_WIDTHS[1].x,
-        at::SCRY_CAPTION_WIDTHS[1].y,
+        layout.scry_caption_widths[0].x,
+        layout.scry_caption_widths[0].y,
+        layout.scry_caption_widths[1].x,
+        layout.scry_caption_widths[1].y,
     ];
     [
         "Drag & reorder",
@@ -206,15 +221,15 @@ fn scry_captions() -> impl Iterator<Item = Element> {
         "Dimmed table backdrop",
     ]
     .into_iter()
-    .zip(at::SCRY_CAPTIONS)
+    .zip(layout.scry_captions)
     .zip(widths)
     .enumerate()
-    .map(|(index, ((name, point), width))| {
+    .map(move |(index, ((name, point), width))| {
         let caption = words(
             name,
             type_style::GALLERY_CAPTION,
             color::TYPE,
-            [point, Vec2::new(width, at::CAPTION.y)],
+            [point, Vec2::new(width, layout.caption.y)],
         );
         // A faint line stands before the second and third captions of the row.
         if index == 1 || index == 2 {
@@ -231,14 +246,10 @@ fn scry_captions() -> impl Iterator<Item = Element> {
 
 /// `07 Manual table prompts`: the three prompts `AskPrompt` opens, each a column of its cancel
 /// button, its field and its confirm button.
-pub(super) fn prompts() -> Element {
-    let Vec3 {
-        x: cancel,
-        y: entry,
-        z: confirm,
-    } = at::PROMPT_ROWS;
-    let dock = at::DOCK;
-    let [step, gap] = at::STEPPER.to_array();
+pub(super) fn prompts(layout: &GalleryLayout) -> Element {
+    let [cancel, entry, confirm] = layout.prompt_rows;
+    let dock = layout.dock;
+    let [step, gap] = layout.stepper.to_array();
     let field = |name: &str, value: &str, left: f32, width: f32| {
         place(
             Element::new(Role::Field)
@@ -279,9 +290,9 @@ pub(super) fn prompts() -> Element {
         ("Power and toughness", "3/3", "Set 3/3"),
     ];
     let names = ["Draw cards", "Set note", "Set power and toughness…"];
-    let mut panel = panel(6);
+    let mut panel = panel(layout, 6);
     for (index, (name, value, label)) in docks.into_iter().enumerate() {
-        let left = at::PROMPT_COLUMNS.to_array()[index];
+        let left = layout.prompt_columns[index];
         // Each prompt is a group of its own, as each `AskPrompt` is a `.gallery-ask` on the web.
         let mut prompt = apart(names[index])
             .child(place(button("Cancel"), [Vec2::new(left, cancel), dock]))
@@ -291,11 +302,11 @@ pub(super) fn prompts() -> Element {
         } else {
             prompt
                 .child(stepper("Less", "−", left, index != 0))
-                .child(field(name, value, left + step + gap, at::STEPPER_FIELD))
+                .child(field(name, value, left + step + gap, layout.stepper_field))
                 .child(stepper(
                     "More",
                     "+",
-                    left + step + gap + at::STEPPER_FIELD + gap,
+                    left + step + gap + layout.stepper_field + gap,
                     true,
                 ))
         };
@@ -304,23 +315,23 @@ pub(super) fn prompts() -> Element {
     panel
 }
 
-pub(super) fn menus(available: bool) -> Element {
+pub(super) fn menus(layout: &GalleryLayout, available: bool) -> Element {
     let samples = [
         ("Permanent", GalleryMenu::Permanent),
         ("Library", GalleryMenu::Library),
         ("Bottom-right corner", GalleryMenu::Corner),
     ];
-    let mut panel = panel(7);
+    let mut panel = panel(layout, 7);
     for (index, (label, kind)) in samples.into_iter().enumerate() {
         let width = if kind == GalleryMenu::Corner {
-            at::CORNER_WIDTH
+            layout.corner_width
         } else {
             size::BUTTON_MIN_WIDTH
         };
         panel = panel.child(place(
             example_button(label, ScreenPress::GalleryMenu(kind), available),
             [
-                at::MENU_BUTTONS[index],
+                layout.menu_buttons[index],
                 Vec2::new(width, size::BUTTON_HEIGHT),
             ],
         ));
@@ -328,18 +339,18 @@ pub(super) fn menus(available: bool) -> Element {
     panel
 }
 
-pub(super) fn commands(available: bool) -> Element {
+pub(super) fn commands(layout: &GalleryLayout, available: bool) -> Element {
     let samples = [
         ("Empty query", GalleryQuery::Empty),
         ("Two groups", GalleryQuery::Top),
         ("No matches", GalleryQuery::Untap),
     ];
-    let mut panel = panel(8);
+    let mut panel = panel(layout, 8);
     for (index, (label, query)) in samples.into_iter().enumerate() {
         panel = panel.child(place(
             example_button(label, ScreenPress::GalleryQuery(Some(query)), available),
             [
-                at::COMMAND_BUTTONS[index],
+                layout.command_buttons[index],
                 Vec2::new(size::BUTTON_MIN_WIDTH, size::BUTTON_HEIGHT),
             ],
         ));

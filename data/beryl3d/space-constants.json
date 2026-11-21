@@ -329,15 +329,6 @@
       "max_width": 430,
       "preview_width": 144
     },
-    "gallery": {
-      "width": 1380,
-      "chip": 76,
-      "small_card": 86,
-      "hand_card": 128,
-      "prompt_width": 336,
-      "scry_card": 154,
-      "scry_source": 184
-    },
     "opening": {
       "top": 92,
       "coin_height": 52,

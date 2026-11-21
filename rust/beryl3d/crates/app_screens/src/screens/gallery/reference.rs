@@ -7,7 +7,7 @@
 //! page, and each sample in a panel is at the web's `At` point or in its `CaptionAt` box, in
 //! points from the inside of the panel's border, as CSS places an absolute child in its parent's
 //! padding box. Those points, and the boxes the web's text and samples take, are
-//! `flat.gallery.desktop` in `data/beryl3d/space-constants.json`.
+//! supplied by the selected profile, under `gallery`.
 
 mod lower;
 
@@ -17,7 +17,7 @@ use glam::Vec2;
 use super::face;
 use game_hud::art::orb::artwork;
 use game_table::faces::{CARD_BACK, FaceList};
-use kit_base::data::space::flat::gallery::reference as at;
+use kit_base::data::profiles::GalleryLayout;
 use kit_base::tokens::{color, gradient, shadow, size, type_style};
 use kit_frame::frame::Role;
 use kit_text::text::TypeStyle;
@@ -60,11 +60,11 @@ const SWATCHES: [(&str, &str, [u8; 4], [u8; 4]); 5] = [
 ];
 
 /// The page, as wide and tall as the web's `.gallery`, with every panel on it.
-pub(super) fn page(faces: &FaceList, available: bool) -> Element {
+pub(super) fn page(layout: &GalleryLayout, faces: &FaceList, available: bool) -> Element {
     holder()
         .name("page")
-        .width(at::PAGE.x)
-        .height(at::PAGE.y)
+        .width(layout.page.x)
+        .height(layout.page.y)
         .shrink(0.0)
         .child(place(
             text("PROJECT BERYL")
@@ -72,15 +72,15 @@ pub(super) fn page(faces: &FaceList, available: bool) -> Element {
                 .style(type_style::GALLERY_WORDMARK)
                 .color(color::GALLERY_WORDMARK)
                 .text_align(TextAlign::Center),
-            at::WORDMARK,
+            layout.wordmark,
         ))
-        .children(at::WORDMARK_RULES.map(|point| {
+        .children(layout.wordmark_rules.map(|point| {
             place(
                 holder().background_image(vec![
                     gradient::GALLERY_WORDMARK_SHADE,
                     gradient::GALLERY_WORDMARK_RULE,
                 ]),
-                [point, at::WORDMARK_RULE],
+                [point, layout.wordmark_rule],
             )
         }))
         .child(place(
@@ -88,17 +88,17 @@ pub(super) fn page(faces: &FaceList, available: bool) -> Element {
                 .style(type_style::GALLERY_SUBTITLE)
                 .color(color::TEXT)
                 .text_align(TextAlign::Center),
-            at::SUBTITLE,
+            layout.subtitle,
         ))
-        .child(foundations())
-        .child(actions())
-        .child(player_zones(faces))
-        .child(lower::card_states(faces))
-        .child(lower::combat(faces))
-        .child(lower::scry(faces))
-        .child(lower::prompts())
-        .child(lower::menus(available))
-        .child(lower::commands(available))
+        .child(foundations(layout))
+        .child(actions(layout))
+        .child(player_zones(layout, faces))
+        .child(lower::card_states(layout, faces))
+        .child(lower::combat(layout, faces))
+        .child(lower::scry(layout, faces))
+        .child(lower::prompts(layout))
+        .child(lower::menus(layout, available))
+        .child(lower::commands(layout, available))
 }
 
 /// Gives an element `words` to show, laid out inside its padding.
@@ -116,12 +116,12 @@ impl Words for Element {
 /// Keeps a swatch's name to the first line of its caption's box, as the web's `figcaption`
 /// sets the name on its first line and the hex value under it.
 trait FirstLine {
-    fn first_line(self) -> Self;
+    fn first_line(self, bottom_padding: f32) -> Self;
 }
 
 impl FirstLine for Element {
-    fn first_line(mut self) -> Self {
-        self.style.padding[2] = at::SWATCH_NAME.y - at::SWATCH_LINE;
+    fn first_line(mut self, bottom_padding: f32) -> Self {
+        self.style.padding[2] = bottom_padding;
         self
     }
 }
@@ -138,19 +138,19 @@ fn place(element: Element, [point, extent]: [Vec2; 2]) -> Element {
 
 /// Panel `index` (0 for `01`): its box on the page, its border lit from above and its numbered
 /// title, over the engraved rule that `.panel-title::after` draws (left out here).
-fn panel(index: usize) -> Element {
-    let extent = at::PANELS_SIZE[index];
+fn panel(layout: &GalleryLayout, index: usize) -> Element {
+    let extent = layout.panels_size[index];
     // The scry panel's title has no inset: `.panel-scry` drops the panels' side padding.
-    let inset = if index == 5 { 0.0 } else { at::TITLE_INSET };
+    let inset = if index == 5 { 0.0 } else { layout.title_inset };
     let number = format!("{:02}", index + 1);
     // The second panel's title starts 4 points further left: `.panel-02 .panel-title` sets a
     // left padding of 12 points where the other panels' titles have 16.
     let pull = if index == 1 {
-        at::SECOND_TITLE_PULL
+        layout.second_title_pull
     } else {
         0.0
     };
-    let mut number_at = at::TITLE_NUMBER;
+    let mut number_at = layout.title_number;
     number_at[0].x -= pull;
     // As on the web, the title's own words follow its number, a gold text of its own.
     let mut title = text(TITLES[index])
@@ -166,7 +166,12 @@ fn panel(index: usize) -> Element {
                 .fit(true),
             number_at,
         ));
-    title.style.padding = [at::TITLE_PADDING.y, 0.0, 0.0, at::TITLE_PADDING.x - pull];
+    title.style.padding = [
+        layout.title_padding.y,
+        0.0,
+        0.0,
+        layout.title_padding.x - pull,
+    ];
     Element::new(Role::Region)
         .name(TITLES[index])
         .background(color::GALLERY_PANEL)
@@ -180,10 +185,10 @@ fn panel(index: usize) -> Element {
         .overflow(Overflow::Clip)
         .position(Position::Absolute)
         .inset([
-            Some(at::PANELS_AT[index].y),
+            Some(layout.panels_at[index].y),
             None,
             None,
-            Some(at::PANELS_AT[index].x),
+            Some(layout.panels_at[index].x),
         ])
         .width(extent.x)
         .height(extent.y)
@@ -193,7 +198,7 @@ fn panel(index: usize) -> Element {
                 Vec2::new(inset, 0.0),
                 Vec2::new(
                     extent.x - 2.0 * size::BORDER - 2.0 * inset,
-                    at::TITLE_HEIGHT,
+                    layout.title_height,
                 ),
             ],
         ))
@@ -215,14 +220,14 @@ fn words(words: &str, style: TypeStyle, tint: [u8; 4], area: [Vec2; 2]) -> Eleme
 }
 
 /// A caption centred on `point.x`, in the web's 240-point `CaptionAt` box.
-fn caption_at(name: &str, point: Vec2) -> Element {
+fn caption_at(layout: &GalleryLayout, name: &str, point: Vec2) -> Element {
     words(
         name,
         type_style::GALLERY_CAPTION,
         color::TYPE,
         [
-            Vec2::new(point.x - at::CAPTION.x / 2.0, point.y),
-            at::CAPTION,
+            Vec2::new(point.x - layout.caption.x / 2.0, point.y),
+            layout.caption,
         ],
     )
 }
@@ -258,10 +263,10 @@ fn divider(area: [Vec2; 2]) -> Element {
 }
 
 /// `01 Foundations`' five color swatches, each a chip over its name and hex value.
-fn swatches(mut panel: Element) -> Element {
+fn swatches(layout: &GalleryLayout, mut panel: Element) -> Element {
     for (index, (name, hex, fill, rim)) in SWATCHES.into_iter().enumerate() {
         #[expect(clippy::cast_precision_loss, reason = "five swatches")]
-        let left = at::CHIP[0].x + at::CHIP_STEP * index as f32;
+        let left = layout.chip[0].x + layout.chip_step * index as f32;
         let dark = index < 2;
         let chip = Element::new(Role::Region)
             .name(&format!("{name} swatch"))
@@ -273,9 +278,12 @@ fn swatches(mut panel: Element) -> Element {
             } else {
                 shadow::GALLERY_SWATCH_LIGHT.to_vec()
             });
-        let [x, width] = at::SWATCH_LABELS[index].to_array();
+        let [x, width] = layout.swatch_labels[index].to_array();
         panel = panel
-            .child(place(chip, [Vec2::new(left, at::CHIP[0].y), at::CHIP[1]]))
+            .child(place(
+                chip,
+                [Vec2::new(left, layout.chip[0].y), layout.chip[1]],
+            ))
             .child(place(
                 // The hex value is part of the swatch's caption, as `<small>` is on the web.
                 text(name)
@@ -284,40 +292,40 @@ fn swatches(mut panel: Element) -> Element {
                     .color(color::TYPE)
                     .text_align(TextAlign::Center)
                     // Its name keeps to its first line, over the hex value.
-                    .first_line()
+                    .first_line(layout.swatch_name.y - layout.swatch_line)
                     .child(words(
                         hex,
                         type_style::GALLERY_HEX,
                         color::TYPE,
                         [
-                            Vec2::new(0.0, at::SWATCH_HEX.x),
-                            Vec2::new(width, at::SWATCH_HEX.y),
+                            Vec2::new(0.0, layout.swatch_hex.x),
+                            Vec2::new(width, layout.swatch_hex.y),
                         ],
                     )),
                 [
-                    Vec2::new(x, at::SWATCH_NAME.x),
-                    Vec2::new(width, at::SWATCH_NAME.y),
+                    Vec2::new(x, layout.swatch_name.x),
+                    Vec2::new(width, layout.swatch_name.y),
                 ],
             ));
     }
     panel
 }
 
-fn foundations() -> Element {
-    swatches(panel(0))
+fn foundations(layout: &GalleryLayout) -> Element {
+    swatches(layout, panel(layout, 0))
         .child(words(
             "Scry",
             type_style::GALLERY_SERIF,
             color::TYPE,
-            at::SERIF_SPECIMEN,
+            layout.serif_specimen,
         ))
         .child(words(
             "Serif · titles and actions",
             type_style::GALLERY_SPECIMEN_CAPTION,
             color::TYPE,
-            at::SERIF_CAPTION,
+            layout.serif_caption,
         ))
-        .child(divider(at::SPECIMEN_DIVIDER))
+        .child(divider(layout.specimen_divider))
         // Beryl 3D's sans serif is a little wider than the web's, so the specimen shrinks to
         // stay on one line.
         .child(
@@ -325,7 +333,7 @@ fn foundations() -> Element {
                 "Drag cards to reorder",
                 type_style::GALLERY_SANS,
                 [255; 4],
-                at::SANS_SPECIMEN,
+                layout.sans_specimen,
             )
             .fit(true),
         )
@@ -333,7 +341,7 @@ fn foundations() -> Element {
             "Sans serif · instructions",
             type_style::GALLERY_SPECIMEN_CAPTION,
             color::TYPE,
-            at::SANS_CAPTION,
+            layout.sans_caption,
         ))
         .child(place(
             Element::new(Role::Region)
@@ -347,14 +355,14 @@ fn foundations() -> Element {
                 )
                 .radius(size::GALLERY_TABLETOP_RADIUS)
                 .box_shadow(shadow::GALLERY_TABLETOP.to_vec()),
-            at::TABLETOP,
+            layout.tabletop,
         ))
         .child(
             words(
                 "Tabletop (matte)",
                 type_style::GALLERY_MATERIAL_CAPTION,
                 color::TYPE,
-                at::TABLETOP_CAPTION,
+                layout.tabletop_caption,
             )
             .fit(true),
         )
@@ -363,35 +371,38 @@ fn foundations() -> Element {
                 .name("gold")
                 .background_image(vec![gradient::GALLERY_METAL_GOLD])
                 .box_shadow(shadow::GALLERY_METAL_GOLD.to_vec()),
-            [at::METAL_RULES[0], at::METAL_RULE],
+            [layout.metal_rules[0], layout.metal_rule],
         ))
         .child(place(
             holder()
                 .name("silver")
                 .background_image(vec![gradient::GALLERY_METAL_SILVER])
                 .box_shadow(shadow::GALLERY_METAL_SILVER.to_vec()),
-            [at::METAL_RULES[1], at::METAL_RULE],
+            [layout.metal_rules[1], layout.metal_rule],
         ))
         .child(words(
             "Thin metallic borders",
             type_style::GALLERY_METAL_CAPTION,
             color::TYPE,
-            at::METAL_CAPTION,
+            layout.metal_caption,
         ))
 }
 
-fn actions() -> Element {
+fn actions(layout: &GalleryLayout) -> Element {
     let samples = [
-        place(primary("Done").style(type_style::GALLERY_PRIMARY), at::DONE),
+        place(
+            primary("Done").style(type_style::GALLERY_PRIMARY),
+            layout.done,
+        ),
         place(
             button("View Battlefield").style(type_style::GALLERY_SECONDARY),
-            at::VIEW,
+            layout.view,
         ),
         place(
             primary("Pass")
                 .enabled(false)
                 .style(type_style::GALLERY_DISABLED),
-            at::PASS,
+            layout.pass,
         ),
     ];
     let captions = ["Primary", "Secondary", "Disabled"]
@@ -405,7 +416,7 @@ fn actions() -> Element {
                     .style(type_style::GALLERY_ROW_CAPTION)
                     .color(color::TYPE)
                     .fit(true),
-                [at::ROW_CAPTIONS[index], at::ROW_CAPTION_SIZES[index]],
+                [layout.row_captions[index], layout.row_caption_sizes[index]],
             )
         });
     let pill = place(
@@ -416,28 +427,32 @@ fn actions() -> Element {
                 Border::uniform([165, 158, 152, 255], size::BORDER)
                     .side_color(0, [179, 172, 166, 255]),
             )
-            .radius(at::PILL[1].y / 2.0)
+            .radius(layout.pill[1].y / 2.0)
             .box_shadow(shadow::GALLERY_PILL.to_vec())
             .child(words(
                 "Opponent has priority",
                 type_style::GALLERY_PILL,
                 [247, 244, 239, 255],
-                at::PILL_TEXT,
+                layout.pill_text,
             )),
-        at::PILL,
+        layout.pill,
     );
-    panel(1)
+    panel(layout, 1)
         .children(samples)
         .children(captions)
-        .children(at::ACTIONS_RULES.map(|point| rule([point, at::ACTIONS_RULE])))
+        .children(
+            layout
+                .actions_rules
+                .map(|point| rule([point, layout.actions_rule])),
+        )
         .child(pill)
-        .child(place(phase_tracker(), at::TRACKER))
+        .child(place(phase_tracker(layout), layout.tracker))
 }
 
 /// The phase tracker of `02 Actions & status`, lighting combat: `PhaseTracker` with
 /// `current="combat"`, its five icons at the web's places in its pill.
-fn phase_tracker() -> Element {
-    let side = f32::from(icons::PHASE_SIDE);
+fn phase_tracker(layout: &GalleryLayout) -> Element {
+    let [point, extent] = layout.phase;
     let mut tracker = Element::new(Role::List)
         .name("Phase tracker")
         .background([0; 4])
@@ -447,7 +462,7 @@ fn phase_tracker() -> Element {
                 .side_color(0, [138, 131, 124, 255])
                 .side_color(2, [138, 131, 124, 255]),
         )
-        .radius(at::TRACKER[1].y / 2.0)
+        .radius(layout.tracker[1].y / 2.0)
         .box_shadow(shadow::GALLERY_TRACKER.to_vec());
     for (index, (icon, label)) in icons::PHASES
         .into_iter()
@@ -475,16 +490,13 @@ fn phase_tracker() -> Element {
             });
         sample.shows = Some(Shown::Icon(icon, icons::PHASE_SIDE));
         #[expect(clippy::cast_precision_loss, reason = "five phases")]
-        let left = at::PHASE[0].x + at::PHASE_STEP * index as f32;
-        tracker = tracker.child(place(
-            sample,
-            [Vec2::new(left, at::PHASE[0].y), Vec2::splat(side)],
-        ));
+        let left = point.x + layout.phase_step * index as f32;
+        tracker = tracker.child(place(sample, [Vec2::new(left, point.y), extent]));
     }
     tracker
 }
 
-fn player_zones(faces: &FaceList) -> Element {
+fn player_zones(layout: &GalleryLayout, faces: &FaceList) -> Element {
     let [_, _, art_width, art_height] = game_hud::art::orb::ART;
     let units = game_hud::art::orb::SCALES[0];
     let art = Vec2::new(art_width, art_height) * units;
@@ -492,11 +504,11 @@ fn player_zones(faces: &FaceList) -> Element {
         (Side::You, true, "22", "Active"),
         (Side::Opponent, false, "17", "Inactive"),
     ];
-    let mut panel = panel(2);
+    let mut panel = panel(layout, 2);
     for (index, (side, active, life, name)) in orbs.into_iter().enumerate() {
         // Beryl 3D's orb art comes at the table's scale, larger than the web gallery's
         // (`--orb: 0.74px`), so it is centred on the web's orb.
-        let middle = at::ORBS[index] + at::ORB / 2.0;
+        let middle = layout.orbs[index] + layout.orb / 2.0;
         let mut orb = Element::new(Role::Region).name(&format!("{name} orb"));
         orb.shows = Some(Shown::Layers(artwork(side, active, 0)));
         panel = panel
@@ -505,9 +517,9 @@ fn player_zones(faces: &FaceList) -> Element {
                 life,
                 type_style::GALLERY_LIFE,
                 color::LIFE,
-                [at::LIVES[index], at::LIFE_SIZES[index]],
+                [layout.lives[index], layout.life_sizes[index]],
             ))
-            .child(caption_at(name, at::ORB_CAPTIONS[index]));
+            .child(caption_at(layout, name, layout.orb_captions[index]));
     }
     let badge = place(
         Element::new(Role::Region)
@@ -518,9 +530,9 @@ fn player_zones(faces: &FaceList) -> Element {
                 text("Opponent")
                     .style(type_style::GALLERY_BADGE)
                     .color([255; 4]),
-                at::BADGE_TEXT,
+                layout.badge_text,
             )),
-        at::BADGE,
+        layout.badge,
     );
     let count = place(
         text("×3")
@@ -532,35 +544,39 @@ fn player_zones(faces: &FaceList) -> Element {
             .border(([184, 146, 78, 255], size::BORDER))
             .radius(size::GALLERY_LAND_COUNT_RADIUS)
             .box_shadow(shadow::GALLERY_LAND_COUNT.to_vec()),
-        at::LAND_COUNT,
+        layout.land_count,
     );
     panel
-        .child(divider(at::ZONES_DIVIDER))
+        .child(divider(layout.zones_divider))
         .child(badge)
-        .child(rule(at::ZONES_RULE))
+        .child(rule(layout.zones_rule))
         .child(pile(
             "Library, 40 cards",
             CARD_BACK,
-            at::LIBRARY,
-            (at::LIBRARY_CARD, at::LIBRARY_DEPTH, at::LIBRARY_LAYERS),
+            layout.library,
+            (
+                layout.library_card,
+                layout.library_depth,
+                layout.library_layers,
+            ),
             ([26, 23, 21, 255], [12, 10, 9, 255], [58, 51, 46, 255]),
         ))
         .child(pile(
             "Graveyard, 4 cards",
             face(faces, "Dusk Cut"),
-            at::GRAVEYARD,
+            layout.graveyard,
             (
-                at::GRAVEYARD_CARD,
-                at::GRAVEYARD_DEPTH,
-                at::GRAVEYARD_LAYERS,
+                layout.graveyard_card,
+                layout.graveyard_depth,
+                layout.graveyard_layers,
             ),
             ([20, 18, 16, 255], [74, 68, 63, 255], [97, 90, 83, 255]),
         ))
-        .children(at::LANDS.into_iter().enumerate().map(|(index, point)| {
+        .children(layout.lands.into_iter().enumerate().map(|(index, point)| {
             apart(&format!("land {}", index + 1)).child({
                 place(
                     flat_face(face(faces, "Island"), "Island"),
-                    [point, at::LAND],
+                    [point, layout.land],
                 )
             })
         }))
@@ -568,8 +584,8 @@ fn player_zones(faces: &FaceList) -> Element {
         .children(
             ["Library", "Graveyard", "Lands (stacked)"]
                 .into_iter()
-                .zip(at::PILE_CAPTIONS)
-                .map(|(name, point)| caption_at(name, point)),
+                .zip(layout.pile_captions)
+                .map(|(name, point)| caption_at(layout, name, point)),
         )
 }
 

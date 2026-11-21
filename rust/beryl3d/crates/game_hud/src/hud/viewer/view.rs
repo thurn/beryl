@@ -15,7 +15,7 @@ use super::revealed::{REVEALED, RevealedFace};
 use crate::hud::piles::pile_cards;
 use game_table::faces::{CARD_BACK, FaceList};
 use game_table::table::{CARD_HEIGHT, CARD_WIDTH, pile_name};
-use kit_base::data::space::flat::gallery as metrics;
+use kit_base::data::presentation::Gallery;
 use kit_base::tokens::{color, size, space, type_style};
 use kit_frame::frame::{ElementId, Role};
 use kit_scene::Show;
@@ -197,7 +197,7 @@ fn face_box(face: &RevealedFace) -> Element {
 /// The web gallery's Scry sample, as an embedded preview of the overlay's zones,
 /// source card and action.
 #[must_use]
-pub fn scry_sample(faces: &FaceList) -> Element {
+pub fn scry_sample(faces: &FaceList, gallery: &Gallery) -> Element {
     let find = |name| faces.find(name).expect("the gallery lists the scry face");
     let card = |id: FaceId, name, width| {
         let mut card = card_box(name)
@@ -217,15 +217,15 @@ pub fn scry_sample(faces: &FaceList) -> Element {
     let bottom = zone(
         "Bottom",
         vec![
-            card(CARD_BACK, "First card back", metrics::SCRY_CARD),
-            card(CARD_BACK, "Second card back", metrics::SCRY_CARD),
+            card(CARD_BACK, "First card back", gallery.scry_card),
+            card(CARD_BACK, "Second card back", gallery.scry_card),
         ],
     );
     let top = zone(
         "Top",
         vec![
-            card(find("Island"), "Island", metrics::SCRY_CARD),
-            card(find("Quell"), "Quell", metrics::SCRY_CARD),
+            card(find("Island"), "Island", gallery.scry_card),
+            card(find("Quell"), "Quell", gallery.scry_card),
         ],
     );
     let choice = column()
@@ -249,5 +249,5 @@ pub fn scry_sample(faces: &FaceList) -> Element {
         .justify_content(kit_ui::element::Justify::Center)
         .background(color::BACKDROP)
         .child(choice)
-        .child(card(find("Foresee"), "Foresee", metrics::SCRY_SOURCE))
+        .child(card(find("Foresee"), "Foresee", gallery.scry_source))
 }

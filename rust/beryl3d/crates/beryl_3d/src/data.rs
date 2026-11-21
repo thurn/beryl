@@ -25,6 +25,7 @@ fn embedded_tuning(name: &str) -> Result<String, String> {
         "notices.json" => include_str!("../../../../../data/beryl3d/notices.json"),
         "revealed.json" => include_str!("../../../../../data/beryl3d/revealed.json"),
         "shown.json" => include_str!("../../../../../data/beryl3d/shown.json"),
+        "gallery.json" => include_str!("../../../../../data/beryl3d/gallery.json"),
         "pointer.json" => include_str!("../../../../../data/beryl3d/pointer.json"),
         _ => return Err(format!("{name}: missing embedded tuning")),
     };

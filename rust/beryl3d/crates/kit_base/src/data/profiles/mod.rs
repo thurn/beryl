@@ -11,8 +11,10 @@ mod screen;
 pub use screen::{BugScreen, ScreenMetrics, StartScreen};
 
 mod banded;
+mod gallery;
 mod hud;
 pub use banded::Banded;
+pub use gallery::GalleryLayout;
 pub use hud::{FloatingPrompt, Hud, Incoming, Inspector, Piece, ResultLayout, WrappedHand};
 
 /// The space a feature has for its content.
@@ -273,6 +275,8 @@ pub struct ProfileData {
     pub slots: BTreeMap<String, SlotSpec>,
     /// Tuning for screens that use a scrolling column.
     pub screen: Option<ScreenMetrics>,
+    /// The gallery's numbered panels when this profile has no scrolling column for samples.
+    pub gallery: Option<GalleryLayout>,
     pub manual: Option<ManualControls>,
     pub settings_quick_action_min_width: Option<f32>,
     test_matrix: Matrix,
@@ -448,6 +452,9 @@ impl ProfileData {
         }
         if self.hud.opening.wrapped_hand.is_some() && self.screen.is_none() {
             return Err("hud.opening.wrapped_hand requires screen metrics".to_owned());
+        }
+        if !self.slots.contains_key("gallery.column") && self.gallery.is_none() {
+            return Err("missing gallery layout".to_owned());
         }
         let conditional_slots = [
             (self.hud.floating_prompt.is_some(), "prompt.dock"),

@@ -6,7 +6,7 @@ use serde::{Deserialize, Deserializer};
 
 use super::playback::{CatchUp, FrameRate, Slide, TierProbe};
 use super::pointer::PointerTuning;
-use super::presentation::{Notices, Revealed, Shown};
+use super::presentation::{Gallery, Notices, Revealed, Shown};
 use super::{effect::Effects, profiles::Profiles, verbs::Verbs};
 
 /// The tuning data supplied by a host. The client uses the typed values directly.
@@ -22,6 +22,7 @@ pub struct Data {
     pub notices: Notices,
     pub revealed: Revealed,
     pub shown: Shown,
+    pub gallery: Gallery,
     pub profiles: Profiles,
     pub effects: Effects,
 }
@@ -53,6 +54,7 @@ impl Data {
             notices: read("notices.json", &load("notices.json")?)?,
             revealed: read("revealed.json", &load("revealed.json")?)?,
             shown: read("shown.json", &load("shown.json")?)?,
+            gallery: read("gallery.json", &load("gallery.json")?)?,
             profiles: Profiles::parse(profiles)?,
             effects,
         })

@@ -38,6 +38,7 @@ fn parse(changed: Option<(&str, &str)>) -> Result<Data, String> {
                 "notices.json" => include_str!("../../../../../../data/beryl3d/notices.json"),
                 "revealed.json" => include_str!("../../../../../../data/beryl3d/revealed.json"),
                 "shown.json" => include_str!("../../../../../../data/beryl3d/shown.json"),
+                "gallery.json" => include_str!("../../../../../../data/beryl3d/gallery.json"),
                 "pointer.json" => include_str!("../../../../../../data/beryl3d/pointer.json"),
                 _ => return Err(format!("{name}: missing test tuning")),
             };
@@ -53,6 +54,32 @@ fn the_repository_tuning_loads() {
     let data = parse(None).expect("repository tuning");
     assert!(data.verbs.fly.arc.is_finite());
     assert!(data.audit.mark_points > 0.0);
+}
+
+#[test]
+fn reference_gallery_rejects_missing_and_surplus_panel_positions() {
+    let (file, text) = profiles::SHIPPED[1];
+    let profile: Value = serde_json::from_str(text).unwrap();
+
+    for surplus in [false, true] {
+        let mut changed = profile.clone();
+        let positions = changed["gallery"]["panels_at"].as_array_mut().unwrap();
+        if surplus {
+            positions.push(positions[0].clone());
+        } else {
+            positions.remove(0);
+        }
+        let why = profiles::Profiles::parse(&[profiles::SHIPPED[0], (file, &changed.to_string())])
+            .unwrap_err();
+        assert!(
+            why.starts_with(&format!("{file}: gallery.panels_at")),
+            "{why}"
+        );
+        assert!(
+            why.contains("invalid length") || why.contains("trailing characters"),
+            "{why}"
+        );
+    }
 }
 
 #[test]
