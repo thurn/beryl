@@ -17,6 +17,9 @@ pub const HISTORY_DAYS: f64 = 30.0;
 /// The figure when there is no history at all: one core.
 pub const DEFAULT_CORES: f64 = 1.0;
 
+/// Tickets below this estimate skip Rust prebuilding and take an older build tree.
+pub const COMPILES_FROM_CORES: f64 = 0.5;
+
 /// Slack for sums of floating-point figures, so that a ticket that fits exactly is admitted.
 const EPSILON: f64 = 1e-9;
 

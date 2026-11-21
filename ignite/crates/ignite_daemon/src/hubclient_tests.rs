@@ -304,6 +304,8 @@ fn statuses_become_the_shared_errors() {
         session: SessionId::new("local_a").unwrap(),
         work: ignite_core::protocol::tickets::LandedWork::default(),
         fresh: false,
+        pressure: None,
+        defer_successor: false,
     };
     assert!(matches!(client.landed(&landed), Err(Error::NotFound(_))));
     assert!(matches!(client.records(&[]), Err(Error::Unreachable(m)) if m.contains("token")));
@@ -393,6 +395,7 @@ fn next_reads_nothing_as_no_reservation() {
         free_ticket_trees: 1,
         free_cores: 4.0,
         admit_cores: None,
+        pressure: None,
         families: Vec::new(),
         name: None,
         justiciar_only: false,

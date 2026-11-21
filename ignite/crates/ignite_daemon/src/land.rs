@@ -177,15 +177,24 @@ fn short(commit: &Commit) -> &str {
 
 impl Landing {
     /// Settles and resends pending landings. The daemon's sender also offers their successors.
-    pub fn deliver_pending(&self, ctx: &Context, handoff: impl FnMut(&Landed, &Reservation)) {
+    pub fn deliver_pending(
+        &self,
+        ctx: &Context,
+        handoff: impl FnMut(&Landed, &Reservation),
+        pressure: impl FnMut()
+            -> Result<Option<ignite_core::dispatch_pressure::DispatchPressure>, Error>,
+    ) {
         self.resolve_pushing(ctx);
-        if let Err(error) = self.records.deliver_all(ctx.hub.as_ref(), handoff) {
+        if let Err(error) = self
+            .records
+            .deliver_all(ctx.hub.as_ref(), handoff, pressure)
+        {
             eprintln!("ignite: landings not recorded at the hub: {error}");
         }
     }
 
     fn land(&self, ctx: &Context, req: &Request, args: &LandArgs) -> Reply {
-        self.deliver_pending(ctx, |_, _| {});
+        self.deliver_pending(ctx, |_, _| {}, || self.trees.dispatch_pressure());
         self.land_in_mode(ctx, req, args)
             .unwrap_or_else(|stop| *stop)
     }
@@ -584,6 +593,8 @@ impl Landing {
                     session: session.clone(),
                     work,
                     fresh: args.fresh,
+                    pressure: None,
+                    defer_successor: false,
                 },
                 commit: rebased.head.clone(),
                 state: RecordState::Pushing,
@@ -692,11 +703,15 @@ impl Landing {
         park_at: &Commit,
     ) -> Settled {
         let ticket = &record.landed.ticket;
-        let closed = match self.records.deliver(ctx.hub.as_ref(), record) {
-            Ok(_) => "ticket closed".to_owned(),
-            Err(Error::Unreachable(_)) => "the ticket closes when the hub returns".to_owned(),
-            Err(error) => format!("the hub refused the record ({error}); it is kept"),
-        };
+        let closed =
+            match self
+                .records
+                .deliver(ctx.hub.as_ref(), record, self.trees.dispatch_pressure())
+            {
+                Ok(_) => "ticket closed".to_owned(),
+                Err(Error::Unreachable(_)) => "the ticket closes when the hub returns".to_owned(),
+                Err(error) => format!("the hub refused the record ({error}); it is kept"),
+            };
         let mut problems = Vec::new();
         let released = match self.trees.release_ticket(&held.tree, park_at, req.pid) {
             Ok(()) => format!("{} released", held.tree),

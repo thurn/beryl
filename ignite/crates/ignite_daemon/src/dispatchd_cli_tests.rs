@@ -550,12 +550,27 @@ fn hub_with_lost_landing_reply(rig: &Rig) -> crate::hubclient::tests::FakeHttpHu
     })
 }
 
+fn file_test_lane(hub: &dyn ignite_core::traits::Hub) -> (TicketId, TicketId) {
+    use ignite_core::protocol::tickets::BatchRequest;
+    use serde_json::json;
+
+    let batch: BatchRequest = serde_json::from_value(json!({
+        "ops": [
+            {"op": "create", "fields": {"title": "first", "labels": ["lane:test"]}},
+            {"op": "create", "fields": {"title": "second", "labels": ["lane:test", "tier:opus"]},
+             "deps": [{"on": "$0"}]}
+        ]
+    }))
+    .unwrap();
+    let filed = hub.batch(&batch).unwrap();
+    (filed.results[0].id.clone(), filed.results[1].id.clone())
+}
+
 #[test]
 fn a_lost_landing_reply_delivers_the_lane_successor_once_the_cli_turn_ends() {
     use ignite_core::ids::Commit;
     use ignite_core::protocol::hub::{Claim, Landed};
-    use ignite_core::protocol::tickets::{BatchRequest, LandedWork, Status};
-    use serde_json::json;
+    use ignite_core::protocol::tickets::{LandedWork, Status};
 
     use crate::land::records::{LandingRecord, RecordState, Records};
 
@@ -572,17 +587,7 @@ fn a_lost_landing_reply_delivers_the_lane_successor_once_the_cli_turn_ends() {
     let http = hub_with_lost_landing_reply(&rig);
     rig.ctx.hub = Arc::new(http.client());
 
-    let batch: BatchRequest = serde_json::from_value(json!({
-        "ops": [
-            {"op": "create", "fields": {"title": "first", "labels": ["lane:test"]}},
-            {"op": "create", "fields": {"title": "second", "labels": ["lane:test", "tier:opus"]},
-             "deps": [{"on": "$0"}]}
-        ]
-    }))
-    .unwrap();
-    let filed = rig.ctx.hub.batch(&batch).unwrap();
-    let first = filed.results[0].id.clone();
-    let second = filed.results[1].id.clone();
+    let (first, second) = file_test_lane(rig.ctx.hub.as_ref());
     let claim = Claim {
         ticket: first.clone(),
         machine: rig.ctx.machine.clone(),
@@ -606,6 +611,8 @@ fn a_lost_landing_reply_delivers_the_lane_successor_once_the_cli_turn_ends() {
                 note: "Landed the first ticket.".to_owned(),
             },
             fresh: false,
+            pressure: None,
+            defer_successor: false,
         },
         commit,
         state: RecordState::Pushed,
@@ -614,7 +621,7 @@ fn a_lost_landing_reply_delivers_the_lane_successor_once_the_cli_turn_ends() {
     };
     records.write(&record).unwrap();
     assert!(matches!(
-        records.deliver(rig.ctx.hub.as_ref(), &record),
+        records.deliver(rig.ctx.hub.as_ref(), &record, Ok(None)),
         Err(Error::Unreachable(_))
     ));
     assert_eq!(
@@ -624,10 +631,14 @@ fn a_lost_landing_reply_delivers_the_lane_successor_once_the_cli_turn_ends() {
 
     let send_pending = || {
         records
-            .deliver_all(rig.ctx.hub.as_ref(), |landed, next| {
-                rig.dispatcher
-                    .chain(&rig.ctx, &landed.ticket, next, landed.fresh);
-            })
+            .deliver_all(
+                rig.ctx.hub.as_ref(),
+                |landed, next| {
+                    rig.dispatcher
+                        .chain(&rig.ctx, &landed.ticket, next, landed.fresh);
+                },
+                || Ok(None),
+            )
             .unwrap();
     };
     fake.set_check(&worker, SessionCheck::Running);

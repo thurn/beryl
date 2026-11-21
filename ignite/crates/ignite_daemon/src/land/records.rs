@@ -15,6 +15,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+use ignite_core::dispatch_pressure::DispatchPressure;
 use ignite_core::ids::{Commit, TicketId, TreeId};
 use ignite_core::protocol::hub::{Landed, Reservation};
 use ignite_core::time::Timestamp;
@@ -157,8 +158,18 @@ impl Records {
     }
 
     /// Records one pushed landing at the hub and returns any successor still reserved for it.
-    pub fn deliver(&self, hub: &dyn Hub, record: &LandingRecord) -> Result<Option<Reservation>> {
-        let reply = hub.landed(&record.landed)?;
+    pub fn deliver(
+        &self,
+        hub: &dyn Hub,
+        record: &LandingRecord,
+        pressure: Result<Option<DispatchPressure>>,
+    ) -> Result<Option<Reservation>> {
+        let mut landed = record.landed.clone();
+        match pressure {
+            Ok(pressure) => landed.pressure = pressure,
+            Err(_) => landed.defer_successor = true,
+        }
+        let reply = hub.landed(&landed)?;
         if reply.next.is_none() {
             self.remove_if(&record.landed.ticket, &record.commit)?;
         }
@@ -171,13 +182,14 @@ impl Records {
         &self,
         hub: &dyn Hub,
         mut handoff: impl FnMut(&Landed, &Reservation),
+        mut pressure: impl FnMut() -> Result<Option<DispatchPressure>>,
     ) -> Result<Vec<TicketId>> {
         let mut closed = Vec::new();
         for record in self.all()? {
             if record.state != RecordState::Pushed {
                 continue;
             }
-            match self.deliver(hub, &record) {
+            match self.deliver(hub, &record, pressure()) {
                 Ok(next) => {
                     if let Some(next) = next {
                         handoff(&record.landed, &next);

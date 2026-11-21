@@ -15,7 +15,7 @@ use ignite_core::protocol::host::{
     RequestIds, ReturnCores, Run, RunReply, Selected,
 };
 use ignite_core::traits::{
-    BuildFor, BuildResult, Builds, Clock, CommandSpec, Launcher, Result, RunResult,
+    BuildFor, BuildResult, Builds, Clock, CommandSpec, Error, Launcher, Result, RunResult,
 };
 
 use super::link::Link;
@@ -236,6 +236,18 @@ pub struct RemoteLandTrees {
 }
 
 impl LandTrees for RemoteLandTrees {
+    fn dispatch_pressure(
+        &self,
+    ) -> Result<Option<ignite_core::dispatch_pressure::DispatchPressure>> {
+        self.remote
+            .link
+            .dispatch_pressure()
+            .map(Some)
+            .ok_or_else(|| {
+                Error::Unreachable("the daemon's admission snapshot is unavailable".to_owned())
+            })
+    }
+
     fn ticket_tree(&self, tree: &TreeId) -> Result<Option<TicketTree>> {
         self.local.ticket_tree(tree)
     }

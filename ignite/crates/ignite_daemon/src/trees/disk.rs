@@ -28,7 +28,7 @@ use ignite_core::traits::{Error, Result};
 use ignite_store::local::{rows, trees as store};
 use serde::Serialize;
 
-use super::{Trees, store_error};
+use super::{Kind, Trees, store_error};
 use space::Space;
 
 mod leased;
@@ -216,6 +216,24 @@ impl Trees {
     /// tree holds the most bytes of its own matters less than freeing any. A tree whose files
     /// are clones of another's frees little, and the next free tree goes after it.
     pub fn free_disk(&self, floor: u64, free: impl Fn() -> Option<u64>) -> Result<DiskReport> {
+        self.free_disk_with(floor, free, true)
+    }
+
+    /// Reclaim only free worktrees for a handoff. Leased trees keep their builds.
+    pub(super) fn free_unused_disk(
+        &self,
+        floor: u64,
+        free: impl Fn() -> Option<u64>,
+    ) -> Result<DiskReport> {
+        self.free_disk_with(floor, free, false)
+    }
+
+    fn free_disk_with(
+        &self,
+        floor: u64,
+        free: impl Fn() -> Option<u64>,
+        may_clear_leased: bool,
+    ) -> Result<DiskReport> {
         let mut report = DiskReport {
             limit: Some(floor),
             ..DiskReport::default()
@@ -228,23 +246,39 @@ impl Trees {
             done.set(!low);
             low
         };
+        let config = &self.inner.config;
+        let ticket_trees: HashSet<_> = config
+            .configured()
+            .into_iter()
+            .filter_map(|(id, kind)| (kind == Kind::Ticket).then_some(id))
+            .collect();
+        let keep = config.keep.get();
         for row in self.free_rows()? {
             if !low() {
                 break;
             }
+            let id = id_of(&row)?;
+            let path = config.path(&id);
+            if !may_clear_leased
+                && (!ticket_trees.contains(&id) || !keep.iter().any(|dir| path.join(dir).exists()))
+            {
+                continue;
+            }
             let Some(mut row) = self.take_for_sweep(&row.id)? else {
                 continue;
             };
-            let id = id_of(&row)?;
             // Forgotten before anything is deleted, as in `hold_disk`.
             self.inner.builds.forget(&id);
-            let path = self.inner.config.path(&id);
-            for dir in self.inner.config.keep.get().iter() {
+            for dir in keep.iter() {
                 remove(&path.join(dir));
             }
             row.built_commit = None;
             self.put_back(&row)?;
             report.cleared.push(id);
+        }
+        if !may_clear_leased {
+            self.serve_waiters();
+            return Ok(report);
         }
         if low() {
             let mut objects = objects::Swept::default();

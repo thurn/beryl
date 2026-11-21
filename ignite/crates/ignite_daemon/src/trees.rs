@@ -31,6 +31,7 @@ mod choice;
 mod disk;
 pub mod head;
 mod landing;
+mod pressure;
 mod reset;
 mod retire;
 mod seed;
@@ -41,6 +42,7 @@ mod wait;
 
 use std::collections::{BTreeMap, VecDeque};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
@@ -258,6 +260,8 @@ struct Inner {
     steps: Arc<crate::steps::Steps>,
     /// How long freeing a tree waits for its running verbs to end once asked to stop.
     stop_wait: Duration,
+    /// Free disk requested by a blocked handoff, in GB as reported by the disk loop.
+    handoff_disk_target: AtomicU64,
     /// The store and the waiters, under one lock so a release cannot slip between a lease
     /// finding no free tree and its waiter joining the queue.
     locked: Mutex<Locked>,
@@ -367,6 +371,7 @@ impl Trees {
                 builds,
                 steps: crate::steps::global(),
                 stop_wait: crate::stop::STOP_WAIT,
+                handoff_disk_target: AtomicU64::new(0),
                 locked: Mutex::new(Locked {
                     db,
                     waiters: VecDeque::new(),

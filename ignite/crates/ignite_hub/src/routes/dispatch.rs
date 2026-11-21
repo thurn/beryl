@@ -331,7 +331,13 @@ fn next(conn: &mut Connection, free: &MachineFree, now: Timestamp) -> Answer {
     let reply = match queue::next(&tx, &free, now).map_err(|e| store_failure(&e))? {
         Ok(reservation) => NextReply::Reserved(reservation),
         // Only a daemon that asked for the reason gets it; an older one reads `null`.
-        Err(reason) => NextReply::Nothing(free.explain.then_some(reason)),
+        Err(wait) => match wait.reclaim_to_gb {
+            Some(target_gb) if free.explain => NextReply::ReclaimDisk {
+                reason: wait.reason,
+                target_gb,
+            },
+            _ => NextReply::Nothing(free.explain.then_some(wait.reason)),
+        },
     };
     tx.commit().map_err(sql_failure)?;
     Ok(Response::json(200, &json!(reply)))
@@ -511,9 +517,17 @@ fn landed(conn: &mut Connection, landed: &Landed, now: Timestamp) -> Answer {
     )?;
     findings::close_ticket(&tx, id, now).map_err(|e| store_failure(&e))?;
     let ticket = load(&tx, id)?;
-    let next = match label(&ticket.labels, "lane:") {
-        Some(lane) => queue::chain_next(&tx, lane, &landed.machine, &landed.session, now)
-            .map_err(|e| store_failure(&e))?,
+    let lane = label(&ticket.labels, "lane:").filter(|_| !landed.defer_successor);
+    let next = match lane {
+        Some(lane) => queue::chain_next(
+            &tx,
+            lane,
+            &landed.machine,
+            &landed.session,
+            now,
+            landed.pressure.as_ref(),
+        )
+        .map_err(|e| store_failure(&e))?,
         None => None,
     };
     if let Some(reservation) = &next {
@@ -819,6 +833,10 @@ mod security_tests;
 #[cfg(test)]
 #[path = "dispatch_hardening_tests.rs"]
 mod hardening_tests;
+
+#[cfg(test)]
+#[path = "dispatch_pressure_tests.rs"]
+mod pressure_tests;
 
 #[cfg(test)]
 #[path = "dispatch_emergency_tests.rs"]

@@ -140,6 +140,8 @@ impl World {
                     note: String::new(),
                 },
                 fresh: false,
+                pressure: None,
+                defer_successor: false,
             })
             .unwrap();
     }

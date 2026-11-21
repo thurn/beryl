@@ -714,5 +714,10 @@
     "label": "Beryl 3D frame gates use fixed budgets, so ordinary count changes no longer require measuring and editing exact pins in each commit.",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Ignite budgets worktree build growth before handing out tickets and paces new build tickets while the core queue recovers, so active worktrees can keep their build outputs.",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

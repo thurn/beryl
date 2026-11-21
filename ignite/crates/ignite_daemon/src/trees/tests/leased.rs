@@ -140,6 +140,21 @@ fn stale_object_files_in_a_leased_tree_are_deleted_under_the_limit_too() {
     assert!(report.reclaimed.is_empty());
 }
 
+#[test]
+fn making_room_for_a_ticket_keeps_leased_and_landing_builds() {
+    let f = Fixture::new(2, 1);
+    let trees = all_leased(&f, None, &[MB]);
+    let worktrees = f.repo.join(".worktrees");
+    write(&worktrees.join("tree-02"), "out/big", "unused build");
+    write(&worktrees.join("landing-1"), "out/big", "tip build");
+
+    let report = trees.free_unused_disk(100, || Some(50)).unwrap();
+
+    assert_eq!(report.cleared, [id("tree-02")], "{report:?}");
+    assert!(worktrees.join("tree-01/out/big").exists());
+    assert!(worktrees.join("landing-1/out/big").exists());
+}
+
 /// Below the disk's floor with no free ticket tree, idle leased trees are cleared too.
 #[test]
 fn below_the_floor_idle_leased_trees_are_cleared_once_no_free_tree_is_left() {

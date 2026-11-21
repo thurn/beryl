@@ -39,6 +39,14 @@ pub struct GateTree {
 
 /// The build trees, as a landing uses them.
 pub trait LandTrees: Send + Sync {
+    /// A current admission reading for a lane successor. `Err` leaves the successor ready for
+    /// regular dispatch, while `Ok(None)` preserves the behavior of callers without a daemon.
+    fn dispatch_pressure(
+        &self,
+    ) -> Result<Option<ignite_core::dispatch_pressure::DispatchPressure>> {
+        Ok(None)
+    }
+
     /// The ticket tree `tree` and its ticket; `None` when no ticket holds it.
     fn ticket_tree(&self, tree: &TreeId) -> Result<Option<TicketTree>>;
     /// The branch checked out in `path`; `None` for a detached `HEAD`.

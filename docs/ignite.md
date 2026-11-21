@@ -4044,10 +4044,33 @@ that their epics are at their `--max-workers` cap, that they need check families
 the machine cannot run, that no ticket tree is free, and that the last idle
 worker is kept for justiciar tickets.
 
-A documentation or tools ticket is therefore admitted on a busy machine, limited
-only by idle workers and trees, while a third kernel ticket waits. The same
-figure decides whether `ignite start` prebuilds the tree: a ticket expected to
-use under half a core is not expected to compile Rust.
+The machine also sends its current disk space, which build outputs are present
+in each worktree, and how long its queue has been healthy. A ticket is charged 1
+GB of projected growth for light work, 12 GB if its named build outputs are
+already present, and 40 GB for a cold build. A ticket that names Rust source or
+a Cargo manifest counts as build work, as does one expected to use half a core
+or more. Unfamiliar paths are treated as cold. The hub subtracts the growth
+allowances for existing claims and reservations from the free space above the 50
+GB cleanup floor. A warm tree can count for only one reservation. Short tickets
+can still fit in the remaining space while a build waits. The build runner also
+checks disk space immediately before launching a build. If disk holds up a
+handoff when no build ticket is held, the daemon tries to make room by clearing
+build outputs from unused worktrees. It leaves leased worktrees alone in this
+sweep.
+
+The machine can start up to three build tickets at once when the rest of its
+budget permits. With three or more active, the newest must have been held for 90
+seconds before another can start. Once a ticket command has waited 30 seconds
+for cores, new build tickets wait until the queue has stayed below that
+threshold for 90 seconds. The two-minute rule still applies to all ordinary
+handoffs. A regression can use available disk space during a queue hold, and a
+justiciar can start to free space. A lane successor shares the same pressure
+checks. If it needs to wait, the landing closes and the successor stays ready.
+Workers that already hold tickets can finish. `ignite status` names the
+condition that is holding up the next handoff.
+
+The half-core figure also decides whether `ignite start` prebuilds the tree:
+lighter tickets take an older tree.
 
 ### Chains and neighbours
 

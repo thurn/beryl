@@ -152,6 +152,17 @@ pub trait Host: Send + Sync {
     /// How long the scheduler's oldest request of ticket work (the `land` and `agent` classes)
     /// has waited for cores, in seconds; zero when none waits.
     fn ticket_work_wait(&self) -> f64;
+    /// Observe the core queue even when all worker slots are busy.
+    fn observe_queue(&self, _now: Timestamp) {}
+    /// Ask the disk loop to make room for a queued ticket by clearing unused outputs.
+    fn reclaim_for_handoff(&self, _target_gb: u64) {}
+    /// The disk and queue conditions local to this machine.
+    fn pressure(
+        &self,
+        _now: Timestamp,
+    ) -> Option<ignite_core::dispatch_pressure::DispatchPressure> {
+        None
+    }
     /// The ticket each session holds a build tree for.
     fn holders(&self) -> BTreeMap<SessionId, TicketId>;
     fn command(&self, session: &SessionId) -> Option<SessionCommand>;

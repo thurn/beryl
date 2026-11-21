@@ -68,7 +68,7 @@ use crate::time::Timestamp;
 use crate::traits::{BuildFor, BuildResult, CommandSpec, Error, Reserve, Result};
 
 /// The newest version of the host protocol this build speaks.
-pub const PROTOCOL_VERSION: u32 = 2;
+pub const PROTOCOL_VERSION: u32 = 3;
 
 /// The longest a call that waits holds its connection before it answers `waiting`.
 pub const MAX_BLOCK_S: u32 = 30;
@@ -89,7 +89,7 @@ pub trait HostCall: Serialize + DeserializeOwned {
 }
 
 /// Every call, with the version that introduced it. A daemon registers a verb for each.
-pub const CALLS: [(&str, u32); 13] = [
+pub const CALLS: [(&str, u32); 14] = [
     (Hello::VERB, Hello::SINCE),
     (Run::VERB, Run::SINCE),
     (Build::VERB, Build::SINCE),
@@ -103,6 +103,7 @@ pub const CALLS: [(&str, u32); 13] = [
     (BorrowCores::VERB, BorrowCores::SINCE),
     (ReturnCores::VERB, ReturnCores::SINCE),
     (Selected::VERB, Selected::SINCE),
+    (ReadDispatchPressure::VERB, ReadDispatchPressure::SINCE),
 ];
 
 /// Whether a verb process speaking `own` may make the call introduced in `since` to a daemon
@@ -665,6 +666,23 @@ impl HostCall for Finished {
     const VERB: &'static str = "host-finished";
     const SINCE: u32 = 1;
     type Reply = Ack;
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+/// A landing takes a fresh admission snapshot immediately before reporting to the hub,
+/// including when an earlier attempt was interrupted.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReadDispatchPressure {
+    pub handle: Handle,
+}
+
+impl HostCall for ReadDispatchPressure {
+    const VERB: &'static str = "host-dispatch-pressure";
+    const SINCE: u32 = 3;
+    type Reply = Option<crate::dispatch_pressure::DispatchPressure>;
+
     fn handle(&self) -> &Handle {
         &self.handle
     }

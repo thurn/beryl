@@ -42,7 +42,7 @@ use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 
 use rusqlite::Connection;
 
-use ignite_core::admission::{self, Worked};
+use ignite_core::admission::{self, COMPILES_FROM_CORES, Worked};
 use ignite_core::ids::{Commit, Handle, MachineId, Seq, SessionId, TicketId, TreeId};
 use ignite_core::protocol::client::{Exit, Reply, Request};
 use ignite_core::protocol::hub::{ReleaseCause, TicketBrief};
@@ -57,10 +57,6 @@ pub use base::green_or_tip;
 pub use watch::ClaimHook;
 
 use parse::{failure, parse_start};
-
-/// A ticket expected to use fewer cores than this is not expected to compile Rust, so its tree
-/// is not prebuilt and it takes the free tree with the oldest build.
-pub const COMPILES_FROM_CORES: f64 = 0.5;
 
 /// The `--needs` value that sets a ticket aside for a person, which requires a note.
 pub const NEEDS_PERSON: &str = "person";

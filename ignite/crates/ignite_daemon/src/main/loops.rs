@@ -200,9 +200,11 @@ impl Parts {
                 ticker.round(|| {
                     let sent = crate::outbox::tick(&db, ctx.hub.as_ref(), &beat);
                     titles.report_holders(&ctx, &db);
-                    landing.deliver_pending(&ctx, |landed, next| {
-                        dispatcher.chain(&ctx, &landed.ticket, next, landed.fresh);
-                    });
+                    landing.deliver_pending(
+                        &ctx,
+                        |landed, next| dispatcher.chain(&ctx, &landed.ticket, next, landed.fresh),
+                        || Ok(dispatcher.pressure(ctx.clock.now())),
+                    );
                     if let Err(error) = update.poll_release() {
                         eprintln!("ignite: the release branch was not checked: {error}");
                     }
@@ -414,6 +416,14 @@ impl Parts {
                     if let Err(error) = idle.hold_disk() {
                         eprintln!("ignite: trees not held under their disk limit: {error}");
                         failure = Some(format!("trees not held under their disk limit: {error}"));
+                    }
+                    if let Err(error) = trees.reclaim_disk_for_handoff() {
+                        eprintln!(
+                            "ignite: cannot reclaim unused build outputs for a handoff: {error}"
+                        );
+                        failure = Some(format!(
+                            "cannot reclaim build outputs for a handoff: {error}"
+                        ));
                     }
                     failure.map_or(Ok(()), Err)
                 });

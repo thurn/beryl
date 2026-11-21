@@ -90,12 +90,7 @@ impl TreeConfig {
 pub(super) fn wanted<'a>(keep: &'a [String], files: &[String]) -> Vec<&'a str> {
     keep.iter()
         .map(String::as_str)
-        .filter(|dir| {
-            let parent = dir.rsplit_once('/').map_or("", |(parent, _)| parent);
-            files
-                .iter()
-                .any(|file| within(file, parent) && !within(file, dir))
-        })
+        .filter(|dir| ignite_core::dispatch_pressure::wants_output(dir, files))
         .collect()
 }
 

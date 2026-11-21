@@ -29,6 +29,8 @@ fn write_pushing(world: &World, commit: &Commit, at: Option<Timestamp>) -> Landi
                 note: "the note".to_owned(),
             },
             fresh: false,
+            pressure: None,
+            defer_successor: false,
         },
         commit: commit.clone(),
         state: RecordState::Pushing,
@@ -100,13 +102,13 @@ fn the_sender_closes_a_ticket_whose_push_landed_but_whose_landing_never_ran_agai
     // A record that is still young is left to its landing.
     world
         .landing
-        .deliver_pending(&world.ctx, |_, _| unreachable!());
+        .deliver_pending(&world.ctx, |_, _| unreachable!(), || Ok(None));
     assert!(world.landings().is_empty());
 
     world.clock.advance(120.0);
     world
         .landing
-        .deliver_pending(&world.ctx, |_, _| unreachable!());
+        .deliver_pending(&world.ctx, |_, _| unreachable!(), || Ok(None));
 
     assert_eq!(world.landings().len(), 1);
     assert!(world.landing.records.all().unwrap().is_empty());
@@ -127,7 +129,7 @@ fn a_landing_the_sender_settles_releases_its_ticket_tree() {
     world.clock.advance(120.0);
     world
         .landing
-        .deliver_pending(&world.ctx, |_, _| unreachable!());
+        .deliver_pending(&world.ctx, |_, _| unreachable!(), || Ok(None));
 
     let tree = TreeId::new("tree-01").unwrap();
     assert_eq!(
@@ -158,7 +160,7 @@ fn a_settled_landing_leaves_a_tree_leased_to_another_ticket_alone() {
     world.clock.advance(120.0);
     world
         .landing
-        .deliver_pending(&world.ctx, |_, _| unreachable!());
+        .deliver_pending(&world.ctx, |_, _| unreachable!(), || Ok(None));
 
     assert_eq!(world.landings().len(), 1);
     assert!(world.trees.released.lock().unwrap().is_empty());
@@ -174,14 +176,14 @@ fn the_sender_drops_an_old_record_whose_commit_never_reached_the_remote() {
     world.clock.advance(120.0);
     world
         .landing
-        .deliver_pending(&world.ctx, |_, _| unreachable!());
+        .deliver_pending(&world.ctx, |_, _| unreachable!(), || Ok(None));
     // Not on the remote, but not old enough to be sure the push is not still in flight.
     assert_eq!(world.landing.records.all().unwrap().len(), 1);
 
     world.clock.advance(600.0);
     world
         .landing
-        .deliver_pending(&world.ctx, |_, _| unreachable!());
+        .deliver_pending(&world.ctx, |_, _| unreachable!(), || Ok(None));
     assert!(world.landing.records.all().unwrap().is_empty());
     assert!(world.landings().is_empty());
 }

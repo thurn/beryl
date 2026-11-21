@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use super::tickets::{LandedWork, Ticket};
 use super::{Class, Outcome};
 use crate::config::Os;
+use crate::dispatch_pressure::DispatchPressure;
 use crate::ids::{CheckName, Commit, InputHash, MachineId, RecordId, SessionId, TicketId, TreeId};
 use crate::time::Timestamp;
 
@@ -145,6 +146,9 @@ pub struct MachineFree {
     /// daemon that predates it sends none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub admit_cores: Option<f64>,
+    /// The machine's current disk and build-queue pressure.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pressure: Option<DispatchPressure>,
     /// The families the machine can run; empty means every family.
     pub families: Vec<String>,
     /// The machine's registered name, which a `needs:<name>` label asks for. The hub fills it
@@ -175,6 +179,7 @@ pub struct MachineFree {
 pub enum NextReply {
     Reserved(Reservation),
     Nothing(Option<String>),
+    ReclaimDisk { reason: String, target_gb: u64 },
 }
 
 /// `POST /next`'s body on the wire: a reservation, `{"nothing": "<reason>"}`, or `null`.
@@ -182,7 +187,11 @@ pub enum NextReply {
 #[serde(untagged)]
 enum NextWire {
     Reserved(Reservation),
-    Nothing { nothing: String },
+    Nothing {
+        nothing: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reclaim_to_gb: Option<u64>,
+    },
 }
 
 impl Serialize for NextReply {
@@ -192,6 +201,12 @@ impl Serialize for NextReply {
             Self::Nothing(None) => serializer.serialize_none(),
             Self::Nothing(Some(reason)) => NextWire::Nothing {
                 nothing: reason.clone(),
+                reclaim_to_gb: None,
+            }
+            .serialize(serializer),
+            Self::ReclaimDisk { reason, target_gb } => NextWire::Nothing {
+                nothing: reason.clone(),
+                reclaim_to_gb: Some(*target_gb),
             }
             .serialize(serializer),
         }
@@ -202,7 +217,17 @@ impl<'de> Deserialize<'de> for NextReply {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         Ok(match Option::<NextWire>::deserialize(deserializer)? {
             Some(NextWire::Reserved(r)) => Self::Reserved(r),
-            Some(NextWire::Nothing { nothing }) => Self::Nothing(Some(nothing)),
+            Some(NextWire::Nothing {
+                nothing,
+                reclaim_to_gb: Some(target_gb),
+            }) => Self::ReclaimDisk {
+                reason: nothing,
+                target_gb,
+            },
+            Some(NextWire::Nothing {
+                nothing,
+                reclaim_to_gb: None,
+            }) => Self::Nothing(Some(nothing)),
             None => Self::Nothing(None),
         })
     }
@@ -268,6 +293,13 @@ pub struct Landed {
     /// its chain goes to a cleared session instead of continuing in this one.
     #[serde(default)]
     pub fresh: bool,
+    /// The current admission budget for assigning a lane successor.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pressure: Option<DispatchPressure>,
+    /// The daemon supports admission checks, but has no current reading. Finish the landing and
+    /// let ordinary dispatch take its successor when capacity can be read again.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub defer_successor: bool,
 }
 
 /// `POST /release`: a session gives a ticket back without landing it.

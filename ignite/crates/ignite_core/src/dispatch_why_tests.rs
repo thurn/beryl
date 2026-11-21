@@ -19,6 +19,7 @@ fn machine() -> MachineFree {
         free_ticket_trees: 4,
         free_cores: 1.0,
         admit_cores: Some(15.0),
+        pressure: None,
         families: Vec::new(),
         name: Some("jarvis".to_owned()),
         justiciar_only: false,

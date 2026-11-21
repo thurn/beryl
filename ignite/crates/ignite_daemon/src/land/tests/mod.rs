@@ -362,7 +362,7 @@ fn a_push_while_the_hub_is_down_closes_the_ticket_when_it_returns_with_one_push(
     world.hub.landed_down.store(false, Ordering::SeqCst);
     world
         .landing
-        .deliver_pending(&world.ctx, |_, _| unreachable!());
+        .deliver_pending(&world.ctx, |_, _| unreachable!(), || Ok(None));
     let landed: Vec<String> = world
         .landings()
         .iter()
@@ -597,6 +597,8 @@ fn an_empty_rebase_does_not_close_a_ticket_whose_push_never_reached_the_remote()
                 note: "the note".to_owned(),
             },
             fresh: false,
+            pressure: None,
+            defer_successor: false,
         },
         commit: never_pushed,
         state: RecordState::Pushing,
@@ -630,6 +632,8 @@ fn a_malformed_record_is_moved_aside_and_the_others_are_still_delivered() {
                 note: "the note".to_owned(),
             },
             fresh: false,
+            pressure: None,
+            defer_successor: false,
         },
         commit,
         state: RecordState::Pushed,
@@ -643,7 +647,7 @@ fn a_malformed_record_is_moved_aside_and_the_others_are_still_delivered() {
     let delivered = world
         .landing
         .records
-        .deliver_all(world.hub.as_ref(), |_, _| unreachable!())
+        .deliver_all(world.hub.as_ref(), |_, _| unreachable!(), || Ok(None))
         .unwrap();
 
     assert_eq!(delivered, [held.ticket]);

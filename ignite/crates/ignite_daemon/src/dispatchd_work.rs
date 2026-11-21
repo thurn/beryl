@@ -7,6 +7,7 @@
 //! as the sender's heartbeat (see [`Dispatcher::view`]).
 
 use ignite_core::config::Config;
+use ignite_core::dispatch_pressure::{BACKLOG_SECONDS, DispatchPressure};
 use ignite_core::ids::{SessionId, TicketId};
 use ignite_core::protocol::hub::{IdleWorker, MachineFree, NextReply, Reservation};
 use ignite_core::protocol::tickets::TicketDetail;
@@ -41,15 +42,6 @@ struct Asking {
     shared: Option<String>,
 }
 
-/// How long ticket work may wait for cores before the dispatcher stops starting ordinary
-/// tickets. On 2026-11-20 jarvis kept starting workers while 16 to 18 commands already waited
-/// for its 15 cores. Each new worker's commands joined the queue, so every command waited
-/// longer, and a one-card change's `ignite check` ran 80 minutes without finishing. Admission by
-/// the tickets' expected cores did not stop it: those figures are history and say nothing about
-/// the queue now. Two minutes is the longest wait for cores a short change should see; past it
-/// the machine has more work than cores, and a new ticket only makes every ticket slower.
-pub const BACKLOG_SECONDS: f64 = 120.0;
-
 /// Clears the flag that says a step is asking the hub, however the step ends.
 struct AskingGuard<'a>(&'a Dispatcher);
 
@@ -60,6 +52,10 @@ impl Drop for AskingGuard<'_> {
 }
 
 impl Dispatcher {
+    pub(crate) fn pressure(&self, now: Timestamp) -> Option<DispatchPressure> {
+        self.host.pressure(now)
+    }
+
     /// Queues a lane's successor for the session that landed its predecessor. The sender
     /// offers the same reservation again until it is claimed or expires.
     pub fn chain(
@@ -122,6 +118,7 @@ impl Dispatcher {
     /// idle and trees are free, asks the hub for tickets. Then starts the CLI sessions and sends
     /// the CLI messages and checks this decided on (see `cli`).
     pub(super) fn refresh(&self, ctx: &Context, members: &[Member]) {
+        self.host.observe_queue(ctx.clock.now());
         self.update_cli_layout();
         self.refresh_state(ctx, members);
         self.run_cli_calls(ctx);
@@ -361,7 +358,7 @@ impl Dispatcher {
             trees,
             workers: slots::capacity(state, members),
             master_only,
-            backlog: (waited >= BACKLOG_SECONDS).then_some(waited),
+            backlog: (waited >= f64::from(BACKLOG_SECONDS)).then_some(waited),
             shared: state
                 .shared
                 .current
@@ -515,6 +512,7 @@ impl Dispatcher {
                 free_ticket_trees: *trees,
                 free_cores: self.host.free_cores(),
                 admit_cores: Some(self.host.admit_cores()),
+                pressure: self.pressure(ctx.clock.now()),
                 families: self.setup.families.clone(),
                 name: None,
                 // The last idle worker of a pool of several is kept for justiciar tickets.
@@ -530,6 +528,11 @@ impl Dispatcher {
             };
             let reservation = match ctx.hub.next_explained(&free) {
                 Ok(NextReply::Reserved(reservation)) => reservation,
+                Ok(NextReply::ReclaimDisk { reason, target_gb }) => {
+                    self.host.reclaim_for_handoff(target_gb);
+                    why = reason;
+                    break;
+                }
                 Ok(NextReply::Nothing(reason)) => {
                     why = reason.unwrap_or_else(|| "the hub gave no reason".to_owned());
                     break;

@@ -9,6 +9,7 @@ use std::sync::{Arc, Mutex, OnceLock, PoisonError, Weak};
 use std::time::{Duration, Instant};
 
 use ignite_core::admission::Worked;
+use ignite_core::dispatch_pressure::{DispatchPressure, QueueRecovery};
 use ignite_core::ids::{Commit, MachineId, SessionId, TicketId, TreeId};
 use ignite_core::protocol::client::{Exit, Reply};
 use ignite_core::protocol::hub::{AdhocClaim, Claim, Close, Release, TicketBrief};
@@ -361,6 +362,8 @@ fn release_unclaimed(served: &Served, trees: &Trees, key: &(TicketId, SessionId)
 pub struct DaemonHost {
     pub trees: Trees,
     pub scheduler: Arc<Scheduler>,
+    /// When the build queue can admit work again after its latest long wait.
+    pub queue_recovery: Mutex<QueueRecovery>,
     pub claims: Arc<Claims>,
     /// The daemon's context outside any request, for releases the dispatcher asks for.
     pub ctx: Context,
@@ -414,6 +417,24 @@ impl Host for DaemonHost {
             ignite_core::protocol::Class::Land,
             ignite_core::protocol::Class::Agent,
         ])
+    }
+
+    fn observe_queue(&self, now: Timestamp) {
+        let waited = self.ticket_work_wait();
+        lock(&self.queue_recovery).observe(now, waited);
+    }
+
+    fn reclaim_for_handoff(&self, target_gb: u64) {
+        self.trees.request_disk_for_handoff(target_gb);
+    }
+
+    fn pressure(&self, now: Timestamp) -> Option<DispatchPressure> {
+        let waited = self.ticket_work_wait();
+        let recovery_seconds = lock(&self.queue_recovery).observe(now, waited);
+        Some(
+            self.trees
+                .dispatch_pressure(waited.floor() as u32, recovery_seconds),
+        )
     }
 
     fn holders(&self) -> BTreeMap<SessionId, TicketId> {

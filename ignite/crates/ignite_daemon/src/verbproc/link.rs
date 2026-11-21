@@ -11,9 +11,9 @@ use ignite_core::ids::Handle;
 use ignite_core::protocol::client::Exit;
 use ignite_core::protocol::host::{
     Ack, AllowStop, BorrowCores, BorrowCoresReply, Build, BuildReply, Finished, Hello, HelloReply,
-    HostCall, LeaseLanding, LeaseLandingReply, Poll, RefuseStop, RefuseStopReply, ReleaseLanding,
-    ReturnCores, Run, RunReply, Selected, SelectedReply, StepUpdate, StopState, decode_reply,
-    encode_request,
+    HostCall, LeaseLanding, LeaseLandingReply, Poll, ReadDispatchPressure, RefuseStop,
+    RefuseStopReply, ReleaseLanding, ReturnCores, Run, RunReply, Selected, SelectedReply,
+    StepUpdate, StopState, decode_reply, encode_request,
 };
 use ignite_core::traits::{Error, Result};
 
@@ -79,6 +79,13 @@ impl HostClient for SocketHost {
     fn return_cores(&self, call: &ReturnCores) -> Result<Ack> {
         self.call(call)
     }
+    fn dispatch_pressure(
+        &self,
+        call: &ReadDispatchPressure,
+    ) -> Result<Option<ignite_core::dispatch_pressure::DispatchPressure>> {
+        self.call(call)
+    }
+
     fn selected(&self, call: &Selected) -> Result<SelectedReply> {
         self.call(call)
     }
@@ -239,6 +246,15 @@ impl Link {
 
     pub fn return_cores(&self, call: &ReturnCores) -> Result<Ack> {
         self.call(|host| host.return_cores(call))
+    }
+
+    pub fn dispatch_pressure(&self) -> Option<ignite_core::dispatch_pressure::DispatchPressure> {
+        // This is a best-effort sample. Landing can still report its results if the host is
+        // restarting or speaks an older protocol. Leave a lane successor ready for dispatch.
+        let call = ReadDispatchPressure {
+            handle: self.handle().clone(),
+        };
+        self.host.dispatch_pressure(&call).ok().flatten()
     }
 
     pub fn selected(&self, call: &Selected) -> Result<SelectedReply> {

@@ -394,6 +394,8 @@ impl Landing {
                     session: session.clone(),
                     work,
                     fresh: args.fresh,
+                    pressure: None,
+                    defer_successor: false,
                 },
                 commit: replayed.clone(),
                 state: RecordState::Pushing,

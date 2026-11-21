@@ -6,8 +6,8 @@ use std::sync::Arc;
 use ignite_core::protocol::client::{Reply, Request};
 use ignite_core::protocol::host::{
     Ack, AllowStop, BorrowCores, Build, CALLS, Finished, Hello, HostCall, LeaseLanding, Poll,
-    RefuseStop, ReleaseLanding, ReturnCores, Run, Selected, StepUpdate, decode_request,
-    encode_reply,
+    ReadDispatchPressure, RefuseStop, ReleaseLanding, ReturnCores, Run, Selected, StepUpdate,
+    decode_request, encode_reply,
 };
 use ignite_core::traits::Result;
 
@@ -89,6 +89,13 @@ pub(super) fn register(host: &Arc<Host>, registry: &mut Registry) {
         Ok(Ack {})
     });
     add::<Selected>(host, registry, |host, _, call| Ok(host.selected(&call)));
+    add::<ReadDispatchPressure>(host, registry, |host, ctx, call| {
+        host.running(ctx, &call.handle)?;
+        Ok(host
+            .dispatcher
+            .as_ref()
+            .and_then(|dispatcher| dispatcher.pressure(ctx.clock.now())))
+    });
     debug_assert!(
         CALLS.iter().all(|(verb, _)| registry.get(verb).is_some()),
         "every call of the host protocol has a verb"

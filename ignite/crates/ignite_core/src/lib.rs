@@ -6,6 +6,7 @@ pub mod budget;
 pub mod cli;
 pub mod config;
 pub mod dispatch;
+pub mod dispatch_pressure;
 pub mod explore;
 pub mod fakes;
 pub mod formatting;

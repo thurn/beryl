@@ -9,10 +9,10 @@ use ignite_core::protocol::hub::Reservation;
 use ignite_core::traits::Clock;
 
 use super::tests::{detail, handoff_to, lock, request, rig, session};
-use super::work::BACKLOG_SECONDS;
 use super::*;
 use crate::server::Verb;
 use crate::testhub::SpyHub;
+use ignite_core::dispatch_pressure::BACKLOG_SECONDS;
 use ignite_core::protocol::client::Reply;
 
 #[test]
@@ -232,7 +232,7 @@ fn a_paused_pool_asks_only_for_tickets_holding_master_back() {
 #[test]
 fn a_long_wait_for_cores_asks_only_for_tickets_holding_master_back() {
     let rig = rig(&["local_w1", "local_w2"]);
-    *lock(&rig.host.waited) = BACKLOG_SECONDS + 30.0;
+    *lock(&rig.host.waited) = f64::from(BACKLOG_SECONDS) + 30.0;
     assert!(rig.step().is_none());
     let asked = rig.hub.asked();
     assert!(
@@ -253,7 +253,7 @@ fn a_long_wait_for_cores_asks_only_for_tickets_holding_master_back() {
     assert_eq!(handoff_to(&rig.step().unwrap()), ("local_w1", "R"));
 
     // Once the wait is short again, ordinary tickets start.
-    *lock(&rig.host.waited) = BACKLOG_SECONDS - 1.0;
+    *lock(&rig.host.waited) = f64::from(BACKLOG_SECONDS) - 1.0;
     rig.reserve("T.1", "local_w2", &[]);
     assert_eq!(handoff_to(&rig.step().unwrap()), ("local_w2", "T.1"));
     assert!(!rig.hub.asked().last().unwrap().master_only);

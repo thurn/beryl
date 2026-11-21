@@ -412,6 +412,7 @@ pub fn desks(base: &Base, ctx: &Context, machinery: &Machinery) -> Result<Desks>
     let host = Arc::new(desk::DaemonHost {
         trees: machinery.trees.clone(),
         scheduler: machinery.scheduler.clone(),
+        queue_recovery: Mutex::default(),
         claims: claims.clone(),
         ctx: ctx.clone(),
         server: OnceLock::new(),
@@ -500,6 +501,7 @@ pub fn server(
     }));
     // The calls of verb processes, which run long verbs outside the daemon (see `crate::host`).
     let host = Host::new(HostParts {
+        dispatcher: Some(desks.dispatcher.clone()),
         starter: Arc::new(SupervisedStarter::new(
             desks.supervised.clone(),
             Some(parts.scheduler.clone()),

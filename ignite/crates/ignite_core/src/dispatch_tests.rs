@@ -30,6 +30,7 @@ fn machine(workers: Vec<IdleWorker>) -> MachineFree {
         free_ticket_trees: 4,
         free_cores: 8.0,
         admit_cores: None,
+        pressure: None,
         families: Vec::new(),
         name: None,
         justiciar_only: false,

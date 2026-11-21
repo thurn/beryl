@@ -34,7 +34,7 @@ pub const ROOM_GB: u64 = 150;
 /// Free disk space the daemon keeps. Below it the trees are held under their current size
 /// less what the disk lacks, whatever `trees_disk_gb` allows: that limit was set for the disk
 /// as it was then, and the rest of the disk can fill after it was set.
-pub const FLOOR_GB: u64 = 50;
+pub use ignite_core::dispatch_pressure::DISK_FLOOR_GB as FLOOR_GB;
 
 /// The least time between two measurements while the disk is below [`FLOOR_GB`].
 pub const LOW_EVERY: Duration = Duration::from_mins(5);

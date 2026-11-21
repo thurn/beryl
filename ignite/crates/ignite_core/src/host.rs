@@ -9,8 +9,8 @@
 
 use crate::protocol::host::{
     Ack, AllowStop, BorrowCores, BorrowCoresReply, Build, BuildReply, Finished, Hello, HelloReply,
-    LeaseLanding, LeaseLandingReply, Poll, RefuseStop, RefuseStopReply, ReleaseLanding,
-    ReturnCores, Run, RunReply, Selected, SelectedReply, StepUpdate, StopState,
+    LeaseLanding, LeaseLandingReply, Poll, ReadDispatchPressure, RefuseStop, RefuseStopReply,
+    ReleaseLanding, ReturnCores, Run, RunReply, Selected, SelectedReply, StepUpdate, StopState,
 };
 use crate::traits::Result;
 
@@ -41,4 +41,11 @@ pub trait HostClient: Send + Sync {
     fn return_cores(&self, call: &ReturnCores) -> Result<Ack>;
     /// `host-selected`; never waits for a build.
     fn selected(&self, call: &Selected) -> Result<SelectedReply>;
+    /// `host-dispatch-pressure`; the daemon's current capacity for a lane successor.
+    fn dispatch_pressure(
+        &self,
+        _call: &ReadDispatchPressure,
+    ) -> Result<Option<crate::dispatch_pressure::DispatchPressure>> {
+        Ok(None)
+    }
 }

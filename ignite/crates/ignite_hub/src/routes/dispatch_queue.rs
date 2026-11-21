@@ -27,6 +27,7 @@ use rusqlite::Connection;
 use ignite_core::admission::{self, Worked};
 use ignite_core::config::Improvement;
 use ignite_core::dispatch::{self, ReadyTicket, TicketKind};
+use ignite_core::dispatch_pressure::{DispatchPressure, HandoffWait};
 use ignite_core::ids::{SessionId, TicketId};
 use ignite_core::owner::{FALLBACK_SECONDS, Owner, Routing};
 use ignite_core::protocol::hub::{MachineFree, Reservation};
@@ -62,6 +63,9 @@ const NEEDS_PERSON: &str = "needs:person";
 mod held;
 use held::Paused;
 
+#[path = "dispatch_capacity.rs"]
+mod capacity;
+
 /// The ticket to reserve for `free`'s machine, already reserved and logged, or why there is none
 /// ([`dispatch::why_nothing`]). Call it inside an `IMMEDIATE` transaction after lapsing old
 /// reservations, so that two machines asking at once are answered one after the other and never
@@ -70,15 +74,19 @@ pub fn next(
     conn: &Connection,
     free: &MachineFree,
     now: Timestamp,
-) -> Result<std::result::Result<Reservation, String>> {
+) -> Result<std::result::Result<Reservation, HandoffWait>> {
     let machine = free.machine.as_str();
     let paused = held::paused(conn, free)?;
     if paused == Paused::Everything {
-        return Ok(Err("hand-offs are paused on every machine".to_owned()));
+        return Ok(Err("hand-offs are paused on every machine"
+            .to_owned()
+            .into()));
     }
     if paused == Paused::MasterOnly && held::holds_one(conn, machine)? {
         return Ok(Err(
-            "the pool is paused and already works a ticket that holds master back".to_owned(),
+            "the pool is paused and already works a ticket that holds master back"
+                .to_owned()
+                .into(),
         ));
     }
     // A worker of this machine that already holds a reservation is asking again because the
@@ -97,7 +105,15 @@ pub fn next(
         .retain(|worker| !waiting.contains(worker.session.as_str()));
     let history = history(conn, machine)?;
     let landed = landed_files(conn)?;
-    free.free_cores = dispatch::room(&free, &held_cores(conn, machine, &history, &landed, now)?);
+    let capacity = capacity::read(
+        conn,
+        machine,
+        &history,
+        &landed,
+        now,
+        free.pressure.as_ref(),
+    )?;
+    free.free_cores = dispatch::room(&free, &capacity.cores);
     let mut ready = snapshot.ready_tickets(conn, &history, &landed, now)?;
     if paused == Paused::MasterOnly {
         ready.retain(held::holds_master);
@@ -114,9 +130,12 @@ pub fn next(
     let epic_order = shares::epic_order(&demand);
     let improvements = improvements_due(conn, machine)?;
     let last_files = last_files(conn, machine)?;
-    let Some(handoff) = dispatch::next_for(&free, &ready, &epic_order, improvements, &last_files)
-    else {
-        return Ok(Err(dispatch::why_nothing(&free, &ready, &epic_order)));
+    let handoff = match capacity.choose(&mut ready, |ready| {
+        dispatch::next_for(&free, ready, &epic_order, improvements, &last_files)
+    }) {
+        Some(Ok(handoff)) => handoff,
+        Some(Err(reason)) => return Ok(Err(reason)),
+        None => return Ok(Err(dispatch::why_nothing(&free, &ready, &epic_order).into())),
     };
     let kind = ready
         .iter()
@@ -142,6 +161,7 @@ pub fn chain_next(
     machine: &ignite_core::ids::MachineId,
     session: &SessionId,
     now: Timestamp,
+    pressure: Option<&DispatchPressure>,
 ) -> Result<Option<Reservation>> {
     if fleet::paused(conn, machine.as_str())? {
         return Ok(None);
@@ -168,6 +188,20 @@ pub fn chain_next(
     let Some(next) = dispatch::chain_next(lane, &ready) else {
         return Ok(None);
     };
+    if let Some(pressure) = pressure
+        && let Some(budget) = capacity::read(
+            conn,
+            machine.as_str(),
+            &history,
+            &landed,
+            now,
+            Some(pressure),
+        )?
+        .disk
+        && budget.blocked(next).is_some()
+    {
+        return Ok(None);
+    }
     reserve(conn, &next.id, machine, session, next.kind, now).map(Some)
 }
 
@@ -489,33 +523,6 @@ fn expected_cores(
     now: Timestamp,
 ) -> f64 {
     admission::expected_cores(ticket.cores, &areas(files, landed), history, now)
-}
-
-/// The expected cores of each ticket in progress on `machine` or reserved for it, which a new
-/// ticket must fit beside ([`dispatch::room`]). The hub cannot see what a ticket has used so
-/// far, so each counts at its expectation alone.
-fn held_cores(
-    conn: &Connection,
-    machine: &str,
-    history: &[Worked],
-    landed: &[String],
-    now: Timestamp,
-) -> Result<Vec<f64>> {
-    let mut statement = conn.prepare(
-        "SELECT id FROM tickets WHERE status = 'in_progress' AND machine = ?1
-         UNION SELECT ticket FROM reservations WHERE machine = ?1",
-    )?;
-    let ids: Vec<String> = statement
-        .query_map([machine], |row| row.get(0))?
-        .collect::<std::result::Result<_, _>>()?;
-    let mut cores = Vec::new();
-    for id in ids {
-        if let Some(ticket) = tickets::load(conn, &id)? {
-            let files = named_files(&format!("{}\n{}", ticket.body, ticket.acceptance));
-            cores.push(expected_cores(&ticket, &files, history, landed, now));
-        }
-    }
-    Ok(cores)
 }
 
 /// The paths a ticket names, in order and without repeats:
