@@ -1960,16 +1960,18 @@ public final class BerylForgeHarness {
             }
             while (pick != null && pick.get("pick").getAsString().equals("Card")) {
                 Card blocker = run.first(player, pick.get("card").getAsString(), null);
-                Card attacker = null;
+                List<Card> attackers = new ArrayList<>();
                 for (Card candidate : combat.getAttackers()) {
                     if (CombatUtil.canBlock(candidate, blocker, combat)) {
-                        attacker = candidate;
-                        break;
+                        attackers.add(candidate);
                     }
                 }
-                if (attacker == null) {
+                if (attackers.isEmpty()) {
                     throw new StepFailed("Forge does not let " + blocker + " block");
                 }
+                // Beryl can name the attacker in a separate answer after choosing a blocker.
+                JsonObject target = run.takeFollowing(player, Set.of("BlockTarget"));
+                Card attacker = target == null ? attackers.get(0) : (Card) run.resolvePick(target, attackers);
                 combat.addBlocker(attacker, blocker);
                 pick = run.takeFollowing(player, Set.of("Blocker"));
             }
