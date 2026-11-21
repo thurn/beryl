@@ -62,12 +62,7 @@ pub fn render_face_read(def: &CardDef, face: FaceIx, words: &Words) -> String {
     let overloaded: Vec<usize> = face
         .casting
         .iter()
-        .filter_map(|option| match option {
-            CastingOption::Overload { ability, .. } | CastingOption::Mutate { ability, .. } => {
-                Some(ability.index())
-            }
-            _ => None,
-        })
+        .filter_map(|option| option.ability().map(crate::AbilityIx::index))
         .collect();
     let mut previous: Option<&Ability> = None;
     // The mana the mana abilities on the last line add between them.
@@ -161,7 +156,8 @@ fn merged(ctx: &mut Ctx, before: &Ability, ability: &Ability) -> Option<String> 
     };
     let same_effect = match (before.body(), ability.body()) {
         (Behavior::Data(a), Behavior::Data(b)) => std::ptr::eq(a, b),
-        _ => false,
+        (Behavior::Data(_), Behavior::Custom(_))
+        | (Behavior::Custom(_), Behavior::Data(_) | Behavior::Custom(_)) => false,
     };
     let of_this = matches!(first.subject, Subject::This) && matches!(second.subject, Subject::This);
     if !same_effect || !of_this || before.condition().is_some() || ability.condition().is_some() {

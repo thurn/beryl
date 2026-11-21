@@ -53,12 +53,15 @@ impl Ctx {
                 };
                 let place = match zone {
                     Zone::Exile => "exile".to_owned(),
-                    zone => with_article(zone_name(zone)),
+                    zone @ (Zone::Library
+                    | Zone::Hand
+                    | Zone::Battlefield
+                    | Zone::Graveyard
+                    | Zone::Stack
+                    | Zone::Nowhere
+                    | Zone::Merged) => with_article(zone_name(zone)),
                 };
-                let instead = match instead {
-                    Zone::Exile => "exile it instead".to_owned(),
-                    zone => format!("put it into its owner's {} instead", zone_name(zone)),
-                };
+                let instead = replacement_destination(instead);
                 vec![format!(
                     "if {what} would be put into {place} from anywhere, {instead}"
                 )]
@@ -70,44 +73,26 @@ impl Ctx {
                         .singular(Kind::Permanent),
                 );
                 let cast = if not_cast { " and it wasn't cast" } else { "" };
-                let instead = match instead {
-                    Zone::Exile => "exile it instead".to_owned(),
-                    zone => format!("put it into its owner's {} instead", zone_name(zone)),
-                };
+                let instead = replacement_destination(instead);
                 vec![format!("if {what} would enter{cast}, {instead}")]
             }
             (Replaced::Draw(players, draws), Rewrite::Instead) => {
-                let except = match draws {
-                    Draws::Each => "",
-                    Draws::ExceptFirstInDrawStep => {
-                        " except the first one they draw in each of their draw steps"
-                    }
-                };
-                let condition = ability
-                    .condition()
-                    .map(|&c| format!(" while {}", self.condition(c)))
-                    .unwrap_or_default();
-                // One player at a time would draw: "a player", "an opponent".
-                let who = match players {
-                    Players::EachPlayer => "a player".to_owned(),
-                    Players::EachOpponent => "an opponent".to_owned(),
-                    players => self.player(players),
-                };
-                let mut instead = self.body(ability.body());
-                if let Some(first) = instead.first_mut() {
-                    let you = if first.starts_with("you ") || first.starts_with("that player ") {
-                        ""
-                    } else {
-                        "you "
-                    };
-                    *first = format!(
-                        "if {who} would draw a card{except}{condition}, {you}{first} instead"
-                    );
-                }
-                return instead;
+                return self.replaced_draw(ability, players, draws);
             }
             (Replaced::Damage, Rewrite::Multiply(n)) => vec![super::prevention::multiplied(n)],
-            _ => self.body(ability.body()),
+            (
+                Replaced::None
+                | Replaced::ThisEnters
+                | Replaced::Draw(..)
+                | Replaced::PutInto(..)
+                | Replaced::Enters { .. }
+                | Replaced::Damage,
+                Rewrite::None
+                | Rewrite::ToZone(_)
+                | Rewrite::Instead
+                | Rewrite::Dredge(_)
+                | Rewrite::Multiply(_),
+            ) => self.body(ability.body()),
         };
         if let Some(&condition) = ability.condition() {
             let condition = self.condition(condition);
@@ -116,5 +101,56 @@ impl Ctx {
             }
         }
         clauses
+    }
+
+    /// "If [player] would draw a card", including any restriction on which draws it replaces.
+    fn replaced_draw(&mut self, ability: &Ability, players: Players, draws: Draws) -> Vec<String> {
+        let except = match draws {
+            Draws::Each => "",
+            Draws::ExceptFirstInDrawStep => {
+                " except the first one they draw in each of their draw steps"
+            }
+        };
+        let condition = ability
+            .condition()
+            .map(|&c| format!(" while {}", self.condition(c)))
+            .unwrap_or_default();
+        // One player at a time would draw: "a player", "an opponent".
+        let who = match players {
+            Players::EachPlayer => "a player".to_owned(),
+            Players::EachOpponent => "an opponent".to_owned(),
+            players @ (Players::You
+            | Players::Target(_)
+            | Players::ControllerOf(_)
+            | Players::OwnerOf(_)
+            | Players::ThatPlayer
+            | Players::EachOther(_)) => self.player(players),
+        };
+        let mut instead = self.body(ability.body());
+        if let Some(first) = instead.first_mut() {
+            let you = if first.starts_with("you ") || first.starts_with("that player ") {
+                ""
+            } else {
+                "you "
+            };
+            *first = format!("if {who} would draw a card{except}{condition}, {you}{first} instead");
+        }
+        instead
+    }
+}
+
+/// What a replacement does when it changes where an object goes.
+fn replacement_destination(zone: Zone) -> String {
+    match zone {
+        Zone::Exile => "exile it instead".to_owned(),
+        zone @ (Zone::Library
+        | Zone::Hand
+        | Zone::Battlefield
+        | Zone::Graveyard
+        | Zone::Stack
+        | Zone::Nowhere
+        | Zone::Merged) => {
+            format!("put it into its owner's {} instead", zone_name(zone))
+        }
     }
 }

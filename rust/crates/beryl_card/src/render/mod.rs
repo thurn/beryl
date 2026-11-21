@@ -25,6 +25,7 @@ mod abilities;
 mod auras;
 mod card;
 mod clauses;
+mod conditions;
 mod copies;
 mod effects;
 mod filters;
@@ -154,7 +155,11 @@ impl Ctx {
             face: None,
             this: match kind {
                 AbilityKind::Spell => "this spell".to_owned(),
-                _ => "this permanent".to_owned(),
+                AbilityKind::Activated
+                | AbilityKind::Mana
+                | AbilityKind::Triggered
+                | AbilityKind::Static
+                | AbilityKind::Replacement => "this permanent".to_owned(),
             },
             attached: Attached::Neither,
             targets: &[],

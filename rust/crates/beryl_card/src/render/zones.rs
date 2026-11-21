@@ -3,11 +3,116 @@
 
 use super::Ctx;
 use super::filters::{Kind, zone_name};
-use super::words::ordinal;
-use crate::effect::{Effect, LibraryPosition, Objects, Players, PutOnto};
+use super::words::{number, ordinal};
+use crate::effect::{
+    Amount, Effect, LibraryOrder, LibraryPosition, Objects, Players, PutOnto, Taken,
+};
 use crate::ids::ZoneSet;
 
 impl Ctx {
+    /// "Look at the top four cards of your library. Put two of them into your hand and the
+    /// rest on the bottom of your library in any order."
+    pub(super) fn dig(
+        &mut self,
+        player: Players,
+        look: Amount,
+        take: Taken,
+        rest: LibraryOrder,
+    ) -> Vec<String> {
+        let looks = self.clause(player, ("look", "looks"), |c| {
+            format!("at {}", c.top_cards(player, look))
+        });
+        let order = match rest {
+            LibraryOrder::Any => "any order",
+            LibraryOrder::Random => "a random order",
+        };
+        let takes = match take {
+            // One sentence puts both piles: "Put two of them into your hand and the rest on
+            // the bottom of your library in any order."
+            Taken::Put(n) => {
+                let both = self.clause(player, ("put", "puts"), |c| {
+                    let library = c.possessive(player);
+                    format!(
+                        "{} of them into {library} hand and the rest on the bottom of \
+                         {library} library in {order}",
+                        number(n)
+                    )
+                });
+                return vec![looks, both];
+            }
+            Taken::MayReveal(filter) => {
+                self.may = true;
+                self.clause(player, ("reveal", "reveals"), |c| {
+                    let card = c
+                        .noun(filter, Kind::Card(None))
+                        .indefinite(Kind::Card(None));
+                    let put = c.verb("put", "puts");
+                    format!(
+                        "{card} from among them and {put} it into {} hand",
+                        c.possessive(player)
+                    )
+                })
+            }
+        };
+        let rest = self.clause(player, ("put", "puts"), |c| {
+            format!(
+                "the rest on the bottom of {} library in {order}",
+                c.possessive(player)
+            )
+        });
+        vec![looks, takes, rest]
+    }
+
+    /// "Look at the top card of target player's library. You may put that card on the
+    /// bottom of that player's library" (CR 701.29a).
+    pub(super) fn fateseal(
+        &mut self,
+        player: Players,
+        library: Players,
+        count: Amount,
+    ) -> Vec<String> {
+        let looks = self.clause(player, ("look", "looks"), |c| {
+            format!("at {}", c.top_cards(library, count))
+        });
+        self.may = true;
+        let them = if matches!(count, Amount::Fixed(1)) {
+            "that card"
+        } else {
+            "any number of them"
+        };
+        let puts = self.clause(player, ("put", "puts"), |c| {
+            format!("{them} on the bottom of {} library", c.possessive(library))
+        });
+        vec![looks, puts]
+    }
+
+    /// "The top card of your library", "the top four cards of target player's library".
+    pub(super) fn top_cards(&mut self, player: Players, count: Amount) -> String {
+        let cards = match count {
+            Amount::Fixed(1) => "card".to_owned(),
+            Amount::Fixed(n) => format!("{} cards", number(n)),
+            Amount::X => "X cards".to_owned(),
+            other @ (Amount::ThatMany
+            | Amount::Carried
+            | Amount::ThoseOf(_)
+            | Amount::Count(_)
+            | Amount::Times(..)
+            | Amount::Plus(..)
+            | Amount::CardTypesAmong(_)
+            | Amount::Power(_)
+            | Amount::Toughness(_)
+            | Amount::ManaValue(_)
+            | Amount::Counters(..)
+            | Amount::Life(_)
+            | Amount::Most(..)
+            | Amount::SpellsCast(_)
+            | Amount::CardsDrawn(_)
+            | Amount::SpellsCastBefore) => format!("{} cards", self.amount(other)),
+        };
+        let whose = self.possessive(player);
+        format!("the top {cards} of {whose} library")
+    }
+
     /// "Put [objects] into their owners' libraries [position]" (CR 400.3).
     pub(super) fn put_into_library(
         &mut self,

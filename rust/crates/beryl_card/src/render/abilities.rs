@@ -227,7 +227,12 @@ impl Ctx {
                 let whom = match trigger.whose {
                     Players::EachPlayer => "a player".to_owned(),
                     Players::EachOpponent => "an opponent".to_owned(),
-                    other => self.player(other),
+                    other @ (Players::You
+                    | Players::Target(_)
+                    | Players::ControllerOf(_)
+                    | Players::OwnerOf(_)
+                    | Players::ThatPlayer
+                    | Players::EachOther(_)) => self.player(other),
                 };
                 format!("deals combat damage to {whom}")
             }
@@ -249,7 +254,11 @@ impl Ctx {
             Players::You => ("you".to_owned(), false),
             Players::EachOpponent => ("an opponent".to_owned(), true),
             Players::EachPlayer => ("a player".to_owned(), true),
-            other => (self.player(other), true),
+            other @ (Players::Target(_)
+            | Players::ControllerOf(_)
+            | Players::OwnerOf(_)
+            | Players::ThatPlayer
+            | Players::EachOther(_)) => (self.player(other), true),
         }
     }
 
@@ -343,7 +352,9 @@ impl Ctx {
         };
         let kind = match chosen.zone {
             Zone::Battlefield | Zone::Nowhere | Zone::Stack => Kind::Permanent,
-            _ => Kind::Card(None),
+            Zone::Library | Zone::Hand | Zone::Graveyard | Zone::Exile | Zone::Merged => {
+                Kind::Card(None)
+            }
         };
         let noun = self.noun(chosen.filter, kind);
         let from = match chosen.zone {
@@ -351,7 +362,9 @@ impl Ctx {
                 format!(" from your {}", zone_name(chosen.zone))
             }
             Zone::Hand if action != CostAction::Discard => " from your hand".to_owned(),
-            _ => String::new(),
+            Zone::Hand | Zone::Battlefield | Zone::Stack | Zone::Nowhere | Zone::Merged => {
+                String::new()
+            }
         };
         let things = match chosen.measure {
             Measure::Count(1) if chosen.other => format!("another {}", noun.singular(kind)),
@@ -498,7 +511,24 @@ impl Ctx {
                 // power names it as "that number".
                 let toughness = match *toughness {
                     Amount::Plus(n, of) if of == power => format!("that number plus {n}"),
-                    other => self.amount(other),
+                    other @ (Amount::Fixed(_)
+                    | Amount::X
+                    | Amount::ThatMany
+                    | Amount::Carried
+                    | Amount::ThoseOf(_)
+                    | Amount::Count(_)
+                    | Amount::Times(..)
+                    | Amount::Plus(..)
+                    | Amount::CardTypesAmong(_)
+                    | Amount::Power(_)
+                    | Amount::Toughness(_)
+                    | Amount::ManaValue(_)
+                    | Amount::Counters(..)
+                    | Amount::Life(_)
+                    | Amount::Most(..)
+                    | Amount::SpellsCast(_)
+                    | Amount::CardsDrawn(_)
+                    | Amount::SpellsCastBefore) => self.amount(other),
                 };
                 return Part::Clause(format!(
                     "{} power is equal to {} and its toughness is equal to {toughness}",

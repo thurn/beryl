@@ -34,7 +34,9 @@ impl Ctx {
                 let creatures = self.objects(objects);
                 return match rule.when {
                     When::Never => format!("{creatures} can't block"),
-                    _ => format!("{creatures} can block only at a changed time"),
+                    When::OnlyAsSorcery | When::AsInstant | When::AsUsual => {
+                        format!("{creatures} can block only at a changed time")
+                    }
                 };
             }
             // "This creature can't attack unless defending player controls an Island": of the
@@ -54,7 +56,9 @@ impl Ctx {
                         format!("{sources} can't be activated unless they're mana abilities")
                     }
                     (When::Never, true) => format!("{sources} can't be activated"),
-                    _ => format!("{sources} can be activated only at a changed time"),
+                    (When::OnlyAsSorcery | When::AsInstant | When::AsUsual, _) => {
+                        format!("{sources} can be activated only at a changed time")
+                    }
                 };
             }
             // "This spell can't be countered": of the spells, not of who would counter them.
@@ -62,7 +66,9 @@ impl Ctx {
                 let spells = self.objects(objects);
                 return match rule.when {
                     When::Never => format!("{spells} can't be countered"),
-                    _ => format!("{spells} can be countered only at a changed time"),
+                    When::OnlyAsSorcery | When::AsInstant | When::AsUsual => {
+                        format!("{spells} can be countered only at a changed time")
+                    }
                 };
             }
             Governed::Player(changes) => return self.player_rules(rule.players, changes),
@@ -73,7 +79,11 @@ impl Ctx {
                     Players::EachPlayer => String::new(),
                     Players::You => " you cast".to_owned(),
                     Players::EachOpponent => " your opponents cast".to_owned(),
-                    _ => format!(" {who} casts"),
+                    Players::Target(_)
+                    | Players::ControllerOf(_)
+                    | Players::OwnerOf(_)
+                    | Players::ThatPlayer
+                    | Players::EachOther(_) => format!(" {who} casts"),
                 };
                 let noun = self.noun(spells, Kind::Spell);
                 return match change {
@@ -165,7 +175,9 @@ impl Ctx {
         });
         match when {
             When::Never => format!("{creatures} can't attack{unless}"),
-            _ => format!("{creatures} can attack only at a changed time"),
+            When::OnlyAsSorcery | When::AsInstant | When::AsUsual => {
+                format!("{creatures} can attack only at a changed time")
+            }
         }
     }
 

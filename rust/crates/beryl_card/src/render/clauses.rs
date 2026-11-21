@@ -135,7 +135,21 @@ impl Ctx {
                 self.possessive(*players),
                 super::filters::zone_name(zone)
             ),
-            other => self.objects(other),
+            other @ (Objects::This
+            | Objects::Target(_)
+            | Objects::AttachedTo
+            | Objects::Those
+            | Objects::TriggeredOn
+            | Objects::TriggeredOnIn(_)
+            | Objects::ExiledWithThis
+            | Objects::PutOntoBattlefieldWithThis
+            | Objects::Carried
+            | Objects::All { .. }
+            | Objects::InZoneOf { .. }
+            | Objects::CardsIn { .. }
+            | Objects::Everywhere(_)
+            | Objects::Paid(_)
+            | Objects::Other(_)) => self.objects(other),
         }
     }
 

@@ -11,7 +11,7 @@ use crate::ability::Behavior;
 use crate::characteristics::Types;
 use crate::continuous::Duration;
 use crate::definition::CardDef;
-use crate::effect::{Amount, Effect, Found, LibraryOrder, Objects, Players, Regeneration, Taken};
+use crate::effect::{Amount, Effect, Found, Objects, Players, Regeneration};
 use crate::filter::Filter;
 use crate::ids::Zone;
 use crate::trigger::TriggerEvent;
@@ -91,7 +91,13 @@ impl Ctx {
                 let counter = self.acts(("counter", "counters"), spells, "");
                 let instead = match zone {
                     Zone::Exile => "exile it".to_owned(),
-                    other => format!(
+                    other @ (Zone::Library
+                    | Zone::Hand
+                    | Zone::Battlefield
+                    | Zone::Graveyard
+                    | Zone::Stack
+                    | Zone::Nowhere
+                    | Zone::Merged) => format!(
                         "put it into its owner's {}",
                         super::filters::zone_name(other)
                     ),
@@ -355,7 +361,25 @@ impl Ctx {
                 amount,
             } => vec![self.clause(player, ("add", "adds"), |c| match amount {
                 Amount::Fixed(n) => symbol(kind).repeat(usize::from(n)),
-                other => format!("an amount of {} equal to {}", symbol(kind), c.amount(other)),
+                other @ (Amount::X
+                | Amount::ThatMany
+                | Amount::Carried
+                | Amount::ThoseOf(_)
+                | Amount::Count(_)
+                | Amount::Times(..)
+                | Amount::Plus(..)
+                | Amount::CardTypesAmong(_)
+                | Amount::Power(_)
+                | Amount::Toughness(_)
+                | Amount::ManaValue(_)
+                | Amount::Counters(..)
+                | Amount::Life(_)
+                | Amount::Most(..)
+                | Amount::SpellsCast(_)
+                | Amount::CardsDrawn(_)
+                | Amount::SpellsCastBefore) => {
+                    format!("an amount of {} equal to {}", symbol(kind), c.amount(other))
+                }
             })],
             Effect::Modify {
                 objects,
@@ -451,7 +475,23 @@ impl Ctx {
             } => vec![self.clause(player, ("untap", "untaps"), |c| {
                 let many = match count {
                     Amount::Fixed(n) => number(n),
-                    other => c.amount(other),
+                    other @ (Amount::X
+                    | Amount::ThatMany
+                    | Amount::Carried
+                    | Amount::ThoseOf(_)
+                    | Amount::Count(_)
+                    | Amount::Times(..)
+                    | Amount::Plus(..)
+                    | Amount::CardTypesAmong(_)
+                    | Amount::Power(_)
+                    | Amount::Toughness(_)
+                    | Amount::ManaValue(_)
+                    | Amount::Counters(..)
+                    | Amount::Life(_)
+                    | Amount::Most(..)
+                    | Amount::SpellsCast(_)
+                    | Amount::CardsDrawn(_)
+                    | Amount::SpellsCastBefore) => c.amount(other),
                 };
                 format!("up to {many} {}", c.counted_objects(permanents))
             })],
@@ -497,94 +537,16 @@ impl Ctx {
         let each = match players {
             Players::EachOpponent => "opponent".to_owned(),
             Players::EachPlayer => "player".to_owned(),
-            other => self.player(other),
+            other @ (Players::You
+            | Players::Target(_)
+            | Players::ControllerOf(_)
+            | Players::OwnerOf(_)
+            | Players::ThatPlayer
+            | Players::EachOther(_)) => self.player(other),
         };
         let mut clauses = self.effect(effect);
         prefix(&mut clauses, &format!("for each {each}, "));
         clauses
-    }
-
-    /// "Look at the top four cards of your library. Put two of them into your hand and the
-    /// rest on the bottom of your library in any order."
-    fn dig(
-        &mut self,
-        player: Players,
-        look: Amount,
-        take: Taken,
-        rest: LibraryOrder,
-    ) -> Vec<String> {
-        let looks = self.clause(player, ("look", "looks"), |c| {
-            format!("at {}", c.top_cards(player, look))
-        });
-        let order = match rest {
-            LibraryOrder::Any => "any order",
-            LibraryOrder::Random => "a random order",
-        };
-        let takes = match take {
-            // One sentence puts both piles: "Put two of them into your hand and the rest on
-            // the bottom of your library in any order."
-            Taken::Put(n) => {
-                let both = self.clause(player, ("put", "puts"), |c| {
-                    let library = c.possessive(player);
-                    format!(
-                        "{} of them into {library} hand and the rest on the bottom of \
-                         {library} library in {order}",
-                        number(n)
-                    )
-                });
-                return vec![looks, both];
-            }
-            Taken::MayReveal(filter) => {
-                self.may = true;
-                self.clause(player, ("reveal", "reveals"), |c| {
-                    let card = c
-                        .noun(filter, Kind::Card(None))
-                        .indefinite(Kind::Card(None));
-                    let put = c.verb("put", "puts");
-                    format!(
-                        "{card} from among them and {put} it into {} hand",
-                        c.possessive(player)
-                    )
-                })
-            }
-        };
-        let rest = self.clause(player, ("put", "puts"), |c| {
-            format!(
-                "the rest on the bottom of {} library in {order}",
-                c.possessive(player)
-            )
-        });
-        vec![looks, takes, rest]
-    }
-
-    /// "Look at the top card of target player's library. You may put that card on the
-    /// bottom of that player's library" (CR 701.29a).
-    fn fateseal(&mut self, player: Players, library: Players, count: Amount) -> Vec<String> {
-        let looks = self.clause(player, ("look", "looks"), |c| {
-            format!("at {}", c.top_cards(library, count))
-        });
-        self.may = true;
-        let them = if matches!(count, Amount::Fixed(1)) {
-            "that card"
-        } else {
-            "any number of them"
-        };
-        let puts = self.clause(player, ("put", "puts"), |c| {
-            format!("{them} on the bottom of {} library", c.possessive(library))
-        });
-        vec![looks, puts]
-    }
-
-    /// "The top card of your library", "the top four cards of target player's library".
-    fn top_cards(&mut self, player: Players, count: Amount) -> String {
-        let cards = match count {
-            Amount::Fixed(1) => "card".to_owned(),
-            Amount::Fixed(n) => format!("{} cards", number(n)),
-            Amount::X => "X cards".to_owned(),
-            other => format!("{} cards", self.amount(other)),
-        };
-        let whose = self.possessive(player);
-        format!("the top {cards} of {whose} library")
     }
 
     /// "Two 2/1 white Insect creature tokens with flying", "a Treasure token"
@@ -667,7 +629,7 @@ impl Ctx {
                 }
                 clauses
             }
-            _ => self.triggered(ability),
+            (Some(_) | None, Behavior::Data(_) | Behavior::Custom(_)) => self.triggered(ability),
         };
         (
             self.targets,
@@ -709,10 +671,9 @@ impl Ctx {
         let yours = |filter: &Filter| matches!(filter, Filter::Whose(Players::You));
         self.targets.get(spec.index()).is_some_and(|t| {
             t.kind == crate::TargetKind::GraveyardCard
-                && match &t.filter {
-                    Filter::All(all) => all.iter().any(yours),
-                    filter => yours(filter),
-                }
+                && t.filter
+                    .conjunction()
+                    .map_or_else(|| yours(&t.filter), |parts| parts.iter().any(yours))
         })
     }
 }

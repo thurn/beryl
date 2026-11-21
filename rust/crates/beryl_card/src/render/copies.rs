@@ -56,7 +56,23 @@ impl Ctx {
             Amount::Fixed(1) => String::new(),
             Amount::Fixed(2) => " twice".to_owned(),
             Amount::Fixed(n) => format!(" {n} times"),
-            other => format!(" for each of {}", self.amount(other)),
+            other @ (Amount::X
+            | Amount::ThatMany
+            | Amount::Carried
+            | Amount::ThoseOf(_)
+            | Amount::Count(_)
+            | Amount::Times(..)
+            | Amount::Plus(..)
+            | Amount::CardTypesAmong(_)
+            | Amount::Power(_)
+            | Amount::Toughness(_)
+            | Amount::ManaValue(_)
+            | Amount::Counters(..)
+            | Amount::Life(_)
+            | Amount::Most(..)
+            | Amount::SpellsCast(_)
+            | Amount::CardsDrawn(_)
+            | Amount::SpellsCastBefore) => format!(" for each of {}", self.amount(other)),
         };
         // The colors the last change that sets them sets (CR 707.9b).
         let colors = except
@@ -77,7 +93,10 @@ impl Ctx {
             .flat_map(|exception| exception.0)
             .fold(crate::Supertypes::NONE, |all, change| match *change {
                 CopyChange::WithoutSupertypes(set) => all.union(set),
-                _ => all,
+                CopyChange::PowerToughness(..)
+                | CopyChange::Colors(_)
+                | CopyChange::AddSubtype(_)
+                | CopyChange::Has(_) => all,
             });
         let the_copy = if count == Amount::Fixed(1) {
             "the copy"

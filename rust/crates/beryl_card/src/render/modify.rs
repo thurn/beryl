@@ -69,7 +69,24 @@ impl Ctx {
                     words.push(word.read(&self.words).name().to_owned());
                 }
                 Modification::SetBasePt(power, toughness) => base = Some((*power, *toughness)),
-                _ => {}
+                Modification::Control
+                | Modification::AddTypes(_)
+                | Modification::RemoveTypes(_)
+                | Modification::SetTypes(_)
+                | Modification::AddSubtypeWord(_)
+                | Modification::SetLandTypeWords(_)
+                | Modification::AddKeywords(_)
+                | Modification::Grant(_)
+                | Modification::SetPower(_)
+                | Modification::SetPt(..)
+                | Modification::ModifyPt(..)
+                | Modification::LoseAllAbilities
+                | Modification::LoseAbility(_)
+                | Modification::AddColorWords(_)
+                | Modification::AddChosenColor
+                | Modification::SwitchPt
+                | Modification::AddProtection(_)
+                | Modification::GrantEscape => {}
             }
         }
         for &modification in modifications {

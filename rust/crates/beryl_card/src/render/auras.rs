@@ -32,9 +32,11 @@ impl Ctx {
     /// enchants in a graveyard is "enchanted creature card".
     pub(super) fn moved_card(&mut self, objects: Objects) -> String {
         let named = self.objects(objects);
-        match (objects, self.attached) {
-            (Objects::AttachedTo, Attached::Aura { card: true, .. }) => format!("{named} card"),
-            _ => named,
+        match self.attached {
+            Attached::Aura { card: true, .. } if objects == Objects::AttachedTo => {
+                format!("{named} card")
+            }
+            Attached::Aura { .. } | Attached::Equipment | Attached::Neither => named,
         }
     }
 }

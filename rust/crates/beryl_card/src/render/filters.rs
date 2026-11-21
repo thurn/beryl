@@ -195,7 +195,11 @@ impl Ctx {
             Players::You => ("you".to_owned(), false),
             Players::EachOpponent => ("an opponent".to_owned(), true),
             Players::EachPlayer => ("a player".to_owned(), true),
-            other => (self.player(other), true),
+            other @ (Players::Target(_)
+            | Players::ControllerOf(_)
+            | Players::OwnerOf(_)
+            | Players::ThatPlayer
+            | Players::EachOther(_)) => (self.player(other), true),
         };
         match (does, third) {
             (true, false) => format!("{who} control"),
@@ -271,7 +275,12 @@ impl Ctx {
         match players {
             Players::EachOpponent => "an opponent's".to_owned(),
             Players::EachPlayer => "a".to_owned(),
-            other => self.possessive(other),
+            other @ (Players::You
+            | Players::Target(_)
+            | Players::ControllerOf(_)
+            | Players::OwnerOf(_)
+            | Players::ThatPlayer
+            | Players::EachOther(_)) => self.possessive(other),
         }
     }
 }
