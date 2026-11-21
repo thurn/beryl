@@ -1,16 +1,3 @@
-//! The number of cards scrolled off each end of a battlefield row, the viewer's hand or the
-//! stack, shown as a float of the flat layer by that end, as "+12" (`floats::ROW_COUNT`,
-//! `floats::HAND_COUNT` and `floats::STACK_COUNT`; docs/beryl-3d.md, "Floats"). A row's count
-//! stands just outside its end. The stack's counts sit outside its visible window. The
-//! hand's stand over the hand's top corners, since a hand that scrolls fills the window from
-//! side to side. A line with no cards off an end shows no count there. Arena's recordings show
-//! no board large enough to scroll, so this is listed among the behaviors not seen in Arena.
-//!
-//! A count changes when a row scrolls or when the table takes the view a script leads to. Every
-//! count the table shows now or will show at the end of a script still to play is laid out
-//! ahead, when a view arrives or a row scrolls (`RowCounts::prepare`), so that a frame only
-//! chooses which laid-out element each float shows and sets its look, and allocates nothing.
-
 use beryl_protocol::protocol::{RowName, Side};
 use glam::{Vec2, Vec3};
 
@@ -19,83 +6,13 @@ use game_table::table::{ROWS, Rows, Scroller, Table, row_area};
 use kit_base::data::profiles::Piece;
 use kit_base::tokens::{size, type_style};
 use kit_ui::element::{Element, FloatId, floats, text};
-use kit_ui::layout::{FloatLook, Layer};
 
-/// Each side has three rows, and with the hand and the stack each has two ends.
-const COUNTS: usize = 16;
-
-/// The first of the battlefield rows' ends that are not; the hand's two come before the
-/// stack's.
+/// The number of battlefield row ends. The hand and stack follow these.
 const ROW_ENDS: usize = 12;
-
-/// The floats that show each row end's count, and the count each shows now.
-#[derive(Debug, Default)]
-pub struct RowCounts {
-    shown: [Option<usize>; COUNTS],
-    /// Each row end's index and a count it will show, kept between calls so that `prepare`
-    /// allocates nothing once it has grown.
-    coming: Vec<(usize, usize)>,
-}
-
-impl RowCounts {
-    /// Lays out ahead, in `layer`, each count that `rows` give a row's end, and forgets those
-    /// laid out before that none of them gives. The client calls it when a view arrives, when a
-    /// row scrolls and when the window changes shape.
-    pub fn prepare<'a>(&mut self, layer: &mut Layer, rows: impl Iterator<Item = &'a Rows>) {
-        let coming = &mut self.coming;
-        coming.clear();
-        for rows in rows {
-            for index in 0..COUNTS {
-                let count = count_in(rows, index);
-                if count > 0 && !coming.contains(&(index, count)) {
-                    coming.push((index, count));
-                }
-            }
-        }
-        for index in 0..COUNTS {
-            let id = float(index);
-            layer.forget_prepared(id, |key| coming.contains(&(index, count_of(key))));
-            for &(_, count) in coming.iter().filter(|(end, _)| *end == index) {
-                layer.prepare(id, key_of(count), || count_text(index, count));
-            }
-        }
-    }
-
-    /// Shows each row end's count as `table` shows the view at rest, or none unless `visible`.
-    /// Lays nothing out and allocates nothing for what `prepare` laid out.
-    pub fn write(&mut self, layer: &mut Layer, table: &Table, visible: bool) {
-        for index in 0..COUNTS {
-            let (scroller, right) = end_of(index);
-            let want = Some(count_in(table.rows(), index)).filter(|&count| visible && count > 0);
-            let id = float(index);
-            if want != self.shown[index] {
-                if !layer.show_prepared(id, want.map(key_of)) {
-                    debug_assert!(false, "no count {want:?} is prepared for row end {index}");
-                    layer.float(id, want.map(|count| count_text(index, count)));
-                }
-                self.shown[index] = want;
-            }
-            if want.is_none() {
-                continue;
-            }
-            let Some((point, anchor)) = place(scroller, right, table) else {
-                continue;
-            };
-            layer.set_float_look(
-                id,
-                FloatLook {
-                    point,
-                    anchor,
-                    ..FloatLook::default()
-                },
-            );
-        }
-    }
-}
 
 /// Where the count of the cards off `scroller`'s `right` or left end stands, in logical points,
 /// and the anchor of the float there, for the table at rest.
-fn place(scroller: Scroller, right: bool, table: &Table) -> Option<(Vec2, Vec2)> {
+pub(super) fn place(scroller: Scroller, right: bool, table: &Table) -> Option<(Vec2, Vec2)> {
     let layout = table.layout();
     let camera = table.camera();
     let profile = table.profile().data();
@@ -162,7 +79,7 @@ fn place(scroller: Scroller, right: bool, table: &Table) -> Option<(Vec2, Vec2)>
 /// The line end at `index`: the line, and whether it is the right end. The viewer's rows come
 /// first, each in the order of `ROWS`, then the opponent's, then the hand and the stack, the
 /// left end before the right.
-fn end_of(index: usize) -> (Scroller, bool) {
+pub(super) fn end_of(index: usize) -> (Scroller, bool) {
     let scroller = match index / 2 {
         6 => Scroller::Hand,
         7 => Scroller::Stack,
@@ -179,7 +96,7 @@ fn end_of(index: usize) -> (Scroller, bool) {
 }
 
 /// How many cards `rows` has off the line end at `index`.
-fn count_in(rows: &Rows, index: usize) -> usize {
+pub(super) fn count_in(rows: &Rows, index: usize) -> usize {
     let (scroller, right) = end_of(index);
     let window = rows.get(scroller);
     if right {
@@ -191,7 +108,7 @@ fn count_in(rows: &Rows, index: usize) -> usize {
 
 /// The float that shows the count of the line end at `index`. `floats::ROW_COUNT` orders the
 /// rows as `RowName` does, which `ROWS` does not.
-fn float(index: usize) -> FloatId {
+pub(super) fn float(index: usize) -> FloatId {
     let (scroller, right) = end_of(index);
     let right = usize::from(right);
     match scroller {
@@ -209,19 +126,19 @@ fn float(index: usize) -> FloatId {
 }
 
 /// The key a count is prepared under.
-fn key_of(count: usize) -> u64 {
+pub(super) fn key_of(count: usize) -> u64 {
     count as u64
 }
 
 /// The count a key was prepared under.
-fn count_of(key: u64) -> usize {
+pub(super) fn count_of(key: u64) -> usize {
     usize::try_from(key).unwrap_or(usize::MAX)
 }
 
 /// The count of the line end at `index`: text that shows "+" and the number, named for the
 /// line, the end and the number, as "Your creatures right 12", "Your hand left 3" or "Stack
 /// right 2", so that the tree's line says all three.
-fn count_text(index: usize, count: usize) -> Element {
+pub(super) fn count_text(index: usize, count: usize) -> Element {
     let (scroller, right) = end_of(index);
     let line = match scroller {
         Scroller::Row(side, row) => {

@@ -11,6 +11,7 @@ use super::gesture::{Gesture, Release};
 use super::{Client, Dismiss, Input, Platform, Press};
 use app_screens::screens::settings::{Message as SettingsMessage, slider_setting};
 use app_screens::screens::{Screen, ScreenPress, Sheet};
+use game_hud::hud::rows::Message as RowMessage;
 use game_hud::prompts;
 use game_play::pointer::Hold;
 use game_play::pointer::rows::scroller_of;
@@ -42,7 +43,7 @@ impl Client {
             if pointer.phase == PointerPhase::Down && pointer.button == Button::Primary {
                 self.end_gesture();
                 self.scrolling.cancel();
-                self.scroll_row_focus = None;
+                self.features.rows_mut().update(RowMessage::Focus(None));
             }
             self.claim(&pointer);
             if ends_gesture(&pointer) {
@@ -232,7 +233,7 @@ impl Client {
                                 == Some(pile) =>
                     {
                         if !self.table_library_clicked(pile) {
-                            self.dispatch_press(&Press::View(pile));
+                            self.press(&Action::new(game_hud::hud::viewer::Message::Open(pile)));
                         }
                     }
                     Some(Release::Element(pressed))
@@ -297,7 +298,7 @@ impl Client {
             }
         }
         if key.code == KeyCode::Tab {
-            self.scroll_row_focus = None;
+            self.features.rows_mut().update(RowMessage::Focus(None));
             self.layer.move_focus(!key.modifiers.shift);
             return None;
         }

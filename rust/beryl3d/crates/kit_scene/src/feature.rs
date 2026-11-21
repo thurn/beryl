@@ -92,6 +92,17 @@ impl<F: Feature> FeatureSlot<F> {
         &self.state
     }
 
+    /// State used by the owner's prepared views. The view key must account for
+    /// inputs changed here, since this access leaves the cached element in place.
+    pub fn state_mut(&mut self) -> &mut F::State {
+        &mut self.state
+    }
+
+    /// Drops a cached view after a change outside the action router.
+    pub fn invalidate_view(&mut self) {
+        self.cached = None;
+    }
+
     /// Applies one message and returns the effects to the router.
     pub fn update(&mut self, message: &F::Message) -> (bool, Effects<F>) {
         let mut effects = Vec::new();

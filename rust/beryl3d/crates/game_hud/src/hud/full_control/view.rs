@@ -4,29 +4,16 @@
 //! moved left by the round pass-on button and its gap while the prompt has one. The phone shows
 //! the sign in its middle band instead (`super::phase::middle`).
 
-use beryl_protocol::prompt::ButtonId;
 use glam::Vec2;
 
-use crate::hud::HudIn;
+use kit_base::geometry::Rect;
 use kit_base::tokens::{color, shadow, size, space};
 use kit_frame::frame::Role;
 use kit_ui::element::{Anchor, Element, Shown};
 use kit_ui::widgets::icons;
 
-/// The stop sign, while full control is on during a game on the desktop. Whether it is on is
-/// read from the stops the game holds (`PlayerView::stops`), as the web's game screen reads
-/// `view.stops`.
-#[must_use]
-pub fn full_control(input: &HudIn) -> Option<Element> {
-    let on = input.view.is_some_and(|view| view.stops.full_control);
-    if !on {
-        return None;
-    }
-    // `.turn-controls:has(.pass-on-button) .full-control`: moved over for the round button.
-    let pass_on = input.prompt.is_some_and(|prompt| {
-        (prompt.buttons.iter()).any(|button_view| button_view.id == ButtonId::PassOn)
-    });
-    let dock = input.profile.slot("full_control")?.rect;
+/// The dock's sign reads the session setting and makes room for Pass On.
+pub(super) fn dock(dock: Rect, pass_on: bool) -> Element {
     let moved = if pass_on {
         size::BUTTON_HEIGHT + space::M
     } else {
@@ -48,5 +35,27 @@ pub fn full_control(input: &HudIn) -> Option<Element> {
     let top = dock.y + (dock.height - side) / 2.0;
     let corner = Vec2::new(dock.x + dock.width - moved, top);
     mark.anchor = Some(Anchor::Point(corner, Vec2::new(1.0, 0.0)));
-    Some(mark)
+    mark
+}
+
+/// The sign at the end of the phase slot.
+pub(super) fn middle_band(slot: Rect) -> Element {
+    let side = f32::from(icons::PHASE_SIDE);
+    let line = slot.y + slot.height / 2.0;
+    let mut mark = Element::new(Role::Region)
+        .name("full control")
+        .width(side)
+        .height(side)
+        .color(color::GOLD)
+        .drop_shadow(shadow::FULL_CONTROL.to_vec())
+        .passes(true);
+    mark.shows = Some(Shown::Icon(
+        icons::FULL_CONTROL,
+        icons::atlas_size(icons::FULL_CONTROL),
+    ));
+    mark.anchor = Some(Anchor::Point(
+        Vec2::new(slot.x + slot.width, line),
+        Vec2::new(1.0, 0.5),
+    ));
+    mark
 }

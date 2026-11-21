@@ -6,37 +6,16 @@
 //! opponent's permanent imposes, shows "Sorcery speed only" under that permanent for a moment
 //! wherever the pointer goes. Nothing here works out what is allowed.
 
-use beryl_protocol::protocol::{
-    DecisionView, ObjectId, RefusalView, Refused, Side, Status, ZoneName,
-};
+use beryl_protocol::protocol::{DecisionView, ObjectId, Side, Status, ZoneName};
 use glam::Vec2;
 
 use super::Client;
 use app_screens::screens::Screen;
-use kit_base::tokens::{color, size, type_style};
+use game_hud::hud::inspector::{Message, notice};
+use kit_base::tokens::size;
 use kit_frame::frame::{ElementId, Place, Role};
-use kit_ui::element::{Element, floats, row, text};
+use kit_ui::element::floats;
 use kit_ui::layout::FloatLook;
-
-/// How long the word at the permanent that forbids a click stays, in nanoseconds: the web's
-/// `NOTICE_MS` of 1,800 ms.
-const NOTICE: u64 = 1_800_000_000;
-
-/// The click the open decision last refused.
-#[derive(Debug)]
-pub(super) struct Refusal {
-    /// The decision that refused it: a later decision says its own.
-    decision: beryl_protocol::DecisionId,
-    refused: Refused,
-    /// Whether the pointer has stayed on the refused card since the click, which keeps the
-    /// reason under its inspector.
-    said: bool,
-    /// When the word at the permanent named by a timing refusal goes, once a frame has shown
-    /// it: `None` until then.
-    notice_until: Option<u64>,
-    /// Whether the word has gone.
-    notice_done: bool,
-}
 
 impl Client {
     /// The open decision, as the latest view sends it, while it is the one the prompt answers.
@@ -61,38 +40,11 @@ impl Client {
         let Some(refused) = decision.refused.iter().find(|refused| refused.slot == slot) else {
             return false;
         };
-        self.inspector.refusal = Some(Refusal {
-            decision: decision.id,
-            refused: refused.clone(),
-            said: true,
-            notice_until: None,
-            notice_done: false,
-        });
-        self.inspector.due = true;
+        let message = Message::Refused(decision.id, refused.clone());
+        self.features.inspector_mut().update(message);
         // The manual table's refusals play the same sound (`Manual::take_refusal`).
         self.manual.refused = true;
         true
-    }
-
-    /// Why the open decision refused the click on the card in `slot`, while the pointer has
-    /// stayed on it since.
-    pub(super) fn refusal_of(&self, slot: ObjectId) -> Option<&RefusalView> {
-        let refusal = self.inspector.refusal.as_ref()?;
-        let open = self.open_decision()?;
-        (refusal.said && refusal.decision == open.id && refusal.refused.slot == slot)
-            .then_some(&refusal.refused.reason)
-    }
-
-    /// The pointer is over the card in `hovered`, or none: the reason under the inspector goes
-    /// once it has left the refused card.
-    pub(super) fn refusal_hovered(&mut self, hovered: Option<ObjectId>) {
-        if let Some(refusal) = &mut self.inspector.refusal
-            && refusal.said
-            && hovered != Some(refusal.refused.slot)
-        {
-            refusal.said = false;
-            self.inspector.due = true;
-        }
     }
 
     /// At the frame at `now`, shows the word under the opponent's permanent that holds the
@@ -101,15 +53,10 @@ impl Client {
     /// game screen with the table shown.
     pub(super) fn refusal_frame(&mut self, now: u64) -> Option<u64> {
         let place = self.notice_place();
-        let refusal = self.inspector.refusal.as_mut();
-        let until = match (refusal, place) {
-            (Some(refusal), Some(_)) if !refusal.notice_done => {
-                let until = *refusal.notice_until.get_or_insert(now + NOTICE);
-                refusal.notice_done = now >= until;
-                (!refusal.notice_done).then_some(until)
-            }
-            _ => None,
-        };
+        let until = self
+            .features
+            .inspector_mut()
+            .refusal_until(place.is_some(), now);
         let shown = until.and(place);
         self.layer.float(floats::REFUSAL, shown.map(|_| notice()));
         if let Some(point) = shown {
@@ -131,13 +78,8 @@ impl Client {
         if self.screen != Screen::Game || !self.table_shown() {
             return None;
         }
-        let refusal = self.inspector.refusal.as_ref()?;
-        if self.open_decision()?.id != refusal.decision {
-            return None;
-        }
-        let RefusalView::Timing { by: Some(by) } = refusal.refused.reason else {
-            return None;
-        };
+        let decision = self.open_decision()?.id;
+        let by = self.features.inspector().timing_permanent(decision)?;
         let id = ElementId(u32::from(by.0));
         let element = (self.frame.resolved.iter())
             .find(|element| element.role == Role::Card && element.id == id)?;
@@ -155,22 +97,4 @@ impl Client {
             .fold(f32::NEG_INFINITY, f32::max);
         Some(Vec2::new(x, bottom + size::TIMING_REFUSAL_GAP))
     }
-}
-
-/// The word at the permanent that holds its controller's opponents to sorcery speed: the web's
-/// `TimingRefusal`.
-fn notice() -> Element {
-    let mut word = row()
-        .name("Sorcery speed only")
-        .background(color::TIMING_REFUSAL)
-        .border((color::STAT_DOWN, 1.0))
-        .radius(size::TIMING_REFUSAL_RADIUS)
-        .passes(true)
-        .child(text("Sorcery speed only").style(type_style::TIMING_REFUSAL));
-    let (across, down) = (
-        size::TIMING_REFUSAL_PADDING_X,
-        size::TIMING_REFUSAL_PADDING_Y,
-    );
-    word.style.padding = [down, across, down, across];
-    word
 }

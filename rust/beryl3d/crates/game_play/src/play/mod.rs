@@ -30,7 +30,6 @@ pub(crate) use compile::nanoseconds;
 mod hand_order;
 mod index;
 mod notices;
-pub(crate) mod opening;
 mod part;
 #[cfg(feature = "driver")]
 pub mod parts;

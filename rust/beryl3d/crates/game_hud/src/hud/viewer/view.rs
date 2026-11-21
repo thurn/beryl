@@ -5,14 +5,13 @@
 //! that it is the same card on the table and in the viewer. The faces of the Revealed Cards
 //! pile are second elements, not scene objects, so its viewer draws them flat (`Shown::Face`).
 
-use crate::hud::GamePress;
+use super::Message;
 use crate::inspect::Viewed;
 use beryl_protocol::PlayerView;
 use beryl_protocol::protocol::{ObjectId, Side, ZoneName};
 use glam::Vec2;
 
 use super::revealed::{REVEALED, RevealedFace};
-use crate::hud::HudIn;
 use crate::hud::piles::pile_cards;
 use game_table::faces::{CARD_BACK, FaceList};
 use game_table::table::{CARD_HEIGHT, CARD_WIDTH, pile_name};
@@ -30,27 +29,30 @@ use kit_ui::widgets::{icon_button, icons};
 /// the top one first, or the faces of the Revealed Cards pile, in a grid that scrolls past two
 /// rows. Its close button and Escape close it (`Dismiss::Viewer`).
 #[must_use]
-pub fn viewer(input: &HudIn) -> Option<Element> {
-    let area = input.profile.slot("viewer")?.rect;
-    let centre = Vec2::new(area.x + area.width / 2.0, area.y + area.height / 2.0);
-    let (title, boxes) = match input.viewing? {
+pub(super) fn dialog(
+    (window, centre): (Size, Vec2),
+    view: Option<&PlayerView>,
+    viewing: Option<Viewed>,
+    revealed: &[RevealedFace],
+) -> Option<Element> {
+    let (title, boxes) = match viewing? {
         Viewed::Pile(side, zone) => {
-            let view = input.view?;
+            let view = view?;
             let mut slots = pile_cards(view, side, zone);
             slots.reverse();
             let boxes: Vec<Element> = slots.iter().map(|&slot| object_box(view, slot)).collect();
             (pile_title(side, zone).to_owned(), boxes)
         }
         Viewed::Revealed => {
-            let boxes = input.revealed.iter().map(face_box).collect();
+            let boxes = revealed.iter().map(face_box).collect();
             (REVEALED.to_owned(), boxes)
         }
     };
     let count = boxes.len();
-    let close = icon_button(icons::CLOSE, "close").on_press(GamePress::DismissViewer);
+    let close = icon_button(icons::CLOSE, "close").on_press(Message::Close);
     Some(viewer_dialog(
-        (input.window.size, centre),
-        (&title, &count_text(count, input.viewing?)),
+        (window, centre),
+        (&title, &count_text(count, viewing?)),
         count,
         size::VIEWER_MIN_WIDTH,
         Some(close),

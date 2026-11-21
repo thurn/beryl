@@ -10,7 +10,10 @@ use super::features::{Placement, ViewInputs};
 
 use crate::command::{Request, SessionCommand};
 use app_screens::screens::{self, Screen, ScreenIn, ScreenPress, Sheet, bug_report};
+use game_hud::hud::inspector::Message as Inspect;
 use game_hud::hud::placement_scene::PlacementScene;
+use game_hud::hud::rows::Message as RowMessage;
+use game_hud::screens::game::Furniture;
 use game_manual::manual::TableCommand;
 use game_table::faces::{FaceList, Faces};
 use kit_ui::element::{Action, floats};
@@ -28,19 +31,15 @@ impl Client {
             self.shown = (self.screen, sheet);
             self.end_gesture();
             self.scrolling.cancel();
-            self.scroll_row_focus = None;
+            self.features.rows_mut().update(RowMessage::Focus(None));
             self.cancel_touch();
-            self.inspector.pinned = None;
+            self.features.inspector_mut().update(Inspect::Pin(None));
         }
-        self.inspector.due = true;
+        self.features.inspector_mut().update(Inspect::Invalidate);
+        self.refresh_screen_state();
+        let under_visible = sheet != Some(Sheet::Settings) && !self.bug_hides_screen();
+        let furniture = self.game_furniture(under_visible);
         let view = self.show.latest().map(|update| &update.view);
-        let played = self.show.shown().map(|update| &update.view);
-        self.viewing
-            .spin(played.filter(|_| self.screen == Screen::Game), self.now);
-        // A result put aside comes back with the next game's end.
-        if view.is_none_or(|view| !matches!(view.status, Status::Over { .. } | Status::Stopped)) {
-            self.features.reset_result();
-        }
         let feature_inputs = ViewInputs {
             profile: self.show.table().profile(),
             screen: self.screen,
@@ -55,7 +54,6 @@ impl Client {
         };
         let sheet_view =
             sheet.and_then(|sheet| self.features.view(Placement::Sheet(sheet), feature_inputs));
-        let under_visible = sheet != Some(Sheet::Settings) && !self.bug_hides_screen();
         let log = (under_visible && self.screen == Screen::Game)
             .then(|| self.features.view(Placement::GameLog, feature_inputs))
             .flatten();
@@ -90,7 +88,7 @@ impl Client {
         {
             None
         } else {
-            mounted_screen.or_else(|| screens::screen(&input, log, result))
+            mounted_screen.or_else(|| screens::screen(&input, furniture, log, result))
         };
         let opening = under.is_some()
             && sheet.is_none()
@@ -103,7 +101,7 @@ impl Client {
             None => under,
         };
         let music = screens::music(self.screen, view);
-        self.viewing.opening = opening;
+        self.opening.shown = opening;
         // While the opening shows the hand, the table's hand waits below the window, as the web's
         // desktop board holds it away under the opening, a sheet open over it or not; the
         // phone's board does not.
@@ -135,6 +133,51 @@ impl Client {
         }
     }
 
+    /// Updates the opening clock and whether a result can be dismissed.
+    fn refresh_screen_state(&mut self) {
+        let played = self.show.shown().map(|update| &update.view);
+        self.opening
+            .spin(played.filter(|_| self.screen == Screen::Game), self.now);
+        // A result put aside comes back with the next game's end.
+        if self.show.latest().is_none_or(|update| {
+            !matches!(update.view.status, Status::Over { .. } | Status::Stopped)
+        }) {
+            self.features.reset_result();
+        }
+    }
+
+    /// Fills the HUD positions in the game screen from the registered views.
+    fn game_furniture(&mut self, visible: bool) -> Furniture {
+        if !visible || self.screen != Screen::Game {
+            return Furniture::default();
+        }
+        let input = self.screen_in().hud();
+        let steps = game_hud::hud::steps::Inputs::new(&input);
+        let dock = game_hud::hud::full_control::Inputs::dock(&input);
+        let band = game_hud::hud::full_control::Inputs::middle_band(&input);
+        let players = input
+            .profile
+            .data()
+            .hud
+            .table
+            .contains(&kit_base::data::profiles::Piece::Players)
+            .then(|| game_hud::hud::players::players(&input))
+            .flatten();
+        let viewer = game_hud::hud::viewer::Inputs::new(
+            self.show.table().profile(),
+            self.window.size,
+            self.show.latest().map(|update| &update.view),
+            self.views,
+        );
+        Furniture {
+            players,
+            steps: self.features.step_view(steps),
+            dock_full_control: dock.map(|input| self.features.full_control_view(input)),
+            band_full_control: band.map(|input| self.features.full_control_view(input)),
+            viewer: viewer.and_then(|input| self.features.viewer_view(input)),
+        }
+    }
+
     /// Everything the screen functions read, from what the client holds now. The inspector sets
     /// `inspected` on it; nothing else differs between the screen and the inspector.
     pub(super) fn screen_in(&self) -> ScreenIn<'_> {
@@ -144,12 +187,12 @@ impl Client {
             profile: self.show.table().profile(),
             view: self.show.latest().map(|update| &update.view),
             played: self.show.shown().map(|update| &update.view),
-            turn: self.viewing.turn,
+            turn: self.features.steps().turn,
             // While the opening's coin spins, no decision is offered, as the web's `Opening` offers
             // none.
             prompt: (self.prompt.as_ref())
                 .map(|(_, prompt)| prompt)
-                .filter(|_| !self.viewing.spinning(self.now)),
+                .filter(|_| !self.opening.spinning(self.now)),
             full_control: self.settings.full_control,
             stops: self.settings.stops,
             bindings: &self.settings.bindings,
@@ -158,12 +201,12 @@ impl Client {
             fields: self.layer.fields(),
             inspected: None,
             faces: Some(self.faces()),
-            viewing: self.viewing.open,
-            revealed: &self.viewing.revealed,
+            viewing: self.features.viewer().open(),
+            revealed: self.features.viewer().revealed(),
             table: &self.manual.state,
             carried: self.gesture.carried(),
             lobby: &self.manual.lobby,
-            spinning: self.viewing.spinning(self.now),
+            spinning: self.opening.spinning(self.now),
             placement_scene: None,
         }
     }

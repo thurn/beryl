@@ -5,7 +5,7 @@
 //! whenever the pile holds a face (`floats::REVEALED`), laid out once ahead of time, and not a
 //! piece of the game screen.
 
-use crate::hud::GamePress;
+use super::Message;
 use crate::inspect::Viewed;
 use beryl_protocol::protocol::ObjectId;
 use glam::Vec2;
@@ -39,14 +39,14 @@ pub struct RevealedFace {
 #[must_use]
 pub fn revealed() -> Element {
     let mut pill = button(REVEALED)
-        .on_press(GamePress::View(Viewed::Revealed))
+        .on_press(Message::Open(Viewed::Revealed))
         .height(size::PILL_HEIGHT)
         .min_width(0.0)
         .style(type_style::PILL);
     pill.style.padding = [0.0, size::PILL_PADDING, 0.0, size::PILL_PADDING];
     let mut cross = Element::new(Role::Button)
         .name("Dismiss")
-        .on_press(GamePress::DismissRevealed)
+        .on_press(Message::DismissRevealed)
         .width(size::PILL_CROSS)
         .height(size::PILL_CROSS)
         .background(color::ICON_BUTTON)
@@ -68,7 +68,7 @@ pub fn revealed() -> Element {
 pub fn pile_button(area: Rect) -> Element {
     Element::new(Role::Button)
         .name(REVEALED)
-        .on_press(GamePress::View(Viewed::Revealed))
+        .on_press(Message::Open(Viewed::Revealed))
         .width(area.width)
         .height(area.height)
         .background([0; 4])

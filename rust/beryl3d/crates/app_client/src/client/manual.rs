@@ -175,7 +175,7 @@ impl Client {
             return true;
         };
         let shift = self.manual.shift;
-        let viewed = self.viewing.open.is_some() && self.viewer_shows(slot);
+        let viewed = self.features.viewer().open().is_some() && self.viewer_shows(slot);
         let card = Target::Card(slot);
         let side = object.zone_side.unwrap_or(object.owner);
         let (id, target) = match object.zone {
@@ -330,7 +330,7 @@ impl Client {
             bindings: &self.settings.bindings,
             last_token: self.manual.last_token.as_ref(),
             selected: &self.manual.state.selection,
-            viewer_open: self.viewing.open.is_some(),
+            viewer_open: self.features.viewer().open().is_some(),
             whole_library: self.whole_library_open(),
         }
     }
@@ -506,7 +506,7 @@ impl Client {
     /// Does what a client command does to the open viewer (`ViewerControl`). With no viewer
     /// open it does nothing.
     pub(super) fn viewer_control(&mut self, control: ViewerControl) {
-        if self.viewing.open.is_none() {
+        if self.features.viewer().open().is_none() {
             return;
         }
         match control {

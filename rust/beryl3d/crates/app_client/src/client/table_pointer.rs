@@ -262,7 +262,7 @@ impl Client {
     /// command's wait for its target, or else empties the selection, as the web's selection
     /// takes Escape. Returns whether it did either.
     pub(super) fn table_escape(&mut self) -> bool {
-        if !self.at_table() || self.viewing.open.is_some() {
+        if !self.at_table() || self.features.viewer().open().is_some() {
             return false;
         }
         if self.manual.picking.take().is_some() {
@@ -299,7 +299,7 @@ impl Client {
 
     /// The card of the open viewer under `at` on the table, as a target, if there is one.
     pub(super) fn viewer_card_at(&self, at: Vec2) -> Option<Target> {
-        self.viewing.open?;
+        self.features.viewer().open()?;
         viewers::card_at(&self.frame, at, |slot| self.viewer_shows(slot))
     }
 

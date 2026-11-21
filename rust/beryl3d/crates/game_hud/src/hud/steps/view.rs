@@ -6,7 +6,7 @@
 //!
 //! - An icon is filled where the player stops with the stack empty in that player's turns
 //!   (`Settings::stops`), outlined and dimmer where they do not. A press on it sends
-//!   `GamePress::Stop`, which sets or clears that stop.
+//!   `Message::Toggle`, which sets or clears that stop.
 //! - No player gets priority in the untap step or, normally, in cleanup, so those two are never
 //!   stops: their icons are dimmer still and take no press. [CR 502.4]: "No player receives
 //!   priority during the untap step, so no spells can be cast or resolved and no abilities can
@@ -28,12 +28,14 @@
 //! [CR 502.4]: https://yawgatog.com/resources/magic-rules/#R5024
 //! [CR 514.3]: https://yawgatog.com/resources/magic-rules/#R5143
 
-use crate::hud::GamePress;
+use super::{Inputs, Message};
 use beryl_protocol::protocol::{Side, Step, StepSet};
 use glam::Vec2;
 
-use super::players::face_centre;
-use crate::hud::HudIn;
+use kit_base::tokens::ratio;
+use kit_ui::element::Shortcuts;
+
+use crate::hud::players::face_centre;
 use game_table::profiles::Profile;
 use kit_base::data::space::hud::{STEP_FIXED, STEP_OFF};
 use kit_base::tokens::{color, shadow, size};
@@ -105,30 +107,23 @@ const NEVER: [(usize, Step); 2] = [(0, Step::Untap), (11, Step::Cleanup)];
 /// What the game screen shows for the steps: both players' stops, once a game has a view, on
 /// the desktop layout, while no pile's viewer is open.
 #[must_use]
-pub fn steps(input: &HudIn) -> Option<Element> {
-    let view = input.view?;
-    // A pile's viewer stands over the table and its controls, and its own buttons sit where
-    // the stops beside the viewer's own orb stand.
-    if input.viewing.is_some() {
+fn steps(input: &Inputs) -> Option<Element> {
+    if !input.visible() {
         return None;
     }
     let stops = input.stops;
-    let (active, step) = input
-        .turn
-        .map_or((view.turn.active, view.turn.step), |turn| {
-            (turn.active, turn.step)
-        });
+    let (active, step) = input.current()?;
     let current = |side: Side| (active == side).then_some(step);
     Some(holder().name("steps").children([
         rows(
             Side::You,
             (Mode::Stops(stops.yours, current(Side::You)), active),
-            input.profile,
+            input.centres[0],
         ),
         rows(
             Side::Opponent,
             (Mode::Stops(stops.theirs, current(Side::Opponent)), active),
-            input.profile,
+            input.centres[1],
         ),
     ]))
 }
@@ -141,11 +136,15 @@ pub fn table_tracks(
     press: fn(usize, bool) -> Action,
 ) -> Element {
     holder().name("steps").children([
-        rows(Side::You, (Mode::Table { lit, press }, active), profile),
+        rows(
+            Side::You,
+            (Mode::Table { lit, press }, active),
+            face_centre(Side::You, profile),
+        ),
         rows(
             Side::Opponent,
             (Mode::Table { lit, press }, active),
-            profile,
+            face_centre(Side::Opponent, profile),
         ),
     ])
 }
@@ -164,7 +163,7 @@ enum Mode {
 
 /// `side`'s twelve icons about their orb, for `mode`, in a turn whose active player is
 /// `active`.
-fn rows(side: Side, (mode, active): (Mode, Side), profile: Profile) -> Element {
+fn rows(side: Side, (mode, active): (Mode, Side), centre: Vec2) -> Element {
     let whose = match side {
         Side::You => "Your",
         Side::Opponent => "Opponent's",
@@ -188,10 +187,7 @@ fn rows(side: Side, (mode, active): (Mode, Side), profile: Profile) -> Element {
         .gap(size::STEP_ROW_GAP)
         .grid_template_columns(vec![column, column, column, orb, column, column, column])
         .grid_template_rows(vec![row, row]);
-    element.anchor = Some(Anchor::Point(
-        face_centre(side, profile),
-        Vec2::new(0.5, 0.5),
-    ));
+    element.anchor = Some(Anchor::Point(centre, Vec2::new(0.5, 0.5)));
     element.children((0..STEP_STOPS.len()).map(|at| {
         let icon = match mode {
             Mode::Stops(set, current) => icon(at, whose, side, set, current),
@@ -284,7 +280,7 @@ fn icon(at: usize, whose: &str, side: Side, set: StepSet, current: Option<Step>)
         .width(size::STEP)
         .height(size::STEP)
         .selected(on)
-        .on_press(GamePress::Stop {
+        .on_press(Message::Toggle {
             step: last_step,
             theirs: side == Side::Opponent,
         })
@@ -321,4 +317,26 @@ fn track_icon(at: usize, whose: &str, here: bool, press: Action) -> Element {
         .children([glyph]);
     icon.press = Some(press);
     icon
+}
+
+/// `element` with no press on it or anything in it, as an element under an overlay takes none.
+fn inert(mut element: Element) -> Element {
+    element.press = None;
+    element.shortcuts = Shortcuts::default();
+    element.children = element.children.into_iter().map(inert).collect();
+    element
+}
+
+/// The step row as the game screen shows it (`steps::steps`): under the opening's backdrop,
+/// dimmed and with no presses, since the overlay takes the presses that would reach the stops
+/// under it. The client builds it again on its own as the table reaches a step of the turn
+/// (`Layer::replace`).
+#[must_use]
+pub(crate) fn game_steps(input: &Inputs) -> Option<Element> {
+    let steps = steps(input)?;
+    Some(if input.opening {
+        inert(steps).opacity(ratio::OPENING_HUD_OPACITY)
+    } else {
+        steps
+    })
 }

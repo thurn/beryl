@@ -14,11 +14,12 @@ use beryl_protocol::protocol::{ObjectId, ObjectView, PlayerState, PlayerView, Si
 use glam::Vec2;
 
 use game_play::play::Show;
-use game_table::table::{PileShown, Table, host_slot, pile_name};
+use game_table::table::{PileShown, Table, host_slot};
 use kit_base::data::space::flat::TOOLTIP_GAP;
-use kit_ui::element::{Element, floats};
+use kit_ui::element::floats;
 use kit_ui::layout::{FloatLook, Layer};
-use kit_ui::widgets::tip_label;
+mod view;
+use view::count_text;
 
 /// The floats that show each pile's count, and the count each shows now.
 #[derive(Debug, Default)]
@@ -186,21 +187,4 @@ fn exiled(view: &PlayerView, side: Side) -> impl Iterator<Item = &ObjectView> {
             && object.zone_side.unwrap_or(object.owner) == side
             && host_slot(object, find).is_none()
     })
-}
-
-/// The count of the pile at `index`, as its tip says it: the zone and the number, "Library ·
-/// 33" (`pileTip` in `ui/src/game/Piles.tsx`). It is named for the pile and the number, as
-/// "Your library 60", so that the tree's line for it says both.
-fn count_text(index: usize, count: usize) -> Element {
-    let (side, zone) = PileShown::of_index(index);
-    let words = match zone {
-        ZoneName::Library => "Library",
-        ZoneName::Graveyard => "Graveyard",
-        _ => "Exile",
-    };
-    // It lets the pointer through to the pile and any card over it, as `.tip` takes no
-    // pointer events.
-    let mut element = tip_label(format!("{words} \u{b7} {count}")).passes(true);
-    element.name = format!("{} {count}", pile_name(side, zone));
-    element
 }

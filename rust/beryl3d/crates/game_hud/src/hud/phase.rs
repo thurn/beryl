@@ -29,7 +29,11 @@ pub fn menu(profile: Profile, press: Action) -> Option<Element> {
 /// stack holds anything; and full control's mark at the band's right end while it is on. Neither
 /// takes a press: the phase is shown, and full control is set in the settings.
 #[must_use]
-pub fn middle(view: &PlayerView, full_control: bool, profile: Profile) -> Option<Element> {
+pub fn middle(
+    view: &PlayerView,
+    full_control: Option<Element>,
+    profile: Profile,
+) -> Option<Element> {
     let slot = profile.slot("phase")?.rect;
     let bounds = phase_box(view.stack.is_empty(), slot);
     let yours = view.turn.active == Side::You;
@@ -55,29 +59,11 @@ pub fn middle(view: &PlayerView, full_control: bool, profile: Profile) -> Option
         Vec2::new(bounds.x, line),
         Vec2::new(0.0, 0.5),
     ));
-    let mark = full_control.then(|| {
-        let mut mark = Element::new(Role::Region)
-            .name("full control")
-            .width(side)
-            .height(side)
-            .color(color::GOLD)
-            .drop_shadow(shadow::FULL_CONTROL.to_vec())
-            .passes(true);
-        mark.shows = Some(Shown::Icon(
-            icons::FULL_CONTROL,
-            icons::atlas_size(icons::FULL_CONTROL),
-        ));
-        mark.anchor = Some(Anchor::Point(
-            Vec2::new(slot.x + slot.width, line),
-            Vec2::new(1.0, 0.5),
-        ));
-        mark
-    });
     Some(
         kit_ui::element::holder()
             .name("middle")
             .child(phase)
-            .children(mark),
+            .children(full_control),
     )
 }
 

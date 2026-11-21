@@ -222,6 +222,7 @@ mod milestone_three {
     use app_screens::screens::{self, Music, Screen, ScreenIn, bug_report, start, testing};
     use beryl_protocol::testing::ViewBuilder;
     use game_hud::prompts;
+    use game_hud::screens::game::Furniture;
     use game_table::table::Window;
     use kit_scene::Feature;
     use kit_ui::widgets::{FieldState, Fields};
@@ -294,7 +295,8 @@ mod milestone_three {
                         filter: FieldState::default(),
                     },
                 ),
-                _ => screens::screen(&input, None, None).expect("the screen has a view"),
+                _ => screens::screen(&input, Furniture::default(), None, None)
+                    .expect("the screen has a view"),
             };
             assert!(!element.name.is_empty(), "{screen:?}");
         }

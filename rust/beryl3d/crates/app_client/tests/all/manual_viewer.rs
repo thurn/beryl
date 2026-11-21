@@ -214,7 +214,6 @@ fn a_look_at_the_top_lists_only_the_cards_it_took() {
 
 #[test]
 fn scrolling_a_large_pile_moves_its_cards_and_clips_cards_that_leave_the_grid() {
-    use app_client::Press;
     use game_hud::inspect::Viewed;
     use glam::Vec2;
     use kit_ui::element::Action;
@@ -246,10 +245,9 @@ fn scrolling_a_large_pile_moves_its_cards_and_clips_cards_that_leave_the_grid() 
     });
     client.handle(Input::Update(Box::new(update)));
     client.frame(0);
-    client.press(&Action::new(Press::View(Viewed::Pile(
-        Side::You,
-        ZoneName::Graveyard,
-    ))));
+    client.press(&Action::new(game_hud::hud::viewer::Message::Open(
+        Viewed::Pile(Side::You, ZoneName::Graveyard),
+    )));
     client.frame(0);
     let frame = client.frame(1_000_000_000);
     let grid = frame

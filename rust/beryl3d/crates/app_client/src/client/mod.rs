@@ -15,19 +15,16 @@ mod gesture;
 
 use std::collections::VecDeque;
 
+use beryl_protocol::GameUpdate;
 use beryl_protocol::prompt::{Click, ClickRequest, PromptView};
 use beryl_protocol::protocol::{DecisionId, SessionId, Status};
 use beryl_protocol::script::{OwnTimings, Verb, own_timings};
-use beryl_protocol::{GameUpdate, StopsSetting};
 
 use crate::settings::Settings;
 use app_screens::screens::{GalleryState, Music, Screen, Sheet, bug_report, start, testing};
 use game_hud::hud::banner::Banner;
-use game_hud::hud::piles::PileCounts;
-use game_hud::hud::rows::RowCounts;
+use game_hud::hud::notices::NoticeFloats;
 use game_hud::prompts;
-use game_play::hud::counts::CountFloats;
-use game_play::hud::notices::NoticeFloats;
 use game_play::play::Show;
 use game_play::play::record::{Plant, ScriptRecord};
 use game_play::pointer::LetGo;
@@ -56,9 +53,6 @@ mod stops;
 mod table_pointer;
 mod touch;
 mod viewing;
-
-use inspect::Inspector;
-use viewing::Viewing;
 
 /// The platform a host runs on, as far as the client cares: where `Cmd` in a shortcut means
 /// the Command key, and where it means Control.
@@ -99,22 +93,12 @@ pub struct Client {
     show: Show,
     /// The flat layer: the screen, the sheet over it and the floats.
     layer: Layer,
-    /// The floats that show the players' life totals and pools.
-    counts: CountFloats,
-    /// The floats that show how many cards each pile holds.
-    piles: PileCounts,
-    /// The floats that show the notices `announce` steps make.
-    notices: NoticeFloats,
-    /// The counts of the cards scrolled off each end of a battlefield row.
-    row_counts: RowCounts,
-    /// The step banner under the opponent's orb.
-    banner: Banner,
     /// The registered features, their state and the open sheet route.
     features: features::Features,
+    opening: viewing::Opening,
+    screen_cards: viewing::ScreenCards,
     /// Scrolls the flat layer and the table from common pointer events.
     scrolling: kit_ui::scroll::ScrollGesture<scrolling::Target>,
-    /// The row clicked most recently, if the player has not moved the keyboard focus.
-    scroll_row_focus: Option<game_table::table::Scroller>,
     /// The screen the flat layer shows. A recording or a game is fed to the client on the game
     /// screen, which it starts on.
     screen: Screen,
@@ -124,9 +108,6 @@ pub struct Client {
     settings: Settings,
     /// The session the latest view came from, which stop and concede commands name.
     session: Option<SessionId>,
-    /// The stops the game holds, as far as the client knows: the latest view's, or those it
-    /// sent since (`send_stops`).
-    stops_held: Option<StopsSetting>,
     /// The music last asked of the host, so that it is asked for again only when it changes.
     music: Option<Music>,
     /// The timing of every step the client makes itself, read once at startup.
@@ -169,10 +150,6 @@ pub struct Client {
     /// Whether the host has said memory is low (`Lifecycle::LowMemory`), which fixes the tier at
     /// Baseline.
     low_memory: bool,
-    /// What the inspector shows and when to lay it out again (`inspect`).
-    inspector: Inspector,
-    /// The viewer of a pile's cards and the Revealed Cards pill (`viewing`).
-    viewing: Viewing,
     /// What the manual table shows over itself (`manual`).
     manual: manual::Manual,
     /// The fingers on a touch screen (`touch`).
@@ -197,20 +174,15 @@ impl Client {
             window,
             show: Show::new(Table::new(data, window)),
             layer: Layer::new(),
-            counts: CountFloats::default(),
-            piles: PileCounts::default(),
-            notices: NoticeFloats::default(),
-            row_counts: RowCounts::default(),
-            banner: Banner::default(),
             features: features::Features::default(),
+            opening: viewing::Opening::default(),
+            screen_cards: viewing::ScreenCards::default(),
             scrolling: kit_ui::scroll::ScrollGesture::default(),
-            scroll_row_focus: None,
             screen: Screen::Game,
             gallery: GalleryState::default(),
             gallery_faces: None,
             settings: Settings::default(),
             session: None,
-            stops_held: None,
             music: None,
             own_timings: own_timings(),
             prompt: None,
@@ -231,8 +203,6 @@ impl Client {
             clicks: VecDeque::new(),
             tier: Tier::Baseline,
             low_memory: false,
-            inspector: Inspector::default(),
-            viewing: Viewing::default(),
             manual: manual::Manual::default(),
             touch: Touch::default(),
         }
@@ -338,8 +308,7 @@ impl Client {
             _ => None,
         });
         self.prepare_pill(&update.view);
-        self.stops_held = Some(update.view.stops);
-        self.send_stops();
+        self.receive_stops(&update);
         // The same view sent again says nothing new happened.
         let again = self
             .show
@@ -364,8 +333,12 @@ impl Client {
         let shown = self.show.shown().map(|update| &update.view);
         let coming = self.show.coming_counts().map(|(_, view)| view);
         let table = self.show.table();
-        (self.piles).prepare(&mut self.layer, table, shown.into_iter().chain(coming));
-        (self.row_counts).prepare(&mut self.layer, self.show.coming_rows());
+        self.features
+            .piles_mut()
+            .prepare(&mut self.layer, table, shown.into_iter().chain(coming));
+        self.features
+            .rows_mut()
+            .prepare(&mut self.layer, self.show.coming_rows());
         self.show_screen();
     }
 
@@ -442,30 +415,35 @@ impl Client {
         self.layer
             .follow(|subject| game_table::table::spot_of(&builder, table, subject));
         // Each total shows what `prepare` laid out, over the opening too, as the web's does.
-        self.counts.write(
+        self.features.totals_mut().write(
             &mut self.layer,
             self.show.counts(),
             self.show.effects(),
             table_now,
             (table.layout(), table.data(), builder.tier()),
             self.window.size,
-            (counted, targets, self.viewing.opening),
+            (counted, targets, self.opening.shown),
         );
-        (self.piles).write(&mut self.layer, &self.show, counted && !covers);
-        (self.notices).write(
+        self.features
+            .piles_mut()
+            .write(&mut self.layer, &self.show, counted && !covers);
+        self.features.notices_mut().write(
             &mut self.layer,
             self.show.notices(),
             table_now,
             (self.show.table().layout(), self.window.size),
             visible,
         );
-        (self.row_counts).write(&mut self.layer, self.show.table(), rows_counted);
+        self.features
+            .rows_mut()
+            .write(&mut self.layer, self.show.table(), rows_counted);
         let at_rest = self.show.shown().map(|update| &update.view);
-        (self.banner).write(
+        let banner = self.features.banner_mut();
+        banner.write(
             &mut self.layer,
             at_rest,
             table_now,
-            self.show.table().profile(),
+            table.profile(),
             visible,
         );
         let (layout_nodes, text_runs) = self.layer.take_work();
@@ -494,6 +472,12 @@ impl Client {
             layers.as_ref(),
         );
         builder.finish();
+        self.finish_frame(table_now, transitioning);
+        &self.frame
+    }
+
+    /// Resolves pointer actions against the drawn frame and schedules its successor.
+    fn finish_frame(&mut self, table_now: u64, transitioning: bool) {
         self.placed_let_go();
         // The element a press under the mouse would reach is drawn `hovered`. A press on a card
         // that ended since the last frame and means a click on it (a press that picked nothing
@@ -511,13 +495,13 @@ impl Client {
         // The inspector and a pile's count follow what was just found under the pointer in the
         // next frame, and a prompt whose view has just played out draws its marks in it.
         let own_due = self.own_due && self.show.settled();
-        let inspecting = self.inspector.due || self.hovered_slot() != self.inspector.judged;
-        self.wake = if transitioning || own_due || inspecting || self.piles.due(&self.show) {
-            Wake::Now
-        } else {
-            self.timed_wake(table_now)
-        };
-        &self.frame
+        let inspecting = self.features.inspector().needs_frame(self.hovered_slot());
+        self.wake =
+            if transitioning || own_due || inspecting || self.features.piles().due(&self.show) {
+                Wake::Now
+            } else {
+                self.timed_wake(table_now)
+            };
     }
 
     /// The spans and streaks the table shows.

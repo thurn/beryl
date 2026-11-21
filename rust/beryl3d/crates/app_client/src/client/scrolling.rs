@@ -6,6 +6,7 @@ use glam::Vec2;
 
 use super::Client;
 use app_screens::screens::Screen;
+use game_hud::hud::rows::Message as RowMessage;
 use game_play::pointer::rows::scroller_of;
 use game_table::table::{Scroller, Table};
 use kit_base::geometry::{GroupWindow, ScrollAxis};
@@ -25,7 +26,7 @@ impl Client {
     fn rows_scroll(&self) -> bool {
         matches!(self.screen, Screen::Game | Screen::Table)
             && self.features.sheet.is_none()
-            && self.viewing.open.is_none()
+            && self.features.viewer().open().is_none()
             && self.manual.menu.is_none()
             && !self.manual.overlay_open()
             && !self.table_frozen()
@@ -43,7 +44,9 @@ impl Client {
         if pointer.phase == PointerPhase::Down
             && let Some((Target::Row(row), _)) = at
         {
-            self.scroll_row_focus = Some(row);
+            self.features
+                .rows_mut()
+                .update(RowMessage::Focus(Some(row)));
             self.layer.focus(None);
         }
         // A card that has picked up keeps its drag. A sideways drag on a scrolling hand
@@ -105,7 +108,9 @@ impl Client {
             .map(|(id, offset)| (Target::Element(id), offset))
             .or_else(|| {
                 let row = self
-                    .scroll_row_focus
+                    .features
+                    .rows()
+                    .focus()
                     .filter(|_| self.layer.focused().is_none() && self.rows_scroll())?;
                 let offset = row_viewport(self.show.table(), row)?.key(key)?;
                 Some((Target::Row(row), offset))
@@ -141,7 +146,8 @@ impl Client {
                 )]
                 let first = offset.x as isize;
                 if self.show.scroll_row(row, first) {
-                    self.row_counts
+                    self.features
+                        .rows_mut()
                         .prepare(&mut self.layer, self.show.coming_rows());
                 }
             }

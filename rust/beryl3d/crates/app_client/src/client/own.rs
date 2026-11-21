@@ -12,8 +12,8 @@ use beryl_protocol::script::{Arrow, OwnStep, Subject, Verb};
 use glam::Vec2;
 
 use super::Client;
+use game_hud::hud::notices::NoticeFloats;
 use game_hud::prompts;
-use game_play::hud::notices::NoticeFloats;
 use game_play::light::Aim;
 use game_play::play::PlacedLetGo;
 use game_table::table::{Held, TrayPoses};
@@ -355,7 +355,9 @@ impl Client {
             );
         }
         if self.show.rows_key() != rows {
-            (self.row_counts).prepare(&mut self.layer, self.show.coming_rows());
+            self.features
+                .rows_mut()
+                .prepare(&mut self.layer, self.show.coming_rows());
         }
         self.prepare_steps();
     }
@@ -366,7 +368,9 @@ impl Client {
     /// whole as the table is placed again, and its notices are laid out only now.
     pub(super) fn prepare_resized(&mut self) {
         self.prepare_revealed_pile();
-        (self.row_counts).prepare(&mut self.layer, self.show.coming_rows());
+        self.features
+            .rows_mut()
+            .prepare(&mut self.layer, self.show.coming_rows());
         self.prepare_counts();
         NoticeFloats::prepare(
             &mut self.layer,
@@ -379,9 +383,9 @@ impl Client {
     /// out none of them, each total of a player the open prompt marks as a target too.
     pub(super) fn prepare_counts(&mut self) {
         let targets = self.targets(true);
-        self.counts.passes = self.screen == app_screens::screens::Screen::Game;
-        self.counts.pools = self.screen != app_screens::screens::Screen::Table;
-        (self.counts).prepare(
+        self.features.totals_mut().passes = self.screen == app_screens::screens::Screen::Game;
+        self.features.totals_mut().pools = self.screen != app_screens::screens::Screen::Table;
+        self.features.totals_mut().prepare(
             &mut self.layer,
             self.show.counts(),
             self.show.coming_counts(),

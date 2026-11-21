@@ -105,8 +105,7 @@ fn a_stop_set_while_the_opponent_acts_is_sent_at_the_next_decision() {
     let sent = stops_sent(&mut client);
     assert_eq!(sent.len(), 1);
     assert!(sent[0].theirs.has(Step::Draw.into()));
-    // Sent once: a later view of the same game, still holding the old stops because the
-    // session has not drawn one since, sends them again only at that view.
+    // Frames between updates do not resend the command.
     client.frame(1_000_000);
     assert_eq!(stops_sent(&mut client), []);
 }
@@ -137,6 +136,26 @@ fn a_stop_set_and_cleared_in_one_decision_sends_both_changes() {
         Some(&StopsSetting::SMART),
         "the game is told the stop is cleared again"
     );
+}
+
+#[test]
+fn an_earlier_stop_acknowledgement_keeps_the_later_change_pending() {
+    let decision = || deciding(prompt("Pay {1}{U}"));
+    let mut client = client();
+    client.handle(decision());
+    press_toggle(&mut client, 0, "Opponent's draw");
+    press_toggle(&mut client, 1_000_000, "Opponent's draw");
+    let sent = stops_sent(&mut client);
+    assert_eq!(sent.len(), 2);
+
+    for stops in sent {
+        let Input::Update(mut update) = decision() else {
+            unreachable!("a decision is sent in a game update");
+        };
+        update.view.stops = stops;
+        client.handle(Input::Update(update));
+        assert_eq!(stops_sent(&mut client), []);
+    }
 }
 
 #[test]

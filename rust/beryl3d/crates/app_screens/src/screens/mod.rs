@@ -15,9 +15,9 @@ pub use game_manual::screens::table_entries::{
 };
 use game_manual::screens::{lobby, table};
 
+pub use game_hud::hud::steps::steps as game_steps;
 pub use game_hud::navigation::{Screen, Sheet};
 use game_hud::screens::game;
-pub use game_hud::screens::game::game_steps;
 pub use game_play::sound::Music;
 pub use settings::{GEAR_INSET, corner};
 
@@ -137,11 +137,17 @@ pub fn sheet_face(input: &ScreenIn) -> Option<kit_ui::input::FaceId> {
 
 /// Composes the game, lobby, table and gallery routes.
 #[must_use]
-pub fn screen(input: &ScreenIn, log: Option<Element>, result: Option<Element>) -> Option<Element> {
+pub fn screen(
+    input: &ScreenIn,
+    furniture: game::Furniture,
+    log: Option<Element>,
+    result: Option<Element>,
+) -> Option<Element> {
     Some(match input.screen {
         Screen::Start | Screen::Testing => return None,
         Screen::Game => game::game(
             &input.hud(),
+            furniture,
             log,
             result,
             Action::new(settings::Message::Open),

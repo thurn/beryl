@@ -21,6 +21,7 @@ use glam::Vec2;
 
 use super::Client;
 use app_screens::screens::Screen;
+use game_hud::hud::inspector::Message as Inspect;
 use game_play::pointer::takes_pointer;
 use game_play::pointer::touch::Landed;
 use kit_frame::frame::Role;
@@ -47,8 +48,8 @@ impl Client {
             PointerPhase::Down => {
                 let felt = self.on_felt(at);
                 match self.touch.down(id, at, self.now, felt) {
-                    Landed::Active if self.inspector.pinned.take().is_some() => {
-                        self.inspector.due = true;
+                    Landed::Active if self.features.inspector().pinned() => {
+                        self.features.inspector_mut().update(Inspect::Pin(None));
                         false
                     }
                     Landed::Active => {
@@ -138,8 +139,9 @@ impl Client {
         if self.screen != Screen::Game || self.usable(slot) {
             self.card_clicked(slot);
         } else if let Ok(slot) = u16::try_from(slot) {
-            self.inspector.pinned = Some(ObjectId(slot));
-            self.inspector.due = true;
+            self.features
+                .inspector_mut()
+                .update(Inspect::Pin(Some(ObjectId(slot))));
         }
     }
 
@@ -173,8 +175,9 @@ impl Client {
         let Ok(slot) = u16::try_from(element.id.0) else {
             return false;
         };
-        self.inspector.pinned = Some(ObjectId(slot));
-        self.inspector.due = true;
+        self.features
+            .inspector_mut()
+            .update(Inspect::Pin(Some(ObjectId(slot))));
         true
     }
 

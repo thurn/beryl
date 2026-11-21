@@ -1,18 +1,13 @@
 //! Dispatches messages received from the flat layer and the client's own controls.
 
 use beryl_protocol::prompt::{ButtonId, Click};
-use beryl_protocol::protocol::Step;
 
 use super::Client;
 use app_screens::screens::ScreenPress;
-use game_hud::hud::GamePress;
-use game_hud::inspect::Viewed;
 use game_manual::manual::{LobbyPress, TableCommand, TablePress};
 use kit_ui::element::Action;
 use kit_ui::layout::DismissMenu;
 use kit_ui::widgets::{MenuChoice, MenuId};
-
-use super::stops::toggled;
 
 /// What a press on an element means. The client turns it into a `SessionCommand`, a
 /// `Request` or a change of screen, sheet or settings, adding what a screen function does not
@@ -24,9 +19,6 @@ pub enum Press {
     /// Any click on the open prompt other than a button: a card, an ability or a player, a
     /// number, a catalog entry, or a card dropped into a pile.
     Prompt(Click),
-    /// Turn the stop at `step` on or off, on the player's own turns or, if `theirs`, on the
-    /// opponent's.
-    Stop { step: Step, theirs: bool },
     /// A row of an open menu, counting from 0 over all its groups.
     Menu(MenuId, u16),
     /// Open one of the gallery's example context menus.
@@ -35,8 +27,6 @@ pub enum Press {
     GalleryQuery(Option<app_screens::screens::GalleryQuery>),
     /// Close something shown over the screen.
     Dismiss(Dismiss),
-    /// Open the viewer of a pile's cards, as a press on a pile does.
-    View(Viewed),
     /// Give the manual table's command at this index of `manual::commands::COMMANDS` to what
     /// the pointer is on, as a key of the table does. The flag is whether Shift made the key's
     /// token face down.
@@ -53,12 +43,8 @@ pub enum Press {
 /// What a `Press::Dismiss` closes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Dismiss {
-    /// The cards an opponent's effect revealed.
-    Revealed,
     /// The open menu.
     Menu,
-    /// The browser of a pile's cards.
-    Viewer,
 }
 
 impl Client {
@@ -80,14 +66,6 @@ impl Client {
             self.dispatch_press(&press);
         } else if let Some(&click) = action.downcast_ref::<Click>() {
             self.click(click);
-        } else if let Some(&press) = action.downcast_ref::<GamePress>() {
-            let press = match press {
-                GamePress::Stop { step, theirs } => Press::Stop { step, theirs },
-                GamePress::View(viewed) => Press::View(viewed),
-                GamePress::DismissRevealed => Press::Dismiss(Dismiss::Revealed),
-                GamePress::DismissViewer => Press::Dismiss(Dismiss::Viewer),
-            };
-            self.dispatch_press(&press);
         } else if let Some(&press) = action.downcast_ref::<TablePress>() {
             self.table_press(press);
         } else if let Some(&press) = action.downcast_ref::<LobbyPress>() {
@@ -108,19 +86,6 @@ impl Client {
         match *press {
             Press::Button(button) => self.click(Click::Button { button }),
             Press::Prompt(click) => self.click(click),
-            Press::Stop { step, theirs } => {
-                let stops = &mut self.settings.stops;
-                let set = if theirs {
-                    &mut stops.theirs
-                } else {
-                    &mut stops.yours
-                };
-                *set = toggled(*set, step);
-                self.save_stops();
-            }
-            Press::View(viewed) => self.view(Some(viewed)),
-            Press::Dismiss(Dismiss::Viewer) => self.dismiss_viewer(),
-            Press::Dismiss(Dismiss::Revealed) => self.dismiss_revealed(),
             Press::GalleryMenu(kind) => {
                 let at = self.owned.mouse.unwrap_or_else(|| {
                     glam::Vec2::new(self.window.size.width, self.window.size.height) / 2.0

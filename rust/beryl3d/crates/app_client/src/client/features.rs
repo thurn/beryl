@@ -12,7 +12,16 @@ use app_screens::screens::testing::{self, TestingScreen};
 use app_screens::screens::{self, GalleryState, Screen, Sheet};
 use app_screens::settings::ScreenSettings;
 use beryl_protocol::{PlayerView, SessionId};
+use game_hud::hud::banner::Banner;
+use game_hud::hud::counts::CountFloats;
+use game_hud::hud::full_control::{self, FullControl};
+use game_hud::hud::inspector::Inspector;
 use game_hud::hud::log::{self, GameLog, Logged};
+use game_hud::hud::notices::NoticeFloats;
+use game_hud::hud::piles::PileCounts;
+use game_hud::hud::rows::RowCounts;
+use game_hud::hud::steps::{self, StepRow};
+use game_hud::hud::viewer::{self, Viewer};
 use game_hud::screens::game_over::{self, GameOver};
 use game_manual::screens::table_entries::TableEntries;
 use game_table::faces::{FaceList, Faces};
@@ -30,6 +39,15 @@ const START: &str = "start";
 const TESTING: &str = "testing";
 const BUG_REPORT: &str = "bug-report";
 const GAME_OVER: &str = "game-over";
+const TOTALS: &str = "life-totals";
+const PILES: &str = "pile-counts";
+const NOTICES: &str = "notices";
+const ROWS: &str = "row-counts";
+const BANNER: &str = "step-banner";
+const INSPECTOR: &str = "inspector";
+const STEPS: &str = "steps";
+const FULL_CONTROL: &str = "full-control";
+const VIEWER: &str = "pile-viewer";
 const REGISTRY: &[Registration] = &[
     Registration::of::<SettingsSheet>(SETTINGS, Placement::Sheet(Sheet::Settings)),
     Registration::of::<GameLog>("game-log", Placement::GameLog),
@@ -37,6 +55,15 @@ const REGISTRY: &[Registration] = &[
     Registration::of::<TestingScreen>(TESTING, Placement::Screen(Screen::Testing)),
     Registration::of::<BugReport>(BUG_REPORT, Placement::Sheet(Sheet::BugReport)),
     Registration::of::<GameOver>(GAME_OVER, Placement::GameOver),
+    Registration::prepared::<CountFloats>(TOTALS),
+    Registration::prepared::<PileCounts>(PILES),
+    Registration::prepared::<NoticeFloats>(NOTICES),
+    Registration::prepared::<RowCounts>(ROWS),
+    Registration::prepared::<Banner>(BANNER),
+    Registration::prepared::<Inspector>(INSPECTOR),
+    Registration::routed::<StepRow>(STEPS),
+    Registration::routed::<FullControl>(FULL_CONTROL),
+    Registration::routed::<Viewer>(VIEWER),
 ];
 
 /// Locations in the flat layer's composition that take a registered feature.
@@ -67,7 +94,7 @@ type Slots = BTreeMap<&'static str, Box<dyn Any>>;
 
 struct Registration {
     id: &'static str,
-    placement: Placement,
+    placement: Option<Placement>,
     create: fn() -> Box<dyn Any>,
     state: for<'a> fn(&'a Slots, &'static str) -> &'a dyn Debug,
     route: fn(&mut Client, &'static str, &Action) -> Option<bool>,
@@ -76,6 +103,10 @@ struct Registration {
 
 impl Registration {
     const fn of<F: Mounted>(id: &'static str, placement: Placement) -> Self {
+        Self::mounted::<F>(id, Some(placement))
+    }
+
+    const fn mounted<F: Mounted>(id: &'static str, placement: Option<Placement>) -> Self {
         Self {
             id,
             placement,
@@ -84,6 +115,22 @@ impl Registration {
             route: route::<F>,
             view: F::mounted_view,
         }
+    }
+    // Playback variants are prepared separately in Layer. The registry owns
+    // their state even though there is no single screen mount to cache.
+    const fn prepared<S: Debug + Default + 'static>(id: &'static str) -> Self {
+        Self {
+            id,
+            placement: None,
+            create: || Box::new(S::default()),
+            state: |slots, id| slots[id].downcast_ref::<S>().unwrap(),
+            route: |_, _, _| None,
+            view: |_, _, _| None,
+        }
+    }
+
+    const fn routed<F: Mounted>(id: &'static str) -> Self {
+        Self::mounted::<F>(id, None)
     }
 }
 
@@ -132,6 +179,102 @@ impl Features {
             .state()
     }
 
+    fn prepared<S: 'static>(&self, id: &'static str) -> &S {
+        self.slots[id].downcast_ref().expect("registered HUD state")
+    }
+
+    fn prepared_mut<S: 'static>(&mut self, id: &'static str) -> &mut S {
+        self.slots
+            .get_mut(id)
+            .and_then(|slot| slot.downcast_mut())
+            .expect("registered HUD state")
+    }
+
+    pub fn totals_mut(&mut self) -> &mut CountFloats {
+        self.prepared_mut(TOTALS)
+    }
+
+    pub fn piles(&self) -> &PileCounts {
+        self.prepared(PILES)
+    }
+
+    pub fn piles_mut(&mut self) -> &mut PileCounts {
+        self.prepared_mut(PILES)
+    }
+
+    pub fn notices_mut(&mut self) -> &mut NoticeFloats {
+        self.prepared_mut(NOTICES)
+    }
+
+    pub fn rows(&self) -> &RowCounts {
+        self.prepared(ROWS)
+    }
+
+    pub fn rows_mut(&mut self) -> &mut RowCounts {
+        self.prepared_mut(ROWS)
+    }
+
+    pub fn banner_mut(&mut self) -> &mut Banner {
+        self.prepared_mut(BANNER)
+    }
+
+    pub fn inspector(&self) -> &Inspector {
+        self.prepared(INSPECTOR)
+    }
+
+    pub fn inspector_mut(&mut self) -> &mut Inspector {
+        self.prepared_mut(INSPECTOR)
+    }
+
+    pub fn steps(&self) -> &steps::State {
+        self.state_of::<StepRow>(STEPS)
+    }
+
+    pub fn steps_mut(&mut self) -> &mut steps::State {
+        Self::slot::<StepRow>(&mut self.slots, STEPS).state_mut()
+    }
+
+    pub fn step_view(&mut self, input: steps::Inputs) -> Option<Element> {
+        input.visible().then(|| {
+            Self::slot::<StepRow>(&mut self.slots, STEPS)
+                .view(input)
+                .clone()
+        })
+    }
+
+    pub fn full_control_view(&mut self, input: full_control::Inputs) -> Element {
+        Self::slot::<FullControl>(&mut self.slots, FULL_CONTROL)
+            .view(input)
+            .clone()
+    }
+
+    pub fn viewer(&self) -> &viewer::State {
+        self.state_of::<Viewer>(VIEWER)
+    }
+
+    pub fn viewer_mut(&mut self) -> &mut viewer::State {
+        Self::slot::<Viewer>(&mut self.slots, VIEWER).state_mut()
+    }
+
+    pub fn show_viewer(
+        &mut self,
+        open: Option<game_hud::inspect::Viewed>,
+        revealed: Vec<viewer::RevealedFace>,
+    ) {
+        let slot = Self::slot::<Viewer>(&mut self.slots, VIEWER);
+        slot.state_mut().show(open, revealed);
+        slot.invalidate_view();
+    }
+
+    pub fn viewer_view(&mut self, input: viewer::Inputs<'_>) -> Option<Element> {
+        let slot = Self::slot::<Viewer>(&mut self.slots, VIEWER);
+        let open = slot.state().open()?;
+        if matches!(open, game_hud::inspect::Viewed::Pile(..)) {
+            input.view?;
+        }
+        Some(slot.view(input).clone())
+    }
+
     pub fn bug(&self) -> &bug_report::State {
         self.state_of::<BugReport>(BUG_REPORT)
     }
@@ -159,7 +302,9 @@ impl Features {
     }
 
     pub fn view(&mut self, placement: Placement, inputs: ViewInputs<'_>) -> Option<Element> {
-        let entry = REGISTRY.iter().find(|entry| entry.placement == placement)?;
+        let entry = REGISTRY
+            .iter()
+            .find(|entry| entry.placement == Some(placement))?;
         (entry.view)(self, entry.id, inputs).cloned()
     }
 
@@ -210,10 +355,12 @@ impl Client {
 /// Adapts each feature's inputs and effects to the application.
 trait Mounted: Feature + Sized + 'static {
     fn mounted_view<'a>(
-        features: &'a mut Features,
-        id: &'static str,
-        inputs: ViewInputs<'_>,
-    ) -> Option<&'a Element>;
+        _: &'a mut Features,
+        _: &'static str,
+        _: ViewInputs<'_>,
+    ) -> Option<&'a Element> {
+        None
+    }
     fn command(client: &mut Client, command: Self::Command);
     fn request(client: &mut Client, request: Self::Request) -> bool;
 }
@@ -463,6 +610,42 @@ impl Mounted for GameOver {
 
     fn request(client: &mut Client, _: Self::Request) -> bool {
         update::<StartScreen>(client, START, &start::Message::Open(Screen::Start))
+    }
+}
+
+impl Mounted for StepRow {
+    fn command(_: &mut Client, command: Self::Command) {
+        match command {}
+    }
+
+    fn request(client: &mut Client, request: Self::Request) -> bool {
+        client.toggle_stop(request);
+        true
+    }
+}
+
+impl Mounted for FullControl {
+    fn command(_: &mut Client, command: Self::Command) {
+        match command {}
+    }
+
+    fn request(_: &mut Client, request: Self::Request) -> bool {
+        match request {}
+    }
+}
+
+impl Mounted for Viewer {
+    fn command(_: &mut Client, command: Self::Command) {
+        match command {}
+    }
+
+    fn request(client: &mut Client, request: Self::Request) -> bool {
+        match request {
+            viewer::Message::Open(pile) => client.view(Some(pile)),
+            viewer::Message::Close => client.dismiss_viewer(),
+            viewer::Message::DismissRevealed => client.dismiss_revealed(),
+        }
+        false
     }
 }
 

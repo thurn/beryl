@@ -1,9 +1,8 @@
 //! What the game screen shows to look at cards closely: the inspector for one card, the viewer
 //! of a pile's cards and the cards an effect revealed.
 
-pub mod inspector;
-pub mod revealed;
-pub mod viewer;
+pub use crate::hud::{inspector, viewer};
+pub use viewer::revealed;
 
 /// What the viewer shows the cards of (`inspect::viewer`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

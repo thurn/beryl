@@ -4,7 +4,7 @@ use beryl_protocol::protocol::ZoneName;
 
 use super::TablePress;
 use super::viewers::{PileViewer, SEARCH, Sort, sections};
-use game_hud::hud::GamePress;
+use game_hud::hud::viewer::Message;
 use game_hud::hud::{HudIn, piles::pile_cards};
 use game_hud::inspect::Viewed;
 use game_hud::inspect::viewer::{
@@ -52,11 +52,7 @@ pub(crate) fn table_viewer(input: &HudIn, fields: &Fields, state: &PileViewer) -
             button("Don't shuffle").on_press(TablePress::ViewerFinish(false)),
         ]
     } else {
-        vec![
-            button("Close")
-                .name("close")
-                .on_press(GamePress::DismissViewer),
-        ]
+        vec![button("Close").name("close").on_press(Message::Close)]
     };
     let content = column()
         .name("browser")

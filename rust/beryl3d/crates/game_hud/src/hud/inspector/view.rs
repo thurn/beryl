@@ -44,6 +44,24 @@ pub struct Inspected {
     pub refusal: Option<RefusalView>,
 }
 
+/// The word at the permanent that holds its controller's opponents to sorcery speed: the web's
+/// `TimingRefusal`.
+pub fn notice() -> Element {
+    let mut word = row()
+        .name("Sorcery speed only")
+        .background(color::TIMING_REFUSAL)
+        .border((color::STAT_DOWN, 1.0))
+        .radius(size::TIMING_REFUSAL_RADIUS)
+        .passes(true)
+        .child(text("Sorcery speed only").style(type_style::TIMING_REFUSAL));
+    let (across, down) = (
+        size::TIMING_REFUSAL_PADDING_X,
+        size::TIMING_REFUSAL_PADDING_Y,
+    );
+    word.style.padding = [down, across, down, across];
+    word
+}
+
 /// The inspector's corner radius, `.inspect`'s `border-radius`.
 const RADIUS: f32 = size::INSPECTOR_RADIUS;
 
