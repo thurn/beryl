@@ -1,4 +1,6 @@
 //! Discard ([CR 701.9](https://yawgatog.com/resources/magic-rules/#R7019)).
+//!
+//! Implements: CR 701.9
 
 use beryl_card::{Amount, Players};
 
@@ -18,7 +20,7 @@ use crate::zones;
 /// Discards a card from its owner's hand
 /// ([CR 701.9a](https://yawgatog.com/resources/magic-rules/#R7019a)): "To discard a card,
 /// move it from its owner's hand to that player's graveyard." One no longer in a hand is not
-/// discarded (CR 400.7).
+/// discarded (see CR 400.7).
 #[inline]
 pub fn discard<L: Layout>(game: &mut Game<'_, L>, card: ObjectRef<L>) -> Result<(), Full> {
     if !game.state.is_current(card) || game.state.object(card.slot).zone() != Zone::Hand {
@@ -81,7 +83,7 @@ fn discard_of<L: Layout>(
 
 /// [`Effect::Discard`](beryl_card::Effect::Discard): "[Player] discards [count] cards", each
 /// of their choice (CR 701.9b), or their whole hand if it has fewer
-/// ([CR 609.3](https://yawgatog.com/resources/magic-rules/#R6093)). The outcome is the cards
+/// (see [CR 609.3](https://yawgatog.com/resources/magic-rules/#R6093)). The outcome is the cards
 /// discarded.
 pub(crate) fn instruction<L: Layout>(
     run: &mut Run<'_, '_, L>,

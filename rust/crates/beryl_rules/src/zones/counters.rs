@@ -1,4 +1,6 @@
-//! Counters ([CR 122](https://yawgatog.com/resources/magic-rules/#R122)).
+//! Counters (see [CR 122](https://yawgatog.com/resources/magic-rules/#R122)).
+//!
+//! Implements: CR 122.6
 
 use beryl_card::{Amount, Objects};
 use beryl_kernel::reference::Permanent;
@@ -11,7 +13,7 @@ use crate::state::{CounterKind, ObjectRef};
 
 /// Puts `amount` counters of a kind on a permanent
 /// ([CR 122.6](https://yawgatog.com/resources/magic-rules/#R1226)). One that has changed zones
-/// since gets none (CR 400.7).
+/// since gets none (see CR 400.7).
 #[inline]
 pub fn add<L: Layout>(
     game: &mut Game<'_, L>,
@@ -32,7 +34,7 @@ pub fn add<L: Layout>(
 }
 
 /// Removes up to `amount` counters of a kind from a permanent: as many as it has
-/// ([CR 609.3](https://yawgatog.com/resources/magic-rules/#R6093)).
+/// (see [CR 609.3](https://yawgatog.com/resources/magic-rules/#R6093)).
 #[inline]
 pub fn remove<L: Layout>(
     game: &mut Game<'_, L>,
@@ -72,7 +74,7 @@ pub(crate) fn remove_from_object<L: Layout>(
 }
 
 /// [`Effect::AddCounters`](beryl_card::Effect::AddCounters): "Put [count] [kind] counters on
-/// [objects]" (CR 122.1). The outcome is the counters put.
+/// [objects]" (see CR 122.1). The outcome is the counters put.
 pub(crate) fn add_instruction<L: Layout>(
     run: &mut Run<'_, '_, L>,
     objects: Objects,
@@ -83,7 +85,7 @@ pub(crate) fn add_instruction<L: Layout>(
 }
 
 /// [`Effect::RemoveCounters`](beryl_card::Effect::RemoveCounters): "Remove [count] [kind]
-/// counters from [objects]", as many as each has (CR 609.3). The outcome is the counters
+/// counters from [objects]", as many as each has (see CR 609.3). The outcome is the counters
 /// removed.
 pub(crate) fn remove_instruction<L: Layout>(
     run: &mut Run<'_, '_, L>,

@@ -22,7 +22,7 @@ use crate::state::{
     Zone,
 };
 use crate::{CardTable, GameTable, Profile, State, continuous::layers, reference};
-use crate::{Scratch, tokens};
+use crate::{Scratch, zones::tokens};
 
 use super::events::{find, with_game};
 use super::{DUAL, LAND};

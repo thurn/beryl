@@ -20,7 +20,7 @@ use crate::ids::Slot;
 use crate::replacement::event::{self, Reason, TokenEntry};
 use crate::resolution::Resolution;
 use crate::state::{Duration, TurnStep, Zone};
-use crate::{CardTable, Choice, DecisionKind, Decklist, Profile, continuous, tokens, zones};
+use crate::{CardTable, Choice, DecisionKind, Decklist, Profile, continuous, zones, zones::tokens};
 
 /// "When this creature enters, exile another target permanent. Return that card to the
 /// battlefield under its owner's control at the beginning of the next end step."

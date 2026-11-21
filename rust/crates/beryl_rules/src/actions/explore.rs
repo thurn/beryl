@@ -1,4 +1,6 @@
 //! Explore ([CR 701.44](https://yawgatog.com/resources/magic-rules/#R70144)).
+//!
+//! Implements: CR 701.44
 
 use beryl_card::{Objects, prompt};
 
@@ -12,7 +14,7 @@ use crate::layout::Layout;
 use crate::replacement::event::Reason;
 use crate::resolution::Resolution;
 use crate::state::{CounterKind, ObjectRef, Zone};
-use crate::{counters, zones};
+use crate::{zones, zones::counters};
 
 /// A permanent explores ([CR 701.44a](https://yawgatog.com/resources/magic-rules/#R70144a)):
 /// "that permanent's controller reveals the top card of their library. If a land card is
@@ -40,7 +42,7 @@ pub fn explore<L: Layout>(
     let top = game.state.library(player).last().copied();
     if let Some(slot) = top {
         reveal(game, player, slot);
-        // A card in a library has its front face's characteristics (CR 712.6a).
+        // A card in a library has its front face's characteristics (see CR 712.6a).
         let face = game.state.definition(slot).face(game.table);
         if face.types.contains(Types::LAND) {
             let card = game.state.object_ref(slot);

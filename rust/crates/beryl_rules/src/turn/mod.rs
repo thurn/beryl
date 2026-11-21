@@ -8,15 +8,15 @@ pub(crate) mod stops;
 use crate::combat;
 use crate::continuous::layers;
 use crate::decision::{Outcome, StallReason};
-use crate::drawing;
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
 use crate::layout::Layout;
-use crate::phasing;
+use crate::objects::phasing;
 use crate::replacement::event::{self, Reason, Sink};
 use crate::state::{Duration, Pending, State, TurnStep, Zone, ZoneKey};
 use crate::table::GameTable;
+use crate::zones::drawing;
 
 /// The maximum hand size ([CR 514.1](https://yawgatog.com/resources/magic-rules/#R5141)),
 /// "normally seven".

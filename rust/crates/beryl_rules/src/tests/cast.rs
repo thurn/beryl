@@ -29,7 +29,7 @@ use crate::{
     State, Step, apply, next,
 };
 use crate::{CustomBody, Layout, custom_body};
-use crate::{choices, drawing, zones};
+use crate::{choices, zones, zones::drawing};
 use beryl_kernel::two_player::TwoPlayerSeat as _;
 
 use super::{DUAL, LAND, begin};

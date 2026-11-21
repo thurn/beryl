@@ -1,5 +1,7 @@
-//! Linked abilities ([CR 607](https://yawgatog.com/resources/magic-rules/#R607)): the cards
+//! Linked abilities (see [CR 607](https://yawgatog.com/resources/magic-rules/#R607)): the cards
 //! one ability of an object exiles, which another of its abilities refers to.
+//!
+//! Implements: CR 607.2a
 
 use beryl_card::Objects;
 

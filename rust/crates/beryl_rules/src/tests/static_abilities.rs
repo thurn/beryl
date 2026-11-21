@@ -19,7 +19,7 @@ use crate::ids::{Seat, Slot};
 use crate::state::{TurnStep, Zone, ZoneKey};
 use crate::{
     CardTable, GameTable, Outcome, Profile, Scratch, State, continuous::layers,
-    continuous::rule_change, drawing,
+    continuous::rule_change, zones::drawing,
 };
 
 use super::LAND;

@@ -17,7 +17,8 @@ use crate::state::{Pending, State, TurnStep};
 use crate::table::GameTable;
 use crate::turn::paused_step;
 use crate::{
-    casting, combat, continuous::layers, face_down, mana, sba, stack::resolve, stack::trigger, turn,
+    casting, combat, continuous::layers, mana, objects::face_down, sba, stack::resolve,
+    stack::trigger, turn,
 };
 
 mod questions;

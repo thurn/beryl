@@ -1,4 +1,6 @@
 //! Destroy ([CR 701.8](https://yawgatog.com/resources/magic-rules/#R7018)).
+//!
+//! Implements: CR 701.8, CR 702.12b
 
 use beryl_card::{Keywords, Objects, Regeneration};
 use beryl_kernel::reference::{Permanent, Permanents};
@@ -14,7 +16,7 @@ use crate::state::{State, Zone};
 
 /// Destroys a permanent ([CR 701.8a](https://yawgatog.com/resources/magic-rules/#R7018a)):
 /// "To destroy a permanent, move it from the battlefield to its owner's graveyard." One that
-/// has left the battlefield since is not destroyed (CR 400.7), nor is one with indestructible
+/// has left the battlefield since is not destroyed (see CR 400.7), nor is one with indestructible
 /// ([`indestructible`]). A regeneration shield on it replaces the destruction
 /// ([`replacement::destruction`]).
 #[inline]

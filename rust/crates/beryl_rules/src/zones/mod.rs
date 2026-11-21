@@ -1,5 +1,13 @@
-//! Zones ([CR 400](https://yawgatog.com/resources/magic-rules/#R400)): moving an object from
+//! Zones (see [CR 400](https://yawgatog.com/resources/magic-rules/#R400)): moving an object from
 //! one to another, and looking at the cards of a hidden one.
+//!
+//! Implements: CR 110.2a, CR 400.2, CR 400.3, CR 400.4a
+
+pub mod counters;
+pub mod drawing;
+pub mod emblems;
+pub mod library;
+pub mod tokens;
 
 use beryl_card::{Objects, Players, PutOnto, Types};
 use beryl_kernel::reference::{Cards, ZoneMark};
@@ -18,7 +26,7 @@ use crate::state::{CounterKind, Memo, ObjectRef, Zone};
 use crate::zone::Place;
 
 /// Moves an object to a zone, to the top of an ordered one. One that has changed zones since
-/// does not move ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)): "An object
+/// does not move (see [CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)): "An object
 /// that moves from one zone to another becomes a new object with no memory of, or relation
 /// to, its previous existence."
 #[inline]
@@ -59,7 +67,7 @@ pub fn move_all<L: Layout>(
 }
 
 /// Exiles cards chosen for a cost together. A token does not represent a card
-/// ([CR 111.6]) and cannot enter the payment's checked set.
+/// (see [CR 111.6]) and cannot enter the payment's checked set.
 ///
 /// ```compile_fail,E0308
 /// use beryl_kernel::reference::{Graveyard, Permanents};
@@ -134,14 +142,14 @@ pub fn put_onto_battlefield<L: Layout>(
 /// [`Effect::ReturnToBattlefield`](beryl_card::Effect::ReturnToBattlefield): "Return
 /// [cards] to the battlefield under their owners' control", from whatever zone each is in,
 /// all at once, untapped and as new objects
-/// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)). The outcome is the
+/// (see [CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)). The outcome is the
 /// permanents they are.
 ///
 /// An instant or sorcery card stays where it is
 /// ([CR 400.4a](https://yawgatog.com/resources/magic-rules/#R4004a)): "If an instant or
 /// sorcery card would enter the battlefield, it remains in its previous zone." A token that
 /// left the battlefield has ceased to exist
-/// ([CR 111.7](https://yawgatog.com/resources/magic-rules/#R1117)), so nothing names it.
+/// (see [CR 111.7](https://yawgatog.com/resources/magic-rules/#R1117)), so nothing names it.
 pub(crate) fn return_instruction<L: Layout>(
     run: &mut Run<'_, '_, L>,
     cards: Objects,
@@ -161,7 +169,7 @@ pub(crate) fn return_instruction<L: Layout>(
 
 /// [`Effect::PutOntoBattlefield`](beryl_card::Effect::PutOntoBattlefield): "Return [objects]
 /// to the battlefield under your control", from whatever zone each is in, all at once and as
-/// new objects (CR 400.7), under the control of the one player [`PutOnto::under`] names or
+/// new objects (see CR 400.7), under the control of the one player [`PutOnto::under`] names or
 /// else of each one's owner
 /// ([CR 110.2a](https://yawgatog.com/resources/magic-rules/#R1102a)): "If an effect
 /// instructs a player to put an object onto the battlefield, that object enters the
@@ -286,7 +294,7 @@ pub(crate) fn put_into_graveyard_instruction<L: Layout>(
 
 /// Puts the objects `objects` names into their owners' hands or libraries, at `place` in a
 /// library (CR 400.3): the arm of [`return_to_hand_instruction`] and of
-/// [`library::put_instruction`](crate::library::put_instruction). A spell among them leaves
+/// [`library::put_instruction`](crate::zones::library::put_instruction). A spell among them leaves
 /// the stack without resolving. The outcome is the cards that are there.
 pub(crate) fn put_instruction<L: Layout>(
     run: &mut Run<'_, '_, L>,

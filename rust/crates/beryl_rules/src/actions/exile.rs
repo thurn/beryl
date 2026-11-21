@@ -1,4 +1,6 @@
 //! Exile ([CR 701.13](https://yawgatog.com/resources/magic-rules/#R70113)).
+//!
+//! Implements: CR 701.13
 
 use beryl_card::Objects;
 

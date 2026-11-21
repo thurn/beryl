@@ -1,4 +1,6 @@
 //! Tap and untap ([CR 701.26](https://yawgatog.com/resources/magic-rules/#R70126)).
+//!
+//! Implements: CR 701.26
 
 use beryl_card::{Amount, Objects, Players};
 
@@ -54,7 +56,7 @@ pub fn untap_up_to<L: Layout>(
 
 /// [`Effect::UntapUpTo`](beryl_card::Effect::UntapUpTo): "[Player] untaps up to [count]
 /// [permanents]" (CR 701.26b), chosen as the instruction is reached
-/// ([CR 608.2d](https://yawgatog.com/resources/magic-rules/#R6082d)). The outcome is the
+/// (see [CR 608.2d](https://yawgatog.com/resources/magic-rules/#R6082d)). The outcome is the
 /// permanents untapped.
 pub(crate) fn untap_up_to_instruction<L: Layout>(
     run: &mut Run<'_, '_, L>,

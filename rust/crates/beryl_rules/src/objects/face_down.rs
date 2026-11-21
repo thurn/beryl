@@ -1,11 +1,13 @@
-//! Face-down permanents ([CR 708](https://yawgatog.com/resources/magic-rules/#R708)): turning
+//! Face-down permanents (see [CR 708](https://yawgatog.com/resources/magic-rules/#R708)): turning
 //! a manifested permanent face up, a special action (CR 116.2b). Manifesting a card
-//! (CR 701.40) is [`crate::actions::manifest`].
+//! (see CR 701.40) is [`crate::actions::manifest`].
 //!
 //! A face-down permanent's face is [`FaceIx::DOWN`], whose characteristics are
 //! [`crate::card::FACE_DOWN`]'s whichever card it is, so layers, triggers, filters and costs
 //! read the 2/2 with no text through [`crate::card::CardDef::face`] like any face. What stays
 //! hidden is its card: its controller knows it, the other player doesn't (architecture §13).
+//!
+//! Implements: CR 116.2b, CR 701.40b, CR 712.12a
 
 use crate::bitboard::Bitboard;
 use crate::card::{FaceIx, ManaCost, Part, Prompt, Purpose, Types};
@@ -26,13 +28,13 @@ use crate::table::GameTable;
 /// mana cost is, pay that cost, then turn the permanent face up. ... (If the card representing
 /// that permanent isn't a creature card or it doesn't have a mana cost, it can't be turned
 /// face up this way.)" The card's characteristics are its front face's
-/// ([CR 712.6a](https://yawgatog.com/resources/magic-rules/#R7126a)), which is the face it
+/// (see [CR 712.6a](https://yawgatog.com/resources/magic-rules/#R7126a)), which is the face it
 /// turns up ([CR 712.12a](https://yawgatog.com/resources/magic-rules/#R71212a)): "If it's
 /// turned face up, it will have its front face up." No implemented creature card costs {0},
 /// so a cost of nothing is no mana cost.
 fn face_up_cost<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> Option<ManaCost> {
     // Only a card is turned face up: a token copy of a face-down permanent has no card
-    // behind it (CR 707.2, 708.2).
+    // behind it (see CR 707.2 and see CR 708.2).
     let front = s.card_def(t, slot)?.front();
     (front.types.contains(Types::CREATURE) && !front.cost.is_zero()).then(|| front.cost.with_x(0))
 }
@@ -67,7 +69,7 @@ pub(crate) fn face_up_options<L: Layout>(
 /// Begins turning the face-down permanent in `slot` face up: pays its mana cost by the one
 /// payment plan there is, or asks how, then turns it face up.
 ///
-/// [CR 116.3](https://yawgatog.com/resources/magic-rules/#R1163): "If a player takes a special
+/// See [CR 116.3](https://yawgatog.com/resources/magic-rules/#R1163): "If a player takes a special
 /// action, that player receives priority afterward."
 pub(crate) fn begin_turning_face_up<L: Layout>(
     s: &mut State<L>,

@@ -14,7 +14,7 @@ pub use beryl_kernel::event::{
     Tagged, Work,
 };
 
-pub use crate::tokens::TokenEntry;
+pub use crate::zones::tokens::TokenEntry;
 use beryl_kernel::mutate::Arrival;
 
 use crate::bitboard::Bitboard;

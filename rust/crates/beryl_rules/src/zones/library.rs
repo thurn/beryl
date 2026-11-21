@@ -1,4 +1,6 @@
 //! Library ([CR 401](https://yawgatog.com/resources/magic-rules/#R401)).
+//!
+//! Implements: CR 401
 
 use beryl_card::{Amount, LibraryOrder, LibraryPosition, Objects, Players, Taken, prompt};
 
@@ -161,7 +163,7 @@ pub fn put_back<L: Layout>(
 /// - [`Taken::MayReveal`]: a look whose count is `n` as it was told, opening with whether to
 ///   take a card and then which, among those the filter accepts for the player
 ///   ([`choices::may_pick`]). The card taken is revealed
-///   ([CR 701.20a](https://yawgatog.com/resources/magic-rules/#R70120a)): "To reveal a card,
+///   (see [CR 701.20a](https://yawgatog.com/resources/magic-rules/#R70120a)): "To reveal a card,
 ///   show that card to all players for a brief time."
 /// - [`LibraryOrder::Any`]: one pick for each card of the rest at the second part of the
 ///   arrangement, whose count is the cards still to place, each going under the ones before
@@ -245,7 +247,7 @@ pub(crate) fn put_instruction<L: Layout>(
 
 /// [`LibraryPosition::TopOrBottom`]: "Its owner puts it on their choice of the top or bottom
 /// of their library." Each card's owner is asked as the instruction is reached
-/// ([CR 608.2d](https://yawgatog.com/resources/magic-rules/#R6082d)), a yes for the top, and
+/// (see [CR 608.2d](https://yawgatog.com/resources/magic-rules/#R6082d)), a yes for the top, and
 /// the card goes there before the next is asked about. The outcome is the cards that are in
 /// a library.
 fn put_at_owners_choice<L: Layout>(

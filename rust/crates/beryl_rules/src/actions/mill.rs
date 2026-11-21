@@ -1,4 +1,6 @@
 //! Mill ([CR 701.17](https://yawgatog.com/resources/magic-rules/#R70117)).
+//!
+//! Implements: CR 701.17
 
 use beryl_card::{Amount, Players};
 
@@ -10,7 +12,7 @@ use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
 use crate::replacement::event::Reason;
 use crate::state::{Zone, ZoneKey};
-use crate::{library, zones};
+use crate::{zones, zones::library};
 
 /// `player` mills `n` cards
 /// ([CR 701.17a](https://yawgatog.com/resources/magic-rules/#R70117a)): "For a player to

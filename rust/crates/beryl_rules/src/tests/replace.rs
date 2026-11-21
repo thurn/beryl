@@ -12,16 +12,16 @@ use crate::actions::manifest::manifest;
 use crate::bitboard::Bitboard;
 use crate::card::{Ability, CardDef, Face, Players, Replaced, Replacement, Rewrite, Types};
 use crate::continuous;
-use crate::drawing;
 use crate::filter::Filter;
 use crate::game::Game;
 use crate::ids::Seat;
 use crate::replacement::event::{Reason, Sink, TokenEntry};
 use crate::state::{Continuous, Duration, LayerChange, MoveReplacement, TurnStep, Zone};
 use crate::table::TableError;
+use crate::zones::drawing;
 use crate::{
-    CardTable, GameTable, Outcome, Profile, Scratch, State, continuous::layers, library, tokens,
-    zones,
+    CardTable, GameTable, Outcome, Profile, Scratch, State, continuous::layers, zones,
+    zones::library, zones::tokens,
 };
 use beryl_kernel::replacement::Unreplaced;
 

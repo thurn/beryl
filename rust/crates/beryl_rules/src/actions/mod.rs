@@ -1,8 +1,10 @@
-//! Keyword actions ([CR 701](https://yawgatog.com/resources/magic-rules/#R701)), one module
+//! Keyword actions (see [CR 701](https://yawgatog.com/resources/magic-rules/#R701)), one module
 //! for each, named as the rules name it.
+//!
+//! Implements: none. Groups keyword actions and coin flips.
 
 pub mod attach;
-pub mod copy;
+pub mod coins;
 pub mod counter;
 pub mod destroy;
 pub mod discard;

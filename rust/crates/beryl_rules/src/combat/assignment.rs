@@ -2,11 +2,13 @@
 //! more than one creature or with trample divides it, and dealing it.
 //!
 //! [CR 510]: https://yawgatog.com/resources/magic-rules/#R510
+//!
+//! Implements: CR 510, CR 702.19b, CR 702.19d
 
+use super::damage;
 use super::{blockers_of, has, in_combat_now};
 use crate::bitboard::Bitboard;
 use crate::card::{Keywords, Prompt, Purpose};
-use crate::damage;
 use crate::decision::{Candidates, Choice, Decision, DecisionKind, OPTIONS, Opt};
 use crate::engine::collapse;
 use crate::fixed::Full;
@@ -53,7 +55,7 @@ fn power<L: Layout>(s: &State<L>, slot: L::Slot) -> u8 {
 }
 
 /// The damage that would be lethal to a creature: its toughness less the damage already marked on
-/// it ([CR 120.6]): "If the total damage marked on a creature is greater than or equal to its
+/// it (see [CR 120.6]): "If the total damage marked on a creature is greater than or equal to its
 /// toughness, that creature has been dealt lethal damage". At least 1.
 ///
 /// [CR 120.6]: https://yawgatog.com/resources/magic-rules/#R1206
@@ -239,7 +241,7 @@ struct Assignment<L: Layout = Small> {
 /// [CR 510.2](https://yawgatog.com/resources/magic-rules/#R5102): "Second, all combat damage that's
 /// been assigned is dealt simultaneously." Every assignment is made from the creatures as they are
 /// before any damage is dealt, and the events of the damage are kept as one group. Damage to a
-/// player is the life they lose (CR 120.3a), in the one event.
+/// player is the life they lose (see CR 120.3a), in the one event.
 fn deal<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,

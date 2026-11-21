@@ -1,4 +1,6 @@
-//! Mutate ([CR 702.140](https://yawgatog.com/resources/magic-rules/#R702140)).
+//! Mutate (see [CR 702.140](https://yawgatog.com/resources/magic-rules/#R702140)).
+//!
+//! Implements: CR 702.140c, CR 702.140d, CR 731.2c
 
 use beryl_card::{Objects, Prompt, Purpose, prompt};
 

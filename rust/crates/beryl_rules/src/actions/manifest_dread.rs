@@ -1,4 +1,6 @@
 //! Manifest dread ([CR 701.62](https://yawgatog.com/resources/magic-rules/#R70162)).
+//!
+//! Implements: CR 701.62
 
 use beryl_card::{Players, prompt};
 
@@ -13,7 +15,7 @@ use crate::layout::Layout;
 use crate::replacement::event::Reason;
 use crate::resolution::Resolution;
 use crate::state::Zone;
-use crate::{library, zones};
+use crate::{zones, zones::library};
 
 /// `player` manifests dread
 /// ([CR 701.62a](https://yawgatog.com/resources/magic-rules/#R70162a)): "'Manifest dread'

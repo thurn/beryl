@@ -1,5 +1,7 @@
-//! One-shot effects ([CR 610](https://yawgatog.com/resources/magic-rules/#R610)): those that
+//! One-shot effects (see [CR 610](https://yawgatog.com/resources/magic-rules/#R610)): those that
 //! move an object "until" an event, which a second one then undoes (CR 610.3).
+//!
+//! Implements: CR 610.3
 
 use beryl_card::Objects;
 
@@ -27,8 +29,8 @@ pub fn exile_until_leaves<L: Layout>(
     object: ObjectRef<L>,
     until: ObjectRef<L>,
 ) -> Result<(), Full> {
-    // A phased-out `until` has not left the battlefield (CR 702.26d), so the event has not
-    // occurred; a phased-out `object` can't be exiled (CR 702.26b).
+    // A phased-out `until` has not left the battlefield (see CR 702.26d), so the event has not
+    // occurred; a phased-out `object` can't be exiled (see CR 702.26b).
     let until_stays =
         game.state.is_current(until) && game.state.object(until.slot).zone() == Zone::Battlefield;
     if !until_stays || game.state.permanent(object).is_none() {

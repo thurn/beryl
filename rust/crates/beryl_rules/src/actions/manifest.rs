@@ -1,5 +1,7 @@
-//! Manifest ([CR 701.40](https://yawgatog.com/resources/magic-rules/#R70140)). Turning a
-//! manifested permanent face up is a special action, in [`crate::face_down`].
+//! Manifest (see [CR 701.40](https://yawgatog.com/resources/magic-rules/#R70140)). Turning a
+//! manifested permanent face up is a special action, in [`crate::objects::face_down`].
+//!
+//! Implements: CR 701.40a, CR 708.3, CR 708.5
 
 use crate::bitboard::Bitboard;
 use crate::card::FaceIx;
@@ -23,7 +25,7 @@ use crate::state::Zone;
 /// abilities never apply.
 ///
 /// The battlefield is a public zone, but a face-down card isn't seen
-/// ([CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002)): "Public zones are zones in
+/// (see [CR 400.2](https://yawgatog.com/resources/magic-rules/#R4002)): "Public zones are zones in
 /// which all players can see the cards' faces, except for those cards that some rule or effect
 /// specifically allow to be face down." Its controller may look at it (CR 708.5); another
 /// player knows it only if they already did. A card a replacement effect put somewhere else

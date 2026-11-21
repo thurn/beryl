@@ -1,4 +1,6 @@
 //! Sacrifice ([CR 701.21](https://yawgatog.com/resources/magic-rules/#R70121)).
+//!
+//! Implements: CR 701.21
 
 use beryl_card::Objects;
 
@@ -13,7 +15,7 @@ use crate::zones;
 
 /// Sacrifices a permanent ([CR 701.21a](https://yawgatog.com/resources/magic-rules/#R70121a)):
 /// "To sacrifice a permanent, its controller moves it from the battlefield directly to its
-/// owner's graveyard." One that has left the battlefield since is not sacrificed (CR 400.7).
+/// owner's graveyard." One that has left the battlefield since is not sacrificed (see CR 400.7).
 #[inline]
 pub fn sacrifice<L: Layout>(game: &mut Game<'_, L>, object: ObjectRef<L>) -> Result<(), Full> {
     if game.state.permanent(object).is_none() {

@@ -1,4 +1,6 @@
 //! Attach ([CR 701.3](https://yawgatog.com/resources/magic-rules/#R7013)).
+//!
+//! Implements: CR 701.3
 
 use beryl_card::{AbilityKind, Objects, TargetKind, TargetSpec};
 
@@ -14,7 +16,7 @@ use crate::table::GameTable;
 /// Whether the Aura in `aura`, on the battlefield, may enchant the object in `host`, on the
 /// battlefield or in a graveyard.
 ///
-/// [CR 702.5c](https://yawgatog.com/resources/magic-rules/#R7025c): "If an Aura has
+/// See [CR 702.5c](https://yawgatog.com/resources/magic-rules/#R7025c): "If an Aura has
 /// multiple instances of enchant, all of them apply. ... The Aura can enchant only objects or
 /// players that match all of its enchant abilities." An
 /// Aura's enchant abilities are what the spell abilities it has now target
@@ -23,7 +25,7 @@ use crate::table::GameTable;
 /// graveyard" and gains "enchant creature put onto the battlefield with this Aura". An Aura
 /// with none left is restricted by none.
 ///
-/// [CR 303.4d](https://yawgatog.com/resources/magic-rules/#R3034d): "An Aura can't enchant
+/// See [CR 303.4d](https://yawgatog.com/resources/magic-rules/#R3034d): "An Aura can't enchant
 /// itself. ... An Aura that's also a creature can't enchant anything."
 pub(crate) fn may_enchant<L: Layout>(
     s: &State<L>,
@@ -46,7 +48,7 @@ pub(crate) fn may_enchant<L: Layout>(
 /// Whether one enchant ability, the target spec of an Aura's spell ability, allows the Aura in
 /// `aura` to enchant the object in `host`: an object in the zone the spec chooses from, which
 /// passes its filter read for the Aura's controller and is not protected from the Aura
-/// ([CR 702.16c]): "A permanent or player with protection can’t be enchanted by Auras that
+/// (see [CR 702.16c]): "A permanent or player with protection can’t be enchanted by Auras that
 /// have the stated quality."
 ///
 /// [CR 702.16c]: https://yawgatog.com/resources/magic-rules/#R70216c
@@ -84,7 +86,7 @@ fn enchantable<L: Layout>(
 /// Whether the Equipment in `equipment` may be attached to the permanent in `host`, both on
 /// the battlefield.
 ///
-/// [CR 301.5c](https://yawgatog.com/resources/magic-rules/#R3015c): "An Equipment that's also
+/// See [CR 301.5c](https://yawgatog.com/resources/magic-rules/#R3015c): "An Equipment that's also
 /// a creature can't equip a creature unless that Equipment has reconfigure ... An Equipment
 /// that loses the subtype 'Equipment' can't equip a creature. An Equipment can't equip
 /// itself." No implemented card has reconfigure.
@@ -94,7 +96,7 @@ fn enchantable<L: Layout>(
 /// player, the effect does nothing and the first object doesn't move." An Aura is asked
 /// [`may_enchant`] instead.
 ///
-/// [CR 702.16d](https://yawgatog.com/resources/magic-rules/#R70216d): "A permanent with
+/// See [CR 702.16d](https://yawgatog.com/resources/magic-rules/#R70216d): "A permanent with
 /// protection can’t be equipped by Equipment that have the stated quality".
 pub(crate) fn may_equip<L: Layout>(game: &Game<'_, L>, equipment: L::Slot, host: L::Slot) -> bool {
     may_equip_in(game.state, game.table, equipment, host)
@@ -124,8 +126,8 @@ pub(crate) fn may_equip_in<L: Layout>(
 /// to, the Aura, Equipment, or Fortification doesn't move. If an effect tries to attach an
 /// Aura, Equipment, or Fortification to the object or player it's already attached to, the
 /// effect does nothing." An Equipment or a creature that has left the battlefield is not
-/// there to attach (CR 400.7), and an Equipment can't equip more than one creature (CR
-/// 301.5c), so the instruction moves at most one Equipment onto one creature. An Aura moves
+/// there to attach (see CR 400.7), and an Equipment can't equip more than one creature
+/// (see CR 301.5c), so the instruction moves at most one Equipment onto one creature. An Aura moves
 /// onto what its enchant abilities allow ([`may_enchant`]).
 pub(crate) fn instruction<L: Layout>(
     run: &mut Run<'_, '_, L>,

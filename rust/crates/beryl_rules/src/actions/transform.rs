@@ -1,6 +1,8 @@
 //! Transform ([CR 701.27](https://yawgatog.com/resources/magic-rules/#R70127)), and a card
 //! put onto the battlefield transformed
 //! ([CR 712.11a](https://yawgatog.com/resources/magic-rules/#R71211a)).
+//!
+//! Implements: CR 701.27, CR 712.11a
 
 use beryl_card::Objects;
 
@@ -16,7 +18,7 @@ use crate::zones;
 
 /// Exiles a permanent, then returns it to the battlefield transformed under its owner's
 /// control. It returns as a new object
-/// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)) with its back face up
+/// (see [CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)) with its back face up
 /// ([`return_transformed`]). If it already left the battlefield, it isn't exiled, so it
 /// doesn't return.
 pub fn exile_and_return_transformed<L: Layout>(
@@ -40,7 +42,7 @@ pub fn exile_and_return_transformed<L: Layout>(
 /// that isn't a double-faced card onto the battlefield transformed or converted, that card
 /// stays in its current zone." It returns as a new object, and one that has changed zones
 /// since it was named does not move
-/// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)).
+/// (see [CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)).
 pub fn return_transformed<L: Layout>(
     game: &mut Game<'_, L>,
     card: ObjectRef<L>,

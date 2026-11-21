@@ -309,9 +309,9 @@ pub struct Permanents<L: Layout = Small>(Bitboard<L::Slot>);
   is safe, or become references.
 
 The contract ticket lands the types, the queries and the conversion of the
-kernel mutators and of three rules modules as the pattern (`zones.rs`,
-`actions/destroy.rs`, `counters.rs`). The module passes of section C convert the
-rest.
+kernel mutators and of three rules modules as the pattern (`zones/mod.rs`,
+`actions/destroy.rs`, `zones/counters.rs`). The module passes of section C
+convert the rest.
 
 ### C. Rule ownership and the module pass
 
@@ -360,9 +360,13 @@ special action module, while the turn's land limit stays in the turn module.
 Delve stays beside the casting costs it adjusts. `keywords/` declares the
 keyword rules it implements individually. Protection is in `replacement/`. That
 directory also handles the entry choice for an Aura (CR 303.4f and CR 303.4g)
-and dredge (CR 702.52a). Phasing and mutate are in `objects/`. The pass labels
-group related rules for navigation. A declaration claims only the sections or
-subrules that the module implements.
+and dredge (CR 702.52a). Phasing, mutate and turning a manifested permanent face
+up are in `objects/`. Manifesting and transforming stay with their keyword
+actions. Combat's damage module handles lifelink and choosing the source a
+shield prevents damage from. The zone modules handle tokens that enter attacking
+and token copies of double-faced permanents. The pass labels group related rules
+for navigation. A declaration claims only the sections or subrules that the
+module implements.
 
 #### `beryl_kernel/src/`
 
@@ -917,11 +921,11 @@ where they branch on it; nothing infers it from `Face::transformed`.
 `CastingOption::Morph(cost)` casts the card face down: `become_spell` takes
 `FaceIx::DOWN`, the spell is a 2/2 creature spell with no name that only its
 controller may look at, and it enters face down. Turning it up is the special
-action that exists for manifested cards (`face_down.rs`), paying the morph cost,
-which may be a non-mana cost (Gathan Raiders). A face-down card is revealed when
-it leaves the stack or the battlefield and when the game ends. Illusionary Mask
-lets any creature card be cast this way and turns it up with a replacement when
-it would deal or be dealt damage.
+action that exists for manifested cards (`objects/face_down.rs`), paying the
+morph cost, which may be a non-mana cost (Gathan Raiders). A face-down card is
+revealed when it leaves the stack or the battlefield and when the game ends.
+Illusionary Mask lets any creature card be cast this way and turns it up with a
+replacement when it would deal or be dealt damage.
 
 **Cards outside the game**
 ([CR 400.11](https://yawgatog.com/resources/magic-rules/#R40011)). The

@@ -4,17 +4,19 @@
 //!
 //! A copy of a spell is an object in a slot of the shared pool, which holds tokens and spell
 //! copies, marked as a token: a copy of a permanent spell becomes a token as it resolves
-//! ([CR 608.3f]), and a token on the stack is always a copy of a spell, since no token is
+//! (see [CR 608.3f]), and a token on the stack is always a copy of a spell, since no token is
 //! ever cast. It takes the copiable values of the spell it copies, with the copier's exception
 //! after them, and a stack entry with the original's face, targets, X and casting options
 //! paid. Nothing notes that it was cast, so no "when you cast" ability triggers and no count
 //! of spells cast counts it. When it leaves the stack it goes where a spell's card would, and
-//! the state-based check ends it there ([CR 704.5e]): "If a copy of a spell is in a zone other
+//! the state-based check ends it there (see [CR 704.5e]): "If a copy of a spell is in a zone other
 //! than the stack, it ceases to exist."
 //!
 //! [CR 707.10]: https://yawgatog.com/resources/magic-rules/#R70710
 //! [CR 608.3f]: https://yawgatog.com/resources/magic-rules/#R6083f
 //! [CR 704.5e]: https://yawgatog.com/resources/magic-rules/#R7045e
+//!
+//! Implements: CR 707.10
 
 use beryl_card::{Amount, ExceptIx, Objects, Words};
 
@@ -40,8 +42,8 @@ use crate::state::{AbilityTarget, ObjectRef, StackEntry, StackItem, Target, Targ
 /// is copied `count` times, the spells in the order their entries are on the stack, from the
 /// bottom. The ability's own spell that has left the stack, as a storm trigger's countered
 /// spell has, is copied as it last existed there ([`State::departed_spell`]), since the
-/// ability exists independently of it ([CR 113.7a]) and uses its last known information
-/// ([CR 608.2h]): "if it's no longer in that zone ... the effect uses the object's last known
+/// ability exists independently of it (see [CR 113.7a]) and uses its last known information
+/// (see [CR 608.2h]): "if it's no longer in that zone ... the effect uses the object's last known
 /// information." The ability's controller controls and owns the copies ([CR 707.10]): "A copy
 /// of a spell is owned by the player under whose control it was put on the stack." The
 /// outcome is the copies.
@@ -61,9 +63,9 @@ pub(crate) fn instruction<L: Layout>(
     let chosen = run.scene().objects(spells);
     let entry = &run.resolution().entry;
     let controller = entry.controller();
-    // CR 707.9b: the exception is one the ability's own face lists, and the copy takes it
+    // See CR 707.9b: the exception is one the ability's own face lists, and the copy takes it
     // after those of what it copies. Its color words read through the text changes of the
-    // spell or ability making the copy (CR 612.1), as they are now.
+    // spell or ability making the copy (see CR 612.1), as they are now.
     let addition = except.map(|ix| Addition::new(entry.card(), entry.face(), ix));
     let words = run.state().entry_words(entry);
     let departed = match spells {

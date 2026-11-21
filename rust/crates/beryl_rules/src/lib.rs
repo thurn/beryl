@@ -45,22 +45,22 @@
 //! (architecture §8.2), so triggers, replacement effects, the layers and the sink see it.
 //! Given an object that has changed zones since, it does nothing to it (CR 400.7). A function
 //! that only reads takes the state and the table, as the kernel's queries do
-//! ([`library::top`]).
+//! ([`zones::library::top`]).
 //!
 //! A library function is `pub` and `#[inline]` where it is a mutator and its event. It
 //! names no card, and no player but those it is given.
 //!
 //! The engine's own code (turns, casting, combat, the event pipeline) still passes the three
 //! apart. It is not rewritten for this: a bead that touches such a function converts it, and
-//! until then a caller of the library makes the game where it calls, as `combat.rs` does to
-//! deal combat damage.
+//! until then a caller of the library makes the game where it calls, as
+//! `combat/assignment.rs` does to deal combat damage.
 //!
 //! ## Layout
 //!
 //! Keep rule operations as free functions in the module that owns the rule. The module path
-//! gives shared verbs their meaning, as with `tokens::create` and `emblems::create`. A
-//! layout-dependent signature declares `L: Layout`. Engine callers use the same generic
-//! [`next`] and [`apply`] with either layout.
+//! gives shared verbs their meaning, as with `zones::tokens::create` and
+//! `zones::emblems::create`. A layout-dependent signature declares `L: Layout`. Engine callers
+//! use the same generic [`next`] and [`apply`] with either layout.
 //!
 //! The destruction prototype moved two operations onto `Game` and added three source lines,
 //! with the same six signature lines. Concrete engine entry points halved the generated LLVM
@@ -128,14 +128,14 @@
 //! | --- | --- | --- |
 //! | CR 701, keyword actions | `actions/`, a file for each, named as the rules name it | [`actions::counter`], [`actions::destroy`], [`actions::discard`], [`actions::exile`], [`actions::explore`], [`actions::fateseal`], [`actions::manifest`], [`actions::manifest_dread`], [`actions::mill`], [`actions::regenerate`], [`actions::reveal`], [`actions::sacrifice`], [`actions::scry`], [`actions::search`], [`actions::shuffle`], [`actions::tap`] (tap and untap), [`actions::transform`] |
 //! | CR 702, keyword abilities | `keywords/`, a file for each | [`keywords::flashback`]; kicker |
-//! | any other rule | a module named for the rule's title | [`game::ending`] the game (CR 104), [`mana`], which the engine's payment solver shares (CR 106), [`tokens`] (CR 111), [`emblems`] (CR 114), [`casting::payment`] (CR 118), [`game::life`] (CR 119), [`damage`] (CR 120), [`drawing`] (CR 121), [`counters`] (CR 122), [`zones`] (CR 400), [`library`] (CR 401), [`stack`] (CR 405), [`casting::start`] for spells an effect allows (CR 601), [`stack::delayed_triggers`] (CR 603.7), [`linked`] abilities (CR 607), [`choices`] made while resolving (CR 608.2d), [`one_shot`] effects (CR 610), [`continuous`] effects (CR 611), [`coins`] (CR 705); copies (CR 707) |
+//! | any other rule | a module named for the rule's title | [`game::ending`] the game (CR 104), [`mana`], which the engine's payment solver shares (CR 106), [`zones::tokens`] (CR 111), [`zones::emblems`] (CR 114), [`casting::payment`] (CR 118), [`game::life`] (CR 119), [`combat::damage`] (CR 120), [`zones::drawing`] (CR 121), [`zones::counters`] (CR 122), [`zones`] (CR 400), [`zones::library`] (CR 401), [`stack`] (CR 405), [`casting::start`] for spells an effect allows (CR 601), [`stack::delayed_triggers`] (CR 603.7), [`objects::linked`] abilities (CR 607), [`choices`] made while resolving (CR 608.2d), [`objects::one_shot`] effects (CR 610), [`continuous`] effects (CR 611), [`actions::coins`] (CR 705); [`objects::copy`] (CR 707) |
 //!
 //! A module holds, in this order:
 //!
 //! 1. Its header names the rules and gives an `Implements:` declaration for the rules it owns.
 //! 2. The functions, each citing its rule with a quotation. An action's function has the
 //!    action's name (`actions::scry::scry`); a module named for a thing holds what is done
-//!    with it (`game::life::gain`, `counters::remove`, `tokens::create`).
+//!    with it (`game::life::gain`, `zones::counters::remove`, `zones::tokens::create`).
 //! 3. The interpreter's arm for each effect-data entry that calls them: a `pub(crate)`
 //!    function named `instruction`, or `<function>_instruction` where the module has more
 //!    than one. It takes the interpreter's `Run` and the entry's operands as the vocabulary
@@ -144,7 +144,7 @@
 //!    (`interpret/run.rs`) is the table of entries, one line for each, naming its arm; an
 //!    entry whose module is not written still has its arm there. Two entries that differ
 //!    only in where they put a card share one arm, which each one's own names
-//!    ([`zones`]'s for [`library`]'s "put into a library").
+//!    ([`zones`]'s for [`zones::library`]'s "put into a library").
 //! 4. The entry's English template, a constant directly above its arm. Milestone 8
 //!    writes them; none exists yet.
 //!
@@ -213,31 +213,21 @@ pub mod card;
 pub mod casting;
 pub mod choices;
 mod chosen;
-pub mod coins;
-mod combat;
+pub mod combat;
 pub mod continuous;
-pub mod counters;
 pub mod coverage;
-pub mod damage;
-pub mod drawing;
-pub mod emblems;
 mod engine;
-mod face_down;
 pub mod game;
 mod interpret;
 pub mod keywords;
-pub mod library;
-pub mod linked;
 pub mod mana;
-pub mod one_shot;
-mod phasing;
+pub mod objects;
 mod reference;
 pub mod replacement;
 pub mod resolution;
 mod sba;
 mod scratch;
 pub mod stack;
-pub mod tokens;
 mod turn;
 pub mod zones;
 
@@ -267,7 +257,6 @@ pub use bodies::{CustomBody, custom_body};
 pub use casting::{cost_being_cast, payable_responses, pointless, target_takes};
 pub use combat::preferred_damage;
 pub use continuous::layers::rederive;
-pub use drawing::wins_instead_of_drawing;
 pub use engine::{
     Counts, Scratch, apply, apply_decided, concede, interchangeable, next, next_in_step,
     next_within, observe, paused_events, refusal, view,
@@ -277,6 +266,7 @@ pub use keywords::flashback::paid as flashback_paid;
 pub use mana::mana_contribution;
 pub use reference::check_references;
 pub use resolution::Resolution;
+pub use zones::drawing::wins_instead_of_drawing;
 
 // The tests set games up as a caller of the facade does, with the kernel's names at the root.
 #[cfg(test)]

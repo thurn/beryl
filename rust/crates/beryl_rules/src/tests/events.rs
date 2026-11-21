@@ -18,7 +18,7 @@ use crate::card::{
     Purpose, Replacement, Subtype, Subtypes, TargetKind, TargetSpec, Trigger, Types,
 };
 use crate::card::{CastingKind, Flow, ObjectAbility};
-use crate::damage;
+use crate::combat::damage;
 use crate::filter::{Evaluate, Filter};
 use crate::fixed::Fixed;
 use crate::game::Game;
@@ -38,7 +38,7 @@ use crate::{
     Scratch, State, Step, apply, next,
 };
 use crate::{CustomBody, Layout, custom_body};
-use crate::{continuous, counters, linked, one_shot, tokens};
+use crate::{continuous, objects::linked, objects::one_shot, zones::counters, zones::tokens};
 use beryl_kernel::two_player::TwoPlayerSeat as _;
 
 use super::{LAND, begin};

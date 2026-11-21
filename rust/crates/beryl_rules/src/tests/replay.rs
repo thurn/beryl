@@ -268,7 +268,7 @@ fn a_library_token_cannot_make_a_draw_eligible_for_dredge() {
     assert!(crate::replacement::dredges(&state, &table, player).is_empty());
 
     let mut game = Game::new(&mut state, &table, &mut scratch.events);
-    crate::drawing::draw(&mut game, player, 1).unwrap();
+    crate::zones::drawing::draw(&mut game, player, 1).unwrap();
     assert_eq!(state.object(card).zone(), Zone::Hand);
     assert_eq!(state.object(dredger).zone(), Zone::Graveyard);
     assert_eq!(state.library(player), &[token]);

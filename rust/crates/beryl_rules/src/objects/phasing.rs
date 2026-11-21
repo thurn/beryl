@@ -5,6 +5,8 @@
 //! need nothing else to treat it as though it does not exist.
 //!
 //! [CR 702.26]: https://yawgatog.com/resources/magic-rules/#R70226
+//!
+//! Implements: CR 502.1, CR 702.26
 
 use beryl_card::Objects;
 
@@ -45,7 +47,7 @@ pub(crate) fn instruction<L: Layout>(
 /// simultaneously." One test of an empty set while nothing is phased out.
 ///
 /// A permanent that phases in has been under its controller's control continuously since their
-/// turn began, so it can attack and pay {T} costs this turn ([CR 302.6]): "A creature's activated
+/// turn began, so it can attack and pay {T} costs this turn (see [CR 302.6]): "A creature's activated
 /// ability with the tap symbol or the untap symbol in its activation cost can't be activated
 /// unless the creature has been under its controller's control continuously since their most
 /// recent turn began."

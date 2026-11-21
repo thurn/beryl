@@ -1,4 +1,6 @@
 //! Scry ([CR 701.22](https://yawgatog.com/resources/magic-rules/#R70122)).
+//!
+//! Implements: CR 701.22
 
 use beryl_card::{Amount, Players, prompt};
 
@@ -9,10 +11,10 @@ use crate::game::Game;
 use crate::ids::Seat;
 use crate::interpret::{Outcome, Run};
 use crate::layout::{Layout, Queue};
-use crate::library;
 use crate::replacement::event::Event;
 use crate::resolution::Resolution;
 use crate::zone::Place;
+use crate::zones::library;
 use beryl_kernel::reference::Library;
 
 /// `player` scries `n`

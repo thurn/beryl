@@ -11,7 +11,7 @@ use beryl_card::{Effect, Objects, Players};
 use beryl_kernel::reference::{Permanent, Permanents};
 
 use crate::actions::{
-    attach, copy, counter, destroy, discard, exile, explore, fateseal, manifest_dread, mill,
+    attach, coins, counter, destroy, discard, exile, explore, fateseal, manifest_dread, mill,
     regenerate, sacrifice, scry, search, shuffle, tap, transform,
 };
 use crate::bitboard::Bitboard;
@@ -24,14 +24,13 @@ use crate::ids::Seat;
 use crate::interpret::scene::{Outcome, Registers, Scene};
 use crate::keywords::flashback;
 use crate::layout::{Layout, Queue, Table};
+use crate::objects::{copy, linked, one_shot};
 use crate::resolution::Resolution;
+use crate::stack::delayed_triggers;
 use crate::state::TriggeredAbility;
 use crate::state::{AbilityRef, PendingTrigger, StackItem, State, Zone, placed};
-use crate::zones;
-use crate::{choices, coins, continuous, counters, damage, drawing};
-use crate::{
-    continuous::layers, emblems, library, linked, mana, one_shot, stack::delayed_triggers, tokens,
-};
+use crate::zones::{self, counters, drawing, emblems, library, tokens};
+use crate::{choices, combat::damage, continuous, continuous::layers, mana};
 
 /// One resolution of an ability written as data: the game, what is resolving in it, and
 /// what it keeps between instructions.
@@ -270,7 +269,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
                 regeneration,
             } => destroy::instruction(self, objects, regeneration)?,
             Effect::Regenerate(objects) => regenerate::instruction(self, objects)?,
-            Effect::PhaseOut(objects) => crate::phasing::instruction(self, objects)?,
+            Effect::PhaseOut(objects) => crate::objects::phasing::instruction(self, objects)?,
             Effect::PreventDamage {
                 to,
                 prevention,
@@ -321,7 +320,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             Effect::Mill { player, count } => mill::instruction(self, player, count)?,
             Effect::Scry { player, count } => scry::instruction(self, player, count)?,
             Effect::Explore(objects) => explore::instruction(self, objects)?,
-            Effect::Mutate(objects) => crate::keywords::mutate::instruction(self, objects)?,
+            Effect::Mutate(objects) => crate::objects::mutate::instruction(self, objects)?,
             Effect::ManifestDread(players) => manifest_dread::instruction(self, players)?,
             Effect::FlipCoin(players) => coins::instruction(self, players)?,
             Effect::DealDamage { to, amount } => damage::instruction(self, to, amount)?,

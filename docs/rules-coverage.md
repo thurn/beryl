@@ -378,8 +378,8 @@ proposal, a filter over it, a class from CR 616.1 and a rewrite.
   state says a choice is possible: an optional replacement is live, or two that
   are not the same. Rollouts answer inline and never pause, as today.
 - **Draws.** A draw of several cards is split into single draws only when
-  something replaces draws or triggers on each card, as `drawing::draw` already
-  does for one case.
+  something replaces draws or triggers on each card, as `zones::drawing::draw`
+  already does for one case.
 - **Entering.** The effects that apply to an entering permanent are found
   against the permanent as it would exist (group 2). An Aura that enters without
   being cast chooses what it enchants as part of its entry (CR 303.4f).
@@ -417,7 +417,7 @@ Built so far (by-bajq.3.1):
   own replacements are applied after its destination is settled: they only
   change how it enters and never conflict with one another or with a change of
   destination.
-- A draw keeps `drawing::draw`'s loop of single draws and asks
+- A draw keeps `zones::drawing::draw`'s loop of single draws and asks
   `replacement::draw` before each. Damage gets its proposal with prevention
   (by-bajq.3.9), the first replacement of damage.
 

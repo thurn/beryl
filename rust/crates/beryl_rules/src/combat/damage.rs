@@ -1,4 +1,6 @@
 //! Damage ([CR 120](https://yawgatog.com/resources/magic-rules/#R120)).
+//!
+//! Implements: CR 120, CR 609.7a, CR 615.3, CR 702.15b, CR 702.15d
 
 use beryl_card::prompt::Purpose;
 use beryl_card::{Amount, Filter, Keywords, Prevention, Prompt, Recipients, Words};
@@ -35,7 +37,7 @@ use crate::{choices, continuous, continuous::rule_change, replacement};
 ///
 /// The damage is proposed first and its replacement and prevention effects applied
 /// ([`replacement::damage`]); damage they prevent is not dealt, and no lifelink comes of it.
-/// Returns how much was dealt, after them ([CR 615.1]): prevention effects "apply to damage
+/// Returns how much was dealt, after them (see [CR 615.1]): prevention effects "apply to damage
 /// and modify how much damage, if any, is dealt", so "damage dealt this way" counts none
 /// that was prevented.
 ///
@@ -74,7 +76,7 @@ pub fn deal<L: Layout>(
     let lifelink = lifelink(game, source);
     let e = match to {
         // A player whose life total can't change is still dealt the damage, and loses no life
-        // ([CR 119.8](https://yawgatog.com/resources/magic-rules/#R1198)): "If an effect says
+        // (see [CR 119.8](https://yawgatog.com/resources/magic-rules/#R1198)): "If an effect says
         // that a player can't lose life, that player can't make an exchange such that the
         // player's life total would become lower".
         Recipient::Player(p) => {
@@ -104,7 +106,7 @@ pub fn deal<L: Layout>(
 ///
 /// Per [CR 702.15d], "The lifelink rules function no matter what zone an object with lifelink deals
 /// damage from." A permanent's keywords are its layer results; anywhere else, those of the face
-/// it has there. A source that has left its zone since is a new object (CR 400.7) whose keywords
+/// it has there. A source that has left its zone since is a new object (see CR 400.7) whose keywords
 /// are not kept, so it gives none.
 ///
 /// [CR 702.15b]: https://yawgatog.com/resources/magic-rules/#R70215b

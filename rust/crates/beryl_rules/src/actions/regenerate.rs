@@ -2,7 +2,7 @@
 //!
 //! A resolving "regenerate" creates a regeneration shield: an entry of the Effects store on
 //! the permanent, lasting until end of turn. The shield is a replacement effect of
-//! destruction ([CR 614.8]): "Regeneration is a destruction-replacement effect." Each
+//! destruction (see [CR 614.8]): "Regeneration is a destruction-replacement effect." Each
 //! destruction is proposed to [`crate::replacement::destruction`], which applies the shields: a
 //! destruction by an effect ([`super::destroy`]) and the state-based destruction of a
 //! creature with lethal damage (`sba`). A sacrifice and a creature with toughness 0 are not
@@ -10,6 +10,8 @@
 //!
 //! [CR 701.19]: https://yawgatog.com/resources/magic-rules/#R70119
 //! [CR 614.8]: https://yawgatog.com/resources/magic-rules/#R6148
+//!
+//! Implements: CR 701.19
 
 use beryl_card::Objects;
 

@@ -408,7 +408,7 @@ def test_a_documentation_change_reruns_only_the_markdown_checks() -> None:
         "citations-docs",
     }
     # And a change to rules code reads the rules checks, not the Markdown ones.
-    code = reading("rust/crates/beryl_rules/src/combat.rs")
+    code = reading("rust/crates/beryl_rules/src/combat/mod.rs")
     assert {"two-player", "board-door", "file-length", "rule-ownership"} <= code
     assert not code & {"markdown-format", "citations-docs"}
 

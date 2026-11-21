@@ -1,4 +1,6 @@
 //! Emblems ([CR 114](https://yawgatog.com/resources/magic-rules/#R114)).
+//!
+//! Implements: CR 114
 
 use beryl_card::{CardDef, Players};
 

@@ -1,4 +1,6 @@
 //! Search ([CR 701.23](https://yawgatog.com/resources/magic-rules/#R70123)).
+//!
+//! Implements: CR 701.23
 
 use beryl_card::{Amount, Found, Players};
 

@@ -4,7 +4,7 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{FaceIx, Subtype, Types};
-use crate::damage;
+use crate::combat::damage;
 use crate::game::Game;
 use crate::ids::{Seat, SlotId};
 use crate::replacement::event::{self, Event, Reason, Recipient};

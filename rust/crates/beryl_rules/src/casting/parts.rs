@@ -14,7 +14,6 @@ use crate::bitboard::Bitboard;
 use crate::card::{
     Castings, Chosen, CostAction, CostPart, Face, ManaCost, Measure, Prompt, Purpose,
 };
-use crate::counters;
 use crate::decision::{Candidates, Decision, DecisionKind, OPTIONS, Opt};
 use crate::engine::{collapse, collapse_in_order};
 use crate::filter::Evaluate;
@@ -30,6 +29,7 @@ use crate::state::{
     Zone, ZoneKey,
 };
 use crate::table::GameTable;
+use crate::zones::counters;
 
 use super::costs::{graveyard_start, remember_cost_pick, total_cost};
 use super::delve::{DELVE, DELVE_PART, delve_candidates, delve_most, delves};

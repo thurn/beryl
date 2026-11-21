@@ -1,4 +1,6 @@
-//! Flashback ([CR 702.34](https://yawgatog.com/resources/magic-rules/#R70234)).
+//! Flashback (see [CR 702.34](https://yawgatog.com/resources/magic-rules/#R70234)).
+//!
+//! Implements: CR 702.34a
 
 use beryl_card::Objects;
 

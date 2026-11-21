@@ -1,9 +1,11 @@
-//! Combat: declaring attackers and blockers one pick at a time, and combat damage
-//! (architecture §11, decision D8, CR 506 to 511).
+//! Combat: declaring attackers and blockers one pick at a time, assigning combat damage
+//! and ending combat (architecture §11, decision D8).
 //!
 //! Declarations and damage divisions are explicit machines whose step lives in
 //! [`Pending`]; every candidate offered is legal, so a declaration never has to be undone
 //! (CR 508.1, 509.1 return the game to before an illegal one).
+//!
+//! Implements: CR 506.2, CR 506.4, CR 508.1, CR 508.3a, CR 509.1, CR 511.3, CR 702.9b, CR 702.10b, CR 702.14c
 
 use crate::bitboard::Bitboard;
 use crate::card::{Keywords, Part, Prompt, Purpose, Types};
@@ -19,6 +21,7 @@ use crate::state::{AttackTarget, CombatRole, Pending, State, TurnStep};
 use crate::table::GameTable;
 
 mod assignment;
+pub mod damage;
 
 pub use assignment::preferred_damage;
 pub(crate) use assignment::{begin_damage, divide, division_decision, first_strike_step};
@@ -28,7 +31,7 @@ pub(crate) use assignment::{begin_damage, divide, division_decision, first_strik
 ///
 /// The declarations here are the two-player game's: [`Opt::Defender`] names a planeswalker or
 /// "the" defending player, and one player declares every block. With more players each of the
-/// attacking player's opponents is a defending player (CR 802.2), an attacker is declared
+/// attacking player's opponents is a defending player (see CR 802.2), an attacker is declared
 /// against one of them and each declares their own blocks.
 ///
 /// [CR 506.2]: https://yawgatog.com/resources/magic-rules/#R5062
@@ -227,7 +230,7 @@ pub(crate) fn attack<L: Layout>(
 /// [CR 508.3a](https://yawgatog.com/resources/magic-rules/#R5083a): "An ability that reads
 /// "Whenever [a creature] attacks, . . ." triggers if that creature is declared as an attacker. ...
 /// Such abilities won't trigger if a creature is put onto the battlefield attacking." The event
-/// names only the declared attackers ([CR 508.4]): creatures put onto the battlefield attacking,
+/// names only the declared attackers (see [CR 508.4]): creatures put onto the battlefield attacking,
 /// "for the purposes of trigger events and effects, ... never 'attacked.'"
 ///
 /// The taps and the attack are kept as one group: the one declaration ([CR 508.1]: "First, the
@@ -301,7 +304,7 @@ fn declare_attack<L: Layout>(
 /// [CR 702.9b](https://yawgatog.com/resources/magic-rules/#R7029b): "A creature with flying can't
 /// be blocked except by creatures with flying and/or reach."
 ///
-/// [CR 702.16f](https://yawgatog.com/resources/magic-rules/#R70216f): "Attacking creatures with
+/// See [CR 702.16f](https://yawgatog.com/resources/magic-rules/#R70216f): "Attacking creatures with
 /// protection can’t be blocked by creatures that have the stated quality."
 fn can_block<L: Layout>(s: &State<L>, t: &GameTable, blocker: L::Slot, attacker: L::Slot) -> bool {
     let Some(target) = s.object(attacker).attack_target() else {

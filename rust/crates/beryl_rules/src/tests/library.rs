@@ -14,8 +14,8 @@ use crate::resolution::Resolution;
 use crate::state::{ObjectRef, StackEntry, StackItem, TargetPlaces, TurnStep, Zone, ZoneKey};
 use crate::zone::Place;
 use crate::{
-    Choice, Decision, DecisionKind, GameTable, Opt, PlayerSet, Profile, Scratch, State, choices,
-    coins, library, tokens,
+    Choice, Decision, DecisionKind, GameTable, Opt, PlayerSet, Profile, Scratch, State,
+    actions::coins, choices, zones::library, zones::tokens,
 };
 use beryl_card::effect::build::{scry, you};
 use beryl_kernel::two_player::TwoPlayerSeat as _;
@@ -121,7 +121,8 @@ fn top_cards_and_draws_skip_objects_waiting_to_cease_to_exist() {
         &[token, copy]
     );
     assert_eq!(library::top(&s, player, 1).sole(), Some(card));
-    crate::drawing::draw(&mut Game::new(&mut s, &t, &mut scratch.events), player, 1).unwrap();
+    crate::zones::drawing::draw(&mut Game::new(&mut s, &t, &mut scratch.events), player, 1)
+        .unwrap();
     assert_eq!(s.object(card).zone(), Zone::Hand);
     assert!(!s.player(player).drew_from_empty());
     assert_eq!(
@@ -136,7 +137,8 @@ fn top_cards_and_draws_skip_objects_waiting_to_cease_to_exist() {
     scratch.events.drain();
     assert_eq!(s.library(player), &[token, copy]);
     assert!(!s.player(player).drew_from_empty());
-    crate::drawing::draw(&mut Game::new(&mut s, &t, &mut scratch.events), player, 1).unwrap();
+    crate::zones::drawing::draw(&mut Game::new(&mut s, &t, &mut scratch.events), player, 1)
+        .unwrap();
     assert!(s.player(player).drew_from_empty());
     assert_eq!(s.library(player), &[token, copy]);
     assert!(scratch.events.events().is_empty());

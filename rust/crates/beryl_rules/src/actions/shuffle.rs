@@ -1,4 +1,6 @@
 //! Shuffle ([CR 701.24](https://yawgatog.com/resources/magic-rules/#R70124)).
+//!
+//! Implements: CR 701.24
 
 use beryl_card::{Objects, Players};
 
@@ -24,9 +26,9 @@ pub fn shuffle<L: Layout>(game: &mut Game<'_, L>, player: Seat) -> Result<(), Fu
 
 /// [`Effect::ShuffleInto`](beryl_card::Effect::ShuffleInto): "[Player] shuffles [cards] into
 /// their library." The cards go to their owners' libraries together
-/// ([CR 400.3](https://yawgatog.com/resources/magic-rules/#R4003)), and then each of the
+/// (see [CR 400.3](https://yawgatog.com/resources/magic-rules/#R4003)), and then each of the
 /// players shuffles, in turn order
-/// ([CR 101.4](https://yawgatog.com/resources/magic-rules/#R1014)), whether or not any card
+/// (see [CR 101.4](https://yawgatog.com/resources/magic-rules/#R1014)), whether or not any card
 /// was theirs
 /// ([CR 701.24d](https://yawgatog.com/resources/magic-rules/#R70124d)): "If an effect would
 /// cause a player to shuffle a set of objects into a library, that library is shuffled even

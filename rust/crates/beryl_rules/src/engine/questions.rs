@@ -15,8 +15,8 @@ use crate::state::{Pending, State};
 use crate::table::GameTable;
 use crate::turn::paused_step;
 use crate::{
-    casting, chosen, combat, continuous::arrival_timestamps, face_down, mana, sba, stack::resolve,
-    stack::trigger, turn,
+    casting, chosen, combat, continuous::arrival_timestamps, mana, objects::face_down, sba,
+    stack::resolve, stack::trigger, turn,
 };
 
 use super::{act, collapse};

@@ -1,6 +1,8 @@
 //! Drawing a card ([CR 121]).
 //!
 //! [CR 121]: https://yawgatog.com/resources/magic-rules/#R121
+//!
+//! Implements: CR 121
 
 use beryl_card::{Amount, Players};
 
@@ -33,15 +35,15 @@ use beryl_kernel::replacement::{self as card_replacement, Instead};
 ///
 /// Each draw is offered first to the dredge abilities of cards in the player's graveyard
 /// ([`replacement::dredge`]), which the player may choose one of, then to the replacement effects of
-/// permanents ([`Replaced::Draw`], [`replacement::draw`]), an empty library or not ([CR 614.11]):
+/// permanents ([`Replaced::Draw`], [`replacement::draw`]), an empty library or not (see [CR 614.11]):
 /// "Some effects replace card draws. These effects are applied even if no cards could be drawn
 /// because there are no cards in the affected player's library." What happens instead follows
 /// the cards drawn before it ([`instead`]). Where it ends the game, the draws left are never
 /// made. With no such permanent on the battlefield a draw reads no ability.
 ///
 /// Each card drawn is counted for the player this turn, and in their own draw step as drawn
-/// in it ([CR 504.1]): "First, the active player draws a card." A replaced draw never happened
-/// ([CR 614.6]): "If an event is replaced, it never happens." Neither is a draw from an empty
+/// in it (see [CR 504.1]): "First, the active player draws a card." A replaced draw never happened
+/// (see [CR 614.6]): "If an event is replaced, it never happens." Neither is a draw from an empty
 /// library, which draws no card.
 ///
 /// [CR 121.2]: https://yawgatog.com/resources/magic-rules/#R1212
@@ -111,12 +113,12 @@ pub fn draw<L: Layout>(game: &mut Game<'_, L>, player: Seat, cards: u8) -> Resul
 }
 
 /// Does what `replacement` has happen instead of `player`'s draw. "You" and "each opponent" in
-/// it are read for the permanent's controller (CR 109.5).
+/// it are read for the permanent's controller (see CR 109.5).
 ///
 /// A replacement whose body is instructions carries them out as a resolution would
 /// ([`interpret::instead_of_drawing`]), with the drawing player as "that player". A draw they
 /// make is a modified event, to which this replacement does not apply again, while the others
-/// still may ([CR 614.5]): "A replacement effect doesn't invoke itself repeatedly; it gets only
+/// still may (see [CR 614.5]): "A replacement effect doesn't invoke itself repeatedly; it gets only
 /// one opportunity to affect an event or any modified events that may replace that event." So
 /// it is recorded as applied ([`Sink::applied`]) while they run. A question they ask, such as
 /// which card to discard, stops a run that may pause and is answered when it runs again

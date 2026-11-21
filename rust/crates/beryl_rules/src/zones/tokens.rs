@@ -1,6 +1,8 @@
 //! Tokens ([CR 111]).
 //!
 //! [CR 111]: https://yawgatog.com/resources/magic-rules/#R111
+//!
+//! Implements: CR 111, CR 506.3b, CR 506.3c, CR 508.4, CR 701.7a, CR 707.8a
 
 use beryl_card::{Amount, ExceptIx, Objects, Players};
 
@@ -47,8 +49,8 @@ pub fn predefined<L: Layout>(t: &GameTable, def: &'static CardDef) -> Copiable<L
 /// predefined token's ([`predefined`]), or those of what the tokens copy. Returns the tokens.
 ///
 /// [CR 111.1](https://yawgatog.com/resources/magic-rules/#R1111): "Some effects put tokens onto the
-/// battlefield." [CR 111.2]: "The player who creates a token is its owner." [CR 707.2]: "the copy
-/// acquires the copiable values of the original object's characteristics".
+/// battlefield." [CR 111.2]: "The player who creates a token is its owner."
+/// See [CR 707.2]: "the copy acquires the copiable values of the original object's characteristics".
 ///
 /// The tokens take free slots from the shared pool (architecture §4.2) and enter as one
 /// event; then one `TokensCreated` event follows for "whenever you create one or more".
@@ -97,8 +99,8 @@ pub fn create<L: Layout>(
 /// defending player protects it's attacking as it enters the battlefield". Only the attacking
 /// player's creatures can be ([CR 506.3b]): "If an effect would put a creature onto the battlefield
 /// attacking under the control of any player except an attacking player, that creature does enter
-/// the battlefield, but it's never considered to be an attacking creature." [CR 506.2]: "During the
-/// combat phase, the active player is the attacking player". Nor can they attack a player who is
+/// the battlefield, but it's never considered to be an attacking creature."
+/// See [CR 506.2]: "During the combat phase, the active player is the attacking player". Nor can they attack a player who is
 /// not a defending player ([CR 506.3c]): the creature "does enter the battlefield, but it's never
 /// considered to be an attacking creature."
 ///
@@ -135,7 +137,7 @@ pub fn create_attacking<L: Layout>(
         // the battlefield, attacking the player, so they see what they choose for. Nothing
         // sees them in between: it is one step of the resolution, in which no player gets
         // priority and no ability triggers or state-based action is checked
-        // ([CR 608.2c](https://yawgatog.com/resources/magic-rules/#R6082c): "The
+        // (see [CR 608.2c](https://yawgatog.com/resources/magic-rules/#R6082c): "The
         // controller of the spell or ability follows its instructions in the order
         // written").
         let opts = combat::attack_targets(game.state)?;
@@ -184,10 +186,10 @@ pub(crate) fn create_instruction<L: Layout>(
 }
 
 /// [`Effect::CreateCopies`](beryl_card::Effect::CreateCopies): "[Player] creates [count] tokens
-/// that are copies of [object]" ([CR 707.2]): "the copy acquires the copiable values of the
+/// that are copies of [object]" (see [CR 707.2]): "the copy acquires the copiable values of the
 /// original object's characteristics". Those of the ability's own source are its card's once it has
-/// left (CR 608.2h), as offspring's "a copy of it" (CR 702.175a), and those of a target the effect
-/// has moved are its last known ones (CR 608.2h): an exiled token has ceased to exist ([CR 111.7])
+/// left (see CR 608.2h), as offspring's "a copy of it" (see CR 702.175a), and those of a target the effect
+/// has moved are its last known ones (see CR 608.2h): an exiled token has ceased to exist ([CR 111.7])
 /// and is copied all the same. The outcome is the tokens.
 ///
 /// [CR 707.2]: https://yawgatog.com/resources/magic-rules/#R7072
@@ -199,12 +201,12 @@ pub(crate) fn create_copies_instruction<L: Layout>(
     count: Amount,
     except: Option<ExceptIx>,
 ) -> Result<Outcome<L>, Full> {
-    // CR 707.9b: "The final set of values for that characteristic becomes part of the
+    // See CR 707.9b: "The final set of values for that characteristic becomes part of the
     // copiable values of the copy." The exception is one the ability's own face lists, and
-    // the copy takes it after those of what it copies (CR 707.9b).
+    // the copy takes it after those of what it copies (see CR 707.9b).
     let entry = &run.resolution().entry;
     let addition = except.map(|ix| Addition::new(entry.card(), entry.face(), ix));
-    // Its color words read through the text changes of the spell or ability (CR 612.1).
+    // Its color words read through the text changes of the spell or ability (see CR 612.1).
     let words = run.state().entry_words(entry);
     let table = run.game().table;
     let excepted = |what: Copiable<L>| match addition {

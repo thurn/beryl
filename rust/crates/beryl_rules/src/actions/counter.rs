@@ -1,4 +1,6 @@
 //! Counter ([CR 701.6](https://yawgatog.com/resources/magic-rules/#R7016)).
+//!
+//! Implements: CR 701.6
 
 use beryl_card::Objects;
 
@@ -41,7 +43,7 @@ pub fn counter<L: Layout>(
 /// Counters the activated or triggered ability at `place` on the stack (CR 701.6a). Its
 /// source is untouched, and a delayed triggered ability countered this way does not wait
 /// again: it left the list of delayed triggers as it triggered
-/// ([CR 603.7b](https://yawgatog.com/resources/magic-rules/#R6037b)): "A delayed triggered
+/// (see [CR 603.7b](https://yawgatog.com/resources/magic-rules/#R6037b)): "A delayed triggered
 /// ability will trigger only once—the next time its trigger event occurs—unless it has a
 /// stated duration". Returns whether it was countered.
 pub(crate) fn counter_ability<L: Layout>(game: &mut Game<'_, L>, place: usize) -> bool {
@@ -79,7 +81,7 @@ pub(crate) fn instruction<L: Layout>(
 
 /// [`Effect::CounterInto`](beryl_card::Effect::CounterInto): "Counter [spell]. If that spell
 /// is countered this way, [put it into `zone`] instead of putting it into its owner's
-/// graveyard" ([CR 608.2c](https://yawgatog.com/resources/magic-rules/#R6082c): "later text
+/// graveyard" (see [CR 608.2c](https://yawgatog.com/resources/magic-rules/#R6082c): "later text
 /// on the card may modify the meaning of earlier text"). Of several, the topmost first. The
 /// outcome is the spells countered.
 pub(crate) fn into_instruction<L: Layout>(
