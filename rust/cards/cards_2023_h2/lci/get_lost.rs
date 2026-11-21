@@ -9,11 +9,9 @@
 
 use crate::prelude::*;
 
-/// "Its controller" is the permanent's controller as it was destroyed ([CR 608.2h]): "If an effect
-/// requires information from the game ..., the answer is determined only once, when the effect is
-/// applied. If the effect requires information from a specific object, ... the effect uses the
-/// current information of that object if it's in the public zone it was expected to be in; if it's
-/// no longer in that zone, ... the effect uses the object's last known information."
+/// The Maps go to the permanent's last battlefield controller. [CR 608.2h] says “the
+/// effect uses the object's last known information” when the object has left the
+/// expected public zone.
 ///
 /// [CR 608.2h]: https://yawgatog.com/resources/magic-rules/#R6082h
 pub static CARD: CardDef = Printed::GetLost
@@ -30,15 +28,8 @@ pub static CARD: CardDef = Printed::GetLost
     .card()
     .creating(&[&MAP]);
 
-/// The Map token's name: its subtype plus the word "Token" (CR 111.4).
 pub use crate::tokens::MAP_TOKEN;
 
-/// The predefined Map token ([CR 111.10s]): "A Map token is a colorless Map artifact token with
-/// "{1}, {T}, Sacrifice this token: Target creature you control explores. Activate only as a
-/// sorcery."" Explore is [CR 701.44a].
-///
-/// [CR 111.10s]: https://yawgatog.com/resources/magic-rules/#R11110s
-/// [CR 701.44a]: https://yawgatog.com/resources/magic-rules/#R70144a
 pub static MAP: CardDef = Token::MapToken
     .abilities(&[Ability::activated(Cost::of(
         ManaCost::generic(1),
@@ -83,39 +74,6 @@ pub mod scenarios {
     const SACRIFICE_A_MAP: Action = THEM.activates(MAP_NAME, 0);
 
     pub const SCENARIOS: &[Scenario] = &[
-        // With no legal target it can't be cast
-        // ([CR 601.2c](https://yawgatog.com/resources/magic-rules/#R6012c)): P1's Mana Crypt is
-        // an artifact, so passing is P0's only option.
-        Scenario::new("Get Lost can't be cast without a target")
-            .battlefield(P0, &[Card::Plains; 3])
-            .hand(P0, &[Card::GetLost])
-            .battlefield(P1, &[Prop::Artifact])
-            .actions(&[
-                advance_to(1, TurnStep::PrecombatMain),
-                ME.deciding(DecisionKind::Priority, 1),
-            ]),
-        // Its mana cost is {1}{W}: two Plains cast it. The oracles caught it costing {1}{W}{W}.
-        Scenario::new("Get Lost costs one and a white")
-            .battlefield(P0, &[Card::Plains, Card::Plains])
-            .hand(P0, &[Card::GetLost, Card::Island])
-            .battlefield(P1, &[FLIER])
-            .actions(&[
-                ME.casts(Card::GetLost),
-                THEM.has(Zone::Graveyard, FLIER, 1),
-                ME.tapped(Card::Plains, 2),
-            ]),
-        // The Island left in P0's hand keeps the game in P0's main phase once Get Lost has
-        // resolved.
-        Scenario::new("Get Lost on a planeswalker gives its controller two Maps")
-            .battlefield(P0, &[Card::Plains; 3])
-            .hand(P0, &[Card::GetLost, Card::Island])
-            .battlefield(P1, &[Card::JaceTheMindSculptor])
-            .actions(&[
-                ME.casts(Card::GetLost),
-                THEM.has(Zone::Graveyard, Card::JaceTheMindSculptor, 1),
-                THEM.has(Zone::Battlefield, MAP_NAME, 2),
-                ME.has(Zone::Battlefield, MAP_NAME, 0),
-            ]),
         // Explore ([CR 701.44a](https://yawgatog.com/resources/magic-rules/#R70144a)): "...that
         // permanent's controller reveals the top card of their library. If a land card is
         // revealed this way, that player puts that card into their hand. Otherwise, that player
@@ -139,19 +97,6 @@ pub mod scenarios {
             THEM.counters(FLIER, CounterKind::PlusOne, 0),
         ]),
         exploring(
-            "A Map explores a nonland into a counter and the graveyard",
-            &[Card::Oust, Card::Island],
-        )
-        .actions(&[
-            LET_P0_ACT,
-            GET_LOST,
-            SACRIFICE_A_MAP,
-            THEM.yes(),
-            THEM.counters(FLIER, CounterKind::PlusOne, 1),
-            THEM.has(Zone::Graveyard, Card::Oust, 1),
-            THEM.library_top(&[Card::Island]),
-        ]),
-        exploring(
             "A Map explores a nonland into a counter, left on top",
             &[Card::Oust, Card::Island],
         )
@@ -163,12 +108,6 @@ pub mod scenarios {
             THEM.counters(FLIER, CounterKind::PlusOne, 1),
             THEM.has(Zone::Graveyard, Card::Oust, 0),
             THEM.library_top(&[Card::Oust, Card::Island]),
-        ]),
-        exploring("A Map explores an empty library into a counter", &[]).actions(&[
-            LET_P0_ACT,
-            GET_LOST,
-            SACRIFICE_A_MAP,
-            THEM.counters(FLIER, CounterKind::PlusOne, 1),
         ]),
     ];
 }

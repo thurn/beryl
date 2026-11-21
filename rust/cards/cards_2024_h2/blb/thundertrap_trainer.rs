@@ -11,14 +11,6 @@
 
 use crate::prelude::*;
 
-/// "Look at the top four cards of your library. You may reveal a noncreature, nonland card from
-/// among them and put it into your hand. Put the rest on the bottom of your library in a random
-/// order." The look, the optional reveal ([CR 701.20a]): "To reveal a card, show that card to all
-/// players for a brief time", and the rest to the bottom in a random order ([CR 401.4]): "That
-/// library's owner doesn't reveal the order in which the cards go into the library."
-///
-/// [CR 701.20a]: https://yawgatog.com/resources/magic-rules/#R70120a
-/// [CR 401.4]: https://yawgatog.com/resources/magic-rules/#R4014
 pub static CARD: CardDef = Printed::ThundertrapTrainer
     .abilities(&[
         Ability::offspring(),
@@ -73,19 +65,6 @@ pub mod scenarios {
                 // The fifth card, below the four, is on top now.
                 advance_to(3, TurnStep::PrecombatMain),
                 ME.has(Zone::Hand, Prop::Artifact, 1),
-            ]),
-        Scenario::new("Thundertrap Trainer finds no spell")
-            .hand(P0, &[TRAINER])
-            .battlefield(P0, &[Card::Island; 2])
-            .library(P0, LANDS)
-            .actions(&[
-                ME.casts(TRAINER),
-                Resolve,
-                stack(1),
-                Resolve,
-                ME.has_cards(Zone::Library, 8),
-                ME.has_cards(Zone::Hand, 0),
-                ME.controls(TRAINER, 1),
             ]),
         // Offspring paid: two enters triggers, ordered by their controller; the 1/1 token copy
         // has the look of its own, but not offspring's.

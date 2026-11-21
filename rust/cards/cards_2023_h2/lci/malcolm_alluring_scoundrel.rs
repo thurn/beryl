@@ -11,17 +11,10 @@
 
 use crate::prelude::*;
 
-/// The counter, the loot, and the offer to cast the discarded card as the ability finishes
-/// resolving ([CR 608.2g]). Without its mana cost it is cast for an alternative cost ([CR 118.9]),
-/// so a land, which can't be cast, is never offered.
-///
-/// The count is read from Malcolm on the battlefield. Had he left before the ability resolved, his
-/// last-known chorus count would decide ([CR 608.2h]); the engine keeps no counters in last-known
-/// information, so the cast is then not offered.
+/// The offer to cast the discard is part of the damage trigger's resolution. Under
+/// [CR 608.2g], “no player receives priority after it's cast” during that resolution.
 ///
 /// [CR 608.2g]: https://yawgatog.com/resources/magic-rules/#R6082g
-/// [CR 118.9]: https://yawgatog.com/resources/magic-rules/#R1189
-/// [CR 608.2h]: https://yawgatog.com/resources/magic-rules/#R6082h
 pub static CARD: CardDef = Printed::MalcolmAlluringScoundrel
     .keywords(Keywords::FLASH.union(Keywords::FLYING))
     .abilities(&[

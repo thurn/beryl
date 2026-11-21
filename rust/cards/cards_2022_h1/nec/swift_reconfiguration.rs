@@ -43,6 +43,7 @@ pub mod scenarios {
 
     /// A Plains for the Aura, and four Islands for a Thieving Skydiver kicked for up to 2.
     const SKYDIVER_SETUP: Scenario = Scenario::setup()
+        .interaction(&[Card::ThievingSkydiver])
         .hand(P0, &[SWIFT, Card::ThievingSkydiver])
         .battlefield(
             P0,

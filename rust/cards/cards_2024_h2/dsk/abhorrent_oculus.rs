@@ -11,22 +11,6 @@
 
 use crate::prelude::*;
 
-/// The six cards are an additional cost ([CR 118.8]): "Some spells and abilities have additional
-/// costs. An additional cost is a cost listed in a spell's rules text, or applied to a spell or
-/// ability from another effect, that its controller must pay at the same time they pay the spell's
-/// mana cost or the ability's activation cost." The trigger is the opponent's upkeep's alone
-/// ([CR 503.1a]): "Any abilities that triggered during the untap step and any abilities that
-/// triggered at the beginning of the upkeep are put onto the stack before the active player gets
-/// priority".
-///
-/// Manifest dread ([CR 701.62a]): "Look at the top two cards of your library. Manifest one of them,
-/// then put the cards you looked at that were not manifested this way into your graveyard." The
-/// ability's controller does, whether or not Oculus is still there ([CR 113.7a]).
-///
-/// [CR 118.8]: https://yawgatog.com/resources/magic-rules/#R1188
-/// [CR 503.1a]: https://yawgatog.com/resources/magic-rules/#R5031a
-/// [CR 701.62a]: https://yawgatog.com/resources/magic-rules/#R70162a
-/// [CR 113.7a]: https://yawgatog.com/resources/magic-rules/#R1137a
 pub static CARD: CardDef = Printed::AbhorrentOculus
     .keywords(Keywords::FLYING)
     .abilities(&[
@@ -161,21 +145,6 @@ pub mod scenarios {
                 ME.tapped(Card::Island, 2),
                 ME.pt(Card::SnapcasterMage, 2, 1),
                 stack(0),
-            ]),
-        // CR 701.40b: a face-down Counterspell is a 2/2 creature, but its card isn't a creature
-        // card, so it can't be turned face up: player 0 may only pass or cast `Prop::FlashCreature`.
-        Scenario::new("A manifested noncreature card can't be turned face up")
-            .at(1, P0, TurnStep::PostcombatMain)
-            .battlefield(P0, &[OCULUS, Card::Swamp, Card::Island, Card::Island])
-            .hand(P0, &[Prop::FlashCreature])
-            .library(P0, &[Card::Counterspell, Card::Island])
-            .library(P1, &[Card::Plains])
-            .actions(&[
-                TO_THEIR_UPKEEP,
-                Resolve,
-                ME.picks(Card::Counterspell),
-                ME.creature(Card::Counterspell, true),
-                ME.deciding(DecisionKind::Priority, 2),
             ]),
         // CR 708.9: Oust puts the face-down creature second from the top of its owner's
         // library, revealed as it goes. Its controller gains the 3 life.

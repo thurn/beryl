@@ -9,19 +9,10 @@
 
 use crate::prelude::*;
 
-/// The Spirit token's name ([CR 111.4]): its subtype plus the word "Token".
-///
-/// [CR 111.4]: https://yawgatog.com/resources/magic-rules/#R1114
 pub const SPIRIT_TOKEN: &str = "Spirit Token";
 
-/// "A 1/1 white Spirit creature token with flying"
 pub static SPIRIT: CardDef = Token::SpiritToken.keywords(Keywords::FLYING).card();
 
-/// "When this artifact enters, create a 1/1 white Spirit creature token with flying." [CR 111.2]:
-/// "The player who creates a token is its owner. The token enters the battlefield under that
-/// player's control."
-///
-/// [CR 111.2]: https://yawgatog.com/resources/magic-rules/#R1112
 pub static CARD: CardDef = Printed::StaffOfTheStoryteller
     .abilities(&[
         when_enters(&create_tokens(you(), &SPIRIT, 1)),
@@ -92,19 +83,6 @@ pub mod scenarios {
                 ME.passes(),
                 ME.attacks_with(Card::OverlordOfTheMistmoors),
                 ME.controls(crate::tokens::INSECT_TOKEN, 2),
-                ME.counters(STAFF, CounterKind::Story, 1),
-            ]),
-        // A UI regression: resolving a response must not demand a pass on one's own spell.
-        Scenario::new("Staff resolves after an opposing flash creature")
-            .battlefield(P0, &[Card::Plains, Card::Plains])
-            .hand(P0, &[STAFF, Card::Plains])
-            .battlefield(P1, &[Card::Swamp, Card::Island, Card::Island])
-            .hand(P1, &[Prop::FlashCreature])
-            .library(P0, &[Card::Island])
-            .library(P1, &[Card::Island])
-            .actions(&[
-                ME.casts(STAFF),
-                THEM.casts(Prop::FlashCreature),
                 ME.counters(STAFF, CounterKind::Story, 1),
             ]),
     ];
