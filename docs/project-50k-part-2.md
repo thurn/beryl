@@ -479,11 +479,9 @@ epic already listed which test definition each real card's scenario now covers.
 ### D. Compile and check time
 
 - **Rebuild counts.** Ignite measures compile cost as the instructions the
-  compiler executes to rebuild after one fixed edit ([ignite.md](ignite.md),
-  "Rebuild counts"). It keeps the series, and files a ticket for the crate that
-  agents spend most on rebuilding. A per-crate series of seconds was built for
-  this plan first (`just efficiency compile`). The checks that wrote its data
-  were removed with the move to Ignite, so it is removed too.
+  compiler executes to rebuild after one fixed edit. Ignite keeps the series,
+  and its `slow-crate` rule files a ticket based on what agents spent rebuilding
+  a crate. See [Rebuild counts](ignite.md#rebuild-counts).
 - **What was tried.** Non-generic engine entry points raised the rollout count
   by 0.68% and are not built (section C). Merging `beryl_search`'s test binaries
   into one saved nothing that could be measured. No ticket of this plan reduces

@@ -62,6 +62,39 @@ def test_export_then_import_reproduces_the_hosts_rows(
     assert dump(target, "other") == {name: [] for name in dump(target, "other")}
 
 
+def test_upgrade_drops_compile_timings_and_keeps_other_export_rows(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "old.sqlite"
+    out = tmp_path / "old.jsonl"
+    with monkeypatch.context() as legacy:
+        legacy.setattr(store, "MIGRATIONS", store.MIGRATIONS[:18])
+        old = store.open_store(path)
+        seed(old, "cygnus")
+        old.execute(
+            "INSERT INTO compile_timings VALUES "
+            "('cygnus', 'run', '2026-11-14T10:00:00Z', 'kernel', 'check', 2, 0)"
+        )
+        old.execute(
+            "INSERT INTO sources (source, path) VALUES ('timings', 'old.jsonl')"
+        )
+        old.commit()
+        assert exchange.export(old, "cygnus", None, out)["compile_timings"] == 1
+        old.close()
+
+    upgraded = store.open_store(path)
+    target = store.open_store(tmp_path / "target.sqlite")
+    try:
+        assert "compile_timings" not in store.tables(upgraded)
+        assert upgraded.execute("SELECT source FROM sources").fetchall() == []
+        exchange.import_file(target, out, "jarvis")
+        assert dump(target, "cygnus") == dump(upgraded, "cygnus")
+        assert upgraded.execute("SELECT count(*) FROM requests").fetchone() == (2,)
+    finally:
+        target.close()
+        upgraded.close()
+
+
 def test_importing_twice_or_overlapping_changes_nothing(
     tmp_path: Path, source: sqlite3.Connection
 ) -> None:

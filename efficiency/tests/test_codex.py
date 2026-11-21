@@ -167,7 +167,7 @@ def test_a_log_of_another_project_is_ignored(tmp_path: Path) -> None:
 
 
 def test_ticket_spend_reprices_codex_and_estimates_its_weekly_share(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     log = (
         Rollout(tmp_path, THREAD)
@@ -196,7 +196,9 @@ def test_ticket_spend_reprices_codex_and_estimates_its_weekly_share(
     )
     log.write()
     beads = listing(bead_record("by-a"))
-    db = run(tmp_path, beads)
+    with monkeypatch.context() as legacy:
+        legacy.setattr(store, "MIGRATIONS", store.MIGRATIONS[:18])
+        db = run(tmp_path, beads)
     [before] = spend.for_hub(db, HOST, None)
     # One tick of the account counter is too little to calibrate a ticket.
     assert "plan_percent" not in before
@@ -208,7 +210,7 @@ def test_ticket_spend_reprices_codex_and_estimates_its_weekly_share(
     # An upgrade must backfill samples from already ingested lines and preserve a
     # request whose log is gone.
     db.execute("DROP TABLE codex_plan_usage")
-    db.execute(f"PRAGMA user_version = {store.version() - 1}")
+    db.execute("PRAGMA user_version = 17")
     db.execute(
         """INSERT INTO requests (host, provider, transcript, message, time)
         VALUES (?, 'codex', ?, 'old', '2026-11-01T00:00:00.000Z')""",

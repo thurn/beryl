@@ -2,15 +2,14 @@
 the hub, ingest reads the hub's SQLite database read-only, by its schema
 (ignite/crates/ignite_store/src/hub/schema.sql and the migrations after it):
 
-- `records`, one row per command Ignite ran on any machine, with `compile_units`, the
-  compiler's cost per crate. They are read after the last record ID already read and stand in
-  for the run log, the CPU token pool's leases and the CPU sampler: each record becomes a row
-  of `ignite_records`, one `leases` row (its wait for cores), `cpu` and `cpu_minutes` rows
-  spread over the minutes it ran, and, for a check family, a `checks` and a `lane_runs` row.
+- `records`, one row per command Ignite ran on any machine. Ingest resumes at the last record
+  ID it read. These records stand in for the run log, the CPU token pool's leases and the
+  CPU sampler. Each becomes an `ignite_records` row, one `leases` row (its wait for cores),
+  `cpu` and `cpu_minutes` rows spread over the minutes it ran, and, for a check family, a
+  `checks` and a `lane_runs` row.
   The gate (class `land`) is the script `check`, as the fast check was, and tip verification
-  (class `tip`) is `ci`, as slow CI was; other classes keep their name. A record's `at` is
-  when the command ended. Each compile unit becomes a `compile_timings` row. Enact's lock log
-  has no counterpart: nothing in Ignite waits on one lock.
+  (class `tip`) is `ci`, as slow CI was. Other classes keep their name. A record's `at`
+  is when the command ended.
 - `metrics`, the efficiency rows other machines' daemons posted, one export line per row.
   They are imported as `just efficiency import` imports a file.
 - `metrics` rows of the source `plan_usage`, the Claude plan's usage samples a dispatcher
@@ -233,7 +232,7 @@ def record_rows(r: dict[str, object], host: str, cores: int) -> list[Row]:
 
 
 class Records(CursorSource):
-    """The hub's records and compile units, after the last record ID read."""
+    """The hub's records after the last record ID read."""
 
     name = "ignite-records"
 
@@ -253,13 +252,6 @@ class Records(CursorSource):
                     (after, PAGE),
                 )
             ]
-            for r in found:
-                r["units"] = [
-                    dict(u)
-                    for u in hub.execute(
-                        "SELECT * FROM compile_units WHERE record = ?", (r["id"],)
-                    )
-                ]
         finally:
             hub.close()
         if not found:
@@ -279,23 +271,6 @@ class Records(CursorSource):
             if r["ticket"] is not None:
                 r["ticket"] = ticket_ids.stored(db, str(r["ticket"]))
             written += record_rows(r, host, int(str(r["machine_cores"] or 0)))
-            units = r["units"]
-            assert isinstance(units, list)
-            for u in units:
-                written.append(
-                    (
-                        "compile_timings",
-                        {
-                            "host": host,
-                            "run": f"{machine}:{r['id']}",
-                            "time": iso(utc(r["at"])),
-                            "crate": u["crate_name"],
-                            "mode": u["mode"],
-                            "seconds": u["cpu_s"],
-                            "fresh": int(not u["rebuilt"]),
-                        },
-                    )
-                )
         count = write(db, written, MERGES)
         if self.local in hosts:
             table, _ = kinds.load()

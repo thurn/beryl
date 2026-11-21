@@ -5129,7 +5129,7 @@ What the switch imports:
   current service's database.
 - The run log and the verdicts on each check's failures, as each check's record
   of runs, costs and failures, so the gate has scores on the first day.
-- The recorded per-crate compile timings.
+- The recorded per-crate compile timings, stored as compile units in the hub.
 
 What the switch deletes, in the same change:
 

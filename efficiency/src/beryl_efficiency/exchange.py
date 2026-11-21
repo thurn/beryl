@@ -185,6 +185,9 @@ def import_lines(
                 continue
             record = json.loads(line)
             name, row = record["table"], record["row"]
+            # The hub can send rows from older exports alongside a newer header.
+            if name == "compile_timings":
+                continue
             if name not in tables or not isinstance(row, dict):
                 raise ExchangeError(f"unknown table {name!r} in the export")
             if row.get("host") != source:

@@ -43,9 +43,6 @@ CREATE TABLE records (id INTEGER PRIMARY KEY, machine TEXT NOT NULL, ticket TEXT
   queued_s REAL NOT NULL, wall_s REAL NOT NULL, cpu_s REAL NOT NULL, instructions REAL,
   peak_mb INTEGER NOT NULL, outcome TEXT, commit_sha TEXT, ignite TEXT NOT NULL,
   at TEXT NOT NULL);
-CREATE TABLE compile_units (record INTEGER NOT NULL, crate_name TEXT NOT NULL,
-  mode TEXT NOT NULL, instructions REAL, cpu_s REAL NOT NULL, rebuilt INTEGER NOT NULL,
-  PRIMARY KEY (record, crate_name, mode));
 CREATE TABLE metrics (machine TEXT NOT NULL, source TEXT NOT NULL, data TEXT NOT NULL,
   at TEXT NOT NULL, PRIMARY KEY (machine, source, data)) WITHOUT ROWID;
 """
@@ -67,14 +64,13 @@ def record(
     outcome: str | None = "pass",
     commit: str = "k1",
     instructions: float | None = None,
-) -> int:
-    cursor = hub.execute(
+) -> None:
+    hub.execute(
         "INSERT INTO records (machine, ticket, session, tree, verb, class, family, queued_s, "
         "wall_s, cpu_s, instructions, peak_mb, outcome, commit_sha, ignite, at) "
         "VALUES ('m-1', 'p.1', 'local_w', 'tree-07', ?, ?, ?, ?, ?, ?, ?, 100, ?, ?, 'i1', ?)",
         (verb, klass, family, queued, wall, cpu, instructions, outcome, commit, end),
     )
-    return int(cursor.lastrowid or 0)
 
 
 def make_hub(path: Path) -> sqlite3.Connection:
@@ -90,11 +86,7 @@ def make_hub(path: Path) -> sqlite3.Connection:
     record(hub, at(10, 11), "land", "land", "names", 20, 10, instructions=1e11)
     record(hub, at(10, 14), "land", "land", "rust", 30, 40, commit="k2")
     record(hub, at(10, 12), "cached", "land", "format", 0, 0)
-    tip = record(hub, at(10, 40), "tip", "tip", "rust", 120, 480, outcome="fail")
-    hub.execute(
-        "INSERT INTO compile_units VALUES (?, 'beryl_kernel', 'test', NULL, 12.5, 1)",
-        (tip,),
-    )
+    record(hub, at(10, 40), "tip", "tip", "rust", 120, 480, outcome="fail")
     hub.executemany(
         "INSERT INTO tickets VALUES (?, ?, ?, ?)",
         [
@@ -197,16 +189,11 @@ def test_the_machine_query_reads_the_records_minutes_and_waits(
     assert queued["tip rust"] == 0.0
 
 
-def test_records_are_read_once_and_compile_units_kept(
-    hub: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_records_are_read_once(hub: sqlite3.Connection) -> None:
     assert cli.main(["ingest"]) == 0
     db = store.open_read_only(paths.store())
     try:
         assert db.execute("SELECT count(*) FROM ignite_records").fetchone()[0] == 5
-        assert db.execute(
-            "SELECT host, crate, seconds, fresh FROM compile_timings"
-        ).fetchall() == [("jarvis", "beryl_kernel", 12.5, 0)]
         runs = db.execute("SELECT sum(runs) FROM checks").fetchone()[0]
         assert runs == 4
     finally:

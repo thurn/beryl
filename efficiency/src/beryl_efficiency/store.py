@@ -607,6 +607,11 @@ MIGRATIONS: tuple[str, ...] = (
     -- request and window rows already in the store are kept, including deleted logs.
     DELETE FROM sources WHERE source = 'codex';
     """,
+    """
+    -- Retire the per-crate timing table and the file reader's saved positions.
+    DROP TABLE IF EXISTS compile_timings;
+    DELETE FROM sources WHERE source = 'timings';
+    """,
 )
 
 

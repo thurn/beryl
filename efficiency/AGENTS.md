@@ -86,17 +86,16 @@ store" and "Isolation" before changing anything here.
   any machine, replaced the run log, the token pool's leases and the CPU
   sampler: each becomes an `ignite_records` row, a `leases` row, `cpu` and
   `cpu_minutes` rows over the minutes it ran and, for a check family, `checks`
-  and `lane_runs` rows (the gate as script `check`, tip verification as `ci`);
-  compile units become `compile_timings`. The efficiency rows other machines'
-  daemons posted (`metrics`, one export line per row) are imported as `import`
-  imports a file. `PlanSamples` copies the Claude plan's usage samples (metrics
-  source `plan_usage`) into `plan_usage`, which is never exported. Tickets,
-  tips, hand-offs and workers are copied into the `ignite_*` tables, and
-  `HubTickets` also writes the tickets as `beads`, `labels` and `ticket_aliases`
-  rows, which replaced `tk export` (the hub supplies no verdict comments or
-  session events, so those tables stop growing). The `ignite` source comes first
-  in `cli.sources()`, ahead of the transcripts, because windows read the
-  tickets; on a machine with no hub database none of these sources exist and
+  and `lane_runs` rows (the gate as script `check`, tip verification as `ci`).
+  The efficiency rows other machines' daemons posted (`metrics`, one export line
+  per row) are imported as `import` imports a file. `PlanSamples` copies the
+  Claude plan's usage samples (metrics source `plan_usage`) into `plan_usage`,
+  which is never exported. Tickets, tips, hand-offs and workers are copied into
+  the `ignite_*` tables. `HubTickets` also writes tickets as `beads`, `labels`
+  and `ticket_aliases` rows in place of `tk export`. The hub supplies no verdict
+  comments or session events, so those tables stop growing. The `ignite` source
+  comes first in `cli.sources()`, ahead of the transcripts, because windows read
+  the tickets; on a machine with no hub database none of these sources exist and
   ingest keeps what the store has. A machine is named by the first host seen for
   its ID (`ignite_machines`), so a rename does not split it, and hub ticket IDs
   are resolved with `ticket_ids.stored`. `ignite_metrics.py` registers the

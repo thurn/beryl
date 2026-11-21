@@ -27,8 +27,7 @@ from pathlib import Path
 from . import cards, ci, machine  # noqa: F401
 from .commits import History
 from .facts import Facts, spread
-from .metrics import Mark, Points, fmt
-from .metrics import get as get_metric
+from .metrics import METRICS, Mark, Points, fmt
 from .render import Result, describe, table
 from .rollups import day_of
 from .scope import Range, Scope, parse_time
@@ -153,9 +152,7 @@ def problems(
         except ValueError as e:
             found.append(f"{where} {e}")
         else:
-            if name not in known and not (
-                name.startswith("compile.") and get_metric(name) is not None
-            ):
+            if name not in known:
                 found.append(
                     f"{where} no metric {name}; `just efficiency metrics` lists them"
                 )
@@ -280,7 +277,7 @@ def mark(
     except ValueError as e:
         found = Compared(None, None, 0, 0, str(e))
     else:
-        metric = get_metric(name)
+        metric = METRICS.get(name)
         if metric is None:
             found = Compared(None, None, 0, 0, f"no metric {name}")
         elif time is not None:
@@ -371,5 +368,5 @@ def report(
 
 
 def show(value: float | None, spec: str) -> str:
-    metric = get_metric(base(spec))
+    metric = METRICS.get(base(spec))
     return fmt(value, metric.digits if metric else 2)

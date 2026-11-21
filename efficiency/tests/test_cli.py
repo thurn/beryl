@@ -15,7 +15,6 @@ from tests.synthetic import bead, listing
 # labels for the tickets table, ingests for the tool's own cost, and the four that ticket
 # windows are derived from.
 TABLES = {
-    "compile_timings",
     "requests",
     "tool_calls",
     "windows",
