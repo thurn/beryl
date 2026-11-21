@@ -5,11 +5,11 @@
 
 use beryl_protocol::GameUpdate;
 use beryl_protocol::protocol::{CardHandling, Facing, ObjectId, ObjectView, Side, ZoneName};
-use beryl_protocol::script::{Act, Arrow, Curve, Fact, Span, Step, StepTiming, Subject, Verb};
+use beryl_protocol::script::{Act, Arrow, Curve, Fact, Span, StepTiming, Subject, Verb};
+use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, step, timing};
 use game_play::play::Show;
 use game_play::verbs;
 use game_probe::agent::steps::{no_jumps, rest_equals_placement, step_times};
-use game_probe::testing::{ScriptBuilder, ViewBuilder, timing};
 use glam::Vec2;
 use kit_frame::frame::{Frame, Place, REVEALED_FACE, Role, StateBits};
 use kit_probe::agent::checks::duplicates;
@@ -501,10 +501,7 @@ fn looked_at_cards_go_back_over_a_leading_arrow_end() {
         .as_mut()
         .expect("a script")
         .beats
-        .push(vec![Step {
-            act: point(Span::Begin),
-            cause: None,
-        }]);
+        .push(vec![step(point(Span::Begin))]);
     let mut done = start.view.clone();
     done.handling = None;
     let end = scripted(&begin, &done, vec![point(Span::End)]);

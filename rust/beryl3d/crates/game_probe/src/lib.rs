@@ -2,6 +2,4 @@
 
 pub mod agent;
 pub mod driver;
-pub mod probe;
 pub mod signature;
-pub mod testing;

@@ -3,8 +3,8 @@
 //! table stands in, and every card at rest keeping a 44-point square to press.
 
 use beryl_protocol::protocol::{CardType, ObjectId, RowName, Side, ZoneName};
+use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use game_play::play::Show;
-use game_probe::testing::{ScriptBuilder, ViewBuilder};
 use game_table::table::phone::{Band, battlefield, layout};
 use game_table::table::{DESKTOP, Held, Table, TrayKind, Window, phone_bands};
 use glam::Vec2;

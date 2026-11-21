@@ -6,8 +6,8 @@ use crate::common::{MS, before, discard, draw, empty_frame, frame, show};
 use beryl_protocol::GameUpdate;
 use beryl_protocol::protocol::{ObjectId, Why, ZoneName};
 use beryl_protocol::script::{Act, Subject};
+use beryl_protocol::testing::{ScriptBuilder, timing};
 use game_play::play::Show;
-use game_probe::testing::{ScriptBuilder, timing};
 
 /// The viewer's hand cards in the view the show rests on, as it lists them.
 fn hand(show: &Show) -> Vec<ObjectId> {

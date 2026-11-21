@@ -12,7 +12,7 @@ use beryl_card_records::{TokenMakers, fixture_message};
 use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::prompt::{ButtonId, Click, ClickRequest};
 use beryl_protocol::protocol::{Side, ZoneName};
-use game_probe::testing::ViewBuilder;
+use beryl_protocol::testing::ViewBuilder;
 use game_table::table::{Window, phone_bands};
 use kit_frame::frame::{Frame, Role};
 use kit_probe::agent::checks::{on_screen, overlap, phone_sizes, reachable};

@@ -4,7 +4,7 @@
 use app_client::Input;
 use app_client::{Client, Config};
 use beryl_protocol::protocol::{CardType, Combat, ObjectId, Side, ZoneName};
-use game_probe::testing::{ScriptBuilder, ViewBuilder};
+use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use game_table::table::{CARD_HEIGHT, CARD_WIDTH};
 use glam::{Affine3A, Vec3};
 use kit_frame::frame::{Band, Draw, Frame, Material, Sprite, sprites};

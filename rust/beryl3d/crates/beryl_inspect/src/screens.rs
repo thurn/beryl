@@ -30,9 +30,9 @@ use beryl_protocol::protocol::{
     TablePrompt, TableView, TargetRef, ZoneName,
 };
 use beryl_protocol::script::{Act, Notice, Reset, Step, StepTiming};
+use beryl_protocol::testing;
 use beryl_protocol::{AgentView, GameUpdate, PlayerView, SessionId};
 use game_probe::driver::{OPEN, RECORDINGS};
-use game_probe::testing;
 
 /// What every screen recording's name starts with.
 pub const PREFIX: &str = "screen/";

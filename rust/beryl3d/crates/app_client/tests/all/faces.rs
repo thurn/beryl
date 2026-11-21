@@ -4,7 +4,7 @@
 use app_client::Input;
 use app_client::{Client, Config};
 use beryl_card_records::{CardRecords, TokenMakers, card_records_among};
-use game_probe::testing::{ScriptBuilder, ViewBuilder};
+use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use game_table::faces::{CARD_BACK, FaceList};
 use kit_frame::frame::{Frame, Material, Role, TextureArray};
 use kit_probe::agent::checks::blank_cards;

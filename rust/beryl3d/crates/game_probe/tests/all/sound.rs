@@ -7,8 +7,8 @@ use crate::common::{MS, empty_frame, frame, show};
 use beryl_protocol::GameUpdate;
 use beryl_protocol::protocol::{ObjectView, Side, Why, ZoneName};
 use beryl_protocol::script::{Act, Table as Played, time_script};
+use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, step};
 use game_play::sound::NAMES;
-use game_probe::testing::{ScriptBuilder, ViewBuilder};
 
 /// The sounds of the frames that list any, as the frame's time in nanoseconds and each sound's
 /// name and whether it is the opponent's.
@@ -28,10 +28,7 @@ fn play(
     let acts = acts(&start);
     let mut script = ScriptBuilder::default().build();
     for (act, with) in &acts {
-        let step = beryl_protocol::script::Step {
-            act: act.clone(),
-            cause: None,
-        };
+        let step = step(act.clone());
         match script.beats.last_mut() {
             Some(beat) if *with => beat.push(step),
             _ => script.beats.push(vec![step]),

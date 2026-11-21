@@ -6,7 +6,7 @@ use beryl_protocol::protocol::{
     CardType, ObjectId, PlayerView, RowName, Side, StackItem, TargetRef, ZoneName,
 };
 use beryl_protocol::script::Reset;
-use game_probe::testing::{ScriptBuilder, ViewBuilder, script};
+use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, script};
 use game_table::table::{
     ABILITY_IDS, CARD_HEIGHT, CARD_WIDTH, Camera, DESKTOP, Scroll, Window, place,
 };

@@ -9,6 +9,10 @@ publish = false
 [lints]
 workspace = true
 
+[features]
+# Synthetic views and scripts for tests and playback tools.
+testing = []
+
 [dependencies]
 # Seats, zones, steps, prompt purposes and the other enums the protocol mirrors.
 beryl_card = { path = "../beryl_card" }

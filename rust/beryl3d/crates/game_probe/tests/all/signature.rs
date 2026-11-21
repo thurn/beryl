@@ -5,8 +5,8 @@ use beryl_protocol::protocol::{
     Candidate, CandidateView, DecisionId, DecisionView, Kind, ObjectId, SessionId, Side, Status,
     ZoneName,
 };
+use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use game_probe::signature::{Measure, Signature};
-use game_probe::testing::ViewBuilder;
 use game_table::table::Window;
 
 fn moment(name: &str, title: &str, candidates: &[u16], tapped: bool) -> GameUpdate {
@@ -120,23 +120,20 @@ fn changing_which_library_card_is_on_top_changes_the_signature() {
 
 #[test]
 fn a_notice_pill_and_a_banner_have_different_signatures() {
-    use beryl_protocol::script::{Act, Notice, Script, Step};
+    use beryl_protocol::script::{Act, Notice};
 
     let mut pill = ViewBuilder::new().update();
-    pill.view.script = Some(Script {
-        reset: None,
-        beats: vec![vec![Step {
-            act: Act::Announce {
+    pill.view.script = Some(
+        ScriptBuilder::default()
+            .beat([Act::Announce {
                 notice: Notice::Scry {
                     player: Side::You,
                     top: 0,
                     bottom: 1,
                 },
-            },
-            cause: None,
-        }]],
-        timing: Vec::new(),
-    });
+            }])
+            .build(),
+    );
     let mut banner = pill.clone();
     banner.view.script.as_mut().unwrap().beats[0][0].act = Act::Announce {
         notice: Notice::Shuffle,

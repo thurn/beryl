@@ -255,12 +255,12 @@ mod tests {
     use kit_text::text::Text;
 
     fn permanent(note: Option<&str>, chosen: Option<&str>) -> ObjectView {
-        ObjectView {
-            name: Some("Painter's Servant".to_owned()),
-            note: note.map(str::to_owned),
-            chosen: chosen.map(str::to_owned),
-            ..ObjectView::neutral(ObjectId(1), ZoneName::Battlefield, Side::You)
-        }
+        let mut object = ObjectView::neutral(ObjectId(1), ZoneName::Battlefield, Side::You);
+        object.name = Some("Painter's Servant".to_owned());
+
+        object.note = note.map(str::to_owned);
+        object.chosen = chosen.map(str::to_owned);
+        object
     }
 
     #[test]

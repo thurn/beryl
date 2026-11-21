@@ -175,3 +175,41 @@ def test_a_test_module_may_hold_numbers(tmp_path: Path) -> None:
     )
     (found,) = purity.scene_literals(tmp_path)
     assert f"{screen}:6:" in found
+
+
+def test_protocol_literals_checks_sources_and_tests(tmp_path: Path) -> None:
+    write(tmp_path, purity.LEVELS_FILE, '{"protocol_literals": {}}')
+    path = f"{CRATES}/app_client/tests/story.rs"
+    write(
+        tmp_path,
+        path,
+        "fn view() -> beryl_protocol::protocol::PlayerView {\n"
+        "    // ObjectView { name, ..object }\n"
+        '    let text = "Step { act, cause }";\n'
+        "    let other = TablePress::Step { at, active };\n"
+        "    let object = ObjectView { name, ..object };\n"
+        "    let step = beryl_protocol::script::Step\n"
+        "        { act, cause: None };\n"
+        "    PlayerView { ..view }\n"
+        "}\n"
+        "enum TablePress { Step { at: u8, active: bool } }\n",
+    )
+    found = purity.protocol_literals(tmp_path)
+    assert len(found) == 3
+    assert found[0].startswith(f"{path}:5: ObjectView literal")
+    assert found[1].startswith(f"{path}:6: Step literal")
+    assert found[2].startswith(f"{path}:8: PlayerView literal")
+
+
+def test_protocol_literal_allowances_hold_exact_counts(tmp_path: Path) -> None:
+    path = f"{CRATES}/beryl_inspect/src/stress.rs"
+    write(tmp_path, purity.LEVELS_FILE, json.dumps({"protocol_literals": {path: 1}}))
+    literal = "let step = Step { act, cause: None };\n"
+    write(tmp_path, path, literal)
+    assert purity.protocol_literals(tmp_path) == []
+    write(tmp_path, path, literal * 2)
+    (extra,) = purity.protocol_literals(tmp_path)
+    assert extra.startswith(f"{path}:2: Step literal raises the count to 2, above 1")
+    write(tmp_path, path, "")
+    (stale,) = purity.protocol_literals(tmp_path)
+    assert "dropped to 0 from 1" in stale

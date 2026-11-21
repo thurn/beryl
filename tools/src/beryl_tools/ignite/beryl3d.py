@@ -76,6 +76,7 @@ SOURCE_RULES: dict[str, Callable[[Path], list[str]]] = {
     "lints-match": purity.lints_match,
     "data-names": purity.data_names,
     "scene-literals": purity.scene_literals,
+    "protocol-literals": purity.protocol_literals,
     "corpus": pack.check_corpus,
 }
 

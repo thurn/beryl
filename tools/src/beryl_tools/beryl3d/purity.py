@@ -383,6 +383,7 @@ class Levels(TypedDict):
     cap_lines: int
     cap_allowances: dict[str, CapAllowance]
     protocol: dict[str, int]
+    protocol_literals: dict[str, int]
 
 
 class RustToken(NamedTuple):
@@ -445,6 +446,60 @@ def named_lines(tokens: list[RustToken], starts: list[int]) -> set[int]:
 
 def line_starts(source: str) -> list[int]:
     return [0, *(match.end() for match in re.finditer("\n", source))]
+
+
+def protocol_literal_lines(source: str) -> list[tuple[int, str]]:
+    """Find direct protocol struct literals, including ones split across lines."""
+    tokens = rust_tokens(source)
+    names = [token.text.removeprefix("r#") for token in tokens]
+    starts = line_starts(source)
+    found: list[tuple[int, str]] = []
+    for index, name in enumerate(names[:-2]):
+        if name not in {"ObjectView", "PlayerView", "Step"} or names[index + 1] != "{":
+            continue
+        start = index
+        while start >= 2 and names[start - 1] == "::":
+            if RUST_IDENTIFIER.fullmatch(names[start - 2]) is None:
+                break
+            start -= 2
+        if start and names[start - 1] == "::":
+            start -= 1
+        if start and names[start - 1] in {">", "struct", "enum", "impl", "for", "let"}:
+            continue
+        if name == "Step":
+            # A bare Step may also be an enum variant, such as TablePress::Step.
+            if index == start and names[index + 2] not in {"act", "cause", "."}:
+                continue
+            if index != start and names[index - 2] != "script":
+                continue
+        found.append((bisect.bisect_right(starts, tokens[index].offset), name))
+    return found
+
+
+def protocol_literals(root: Path) -> list[str]:
+    """Hold Beryl 3D's direct protocol literals to the legacy stories' counts."""
+    config = cast(Levels, json.loads((root / LEVELS_FILE).read_text()))
+    limits = config["protocol_literals"]
+    measured: dict[str, list[tuple[int, str]]] = {}
+    for path in sorted(crates(root).rglob("*.rs")):
+        if locations := protocol_literal_lines(path.read_text()):
+            measured[path.relative_to(root).as_posix()] = locations
+
+    found: list[str] = []
+    for path in sorted(measured.keys() | limits.keys()):
+        locations, limit = measured.get(path, []), limits.get(path, 0)
+        if len(locations) > limit:
+            found.extend(
+                f"{path}:{line}: {name} literal raises the count to {len(locations)}, "
+                f"above {limit}. Use a builder from beryl_protocol."
+                for line, name in locations[limit:]
+            )
+        elif len(locations) < limit:
+            found.append(
+                f"{LEVELS_FILE}: protocol_literals count for {path} dropped to "
+                f"{len(locations)} from {limit}. Lower or remove the allowance."
+            )
+    return found
 
 
 def dependency_names(
@@ -636,12 +691,18 @@ def scene_literals_step(*_args: str) -> int:
     return report("scene-literals", scene_literals(paths.REPO))
 
 
+def protocol_literals_step(*_args: str) -> int:
+    """The `protocol-literals` check."""
+    return report("protocol-literals", protocol_literals(paths.REPO))
+
+
 STEPS = {
     "scene-purity": scene_purity_step,
     "levels": levels_step,
     "lints-match": lints_match_step,
     "data-names": data_names_step,
     "scene-literals": scene_literals_step,
+    "protocol-literals": protocol_literals_step,
 }
 
 if __name__ == "__main__":

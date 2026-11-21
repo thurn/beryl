@@ -85,5 +85,9 @@
     "kit_fx": 4,
     "kit_scene": 0,
     "kit_probe": 2
+  },
+  "protocol_literals": {
+    "rust/beryl3d/crates/beryl_inspect/src/screens.rs": 2,
+    "rust/beryl3d/crates/beryl_inspect/src/stress.rs": 1
   }
 }

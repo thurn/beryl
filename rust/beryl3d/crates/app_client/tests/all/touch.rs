@@ -15,7 +15,7 @@ use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::prompt::{ButtonId, Click, ClickRequest, Marked};
 use beryl_protocol::protocol::{CardType, ObjectId, Side, Status, ZoneName};
 use beryl_protocol::script::{Mark, Subject};
-use game_probe::testing::{ScriptBuilder, ViewBuilder, table};
+use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, table};
 use glam::Vec2;
 use kit_frame::frame::{ElementId, Frame, FrameBuilder, NameRef, Place, Resolved, Role, StateBits};
 use kit_scene::hit::{hit, uncovered};

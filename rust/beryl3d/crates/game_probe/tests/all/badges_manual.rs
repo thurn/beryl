@@ -5,8 +5,8 @@
 use crate::common::{MS, empty_frame, frame, show};
 use beryl_protocol::GameUpdate;
 use beryl_protocol::protocol::{CardType, NamedCounter, ObjectId, Side, ZoneName};
+use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use game_play::play::Show;
-use game_probe::testing::{ScriptBuilder, ViewBuilder};
 use game_table::table::badges::{NAME_STYLE, STYLE};
 use glam::{Vec2, Vec3};
 use kit_frame::frame::{Frame, Material};

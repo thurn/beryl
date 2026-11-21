@@ -6,8 +6,8 @@
 use beryl_protocol::GameUpdate;
 use beryl_protocol::protocol::{CardType, ObjectId, Side, Why, ZoneName};
 use beryl_protocol::script::{Act, Subject, Table as Played, time_script};
+use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use game_play::play::Show;
-use game_probe::testing::{ScriptBuilder, ViewBuilder};
 use kit_base::data::space::effects::dissolve;
 use kit_base::data::space::enhanced::particles::{ash, vortex};
 use kit_frame::frame::{Draw, Frame, FrameBuilder, Material, PARTICLES};

@@ -5,7 +5,7 @@ use app_client::driver::{Duration, Page, Recording};
 use beryl_card_records::{TokenMakers, fixture_message};
 use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::protocol::{CardType, Side, ZoneName};
-use game_probe::testing::{ScriptBuilder, ViewBuilder};
+use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use glam::Vec2;
 use kit_frame::frame::{Material, Role, StateBits, TextureArray};
 use kit_probe::agent::{Layout, Rule};
@@ -232,7 +232,7 @@ fn escape_closes_the_viewer() {
 #[test]
 fn the_revealed_pill_stands_over_the_revealed_pile_and_its_cross_puts_it_away() {
     use beryl_protocol::script::Act;
-    use game_probe::testing::timing;
+    use beryl_protocol::testing::timing;
     use kit_frame::frame::REVEALED_FACE;
 
     let mut view = table();
@@ -245,7 +245,7 @@ fn the_revealed_pill_stands_over_the_revealed_pile_and_its_cross_puts_it_away() 
         object: shown.clone(),
     }]);
     let mut after = start.clone();
-    after.view.script = Some(game_probe::testing::script(
+    after.view.script = Some(beryl_protocol::testing::script(
         None,
         script.build().beats,
         vec![timing(300.0)],

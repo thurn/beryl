@@ -6,8 +6,8 @@ use app_client::Input;
 use app_client::command::SessionCommand;
 use app_client::{Client, Config};
 use beryl_protocol::protocol::{Answer, LinkState, TablePrompt};
+use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, table};
 use game_manual::manual::opening::prompt;
-use game_probe::testing::{ScriptBuilder, ViewBuilder, table};
 use glam::Vec2;
 use kit_frame::frame::{Frame, Role};
 use kit_ui::input::{

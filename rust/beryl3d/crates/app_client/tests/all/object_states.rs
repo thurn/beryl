@@ -5,7 +5,7 @@
 
 use app_client::Input;
 use beryl_protocol::protocol::{CardType, ObjectId, Side, Status, ZoneName};
-use game_probe::testing::{ScriptBuilder, ViewBuilder};
+use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use kit_frame::frame::{Frame, Place, Resolved, Role, StateBits};
 use kit_probe::agent::checks::{duplicates, on_screen, reachable};
 use kit_probe::agent::tree::{TreeOptions, tree};

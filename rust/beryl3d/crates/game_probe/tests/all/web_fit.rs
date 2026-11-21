@@ -2,7 +2,7 @@
 //! (`table::web_fit`): each card's box on the window against the web's box of the same card.
 
 use beryl_protocol::protocol::{CardType, Combat, ObjectId, Side, ZoneName};
-use game_probe::testing::ViewBuilder;
+use beryl_protocol::testing::ViewBuilder;
 use game_table::table::{DESKTOP, Scroll, Window, place};
 use glam::Vec2;
 use kit_ui::input::{Insets, Size};

@@ -4,18 +4,17 @@
 //! Here every permanent has a name of its own. Nothing reads a clock or a random number, so
 //! two calls return equal values.
 
-use beryl_protocol::PlayerView;
 use beryl_protocol::card_records::{CardEntry, CardFace, CardImages, CardRecords};
 use beryl_protocol::protocol::{
     CardHandling, Facing, ObjectId, ObjectView, PlayerState, PowerToughness, Side, StackItem,
     TargetRef, Why, ZoneName,
 };
 use beryl_protocol::script::{
-    Act, Arrow, Fact, Mark, Notice, Reset, Span, Step, StepTiming, Stream, Subject, Table, Tally,
-    replay, time_script,
+    Act, Arrow, Curve, Fact, Mark, Notice, Reset, Span, Step, StepTiming, Stream, Subject, Table,
+    Tally, replay, time_script,
 };
-use game_probe::probe::{self, card, permanent};
-use game_probe::testing;
+use beryl_protocol::testing::{self, card, permanent, step, timing};
+use beryl_protocol::{PlayerView, performance_probe};
 use kit_probe::agent::Rule;
 
 /// A synthetic board and any scripted changes to it.
@@ -145,13 +144,44 @@ pub fn stress(name: &str) -> Option<Stress> {
     Board::parse(name).map(Board::build)
 }
 
+/// How many permanents move from the graphics probe's board to the end of the battlefield.
+const FLIGHTS: usize = 40;
+const FLIGHT_DURATION: f64 = 420.0;
+const FLIGHT_STAGGER: f64 = 30.0;
+
 /// A battlefield of `count` permanents, then the same one after 40 of them have moved to its
-/// end: the board the app also draws to choose its tier (`game_probe::probe`).
+/// end. The first view is the board the app draws to choose its graphics tier.
 fn board(count: u16) -> Stress {
-    let probe::Board { views, timings } = probe::board(count);
+    let first = performance_probe(count);
+    let mut second = first.clone();
+    let moved = second.objects[..FLIGHTS].to_vec();
+    second.battlefield.rotate_left(FLIGHTS);
+    second.objects.rotate_left(FLIGHTS);
+    let end = count - 1;
+    let beat: Vec<Step> = moved
+        .into_iter()
+        .map(|object| {
+            step(Act::Fly {
+                from: ZoneName::Battlefield,
+                why: Why::Effect,
+                object,
+                at: Some(end),
+                item: None,
+                origin: None,
+            })
+        })
+        .collect();
+    let flight = StepTiming {
+        stagger: FLIGHT_STAGGER,
+        curve: Curve::EaseInOut,
+        ..timing(FLIGHT_DURATION)
+    };
+    let timings = vec![flight; beat.len()];
+    second.script = Some(testing::script(None, vec![beat], timings.clone()));
+
     Stress {
-        views,
-        timings,
+        views: vec![first, second],
+        timings: vec![timings],
         drive: Drive::default(),
         unjudged: &[],
     }

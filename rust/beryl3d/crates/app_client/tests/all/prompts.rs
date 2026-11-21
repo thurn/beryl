@@ -13,7 +13,7 @@ use beryl_protocol::prompt::{
 use beryl_protocol::protocol::{
     Candidate, CandidateView, DecisionView, Kind, ObjectId, SessionId, Side, Status, ZoneName,
 };
-use game_probe::testing::{ScriptBuilder, ViewBuilder};
+use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use game_table::table::TraySpace;
 use glam::Vec2;
 use kit_frame::frame::{Frame, Role, StateBits};

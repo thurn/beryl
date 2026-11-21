@@ -14,7 +14,7 @@ use beryl_protocol::protocol::{
     DecisionId, DecisionView, Kind, SessionId, Side, Status, Why, ZoneName,
 };
 use beryl_protocol::script::Act;
-use game_probe::testing::{ScriptBuilder, ViewBuilder, timing};
+use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, timing};
 use game_table::table::Table;
 use glam::Vec2;
 use kit_base::tokens::{space, type_style};

@@ -11,12 +11,12 @@ use beryl_protocol::protocol::{ObjectId, Side};
 use beryl_protocol::script::{
     Act, Mark, Span as Edge, Subject, Table as Played, Verb, time_script,
 };
+use beryl_protocol::testing::ScriptBuilder;
 use game_play::light::marks::band;
 use game_play::play::Show;
 use game_play::play::record::ScriptRecord;
 use game_probe::agent::game_checks::marks_on;
 use game_probe::agent::steps::{no_jumps, rest_equals_placement, step_times};
-use game_probe::testing::ScriptBuilder;
 use glam::Vec3;
 use kit_frame::frame::{Band, Draw, Frame, Material, Resolved, StateBits, sprites};
 use kit_probe::agent::{Context, Layout, Rule};

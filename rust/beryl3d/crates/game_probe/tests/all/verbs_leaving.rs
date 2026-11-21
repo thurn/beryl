@@ -8,10 +8,10 @@ use beryl_protocol::GameUpdate;
 use beryl_protocol::protocol::{ObjectId, PlayerView, Side, StackItem, Why, ZoneName};
 
 use beryl_protocol::script::{Act, Curve as Named, Subject, Table as Played, Verb, time_script};
+use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use game_play::play::Show;
 use game_play::play::record::ScriptRecord;
 use game_probe::agent::steps::{Sample, no_jumps, rest_equals_placement, step_shown, step_times};
-use game_probe::testing::{ScriptBuilder, ViewBuilder};
 use kit_base::data::audit;
 use kit_base::pose::{Pose, Segment};
 use kit_frame::frame::{Frame, Role};

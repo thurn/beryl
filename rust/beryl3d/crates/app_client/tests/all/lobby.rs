@@ -9,7 +9,7 @@ use app_client::{Client, Config};
 use beryl_protocol::SessionError;
 use beryl_protocol::ipc::decks::{DeckImportReply, DeckImportRequest, SavedDeck};
 use beryl_protocol::ipc::{LobbyChange, LobbyUpdate, TableRefusalReason, TableRefused};
-use game_probe::testing::{ScriptBuilder, ViewBuilder, lobby, table};
+use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, lobby, table};
 use glam::Vec2;
 use kit_frame::frame::{Frame, Role};
 use kit_ui::input::{

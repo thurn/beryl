@@ -7,8 +7,8 @@ use beryl_protocol::protocol::{
     CardType, ObjectId, ObjectView, PlayerView, Side, StackItem, Why, ZoneName,
 };
 use beryl_protocol::script::{Act, Fact, StepTiming, Subject};
+use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, object, timing};
 use game_play::play::Show;
-use game_probe::testing::{ScriptBuilder, ViewBuilder, object, timing};
 use game_table::table::{DESKTOP, Table, Window};
 use kit_frame::frame::{Frame, FrameBuilder};
 use kit_ui::input::{Insets, Size, Tier};

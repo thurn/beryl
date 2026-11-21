@@ -6,10 +6,10 @@
 )]
 
 use beryl_protocol::protocol::{ObjectId, Side, ZoneName};
-use beryl_protocol::script::{Act, Curve as Named, Room, Step, StepTiming, Subject};
+use beryl_protocol::script::{Act, Curve as Named, Step, StepTiming, Subject};
+use beryl_protocol::testing::{object, step};
 use game_play::beat::{Laid, Opens, beat};
 use game_play::named_curve;
-use game_probe::testing::object;
 use kit_base::pose::Curve;
 
 #[test]
@@ -28,10 +28,7 @@ fn tap(slot: u16) -> Step {
         Some("Card"),
     );
     object.tapped = true;
-    Step {
-        act: Act::Tap { object },
-        cause: None,
-    }
+    step(Act::Tap { object })
 }
 
 fn thing(slot: u16) -> Subject {
@@ -43,24 +40,8 @@ fn thing(slot: u16) -> Subject {
 /// A timing of 300 ms with no delay or stagger, changed by `f`.
 fn timing(f: impl FnOnce(&mut StepTiming)) -> StepTiming {
     let mut timing = StepTiming {
-        case: None,
-        duration: 300.0,
-        delay: 0.0,
-        stagger: 0.0,
         curve: Named::Linear,
-        each: None,
-        with: false,
-        after: Vec::new(),
-        hold: None,
-        leads: false,
-        passes: false,
-        alone: false,
-        opens: false,
-        ahead: false,
-        closes: None,
-        room: Room::Step,
-        phases: Vec::new(),
-        effects: Vec::new(),
+        ..beryl_protocol::testing::timing(300.0)
     };
     f(&mut timing);
     timing

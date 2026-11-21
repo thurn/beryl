@@ -10,8 +10,8 @@ use beryl_protocol::GameUpdate;
 use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::protocol::{CardType, PlayerView, RowName, Side, Why, ZoneName};
 use beryl_protocol::script::{Act, Script, Step, StepTiming};
+use beryl_protocol::testing::{self, ScriptBuilder, ViewBuilder, step, timing};
 use game_probe::agent::steps::rest_equals_placement;
-use game_probe::testing::{self, ScriptBuilder, ViewBuilder, timing};
 use glam::Vec2;
 use kit_frame::frame::{Frame, Place, Role};
 use kit_probe::agent::{Layout, Rule};
@@ -351,16 +351,15 @@ fn a_card_flying_to_the_hidden_end_of_a_phone_row_is_seen() {
     let end = u16::try_from(after.battlefield.len() - 1).expect("a short row");
     let beat: Vec<Step> = moved
         .into_iter()
-        .map(|object| Step {
-            act: Act::Fly {
+        .map(|object| {
+            step(Act::Fly {
                 from: ZoneName::Battlefield,
                 why: Why::Effect,
                 object,
                 at: Some(end),
                 item: None,
                 origin: None,
-            },
-            cause: None,
+            })
         })
         .collect();
     let flight = StepTiming {
@@ -421,16 +420,15 @@ fn a_card_waiting_at_a_crowded_rows_hidden_end_is_not_drawn() {
     let mut entered = record(&before.view);
     entered.zone = ZoneName::Battlefield;
     let left = record(&after);
-    let fly = |from, why, object| Step {
-        act: Act::Fly {
+    let fly = |from, why, object| {
+        step(Act::Fly {
             from,
             why,
             object,
             at: None,
             item: None,
             origin: None,
-        },
-        cause: None,
+        })
     };
     let beats = vec![
         vec![fly(ZoneName::Hand, Why::Play, entered)],

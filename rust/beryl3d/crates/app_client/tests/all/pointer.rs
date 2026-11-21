@@ -7,7 +7,7 @@ use app_client::{Client, Config};
 use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::protocol::{CardType, Side, Why, ZoneName};
 use beryl_protocol::script::Act;
-use game_probe::testing::{ScriptBuilder, ViewBuilder, timing};
+use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, timing};
 use glam::Vec2;
 use kit_frame::frame::{Frame, Role, StateBits};
 use kit_probe::agent::Layout;

@@ -6,9 +6,9 @@ use crate::common::{
 };
 use beryl_protocol::GameUpdate;
 use beryl_protocol::protocol::{Side, StackItem, Step as TurnStep, Why, ZoneName};
-use beryl_protocol::script::{Act, Fact, Step, Subject};
+use beryl_protocol::script::{Act, Fact, Subject};
+use beryl_protocol::testing::{ScriptBuilder, step, timing};
 use game_play::play::Show;
-use game_probe::testing::{ScriptBuilder, timing};
 use kit_base::pose::Curve;
 use kit_frame::frame::Wake;
 
@@ -303,16 +303,13 @@ fn a_step_the_table_cannot_take_leaves_the_steps_after_it_placed() {
     let script = after.view.script.as_mut().expect("a script");
     script.beats.insert(
         1,
-        vec![Step {
-            act: Act::Vanish {
-                subject: Subject::Ability { id: 999 },
-                from: ZoneName::Stack,
-                why: Why::Resolve,
-                object: None,
-                at: None,
-            },
-            cause: None,
-        }],
+        vec![step(Act::Vanish {
+            subject: Subject::Ability { id: 999 },
+            from: ZoneName::Stack,
+            why: Why::Resolve,
+            object: None,
+            at: None,
+        })],
     );
     timings.insert(1, timing(100.0));
     let mut show = show();
@@ -404,28 +401,22 @@ fn a_later_script_finds_the_ability_an_earlier_script_numbered() {
     let script = resolved.view.script.as_mut().expect("a script");
     script.beats.insert(
         0,
-        vec![Step {
-            act: Act::Set {
-                fact: Fact::Item {
-                    subject: Subject::Ability { id: 7 },
-                    item: ability(2),
-                },
+        vec![step(Act::Set {
+            fact: Fact::Item {
+                subject: Subject::Ability { id: 7 },
+                item: ability(2),
             },
-            cause: None,
-        }],
+        })],
     );
     script.beats.insert(
         1,
-        vec![Step {
-            act: Act::Vanish {
-                subject: Subject::Ability { id: 7 },
-                from: ZoneName::Stack,
-                why: Why::Resolve,
-                object: None,
-                at: None,
-            },
-            cause: None,
-        }],
+        vec![step(Act::Vanish {
+            subject: Subject::Ability { id: 7 },
+            from: ZoneName::Stack,
+            why: Why::Resolve,
+            object: None,
+            at: None,
+        })],
     );
     timings.splice(0..0, [timing(100.0), timing(100.0)]);
     let mut show = show();
@@ -577,7 +568,7 @@ fn a_card_fading_into_the_hand_stands_at_its_new_place_when_room_is_made() {
     let second = library[library.len() - 2];
     let mut view = start.view.clone();
     let appear = |slot, name| {
-        let card = game_probe::testing::object(slot, ZoneName::Hand, Side::You, Some(name));
+        let card = beryl_protocol::testing::object(slot, ZoneName::Hand, Side::You, Some(name));
         Act::Appear {
             from: ZoneName::Library,
             why: Why::Draw,
@@ -587,7 +578,7 @@ fn a_card_fading_into_the_hand_stands_at_its_new_place_when_room_is_made() {
         }
     };
     for slot in [cards.top, second] {
-        let card = game_probe::testing::object(slot, ZoneName::Hand, Side::You, Some("Island"));
+        let card = beryl_protocol::testing::object(slot, ZoneName::Hand, Side::You, Some("Island"));
         if let Some(object) = view.objects.iter_mut().find(|o| o.slot == slot) {
             *object = card;
         }

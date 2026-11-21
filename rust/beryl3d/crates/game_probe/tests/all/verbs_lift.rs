@@ -3,7 +3,7 @@
 //! face down for a counted look at a pile.
 
 use beryl_protocol::protocol::{CardHandling, ObjectId, PlayerView, Side, ZoneName};
-use game_probe::testing::ViewBuilder;
+use beryl_protocol::testing::ViewBuilder;
 use glam::Vec2;
 
 use crate::common::show;

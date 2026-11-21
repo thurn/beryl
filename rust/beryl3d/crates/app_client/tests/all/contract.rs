@@ -217,8 +217,8 @@ mod milestone_three {
         Inputs, Message as SettingsMessage, SettingsSheet, State,
     };
     use app_screens::screens::{self, BugForm, Music, Screen, ScreenIn, StartForm};
+    use beryl_protocol::testing::ViewBuilder;
     use game_hud::prompts;
-    use game_probe::testing::ViewBuilder;
     use game_table::table::Window;
     use kit_scene::Feature;
     use kit_ui::widgets::Fields;

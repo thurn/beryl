@@ -1,13 +1,13 @@
-//! Builders for the views and scripts that tests and tools hand the client core, so that a test
-//! names only what it is about. Only a driver of the client needs them (the `driver` feature).
+//! Builders for the views and scripts that tests and playback tools hand to clients.
 
-use beryl_protocol::GameUpdate;
-use beryl_protocol::protocol::{
-    AssistsView, CardType, Declaration, LinkState, ManaPool, ManualOrders, ObjectId, ObjectView,
-    PlayerState, PlayerView, PowerToughness, SessionId, Side, StackItem, TablePhase, TableView,
-    ZoneName,
+use crate::GameUpdate;
+use crate::protocol::{
+    AssistsView, CardType, LinkState, ManualOrders, ObjectId, ObjectView, PlayerState, PlayerView,
+    PowerToughness, SessionId, Side, StackItem, TablePhase, TableView, ZoneName,
 };
-use beryl_protocol::script::{Act, Curve, Reset, Room, Script, Step, StepTiming};
+use crate::script::{Act, Curve, Reset, Room, Script, Step, StepTiming};
+
+pub use crate::performance_probe::{card, permanent};
 
 /// Builds a `PlayerView` one card at a time. Each card takes the next slot.
 #[derive(Clone, Debug)]
@@ -16,16 +16,15 @@ pub struct ViewBuilder {
 }
 
 impl Default for ViewBuilder {
-    /// A view of a game in its first turn, past the opening hands, which the game screen shows
-    /// over the table (`screens::opening`) before it.
+    /// A view of a game in its first turn, after both players have kept their hands.
     fn default() -> Self {
-        let mut view = PlayerView::neutral(player(), player());
+        let mut view = PlayerView::neutral(PlayerState::neutral(20), PlayerState::neutral(20));
         view.turn.number = 1;
         view.turn.own_number = 1;
         view.turn.starting = Some(Side::You);
         // The stops a session starts a game with, which the client's default settings hold, so
         // that a test's first decision sends no stops.
-        view.stops = beryl_protocol::StopsSetting::SMART;
+        view.stops = crate::StopsSetting::SMART;
         Self { view }
     }
 }
@@ -69,7 +68,11 @@ impl ViewBuilder {
     }
 
     /// Adds a card named `name` to `side`'s `zone`, owned and controlled by that side, and
-    /// returns it to be changed further. A library card's name is hidden.
+    /// returns it to be changed further. Library cards and the opponent's hand cards are hidden.
+    ///
+    /// # Panics
+    ///
+    /// Panics if all 65,536 object slots are occupied.
     pub fn card(&mut self, zone: ZoneName, side: Side, name: &str) -> &mut ObjectView {
         let slot = ObjectId(u16::try_from(self.view.objects.len()).expect("fewer than 2^16 cards"));
         let player = match side {
@@ -80,12 +83,7 @@ impl ViewBuilder {
             ZoneName::Library => player.library.push(slot),
             ZoneName::Graveyard => player.graveyard.push(slot),
             ZoneName::Battlefield => self.view.battlefield.push(slot),
-            ZoneName::Stack => self.view.stack.push(StackItem::Spell {
-                slot,
-                targets: Vec::new(),
-                x: 0,
-                paid: Vec::new(),
-            }),
+            ZoneName::Stack => self.view.stack.push(StackItem::spell(slot)),
             ZoneName::Hand
             | ZoneName::Exile
             | ZoneName::Nowhere
@@ -141,11 +139,7 @@ impl ScriptBuilder {
 
     /// Adds a beat whose steps are `acts`, each with no cause.
     pub fn beat(&mut self, acts: impl IntoIterator<Item = Act>) -> &mut Self {
-        self.script.beats.push(
-            acts.into_iter()
-                .map(|act| Step { act, cause: None })
-                .collect(),
-        );
+        self.script.beats.push(acts.into_iter().map(step).collect());
         self
     }
 
@@ -155,26 +149,15 @@ impl ScriptBuilder {
     }
 }
 
-/// A player at 20 life with nothing in their zones.
-fn player() -> PlayerState {
-    PlayerState {
-        life: 20,
-        mana: ManaPool::default(),
-        lands_played: 0,
-        mulligans: 0,
-        mulligan: Declaration::Kept,
-        library: Vec::new(),
-        graveyard: Vec::new(),
-        emblems: Vec::new(),
-        named_counters: Vec::new(),
-    }
+/// A script step with no cause.
+#[must_use]
+pub const fn step(act: Act) -> Step {
+    Step { act, cause: None }
 }
 
 /// A plain face-up card with nothing on it.
 #[must_use]
 pub fn object(slot: ObjectId, zone: ZoneName, side: Side, name: Option<&str>) -> ObjectView {
-    // Every other field comes from `ObjectView::neutral`, so a field added to the protocol with
-    // a default compiles here unchanged.
     ObjectView {
         name: name.map(str::to_owned),
         ..ObjectView::neutral(slot, zone, side)
@@ -292,7 +275,7 @@ pub fn table(view: &PlayerView) -> TableView {
 ///
 /// Never: the lobby is built from values a lobby holds.
 #[must_use]
-pub fn lobby(loaded: bool) -> beryl_protocol::ipc::LobbyUpdate {
+pub fn lobby(loaded: bool) -> crate::ipc::LobbyUpdate {
     let (main, side) = if loaded { (40, 8) } else { (0, 0) };
     serde_json::from_value(serde_json::json!({
         "view": {
@@ -308,4 +291,28 @@ pub fn lobby(loaded: bool) -> beryl_protocol::ipc::LobbyUpdate {
         }
     }))
     .expect("a hand-built lobby")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sample_view_has_both_players_zones_and_a_spell() {
+        let view = ViewBuilder::sample().build();
+        assert_eq!(view.objects.len(), 31);
+        assert_eq!(view.battlefield.len(), 10);
+        assert_eq!(view.stack, [StackItem::spell(ObjectId(30))]);
+        for player in [&view.players.you, &view.players.opponent] {
+            assert_eq!(player.library.len(), 5);
+            assert_eq!(player.graveyard.len(), 1);
+        }
+        let opponent_hand: Vec<_> = view
+            .objects
+            .iter()
+            .filter(|object| object.zone == ZoneName::Hand && object.owner == Side::Opponent)
+            .collect();
+        assert_eq!(opponent_hand.len(), 3);
+        assert!(opponent_hand.iter().all(|object| object.name.is_none()));
+    }
 }

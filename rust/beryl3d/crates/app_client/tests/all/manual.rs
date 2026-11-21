@@ -10,11 +10,11 @@ use beryl_card_records::{TokenMakers, card_records_among};
 use beryl_protocol::ipc::decks::{CardSearchHit, CardTokenLink};
 use beryl_protocol::ipc::{TableActReply, TableRefusalReason, TableRefused};
 use beryl_protocol::protocol::{LogLine, ObjectId, Side, TableAction, TableArrow, ZoneName};
-use beryl_protocol::script::{Act, Arrow, Span as Edge, Step, Subject};
+use beryl_protocol::script::{Act, Arrow, Span as Edge, Subject};
+use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, script, step, table, timing};
 use game_manual::manual::bindings::Bindings;
 use game_manual::manual::commands::{AppliesTo, commands_for};
 use game_manual::manual::{Context, Target, target_at};
-use game_probe::testing::{ScriptBuilder, ViewBuilder, script, table, timing};
 use glam::Vec2;
 use kit_frame::frame::{Frame, Role, StateBits, Wake};
 use kit_ui::input::{
@@ -1128,14 +1128,7 @@ fn an_arrow_of_the_view_is_drawn_between_its_two_objects() {
         from: from_subject,
         to: to_subject,
     };
-    next.script = Some(script(
-        None,
-        vec![vec![Step {
-            act: point,
-            cause: None,
-        }]],
-        vec![timing(200.0)],
-    ));
+    next.script = Some(script(None, vec![vec![step(point)]], vec![timing(200.0)]));
     client.handle(Input::Update(Box::new(beryl_protocol::GameUpdate {
         session: beryl_protocol::SessionId(1),
         view: next,

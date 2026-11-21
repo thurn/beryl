@@ -31,6 +31,8 @@ app_screens.workspace = true
 scaffold_web.workspace = true
 
 [dev-dependencies]
+# Builds synthetic protocol views and scripts for client tests.
+beryl_protocol = { workspace = true, features = ["testing"] }
 # The incremental compilation test prepares an already recorded view.
 game_play = { workspace = true, features = ["driver"] }
 # Supplies face records for tests without linking the engine or cards.

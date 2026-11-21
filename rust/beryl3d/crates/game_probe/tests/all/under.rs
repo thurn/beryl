@@ -3,7 +3,7 @@
 //! either player's, peeks out to its right. And the rows that are laid from their left end.
 
 use beryl_protocol::protocol::{CardType, ObjectId, PlayerView, RowName, Side, ZoneName};
-use game_probe::testing::ViewBuilder;
+use beryl_protocol::testing::ViewBuilder;
 use game_table::table::{Camera, DESKTOP, Placement, Scroll, Window, place};
 use kit_frame::frame::Place;
 use kit_ui::input::{Insets, Size};

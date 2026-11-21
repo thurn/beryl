@@ -8,7 +8,7 @@ pub use game::*;
 use app_client::{Client, Config, Input};
 use beryl_protocol::protocol::Side;
 use beryl_protocol::script::{Act, Table as Played, time_script};
-use game_probe::testing::{ScriptBuilder, ViewBuilder};
+use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use kit_ui::input::{Insets, Size};
 
 /// A client at 1440 by 900 that keeps a record of its scripts. It shows the sample table at the

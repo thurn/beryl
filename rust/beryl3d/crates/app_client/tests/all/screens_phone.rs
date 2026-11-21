@@ -14,8 +14,8 @@ use beryl_protocol::prompt::{PartName, PromptView, Purpose, ShapeBody, Words};
 use beryl_protocol::protocol::{
     DecisionId, DecisionView, Kind, LossReason, OutcomeView, SessionId, Side, Status, ZoneName,
 };
+use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use beryl_protocol::{AgentView, StartRequest};
-use game_probe::testing::{ScriptBuilder, ViewBuilder};
 use kit_frame::frame::StateBits;
 use kit_probe::agent::{Layout, Rule};
 use kit_ui::input::{Insets, Rect, Size};

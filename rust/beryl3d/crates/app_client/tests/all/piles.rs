@@ -8,7 +8,7 @@ use app_client::{Client, Config};
 use beryl_protocol::GameUpdate;
 use beryl_protocol::protocol::{ObjectId, Side, Why, ZoneName};
 use beryl_protocol::script::Act;
-use game_probe::testing::{ScriptBuilder, ViewBuilder, object, timing};
+use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, object, timing};
 use game_table::table::{
     Camera, DESKTOP, Held, LAYER, Table, TrayKind, TraySpace, landing, tray, tray_boxes,
 };

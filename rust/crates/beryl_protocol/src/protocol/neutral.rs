@@ -60,9 +60,6 @@ impl PlayerState {
 
 impl ObjectView {
     /// A face-up, nameless card in `zone` that `side` owns and controls, with nothing on it.
-    ///
-    /// Tests and tools outside the main workspace build views with `..ObjectView::neutral(..)`
-    /// instead of naming every field, so a new field with a default never breaks them.
     pub fn neutral(slot: ObjectId, zone: ZoneName, side: Side) -> Self {
         Self::hidden(slot, zone, side, side)
     }

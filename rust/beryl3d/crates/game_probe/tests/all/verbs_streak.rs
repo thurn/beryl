@@ -8,11 +8,11 @@ use beryl_protocol::protocol::{
     CardType, Mana, ObjectId, ObjectView, Side, StackItem, Why, ZoneName,
 };
 use beryl_protocol::script::{Act, Curve, StepTiming, Stream, Subject};
+use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, timing};
 use game_play::light::streaks::RECORDS;
 use game_play::play::Show;
 use game_play::play::record::ScriptRecord;
 use game_probe::agent::steps::{no_jumps, rest_equals_placement, step_times};
-use game_probe::testing::{ScriptBuilder, ViewBuilder, timing};
 use glam::Vec3;
 use kit_frame::frame::{Frame, Material};
 

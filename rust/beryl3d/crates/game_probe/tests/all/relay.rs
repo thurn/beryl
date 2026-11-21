@@ -13,9 +13,9 @@ use crate::common::{MS, before, empty_frame, frame, show, three_beats};
 use beryl_protocol::GameUpdate;
 use beryl_protocol::protocol::{ObjectId, Side};
 use beryl_protocol::script::{Act, Arrow, Mark, Notice, Span as Edge, StepTiming, Subject};
+use beryl_protocol::testing::{ScriptBuilder, timing};
 use game_play::play::Show;
 use game_play::play::record::{Cause, ScriptRecord};
-use game_probe::testing::{ScriptBuilder, timing};
 
 const fn card(slot: ObjectId) -> Subject {
     Subject::Object { slot }

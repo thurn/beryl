@@ -10,9 +10,9 @@ use beryl_protocol::protocol::{
     CardType, Counter, CounterView, ObjectId, PlayerView, PowerToughness, Side, Why, ZoneName,
 };
 use beryl_protocol::script::{Act, Fact, Script, Table as Played, time_script};
+use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use game_play::play::Show;
 use game_probe::agent::steps::{no_jumps, rest_equals_placement, step_times};
-use game_probe::testing::{ScriptBuilder, ViewBuilder};
 use game_table::table::badges::STYLE;
 use glam::{Vec2, Vec3};
 use kit_frame::frame::{Frame, Material, StateBits};

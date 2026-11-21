@@ -5,10 +5,10 @@
 use beryl_protocol::GameUpdate;
 use beryl_protocol::protocol::{ObjectId, Side};
 use beryl_protocol::script::{Act, Arrow, Span, StepTiming, Subject};
+use beryl_protocol::testing::{ScriptBuilder, timing};
 use game_play::light::arrows::RIBBON;
 use game_play::play::Show;
 use game_probe::agent::steps::{no_jumps, rest_equals_placement, step_times};
-use game_probe::testing::{ScriptBuilder, timing};
 use glam::Vec2;
 use kit_base::data::space::light;
 use kit_frame::frame::{Frame, Material, Role};

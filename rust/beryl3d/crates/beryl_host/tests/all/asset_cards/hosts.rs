@@ -13,7 +13,7 @@ use beryl_host::{Chosen, Feed, Scans, Ticked, Windowless, WindowlessOptions};
 use beryl_protocol::GameUpdate;
 use beryl_protocol::card_records::CardRecords;
 use beryl_protocol::protocol::{CardType, LossReason, OutcomeView, Side, Status, ZoneName};
-use game_probe::testing::{ScriptBuilder, ViewBuilder};
+use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use game_table::faces::FaceList;
 use kit_frame::frame::Role;
 use kit_ui::input::Size;

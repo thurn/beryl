@@ -5,7 +5,7 @@
 use app_client::driver::{Mode, Page, Recording};
 use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::protocol::Side;
-use game_probe::testing::{ScriptBuilder, ViewBuilder};
+use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use kit_probe::agent::{Fault, Layout, Rule};
 use kit_ui::input::{AssetReady, GlyphCell, GlyphKey, Size};
 

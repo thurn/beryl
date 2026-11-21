@@ -11,7 +11,7 @@ use beryl_protocol::GameUpdate;
 use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::protocol::{CardType, Side, ZoneName};
 use beryl_protocol::script::{Act, Table as Played, time_script};
-use game_probe::testing::{ScriptBuilder, ViewBuilder};
+use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use glam::Vec2;
 use kit_frame::frame::{Frame, StateBits, Wake};
 use kit_probe::agent::{Layout, TreeOptions, tree};

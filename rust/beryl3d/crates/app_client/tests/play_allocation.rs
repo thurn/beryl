@@ -15,13 +15,13 @@ use beryl_protocol::protocol::{Mana, ObjectId, Side, ZoneName};
 use beryl_protocol::script::{
     self, Act, Arrow, Curve, Edge, Mark, StepEffect, StepTiming, Stream, Subject,
 };
+use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, timing};
 use common::{Cards, MS, before, emerge, empty_frame, resolve, show, three_beats};
 use game_play::light::streaks::RECORDS;
 use game_play::light::{ArrowSpan, Lit, MarkSpan, Span};
 use game_play::play::Show;
 use game_play::play::record::{Plant, Planted};
 use game_play::verbs::Interval;
-use game_probe::testing::{ScriptBuilder, ViewBuilder, timing};
 use kit_frame::frame::{Frame, FrameBuilder, Material, Role};
 
 /// The system allocator, counting the allocations it makes.

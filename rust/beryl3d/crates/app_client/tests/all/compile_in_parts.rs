@@ -7,8 +7,8 @@ use beryl_protocol::GameUpdate;
 use beryl_protocol::protocol::{PlayerView, SessionId};
 use beryl_protocol::protocol::{Side, Why, ZoneName};
 use beryl_protocol::script::{Act, Step, StepTiming};
+use beryl_protocol::testing::{ViewBuilder, object, script, step, timing};
 use game_play::play::parts::{STEPS_PER_ADVANCE, compile_in_parts};
-use game_probe::testing::{ViewBuilder, object, script, timing};
 use game_table::table::{DESKTOP, Table};
 use kit_frame::frame::Wake;
 use kit_ui::input::{Insets, Size};
@@ -95,16 +95,15 @@ fn flights_after(before: &PlayerView) -> PlayerView {
         .map(|chunk| {
             chunk
                 .iter()
-                .map(|&slot| Step {
-                    act: Act::Fly {
+                .map(|&slot| {
+                    step(Act::Fly {
                         from: ZoneName::Battlefield,
                         why: Why::Effect,
                         object: before.objects[usize::from(slot.0)].clone(),
                         at: Some(end),
                         item: None,
                         origin: None,
-                    },
-                    cause: None,
+                    })
                 })
                 .collect()
         })
@@ -268,17 +267,14 @@ fn draws_compiled_in_parts_pose_every_card_as_compiled_whole() {
             let card = object(slot, ZoneName::Hand, Side::You, Some("Island"));
             after.objects[usize::from(slot.0)] = card.clone();
             after.players.you.library.retain(|&other| other != slot);
-            beat.push(Step {
-                act: Act::Fly {
-                    from: ZoneName::Library,
-                    why: Why::Draw,
-                    object: card,
-                    at: None,
-                    item: None,
-                    origin: None,
-                },
-                cause: None,
-            });
+            beat.push(step(Act::Fly {
+                from: ZoneName::Library,
+                why: Why::Draw,
+                object: card,
+                at: None,
+                item: None,
+                origin: None,
+            }));
         }
         beats.push(beat);
     }

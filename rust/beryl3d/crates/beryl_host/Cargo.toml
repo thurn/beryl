@@ -39,12 +39,10 @@ glam = "0.34.3"
 [dev-dependencies]
 # Supplies face records from sample decks to the asset preparation tests.
 beryl_card_records = { path = "../../../crates/beryl_card_records" }
-# Builds a live game view and its result for the offscreen host test.
-game_probe.workspace = true
 # Encodes a synthetic JPEG for the asset preparation tests.
 image = { version = "0.25.10", default-features = false, features = ["jpeg"] }
-# The empty card records a test gives the client, so that its match lists only the card back.
-beryl_protocol = { path = "../../../crates/beryl_protocol" }
+# Builds synthetic game views for offscreen host tests and supplies empty card records.
+beryl_protocol = { workspace = true, features = ["testing"] }
 
 # The desktop window and its events, in place of hand-written platform windowing. The phones
 # have native Swift and Kotlin hosts instead (decision C7), which call `phone::Phone`.

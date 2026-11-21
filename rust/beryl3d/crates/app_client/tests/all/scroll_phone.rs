@@ -6,7 +6,7 @@
 use app_client::driver::{Page, Recording};
 use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::protocol::{Side, ZoneName};
-use game_probe::testing::{ScriptBuilder, ViewBuilder};
+use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use glam::Vec2;
 use kit_frame::frame::{Frame, Place, Role};
 use kit_probe::agent::{Layout, Rule};

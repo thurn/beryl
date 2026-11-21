@@ -22,9 +22,9 @@ use beryl_protocol::protocol::{
     PowerToughness, SessionId, Side, Status, ZoneName,
 };
 use beryl_protocol::script::{Act, Mark, Notice, Subject, Tally};
+use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use game_play::light::{MarkSpan, Span};
 use game_play::verbs::Interval;
-use game_probe::testing::{ScriptBuilder, ViewBuilder};
 use game_table::table::Table;
 use game_table::table::spot_of;
 use glam::Vec2;

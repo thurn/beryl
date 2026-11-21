@@ -5,7 +5,7 @@ use app_client::driver::{Page, Recording};
 use beryl_card_records::{TokenMakers, fixture_message};
 use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::protocol::{Culprit, LossReason, OutcomeView, Side, Stall, Status, ZoneName};
-use game_probe::testing::{ScriptBuilder, ViewBuilder};
+use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use kit_probe::agent::Layout;
 use kit_ui::input::Size;
 

@@ -17,10 +17,9 @@ use app_client::Input;
 use app_client::settings::{Graphics, Settings};
 use app_client::{Client, Config};
 use beryl_host::{Chosen, Opening};
-use beryl_protocol::GameUpdate;
 use beryl_protocol::protocol::SessionId;
+use beryl_protocol::{GameUpdate, performance_probe};
 use beryl_render::{Renderer, Target};
-use game_probe::probe as board;
 use kit_base::data::space::enhanced::probe as data;
 use kit_ui::input::{Insets, Size, Tier};
 use serde::{Deserialize, Serialize};
@@ -82,10 +81,9 @@ pub fn probe(renderer: &mut Renderer, size: Size, scale: f32, display_hz: f32) -
         scale,
         safe_area: Insets::default(),
     });
-    let first = board::board(PERMANENTS).views.swap_remove(0);
     client.handle(Input::Update(Box::new(GameUpdate {
         session: SessionId(1),
-        view: first,
+        view: performance_probe(PERMANENTS),
     })));
     client.handle(Input::Tier(Tier::Enhanced));
     client.prepare(0);

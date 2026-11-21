@@ -6,7 +6,7 @@ use app_client::Input;
 use app_client::command::{Request, SessionCommand};
 use beryl_protocol::StopsSetting;
 use beryl_protocol::protocol::{CardType, GameEvent, SessionId, Side, Step, ZoneName};
-use game_probe::testing::ViewBuilder;
+use beryl_protocol::testing::ViewBuilder;
 use kit_frame::frame::{Frame, Role, StateBits};
 use kit_ui::input::PointerPhase;
 

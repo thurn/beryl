@@ -11,7 +11,7 @@ use beryl_protocol::protocol::{
     Answer, AssistsView, LabelView, ObjectId, PileName, ProposalLine, ProposalView, Side,
     TableAbilityOption, TableCardCommands, TableFlowOption, TablePrompt, TargetRef, ZoneName,
 };
-use game_probe::testing::{ScriptBuilder, ViewBuilder, table};
+use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, table};
 use glam::Vec2;
 use kit_frame::frame::{Frame, Role, StateBits};
 use kit_ui::input::{

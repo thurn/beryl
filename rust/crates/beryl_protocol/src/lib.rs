@@ -6,10 +6,13 @@
 
 pub mod card_records;
 pub mod ipc;
+mod performance_probe;
 pub mod prompt;
 pub mod protocol;
 pub mod script;
 mod session_ids;
+#[cfg(any(test, feature = "testing"))]
+pub mod testing;
 mod wire_fingerprint;
 
 use std::fmt;
@@ -19,6 +22,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 pub use beryl_card::Seat;
+pub use performance_probe::performance_probe;
 pub use protocol::{CandidateIndex, DecisionId, PlayerView, SessionId, Status, StopsSetting};
 pub use session_ids::SessionIds;
 

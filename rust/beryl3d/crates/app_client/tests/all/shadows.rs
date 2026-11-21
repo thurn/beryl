@@ -6,7 +6,7 @@ use app_client::{Client, Config};
 use beryl_protocol::GameUpdate;
 use beryl_protocol::protocol::{CardType, Side, Why, ZoneName};
 use beryl_protocol::script::Act;
-use game_probe::testing::{ScriptBuilder, ViewBuilder, object, timing};
+use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, object, timing};
 use kit_frame::frame::{BANDS, Band, Draw, Frame, Material};
 use kit_ui::input::{Insets, Size, Tier};
 
