@@ -1,5 +1,5 @@
-//! The Codex adapter: builds the command line of one `codex exec --json` turn, reads the JSON
-//! events the turn printed, and says how the turn ended.
+//! The Codex adapter: builds the command line of one `codex exec --json` turn, reads its JSON
+//! events and startup diagnostics, and says how the turn ended.
 //!
 //! The events this reads (Codex CLI 0.154 and 0.171), one JSON object per line:
 //!
@@ -54,6 +54,9 @@ impl CliApp for Codex {
         for line in output.lines() {
             events.lines += 1;
             let Ok(event) = serde_json::from_str::<Value>(line) else {
+                if events.transcript.is_none() && events.startup_error.is_none() {
+                    events.startup_error = startup_error(line);
+                }
                 continue;
             };
             match event["type"].as_str() {
@@ -111,12 +114,35 @@ impl CliApp for Codex {
                 message: events
                     .error
                     .clone()
+                    .or_else(|| events.startup_error.clone())
                     .unwrap_or_else(|| format!("codex exited with {code} before its first event")),
             },
             // No `turn.completed` or `turn.failed`: a crash, a kill, a reboot or a hung turn.
             _ => TurnEnd::Interrupted,
         }
     }
+}
+
+/// Codex prints a fatal `thread/start` error before emitting events when a required MCP
+/// handshake fails. Only the server identifier belongs in a hold report, since the transport
+/// error can contain endpoint URLs and local paths.
+fn startup_error(line: &str) -> Option<String> {
+    let failure = line.strip_prefix(concat!(
+        "Error: thread/start: thread/start failed: error creating thread: Fatal error: ",
+        "Failed to initialize session: required MCP servers failed to initialize: "
+    ))?;
+    let (server, detail) = failure.split_once(": ")?;
+    if !(1..=64).contains(&server.len())
+        || !server
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+        || !detail.starts_with("handshaking with MCP server failed:")
+    {
+        return None;
+    }
+    Some(format!(
+        "required MCP server '{server}' failed its startup handshake"
+    ))
 }
 
 /// Maps the message of a `turn.failed` to the way the turn ended.
@@ -219,6 +245,7 @@ mod tests {
     const RESUMED: &str = include_str!("codex_fixtures/resumed.jsonl");
     const REFUSED_OLD: &str = include_str!("codex_fixtures/model_refused_0_154.jsonl");
     const REFUSED_NEW: &str = include_str!("codex_fixtures/model_refused_0_171.jsonl");
+    const MCP_HANDSHAKE: &str = include_str!("codex_fixtures/required_mcp_handshake.txt");
 
     fn spec(transcript: Option<&str>) -> TurnSpec {
         TurnSpec {
@@ -441,13 +468,46 @@ mod tests {
                 ..
             }
         ));
-        assert!(matches!(
-            end("Error: stdin is not a terminal\n", Some(1)),
+        let generic = TurnEnd::Hold {
+            reason: HoldReason::NoFirstLine,
+            message: "codex exited with 1 before its first event".to_string(),
+        };
+        assert_eq!(end("", Some(1)), generic);
+        assert_eq!(end("Error: stdin is not a terminal\n", Some(1)), generic);
+    }
+
+    #[test]
+    fn required_mcp_handshake_failure_names_only_the_server_in_the_hold() {
+        let events = Codex.read(MCP_HANDSHAKE);
+        assert_eq!(events.transcript, None);
+        assert_eq!(events.error, None);
+        assert!(!events.result_seen);
+        assert_eq!(
+            Codex.classify(&events, Some(1)),
             TurnEnd::Hold {
                 reason: HoldReason::NoFirstLine,
-                ..
+                message: "required MCP server 'playwright' failed its startup handshake"
+                    .to_string(),
             }
-        ));
+        );
+    }
+
+    #[test]
+    fn startup_diagnostic_ignores_unrecognized_output_and_unsafe_names() {
+        let warning = MCP_HANDSHAKE.lines().nth(1).unwrap();
+        let unsafe_name = MCP_HANDSHAKE.replace("playwright:", "https://example.test:");
+        let generic = TurnEnd::Hold {
+            reason: HoldReason::NoFirstLine,
+            message: "codex exited with 1 before its first event".to_string(),
+        };
+        assert_eq!(end(warning, Some(1)), generic);
+        assert_eq!(end(&unsafe_name, Some(1)), generic);
+    }
+
+    #[test]
+    fn startup_diagnostic_does_not_replace_json_result() {
+        let output = format!("{MCP_HANDSHAKE}{REFUSED_NEW}");
+        assert_eq!(end(&output, Some(1)), end(REFUSED_NEW, Some(1)));
     }
 
     #[test]

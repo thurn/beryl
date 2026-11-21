@@ -139,7 +139,7 @@ pub struct TokenCounts {
     pub cache_write: u64,
 }
 
-/// What a turn's event stream said, as far as it has been written.
+/// What a turn's output said, as far as it has been written.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct TurnEvents {
     /// The transcript ID the first line named.
@@ -165,6 +165,9 @@ pub struct TurnEvents {
     pub error: Option<String>,
     /// The number of lines read, JSON or not, so a reader can tell a turn that printed nothing.
     pub lines: u32,
+    /// A sanitized diagnostic from before the first event, for holds on startup failures.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub startup_error: Option<String>,
 }
 
 /// Why a turn's failure is not the session's own, which puts the app on a CLI hold.
@@ -321,8 +324,8 @@ pub trait CliApp: Send + Sync {
     fn name(&self) -> &'static str;
     /// The program and every argument of one turn.
     fn command(&self, spec: &TurnSpec) -> Vec<String>;
-    /// What the text of a turn's `output.log`, as far as it has been written, says. Lines that
-    /// are not JSON and events of unknown types are skipped.
+    /// What the text of a turn's `output.log`, as far as it has been written, says. Adapters
+    /// read JSON events they recognize and may also extract sanitized startup diagnostics.
     fn read(&self, output: &str) -> TurnEvents;
     /// How a turn ended, from its events and its exit code (`None` when a signal ended it or no
     /// exit was recorded).
