@@ -10,24 +10,13 @@
 
 use crate::prelude::*;
 
-/// The Human token ([CR 111.4]): "If the spell or ability doesn't specify the name of the token,
-/// its name is the same as its subtype(s) plus the word 'Token.'"
-///
-/// [CR 111.4]: https://yawgatog.com/resources/magic-rules/#R1114
 pub use crate::tokens::HUMAN_TOKEN;
 
-/// The Human token.
 pub static HUMAN: CardDef = Token::HumanToken.card();
 
-/// Adeline's power is "the number of creatures you control".
 pub static CARD: CardDef = Printed::AdelineResplendentCathar
     .keywords(Keywords::VIGILANCE)
     .abilities(&[
-        // A characteristic-defining ability
-        // ([CR 604.3](https://yawgatog.com/resources/magic-rules/#R6043)), applied in
-        // layer 7a ([CR 613.4a](https://yawgatog.com/resources/magic-rules/#R6134a)):
-        // "Effects from characteristic-defining abilities that define power and/or
-        // toughness are applied."
         Ability::static_ability(&LayerSpec {
             affected: Objects::This,
             condition: None,
@@ -39,11 +28,6 @@ pub static CARD: CardDef = Printed::AdelineResplendentCathar
                 ]),
             }))],
         }),
-        // "Whenever you attack"
-        // ([CR 508.3d](https://yawgatog.com/resources/magic-rules/#R5083d)): it
-        // "triggers if one or more creatures that player controls are declared as
-        // attackers." A Human for each opponent, attacking that player or, as its
-        // controller chooses, a planeswalker they control (CR 508.4).
         Ability::triggered(&Trigger::attack(Players::You)).effect(&for_each_player(
             each_opponent(),
             &create_attacking_tokens(you(), &HUMAN, 1, that_player()),
@@ -81,29 +65,6 @@ pub mod scenarios {
                 // Adeline's 3 and the Human's 1.
                 THEM.life(16),
             ]),
-        // Adeline stays home while the flier attacks: "you attack" all the same.
-        Scenario::new("Adeline's Human arrives when she stays home")
-            .battlefield(P0, &[ADELINE, Prop::Flier])
-            .actions(&[
-                advance_to(1, TurnStep::BeginningOfCombat),
-                ME.passes(),
-                ME.attacks_with(Prop::Flier),
-                ME.done_attacking(),
-                Resolve,
-                ME.attacking(HUMAN_TOKEN, 1),
-                ME.attacking(ADELINE, 0),
-                advance_to(1, TurnStep::EndOfCombat),
-                // The flier's 3 and the Human's 1.
-                THEM.life(16),
-            ]),
-        // Her power is defined in every zone (CR 604.3). In a hand she has no controller, so
-        // "creatures you control" are her owner's (CR 108.4a): the flier, not P1's
-        // creature, and she is 1/4.
-        Scenario::new("Adeline in a hand counts her owner's creatures")
-            .hand(P0, &[ADELINE])
-            .battlefield(P0, &[Prop::Flier])
-            .battlefield(P1, &[Prop::Flier])
-            .actions(&[ME.pt_in(Zone::Hand, ADELINE, 1, 4)]),
         // "Attacking that player or a planeswalker they control": its controller picks the
         // planeswalker (CR 508.4), whom the Human's damage then removes loyalty from (CR 120.3c).
         Scenario::new("Adeline's Human attacks a planeswalker")

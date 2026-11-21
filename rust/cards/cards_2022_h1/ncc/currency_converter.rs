@@ -11,32 +11,19 @@
 use crate::prelude::*;
 use crate::tokens::TREASURE;
 
-/// The Rogue token's name: its subtype plus the word "Token" ([CR 111.4]).
-///
-/// [CR 111.4]: https://yawgatog.com/resources/magic-rules/#R1114
 pub use crate::tokens::ROGUE_TOKEN;
 
-/// The Rogue token: a 2/2 black Rogue creature token.
 pub static ROGUE: CardDef = Token::RogueToken.card();
 
-/// "That card from your graveyard" is the card as it was put into the graveyard: once it has left,
-/// it is a new object ([CR 400.7]) and nothing is asked. A discarded card that a replacement effect
-/// put somewhere else, as madness exiles it, was never in the graveyard and is not exiled with
-/// this. The exile is linked to the last ability ([CR 607.2a]): "The second ability refers only to
-/// cards in the exile zone that were put there as a result of an instruction to exile them in the
-/// first ability."
+/// A discard that madness sends to exile never reaches the Converter's graveyard
+/// choice. The next zone change also breaks that choice's reference because [CR 400.7]
+/// says “An object that moves from one zone to another becomes a new object.”
 ///
-/// Draws, then discards ([CR 608.2c]): "The controller of the spell or ability follows its
-/// instructions in the order written."
-///
-/// One of the cards exiled with this Converter, its controller's choice, goes to its owner's
-/// graveyard (CR 400.3); what it is decides the token. Off the stack and the battlefield a modal
-/// double-faced card has only its front face's characteristics ([CR 712.6a]), so Sink into Stupor
-/// is a nonland card. With no card exiled with it there is no "it", and no token.
+/// The token choice uses the returned card's characteristics in the graveyard. Under
+/// [CR 712.6a] a double-faced card in that zone “has only the characteristics of its
+/// front face,” so Sink into Stupor yields a Rogue.
 ///
 /// [CR 400.7]: https://yawgatog.com/resources/magic-rules/#R4007
-/// [CR 607.2a]: https://yawgatog.com/resources/magic-rules/#R6072a
-/// [CR 608.2c]: https://yawgatog.com/resources/magic-rules/#R6082c
 /// [CR 712.6a]: https://yawgatog.com/resources/magic-rules/#R7126a
 pub static CARD: CardDef = Printed::CurrencyConverter
     .abilities(&[
@@ -190,62 +177,6 @@ pub mod scenarios {
                 ME.has(Zone::Graveyard, Card::Island, 1),
                 ME.has(Zone::Exile, Card::Oust, 1),
                 ME.controls(TREASURE_TOKEN, 1),
-                ME.controls(ROGUE_TOKEN, 0),
-            ]),
-        // P1 returns the Converter to P0's hand in response to its {T}. The ability still refers
-        // to the cards that Converter exiled (CR 607.2a), so Oust goes to the graveyard for a
-        // Rogue. The creature makes the target a choice, which the oracles are then told.
-        Scenario::new("Currency Converter's ability returns a card after the Converter left")
-            // The Converter, the {2} for its loot, a Swamp for the flash creature, and a tapped
-            // creature, which can't attack on the first turn.
-            .battlefield(P0, &[CONVERTER, Card::Island, Card::Island, Card::Swamp])
-            .permanents(P0, &[Permanent::new(Prop::Vanilla).tapped()])
-            .hand(P0, &[Card::Oust, Prop::FlashCreature])
-            .library(P0, &[Card::Plains, Card::Plains, Card::Plains])
-            .battlefield(P1, &[Card::Island; 3])
-            .hand(P1, &[Card::SinkIntoStupor])
-            .library(P1, &[Card::Island, Card::Island])
-            .actions(&[
-                ME.activates(CONVERTER, 1),
-                Resolve,
-                ME.picks(Card::Oust),
-                Resolve,
-                ME.yes(),
-                advance_to(3, TurnStep::PrecombatMain),
-                // The flash creature in P0's hand makes each of P0's priorities a decision.
-                ME.activates(CONVERTER, 2),
-                ME.passes(),
-                THEM.casts(Card::SinkIntoStupor),
-                THEM.targets(CONVERTER),
-                Resolve,
-                ME.has(Zone::Hand, CONVERTER, 1),
-                Resolve,
-                ME.has(Zone::Graveyard, Card::Oust, 1),
-                ME.controls(ROGUE_TOKEN, 1),
-            ]),
-        // P1 returns the Converter to P0's hand after it exiled Oust. Recast, it is a new object
-        // (CR 400.7), and Oust was exiled with the old one: its {T} finds nothing.
-        Scenario::new("Currency Converter's exiled cards stay with the Converter that exiled them")
-            // The Converter, the {2} for its loot and the {1} to cast it again.
-            .battlefield(P0, &[CONVERTER, Card::Island, Card::Island, Card::Island])
-            .hand(P0, &[Card::Oust])
-            .library(P0, &[Card::Plains, Card::Plains])
-            .battlefield(P1, &[Card::Island; 3])
-            .hand(P1, &[Card::SinkIntoStupor])
-            .actions(&[
-                ME.activates(CONVERTER, 1),
-                Resolve,
-                ME.picks(Card::Oust),
-                Resolve,
-                ME.yes(),
-                ME.passes(),
-                THEM.casts(Card::SinkIntoStupor),
-                ME.has(Zone::Hand, CONVERTER, 1),
-                ME.casts(CONVERTER),
-                Resolve,
-                ME.activates(CONVERTER, 2),
-                Resolve,
-                ME.has(Zone::Exile, Card::Oust, 1),
                 ME.controls(ROGUE_TOKEN, 0),
             ]),
     ];

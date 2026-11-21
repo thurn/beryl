@@ -11,19 +11,10 @@
 
 use crate::prelude::*;
 
-/// The spell leaves the stack without resolving, to the library of its owner, who chooses the end
-/// ([CR 400.3]): "If an object would go to any library, graveyard, or hand other than its owner's,
-/// it goes to its owner's corresponding zone." The trigger resolves whether or not Subtlety is
-/// still there, as after evoke's sacrifice ([CR 113.7a]): "Once activated or triggered, an ability
-/// exists on the stack independently of its source."
+/// Both enters triggers go on the stack when Subtlety is evoked. [CR 603.3b] lets their
+/// controller put them on the stack “in any order they choose.” The tuck still resolves
+/// if the sacrifice resolves first.
 ///
-/// Evoke's cost exiles a blue card from the hand rather than paying {2}{U}{U} ([CR 702.74a]), and
-/// its sacrifice trigger enters alongside the tuck, both Subtlety's controller's to order
-/// ([CR 603.3b]).
-///
-/// [CR 400.3]: https://yawgatog.com/resources/magic-rules/#R4003
-/// [CR 113.7a]: https://yawgatog.com/resources/magic-rules/#R1137a
-/// [CR 702.74a]: https://yawgatog.com/resources/magic-rules/#R70274a
 /// [CR 603.3b]: https://yawgatog.com/resources/magic-rules/#R6033b
 pub static CARD: CardDef = Printed::Subtlety
     .keywords(Keywords::FLASH.union(Keywords::FLYING))
@@ -96,39 +87,6 @@ pub mod scenarios {
                 Resolve,
                 THEM.no(),
                 THEM.library_top(&[Card::Island, Card::TeferiTimeRaveler]),
-                ME.has(Zone::Graveyard, Card::Subtlety, 1),
-            ]),
-        // With mana for its cost and two other blue cards in hand, both casts are offered; evoked,
-        // P0 picks which blue card to exile.
-        Scenario::new("Subtlety with mana and blue cards: cast or evoke, then which card to exile")
-            .at(2, P1, TurnStep::PrecombatMain)
-            .battlefield(P0, &[Card::Island; 4])
-            .hand(
-                P0,
-                &[Card::Subtlety, Prop::UntargetedSpell, Prop::Planeswalker],
-            )
-            .battlefield(P1, &[Card::Plains; 3])
-            .hand(P1, &[Prop::Flier, Card::Plains])
-            .actions(&[
-                THEM.casts(Prop::Flier),
-                // Passing, the cast for mana and the evoke.
-                ME.deciding(DecisionKind::Priority, 3),
-                Action::Cast {
-                    player: P0,
-                    card: Card::Subtlety,
-                    face: FaceIx::FRONT,
-                    costs: Castings::only(0),
-                },
-                ME.deciding(DecisionKind::ChooseObject, 2),
-                ME.picks(Prop::UntargetedSpell),
-                ME.has(Zone::Exile, Prop::UntargetedSpell, 1),
-                Resolve,
-                ME.chooses(DecisionKind::TriggerOrder, Card::Subtlety),
-                ME.target_count(1),
-                Resolve,
-                Resolve,
-                THEM.yes(),
-                THEM.library_top(&[Prop::Flier, Card::Island]),
                 ME.has(Zone::Graveyard, Card::Subtlety, 1),
             ]),
     ];

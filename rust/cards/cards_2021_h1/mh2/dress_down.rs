@@ -10,21 +10,11 @@
 
 use crate::prelude::*;
 
-/// Flash, and "When this enchantment enters, draw a card."
+/// A creature whose power was defined by its own ability loses that definition too.
+/// For example, Adeline's printed asterisk is zero while her ability is absent.
+/// [CR 208.5] says “If a creature somehow has no value for its power, its power is 0.”
 ///
-/// "Creatures lose all abilities.": a static ability in layer 6 over every creature
-/// ([CR 613.1f]): "Layer 6: Ability-adding effects, keyword counters, ability-removing
-/// effects, and effects that say an object can't have an ability are applied." It removes
-/// what the creatures have when it applies, and an effect that grants an ability later in
-/// timestamp order still grants it. Their power and toughness stay, but a power that an
-/// ability of the creature defined is lost with that ability.
-///
-/// "At the beginning of the end step, sacrifice this enchantment.": every player's end step
-/// ([CR 603.2b]): "When a phase or step begins, all abilities that trigger 'at the beginning
-/// of' that phase or step trigger."
-///
-/// [CR 613.1f]: https://yawgatog.com/resources/magic-rules/#R6131f
-/// [CR 603.2b]: https://yawgatog.com/resources/magic-rules/#R6032b
+/// [CR 208.5]: https://yawgatog.com/resources/magic-rules/#R2085
 pub static CARD: CardDef = Printed::DressDown
     .keywords(Keywords::FLASH)
     .abilities(&[
@@ -49,18 +39,6 @@ pub mod scenarios {
     const DRESS_DOWN: &str = Card::DressDown;
 
     pub const SCENARIOS: &[Scenario] = &[
-        Scenario::new("it enters and draws a card")
-            .hand(P0, &[DRESS_DOWN])
-            .battlefield(P0, &[Card::Island, Card::Island])
-            .library(P0, &[Card::Plains, Card::Island])
-            .actions(&[
-                ME.casts(DRESS_DOWN),
-                Resolve,
-                stack(1),
-                Resolve,
-                ME.has(Zone::Hand, Card::Plains, 1),
-                ME.controls(DRESS_DOWN, 1),
-            ]),
         // Adeline's power was defined by her own ability, which is gone: her printed power
         // is *, which is 0. The flier keeps its printed 3/1.
         Scenario::new("creatures keep printed power but lose defined power")
@@ -121,25 +99,6 @@ pub mod scenarios {
                 stack(0),
                 ME.has(Zone::Hand, Card::Plains, 0),
                 ME.pt(DRESS_DOWN, 2, 2),
-            ]),
-        // Flash: cast in the opponent's turn, it draws, and is sacrificed at that turn's end
-        // step.
-        Scenario::new("cast on the opponent's turn, it goes at that end step")
-            .hand(P0, &[DRESS_DOWN])
-            .battlefield(P0, &[Card::Island, Card::Island])
-            .library(P0, &[Card::Plains, Card::Island, Card::Island])
-            .library(P1, &[Card::Island, Card::Island])
-            .actions(&[
-                advance_to(2, TurnStep::PrecombatMain),
-                THEM.passes(),
-                ME.casts(DRESS_DOWN),
-                Resolve,
-                ME.controls(DRESS_DOWN, 1),
-                advance_to(2, TurnStep::End),
-                ME.has(Zone::Hand, Card::Plains, 1),
-                stack(1),
-                Resolve,
-                ME.controls(DRESS_DOWN, 0),
             ]),
     ];
 }

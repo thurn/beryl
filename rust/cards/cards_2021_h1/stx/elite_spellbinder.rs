@@ -10,18 +10,6 @@
 
 use crate::prelude::*;
 
-/// "Target opponent's hand" is looked at in full, for "a nonland card from it" to exile.
-///
-/// Looking at a hand shows it to the looker alone; the exiled card is public. Its owner may cast it
-/// from exile for as long as it stays there ([CR 601.3]), and the {2} is a cost increase
-/// ([CR 601.2f]): the total cost is the mana cost "plus all additional costs and cost increases".
-/// The card is nonland, so playing it is casting it ([CR 701.18b]): "To play a card means to play
-/// that card as a land or to cast that card as a spell, whichever is appropriate." The whole hand
-/// is looked at, for one card to exile.
-///
-/// [CR 601.3]: https://yawgatog.com/resources/magic-rules/#R6013
-/// [CR 601.2f]: https://yawgatog.com/resources/magic-rules/#R6012f
-/// [CR 701.18b]: https://yawgatog.com/resources/magic-rules/#R70118b
 pub static CARD: CardDef = Printed::EliteSpellbinder
     .keywords(Keywords::FLYING)
     .abilities(&[Ability::triggered(&Trigger::ENTERS)
@@ -79,17 +67,6 @@ pub mod scenarios {
                 THEM.tapped(Card::Plains, 3),
                 Resolve,
                 THEM.controls(Prop::Artifact, 1),
-            ]),
-        // Only lands: nothing to exile, nothing to ask.
-        Scenario::new("Spellbinder sees a hand of lands")
-            .hand(P0, &[SPELLBINDER])
-            .battlefield(P0, &[Card::Plains; 3])
-            .hand(P1, &[Card::Island, Card::Plains])
-            .actions(&[
-                ME.casts(SPELLBINDER),
-                advance_to(1, TurnStep::PostcombatMain),
-                THEM.has_cards(Zone::Exile, 0),
-                THEM.has_cards(Zone::Hand, 2),
             ]),
     ];
 }

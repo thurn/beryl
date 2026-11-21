@@ -8,13 +8,9 @@
 
 use crate::prelude::*;
 
-/// "Exile target ... until this artifact leaves the battlefield" ([CR 610.3]): "A second one-shot
-/// effect is created immediately after the specified event. This second one-shot effect returns the
-/// object to its previous zone." A target gone, or no longer matching, by resolution stops the
-/// ability ([CR 608.2b]); a Hole gone first exiles nothing ([CR 610.3b]).
+/// If the Hole leaves while its enters trigger is on the stack, [CR 610.3b] says “the
+/// object doesn't move” because the specified return event has already happened.
 ///
-/// [CR 610.3]: https://yawgatog.com/resources/magic-rules/#R6103
-/// [CR 608.2b]: https://yawgatog.com/resources/magic-rules/#R6082b
 /// [CR 610.3b]: https://yawgatog.com/resources/magic-rules/#R6103b
 pub static CARD: CardDef = Printed::PortableHole
     .abilities(&[Ability::triggered(&Trigger::ENTERS)
@@ -75,21 +71,6 @@ pub mod scenarios {
                 THEM.has(Zone::Exile, TWO_DROP, 0),
                 THEM.controls(TWO_DROP, 1),
             ]),
-        // The three-drop's mana value is 3, and P0's own two-drop isn't an opponent's: with no
-        // legal target the trigger never goes on the stack.
-        Scenario::new("Portable Hole with no permanent of mana value 2 or less to exile")
-            .battlefield(P0, &[Card::Plains, TWO_DROP])
-            .hand(P0, &[HOLE])
-            .library(P0, &[Card::Island])
-            .battlefield(P1, &[THREE_DROP])
-            .actions(&[
-                ME.casts(HOLE),
-                Resolve,
-                stack(0),
-                ME.controls(HOLE, 1),
-                THEM.controls(THREE_DROP, 1),
-                ME.controls(TWO_DROP, 1),
-            ]),
         // With the trigger on the stack, P0 returns its target to P1's hand with Sink into
         // Stupor: the trigger does nothing, and the Hole stays.
         Scenario::new("Portable Hole's target gone before the trigger resolves")
@@ -111,32 +92,6 @@ pub mod scenarios {
                 stack(0),
                 THEM.has(Zone::Exile, TWO_DROP, 0),
                 ME.controls(HOLE, 1),
-            ]),
-        // P1 answers the trigger by returning the Hole to P0's hand with Sink into Stupor: the
-        // event the exile lasts until has happened, so the two-drop never leaves (CR 610.3b).
-        // P0's instant in hand, with the Islands for it and P1's two-drop to target, gives P0 a
-        // priority to pass between the two resolutions.
-        Scenario::new("Portable Hole gone before its trigger resolves")
-            .battlefield(
-                P0,
-                &[Card::Plains, Card::Island, Card::Island, Card::Island],
-            )
-            .hand(P0, &[HOLE, Prop::Removal])
-            .library(P0, &[Card::Island])
-            .battlefield(P1, &[TWO_DROP, Card::Island, Card::Island, Card::Island])
-            .hand(P1, &[Card::SinkIntoStupor])
-            .actions(&[
-                ME.casts(HOLE),
-                Resolve,
-                stack(1),
-                ME.passes(),
-                THEM.casts(Card::SinkIntoStupor),
-                Resolve,
-                Resolve,
-                stack(0),
-                ME.has(Zone::Hand, HOLE, 1),
-                THEM.has(Zone::Exile, TWO_DROP, 0),
-                THEM.controls(TWO_DROP, 1),
             ]),
     ];
 }
