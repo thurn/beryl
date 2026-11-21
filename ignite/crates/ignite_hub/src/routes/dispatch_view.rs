@@ -292,9 +292,11 @@ fn hand_out(
         };
         machines.push((seat.name.clone(), said));
     }
-    // The chip names a reason from a machine that said what it has free, when one did: a
-    // silent machine's line says nothing about this ticket in particular.
+    // The chip names a reason from a machine the ticket may go to, preferring one that said
+    // what it has free: a silent machine's line says nothing about this ticket in particular,
+    // and "pinned to machine" only points at another machine whose own line is the reason.
     let reported: Vec<(String, String)> = machines.clone();
+    let first_silent = machines.len();
     for (name, known) in silent {
         let said = ticket
             .pins
@@ -304,9 +306,15 @@ fn hand_out(
             .map_or_else(|| known.clone(), |pin| format!("pinned to machine {pin}"));
         machines.push((name.clone(), said));
     }
+    let unreported = machines[first_silent..].to_vec();
     machines.sort_by(|a, b| a.0.cmp(&b.0));
     let summary = next_on.as_ref().map_or_else(
-        || summary(&reported).unwrap_or_else(|| summary(&machines).unwrap_or_default()),
+        || {
+            summary(&reported)
+                .or_else(|| summary(&unreported))
+                .or_else(|| most_common(machines.iter().map(|(_, reason)| reason.as_str())))
+                .unwrap_or_default()
+        },
         |machine| format!("Next on {machine}"),
     );
     Waiting {
@@ -391,28 +399,27 @@ fn take(seat: &mut Seat, ticket: &ReadyTicket) {
     seat.taken += 1;
 }
 
-/// The reason to show on a ticket no machine takes next: the one most machines give, leaving
-/// out machines excluded by its machine pin, unless all are excluded. `None` when `machines`
-/// is empty.
+/// The reason to show on a ticket no machine takes next: the one most of `machines` give,
+/// leaving out machines its machine pin excludes. `None` when every machine is excluded.
 fn summary(machines: &[(String, String)]) -> Option<String> {
-    let matching: Vec<&str> = machines
-        .iter()
-        .map(|(_, reason)| reason.as_str())
-        .filter(|reason| !reason.starts_with("pinned to machine "))
-        .collect();
-    let pool: Vec<&str> = if matching.is_empty() {
-        machines.iter().map(|(_, reason)| reason.as_str()).collect()
-    } else {
-        matching
-    };
+    most_common(
+        machines
+            .iter()
+            .map(|(_, reason)| reason.as_str())
+            .filter(|reason| !reason.starts_with("pinned to machine ")),
+    )
+}
+
+/// The reason given most often, capitalized; the first given wins a tie.
+fn most_common<'a>(reasons: impl Iterator<Item = &'a str>) -> Option<String> {
     let mut counts: Vec<(&str, usize)> = Vec::new();
-    for reason in pool {
+    for reason in reasons {
         match counts.iter_mut().find(|(seen, _)| *seen == reason) {
             Some((_, n)) => *n += 1,
             None => counts.push((reason, 1)),
         }
     }
-    let best = counts.iter().map(|(_, n)| *n).max().unwrap_or(0);
+    let best = counts.iter().map(|(_, n)| *n).max()?;
     counts
         .into_iter()
         .find(|(_, n)| *n == best)

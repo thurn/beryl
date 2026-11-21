@@ -275,3 +275,21 @@ fn a_chip_names_a_reporting_machines_reason_not_a_silent_machines() {
         "the card still lists it: {card}"
     );
 }
+
+#[test]
+fn a_ticket_pinned_to_a_silent_machine_names_that_machines_reason() {
+    let conn = seeded();
+    // `multivac` never asked and has no workers; pin `e1.3` to it.
+    conn.execute(
+        "UPDATE tickets SET labels = '[\"machine:multivac\"]' WHERE id = 'e1.3'",
+        [],
+    )
+    .unwrap();
+    let body = page(&conn, "/available");
+    let waiting = section(&body, "waiting");
+    assert!(waiting.contains(">Has no workers<"), "{waiting}");
+    assert!(
+        !waiting.contains(">Pinned to machine multivac<"),
+        "{waiting}"
+    );
+}
