@@ -282,28 +282,32 @@ def lints_match(root: Path) -> list[str]:
     ]
 
 
-def verb_names(root: Path) -> set[str]:
-    """Each verb of data/ui-conventions.json, and each of its cases."""
-    data = json.loads((root / "data" / "ui-conventions.json").read_text())
-    names: set[str] = set()
-    for verb in data["verbs"]:
-        names.add(verb["name"])
-        names.update(verb.get("cases", {}))
-    return names
-
-
 def data_names(root: Path) -> list[str]:
-    """Each key under `verbs` in data/beryl3d/verbs.json that names no verb or case."""
-    space = root / "data" / "beryl3d" / "verbs.json"
-    if not space.is_file():
-        return []
-    known = verb_names(root)
-    return [
+    """Match runtime verb and effect names to the shared UI conventions."""
+    directory = root / "data" / "beryl3d"
+    conventions = json.loads((root / "data" / "ui-conventions.json").read_text())
+    verb_names: set[str] = set()
+    for verb in conventions["verbs"]:
+        verb_names.add(verb["name"])
+        verb_names.update(verb.get("cases", {}))
+    verbs = json.loads((directory / "verbs.json").read_text())["verbs"]
+    found = [
         f"data/beryl3d/verbs.json: verbs.{key} names no verb or case of "
         "data/ui-conventions.json"
-        for key in json.loads(space.read_text()).get("verbs", {})
-        if key not in known
+        for key in verbs
+        if key not in verb_names
     ]
+    effect_names = {effect["name"] for effect in conventions["effects"]}
+    effect_files = {file.stem for file in (directory / "effects").glob("*.json")}
+    found.extend(
+        f"data/beryl3d/effects/{name}.json: no such effect in data/ui-conventions.json"
+        for name in sorted(effect_files - effect_names)
+    )
+    found.extend(
+        f"data/beryl3d/effects/{name}.json: missing definition for effect in data/ui-conventions.json"
+        for name in sorted(effect_names - effect_files)
+    )
+    return found
 
 
 def b3d_data(root: Path) -> list[str]:
@@ -375,7 +379,7 @@ def non_test_lines(path: Path) -> list[tuple[int, str]]:
 
 
 def scene_literals(root: Path) -> list[str]:
-    """Each nontrivial float literal outside tests in code that uses design tokens."""
+    """Each nontrivial float literal outside tests in code that lays out and styles elements."""
     found: list[str] = []
     for crate, folder in TOKEN_FOLDERS:
         directory = crates(root) / crate / "src" / folder
@@ -384,9 +388,9 @@ def scene_literals(root: Path) -> list[str]:
                 for match in FLOAT_LITERAL.finditer(line):
                     if float(match[0].replace("_", "")) not in PLAIN_FLOATS:
                         found.append(
-                            f"{path.relative_to(root)}:{number}: the literal {match[0]} is a "
-                            f"size, so it is a design token in {TOKEN_FILE}, under `flat`, "
-                            "that the code names through `tokens`"
+                            f"{path.relative_to(root)}:{number}: the literal {match[0]} belongs "
+                            f"in {TOKEN_FILE} under `flat` for a design token, or in "
+                            "the corresponding data/beryl3d/ tuning file for a layout setting"
                         )
     return found
 

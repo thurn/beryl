@@ -1,5 +1,10 @@
+#[path = "../../../../test_profiles.rs"]
+mod test_profiles;
+
+use test_profiles::SHIPPED;
+
 use glam::{Quat, Vec2, Vec3};
-use kit_base::data::profiles::{Profiles, SHIPPED};
+use kit_base::data::profiles::Profiles;
 use kit_base::geometry::{Insets, Rect, Size, Window};
 use kit_space::arrange::{
     Alignment, CentredFan, Container, Edge, Fan, Group, Item, Limits, Overflow, Policy, Region,

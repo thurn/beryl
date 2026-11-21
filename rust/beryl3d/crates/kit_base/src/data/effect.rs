@@ -284,14 +284,15 @@ pub struct Vortex {
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+// Empty struct variants make Serde reject extra keys on channels without parameters.
 #[serde(tag = "channel", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Surface {
-    Whiten,
+    Whiten {},
     Tint { color: [u8; 4] },
     TextTint { color: [u8; 4] },
-    Dissolve,
-    Opacity,
-    PreviousFace,
+    Dissolve {},
+    Opacity {},
+    PreviousFace {},
 }
 
 /// Which side of an anchor a prepared number starts on.

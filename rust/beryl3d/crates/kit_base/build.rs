@@ -1,5 +1,4 @@
-//! Generates the remaining spatial constants.
-//! It also generates the design tokens and embeds the serif font files.
+//! Generates the design tokens and embeds the serif font files.
 
 #[path = "build/gradients.rs"]
 mod gradients;
@@ -10,15 +9,7 @@ use std::path::PathBuf;
 
 fn main() {
     let manifest = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
-    let data = manifest.join("../../../../data/beryl3d");
-    let space = data.join("space-constants.json");
-    println!("cargo:rerun-if-changed={}", space.display());
-    let space_text = fs::read_to_string(&space).unwrap();
-    let space_json: serde_json::Value = serde_json::from_str(&space_text).unwrap();
-    let mut out = String::new();
-    write_space(&space_json, &mut out);
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
-    fs::write(out_dir.join("data.rs"), out).unwrap();
     write_serif(&out_dir);
     let tokens = manifest.join("../../../../data/design-tokens.json");
     println!("cargo:rerun-if-changed={}", tokens.display());
@@ -394,92 +385,4 @@ fn parse_color<'a>(value: &str, find: &dyn Fn(&str) -> &'a serde_json::Value) ->
     let byte = (percent * 255.0 / 100.0).round() as u8;
     rgba[3] = byte;
     rgba
-}
-
-/// Writes the module `space` from `space-constants.json` by one rule, whatever the keys are. An object
-/// becomes a `pub mod` named for its key. A number becomes a `pub const` named for its key in
-/// upper case: a `usize` when its dotted path is listed in the top-level `counts` array, and
-/// an `f32` otherwise. An array of two or three numbers becomes a `glam::Vec2` or `glam::Vec3`,
-/// and an array of such arrays a fixed-size array of them. `counts` itself is not written.
-fn write_space(json: &serde_json::Value, out: &mut String) {
-    let counts: Vec<&str> = json["counts"]
-        .as_array()
-        .map(|paths| paths.iter().filter_map(serde_json::Value::as_str).collect())
-        .unwrap_or_default();
-    out.push_str("/// Spatial constants from `space-constants.json`.\npub mod space {\n");
-    let object = json.as_object().expect("space-constants.json is an object");
-    write_members(object, "", 1, &counts, out);
-    out.push_str("}\n");
-}
-
-/// Writes the members of `object`, whose own dotted path is `path`, at `depth` levels of
-/// indentation.
-fn write_members(
-    object: &serde_json::Map<String, serde_json::Value>,
-    path: &str,
-    depth: usize,
-    counts: &[&str],
-    out: &mut String,
-) {
-    let indent = "    ".repeat(depth);
-    for (key, value) in object {
-        if path.is_empty() && key == "counts" {
-            continue;
-        }
-        let dotted = if path.is_empty() {
-            key.clone()
-        } else {
-            format!("{path}.{key}")
-        };
-        writeln!(out, "{indent}/// `{dotted}` in the spatial tuning.").unwrap();
-        if let Some(members) = value.as_object() {
-            let module: String = key
-                .chars()
-                .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
-                .collect();
-            writeln!(out, "{indent}pub mod {module} {{").unwrap();
-            write_members(members, &dotted, depth + 1, counts, out);
-            writeln!(out, "{indent}}}").unwrap();
-        } else {
-            let name = key.to_uppercase();
-            let (kind, expression) = if counts.contains(&dotted.as_str()) {
-                let count = value
-                    .as_u64()
-                    .unwrap_or_else(|| panic!("space-constants.json's `{dotted}` is a count"));
-                ("usize".to_string(), count.to_string())
-            } else {
-                value_expression(value).unwrap_or_else(|| {
-                    panic!("space-constants.json's `{dotted}` is not a number or vector")
-                })
-            };
-            writeln!(out, "{indent}pub const {name}: {kind} = {expression};").unwrap();
-        }
-    }
-}
-
-/// The type and the constant expression of a number, a vector or an array of vectors.
-fn value_expression(value: &serde_json::Value) -> Option<(String, String)> {
-    if let Some(number) = value.as_f64() {
-        return Some(("f32".to_string(), format!("{number:?}_f32")));
-    }
-    let items = value.as_array()?;
-    if items.iter().all(serde_json::Value::is_number) && matches!(items.len(), 2 | 3) {
-        let numbers: Vec<String> = items
-            .iter()
-            .map(|item| format!("{:?}_f32", item.as_f64().unwrap()))
-            .collect();
-        let kind = format!("glam::Vec{}", items.len());
-        return Some((kind.clone(), format!("{kind}::new({})", numbers.join(", "))));
-    }
-    let elements: Vec<(String, String)> =
-        items.iter().map(value_expression).collect::<Option<_>>()?;
-    let kind = &elements.first()?.0;
-    if kind == "f32" || elements.iter().any(|(other, _)| other != kind) {
-        return None;
-    }
-    let expressions: Vec<&str> = elements.iter().map(|(_, e)| e.as_str()).collect();
-    Some((
-        format!("[{kind}; {}]", elements.len()),
-        format!("[{}]", expressions.join(", ")),
-    ))
 }

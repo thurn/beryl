@@ -409,9 +409,10 @@ fn covered(place: Side, targets: &[Rect], (data, card): (Inspector, Card)) -> f3
 #[cfg(test)]
 mod tests {
     use super::{Placed, stage_place as place_in};
+    use crate::test_profiles::SHIPPED;
     use glam::Vec2;
     use kit_base::data::Card;
-    use kit_base::data::profiles::{Profiles, SHIPPED};
+    use kit_base::data::profiles::Profiles;
     use kit_ui::input::{Rect, Size};
 
     fn window(width: f32, height: f32) -> Rect {

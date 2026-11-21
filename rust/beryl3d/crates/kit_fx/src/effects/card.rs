@@ -106,21 +106,21 @@ pub fn look_with_face(
         };
         let value = amount.at(progress).clamp(0.0, 1.0);
         match *surface {
-            Surface::Whiten => look.whiten = look.whiten.max(value),
+            Surface::Whiten {} => look.whiten = look.whiten.max(value),
             Surface::Tint {
                 color: [r, g, b, _],
             } => {
                 look.tint = player::tint(look.tint, [r, g, b], value);
             }
-            Surface::Dissolve => look.dissolve = look.dissolve.max(value),
-            Surface::Opacity => look.pose.opacity *= value,
-            Surface::PreviousFace if value > 0.0 => {
+            Surface::Dissolve {} => look.dissolve = look.dissolve.max(value),
+            Surface::Opacity {} => look.pose.opacity *= value,
+            Surface::PreviousFace {} if value > 0.0 => {
                 if let Some(earlier_face) = earlier_face.take() {
                     look.face = earlier_face();
                     look.full = None;
                 }
             }
-            Surface::PreviousFace | Surface::TextTint { .. } => {}
+            Surface::PreviousFace {} | Surface::TextTint { .. } => {}
         }
     }
 }

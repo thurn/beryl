@@ -1,5 +1,10 @@
 //! The shipped profiles select a layout and fit their named slots to the window.
 
+#[path = "../../../../test_profiles.rs"]
+mod test_profiles;
+
+use test_profiles::SHIPPED;
+
 use game_table::profiles::Profile;
 use game_table::table::Window;
 use kit_base::data::profiles::Region;
@@ -71,7 +76,7 @@ fn the_windows_use_the_supplied_table_and_screen_tuning() {
 
     use game_table::table::Table;
     use kit_base::data::Data;
-    use kit_base::data::profiles::{HeldDraw, SHIPPED};
+    use kit_base::data::profiles::HeldDraw;
 
     let renamed = SHIPPED[0]
         .1
@@ -124,7 +129,7 @@ fn the_windows_use_the_supplied_table_and_screen_tuning() {
 
 #[test]
 fn the_reference_and_fitted_tables_read_the_supplied_geometry() {
-    use kit_base::data::profiles::{Profiles, SHIPPED};
+    use kit_base::data::profiles::Profiles;
 
     let shipped = Profiles::parse(&SHIPPED, crate::test_data::data().card).unwrap();
     let window = shipped.fallback().usual_window();
@@ -156,7 +161,7 @@ fn a_put_back_tray_uses_the_deck_geometry_of_its_own_profile() {
 
     use beryl_protocol::protocol::ObjectId;
     use game_table::table::{Held, Table, TrayKind};
-    use kit_base::data::profiles::{Profiles, SHIPPED};
+    use kit_base::data::profiles::Profiles;
 
     let compact = SHIPPED[0]
         .1

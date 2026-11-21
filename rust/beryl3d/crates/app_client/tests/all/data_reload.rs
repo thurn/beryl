@@ -1,5 +1,10 @@
 //! Runtime tuning takes effect during playback and at rest.
 
+#[path = "../../../../test_profiles.rs"]
+mod test_profiles;
+
+use test_profiles::SHIPPED;
+
 use std::sync::Arc;
 
 use app_client::{Client, Config, Input};
@@ -34,12 +39,11 @@ fn reloading_during_a_flight_uses_new_motion_and_reaches_the_new_layout() {
     let old = crate::test_data::data();
     let mut new = (*old).clone();
     new.verbs.fly.arc += 100.0;
-    let (name, contents) = profiles::SHIPPED[1];
+    let (name, contents) = SHIPPED[1];
     let mut profile: serde_json::Value = serde_json::from_str(contents).unwrap();
     profile["table"]["camera"]["pitch_degrees"] = serde_json::json!(34.0);
     let profile = profile.to_string();
-    new.profiles =
-        profiles::Profiles::parse(&[profiles::SHIPPED[0], (name, &profile)], new.card).unwrap();
+    new.profiles = profiles::Profiles::parse(&[SHIPPED[0], (name, &profile)], new.card).unwrap();
     let new = Arc::new(new);
 
     let client = |data| {

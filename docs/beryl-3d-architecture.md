@@ -325,12 +325,8 @@ frame log and places the table again, recompiling unfinished scripts. If an edit
 fails validation, the app keeps the last valid data and shows a notice until a
 valid edit arrives. The log names the file and the validation error.
 
-Changing how far a card lifts is then an edit to a JSON file and one
-`just b3d png`, with no compile. Verb, audit, pointer, playback, presentation,
-`just b3d png`, with no compile. Verb, audit, pointer, playback, presentation,
-lighting, shadow, arrow, mark, combat emblem, card size and badge tuning already
-take this path. During the conversion, `space-constants.json` holds spatial
-values that still generate Rust constants.
+To change how far a card lifts, edit `light.json` and run `just b3d png`. The
+picture tool reads the new value without compiling.
 
 ### Effects
 

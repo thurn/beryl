@@ -1,6 +1,11 @@
 //! The flat layer's icons, rasterized by the glyph worker: what a host asks for and what comes
 //! back.
 
+#[path = "../../../../test_profiles.rs"]
+mod test_profiles;
+
+use test_profiles::SHIPPED;
+
 use std::collections::BTreeSet;
 use std::sync::mpsc;
 
@@ -11,7 +16,7 @@ use beryl_assets::{Prepared, Upload};
 use beryl_host::spawn_glyph_worker;
 use game_hud::art::orb::{self, FIRST_ICON};
 use kit_base::atlas::{AssetReady, GlyphCell, GlyphKey, IconCell, IconId};
-use kit_base::data::profiles::{Profiles, SHIPPED};
+use kit_base::data::profiles::Profiles;
 use kit_probe::driver::atlas::stub_icons;
 use kit_text::text::fonts::Font;
 use kit_ui::art::icons::ALL;

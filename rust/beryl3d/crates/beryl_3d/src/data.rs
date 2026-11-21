@@ -4,12 +4,22 @@ use std::sync::{Arc, OnceLock};
 
 use kit_base::data::{Data, profiles};
 
+const PROFILES: [(&str, &str); 2] = [
+    (
+        profiles::FILES[0],
+        include_str!("../../../../../data/beryl3d/profiles/phone.json"),
+    ),
+    (
+        profiles::FILES[1],
+        include_str!("../../../../../data/beryl3d/profiles/desktop.json"),
+    ),
+];
 const EFFECTS: &[(&str, &str)] = &include!(concat!(env!("OUT_DIR"), "/effects.rs"));
 
 pub(crate) fn embedded() -> Result<Arc<Data>, String> {
     static DATA: OnceLock<Result<Arc<Data>, String>> = OnceLock::new();
     DATA.get_or_init(|| {
-        Data::parse(embedded_tuning, &profiles::SHIPPED, EFFECTS.iter().copied()).map(Arc::new)
+        Data::parse(embedded_tuning, &PROFILES, EFFECTS.iter().copied()).map(Arc::new)
     })
     .clone()
 }

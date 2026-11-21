@@ -465,7 +465,50 @@ impl ProfileData {
     }
 
     fn validate_slots(&self) -> Result<(), String> {
+        let compact = self.size_class == SizeClass::Compact;
+        let floating_prompt = self.hud.floating_prompt.is_some();
+        let slots = [
+            ("bug.hint", compact),
+            ("bug.sheet", compact),
+            ("bug.tools", compact),
+            ("divide.edge", false),
+            ("divide.side", false),
+            ("full_control", self.hud.table.contains(&Piece::FullControl)),
+            ("gallery.column", compact),
+            ("gear", self.hud.table.contains(&Piece::Gear)),
+            ("inspector", self.table.inspector.is_some()),
+            ("log", true),
+            ("log.toggle", self.hud.overlays.contains(&Piece::LogColumn)),
+            ("manual.connection", compact),
+            ("manual.log", compact),
+            ("manual.mana", compact),
+            ("manual.menu", compact),
+            ("manual.next", compact),
+            ("manual.proposals", compact),
+            ("menu", self.hud.table.contains(&Piece::Menu)),
+            ("opening", true),
+            ("phase", self.hud.table.contains(&Piece::Phase)),
+            ("player.opponent", true),
+            ("player.you", true),
+            ("prompt.asked", floating_prompt),
+            ("prompt.bar", true),
+            ("prompt.catalog", false),
+            ("prompt.clearance", floating_prompt),
+            ("prompt.dock", floating_prompt),
+            ("prompt.stacked", floating_prompt),
+            ("prompt.ways", false),
+            ("result", true),
+            ("result.dock", true),
+            ("revealed.pile", false),
+            ("screen.column", compact),
+            ("screen.dock", compact),
+            ("settings.sheet", true),
+            ("viewer", true),
+        ];
         for (name, slot) in &self.slots {
+            if !slots.iter().any(|(known, _)| name == known) {
+                return Err(format!("slots.{name}: unknown field `{name}`"));
+            }
             if !matches!(
                 slot.region,
                 Region::SafeArea | Region::Window | Region::PlayerYou | Region::PlayerOpponent
@@ -480,50 +523,16 @@ impl ProfileData {
                 return Err(format!("invalid dimensions for slots.{name}"));
             }
         }
-        for name in [
-            "settings.sheet",
-            "prompt.bar",
-            "opening",
-            "player.you",
-            "player.opponent",
-            "log",
-            "result",
-            "result.dock",
-            "viewer",
-        ] {
-            if !self.slots.contains_key(name) {
+        for (name, required) in slots {
+            if required && !self.slots.contains_key(name) {
                 return Err(format!("missing slots.{name}"));
             }
         }
         if self.slots.contains_key("manual.menu") && self.manual.is_none() {
             return Err("slots.manual.menu requires manual controls".to_owned());
         }
-        if self.size_class == SizeClass::Compact {
-            if self.screen.is_none() {
-                return Err("missing screen metrics".to_owned());
-            }
-            if self.manual.is_none() {
-                return Err("missing manual controls".to_owned());
-            }
-            for name in [
-                "screen.column",
-                "screen.dock",
-                "result.dock",
-                "gallery.column",
-                "bug.hint",
-                "bug.tools",
-                "bug.sheet",
-                "manual.menu",
-                "manual.connection",
-                "manual.log",
-                "manual.proposals",
-                "manual.next",
-                "manual.mana",
-            ] {
-                if !self.slots.contains_key(name) {
-                    return Err(format!("missing slots.{name}"));
-                }
-            }
+        if compact && self.screen.is_none() {
+            return Err("missing screen metrics".to_owned());
         }
         let opening = self.hud.opening;
         if opening.single_row.is_some() == opening.wrapped_hand.is_some() {
@@ -534,23 +543,6 @@ impl ProfileData {
         }
         if !self.slots.contains_key("gallery.column") && self.gallery.is_none() {
             return Err("missing gallery layout".to_owned());
-        }
-        let conditional_slots = [
-            (self.hud.floating_prompt.is_some(), "prompt.dock"),
-            (self.hud.floating_prompt.is_some(), "prompt.stacked"),
-            (self.hud.floating_prompt.is_some(), "prompt.asked"),
-            (self.hud.floating_prompt.is_some(), "prompt.clearance"),
-            (self.hud.table.contains(&Piece::Menu), "menu"),
-            (self.hud.table.contains(&Piece::Gear), "gear"),
-            (self.hud.table.contains(&Piece::Phase), "phase"),
-            (self.hud.table.contains(&Piece::FullControl), "full_control"),
-            (self.hud.overlays.contains(&Piece::LogColumn), "log.toggle"),
-            (self.table.inspector.is_some(), "inspector"),
-        ];
-        for (used, name) in conditional_slots {
-            if used && !self.slots.contains_key(name) {
-                return Err(format!("missing slots.{name}"));
-            }
         }
         Ok(())
     }
@@ -573,18 +565,6 @@ pub struct Profiles {
 
 /// The profile files in selection order, relative to the host's data directory.
 pub const FILES: [&str; 2] = ["profiles/phone.json", "profiles/desktop.json"];
-
-/// The text the native host embeds, in the same order as the checkout loader.
-pub const SHIPPED: [(&str, &str); 2] = [
-    (
-        FILES[0],
-        include_str!("../../../../../../../data/beryl3d/profiles/phone.json"),
-    ),
-    (
-        FILES[1],
-        include_str!("../../../../../../../data/beryl3d/profiles/desktop.json"),
-    ),
-];
 
 impl Profiles {
     /// Loads the layout profiles in selection order.

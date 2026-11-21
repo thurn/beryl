@@ -1,4 +1,4 @@
-//! Validated tuning data supplied by the host, and the constants awaiting conversion.
+//! Validated tuning data supplied by the host.
 
 pub mod badges;
 mod card;
@@ -17,5 +17,3 @@ pub mod verbs;
 pub use badges::BadgeTuning;
 pub use card::Card;
 pub use tuning::{Audit, Data};
-
-include!(concat!(env!("OUT_DIR"), "/data.rs"));

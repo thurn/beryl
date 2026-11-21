@@ -72,14 +72,28 @@ def test_the_lint_tables_must_match(tmp_path: Path) -> None:
 
 
 def test_a_verb_key_names_a_verb_or_a_case(tmp_path: Path) -> None:
-    conventions = {"verbs": [{"name": "fly", "cases": {"draw": {}}}]}
+    conventions = {
+        "verbs": [{"name": "fly", "cases": {"draw": {}}}],
+        "effects": [{"name": "glow"}],
+    }
     write(tmp_path, "data/ui-conventions.json", json.dumps(conventions))
-    space = "data/beryl3d/verbs.json"
-    write(tmp_path, space, json.dumps({"verbs": {"fly": {}, "draw": {}}}))
+    verbs = "data/beryl3d/verbs.json"
+    write(tmp_path, "data/beryl3d/effects/glow.json", "{}")
+    write(tmp_path, verbs, json.dumps({"verbs": {"fly": {}, "draw": {}}}))
     assert purity.data_names(tmp_path) == []
-    write(tmp_path, space, json.dumps({"verbs": {"flee": {}}}))
+    write(tmp_path, verbs, json.dumps({"verbs": {"flee": {}}}))
     (found,) = purity.data_names(tmp_path)
     assert "verbs.flee names no verb or case" in found
+
+
+def test_each_convention_effect_has_a_definition(tmp_path: Path) -> None:
+    conventions = {"verbs": [], "effects": [{"name": "glow"}]}
+    write(tmp_path, "data/ui-conventions.json", json.dumps(conventions))
+    write(tmp_path, "data/beryl3d/verbs.json", '{"verbs": {}}')
+    write(tmp_path, "data/beryl3d/effects/glo.json", "{}")
+    unknown, missing = purity.data_names(tmp_path)
+    assert "glo.json: no such effect" in unknown
+    assert "glow.json: missing definition" in missing
 
 
 def test_only_the_recorder_file_names_the_recorder(tmp_path: Path) -> None:

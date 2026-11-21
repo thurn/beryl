@@ -1,5 +1,10 @@
 //! Tuning values must parse and report the key at fault when they do not.
 
+#[path = "../../../../test_profiles.rs"]
+mod test_profiles;
+
+use test_profiles::SHIPPED;
+
 use kit_base::data::{Card, Data, profiles};
 use serde_json::Value;
 
@@ -57,7 +62,7 @@ fn parse(changed: Option<(&str, &str)>) -> Result<Data, String> {
             };
             Ok(text.to_owned())
         },
-        &profiles::SHIPPED,
+        &SHIPPED,
         EFFECTS,
     )
 }
@@ -71,7 +76,7 @@ fn the_repository_tuning_loads() {
 
 #[test]
 fn reference_gallery_rejects_missing_and_surplus_panel_positions() {
-    let (file, text) = profiles::SHIPPED[1];
+    let (file, text) = SHIPPED[1];
     let profile: Value = serde_json::from_str(text).unwrap();
 
     for surplus in [false, true] {
@@ -82,11 +87,8 @@ fn reference_gallery_rejects_missing_and_surplus_panel_positions() {
         } else {
             positions.remove(0);
         }
-        let why = profiles::Profiles::parse(
-            &[profiles::SHIPPED[0], (file, &changed.to_string())],
-            card(),
-        )
-        .unwrap_err();
+        let why = profiles::Profiles::parse(&[SHIPPED[0], (file, &changed.to_string())], card())
+            .unwrap_err();
         assert!(
             why.starts_with(&format!("{file}: gallery.panels_at")),
             "{why}"
@@ -184,8 +186,20 @@ fn effect_errors_name_the_file_and_bad_layer() {
 }
 
 #[test]
+fn a_parameterless_surface_rejects_an_unknown_key() {
+    use kit_base::data::effect::Effects;
+
+    let text = include_str!("../../../../../../data/beryl3d/effects/blanch.json");
+    let mut blanch: Value = serde_json::from_str(text).unwrap();
+    blanch["layers"][0]["surface"]["unused_key"] = true.into();
+    let why = Effects::parse([("blanch", blanch.to_string().as_str())]).unwrap_err();
+    assert!(why.contains("effects/blanch.json: layers[0]"), "{why}");
+    assert!(why.contains("unknown field `unused_key`"), "{why}");
+}
+
+#[test]
 fn table_profiles_reject_unknown_geometry_fields() {
-    use kit_base::data::profiles::{Profiles, SHIPPED};
+    use kit_base::data::profiles::Profiles;
 
     for (index, key, section) in [
         (0, "beneath_step", "table"),
@@ -203,6 +217,19 @@ fn table_profiles_reject_unknown_geometry_fields() {
         assert!(why.contains(&format!("{file}: {section}")), "{why}");
         assert!(why.contains("unknown field `unknown_measurement`"), "{why}");
     }
+}
+
+#[test]
+fn a_profile_rejects_an_unknown_named_slot() {
+    let (file, text) = SHIPPED[0];
+    let mut profile: Value = serde_json::from_str(text).unwrap();
+    profile["slots"]["unused.slot"] = profile["slots"]["screen.column"].clone();
+    let why =
+        profiles::Profiles::parse(&[(file, &profile.to_string()), SHIPPED[1]], card()).unwrap_err();
+    assert!(
+        why.starts_with(file) && why.contains("slots.unused.slot: unknown field `unused.slot`"),
+        "{why}"
+    );
 }
 
 /// A card's size and the badges' sizes are read at run time, so a supplied size reaches every

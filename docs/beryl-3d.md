@@ -820,8 +820,8 @@ code usually goes wrong.
 ### Motion the pointer drives
 
 Three motions follow the pointer and not a script. Their values are in
-`data/beryl3d/space-constants.json`, under `pointer`. They start as copies of
-the constants in the web interface's `ui/src/stage/raised.ts` and `heft.ts`.
+`data/beryl3d/pointer.json`. They start as copies of the constants in the web
+interface's `ui/src/stage/raised.ts` and `heft.ts`.
 
 - **Where the pointer is, is state. When it moved is not.** `handle` stores the
   pointer's latest position and phase. `frame` finds what the pointer is over
@@ -1063,7 +1063,7 @@ There are four hosts.
 **Choosing a frame rate** (decision C18). Every host feeds the time between its
 animating frames to one rule, `RateRule` in `beryl_host::rate`, through the
 frame loop that all hosts share, and carries out the steps it returns. Its
-thresholds are `frame_rate` in `data/beryl3d/space-constants.json`.
+thresholds are in `data/beryl3d/frame-rate.json`.
 
 - **A frame misses the rate** when more than `late_intervals` (1.5) of the
   chosen rate's intervals passed since the frame before it while the ticks ran.
@@ -1309,21 +1309,19 @@ camera, how game objects are placed in it and how verbs move them.
   cropped art tiles of unknown proportions, so `just b3d camera-fit` measures
   the art frame printed on each tile and gives each its own aspect ratio: the
   sides of untapped cards fix the pitch, and the slight turn of tapped cards
-  fixes the field of view. The fitted values are data: the desktop layout's
-  camera, rows and piles are `layout.desktop` in
-  `data/beryl3d/space-constants.json`, the hands and the stack, which are placed
-  relative to the camera, are `hand`, `opponent_hand` and `stack`, contact
-  shadows are `shadow`, and the card's size is `card`. A build script turns the
-  file into constants by one rule that names no key.
+  fixes the field of view. The desktop profile
+  (`data/beryl3d/profiles/desktop.json`) holds the camera, rows, piles, hands
+  and stack. Contact shadows use `data/beryl3d/lighting.json`, and the card's
+  size comes from `data/beryl3d/card.json`.
 
   The phone camera is not fitted to Arena: `just video list` found no local
   recordings when it was written. Its source is the web interface's portrait
   layout instead. The fixed orientation (pitch 10 degrees from straight down,
-  field of view 24.29 degrees, both in `layout.phone` of `space-constants.json`)
-  was chosen so that a tapped card in the far row keeps a 44-point square at 375
-  by 647 points. Only the distance is fitted: the required rectangle must match
-  the battlefield rectangle that `phoneLayout` (`ui/src/mobile/layout.ts`) gives
-  at 393 by 759, sized as `useViewport` (`ui/src/mobile/chrome.tsx`) sizes the
+  field of view 24.29 degrees, both in `data/beryl3d/profiles/phone.json`) was
+  chosen so that a tapped card in the far row keeps a 44-point square at 375 by
+  647 points. Only the distance is fitted: the required rectangle must match the
+  battlefield rectangle that `phoneLayout` (`ui/src/mobile/layout.ts`) gives at
+  393 by 759, sized as `useViewport` (`ui/src/mobile/chrome.tsx`) sizes the
   viewport. That is a column inside 8-point gutters, from the top safe inset
   plus 48 points to the window's height less the hand band and 60 points. With
   safe insets of 44 and 34 points the projected edges measure (8.01, 92.00,
@@ -1810,17 +1808,16 @@ What the session does and what a client still does:
   then the cards stay where the tray held them.
 - **A client may play scripts faster to catch up.** When many updates arrive at
   once, as when a recording or a reconnection delivers a dozen views together,
-  Beryl 3D plays each script that starts with more than `catch_up.double`
-  updates waiting at twice real time, and with more than `catch_up.quadruple`
-  waiting at four times (`data/beryl3d/space-constants.json`,
-  `play::Show::frame`). The web interface has no catch-up, so the text commands'
-  `--no-catch-up` plays every script at real time, and `just b3d match motion`
-  always passes it. Holds are measured in script time, as the web interface
-  measures them: `light::Lit` keeps a script clock that runs at each script's
-  rate while it plays and at real time between scripts, and a span records when
-  it stood whole on that clock. So an arrow that stood whole while a script
-  played at twice real time has stood, when a later script ends it, the script
-  time that passed, not the shorter real time.
+  Beryl 3D plays each script that starts with more than `double` updates waiting
+  at twice real time, and with more than `quadruple` waiting at four times
+  (`data/beryl3d/catch-up.json`, `play::Show::frame`). The web interface has no
+  catch-up, so the text commands' `--no-catch-up` plays every script at real
+  time, and `just b3d match motion` always passes it. Holds are measured in
+  script time, as the web interface measures them: `light::Lit` keeps a script
+  clock that runs at each script's rate while it plays and at real time between
+  scripts, and a span records when it stood whole on that clock. So an arrow
+  that stood whole while a script played at twice real time has stood, when a
+  later script ends it, the script time that passed, not the shorter real time.
 - **Segments are made from the laid-out beat.** Each step becomes segments, at
   absolute times, on the scene objects it concerns.
 - **Reduced motion** is a client's choice: it plays every step with no duration,
@@ -2315,8 +2312,8 @@ It changes only how pixels are shaded.
   particle is a pure function of its run, its index and the frame's time, its
   randomness an integer hash of the object's id and the step, and a frame holds
   at most `PARTICLES` of them, shared equally among its runs. Their counts,
-  lives and sizes are `enhanced.particles` in
-  `data/beryl3d/space-constants.json`.
+  lives and sizes come from the layers in
+  `data/beryl3d/effects/{blanch,dissolve}.json`.
 - **Multisampling**, four samples, with a depth buffer.
 
 The rule that keeps the tiers in step: **a tier never changes where anything is,

@@ -2,6 +2,11 @@
 //! to be a binary of its own, and every one of them linked the crate and its dependencies again
 //! after each edit.
 
+#[path = "../../../../test_profiles.rs"]
+mod test_profiles;
+
+use test_profiles::SHIPPED;
+
 /// A card's printed size from the repository's `card.json`, the size frames are built with.
 fn card() -> glam::Vec2 {
     card_data().size()
@@ -27,7 +32,7 @@ mod tabletop;
 mod text;
 
 fn reference_camera() -> kit_space::camera::CameraData {
-    use kit_base::data::profiles::{Profiles, SHIPPED};
+    use kit_base::data::profiles::Profiles;
 
     Profiles::parse(&SHIPPED, card_data())
         .unwrap()

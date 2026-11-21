@@ -344,6 +344,7 @@ fn validate_data(options: &Options) -> Result<Printed, Usage> {
     if let Some(argument) = options.rest.first() {
         return Err(Usage(format!("data takes no argument, got {argument:?}")));
     }
+    crate::pages::validate_inspection_profiles().map_err(Usage)?;
     Ok(Printed::text(format!(
         "just b3d data\nValidated tuning in {}\n",
         crate::data::directory().display()

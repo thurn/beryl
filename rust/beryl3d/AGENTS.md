@@ -265,25 +265,26 @@ project, and selects the main lanes.
 
 - The host passes validated `kit_base::data::Data` to the client. The app embeds
   the files, and the tools load them from the checkout or `BERYL3D_DATA`.
-  `just b3d data` runs the same validation as the `b3d-data` source check.
-  `verbs.json` holds verb motion and `audit.json` holds interface thresholds.
-  `pointer.json` holds mouse, touch and scrolling thresholds. `catch-up.json`
-  and `slide.json` govern queued scripts and table regrouping. `frame-rate.json`
-  and `tier-probe.json` control host pacing and startup tier selection.
-  `notices.json`, `revealed.json` and `shown.json` control notices, the Revealed
-  Cards fan and cards shown over the flat layer. `flat.json` holds menu,
-  tooltip, transition and manual-overlay tuning. `hud.json` holds the combat
-  banner, opening indicators, incoming damage and step-track appearance.
-  `lighting.json` holds the light and shadow darkness both tiers share, the
-  Baseline contact shadows, and the Enhanced lights, shadow map and bloom. The
-  hosts pass that tuning to `beryl_render::Renderer` when they make it.
-  `light.json` holds the arrows, lines, marks and the glow of the shapes of
-  light, and `own.json` the moon, coin, attacker chevron and blocker crescent.
-  The host draws atlas page 0 from both (`Assets::sync_light`) and draws it
-  again when either changes. `card.json` holds a card's printed size and
-  stacking, which each profile's camera carries (`CameraData::card`) and each
-  frame passes to the renderer's card mesh (`Frame::card`). `badges.json` holds
-  the badges' sizes; a change reshapes their text.
+  `just b3d data` runs the same validation as the `b3d-data` source check,
+  including inspection-only profiles. `verbs.json` holds verb motion and
+  `audit.json` holds interface thresholds. `pointer.json` holds mouse, touch and
+  scrolling thresholds. `catch-up.json` and `slide.json` govern queued scripts
+  and table regrouping. `frame-rate.json` and `tier-probe.json` control host
+  pacing and startup tier selection. `notices.json`, `revealed.json` and
+  `shown.json` control notices, the Revealed Cards fan and cards shown over the
+  flat layer. `flat.json` holds menu, tooltip, transition and manual-overlay
+  tuning. `hud.json` holds the combat banner, opening indicators, incoming
+  damage and step-track appearance. `lighting.json` holds the light and shadow
+  darkness both tiers share, the Baseline contact shadows, and the Enhanced
+  lights, shadow map and bloom. The hosts pass that tuning to
+  `beryl_render::Renderer` when they make it. `light.json` holds the arrows,
+  lines, marks and the glow of the shapes of light, and `own.json` the moon,
+  coin, attacker chevron and blocker crescent. The host draws atlas page 0 from
+  both (`Assets::sync_light`) and draws it again when either changes.
+  `card.json` holds a card's printed size and stacking, which each profile's
+  camera carries (`CameraData::card`) and each frame passes to the renderer's
+  card mesh (`Frame::card`). `badges.json` holds the badges' sizes; a change
+  reshapes their text. `gallery.json` holds the gallery's card and scry samples.
 
 - `data/beryl3d/effects/*.json` defines drawing layers for runtime effects. The
   app embeds them. Tools read them from the checkout or `BERYL3D_DATA`. The
@@ -295,11 +296,8 @@ project, and selects the main lanes.
   windows. The profiles also supply opening dimensions, orb scale and compact
   action sizes.
 
-- `data/beryl3d/space-constants.json` holds the shared tuning that still
-  compiles to constants. The `kit_base` build script publishes it under
-  `data::space`. An object becomes a module, a number an `f32` constant and an
-  array of two or three numbers a `glam::Vec2` or `Vec3`. The top-level `counts`
-  array names the numbers generated as `usize`.
+- The `kit_base` build script generates design tokens from
+  `data/design-tokens.json` and embeds the serif fonts.
 
 - `data/beryl3d/camera-fit.json`: cards measured in Arena's recordings, each a
   rectangle on a card's face (the art frame) with its four corners in pixels of

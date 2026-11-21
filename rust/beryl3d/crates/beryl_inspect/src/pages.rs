@@ -101,12 +101,19 @@ impl InspectionProfile {
     }
 }
 
+static INSPECTION_PROFILES: [InspectionProfile; 1] = [InspectionProfile {
+    source: game_table::profiles::wide_compact::SOURCE,
+    data: OnceLock::new(),
+}];
+
+pub(crate) fn validate_inspection_profiles() -> Result<(), String> {
+    INSPECTION_PROFILES
+        .iter()
+        .try_for_each(|profile| profile.data().map(|_| ()))
+}
+
 pub(crate) fn inspection_profile(name: &str) -> Result<&'static InspectionProfile, String> {
-    static PROFILES: [InspectionProfile; 1] = [InspectionProfile {
-        source: game_table::profiles::wide_compact::SOURCE,
-        data: OnceLock::new(),
-    }];
-    let profile = PROFILES
+    let profile = INSPECTION_PROFILES
         .iter()
         .find(|profile| profile.name() == name)
         .ok_or_else(|| format!("unknown inspection profile {name:?}"))?;

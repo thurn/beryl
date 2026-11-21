@@ -14,6 +14,7 @@ fn reference() -> Layout {
 mod test_data;
 
 mod box_shadows;
+mod clearance;
 mod faces;
 mod paints;
 mod profiles;

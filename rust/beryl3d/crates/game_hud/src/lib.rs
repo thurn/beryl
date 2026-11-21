@@ -6,3 +6,7 @@ pub mod inspect;
 pub mod navigation;
 pub mod prompts;
 pub mod screens;
+
+#[cfg(test)]
+#[path = "../../../test_profiles.rs"]
+mod test_profiles;

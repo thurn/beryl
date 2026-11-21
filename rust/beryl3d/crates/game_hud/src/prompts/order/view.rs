@@ -289,8 +289,9 @@ pub fn carried_item(
 #[cfg(test)]
 mod tests {
     use super::{Profile, cells, slot_in};
+    use crate::test_profiles::SHIPPED;
     use kit_base::data::Card;
-    use kit_base::data::profiles::{Profiles, SHIPPED};
+    use kit_base::data::profiles::Profiles;
 
     #[test]
     fn an_item_let_go_past_either_end_lands_at_that_end() {
