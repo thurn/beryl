@@ -2233,7 +2233,10 @@ step begins it as the step starts, as it ends or as its blow lands. There are
 14, listed in `data/ui-conventions.json` with their durations, and each verb's
 entry there says which effects its steps begin. Both tiers show every effect.
 The Baseline tier draws each one with the records below, and the Enhanced tier
-adds to some of them.
+adds to some of them. Beryl 3D reads the drawing layers for `glow`, `dissolve`
+and `loss` from `data/beryl3d/effects/`. The app embeds those files, and the
+inspector and recorder load them with the other runtime tuning. Edit the effect
+files to change their drawing without rebuilding the inspector.
 
 | Effect     | Baseline tier                                                                                               | Enhanced tier adds |
 | ---------- | ----------------------------------------------------------------------------------------------------------- | ------------------ |

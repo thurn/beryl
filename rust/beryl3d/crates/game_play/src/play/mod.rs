@@ -604,9 +604,14 @@ impl Show {
                 .copied()
                 .filter(|run| run.start <= now && now < run.start + run.duration),
         );
+        let definitions = &self.table.data().effects;
         self.card_effects.clear();
-        self.card_effects
-            .extend(active.iter().copied().filter(|run| run.effect.on_card()));
+        self.card_effects.extend(
+            active
+                .iter()
+                .copied()
+                .filter(|run| run.effect.on_card(definitions)),
+        );
         let dress = Dress {
             effects: &self.card_effects,
             badges: &self.badges,
@@ -643,16 +648,15 @@ impl Show {
             }
             Some(reach)
         };
-        effects::light::write(
+        let camera = self.table.camera();
+        effects::write(
+            &self.table.data().effects,
             &self.active_effects,
             now,
             light_target,
-            self.table.camera().eye,
+            (camera.eye, camera.window.scale),
             builder,
         );
-        effects::particles::write(&self.active_effects, now, |on| scene.reach(on), builder);
-        let scale = self.table.camera().window.scale;
-        effects::shake::write(&self.active_effects, now, scale, builder);
     }
 
     /// Ends the playing script: the table shows its view, at rest, with its life totals and

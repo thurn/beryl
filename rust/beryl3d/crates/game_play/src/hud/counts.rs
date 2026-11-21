@@ -22,12 +22,15 @@ use glam::Vec2;
 use crate::art::orb;
 pub(crate) use game_table::table::HALF_LIFE;
 use game_table::table::Layout;
-use kit_base::data::verbs::Count as CountTuning;
+use kit_base::data::{
+    Data,
+    effect::{Effects, NumberOrigin},
+};
 use kit_base::tokens::{color, size, type_style};
 use kit_frame::frame::Role;
-use kit_fx::effects::{Effect, EffectRun};
+use kit_fx::effects::{self, Effect, EffectRun, NumberLook, TextLook};
 use kit_ui::element::{Align, Element, FloatId, Span, TextAlign, floats, holder, text};
-use kit_ui::input::Size;
+use kit_ui::input::{Size, Tier};
 use kit_ui::layout::{FloatLook, Layer};
 
 /// A number a `count` step sets.
@@ -209,13 +212,12 @@ impl CountFloats {
         }
     }
 
-    /// Shows `counts` in `layer` as they stand at `now`, where `layout` puts each player's total
-    /// and pool in a window of `size`, or shows none of them unless `visible`. A `loss` or `gain`
-    /// in `effects` that plays on a player at `now` tints their total and shows by how much it
-    /// changed, sinking away for a loss and rising for a gain while it fades, linearly over the
-    /// run. A press on the total of a player marked in `targets` picks them. While `dimmed`, the
-    /// opening's backdrop lies under the totals, which are dimmed as it dims what lies under it.
-    /// Lays nothing out and allocates nothing for what `prepare` laid out.
+    /// Shows the prepared totals and pools where the layout puts them. A text effect may
+    /// tint a total or float its prepared change. Targetable totals respond to presses.
+    /// Under the opening's backdrop, the totals dim with their orbs.
+    /// The first visible text effect on each total supplies its tint and number.
+    /// [`Self::prepare`] lays out the numbers in advance, including those whose
+    /// effects begin after the count step.
     #[expect(
         clippy::too_many_arguments,
         reason = "each is a separate input of the frame"
@@ -226,7 +228,7 @@ impl CountFloats {
         counts: &Counts,
         effects: &[EffectRun],
         now: u64,
-        (layout, tuning): (&Layout, &CountTuning),
+        (layout, data, tier): (&Layout, &Data, Tier),
         size: Size,
         (visible, targets, dimmed): (bool, [bool; 2], bool),
     ) {
@@ -239,19 +241,18 @@ impl CountFloats {
             // over the opponent's total, as the web's coin covers it.
             let hidden = dimmed && (phone || side == Side::Opponent);
             let counts = counts.player(side).filter(|_| visible && !hidden);
-            let run = effects.iter().find(|run| {
-                matches!(run.effect, Effect::Loss | Effect::Gain)
-                    && run.on == Subject::Player { player: side }
-                    && run.start <= now
-                    && now < run.start + run.duration
-            });
+            let effect = effects
+                .iter()
+                .filter(|run| run.on == Subject::Player { player: side })
+                .find_map(|&run| count_look(&data.effects, run, now, tier))
+                .unwrap_or_default();
             let want = Shown {
                 life: counts.map(|counts| (counts.life, target, passes)),
                 pool: counts
                     .filter(|_| self.pools)
                     .map(|counts| counts.pool)
                     .filter(|pool| *pool != ManaPool::default()),
-                change: counts.zip(run).map(|(counts, _)| counts.change),
+                change: counts.zip(effect.number).map(|(counts, _)| counts.change),
             };
             let shown = &mut self.shown[at];
             if want.life != shown.life {
@@ -284,10 +285,6 @@ impl CountFloats {
             // The web centres the total on the orb's core, a few points off its art's middle.
             let units = orb::SCALES[usize::from(phone)];
             let life = points(anchor.life, size) + Vec2::new(0.0, orb::face_offset(side) * units);
-            let tint = run.map(|run| match run.effect {
-                Effect::Gain => color::GAIN,
-                _ => color::LOSS,
-            });
             // Under the opening's backdrop the total is dimmed as the orb under it is.
             let opacity = if dimmed {
                 1.0 - crate::play::opening::backdrop_cover(life.y, size.height)
@@ -300,7 +297,7 @@ impl CountFloats {
                     point: life,
                     anchor: Vec2::new(0.5, 0.5),
                     opacity,
-                    tint,
+                    tint: effect.tint,
                     scale: 1.0,
                 },
             );
@@ -311,55 +308,56 @@ impl CountFloats {
                     ..FloatLook::default()
                 },
             );
-            if let Some(run) = run {
+            if let Some(number) = effect.number {
                 layer.set_float_look(
                     floats::LIFE_CHANGE[at],
-                    change_look(run, now, life, tint, phone, tuning.drift),
+                    change_look(number, life, effect.tint, phone, data.verbs.count.drift),
                 );
             }
         }
     }
 }
 
-/// How far, in points, a gain's number on the desktop layout starts above where the web's
-/// `.life-change-gain` puts it. At the web's position the number's box reaches 3 points into the
-/// "Your draw" step toggle at the orb's top left, which "text overlaps nothing" rejects now that
-/// the steps stay up while scripts play, and the number is a transient float, so 2 points do not
-/// show.
+/// Samples the effect's text and number using the orb's ordinary text color as the base.
+fn count_look(effects: &Effects, run: EffectRun, now: u64, tier: Tier) -> Option<TextLook> {
+    if run.effect == Effect::Gain && effects.get(run.effect.name()).is_none() {
+        let through = run.elapsed(now)?;
+        return Some(TextLook {
+            tint: Some(color::GAIN),
+            number: Some(NumberLook {
+                origin: NumberOrigin::Above,
+                drift: -through,
+                opacity: 1.0 - through,
+            }),
+        });
+    }
+    effects::text(effects, run, now, tier, color::LIFE)
+}
+
+/// Keep the desktop gain above the position where it overlaps the "Your draw" toggle.
 const GAIN_CLEARANCE: f32 = 2.0;
 
-/// The look of the amount a life total at `life` changed by, as the `loss` or `gain` `run`
-/// stands at `now`: from beside the total, it sinks below it for a loss, or rises above it for
-/// a gain, `drift` points over the run, while its opacity falls from 1 to 0.
+/// Places the sampled number beside the total at `life`, using the orb's top or bottom.
 fn change_look(
-    run: &EffectRun,
-    now: u64,
+    number: NumberLook,
     life: Vec2,
     tint: Option<[u8; 4]>,
     phone: bool,
     drift: f32,
 ) -> FloatLook {
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "an effect lasts seconds at most"
-    )]
-    let through = if run.duration == 0 {
-        1.0
-    } else {
-        (now - run.start) as f32 / run.duration as f32
-    };
     // The web positions the loss from the orb art's bottom (14 points in), and the
     // gain from its top (4 points in), rather than from the total's line box.
     let half = orb::ART[3] * orb::SCALES[usize::from(phone)] / 2.0;
     let height = type_style::TITLE.size * type_style::TITLE.line_height;
-    let drift = drift * through;
-    let (offset, anchor) = if phone && run.effect == Effect::Gain {
-        (-HALF_LIFE - drift, Vec2::new(0.5, 1.0))
+    let drift = drift * number.drift;
+    let above = number.origin == NumberOrigin::Above;
+    let (offset, anchor) = if phone && above {
+        (-HALF_LIFE + drift, Vec2::new(0.5, 1.0))
     } else if phone {
         (HALF_LIFE + drift, Vec2::new(0.5, 0.0))
-    } else if run.effect == Effect::Gain {
+    } else if above {
         (
-            -half + size::LIFE_CHANGE_TOP - GAIN_CLEARANCE - drift,
+            -half + size::LIFE_CHANGE_TOP - GAIN_CLEARANCE + drift,
             Vec2::new(1.0, 0.0),
         )
     } else {
@@ -368,16 +366,9 @@ fn change_look(
             Vec2::new(1.0, 0.0),
         )
     };
-    // The web's `.life-change` ends left of the orb's centre, so a loss beside the
-    // opponent's total cannot drift through the Combat banner below it.
+    // Ending left of the orb keeps the change clear of the Combat banner.
     let left = if phone { 0.0 } else { size::LIFE_CHANGE_LEFT };
-    FloatLook {
-        point: life + Vec2::new(-left, offset),
-        anchor,
-        opacity: 1.0 - through,
-        tint,
-        scale: 1.0,
-    }
+    number.place(life + Vec2::new(-left, offset), anchor, tint)
 }
 
 /// Shows as the float `id` the element prepared under `key`, or nothing. Where none was

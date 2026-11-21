@@ -8,8 +8,7 @@ use beryl_protocol::protocol::{CardType, ObjectId, Side, Why, ZoneName};
 use beryl_protocol::script::{Act, Subject, Table as Played, time_script};
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use game_play::play::Show;
-use kit_base::data::space::effects::dissolve;
-use kit_base::data::space::enhanced::particles::{ash, vortex};
+use kit_base::data::space::enhanced::particles::vortex;
 use kit_frame::frame::{Draw, Frame, FrameBuilder, Material, PARTICLES};
 use kit_fx::effects::Effect;
 use kit_ui::input::Tier;
@@ -157,8 +156,9 @@ fn baseline_writes_no_particles() {
 
 #[test]
 fn a_destroyed_card_falls_to_ash_after_it_darkens_and_an_exiled_one_to_a_vortex() {
+    const DARKENED: f32 = 0.3;
     for (why, effect, most) in [
-        (Why::Destroy, Effect::Dissolve, ash::COUNT),
+        (Why::Destroy, Effect::Dissolve, 96),
         (Why::Exile, Effect::Blanch, vortex::COUNT),
     ] {
         let (start, vanished) = angel_leaves(why);
@@ -168,7 +168,7 @@ fn a_destroyed_card_falls_to_ash_after_it_darkens_and_an_exiled_one_to_a_vortex(
             clippy::cast_sign_loss,
             reason = "a share of a run of about a second, in nanoseconds"
         )]
-        let darkened = from + (f64::from(dissolve::DARKENED) * duration as f64) as u64;
+        let darkened = from + (f64::from(DARKENED) * duration as f64) as u64;
         let mut seen = 0;
         for (now, frame) in frames(&start, &vanished, Tier::Enhanced) {
             let written = particles(&frame);

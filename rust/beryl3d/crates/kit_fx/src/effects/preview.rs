@@ -3,6 +3,7 @@
 use glam::{Vec2, Vec3};
 
 use super::{Effect, EffectRun, Reach, card, light, shake};
+use kit_base::data::effect::Effects;
 use kit_base::geometry::{Rect, plane::ScreenPlane};
 use kit_base::pose::Pose;
 use kit_frame::frame::{Band, Draw, FrameBuilder};
@@ -32,6 +33,7 @@ pub fn position(effect: Effect, rect: Rect, now: u64) -> Rect {
 /// Draws a painted rectangle and the effect on it. A color wash uses the same tint and
 /// fade as a card. With a solid paint, dissolve reduces opacity and cover has no face swap.
 pub fn write(
+    data: &Effects,
     effect: Effect,
     rect: Rect,
     now: u64,
@@ -61,7 +63,7 @@ pub fn write(
         state: 0,
         interactive: false,
     };
-    card::look(&runs, on, now, None, &mut look);
+    card::look((data, builder.tier()), &runs, on, now, None, &mut look);
     #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
@@ -84,13 +86,14 @@ pub fn write(
             0.0,
         ),
     );
-    card::write(&runs, on, now, &look, builder);
+    card::write(data, &runs, on, now, &look, builder);
     light::write(
+        data,
         &runs,
         now,
         |_, before| Some(reach(before)),
         Vec3::ZERO,
         builder,
     );
-    shake::write(&runs, now, plane.scale(), builder);
+    shake::write(data, &runs, now, plane.scale(), builder);
 }

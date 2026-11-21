@@ -1,0 +1,33 @@
+{
+  "name": "dissolve",
+  "target": "subject",
+  "length": "step",
+  "layers": [
+    {
+      "kind": "surface",
+      "surface": { "channel": "tint", "color": [0, 0, 0, 255] },
+      "amount": { "from": 0.0, "by": 0.65, "end": 0.3 },
+      "record": true
+    },
+    {
+      "kind": "surface",
+      "start": 0.3,
+      "surface": { "channel": "dissolve" },
+      "amount": { "from": 0.0, "by": 1.0 }
+    },
+    {
+      "kind": "particles",
+      "enhanced_only": true,
+      "emitter": {
+        "count": 96,
+        "sweep": { "from": 0.3, "by": 0.7 },
+        "life": 0.35,
+        "size": { "from": 1.2, "by": 1.2 },
+        "fall": 18.0,
+        "drift": 6.0,
+        "travel": { "from": 0.0, "by": 1.0, "ease": "out_quad" },
+        "tint": [89, 89, 89, 255]
+      }
+    }
+  ]
+}

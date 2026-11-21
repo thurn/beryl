@@ -7,11 +7,13 @@
 //! for this package only, so a new commit rebuilds `beryl_3d` but not the scene or inspect
 //! crates it depends on.
 
-use std::path::Path;
+use std::fmt::Write as _;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn main() {
     commit();
+    embed_effects();
     println!("cargo:rerun-if-changed=tests/c");
     println!("cargo:rerun-if-changed=include/beryl3d.h");
     let target = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
@@ -61,4 +63,35 @@ fn commit() {
             println!("cargo:rerun-if-changed={path}");
         }
     }
+}
+
+/// Lists the files to embed in the standalone app, including every newly added definition.
+fn embed_effects() {
+    const DIRECTORY: &str = "../../../../data/beryl3d/effects";
+    println!("cargo:rerun-if-changed={DIRECTORY}");
+    let mut paths: Vec<_> = std::fs::read_dir(DIRECTORY)
+        .expect("effect definitions")
+        .map(|entry| entry.expect("effect file").path())
+        .filter(|path| {
+            path.extension()
+                .is_some_and(|extension| extension == "json")
+        })
+        .collect();
+    paths.sort_unstable();
+    let mut source = String::from("[\n");
+    for path in paths {
+        let name = path
+            .file_stem()
+            .and_then(|name| name.to_str())
+            .expect("UTF-8 effect name");
+        let file = format!("/{DIRECTORY}/{name}.json");
+        writeln!(
+            source,
+            "({name:?}, include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), {file:?}))),"
+        )
+        .expect("write embedded effect");
+    }
+    source.push_str("]\n");
+    let output = PathBuf::from(std::env::var_os("OUT_DIR").expect("Cargo output"));
+    std::fs::write(output.join("effects.rs"), source).expect("write effect file list");
 }

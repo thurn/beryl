@@ -6,10 +6,11 @@ use beryl_protocol::protocol::ObjectId;
 use beryl_protocol::script::{Edge, StepEffect, Subject};
 use game_table::table::Look;
 use glam::Vec2;
-use kit_base::data::space::effects::{blanch, cover, dim, dissolve, settle};
+use kit_base::data::space::effects::{blanch, cover, dim, settle};
 use kit_base::pose::{Curve, Pose};
 use kit_frame::frame::{Frame, Material};
 use kit_fx::effects::{Effect, EffectRun, card, shake};
+use kit_ui::input::Tier;
 
 use crate::common::{MS, empty_frame, frame};
 use crate::effects::{effect, started};
@@ -49,7 +50,14 @@ fn look_at(effect: Effect, share: f32) -> Look {
         reason = "a share from 0 to 1 of a second"
     )]
     let now = 1_000 * MS + (f64::from(share) * 1e9).round() as u64;
-    card::look(&[run(effect)], ON, now, EARLIER, &mut look);
+    card::look(
+        (&crate::test_data::data().effects, Tier::Baseline),
+        &[run(effect)],
+        ON,
+        now,
+        EARLIER,
+        &mut look,
+    );
     look
 }
 
@@ -103,13 +111,14 @@ fn settle_is_still_then_washes_white_and_back() {
 
 #[test]
 fn dissolve_darkens_holds_and_breaks_up() {
-    let dark = channel(dissolve::DARK);
+    const DARKENED: f32 = 0.3;
+    let dark = channel(0.35);
     check(
         Effect::Dissolve,
         &[
             (0.0, 0.0, 0.0, 255, 1.0),
-            (dissolve::DARKENED, 0.0, 0.0, dark, 1.0),
-            (f32::midpoint(dissolve::DARKENED, 1.0), 0.5, 0.0, dark, 1.0),
+            (DARKENED, 0.0, 0.0, dark, 1.0),
+            (f32::midpoint(DARKENED, 1.0), 0.5, 0.0, dark, 1.0),
             (0.999, 1.0, 0.0, dark, 1.0),
         ],
     );
@@ -165,7 +174,14 @@ fn a_run_on_another_card_or_outside_its_time_changes_nothing() {
         on: Subject::Object { slot: ObjectId(8) },
         ..run(Effect::Blanch)
     };
-    card::look(&[elsewhere], ON, 1_500 * MS, EARLIER, &mut look);
+    card::look(
+        (&crate::test_data::data().effects, Tier::Baseline),
+        &[elsewhere],
+        ON,
+        1_500 * MS,
+        EARLIER,
+        &mut look,
+    );
     assert_eq!(look, plain);
 }
 
@@ -263,7 +279,13 @@ fn a_shake_swings_twice_and_ends_still() {
             reason = "a time"
         )]
         let now = 1_000 * MS + (share * 1e9) as u64;
-        shake::offset(&runs, now, 2.0)
+        shake::offset(
+            &crate::test_data::data().effects,
+            &runs,
+            now,
+            2.0,
+            Tier::Baseline,
+        )
     };
     assert_eq!(at(0.0), Vec2::ZERO);
     assert_eq!(at(1.0), Vec2::ZERO, "the run is over");

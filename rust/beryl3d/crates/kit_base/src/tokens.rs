@@ -77,8 +77,6 @@ pub mod color {
     pub const BLOCK_LINE_CORE: [u8; 4] = [255, 247, 204, 255];
     pub const SOURCE_LINE_CORE: [u8; 4] = [255, 242, 217, 255];
 
-    /// A life total that falls: the `--flare` of the `[data-life] > .stage-effect` rule.
-    pub const LOSS: [u8; 4] = [255, 106, 85, 255];
     /// A life total that rises: the `--flare` of the `[data-life] > .stage-effect-gain` rule.
     pub const GAIN: [u8; 4] = [127, 224, 138, 255];
 
@@ -98,9 +96,6 @@ pub mod color {
     /// The glow of a streak of damage: `ember` in `TONES`, which `TONE` names for damage.
     pub const DAMAGE: [u8; 4] = [255, 38, 10, 255];
 
-    /// The halo of the `glow` effect: the warm outer shadow of `.stage-effect-glow` in
-    /// `ui/src/stage/effects.css`, at its 75% opacity.
-    pub const GLOW: [u8; 4] = [255, 214, 140, 191];
     /// The burst of the `impact` effect: the middle stop of `.stage-effect-impact`'s gradient.
     pub const IMPACT: [u8; 4] = [255, 196, 120, 255];
     /// The flare of the `flash` effect: the `--light` of `.stage-effect-flash` at 85% opacity.

@@ -2,10 +2,12 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::iter::Peekable;
+use std::sync::Arc;
 
 use glam::camera::rh::proj::directx;
 use glam::{Affine3A, Vec2};
 use kit_base::atlas::{GlyphKey, Tier};
+use kit_base::data::{Data, effect::Effects};
 use kit_base::geometry::{Rect, Window, plane::ScreenPlane};
 use kit_frame::frame::{ElementId, Frame, FrameBuilder, NameRef, Place, Resolved, Role, StateBits};
 use kit_fx::effects::{Effect, preview};
@@ -21,6 +23,7 @@ use super::{Body, Node, NodeState, Story};
 
 /// A toolkit scene drawn on its own clock. It does no I/O and asks its host for text and icons.
 pub struct Player {
+    data: Arc<Data>,
     window: Window,
     layer: Layer,
     nodes: BTreeMap<ElementId, PreviewNode>,
@@ -42,7 +45,7 @@ impl Player {
     /// Lays out the story in the given window. The caller supplies the atlas, either through
     /// the host or with [`Self::stub_atlas`] for checks that only need draw records.
     #[must_use]
-    pub fn new(story: &Story, window: Window) -> Self {
+    pub fn new(story: &Story, window: Window, data: Arc<Data>) -> Self {
         let mut layer = Layer::new();
         layer.resize(window);
         let mut authored = vec![None];
@@ -96,6 +99,7 @@ impl Player {
             layer.focus(Some(id));
         }
         Self {
+            data,
             window,
             layer,
             nodes,
@@ -105,6 +109,12 @@ impl Player {
             tier: Tier::Baseline,
             dirty: true,
         }
+    }
+
+    /// The tuning supplied by the host.
+    #[must_use]
+    pub fn data(&self) -> &Arc<Data> {
+        &self.data
     }
 
     /// Delivers every requested glyph and the toolkit icons as placeholder cells for checks.
@@ -213,7 +223,14 @@ impl Player {
                 -half.x, half.x, -half.y, half.y, 0.1, 1024.0,
             ));
             if let Some((effect, rect)) = self.effect {
-                write_effect(effect, rect, self.now, &plane, &mut builder);
+                write_effect(
+                    &self.data.effects,
+                    effect,
+                    rect,
+                    self.now,
+                    &plane,
+                    &mut builder,
+                );
             } else {
                 self.layer.write_preview(&mut builder, &plane, &|id| {
                     self.nodes
@@ -326,6 +343,7 @@ fn placed(mut element: Element, rect: Rect, origin: Vec2) -> Element {
 }
 
 fn write_effect(
+    data: &Effects,
     effect: Effect,
     rect: Rect,
     now: u64,
@@ -368,5 +386,5 @@ fn write_effect(
             note: NameRef::default(),
         },
     );
-    preview::write(effect, rect, now, plane, builder);
+    preview::write(data, effect, rect, now, plane, builder);
 }

@@ -1,0 +1,20 @@
+{
+  "name": "glow",
+  "target": "subject",
+  "length": "effect",
+  "layers": [
+    {
+      "kind": "sprite",
+      "shape": "halo",
+      "quad": {
+        "scale": { "from": 1.0, "by": 0.1 },
+        "tint": [255, 214, 140, 191],
+        "fade": { "from": 0.0, "by": 1.0 },
+        "record": {
+          "scale": { "from": 1.0, "by": 0.1 },
+          "opacity": { "from": 1.0, "by": -1.0 }
+        }
+      }
+    }
+  ]
+}

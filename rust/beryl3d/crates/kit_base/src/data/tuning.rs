@@ -4,8 +4,7 @@ use glam::Vec2;
 use serde::de::{DeserializeOwned, Error};
 use serde::{Deserialize, Deserializer};
 
-use super::profiles::Profiles;
-use super::verbs::Verbs;
+use super::{effect::Effects, profiles::Profiles, verbs::Verbs};
 
 /// The tuning data supplied by a host. The client uses the typed values directly.
 #[derive(Clone, Debug, PartialEq)]
@@ -13,19 +12,32 @@ pub struct Data {
     pub verbs: Verbs,
     pub audit: Audit,
     pub profiles: Profiles,
+    pub effects: Effects,
 }
 
 impl Data {
-    /// Parses the spatial tuning, the interface thresholds and the layout profiles.
+    /// Parses spatial tuning, interface thresholds, layout profiles and effect definitions.
     /// Errors name the input file and the path to the offending value.
-    pub fn parse(space: &str, gates: &str, profiles: &[(&str, &str)]) -> Result<Self, String> {
+    pub fn parse<'a>(
+        space: &str,
+        gates: &str,
+        profiles: &[(&str, &str)],
+        effects: impl IntoIterator<Item = (&'a str, &'a str)>,
+    ) -> Result<Self, String> {
         let Space { verbs } = read("space.json", space)?;
         let Gates { audit } = read("gates.json", gates)?;
         validate(&verbs).map_err(|(key, why)| format!("space.json: verbs.{key}: {why}"))?;
+        let effects = Effects::parse(effects)?;
+        for required in ["glow", "dissolve", "loss"] {
+            if effects.get(required).is_none() {
+                return Err(format!("effects/{required}.json: missing definition"));
+            }
+        }
         Ok(Self {
             verbs,
             audit,
             profiles: Profiles::parse(profiles)?,
+            effects,
         })
     }
 }

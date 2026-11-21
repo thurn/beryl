@@ -588,27 +588,19 @@ impl Table {
         }
         state |= u16::from(shown.phased_out) * StateBits::PHASED_OUT;
         state |= u16::from(shown.hidden_pick) * StateBits::PICKED;
-        let mut look = Look {
-            pose: object.pose,
-            tint: [255, 255, 255],
-            dissolve: 0.0,
-            whiten: 0.0,
-            face,
-            // On the desktop the hand and the stack show a card's full frame, as the web
-            // interface does; its phone layout draws every card without a scan in the
-            // battlefield frame (`scanOrFrame` in `ui/src/mobile/faces.tsx`).
-            full: (matches!(shown.zone, ZoneName::Hand | ZoneName::Stack)
-                && !self.camera.window.phone())
-            .then(|| faces.full_layers_of_object(shown))
-            .flatten(),
-            state,
-            // A copy beneath a pile's top peeks out too little to be pressed by itself; the
-            // pile is pressed through its top card. Under a tray, only its cards (`pressable`).
-            interactive: state & StateBits::FACE_DOWN == 0
-                && object.copies > 0
-                && !name.is_empty()
-                && self.pressable(slot, object.place, waiting),
-        };
+        // The desktop hand and stack show the full frame. The phone uses the board frame
+        // (`scanOrFrame` in `ui/src/mobile/faces.tsx`).
+        let full = (matches!(shown.zone, ZoneName::Hand | ZoneName::Stack)
+            && !self.camera.window.phone())
+        .then(|| faces.full_layers_of_object(shown))
+        .flatten();
+        // A copy beneath the top card peeks out too little to be pressed by itself.
+        // A pile is pressed through its top card. The tray makes only its own cards pressable.
+        let interactive = state & StateBits::FACE_DOWN == 0
+            && object.copies > 0
+            && !name.is_empty()
+            && self.pressable(slot, object.place, waiting);
+        let mut look = Look::new(object.pose, face, full, state, interactive);
         let on = Subject::Object {
             slot: ObjectId(u16::try_from(slot).expect("slots are u16")),
         };
@@ -625,15 +617,23 @@ impl Table {
         // A card shown in a box (`held_at`) is drawn there, and its effects at the place
         // the table holds it.
         let effects_on_card = if held_at.is_some() {
-            &[][..]
+            &[]
         } else {
             dress.effects
         };
-        effects::card::look_with_face(effects_on_card, on, dress.now, earlier_face, &mut look);
+        let effects = &self.data.effects;
+        effects::card::look_with_face(
+            (effects, builder.tier()),
+            effects_on_card,
+            on,
+            dress.now,
+            earlier_face,
+            &mut look,
+        );
         (dress.marks)(on, &mut look);
         (dress.pointer)(slot, &self.camera, &mut look);
         let held = held_at.map_or(look, |pose| Look { pose, ..look });
-        effects::card::write(dress.effects, on, dress.now, &held, builder);
+        effects::card::write(effects, dress.effects, on, dress.now, &held, builder);
         if shown.zone == ZoneName::Battlefield {
             own::write((slot, shown), &look, &self.fights, dress.now, builder);
         } else {

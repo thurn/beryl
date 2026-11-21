@@ -167,6 +167,7 @@ fn player(text: &str) -> Player {
             scale: 1.0,
             safe_area: Insets::default(),
         },
+        crate::test_data::data(),
     );
     player.stub_atlas();
     player

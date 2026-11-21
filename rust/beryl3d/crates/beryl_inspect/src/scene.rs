@@ -59,6 +59,7 @@ impl Scene {
                 scale,
                 safe_area,
             },
+            crate::data::checkout()?,
         );
         player.stub_atlas();
         Ok(Self::Story(Box::new(StoryScene {
@@ -262,6 +263,7 @@ impl Scene {
                         scale: scene.scale,
                         safe_area: scene.context.safe_area,
                     },
+                    scene.player.data().clone(),
                 );
                 scene.player.set_tier(scene.tier);
                 Self::Story(scene)

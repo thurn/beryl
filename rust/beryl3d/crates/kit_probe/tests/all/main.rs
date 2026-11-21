@@ -3,3 +3,6 @@
 mod driver;
 mod stories;
 mod tree;
+
+#[path = "../../../../test_data.rs"]
+mod test_data;

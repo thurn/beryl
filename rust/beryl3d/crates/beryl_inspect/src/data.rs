@@ -28,7 +28,35 @@ pub fn load(directory: &Path) -> Result<Data, String> {
         .iter()
         .map(|(name, text)| (*name, text.as_str()))
         .collect();
-    Data::parse(&space, &gates, &contents).map_err(|why| format!("{}/{why}", directory.display()))
+    let effects_dir = directory.join("effects");
+    let entries = std::fs::read_dir(&effects_dir)
+        .map_err(|error| format!("{}: {error}", effects_dir.display()))?;
+    let mut effects = Vec::new();
+    for entry in entries {
+        let path = entry.map_err(|error| error.to_string())?.path();
+        if path
+            .extension()
+            .is_some_and(|extension| extension == "json")
+        {
+            let name = path
+                .file_stem()
+                .and_then(|stem| stem.to_str())
+                .ok_or_else(|| format!("{}: expected a UTF-8 effect name", path.display()))?;
+            let text = std::fs::read_to_string(&path)
+                .map_err(|error| format!("{}: {error}", path.display()))?;
+            effects.push((name.to_owned(), text));
+        }
+    }
+    effects.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+    Data::parse(
+        &space,
+        &gates,
+        &contents,
+        effects
+            .iter()
+            .map(|(name, text)| (name.as_str(), text.as_str())),
+    )
+    .map_err(|why| format!("{}/{why}", directory.display()))
 }
 
 /// Shares one validated set with every client started by this tool invocation.

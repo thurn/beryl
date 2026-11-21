@@ -2,11 +2,15 @@
 //! unspent mana changes as its step begins, and the `loss` or `gain` the step begins shows by
 //! how much a total changed.
 
-use app_client::Client;
+use std::fmt::Write;
+
+use app_client::{Client, Input};
 use beryl_protocol::protocol::{ManaPool, Side};
 use beryl_protocol::script::{Act, Tally};
 use glam::Vec2;
-use kit_frame::frame::{Frame, Role};
+use kit_frame::frame::{Frame, Material, Role};
+use kit_probe::driver::atlas::{STUB_PAGE, stub_glyph};
+use kit_ui::input::AssetReady;
 
 use crate::common::{MS, counting};
 
@@ -171,5 +175,40 @@ fn no_frame_of_a_loss_lays_anything_out() {
         assert_eq!(frame.work.text_runs, 0, "text shaped at {now}");
         assert_eq!(total(&frame, "You"), "17");
         now += 16 * MS;
+    }
+}
+
+/// The loss ring and the glyphs it colors, recorded at ten times along a count step.
+fn loss_draws() -> String {
+    const LOSS_RGB: [u8; 3] = [255, 106, 85];
+    let (mut client, steps) = counting(vec![pool(), life(Side::You, 17)]);
+    let glyphs = client.wanted_glyphs().map(stub_glyph).collect();
+    client.handle(Input::Assets(AssetReady::Glyphs {
+        page: STUB_PAGE,
+        glyphs,
+    }));
+    let (from, to) = steps[1];
+    let mut output = String::new();
+    for time in [0, 100, 200, 300, 400, 500, 600, 750, 900, 999] {
+        writeln!(output, "At {time}/1000").unwrap();
+        let frame = client.frame(from + (to - from) * time / 1000);
+        assert!(element(frame, Role::Text, "-3").is_some(), "at {time}");
+        let mut glyphs = 0;
+        for draw in frame.draws.iter().filter(|draw| draw.tint[..3] == LOSS_RGB) {
+            glyphs += usize::from(draw.material == Material::Glyph as u8);
+            writeln!(output, "{draw:?}").unwrap();
+        }
+        assert!(glyphs > 0, "the life effect colors glyphs at {time}");
+    }
+    output
+}
+
+#[test]
+fn the_data_defined_loss_keeps_the_original_ring_and_number() {
+    let found = loss_draws();
+    let expected = include_str!("../fixtures/life-loss.txt");
+    assert_eq!(found.lines().count(), expected.lines().count());
+    for (line, (found, expected)) in found.lines().zip(expected.lines()).enumerate() {
+        assert_eq!(found, expected, "life loss record {}", line + 1);
     }
 }

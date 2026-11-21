@@ -18,3 +18,7 @@ kit_ui.workspace = true
 kit_space.workspace = true
 kit_fx.workspace = true
 kit_scene.workspace = true
+
+[dev-dependencies]
+# Loads the same story effect definitions as the inspector.
+beryl_test_files = { path = "../../../crates/beryl_test_files" }

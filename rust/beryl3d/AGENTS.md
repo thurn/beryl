@@ -269,6 +269,11 @@ project, and selects the main lanes.
   `kit_base::data::Data` to the client. `just b3d data` runs the same validation
   as the `b3d-data` source check.
 
+- `data/beryl3d/effects/*.json` defines drawing layers for runtime effects. The
+  app embeds them. Tools read them from the checkout or `BERYL3D_DATA`. The
+  effect names and durations shared by both clients are in
+  `data/ui-conventions.json`.
+
 - `data/beryl3d/profiles/` holds the layouts, including their window conditions,
   the camera and container tuning, named slots, interface thresholds and test
   windows. Hosts load them with the verb tuning. The build script generates the

@@ -1,0 +1,31 @@
+{
+  "name": "loss",
+  "target": "subject",
+  "length": "step",
+  "layers": [
+    {
+      "kind": "ring",
+      "quad": {
+        "scale": 1.45,
+        "tint": [255, 106, 85, 255],
+        "fade": { "from": 0.0, "by": 1.0 },
+        "record": {
+          "scale": { "from": 1.0, "by": 0.45 },
+          "opacity": { "from": 1.0, "by": -1.0 }
+        }
+      }
+    },
+    {
+      "kind": "surface",
+      "surface": { "channel": "text_tint", "color": [255, 106, 85, 255] },
+      "amount": 1.0
+    },
+    {
+      "kind": "number",
+      "clock": "elapsed",
+      "origin": "below",
+      "drift": { "from": 0.0, "by": 1.0 },
+      "opacity": { "from": 1.0, "by": -1.0 }
+    }
+  ]
+}

@@ -472,7 +472,7 @@ impl Client {
             self.show.counts(),
             self.show.effects(),
             table_now,
-            (table.layout(), &table.data().verbs.count),
+            (table.layout(), table.data(), builder.tier()),
             self.window.size,
             (counted, targets, self.viewing.opening),
         );

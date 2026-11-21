@@ -1,0 +1,225 @@
+//! Effect definitions decoded by the data store and sampled by the frame player.
+
+mod curve;
+pub use curve::Scalar;
+
+use std::collections::BTreeMap;
+
+use serde::Deserialize;
+
+use super::tuning::read;
+
+/// Definitions indexed by the names used in script timing. Hosts parse these before playback.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Effects(BTreeMap<String, Definition>);
+
+impl Effects {
+    /// Parses pairs of filename stems and JSON texts.
+    ///
+    /// # Errors
+    ///
+    /// A file is invalid, its name differs from its filename stem, or a name is repeated.
+    pub fn parse<'a>(files: impl IntoIterator<Item = (&'a str, &'a str)>) -> Result<Self, String> {
+        let mut definitions = BTreeMap::new();
+        for (name, text) in files {
+            let file = format!("effects/{name}.json");
+            let definition: Definition = read(&file, text)?;
+            if definition.name != name {
+                return Err(format!("{file}: name must match the filename"));
+            }
+            if definition.layers.is_empty() {
+                return Err(format!(
+                    "{file}: layers must contain at least one primitive"
+                ));
+            }
+            for (index, layer) in definition.layers.iter().enumerate() {
+                if !(0.0..layer.end).contains(&layer.start) || layer.end > 1.0 {
+                    return Err(format!("{file}: layers[{index}] must fit within 0 to 1"));
+                }
+            }
+            if definitions.insert(name.to_owned(), definition).is_some() {
+                return Err(format!("{file}: duplicate definition"));
+            }
+        }
+        Ok(Self(definitions))
+    }
+
+    /// Whether an effect with no named anchor can play on its step's subject.
+    #[must_use]
+    pub fn allows_subject(&self, name: &str) -> bool {
+        self.get(name)
+            .is_none_or(|definition| definition.target == Target::Subject)
+    }
+
+    #[must_use]
+    pub fn get(&self, name: &str) -> Option<&Definition> {
+        self.0.get(name)
+    }
+}
+
+/// One effect on the anchor selected when the step begins it.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct Definition {
+    pub name: String,
+    pub target: Target,
+    pub length: Length,
+    pub layers: Vec<Layer>,
+}
+
+/// Whether the script may use its step's subject as the default anchor.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Target {
+    Subject,
+    Named,
+}
+
+/// The default length source in the shared script timing data. Individual steps can override it.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Length {
+    Step,
+    Effect,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Clock {
+    #[default]
+    Eased,
+    Elapsed,
+}
+
+/// A primitive and the interval on the effect clock over which to sample it.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct Layer {
+    #[serde(default)]
+    pub start: f32,
+    #[serde(default = "one")]
+    pub end: f32,
+    #[serde(default)]
+    pub clock: Clock,
+    #[serde(default)]
+    pub enhanced_only: bool,
+    #[serde(flatten)]
+    pub primitive: Primitive,
+}
+
+/// The primitives the effect player can draw. Values that vary across a layer are curves.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum Primitive {
+    Sprite {
+        shape: Shape,
+        quad: Quad,
+    },
+    Ring {
+        quad: Quad,
+    },
+    Burst {
+        quad: Quad,
+    },
+    Streak {
+        lookback_ms: u16,
+        width: Scalar,
+        minimum: Scalar,
+        tint: [u8; 4],
+        opacity: Scalar,
+    },
+    Particles {
+        emitter: Emitter,
+    },
+    Surface {
+        surface: Surface,
+        amount: Scalar,
+        #[serde(default)]
+        record: bool,
+    },
+    Shake {
+        x: Scalar,
+        y: Scalar,
+    },
+    Number {
+        origin: NumberOrigin,
+        drift: Scalar,
+        opacity: Scalar,
+    },
+}
+
+/// Sprite cells used by effect quads. The halo's empty center is sized to the subject.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Shape {
+    Disc,
+    Cone,
+    Comet,
+    Ribbon,
+    Outline,
+    Head,
+    Wedge,
+    Crescent,
+    Tap,
+    Moon,
+    Plaque,
+    Coin,
+    Halo,
+    WedgeHot,
+}
+
+/// An additive quad placed over the subject's surface, scaled relative to the subject's size.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct Quad {
+    pub scale: Scalar,
+    pub tint: [u8; 4],
+    /// How much the draw material fades the light, from 0 (whole) to 1 (gone).
+    pub fade: Scalar,
+    /// The box and opacity used to compare the light to the web element that represents it.
+    pub record: Option<LightRecord>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct LightRecord {
+    pub scale: Scalar,
+    pub opacity: Scalar,
+}
+
+/// Particles emitted from a sweep over rows of the subject's face. Size is sampled by seed,
+/// sweep by row, fall and drift by layer time, and travel by particle age.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct Emitter {
+    pub count: u16,
+    pub sweep: Scalar,
+    #[serde(deserialize_with = "super::tuning::positive_fraction")]
+    pub life: f32,
+    pub size: Scalar,
+    pub fall: Scalar,
+    pub drift: Scalar,
+    pub travel: Scalar,
+    pub tint: [u8; 4],
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(tag = "channel", rename_all = "snake_case", deny_unknown_fields)]
+pub enum Surface {
+    Whiten,
+    Tint { color: [u8; 4] },
+    TextTint { color: [u8; 4] },
+    Dissolve,
+    Opacity,
+}
+
+/// Which side of an anchor a prepared number starts on.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum NumberOrigin {
+    Above,
+    Below,
+}
+
+fn one() -> f32 {
+    1.0
+}

@@ -142,20 +142,20 @@ impl Table {
             Some(_) => faces.plate_full_layers(name, *triggered, *nth),
             None => faces.full_layers_named(name),
         });
-        let mut look = Look {
-            pose: object.pose,
-            tint: [255, 255, 255],
-            dissolve: 0.0,
-            whiten: 0.0,
-            face,
-            full,
-            state: if under_way { StateBits::MOVING } else { 0 },
-            interactive: false,
-        };
+        let state = if under_way { StateBits::MOVING } else { 0 };
+        let mut look = Look::new(object.pose, face, full, state, false);
         let on = Subject::Ability { id };
-        effects::card::look(dress.effects, on, dress.now, face, &mut look);
+        let effects = &self.data.effects;
+        effects::card::look(
+            (effects, builder.tier()),
+            dress.effects,
+            on,
+            dress.now,
+            face,
+            &mut look,
+        );
         (dress.marks)(on, &mut look);
-        effects::card::write(dress.effects, on, dress.now, &look, builder);
+        effects::card::write(effects, dress.effects, on, dress.now, &look, builder);
         self.write_shadow((None, object.place), &look.pose, under_way, builder);
         self.write_look(
             name,

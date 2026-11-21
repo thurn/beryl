@@ -26,6 +26,7 @@ use crate::play::TurnChange;
 use crate::sound::{SoundRun, Sounds};
 use crate::verbs::{self, Interval};
 use game_table::table::{Objects, PileCount, Table, Turn};
+use kit_base::data::effect::Effects;
 use kit_base::pose::Segment;
 use kit_fx::effects::{Effect, EffectRun};
 use kit_space::motion::Track;
@@ -482,7 +483,8 @@ impl<'a> Compiling<'a> {
                     motion.closings_into(first, &mut out.closes[first..]);
                 }
             }
-            effects_of(number, step, timing, &laid, &mut out.effects);
+            let definitions = &table.data().effects;
+            effects_of(number, step, timing, &laid, definitions, &mut out.effects);
             if self.records {
                 out.steps.push(StepRecord {
                     view: 0,
@@ -588,23 +590,26 @@ pub(super) fn ended(played: Option<&Played>, after: &PlayerView, script: &Script
     replay(start, script).unwrap_or_else(|_| numbered(Played::of(after)))
 }
 
-/// Adds to `runs` the effects that `step`, the script's step `number`, begins, on the script's
-/// clock, as the web stage begins them (`Effects::begin` in ui/src/stage/effects.ts). Each is on
-/// what its `on` names, or else on what the step's act is about (`lit_by`); with neither it is
-/// dropped. It begins
-/// at the edge of the step its `when` names, `into` the step's length after that, and then
-/// `delay` later, and it lasts its `duration`, or the step's length where it has none. One that
-/// would last no time is dropped.
+/// Begins each effect on its named target or on the step's subject. Its clock starts at
+/// the step edge plus `into` times the step's length plus `delay`, as `Effects::begin` does
+/// on the web. Its duration comes from the shared timing, or defaults to the step's length.
 fn effects_of(
     number: usize,
     step: &Step,
     timing: &StepTiming,
     laid: &Laid,
+    definitions: &Effects,
     runs: &mut Vec<EffectRun>,
 ) {
     let span = laid.to - laid.from;
     for effect in &timing.effects {
-        let Some(on) = effect.on.or_else(|| lit_by(&step.act)) else {
+        let subject = || {
+            definitions
+                .allows_subject(&effect.name)
+                .then(|| lit_by(&step.act))
+                .flatten()
+        };
+        let Some(on) = effect.on.or_else(subject) else {
             continue;
         };
         let Some(named) = Effect::from_name(&effect.name) else {

@@ -18,6 +18,21 @@ pub fn data() -> Arc<Data> {
         let contents = std::array::from_fn::<_, { profiles::FILES.len() }, _>(|index| {
             (profiles::FILES[index], files[index].as_str())
         });
-        Arc::new(Data::parse(&space, &gates, &contents).expect("repository tuning"))
+        let directory = std::path::Path::new("data/beryl3d/effects");
+        let effects: Vec<_> = beryl_test_files::read_dir(directory)
+            .expect("read effect definitions")
+            .map(|entry| entry.expect("effect file").file_name())
+            .filter_map(|file| file.into_string().ok())
+            .filter_map(|file| {
+                let name = file.strip_suffix(".json")?.to_owned();
+                let text = beryl_test_files::read_to_string(directory.join(file))
+                    .expect("read effect file");
+                Some((name, text))
+            })
+            .collect();
+        let effects = effects
+            .iter()
+            .map(|(name, text)| (name.as_str(), text.as_str()));
+        Arc::new(Data::parse(&space, &gates, &contents, effects).expect("repository tuning"))
     }))
 }

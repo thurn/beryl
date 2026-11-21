@@ -302,10 +302,6 @@
       "peak": 0.36,
       "bloomed": 0.66
     },
-    "dissolve": {
-      "dark": 0.35,
-      "darkened": 0.3
-    },
     "dim": {
       "dark": 0.35,
       "darkened": 0.3
@@ -321,9 +317,6 @@
     "shake": {
       "x": 6,
       "y": 2
-    },
-    "glow": {
-      "spread": 0.1
     },
     "impact": {
       "wide": 1.5,
@@ -373,16 +366,6 @@
       "share": 0.3333
     },
     "particles": {
-      "ash": {
-        "count": 96,
-        "life": 0.35,
-        "size": [
-          1.2,
-          2.4
-        ],
-        "fall": 18,
-        "drift": 6
-      },
       "vortex": {
         "count": 128,
         "life": 0.5,
