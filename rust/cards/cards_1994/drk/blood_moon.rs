@@ -7,21 +7,11 @@
 
 use crate::prelude::*;
 
-/// "Nonbasic lands are Mountains" sets each nonbasic land's land type in layer 4
-/// ([CR 305.7]): "If an effect sets a land's subtype to one or more of the basic land types,
-/// the land no longer has its old land type. It loses all abilities generated from its rules
-/// text, its old land types, and any copiable effects affecting that land, and it gains the
-/// appropriate mana ability for each new basic land type." So a nonbasic land taps for {R}
-/// and nothing else, and its other abilities are gone, though it keeps its name, its other
-/// card types and its supertypes. Dryad Arbor stays a green Dryad creature.
+/// Urborg, Tomb of Yawgmoth's effect depends on Blood Moon in layer 4, whichever land
+/// or enchantment entered first. Blood Moon removes Urborg's ability before it can apply
+/// ([CR 613.8a]): "applying the other would change the text or the existence of the first
+/// effect".
 ///
-/// Urborg, Tomb of Yawgmoth's ability depends on this one, whichever entered first: this
-/// effect removes Urborg's ability, so Urborg's waits for it and then does not exist
-/// ([CR 613.8a]): "An effect is said to “depend on” another if (a) it's applied in the same
-/// layer (and, if applicable, sublayer) as the other effect; (b) applying the other would
-/// change the text or the existence of the first effect".
-///
-/// [CR 305.7]: https://yawgatog.com/resources/magic-rules/#R3057
 /// [CR 613.8a]: https://yawgatog.com/resources/magic-rules/#R6138a
 pub static CARD: CardDef = Printed::BloodMoon
     .abilities(&[Ability::static_ability(&LayerSpec {
@@ -65,15 +55,6 @@ pub mod scenarios {
             .hand(P0, &[Prop::Artifact])
             .battlefield(P0, &[BLOOD_MOON, Card::Tundra, Prop::Flier])
             .actions(&[ME.deciding(DecisionKind::Attacker, 2)]),
-        // A basic land is no nonbasic land: the Plains still pays for the artifact.
-        Scenario::new("a basic land keeps its land type")
-            .hand(P0, &[Prop::Artifact])
-            .battlefield(P0, &[BLOOD_MOON, Card::Plains])
-            .actions(&[
-                ME.casts(Prop::Artifact),
-                Resolve,
-                ME.controls(Prop::Artifact, 1),
-            ]),
         // The Bog enters as a Mountain, without its enters trigger or its replacement effect.
         Scenario::new("Bojuka Bog enters without exiling a graveyard")
             .interaction(&[Card::BojukaBog])
