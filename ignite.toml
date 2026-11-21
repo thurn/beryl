@@ -348,7 +348,7 @@ products = ["clippy", "rust-tests"]
 [[rebuild]]
 name = "b3d-prompt-body"
 edit = "append a no-op item to the Beryl 3D prompt bar module"
-file = "rust/beryl3d/crates/game_hud/src/prompts/bar.rs"
+file = "rust/beryl3d/crates/game_hud/src/prompts/bar/view.rs"
 append = "\nconst _: () = ();\n"
 products = ["b3d"]
 

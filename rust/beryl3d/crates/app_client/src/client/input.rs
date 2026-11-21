@@ -10,7 +10,7 @@ use glam::Vec2;
 use super::gesture::{Gesture, Release};
 use super::{Client, Dismiss, Input, Platform, Press};
 use app_screens::screens::settings::{Message as SettingsMessage, slider_setting};
-use app_screens::screens::{Screen, ScreenPress, Sheet};
+use app_screens::screens::{Screen, Sheet};
 use game_hud::hud::rows::Message as RowMessage;
 use game_hud::prompts;
 use game_play::pointer::Hold;
@@ -68,16 +68,20 @@ impl Client {
         }
         // The mouse is followed whatever is asked, so that an arrow to the pointer that a
         // prompt opens under it starts there. A touch has no pointer to follow.
-        self.owned.mouse = match (pointer.kind, pointer.phase) {
+        self.mouse = match (pointer.kind, pointer.phase) {
             (PointerKind::Mouse, PointerPhase::Leave | PointerPhase::Cancel) => None,
             (PointerKind::Mouse, _) => Some(pointer.position),
-            _ => self.owned.mouse,
+            _ => self.mouse,
         };
-        self.carry(self.show.pointer().held());
+        self.features
+            .prompts
+            .carry(self.show.pointer().held(), self.views, &self.show);
         // A press outside an open context menu closes it and means nothing else.
         if pointer.phase == PointerPhase::Down
             && pointer.button == Button::Primary
-            && self.layer.outside_menu(pointer.position, self.open)
+            && self
+                .layer
+                .outside_menu(pointer.position, self.features.layer_open)
         {
             self.dispatch_press(&Press::Dismiss(Dismiss::Menu));
             return;
@@ -101,15 +105,17 @@ impl Client {
         }
         let hovered = self.hover_flat(&pointer);
         // The pointer on a payment's Auto Pay, or a touch held on it, marks what it would tap.
-        let suggesting = if let (Some((_, prompt)), Some((_, action, true))) =
-            (&self.prompt, &hovered)
-            && let Some(Click::Button { button }) = action.downcast_ref::<Click>()
+        let suggesting = if let (Some(prompt), Some((_, action, true))) =
+            (self.features.prompts.current(), &hovered)
+            && let Some(game_hud::prompts::bar::Message::Button(button)) = action.downcast_ref()
         {
             prompts::shows(prompt, *button)
         } else {
             false
         };
-        self.suggest(suggesting);
+        self.features
+            .prompts
+            .suggest(suggesting, self.views, &self.show);
     }
 
     /// Tells the flat layer which element a press under `pointer` would reach, which it draws
@@ -118,7 +124,10 @@ impl Client {
         let gone = matches!(pointer.phase, PointerPhase::Cancel | PointerPhase::Leave)
             || (pointer.kind == PointerKind::Touch && pointer.phase == PointerPhase::Up);
         let hovered = (!gone)
-            .then(|| self.layer.press_at(pointer.position, self.open))
+            .then(|| {
+                self.layer
+                    .press_at(pointer.position, self.features.layer_open)
+            })
             .flatten();
         let id = hovered.as_ref().map(|(id, ..)| *id);
         let held = (!ends_gesture(pointer))
@@ -126,7 +135,7 @@ impl Client {
             .flatten();
         (self.layer).point_at(id, held);
         let at = (!gone).then_some(pointer.position);
-        self.layer.hover(at, self.open);
+        self.layer.hover(at, self.features.layer_open);
         hovered
     }
 
@@ -137,7 +146,9 @@ impl Client {
         let primary = pointer.button == Button::Primary;
         let at = match (pointer.phase, self.gesture) {
             (PointerPhase::Down, _) if primary => {
-                let Some((id, press, rect)) = self.layer.slider_at(pointer.position, self.open)
+                let Some((id, press, rect)) = self
+                    .layer
+                    .slider_at(pointer.position, self.features.layer_open)
                 else {
                     return false;
                 };
@@ -170,7 +181,7 @@ impl Client {
     /// the flat layer covers, as `point` describes it.
     pub(super) fn press_flat(&mut self, pointer: &Pointer, table: bool) {
         let primary = pointer.button == Button::Primary;
-        let open = self.open;
+        let open = self.features.layer_open;
         match pointer.phase {
             PointerPhase::Down if primary => {
                 let pressed = (self.layer.press_at(pointer.position, open)).map(|(id, ..)| id);
@@ -339,7 +350,7 @@ impl Client {
             && self.screen == Screen::Game
             && Chord::parse("Cmd+Z", mac) == Some(Chord::of(&key))
         {
-            return Some(Action::new(ScreenPress::Undo));
+            return Some(Action::new(game_hud::prompts::bar::Message::Undo));
         }
         self.inputs.push(Input::Key(key));
         None
@@ -367,7 +378,12 @@ impl Client {
         if let Some(holdable) = self.table_holdable(slot, place) {
             return holdable;
         }
-        let Some((_, prompt)) = self.prompt.as_ref().filter(|_| self.open) else {
+        let Some(prompt) = self
+            .features
+            .prompts
+            .current()
+            .filter(|_| self.features.layer_open)
+        else {
             return false;
         };
         let in_hand = matches!(
@@ -392,7 +408,12 @@ impl Client {
     /// card it landed in front of (`table::landing`), as the web's `#dropped` does. Let go
     /// outside every box, or in a closed pile, it goes back where it lay and nothing is sent.
     pub(super) fn drop_held(&mut self, slot: usize, at: Vec2) {
-        let Some((_, prompt)) = self.prompt.as_ref().filter(|_| self.open) else {
+        let Some(prompt) = self
+            .features
+            .prompts
+            .current()
+            .filter(|_| self.features.layer_open)
+        else {
             return;
         };
         let (ShapeBody::Split { piles }, Some(held)) = (&prompt.body, prompts::Piles::of(prompt))

@@ -115,9 +115,19 @@ impl<F: Feature> FeatureSlot<F> {
 
     /// Reuses the element until an update changes the state or a view input changes.
     pub fn view(&mut self, inputs: F::Inputs<'_>) -> &Element {
+        self.view_with(inputs, F::view)
+    }
+
+    /// Caches a view whose mount supplies context local to the build, such as
+    /// a copy of a placement scene for recording the view's layout checks.
+    pub fn view_with<'a>(
+        &mut self,
+        inputs: F::Inputs<'a>,
+        build: impl FnOnce(&F::State, F::Inputs<'a>) -> Element,
+    ) -> &Element {
         let key = F::view_key(&self.state, &inputs);
         if self.cached.as_ref().is_none_or(|(last, _)| *last != key) {
-            self.cached = Some((key, F::view(&self.state, inputs)));
+            self.cached = Some((key, build(&self.state, inputs)));
         }
         &self.cached.as_ref().expect("the feature has a view").1
     }

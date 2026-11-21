@@ -62,7 +62,7 @@ impl Kind {
 impl<'a> Piles<'a> {
     /// The cards `prompt` holds up: a pick's non-empty tray, a split's two piles, or the cards
     /// a yes or no or a choice among answers is about, unless the choice is among the ways to
-    /// use a card, which shows the card once a way instead (`super::choose`). None for any other
+    /// use a card, which shows the card once a way instead (`super::mode`). None for any other
     /// prompt, which picks what it asks about where it lies, or for one the table does not show
     /// (`super::on_table`).
     #[must_use]

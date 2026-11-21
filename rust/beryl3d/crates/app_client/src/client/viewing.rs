@@ -178,7 +178,7 @@ impl Client {
     pub(super) fn place_shown(&mut self) {
         Tree::screen_shows(&self.layer, &mut self.screen_cards.placements);
         let timing = |step: OwnStep| {
-            (self.own_timings.entries.iter())
+            (self.step_timings.entries.iter())
                 .find(|entry| entry.step == step)
                 .map_or((0, Curve::EASE_OUT), |entry| {
                     #[expect(
@@ -321,8 +321,7 @@ impl Client {
     /// web's `.stage-tray` covers them.
     pub(super) fn prompt_covers_table(&self) -> bool {
         self.table_open()
-            && (self.prompt.as_ref())
-                .is_some_and(|(_, prompt)| game_hud::prompts::covers_table(prompt))
+            && (self.features.prompts.current()).is_some_and(game_hud::prompts::covers_table)
     }
 
     /// Whether the rows' counts are shown, given whether the hud is `visible` and the table

@@ -147,7 +147,12 @@ impl Client {
 
     /// Whether the open prompt can use the card in `slot`: it marks the card.
     fn usable(&self, slot: usize) -> bool {
-        let Some((_, prompt)) = self.prompt.as_ref().filter(|_| self.open) else {
+        let Some(prompt) = self
+            .features
+            .prompts
+            .current()
+            .filter(|_| self.features.layer_open)
+        else {
             return false;
         };
         let Ok(slot) = u16::try_from(slot) else {
@@ -193,7 +198,7 @@ impl Client {
             }
             Screen::Game => {
                 self.features.sheet.is_none()
-                    && self.layer.press_at(at, self.open).is_none()
+                    && self.layer.press_at(at, self.features.layer_open).is_none()
                     && hit(&self.frame, at).is_some_and(|index| {
                         let element = &self.frame.resolved[index as usize];
                         element.role == Role::Card && takes_pointer(element.place)

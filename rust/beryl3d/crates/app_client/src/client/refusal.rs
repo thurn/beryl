@@ -20,9 +20,9 @@ use kit_ui::layout::FloatLook;
 impl Client {
     /// The open decision, as the latest view sends it, while it is the one the prompt answers.
     pub(super) fn open_decision(&self) -> Option<&DecisionView> {
-        let (open, _) = self.prompt.as_ref()?;
+        let open = self.features.prompts.decision()?;
         match &self.show.latest()?.view.status {
-            Status::Deciding { decision } if decision.id == *open => Some(decision),
+            Status::Deciding { decision } if decision.id == open => Some(decision),
             _ => None,
         }
     }

@@ -4,14 +4,15 @@
 
 use std::borrow::Cow;
 
-use beryl_protocol::prompt::{ButtonId, Click, PromptButton, PromptView, Purpose, ShapeBody};
+use beryl_protocol::prompt::{ButtonId, PromptButton, PromptView, ShapeBody};
 use beryl_protocol::protocol::{Side, Status};
 use glam::Vec2;
 
-use super::Piles;
+use super::Message;
 use crate::hud::HudIn;
 use crate::hud::phase::phase_box;
 use crate::hud::placement_scene::{Group, PlacementScene, inset, rect};
+use crate::prompts::{Piles, covers_table, ways};
 use game_table::profiles::Profile;
 use kit_base::data::profiles::{FloatingPrompt, Piece};
 use kit_base::geometry::Rect;
@@ -22,31 +23,10 @@ use kit_ui::element::{Align, Anchor, Element, Position, TextAlign, column, holde
 use kit_ui::layout::{DOCK_BOTTOM, DOCK_RIGHT};
 use kit_ui::widgets::{self, button, icon_button, icons, primary};
 
-/// The prompt bar for `prompt`: on the desktop, the action dock (`captioned_dock`), with what the prompt
-/// asks at its top, its other buttons stacked under that in the order the session sent them,
-/// the first at the foot, and the button it puts forward at the dock's foot as the turn button,
-/// with the one that passes on beside it and its caption under it, as the web's `PromptDock`
-/// (`ui/src/stage/PromptBar.tsx`) lays them out. The ways to use a card stand over the table
-/// instead (`super::ways`).
-/// A prompt with no title, such as a priority stop's, shows only its buttons, as the web
-/// interface's prompt bar does (`ui/src/stage/PromptBar.tsx`): an empty text would still take
-/// a gap beside them.
-///
-/// While the viewer controls the opponent's turn, a decision they make for the opponent says
-/// "For opponent" before what it asks, and a priority says only that, as the web's `Asks` does
-/// ([CR 724.5]): "While controlling another player, a player makes all choices and decisions
-/// the controlled player is allowed to make or is told to make by the rules or by any objects."
-///
-/// [CR 724.5]: https://yawgatog.com/resources/magic-rules/#R7245
-#[must_use]
-pub fn prompt_bar(prompt: &PromptView, input: &HudIn) -> Element {
-    bar(prompt, input, None)
-}
-
 /// Controls a prompt adds to its bar, such as a number's steps, and about how large they are
 /// drawn, in logical points: an estimate on the generous side, as `button_width` makes, which
 /// only decides where they stand on the phone.
-pub(super) struct Controls {
+pub(in crate::prompts) struct Controls {
     pub element: Element,
     pub size: (f32, f32),
 }
@@ -60,7 +40,7 @@ pub fn title(prompt: &PromptView, acting_for: bool) -> Cow<'_, str> {
         (true, false) => Cow::Owned(format!("For opponent: {}", prompt.title)),
     };
     match &prompt.body {
-        ShapeBody::Pay { cost, left } if !prompt.is(Purpose::Mana) || left != cost => {
+        ShapeBody::Pay { cost, left } if super::super::pay::shows_remaining(prompt, cost, left) => {
             Cow::Owned(format!("{asks} ({left})"))
         }
         ShapeBody::Divide { left, .. } => Cow::Owned(format!("{asks} ({left})")),
@@ -68,14 +48,27 @@ pub fn title(prompt: &PromptView, acting_for: bool) -> Cow<'_, str> {
     }
 }
 
-/// The prompt bar with any controls it puts over the turn button.
+/// The prompt bar for `prompt`: on the desktop, the action dock (`captioned_dock`), with what the prompt
+/// asks at its top, its other buttons stacked under that in the order the session sent them,
+/// the first at the foot, and the button it puts forward at the dock's foot as the turn button,
+/// with the one that passes on beside it and its caption under it, as the web's `PromptDock`
+/// (`ui/src/stage/PromptBar.tsx`) lays them out. The ways to use a card stand over the table
+/// instead (`ways`).
+/// A prompt with no title, such as a priority stop's, shows only its buttons, as the web
+/// interface's prompt bar does (`ui/src/stage/PromptBar.tsx`): an empty text would still take
+/// a gap beside them.
+///
+/// While the viewer controls the opponent's turn, a decision they make for the opponent says
+/// "For opponent" before what it asks, and a priority says only that, as the web's `Asks` does
+/// ([CR 724.5]): "While controlling another player, a player makes all choices and decisions
+/// the controlled player is allowed to make or is told to make by the rules or by any objects."
+///
+/// [CR 724.5]: https://yawgatog.com/resources/magic-rules/#R7245
 pub(super) fn bar(prompt: &PromptView, input: &HudIn, controls: Option<Controls>) -> Element {
-    let acting_for = input.view.is_some_and(|view| {
-        matches!(&view.status, Status::Deciding { decision } if decision.acting_for.is_some())
-    });
+    let acting_for = input.view.is_some_and(acting_for);
     let asks = title(prompt, acting_for);
     let held_up = Piles::of(prompt).is_some();
-    if let Some(slots) = PromptSlots::new(input, held_up || super::covers_table(prompt)) {
+    if let Some(slots) = PromptSlots::new(input, held_up || covers_table(prompt)) {
         return floating_bar(prompt, &asks, controls, &slots, held_up);
     }
     let title = (!asks.is_empty()).then(|| {
@@ -83,7 +76,7 @@ pub(super) fn bar(prompt: &PromptView, input: &HudIn, controls: Option<Controls>
             .style(type_style::TITLE)
             .text_align(TextAlign::Center)
     });
-    let ways = || super::ways(prompt).map(|way| way.id);
+    let ways = || ways(prompt).map(|way| way.id);
     let buttons: Vec<&PromptButton> = (prompt.buttons.iter())
         .filter(|button_view| !ways().any(|id| id == button_view.id))
         .collect();
@@ -102,9 +95,7 @@ pub(super) fn bar(prompt: &PromptView, input: &HudIn, controls: Option<Controls>
             dock_sized(
                 button(&button_view.label)
                     .enabled(button_view.enabled)
-                    .on_press(Click::Button {
-                        button: button_view.id,
-                    }),
+                    .on_press(Message::Button(button_view.id)),
             )
         })
         .collect();
@@ -117,7 +108,7 @@ pub(super) fn bar(prompt: &PromptView, input: &HudIn, controls: Option<Controls>
                 dock_sized(
                     primary(&forward.label)
                         .enabled(forward.enabled)
-                        .on_press(Click::Button { button: forward.id }),
+                        .on_press(Message::Button(forward.id)),
                 ),
                 pass_on,
                 &forward.caption,
@@ -177,9 +168,7 @@ pub fn turn_action(pressed: Element, pass_on: Option<&PromptButton>, caption: &s
         // edge the dock's gap left of the turn button's left edge.
         widgets::pass_on(&button_view.label, height)
             .enabled(button_view.enabled)
-            .on_press(Click::Button {
-                button: button_view.id,
-            })
+            .on_press(Message::Button(button_view.id))
             .position(Position::Absolute)
             .inset([Some(0.0), None, None, Some(-(height + gap))])
     });
@@ -248,7 +237,7 @@ fn floating_bar(
     slots: &PromptSlots,
     held_up: bool,
 ) -> Element {
-    let ways = || super::ways(prompt).map(|way| way.id);
+    let ways = || ways(prompt).map(|way| way.id);
     let buttons: Vec<&PromptButton> = (prompt.buttons.iter())
         .filter(|button_view| !ways().any(|id| id == button_view.id))
         .collect();
@@ -498,9 +487,7 @@ fn dock(
                 .box_shadow(Vec::new())
                 .drop_shadow(shadow::PASS_ON.to_vec())
                 .enabled(button_view.enabled)
-                .on_press(Click::Button {
-                    button: button_view.id,
-                })
+                .on_press(Message::Button(button_view.id))
         }))
 }
 
@@ -664,9 +651,7 @@ impl PromptSlots<'_> {
         self.sized(
             widget(&button_view.label)
                 .enabled(button_view.enabled)
-                .on_press(Click::Button {
-                    button: button_view.id,
-                }),
+                .on_press(Message::Button(button_view.id)),
         )
     }
 
@@ -693,14 +678,9 @@ const OPPONENTS_TURN: &str = "Opponent's Turn";
 /// opponent's orb. The opponent acts while they decide, or while their turn plays on without
 /// the viewer, as the web's `opponentActing` says. `None` at any other time.
 #[must_use]
-pub fn waiting(input: &HudIn) -> Option<Element> {
+pub(super) fn waiting(input: &HudIn) -> Option<Element> {
     let view = input.view?;
-    let acting = match view.status {
-        Status::Thinking => true,
-        Status::Playing => view.turn.active == Side::Opponent,
-        _ => false,
-    };
-    if !acting || input.prompt.is_some() {
+    if !opponent_acts(view) || input.prompt.is_some() {
         return None;
     }
     let label = button(OPPONENTS_TURN).enabled(false);
@@ -734,4 +714,16 @@ pub fn waiting(input: &HudIn) -> Option<Element> {
         Vec2::new(1.0, 0.5),
     ));
     Some(holder().name("prompt").child(label))
+}
+
+pub(super) fn opponent_acts(view: &beryl_protocol::PlayerView) -> bool {
+    match view.status {
+        Status::Thinking => true,
+        Status::Playing => view.turn.active == Side::Opponent,
+        _ => false,
+    }
+}
+
+pub(super) fn acting_for(view: &beryl_protocol::PlayerView) -> bool {
+    matches!(&view.status, Status::Deciding { decision } if decision.acting_for.is_some())
 }

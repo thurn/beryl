@@ -4,10 +4,10 @@
 //! tooltip that waits for the pointer to rest, and a long list that scrolls.
 
 use app_client::Input;
-use app_client::Press;
 use app_client::command::Request;
 use app_client::settings::Setting;
 use app_screens::screens::settings::Message as SettingsMessage;
+use game_hud::prompts::bar::Message as BarMessage;
 use game_table::table::Window;
 use glam::Vec2;
 use kit_base::tokens::{color, gradient, size, type_style};
@@ -390,7 +390,7 @@ fn a_tooltip_shows_after_the_pointer_rests_500_ms_and_not_before() {
     (client.layer_mut()).show(Some(
         row()
             .name("dock")
-            .child(widgets::button("Undo").on_press(Press::Undo))
+            .child(widgets::button("Undo").on_press(BarMessage::Undo))
             .child(widgets::tooltip("Undo the last action", "Undo")),
     ));
     let frame = client.frame(OPEN);
@@ -425,7 +425,7 @@ fn a_tooltip_shows_after_the_pointer_rests_500_ms_and_not_before() {
 fn a_50_row_list_in_a_short_box_is_on_screen_and_reachable_with_only_its_visible_rows_interactive()
 {
     let mut layer = Layer::new();
-    let rows = (0..50).map(|n| text(&format!("Entry {n}")).on_press(Press::Undo));
+    let rows = (0..50).map(|n| text(&format!("Entry {n}")).on_press(BarMessage::Undo));
     layer.show(Some(
         row()
             .name("log panel")

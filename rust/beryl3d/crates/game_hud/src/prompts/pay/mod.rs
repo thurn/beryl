@@ -4,25 +4,10 @@
 //! Pay: until then those permanents are outlined as anything else that may be picked. A click
 //! on a permanent where it lies picks it or takes it back, through the table's pointer.
 
-use beryl_protocol::prompt::{ButtonId, Marked, PromptView};
+use beryl_protocol::prompt::{ButtonId, Marked};
 use beryl_protocol::script::Mark;
 
-use super::bar::bar;
 use super::{Shown, Steps, marks};
-use crate::hud::HudIn;
-use kit_ui::element::Element;
-
-/// The prompt bar, with how much of the cost is still to pay after what it asks, as the web's
-/// `Asks` (`ui/src/stage/PromptBar.tsx`) writes it. A mana payment's title already names the
-/// whole cost ("Pay {1}{W}."), so before anything is picked it shows the amount once. A crew or
-/// waterbend cost keeps its amount beside the title.
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "every shape returns an `Option`: a built shape may show nothing in the flat layer"
-)]
-pub(super) fn screen(prompt: &PromptView, input: &HudIn) -> Option<Element> {
-    Some(bar(prompt, input, None))
-}
 
 /// Whether `button` is the one whose hover shows what the payment would tap: Auto Pay.
 pub(super) fn shows(button: ButtonId) -> bool {
@@ -45,4 +30,18 @@ fn look(shown: Shown, marked: Marked) -> Option<Mark> {
         (Mark::Eligible, true) => None,
         (mark, _) => Some(mark),
     }
+}
+
+mod view;
+
+prompt_feature!(Pay, view::view, own);
+
+/// A mana payment's title already names the full cost, so show an amount next
+/// to it only after some mana has been paid. Other costs always show the amount.
+pub(super) fn shows_remaining(
+    prompt: &beryl_protocol::prompt::PromptView,
+    cost: &str,
+    left: &str,
+) -> bool {
+    !prompt.is(beryl_protocol::prompt::Purpose::Mana) || left != cost
 }

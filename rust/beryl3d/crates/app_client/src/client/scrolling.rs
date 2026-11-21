@@ -82,17 +82,25 @@ impl Client {
         wheel: Option<Vec2>,
     ) -> Option<(Target, Viewport)> {
         let point = pointer.position;
-        if let Some((id, view)) = self.layer.scroll_target_at(point, self.open, wheel) {
+        if let Some((id, view)) =
+            self.layer
+                .scroll_target_at(point, self.features.layer_open, wheel)
+        {
             // Let mouse drags select text inside a scrollable sheet.
             if wheel.is_none()
                 && pointer.kind == PointerKind::Mouse
-                && self.layer.field_at(point, self.open)
+                && self.layer.field_at(point, self.features.layer_open)
             {
                 return None;
             }
             return Some((Target::Element(id), view));
         }
-        if !rows || self.layer.press_at(point, self.open).is_some() {
+        if !rows
+            || self
+                .layer
+                .press_at(point, self.features.layer_open)
+                .is_some()
+        {
             return None;
         }
         let element = &self.frame.resolved[hit(&self.frame, point)? as usize];
@@ -104,7 +112,7 @@ impl Client {
     pub(super) fn scroll_key(&mut self, key: Key) -> bool {
         let update = self
             .layer
-            .scroll_key(key, self.open)
+            .scroll_key(key, self.features.layer_open)
             .map(|(id, offset)| (Target::Element(id), offset))
             .or_else(|| {
                 let row = self

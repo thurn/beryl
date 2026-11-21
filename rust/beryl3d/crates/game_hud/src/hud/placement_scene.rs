@@ -153,6 +153,45 @@ impl PlacementScene {
         Some((choice, candidate.bounds))
     }
 
+    /// The bounds, ids and groups of the table and phase nodes a prompt can query.
+    /// Control placement does not change this source geometry.
+    pub(crate) fn prompt_geometry(&self) -> Vec<(ElementId, Option<u32>, Rect)> {
+        self.tree
+            .borrow()
+            .nodes()
+            .iter()
+            .filter(|node| node.keep_clear.is_none())
+            .map(|node| (node.id, node.parent, node.space.screen_bounds()))
+            .collect()
+    }
+
+    /// A prompt solves its controls against a private copy of the table.
+    #[must_use]
+    pub(crate) fn prompt_scene(&self) -> Self {
+        let mut tree = Tree::default();
+        for node in self
+            .tree
+            .borrow()
+            .nodes()
+            .iter()
+            .filter(|node| node.keep_clear.is_none())
+        {
+            tree.push(node.clone());
+        }
+        Self {
+            tree: RefCell::new(tree),
+            clearances: RefCell::default(),
+        }
+    }
+
+    pub(crate) fn take_clearances(self) -> Vec<Clearance> {
+        self.clearances.into_inner()
+    }
+
+    pub(crate) fn add_clearances(&self, clearances: &[Clearance]) {
+        self.clearances.borrow_mut().extend_from_slice(clearances);
+    }
+
     /// The solved relations, shared with frames without copying their boxes.
     #[must_use]
     pub fn into_clearances(self) -> Arc<[Clearance]> {

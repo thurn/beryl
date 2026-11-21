@@ -14,23 +14,11 @@
 //! declares every creature that can attack, and the decline takes the declaration back or
 //! declares none.
 
-use beryl_protocol::prompt::{PromptView, ShapeBody};
+use beryl_protocol::prompt::ShapeBody;
 use beryl_protocol::script::Subject;
 
-use super::{Shown, Steps, begin_spans, end_spans, mark_spans, prompt_bar};
-use crate::hud::HudIn;
+use super::{Shown, Steps, begin_spans, end_spans, mark_spans};
 use game_play::light::{ArrowSpan, Span};
-use kit_ui::element::Element;
-
-/// What the flat layer shows for `prompt`: the prompt bar. A player the prompt marks is aimed
-/// at by a press on their life total (`CountFloats`).
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "every shape returns an `Option`: a built shape may show nothing in the flat layer"
-)]
-pub(super) fn screen(prompt: &PromptView, input: &HudIn) -> Option<Element> {
-    Some(prompt_bar(prompt, input))
-}
 
 /// Makes what the table shows for the declaration `shown` replace what it showed for `was`, as
 /// one beat: the marks and lines `was` drew and `shown` does not end, then those new in `shown`
@@ -70,3 +58,7 @@ fn spans(prompt: Option<Shown<'_>>) -> impl Iterator<Item = Span> + '_ {
         mark_spans(shown.prompt).chain(lines)
     })
 }
+
+mod view;
+
+prompt_feature!(Declare, view::view, own);

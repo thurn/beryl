@@ -16,8 +16,8 @@ mod gesture;
 use std::collections::VecDeque;
 
 use beryl_protocol::GameUpdate;
-use beryl_protocol::prompt::{Click, ClickRequest, PromptView};
-use beryl_protocol::protocol::{DecisionId, SessionId, Status};
+use beryl_protocol::prompt::Click;
+use beryl_protocol::protocol::SessionId;
 use beryl_protocol::script::{OwnTimings, Verb, own_timings};
 
 use crate::settings::Settings;
@@ -110,28 +110,12 @@ pub struct Client {
     session: Option<SessionId>,
     /// The music last asked of the host, so that it is asked for again only when it changes.
     music: Option<Music>,
-    /// The timing of every step the client makes itself, read once at startup.
-    own_timings: OwnTimings,
-    /// The open decision and its prompt's latest state, from the view or a click's reply.
-    prompt: Option<(DecisionId, PromptView)>,
-    /// The prompt's state before its latest change, and whether the next `frame` still has to
-    /// call `prompts::own` for that change at its `now`. Kept here, not cloned in `frame`, so
-    /// that a frame allocates nothing.
-    was: Option<(DecisionId, PromptView)>,
-    own_due: bool,
-    suggesting: Suggesting,
-    /// What the prompt's own steps depend on besides the prompt (`own::Owned`).
-    owned: own::Owned,
-    /// How many views the client has been given, and, once `record` is called, every step the
-    /// prompts have made themselves since.
+    /// Timing shared by prompts and other steps the client plays itself.
+    step_timings: OwnTimings,
+    /// How many session views the client has been given.
     views: usize,
-    own_record: Option<Vec<prompts::OwnRecord>>,
-    /// Whether the prompt bar is drawn and takes presses. The bar of the latest view is laid out
-    /// as the view arrives, because layout runs in `handle`, but it opens only once that view's
-    /// script and every script before it have played out (`Show::settled`), as the web
-    /// interface's prompt opens when its view has played out. Set by each `frame`, so a press
-    /// reaches only a bar the last frame drew. The bar waits for it (`Element::waits`).
-    open: bool,
+    /// Where the mouse is over the window, while it is.
+    mouse: Option<glam::Vec2>,
     /// What the primary pointer is doing since it went down (`gesture`), and the screen and
     /// sheet the flat layer last showed, a change of which ends it.
     gesture: gesture::Gesture,
@@ -143,9 +127,6 @@ pub struct Client {
     wake: Wake,
     requests: VecDeque<Request>,
     commands: VecDeque<SessionCommand>,
-    /// The decision of each click sent and not yet answered, oldest first. The session answers
-    /// commands in order, so each `Reply::Click` is for the oldest.
-    clicks: VecDeque<DecisionId>,
     tier: Tier,
     /// Whether the host has said memory is low (`Lifecycle::LowMemory`), which fixes the tier at
     /// Baseline.
@@ -154,14 +135,6 @@ pub struct Client {
     manual: manual::Manual,
     /// The fingers on a touch screen (`touch`).
     touch: Touch,
-}
-
-/// Whether the pointer is on the open prompt's button that shows what it would tap
-/// (`prompts::shows`), and whether it was when `prompts::own` last ran, beside `Client::was`.
-#[derive(Clone, Copy, Debug, Default)]
-struct Suggesting {
-    now: bool,
-    was: bool,
 }
 
 impl Client {
@@ -184,15 +157,9 @@ impl Client {
             settings: Settings::default(),
             session: None,
             music: None,
-            own_timings: own_timings(),
-            prompt: None,
-            was: None,
-            own_due: false,
-            suggesting: Suggesting::default(),
-            owned: own::Owned::default(),
+            step_timings: own_timings(),
             views: 0,
-            own_record: None,
-            open: false,
+            mouse: None,
             gesture: gesture::Gesture::None,
             shown: (Screen::Game, None),
             platform: Platform::Mac,
@@ -200,7 +167,6 @@ impl Client {
             wake: Wake::Never,
             requests: VecDeque::new(),
             commands: VecDeque::new(),
-            clicks: VecDeque::new(),
             tier: Tier::Baseline,
             low_memory: false,
             manual: manual::Manual::default(),
@@ -230,9 +196,14 @@ impl Client {
             Input::Update(update) => self.take_game_update(update),
             Input::Reply(Reply::CardSearch(text, hits)) => self.take_token_hits(text, hits),
             Input::Reply(Reply::TableAct(reply)) => self.take_table_reply(reply),
-            Input::Reply(Reply::Click(Ok(reply))) => self.click_replied(reply),
+            Input::Reply(Reply::Click(Ok(reply))) => {
+                if self.features.prompts.reply(reply, self.views, &self.show) {
+                    self.prepare_counts();
+                    self.show_screen();
+                }
+            }
             Input::Reply(Reply::Click(Err(_))) => {
-                self.clicks.pop_front();
+                self.features.prompts.rejected();
                 self.inputs.push(input);
             }
             Input::Lobby(update) => self.take_lobby(*update),
@@ -302,11 +273,9 @@ impl Client {
         }
         self.views += 1;
         self.take_session(&update);
-        self.set_source(&update.view.status);
-        self.set_prompt(match &update.view.status {
-            Status::Deciding { decision } => Some((decision.id, (*decision.prompt).clone())),
-            _ => None,
-        });
+        self.features
+            .prompts
+            .take_view(&update.view.status, self.views, &self.show);
         self.prepare_pill(&update.view);
         self.receive_stops(&update);
         // The same view sent again says nothing new happened.
@@ -388,12 +357,11 @@ impl Client {
         let reporting = self.bug_open();
         self.inputs.clear();
         self.touch_frame(now);
-        self.own(table_now);
-        self.set_aims(self.table_open());
+        self.advance_prompt(table_now);
         self.table_frame(table_now);
         let covers = self.prompt_covers_table();
         self.show.cover_table(covers);
-        let targets = self.targets(self.table_open());
+        let targets = self.features.prompts.targets(self.table_open());
         let transitioning =
             self.tick_layer(now) | self.shake_button(table_now) | self.scrolling.moving(now);
         self.show.pointer_mut().advance(table_now);
@@ -450,7 +418,7 @@ impl Client {
         builder.layout_work(layout_nodes, text_runs);
         builder.placement_work(self.show.table().take_placed(), self.show.take_compiled());
         // The bug report is drawn whether or not the table has settled (`bug`).
-        self.open = reporting || self.show.settled();
+        self.features.layer_open = reporting || self.show.settled();
         let faces = if self.screen == Screen::Gallery {
             self.gallery_faces.as_ref()
         } else {
@@ -468,7 +436,7 @@ impl Client {
         self.layer.write_with(
             &mut builder,
             &self.show.table().camera().screen_plane(),
-            self.open,
+            self.features.layer_open,
             layers.as_ref(),
         );
         builder.finish();
@@ -478,7 +446,7 @@ impl Client {
 
     /// Resolves pointer actions against the drawn frame and schedules its successor.
     fn finish_frame(&mut self, table_now: u64, transitioning: bool) {
-        self.placed_let_go();
+        self.features.prompts.placed_let_go(&mut self.show);
         // The element a press under the mouse would reach is drawn `hovered`. A press on a card
         // that ended since the last frame and means a click on it (a press that picked nothing
         // up, or a card carried off the hand and let go) clicks the open prompt on that card;
@@ -494,7 +462,7 @@ impl Client {
         }
         // The inspector and a pile's count follow what was just found under the pointer in the
         // next frame, and a prompt whose view has just played out draws its marks in it.
-        let own_due = self.own_due && self.show.settled();
+        let own_due = self.features.prompts.due() && self.show.settled();
         let inspecting = self.features.inspector().needs_frame(self.hovered_slot());
         self.wake =
             if transitioning || own_due || inspecting || self.features.piles().due(&self.show) {
@@ -543,28 +511,22 @@ impl Client {
     /// Clicks the open prompt, naming the decision and the prompt's state the click was made
     /// on. Does nothing while no prompt is open.
     fn click(&mut self, click: Click) {
-        let Some((decision, prompt)) = &self.prompt else {
-            return;
-        };
-        self.clicks.push_back(*decision);
-        self.commands.push_back(SessionCommand::Click(ClickRequest {
-            decision: *decision,
-            revision: prompt.revision,
-            click,
-        }));
+        if let Some(request) = self.features.prompts.click(click) {
+            self.commands.push_back(SessionCommand::Click(request));
+        }
     }
 
     /// From now on, keeps a record of every script the client is given, for the interface
     /// checks (`Show::record`).
     pub fn record(&mut self) {
         self.show.record();
-        self.own_record.get_or_insert_default();
+        self.features.prompts.record();
     }
 
     /// Every step the prompts have made themselves since `record` was called, in order.
     #[must_use]
     pub fn own_history(&self) -> &[prompts::OwnRecord] {
-        self.own_record.as_deref().unwrap_or_default()
+        self.features.prompts.history()
     }
 
     /// The record of every script given since `record` was called, in order.

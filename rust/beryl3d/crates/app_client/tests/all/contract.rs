@@ -208,11 +208,11 @@ fn the_same_inputs_and_times_give_the_same_frames() {
 }
 
 mod milestone_three {
-    use app_client::Press;
     use app_client::command::{Request, SessionCommand};
     use beryl_protocol::prompt::{ButtonId, Click, ClickRequest, PromptView, ShapeBody};
     use beryl_protocol::protocol::{LossReason, OutcomeView, Side, Status};
     use beryl_protocol::script::Arrow;
+    use game_hud::prompts::bar::Message as BarMessage;
     use kit_ui::element::Action;
 
     use app_client::settings::{Setting, Settings};
@@ -224,6 +224,7 @@ mod milestone_three {
     use game_hud::prompts;
     use game_hud::screens::game::Furniture;
     use game_table::table::Window;
+    use kit_frame::frame::Role;
     use kit_scene::Feature;
     use kit_ui::widgets::{FieldState, Fields};
 
@@ -236,7 +237,7 @@ mod milestone_three {
     static ENTRIES: screens::TableEntries = screens::TableEntries::new();
     static LOBBY: game_manual::manual::lobby::Lobby = game_manual::manual::lobby::Lobby::new();
 
-    use super::super::flat_layer::{client, deciding, decision, prompt};
+    use super::super::flat_layer::{client, deciding, decision, find, prompt};
 
     fn input<'a>(prompt: Option<&'a PromptView>, settings: &'a Settings) -> ScreenIn<'a> {
         ScreenIn {
@@ -366,29 +367,16 @@ mod milestone_three {
 
     #[test]
     fn every_prompt_shape_shows_the_prompt_bar() {
-        let settings = Settings::default();
-        // A divide's bar also says how much is left, and its element holds the share over each
-        // recipient: `prompts_divide` in `beryl_inspect` tests what it shows.
-        let built = |body: &ShapeBody| matches!(body, ShapeBody::Divide { .. });
-        for body in bodies().into_iter().filter(|body| !built(body)) {
+        for body in bodies() {
+            let mut client = client();
             let mut shaped = prompt("Choose");
             shaped.body = body;
-            let input = input(Some(&shaped), &settings);
-            let element =
-                prompts::screen(&shaped, &input.hud()).expect("every shape shows its bar");
-            let bar = prompts::prompt_bar(&shaped, &input.hud());
-            assert_eq!(element.name, bar.name, "{:?}", shaped.body);
-            // A shape may add its own controls to the bar, as a number adds its steps, but
-            // keeps the bar's title and buttons in their order.
-            let mut shown = element.children.iter();
-            for child in &bar.children {
-                assert!(
-                    shown.any(|element| element == child),
-                    "{:?} lacks {:?}",
-                    shaped.body,
-                    child.name
-                );
-            }
+            let title = prompts::prompt_title(&shaped, false).into_owned();
+            client.handle(deciding(shaped));
+            let frame = client.frame(0);
+            find(frame, Role::Text, &title);
+            find(frame, Role::Button, "Auto Pay");
+            find(frame, Role::Button, "Cancel");
         }
     }
 
@@ -396,7 +384,7 @@ mod milestone_three {
     fn a_button_press_clicks_the_open_prompt() {
         let mut client = client();
         client.handle(deciding(prompt("Pay {1}{U}")));
-        client.press(&Action::new(Press::Button(ButtonId::Auto)));
+        client.press(&Action::new(BarMessage::Button(ButtonId::Auto)));
         assert_eq!(
             client.next_command(),
             Some(SessionCommand::Click(ClickRequest {

@@ -9,14 +9,14 @@ use super::Client;
 use super::features::{Placement, ViewInputs};
 
 use crate::command::{Request, SessionCommand};
-use app_screens::screens::{self, Screen, ScreenIn, ScreenPress, Sheet, bug_report};
+use app_screens::screens::{self, Screen, ScreenIn, Sheet, bug_report};
 use game_hud::hud::inspector::Message as Inspect;
 use game_hud::hud::placement_scene::PlacementScene;
 use game_hud::hud::rows::Message as RowMessage;
 use game_hud::screens::game::Furniture;
 use game_manual::manual::TableCommand;
 use game_table::faces::{FaceList, Faces};
-use kit_ui::element::{Action, floats};
+use kit_ui::element::{Action, Element, floats};
 use kit_ui::input::{AssetReady, FaceSize};
 use kit_ui::layout::FloatLook;
 
@@ -88,7 +88,7 @@ impl Client {
         {
             None
         } else {
-            mounted_screen.or_else(|| screens::screen(&input, furniture, log, result))
+            mounted_screen.or_else(|| self.compose_screen(&input, furniture, log, result))
         };
         let opening = under.is_some()
             && sheet.is_none()
@@ -175,7 +175,24 @@ impl Client {
             dock_full_control: dock.map(|input| self.features.full_control_view(input)),
             band_full_control: band.map(|input| self.features.full_control_view(input)),
             viewer: viewer.and_then(|input| self.features.viewer_view(input)),
+            prompt: None,
         }
+    }
+
+    /// Adds the mounted prompt to the game screen's furniture and overlays.
+    fn compose_screen(
+        &self,
+        input: &ScreenIn<'_>,
+        mut furniture: Furniture,
+        log: Option<Element>,
+        result: Option<Element>,
+    ) -> Option<Element> {
+        // The prompt takes presses only after the script of its view has played out.
+        furniture.prompt = (input.screen == Screen::Game)
+            .then(|| self.features.prompt_view(input.hud()))
+            .flatten()
+            .map(Element::waits);
+        screens::screen(input, furniture, log, result)
     }
 
     /// Everything the screen functions read, from what the client holds now. The inspector sets
@@ -190,8 +207,10 @@ impl Client {
             turn: self.features.steps().turn,
             // While the opening's coin spins, no decision is offered, as the web's `Opening` offers
             // none.
-            prompt: (self.prompt.as_ref())
-                .map(|(_, prompt)| prompt)
+            prompt: self
+                .features
+                .prompts
+                .current()
                 .filter(|_| !self.opening.spinning(self.now)),
             full_control: self.settings.full_control,
             stops: self.settings.stops,
@@ -283,7 +302,9 @@ impl Client {
         let undo = match self.screen {
             Screen::Table => game_manual::manual::commands::command("table.undo")
                 .map(|(index, _)| Action::new(TableCommand(index, false))),
-            _ => self.undoable().map(|_| Action::new(ScreenPress::Undo)),
+            _ => self
+                .undoable()
+                .map(|_| Action::new(game_hud::prompts::bar::Message::Undo)),
         };
         let bug = !self.bug_open();
         let profile = self.show.table().profile();
@@ -326,7 +347,7 @@ impl Client {
     /// click is waiting for its answer, as the web's `StageBoard` shows its undo button.
     pub(super) fn undoable(&self) -> Option<DecisionId> {
         let decision = self.open_decision()?;
-        (decision.undo > 0 && self.clicks.is_empty()).then_some(decision.id)
+        (decision.undo > 0 && !self.features.prompts.waiting_for_reply()).then_some(decision.id)
     }
 
     /// Takes back the viewer's latest answer, one for each press of undo or Cmd+Z, across the

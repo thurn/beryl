@@ -11,6 +11,7 @@ use app_screens::screens::start::{self, StartScreen};
 use app_screens::screens::testing::{self, TestingScreen};
 use app_screens::screens::{self, GalleryState, Screen, Sheet};
 use app_screens::settings::ScreenSettings;
+use beryl_protocol::prompt::{Click, PromptView};
 use beryl_protocol::{PlayerView, SessionId};
 use game_hud::hud::banner::Banner;
 use game_hud::hud::counts::CountFloats;
@@ -22,6 +23,9 @@ use game_hud::hud::piles::PileCounts;
 use game_hud::hud::rows::RowCounts;
 use game_hud::hud::steps::{self, StepRow};
 use game_hud::hud::viewer::{self, Viewer};
+use game_hud::prompts::{self, bar::PromptBar};
+
+mod prompt;
 use game_hud::screens::game_over::{self, GameOver};
 use game_manual::screens::table_entries::TableEntries;
 use game_table::faces::{FaceList, Faces};
@@ -64,6 +68,18 @@ const REGISTRY: &[Registration] = &[
     Registration::routed::<StepRow>(STEPS),
     Registration::routed::<FullControl>(FULL_CONTROL),
     Registration::routed::<Viewer>(VIEWER),
+    Registration::prompt::<PromptBar>("prompt-bar", Placement::PromptBar),
+    Registration::prompt::<prompts::Pick>("prompt-pick", Placement::Shape("pick")),
+    Registration::prompt::<prompts::Order>("prompt-order", Placement::Shape("order")),
+    Registration::prompt::<prompts::Split>("prompt-split", Placement::Shape("split")),
+    Registration::prompt::<prompts::YesNo>("prompt-yes-no", Placement::Shape("yesNo")),
+    Registration::prompt::<prompts::Number>("prompt-number", Placement::Shape("number")),
+    Registration::prompt::<prompts::Mode>("prompt-mode", Placement::Shape("mode")),
+    Registration::prompt::<prompts::Catalog>("prompt-catalog", Placement::Shape("catalog")),
+    Registration::prompt::<prompts::Divide>("prompt-divide", Placement::Shape("divide")),
+    Registration::prompt::<prompts::Pay>("prompt-pay", Placement::Shape("pay")),
+    Registration::prompt::<prompts::Declare>("prompt-declare", Placement::Shape("declare")),
+    Registration::prompt::<prompts::Candidates>("prompt-candidates", Placement::Candidates),
 ];
 
 /// Locations in the flat layer's composition that take a registered feature.
@@ -73,6 +89,9 @@ pub(super) enum Placement {
     Sheet(Sheet),
     GameLog,
     GameOver,
+    PromptBar,
+    Shape(&'static str),
+    Candidates,
 }
 
 /// App inputs available to mounts. Each feature receives only the inputs it reads.
@@ -96,9 +115,10 @@ struct Registration {
     id: &'static str,
     placement: Option<Placement>,
     create: fn() -> Box<dyn Any>,
-    state: for<'a> fn(&'a Slots, &'static str) -> &'a dyn Debug,
+    state: fn(&Slots, &'static str) -> String,
     route: fn(&mut Client, &'static str, &Action) -> Option<bool>,
     view: for<'a> fn(&'a mut Features, &'static str, ViewInputs<'_>) -> Option<&'a Element>,
+    prompt_view: Option<prompt::Draw>,
 }
 
 impl Registration {
@@ -111,11 +131,15 @@ impl Registration {
             id,
             placement,
             create: || Box::new(FeatureSlot::<F>::default()),
-            state: |slots, id| slots[id].downcast_ref::<FeatureSlot<F>>().unwrap().state(),
+            state: |slots, id| {
+                print_state(slots[id].downcast_ref::<FeatureSlot<F>>().unwrap().state())
+            },
             route: route::<F>,
             view: F::mounted_view,
+            prompt_view: None,
         }
     }
+
     // Playback variants are prepared separately in Layer. The registry owns
     // their state even though there is no single screen mount to cache.
     const fn prepared<S: Debug + Default + 'static>(id: &'static str) -> Self {
@@ -123,9 +147,10 @@ impl Registration {
             id,
             placement: None,
             create: || Box::new(S::default()),
-            state: |slots, id| slots[id].downcast_ref::<S>().unwrap(),
+            state: |slots, id| print_state(slots[id].downcast_ref::<S>().unwrap()),
             route: |_, _, _| None,
             view: |_, _, _| None,
+            prompt_view: None,
         }
     }
 
@@ -136,6 +161,10 @@ impl Registration {
 
 pub(super) struct Features {
     slots: Slots,
+    pub prompts: prompts::router::Router,
+    /// The layer's waiting elements draw and take input after playback settles.
+    /// The bug report opens the layer even while it freezes the table.
+    pub layer_open: bool,
     /// The route of the open sheet, shared by the settings and bug report.
     pub sheet: Option<Sheet>,
     /// Narration derived from the ordered session views, including views no
@@ -153,6 +182,8 @@ impl Default for Features {
                 .iter()
                 .map(|entry| (entry.id, (entry.create)()))
                 .collect(),
+            prompts: prompts::router::Router::default(),
+            layer_open: false,
             sheet: None,
             log_history: Logged::default(),
             frame_times: BTreeSet::new(),
@@ -224,6 +255,15 @@ impl Features {
 
     pub fn inspector_mut(&mut self) -> &mut Inspector {
         self.prepared_mut(INSPECTOR)
+    }
+
+    pub fn inspector_and_prompt(&mut self) -> (&mut Inspector, Option<&PromptView>) {
+        let inspector = self
+            .slots
+            .get_mut(INSPECTOR)
+            .and_then(|slot| slot.downcast_mut())
+            .expect("registered HUD state");
+        (inspector, self.prompts.current())
     }
 
     pub fn steps(&self) -> &steps::State {
@@ -308,17 +348,21 @@ impl Features {
         (entry.view)(self, entry.id, inputs).cloned()
     }
 
-    pub fn state(&self, id: &str) -> Option<&dyn Debug> {
+    pub fn state(&self, id: &str) -> Option<String> {
         let entry = REGISTRY.iter().find(|entry| entry.id == id)?;
         Some((entry.state)(&self.slots, entry.id))
     }
+}
+
+fn print_state(state: &dyn Debug) -> String {
+    format!("{state:#?}")
 }
 
 impl Client {
     /// Prints the current state of a registered feature, by id.
     #[must_use]
     pub fn feature_state(&self, id: &str) -> Option<String> {
-        self.features.state(id).map(|state| format!("{state:#?}"))
+        self.features.state(id)
     }
 
     pub(super) fn update_start(&mut self, message: &start::Message) {
@@ -346,6 +390,12 @@ impl Client {
 
     /// Returns whether a registered feature handled the action and changed the view.
     pub(super) fn route_feature(&mut self, action: &Action) -> Option<bool> {
+        // Life totals come from the table's playback crate. A target on a
+        // life total enters the same session router as a shape's flat controls.
+        if let Some(&click @ Click::On { .. }) = action.downcast_ref::<Click>() {
+            self.click(click);
+            return Some(false);
+        }
         REGISTRY
             .iter()
             .find_map(|entry| (entry.route)(self, entry.id, action))

@@ -1,7 +1,5 @@
 //! Dispatches messages received from the flat layer and the client's own controls.
 
-use beryl_protocol::prompt::{ButtonId, Click};
-
 use super::Client;
 use app_screens::screens::ScreenPress;
 use game_manual::manual::{LobbyPress, TableCommand, TablePress};
@@ -14,11 +12,6 @@ use kit_ui::widgets::{MenuChoice, MenuId};
 /// know, such as the open decision's id.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Press {
-    /// One of the open prompt's buttons.
-    Button(ButtonId),
-    /// Any click on the open prompt other than a button: a card, an ability or a player, a
-    /// number, a catalog entry, or a card dropped into a pile.
-    Prompt(Click),
     /// A row of an open menu, counting from 0 over all its groups.
     Menu(MenuId, u16),
     /// Open one of the gallery's example context menus.
@@ -36,8 +29,6 @@ pub enum Press {
     Table(game_manual::manual::TablePress),
     /// One of the manual table's lobby controls.
     Lobby(LobbyPress),
-    /// Take back the viewer's latest answer that can be taken back (`Client::undo`).
-    Undo,
 }
 
 /// What a `Press::Dismiss` closes.
@@ -61,11 +52,8 @@ impl Client {
                 ScreenPress::GalleryMenu(kind) => Press::GalleryMenu(kind),
                 ScreenPress::GalleryQuery(query) => Press::GalleryQuery(query),
                 ScreenPress::DismissMenu => Press::Dismiss(Dismiss::Menu),
-                ScreenPress::Undo => Press::Undo,
             };
             self.dispatch_press(&press);
-        } else if let Some(&click) = action.downcast_ref::<Click>() {
-            self.click(click);
         } else if let Some(&press) = action.downcast_ref::<TablePress>() {
             self.table_press(press);
         } else if let Some(&press) = action.downcast_ref::<LobbyPress>() {
@@ -84,10 +72,8 @@ impl Client {
     /// and nowhere else.
     pub(crate) fn dispatch_press(&mut self, press: &Press) {
         match *press {
-            Press::Button(button) => self.click(Click::Button { button }),
-            Press::Prompt(click) => self.click(click),
             Press::GalleryMenu(kind) => {
-                let at = self.owned.mouse.unwrap_or_else(|| {
+                let at = self.mouse.unwrap_or_else(|| {
                     glam::Vec2::new(self.window.size.width, self.window.size.height) / 2.0
                 });
                 self.gallery.menu = Some((kind, at));
@@ -98,7 +84,6 @@ impl Client {
                 self.show_screen();
             }
             Press::Menu(game_manual::manual::menus::MENU, row) => self.press_table_menu(row),
-            Press::Undo => self.undo(),
             Press::Menu(..) => {}
             Press::Dismiss(Dismiss::Menu) => {
                 if self.gallery.menu.take().is_some() {

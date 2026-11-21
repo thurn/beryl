@@ -45,9 +45,10 @@ impl Client {
 
     pub(super) fn receive_stops(&mut self, update: &GameUpdate) {
         let at = self
-            .prompt
-            .as_ref()
-            .map(|(decision, _)| (update.session, *decision));
+            .features
+            .prompts
+            .decision()
+            .map(|decision| (update.session, decision));
         let held = update.view.stops;
         self.features.steps_mut().receive(at, held);
         self.send_stops_from(held);
@@ -62,7 +63,7 @@ impl Client {
     /// The session takes stops only at the player's decision. A setting made
     /// while the opponent acts is sent at the next decision.
     fn send_stops_from(&mut self, held: StopsSetting) {
-        let (Some(session), Some(_)) = (self.session, &self.prompt) else {
+        let (Some(session), Some(_)) = (self.session, self.features.prompts.decision()) else {
             return;
         };
         let want = self.settings.stops;

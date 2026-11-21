@@ -1,4 +1,4 @@
-//! Messages from the gallery and the game's undo button.
+//! Messages from the gallery.
 
 use super::{GalleryMenu, GalleryQuery};
 
@@ -7,5 +7,4 @@ pub enum ScreenPress {
     GalleryMenu(GalleryMenu),
     GalleryQuery(Option<GalleryQuery>),
     DismissMenu,
-    Undo,
 }

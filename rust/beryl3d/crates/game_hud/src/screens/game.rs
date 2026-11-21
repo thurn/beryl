@@ -15,6 +15,7 @@ use kit_ui::element::{Action, Anchor, Element, holder, row};
 /// The registered views the active profile places on the game screen.
 #[derive(Default)]
 pub struct Furniture {
+    pub prompt: Option<Element>,
     pub players: Option<Element>,
     pub steps: Option<Element>,
     pub dock_full_control: Option<Element>,
@@ -35,7 +36,7 @@ pub fn game(
     let layout = &input.profile.data().hud;
     let opening = opening::opening(input);
     let is_opening = opening.is_some();
-    let prompt = waiting(input).filter(|_| !opening::choosing_start(input));
+    let prompt = views.prompt.filter(|_| !opening::choosing_start(input));
     let covers = input.prompt.is_some_and(prompts::covers_table);
     let overlays = overlays(input, log, result, views.viewer);
     let mut menu = Some(menu);
@@ -105,14 +106,4 @@ fn overlays(
             _ => None,
         })
         .collect()
-}
-
-/// The open prompt, or what the screen shows while the opponent decides, waiting for the table
-/// to settle (`Element::waits`): the web interface's prompt opens once its view has played out.
-fn waiting(input: &HudIn) -> Option<Element> {
-    input
-        .prompt
-        .and_then(|prompt| prompts::screen(prompt, input))
-        .or_else(|| prompts::waiting(input))
-        .map(Element::waits)
 }

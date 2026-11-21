@@ -28,7 +28,7 @@ impl Client {
         if self.bug_open() {
             self.features.bug().screen_open
         } else {
-            self.open
+            self.features.layer_open
         }
     }
 
@@ -66,7 +66,7 @@ impl Client {
             self.layer.focus(None);
             self.update_bug(&Message::Opened {
                 now: self.now,
-                screen_open: self.open,
+                screen_open: self.features.layer_open,
             });
         }
         true
@@ -133,7 +133,10 @@ impl Client {
     fn drag_region(&mut self, pointer: &Pointer) -> bool {
         if pointer.phase == PointerPhase::Down
             && pointer.button == Button::Primary
-            && self.layer.press_at(pointer.position, self.open).is_some()
+            && self
+                .layer
+                .press_at(pointer.position, self.features.layer_open)
+                .is_some()
         {
             return false;
         }

@@ -27,7 +27,6 @@
 //! Not built yet: the web's face-down hand while the viewer has declared a mulligan.
 
 use beryl_protocol::PlayerView;
-use beryl_protocol::prompt::Click;
 use beryl_protocol::prompt::{PromptButton, PromptView, Purpose};
 use beryl_protocol::protocol::{CardHandling, Declaration, ObjectId, Side, Status, ZoneName};
 use beryl_protocol::script::{Mark, Subject};
@@ -116,7 +115,7 @@ pub fn opening(input: &HudIn) -> Option<Element> {
     // opening offers no decision, as the web's offers none until its view has played out.
     let caught_up = input.view.is_some_and(|latest| std::ptr::eq(latest, view));
     let prompt = input.prompt.filter(|_| caught_up);
-    let picking = prompt.filter(|prompt| prompt.is(Purpose::PutOnBottom));
+    let picking = bottom_prompt(prompt);
     let hand: Vec<ObjectId> = (view.objects.iter())
         .filter(|object| object.zone == ZoneName::Hand && object.owner == Side::You)
         .map(|object| object.slot)
@@ -167,6 +166,11 @@ pub fn opening(input: &HudIn) -> Option<Element> {
         },
         input.profile,
     ))
+}
+
+/// Putting a mulligan card on the bottom uses the opening hand's slots.
+fn bottom_prompt(prompt: Option<&PromptView>) -> Option<&PromptView> {
+    prompt.filter(|prompt| prompt.is(Purpose::PutOnBottom))
 }
 
 /// What an opening shows: whether the viewer is on the play (none while that is still being
@@ -322,7 +326,7 @@ fn choice(buttons: &[PromptButton]) -> Option<Element> {
             widget(&view.label)
                 .min_width(size::BUTTON_WIDTH)
                 .enabled(view.enabled)
-                .on_press(Click::Button { button: view.id })
+                .on_press(crate::prompts::bar::Message::Button(view.id))
         })),
     )
 }

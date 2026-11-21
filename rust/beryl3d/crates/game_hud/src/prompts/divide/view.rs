@@ -10,16 +10,16 @@
 //! Each recipient wears the target mark the session sends, with an arrow to it from the spell
 //! or ability that asks, which the client begins and ends itself (`own`).
 
+use super::Divide;
+
 use beryl_protocol::prompt::{Click, PromptView, ShapeBody, Share};
 use beryl_protocol::protocol::Side;
 use beryl_protocol::script::Subject;
 use glam::Vec2;
 
-use super::bar::bar;
-use super::{Shown, Steps, begin_spans, end_spans, mark_spans, target_arrows};
 use crate::hud::HudIn;
 use crate::hud::placement_scene::{Group, PlacementScene, inset, rect};
-use game_play::light::Span;
+use crate::prompts::feature::Details;
 use kit_base::tokens::{color, size, space, type_style};
 use kit_frame::frame::ElementId;
 use kit_scene::{Slot, hit::contains};
@@ -30,13 +30,9 @@ use kit_ui::widgets::{icon_button, icons};
 /// after what it asks, as the web's `Asks` (`ui/src/stage/PromptBar.tsx`) writes it, and the
 /// share of each recipient that is an object. A share is laid out at its recipient, out of the
 /// bar's flow (`layout::anchor`).
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "every shape returns an `Option`: a built shape may show nothing in the flat layer"
-)]
-pub(super) fn screen(prompt: &PromptView, input: &HudIn) -> Option<Element> {
+pub(super) fn view(prompt: &PromptView, input: &HudIn, bar: Element) -> Element {
     let ShapeBody::Divide { left, shares, .. } = &prompt.body else {
-        return Some(bar(prompt, input, None));
+        return bar;
     };
     let left = *left;
     let controls = (shares.iter()).filter_map(|&share| {
@@ -46,7 +42,7 @@ pub(super) fn screen(prompt: &PromptView, input: &HudIn) -> Option<Element> {
             share_control(share, left)
         }
     });
-    Some(bar(prompt, input, None).children(controls.flatten()))
+    bar.children(controls.flatten())
 }
 
 /// The control over a recipient that is an object: a column centred on it of the button that
@@ -83,9 +79,7 @@ fn edge_share(share: Share, left: u8, input: &HudIn, safe: Slot) -> Option<Vec<E
     let Subject::Object { slot } = share.on else {
         return None;
     };
-    let theirs = (input.view)
-        .and_then(|view| view.objects.iter().find(|object| object.slot == slot))
-        .is_some_and(|object| object.controller == Side::Opponent);
+    let theirs = opponent_controls(input, slot);
     let target = input.profile.data().checks.target_points;
     let (more, less) = steps(share, left, target);
     let mut control = column()
@@ -162,7 +156,7 @@ fn steps(Share { on, amount }: Share, left: u8, side: f32) -> (Element, Element)
             .radius(side / 2.0)
             .enabled(to.is_some());
         match to {
-            Some(n) => button.on_press(Click::Number { n, on: Some(on) }),
+            Some(n) => button.on_press(Divide::message(Click::Number { n, on: Some(on) })),
             None => button,
         }
     };
@@ -187,18 +181,24 @@ fn amount(amount: u8) -> Element {
         .min_width(size::SHARE_STEP)
 }
 
-/// Makes what the table shows for the division `shown` replace what it showed for `was`, as one
-/// beat: the marks and arrows `was` drew and `shown` does not end, then those new in `shown`
-/// begin. Allocates nothing.
-pub(super) fn own(shown: Option<Shown>, was: Option<Shown>, steps: &mut Steps) {
-    end_spans(spans, shown, was, steps);
-    begin_spans(spans, shown, was, steps);
+fn opponent_controls(input: &HudIn<'_>, slot: beryl_protocol::protocol::ObjectId) -> bool {
+    (input.view)
+        .and_then(|view| view.objects.iter().find(|object| object.slot == slot))
+        .is_some_and(|object| object.controller == Side::Opponent)
 }
 
-/// The spans the table draws for `prompt`, as `Prompts.#mark` does: each of its marks, and an
-/// arrow to each recipient from the spell or ability that asks (`target_arrows`).
-fn spans(prompt: Option<Shown<'_>>) -> impl Iterator<Item = Span> + '_ {
-    prompt
-        .into_iter()
-        .flat_map(|shown| mark_spans(shown.prompt).chain(target_arrows(shown)))
+pub(super) fn details(input: &HudIn<'_>) -> Details {
+    let shares = match input.prompt.map(|prompt| &prompt.body) {
+        Some(ShapeBody::Divide { shares, .. }) => shares.as_slice(),
+        _ => &[],
+    };
+    Details::Divide(
+        shares
+            .iter()
+            .map(|share| match share.on {
+                Subject::Object { slot } => opponent_controls(input, slot),
+                _ => false,
+            })
+            .collect(),
+    )
 }

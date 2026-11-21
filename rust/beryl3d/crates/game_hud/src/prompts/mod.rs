@@ -1,24 +1,40 @@
-//! Prompts: what the flat layer shows for the open prompt, and the marks and arrows the
-//! client begins and ends itself while the player answers it (docs/beryl-3d.md, "The flat
-//! layer"). Each group of shapes has a file of its own; both entry points are one match over
-//! the prompt's `ShapeBody`.
+//! The prompt bar and the features that present each session prompt shape.
 
+#[macro_use]
+mod feature;
 pub mod bar;
+mod candidates;
 mod catalog;
-mod choose;
 mod declare;
 mod divide;
+mod mode;
+mod number;
 pub mod order;
 mod pay;
 mod pick;
+pub mod router;
 mod split;
 mod tray;
+mod yes_no;
+
+pub use candidates::Candidates;
+pub use catalog::Catalog;
+pub use declare::Declare;
+pub use divide::Divide;
+pub use feature::{Command, Inputs, Mounted};
+pub use mode::Mode;
+pub use number::Number;
+pub use order::Order;
+pub use pay::Pay;
+pub use pick::Pick;
+pub use split::Split;
+pub use yes_no::YesNo;
 
 use beryl_protocol::prompt::{ButtonId, Marked, PromptButton, PromptView, Purpose, ShapeBody};
 use beryl_protocol::protocol::{ObjectId, PlayerView, ZoneName};
 use beryl_protocol::script::{Arrow, Mark, OwnStep, OwnTimings, StepTiming, Subject, Verb};
 
-pub use bar::{prompt_bar, title as prompt_title, waiting};
+pub use bar::title as prompt_title;
 pub use tray::Piles;
 
 use crate::hud::HudIn;
@@ -53,35 +69,6 @@ impl Shown<'_> {
     }
 }
 
-/// What the flat layer shows for `prompt`, if anything. While the prompt holds cards up in its
-/// tray, the table lies under the tray's shade, first in the flat layer so that the bar is drawn
-/// over it, and the cards held up are drawn over the flat layer (`Table::in_tray`), as the web
-/// interface's `TrayUnder` shades the table under them (`shades` in `ui/src/stage/Tray.tsx`).
-#[must_use]
-pub fn screen(prompt: &PromptView, input: &HudIn) -> Option<Element> {
-    let mut screen = shape_screen(prompt, input)?;
-    if Piles::of(prompt).is_some() {
-        screen.children.insert(0, shade(input));
-    }
-    Some(screen)
-}
-
-/// What the flat layer shows for the shape of `prompt`, if anything.
-fn shape_screen(prompt: &PromptView, input: &HudIn) -> Option<Element> {
-    match &prompt.body {
-        ShapeBody::Pick { .. } | ShapeBody::Candidates => pick::screen(prompt, input),
-        ShapeBody::Split { .. } => split::screen(prompt, input),
-        ShapeBody::Order { .. } => order::screen(prompt, input),
-        ShapeBody::Pay { .. } => pay::screen(prompt, input),
-        ShapeBody::Declare { .. } => declare::screen(prompt, input),
-        ShapeBody::YesNo { .. } | ShapeBody::Number { .. } | ShapeBody::Mode { .. } => {
-            choose::screen(prompt, input)
-        }
-        ShapeBody::Catalog { .. } => catalog::screen(prompt, input),
-        ShapeBody::Divide { .. } => divide::screen(prompt, input),
-    }
-}
-
 /// The whole window in the tray's shade (`.stage-tray`), which the pointer goes through.
 fn shade(input: &HudIn) -> Element {
     let window = input.window.size;
@@ -103,7 +90,7 @@ fn shade(input: &HudIn) -> Element {
 #[must_use]
 pub fn faces(input: &HudIn) -> Vec<FaceId> {
     input.prompt.map_or_else(Vec::new, |prompt| {
-        choose::way_faces(prompt, input).flatten().collect()
+        mode::way_faces(prompt, input).flatten().collect()
     })
 }
 
@@ -127,7 +114,7 @@ pub fn covers_table(prompt: &PromptView) -> bool {
 pub fn shows(prompt: &PromptView, button: ButtonId) -> bool {
     match prompt.body {
         ShapeBody::Pay { .. } => pay::shows(button),
-        ShapeBody::YesNo { .. } => choose::shows(prompt, button),
+        ShapeBody::YesNo { .. } => yes_no::shows(prompt, button),
         _ => false,
     }
 }
@@ -142,7 +129,7 @@ pub(super) fn on_table(prompt: &PromptView) -> bool {
 /// The buttons of `prompt` that are the ways to use a card, where it is the choice among them
 /// (a mode of purpose `act`): each way the card can be cast, played or activated, and each
 /// activated ability it cannot use now. The web's `waysOf` (`ui/src/stage/prompt.ts`). These
-/// stand over the table as the card once a way (`choose`), not in the prompt bar.
+/// stand over the table as the card once a way (`Mode`), not in the prompt bar.
 pub fn ways(prompt: &PromptView) -> impl Iterator<Item = &PromptButton> {
     let choosing = matches!(prompt.body, ShapeBody::Mode { .. }) && prompt.is(Purpose::Act);
     (prompt.buttons.iter())
@@ -178,20 +165,21 @@ fn own_shape(shown: Option<Shown>, was: Option<Shown>, steps: &mut Steps) {
         return;
     };
     match body {
-        ShapeBody::Pick { .. } | ShapeBody::Candidates => {
-            pick::own(shown, was, steps);
-        }
-        ShapeBody::Split { .. } => split::own(shown, was, steps),
-        ShapeBody::Order { .. } => order::own(shown, was, steps),
-        ShapeBody::Pay { .. } => pay::own(shown, was, steps),
-        ShapeBody::Declare { .. } => declare::own(shown, was, steps),
-        ShapeBody::YesNo { .. } | ShapeBody::Number { .. } | ShapeBody::Mode { .. } => {
-            choose::own(shown, was, steps);
-        }
-        ShapeBody::Catalog { .. } => catalog::own(shown, was, steps),
-        ShapeBody::Divide { .. } => divide::own(shown, was, steps),
+        ShapeBody::Pick { .. } => Pick::own(shown, was, steps),
+        ShapeBody::Candidates => Candidates::own(shown, was, steps),
+        ShapeBody::Split { .. } => Split::own(shown, was, steps),
+        ShapeBody::Order { .. } => Order::own(shown, was, steps),
+        ShapeBody::Pay { .. } => Pay::own(shown, was, steps),
+        ShapeBody::Declare { .. } => Declare::own(shown, was, steps),
+        ShapeBody::YesNo { .. } => YesNo::own(shown, was, steps),
+        ShapeBody::Number { .. } => Number::own(shown, was, steps),
+        ShapeBody::Mode { .. } => Mode::own(shown, was, steps),
+        ShapeBody::Catalog { .. } => Catalog::own(shown, was, steps),
+        ShapeBody::Divide { .. } => Divide::own(shown, was, steps),
     }
 }
+
+fn no_steps(_shown: Option<Shown>, _was: Option<Shown>, _steps: &mut Steps) {}
 
 /// Makes the marks on the table those of `shown` where they were those of `was`: the marks
 /// `was` had and `shown` has not end, then the tray lifts the cards `shown` holds up or lets

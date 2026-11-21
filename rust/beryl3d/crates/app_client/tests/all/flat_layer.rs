@@ -2,7 +2,6 @@
 //! by taffy with text shaped by parley, and the work it costs.
 
 use app_client::Input;
-use app_client::Press;
 use app_client::command::{Reply, SessionCommand};
 use app_client::{Client, Config};
 use beryl_protocol::GameUpdate;
@@ -15,6 +14,7 @@ use beryl_protocol::protocol::{
 };
 use beryl_protocol::script::Act;
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, timing};
+use game_hud::prompts::bar::Message as BarMessage;
 use game_table::table::Table;
 use glam::Vec2;
 use kit_base::tokens::{space, type_style};
@@ -481,6 +481,15 @@ fn an_answer_to_the_decision_before_leaves_the_next_prompt_open() {
     client.handle(Input::Reply(Reply::Click(Ok(ClickReply::Answered))));
     let frame = client.frame(1);
     find(frame, Role::Text, "Pay {U}");
+    // A click on the visible next prompt must use its id and current revision.
+    let at = centre(frame, find(frame, Role::Button, "Auto Pay"));
+    client.handle(pointer(PointerPhase::Down, at));
+    client.handle(pointer(PointerPhase::Up, at));
+    let Some(SessionCommand::Click(sent)) = client.next_command() else {
+        panic!("the next prompt still takes clicks");
+    };
+    assert_eq!(sent.decision.seq, decision().seq + 1);
+    assert_eq!(sent.revision, 3);
 }
 
 #[test]
@@ -739,13 +748,13 @@ fn a_float_with_a_press_takes_presses_and_one_without_does_not() {
     assert_eq!(layer.press_at(at, false), None);
     layer.float(
         LIFE,
-        Some(text("20").on_press(Press::Button(ButtonId::Auto))),
+        Some(text("20").on_press(BarMessage::Button(ButtonId::Auto))),
     );
     let frame = write_layer(&mut layer, false);
     let id = frame.resolved[find(&frame, Role::Text, "20")].id;
     assert_eq!(
         layer.press_at(at, false),
-        Some((id, Action::new(Press::Button(ButtonId::Auto)), true)),
+        Some((id, Action::new(BarMessage::Button(ButtonId::Auto)), true)),
         "a kept float keeps its look and takes presses with no prompt open"
     );
 }

@@ -4,10 +4,12 @@
 //! would hold cards up in, each a button that sends `Click::Entry` with its index. The entry
 //! the session says is chosen is lit. A list longer than its space scrolls (`widgets::list`).
 
+use super::Catalog;
+use crate::prompts::shade;
+
 use beryl_protocol::prompt::{Click, PromptView, ShapeBody};
 use glam::Vec2;
 
-use super::{Shown, Steps, prompt_bar};
 use crate::hud::HudIn;
 use game_table::table::TraySpace;
 use kit_base::tokens::{color, size, type_style};
@@ -19,22 +21,14 @@ use kit_ui::widgets::list;
 /// the entries over the shade. The shade comes first so that the bar is drawn over it, and it
 /// lets the pointer through, as the web's `.stage-tray` does; the table takes no press while
 /// it is up (`super::covers_table`).
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "every shape returns an `Option`: a built shape may show nothing in the flat layer"
-)]
-pub(super) fn screen(prompt: &PromptView, input: &HudIn) -> Option<Element> {
-    let mut bar = prompt_bar(prompt, input);
+pub(super) fn view(prompt: &PromptView, input: &HudIn, bar: Element) -> Element {
+    let mut bar = bar;
     if let ShapeBody::Catalog { entries, chosen } = &prompt.body {
-        bar.children.insert(0, super::shade(input));
+        bar.children.insert(0, shade(input));
         bar.children.push(entries_column(entries, *chosen, input));
     }
-    Some(bar)
+    bar
 }
-
-/// The marks and arrows the client draws itself for the prompt `shown`, which was `was`: none,
-/// since a catalog is about no object.
-pub(super) fn own(_shown: Option<Shown>, _was: Option<Shown>, _steps: &mut Steps) {}
 
 /// The entries in the session's order, in a scrolling list as wide as its widest entry, centred
 /// in the tray's space of the desktop layout as `.stage-choose` centres it, with the one `chosen`
@@ -92,5 +86,5 @@ fn entry(words: &str, index: u16, chosen: bool) -> Element {
         .border((rim, size::TRAY_PILE_BORDER))
         .color(color::TEXT)
         .selected(chosen)
-        .on_press(Click::Entry { index })
+        .on_press(Catalog::message(Click::Entry { index }))
 }

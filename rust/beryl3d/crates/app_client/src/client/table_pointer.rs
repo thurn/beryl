@@ -85,7 +85,10 @@ impl Client {
         if pointer.phase != PointerPhase::Down
             || pointer.button != Button::Primary
             || !self.at_table()
-            || self.layer.press_at(pointer.position, self.open).is_some()
+            || self
+                .layer
+                .press_at(pointer.position, self.features.layer_open)
+                .is_some()
         {
             return false;
         }
@@ -139,7 +142,10 @@ impl Client {
         match pointer.phase {
             PointerPhase::Down if pointer.button == Button::Primary => {
                 let empty = self.at_table()
-                    && self.layer.press_at(pointer.position, self.open).is_none()
+                    && self
+                        .layer
+                        .press_at(pointer.position, self.features.layer_open)
+                        .is_none()
                     && hit(&self.frame, pointer.position).is_none_or(|index| {
                         let element = &self.frame.resolved[index as usize];
                         !matches!(element.role, Role::Card | Role::Pile | Role::Player)
@@ -322,7 +328,7 @@ impl Client {
             self.manual.state.summary_over = over;
             self.show_screen();
         }
-        if let (Some(pick), Some(mouse)) = (self.manual.picking, self.owned.mouse) {
+        if let (Some(pick), Some(mouse)) = (self.manual.picking, self.mouse) {
             self.show.lit_mut().set_aims([arrows::aim(pick, mouse)]);
         }
     }

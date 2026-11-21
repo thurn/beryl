@@ -4,11 +4,11 @@
 
 use app_client::Client;
 use app_client::Input;
-use app_client::Press;
 use app_client::command::{Request, SessionCommand};
 use app_screens::screens::settings::Message as SettingsMessage;
 use beryl_protocol::prompt::{ButtonId, Click, ClickRequest, PromptButton, ShapeBody};
 use beryl_protocol::script::Subject;
+use game_hud::prompts::bar::Message as BarMessage;
 use glam::Vec2;
 use kit_frame::frame::{Role, StateBits};
 use kit_ui::element::Action;
@@ -22,9 +22,7 @@ use super::flat_layer::{centre, client, deciding, edges, find, pointer, prompt};
 const MS: u64 = 1_000_000;
 
 /// What pressing the prompt's Cancel button sends.
-const DECLINE: Press = Press::Prompt(Click::Button {
-    button: ButtonId::Decline,
-});
+const DECLINE: BarMessage = BarMessage::Button(ButtonId::Decline);
 
 /// A finger at `position`.
 fn touch(phase: PointerPhase, position: Vec2) -> Input {

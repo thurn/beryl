@@ -34,8 +34,7 @@ impl Client {
         let visible =
             matches!(self.screen, Screen::Game | Screen::Table) && self.features.sheet.is_none();
         let decision = self.open_decision().map(|decision| decision.id);
-        let prompt = self.prompt.as_ref().map(|(_, prompt)| prompt);
-        let inspector = self.features.inspector_mut();
+        let (inspector, prompt) = self.features.inspector_and_prompt();
         inspector.update(Message::Observe { hovered, until });
         let inspected = if visible {
             inspector.inspected_now(&self.frame, self.show.faces().list(), prompt, decision)

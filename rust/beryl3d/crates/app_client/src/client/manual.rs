@@ -120,7 +120,9 @@ impl Client {
             return false;
         }
         if self.screen == Screen::Table
-            && let Some((_, action, _)) = self.layer.press_at(pointer.position, self.open)
+            && let Some((_, action, _)) = self
+                .layer
+                .press_at(pointer.position, self.features.layer_open)
             && let Some(&TablePress::Counter { side, at }) = action.downcast_ref()
         {
             self.adjust_counter(side, at, false, TablePress::Counter { side, at });
@@ -269,7 +271,7 @@ impl Client {
         if view.table.is_none() {
             return;
         }
-        let pointed = (self.owned.mouse).map_or(Target::Table, |at| {
+        let pointed = (self.mouse).map_or(Target::Table, |at| {
             (self.viewer_card_at(at)).unwrap_or_else(|| manual::target_at(&self.frame, at))
         });
         let on_pointer = command.id.starts_with("life.")

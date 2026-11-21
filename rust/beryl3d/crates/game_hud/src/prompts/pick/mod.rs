@@ -13,23 +13,11 @@
 //! A prompt the session holds no state for is not the table's to show, as the web's `onTable`
 //! has it: it shows the prompt bar and draws nothing on the table.
 
-use beryl_protocol::prompt::{PromptView, ShapeBody};
+use beryl_protocol::prompt::ShapeBody;
 use beryl_protocol::script::{Mark, Subject};
 
-use super::{Shown, Steps, mark_spans, prompt_bar, target_arrows, tray};
-use crate::hud::HudIn;
+use super::{Shown, Steps, mark_spans, target_arrows, tray};
 use game_play::light::{MarkSpan, Span};
-use kit_ui::element::Element;
-
-/// What the flat layer shows for `prompt`: the prompt bar. A player the prompt marks is picked
-/// by a press on their life total (`CountFloats`).
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "every shape returns an `Option`: a built shape may show nothing in the flat layer"
-)]
-pub(super) fn screen(prompt: &PromptView, input: &HudIn) -> Option<Element> {
-    Some(prompt_bar(prompt, input))
-}
 
 /// Makes what the table shows for the prompt `shown` replace what it showed for `was`, as one
 /// beat (`tray::own`): its marks and arrows, and the cards its tray holds up.
@@ -60,4 +48,16 @@ fn spans(prompt: Option<Shown<'_>>) -> impl Iterator<Item = Span> + '_ {
             });
         marks.chain(arrows).chain(carried)
     })
+}
+
+mod view;
+
+prompt_feature!(Pick, view::view, own);
+
+/// Only a target choice whose next target is on the table draws an arrow
+/// from the source to the pointer. A tray covers the table instead.
+pub(super) fn seeks_target(prompt: &beryl_protocol::prompt::PromptView) -> bool {
+    prompt.is(beryl_protocol::prompt::Purpose::Target)
+        && matches!(&prompt.body, ShapeBody::Pick { tray, picked, most, .. }
+            if tray.is_empty() && picked.len() < usize::from(*most))
 }

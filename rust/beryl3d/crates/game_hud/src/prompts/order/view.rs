@@ -12,13 +12,15 @@
 //! lands in front of (`slot_at`, `Client::carry_item`). The order after each is the session's:
 //! its reply is drawn.
 
+use super::Order;
+
 use beryl_protocol::prompt::{Click, PromptView, ShapeBody};
 use beryl_protocol::protocol::{Candidate, CandidateView, PlayerView, Status};
 use beryl_protocol::script::Subject;
 use glam::Vec2;
 
-use super::{Shown, Steps, prompt_bar};
 use crate::hud::HudIn;
+use crate::prompts::feature::Details;
 use game_table::faces::FaceList;
 use game_table::table::{CARD_HEIGHT, CARD_WIDTH, TraySpace, tray_area};
 use kit_base::tokens::{color, size, space, type_style};
@@ -42,17 +44,12 @@ const SPACE: TraySpace = TraySpace::REFERENCE;
 /// their row with the session's words for its two ends under it, and the prompt bar. The item
 /// `carried`, which the pointer carries along the row, is left out of it: a float draws it
 /// under the pointer (`carried_item`).
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "every shape returns an `Option`: a built shape may show nothing in the flat layer"
-)]
-pub(super) fn screen(prompt: &PromptView, input: &HudIn) -> Option<Element> {
-    let bar = prompt_bar(prompt, input);
+pub(super) fn view(prompt: &PromptView, input: &HudIn, bar: Element) -> Element {
     let ShapeBody::Order { items } = &prompt.body else {
-        return Some(bar);
+        return bar;
     };
     if items.is_empty() {
-        return Some(bar);
+        return bar;
     }
     let size = input.window.size;
     let mut shade = row()
@@ -69,14 +66,12 @@ pub(super) fn screen(prompt: &PromptView, input: &HudIn) -> Option<Element> {
             element.anchor = Some(Anchor::Point(Vec2::new(cell.x, cell.y), Vec2::ZERO));
             element
         });
-    Some(
-        row()
-            .name("order")
-            .child(shade)
-            .children(row_items)
-            .child(ends(prompt, items.len(), size))
-            .child(bar),
-    )
+    row()
+        .name("order")
+        .child(shade)
+        .children(row_items)
+        .child(ends(prompt, items.len(), size))
+        .child(bar)
 }
 
 /// The waiting trigger `on`, `place` in the order from the first to resolve, as the row draws
@@ -90,6 +85,23 @@ fn item(
     faces: Option<&FaceList>,
     cell: Rect,
 ) -> Element {
+    let (name, face) = item_face(on, view, faces);
+    Element {
+        shows: face.map(|face| Showing::Face(face, FaceSize::Board)),
+        ..Element::new(Role::Ability)
+    }
+    .name(&format!("{}. {}", place + 1, name))
+    .width(cell.width)
+    .height(cell.height)
+    .radius(size::ORDER_ITEM_RADIUS)
+    .on_press(Order::message(Click::Drop { on, pile: 0, at: 0 }))
+}
+
+fn item_face<'a>(
+    on: Subject,
+    view: Option<&'a PlayerView>,
+    faces: Option<&FaceList>,
+) -> (&'a str, Option<kit_ui::input::FaceId>) {
     let candidate = candidate(on, view);
     let source = candidate.and_then(|candidate| match candidate.option {
         Candidate::Trigger { source, .. } => source,
@@ -106,15 +118,25 @@ fn item(
             .flatten();
         plate_face.or_else(|| faces.find(name))
     });
-    Element {
-        shows: face.map(|face| Showing::Face(face, FaceSize::Board)),
-        ..Element::new(Role::Ability)
+    (name.unwrap_or(""), face)
+}
+
+pub(super) fn details(input: &HudIn<'_>) -> Details {
+    let items = match input.prompt.map(|prompt| &prompt.body) {
+        Some(ShapeBody::Order { items }) => items.as_slice(),
+        _ => &[],
+    };
+    let items = items
+        .iter()
+        .map(|&on| {
+            let (name, face) = item_face(on, input.view, input.faces);
+            (name.to_owned(), face)
+        })
+        .collect();
+    Details::Order {
+        items,
+        carried: input.carried,
     }
-    .name(&format!("{}. {}", place + 1, name.unwrap_or("")))
-    .width(cell.width)
-    .height(cell.height)
-    .radius(size::ORDER_ITEM_RADIUS)
-    .on_press(Click::Drop { on, pile: 0, at: 0 })
 }
 
 /// The open decision's candidate that the item `on` of an order names: the order's items are
@@ -254,10 +276,6 @@ pub fn carried_item(
     element.press = None;
     Some(element.border((color::GOLD, size::ORDER_ITEM_RING)))
 }
-
-/// The marks and arrows the client draws itself for an order: none, since a waiting trigger is
-/// not on the table and the session marks nothing.
-pub(super) fn own(_shown: Option<Shown>, _was: Option<Shown>, _steps: &mut Steps) {}
 
 #[cfg(test)]
 mod tests {

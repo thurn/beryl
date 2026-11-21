@@ -14,10 +14,10 @@
 //! The flat layer is drawn over the table, so a box is its rim and its name alone, and lets the
 //! pointer through to the cards in it: the web's translucent fill would cover them.
 
+use crate::prompts::Piles;
 use beryl_protocol::prompt::{PromptView, ShapeBody};
 use glam::Vec2;
 
-use super::{Piles, Shown, Steps, prompt_bar, tray};
 use crate::hud::HudIn;
 use game_table::table::tray_boxes;
 use kit_base::tokens::{color, size, type_style};
@@ -32,14 +32,9 @@ const LABEL_LEAST: f32 = size::SPLIT_LABEL_LEAST;
 /// What the flat layer shows for `prompt`: the prompt bar, and a box round each pile's place in
 /// the tray, its name in the strip over its cards; none for a fan, and none of their edges for
 /// a put-back.
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "every shape returns an `Option`: a built shape may show nothing in the flat layer"
-)]
-pub(super) fn screen(prompt: &PromptView, input: &HudIn) -> Option<Element> {
-    let bar = prompt_bar(prompt, input);
+pub(super) fn view(prompt: &PromptView, input: &HudIn, bar: Element) -> Element {
     let (ShapeBody::Split { piles }, Some(held)) = (&prompt.body, Piles::of(prompt)) else {
-        return Some(bar);
+        return bar;
     };
     let space = input.profile.tray();
     let size = input.window.size;
@@ -54,7 +49,7 @@ pub(super) fn screen(prompt: &PromptView, input: &HudIn) -> Option<Element> {
     };
     let edged = !held.put_back();
     let boxes = tray_boxes(&held.held(None), space, size);
-    Some(bar.children(piles.iter().zip(boxes).map(|(pile, area)| {
+    bar.children(piles.iter().zip(boxes).map(|(pile, area)| {
         let mut pile_box = row()
             .name(&pile.label)
             .width(area.width)
@@ -74,12 +69,5 @@ pub(super) fn screen(prompt: &PromptView, input: &HudIn) -> Option<Element> {
         );
         pile_box.anchor = Some(Anchor::Point(Vec2::new(area.x, area.y), Vec2::ZERO));
         pile_box
-    })))
-}
-
-/// Makes what the table shows for the prompt `shown` replace what it showed for `was`, as one
-/// beat (`tray::own`): the marks the session sends on the cards, and the two piles held up in
-/// the tray, sorted again after each reply.
-pub(super) fn own(shown: Option<Shown>, was: Option<Shown>, steps: &mut Steps) {
-    tray::own(shown, was, tray::marks, steps);
+    }))
 }

@@ -181,12 +181,15 @@ impl Inspector {
     }
 }
 
+/// Priority marks actions the player can take. Those marks need no space
+/// around them when the inspector opens, unlike the targets of a choice.
+fn keep_clear_for_prompt(prompt: Option<&PromptView>) -> bool {
+    prompt.is_some_and(|prompt| !prompt.is(Purpose::Priority))
+}
+
 /// The boxes marked by a prompt that is actually asking the player to pick a card.
 fn marked(prompt: Option<&PromptView>, frame: &Frame) -> Vec<Rect> {
-    let Some(prompt) = prompt else {
-        return Vec::new();
-    };
-    if prompt.is(Purpose::Priority) {
+    if !keep_clear_for_prompt(prompt) {
         return Vec::new();
     }
     let marks = StateBits::ELIGIBLE | StateBits::TARGET | StateBits::SELECTED;

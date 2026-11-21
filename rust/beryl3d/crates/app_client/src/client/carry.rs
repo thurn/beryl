@@ -74,10 +74,8 @@ impl Client {
                 if !self.still_ordering(carry) {
                     return true;
                 }
-                let at = (self.prompt.as_ref())
-                    .and_then(|(_, prompt)| {
-                        order::slot_at(prompt, self.window.size, pointer.position.x)
-                    })
+                let at = (self.features.prompts.current())
+                    .and_then(|prompt| order::slot_at(prompt, self.window.size, pointer.position.x))
                     .and_then(|at| u16::try_from(at).ok());
                 if let Some(at) = at {
                     self.click(Click::Drop {
@@ -97,19 +95,23 @@ impl Client {
     /// prompt; a drop is then not sent, as the web's `OrderRow` takes no carry while a move is
     /// being sent, and the prompt the session opens next is the one to answer.
     fn still_ordering(&self, carry: Carry) -> bool {
-        (self.prompt.as_ref())
-            .filter(|_| self.open)
-            .is_some_and(|(_, prompt)| order::cell_of(prompt, self.window.size, carry.on).is_some())
+        (self.features.prompts.current())
+            .filter(|_| self.features.layer_open)
+            .is_some_and(|prompt| order::cell_of(prompt, self.window.size, carry.on).is_some())
     }
 
     /// The item of the open order prompt's row that a press at `point` reaches, if any.
     fn order_item_at(&self, point: Vec2) -> Option<Subject> {
-        let (_, prompt) = self.prompt.as_ref().filter(|_| self.open)?;
+        let prompt = self
+            .features
+            .prompts
+            .current()
+            .filter(|_| self.features.layer_open)?;
         if !matches!(prompt.body, ShapeBody::Order { .. }) {
             return None;
         }
-        let (_, action, enabled) = self.layer.press_at(point, self.open)?;
-        match (action.downcast_ref::<Click>()?, enabled) {
+        let (_, action, enabled) = self.layer.press_at(point, self.features.layer_open)?;
+        match (order::click(&action)?, enabled) {
             (
                 Click::Drop {
                     on: on @ Subject::Ability { .. },
@@ -131,7 +133,7 @@ impl Client {
             },
             release: None,
         };
-        let float = (self.prompt.as_ref()).and_then(|(_, prompt)| {
+        let float = (self.features.prompts.current()).and_then(|prompt| {
             let view = self.show.latest().map(|update| &update.view);
             let faces = Some(self.show.faces().list());
             order::carried_item(prompt, carry.on, view, faces, self.window.size)
@@ -143,8 +145,8 @@ impl Client {
     /// Moves the carried float so that the item keeps the place under the pointer, now at
     /// `at`, that it had where the press began.
     fn move_item(&mut self, carry: Carry, at: Vec2) {
-        let Some(cell) = (self.prompt.as_ref())
-            .and_then(|(_, prompt)| order::cell_of(prompt, self.window.size, carry.on))
+        let Some(cell) = (self.features.prompts.current())
+            .and_then(|prompt| order::cell_of(prompt, self.window.size, carry.on))
         else {
             return;
         };
