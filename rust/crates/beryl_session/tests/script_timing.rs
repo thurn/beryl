@@ -2,7 +2,8 @@
 //! (`beryl_session::script::Script::timing`): scripts built as a scenario plays, and scripts
 //! of a game resumed from a save of the corpus.
 
-use beryl_cards::{CARDS, names};
+use crate::common::fixtures::TRINKET_MAGE_FINDS_PORTABLE_HOLE;
+use beryl_cards::CARDS;
 use beryl_session::corpus;
 use beryl_session::protocol::PlayerView;
 use beryl_session::script::Script;
@@ -25,11 +26,7 @@ fn assert_timed(script: &Script, where_: &str) {
 /// opponent's, and its flight onto the battlefield as a permanent's that resolves.
 #[test]
 fn a_cast_and_its_resolution_are_timed_step_for_step() {
-    let views = views(
-        names::TRINKET_MAGE,
-        "Trinket Mage finds Portable Hole",
-        |_, _, _| {},
-    );
+    let views = views(TRINKET_MAGE_FINDS_PORTABLE_HOLE, |_, _, _| {});
     let mut cases = [BTreeSet::new(), BTreeSet::new()];
     for (n, seats) in views.iter().enumerate() {
         for (seat, view) in seats.iter().enumerate() {

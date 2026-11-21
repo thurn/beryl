@@ -8,9 +8,9 @@
 
 use std::panic::catch_unwind;
 
-use beryl_cards::CARDS;
+use beryl_cards::{CARDS, names, props};
 use beryl_engine::{GameTable, State};
-use beryl_scenario::{Action, Bounds, Check, Live, Scenario, exhaust, invariants};
+use beryl_scenario::{Action, Bounds, Check, Live, P0, P1, Scenario, exhaust, invariants};
 
 /// The default bounds: the whole corpus in a few seconds of a debug build.
 const BOUNDS: Bounds = Bounds {
@@ -46,12 +46,15 @@ fn bounds() -> Bounds {
 /// ([`beryl_cards::derive`]), or the one card's `BERYL_EXHAUST_CARD` names.
 fn scenarios() -> Vec<(&'static str, &'static Scenario)> {
     let card = var("BERYL_EXHAUST_CARD");
-    let chosen: Vec<_> = beryl_cards::scenarios()
+    let mut chosen = Vec::new();
+    for &(name, scenarios) in beryl_cards::scenarios()
         .iter()
         .chain(beryl_cards::derive::all())
-        .filter(|&&(name, _)| card.as_deref().is_none_or(|c| c.eq_ignore_ascii_case(name)))
-        .flat_map(|&(name, scenarios)| scenarios.iter().map(move |s| (name, s)))
-        .collect();
+    {
+        if card.as_deref().is_none_or(|c| c.eq_ignore_ascii_case(name)) {
+            chosen.extend(scenarios.iter().map(|scenario| (name, scenario)));
+        }
+    }
     assert!(!chosen.is_empty(), "no card named {card:?}");
     chosen
 }
@@ -135,9 +138,8 @@ fn every_scenario_keeps_the_invariants_to_a_depth() {
 /// engine's debug assertions do, rather than returning a violation.
 ///
 /// The search checks every position, the runner stops only where someone has a choice, and a
-/// spell or ability that no one can respond to resolves between the two: a search that breaks
-/// the check there replays to an empty stack. So the test takes the first finding the runner
-/// can stop at, and there must be one.
+/// spell that resolves immediately would replay to an empty stack. The opponent has mana to
+/// cast Counterspell, so the runner stops with the first spell still on the stack.
 #[test]
 fn a_broken_invariant_is_found_and_replays() {
     #[allow(clippy::unnecessary_wraps)] // A `Check`, failing by panicking.
@@ -156,17 +158,17 @@ fn a_broken_invariant_is_found_and_replays() {
             .unwrap_or_else(|f| panic!("{f}\n{}", scenario.name));
         catch_unwind(|| stack_stays_empty(live.table(), live.state())).is_err()
     }
-    let found = scenarios()
-        .into_iter()
-        .find_map(|(_, scenario)| {
-            exhaust(&CARDS, scenario, BOUNDS, stack_stays_empty)
-                .err()
-                .filter(|found| found.searched > 0)
-                .filter(|found| {
-                    assert!(found.why.contains("something is on the stack"), "{found}");
-                    breaks(found.scenario.as_ref().expect("a scriptable sequence"))
-                })
-        })
-        .expect("a scenario's search breaks the check where the runner stops");
+    const SCENARIO: Scenario = Scenario::new("A spell the opponent can counter")
+        .battlefield(P0, &[names::PLAINS])
+        .hand(P0, &[props::ARTIFACT.card])
+        .battlefield(P1, &[names::ISLAND; 2])
+        .hand(P1, &[names::COUNTERSPELL]);
+    let found = exhaust(&CARDS, &SCENARIO, BOUNDS, stack_stays_empty)
+        .expect_err("casting the spell breaks the invariant");
+    assert!(found.searched > 0, "{found}");
+    assert!(found.why.contains("something is on the stack"), "{found}");
+    assert!(breaks(
+        found.scenario.as_ref().expect("a scriptable sequence")
+    ));
     println!("{found}");
 }

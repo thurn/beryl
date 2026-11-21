@@ -2,20 +2,19 @@
 //! scenarios reach it: a consumer folds a run of picks into one prompt from the record alone,
 //! so the record must keep to the rules its shape and part set.
 
+use beryl_cards::props::Prop;
 use beryl_cards::{CARDS, names};
 use beryl_engine::card::{Part, Place, Purpose, Shape};
 use beryl_engine::{
     Bitboard, Candidates, Decision, DecisionKind, Opt, Scratch, State, Zone, ZoneKey, view,
 };
+use beryl_scenario::Scenario;
+use beryl_scenario::prelude::{ME, P0, P1, Resolve, THEM, TurnStep, advance_to, stack};
 
-/// Every decision `card`'s scenarios reach, with the state it is asked in: for a question a
-/// resolving spell or ability asks, the state as the resolution has left it so far.
-fn decisions(card: &str, mut each: impl FnMut(&str, &State, &Decision)) {
-    let (_, scenarios) = beryl_cards::scenarios()
-        .iter()
-        .find(|&&(name, _)| name == card)
-        .expect("the card's scenarios");
-    for scenario in *scenarios {
+/// Every decision the scenarios reach, with the state it is asked in. For a question a
+/// resolving spell or ability asks, the state includes the effects resolved so far.
+fn decisions(scenarios: &[Scenario], mut each: impl FnMut(&str, &State, &Decision)) {
+    for scenario in scenarios {
         beryl_scenario::visit(&CARDS, scenario, |t, s, d| {
             each(scenario.name, view(s, t, &mut Scratch::new()), d);
         })
@@ -39,8 +38,8 @@ fn offered(d: &Decision) -> Bitboard {
 
 #[test]
 fn every_decision_says_a_prompt_its_shape_and_part_allow() {
-    for &(card, _) in beryl_cards::scenarios() {
-        decisions(card, |scenario, _, d| {
+    for &(card, scenarios) in beryl_cards::scenarios() {
+        decisions(scenarios, |scenario, _, d| {
             let at = format!("{card} / {scenario}: {d:?}");
             let (shape, part) = (d.prompt.shape(), d.prompt.part);
             // Each part belongs to the shapes whose runs have it.
@@ -83,7 +82,7 @@ fn every_decision_says_a_prompt_its_shape_and_part_allow() {
 fn a_discard_run_counts_down_and_its_alternative_names_the_basic_lands() {
     let mut instead = false;
     let mut left = Vec::new();
-    decisions(names::THIRST_FOR_DISCOVERY, |_, s, d| {
+    decisions(&[THIRST], |_, s, d| {
         if d.prompt.purpose != Purpose::Discard {
             return;
         }
@@ -104,9 +103,9 @@ fn a_discard_run_counts_down_and_its_alternative_names_the_basic_lands() {
 #[test]
 fn a_look_keeps_its_cards_from_the_yes_or_no_through_the_pick() {
     let mut picked = false;
-    for card in [names::THUNDERTRAP_TRAINER, names::ELITE_SPELLBINDER] {
+    for scenario in [TRAINER, SPELLBINDER] {
         let mut whether = None;
-        decisions(card, |_, s, d| {
+        decisions(&[scenario], |_, s, d| {
             if d.prompt.purpose != Purpose::Look {
                 return;
             }
@@ -127,3 +126,76 @@ fn a_look_keeps_its_cards_from_the_yes_or_no_through_the_pick() {
     }
     assert!(picked, "no look reached its pick");
 }
+
+const THIRST: Scenario =
+    Scenario::new("Thirst for Discovery: discarding two cards with a basic land in hand")
+        .battlefield(P0, &[names::ISLAND; 3])
+        .hand(P0, &[names::THIRST_FOR_DISCOVERY])
+        .library(
+            P0,
+            &[
+                names::PLAINS,
+                Prop::Artifact,
+                names::COUNTERSPELL,
+                names::ISLAND,
+            ],
+        )
+        .actions(&[
+            ME.casts(names::THIRST_FOR_DISCOVERY),
+            Resolve,
+            ME.no(),
+            ME.picks(Prop::Artifact),
+            ME.picks(names::PLAINS),
+            ME.has(Zone::Graveyard, Prop::Artifact, 1),
+            ME.has(Zone::Graveyard, names::PLAINS, 1),
+            ME.has(Zone::Hand, names::COUNTERSPELL, 1),
+        ]);
+
+const TRAINER: Scenario = Scenario::new("Thundertrap Trainer takes a spell")
+    .hand(P0, &[names::THUNDERTRAP_TRAINER])
+    .battlefield(P0, &[names::ISLAND; 2])
+    .library(
+        P0,
+        &[
+            names::PLAINS,
+            Prop::Instant,
+            Prop::Flier,
+            names::OUST,
+            Prop::Artifact,
+        ],
+    )
+    .library(P1, &[names::PLAINS])
+    .actions(&[
+        ME.casts(names::THUNDERTRAP_TRAINER),
+        Resolve,
+        Resolve,
+        ME.yes(),
+        ME.deciding(DecisionKind::ChooseObject, 2),
+        ME.picks(names::OUST),
+        ME.has(Zone::Hand, names::OUST, 1),
+        ME.has_cards(Zone::Library, 4),
+        advance_to(3, TurnStep::PrecombatMain),
+        ME.has(Zone::Hand, Prop::Artifact, 1),
+    ]);
+
+const SPELLBINDER: Scenario = Scenario::new("Spellbinder's card costs its owner {2} more")
+    .hand(P0, &[names::ELITE_SPELLBINDER])
+    .battlefield(P0, &[names::PLAINS; 3])
+    .hand(P1, &[Prop::Artifact, names::ISLAND])
+    .battlefield(P1, &[names::PLAINS; 3])
+    .library(P1, &[names::ISLAND])
+    .actions(&[
+        ME.casts(names::ELITE_SPELLBINDER),
+        Resolve,
+        stack(1),
+        Resolve,
+        ME.yes(),
+        THEM.has(Zone::Exile, Prop::Artifact, 1),
+        THEM.has(Zone::Hand, Prop::Artifact, 0),
+        advance_to(2, TurnStep::PrecombatMain),
+        THEM.deciding(DecisionKind::Priority, 4),
+        THEM.casts(Prop::Artifact),
+        THEM.tapped(names::PLAINS, 3),
+        Resolve,
+        THEM.controls(Prop::Artifact, 1),
+    ]);

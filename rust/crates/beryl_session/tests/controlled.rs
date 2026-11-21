@@ -1,6 +1,6 @@
 //! A turn one player controls for another (CR 724): what each seat's view shows of it.
 
-use beryl_cards::names;
+use crate::common::fixtures::MINDSLAVER;
 use beryl_session::protocol::{PlayerView, Side, ZoneName};
 
 use crate::common;
@@ -21,11 +21,7 @@ fn opponents_hand(view: &PlayerView) -> Vec<Option<String>> {
 /// [CR 724.4]: https://yawgatog.com/resources/magic-rules/#R7244
 #[test]
 fn the_controller_sees_the_controlled_players_hand_and_remembers_it() {
-    let views = common::views(
-        names::MINDSLAVER,
-        "the control ends with the turn",
-        |_, _, _| {},
-    );
+    let views = common::views(MINDSLAVER, |_, _, _| {});
     let hand = |turn: u16| {
         let [mine, theirs] = views
             .iter()
@@ -46,11 +42,7 @@ fn the_controller_sees_the_controlled_players_hand_and_remembers_it() {
 /// [CR 724.1]: https://yawgatog.com/resources/magic-rules/#R7241
 #[test]
 fn both_seats_see_who_controls_the_turn() {
-    let views = common::views(
-        names::MINDSLAVER,
-        "the control ends with the turn",
-        |_, _, _| {},
-    );
+    let views = common::views(MINDSLAVER, |_, _, _| {});
     for [mine, theirs] in &views {
         let controlled = mine.turn.number == 2;
         assert_eq!(mine.turn.controlled_by, controlled.then_some(Side::You));

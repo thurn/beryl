@@ -52,6 +52,7 @@ from .. import (
     plan_references,
     rule_ownership,
     rulings,
+    scenario_fixtures,
     scryfall,
     two_player,
 )
@@ -396,6 +397,16 @@ CHECKS: tuple[Check, ...] = (
         "source",
         card_names_check,
         tuple(CARD_NAME_INPUTS),
+    ),
+    Check(
+        "scenario-fixtures",
+        "source",
+        lambda root: scenario_fixtures.check(root, tracked(root)),
+        (
+            "**/*.rs",
+            module("scenario_fixtures"),
+            *CARD_NAME_MODULES,
+        ),
     ),
     Check(
         "two-player",

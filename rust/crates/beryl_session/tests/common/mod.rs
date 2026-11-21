@@ -2,24 +2,27 @@
 //! played through the engine, each seat's views fed to its screen as the session feeds them.
 
 use beryl_cards::CARDS;
+
 use beryl_engine::event::Tagged;
 use beryl_engine::{Observation, Seat};
+use beryl_scenario::Scenario;
 use beryl_session::StopsSetting;
 use beryl_session::protocol::{Moment, PlayerView, heard, player_view};
 use beryl_session::script::{Heard, Names, Screen};
 
-/// Each seat's views as `card`'s scenario named `name` plays, the first player's and then the
+pub mod fixtures;
+
+/// Each seat's views as the scenario plays, the first player's and then the
 /// second's, each with its script: the first is the reset its screen starts from, and view
 /// `n` comes with what action `n` of the scenario did, with the forced answers after it.
 /// Each view is the one a player waiting on the scenario's next answer has: it says which
 /// attackers await what they attack and which cards the opponent is handling, and no more of
 /// the decision. `tweak` may change view `n` of seat 0 or 1 before its screen sees it.
 pub fn views(
-    card: &str,
-    name: &str,
+    scenario: &Scenario,
     tweak: impl FnMut(usize, u8, &mut PlayerView),
 ) -> Vec<[PlayerView; 2]> {
-    let heard = views_heard(card, name, tweak);
+    let heard = views_heard(scenario, tweak);
     heard
         .into_iter()
         .map(|seats| seats.map(|(view, _)| view))
@@ -29,18 +32,9 @@ pub fn views(
 /// [`views`], each with what the engine said of its events and its stack: what its screen
 /// built its script from.
 pub fn views_heard(
-    card: &str,
-    name: &str,
+    scenario: &Scenario,
     mut tweak: impl FnMut(usize, u8, &mut PlayerView),
 ) -> Vec<[(PlayerView, Heard); 2]> {
-    let scenario = beryl_cards::scenarios()
-        .iter()
-        .copied()
-        .chain(beryl_cards::library::by_card())
-        .filter(|&(c, _)| c == card)
-        .flat_map(|(_, cases)| cases)
-        .find(|s| s.name == name)
-        .expect("the scenario");
     let (table, _) = beryl_scenario::position(&CARDS, scenario).unwrap_or_else(|e| panic!("{e}"));
     // The decision open in each state an action answers.
     let mut open = Vec::new();
@@ -86,15 +80,15 @@ pub fn views_heard(
 }
 
 /// Each seat's scripts of a scenario, as text ([`views`]).
-pub fn scripts(card: &str, name: &str) -> Vec<[String; 2]> {
+pub fn scripts(scenario: &Scenario) -> Vec<[String; 2]> {
     let text = |view: PlayerView| view.script.expect("a view's script").to_string();
-    let views = views(card, name, |_, _, _| {});
+    let views = views(scenario, |_, _, _| {});
     views.into_iter().map(|seats| seats.map(text)).collect()
 }
 
-/// Script `n` of `card`'s scenario `name`, for the player who goes first and for the other.
-pub fn script(card: &str, name: &str, n: usize) -> [String; 2] {
-    scripts(card, name).swap_remove(n)
+/// Script `n` of the scenario, for the player who goes first and for the other.
+pub fn script(scenario: &Scenario, n: usize) -> [String; 2] {
+    scripts(scenario).swap_remove(n)
 }
 
 /// A script's text from its lines.

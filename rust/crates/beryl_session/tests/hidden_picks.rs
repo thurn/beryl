@@ -6,25 +6,13 @@
 //!
 //! [CR 101.4a]: https://yawgatog.com/resources/magic-rules/#R1014a
 
+use crate::common::fixtures::SHOW_AND_TELL;
 use crate::play::Play;
 
 use beryl_cards::{CARDS, names};
 use beryl_engine::{Observation, Seat};
 use beryl_session::protocol::{Candidate, Moment, ObjectView, Side, ZoneName, player_view};
 use beryl_session::{CandidateIndex, Status, StopsSetting};
-
-/// Show and Tell's scenario in which both players put a creature onto the battlefield, the
-/// first player Griselbrand.
-fn both_put_creatures() -> &'static beryl_scenario::Scenario {
-    let (_, scenarios) = beryl_cards::scenarios()
-        .iter()
-        .find(|&&(card, _)| card == names::SHOW_AND_TELL)
-        .expect("the card's scenarios");
-    scenarios
-        .iter()
-        .find(|s| s.name == "Show and Tell puts both players' creatures onto the battlefield")
-        .expect("the scenario")
-}
 
 fn picked(view: impl IntoIterator<Item = ObjectView>) -> Vec<ObjectView> {
     view.into_iter().filter(|o| o.hidden_pick).collect()
@@ -33,7 +21,7 @@ fn picked(view: impl IntoIterator<Item = ObjectView>) -> Vec<ObjectView> {
 #[test]
 fn a_hidden_pick_is_marked_for_both_players_and_named_only_for_its_picker() {
     let mut seen = None;
-    beryl_scenario::visit(&CARDS, both_put_creatures(), |t, s, d| {
+    beryl_scenario::visit(&CARDS, SHOW_AND_TELL, |t, s, d| {
         if d.decider != Seat::P1 || seen.is_some() {
             return;
         }
@@ -62,7 +50,7 @@ fn a_hidden_pick_is_marked_for_both_players_and_named_only_for_its_picker() {
 /// made.
 #[test]
 fn a_session_marks_the_humans_hidden_pick_while_the_opponent_picks() {
-    let mut play = Play::scenario(both_put_creatures());
+    let mut play = Play::scenario(SHOW_AND_TELL);
     play.choose(|c| matches!(c, Candidate::Cast { .. }));
     while play.decision().kind == beryl_session::protocol::Kind::Priority {
         play.choose(|c| *c == Candidate::Pass);

@@ -457,12 +457,7 @@ fn scried_cards_are_known_where_they_went() {
 /// [CR 731.2e]: https://yawgatog.com/resources/magic-rules/#R7312e
 #[test]
 fn a_face_down_card_under_a_merged_permanent_stays_hidden() {
-    let scenario = crate::tests::scenarios_of(names::GEMRAZER)
-        .iter()
-        .find(|s| {
-            s.name == "Gemrazer over a face-down creature: a face-up Gemrazer, its card hidden"
-        })
-        .expect("the scenario");
+    let scenario = super::fixtures::MUTATE_FACE_DOWN;
     let mut last = None;
     beryl_scenario::visit(&CARDS, scenario, |t, s, _| last = Some((t.clone(), *s))).unwrap();
     let (t, s) = last.expect("a decision");

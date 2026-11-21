@@ -2,6 +2,9 @@
 //! merged under it, and the card a copy really is. And what the table reads of its card: that
 //! it has a mana ability.
 
+use crate::common::fixtures::{
+    COPY_MERGED_CREATURE, GEMRAZER_OVER_FACE_DOWN_CARD, GEMRAZER_UNDER_CREATURE, TEFERIS_PROTECTION,
+};
 use beryl_cards::names;
 use beryl_engine::TurnStep;
 use beryl_scenario::{P0, P1, Permanent, Scenario};
@@ -25,11 +28,7 @@ fn named<'a>(view: &'a PlayerView, name: &str) -> Vec<&'a ObjectView> {
 /// [CR 731.2b]: https://yawgatog.com/resources/magic-rules/#R7312b
 #[test]
 fn a_merged_permanents_other_cards_are_sent_as_part_of_it() {
-    let views = common::views(
-        names::GEMRAZER,
-        "Gemrazer under a creature: the creature's values, Gemrazer's abilities",
-        |_, _, _| {},
-    );
+    let views = common::views(GEMRAZER_UNDER_CREATURE, |_, _, _| {});
     for view in views.last().expect("a view") {
         let [artist] = named(view, "Blood Artist")[..] else {
             panic!("one Blood Artist");
@@ -51,11 +50,7 @@ fn a_merged_permanents_other_cards_are_sent_as_part_of_it() {
 /// [CR 707.2]: https://yawgatog.com/resources/magic-rules/#R7072
 #[test]
 fn a_copy_says_what_card_it_really_is() {
-    let views = common::views(
-        names::GEMRAZER,
-        "Glasspool Mimic copying Gemrazer's merged creature has both cards' abilities",
-        |_, _, _| {},
-    );
+    let views = common::views(COPY_MERGED_CREATURE, |_, _, _| {});
     let copied = |view: &PlayerView| {
         named(view, "Gemrazer")
             .into_iter()
@@ -80,11 +75,7 @@ fn a_copy_says_what_card_it_really_is() {
 /// [CR 731.2e]: https://yawgatog.com/resources/magic-rules/#R7312e
 #[test]
 fn a_face_down_card_under_a_merged_permanent_stays_hidden() {
-    let views = common::views(
-        names::GEMRAZER,
-        "Gemrazer over a face-down creature: a face-up Gemrazer, its card hidden",
-        |_, _, _| {},
-    );
+    let views = common::views(GEMRAZER_OVER_FACE_DOWN_CARD, |_, _, _| {});
     // The card drawn under the merged Gemrazer: its name and whether it is face down.
     let under = |view: &PlayerView| {
         let [gemrazer] = named(view, "Gemrazer")[..] else {
@@ -119,11 +110,7 @@ fn a_face_down_card_under_a_merged_permanent_stays_hidden() {
 /// [CR 702.26b]: https://yawgatog.com/resources/magic-rules/#R70226b
 #[test]
 fn phased_out_permanents_stay_on_the_battlefield_marked() {
-    let views = common::views(
-        names::TEFERIS_PROTECTION,
-        "a creature phased out in response to Lightning Bolt survives",
-        |_, _, _| {},
-    );
+    let views = common::views(TEFERIS_PROTECTION, |_, _, _| {});
     let phased = |view: &PlayerView| {
         (view.objects.iter())
             .filter(|o| o.phased_out)

@@ -57,6 +57,17 @@ pub fn scenarios() -> &'static [(&'static str, &'static [beryl_scenario::Scenari
     })
 }
 
+/// The written cases of a card selected by a corpus tool, such as `beryl_scenario run --card`.
+/// Focused tests declare their own cases or use the rules library.
+#[cfg(feature = "scenarios")]
+pub fn written_scenarios_for(card: &str) -> &'static [beryl_scenario::Scenario] {
+    SET_SCENARIOS
+        .iter()
+        .flat_map(|part| part.iter())
+        .find_map(|&(name, scenarios)| (name == card).then_some(scenarios))
+        .unwrap_or_default()
+}
+
 #[cfg(test)]
 mod tests;
 

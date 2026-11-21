@@ -26,10 +26,7 @@ const DEPTHS: &str = "Dark Depths";
 
 #[test]
 fn a_power_toughness_copy_exception_omits_the_defining_ability_from_later_copies() {
-    let scenario = super::scenarios_of(names::QUICKSILVER_GARGANTUAN)
-        .iter()
-        .find(|scenario| scenario.name == "the Gargantuan copies Tarmogoyf as a 7/7")
-        .unwrap();
+    let scenario = super::fixtures::GARGANTUAN_COPIES_TARMOGOYF;
     let (table, _) = beryl_scenario::position(&CARDS, scenario).unwrap();
     let mut last = None;
     beryl_scenario::watch(&CARDS, scenario, |state, _| last = Some(*state))

@@ -1,11 +1,16 @@
-//! What each prompt says of itself on the wire (`DecisionView::prompt`), as the cards' own
-//! scenarios reach it: the UI reads a question's shape, purpose and words from it, never from
-//! the card asking.
+//! What each prompt says on the wire (`DecisionView::prompt`): the question's shape,
+//! purpose and words.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 
-use beryl_cards::{CARDS, names};
+use crate::common::fixtures::{
+    ADELINE_ATTACKS_PLANESWALKER, MAP_EXPLORES_NONLAND, OCULUS_EXILES_SIX_CARDS,
+    OCULUS_MANIFESTS_DREAD, SPELLBINDER, STOCK_UP, SUBTLETY_HARD_CAST,
+    TRINKET_MAGE_FINDS_PORTABLE_HOLE,
+};
+
+use beryl_cards::{CARDS, library, names};
 use beryl_engine::card::{ManaCost, Part, Prompt, Purpose, Shape};
 use beryl_engine::state::Pending;
 use beryl_engine::two_player::TwoPlayerSeat as _;
@@ -14,6 +19,12 @@ use beryl_scenario::Scenario;
 use beryl_session::prompt::{Lies, PlaceName, PromptView, ShapeBody, shape_name};
 use beryl_session::protocol::{CardHandling, DecisionView, Moment, Side, player_view};
 use beryl_session::{DecisionId, SessionId, Status, StopsSetting};
+use scenarios::{
+    ICEBERG_BOTTOM, ICEBERG_MANA_SOURCES, ICEBERG_SCRY, SUBTLETY_PITCH, THUNDERTRAP_TRAINER,
+    TRINKET_KNOWN_TOP, WINDS_OVERLOAD, WINDS_SINGLE,
+};
+
+mod scenarios;
 
 /// A prompt in one line, as these tests expect it: the decision's kind, then the prompt's
 /// shape, purpose and part, its title, its two numbers, its cost, where its cards go, whose
@@ -67,21 +78,15 @@ fn name<T: serde::Serialize>(value: &T) -> String {
     }
 }
 
-/// Every decision `card`'s scenarios meet, as its seat is sent it.
-fn decisions(card: &str) -> Vec<DecisionView> {
-    asked(card).into_iter().map(|(view, _)| view).collect()
-}
-
-/// Every decision `card`'s scenarios meet, as its seat is sent it, with the engine's record
-/// of its prompt.
-fn asked(card: &str) -> Vec<(DecisionView, Prompt)> {
-    let (_, scenarios) = beryl_cards::scenarios()
-        .iter()
-        .find(|&&(name, _)| name == card)
-        .expect("the card's scenarios");
+/// Every decision the scenarios reach, as its seat receives it.
+fn decisions(scenarios: &[Scenario]) -> Vec<DecisionView> {
     asked_in(scenarios)
+        .into_iter()
+        .map(|(view, _)| view)
+        .collect()
 }
 
+/// Every decision the scenarios reach, with the engine's record of its prompt.
 fn asked_in(scenarios: &[Scenario]) -> Vec<(DecisionView, Prompt)> {
     let mut seen = Vec::new();
     for scenario in scenarios {
@@ -112,11 +117,11 @@ fn asked_in(scenarios: &[Scenario]) -> Vec<(DecisionView, Prompt)> {
     seen
 }
 
-/// The distinct prompts of `purposes` that `card`'s scenarios meet, in the order they first
+/// The distinct prompts of `purposes` that these scenarios reach, in the order they first
 /// come, each in one [`line`].
-fn asks(card: &str, purposes: &[Purpose]) -> Vec<String> {
+fn asks(scenarios: &[Scenario], purposes: &[Purpose]) -> Vec<String> {
     let mut seen = Vec::new();
-    for (decision, record) in asked(card) {
+    for (decision, record) in asked_in(scenarios) {
         let asked = line(&decision, &record);
         if purposes.iter().any(|&p| decision.prompt.is(p)) && !seen.contains(&asked) {
             seen.push(asked);
@@ -127,16 +132,8 @@ fn asks(card: &str, purposes: &[Purpose]) -> Vec<String> {
 
 #[test]
 fn a_token_awaiting_its_attack_target_is_public_from_both_seats() {
-    let (_, scenarios) = beryl_cards::scenarios()
-        .iter()
-        .find(|&&(name, _)| name == names::ADELINE_RESPLENDENT_CATHAR)
-        .unwrap();
-    let scenario = scenarios
-        .iter()
-        .find(|scenario| scenario.name == "Adeline's Human attacks a planeswalker")
-        .unwrap();
     let mut checked = false;
-    beryl_scenario::visit(&CARDS, scenario, |t, s, d| {
+    beryl_scenario::visit(&CARDS, ADELINE_ATTACKS_PLANESWALKER, |t, s, d| {
         if d.prompt.purpose != Purpose::Attack || d.prompt.part != Part::Aim {
             return;
         }
@@ -198,12 +195,8 @@ fn a_token_awaiting_its_attack_target_is_public_from_both_seats() {
 
 #[test]
 fn stock_up_observer_sees_the_group_size_without_seeing_its_cards_or_choices() {
-    let (_, scenarios) = beryl_cards::scenarios()
-        .iter()
-        .find(|&&(name, _)| name == names::STOCK_UP)
-        .unwrap();
     let mut checked = false;
-    beryl_scenario::visit(&CARDS, &scenarios[0], |t, s, d| {
+    beryl_scenario::visit(&CARDS, STOCK_UP, |t, s, d| {
         if (d.prompt.purpose, d.prompt.part, d.prompt.most) != (Purpose::Arrange, Part::First, 2) {
             return;
         }
@@ -262,7 +255,10 @@ fn stock_up_observer_sees_the_group_size_without_seeing_its_cards_or_choices() {
 #[test]
 fn aangs_iceberg_waterbends_its_cost_then_scries_two() {
     assert_eq!(
-        asks(names::AANGS_ICEBERG, &[Purpose::Waterbend, Purpose::Scry]),
+        asks(
+            &[ICEBERG_BOTTOM, ICEBERG_SCRY, ICEBERG_MANA_SOURCES],
+            &[Purpose::Waterbend, Purpose::Scry]
+        ),
         [
             "manaPayment pay waterbend pick: \"Tap permanents to Waterbend\" 0/0 {3} \
              you's battlefield",
@@ -280,13 +276,13 @@ fn aangs_iceberg_waterbends_its_cost_then_scries_two() {
 #[test]
 fn thundertrap_trainer_looks_at_the_top_four_for_a_card_to_take() {
     assert_eq!(
-        asks(names::THUNDERTRAP_TRAINER, &[Purpose::Look]),
+        asks(&[THUNDERTRAP_TRAINER], &[Purpose::Look]),
         [
             "yesNo pick look whether: \"Put one of them into your hand?\" 4/1 >hand you's library about 2",
             "chooseObject pick look pick: \"Put one of them into your hand.\" 4/1 >hand you's library about 2",
         ]
     );
-    let look = decisions(names::THUNDERTRAP_TRAINER)
+    let look = decisions(&[THUNDERTRAP_TRAINER])
         .into_iter()
         .find(|d| d.prompt.is(Purpose::Look))
         .unwrap();
@@ -296,7 +292,7 @@ fn thundertrap_trainer_looks_at_the_top_four_for_a_card_to_take() {
 
 #[test]
 fn elite_spellbinder_looks_at_the_opponents_hand_for_a_card_to_exile() {
-    let asked = asks(names::ELITE_SPELLBINDER, &[Purpose::Look]);
+    let asked = asks(&[*SPELLBINDER], &[Purpose::Look]);
     assert!(!asked.is_empty());
     for look in &asked {
         // A hand is looked at whole: the prompt counts no cards.
@@ -309,7 +305,7 @@ fn elite_spellbinder_looks_at_the_opponents_hand_for_a_card_to_exile() {
             .unwrap_or_else(|| panic!("{look}"));
         assert!(about.parse::<usize>().is_ok_and(|n| n > 0), "{look}");
     }
-    let look = decisions(names::ELITE_SPELLBINDER)
+    let look = decisions(&[*SPELLBINDER])
         .into_iter()
         .find(|d| d.prompt.is(Purpose::Look))
         .unwrap();
@@ -319,11 +315,15 @@ fn elite_spellbinder_looks_at_the_opponents_hand_for_a_card_to_exile() {
 
 #[test]
 fn jace_fateseals_and_puts_two_cards_back() {
+    let scenarios: Vec<_> = library::actions::fateseal::SCENARIOS
+        .iter()
+        .chain(library::actions::fateseal::TOP_OR_BOTTOM)
+        .chain(library::library::PUT_BACK_IN_ORDER)
+        .chain(library::library::PUT_BACK)
+        .copied()
+        .collect();
     assert_eq!(
-        asks(
-            names::JACE_THE_MIND_SCULPTOR,
-            &[Purpose::Fateseal, Purpose::PutBack]
-        ),
+        asks(&scenarios, &[Purpose::Fateseal, Purpose::PutBack]),
         [
             "yesNo yesNo fateseal pick: \"Top of Library\" 1/0 >bottom >top \
              opponent's library about 1",
@@ -338,10 +338,10 @@ fn jace_fateseals_and_puts_two_cards_back() {
 #[test]
 fn a_maps_explore_asks_whether_the_revealed_card_goes_to_the_graveyard() {
     assert_eq!(
-        asks(names::GET_LOST, &[Purpose::Explore]),
+        asks(&[*MAP_EXPLORES_NONLAND], &[Purpose::Explore]),
         ["yesNo yesNo explore pick: \"Explore\" 1/0 >graveyard >top you's library about 1"]
     );
-    let explore = decisions(names::GET_LOST)
+    let explore = decisions(&[*MAP_EXPLORES_NONLAND])
         .into_iter()
         .find(|d| d.prompt.is(Purpose::Explore))
         .unwrap();
@@ -377,7 +377,7 @@ fn time_spiral_untaps_up_to_six_lands() {
 fn trinket_mage_may_search_for_up_to_one_card() {
     assert_eq!(
         asks(
-            names::TRINKET_MAGE,
+            &[*TRINKET_MAGE_FINDS_PORTABLE_HOLE, TRINKET_KNOWN_TOP],
             &[Purpose::MaySearch, Purpose::Search, Purpose::Fateseal]
         ),
         [
@@ -393,7 +393,7 @@ fn trinket_mage_may_search_for_up_to_one_card() {
 #[test]
 fn winds_of_abandon_searches_for_a_land_per_creature_exiled() {
     assert_eq!(
-        asks(names::WINDS_OF_ABANDON, &[Purpose::Search]),
+        asks(&[WINDS_SINGLE, WINDS_OVERLOAD], &[Purpose::Search]),
         [
             // Each creature's controller searches their own library.
             "chooseUpTo pick search pick: \"Search for a card.\" 0/1 you's library",
@@ -405,10 +405,13 @@ fn winds_of_abandon_searches_for_a_land_per_creature_exiled() {
 #[test]
 fn mana_tithe_asks_its_target_to_pay_one() {
     assert_eq!(
-        asks(names::MANA_TITHE, &[Purpose::UnlessPays]),
+        asks(
+            library::actions::counter::UNLESS_PAID,
+            &[Purpose::UnlessPays]
+        ),
         ["yesNo yesNo unless-pays pick: \"Pay {1}.\" 0/0 {1}"]
     );
-    let pays = decisions(names::MANA_TITHE)
+    let pays = decisions(library::actions::counter::UNLESS_PAID)
         .into_iter()
         .find(|d| d.prompt.is(Purpose::UnlessPays))
         .unwrap();
@@ -419,7 +422,10 @@ fn mana_tithe_asks_its_target_to_pay_one() {
 #[test]
 fn subtlety_asks_the_spells_owner_top_or_bottom_and_its_evoke_exile() {
     assert_eq!(
-        asks(names::SUBTLETY, &[Purpose::TopOrBottom, Purpose::ExileCost]),
+        asks(
+            &[*SUBTLETY_HARD_CAST, SUBTLETY_PITCH],
+            &[Purpose::TopOrBottom, Purpose::ExileCost]
+        ),
         [
             "yesNo yesNo top-or-bottom pick: \"Subtlety\" 0/0 >top >bottom \
              you's stack about 1",
@@ -431,7 +437,7 @@ fn subtlety_asks_the_spells_owner_top_or_bottom_and_its_evoke_exile() {
 #[test]
 fn abhorrent_oculus_asks_for_graveyard_cards_then_a_card_to_manifest() {
     let asked = asks(
-        names::ABHORRENT_OCULUS,
+        &[*OCULUS_EXILES_SIX_CARDS, *OCULUS_MANIFESTS_DREAD],
         &[Purpose::ExileCost, Purpose::ManifestDread],
     );
     // Six cards from the graveyard, one pick at a time, the count falling; the graveyard's
@@ -459,8 +465,8 @@ fn every_prompt_the_scenarios_reach_is_sent_with_its_shape_and_a_whole_title() {
         .map(|purpose| (purpose.name(), shape_name(purpose.shape())))
         .collect();
     let mut reached = BTreeSet::new();
-    for &(card, _) in beryl_cards::scenarios() {
-        for decision in decisions(card) {
+    for &(card, scenarios) in beryl_cards::scenarios() {
+        for decision in decisions(scenarios) {
             let prompt = *decision.prompt;
             // The state is the game's to add: a view of a position has none.
             assert_eq!(

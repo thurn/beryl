@@ -3,6 +3,9 @@
 //! lose the game." The card whose effect ended it, with the ability that did, or the source of
 //! the damage that took the last life.
 
+use crate::common::fixtures::{
+    JACE_DRAWS_LIBRARY_EMPTY, JACE_MILLS_HIMSELF_EMPTY, JACES_OPPONENT_DRAWS_FROM_EMPTY_LIBRARY,
+};
 use beryl_cards::{CARDS, names};
 use beryl_engine::event::{Event, Recipient};
 use beryl_engine::two_player::TwoPlayerSeat as _;
@@ -88,17 +91,6 @@ fn ending(scenario: &Scenario, viewer: Seat) -> OutcomeView {
     outcome
 }
 
-fn jace(name: &str) -> &'static Scenario {
-    let (_, scenarios) = beryl_cards::scenarios()
-        .iter()
-        .find(|&&(c, _)| c == names::JACE_WIELDER_OF_MYSTERIES)
-        .expect("Jace's scenarios");
-    scenarios
-        .iter()
-        .find(|s| s.name == name)
-        .expect("the scenario")
-}
-
 fn by_jace(kind: AbilityClass, nth: u8) -> Culprit {
     Culprit {
         name: names::JACE_WIELDER_OF_MYSTERIES.to_owned(),
@@ -109,7 +101,7 @@ fn by_jace(kind: AbilityClass, nth: u8) -> Culprit {
 
 #[test]
 fn jaces_replacement_names_jace_and_his_first_paragraph() {
-    let scenario = jace("+1 milling his controller empty wins on the draw");
+    let scenario = JACE_MILLS_HIMSELF_EMPTY;
     assert_eq!(
         ending(scenario, P1),
         OutcomeView::Win {
@@ -122,7 +114,7 @@ fn jaces_replacement_names_jace_and_his_first_paragraph() {
 
 #[test]
 fn jaces_minus_eight_names_his_second_loyalty_ability() {
-    let scenario = jace("−8 draws the library empty and wins");
+    let scenario = JACE_DRAWS_LIBRARY_EMPTY;
     assert_eq!(
         ending(scenario, P0),
         OutcomeView::Win {
@@ -135,7 +127,7 @@ fn jaces_minus_eight_names_his_second_loyalty_ability() {
 
 #[test]
 fn drawing_from_an_empty_library_names_no_card() {
-    let scenario = jace("the opponent's draw from an empty library still loses");
+    let scenario = JACES_OPPONENT_DRAWS_FROM_EMPTY_LIBRARY;
     assert_eq!(
         ending(scenario, P1),
         OutcomeView::Win {

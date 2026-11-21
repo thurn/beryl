@@ -263,11 +263,11 @@ fn targets_say_what_they_accept_and_faces_whether_they_transform() {
 
 #[test]
 fn a_scenario_names_its_cards_and_the_tokens_they_make() {
-    let (card, scenarios) = crate::scenarios()
-        .iter()
-        .find(|(card, _)| *card == names::STAFF_OF_THE_STORYTELLER)
-        .unwrap();
-    let named = named(&CARDS, card, &scenarios[0]);
+    let named = named(
+        &CARDS,
+        names::STAFF_OF_THE_STORYTELLER,
+        super::fixtures::STAFF,
+    );
     assert!(named.contains_key(names::STAFF_OF_THE_STORYTELLER));
     assert!(
         named.contains_key(cards_2023_h1::onc::staff_of_the_storyteller::SPIRIT_TOKEN),

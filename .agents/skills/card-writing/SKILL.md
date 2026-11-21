@@ -86,6 +86,9 @@ kill. A mutant changes one part of the definition. A scenario kills it when
 the change alters what the scenario observes. If generated scenarios kill all
 mutants, at least one passes in XMage or Forge, and neither oracle reports an
 unexpected failure, omit the `scenarios` module unless a ruling needs one.
+Focused tests outside the card files use their own `Scenario` constants or
+the shared rules library. Those fixtures keep working when a card file drops
+or reorders its hand-written scenarios.
 
 For each surviving mutant, write a scenario whose outcome changes under that
 mutation. If all generated scenarios are unsupported by the oracles, write a

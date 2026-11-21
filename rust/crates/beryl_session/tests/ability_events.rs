@@ -4,6 +4,9 @@
 //! process for activating an ability is identical to the process for casting a spell listed in
 //! rules 601.2b-i." It may have resolved by the time a view shows.
 
+use crate::common::fixtures::{
+    CREW_RECONFIGURED_VEHICLE, JACE_MILLS_THEN_DRAWS, OUST, STAFF, TEFERI_RETURNS_ARTIFACT,
+};
 use beryl_cards::{CARDS, names, props};
 use beryl_engine::{
     Choice, DecisionKind, Observation, Opt, Replay, Scratch, Seat, Step, apply, next,
@@ -13,23 +16,14 @@ use beryl_session::StopsSetting;
 use beryl_session::protocol::ObjectId;
 use beryl_session::protocol::{GameEvent, Moment, Side, StackItem, TargetRef, player_view};
 
-/// The events of `card`'s scenario named `name` as its first `actions` actions play out, and
+/// The events of the scenario as its first `actions` actions play out, and
 /// the decisions with one answer after them, as `viewer` is told them; and the slot of each
 /// card on the battlefield then, by name.
 fn events(
-    card: &str,
-    name: &str,
+    scenario: &beryl_scenario::Scenario,
     actions: usize,
     viewer: Seat,
 ) -> (Vec<GameEvent>, impl Fn(&str) -> ObjectId) {
-    let (_, scenarios) = beryl_cards::scenarios()
-        .iter()
-        .find(|&&(c, _)| c == card)
-        .expect("the card's scenarios");
-    let scenario = scenarios
-        .iter()
-        .find(|s| s.name == name)
-        .expect("the scenario");
     let (t, mut s) = beryl_scenario::position(&CARDS, scenario).unwrap_or_else(|e| panic!("{e}"));
     let mut x = Scratch::recording();
     let decide = |s: &mut beryl_engine::State, x: &mut Scratch| match next(s, &t, x, &mut Replay) {
@@ -109,12 +103,7 @@ fn abilities(events: &[GameEvent]) -> Vec<(&StackItem, Option<i8>)> {
 #[test]
 fn a_loyalty_activation_names_its_source_cost_and_target_player() {
     // Jace's +1 targeting P1, as P1 sees it.
-    let (events, slot) = events(
-        names::JACE_WIELDER_OF_MYSTERIES,
-        "+1 mills the target player two, then draws",
-        2,
-        Seat::new(1),
-    );
+    let (events, slot) = events(JACE_MILLS_THEN_DRAWS, 2, Seat::new(1));
     let jace = slot(names::JACE_WIELDER_OF_MYSTERIES);
     let seen = abilities(&events);
     let [(item, loyalty)] = seen.as_slice() else {
@@ -157,12 +146,7 @@ fn a_loyalty_activation_names_its_source_cost_and_target_player() {
 #[test]
 fn a_targeted_ability_names_its_source_cost_and_target_object() {
     // Teferi's −3 targeting P1's Staff, as P0 sees it.
-    let (events, slot) = events(
-        names::TEFERI_TIME_RAVELER,
-        "−3 returns an opposing artifact and draws a card",
-        2,
-        Seat::new(0),
-    );
+    let (events, slot) = events(TEFERI_RETURNS_ARTIFACT, 2, Seat::new(0));
     let teferi = slot(names::TEFERI_TIME_RAVELER);
     let seen = abilities(&events);
     let [(item, loyalty)] = seen.as_slice() else {
@@ -189,12 +173,7 @@ fn a_targeted_ability_names_its_source_cost_and_target_object() {
 fn a_cast_names_its_spell_and_targets_as_the_stack_showed_them() {
     // Oust aimed at P1's creature, as P1 sees it: a spell that resolves unanswered is gone from
     // the stack by the next view, which shows its cast from the event alone.
-    let (events, slot) = events(
-        names::OUST,
-        "Oust puts the creature second from the top and its controller gains 3",
-        1,
-        Seat::new(1),
-    );
+    let (events, slot) = events(OUST, 1, Seat::new(1));
     let oust = slot(names::OUST);
     let creature = slot(props::FLIER.card);
     let casts: Vec<_> = events
@@ -221,12 +200,7 @@ fn a_cast_names_its_spell_and_targets_as_the_stack_showed_them() {
 
 #[test]
 fn an_unanswered_nontargeted_trigger_is_announced() {
-    let (events, slot) = events(
-        names::STAFF_OF_THE_STORYTELLER,
-        "its own Spirit and a Samurai each add a story counter, spent to draw",
-        4,
-        Seat::new(1),
-    );
+    let (events, slot) = events(STAFF, 4, Seat::new(1));
     let staff = slot(names::STAFF_OF_THE_STORYTELLER);
     assert_eq!(
         abilities(&events)
@@ -253,12 +227,7 @@ fn an_unanswered_nontargeted_trigger_is_announced() {
 fn a_granted_ability_carries_its_rules_text() {
     // Swift Reconfiguration grants crew 5 to the permanent it enchants, whose printed text
     // has no paragraph for it, so the stack item says the ability in words.
-    let (events, slot) = events(
-        names::SWIFT_RECONFIGURATION,
-        "crewing the Vehicle makes it a creature until end of turn",
-        5,
-        Seat::new(0),
-    );
+    let (events, slot) = events(CREW_RECONFIGURED_VEHICLE, 5, Seat::new(0));
     let seen = abilities(&events);
     let [(item, _)] = seen.as_slice() else {
         panic!("one ability: {events:?}");

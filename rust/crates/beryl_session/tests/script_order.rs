@@ -23,10 +23,11 @@
 //! `ui/scripts/card-records.test.mjs`).
 
 use crate::common;
+use crate::common::fixtures::{OCULUS_EXILES_SIX_CARDS, STAFF, TITHE_PAYMENT};
 use crate::play;
 
 use beryl_cards::names::{
-    self, COUNTERSPELL, ISLAND, JACE_WIELDER_OF_MYSTERIES, MANA_CRYPT, MANA_TITHE, PLAINS,
+    COUNTERSPELL, ISLAND, JACE_WIELDER_OF_MYSTERIES, MANA_CRYPT, MANA_TITHE, PLAINS,
 };
 use beryl_engine::TurnStep;
 use beryl_engine::card::Purpose;
@@ -75,8 +76,7 @@ fn arrows(script: &str) -> Vec<&str> {
 /// scenario's three views of it (the cast, the payment, the cards chosen) are joined here.
 #[test]
 fn a_costs_mana_is_paid_before_its_cards_leave() {
-    let name = "Abhorrent Oculus exiles six of seven graveyard cards as it's cast";
-    let views = views_heard(names::ABHORRENT_OCULUS, name, |_, _, _| {});
+    let views = views_heard(OCULUS_EXILES_SIX_CARDS, |_, _, _| {});
     for (seat, who) in ["you", "opponent"].into_iter().enumerate() {
         let mut screen = Screen::default();
         let (first, heard) = &views[0][seat];
@@ -123,8 +123,7 @@ fn a_costs_mana_is_paid_before_its_cards_leave() {
 /// that asked for it, whose arrow then ends and which only then leaves the stack.
 #[test]
 fn mana_paid_as_a_spell_resolves_streaks_into_it_before_it_leaves() {
-    let name = "Mana Tithe: lands left after paying for the spell pay {1}";
-    let [first, second] = script(names::MANA_TITHE, name, 3);
+    let [first, second] = script(TITHE_PAYMENT, 3);
     // The payer taps the land, and its mana is the land's own ability's.
     let paid = |who: &str| {
         text(&[
@@ -145,8 +144,7 @@ fn mana_paid_as_a_spell_resolves_streaks_into_it_before_it_leaves() {
 /// other's. The first has resolved and gone before the second emerges.
 #[test]
 fn two_abilities_of_one_source_each_emerge_as_their_own() {
-    let name = "its own Spirit and a Samurai each add a story counter, spent to draw";
-    let all = views(names::STAFF_OF_THE_STORYTELLER, name, |_, _, _| {});
+    let all = views(STAFF, |_, _, _| {});
     for seat in 0..2 {
         let emerged: Vec<(u32, Option<ObjectId>, u8, u8)> = (all[..=3].iter())
             .flat_map(|seats| {

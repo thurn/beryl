@@ -3,9 +3,15 @@
 //! the sequences behind two themes of repeated bug reports, and for each invariant a
 //! hand-built script that breaks it: the last two, a step whose cause was not there.
 
+use crate::common::fixtures::{
+    ADELINE_ATTACKS_PLANESWALKER, ADELINE_TOKEN, BEZA, COUNTERSPELL, MANA_CRYPT, MANA_DRAIN,
+    PORTABLE_HOLE_TARGET_GONE, REPRIEVE_COUNTERSPELL, SKYDIVER, SPHINX, TEFERI_DIES_IN_COMBAT,
+    TWO_PLANESWALKERS_ATTACKED,
+};
+
 use crate::common;
 
-use beryl_cards::{CARDS, names};
+use beryl_cards::CARDS;
 use beryl_search::Budget;
 use beryl_session::protocol::{
     Candidate, Kind, ObjectId, ObjectView, Side, StackItem, TargetRef, Why, ZoneName,
@@ -16,11 +22,11 @@ use beryl_session::script::{
 use beryl_session::{CandidateIndex, Game, Prepared, Seat, SessionId, Status, StopsSetting};
 use common::{script, scripts, text, views};
 
-/// The steps of `card`'s scenario `name` whose text has `part`, over all its scripts, for the
+/// The steps of the scenario whose text has `part`, over all its scripts, for the
 /// player who goes first and for the other: each with the number of its script.
-fn steps(card: &str, name: &str, part: &str) -> [Vec<(usize, String)>; 2] {
+fn steps(scenario: &beryl_scenario::Scenario, part: &str) -> [Vec<(usize, String)>; 2] {
     let mut found: [Vec<(usize, String)>; 2] = Default::default();
-    for (n, seats) in scripts(card, name).into_iter().enumerate() {
+    for (n, seats) in scripts(scenario).into_iter().enumerate() {
         for (seat, script) in seats.into_iter().enumerate() {
             let lines = script.lines().filter(|line| line.contains(part));
             found[seat].extend(lines.map(|line| (n, line.trim_start_matches("& ").to_owned())));
@@ -36,22 +42,20 @@ fn lines(found: &[(usize, &str)]) -> Vec<(usize, String)> {
         .collect()
 }
 
-const TEFERI_FALLS: &str = "combat damage removes Teferi while other attacks remain";
-
 /// `point`, an attack line: only an attacker at a planeswalker has one (Arena,
 /// `UrGalw_f35w 48:56.6`; one at the player has only its chevron). It begins once what it
 /// attacks is chosen, and ends before that planeswalker leaves. The same from both seats,
 /// but for who the player is.
 #[test]
 fn an_attack_line_begins_with_its_destination_and_ends_before_that_leaves() {
-    let [first, second] = script(names::TEFERI_TIME_RAVELER, TEFERI_FALLS, 7);
+    let [first, second] = script(TEFERI_DIES_IN_COMBAT, 7);
     let chosen = text(&[
         "set #0 (Geist of the Moors) battlefield 3/1 attacking #256",
         "& +point attack #0 > #256",
     ]);
     assert_eq!(first, chosen);
     assert_eq!(second, chosen);
-    let [first, second] = script(names::TEFERI_TIME_RAVELER, TEFERI_FALLS, 9);
+    let [first, second] = script(TEFERI_DIES_IN_COMBAT, 9);
     let combat = |defender: &str, attacker: &str| {
         text(&[
             "tap #0 (Geist of the Moors)".to_owned(),
@@ -76,7 +80,7 @@ fn an_attack_line_begins_with_its_destination_and_ends_before_that_leaves() {
 /// not before its destination is chosen, and ends at most once.
 #[test]
 fn a_combat_line_is_begun_once_and_never_swings() {
-    let [first, second] = steps(names::TEFERI_TIME_RAVELER, TEFERI_FALLS, "point attack");
+    let [first, second] = steps(TEFERI_DIES_IN_COMBAT, "point attack");
     assert_eq!(
         first,
         lines(&[
@@ -93,8 +97,7 @@ fn a_combat_line_is_begun_once_and_never_swings() {
     );
     // The last attacker declared, sent at a planeswalker, begins its line as it taps, not
     // after combat (by-w8gv.21.57).
-    let name = "combat damage removes Teferi while the other planeswalker is attacked";
-    let [first, second] = steps(names::TEFERI_TIME_RAVELER, name, "point attack");
+    let [first, second] = steps(TWO_PLANESWALKERS_ATTACKED, "point attack");
     let both = lines(&[
         (6, "+point attack #0 > #256"),
         (8, "+point attack #2 > #259"),
@@ -104,8 +107,7 @@ fn a_combat_line_is_begun_once_and_never_swings() {
     assert_eq!(second, both);
     // An attacker's line stays through its attack trigger and through the choice of what
     // the token the trigger makes is attacking (by-y3sp).
-    let name = "Adeline's Human attacks a planeswalker";
-    let [first, second] = steps(names::ADELINE_RESPLENDENT_CATHAR, name, "point attack");
+    let [first, second] = steps(ADELINE_ATTACKS_PLANESWALKER, "point attack");
     assert_eq!(first, lines(&[(5, "+point attack #512 > #256")]));
     assert_eq!(second, lines(&[(5, "+point attack #512 > #256")]));
 }
@@ -115,8 +117,7 @@ fn a_combat_line_is_begun_once_and_never_swings() {
 /// its source first, and its line to that source ends with the block line.
 #[test]
 fn a_block_line_lasts_until_combat_damage_is_done() {
-    let name = "Sphinx dies as a card, then as a token";
-    let [first, second] = script(names::SPHINX_OF_FALSE_CONCLUSIONS, name, 7);
+    let [first, second] = script(SPHINX, 7);
     let declared = text(&[
         "set #1 (Sphinx of False Conclusions) battlefield tapped 4/2 attacking",
         "& set #256 (Geist of the Moors) battlefield 3/1 blocking #1",
@@ -124,7 +125,7 @@ fn a_block_line_lasts_until_combat_damage_is_done() {
     ]);
     assert_eq!(first, declared);
     assert_eq!(second, declared);
-    let [first, second] = script(names::SPHINX_OF_FALSE_CONCLUSIONS, name, 8);
+    let [first, second] = script(SPHINX, 8);
     let damage = |who: &str| {
         let who = who.to_owned();
         let turn = |step: &str| format!("set turn 1 {who} {step}");
@@ -151,14 +152,7 @@ fn a_block_line_lasts_until_combat_damage_is_done() {
 /// that follows the choice comes before the step that says what was chosen.
 #[test]
 fn a_line_at_a_planeswalker_never_points_at_the_player_first() {
-    let (_, scenarios) = beryl_cards::scenarios()
-        .iter()
-        .find(|&&(card, _)| card == names::ADELINE_RESPLENDENT_CATHAR)
-        .unwrap();
-    let scenario = scenarios
-        .iter()
-        .find(|s| s.name == "Adeline's Human attacks a planeswalker")
-        .unwrap();
+    let scenario = ADELINE_ATTACKS_PLANESWALKER;
     let (table, state) = beryl_scenario::position(&CARDS, scenario).unwrap();
     let random = beryl_search::agent("random").unwrap();
     let mut game = Game::prepared(
@@ -218,16 +212,13 @@ fn a_line_at_a_planeswalker_never_points_at_the_player_first() {
     );
 }
 
-const HOLE: &str = "Portable Hole's target gone before the trigger resolves";
-
 /// `point`, the lines of a combat that begins and ends inside one script: the seat's screen is
 /// shown no view from the attack to the deaths combat damage deals, as a seat is that has
 /// nothing to decide meanwhile. The block line begins with the block's event and ends before
 /// the creatures leave, though the view's end has no line, as when each part had a view.
 #[test]
 fn a_combat_inside_one_script_shows_its_lines() {
-    let name = "Sphinx dies as a card, then as a token";
-    let views = common::views_heard(names::SPHINX_OF_FALSE_CONCLUSIONS, name, |_, _, _| {});
+    let views = common::views_heard(SPHINX, |_, _, _| {});
     // The second combat: its attack is view 18's, its block and damage view 21's.
     let (shown, combat) = views.split_at(17);
     let combat = &combat[..5];
@@ -280,7 +271,7 @@ fn a_combat_inside_one_script_shows_its_lines() {
 /// though the trigger stays on the stack still naming the card, now in a hand.
 #[test]
 fn an_arrow_ends_before_its_target_moves_and_does_not_follow_it() {
-    let [first, second] = script(names::PORTABLE_HOLE, HOLE, 5);
+    let [first, second] = script(PORTABLE_HOLE_TARGET_GONE, 5);
     let returned = text(&[
         "-point hostile-target a1 > #256",
         "& -point hostile-target #4 > #256",
@@ -293,12 +284,12 @@ fn an_arrow_ends_before_its_target_moves_and_does_not_follow_it() {
         (2, "+point hostile-target a1 > #256"),
         (5, "-point hostile-target a1 > #256"),
     ]);
-    let [first, second] = steps(names::PORTABLE_HOLE, HOLE, "target a1");
+    let [first, second] = steps(PORTABLE_HOLE_TARGET_GONE, "target a1");
     assert_eq!(first, aimed);
     assert_eq!(second, aimed);
     // What the UI drew the arrow from: the view after still has the trigger on the stack
     // aimed at the card's slot, and the card in its owner's hand.
-    let view = &views(names::PORTABLE_HOLE, HOLE, |_, _, _| {})[6][0];
+    let view = &views(PORTABLE_HOLE_TARGET_GONE, |_, _, _| {})[6][0];
     assert!(matches!(
         view.stack.as_slice(),
         [StackItem::Ability { targets, .. }] if *targets == [TargetRef::Object { slot: ObjectId(256) }]
@@ -311,8 +302,7 @@ fn an_arrow_ends_before_its_target_moves_and_does_not_follow_it() {
     assert_eq!(creature.zone, ZoneName::Hand);
     // A spell returned to its owner's hand takes no arrow there with it (by-8uw): the
     // arrow at it, and its own at what it would have countered, end before it goes.
-    let name = "Reprieve on a counterspell saves the spell it targets";
-    let [first, _] = script(names::REPRIEVE, name, 6);
+    let [first, _] = script(REPRIEVE_COUNTERSPELL, 6);
     assert_eq!(
         first,
         text(&[
@@ -323,7 +313,7 @@ fn an_arrow_ends_before_its_target_moves_and_does_not_follow_it() {
             "vanish #3 (Reprieve) stack>graveyard resolve <- #3",
         ])
     );
-    let [first, _] = steps(names::REPRIEVE, name, "target #3 > #259");
+    let [first, _] = steps(REPRIEVE_COUNTERSPELL, "target #3 > #259");
     assert_eq!(
         first,
         lines(&[
@@ -338,13 +328,11 @@ fn an_arrow_ends_before_its_target_moves_and_does_not_follow_it() {
 /// streaks from the player into the spell.
 #[test]
 fn mana_counts_in_a_pool_and_streaks_out_of_it() {
-    let name = "Mana Drain: the countered spell's mana value at the caster's next main phase";
-    let [first, second] = steps(names::MANA_DRAIN, name, "pool");
+    let [first, second] = steps(MANA_DRAIN, "pool");
     assert_eq!(first, lines(&[(7, "count you pool CCC <- a1")]));
     assert_eq!(second, lines(&[(7, "count opponent pool CCC <- a1")]));
     // No scenario casts a spell with floating mana, so the view before a cast is given one
     // blue mana in the caster's pool, which the view after the cast no longer has.
-    let name = "Counterspell counters a spell into its owner's graveyard";
     let floating = |n: usize, seat: u8, view: &mut beryl_session::protocol::PlayerView| {
         if n == 1 {
             let caster = if seat == 0 {
@@ -355,7 +343,7 @@ fn mana_counts_in_a_pool_and_streaks_out_of_it() {
             caster.mana.blue = 1;
         }
     };
-    let [first, second] = views(names::COUNTERSPELL, name, floating).swap_remove(2);
+    let [first, second] = views(COUNTERSPELL, floating).swap_remove(2);
     let paid = |who: &str, dwell: bool| {
         let mut lines = vec![
             format!("fly #1 (Counterspell) hand>stack cast at #257 <- {who}"),
@@ -390,8 +378,7 @@ fn mana_counts_in_a_pool_and_streaks_out_of_it() {
 /// one beat, the payment being one event of the rules.
 #[test]
 fn a_sacrificed_sources_mana_streaks_from_where_it_lay() {
-    let name = "Beza's Treasure pays for Counterspell";
-    let [first, second] = scripts(names::BEZA_THE_BOUNDING_SPRING, name).swap_remove(9);
+    let [first, second] = scripts(BEZA).swap_remove(9);
     let paid = |who: &str| {
         text(&[
             format!("fly #1 (Counterspell) hand>stack cast at #258 <- {who}"),
@@ -413,7 +400,6 @@ fn a_sacrificed_sources_mana_streaks_from_where_it_lay() {
 #[test]
 fn the_games_last_play_is_left_to_be_seen() {
     use beryl_session::protocol::{LossReason, OutcomeView, Side};
-    let name = "Mana Crypt's flip lost: 3 damage to its controller";
     let over = |n: usize, seat: u8, view: &mut beryl_session::protocol::PlayerView| {
         if n == 2 {
             view.status = beryl_session::protocol::Status::Over {
@@ -425,7 +411,7 @@ fn the_games_last_play_is_left_to_be_seen() {
             };
         }
     };
-    let [first, second] = views(names::MANA_CRYPT, name, over).swap_remove(2);
+    let [first, second] = views(MANA_CRYPT, over).swap_remove(2);
     let last = |view: beryl_session::protocol::PlayerView| {
         let script = view.script.expect("a view's script").to_string();
         script.lines().last().map(str::to_owned)
@@ -439,8 +425,7 @@ fn the_games_last_play_is_left_to_be_seen() {
 /// counterspell goes on the stack, the mana, the arrow's end in a beat of its own, and both
 /// spells leaving. The rule invariants hold it, and each test below breaks one.
 fn counterspell() -> (Table, Script) {
-    let name = "Counterspell counters a spell into its owner's graveyard";
-    let views = views(names::COUNTERSPELL, name, |_, _, _| {});
+    let views = views(COUNTERSPELL, |_, _, _| {});
     let script = views[2][0].script.clone().unwrap();
     assert_eq!(script.beats.len(), 4);
     assert_eq!(
@@ -618,8 +603,7 @@ fn flip() -> (Step, &'static str) {
 /// The script that puts Adeline's trigger on the stack and the script that resolves it, with
 /// the table and the spans each plays over.
 fn trigger() -> [(Table, Vec<Open>, Script); 2] {
-    let name = "Adeline's Human arrives attacking";
-    let views = views(names::ADELINE_RESPLENDENT_CATHAR, name, |_, _, _| {});
+    let views = views(ADELINE_TOKEN, |_, _, _| {});
     let has = |s: &Script, lifts: bool| {
         (s.beats.iter().flatten()).any(|step| match step.act {
             Act::Emerge { id: 1, .. } => lifts,
@@ -688,8 +672,7 @@ fn a_cause_that_is_gone_breaks_a_rule() {
 /// then play over that reset.
 #[test]
 fn a_view_shown_first_starts_over_where_its_scripts_left_the_stack() {
-    let name = "Thieving Skydiver kicked steals Mana Crypt over a Map";
-    let views = views(names::THIEVING_SKYDIVER, name, |_, _, _| {});
+    let views = views(SKYDIVER, |_, _, _| {});
     for seat in 0..2 {
         let mut follow = Follow::default();
         for seats in &views[..8] {
@@ -746,8 +729,7 @@ fn a_span_is_ended_by_its_script_or_carried_to_the_next() {
 /// what it is on moves.
 #[test]
 fn the_session_carries_an_open_span_to_the_script_that_ends_it() {
-    let name = "Thieving Skydiver kicked steals Mana Crypt over a Map";
-    let [first, second] = steps(names::THIEVING_SKYDIVER, name, " a1 > ");
+    let [first, second] = steps(SKYDIVER, " a1 > ");
     let spans = lines(&[
         (7, "+point source a1 > #0"),
         (9, "+point hostile-target a1 > #256"),

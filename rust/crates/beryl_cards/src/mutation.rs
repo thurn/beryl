@@ -132,18 +132,6 @@ fn result(cards: &'static CardTable, scenario: &Scenario) -> Result<ScenarioResu
     })
 }
 
-/// Every scenario of the card: its file's, the rules library's for it and its generated ones.
-#[cfg(test)]
-fn scenarios_of(card: &str) -> Vec<&'static Scenario> {
-    let own = crate::scenarios().iter().copied();
-    let generated = crate::derive::all().iter().copied();
-    own.chain(crate::library::by_card())
-        .chain(generated)
-        .filter(|(c, _)| *c == card)
-        .flat_map(|(_, s)| s.iter())
-        .collect()
-}
-
 /// What the check found for one card.
 pub struct Report {
     pub card: &'static str,
@@ -183,7 +171,14 @@ fn killed(mutant: &'static CardDef, expected: &[(&Scenario, ScenarioResult)]) ->
 #[cfg(test)]
 fn check(def: &'static CardDef) -> Report {
     let witnesses = witnesses::for_card(def.name);
-    let mut expected = expected(scenarios_of(def.name));
+    let written = crate::written_scenarios_for(def.name);
+    let shared = crate::library::by_card();
+    let generated = crate::derive::all().iter().copied();
+    let scenarios = shared
+        .chain(generated)
+        .filter(|&(card, _)| card == def.name)
+        .flat_map(|(_, cases)| cases);
+    let mut expected = expected(written.iter().chain(scenarios).collect());
     expected.extend(witnesses.iter().map(|scenario| {
         let result = result(&CARDS, scenario)
             .unwrap_or_else(|error| panic!("{}: invalid witness: {error}", def.name));
@@ -295,7 +290,7 @@ fn a_mutant_of_an_emblem_is_a_mutant_of_its_card() {
         .get(crate::names::TEFERI_HERO_OF_DOMINARIA)
         .expect("Teferi has a file");
     let emblem = teferi.tokens[0];
-    let expected = expected(scenarios_of(teferi.name));
+    let expected = expected(crate::library::emblems::SCENARIOS.iter().collect());
     let optional: Vec<_> = mutants(teferi)
         .into_iter()
         .filter(|m| m.node == format!("{}: ability 0, target 0", emblem.name))

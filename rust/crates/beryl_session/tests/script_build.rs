@@ -3,35 +3,45 @@
 //! its screen, the script between two of them read as text.
 
 use crate::common;
+use crate::common::fixtures::{
+    ADELINE_TOKEN, COUNTERSPELL, DAMN_SWEEPS_TOKENS, EMPEROR_EXILES_ATTACKER,
+    EMPEROR_GROWS_CREATURE, MANA_CRYPT, OUST, PORTABLE_HOLE, REPRIEVE_SPELL_WITH_X, SKYDIVER,
+    STAFF, SWIFT_RECONFIGURATION_ENTERS, THIRST, TIMETWISTER, TURN_MANIFESTED_CREATURE_FACE_UP,
+};
 
+use beryl_cards::CARDS;
 use beryl_cards::decks::WU_CONTROL;
-use beryl_cards::{CARDS, names};
 use beryl_engine::Seat;
 use beryl_session::protocol::{PlayerView, Why, ZoneName};
 use beryl_session::script::{Act, Script, Step, Subject, Table, failure, replay};
 use beryl_session::{CandidateIndex, Game, SessionId, StartGame, Status, StopsSetting};
 use common::{script, scripts, text};
 
-/// Prints every script of a scenario, to read what a change does to them:
-/// `SCRIPT_DUMP="card|scenario" cargo test -p beryl_session --test script_build dump --
+/// Prints every script of a scenario chosen at runtime:
+/// `SCRIPT_DUMP="card|scenario" cargo test -p beryl_session --test session script_build::dump --
 /// --ignored --nocapture`.
 #[test]
 #[ignore = "prints the scripts of the scenario SCRIPT_DUMP names"]
 fn dump() {
     let which = std::env::var("SCRIPT_DUMP").expect("SCRIPT_DUMP=card|scenario");
     let (card, name) = which.split_once('|').expect("card|scenario");
-    for (n, [first, second]) in scripts(card, name).into_iter().enumerate() {
+    let written = beryl_cards::written_scenarios_for(card);
+    let shared = beryl_cards::library::by_card()
+        .filter(|&(owner, _)| owner == card)
+        .flat_map(|(_, cases)| cases);
+    let scenario = written
+        .iter()
+        .chain(shared)
+        .find(|scenario| scenario.name == name)
+        .expect("the requested scenario");
+    for (n, [first, second]) in scripts(scenario).into_iter().enumerate() {
         println!("== {n}\n-- first\n{first}-- second\n{second}");
     }
 }
 
 #[test]
 fn a_seats_first_script_starts_its_screen_over() {
-    let [first, second] = script(
-        names::MANA_CRYPT,
-        "Mana Crypt's flip lost: 3 damage to its controller",
-        0,
-    );
+    let [first, second] = script(MANA_CRYPT, 0);
     // The upkeep trigger is on the stack as the scenario begins: each seat numbers it, and
     // shows at once the line from it to its source (`point`).
     assert_eq!(first, "reset a1\n+point source a1 > #1\n");
@@ -43,9 +53,8 @@ fn a_seats_first_script_starts_its_screen_over() {
 /// goes on the stack and ends in a beat of its own before its target leaves.
 #[test]
 fn a_spell_flies_to_the_stack_and_a_counterspell_takes_it_off() {
-    let name = "Counterspell counters a spell into its owner's graveyard";
     // The second player casts Portable Hole, its Plains sending its mana into the spell.
-    let [first, second] = script(names::COUNTERSPELL, name, 1);
+    let [first, second] = script(COUNTERSPELL, 1);
     assert_eq!(
         first,
         text(&[
@@ -65,7 +74,7 @@ fn a_spell_flies_to_the_stack_and_a_counterspell_takes_it_off() {
     // The first answers. Their Islands tap together, each sending its mana into the spell; the
     // spell is read by the player who did not cast it; the countered spell and the
     // counterspell leave in one beat.
-    let [first, second] = script(names::COUNTERSPELL, name, 2);
+    let [first, second] = script(COUNTERSPELL, 2);
     assert_eq!(
         first,
         text(&[
@@ -102,7 +111,6 @@ fn a_spell_flies_to_the_stack_and_a_counterspell_takes_it_off() {
 /// trigger makes is there, which raises the attacker's power.
 #[test]
 fn an_attack_trigger_emerges_and_its_token_appears() {
-    let name = "Adeline's Human arrives attacking";
     for (n, lines) in [
         (
             4,
@@ -118,13 +126,13 @@ fn an_attack_trigger_emerges_and_its_token_appears() {
             ],
         ),
     ] {
-        let [first, second] = script(names::ADELINE_RESPLENDENT_CATHAR, name, n);
+        let [first, second] = script(ADELINE_TOKEN, n);
         assert_eq!(first, text(&lines), "script {n}");
         assert_eq!(second, text(&lines), "script {n}");
     }
     // The engine says a triggered ability with no target arrived on the stack, put there by
     // its controller.
-    let [first, second] = script(names::ADELINE_RESPLENDENT_CATHAR, name, 5);
+    let [first, second] = script(ADELINE_TOKEN, 5);
     assert_eq!(
         first,
         text(&[
@@ -144,11 +152,7 @@ fn an_attack_trigger_emerges_and_its_token_appears() {
 /// `strike`: the attackers deal their combat damage at once, each with the life it takes.
 #[test]
 fn combat_damage_strikes_and_counts_life() {
-    let [first, second] = script(
-        names::ADELINE_RESPLENDENT_CATHAR,
-        "Adeline's Human arrives attacking",
-        12,
-    );
+    let [first, second] = script(ADELINE_TOKEN, 12);
     assert_eq!(
         first,
         text(&[
@@ -180,11 +184,7 @@ fn combat_damage_strikes_and_counts_life() {
 /// then deals, from the ability to the player, with the life it takes.
 #[test]
 fn a_coin_is_announced_and_noncombat_damage_streaks() {
-    let [first, second] = script(
-        names::MANA_CRYPT,
-        "Mana Crypt's flip lost: 3 damage to its controller",
-        2,
-    );
+    let [first, second] = script(MANA_CRYPT, 2);
     assert_eq!(
         first,
         text(&[
@@ -220,11 +220,7 @@ fn a_coin_is_announced_and_noncombat_damage_streaks() {
 /// `set`, the banner, and the lands untapping together.
 #[test]
 fn a_loyalty_cost_counts_after_its_ability_emerges() {
-    let [first, second] = script(
-        names::THE_WANDERING_EMPEROR,
-        "flashed in during combat, \u{2212}2 exiles the tapped attacker",
-        4,
-    );
+    let [first, second] = script(EMPEROR_EXILES_ATTACKER, 4);
     assert_eq!(
         first,
         text(&[
@@ -285,11 +281,7 @@ fn a_loyalty_cost_counts_after_its_ability_emerges() {
 /// `count`: a counter put on a permanent by its own trigger.
 #[test]
 fn a_counter_counts() {
-    let [first, second] = script(
-        names::STAFF_OF_THE_STORYTELLER,
-        "its own Spirit and a Samurai each add a story counter, spent to draw",
-        4,
-    );
+    let [first, second] = script(STAFF, 4);
     let lines = [
         "count #2 (Staff of the Storyteller) story 1 <- a2",
         "-point source a2 > #2",
@@ -303,11 +295,7 @@ fn a_counter_counts() {
 /// A step of its own for the numbers would follow the counter's if its record lacked them.
 #[test]
 fn a_plus_one_counter_counts_with_the_stats_it_changes() {
-    let [first, second] = script(
-        names::THE_WANDERING_EMPEROR,
-        "+1 grows a creature and gives it first strike",
-        3,
-    );
+    let [first, second] = script(EMPEROR_GROWS_CREATURE, 3);
     let lines = [
         "count #256 (Wetland Sambar) plusOne 1 <- a1",
         "-point source a1 > #0",
@@ -322,11 +310,7 @@ fn a_plus_one_counter_counts_with_the_stats_it_changes() {
 /// not drawn again by the ability that moved it.
 #[test]
 fn a_stolen_permanent_flies_to_its_new_side() {
-    let [first, second] = script(
-        names::THIEVING_SKYDIVER,
-        "Thieving Skydiver kicked steals Mana Crypt over a Map",
-        10,
-    );
+    let [first, second] = script(SKYDIVER, 10);
     assert_eq!(
         first,
         text(&[
@@ -351,11 +335,7 @@ fn a_stolen_permanent_flies_to_its_new_side() {
 /// that creature ended first, and what it changes of the creature shows after it lands.
 #[test]
 fn an_aura_flies_onto_its_permanent() {
-    let [first, second] = script(
-        names::SWIFT_RECONFIGURATION,
-        "a creature becomes a noncreature Vehicle that can't crew alone",
-        2,
-    );
+    let [first, second] = script(SWIFT_RECONFIGURATION_ENTERS, 2);
     // Cast with flash, it resolves at once: no one can respond.
     let cast = |who: &str| {
         [
@@ -387,11 +367,7 @@ fn an_aura_flies_onto_its_permanent() {
 /// and the face-down one under its name.
 #[test]
 fn a_sweepers_creatures_vanish_together() {
-    let [first, second] = script(
-        names::DAMN,
-        "Damn overloaded takes tokens and face-down creatures at once",
-        2,
-    );
+    let [first, second] = script(DAMN_SWEEPS_TOKENS, 2);
     let lines = [
         "vanish #0 (Adeline, Resplendent Cathar) battlefield>graveyard destroy <- #1",
         "& vanish #512 battlefield>gone destroy <- #1",
@@ -408,11 +384,7 @@ fn a_sweepers_creatures_vanish_together() {
 /// graveyard in the next. The look the opponent's seat saw lifted ends before they move.
 #[test]
 fn cards_drawn_and_discarded_fly_from_both_seats() {
-    let [first, second] = script(
-        names::THIRST_FOR_DISCOVERY,
-        "Thirst for Discovery: discarding two cards with a basic land in hand",
-        5,
-    );
+    let [first, second] = script(THIRST, 5);
     let lines = [
         "fly #6 (Plains) library>hand draw <- #2",
         "& fly #7 (Portable Hole) library>hand draw <- #2",
@@ -441,8 +413,7 @@ fn cards_drawn_and_discarded_fly_from_both_seats() {
 /// hand, unseen by the other seat.
 #[test]
 fn a_returned_spell_flies_for_its_owner_and_vanishes_for_the_other_seat() {
-    let name = "Reprieve returns a spell with X to its owner's hand and draws";
-    let [first, second] = script(names::REPRIEVE, name, 3);
+    let [first, second] = script(REPRIEVE_SPELL_WITH_X, 3);
     assert_eq!(
         first,
         text(&[
@@ -480,8 +451,7 @@ fn a_returned_spell_flies_for_its_owner_and_vanishes_for_the_other_seat() {
 /// that took it after it.
 #[test]
 fn an_exiled_permanent_vanishes() {
-    let name = "Portable Hole exiles until it leaves the battlefield";
-    let [first, second] = script(names::PORTABLE_HOLE, name, 3);
+    let [first, second] = script(PORTABLE_HOLE, 3);
     let lines = [
         "-point hostile-target a1 > #261",
         "vanish #261 (Wetland Sambar) battlefield>exile exile <- a1",
@@ -495,11 +465,7 @@ fn an_exiled_permanent_vanishes() {
 /// `vanish` into a library: the place the card takes in it, and no name there.
 #[test]
 fn a_permanent_put_into_a_library_takes_its_place() {
-    let [first, second] = script(
-        names::OUST,
-        "Oust puts the creature second from the top and its controller gains 3",
-        1,
-    );
+    let [first, second] = script(OUST, 1);
     assert_eq!(
         first,
         text(&[
@@ -536,15 +502,14 @@ fn a_permanent_put_into_a_library_takes_its_place() {
 /// the other is in the graveyard with no flight.
 #[test]
 fn a_face_down_permanent_flips() {
-    let name = "A manifested creature turns face up for its mana cost, entering no more";
     // The player choosing sees both cards' faces; the other sees nothing yet.
-    let [first, second] = script(names::ABHORRENT_OCULUS, name, 2);
+    let [first, second] = script(TURN_MANIFESTED_CREATURE_FACE_UP, 2);
     assert_eq!(
         first,
         text(&["flip #2 (Snapcaster Mage)", "& flip #4 (Island)"])
     );
     assert_eq!(second, "");
-    let [first, second] = script(names::ABHORRENT_OCULUS, name, 3);
+    let [first, second] = script(TURN_MANIFESTED_CREATURE_FACE_UP, 3);
     assert_eq!(
         first,
         text(&[
@@ -563,7 +528,7 @@ fn a_face_down_permanent_flips() {
             "vanish a1 stack>gone resolve <- a1",
         ])
     );
-    let [first, second] = script(names::ABHORRENT_OCULUS, name, 4);
+    let [first, second] = script(TURN_MANIFESTED_CREATURE_FACE_UP, 4);
     assert_eq!(
         first,
         text(&[
@@ -593,7 +558,7 @@ fn a_face_down_permanent_flips() {
 /// rules, and each player's seven are drawn in a beat.
 #[test]
 fn a_shuffle_sets_the_library() {
-    let [first, second] = script(names::TIMETWISTER, "Timetwister with empty graveyards", 1);
+    let [first, second] = script(TIMETWISTER, 1);
     let cast = |who: &str| {
         vec![
             format!("fly #1 (Timetwister) hand>stack cast <- {who}"),

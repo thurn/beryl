@@ -131,13 +131,12 @@ fn run_card(name: &str) -> ExitCode {
         eprintln!("beryl_scenario: no card named {name} is built");
         return ExitCode::from(2);
     };
-    let written: Vec<&Scenario> = beryl_cards::scenarios()
-        .iter()
-        .copied()
-        .chain(beryl_cards::library::by_card())
-        .filter(|&(card, _)| card == def.name)
-        .flat_map(|(_, scenarios)| scenarios)
-        .collect();
+    let written: Vec<&Scenario> =
+        std::iter::once((def.name, beryl_cards::written_scenarios_for(def.name)))
+            .chain(beryl_cards::library::by_card())
+            .filter(|&(card, _)| card == def.name)
+            .flat_map(|(_, scenarios)| scenarios)
+            .collect();
     let derived = derive_card(def);
     let mut failed = 0;
     for (kind, scenario) in written.iter().map(|&s| ("hand-written", s)).chain(
@@ -190,10 +189,7 @@ fn generated_card(name: &str) -> ExitCode {
         eprintln!("beryl_scenario: no card named {name} is built");
         return ExitCode::from(2);
     };
-    let written = beryl_cards::scenarios()
-        .iter()
-        .find(|(card, _)| *card == def.name)
-        .map_or(0, |(_, scenarios)| scenarios.len());
+    let written = beryl_cards::written_scenarios_for(def.name).len();
     let derived = derive_card(def);
     let (scenarios, cut) = if let Some(derived) = &derived {
         if !derived.failures.is_empty() {

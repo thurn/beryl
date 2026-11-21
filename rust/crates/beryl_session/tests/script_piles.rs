@@ -3,16 +3,19 @@
 //! `script_build.rs`'s.
 
 use crate::common;
+use crate::common::fixtures::{
+    FACE_DOWN_CREATURE_LEAVES, JACE_MILLS_THEN_DRAWS, MAP_EXPLORES_LAND, MAP_EXPLORES_NONLAND,
+    SNAPCASTER_MAGE, SPELLBINDER, STOCK_UP, SUBTLETY_EVOKED, SUBTLETY_HARD_CAST,
+    TRINKET_MAGE_FINDS_MANA_CRYPT,
+};
 
-use beryl_cards::names;
 use common::{script, text};
 
 /// `fly` of a mill: the cards go from the library to the graveyard face up, together, and the
 /// draw that follows is a beat of its own.
 #[test]
 fn milled_cards_fly_to_the_graveyard_together() {
-    let name = "+1 mills the target player two, then draws";
-    let [first, second] = script(names::JACE_WIELDER_OF_MYSTERIES, name, 3);
+    let [first, second] = script(JACE_MILLS_THEN_DRAWS, 3);
     let lines = |drawn: &str, at: &str| {
         text(&[
             "fly #256 (Plains) library>graveyard effect <- a1".to_owned(),
@@ -30,8 +33,7 @@ fn milled_cards_fly_to_the_graveyard_together() {
 /// `fly` of a card cast from a graveyard: from its pile to the stack, as one cast from a hand.
 #[test]
 fn a_card_cast_with_flashback_flies_from_the_graveyard() {
-    let name = "Snapcaster Mage: flashback a counterspell, then exile it";
-    let [first, second] = script(names::SNAPCASTER_MAGE, name, 5);
+    let [first, second] = script(SNAPCASTER_MAGE, 5);
     let cast = |who: &str| {
         let mut lines = vec![
             format!("fly #0 (Counterspell) graveyard>stack cast flashback at #257 <- {who}"),
@@ -58,8 +60,7 @@ fn a_card_cast_with_flashback_flies_from_the_graveyard() {
 /// `fly` of a card cast from exile: from the pile Elite Spellbinder put it in to the stack.
 #[test]
 fn a_card_cast_from_exile_flies_to_the_stack() {
-    let name = "Spellbinder's card costs its owner {2} more";
-    let [first, second] = script(names::ELITE_SPELLBINDER, name, 10);
+    let [first, second] = script(SPELLBINDER, 10);
     let cast = |who: &str| {
         let mut lines = vec![format!(
             "fly #260 (Portable Hole) exile>stack cast <- {who}"
@@ -85,7 +86,7 @@ fn a_card_cast_from_exile_flies_to_the_stack() {
 /// their seat gets only its flight to the hand.
 #[test]
 fn a_card_found_and_revealed_is_held_up_before_it_goes_to_the_hand() {
-    let [first, second] = script(names::TRINKET_MAGE, "Trinket Mage finds Mana Crypt", 6);
+    let [first, second] = script(TRINKET_MAGE_FINDS_MANA_CRYPT, 6);
     let found = ["fly #5 (Mana Crypt) library>hand effect <- a1"];
     let held = ["showcase #5 (Mana Crypt) <- a1"];
     let own = [
@@ -117,27 +118,24 @@ fn a_card_found_and_revealed_is_held_up_before_it_goes_to_the_hand() {
 /// held up all the same.
 #[test]
 fn an_explored_card_is_held_up_whether_it_leaves_the_library_or_stays() {
-    let name = "Get Lost on a creature gives two Maps; one explores a land into hand";
-    let [theirs, own] = script(names::GET_LOST, name, 6);
+    let [theirs, own] = script(MAP_EXPLORES_LAND, 6);
     let held = "showcase #261 (Plains) <- a1\nfly #261 (Plains) library>hand effect <- a1\n";
     assert!(theirs.contains(held), "{theirs}");
     assert!(!own.contains("showcase"), "{own}");
-    let name = "A Map explores a nonland into a counter, left on top";
     let rest = [
         "count #257 (Geist of the Moors) plusOne 1 <- a1",
         "-point friendly-target a1 > #257",
         "vanish a1 stack>gone resolve <- a1",
     ];
     let held = text(&[&["showcase #261 (Oust) <- a1"][..], &rest[..]].concat());
-    assert_eq!(script(names::GET_LOST, name, 4), [held, text(&rest)]);
+    assert_eq!(script(MAP_EXPLORES_NONLAND, 4), [held, text(&rest)]);
 }
 
 /// `showcase` of a face-down permanent that leaves for a zone that shows no face: it is held
 /// up as it goes, in the beat that takes it.
 #[test]
 fn a_face_down_permanent_put_into_a_library_is_held_up_as_it_goes() {
-    let name = "A face-down permanent leaving the battlefield is revealed";
-    let [first, second] = script(names::ABHORRENT_OCULUS, name, 7);
+    let [first, second] = script(FACE_DOWN_CREATURE_LEAVES, 7);
     let lines = |gains: &str| {
         text(&[
             "-point hostile-target #256 > #0".to_owned(),
@@ -155,8 +153,7 @@ fn a_face_down_permanent_put_into_a_library_is_held_up_as_it_goes() {
 /// milled card's flight shows it.
 #[test]
 fn a_card_that_is_not_revealed_is_not_held_up() {
-    let name = "+1 mills the target player two, then draws";
-    for milled in script(names::JACE_WIELDER_OF_MYSTERIES, name, 3) {
+    for milled in script(JACE_MILLS_THEN_DRAWS, 3) {
         assert!(!milled.contains("showcase"), "{milled}");
     }
 }
@@ -168,7 +165,7 @@ fn a_card_that_is_not_revealed_is_not_held_up() {
 fn the_opponents_choice_of_top_or_bottom_is_announced() {
     let cases = [
         (
-            "Subtlety hard cast: the creature spell's owner puts it on top",
+            SUBTLETY_HARD_CAST,
             7,
             "#261 (Geist of the Moors)",
             "top",
@@ -178,15 +175,16 @@ fn the_opponents_choice_of_top_or_bottom_is_announced() {
             ][..],
         ),
         (
-            "Subtlety evoked: sacrificed, its trigger still tucks a planeswalker spell",
+            SUBTLETY_EVOKED,
             10,
             "#258 (Teferi, Time Raveler)",
             "bottom",
             &["vanish a1 stack>gone resolve <- a1"][..],
         ),
     ];
-    for (name, n, spell, end, after) in cases {
-        let [first, second] = script(names::SUBTLETY, name, n);
+    for (scenario, n, spell, end, after) in cases {
+        let name = scenario.name;
+        let [first, second] = script(scenario, n);
         let lines = |told: bool| {
             let mut lines = vec![
                 format!("-point hostile-target a1 > {}", &spell[..4]),
@@ -210,8 +208,7 @@ fn the_opponents_choice_of_top_or_bottom_is_announced() {
 /// hand once each, and the three left never visibly move.
 #[test]
 fn a_look_that_is_not_a_scry_lifts_nothing_and_its_cards_leave_once() {
-    let name = "Stock Up takes two of five and orders the rest on the bottom";
-    let theirs: String = common::scripts(names::STOCK_UP, name)
+    let theirs: String = common::scripts(STOCK_UP)
         .into_iter()
         .map(|[_, theirs]| theirs)
         .collect();

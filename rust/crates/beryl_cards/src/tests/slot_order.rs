@@ -10,14 +10,7 @@ fn simultaneous_entry_choices_and_events_match_in_both_layouts() {
     use beryl_engine::{DecisionKind, Relayout, Replay, Scratch, Step, apply, next};
     use beryl_scenario::answer;
 
-    let (_, scenarios) = crate::scenarios()
-        .iter()
-        .find(|(card, _)| *card == names::SHOW_AND_TELL)
-        .unwrap();
-    let scenario = scenarios
-        .iter()
-        .find(|case| case.name == "Show and Tell chooses both Auras before either attachment")
-        .unwrap();
+    let scenario = super::fixtures::SHOW_AND_TELL_AURAS;
     let (table, _) = beryl_scenario::position(&CARDS, scenario).unwrap();
     for slots in Slots::ALL {
         let mut checked = false;

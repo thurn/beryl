@@ -17,6 +17,7 @@ mod copies;
 mod derive;
 mod equipment;
 mod facts;
+pub(crate) mod fixtures;
 mod knowledge;
 mod props;
 mod render;
@@ -25,12 +26,6 @@ mod slot_order;
 mod store;
 mod text;
 mod vocabulary;
-
-/// The scenarios in the file of the card called `name`.
-pub(crate) fn scenarios_of(name: &str) -> &'static [beryl_scenario::Scenario] {
-    let found = crate::scenarios().iter().find(|(card, _)| *card == name);
-    found.unwrap_or_else(|| panic!("{name} has no scenarios")).1
-}
 
 /// The generated tables: one card and one list of scenarios per card file, under the card's
 /// own name, and a constant for every card.
@@ -385,11 +380,11 @@ fn the_dump_is_valid_json_with_every_scenario() {
         serde_json::from_str(&beryl_scenario::to_json(&CARDS, crate::scenarios())).unwrap();
     let total: usize = crate::scenarios().iter().map(|(_, s)| s.len()).sum();
     assert_eq!(json.as_array().unwrap().len(), total);
-    if let Some((first, _)) = crate::scenarios()
+    let cards = crate::scenarios()
         .iter()
-        .find(|(_, cases)| !cases.is_empty())
-    {
-        assert_eq!(json[0]["card"], *first);
+        .flat_map(|(card, cases)| cases.iter().map(move |_| card));
+    for (entry, card) in json.as_array().unwrap().iter().zip(cards) {
+        assert_eq!(entry["card"], *card);
     }
 }
 
@@ -550,10 +545,7 @@ fn a_cleanup_discard_triggers_currency_converter() {
 /// whatever card it deals there.
 #[test]
 fn a_face_down_card_is_hidden_until_it_leaves() {
-    let scenario = scenarios_of(names::ABHORRENT_OCULUS)
-        .iter()
-        .find(|s| s.name == "A face-down permanent leaving the battlefield is revealed")
-        .expect("the scenario");
+    let scenario = fixtures::FACE_DOWN_CREATURE_LEAVES;
     let mut snapcaster = None;
     let mut known = Vec::new();
     beryl_scenario::visit(&CARDS, scenario, |t, s, d| {
@@ -586,10 +578,7 @@ fn a_face_down_card_is_hidden_until_it_leaves() {
 /// turned face up (CR 701.40b).
 #[test]
 fn a_copy_of_a_face_down_permanent_hides_its_card() {
-    let scenario = scenarios_of(names::ABHORRENT_OCULUS)
-        .iter()
-        .find(|s| s.name == "Fractured Identity copies a face-down permanent as a 2/2")
-        .expect("the scenario");
+    let scenario = fixtures::COPY_FACE_DOWN_PERMANENT;
     let mut last = None;
     beryl_scenario::visit(&CARDS, scenario, |t, s, d| {
         last = Some((t.clone(), *s, *d));
@@ -690,10 +679,7 @@ fn permanent_named(t: &GameTable, s: &State, name: &str) -> beryl_engine::Slot {
 #[test]
 fn currency_converters_return_is_pointless_until_it_exiles_a_card() {
     use beryl_engine::card::ObjectAbility;
-    let scenario = scenarios_of(names::CURRENCY_CONVERTER)
-        .iter()
-        .find(|s| s.name == "Currency Converter chooses among its exiled cards")
-        .unwrap();
+    let scenario = fixtures::CURRENCY_CONVERTER;
     let mut seen = Vec::new();
     beryl_scenario::visit(&CARDS, scenario, |t, s, d| {
         if d.kind == DecisionKind::Priority && d.player == Seat::P0 {

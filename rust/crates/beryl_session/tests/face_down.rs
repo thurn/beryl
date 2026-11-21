@@ -5,30 +5,18 @@
 //! can't look at face-down cards in any other zone or face-down spells or permanents controlled
 //! by another player."
 
-use beryl_cards::{CARDS, names, props};
+use crate::common::fixtures::{COPY_FACE_DOWN_PERMANENT, OCULUS_MANIFESTS_DREAD};
+use beryl_cards::{CARDS, props};
 use beryl_engine::{Observation, Seat, SlotId, Zone};
 use beryl_session::StopsSetting;
 use beryl_session::protocol::{
     CardType, Facing, Moment, ObjectId, ObjectView, PowerToughness, Side, player_view,
 };
 
-/// Abhorrent Oculus's scenario named `name`.
-fn oculus_scenario(name: &str) -> &'static beryl_scenario::Scenario {
-    let (_, scenarios) = beryl_cards::scenarios()
-        .iter()
-        .find(|&&(card, _)| card == names::ABHORRENT_OCULUS)
-        .expect("the card's scenarios");
-    scenarios
-        .iter()
-        .find(|s| s.name == name)
-        .expect("the scenario")
-}
-
 /// The face-down permanent each player sees once Abhorrent Oculus has manifested
 /// `props::VANILLA`, as player 0 (its controller) and player 1.
 fn seen() -> [ObjectView; 2] {
-    let scenario =
-        oculus_scenario("Abhorrent Oculus manifests dread on each opponent's upkeep only");
+    let scenario = OCULUS_MANIFESTS_DREAD;
     let mut seen = None;
     beryl_scenario::visit(&CARDS, scenario, |t, s, _| {
         let view = |viewer| {
@@ -77,7 +65,7 @@ fn a_face_down_permanent_is_a_nameless_two_two_to_its_opponent() {
 /// nameless 2/2, and neither the state nor either view of it holds that creature's name.
 #[test]
 fn a_copy_of_a_face_down_permanent_is_a_face_up_nameless_two_two() {
-    let scenario = oculus_scenario("Fractured Identity copies a face-down permanent as a 2/2");
+    let scenario = COPY_FACE_DOWN_PERMANENT;
     let mut last = None;
     beryl_scenario::visit(&CARDS, scenario, |t, s, _| last = Some((t.clone(), *s)))
         .unwrap_or_else(|e| panic!("{e}"));
