@@ -90,7 +90,7 @@ impl Layer {
                     (self.floats.iter().rev())
                         .filter(move |float| float.id.under_screen() == under)
                         .find_map(|float| {
-                            let corner = float.corner();
+                            let corner = float.corner()?;
                             let rect = float.node.rect;
                             let pivot = corner + glam::Vec2::new(rect.width, rect.height) / 2.0;
                             let zoom = Zoom::around(pivot, float.look.scale);
@@ -126,33 +126,45 @@ impl Layer {
     /// The press and the box on the window of the enabled slider `id`, if the screen shows it.
     #[must_use]
     pub fn slider(&self, id: ElementId) -> Option<(Action, Rect)> {
-        /// `id`'s node in `node`'s tree, whose top left corner stands at `origin`, with the
-        /// corner of the tree it is laid out in.
-        fn search(node: &Node, id: ElementId, origin: Vec2, zoom: Zoom) -> Option<(&Node, Rect)> {
-            if node.element.style.display == Display::None {
+        let (node, rect) = self.positioned_node(id, true)?;
+        slider(node).map(|press| (press, rect))
+    }
+
+    /// The live box of an active screen node, independent of its paint order.
+    pub(super) fn positioned_node(&self, id: ElementId, open: bool) -> Option<(&Node, Rect)> {
+        fn search<'a>(
+            layer: &Layer,
+            node: &'a Node,
+            id: ElementId,
+            open: bool,
+            origin: Vec2,
+            zoom: Zoom,
+        ) -> Option<(&'a Node, Rect)> {
+            if node.element.style.display == Display::None || (node.element.waits && !open) {
                 return None;
             }
             let origin = origin + node.translation();
-            let rect = moved(node.paint_rect(), origin + node.offset());
+            let sink = layer.node_sink(node, layer.state(node));
+            let rect = moved(node.paint_rect(), origin + node.offset() + sink);
             let zoom = node.zoom(zoom, rect);
             if node.id == id {
                 return Some((node, zoom.rect(rect)));
             }
             let inside = origin - node.scroll;
-            node.children
-                .iter()
-                .find_map(|child| match child.element.anchor {
-                    Some(_) => search(child, id, child.corner()?, zoom),
-                    None => search(child, id, inside, zoom),
-                })
+            node.children.iter().find_map(|child| {
+                let origin = match child.element.anchor {
+                    Some(_) => child.corner()?,
+                    None => inside,
+                };
+                search(layer, child, id, open, origin, zoom)
+            })
         }
         let screen = self.screen.as_ref()?;
         let origin = match screen.element.anchor {
             Some(_) => screen.corner()?,
             None => Vec2::ZERO,
         };
-        let (node, rect) = search(screen, id, origin, Zoom::IDENTITY)?;
-        slider(node).map(|press| (press, rect))
+        search(self, screen, id, open, origin, Zoom::IDENTITY)
     }
 
     /// The press of the focused element, if it is an enabled slider.

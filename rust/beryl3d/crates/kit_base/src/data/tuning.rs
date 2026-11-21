@@ -78,6 +78,8 @@ pub struct Audit {
     #[serde(deserialize_with = "nonnegative")]
     pub mark_points: f32,
     #[serde(deserialize_with = "nonnegative")]
+    pub anchor_points: f32,
+    #[serde(deserialize_with = "nonnegative")]
     pub step_ms: f32,
     #[serde(deserialize_with = "nonnegative")]
     pub step_points: f32,

@@ -171,10 +171,12 @@ impl Inspector {
         let name = frame.name(element.name);
         let face = faces.find(name)?;
         let x = element.corners.iter().map(|corner| corner.x).sum::<f32>() / f32::from(4_u8);
+        let bounds = kit_scene::hit::bounds(element);
         Some(Inspected {
             slot,
             face,
             x,
+            origin: glam::Vec2::new(bounds.x, bounds.y),
             targets: marked(prompt, frame),
             refusal,
         })

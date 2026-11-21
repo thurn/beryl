@@ -13,7 +13,7 @@ use glam::Vec2;
 use kit_base::tokens::{color, gradient, size, type_style};
 use kit_frame::frame::{Frame, Material, RADIAL, Role, StateBits, Wake};
 use kit_probe::agent::Rule;
-use kit_probe::agent::checks::{minimum_sizes, on_screen, reachable, text_fits};
+use kit_probe::agent::checks::{anchors_hold, minimum_sizes, on_screen, reachable, text_fits};
 use kit_ui::element::Action;
 use kit_ui::element::{Gradient, describe, row, text};
 use kit_ui::input::{IconCell, Insets, Key, KeyCode, KeyPhase, Modifiers, PointerPhase, Size};
@@ -389,8 +389,8 @@ fn a_tooltip_shows_after_the_pointer_rests_500_ms_and_not_before() {
     (client.layer_mut()).show(Some(
         row()
             .name("dock")
-            .child(widgets::button("Undo").on_press(BarMessage::Undo))
-            .child(widgets::tooltip("Undo the last action", "Undo")),
+            .child(widgets::tooltip("Undo the last action", "Undo"))
+            .child(widgets::button("Undo").on_press(BarMessage::Undo)),
     ));
     let frame = client.frame(OPEN);
     let undo = find(frame, Role::Button, "Undo");
@@ -411,6 +411,14 @@ fn a_tooltip_shows_after_the_pointer_rests_500_ms_and_not_before() {
     // It stands above the button.
     let (_, _, _, tip_bottom) = edges(frame, tip);
     assert!(tip_bottom <= undo_top);
+    assert!(anchors_hold(frame, &context()).is_empty());
+    let mut displaced = frame.clone();
+    for corner in &mut displaced.resolved[tip].corners {
+        corner.y += 2.0;
+    }
+    let faults = anchors_hold(&displaced, &context());
+    assert_eq!(faults.len(), 1);
+    assert_eq!(faults[0].rule, Rule::RelationsHold);
     let midway = due + 60_000_000;
     let frame = client.frame(midway);
     let opacity = frame.resolved[shown(frame).expect("the tooltip is fading in")].opacity;

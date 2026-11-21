@@ -33,6 +33,7 @@ use game_table::faces::{CARD_BACK, FaceList, Faces};
 use game_table::table::{Table, Window};
 use kit_base::data::Data;
 use kit_frame::frame::{self, Frame, FrameBuilder, Sound, Wake};
+use kit_scene::Tree;
 use kit_ui::input::{FaceId, FaceSize, GlyphKey, Lifecycle, Tier};
 use kit_ui::layout::{self, Layer};
 use std::sync::Arc;
@@ -373,6 +374,9 @@ impl Client {
         self.show.frame(table_now, &mut builder);
         // Elements anchored to a card, an ability or a player stand where the table drew it.
         let table = self.show.table();
+        if visible {
+            table.write_hud_anchors(&mut builder);
+        }
         self.layer
             .follow(|subject| game_table::table::spot_of(&builder, table, subject));
         // Each total shows what `prepare` laid out, over the opening too, as the web's does.
@@ -381,8 +385,7 @@ impl Client {
             self.show.counts(),
             self.show.effects(),
             table_now,
-            (table.layout(), table.data(), builder.tier()),
-            self.window.size,
+            (table, builder.tier()),
             (counted, targets, self.opening.shown),
         );
         self.features
@@ -392,7 +395,7 @@ impl Client {
             &mut self.layer,
             self.show.notices(),
             table_now,
-            (self.show.table().layout(), self.window.size),
+            self.show.table().layout(),
             visible,
         );
         self.features
@@ -400,13 +403,8 @@ impl Client {
             .write(&mut self.layer, self.show.table(), rows_counted);
         let at_rest = self.show.shown().map(|update| &update.view);
         let banner = self.features.banner_mut();
-        banner.write(
-            &mut self.layer,
-            at_rest,
-            table_now,
-            table.profile(),
-            visible,
-        );
+        banner.write(&mut self.layer, at_rest, table_now, visible);
+        Tree::solve_float_anchors(&mut self.layer, &builder);
         let (layout_nodes, text_runs) = self.layer.take_work();
         builder.layout_work(layout_nodes, text_runs);
         builder.placement_work(self.show.table().take_placed(), self.show.take_compiled());

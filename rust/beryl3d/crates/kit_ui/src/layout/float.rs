@@ -6,6 +6,7 @@
 //! out.
 
 use glam::Vec2;
+use kit_frame::frame::Anchor;
 
 use super::{CONTENT, Layer, Node, compute, compute_anchored, want_node};
 use crate::element::{Element, FloatId};
@@ -52,6 +53,8 @@ pub(super) struct Float {
     pub id: FloatId,
     pub node: Node,
     pub look: FloatLook,
+    pub binding: Option<Anchor>,
+    pub placed: Option<Vec2>,
     /// The key it was prepared under, if `show_prepared` showed it.
     pub key: Option<u64>,
 }
@@ -66,9 +69,16 @@ pub(super) struct Prepared {
 
 impl Float {
     /// Where the float's top left corner stands on screen.
-    pub fn corner(&self) -> Vec2 {
+    pub fn corner(&self) -> Option<Vec2> {
+        if self.binding.is_some() {
+            return self.placed;
+        }
+        Some(self.look.corner(self.size()))
+    }
+
+    pub fn size(&self) -> Vec2 {
         let rect = self.node.rect;
-        self.look.corner(Vec2::new(rect.width, rect.height))
+        Vec2::new(rect.width, rect.height)
     }
 }
 
@@ -81,7 +91,13 @@ impl Layer {
         let at = self.floats.binary_search_by_key(&id, |float| float.id);
         match (at, element) {
             (Ok(index), Some(element)) => {
-                let Float { node, look, .. } = self.floats.remove(index);
+                let Float {
+                    node,
+                    look,
+                    binding,
+                    placed,
+                    ..
+                } = self.floats.remove(index);
                 let node = self.reconcile(Some(node), element);
                 self.floats.insert(
                     index,
@@ -89,6 +105,8 @@ impl Layer {
                         id,
                         node,
                         look,
+                        binding,
+                        placed,
                         key: None,
                     },
                 );
@@ -101,6 +119,8 @@ impl Layer {
                         id,
                         node,
                         look: FloatLook::default(),
+                        binding: None,
+                        placed: None,
                         key: None,
                     },
                 );
@@ -119,7 +139,28 @@ impl Layer {
     /// shown has no look to set, and the call does nothing.
     pub fn set_float_look(&mut self, id: FloatId, look: FloatLook) {
         if let Ok(index) = self.floats.binary_search_by_key(&id, |float| float.id) {
-            self.floats[index].look = look;
+            let float = &mut self.floats[index];
+            float.look = look;
+            float.binding = None;
+        }
+    }
+
+    /// Gives a shown float a scene anchor and its paint properties.
+    pub fn anchor_float(&mut self, id: FloatId, anchor: Anchor, look: FloatLook) {
+        if let Ok(index) = self.floats.binary_search_by_key(&id, |float| float.id) {
+            let float = &mut self.floats[index];
+            float.binding = Some(anchor);
+            float.look = look;
+        }
+    }
+
+    /// Updates the prepared floats from the scene's anchor pass. A float
+    /// without a target has no box to paint or hit.
+    pub fn place_float_anchors(&mut self, place: impl Fn(&Anchor, Vec2) -> Option<Vec2>) {
+        for float in &mut self.floats {
+            if let Some(anchor) = &float.binding {
+                float.placed = place(anchor, float.size());
+            }
         }
     }
 
@@ -195,6 +236,8 @@ impl Layer {
                     id,
                     node: incoming.node,
                     look: FloatLook::default(),
+                    binding: None,
+                    placed: None,
                     key: Some(incoming.key),
                 },
             ),

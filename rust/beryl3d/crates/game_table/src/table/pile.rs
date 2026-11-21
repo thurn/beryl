@@ -27,8 +27,8 @@ use super::scene::Table;
 use super::{CARD_HEIGHT, CARD_WIDTH, Camera, LAYER, Layout};
 use kit_base::pose::Pose;
 use kit_frame::frame::{
-    Band, Draw, ElementId, ElementLook, FrameBuilder, NameRef, Place, REVEALED_FACE, Resolved,
-    Role, StateBits,
+    Anchor, Band, Draw, ElementId, ElementLook, FrameBuilder, NameRef, Place, REVEALED_FACE,
+    Resolved, Role, StateBits,
 };
 use kit_space::arrange::Pile;
 
@@ -340,6 +340,35 @@ impl Table {
         }
         let top = pile.shown_top(self.rest(top)?);
         Some((pile.count, self.camera().card_corners(top.transform())))
+    }
+
+    /// Anchors a count to the centre of the top card or the middle of its lowest edge.
+    #[must_use]
+    pub fn pile_count_anchor(&self, index: usize, gap: f32) -> Option<(usize, Anchor)> {
+        let (side, zone) = PileShown::of_index(index);
+        let (count, mut corners) = self.pile(side, zone)?;
+        let low = corners.into_iter().reduce(Vec2::min)?;
+        let high = corners.into_iter().reduce(Vec2::max)?;
+        let (point, align, offset) = match side {
+            Side::You => (
+                corners[0]
+                    .midpoint(corners[2])
+                    .midpoint(corners[1].midpoint(corners[3])),
+                Vec2::splat(0.5),
+                Vec2::ZERO,
+            ),
+            Side::Opponent => {
+                corners.sort_unstable_by(|a, b| a.y.total_cmp(&b.y));
+                (
+                    Vec2::new(f32::midpoint(corners[2].x, corners[3].x), corners[3].y),
+                    Vec2::new(0.5, 0.0),
+                    Vec2::new(0.0, gap),
+                )
+            }
+        };
+        let at = (point - low) / (high - low).max(Vec2::splat(f32::EPSILON));
+        let id = ElementId(PILE_IDS + u32::try_from(index).ok()?);
+        Some((count, Anchor::new(id, at, align, offset)))
     }
 
     /// Writes each pile that holds a card: its resolved element, and the side of the cards

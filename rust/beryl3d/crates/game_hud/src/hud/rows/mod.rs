@@ -15,7 +15,7 @@ use game_table::table::{Rows, Scroller, Table};
 
 mod view;
 use kit_ui::layout::{FloatLook, Layer};
-use view::{count_in, count_of, count_text, end_of, float, key_of, place};
+use view::{anchor, count_in, count_of, count_text, end_of, float, key_of};
 
 /// Each side has three rows, and with the hand and the stack each has two ends.
 const COUNTS: usize = 16;
@@ -88,17 +88,7 @@ impl RowCounts {
             if want.is_none() {
                 continue;
             }
-            let Some((point, anchor)) = place(scroller, right, table) else {
-                continue;
-            };
-            layer.set_float_look(
-                id,
-                FloatLook {
-                    point,
-                    anchor,
-                    ..FloatLook::default()
-                },
-            );
+            layer.anchor_float(id, anchor(scroller, right, table), FloatLook::default());
         }
     }
 }

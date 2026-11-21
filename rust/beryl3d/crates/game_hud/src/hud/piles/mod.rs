@@ -11,7 +11,6 @@
 //! allocates nothing.
 
 use beryl_protocol::protocol::{ObjectId, ObjectView, PlayerState, PlayerView, Side, ZoneName};
-use glam::Vec2;
 
 use game_play::play::Show;
 use game_table::table::{PileShown, Table, host_slot};
@@ -88,9 +87,10 @@ impl PileCounts {
         let (table, hovered) = (show.table(), show.pointer().hovered_pile());
         self.hovered = hovered;
         for index in 0..6 {
-            let (side, zone) = PileShown::of_index(index);
-            let pile = (table.pile(side, zone)).filter(|_| visible && hovered == Some(index));
-            let want = pile.map(|(count, _)| count);
+            let pile = (visible && hovered == Some(index))
+                .then(|| table.pile_count_anchor(index, TOOLTIP_GAP))
+                .flatten();
+            let want = pile.as_ref().map(|(count, _)| *count);
             let id = float(index);
             if want != self.shown[index] {
                 if !layer.show_prepared(id, want.map(key_of)) {
@@ -99,37 +99,9 @@ impl PileCounts {
                 }
                 self.shown[index] = want;
             }
-            let Some((_, corners)) = &pile else {
-                continue;
-            };
-            let (point, anchor) = match side {
-                // `.tip-over`: centred on the middle of the pile, where the top card's
-                // diagonals meet.
-                Side::You => {
-                    let middle =
-                        (corners[0].midpoint(corners[2])).midpoint(corners[1].midpoint(corners[3]));
-                    (middle, Vec2::new(0.5, 0.5))
-                }
-                // `.tip-below`: `TOOLTIP_GAP` under the pile's lowest edge, centred on the
-                // middle of its foot, the bottom edge of the leaning card.
-                Side::Opponent => {
-                    let mut by_height = *corners;
-                    by_height.sort_unstable_by(|a, b| a.y.total_cmp(&b.y));
-                    let foot = f32::midpoint(by_height[2].x, by_height[3].x);
-                    (
-                        Vec2::new(foot, by_height[3].y + TOOLTIP_GAP),
-                        Vec2::new(0.5, 0.0),
-                    )
-                }
-            };
-            layer.set_float_look(
-                id,
-                FloatLook {
-                    point,
-                    anchor,
-                    ..FloatLook::default()
-                },
-            );
+            if let Some((_, anchor)) = pile {
+                layer.anchor_float(id, anchor, FloatLook::default());
+            }
         }
     }
 }

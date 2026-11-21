@@ -128,6 +128,7 @@ fn animation_places_anchors_without_repeating_layout() {
         SolveStep::KeepClear,
         SolveStep::Anchor,
         SolveStep::Anchor,
+        SolveStep::Anchor,
     ]
     .into_iter();
     let mut record = |step, _: &mut Tree| assert_eq!(Some(step), expected.next());
@@ -135,6 +136,65 @@ fn animation_places_anchors_without_repeating_layout() {
     tree.solve(SolvePhase::Frame, &mut record);
     tree.solve(SolvePhase::Frame, &mut record);
     assert_eq!(expected.next(), None);
+}
+
+#[test]
+fn anchored_rectangles_follow_their_targets_and_leave_with_them() {
+    let mut tree = Tree::default();
+    let mut label = Node::screen(ElementId(1), "label", BOX);
+    label.anchor = Some(Anchor::new(
+        ElementId(2),
+        Vec2::new(1.0, 0.5),
+        Vec2::new(0.0, 0.5),
+        Vec2::X * 4.0,
+    ));
+    let label = tree.push(label);
+    let mut detail = Node::screen(ElementId(3), "detail", BOX);
+    detail.parent = Some(label);
+    detail.anchor = Some(Anchor::new(ElementId(1), Vec2::Y, Vec2::ZERO, Vec2::ZERO));
+    let detail = tree.push(detail);
+    let target = tree.push(Node::screen(ElementId(2), "target", BOX));
+    let other = tree.push(Node::screen(ElementId(4), "other", BOX));
+    let mut child = Node::screen(ElementId(5), "child", BOX);
+    child.parent = Some(other);
+    tree.push(child);
+
+    for delta in [0.0, 24.0] {
+        tree.solve(SolvePhase::Frame, |_, tree| {
+            tree.set_space(
+                target,
+                Space::Screen {
+                    bounds: Rect {
+                        x: BOX.x + delta,
+                        y: BOX.y + delta,
+                        ..BOX
+                    },
+                },
+            );
+        });
+        let label_box = tree.nodes()[label as usize].space.screen_bounds();
+        assert_eq!(
+            label_box,
+            Rect {
+                x: 44.0 + delta,
+                y: 12.0 + delta,
+                ..BOX
+            }
+        );
+        assert_eq!(
+            tree.nodes()[detail as usize].space.screen_bounds(),
+            Rect {
+                y: label_box.y + label_box.height,
+                ..label_box
+            },
+        );
+    }
+
+    tree.remove(target);
+    tree.solve(SolvePhase::Frame, |_, _| {});
+    assert_eq!(tree.nodes().len(), 2);
+    assert_eq!(tree.nodes()[0].id, ElementId(4));
+    assert_eq!(tree.nodes()[1].parent, Some(0));
 }
 
 #[test]

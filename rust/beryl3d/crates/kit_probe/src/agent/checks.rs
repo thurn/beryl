@@ -38,6 +38,7 @@ pub fn check(
     faults.extend(layer_drawn(frame, context));
     faults.extend(marks_on(frame, context, ring_target));
     faults.extend(keep_clear(frame, context));
+    faults.extend(anchors_hold(frame, context));
     faults.extend(minimum_sizes(frame, context));
     faults
 }
@@ -67,6 +68,41 @@ pub fn keep_clear(frame: &Frame, context: &Context) -> Vec<Fault> {
                     vec![control, covered],
                 ))
             })
+        })
+        .collect()
+}
+
+/// Checks the drawn box of each anchored node against its target's current box.
+#[must_use]
+pub fn anchors_hold(frame: &Frame, context: &Context) -> Vec<Fault> {
+    frame
+        .anchors
+        .iter()
+        .filter_map(|placement| {
+            let element = &frame.resolved[placement.element as usize];
+            let rect = bounds(element);
+            let actual = Vec2::new(rect.x, rect.y);
+            let target = frame.anchor_bounds(&placement.anchor.to);
+            let expected = target.map(|target| placement.corner(target));
+            if expected.is_some_and(|corner| {
+                (actual - corner).abs().max_element() <= context.audit.anchor_points
+            }) {
+                return None;
+            }
+            let detail = expected.map_or_else(
+                || "has no anchor target".to_owned(),
+                |corner| format!("should start at ({:.2}, {:.2})", corner.x, corner.y),
+            );
+            let subject = Subject {
+                locator: locator_of(frame, placement.element),
+                rect,
+            };
+            Some(fault(
+                Rule::RelationsHold,
+                context,
+                format!("{} {detail}", subject.describe()),
+                vec![subject],
+            ))
         })
         .collect()
 }

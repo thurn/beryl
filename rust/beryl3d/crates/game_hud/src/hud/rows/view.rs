@@ -1,79 +1,30 @@
 use beryl_protocol::protocol::{RowName, Side};
-use glam::{Vec2, Vec3};
-
-use game_play::hud::counts::{index, points};
-use game_table::table::{ROWS, Rows, Scroller, Table, row_area};
-use kit_base::data::profiles::Piece;
-use kit_base::tokens::{size, type_style};
+use game_table::table::{HudAnchor, ROWS, Rows, Scroller, Table};
+use glam::Vec2;
+use kit_frame::frame::Anchor;
 use kit_ui::element::{Element, FloatId, floats, text};
 
 /// The number of battlefield row ends. The hand and stack follow these.
 const ROW_ENDS: usize = 12;
 
-/// Where the count of the cards off `scroller`'s `right` or left end stands, in logical points,
-/// and the anchor of the float there, for the table at rest.
-pub(super) fn place(scroller: Scroller, right: bool, table: &Table) -> Option<(Vec2, Vec2)> {
-    let layout = table.layout();
-    let camera = table.camera();
-    let profile = table.profile().data();
-    let gap = profile.table.row_count_gap;
-    // Beside the end, on the line's middle: the left count ends a gap before the line starts,
-    // and the right count starts a gap after it ends.
-    let beside = |left: f32, right_end: f32, y: f32| {
-        Some(if right {
-            (Vec2::new(right_end + gap, y), Vec2::new(0.0, 0.5))
-        } else {
-            (Vec2::new(left - gap, y), Vec2::new(1.0, 0.5))
-        })
+/// The edge of the scroller's window that a count labels.
+pub(super) fn anchor(scroller: Scroller, right: bool, table: &Table) -> Anchor {
+    let gap = table.profile().data().table.row_count_gap;
+    let end = if right { 1.0 } else { 0.0 };
+    let (at, align, offset) = match scroller {
+        Scroller::Hand => (Vec2::new(end, 0.0), Vec2::new(end, 1.0), -Vec2::Y * gap),
+        Scroller::Stack if table.layout().centred_stack_line().is_none() => (
+            Vec2::new(1.0, end),
+            Vec2::new(1.0, 1.0 - end),
+            Vec2::Y * if right { gap } else { -gap },
+        ),
+        _ => (
+            Vec2::new(end, 0.5),
+            Vec2::new(1.0 - end, 0.5),
+            Vec2::X * if right { gap } else { -gap },
+        ),
     };
-    match scroller {
-        Scroller::Row(side, row) => {
-            let (area, y) = row_area((layout, camera), side, row);
-            let [left, right_end] =
-                [area.left, area.right].map(|x| camera.to_screen(Vec3::new(x, y, 0.0)));
-            let (mut point, anchor) = beside(left.x, right_end.x, left.y)?;
-            if profile.hud.table.contains(&Piece::StepStops) {
-                // A crowded lands row can end at the life orb. Keep its count outside
-                // the orb and step stops, rather than printing it through that furniture.
-                let life = points(layout.players[index(side)].life, camera.window.size);
-                let half =
-                    Vec2::new(size::ORB_WIDTH, size::ORB_HEIGHT) * layout.play.life.orb_scale / 2.0;
-                let half_line = type_style::BODY.size * type_style::BODY.line_height / 2.0;
-                if (point.y - life.y).abs() < half.y + half_line {
-                    let half_width = size::STEPS_WIDTH / 2.0;
-                    point.x = if right {
-                        point.x.max(life.x + half_width + gap)
-                    } else {
-                        point.x.min(life.x - half_width - gap)
-                    };
-                }
-            }
-            Some((point, anchor))
-        }
-        Scroller::Stack => {
-            let (low, high) = table.stack_bounds()?;
-            if layout.centred_stack_line().is_some() {
-                beside(low.x, high.x, f32::midpoint(low.y, high.y))
-            } else if right {
-                Some((Vec2::new(high.x, high.y + gap), Vec2::new(1.0, 0.0)))
-            } else {
-                Some((Vec2::new(high.x, low.y - gap), Vec2::ONE))
-            }
-        }
-        Scroller::Hand => {
-            // Over the corners of the column at the hand's top edge, inside it.
-            let window = camera.window.size;
-            let y = (1.0 - layout.hand.edge) / 2.0 * window.height - gap;
-            let (left, right_end) = layout
-                .bands
-                .map_or((0.0, window.width), |bands| (bands.left, bands.right));
-            Some(if right {
-                (Vec2::new(right_end, y), Vec2::new(1.0, 1.0))
-            } else {
-                (Vec2::new(left, y), Vec2::new(0.0, 1.0))
-            })
-        }
-    }
+    HudAnchor::Row(scroller).at(at, align, offset)
 }
 
 /// The line end at `index`: the line, and whether it is the right end. The viewer's rows come

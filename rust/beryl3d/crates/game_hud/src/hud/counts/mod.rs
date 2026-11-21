@@ -4,17 +4,16 @@ use beryl_protocol::protocol::{ManaPool, PlayerView, Side};
 use beryl_protocol::script::Subject;
 use glam::Vec2;
 
-use game_table::table::HALF_LIFE;
-use game_table::table::Layout;
+use game_table::table::{HALF_LIFE, HudAnchor, Table};
+use kit_base::data::effect::NumberOrigin;
 use kit_base::data::profiles::{Life, LifeChange, LifeText};
-use kit_base::data::{Data, effect::NumberOrigin};
 use kit_base::tokens::{color, size, type_style};
 use kit_fx::effects::{self, EffectRun, NumberLook};
 use kit_ui::element::{Element, FloatId, floats};
-use kit_ui::input::{Size, Tier};
+use kit_ui::input::Tier;
 use kit_ui::layout::{FloatLook, Layer};
 
-pub use game_play::hud::counts::{Count, CountChange, Counts, PlayerCounts, index, points};
+pub use game_play::hud::counts::{Count, CountChange, Counts, PlayerCounts, index};
 
 use crate::art::orb;
 
@@ -130,22 +129,18 @@ impl CountFloats {
     /// The first visible text effect on each total supplies its tint and number.
     /// [`Self::prepare`] lays out the numbers in advance, including those whose
     /// effects begin after the count step.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "each is a separate input of the frame"
-    )]
     pub fn write(
         &mut self,
         layer: &mut Layer,
         counts: &Counts,
         effects: &[EffectRun],
         now: u64,
-        (layout, data, tier): (&Layout, &Data, Tier),
-        size: Size,
+        (table, tier): (&Table, Tier),
         (visible, targets, dimmed): (bool, [bool; 2], bool),
     ) {
         let passes = self.passes;
-        let life_style = layout.play.life;
+        let data = table.data();
+        let life_style = table.layout().play.life;
         let style = life_style.text;
         for (side, name) in [(Side::You, "You"), (Side::Opponent, "Opponent")] {
             let at = index(side);
@@ -192,43 +187,42 @@ impl CountFloats {
                 });
             }
             *shown = want;
-            let anchor = &layout.players[at];
-            // The web centres the total on the orb's core, a few points off its art's middle.
-            let units = life_style.orb_scale;
-            let life = points(anchor.life, size) + Vec2::new(0.0, orb::face_offset(side) * units);
+            let art_offset = orb::face_offset(side) * life_style.orb_scale;
+            let offset = Vec2::new(0.0, art_offset);
+            let life = HudAnchor::Life(side);
             // Under the opening's backdrop the total is dimmed as the orb under it is.
             let opacity = if dimmed {
-                1.0 - backdrop::backdrop_cover(life.y, size.height)
+                1.0 - backdrop::backdrop_cover(
+                    table.life_centre(side).y + art_offset,
+                    table.camera().window.size.height,
+                )
             } else {
                 1.0
             };
-            layer.set_float_look(
+            layer.anchor_float(
                 floats::LIFE[at],
+                life.at(Vec2::ZERO, Vec2::splat(0.5), offset),
                 FloatLook {
-                    point: life,
-                    anchor: Vec2::new(0.5, 0.5),
                     opacity,
                     tint: effect.tint,
-                    scale: 1.0,
-                },
-            );
-            layer.set_float_look(
-                floats::POOL[at],
-                FloatLook {
-                    point: points(anchor.pool, size),
                     ..FloatLook::default()
                 },
             );
+            layer.anchor_float(
+                floats::POOL[at],
+                HudAnchor::Pool(side).at(Vec2::ZERO, Vec2::ZERO, Vec2::ZERO),
+                FloatLook::default(),
+            );
             if let Some(number) = effect.number {
-                layer.set_float_look(
+                let (align, drift) = change_placement(number, life_style, data.verbs.count.drift);
+                layer.anchor_float(
                     floats::LIFE_CHANGE[at],
-                    change_look(
-                        number,
-                        life,
-                        effect.tint,
-                        life_style,
-                        data.verbs.count.drift,
-                    ),
+                    life.at(Vec2::ZERO, align, offset + drift),
+                    FloatLook {
+                        opacity: number.opacity,
+                        tint: effect.tint,
+                        ..FloatLook::default()
+                    },
                 );
             }
         }
@@ -238,14 +232,8 @@ impl CountFloats {
 /// Keep the desktop gain above the position where it overlaps the "Your draw" toggle.
 const GAIN_CLEARANCE: f32 = 2.0;
 
-/// Places the sampled number beside the total at `life`, using the orb's top or bottom.
-fn change_look(
-    number: NumberLook,
-    life: Vec2,
-    tint: Option<[u8; 4]>,
-    style: Life,
-    drift: f32,
-) -> FloatLook {
+/// The sampled number's alignment and offset relative to the life total.
+fn change_placement(number: NumberLook, style: Life, drift: f32) -> (Vec2, Vec2) {
     let drift = drift * number.drift;
     let above = number.origin == NumberOrigin::Above;
     let (left, offset, anchor) = match style.change {
@@ -263,7 +251,7 @@ fn change_look(
             (size::LIFE_CHANGE_LEFT, offset, Vec2::new(1.0, 0.0))
         }
     };
-    number.place(life + Vec2::new(-left, offset), anchor, tint)
+    (anchor, Vec2::new(-left, offset))
 }
 
 /// Shows as the float `id` the element prepared under `key`, or nothing. Where none was

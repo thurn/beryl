@@ -12,7 +12,7 @@ use super::{Layer, menu::fit};
 use crate::element::{Anchor, Display};
 use crate::input::{Rect, Size};
 use kit_base::data::space::flat::{MENU_EDGE, TOOLTIP_DELAY, TOOLTIP_GAP};
-use kit_frame::frame::{ElementId, Role};
+use kit_frame::frame::{Anchor as SceneAnchor, ElementId, Role};
 
 /// What a tooltip's name starts with, before the name of the element it explains.
 pub const TIP_PREFIX: &str = "tooltip ";
@@ -25,8 +25,8 @@ const DELAY: u64 = TOOLTIP_DELAY as u64 * 1_000_000;
 #[derive(Clone, Copy, Debug)]
 pub(super) struct Resting {
     tooltip: ElementId,
-    /// The box on the window of the element it explains.
-    target: Rect,
+    /// The id of the current target, whose box can move after the wait starts.
+    target: ElementId,
     /// When the pointer came onto that element: the `now` of the first frame after it did.
     since: Option<u64>,
     shown: bool,
@@ -50,17 +50,14 @@ impl Layer {
             }
         }
         let wanted = point.and_then(|point| {
-            self.hit(point, open, |node, rect| {
+            self.hit(point, open, |node, _| {
                 let tooltip = self.tooltip_of(&node.element.name)?;
-                Some((tooltip, rect))
+                Some((tooltip, node.id))
             })
         });
-        let now = self.tip.map(|tip| tip.tooltip);
-        if wanted.map(|(tooltip, _)| tooltip) == now {
+        let current = self.tip.map(|tip| (tip.tooltip, tip.target));
+        if wanted == current {
             return;
-        }
-        if let Some(old) = now {
-            self.show_tip(old, None);
         }
         self.tip = wanted.map(|(tooltip, target)| Resting {
             tooltip,
@@ -81,8 +78,8 @@ impl Layer {
             return;
         }
         tip.shown = true;
-        let (tooltip, target) = (tip.tooltip, tip.target);
-        self.show_tip(tooltip, Some(target));
+        let tooltip = tip.tooltip;
+        self.show_tip(tooltip);
     }
 
     /// When the tooltip that is waiting will show, in nanoseconds since the client started, so
@@ -93,20 +90,27 @@ impl Layer {
         tip.since.map(|since| since + DELAY)
     }
 
-    /// Shows the tooltip `id` beside `target`, or hides it with `None`.
-    fn show_tip(&mut self, id: ElementId, target: Option<Rect>) {
-        let window = self.window.size;
+    /// Starts the tooltip's enter transition when its wait ends.
+    fn show_tip(&mut self, id: ElementId) {
         let Some(node) = self.screen.as_mut().and_then(|node| node.find_mut(id)) else {
             return;
         };
-        node.shown = target.is_some();
-        if let Some(target) = target {
-            let size = Vec2::new(node.rect.width, node.rect.height);
-            node.placed = Some(beside(target, size, window));
-            if let Some(enter) = node.element.style.enter {
-                node.presence(enter, true);
-            }
+        if let Some(enter) = node.element.style.enter {
+            node.presence(enter, true);
         }
+    }
+
+    /// Places a visible tooltip against its target's current box, even when the
+    /// tooltip is registered before its target in the screen.
+    pub(super) fn tip_anchor(
+        &self,
+        id: ElementId,
+        size: Vec2,
+        open: bool,
+    ) -> Option<(SceneAnchor, Rect)> {
+        let tip = self.tip.filter(|tip| tip.shown && tip.tooltip == id)?;
+        let (_, target) = self.positioned_node(tip.target, open)?;
+        Some((beside(tip.target, target, size, self.window.size), target))
     }
 
     /// The tooltip on the screen that explains the element named `name`, if any.
@@ -130,16 +134,25 @@ impl Layer {
     }
 }
 
-/// Where a tooltip `size` large stands beside the element whose box is `target`, on a window
-/// of `window`'s size: centred above it, or below it where it would pass the window's top,
-/// and kept inside the window across.
-fn beside(target: Rect, size: Vec2, window: Size) -> Vec2 {
+/// Centres a tooltip above its target, or below it when it would pass the
+/// window's top. The horizontal offset keeps the tooltip inside the window.
+fn beside(id: ElementId, target: Rect, size: Vec2, window: Size) -> SceneAnchor {
     let x = target.x + (target.width - size.x) / 2.0;
+    let dx = fit(x, size.x, window.width) - x;
     let above = target.y - TOOLTIP_GAP - size.y;
-    let y = if above >= MENU_EDGE {
-        above
+    if above >= MENU_EDGE {
+        SceneAnchor::new(
+            id,
+            Vec2::new(0.5, 0.0),
+            Vec2::new(0.5, 1.0),
+            Vec2::new(dx, -TOOLTIP_GAP),
+        )
     } else {
-        target.y + target.height + TOOLTIP_GAP
-    };
-    Vec2::new(fit(x, size.x, window.width), y)
+        SceneAnchor::new(
+            id,
+            Vec2::new(0.5, 1.0),
+            Vec2::new(0.5, 0.0),
+            Vec2::new(dx, TOOLTIP_GAP),
+        )
+    }
 }

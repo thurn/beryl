@@ -10,7 +10,7 @@ mod paint;
 pub mod picking;
 mod relations;
 mod rings;
-pub use relations::{Clearance, NodeRef, Show};
+pub use relations::{Anchor, Anchored, Clearance, NodeRef, Show};
 pub mod text;
 
 pub use order::PaintBand;
@@ -381,6 +381,10 @@ pub struct Frame {
     pub resolved: Vec<Resolved>,
     /// Screen element indexes with a Show relation, in registration order, and their targets.
     shows: Vec<(u32, ElementId)>,
+    /// The anchored placements written in this frame.
+    pub anchors: Vec<Anchored>,
+    /// The boxes of layout nodes that paint nothing, such as an empty row's container.
+    anchor_nodes: Vec<(ElementId, Rect)>,
     /// Every resolved element's name, end to end.
     pub names: String,
     /// In drawing order.
@@ -473,6 +477,8 @@ impl Frame {
         Self {
             resolved: Vec::with_capacity(elements),
             shows: Vec::with_capacity(elements),
+            anchors: Vec::with_capacity(elements),
+            anchor_nodes: Vec::with_capacity(32),
             names: String::with_capacity(name_bytes),
             draws: Vec::with_capacity(draws),
             opaque: 0,
@@ -499,23 +505,6 @@ impl Frame {
             text_room: TEXT_RECORDS,
             scratch: order::Scratch::with_capacity(draws, elements),
         }
-    }
-
-    /// The centre of the box of the table's element `id` (a card or an ability, not an element
-    /// of the flat layer), on the window in logical points, if the frame holds it.
-    #[must_use]
-    pub fn centre(&self, id: ElementId) -> Option<Vec2> {
-        let corners = self.corners(id)?;
-        Some(corners.iter().copied().sum::<Vec2>() / 4.0)
-    }
-
-    /// The corners of the box of the table's element `id` (a card or an ability, not an
-    /// element of the flat layer), on the window in logical points, if the frame holds it.
-    #[must_use]
-    pub fn corners(&self, id: ElementId) -> Option<[Vec2; 4]> {
-        let element = (self.resolved.iter())
-            .find(|element| element.id == id && element.place != Place::Layer)?;
-        Some(element.corners)
     }
 
     /// The name of a resolved element.
@@ -554,6 +543,8 @@ impl<'a> FrameBuilder<'a> {
     pub fn new(frame: &'a mut Frame, tier: Tier) -> Self {
         frame.resolved.clear();
         frame.shows.clear();
+        frame.anchors.clear();
+        frame.anchor_nodes.clear();
         frame.names.clear();
         frame.draws.clear();
         frame.opaque = 0;

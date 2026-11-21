@@ -9,10 +9,10 @@
 //! - The banner is a float (`floats::STEP_BANNER`), laid out ahead (`Banner::prepare`), so that
 //!   the frame that shows or hides it lays nothing out and allocates nothing.
 
-use beryl_protocol::protocol::{Combat, Kind, PlayerView, Side, Status, Step};
+use beryl_protocol::protocol::{Combat, Kind, PlayerView, Status, Step};
 use glam::Vec2;
 
-use game_table::profiles::Profile;
+use game_table::table::HudAnchor;
 use kit_base::data::space::hud::{BANNER, BANNER_GAP};
 use kit_base::tokens::{ratio, size};
 use kit_ui::element::floats;
@@ -93,15 +93,8 @@ impl Banner {
             .is_some_and(|(_, since)| now.saturating_sub(since) < SHOWS)
     }
 
-    /// Shows in `layer` the banner that `view`, the view at rest, calls for at `now` in `window`, or neither unless `visible`. Lays nothing out and allocates nothing.
-    pub fn write(
-        &mut self,
-        layer: &mut Layer,
-        view: Option<&PlayerView>,
-        now: u64,
-        profile: Profile,
-        visible: bool,
-    ) {
+    /// Shows in `layer` the banner that `view`, the view at rest, calls for at `now`, or neither unless `visible`. Lays nothing out and allocates nothing.
+    pub fn write(&mut self, layer: &mut Layer, view: Option<&PlayerView>, now: u64, visible: bool) {
         let wants = view.and_then(combat_banner);
         match (wants, self.wanted) {
             (Some(detail), Some((held, _))) if detail == held => {}
@@ -117,16 +110,15 @@ impl Banner {
             layer.show_prepared(floats::STEP_BANNER, show.map(|detail| detail as u64));
             self.shown = show;
         }
-        let orb = profile.player_centre(Side::Opponent);
-        let below = orb.y + size::ORB_HEIGHT / 2.0 + size::ORB_BEZEL;
         if show.is_some() {
-            layer.set_float_look(
+            layer.anchor_float(
                 floats::STEP_BANNER,
-                FloatLook {
-                    point: Vec2::new(profile.window().size.width / 2.0, below + BANNER_GAP),
-                    anchor: Vec2::new(0.5, 0.0),
-                    ..FloatLook::default()
-                },
+                HudAnchor::CombatBanner.at(
+                    Vec2::ZERO,
+                    Vec2::new(0.5, 0.0),
+                    Vec2::Y * (size::ORB_HEIGHT / 2.0 + size::ORB_BEZEL + BANNER_GAP),
+                ),
+                FloatLook::default(),
             );
         }
     }

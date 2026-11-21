@@ -13,6 +13,8 @@ mod clearance;
 pub mod far_shade;
 mod hands;
 pub use hands::HandFits;
+mod hud_anchors;
+pub use hud_anchors::HudAnchor;
 pub mod lifted;
 mod look;
 mod own;

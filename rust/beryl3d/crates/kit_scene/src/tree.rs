@@ -4,9 +4,9 @@ use std::borrow::Cow;
 
 use glam::Vec2;
 use kit_base::{geometry::Rect, pose::Pose};
-use kit_frame::frame::{ElementId, Frame, Resolved, Role};
+use kit_frame::frame::{ElementId, Frame, FrameBuilder, Resolved, Role};
 
-pub use kit_frame::frame::{NodeRef, PaintBand as Band, Show};
+pub use kit_frame::frame::{Anchor, NodeRef, PaintBand as Band, Show};
 use kit_ui::layout::Layer;
 
 use crate::hit::{bounds, intersection};
@@ -64,18 +64,6 @@ impl From<Rect> for Candidate {
     }
 }
 
-/// Places a node relative to another node's screen box.
-#[derive(Clone, Debug, PartialEq)]
-pub struct Anchor {
-    pub to: NodeRef,
-    /// The point of the target's box, as fractions from its top left.
-    pub at: Vec2,
-    /// The point of this node's box to align with `at`, as fractions from its top left.
-    pub align: Vec2,
-    /// An additional offset in logical points.
-    pub offset: Vec2,
-}
-
 /// Selects the first candidate slot that covers none of the queried nodes.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct KeepClear {
@@ -131,7 +119,7 @@ impl<'a> Node<'a> {
             parent: (element.parent != u32::MAX).then_some(element.parent),
             space,
             band: Band::of(element),
-            anchor: None,
+            anchor: frame.anchor_of(index).cloned(),
             keep_clear: None,
             show: frame.shown_by(index).map(Show::object),
         }
@@ -168,6 +156,16 @@ pub struct Tree<Nodes = Vec<Node<'static>>> {
     nodes: Nodes,
     slots: Vec<Candidate>,
     selected: Vec<Option<SlotRef>>,
+    anchors: Vec<AnchorState>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum AnchorState {
+    Pending,
+    Visiting,
+    Placed,
+    Missing,
+    Retained(u32),
 }
 
 impl<'a> Tree<&'a Frame> {
@@ -178,6 +176,7 @@ impl<'a> Tree<&'a Frame> {
             nodes: frame,
             slots: Vec::new(),
             selected: Vec::new(),
+            anchors: Vec::new(),
         }
     }
 
@@ -215,6 +214,7 @@ impl<'a> Tree<Vec<Node<'a>>> {
         assert!(node.parent.is_none_or(|parent| parent < index));
         self.nodes.push(node);
         self.selected.push(None);
+        self.anchors.push(AnchorState::Pending);
         index
     }
 
@@ -237,11 +237,10 @@ impl<'a> Tree<Vec<Node<'a>>> {
     }
 
     fn unique(&self, matches: impl Fn(&Node<'a>) -> bool) -> Option<u32> {
-        let mut found = self
-            .nodes
-            .iter()
-            .enumerate()
-            .filter(|(_, node)| matches(node));
+        let mut found =
+            self.nodes.iter().enumerate().filter(|&(index, node)| {
+                self.anchors[index] != AnchorState::Missing && matches(node)
+            });
         let (index, _) = found.next()?;
         if found.next().is_some() {
             return None;
@@ -257,15 +256,110 @@ impl<'a> Tree<Vec<Node<'a>>> {
         use SolveStep::{Anchor, Arrange, KeepClear, Layout};
 
         let steps: &[_] = match phase {
-            SolvePhase::Handle => &[Arrange, Layout, KeepClear],
+            SolvePhase::Handle => &[Arrange, Layout, KeepClear, Anchor],
             SolvePhase::Frame => &[Anchor],
         };
         for &step in steps {
             run(step, self);
-            if step == KeepClear {
-                self.place_clear_nodes();
+            match step {
+                KeepClear => self.place_clear_nodes(),
+                Anchor => self.place_anchors(),
+                _ => {}
             }
         }
+    }
+
+    /// Removes a node and its dependents on the next solve. Indexes can change when
+    /// removed nodes are discarded, so retain a `NodeRef` across structural changes.
+    pub fn remove(&mut self, index: u32) {
+        if let Some(state) = self.anchors.get_mut(index as usize) {
+            *state = AnchorState::Missing;
+        }
+    }
+
+    fn place_anchors(&mut self) {
+        for state in &mut self.anchors {
+            if *state != AnchorState::Missing {
+                *state = AnchorState::Pending;
+            }
+        }
+        for index in 0..self.nodes.len() {
+            self.place_anchor(index);
+        }
+        if !self.anchors.contains(&AnchorState::Missing) {
+            return;
+        }
+        let mut next = 0;
+        for state in &mut self.anchors {
+            if *state == AnchorState::Placed {
+                *state = AnchorState::Retained(next);
+                next += 1;
+            }
+        }
+        let mut index = 0;
+        self.nodes.retain_mut(|node| {
+            let keep = self.anchors[index] != AnchorState::Missing;
+            if keep && let Some(parent) = node.parent {
+                let AnchorState::Retained(parent) = self.anchors[parent as usize] else {
+                    unreachable!("a retained node must have a retained parent");
+                };
+                node.parent = Some(parent);
+            }
+            index += 1;
+            keep
+        });
+        let mut index = 0;
+        self.selected.retain(|_| {
+            let keep = self.anchors[index] != AnchorState::Missing;
+            index += 1;
+            keep
+        });
+        self.anchors.retain(|state| *state != AnchorState::Missing);
+    }
+
+    fn place_anchor(&mut self, index: usize) -> bool {
+        match self.anchors[index] {
+            AnchorState::Placed => return true,
+            AnchorState::Pending => self.anchors[index] = AnchorState::Visiting,
+            _ => return false,
+        }
+        let parent = self.nodes[index].parent;
+        let placed = parent.is_none_or(|parent| self.place_anchor(parent as usize))
+            && self.place_against_target(index);
+        self.anchors[index] = if placed {
+            AnchorState::Placed
+        } else {
+            AnchorState::Missing
+        };
+        placed
+    }
+
+    fn place_against_target(&mut self, index: usize) -> bool {
+        let node = &self.nodes[index];
+        let Some(anchor) = &node.anchor else {
+            return true;
+        };
+        let Some(target) = self.resolve(&anchor.to).map(|target| target as usize) else {
+            return false;
+        };
+        if !self.place_anchor(target) {
+            return false;
+        }
+        let node = &self.nodes[index];
+        let bounds = node.space.screen_bounds();
+        let target = self.nodes[target].space.screen_bounds();
+        let Some(anchor) = &node.anchor else {
+            return false;
+        };
+        let corner = anchor.corner(target, Vec2::new(bounds.width, bounds.height));
+        self.nodes[index].space = Space::Screen {
+            bounds: Rect {
+                x: corner.x,
+                y: corner.y,
+                ..bounds
+            },
+        };
+        true
     }
 
     /// Registers a screen slot for a subsequent keep-clear pass.
@@ -350,6 +444,14 @@ pub struct ShowPlacement {
 }
 
 impl Tree {
+    /// Runs the frame anchor pass on retained screen floats after the table has been drawn.
+    pub fn solve_float_anchors(layer: &mut Layer, frame: &FrameBuilder<'_>) {
+        layer.place_float_anchors(|anchor, size| {
+            let target = frame.anchor_bounds(&anchor.to)?;
+            Some(anchor.corner(target, size))
+        });
+    }
+
     /// Resolves the active screen's Show declarations after layout or scrolling. The object
     /// keeps its resting pose, even when the declaring element is currently outside its clip.
     pub fn screen_shows(layer: &Layer, placements: &mut Vec<ShowPlacement>) {

@@ -23,7 +23,7 @@ use game_table::faces::FaceList;
 use game_table::table::{CARD_HEIGHT, CARD_WIDTH};
 use kit_base::data::profiles::Inspector;
 use kit_base::tokens::{color, size, space, type_style};
-use kit_frame::frame::Role;
+use kit_frame::frame::{Anchor, ElementId, Role};
 use kit_ui::element::{Element, Shown, column, row, text};
 use kit_ui::input::{FaceId, FaceSize, Rect};
 
@@ -35,6 +35,8 @@ pub struct Inspected {
     pub face: FaceId,
     /// The middle of the card across the window, in logical points.
     pub x: f32,
+    /// The top left of the projected box used when choosing the inspector slot.
+    pub origin: Vec2,
     /// The boxes of the cards the open prompt marks, which the player may be about to pick and
     /// which the inspector keeps clear of where it can (the web's `keptClear`).
     pub targets: Vec<Rect>,
@@ -68,7 +70,7 @@ const RADIUS: f32 = size::INSPECTOR_RADIUS;
 /// the place `place` gives, with its state beneath it. Nothing when no card is inspected, on the
 /// phone layout, which reads a card another way, or when the view has no such card.
 #[must_use]
-pub fn inspector(input: &HudIn) -> Option<Element> {
+pub fn inspector(input: &HudIn) -> Option<(Element, Anchor)> {
     let inspected = input.inspected?;
     let place = place(input)?;
     let object = input
@@ -95,24 +97,29 @@ pub fn inspector(input: &HudIn) -> Option<Element> {
             .color(color::TEXT_DIM)
             .max_width(inner)
     });
-    Some(
-        column()
-            .name(&format!("{name}, inspected"))
-            .width(place.width)
-            .padding(pad)
-            .gap(space::S)
-            .background(color::SURFACE_SUNK)
-            .radius(RADIUS)
-            .passes(true)
-            .child(face)
-            .children(lines)
-            .children(
-                inspected
-                    .refusal
-                    .as_ref()
-                    .map(|reason| refusal(reason, input, inner)),
-            ),
-    )
+    let element = column()
+        .name(&format!("{name}, inspected"))
+        .width(place.width)
+        .padding(pad)
+        .gap(space::S)
+        .background(color::SURFACE_SUNK)
+        .radius(RADIUS)
+        .passes(true)
+        .child(face)
+        .children(lines)
+        .children(
+            inspected
+                .refusal
+                .as_ref()
+                .map(|reason| refusal(reason, input, inner)),
+        );
+    let anchor = Anchor::new(
+        ElementId(u32::from(inspected.slot.0)),
+        Vec2::ZERO,
+        Vec2::ZERO,
+        place.offset,
+    );
+    Some((element, anchor))
 }
 
 /// The line under the state that says why a click on the card was refused, as the web's
@@ -253,8 +260,8 @@ fn paid_word(cost: PaidCost) -> &'static str {
     }
 }
 
-/// Where the inspector stands, in logical points of the window: its top left corner and its
-/// width. As the web's `inspectorPlace` puts it: beside the table on the side away from the
+/// The inspector's width and offset from its card, in logical points. The web's
+/// `inspectorPlace` uses the side of the table away from the
 /// card, never over a life orb, which lies between the two sides. While the stack or a prompt
 /// holds the table's right (the stack is not empty or the prompt marks cards), it stands smaller
 /// in the column between the life orbs and the stack instead. It never covers a card the prompt
@@ -263,8 +270,7 @@ fn paid_word(cost: PaidCost) -> &'static str {
 /// takes the side that covers the least of them.
 ///
 /// `None` with no card inspected and on the phone layout.
-#[must_use]
-pub fn place(input: &HudIn) -> Option<Placed> {
+fn place(input: &HudIn) -> Option<Placed> {
     let inspected = input.inspected?;
     let area = input.profile.slot("inspector")?.rect;
     let data = input.profile.data().table.inspector?;
@@ -273,17 +279,17 @@ pub fn place(input: &HudIn) -> Option<Placed> {
     Some(stage_place(
         area,
         data,
-        inspected.x,
+        (inspected.x, inspected.origin),
         taken,
         &inspected.targets,
     ))
 }
 
-/// Where the inspector stands and how wide it is, in logical points of the window.
+/// An inspector slot described relative to its card.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Placed {
-    pub corner: Vec2,
-    pub width: f32,
+struct Placed {
+    offset: Vec2,
+    width: f32,
 }
 
 /// A place on the web's stage: its left edge, top and width in stage pixels.
@@ -296,10 +302,16 @@ struct Side {
 
 /// `inspectorPlace`, on a stage as tall as `data.stage_height` and as wide as `window`'s shape
 /// makes it, turned into logical points of `window`.
-fn stage_place(area: Rect, data: Inspector, x: f32, taken: bool, targets: &[Rect]) -> Placed {
+fn stage_place(
+    area: Rect,
+    data: Inspector,
+    (card_x, card_origin): (f32, Vec2),
+    taken: bool,
+    targets: &[Rect],
+) -> Placed {
     let per_point = data.stage_height / area.height;
     let stage_width = area.width * per_point;
-    let x = x - area.x;
+    let x = card_x - area.x;
     // The web's `fromMiddle` and `fromRight`: a place drawn for the base stage, held to the
     // middle or to the right edge of a wider or narrower one.
     let from_middle = |at: f32| at + (stage_width - data.base_width) / 2.0;
@@ -368,7 +380,8 @@ fn stage_place(area: Rect, data: Inspector, x: f32, taken: bool, targets: &[Rect
         }
     });
     Placed {
-        corner: Vec2::new(place.left, place.top) / per_point + Vec2::new(area.x, area.y),
+        offset: Vec2::new(place.left, place.top) / per_point
+            - (card_origin - Vec2::new(area.x, area.y)),
         width: place.width / per_point,
     }
 }
@@ -417,7 +430,7 @@ mod tests {
         place_in(
             area,
             data.table.inspector.expect("inspector metrics"),
-            x,
+            (x, Vec2::ZERO),
             taken,
             targets,
         )
@@ -430,18 +443,18 @@ mod tests {
         assert_eq!(
             on_left,
             Placed {
-                corner: Vec2::new(24.0, 118.0),
+                offset: Vec2::new(24.0, 118.0),
                 width: 330.0
             }
         );
         let on_right = stage_place(window, 300.0, false, &[]);
-        assert_eq!(on_right.corner, Vec2::new(1600.0 - 330.0 - 24.0, 118.0));
+        assert_eq!(on_right.offset, Vec2::new(1600.0 - 330.0 - 24.0, 118.0));
     }
 
     #[test]
     fn a_taken_right_puts_it_between_the_orbs_and_the_stack() {
         let placed = stage_place(window(1600.0, 900.0), 300.0, true, &[]);
-        assert_eq!(placed.corner, Vec2::new(940.0, 172.0));
+        assert_eq!(placed.offset, Vec2::new(940.0, 172.0));
         assert!((placed.width - (1284.0 - 54.0 - 940.0)).abs() < 1e-3);
     }
 
@@ -454,14 +467,14 @@ mod tests {
             height: 140.0,
         };
         let placed = stage_place(window(1600.0, 900.0), 300.0, false, &[target]);
-        assert!((placed.corner.x - 24.0).abs() < 1e-3, "{placed:?}");
+        assert!((placed.offset.x - 24.0).abs() < 1e-3, "{placed:?}");
     }
 
     #[test]
     fn a_window_twice_the_size_doubles_every_number() {
         let small = stage_place(window(1600.0, 900.0), 300.0, true, &[]);
         let large = stage_place(window(3200.0, 1800.0), 600.0, true, &[]);
-        assert!((large.corner - small.corner * 2.0).length() < 1e-3);
+        assert!((large.offset - small.offset * 2.0).length() < 1e-3);
         assert!((large.width - small.width * 2.0).abs() < 1e-3);
     }
 }

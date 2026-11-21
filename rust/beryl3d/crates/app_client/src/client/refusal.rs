@@ -13,7 +13,7 @@ use super::Client;
 use app_screens::screens::Screen;
 use game_hud::hud::inspector::{Message, notice};
 use kit_base::tokens::size;
-use kit_frame::frame::{ElementId, Place, Role};
+use kit_frame::frame::{Anchor, ElementId, Place, Role};
 use kit_ui::element::floats;
 use kit_ui::layout::FloatLook;
 
@@ -58,23 +58,18 @@ impl Client {
             .inspector_mut()
             .refusal_until(place.is_some(), now);
         let shown = until.and(place);
-        self.layer.float(floats::REFUSAL, shown.map(|_| notice()));
-        if let Some(point) = shown {
-            self.layer.set_float_look(
-                floats::REFUSAL,
-                FloatLook {
-                    point,
-                    anchor: Vec2::new(0.5, 0.0),
-                    ..FloatLook::default()
-                },
-            );
+        self.layer
+            .float(floats::REFUSAL, shown.as_ref().map(|_| notice()));
+        if let Some(anchor) = shown {
+            self.layer
+                .anchor_float(floats::REFUSAL, anchor, FloatLook::default());
         }
         until
     }
 
     /// Where the word stands, centred under the permanent the refusal names, when that is a
     /// named permanent an opponent controls on the battlefield and the decision is still open.
-    fn notice_place(&self) -> Option<Vec2> {
+    fn notice_place(&self) -> Option<Anchor> {
         if self.screen != Screen::Game || !self.table_shown() {
             return None;
         }
@@ -92,9 +87,13 @@ impl Client {
             return None;
         };
         let x = element.corners.iter().map(|corner| corner.x).sum::<f32>() / 4.0;
-        let bottom = (element.corners.iter())
-            .map(|corner| corner.y)
-            .fold(f32::NEG_INFINITY, f32::max);
-        Some(Vec2::new(x, bottom + size::TIMING_REFUSAL_GAP))
+        let bounds = kit_scene::hit::bounds(element);
+        let across = (x - bounds.x) / bounds.width.max(f32::EPSILON);
+        Some(Anchor::new(
+            id,
+            Vec2::new(across, 1.0),
+            Vec2::new(0.5, 0.0),
+            Vec2::Y * size::TIMING_REFUSAL_GAP,
+        ))
     }
 }

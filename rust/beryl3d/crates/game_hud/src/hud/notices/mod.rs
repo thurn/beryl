@@ -14,13 +14,10 @@
 use beryl_protocol::protocol::{PlayerView, Side};
 use glam::Vec2;
 
-use game_play::hud::counts::{index, points};
 use game_play::notice::{Announced, NoticeRun, Place};
-use game_table::table::HALF_LIFE;
-use game_table::table::Layout;
+use game_table::table::{HALF_LIFE, HudAnchor, Layout};
 use kit_base::tokens::{ratio, space};
 use kit_ui::element::{FloatId, floats};
-use kit_ui::input::Size;
 use kit_ui::layout::{FloatLook, Layer};
 
 /// Every float a notice is shown in, with the place that shows there.
@@ -67,15 +64,14 @@ impl NoticeFloats {
         }
     }
 
-    /// Shows in `layer` the notices of `notices` under way at `now`, placed for `layout` in a
-    /// window of `size`, or none of them unless `visible`. Lays nothing out and allocates
+    /// Shows in `layer` the notices of `notices` under way at `now`, placed for `layout`, or none of them unless `visible`. Lays nothing out and allocates
     /// nothing for what `prepare` laid out.
     pub fn write(
         &mut self,
         layer: &mut Layer,
         notices: &[Announced],
         now: u64,
-        (layout, size): (&Layout, Size),
+        layout: &Layout,
         visible: bool,
     ) {
         for (at, (id, place)) in FLOATS.into_iter().enumerate() {
@@ -94,45 +90,33 @@ impl NoticeFloats {
             let Some(announced) = showing else {
                 continue;
             };
-            let (point, anchor) = match (place, layout.bands) {
-                // On the phone the turn's banner crosses the middle band, a coin is tossed just
-                // above it, and a scry's pill stands beside its player's lands, at the end of
-                // their row (docs/ui-conventions.md, "The phone").
-                (Place::Banner, Some(bands)) => (
-                    Vec2::new(size.width / 2.0, bands.middle.middle()),
-                    Vec2::new(0.5, 0.5),
-                ),
-                (Place::Coin, Some(bands)) => (
-                    Vec2::new(size.width / 2.0, bands.middle.top),
+            let slide = Vec2::Y * slide(announced, now);
+            let anchor = match (place, layout.bands.is_some()) {
+                // In a banded layout banners cross the middle, the coin sits above it,
+                // and a scry's pill sits at the end of its player's lands.
+                (Place::Coin, true) => {
+                    HudAnchor::Middle.at(Vec2::new(0.5, 0.0), Vec2::new(0.5, 1.0), slide)
+                }
+                (Place::Pill(player), true) => {
+                    let end = Vec2::new(1.0, 0.5);
+                    HudAnchor::BackStrip(player).at(end, end, slide)
+                }
+                (Place::Banner | Place::Coin, _) => {
+                    HudAnchor::Middle.at(Vec2::splat(0.5), Vec2::splat(0.5), slide)
+                }
+                (Place::Pill(player), false) => HudAnchor::Life(player).at(
+                    Vec2::ZERO,
                     Vec2::new(0.5, 1.0),
+                    slide - Vec2::Y * (HALF_LIFE + space::S),
                 ),
-                (Place::Pill(player), Some(bands)) => {
-                    let back = match player {
-                        Side::You => bands.your_back,
-                        Side::Opponent => bands.opponent_back,
-                    };
-                    (Vec2::new(bands.right, back.middle()), Vec2::new(1.0, 0.5))
-                }
-                (Place::Banner | Place::Coin, None) => (
-                    Vec2::new(size.width / 2.0, size.height / 2.0),
-                    Vec2::new(0.5, 0.5),
-                ),
-                (Place::Pill(player), None) => {
-                    let life = points(layout.players[index(player)].life, size);
-                    (
-                        life - Vec2::new(0.0, HALF_LIFE + space::S),
-                        Vec2::new(0.5, 1.0),
-                    )
-                }
             };
-            layer.set_float_look(
+            layer.anchor_float(
                 id,
+                anchor,
                 FloatLook {
-                    point: point + Vec2::new(0.0, slide(announced, now)),
-                    anchor,
                     opacity: opacity(announced, now),
-                    tint: None,
                     scale: scale(announced, now),
+                    ..FloatLook::default()
                 },
             );
         }

@@ -60,7 +60,8 @@ impl Node {
                 (self.followed).map(|bottom| bottom + Vec2::new(-size.x / 2.0, gap))
             }
             Anchor::Menu(_) => self.placed,
-            Anchor::Submenu | Anchor::Tip => self.placed.filter(|_| self.shown),
+            Anchor::Submenu => self.placed.filter(|_| self.shown),
+            Anchor::Tip => None,
         }
     }
 }

@@ -48,21 +48,15 @@ impl Client {
             inspected: self.features.inspector().shown(),
             ..self.screen_in()
         };
-        let element = inspector::inspector(&input.hud());
-        let place = inspector::place(&input.hud());
-        let shown = element.is_some();
-        self.layer.float(floats::INSPECTOR, element);
-        if let (true, Some(place)) = (shown, place) {
-            self.layer.set_float_look(
-                floats::INSPECTOR,
-                FloatLook {
-                    point: place.corner,
-                    ..FloatLook::default()
-                },
-            );
+        if let Some((element, anchor)) = inspector::inspector(&input.hud()) {
+            self.layer.float(floats::INSPECTOR, Some(element));
+            self.layer
+                .anchor_float(floats::INSPECTOR, anchor, FloatLook::default());
             if let Some(inspected) = self.features.inspector().shown() {
                 self.show.faces_mut().want_full(inspected.face);
             }
+        } else {
+            self.layer.float(floats::INSPECTOR, None);
         }
     }
 

@@ -5,7 +5,7 @@ use glam::Vec2;
 use super::super::{Layer, float::Float, panel::Chain};
 use super::{Drawing, FaceLayers, Look, children, over_floats, own_filter};
 use kit_base::geometry::plane::{ScreenPlane, Zoom};
-use kit_frame::frame::{ElementId, FrameBuilder, StateBits};
+use kit_frame::frame::{Anchored, ElementId, FrameBuilder, StateBits};
 
 impl Layer {
     /// Writes the flat layer into `builder`, on the plane `camera` puts in front of the table:
@@ -123,7 +123,9 @@ impl Layer {
         faces: Option<&FaceLayers<'_>>,
     ) {
         let rect = float.node.rect;
-        let corner = float.corner();
+        let Some(corner) = float.corner() else {
+            return;
+        };
         let zoom = Zoom::around(
             corner + Vec2::new(rect.width, rect.height) / 2.0,
             float.look.scale,
@@ -141,7 +143,7 @@ impl Layer {
             zoom,
             departing: false,
         };
-        self.write_node(
+        let element = self.write_node(
             &float.node,
             u32::MAX,
             true,
@@ -152,5 +154,13 @@ impl Layer {
                 ..drawing
             },
         );
+        if let (Some(element), Some(anchor)) = (element, &float.binding) {
+            builder.anchored(Anchored {
+                element,
+                anchor: anchor.clone(),
+                size: float.size(),
+                scale: float.look.scale,
+            });
+        }
     }
 }

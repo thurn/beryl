@@ -13,7 +13,7 @@ use super::edit::Marks;
 use super::panel::{Chain, look_of, mask_of, panel, write_box, write_mask};
 use super::shadows::write_icon_shadows;
 use super::{Layer, Node, text_top};
-use crate::element::{Display, Element, Overflow, Property, Shown, TextAlign};
+use crate::element::{Anchor, Display, Element, Overflow, Property, Shown, TextAlign};
 use crate::input::{FaceId, FaceSize, Rect};
 use crate::widgets::icons::{LayeredIcon, cell_width};
 use kit_base::geometry::{
@@ -23,7 +23,8 @@ use kit_base::geometry::{
 use kit_base::tokens::color;
 use kit_frame::frame::text::{BlockLook, faded, write_block};
 use kit_frame::frame::{
-    Band, Draw, ElementId, FrameBuilder, Missing, NameRef, Place, Resolved, Role, StateBits,
+    Anchored, Band, Draw, ElementId, FrameBuilder, Missing, NameRef, Place, Resolved, Role,
+    StateBits,
 };
 use kit_text::text;
 
@@ -95,6 +96,16 @@ impl Layer {
         }
     }
 
+    /// A held button sinks a point, and a refused press can shake its control.
+    pub(super) fn node_sink(&self, node: &Node, state: StateBits) -> Vec2 {
+        let sink = if state.has(StateBits::HELD) && sinks(node) {
+            Vec2::Y
+        } else {
+            Vec2::ZERO
+        };
+        sink + self.shake_of(node)
+    }
+
     /// Writes `node` and everything under it, moved so that its tree's top left corner stands
     /// at `look.point`, with `look`'s opacity, text color and clip. A node shown with
     /// `Display::None` is not written, and an anchored child is written at its own corner, or
@@ -124,14 +135,7 @@ impl Layer {
         if look.passes {
             state.0 |= StateBits::PASSES;
         }
-        // The layout slide moves this node alone. A held button sinks a point, as the
-        // `.button:active` rule moves it.
-        let sink = if state.has(StateBits::HELD) && sinks(node) {
-            Vec2::Y
-        } else {
-            Vec2::ZERO
-        };
-        let sink = sink + self.shake_of(node);
+        let sink = self.node_sink(node, state);
         let rect = moved(node.paint_rect(), look.point + node.offset() + sink);
         let scaled_camera;
         let camera = if node.scaled() {
@@ -230,6 +234,12 @@ impl Layer {
             }
             let mut look = inside;
             look.departing = departing;
+            if child.element.anchor == Some(Anchor::Tip) {
+                if !departing {
+                    self.write_tip(child, index, look, builder, drawing);
+                }
+                continue;
+            }
             if child.element.anchor.is_some() {
                 let Some(corner) = child.corner() else {
                     continue;
@@ -241,6 +251,31 @@ impl Layer {
                 look.clip = None;
             }
             self.write_node(child, index, false, look, builder, drawing);
+        }
+    }
+
+    fn write_tip(
+        &self,
+        node: &Node,
+        parent: u32,
+        mut look: Look<'_>,
+        builder: &mut FrameBuilder<'_>,
+        drawing: Drawing<'_, impl Fn(ElementId) -> StateBits + Copy>,
+    ) {
+        let rect = node.paint_rect();
+        let size = Vec2::new(rect.width, rect.height);
+        let Some((anchor, target)) = self.tip_anchor(node.id, size, look.open) else {
+            return;
+        };
+        look.point = anchor.corner(target, size);
+        look.clip = None;
+        if let Some(element) = self.write_node(node, parent, false, look, builder, drawing) {
+            builder.anchored(Anchored {
+                element,
+                anchor,
+                size,
+                scale: 1.0,
+            });
         }
     }
 
@@ -625,7 +660,7 @@ fn ink(node: &Node, state: StateBits, tint: Option<[u8; 4]>) -> [u8; 4] {
 impl Layer {
     /// The state `node` is drawn in and its resolved element has: disabled, focused, selected,
     /// primary, under the pointer and held down by a press.
-    fn state(&self, node: &Node) -> StateBits {
+    pub(super) fn state(&self, node: &Node) -> StateBits {
         let element = &node.element;
         let mut state = 0;
         if !element.enabled {

@@ -6,8 +6,6 @@
 //!   As a script ends, `Counts` takes the numbers of the view it leads to. So a total changes as
 //!   its step begins, not when the view that holds it arrives.
 use beryl_protocol::protocol::{ManaPool, PlayerView, Side};
-use glam::Vec2;
-use kit_ui::input::Size;
 
 /// A number a `count` step sets.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -84,12 +82,4 @@ pub const fn index(side: Side) -> usize {
         Side::You => 0,
         Side::Opponent => 1,
     }
-}
-
-/// A point in normalized device coordinates as logical points of a window of `size`.
-pub fn points(ndc: Vec2, size: Size) -> Vec2 {
-    Vec2::new(
-        f32::midpoint(ndc.x, 1.0) * size.width,
-        f32::midpoint(1.0, -ndc.y) * size.height,
-    )
 }
