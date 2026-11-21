@@ -167,7 +167,14 @@ def script(boards: list[str], *, wait: bool = True) -> str:
     names = shlex.join(boards)
     work = f"""{source.take_in_script()}cd {source.SOURCE}/rust/beryl3d
 {vm.JOBS_SCRIPT}CARGO_TARGET_DIR={TARGET} {shlex.join(build)}
-out=$(mktemp -d)
+# The dumps are one file per frame, over a gigabyte for a run. They go on the machine's disk,
+# not `/tmp`, which is a 6 GiB tmpfs: a run that was killed before it removed its directory
+# left it there, and after a few of them Callgrind could not even create its `vgdb` pipe, so
+# every later run failed with no message of its own. This script holds the machine's lock,
+# so any directory a former run left is stale.
+rm -rf "$HOME"/b3d-counts.*
+out=$(mktemp -d "$HOME/b3d-counts.XXXXXX")
+trap 'rm -rf "$out"' EXIT
 pids=()
 for board in {names}; do
   BERYL_CACHE="$HOME/{source.VM_CACHE}" {shlex.join(callgrind)} \\
@@ -186,7 +193,6 @@ for board in {names}; do
     echo "count $board ${{dump##*.}} $(sed -n 's/^totals: *//p' "$dump")"
   done
 done
-rm -rf "$out"
 # The script's status is its last command's. Not `exit`: in this login shell `exit` runs
 # Ubuntu's `~/.bash_logout`, whose `clear_console` fails with no terminal and replaces it.
 test "$failed" = 0
