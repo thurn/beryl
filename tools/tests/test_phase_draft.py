@@ -28,6 +28,67 @@ def test_translates_a_targeted_spell_and_an_enters_trigger(
     assert phase_draft.triggered(trigger).expression() == "when_enters(&draw(you(), 1))"
 
 
+def test_drafts_flamecast_wheel_with_a_permanent_damage_recipient() -> None:
+    ability = phase_draft.ability(
+        {
+            "kind": "Activated",
+            "effect": {
+                "type": "DealDamage",
+                "amount": {"type": "Fixed", "value": 3},
+                "target": {
+                    "type": "Typed",
+                    "type_filters": ["Creature"],
+                    "controller": None,
+                    "properties": [],
+                },
+            },
+            "cost": {
+                "type": "Composite",
+                "costs": [
+                    {
+                        "type": "Mana",
+                        "cost": {"type": "Cost", "shards": [], "generic": 5},
+                    },
+                    {"type": "Tap"},
+                    {"type": "Sacrifice", "target": {"type": "SelfRef"}, "count": 1},
+                ],
+            },
+        }
+    )
+    assert ability.expression() == (
+        'Ability::activated(Cost::of(mana("{5}"), &[CostPart::TAP, CostPart::SACRIFICE]))'
+        ".target(&TargetSpec::creature())"
+        ".effect(&Effect::DealDamage { to: Recipients::Permanents(target()), "
+        "amount: Amount::Fixed(3) })"
+    )
+
+
+@pytest.mark.parametrize(
+    ("target", "spec", "effect"),
+    [
+        ("Player", "player", "deal_damage_to(target_player(), 3)"),
+        ("Opponent", "opponent", "deal_damage_to(target_player(), 3)"),
+        ("Any", "any_target", "deal_damage_to_any_target(3)"),
+    ],
+)
+def test_drafts_damage_to_player_or_any_target(
+    target: str, spec: str, effect: str
+) -> None:
+    ability = phase_draft.ability(
+        {
+            "kind": "Spell",
+            "effect": {
+                "type": "DealDamage",
+                "amount": {"type": "Fixed", "value": 3},
+                "target": {"type": target},
+            },
+        }
+    )
+    assert ability.expression() == (
+        f"Ability::spell().target(&TargetSpec::{spec}()).effect(&{effect})"
+    )
+
+
 @pytest.mark.parametrize(
     ("extra", "field"),
     [

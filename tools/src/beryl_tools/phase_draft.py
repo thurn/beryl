@@ -354,8 +354,13 @@ def effect(code: Node, duration: object) -> tuple[str, str]:
             result = f"deal_damage_to_any_target({amount})"
         elif affected.players:
             result = f"deal_damage_to({affected.players}, {amount})"
+        elif affected.kind == "Permanent":
+            result = (
+                f"Effect::DealDamage {{ to: Recipients::Permanents({affected.objects}), "
+                f"amount: Amount::Fixed({amount}) }}"
+            )
         else:
-            result = f"Effect::DealDamage {{ to: Recipients::target(beryl_card::SpecIx::new(0)), amount: Amount::Fixed({amount}) }}"
+            raise Unsupported("effect.target: expected a damage recipient")
     elif kind == "Pump" and affected.objects and duration == "UntilEndOfTurn":
         power = fixed(code.take("power"), -128, 127)
         toughness = fixed(code.take("toughness"), -128, 127)
