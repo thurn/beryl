@@ -17,8 +17,7 @@ use super::{
     BANDS, Band, Draw, Frame, FrameBuilder, Material, Mesh, Resolved, Role, StateBits, sprites,
 };
 
-/// The low bits of a sort key hold the record's index in push order, so that records that tie
-/// keep the order they were pushed in, and the sort is the same on every machine.
+/// The low bits of a sort key break ties by record index, making the sort deterministic.
 const INDEX_BITS: u32 = 24;
 const INDEX_MASK: u64 = (1 << INDEX_BITS) - 1;
 /// The 32 bits above the index order records within a band by depth.
@@ -146,7 +145,8 @@ impl Scratch {
             (index as u64) <= INDEX_MASK,
             "a frame holds fewer than 2^24 records"
         );
-        self.keys.push(((band as u64) << BAND_SHIFT) | index as u64);
+        self.keys
+            .push(((band as u64) << BAND_SHIFT) | record_tie(band, index as u64));
         let first = self.first_calls[band as usize].get_or_insert(draw.flags);
         if *first != draw.flags {
             self.mixed |= 1 << band as u16;
@@ -160,22 +160,19 @@ pub(super) fn finish(frame: &mut Frame) {
     let (view_projection, card) = (frame.view_projection, frame.card);
     let Frame { draws, scratch, .. } = frame;
     for key in &mut scratch.keys {
-        let draw = &draws[(*key & INDEX_MASK) as usize];
+        let draw = &draws[record_index(*key)];
         *key |= u64::from(depth_key(band_of(*key), draw, view_projection)) << DEPTH_SHIFT;
     }
     scratch.keys.sort_unstable();
     batch_bands(scratch, draws, (&view_projection, card));
-    scratch.draws.extend(
-        scratch
-            .keys
-            .iter()
-            .map(|key| draws[(*key & INDEX_MASK) as usize]),
-    );
+    scratch
+        .draws
+        .extend(scratch.keys.iter().map(|key| draws[record_index(*key)]));
     std::mem::swap(draws, &mut scratch.draws);
     if !frame.owners.is_empty() {
         let pushed = std::mem::take(&mut frame.owners);
         frame.owners = (scratch.keys.iter())
-            .map(|key| pushed[(*key & INDEX_MASK) as usize])
+            .map(|key| pushed[record_index(*key)])
             .collect();
     }
 
@@ -330,6 +327,19 @@ impl FrameBuilder<'_> {
     }
 }
 
+/// Opaque passes use a strict depth test. Submit the last registered card first at equal
+/// depth so it wins the tie, just as it does when hit testing visits nodes front to back.
+fn record_tie(band: Band, index: u64) -> u64 {
+    match band {
+        Band::Opaque | Band::MovingOpaque => INDEX_MASK ^ index,
+        _ => index,
+    }
+}
+
+fn record_index(key: u64) -> usize {
+    record_tie(band_of(key), key & INDEX_MASK) as usize
+}
+
 /// The band a sort key holds.
 fn band_of(key: u64) -> Band {
     match key >> BAND_SHIFT {
@@ -454,7 +464,7 @@ fn adds(draw: &Draw) -> bool {
 
 /// The part of the key a draw call is cut on: the record's mesh, texture array and clip.
 fn call_key(key: u64, draws: &[Draw]) -> u8 {
-    draws[(key & INDEX_MASK) as usize].flags
+    draws[record_index(key)].flags
 }
 
 /// Whether every call key in `keys` comes in one unbroken run already, as in a band whose
@@ -510,7 +520,7 @@ fn batch(
     placed.clear();
     out.clear();
     for &key in keys.iter() {
-        let draw = &draws[(key & INDEX_MASK) as usize];
+        let draw = &draws[record_index(key)];
         rects.push(screen_rect(draw, view_projection, card));
         additive.push(adds(draw));
         placed.push(false);

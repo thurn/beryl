@@ -217,6 +217,12 @@ fn a_look_at_the_top_lists_only_the_cards_it_took() {
 
 #[test]
 fn scrolling_a_large_pile_moves_its_cards_and_clips_cards_that_leave_the_grid() {
+    for (width, height, scale) in [(1600.0, 900.0, 2.0), (393.0, 759.0, 3.0)] {
+        scroll_pile_and_check_clipping(Size { width, height }, scale);
+    }
+}
+
+fn scroll_pile_and_check_clipping(size: Size, scale: f32) {
     use game_hud::inspect::Viewed;
     use glam::Vec2;
     use kit_ui::element::Action;
@@ -239,11 +245,8 @@ fn scrolling_a_large_pile_moves_its_cards_and_clips_cards_that_leave_the_grid() 
         },
     );
     client.handle(Input::Device(DeviceInput::Surface {
-        size: Size {
-            width: 1600.0,
-            height: 900.0,
-        },
-        scale: 2.0,
+        size,
+        scale,
         safe_area: Insets::default(),
     }));
     client.handle(Input::Update(Box::new(update)));
@@ -296,7 +299,7 @@ fn scrolling_a_large_pile_moves_its_cards_and_clips_cards_that_leave_the_grid() 
     assert!(!top.is_empty());
     client.handle(roll(half_row));
     let frame = client.frame(1_005_000_000);
-    assert_clipped_card(frame, id, clip);
+    assert_clipped_card(frame, id, clip, scale);
 
     client.handle(roll(10_000.0));
     let end = cards(client.frame(1_010_000_000));
@@ -312,7 +315,12 @@ fn scrolling_a_large_pile_moves_its_cards_and_clips_cards_that_leave_the_grid() 
 }
 
 /// The same rectangle cuts the card in drawing and in the manual viewer's hit test.
-fn assert_clipped_card(frame: &Frame, id: kit_frame::frame::ElementId, clip: kit_ui::input::Rect) {
+fn assert_clipped_card(
+    frame: &Frame,
+    id: kit_frame::frame::ElementId,
+    clip: kit_ui::input::Rect,
+    scale: f32,
+) {
     use game_manual::manual::viewers::card_at;
     use glam::Vec2;
 
@@ -324,7 +332,7 @@ fn assert_clipped_card(frame: &Frame, id: kit_frame::frame::ElementId, clip: kit
         frame.band(at) == Some(kit_frame::frame::Band::LayerCards)
             && draw.clip() > 0
             && frame.clips[usize::from(draw.clip())]
-                == kit_base::geometry::zoom_rect(clip, (Vec2::ZERO, 2.0))
+                == kit_base::geometry::zoom_rect(clip, (Vec2::ZERO, scale))
     }));
     let shown = |slot: ObjectId| u32::from(slot.0) == id.0;
     let x = bounds.x + bounds.width / 2.0;

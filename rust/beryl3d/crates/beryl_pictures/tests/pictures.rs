@@ -52,6 +52,97 @@ fn written(output: &Output) -> (PathBuf, (u32, u32)) {
 }
 
 #[test]
+fn a_press_reaches_the_card_that_paints_an_opaque_depth_tie() {
+    use beryl_render::{BACK_LAYER, Limits, Renderer, Target};
+    use glam::{Mat4, Vec2, Vec3};
+    use kit_base::{
+        atlas::{FaceSize, Tier},
+        pose::Pose,
+    };
+    use kit_frame::frame::{
+        Band, Draw, ElementId, Frame, FrameBuilder, NameRef, Place, Resolved, Role,
+    };
+
+    let card = Vec2::new(63.0, 88.0);
+    let pose = Pose {
+        position: Vec3::Z * 0.5,
+        scale: 1.0 / card.y,
+        ..Pose::default()
+    };
+    let point = Vec2::splat(32.5);
+    let lighting = beryl_inspect::data::checkout().expect("tuning").lighting;
+    let mut renderer = Renderer::headless(Limits::Default, lighting).expect("a GPU");
+    let format = beryl_assets::Format::choose(&renderer.formats());
+    renderer.set_faces(&["", "Island", "Plains"], format);
+    let mut target = Target::offscreen(&renderer, 64, 64);
+    let cards = [("Island", [255, 0, 0, 255]), ("Plains", [0, 0, 255, 255])];
+    let at = (32 * 64 + 32) * 4;
+    for (tier, state) in [
+        (Tier::Baseline, 0),
+        (Tier::Baseline, StateBits::MOVING),
+        (Tier::Enhanced, 0),
+        (Tier::Enhanced, StateBits::MOVING),
+    ] {
+        let mut frame = Frame::with_capacity(2, 2, 64);
+        let mut builder = FrameBuilder::new(&mut frame, tier, card);
+        builder.camera(Mat4::IDENTITY);
+        for (index, (name, tint)) in cards.into_iter().enumerate() {
+            let half = card * (pose.scale * 16.0);
+            let corners = [
+                Vec2::new(-half.x, -half.y),
+                Vec2::new(half.x, -half.y),
+                Vec2::new(half.x, half.y),
+                Vec2::new(-half.x, half.y),
+            ]
+            .map(|corner| Vec2::splat(32.0) + corner);
+            let element = builder.resolved(
+                name,
+                Resolved {
+                    id: ElementId(index as u32),
+                    parent: u32::MAX,
+                    role: Role::Card,
+                    name: NameRef::default(),
+                    place: Place::Revealed,
+                    pose: Some(pose),
+                    corners,
+                    depth: 0.5,
+                    opacity: 1.0,
+                    clip: None,
+                    interactive: true,
+                    state: StateBits(state),
+                    face: None,
+                    copies: 1,
+                    really: NameRef::default(),
+                    note: NameRef::default(),
+                },
+            );
+            builder.draw_card(
+                element,
+                Band::Opaque,
+                Draw::card(
+                    pose.transform(),
+                    tint,
+                    FaceSize::Board,
+                    index as u16 + 1,
+                    BACK_LAYER,
+                    0.0,
+                    0.0,
+                ),
+            );
+        }
+        let frame = builder.finish();
+        let hit = hit::hit(frame, point).expect("a card at the press") as usize;
+        assert_eq!(frame.name(frame.resolved[hit].name), "Plains");
+        renderer.render(frame, &mut target);
+        let pixels = renderer.read(&target);
+        assert!(
+            pixels[at + 2] > pixels[at],
+            "{tier:?} state {state}: Plains paints the press point"
+        );
+    }
+}
+
+#[test]
 fn the_picture_shows_the_card_the_tree_says_is_in_flight() {
     let page = pages::page("verbs-zones", Side::You, Layout::Desktop, WINDOW).expect("a page");
     let mut head = Headless::new(page, WINDOW.width, WINDOW.height, &Scans::app()).expect("a GPU");
