@@ -3,17 +3,16 @@
 use beryl_protocol::protocol::ObjectId;
 use glam::Vec2;
 use kit_base::geometry::Rect;
-use kit_frame::frame::{ElementId, FrameBuilder, NameRef, Place, Resolved, Role, StateBits};
+use kit_frame::frame::{
+    ElementId, FrameBuilder, NameRef, Place, Resolved, Role, StateBits, TRAY_CARD_BOX_IDS,
+    TRAY_GRID_IDS,
+};
 use kit_scene::hit::{contains, intersection};
 use kit_ui::scroll::Viewport;
 
 use super::super::Table;
 use super::super::tray_layout::{Held, TrayGrid, landing_at};
 use super::SceneObject;
-
-/// Reserved ids for the flat boxes that show the tray's cards.
-const GRID_IDS: u32 = 1 << 24;
-const CARD_BOX_IDS: u32 = GRID_IDS + (1 << 16);
 
 impl Table {
     /// The scrolling grid at the pointer, and its viewport.
@@ -123,7 +122,8 @@ impl Table {
     /// animates the object itself, so these boxes take no pointer input.
     pub(in crate::table) fn write_tray_grids(&self, builder: &mut FrameBuilder) {
         for (index, grid) in self.tray.grids.iter().enumerate() {
-            let id = ElementId(GRID_IDS + u32::try_from(index).expect("grid index fits in u32"));
+            let id =
+                ElementId(TRAY_GRID_IDS + u32::try_from(index).expect("grid index fits in u32"));
             let clip = (grid.limit > 0.0).then_some(grid.region);
             let parent = builder.resolved(&grid.name, region(id, u32::MAX, grid.region, None));
             for (&(slot, mut pose), label) in
@@ -137,7 +137,7 @@ impl Table {
                 let id = ElementId(u32::from(slot.0));
                 let shown = builder.resolved(
                     label,
-                    region(ElementId(CARD_BOX_IDS + id.0), parent, rect, clip),
+                    region(ElementId(TRAY_CARD_BOX_IDS + id.0), parent, rect, clip),
                 );
                 builder.shows(shown, id);
             }

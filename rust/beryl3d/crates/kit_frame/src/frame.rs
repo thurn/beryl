@@ -58,6 +58,15 @@ pub const ARROW_IDS: u32 = 1 << 22;
 /// element of a card held up to be read, beside the card itself.
 pub const REVEALED_FACE: u32 = 1 << 21;
 
+/// The first mark id. Each active mark adds its index among the open spans.
+pub const MARK_IDS: u32 = 1 << 24;
+
+/// The first tray grid id. The following range begins at `TRAY_CARD_BOX_IDS`.
+pub const TRAY_GRID_IDS: u32 = 1 << 25;
+
+/// The first id of the tray boxes that show cards, indexed by card slot.
+pub const TRAY_CARD_BOX_IDS: u32 = TRAY_GRID_IDS + (1 << 16);
+
 /// A range of `Frame::names`, so that a resolved element owns no string.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct NameRef {

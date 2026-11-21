@@ -26,8 +26,8 @@ use kit_base::data::light::Light;
 use kit_base::pose::{Curve, Pose};
 use kit_base::tokens::color;
 use kit_frame::frame::{
-    Band, Draw, ElementId, FrameBuilder, NameRef, Place, Resolved, Ring, Role, ShapeAnchor,
-    StateBits, box_shadow_reach, outline_corners, rows, sprites,
+    Band, Draw, ElementId, FrameBuilder, MARK_IDS, NameRef, Place, Resolved, Ring, Role,
+    ShapeAnchor, StateBits, box_shadow_reach, outline_corners, rows, sprites,
 };
 use kit_ui::element::Shadow;
 use kit_ui::layout::shape_radius;
@@ -350,7 +350,7 @@ impl MarkNode<'_> {
             clippy::cast_possible_truncation,
             reason = "active marks fit the mark id range"
         )]
-        let id = ElementId((1 << 24) + self.index as u32);
+        let id = ElementId(MARK_IDS + self.index as u32);
         let at = builder.resolved(
             self.mark.name(),
             Resolved {
