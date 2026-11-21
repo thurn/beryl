@@ -2,7 +2,7 @@
 //! spell on it, and a spell leaving it without resolving.
 
 use crate::bitboard::Bitboard;
-use crate::cast;
+use crate::casting;
 use crate::event::Reason;
 use crate::fixed::Full;
 use crate::game::Game;
@@ -18,7 +18,7 @@ pub(crate) fn unstack<L: Layout>(
     objects: Bitboard<L::Slot>,
     to: Zone,
 ) -> Result<Bitboard<L::Slot>, Full> {
-    if (objects & cast::spells(game.state)).is_empty() {
+    if (objects & casting::spells(game.state)).is_empty() {
         return Ok(objects);
     }
     let flashback = remove_spells(game, objects, to)?;

@@ -1,5 +1,7 @@
-//! Offering to cast a card during a resolution (CR 608.2g), and a spell leaving the stack
+//! Offering to cast a card during a resolution (see CR 608.2g), and a spell leaving the stack
 //! without resolving.
+//!
+//! Implements: none. Offers legal casts during resolution and delegates spell movement to the event pipeline.
 
 use beryl_kernel::reference::Spell;
 
@@ -15,7 +17,7 @@ use crate::table::GameTable;
 use super::costs::From;
 use super::legal::{Situation, cast_options};
 
-/// The options of a resolution's offer to cast a card (CR 608.2g): not casting it, then each
+/// The options of a resolution's offer to cast a card (see CR 608.2g): not casting it, then each
 /// way of casting it.
 pub(crate) fn offer_options<L: Layout>(
     s: &State<L>,

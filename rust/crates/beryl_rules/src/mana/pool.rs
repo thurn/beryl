@@ -1,4 +1,6 @@
 //! What a pool and its sources can pay: the funds a cost is checked against.
+//!
+//! Implements: none. Checks whether the pool and available sources can cover a cost.
 
 use crate::bitboard::Bitboard;
 use crate::card::ManaCost;
@@ -154,7 +156,7 @@ impl<L: Layout> Funds<L> {
 
     /// The untapped sources that can pay for `paying`, including sources without an
     /// unrestricted mana ability. The same source cannot make mana and pay in its place
-    /// ([CR 701.67a]): "you may tap an untapped artifact or creature you control rather than
+    /// (see [CR 701.67a]): "you may tap an untapped artifact or creature you control rather than
     /// pay that mana."
     ///
     /// [CR 701.67a]: https://yawgatog.com/resources/magic-rules/#R70167a

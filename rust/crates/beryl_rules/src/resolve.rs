@@ -13,7 +13,7 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{Ability, AbilityKind, CastingOption, Face};
-use crate::cast::{self, entry_ability};
+use crate::casting::{self, entry_ability};
 use crate::chance;
 use crate::decision::{Answers, Choice, Decision, Outcome, StallReason};
 use crate::event::{self, Entry, Event, Reason, Sink, Tagged};
@@ -315,7 +315,7 @@ pub(crate) fn legal_targets<L: Layout>(
 ) -> TargetPlaces {
     let mut legal = TargetPlaces::NONE;
     for (place, target) in placed(entry.targets.as_slice()) {
-        if cast::still_legal(s, t, entry, ability, target) {
+        if casting::still_legal(s, t, entry, ability, target) {
             legal.insert(place);
         }
     }
@@ -426,7 +426,7 @@ fn body<L: Layout>(
         enter_battlefield(s, t, sink, entry)?;
     } else if ability.is_some() && !entry.targets.is_empty() && legal.is_empty() {
         if spell.is_some() {
-            cast::leave_stack(s, t, sink, entry, Zone::Graveyard, Reason::Resolve)?;
+            casting::leave_stack(s, t, sink, entry, Zone::Graveyard, Reason::Resolve)?;
         }
     } else if spell.is_some() && !face.is_instant_or_sorcery() && !mutating {
         // An Aura's spell ability, which says what it targets, does its work by entering.
@@ -460,7 +460,7 @@ fn body<L: Layout>(
         // ability is removed from the stack and ceases to exist." Unless its own effect moved
         // it already, as Time Spiral exiles itself.
         if spell.is_some_and(|r| s.is_current(r)) {
-            cast::leave_stack(s, t, sink, entry, Zone::Graveyard, Reason::Resolve)?;
+            casting::leave_stack(s, t, sink, entry, Zone::Graveyard, Reason::Resolve)?;
         }
         if let Some((object, player, free)) = offer {
             s.ask(Pending::CastOffer {

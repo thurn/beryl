@@ -3,7 +3,7 @@
 //! themselves are [`crate::choices`]'.
 
 use crate::card::{Ability, CastingIx, ManaColor, Stop, Words};
-use crate::cast;
+use crate::casting;
 use crate::decision::{Answers, Choice, Decision, Opt, Outcome, StallReason};
 use crate::game::Game;
 use crate::ids::Seat;
@@ -129,7 +129,7 @@ impl<'a, L: Layout> Resolution<'a, L> {
     /// they're illegal."
     pub fn target(&self, game: &Game<'_, L>, place: TargetPlace) -> Option<Target<L>> {
         let target = *self.entry.targets.as_slice().get(place.index())?;
-        cast::still_legal(game.state, game.table, &self.entry, self.ability, target)
+        casting::still_legal(game.state, game.table, &self.entry, self.ability, target)
             .then_some(target)
     }
 

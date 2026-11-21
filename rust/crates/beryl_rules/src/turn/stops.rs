@@ -1,6 +1,8 @@
 //! Restriction profiles at work (architecture §12.3, §15): where a [`Profile`], which is the
 //! kernel's data (`beryl_kernel::profile`), stops a player in the game as it stands.
 //! `crate::profile` re-exports these beside the kernel's types.
+//!
+//! Implements: none. Applies the player's stop settings.
 
 use crate::card::Purpose;
 use crate::combat;
@@ -25,7 +27,7 @@ pub(crate) fn stops_for<L: Layout>(profile: Profile, s: &State<L>, player: Seat)
 /// player casts or an ability they activate, while [`Profile::asks_targets`] names them,
 /// or a waterbend payment whose human must select even a required bender.
 /// A triggered ability's lone target stays silent, as nothing can take it back
-/// ([CR 603.3d](https://yawgatog.com/resources/magic-rules/#R6033d)).
+/// (see [CR 603.3d](https://yawgatog.com/resources/magic-rules/#R6033d)).
 pub(crate) fn asks_lone<L: Layout>(profile: Profile, s: &State<L>, d: &Decision<L>) -> bool {
     (d.prompt.purpose == Purpose::Waterbend && profile.taps_mana == Some(d.player))
         || d.kind == DecisionKind::Target

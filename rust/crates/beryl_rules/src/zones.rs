@@ -6,7 +6,7 @@ use beryl_kernel::reference::{Cards, ZoneMark};
 
 use crate::bitboard::Bitboard;
 use crate::card::FaceIx;
-use crate::cast;
+use crate::casting;
 use crate::event::{self, Entry, Reason};
 use crate::fixed::Full;
 use crate::game::Game;
@@ -88,7 +88,7 @@ pub fn return_to_hand<L: Layout>(game: &mut Game<'_, L>, object: ObjectRef<L>) -
     let to = if game.state.permanent(object).is_some() {
         Some(Zone::Hand)
     } else if let Some(spell) = game.state.spell(object) {
-        cast::unstack(game.state, game.table, game.sink, spell, Zone::Hand)?
+        casting::unstack(game.state, game.table, game.sink, spell, Zone::Hand)?
     } else {
         None
     };

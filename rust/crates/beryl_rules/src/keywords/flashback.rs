@@ -2,7 +2,7 @@
 
 use beryl_card::Objects;
 
-use crate::casting;
+use crate::casting::start;
 use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
@@ -30,7 +30,7 @@ pub fn grant<L: Layout>(
         increase: 0,
         replacement: Some(MoveReplacement::Flashback),
     };
-    casting::permit(game, resolution, object, terms, Duration::EndOfTurn)
+    start::permit(game, resolution, object, terms, Duration::EndOfTurn)
 }
 
 /// Whether the spell was cast for a flashback cost: the replacement that paying one starts

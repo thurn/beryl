@@ -21,7 +21,7 @@ use beryl_card::{Amount, ExceptIx, Objects, Words};
 use crate::additions::Addition;
 use crate::bitboard::Bitboard;
 use crate::card::Stop;
-use crate::cast::{self, entry_ability};
+use crate::casting::{self, entry_ability};
 use crate::choices;
 use crate::decision::Opt;
 use crate::event::{self, Reason};
@@ -173,7 +173,7 @@ fn choose_new_targets<L: Layout>(
         let place =
             TargetPlace::new(u8::try_from(i).expect("a stack entry holds at most TARGETS targets"));
         let target = copy.targets.as_slice()[i];
-        let others = cast::new_targets(game.state, game.table, copy, ability, place);
+        let others = casting::new_targets(game.state, game.table, copy, ability, place);
         let kept = option_of(target);
         let chosen = choices::retarget(game, resolution, controller, kept, others)?;
         let spec = target.spec();

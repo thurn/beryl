@@ -1,6 +1,8 @@
 //! Casting spells and activating abilities as an explicit machine (architecture §7.4): announce,
 //! face, alternative and additional costs, X, targets, total cost, payment plan, payment.
 //!
+//! Implements: CR 118.3, CR 601, CR 602.2, CR 602.5
+//!
 //! [CR 601.2](https://yawgatog.com/resources/magic-rules/#R6012): "To cast a spell is to take
 //! it from where it is (usually the hand), put it on the stack, and pay its costs, so that it
 //! will eventually resolve and have its effect. ... If a player is unable to comply with the
@@ -10,15 +12,20 @@
 //! Spells that cannot be paid for or targeted are never offered, and every step offers only
 //! answers that leave the rest completable, so the machine never has to rewind.
 
+mod announced;
 mod costs;
 mod delve;
+pub(crate) mod land;
 mod legal;
 mod parts;
+pub mod payment;
 mod stack;
+pub mod start;
 mod steps;
 mod targets;
 mod timing;
 
+pub use announced::target_takes;
 pub use costs::cost_being_cast;
 pub use legal::{payable_responses, pointless};
 pub(crate) use legal::{priority_options, refusal};

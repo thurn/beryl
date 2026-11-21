@@ -1,4 +1,6 @@
 //! What a plan leaves payable later: the costs a player may still face this turn.
+//!
+//! Implements: none. Estimates which costs a player may still face.
 
 use crate::bitboard::Bitboard;
 use crate::card::{
@@ -137,10 +139,10 @@ impl<L: Layout> Ahead<L> {
 /// Whether `player` may still act at sorcery speed before their sources next untap: it is
 /// their turn, short of its end step, so a main phase may still come with the stack empty.
 ///
-/// - [CR 307.1](https://yawgatog.com/resources/magic-rules/#R3071): "A player who has priority
+/// - see [CR 307.1](https://yawgatog.com/resources/magic-rules/#R3071): "A player who has priority
 ///   may cast a sorcery card from their hand during a main phase of their turn when the stack
 ///   is empty."
-/// - [CR 502.3](https://yawgatog.com/resources/magic-rules/#R5023): "the active player
+/// - see [CR 502.3](https://yawgatog.com/resources/magic-rules/#R5023): "the active player
 ///   determines which permanents they control will untap. Then they untap them all
 ///   simultaneously."
 fn sorcery_window<L: Layout>(s: &State<L>, player: Seat) -> bool {
@@ -148,8 +150,8 @@ fn sorcery_window<L: Layout>(s: &State<L>, player: Seat) -> bool {
 }
 
 /// Whether `player` may cast `face` at instant speed, as casting decides: an instant
-/// ([CR 117.1a](https://yawgatog.com/resources/magic-rules/#R1171a)), a face with flash
-/// ([CR 702.8a](https://yawgatog.com/resources/magic-rules/#R7028a)), or a sorcery given flash
+/// (see [CR 117.1a](https://yawgatog.com/resources/magic-rules/#R1171a)), a face with flash
+/// (see [CR 702.8a](https://yawgatog.com/resources/magic-rules/#R7028a)), or a sorcery given flash
 /// by a rule change. Casting's own check is kept apart: the hot priority path inlines it.
 fn instant_speed<L: Layout>(s: &State<L>, t: &GameTable, face: &Face, player: Seat) -> bool {
     face.types.intersects(Types::INSTANT)
@@ -159,7 +161,7 @@ fn instant_speed<L: Layout>(s: &State<L>, t: &GameTable, face: &Face, player: Se
 
 /// Whether a land `player` plays now enters untapped, by its face's replacement abilities, as
 /// [`event`] decides as it enters
-/// ([CR 614.1c](https://yawgatog.com/resources/magic-rules/#R6141c)): "Effects that read
+/// (see [CR 614.1c](https://yawgatog.com/resources/magic-rules/#R6141c)): "Effects that read
 /// '[This permanent] enters with . . . ,' 'As [this permanent] enters . . . ,' or '[This
 /// permanent] enters as . . . ' are replacement effects." One that asks for life enters
 /// untapped if the player pays, which is theirs to choose.
@@ -197,15 +199,15 @@ fn enters_untapped<L: Layout>(s: &State<L>, player: Seat, face: &Face) -> bool {
 /// permanents' abilities, those that need sorcery speed only while [`sorcery_window`] allows;
 /// and the lands in their hand, while they may still play one this turn.
 ///
-/// [CR 305.2](https://yawgatog.com/resources/magic-rules/#R3052): "A player can normally play
+/// See [CR 305.2](https://yawgatog.com/resources/magic-rules/#R3052): "A player can normally play
 /// one land during their turn".
 fn ahead<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Ahead<L> {
     let mut ahead: Ahead<L> = Ahead::default();
     let sorcery = sorcery_window(s, player);
     let land_drop = sorcery && s.player(player).lands_played() < 1;
     // A transforming card's back face is never cast: "A double-faced spell is cast with its
-    // front face up by default" ([CR 712.8](https://yawgatog.com/resources/magic-rules/#R7128)).
-    // A land is played, not cast ([CR 305.1](https://yawgatog.com/resources/magic-rules/#R3051)).
+    // front face up by default" (see [CR 712.8](https://yawgatog.com/resources/magic-rules/#R7128)).
+    // A land is played, not cast (see [CR 305.1](https://yawgatog.com/resources/magic-rules/#R3051)).
     let castable = |face: &Face| {
         !face.transformed
             && !face.types.intersects(Types::LAND)
@@ -243,7 +245,7 @@ fn ahead<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Ahead<L> {
         }
     }
     for p in s.cast_permissions().filter(|p| p.terms.player == player) {
-        // Only a card is cast (CR 601.2a).
+        // Only a card is cast (see CR 601.2a).
         let faces = s.card_def(t, p.card.slot).map_or_default(|def| def.faces);
         for face in faces {
             if castable(face) {
@@ -283,7 +285,7 @@ fn ahead<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Ahead<L> {
 /// symbols of any one, how many, and their symbols in all: a cost hungry for colors is the
 /// one a careless payment strands; a generic one is paid from whatever is left. Last, how
 /// many creatures stay untapped, free to attack or block
-/// ([CR 508.1a](https://yawgatog.com/resources/magic-rules/#R5081a): "The chosen creatures
+/// (see [CR 508.1a](https://yawgatog.com/resources/magic-rules/#R5081a): "The chosen creatures
 /// must be untapped"), so a dual taps before a mana creature when nothing else tells them
 /// apart.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]

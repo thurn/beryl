@@ -1,4 +1,6 @@
-//! Starting the game: deck slots, who plays first, and the London mulligan (CR 103).
+//! Starting the game: deck slots, who plays first, and the London mulligan (see CR 103).
+//!
+//! Implements: CR 103.1, CR 103.5
 
 use crate::event::Sink;
 use crate::fixed::Full;

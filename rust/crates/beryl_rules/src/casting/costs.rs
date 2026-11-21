@@ -1,5 +1,7 @@
 //! What a spell or ability costs (CR 601.2f, CR 601.2h): its casting options, X and the total
 //! cost.
+//!
+//! Implements: CR 107.3b, CR 118.9a
 
 use crate::bitboard::Bitboard;
 use crate::card::{CastingOption, Castings, Face, ManaCost};
@@ -19,7 +21,7 @@ use super::timing::entry_ability_of;
 pub(super) enum From {
     /// At priority, from a hand or under a permission.
     Priority,
-    /// During a resolution that offers it (CR 608.2g), for free or not.
+    /// During a resolution that offers it (see CR 608.2g), for free or not.
     Resolution { free: bool },
 }
 
@@ -145,7 +147,7 @@ pub(super) fn total_cost<L: Layout>(
         (StackItem::Spell { object, costs, .. }, _) => {
             let increase = s.cost_increase(object);
             let mut cost = spell_cost(s, t, c.player, face, costs, entry.x, increase, c.free());
-            // Cards delve exiled pay for generic mana of the locked-in total (CR 702.66a).
+            // Cards delve exiled pay for generic mana of the locked-in total (see CR 702.66a).
             cost.generic -= c.substituted;
             cost
         }

@@ -2,19 +2,21 @@
 
 use crate::bitboard::Bitboard;
 use crate::card::{ChosenKind, FaceIx, Prompt, Purpose, Types};
+use crate::casting::land::{enter_from_hand, enter_or_choose};
 use crate::decision::{Answers, Candidates, Choice, Decision, DecisionKind, OPTIONS, Opt, Refusal};
 use crate::event::Sink;
 use crate::fixed::Full;
+use crate::game::start;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue, index};
 use crate::observation::Observation;
 use crate::scratch::Scratch;
 use crate::state::{Pending, State};
 use crate::table::GameTable;
-use crate::{cast, chosen, combat, entered, face_down, mana, resolve, sba, start, trigger, turn};
+use crate::turn::paused_step;
+use crate::{casting, chosen, combat, entered, face_down, mana, resolve, sba, trigger, turn};
 
-use super::land::{enter_from_hand, enter_or_choose};
-use super::{act, collapse, paused_step};
+use super::{act, collapse};
 
 /// The open decision, a pure function of the state, so `apply` recomputes rather than
 /// remembers it. The sink only counts the payment solver's runs. It is built as its own
@@ -101,7 +103,7 @@ pub(crate) fn decision<L: Layout>(
         Pending::DeclareAttackers { attacker } => combat::attack_decision(s, t, attacker),
         Pending::DeclareBlockers { blocker } => combat::block_decision(s, t, blocker),
         Pending::CombatDamage { done, lethal } => combat::division_decision(s, done, lethal),
-        Pending::Casting(c) => cast::decision(s, t, sink, &c),
+        Pending::Casting(c) => casting::decision(s, t, sink, &c),
         Pending::TurningFaceUp { slot, remaining } => {
             face_down::decision(s, t, sink, slot, remaining)
         }
@@ -113,7 +115,7 @@ pub(crate) fn decision<L: Layout>(
         } => Ok(Decision::options(
             player,
             DecisionKind::CastOffer,
-            cast::offer_options(s, t, object, player, free)?,
+            casting::offer_options(s, t, object, player, free)?,
             Prompt::new(Purpose::CastOffer),
         )
         // The question is about the card offered.
@@ -159,7 +161,7 @@ fn priority_decision<L: Layout>(s: &State<L>, t: &GameTable) -> Result<Decision<
             out.push(Opt::PlayLand(slot))
         })?;
     }
-    cast::priority_options(s, t, player, list)?;
+    casting::priority_options(s, t, player, list)?;
     mana::instant_options(s, t, player, list)?;
     face_down::face_up_options(s, t, player, list)?;
     // Last, as the options a full list leaves out: tapping ahead is never needed, the payment
@@ -189,7 +191,7 @@ pub(super) fn only_idle<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>)
         Candidates::Options(list) => list.iter().all(|o| match *o {
             Opt::Pass => true,
             Opt::Mana { .. } => floats,
-            Opt::Activate { slot, ability } => quiet && cast::pointless(s, t, slot, ability),
+            Opt::Activate { slot, ability } => quiet && casting::pointless(s, t, slot, ability),
             Opt::PlayLand(_)
             | Opt::Play
             | Opt::Draw
@@ -220,7 +222,7 @@ pub(super) fn only_idle<L: Layout>(s: &State<L>, t: &GameTable, d: &Decision<L>)
 /// ([CR 712.9](https://yawgatog.com/resources/magic-rules/#R7129)): "A player playing a
 /// modal double-faced card ... as a land chooses one of its faces that's a land before putting
 /// it onto the battlefield." The implemented modal double-faced cards have one land face at most.
-pub(super) fn land_face<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> Option<FaceIx> {
+pub(crate) fn land_face<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot) -> Option<FaceIx> {
     let def = s.card_def(t, slot)?;
     def.face_ixs()
         .find(|&f| def.face(f).types.intersects(Types::LAND))
@@ -244,11 +246,11 @@ pub fn refusal<L: Layout>(
     let land = match land_face(s, t, slot) {
         None => None,
         Some(_) if turn::may_play_land(s, player) => return None,
-        Some(_) if cast::sorcery_timing(s, player) => Some(Refusal::LandPlayed),
+        Some(_) if casting::sorcery_timing(s, player) => Some(Refusal::LandPlayed),
         Some(_) => Some(Refusal::Timing { by: None }),
     };
     // A full capacity leaves the reason unknown.
-    cast::refusal(s, t, player, slot, land).ok().flatten()
+    casting::refusal(s, t, player, slot, land).ok().flatten()
 }
 
 /// Gives `d`, built for the player it belongs to, to the player controlling them this turn, if
@@ -290,7 +292,7 @@ pub(super) fn perform_machine<L: Layout>(
         Pending::Casting(casting) => {
             let (option, object) = (d.candidates.option(c), d.candidates.object(c));
             act(s, &mut x.events, d.player, option);
-            let done = cast::perform(s, t, &mut x.events, casting, option, object);
+            let done = casting::perform(s, t, &mut x.events, casting, option, object);
             x.events.leave();
             done
         }
@@ -400,7 +402,7 @@ fn offered_cast<L: Layout>(
         | Opt::Object(_)
         | Opt::TurnFaceUp(_)) => {
             act(s, sink, player, Some(cast_option));
-            let done = cast::begin_cast(s, t, sink, player, cast_option, Some(free));
+            let done = casting::begin_cast(s, t, sink, player, cast_option, Some(free));
             sink.leave();
             done
         }

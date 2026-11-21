@@ -26,7 +26,7 @@
 //!
 //! No resolution asks in the other shapes yet (an order, a number, a mode, a division): the
 //! first that does adds its function here. The cast a resolution offers is a
-//! mode, but the engine asks it once the resolution has ended ([`crate::casting::offer`]).
+//! mode, but the engine asks it once the resolution has ended ([`crate::casting::start::offer`]).
 //!
 //! In debug builds each function checks that the prompt it is given is one its question can
 //! answer, so a purpose asked through the wrong function fails where it is written.
@@ -307,7 +307,7 @@ pub(crate) fn retarget<L: Layout>(
     resolution: &mut Resolution<'_, L>,
     player: Seat,
     kept: Opt<L>,
-    others: crate::cast::TargetSet<L>,
+    others: crate::casting::TargetSet<L>,
 ) -> Result<Opt<L>, Stop> {
     let s = &*game.state;
     let mut opts: L::Queue<Opt<L>, OPTIONS> = Default::default();

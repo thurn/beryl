@@ -11,7 +11,7 @@ use beryl_card::{Amount, CastingKind, Condition, Objects, Players, SpecIx, Types
 use crate::PlayerSet;
 use crate::bitboard::Bitboard;
 use crate::card::Castings;
-use crate::cast;
+use crate::casting;
 use crate::filter::{Evaluate, Filter};
 use crate::ids::Seat;
 use crate::layout::{Layout, PerPlayer, Table};
@@ -295,7 +295,7 @@ impl<L: Layout> Scene<'_, L> {
             Objects::All { zone, filter } => {
                 let within = match zone {
                     Zone::Battlefield => s.battlefield().iter().copied().collect(),
-                    Zone::Stack => cast::spells(s),
+                    Zone::Stack => casting::spells(s),
                     Zone::Library
                     | Zone::Hand
                     | Zone::Graveyard
@@ -308,7 +308,7 @@ impl<L: Layout> Scene<'_, L> {
             // CR 611.3b: the cards in every zone, the spells and the permanents.
             Objects::Everywhere(filter) => {
                 let mut within: Bitboard<L::Slot> = s.battlefield().iter().copied().collect();
-                within |= cast::spells(s);
+                within |= casting::spells(s);
                 for zone in [Zone::Library, Zone::Hand, Zone::Graveyard, Zone::Exile] {
                     within |= s.in_zone(zone);
                 }

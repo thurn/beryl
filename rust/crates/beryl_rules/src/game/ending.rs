@@ -1,5 +1,7 @@
-//! Ending the game ([CR 104](https://yawgatog.com/resources/magic-rules/#R104)) as an
+//! Ending the game (see [CR 104](https://yawgatog.com/resources/magic-rules/#R104)) as an
 //! effect says.
+//!
+//! Implements: CR 104.2b, CR 104.3e
 
 use beryl_card::Players;
 

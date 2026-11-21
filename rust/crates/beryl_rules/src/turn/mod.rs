@@ -1,4 +1,9 @@
 //! Turn structure: turns, steps and their turn-based actions (architecture §12.1).
+//!
+//! Implements: CR 103.8, CR 305.2, CR 500, CR 502.3, CR 502.4, CR 504.1, CR 514, CR 703.4d
+
+pub(crate) mod paused_step;
+pub(crate) mod stops;
 
 use crate::combat;
 use crate::decision::{Outcome, StallReason};
@@ -37,11 +42,11 @@ pub(crate) fn begin_turn<L: Layout>(
         return Ok(());
     }
     let active = s.begin_turn();
-    // CR 611.2a: an effect lasts "as long as stated by the spell or ability creating it";
+    // See CR 611.2a: an effect lasts "as long as stated by the spell or ability creating it";
     // one that lasts until a player's next turn ends as that turn begins.
     s.expire(Duration::UntilYourNextTurn(active));
     layers::refresh(s, t, sink)?;
-    // CR 302.6: the active player's permanents have now been under their control since their
+    // See CR 302.6: the active player's permanents have now been under their control since their
     // most recent turn began.
     s.reset_permanents_for_turn(active);
     begin_step(s, t, sink, TurnStep::Untap)
@@ -49,7 +54,7 @@ pub(crate) fn begin_turn<L: Layout>(
 
 /// Begins a step: its turn-based actions, then priority for the active player.
 ///
-/// [CR 117.3a](https://yawgatog.com/resources/magic-rules/#R1173a): "The active player
+/// See [CR 117.3a](https://yawgatog.com/resources/magic-rules/#R1173a): "The active player
 /// receives priority at the beginning of most steps and phases, after any turn-based actions
 /// (such as drawing a card during the draw step; see rule 703) have been dealt with".
 ///
@@ -178,7 +183,7 @@ fn next_step<L: Layout>(
         TurnStep::Draw => TurnStep::PrecombatMain,
         TurnStep::PrecombatMain => TurnStep::BeginningOfCombat,
         TurnStep::BeginningOfCombat => TurnStep::DeclareAttackers,
-        // CR 508.8: "If no creatures are declared as attackers or put onto the battlefield
+        // See CR 508.8: "If no creatures are declared as attackers or put onto the battlefield
         // attacking, skip the declare blockers and combat damage steps."
         TurnStep::DeclareAttackers if s.turn().attacked() || any_attacking(s) => {
             TurnStep::DeclareBlockers
@@ -220,7 +225,7 @@ fn cleanup<L: Layout>(s: &mut State<L>) {
 
 /// Discards one card in the cleanup step, finishing the step once the hand is small enough.
 ///
-/// [CR 701.9a](https://yawgatog.com/resources/magic-rules/#R7019a): "To discard a card, move
+/// See [CR 701.9a](https://yawgatog.com/resources/magic-rules/#R7019a): "To discard a card, move
 /// it from its owner's hand to that player's graveyard."
 pub(crate) fn cleanup_discard<L: Layout>(
     s: &mut State<L>,
@@ -255,7 +260,7 @@ fn finish_cleanup<L: Layout>(s: &mut State<L>) {
 
 /// Whether a player may play a land now.
 ///
-/// [CR 305.1](https://yawgatog.com/resources/magic-rules/#R3051): "A player who has priority
+/// See [CR 305.1](https://yawgatog.com/resources/magic-rules/#R3051): "A player who has priority
 /// may play a land card from their hand during a main phase of their turn when the stack is
 /// empty."
 ///

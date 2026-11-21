@@ -1,7 +1,9 @@
 //! Playing a land: the special action and the questions a land asks as it enters.
+//!
+//! Implements: CR 116.3, CR 305.1
 
-use super::land_face;
 use crate::bitboard::Bitboard;
+use crate::engine::land_face;
 use crate::event::{self, Entry, Reason, Sink};
 use crate::fixed::Full;
 use crate::ids::Seat;
@@ -20,10 +22,10 @@ use crate::table::GameTable;
 /// [CR 116.3](https://yawgatog.com/resources/magic-rules/#R1163): "If a player takes a special
 /// action, that player receives priority afterward."
 ///
-/// [CR 119.4](https://yawgatog.com/resources/magic-rules/#R1194): "If a cost or effect allows
+/// See [CR 119.4](https://yawgatog.com/resources/magic-rules/#R1194): "If a cost or effect allows
 /// a player to pay an amount of life greater than 0, the player may do so only if their life
 /// total is greater than or equal to the amount of the payment."
-pub(super) fn play_land<L: Layout>(
+pub(crate) fn play_land<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
@@ -38,7 +40,7 @@ pub(super) fn play_land<L: Layout>(
         ..Entry::default()
     };
     match crate::replace::life_to_enter(s, t, slot, entry)? {
-        Some(life) if crate::life::can_pay(s, t, player, life) => {
+        Some(life) if crate::game::life::can_pay(s, t, player, life) => {
             s.ask(Pending::EnterPayingLife { slot, life });
             Ok(())
         }
@@ -48,7 +50,7 @@ pub(super) fn play_land<L: Layout>(
 
 /// Puts the land being played onto the battlefield, or first asks for the value it chooses as
 /// it enters ([`Pending::EnterChoosing`]).
-pub(super) fn enter_or_choose<L: Layout>(
+pub(crate) fn enter_or_choose<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,
@@ -73,7 +75,7 @@ pub(super) fn enter_or_choose<L: Layout>(
 }
 
 /// Moves the land being played from its owner's hand onto the battlefield.
-pub(super) fn enter_from_hand<L: Layout>(
+pub(crate) fn enter_from_hand<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     sink: &mut Sink<L>,

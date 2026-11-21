@@ -1,6 +1,8 @@
 //! Paying the parts of a cost that are not mana (CR 601.2h): what is done to the object the
 //! cost is on, and the one step in which a player chooses the objects a part is paid with.
 //!
+//! Implements: CR 118.1, CR 606.4
+//!
 //! [CR 118.1](https://yawgatog.com/resources/magic-rules/#R1181): "To pay a cost, a player
 //! carries out the instructions specified by the spell, ability, or effect that contains that
 //! cost." A cost's parts are data ([`CostPart`]), and a card table holds only the parts paid
@@ -19,9 +21,9 @@ use crate::event::{self, Reason, Sink};
 use crate::filter::Evaluate;
 use crate::fixed::Full;
 use crate::game::Game;
+use crate::game::life;
 use crate::ids::Seat;
 use crate::layout::{Layout, Queue};
-use crate::life;
 use crate::mana::{self, Funds};
 use crate::state::{
     CastKind, CastStep, Casting, CounterKind, PayingObjects, Pending, StackEntry, StackItem, State,
@@ -120,8 +122,8 @@ pub(super) fn substitute(
 /// that taps them ([CR 118.3](https://yawgatog.com/resources/magic-rules/#R1183): "a
 /// permanent that's already tapped can't be tapped to pay a cost"). Summoning sickness doesn't
 /// stop them: tapping them is a cost of this ability, not an ability of theirs with {T}
-/// (CR 302.6). Elsewhere they are cards
-/// ([CR 111.6](https://yawgatog.com/resources/magic-rules/#R1116): "A token isn't a card"): a
+/// (see CR 302.6). Elsewhere they are cards
+/// (see [CR 111.6](https://yawgatog.com/resources/magic-rules/#R1116): "A token isn't a card"): a
 /// sacrificed token remains in a graveyard until state-based actions are checked.
 pub(super) fn candidates<L: Layout>(
     s: &State<L>,
@@ -282,7 +284,7 @@ fn parts_share_enough<L: Layout>(
 }
 
 /// Whether `player` can pay `cost`, paying up to `most` of its generic mana with one of
-/// `objects` each rather than with mana (CR 701.67a), and with none of `exclude`. An object
+/// `objects` each rather than with mana (see CR 701.67a), and with none of `exclude`. An object
 /// that makes no mana now pays as much as it ever can, so those pay first; a mana source
 /// pays at least as much tapped for mana, so it never needs to.
 #[allow(clippy::too_many_arguments)]
@@ -378,7 +380,7 @@ pub(super) fn pay<L: Layout>(
                 Measure::ForGeneric(_) => {}
             },
             CostPart::Life(n) => {
-                // CR 119.4: "If a player pays life, the payment is subtracted from their life
+                // See CR 119.4: "If a player pays life, the payment is subtracted from their life
                 // total; in other words, the player loses that much life". The player who
                 // pays is the one casting the spell or activating the ability.
                 let player = top(s).controller();
@@ -437,7 +439,7 @@ pub(super) fn pay_substitutes<L: Layout>(
     pay_mana(s, t, sink, c)
 }
 
-/// The answers while paying generic mana with objects (CR 701.67a): tap one more, while the
+/// The answers while paying generic mana with objects (see CR 701.67a): tap one more, while the
 /// rest stays payable, or pay what is left with mana, when it can be. Interchangeable ones
 /// are one answer (§7.2). The human can also activate a mana ability
 /// ([CR 601.2g](https://yawgatog.com/resources/magic-rules/#R6012g)): "the player then has a
@@ -715,8 +717,8 @@ pub(super) fn perform<L: Layout>(
     let mut paying = step(&c);
     match chosen.measure {
         Measure::ForGeneric(_) => {
-            // CR 701.67a: "you may tap an untapped artifact or creature you control rather
-            // than pay that mana." CR 702.66a: "you may exile a card from your graveyard
+            // See CR 701.67a: "you may tap an untapped artifact or creature you control rather
+            // than pay that mana." see CR 702.66a: "you may exile a card from your graveyard
             // rather than pay that mana." The cards stay in the graveyard until the last is
             // chosen, then go to exile at once ([`end_substitutes`]).
             match option {
@@ -743,7 +745,7 @@ pub(super) fn perform<L: Layout>(
             return Ok(());
         }
         Measure::TotalPower(_) => {
-            // CR 702.122b: "A creature 'crews a Vehicle' when it's tapped to pay the cost to
+            // See CR 702.122b: "A creature 'crews a Vehicle' when it's tapped to pay the cost to
             // activate a Vehicle's crew ability."
             let slot = object.expect("an object to pay with");
             let power = power_of(s, slot);

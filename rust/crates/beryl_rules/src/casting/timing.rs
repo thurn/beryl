@@ -1,5 +1,7 @@
 //! When a player may cast a spell or activate an ability: sorcery and instant speed
-//! (CR 307.1, CR 117.1a), and the ability a stack entry resolves.
+//! (CR 307.1, see CR 117.1a), and the ability a stack entry resolves.
+//!
+//! Implements: CR 307.1
 
 use crate::card::{Ability, Face, FaceAbility, Keywords, ObjectAbility, Types};
 use crate::definition::Definition;
@@ -30,7 +32,7 @@ pub(super) fn entry_ability_of<L: Layout>(
 /// The card, face and ability a stack entry records for activating ability `ability` of the
 /// permanent in `slot`: one of its own, one granted to it, which is printed on the
 /// granting card's front face (§9), or one of a card under it, if it is a merged permanent,
-/// printed on that card's face ([CR 702.140e]): "A mutated permanent has all abilities of
+/// printed on that card's face (see [CR 702.140e]): "A mutated permanent has all abilities of
 /// each card and token that represents it."
 ///
 /// [CR 702.140e]: https://yawgatog.com/resources/magic-rules/#R702140e
@@ -82,8 +84,8 @@ pub(crate) fn sorcery_timing<L: Layout>(s: &State<L>, player: Seat) -> bool {
 }
 
 /// Whether `player` may cast this face at instant speed: an instant
-/// ([CR 117.1a](https://yawgatog.com/resources/magic-rules/#R1171a)), a face with flash
-/// ([CR 702.8a](https://yawgatog.com/resources/magic-rules/#R7028a)), or a sorcery while a
+/// (see [CR 117.1a](https://yawgatog.com/resources/magic-rules/#R1171a)), a face with flash
+/// (see [CR 702.8a](https://yawgatog.com/resources/magic-rules/#R7028a)), or a sorcery while a
 /// rule change lets them cast sorceries as though they had flash.
 pub(super) fn instant_speed<L: Layout>(
     s: &State<L>,

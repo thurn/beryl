@@ -128,14 +128,14 @@
 //! | --- | --- | --- |
 //! | CR 701, keyword actions | `actions/`, a file for each, named as the rules name it | [`actions::counter`], [`actions::destroy`], [`actions::discard`], [`actions::exile`], [`actions::explore`], [`actions::fateseal`], [`actions::manifest`], [`actions::manifest_dread`], [`actions::mill`], [`actions::regenerate`], [`actions::reveal`], [`actions::sacrifice`], [`actions::scry`], [`actions::search`], [`actions::shuffle`], [`actions::tap`] (tap and untap), [`actions::transform`] |
 //! | CR 702, keyword abilities | `keywords/`, a file for each | [`keywords::flashback`]; kicker |
-//! | any other rule | a module named for the rule's title | [`ending`] the game (CR 104), [`mana`], which the engine's payment solver shares (CR 106), [`tokens`] (CR 111), [`emblems`] (CR 114), [`costs`] (CR 118), [`life`] (CR 119), [`damage`] (CR 120), [`drawing`] (CR 121), [`counters`] (CR 122), [`zones`] (CR 400), [`library`] (CR 401), [`stack`] (CR 405), [`casting`] spells as an effect allows (CR 601), [`delayed_triggers`] (CR 603.7), [`linked`] abilities (CR 607), [`choices`] made while resolving (CR 608.2d), [`one_shot`] effects (CR 610), [`continuous`] effects (CR 611), [`coins`] (CR 705); copies (CR 707) |
+//! | any other rule | a module named for the rule's title | [`game::ending`] the game (CR 104), [`mana`], which the engine's payment solver shares (CR 106), [`tokens`] (CR 111), [`emblems`] (CR 114), [`casting::payment`] (CR 118), [`game::life`] (CR 119), [`damage`] (CR 120), [`drawing`] (CR 121), [`counters`] (CR 122), [`zones`] (CR 400), [`library`] (CR 401), [`stack`] (CR 405), [`casting::start`] for spells an effect allows (CR 601), [`delayed_triggers`] (CR 603.7), [`linked`] abilities (CR 607), [`choices`] made while resolving (CR 608.2d), [`one_shot`] effects (CR 610), [`continuous`] effects (CR 611), [`coins`] (CR 705); copies (CR 707) |
 //!
 //! A module holds, in this order:
 //!
-//! 1. Its first line: the rule's title and number, with the link.
+//! 1. Its header names the rules and gives an `Implements:` declaration for the rules it owns.
 //! 2. The functions, each citing its rule with a quotation. An action's function has the
 //!    action's name (`actions::scry::scry`); a module named for a thing holds what is done
-//!    with it (`life::gain`, `counters::remove`, `tokens::create`).
+//!    with it (`game::life::gain`, `counters::remove`, `tokens::create`).
 //! 3. The interpreter's arm for each effect-data entry that calls them: a `pub(crate)`
 //!    function named `instruction`, or `<function>_instruction` where the module has more
 //!    than one. It takes the interpreter's `Run` and the entry's operands as the vocabulary
@@ -173,7 +173,7 @@
 //! An object's ability is read through [`State::has_ability`](state::State::has_ability):
 //! a reader walks the face's abilities and asks it of each. An ability granted to a permanent
 //! by another's effect is read from the permanent's layer result instead, and only by
-//! activation (`cast/legal.rs`, `cast/timing.rs`) and the layers.
+//! activation (`casting/legal.rs`, `casting/timing.rs`) and the layers.
 //!
 //! ## Scenarios
 //!
@@ -209,24 +209,20 @@
 //! [`custom_body`].
 
 pub mod actions;
-mod announced;
 mod bodies;
 pub mod card;
-mod cast;
 pub mod casting;
 pub mod choices;
 mod chosen;
 pub mod coins;
 mod combat;
 pub mod continuous;
-pub mod costs;
 pub mod counters;
 pub mod coverage;
 pub mod damage;
 pub mod delayed_triggers;
 pub mod drawing;
 pub mod emblems;
-pub mod ending;
 mod engine;
 mod entered;
 pub mod event;
@@ -236,7 +232,6 @@ mod interpret;
 pub mod keywords;
 mod layers;
 pub mod library;
-pub mod life;
 pub mod linked;
 pub mod mana;
 pub mod one_shot;
@@ -250,8 +245,6 @@ mod rule_change;
 mod sba;
 mod scratch;
 pub mod stack;
-mod start;
-mod stops;
 mod text;
 pub mod tokens;
 mod trigger;
@@ -275,14 +268,13 @@ pub mod layout {
 
 /// The kernel's restriction profiles, and where they stop a player in a game.
 pub mod profile {
-    pub use crate::stops::{NextStop, can_declare_blockers, next_step_stop, next_stop};
-    pub(crate) use crate::stops::{asks_lone, stops_for};
+    pub use crate::turn::stops::{NextStop, can_declare_blockers, next_step_stop, next_stop};
+    pub(crate) use crate::turn::stops::{asks_lone, stops_for};
     pub use beryl_kernel::profile::*;
 }
 
-pub use announced::target_takes;
 pub use bodies::{CustomBody, custom_body};
-pub use cast::{cost_being_cast, payable_responses, pointless};
+pub use casting::{cost_being_cast, payable_responses, pointless, target_takes};
 pub use combat::preferred_damage;
 pub use drawing::wins_instead_of_drawing;
 pub use engine::{

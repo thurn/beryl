@@ -15,17 +15,18 @@ use crate::event::{Event, ReplacementKind};
 use crate::filter;
 use crate::fixed::Full;
 use crate::game::Game;
+use crate::game::ending;
 use crate::ids::Seat;
 use crate::interpret::{self, Outcome, Run};
 use crate::layout::{Layout, Queue};
 use crate::observation::Observation;
+use crate::replace;
 use crate::replace::DrawReplacement;
 use crate::replacement::{self, Instead};
 use crate::resolution::Resolution;
 use crate::state::TriggeredAbility;
 use crate::state::{AbilityRef, Count, PendingTrigger, TriggerInfo, TurnStep, Zone, ZoneKey};
 use crate::table::Capability;
-use crate::{ending, replace};
 
 /// A player draws cards, one at a time ([CR 121.2]): "If a player is instructed to draw multiple
 /// cards, that player performs that many individual card draws." The event counts the cards

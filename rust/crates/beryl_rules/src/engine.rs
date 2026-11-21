@@ -1,9 +1,11 @@
 //! The engine loop: `next` advances to the next decision, `apply` consumes one answer
 //! (architecture §3, §7).
 
+use crate::casting::land::play_land;
 use crate::decision::{Answers, Choice, Decision, DecisionKind, Opt, Outcome, StallReason, Step};
 use crate::event::{Cause, Sink, StackIx, Tagged};
 use crate::fixed::Full;
+use crate::game::start;
 use crate::ids::Seat;
 use crate::layout::Layout;
 use crate::observation::Observation;
@@ -13,18 +15,16 @@ use crate::scratch::assert_sound;
 pub use crate::scratch::{Counts, Scratch};
 use crate::state::{Pending, State, TurnStep};
 use crate::table::GameTable;
-use crate::{cast, combat, face_down, layers, mana, resolve, sba, start, trigger, turn};
+use crate::turn::paused_step;
+use crate::{casting, combat, face_down, layers, mana, resolve, sba, trigger, turn};
 
-mod land;
-mod paused_step;
 mod questions;
 
 pub use crate::decision::interchangeable;
 pub(crate) use crate::decision::{collapse, collapse_in_order};
-use land::play_land;
 pub use questions::refusal;
-pub(crate) use questions::{controlled, decision};
-use questions::{land_face, only_idle, perform_machine};
+pub(crate) use questions::{controlled, decision, land_face};
+use questions::{only_idle, perform_machine};
 
 /// The position a player sees the open decision in. That is the state itself, except while
 /// a resolution or a step's turn-based actions are paused (§7.3): the committed state is then
@@ -527,13 +527,13 @@ fn take_action<L: Layout>(
     match option {
         Opt::PlayLand(slot) => play_land(s, t, &mut x.events, player, slot),
         cast_option @ Opt::Cast { .. } => {
-            cast::begin_cast(s, t, &mut x.events, player, cast_option, None)
+            casting::begin_cast(s, t, &mut x.events, player, cast_option, None)
         }
         Opt::Activate { slot, ability } if mana::is_instant(s, t, slot, ability) => {
             mana::begin_instant(s, t, &mut x.events, slot, ability)
         }
         Opt::Activate { slot, ability } => {
-            cast::begin_activate(s, t, &mut x.events, player, slot, ability)
+            casting::begin_activate(s, t, &mut x.events, player, slot, ability)
         }
         Opt::TurnFaceUp(slot) => {
             face_down::begin_turning_face_up(s, t, &mut x.events, player, slot)

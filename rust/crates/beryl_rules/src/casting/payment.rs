@@ -1,6 +1,8 @@
-//! Costs ([CR 118](https://yawgatog.com/resources/magic-rules/#R118)) paid while a spell or
+//! Costs (see [CR 118](https://yawgatog.com/resources/magic-rules/#R118)) paid while a spell or
 //! ability resolves ([CR 118.12](https://yawgatog.com/resources/magic-rules/#R11812)): "The
 //! action [do something] is a cost, paid when the spell or ability resolves."
+//!
+//! Implements: CR 118.12
 //!
 //! The cost of a spell or an ability is paid as it is cast or activated, by the engine's
 //! casting steps. What is here is the cost an effect names ([`Effect::Unless`]), which a
@@ -33,7 +35,7 @@ use crate::state::{Zone, ZoneKey};
 /// a cost without having the necessary resources to pay it fully." Returns whether they
 /// paid.
 ///
-/// [CR 608.2g](https://yawgatog.com/resources/magic-rules/#R6082g): "If an effect gives a
+/// See [CR 608.2g](https://yawgatog.com/resources/magic-rules/#R6082g): "If an effect gives a
 /// player the option to pay mana, they may activate mana abilities before taking that
 /// action."
 pub fn may_pay<L: Layout>(
@@ -68,7 +70,7 @@ pub fn may_pay<L: Layout>(
 /// nothing is left to pay, or else by one of the whole payments the engine worked out.
 ///
 /// The mana abilities they activate for it are their own doing, inside the resolution that
-/// asks ([CR 605.3a](https://yawgatog.com/resources/magic-rules/#R6053a): "A player may
+/// asks (see [CR 605.3a](https://yawgatog.com/resources/magic-rules/#R6053a): "A player may
 /// activate an activated mana ability ... whenever a rule or effect asks for a mana payment,
 /// even if it's in the middle of casting or resolving a spell or activating or resolving an
 /// ability."), and name the spell or ability resolving as what they pay for.
@@ -133,7 +135,7 @@ pub fn pay<L: Layout>(
 /// ([CR 118.12](https://yawgatog.com/resources/magic-rules/#R11812)): "The action [do
 /// something] is a cost, paid when the spell or ability resolves." They are asked `prompt`,
 /// a yes or no about the cards, and on a yes choose which
-/// ([CR 701.9b](https://yawgatog.com/resources/magic-rules/#R7019b)). With no such card they
+/// (see [CR 701.9b](https://yawgatog.com/resources/magic-rules/#R7019b)). With no such card they
 /// cannot pay and are not asked
 /// ([CR 118.3](https://yawgatog.com/resources/magic-rules/#R1183)). Returns whether they
 /// discarded.

@@ -16,6 +16,7 @@ use crate::card::{
     ManaColor, ManaCost, ManaSet, Players, Prompt, Purpose, Subtype, Subtypes, Supertypes,
     TargetKind, TargetSpec, Trigger, Types,
 };
+use crate::casting::start as casting;
 use crate::event::Reason;
 use crate::filter::{Evaluate, Filter};
 use crate::game;
@@ -28,7 +29,7 @@ use crate::{
     State, Step, apply, next,
 };
 use crate::{CustomBody, Layout, custom_body};
-use crate::{casting, choices, drawing, zones};
+use crate::{choices, drawing, zones};
 use beryl_kernel::two_player::TwoPlayerSeat as _;
 
 use super::{DUAL, LAND, begin};

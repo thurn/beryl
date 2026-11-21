@@ -3,7 +3,7 @@
 use beryl_card::Objects;
 
 use crate::bitboard::Bitboard;
-use crate::cast;
+use crate::casting;
 use crate::event::Reason;
 use crate::fixed::Full;
 use crate::game::Game;
@@ -34,7 +34,7 @@ pub fn counter<L: Layout>(
         return Ok(false);
     };
     let reason = Reason::Counter;
-    cast::leave_stack(game.state, game.table, game.sink, &entry, to, reason)?;
+    casting::leave_stack(game.state, game.table, game.sink, &entry, to, reason)?;
     Ok(true)
 }
 

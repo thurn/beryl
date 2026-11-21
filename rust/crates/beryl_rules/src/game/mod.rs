@@ -1,5 +1,11 @@
 //! [`Game`]: what every function of the rules library works on (the crate's contract,
 //! "Game").
+//!
+//! Implements: none. Groups the state, card tables and event sink for rules operations.
+
+pub mod ending;
+pub mod life;
+pub(crate) mod start;
 
 use crate::event::{self, Event, Sink};
 use crate::fixed::Full;

@@ -16,8 +16,10 @@ use crate::actions::{
 };
 use crate::bitboard::Bitboard;
 use crate::card::{Flow, Stop};
+use crate::casting::{payment, start};
 use crate::fixed::Full;
 use crate::game::Game;
+use crate::game::{ending, life};
 use crate::ids::Seat;
 use crate::interpret::scene::{Outcome, Registers, Scene};
 use crate::keywords::flashback;
@@ -26,8 +28,8 @@ use crate::resolution::Resolution;
 use crate::state::TriggeredAbility;
 use crate::state::{AbilityRef, PendingTrigger, StackItem, State, Zone, placed};
 use crate::zones;
-use crate::{casting, choices, coins, continuous, costs, counters, damage, drawing, ending};
-use crate::{delayed_triggers, emblems, layers, library, life, linked, mana, one_shot, tokens};
+use crate::{choices, coins, continuous, counters, damage, drawing};
+use crate::{delayed_triggers, emblems, layers, library, linked, mana, one_shot, tokens};
 
 /// One resolution of an ability written as data: the game, what is resolving in it, and
 /// what it keeps between instructions.
@@ -155,7 +157,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
                 effect,
                 player,
                 cost,
-            } => return costs::unless_instruction(self, effect, player, cost),
+            } => return payment::unless_instruction(self, effect, player, cost),
             Effect::ForEachPlayer { players, effect } => {
                 return self.for_each_player(players, effect);
             }
@@ -385,9 +387,9 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
                 cards,
                 duration,
                 terms,
-            } => casting::permit_instruction(self, player, cards, duration, terms)?,
+            } => start::permit_instruction(self, player, cards, duration, terms)?,
             Effect::MayCast { player, card, free } => {
-                casting::may_cast_instruction(self, player, card, free)?
+                start::may_cast_instruction(self, player, card, free)?
             }
             Effect::UntapUpTo {
                 player,

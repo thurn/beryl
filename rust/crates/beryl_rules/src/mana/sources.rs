@@ -1,5 +1,7 @@
 //! What can make mana: the sources a player's mana abilities form, in classes of
 //! interchangeable permanents.
+//!
+//! Implements: none. Groups usable mana sources and checks their activation restrictions.
 
 use crate::bitboard::Bitboard;
 #[cfg(doc)]
@@ -86,7 +88,7 @@ pub(crate) struct Sources<L: Layout = Small> {
 
 /// Whether `player` may activate a mana ability now: one restricted to "Activate only if you
 /// control" a kind of permanent needs one on the battlefield
-/// ([CR 602.5](https://yawgatog.com/resources/magic-rules/#R6025)): "A player can't begin to
+/// (see [CR 602.5](https://yawgatog.com/resources/magic-rules/#R6025)): "A player can't begin to
 /// activate an ability that's prohibited from being activated." The kind of permanent is
 /// read through `words`, those of the permanent with the ability: the card table refuses a
 /// granted mana ability, so it is always the permanent's own.
@@ -116,7 +118,7 @@ const RESTRICTED_RANK: u8 = CONSUMED_RANK + 1;
 
 /// Whether `player` may tap the permanent in `slot`, whose derived characteristics are `d`,
 /// for mana now: they control it, it is untapped, and a creature has been theirs since their
-/// most recent turn began ([CR 302.6]): "A creature's activated ability with the tap symbol
+/// most recent turn began (see [CR 302.6]): "A creature's activated ability with the tap symbol
 /// ... in its activation cost can't be activated unless the creature has been under its
 /// controller's control continuously since their most recent turn began."
 ///
@@ -160,8 +162,8 @@ pub(super) fn source<L: Layout>(
     let mana = s.definition(slot).facts(t).mana;
     // The table's facts stand in for reading the face, for a permanent that makes its card's
     // mana: they must say what reading it would. One that lost an ability, or whose land
-    // types an effect changed, is read ability by ability (CR 613.1f, CR 305.7), as is a
-    // merged permanent, which has the abilities of the cards under it too (CR 702.140e).
+    // types an effect changed, is read ability by ability (see CR 613.1f, see CR 305.7), as is a
+    // merged permanent, which has the abilities of the cards under it too (see CR 702.140e).
     let card_mana = || s.makes_card_mana(slot);
     debug_assert!(
         mana != ManaFace::Not || !card_mana() || read_source(s, t, player, slot, face()).is_none(),
@@ -171,9 +173,9 @@ pub(super) fn source<L: Layout>(
     if (mana == ManaFace::Not && card_mana()) || d.controller != player || o.is_tapped() {
         return None;
     }
-    // CR 302.6: a creature's {T} abilities need it under its controller's control since their
+    // See CR 302.6: a creature's {T} abilities need it under its controller's control since their
     // most recent turn began.
-    // CR 702.10c: haste lifts that.
+    // see CR 702.10c: haste lifts that.
     if d.types.intersects(Types::CREATURE)
         && o.is_summoning_sick()
         && !d.keywords.contains(Keywords::HASTE)
@@ -372,7 +374,7 @@ impl<L: Layout> Sources<L> {
     }
 
     /// Whether a plan spends restricted mana whose restriction has a rider: a plan that does
-    /// has a different outcome from one that doesn't (CR 106.6).
+    /// has a different outcome from one that doesn't (see CR 106.6).
     #[inline]
     pub(super) fn rides(&self, plan: &Plan<L>) -> bool {
         if !self.memory {

@@ -5,6 +5,7 @@
 use crate::actions::{manifest, tap, transform};
 use crate::bitboard::Bitboard;
 use crate::card::{Ability, Castings, FaceIx, ManaCost, Prompt, Purpose, Stop, Types};
+use crate::casting::payment as costs;
 use crate::decision::Candidates;
 use crate::event::{self, Event, Reason};
 use crate::game::Game;
@@ -14,7 +15,7 @@ use crate::state::{ObjectRef, StackEntry, StackItem, TargetPlaces, TurnStep, Zon
 use crate::zone::Place;
 use crate::{
     Choice, Decision, DecisionKind, GameTable, Opt, PlayerSet, Profile, Scratch, State, choices,
-    coins, costs, library, tokens,
+    coins, library, tokens,
 };
 use beryl_card::effect::build::{scry, you};
 use beryl_kernel::two_player::TwoPlayerSeat as _;

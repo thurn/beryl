@@ -2,6 +2,8 @@
 //! card from your graveyard rather than pay that mana." The part of a spell's cost that delve
 //! adds, and how many cards it may take; `parts` pays it.
 //!
+//! Implements: CR 702.66a
+//!
 //! [CR 702.66a]: https://yawgatog.com/resources/magic-rules/#R70266a
 
 use crate::bitboard::Bitboard;

@@ -463,8 +463,8 @@ Built by by-bajq.3.9:
 - The gate is a bit of the state's replacement mask, `Replaces::PROTECTION`, set
   by the layers when an effect that gives protection applied:
   `State::protection` is one AND without it. `beryl_rules/src/protection.rs`
-  reads it for targets (`cast/targets.rs`, as they are chosen and as the spell
-  or ability resolves), Auras (`sba.rs`, CR 704.5m), Equipment
+  reads it for targets (`casting/targets.rs`, as they are chosen and as the
+  spell or ability resolves), Auras (`sba.rs`, CR 704.5m), Equipment
   (`attach::may_equip_in`, CR 704.5n) and blockers (`combat::can_block`).
 - No printed protection exists yet: a face's keywords have no parameter, so a
   card with "protection from red" adds it to the face when its first card comes.
@@ -728,8 +728,8 @@ Built by by-bajq.3.10:
 - **The total cost** (CR 601.2f) is computed in one place, in the order the rule
   gives: the mana cost or an alternative cost, then additional costs and
   increases, then reductions, then an effect that sets a floor, which says of
-  itself that it applies last (built: `cast::costs::spell_cost`, Trinisphere and
-  Thalia). A static cost change is a rule change the game numbers
+  itself that it applies last (built: `casting::costs::spell_cost`, Trinisphere
+  and Thalia). A static cost change is a rule change the game numbers
   (`Governed::SpellCosts`, `RuleKind::SpellCost`). It is asked of the permanents
   that make it, not kept in the players' rule sets, because Trinisphere's "as
   long as this artifact is untapped" is a condition the layers don't read. In a
@@ -749,8 +749,8 @@ Built by by-bajq.3.10:
   `When::Never` (built for Pithing Needle). A filter has no permanent to read a
   memo from, so the sources are `Named::Chosen`, not a filter: the name the
   permanent that makes the rule chose. The check (`rule_change::cant_activate`,
-  last in `cast::legal::activatable`) finds the makers only once the kind is in
-  force, and compares each one's chosen name with the source's copiable name.
+  last in `casting::legal::activatable`) finds the makers only once the kind is
+  in force, and compares each one's chosen name with the source's copiable name.
 - **A chosen value** is a memo of the permanent: a name, a color, a creature
   type. It is chosen as the permanent enters, through the replacement pipeline,
   in the `Catalog` prompt shape (built by by-bajq.3.3: `Rewrite::Choose`,
@@ -763,8 +763,8 @@ Built by by-bajq.3.10:
 - **A class of permission.** An effect that lets a player cast every card a
   filter accepts from a zone is a rule change with casting terms. A keyword that
   does so by granting an ability to cards in a graveyard is read through group
-  4's list. `cast::legal::cast_sources` scans the zone only while such a rule is
-  in force.
+  4's list. `casting::legal::cast_sources` scans the zone only while such a rule
+  is in force.
 - **Escape as built** (by-bajq.5.5). Underworld Breach's grant is a static
   ability on `Objects::Everywhere` whose filter names the zone
   (`Filter::InZone(Graveyard)`) and whose part is `Modification::GrantEscape`

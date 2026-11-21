@@ -3,6 +3,8 @@
 //! is spent on, or create a delayed triggered ability (see rule 603.7a) that triggers when that
 //! mana is spent. This doesn't affect the mana's type."
 //!
+//! Implements: CR 106.6
+//!
 //! A source whose mana ability makes restricted mana is a class of its own in a payment its
 //! restriction accepts, and in no other ([`super::sources::Sources::of`]). Mana that remembers
 //! in a pool pays only what its restriction accepts. Spent on a spell, its rider becomes a rule

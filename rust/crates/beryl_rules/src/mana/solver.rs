@@ -1,4 +1,6 @@
 //! The payment plans offered: which sources a plan taps and which floating mana it spends.
+//!
+//! Implements: none. Enumerates mana payments for the engine to offer.
 
 use crate::bitboard::Bitboard;
 use crate::card::ManaCost;
@@ -278,7 +280,7 @@ fn wasteful<L: Layout, const MEMORY: bool>(
 ///
 /// - [CR 106.4](https://yawgatog.com/resources/magic-rules/#R1064): "Each player's mana pool
 ///   empties at the end of each step and phase".
-/// - [CR 605.3a](https://yawgatog.com/resources/magic-rules/#R6053a): "A player may activate
+/// - see [CR 605.3a](https://yawgatog.com/resources/magic-rules/#R6053a): "A player may activate
 ///   an activated mana ability whenever they have priority".
 fn floats_for_nothing<L: Layout>(sources: &Sources<L>, p: &Plan<L>, q: &Plan<L>) -> bool {
     if p == q

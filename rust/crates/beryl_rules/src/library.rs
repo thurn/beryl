@@ -5,7 +5,7 @@ use beryl_card::{Amount, LibraryOrder, LibraryPosition, Objects, Players, Taken,
 use crate::actions::reveal;
 use crate::bitboard::Bitboard;
 use crate::card::{Part, Prompt, Purpose, Stop};
-use crate::cast;
+use crate::casting;
 use crate::choices;
 use crate::event::{self, Entry, Event, Reason};
 use crate::filter::Evaluate;
@@ -62,7 +62,7 @@ pub fn put_into<L: Layout>(
             let Some(spell) = game.state.spell(object) else {
                 return Ok(());
             };
-            match cast::unstack(game.state, game.table, game.sink, spell, Zone::Library)? {
+            match casting::unstack(game.state, game.table, game.sink, spell, Zone::Library)? {
                 Some(Zone::Library) => {}
                 Some(to) => return zones::move_to(game, object, to, Reason::Effect),
                 None => return Ok(()),

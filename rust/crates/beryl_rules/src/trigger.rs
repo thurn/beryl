@@ -771,7 +771,7 @@ pub(crate) fn put_on_stack<L: Layout>(
             })
         },
     )?;
-    crate::cast::target_trigger(s, t, sink)
+    crate::casting::target_trigger(s, t, sink)
 }
 
 /// Creates a delayed triggered ability ([CR 603.7]).

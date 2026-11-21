@@ -1,4 +1,6 @@
-//! Choosing targets (CR 601.2c) and whether they are still legal (CR 115.3, CR 608.2b).
+//! Choosing targets (CR 601.2c) and whether they are still legal (CR 115.3, see CR 608.2b).
+//!
+//! Implements: CR 115.3, CR 115.5
 
 use crate::PlayerSet;
 use crate::bitboard::Bitboard;
@@ -123,7 +125,7 @@ fn ability_domain<L: Layout>(s: &State<L>, kind: TargetKind, itself: Itself<L>) 
 }
 
 /// The activated and triggered abilities of `kinds` on the stack below `below`, by place
-/// ([`TargetSet::abilities`]). Mana abilities never go on the stack (CR 605.3b).
+/// ([`TargetSet::abilities`]). Mana abilities never go on the stack (see CR 605.3b).
 fn abilities<L: Layout>(s: &State<L>, kinds: Abilities, below: usize) -> u64 {
     let mut places = 0;
     for (place, entry) in s.stack().iter().enumerate().take(below.min(64)) {
@@ -214,7 +216,7 @@ fn domain<L: Layout>(
 ) -> TargetSet<L> {
     let players = match spec.kind {
         TargetKind::Player | TargetKind::PermanentOrPlayer => {
-            // CR 702.16j: a player with protection from everything "can't be targeted by
+            // See CR 702.16j: a player with protection from everything "can't be targeted by
             // spells or abilities".
             s.players().filter(|p| {
                 player_matches(spec, p, you) && !rule_change::protected_from_everything(s, t, p)
@@ -318,12 +320,12 @@ pub(super) fn source_of<L: Layout>(entry: &StackEntry<L>) -> Option<L::Slot> {
 }
 
 /// Whether a chosen target is still legal as its spell or ability resolves
-/// ([CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)): "A target that's no
+/// (see [CR 608.2b](https://yawgatog.com/resources/magic-rules/#R6082b)): "A target that's no
 /// longer in the zone it was in when it was targeted is illegal. Other changes to the game
 /// state may cause a target to no longer be legal". A zone change gives the object a new
 /// incarnation, so a stale reference is illegal, and an ability that has left the stack is
 /// gone ([`AbilityTarget::Gone`]). A player who gains protection from everything "can't be
-/// targeted by spells or abilities" ([CR 702.16j]).
+/// targeted by spells or abilities" (see [CR 702.16j]).
 ///
 /// [CR 702.16j]: https://yawgatog.com/resources/magic-rules/#R70216j
 pub(crate) fn still_legal<L: Layout>(
@@ -372,7 +374,7 @@ fn ability_still_legal<L: Layout>(
 
 /// The new targets a copy of a spell may have in place of its target at `place`, for its
 /// controller to choose among as the copy is made, before it is on the stack
-/// ([CR 707.10c]): "If the player chooses to change some or all of the targets, the new targets
+/// (see [CR 707.10c]): "If the player chooses to change some or all of the targets, the new targets
 /// must be legal. Once the player has decided what the copy's targets will be, the copy is put
 /// onto the stack with those targets." The candidates of that target's spec now, less the
 /// targets `entry`, the copy's entry, has for the same spec: the same target can't be chosen
@@ -415,7 +417,7 @@ pub(crate) fn new_targets<L: Layout>(
 
 /// Chooses the targets of the triggered ability just put on the stack, if it has any.
 ///
-/// [CR 603.3d](https://yawgatog.com/resources/magic-rules/#R6033d): "The remainder of the
+/// See [CR 603.3d](https://yawgatog.com/resources/magic-rules/#R6033d): "The remainder of the
 /// process for putting a triggered ability on the stack is identical to the process for
 /// casting a spell listed in rules 601.2c-d. If a choice is required when the triggered
 /// ability goes on the stack but no legal choices can be made for it, ... the ability is
@@ -431,7 +433,7 @@ pub(crate) fn target_trigger<L: Layout>(
     };
     if ability.targets().is_empty() {
         // The trigger is already on the stack, with no choices to announce first
-        // ([CR 603.3](https://yawgatog.com/resources/magic-rules/#R6033)):
+        // (see [CR 603.3](https://yawgatog.com/resources/magic-rules/#R6033)):
         // "its controller puts it on the stack as an object that's not a card".
         sink.note(ability_event(entry));
         return Ok(());

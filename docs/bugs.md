@@ -212,34 +212,34 @@ fixed in the same session. Newest first.
   scenario.
 
 - **Delve could exile the cards an escape cost needed.** The nightly fuzz
-  panicked with "enough cards to pay the cost" in `cast::parts::choices`: Gurmag
-  Angler, cast with the escape that Underworld Breach grants, reached the step
-  that asks for escape's "exile three other cards from your graveyard" with an
-  empty graveyard. A spell's delve exiles its cards while the mana is paid,
+  panicked with "enough cards to pay the cost" in `casting::parts::choices`:
+  Gurmag Angler, cast with the escape that Underworld Breach grants, reached the
+  step that asks for escape's "exile three other cards from your graveyard" with
+  an empty graveyard. A spell's delve exiles its cards while the mana is paid,
   before the spell's other cost parts, and both the legality check
-  (`cast::parts::delve_pays`) and the delve step (`pay_substitutes`) let delve
-  take every card in the graveyard. `spell_payable` counted the same cards again
-  for escape, so a spell was offered whose total cost could not be paid (CR
-  601.2h). Fixed: `delve_most` caps delve at the graveyard's cards less those
-  the spell's other graveyard parts take, in both places. Two Underworld Breach
-  scenarios hold it. Prevention: when two parts of one cost draw on the same
-  pool, the legality check must count the pool once for both. The fuzz caught
-  this class, and no type can express a shared pool cheaply.
+  (`casting::delve::delve_pays`) and the delve step (`pay_substitutes`) let
+  delve take every card in the graveyard. `spell_payable` counted the same cards
+  again for escape, so a spell was offered whose total cost could not be paid
+  (CR 601.2h). Fixed: `delve_most` caps delve at the graveyard's cards less
+  those the spell's other graveyard parts take, in both places. Two Underworld
+  Breach scenarios hold it. Prevention: when two parts of one cost draw on the
+  same pool, the legality check must count the pool once for both. The fuzz
+  caught this class, and no type can express a shared pool cheaply.
 
 - **An additional cost and escape could count the same graveyard cards.** After
   the delve fix above, the nightly fuzz still panicked with "enough cards to pay
-  the cost" in `cast::parts::choices`: Abhorrent Oculus, whose additional cost
-  exiles six cards from its caster's graveyard, was offered with the escape that
-  Underworld Breach grants, which exiles three other cards, though the graveyard
-  held fewer than nine. `cast::parts::spell_payable` asked `payable` about each
-  part alone, so each saw enough cards. The delve fix had counted the pool once
-  only for delve against the other parts, not for two counted parts against each
-  other. Fixed: `parts_share_enough` checks every set of the parts that take a
-  number of objects from one zone against the objects any of them accepts
-  (Hall's condition, exact for any filters). Two Underworld Breach scenarios
-  hold it. Prevention: the same as the delve entry; the shared-pool check now
-  covers every counted part of a spell's cost, and the fuzz's shrink test
-  (`fuzz_games_keep_the_invariants`) found the case.
+  the cost" in `casting::parts::choices`: Abhorrent Oculus, whose additional
+  cost exiles six cards from its caster's graveyard, was offered with the escape
+  that Underworld Breach grants, which exiles three other cards, though the
+  graveyard held fewer than nine. `casting::parts::spell_payable` asked
+  `payable` about each part alone, so each saw enough cards. The delve fix had
+  counted the pool once only for delve against the other parts, not for two
+  counted parts against each other. Fixed: `parts_share_enough` checks every set
+  of the parts that take a number of objects from one zone against the objects
+  any of them accepts (Hall's condition, exact for any filters). Two Underworld
+  Breach scenarios hold it. Prevention: the same as the delve entry; the
+  shared-pool check now covers every counted part of a spell's cost, and the
+  fuzz's shrink test (`fuzz_games_keep_the_invariants`) found the case.
 
 - **A prompt's lookahead could misread a paused resolution's answers.** The
   nightly's session fuzz (`session_games_keep_the_script_checks`) panicked with
@@ -262,17 +262,18 @@ fixed in the same session. Newest first.
   for its alternative cost, and casting it exiled the blue card and paid no
   life, though no life can be paid while a player's life total can't change (CR
   119.8). An activated ability's life cost was already refused. Whether a
-  spell's cost could be paid was decided by `cast::parts::spell_payable`, which
-  asked the kernel's `State::can_pay_life`. That function only compared the
-  amount with the life total, but its comment said every rule asked it. The
-  check that also reads the rule change is `beryl_rules::life::can_pay`. Found
-  by an adversarial review of the keystone cards. Fixed: `spell_payable` asks
-  `life::can_pay`, and the kernel function is renamed `State::has_life_to_pay`,
-  with a comment saying that it is only half the question. A Platinum Emperion
-  scenario holds Force of Will under it. Prevention: when the kernel can answer
-  only part of a rules question, its function should be named for that part, so
-  that a caller can't mistake it for the whole answer. No check can stop the
-  next such pair. Here the rename makes the mistake visible at the call site.
+  spell's cost could be paid was decided by `casting::parts::spell_payable`,
+  which asked the kernel's `State::can_pay_life`. That function only compared
+  the amount with the life total, but its comment said every rule asked it. The
+  check that also reads the rule change is `beryl_rules::game::life::can_pay`.
+  Found by an adversarial review of the keystone cards. Fixed: `spell_payable`
+  asks `life::can_pay`, and the kernel function is renamed
+  `State::has_life_to_pay`, with a comment saying that it is only half the
+  question. A Platinum Emperion scenario holds Force of Will under it.
+  Prevention: when the kernel can answer only part of a rules question, its
+  function should be named for that part, so that a caller can't mistake it for
+  the whole answer. No check can stop the next such pair. Here the rename makes
+  the mistake visible at the call site.
 
 - **Painter's Servant entering with another permanent at once panicked.** When
   Worldgorger Dragon left and returned Painter's Servant together with another
@@ -413,8 +414,8 @@ fixed in the same session. Newest first.
   of Souls that chose Zombie as the only land and six cards in the graveyard,
   Gurmag Angler was not offered: the six cards pay {6} and only the Cavern's
   colored mana can pay {B}. The legality check tries restricted mana and delve
-  as two separate fallbacks (`cast::legal::pays_otherwise`), and the delve
-  fallback (`cast::parts::delve_pays`) asked for a payment for no spell
+  as two separate fallbacks (`casting::legal::pays_otherwise`), and the delve
+  fallback (`casting::delve::delve_pays`) asked for a payment for no spell
   (`mana::Paying::NOTHING`), which restricted mana never pays. The casting
   machine itself passed the spell (`Paying::entry`), so only the check was
   wrong. Nothing caught it because the reference payability check

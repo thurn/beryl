@@ -5,6 +5,8 @@
 //! prohibits that player from casting it."). A permission is an entry of the Effects store
 //! on the card (`beryl_kernel`'s contract, "Stores"), and its terms become entries on the
 //! spell as it is cast.
+//!
+//! Implements: none. Uses the parent module's casting rule for permissions granted by effects.
 
 use beryl_card::{CastTerms, Filter, Objects, Players, Types, Words};
 
@@ -26,7 +28,7 @@ use crate::state::{
 /// cast a spell only if a rule or effect allows that player to cast it". The effect's last
 /// action: the card is offered as the resolution finishes, which is when a spell cast
 /// during it would otherwise have mattered, since "no player receives priority after it's
-/// cast" ([CR 608.2g](https://yawgatog.com/resources/magic-rules/#R6082g)). The engine asks
+/// cast" (see [CR 608.2g](https://yawgatog.com/resources/magic-rules/#R6082g)). The engine asks
 /// then whether, and how, the player casts it.
 pub fn offer<L: Layout>(
     resolution: &mut Resolution<'_, L>,
@@ -97,9 +99,9 @@ pub(crate) fn permission<L: Layout>(
 /// cost increase
 /// ([CR 601.2f](https://yawgatog.com/resources/magic-rules/#R6012f): "plus all additional
 /// costs and cost increases") and the replacement of where it goes as it leaves the stack
-/// ([CR 614.1a](https://yawgatog.com/resources/magic-rules/#R6141a)). The permission was
+/// (see [CR 614.1a](https://yawgatog.com/resources/magic-rules/#R6141a)). The permission was
 /// about the card where it was and ended as it left
-/// ([CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)); the spell is a new
+/// (see [CR 400.7](https://yawgatog.com/resources/magic-rules/#R4007)); the spell is a new
 /// object, and these end with it.
 pub(crate) fn begin_on_spell<L: Layout>(
     s: &mut State<L>,
@@ -120,7 +122,7 @@ pub(crate) fn begin_on_spell<L: Layout>(
 }
 
 /// [`Effect::MayCast`](beryl_card::Effect::MayCast): "[Player] may cast [card]", without
-/// paying its mana cost when `free` (CR 608.2g): the card is offered as the effect finishes
+/// paying its mana cost when `free` (see CR 608.2g): the card is offered as the effect finishes
 /// ([`offer`]). It offers one card, the first of several in the order the game lists them.
 /// The outcome is the card offered.
 pub(crate) fn may_cast_instruction<L: Layout>(
@@ -164,7 +166,7 @@ pub(crate) fn permit_instruction<L: Layout>(
     };
     for &slot in run.in_game_order(cards)?.iter() {
         let card = run.state().object_ref(slot);
-        // CR 701.18b: "To play a card means to play that card as a land or to cast that card
+        // See CR 701.18b: "To play a card means to play that card as a land or to cast that card
         // as a spell, whichever is appropriate." Only casting is permitted here.
         if terms.played {
             let (game, _) = run.resolving();

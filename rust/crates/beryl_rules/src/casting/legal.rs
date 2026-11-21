@@ -1,5 +1,7 @@
 //! Whether a player may begin to cast a spell (CR 601.3) or activate an ability (CR 602.5), and
 //! so which casts and activations a priority decision offers.
+//!
+//! Implements: CR 305.9, CR 606.3, CR 606.6
 
 use std::cell::{Cell, OnceCell};
 
@@ -10,13 +12,12 @@ use crate::card::{
     Ability, AbilityIx, AbilityKind, Castings, CostAction, CostPart, Face, FaceIx, Keywords,
     ManaCost, ObjectAbility, Timing, Types,
 };
-use crate::casting;
 use crate::decision::{Candidates, OPTIONS, Opt, Refusal};
 use crate::engine::collapse;
 use crate::fixed::Full;
+use crate::game::life;
 use crate::ids::{Seat, SlotId};
 use crate::layout::{Layout, Queue, Small};
-use crate::life;
 use crate::mana::{self, Funds};
 use crate::rule_change;
 use crate::state::{RuleKind, State, Tracker, Zone, ZoneKey};
@@ -25,6 +26,7 @@ use crate::table::{Capability, GameTable};
 use super::costs::{From, option_sets, spell_cost, x_range_start};
 use super::delve;
 use super::parts;
+use super::start;
 use super::targets::{Itself, targetable};
 use super::timing::{activated, instant_speed, sorcery_timing};
 
@@ -98,7 +100,7 @@ fn in_time<L: Layout, const TARGETS: bool>(
     from: From,
 ) -> bool {
     // CR 305.9: "If an object is both a land and another card type, it can be played only as
-    // a land. It can't be cast as a spell." CR 712.8c: "Only the face that will be face up
+    // a land. It can't be cast as a spell." see CR 712.8c: "Only the face that will be face up
     // on the stack is evaluated to determine if it can be cast."
     if face.types.intersects(Types::LAND) {
         return false;
@@ -135,7 +137,7 @@ fn restricted_pays<L: Layout>(
 
 /// Whether `cost` for casting the card in `slot` as its face `face` is paid some way other
 /// than with unrestricted mana: with restricted mana the spell accepts, or with cards delve
-/// exiles (CR 702.66a). Never in a game whose cards make no restricted mana and have no
+/// exiles (see CR 702.66a). Never in a game whose cards make no restricted mana and have no
 /// delve, which the caller tests first.
 #[cold]
 #[inline(never)]
@@ -186,7 +188,7 @@ fn refused<L: Layout, const TARGETS: bool>(
     let (increase, free) = match from {
         // A cast for escape is under no permission's terms.
         From::Priority if !costs.escapes() => (
-            casting::permission(s, player, slot).map_or(0, |p| p.terms.increase),
+            start::permission(s, player, slot).map_or(0, |p| p.terms.increase),
             false,
         ),
         From::Priority => (0, false),
@@ -319,7 +321,7 @@ struct Ways {
     /// under a permission, or during a resolution.
     plain: bool,
     /// With an alternative cost no face lists: free, or flashback's. Then the face's own
-    /// alternative costs can't be paid (CR 118.9a).
+    /// alternative costs can't be paid (see CR 118.9a).
     alternative: bool,
     /// With the escape an effect grants a card in a graveyard ([`Castings::ESCAPE`]).
     escape: bool,
@@ -334,8 +336,8 @@ impl Ways {
                 escape: false,
             },
             From::Priority => {
-                let permission = casting::permission(s, player, slot);
-                // CR 702.138a: escape "functions while the card with escape is in a player's
+                let permission = start::permission(s, player, slot);
+                // See CR 702.138a: escape "functions while the card with escape is in a player's
                 // graveyard", and lets its owner cast it from there.
                 let escape = s.reaches_elsewhere() && {
                     let o = s.object(slot);
@@ -471,7 +473,7 @@ fn activatable<L: Layout, const TARGETS: bool>(
         return false;
     }
     // CR 602.2: "Only an object's controller (or its owner, if it doesn't have a controller)
-    // can activate its activated ability". CR 702.29a: cycling "functions only while the card
+    // can activate its activated ability". see CR 702.29a: cycling "functions only while the card
     // with cycling is in a player's hand."
     let in_place = if a.cost().does(CostAction::Discard) {
         o.zone() == Zone::Hand && o.owner() == player
@@ -562,7 +564,7 @@ pub fn pointless<L: Layout>(
         .is_some_and(|objects| crate::interpret::names_nothing(s, t, slot, objects))
 }
 
-/// Appends the abilities `player` can activate now. CR 117.1b: "A player may activate an
+/// Appends the abilities `player` can activate now. see CR 117.1b: "A player may activate an
 /// activated ability any time they have priority."
 fn activation_options<L: Layout, const TARGETS: bool>(
     s: &State<L>,
@@ -596,10 +598,10 @@ fn activation_options<L: Layout, const TARGETS: bool>(
         rule_change::unprohibited(s, t, prohibited, player, objects)
     };
     Candidates::<L>::extend_options(out, collapse(s, objects), |out, slot| {
-        // Of its own abilities, only the activated ones can be activated (CR 602.1), so the
+        // Of its own abilities, only the activated ones can be activated (see CR 602.1), so the
         // rest are not checked; granted ones and those of the cards under a merged permanent
         // are checked whatever they are. One it has lost
-        // can't be activated (CR 613.1f): asked once of a permanent that has them all, as
+        // can't be activated (see CR 613.1f): asked once of a permanent that has them all, as
         // most have.
         let lost = !s.has_every_ability(slot);
         let abilities = facts(slot)
@@ -620,7 +622,7 @@ fn activation_options<L: Layout, const TARGETS: bool>(
 }
 
 /// The abilities other objects granted the object in `slot`, and those of the cards under it
-/// if it is a merged permanent ([CR 702.140e]), if `any` card of the game grants one or merges
+/// if it is a merged permanent (see [CR 702.140e]), if `any` card of the game grants one or merges
 /// ([`Capability::Grants`], [`Capability::Merges`]).
 ///
 /// [CR 702.140e]: https://yawgatog.com/resources/magic-rules/#R702140e
@@ -668,7 +670,7 @@ pub(crate) fn priority_options<L: Layout>(
 /// Spells and abilities whose costs `player` could pay at instant speed on another
 /// player's turn. A response's target may only appear after the other player acts.
 ///
-/// Under [CR 117.1a], "A player may cast an instant spell any time they have priority."
+/// Under see [CR 117.1a], "A player may cast an instant spell any time they have priority."
 /// Under [CR 118.3], "A player can't pay a cost without having the necessary resources
 /// to pay it fully."
 ///
@@ -715,7 +717,7 @@ fn ability_payable<L: Layout>(
 }
 
 /// Whether `player` can pay every payment of life among `parts`, as [`life::can_pay`]
-/// answers for each ([CR 119.4](https://yawgatog.com/resources/magic-rules/#R1194)): "If a
+/// answers for each (see [CR 119.4](https://yawgatog.com/resources/magic-rules/#R1194)): "If a
 /// cost or effect allows a player to pay an amount of life greater than 0, the player may do
 /// so only if their life total is greater than or equal to the amount of the payment."
 fn life_payable<L: Layout>(s: &State<L>, t: &GameTable, player: Seat, parts: &[CostPart]) -> bool {

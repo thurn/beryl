@@ -1,11 +1,12 @@
 //! The steps of casting a spell (CR 601.2a to 601.2i) and activating an ability (CR 602.2a), in
 //! order: announce, targets, pay, and the spell becomes cast.
+//!
+//! Implements: none. Runs the casting and activation steps declared in the parent module.
 
 use beryl_kernel::reference::Graveyard;
 
 use crate::bitboard::Bitboard;
 use crate::card::{CastingIx, ObjectAbility, Part, Prompt, Purpose, TargetSpec};
-use crate::casting;
 use crate::decision::{Candidates, Decision, DecisionKind, OPTIONS, Opt};
 use crate::engine::collapse;
 use crate::event::{self, Event, EventKind, Reason, Sink};
@@ -24,6 +25,7 @@ use crate::trigger;
 
 use super::costs::{spent_by_entry, total_cost, x_range_start};
 use super::parts;
+use super::start;
 use super::targets::{TargetSet, target_options};
 use super::timing::{activated, entry_ability};
 
@@ -33,7 +35,7 @@ use super::timing::{activated, entry_ability};
 /// a spell, a player first moves that card ... from where it is to the stack. It becomes the
 /// topmost object on the stack. ... and that player becomes its controller."
 ///
-/// [CR 712.8b](https://yawgatog.com/resources/magic-rules/#R7128b): "A player casting a modal
+/// See [CR 712.8b](https://yawgatog.com/resources/magic-rules/#R7128b): "A player casting a modal
 /// double-faced card ... chooses which face they are casting before putting it onto the
 /// stack."
 pub(crate) fn begin_cast<L: Layout>(
@@ -47,9 +49,9 @@ pub(crate) fn begin_cast<L: Layout>(
     let Opt::Cast { slot, face, costs } = option else {
         unreachable!("a cast option");
     };
-    // A cast for escape is under no permission's terms (CR 118.9a): only one alternative
+    // A cast for escape is under no permission's terms (see CR 118.9a): only one alternative
     // cost is paid, so a flashback permission the card also has does nothing to it.
-    let permission = casting::permission(s, player, slot).filter(|_| !costs.escapes());
+    let permission = start::permission(s, player, slot).filter(|_| !costs.escapes());
     if cfg!(debug_assertions) && costs.escapes() {
         hit_escape(s, t, slot);
     }
@@ -70,7 +72,7 @@ pub(crate) fn begin_cast<L: Layout>(
         }),
     )?;
     if let Some(permission) = permission {
-        casting::begin_on_spell(s, slot, permission)?;
+        start::begin_on_spell(s, slot, permission)?;
     }
     let free = resolving.unwrap_or(false);
     let def_face = t.def(card).face(face);
@@ -287,9 +289,9 @@ fn after_mana<L: Layout>(
 ///
 /// [CR 601.2i](https://yawgatog.com/resources/magic-rules/#R6012i): "Any abilities that
 /// trigger when a spell is cast or put onto the stack trigger at this time. If the spell's
-/// controller had priority before casting it, they get priority." CR 608.2g: after a spell
+/// controller had priority before casting it, they get priority." see CR 608.2g: after a spell
 /// cast during a resolution, "no player receives priority"; the resolution it was cast in is
-/// over by now, so the active player receives priority (CR 117.3b).
+/// over by now, so the active player receives priority (see CR 117.3b).
 pub(super) fn finish<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
@@ -342,7 +344,7 @@ pub(super) fn finish<L: Layout>(
 }
 
 /// Matches the triggers of the objects the spell or ability on top of the stack targets, now
-/// that its targets are chosen and it is cast, activated or put on the stack ([CR 603.2e]):
+/// that its targets are chosen and it is cast, activated or put on the stack (see [CR 603.2e]):
 /// "Some trigger events use the word 'becomes' ... These trigger only at the time the named
 /// event happens". Each object once, however many of the targets it is. Asked only in a game
 /// whose cards listen to such an event, so others pay one AND.

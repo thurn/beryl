@@ -9,6 +9,7 @@ use crate::event::Recipient;
 use crate::filter::Evaluate;
 use crate::fixed::Full;
 use crate::game::Game;
+use crate::game::life;
 use crate::ids::Seat;
 use crate::interpret::{Outcome, Run};
 use crate::layout::Layout;
@@ -16,7 +17,7 @@ use crate::state::{
     ChosenSource, Continuous, Duration, ObjectRef, Shield, State, Subject, ZoneKey,
 };
 use crate::table::GameTable;
-use crate::{choices, continuous, life, replace, rule_change};
+use crate::{choices, continuous, replace, rule_change};
 
 /// Deals `amount` damage from `source` to a player or a permanent, combat damage with
 /// `combat` ([CR 120.3](https://yawgatog.com/resources/magic-rules/#R1203)). A permanent that

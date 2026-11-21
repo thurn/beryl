@@ -1,8 +1,10 @@
 //! What the target being announced is chosen for, said without running the effect: a player
 //! is told before they aim at what is their own.
+//!
+//! Implements: none. Explains what the current target choice is for.
 
+use super::entry_ability;
 use crate::card::Takes;
-use crate::cast::entry_ability;
 use crate::layout::Layout;
 use crate::state::{CastStep, Pending, State, Zone};
 use crate::table::GameTable;
@@ -13,7 +15,7 @@ use crate::table::GameTable;
 /// take the object in `slot` from its controller, were it chosen
 /// ([`Ability::takes_target`](crate::card::Ability::takes_target)): a permanent removed from
 /// the battlefield, or a spell countered
-/// ([CR 701.6a](https://yawgatog.com/resources/magic-rules/#R7016a): "To counter a spell or
+/// (see [CR 701.6a](https://yawgatog.com/resources/magic-rules/#R7016a): "To counter a spell or
 /// ability means to cancel it, removing it from the stack. It doesn't resolve and none of
 /// its effects occur. A countered spell is put into its owner's graveyard."). This describes
 /// the choice: it neither runs the effect nor says whether the object is a legal target.

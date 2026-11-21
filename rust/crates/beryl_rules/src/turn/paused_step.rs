@@ -1,5 +1,7 @@
-//! A step's turn-based actions that may pause at a replacement effect's choice ([CR 616.1]),
+//! A step's turn-based actions that may pause at a replacement effect's choice (see [CR 616.1]),
 //! as the draw step's draw may for a dredge.
+//!
+//! Implements: none. Replays turn-based actions when a replacement effect asks for a choice.
 //!
 //! The turn-based actions of a step are carried out as it begins, where no resolution is open
 //! to pause. While such a choice can come up ([`crate::replace::may_ask`]), the step begins on the
@@ -28,7 +30,7 @@ use crate::{chance, resolve, turn};
 /// choice can come up ([`crate::replace::may_ask`]).
 #[cold]
 #[inline(never)]
-pub(super) fn end_step<L: Layout>(
+pub(crate) fn end_step<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     x: &mut Scratch<L>,
@@ -41,7 +43,7 @@ pub(super) fn end_step<L: Layout>(
 /// Runs the turn-based actions of the step that has just begun on a copy of the state, or
 /// runs them again with the record of a pause.
 #[inline(never)]
-pub(super) fn step_actions<L: Layout>(
+pub(crate) fn step_actions<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,
     x: &mut Scratch<L>,
@@ -93,7 +95,7 @@ pub(super) fn step_actions<L: Layout>(
 /// Replays a step's paused turn-based actions into the scratch state up to their question, so
 /// a viewer sees the position the question is asked in. Their events go to `seen` with their
 /// tags if given.
-pub(super) fn replay_to_question<'a, L: Layout>(
+pub(crate) fn replay_to_question<'a, L: Layout>(
     s: &State<L>,
     t: &GameTable,
     x: &'a mut Scratch<L>,

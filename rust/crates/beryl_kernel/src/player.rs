@@ -214,7 +214,7 @@ impl<L: Layout> State<L> {
     /// pay 0 life, no matter what their (or their team's) life total is, and even if an effect
     /// says players can't pay life." This is only half of whether life can be paid: an effect can
     /// also stop a player's life total from changing, which the kernel can't see. Rules code asks
-    /// `beryl_rules::life::can_pay`, which asks both.
+    /// `beryl_rules::game::life::can_pay`, which asks both.
     #[inline]
     #[must_use]
     pub fn has_life_to_pay(&self, player: Seat, amount: u8) -> bool {

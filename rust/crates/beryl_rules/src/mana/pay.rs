@@ -1,4 +1,6 @@
 //! Tapping and paying: carrying out a plan or a manual choice.
+//!
+//! Implements: CR 605.3
 
 use crate::bitboard::Bitboard;
 use crate::card::{
@@ -23,11 +25,11 @@ use super::{KINDS, Taps};
 /// Pays `cost` by `plan`: taps its sources for the mana it needs, sacrificing those whose
 /// ability says so, and spends it.
 ///
-/// [CR 601.2g](https://yawgatog.com/resources/magic-rules/#R6012g): "If the total cost
+/// See [CR 601.2g](https://yawgatog.com/resources/magic-rules/#R6012g): "If the total cost
 /// includes a mana payment, the player then has a chance to activate mana abilities ... Mana
 /// abilities must be activated before costs are paid."
 ///
-/// [CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h): "The player pays the
+/// See [CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h): "The player pays the
 /// total cost. ... Partial payments are not allowed." So the events of the payment, each
 /// source's tap and the mana it makes, are kept as one group: the cost is paid or it is not.
 #[allow(clippy::too_many_arguments)]
@@ -355,7 +357,7 @@ fn activate_as<L: Layout, const RESTRICTED: bool>(
     let (card, face) = s.definition(slot).record(t);
     // The card table refuses a card that grants a mana ability (`TableError::Granted`), so
     // the one found is the permanent's own, or, of a merged permanent, that of a card under
-    // it (CR 702.140e), printed on that card's face.
+    // it (see CR 702.140e), printed on that card's face.
     let printed = s.abilities(t, slot).find_map(|(ability, a)| match ability {
         ObjectAbility::Own(i)
             if !restricted
@@ -373,11 +375,11 @@ fn activate_as<L: Layout, const RESTRICTED: bool>(
         && let Some((_, ability)) = remembered::makes(s, t, slot, color)
     {
         let source = s.object_ref(slot);
-        // Its only cost is {T} (CR 602.2b, CR 601.2h).
+        // Its only cost is {T} (see CR 602.2b, see CR 601.2h).
         event::set_tapped(s, t, sink, source, true)?;
         return remembered::add(s, t, sink, source, ability, color);
     }
-    // [CR 305.6](https://yawgatog.com/resources/magic-rules/#R3056): a land of a basic land
+    // See [CR 305.6](https://yawgatog.com/resources/magic-rules/#R3056): a land of a basic land
     // type "has the intrinsic ability “{T}: Add [mana symbol],” even if the text box doesn't
     // actually contain that text". It is no ability of the face, so its activation names
     // none: the ability adds its mana with no resolution that would read one.
@@ -391,9 +393,9 @@ fn activate_as<L: Layout, const RESTRICTED: bool>(
         .expect("a mana ability that makes the chosen mana");
     let source = s.object_ref(slot);
     let controller = s.controller(slot);
-    // The costs come first ([CR 602.2b](https://yawgatog.com/resources/magic-rules/#R6022b)):
+    // The costs come first (see [CR 602.2b](https://yawgatog.com/resources/magic-rules/#R6022b)):
     // activating follows casting's steps, among them
-    // [CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h): "The player pays the
+    // see [CR 601.2h](https://yawgatog.com/resources/magic-rules/#R6012h): "The player pays the
     // total cost." The hand is discarded before the source is sacrificed: the player pays a
     // cost's parts in any order, and the order changes nothing here.
     if ability.cost().does(CostAction::Tap) {
@@ -608,7 +610,7 @@ pub(crate) fn standalone_options<L: Layout>(
 /// ([`is_instant_mana`]), one option for each, for each set of interchangeable permanents
 /// (§7.2). The mana solver never activates such an ability, so it is offered here whatever
 /// the profile: "Activate only as an instant" lets it be activated at priority alone
-/// ([CR 117.1a]): "A player may cast an instant spell any time they have priority." A game
+/// (see [CR 117.1a]): "A player may cast an instant spell any time they have priority." A game
 /// whose cards have none pays one test of the table.
 ///
 /// [CR 117.1a]: https://yawgatog.com/resources/magic-rules/#R1171a
@@ -669,7 +671,7 @@ pub(crate) fn begin_instant<L: Layout>(
         .find(|&(a, _)| a == ability)
         .map(|(_, a)| a.produces().colors)
         .expect("an ability offered");
-    // CR 117.3c: "If a player has priority when they ... activate an ability ..., that player
+    // See CR 117.3c: "If a player has priority when they ... activate an ability ..., that player
     // receives priority afterward."
     s.reset_passes();
     if kinds.is_power_of_two() {
@@ -709,7 +711,7 @@ pub(crate) fn is_instant<L: Layout>(
 }
 
 /// Exact sources the human can activate before paying Waterbend, even when a twin
-/// would make the same mana. [CR 601.2g](https://yawgatog.com/resources/magic-rules/#R6012g):
+/// would make the same mana. see [CR 601.2g](https://yawgatog.com/resources/magic-rules/#R6012g):
 /// "the player then has a chance to activate mana abilities".
 pub(crate) fn waterbend_mana_options<L: Layout>(
     s: &State<L>,

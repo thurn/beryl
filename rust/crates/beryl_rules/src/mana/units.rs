@@ -1,5 +1,7 @@
 //! Mana counted by what it can pay for: the units a payment draws on, and whether they pay a
 //! cost (architecture §10).
+//!
+//! Implements: CR 107.4a
 
 use super::KINDS;
 use crate::card::ManaCost;

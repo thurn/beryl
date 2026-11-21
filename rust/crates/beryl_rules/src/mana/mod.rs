@@ -1,6 +1,8 @@
 //! Mana: mana abilities, the payability prefilter and the payment solver (architecture §10,
 //! decision D7).
 //!
+//! Implements: CR 106.4
+//!
 //! [CR 106.4](https://yawgatog.com/resources/magic-rules/#R1064): "When an effect instructs a
 //! player to add mana, that mana goes into a player's mana pool. From there, it can be used to
 //! pay costs immediately, or it can stay in the player's mana pool as unspent mana."

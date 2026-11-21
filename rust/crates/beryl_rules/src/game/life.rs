@@ -1,4 +1,6 @@
 //! Life ([CR 119](https://yawgatog.com/resources/magic-rules/#R119)): gaining and losing it.
+//!
+//! Implements: CR 119
 
 use beryl_card::{Amount, Players};
 
@@ -74,7 +76,7 @@ pub(crate) fn lose_instruction<L: Layout>(
     change(run, players, amount, lose)
 }
 
-/// Each of `players` gains or loses `amount` life with `change`, in turn order (CR 101.4).
+/// Each of `players` gains or loses `amount` life with `change`, in turn order (see CR 101.4).
 /// None of it is no event.
 fn change<L: Layout>(
     run: &mut Run<'_, '_, L>,
