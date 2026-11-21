@@ -37,9 +37,9 @@
             .catch(() => {});
         navigator.serviceWorker.addEventListener("message", (event) => {
             const data = event.data || {};
-            if (data.type === "cirrus-updated" && sameDocument(data.url)) {
-                freshFromCache(data.url);
-            }
+            if (data.type !== "cirrus-updated") return;
+            pages.delete(key(data.url));
+            if (sameDocument(data.url)) freshFromCache(data.url);
         });
     }
 
@@ -58,14 +58,15 @@
         return u.href;
     }
 
-    function fetchPage(url) {
+    function fetchPage(url, fresh = false) {
         const k = key(url);
         const hit = pages.get(k);
-        if (hit && performance.now() - hit.at < PREFETCH_TTL_MS) {
+        if (!fresh && hit && performance.now() - hit.at < PREFETCH_TTL_MS) {
             return hit.promise;
         }
         const promise = fetch(k, {
             credentials: "same-origin",
+            cache: fresh ? "no-store" : "default",
         }).then((r) => {
             if (
                 !r.ok ||
@@ -191,9 +192,19 @@
             bar()?.classList.remove("c-done");
             bar()?.classList.add("c-loading");
         }, PROGRESS_DELAY_MS);
-        let html;
+        let doc;
+        const parse = (html) => new DOMParser().parseFromString(html, "text/html");
         try {
-            html = await fetchPage(url);
+            doc = parse(await fetchPage(url));
+            if (ticket !== navigation) return;
+            // The cache can hold a board from before a closure even when the open
+            // detail page already shows Closed. Check the server before showing it.
+            const seq = stamp(doc);
+            if (seq >= 0 && seq < Math.max(stamp(document), since)) {
+                try {
+                    doc = parse(await fetchPage(url, true));
+                } catch {} // Keep cached navigation available offline.
+            }
         } catch {
             if (ticket === navigation) location.href = url;
             return;
@@ -204,7 +215,6 @@
         if (bar()?.classList.contains("c-loading")) {
             bar().classList.replace("c-loading", "c-done");
         }
-        const doc = new DOMParser().parseFromString(html, "text/html");
         if (push) {
             history.replaceState({ ...history.state, scroll: scrollY }, "");
             history.pushState({ scroll: 0 }, "", url);

@@ -15,7 +15,7 @@ self.addEventListener("activate", (event) =>
 
 self.addEventListener("fetch", (event) => {
     const request = event.request;
-    if (request.method !== "GET") return;
+    if (request.method !== "GET" || request.cache === "no-store") return;
     const url = new URL(request.url);
     if (url.origin !== self.location.origin) return;
     if (HASHED.test(url.pathname)) {
@@ -66,7 +66,7 @@ async function staleWhileRevalidate(event, request) {
         if (response.ok && !response.redirected) {
             const changed = cached && stamp(cached) !== stamp(response);
             await cache.put(key, response.clone());
-            if (changed) notify(request.url);
+            if (changed) await notify(request.url);
         } else if (response.status === 404) {
             await cache.delete(key);
         }
