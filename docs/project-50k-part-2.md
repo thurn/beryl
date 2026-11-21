@@ -2,13 +2,14 @@
 
 *The plan for the second half of Project 50k: an engine structure and a card
 workflow that would still work with a full implementation of the Comprehensive
-Rules and 50,000 card definitions. Decided 2026-11-15 in a design interview. The
-work is the epic `by-ptc7`, whose tickets are written against this document.*
+Rules and 50,000 card definitions. Decided 2026-11-15 in a design interview, and
+revised 2026-11-20 when the work was planned again for Ignite. The tickets of
+its epic are written against this document.*
 
-Part I (`by-w8gv`) rebuilt the engine around a kernel crate, card behavior as
-effect data, set crates and a card store. The rules keystones epic (`by-bajq`,
-planned in [rules-coverage.md](rules-coverage.md)) then built the 24 cards that
-force the hardest rules machinery. Part II does three things:
+Part I rebuilt the engine around a kernel crate, card behavior as effect data,
+set crates and a card store. The rules keystones epic (planned in
+[rules-coverage.md](rules-coverage.md)) then built the 24 cards that force the
+hardest rules machinery. Part II does three things:
 
 1. It checks that those keystone cards get every edge case right.
 2. It builds 29 more keystone cards, chosen because each breaks an assumption
@@ -19,12 +20,13 @@ force the hardest rules machinery. Part II does three things:
    source files organised by the rule they implement, a cheaper way to write and
    test a simple card, and compile and check times that are measured.
 
-This is an engine and tooling plan. The game UI is moving to Beryl 3D
-(`by-q44s`), so nothing here builds UI.
+This is an engine and tooling plan. The game UI is moving to Beryl 3D, so
+nothing here builds UI.
 
-**Folded in from `by-bajq`.** That epic's closing architecture audit and its
-documentation pass were closed unrun on 2026-11-15 and moved here, so that one
-audit looks at the keystones as built and at what Part II is about to change:
+**Folded in from the rules keystones epic.** That epic's closing architecture
+audit and its documentation pass were closed unrun on 2026-11-15 and moved here,
+so that one audit looks at the keystones as built and at what Part II is about
+to change:
 
 - The baseline audit (the first ticket of this plan) answers the six questions
   the closing audit was to answer: whether decisions R4 to R13 of
@@ -37,11 +39,56 @@ audit looks at the keystones as built and at what Part II is about to change:
   that epic's acceptance, line by line. It rewrites "Where the engine stands" in
   that document from the code. Its list of one-card logic goes to the module
   passes (section C), which are where such logic is removed.
-- This plan's Archivist retires both plan documents into the technical
-  documents, and takes over the list that epic's Archivist had: sections 4, 5,
-  7, 8, 9, 10, 13 and 20 of the architecture document, the two contracts,
-  `rust/AGENTS.md` and [benchmarking.md](benchmarking.md) for the present-cost
-  gate, and the census section.
+- This plan's documentation ticket retires both plan documents into the
+  technical documents, and takes over the list that epic's documentation pass
+  had: sections 4, 5, 7, 8, 9, 10, 13 and 20 of the architecture document, the
+  two contracts, `rust/AGENTS.md` and [benchmarking.md](benchmarking.md) for the
+  present-cost gate, and the census section.
+
+## Status
+
+Work on this plan began on 2026-11-15 and paused on 2026-11-17, when the project
+moved its build, check and delivery system to Ignite. It was planned again on
+2026-11-20 from the code as it then was.
+
+Built by then:
+
+- the baseline audit of the rules keystones;
+- the rulings ledger, its check and `just card rulings`, with every ruling of
+  the 49 first keystone cards a scenario or a recorded reason (section A);
+- exhaustive matches and checked casts in `beryl_kernel` and `beryl_rules`,
+  candidate order private to the kernel, and the typed-reference contract with
+  its three pattern modules (section B);
+- the `Implements:` declaration, the `rule-ownership` check,
+  `just citations coverage` and the module map, the decision on `L: Layout`, and
+  the first two module passes of the kernel (section C);
+- the card workflow's tools: mutants for every part of a definition, the wider
+  snapshot, generator stimuli and witnesses, the generated bar, the prelude
+  functions, the brief that drafts, `just set list` and `just set plan`, and the
+  rewritten `card-writing` skill (section E).
+
+Not yet built: the same guards in `beryl_card` and the both-layout comparison;
+the keystone pool; fifteen bugs the audits and the fuzzers found; the move of
+the rules' files to their rule-owned places and the remaining module passes; the
+conversion of the existing cards to the generated bar and the twelve new cards;
+and all 29 new keystone cards.
+
+What the second planning changed:
+
+- **The keystones no longer wait for the module passes.** The files move first,
+  in one chain of tickets that changes nothing but paths (the division). After
+  it the module passes, the keystone families and the card workflow run
+  together. A keystone ticket conflicts with a move, and not with the rest of a
+  pass (P11, "Sequencing").
+- **The keystone pool is played by Ignite's exploration checks** on idle cores,
+  which file their own tickets for failures. No ticket runs a fixed number of
+  games (section A).
+- **Per-card tests are not sampled yet**, and **compile cost is measured by
+  Ignite's rebuild counts** (P12, section D).
+- **The twelve new cards are written with no trial of a cheaper model.** The
+  pool has no such tier, so drafted cards are `tier:light` (section E).
+- All 29 keystones stay, including subgames, banding and Illusionary Mask, which
+  cover few cards (P5).
 
 ## Where things stand
 
@@ -88,24 +135,24 @@ testing the result. The card workflow below attacks those two costs.
 
 ## Decisions
 
-| ID  | Decision                                                                                                                                                                                                                                                             | Why                                                                                                                                                                                  |
-| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| P1  | A card is a hand-written Rust file. Oracle text is never parsed, at build time or run time.                                                                                                                                                                          | Measured above. Rust files passed the 50,000-card rehearsal and are type checked for free.                                                                                           |
-| P2  | A card needs no hand-written scenario when its generated scenarios kill every mutant of its definition and agree with XMage and Forge. Hand-written scenarios belong to vocabulary entries, written once, and to cards with rulings the generator cannot reach.      | Scenarios are 71% of card-file lines and three quarters of card compile cost. K3 already intended this; three tests and the `card-writing` skill still demanded hand-written ones.   |
-| P3  | A card file cites the Comprehensive Rules only where the card relies on something no vocabulary entry says. Rules code and vocabulary entries keep their citations.                                                                                                  | Half of a definition was quotes of rules the vocabulary entry already cites.                                                                                                         |
-| P4  | Part II builds the card workflow and checks it on about a dozen cards. No whole set is implemented.                                                                                                                                                                  | A set run is its own epic; this one stays about structure.                                                                                                                           |
-| P5  | Three families of new keystones are built, 29 cards: turn and game structure, casting and combat exceptions, and card shapes with face-down cards and cards from outside the game. The monarch, the initiative, day and night and voting are left to later set work. | The three change engine structure. The fourth is mostly new store entries.                                                                                                           |
-| P6  | The `by-bajq` cards are audited with a rulings ledger, which a check holds complete, and with fuzzing and exhaustive search over a pool of only those cards.                                                                                                         | Rulings are a bounded list of what each card must do (about 500 statements). Lockstep games against the oracles would need a decision bridge that is fragile on exactly these cards. |
-| P7  | The compiler refuses the bug classes it can: no wildcard match arm over an enum, no lossy integer cast, no walk over a set in slot order outside the kernel, and object references typed by what they point at. Every scenario also plays in both state layouts.     | The table under "From the bug log to guards".                                                                                                                                        |
-| P8  | Each engine module declares the Comprehensive Rules it implements. A check holds a file's citations to that range and reports rules no module owns. The engine is reorganised once to match. The 800-line limit stays.                                               | About 30 files were cut at the limit instead of at a boundary. The same data is a coverage map of the rules.                                                                         |
-| P9  | Shared card helpers are prelude functions that compose vocabulary. Pass card-specific inputs as arguments and keep straightforward builder calls inline. The brief drafts definitions, and a set planner sorts a set.                                                | Reusable builders give a name to a composition and can cover many cards with a single function.                                                                                      |
-| P10 | The engine reads the shape of a game from one `Format` value. Only two-player constructed exists. No other mode is built.                                                                                                                                            | Subgames and restarts need it anyway, and Commander, Planechase, Archenemy, Two-Headed Giant and DanDân are other values of it.                                                      |
-| P11 | Each engine module gets one pass that moves it to its rule-owned place, converts it to typed references and simplifies it, as three commits. Lines before and after are recorded. No line count is a gate.                                                           | Learning a module is most of what a session costs, so three trips would cost three times. A line target invites dense code.                                                          |
-| P12 | Compile and check time is measured per crate and kept as a series. The largest costs are fixed from the measurement. An engine change tests the deck cards, the keystones and a sample fixed by the commit; the whole pool runs in the nightly.                      | Nobody has per-crate numbers. Per-card tests cost about 0.1 CPU-seconds a card, which is over an hour at 50,000.                                                                     |
-| P13 | New keystones have no UI bar. The session's views and animation scripts cover a new object state with existing prompt shapes and verbs, so the script checks keep passing.                                                                                           | The UI is moving to Beryl 3D.                                                                                                                                                        |
-| P14 | The performance bars of `by-bajq` carry over: the count gate is never raised for a mechanism, a family's rollout step stays within 1.25 times the same step without it, and `State<Small>` stays within 20,480 bytes. Subgames live only in the `Large` layout.      | A mechanic the WU mirror does not use must cost it nothing.                                                                                                                          |
-| P15 | Design, foundation, keystone and review tickets are `tier:opus`. The rulings ledger, partner cards, lint sweeps and measurements are `tier:sonnet`. Nothing is `tier:fable`.                                                                                         | The designs here come from the one session that planned this.                                                                                                                        |
-| P16 | Out of scope: dexterity cards, un-cards, Alchemy cards, and cards that only matter during a draft. Ante is designed below and not built. Omen and Station cards are left to set work.                                                                                | The target is every other known card. Omens follow the adventure pattern and Stations are counters.                                                                                  |
+| ID  | Decision                                                                                                                                                                                                                                                                                              | Why                                                                                                                                                                                                                                       |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P1  | A card is a hand-written Rust file. Oracle text is never parsed, at build time or run time.                                                                                                                                                                                                           | Measured above. Rust files passed the 50,000-card rehearsal and are type checked for free.                                                                                                                                                |
+| P2  | A card needs no hand-written scenario when its generated scenarios kill every mutant of its definition and agree with XMage and Forge. Hand-written scenarios belong to vocabulary entries, written once, and to cards with rulings the generator cannot reach.                                       | Scenarios are 71% of card-file lines and three quarters of card compile cost. K3 already intended this; three tests and the `card-writing` skill still demanded hand-written ones.                                                        |
+| P3  | A card file cites the Comprehensive Rules only where the card relies on something no vocabulary entry says. Rules code and vocabulary entries keep their citations.                                                                                                                                   | Half of a definition was quotes of rules the vocabulary entry already cites.                                                                                                                                                              |
+| P4  | Part II builds the card workflow and checks it on about a dozen cards. No whole set is implemented.                                                                                                                                                                                                   | A set run is its own epic; this one stays about structure.                                                                                                                                                                                |
+| P5  | Three families of new keystones are built, 29 cards: turn and game structure, casting and combat exceptions, and card shapes with face-down cards and cards from outside the game. The monarch, the initiative, day and night and voting are left to later set work.                                  | The three change engine structure. The fourth is mostly new store entries.                                                                                                                                                                |
+| P6  | The first keystone cards are audited with a rulings ledger, which a check holds complete, and with fuzzing and exhaustive search over a pool of only those cards.                                                                                                                                     | Rulings are a bounded list of what each card must do (about 500 statements). Lockstep games against the oracles would need a decision bridge that is fragile on exactly these cards.                                                      |
+| P7  | The compiler refuses the bug classes it can: no wildcard match arm over an enum, no lossy integer cast, no walk over a set in slot order outside the kernel, and object references typed by what they point at. Every scenario also plays in both state layouts.                                      | The table under "From the bug log to guards".                                                                                                                                                                                             |
+| P8  | Each engine module declares the Comprehensive Rules it implements. A check holds a file's citations to that range and reports rules no module owns. The engine is reorganised once to match. The 800-line limit stays.                                                                                | About 30 files were cut at the limit instead of at a boundary. The same data is a coverage map of the rules.                                                                                                                              |
+| P9  | Shared card helpers are prelude functions that compose vocabulary. Pass card-specific inputs as arguments and keep straightforward builder calls inline. The brief drafts definitions, and a set planner sorts a set.                                                                                 | Reusable builders give a name to a composition and can cover many cards with a single function.                                                                                                                                           |
+| P10 | The engine reads the shape of a game from one `Format` value. Only two-player constructed exists. No other mode is built.                                                                                                                                                                             | Subgames and restarts need it anyway, and Commander, Planechase, Archenemy, Two-Headed Giant and DanDân are other values of it.                                                                                                           |
+| P11 | The engine's files move to their rule-owned places first, in one chain of tickets that changes nothing but paths (the division). Each module then gets one pass that converts it to typed references and simplifies it, as two commits. Lines before and after are recorded. No line count is a gate. | Learning a module is most of what a session costs, so two trips would cost twice. A keystone ticket conflicts with a move and not with the rest of a pass, so only the moves come before the keystones. A line target invites dense code. |
+| P12 | Compile cost is measured by Ignite's rebuild counts, and Ignite files the ticket for the crate that agents spend most on rebuilding. Every card's tests run on an engine change while the pool is small; sampling them waits until the pool is in the thousands.                                      | Per-card tests cost about 0.1 CPU-seconds a card: 13 seconds at 132 cards and over an hour at 50,000. Ignite reruns a check only when its inputs change.                                                                                  |
+| P13 | New keystones have no UI bar. The session's views and animation scripts cover a new object state with existing prompt shapes and verbs, so the script checks keep passing.                                                                                                                            | The UI is moving to Beryl 3D.                                                                                                                                                                                                             |
+| P14 | The performance bars of the rules keystones epic carry over: the count gate is never raised for a mechanism, a family's rollout step stays within 1.25 times the same step without it, and `State<Small>` stays within 20,480 bytes. Subgames live only in the `Large` layout.                        | A mechanic the WU mirror does not use must cost it nothing.                                                                                                                                                                               |
+| P15 | Design, foundation, keystone and review tickets are `tier:opus`. The rulings ledger, partner cards, lint sweeps and measurements are `tier:sonnet`, and drafted cards are `tier:light`. Nothing is `tier:fable`.                                                                                      | The designs here come from the one session that planned this.                                                                                                                                                                             |
+| P16 | Out of scope: dexterity cards, un-cards, Alchemy cards, and cards that only matter during a draft. Ante is designed below and not built. Omen and Station cards are left to set work.                                                                                                                 | The target is every other known card. Omens follow the adventure pattern and Stations are counters.                                                                                                                                       |
 
 ## From the bug log to guards
 
@@ -152,23 +199,24 @@ The `rulings` check fails when a card listed in the ledger has a ruling with no
 entry, an entry names a scenario that does not exist, or an entry's hash matches
 no ruling. Like `just citations`, it is skipped where the bulk file is not
 cached. `just card rulings <name>` prints a card's rulings beside their entries.
-Cards join the ledger as they are audited: the 49 `by-bajq` cards first, every
-keystone of this plan as it is written, and any later card a writer chooses to
-list. A card not listed is not checked, so the ledger never blocks a simple
-card.
+Cards join the ledger as they are audited: the 49 cards of the rules keystones
+epic first, every keystone of this plan as it is written, and any later card a
+writer chooses to list. A card not listed is not checked, so the ledger never
+blocks a simple card.
 
 **The keystone pool.** `just fuzz` already plays a quarter of its games with
 decks dealt from one keystone family at a time (`decks::KEYSTONE_FAMILIES`,
 `fuzz_deck_from`), so the cards of a family meet each other. Cards of different
 families rarely meet: Humility with Gemrazer, Rest in Peace with Underworld
 Breach, Painter's Servant with Mother of Runes. A pool of every keystone and
-partner makes those pairings the common case. `just fuzz --pool keystones` deals
-both decks from it, and `just exhaust --pool keystones` searches from positions
-cut from those games, with the invariants, the references and the both-layout
-comparison (section B) at every decision. The nightly runs both and files a
-ticket for a failure, as the browser sweep does. A failure shrinks to a scenario
-(`beryl_search/tests/all/shrink.rs`). Each keystone of this plan joins the pool
-with its card.
+partner makes those pairings the common case. The fuzzers deal both decks from
+it in a test of their own, and the exhaustive search starts from positions cut
+from those games, with the invariants, the references and the both-layout
+comparison (section B) at every decision. Ignite plays both as exploration
+checks on idle cores and files a ticket for a failure ([ignite.md](ignite.md),
+"Exploration checks"), so no ticket of this plan runs a fixed number of games. A
+failure shrinks to a scenario (`beryl_search/tests/all/shrink.rs`). Each
+keystone of this plan joins the pool with its card.
 
 ### B. Guards
 
@@ -275,7 +323,7 @@ citation tool reads:
 ```
 
 `just citations` already finds every citation in a file. The `rule-ownership`
-check, in the `names` lane, fails when:
+check fails when:
 
 - a file in the kernel's or the rules' `src` cites a rule outside the ranges it
   or its parent module declares, unless the citation is written as a
@@ -294,11 +342,11 @@ owns, by section, and writes the same to `$BERYL_CACHE/rule-coverage.json`. A
 claim identifies the module to extend for rules under that claim. The list shows
 where the engine still needs an owner.
 
-**The module map.** The pass numbers match the children of M4. Paths are
-relative to each crate's `src/`. Files keep their names and nesting under the
-destination unless a named move or a directory move below says otherwise. A
-surviving test stays in its test module. The table inventories the source trees
-at the start of the passes.
+**The module map.** The tickets name a pass by its row here. Paths are relative
+to each crate's `src/`. Files keep their names and nesting under the destination
+unless a named move or a directory move below says otherwise. A surviving test
+stays in its test module. The table inventories the source trees at the start of
+the passes.
 
 The kernel groups its code by what it stores. Its modules declare rules where
 they implement them directly. The kernel's zone mutator owns CR 400.7, so
@@ -348,20 +396,32 @@ to. The root `lib.rs` keeps the crate contract.
 | 20. Casting and payment tests                                                                         | `tests/`                            | `tests/{any_target.rs,banned.rs,cast.rs,casting.rs,chosen.rs,life_costs.rs,payment.rs,remembered_mana.rs,spell_copies.rs,spell_costs.rs}`                                                                                                                                                                                                           |
 | 21. Combat, library, and other tests                                                                  | `tests/`                            | `tests/{combat.rs,effects.rs,game.rs,graveyard_return.rs,library.rs,mulligan.rs,phasing.rs,regeneration.rs,rules.rs,trackers.rs}`, `tests/combat/keywords.rs`                                                                                                                                                                                       |
 
-**One pass per module (P11).** Each ticket of the module pass takes one row of
-the table and makes three commits:
+**The division (P11).** The files move first. A chain of four tickets takes the
+rows of the rules' table in order (6 to 8, 9 to 11, 12 to 15, then 16). Each
+moves its files to their rule-owned places with `Implements:` headers and takes
+them off the `rule-ownership` allowlist, and changes nothing else: no function
+body, no signature and no test. A fifth ticket adds the headers to rows 3 to 5
+of the kernel's table, where no file moves. The first two rows of the kernel
+were done before the division. Every other ticket that changes `beryl_rules`
+waits for the last ticket of the chain.
 
-1. **Move.** Files go to their rule-owned place with `Implements:` headers, with
-   no change to behavior. `rule-ownership` passes for the module.
-2. **Typed references.** The module's functions take the types of B5. The
+**One pass per module (P11).** Each ticket of the module pass then takes one row
+of the table and makes two commits:
+
+1. **Typed references.** The module's functions take the types of B5. The
    `is_current` test each function made for itself goes away where the type now
    carries it.
-3. **Simplify.** Parallel readers of one rules question become one query. Dead
+2. **Simplify.** Parallel readers of one rules question become one query. Dead
    parameters, wrappers that only forward and comments that restate the code go.
-   Behavior is held by the scenarios, `just fuzz`, the frozen saves,
-   `rollouts_never_change` and the count gate.
+   A file that exists only because another reached 800 lines rejoins it or gets
+   a name that says what it holds. Behavior is held by the scenarios,
+   `just fuzz`, the frozen saves, `rollouts_never_change` and the count gate.
 
-The ticket's close reason gives the module's non-test lines before and after
+The passes run at the same time as the keystone families, which add to the same
+modules. A pass changes a module's internals and a keystone adds to them, so
+each rebases over the other.
+
+The ticket's landing note gives the module's non-test lines before and after
 each commit. A module whose simplification finds little says so; no number is a
 target.
 
@@ -405,42 +465,35 @@ Cargo timed the `beryl_rules` library unit at 3.2 s before the change and 42.7 s
 with it. The `beryl_search` library unit went from 53.4 to 43.2 s, and
 `beryl_session` from 51.9 to 52.5 s.
 
-**Rules tests.** `beryl_rules/src/tests/` is 14,150 lines of tests that define
-their own test cards and arrange boards through the kernel's test door, because
-`beryl_scenario` sits above the engine. A test that only drives decisions and
-reads the result is a scenario in disguise: it moves to
+**Rules tests.** `beryl_rules/src/tests/` is about 14,600 lines of tests that
+define their own test cards and arrange boards through the kernel's test door,
+because `beryl_scenario` sits above the engine. A test that only drives
+decisions and reads the result is a scenario in disguise: it moves to
 `beryl_cards/src/library/` as a hand-written scenario on a real card, where the
 oracles also play it, and its test card is deleted. A test that calls an
-internal function directly stays where it is. `by-bajq`'s Wardens already listed
-which test definition each real card's scenario now covers.
+internal function directly stays where it is. The reviews of the rules keystones
+epic already listed which test definition each real card's scenario now covers.
 
 ### D. Compile and check time
 
-- **Measure first.** A `timings` source in the efficiency store records, per
-  crate and per day, the seconds of `cargo check`, `cargo clippy` and the test
-  build, read from `cargo --timings` output that the `rust` lane's steps write
-  when run with a flag, and from the scale rehearsal. `just efficiency metrics`
-  gains `compile.<crate>.check`, `.clippy` and `.test-build`. The same ticket
-  profiles `just efficiency cards`, which did not finish in two minutes during
-  planning, separating query time from automatic ingestion and recording what it
-  is waiting for if the delay remains. Slow CI enables `--timings`; the fast
-  check leaves it off. Stable Cargo's HTML `UNIT_DATA` supplies unit durations
-  and its artifact messages supply freshness. The `compile` query reports
-  rebuilt medians separately from cache hits. Its shares use summed unit seconds
-  within each mode, because parallel units overlap; CPU-token waits, build-lock
-  waits and copying the cache are not compile costs.
-- **Then fix the largest.** One ticket takes the three largest costs the series
-  shows and reduces each, with before and after in its close reason. The known
-  candidates are downstream monomorphization in `beryl_search` (section C),
-  Clippy checking every card's scenarios with all features enabled, and the
-  integration-test binaries of `beryl_session` and `beryl_cli` each linking the
-  engine.
-- **What an engine change tests.** `every_card_has_scenarios_and_they_pass`, the
-  mutation check and the generated scenarios take a card filter. The fast check
-  and slow CI pass it the cards of `docs/sample-decks/`, the keystones, the
-  cards whose files changed and a sample of the rest fixed by the commit hash,
-  as the `oracle` lane already does (`oracle_selection.py`). The nightly plays
-  every card and files a ticket for a failure.
+- **Rebuild counts.** Ignite measures compile cost as the instructions the
+  compiler executes to rebuild after one fixed edit ([ignite.md](ignite.md),
+  "Rebuild counts"). It keeps the series, and files a ticket for the crate that
+  agents spend most on rebuilding. A per-crate series of seconds was built for
+  this plan first (`just efficiency compile`). The checks that wrote its data
+  were removed with the move to Ignite, so it is removed too.
+- **What was tried.** Non-generic engine entry points raised the rollout count
+  by 0.68% and are not built (section C). Merging `beryl_search`'s test binaries
+  into one saved nothing that could be measured. No ticket of this plan reduces
+  compile time: Ignite's rule decides when a crate is worth it.
+- **What an engine change tests.** Every card. At 132 cards
+  `every_card_has_scenarios_and_they_pass`, the mutation check and the generated
+  scenarios cost about 13 CPU-seconds together, and Ignite reruns them only when
+  their inputs change. When the pool is in the thousands they become a check
+  family with one check a card, as the oracle family already is. A change to one
+  card then reruns that card, and an engine change runs the deck cards, the
+  keystones and a sample fixed by the commit, with the rest played on idle
+  cores.
 - **The rehearsal follows the workflow.** `just scale` clones today's card
   files, scenarios and all. Once simple cards carry no hand-written scenarios
   (section E), the rehearsal's mix is three quarters cards without a scenarios
@@ -573,7 +626,7 @@ commons and uncommons use. It drafted 60 random commons and uncommons
 completely. 52 of them compiled, and 33 rendered exactly to their Oracle text.
 The other 19 named their difference in the render diff: 6 were the table's
 wording and 13 were clauses Phase had dropped. A `drafted` card is then a fix-up
-for a `tier:haiku` writer (E7).
+for a `tier:light` writer (E7).
 
 **E6. The set planner.** `just set list <code>` prints the cards first printed
 in a set. `just set plan <code>` sorts them:
@@ -581,7 +634,7 @@ in a set. `just set plan <code>` sorts them:
 | Tier         | Meaning                                                                       | Who writes it                          |
 | ------------ | ----------------------------------------------------------------------------- | -------------------------------------- |
 | `store`      | Complete from the card store (keyword-only creatures)                         | Nobody                                 |
-| `drafted`    | Every sentence drafted by the brief                                           | A `tier:haiku` writer checks the draft |
+| `drafted`    | Every sentence drafted by the brief                                           | A `tier:light` writer checks the draft |
 | `composed`   | The keywords and layout are supported, with clauses to compose by hand        | A `tier:sonnet` writer                 |
 | `vocabulary` | A missing Phase node kind or a clause with distant examples, grouped by cards | One `tier:opus` ticket a group         |
 | `mechanism`  | A keyword, layout or rule the engine lacks                                    | A design ticket                        |
@@ -593,7 +646,7 @@ matches between clauses on different implemented cards, measured when the
 planner was added. A draft is complete when the drafter covers its clauses. The
 table also reports any prior compile and render audit results for cards in the
 set. Planning reuses the renderer built in the current checkout and the cached
-census when available. `--beads` prints commands for each vocabulary group and
+census when available. `--tickets` prints commands for each vocabulary group and
 batches of at most twenty drafted or composed cards.
 
 **E7. The skill.** The `card-writing` skill is rewritten around the draft: run
@@ -607,11 +660,14 @@ another card.
 **E8. The proof.** The existing simple cards are converted first: each card
 whose generated scenarios kill every mutant loses its hand-written scenarios,
 except those the rulings ledger names, and its doc comment keeps only
-card-specific rulings (P3). Then a dozen cards nobody has implemented, picked by
-`just set plan` from one set's `drafted` and `composed` tiers, are written by
-`tier:sonnet` sessions with the new skill. The ticket reports, from the
-efficiency store, tokens and minutes per card against the 121 cards before, the
-share that passed `just card check` first time, and the lines per card file.
+card-specific rulings (P3). Then a dozen cards nobody has implemented are
+written with the new skill: the first six of the `drafted` tier of
+`just set plan` for one set by a `tier:light` session, and the first six of its
+`composed` tier by a `tier:sonnet` session. A report ticket then gives, from the
+efficiency store and by tier, tokens and minutes per card against the cards
+written before, the share that passed `just card check` first time, the share
+with no hand-written scenario, and the lines per card file. It names the model
+each tier ran on. No cheaper model is tried: the pool has no tier for one.
 
 ### F. The shape of a game
 
@@ -649,7 +705,7 @@ impl Format { pub const CONSTRUCTED: Format = ..; }
   count should not move.
 
 The table of what each other mode would still need is at the end of this
-document, and the Archivist moves it to the architecture document.
+document, and the documentation ticket moves it to the architecture document.
 
 ### G. Turn and game structure
 
@@ -897,8 +953,9 @@ scenarios' missing producer, as the card-writing skill already directs.
 
 ## Bars and validation
 
-Every ticket of the epic holds these, and says so in its close reason where it
-measured one.
+Every ticket of the epic holds these, and says so in its landing note where it
+measured one. A ticket runs each command through Ignite
+(`ignite run -- <command>`), and `ignite check` runs the checks a landing needs.
 
 | Check               | What it proves                                                                                | Command                           |
 | ------------------- | --------------------------------------------------------------------------------------------- | --------------------------------- |
@@ -915,49 +972,59 @@ measured one.
 | Fuzzing, exhaustion | Long random games, and every short line from a scenario's end, break no invariant             | `just fuzz`, `just exhaust`       |
 | Script checks       | Each keystone's spec moments pass from both seats with existing verbs and prompt shapes       | `beryl_cli script-check`          |
 
-A ticket whose change cannot hold the count gate after three attempts stops and
-says so on the epic, as in `by-bajq`: that is the one thing that stops the run.
-A family's present-cost miss after three attempts is recorded and files a
-follow-up.
+A ticket whose change cannot hold the count gate after three attempts records
+the counts and what each attempt tried on the ticket and on the epic, and is
+given back for the owner's decision. The tickets that depend on it wait, and
+independent work goes on. A family's present-cost miss after three attempts is
+recorded and files a follow-up.
 
 ## Sequencing
 
-The whole epic waits for `by-bajq` to close.
+Revised 2026-11-20. Under the first order every module pass and an audit came
+before any keystone, which put about twenty refactoring tickets ahead of the
+first new card.
 
-1. **Baseline and contracts.** The baseline audit of the rules keystones comes
-   first and gates the module passes. In parallel: the compile-time series, the
-   three lint sweeps (one a crate), the both-layout comparison, the
-   typed-reference contract, the rule-ownership contract, the `L: Layout`
-   decision, and the order-free set change.
-2. **The keystone audit** runs beside everything, since it touches card files:
-   the ledger tool, then the 49 cards in eight lanes, then the keystone pool.
-3. **The card workflow** runs beside the module passes: mutants, the bar, the
-   generator, the prelude functions, the brief, the planner, the skill, the
-   proof.
-4. **The module passes**, after the contracts and the sweeps: about fifteen
-   tickets, one a module group, in parallel, each with a Warden for its area.
-5. **A Mason** audits the kernel and rules contracts after the passes.
-6. **The three keystone families**, in parallel, after the Mason. Each starts
-   with its foundation (`Format` and the turn plan; casting inside a resolution
-   and `combat::assigner`; `Shape`), then its keystones, then its present-cost
-   measurement, its agents ticket and its Warden.
-7. **A final Mason**, and the Archivist, who retires this document into the
-   architecture document.
+1. **Fixes carried over** start at once: the bugs that the rulings audits and
+   the fuzzers found. They depend on nothing.
+2. **The division** starts at once and runs as a chain: four tickets move the
+   rules' files to their rule-owned places, and one adds the kernel's remaining
+   `Implements:` headers. An audit of the division follows it and gates nothing.
+3. **Beside the division**, since they do not touch the rules' paths: the guards
+   that are left (the `beryl_card` lint sweep, the both-layout comparison), the
+   keystone pool, the conversion of the existing cards to the generated bar, the
+   twelve new cards, and the passes over the card vocabulary and the renderer.
+4. **After the division, in parallel**:
+   - the module passes, one ticket a row of the module map, and the rules tests
+     that become scenarios;
+   - the three keystone families. Each starts with its foundation (`Format` and
+     the turn plan; casting inside a resolution and `combat::assigner`; `Shape`,
+     sagas, face-down spells and the sideboard), then its keystones, then its
+     present-cost measurement and its agents ticket.
+5. **A review of each area** follows the tickets it reviews: the guards, the
+   keystone audit, the card workflow, the module passes in four groups, and each
+   keystone family in one or two.
+6. **A closing audit** of the whole against this plan, and then the
+   documentation ticket, which retires this document into the architecture
+   document.
 
 ## Risks
 
-- **The module passes collide.** Fifteen sessions move files in one crate at
-  once. Each pass owns a disjoint set of files, `ignite land` rebases, and the
-  shared files (`lib.rs`, `game.rs`) are edited additively. The first commit of
-  each pass, the move, lands by itself so that the others rebase over a small
-  change.
+- **Passes and keystones collide.** After the division, a module pass and a
+  keystone ticket can change the same module at once. Each pass owns a disjoint
+  set of files, a pass changes internals where a keystone adds to them, and
+  `ignite land` rebases. A pass whose module a foundation ticket is rebuilding
+  (the cast's steps, the chooser of a damage division, comparisons of turn
+  steps) leaves that part to the foundation ticket, and its ticket says so.
+- **The division is not only paths.** A move changes the order in which code is
+  compiled, which can shift the count by layout alone. Each division ticket
+  reports the count before and after, and the audit that follows adds them up.
 - **Typed references cost instructions.** They are transparent wrappers, but a
   proof that is checked where it was once assumed is a branch. Only the count
   shows it, and each pass reports it.
 - **The generator cannot reach "every mutant" for most cards.** Then P2 covers
   few cards and the workflow's gain comes from the draft and the prelude
-  functions. The conversion of the existing cards (E8) measures the share before
-  the dozen new cards are written.
+  functions. The conversion of the existing cards (E8) measures the share, and
+  the twelve new cards measure it again on cards nobody has written.
 - **A helper changes what its callers render.** Card text checks the complete
   definition against its Oracle text, including the composed effects and
   targets.
