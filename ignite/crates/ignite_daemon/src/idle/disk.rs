@@ -68,22 +68,24 @@ impl Idle {
     /// the daemon restarted for a release before any round finished. This pass reads only the
     /// disk's free space, so it can run each round.
     pub fn hold_floor(&self) -> Result<Option<DiskReport>> {
+        // The tip loop also asks for a sweep. Let each pass see the space the other freed
+        // before selecting more trees.
+        let mut last = super::lock(&self.floor_stuck);
         if !self.below_floor() {
-            *super::lock(&self.floor_stuck) = None;
+            *last = None;
             return Ok(None);
         }
         crate::steps::step("clearing builds until the disk is back above its floor");
         let report = self.host.free_disk(FLOOR_GB)?;
         log(&report, true);
         if let Some(stuck) = &report.stuck {
-            let mut last = super::lock(&self.floor_stuck);
             // Said once while it stays the same, since the loop's failed round shows it too.
             if last.as_ref() != Some(stuck) {
                 eprintln!("ignite: {stuck}");
             }
             *last = Some(stuck.clone());
         } else {
-            *super::lock(&self.floor_stuck) = None;
+            *last = None;
         }
         Ok(Some(report))
     }

@@ -280,9 +280,15 @@ impl Parts {
         let mut tips = TipLoop::new(server, Arc::new(self.round_verb()));
         let (ctx, wait_s) = (self.ctx.clone(), self.feed_wait_s);
         let update = self.update.clone();
+        let idle = self.idle.clone();
+        let reclaim = move || {
+            if let Err(error) = idle.hold_floor() {
+                eprintln!("ignite: disk sweep before tip verification: {error}");
+            }
+        };
         self.start_loop("ignite-tip", TIP_STALLS_AFTER, move |ticker| {
             loop {
-                let round = ticker.round(|| match tips.turn(&ctx, wait_s) {
+                let round = ticker.round(|| match tips.turn(&ctx, wait_s, &reclaim) {
                     Ok(Some((
                         _,
                         TipOutcome::Verified | TipOutcome::VerifiedWithDeferrals { .. },
