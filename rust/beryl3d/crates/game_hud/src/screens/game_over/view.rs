@@ -18,8 +18,6 @@ use glam::Vec2;
 use super::{Inputs, Message, State};
 
 use game_table::table::{CARD_HEIGHT, CARD_WIDTH};
-use kit_base::data::space::flat::phone::game_over as metrics;
-use kit_base::data::space::flat::phone::opening::NARROW_BELOW;
 use kit_base::tokens::{color, ratio, size, space, type_style};
 use kit_frame::frame::Role;
 use kit_text::text::TypeStyle;
@@ -27,9 +25,6 @@ use kit_ui::element::{Align, Anchor, Element, Filter, Justify, Shown, column, ho
 use kit_ui::input::FaceSize;
 use kit_ui::widgets::screen::backdrop;
 use kit_ui::widgets::{button, primary};
-
-/// The width of the card that ended the game, the web's 230 on the desktop.
-const CULPRIT_WIDTH: f32 = size::GAME_OVER_CULPRIT_WIDTH;
 
 /// The result's title, `.game-over-title`: 72 points, bold.
 const TITLE: TypeStyle = type_style::GAME_OVER_TITLE;
@@ -110,22 +105,14 @@ const DIMMED: [Filter; 3] = [
 /// The result's title, why the game ended and the card that ended it, in a column at the
 /// window's middle.
 fn result(input: &Inputs, outcome: Option<&OutcomeView>) -> Element {
-    let phone = input.window.phone();
-    // The phone's result is smaller (`.phone-game-over`).
-    let (title_style, reason_style, reason_gap) = if phone {
-        (
-            TypeStyle {
-                size: metrics::TITLE,
-                ..TITLE
-            },
-            TypeStyle {
-                size: metrics::REASON,
-                ..REASON
-            },
-            metrics::REASON_GAP,
-        )
-    } else {
-        (TITLE, REASON, size::GAME_OVER_REASON_GAP)
+    let layout = input.layout;
+    let title_style = TypeStyle {
+        size: layout.title,
+        ..TITLE
+    };
+    let reason_style = TypeStyle {
+        size: layout.reason,
+        ..REASON
     };
     let title = result_title(outcome);
     let mut heading = text(title)
@@ -150,13 +137,15 @@ fn result(input: &Inputs, outcome: Option<&OutcomeView>) -> Element {
                 .style(reason_style)
                 .color(color::TEXT)
                 .passes(true);
-            line.style.margin = [reason_gap, 0.0, 0.0, 0.0];
+            line.style.margin = [layout.reason_gap, 0.0, 0.0, 0.0];
             line
         }))
         .children(culprit);
     // The flat layer's root puts a screen in its bottom right corner, so the group is anchored
     // to the window's middle instead.
-    screen.anchor = Some(Anchor::Point(middle(input), Vec2::splat(0.5)));
+    let area = input.area;
+    let centre = Vec2::new(area.x + area.width / 2.0, area.y + area.height / 2.0);
+    screen.anchor = Some(Anchor::Point(centre, Vec2::splat(0.5)));
     screen
 }
 
@@ -165,57 +154,31 @@ fn result(input: &Inputs, outcome: Option<&OutcomeView>) -> Element {
 /// `--button-gap` apart and as wide as the widest, at least `--button-width`. The web's
 /// `DockButtons` puts its first button at the foot, so `New Game` comes last here.
 fn dock(input: &Inputs, buttons: Vec<Element>) -> Element {
-    if let Some((layout, rect)) = input.dock {
-        return layout.actions_at_foot("game over buttons", buttons, rect);
+    let area = input.dock;
+    if let Some(layout) = input.column {
+        return layout.actions_at_foot("game over buttons", buttons, area);
     }
-    let window = input.window;
-    let at = Vec2::new(
-        window.size.width - window.safe_area.right - DOCK_RIGHT,
-        window.size.height - window.safe_area.bottom - BUTTONS_BOTTOM,
-    );
     let mut dock = column()
         .name("game over buttons")
-        .gap(BUTTON_GAP)
+        .gap(space::M)
         .align_items(Align::Stretch)
-        .min_width(DOCK_WIDTH)
+        .min_width(size::BUTTON_WIDTH)
         .children(buttons);
-    dock.anchor = Some(Anchor::Point(at, Vec2::ONE));
+    dock.anchor = Some(Anchor::Point(
+        Vec2::new(area.x + area.width, area.y + area.height),
+        Vec2::ONE,
+    ));
     dock
 }
 
-/// How far the dock's bottom edge stands above the window's: the web's `.dock` `bottom`.
-const BUTTONS_BOTTOM: f32 = size::GAME_OVER_BUTTONS_BOTTOM;
-/// How far the dock's right edge stands in from the window's: the web's `.dock` `right`.
-const DOCK_RIGHT: f32 = size::GAME_OVER_BUTTONS_RIGHT;
-/// The gap between the dock's buttons, the web's `--button-gap`.
-const BUTTON_GAP: f32 = space::M;
-/// The dock's least width, the web's `--button-width`.
-const DOCK_WIDTH: f32 = size::BUTTON_WIDTH;
-
-/// The middle of the window or, on the phone, of its safe area.
-fn middle(input: &Inputs) -> Vec2 {
-    let window = input.window;
-    if input.window.phone() {
-        let safe = window.safe_area;
-        Vec2::new(
-            safe.left + (window.size.width - safe.left - safe.right) / 2.0,
-            safe.top + (window.size.height - safe.top - safe.bottom) / 2.0,
-        )
-    } else {
-        Vec2::new(window.size.width, window.size.height) / 2.0
-    }
-}
-
-/// The width of the card that ended the game and the gap above it: the web's 230 on the
-/// desktop, and 160 on a phone (140 on one narrower than 393 points).
+/// The width of the card that ended the game and the gap above it.
 fn culprit_size(input: &Inputs) -> (f32, f32) {
-    if !input.window.phone() {
-        (CULPRIT_WIDTH, size::GAME_OVER_CARD_GAP)
-    } else if input.window.size.width < NARROW_BELOW {
-        (metrics::CARD_NARROW, metrics::CARD_GAP)
-    } else {
-        (metrics::CARD, metrics::CARD_GAP)
-    }
+    let layout = input.layout;
+    let width = layout
+        .narrow_card
+        .filter(|card| input.window.size.width < card.below)
+        .map_or(layout.card, |card| card.width);
+    (width, layout.card_gap)
 }
 
 /// The card that ended the game, or its ability plate.

@@ -173,7 +173,83 @@
       "change": "beside_orb"
     }
   },
+  "hud": {
+    "table": [
+      "players",
+      "step_stops",
+      "full_control",
+      "gear"
+    ],
+    "overlays": [
+      "log_column",
+      "viewer",
+      "result"
+    ],
+    "table_under_opening": true,
+    "anchored_to_window": false,
+    "incoming": {
+      "left": 30,
+      "top": 6,
+      "opponent_top": 82,
+      "min_width": 44,
+      "padding_x": 8,
+      "padding_y": 3,
+      "text": 20
+    },
+    "opening": {
+      "start_choice": true,
+      "waiting_dots": true
+    },
+    "result": {
+      "title": 72,
+      "reason": 24,
+      "reason_gap": 14,
+      "card": 230,
+      "card_gap": 22
+    }
+  },
   "slots": {
+    "player.you": { "region": "player_you", "max_width": 272, "max_height": 116, "align_x": "center", "align_y": "center" },
+    "player.opponent": { "region": "player_opponent", "max_width": 272, "max_height": 116, "align_x": "center", "align_y": "center" },
+    "opening": {
+      "region": "window",
+      "inset": [92, 0, 0, 0]
+    },
+    "result": {
+      "region": "window"
+    },
+    "result.dock": {
+      "region": "safe_area",
+      "inset": [
+        0,
+        39,
+        87,
+        0
+      ],
+      "max_width": 460,
+      "align_x": "end",
+      "align_y": "end"
+    },
+    "viewer": {
+      "region": "window"
+    },
+    "full_control": {
+      "inset": [0, 301, 87, 0],
+      "max_height": 48,
+      "align_y": "end"
+    },
+    "log.toggle": {
+      "region": "window",
+      "inset": [
+        18,
+        0,
+        0,
+        18
+      ]
+    },
+    "inspector": {
+      "region": "window"
+    },
     "settings.sheet": {
       "region": "safe_area",
       "inset": [24, 0, 24, 0],
@@ -188,53 +264,14 @@
       "align_x": "end",
       "align_y": "end"
     },
-    "prompt.dock": {
-      "region": "safe_area",
-      "inset": [0, 39, 87, 0],
-      "max_width": 460,
-      "max_height": 48,
-      "align_x": "end",
-      "align_y": "end"
-    },
-    "prompt.stacked": {
-      "region": "safe_area",
-      "inset": [0, 39, 135, 0],
-      "max_width": 460,
-      "align_x": "end",
-      "align_y": "end"
-    },
-    "prompt.asked": {
-      "region": "safe_area",
-      "inset": [0, 39, 87, 0],
-      "max_width": 460,
-      "align_x": "end",
-      "align_y": "end"
-    },
-    "player.you": {
-      "region": "safe_area",
-      "max_height": 150,
-      "align_y": "end"
-    },
-    "player.opponent": {
-      "region": "safe_area",
-      "max_height": 150
-    },
     "log": {
-      "region": "safe_area",
+      "region": "window",
       "inset": [262, 0, 0, 18],
       "max_width": 300,
       "max_height": 228
     },
-    "phase": {
-      "region": "safe_area",
-      "inset": [0, 39, 0, 0],
-      "max_width": 420,
-      "max_height": 54,
-      "align_x": "end",
-      "align_y": "end"
-    },
-    "menu": {
-      "region": "safe_area",
+    "gear": {
+      "region": "window",
       "inset": [14, 14, 0, 0],
       "max_width": 44,
       "max_height": 44,

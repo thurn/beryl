@@ -10,15 +10,16 @@ use glam::Vec2;
 
 use super::Piles;
 use crate::hud::HudIn;
-use crate::hud::phone::phase_edges;
+use crate::hud::phase::phase_box;
 use crate::hud::placement_scene::{Group, PlacementScene, inset, rect};
-use game_table::profiles::TableBands;
-use kit_base::data::space::hud::phone as data;
+use game_table::profiles::Profile;
+use kit_base::data::profiles::{FloatingPrompt, Piece};
 use kit_base::geometry::Rect;
 use kit_base::tokens::{color, shadow, size, space, type_style};
 use kit_scene::{Candidate, NodeQuery};
 use kit_text::text::TypeStyle;
 use kit_ui::element::{Align, Anchor, Element, Position, TextAlign, column, holder, row, text};
+use kit_ui::layout::{DOCK_BOTTOM, DOCK_RIGHT};
 use kit_ui::widgets::{self, button, icon_button, icons, primary};
 
 /// The prompt bar for `prompt`: on the desktop, the action dock (`captioned_dock`), with what the prompt
@@ -73,8 +74,9 @@ pub(super) fn bar(prompt: &PromptView, input: &HudIn, controls: Option<Controls>
         matches!(&view.status, Status::Deciding { decision } if decision.acting_for.is_some())
     });
     let asks = title(prompt, acting_for);
-    if let Some(bands) = input.profile.bands() {
-        return phone_bar(prompt, input, &asks, controls, bands);
+    let held_up = Piles::of(prompt).is_some();
+    if let Some(slots) = PromptSlots::new(input, held_up || super::covers_table(prompt)) {
+        return floating_bar(prompt, &asks, controls, &slots, held_up);
     }
     let title = (!asks.is_empty()).then(|| {
         text(&asks)
@@ -106,7 +108,7 @@ pub(super) fn bar(prompt: &PromptView, input: &HudIn, controls: Option<Controls>
             )
         })
         .collect();
-    captioned_dock()
+    bar_column(input.profile)
         .children(title)
         .children(others)
         .children(controls.map(|controls| controls.element))
@@ -137,6 +139,23 @@ pub fn captioned_dock() -> Element {
         .max_width(size::DOCK_MAX_WIDTH)
         .background([0; 4])
         .border(([0; 4], 0.0))
+}
+
+fn bar_column(profile: Profile) -> Element {
+    let mut dock = captioned_dock();
+    if let Some(slot) = profile.slot("prompt.bar") {
+        let bounds = slot.rect;
+        let window = profile.window();
+        let root_right = window.size.width - window.safe_area.right - DOCK_RIGHT;
+        let root_bottom = window.size.height - window.safe_area.bottom - DOCK_BOTTOM;
+        let left = bounds.x + bounds.width - root_right;
+        let top = bounds.y + bounds.height - root_bottom;
+        // Keep the column in the root's flex layout so its title wraps with the buttons.
+        dock = dock
+            .max_width(bounds.width)
+            .inset([Some(top), None, None, Some(left)]);
+    }
+    dock
 }
 
 /// `element`, a button of the dock, as wide as the dock (`.dock .button`: `min-width: 0;
@@ -222,12 +241,12 @@ pub fn captioned(pressed: Element, caption: &str) -> Element {
 ///   about over the table, the table lies under a shade and the pill stands over the strip,
 ///   beside the stacked buttons. The pill lets the pointer through, so it never covers a card
 ///   the prompt picks.
-fn phone_bar(
+fn floating_bar(
     prompt: &PromptView,
-    input: &HudIn,
     asks: &str,
     controls: Option<Controls>,
-    bands: TableBands,
+    slots: &PromptSlots,
+    held_up: bool,
 ) -> Element {
     let ways = || super::ways(prompt).map(|way| way.id);
     let buttons: Vec<&PromptButton> = (prompt.buttons.iter())
@@ -242,18 +261,17 @@ fn phone_bar(
     let others = (buttons.iter().copied())
         .filter(|button_view| Some(button_view.id) != forward.map(|b| b.id))
         .filter(|button_view| Some(button_view.id) != pass_on.map(|b| b.id));
-    let gap = data::DOCK_GAP;
-    let height = data::BUTTON_HEIGHT;
-    let held_up = Piles::of(prompt).is_some();
-    let held = held_up || super::covers_table(prompt);
-    let slots = PromptSlots::new(input, &bands, held);
+    let gap = slots.metrics.gap;
+    let height = slots.dock.height;
+    let left = slots.bar.x;
+    let right = slots.dock.x + slots.dock.width;
     let mut beside_right = 0.0;
     let mut beside_left = 0.0;
     let mut dock_bottom = slots.dock_bottom();
     let dock = (forward.is_some() || pass_on.is_some()).then(|| {
-        let mut dock = dock(forward, pass_on);
-        let width =
-            forward.map_or(0.0, |b| button_width(&b.label) + gap) + pass_on.map_or(0.0, |_| height);
+        let mut dock = dock(forward, pass_on, slots);
+        let width = forward.map_or(0.0, |b| slots.button_width(&b.label) + gap)
+            + pass_on.map_or(0.0, |_| height);
         let (placed, slot) = slots.dock("dock", width, None);
         if slot != 0 {
             beside_right = width;
@@ -261,7 +279,7 @@ fn phone_bar(
             dock_bottom = placed.y + placed.height;
         }
         dock.anchor = Some(Anchor::Point(
-            Vec2::new(bands.right, placed.y + height / 2.0),
+            Vec2::new(right, placed.y + height / 2.0),
             Vec2::new(1.0, 0.5),
         ));
         dock
@@ -272,36 +290,37 @@ fn phone_bar(
         .gap(gap)
         .align_items(Align::Stretch)
         .children(controls.map(|controls| controls.element))
-        .children(others.clone().map(phone_button));
+        .children(others.clone().map(|button| slots.button(button)));
     let over = if held_up && dock.is_none() {
         dock_bottom
     } else if beside_right > 0.0 {
-        bands.your_strip.top - gap
+        slots.strip_top() - gap
     } else {
-        (dock_bottom - height).min(bands.your_strip.top) - gap
+        (dock_bottom - height).min(slots.strip_top()) - gap
     };
     let more = (!more.children.is_empty()).then(|| {
         let (width, tall) = others
-            .map(|b| (button_width(&b.label), height))
+            .map(|b| (slots.button_width(&b.label), height))
             .chain(controls_size)
-            .fold((data::BUTTON_MIN_WIDTH, -gap), |(width, tall), (w, h)| {
-                (width.max(w), tall + h + gap)
-            });
+            .fold(
+                (slots.metrics.button_min_width, -gap),
+                |(width, tall), (w, h)| (width.max(w), tall + h + gap),
+            );
         let beside = if beside_right > 0.0 {
             beside_right + gap
         } else {
             0.0
         };
-        let strip = rect(bands.right - width, over - tall, width, tall);
-        let middle_right = slots.middle(bands.right - beside - width, width, tall);
-        let middle_left = slots.middle(bands.left, width, tall);
+        let strip = rect(right - width, over - tall, width, tall);
+        let middle_right = slots.middle(right - beside - width, width, tall);
+        let middle_left = slots.middle(left, width, tall);
         let (slot, placed) = slots.place(
             "stacked prompt controls",
             strip,
             [middle_right, middle_left],
         );
         match slot {
-            1 => beside_right = bands.right - placed.x,
+            1 => beside_right = right - placed.x,
             2 => beside_left = placed.width,
             _ => {}
         }
@@ -312,8 +331,8 @@ fn phone_bar(
         more
     });
     let pill = (!asks.is_empty()).then(|| {
-        let place = PillPlace::beside_controls(held, over, beside_left, beside_right);
-        pill(asks, place, &slots)
+        let place = PillPlace::beside_controls(slots.held, over, beside_left, beside_right);
+        pill(asks, place, slots)
     });
     // The pill comes first, so that the buttons are drawn over it where they meet.
     holder()
@@ -323,43 +342,79 @@ fn phone_bar(
         .children(dock)
 }
 
-/// Builds the strip and middle-band candidates for a phone prompt.
+/// Resolves the slots used by a prompt whose controls can move around the cards.
 struct PromptSlots<'a> {
-    bands: &'a TableBands,
+    bar: Rect,
+    dock: Rect,
+    middle: Rect,
+    clearance: Rect,
+    asked: Rect,
+    metrics: FloatingPrompt,
     scene: Option<&'a PlacementScene>,
     held: bool,
     phase: (f32, f32),
 }
 
 impl<'a> PromptSlots<'a> {
-    fn new(input: &HudIn<'a>, bands: &'a TableBands, held: bool) -> Self {
-        Self {
-            bands,
+    fn new(input: &HudIn<'a>, held: bool) -> Option<Self> {
+        let profile = input.profile;
+        let metrics = profile.data().hud.floating_prompt?;
+        let [bar, dock, middle, clearance, asked, phase] = profile.slots([
+            "prompt.bar",
+            "prompt.dock",
+            "prompt.stacked",
+            "prompt.clearance",
+            "prompt.asked",
+            "phase",
+        ]);
+        let bar = bar?.rect;
+        let phase = input
+            .view
+            .filter(|_| profile.data().hud.table.contains(&Piece::Phase))
+            .and_then(|view| {
+                let bounds = phase_box(view.stack.is_empty(), phase?.rect);
+                Some((bounds.x, bounds.x + bounds.width))
+            })
+            .unwrap_or((bar.x, bar.x));
+        Some(Self {
+            bar,
+            dock: dock?.rect,
+            middle: middle?.rect,
+            clearance: clearance?.rect,
+            asked: asked?.rect,
+            metrics,
             scene: input.placement_scene,
             held,
-            phase: input.view.map_or((bands.left, bands.left), |view| {
-                phase_edges(view.stack.is_empty(), bands)
-            }),
-        }
+            phase,
+        })
+    }
+
+    fn strip_top(&self) -> f32 {
+        self.clearance.y + self.clearance.height
     }
 
     fn dock_bottom(&self) -> f32 {
-        let bottom = self.bands.your_strip.middle() + data::BUTTON_HEIGHT / 2.0;
+        let bottom = self.dock.y + self.dock.height;
         self.scene
             .into_iter()
             .flat_map(|scene| scene.group(Group::Hand))
-            .map(|card| card.y - data::DOCK_GAP)
+            .map(|card| card.y - self.metrics.gap)
             .fold(bottom, f32::min)
     }
 
     fn dock(&self, name: &'static str, width: f32, narrow: Option<f32>) -> (Rect, usize) {
         let bottom = self.dock_bottom();
-        let height = data::BUTTON_HEIGHT;
-        let strip = rect(self.bands.right - width, bottom - height, width, height);
-        let raised = bottom < self.bands.your_strip.middle() + height / 2.0;
+        let height = self.dock.height;
+        let strip = rect(
+            (self.dock.x + self.dock.width) - width,
+            bottom - height,
+            width,
+            height,
+        );
+        let raised = bottom < self.dock.y + height;
         let middle = |width| {
             raised
-                .then(|| self.middle(self.bands.right - width, width, height))
+                .then(|| self.middle((self.dock.x + self.dock.width) - width, width, height))
                 .flatten()
         };
         let (slot, placed) = self.place(name, strip, [middle(width), narrow.and_then(middle)]);
@@ -369,15 +424,15 @@ impl<'a> PromptSlots<'a> {
     /// A control may reach a few points past the band, where the table's card piles do too.
     fn middle(&self, left: f32, width: f32, height: f32) -> Option<Rect> {
         let (phase_left, phase_right) = self.phase;
-        let gap = data::DOCK_GAP;
+        let gap = self.metrics.gap;
         (!self.held
-            && height <= self.bands.middle.height + 2.0 * data::OVERLAP + 1.0
-            && left >= self.bands.left
+            && height <= self.middle.height + 2.0 * self.metrics.overlap + 1.0
+            && left >= self.middle.x
             && (left + width + gap <= phase_left || left - gap >= phase_right))
             .then(|| {
                 rect(
                     left,
-                    self.bands.middle.middle() - height / 2.0,
+                    self.middle.y + (self.middle.height - height) / 2.0,
                     width,
                     height,
                 )
@@ -409,7 +464,7 @@ impl<'a> PromptSlots<'a> {
         // must stay available even when no place can clear the table.
         let boxes = candidates
             .iter()
-            .map(|&(_, bounds)| inset(bounds, data::OVERLAP));
+            .map(|&(_, bounds)| inset(bounds, self.metrics.overlap));
         scene
             .place(name, of, boxes)
             .map_or((0, strip), |(index, _)| candidates[index])
@@ -426,12 +481,16 @@ fn table_rows() -> Vec<NodeQuery> {
 
 /// The dock: the button a prompt puts forward, drawn as the primary button, and the one that
 /// passes on beside it.
-fn dock(forward: Option<&PromptButton>, pass_on: Option<&PromptButton>) -> Element {
+fn dock(
+    forward: Option<&PromptButton>,
+    pass_on: Option<&PromptButton>,
+    slots: &PromptSlots,
+) -> Element {
     row()
         .name("dock")
-        .gap(data::DOCK_GAP)
+        .gap(slots.metrics.gap)
         .align_items(Align::Center)
-        .children(forward.map(phone_button))
+        .children(forward.map(|button| slots.button(button)))
         .children(pass_on.map(|button_view| {
             // The web's pass-on button is not an icon button: its face (`.pass-on-face` in
             // `controls.css`) casts no box shadow.
@@ -476,15 +535,14 @@ impl PillPlace {
 /// covers a card the prompt picks.
 fn pill(asks: &str, place: PillPlace, slots: &PromptSlots<'_>) -> Element {
     let style = TypeStyle {
-        size: data::PILL_TEXT,
+        size: slots.metrics.pill_text,
         ..type_style::TITLE
     };
-    let padding = data::PILL_PADDING;
+    let padding = slots.metrics.pill_padding;
     let height = style.size * style.line_height + padding;
-    let bands = slots.bands;
     let room = |taken: f32| {
         if taken > 0.0 {
-            taken + data::DOCK_GAP
+            taken + slots.metrics.gap
         } else {
             0.0
         }
@@ -492,11 +550,16 @@ fn pill(asks: &str, place: PillPlace, slots: &PromptSlots<'_>) -> Element {
     let (left, right) = match place {
         PillPlace::Middle => (0.0, 0.0),
         PillPlace::Beside { left, right } => (room(left), room(right)),
-        PillPlace::Over(_) => (0.0, room(data::BUTTON_MIN_WIDTH)),
+        PillPlace::Over(_) => (0.0, room(slots.metrics.button_min_width)),
     };
-    let width = bands.right - bands.left - left - right;
-    let x = bands.left + left;
-    let line = bands.middle.top + (bands.middle.height - height) / 2.0;
+    let area = if matches!(place, PillPlace::Over(_)) {
+        slots.asked
+    } else {
+        slots.bar
+    };
+    let width = area.width - left - right;
+    let x = area.x + left;
+    let line = slots.middle.y + (slots.middle.height - height) / 2.0;
     let top = match place {
         PillPlace::Over(bottom) => bottom - height,
         _ => line,
@@ -506,7 +569,7 @@ fn pill(asks: &str, place: PillPlace, slots: &PromptSlots<'_>) -> Element {
         if matches!(place, PillPlace::Over(_)) {
             scene.place("prompt pill", Vec::new(), [bounds.into()]);
         } else {
-            bounds = pill_slot(scene, bands, bounds, slots.phase.1);
+            bounds = pill_slot(scene, slots, bounds);
         }
     }
     let mut pill = text(asks)
@@ -520,7 +583,7 @@ fn pill(asks: &str, place: PillPlace, slots: &PromptSlots<'_>) -> Element {
         .passes(true);
     pill.style.padding = [padding / 2.0, padding, padding / 2.0, padding];
     pill.anchor = Some(match place {
-        PillPlace::Over(over) => Anchor::Point(Vec2::new(bands.left, over), Vec2::Y),
+        PillPlace::Over(over) => Anchor::Point(Vec2::new(x, over), Vec2::Y),
         _ => Anchor::Point(Vec2::new(bounds.x, bounds.y), Vec2::ZERO),
     });
     pill
@@ -528,13 +591,8 @@ fn pill(asks: &str, place: PillPlace, slots: &PromptSlots<'_>) -> Element {
 
 /// Tries the full prompt width at the nearest quiet height. When cards fill the middle of
 /// the board from top to bottom, the pill can use the space to either side of those cards.
-fn pill_slot(
-    scene: &PlacementScene,
-    bands: &TableBands,
-    preferred: Rect,
-    phase_right: f32,
-) -> Rect {
-    let gap = data::ASKED_GAP;
+fn pill_slot(scene: &PlacementScene, slots: &PromptSlots, preferred: Rect) -> Rect {
+    let gap = slots.metrics.asked_gap;
     let height = preferred.height;
     let cards: Vec<_> = [Group::YourRows, Group::TheirRows, Group::Stack]
         .into_iter()
@@ -545,22 +603,17 @@ fn pill_slot(
         cards
             .iter()
             .flat_map(|card| [card.y + card.height + gap, card.y - gap - height])
-            .filter(|&top| top >= bands.opponent_back.top && top + height <= bands.your_strip.top),
+            .filter(|&top| top >= slots.clearance.y && top + height <= slots.strip_top()),
     );
     tops.sort_by(|a, b| (a - preferred.y).abs().total_cmp(&(b - preferred.y).abs()));
     let full_width = tops.into_iter().map(|y| Candidate {
         bounds: Rect { y, ..preferred },
-        clearance: rect(
-            bands.left,
-            y - gap,
-            bands.right - bands.left,
-            height + 2.0 * gap,
-        ),
+        clearance: rect(slots.bar.x, y - gap, slots.bar.width, height + 2.0 * gap),
     });
 
     let end = preferred.x + preferred.width;
     // A narrower pill can wrap. Reserve an extra line when finding its horizontal slot.
-    let tall = 2.0 * height - data::PILL_PADDING;
+    let tall = 2.0 * height - slots.metrics.pill_padding;
     let (left, right) = cards
         .iter()
         .filter(|card| {
@@ -569,11 +622,11 @@ fn pill_slot(
         .fold((end, preferred.x), |(left, right), card| {
             (left.min(card.x), right.max(card.x + card.width))
         });
-    let start = preferred.x.max(phase_right + gap);
+    let start = preferred.x.max(slots.phase.1 + gap);
     let room = [((right + gap).max(start), end), (start, left - gap)];
     let beside = room
         .into_iter()
-        .filter(|(left, right)| right - left >= data::BUTTON_MIN_WIDTH)
+        .filter(|(left, right)| right - left >= slots.metrics.button_min_width)
         .map(|(left, right)| {
             let bounds = rect(left, preferred.y, right - left, height);
             let clearance = inset(
@@ -593,44 +646,42 @@ fn pill_slot(
         .map_or(preferred, |(_, bounds)| bounds)
 }
 
-/// About how wide a phone button with `label` is drawn, from the count of its characters, at
-/// least `BUTTON_MIN_WIDTH`: an estimate on the generous side, which only decides whether the
-/// button keeps clear of the table's cards where it stands.
-fn button_width(label: &str) -> f32 {
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "a button's label is a few words"
-    )]
-    let characters = label.chars().count() as f32;
-    (characters * data::BUTTON_TEXT * data::CHARACTER_WIDTH + 2.0 * data::BUTTON_PADDING)
-        .max(data::BUTTON_MIN_WIDTH)
-}
+impl PromptSlots<'_> {
+    /// Estimates how much room a button needs when finding a clear spot for it.
+    fn button_width(&self, label: &str) -> f32 {
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "a button's label is a few words"
+        )]
+        let characters = label.chars().count() as f32;
+        (characters * self.metrics.button_text * self.metrics.character_width
+            + 2.0 * self.metrics.button_padding)
+            .max(self.metrics.button_min_width)
+    }
 
-/// One of a prompt's buttons on the phone, as large as a finger (`.phone-dock .button`): the
-/// primary one drawn as the primary button.
-fn phone_button(button_view: &PromptButton) -> Element {
-    let widget = if button_view.primary { primary } else { button };
-    phone_sized(
-        widget(&button_view.label)
-            .enabled(button_view.enabled)
-            .on_press(Click::Button {
-                button: button_view.id,
-            }),
-    )
-}
+    fn button(&self, button_view: &PromptButton) -> Element {
+        let widget = if button_view.primary { primary } else { button };
+        self.sized(
+            widget(&button_view.label)
+                .enabled(button_view.enabled)
+                .on_press(Click::Button {
+                    button: button_view.id,
+                }),
+        )
+    }
 
-/// `element`, a button, as large as a finger (`.phone-dock .button`).
-fn phone_sized(element: Element) -> Element {
-    let mut element = element
-        .height(data::BUTTON_HEIGHT)
-        .min_width(data::BUTTON_MIN_WIDTH)
-        .style(TypeStyle {
-            size: data::BUTTON_TEXT,
-            ..type_style::BUTTON
-        });
-    let padding = data::BUTTON_PADDING;
-    element.style.padding = [0.0, padding, 0.0, padding];
-    element
+    fn sized(&self, element: Element) -> Element {
+        let mut element = element
+            .height(self.dock.height)
+            .min_width(self.metrics.button_min_width)
+            .style(TypeStyle {
+                size: self.metrics.button_text,
+                ..type_style::BUTTON
+            });
+        let padding = self.metrics.button_padding;
+        element.style.padding = [0.0, padding, 0.0, padding];
+        element
+    }
 }
 
 /// The words on the turn button's place while the opponent acts, Arena's label, which the
@@ -653,17 +704,16 @@ pub fn waiting(input: &HudIn) -> Option<Element> {
         return None;
     }
     let label = button(OPPONENTS_TURN).enabled(false);
-    let Some(bands) = input.profile.bands() else {
-        return Some(captioned_dock().child(turn_action(dock_sized(label), None, "")));
+    let Some(slots) = PromptSlots::new(input, false) else {
+        return Some(bar_column(input.profile).child(turn_action(dock_sized(label), None, "")));
     };
     // It stands where the dock would, raised over a hand whose back row stands in the strip. Where
     // that would cover a permanent of the viewer's back row and the label is too wide for the
     // middle band beside the phase icon or stack, it narrows to the room there and shrinks its
     // words to fit.
-    let slots = PromptSlots::new(input, &bands, false);
-    let wide = button_width(OPPONENTS_TURN);
-    let line = bands.middle.middle();
-    let half = data::BUTTON_HEIGHT / 2.0;
+    let wide = slots.button_width(OPPONENTS_TURN);
+    let line = slots.middle.y + slots.middle.height / 2.0;
+    let half = slots.dock.height / 2.0;
     let occupied_right = slots
         .scene
         .into_iter()
@@ -671,15 +721,16 @@ pub fn waiting(input: &HudIn) -> Option<Element> {
         .filter(|item| item.y < line + half && item.y + item.height > line - half)
         .map(|item| item.x + item.width)
         .fold(slots.phase.1, f32::max);
-    let room = bands.right - occupied_right - data::DOCK_GAP;
-    let narrow = (data::BUTTON_MIN_WIDTH..wide)
+    let right = slots.dock.x + slots.dock.width;
+    let room = right - occupied_right - slots.metrics.gap;
+    let narrow = (slots.metrics.button_min_width..wide)
         .contains(&room)
         .then_some(room);
     let (placed, slot) = slots.dock(OPPONENTS_TURN, wide, narrow);
-    let mut label = phone_sized(label);
+    let mut label = slots.sized(label);
     label.style.width = narrow.filter(|_| slot == 2);
     label.anchor = Some(Anchor::Point(
-        Vec2::new(bands.right, placed.y + placed.height / 2.0),
+        Vec2::new(right, placed.y + placed.height / 2.0),
         Vec2::new(1.0, 0.5),
     ));
     Some(holder().name("prompt").child(label))

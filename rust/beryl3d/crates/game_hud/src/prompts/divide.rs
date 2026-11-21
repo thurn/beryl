@@ -4,7 +4,7 @@
 //! The session opens the prompt with the least share on each recipient. Over each recipient
 //! the flat layer shows its share, between a button that gives it one more and one that takes
 //! one away, as the web interface's `Shares` (`ui/src/stage/Choose.tsx`) draws them (on the
-//! phone the buttons stand beside the card instead, `phone_share`); each
+//! phone the buttons stand beside the card instead, `edge_share`); each
 //! sends the session `Click::Number` with the share it asks for, and the session's reply
 //! brings the division as it now stands. The prompt bar says how much is not yet given out.
 //! Each recipient wears the target mark the session sends, with an arrow to it from the spell
@@ -20,7 +20,6 @@ use super::{Shown, Steps, begin_spans, end_spans, mark_spans, target_arrows};
 use crate::hud::HudIn;
 use crate::hud::placement_scene::{Group, PlacementScene, inset, rect};
 use game_play::light::Span;
-use kit_base::data::space::hud::phone::OVERLAP;
 use kit_base::tokens::{color, size, space, type_style};
 use kit_frame::frame::ElementId;
 use kit_scene::{Slot, hit::contains};
@@ -41,8 +40,8 @@ pub(super) fn screen(prompt: &PromptView, input: &HudIn) -> Option<Element> {
     };
     let left = *left;
     let controls = (shares.iter()).filter_map(|&share| {
-        if input.profile.bands().is_some() {
-            phone_share(share, left, input)
+        if let Some(slot) = input.profile.slot("divide.edge") {
+            edge_share(share, left, input, slot)
         } else {
             share_control(share, left)
         }
@@ -80,14 +79,15 @@ fn share_control(share: Share, left: u8) -> Option<Vec<Element>> {
 /// go above a card the opponent controls, at the top of the phone's table, and below one the
 /// viewer controls, towards the window's foot, so that neither stands over the middle of the
 /// table, where the prompt bar is.
-fn phone_share(share: Share, left: u8, input: &HudIn) -> Option<Vec<Element>> {
+fn edge_share(share: Share, left: u8, input: &HudIn, safe: Slot) -> Option<Vec<Element>> {
     let Subject::Object { slot } = share.on else {
         return None;
     };
     let theirs = (input.view)
         .and_then(|view| view.objects.iter().find(|object| object.slot == slot))
         .is_some_and(|object| object.controller == Side::Opponent);
-    let (more, less) = steps(share, left, size::ICON_BUTTON);
+    let target = input.profile.data().checks.target_points;
+    let (more, less) = steps(share, left, target);
     let mut control = column()
         .name(&format!("share {}", slot.0))
         .gap(space::S)
@@ -107,7 +107,7 @@ fn phone_share(share: Share, left: u8, input: &HudIn) -> Option<Vec<Element>> {
         .placement_scene
         .and_then(|layout| {
             let card = layout.bounds(ElementId(u32::from(slot.0)))?;
-            let size = size::ICON_BUTTON;
+            let size = target;
             let height = 2.0 * size + space::S;
             let x = card.x + (card.width - size) / 2.0;
             let above = rect(x, card.y - height, size, height);
@@ -117,11 +117,16 @@ fn phone_share(share: Share, left: u8, input: &HudIn) -> Option<Vec<Element>> {
             } else {
                 [below, above]
             };
-            let safe = Slot::safe_area(input.window);
+            let overlap = input
+                .profile
+                .data()
+                .hud
+                .floating_prompt
+                .map_or(0.0, |metrics| metrics.overlap);
             let candidates = preferred
                 .into_iter()
-                .filter(|&bounds| contains(safe, bounds))
-                .map(|bounds| inset(bounds, OVERLAP));
+                .filter(|&bounds| contains(safe.rect, bounds))
+                .map(|bounds| inset(bounds, overlap));
             let avoids = vec![
                 Group::YourRows.children(),
                 Group::TheirRows.children(),

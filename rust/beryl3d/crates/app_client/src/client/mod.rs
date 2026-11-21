@@ -461,7 +461,13 @@ impl Client {
         );
         (self.row_counts).write(&mut self.layer, self.show.table(), rows_counted);
         let at_rest = self.show.shown().map(|update| &update.view);
-        (self.banner).write(&mut self.layer, at_rest, table_now, self.window, visible);
+        (self.banner).write(
+            &mut self.layer,
+            at_rest,
+            table_now,
+            self.show.table().profile(),
+            visible,
+        );
         let (layout_nodes, text_runs) = self.layer.take_work();
         builder.layout_work(layout_nodes, text_runs);
         builder.placement_work(self.show.table().take_placed(), self.show.take_compiled());

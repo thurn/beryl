@@ -16,7 +16,7 @@ use glam::{Vec2, Vec3};
 
 use game_play::hud::counts::{index, points};
 use game_table::table::{ROWS, Rows, Scroller, Table, row_area};
-use kit_base::data::space::layout::desktop::ROW_COUNT_GAP;
+use kit_base::data::profiles::Piece;
 use kit_base::tokens::{size, type_style};
 use kit_ui::element::{Element, FloatId, floats, text};
 use kit_ui::layout::{FloatLook, Layer};
@@ -98,13 +98,15 @@ impl RowCounts {
 fn place(scroller: Scroller, right: bool, table: &Table) -> Option<(Vec2, Vec2)> {
     let layout = table.layout();
     let camera = table.camera();
+    let profile = table.profile().data();
+    let gap = profile.table.row_count_gap;
     // Beside the end, on the line's middle: the left count ends a gap before the line starts,
     // and the right count starts a gap after it ends.
     let beside = |left: f32, right_end: f32, y: f32| {
         Some(if right {
-            (Vec2::new(right_end + ROW_COUNT_GAP, y), Vec2::new(0.0, 0.5))
+            (Vec2::new(right_end + gap, y), Vec2::new(0.0, 0.5))
         } else {
-            (Vec2::new(left - ROW_COUNT_GAP, y), Vec2::new(1.0, 0.5))
+            (Vec2::new(left - gap, y), Vec2::new(1.0, 0.5))
         })
     };
     match scroller {
@@ -113,7 +115,7 @@ fn place(scroller: Scroller, right: bool, table: &Table) -> Option<(Vec2, Vec2)>
             let [left, right_end] =
                 [area.left, area.right].map(|x| camera.to_screen(Vec3::new(x, y, 0.0)));
             let (mut point, anchor) = beside(left.x, right_end.x, left.y)?;
-            if layout.bands.is_none() {
+            if profile.hud.table.contains(&Piece::StepStops) {
                 // A crowded lands row can end at the life orb. Keep its count outside
                 // the orb and step stops, rather than printing it through that furniture.
                 let life = points(layout.players[index(side)].life, camera.window.size);
@@ -123,9 +125,9 @@ fn place(scroller: Scroller, right: bool, table: &Table) -> Option<(Vec2, Vec2)>
                 if (point.y - life.y).abs() < half.y + half_line {
                     let half_width = size::STEPS_WIDTH / 2.0;
                     point.x = if right {
-                        point.x.max(life.x + half_width + ROW_COUNT_GAP)
+                        point.x.max(life.x + half_width + gap)
                     } else {
-                        point.x.min(life.x - half_width - ROW_COUNT_GAP)
+                        point.x.min(life.x - half_width - gap)
                     };
                 }
             }
@@ -136,18 +138,15 @@ fn place(scroller: Scroller, right: bool, table: &Table) -> Option<(Vec2, Vec2)>
             if layout.centred_stack_line().is_some() {
                 beside(low.x, high.x, f32::midpoint(low.y, high.y))
             } else if right {
-                Some((
-                    Vec2::new(high.x, high.y + ROW_COUNT_GAP),
-                    Vec2::new(1.0, 0.0),
-                ))
+                Some((Vec2::new(high.x, high.y + gap), Vec2::new(1.0, 0.0)))
             } else {
-                Some((Vec2::new(high.x, low.y - ROW_COUNT_GAP), Vec2::ONE))
+                Some((Vec2::new(high.x, low.y - gap), Vec2::ONE))
             }
         }
         Scroller::Hand => {
             // Over the corners of the column at the hand's top edge, inside it.
             let window = camera.window.size;
-            let y = (1.0 - layout.hand.edge) / 2.0 * window.height - ROW_COUNT_GAP;
+            let y = (1.0 - layout.hand.edge) / 2.0 * window.height - gap;
             let (left, right_end) = layout
                 .bands
                 .map_or((0.0, window.width), |bands| (bands.left, bands.right));

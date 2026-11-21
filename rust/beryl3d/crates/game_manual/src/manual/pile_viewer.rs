@@ -65,7 +65,10 @@ pub(crate) fn table_viewer(input: &HudIn, fields: &Fields, state: &PileViewer) -
         .child(controls(fields, state))
         .child(body);
     Some(viewer_dialog(
-        input.window.size,
+        (
+            input.window.size,
+            glam::Vec2::new(input.window.size.width, input.window.size.height) / 2.0,
+        ),
         (pile_title(side, zone), &count),
         cards.len(),
         size::OVERLAY_MAIN + 2.0 * space::L,

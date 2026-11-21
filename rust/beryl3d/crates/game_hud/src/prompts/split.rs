@@ -20,7 +20,6 @@ use glam::Vec2;
 use super::{Piles, Shown, Steps, prompt_bar, tray};
 use crate::hud::HudIn;
 use game_table::table::tray_boxes;
-use kit_base::data::audit;
 use kit_base::tokens::{color, size, type_style};
 use kit_text::text::TypeStyle;
 use kit_ui::element::{Anchor, Element, TextAlign, row, text};
@@ -48,14 +47,8 @@ pub(super) fn screen(prompt: &PromptView, input: &HudIn) -> Option<Element> {
     let heading = space.heading / per_point;
     let label = TypeStyle {
         weight: 600,
-        // On the phone no line of text is smaller than its least size (`agent::checks`).
-        size: ((space.heading * LABEL_SHARE).max(LABEL_LEAST) / per_point).max(
-            if input.window.phone() {
-                audit::PHONE_TEXT_POINTS
-            } else {
-                0.0
-            },
-        ),
+        size: ((space.heading * LABEL_SHARE).max(LABEL_LEAST) / per_point)
+            .max(input.profile.data().checks.text_points.unwrap_or(0.0)),
         line_height: 1.0,
         ..type_style::BODY
     };

@@ -2,14 +2,16 @@
 
 use app_screens::screens::Screen;
 use beryl_protocol::protocol::{Side, ZoneName};
-use game_hud::hud::phone::phase_edges;
-use game_hud::hud::placement_scene::{Group, PlacementScene, rect};
+use game_hud::hud::phase::phase_box;
+use game_hud::hud::placement_scene::{Group, PlacementScene};
+use kit_base::data::profiles::Piece;
 use kit_frame::frame::{ABILITY_IDS, ElementId, Role};
 
 impl super::Client {
     /// Projects the latest view's arranged objects for the phone's screen layout.
     pub(super) fn placement_scene(&self) -> Option<PlacementScene> {
-        let bands = self.show.table().profile().bands()?;
+        let profile = self.show.table().profile();
+        profile.data().hud.floating_prompt?;
         let mut layout = PlacementScene::default();
         let Some(update) = self.show.latest() else {
             return Some(layout);
@@ -43,10 +45,10 @@ impl super::Client {
                 camera.card_box(&pose).0,
             );
         }
-        if self.screen == Screen::Game {
-            let (left, right) = phase_edges(update.view.stack.is_empty(), &bands);
-            let side = right - left;
-            layout.phase(rect(left, bands.middle.middle() - side / 2.0, side, side));
+        if let Some(slot) = profile.slot("phase").filter(|_| {
+            self.screen == Screen::Game && profile.data().hud.table.contains(&Piece::Phase)
+        }) {
+            layout.phase(phase_box(update.view.stack.is_empty(), slot.rect));
         }
         Some(layout)
     }

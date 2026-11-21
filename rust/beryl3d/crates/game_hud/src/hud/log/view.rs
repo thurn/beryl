@@ -3,38 +3,31 @@
 use glam::Vec2;
 
 use super::{LIST, LogEntry, LogKind, Message};
-use game_table::profiles::TableBands;
-use kit_base::data::space::hud::{LOG_BUTTON_TOP, LOG_LEFT, LOG_TOP, phone as data};
+use kit_base::geometry::Rect;
 use kit_base::tokens::{color, size, space, type_style};
 use kit_ui::element::{Align, Anchor, Element, Justify, column, holder, row as flex_row, text};
 use kit_ui::widgets::{icon_button, icons, list};
 
-pub(super) fn desktop(open: bool, entries: &[LogEntry]) -> Element {
+pub(super) fn log_column(open: bool, entries: &[LogEntry], toggle: Rect, area: Rect) -> Element {
     let name = if open { "Hide log" } else { "Show log" };
     let mut button = icon_button(icons::LOG, name)
         .selected(open)
         .on_press(Message::Toggle);
-    button.anchor = Some(Anchor::Point(
-        Vec2::new(LOG_LEFT, LOG_BUTTON_TOP),
-        Vec2::ZERO,
-    ));
+    button.anchor = Some(Anchor::Point(Vec2::new(toggle.x, toggle.y), Vec2::ZERO));
     let list = (open && !entries.is_empty()).then(|| {
         // On the desktop the oldest lines fade out under the list's top edge, as
         // `.game-log-list`'s mask fades them; the phone's sheet has no mask.
-        let mut panel = (panel(entries)
-            .width(size::LOG_WIDTH)
-            .max_height(size::LOG_FOLDED_HEIGHT))
-        .mask(kit_base::tokens::gradient::LOG_MASK)
-        .enter(&kit_ui::widgets::screen::SCREEN_INSTANT);
-        panel.anchor = Some(Anchor::Point(Vec2::new(LOG_LEFT, LOG_TOP), Vec2::ZERO));
+        let mut panel = (panel(entries).width(area.width).max_height(area.height))
+            .mask(kit_base::tokens::gradient::LOG_MASK)
+            .enter(&kit_ui::widgets::screen::SCREEN_INSTANT);
+        panel.anchor = Some(Anchor::Point(Vec2::new(area.x, area.y), Vec2::ZERO));
         panel
     });
     holder().name("log").child(button).children(list)
 }
 
 /// The log's list of `entries`, oldest first, on its panel, with no size or place of its own:
-/// the column at the table's left sets them on the desktop, and the log's sheet on the phone
-/// (`hud::phone`).
+/// the column and sheet each place it in the log slot.
 fn panel(entries: &[LogEntry]) -> Element {
     let last = entries.len().saturating_sub(1);
     let rows = (entries.iter().enumerate()).map(|(at, entry)| {
@@ -85,11 +78,7 @@ fn row(entry: &LogEntry, before: usize, (last, first): (bool, bool)) -> Element 
 /// `ui/src/stage/PhoneChrome.tsx`): the column's width, between the opponent's strip and the hand,
 /// with its heading and a button that closes it over the list, which scrolls to its foot as the
 /// desktop's does.
-pub(super) fn phone(entries: &[LogEntry], bands: &TableBands) -> Element {
-    // Below the opponent's strip, so that the menu button stays clear of it.
-    let margin = data::SHEET_MARGIN;
-    let top = bands.opponent_strip.bottom() + margin;
-    let height = (bands.hand.top - margin - top).max(0.0);
+pub(super) fn sheet(entries: &[LogEntry], area: Rect) -> Element {
     let heading = flex_row()
         .align_items(Align::Center)
         .justify_content(Justify::SpaceBetween)
@@ -101,8 +90,8 @@ pub(super) fn phone(entries: &[LogEntry], bands: &TableBands) -> Element {
         .min_height(size::ICON_BUTTON);
     let mut sheet = column()
         .name("log sheet")
-        .width(bands.right - bands.left)
-        .max_height(height)
+        .width(area.width)
+        .max_height(area.height)
         .padding(space::M)
         .gap(space::S)
         .background(color::PANEL)
@@ -110,6 +99,6 @@ pub(super) fn phone(entries: &[LogEntry], bands: &TableBands) -> Element {
         .radius(size::PANEL_RADIUS)
         .child(heading)
         .child(list);
-    sheet.anchor = Some(Anchor::Point(Vec2::new(bands.left, top), Vec2::ZERO));
+    sheet.anchor = Some(Anchor::Point(Vec2::new(area.x, area.y), Vec2::ZERO));
     sheet
 }

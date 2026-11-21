@@ -74,7 +74,7 @@ fn pieces(view: &PlayerView, window: Window, profile: Profile<'_>) -> Option<(El
                 press: None,
                 choice: &[],
             };
-            (present(&shown, window), buttons, dock_slot.is_none())
+            (present(&shown, profile), buttons, dock_slot.is_none())
         }
         TablePrompt::Opening {
             hand,
@@ -120,7 +120,7 @@ fn pieces(view: &PlayerView, window: Window, profile: Profile<'_>) -> Option<(El
                 press: picking.then_some(bottom as fn(ObjectId) -> Action),
                 choice: &[],
             };
-            (present(&shown, window), buttons, false)
+            (present(&shown, profile), buttons, false)
         }
         TablePrompt::Sort { .. } => return None,
     };

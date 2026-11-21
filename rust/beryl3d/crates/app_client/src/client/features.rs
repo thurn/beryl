@@ -285,14 +285,7 @@ impl Mounted for GameLog {
     ) -> Option<&'a Element> {
         inputs.view?;
         let slot = Features::slot::<Self>(&mut features.slots, id);
-        let layout = if inputs.profile.data().table.bands.is_some() {
-            if !slot.state().open {
-                return None;
-            }
-            log::Layout::Sheet(inputs.profile.bands()?)
-        } else {
-            log::Layout::Sidebar
-        };
+        let layout = log::Layout::for_profile(inputs.profile, slot.state().open)?;
         Some(slot.view(log::Inputs {
             layout,
             history: &features.log_history,

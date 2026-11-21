@@ -6,6 +6,7 @@ use beryl_protocol::protocol::{AbilityClass, OutcomeView, PlayerView, Status};
 use game_table::faces::FaceList;
 use game_table::profiles::Profile;
 use game_table::table::Window;
+use kit_base::data::profiles::ResultLayout;
 use kit_scene::{Context, Feature};
 use kit_ui::element::Element;
 use kit_ui::input::{FaceId, Rect};
@@ -30,7 +31,10 @@ pub struct OpenStart;
 #[derive(Clone, Debug, PartialEq)]
 pub struct Inputs {
     window: Window,
-    dock: Option<(ScreenColumn, Rect)>,
+    area: Rect,
+    dock: Rect,
+    column: Option<ScreenColumn>,
+    layout: ResultLayout,
     outcome: Option<OutcomeView>,
     culprit: Option<FaceId>,
 }
@@ -61,9 +65,10 @@ impl Inputs {
         });
         Some(Self {
             window: profile.window(),
-            dock: profile
-                .screen_column()
-                .zip(profile.slot("result.dock").map(|slot| slot.rect)),
+            area: profile.slot("result")?.rect,
+            dock: profile.slot("result.dock")?.rect,
+            column: profile.screen_column(),
+            layout: profile.data().hud.result,
             outcome: outcome.cloned(),
             culprit,
         })

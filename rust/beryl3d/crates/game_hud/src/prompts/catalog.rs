@@ -13,7 +13,6 @@ use game_table::table::TraySpace;
 use kit_base::tokens::{color, size, type_style};
 use kit_frame::frame::Role;
 use kit_ui::element::{Align, Anchor, Element, Justify, column};
-use kit_ui::input::Rect;
 use kit_ui::widgets::list;
 
 /// What the flat layer shows for `prompt`: the shade over the table, then the prompt bar, then
@@ -45,17 +44,12 @@ fn entries_column(entries: &[String], chosen: Option<u16>, input: &HudIn) -> Ele
     // A phone gives the column the opponent's half of the table, down to the middle band, and
     // keeps every entry as tall as a finger, scrolling the list where they do not fit
     // (`.phone-board .stage-entries` in `ui/src/mobile/phone.css`).
-    let bands = input.profile.bands();
-    let space = bands.map_or(space, |bands| Rect {
-        x: bands.left,
-        y: bands.opponent_back.top,
-        width: bands.right - bands.left,
-        height: bands.middle.bottom() - bands.opponent_back.top,
-    });
+    let slot = input.profile.slot("prompt.catalog");
+    let space = slot.map_or(space, |slot| slot.rect);
     let rows = (entries.iter().enumerate()).map(|(index, words)| {
         let index = u16::try_from(index).unwrap_or(u16::MAX);
         let entry = entry(words, index, chosen == Some(index));
-        if bands.is_some() {
+        if slot.is_some() {
             entry.shrink(0.0)
         } else {
             entry

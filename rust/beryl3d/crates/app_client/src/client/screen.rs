@@ -243,21 +243,35 @@ impl Client {
             _ => self.undoable().map(|_| Action::new(ScreenPress::Undo)),
         };
         let bug = !self.bug_open();
-        let on_table = matches!(self.screen, Screen::Game | Screen::Table);
-        let gear = (on_table
-            && self.table_shown()
-            && self.show.table().profile().size_class() == kit_scene::SizeClass::Regular)
-            .then(|| screens::corner(bug, undo));
-        let shown = gear.is_some();
-        self.layer.float(floats::GEAR, gear);
-        if shown {
+        let profile = self.show.table().profile();
+        let at = match self.screen {
+            Screen::Game
+                if profile
+                    .data()
+                    .hud
+                    .table
+                    .contains(&kit_base::data::profiles::Piece::Gear) =>
+            {
+                profile
+                    .slot("gear")
+                    .map(|slot| Vec2::new(slot.rect.x + slot.rect.width, slot.rect.y))
+            }
+            Screen::Table if profile.size_class() == kit_scene::SizeClass::Regular => {
+                Some(Vec2::new(
+                    self.window.size.width - screens::GEAR_INSET,
+                    screens::GEAR_INSET,
+                ))
+            }
+            _ => None,
+        }
+        .filter(|_| self.table_shown());
+        self.layer
+            .float(floats::GEAR, at.map(|_| screens::corner(bug, undo)));
+        if let Some(point) = at {
             self.layer.set_float_look(
                 floats::GEAR,
                 FloatLook {
-                    point: Vec2::new(
-                        self.window.size.width - screens::GEAR_INSET,
-                        screens::GEAR_INSET,
-                    ),
+                    point,
                     anchor: Vec2::new(1.0, 0.0),
                     ..FloatLook::default()
                 },

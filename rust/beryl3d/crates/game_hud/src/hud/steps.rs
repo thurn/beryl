@@ -34,7 +34,7 @@ use glam::Vec2;
 
 use super::players::face_centre;
 use crate::hud::HudIn;
-use game_table::table::Window;
+use game_table::profiles::Profile;
 use kit_base::data::space::hud::{STEP_FIXED, STEP_OFF};
 use kit_base::tokens::{color, shadow, size};
 use kit_frame::frame::Role;
@@ -109,7 +109,7 @@ pub fn steps(input: &HudIn) -> Option<Element> {
     let view = input.view?;
     // A pile's viewer stands over the table and its controls, and its own buttons sit where
     // the stops beside the viewer's own orb stand.
-    if input.window.phone() || input.viewing.is_some() {
+    if input.viewing.is_some() {
         return None;
     }
     let stops = input.stops;
@@ -123,12 +123,12 @@ pub fn steps(input: &HudIn) -> Option<Element> {
         rows(
             Side::You,
             (Mode::Stops(stops.yours, current(Side::You)), active),
-            input.window,
+            input.profile,
         ),
         rows(
             Side::Opponent,
             (Mode::Stops(stops.theirs, current(Side::Opponent)), active),
-            input.window,
+            input.profile,
         ),
     ]))
 }
@@ -137,12 +137,16 @@ pub fn steps(input: &HudIn) -> Option<Element> {
 pub fn table_tracks(
     active: Side,
     lit: usize,
-    window: Window,
+    profile: Profile,
     press: fn(usize, bool) -> Action,
 ) -> Element {
     holder().name("steps").children([
-        rows(Side::You, (Mode::Table { lit, press }, active), window),
-        rows(Side::Opponent, (Mode::Table { lit, press }, active), window),
+        rows(Side::You, (Mode::Table { lit, press }, active), profile),
+        rows(
+            Side::Opponent,
+            (Mode::Table { lit, press }, active),
+            profile,
+        ),
     ])
 }
 
@@ -160,7 +164,7 @@ enum Mode {
 
 /// `side`'s twelve icons about their orb, for `mode`, in a turn whose active player is
 /// `active`.
-fn rows(side: Side, (mode, active): (Mode, Side), window: Window) -> Element {
+fn rows(side: Side, (mode, active): (Mode, Side), profile: Profile) -> Element {
     let whose = match side {
         Side::You => "Your",
         Side::Opponent => "Opponent's",
@@ -185,7 +189,7 @@ fn rows(side: Side, (mode, active): (Mode, Side), window: Window) -> Element {
         .grid_template_columns(vec![column, column, column, orb, column, column, column])
         .grid_template_rows(vec![row, row]);
     element.anchor = Some(Anchor::Point(
-        face_centre(side, window),
+        face_centre(side, profile),
         Vec2::new(0.5, 0.5),
     ));
     element.children((0..STEP_STOPS.len()).map(|at| {

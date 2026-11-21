@@ -12,8 +12,7 @@
 use beryl_protocol::protocol::{Combat, Kind, PlayerView, Side, Status, Step};
 use glam::Vec2;
 
-use super::players::orb_centre;
-use game_table::table::Window;
+use game_table::profiles::Profile;
 use kit_base::data::space::hud::{BANNER, BANNER_GAP};
 use kit_base::tokens::{color, gradient, ratio, shadow, size, type_style};
 use kit_frame::frame::Role;
@@ -99,7 +98,7 @@ impl Banner {
         layer: &mut Layer,
         view: Option<&PlayerView>,
         now: u64,
-        window: Window,
+        profile: Profile,
         visible: bool,
     ) {
         let wants = view.and_then(combat_banner);
@@ -117,13 +116,13 @@ impl Banner {
             layer.show_prepared(floats::STEP_BANNER, show.map(|detail| detail as u64));
             self.shown = show;
         }
-        let orb = orb_centre(Side::Opponent, window);
+        let orb = profile.player_centre(Side::Opponent);
         let below = orb.y + size::ORB_HEIGHT / 2.0 + size::ORB_BEZEL;
         if show.is_some() {
             layer.set_float_look(
                 floats::STEP_BANNER,
                 FloatLook {
-                    point: Vec2::new(window.size.width / 2.0, below + BANNER_GAP),
+                    point: Vec2::new(profile.window().size.width / 2.0, below + BANNER_GAP),
                     anchor: Vec2::new(0.5, 0.0),
                     ..FloatLook::default()
                 },

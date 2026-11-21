@@ -204,7 +204,7 @@ fn table_steps(input: &HudIn, size_class: SizeClass) -> Option<Element> {
     Some(steps::table_tracks(
         view.turn.active,
         lit,
-        input.window,
+        input.profile,
         |at, active| {
             Action::new(crate::manual::TablePress::Step {
                 #[expect(clippy::cast_possible_truncation, reason = "twelve icons")]

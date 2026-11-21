@@ -34,10 +34,11 @@ use beryl_protocol::script::{Mark, Subject};
 use glam::Vec2;
 
 use crate::hud::HudIn;
-use game_table::table::{CARD_HEIGHT, CARD_WIDTH, Window};
+use game_table::profiles::Profile;
+use game_table::table::{CARD_HEIGHT, CARD_WIDTH};
+use kit_base::data::profiles::{ScreenMetrics, WrappedHand};
 use kit_base::data::space::flat::opening as metrics;
-use kit_base::data::space::flat::phone::opening as phone;
-use kit_base::data::space::flat::phone::{ACTION_GAP, ACTION_HEIGHT, GUTTER};
+use kit_base::geometry::Rect;
 use kit_base::tokens::{color, size, type_style};
 use kit_frame::frame::{ElementId, Role};
 use kit_scene::Show;
@@ -86,7 +87,7 @@ fn opening_view<'a>(input: &HudIn<'a>) -> Option<&'a PlayerView> {
 /// leaves the prompt out.
 #[must_use]
 pub(crate) fn choosing_start(input: &HudIn) -> bool {
-    !input.window.phone()
+    input.profile.data().hud.opening.start_choice
         && !input.spinning
         && opening_view(input).is_some_and(|view| {
             view.turn.starting.is_none()
@@ -164,7 +165,7 @@ pub fn opening(input: &HudIn) -> Option<Element> {
                 &[]
             },
         },
-        input.window,
+        input.profile,
     ))
 }
 
@@ -196,20 +197,24 @@ pub struct Presentation<'a> {
 
 /// The opening `shown` describes, over the dimmed table: the coin, the title, the hand and the
 /// bottom slots, as the web's `OpeningPresentation` lays them out.
-pub fn present(shown: &Presentation, window: Window) -> Element {
+pub fn present(shown: &Presentation, profile: Profile) -> Element {
+    let window = profile.window();
+    let opening = profile.data().hud.opening;
+    let room = profile
+        .slot("opening")
+        .expect("validated opening slot")
+        .rect;
     let Presentation {
         view,
         starting,
         slots,
         ..
     } = *shown;
-    let sizes = if window.phone() {
-        // Room for both rows while cards move between the hand and the slots, as the web
-        // keeps it, and for the prompt's buttons in the dock under them.
-        let rows = shown.rows.div_ceil(phone::PER_ROW);
-        Sizes::phone(window, rows, slots, shown.actions)
+    let sizes = if let Some(wrapped) = opening.wrapped_hand {
+        let screen = profile.data().screen.expect("validated wrapped opening");
+        Sizes::wrapped(shown, wrapped, room, window.size.width, screen)
     } else {
-        Sizes::DESKTOP
+        Sizes::single_row(room.y)
     };
     let card = |slot: ObjectId, width: f32| {
         let mut card = card_box(view, slot, width);
@@ -256,7 +261,7 @@ pub fn present(shown: &Presentation, window: Window) -> Element {
             .passes(true)
             .child(hand_row);
     }
-    let dots = (shown.waiting && !window.phone()).then(waiting);
+    let dots = (shown.waiting && opening.waiting_dots).then(waiting);
     let slots_row = (slots > 0).then(|| {
         let boxes = (0..slots).map(|at| match shown.bottom.get(at) {
             Some(&slot) => card(slot, sizes.slot),
@@ -423,87 +428,97 @@ struct Sizes {
 
 impl Sizes {
     /// The desktop's: the hand in one row of large cards (`.opening`).
-    const DESKTOP: Self = Self {
-        top: metrics::TOP,
-        coin_height: metrics::COIN_HEIGHT,
-        coin_gap: metrics::COIN_GAP,
-        coin_align: Align::Center,
-        coin: COIN,
-        title: TITLE,
-        title_gap: metrics::TITLE_GAP,
-        card: metrics::CARD,
-        slot: metrics::SLOT,
-        card_gap: metrics::CARD_GAP,
-        slot_gap: metrics::SLOT_GAP,
-        slots_gap: metrics::SLOTS_GAP,
-        hand_width: None,
-    };
+    const fn single_row(top: f32) -> Self {
+        Self {
+            top,
+            coin_height: metrics::COIN_HEIGHT,
+            coin_gap: metrics::COIN_GAP,
+            coin_align: Align::Center,
+            coin: COIN,
+            title: TITLE,
+            title_gap: metrics::TITLE_GAP,
+            card: metrics::CARD,
+            slot: metrics::SLOT,
+            card_gap: metrics::CARD_GAP,
+            slot_gap: metrics::SLOT_GAP,
+            slots_gap: metrics::SLOTS_GAP,
+            hand_width: None,
+        }
+    }
 
     /// The phone's in `window` (`.phone-opening`, `phoneCardWidth` in
     /// `ui/src/screens/Opening.tsx`): the hand in rows of four cards, as large as fit between
     /// the coin and the dock with `rows` rows of the hand, `slots` slots for cards going to the
     /// bottom and `actions` buttons in the dock.
-    fn phone(window: Window, rows: usize, slots: usize, actions: usize) -> Self {
-        let safe = window.safe_area;
-        let narrow = window.size.width < phone::NARROW_BELOW;
+    fn wrapped(
+        shown: &Presentation,
+        wrapped: WrappedHand,
+        room: Rect,
+        width: f32,
+        screen: ScreenMetrics,
+    ) -> Self {
+        let Presentation {
+            rows,
+            slots,
+            actions,
+            ..
+        } = *shown;
+        // Reserve space while cards move from the hand into the bottom slots.
+        let rows = rows.div_ceil(wrapped.per_row.get());
+        let narrow = width < wrapped.narrow_below;
         let coin = if narrow {
-            phone::COIN_NARROW
+            wrapped.coin_narrow
         } else {
-            phone::COIN
+            wrapped.coin
         };
-        let per_row = phone::PER_ROW as f32;
-        let height = window.size.height - safe.top - safe.bottom;
-        let header = phone::TOP
-            + coin / 2.0
-            + phone::COIN_LINE
-            + phone::COIN_GAP
-            + phone::TITLE
-            + phone::TITLE_GAP;
-        let footer = GUTTER
+        let per_row = wrapped.per_row.get() as f32;
+        let header =
+            coin / 2.0 + wrapped.coin_line + wrapped.coin_gap + wrapped.title + wrapped.title_gap;
+        let footer = wrapped.dock_bottom
             + if actions > 0 {
-                actions as f32 * ACTION_HEIGHT + (actions - 1) as f32 * ACTION_GAP
+                actions as f32 * screen.action_height + (actions - 1) as f32 * screen.action_gap
             } else {
-                phone::NO_ACTIONS
+                wrapped.no_actions
             };
-        let gaps = rows.saturating_sub(1) as f32 * phone::GAP
-            + if slots > 0 { phone::SLOTS_GAP } else { 0.0 };
-        let card_rows = rows as f32 + if slots > 0 { phone::SLOT_SCALE } else { 0.0 };
+        let gaps = rows.saturating_sub(1) as f32 * wrapped.gap
+            + if slots > 0 { wrapped.slots_gap } else { 0.0 };
+        let card_rows = rows as f32 + if slots > 0 { wrapped.slot_scale } else { 0.0 };
         let most = if narrow {
-            phone::CARD_MOST_NARROW
+            wrapped.card_most_narrow
         } else {
-            phone::CARD_MOST
+            wrapped.card_most
         };
-        let across =
-            (window.size.width - safe.left - safe.right - (per_row - 1.0) * phone::GAP) / per_row;
+        let across = (room.width - (per_row - 1.0) * wrapped.gap) / per_row;
         let down =
-            (height - header - footer - gaps) * CARD_WIDTH / CARD_HEIGHT / card_rows.max(1.0);
+            (room.height - header - footer - gaps) * CARD_WIDTH / CARD_HEIGHT / card_rows.max(1.0);
         let card = most.min(across).min(down).max(0.0).floor();
         let slot = if slots > 0 {
-            let room = window.size.width - safe.left - safe.right - phone::SLOT_EDGE;
-            (phone::SLOT_SCALE * card).min((room - (slots - 1) as f32 * phone::GAP) / slots as f32)
+            let room = room.width - wrapped.slot_edge;
+            (wrapped.slot_scale * card)
+                .min((room - (slots - 1) as f32 * wrapped.gap) / slots as f32)
         } else {
             card
         };
         Self {
-            top: safe.top + phone::TOP - coin / 2.0,
-            coin_height: coin + phone::COIN_LINE,
-            coin_gap: phone::COIN_GAP,
+            top: room.y - coin / 2.0,
+            coin_height: coin + wrapped.coin_line,
+            coin_gap: wrapped.coin_gap,
             coin_align: Align::End,
             coin: TypeStyle {
-                size: phone::COIN_LINE,
+                size: wrapped.coin_line,
                 ..COIN
             },
             title: TypeStyle {
-                size: phone::TITLE,
+                size: wrapped.title,
                 ..TITLE
             },
-            title_gap: phone::TITLE_GAP,
+            title_gap: wrapped.title_gap,
             card,
             slot,
-            card_gap: phone::GAP,
-            slot_gap: phone::GAP,
-            slots_gap: phone::SLOTS_GAP,
-            hand_width: Some(per_row * card + (per_row - 1.0) * phone::GAP),
+            card_gap: wrapped.gap,
+            slot_gap: wrapped.gap,
+            slots_gap: wrapped.slots_gap,
+            hand_width: Some(per_row * card + (per_row - 1.0) * wrapped.gap),
         }
     }
 }

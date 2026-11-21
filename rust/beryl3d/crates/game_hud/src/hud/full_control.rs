@@ -2,7 +2,7 @@
 //! the web interface's `.full-control` stands it among the turn controls (`ui/src/stage/Chrome.tsx`
 //! and `ui/src/screens/styles/controls.css`): `right: 301px; top: 775px` in a 1600 by 900 stage,
 //! moved left by the round pass-on button and its gap while the prompt has one. The phone shows
-//! the sign in its middle band instead (`super::phone::middle`).
+//! the sign in its middle band instead (`super::phase::middle`).
 
 use beryl_protocol::prompt::ButtonId;
 use glam::Vec2;
@@ -11,7 +11,6 @@ use crate::hud::HudIn;
 use kit_base::tokens::{color, shadow, size, space};
 use kit_frame::frame::Role;
 use kit_ui::element::{Anchor, Element, Shown};
-use kit_ui::layout::DOCK_BOTTOM;
 use kit_ui::widgets::icons;
 
 /// The stop sign, while full control is on during a game on the desktop. Whether it is on is
@@ -20,19 +19,19 @@ use kit_ui::widgets::icons;
 #[must_use]
 pub fn full_control(input: &HudIn) -> Option<Element> {
     let on = input.view.is_some_and(|view| view.stops.full_control);
-    if !on || input.window.phone() {
+    if !on {
         return None;
     }
     // `.turn-controls:has(.pass-on-button) .full-control`: moved over for the round button.
     let pass_on = input.prompt.is_some_and(|prompt| {
         (prompt.buttons.iter()).any(|button_view| button_view.id == ButtonId::PassOn)
     });
-    let right = if pass_on {
-        size::FULL_CONTROL_RIGHT + size::BUTTON_HEIGHT + space::M
+    let dock = input.profile.slot("full_control")?.rect;
+    let moved = if pass_on {
+        size::BUTTON_HEIGHT + space::M
     } else {
-        size::FULL_CONTROL_RIGHT
+        0.0
     };
-    let window = input.window;
     let side = f32::from(icons::FULL_CONTROL_SIDE);
     // An icon named by its tip, as the web's sign is an `svg` under a `Tip` that says "Full
     // control".
@@ -46,10 +45,8 @@ pub fn full_control(input: &HudIn) -> Option<Element> {
     mark.shows = Some(Shown::Icon(icons::FULL_CONTROL, icons::FULL_CONTROL_SIDE));
     // `.full-control`'s `top: 775px` against the turn button's top at 765 in a 900-point stage:
     // the sign is centred on the turn button.
-    let button_top =
-        window.size.height - window.safe_area.bottom - DOCK_BOTTOM - size::BUTTON_HEIGHT;
-    let top = button_top + (size::BUTTON_HEIGHT - side) / 2.0;
-    let corner = Vec2::new(window.size.width - window.safe_area.right - right, top);
+    let top = dock.y + (dock.height - side) / 2.0;
+    let corner = Vec2::new(dock.x + dock.width - moved, top);
     mark.anchor = Some(Anchor::Point(corner, Vec2::new(1.0, 0.0)));
     Some(mark)
 }

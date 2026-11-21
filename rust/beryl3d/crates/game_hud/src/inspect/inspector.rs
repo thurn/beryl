@@ -21,8 +21,8 @@ use glam::Vec2;
 
 use crate::hud::HudIn;
 use game_table::faces::FaceList;
-use game_table::table::{CARD_HEIGHT, CARD_WIDTH, Window};
-use kit_base::data::space::layout::desktop::inspector as data;
+use game_table::table::{CARD_HEIGHT, CARD_WIDTH};
+use kit_base::data::profiles::Inspector;
 use kit_base::tokens::{color, size, space, type_style};
 use kit_frame::frame::Role;
 use kit_ui::element::{Element, Shown, column, row, text};
@@ -60,8 +60,10 @@ pub fn inspector(input: &HudIn) -> Option<Element> {
         .iter()
         .find(|object| object.slot == inspected.slot)?;
     let name = object.name.as_deref()?;
-    let per_point = data::STAGE_HEIGHT / input.window.size.height;
-    let pad = data::PAD / per_point;
+    let data = input.profile.data().table.inspector?;
+    let height = input.profile.slot("inspector")?.rect.height;
+    let per_point = data.stage_height / height;
+    let pad = data.pad / per_point;
     let inner = place.width - 2.0 * pad;
     let face = Element {
         shows: Some(Shown::Face(inspected.face, FaceSize::Full)),
@@ -247,13 +249,13 @@ fn paid_word(cost: PaidCost) -> &'static str {
 #[must_use]
 pub fn place(input: &HudIn) -> Option<Placed> {
     let inspected = input.inspected?;
-    if input.window.phone() {
-        return None;
-    }
+    let area = input.profile.slot("inspector")?.rect;
+    let data = input.profile.data().table.inspector?;
     let taken =
         input.view.is_some_and(|view| !view.stack.is_empty()) || !inspected.targets.is_empty();
     Some(stage_place(
-        input.window,
+        area,
+        data,
         inspected.x,
         taken,
         &inspected.targets,
@@ -275,33 +277,34 @@ struct Side {
     width: f32,
 }
 
-/// `inspectorPlace`, on a stage as tall as `data::STAGE_HEIGHT` and as wide as `window`'s shape
+/// `inspectorPlace`, on a stage as tall as `data.stage_height` and as wide as `window`'s shape
 /// makes it, turned into logical points of `window`.
-fn stage_place(window: Window, x: f32, taken: bool, targets: &[Rect]) -> Placed {
-    let per_point = data::STAGE_HEIGHT / window.size.height;
-    let stage_width = window.size.width * per_point;
+fn stage_place(area: Rect, data: Inspector, x: f32, taken: bool, targets: &[Rect]) -> Placed {
+    let per_point = data.stage_height / area.height;
+    let stage_width = area.width * per_point;
+    let x = x - area.x;
     // The web's `fromMiddle` and `fromRight`: a place drawn for the base stage, held to the
     // middle or to the right edge of a wider or narrower one.
-    let from_middle = |at: f32| at + (stage_width - data::BASE_WIDTH) / 2.0;
-    let from_right = |at: f32| at + stage_width - data::BASE_WIDTH;
+    let from_middle = |at: f32| at + (stage_width - data.base_width) / 2.0;
+    let from_right = |at: f32| at + stage_width - data.base_width;
     let left = Side {
-        left: data::EDGE,
-        top: data::TOP,
-        width: data::WIDTH,
+        left: data.edge,
+        top: data.top,
+        width: data.width,
     };
     let right = if taken {
         // Right of the life orbs, left of the stack, below the opponent's orb and above yours.
-        let start = from_middle(data::ORBS_RIGHT);
+        let start = from_middle(data.orbs_right);
         Side {
             left: start,
-            top: data::BETWEEN_TOP,
-            width: from_right(data::STACK_LEFT) - data::STACK_GAP - start,
+            top: data.between_top,
+            width: from_right(data.stack_left) - data.stack_gap - start,
         }
     } else {
         Side {
-            left: stage_width - data::WIDTH - data::EDGE,
-            top: data::TOP,
-            width: data::WIDTH,
+            left: stage_width - data.width - data.edge,
+            top: data.top,
+            width: data.width,
         }
     };
     let sides = if x * per_point >= stage_width / 2.0 {
@@ -312,8 +315,8 @@ fn stage_place(window: Window, x: f32, taken: bool, targets: &[Rect]) -> Placed 
     let targets: Vec<Rect> = targets
         .iter()
         .map(|target| Rect {
-            x: target.x * per_point,
-            y: target.y * per_point,
+            x: (target.x - area.x) * per_point,
+            y: (target.y - area.y) * per_point,
             width: target.width * per_point,
             height: target.height * per_point,
         })
@@ -321,7 +324,7 @@ fn stage_place(window: Window, x: f32, taken: bool, targets: &[Rect]) -> Placed 
     let mut chosen = None;
     'sides: for side in sides {
         let mut width = side.width;
-        while width >= data::LEAST_WIDTH {
+        while width >= data.least_width {
             // The left side keeps its left edge; the others their right one, by the stack or
             // the stage's edge.
             let place = Side {
@@ -333,32 +336,32 @@ fn stage_place(window: Window, x: f32, taken: bool, targets: &[Rect]) -> Placed 
                 width,
                 ..side
             };
-            if covered(place, &targets) <= 0.0 {
+            if covered(place, &targets, data) <= 0.0 {
                 chosen = Some(place);
                 break 'sides;
             }
-            width -= data::NARROW_STEP;
+            width -= data.narrow_step;
         }
     }
     let place = chosen.unwrap_or_else(|| {
-        if covered(sides[1], &targets) < covered(sides[0], &targets) {
+        if covered(sides[1], &targets, data) < covered(sides[0], &targets, data) {
             sides[1]
         } else {
             sides[0]
         }
     });
     Placed {
-        corner: Vec2::new(place.left, place.top) / per_point,
+        corner: Vec2::new(place.left, place.top) / per_point + Vec2::new(area.x, area.y),
         width: place.width / per_point,
     }
 }
 
 /// How much of `targets` the inspector at `place` covers, in square stage pixels: the web's
 /// `inspectorBox`, for a card with no lines under its face, against each target's box.
-fn covered(place: Side, targets: &[Rect]) -> f32 {
-    let inner = place.width - 2.0 * data::PAD;
+fn covered(place: Side, targets: &[Rect], data: Inspector) -> f32 {
+    let inner = place.width - 2.0 * data.pad;
     let right = place.left + place.width;
-    let bottom = place.top + inner * CARD_HEIGHT / CARD_WIDTH + 2.0 * data::PAD + data::ARTIST;
+    let bottom = place.top + inner * CARD_HEIGHT / CARD_WIDTH + 2.0 * data.pad + data.artist;
     targets
         .iter()
         .map(|target| {
@@ -375,18 +378,32 @@ fn covered(place: Side, targets: &[Rect]) -> f32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{Placed, stage_place};
-    use game_table::table::Window;
+    use super::{Placed, stage_place as place_in};
     use glam::Vec2;
-    use kit_ui::input::{Insets, Rect, Size};
+    use kit_base::data::profiles::{Profiles, SHIPPED};
+    use kit_ui::input::{Rect, Size};
 
-    fn window(width: f32, height: f32) -> Window {
-        Window {
-            size_class: None,
-            size: Size { width, height },
-            scale: 1.0,
-            safe_area: Insets::default(),
+    fn window(width: f32, height: f32) -> Rect {
+        Rect {
+            width,
+            height,
+            ..Rect::default()
         }
+    }
+
+    fn stage_place(area: Rect, x: f32, taken: bool, targets: &[Rect]) -> Placed {
+        let profiles = Profiles::parse(&SHIPPED).expect("repository profiles");
+        let data = profiles.for_size(Size {
+            width: area.width,
+            height: area.height,
+        });
+        place_in(
+            area,
+            data.table.inspector.expect("inspector metrics"),
+            x,
+            taken,
+            targets,
+        )
     }
 
     #[test]

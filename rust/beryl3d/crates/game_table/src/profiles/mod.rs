@@ -1,5 +1,7 @@
 //! The selected layout profile and its regions in one window.
 
+use beryl_protocol::protocol::Side;
+use glam::Vec2;
 use kit_base::data::profiles::{ProfileData, Profiles, Region, Row};
 use kit_base::geometry::{Rect, Window};
 use kit_scene::{SizeClass, Slot};
@@ -96,9 +98,38 @@ impl<'a> Profile<'a> {
         })
     }
 
+    /// The initial centre of a player's life total, before the hand can raise it.
+    #[must_use]
+    pub fn player_centre(self, side: Side) -> Vec2 {
+        let window = self.window.size;
+        if let Some(bands) = self.data.table.bands {
+            return Vec2::new(
+                window.width / 2.0,
+                phone::strip_with(self.window, side, bands).middle(),
+            );
+        }
+        let index = usize::from(side == Side::Opponent);
+        let ndc = REFERENCE.players[index].life;
+        Vec2::new(
+            f32::midpoint(ndc.x, 1.0) * window.width,
+            f32::midpoint(1.0, -ndc.y) * window.height,
+        )
+    }
+
     /// Resolves a named slot in logical points. An unknown name has no slot.
     #[must_use]
     pub fn slot(self, name: &str) -> Option<Slot> {
+        self.resolve_slot(name, || self.bands())
+    }
+
+    /// Resolves a group of slots against the same fitted table.
+    #[must_use]
+    pub fn slots<const N: usize>(self, names: [&str; N]) -> [Option<Slot>; N] {
+        let bands = std::cell::OnceCell::new();
+        names.map(|name| self.resolve_slot(name, || *bands.get_or_init(|| self.bands())))
+    }
+
+    fn resolve_slot(self, name: &str, bands: impl FnOnce() -> Option<TableBands>) -> Option<Slot> {
         let spec = *self.data.slots.get(name)?;
         let bounds = if spec.region == Region::Window {
             Rect {
@@ -111,11 +142,33 @@ impl<'a> Profile<'a> {
         };
         let region = match spec.region {
             Region::SafeArea | Region::Window => bounds,
+            Region::PlayerYou | Region::PlayerOpponent => {
+                let side = if spec.region == Region::PlayerYou {
+                    Side::You
+                } else {
+                    Side::Opponent
+                };
+                centred(bounds, self.player_centre(side))
+            }
+            Region::YourStrip | Region::OpponentStrip => {
+                let sizes = self.data.table.bands.expect("validated slot region");
+                let side = if spec.region == Region::YourStrip {
+                    Side::You
+                } else {
+                    Side::Opponent
+                };
+                let strip = phone::strip_with(self.window, side, sizes);
+                let (left, right) = phone::column(self.window, sizes);
+                Rect {
+                    x: left,
+                    y: strip.top,
+                    width: right - left,
+                    height: strip.height,
+                }
+            }
             region => {
-                let bands = self.bands().expect("validated slot region");
+                let bands = bands().expect("validated slot region");
                 let band = match region {
-                    Region::OpponentStrip => bands.opponent_strip,
-                    Region::YourStrip => bands.your_strip,
                     Region::Middle => bands.middle,
                     Region::PromptArea => Band {
                         top: bands.middle.top,
@@ -125,7 +178,19 @@ impl<'a> Profile<'a> {
                         top: bands.opponent_strip.bottom(),
                         height: bands.hand.top - bands.opponent_strip.bottom(),
                     },
-                    Region::SafeArea | Region::Window => unreachable!("handled above"),
+                    Region::AboveViewerRows => Band {
+                        top: bands.opponent_strip.top,
+                        height: bands.your_creatures.top - bands.opponent_strip.top,
+                    },
+                    Region::Battlefield => Band {
+                        top: bands.opponent_back.top,
+                        height: bands.your_strip.top - bands.opponent_back.top,
+                    },
+                    Region::Catalog => Band {
+                        top: bands.opponent_back.top,
+                        height: bands.middle.bottom() - bands.opponent_back.top,
+                    },
+                    _ => unreachable!("unbanded region handled above"),
                 };
                 Rect {
                     x: bands.left,
@@ -145,5 +210,19 @@ fn row(data: Row, centred: bool) -> RowArea {
         left: data.left,
         right: data.right,
         centre: centred.then_some(f32::midpoint(data.left, data.right)),
+    }
+}
+
+// The largest box within the safe area whose centre remains at the original anchor.
+fn centred(safe: Rect, centre: Vec2) -> Rect {
+    let start = Vec2::new(safe.x, safe.y);
+    let end = start + Vec2::new(safe.width, safe.height);
+    let centre = centre.clamp(start, end);
+    let half = (centre - start).min(end - centre);
+    Rect {
+        x: centre.x - half.x,
+        y: centre.y - half.y,
+        width: 2.0 * half.x,
+        height: 2.0 * half.y,
     }
 }

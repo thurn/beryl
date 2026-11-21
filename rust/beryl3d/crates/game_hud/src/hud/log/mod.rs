@@ -9,7 +9,9 @@ pub use lines::{LogKind, LogLine, Names, counter_name, learn_names, listed, log_
 
 use std::convert::Infallible;
 
-use game_table::profiles::TableBands;
+use game_table::profiles::Profile;
+use kit_base::data::profiles::Piece;
+use kit_base::geometry::Rect;
 use kit_scene::{Context, Feature};
 use kit_ui::element::Element;
 
@@ -35,8 +37,28 @@ pub enum Request {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Layout {
-    Sidebar,
-    Sheet(TableBands),
+    Column { toggle: Rect, panel: Rect },
+    Sheet(Rect),
+}
+
+impl Layout {
+    /// The log presentation mounted on the game screen, if this profile has one.
+    #[must_use]
+    pub fn for_profile(profile: Profile, open: bool) -> Option<Self> {
+        profile
+            .data()
+            .hud
+            .overlays
+            .iter()
+            .find_map(|piece| match piece {
+                Piece::LogColumn => Some(Self::Column {
+                    toggle: profile.slot("log.toggle")?.rect,
+                    panel: profile.slot("log")?.rect,
+                }),
+                Piece::LogSheet if open => Some(Self::Sheet(profile.slot("log")?.rect)),
+                _ => None,
+            })
+    }
 }
 
 pub struct Inputs<'a> {
@@ -84,8 +106,10 @@ impl Feature for GameLog {
     fn view(state: &State, inputs: Inputs<'_>) -> Element {
         let entries = inputs.history.entries();
         match inputs.layout {
-            Layout::Sidebar => view::desktop(state.open, entries),
-            Layout::Sheet(bands) => view::phone(entries, &bands),
+            Layout::Column { toggle, panel } => {
+                view::log_column(state.open, entries, toggle, panel)
+            }
+            Layout::Sheet(area) => view::sheet(entries, area),
         }
     }
 }

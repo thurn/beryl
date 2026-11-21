@@ -2005,9 +2005,8 @@ window.
   interactive element inside.
 - **Minimum sizes.** On the phone layout a check holds every touch target to at
   least 44 by 44 points and every line of text to at least 11 points.
-- **The phone's game screen** (`screens::game::game_compact`) places the
-  desktop's pieces in the table's bands (`Profile::bands`), with sizes from the
-  phone profile:
+- **The phone's game screen** (`screens::game::game`) reads its pieces and sizes
+  from the profile. The named slots place its controls in the table's bands.
   - Each orb is centred in its player's strip, drawn at half the desktop's size.
     When the viewer's hand needs more than one row, its back row stands in the
     viewer's strip, and a total in the strip's middle would split that row's

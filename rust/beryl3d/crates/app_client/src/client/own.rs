@@ -365,6 +365,7 @@ impl Client {
     /// the notices of the scripts to come: a script that waited to be compiled is compiled
     /// whole as the table is placed again, and its notices are laid out only now.
     pub(super) fn prepare_resized(&mut self) {
+        self.prepare_revealed_pile();
         (self.row_counts).prepare(&mut self.layer, self.show.coming_rows());
         self.prepare_counts();
         NoticeFloats::prepare(

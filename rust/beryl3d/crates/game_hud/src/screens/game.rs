@@ -7,59 +7,85 @@
 use glam::Vec2;
 
 use super::opening;
-use crate::hud::{HudIn, full_control, phone, players, steps};
+use crate::hud::{HudIn, full_control, phase, players, steps};
 use crate::inspect::viewer;
 use crate::prompts;
+use kit_base::data::profiles::Piece;
 use kit_base::tokens::ratio;
 use kit_ui::element::{Action, Anchor, Element, Shortcuts, holder, row};
 
-/// What the flat layer shows over a game. While none of its pieces shows anything, it is the
-/// open prompt's element alone, as it has been since the prompt bar was the only thing in the
-/// flat layer; with no prompt open, it is an empty region named "game".
+/// Composes the HUD in the order its profile gives. The opening dims the
+/// furniture underneath it. The prompt and its controls remain above the scrim.
 #[must_use]
-pub fn game(input: &HudIn, log: Option<Element>, result: Option<Element>) -> Element {
-    // Play or draw stands in the opening, not in the prompt bar.
-    let prompt = waiting(input).filter(|_| !opening::choosing_start(input));
-    // The orbs, the steps and the log stay up while scripts play, as the web interface's
-    // `Chrome` does; only what waits for the table (`Element::waits`) is held back. The
-    // opening does not wait: the web shows it, with the coin flip, while the hands are dealt.
-    // The life orbs and the step stops stand under its backdrop, which dims them, as the web's
-    // overlay is drawn over its `Hud`; full control's sign is hidden under it.
-    let shown = opening::shown(input);
-    let hud = [
-        players::players(input),
-        game_steps(input),
-        full_control::full_control(input).filter(|_| !shown),
-    ];
-    let over = [
-        log,
-        viewer::viewer(input),
-        // The result blurs everything drawn before it, the floats too (`Style::backdrop`).
-        result.map(Element::waits),
-    ];
+pub fn game(input: &HudIn, log: Option<Element>, result: Option<Element>, menu: Action) -> Element {
+    let layout = &input.profile.data().hud;
     let opening = opening::opening(input);
-    if hud.iter().chain(&over).all(Option::is_none) && opening.is_none() {
+    let is_opening = opening.is_some();
+    let prompt = waiting(input).filter(|_| !opening::choosing_start(input));
+    let covers = input.prompt.is_some_and(prompts::covers_table);
+    let overlays = overlays(input, log, result);
+    let mut menu = Some(menu);
+    let mut game = holder().name("game");
+
+    let under_prompt = (!is_opening && covers && layout.table.contains(&Piece::Phase))
+        .then(|| middle(input))
+        .flatten();
+    let mut furniture = Vec::with_capacity(layout.table.len());
+
+    if !is_opening || layout.table_under_opening {
+        for &piece in &layout.table {
+            let element = match piece {
+                Piece::Players => players::players(input),
+                Piece::StepStops => game_steps(input),
+                Piece::FullControl if !is_opening => full_control::full_control(input),
+                Piece::Phase if !covers => middle(input),
+                Piece::Menu if input.sheet.is_none() && input.view.is_some() => menu
+                    .take()
+                    .and_then(|press| phase::menu(input.profile, press)),
+                _ => None,
+            };
+            furniture.extend(element);
+        }
+    }
+    if !is_opening && furniture.is_empty() && overlays.is_empty() && !layout.anchored_to_window {
         return prompt.unwrap_or_else(|| row().name("game"));
     }
-    // The flat layer draws in tree order, so the opening, whose scrim dims the whole window,
-    // comes before the prompt, whose buttons would otherwise be drawn under it and look
-    // disabled. The opening has nothing Tab stops at, so Tab still reaches the prompt's buttons
-    // first. The prompt draws no panel, as the web's action dock draws none. Outside the
-    // opening the orbs and stops are drawn over the prompt.
-    let (under, after) = if opening.is_some() {
-        (hud, Default::default())
+    if is_opening && layout.table_under_opening {
+        game.children.extend(furniture);
+        game.children.extend(opening);
+        game.children.extend(prompt);
     } else {
-        (Default::default(), hud)
-    };
-    let mut children = Vec::with_capacity(under.len() + 2 + after.len() + over.len());
-    children.extend(under.into_iter().flatten());
-    children.extend(opening);
-    children.extend(prompt);
-    children.extend(after.into_iter().flatten());
-    children.extend(over.into_iter().flatten());
-    let mut game = holder().name("game");
-    game.children = children;
+        game.children.extend(opening);
+        game.children.extend(under_prompt);
+        game.children.extend(prompt);
+        game.children.extend(furniture);
+    }
+    game.children.extend(overlays);
+    if layout.anchored_to_window {
+        game.anchor = Some(Anchor::Point(Vec2::ZERO, Vec2::ZERO));
+    }
     game
+}
+
+fn middle(input: &HudIn) -> Option<Element> {
+    phase::middle(input.view?, input.stops.full_control, input.profile)
+}
+
+fn overlays(input: &HudIn, mut log: Option<Element>, mut result: Option<Element>) -> Vec<Element> {
+    input
+        .profile
+        .data()
+        .hud
+        .overlays
+        .iter()
+        .filter_map(|piece| match piece {
+            Piece::LogColumn | Piece::LogSheet => log.take(),
+            Piece::Viewer => viewer::viewer(input),
+            // The result blurs everything drawn before it, including floats.
+            Piece::Result => result.take().map(Element::waits),
+            _ => None,
+        })
+        .collect()
 }
 
 /// `element` with no press on it or anything in it, as an element under an overlay takes none.
@@ -76,6 +102,9 @@ fn inert(mut element: Element) -> Element {
 /// (`Layer::replace`).
 #[must_use]
 pub fn game_steps(input: &HudIn) -> Option<Element> {
+    if !input.profile.data().hud.table.contains(&Piece::StepStops) {
+        return None;
+    }
     let steps = steps::steps(input)?;
     Some(if opening::shown(input) {
         inert(steps).opacity(ratio::OPENING_HUD_OPACITY)
@@ -92,62 +121,4 @@ fn waiting(input: &HudIn) -> Option<Element> {
         .and_then(|prompt| prompts::screen(prompt, input))
         .or_else(|| prompts::waiting(input))
         .map(Element::waits)
-}
-
-/// What the flat layer shows over a game on the phone layout (docs/ui-conventions.md, "The
-/// phone"), as the web interface's `PhoneStageBoard` composes the desktop's pieces for a phone:
-/// both orbs centred in their strips, the menu button at the end of the opponent's strip, the
-/// phase in the middle band, and the open prompt split between a pill with what it asks and a
-/// dock of its buttons in the viewer's strip (`prompts::prompt_bar`). The log is a sheet the
-/// menu opens, and the step stops are not shown. Every piece stands at a point of the window, so
-/// the screen is an empty region at the window's corner that draws nothing and covers no card.
-#[must_use]
-pub fn game_compact(
-    input: &HudIn,
-    log: Option<Element>,
-    result: Option<Element>,
-    menu: Action,
-) -> Element {
-    let bands = input.profile.bands().unwrap_or_default();
-    let opening = opening::shown(input);
-    let prompt = waiting(input);
-    let middle = input
-        .view
-        .filter(|_| !opening)
-        .map(|view| phone::middle(view, input.stops.full_control, &bands));
-    // A prompt that lists what it asks about over the table, such as a catalog's entries, may
-    // reach into the middle band. The middle band's furniture then lies under the prompt's shade
-    // with the table, so that it is not drawn over the list's buttons, as the web's middle band
-    // lies under its `.stage-tray`.
-    let covers = input.prompt.is_some_and(prompts::covers_table);
-    let (middle_under, middle_over) = if covers {
-        (middle, None)
-    } else {
-        (None, middle)
-    };
-    let furniture = input.view.filter(|_| !opening).map(|_| {
-        [
-            players::players(input),
-            middle_over,
-            // A sheet drawn over the screen, the bug report, has its own controls there.
-            input.sheet.is_none().then(|| phone::menu(&bands, menu)),
-        ]
-    });
-    // The flat layer draws in tree order. The opening's scrim comes first, as on the desktop
-    // (`game`), so that it dims no control that still takes presses; like the desktop's, it
-    // shows while the hands are dealt. The result is drawn over
-    // everything else, which it blurs (`Style::backdrop`).
-    let mut screen = holder()
-        .name("game")
-        .children(opening::opening(input))
-        .children(middle_under)
-        .children(prompt)
-        .children(furniture.into_iter().flatten().flatten())
-        .children(
-            [result.map(Element::waits), log, viewer::viewer(input)]
-                .into_iter()
-                .flatten(),
-        );
-    screen.anchor = Some(Anchor::Point(Vec2::ZERO, Vec2::ZERO));
-    screen
 }

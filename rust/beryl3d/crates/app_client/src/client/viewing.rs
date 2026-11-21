@@ -7,6 +7,7 @@ use beryl_protocol::PlayerView;
 use beryl_protocol::protocol::{Declaration, ObjectId, Side, Step, StopsSetting, ZoneName};
 use beryl_protocol::script::{Act, OwnStep, Turn};
 use game_hud::inspect::Viewed;
+use glam::Vec2;
 
 use super::Client;
 use app_screens::screens::{Screen, ScreenIn};
@@ -27,7 +28,13 @@ const NS_PER_MS: f64 = 1_000_000.0;
 /// The keys the Revealed Cards pill is laid out under: the desktop's pill, and the phone's
 /// button over the pile, which never change.
 const PILL: u64 = 0;
-const REVEALED_PILE: u64 = 1;
+const PILE_BUTTON: u64 = 1;
+
+#[derive(Debug, Default)]
+struct RevealedControl {
+    shown: Option<u64>,
+    pile_slot: Option<kit_base::geometry::Rect>,
+}
 
 /// The client's record of the viewer and the Revealed Cards pill.
 #[derive(Debug, Default)]
@@ -38,8 +45,8 @@ pub(super) struct Viewing {
     pub(super) revealed: Vec<RevealedFace>,
     /// The boxes the screen shows cards in, kept so that finding them allocates nothing.
     placements: Vec<ShowPlacement>,
-    /// Which of the pill's keys is shown, if any.
-    pill: Option<u64>,
+    /// The Revealed Cards control, once a script has revealed a card.
+    revealed_control: Option<RevealedControl>,
     /// Whether the screen shows the opening hand (`screens::opening`), as it was laid out last
     /// and as it was before that, and the window it was laid out in last.
     pub(super) opening: bool,
@@ -265,9 +272,40 @@ impl Client {
         if reveals {
             self.layer
                 .prepare(floats::REVEALED, PILL, revealed::revealed);
-            self.layer
-                .prepare(floats::REVEALED, REVEALED_PILE, revealed::revealed_pile);
+            self.viewing
+                .revealed_control
+                .get_or_insert_with(RevealedControl::default);
+            self.prepare_revealed_pile();
         }
+    }
+
+    /// Sizes the transparent pile button before playback and after a resize.
+    pub(super) fn prepare_revealed_pile(&mut self) {
+        let Some(control) = &mut self.viewing.revealed_control else {
+            return;
+        };
+        let slot = self
+            .show
+            .table()
+            .profile()
+            .slot("revealed.pile")
+            .map(|slot| slot.rect);
+        if control.pile_slot.map(|area| (area.width, area.height))
+            != slot.map(|area| (area.width, area.height))
+        {
+            if control.shown == Some(PILE_BUTTON) {
+                self.layer.show_prepared(floats::REVEALED, None);
+                control.shown = None;
+            }
+            self.layer
+                .forget_prepared(floats::REVEALED, |key| key != PILE_BUTTON);
+            if let Some(area) = slot {
+                self.layer.prepare(floats::REVEALED, PILE_BUTTON, || {
+                    revealed::pile_button(area)
+                });
+            }
+        }
+        control.pile_slot = slot;
     }
 
     /// What each frame does for the screen's own clock: once the opening's coin has stopped
@@ -387,19 +425,21 @@ impl Client {
         if !holds && self.viewing.open == Some(Viewed::Revealed) {
             self.view(None);
         }
-        let compact = self.window.size_class() == kit_scene::SizeClass::Compact;
-        let key = if compact { REVEALED_PILE } else { PILL };
+        let Some(control) = &mut self.viewing.revealed_control else {
+            return;
+        };
+        let pile = control.pile_slot;
+        let key = if pile.is_some() { PILE_BUTTON } else { PILL };
         let shown = (visible && holds).then_some(key);
-        if shown != self.viewing.pill {
-            self.viewing.pill = shown;
+        if shown != control.shown {
+            control.shown = shown;
             self.layer.show_prepared(floats::REVEALED, shown);
         }
         if shown.is_some() {
-            let point = if compact {
-                revealed::pile_corner(self.window)
-            } else {
-                revealed::pill_corner(self.window.size)
-            };
+            let point = pile.map_or_else(
+                || revealed::pill_corner(self.window.size),
+                |area| Vec2::new(area.x, area.y),
+            );
             let look = FloatLook {
                 point,
                 ..FloatLook::default()

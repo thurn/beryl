@@ -117,14 +117,18 @@ pub fn phone_bands(window: Window) -> Option<TableBands> {
 /// place what stands in them on the frame path.
 #[must_use]
 pub fn strip(window: Window, side: Side) -> Band {
+    strip_with(window, side, BANDS)
+}
+
+pub(super) fn strip_with(window: Window, side: Side, sizes: Bands) -> Band {
     match side {
         Side::You => {
-            let bottom = window.size.height - hand_height(window, BANDS);
-            Band::between(bottom - data::bands::YOU_STRIP, bottom)
+            let bottom = window.size.height - hand_height(window, sizes);
+            Band::between(bottom - sizes.you_strip, bottom)
         }
         Side::Opponent => {
             let top = window.safe_area.top;
-            Band::between(top, top + data::bands::OPPONENT_STRIP)
+            Band::between(top, top + sizes.opponent_strip)
         }
     }
 }
@@ -150,7 +154,7 @@ const BANDS: Bands = Bands {
 };
 
 /// The left and right edges of the column, inside the safe area and the side gutters.
-fn column(window: Window, sizes: Bands) -> (f32, f32) {
+pub(super) fn column(window: Window, sizes: Bands) -> (f32, f32) {
     let inset = window.safe_area;
     (
         inset.left + sizes.side,

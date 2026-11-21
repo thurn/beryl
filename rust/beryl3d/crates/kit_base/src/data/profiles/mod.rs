@@ -11,7 +11,9 @@ mod screen;
 pub use screen::{BugScreen, ScreenMetrics, StartScreen};
 
 mod banded;
+mod hud;
 pub use banded::Banded;
+pub use hud::{FloatingPrompt, Hud, Incoming, Inspector, Piece, ResultLayout, WrappedHand};
 
 /// The space a feature has for its content.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
@@ -87,6 +89,9 @@ pub struct Table {
     pub strip: f32,
     #[serde(deserialize_with = "nonnegative")]
     pub gap: f32,
+    #[serde(deserialize_with = "nonnegative")]
+    pub row_count_gap: f32,
+    pub inspector: Option<Inspector>,
     #[serde(deserialize_with = "super::tuning::vector")]
     pub pile_step: Vec2,
     /// The remaining container values, also emitted as constants for placement that has yet
@@ -183,11 +188,16 @@ pub enum Region {
     #[default]
     SafeArea,
     Window,
+    PlayerYou,
+    PlayerOpponent,
     OpponentStrip,
     YourStrip,
     Middle,
     LogArea,
     PromptArea,
+    Catalog,
+    Battlefield,
+    AboveViewerRows,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
@@ -259,6 +269,7 @@ pub struct ProfileData {
     pub table_style: TableStyle,
     pub play: Play,
     pub checks: Checks,
+    pub hud: Hud,
     pub slots: BTreeMap<String, SlotSpec>,
     /// Tuning for screens that use a scrolling column.
     pub screen: Option<ScreenMetrics>,
@@ -379,8 +390,10 @@ impl ProfileData {
 
     fn validate_slots(&self) -> Result<(), String> {
         for (name, slot) in &self.slots {
-            if !matches!(slot.region, Region::SafeArea | Region::Window)
-                && self.table.bands.is_none()
+            if !matches!(
+                slot.region,
+                Region::SafeArea | Region::Window | Region::PlayerYou | Region::PlayerOpponent
+            ) && self.table.bands.is_none()
             {
                 return Err(format!("slots.{name} requires table.bands"));
             }
@@ -394,14 +407,13 @@ impl ProfileData {
         for name in [
             "settings.sheet",
             "prompt.bar",
-            "prompt.dock",
-            "prompt.stacked",
-            "prompt.asked",
+            "opening",
             "player.you",
             "player.opponent",
             "log",
-            "phase",
-            "menu",
+            "result",
+            "result.dock",
+            "viewer",
         ] {
             if !self.slots.contains_key(name) {
                 return Err(format!("missing slots.{name}"));
@@ -432,6 +444,26 @@ impl ProfileData {
                 if !self.slots.contains_key(name) {
                     return Err(format!("missing slots.{name}"));
                 }
+            }
+        }
+        if self.hud.opening.wrapped_hand.is_some() && self.screen.is_none() {
+            return Err("hud.opening.wrapped_hand requires screen metrics".to_owned());
+        }
+        let conditional_slots = [
+            (self.hud.floating_prompt.is_some(), "prompt.dock"),
+            (self.hud.floating_prompt.is_some(), "prompt.stacked"),
+            (self.hud.floating_prompt.is_some(), "prompt.asked"),
+            (self.hud.floating_prompt.is_some(), "prompt.clearance"),
+            (self.hud.table.contains(&Piece::Menu), "menu"),
+            (self.hud.table.contains(&Piece::Gear), "gear"),
+            (self.hud.table.contains(&Piece::Phase), "phase"),
+            (self.hud.table.contains(&Piece::FullControl), "full_control"),
+            (self.hud.overlays.contains(&Piece::LogColumn), "log.toggle"),
+            (self.table.inspector.is_some(), "inspector"),
+        ];
+        for (used, name) in conditional_slots {
+            if used && !self.slots.contains_key(name) {
+                return Err(format!("missing slots.{name}"));
             }
         }
         Ok(())
@@ -466,7 +498,12 @@ pub const SHIPPED: [(&str, &str); 2] = [
 ];
 
 impl Profiles {
-    pub(super) fn parse(files: &[(&str, &str)]) -> Result<Self, String> {
+    /// Loads the layout profiles in selection order.
+    ///
+    /// # Errors
+    ///
+    /// Returns the file and field at fault if the profiles are invalid.
+    pub fn parse(files: &[(&str, &str)]) -> Result<Self, String> {
         let mut profiles = Vec::with_capacity(files.len());
         let mut previous = 0.0;
         let mut names = BTreeSet::new();

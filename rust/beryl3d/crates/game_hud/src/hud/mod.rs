@@ -6,7 +6,7 @@ pub mod full_control;
 mod input;
 pub use input::HudIn;
 pub mod log;
-pub mod phone;
+pub mod phase;
 pub mod piles;
 pub mod placement_scene;
 pub mod players;

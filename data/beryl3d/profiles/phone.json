@@ -28,6 +28,7 @@
       "left": 12,
       "right": 152.1
     },
+    "row_count_gap": 4,
     "gap": 4,
     "pile_step": [3, 3],
     "bands": {
@@ -109,7 +110,113 @@
       "change": "around_total"
     }
   },
+  "hud": {
+    "table": [
+      "players",
+      "phase",
+      "menu"
+    ],
+    "overlays": [
+      "result",
+      "log_sheet",
+      "viewer"
+    ],
+    "table_under_opening": false,
+    "anchored_to_window": true,
+    "incoming": {
+      "left": 22,
+      "top": -4,
+      "min_width": 26,
+      "padding_x": 5,
+      "padding_y": 1,
+      "text": 13,
+      "opponent_top": -4
+    },
+    "opening": {
+      "start_choice": false,
+      "waiting_dots": false,
+      "wrapped_hand": {
+        "coin": 64,
+        "coin_narrow": 56,
+        "narrow_below": 393,
+        "coin_line": 13,
+        "coin_gap": 8,
+        "title": 18,
+        "title_gap": 16,
+        "card_most": 90,
+        "card_most_narrow": 86,
+        "per_row": 4,
+        "gap": 8,
+        "slot_scale": 0.8,
+        "slots_gap": 16,
+        "slot_edge": 16,
+        "no_actions": 40,
+        "dock_bottom": 16
+      }
+    },
+    "floating_prompt": {
+      "button_min_width": 84,
+      "character_width": 0.55,
+      "button_text": 18,
+      "button_padding": 12,
+      "overlap": 4,
+      "asked_gap": 4,
+      "pill_text": 16,
+      "pill_padding": 10,
+      "gap": 6
+    },
+    "result": {
+      "title": 36,
+      "reason": 16,
+      "reason_gap": 8,
+      "card": 160,
+      "card_gap": 12,
+      "narrow_card": {
+        "below": 393,
+        "width": 140
+      }
+    }
+  },
   "slots": {
+    "player.you": { "region": "your_strip" },
+    "player.opponent": { "region": "opponent_strip" },
+    "opening": {
+      "region": "safe_area",
+      "inset": [
+        88,
+        0,
+        0,
+        0
+      ]
+    },
+    "result": {
+      "region": "safe_area"
+    },
+    "viewer": {
+      "region": "window"
+    },
+    "prompt.clearance": {
+      "region": "battlefield"
+    },
+    "prompt.ways": {
+      "region": "above_viewer_rows"
+    },
+    "prompt.catalog": {
+      "region": "catalog"
+    },
+    "divide.edge": {
+      "region": "safe_area"
+    },
+    "revealed.pile": {
+      "region": "opponent_strip",
+      "inset": [
+        0,
+        0,
+        0,
+        82
+      ],
+      "max_width": 52
+    },
     "settings.sheet": {
       "region": "safe_area",
       "inset": [16, 16, 16, 16],
@@ -127,19 +234,12 @@
       "align_y": "center"
     },
     "prompt.stacked": {
-      "region": "prompt_area",
-      "align_x": "end"
+      "region": "middle"
     },
     "prompt.asked": {
       "region": "your_strip",
       "max_height": 44,
       "align_y": "center"
-    },
-    "player.you": {
-      "region": "your_strip"
-    },
-    "player.opponent": {
-      "region": "opponent_strip"
     },
     "log": {
       "region": "log_area",

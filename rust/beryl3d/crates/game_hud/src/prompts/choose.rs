@@ -23,7 +23,6 @@ use crate::hud::HudIn;
 use crate::hud::placement_scene::{Group, rect};
 use game_table::faces::FaceList;
 use game_table::table::{CARD_HEIGHT, CARD_WIDTH};
-use kit_base::data::space::hud::phone::CHARACTER_WIDTH;
 use kit_base::tokens::{color, ratio, size, space, type_style};
 use kit_frame::frame::Role;
 use kit_text::text::TypeStyle;
@@ -50,7 +49,7 @@ const DIMMED: [kit_ui::element::Filter; 2] = [
 pub(super) fn screen(prompt: &PromptView, input: &HudIn) -> Option<Element> {
     // The ways stand at a point of the window, outside the bar's flow, so the bar is laid out
     // as it is without them.
-    Some(bar(prompt, input, stepper(prompt)).children(ways_row(prompt, input)))
+    Some(bar(prompt, input, stepper(prompt, input)).children(ways_row(prompt, input)))
 }
 
 /// Whether `button` of the yes or no `prompt` shows what it would tap: its primary button, the
@@ -82,7 +81,7 @@ fn look(shown: Shown, marked: Marked) -> Option<Mark> {
 /// A number's value, with what it means, between the step to the value below it and the step
 /// to the value above it, as the web's `Stepper` draws it, and about how large it is drawn. A
 /// step with no value to go to cannot be pressed. Nothing for any other prompt.
-fn stepper(prompt: &PromptView) -> Option<Controls> {
+fn stepper(prompt: &PromptView, input: &HudIn) -> Option<Controls> {
     let ShapeBody::Number {
         values,
         value,
@@ -118,7 +117,18 @@ fn stepper(prompt: &PromptView) -> Option<Controls> {
         .child(step(above, icons::PLUS, "More"));
     Some(Controls {
         element,
-        size: stepper_size(&value.to_string(), detail.as_deref()),
+        size: input
+            .profile
+            .data()
+            .hud
+            .floating_prompt
+            .map_or((0.0, 0.0), |metrics| {
+                stepper_size(
+                    &value.to_string(),
+                    detail.as_deref(),
+                    metrics.character_width,
+                )
+            }),
     })
 }
 
@@ -127,14 +137,14 @@ fn stepper(prompt: &PromptView) -> Option<Controls> {
 /// decides where the stepper stands on the phone. `detail` is a cost, each `{...}` of which is
 /// one mana symbol drawn about as wide as its type is tall, and each other character of which
 /// counts as wide as its type is tall too.
-fn stepper_size(value: &str, detail: Option<&str>) -> (f32, f32) {
+fn stepper_size(value: &str, detail: Option<&str>, character_width: f32) -> (f32, f32) {
     let line = |style: TypeStyle| style.size * style.line_height;
     #[expect(
         clippy::cast_precision_loss,
         reason = "a value and its cost are a few characters"
     )]
     let (value_width, detail_width) = (
-        value.chars().count() as f32 * type_style::TITLE.size * CHARACTER_WIDTH,
+        value.chars().count() as f32 * type_style::TITLE.size * character_width,
         detail.map_or(0.0, |detail| {
             let symbols = detail.split('{').skip(1).count();
             let inside: usize = (detail.split('{').skip(1))
@@ -180,11 +190,12 @@ fn ways_row(prompt: &PromptView, input: &HudIn) -> Option<Element> {
         .align_items(Align::Center)
         .children(drawn);
     let mut top = tray.y;
-    if let (Some(scene), Some(bands)) = (input.placement_scene, input.profile.bands()) {
-        let above = bands.your_creatures.top - tray.height;
+    if let (Some(scene), Some(slot)) = (input.placement_scene, input.profile.slot("prompt.ways")) {
+        let area = slot.rect;
+        let above = area.y + area.height - tray.height;
         let candidates = [top, above]
             .into_iter()
-            .filter(|&top| top >= bands.opponent_strip.top)
+            .filter(|&top| top >= area.y)
             .map(|top| rect(tray.x, top, tray.width, tray.height).into());
         // The choices are shown over a shaded table. Prefer the normal tray, then the
         // last position above the viewer's front row before using the shaded tray.

@@ -7,14 +7,12 @@
 
 use crate::hud::GamePress;
 use crate::inspect::Viewed;
-use beryl_protocol::protocol::{ObjectId, Side};
+use beryl_protocol::protocol::ObjectId;
 use glam::Vec2;
 
-use game_table::profiles::phone::strip;
-use game_table::table::{CARD_HEIGHT, CARD_WIDTH, Window};
-use kit_base::data::space::hud::phone::REVEALED_WIDTH;
-use kit_base::data::space::layout::phone::bands::OPPONENT_STRIP;
+use game_table::table::{CARD_HEIGHT, CARD_WIDTH};
 use kit_base::data::space::revealed as data;
+use kit_base::geometry::Rect;
 use kit_base::tokens::{color, size, type_style};
 use kit_frame::frame::Role;
 use kit_ui::element::{Align, Element, Shown, row};
@@ -67,24 +65,14 @@ pub fn revealed() -> Element {
 /// the pile's faces lie at a pile's size, which opens the pile's viewer as a press on a pile
 /// does (`.phone-pile-button` in `ui/src/mobile/phone.css`).
 #[must_use]
-pub fn revealed_pile() -> Element {
+pub fn pile_button(area: Rect) -> Element {
     Element::new(Role::Button)
         .name(REVEALED)
         .on_press(GamePress::View(Viewed::Revealed))
-        .width(REVEALED_WIDTH)
-        .height(OPPONENT_STRIP)
+        .width(area.width)
+        .height(area.height)
         .background([0; 4])
         .border(([0; 4], 0.0))
-}
-
-/// Where the phone's button over the pile stands in a phone `window`, its top left corner in
-/// logical points: centred on the opponent's third pile place, after their library and
-/// graveyard, which the phone leaves free since it rests exiled cards under the graveyard.
-#[must_use]
-pub fn pile_corner(window: Window) -> Vec2 {
-    let strip = strip(window, Side::Opponent);
-    let x = window.safe_area.left + kit_base::data::space::layout::phone::piles::opponent::X.z;
-    Vec2::new(x - REVEALED_WIDTH / 2.0, strip.top)
 }
 
 /// Where the pill's top left corner stands in a window of `window`'s size, in logical points:

@@ -25,15 +25,13 @@ use glam::Vec2;
 
 use crate::hud::HudIn;
 use game_play::art::orb;
-use game_table::profiles::phone::strip;
-use game_table::table::{REFERENCE, Window};
+use game_table::profiles::Profile;
+use kit_base::data::profiles::{Incoming, SizeClass};
 use kit_base::data::space::hud::incoming as badge;
 use kit_text::text::TypeStyle;
 use kit_text::text::fonts::Font;
 use kit_ui::element::{Anchor, Element, Position, Shadow, Shown, TextAlign, holder, text};
 use kit_ui::input::Rect;
-
-use game_play::hud::counts::{index, points};
 
 /// What the game screen shows for the players: both orbs, once a game has a view.
 #[must_use]
@@ -42,20 +40,8 @@ pub fn players(input: &HudIn) -> Option<Element> {
     Some(
         holder()
             .name("players")
-            .children([Side::You, Side::Opponent].map(|side| orb(view, side, input.window))),
+            .children([Side::You, Side::Opponent].map(|side| orb(view, side, input.profile))),
     )
-}
-
-/// The middle of `side`'s orb in a window, in logical points: where the table's layout puts
-/// their life total, which on the phone layout is the middle of their strip
-/// (`table::phone::strip`) until the viewer's hand reaches into it. The table then raises the
-/// viewer's total over the hand (`table::phone::your_life`), and their orb follows it.
-#[must_use]
-pub fn orb_centre(side: Side, window: Window) -> Vec2 {
-    if window.phone() {
-        return Vec2::new(window.size.width / 2.0, strip(window, side).middle());
-    }
-    points(REFERENCE.players[index(side)].life, window.size)
 }
 
 /// The name of `side`'s orb in the tree, by which the "marks on their things" check finds the
@@ -89,16 +75,15 @@ pub fn core_box(side: Side, art: Rect) -> Rect {
 
 /// `side`'s orb as `view` shows it: one element the size of the web's orb art, showing the art
 /// (`Shown::Layers`).
-fn orb(view: &PlayerView, side: Side, window: Window) -> Element {
+fn orb(view: &PlayerView, side: Side, profile: Profile) -> Element {
     let active = view.turn.active == side;
     let life = match side {
         Side::You => view.players.you.life,
         Side::Opponent => view.players.opponent.life,
     };
-    // The phone's strips are lower than the desktop's orb, so it draws the orb smaller, as the
-    // web's `.phone-orb .life-orb` scales it.
-    let scale = u8::from(window.phone());
-    let units = orb::SCALES[usize::from(scale)];
+    let compact = profile.size_class() == SizeClass::Compact;
+    let scale = u8::from(compact);
+    let units = profile.data().play.life.orb_scale;
     let [_, _, width, height] = orb::ART;
     let mut element = Element::new(kit_frame::frame::Role::Region)
         .name(orb_name(side))
@@ -106,18 +91,23 @@ fn orb(view: &PlayerView, side: Side, window: Window) -> Element {
         .height(height * units)
         .selected(active)
         .passes(true)
-        .children(
-            incoming(view, side)
-                .map(|damage| incoming_text(damage, life, side, width * units, window.phone())),
-        );
+        .children(incoming(view, side).map(|damage| {
+            incoming_text(
+                damage,
+                life,
+                side,
+                width * units,
+                profile.data().hud.incoming,
+            )
+        }));
     element.shows = Some(Shown::Layers(orb::artwork(side, active, scale)));
     // On a phone the table raises the viewer's total over a hand of several rows
     // (`table::phone::your_life`), so the orb follows the player's anchor on every frame.
     let middle = Vec2::new(0.5, 0.5);
-    element.anchor = Some(if window.phone() {
+    element.anchor = Some(if compact {
         Anchor::Object(Subject::Player { player: side }, middle)
     } else {
-        Anchor::Point(orb_centre(side, window), middle)
+        Anchor::Point(orb_point(side, profile), middle)
     });
     element
 }
@@ -125,9 +115,18 @@ fn orb(view: &PlayerView, side: Side, window: Window) -> Element {
 /// The middle of `side`'s core in a window, in logical points: where the life total and the
 /// step stops centre on the orb, a few points off the middle of its art (`orb::face_offset`).
 #[must_use]
-pub fn face_centre(side: Side, window: Window) -> Vec2 {
-    let units = orb::SCALES[usize::from(window.phone())];
-    orb_centre(side, window) + Vec2::new(0.0, orb::face_offset(side) * units)
+pub fn face_centre(side: Side, profile: Profile) -> Vec2 {
+    let units = profile.data().play.life.orb_scale;
+    orb_point(side, profile) + Vec2::new(0.0, orb::face_offset(side) * units)
+}
+
+fn orb_point(side: Side, profile: Profile) -> Vec2 {
+    let name = match side {
+        Side::You => "player.you",
+        Side::Opponent => "player.opponent",
+    };
+    let area = profile.slot(name).expect("validated player slot").rect;
+    Vec2::new(area.x + area.width / 2.0, area.y + area.height / 2.0)
 }
 
 /// The incoming badge's colors, from `.life-incoming` in `ui/src/screens/styles/table.css`:
@@ -147,36 +146,25 @@ const LETHAL_INK: [u8; 4] = [255, 255, 255, 255];
 /// for the viewer and the lower for the opponent, as `.life-incoming` places it, a fixed
 /// distance right of the middle of the orb's art, which is `orb_width` wide. A phone puts it on
 /// the upper rim for both players, as `.phone-orb .life-incoming` does.
-fn incoming_text(damage: i32, life: i32, side: Side, orb_width: f32, phone: bool) -> Element {
+fn incoming_text(damage: i32, life: i32, side: Side, orb_width: f32, metrics: Incoming) -> Element {
     let lethal = damage > 0 && damage >= life;
     let words = if damage > 0 {
         format!("\u{2212}{damage}")
     } else {
         "0".to_owned()
     };
-    let (left, top, min_width, padding_x, padding_y, text_size) = if phone {
-        (
-            badge::phone::LEFT,
-            badge::phone::TOP,
-            badge::phone::MIN_WIDTH,
-            badge::phone::PADDING_X,
-            badge::phone::PADDING_Y,
-            badge::phone::TEXT,
-        )
-    } else {
-        let top = match side {
-            Side::You => badge::TOP,
-            Side::Opponent => badge::OPPONENT_TOP,
-        };
-        (
-            badge::LEFT,
-            top,
-            badge::MIN_WIDTH,
-            badge::PADDING_X,
-            badge::PADDING_Y,
-            badge::TEXT,
-        )
+    let top = match side {
+        Side::You => metrics.top,
+        Side::Opponent => metrics.opponent_top,
     };
+    let Incoming {
+        left,
+        min_width,
+        padding_x,
+        padding_y,
+        text: text_size,
+        ..
+    } = metrics;
     let (fill, ring, ink) = if lethal {
         (LETHAL_FILL, LETHAL_RING, LETHAL_INK)
     } else {

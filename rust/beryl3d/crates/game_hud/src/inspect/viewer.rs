@@ -31,6 +31,8 @@ use kit_ui::widgets::{icon_button, icons};
 /// rows. Its close button and Escape close it (`Dismiss::Viewer`).
 #[must_use]
 pub fn viewer(input: &HudIn) -> Option<Element> {
+    let area = input.profile.slot("viewer")?.rect;
+    let centre = Vec2::new(area.x + area.width / 2.0, area.y + area.height / 2.0);
     let (title, boxes) = match input.viewing? {
         Viewed::Pile(side, zone) => {
             let view = input.view?;
@@ -47,7 +49,7 @@ pub fn viewer(input: &HudIn) -> Option<Element> {
     let count = boxes.len();
     let close = icon_button(icons::CLOSE, "close").on_press(GamePress::DismissViewer);
     Some(viewer_dialog(
-        input.window.size,
+        (input.window.size, centre),
         (&title, &count_text(count, input.viewing?)),
         count,
         size::VIEWER_MIN_WIDTH,
@@ -61,7 +63,7 @@ pub fn viewer(input: &HudIn) -> Option<Element> {
 /// with its count and close control. The full choice overlay puts a large title at the
 /// opponent's life total instead. Cards keep their existing grid and travel into its boxes.
 pub fn viewer_dialog(
-    window: Size,
+    (window, centre): (Size, Vec2),
     (title, count): (&str, &str),
     cards: usize,
     minimum_width: f32,
@@ -92,10 +94,7 @@ pub fn viewer_dialog(
         panel = panel.child(row().name("actions").gap(space::M).children(actions));
     }
     panel.style.padding = [space::M, space::L, space::L, space::L];
-    panel.anchor = Some(Anchor::Point(
-        Vec2::new(window.width, window.height) / 2.0,
-        Vec2::splat(0.5),
-    ));
+    panel.anchor = Some(Anchor::Point(centre, Vec2::splat(0.5)));
     let mut shell = column()
         .name("overlay")
         .width(window.width)
