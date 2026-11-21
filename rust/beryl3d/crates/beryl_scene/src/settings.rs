@@ -6,7 +6,7 @@
 
 use beryl_protocol::StopsSetting;
 
-use crate::manual::bindings::Bindings;
+use game_manual::manual::bindings::Bindings;
 
 /// Everything the player sets that outlives a game: the web interface's `AudioSettings`
 /// (`ui/src/audio/sound.ts`), its stops (`beryl.stops` in `ui/src/game/stops.ts`) and its

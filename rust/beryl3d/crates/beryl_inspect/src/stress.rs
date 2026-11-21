@@ -15,8 +15,8 @@ use beryl_protocol::script::{
     replay, time_script,
 };
 use beryl_scene::agent::Rule;
-use beryl_scene::probe::{self, card, permanent};
-use beryl_scene::testing;
+use game_probe::probe::{self, card, permanent};
+use game_probe::testing;
 
 /// A synthetic board and any scripted changes to it.
 #[derive(Clone, Debug, PartialEq)]
@@ -146,7 +146,7 @@ pub fn stress(name: &str) -> Option<Stress> {
 }
 
 /// A battlefield of `count` permanents, then the same one after 40 of them have moved to its
-/// end: the board the app also draws to choose its tier (`beryl_scene::probe`).
+/// end: the board the app also draws to choose its tier (`game_probe::probe`).
 fn board(count: u16) -> Stress {
     let probe::Board { views, timings } = probe::board(count);
     Stress {

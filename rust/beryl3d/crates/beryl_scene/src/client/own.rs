@@ -12,7 +12,7 @@ use beryl_protocol::script::{Arrow, OwnStep, Subject, Verb};
 use glam::Vec2;
 
 use super::Client;
-use crate::prompts;
+use game_hud::prompts;
 use game_play::hud::notices::NoticeFloats;
 use game_play::light::Aim;
 use game_play::play::PlacedLetGo;

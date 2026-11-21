@@ -11,8 +11,8 @@ use beryl_protocol::prompt::Purpose;
 use beryl_protocol::protocol::{ObjectId, Side, ZoneName};
 
 use super::Client;
-use crate::inspect::inspector::{self, Inspected};
 use crate::screens::{Screen, ScreenIn};
+use game_hud::inspect::inspector::{self, Inspected};
 use kit_frame::frame::{ElementId, Place, Role, StateBits};
 use kit_ui::element::floats;
 use kit_ui::input::Rect;

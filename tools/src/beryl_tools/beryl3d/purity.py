@@ -14,7 +14,8 @@ from typing import NamedTuple, TypedDict, cast
 from .. import paths
 
 SCENE = "beryl_scene"
-TOOLKIT_CRATES: set[str] = {
+SCENE_CRATES: set[str] = {
+    SCENE,
     "kit_base",
     "kit_text",
     "kit_frame",
@@ -23,22 +24,17 @@ TOOLKIT_CRATES: set[str] = {
     "kit_fx",
     "kit_scene",
     "kit_probe",
+    "game_table",
+    "game_play",
+    "game_hud",
+    "game_manual",
+    "game_probe",
 }
-SCENE_CRATES: set[str] = TOOLKIT_CRATES | {SCENE, "game_table", "game_play"}
 RENDER = "beryl_render"
 INSPECT = "beryl_inspect"
 # Scene and toolkit code must be deterministic and independent of the host. These `std`
 # paths are banned even when they appear in grouped imports (docs/beryl-3d.md, "Determinism").
-SCENE_MODULES: tuple[str, ...] = (
-    "time",
-    "thread",
-    "fs",
-    "net",
-    "env",
-    "process",
-    "io",
-    "os",
-)
+SCENE_MODULES: set[str] = {"time", "thread", "fs", "net", "env", "process", "io", "os"}
 # The names it may not use at all, however they were imported: maps seeded per process, clocks,
 # locks and global state.
 SCENE_NAMES: tuple[str, ...] = (
@@ -309,13 +305,15 @@ def data_names(root: Path) -> list[str]:
 
 # Elements take their sizes from kit_base design tokens (docs/beryl-3d.md, "Elements").
 TOKEN_FOLDERS: tuple[tuple[str, str], ...] = (
-    (SCENE, "screens"),
-    (SCENE, "prompts"),
     ("kit_ui", "widgets"),
-    (SCENE, "hud"),
     ("game_play", "hud"),
-    (SCENE, "inspect"),
-    (SCENE, "manual"),
+    ("game_hud", "hud"),
+    ("game_hud", "inspect"),
+    ("game_hud", "prompts"),
+    ("game_hud", "screens"),
+    ("game_manual", "manual"),
+    ("game_manual", "screens"),
+    (SCENE, "screens"),
 )
 TOKEN_FILE = "data/design-tokens.json"
 # The float literals that are not sizes: zero, one, a half to centre and two to halve or double.

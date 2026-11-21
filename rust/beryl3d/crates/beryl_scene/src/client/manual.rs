@@ -4,24 +4,24 @@
 //! reaches the session as `SessionCommand::TableAct`, and the table's next view comes back as
 //! `Input::Update`, as a game's does. What the table shows over itself is `manual_overlays`.
 
-use crate::inspect::Viewed;
 use beryl_protocol::GameUpdate;
+use game_hud::inspect::Viewed;
 use glam::Vec2;
 use kit_ui::element::Action;
 
 use super::{Client, Platform};
 use crate::command::SessionCommand;
 
-use crate::manual::lobby::Lobby;
-use crate::manual::menus::{self, Act};
-use crate::manual::tokens::TokenChoice;
-use crate::manual::viewers::{self, Look, ViewerControl};
-use crate::manual::{
-    self, Context, Pending, Pressed, Sent, TablePress, TableState, Target, commands, pools,
-};
 use crate::screens::Screen;
 use beryl_protocol::ipc::TableActReply;
 use beryl_protocol::protocol::{Answer, LinkState, ObjectId, Side, TableAction, ZoneName};
+use game_manual::manual::lobby::Lobby;
+use game_manual::manual::menus::{self, Act};
+use game_manual::manual::tokens::TokenChoice;
+use game_manual::manual::viewers::{self, Look, ViewerControl};
+use game_manual::manual::{
+    self, Context, Pending, Pressed, Sent, TablePress, TableState, Target, commands, pools,
+};
 use game_play::pointer::refusal::Shake;
 use kit_ui::input::{Button, Pointer, PointerPhase};
 use kit_ui::widgets::BACK;
@@ -98,10 +98,10 @@ impl Client {
         {
             self.manual.lobby.link_error = None;
         }
-        crate::manual::selection::keep(&mut self.manual.state.selection, &update.view);
-        if (self.manual.picking)
-            .is_some_and(|pick| !crate::manual::selection::actionable(&update.view, pick.from))
-        {
+        game_manual::manual::selection::keep(&mut self.manual.state.selection, &update.view);
+        if (self.manual.picking).is_some_and(|pick| {
+            !game_manual::manual::selection::actionable(&update.view, pick.from)
+        }) {
             self.manual.picking = None;
         }
         self.manual.menu = None;
@@ -388,7 +388,8 @@ impl Client {
     /// banner's Lobby and what the flat layer shows over every screen.
     pub(super) fn table_frozen(&self) -> bool {
         self.screen == Screen::Table
-            && (self.show.latest()).is_some_and(|update| crate::manual::link::frozen(&update.view))
+            && (self.show.latest())
+                .is_some_and(|update| game_manual::manual::link::frozen(&update.view))
     }
 
     /// Advances the shake of a refused button to the frame at `now` and moves the flat layer's
@@ -463,7 +464,9 @@ impl Client {
             Act::Pick(index) => self.start_pick(index, target),
             Act::Answer(answer) => self.send_answer(answer),
             Act::AskX(source, row) => {
-                self.show_ask(crate::manual::ask::Ask::ability_x(source, row, target));
+                self.show_ask(game_manual::manual::ask::Ask::ability_x(
+                    source, row, target,
+                ));
             }
             Act::Leave => self.leave_table(),
             Act::Nothing => {}

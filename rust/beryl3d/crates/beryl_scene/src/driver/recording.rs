@@ -24,12 +24,12 @@ use beryl_protocol::ipc::{
     SavedTable, SetStopsRequest, TableConnectionError, UndoRequest,
 };
 use beryl_protocol::prompt::{Click, ClickReply};
-use beryl_protocol::protocol::Status;
 use beryl_protocol::{AgentView, CandidateIndex};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::navigation::{Screen, Sheet};
+use game_hud::navigation::{Screen, Sheet};
+use game_probe::driver::{OPEN, RECORDINGS};
 
 /// One recording's messages for one seat: the session's views, as `game-update` events, and
 /// its responses to commands. Other events are ignored.
@@ -101,16 +101,6 @@ impl Recording {
     }
 }
 
-/// The event that a recording made with no engine, such as a screen's, holds to put the client
-/// on a screen or open a sheet over it before its first view. Its payload is the name of the
-/// screen or the sheet (`Screen::name`, `Sheet::name`).
-pub const OPEN: &str = "beryl3d-open";
-
-/// The event that a recording made with no engine, such as the testing screen's, holds to give
-/// the client the names of the recordings a tools build lists (`Input::Recordings`). Its
-/// payload is an array of the names.
-pub const RECORDINGS: &str = "beryl3d-recordings";
-
 impl Recording {
     /// The names its `RECORDINGS` event lists, if it has one.
     #[must_use]
@@ -161,13 +151,6 @@ impl Recording {
             })
             .collect()
     }
-}
-
-/// Whether the session follows `update` with its next view unasked, because the game plays on
-/// without the viewer, as the fixture transport's `playsOn` says.
-#[must_use]
-pub fn plays_on(update: &GameUpdate) -> bool {
-    matches!(update.view.status, Status::Thinking | Status::Playing)
 }
 
 /// The recorded answer to a command.
@@ -392,7 +375,7 @@ fn wire(command: &SessionCommand) -> (&'static str, Option<Value>) {
         ),
         SessionCommand::CardSearch(text) => (
             ipc::CARD_SEARCH,
-            value(&crate::manual::tokens::request(text.clone())),
+            value(&game_manual::manual::tokens::request(text.clone())),
         ),
         SessionCommand::DeckList => (ipc::DECK_LIST, None),
         SessionCommand::DeckImport(request) => (ipc::DECK_IMPORT, value(request)),

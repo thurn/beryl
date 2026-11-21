@@ -6,8 +6,8 @@
 //! A failure the table reports later (`Input::TableError`), such as a guest with another
 //! version of Beryl, shows on the lobby and under the table's connection banner.
 
-use crate::manual::LobbyPress;
 use beryl_protocol::ipc::{LobbyChange, LobbyUpdate, TableRefused};
+use game_manual::manual::LobbyPress;
 
 use super::Client;
 use crate::command::{Reply, SessionCommand};

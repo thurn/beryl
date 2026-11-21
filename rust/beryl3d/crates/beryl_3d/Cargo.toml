@@ -30,8 +30,8 @@ beryl_assets = { path = "../beryl_assets" }
 beryl_host = { path = "../beryl_host" }
 beryl_inspect = { path = "../beryl_inspect", optional = true }
 beryl_render = { path = "../beryl_render" }
-# The `driver` feature reads a replayed recording's views and responses.
-beryl_scene = { path = "../beryl_scene", features = ["driver"] }
+beryl_scene = { path = "../beryl_scene" }
+game_probe.workspace = true
 # The decklist of a game `--agent` starts, as the web app's session deals it. The session
 # already depends on it.
 beryl_cards = { path = "../../../crates/beryl_cards" }

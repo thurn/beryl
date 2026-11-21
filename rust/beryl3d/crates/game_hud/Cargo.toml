@@ -9,6 +9,8 @@ publish = false
 workspace = true
 
 [dependencies]
+beryl_protocol.workspace = true
+glam.workspace = true
 kit_base.workspace = true
 kit_text.workspace = true
 kit_frame.workspace = true

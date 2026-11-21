@@ -4,41 +4,38 @@
 
 mod bug_report;
 mod gallery;
-mod game;
-pub use game::game_steps;
-mod game_over;
-mod lobby;
-pub(crate) mod opening;
 mod settings;
 mod start;
-mod table;
-mod table_entries;
-mod table_opening;
 mod testing;
 
 pub use bug_report::{BugForm, BugStage, CLICK, DESCRIPTION, span};
 pub(crate) use gallery::faces as gallery_faces;
 pub use gallery::{GalleryMenu, GalleryQuery, GalleryState};
+pub use game_manual::screens::table_entries::{
+    COULD_NOT_OPEN, EntryMode, INVITE, NAME, TableEntries,
+};
+use game_manual::screens::{lobby, table};
 pub use start::{SEED, StartForm, in_progress, seed};
-pub use table_entries::{COULD_NOT_OPEN, EntryMode, INVITE, NAME, TableEntries};
 
-pub use crate::navigation::{Screen, Sheet};
+pub use game_hud::navigation::{Screen, Sheet};
+use game_hud::screens::game;
+pub use game_hud::screens::game::game_steps;
 pub use game_play::sound::Music;
 pub use settings::{Concede, GEAR_INSET, corner};
 
-use crate::inspect::Viewed;
 use beryl_protocol::prompt::PromptView;
 use beryl_protocol::protocol::{OutcomeView, Side, Status};
 use beryl_protocol::script::{Subject, Turn};
 use beryl_protocol::{AgentView, PlayerView, StopsSetting};
+use game_hud::inspect::Viewed;
 
-use crate::hud::phone::Occupied;
-use crate::hud::{HudIn, log::LogEntry};
-use crate::inspect::inspector::Inspected;
-use crate::inspect::revealed::RevealedFace;
-use crate::manual::TableState;
-use crate::manual::lobby::Lobby;
 use crate::settings::Settings;
+use game_hud::hud::phone::Occupied;
+use game_hud::hud::{HudIn, log::LogEntry};
+use game_hud::inspect::inspector::Inspected;
+use game_hud::inspect::revealed::RevealedFace;
+use game_manual::manual::TableState;
+use game_manual::manual::lobby::Lobby;
 use game_table::faces::FaceList;
 use game_table::table::Window;
 use kit_ui::element::Element;

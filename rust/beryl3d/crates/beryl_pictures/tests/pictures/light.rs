@@ -19,9 +19,9 @@ use beryl_inspect::{pages, recordings, runner};
 use beryl_protocol::Seat;
 use beryl_protocol::protocol::Side;
 use beryl_scene::agent::Layout;
-use beryl_scene::driver::{Duration, Moment};
 use beryl_scene::frame::{Draw, Frame, Material, Role, Sprite, sprites};
 use beryl_scene::input::Size;
+use game_probe::driver::{Duration, Moment};
 
 const WINDOW: Size = Size {
     width: 1600.0,

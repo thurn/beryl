@@ -3,7 +3,7 @@
 use beryl_protocol::protocol::Status;
 
 use super::Page;
-use super::moment::Name;
+use kit_probe::driver::Name;
 
 impl Page {
     /// Plays the recording to its end on its own clock, and returns each moment's time. The

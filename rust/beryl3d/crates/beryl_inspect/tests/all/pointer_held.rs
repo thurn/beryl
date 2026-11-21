@@ -9,13 +9,13 @@ use beryl_protocol::prompt::{Click, ClickRequest};
 use beryl_protocol::protocol::{ObjectId, Side, Status};
 use beryl_protocol::script::Subject;
 use beryl_scene::Input;
-use beryl_scene::agent::steps::no_jumps;
 use beryl_scene::command::SessionCommand;
 use beryl_scene::driver::{Recording, Responses, plays_on};
 use beryl_scene::frame::{Frame, Role, StateBits, Wake};
 use beryl_scene::input::Size;
 use beryl_scene::input::{Button, Insets, Modifiers, Pointer, PointerKind, PointerPhase};
 use beryl_scene::{Client, Config};
+use game_probe::agent::steps::no_jumps;
 use glam::Vec2;
 
 const CARD: &str = "Trinket Mage";

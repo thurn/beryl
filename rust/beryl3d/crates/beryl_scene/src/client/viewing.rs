@@ -3,14 +3,14 @@
 //! table moves there and back (`Table::show_in`), and the pill, shown whenever the Revealed Cards
 //! pile holds a face.
 
-use crate::inspect::Viewed;
 use beryl_protocol::PlayerView;
 use beryl_protocol::protocol::{Declaration, ObjectId, Side, Step, StopsSetting, ZoneName};
 use beryl_protocol::script::{Act, OwnStep, Turn};
+use game_hud::inspect::Viewed;
 
 use super::Client;
-use crate::inspect::revealed::{self, RevealedFace};
-use crate::screens::{self, Screen, ScreenIn};
+use crate::screens::{Screen, ScreenIn};
+use game_hud::inspect::revealed::{self, RevealedFace};
 use game_play::light::Span;
 use game_play::verbs::Interval;
 use game_table::table::{Moves, Relaid, Window};
@@ -92,7 +92,7 @@ impl Viewing {
     /// has declared, its coin spins for `FLIP_MS` from `now`, however soon they chose, as the
     /// web's `Opening` spins it from when it first shows.
     pub(super) fn spin(&mut self, view: Option<&PlayerView>, now: u64) {
-        let Some(view) = view.filter(|view| screens::opening::in_opening(view)) else {
+        let Some(view) = view.filter(|view| game_hud::screens::opening::in_opening(view)) else {
             self.coin = Coin::Before;
             return;
         };
@@ -157,9 +157,9 @@ impl Client {
                 return;
             }
         }
-        self.manual.viewer = crate::manual::viewers::PileViewer::new();
+        self.manual.viewer = game_manual::manual::viewers::PileViewer::new();
         self.fields.set(
-            crate::manual::viewers::SEARCH,
+            game_manual::manual::viewers::SEARCH,
             kit_ui::widgets::FieldState::default(),
         );
         self.viewing.open = viewed;
@@ -288,7 +288,7 @@ impl Client {
             self.viewing.views_shown = views_shown;
             let played = self.show.shown().map(|update| &update.view);
             let was_opening = self.viewing.opening || self.show.table().hand_away();
-            if was_opening || played.is_some_and(screens::opening::in_opening) {
+            if was_opening || played.is_some_and(game_hud::screens::opening::in_opening) {
                 self.show_screen();
             }
         }
@@ -319,7 +319,7 @@ impl Client {
         let steps = match ahead.iter().position(|(turn, _)| Some(lit(*turn)) == shows) {
             Some(at) => Some(ahead.swap_remove(at).1),
             // A step no script to come named when the client last prepared.
-            None => screens::game_steps(&self.screen_in().hud()),
+            None => game_hud::screens::game::game_steps(&self.screen_in().hud()),
         };
         if let Some(steps) = steps {
             self.layer.replace(steps);
@@ -337,7 +337,7 @@ impl Client {
         }
         let from = {
             let input = self.screen_in();
-            let opening = screens::opening::shown(&input.hud());
+            let opening = game_hud::screens::opening::shown(&input.hud());
             (input.settings.stops, input.window, input.viewing, opening)
         };
         if self.viewing.steps_from != Some(from) {
@@ -370,7 +370,7 @@ impl Client {
                 turn: Some(turn),
                 ..self.screen_in()
             };
-            if let Some(steps) = screens::game_steps(&input.hud()) {
+            if let Some(steps) = game_hud::screens::game::game_steps(&input.hud()) {
                 self.viewing.steps_ahead.push((turn, steps));
             }
         }
@@ -422,7 +422,7 @@ impl Client {
                 zone,
                 ZoneName::Library | ZoneName::Graveyard | ZoneName::Exile
             ),
-            Screen::Table => crate::manual::viewers::opens_on_press(zone),
+            Screen::Table => game_manual::manual::viewers::opens_on_press(zone),
             _ => false,
         };
         (pile && self.sheet.is_none()).then_some(Viewed::Pile(side, zone))
@@ -440,7 +440,7 @@ impl Client {
     pub(super) fn prompt_covers_table(&self) -> bool {
         self.table_open()
             && (self.prompt.as_ref())
-                .is_some_and(|(_, prompt)| crate::prompts::covers_table(prompt))
+                .is_some_and(|(_, prompt)| game_hud::prompts::covers_table(prompt))
     }
 
     /// Whether the rows' counts are shown, given whether the hud is `visible` and the table

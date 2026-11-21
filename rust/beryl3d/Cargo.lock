@@ -225,6 +225,7 @@ dependencies = [
  "beryl_table_session",
  "beryl_test_files",
  "cc",
+ "game_probe",
  "glam",
  "jni-sys 0.3.1",
  "log",
@@ -402,6 +403,7 @@ dependencies = [
  "beryl_protocol",
  "beryl_render",
  "beryl_scene",
+ "game_probe",
  "glam",
  "libc",
  "ndk-sys",
@@ -420,6 +422,7 @@ dependencies = [
  "beryl_protocol",
  "beryl_scene",
  "beryl_test_files",
+ "game_probe",
  "glam",
  "libc",
  "miniz_oxide 0.8.9",
@@ -455,6 +458,7 @@ dependencies = [
  "beryl_protocol",
  "beryl_render",
  "beryl_scene",
+ "game_probe",
  "glam",
  "serde_json",
 ]
@@ -534,9 +538,11 @@ version = "0.1.0"
 dependencies = [
  "beryl_card_records",
  "beryl_protocol",
- "beryl_scene",
  "beryl_test_files",
+ "game_hud",
+ "game_manual",
  "game_play",
+ "game_probe",
  "game_table",
  "glam",
  "kit_base",
@@ -1748,8 +1754,10 @@ dependencies = [
 name = "game_hud"
 version = "0.1.0"
 dependencies = [
+ "beryl_protocol",
  "game_play",
  "game_table",
+ "glam",
  "kit_base",
  "kit_frame",
  "kit_fx",
@@ -1764,9 +1772,11 @@ dependencies = [
 name = "game_manual"
 version = "0.1.0"
 dependencies = [
+ "beryl_protocol",
  "game_hud",
  "game_play",
  "game_table",
+ "glam",
  "kit_base",
  "kit_frame",
  "kit_fx",
@@ -1775,6 +1785,7 @@ dependencies = [
  "kit_space",
  "kit_text",
  "kit_ui",
+ "serde_json",
 ]
 
 [[package]]
@@ -1800,10 +1811,12 @@ dependencies = [
 name = "game_probe"
 version = "0.1.0"
 dependencies = [
+ "beryl_protocol",
  "game_hud",
  "game_manual",
  "game_play",
  "game_table",
+ "glam",
  "kit_base",
  "kit_frame",
  "kit_fx",
@@ -1812,6 +1825,7 @@ dependencies = [
  "kit_space",
  "kit_text",
  "kit_ui",
+ "serde_json",
 ]
 
 [[package]]

@@ -21,11 +21,11 @@ use std::path::Path;
 use beryl_scene::Client;
 use beryl_scene::Input;
 use beryl_scene::agent::{locate, uncovered};
-use beryl_scene::driver::{Action, Duration, point as written_point};
 use beryl_scene::frame::Wake;
 use beryl_scene::input::{
     Button, Key, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase, TextChange,
 };
+use game_probe::driver::{Action, Duration, point as written_point};
 use glam::Vec2;
 
 /// How many moves a drag makes between its press and its release.

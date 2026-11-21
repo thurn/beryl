@@ -21,7 +21,8 @@ use beryl_scene::Input;
 use beryl_scene::data::space::enhanced::probe as data;
 use beryl_scene::input::{Insets, Size, Tier};
 use beryl_scene::settings::{Graphics, Settings};
-use beryl_scene::{Client, Config, probe as board};
+use beryl_scene::{Client, Config};
+use game_probe::probe as board;
 use serde::{Deserialize, Serialize};
 
 /// How many permanents the measured board holds: the `stress-255` gate's board.

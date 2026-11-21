@@ -5,11 +5,11 @@ use beryl_protocol::protocol::{Side, Step};
 
 use super::Client;
 use crate::command::{Request, SessionCommand};
-use crate::hud::GamePress;
-use crate::inspect::Viewed;
-use crate::manual::{LobbyPress, TableCommand, TablePress};
 use crate::screens::{self, BugPress, Concede, GalleryState, Screen, ScreenPress, Sheet};
 use crate::settings::Setting;
+use game_hud::hud::GamePress;
+use game_hud::inspect::Viewed;
+use game_manual::manual::{LobbyPress, TableCommand, TablePress};
 use game_table::faces::Faces;
 use kit_frame::frame::ElementId;
 use kit_ui::element::Action;
@@ -76,7 +76,7 @@ pub enum Press {
     Command(u16, bool),
     /// Something the manual table shows over itself: its command list, ask prompt, token
     /// search, library order tray or log.
-    Table(crate::manual::TablePress),
+    Table(game_manual::manual::TablePress),
     /// One of the bug report's controls.
     Bug(BugPress),
     /// One of the manual table's lobby controls.
@@ -223,7 +223,7 @@ impl Client {
                 self.gallery.query = query;
                 self.show_screen();
             }
-            Press::Menu(crate::manual::menus::MENU, row) => self.press_table_menu(row),
+            Press::Menu(game_manual::manual::menus::MENU, row) => self.press_table_menu(row),
             Press::Log => self.toggle_log(),
             Press::Result(shown) => self.show_result(shown),
             Press::Undo => self.undo(),

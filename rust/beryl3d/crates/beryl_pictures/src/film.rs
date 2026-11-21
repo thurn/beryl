@@ -5,8 +5,8 @@ use std::fmt::Write;
 use beryl_host::Headless;
 use beryl_inspect::cli::{self, Options, Usage};
 use beryl_scene::agent::tree::locator_of;
-use beryl_scene::driver::{Duration, Moment, Name, Offset};
 use beryl_scene::frame::StateBits;
+use game_probe::driver::{Duration, Moment, Name, Offset};
 
 use super::{Error, Region, crop_of, cut, file_name, font, open, out_dir};
 

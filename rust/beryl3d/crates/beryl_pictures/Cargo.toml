@@ -23,7 +23,8 @@ beryl_render = { path = "../beryl_render" }
 beryl_host = { path = "../beryl_host", features = ["headless"] }
 # The recordings pack and the option parser the text commands use.
 beryl_inspect = { path = "../beryl_inspect" }
-beryl_scene = { path = "../beryl_scene", features = ["driver"] }
+beryl_scene = { path = "../beryl_scene" }
+game_probe.workspace = true
 # The point `pixels` asks Beryl 3D's hit test about, a type `beryl_scene` takes.
 glam = "0.34.3"
 # Reads a `just b3d match` snapshot's element records and pairs (`pixels`) and `sample`'s job

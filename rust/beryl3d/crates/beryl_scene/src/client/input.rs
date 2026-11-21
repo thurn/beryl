@@ -9,9 +9,9 @@ use glam::Vec2;
 
 use super::gesture::{Gesture, Release};
 use super::{Client, Dismiss, Input, Platform, Press};
-use crate::prompts;
 use crate::screens::{Screen, ScreenPress, Sheet};
 use crate::settings::Setting;
+use game_hud::prompts;
 use game_play::pointer::Hold;
 use game_play::pointer::rows::scroller_of;
 use game_table::table::{self, Scroller};
@@ -337,7 +337,7 @@ impl Client {
             // context menu is open it does nothing, and the menu's own keys move through its
             // rows.
             let table_key = press
-                .downcast_ref::<crate::manual::TableCommand>()
+                .downcast_ref::<game_manual::manual::TableCommand>()
                 .is_some()
                 || matches!(press.downcast_ref::<Press>(), Some(Press::Command(..)));
             let free = self.manual.menu.is_none() && !self.manual.overlay_open();

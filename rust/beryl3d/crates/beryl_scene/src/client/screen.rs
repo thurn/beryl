@@ -8,9 +8,9 @@ use glam::Vec2;
 use super::Client;
 
 use crate::command::{Request, SessionCommand};
-use crate::hud::phone::Occupied;
-use crate::manual::TableCommand;
 use crate::screens::{self, Screen, ScreenIn, ScreenPress, Sheet, StartForm};
+use game_hud::hud::phone::Occupied;
+use game_manual::manual::TableCommand;
 use game_table::faces::{FaceList, Faces};
 use kit_ui::element::{Action, floats};
 use kit_ui::input::Rect;
@@ -43,7 +43,7 @@ impl Client {
             occupied: &occupied,
             ..self.screen_in()
         };
-        let mut full = crate::prompts::faces(&input.hud());
+        let mut full = game_hud::prompts::faces(&input.hud());
         full.extend(screens::sheet_face(&input));
         // On the desktop the hand and the stack show cards' full frames, as the web interface
         // does; on the phone the battlefield frame.
@@ -66,8 +66,8 @@ impl Client {
         let opening = under.is_some()
             && self.sheet.is_none()
             && self.screen == Screen::Game
-            && screens::opening::shown(&input.hud());
-        let away = self.screen == Screen::Game && screens::opening::shown(&input.hud());
+            && game_hud::screens::opening::shown(&input.hud());
+        let away = self.screen == Screen::Game && game_hud::screens::opening::shown(&input.hud());
         let shown = match self.sheet {
             Some(sheet) => Some(screens::sheet(sheet, under, &input)),
             None => under,
@@ -81,7 +81,7 @@ impl Client {
             self.prepare_resized();
         }
         self.layer.show(shown);
-        self.layer.scroll_to_end(crate::hud::log::LIST);
+        self.layer.scroll_to_end(game_hud::hud::log::LIST);
         self.place_shown();
         let read_whole = read_whole
             .iter()
@@ -145,7 +145,7 @@ impl Client {
             concede: self.concede,
             result_aside: self.viewing.result_aside,
             spinning: self.viewing.spinning(self.now),
-            occupied: &crate::hud::phone::NOTHING,
+            occupied: &game_hud::hud::phone::NOTHING,
         }
     }
 
@@ -270,7 +270,7 @@ impl Client {
         // The game screen's undo takes back an engine decision; the manual table's runs its
         // `table.undo` command, as the web's `Table` passes it to `GameBoard`.
         let undo = match self.screen {
-            Screen::Table => crate::manual::commands::command("table.undo")
+            Screen::Table => game_manual::manual::commands::command("table.undo")
                 .map(|(index, _)| Action::new(TableCommand(index, false))),
             _ => self.undoable().map(|_| Action::new(ScreenPress::Undo)),
         };

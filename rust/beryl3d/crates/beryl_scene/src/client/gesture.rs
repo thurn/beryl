@@ -5,7 +5,7 @@
 //! and `Client::end_gesture` ends it in one place: on the release, Cancel or Leave, the next
 //! press, a change of screen or sheet, and a resize.
 
-use crate::inspect::Viewed;
+use game_hud::inspect::Viewed;
 use glam::Vec2;
 
 use super::Client;

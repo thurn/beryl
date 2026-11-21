@@ -22,6 +22,9 @@ SCENE_CRATES = (
     "kit_probe",
     "game_table",
     "game_play",
+    "game_hud",
+    "game_manual",
+    "game_probe",
 )
 LINTS = '[workspace.lints.rust]\nwarnings = "deny"\n'
 
@@ -145,6 +148,10 @@ def test_only_the_app_and_the_recorder_depend_on_the_engine(tmp_path: Path) -> N
         "beryl_scene/src/screens/start.rs",
         "kit_ui/src/widgets/button.rs",
         "game_play/src/hud/counts.rs",
+        "game_hud/src/prompts/bar.rs",
+        "game_hud/src/screens/game.rs",
+        "game_manual/src/manual/lobby.rs",
+        "game_manual/src/screens/table.rs",
     ),
 )
 def test_elements_take_their_sizes_from_tokens(tmp_path: Path, source: str) -> None:
@@ -158,7 +165,7 @@ def test_elements_take_their_sizes_from_tokens(tmp_path: Path, source: str) -> N
 
 
 def test_a_test_module_may_hold_numbers(tmp_path: Path) -> None:
-    screen = f"{CRATES}/beryl_scene/src/hud/steps.rs"
+    screen = f"{CRATES}/game_hud/src/hud/steps.rs"
     write(
         tmp_path,
         screen,

@@ -11,11 +11,10 @@ workspace = true
 
 [features]
 # `Headless`, which plays a recording through the test driver and draws its frames offscreen.
-# The app leaves it off, so that the driver is not in its build.
-headless = ["beryl_scene/driver"]
+headless = ["dep:game_probe"]
 # `--drive`, which plays a script of actions through the frame loop. Only a debug build of the
 # app has it.
-drive = ["beryl_scene/driver"]
+drive = ["dep:game_probe"]
 
 [dependencies]
 # The scan cache and download queue the asset workers read card pictures from. The app links it
@@ -26,6 +25,7 @@ beryl_art = { path = "../../../crates/beryl_art" }
 beryl_assets = { path = "../beryl_assets" }
 beryl_render = { path = "../beryl_render" }
 beryl_scene = { path = "../beryl_scene" }
+game_probe = { workspace = true, optional = true }
 # Pointer positions as the client's vectors.
 glam = "0.34.3"
 

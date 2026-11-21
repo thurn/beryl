@@ -4,22 +4,15 @@
 pub mod agent;
 mod client;
 pub mod command;
-#[cfg(feature = "driver")]
 pub mod driver;
-pub mod hud;
-pub mod inspect;
-pub mod manual;
-pub mod navigation;
-#[cfg(feature = "driver")]
-pub mod probe;
-pub mod prompts;
 pub mod screens;
 pub mod settings;
-#[cfg(feature = "driver")]
-pub mod testing;
 
 pub use client::{BugPress, Client, Config, Dismiss, Input, Press};
+pub use game_hud::{hud, inspect, navigation, prompts};
+pub use game_manual::manual;
 pub use game_play::{art, beat, light, notice, play, pointer, sound, verbs};
+pub use game_probe::{probe, testing};
 pub use game_table::{faces, table};
 pub use kit_base::{atlas, data, geometry, paint, pose, tokens, typography};
 pub use kit_frame::frame;

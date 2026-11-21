@@ -28,10 +28,11 @@ use beryl_assets::{Config, FULL_LAYERS, Format, Full, Prepared, Preparer, defaul
 use beryl_render::{Limits, Renderer, Target};
 
 use crate::assets::Scans;
-use beryl_scene::driver::{DriverError, Moment, Page};
+use beryl_scene::driver::{DriverError, Page};
 use beryl_scene::faces::FaceList;
 use beryl_scene::frame::Frame;
 use beryl_scene::input::{AssetReady, FaceSize};
+use game_probe::driver::Moment;
 
 /// An address where nothing listens, so that a scan the cache lacks fails to download at once.
 const NOWHERE: Origins<'static> = Origins {

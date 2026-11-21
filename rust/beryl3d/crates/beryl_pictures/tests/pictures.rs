@@ -14,10 +14,10 @@ use beryl_host::{Headless, Scans};
 use beryl_inspect::pages;
 use beryl_protocol::protocol::Side;
 use beryl_scene::agent::{Layout, hit, uncovered};
-use beryl_scene::driver::Moment;
 use beryl_scene::frame::{StateBits, box_shadow_reach};
 use beryl_scene::input::Size;
 use beryl_scene::tokens::shadow;
+use game_probe::driver::Moment;
 
 const WINDOW: Size = Size {
     width: 1600.0,

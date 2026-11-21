@@ -11,7 +11,7 @@ use glam::Vec2;
 
 use super::Client;
 use super::gesture::Gesture;
-use crate::prompts::order;
+use game_hud::prompts::order;
 use kit_base::data::space::pointer::DRAG_THRESHOLD_POINTS;
 use kit_ui::element::floats;
 use kit_ui::input::{Button, Pointer, PointerPhase};

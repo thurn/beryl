@@ -3,19 +3,19 @@
 //! clicking what a command acts toward (`manual::arrows`), and the marks and arrow these draw on
 //! each frame.
 
-use crate::inspect::Viewed;
 use beryl_protocol::protocol::{ObjectId, Side, ZoneName};
+use game_hud::inspect::Viewed;
 use glam::Vec2;
 
 use super::{Client, Platform};
 use kit_base::data::space::pointer::DRAG_THRESHOLD_POINTS;
 use kit_scene::hit::hit;
 
-use crate::manual::arrows::{self, Pick};
-use crate::manual::drop::{self, Area, End};
-use crate::manual::selection;
-use crate::manual::{Target, target_at, viewers};
 use crate::screens::Screen;
+use game_manual::manual::arrows::{self, Pick};
+use game_manual::manual::drop::{self, Area, End};
+use game_manual::manual::selection;
+use game_manual::manual::{Target, target_at, viewers};
 use kit_frame::frame::{Place, Role};
 use kit_ui::input::{Button, Pointer, PointerPhase};
 

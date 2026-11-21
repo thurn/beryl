@@ -19,13 +19,13 @@ use beryl_protocol::protocol::{DecisionId, SessionId, Side, Status};
 use beryl_protocol::script::{OwnTimings, Verb, own_timings};
 use beryl_protocol::{AgentView, StartRequest, StopsSetting};
 
-use crate::hud::banner::Banner;
-use crate::hud::log::Log;
-use crate::hud::piles::PileCounts;
-use crate::hud::rows::RowCounts;
-use crate::prompts;
 use crate::screens::{self, Concede, GalleryState, Music, SEED, Screen, Sheet, StartForm};
 use crate::settings::Settings;
+use game_hud::hud::banner::Banner;
+use game_hud::hud::log::Log;
+use game_hud::hud::piles::PileCounts;
+use game_hud::hud::rows::RowCounts;
+use game_hud::prompts;
 use game_play::hud::counts::CountFloats;
 use game_play::hud::notices::NoticeFloats;
 use game_play::play::Show;

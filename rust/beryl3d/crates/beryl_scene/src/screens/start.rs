@@ -182,7 +182,7 @@ pub fn start(input: &ScreenIn) -> Element {
         .child(seed_row)
         .child(fair_box(form.fair))
         .child(buttons)
-        .children(super::table_entries::entries(
+        .children(game_manual::screens::table_entries::entries(
             input.entries,
             input.fields,
             false,
@@ -203,7 +203,7 @@ pub fn start(input: &ScreenIn) -> Element {
         .child(panel)
         .child(corner());
     let screen = whole_window(input.window.size, screen);
-    super::table_entries::with_host_key(with_keys(screen, input, going_on))
+    game_manual::screens::table_entries::with_host_key(with_keys(screen, input, going_on))
 }
 
 /// What the screen's fields and choices allow, which both layouts read the same way.
@@ -319,7 +319,7 @@ fn start_phone(input: &ScreenIn) -> Element {
         .child(fair)
         .child(phone_action(start))
         .children(back.map(phone_action))
-        .children(super::table_entries::entries(
+        .children(game_manual::screens::table_entries::entries(
             input.entries,
             input.fields,
             true,

@@ -11,14 +11,16 @@ use beryl_protocol::protocol::{Answer, ObjectId, Side};
 
 use super::Client;
 use crate::command::{Request, SessionCommand};
-use crate::manual::ask::{self, Ask, Confirmed};
-use crate::manual::bindings::binding_for;
-use crate::manual::commands::{self, COMMANDS, Values};
-use crate::manual::menus;
-use crate::manual::order::LibraryOrder;
-use crate::manual::palette::{self, Palette, RESET, RESET_NOTICE};
-use crate::manual::tokens::{self, Choice, CustomToken, TokenChoice, TokenSearch};
-use crate::manual::{TablePress, Target, assists, log};
+use game_manual::manual::ask::{self, Ask, Confirmed};
+use game_manual::manual::bindings::binding_for;
+use game_manual::manual::commands::{self, COMMANDS, Values};
+use game_manual::manual::menus;
+use game_manual::manual::order::LibraryOrder;
+use game_manual::manual::palette::{self, Palette, RESET, RESET_NOTICE};
+use game_manual::manual::tokens::{self, Choice, CustomToken, TokenChoice, TokenSearch};
+use game_manual::manual::turn::step_command;
+use game_manual::manual::viewers::ViewerControl;
+use game_manual::manual::{TablePress, Target, assists, log};
 use kit_ui::input::{Key, KeyCode, KeyPhase};
 use kit_ui::widgets::FieldState;
 
@@ -154,8 +156,8 @@ impl Client {
                 let Some(view) = self.show.latest().map(|update| &update.view) else {
                     return;
                 };
-                let id = crate::manual::turn::step_command(view, at, active);
-                self.run_table_command(id, crate::manual::Target::Table);
+                let id = step_command(view, at, active);
+                self.run_table_command(id, Target::Table);
             }
             TablePress::Counter { side, at } => self.adjust_counter(side, at, true, press),
             TablePress::CounterRemove { side, at } => self.adjust_counter(side, at, false, press),
@@ -168,7 +170,7 @@ impl Client {
                 self.requests.push_back(crate::command::Request::Quit);
                 self.show_screen();
             }
-            TablePress::Next => self.run_table_command("phase.next", crate::manual::Target::Table),
+            TablePress::Next => self.run_table_command("phase.next", Target::Table),
             TablePress::Close => {
                 self.manual.close_overlay();
                 self.layer.focus(None);
@@ -199,13 +201,13 @@ impl Client {
             }
             TablePress::Leave => self.leave_table(),
             TablePress::ViewerGroup => {
-                self.viewer_control(crate::manual::viewers::ViewerControl::Group);
+                self.viewer_control(ViewerControl::Group);
             }
             TablePress::ViewerSort(sort) => {
-                self.viewer_control(crate::manual::viewers::ViewerControl::Sort(sort));
+                self.viewer_control(ViewerControl::Sort(sort));
             }
             TablePress::ViewerFinish(shuffle) => {
-                self.viewer_control(crate::manual::viewers::ViewerControl::Finish { shuffle });
+                self.viewer_control(ViewerControl::Finish { shuffle });
             }
         }
     }

@@ -12,9 +12,9 @@ use std::collections::BTreeSet;
 use beryl_protocol::script::{Edge, Verb};
 
 use super::{DriverError, Name, Page};
-use crate::agent::game_checks;
-use crate::agent::steps::{self, Found, Sample, card_of, sample, step_nanoseconds};
 use game_play::play::record::{Plant, Planted, ScriptRecord};
+use game_probe::agent::game_checks;
+use game_probe::agent::steps::{self, Found, Sample, card_of, sample, step_nanoseconds};
 use game_table::table::Camera;
 use kit_base::data::audit;
 use kit_frame::frame::Frame;

@@ -16,15 +16,16 @@ use std::path::Path;
 
 use beryl_scene::Client;
 use beryl_scene::command::{Reply, SessionCommand};
-use beryl_scene::driver::{REPLY_DELAY, Recording, Responses, plays_on};
+use beryl_scene::driver::{Recording, Responses};
 use beryl_scene::frame::Wake;
 use beryl_session::GameUpdate;
 use beryl_session::card_records::CardRecords;
 use beryl_session::ipc::FixtureMessage;
+use game_probe::driver::{REPLY_DELAY, plays_on};
 #[cfg(feature = "tools")]
 use {
-    beryl_inspect::pages, beryl_scene::agent::Layout, beryl_scene::driver::Moment,
-    beryl_scene::input::Size, beryl_session::protocol::Side,
+    beryl_inspect::pages, beryl_scene::agent::Layout, beryl_scene::input::Size,
+    beryl_session::protocol::Side, game_probe::driver::Moment,
 };
 
 /// A moment of a replayed recording, which a bug report saved at it records in its `ui.json`.

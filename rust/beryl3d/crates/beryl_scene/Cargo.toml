@@ -10,11 +10,13 @@ publish = false
 workspace = true
 
 [features]
-# Code that only a driver of the scene (the inspector, a test) needs: the test driver and the
-# builders of `testing`.
-driver = ["dep:serde", "game_play/driver"]
+# Kept for callers of the scene during the crate split.
+driver = []
 
 [dependencies]
+game_probe.workspace = true
+game_manual.workspace = true
+game_hud.workspace = true
 game_play.workspace = true
 game_table.workspace = true
 kit_base.workspace = true
@@ -28,21 +30,19 @@ kit_space.workspace = true
 # The game state the scene shows: PlayerView and the table commands.
 beryl_protocol.workspace = true
 glam.workspace = true
-# The manual table builds and reads table commands as JSON values, and the driver reads a
-# recording's views and responses and writes requests to match them, in place of a hand-written
-# reader. Only the `driver` feature needs `serde` itself.
-serde = { version = "1.0.229", optional = true }
+# Reads recorded replies and encodes requests to match them, without a hand-written reader.
+serde = "1.0.229"
 serde_json.workspace = true
 
 [dev-dependencies]
 # Opens repository files and records each read, so Ignite reruns the tests when one changes.
 beryl_test_files = { path = "../../../crates/beryl_test_files" }
-# The crate itself with the `driver` feature, for the `testing` builders its tests use.
-beryl_scene = { path = ".", features = ["driver"] }
+# The incremental compilation test uses the driver to prepare a recorded view.
+game_play = { workspace = true, features = ["driver"] }
 # The card store's records for the cards a test's views name, which the scene draws faces from.
 # It links no engine or cards.
 beryl_card_records = { path = "../../../crates/beryl_card_records" }
 
 [build-dependencies]
-# Reads audio credits and manual table commands at build time.
+# Reads the audio manifest to generate credits.
 serde_json.workspace = true

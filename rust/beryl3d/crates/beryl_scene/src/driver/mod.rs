@@ -7,16 +7,13 @@
 //! rest in the view it answers, so every moment has the same time on every run. A test that
 //! acts first answers the view itself, from the recording's responses.
 //!
-//! Only a driver of the client needs this (the `driver` feature); the app does not enable it.
+//! This driver uses the same client, inputs and replies as the app.
 
-mod action;
 mod check;
 mod cues;
-mod element;
 mod gesture;
 mod glyphs;
 mod keys;
-mod moment;
 mod playthrough;
 mod recording;
 
@@ -31,29 +28,26 @@ use beryl_protocol::protocol::Side;
 use beryl_protocol::script::Verb;
 use glam::Vec2;
 
-pub use action::{Action, KeyChord, key_code, point};
 pub use check::{Checked, Mode, StepMoment, TimelineStep};
-pub use element::Element;
-pub use moment::{Duration, Moment, Name, Offset, ParseError};
-pub use recording::{Answer, OPEN, RECORDINGS, Recording, Responses, plays_on};
+pub use game_probe::driver::{
+    Action, Duration, Element, KeyChord, Moment, Name, OPEN, Offset, ParseError, RECORDINGS,
+    REPLY_DELAY, TICK, key_code, plays_on, point,
+};
+pub use recording::{Answer, Recording, Responses};
 
 use self::cues::Cues;
-use self::moment::{moment_distance, offset_from};
-use crate::agent::game_checks;
 use game_play::play::record::Plant;
+use game_probe::agent::game_checks;
 use game_table::faces::FaceList;
 use kit_frame::frame::{Frame, Sound, StateBits, Wake};
 use kit_probe::agent::tree::locator_of;
 use kit_probe::agent::{Context, Fault, Layout, TreeOptions, locate, tree};
+use kit_probe::driver::{moment_distance, offset_from};
 use kit_scene::hit::{bounds, uncovered};
 use kit_ui::input::{
     AssetReady, Button, Insets, Modifiers, Pointer, PointerKind, PointerPhase, Size, Tier,
 };
 
-/// How long after the table comes to rest a recorded reply is given.
-pub const REPLY_DELAY: Duration = Duration::from_millis(400);
-/// A tick of the test's clock unless the test sets another: a sixtieth of a second.
-pub const TICK: Duration = Duration(16_666_667);
 /// How long `still` runs the clock before it gives up on the table coming to rest.
 const STILL_LIMIT: Duration = Duration::from_millis(600_000);
 /// How many moves a drag makes between its press and its release, and the step after each.

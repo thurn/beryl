@@ -20,7 +20,8 @@ name = "b3d-frame-counts"
 path = "src/bin/frame_counts.rs"
 
 [dependencies]
-beryl_scene = { path = "../beryl_scene", features = ["driver"] }
+beryl_scene = { path = "../beryl_scene" }
+game_probe.workspace = true
 # The views, scripts and fixture messages a recording holds, with no engine.
 beryl_protocol = { path = "../../../crates/beryl_protocol" }
 # The recordings pack's file format, in place of a hand-written binary format.
