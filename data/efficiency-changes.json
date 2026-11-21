@@ -769,5 +769,10 @@
     "label": "Ignite runs checks with recent product catches before landing changes in the culprit's areas, so tip verification has fewer product regressions to repair.",
     "metric": "ignite.escapes-per-100-landings",
     "expect": "down"
+  },
+  {
+    "label": "Ignite switches ordinary checks off after one invalid failure and files a remedy, reducing time spent on repeated false alarms.",
+    "metric": "ignite.master-lag-minutes",
+    "expect": "down"
   }
 ]

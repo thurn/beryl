@@ -393,6 +393,7 @@ impl Checks {
         run: &mut CheckRun,
     ) {
         let mut stored = Vec::new();
+        let mut flaky = Vec::new();
         // A run that recorded what a test opened gives the test the hash its new list says.
         let unkeyed = self.rekey(ctx, tree, family, &mut finals);
         let moved = moved_inputs(ctx, tree, &finals);
@@ -429,7 +430,7 @@ impl Checks {
                 }),
                 Outcome::Flaky => {
                     if let Ok(commit) = self.trees.head(&tree.path) {
-                        let report = FlakyReport {
+                        flaky.push(FlakyReport {
                             check: keyed.key.check.clone(),
                             hash: keyed.key.hash.clone(),
                             commit,
@@ -439,14 +440,14 @@ impl Checks {
                                 format!("{}:{}", ctx.machine, o.display())
                             }),
                             output: output.as_deref().map(output_tail).unwrap_or_default(),
-                        };
-                        self.cache.flaky(&report);
+                        });
                     }
                 }
                 Outcome::Incomplete => {}
             }
             run.finish(&keyed.listed.check, outcome, failure);
         }
+        self.cache.flaky(&flaky);
         self.cache.store(&stored);
     }
 

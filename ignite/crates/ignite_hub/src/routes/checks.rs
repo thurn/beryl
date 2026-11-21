@@ -1,4 +1,4 @@
-//! The result cache, check and record routes: `/results/lookup`, `/results/store`, `/flaky`,
+//! The result cache, check and record routes: `/results/lookup`, `/results/store`, `/flaky`, `/flaky/batch`,
 //! `/checks/stats`, `/checks/fix-outcomes`, `/tips/claim`, `/tips/verified`, `/landings/lookup`, `/regressions`, `/reverted`,
 //! `/records`, `/metrics/import`, and the reports that file tickets: `/incomplete`, `/audits`,
 //! `/finds` and `/tips/waiting`.
@@ -48,6 +48,7 @@ pub fn handle(conn: &mut Connection, request: &Request, now: Timestamp) -> Optio
         }
         "/results/store"
         | "/flaky"
+        | "/flaky/batch"
         | "/tips/claim"
         | "/tips/verified"
         | "/regressions"
@@ -75,11 +76,8 @@ fn route(conn: &mut Connection, request: &Request, now: Timestamp) -> Result<Res
     match request.path.as_str() {
         "/results/lookup" => lookup(conn, &body(request)?, now),
         "/results/store" => store(conn, request, &body(request)?, now),
-        "/flaky" => {
-            let report: FlakyReport = body(request)?;
-            checks::record_flaky(conn, &report, now).map_err(|e| store_failure(&e))?;
-            Ok(done())
-        }
+        "/flaky" => record_flakes(conn, &[body(request)?], now),
+        "/flaky/batch" => record_flakes(conn, &body::<Vec<FlakyReport>>(request)?, now),
         "/checks/stats" => stats(conn, request),
         "/checks/fix-outcomes" => fixes(conn, request, now),
         "/regressions/open" => open_regressions(conn),
@@ -146,6 +144,23 @@ fn body<T: DeserializeOwned>(request: &Request) -> Result<T, Response> {
 }
 
 /// Answers every key in one transaction, so a request of thousands of keys is one commit.
+fn record_flakes(
+    conn: &mut Connection,
+    reports: &[FlakyReport],
+    now: Timestamp,
+) -> Result<Response, Response> {
+    // Upkeep must see every flake in the command together to identify a machine fault.
+    let tx = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|e| store_failure(&e.into()))?;
+    for report in reports {
+        checks::register(&tx, report.check.as_str()).map_err(|e| store_failure(&e))?;
+        checks::record_flaky(&tx, report, now).map_err(|e| store_failure(&e))?;
+    }
+    tx.commit().map_err(|e| store_failure(&e.into()))?;
+    Ok(done())
+}
+
 fn lookup(
     conn: &mut Connection,
     request: &LookupRequest,

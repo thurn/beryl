@@ -22,6 +22,7 @@ use crate::hubclient::too_large;
 const RECORD: &str = "record";
 const RESULT: &str = "result";
 const FLAKY: &str = "flaky";
+const FLAKY_BATCH: &str = "flaky-batch";
 const METRICS: &str = "metrics";
 const TRANSCRIPT: &str = "transcript";
 
@@ -36,8 +37,8 @@ pub fn push_result(conn: &Connection, result: &NewResult, at: Timestamp) -> Resu
     push(conn, RESULT, result, at)
 }
 
-pub fn push_flaky(conn: &Connection, report: &FlakyReport, at: Timestamp) -> Result<()> {
-    push(conn, FLAKY, report, at)
+pub fn push_flaky(conn: &Connection, reports: &[FlakyReport], at: Timestamp) -> Result<()> {
+    push(conn, FLAKY_BATCH, &reports, at)
 }
 
 /// Queues rows for the hub's `POST /metrics/import`, such as a CLI turn's cost.
@@ -170,9 +171,10 @@ fn send(hub: &dyn Hub, kind: &str, run: &[&rows::OutboxEntry]) -> Result<()> {
     match kind {
         RECORD => hub.records(&parse::<Record>(run)?),
         RESULT => hub.store(&parse::<NewResult>(run)?),
-        FLAKY => parse::<FlakyReport>(run)?
+        FLAKY => hub.flaky_batch(&parse::<FlakyReport>(run)?),
+        FLAKY_BATCH => parse::<Vec<FlakyReport>>(run)?
             .iter()
-            .try_for_each(|report| hub.flaky(report)),
+            .try_for_each(|reports| hub.flaky_batch(reports)),
         METRICS => parse::<MetricsImport>(run)?
             .iter()
             .try_for_each(|import| hub.metrics(import)),

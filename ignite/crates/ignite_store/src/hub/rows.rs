@@ -192,6 +192,8 @@ crate::tables! {
         state: String,
         /// Empty for portable checks and null for a historical regression.
         platform: Option<String>,
+        culprit_ticket: Option<String>,
+        failure_output: Option<String>,
     }
 
     Tip = "tips" {
@@ -357,6 +359,8 @@ crate::tables! {
         source: String,
         first_bad: Option<String>,
         fixing_commit: Option<String>,
+        failure_output: Option<String>,
+        remedy_ticket: Option<String>,
     }
 
     /// Each class's rate of check commands for one day, in billions of instructions per second.

@@ -105,29 +105,6 @@ fn switching_to_the_same_state_or_an_unknown_check_writes_nothing() {
 }
 
 #[test]
-fn a_check_switched_back_on_needs_two_new_flaky_records_to_go_off_again() {
-    let mut conn = hub::open_in_memory().unwrap();
-    listed(&mut conn, &["rust:a"]);
-    flaky(&conn, "rust:a", "aaaa", "", 1);
-    flaky(&conn, "rust:a", "bbbb", "", 2);
-    assert!(checks::flaky_repeated(&conn, "rust:a").unwrap());
-    // What the hub's upkeep does when it switches the check off.
-    conn.execute(
-        "UPDATE flaky SET filed = 'q1' WHERE check_name = 'rust:a'",
-        [],
-    )
-    .unwrap();
-    checks::set_state(&conn, "rust:a", CheckState::Off).unwrap();
-
-    switch(&conn, &by_hand("rust:a", CheckState::On, Some("q1"))).unwrap();
-    assert!(!checks::flaky_repeated(&conn, "rust:a").unwrap());
-    flaky(&conn, "rust:a", "cccc", "", 13);
-    assert!(!checks::flaky_repeated(&conn, "rust:a").unwrap());
-    flaky(&conn, "rust:a", "dddd", "", 14);
-    assert!(checks::flaky_repeated(&conn, "rust:a").unwrap());
-}
-
-#[test]
 fn the_flaky_ticket_is_the_newest_one_about_the_check_itself() {
     let mut conn = hub::open_in_memory().unwrap();
     listed(&mut conn, &["rust:a", "rust:b", "rust:c"]);

@@ -31,11 +31,16 @@ A fix lands with `ignite land`, never by a push to `refs/ignite/staging`.
 2. **Find the cause.** When the product broke, fix the product: a rules engine
    bug also gets an entry in `docs/bugs.md` (root `AGENTS.md`, Conventions), and
    a UI break adds the broken state as a fixture or spec moment (root
-   `AGENTS.md`, Checks). When the check is wrong and the product is right, fix
-   or replace the check as in "A check to change" below. A failure caused by a
-   machine's state, such as a full disk or a stale cache, is fixed in `tools/`
-   or in the family's declaration, so it cannot recur.
-3. **Verify** that `ignite test <check>` passes at the staging tip.
+   `AGENTS.md`, Checks). When the fix changes only the test, delete it or
+   redesign it to prevent the same invalid failure, using "A check to change"
+   below. Adjusting the assertion alone leaves the cause in place. Record the
+   remedy on the ticket. Card and rules definitions and the oracle scenarios
+   they produce count as product code. Fix a failure caused by a machine's
+   state, such as a full disk or a stale cache, in `tools/` or in the family's
+   declaration so it cannot recur.
+3. **Verify** that `ignite test <check>` passes at the staging tip, using
+   the replacement's name when you replaced the check. If you deleted it,
+   verify that its family no longer lists it.
 
 ## A check to change: flaky, hung or costly
 
@@ -74,7 +79,7 @@ nothing caught.
    Loosening a threshold, adding a retry and raising a limit are not remedies.
 4. **Never cut a protected check**: the families and checks listed under
    `protected` in `ignite.toml` (the app starting, the `ui-smoke` checks,
-   clippy, pyre, the UI's typecheck, the source rules).
+   clippy, pyre, the UI's typecheck, the source rules and the oracle families).
 5. **A browser check** you change follows `ui/AGENTS.md`. When you delete one,
    make sure the generic UI checks (overlap, off-screen, reachability, duplicate
    objects, page errors, motion) still cover what it showed, and that no fixture

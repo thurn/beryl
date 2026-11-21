@@ -4,7 +4,7 @@
 //! Kinds whose fault cannot be seen to clear answer [`Verdict::Unwatched`] and stay open until a
 //! person or worker closes them:
 //!
-//! - `flaky`, `flaky-always`: the check is switched off, so no new evidence comes.
+//! - `flaky`, `flaky-always`, `test-only-regression`: a worker must decide and apply a remedy.
 //! - `machine-flaky`, `disagreement`: intermittent by nature, so a quiet spell proves nothing.
 //! - `audit`: caching is switched off for the check, so the disagreement cannot be seen again.
 //! - `found`: a bug that exploration found stays until it is fixed, and exploration may never

@@ -1,9 +1,8 @@
 //! Switching a check on or off by hand (`ignite flaky on|off`), the record of who did it, and the
 //! list of checks that are off, have flaked or were switched by hand.
 //!
-//! The hub switches a check off by itself after its second flaky record (see the hub's flaky
-//! upkeep). Switching it back on by hand does not bring those records back: each one already has
-//! its ticket and no longer counts, so the check is switched off again only after two new ones.
+//! The hub switches an ordinary check off after its first flake or test-only regression close.
+//! Once upkeep files the remedy, that sighting will not switch the check off again.
 
 use rusqlite::{Connection, OptionalExtension, params};
 
@@ -73,15 +72,18 @@ pub fn switch(conn: &Connection, switch: &Switch) -> Result<Option<CheckState>> 
     Ok(Some(previous))
 }
 
-/// The newest ticket filed for the check's own flaky records: not a ticket for a machine on
-/// which many checks flaked at once.
+/// The newest remedy ticket for the check's own failure, excluding machine faults.
 pub fn flaky_ticket(conn: &Connection, check: &str) -> Result<Option<String>> {
     Ok(conn
         .query_row(
             &format!(
-                "SELECT filed FROM flaky
-                 WHERE check_name = ?1 AND filed IS NOT NULL AND {}
-                 ORDER BY at DESC LIMIT 1",
+                "SELECT ticket FROM (
+                   SELECT filed AS ticket, at FROM flaky
+                   WHERE check_name = ?1 AND filed IS NOT NULL AND {}
+                   UNION ALL
+                   SELECT remedy_ticket, at FROM check_fix_outcomes
+                   WHERE check_name = ?1 AND remedy_ticket != ''
+                 ) ORDER BY at DESC LIMIT 1",
                 not_machine_fault()
             ),
             params![check],
@@ -131,6 +133,8 @@ pub fn flaky_checks(conn: &Connection) -> Result<Vec<FlakyCheck>> {
              WHERE c.state = 'off'
                 OR EXISTS (SELECT 1 FROM flaky f WHERE f.check_name = c.name AND {fault})
                 OR EXISTS (SELECT 1 FROM check_state_changes s WHERE s.check_name = c.name)
+                OR EXISTS (SELECT 1 FROM check_fix_outcomes o
+                           WHERE o.check_name = c.name AND o.remedy_ticket != '')
              ORDER BY c.name",
             fault = not_machine_fault()
         ))?;

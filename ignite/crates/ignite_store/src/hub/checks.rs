@@ -13,9 +13,6 @@ use crate::{Result, StoreError};
 /// How many costs a check keeps.
 const COSTS_KEPT: usize = 20;
 
-/// A second flaky record on a different commit within this many days switches a check off.
-pub const FLAKY_WINDOW_DAYS: f64 = 7.0;
-
 pub(crate) fn state_text(state: CheckState) -> &'static str {
     match state {
         CheckState::On => "on",
@@ -349,35 +346,10 @@ pub fn record_flaky(conn: &Connection, report: &FlakyReport, now: Timestamp) -> 
     Ok(())
 }
 
-/// Whether `check` has two flaky records that count ([`counting_flaky`]) on different commits
-/// no more than 7 days apart.
-pub fn flaky_repeated(conn: &Connection, check: &str) -> Result<bool> {
-    let mut select = conn.prepare_cached(&format!(
-        "SELECT commit_sha, at FROM flaky WHERE check_name = ?1 AND {} ORDER BY at",
-        counting_flaky()
-    ))?;
-    let records = select
-        .query_map(params![check], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-        })?
-        .collect::<rusqlite::Result<Vec<_>>>()?;
-    let mut parsed = Vec::with_capacity(records.len());
-    for (commit, at) in records {
-        parsed.push((commit, parse::<Timestamp>("time", &at)?));
-    }
-    let window = FLAKY_WINDOW_DAYS * 86_400.0;
-    Ok(parsed.iter().enumerate().any(|(i, (commit, at))| {
-        parsed[i + 1..]
-            .iter()
-            .any(|(other, later)| other != commit && later.seconds_since(*at) <= window)
-    }))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::hub;
-    use ignite_core::ids::{CheckName, Commit, InputHash, MachineId};
 
     fn check(name: &str, family: &str) -> rows::Check {
         rows::Check {
@@ -387,22 +359,6 @@ mod tests {
             state: "on".to_owned(),
             check_group: "group".to_owned(),
         }
-    }
-
-    fn flaky_report(commit: &str) -> FlakyReport {
-        FlakyReport {
-            check: CheckName::new("rust:a").unwrap(),
-            hash: InputHash::new("1".repeat(64)).unwrap(),
-            commit: Commit::new(commit).unwrap(),
-            machine: MachineId::new("m-1").unwrap(),
-            always: false,
-            command: String::new(),
-            output: String::new(),
-        }
-    }
-
-    fn day(n: u32) -> Timestamp {
-        format!("2026-11-{n:02}T12:00:00.000Z").parse().unwrap()
     }
 
     #[test]
@@ -581,23 +537,5 @@ mod tests {
         assert_eq!(reply.checks[0].state, CheckState::On);
         assert_eq!(reply.checks[1].median_cost, None);
         assert!((reply.family_rate - 0.5).abs() < 1e-9);
-    }
-
-    #[test]
-    fn a_second_flaky_record_on_a_different_commit_within_a_week_is_repeated() {
-        let conn = hub::open_in_memory().unwrap();
-        assert!(!flaky_repeated(&conn, "rust:a").unwrap());
-        record_flaky(&conn, &flaky_report("aaaa"), day(1)).unwrap();
-        assert!(!flaky_repeated(&conn, "rust:a").unwrap());
-        // The same hash and commit again is the same record.
-        record_flaky(&conn, &flaky_report("aaaa"), day(2)).unwrap();
-        assert!(!flaky_repeated(&conn, "rust:a").unwrap());
-        // A different commit eight days after the first is outside the window.
-        record_flaky(&conn, &flaky_report("bbbb"), day(9)).unwrap();
-        assert!(!flaky_repeated(&conn, "rust:a").unwrap());
-        // A third, a different commit one day after the second, is inside it.
-        record_flaky(&conn, &flaky_report("cccc"), day(10)).unwrap();
-        assert!(flaky_repeated(&conn, "rust:a").unwrap());
-        assert!(!flaky_repeated(&conn, "rust:other").unwrap());
     }
 }

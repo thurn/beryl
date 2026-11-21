@@ -18,16 +18,14 @@ Fixing it:
   properly.
 - When the cause is in the product (a race, nondeterminism, a broken edge
   case), fix the product.
-- When the product is right and only the test is wrong (a timing threshold
-  tripping under load, a sleep, a brittle assertion on incidental output),
-  seriously consider deleting the test. A false alarm is strong evidence
-  that it is worthless: it took a worker off real work and caught nothing.
-- Repair such a test only if it guards behavior nothing else covers, by
-  replacing the timing with a deterministic check. Never loosen a
-  threshold or add a retry.
-- Say on the ticket which tests you deleted and why.
+- When the fix changes only the test, delete the test or redesign it so
+  it cannot fail for the same invalid reason. Keep essential coverage
+  with a deterministic check. Adjusting the assertion alone, loosening
+  a threshold or adding a retry leaves the cause in place.
+- Say on the ticket which test you deleted or redesigned and why.
 - When the ticket's comments show more failures that your fix does not
   cover, fix them too or file a ticket with the evidence.
-- Run the failing check yourself before landing.
+- Run the repaired or replacement check before landing. If you deleted
+  the check, verify that its family no longer lists it.
 
 A failure of the machine itself is not a regression: ignite guide machine.

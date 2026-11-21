@@ -163,6 +163,28 @@ pub(super) fn file_if(
     now: Timestamp,
     needed: impl Fn(&Connection) -> Result<bool>,
 ) -> Result<Option<Filed>> {
+    file_with(conn, author, filing, now, needed, |_, _| Ok(()))
+}
+
+/// Records the effect of a new sighting in the transaction that files its ticket.
+pub(super) fn file_then(
+    conn: &mut Connection,
+    filing: &Filing,
+    now: Timestamp,
+    record: impl FnOnce(&Connection, &str) -> Result<()>,
+) -> Result<Filed> {
+    file_with(conn, UPKEEP, filing, now, |_| Ok(true), record)?
+        .ok_or_else(|| StoreError::Invalid("an unconditional filing was skipped".to_owned()))
+}
+
+fn file_with(
+    conn: &mut Connection,
+    author: Author,
+    filing: &Filing,
+    now: Timestamp,
+    needed: impl Fn(&Connection) -> Result<bool>,
+    record: impl FnOnce(&Connection, &str) -> Result<()>,
+) -> Result<Option<Filed>> {
     let key = filing.signature.key();
     let body = filing.fields.body.clone().unwrap_or_default();
     let origin = origin(conn, author.machine)?;
@@ -248,11 +270,10 @@ pub(super) fn file_if(
         }
         match batch::apply_automatic_in(&mut tx, &request, author.actor, author.machine, now)? {
             BatchOutcome::Applied(reply) => {
+                let ticket = reply.results[0].id.to_string();
+                record(&tx, &ticket)?;
                 tx.commit()?;
-                return Ok(Some(Filed {
-                    ticket: reply.results[0].id.to_string(),
-                    change,
-                }));
+                return Ok(Some(Filed { ticket, change }));
             }
             BatchOutcome::Conflict(_) => {}
         }

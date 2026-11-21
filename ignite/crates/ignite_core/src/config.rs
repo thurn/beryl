@@ -374,9 +374,8 @@ pub struct Rules {
     /// Rules whose findings show on the dashboard and file no ticket, such as one that
     /// compares model tiers, because that choice stays with people.
     pub report_only: Vec<String>,
-    /// Checks that `never-caught` never names, each a family (`clippy`) or a whole check name
-    /// (`family:name`). They are cheap, and what they guard is too basic to give up for want
-    /// of a recent failure.
+    /// Checks that stay on when upkeep files a remedy, each a family (`clippy`) or a whole
+    /// check name (`family:name`). The `never-caught` rule also skips these checks.
     pub protected: Vec<String>,
 }
 

@@ -3079,6 +3079,15 @@ matches a test pattern, and `none` if no files landed. Each new close of a
 reopened ticket gets its own record. `ignite why <check>` lists the check's
 recorded outcomes from the last 30 days.
 
+A test-only repair must delete the invalid test or redesign it to prevent the
+same failure. The worker records the remedy on the regression ticket. When the
+repair lands, upkeep switches off the registered check on every machine and
+files a delete-or-redesign ticket with the failure output and the fixing commit.
+Protected checks stay on and get the same ticket. When the culprit and the test
+update landed from the same ticket, upkeep treats the update as part of that
+work and files no remedy. Card and rules definitions and oracle scenario sources
+and data are product paths.
+
 ## Flaky checks
 
 A flaky check costs every agent that meets it, so Ignite stops running one as
@@ -3087,10 +3096,11 @@ soon as the evidence is in, without waiting for an agent.
 - Every check that fails is run a second time at once. One that then passes, on
   the same input hash, is recorded as flaky, and the gate or verification that
   saw it passes.
-- A second flaky record within 7 days of the first, on a different commit,
-  switches the check off on every machine. An off check does not run.
-- The hub files a P3 ticket to delete the check or replace it with a
-  deterministic test. The ticket quotes both failures.
+- The daemon reports a command's flakes together so upkeep can tell when the
+  machine caused them.
+- The first flake switches the check off on every machine. The hub files a P3
+  ticket to delete or redesign the check and quotes the failed run's output.
+  Protected checks keep running and get the same ticket.
 - One ticket covers a whole check family. While a family's flaky ticket is not
   closed, the next check of that family to be switched off is added to it as a
   comment, so one session investigates them together instead of one session per
@@ -3099,9 +3109,8 @@ soon as the evidence is in, without waiting for an agent.
   is fixed, and `ignite flaky off <check> -m "<why>"` switches one off on every
   machine by hand. Each needs the machine's write token. The hub records who
   switched the check, from which machine and why, and comments on the check's
-  flaky ticket if it has one. A check switched back on goes off again only after
-  two new flaky records, because the records that switched it off already have
-  their ticket.
+  remedy ticket if it has one. Upkeep records the ticket against the failure
+  evidence so a later pass cannot switch the check back off for that failure.
 - `ignite flaky list` lists every check that is off, has flaked or was switched
   by hand, with its flaky records, its ticket and the last switch by hand.
 - A run that could not complete, because a tool was missing or a process was
@@ -3251,11 +3260,11 @@ The rules for the faults listed above:
   a week, gets a new ticket that names the old one.
 
 Some kinds are never closed automatically, because nothing the hub can observe
-shows their fault cleared: flaky checks (the check is switched off), flakes
-blamed on a machine and passes that replaced another machine's failure (both
-intermittent), cache audits (caching is switched off), exploration finds,
-justiciar reports from a daemon or a session, and improvement tickets from the
-rules.
+shows their fault cleared: flaky checks and test-only regressions that need a
+remedy, flakes blamed on a machine and passes that replaced another machine's
+failure (both intermittent), cache audits (caching is switched off), exploration
+finds, justiciar reports from a daemon or a session, and improvement tickets
+from the rules.
 
 ```sh
 ignite ticket create "Split beryl_session's replay code" -p P2 \

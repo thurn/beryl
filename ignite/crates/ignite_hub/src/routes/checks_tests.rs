@@ -333,7 +333,7 @@ fn a_record_batch_sent_twice_is_stored_once_with_the_same_ids() {
 }
 
 #[test]
-fn a_second_flaky_report_on_another_commit_is_kept_for_upkeep_to_act_on() {
+fn flaky_reports_are_deduplicated_by_check_hash_and_commit() {
     let hub = TestHub::start("flaky");
     for commit in ["abcd", "abcd", "ef01"] {
         let report =
@@ -345,7 +345,39 @@ fn a_second_flaky_report_on_another_commit_is_kept_for_upkeep_to_act_on() {
         .query_row("SELECT COUNT(*) FROM flaky", [], |r| r.get(0))
         .unwrap();
     assert_eq!(rows, 2, "the same report twice is one row");
-    assert!(ignite_store::hub::checks::flaky_repeated(&conn, "rust:a").unwrap());
+}
+
+#[test]
+fn one_batch_of_flakes_files_a_machine_fault_and_leaves_its_checks_on() {
+    let hub = TestHub::start("flaky-batch");
+    let names = ["rust:a", "rust:b", "rust:c"];
+    let reports = names.map(|check| {
+        json!({
+            "check": check, "hash": digest(1), "commit": "abcd", "machine": "m-1",
+            "command": "m-1:command", "output": "machine was out of disk space",
+        })
+    });
+    hub.post("/flaky/batch", &json!(reports));
+
+    let mut conn = hub.conn.lock().unwrap();
+    let report = crate::upkeep::Upkeep::new(None)
+        .unwrap()
+        .pass(&mut conn, at(1.0))
+        .unwrap();
+    assert!(report.checks_switched_off.is_empty());
+    assert_eq!(report.tickets_filed.len(), 1);
+    let ticket = ignite_store::hub::tickets::load(&conn, &report.tickets_filed[0])
+        .unwrap()
+        .unwrap();
+    assert_eq!(ticket.priority, 1);
+    assert!(ticket.title.starts_with("Many checks flaked at once on "));
+    for name in names {
+        use ignite_core::protocol::hub::CheckState;
+        assert_eq!(
+            ignite_store::hub::check_state::state(&conn, name).unwrap(),
+            Some(CheckState::On),
+        );
+    }
 }
 
 #[test]

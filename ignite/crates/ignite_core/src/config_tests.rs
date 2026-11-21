@@ -163,7 +163,11 @@ fn the_repository_configuration_parses() {
     let (config, unknown) = Config::parse_with_unknown("ignite.toml", &text).unwrap();
     assert!(unknown.is_empty(), "{unknown:?}");
     assert!(config.machine.len() >= 3);
-    assert_eq!(config.rules, Rules::default());
+    let mut rules = Rules::default();
+    rules
+        .protected
+        .extend(["oracle".into(), "oracle-generated".into()]);
+    assert_eq!(config.rules, rules);
 }
 
 #[test]

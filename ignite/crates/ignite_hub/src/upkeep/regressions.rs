@@ -172,14 +172,25 @@ fn update_open(
     now: Timestamp,
 ) -> Result<Outcome> {
     let ops = attribution(tx, ticket, author, report, false)?;
+    let check = report.check.as_str();
+    if let Some(culprit) = &report.caused_by {
+        // A grouped check can get a confirmed culprit without changing the ticket's routing.
+        tx.execute(
+            "UPDATE regressions SET first_bad = ?2, last_good = ?3,
+                culprit_ticket = ?4, failure_output = COALESCE(NULLIF(?5, ''), failure_output)
+             WHERE check_name = ?1",
+            params![
+                check,
+                report.first_bad.as_str(),
+                report.last_good.as_str(),
+                culprit.as_str(),
+                report.output,
+            ],
+        )?;
+    }
     if ops.is_empty() {
         return Ok(Outcome::Unchanged);
     }
-    let check = report.check.as_str();
-    tx.execute(
-        "UPDATE regressions SET first_bad = ?2, last_good = ?3 WHERE check_name = ?1",
-        params![check, report.first_bad.as_str(), report.last_good.as_str()],
-    )?;
     // The report may have waited for the transaction that claimed the ticket.
     let now = ticket.claimed_at.map_or(now, |claimed| now.max(claimed));
     apply(tx, author, check, ops, now)?;

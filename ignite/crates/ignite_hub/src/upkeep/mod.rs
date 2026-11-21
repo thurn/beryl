@@ -6,8 +6,8 @@
 //! - releases the claims of a machine that has not sent a heartbeat for 2 hours ([`offline`]);
 //! - marks a regression fixed once its ticket closed and its check has passed since
 //!   ([`regressions`]);
-//! - switches off each check with a second flaky record and files its P3 ticket, or a P1 one
-//!   for a check in the always set or a command in which many checks flaked ([`flaky`]);
+//! - files remedies for test-only regression fixes and flakes, and switches off ordinary
+//!   checks that fail for those reasons ([`invalid_checks`], [`flaky`]);
 //! - files a P1 ticket for a tip that has waited an hour on a machine that has not reported,
 //!   and one for an epic in which nothing can start ([`stuck`]);
 //! - files the copy of each meta-ticket whose schedule says one is due ([`schedules`]);
@@ -40,7 +40,8 @@ mod clearing_kinds;
 pub(crate) mod culprit_affinity;
 pub mod explore;
 pub mod filing;
-pub mod flaky;
+mod flaky;
+mod invalid_checks;
 pub mod justiciar;
 pub mod machines;
 pub mod missed;
@@ -78,6 +79,7 @@ use std::time::Duration;
 
 use rusqlite::Connection;
 
+use ignite_core::config::Rules;
 use ignite_core::time::Timestamp;
 use ignite_core::traits::Clock;
 use ignite_store::hub::fleet;
@@ -115,6 +117,7 @@ pub struct UpkeepReport {
 pub struct Upkeep {
     /// Where snapshots and exports go; `None` takes none.
     backups: Option<PathBuf>,
+    rules: Rules,
     last_snapshot: Option<Timestamp>,
     last_export_day: Option<String>,
     /// The attachment files to keep within their budget; `None` tidies none.
@@ -134,11 +137,19 @@ impl Upkeep {
         };
         Ok(Upkeep {
             backups,
+            rules: Rules::default(),
             last_snapshot,
             last_export_day,
             attachments: None,
             last_tidy: None,
         })
+    }
+
+    /// Uses the repository's protected check list for automatic switching.
+    #[must_use]
+    pub fn with_rules(mut self, rules: Rules) -> Self {
+        self.rules = rules;
+        self
     }
 
     /// The same upkeep, also keeping `files` within their budget once an hour.
@@ -168,13 +179,15 @@ impl Upkeep {
             report.released_claims.extend(released);
         }));
         keep(regressions::mark_fixed(conn).map(|fixed| report.regressions_fixed = fixed));
-        keep(flaky::switch_off_repeated(conn, now).map(|flaky| {
-            for (check, filed) in flaky.switched_off {
-                report.checks_switched_off.push(check);
-                report.tickets_filed.push(filed.ticket);
-            }
-            note(&mut report, flaky.filed);
-        }));
+        for result in [
+            invalid_checks::regressions(conn, &self.rules, now),
+            flaky::handle(conn, &self.rules, now),
+        ] {
+            keep(result.map(|remedy| {
+                report.checks_switched_off.extend(remedy.switched_off);
+                note(&mut report, remedy.filed);
+            }));
+        }
         keep(stuck::tips_waiting(conn, now).map(|filed| note(&mut report, filed)));
         keep(stuck::stuck_epics(conn, now).map(|filed| note(&mut report, filed)));
         keep(justiciar::master_lag(conn, now).map(|filed| note(&mut report, filed)));

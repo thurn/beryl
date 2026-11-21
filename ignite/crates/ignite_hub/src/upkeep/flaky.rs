@@ -1,40 +1,25 @@
-//! Flaky checks.
-//!
-//! - A check with a second flaky record within 7 days of the first, on a different commit, is
-//!   switched off on every machine, and a P3 ticket asks for it to be deleted or replaced with a
-//!   deterministic test. The ticket quotes both failures' output.
-//! - A check in the always set is never switched off. Its second flaky record files a P1 ticket
-//!   to fix the step instead, because a formatter or lint that flakes is almost always the
-//!   machine.
-//! - Both kinds of ticket are shared by a check family (the part of a check's name before the
-//!   colon). While a family's ticket is not closed, the next check of that family to be switched
-//!   off is added to it as a comment instead of filing another ticket. Flakes in one family
-//!   often share a cause, such as a loaded machine, and one session investigating them together
-//!   costs much less than one session per check.
-//! - When three or more checks flaked in one command run, the machine is at fault (a full disk,
-//!   a stuck browser page). None of those records counts toward switching a check off, and the
-//!   command gets one P1 ticket for the machine.
-//!
-//! Each record that a ticket was filed for is marked with that ticket, and no longer counts, so
-//! a later pass files nothing more for it.
+//! One flake on the same inputs is enough to file a remedy and switch off an ordinary check.
+//! When three or more checks flake in one command, file a machine ticket first and leave
+//! every check in that command running.
 
 use rusqlite::{Connection, params};
 
+use ignite_core::config::Rules;
 use ignite_core::pins::machine_label;
-use ignite_core::protocol::hub::CheckState;
 use ignite_core::protocol::tickets::{TicketFields, TicketType};
 use ignite_core::time::Timestamp;
 use ignite_store::Result;
-use ignite_store::hub::checks::{self, FLAKY_WINDOW_DAYS, MACHINE_FAULT_CHECKS};
+use ignite_store::hub::checks::{self, MACHINE_FAULT_CHECKS};
 
 use super::filing::{self, Filed, Filing, UPKEEP};
+use super::invalid_checks::{self, Remedy, RemedyOutcome};
 use super::regressions::OUTPUT_LINES;
 use super::signature::Signature;
 use super::{machines, parse_time, tail};
 
 /// One flaky record: the check failed and then passed on the same inputs.
 struct FlakyRecord {
-    check: String,
+    name: String,
     hash: String,
     commit: String,
     machine: String,
@@ -43,22 +28,16 @@ struct FlakyRecord {
     output: String,
 }
 
-/// What one pass over the flaky records did.
-#[derive(Debug, Default)]
-pub struct FlakyOutcome {
-    /// Each check switched off, with its P3 ticket.
-    pub switched_off: Vec<(String, Filed)>,
-    /// The P1 tickets for always-set checks and for machine faults.
-    pub filed: Vec<Filed>,
-}
-
-/// Files one machine ticket for each command in which many checks flaked, then switches off
-/// each check that is on and has two flaky records that count, or files a P1 ticket for it if
-/// it is in the always set.
-pub fn switch_off_repeated(conn: &mut Connection, now: Timestamp) -> Result<FlakyOutcome> {
-    let mut outcome = FlakyOutcome {
+/// Files machine faults first, then handles the first unfiled flake of each check. One ticket
+/// per family holds ordinary flakes. Always-set checks get a P1 step repair and stay on.
+pub(super) fn handle(
+    conn: &mut Connection,
+    rules: &Rules,
+    now: Timestamp,
+) -> Result<RemedyOutcome> {
+    let mut outcome = RemedyOutcome {
         filed: machine_faults(conn, now)?,
-        ..FlakyOutcome::default()
+        ..RemedyOutcome::default()
     };
     let candidates: Vec<String> = {
         let mut select = conn.prepare(&format!(
@@ -70,32 +49,37 @@ pub fn switch_off_repeated(conn: &mut Connection, now: Timestamp) -> Result<Flak
             .query_map([], |row| row.get(0))?
             .collect::<rusqlite::Result<_>>()?
     };
+    let condition = format!("check_name = ?1 AND {}", checks::counting_flaky());
     for check in candidates {
-        if !checks::flaky_repeated(conn, &check)? {
-            continue;
-        }
-        let records = records(
-            conn,
-            &format!("check_name = ?1 AND {}", checks::counting_flaky()),
-            &check,
-        )?;
-        let Some((first, second)) = repeated_pair(&records) else {
+        let records = records(conn, &condition, &check)?;
+        let Some(first) = records
+            .iter()
+            .find(|record| record.always)
+            .or(records.first())
+        else {
             continue;
         };
-        if first.always || second.always {
-            let filed = filing::file(conn, UPKEEP, &always_filing(&check, first, second), now)?;
-            mark_filed(conn, &[first, second], &filed.ticket)?;
-            outcome.filed.push(filed);
-        } else {
-            // The ticket comes first. If filing fails the check stays on and the next pass tries
-            // again; if the process stops between the two, the next pass finds the same records
-            // unmarked, files nothing new (the ticket already holds the evidence) and then
-            // switches the check off.
-            let filed = filing::file(conn, UPKEEP, &off_filing(&check, first, second), now)?;
-            checks::set_state(conn, &check, CheckState::Off)?;
-            mark_filed(conn, &[first, second], &filed.ticket)?;
-            outcome.switched_off.push((check, filed));
-        }
+        let remedy = Remedy {
+            check: &check,
+            category: if first.always {
+                "flaky-always"
+            } else {
+                "flaky"
+            },
+            evidence: format!("{check}@{}:{}", first.commit, first.hash),
+            failure: quote(first),
+            keep_on: first.always || rules.is_protected(&check),
+        };
+        invalid_checks::file(conn, &remedy, &mut outcome, now, |tx, ticket| {
+            let mut update = tx.prepare_cached(
+                "UPDATE flaky SET filed = ?4
+                 WHERE check_name = ?1 AND hash = ?2 AND commit_sha = ?3 AND filed IS NULL",
+            )?;
+            for record in &records {
+                update.execute(params![check, record.hash, record.commit, ticket])?;
+            }
+            Ok(())
+        })?;
     }
     Ok(outcome)
 }
@@ -121,7 +105,7 @@ fn machine_faults(conn: &mut Connection, now: Timestamp) -> Result<Vec<Filed>> {
             continue;
         };
         let name = machines::name(conn, &first.machine)?;
-        let mut names: Vec<&str> = records.iter().map(|r| r.check.as_str()).collect();
+        let mut names: Vec<&str> = records.iter().map(|r| r.name.as_str()).collect();
         names.sort_unstable();
         names.dedup();
         let body = format!(
@@ -179,9 +163,9 @@ fn records(conn: &Connection, condition: &str, value: &str) -> Result<Vec<FlakyR
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     rows.into_iter()
-        .map(|(check, hash, commit, machine, at, always, output)| {
+        .map(|(name, hash, commit, machine, at, always, output)| {
             Ok(FlakyRecord {
-                check,
+                name,
                 hash,
                 commit,
                 machine,
@@ -193,108 +177,16 @@ fn records(conn: &Connection, condition: &str, value: &str) -> Result<Vec<FlakyR
         .collect()
 }
 
-fn mark_filed(conn: &Connection, records: &[&FlakyRecord], ticket: &str) -> Result<()> {
-    let mut update = conn.prepare_cached(
-        "UPDATE flaky SET filed = ?4 WHERE check_name = ?1 AND hash = ?2 AND commit_sha = ?3",
-    )?;
-    for record in records {
-        update.execute(params![record.check, record.hash, record.commit, ticket])?;
-    }
-    Ok(())
-}
-
-/// The first two records on different commits within the window, as `flaky_repeated` counts
-/// them.
-fn repeated_pair(records: &[FlakyRecord]) -> Option<(&FlakyRecord, &FlakyRecord)> {
-    let window = FLAKY_WINDOW_DAYS * 86_400.0;
-    records.iter().enumerate().find_map(|(i, first)| {
-        records[i + 1..]
-            .iter()
-            .find(|later| {
-                later.commit != first.commit && later.at.seconds_since(first.at) <= window
-            })
-            .map(|later| (first, later))
-    })
-}
-
-/// Both failures, each with where and when it happened and its output.
-fn quote_both(first: &FlakyRecord, second: &FlakyRecord) -> String {
-    let quote = |record: &FlakyRecord| {
-        let output = if record.output.is_empty() {
-            "(no output was reported)".to_owned()
-        } else {
-            tail(&record.output, OUTPUT_LINES)
-        };
-        format!(
-            "- {}: failed, then passed on the same inputs, at commit {} on machine {} (input \
-             hash {}). Output of the failed run (last {OUTPUT_LINES} lines):\n{output}",
-            record.at, record.commit, record.machine, record.hash
-        )
+/// Where and when the check flaked, followed by the failed command's output.
+fn quote(record: &FlakyRecord) -> String {
+    let output = if record.output.is_empty() {
+        "(no output was reported)".to_owned()
+    } else {
+        tail(&record.output, OUTPUT_LINES)
     };
-    format!("{}\n\n{}", quote(first), quote(second))
-}
-
-fn family(check: &str) -> &str {
-    check.split_once(':').map_or(check, |(family, _)| family)
-}
-
-/// Names one check's pair of flaky records, so that the family's shared ticket records each
-/// check's pair once.
-fn evidence(check: &str, first: &FlakyRecord, second: &FlakyRecord) -> String {
-    format!("{check}@{}+{}", first.commit, second.commit)
-}
-
-fn off_filing(check: &str, first: &FlakyRecord, second: &FlakyRecord) -> Filing {
-    let family = family(check);
-    let body = format!(
-        "{check} failed and then passed at once on the same inputs twice within \
-         {FLAKY_WINDOW_DAYS} days, on different commits. It is switched off on every machine.\n\n\
-         {}\n\n\
-         Delete {check}, or replace it with a deterministic test and switch it back on.",
-        quote_both(first, second)
-    );
-    Filing {
-        signature: Signature::of_subject(family, "flaky"),
-        evidence: evidence(check, first, second),
-        fields: TicketFields {
-            title: Some(format!("Flaky checks switched off in {family}")),
-            body: Some(body),
-            ticket_type: Some(TicketType::Bug),
-            priority: Some(3),
-            labels: Some(vec!["flaky".to_owned(), format!("check:{family}")]),
-            // The filed records are linked afterward. A close can already see the check here.
-            metadata: Some([(filing::CHECKS_KEY.to_owned(), serde_json::json!([check]))].into()),
-            ..TicketFields::default()
-        },
-        deps: Vec::new(),
-        released: false,
-    }
-}
-
-fn always_filing(check: &str, first: &FlakyRecord, second: &FlakyRecord) -> Filing {
-    let family = family(check);
-    let body = format!(
-        "{check} is in the always set and failed and then passed at once on the same inputs \
-         twice within {FLAKY_WINDOW_DAYS} days, on different commits. A check in the always set \
-         is never switched off, so it still runs. A formatter or lint that flakes is almost \
-         always the machine: a file another process changed, a shared temporary path or a \
-         download. Fix the step so that it gives the same result every time.\n\n{}",
-        quote_both(first, second)
-    );
-    Filing {
-        signature: Signature::of_subject(family, "flaky-always"),
-        evidence: evidence(check, first, second),
-        fields: TicketFields {
-            title: Some(format!("Always-set checks flake in {family}")),
-            body: Some(body),
-            ticket_type: Some(TicketType::Bug),
-            priority: Some(1),
-            labels: Some(vec!["flaky".to_owned(), format!("check:{family}")]),
-            // The filed records are linked afterward. A close can already see the check here.
-            metadata: Some([(filing::CHECKS_KEY.to_owned(), serde_json::json!([check]))].into()),
-            ..TicketFields::default()
-        },
-        deps: Vec::new(),
-        released: false,
-    }
+    format!(
+        "The check failed and then passed on the same inputs on {} at commit {} on machine {} \
+         (input hash {}). Output of the failed run (last {OUTPUT_LINES} lines):\n{output}",
+        record.at, record.commit, record.machine, record.hash
+    )
 }

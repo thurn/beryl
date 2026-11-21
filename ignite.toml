@@ -29,6 +29,7 @@ green = "refs/ignite/green"
 saved = "refs/ignite/tickets/"
 
 # Paths that count as test files when Ignite classifies a landed check fix.
+# Card and rules definitions and the oracle scenario sources and data count as product code.
 test_paths = [
   "**/tests/**",                  # Integration tests and their fixtures and expected outputs.
   "**/*_tests.rs",                # Rust unit tests in sibling modules.
@@ -60,7 +61,7 @@ test_paths = [
 # 2026-11-18 `ignite test` of these checks took 5 to 8.5 minutes through the scheduler while Beryl
 # builds held its cores, against about a minute when it got them.
 [express]
-paths = ["ignite/**", "ignite.toml", "docs/ignite.md", "data/efficiency-changes.json"]
+paths = ["ignite/**", "ignite.toml", "docs/ignite.md", "data/efficiency-changes.json", ".agents/skills/cifix/SKILL.md"]
 tree = ".worktrees/express" # unused since express landings run in their own trees; kept for older daemons
 dir = "ignite"
 commands = [
@@ -94,12 +95,12 @@ commands = [
 ]
 families = ["ignite", "ignite-lint"]
 # Files no express command builds or runs: the design document, which the Markdown check only
-# checks the formatting of after the landing's formatters rewrote it, and the efficiency log,
-# which no command reads. Nearly every Ignite change edits both, so any landing that rebases
-# over another Ignite change finds them shared, and without this list it ran all four commands
+# checks the formatting of after the landing's formatters rewrote it, the efficiency log, and
+# the Ignite check repair skill. Nearly every Ignite change edits the design or log, so a landing
+# that rebases over another Ignite change finds them shared. Without this list it ran all four commands
 # again (65 to 71 s on 2026-11-19). A commit landed meanwhile that edits one of them leaves an
 # earlier pass standing; a shared file under `dir` still runs the commands again.
-inert = ["docs/ignite.md", "data/efficiency-changes.json"]
+inert = ["docs/ignite.md", "data/efficiency-changes.json", ".agents/skills/cifix/SKILL.md"]
 
 # Formatters `ignite land` runs on the files a landing changes, before the gate or the express
 # commands, committing what they change as `style: format` (docs/ignite.md, "Formatting at
@@ -186,10 +187,11 @@ backlog_high = 0.20
 window = 20
 
 # Improvement rules (docs/ignite.md, "Improvement tickets"). A report-only rule files nothing.
-# `never-caught` never names a protected check: a family, or a whole `family:name`.
+# Upkeep leaves protected checks on when it files a remedy. The never-caught rule skips them.
+# The oracle families play product scenarios against independent rules engines.
 [rules]
 report_only = ["tier-gap"]
-protected = ["app", "ui-smoke", "clippy", "pyre", "ui-types", "source"]
+protected = ["app", "ui-smoke", "clippy", "pyre", "ui-types", "source", "oracle", "oracle-generated"]
 
 # A ticket's `effort:` label overrides this default. Apps without an entry use medium.
 [pool.default_effort]

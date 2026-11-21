@@ -6,20 +6,14 @@
 //! - A run that ends without reporting the check is `Incomplete`. It is run again, at most twice
 //!   more; a third incomplete attempt gives up, and the hub files a P1 ticket. A check that
 //!   failed earlier on the same inputs stays failed instead.
-//! - A second flaky record within 7 days of the first, on a different commit, switches the check
-//!   off ([`switch_off`]).
+//! - The hub handles a flaky verdict as an invalid failure after it rules out a machine fault.
 //! - A failure counts toward a check's statistics only when a later change made the check pass
 //!   again ([`failure_counts`]).
 
-use crate::ids::Commit;
 use crate::protocol::Outcome;
-use crate::time::Timestamp;
 
 /// Attempts at one input hash that may end incomplete before giving up: the first and two more.
 pub const MAX_INCOMPLETE: usize = 3;
-
-/// How long a flaky record stays relevant to switching a check off, in seconds (7 days).
-pub const FLAKY_WINDOW_SECONDS: f64 = 7.0 * 24.0 * 60.0 * 60.0;
 
 /// What to do after a run.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -68,27 +62,6 @@ pub fn next(runs: &[Outcome]) -> Next {
     }
 }
 
-/// One recorded flaky result.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct FlakyRecord {
-    pub commit: Commit,
-    pub at: Timestamp,
-}
-
-/// Whether a check is switched off, given its flaky records in any order. Two records on
-/// different commits no more than 7 days apart switch it off. The same commit twice is one
-/// piece of evidence, not two.
-pub fn switch_off(records: &[FlakyRecord]) -> bool {
-    records.iter().enumerate().any(|(i, a)| {
-        records[i + 1..].iter().any(|b| {
-            a.commit != b.commit && {
-                let (earlier, later) = if a.at <= b.at { (a, b) } else { (b, a) };
-                later.at.seconds_since(earlier.at) <= FLAKY_WINDOW_SECONDS
-            }
-        })
-    })
-}
-
 /// Whether a failure counts toward the check's statistics: a later change made the check pass
 /// again, so the failure was a fixed bug and not a check that was always wrong. `later` is the
 /// check's outcomes after the failure, oldest first.
@@ -100,15 +73,6 @@ pub fn failure_counts(later: &[Outcome]) -> bool {
 mod tests {
     use super::*;
     use Outcome::{Fail, Flaky, Incomplete, Pass};
-
-    fn record(commit: &str, millis: i64) -> FlakyRecord {
-        FlakyRecord {
-            commit: commit.parse().unwrap(),
-            at: Timestamp::from_millis(millis),
-        }
-    }
-
-    const DAY: i64 = 24 * 60 * 60 * 1000;
 
     #[test]
     fn pass_is_final() {
@@ -144,24 +108,6 @@ mod tests {
     #[test]
     fn incomplete_then_pass_is_a_pass() {
         assert_eq!(next(&[Incomplete, Pass]), Next::Done(Pass));
-    }
-
-    #[test]
-    fn seventh_day_switches_off_and_the_eighth_does_not() {
-        let a = record("aaaaaaa", 0);
-        assert!(switch_off(&[a.clone(), record("bbbbbbb", 7 * DAY)]));
-        assert!(!switch_off(&[a, record("bbbbbbb", 7 * DAY + 1)]));
-    }
-
-    #[test]
-    fn the_same_commit_twice_does_not_switch_off() {
-        assert!(!switch_off(&[record("aaaaaaa", 0), record("aaaaaaa", DAY)]));
-    }
-
-    #[test]
-    fn one_record_does_not_switch_off_and_order_does_not_matter() {
-        assert!(!switch_off(&[record("aaaaaaa", 0)]));
-        assert!(switch_off(&[record("bbbbbbb", DAY), record("aaaaaaa", 0)]));
     }
 
     #[test]

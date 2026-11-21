@@ -428,6 +428,7 @@ fn landed(conn: &mut Connection, landed: &Landed, now: Timestamp, test_paths: &[
         })
         .map_err(sql_failure)?;
     fleet::lapse(&tx, now).map_err(|e| store_failure(&e))?;
+    let prior_commits = ticket.landed.map_or_else(Vec::new, |work| work.commits);
     let mut metadata = ticket.metadata;
     if let Some(app) = cli_provider(&landed.session) {
         metadata.insert(
@@ -454,7 +455,12 @@ fn landed(conn: &mut Connection, landed: &Landed, now: Timestamp, test_paths: &[
         now,
     )
     .map_err(|e| store_failure(&e))?;
-    close_after_landing(&mut tx, landed, now, test_paths)?;
+    let fix = LandingFix {
+        outcome: FixOutcome::classify(&landed.work.files, test_paths),
+        commit: landed.work.commits.last().cloned(),
+        prior_commits,
+    };
+    close_after_landing(&mut tx, landed, now, &fix)?;
     free_worker(
         &tx,
         &landed.machine,
@@ -488,7 +494,7 @@ fn close_after_landing(
     tx: &mut Transaction,
     landed: &Landed,
     now: Timestamp,
-    test_paths: &[String],
+    fix: &LandingFix,
 ) -> Result<(), Response> {
     let id = landed.ticket.as_str();
     let reason = landed.work.note.lines().next().unwrap_or("").trim();
@@ -497,17 +503,13 @@ fn close_after_landing(
         preconditions: Vec::new(),
         ops: closing(&load(tx, id)?, reason),
     };
-    let fix = LandingFix {
-        outcome: FixOutcome::classify(&landed.work.files, test_paths),
-        commit: landed.work.commits.last().cloned(),
-    };
     batch_result(batch::apply_landing_in(
         tx,
         &request,
         landed.session.as_str(),
         landed.machine.as_str(),
         now,
-        (id, &fix),
+        (id, fix),
     ))?;
     Ok(())
 }

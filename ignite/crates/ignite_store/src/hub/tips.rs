@@ -7,7 +7,7 @@
 use rusqlite::{Connection, OptionalExtension, params};
 
 use ignite_core::config::Os;
-use ignite_core::ids::Commit;
+use ignite_core::ids::{Commit, TicketId};
 use ignite_core::protocol::hub::{
     LandedCommit, RegressionReport, TipClaim, TipClaimReply, TipState, TipVerified,
 };
@@ -153,8 +153,9 @@ pub fn regression(conn: &Connection, report: &RegressionReport, ticket: &str) ->
     match state.as_deref() {
         None => {
             conn.execute(
-                "INSERT INTO regressions (check_name, ticket, first_bad, last_good, state, platform)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                "INSERT INTO regressions
+                    (check_name, ticket, first_bad, last_good, state, platform, culprit_ticket, failure_output)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
                 params![
                     report.check.as_str(),
                     ticket,
@@ -162,12 +163,15 @@ pub fn regression(conn: &Connection, report: &RegressionReport, ticket: &str) ->
                     report.last_good.as_str(),
                     OPEN,
                     report.platform.map(Os::as_str).unwrap_or_default(),
+                    report.caused_by.as_ref().map(TicketId::as_str),
+                    report.output,
                 ],
             )?;
         }
         Some(FIXED) => {
             conn.execute(
-                "UPDATE regressions SET state = ?2, first_bad = ?3, last_good = ?4, platform = ?5
+                "UPDATE regressions SET state = ?2, first_bad = ?3, last_good = ?4, platform = ?5,
+                    culprit_ticket = ?6, failure_output = ?7
                  WHERE check_name = ?1",
                 params![
                     report.check.as_str(),
@@ -175,6 +179,8 @@ pub fn regression(conn: &Connection, report: &RegressionReport, ticket: &str) ->
                     report.first_bad.as_str(),
                     report.last_good.as_str(),
                     report.platform.map(Os::as_str).unwrap_or_default(),
+                    report.caused_by.as_ref().map(TicketId::as_str),
+                    report.output,
                 ],
             )?;
         }

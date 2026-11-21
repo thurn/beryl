@@ -15,6 +15,9 @@ use crate::{Result, StoreError};
 pub struct LandingFix {
     pub outcome: FixOutcome,
     pub commit: Option<Commit>,
+    /// Commits the same ticket landed before this close, for older regression reports that
+    /// did not record which ticket landed their culprit.
+    pub prior_commits: Vec<Commit>,
 }
 
 /// Records one outcome per check on the ticket, and credits exploration families for a
@@ -30,13 +33,21 @@ pub(super) fn record_close(
     let commit = landing
         .and_then(|fix| fix.commit.as_ref())
         .map(Commit::as_str);
+    let prior_commits = landing.map_or(&[][..], |fix| fix.prior_commits.as_slice());
+    let prior_commits = serde_json::to_string(prior_commits)
+        .map_err(|error| StoreError::Invalid(error.to_string()))?;
     conn.execute(
         "INSERT INTO check_fix_outcomes
-            (close_seq, check_name, ticket, at, outcome, source, first_bad, fixing_commit)
-         SELECT ?1, check_name, ?2, ?3, ?4, 'regression', first_bad, ?5
-         FROM regressions WHERE ticket = ?2
+            (close_seq, check_name, ticket, at, outcome, source, first_bad, fixing_commit,
+             failure_output, remedy_ticket)
+         SELECT ?1, r.check_name, ?2, ?3, ?4, 'regression', r.first_bad, ?5,
+             CASE WHEN ?4 = 'test-only' THEN r.failure_output END,
+             CASE WHEN ?4 = 'test-only' AND ?5 IS NOT NULL AND NOT EXISTS (
+                 SELECT 1 FROM json_each(?6) WHERE value = r.first_bad
+             ) AND coalesce(r.culprit_ticket, '') != ?2 THEN '' END
+         FROM regressions r WHERE r.ticket = ?2
          UNION ALL
-         SELECT ?1, check_name, ?2, ?3, ?4, 'flaky', NULL, ?5
+         SELECT ?1, check_name, ?2, ?3, ?4, 'flaky', NULL, ?5, NULL, NULL
          FROM (
              SELECT check_name FROM flaky WHERE filed = ?2
              UNION
@@ -46,7 +57,14 @@ pub(super) fn record_close(
              SELECT 1 FROM tickets, json_each(tickets.labels)
              WHERE tickets.id = ?2 AND json_each.value = 'flaky'
          )",
-        params![close_seq, ticket, now.to_string(), outcome.as_str(), commit],
+        params![
+            close_seq,
+            ticket,
+            now.to_string(),
+            outcome.as_str(),
+            commit,
+            prior_commits
+        ],
     )?;
     if outcome == FixOutcome::Product {
         let mut families = conn.prepare(
@@ -95,7 +113,8 @@ pub fn products(conn: &Connection) -> Result<Vec<CheckFix>> {
 }
 
 const SELECT: &str =
-    "SELECT close_seq, check_name, ticket, at, outcome, source, first_bad, fixing_commit
+    "SELECT close_seq, check_name, ticket, at, outcome, source, first_bad, fixing_commit,
+            failure_output, remedy_ticket
      FROM check_fix_outcomes";
 const ORDER: &str = "ORDER BY at DESC, close_seq DESC, check_name, source";
 
@@ -111,6 +130,8 @@ fn read(conn: &Connection, sql: &str, args: impl rusqlite::Params) -> Result<Vec
             source: row.get(5)?,
             first_bad: row.get(6)?,
             fixing_commit: row.get(7)?,
+            failure_output: row.get(8)?,
+            remedy_ticket: row.get(9)?,
         })
     };
     let rows = query.query_map(args, read)?;

@@ -397,6 +397,10 @@ pub trait Hub: Send + Sync {
     fn metrics(&self, import: &MetricsImport) -> Result<()>;
     /// Reports a check that failed, then passed at once on the same inputs (`POST /flaky`).
     fn flaky(&self, report: &FlakyReport) -> Result<()>;
+    /// Sends the flakes observed together so upkeep can distinguish a machine fault.
+    fn flaky_batch(&self, reports: &[FlakyReport]) -> Result<()> {
+        reports.iter().try_for_each(|report| self.flaky(report))
+    }
     /// Reports the title a desktop session shows (`POST /session-titles`). A hub that keeps no
     /// titles accepts and drops it.
     fn session_title(&self, _title: &SessionTitle) -> Result<()> {

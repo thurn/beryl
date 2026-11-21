@@ -45,7 +45,7 @@ fn register(conn: &Connection, id: &str, name: &str, os: Os, now: Timestamp) {
 }
 
 #[test]
-fn an_always_set_check_that_flakes_twice_stays_on_and_gets_one_p1() {
+fn an_always_set_check_that_flakes_once_stays_on_and_gets_one_p1() {
     let clock = start();
     let mut conn = hub::open_in_memory().unwrap();
     let mut upkeep = Upkeep::new(None).unwrap();
@@ -56,8 +56,6 @@ fn an_always_set_check_that_flakes_twice_stays_on_and_gets_one_p1() {
     };
 
     checks::record_flaky(&conn, &always("aaaa"), clock.now()).unwrap();
-    clock.advance(86_400.0);
-    checks::record_flaky(&conn, &always("bbbb"), clock.now()).unwrap();
     let report = upkeep.pass(&mut conn, clock.now()).unwrap();
     assert!(report.checks_switched_off.is_empty());
     assert_eq!(check_state(&conn, "format:rust"), "on");
@@ -65,7 +63,6 @@ fn an_always_set_check_that_flakes_twice_stays_on_and_gets_one_p1() {
     let filed = ticket(&conn, &report.tickets_filed[0]);
     assert_eq!(filed.priority, 1);
     assert!(filed.body.contains("format:rust failed in m-1:aaaa"));
-    assert!(filed.body.contains("format:rust failed in m-1:bbbb"));
 
     // The records it was filed for no longer count, so later passes file nothing more.
     clock.advance(60.0);
@@ -110,11 +107,11 @@ fn many_checks_flaking_in_one_command_switch_none_off_and_file_one_machine_ticke
     clock.advance(86_400.0);
     checks::record_flaky(&conn, &flaky("ui:a", "cccc", "m-1:run-3"), clock.now()).unwrap();
     let report = upkeep.pass(&mut conn, clock.now()).unwrap();
-    assert!(report.checks_switched_off.is_empty() && report.tickets_filed.is_empty());
-    for name in names {
-        assert_eq!(check_state(&conn, name), "on");
-    }
-    assert_eq!(all_tickets(&conn, clock.now()).len(), 1);
+    assert_eq!(report.checks_switched_off, ["ui:a"]);
+    assert_eq!(check_state(&conn, "ui:a"), "off");
+    assert_eq!(check_state(&conn, "ui:b"), "on");
+    assert_eq!(check_state(&conn, "rust:c"), "on");
+    assert_eq!(all_tickets(&conn, clock.now()).len(), 2);
 }
 
 #[test]
@@ -125,23 +122,29 @@ fn flaky_checks_of_one_family_share_one_ticket_and_other_families_get_their_own(
     for name in ["rust:a", "rust:b", "ui:c"] {
         list_check(&mut conn, name);
     }
-    // Each check flakes alone in its own command, twice on different commits.
-    let twice = |conn: &Connection, clock: &dyn Clock, name: &str| {
-        for commit in ["aaaa", "bbbb"] {
-            let command = format!("m-1:{name}:{commit}");
-            checks::record_flaky(conn, &flaky(name, commit, &command), clock.now()).unwrap();
-        }
+    // Each check flakes alone in its own command.
+    let once = |conn: &Connection, clock: &dyn Clock, name: &str| {
+        let command = format!("m-1:{name}");
+        checks::record_flaky(conn, &flaky(name, "aaaa", &command), clock.now()).unwrap();
     };
 
-    twice(&conn, &clock, "rust:a");
+    once(&conn, &clock, "rust:a");
     let report = upkeep.pass(&mut conn, clock.now()).unwrap();
     assert_eq!(report.checks_switched_off, vec!["rust:a"]);
     let shared = ticket(&conn, &report.tickets_filed[0]);
-    assert_eq!(shared.title, "Flaky checks switched off in rust");
+    assert_eq!(shared.title, "Delete or redesign invalid checks in rust");
+    assert!(shared.body.contains("rust:a failed in m-1:rust:a"));
+    assert!(shared.body.contains("Delete rust:a or redesign it"));
+    assert_eq!(check_state(&conn, "rust:a"), "off");
+
+    checks::set_state(&conn, "rust:a", ignite_core::protocol::hub::CheckState::On).unwrap();
+    let report = upkeep.pass(&mut conn, clock.now()).unwrap();
+    assert!(report.checks_switched_off.is_empty() && report.tickets_filed.is_empty());
+    assert_eq!(check_state(&conn, "rust:a"), "on");
 
     // A second check of the same family goes onto the open ticket as a comment.
     clock.advance(3_600.0);
-    twice(&conn, &clock, "rust:b");
+    once(&conn, &clock, "rust:b");
     let report = upkeep.pass(&mut conn, clock.now()).unwrap();
     assert_eq!(report.checks_switched_off, vec!["rust:b"]);
     assert_eq!(report.tickets_filed, vec![shared.id.to_string()]);
@@ -150,7 +153,7 @@ fn flaky_checks_of_one_family_share_one_ticket_and_other_families_get_their_own(
 
     // A check of another family gets a ticket of its own.
     clock.advance(3_600.0);
-    twice(&conn, &clock, "ui:c");
+    once(&conn, &clock, "ui:c");
     let report = upkeep.pass(&mut conn, clock.now()).unwrap();
     assert_ne!(report.tickets_filed, vec![shared.id.to_string()]);
     assert_eq!(all_tickets(&conn, clock.now()).len(), 2);

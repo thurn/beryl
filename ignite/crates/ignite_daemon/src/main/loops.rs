@@ -686,6 +686,7 @@ pub fn serve_hub_at(
     }
     let upkeep = ignite_hub::upkeep::Upkeep::new(Some(dir.join("backups")))
         .map_err(store)?
+        .with_rules(config.rules.clone())
         .with_attachments(ignite_hub::attachments::AttachmentFiles::beside(
             &database,
             config.hub.attachment_budget_bytes(),

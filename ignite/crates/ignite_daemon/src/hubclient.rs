@@ -518,6 +518,15 @@ impl Hub for HubClient {
         Ok(())
     }
 
+    fn flaky_batch(&self, reports: &[FlakyReport]) -> Result<()> {
+        match self.post::<_, serde_json::Value>("/flaky/batch", &reports) {
+            Ok(_) => Ok(()),
+            // Older hubs still apply their original policy to the individual reports.
+            Err(Error::NotFound(_)) => reports.iter().try_for_each(|report| self.flaky(report)),
+            Err(error) => Err(error),
+        }
+    }
+
     fn transcripts(&self, append: &TranscriptAppend) -> Result<()> {
         let _: serde_json::Value = self.post("/transcripts/append", append)?;
         Ok(())

@@ -7,8 +7,8 @@ use ignite_core::fakes::FakeClock;
 use ignite_core::ids::{CheckName, Commit, InputHash, MachineId, RecordId, TicketId};
 use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::{
-    AuditReport, CheckState, FlakyReport, FoundBy, IncompleteReason, IncompleteReport,
-    MachineRegister, NewResult, RegressionReport, ResultKey, TipWaiting,
+    AuditReport, CheckState, FoundBy, IncompleteReason, IncompleteReport, MachineRegister,
+    NewResult, RegressionReport, ResultKey, TipWaiting,
 };
 use ignite_core::protocol::tickets::{
     BatchRequest, Dependency, Operation, Status, Ticket, TicketFields, TicketQuery, TicketType,
@@ -454,48 +454,6 @@ fn a_pass_after_the_fix_closed_marks_the_regression_fixed() {
     pass(&mut conn, '2', clock.now());
     let report = upkeep.pass(&mut conn, clock.now()).unwrap();
     assert_eq!(report.regressions_fixed, vec!["rust:a::b"]);
-}
-
-#[test]
-fn a_check_is_switched_off_on_its_second_flaky_record_and_not_its_first() {
-    let clock = start();
-    let mut conn = hub::open_in_memory().unwrap();
-    let mut upkeep = Upkeep::new(None).unwrap();
-    list_check(&mut conn, "ui:shots");
-    let flaky = |commit: &str| FlakyReport {
-        check: CheckName::new("ui:shots").unwrap(),
-        hash: InputHash::new("1".repeat(64)).unwrap(),
-        commit: Commit::new(commit).unwrap(),
-        machine: MachineId::new("m-1").unwrap(),
-        always: false,
-        command: format!("m-1:{commit}.out"),
-        output: format!("timed out waiting at {commit}"),
-    };
-
-    checks::record_flaky(&conn, &flaky("aaaa"), clock.now()).unwrap();
-    let report = upkeep.pass(&mut conn, clock.now()).unwrap();
-    assert!(report.checks_switched_off.is_empty());
-    assert_eq!(check_state(&conn, "ui:shots"), "on");
-
-    clock.advance(2.0 * 86_400.0);
-    checks::record_flaky(&conn, &flaky("bbbb"), clock.now()).unwrap();
-    let report = upkeep.pass(&mut conn, clock.now()).unwrap();
-    assert_eq!(report.checks_switched_off, vec!["ui:shots"]);
-    assert_eq!(check_state(&conn, "ui:shots"), "off");
-    let filed = ticket(&conn, &report.tickets_filed[0]);
-    assert_eq!(filed.priority, 3);
-    assert!(filed.body.contains("commit aaaa") && filed.body.contains("commit bbbb"));
-    assert!(
-        filed.body.contains("timed out waiting at aaaa")
-            && filed.body.contains("timed out waiting at bbbb"),
-        "the ticket quotes both failures' output"
-    );
-
-    // Later passes leave the switched-off check and its ticket alone.
-    clock.advance(60.0);
-    let report = upkeep.pass(&mut conn, clock.now()).unwrap();
-    assert!(report.checks_switched_off.is_empty() && report.tickets_filed.is_empty());
-    assert_eq!(all_tickets(&conn, clock.now()).len(), 1);
 }
 
 #[test]

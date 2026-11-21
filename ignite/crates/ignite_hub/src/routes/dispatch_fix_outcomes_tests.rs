@@ -6,7 +6,7 @@ use ignite_store::hub::{self, batch, checks, findings, fix_outcomes};
 
 use super::tests::{at, claim, file, landed, post, post_with_test_paths, register, start};
 use super::{Connection, Request, Timestamp, json};
-use crate::upkeep::{filing::UPKEEP, flaky, regressions};
+use crate::upkeep::{Upkeep, filing::UPKEEP, regressions};
 
 fn report(name: &str) -> RegressionReport {
     RegressionReport {
@@ -142,10 +142,10 @@ fn closing_a_flaky_ticket_by_batch_records_each_grouped_check_once() {
             checks::record_flaky(&conn, &report, start()).unwrap();
         }
     }
-    let outcome = flaky::switch_off_repeated(&mut conn, at(1.0)).unwrap();
-    assert_eq!(outcome.filed.len(), 2);
-    let ticket = &outcome.filed[0].ticket;
-    assert_eq!(ticket, &outcome.filed[1].ticket);
+    let outcome = Upkeep::new(None).unwrap().pass(&mut conn, at(1.0)).unwrap();
+    assert_eq!(outcome.tickets_filed.len(), 2);
+    let ticket = &outcome.tickets_filed[0];
+    assert_eq!(ticket, &outcome.tickets_filed[1]);
     let request = BatchRequest {
         preconditions: Vec::new(),
         ops: vec![Operation::Close {
@@ -193,4 +193,146 @@ fn only_product_landings_credit_exploration() {
     assert_eq!(days.len(), 1);
     assert_eq!(days[0].family, "fuzz");
     assert_eq!(days[0].bugs, 1);
+}
+
+#[test]
+fn a_test_only_close_follows_up_each_registered_check_and_leaves_protected_checks_on() {
+    use ignite_core::config::Rules;
+    use ignite_core::protocol::hub::CheckState;
+    use ignite_store::hub::{check_state, tickets};
+
+    let mut conn = hub::open_in_memory().unwrap();
+    register(&mut conn);
+    let names = ["ordinary", "protected", "unknown"];
+    for name in &names[..2] {
+        checks::register(&conn, &format!("unit:{name}")).unwrap();
+    }
+    let mut regression_ticket = None;
+    for name in names {
+        let mut report = report(name);
+        report.output = format!("{name} failed with a brittle assertion");
+        let (ticket, _) = regressions::file(&mut conn, UPKEEP, &report, at(1.0)).unwrap();
+        assert_eq!(regression_ticket.get_or_insert(ticket.clone()), &ticket);
+    }
+    let regression_ticket = regression_ticket.unwrap();
+    assert_eq!(
+        post(
+            &mut conn,
+            "/claims",
+            &claim(&regression_ticket, "a"),
+            at(2.0)
+        )
+        .0,
+        200
+    );
+    let mut body = landed(&regression_ticket, "a", "fixed");
+    body["work"]["files"] = json!(["tests/regression.rs"]);
+    assert_eq!(
+        post_with_test_paths(
+            &mut conn,
+            "/landed",
+            &body,
+            at(3.0),
+            &["tests/**".to_owned()]
+        )
+        .0,
+        200
+    );
+
+    let mut upkeep = Upkeep::new(None).unwrap().with_rules(Rules {
+        protected: vec!["unit:protected".to_owned()],
+        ..Rules::default()
+    });
+    let result = upkeep.pass(&mut conn, at(4.0)).unwrap();
+    assert_eq!(result.checks_switched_off, ["unit:ordinary"]);
+    assert_eq!(result.tickets_filed.len(), 2);
+    let remedy = &result.tickets_filed[0];
+    assert_eq!(&result.tickets_filed[1], remedy);
+    let ordinary = tickets::load(&conn, remedy).unwrap().unwrap();
+    assert!(
+        ordinary
+            .body
+            .contains("ordinary failed with a brittle assertion")
+    );
+    assert!(ordinary.body.contains("Fixing commit 3a9e4c1"));
+    assert!(
+        ordinary
+            .body
+            .contains("Delete unit:ordinary or redesign it")
+    );
+    let comments = tickets::comments(&conn, remedy).unwrap();
+    assert_eq!(comments.len(), 1);
+    assert!(
+        comments[0]
+            .text
+            .contains("protected failed with a brittle assertion")
+    );
+    assert!(
+        comments[0]
+            .text
+            .contains("It stays on because it is protected.")
+    );
+    assert_eq!(
+        check_state::state(&conn, "unit:protected").unwrap(),
+        Some(CheckState::On)
+    );
+    assert_eq!(check_state::state(&conn, "unit:unknown").unwrap(), None);
+    assert_eq!(
+        check_state::flaky_ticket(&conn, "unit:ordinary").unwrap(),
+        Some(remedy.clone())
+    );
+
+    checks::set_state(&conn, "unit:ordinary", CheckState::On).unwrap();
+    let result = upkeep.pass(&mut conn, at(5.0)).unwrap();
+    assert!(result.tickets_filed.is_empty());
+    assert!(result.checks_switched_off.is_empty());
+    assert_eq!(
+        check_state::state(&conn, "unit:ordinary").unwrap(),
+        Some(CheckState::On)
+    );
+}
+
+#[test]
+fn the_culprit_tickets_own_test_update_and_scenario_changes_do_not_switch_checks_off() {
+    use ignite_core::protocol::hub::CheckState;
+    use ignite_store::hub::check_state;
+
+    let mut conn = hub::open_in_memory().unwrap();
+    register(&mut conn);
+    for (name, path) in [
+        ("own-update", "tests/regression.rs"),
+        ("scenario", "src/rules/scenarios.rs"),
+    ] {
+        let mut report = report(name);
+        checks::register(&conn, report.check.as_str()).unwrap();
+        let (ticket, _) = regressions::file(&mut conn, UPKEEP, &report, at(1.0)).unwrap();
+        if name == "own-update" {
+            report.caused_by = Some(ticket.parse().unwrap());
+            regressions::file(&mut conn, UPKEEP, &report, at(1.0)).unwrap();
+        }
+        assert_eq!(
+            post(&mut conn, "/claims", &claim(&ticket, "a"), at(2.0)).0,
+            200
+        );
+        let mut body = landed(&ticket, "a", "fixed");
+        body["work"]["files"] = json!([path]);
+        assert_eq!(
+            post_with_test_paths(
+                &mut conn,
+                "/landed",
+                &body,
+                at(3.0),
+                &["tests/**".to_owned()]
+            )
+            .0,
+            200
+        );
+        let result = Upkeep::new(None).unwrap().pass(&mut conn, at(4.0)).unwrap();
+        assert!(result.tickets_filed.is_empty());
+        assert!(result.checks_switched_off.is_empty());
+        assert_eq!(
+            check_state::state(&conn, report.check.as_str()).unwrap(),
+            Some(CheckState::On)
+        );
+    }
 }

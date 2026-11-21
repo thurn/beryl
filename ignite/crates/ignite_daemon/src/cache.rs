@@ -215,10 +215,10 @@ impl ResultCache {
         None
     }
 
-    /// Reports a flaky check to the hub, or queues the report when the hub cannot take it.
-    pub fn flaky(&self, report: &FlakyReport) {
-        if self.hub.flaky(report).is_err() {
-            let _ = outbox::push_flaky(&self.conn(), report, self.clock.now());
+    /// Reports a run's flakes together, or queues the batch if the hub cannot take it.
+    pub fn flaky(&self, reports: &[FlakyReport]) {
+        if !reports.is_empty() && self.hub.flaky_batch(reports).is_err() {
+            let _ = outbox::push_flaky(&self.conn(), reports, self.clock.now());
         }
     }
 
