@@ -42,7 +42,7 @@ from pathlib import Path
 from ... import paths as repo_paths
 from ... import shots
 from .. import paths as beryl3d_paths
-from . import css
+from . import css, support
 
 HERE: Path = Path(__file__).resolve().parent
 SAMPLES: Path = repo_paths.REPO / "data" / "beryl3d" / "match" / "samples.json"
@@ -231,6 +231,26 @@ def drop_shadows(text: str) -> list[dict[str, object]] | None:
     return [shadows(argument)[0] for _, argument in functions]
 
 
+def background_boxes(style: dict[str, str]) -> list[str] | None:
+    """The boxes of the gradients, or None when a layer's origin and clip differ."""
+    if "background-clip" not in style and "background-origin" not in style:
+        return []
+    clip = style.get("background-clip", "border-box")
+    origin = style.get("background-origin", "padding-box")
+    if not support.can_express("background-clip", clip) or not support.can_express(
+        "background-origin", origin
+    ):
+        return None
+    count = len(css.commas(style.get("background-image", "")))
+    clips, origins = css.commas(clip), css.commas(origin)
+    boxes = [clips[index % len(clips)] for index in range(count)]
+    return (
+        boxes
+        if all(box == origins[i % len(origins)] for i, box in enumerate(boxes))
+        else None
+    )
+
+
 def lacking(sample: dict[str, object]) -> list[str]:
     """What of `sample` Beryl 3D cannot draw yet: each CSS property `Style` lacks. A `filter`
     is drawn when it is only drop shadows or only the functions of `FILTERS`, a
@@ -238,6 +258,7 @@ def lacking(sample: dict[str, object]) -> list[str]:
     """
     style = sample["style"]
     assert isinstance(style, dict)
+    layer_boxes_supported: bool = background_boxes(style) is not None
 
     def drawn(name: str, value: str) -> bool:
         if name in SUPPORTED:
@@ -248,6 +269,8 @@ def lacking(sample: dict[str, object]) -> list[str]:
             )
         if name == "background-image":
             return all(gradient(layer) is not None for layer in css.commas(value))
+        if name in ("background-clip", "background-origin"):
+            return layer_boxes_supported
         if name == "mask-image":
             found = gradient(value)
             return found is not None and found["kind"] == "linear"
@@ -331,6 +354,7 @@ def native_style(style: dict[str, str]) -> dict[str, object]:
         "background_image": [
             gradient(layer) for layer in css.commas(style.get("background-image", ""))
         ],
+        "background_boxes": background_boxes(style),
         "mask": gradient(style["mask-image"]) if "mask-image" in style else None,
         "filter": filter_functions(style.get("filter", "")) or [],
     }

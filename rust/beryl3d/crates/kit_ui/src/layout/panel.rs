@@ -9,7 +9,7 @@ use super::Node;
 use super::shadows::{ShadowBox, write_box_shadows};
 use super::write::{Look, clip_inside, intersection, scaled};
 use crate::element::paint::{blur_of, filtered};
-use crate::element::{Border, Filter, Gradient, Shadow, Shape, Shown, Stop};
+use crate::element::{BackgroundBox, Border, Filter, Gradient, Shadow, Shape, Shown, Stop};
 use crate::input::Rect;
 use kit_base::geometry::plane::ScreenPlane;
 use kit_base::tokens::{color, shadow, size};
@@ -224,6 +224,20 @@ fn visible(border: &Border) -> bool {
     (border.color.iter().zip(border.width)).any(|(edge, width)| edge[3] > 0 && width > 0.0)
 }
 
+/// The box inside the border and its corner radius. The painter uses one radius, reduced by
+/// the largest border width so it fits inside each side.
+pub(super) fn padding_box(rect: Rect, radius: f32, border: [f32; 4]) -> (Rect, f32) {
+    let [top, right, bottom, left] = border.map(|width| width.max(0.0));
+    let inside = Rect {
+        x: rect.x + left,
+        y: rect.y + top,
+        width: (rect.width - left - right).max(0.0),
+        height: (rect.height - top - bottom).max(0.0),
+    };
+    let widest = top.max(right).max(bottom).max(left);
+    (inside, (radius - widest).max(0.0))
+}
+
 /// The box shadows `node` is drawn with in `state`, as `buttons.css` and `icon-button.css`
 /// change them: a disabled button with words has a faint dark ring whatever its style says, and
 /// an icon button's rim brightens under the pointer or with the focus. Any other element has
@@ -293,13 +307,23 @@ pub(super) fn write_box(
             } else if panel.tint[3] > 0 {
                 write_panel(panel, panel.tint, false, rect, look, builder, camera);
             }
-            for layer in layers.iter().rev() {
+            let boxes = &style.background_boxes;
+            for (index, layer) in layers.iter().enumerate().rev() {
+                let (area, radius) =
+                    if !boxes.is_empty() && boxes[index % boxes.len()] == BackgroundBox::Padding {
+                        padding_box(rect, panel.radius, panel.border.width)
+                    } else {
+                        (rect, panel.radius)
+                    };
+                if area.width <= 0.0 || area.height <= 0.0 {
+                    continue;
+                }
                 let layer = if panel.lifted {
                     layer.map_colors(brighter)
                 } else {
                     *layer
                 };
-                write_gradient(&layer, rect, panel.radius, look, builder, camera);
+                write_gradient(&layer, area, radius, look, builder, camera);
             }
             if visible(&panel.border) {
                 write_panel(panel, [0; 4], true, rect, look, builder, camera);

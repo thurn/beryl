@@ -12,6 +12,7 @@
 //!   "box": [w, h], "web": "<png>", "style": {"background": [r, g, b, a] | null,
 //!   "border": {"color": [[r, g, b, a] x 4], "width": [w x 4]} | null, "radius": r, "opacity": o,
 //!   "box_shadow": [shadow], "drop_shadow": [shadow], "background_image": [gradient],
+//!   "background_boxes": ["border-box" | "padding-box"],
 //!   "mask": gradient | null, "filter": [{"fn", "value"}]},
 //!   "text": {"string", "color": [r, g, b, a], "size"} | null,
 //!   "icon": {"id", "size", "color": [r, g, b, a]} | null}]}
@@ -50,8 +51,8 @@ use kit_frame::frame::{Frame, FrameBuilder};
 use kit_text::text::TypeStyle;
 use kit_text::text::fonts::Font;
 use kit_ui::element::{
-    Align, Border, Element, Extent, Filter, Gradient, Justify, Length, Position, Shadow, Shape,
-    Shown, Stop, holder, row,
+    Align, BackgroundBox, Border, Element, Extent, Filter, Gradient, Justify, Length, Position,
+    Shadow, Shape, Shown, Stop, holder, row,
 };
 use kit_ui::input::AssetReady;
 use kit_ui::input::{Insets, Size, Tier};
@@ -82,6 +83,7 @@ struct Sample {
     box_shadow: Vec<Shadow>,
     drop_shadow: Vec<Shadow>,
     background_image: Vec<Gradient>,
+    background_boxes: Vec<BackgroundBox>,
     mask: Option<Gradient>,
     filter: Vec<Filter>,
     text: Option<SampleText>,
@@ -217,6 +219,8 @@ fn read_sample(value: &Value) -> Result<Sample, Error> {
         .map(|layer| gradient(layer).ok_or_else(|| bad("background_image")))
         .collect::<Result<_, _>>()?,
     };
+    let background_boxes =
+        background_boxes(&style["background_boxes"]).ok_or_else(|| bad("background_boxes"))?;
     let mask = match &style["mask"] {
         Value::Null => None,
         given => Some(gradient(given).ok_or_else(|| bad("mask"))?),
@@ -259,6 +263,7 @@ fn read_sample(value: &Value) -> Result<Sample, Error> {
         box_shadow,
         drop_shadow,
         background_image,
+        background_boxes,
         mask,
         filter,
         text,
@@ -272,6 +277,20 @@ fn read_sample(value: &Value) -> Result<Sample, Error> {
         opacity: style["opacity"].as_f64().unwrap_or(1.0) as f32,
         name,
     })
+}
+
+/// The positioning and clipping box of each background layer. A missing list is empty.
+fn background_boxes(value: &Value) -> Option<Vec<BackgroundBox>> {
+    let Some(list) = value.as_array() else {
+        return value.is_null().then(Vec::new);
+    };
+    list.iter()
+        .map(|area| match area.as_str()? {
+            "border-box" => Some(BackgroundBox::Border),
+            "padding-box" => Some(BackgroundBox::Padding),
+            _ => None,
+        })
+        .collect()
 }
 
 /// A list of shadows as the job writes them, or `None` if one is malformed. A missing list is
@@ -383,6 +402,10 @@ fn screen(sample: &Sample, mask: bool) -> Element {
             .style
             .background_image
             .clone_from(&sample.background_image);
+        element
+            .style
+            .background_boxes
+            .clone_from(&sample.background_boxes);
         element.style.mask = sample.mask;
         element.style.filter.clone_from(&sample.filter);
         if let Some(icon) = &sample.icon {
@@ -621,6 +644,7 @@ mod tests {
             box_shadow: Vec::new(),
             drop_shadow: Vec::new(),
             background_image: Vec::new(),
+            background_boxes: Vec::new(),
             mask: None,
             filter: Vec::new(),
             text: None,
@@ -667,6 +691,7 @@ mod tests {
             box_shadow: Vec::new(),
             drop_shadow: Vec::new(),
             background_image: vec![Gradient::linear(180.0, &[Stop::new(red), Stop::new(blue)])],
+            background_boxes: Vec::new(),
             // The mask hides the box's left half.
             mask: Some(Gradient::linear(
                 90.0,

@@ -41,6 +41,15 @@ pub enum TextAlign {
     Center,
 }
 
+/// The box that positions and clips one gradient, as one box keyword in CSS's `background`
+/// shorthand sets both `background-origin` and `background-clip`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum BackgroundBox {
+    #[default]
+    Border,
+    Padding,
+}
+
 /// How an element lays out its children: CSS `display`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Display {
@@ -136,6 +145,9 @@ pub struct Style {
     /// color and under its border. An element with gradients is drawn on a panel, as with a
     /// `background`.
     pub background_image: Vec<Gradient>,
+    /// The positioning and clipping boxes of `background_image`, in the same order. A shorter
+    /// list repeats as in CSS. An empty list draws every gradient across the border box.
+    pub background_boxes: Vec<BackgroundBox>,
     /// A gradient whose opacity, at each point of its box, scales the opacity of the element and
     /// everything under it there, as CSS's `mask-image`; outside its box they are cut off. Only a
     /// linear gradient is drawn.
@@ -221,6 +233,7 @@ impl Default for Style {
             opacity: 1.0,
             background: None,
             background_image: Vec::new(),
+            background_boxes: Vec::new(),
             mask: None,
             scroll_fade: None,
             filter: Vec::new(),
@@ -272,6 +285,7 @@ setters! {
     box_shadow: Vec<Shadow>,
     drop_shadow: Vec<Shadow>,
     background_image: Vec<Gradient>,
+    background_boxes: Vec<BackgroundBox>,
     filter: Vec<Filter>,
     fit: bool,
     passes: bool,

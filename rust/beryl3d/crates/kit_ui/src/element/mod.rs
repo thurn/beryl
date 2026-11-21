@@ -17,7 +17,9 @@ pub use paint::{
     Border, DropLayer, DropLayers, Extent, Filter, Gradient, Length, MOST_DROP_SHADOWS, Shadow,
     Shape, Stop,
 };
-pub use style::{Align, Direction, Display, Justify, Overflow, Position, Style, TextAlign, Track};
+pub use style::{
+    Align, BackgroundBox, Direction, Display, Justify, Overflow, Position, Style, TextAlign, Track,
+};
 
 use crate::input::{FaceId, FaceSize};
 use crate::widgets::icons::LayeredIcon;

@@ -45,7 +45,7 @@ pub(super) fn write_box_shadows(
             continue;
         }
         let (rect, radius) = if inset {
-            padding_box(cast)
+            super::panel::padding_box(cast.rect, cast.radius, cast.border)
         } else {
             (cast.rect, cast.radius)
         };
@@ -75,21 +75,6 @@ pub(super) fn write_box_shadows(
         }
         builder.draw(Band::Layer, draw);
     }
-}
-
-/// The padding box of `cast` and its corner radius: the border box less the border, with the
-/// widest side's width taken off the radius, as CSS's inner border radius is where the sides
-/// are the same width.
-fn padding_box(cast: &ShadowBox) -> (Rect, f32) {
-    let [top, right, bottom, left] = cast.border.map(|width| width.max(0.0));
-    let rect = Rect {
-        x: cast.rect.x + left,
-        y: cast.rect.y + top,
-        width: (cast.rect.width - left - right).max(0.0),
-        height: (cast.rect.height - top - bottom).max(0.0),
-    };
-    let widest = top.max(right).max(bottom).max(left);
-    (rect, (cast.radius - widest).max(0.0))
 }
 
 /// The corner radius of a shadow's shape: a box `size` large with corners of `radius`, grown

@@ -1,6 +1,8 @@
 {
   "supported": {
     "background-color": ["color"],
+    "background-clip": ["border-box or padding-box"],
+    "background-origin": ["border-box or padding-box"],
     "background-image": ["linear", "radial", "linear + linear", "linear + radial", "radial + linear", "radial + radial"],
     "border-width": ["uniform", "sides differ"],
     "border-color": ["color", "sides differ"],

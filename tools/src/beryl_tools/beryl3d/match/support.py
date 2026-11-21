@@ -19,7 +19,7 @@ from functools import cache
 from pathlib import Path
 
 from ... import paths as repo_paths
-from . import records
+from . import css, records
 
 SUPPORTED: Path = repo_paths.REPO / "data" / "beryl3d" / "match" / "supported.json"
 
@@ -72,6 +72,10 @@ def shape(name: str, value: object) -> str | None:
         return "sides differ" if isinstance(value, list) else "uniform"
     if name == "border-radius":
         return "corners differ" if isinstance(value, list) else "uniform"
+    if name in ("background-clip", "background-origin") and isinstance(value, str):
+        boxes = css.commas(value)
+        if boxes and all(box in ("border-box", "padding-box") for box in boxes):
+            return "border-box or padding-box"
     if not isinstance(value, list):
         return "value"
     if name == "box-shadow":
