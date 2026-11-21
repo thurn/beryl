@@ -9,8 +9,7 @@ use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, timing};
 use game_play::play::Show;
 use game_play::play::record::ScriptRecord;
 use game_probe::agent::steps::{no_jumps, rest_equals_placement, step_times};
-use game_table::table::badges::STYLE;
-use game_table::table::{CARD_HEIGHT, CARD_WIDTH};
+use game_table::table::badges::{BadgeSizes, style};
 use glam::{Vec2, Vec3};
 use kit_text::text::{Glyphs, Text, glyph_key};
 use kit_ui::input::{GlyphCell, GlyphKey};
@@ -138,10 +137,15 @@ fn shape_badges(show: &mut Show) {
     const SCALE: f32 = 2.0;
     let mut wanted = Glyphs::default();
     let badges = show.badges_mut();
-    badges.shape(&mut Text::new(), &mut wanted, SCALE);
+    badges.shape(
+        &mut Text::new(),
+        &mut wanted,
+        SCALE,
+        BadgeSizes::of(&crate::test_data::data()),
+    );
     let cells: Vec<GlyphCell> = (0..2_000)
         .map(|glyph| GlyphCell {
-            key: glyph_key(STYLE, SCALE, glyph),
+            key: glyph_key(style(&crate::test_data::data().badges), SCALE, glyph),
             rect: [glyph, 0, 16, 20],
             bearing: [0, -20],
         })
@@ -258,7 +262,11 @@ fn a_strike_stops_outside_the_card_it_strikes() {
     let corners: Vec<Vec2> = [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)]
         .into_iter()
         .map(|(x, y)| {
-            let corner = Vec3::new(x * CARD_WIDTH / 2.0, y * CARD_HEIGHT / 2.0, 0.0);
+            let corner = Vec3::new(
+                x * crate::test_data::data().card.width / 2.0,
+                y * crate::test_data::data().card.height / 2.0,
+                0.0,
+            );
             camera.to_screen(pose.transform().transform_point3(corner))
         })
         .collect();

@@ -221,7 +221,7 @@ impl Player {
             let Window { size, .. } = self.window;
             let half = Vec2::new(size.width, size.height) / 2.0;
             let plane = ScreenPlane::new(Affine3A::IDENTITY, self.window, half.y, 16.0);
-            let mut builder = FrameBuilder::new(&mut self.frame, self.tier);
+            let mut builder = FrameBuilder::new(&mut self.frame, self.tier, self.data.card.size());
             builder.camera(directx::orthographic(
                 -half.x, half.x, -half.y, half.y, 0.1, 1024.0,
             ));

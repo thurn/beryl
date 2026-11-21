@@ -500,7 +500,7 @@ impl Drawer {
         self.give(&mut layer);
         let camera = Camera::fit(self.camera, window);
         let mut frame = Frame::with_capacity(16, 16, 64);
-        let mut builder = FrameBuilder::new(&mut frame, Tier::Enhanced);
+        let mut builder = FrameBuilder::new(&mut frame, Tier::Enhanced, camera.data.card.size());
         builder.camera(camera.view_projection);
         layer.write(&mut builder, &camera.screen_plane(), true);
         let frame = builder.finish();

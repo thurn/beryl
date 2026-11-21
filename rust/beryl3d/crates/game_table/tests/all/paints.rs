@@ -19,7 +19,11 @@ const GOLD: [u8; 4] = [228, 162, 66, 255];
 
 fn write(layer: &mut Layer) -> Frame {
     let mut frame = Frame::with_capacity(64, 256, 1024);
-    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
+    let mut builder = FrameBuilder::new(
+        &mut frame,
+        Tier::Baseline,
+        crate::test_data::data().card.size(),
+    );
     layer.write(
         &mut builder,
         &Table::new(

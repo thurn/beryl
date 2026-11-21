@@ -379,7 +379,11 @@ fn a_title_too_long_for_its_box_fails_text_fits() {
         ),
     ));
     let mut frame = Frame::with_capacity(16, 16, 1024);
-    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
+    let mut builder = FrameBuilder::new(
+        &mut frame,
+        Tier::Baseline,
+        crate::test_data::data().card.size(),
+    );
     layer.write(
         &mut builder,
         &Table::new(
@@ -599,7 +603,11 @@ fn centred_at(point: Vec2) -> FloatLook {
 /// `open`, and the layout work done since the last frame.
 pub(super) fn write_layer(layer: &mut Layer, open: bool) -> Frame {
     let mut frame = Frame::with_capacity(64, 256, 1024);
-    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
+    let mut builder = FrameBuilder::new(
+        &mut frame,
+        Tier::Baseline,
+        crate::test_data::data().card.size(),
+    );
     let (layout_nodes, text_runs) = layer.take_work();
     builder.layout_work(layout_nodes, text_runs);
     layer.write(

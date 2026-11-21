@@ -14,7 +14,6 @@ use glam::camera::rh::{proj::directx, view::look_at_mat4};
 use glam::{Affine3A, Mat4, Quat, Vec2, Vec3};
 use kit_base::atlas::artwork::{Artwork, Fill, Shape};
 use kit_base::atlas::{AssetReady, GlyphCell, GlyphKey, IconId, Tier};
-use kit_base::geometry::{CARD_HEIGHT, CARD_WIDTH};
 use kit_frame::frame::{Band, Draw, Frame, FrameBuilder, Sprite};
 use kit_text::text::fonts::Font;
 
@@ -45,7 +44,7 @@ fn over(corner: Vec2, size: Vec2) -> Affine3A {
 /// Draws `records`, each with its band, and returns the target's RGBA pixels.
 fn draw(renderer: &mut Renderer, records: &[(Band, Draw)]) -> Vec<u8> {
     let mut frame = Frame::with_capacity(0, records.len(), 0);
-    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
+    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline, crate::card());
     builder.camera(camera());
     for &(band, record) in records {
         builder.draw(band, record);
@@ -73,7 +72,7 @@ fn assert_near(found: [u8; 3], expected: [u8; 3], tolerance: u8, what: &str) {
 
 /// A background covering the whole target, drawn opaque, of `rgb`.
 fn background(rgb: [u8; 3]) -> (Band, Draw) {
-    let size = Vec3::new(400.0 / CARD_WIDTH, 400.0 / CARD_HEIGHT, 1.0);
+    let size = Vec3::new(400.0 / crate::card().x, 400.0 / crate::card().y, 1.0);
     let transform = Affine3A::from_scale_rotation_translation(size, Quat::IDENTITY, Vec3::ZERO);
     (
         Band::Opaque,

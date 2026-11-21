@@ -43,7 +43,7 @@ fn draw_card(renderer: &mut Renderer, face: u16, half: f32) -> Picture {
         0.0,
     );
     let mut frame = Frame::with_capacity(0, 1, 0);
-    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
+    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline, crate::card());
     builder.camera(camera);
     builder.draw(Band::Opaque, card);
     let frame = builder.finish();

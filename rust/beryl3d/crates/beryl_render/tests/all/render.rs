@@ -9,7 +9,7 @@ use beryl_render::{BACK_LAYER, Limits, Renderer, Target};
 use glam::camera::rh::{proj::directx, view::look_at_mat4};
 use glam::{Affine3A, Mat4, Quat, Vec2, Vec3};
 use kit_base::atlas::{FaceSize, Tier};
-use kit_base::geometry::{CARD_HEIGHT, CARD_WIDTH, Rect, Window};
+use kit_base::geometry::{Rect, Window};
 use kit_frame::frame::{Band, DRAWS, Draw, Frame, FrameBuilder, sprites};
 use kit_space::camera::Camera;
 
@@ -46,7 +46,7 @@ pub(super) fn overhead() -> Mat4 {
 /// The table material draws its tint, so the rectangle is that solid color.
 pub(super) fn rectangle(centre: Vec2, size: Vec2, z: f32, rgb: [u8; 3]) -> Draw {
     let transform = Affine3A::from_scale_rotation_translation(
-        Vec3::new(size.x / CARD_WIDTH, size.y / CARD_HEIGHT, 1.0),
+        Vec3::new(size.x / crate::card().x, size.y / crate::card().y, 1.0),
         Quat::IDENTITY,
         centre.extend(z),
     );
@@ -86,7 +86,7 @@ pub(super) fn draw_in(
     records: &[(Band, Draw)],
 ) -> (Picture, u32) {
     let mut frame = Frame::with_capacity(0, records.len(), 0);
-    let mut builder = FrameBuilder::new(&mut frame, tier);
+    let mut builder = FrameBuilder::new(&mut frame, tier, crate::card());
     builder.camera(view_projection);
     for &(band, record) in records {
         builder.draw(band, record);
@@ -186,7 +186,7 @@ fn frames_drawn_back_to_back_keep_their_own_records() {
             .iter()
             .map(|&color| {
                 let mut frame = Frame::with_capacity(0, 1, 0);
-                let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
+                let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline, crate::card());
                 builder.camera(overhead());
                 builder.draw(
                     Band::Opaque,
@@ -454,7 +454,7 @@ pub(super) fn twenty_cards() -> TwentyCards {
         edges.push((Band::TableMarks, record.edge()));
     }
     let cloth = Affine3A::from_scale_rotation_translation(
-        Vec3::new(4000.0 / CARD_WIDTH, 4000.0 / CARD_HEIGHT, 1.0),
+        Vec3::new(4000.0 / crate::card().x, 4000.0 / crate::card().y, 1.0),
         Quat::IDENTITY,
         Vec3::new(0.0, 0.0, -0.5),
     );
@@ -485,7 +485,7 @@ fn twenty_cards_with_three_raised_draw_in_perspective() {
     for limits in BOTH {
         let mut renderer = renderer(limits);
         let mut frame = Frame::with_capacity(0, records.len(), 0);
-        let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
+        let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline, crate::card());
         builder.camera(camera.view_projection);
         for &(band, record) in &records {
             builder.draw(band, record);
@@ -602,7 +602,7 @@ fn a_shake_moves_the_table_and_not_the_flat_layer() {
         let mut renderer = renderer(limits);
         let mut picture = |shake: Vec2| {
             let mut frame = Frame::with_capacity(0, records.len(), 0);
-            let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
+            let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline, crate::card());
             builder.camera(overhead());
             builder.shake(shake);
             for &(band, record) in &records {
@@ -650,7 +650,7 @@ fn a_shown_card_draws_only_inside_its_elements_clip() {
         let mut renderer = renderer(limits);
         for tier in [Tier::Baseline, Tier::Enhanced] {
             let mut frame = Frame::with_capacity(0, 2, 0);
-            let mut builder = FrameBuilder::new(&mut frame, tier);
+            let mut builder = FrameBuilder::new(&mut frame, tier, crate::card());
             builder.camera(overhead());
             let clip = builder
                 .scissor(Rect {

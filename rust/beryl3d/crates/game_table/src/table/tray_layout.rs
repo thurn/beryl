@@ -27,7 +27,8 @@
 use beryl_protocol::protocol::ObjectId;
 use glam::{Quat, Vec2};
 
-use super::{CARD_HEIGHT, CARD_WIDTH, Camera};
+use super::Camera;
+use kit_base::data::Card;
 use kit_base::data::profiles::TrayTuning;
 use kit_base::pose::Pose;
 use kit_ui::input::{Rect, Size};
@@ -63,6 +64,8 @@ pub struct TraySpace {
     /// The strip over a box's cards that says what the pile is.
     pub heading: f32,
     pub tuning: TrayTuning,
+    /// The card the tray holds up, whose shape sets how tall a card of a given width is.
+    pub card: Card,
 }
 
 impl TraySpace {
@@ -227,9 +230,9 @@ fn widths(space: &TraySpace) -> impl Iterator<Item = f32> + '_ {
     })
 }
 
-/// How tall a card `width` wide is.
-fn height_of(width: f32) -> f32 {
-    width * CARD_HEIGHT / CARD_WIDTH
+/// How tall a card `width` wide is, in a tray of `space`.
+fn height_of(space: &TraySpace, width: f32) -> f32 {
+    width * space.card.height / space.card.width
 }
 
 /// Where the `index`th of `count` cards lies along a fan, from -1 at its left end to 1 at its
@@ -260,12 +263,13 @@ fn rows(count: usize, space: &TraySpace, (left, wide): (f32, f32)) -> Vec<Spot> 
         width = tried;
         across = total.min(fits);
         step = tried + gap;
-        if deep as f32 * (height_of(tried) + gap) - gap <= space.height {
+        if deep as f32 * (height_of(space, tried) + gap) - gap <= space.height {
             break;
         }
         if tried <= space.least {
             // Too many for whole cards: the rows the space holds, each closed up over itself.
-            let held = (((space.height + gap) / (height_of(tried) + gap)).floor() as usize).max(1);
+            let held =
+                (((space.height + gap) / (height_of(space, tried) + gap)).floor() as usize).max(1);
             across = total.div_ceil(held);
             step = f32::min(step, (wide - tried) / (across.max(2) - 1) as f32);
             if step < space.least_step {
@@ -281,13 +285,13 @@ fn rows(count: usize, space: &TraySpace, (left, wide): (f32, f32)) -> Vec<Spot> 
     // that a row later in front leaves the top of each card behind it uncovered.
     let pitch = if deep > 1 {
         f32::min(
-            height_of(width) + gap,
-            ((space.height - height_of(width)) / (deep - 1) as f32).max(0.0),
+            height_of(space, width) + gap,
+            ((space.height - height_of(space, width)) / (deep - 1) as f32).max(0.0),
         )
     } else {
         0.0
     };
-    let tall = height_of(width) + (deep - 1) as f32 * pitch;
+    let tall = height_of(space, width) + (deep - 1) as f32 * pitch;
     let top = space.y + ((space.height - tall) / 2.0).max(0.0);
     (0..count)
         .map(|index| {
@@ -321,7 +325,7 @@ fn boxes(counts: &[usize], rooms: &[usize], space: &TraySpace, (left, wide): (f3
         width = tried;
         step = tried + gap;
         let whole = piles * tried + between * step + edges;
-        let tall = height_of(tried) + heading + 2.0 * gap;
+        let tall = height_of(space, tried) + heading + 2.0 * gap;
         if whole <= wide && tall <= space.height {
             break;
         }
@@ -329,7 +333,7 @@ fn boxes(counts: &[usize], rooms: &[usize], space: &TraySpace, (left, wide): (f3
             step = f32::min(step, (wide - edges - piles * tried) / between);
         }
     }
-    let height = height_of(width) + heading + 2.0 * gap;
+    let height = height_of(space, width) + heading + 2.0 * gap;
     let whole = piles * width + between * step + edges;
     let y = space.y + ((space.height - height) / 2.0).max(0.0);
     let mut x = left + (wide - whole) / 2.0;
@@ -384,8 +388,8 @@ fn stacked(
     let width = (inner - space.least_step * (most_room - 1) as f32)
         .min(space.most)
         .max(space.least)
-        .min((tall * CARD_WIDTH / CARD_HEIGHT).max(space.least_step));
-    let height = height_of(width) + heading + 2.0 * gap;
+        .min((tall * space.card.width / space.card.height).max(space.least_step));
+    let height = height_of(space, width) + heading + 2.0 * gap;
     let bands = [(space.y, space.height), (second.y, second.height)];
     let mut laid = Laid::of(
         Vec::with_capacity(counts.iter().sum()),
@@ -426,7 +430,7 @@ fn fan(
     (left, wide): (f32, f32),
 ) -> Laid {
     let gap = space.gap;
-    let aspect = CARD_WIDTH / CARD_HEIGHT;
+    let aspect = space.card.width / space.card.height;
     let count = order.len().max(1);
     let across = wide - 2.0 * gap;
     let tall = (space.height - 2.0 * gap) * aspect;
@@ -452,7 +456,8 @@ fn fan(
     .max(space.least_step);
     let whole = width + step * (count - 1) as f32;
     let start = left + (wide - whole) / 2.0;
-    let top = space.y + (space.height - height_of(width) - space.tuning.fan.drop * width) / 2.0;
+    let top =
+        space.y + (space.height - height_of(space, width) - space.tuning.fan.drop * width) / 2.0;
     let spot = |index: usize| {
         let t = along(index, count);
         Spot {
@@ -609,7 +614,7 @@ fn screen_pose(
     turn: f32,
     depth: f32,
 ) -> Pose {
-    let height = height_of(width);
+    let height = height_of(space, width);
     let centre = Vec2::new(x + width / 2.0, y + height / 2.0);
     let ndc = Vec2::new(
         centre.x / stage_width * 2.0 - 1.0,

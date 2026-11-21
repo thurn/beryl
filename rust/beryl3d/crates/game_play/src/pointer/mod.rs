@@ -25,7 +25,7 @@ use glam::{Mat3, Quat, Vec2};
 
 use crate::play::compile::Compiled;
 pub use game_table::table::takes_pointer;
-use game_table::table::{CARD_HEIGHT, Camera, Look, PILE_IDS};
+use game_table::table::{Camera, Look, PILE_IDS};
 use held::{By, Fall, Grip, Lean};
 use kit_base::data::pointer::PointerTuning;
 use kit_base::pose::between;
@@ -407,7 +407,7 @@ pub fn look(
 /// hand.
 fn raised(rest: &Pose, camera: &Camera, tuning: &PointerTuning) -> Pose {
     let [right, up, back] = camera.axes();
-    let grown = (tuning.raise_scale - 1.0) * CARD_HEIGHT / 2.0;
+    let grown = (tuning.raise_scale - 1.0) * camera.data.card.height / 2.0;
     let position = rest.position + up * (tuning.raise_mm + grown) * rest.scale;
     kit_space::arrange::spot(
         camera.eye + (position - camera.eye) * tuning.nearer,

@@ -10,9 +10,7 @@ use super::{
 };
 use crate::profiles::web_fit;
 use crate::table::rows::{Beneath, NameIds, RowWindow, SameName, grouped};
-use crate::table::{
-    CARD_HEIGHT, CARD_WIDTH, Camera, FittedRow, Layout, RowArea, RowZoom, row_area,
-};
+use crate::table::{Camera, FittedRow, Layout, RowArea, RowZoom, row_area};
 use glam::{Quat, Vec3};
 use kit_frame::frame::Place;
 use kit_scene::hit::CELL;
@@ -41,7 +39,7 @@ impl RowFits {
                     area.centre,
                     y,
                     camera,
-                    (CARD_WIDTH, layout.strip + 2.0 * CELL),
+                    (camera.data.card.width, layout.strip + 2.0 * CELL),
                 );
                 RowFit { area, y, row }
             })
@@ -217,7 +215,7 @@ fn row_rules(
         .with_spacing(
             (gap, tapped_gap),
             layout.pile_step,
-            layout.beneath_step.x * CARD_WIDTH,
+            layout.beneath_step.x * layout.camera.card.width,
             limit,
         )
         .at_scale(scale);
@@ -245,14 +243,15 @@ pub(super) fn battlefield_row(
     // table is up the screen, so the viewer's creatures and the opponent's back rows keep their
     // far edges, and move their line of centres that much further away.
     let line = fitted.map_or(y, |fitted| {
-        let shrink = CARD_HEIGHT / 2.0 * fitted.scale * (1.0 - zoom) * fitted.tilt.cos();
+        let shrink =
+            camera.data.card.height / 2.0 * fitted.scale * (1.0 - zoom) * fitted.tilt.cos();
         if (side == Side::You) == (row == RowName::Creatures) {
             y + shrink
         } else {
             y - shrink
         }
     });
-    let height = fitted.map_or(0.0, |fitted| fitted.height(line));
+    let height = fitted.map_or(0.0, |fitted| fitted.height(line, camera.data.card));
     let on_line = (row, Vec3::new(0.0, line, height));
     let faces = faces(&cards, placement, (camera, area, on_line), |x| {
         fit.row.unscaled(x, scale)
@@ -266,7 +265,7 @@ pub(super) fn battlefield_row(
         row: Some(row),
     };
     let window = solver::arrange(container, &inputs, offset, |placed| {
-        let (object, mut pose) = groups.pose(&beneath, &placed, y);
+        let (object, mut pose) = groups.pose(&beneath, &placed, (y, camera.data.card));
         let visible = placed.visible;
         if let Some(fitted) = fitted {
             let at = pose.position;
@@ -286,7 +285,7 @@ pub(super) fn battlefield_row(
             // keeps the height of its place in the row: the row's plane rises from the near edge
             // of an untapped card, so the opponent's attacker, moved toward the viewer, would
             // otherwise sink with its near edge and its wedge under the table.
-            pose.position.z += fitted.height(pose.position.y);
+            pose.position.z += fitted.height(pose.position.y, camera.data.card);
             if matches!(object.combat, Some(Combat::Attacking { .. })) {
                 pose.position.y += fitted.advance[usize::from(object.tapped)];
             }
@@ -363,7 +362,10 @@ fn faces(
             .collect();
         let middle = (together.len() - 1) as f32 / 2.0;
         for (index, slot) in together.into_iter().enumerate() {
-            faces.push((slot, x + (index as f32 - middle) * CARD_WIDTH * 1.04));
+            faces.push((
+                slot,
+                x + (index as f32 - middle) * camera.data.card.width * 1.04,
+            ));
         }
     }
     faces

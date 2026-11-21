@@ -17,7 +17,6 @@ use glam::Vec2;
 
 use super::{Inputs, Message, State};
 
-use game_table::table::{CARD_HEIGHT, CARD_WIDTH};
 use kit_base::tokens::{color, ratio, size, space, type_style};
 use kit_frame::frame::Role;
 use kit_text::text::TypeStyle;
@@ -123,7 +122,7 @@ fn result(input: &Inputs, outcome: Option<&OutcomeView>) -> Element {
     let culprit = outcome.and_then(|outcome| match outcome {
         OutcomeView::Win { by: Some(by), .. } if reason(outcome).is_some() => input
             .culprit
-            .map(|face| culprit_card(&by.name, face, culprit_size(input))),
+            .map(|face| culprit_card(&by.name, face, culprit_size(input), input.card)),
         _ => None,
     });
     let mut screen = column()
@@ -182,7 +181,12 @@ fn culprit_size(input: &Inputs) -> (f32, f32) {
 }
 
 /// The card that ended the game, or its ability plate.
-fn culprit_card(name: &str, face: kit_ui::input::FaceId, (width, gap): (f32, f32)) -> Element {
+fn culprit_card(
+    name: &str,
+    face: kit_ui::input::FaceId,
+    (width, gap): (f32, f32),
+    card: kit_base::data::Card,
+) -> Element {
     Element {
         shows: Some(Shown::Face(face, FaceSize::Full)),
         ..Element::new(Role::Region)
@@ -190,6 +194,6 @@ fn culprit_card(name: &str, face: kit_ui::input::FaceId, (width, gap): (f32, f32
     .name(name)
     .passes(true)
     .width(width)
-    .height(width * CARD_HEIGHT / CARD_WIDTH)
+    .height(width * card.height / card.width)
     .margin([gap, 0.0, 0.0, 0.0])
 }

@@ -21,7 +21,7 @@ use beryl_protocol::script::{Act, Step, Subject};
 use glam::{Quat, Vec2, Vec3, Vec3Swizzles};
 
 use super::{Interval, StepIn, StepOut};
-use game_table::table::{CARD_HEIGHT, CARD_WIDTH};
+use kit_base::data::Card;
 use kit_base::pose::{Curve, Pose, Segment};
 
 pub const BUILT: bool = true;
@@ -79,7 +79,7 @@ pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
         step.own.from + offset
     };
     let lean = Quat::from_rotation_z(blow.lean);
-    let width = CARD_WIDTH * from.scale;
+    let width = step.places.camera().data.card.width * from.scale;
     let camera = step.places.camera();
     // Drawn `lift` larger: brought toward the eye by that share of its new distance.
     let toward_eye = (camera.eye - from.position).normalize_or_zero();
@@ -130,7 +130,10 @@ fn blow(step: &StepIn<'_>, from: Pose, struck: Subject) -> Option<Blow> {
     let (at, half) = match struck {
         Subject::Object { .. } => {
             let pose = step.places.pose(struck, step.own.from)?;
-            (pose.position.xy(), extent(pose))
+            (
+                pose.position.xy(),
+                extent(pose, step.places.camera().data.card),
+            )
         }
         // A player's anchor stands before the eye: what the strike goes at is the point of the
         // table under it on the screen. It stops with its own edge at the anchor, not over it.
@@ -138,7 +141,7 @@ fn blow(step: &StepIn<'_>, from: Pose, struck: Subject) -> Option<Blow> {
             let anchor = step.places.pose(struck, step.own.from)?.position;
             (
                 under(step.places.camera().eye, anchor, from.position.z),
-                extent(from),
+                extent(from, step.places.camera().data.card),
             )
         }
         Subject::Ability { .. } => return None,
@@ -157,7 +160,7 @@ fn blow(step: &StepIn<'_>, from: Pose, struck: Subject) -> Option<Blow> {
     let short = edge + strike.near;
     // Two creatures that strike each other meet half way.
     let share = if meets_another(step) { 0.5 } else { 1.0 };
-    let least = strike.least * CARD_WIDTH * from.scale;
+    let least = strike.least * step.places.camera().data.card.width * from.scale;
     let go = ((far - short) * share).max(least);
     let camera = step.places.camera();
     let leftward =
@@ -174,10 +177,10 @@ fn blow(step: &StepIn<'_>, from: Pose, struck: Subject) -> Option<Blow> {
 
 /// Half the width and depth a card at `pose` covers on the table, turned as it lies. A card
 /// that leans back from the table (`table::web_fit`) reaches as much further up the screen as
-/// its far edge rises, which counts as depth.
-fn extent(pose: Pose) -> Vec2 {
-    let across = pose.rotation * Vec3::new(CARD_WIDTH / 2.0, 0.0, 0.0);
-    let along = pose.rotation * Vec3::new(0.0, CARD_HEIGHT / 2.0, 0.0);
+/// its far edge rises, which counts as depth. The card is `card`'s size.
+fn extent(pose: Pose, card: Card) -> Vec2 {
+    let across = pose.rotation * Vec3::new(card.width / 2.0, 0.0, 0.0);
+    let along = pose.rotation * Vec3::new(0.0, card.height / 2.0, 0.0);
     Vec2::new(
         across.x.abs() + along.x.abs(),
         across.y.abs() + along.y.abs() + across.z.abs() + along.z.abs(),

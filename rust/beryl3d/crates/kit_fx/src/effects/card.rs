@@ -1,11 +1,9 @@
 //! Samples the effect layers drawn with a surface and its resolved pose.
 
 use beryl_protocol::script::Subject;
-use glam::{Vec2, Vec3};
 
 use super::{Effect, EffectRun, Reach, player};
 use kit_base::data::effect::{Effects, Primitive, Surface};
-use kit_base::data::space::card::{HEIGHT as CARD_HEIGHT, WIDTH as CARD_WIDTH};
 use kit_base::pose::Pose;
 use kit_frame::frame::{Draw, EffectLook, FrameBuilder, sprites};
 use kit_ui::input::Tier;
@@ -157,7 +155,7 @@ pub fn write(
             } => {
                 let reach = Reach {
                     pose: look.pose,
-                    half: Vec2::new(CARD_WIDTH, CARD_HEIGHT) * (0.5 * look.pose.scale),
+                    half: builder.card() * (0.5 * look.pose.scale),
                 };
                 player::write_surface_burst(quad, (progress, effects.lift()), run, reach, builder);
             }
@@ -169,7 +167,7 @@ pub fn write(
 /// Records the strength of a surface change for the match tools.
 fn record(builder: &mut FrameBuilder<'_>, effect: Effect, on: Subject, look: &Look, strength: f32) {
     let face = look.pose.frame(
-        Vec3::new(CARD_WIDTH, CARD_HEIGHT, 1.0) * look.pose.scale,
+        builder.card().extend(1.0) * look.pose.scale,
         look.pose.position,
     );
     builder.effect(EffectLook {

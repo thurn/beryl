@@ -10,7 +10,6 @@ use crate::hud::HudIn;
 use crate::hud::placement_scene::{Group, rect};
 use crate::prompts::{feature::Details, ways};
 use game_table::faces::FaceList;
-use game_table::table::{CARD_HEIGHT, CARD_WIDTH};
 use kit_base::tokens::{color, ratio, space, type_style};
 use kit_frame::frame::Role;
 use kit_ui::element::{Align, Anchor, Direction, Element, Justify, Shown as Showing, row, text};
@@ -46,7 +45,8 @@ fn ways_row(prompt: &PromptView, input: &HudIn) -> Option<Element> {
     let tray_wide = tray.width / per_stage;
     let width =
         ((tray_wide - space.gap) / count - space.gap).clamp(space.least, space.most) * per_stage;
-    let drawn = (ways.iter().zip(faces)).map(|(way, face)| way_element(way, face, width));
+    let drawn =
+        (ways.iter().zip(faces)).map(|(way, face)| way_element(way, face, (width, space.card)));
     let mut element = row()
         .name("ways")
         .width(tray.width)
@@ -101,7 +101,11 @@ pub(in crate::prompts) fn way_faces<'a>(
 
 /// One way to use the card: its face `width` wide, where the face is known, over its label.
 /// A press sends the way's button; a way that cannot be chosen is dimmed and takes no press.
-fn way_element(way: &PromptButton, face: Option<FaceId>, width: f32) -> Element {
+fn way_element(
+    way: &PromptButton,
+    face: Option<FaceId>,
+    (width, card): (f32, kit_base::data::Card),
+) -> Element {
     let faces = face.map(|face| {
         let element = Element {
             shows: Some(Showing::Face(face, FaceSize::Full)),
@@ -109,7 +113,7 @@ fn way_element(way: &PromptButton, face: Option<FaceId>, width: f32) -> Element 
         }
         .name("face")
         .width(width)
-        .height(width * CARD_HEIGHT / CARD_WIDTH);
+        .height(width * card.height / card.width);
         if way.enabled {
             element
         } else {

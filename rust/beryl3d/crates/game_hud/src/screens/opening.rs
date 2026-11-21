@@ -34,7 +34,7 @@ use glam::Vec2;
 
 use crate::hud::HudIn;
 use game_table::profiles::Profile;
-use game_table::table::{CARD_HEIGHT, CARD_WIDTH};
+use kit_base::data::Card;
 use kit_base::data::profiles::{ScreenMetrics, WrappedHand};
 use kit_base::data::space::flat::opening as metrics;
 use kit_base::geometry::Rect;
@@ -216,12 +216,18 @@ pub fn present(shown: &Presentation, profile: Profile) -> Element {
     } = *shown;
     let sizes = if let Some(wrapped) = opening.wrapped_hand {
         let screen = profile.data().screen.expect("validated wrapped opening");
-        Sizes::wrapped(shown, wrapped, room, window.size.width, screen)
+        Sizes::wrapped(
+            shown,
+            (wrapped, profile.card()),
+            room,
+            window.size.width,
+            screen,
+        )
     } else {
         Sizes::single_row(room.y)
     };
     let card = |slot: ObjectId, width: f32| {
-        let mut card = card_box(view, slot, width);
+        let mut card = card_box(view, slot, (width, profile.card()));
         card.press = shown.press.map(|press| press(slot));
         card
     };
@@ -269,7 +275,7 @@ pub fn present(shown: &Presentation, profile: Profile) -> Element {
     let slots_row = (slots > 0).then(|| {
         let boxes = (0..slots).map(|at| match shown.bottom.get(at) {
             Some(&slot) => card(slot, sizes.slot),
-            None => empty_slot(at, sizes.slot),
+            None => empty_slot(at, (sizes.slot, profile.card())),
         });
         let mut slots_row = row()
             .name("Bottom of your library")
@@ -386,7 +392,7 @@ fn selected(prompt: &PromptView, slot: ObjectId) -> bool {
 /// The box `width` points wide that shows the scene object in `slot`, named for its card and
 /// slot as a locator names a card ("Island #8"). The box takes no press: the card drawn in it
 /// is the table's, and a click on it clicks the open prompt on the card (`Client::frame`).
-fn card_box(view: &PlayerView, slot: ObjectId, width: f32) -> Element {
+fn card_box(view: &PlayerView, slot: ObjectId, (width, card): (f32, Card)) -> Element {
     let name = (view.objects.iter())
         .find(|object| object.slot == slot)
         .and_then(|object| object.name.as_deref())
@@ -394,17 +400,17 @@ fn card_box(view: &PlayerView, slot: ObjectId, width: f32) -> Element {
     let mut element = Element::new(Role::Region)
         .name(&format!("{name} #{}", slot.0))
         .width(width)
-        .height(width * CARD_HEIGHT / CARD_WIDTH);
+        .height(width * card.height / card.width);
     element.show = Some(Show::object(ElementId(u32::from(slot.0))));
     element
 }
 
 /// An empty slot for a card still to be put on the bottom, `.opening-slot`.
-fn empty_slot(at: usize, width: f32) -> Element {
+fn empty_slot(at: usize, (width, card): (f32, Card)) -> Element {
     Element::new(Role::Region)
         .name(&format!("slot {}", at + 1))
         .width(width)
-        .height(width * CARD_HEIGHT / CARD_WIDTH)
+        .height(width * card.height / card.width)
         .background(color::BACKDROP)
         .passes(true)
 }
@@ -456,7 +462,7 @@ impl Sizes {
     /// bottom and `actions` buttons in the dock.
     fn wrapped(
         shown: &Presentation,
-        wrapped: WrappedHand,
+        (wrapped, card): (WrappedHand, Card),
         room: Rect,
         width: f32,
         screen: ScreenMetrics,
@@ -494,7 +500,7 @@ impl Sizes {
         };
         let across = (room.width - (per_row - 1.0) * wrapped.gap) / per_row;
         let down =
-            (room.height - header - footer - gaps) * CARD_WIDTH / CARD_HEIGHT / card_rows.max(1.0);
+            (room.height - header - footer - gaps) * card.width / card.height / card_rows.max(1.0);
         let card = most.min(across).min(down).max(0.0).floor();
         let slot = if slots > 0 {
             let room = room.width - wrapped.slot_edge;

@@ -14,7 +14,7 @@ const SCALE: f32 = 2.0;
 /// The frame `layer` writes on its own, with the layout work done since the last one.
 fn write(layer: &mut Layer) -> Frame {
     let mut frame = Frame::with_capacity(64, 256, 4096);
-    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
+    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline, crate::card());
     let (layout_nodes, text_runs) = layer.take_work();
     builder.layout_work(layout_nodes, text_runs);
     let plane = ScreenPlane::new(Affine3A::IDENTITY, window(), 1.0, 1.0);

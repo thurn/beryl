@@ -10,7 +10,7 @@ use beryl_protocol::GameUpdate;
 use beryl_protocol::protocol::{ObjectId, Side, Why, ZoneName};
 use beryl_protocol::script::Act;
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, object, timing};
-use game_table::table::{Camera, Held, LAYER, Table, TrayKind, landing, tray, tray_boxes};
+use game_table::table::{Camera, Held, Table, TrayKind, landing, tray, tray_boxes};
 use glam::{Vec2, Vec3};
 use kit_base::pose::{Pose, Segment};
 use kit_frame::frame::{Frame, Role};
@@ -73,7 +73,7 @@ fn library_height(table: &Table, view: &ViewBuilder) -> f32 {
     let library = view.build().players.you.library;
     let height = |slot: ObjectId| table.rest(usize::from(slot.0)).expect("placed").position.z;
     let (bottom, top) = (library[0], *library.last().expect("a card"));
-    height(top) - height(bottom) + LAYER
+    height(top) - height(bottom) + crate::test_data::data().card.layer
 }
 
 #[test]
@@ -113,7 +113,7 @@ fn a_library_falls_by_one_layer_when_a_card_is_drawn() {
     // The cards of a taller pile are drawn a hair smaller, so that they are as large on screen as
     // a shorter pile's, which moves where their near edge stands by far less than a layer.
     assert!(
-        (before - after - LAYER).abs() < 1e-2,
+        (before - after - crate::test_data::data().card.layer).abs() < 1e-2,
         "{before} became {after}"
     );
 }

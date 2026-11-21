@@ -38,7 +38,8 @@ fn reloading_during_a_flight_uses_new_motion_and_reaches_the_new_layout() {
     let mut profile: serde_json::Value = serde_json::from_str(contents).unwrap();
     profile["table"]["camera"]["pitch_degrees"] = serde_json::json!(34.0);
     let profile = profile.to_string();
-    new.profiles = profiles::Profiles::parse(&[profiles::SHIPPED[0], (name, &profile)]).unwrap();
+    new.profiles =
+        profiles::Profiles::parse(&[profiles::SHIPPED[0], (name, &profile)], new.card).unwrap();
     let new = Arc::new(new);
 
     let client = |data| {

@@ -6,7 +6,6 @@
 use beryl_render::{Limits, Renderer};
 use glam::{Affine3A, Quat, Vec2, Vec3};
 use kit_base::atlas::Tier;
-use kit_base::geometry::{CARD_HEIGHT, CARD_WIDTH};
 use kit_frame::frame::{Band, Draw, sprites};
 
 use super::render::{Picture, TwentyCards, draw_in, overhead, rectangle, renderer, twenty_cards};
@@ -26,7 +25,7 @@ pub(super) fn within(found: [u8; 3], expected: [u8; 3], tolerance: u8) -> bool {
 /// turned 30 degrees: one solid color, on the card mesh with its rounded corners.
 fn turned(size: Vec2, z: f32, rgb: [u8; 3]) -> Draw {
     let transform = Affine3A::from_scale_rotation_translation(
-        Vec3::new(size.x / CARD_WIDTH, size.y / CARD_HEIGHT, 1.0),
+        Vec3::new(size.x / crate::card().x, size.y / crate::card().y, 1.0),
         Quat::from_rotation_z(30_f32.to_radians()),
         Vec3::new(0.0, 0.0, z),
     );

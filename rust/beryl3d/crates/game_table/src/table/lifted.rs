@@ -14,7 +14,7 @@ use beryl_protocol::script::{Act, Span, Table as Played};
 use glam::{Quat, Vec2};
 
 use super::place::{Group, Placement, Zones, members};
-use super::{CARD_HEIGHT, CARD_WIDTH, Camera, LAYER, Layout};
+use super::{Camera, Layout};
 use kit_base::data::verbs::{Lift, LiftHand};
 use kit_base::pose::Pose;
 use kit_frame::frame::Place;
@@ -163,7 +163,7 @@ pub(crate) fn lay(
     for (object, (offset, under, order)) in cards.iter().zip(fan_slots(cards.len(), columns)) {
         let pose = if library {
             let beside = lift.library.beside
-                + Vec2::X * offset * lift.library.step * CARD_WIDTH
+                + Vec2::X * offset * lift.library.step * layout.camera.card.width
                 + lift.library.packet * under as f32;
             // Beside the library toward the table's middle: to its right on the viewer's side,
             // and to its left on the opponent's.
@@ -181,7 +181,7 @@ pub(crate) fn lay(
             let pile = super::PileShown::index(side, ZoneName::Library);
             let at = placement.piles[pile].base + beside;
             Pose {
-                position: at.extend(lift.library.rise + LAYER * order),
+                position: at.extend(lift.library.rise + layout.camera.card.layer * order),
                 scale,
                 turn: 1.0,
                 ..Pose::default()
@@ -237,7 +237,7 @@ fn held_up(
         (false, Side::Opponent) => (hand.theirs_at, hand.height),
     };
     // A card's width, in normalized device coordinates of the window.
-    let width = height * 2.0 * (CARD_WIDTH / CARD_HEIGHT) / aspect;
+    let width = height * 2.0 * (camera.data.card.width / camera.data.card.height) / aspect;
     // Where the middle card stands is given across in window heights, so that it keeps its
     // distance from the middle of the screen at any window shape, as the web's `fromMiddle` does.
     let y = if side == Side::You && !opening && ceiling.is_finite() {

@@ -7,9 +7,9 @@ use glam::{Quat, Vec3};
 use kit_space::arrange::Edge;
 use kit_space::arrange::row::{Group, Member, Placed, Tuck};
 
+use super::Layout;
 use super::place::host_slot;
-use super::{CARD_HEIGHT, CARD_WIDTH, LAYER, Layout};
-use kit_base::data::space::card::PHASED_OUT_OPACITY;
+use kit_base::data::Card;
 use kit_base::pose::Pose;
 
 mod change;
@@ -216,7 +216,7 @@ impl Groups<'_, '_> {
                 .filter(|(_, (host, _))| *host == face.slot)
                 .map(|(key, (_, card))| Tuck {
                     key,
-                    width: card_width(card),
+                    width: card_width(card, layout.camera.card),
                     edge: if peeks_left(card) {
                         Edge::Start
                     } else {
@@ -225,7 +225,7 @@ impl Groups<'_, '_> {
                 })
                 .collect();
             Group {
-                width: card_width(face),
+                width: card_width(face, layout.camera.card),
                 copies: pile.len(),
                 gap_class: face.tapped,
                 anchor: faces
@@ -236,7 +236,7 @@ impl Groups<'_, '_> {
                 tuck_rise: if face.types.contains(&CardType::Land) || !layout.style.tuck_rise {
                     0.0
                 } else {
-                    layout.beneath_step.y * CARD_HEIGHT
+                    layout.beneath_step.y * layout.camera.card.height
                 },
             }
         })
@@ -244,12 +244,12 @@ impl Groups<'_, '_> {
 }
 
 impl<'a> Groups<'a, '_> {
-    /// Turn an arranged item's centre and layer into its card pose.
+    /// Turn an arranged item's centre and layer into its card pose, for cards of `card`'s size.
     pub(super) fn pose(
         &self,
         beneath: &Beneath<'a>,
         placed: &Placed,
-        y: f32,
+        (y, card): (f32, Card),
     ) -> (&'a ObjectView, Pose) {
         let (object, rotation) = match placed.member {
             Member::Copy(index) => {
@@ -267,13 +267,13 @@ impl<'a> Groups<'a, '_> {
             position: Vec3::new(
                 placed.centre.x,
                 y + placed.centre.y,
-                LAYER * placed.layer as f32,
+                card.layer * placed.layer as f32,
             ),
             rotation,
             ..Pose::default()
         };
         let pose = match placed.member {
-            Member::Copy(_) => reposed(object, pose),
+            Member::Copy(_) => reposed(object, pose, card),
             Member::Tuck(_) => Pose {
                 turn: if face_up(object) { 0.0 } else { 1.0 },
                 ..pose
@@ -283,25 +283,26 @@ impl<'a> Groups<'a, '_> {
     }
 }
 
-fn card_width(object: &ObjectView) -> f32 {
+fn card_width(object: &ObjectView, card: Card) -> f32 {
     if object.tapped {
-        CARD_HEIGHT
+        card.height
     } else {
-        CARD_WIDTH
+        card.width
     }
 }
 
 /// `pose` with what `object`'s own record decides of a permanent's pose in its row and nothing
-/// else does: whether it shows its face, and how faded it is. A step that changes only those
-/// (`RowChange::Pose`) gives the card its new pose with this, and lays out nothing else.
-pub fn reposed(object: &ObjectView, pose: Pose) -> Pose {
+/// else does: whether it shows its face, and how faded it is (`card`'s phased-out opacity). A
+/// step that changes only those (`RowChange::Pose`) gives the card its new pose with this, and
+/// lays out nothing else.
+pub fn reposed(object: &ObjectView, pose: Pose, card: Card) -> Pose {
     Pose {
         turn: if face_up(object) { 0.0 } else { 1.0 },
         // A phased-out permanent stays where it lay, faded, as the web interface draws it:
         // it is treated as though it does not exist
         // ([CR 702.26b](https://yawgatog.com/resources/magic-rules/#R70226b)).
         opacity: if object.phased_out {
-            PHASED_OUT_OPACITY
+            card.phased_out_opacity
         } else {
             1.0
         },

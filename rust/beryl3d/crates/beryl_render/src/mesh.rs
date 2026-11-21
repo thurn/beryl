@@ -4,7 +4,7 @@
 //! index buffer, and the indices count from the start of the vertex buffer, so a draw call
 //! needs no base vertex (OpenGL ES 3.0 has none).
 
-use kit_base::geometry::{CARD_HEIGHT, CARD_WIDTH};
+use glam::Vec2;
 use kit_frame::frame::{Mesh, sprites};
 
 /// The radius of a card's rounded corners, in millimetres.
@@ -38,13 +38,14 @@ pub struct Meshes {
     pub ranges: [std::ops::Range<u32>; 4],
 }
 
-/// Builds the four meshes.
+/// Builds the four meshes, with the card `size` millimetres wide and high (`Frame::card`).
+/// The number of vertices and indices does not depend on the size.
 #[must_use]
-pub fn meshes() -> Meshes {
+pub fn meshes(size: Vec2) -> Meshes {
     let mut vertices = Vec::new();
     let mut indices = Vec::new();
-    let card = card(&mut vertices, &mut indices);
-    let edge = edge(&mut vertices, &mut indices);
+    let card = card(size, &mut vertices, &mut indices);
+    let edge = edge(size, &mut vertices, &mut indices);
     let quad = quad(&mut vertices, &mut indices);
     let outline_ring = outline_ring(&mut vertices, &mut indices);
     let mut ranges = [0..0, 0..0, 0..0, 0..0];
@@ -59,13 +60,10 @@ pub fn meshes() -> Meshes {
     }
 }
 
-/// The card's outline, counterclockwise seen from the face: each point and the outward
-/// direction there.
-fn outline() -> impl Iterator<Item = ([f32; 2], [f32; 2])> {
-    let half = [
-        CARD_WIDTH / 2.0 - CARD_RADIUS,
-        CARD_HEIGHT / 2.0 - CARD_RADIUS,
-    ];
+/// The outline of a card `size` large, counterclockwise seen from the face: each point and the
+/// outward direction there.
+fn outline(size: Vec2) -> impl Iterator<Item = ([f32; 2], [f32; 2])> {
+    let half = [size.x / 2.0 - CARD_RADIUS, size.y / 2.0 - CARD_RADIUS];
     let corners = [
         (1.0, 1.0, 0.0),
         (-1.0, 1.0, 90.0),
@@ -87,17 +85,15 @@ fn outline() -> impl Iterator<Item = ([f32; 2], [f32; 2])> {
     })
 }
 
-fn uv(position: [f32; 2]) -> [f32; 2] {
-    [
-        position[0] / CARD_WIDTH + 0.5,
-        0.5 - position[1] / CARD_HEIGHT,
-    ]
+fn uv(position: [f32; 2], size: Vec2) -> [f32; 2] {
+    [position[0] / size.x + 0.5, 0.5 - position[1] / size.y]
 }
 
-fn vertex(position: [f32; 2], outward: [f32; 2], edge: f32) -> Vertex {
+/// A vertex of a card `size` large, or of a mesh in the units of one.
+fn vertex(position: [f32; 2], outward: [f32; 2], edge: f32, size: Vec2) -> Vertex {
     Vertex {
         position,
-        uv: uv(position),
+        uv: uv(position, size),
         outward,
         edge,
         unused: 0.0,
@@ -114,11 +110,11 @@ fn range(indices: &[u16], start: usize) -> std::ops::Range<u32> {
 
 /// The card: a fan of triangles around its centre, so its corners are geometry and every pixel
 /// it covers is opaque.
-fn card(vertices: &mut Vec<Vertex>, indices: &mut Vec<u16>) -> std::ops::Range<u32> {
+fn card(size: Vec2, vertices: &mut Vec<Vertex>, indices: &mut Vec<u16>) -> std::ops::Range<u32> {
     let start = indices.len();
     let centre = first(vertices);
-    vertices.push(vertex([0.0, 0.0], [0.0, 0.0], 0.0));
-    vertices.extend(outline().map(|(point, _)| vertex(point, [0.0, 0.0], 0.0)));
+    vertices.push(vertex([0.0, 0.0], [0.0, 0.0], 0.0, size));
+    vertices.extend(outline(size).map(|(point, _)| vertex(point, [0.0, 0.0], 0.0, size)));
     let ring = OUTLINE as u16;
     for i in 0..ring {
         indices.extend_from_slice(&[centre, centre + 1 + i, centre + 1 + (i + 1) % ring]);
@@ -128,12 +124,12 @@ fn card(vertices: &mut Vec<Vertex>, indices: &mut Vec<u16>) -> std::ops::Range<u
 
 /// The edge strip: an inner ring on the card's outline and an outer ring at the same points,
 /// which the vertex shader moves one physical pixel outward along `outward`.
-fn edge(vertices: &mut Vec<Vertex>, indices: &mut Vec<u16>) -> std::ops::Range<u32> {
+fn edge(size: Vec2, vertices: &mut Vec<Vertex>, indices: &mut Vec<u16>) -> std::ops::Range<u32> {
     let start = indices.len();
     let base = first(vertices);
-    for (point, outward) in outline() {
-        vertices.push(vertex(point, outward, 0.0));
-        vertices.push(vertex(point, outward, 1.0));
+    for (point, outward) in outline(size) {
+        vertices.push(vertex(point, outward, 0.0, size));
+        vertices.push(vertex(point, outward, 1.0, size));
     }
     let ring = OUTLINE as u16;
     for i in 0..ring {
@@ -203,7 +199,7 @@ mod tests {
 
     #[test]
     fn every_triangle_faces_the_front() {
-        let m = meshes();
+        let m = meshes(Vec2::new(63.0, 88.0));
         for (mesh, range) in m.ranges.iter().enumerate() {
             let indices = &m.indices[range.start as usize..range.end as usize];
             assert!(!indices.is_empty());

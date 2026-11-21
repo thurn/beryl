@@ -23,7 +23,7 @@ use crate::hud::HudIn;
 use crate::prompts::feature::Details;
 use game_table::faces::FaceList;
 use game_table::profiles::Profile;
-use game_table::table::{CARD_HEIGHT, CARD_WIDTH, TraySpace, tray_area};
+use game_table::table::{TraySpace, tray_area};
 use kit_base::tokens::{color, size, space, type_style};
 use kit_frame::frame::Role;
 use kit_text::text::TypeStyle;
@@ -170,7 +170,8 @@ fn ends(prompt: &PromptView, count: usize, tray: (TraySpace, Size)) -> Element {
         .justify_content(Justify::SpaceBetween)
         .child(word(last))
         .child(word(first));
-    let row_bottom = row_top(count, tray) + item_width(count, tray) * CARD_HEIGHT / CARD_WIDTH;
+    let row_bottom =
+        row_top(count, tray) + item_width(count, tray) * tray.0.card.height / tray.0.card.width;
     let top = row_bottom + ENDS_GAP / per_point;
     ends.anchor = Some(Anchor::Point(
         Vec2::new(area.x + (area.width - width) / 2.0, top),
@@ -203,8 +204,8 @@ fn row_top(count: usize, tray: (TraySpace, Size)) -> f32 {
     let (space, size) = tray;
     let per_point = per_point(tray);
     let area = tray_area(space, size);
-    let tall =
-        item_width(count, tray) * CARD_HEIGHT / CARD_WIDTH + (ENDS_GAP + ENDS_SIZE) / per_point;
+    let tall = item_width(count, tray) * space.card.height / space.card.width
+        + (ENDS_GAP + ENDS_SIZE) / per_point;
     area.y + (area.height - tall) / 2.0
 }
 
@@ -216,7 +217,7 @@ fn cells(count: usize, tray: (TraySpace, Size)) -> impl Iterator<Item = Rect> {
     let (space, size) = tray;
     let area = tray_area(space, size);
     let width = item_width(count, tray);
-    let height = width * CARD_HEIGHT / CARD_WIDTH;
+    let height = width * space.card.height / space.card.width;
     let gap = space.gap / per_point(tray);
     let row = count as f32 * width + count.saturating_sub(1) as f32 * gap;
     let right = area.x + f32::midpoint(area.width, row);
@@ -288,11 +289,13 @@ pub fn carried_item(
 #[cfg(test)]
 mod tests {
     use super::{Profile, cells, slot_in};
+    use kit_base::data::Card;
     use kit_base::data::profiles::{Profiles, SHIPPED};
 
     #[test]
     fn an_item_let_go_past_either_end_lands_at_that_end() {
-        let profiles = Profiles::parse(&SHIPPED).unwrap();
+        let card = include_str!("../../../../../../../data/beryl3d/card.json");
+        let profiles = Profiles::parse(&SHIPPED, Card::parse(card).unwrap()).unwrap();
         let window = profiles.fallback().usual_window();
         let profile = Profile::for_window(&profiles, window);
         let tray = (profile.order_tray(), window.size);

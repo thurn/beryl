@@ -7,7 +7,7 @@ use beryl_protocol::protocol::{ObjectId, ObjectView, Side, StackItem, ZoneName};
 use glam::{Quat, Vec2};
 
 use super::place::{Placement, Rest, turn};
-use super::{CARD_HEIGHT, CARD_WIDTH, Camera, Layout, RowWindow, StackData, Table};
+use super::{Camera, Layout, RowWindow, StackData, Table};
 use kit_base::pose::Pose;
 use kit_frame::frame::Place;
 use kit_space::arrange::{AnchoredCascade, Cascade, CascadeLayout};
@@ -190,7 +190,10 @@ fn arrange(
             }
             .centred(
                 (data.left, data.right, data.middle),
-                Vec2::new(data.height * (CARD_WIDTH / CARD_HEIGHT), data.height),
+                Vec2::new(
+                    data.height * (camera.data.card.width / camera.data.card.height),
+                    data.height,
+                ),
                 (layout.target, data.count_room),
                 items,
             );
@@ -230,7 +233,7 @@ fn anchored(data: &StackData, camera: &Camera, target: f32) -> (Cascade, Anchore
     let window = camera.window;
     let units = 2.0 / window.size.height;
     let aspect = window.size.width / window.size.height;
-    let size = Vec2::new(CARD_WIDTH / CARD_HEIGHT, 1.0) * data.height * 2.0;
+    let size = Vec2::new(camera.data.card.width / camera.data.card.height, 1.0) * data.height * 2.0;
     let target = target * units;
     (
         Cascade {

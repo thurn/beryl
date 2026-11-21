@@ -44,7 +44,7 @@ fn tags(frame: &Frame) -> Vec<u8> {
 /// sibling's record goes to an earlier band than the panel's.
 fn built(frame: &mut Frame) {
     frame.looking = true;
-    let mut builder = FrameBuilder::new(frame, Tier::Baseline);
+    let mut builder = FrameBuilder::new(frame, Tier::Baseline, crate::card());
     builder.camera(Mat4::IDENTITY);
     builder.draw(
         Band::Opaque,
@@ -73,7 +73,7 @@ fn a_frame_not_looking_records_no_owners() {
     let mut frame = Frame::with_capacity(8, 8, 64);
     built(&mut frame);
     frame.looking = false;
-    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
+    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline, crate::card());
     builder.resolved("panel", element(1, u32::MAX));
     builder.draw(Band::Layer, quad(10));
     builder.finish();

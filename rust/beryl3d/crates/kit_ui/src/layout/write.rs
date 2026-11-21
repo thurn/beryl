@@ -7,7 +7,7 @@ mod layer;
 
 use std::borrow::Cow;
 
-use glam::{Affine3A, Vec2, Vec3};
+use glam::{Affine3A, Vec2};
 
 use super::edit::Marks;
 use super::panel::{Chain, look_of, mask_of, panel, write_box, write_mask};
@@ -16,10 +16,7 @@ use super::{Layer, Node, text_top};
 use crate::element::{Anchor, Display, Element, Overflow, Property, Shown, TextAlign};
 use crate::input::{FaceId, FaceSize, Rect};
 use crate::widgets::icons::{LayeredIcon, cell_width};
-use kit_base::geometry::{
-    CARD_HEIGHT, CARD_WIDTH,
-    plane::{ScreenPlane, Zoom},
-};
+use kit_base::geometry::plane::{ScreenPlane, Zoom};
 use kit_base::tokens::color;
 use kit_frame::frame::text::{BlockLook, faded, write_block};
 use kit_frame::frame::{
@@ -362,7 +359,8 @@ impl Layer {
                 if matches!(node.element.shows, Some(Shown::TappedFace(..))) {
                     transform *= Affine3A::from_rotation_z(-std::f32::consts::FRAC_PI_2);
                 }
-                let Some(mut draw) = face_draw(faces, face, size, transform) else {
+                let Some(mut draw) = face_draw(faces, (face, size), transform, builder.card())
+                else {
                     return;
                 };
                 // A face's color, where it has one, darkens it, as a way that cannot be chosen
@@ -586,9 +584,9 @@ fn write_marks(
 /// landed, and otherwise from its board-size layer, enlarged. `None` while it has neither.
 fn face_draw(
     faces: &FaceLayers<'_>,
-    face: FaceId,
-    size: FaceSize,
+    (face, size): (FaceId, FaceSize),
     transform: Affine3A,
+    card: Vec2,
 ) -> Option<Draw> {
     let full = match size {
         FaceSize::Full => (faces.layer)(face, FaceSize::Full),
@@ -599,8 +597,8 @@ fn face_draw(
         None => (FaceSize::Board, (faces.layer)(face, FaceSize::Board)?),
     };
     let back = (faces.layer)(faces.back, size).unwrap_or(0);
-    // The card mesh is a card's size in millimetres about its middle; the box is the unit square.
-    let card = Affine3A::from_scale(Vec3::new(1.0 / CARD_WIDTH, 1.0 / CARD_HEIGHT, 1.0));
+    // The card mesh is `card` millimetres about its middle; the box is the unit square.
+    let card = Affine3A::from_scale(card.recip().extend(1.0));
     Some(Draw::card(
         transform * card,
         [255; 4],

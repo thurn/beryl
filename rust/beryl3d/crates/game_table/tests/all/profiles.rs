@@ -126,7 +126,7 @@ fn the_windows_use_the_supplied_table_and_screen_tuning() {
 fn the_reference_and_fitted_tables_read_the_supplied_geometry() {
     use kit_base::data::profiles::{Profiles, SHIPPED};
 
-    let shipped = Profiles::parse(&SHIPPED).unwrap();
+    let shipped = Profiles::parse(&SHIPPED, crate::test_data::data().card).unwrap();
     let window = shipped.fallback().usual_window();
     let original = Profile::for_window(&shipped, window).layout();
     let modified = SHIPPED[1]
@@ -134,7 +134,11 @@ fn the_reference_and_fitted_tables_read_the_supplied_geometry() {
         .replace("\"pitch_degrees\": 27.0", "\"pitch_degrees\": 29.0")
         .replace("\"land_width\": 100", "\"land_width\": 96")
         .replace("\"depth\": 300", "\"depth\": 306");
-    let profiles = Profiles::parse(&[SHIPPED[0], (SHIPPED[1].0, &modified)]).unwrap();
+    let profiles = Profiles::parse(
+        &[SHIPPED[0], (SHIPPED[1].0, &modified)],
+        crate::test_data::data().card,
+    )
+    .unwrap();
     let profile = Profile::for_window(&profiles, window);
     let reference = profile.reference_layout().unwrap();
     let fitted = profile.layout();
@@ -161,7 +165,11 @@ fn a_put_back_tray_uses_the_deck_geometry_of_its_own_profile() {
         .1
         .replace("\"deck_backs\": 4", "\"deck_backs\": 3");
     let mut data = (*crate::test_data::data()).clone();
-    data.profiles = Profiles::parse(&[(SHIPPED[0].0, &compact), (SHIPPED[1].0, &regular)]).unwrap();
+    data.profiles = Profiles::parse(
+        &[(SHIPPED[0].0, &compact), (SHIPPED[1].0, &regular)],
+        data.card,
+    )
+    .unwrap();
     let data = Arc::new(data);
     let held = Held {
         piles: vec![vec![], vec![ObjectId(1)]],

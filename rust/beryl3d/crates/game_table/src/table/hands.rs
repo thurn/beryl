@@ -10,7 +10,7 @@ use kit_space::arrange::{
 };
 
 use super::place::{Placement, Rest, turn};
-use super::{CARD_HEIGHT, CARD_WIDTH, Camera, HandData, RowWindow};
+use super::{Camera, HandData, RowWindow};
 
 pub(super) fn hand(
     placement: &mut Placement,
@@ -95,7 +95,7 @@ fn fan_rests(
         Quat::IDENTITY,
         0.5,
     );
-    let units = anchor.scale * CARD_HEIGHT;
+    let units = anchor.scale * camera.data.card.height;
     let window = camera.window.size;
     let region = Region {
         centre: anchor.position,
@@ -129,7 +129,7 @@ fn fan_rests(
     let items: Vec<_> = (0..count)
         .map(|index| Item {
             key: index as u64,
-            size: Vec2::new(CARD_WIDTH, CARD_HEIGHT),
+            size: Vec2::new(camera.data.card.width, camera.data.card.height),
             pressable,
             group: None,
             under: None,

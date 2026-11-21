@@ -233,7 +233,7 @@ fn a_press_follows_paint_order_across_the_table_and_screen() {
         note: NameRef::default(),
     };
     let mut frame = Frame::with_capacity(6, 0, 0);
-    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
+    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline, crate::card());
     let dragged = builder.resolved("dragged", node(5, 7.0, StateBits::HELD, true));
     let moving = builder.resolved(
         "moving into preview",

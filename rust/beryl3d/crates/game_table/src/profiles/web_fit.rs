@@ -24,12 +24,15 @@
 use glam::{Vec2, Vec3};
 
 use crate::table::pile::lift;
-use crate::table::{CARD_HEIGHT, CARD_WIDTH, Camera, LAYER, RowArea, Window};
+use crate::table::{Camera, RowArea, Window};
+use kit_base::data::Card;
 use kit_base::data::profiles::{Perspective, StageSize, WebFit};
 use kit_base::pose::Pose;
 
-/// The web interface's `CARD_ASPECT`, a card's width over its height.
-const ASPECT: f32 = CARD_WIDTH / CARD_HEIGHT;
+/// A card's width over its height, as the web interface's `CARD_ASPECT` is.
+fn aspect(card: Card) -> f32 {
+    card.width / card.height
+}
 
 /// One battlefield row of one side fitted to the web's: its area on the table, the scale its
 /// cards are drawn at, and the gaps between them in millimetres before that scale.
@@ -68,10 +71,11 @@ pub struct FittedRow {
 }
 
 impl FittedRow {
-    /// How high above the table the row's plane lies over `y`, at its cards' scale.
+    /// How high above the table the row's plane lies over `y`, at its cards' scale, for cards of
+    /// `card`'s size.
     #[must_use]
-    pub fn height(&self, y: f32) -> f32 {
-        let half = CARD_HEIGHT / 2.0 * self.scale;
+    pub fn height(&self, y: f32, card: Card) -> f32 {
+        let half = card.height / 2.0 * self.scale;
         half * self.tilt.sin() + (y - self.area.y) * self.tilt.tan()
     }
 }
@@ -205,7 +209,7 @@ fn side_rows(stage: &Stage, camera: &Camera, data: &WebFit, opponent: bool) -> [
 /// points land. Its line and its cards' tilt are found by `Stand::fit`.
 fn fit_row(stage: &Stage, camera: &Camera, spec: &RowSpec, forward: f32) -> FittedRow {
     let width = spec.frame * stage.depth_scale(spec.top);
-    let height = width / ASPECT;
+    let height = width / aspect(camera.data.card);
     let line = stage.on_window(Vec2::new(0.0, spec.top + height / 2.0)).y;
     // The centre of the web's card whose top left corner is at `x`, leaned about its top.
     let centre_of = |x: f32| x + width / 2.0 + stage.lean(x + width / 2.0, spec.top) * height / 2.0;
@@ -221,23 +225,24 @@ fn fit_row(stage: &Stage, camera: &Camera, spec: &RowSpec, forward: f32) -> Fitt
     let mut stand = Stand {
         y: camera.on_plane(Vec2::new(0.0, line), 0.0).y,
         tilt: 0.0,
-        scale: width * per_pixel(0.0) / CARD_WIDTH,
+        scale: width * per_pixel(0.0) / camera.data.card.width,
     };
     // The scale and the stand depend on each other only a little: two rounds settle both.
     for _ in 0..2 {
         stand = stand.fit(camera, line, height * stage.scale);
-        stand.scale = width * per_pixel(stand.lift(CARD_HEIGHT)) / CARD_WIDTH;
+        stand.scale =
+            width * per_pixel(stand.lift(camera.data.card.height)) / camera.data.card.width;
     }
-    let lift = stand.lift(CARD_HEIGHT);
+    let lift = stand.lift(camera.data.card.height);
     let scale = stand.scale;
     // A gap of the web's, against its card's frame, is the same share of a card here.
-    let gap = |pixels: f32| CARD_WIDTH * pixels / spec.frame;
+    let gap = |pixels: f32| camera.data.card.width * pixels / spec.frame;
     let row = FittedRow {
         stage: *stage,
         area: RowArea {
             y: stand.y,
-            left: across(centre_of(spec.start), lift) - CARD_WIDTH * scale / 2.0,
-            right: across(centre_of(spec.end - width), lift) + CARD_WIDTH * scale / 2.0,
+            left: across(centre_of(spec.start), lift) - camera.data.card.width * scale / 2.0,
+            right: across(centre_of(spec.end - width), lift) + camera.data.card.width * scale / 2.0,
             centre: spec.centre.map(|x| across(x, lift)),
         },
         scale,
@@ -253,7 +258,10 @@ fn fit_row(stage: &Stage, camera: &Camera, spec: &RowSpec, forward: f32) -> Fitt
     let moved = |pixels: f32| {
         let goal = line + pixels * stage.scale;
         let moved = Stand::solve(row.area.y, |y| {
-            camera.to_screen(Vec3::new(0.0, y, row.height(y))).y - goal
+            camera
+                .to_screen(Vec3::new(0.0, y, row.height(y, camera.data.card)))
+                .y
+                - goal
         });
         moved - row.area.y
     };
@@ -295,7 +303,11 @@ impl Stand {
 
     /// `extent` of an untapped card whose centre lies over `y`, with its near edge on the table.
     fn untapped(self, camera: &Camera, y: f32) -> (f32, f32) {
-        self.extent(camera, (y, self.lift(CARD_HEIGHT)), CARD_HEIGHT)
+        self.extent(
+            camera,
+            (y, self.lift(camera.data.card.height)),
+            camera.data.card.height,
+        )
     }
 
     /// The stand whose untapped card is `height` points tall on screen with its middle on the
@@ -397,9 +409,9 @@ pub fn lean((row, zoom): (&FittedRow, f32), camera: &Camera, pose: Pose, tapped:
     // The web's card across the screen and down it: a tapped card lies turned a quarter.
     let width = row.width * zoom;
     let (wide, tall) = if tapped {
-        (width / ASPECT, width)
+        (width / aspect(camera.data.card), width)
     } else {
-        (width, width / ASPECT)
+        (width, width / aspect(camera.data.card))
     };
     let centre = camera.to_screen(pose.position).x;
     // The web's lean is taken at the middle of its card's top edge, which lies the lean's
@@ -416,7 +428,7 @@ pub fn lean((row, zoom): (&FittedRow, f32), camera: &Camera, pose: Pose, tapped:
     // tangent times its height from its top's middle; a tapped card is less tall, so the web's
     // centre lies nearer its top's middle.
     let centre = if tapped {
-        centre + tangent * (tall - width / ASPECT) / 2.0
+        centre + tangent * (tall - width / aspect(camera.data.card)) / 2.0
     } else {
         centre
     };
@@ -517,7 +529,8 @@ pub(super) fn piles(window: Window, camera: &Camera, data: &WebFit) -> FittedPil
             (piles.you.y, piles.you.width, xs, piles.you.base)
         } else {
             let xs = piles.opponent.x.map(|x| stage.right_held(x));
-            let height = piles.opponent.width * stage.depth_scale(piles.opponent.y) / ASPECT;
+            let height = piles.opponent.width * stage.depth_scale(piles.opponent.y)
+                / aspect(camera.data.card);
             let base = data.opponent.back
                 - piles.clearance
                 - piles.opponent.spread_down * piles.most_thickness
@@ -526,7 +539,7 @@ pub(super) fn piles(window: Window, camera: &Camera, data: &WebFit) -> FittedPil
             (piles.opponent.y, piles.opponent.width, xs, base)
         };
         let width = frame * stage.depth_scale(y);
-        let height = width / ASPECT;
+        let height = width / aspect(camera.data.card);
         for (zone, x) in xs.into_iter().enumerate() {
             let middle = x + width / 2.0;
             let centre = Vec2::new(
@@ -548,7 +561,7 @@ pub(super) fn piles(window: Window, camera: &Camera, data: &WebFit) -> FittedPil
         for (zone, x) in xs.into_iter().enumerate() {
             let middle = x + width / 2.0;
             let top = fitted.tops[side][zone];
-            let z = LAYER * 0.5 + lift(stand.scale, stand.tilt);
+            let z = camera.data.card.layer * 0.5 + lift(camera.data.card, stand.scale, stand.tilt);
             let pose = Pose {
                 position: camera.on_plane(top, z).truncate().extend(z),
                 rotation: glam::Quat::from_rotation_x(stand.tilt),
@@ -594,8 +607,8 @@ fn fit_card(camera: &Camera, line: f32, (width, height): (f32, f32)) -> Stand {
     };
     for _ in 0..4 {
         stand = stand.fit(camera, line, height);
-        let up = stand.lift(CARD_HEIGHT);
-        let half = CARD_WIDTH / 2.0 * stand.scale;
+        let up = stand.lift(camera.data.card.height);
+        let half = camera.data.card.width / 2.0 * stand.scale;
         let left = camera.to_screen(Vec3::new(-half, stand.y, up)).x;
         let right = camera.to_screen(Vec3::new(half, stand.y, up)).x;
         stand.scale *= width / (right - left);

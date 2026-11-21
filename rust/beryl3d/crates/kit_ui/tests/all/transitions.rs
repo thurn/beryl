@@ -20,7 +20,7 @@ const PAINT: &[Transition] = &[
 fn draw(layer: &Layer) -> Frame {
     let mut frame = Frame::with_capacity(32, 256, 256);
     frame.looking = true;
-    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
+    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline, crate::card());
     let camera = ScreenPlane::new(Affine3A::IDENTITY, Window::default(), 1.0, 1.0);
     layer.write(&mut builder, &camera, true);
     builder.finish();

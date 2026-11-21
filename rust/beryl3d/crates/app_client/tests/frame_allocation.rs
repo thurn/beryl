@@ -10,6 +10,12 @@
 #[path = "../../../test_data.rs"]
 mod test_data;
 
+/// A card's printed size from the repository's tuning, which frames are built with. Reading it
+/// allocates nothing once the tuning is loaded.
+fn card() -> glam::Vec2 {
+    test_data::data().card.size()
+}
+
 mod common;
 
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -503,7 +509,7 @@ fn a_moved_float_allocates_nothing() {
             scale: 1.0,
         },
     );
-    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
+    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline, card());
     layer.write(&mut builder, &table.camera().screen_plane(), false);
     let elements = builder.finish().resolved.len();
     let after = ALLOCATIONS.load(Ordering::Relaxed);
@@ -534,7 +540,7 @@ fn an_anchored_element_allocates_nothing() {
     for now in (0..30).map(|index| index * 16 * common::MS) {
         show.prepare(now);
         let before = ALLOCATIONS.load(Ordering::Relaxed);
-        let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
+        let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline, card());
         show.frame(now, &mut builder);
         layer.follow(|subject| spot_of(&builder, show.table(), subject));
         layer.write(&mut builder, &show.table().camera().screen_plane(), true);
@@ -582,7 +588,7 @@ fn a_transition_allocates_nothing() {
     for now in (0..12).map(|index| common::MS * (1_000 + index * 16)) {
         let before = ALLOCATIONS.load(Ordering::Relaxed);
         let moving = layer.tick(now).moving;
-        let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
+        let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline, card());
         layer.write(&mut builder, &table.camera().screen_plane(), true);
         builder.finish();
         let after = ALLOCATIONS.load(Ordering::Relaxed);

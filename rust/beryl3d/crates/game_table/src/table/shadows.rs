@@ -10,15 +10,11 @@ use glam::{Affine3A, Vec2, Vec3};
 
 use super::pile::PileShown;
 use super::scene::{SceneObject, Table};
-use super::{CARD_HEIGHT, CARD_WIDTH};
+use kit_base::data::Card;
 use kit_base::data::lighting::Shadow;
 use kit_base::pose::Pose;
 use kit_frame::frame::{Band, Draw, FrameBuilder, Place};
 use kit_ui::input::Tier;
-
-/// Half a card's diagonal, in millimetres at a scale of 1: no point of a card lies farther from
-/// its centre.
-const HALF_DIAGONAL: f32 = 54.1;
 
 impl Table {
     /// Writes the contact shadow of the card in `slot` (none for an ability) drawn at `pose`,
@@ -60,8 +56,8 @@ impl Table {
         let spread = contact.penumbra * height;
         let scale = pose.scale.max(f32::EPSILON);
         let grown = Vec3::new(
-            1.0 + spread / (CARD_WIDTH * scale),
-            1.0 + spread / (CARD_HEIGHT * scale),
+            1.0 + spread / (self.camera().data.card.width * scale),
+            1.0 + spread / (self.camera().data.card.height * scale),
             1.0,
         );
         let card = pose.transform() * Affine3A::from_scale(grown);
@@ -120,12 +116,12 @@ impl Table {
                     continue;
                 }
                 let offset = point - Vec2::new(lying.x, lying.y);
-                let reach = HALF_DIAGONAL * lying.scale;
+                let reach = floors.half.length() * lying.scale;
                 if offset.x.abs() > reach || offset.y.abs() > reach {
                     continue;
                 }
                 let local = lying.inverse * offset.extend(0.0) / lying.scale;
-                if local.x.abs() <= CARD_WIDTH / 2.0 && local.y.abs() <= CARD_HEIGHT / 2.0 {
+                if local.x.abs() <= floors.half.x && local.y.abs() <= floors.half.y {
                     floor = lying.z;
                 }
             }
@@ -145,6 +141,8 @@ pub(crate) struct Floors {
     lying: Vec<Lying>,
     /// The farthest any of their faces reaches from its centre, in millimetres.
     reach: f32,
+    /// Half a card's printed width and height, in millimetres at a scale of 1.
+    half: Vec2,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -159,8 +157,11 @@ struct Lying {
 }
 
 impl Floors {
-    /// The cards of `cards`, by slot, that lie on the table.
-    pub(super) fn of(cards: &[Option<SceneObject>]) -> Self {
+    /// The cards of `cards`, by slot, that lie on the table, for cards of `card`'s size.
+    pub(super) fn of(cards: &[Option<SceneObject>], card: Card) -> Self {
+        // Half a card's diagonal, in millimetres at a scale of 1: no point of a card lies
+        // farther from its centre.
+        let half_diagonal = card.half().length();
         let lies = |object: &&SceneObject| {
             matches!(
                 object.place,
@@ -174,7 +175,7 @@ impl Floors {
             )
         };
         let reach = (cards.iter().flatten().filter(lies))
-            .map(|object| HALF_DIAGONAL * object.pose.scale)
+            .map(|object| half_diagonal * object.pose.scale)
             .fold(0.0_f32, f32::max);
         let mut lying: Vec<Lying> = (cards.iter().enumerate())
             .filter_map(|(slot, object)| {
@@ -191,7 +192,11 @@ impl Floors {
             })
             .collect();
         lying.sort_unstable_by(|a, b| a.band.cmp(&b.band).then(a.x.total_cmp(&b.x)));
-        Floors { lying, reach }
+        Floors {
+            lying,
+            reach,
+            half: card.half(),
+        }
     }
 
     /// The band across the table that `y` lies in.

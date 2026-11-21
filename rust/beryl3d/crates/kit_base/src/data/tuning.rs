@@ -9,11 +9,14 @@ use super::lighting::Lighting;
 use super::playback::{CatchUp, FrameRate, Slide, TierProbe};
 use super::pointer::PointerTuning;
 use super::presentation::{Gallery, Notices, Revealed, Shown};
-use super::{effect::Effects, profiles::Profiles, verbs::Verbs};
+use super::{BadgeTuning, Card, effect::Effects, profiles::Profiles, verbs::Verbs};
 
 /// The tuning data supplied by a host. The client uses the typed values directly.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Data {
+    /// A card's printed size, which every card mesh, hit box and placement uses.
+    pub card: Card,
+    pub badges: BadgeTuning,
     pub verbs: Verbs,
     pub audit: Audit,
     pub pointer: PointerTuning,
@@ -33,7 +36,8 @@ pub struct Data {
 }
 
 impl Data {
-    /// Parses spatial tuning, interface thresholds, layout profiles and effect definitions.
+    /// Parses the card's size, badge sizes, spatial tuning, interface thresholds, layout profiles
+    /// and effect definitions.
     /// The host supplies each tuning file through `load`. Errors name the input file and key.
     pub fn parse<'a>(
         mut load: impl FnMut(&str) -> Result<String, String>,
@@ -49,7 +53,10 @@ impl Data {
                 return Err(format!("effects/{required}.json: missing definition"));
             }
         }
+        let card = Card::parse(&load("card.json")?)?;
         Ok(Self {
+            card,
+            badges: BadgeTuning::parse(&load("badges.json")?)?,
             verbs,
             audit: read("audit.json", &load("audit.json")?)?,
             pointer: PointerTuning::parse(&load("pointer.json")?)?,
@@ -64,7 +71,7 @@ impl Data {
             shown: read("shown.json", &load("shown.json")?)?,
             gallery: read("gallery.json", &load("gallery.json")?)?,
             lighting: Lighting::parse(&load("lighting.json")?)?,
-            profiles: Profiles::parse(profiles)?,
+            profiles: Profiles::parse(profiles, card)?,
             effects,
         })
     }

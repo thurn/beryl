@@ -15,7 +15,8 @@ use beryl_protocol::script::{Act, Notice, Script, Subject};
 use game_hud::hud::log::Logged;
 use game_hud::prompts::prompt_title;
 use game_table::table::Window;
-use kit_base::data::profiles::Profiles;
+use game_table::table::badges::name_style;
+use kit_base::data::Data;
 use serde_json::{Value, json};
 
 use self::table::{CardGroup, zone_groups};
@@ -32,10 +33,12 @@ pub struct Measure {
 }
 
 impl Measure {
+    /// A measure of `data`'s layout profiles at `windows`, which shapes named counters' labels
+    /// in the style the badges draw them in at `data`'s badge sizes.
     #[must_use]
-    pub fn new(profiles: &Profiles, windows: &[Window]) -> Self {
+    pub fn new(data: &Data, windows: &[Window]) -> Self {
         Self {
-            words: Words::new(profiles, windows),
+            words: Words::new(&data.profiles, windows, name_style(&data.badges)),
         }
     }
 

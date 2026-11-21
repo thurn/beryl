@@ -122,7 +122,7 @@ fn backdrop_panel(renderer: &mut Renderer, tier: Tier, camera: CameraData) -> Va
     layer.show(Some(board));
     let camera = Camera::fit(camera, window);
     let mut frame = Frame::with_capacity(8, 8, 64);
-    let mut builder = FrameBuilder::new(&mut frame, tier);
+    let mut builder = FrameBuilder::new(&mut frame, tier, camera.data.card.size());
     builder.camera(camera.view_projection);
     layer.write(&mut builder, &camera.screen_plane(), true);
     let mut target = Target::offscreen(renderer, width, height);

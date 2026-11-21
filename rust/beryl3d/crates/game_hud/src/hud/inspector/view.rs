@@ -20,7 +20,7 @@ use glam::Vec2;
 
 use crate::hud::HudIn;
 use game_table::faces::FaceList;
-use game_table::table::{CARD_HEIGHT, CARD_WIDTH};
+use kit_base::data::Card;
 use kit_base::data::profiles::Inspector;
 use kit_base::tokens::{color, size, space, type_style};
 use kit_frame::frame::{Anchor, ElementId, Role};
@@ -90,7 +90,7 @@ pub fn inspector(input: &HudIn) -> Option<(Element, Anchor)> {
     }
     .name("face")
     .width(inner)
-    .height(inner * CARD_HEIGHT / CARD_WIDTH);
+    .height(inner * input.profile.card().height / input.profile.card().width);
     let lines = state(object, input).into_iter().map(|line| {
         text(&line)
             .style(type_style::BODY)
@@ -278,7 +278,7 @@ fn place(input: &HudIn) -> Option<Placed> {
         input.view.is_some_and(|view| !view.stack.is_empty()) || !inspected.targets.is_empty();
     Some(stage_place(
         area,
-        data,
+        (data, input.profile.card()),
         (inspected.x, inspected.origin),
         taken,
         &inspected.targets,
@@ -304,7 +304,7 @@ struct Side {
 /// makes it, turned into logical points of `window`.
 fn stage_place(
     area: Rect,
-    data: Inspector,
+    (data, card): (Inspector, Card),
     (card_x, card_origin): (f32, Vec2),
     taken: bool,
     targets: &[Rect],
@@ -365,7 +365,7 @@ fn stage_place(
                 width,
                 ..side
             };
-            if covered(place, &targets, data) <= 0.0 {
+            if covered(place, &targets, (data, card)) <= 0.0 {
                 chosen = Some(place);
                 break 'sides;
             }
@@ -373,7 +373,7 @@ fn stage_place(
         }
     }
     let place = chosen.unwrap_or_else(|| {
-        if covered(sides[1], &targets, data) < covered(sides[0], &targets, data) {
+        if covered(sides[1], &targets, (data, card)) < covered(sides[0], &targets, (data, card)) {
             sides[1]
         } else {
             sides[0]
@@ -388,10 +388,10 @@ fn stage_place(
 
 /// How much of `targets` the inspector at `place` covers, in square stage pixels: the web's
 /// `inspectorBox`, for a card with no lines under its face, against each target's box.
-fn covered(place: Side, targets: &[Rect], data: Inspector) -> f32 {
+fn covered(place: Side, targets: &[Rect], (data, card): (Inspector, Card)) -> f32 {
     let inner = place.width - 2.0 * data.pad;
     let right = place.left + place.width;
-    let bottom = place.top + inner * CARD_HEIGHT / CARD_WIDTH + 2.0 * data.pad + data.artist;
+    let bottom = place.top + inner * card.height / card.width + 2.0 * data.pad + data.artist;
     targets
         .iter()
         .map(|target| {
@@ -410,6 +410,7 @@ fn covered(place: Side, targets: &[Rect], data: Inspector) -> f32 {
 mod tests {
     use super::{Placed, stage_place as place_in};
     use glam::Vec2;
+    use kit_base::data::Card;
     use kit_base::data::profiles::{Profiles, SHIPPED};
     use kit_ui::input::{Rect, Size};
 
@@ -422,14 +423,16 @@ mod tests {
     }
 
     fn stage_place(area: Rect, x: f32, taken: bool, targets: &[Rect]) -> Placed {
-        let profiles = Profiles::parse(&SHIPPED).expect("repository profiles");
+        let card = include_str!("../../../../../../../data/beryl3d/card.json");
+        let card = Card::parse(card).expect("repository card");
+        let profiles = Profiles::parse(&SHIPPED, card).expect("repository profiles");
         let data = profiles.for_size(Size {
             width: area.width,
             height: area.height,
         });
         place_in(
             area,
-            data.table.inspector.expect("inspector metrics"),
+            (data.table.inspector.expect("inspector metrics"), card),
             (x, Vec2::ZERO),
             taken,
             targets,

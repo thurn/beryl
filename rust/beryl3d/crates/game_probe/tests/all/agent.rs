@@ -93,7 +93,11 @@ impl Spec {
 
 fn frame(specs: Vec<Spec>) -> Frame {
     let mut frame = Frame::with_capacity(specs.len(), 0, 4096);
-    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
+    let mut builder = FrameBuilder::new(
+        &mut frame,
+        Tier::Baseline,
+        crate::test_data::data().card.size(),
+    );
     for spec in specs {
         builder.resolved(spec.name, spec.element);
     }
@@ -463,7 +467,11 @@ fn an_enabled_button_one_point_into_any_inset_is_off_screen() {
 /// of its text at `text` points.
 fn sized(width: f32, height: f32, text: f32) -> Frame {
     let mut frame = Frame::with_capacity(1, 1, 4096);
-    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
+    let mut builder = FrameBuilder::new(
+        &mut frame,
+        Tier::Baseline,
+        crate::test_data::data().card.size(),
+    );
     let spec = layer(Role::Button, "Done", 1, rect(100.0, 300.0, width, height));
     builder.resolved(spec.name, spec.element);
     builder.line(0, rect(104.0, 310.0, 30.0, text), text, 0.0, "");
@@ -806,7 +814,11 @@ fn the_layout_follows_the_shorter_side_of_the_window() {
 /// text "On the play" and a toggle, and the toggle's own label inside it.
 fn life_beside_text(life: Rect) -> Frame {
     let mut frame = Frame::with_capacity(4, 0, 4096);
-    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
+    let mut builder = FrameBuilder::new(
+        &mut frame,
+        Tier::Baseline,
+        crate::test_data::data().card.size(),
+    );
     let total = layer(Role::Player, "You 20", 1, life);
     let play = layer(
         Role::Text,

@@ -6,6 +6,7 @@ use beryl_protocol::protocol::{AbilityClass, OutcomeView, PlayerView, Status};
 use game_table::faces::FaceList;
 use game_table::profiles::Profile;
 use game_table::table::Window;
+use kit_base::data::Card;
 use kit_base::data::profiles::ResultLayout;
 use kit_scene::{Context, Feature};
 use kit_ui::element::Element;
@@ -35,6 +36,7 @@ pub struct Inputs {
     dock: Rect,
     column: Option<ScreenColumn>,
     layout: ResultLayout,
+    card: Card,
     outcome: Option<OutcomeView>,
     culprit: Option<FaceId>,
 }
@@ -69,6 +71,7 @@ impl Inputs {
             dock: profile.slot("result.dock")?.rect,
             column: profile.screen_column(),
             layout: profile.data().hud.result,
+            card: profile.card(),
             outcome: outcome.cloned(),
             culprit,
         })

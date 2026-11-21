@@ -81,7 +81,7 @@ fn vanish(before: &GameUpdate, slots: &[ObjectId], why: Why) -> GameUpdate {
 
 /// The frame `show` draws at `now` in `tier`.
 fn draw(show: &mut Show, buffer: &mut Frame, now: u64, tier: Tier) -> Frame {
-    let mut builder = FrameBuilder::new(buffer, tier);
+    let mut builder = FrameBuilder::new(buffer, tier, crate::test_data::data().card.size());
     show.frame(now, &mut builder);
     builder.finish().clone()
 }

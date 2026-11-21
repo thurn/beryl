@@ -46,7 +46,6 @@ use super::{Interval, StepIn, StepOut};
 use beryl_protocol::script::Subject;
 use game_table::table::Camera;
 use kit_base::data::profiles::HeldDraw;
-use kit_base::data::space;
 use kit_base::data::verbs::{Bowing, Fly};
 use kit_base::pose::{Bow, Curve, Pose, Segment, Shape};
 
@@ -442,7 +441,7 @@ pub fn play(step: &StepIn<'_>, out: &mut StepOut<'_>) {
                 // Up the screen by a share of the spell's width, and no higher than the room
                 // over it.
                 rise: axes[1]
-                    * (fly.thrown.height * space::card::WIDTH * from.scale)
+                    * (fly.thrown.height * step.places.camera().data.card.width * from.scale)
                         .min(room((from, to), step.places.camera())),
                 aloft: fly.thrown.scale * from.scale,
                 tuning: fly.thrown,

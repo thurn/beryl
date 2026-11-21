@@ -11,6 +11,7 @@ use crate::features::library_order::Message as LibraryOrderMessage;
 use beryl_protocol::PlayerView;
 use beryl_protocol::protocol::{ObjectId, Side, TableAction};
 use beryl_protocol::script::Subject;
+use kit_base::data::Card;
 
 use super::commands::seat_of;
 use game_hud::inspect::viewer::object_box;
@@ -89,14 +90,14 @@ impl LibraryOrder {
 /// The tray over a window of `window`'s size: its title, the cards in a row with the
 /// highlighted one marked, Done and Cancel.
 #[must_use]
-pub fn tray(order: &LibraryOrder, view: &PlayerView, window: Size) -> Element {
+pub fn tray(order: &LibraryOrder, view: &PlayerView, (window, shape): (Size, Card)) -> Element {
     let cards =
         row()
             .name("cards")
             .gap(size::VIEWER_GAP)
             .children((order.cards.iter().enumerate()).map(|(at, &slot)| {
                 let at_u16 = u16::try_from(at).unwrap_or(u16::MAX);
-                let mut card = object_box(view, slot)
+                let mut card = object_box(view, slot, shape)
                     .selected(at == order.highlight)
                     .on_press(LibraryOrderMessage::Card(at_u16));
                 card.focus = true;

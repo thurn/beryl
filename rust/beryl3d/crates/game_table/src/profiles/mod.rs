@@ -2,6 +2,7 @@
 
 use beryl_protocol::protocol::Side;
 use glam::Vec2;
+use kit_base::data::Card;
 use kit_base::data::profiles::{ProfileData, Profiles, Region, Row};
 use kit_base::geometry::{Rect, Window};
 use kit_scene::{SizeClass, Slot};
@@ -71,14 +72,14 @@ impl<'a> Profile<'a> {
     pub fn tray(self) -> TraySpace {
         let table = &self.data.table;
         if let Some(anchored) = &table.anchored {
-            return desktop::tray(anchored.tray, table.tray_tuning);
+            return desktop::tray(anchored.tray, table.tray_tuning, table.camera.card);
         }
         phone::tray_in(
             self.window,
             &self.bands().expect("validated banded table"),
             table.banded.expect("validated banded table"),
             table.bands.expect("validated banded table"),
-            table.tray_tuning,
+            (table.tray_tuning, table.camera.card),
         )
     }
 
@@ -91,10 +92,12 @@ impl<'a> Profile<'a> {
             || {
                 fallback.anchored.as_ref().map_or_else(
                     || self.tray(),
-                    |anchored| desktop::tray(anchored.tray, fallback.tray_tuning),
+                    |anchored| {
+                        desktop::tray(anchored.tray, fallback.tray_tuning, table.camera.card)
+                    },
                 )
             },
-            |anchored| desktop::tray(anchored.tray, table.tray_tuning),
+            |anchored| desktop::tray(anchored.tray, table.tray_tuning, table.camera.card),
         )
     }
 
@@ -103,7 +106,7 @@ impl<'a> Profile<'a> {
     pub fn bands(self) -> Option<TableBands> {
         let table = &self.data.table;
         let sizes = table.bands?;
-        let area = phone::battlefield_with(self.window, sizes);
+        let area = phone::battlefield_with(self.window, sizes, table.camera.card);
         let camera = Camera::fit_inside(table.camera, self.window, area);
         Some(phone::bands_with(
             &camera,
@@ -116,6 +119,12 @@ impl<'a> Profile<'a> {
     #[must_use]
     pub fn window(self) -> Window {
         self.window
+    }
+
+    /// The card's printed size and stacking (`card.json`), which the profile's camera carries.
+    #[must_use]
+    pub fn card(self) -> Card {
+        self.data.table.camera.card
     }
 
     /// The scrolling column and action dock, when this profile supplies them.
@@ -135,7 +144,7 @@ impl<'a> Profile<'a> {
         if let Some(bands) = self.data.table.bands {
             return Vec2::new(
                 window.width / 2.0,
-                phone::strip_with(self.window, side, bands).middle(),
+                phone::strip_with(self.window, side, (bands, self.data.table.camera.card)).middle(),
             );
         }
         let index = usize::from(side == Side::Opponent);
@@ -207,7 +216,8 @@ impl<'a> Profile<'a> {
                 } else {
                     Side::Opponent
                 };
-                let strip = phone::strip_with(self.window, side, sizes);
+                let strip =
+                    phone::strip_with(self.window, side, (sizes, self.data.table.camera.card));
                 let (left, right) = phone::column(self.window, sizes);
                 Rect {
                     x: left,

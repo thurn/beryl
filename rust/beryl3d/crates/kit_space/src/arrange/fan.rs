@@ -1,7 +1,7 @@
 //! Centred rows of rectangles hanging from a circular arc along a screen edge.
 
 use glam::{Quat, Vec2};
-use kit_base::geometry::{CARD_HEIGHT, GroupWindow, ScrollAxis};
+use kit_base::geometry::{GroupWindow, ScrollAxis};
 
 use super::press::{Bounds, PressArea, Quad, Rectangle, safe_area};
 use super::{Camera, Container, Item, Overflow, Placed, Solved};
@@ -40,7 +40,7 @@ pub(super) fn arrange(
     let units = camera
         .screen_pose(Vec2::ZERO, depth, Quat::IDENTITY, 0.5)
         .scale
-        * CARD_HEIGHT;
+        * camera.data.card.height;
     let ndc = camera.project(anchor).truncate();
     let window = camera.window.size;
     let target = container.limits.press_points;
@@ -372,7 +372,7 @@ impl Fit<'_> {
             Quat::from_rotation_z(screen.angle),
             screen.height,
         );
-        pose.scale *= CARD_HEIGHT / item.size.y;
+        pose.scale *= self.camera.data.card.height / item.size.y;
         Placed {
             key: item.key,
             pose,

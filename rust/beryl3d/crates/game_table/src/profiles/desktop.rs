@@ -1,5 +1,6 @@
 //! An anchored table, optionally fitted to the web stage's projected rows and piles.
 
+use kit_base::data::Card;
 use kit_base::data::profiles::{Anchored, ProfileData, TrayTuning, anchored};
 use kit_space::arrange::row::ScaleLimit;
 
@@ -23,7 +24,7 @@ pub(super) fn reference(profile: &ProfileData, data: &Anchored) -> Layout {
         beneath_step: table.beneath_step,
         piles: piles.map(|pile| [pile.library, pile.graveyard, pile.exile]),
         pile_scale: piles.map(|pile| pile.scale),
-        tray: tray(data.tray, table.tray_tuning),
+        tray: tray(data.tray, table.tray_tuning, table.camera.card),
         stack: StackPlacement::Anchored(stack(data.stack)),
         hand: hand(data.hand),
         opponent_hand: hand(data.opponent_hand),
@@ -44,7 +45,7 @@ pub(super) fn reference(profile: &ProfileData, data: &Anchored) -> Layout {
     }
 }
 
-pub(super) fn tray(data: anchored::Tray, tuning: TrayTuning) -> TraySpace {
+pub(super) fn tray(data: anchored::Tray, tuning: TrayTuning, card: Card) -> TraySpace {
     TraySpace {
         stage_height: data.stage_height,
         y: data.y,
@@ -60,6 +61,7 @@ pub(super) fn tray(data: anchored::Tray, tuning: TrayTuning) -> TraySpace {
         least_step: 0.0,
         heading: data.heading,
         tuning,
+        card,
     }
 }
 

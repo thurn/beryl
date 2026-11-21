@@ -25,6 +25,7 @@ use crate::panel_blur::{self, PanelBlur};
 use crate::pipeline::{DEPTH, RECORD, bind_group_layout, pipelines};
 use crate::slots::{Slots, mapped_features};
 use crate::target::Target;
+use glam::Vec2;
 use kit_frame::frame::PaintTable;
 
 /// How many records the instance buffer holds: the most a frame of the engine's largest board
@@ -75,6 +76,8 @@ pub struct Renderer {
     indices: wgpu::Buffer,
     /// The index range of each mesh, by `Mesh` value.
     ranges: [std::ops::Range<u32>; 4],
+    /// The card size the card meshes in `vertices` were built at.
+    card: Vec2,
     /// The board-size and full-size card face arrays, by `FaceSize` value.
     faces: [FaceArray; 2],
     /// The atlas of glyph pages and shapes.
@@ -118,11 +121,13 @@ impl Renderer {
             min_filter: wgpu::FilterMode::Linear,
             ..Default::default()
         });
-        let meshes = meshes();
+        // A frame's card size until the first frame says otherwise (`Frame::card`).
+        let card = Vec2::ONE;
+        let meshes = meshes(card);
         let vertices = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("meshes"),
             contents: bytemuck::cast_slice(&meshes.vertices),
-            usage: wgpu::BufferUsages::VERTEX,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
         let indices = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("mesh indices"),
@@ -150,6 +155,7 @@ impl Renderer {
             vertices,
             indices,
             ranges: meshes.ranges,
+            card,
             faces,
             atlas,
             waiting: Waiting::default(),
@@ -386,8 +392,23 @@ impl Renderer {
         uploaded.into_iter().flatten()
     }
 
+    /// Builds the card meshes again at `card`, the frame's card size, when it differs from the
+    /// size they were built at, as it does once tuning loaded again changes it. The meshes keep
+    /// their number of vertices, so the buffer is rewritten in place.
+    pub(crate) fn fit_card_mesh(&mut self, card: Vec2) {
+        if card == self.card {
+            return;
+        }
+        let meshes = meshes(card);
+        debug_assert_eq!(meshes.ranges, self.ranges);
+        self.queue
+            .write_buffer(&self.vertices, 0, bytemuck::cast_slice(&meshes.vertices));
+        self.card = card;
+    }
+
     /// Draws `frame` into `target`, cleared to black first.
     pub fn render(&mut self, frame: &Frame, target: &mut Target) -> Drawn {
+        self.fit_card_mesh(frame.card);
         self.render_view(frame, &target.view, target.width, target.height)
     }
 
@@ -399,7 +420,8 @@ impl Renderer {
             .map(|enhanced| enhanced.tuning)
     }
 
-    /// Draws `frame` into `view`, `width` by `height` physical pixels, cleared to black first:
+    /// Draws `frame` into `view`, `width` by `height` physical pixels, cleared to black first, with
+    /// the card meshes already built at the frame's card size (`fit_card_mesh`):
     /// in the Enhanced tier when the frame is in it and this renderer can draw it, and in
     /// Baseline otherwise.
     pub(crate) fn render_view(

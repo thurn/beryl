@@ -70,8 +70,8 @@ use crate::light::{self, Lit};
 use crate::notice::Announced;
 use crate::pointer::Pointer;
 use game_table::faces::Faces;
-use game_table::table::badges::Badges;
-use game_table::table::{CARD_HEIGHT, CARD_WIDTH, Dress, Table, ability_track};
+use game_table::table::badges::{BadgeSizes, Badges};
+use game_table::table::{Dress, Table, ability_track};
 use kit_base::data::playback::CatchUp;
 use kit_base::pose::Pose;
 use kit_frame::frame::FrameBuilder;
@@ -232,7 +232,7 @@ impl Show {
     pub fn reach(&self, subject: Subject, now: u64) -> Option<Reach> {
         let card = |pose: Pose| Reach {
             pose,
-            half: Vec2::new(CARD_WIDTH, CARD_HEIGHT) * 0.5 * pose.scale,
+            half: self.table.camera().data.card.size() * 0.5 * pose.scale,
         };
         match subject {
             Subject::Object { slot } => self.drawn_pose(usize::from(slot.0), now).map(card),
@@ -315,23 +315,34 @@ impl Show {
         &mut self.badges
     }
 
-    /// Shapes the numbers and signs of the badges, once, at `scale`; the mana symbols of every
-    /// cost the face list names that are not shaped yet, for the costs hand cards show; and the
-    /// name of every named counter and the lines of text (`Badges::prepare`) in the latest view
-    /// not shaped yet. Each view is the latest when it arrives, so every name a view shows is
-    /// shaped before a frame shows it.
+    /// Shapes the numbers and signs of the badges at `scale`, once for each set of badge sizes
+    /// the data gives; the mana symbols of every cost the face list names that are not shaped
+    /// yet, for the costs hand cards show; and the name of every named counter and the lines of
+    /// text (`Badges::prepare`) in the latest view not shaped yet. Each view is the latest when
+    /// it arrives, so every name a view shows is shaped before a frame shows it. New sizes drop
+    /// every shaped name and line, so those of every view still to be shown are shaped again.
     pub fn shape_badges(&mut self, text: &mut Text, wanted: &mut Glyphs, scale: f32) {
-        if !self.badges.shaped() {
-            self.badges.shape(text, wanted, scale);
+        let sizes = BadgeSizes::of(self.table.data());
+        let resized = !self.badges.shaped_at(&sizes);
+        if resized {
+            self.badges.shape(text, wanted, scale, sizes);
         }
         self.badges.shape_costs(text, wanted, self.faces.list());
-        // `latest`, with the show's fields borrowed apart from the badges.
-        let latest = (self.waiting.back().map(|waiting| &*waiting.update))
-            .or((self.playing.as_ref()).and_then(|playing| playing.update.as_deref()))
-            .or(self.shown.as_deref());
-        if let Some(update) = latest {
+        // The views the frames may still show, the latest last, with the show's fields
+        // borrowed apart from the badges.
+        let playing = (self.playing.as_ref()).and_then(|playing| playing.update.as_deref());
+        let held = (self.shown.as_deref().into_iter())
+            .chain(playing)
+            .chain(self.waiting.iter().map(|waiting| &*waiting.update));
+        let latest = held.clone().last();
+        let mut shape = |update: &GameUpdate| {
             self.badges.shape_names(text, wanted, &update.view.objects);
             self.badges.prepare(&update.view, text, wanted);
+        };
+        if resized {
+            held.for_each(&mut shape);
+        } else if let Some(update) = latest {
+            shape(update);
         }
     }
 

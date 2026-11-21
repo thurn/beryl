@@ -35,7 +35,10 @@ pub(crate) fn table_viewer(input: &HudIn, fields: &Fields, state: &PileViewer) -
     let sections = sections(view, input.faces, &cards, &query, state.sort, state.grouped);
     let mut boxes: Vec<(Option<String>, Vec<Element>)> = (sections.into_iter())
         .map(|section| {
-            let boxes = section.cards.iter().map(|&slot| object_box(view, slot));
+            let boxes = section
+                .cards
+                .iter()
+                .map(|&slot| object_box(view, slot, input.profile.card()));
             (section.label, boxes.collect())
         })
         .collect();

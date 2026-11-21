@@ -15,6 +15,7 @@ pub mod text;
 
 pub use order::PaintBand;
 mod undrawn;
+mod work;
 
 use std::sync::Arc;
 
@@ -30,6 +31,7 @@ pub use look::{EffectLook, ElementLook, LookPaint, LookShadow, Looks};
 pub use paint::{GRADIENTS, GradientEntry, MaskEntry, PaintTable, Paints};
 pub use rings::{LIFTED, Lifted, RINGS, Ring, Ringed};
 pub use undrawn::{Missing, Undrawn};
+pub use work::{Areas, Load, Work};
 
 use kit_base::atlas::Tier;
 use kit_base::geometry::Rect;
@@ -240,51 +242,6 @@ pub struct Sound {
 /// The most sounds a frame holds without allocating.
 const SOUNDS: usize = 16;
 
-/// Numbers that predict the GPU's load, added up while the frame is built. The screen areas,
-/// which take longer to measure, are `Frame::areas`.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct Load {
-    pub draw_calls: u32,
-    pub instances: u32,
-    pub upload_bytes: u32,
-    /// The particle records of the frame, which only the Enhanced tier writes.
-    pub particles: u32,
-}
-
-/// The screen area of a frame's records, in screens (`Frame::areas`).
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct Areas {
-    /// The screen area of the opaque records.
-    pub opaque: f32,
-    /// The screen area of the blended records.
-    pub blended: f32,
-}
-
-/// The work the client core did, counted so that the gates can hold it.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct Work {
-    /// Elements visited: each object slot of the table and each node of the flat layer that
-    /// the frame looks at, whether or not it draws it.
-    pub elements: u32,
-    /// Animation segments evaluated: one for each object whose pose comes from a track.
-    pub segments: u32,
-    /// Layout nodes computed, in `handle`.
-    pub layout_nodes: u32,
-    /// Runs of text shaped, in `handle`.
-    pub text_runs: u32,
-    /// Draw records written.
-    pub records: u32,
-    /// Objects placed: each object of `Placement::rests` whose resting place the table worked
-    /// out, whether in `handle`, compiling a script step by step, or in the frame. A group whose
-    /// resting places are copied from a placement already made counts nothing, and neither do
-    /// the abilities on the stack, which are few.
-    pub placed: u32,
-    /// Script steps compiled, in `handle` or in the frame: each step of each script the show
-    /// was given or compiled again. A step costs work even where it places nothing and writes
-    /// no segment, such as an arrow that opens.
-    pub steps: u32,
-}
-
 /// When the client next needs a frame, as of the last call to `Client::frame`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Wake {
@@ -403,6 +360,9 @@ pub struct Frame {
     /// with depth from 0 at the near plane to 1 at the far one. It serves every record,
     /// because a flat-layer record is placed on a plane just in front of the camera.
     pub view_projection: Mat4,
+    /// A card's printed width and height in millimetres, the size of the card mesh. The
+    /// renderer builds its card mesh at this size, and `finish` bounds card records by it.
+    pub card: Vec2,
     /// Clip rectangles in physical pixels; entry 0 is not used.
     pub clips: [Rect; CLIPS],
     /// Whether a clip was asked for after all 15 entries were taken. The records that wanted it
@@ -486,6 +446,7 @@ impl Frame {
             bands: [0; BANDS + 1],
             tier: Tier::Baseline,
             view_projection: Mat4::IDENTITY,
+            card: Vec2::ONE,
             clips: [Rect::default(); CLIPS],
             clips_full: false,
             paints: Paints::default(),
@@ -539,8 +500,8 @@ pub struct FrameBuilder<'a> {
 }
 
 impl<'a> FrameBuilder<'a> {
-    /// Starts a frame drawn in `tier`.
-    pub fn new(frame: &'a mut Frame, tier: Tier) -> Self {
+    /// Starts a frame drawn in `tier`, whose card mesh is `card` millimetres wide and high.
+    pub fn new(frame: &'a mut Frame, tier: Tier, card: Vec2) -> Self {
         frame.resolved.clear();
         frame.shows.clear();
         frame.anchors.clear();
@@ -552,6 +513,7 @@ impl<'a> FrameBuilder<'a> {
         frame.bands = [0; BANDS + 1];
         frame.tier = tier;
         frame.view_projection = Mat4::IDENTITY;
+        frame.card = card;
         frame.clips = [Rect::default(); CLIPS];
         frame.clips_full = false;
         frame.paints = Paints::default();
@@ -653,6 +615,13 @@ impl<'a> FrameBuilder<'a> {
     /// Counts an animation segment evaluated for an object's pose.
     pub fn segment(&mut self) {
         self.frame.work.segments += 1;
+    }
+
+    /// A card's printed width and height in millimetres, the size of the card mesh records are
+    /// drawn with (`Frame::card`).
+    #[must_use]
+    pub fn card(&self) -> Vec2 {
+        self.frame.card
     }
 
     /// Sets the camera's view and projection, `Frame::view_projection`, which `finish` also uses

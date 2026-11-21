@@ -384,6 +384,7 @@ impl Mounted for OrderTray {
         Some(slot.view(library_order::Inputs {
             view: inputs.view?,
             window: inputs.window.size,
+            card: inputs.profile.card(),
         }))
     }
 

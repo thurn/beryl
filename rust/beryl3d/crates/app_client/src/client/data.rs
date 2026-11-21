@@ -17,6 +17,12 @@ impl Client {
         if self.data() != &data {
             self.show.set_data(data);
             self.resize(self.window);
+            // Badge sizes are part of shaping: shaped badges are shaped again at the new sizes
+            // now, so that no frame draws text shaped at the old ones.
+            if self.show.badges_mut().shaped() {
+                let (text, glyphs) = self.layer.text_and_glyphs();
+                self.show.shape_badges(text, glyphs, self.window.scale);
+            }
         }
     }
 

@@ -46,7 +46,11 @@ fn an_element_anchored_to_a_card_stays_on_it_while_it_flies() {
     let mut centres = Vec::new();
     let mut now = 0;
     while now <= 600 * MS {
-        let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
+        let mut builder = FrameBuilder::new(
+            &mut frame,
+            Tier::Baseline,
+            crate::test_data::data().card.size(),
+        );
         show.frame(now, &mut builder);
         let card = builder.centre(ElementId(u32::from(cards.land.0)));
         layer.follow(|subject| spot_of(&builder, show.table(), subject));
@@ -79,7 +83,11 @@ fn an_element_anchored_to_a_card_the_table_does_not_show_is_not_drawn() {
     })));
     layer.follow(|_| None);
     let mut frame = Frame::with_capacity(64, 256, 4096);
-    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
+    let mut builder = FrameBuilder::new(
+        &mut frame,
+        Tier::Baseline,
+        crate::test_data::data().card.size(),
+    );
     let table = Table::new(
         crate::test_data::data(),
         game_table::table::Window::default(),

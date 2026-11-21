@@ -7,7 +7,7 @@ use glam::Vec2;
 use super::super::{GalleryMenu, GalleryQuery, example_button, face};
 use super::{Words, apart, caption_at, flat_face, panel, place, rule, words};
 use game_table::faces::{CARD_BACK, FaceList};
-use game_table::table::{CARD_HEIGHT, CARD_WIDTH};
+use kit_base::data::Card;
 use kit_base::data::profiles::GalleryLayout;
 use kit_base::tokens::{color, shadow, size, type_style};
 use kit_frame::frame::Role;
@@ -20,22 +20,22 @@ const STEPPER_DISABLED: [u8; 4] = [111, 106, 100, 255];
 
 /// The box of a field card's face on the web, inside its dark rim, when the card stands at
 /// `point` `width` points wide.
-fn field_face(layout: &GalleryLayout, point: Vec2, width: f32) -> [Vec2; 2] {
-    let card = Vec2::new(width, width * CARD_HEIGHT / CARD_WIDTH);
+fn field_face(layout: &GalleryLayout, point: Vec2, (width, shape): (f32, Card)) -> [Vec2; 2] {
+    let card = Vec2::new(width, width * shape.height / shape.width);
     [point + card * layout.face_inset, card * layout.face_scale]
 }
 
 /// A field card's face, its corners rounded as the web's frame rounds them.
 fn field_card(
     layout: &GalleryLayout,
-    faces: &FaceList,
+    (faces, shape): (&FaceList, Card),
     name: &str,
     point: Vec2,
     width: f32,
 ) -> Element {
     place(
         flat_face(face(faces, name), name).radius(width * layout.face_radius),
-        field_face(layout, point, width),
+        field_face(layout, point, (width, shape)),
     )
 }
 
@@ -45,7 +45,7 @@ fn ringed(card: Element, ring: &[Shadow]) -> Element {
     card.box_shadow(ring.to_vec())
 }
 
-pub(super) fn card_states(layout: &GalleryLayout, faces: &FaceList) -> Element {
+pub(super) fn card_states(layout: &GalleryLayout, (faces, shape): (&FaceList, Card)) -> Element {
     let [colossus, source, target] = layout.states_cards;
     let width = layout.states_card;
     let mut tapped = flat_face(face(faces, "Mountain"), "Mountain");
@@ -57,13 +57,13 @@ pub(super) fn card_states(layout: &GalleryLayout, faces: &FaceList) -> Element {
         .map(|((name, point), width)| {
             place(
                 flat_face(face(faces, name), &format!("{name} in hand")),
-                [point, Vec2::new(width, width * CARD_HEIGHT / CARD_WIDTH)],
+                [point, Vec2::new(width, width * shape.height / shape.width)],
             )
         });
     panel(layout, 3)
         .child(field_card(
             layout,
-            faces,
+            (faces, shape),
             "Cinder Colossus",
             colossus,
             width,
@@ -74,11 +74,11 @@ pub(super) fn card_states(layout: &GalleryLayout, faces: &FaceList) -> Element {
             layout.untapped,
         ))
         .child(ringed(
-            field_card(layout, faces, "Gloom Wren", source, width),
+            field_card(layout, (faces, shape), "Gloom Wren", source, width),
             &shadow::GALLERY_SOURCE_RING,
         ))
         .child(apart("target").child(ringed(
-            field_card(layout, faces, "Gloom Wren", target, width),
+            field_card(layout, (faces, shape), "Gloom Wren", target, width),
             &shadow::GALLERY_TARGET_RING,
         )))
         .children(
@@ -90,7 +90,7 @@ pub(super) fn card_states(layout: &GalleryLayout, faces: &FaceList) -> Element {
         .children(hand)
 }
 
-pub(super) fn combat(layout: &GalleryLayout, faces: &FaceList) -> Element {
+pub(super) fn combat(layout: &GalleryLayout, (faces, shape): (&FaceList, Card)) -> Element {
     let [attacker, blocker] = layout.combatants;
     let [colossus, beast] = layout.stack_cards;
     let ability = faces
@@ -98,11 +98,11 @@ pub(super) fn combat(layout: &GalleryLayout, faces: &FaceList) -> Element {
         .expect("the Colossus has a trigger");
     panel(layout, 4)
         .child(ringed(
-            field_card(layout, faces, "Beast", attacker, layout.combatant),
+            field_card(layout, (faces, shape), "Beast", attacker, layout.combatant),
             &shadow::GALLERY_ATTACK_RING,
         ))
         .child(ringed(
-            field_card(layout, faces, "Angel", blocker, layout.combatant),
+            field_card(layout, (faces, shape), "Angel", blocker, layout.combatant),
             &shadow::GALLERY_TARGET_RING,
         ))
         .children(
@@ -114,7 +114,7 @@ pub(super) fn combat(layout: &GalleryLayout, faces: &FaceList) -> Element {
         .child(rule(layout.combat_rule))
         .child(field_card(
             layout,
-            faces,
+            (faces, shape),
             "Cinder Colossus",
             colossus,
             layout.stack_card,
@@ -123,7 +123,13 @@ pub(super) fn combat(layout: &GalleryLayout, faces: &FaceList) -> Element {
             flat_face(ability, "Cinder Colossus ability"),
             layout.ability,
         ))
-        .child(apart("stack").child(field_card(layout, faces, "Beast", beast, layout.stack_card)))
+        .child(apart("stack").child(field_card(
+            layout,
+            (faces, shape),
+            "Beast",
+            beast,
+            layout.stack_card,
+        )))
 }
 
 /// `06 Scry overlay`: the scry overlay over a dimmed table, drawn at 0.35 of its size, as the

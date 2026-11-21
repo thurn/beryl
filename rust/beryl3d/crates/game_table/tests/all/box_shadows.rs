@@ -29,7 +29,11 @@ fn outer_shadows_go_under_the_panel_and_inset_ones_over_it() {
     let mut layer = Layer::new();
     layer.show(Some(holder().child(panel)));
     let mut frame = Frame::with_capacity(16, 16, 64);
-    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
+    let mut builder = FrameBuilder::new(
+        &mut frame,
+        Tier::Baseline,
+        crate::test_data::data().card.size(),
+    );
     layer.write(
         &mut builder,
         &Table::new(

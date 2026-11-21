@@ -13,34 +13,33 @@ use std::collections::BTreeMap;
 use beryl_protocol::protocol::{ObjectView, PlayerView, ZoneName};
 use glam::{Affine3A, Vec2};
 
-use super::{Badges, On, Plate, em, panel};
-use crate::table::{CARD_HEIGHT, CARD_WIDTH};
-use kit_base::data::space::badges::{self as data, copy, counter, note};
+use super::{Badges, On, Plate, panel};
+use kit_base::data::BadgeTuning;
 use kit_base::tokens::{badge, color};
 use kit_frame::frame::FrameBuilder;
 use kit_text::text::fonts::Font;
 use kit_text::text::{Block, Glyphs, Text, TypeStyle};
 
 /// The style a note or a chosen value is shaped in: the interface font's bold
-/// (`.card-note`'s `font`), at `note::POINTS`.
-pub(super) const NOTE_STYLE: TypeStyle = TypeStyle {
-    font: Font::OpenSans,
-    weight: 700,
-    italic: false,
-    size: note::POINTS,
-    line_height: 1.0,
-    letter_spacing: 0.0,
-};
+/// (`.card-note`'s `font`), at `note.points`.
+fn note_style(tuning: &BadgeTuning) -> TypeStyle {
+    TypeStyle {
+        font: Font::OpenSans,
+        weight: 700,
+        italic: false,
+        size: tuning.note.points,
+        line_height: 1.0,
+        letter_spacing: 0.0,
+    }
+}
 
-/// The style of a copy's label (`.token-label`'s `font`), at `copy::POINTS`.
-pub(super) const COPY_STYLE: TypeStyle = TypeStyle {
-    font: Font::OpenSans,
-    weight: 700,
-    italic: false,
-    size: copy::POINTS,
-    line_height: 1.0,
-    letter_spacing: 0.0,
-};
+/// The style of a copy's label (`.token-label`'s `font`), at `copy.points`.
+fn copy_style(tuning: &BadgeTuning) -> TypeStyle {
+    TypeStyle {
+        size: tuning.copy.points,
+        ..note_style(tuning)
+    }
+}
 
 /// A line of text, shaped and cut to the room it has on a card.
 #[derive(Debug)]
@@ -66,8 +65,15 @@ pub(super) struct Tags {
 impl Tags {
     /// Shapes the line of each permanent of `view` that says something and was not shaped
     /// before, and the copy label if `view` holds the first copy, and asks `wanted` for their
-    /// glyphs at `scale`.
-    pub fn prepare(&mut self, view: &PlayerView, text: &mut Text, wanted: &mut Glyphs, scale: f32) {
+    /// glyphs at `scale`, at the sizes `tuning` sets.
+    pub fn prepare(
+        &mut self,
+        view: &PlayerView,
+        text: &mut Text,
+        wanted: &mut Glyphs,
+        (scale, tuning): (f32, &BadgeTuning),
+    ) {
+        let (note_style, room) = (note_style(tuning), note_room(tuning));
         let permanents =
             (view.objects.iter()).filter(|object| object.zone == ZoneName::Battlefield);
         for object in permanents {
@@ -75,21 +81,21 @@ impl Tags {
                 && !self.lines.contains_key(said)
             {
                 // A line break would start a second line over the card's art.
-                let block = text.block(&said.replace('\n', " "), NOTE_STYLE, &[], None);
+                let block = text.block(&said.replace('\n', " "), note_style, &[], None);
                 let mut line = whole(block.clone());
-                if block.width > note_room() {
+                if block.width > room {
                     let ellipsis = self.ellipsis.get_or_insert_with(|| {
-                        let ellipsis = text.block("\u{2026}", NOTE_STYLE, &[], None).clone();
+                        let ellipsis = text.block("\u{2026}", note_style, &[], None).clone();
                         wanted.want(&ellipsis, scale);
                         ellipsis
                     });
-                    line = cut(line.block, note_room() - ellipsis.width);
+                    line = cut(line.block, room - ellipsis.width);
                 }
                 wanted.want(&line.block, scale);
                 self.lines.insert(said.to_owned(), line);
             }
             if object.really.is_some() && self.copy.is_none() {
-                let block = text.block("Copy", COPY_STYLE, &[], None).clone();
+                let block = text.block("Copy", copy_style(tuning), &[], None).clone();
                 wanted.want(&block, scale);
                 self.copy = Some(whole(block));
             }
@@ -137,28 +143,33 @@ impl Badges {
         if !builder.take_text_room(1 + line.kept) {
             return 0.0;
         }
-        let text = copy::TEXT * em();
-        let k = text / copy::POINTS;
-        let border = copy::BORDER * em();
+        let text = self.tuning().copy.text * self.em();
+        let k = text / self.tuning().copy.points;
+        let border = self.tuning().copy.border * self.em();
         let size = Vec2::new(
-            line.block.width * k + 2.0 * (copy::PADDING_X * em() + border),
-            text * copy::LINE_HEIGHT + 2.0 * (copy::PADDING_Y * em() + border),
+            line.block.width * k + 2.0 * (self.tuning().copy.padding_x * self.em() + border),
+            text * self.tuning().copy.line_height
+                + 2.0 * (self.tuning().copy.padding_y * self.em() + border),
         );
-        let middle = -CARD_HEIGHT / 2.0 + (counter::BOTTOM + counter::HEIGHT / 2.0) * em();
+        let middle = -self.sizes().card.height / 2.0
+            + (self.tuning().counter.bottom + self.tuning().counter.height / 2.0) * self.em();
         let plate = Plate {
             at: Vec2::new(x + size.x / 2.0, middle),
             size,
-            radius: copy::RADIUS * em(),
+            radius: self.tuning().copy.radius * self.em(),
             border,
             fill: badge::COPY,
             edge: badge::COPY_BORDER,
             numerals: text,
         };
-        panel(&plate, (card, on), builder);
-        let pen = Vec2::new(x + border + copy::PADDING_X * em(), middle + text / 2.0);
+        panel(&plate, (card, on, self.raise()), builder);
+        let pen = Vec2::new(
+            x + border + self.tuning().copy.padding_x * self.em(),
+            middle + text / 2.0,
+        );
         let glyphs = &line.block.glyphs[..line.kept];
         self.glyphs(
-            COPY_STYLE,
+            copy_style(self.tuning()),
             glyphs,
             (pen, k, badge::COPY_INK),
             (card, on),
@@ -180,31 +191,37 @@ impl Badges {
         if !builder.take_text_room(records) {
             return false;
         }
-        let text = note::TEXT * em();
-        let k = text / note::POINTS;
+        let text = self.tuning().note.text * self.em();
+        let k = text / self.tuning().note.points;
         let size = Vec2::new(
-            CARD_WIDTH - 2.0 * note::SIDE * em(),
-            text * note::LINE_HEIGHT + 2.0 * note::PADDING_Y * em(),
+            self.sizes().card.width - 2.0 * self.tuning().note.side * self.em(),
+            text * self.tuning().note.line_height + 2.0 * self.tuning().note.padding_y * self.em(),
         );
-        let top = CARD_HEIGHT / 2.0 - note::TOP * em();
+        let top = self.sizes().card.height / 2.0 - self.tuning().note.top * self.em();
         let plate = Plate {
             at: Vec2::new(0.0, top - size.y / 2.0),
             size,
-            radius: note::RADIUS * em(),
+            radius: self.tuning().note.radius * self.em(),
             border: 0.0,
             fill: badge::NOTE,
             edge: badge::NOTE,
             numerals: text,
         };
-        panel(&plate, (card, on), builder);
-        let left = -size.x / 2.0 + note::PADDING_X * em();
+        panel(&plate, (card, on, self.raise()), builder);
+        let left = -size.x / 2.0 + self.tuning().note.padding_x * self.em();
         let pen = Vec2::new(left, plate.at.y + text / 2.0);
         let ink = (pen, k, color::TYPE);
         let glyphs = &line.block.glyphs[..line.kept];
-        self.glyphs(NOTE_STYLE, glyphs, ink, (card, on), builder);
+        self.glyphs(note_style(self.tuning()), glyphs, ink, (card, on), builder);
         if let Some((at, block)) = ellipsis {
             let pen = (pen + Vec2::new(at * k, 0.0), k, color::TYPE);
-            self.glyphs(NOTE_STYLE, &block.glyphs, pen, (card, on), builder);
+            self.glyphs(
+                note_style(self.tuning()),
+                &block.glyphs,
+                pen,
+                (card, on),
+                builder,
+            );
         }
         true
     }
@@ -220,8 +237,9 @@ fn said(object: &ObjectView) -> Option<&str> {
 
 /// The room a note's line has, in points: the card's width less the panel's margins and its
 /// padding.
-fn note_room() -> f32 {
-    (1.0 / data::EM - 2.0 * note::SIDE - 2.0 * note::PADDING_X) * note::POINTS / note::TEXT
+fn note_room(tuning: &BadgeTuning) -> f32 {
+    let note = &tuning.note;
+    (1.0 / tuning.em - 2.0 * note.side - 2.0 * note.padding_x) * note.points / note.text
 }
 
 /// `block` drawn whole.
@@ -272,20 +290,25 @@ mod tests {
 
     #[test]
     fn a_long_note_is_cut_to_the_card_with_an_ellipsis_and_a_short_one_is_not() {
+        let tuning = BadgeTuning::parse(include_str!(
+            "../../../../../../../data/beryl3d/badges.json"
+        ))
+        .unwrap();
+        let (note_style, room) = (note_style(&tuning), note_room(&tuning));
         let mut text = Text::new();
-        let short = text.block("Red", NOTE_STYLE, &[], None).clone();
+        let short = text.block("Red", note_style, &[], None).clone();
         let long = (text.block(
             &"Exiled until this leaves ".repeat(3),
-            NOTE_STYLE,
+            note_style,
             &[],
             None,
         ))
         .clone();
-        let ellipsis = text.block("\u{2026}", NOTE_STYLE, &[], None).width;
-        assert!(short.width <= note_room());
-        let line = cut(long, note_room() - ellipsis);
+        let ellipsis = text.block("\u{2026}", note_style, &[], None).width;
+        assert!(short.width <= room);
+        let line = cut(long, room - ellipsis);
         assert!(0 < line.kept && line.kept < line.block.glyphs.len());
         let at = line.ellipsis.expect("a cut line ends with an ellipsis");
-        assert!(at + ellipsis <= note_room() && at > note_room() / 2.0);
+        assert!(at + ellipsis <= room && at > room / 2.0);
     }
 }

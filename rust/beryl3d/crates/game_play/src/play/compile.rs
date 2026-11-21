@@ -517,7 +517,7 @@ impl<'a> Compiling<'a> {
         let at_rest = |played: &Played| {
             let numbers = numbers_of(played);
             let placement = table.placement(after, &numbers);
-            Table::objects_for(after, numbers, &placement)
+            table.objects_for(after, numbers, &placement)
         };
         if let Some(played) = self.ended.take() {
             out.finals = at_rest(&played);
@@ -545,7 +545,7 @@ impl<'a> Compiling<'a> {
         let fallback = (motion.unplaced != 0).then(|| numbered(Played::of(after)));
         let numbers = numbers_of(fallback.as_ref().unwrap_or(&motion.played));
         let placement = motion.placement_of(table, after, &numbers);
-        out.finals = Table::objects_for(after, numbers, &placement);
+        out.finals = table.objects_for(after, numbers, &placement);
         fallback.unwrap_or(motion.played)
     }
 }

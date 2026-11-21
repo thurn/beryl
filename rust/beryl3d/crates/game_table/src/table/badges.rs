@@ -11,22 +11,23 @@
 //!
 //! Each badge is a rounded panel lying on the card's face, which moves and turns with the card,
 //! and its number is glyph records. Its sizes are the web's, in the em of a battlefield card
-//! (a tenth of its width), from `badges` in `data/beryl3d/space-constants.json`. The digits and signs are
-//! shaped once, when the first view arrives (`Badges::shape`), so a frame only places glyphs it
+//! (a tenth of its width), from `data/beryl3d/badges.json`. The digits and signs are
+//! shaped when the first view arrives and again when that data changes (`Badges::shape`), so a frame only places glyphs it
 //! already has and allocates nothing. A named counter's name is shaped when the first view that
 //! names it arrives (`Badges::shape_names`), and the lock is the flat layer's `LOCK` icon. The
 //! lines of text a permanent wears besides, its note or chosen value and a copy's label, are
 //! `tags`.
 
 mod cost;
+mod labels;
 mod tags;
 
-use beryl_protocol::protocol::{Counter, ObjectView, PlayerView, ZoneName};
+use beryl_protocol::protocol::{ObjectView, PlayerView, ZoneName};
 use glam::{Affine3A, Quat, Vec2};
+use labels::{Label, counters, plaque};
 
-use super::{CARD_HEIGHT, CARD_WIDTH};
 use crate::faces::ListedFace;
-use kit_base::data::space::badges as data;
+use kit_base::data::{BadgeTuning, Card, Data};
 use kit_base::pose::Pose;
 use kit_base::tokens::{badge, color};
 use kit_frame::frame::{Band, Draw, FrameBuilder, RECORDS_PER_OBJECT, Sprite};
@@ -36,27 +37,52 @@ use kit_ui::input::{GlyphCell, IconCell};
 use kit_ui::widgets::icons::{LOCK, LOCK_SIDE};
 
 /// The style every badge's number is shaped in: the card font's bold, at the size in points a
-/// plaque's numerals have on a battlefield card of the web interface.
-pub const STYLE: TypeStyle = TypeStyle {
-    font: Font::CrimsonPro,
-    weight: 700,
-    italic: false,
-    size: data::NUMERAL_POINTS,
-    line_height: 1.0,
-    letter_spacing: 0.0,
-};
+/// plaque's numerals have on a battlefield card of the web interface (`numeral_points`).
+#[must_use]
+pub fn style(tuning: &BadgeTuning) -> TypeStyle {
+    TypeStyle {
+        font: Font::CrimsonPro,
+        weight: 700,
+        italic: false,
+        size: tuning.numeral_points,
+        line_height: 1.0,
+        letter_spacing: 0.0,
+    }
+}
 
 /// The style a named counter's name is shaped in: the interface font's bold, which the web's
 /// `.mark-badge` sets its label in, at the size the numerals are shaped at, so that both are
 /// drawn from cells of about the same size.
-pub const NAME_STYLE: TypeStyle = TypeStyle {
-    font: Font::OpenSans,
-    weight: 700,
-    italic: false,
-    size: data::NUMERAL_POINTS,
-    line_height: 1.0,
-    letter_spacing: 0.0,
-};
+#[must_use]
+pub fn name_style(tuning: &BadgeTuning) -> TypeStyle {
+    TypeStyle {
+        font: Font::OpenSans,
+        ..style(tuning)
+    }
+}
+
+/// The sizes badges are shaped and drawn at: the badges' tuning and the card they lie on.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BadgeSizes {
+    pub tuning: BadgeTuning,
+    pub card: Card,
+}
+
+impl BadgeSizes {
+    /// The sizes `data` sets.
+    #[must_use]
+    pub fn of(data: &Data) -> Self {
+        Self {
+            tuning: data.badges,
+            card: data.card,
+        }
+    }
+
+    /// One millimetre of the web card's em, a share of a battlefield card's width.
+    fn em(&self) -> f32 {
+        self.tuning.em * self.card.width
+    }
+}
 
 /// The highest number a badge shows; a higher one shows as this.
 const MOST: u32 = 99;
@@ -79,15 +105,12 @@ const BUDGET: usize = RECORDS_PER_OBJECT - 4;
 /// The most pieces of text one badge holds: `-12/-34`.
 const LONGEST: usize = 7;
 
-/// One millimetre of the web card's em, a tenth of a battlefield card's width.
-fn em() -> f32 {
-    data::EM * CARD_WIDTH
-}
-
 /// The shaped numbers and signs badges are made of, and where the glyph atlas holds their
 /// glyphs.
 #[derive(Debug, Default)]
 pub struct Badges {
+    /// The sizes everything below was shaped for. None until shaped.
+    sizes: Option<BadgeSizes>,
     /// By piece: the digits, then `+`, `-`, `/` and `×`. Empty until shaped.
     pieces: Vec<Block>,
     glyphs: Glyphs,
@@ -112,20 +135,67 @@ impl Badges {
         !self.pieces.is_empty()
     }
 
-    /// Shapes every piece with `text`, once, and asks `wanted` for their glyphs at `scale`.
-    pub fn shape(&mut self, text: &mut Text, wanted: &mut Glyphs, scale: f32) {
+    /// Whether the pieces are shaped at `sizes`.
+    #[must_use]
+    pub fn shaped_at(&self, sizes: &BadgeSizes) -> bool {
+        self.shaped() && self.sizes.as_ref() == Some(sizes)
+    }
+
+    /// Shapes every piece with `text` at `sizes`, and asks `wanted` for their glyphs at `scale`.
+    /// New sizes, from tuning loaded again, drop every shaped name, cost and line of text, whose
+    /// sizes and cuts depend on them, so that the callers that shape those as views arrive
+    /// shape them again (`shape_names`, `shape_costs` and `prepare`).
+    pub fn shape(&mut self, text: &mut Text, wanted: &mut Glyphs, scale: f32, sizes: BadgeSizes) {
         self.scale = scale;
-        if self.pieces.is_empty() {
+        if !self.shaped_at(&sizes) {
+            self.sizes = Some(sizes);
+            self.names.clear();
+            self.costs = cost::Costs::default();
+            self.tags = tags::Tags::default();
             let pieces = [
                 "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "+", "-", "/", "\u{d7}",
             ];
+            let style = style(&sizes.tuning);
             self.pieces = pieces
                 .into_iter()
-                .map(|piece| text.block(piece, STYLE, &[], None).clone())
+                .map(|piece| text.block(piece, style, &[], None).clone())
                 .collect();
             debug_assert_eq!(self.pieces.len(), PIECES);
         }
         self.want(wanted);
+    }
+
+    /// The sizes the badges were shaped at.
+    ///
+    /// # Panics
+    ///
+    /// If they are not shaped. Every caller checks first, since nothing is drawn before then.
+    fn sizes(&self) -> &BadgeSizes {
+        self.sizes
+            .as_ref()
+            .expect("the badges are shaped before they are drawn")
+    }
+
+    fn tuning(&self) -> &BadgeTuning {
+        &self.sizes().tuning
+    }
+
+    /// One millimetre of the web card's em, a share of a battlefield card's width.
+    fn em(&self) -> f32 {
+        self.sizes().em()
+    }
+
+    /// How far a badge's panel lies above the card's face, in millimetres.
+    fn raise(&self) -> f32 {
+        self.tuning().raise * self.em()
+    }
+
+    fn style(&self) -> TypeStyle {
+        style(self.tuning())
+    }
+
+    fn name_style(&self) -> TypeStyle {
+        name_style(self.tuning())
     }
 
     /// Takes a new number of physical pixels per logical point, and asks `wanted` for the
@@ -162,6 +232,9 @@ impl Badges {
         wanted: &mut Glyphs,
         objects: impl IntoIterator<Item = &'a ObjectView>,
     ) {
+        if self.sizes.is_none() {
+            return;
+        }
         let names = objects
             .into_iter()
             .flat_map(|object| object.named_counters.iter());
@@ -173,7 +246,7 @@ impl Badges {
                 continue;
             };
             let block = text
-                .block(&counter_label(&counter.name), NAME_STYLE, &[], None)
+                .block(&counter_label(&counter.name), self.name_style(), &[], None)
                 .clone();
             wanted.want(&block, self.scale);
             self.names.insert(at, (counter.name.as_str().into(), block));
@@ -184,7 +257,11 @@ impl Badges {
     /// each text, and asks `wanted` for their glyphs. Called for every view as it arrives,
     /// after `shape`, so that a frame shapes none.
     pub fn prepare(&mut self, view: &PlayerView, text: &mut Text, wanted: &mut Glyphs) {
-        self.tags.prepare(view, text, wanted, self.scale);
+        let Some(sizes) = self.sizes else {
+            return;
+        };
+        self.tags
+            .prepare(view, text, wanted, (self.scale, &sizes.tuning));
     }
 
     /// The shaped label of the named counter called `name`, if it is shaped.
@@ -219,65 +296,6 @@ pub fn counter_label(name: &str) -> String {
     }
 }
 
-/// How a number reads against the one printed on the card.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Tone {
-    Printed,
-    Up,
-    Down,
-}
-
-impl Tone {
-    fn of(now: i32, printed: Option<i32>) -> Self {
-        match printed.map(|printed| now.cmp(&printed)) {
-            Some(std::cmp::Ordering::Greater) => Self::Up,
-            Some(std::cmp::Ordering::Less) => Self::Down,
-            _ => Self::Printed,
-        }
-    }
-
-    /// The ink of a number on the pale plaque (`.card-pt b` and `toneClass`).
-    fn ink(self) -> [u8; 4] {
-        match self {
-            Self::Printed => badge::PLAQUE_INK,
-            Self::Up => color::STAT_UP_INK,
-            Self::Down => color::STAT_DOWN_INK,
-        }
-    }
-}
-
-/// A badge's text: up to `LONGEST` pieces, each with its ink.
-#[derive(Clone, Copy, Default)]
-struct Label {
-    pieces: [(usize, [u8; 4]); LONGEST],
-    len: usize,
-}
-
-impl Label {
-    fn push(&mut self, piece: usize, ink: [u8; 4]) {
-        if self.len < LONGEST {
-            self.pieces[self.len] = (piece, ink);
-            self.len += 1;
-        }
-    }
-
-    /// `value` as pieces, with a minus sign when it is below zero.
-    fn number(&mut self, value: i32, ink: [u8; 4]) {
-        if value < 0 {
-            self.push(MINUS, ink);
-        }
-        let magnitude = value.unsigned_abs().min(MOST);
-        if magnitude >= 10 {
-            self.push((magnitude / 10) as usize, ink);
-        }
-        self.push((magnitude % 10) as usize, ink);
-    }
-
-    fn pieces(&self) -> &[(usize, [u8; 4])] {
-        &self.pieces[..self.len]
-    }
-}
-
 /// One badge's shape on the card's face, in millimetres from the face's middle, x to the right
 /// and y up.
 struct Plate {
@@ -296,6 +314,8 @@ struct Plate {
 /// in `ink`, and the gap after it.
 struct Name<'a> {
     block: &'a Block,
+    /// The style the name was shaped in.
+    style: TypeStyle,
     size: f32,
     gap: f32,
     ink: [u8; 4],
@@ -304,7 +324,7 @@ struct Name<'a> {
 impl Name<'_> {
     /// Its width with the gap, in millimetres.
     fn width(&self) -> f32 {
-        self.block.width * self.size / NAME_STYLE.size + self.gap
+        self.block.width * self.size / self.style.size + self.gap
     }
 }
 
@@ -339,19 +359,20 @@ impl Badges {
         // as the web interface draws them, and a card turning over turns them with it.
         let card = on.pose.upward();
         let mut left = BUDGET;
-        let corner = Vec2::new(CARD_WIDTH, CARD_HEIGHT) / 2.0;
+        let corner = self.sizes().card.half();
         if let Some((label, fill)) = plaque(object, face) {
-            let height = data::plaque::HEIGHT * em();
-            let numerals = data::plaque::NUMERALS * em();
-            let width = (self.width(&label, numerals) + 2.0 * data::plaque::PADDING * em())
-                .max(data::plaque::MIN_WIDTH * em());
-            let right = corner.x - data::plaque::RIGHT * em();
-            let bottom = -corner.y + data::plaque::BOTTOM * em();
+            let height = self.tuning().plaque.height * self.em();
+            let numerals = self.tuning().plaque.numerals * self.em();
+            let width = (self.width(&label, numerals)
+                + 2.0 * self.tuning().plaque.padding * self.em())
+            .max(self.tuning().plaque.min_width * self.em());
+            let right = corner.x - self.tuning().plaque.right * self.em();
+            let bottom = -corner.y + self.tuning().plaque.bottom * self.em();
             let plate = Plate {
                 at: Vec2::new(right - width / 2.0, bottom + height / 2.0),
                 size: Vec2::new(width, height),
-                radius: data::plaque::RADIUS * em(),
-                border: data::plaque::BORDER * em(),
+                radius: self.tuning().plaque.radius * self.em(),
+                border: self.tuning().plaque.border * self.em(),
                 fill,
                 edge: badge::PLAQUE_BORDER,
                 numerals,
@@ -362,16 +383,17 @@ impl Badges {
             let mut label = Label::default();
             label.push(TIMES, badge::COUNT_INK);
             label.number(i32::from(copies), badge::COUNT_INK);
-            let numerals = data::count::NUMERALS * em();
-            let width = self.width(&label, numerals) + 2.0 * data::count::PADDING * em();
-            let height = data::count::HEIGHT * em();
-            let right = corner.x - data::count::RIGHT * em();
-            let top = corner.y - data::count::TOP * em();
+            let numerals = self.tuning().count.numerals * self.em();
+            let width =
+                self.width(&label, numerals) + 2.0 * self.tuning().count.padding * self.em();
+            let height = self.tuning().count.height * self.em();
+            let right = corner.x - self.tuning().count.right * self.em();
+            let top = corner.y - self.tuning().count.top * self.em();
             let plate = Plate {
                 at: Vec2::new(right - width / 2.0, top - height / 2.0),
                 size: Vec2::new(width, height),
-                radius: data::count::RADIUS * em(),
-                border: data::count::BORDER * em(),
+                radius: self.tuning().count.radius * self.em(),
+                border: self.tuning().count.border * self.em(),
                 fill: badge::COUNT,
                 edge: badge::COUNT_BORDER,
                 numerals,
@@ -383,35 +405,36 @@ impl Badges {
         }
         // Along the foot, left to right, as far as the plaque: a copy's label, then the
         // counters.
-        let mut x = -corner.x + data::counter::LEFT * em();
-        let end = corner.x - data::counter::RIGHT * em();
+        let mut x = -corner.x + self.tuning().counter.left * self.em();
+        let end = corner.x - self.tuning().counter.right * self.em();
         if let Some(line) = self.tags.copy(object).filter(|_| on.show_copy_label) {
             let width = self.copy_label(line, x, (card, on), builder);
             if width > 0.0 {
-                x += width + data::counter::GAP * em();
+                x += width + self.tuning().counter.gap * self.em();
             }
         }
         for (count, mark) in counters(object) {
             let mut label = Label::default();
             label.number(count, mark);
-            let numerals = data::counter::NUMERALS * em();
-            let width = self.width(&label, numerals) + 2.0 * data::counter::PADDING * em();
+            let numerals = self.tuning().counter.numerals * self.em();
+            let width =
+                self.width(&label, numerals) + 2.0 * self.tuning().counter.padding * self.em();
             if x + width > end {
                 break;
             }
-            let height = data::counter::HEIGHT * em();
-            let bottom = -corner.y + data::counter::BOTTOM * em();
+            let height = self.tuning().counter.height * self.em();
+            let bottom = -corner.y + self.tuning().counter.bottom * self.em();
             let plate = Plate {
                 at: Vec2::new(x + width / 2.0, bottom + height / 2.0),
                 size: Vec2::new(width, height),
-                radius: data::counter::RADIUS * em(),
-                border: data::counter::BORDER * em(),
+                radius: self.tuning().counter.radius * self.em(),
+                border: self.tuning().counter.border * self.em(),
                 fill: badge::COUNTER,
                 edge: color::METAL_BRIGHT,
                 numerals,
             };
             let _ = self.badge(&plate, (None, &label), (card, on), &mut left, builder);
-            x += width + data::counter::GAP * em();
+            x += width + self.tuning().counter.gap * self.em();
         }
         self.write_named(object, corner, (card, on), &mut left, builder);
         let (said, line) = self.tags.note(object)?;
@@ -432,12 +455,12 @@ impl Badges {
         left: &mut usize,
         builder: &mut FrameBuilder,
     ) {
-        let mut x = -corner.x + data::counter::LEFT * em();
-        let end = corner.x - data::counter::NAMED_RIGHT * em();
-        let numerals = data::counter::NUMERALS * em();
-        let height = data::counter::HEIGHT * em();
+        let mut x = -corner.x + self.tuning().counter.left * self.em();
+        let end = corner.x - self.tuning().counter.named_right * self.em();
+        let numerals = self.tuning().counter.numerals * self.em();
+        let height = self.tuning().counter.height * self.em();
         let start = x;
-        let mut bottom = -corner.y + data::counter::NAMED_BOTTOM * em();
+        let mut bottom = -corner.y + self.tuning().counter.named_bottom * self.em();
         for counter in object
             .named_counters
             .iter()
@@ -448,26 +471,28 @@ impl Badges {
             };
             let name = Name {
                 block,
-                size: data::counter::NAME * em(),
-                gap: data::counter::NAME_GAP * em(),
+                style: self.name_style(),
+                size: self.tuning().counter.name * self.em(),
+                gap: self.tuning().counter.name_gap * self.em(),
                 ink: color::TYPE,
             };
             let mut label = Label::default();
             label.number(counter.count, color::TYPE);
-            let width =
-                name.width() + self.width(&label, numerals) + 2.0 * data::counter::PADDING * em();
+            let width = name.width()
+                + self.width(&label, numerals)
+                + 2.0 * self.tuning().counter.padding * self.em();
             if start + width > end {
                 break;
             }
             if x + width > end {
                 x = start;
-                bottom += height + data::counter::GAP * em();
+                bottom += height + self.tuning().counter.gap * self.em();
             }
             let plate = Plate {
                 at: Vec2::new(x + width / 2.0, bottom + height / 2.0),
                 size: Vec2::new(width, height),
-                radius: data::counter::RADIUS * em(),
-                border: data::counter::BORDER * em(),
+                radius: self.tuning().counter.radius * self.em(),
+                border: self.tuning().counter.border * self.em(),
                 fill: badge::COUNTER,
                 edge: color::METAL_BRIGHT,
                 numerals,
@@ -475,7 +500,7 @@ impl Badges {
             if !self.badge(&plate, (Some(&name), &label), (card, on), left, builder) {
                 break;
             }
-            x += width + data::counter::GAP * em();
+            x += width + self.tuning().counter.gap * self.em();
         }
     }
 
@@ -489,23 +514,26 @@ impl Badges {
         left: &mut usize,
         builder: &mut FrameBuilder,
     ) {
-        use data::lock;
         let Some(sprite) = self.lock else {
             return;
         };
+        let lock = self.tuning().lock;
         if *left < 2 {
             return;
         }
         *left -= 2;
-        let icon = lock::ICON * em();
-        let border = lock::BORDER * em();
+        let icon = lock.icon * self.em();
+        let border = lock.border * self.em();
         let size = Vec2::new(
-            icon + (lock::PADDING_LEFT + lock::PADDING_RIGHT) * em() + 2.0 * border,
-            lock::HEIGHT * em(),
+            icon + (lock.padding_left + lock.padding_right) * self.em() + 2.0 * border,
+            lock.height * self.em(),
         );
-        let top_left = Vec2::new(-corner.x + lock::LEFT * em(), corner.y - lock::TOP * em());
+        let top_left = Vec2::new(
+            -corner.x + lock.left * self.em(),
+            corner.y - lock.top * self.em(),
+        );
         let at = top_left + Vec2::new(size.x, -size.y) / 2.0;
-        let raise = data::RAISE * em();
+        let raise = self.raise();
         builder.draw(
             on.band,
             Draw::panel(
@@ -513,12 +541,12 @@ impl Badges {
                 faded(badge::COUNTER, on.opacity),
                 faded(color::METAL_BRIGHT, on.opacity),
                 size,
-                lock::RADIUS * em(),
+                lock.radius * self.em(),
                 border,
             ),
         );
         let middle = Vec2::new(
-            top_left.x + border + lock::PADDING_LEFT * em() + icon / 2.0,
+            top_left.x + border + lock.padding_left * self.em() + icon / 2.0,
             at.y,
         );
         builder.draw(
@@ -538,7 +566,7 @@ impl Badges {
             .iter()
             .map(|&(piece, _)| self.pieces[piece].width)
             .sum();
-        points * numerals / STYLE.size
+        points * numerals / self.style().size
     }
 
     /// Writes `plate` and, centred on it, `name` if any and then `label`, onto `card`, if
@@ -562,21 +590,21 @@ impl Badges {
             return false;
         }
         *left -= records;
-        panel(plate, (card, on), builder);
+        panel(plate, (card, on, self.raise()), builder);
         let width = name.map_or(0.0, Name::width) + self.width(label, plate.numerals);
         let mut x = plate.at.x - width / 2.0;
         if let Some(name) = name {
             let pen = Vec2::new(x, plate.at.y + name.size / 2.0);
-            let glyphs = (name.block, NAME_STYLE, name.size / NAME_STYLE.size);
+            let glyphs = (name.block, name.style, name.size / name.style.size);
             self.text(glyphs, pen, name.ink, (card, on), builder);
             x += name.width();
         }
         // Millimetres per point, and the text box's top left corner.
-        let k = plate.numerals / STYLE.size;
+        let k = plate.numerals / self.style().size;
         let mut pen = Vec2::new(x, plate.at.y + plate.numerals / 2.0);
         for &(piece, ink) in label.pieces() {
             let block = &self.pieces[piece];
-            self.text((block, STYLE, k), pen, ink, (card, on), builder);
+            self.text((block, self.style(), k), pen, ink, (card, on), builder);
             pen.x += block.width * k;
         }
         true
@@ -606,7 +634,7 @@ impl Badges {
         builder: &mut FrameBuilder,
     ) {
         let scale = self.scale;
-        let raise = data::RAISE * em();
+        let raise = self.raise();
         for glyph in glyphs {
             let Some(placed) = self.glyphs.get(glyph_key(style, scale, glyph.glyph)) else {
                 continue;
@@ -647,12 +675,12 @@ fn quad(card: Affine3A, at: Vec2, size: Vec2, height: f32) -> Affine3A {
     )
 }
 
-/// Writes `plate`'s rounded panel onto `card`.
-fn panel(plate: &Plate, (card, on): (Affine3A, &On), builder: &mut FrameBuilder) {
+/// Writes `plate`'s rounded panel onto `card`, `raise` millimetres above its face.
+fn panel(plate: &Plate, (card, on, raise): (Affine3A, &On, f32), builder: &mut FrameBuilder) {
     builder.draw(
         on.band,
         Draw::panel(
-            quad(card, plate.at, plate.size, data::RAISE * em()),
+            quad(card, plate.at, plate.size, raise),
             faded(plate.fill, on.opacity),
             faded(plate.edge, on.opacity),
             plate.size,
@@ -660,61 +688,6 @@ fn panel(plate: &Plate, (card, on): (Affine3A, &On), builder: &mut FrameBuilder)
             plate.border,
         ),
     );
-}
-
-/// The plaque's label and fill: power and toughness for a creature, loyalty for a
-/// planeswalker, or none.
-fn plaque(object: &ObjectView, face: Option<&ListedFace>) -> Option<(Label, [u8; 4])> {
-    let fill = match face.map_or(&[][..], |face| face.colors.as_slice()) {
-        [] => badge::PLAQUE_COLORLESS,
-        [only] => match only.as_str() {
-            "W" => badge::PLAQUE_WHITE,
-            "U" => badge::PLAQUE_BLUE,
-            "B" => badge::PLAQUE_BLACK,
-            "R" => badge::PLAQUE_RED,
-            "G" => badge::PLAQUE_GREEN,
-            _ => badge::PLAQUE_COLORLESS,
-        },
-        _ => badge::PLAQUE_GOLD,
-    };
-    let mut label = Label::default();
-    if let Some(pt) = object.pt {
-        let printed = face.and_then(|face| face.printed);
-        let power = Tone::of(pt.power, printed.map(|[power, _]| power));
-        let toughness = if object.damage > 0 {
-            Tone::Down
-        } else {
-            Tone::of(pt.toughness, printed.map(|[_, toughness]| toughness))
-        };
-        label.number(pt.power, power.ink());
-        label.push(SLASH, badge::PLAQUE_INK);
-        label.number((pt.toughness - object.damage).max(0), toughness.ink());
-        return Some((label, fill));
-    }
-    let loyalty = object
-        .counters
-        .iter()
-        .find(|counter| counter.kind == Counter::Loyalty)?;
-    label.number(loyalty.count, badge::PLAQUE_INK);
-    Some((label, fill))
-}
-
-/// The count of each kind of counter on `object` but loyalty, which its plaque shows, and the
-/// color its number is drawn in (`.mark-plusOne`, `.mark-minusOne` and `.mark-badge svg`'s
-/// gold). The manual table's named counters have a row of their own (`write_named`).
-fn counters(object: &ObjectView) -> impl Iterator<Item = (i32, [u8; 4])> + '_ {
-    object
-        .counters
-        .iter()
-        .filter(|counter| counter.kind != Counter::Loyalty && counter.count != 0)
-        .map(|counter| {
-            let mark = match counter.kind {
-                Counter::PlusOne => color::STAT_UP,
-                Counter::MinusOne => color::STAT_DOWN,
-                _ => color::GOLD,
-            };
-            (counter.count, mark)
-        })
 }
 
 /// `color` with its alpha scaled by `opacity`.

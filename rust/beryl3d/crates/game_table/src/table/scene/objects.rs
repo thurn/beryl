@@ -10,7 +10,12 @@ use crate::table::shadows::Floors;
 impl Table {
     /// The scene objects of `view`, whose stack's abilities `numbers` numbers, each at its
     /// resting place in `placement`.
-    pub fn objects_for(view: &PlayerView, numbers: Vec<u32>, placement: &Placement) -> Objects {
+    pub fn objects_for(
+        &self,
+        view: &PlayerView,
+        numbers: Vec<u32>,
+        placement: &Placement,
+    ) -> Objects {
         let mut abilities = Vec::with_capacity(placement.abilities.len());
         let stack = view
             .stack
@@ -36,7 +41,7 @@ impl Table {
         abilities.sort_unstable_by_key(|(id, _)| *id);
         let cards = Self::cards_for(view, placement);
         Objects {
-            floors: Floors::of(&cards),
+            floors: Floors::of(&cards, self.camera().data.card),
             cards,
             abilities,
             numbers,

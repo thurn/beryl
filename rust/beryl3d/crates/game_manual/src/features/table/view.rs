@@ -138,7 +138,7 @@ pub(super) fn table(state: &State, input: Inputs<'_>) -> Element {
         .zip(table)
         .map(|(view, table)| assists::labels(&table.labels, view, profile))
         .unwrap_or_default();
-    let sort = view.and_then(|view| assists::sort_tray(view, window.size));
+    let sort = view.and_then(|view| assists::sort_tray(view, window.size, profile.card()));
     let sweep = (state.sweep)
         .filter(|(from, to)| from.distance(*to) >= input.drag_threshold)
         .map(|(from, to)| selection::rectangle(selection::sweep_box(from, to)));

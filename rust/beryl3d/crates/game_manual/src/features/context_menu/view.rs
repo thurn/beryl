@@ -1,8 +1,5 @@
 use super::State;
-use game_table::{
-    profiles::Profile,
-    table::{CARD_HEIGHT, CARD_WIDTH, Window},
-};
+use game_table::{profiles::Profile, table::Window};
 use kit_base::{data::space::flat::sheet, geometry::Rect};
 use kit_frame::frame::Role;
 use kit_ui::element::Element;
@@ -54,7 +51,7 @@ pub(super) fn render(state: &State, inputs: Inputs<'_>) -> Element {
         }
         .name("preview")
         .width(sheet::PREVIEW_WIDTH)
-        .height(sheet::PREVIEW_WIDTH * CARD_HEIGHT / CARD_WIDTH);
+        .height(sheet::PREVIEW_WIDTH * inputs.profile.card().height / inputs.profile.card().width);
         panel
             .children
             .insert(0, column().align_items(Align::Center).child(card));

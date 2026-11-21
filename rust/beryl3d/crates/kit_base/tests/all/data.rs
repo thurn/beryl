@@ -1,6 +1,6 @@
 //! Tuning values must parse and report the key at fault when they do not.
 
-use kit_base::data::{Data, profiles};
+use kit_base::data::{Card, Data, profiles};
 use serde_json::Value;
 
 const VERBS: &str = include_str!("../../../../../../data/beryl3d/verbs.json");
@@ -19,6 +19,12 @@ const EFFECTS: [(&str, &str); 3] = [
     ),
 ];
 const AUDIT: &str = include_str!("../../../../../../data/beryl3d/audit.json");
+const CARD: &str = include_str!("../../../../../../data/beryl3d/card.json");
+const BADGES: &str = include_str!("../../../../../../data/beryl3d/badges.json");
+
+fn card() -> Card {
+    Card::parse(CARD).expect("repository card")
+}
 
 fn parse(changed: Option<(&str, &str)>) -> Result<Data, String> {
     Data::parse(
@@ -29,6 +35,8 @@ fn parse(changed: Option<(&str, &str)>) -> Result<Data, String> {
                 return Ok(text.to_owned());
             }
             let text = match name {
+                "card.json" => CARD,
+                "badges.json" => BADGES,
                 "verbs.json" => VERBS,
                 "audit.json" => AUDIT,
                 "catch-up.json" => include_str!("../../../../../../data/beryl3d/catch-up.json"),
@@ -72,8 +80,11 @@ fn reference_gallery_rejects_missing_and_surplus_panel_positions() {
         } else {
             positions.remove(0);
         }
-        let why = profiles::Profiles::parse(&[profiles::SHIPPED[0], (file, &changed.to_string())])
-            .unwrap_err();
+        let why = profiles::Profiles::parse(
+            &[profiles::SHIPPED[0], (file, &changed.to_string())],
+            card(),
+        )
+        .unwrap_err();
         assert!(
             why.starts_with(&format!("{file}: gallery.panels_at")),
             "{why}"
@@ -174,8 +185,43 @@ fn table_profiles_reject_unknown_geometry_fields() {
         let (file, text) = files[index];
         let invalid = text.replacen(&format!("\"{key}\""), "\"unknown_measurement\"", 1);
         files[index] = (file, &invalid);
-        let why = Profiles::parse(&files).unwrap_err();
+        let why = Profiles::parse(&files, card()).unwrap_err();
         assert!(why.contains(&format!("{file}: {section}")), "{why}");
         assert!(why.contains("unknown field `unknown_measurement`"), "{why}");
     }
+}
+
+/// A card's size and the badges' sizes are read at run time, so a supplied size reaches every
+/// camera the profiles fit, and the badges' tuning is the file's.
+#[test]
+fn card_and_badge_sizes_come_from_their_files() {
+    let wide = CARD.replacen("\"width\": 63", "\"width\": 70", 1);
+    let data = parse(Some(("card.json", &wide))).expect("a wider card");
+    assert!((data.card.width - 70.0).abs() < f32::EPSILON);
+    for profile in data.profiles.iter() {
+        assert_eq!(profile.table.camera.card, data.card);
+    }
+    let larger = BADGES.replacen("\"numeral_points\": 17", "\"numeral_points\": 19", 1);
+    let data = parse(Some(("badges.json", &larger))).expect("larger numerals");
+    assert!((data.badges.numeral_points - 19.0).abs() < f32::EPSILON);
+}
+
+/// The card and badge files name the key at fault: an unknown one, or a size out of range.
+#[test]
+fn card_and_badge_files_reject_bad_keys() {
+    let unknown = CARD.replacen("\"layer\"", "\"thickness\"", 1);
+    let why = parse(Some(("card.json", &unknown))).unwrap_err();
+    assert!(
+        why.contains("card.json") && why.contains("thickness"),
+        "{why}"
+    );
+    let flat = CARD.replacen("\"height\": 88", "\"height\": 0", 1);
+    let why = parse(Some(("card.json", &flat))).unwrap_err();
+    assert!(why.starts_with("card.json: height"), "{why}");
+    let unknown = BADGES.replacen("\"min_width\"", "\"least_width\"", 1);
+    let why = parse(Some(("badges.json", &unknown))).unwrap_err();
+    assert!(
+        why.contains("badges.json: plaque") && why.contains("least_width"),
+        "{why}"
+    );
 }

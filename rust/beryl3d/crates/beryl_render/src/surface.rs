@@ -182,6 +182,7 @@ impl Renderer {
         let view = drawable
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
+        self.fit_card_mesh(frame.card);
         let drawn = self.render_view(frame, &view, surface.config.width, surface.config.height);
         before();
         self.queue.present(drawable);

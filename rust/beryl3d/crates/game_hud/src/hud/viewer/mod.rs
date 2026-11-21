@@ -1,5 +1,6 @@
 //! The pile viewer and the prepared Revealed Cards controls.
 
+use kit_base::data::Card;
 use std::convert::Infallible;
 
 use beryl_protocol::PlayerView;
@@ -41,6 +42,8 @@ pub struct State {
 pub struct Inputs<'a> {
     pub window: Size,
     pub centre: Vec2,
+    /// The card whose shape the grid's boxes take.
+    pub card: Card,
     pub view: Option<&'a PlayerView>,
     pub revision: usize,
 }
@@ -52,7 +55,7 @@ impl Feature for Viewer {
     type State = State;
     type Message = Message;
     type Inputs<'a> = Inputs<'a>;
-    type ViewKey = (Size, Vec2, Option<Viewed>, Option<usize>);
+    type ViewKey = (Size, Vec2, Card, Option<Viewed>, Option<usize>);
     type Command = Infallible;
     type Request = Message;
 
@@ -67,12 +70,12 @@ impl Feature for Viewer {
 
     fn view_key(state: &State, input: &Inputs<'_>) -> Self::ViewKey {
         let revision = matches!(state.open, Some(Viewed::Pile(..))).then_some(input.revision);
-        (input.window, input.centre, state.open, revision)
+        (input.window, input.centre, input.card, state.open, revision)
     }
 
     fn view(state: &State, input: Inputs<'_>) -> Element {
         view::dialog(
-            (input.window, input.centre),
+            (input.window, input.centre, input.card),
             input.view,
             state.open,
             &state.revealed,
@@ -93,6 +96,7 @@ impl<'a> Inputs<'a> {
         Some(Self {
             window,
             centre: Vec2::new(area.x + area.width / 2.0, area.y + area.height / 2.0),
+            card: profile.card(),
             view,
             revision,
         })
@@ -164,7 +168,13 @@ impl State {
     }
 
     /// Shows the prepared control while a revealed face is visible.
-    pub fn write_pill(&mut self, layer: &mut Layer, window: Size, tuning: Revealed, visible: bool) {
+    pub fn write_pill(
+        &mut self,
+        layer: &mut Layer,
+        window: Size,
+        (tuning, card): (Revealed, Card),
+        visible: bool,
+    ) {
         let Some(control) = &mut self.control else {
             return;
         };
@@ -177,7 +187,7 @@ impl State {
         }
         if shown.is_some() {
             let point = pile.map_or_else(
-                || revealed::pill_corner(window, tuning),
+                || revealed::pill_corner(window, tuning, card),
                 |area| Vec2::new(area.x, area.y),
             );
             let look = FloatLook {
@@ -194,7 +204,7 @@ impl State {
 pub fn viewer(input: &HudIn<'_>) -> Option<Element> {
     let layout = Inputs::new(input.profile, input.window.size, input.view, 0)?;
     view::dialog(
-        (layout.window, layout.centre),
+        (layout.window, layout.centre, layout.card),
         layout.view,
         input.viewing,
         input.revealed,

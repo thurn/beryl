@@ -128,7 +128,7 @@ fn ends_with(after: &PlayerView, from: Option<&Played>) -> Played {
 fn finals_at(after: &PlayerView, played: &Played, table: &Table) -> Objects {
     let numbers = numbers_of(played);
     let placement = table.placement(after, &numbers);
-    Table::objects_for(after, numbers, &placement)
+    table.objects_for(after, numbers, &placement)
 }
 
 impl Show {

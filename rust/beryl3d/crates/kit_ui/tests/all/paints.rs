@@ -28,7 +28,7 @@ fn a_padding_box_gradient_leaves_the_border_box_gradient_visible() {
 
     let plane = ScreenPlane::new(Affine3A::IDENTITY, Window::default(), 1.0, 1.0);
     let mut frame = Frame::with_capacity(4, 4, 16);
-    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
+    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline, crate::card());
     layer.write(&mut builder, &plane, true);
     let frame = builder.finish();
 

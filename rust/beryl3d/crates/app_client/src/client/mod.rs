@@ -364,7 +364,8 @@ impl Client {
         // The guided start's opening covers the table's life totals and pile counts, not notices.
         let counted = visible && !self.guided_start();
         let rows_counted = self.rows_counted(visible, covers);
-        let mut builder = FrameBuilder::new(&mut self.frame, self.tier);
+        let card = self.data().card.size();
+        let mut builder = FrameBuilder::new(&mut self.frame, self.tier, card);
         // The flat layer is placed for the table's camera, so the frame takes it even when no
         // game view writes the table, as on the start screen (the "layer drawn" check).
         builder.camera(self.show.table().camera().view_projection);

@@ -6,7 +6,6 @@ use beryl_render::Target;
 use glam::camera::rh::{proj::directx, view::look_at_mat4};
 use glam::{Affine3A, Mat4, Quat, Vec2, Vec3};
 use kit_base::atlas::Tier;
-use kit_base::geometry::{CARD_HEIGHT, CARD_WIDTH};
 use kit_frame::frame::{Band, Draw, Frame, FrameBuilder};
 use serde_json::Value;
 
@@ -93,7 +92,7 @@ fn draw_shaded_cloth(
 ) -> Picture {
     let mut cloth = Draw::tabletop(
         Affine3A::from_scale_rotation_translation(
-            Vec3::new(4000.0 / CARD_WIDTH, 4000.0 / CARD_HEIGHT, 1.0),
+            Vec3::new(4000.0 / crate::card().x, 4000.0 / crate::card().y, 1.0),
             Quat::IDENTITY,
             Vec3::new(0.0, 0.0, -0.5),
         ),
@@ -103,7 +102,7 @@ fn draw_shaded_cloth(
         cloth = cloth.with_far_shade(centre, radius);
     }
     let mut frame = Frame::with_capacity(0, 1, 0);
-    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
+    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline, crate::card());
     builder.camera(camera());
     builder.shake(shake);
     builder.draw(Band::Opaque, cloth);

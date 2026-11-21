@@ -135,7 +135,8 @@ mod tests {
     #[test]
     fn records_split_by_pass_mesh_array_and_clip() {
         let mut frame = Frame::with_capacity(0, 16, 0);
-        let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
+        let mut builder =
+            FrameBuilder::new(&mut frame, Tier::Baseline, glam::Vec2::new(63.0, 88.0));
         builder.draw(Band::Opaque, card());
         builder.draw(
             Band::Opaque,

@@ -76,10 +76,6 @@ impl Default for Window {
     }
 }
 
-/// A card's printed width and height (`card` in `space-constants.json`).
-pub const CARD_WIDTH: f32 = crate::data::space::card::WIDTH;
-pub const CARD_HEIGHT: f32 = crate::data::space::card::HEIGHT;
-
 /// `rect` scaled by `zoom`'s scale about its point.
 pub fn zoom_rect(rect: Rect, (pivot, scale): (Vec2, f32)) -> Rect {
     Rect {

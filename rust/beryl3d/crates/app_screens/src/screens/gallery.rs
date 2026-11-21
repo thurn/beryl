@@ -12,7 +12,7 @@ use glam::Vec2;
 use super::{Screen, ScreenIn, start};
 use game_hud::inspect::viewer::scry_sample;
 use game_table::faces::{CARD_BACK, FaceList};
-use game_table::table::{CARD_HEIGHT, CARD_WIDTH};
+use kit_base::data::Card;
 use kit_base::data::presentation::Gallery;
 use kit_base::tokens::{color, shadow, size, space, type_style};
 use kit_frame::frame::Role;
@@ -81,12 +81,12 @@ pub fn gallery(input: &ScreenIn) -> Element {
         .child(text("Game UI · Component Library").style(type_style::OVERLAY_INSTRUCTION))
         .child(foundations(sizes))
         .child(actions())
-        .child(player_zones(faces, sizes))
-        .child(card_states(faces, sizes))
-        .child(combat(faces, sizes))
+        .child(player_zones(faces, sizes, input.data.card))
+        .child(card_states(faces, sizes, input.data.card))
+        .child(combat(faces, sizes, input.data.card))
         .child(
             section("Scry overlay")
-                .child(scry_sample(faces, sizes))
+                .child(scry_sample(faces, sizes, input.data.card))
                 .child(
                     specimen_row().children(
                         [
@@ -149,7 +149,7 @@ fn reference_page(input: &ScreenIn, faces: &FaceList, width: f32, height: f32) -
         .align_items(Align::Center)
         .child(reference::page(
             layout,
-            faces,
+            (faces, input.data.card),
             opened.is_none() && query.is_none(),
         ));
     let mut screen = with_escape(screen, input.gallery);
@@ -351,7 +351,7 @@ fn pill(label: &str, tint: [u8; 4]) -> Element {
         .color(tint)
 }
 
-fn player_zones(faces: &FaceList, sizes: &Gallery) -> Element {
+fn player_zones(faces: &FaceList, sizes: &Gallery, shape: Card) -> Element {
     section("Player & zones")
         .child(specimen_row().children([
             specimen(pill("22", color::GOLD), "Active"),
@@ -360,21 +360,31 @@ fn player_zones(faces: &FaceList, sizes: &Gallery) -> Element {
         ]))
         .child(specimen_row().children([
             specimen(
-                pile(CARD_BACK, "Card back", 40, sizes.small_card),
+                pile(CARD_BACK, "Card back", 40, (sizes.small_card, shape)),
                 "Library",
             ),
             specimen(
-                pile(face(faces, "Dusk Cut"), "Dusk Cut", 4, sizes.small_card),
+                pile(
+                    face(faces, "Dusk Cut"),
+                    "Dusk Cut",
+                    4,
+                    (sizes.small_card, shape),
+                ),
                 "Graveyard",
             ),
             specimen(
-                pile(face(faces, "Island"), "Island", 3, sizes.small_card),
+                pile(
+                    face(faces, "Island"),
+                    "Island",
+                    3,
+                    (sizes.small_card, shape),
+                ),
                 "Lands (stacked)",
             ),
         ]))
 }
 
-fn pile(id: FaceId, name: &str, count: u8, width: f32) -> Element {
+fn pile(id: FaceId, name: &str, count: u8, width: (f32, Card)) -> Element {
     column()
         .gap(space::S)
         .align_items(Align::Center)
@@ -382,15 +392,18 @@ fn pile(id: FaceId, name: &str, count: u8, width: f32) -> Element {
         .child(pill(&count.to_string(), color::TEXT_DIM))
 }
 
-fn card_states(faces: &FaceList, sizes: &Gallery) -> Element {
+fn card_states(faces: &FaceList, sizes: &Gallery, shape: Card) -> Element {
     section("Cards & states")
         .child(specimen_row().children([
-            card(faces, "Cinder Colossus", sizes.small_card),
-            specimen(tapped_card(faces, "Mountain", sizes.small_card), "Tapped"),
-            specimen(card(faces, "Plains", sizes.small_card), "Untapped"),
+            card(faces, "Cinder Colossus", (sizes.small_card, shape)),
+            specimen(
+                tapped_card(faces, "Mountain", (sizes.small_card, shape)),
+                "Tapped",
+            ),
+            specimen(card(faces, "Plains", (sizes.small_card, shape)), "Untapped"),
             specimen(
                 rim(
-                    card(faces, "Gloom Wren", sizes.small_card),
+                    card(faces, "Gloom Wren", (sizes.small_card, shape)),
                     color::GOLD,
                     size::PANEL_RADIUS,
                 ),
@@ -398,29 +411,36 @@ fn card_states(faces: &FaceList, sizes: &Gallery) -> Element {
             ),
             specimen(
                 rim(
-                    card(faces, "Gloom Wren", sizes.small_card),
+                    card(faces, "Gloom Wren", (sizes.small_card, shape)),
                     color::CYAN,
                     size::PANEL_RADIUS,
                 ),
                 "Target (cyan)",
             ),
         ]))
-        .child(specimen_row().children(
-            ["Exile Lance", "Mountain", "Plateau"].map(|name| card(faces, name, sizes.hand_card)),
-        ))
+        .child(
+            specimen_row().children(
+                ["Exile Lance", "Mountain", "Plateau"]
+                    .map(|name| card(faces, name, (sizes.hand_card, shape))),
+            ),
+        )
 }
 
-fn combat(faces: &FaceList, sizes: &Gallery) -> Element {
+fn combat(faces: &FaceList, sizes: &Gallery, shape: Card) -> Element {
     const TRIGGER: &str = "When Cinder Colossus enters the battlefield, it deals 3 damage divided as you choose among one, two, or three targets.";
     section("Combat & stack")
         .child(specimen_row().children([
             specimen(
-                rim(card(faces, "Beast", sizes.small_card), color::EMBER, 0.0),
+                rim(
+                    card(faces, "Beast", (sizes.small_card, shape)),
+                    color::EMBER,
+                    0.0,
+                ),
                 "Attacker · angular",
             ),
             specimen(
                 rim(
-                    card(faces, "Angel", sizes.small_card),
+                    card(faces, "Angel", (sizes.small_card, shape)),
                     color::CYAN,
                     size::PANEL_RADIUS,
                 ),
@@ -429,18 +449,18 @@ fn combat(faces: &FaceList, sizes: &Gallery) -> Element {
         ]))
         .child(
             specimen_row().children([
-                card(faces, "Cinder Colossus", sizes.small_card),
+                card(faces, "Cinder Colossus", (sizes.small_card, shape)),
                 specimen(
                     flat_card(
                         faces
                             .plate("Cinder Colossus", true, 0)
                             .expect("the Colossus has a trigger"),
                         "Cinder Colossus ability",
-                        sizes.hand_card,
+                        (sizes.hand_card, shape),
                     ),
                     TRIGGER,
                 ),
-                card(faces, "Beast", sizes.small_card),
+                card(faces, "Beast", (sizes.small_card, shape)),
             ]),
         )
 }
@@ -459,24 +479,25 @@ fn face(faces: &FaceList, name: &str) -> FaceId {
         .expect("the gallery lists every sample face")
 }
 
-fn card(faces: &FaceList, name: &str, width: f32) -> Element {
+/// A card `width` wide, in the shape of the card the width comes with.
+fn card(faces: &FaceList, name: &str, width: (f32, Card)) -> Element {
     flat_card(face(faces, name), name, width)
 }
 
-fn tapped_card(faces: &FaceList, name: &str, width: f32) -> Element {
+fn tapped_card(faces: &FaceList, name: &str, (width, shape): (f32, Card)) -> Element {
     let face = face(faces, name);
-    let mut card = flat_card(face, name, width)
-        .width(width * CARD_HEIGHT / CARD_WIDTH)
+    let mut card = flat_card(face, name, (width, shape))
+        .width(width * shape.height / shape.width)
         .height(width);
     card.shows = Some(Shown::TappedFace(face, FaceSize::Board));
     card
 }
 
-fn flat_card(id: FaceId, name: &str, width: f32) -> Element {
+fn flat_card(id: FaceId, name: &str, (width, shape): (f32, Card)) -> Element {
     let mut card = Element::new(Role::Region)
         .name(name)
         .width(width)
-        .height(width * CARD_HEIGHT / CARD_WIDTH)
+        .height(width * shape.height / shape.width)
         .shrink(0.0)
         .background(color::SURFACE);
     card.shows = Some(Shown::Face(id, FaceSize::Board));

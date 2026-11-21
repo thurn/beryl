@@ -16,6 +16,8 @@ pub(crate) fn embedded() -> Result<Arc<Data>, String> {
 
 fn embedded_tuning(name: &str) -> Result<String, String> {
     let text = match name {
+        "card.json" => include_str!("../../../../../data/beryl3d/card.json"),
+        "badges.json" => include_str!("../../../../../data/beryl3d/badges.json"),
         "verbs.json" => include_str!("../../../../../data/beryl3d/verbs.json"),
         "audit.json" => include_str!("../../../../../data/beryl3d/audit.json"),
         "catch-up.json" => include_str!("../../../../../data/beryl3d/catch-up.json"),

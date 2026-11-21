@@ -10,7 +10,7 @@ use crate::inspect::Viewed;
 use beryl_protocol::protocol::ObjectId;
 use glam::Vec2;
 
-use game_table::table::{CARD_HEIGHT, CARD_WIDTH};
+use kit_base::data::Card;
 use kit_base::data::presentation::Revealed;
 use kit_base::geometry::Rect;
 use kit_base::tokens::{color, size, type_style};
@@ -79,14 +79,14 @@ pub fn pile_button(area: Rect) -> Element {
 /// a little left of and above the pile's first face, as `RevealedCards` sets the pill's `left`
 /// and `top` from the pile's space.
 #[must_use]
-pub fn pill_corner(window: Size, tuning: Revealed) -> Vec2 {
+pub fn pill_corner(window: Size, tuning: Revealed, card: Card) -> Vec2 {
     // The first face's centre, from normalized device coordinates, and its half size.
     let centre = Vec2::new(
         f32::midpoint(tuning.at[0], 1.0) * window.width,
         (1.0 - tuning.at[1]) / 2.0 * window.height,
     );
     let height = tuning.height * window.height;
-    let half = Vec2::new(height * CARD_WIDTH / CARD_HEIGHT, height) / 2.0;
+    let half = Vec2::new(height * card.width / card.height, height) / 2.0;
     centre - half + Vec2::new(tuning.pill_x, tuning.pill_y)
 }
 

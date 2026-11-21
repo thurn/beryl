@@ -283,13 +283,15 @@ impl Table {
 /// Where a card stands to fill `rect`, a box of the window in logical points, seen through
 /// `camera`: centred in it, facing the camera, as large as fits it.
 fn box_pose(camera: &Camera, rect: Rect, depth: f32) -> Pose {
-    use super::{CARD_HEIGHT, CARD_WIDTH};
     let window = camera.window.size;
     let centre = glam::Vec2::new(rect.x + rect.width / 2.0, rect.y + rect.height / 2.0);
     let ndc = glam::Vec2::new(
         centre.x / window.width * 2.0 - 1.0,
         1.0 - centre.y / window.height * 2.0,
     );
-    let height = rect.height.min(rect.width * CARD_HEIGHT / CARD_WIDTH) / window.height;
+    let height = rect
+        .height
+        .min(rect.width * camera.data.card.height / camera.data.card.width)
+        / window.height;
     camera.screen_pose(ndc, depth, glam::Quat::IDENTITY, height)
 }

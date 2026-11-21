@@ -94,7 +94,6 @@ pub mod sprites {
     use glam::Vec2;
 
     use super::Sprite;
-    use kit_base::geometry::{CARD_HEIGHT, CARD_WIDTH};
 
     /// The atlas page that holds them.
     pub const PAGE: u16 = 0;
@@ -199,13 +198,13 @@ pub mod sprites {
 
     /// The size to scale a quad drawn with `WEDGE` or `WEDGE_HOT` to, so that the chevron is
     /// `across` wide at its base and `length` from its base to its point, with room round it
-    /// for its halo; both in the units of `CARD_WIDTH`. The quad's middle lies `length / 2`
-    /// past the base, toward the point.
+    /// for its halo; all three in the units of `card_width`, the width of the card it points
+    /// from. The quad's middle lies `length / 2` past the base, toward the point.
     #[must_use]
-    pub fn wedge_size(across: f32, length: f32) -> Vec2 {
+    pub fn wedge_size(across: f32, length: f32, card_width: f32) -> Vec2 {
         Vec2::new(
             across * (1.0 + 2.0 * WEDGE_ROOM),
-            length + 2.0 * WEDGE_ROOM * CARD_WIDTH,
+            length + 2.0 * WEDGE_ROOM * card_width,
         )
     }
 
@@ -219,8 +218,13 @@ pub mod sprites {
     /// filtering.
     pub const OUTLINE_HOLE: [f32; 2] = [0.29, 0.42];
     /// Half the width and height of the rounded rectangle that `OUTLINE`'s line runs along, in
-    /// the same units. It has a card's proportions, since the cell holds a card's outline.
-    pub const OUTLINE_LINE: [f32; 2] = [LINE_HEIGHT * CARD_WIDTH / CARD_HEIGHT, LINE_HEIGHT];
+    /// the same units. It has the proportions of the card outline drawn in the cell.
+    pub const OUTLINE_LINE: [f32; 2] = [LINE_HEIGHT * DRAWN_CARD_SHAPE, LINE_HEIGHT];
+    /// The width per height of the card that `beryl_assets` draws the outline and the halo
+    /// around in their atlas cells: a printed card's 63 by 88 millimetres. The atlas is artwork,
+    /// drawn once when the renderer starts, so this is the artwork's shape, not the card size the
+    /// data sets; the quads stretch the artwork over the card they ring.
+    const DRAWN_CARD_SHAPE: f32 = 63.0 / 88.0;
     /// `OUTLINE_LINE`'s height: 0.94 of the cell's drawn area, which leaves `beryl_assets`'
     /// border of 2 texels on each side of the 256 texel cell.
     const LINE_HEIGHT: f32 = 0.94 * 126.0 / 256.0;
@@ -228,7 +232,7 @@ pub mod sprites {
     /// Half the width and height of the card that `HALO`'s light lies round, in the units of a
     /// unit quad drawn with the whole cell (-0.5 to 0.5 across): the halo is empty inside it,
     /// and its light reaches out from its edge to near the edge of the cell.
-    pub const HALO_CARD: [f32; 2] = [HALO_HEIGHT * CARD_WIDTH / CARD_HEIGHT, HALO_HEIGHT];
+    pub const HALO_CARD: [f32; 2] = [HALO_HEIGHT * DRAWN_CARD_SHAPE, HALO_HEIGHT];
     /// `HALO_CARD`'s height.
     const HALO_HEIGHT: f32 = 0.32;
 

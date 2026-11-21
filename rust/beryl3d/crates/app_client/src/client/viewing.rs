@@ -270,7 +270,10 @@ impl Client {
         self.features.viewer_mut().write_pill(
             &mut self.layer,
             self.window.size,
-            self.show.table().data().revealed,
+            (
+                self.show.table().data().revealed,
+                self.show.table().data().card,
+            ),
             visible && holds,
         );
     }

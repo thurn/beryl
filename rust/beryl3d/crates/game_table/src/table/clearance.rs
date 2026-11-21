@@ -5,7 +5,7 @@ use glam::{Vec2, Vec3};
 use kit_base::tokens::size;
 use kit_scene::hit::CELL;
 
-use super::{CARD_HEIGHT, CARD_WIDTH, Camera, Layout, RowArea, stack};
+use super::{Camera, Layout, RowArea, stack};
 
 /// The area of the battlefield row `row` on `side`'s half of the table, and its height on the
 /// table. As the web interface ends the permanents' rows left of the stack (`ROOM.end` in
@@ -59,14 +59,21 @@ fn clear_of_life(
     let half_width = (size::ORB_WIDTH * layout.play.life.orb_scale).max(size::STEPS_WIDTH) / 2.0;
     // The band an untapped card of the row stands across, the taller of its two.
     let height = |along: f32| camera.to_screen(Vec3::new(0.0, y + along, 0.0)).y;
-    let (near, far) = (height(-CARD_HEIGHT / 2.0), height(CARD_HEIGHT / 2.0));
+    let (near, far) = (
+        height(-camera.data.card.height / 2.0),
+        height(camera.data.card.height / 2.0),
+    );
     if near.max(far) < life.y - half_height || near.min(far) > life.y + half_height {
         return area;
     }
     // A card's edge runs the length of an untapped card, and of its two ends the one nearer
     // the orb on screen meets it first.
     let table_x = |screen_x: f32| {
-        [-CARD_HEIGHT / 2.0, CARD_HEIGHT / 2.0].map(|along| {
+        [
+            -camera.data.card.height / 2.0,
+            camera.data.card.height / 2.0,
+        ]
+        .map(|along| {
             let point = Vec3::new(0.0, y + along, 0.0);
             (screen_x - camera.to_screen(point).x) / camera.points_per_millimetre(point)
         })
@@ -74,10 +81,16 @@ fn clear_of_life(
     let mut area = area;
     if row == RowName::Lands {
         let [a, b] = table_x(life.x - half_width - LIFE_CLEARANCE);
-        area.right = area.right.min(a.min(b)).max(area.left + CARD_HEIGHT);
+        area.right = area
+            .right
+            .min(a.min(b))
+            .max(area.left + camera.data.card.height);
     } else {
         let [a, b] = table_x(life.x + half_width + LIFE_CLEARANCE);
-        area.left = area.left.max(a.max(b)).min(area.right - CARD_HEIGHT);
+        area.left = area
+            .left
+            .max(a.max(b))
+            .min(area.right - camera.data.card.height);
     }
     area
 }
@@ -99,7 +112,10 @@ fn left_of_stack((layout, camera): (&Layout, &Camera), side: Side, row: RowName)
     };
     // The band a tapped card of the row lies across, the narrower of its two.
     let height = |along: f32| camera.to_screen(Vec3::new(0.0, y + along, 0.0)).y;
-    let (near, far) = (height(-CARD_WIDTH / 2.0), height(CARD_WIDTH / 2.0));
+    let (near, far) = (
+        height(-camera.data.card.width / 2.0),
+        height(camera.data.card.width / 2.0),
+    );
     let uncovered = (stack_min.y - near.min(far)).max(near.max(far) - stack_max.y);
     // The reachable check finds an uncovered square only in whole cells of its grid.
     if uncovered >= layout.target + 2.0 * CELL {
@@ -108,19 +124,22 @@ fn left_of_stack((layout, camera): (&Layout, &Camera), side: Side, row: RowName)
     // Along a line of the table at one height, a point's place across the screen is linear in
     // its x. A card's right edge runs the length of an untapped card, and the end of it that
     // stands further right on screen meets the stack's reach first.
-    let right = [-CARD_HEIGHT / 2.0, CARD_HEIGHT / 2.0]
-        .map(|along| {
-            let point = Vec3::new(0.0, y + along, 0.0);
-            (stack_min.x - camera.to_screen(point).x) / camera.points_per_millimetre(point)
-        })
-        .into_iter()
-        .fold(f32::INFINITY, f32::min);
+    let right = [
+        -camera.data.card.height / 2.0,
+        camera.data.card.height / 2.0,
+    ]
+    .map(|along| {
+        let point = Vec3::new(0.0, y + along, 0.0);
+        (stack_min.x - camera.to_screen(point).x) / camera.points_per_millimetre(point)
+    })
+    .into_iter()
+    .fold(f32::INFINITY, f32::min);
     let end = right - layout.gap;
     // On a narrow window, such as the phone's portrait one, the stack's column stands over the
     // rows rather than beside them, and its reach lies left of where the row starts. Cutting
     // the row there would leave it no room, so the row keeps its whole area and the stack is
     // drawn over it.
-    if end < area.left + CARD_HEIGHT {
+    if end < area.left + camera.data.card.height {
         return (area, y);
     }
     let area = RowArea {
@@ -136,14 +155,16 @@ mod tests {
 
     use super::row_area;
     use crate::profiles::Profile;
-    use crate::table::{CARD_HEIGHT, Camera, Layout, Window};
+    use crate::table::{Camera, Layout, Window};
+    use kit_base::data::Card;
     use kit_base::data::profiles::{Profiles, SHIPPED};
     use kit_ui::input::Size;
 
     const ROWS: [RowName; 3] = [RowName::Creatures, RowName::Lands, RowName::Others];
 
     fn reference() -> Layout {
-        let profiles = Profiles::parse(&SHIPPED).unwrap();
+        let card = include_str!("../../../../../../data/beryl3d/card.json");
+        let profiles = Profiles::parse(&SHIPPED, Card::parse(card).unwrap()).unwrap();
         Profile::for_window(&profiles, profiles.fallback().usual_window())
             .reference_layout()
             .unwrap()
@@ -168,7 +189,7 @@ mod tests {
                 for row in ROWS {
                     let (area, _) = row_area((&reference, &camera), side, row);
                     assert!(
-                        area.right - area.left >= CARD_HEIGHT,
+                        area.right - area.left >= reference.camera.card.height,
                         "{width}x{height} {side:?} {row:?}: {} to {}",
                         area.left,
                         area.right,
@@ -191,7 +212,7 @@ mod tests {
                     "{width}x{height} {side:?}"
                 );
                 assert!(
-                    area.right - area.left >= CARD_HEIGHT,
+                    area.right - area.left >= reference.camera.card.height,
                     "{width}x{height} {side:?}"
                 );
             }
@@ -221,8 +242,11 @@ mod tests {
                 (size::ORB_WIDTH * reference.play.life.orb_scale).max(size::STEPS_WIDTH) / 2.0;
             let screen = |row, x: f32| {
                 let (_, y) = row_area((&reference, &camera), Side::You, row);
-                [-CARD_HEIGHT / 2.0, CARD_HEIGHT / 2.0]
-                    .map(|along| camera.to_screen(Vec3::new(x, y + along, 0.0)).x)
+                [
+                    -reference.camera.card.height / 2.0,
+                    reference.camera.card.height / 2.0,
+                ]
+                .map(|along| camera.to_screen(Vec3::new(x, y + along, 0.0)).x)
             };
             let (lands, _) = row_area((&reference, &camera), Side::You, RowName::Lands);
             let (others, _) = row_area((&reference, &camera), Side::You, RowName::Others);

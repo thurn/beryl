@@ -34,7 +34,7 @@ fn frame(tier: Tier) -> Frame {
     let root = holder().position(Position::Absolute).inset([Some(0.0); 4]);
     layer.show(Some(root.child(panel)));
     let mut frame = Frame::with_capacity(8, 8, 32);
-    let mut builder = FrameBuilder::new(&mut frame, tier);
+    let mut builder = FrameBuilder::new(&mut frame, tier, crate::card());
     layer.write(
         &mut builder,
         &ScreenPlane::new(Affine3A::IDENTITY, window, 1.0, 1.0),

@@ -3,8 +3,9 @@
 //!
 //! Units are millimetres. The table is the plane z = 0; x runs to the viewer's right, y away
 //! from the viewer toward the opponent, and z up toward the camera. A card mesh is a card's
-//! printed size, 63 by 88, centred on the origin in the plane z = 0 with its face toward +z,
-//! so a pose's scale of 1 is a card's real size.
+//! printed size (`card.json`, which the camera carries as `CameraData::card`), centred on the
+//! origin in the plane z = 0 with its face toward +z, so a pose's scale of 1 is a card's real
+//! size.
 
 mod anchors;
 pub use anchors::spot_of;
@@ -56,16 +57,13 @@ pub use tray_layout::{
     Across, Held, Second, TrayKind, TrayPoses, TraySpace, landing, tray, tray_area, tray_boxes,
 };
 
-use kit_base::data::space;
 use kit_base::tokens::type_style;
 use kit_frame::frame::Place;
 
 /// Half the line height of a life total in logical points.
 pub const HALF_LIFE: f32 = type_style::TITLE.size * type_style::TITLE.line_height / 2.0;
 
-pub use kit_base::geometry::{CARD_HEIGHT, CARD_WIDTH, Window};
-/// The height between two cards lying one on the other, in a pile or an overlapped row.
-pub const LAYER: f32 = space::card::LAYER;
+pub use kit_base::geometry::Window;
 
 /// Whether a card resting at `place` takes the pointer, once it is face up and the viewer knows
 /// its name: one on the battlefield, on the stack or in the viewer's hand. A pile is one

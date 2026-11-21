@@ -82,7 +82,7 @@ impl<'a> Motion<'a> {
                         && let Some(rest) = self.rests.get(slot)
                     {
                         let rest = Rest {
-                            pose: reposed(record, rest.pose),
+                            pose: reposed(record, rest.pose, table.camera().data.card),
                             ..*rest
                         };
                         self.fresh.set(slot, rest);

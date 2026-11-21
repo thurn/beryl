@@ -23,6 +23,7 @@ use beryl_protocol::protocol::{
 };
 use beryl_protocol::script::Subject;
 use game_hud::hud::placement_scene::PlacementScene;
+use kit_base::data::Card;
 
 use glam::Vec2;
 
@@ -235,7 +236,7 @@ fn touch(element: Element, target: Option<f32>) -> Element {
 /// sort: the cards not yet placed in a row, then a row for each pile with its name, and Done
 /// and Cancel.
 #[must_use]
-pub fn sort_tray(view: &PlayerView, window: Size) -> Option<Element> {
+pub fn sort_tray(view: &PlayerView, window: Size, shape: Card) -> Option<Element> {
     let Some(TablePrompt::Sort {
         title,
         cards,
@@ -245,7 +246,8 @@ pub fn sort_tray(view: &PlayerView, window: Size) -> Option<Element> {
     else {
         return None;
     };
-    let card = |slot: ObjectId| object_box(view, slot).on_press(TableMessage::SortCard(slot));
+    let card =
+        |slot: ObjectId| object_box(view, slot, shape).on_press(TableMessage::SortCard(slot));
     let unplaced = (cards.iter().copied())
         .filter(|slot| !placed.iter().any(|pile| pile.contains(slot)))
         .map(card);

@@ -13,7 +13,7 @@ use beryl_protocol::script::{Act, Fact, Script, Table as Played, time_script};
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use game_play::play::Show;
 use game_probe::agent::steps::{no_jumps, rest_equals_placement, step_times};
-use game_table::table::badges::STYLE;
+use game_table::table::badges::{BadgeSizes, style};
 use glam::{Vec2, Vec3};
 use kit_frame::frame::{Frame, Material, StateBits};
 use kit_text::text::{Glyphs, Text, glyph_key};
@@ -249,7 +249,7 @@ fn a_permanent_reads_as_tapped_from_the_middle_of_its_turn() {
 fn every_glyph() -> Vec<GlyphCell> {
     (0..2_000)
         .map(|glyph| GlyphCell {
-            key: glyph_key(STYLE, SCALE, glyph),
+            key: glyph_key(style(&crate::test_data::data().badges), SCALE, glyph),
             rect: [glyph, 0, 16, 20],
             bearing: [0, -20],
         })
@@ -261,7 +261,12 @@ fn badged_show(before: &GameUpdate) -> Show {
     let mut show = shown(before);
     let mut wanted = Glyphs::default();
     let badges = show.badges_mut();
-    badges.shape(&mut Text::new(), &mut wanted, SCALE);
+    badges.shape(
+        &mut Text::new(),
+        &mut wanted,
+        SCALE,
+        BadgeSizes::of(&crate::test_data::data()),
+    );
     let cells = every_glyph();
     badges.add(1, &cells);
     let _: Vec<GlyphKey> = wanted.drain_wanted().collect();
@@ -286,7 +291,12 @@ fn glyphs_of(text: &str) -> Vec<u16> {
     let mut shaper = Text::new();
     text.chars()
         .flat_map(|piece| {
-            let block = shaper.block(&piece.to_string(), STYLE, &[], None);
+            let block = shaper.block(
+                &piece.to_string(),
+                style(&crate::test_data::data().badges),
+                &[],
+                None,
+            );
             block
                 .glyphs
                 .iter()

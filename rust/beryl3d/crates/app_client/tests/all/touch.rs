@@ -502,7 +502,11 @@ fn strip_card(id: u32, x: f32, depth: f32) -> Resolved {
 #[test]
 fn a_finger_in_a_44_point_strip_reaches_the_card_under_the_one_over_it() {
     let mut frame = Frame::with_capacity(2, 0, 64);
-    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
+    let mut builder = FrameBuilder::new(
+        &mut frame,
+        Tier::Baseline,
+        crate::test_data::data().card.size(),
+    );
     builder.resolved("Island", strip_card(0, 100.0, 2.0));
     builder.resolved("Plains", strip_card(1, 144.0, 1.0));
     builder.finish();

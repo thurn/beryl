@@ -7,7 +7,7 @@ use beryl_protocol::GameUpdate;
 use beryl_protocol::protocol::{CardType, NamedCounter, ObjectId, Side, ZoneName};
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
 use game_play::play::Show;
-use game_table::table::badges::{NAME_STYLE, STYLE};
+use game_table::table::badges::{name_style, style};
 use glam::{Vec2, Vec3};
 use kit_frame::frame::{Frame, Material};
 use kit_text::text::{Glyphs, Text, TypeStyle, glyph_key};
@@ -44,16 +44,19 @@ fn badged(update: &GameUpdate) -> Show {
     let mut wanted = Glyphs::default();
     show.shape_badges(&mut Text::new(), &mut wanted, SCALE);
     let _: Vec<GlyphKey> = wanted.drain_wanted().collect();
-    let cells: Vec<GlyphCell> = [STYLE, NAME_STYLE]
-        .into_iter()
-        .flat_map(|style| {
-            (0..2_000).map(move |glyph| GlyphCell {
-                key: glyph_key(style, SCALE, glyph),
-                rect: [glyph, 0, 16, 20],
-                bearing: [0, -20],
-            })
+    let cells: Vec<GlyphCell> = [
+        style(&crate::test_data::data().badges),
+        name_style(&crate::test_data::data().badges),
+    ]
+    .into_iter()
+    .flat_map(|style| {
+        (0..2_000).map(move |glyph| GlyphCell {
+            key: glyph_key(style, SCALE, glyph),
+            rect: [glyph, 0, 16, 20],
+            bearing: [0, -20],
         })
-        .collect();
+    })
+    .collect();
     let badges = show.badges_mut();
     badges.add(1, &cells);
     badges.add_icons(
@@ -113,10 +116,16 @@ fn a_named_counter_wears_its_shortened_name_before_its_count() {
         row(b.1).total_cmp(&row(a.1)).then(a.1.x.total_cmp(&b.1.x))
     });
     let glyphs: Vec<u16> = records.into_iter().map(|(glyph, _)| glyph).collect();
-    let mut expected = glyphs_of("Corru\u{2026}", NAME_STYLE);
-    expected.extend(glyphs_of("2", STYLE));
-    expected.extend(glyphs_of("Ki", NAME_STYLE));
-    expected.extend(glyphs_of("4", STYLE));
+    let mut expected = glyphs_of(
+        "Corru\u{2026}",
+        name_style(&crate::test_data::data().badges),
+    );
+    expected.extend(glyphs_of("2", style(&crate::test_data::data().badges)));
+    expected.extend(glyphs_of(
+        "Ki",
+        name_style(&crate::test_data::data().badges),
+    ));
+    expected.extend(glyphs_of("4", style(&crate::test_data::data().badges)));
     assert_eq!(
         glyphs, expected,
         "a name past six letters is cut to five and an ellipsis, a shorter one is whole"

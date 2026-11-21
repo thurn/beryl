@@ -3,7 +3,7 @@
 use game_hud::hud::log::{LogKind, LogLine};
 use game_table::profiles::Profile;
 use game_table::table::Window;
-use game_table::table::badges::{NAME_STYLE, counter_label};
+use game_table::table::badges::counter_label;
 use kit_base::data::profiles::Profiles;
 use kit_base::tokens::{size, space, type_style};
 use kit_text::text::{Text, TypeStyle};
@@ -19,10 +19,12 @@ struct Widths {
 pub(super) struct Words {
     widths: Widths,
     text: Text,
+    /// The style the badges shape a named counter's label in.
+    name_style: TypeStyle,
 }
 
 impl Words {
-    pub(super) fn new(profiles: &Profiles, windows: &[Window]) -> Self {
+    pub(super) fn new(profiles: &Profiles, windows: &[Window], name_style: TypeStyle) -> Self {
         let mut widths = Widths {
             inspector: Vec::new(),
             desktop_prompt: Vec::new(),
@@ -82,6 +84,7 @@ impl Words {
         Self {
             widths,
             text: Text::new(),
+            name_style,
         }
     }
 
@@ -90,7 +93,9 @@ impl Words {
     }
 
     pub(super) fn counter_label_shape(&mut self, name: &str) -> (u32, usize) {
-        let block = self.text.block(&counter_label(name), NAME_STYLE, &[], None);
+        let block = self
+            .text
+            .block(&counter_label(name), self.name_style, &[], None);
         (block.width.to_bits(), block.glyphs.len())
     }
 

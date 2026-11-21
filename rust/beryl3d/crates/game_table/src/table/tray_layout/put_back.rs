@@ -4,7 +4,6 @@
 use beryl_protocol::protocol::ObjectId;
 use glam::Vec2;
 
-use super::super::{CARD_HEIGHT, CARD_WIDTH};
 use super::{Area, Held, Laid, Spot, TraySpace, along, height_of, rooms_of, widths};
 
 /// Cards put back from the hand (the second pile) onto the library (the first), each pile laid
@@ -29,7 +28,7 @@ pub(super) fn put_back(held: &Held, space: &TraySpace, (left, wide): (f32, f32))
     // a hand that keeps room for every card the tray holds would close up below `least_step`.
     let fan_room = if own.is_some() { count as f32 } else { room };
     let (width, step) = sizes(space, wide, deep, fan_room);
-    let height = height_of(width);
+    let height = height_of(space, width);
     let fanned = width + step * (room - 1.0).max(0.0);
     let whole = if own.is_some() {
         width
@@ -151,14 +150,14 @@ fn column_spot(
 /// How tall the box of a put-back's hand in a band of its own is, with cards `width` wide, from
 /// its top edge, over the name, to its bottom edge, under the row of cards.
 fn fan_height(space: &TraySpace, width: f32) -> f32 {
-    space.heading + 2.0 * space.gap + height_of(width)
+    space.heading + 2.0 * space.gap + height_of(space, width)
 }
 
 /// How far each card on a put-back's library, `width` wide, lies below the one under it: a
 /// name bar's height, and at least the space's `least_step`.
 fn cascade(space: &TraySpace, width: f32) -> f32 {
     f32::max(
-        space.tuning.put_back.cascade * height_of(width),
+        space.tuning.put_back.cascade * height_of(space, width),
         space.least_step,
     )
 }
@@ -171,7 +170,7 @@ fn cascade(space: &TraySpace, width: f32) -> f32 {
 fn sizes(space: &TraySpace, wide: f32, deep: f32, room: f32) -> (f32, f32) {
     let shape = &space.tuning.put_back;
     let gap = space.gap;
-    let tall = |width: f32| height_of(width) + cascade(space, width) * (deep - 1.0);
+    let tall = |width: f32| height_of(space, width) + cascade(space, width) * (deep - 1.0);
     let fan_step = |width: f32| {
         let across = if space.second.is_some() {
             wide
@@ -202,7 +201,7 @@ fn sizes(space: &TraySpace, wide: f32, deep: f32, room: f32) -> (f32, f32) {
     if let Some(own) = space.second
         && fan_height(space, width) > own.height
     {
-        let most = (own.height - space.heading - 2.0 * gap) * CARD_WIDTH / CARD_HEIGHT;
+        let most = (own.height - space.heading - 2.0 * gap) * space.card.width / space.card.height;
         width = most.max(space.least_step);
         step = fan_step(width);
     }

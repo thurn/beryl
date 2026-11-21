@@ -13,6 +13,7 @@ mod lower;
 
 use beryl_protocol::protocol::Side;
 use glam::Vec2;
+use kit_base::data::Card;
 
 use super::face;
 use game_hud::art::orb::artwork;
@@ -60,7 +61,11 @@ const SWATCHES: [(&str, &str, [u8; 4], [u8; 4]); 5] = [
 ];
 
 /// The page, as wide and tall as the web's `.gallery`, with every panel on it.
-pub(super) fn page(layout: &GalleryLayout, faces: &FaceList, available: bool) -> Element {
+pub(super) fn page(
+    layout: &GalleryLayout,
+    (faces, shape): (&FaceList, Card),
+    available: bool,
+) -> Element {
     holder()
         .name("page")
         .width(layout.page.x)
@@ -93,8 +98,8 @@ pub(super) fn page(layout: &GalleryLayout, faces: &FaceList, available: bool) ->
         .child(foundations(layout))
         .child(actions(layout))
         .child(player_zones(layout, faces))
-        .child(lower::card_states(layout, faces))
-        .child(lower::combat(layout, faces))
+        .child(lower::card_states(layout, (faces, shape)))
+        .child(lower::combat(layout, (faces, shape)))
         .child(lower::scry(layout, faces))
         .child(lower::prompts(layout))
         .child(lower::menus(layout, available))

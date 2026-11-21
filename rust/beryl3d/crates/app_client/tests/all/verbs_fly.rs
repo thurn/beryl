@@ -17,7 +17,6 @@ use game_play::play::record::ScriptRecord;
 use game_probe::agent::steps::{no_jumps, rest_equals_placement, step_times};
 use game_table::table::Window;
 use glam::Vec3;
-use kit_base::data::space;
 use kit_base::pose::{Pose, Segment};
 use kit_probe::agent::Rule;
 use kit_space::motion::pose_at;
@@ -509,7 +508,9 @@ fn a_thrown_permanent_never_rises_past_the_top_of_the_window() {
             );
             highest = highest.max(off_line(pose(&show, slot, t), from, to).dot(up));
         }
-        let full = show.table().data().verbs.fly.thrown.height * space::card::WIDTH * from.scale;
+        let full = show.table().data().verbs.fly.thrown.height
+            * crate::test_data::data().card.width
+            * from.scale;
         if capped {
             assert!(highest < 0.8 * full, "{case}: rises {highest} of {full}");
         } else {

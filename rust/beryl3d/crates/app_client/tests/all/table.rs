@@ -8,7 +8,7 @@ use beryl_protocol::protocol::{
 };
 use beryl_protocol::script::Reset;
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder, script};
-use game_table::table::{ABILITY_IDS, CARD_HEIGHT, CARD_WIDTH, Camera, Placement, Scroll, Window};
+use game_table::table::{ABILITY_IDS, Camera, Placement, Scroll, Window};
 use glam::{Vec2, Vec3};
 use kit_base::pose::Pose;
 use kit_frame::frame::{Frame, Place, Role};
@@ -261,13 +261,13 @@ fn a_crowded_battlefield_keeps_its_cards_in_the_table_with_their_strips_uncovere
         drawn += 1;
         let p = rest.pose.position;
         let half = if object.tapped {
-            CARD_HEIGHT
+            crate::test_data::data().card.height
         } else {
-            CARD_WIDTH
+            crate::test_data::data().card.width
         } / 2.0
             * rest.pose.scale;
         assert!(p.x - half >= low.x && p.x + half <= high.x, "{p}");
-        let long = CARD_HEIGHT / 2.0 * rest.pose.scale;
+        let long = crate::test_data::data().card.height / 2.0 * rest.pose.scale;
         assert!(p.y - long >= low.y && p.y + long <= high.y, "{p}");
     }
     assert!(drawn < 255, "some cards are scrolled out of view");
@@ -343,7 +343,10 @@ fn by_hand(point: Vec3, camera: &Camera) -> Vec2 {
 #[test]
 fn a_card_at_the_tables_centre_projects_where_a_hand_calculation_says() {
     let camera = Camera::fit(reference().camera, window(1440.0, 900.0));
-    let (x, y) = (CARD_WIDTH / 2.0, CARD_HEIGHT / 2.0);
+    let (x, y) = (
+        crate::test_data::data().card.width / 2.0,
+        crate::test_data::data().card.height / 2.0,
+    );
     for corner in [
         Vec3::new(-x, -y, 0.0),
         Vec3::new(x, -y, 0.0),
@@ -545,7 +548,10 @@ fn hands(count: usize) -> PlayerView {
 /// The corners on screen of a card resting at `pose`, in points: its face's bottom left, bottom
 /// right, top right and top left.
 fn corners(pose: &Pose, camera: &Camera) -> [Vec2; 4] {
-    let (x, y) = (CARD_WIDTH / 2.0, CARD_HEIGHT / 2.0);
+    let (x, y) = (
+        crate::test_data::data().card.width / 2.0,
+        crate::test_data::data().card.height / 2.0,
+    );
     let transform = pose.transform();
     [(-x, -y), (x, -y), (x, y), (-x, y)]
         .map(|(x, y)| camera.to_screen(transform.transform_point3(Vec3::new(x, y, 0.0))))
@@ -669,7 +675,7 @@ fn a_hands_cards_lie_on_one_circle_and_turn_more_the_farther_from_the_middle() {
                 .collect();
             let wide = cards[0][0].distance(cards[0][1]);
             // One millimetre of the hand's plane, in points.
-            let millimetre = wide / (CARD_WIDTH * poses[0].scale);
+            let millimetre = wide / (crate::test_data::data().card.width * poses[0].scale);
             let radius = data.fan_radius * wide;
             let middle = (edges[0] + edges[count - 1]) / 2.0;
             // The circle's centre lies below the middle of the viewer's fan, above the

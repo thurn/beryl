@@ -5,7 +5,6 @@ use app_client::Input;
 use app_client::{Client, Config};
 use beryl_protocol::protocol::{CardType, Combat, ObjectId, Side, ZoneName};
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
-use game_table::table::{CARD_HEIGHT, CARD_WIDTH};
 use glam::{Affine3A, Vec3};
 use kit_frame::frame::{Band, Draw, Frame, Material, Sprite, sprites};
 use kit_ui::input::{Insets, Size};
@@ -101,7 +100,8 @@ fn a_summoning_sick_creature_has_one_more_record_inside_its_corners() {
     assert_eq!(moons.len(), 1, "one moon");
     let at = on_card(&sick, &moons[0].1);
     assert!(
-        at.x.abs() < CARD_WIDTH / 2.0 && at.y.abs() < CARD_HEIGHT / 2.0,
+        at.x.abs() < crate::test_data::data().card.width / 2.0
+            && at.y.abs() < crate::test_data::data().card.height / 2.0,
         "{at}"
     );
     assert!(at.y < 0.0, "the moon is over the lower half: {at}");
@@ -143,7 +143,7 @@ fn an_attackers_wedge_lies_past_the_edge_toward_the_defender() {
         // The viewer sits at -y, so the opponent's side of the table is +y.
         let past = (wedge.y - card.y) * toward;
         assert!(
-            past > CARD_HEIGHT / 2.0,
+            past > crate::test_data::data().card.height / 2.0,
             "{side:?}'s wedge is {past} mm toward the defender from the card's middle"
         );
     }
@@ -162,7 +162,7 @@ fn a_tapped_attackers_wedge_is_on_the_side_facing_the_defender() {
     let wedge = marks(&frame, sprites::WEDGE)[0].1;
     let card = transform(&card(&frame)).translation;
     let past = transform(&wedge).translation.y - card.y;
-    assert!(past > CARD_WIDTH / 2.0, "{past}");
+    assert!(past > crate::test_data::data().card.width / 2.0, "{past}");
 }
 
 #[test]
@@ -182,7 +182,7 @@ fn a_blockers_crescent_is_in_the_tables_band() {
     let card = transform(&card(&frame)).translation;
     let past = card.y - transform(&crescents[0].1).translation.y;
     assert!(
-        past > CARD_HEIGHT / 2.0,
+        past > crate::test_data::data().card.height / 2.0,
         "toward the viewer's attacker: {past}"
     );
 }

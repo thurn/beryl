@@ -1,6 +1,6 @@
 use glam::{Quat, Vec2, Vec3};
 use kit_base::data::profiles::{Profiles, SHIPPED};
-use kit_base::geometry::{CARD_HEIGHT, CARD_WIDTH, Insets, Rect, Size, Window};
+use kit_base::geometry::{Insets, Rect, Size, Window};
 use kit_space::arrange::{
     Alignment, CentredFan, Container, Edge, Fan, Group, Item, Limits, Overflow, Policy, Region,
     Solved, Under, arrange,
@@ -29,12 +29,12 @@ fn rectangles(count: usize, size: Vec2) -> Vec<Item> {
 }
 
 fn reference_camera() -> Camera {
-    let profiles = Profiles::parse(&SHIPPED).unwrap();
+    let profiles = Profiles::parse(&SHIPPED, crate::card_data()).unwrap();
     Camera::fit(profiles.fallback().table.camera, Window::default())
 }
 
 fn profiles() -> [(Camera, f32); 2] {
-    let profiles = Profiles::parse(&SHIPPED).unwrap();
+    let profiles = Profiles::parse(&SHIPPED, crate::card_data()).unwrap();
     let compact = profiles.for_size(Size {
         width: 393.0,
         height: 759.0,
@@ -50,7 +50,7 @@ fn profiles() -> [(Camera, f32); 2] {
     let bands = compact.table.bands.unwrap();
     let width = tall.size.width - bands.side * 2.0;
     let hand = (width * bands.hand_share).min(bands.hand_width);
-    let hand = (hand * (CARD_HEIGHT / CARD_WIDTH) * bands.hand_shown).round();
+    let hand = (hand * (crate::card().y / crate::card().x) * bands.hand_shown).round();
     let top = tall.safe_area.top + bands.opponent_strip;
     let bottom = tall.size.height - hand - tall.safe_area.bottom - bands.you_strip;
     let area = Rect {
@@ -426,11 +426,11 @@ fn overlapping_rows_keep_the_prefix_before_a_removal() {
 
 #[test]
 fn a_centred_fan_wraps_before_scrolling_and_keeps_its_press_squares() {
-    let items = rectangles(60, Vec2::new(CARD_WIDTH, CARD_HEIGHT));
+    let items = rectangles(60, Vec2::new(crate::card().x, crate::card().y));
     for ((camera, target), scrolls) in profiles().into_iter().zip([false, true]) {
         let window = camera.window.size;
         let anchor = camera.screen_pose(Vec2::new(0.0, -0.62), 300.0, Quat::IDENTITY, 0.5);
-        let units = anchor.scale * CARD_HEIGHT;
+        let units = anchor.scale * crate::card().y;
         let fan = Container {
             region: Region {
                 centre: anchor.position,
@@ -438,8 +438,10 @@ fn a_centred_fan_wraps_before_scrolling_and_keeps_its_press_squares() {
                 rotation: anchor.rotation,
             },
             policy: Policy::Fan(Fan::Centred(CentredFan {
-                height: f32::min(100.0 / (CARD_WIDTH / CARD_HEIGHT), window.height * 0.28)
-                    / window.height,
+                height: f32::min(
+                    100.0 / (crate::card().x / crate::card().y),
+                    window.height * 0.28,
+                ) / window.height,
                 radius: 14.0,
                 step: 0.95,
                 span: 3.35,

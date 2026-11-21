@@ -412,7 +412,8 @@ mod tests {
             Renderer::headless(Limits::Default, crate::test_lighting()).expect("a GPU adapter");
         assert!(renderer.enhanced_available(), "no Enhanced support");
         let mut frame = Frame::with_capacity(0, 1, 0);
-        let mut builder = FrameBuilder::new(&mut frame, Tier::Enhanced);
+        let mut builder =
+            FrameBuilder::new(&mut frame, Tier::Enhanced, glam::Vec2::new(63.0, 88.0));
         builder.camera(directx::orthographic(
             -100.0, 100.0, -100.0, 100.0, -100.0, 100.0,
         ));

@@ -20,7 +20,7 @@ use super::shadows::Floors;
 use super::shown::Shown;
 use super::tray::TrayMotion;
 use super::tray_layout::Held;
-use super::{CARD_HEIGHT, CARD_WIDTH, Camera, Layout, PlayerAnchor, Window, takes_pointer};
+use super::{Camera, Layout, PlayerAnchor, Window, takes_pointer};
 use crate::faces::{CARD_BACK, Faces};
 use crate::profiles::Profile;
 use kit_base::data::Data;
@@ -360,7 +360,7 @@ impl Table {
             self.layout.players[0] = dock.anchor(self.camera.window, top);
         }
         let placement = self.with_held(placement);
-        self.objects = Self::objects_for(view, numbers, &placement);
+        self.objects = self.objects_for(view, numbers, &placement);
     }
 
     /// Exchanges the resting scene at the end of a script without allocating.
@@ -455,7 +455,11 @@ impl Table {
         self.write_abilities(view, motion, faces, (back, dress), builder);
         self.write_revealed(faces, (back, dress.now), revealed, builder);
         let cloth = Affine3A::from_scale_rotation_translation(
-            Vec3::new(CLOTH / CARD_WIDTH, CLOTH / CARD_HEIGHT, 1.0),
+            Vec3::new(
+                CLOTH / self.camera.data.card.width,
+                CLOTH / self.camera.data.card.height,
+                1.0,
+            ),
             glam::Quat::IDENTITY,
             Vec3::new(0.0, 0.0, CLOTH_HEIGHT),
         );

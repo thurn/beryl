@@ -14,7 +14,8 @@ use glam::Vec2;
 use super::revealed::{REVEALED, RevealedFace};
 use crate::hud::piles::pile_cards;
 use game_table::faces::{CARD_BACK, FaceList};
-use game_table::table::{CARD_HEIGHT, CARD_WIDTH, pile_name};
+use game_table::table::pile_name;
+use kit_base::data::Card;
 use kit_base::data::presentation::Gallery;
 use kit_base::tokens::{color, size, space, type_style};
 use kit_frame::frame::{ElementId, Role};
@@ -30,7 +31,7 @@ use kit_ui::widgets::{icon_button, icons};
 /// rows. Its close button and Escape close it (`Dismiss::Viewer`).
 #[must_use]
 pub(super) fn dialog(
-    (window, centre): (Size, Vec2),
+    (window, centre, card): (Size, Vec2, Card),
     view: Option<&PlayerView>,
     viewing: Option<Viewed>,
     revealed: &[RevealedFace],
@@ -40,11 +41,14 @@ pub(super) fn dialog(
             let view = view?;
             let mut slots = pile_cards(view, side, zone);
             slots.reverse();
-            let boxes: Vec<Element> = slots.iter().map(|&slot| object_box(view, slot)).collect();
+            let boxes: Vec<Element> = slots
+                .iter()
+                .map(|&slot| object_box(view, slot, card))
+                .collect();
             (pile_title(side, zone).to_owned(), boxes)
         }
         Viewed::Revealed => {
-            let boxes = revealed.iter().map(face_box).collect();
+            let boxes = revealed.iter().map(|face| face_box(face, card)).collect();
             (REVEALED.to_owned(), boxes)
         }
     };
@@ -167,29 +171,29 @@ pub fn cards(boxes: Vec<Element>) -> Element {
     grid
 }
 
-/// A box of the grid, a card's size, named `name`.
-fn card_box(name: &str) -> Element {
+/// A box of the grid, the shape of `card`, named `name`.
+fn card_box(name: &str, card: Card) -> Element {
     Element::new(Role::Region)
         .name(name)
         .width(size::VIEWER_CARD)
-        .height(size::VIEWER_CARD * CARD_HEIGHT / CARD_WIDTH)
+        .height(size::VIEWER_CARD * card.height / card.width)
 }
 
 /// The box that shows the scene object in `slot`, named for its card and slot, as a locator
 /// names a card ("Island #8").
-pub fn object_box(view: &PlayerView, slot: ObjectId) -> Element {
+pub fn object_box(view: &PlayerView, slot: ObjectId, card: Card) -> Element {
     let object = view.objects.iter().find(|object| object.slot == slot);
     let name = object
         .and_then(|object| object.name.as_deref())
         .unwrap_or("card");
-    let mut element = card_box(&format!("{name} #{}", slot.0));
+    let mut element = card_box(&format!("{name} #{}", slot.0), card);
     element.show = Some(Show::object(ElementId(u32::from(slot.0))));
     element
 }
 
 /// The box that shows a revealed face flat.
-fn face_box(face: &RevealedFace) -> Element {
-    let mut element = card_box(&format!("{} #{}", face.name, face.slot.0));
+fn face_box(face: &RevealedFace, card: Card) -> Element {
+    let mut element = card_box(&format!("{} #{}", face.name, face.slot.0), card);
     element.shows = face.face.map(|id| Shown::Face(id, FaceSize::Board));
     element
 }
@@ -197,12 +201,12 @@ fn face_box(face: &RevealedFace) -> Element {
 /// The web gallery's Scry sample, as an embedded preview of the overlay's zones,
 /// source card and action.
 #[must_use]
-pub fn scry_sample(faces: &FaceList, gallery: &Gallery) -> Element {
+pub fn scry_sample(faces: &FaceList, gallery: &Gallery, shape: Card) -> Element {
     let find = |name| faces.find(name).expect("the gallery lists the scry face");
     let card = |id: FaceId, name, width| {
-        let mut card = card_box(name)
+        let mut card = card_box(name, shape)
             .width(width)
-            .height(width * CARD_HEIGHT / CARD_WIDTH)
+            .height(width * shape.height / shape.width)
             .background(color::SURFACE);
         card.shows = Some(Shown::Face(id, FaceSize::Board));
         card

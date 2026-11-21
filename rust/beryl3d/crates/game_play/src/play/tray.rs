@@ -10,7 +10,7 @@ use super::Show;
 use super::compile::{nanoseconds, subject_of};
 use crate::beat::Laid;
 use crate::light::Lit;
-use game_table::table::{CARD_WIDTH, Held, Moves, TrayPoses};
+use game_table::table::{Held, Moves, TrayPoses};
 use kit_base::pose::{Curve, Pose};
 use kit_scene::ShowPlacement;
 
@@ -128,7 +128,8 @@ impl Show {
             };
             // A card the script only turns over where it lies, or moves within its pile as it
             // reorders it, goes back with the rest.
-            if last.position.distance(resting.position) <= CARD_WIDTH / 2.0 {
+            if last.position.distance(resting.position) <= self.table.camera().data.card.width / 2.0
+            {
                 continue;
             }
             handed.push(slot);

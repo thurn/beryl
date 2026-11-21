@@ -25,7 +25,7 @@ use std::f32::consts::PI;
 use beryl_protocol::protocol::{Combat, ObjectView, Side};
 use glam::{Affine3A, Quat, Vec2, Vec3};
 
-use super::{CARD_HEIGHT, CARD_WIDTH, Look};
+use super::Look;
 use kit_base::data::light::Own;
 use kit_base::tokens::color;
 use kit_frame::frame::{Band, Draw, FrameBuilder, PaintBand, Sprite, sprites};
@@ -103,14 +103,14 @@ pub(super) fn write(
     if look.pose.opacity <= 0.0 {
         return;
     }
+    let card = builder.card();
     let mut marks = Marks::on(look, own, band, builder);
-    let card = Vec2::new(CARD_WIDTH, CARD_HEIGHT);
     if record.summoning_sick {
-        let size = Vec2::splat(own.moon.size * CARD_WIDTH);
+        let size = Vec2::splat(own.moon.size * card.x);
         marks.icon(sprites::MOON, own.moon.at * card, size, color::MOON);
     }
     if record.token {
-        let size = Vec2::splat(own.coin.size * CARD_WIDTH);
+        let size = Vec2::splat(own.coin.size * card.x);
         marks.icon(sprites::COIN, own.coin.at * card, size, color::COIN);
     }
     if record.controller != record.owner {
@@ -123,7 +123,7 @@ pub(super) fn write(
             reason = "an age in nanoseconds; a few seconds fit an f32's precision well enough"
         )]
         let age = now.saturating_sub(since) as f32 / 1e6;
-        let edge = Edge::toward(look.pose.rotation, defending(record.controller));
+        let edge = Edge::toward(look.pose.rotation, defending(record.controller), card);
         marks.fight(fighting, &edge, age);
     }
 }
@@ -207,9 +207,13 @@ impl<'b, 'f> Marks<'b, 'f> {
         let turn = edge.axis.y.atan2(edge.axis.x) - PI / 2.0;
         if fighting == Fighting::Attacks {
             let pop = (-age / self.own.wedge.pop_ms).exp();
-            let length = self.own.wedge.chevron * CARD_WIDTH * (1.0 + self.own.wedge.pop.y * pop);
-            let size =
-                sprites::wedge_size(edge.across * (1.0 + self.own.wedge.pop.x * pop), length);
+            let card_width = self.builder.card().x;
+            let length = self.own.wedge.chevron * card_width * (1.0 + self.own.wedge.pop.y * pop);
+            let size = sprites::wedge_size(
+                edge.across * (1.0 + self.own.wedge.pop.x * pop),
+                length,
+                card_width,
+            );
             let transform = self.past(edge, length / 2.0, size, turn);
             for (sprite, tint) in [
                 (sprites::WEDGE, color::WEDGE),
@@ -256,20 +260,21 @@ struct Edge {
 
 impl Edge {
     /// The edge of a card turned by `rotation` that faces most nearly `way`, a direction in the
-    /// table's space. A tapped attacker's wedge is on its long side, which faces the defender.
-    fn toward(rotation: Quat, way: Vec2) -> Self {
+    /// table's space, on a card `card` wide and high. A tapped attacker's wedge is on its long
+    /// side, which faces the defender.
+    fn toward(rotation: Quat, way: Vec2, card: Vec2) -> Self {
         let local = rotation.inverse() * way.extend(0.0);
         if local.y.abs() >= local.x.abs() {
             Self {
                 axis: Vec2::new(0.0, local.y.signum()),
-                reach: CARD_HEIGHT / 2.0,
-                across: CARD_WIDTH,
+                reach: card.y / 2.0,
+                across: card.x,
             }
         } else {
             Self {
                 axis: Vec2::new(local.x.signum(), 0.0),
-                reach: CARD_WIDTH / 2.0,
-                across: CARD_HEIGHT,
+                reach: card.x / 2.0,
+                across: card.y,
             }
         }
     }

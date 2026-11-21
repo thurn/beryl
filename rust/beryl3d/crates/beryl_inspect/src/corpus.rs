@@ -64,7 +64,7 @@ fn fixtures() -> Result<BTreeSet<String>, String> {
 /// is sorted by name and seat, so insertion chooses the first name in each group.
 pub(crate) fn representatives() -> Result<Vec<Representative<'static>>, String> {
     let windows = Windows::All.windows();
-    let mut measure = Measure::new(&crate::data::checkout_ref()?.profiles, &windows);
+    let mut measure = Measure::new(crate::data::checkout_ref()?, &windows);
     let mut groups = HashMap::<Vec<(Seat, Signature)>, Representative<'_>>::new();
     for entries in recordings::entries()?.chunk_by(|a, b| a.name == b.name) {
         let name = entries[0].name;

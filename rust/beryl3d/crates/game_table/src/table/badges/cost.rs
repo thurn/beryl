@@ -3,14 +3,14 @@
 //! `.hand-cost` (UI Conventions, "The hand's fan"). `badges.cost` measures each disc and gap in
 //! twelfths of a hand card's width. `Badges::shape_costs` shapes symbols when a face list arrives.
 //! A frame places the cached glyphs without allocating.
-//! The sizes come from `data/beryl3d/space-constants.json`.
+//! The sizes come from `cost` in `data/beryl3d/badges.json`.
 
 use beryl_protocol::protocol::{ObjectView, ZoneName};
 use glam::{Affine3A, Quat, Vec2, Vec3};
 
 use super::{Badges, On, faded};
 use crate::faces::{FaceList, ListedFace};
-use kit_base::data::space::badges::cost as data;
+use kit_base::data::BadgeTuning;
 use kit_base::tokens::{badge, mana};
 use kit_frame::frame::{
     Draw, ElementId, FrameBuilder, NameRef, Place, RECORDS_PER_OBJECT, Resolved, Role, Sprite,
@@ -19,7 +19,7 @@ use kit_frame::frame::{
 use kit_text::text::fonts::Font;
 use kit_text::text::{Block, Glyphs, Text, TypeStyle, glyph_key};
 
-use super::super::{CARD_HEIGHT, CARD_WIDTH, Camera};
+use super::super::Camera;
 use kit_frame::frame::ARROW_IDS;
 
 /// The element id of the cost of the card in slot 0: past the arrows' and the aims'. The cost
@@ -29,14 +29,16 @@ const COST_IDS: u32 = ARROW_IDS + (1 << 17);
 /// The style a symbol is shaped in: the card font around it, for a symbol the Mana font has no
 /// glyph for, at a size near the one a hand card shows it at, so that its glyph is drawn from a
 /// cell of about its size.
-const STYLE: TypeStyle = TypeStyle {
-    font: Font::CrimsonPro,
-    weight: 700,
-    italic: false,
-    size: data::POINTS,
-    line_height: 1.0,
-    letter_spacing: 0.0,
-};
+fn style(tuning: &BadgeTuning) -> TypeStyle {
+    TypeStyle {
+        font: Font::CrimsonPro,
+        weight: 700,
+        italic: false,
+        size: tuning.cost.points,
+        line_height: 1.0,
+        letter_spacing: 0.0,
+    }
+}
 
 /// The records a cost may write: those a card may write besides itself, its soft edge, its
 /// contact shadow and a mark. A hand card wears no badges, so they are all the cost's: seven
@@ -69,16 +71,19 @@ fn symbols(cost: &str) -> impl Iterator<Item = &str> {
         .filter(|symbol| !symbol.is_empty())
 }
 
-/// The millimetres in one type unit of a hand card.
-fn em() -> f32 {
-    data::EM * CARD_WIDTH
-}
-
 impl Badges {
+    /// The millimetres in one type unit of a hand card.
+    fn cost_em(&self) -> f32 {
+        self.sizes().tuning.cost.em * self.sizes().card.width
+    }
+
     /// Shapes every mana symbol of a cost in `list` not shaped yet, and asks `wanted` for their
     /// glyphs. A list's costs are shaped when its first view arrives; one already shaped costs
     /// a look-up for each of its symbols.
     pub fn shape_costs(&mut self, text: &mut Text, wanted: &mut Glyphs, list: &FaceList) {
+        let Some(sizes) = self.sizes else {
+            return;
+        };
         let costs = list
             .faces()
             .iter()
@@ -92,7 +97,9 @@ impl Badges {
                 else {
                     continue;
                 };
-                let block = text.block(&cost_of(symbol), STYLE, &[], None).clone();
+                let block = text
+                    .block(&cost_of(symbol), style(&sizes.tuning), &[], None)
+                    .clone();
                 wanted.want(&block, self.scale);
                 self.costs.symbols.insert(at, (symbol.into(), block));
             }
@@ -133,18 +140,21 @@ impl Badges {
         if shown == 0 {
             return;
         }
-        let (disc, gap) = (data::SYMBOL * em(), data::GAP * em());
+        let (disc, gap) = (
+            self.tuning().cost.symbol * self.cost_em(),
+            self.tuning().cost.gap * self.cost_em(),
+        );
         #[expect(
             clippy::cast_precision_loss,
             reason = "a cost has far fewer than 2^24 symbols"
         )]
         let width = shown as f32 * disc + (shown - 1) as f32 * gap;
-        let corner = Vec2::new(CARD_WIDTH, CARD_HEIGHT) / 2.0;
-        let right = corner.x - data::RIGHT * em();
-        let bottom = corner.y - data::SINK * em();
+        let corner = self.sizes().card.half();
+        let right = corner.x - self.tuning().cost.right * self.cost_em();
+        let bottom = corner.y - self.tuning().cost.sink * self.cost_em();
         // Toward the eye by `LIFT` millimetres, in the card's own units, so that the cost stands
         // in front of the next cards of the fan.
-        let height = data::LIFT / on.pose.scale.max(f32::EPSILON);
+        let height = self.tuning().cost.lift / on.pose.scale.max(f32::EPSILON);
         let card = on.pose.upward();
         let box_corners = [
             Vec2::new(right - width, bottom),
@@ -221,12 +231,12 @@ impl Badges {
                 faded(badge::COST_RING, on.opacity),
                 Vec2::splat(disc),
                 disc / 2.0,
-                data::RING * em(),
+                self.tuning().cost.ring * self.cost_em(),
             ),
         );
         // Millimetres per point of the shaped symbol, and how far its glyphs stand above the disc.
         let k = disc / symbol.rect.width;
-        let raise = super::data::RAISE * super::em();
+        let raise = self.raise();
         for glyph in &block.glyphs {
             let run = block.run(glyph.run);
             let Some((placed, larger)) =

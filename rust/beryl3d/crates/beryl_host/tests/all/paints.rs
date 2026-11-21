@@ -39,7 +39,7 @@ fn picture(
     let root = holder().position(Position::Absolute).inset([Some(0.0); 4]);
     layer.show(Some(root.children(elements)));
     let mut frame = Frame::with_capacity(16, 16, 64);
-    let mut builder = FrameBuilder::new(&mut frame, tier);
+    let mut builder = FrameBuilder::new(&mut frame, tier, crate::test_data::data().card.size());
     let data = crate::test_data::data();
     let camera = Camera::fit(data.profiles.fallback().table.camera, window);
     builder.camera(camera.view_projection);

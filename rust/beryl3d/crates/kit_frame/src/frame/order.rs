@@ -17,7 +17,6 @@ use super::{
     BANDS, Band, Draw, ElementId, Frame, FrameBuilder, Material, Mesh, Resolved, Role, StateBits,
     sprites,
 };
-use kit_base::geometry::{CARD_HEIGHT, CARD_WIDTH};
 
 /// The low bits of a sort key hold the record's index in push order, so that records that tie
 /// keep the order they were pushed in, and the sort is the same on every machine.
@@ -159,14 +158,14 @@ impl Scratch {
 /// Puts `frame.draws` in drawing order, sets `opaque`, `layer` and `bands`, and counts the
 /// load, all but the screen areas, which `areas` measures when a gate asks for them.
 pub(super) fn finish(frame: &mut Frame) {
-    let view_projection = frame.view_projection;
+    let (view_projection, card) = (frame.view_projection, frame.card);
     let Frame { draws, scratch, .. } = frame;
     for key in &mut scratch.keys {
         let draw = &draws[(*key & INDEX_MASK) as usize];
         *key |= u64::from(depth_key(band_of(*key), draw, view_projection)) << DEPTH_SHIFT;
     }
     scratch.keys.sort_unstable();
-    batch_bands(scratch, draws, &view_projection);
+    batch_bands(scratch, draws, (&view_projection, card));
     scratch.draws.extend(
         scratch
             .keys
@@ -200,7 +199,7 @@ pub(super) fn areas(frame: &Frame) -> super::Areas {
         ..frame.bands[Band::Moving as usize] as usize;
     let mut areas = super::Areas::default();
     for (index, draw) in frame.draws.iter().enumerate() {
-        let area = screen_area(draw, &frame.view_projection);
+        let area = screen_area(draw, &frame.view_projection, frame.card);
         if index < opaque || moving_opaque.contains(&index) {
             areas.opaque += area;
         } else {
@@ -437,7 +436,7 @@ fn overlap(a: &Rect, b: &Rect) -> bool {
 
 /// Batches the records of each blended band of the table (`batch`). The flat layer's bands
 /// keep the order of their tree.
-fn batch_bands(scratch: &mut Scratch, draws: &[Draw], view_projection: &Mat4) {
+fn batch_bands(scratch: &mut Scratch, draws: &[Draw], camera: (&Mat4, Vec2)) {
     let Scratch {
         keys,
         batching,
@@ -450,12 +449,7 @@ fn batch_bands(scratch: &mut Scratch, draws: &[Draw], view_projection: &Mat4) {
         let band = band_of(keys[start]);
         let len = keys[start..end].partition_point(|&key| band_of(key) == band);
         if band != Band::MovingOpaque && *mixed & (1 << band as u16) != 0 {
-            batch(
-                &mut keys[start..start + len],
-                draws,
-                view_projection,
-                batching,
-            );
+            batch(&mut keys[start..start + len], draws, camera, batching);
         }
         start += len;
     }
@@ -506,7 +500,12 @@ fn grouped(keys: &[u64], draws: &[Draw]) -> bool {
 /// still not placed. A record is never placed before one it overlaps that was before it, unless
 /// both add their light to what is beneath them (`additive`): sums come out the same in any
 /// order.
-fn batch(keys: &mut [u64], draws: &[Draw], view_projection: &Mat4, batching: &mut Batching) {
+fn batch(
+    keys: &mut [u64],
+    draws: &[Draw],
+    (view_projection, card): (&Mat4, Vec2),
+    batching: &mut Batching,
+) {
     if grouped(keys, draws) {
         return;
     }
@@ -523,7 +522,7 @@ fn batch(keys: &mut [u64], draws: &[Draw], view_projection: &Mat4, batching: &mu
     out.clear();
     for &key in keys.iter() {
         let draw = &draws[(key & INDEX_MASK) as usize];
-        rects.push(screen_rect(draw, view_projection));
+        rects.push(screen_rect(draw, view_projection, card));
         additive.push(adds(draw));
         placed.push(false);
     }
@@ -619,10 +618,11 @@ fn rect_area(draw: &Draw, view_projection: &Mat4, half: Vec2) -> f32 {
     twice.abs() / 8.0
 }
 
-/// Half the size of the rectangle that bounds `mesh` in its own space.
-fn bounds(mesh: Mesh) -> Vec2 {
+/// Half the size of the rectangle that bounds `mesh` in its own space, where a card mesh is
+/// `card` large.
+fn bounds(mesh: Mesh, card: Vec2) -> Vec2 {
     match mesh {
-        Mesh::Card | Mesh::CardEdge => Vec2::new(CARD_WIDTH, CARD_HEIGHT) / 2.0,
+        Mesh::Card | Mesh::CardEdge => card / 2.0,
         Mesh::Quad => Vec2::splat(0.5),
         Mesh::Outline => Vec2::from(sprites::OUTLINE_OUTER),
     }
@@ -633,14 +633,14 @@ fn bounds(mesh: Mesh) -> Vec2 {
 /// mesh's empty middle. The rounded corners of a card are counted as covered. The edge strip is
 /// one pixel wide, so it is counted as covering nothing. A clip rectangle is not taken into
 /// account.
-fn screen_area(draw: &Draw, view_projection: &Mat4) -> f32 {
+fn screen_area(draw: &Draw, view_projection: &Mat4, card: Vec2) -> f32 {
     match mesh_of(draw) {
         Mesh::CardEdge => 0.0,
         Mesh::Outline => {
-            rect_area(draw, view_projection, bounds(Mesh::Outline))
+            rect_area(draw, view_projection, bounds(Mesh::Outline, card))
                 - rect_area(draw, view_projection, Vec2::from(sprites::OUTLINE_HOLE))
         }
-        mesh => rect_area(draw, view_projection, bounds(mesh)),
+        mesh => rect_area(draw, view_projection, bounds(mesh, card)),
     }
 }
 
@@ -649,8 +649,8 @@ fn screen_area(draw: &Draw, view_projection: &Mat4) -> f32 {
 /// its four corners as projected; only one that reaches behind it is cut to the view volume
 /// first. Depth and a clip rectangle are not taken into account, so the rectangle may be larger
 /// than what is drawn, never smaller.
-fn screen_rect(draw: &Draw, view_projection: &Mat4) -> Rect {
-    let half = bounds(mesh_of(draw));
+fn screen_rect(draw: &Draw, view_projection: &Mat4, card: Vec2) -> Rect {
+    let half = bounds(mesh_of(draw), card);
     let m = &draw.model;
     let corner = |x: f32, y: f32| {
         *view_projection

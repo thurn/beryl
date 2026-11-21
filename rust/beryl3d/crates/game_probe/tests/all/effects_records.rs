@@ -57,7 +57,8 @@ fn records(effect: Effect, data: &Effects) -> String {
                 state: 0,
                 interactive: false,
             };
-            let mut builder = FrameBuilder::new(&mut frame, tier);
+            let mut builder =
+                FrameBuilder::new(&mut frame, tier, crate::test_data::data().card.size());
             card::look((data, tier), &runs, on, now, None, &mut surface);
             card::write(data, &runs, on, now, &surface, &mut builder);
             light::write(data, &runs, now, |_, _| Some(reach), Vec3::Z, &mut builder);
@@ -127,7 +128,8 @@ fn remaining_records(effect: Effect, on: Subject, moving: bool, data: &Effects) 
             let now = run.start + ms * MS;
             let mut surface = card::Look::new(pose, Some(1), Some([2, 3]), 0, false);
             surface.tint = [190, 210, 230];
-            let mut builder = FrameBuilder::new(&mut frame, tier);
+            let mut builder =
+                FrameBuilder::new(&mut frame, tier, crate::test_data::data().card.size());
             card::look((data, tier), &[run], on, now, Some(4), &mut surface);
             card::write(data, &[run], on, now, &surface, &mut builder);
             effects::write(

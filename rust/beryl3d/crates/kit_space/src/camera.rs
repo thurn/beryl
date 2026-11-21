@@ -6,7 +6,7 @@
 use glam::camera::rh::{proj::directx, view::look_at_mat4};
 use glam::{Affine3A, Mat3, Mat4, Quat, Vec2, Vec3};
 
-use kit_base::geometry::{CARD_HEIGHT, CARD_WIDTH, Window};
+use kit_base::geometry::Window;
 use kit_base::geometry::{Rect, plane::ScreenPlane};
 use kit_base::pose::Pose;
 
@@ -175,16 +175,17 @@ impl Camera {
         Pose {
             position: self.inverse_view.transform_point3(local),
             rotation: self.inverse_rotation * rotation,
-            scale: height * 2.0 * depth * self.tan_half / CARD_HEIGHT,
+            scale: height * 2.0 * depth * self.tan_half / self.data.card.height,
             ..Pose::default()
         }
     }
 
-    /// A card's corners on screen, in logical points, when the unit card is laid by `transform`:
+    /// A card's corners on screen, in logical points, when a card of the camera's card size is
+    /// laid by `transform`:
     /// bottom left, bottom right, top right and top left of its face.
     #[must_use]
     pub fn card_corners(&self, transform: Affine3A) -> [Vec2; 4] {
-        let (x, y) = (CARD_WIDTH / 2.0, CARD_HEIGHT / 2.0);
+        let Vec2 { x, y } = self.data.card.half();
         [(-x, -y), (x, -y), (x, y), (-x, y)]
             .map(|(x, y)| self.to_screen(transform.transform_point3(Vec3::new(x, y, 0.0))))
     }

@@ -37,7 +37,8 @@ pub fn empty_frame() -> Frame {
 
 /// The frame `show` draws at `now`.
 pub fn frame(show: &mut Show, frame: &mut Frame, now: u64) -> Frame {
-    let mut builder = FrameBuilder::new(frame, Tier::Baseline);
+    let mut builder =
+        FrameBuilder::new(frame, Tier::Baseline, crate::test_data::data().card.size());
     show.frame(now, &mut builder);
     builder.finish().clone()
 }

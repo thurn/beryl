@@ -174,7 +174,14 @@ fn after_each_verbs_zones_script_every_object_rests_at_its_placement() {
         let mut now = 0;
         for (index, update) in views.into_iter().enumerate() {
             show.push(Box::new(update.clone()), timings(&update));
-            show.frame(now, &mut FrameBuilder::new(&mut frame, Tier::Baseline));
+            show.frame(
+                now,
+                &mut FrameBuilder::new(
+                    &mut frame,
+                    Tier::Baseline,
+                    crate::test_data::data().card.size(),
+                ),
+            );
             // The show lists each hand in its order of arrival, where the session's view lists
             // it by slot, so the view placed is the one the show ends on.
             let latest = show.latest().expect("the view was given");
@@ -210,7 +217,14 @@ fn after_each_verbs_zones_script_every_object_rests_at_its_placement() {
                     Wake::Now => now + 16_666_667,
                     Wake::At(at) => at.max(now + 1),
                 };
-                show.frame(now, &mut FrameBuilder::new(&mut frame, Tier::Baseline));
+                show.frame(
+                    now,
+                    &mut FrameBuilder::new(
+                        &mut frame,
+                        Tier::Baseline,
+                        crate::test_data::data().card.size(),
+                    ),
+                );
             }
             for object in &update.view.objects {
                 let rest = placement.get(object.slot).map(|rest| rest.pose);

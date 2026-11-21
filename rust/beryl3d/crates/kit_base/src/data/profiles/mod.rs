@@ -5,6 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use glam::{Vec2, Vec3};
 use serde::{Deserialize, Deserializer};
 
+use super::Card;
 use super::tuning::{fraction, nonnegative, positive, read, vector};
 use crate::geometry::{Insets, Size, Window};
 mod screen;
@@ -45,6 +46,22 @@ pub struct CameraData {
     /// The lowest and highest corners of the required rectangle, in millimetres on the table.
     #[serde(deserialize_with = "corners")]
     pub required: [Vec2; 2],
+    /// The card's data (`card.json`): its printed size in millimetres, which a pose's scale of 1
+    /// measures, and how far stacked cards lie apart. A profile does not write it:
+    /// `Profiles::parse` copies it in, so every camera, and the placement that reads the camera,
+    /// sizes cards as the card meshes do.
+    #[serde(skip, default = "unset_card")]
+    pub card: Card,
+}
+
+/// The card of a camera read from a profile, before `Profiles::parse` copies in the card's data.
+fn unset_card() -> Card {
+    Card {
+        width: f32::NAN,
+        height: f32::NAN,
+        layer: f32::NAN,
+        phased_out_opacity: f32::NAN,
+    }
 }
 
 fn point<'de, D: Deserializer<'de>>(de: D) -> Result<Vec3, D::Error> {
@@ -545,12 +562,13 @@ impl Profiles {
     /// # Errors
     ///
     /// Returns the file and field at fault if the profiles are invalid.
-    pub fn parse(files: &[(&str, &str)]) -> Result<Self, String> {
+    pub fn parse(files: &[(&str, &str)], card: Card) -> Result<Self, String> {
         let mut profiles = Vec::with_capacity(files.len());
         let mut previous = 0.0;
         let mut names = BTreeSet::new();
         for (index, &(file, text)) in files.iter().enumerate() {
-            let profile: ProfileData = read(file, text)?;
+            let mut profile: ProfileData = read(file, text)?;
+            profile.table.camera.card = card;
             profile.validate().map_err(|why| format!("{file}: {why}"))?;
             let fallback = index + 1 == files.len();
             if profile.shorter_side_below.is_none() != fallback

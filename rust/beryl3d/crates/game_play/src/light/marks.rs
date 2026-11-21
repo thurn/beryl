@@ -23,7 +23,7 @@ use glam::{Affine3A, Quat, Vec2, Vec3};
 use super::{Lit, MarkSpan, Open, Span};
 use crate::art::orb;
 use crate::play::Scene;
-use game_table::table::{ABILITY_IDS, CARD_HEIGHT, CARD_WIDTH, Look};
+use game_table::table::{ABILITY_IDS, Look};
 use kit_base::data::light::Light;
 use kit_base::pose::{Curve, Pose};
 use kit_base::tokens::color;
@@ -266,7 +266,7 @@ impl Outline {
     /// Writes one `BoxShadow` record for each of the outline's shadows round the thing `half`
     /// millimetres across and up from `position`, at `pose`, in the color `tint`, and its ring
     /// `ring(model, line, outer)`. The records lie in the card's own plane and units, a frame
-    /// being `CARD_WIDTH`, and `pose` turns and scales them with it. The outer shadows come
+    /// being a card's width, and `pose` turns and scales them with it. The outer shadows come
     /// first, the inset ones after, each kind last first, as CSS paints them. Allocates
     /// nothing.
     fn write(
@@ -278,7 +278,7 @@ impl Outline {
         ring: impl Fn([f32; 12], [f32; 2], [f32; 2]) -> Ring,
         builder: &mut FrameBuilder<'_>,
     ) {
-        let frame = CARD_WIDTH;
+        let frame = builder.card().x;
         let scale = pose.scale.max(f32::EPSILON);
         let size = 2.0 * (half / scale + Vec2::splat(self.grow * frame));
         let radius = self.radius * frame;
@@ -339,7 +339,8 @@ fn ringed(on: Subject) -> Ringed {
 /// (`Camera::screen_pose`), which gives how many millimetres there one pixel of the stage's
 /// 900 covers.
 pub(crate) fn player_half(scene: &Scene<'_>, scale: f32) -> Vec2 {
-    let window = scale * CARD_HEIGHT / scene.table().layout().hand.height;
+    let card = scene.table().camera().data.card;
+    let window = scale * card.height / scene.table().layout().hand.height;
     scene.table().data().light.player_half_pixels * (window / 900.0)
 }
 
@@ -352,6 +353,6 @@ fn player_face_offset(scene: &Scene<'_>, side: Side, scale: f32) -> f32 {
     let window = table.camera().window;
     let points = orb::face_offset(side) * table.layout().play.life.orb_scale;
     let millimetres_per_point =
-        scale * CARD_HEIGHT / table.layout().hand.height / window.size.height;
+        scale * table.camera().data.card.height / table.layout().hand.height / window.size.height;
     points * millimetres_per_point
 }
