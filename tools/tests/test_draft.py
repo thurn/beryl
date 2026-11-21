@@ -4,14 +4,16 @@ import json
 from pathlib import Path
 from typing import cast
 
+import pytest
+
 from beryl_tools import card_store, draft, phase_draft, render_diff
 
 
-def record(name: str, text: str) -> card_store.Json:
+def record(name: str, text: str, *, type_line: str = "Instant") -> card_store.Json:
     return {
         "name": name,
         "layout": "normal",
-        "faces": [{"name": name, "type_line": "Instant", "oracle_text": text}],
+        "faces": [{"name": name, "type_line": type_line, "oracle_text": text}],
     }
 
 
@@ -55,6 +57,54 @@ def test_outdated_oracle_text_cannot_supply_a_draft() -> None:
     proposal = draft.compose(record("Opt", "Scry 2.\nDraw a card."), opt(), tuple)
     assert not proposal.expression
     assert "Oracle texts differ" in proposal.source_note
+
+
+@pytest.mark.parametrize(
+    ("first_ability", "matches"),
+    [
+        ("+2: Draw a card.", True),
+        ("+3: Draw a card.", False),
+        ("+2: Draw two cards.", False),
+    ],
+    ids=["equivalent-prefixes", "changed-cost", "changed-effect"],
+)
+def test_phase_loyalty_cost_brackets(first_ability: str, matches: bool) -> None:
+    abilities = [
+        {
+            "kind": "Spell" if amount is None else "Activated",
+            "description": description,
+            "cost": (
+                {"type": "Loyalty", "amount": amount} if amount is not None else None
+            ),
+            "effect": {"type": "Unimplemented"},
+        }
+        for description, amount in (
+            ("[+2]: Draw a card.", 2),
+            ("[−X]: Draw X cards.", None),
+            ("[0]: Scry 1.", 0),
+            ("[−10]: Draw ten cards.", -10),
+        )
+    ]
+    phase: card_store.Json = {
+        "oracle_text": "\n".join(str(ability["description"]) for ability in abilities),
+        "abilities": abilities,
+    }
+    oracle = f"{first_ability}\n−X: Draw X cards.\n0: Scry 1.\n−10: Draw ten cards."
+    proposal = draft.compose(
+        record("Example", oracle, type_line="Planeswalker"), phase, tuple
+    )
+    if matches:
+        assert not proposal.source_note
+        assert tuple(clause.node_kind for clause in proposal.unresolved) == (
+            "cost:Loyalty",
+            "",
+            "cost:Loyalty",
+            "cost:Loyalty",
+        )
+        assert "unsupported Unimplemented" in proposal.unresolved[1].reason
+    else:
+        assert "Oracle texts differ" in proposal.source_note
+        assert all(not clause.node_kind for clause in proposal.unresolved)
 
 
 def test_portable_spells_keep_their_target_expression() -> None:

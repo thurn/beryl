@@ -138,6 +138,15 @@ def unify_whitespace(text: str, context: Context) -> str:
     return "\n".join(line for line in lines if line)
 
 
+def strip_loyalty_brackets(text: str, context: Context) -> str:
+    """Removes the brackets from loyalty prefixes such as Phase's `[+2]:`.
+
+    Run after punctuation and whitespace normalization so the prefix starts
+    the line and minus signs use the same spelling.
+    """
+    return re.sub(r"^\[([+-][0-9]+|-X|0)\](?=:)", r"\1", text, flags=re.M)
+
+
 # The personal pronouns Oracle uses for a named character, and the one a template uses for any
 # object. "Her" is "its" before a noun ("her loyalty abilities") and "it" otherwise.
 PRONOUNS: list[tuple[str, str]] = [
@@ -266,6 +275,7 @@ NORMALIZATIONS: list[Normalization] = [
     strip_reminder_text,
     unify_punctuation,
     unify_whitespace,
+    strip_loyalty_brackets,
     unify_self_reference,
     neuter_pronouns,
     share_spell_noun,
