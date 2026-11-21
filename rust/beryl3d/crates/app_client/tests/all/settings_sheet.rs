@@ -2,7 +2,6 @@
 //! slider that saves a level, concede only in a game, and Escape that closes it.
 
 use app_client::Client;
-use app_client::Press;
 use app_client::command::Request;
 use app_screens::screens::settings::Message as SettingsMessage;
 use kit_ui::element::Action;
@@ -117,7 +116,9 @@ fn concede_asks_to_confirm_and_closing_the_sheet_puts_it_back() {
 #[test]
 fn concede_is_absent_on_the_start_screen() {
     let mut client = in_game();
-    client.press(&Action::new(Press::Open(Screen::Start)));
+    client.press(&Action::new(app_screens::screens::start::Message::Open(
+        Screen::Start,
+    )));
     client.press(&Action::new(SettingsMessage::Open));
     let names = controls(&mut client);
     assert!(names.contains(&"Music".to_owned()));

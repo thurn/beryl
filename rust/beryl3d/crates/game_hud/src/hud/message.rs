@@ -7,9 +7,7 @@ use crate::inspect::Viewed;
 /// An interaction with the game screen or its overlays.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GamePress {
-    OpenStart,
     Stop { step: Step, theirs: bool },
-    Result(bool),
     View(Viewed),
     DismissRevealed,
     DismissViewer,

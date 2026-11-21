@@ -14,10 +14,36 @@ use crate::input::{Key, KeyCode, KeyPhase, Rect};
 use kit_frame::frame::ElementId;
 use kit_text::text::{self, Run};
 
+use crate::widgets::{FieldState, Fields};
+
 /// The width of the caret, in logical points.
 const CARET_WIDTH: f32 = 1.5;
 /// The thickness of the line under an input method's composing text, in logical points.
 const UNDERLINE: f32 = 1.5;
+
+/// How soon and how close a second press must be to select a word.
+const DOUBLE_CLICK: u64 = 500_000_000;
+const DOUBLE_CLICK_POINTS: f32 = 4.0;
+
+#[derive(Default)]
+pub(super) struct TextFields {
+    values: Fields,
+    entry: Option<ElementId>,
+    last_down: Option<(u64, Vec2)>,
+}
+
+/// An edit to the text of a named field.
+#[derive(Debug, PartialEq, Eq)]
+pub struct FieldChange {
+    pub name: String,
+    pub text: String,
+}
+
+/// A change to the field the host provides native text entry for.
+pub struct TextEntry {
+    pub end: bool,
+    pub begin: Option<(ElementId, Rect, String)>,
+}
 
 /// The field being edited.
 pub(super) struct Editing {
@@ -83,8 +109,8 @@ pub enum Edit<'a> {
 /// What an edit asks of the client.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct Edited {
-    /// The field's new text, if the edit changed it.
-    pub text: Option<String>,
+    /// The field and its committed text, if the edit changed it.
+    pub change: Option<FieldChange>,
     /// Text to put on the clipboard: the selection, copied or cut.
     pub copy: Option<String>,
     /// Whether to read the clipboard, to paste what it holds.
@@ -94,6 +120,74 @@ pub struct Edited {
 }
 
 impl Layer {
+    /// The saved text, caret and selection for the screen's fields.
+    #[must_use]
+    pub fn fields(&self) -> &Fields {
+        &self.text_fields.values
+    }
+
+    /// Supplies a field's initial or programmatically replaced value.
+    pub fn set_field(&mut self, name: &str, state: FieldState) {
+        self.text_fields.values.set(name, state);
+    }
+
+    /// Reads the live caret and selection when this field has the focus.
+    #[must_use]
+    pub fn field(&self, name: &str) -> FieldState {
+        let mut state = self.fields().get(name);
+        if self.edited_id().and_then(|id| self.name_of(id)) == Some(name)
+            && let Some((caret, selection)) = self.edited_caret()
+        {
+            state.caret = caret;
+            state.selection = selection;
+        }
+        state
+    }
+
+    /// Applies a pointer press to the editor, recognizing double clicks.
+    pub fn press_field(&mut self, now: u64, point: Vec2, extend: bool) {
+        let word = self.text_fields.last_down.is_some_and(|(at, there)| {
+            now.saturating_sub(at) <= DOUBLE_CLICK && there.distance(point) <= DOUBLE_CLICK_POINTS
+        });
+        // A third press is the first of a new double click.
+        self.text_fields.last_down = (!word).then_some((now, point));
+        self.edit(Edit::Down {
+            point,
+            word,
+            extend,
+        });
+    }
+
+    /// Stores a committed edit and describes it to the field's owner.
+    fn commit_field(&mut self, text: String) -> Option<FieldChange> {
+        let name = self.name_of(self.edited_id()?)?.to_owned();
+        let (caret, selection) = self.edited_caret().unwrap_or_default();
+        self.set_field(
+            &name,
+            FieldState {
+                text: text.clone(),
+                caret,
+                selection,
+                placeholder: String::new(),
+            },
+        );
+        Some(FieldChange { name, text })
+    }
+
+    /// Returns a text-entry change the host has yet to receive.
+    pub fn text_entry(&mut self) -> Option<TextEntry> {
+        let edited = self.edited_id();
+        if edited == self.text_fields.entry {
+            return None;
+        }
+        let end = self.text_fields.entry.is_some();
+        self.text_fields.entry = edited;
+        Some(TextEntry {
+            end,
+            begin: self.edited(),
+        })
+    }
+
     /// The edited field, its box on the window and its text, if the focus is on a text field.
     #[must_use]
     pub fn edited(&self) -> Option<(ElementId, Rect, String)> {
@@ -125,7 +219,7 @@ impl Layer {
 
     /// The name of the screen's element `id`, if it is on the screen.
     #[must_use]
-    pub fn name_of(&self, id: ElementId) -> Option<&str> {
+    fn name_of(&self, id: ElementId) -> Option<&str> {
         self.find(id).map(|node| node.element.name.as_str())
     }
 
@@ -255,7 +349,7 @@ impl Layer {
         let after = committed(&editing.editor);
         if after != before {
             editing.given.clone_from(&after);
-            edited.text = Some(after);
+            edited.change = self.commit_field(after);
         }
         self.refresh_edit();
         edited

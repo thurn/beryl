@@ -29,7 +29,6 @@ pub struct HudIn<'a> {
     pub viewing: Option<Viewed>,
     pub revealed: &'a [RevealedFace],
     pub carried: Option<Subject>,
-    pub result_aside: bool,
     pub spinning: bool,
     pub placement_scene: Option<&'a PlacementScene>,
 }

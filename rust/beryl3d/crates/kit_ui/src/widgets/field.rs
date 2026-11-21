@@ -1,7 +1,7 @@
 //! A text field, such as the bug report's description. While it has the focus the layer edits
 //! it in place (`layout::Edit`): typing, the arrow keys with Shift to select, Home and End, a
 //! double click to select a word, a drag to select, and Cmd+A, Cmd+C, Cmd+X and Cmd+V. Each
-//! change comes back to the client as `Press::Field`, which keeps it in `Fields`.
+//! change is held by the layer and reported to the field’s owner.
 
 use std::collections::BTreeMap;
 use std::ops::Range;
@@ -22,7 +22,7 @@ pub struct FieldState {
     pub placeholder: String,
 }
 
-/// The state of every text field the screens show, by the field's name. The client keeps it
+/// The state of every text field the screens show, by the field's name. The layer keeps it
 /// and hands it to the screen functions (`ScreenIn::fields`), so that what a person typed
 /// stays when the screen is built again.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

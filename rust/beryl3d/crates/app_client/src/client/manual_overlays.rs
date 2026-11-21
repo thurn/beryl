@@ -72,7 +72,7 @@ impl Client {
         self.manual.close_overlay();
         self.layer.focus(None);
         if !field.is_empty() {
-            self.fields.set(field, state);
+            self.layer.set_field(field, state);
         }
     }
 
@@ -89,10 +89,10 @@ impl Client {
     /// the store for tokens matching a token search's new query.
     pub(super) fn follow_table_query(&mut self) {
         if let Some(open) = &mut self.manual.palette {
-            open.set_query(&self.fields.get(palette::FIELD).text);
+            open.set_query(&self.layer.fields().get(palette::FIELD).text);
         }
         if let Some(open) = &mut self.manual.tokens {
-            let query = self.fields.get(tokens::FIELD).text;
+            let query = self.layer.fields().get(tokens::FIELD).text;
             open.set_query(&query);
             if let Some(text) = open.wants(&query) {
                 open.asked = Some(text.clone());
@@ -291,7 +291,7 @@ impl Client {
         let Some(open) = self.manual.palette.take() else {
             return;
         };
-        let query = self.fields.get(palette::FIELD).text;
+        let query = self.layer.fields().get(palette::FIELD).text;
         let Some(row) = open.matched(&query).get(at).map(|row| (*row).clone()) else {
             self.manual.palette = Some(open);
             return;
@@ -319,7 +319,7 @@ impl Client {
         let Some(ask) = &self.manual.ask else {
             return;
         };
-        let text = self.fields.get(&ask.field).text;
+        let text = self.layer.fields().get(&ask.field).text;
         self.confirm_ask_with(&text);
     }
 
@@ -355,7 +355,7 @@ impl Client {
             return;
         };
         let name = ask.field.clone();
-        let text = self.fields.get(&name).text;
+        let text = self.layer.fields().get(&name).text;
         let Some(next) = ask.step(&text, if up { 1 } else { -1 }) else {
             return;
         };
@@ -369,7 +369,7 @@ impl Client {
         // The field's editor keeps its own text while it is focused, so it takes the new value
         // by being focused again.
         self.layer.focus(None);
-        self.fields.set(&name, state);
+        self.layer.set_field(&name, state);
         self.show_screen();
         self.layer.focus_field(&name);
     }
@@ -421,7 +421,7 @@ impl Client {
     fn open_custom(&mut self, command: u16, face_down: bool) {
         self.over(tokens::NAME, FieldState::default());
         for name in tokens::CUSTOM_FIELDS {
-            self.fields.set(name, FieldState::default());
+            self.layer.set_field(name, FieldState::default());
         }
         self.manual.custom = Some(CustomToken::open(command, face_down));
         self.show_screen();
@@ -434,7 +434,7 @@ impl Client {
         let Some(form) = self.manual.custom.clone() else {
             return;
         };
-        if let Some(choice) = form.choice(&self.fields) {
+        if let Some(choice) = form.choice(self.layer.fields()) {
             self.make_token(form.command, &choice, shift || form.face_down);
         }
     }
@@ -446,7 +446,7 @@ impl Client {
         let Some(open) = &mut self.manual.palette else {
             return;
         };
-        let query = self.fields.get(palette::FIELD).text;
+        let query = self.layer.fields().get(palette::FIELD).text;
         let bindable =
             (open.matched(&query).get(open.highlight)).is_some_and(|row| row.command != RESET);
         if !bindable {
@@ -471,7 +471,7 @@ impl Client {
         let Some(open) = &self.manual.palette else {
             return;
         };
-        let query = self.fields.get(palette::FIELD).text;
+        let query = self.layer.fields().get(palette::FIELD).text;
         let Some(row) = open
             .matched(&query)
             .get(open.highlight)

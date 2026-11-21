@@ -1,60 +1,11 @@
-//! The client's side of the bug report (`screens::bug_report`): opening it freezes the table,
-//! the host takes the picture, a drag chooses the region, and Submit asks the host to save the
-//! report, as the web interface's `BugReporter` (`ui/src/components/BugReport.tsx`) does.
-//!
-//! The table freezes by its clock: while the report is open, every part of the client that
-//! plays the table is given the time it froze at, and once it closes the table's clock runs
-//! that much behind the frame's, so what was playing goes on from where it stopped, as the
-//! web's `thaw` lets the page play on. The flat layer keeps the frame's clock, so the report's
-//! own panel fades in.
+//! Connects the report's messages and paused clock to the table and input routing.
 
-use glam::Vec2;
-
-use super::{BugPress, Client, Platform};
-use crate::command::Request;
-use app_screens::screens::{BugForm, BugStage, CLICK, DESCRIPTION, Sheet, span};
+use super::{Client, Platform};
+use app_screens::screens::Sheet;
+use app_screens::screens::bug_report::{BugStage, Message, whole_window};
 use kit_frame::frame::Wake;
 use kit_ui::element::Chord;
-use kit_ui::input::{Button, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerPhase, Rect};
-use kit_ui::widgets::FieldState;
-
-/// How long "Saved" shows before the report closes, in nanoseconds (`SAVED_MS`).
-const SAVED: u64 = 900_000_000;
-
-/// How many frames the report draws nothing of itself after it froze the table: the frame
-/// drawn after Cmd+B, after which the host sees `Request::FreezeFrame`, and the next one,
-/// which the host reads back as the picture.
-const CAPTURE_FRAMES: u8 = 2;
-
-/// The bug report's state beside its `BugForm`, and the table's clock.
-#[derive(Debug, Default)]
-pub(super) struct Bug {
-    pub(super) form: BugForm,
-    /// The table's time when the report froze it, while it is open.
-    frozen: Option<u64>,
-    /// How far the table's clock runs behind the frame's: the time it has spent frozen.
-    behind: u64,
-    /// Where the primary button went down to drag out a region.
-    from: Option<Vec2>,
-    /// Whether the whole window was asked for while the picture was being taken.
-    whole: bool,
-    /// Whether the prompt was drawn when the report froze the table: what waits for the table
-    /// (`Element::waits`) is drawn only once it has settled (`Client::open`), and a frozen
-    /// table never settles.
-    screen_open: bool,
-}
-
-impl Bug {
-    /// The table's time at the frame time `now`.
-    pub(super) fn table(&self, now: u64) -> u64 {
-        self.frozen.unwrap_or(now.saturating_sub(self.behind))
-    }
-
-    /// The frame time at the table's time `table`.
-    pub(super) fn frame_time(&self, table: u64) -> u64 {
-        table + self.behind
-    }
-}
+use kit_ui::input::{Button, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerPhase};
 
 impl Client {
     /// Whether the bug report is open.
@@ -68,14 +19,14 @@ impl Client {
     /// the report.
     pub(super) fn table_shown(&self) -> bool {
         self.features.sheet.is_none()
-            || (self.bug_open() && matches!(self.bug.form.stage, BugStage::Capturing { .. }))
+            || (self.bug_open() && matches!(self.features.bug().stage, BugStage::Capturing { .. }))
     }
 
     /// Whether the prompt's marks and the screen show as the table stands: as they stood when
     /// the report froze it, while it is open.
     pub(super) fn table_open(&self) -> bool {
         if self.bug_open() {
-            self.bug.screen_open
+            self.features.bug().screen_open
         } else {
             self.open
         }
@@ -85,7 +36,7 @@ impl Client {
     /// report froze the table. While the report is open the flat layer is always drawn, so
     /// that the report shows.
     pub(super) fn bug_hides_screen(&self) -> bool {
-        self.bug_open() && !self.bug.screen_open
+        self.bug_open() && !self.features.bug().screen_open
     }
 
     /// Opens `sheet` over the screen, or closes the open one. Opening the bug report freezes
@@ -105,99 +56,33 @@ impl Client {
             return false;
         }
         if was {
-            if let Some(frozen) = self.bug.frozen.take() {
-                self.bug.behind = self.now.saturating_sub(frozen);
-            }
+            self.update_bug(&Message::Closed(self.now));
             self.layer.focus(None);
         }
         self.features.sheet = sheet;
-        // Closing or changing the sheet puts the confirmation back.
+        // Closing or changing the sheet resets the settings confirmation.
         self.features.reset_sheet();
         if opening {
-            self.bug.frozen = Some(self.bug.table(self.now));
-            self.bug.screen_open = self.open;
-            self.bug.form = BugForm::new();
-            self.bug.from = None;
-            self.bug.whole = false;
             self.layer.focus(None);
-            self.fields.set(DESCRIPTION, FieldState::default());
-            self.requests.push_back(Request::FreezeFrame);
+            self.update_bug(&Message::Opened {
+                now: self.now,
+                screen_open: self.open,
+            });
         }
         true
     }
 
-    /// Carries out a press of one of the report's controls.
-    pub(super) fn bug_press(&mut self, press: BugPress) {
-        match press {
-            BugPress::Whole => match self.bug.form.stage {
-                // As the web's `wantWhole`: the window is taken once the picture is in.
-                BugStage::Capturing { .. } => self.bug.whole = true,
-                BugStage::Select { .. } => self.choose(self.whole_window()),
-                _ => {}
-            },
-            BugPress::Ai => {
-                self.bug.form.ai = !self.bug.form.ai;
-                self.show_screen();
-            }
-            BugPress::Save => self.save_bug(),
-        }
-    }
-
-    /// The host's answer to `Request::SaveBug`: "Saved", or the error under the description.
-    pub(super) fn bug_saved(&mut self, result: Result<(), String>) {
-        let BugStage::Describe { region, .. } = self.bug.form.stage else {
-            return;
-        };
-        self.bug.form.stage = match result {
-            Ok(()) => {
-                self.layer.focus(None);
-                BugStage::Saved {
-                    region,
-                    close_at: None,
-                }
-            }
-            Err(error) => BugStage::Describe {
-                region,
-                saving: false,
-                error: Some(error),
-            },
-        };
-        self.show_screen();
-    }
-
-    /// What the report does at the start of the frame at `now`: shows the region chooser once
-    /// the picture has been taken, and closes once "Saved" has shown long enough. Returns the
-    /// table's time.
+    /// Advances report capture or dismissal and returns the paused table clock.
     pub(super) fn bug_frame(&mut self, now: u64) -> u64 {
-        if self.bug_open() {
-            match self.bug.form.stage {
-                BugStage::Capturing { drawn } if drawn < CAPTURE_FRAMES => {
-                    self.bug.form.stage = BugStage::Capturing { drawn: drawn + 1 };
-                }
-                BugStage::Capturing { .. } => {
-                    self.bug.form.stage = BugStage::Select { drag: None };
-                    if self.bug.whole {
-                        self.choose(self.whole_window());
-                    } else {
-                        self.show_screen();
-                    }
-                }
-                BugStage::Saved {
-                    region,
-                    close_at: None,
-                } => {
-                    self.bug.form.stage = BugStage::Saved {
-                        region,
-                        close_at: Some(now + SAVED),
-                    };
-                }
-                BugStage::Saved {
-                    close_at: Some(at), ..
-                } if now >= at => self.set_sheet(None),
-                _ => {}
-            }
+        if self.bug_open()
+            && self.update_bug(&Message::Tick {
+                now,
+                window: whole_window(self.window.size),
+            })
+        {
+            self.show_screen();
         }
-        self.bug.table(now)
+        self.features.bug().table_time(now)
     }
 
     /// When the next frame is needed for the table, whose time is `table`, and for the report:
@@ -206,17 +91,11 @@ impl Client {
     pub(super) fn bug_wake(&self, table: u64) -> Wake {
         if !self.bug_open() {
             return match self.show.wake(table) {
-                Wake::At(at) => Wake::At(self.bug.frame_time(at)),
+                Wake::At(at) => Wake::At(self.features.bug().frame_time(at)),
                 wake => wake,
             };
         }
-        match self.bug.form.stage {
-            BugStage::Capturing { .. } | BugStage::Saved { close_at: None, .. } => Wake::Now,
-            BugStage::Saved {
-                close_at: Some(at), ..
-            } => Wake::At(at),
-            _ => Wake::Never,
-        }
+        self.features.bug().wake()
     }
 
     /// When the next thing that waits for a time acts, with nothing animating: the bug report's
@@ -233,7 +112,7 @@ impl Client {
     /// being chosen, a drag outside the tools draws it, and a release chooses it (a click, the
     /// whole window); otherwise the pointer presses the report's controls.
     pub(super) fn bug_point(&mut self, pointer: &Pointer) {
-        match self.bug.form.stage {
+        match self.features.bug().stage {
             BugStage::Capturing { .. } => return,
             BugStage::Select { .. } => {
                 if !self.drag_region(pointer) {
@@ -252,35 +131,17 @@ impl Client {
     /// Draws or chooses the region `pointer` drags out, unless it went down on a tool.
     /// Returns whether it did.
     fn drag_region(&mut self, pointer: &Pointer) -> bool {
-        let primary = pointer.button == Button::Primary;
-        let at = pointer.position;
-        match (pointer.phase, self.bug.from) {
-            (PointerPhase::Down, _) if primary => {
-                if self.layer.press_at(at, self.open).is_some() {
-                    return false;
-                }
-                self.bug.from = Some(at);
-                self.bug.form.stage = BugStage::Select {
-                    drag: Some(span(at, at)),
-                };
-            }
-            (PointerPhase::Move, Some(from)) => {
-                self.bug.form.stage = BugStage::Select {
-                    drag: Some(span(from, at)),
-                };
-            }
-            (PointerPhase::Up, Some(from)) if primary => {
-                self.bug.from = None;
-                let region = span(from, at);
-                let click = region.width < CLICK || region.height < CLICK;
-                self.choose(if click { self.whole_window() } else { region });
-                return true;
-            }
-            (PointerPhase::Cancel | PointerPhase::Leave, Some(_)) => {
-                self.bug.from = None;
-                self.bug.form.stage = BugStage::Select { drag: None };
-            }
-            _ => return false,
+        if pointer.phase == PointerPhase::Down
+            && pointer.button == Button::Primary
+            && self.layer.press_at(pointer.position, self.open).is_some()
+        {
+            return false;
+        }
+        if !self.update_bug(&Message::Drag {
+            pointer: *pointer,
+            window: whole_window(self.window.size),
+        }) {
+            return false;
         }
         self.show_screen();
         true
@@ -303,19 +164,23 @@ impl Client {
             }
             return true;
         }
-        match self.bug.form.stage {
+        match self.features.bug().stage {
             BugStage::Capturing { .. } | BugStage::Select { .. } => {
                 let plain = key.modifiers == Modifiers::default();
-                if first && plain && matches!(key.code, KeyCode::Space | KeyCode::Enter) {
-                    self.bug_press(BugPress::Whole);
+                if first
+                    && plain
+                    && matches!(key.code, KeyCode::Space | KeyCode::Enter)
+                    && self.update_bug(&Message::Whole(whole_window(self.window.size)))
+                {
+                    self.show_screen();
                 }
                 true
             }
             BugStage::Describe { .. } => {
                 let mac = self.platform == Platform::Mac;
                 if Chord::parse("Cmd+Return", mac) == Some(Chord::of(&key)) {
-                    if first {
-                        self.bug_press(BugPress::Save);
+                    if first && self.update_bug(&Message::Save(self.window.size)) {
+                        self.show_screen();
                     }
                     return true;
                 }
@@ -336,56 +201,6 @@ impl Client {
                 true
             }
             BugStage::Saved { .. } => true,
-        }
-    }
-
-    /// Goes on to describe `region`, with the description field focused.
-    fn choose(&mut self, region: Rect) {
-        self.bug.form.stage = BugStage::Describe {
-            region,
-            saving: false,
-            error: None,
-        };
-        self.show_screen();
-        self.layer.focus_field(DESCRIPTION);
-    }
-
-    /// Asks the host to save the report with the description typed, unless it is empty or
-    /// already being saved.
-    fn save_bug(&mut self) {
-        let BugStage::Describe {
-            region,
-            saving: false,
-            ..
-        } = self.bug.form.stage
-        else {
-            return;
-        };
-        let description = self.field(DESCRIPTION).text;
-        if description.trim().is_empty() {
-            return;
-        }
-        self.bug.form.stage = BugStage::Describe {
-            region,
-            saving: true,
-            error: None,
-        };
-        self.requests.push_back(Request::SaveBug {
-            description,
-            ai: self.bug.form.ai,
-            region,
-            window: self.window.size,
-        });
-        self.show_screen();
-    }
-
-    /// The whole window, in logical points.
-    fn whole_window(&self) -> Rect {
-        Rect {
-            x: 0.0,
-            y: 0.0,
-            width: self.window.size.width,
-            height: self.window.size.height,
         }
     }
 }

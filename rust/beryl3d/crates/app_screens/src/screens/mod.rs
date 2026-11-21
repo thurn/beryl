@@ -2,20 +2,18 @@
 //! that open over them (docs/beryl-3d.md, "The flat layer"). `screen` is one match that calls
 //! one function per file, so each screen is built in its own file.
 
-mod bug_report;
+pub mod bug_report;
 mod gallery;
 pub mod settings;
-mod start;
-mod testing;
+pub mod start;
+pub mod testing;
 
-pub use bug_report::{BugForm, BugStage, CLICK, DESCRIPTION, span};
 pub use gallery::faces as gallery_faces;
 pub use gallery::{GalleryMenu, GalleryQuery, GalleryState};
 pub use game_manual::screens::table_entries::{
     COULD_NOT_OPEN, EntryMode, INVITE, NAME, TableEntries,
 };
 use game_manual::screens::{lobby, table};
-pub use start::{SEED, StartForm, in_progress, seed};
 
 pub use game_hud::navigation::{Screen, Sheet};
 use game_hud::screens::game;
@@ -26,7 +24,7 @@ pub use settings::{GEAR_INSET, corner};
 use beryl_protocol::prompt::PromptView;
 use beryl_protocol::protocol::{OutcomeView, Side, Status};
 use beryl_protocol::script::{Subject, Turn};
-use beryl_protocol::{AgentView, PlayerView, StopsSetting};
+use beryl_protocol::{PlayerView, StopsSetting};
 use game_hud::inspect::Viewed;
 
 use game_hud::hud::HudIn;
@@ -68,22 +66,8 @@ pub struct ScreenIn<'a> {
     pub bindings: &'a Bindings,
     /// The sheet open over the screen, if any.
     pub sheet: Option<Sheet>,
-    /// The agents a person may play, in the order the host listed them.
-    pub agents: &'a [AgentView],
-    /// What the person has chosen on the start screen.
-    pub start: &'a StartForm,
-    /// The start screen's ways onto a manual table: the open form, the saved tables and why
-    /// the last table did not open.
-    pub entries: &'a TableEntries,
     /// Which samples are open in the gallery.
     pub gallery: GalleryState,
-    /// The names of the recordings the testing screen lists, as the host listed them: none
-    /// outside a tools build.
-    pub recordings: &'a [String],
-    /// The seat the testing screen replays recordings from.
-    pub seat: Side,
-    /// The bug report, while it is open.
-    pub bug: &'a BugForm,
     /// What each text field holds, by its name.
     pub fields: &'a Fields,
     /// The card the pointer is over that the inspector shows, if any (`inspect::inspector`).
@@ -102,9 +86,6 @@ pub struct ScreenIn<'a> {
     pub carried: Option<Subject>,
     /// The manual table's lobby (`manual::lobby`).
     pub lobby: &'a Lobby,
-    /// Whether the person put the game's result aside to see the battlefield
-    /// (`game_over::game_over`).
-    pub result_aside: bool,
     /// Whether the opening still shows the coin flip it began with, holding back who starts and
     /// the open decision (`opening::opening`).
     pub spinning: bool,
@@ -133,7 +114,6 @@ impl<'a> ScreenIn<'a> {
             viewing: self.viewing,
             revealed: self.revealed,
             carried: self.carried,
-            result_aside: self.result_aside,
             spinning: self.spinning,
             placement_scene: self.placement_scene,
         }
@@ -155,15 +135,18 @@ pub fn sheet_face(input: &ScreenIn) -> Option<kit_ui::input::FaceId> {
     table::sheet_face(&input.table_input())
 }
 
-/// What the flat layer shows on `screen`.
+/// Composes the game, lobby, table and gallery routes.
 #[must_use]
-pub fn screen(screen: Screen, input: &ScreenIn, log: Option<Element>) -> Element {
-    match screen {
-        Screen::Start => start::start(input),
-        Screen::Game if input.profile.data().table.bands.is_some() => {
-            game::game_compact(&input.hud(), log, Action::new(settings::Message::Open))
-        }
-        Screen::Game => game::game(&input.hud(), log),
+pub fn screen(input: &ScreenIn, log: Option<Element>, result: Option<Element>) -> Option<Element> {
+    Some(match input.screen {
+        Screen::Start | Screen::Testing => return None,
+        Screen::Game if input.profile.data().table.bands.is_some() => game::game_compact(
+            &input.hud(),
+            log,
+            result,
+            Action::new(settings::Message::Open),
+        ),
+        Screen::Game => game::game(&input.hud(), log, result),
         Screen::Lobby => lobby::lobby(&lobby::LobbyIn {
             window: input.window,
             profile: input.profile,
@@ -172,14 +155,7 @@ pub fn screen(screen: Screen, input: &ScreenIn, log: Option<Element>) -> Element
         }),
         Screen::Table => table::table(&input.table_input()),
         Screen::Gallery => gallery::gallery(input),
-        Screen::Testing => testing::testing(input),
-    }
-}
-
-/// What the bug report shows over the screen, if the screen is visible.
-#[must_use]
-pub fn bug_report(under: Option<Element>, input: &ScreenIn) -> Element {
-    bug_report::bug_report(under, input)
+    })
 }
 
 /// The music that plays on `screen` with `view` the latest view of the game, as the web
@@ -205,4 +181,4 @@ pub fn music(screen: Screen, view: Option<&PlayerView>) -> Option<Music> {
 }
 
 mod message;
-pub use message::{BugPress, ScreenPress};
+pub use message::ScreenPress;

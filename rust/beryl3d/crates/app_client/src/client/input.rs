@@ -331,7 +331,7 @@ impl Client {
             "Cmd+B"
         };
         if first && Chord::parse(bug_report, mac) == Some(Chord::of(&key)) {
-            return Some(Action::new(ScreenPress::ReportBug));
+            return Some(Action::new(app_screens::screens::bug_report::Message::Open));
         }
         // The platform's undo takes back an answer, as the web's `StageBoard` lets it.
         if first

@@ -43,8 +43,6 @@ pub(super) struct Viewing {
     /// Whether the screen shows the opening hand (`screens::opening`), as it was laid out last
     /// and as it was before that, and the window it was laid out in last.
     pub(super) opening: bool,
-    /// Whether the ended game's result is put aside (`ScreenIn::result_aside`).
-    pub(super) result_aside: bool,
     was_opening: bool,
     laid_in: Option<Window>,
     /// Where the opening's coin flip stands.
@@ -158,7 +156,7 @@ impl Client {
             }
         }
         self.manual.viewer = game_manual::manual::viewers::PileViewer::new();
-        self.fields.set(
+        self.layer.set_field(
             game_manual::manual::viewers::SEARCH,
             kit_ui::widgets::FieldState::default(),
         );

@@ -7,7 +7,6 @@ use std::sync::mpsc::{self, Receiver};
 use std::time::Duration;
 
 use app_client::Input;
-use app_client::Press;
 use app_client::{Client, Config};
 use app_screens::screens::Screen;
 use beryl_art::Origins;
@@ -125,10 +124,15 @@ fn the_gallerys_faces_never_land_in_the_matchs() {
     let mut host = Host::new("gallery");
     host.client.handle(no_records());
     host.client
-        .press(&Action::new(Press::Open(Screen::Gallery)));
+        .press(&Action::new(app_screens::screens::start::Message::Open(
+            Screen::Gallery,
+        )));
     assert!(host.client.showing_gallery());
     host.until(|client| client.face_layers().board_layer_of(FaceId(0)).is_some());
-    host.client.press(&Action::new(Press::Open(Screen::Start)));
+    host.client
+        .press(&Action::new(app_screens::screens::start::Message::Open(
+            Screen::Start,
+        )));
     assert!(!host.client.showing_gallery());
     assert_eq!(host.board_layer(CARD_BACK), None);
 }
@@ -140,7 +144,9 @@ fn the_gallerys_faces_never_land_in_the_matchs() {
 fn held_faces_are_uploaded_one_a_frame_before_it() {
     let mut host = Host::new("held");
     host.client
-        .press(&Action::new(Press::Open(Screen::Gallery)));
+        .press(&Action::new(app_screens::screens::start::Message::Open(
+            Screen::Gallery,
+        )));
     host.deliver(When::AfterFrame);
     let count = host.client.faces().faces().len();
     assert!(count > 2, "the gallery lists {count} faces");

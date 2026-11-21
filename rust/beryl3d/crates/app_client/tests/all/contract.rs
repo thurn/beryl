@@ -219,12 +219,12 @@ mod milestone_three {
     use app_screens::screens::settings::{
         Inputs, Message as SettingsMessage, SettingsSheet, State,
     };
-    use app_screens::screens::{self, BugForm, Music, Screen, ScreenIn, StartForm};
+    use app_screens::screens::{self, Music, Screen, ScreenIn, bug_report, start, testing};
     use beryl_protocol::testing::ViewBuilder;
     use game_hud::prompts;
     use game_table::table::Window;
     use kit_scene::Feature;
-    use kit_ui::widgets::Fields;
+    use kit_ui::widgets::{FieldState, Fields};
 
     static TUNING: std::sync::OnceLock<std::sync::Arc<kit_base::data::Data>> =
         std::sync::OnceLock::new();
@@ -232,7 +232,6 @@ mod milestone_three {
     static FIELDS: Fields = Fields::new();
 
     static TABLE: game_manual::manual::TableState = game_manual::manual::TableState::new();
-    static BUG: BugForm = BugForm::new();
     static ENTRIES: screens::TableEntries = screens::TableEntries::new();
     static LOBBY: game_manual::manual::lobby::Lobby = game_manual::manual::lobby::Lobby::new();
 
@@ -255,17 +254,7 @@ mod milestone_three {
             bindings: &settings.bindings,
             sheet: None,
             spinning: false,
-            agents: &[],
-            start: &StartForm {
-                agent: None,
-                fair: false,
-                confirming: false,
-            },
-            entries: &ENTRIES,
             gallery: screens::GalleryState::default(),
-            recordings: &[],
-            seat: Side::You,
-            bug: &BUG,
             fields: &FIELDS,
             inspected: None,
             faces: None,
@@ -274,7 +263,6 @@ mod milestone_three {
             table: &TABLE,
             carried: None,
             lobby: &LOBBY,
-            result_aside: false,
             placement_scene: None,
         }
     }
@@ -284,12 +272,33 @@ mod milestone_three {
         let settings = Settings::default();
         let input = input(None, &settings);
         for screen in Screen::ALL {
-            assert!(
-                !screens::screen(screen, &input, None).name.is_empty(),
-                "{screen:?}"
-            );
+            let input = ScreenIn { screen, ..input };
+            let element = match screen {
+                Screen::Start => start::StartScreen::view(
+                    &start::State::default(),
+                    start::Inputs {
+                        window: input.window,
+                        column: input.profile.screen_column(),
+                        in_progress: false,
+                        session: None,
+                        has_recordings: false,
+                        entries: &ENTRIES,
+                        fields: &FIELDS,
+                    },
+                ),
+                Screen::Testing => testing::TestingScreen::view(
+                    &testing::State::default(),
+                    testing::Inputs {
+                        window: input.window,
+                        column: input.profile.screen_column(),
+                        filter: FieldState::default(),
+                    },
+                ),
+                _ => screens::screen(&input, None, None).expect("the screen has a view"),
+            };
+            assert!(!element.name.is_empty(), "{screen:?}");
         }
-        assert!(!screens::bug_report(None, &input).name.is_empty());
+        assert!(!bug_report::compose(None, None).name.is_empty());
         let settings = SettingsSheet::view(
             &State::default(),
             Inputs {

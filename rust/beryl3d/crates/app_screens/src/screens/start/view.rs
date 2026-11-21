@@ -4,12 +4,12 @@
 //! manual tables' entries (`table_entries`) and the export of bug reports, and the sound button in
 //! the corner.
 
-use crate::screens::ScreenPress;
 use beryl_protocol::AgentView;
-use beryl_protocol::protocol::Status;
+use beryl_protocol::SessionId;
 
-use super::settings::Message as SettingsMessage;
-use super::{Screen, ScreenIn};
+use super::super::bug_report;
+use super::super::settings::Message as SettingsMessage;
+use super::{Inputs, Message, Screen, State, seed};
 use kit_base::tokens::{color, ratio, size, space, type_style};
 use kit_frame::frame::Role;
 use kit_text::text::TypeStyle;
@@ -20,16 +20,9 @@ use kit_ui::widgets::start_panel::{
 };
 use kit_ui::widgets::{self, FieldState, button, field, icon_button, list, primary, tooltip};
 
-/// The name of the seed's text field.
-pub const SEED: &str = "seed";
-
 /// The agents that play on the true state, hidden cards included, which the screen marks as
 /// cheating: the web's `CHEATING`.
 const CHEATING: [&str; 2] = ["mcts-omniscient-quick", "pimc18-omniscient-30m-anchor"];
-
-/// The opponent offered first, the web's `DEFAULT_AGENT`: strong, and answers in about two
-/// seconds.
-const DEFAULT_AGENT: &str = "mcts-hidden";
 
 /// The height of everything in the window but the opponents' rows: the panel's other contents,
 /// its padding and gaps, and a margin above and below it.
@@ -65,80 +58,18 @@ const CHEATING_NOTE: TypeStyle = type_style::START_CHEATING_NOTE;
 /// `.start-agent-about`: 14-point sans.
 const ABOUT: TypeStyle = type_style::START_ABOUT;
 
-/// What the person has chosen on the start screen besides the seed, which is a text field the
-/// client keeps in `Fields`. The client keeps it so that the choices stay while the screen is
-/// built again.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct StartForm {
-    /// The chosen opponent, counting the host's agents from 0, once they have arrived.
-    pub agent: Option<u16>,
-    /// Whether the game is dealt the deal the AI judges fairest of many.
-    pub fair: bool,
-    /// Whether a new game was asked for with one in progress, so that the next press of the
-    /// start button concedes that game and starts the new one.
-    pub confirming: bool,
-}
-
-impl StartForm {
-    /// The opponent chosen first among `agents`: the web's default agent if the host offers
-    /// it, or else the first.
-    #[must_use]
-    pub fn first_agent(agents: &[AgentView]) -> Option<u16> {
-        if agents.is_empty() {
-            return None;
-        }
-        let at = (agents.iter())
-            .position(|agent| agent.name == DEFAULT_AGENT)
-            .unwrap_or(0);
-        u16::try_from(at).ok()
-    }
-}
-
-/// What the seed field holds when it is neither blank nor a seed.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct NotASeed;
-
-/// The seed a seed field holding `words` asks for: `Ok(None)` while it is blank, which deals
-/// from the clock, and an error unless it is a whole number from 0 to 2^32 - 1.
-///
-/// # Errors
-///
-/// When `words` is neither blank nor such a number.
-pub fn seed(words: &str) -> Result<Option<u32>, NotASeed> {
-    let words = words.trim();
-    if words.is_empty() {
-        return Ok(None);
-    }
-    words.parse().map(Some).map_err(|_| NotASeed)
-}
-
-/// Whether `view` is of an engine game that goes on, which a new game concedes first: one
-/// waiting on a player or playing through a step. A game that is over, a session that stopped
-/// and the manual table (`Status::Free`) are not.
+/// What the start screen shows, including the testing shortcut when recordings are available.
 #[must_use]
-pub fn in_progress(view: Option<&beryl_protocol::PlayerView>) -> bool {
-    view.is_some_and(|view| {
-        matches!(
-            view.status,
-            Status::Deciding { .. } | Status::Thinking | Status::Playing
-        )
-    })
-}
-
-/// What the flat layer shows on the screen. In a tools build of the app, which lists the
-/// recordings (`ScreenIn::recordings`), the key T opens the testing screen.
-#[must_use]
-pub fn start(input: &ScreenIn) -> Element {
-    if let Some(layout) = input.profile.screen_column() {
-        return start_column(input, layout);
+pub(super) fn start(state: &State, input: &Inputs) -> Element {
+    if let Some(layout) = input.column {
+        return start_column(state, input, layout);
     }
-    let form = input.start;
     let Chosen {
         going_on,
         seed_state,
         seed_ok,
         startable,
-    } = Chosen::of(input);
+    } = Chosen::of(state, input);
 
     let heading = [
         text("New Game").style(TITLE).color(color::GOLD),
@@ -147,9 +78,9 @@ pub fn start(input: &ScreenIn) -> Element {
             .color(color::TEXT_DIM)
             .margin([-size::START_SUBTITLE_PULL, 0.0, 0.0, 0.0]),
     ];
-    let rows = input.agents.iter().enumerate().map(|(at, agent)| {
+    let rows = state.agents.iter().enumerate().map(|(at, agent)| {
         let at = u16::try_from(at).unwrap_or(u16::MAX);
-        agent_row(agent, at, form.agent == Some(at), None)
+        agent_row(agent, at, state.agent == Some(at), None)
     });
     // The host offers a dozen agents, more than a short window has room for, so the rows
     // scroll inside what the rest of the panel leaves.
@@ -165,8 +96,8 @@ pub fn start(input: &ScreenIn) -> Element {
         )
         .child(list("Opponent", rows).gap(space::S).max_height(room));
     let seed_row = seed_row(&seed_state, seed_ok);
-    let buttons = buttons(going_on, form.confirming, startable);
-    let export = small(button("Export Bug Reports")).on_press(ScreenPress::ExportBugs);
+    let buttons = buttons(going_on, state.confirming, startable, input.session);
+    let export = small(button("Export Bug Reports")).on_press(bug_report::Message::Export);
     let export_tip = tooltip(
         "Includes screenshots, replays, and logs",
         "Export Bug Reports",
@@ -181,7 +112,7 @@ pub fn start(input: &ScreenIn) -> Element {
         .children(heading)
         .child(agents)
         .child(seed_row)
-        .child(fair_box(form.fair))
+        .child(fair_box(state.fair))
         .child(buttons)
         .children(game_manual::screens::table_entries::entries(
             input.entries,
@@ -220,12 +151,12 @@ struct Chosen {
 }
 
 impl Chosen {
-    fn of(input: &ScreenIn) -> Self {
-        let going_on = in_progress(input.view);
-        let mut seed_state = input.fields.get(SEED);
+    fn of(state: &State, input: &Inputs) -> Self {
+        let going_on = input.in_progress;
+        let mut seed_state = input.fields.get(super::SEED);
         "random".clone_into(&mut seed_state.placeholder);
         let seed_ok = seed(&seed_state.text).is_ok();
-        let startable = input.start.agent.is_some() && seed_ok;
+        let startable = state.agent.is_some() && seed_ok;
         Self {
             going_on,
             seed_state,
@@ -238,19 +169,19 @@ impl Chosen {
 /// `screen` with the start screen's keys: Enter does what the primary button does (back to the
 /// game in progress, else a new one), G opens the gallery and, in a tools build of the app,
 /// which lists the recordings, T opens the testing screen.
-fn with_keys(screen: Element, input: &ScreenIn, going_on: bool) -> Element {
+fn with_keys(screen: Element, input: &Inputs, going_on: bool) -> Element {
     let enter = if going_on {
-        ScreenPress::Open(Screen::Game)
+        Message::Open(Screen::Game)
     } else {
-        ScreenPress::Start
+        Message::Start(input.session)
     };
     let screen = screen
         .shortcut("Enter", enter)
-        .shortcut("G", ScreenPress::Open(Screen::Gallery));
-    if input.recordings.is_empty() {
-        screen
+        .shortcut("G", Message::Open(Screen::Gallery));
+    if input.has_recordings {
+        screen.shortcut("T", Message::Open(Screen::Testing))
     } else {
-        screen.shortcut("T", ScreenPress::Open(Screen::Testing))
+        screen
     }
 }
 
@@ -260,15 +191,14 @@ fn with_keys(screen: Element, input: &ScreenIn, going_on: bool) -> Element {
 /// above the other, the solo table and the export of bug reports at its foot. There is no
 /// title, as on the web's phone. When the window is too short for even one opponent's row (the
 /// system keyboard is up), the whole column scrolls instead, so every action stays in reach.
-fn start_column(input: &ScreenIn, layout: ScreenColumn) -> Element {
+fn start_column(state: &State, input: &Inputs, layout: ScreenColumn) -> Element {
     let metrics = layout.metrics.start;
-    let form = input.start;
     let Chosen {
         going_on,
         seed_state,
         seed_ok,
         startable,
-    } = Chosen::of(input);
+    } = Chosen::of(state, input);
     let target = layout.target;
     let sound = icon_button(widgets::icons::SPEAKER, "Sound")
         .width(target)
@@ -289,9 +219,9 @@ fn start_column(input: &ScreenIn, layout: ScreenColumn) -> Element {
         })
         .color(color::TEXT_DIM)
         .shrink(0.0);
-    let rows = input.agents.iter().enumerate().map(|(at, agent)| {
+    let rows = state.agents.iter().enumerate().map(|(at, agent)| {
         let at = u16::try_from(at).unwrap_or(u16::MAX);
-        agent_row(agent, at, form.agent == Some(at), Some(metrics))
+        agent_row(agent, at, state.agent == Some(at), Some(metrics))
     });
     let agents = list("Opponent", rows)
         .gap(metrics.agent_gap)
@@ -305,9 +235,9 @@ fn start_column(input: &ScreenIn, layout: ScreenColumn) -> Element {
         field.style.grow = 1.0;
         field.style.align_self = Some(Align::Stretch);
     }
-    let fair = fair_box(form.fair).min_height(metrics.field).shrink(0.0);
-    let (start, back) = start_buttons(going_on, form.confirming, startable);
-    let export = button("Export Bug Reports").on_press(ScreenPress::ExportBugs);
+    let fair = fair_box(state.fair).min_height(metrics.field).shrink(0.0);
+    let (start, back) = start_buttons(going_on, state.confirming, startable, input.session);
+    let export = button("Export Bug Reports").on_press(bug_report::Message::Export);
     let content = column()
         .name("start column")
         .gap(metrics.gap)
@@ -335,7 +265,7 @@ fn start_column(input: &ScreenIn, layout: ScreenColumn) -> Element {
 
 /// The seed's label and text field, holding `state`, drawn in ember unless `ok`.
 fn seed_row(state: &FieldState, ok: bool) -> Element {
-    let mut seed_field = field(SEED, state);
+    let mut seed_field = field(super::SEED, state);
     seed_field.style.width = Some(SEED_WIDTH);
     seed_field.style.padding = [
         size::START_SEED_PADDING_Y,
@@ -358,8 +288,13 @@ fn seed_row(state: &FieldState, ok: bool) -> Element {
 /// The start button, enabled if `startable`, and with a game `going_on`, the button back to it
 /// before it (`.start-buttons`). The start button's words say what it will do: start, ask to
 /// confirm a new game, or once `confirming`, concede and start.
-fn buttons(going_on: bool, confirming: bool, startable: bool) -> Element {
-    let (start, back) = start_buttons(going_on, confirming, startable);
+fn buttons(
+    going_on: bool,
+    confirming: bool,
+    startable: bool,
+    session: Option<SessionId>,
+) -> Element {
+    let (start, back) = start_buttons(going_on, confirming, startable, session);
     // With a game in progress, going back to it comes first.
     row()
         .name("buttons")
@@ -371,7 +306,12 @@ fn buttons(going_on: bool, confirming: bool, startable: bool) -> Element {
 /// The start button and, with a game `going_on`, the button back to it. The start button's
 /// words say what it will do: start, ask to confirm a new game, or once `confirming`, concede
 /// and start. Going back to a game in progress is the primary button then.
-fn start_buttons(going_on: bool, confirming: bool, startable: bool) -> (Element, Option<Element>) {
+fn start_buttons(
+    going_on: bool,
+    confirming: bool,
+    startable: bool,
+    session: Option<SessionId>,
+) -> (Element, Option<Element>) {
     let label = if !going_on {
         "Start"
     } else if confirming {
@@ -384,9 +324,11 @@ fn start_buttons(going_on: bool, confirming: bool, startable: bool) -> (Element,
     } else {
         primary(label)
     };
-    let back =
-        going_on.then(|| primary("Return to Game").on_press(ScreenPress::Open(Screen::Game)));
-    (start.enabled(startable).on_press(ScreenPress::Start), back)
+    let back = going_on.then(|| primary("Return to Game").on_press(Message::Open(Screen::Game)));
+    (
+        start.enabled(startable).on_press(Message::Start(session)),
+        back,
+    )
 }
 
 /// The sound button in the window's corner (`SoundCorner`), which opens the settings.
@@ -477,7 +419,7 @@ fn agent_row(
         .gap(size::START_AGENT_GAP)
         .radius(size::START_AGENT_RADIUS)
         .align_items(Align::Start)
-        .on_press(ScreenPress::Agent(at))
+        .on_press(Message::Agent(at))
         .child(dot)
         .child(words);
     element.style.padding = if let Some(metrics) = compact {
@@ -511,5 +453,5 @@ fn agent_row(
 
 /// The "Fair deal" box (`.start-fair`): a checkbox and its label, which a press turns on or off.
 fn fair_box(on: bool) -> Element {
-    checkbox("Fair deal", on).on_press(ScreenPress::FairDeal)
+    checkbox("Fair deal", on).on_press(Message::FairDeal)
 }

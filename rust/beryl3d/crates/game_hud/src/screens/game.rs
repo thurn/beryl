@@ -6,7 +6,7 @@
 
 use glam::Vec2;
 
-use super::{game_over, opening};
+use super::opening;
 use crate::hud::{HudIn, full_control, phone, players, steps};
 use crate::inspect::viewer;
 use crate::prompts;
@@ -17,7 +17,7 @@ use kit_ui::element::{Action, Anchor, Element, Shortcuts, holder, row};
 /// open prompt's element alone, as it has been since the prompt bar was the only thing in the
 /// flat layer; with no prompt open, it is an empty region named "game".
 #[must_use]
-pub fn game(input: &HudIn, log: Option<Element>) -> Element {
+pub fn game(input: &HudIn, log: Option<Element>, result: Option<Element>) -> Element {
     // Play or draw stands in the opening, not in the prompt bar.
     let prompt = waiting(input).filter(|_| !opening::choosing_start(input));
     // The orbs, the steps and the log stay up while scripts play, as the web interface's
@@ -35,7 +35,7 @@ pub fn game(input: &HudIn, log: Option<Element>) -> Element {
         log,
         viewer::viewer(input),
         // The result blurs everything drawn before it, the floats too (`Style::backdrop`).
-        game_over::game_over(input).map(Element::waits),
+        result.map(Element::waits),
     ];
     let opening = opening::opening(input);
     if hud.iter().chain(&over).all(Option::is_none) && opening.is_none() {
@@ -102,7 +102,12 @@ fn waiting(input: &HudIn) -> Option<Element> {
 /// menu opens, and the step stops are not shown. Every piece stands at a point of the window, so
 /// the screen is an empty region at the window's corner that draws nothing and covers no card.
 #[must_use]
-pub fn game_compact(input: &HudIn, log: Option<Element>, menu: Action) -> Element {
+pub fn game_compact(
+    input: &HudIn,
+    log: Option<Element>,
+    result: Option<Element>,
+    menu: Action,
+) -> Element {
     let bands = input.profile.bands().unwrap_or_default();
     let opening = opening::shown(input);
     let prompt = waiting(input);
@@ -139,13 +144,9 @@ pub fn game_compact(input: &HudIn, log: Option<Element>, menu: Action) -> Elemen
         .children(prompt)
         .children(furniture.into_iter().flatten().flatten())
         .children(
-            [
-                game_over::game_over(input).map(Element::waits),
-                log,
-                viewer::viewer(input),
-            ]
-            .into_iter()
-            .flatten(),
+            [result.map(Element::waits), log, viewer::viewer(input)]
+                .into_iter()
+                .flatten(),
         );
     screen.anchor = Some(Anchor::Point(Vec2::ZERO, Vec2::ZERO));
     screen

@@ -13,9 +13,9 @@
 //! `TableConnectionError` (`{"reason": ...}`) is that command failing.
 
 use crate::client;
-use app_screens::screens::ScreenPress;
+use app_screens::screens::bug_report;
 use app_screens::screens::settings::Message as SettingsMessage;
-use client::{Press, Reply, SessionCommand};
+use client::{Reply, SessionCommand};
 use kit_ui::element::Action;
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::Arc;
@@ -147,9 +147,11 @@ impl Recording {
                 let screen = Screen::ALL.into_iter().find(|screen| screen.name() == name);
                 let sheet = Sheet::ALL.into_iter().find(|sheet| sheet.name() == name);
                 match (screen, sheet) {
-                    (Some(screen), _) => Action::new(Press::Open(screen)),
+                    (Some(screen), _) => {
+                        Action::new(app_screens::screens::start::Message::Open(screen))
+                    }
                     (None, Some(Sheet::Settings)) => Action::new(SettingsMessage::Open),
-                    (None, Some(Sheet::BugReport)) => Action::new(ScreenPress::ReportBug),
+                    (None, Some(Sheet::BugReport)) => Action::new(bug_report::Message::Open),
                     (None, None) => panic!("{OPEN} names no screen or sheet: {name:?}"),
                 }
             })

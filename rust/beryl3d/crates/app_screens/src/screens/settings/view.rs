@@ -6,7 +6,6 @@
 
 use super::{Inputs, Message, State};
 use crate::screens::Screen;
-use crate::screens::ScreenPress;
 use crate::settings::{Graphics, Setting};
 use kit_base::tokens::{color, size, space, type_style};
 use kit_scene::SizeClass;
@@ -31,9 +30,10 @@ pub fn corner(bug: bool, undo: Option<Action>) -> Element {
         .border(([0; 4], 0.0))
         .gap(size::CORNER_GAP)
         .child(icon_button(icons::GEAR, "Settings").on_press(Message::Open))
-        .children(
-            bug.then(|| icon_button(icons::BUG, "Report bug").on_press(ScreenPress::ReportBug)),
-        )
+        .children(bug.then(|| {
+            icon_button(icons::BUG, "Report bug")
+                .on_press(crate::screens::bug_report::Message::Open)
+        }))
         .children(undo.map(|press| {
             let mut button = icon_button(icons::UNDO, "Undo");
             button.press = Some(press);

@@ -9,7 +9,7 @@ pub use samples::faces;
 use crate::screens::ScreenPress;
 use glam::Vec2;
 
-use super::{Screen, ScreenIn};
+use super::{Screen, ScreenIn, start};
 use game_hud::inspect::viewer::scry_sample;
 use game_table::faces::{CARD_BACK, FaceList};
 use game_table::table::{CARD_HEIGHT, CARD_WIDTH};
@@ -101,7 +101,7 @@ pub fn gallery(input: &ScreenIn) -> Element {
         .child(prompts())
         .child(context_menus(opened.is_none()))
         .child(commands(query, opened.is_none()));
-    let mut screen = column()
+    let screen = column()
         .name("gallery")
         .width(width)
         .height(height)
@@ -109,17 +109,8 @@ pub fn gallery(input: &ScreenIn) -> Element {
         .overflow(Overflow::Scroll)
         .align_items(Align::Center)
         .padding(edge)
-        .child(content)
-        .shortcut(
-            "Escape",
-            if opened.is_some() {
-                ScreenPress::DismissMenu
-            } else if query.is_some() {
-                ScreenPress::GalleryQuery(None)
-            } else {
-                ScreenPress::Open(Screen::Start)
-            },
-        );
+        .child(content);
+    let mut screen = with_escape(screen, input.gallery);
     // The gallery fills the safe area. The game screen's root reserves room for its dock.
     screen.anchor = Some(Anchor::Point(Vec2::new(inset.left, inset.top), Vec2::ZERO));
     if let Some((kind, at)) = opened {
@@ -142,15 +133,15 @@ fn reference_page(input: &ScreenIn, faces: &FaceList, width: f32, height: f32) -
         query,
     } = input.gallery;
     let inset = input.window.safe_area;
-    let mut screen = column()
+    let screen = column()
         .name("gallery")
         .width(width)
         .height(height)
         .background(color::GALLERY_PAGE)
         .overflow(Overflow::Scroll)
         .align_items(Align::Center)
-        .child(reference::page(faces, opened.is_none() && query.is_none()))
-        .shortcut("Escape", escape(input.gallery));
+        .child(reference::page(faces, opened.is_none() && query.is_none()));
+    let mut screen = with_escape(screen, input.gallery);
     screen.anchor = Some(Anchor::Point(Vec2::new(inset.left, inset.top), Vec2::ZERO));
     if let Some(query) = query {
         let mut preview = command_preview(query)
@@ -175,13 +166,13 @@ fn reference_page(input: &ScreenIn, faces: &FaceList, width: f32, height: f32) -
 
 /// What Escape does on the gallery: closes an open menu, then the command list's preview, then
 /// goes back to the start screen.
-fn escape(state: GalleryState) -> ScreenPress {
+fn with_escape(screen: Element, state: GalleryState) -> Element {
     if state.menu.is_some() {
-        ScreenPress::DismissMenu
+        screen.shortcut("Escape", ScreenPress::DismissMenu)
     } else if state.query.is_some() {
-        ScreenPress::GalleryQuery(None)
+        screen.shortcut("Escape", ScreenPress::GalleryQuery(None))
     } else {
-        ScreenPress::Open(Screen::Start)
+        screen.shortcut("Escape", start::Message::Open(Screen::Start))
     }
 }
 

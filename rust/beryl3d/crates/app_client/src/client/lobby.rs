@@ -82,9 +82,10 @@ impl Client {
                     return;
                 };
                 // The fields empty again, to show the settings the lobby comes back with.
-                self.fields.set(lobby::STARTING_LIFE, FieldState::default());
-                self.fields
-                    .set(lobby::STARTING_HAND_SIZE, FieldState::default());
+                self.layer
+                    .set_field(lobby::STARTING_LIFE, FieldState::default());
+                self.layer
+                    .set_field(lobby::STARTING_HAND_SIZE, FieldState::default());
                 LobbyChange::Settings { settings }
             }
             LobbyPress::Start if view.is_some_and(|view| view.can_start) => LobbyChange::Start,
@@ -118,8 +119,14 @@ impl Client {
     /// Sends the pasted decklist to be read and saved under the name typed, once both fields
     /// hold something and no decklist is being read already.
     fn import_deck(&mut self) {
-        let name = self.fields.get(lobby::DECK_NAME).text.trim().to_owned();
-        let text = self.fields.get(lobby::DECKLIST).text;
+        let name = self
+            .layer
+            .fields()
+            .get(lobby::DECK_NAME)
+            .text
+            .trim()
+            .to_owned();
+        let text = self.layer.fields().get(lobby::DECKLIST).text;
         if name.is_empty() || text.trim().is_empty() || self.manual.lobby.importing {
             return;
         }
@@ -135,8 +142,9 @@ impl Client {
 
     /// Loads `deck` at the table, keeps its name to show, and closes the picker.
     fn load_deck(&mut self, deck: DeckImportReply) {
-        self.fields.set(lobby::DECK_NAME, FieldState::default());
-        self.fields.set(lobby::DECKLIST, FieldState::default());
+        self.layer
+            .set_field(lobby::DECK_NAME, FieldState::default());
+        self.layer.set_field(lobby::DECKLIST, FieldState::default());
         let lobby = &mut self.manual.lobby;
         lobby.deck_name = Some(deck.name);
         lobby.picker = None;
@@ -180,14 +188,14 @@ impl Client {
 
     /// The settings the host's fields ask for, if they can be read and ask for a change.
     fn asked_settings(&self, current: LobbySettings) -> Option<LobbySettings> {
-        let life = self.fields.get(lobby::STARTING_LIFE).text;
-        let hand = self.fields.get(lobby::STARTING_HAND_SIZE).text;
+        let life = self.layer.fields().get(lobby::STARTING_LIFE).text;
+        let hand = self.layer.fields().get(lobby::STARTING_HAND_SIZE).text;
         lobby::asked_settings(current, &life, &hand).ok().flatten()
     }
 
     /// Shows the lobby screen with no lobby yet, which arrives as `Input::Lobby`.
     pub(super) fn open_lobby(&mut self) {
-        self.first_view_opens = None;
+        self.update_start(&app_screens::screens::start::Message::Leave);
         self.manual.lobby = lobby::Lobby::new();
         self.screen = Screen::Lobby;
         self.change_sheet(None);

@@ -12,12 +12,11 @@
 //!
 //! Not built yet: the web's small icon beside the reason.
 
-use crate::hud::GamePress;
-use beryl_protocol::protocol::{Culprit, LossReason, OutcomeView, Side, Stall, Status};
+use beryl_protocol::protocol::{LossReason, OutcomeView, Side, Stall};
 use glam::Vec2;
 
-use crate::hud::HudIn;
-use game_table::faces::FaceList;
+use super::{Inputs, Message, State};
+
 use game_table::table::{CARD_HEIGHT, CARD_WIDTH};
 use kit_base::data::space::flat::phone::game_over as metrics;
 use kit_base::data::space::flat::phone::opening::NARROW_BELOW;
@@ -72,34 +71,22 @@ fn reason(outcome: &OutcomeView) -> Option<&'static str> {
     }
 }
 
-/// How a game that is no longer going on ended: with an outcome, or none if it was stopped.
-struct Ended<'a>(Option<&'a OutcomeView>);
-
-/// How the game ended, or none while it goes on.
-fn shown<'a>(input: &HudIn<'a>) -> Option<Ended<'a>> {
-    match &input.view?.status {
-        Status::Over { outcome } => Some(Ended(Some(outcome))),
-        Status::Stopped => Some(Ended(None)),
-        _ => None,
-    }
-}
-
 /// What the game screen shows once the view says the game has ended: while the result is shown,
 /// one element holding the scrim, the result and its dock, which blurs and darkens everything
 /// drawn under it (`Style::backdrop`); while the result is put aside, the dock with the
 /// button that brings it back. The holder has no size, so that it covers nothing, and each piece
 /// in it stands at its own point of the window.
 #[must_use]
-pub fn game_over(input: &HudIn) -> Option<Element> {
-    let Ended(outcome) = shown(input)?;
+pub(super) fn game_over(state: &State, input: &Inputs) -> Element {
+    let outcome = input.outcome.as_ref();
     let title = result_title(outcome);
-    if input.result_aside {
-        let back = button(&format!("Back to {title}")).on_press(GamePress::Result(true));
-        return Some(dock(input, vec![back]));
+    if state.aside {
+        let back = button(&format!("Back to {title}")).on_press(Message::Shown(true));
+        return dock(input, vec![back]);
     }
     let buttons = vec![
-        button("View Battlefield").on_press(GamePress::Result(false)),
-        primary("New Game").on_press(GamePress::OpenStart),
+        button("View Battlefield").on_press(Message::Shown(false)),
+        primary("New Game").on_press(Message::NewGame),
     ];
     let mut screen = holder()
         .name("game over screen")
@@ -110,7 +97,7 @@ pub fn game_over(input: &HudIn) -> Option<Element> {
     screen.style.filter = DIMMED.to_vec();
     screen.style.backdrop = true;
     screen.anchor = Some(Anchor::Point(Vec2::ZERO, Vec2::ZERO));
-    Some(screen)
+    screen
 }
 
 /// The web's `.table-dimmed` filter: `blur(2.5px) brightness(0.68) saturate(0.85)`.
@@ -122,7 +109,7 @@ const DIMMED: [Filter; 3] = [
 
 /// The result's title, why the game ended and the card that ended it, in a column at the
 /// window's middle.
-fn result(input: &HudIn, outcome: Option<&OutcomeView>) -> Element {
+fn result(input: &Inputs, outcome: Option<&OutcomeView>) -> Element {
     let phone = input.window.phone();
     // The phone's result is smaller (`.phone-game-over`).
     let (title_style, reason_style, reason_gap) = if phone {
@@ -146,13 +133,12 @@ fn result(input: &HudIn, outcome: Option<&OutcomeView>) -> Element {
         .color(color::GOLD)
         .passes(true);
     heading.text = Some(title.to_uppercase());
-    let culprit = outcome
-        .and_then(|outcome| match outcome {
-            OutcomeView::Win { by, .. } => by.as_ref(),
-            _ => None,
-        })
-        .filter(|_| outcome.and_then(reason).is_some())
-        .and_then(|culprit| culprit_card(culprit, input.faces?, culprit_size(input)));
+    let culprit = outcome.and_then(|outcome| match outcome {
+        OutcomeView::Win { by: Some(by), .. } if reason(outcome).is_some() => input
+            .culprit
+            .map(|face| culprit_card(&by.name, face, culprit_size(input))),
+        _ => None,
+    });
     let mut screen = column()
         .name("game over")
         .passes(true)
@@ -178,13 +164,9 @@ fn result(input: &HudIn, outcome: Option<&OutcomeView>) -> Element {
 /// `ui/src/screens/styles/controls.css`): `right: 39px; bottom: 87px`, its buttons stacked
 /// `--button-gap` apart and as wide as the widest, at least `--button-width`. The web's
 /// `DockButtons` puts its first button at the foot, so `New Game` comes last here.
-fn dock(input: &HudIn, buttons: Vec<Element>) -> Element {
-    if let Some((layout, slot)) = input
-        .profile
-        .screen_column()
-        .zip(input.profile.slot("result.dock"))
-    {
-        return layout.actions_at_foot("game over buttons", buttons, slot.rect);
+fn dock(input: &Inputs, buttons: Vec<Element>) -> Element {
+    if let Some((layout, rect)) = input.dock {
+        return layout.actions_at_foot("game over buttons", buttons, rect);
     }
     let window = input.window;
     let at = Vec2::new(
@@ -211,7 +193,7 @@ const BUTTON_GAP: f32 = space::M;
 const DOCK_WIDTH: f32 = size::BUTTON_WIDTH;
 
 /// The middle of the window or, on the phone, of its safe area.
-fn middle(input: &HudIn) -> Vec2 {
+fn middle(input: &Inputs) -> Vec2 {
     let window = input.window;
     if input.window.phone() {
         let safe = window.safe_area;
@@ -226,7 +208,7 @@ fn middle(input: &HudIn) -> Vec2 {
 
 /// The width of the card that ended the game and the gap above it: the web's 230 on the
 /// desktop, and 160 on a phone (140 on one narrower than 393 points).
-fn culprit_size(input: &HudIn) -> (f32, f32) {
+fn culprit_size(input: &Inputs) -> (f32, f32) {
     if !input.window.phone() {
         (CULPRIT_WIDTH, size::GAME_OVER_CARD_GAP)
     } else if input.window.size.width < NARROW_BELOW {
@@ -236,28 +218,15 @@ fn culprit_size(input: &HudIn) -> (f32, f32) {
     }
 }
 
-/// The card that ended the game, drawn flat and whole, or as the plate of the ability that did
-/// it when its card's text has one for it. None until the card's face is known.
-fn culprit_card(culprit: &Culprit, faces: &FaceList, (width, gap): (f32, f32)) -> Option<Element> {
-    let plate = culprit.ability.and_then(|ability| {
-        use beryl_protocol::protocol::AbilityClass;
-        let triggered = match ability.kind {
-            AbilityClass::Triggered => true,
-            AbilityClass::Activated => false,
-            AbilityClass::Static => return None,
-        };
-        faces.plate(&culprit.name, triggered, ability.nth)
-    });
-    let face = plate.or_else(|| faces.find(&culprit.name))?;
-    Some(
-        Element {
-            shows: Some(Shown::Face(face, FaceSize::Full)),
-            ..Element::new(Role::Region)
-        }
-        .name(&culprit.name)
-        .passes(true)
-        .width(width)
-        .height(width * CARD_HEIGHT / CARD_WIDTH)
-        .margin([gap, 0.0, 0.0, 0.0]),
-    )
+/// The card that ended the game, or its ability plate.
+fn culprit_card(name: &str, face: kit_ui::input::FaceId, (width, gap): (f32, f32)) -> Element {
+    Element {
+        shows: Some(Shown::Face(face, FaceSize::Full)),
+        ..Element::new(Role::Region)
+    }
+    .name(name)
+    .passes(true)
+    .width(width)
+    .height(width * CARD_HEIGHT / CARD_WIDTH)
+    .margin([gap, 0.0, 0.0, 0.0])
 }

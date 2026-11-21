@@ -40,8 +40,8 @@ impl Client {
     /// Hosts or joins a table with the open form's name and invite code, once the fields hold
     /// what it needs.
     fn open_from_form(&mut self) {
-        let name = self.fields.get(NAME).text.trim().to_owned();
-        let invite = self.fields.get(INVITE).text.trim().to_owned();
+        let name = self.layer.fields().get(NAME).text.trim().to_owned();
+        let invite = self.layer.fields().get(INVITE).text.trim().to_owned();
         let command = match self.manual.entries.mode {
             Some(EntryMode::Host) if !name.is_empty() => SessionCommand::TableHost { name },
             Some(EntryMode::Join) if !name.is_empty() && !invite.is_empty() => {

@@ -1,23 +1,11 @@
-//! The client's side of editing a text field (`layout::Edit`): what it hands the edited field,
-//! the text it keeps for the screens (`Fields`), and what it asks of the host, which is text
-//! entry over the field and the clipboard.
+//! Routes toolkit field changes and clipboard and native entry requests.
 
-use glam::Vec2;
-
-use super::{Client, Input, Platform, Press};
+use super::{Client, Input, Platform};
 use crate::command::Request;
 
-use kit_frame::frame::ElementId;
 use kit_ui::input::{Key, KeyCode, Pointer, TextChange};
 use kit_ui::layout::Edit;
 use kit_ui::widgets::FieldState;
-
-/// How soon after a press a second one in the same place is a double click, in nanoseconds:
-/// half a second, the usual default on the desktop platforms.
-const DOUBLE_CLICK: u64 = 500_000_000;
-
-/// How far apart, in logical points, the two presses of a double click may be.
-const DOUBLE_CLICK_POINTS: f32 = 4.0;
 
 impl Client {
     /// Whether the host runs on the Mac, where `Cmd` in a shortcut is the Command key.
@@ -31,15 +19,7 @@ impl Client {
     /// being built again, so `Fields` keeps the caret of the field's last change of text.
     #[must_use]
     pub fn field(&self, name: &str) -> FieldState {
-        let mut state = self.fields.get(name);
-        let edited = self.layer.edited_id();
-        if edited.and_then(|id| self.layer.name_of(id)) == Some(name)
-            && let Some((caret, selection)) = self.layer.edited_caret()
-        {
-            state.caret = caret;
-            state.selection = selection;
-        }
-        state
+        self.layer.field(name)
     }
 
     /// Hands the edited field text typed into it, an input method's, a phone's native field's
@@ -60,10 +40,10 @@ impl Client {
     /// field took the edit.
     pub(super) fn edit(&mut self, edit: Edit) -> bool {
         let edited = self.layer.edit(edit);
-        if let Some(text) = edited.text
-            && let Some(id) = self.layer.edited_id()
-        {
-            self.dispatch_press(&Press::Field(id, text));
+        if let Some(change) = edited.change {
+            self.feature_field_changed(change);
+            self.follow_table_query();
+            self.show_screen();
         }
         if let Some(copied) = edited.copy {
             self.requests.push_back(Request::Copy(copied));
@@ -95,56 +75,23 @@ impl Client {
     /// the word there on the second press of a double click, and extends the selection with
     /// Shift held.
     pub(super) fn press_field(&mut self, pointer: &Pointer) {
-        let point = pointer.position;
-        let word = self.last_down.is_some_and(|(at, there): (u64, Vec2)| {
-            self.now.saturating_sub(at) <= DOUBLE_CLICK
-                && there.distance(point) <= DOUBLE_CLICK_POINTS
-        });
-        // A third press starts again, as the first of a new double click.
-        self.last_down = (!word).then_some((self.now, point));
-        self.edit(Edit::Down {
-            point,
-            word,
-            extend: pointer.modifiers.shift,
-        });
-    }
-
-    /// Keeps `text` as what the field `id` holds, with its editor's caret and selection, and
-    /// builds the screen again to show it.
-    pub(super) fn keep_field(&mut self, id: ElementId, text: &str) {
-        let Some(name) = self.layer.name_of(id) else {
-            return;
-        };
-        let name = name.to_owned();
-        let (caret, selection) = (self.layer.edited_id() == Some(id))
-            .then(|| self.layer.edited_caret())
-            .flatten()
-            .unwrap_or_default();
-        let state = FieldState {
-            text: text.to_owned(),
-            caret,
-            selection,
-            placeholder: String::new(),
-        };
-        self.fields.set(&name, state);
-        self.follow_table_query();
-        self.show_screen();
+        self.layer
+            .press_field(self.now, pointer.position, pointer.modifiers.shift);
     }
 
     /// Asks the host to begin text entry over a field that has just taken the focus, or to end
     /// it once no field has the focus: on a phone that shows or hides the native field, and on
     /// the desktop it turns the input method on or off.
     pub(super) fn follow_entry(&mut self) {
-        let edited = self.layer.edited_id();
-        if edited == self.entry {
+        let Some(entry) = self.layer.text_entry() else {
             return;
-        }
-        if self.entry.is_some() {
+        };
+        if entry.end {
             self.requests.push_back(Request::EndTextEntry);
         }
-        self.entry = edited;
-        if let Some((field, rect, text)) = self.layer.edited() {
-            (self.requests).push_back(Request::BeginTextEntry { field, rect, text });
+        if let Some((field, rect, text)) = entry.begin {
+            self.requests
+                .push_back(Request::BeginTextEntry { field, rect, text });
         }
     }
 }

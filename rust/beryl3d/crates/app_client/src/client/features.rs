@@ -4,28 +4,48 @@ use std::any::Any;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Debug;
 
+use crate::command::Request;
+use app_screens::screens::bug_report::{self, BugReport};
 use app_screens::screens::settings::{self, SettingsSheet};
-use app_screens::screens::{Screen, Sheet};
+use app_screens::screens::start::{self, StartScreen};
+use app_screens::screens::testing::{self, TestingScreen};
+use app_screens::screens::{self, GalleryState, Screen, Sheet};
 use app_screens::settings::ScreenSettings;
+use beryl_protocol::{PlayerView, SessionId};
 use game_hud::hud::log::{self, GameLog, Logged};
+use game_hud::screens::game_over::{self, GameOver};
+use game_manual::screens::table_entries::TableEntries;
+use game_table::faces::{FaceList, Faces};
 use game_table::profiles::Profile;
 use game_table::table::Window;
 use kit_scene::{Effect, Feature, FeatureSlot};
 use kit_ui::element::{Action, Element};
+use kit_ui::layout::FieldChange;
+use kit_ui::widgets::{FieldState, Fields};
 
 use super::{Client, SessionCommand};
 
 const SETTINGS: &str = "settings";
+const START: &str = "start";
+const TESTING: &str = "testing";
+const BUG_REPORT: &str = "bug-report";
+const GAME_OVER: &str = "game-over";
 const REGISTRY: &[Registration] = &[
     Registration::of::<SettingsSheet>(SETTINGS, Placement::Sheet(Sheet::Settings)),
     Registration::of::<GameLog>("game-log", Placement::GameLog),
+    Registration::of::<StartScreen>(START, Placement::Screen(Screen::Start)),
+    Registration::of::<TestingScreen>(TESTING, Placement::Screen(Screen::Testing)),
+    Registration::of::<BugReport>(BUG_REPORT, Placement::Sheet(Sheet::BugReport)),
+    Registration::of::<GameOver>(GAME_OVER, Placement::GameOver),
 ];
 
 /// Locations in the flat layer's composition that take a registered feature.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum Placement {
+    Screen(Screen),
     Sheet(Sheet),
     GameLog,
+    GameOver,
 }
 
 /// App inputs available to mounts. Each feature receives only the inputs it reads.
@@ -34,7 +54,11 @@ pub(super) struct ViewInputs<'a> {
     pub screen: Screen,
     pub window: Window,
     pub profile: Profile<'a>,
-    pub has_view: bool,
+    pub view: Option<&'a PlayerView>,
+    pub session: Option<SessionId>,
+    pub fields: &'a Fields,
+    pub entries: &'a TableEntries,
+    pub faces: &'a FaceList,
     pub game_over: bool,
     pub settings: ScreenSettings,
 }
@@ -71,6 +95,8 @@ pub(super) struct Features {
     /// longer available from playback. It is an input to the game log.
     pub log_history: Logged,
     frame_times: BTreeSet<u64>,
+    /// A field to focus once an update's new layout exists.
+    pub focus_after_show: Option<&'static str>,
 }
 
 impl Default for Features {
@@ -83,6 +109,7 @@ impl Default for Features {
             sheet: None,
             log_history: Logged::default(),
             frame_times: BTreeSet::new(),
+            focus_after_show: None,
         }
     }
 }
@@ -96,6 +123,21 @@ impl Features {
             .get_mut(id)
             .and_then(|slot| slot.downcast_mut())
             .expect("the registry owns this feature's slot")
+    }
+
+    fn state_of<F: Feature + 'static>(&self, id: &'static str) -> &F::State {
+        self.slots[id]
+            .downcast_ref::<FeatureSlot<F>>()
+            .expect("the registry owns this feature's slot")
+            .state()
+    }
+
+    pub fn bug(&self) -> &bug_report::State {
+        self.state_of::<BugReport>(BUG_REPORT)
+    }
+
+    pub fn reset_result(&mut self) {
+        Self::slot::<GameOver>(&mut self.slots, GAME_OVER).update(&game_over::Message::Reset);
     }
 
     fn request_frame(&mut self, at: u64) {
@@ -134,6 +176,29 @@ impl Client {
         self.features.state(id).map(|state| format!("{state:#?}"))
     }
 
+    pub(super) fn update_start(&mut self, message: &start::Message) {
+        update::<StartScreen>(self, START, message);
+    }
+
+    pub(super) fn update_testing(&mut self, message: &testing::Message) {
+        update::<TestingScreen>(self, TESTING, message);
+    }
+
+    pub(super) fn update_bug(&mut self, message: &bug_report::Message) -> bool {
+        update::<BugReport>(self, BUG_REPORT, message)
+    }
+
+    pub(super) fn feature_field_changed(&mut self, change: FieldChange) {
+        match change.name.as_str() {
+            start::SEED => self.update_start(&start::Message::Seed(change.text)),
+            testing::FILTER => self.update_testing(&testing::Message::Filter(change.text)),
+            bug_report::DESCRIPTION => {
+                self.update_bug(&bug_report::Message::Description(change.text));
+            }
+            _ => {}
+        }
+    }
+
     /// Returns whether a registered feature handled the action and changed the view.
     pub(super) fn route_feature(&mut self, action: &Action) -> Option<bool> {
         REGISTRY
@@ -155,6 +220,10 @@ trait Mounted: Feature + Sized + 'static {
 
 fn route<F: Mounted>(client: &mut Client, id: &'static str, action: &Action) -> Option<bool> {
     let message = action.downcast_ref::<F::Message>()?;
+    Some(update::<F>(client, id, message))
+}
+
+fn update<F: Mounted>(client: &mut Client, id: &'static str, message: &F::Message) -> bool {
     let (mut changed, effects) =
         Features::slot::<F>(&mut client.features.slots, id).update(message);
     for effect in effects {
@@ -165,7 +234,7 @@ fn route<F: Mounted>(client: &mut Client, id: &'static str, action: &Action) -> 
             Effect::FrameAt(at) => client.features.request_frame(at),
         }
     }
-    Some(changed)
+    changed
 }
 
 impl Mounted for SettingsSheet {
@@ -214,9 +283,7 @@ impl Mounted for GameLog {
         id: &'static str,
         inputs: ViewInputs<'_>,
     ) -> Option<&'a Element> {
-        if !inputs.has_view {
-            return None;
-        }
+        inputs.view?;
         let slot = Features::slot::<Self>(&mut features.slots, id);
         let layout = if inputs.profile.data().table.bands.is_some() {
             if !slot.state().open {
@@ -242,6 +309,167 @@ impl Mounted for GameLog {
                 client.features.sheet.is_some() && client.change_sheet(None)
             }
         }
+    }
+}
+
+impl Mounted for StartScreen {
+    fn mounted_view<'a>(
+        features: &'a mut Features,
+        id: &'static str,
+        inputs: ViewInputs<'_>,
+    ) -> Option<&'a Element> {
+        let has_recordings = !features
+            .state_of::<TestingScreen>(TESTING)
+            .recordings
+            .is_empty();
+        let in_progress = start::in_progress(inputs.view);
+        Some(
+            Features::slot::<Self>(&mut features.slots, id).view(start::Inputs {
+                window: inputs.window,
+                column: inputs.profile.screen_column(),
+                in_progress,
+                session: inputs.session.filter(|_| in_progress),
+                has_recordings,
+                fields: inputs.fields,
+                entries: inputs.entries,
+            }),
+        )
+    }
+
+    fn command(client: &mut Client, command: Self::Command) {
+        client.commands.push_back(match command {
+            start::Command::Concede(session) => SessionCommand::Concede(session),
+            start::Command::Start(request) => SessionCommand::Start(request),
+        });
+    }
+
+    fn request(client: &mut Client, request: Self::Request) -> bool {
+        match request {
+            start::Request::Open(screen) => {
+                client.screen = screen;
+                client.gallery = GalleryState::default();
+                if screen == Screen::Gallery {
+                    client
+                        .gallery_faces
+                        .get_or_insert_with(|| Faces::new(screens::gallery_faces()));
+                }
+                client.change_sheet(None)
+            }
+            start::Request::AwaitGame => {
+                client.screen = Screen::Start;
+                true
+            }
+            start::Request::EnterGame => {
+                client.screen = Screen::Game;
+                client.change_sheet(None)
+            }
+            start::Request::ResumeGame => {
+                client.screen = Screen::Game;
+                true
+            }
+        }
+    }
+}
+
+impl Mounted for TestingScreen {
+    fn mounted_view<'a>(
+        features: &'a mut Features,
+        id: &'static str,
+        inputs: ViewInputs<'_>,
+    ) -> Option<&'a Element> {
+        Some(
+            Features::slot::<Self>(&mut features.slots, id).view(testing::Inputs {
+                window: inputs.window,
+                column: inputs.profile.screen_column(),
+                filter: inputs.fields.get(testing::FILTER),
+            }),
+        )
+    }
+
+    fn command(_: &mut Client, command: Self::Command) {
+        match command {}
+    }
+
+    fn request(client: &mut Client, replay: Self::Request) -> bool {
+        client.requests.push_back(Request::Replay {
+            name: replay.name,
+            seat: replay.seat,
+        });
+        client.screen = Screen::Game;
+        client.change_sheet(None)
+    }
+}
+
+impl Mounted for BugReport {
+    fn mounted_view<'a>(
+        features: &'a mut Features,
+        id: &'static str,
+        inputs: ViewInputs<'_>,
+    ) -> Option<&'a Element> {
+        let slot = Features::slot::<Self>(&mut features.slots, id);
+        if matches!(slot.state().stage, bug_report::BugStage::Capturing { .. }) {
+            return None;
+        }
+        Some(slot.view(bug_report::Inputs {
+            window: inputs.window,
+            layout: bug_report::Layout::new(inputs.profile),
+            description: inputs.fields.get(bug_report::DESCRIPTION),
+        }))
+    }
+
+    fn command(_: &mut Client, command: Self::Command) {
+        match command {}
+    }
+
+    fn request(client: &mut Client, request: Self::Request) -> bool {
+        match request {
+            bug_report::Request::Open => return client.change_sheet(Some(Sheet::BugReport)),
+            bug_report::Request::Close => return client.change_sheet(None),
+            bug_report::Request::FreezeFrame => {
+                client
+                    .layer
+                    .set_field(bug_report::DESCRIPTION, FieldState::default());
+                client.requests.push_back(Request::FreezeFrame);
+            }
+            bug_report::Request::FocusDescription => {
+                client.features.focus_after_show = Some(bug_report::DESCRIPTION);
+            }
+            bug_report::Request::ClearFocus => client.layer.focus(None),
+            bug_report::Request::Save {
+                description,
+                ai,
+                region,
+                window,
+            } => {
+                client.requests.push_back(Request::SaveBug {
+                    description,
+                    ai,
+                    region,
+                    window,
+                });
+            }
+            bug_report::Request::Export => client.requests.push_back(Request::ExportBugs),
+        }
+        false
+    }
+}
+
+impl Mounted for GameOver {
+    fn mounted_view<'a>(
+        features: &'a mut Features,
+        id: &'static str,
+        inputs: ViewInputs<'_>,
+    ) -> Option<&'a Element> {
+        let inputs = game_over::Inputs::new(inputs.profile, inputs.view, inputs.faces)?;
+        Some(Features::slot::<Self>(&mut features.slots, id).view(inputs))
+    }
+
+    fn command(_: &mut Client, command: Self::Command) {
+        match command {}
+    }
+
+    fn request(client: &mut Client, _: Self::Request) -> bool {
+        update::<StartScreen>(client, START, &start::Message::Open(Screen::Start))
     }
 }
 

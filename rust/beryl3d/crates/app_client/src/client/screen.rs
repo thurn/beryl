@@ -1,15 +1,15 @@
 //! Showing the flat layer's screen or sheet, and the corner's buttons, a float at the game
 //! screen's top right: the gear that opens the settings sheet, the bug button and undo.
 
+use beryl_protocol::DecisionId;
 use beryl_protocol::protocol::Status;
-use beryl_protocol::{AgentView, DecisionId};
 use glam::Vec2;
 
 use super::Client;
 use super::features::{Placement, ViewInputs};
 
 use crate::command::{Request, SessionCommand};
-use app_screens::screens::{self, Screen, ScreenIn, ScreenPress, Sheet, StartForm};
+use app_screens::screens::{self, Screen, ScreenIn, ScreenPress, Sheet, bug_report};
 use game_hud::hud::placement_scene::PlacementScene;
 use game_manual::manual::TableCommand;
 use game_table::faces::{FaceList, Faces};
@@ -39,21 +39,34 @@ impl Client {
             .spin(played.filter(|_| self.screen == Screen::Game), self.now);
         // A result put aside comes back with the next game's end.
         if view.is_none_or(|view| !matches!(view.status, Status::Over { .. } | Status::Stopped)) {
-            self.viewing.result_aside = false;
+            self.features.reset_result();
         }
         let feature_inputs = ViewInputs {
             profile: self.show.table().profile(),
             screen: self.screen,
             window: self.window,
-            has_view: view.is_some(),
+            view,
+            session: self.session,
+            fields: self.layer.fields(),
+            entries: &self.manual.entries,
+            faces: self.show.faces().list(),
             game_over: view.is_some_and(|view| matches!(view.status, Status::Over { .. })),
             settings: self.settings.screen(),
         };
-        let settings = sheet
-            .filter(|sheet| *sheet == Sheet::Settings)
-            .and_then(|sheet| self.features.view(Placement::Sheet(sheet), feature_inputs));
-        let log = (self.screen == Screen::Game && settings.is_none() && !self.bug_hides_screen())
+        let sheet_view =
+            sheet.and_then(|sheet| self.features.view(Placement::Sheet(sheet), feature_inputs));
+        let under_visible = sheet != Some(Sheet::Settings) && !self.bug_hides_screen();
+        let log = (under_visible && self.screen == Screen::Game)
             .then(|| self.features.view(Placement::GameLog, feature_inputs))
+            .flatten();
+        let mounted_screen = under_visible
+            .then(|| {
+                self.features
+                    .view(Placement::Screen(self.screen), feature_inputs)
+            })
+            .flatten();
+        let result = (under_visible && self.screen == Screen::Game)
+            .then(|| self.features.view(Placement::GameOver, feature_inputs))
             .flatten();
         let placement_scene = self.placement_scene();
         let input = ScreenIn {
@@ -72,13 +85,12 @@ impl Client {
         // prompt open, the game screen shows nothing, so that no empty panel is drawn over the
         // table. Once a game has a view it shows the players' furniture, and once the game has
         // ended, the result.
-        let under = match sheet {
-            Some(sheet) if sheet != Sheet::BugReport => None,
-            _ if self.bug_hides_screen() => None,
-            _ if self.screen == Screen::Game && input.prompt.is_none() && input.view.is_none() => {
-                None
-            }
-            _ => Some(screens::screen(self.screen, &input, log)),
+        let under = if !under_visible
+            || (self.screen == Screen::Game && input.prompt.is_none() && input.view.is_none())
+        {
+            None
+        } else {
+            mounted_screen.or_else(|| screens::screen(&input, log, result))
         };
         let opening = under.is_some()
             && sheet.is_none()
@@ -86,8 +98,8 @@ impl Client {
             && game_hud::screens::opening::shown(&input.hud());
         let away = self.screen == Screen::Game && game_hud::screens::opening::shown(&input.hud());
         let shown = match sheet {
-            Some(Sheet::Settings) => settings,
-            Some(Sheet::BugReport) => Some(screens::bug_report(under, &input)),
+            Some(Sheet::Settings) => sheet_view,
+            Some(Sheet::BugReport) => Some(bug_report::compose(under, sheet_view)),
             None => under,
         };
         let music = screens::music(self.screen, view);
@@ -105,6 +117,9 @@ impl Client {
             .unwrap_or_default();
         self.layer
             .show(shown.map(kit_ui::widgets::screen::with_transitions));
+        if let Some(field) = self.features.focus_after_show.take() {
+            self.layer.focus_field(field);
+        }
         self.layer.scroll_to_end(game_hud::hud::log::LIST);
         self.place_shown();
         let read_whole = read_whole
@@ -118,19 +133,6 @@ impl Client {
             self.music = music;
             self.requests.push_back(Request::Music(music));
         }
-    }
-
-    /// Keeps the agents a person may play and chooses the first to offer. The live app sends
-    /// them once it has resumed a game or found none to resume, so agents that arrive before
-    /// any view mean there is no game yet: the person starts one on the start screen.
-    pub(super) fn take_agents(&mut self, agents: Vec<AgentView>) {
-        if self.views == 0 {
-            self.screen = Screen::Start;
-            self.first_view_opens = Some(Screen::Game);
-        }
-        self.start.agent = StartForm::first_agent(&agents);
-        self.agents = agents;
-        self.show_screen();
     }
 
     /// Everything the screen functions read, from what the client holds now. The inspector sets
@@ -152,14 +154,8 @@ impl Client {
             stops: self.settings.stops,
             bindings: &self.settings.bindings,
             sheet: self.features.sheet,
-            agents: &self.agents,
-            start: &self.start,
-            entries: &self.manual.entries,
             gallery: self.gallery,
-            recordings: &self.recordings,
-            seat: self.seat,
-            bug: &self.bug.form,
-            fields: &self.fields,
+            fields: self.layer.fields(),
             inspected: None,
             faces: Some(self.faces()),
             viewing: self.viewing.open,
@@ -167,16 +163,9 @@ impl Client {
             table: &self.manual.state,
             carried: self.gesture.carried(),
             lobby: &self.manual.lobby,
-            result_aside: self.viewing.result_aside,
             spinning: self.viewing.spinning(self.now),
             placement_scene: None,
         }
-    }
-
-    /// Shows the ended game's result over the table, or puts it aside (`GamePress::Result`).
-    pub(super) fn show_result(&mut self, shown: bool) {
-        self.viewing.result_aside = !shown;
-        self.show_screen();
     }
 
     /// The active screen's faces, which the host's asset workers prepare. A match's

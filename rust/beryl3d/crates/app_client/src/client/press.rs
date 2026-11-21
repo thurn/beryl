@@ -1,16 +1,13 @@
 //! Dispatches messages received from the flat layer and the client's own controls.
 
 use beryl_protocol::prompt::{ButtonId, Click};
-use beryl_protocol::protocol::{Side, Step};
+use beryl_protocol::protocol::Step;
 
 use super::Client;
-use crate::command::Request;
-use app_screens::screens::{self, BugPress, GalleryState, Screen, ScreenPress, Sheet};
+use app_screens::screens::ScreenPress;
 use game_hud::hud::GamePress;
 use game_hud::inspect::Viewed;
 use game_manual::manual::{LobbyPress, TableCommand, TablePress};
-use game_table::faces::Faces;
-use kit_frame::frame::ElementId;
 use kit_ui::element::Action;
 use kit_ui::layout::DismissMenu;
 use kit_ui::widgets::{MenuChoice, MenuId};
@@ -27,38 +24,15 @@ pub enum Press {
     /// Any click on the open prompt other than a button: a card, an ability or a player, a
     /// number, a catalog entry, or a card dropped into a pile.
     Prompt(Click),
-    /// Go to a screen.
-    Open(Screen),
     /// Turn the stop at `step` on or off, on the player's own turns or, if `theirs`, on the
     /// opponent's.
     Stop { step: Step, theirs: bool },
-    /// Start a game with what the start screen holds: the chosen opponent, the seed and the
-    /// fair-deal box. With a game in progress the first press asks to confirm, and the next
-    /// concedes that game before starting the new one.
-    Start,
-    /// Choose the `n`th agent the host listed (`Input::Agents`), counting from 0, as the
-    /// opponent of the next game.
-    Agent(u16),
-    /// Turn the start screen's fair-deal box on or off.
-    FairDeal,
-    /// Save every bug report to one file (`Request::ExportBugs`).
-    ExportBugs,
-    /// Replay the `recording`th recording the host listed (`Input::Recordings`), counting
-    /// from 0, from the seat the testing screen's toggle shows.
-    Replay { recording: u16 },
-    /// Set the seat the testing screen replays recordings from.
-    Seat(Side),
     /// A row of an open menu, counting from 0 over all its groups.
     Menu(MenuId, u16),
     /// Open one of the gallery's example context menus.
     GalleryMenu(app_screens::screens::GalleryMenu),
     /// Show one of the gallery's example command searches, or close its preview.
     GalleryQuery(Option<app_screens::screens::GalleryQuery>),
-    /// Give the keys to an element, such as a text field.
-    Focus(ElementId),
-    /// The text field `ElementId` now holds this text: an edit made in it, which
-    /// `Client::press` keeps in the field's `FieldState`.
-    Field(ElementId, String),
     /// Close something shown over the screen.
     Dismiss(Dismiss),
     /// Open the viewer of a pile's cards, as a press on a pile does.
@@ -70,13 +44,8 @@ pub enum Press {
     /// Something the manual table shows over itself: its command list, ask prompt, token
     /// search, library order tray or log.
     Table(game_manual::manual::TablePress),
-    /// One of the bug report's controls.
-    Bug(BugPress),
     /// One of the manual table's lobby controls.
     Lobby(LobbyPress),
-    /// Show the ended game's result over the table, or put it aside to see the battlefield
-    /// (`screens::game_over`).
-    Result(bool),
     /// Take back the viewer's latest answer that can be taken back (`Client::undo`).
     Undo,
 }
@@ -103,19 +72,9 @@ impl Client {
             self.dispatch_press(press);
         } else if let Some(&press) = action.downcast_ref::<ScreenPress>() {
             let press = match press {
-                ScreenPress::Open(screen) => Press::Open(screen),
-                ScreenPress::ReportBug => return self.set_sheet(Some(Sheet::BugReport)),
-                ScreenPress::CloseBugReport => return self.set_sheet(None),
-                ScreenPress::Start => Press::Start,
-                ScreenPress::Agent(agent) => Press::Agent(agent),
-                ScreenPress::FairDeal => Press::FairDeal,
-                ScreenPress::ExportBugs => Press::ExportBugs,
-                ScreenPress::Replay { recording } => Press::Replay { recording },
-                ScreenPress::Seat(side) => Press::Seat(side),
                 ScreenPress::GalleryMenu(kind) => Press::GalleryMenu(kind),
                 ScreenPress::GalleryQuery(query) => Press::GalleryQuery(query),
                 ScreenPress::DismissMenu => Press::Dismiss(Dismiss::Menu),
-                ScreenPress::Bug(kind) => Press::Bug(kind),
                 ScreenPress::Undo => Press::Undo,
             };
             self.dispatch_press(&press);
@@ -123,9 +82,7 @@ impl Client {
             self.click(click);
         } else if let Some(&press) = action.downcast_ref::<GamePress>() {
             let press = match press {
-                GamePress::OpenStart => Press::Open(Screen::Start),
                 GamePress::Stop { step, theirs } => Press::Stop { step, theirs },
-                GamePress::Result(shown) => Press::Result(shown),
                 GamePress::View(viewed) => Press::View(viewed),
                 GamePress::DismissRevealed => Press::Dismiss(Dismiss::Revealed),
                 GamePress::DismissViewer => Press::Dismiss(Dismiss::Viewer),
@@ -151,16 +108,6 @@ impl Client {
         match *press {
             Press::Button(button) => self.click(Click::Button { button }),
             Press::Prompt(click) => self.click(click),
-            Press::Open(screen) => {
-                self.first_view_opens = None;
-                self.screen = screen;
-                self.gallery = GalleryState::default();
-                if screen == Screen::Gallery {
-                    self.gallery_faces
-                        .get_or_insert_with(|| Faces::new(screens::gallery_faces()));
-                }
-                self.set_sheet(None);
-            }
             Press::Stop { step, theirs } => {
                 let stops = &mut self.settings.stops;
                 let set = if theirs {
@@ -171,23 +118,8 @@ impl Client {
                 *set = toggled(*set, step);
                 self.save_stops();
             }
-            Press::Start => self.start_game(),
-            Press::Agent(agent) => {
-                self.start.agent = Some(agent);
-                self.show_screen();
-            }
-            Press::FairDeal => {
-                self.start.fair = !self.start.fair;
-                self.show_screen();
-            }
-            Press::ExportBugs => self.requests.push_back(Request::ExportBugs),
-            Press::Replay { recording } => self.replay(recording),
-            Press::Seat(seat) => self.set_seat(seat),
-            Press::Focus(id) => self.layer.focus(Some(id)),
-            Press::Field(id, ref text) => self.keep_field(id, text),
             Press::View(viewed) => self.view(Some(viewed)),
             Press::Dismiss(Dismiss::Viewer) => self.dismiss_viewer(),
-            Press::Bug(press) => self.bug_press(press),
             Press::Dismiss(Dismiss::Revealed) => self.dismiss_revealed(),
             Press::GalleryMenu(kind) => {
                 let at = self.owned.mouse.unwrap_or_else(|| {
@@ -201,7 +133,6 @@ impl Client {
                 self.show_screen();
             }
             Press::Menu(game_manual::manual::menus::MENU, row) => self.press_table_menu(row),
-            Press::Result(shown) => self.show_result(shown),
             Press::Undo => self.undo(),
             Press::Menu(..) => {}
             Press::Dismiss(Dismiss::Menu) => {

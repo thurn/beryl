@@ -16,12 +16,12 @@ mod gesture;
 use std::collections::VecDeque;
 
 use beryl_protocol::prompt::{Click, ClickRequest, PromptView};
-use beryl_protocol::protocol::{DecisionId, SessionId, Side, Status};
+use beryl_protocol::protocol::{DecisionId, SessionId, Status};
 use beryl_protocol::script::{OwnTimings, Verb, own_timings};
-use beryl_protocol::{AgentView, StartRequest, StopsSetting};
+use beryl_protocol::{GameUpdate, StopsSetting};
 
 use crate::settings::Settings;
-use app_screens::screens::{self, GalleryState, Music, SEED, Screen, Sheet, StartForm};
+use app_screens::screens::{GalleryState, Music, Screen, Sheet, bug_report, start, testing};
 use game_hud::hud::banner::Banner;
 use game_hud::hud::piles::PileCounts;
 use game_hud::hud::rows::RowCounts;
@@ -35,10 +35,9 @@ use game_play::pointer::touch::Touch;
 use game_table::faces::{CARD_BACK, FaceList, Faces};
 use game_table::table::{Table, Window};
 use kit_base::data::Data;
-use kit_frame::frame::{self, ElementId, Frame, FrameBuilder, Sound, Wake};
+use kit_frame::frame::{self, Frame, FrameBuilder, Sound, Wake};
 use kit_ui::input::{FaceId, FaceSize, GlyphKey, Lifecycle, Tier};
 use kit_ui::layout::{self, Layer};
-use kit_ui::widgets::Fields;
 use std::sync::Arc;
 
 mod input;
@@ -50,13 +49,11 @@ mod own;
 mod press;
 mod profiles;
 mod scrolling;
-pub use app_screens::screens::BugPress;
 pub use press::{Dismiss, Press};
 mod refusal;
 mod screen;
 mod stops;
 mod table_pointer;
-mod testing;
 mod touch;
 mod viewing;
 
@@ -125,17 +122,6 @@ pub struct Client {
     /// The static samples have their own face list, loaded only when the gallery opens.
     gallery_faces: Option<Faces>,
     settings: Settings,
-    /// The agents a person may play, as the host listed them.
-    agents: Vec<AgentView>,
-    /// What the person has chosen on the start screen.
-    start: StartForm,
-    /// The screen the first view of all opens, if the client is on the start screen only
-    /// because the agents arrived before any view: the game, which the host resumed or started.
-    first_view_opens: Option<Screen>,
-    /// The names of the recordings the testing screen lists, as the host listed them.
-    recordings: Vec<String>,
-    /// The seat the testing screen replays recordings from.
-    seat: Side,
     /// The session the latest view came from, which stop and concede commands name.
     session: Option<SessionId>,
     /// The stops the game holds, as far as the client knows: the latest view's, or those it
@@ -171,13 +157,6 @@ pub struct Client {
     shown: (Screen, Option<Sheet>),
     /// The host's platform, which says what `Cmd` in a shortcut means.
     platform: Platform,
-    /// What each text field holds, which the screens show (`editing`).
-    fields: Fields,
-    /// The text field the host was last asked to begin text entry over, if any.
-    entry: Option<ElementId>,
-    /// When and where the primary button last went down in the edited field, which makes the
-    /// next press there a double click.
-    last_down: Option<(u64, glam::Vec2)>,
     /// The `now` of the latest frame: the time of every input since, which has none of its own.
     now: u64,
     wake: Wake,
@@ -194,8 +173,6 @@ pub struct Client {
     inspector: Inspector,
     /// The viewer of a pile's cards and the Revealed Cards pill (`viewing`).
     viewing: Viewing,
-    /// The bug report and the table's clock, which it freezes (`bug`).
-    bug: bug::Bug,
     /// What the manual table shows over itself (`manual`).
     manual: manual::Manual,
     /// The fingers on a touch screen (`touch`).
@@ -232,11 +209,6 @@ impl Client {
             gallery: GalleryState::default(),
             gallery_faces: None,
             settings: Settings::default(),
-            agents: Vec::new(),
-            start: StartForm::default(),
-            first_view_opens: None,
-            recordings: Vec::new(),
-            seat: Side::You,
             session: None,
             stops_held: None,
             music: None,
@@ -252,9 +224,6 @@ impl Client {
             gesture: gesture::Gesture::None,
             shown: (Screen::Game, None),
             platform: Platform::Mac,
-            fields: Fields::new(),
-            entry: None,
-            last_down: None,
             now: 0,
             wake: Wake::Never,
             requests: VecDeque::new(),
@@ -264,7 +233,6 @@ impl Client {
             low_memory: false,
             inspector: Inspector::default(),
             viewing: Viewing::default(),
-            bug: bug::Bug::default(),
             manual: manual::Manual::default(),
             touch: Touch::default(),
         }
@@ -289,52 +257,7 @@ impl Client {
     pub fn handle(&mut self, input: Input) {
         match input {
             Input::Data(data) => self.set_data(data),
-            Input::Update(update) => {
-                // The first view of all is of a game the host resumed or started, which may
-                // reach the client after the agents put it on the start screen.
-                if let Some(screen) = self.first_view_opens.take() {
-                    self.screen = screen;
-                }
-                self.views += 1;
-                self.take_session(&update);
-                self.set_source(&update.view.status);
-                self.set_prompt(match &update.view.status {
-                    Status::Deciding { decision } => {
-                        Some((decision.id, (*decision.prompt).clone()))
-                    }
-                    _ => None,
-                });
-                self.prepare_pill(&update.view);
-                self.stops_held = Some(update.view.stops);
-                self.send_stops();
-                // The same view sent again says nothing new happened.
-                let again = self
-                    .show
-                    .latest()
-                    .is_some_and(|latest| latest.view == update.view);
-                if !again {
-                    self.features.log_history.take(&update.view);
-                }
-                Banner::prepare(&mut self.layer, &update.view);
-                self.show.push_update(update);
-                // Every life total and pool the scripts to come will show is laid out now, so
-                // that a frame lays out none of them.
-                self.prepare_counts();
-                // And so is every notice they will show.
-                NoticeFloats::prepare(
-                    &mut self.layer,
-                    self.show.coming_notices(),
-                    self.show.notices(),
-                );
-                let (text, glyphs) = self.layer.text_and_glyphs();
-                self.show.shape_badges(text, glyphs, self.window.scale);
-                let shown = self.show.shown().map(|update| &update.view);
-                let coming = self.show.coming_counts().map(|(_, view)| view);
-                let table = self.show.table();
-                (self.piles).prepare(&mut self.layer, table, shown.into_iter().chain(coming));
-                (self.row_counts).prepare(&mut self.layer, self.show.coming_rows());
-                self.show_screen();
-            }
+            Input::Update(update) => self.take_game_update(update),
             Input::Reply(Reply::CardSearch(text, hits)) => self.take_token_hits(text, hits),
             Input::Reply(Reply::TableAct(reply)) => self.take_table_reply(reply),
             Input::Reply(Reply::Click(Ok(reply))) => self.click_replied(reply),
@@ -355,12 +278,19 @@ impl Client {
                 self.send_stops();
                 self.show_screen();
             }
-            Input::Agents(agents) => self.take_agents(agents),
-            Input::Recordings(recordings) => {
-                self.recordings = recordings;
+            Input::Agents(agents) => {
+                self.update_start(&start::Message::Agents(agents, self.views == 0));
                 self.show_screen();
             }
-            Input::BugSaved(result) => self.bug_saved(result),
+            Input::Recordings(recordings) => {
+                self.update_testing(&testing::Message::Recordings(recordings));
+                self.show_screen();
+            }
+            Input::BugSaved(result) => {
+                if self.update_bug(&bug_report::Message::Saved(result)) {
+                    self.show_screen();
+                }
+            }
             Input::Nudge => {}
             Input::Pointer(pointer) => self.point(pointer),
             Input::Key(key) => self.key(key),
@@ -393,6 +323,50 @@ impl Client {
         }
         self.follow_entry();
         self.wake = Wake::Now;
+    }
+
+    /// Applies a session update and lays out what its next frames will draw.
+    fn take_game_update(&mut self, update: Box<GameUpdate>) {
+        if self.views == 0 {
+            self.update_start(&start::Message::FirstView);
+        }
+        self.views += 1;
+        self.take_session(&update);
+        self.set_source(&update.view.status);
+        self.set_prompt(match &update.view.status {
+            Status::Deciding { decision } => Some((decision.id, (*decision.prompt).clone())),
+            _ => None,
+        });
+        self.prepare_pill(&update.view);
+        self.stops_held = Some(update.view.stops);
+        self.send_stops();
+        // The same view sent again says nothing new happened.
+        let again = self
+            .show
+            .latest()
+            .is_some_and(|latest| latest.view == update.view);
+        if !again {
+            self.features.log_history.take(&update.view);
+        }
+        Banner::prepare(&mut self.layer, &update.view);
+        self.show.push_update(update);
+        // Every life total and pool the scripts to come will show is laid out now, so
+        // that a frame lays out none of them.
+        self.prepare_counts();
+        // And so is every notice they will show.
+        NoticeFloats::prepare(
+            &mut self.layer,
+            self.show.coming_notices(),
+            self.show.notices(),
+        );
+        let (text, glyphs) = self.layer.text_and_glyphs();
+        self.show.shape_badges(text, glyphs, self.window.scale);
+        let shown = self.show.shown().map(|update| &update.view);
+        let coming = self.show.coming_counts().map(|(_, view)| view);
+        let table = self.show.table();
+        (self.piles).prepare(&mut self.layer, table, shown.into_iter().chain(coming));
+        (self.row_counts).prepare(&mut self.layer, self.show.coming_rows());
+        self.show_screen();
     }
 
     fn set_data(&mut self, data: Arc<Data>) {
@@ -576,39 +550,6 @@ impl Client {
         }
     }
 
-    /// Starts a game with what the start screen holds, as the web's `StartScreen` does: nothing
-    /// while no opponent is chosen or the seed is not one; with a game in progress, the first
-    /// press only asks to confirm ("Concede & Start") and the next concedes that game and then
-    /// starts the new one, whether or not the concession lands first.
-    fn start_game(&mut self) {
-        let Some(agent) = (self.start.agent).and_then(|at| self.agents.get(usize::from(at))) else {
-            return;
-        };
-        let Ok(seed) = screens::seed(&self.fields.get(SEED).text) else {
-            return;
-        };
-        let view = self.show.latest().map(|update| &update.view);
-        let going_on = self.session.filter(|_| screens::in_progress(view));
-        if going_on.is_some() && !self.start.confirming {
-            self.start.confirming = true;
-            self.show_screen();
-            return;
-        }
-        if let Some(session) = going_on {
-            self.commands.push_back(SessionCommand::Concede(session));
-        }
-        self.commands.push_back(SessionCommand::Start(StartRequest {
-            agent: agent.name.clone(),
-            seed,
-            fair: self.start.fair,
-        }));
-        self.start.confirming = false;
-        self.first_view_opens = None;
-        self.screen = Screen::Game;
-        self.set_sheet(None);
-        self.show_screen();
-    }
-
     /// Clicks the open prompt, naming the decision and the prompt's state the click was made
     /// on. Does nothing while no prompt is open.
     fn click(&mut self, click: Click) {
@@ -651,14 +592,16 @@ impl Client {
     /// started, however the frames fell.
     #[must_use]
     pub fn rested(&self) -> u64 {
-        self.bug.frame_time(self.show.rested())
+        self.features.bug().frame_time(self.show.rested())
     }
 
     /// When the first notice shown or to be shown ends, as of the last `frame`, if there is one
     /// (`Show::notice_end`).
     #[must_use]
     pub fn notice_end(&self) -> Option<u64> {
-        self.show.notice_end().map(|end| self.bug.frame_time(end))
+        self.show
+            .notice_end()
+            .map(|end| self.features.bug().frame_time(end))
     }
 
     /// The frame the last `frame` made, without making another: what the host read back, for

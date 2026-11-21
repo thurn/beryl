@@ -33,7 +33,7 @@ use taffy::{
 };
 
 pub use anchor::Spot;
-pub use edit::{Edit, Edited};
+pub use edit::{Edit, Edited, FieldChange, TextEntry};
 pub use float::FloatLook;
 pub use menu::{DismissMenu, Navigation};
 pub use motion::Ticked;
@@ -137,6 +137,7 @@ pub struct Layer {
     pressed: Option<ElementId>,
     /// The focused text field's editor, while a text field has the focus (`edit`).
     editing: Option<edit::Editing>,
+    text_fields: edit::TextFields,
     /// Whether the tree being matched and laid out is the screen's, whose changes transition
     /// (`motion`); floats' do not.
     animating: bool,
@@ -190,6 +191,7 @@ impl Layer {
             hovered: None,
             pressed: None,
             editing: None,
+            text_fields: edit::TextFields::default(),
             animating: false,
             ticks: None,
             submenu: None,

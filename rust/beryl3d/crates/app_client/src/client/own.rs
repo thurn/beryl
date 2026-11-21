@@ -334,7 +334,7 @@ impl Client {
     /// also prepares the scripts for callers that omit this step.
     pub fn prepare(&mut self, now: u64) {
         self.prepare_scroll(now);
-        self.prepare_table(self.bug.table(now));
+        self.prepare_table(self.features.bug().table_time(now));
     }
 
     /// From now on, compiles every script whole as it arrives (`Show::compile_whole`): for the
