@@ -22,6 +22,11 @@ pub(crate) fn read(conn: &Connection) -> Option<FleetNotice> {
         .and_then(|json| serde_json::from_str(&json).ok())
 }
 
+/// A notice with no cap means automatic sizing, including on a machine with a legacy cap.
+pub(crate) fn disk_cap_gb(notice: Option<&FleetNotice>, legacy: Option<u32>) -> Option<u32> {
+    notice.map_or(legacy, |notice| notice.disk_cap_gb)
+}
+
 /// Applies machine policy sent by the hub. A reply from an older hub has no fleet notice.
 pub fn heard(pool: &Pool, reply: &HeartbeatReply) -> Result<()> {
     pool.set_paused_everywhere(reply.paused_everywhere);

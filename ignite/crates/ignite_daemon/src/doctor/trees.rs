@@ -3,15 +3,16 @@
 //! trees' budget.
 
 use std::collections::BTreeSet;
-use std::path::{Path, PathBuf};
-use std::process::Command;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, PoisonError};
-use std::time::{Duration, SystemTime};
+use std::path::PathBuf;
+use std::sync::Arc;
 
+use ignite_core::capacity::{BYTES_PER_GB, BYTES_PER_GIB};
 use ignite_core::config::Machine;
 use ignite_core::ids::Commit;
 use ignite_core::traits::Result;
+use ignite_os::system::DiskSpace;
+
+use crate::trees::TreeConfig;
 
 use super::{DoctorInput, Finding, Host, StatusSection};
 
@@ -204,205 +205,115 @@ pub(super) fn findings(
         .find(|p| input.host.path_exists(p))
         .unwrap_or(&dir);
     findings.push(disk_finding(
-        input.host.disk_free_gb(probe),
-        input.host.trees_used_gb(&dir),
-        machine.trees_disk_gb,
+        input.host.disk_space(probe),
+        input.used_tree_bytes,
+        crate::fleet_notice::disk_cap_gb(input.fleet.as_ref(), machine.trees_disk_gb),
     ));
 }
 
-/// The `disk` finding. The trees may use `budget` GB in all, and what they use already counts
-/// toward it, so the disk has room when what is free plus what the trees use reaches the budget.
-/// Comparing the free space alone with the budget called a disk short that had room to spare.
-fn disk_finding(free: Option<u64>, used: Option<u64>, budget: Option<u32>) -> Finding {
-    let Some(free) = free else {
+fn disk_finding(disk: Option<DiskSpace>, used: Option<u64>, cap_gb: Option<u32>) -> Finding {
+    let Some(disk) = disk else {
         return Finding::problem(
             "disk",
-            "cannot read the free disk space.",
-            "run `df -k` in the tree directory and check that the disk is mounted",
+            "cannot read the volume size and available space.",
+            "check that the volume holding the tree directory is mounted",
         );
     };
-    // jarvis's disk held 4 GB free, every build waited for space, and this finding said "ok"
-    // because the trees' 1,633 GB plus the free space still reached their 250 GB budget. Below
-    // the floor the daemon keeps, the disk is short whatever the budget says.
-    let floor = crate::idle::FLOOR_GB;
-    if free < floor {
+    let gb = |bytes: u64| bytes as f64 / BYTES_PER_GB as f64;
+    let free = disk.available / BYTES_PER_GB;
+    let budget = TreeConfig::disk_budget(Some(disk), used, cap_gb);
+    let budget_text = match (used, budget) {
+        (Some(_), Some((bytes, source))) => {
+            format!("{:.1} GB tree budget (set by the {source})", gb(bytes))
+        }
+        _ => match cap_gb {
+            Some(cap) => format!("tree budget pending a measurement ({cap} GB cap)"),
+            None => "tree budget pending a measurement".to_owned(),
+        },
+    };
+    let floor_bytes = crate::idle::FLOOR_GB * BYTES_PER_GIB;
+    if disk.available < floor_bytes {
         return Finding::problem(
             "disk",
             format!(
-                "{free} GB free, under the {floor} GB the daemon keeps free; builds wait for \
-                 space."
+                "{free} GB free, under the {:.1} GB free-space floor; builds may wait for \
+                 space. {budget_text}.",
+                gb(floor_bytes)
             ),
             "free disk space; the disk loop clears free trees' builds first, then the \
              incremental caches and builds of leased trees that run nothing",
         );
     }
-    let Some(budget) = budget.map(u64::from) else {
-        return Finding::ok("disk", format!("{free} GB free; no budget is set."));
-    };
-    match used {
-        Some(used) if free + used < budget => Finding::problem(
-            "disk",
-            format!(
-                "{free} GB free and the trees use {used} GB, so they can grow to {} GB, less \
-                 than the {budget} GB they may use.",
-                free + used
-            ),
-            "free disk space, or lower trees_disk_gb for this machine in ignite.toml",
-        ),
-        // jarvis's trees used 1,633 GB of a 250 GB budget while the disk loop could clear
-        // nothing, because every tree was leased. The disk still had room then; it filled hours
-        // later.
-        Some(used) if used > budget => Finding::warning(
-            "disk",
-            format!("the trees use {used} GB, over the {budget} GB they may use; {free} GB free."),
-            "the disk loop clears free trees and idle leased trees; if the trees stay over \
-             the budget, look for a tree whose build directories keep growing",
-        ),
-        Some(used) => Finding::ok(
-            "disk",
-            format!(
-                "{free} GB free and the trees use {used} GB, room for the {budget} GB they may use."
-            ),
-        ),
-        None if free < budget => Finding::warning(
-            "disk",
-            format!(
-                "{free} GB free, less than the {budget} GB the trees may use; what the trees use \
-                 already is not measured yet."
-            ),
-            "run `ignite doctor` again in a few minutes, once the trees have been measured",
-        ),
-        None => Finding::ok(
-            "disk",
-            format!("{free} GB free; the trees may use {budget} GB."),
-        ),
-    }
-}
-
-/// How long a measurement of the trees' disk use is used before it is made again.
-const USED_FRESH: Duration = Duration::from_hours(1);
-
-/// The last measurement of a trees folder: when it was made, and the gigabytes it found.
-static USED: Mutex<Option<(PathBuf, SystemTime, u64)>> = Mutex::new(None);
-/// A measurement is running.
-static MEASURING: AtomicBool = AtomicBool::new(false);
-
-/// The gigabytes under `dir` from the last measurement, which may be up to [`USED_FRESH`] old.
-/// When there is none, or it is older, a measurement starts on a thread of its own (`du` over
-/// hundreds of gigabytes takes minutes), and this answers with what it has: an older figure,
-/// or `None`.
-pub(super) fn used_gb(dir: &Path) -> Option<u64> {
-    let last = USED
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .clone()
-        .filter(|(measured, _, _)| measured == dir)
-        .or_else(|| saved(dir));
-    let fresh = last
-        .as_ref()
-        .is_some_and(|(_, at, _)| at.elapsed().is_ok_and(|age| age < USED_FRESH));
-    if !fresh && !MEASURING.swap(true, Ordering::SeqCst) {
-        let dir = dir.to_path_buf();
-        std::thread::spawn(move || {
-            if let Some(gb) = measure_gb(&dir) {
-                let at = SystemTime::now();
-                save(&dir, at, gb);
-                *USED.lock().unwrap_or_else(PoisonError::into_inner) = Some((dir, at, gb));
+    match (used, budget) {
+        (Some(used), Some((bytes, _))) => {
+            let usage = format!("{free} GB free, {:.1} GB in the trees", gb(used));
+            if used > bytes {
+                Finding::warning(
+                    "disk",
+                    format!("{usage}, over the {budget_text}."),
+                    "the disk loop clears free trees and idle leased trees; if the trees stay over \
+                     the budget, look for a tree whose build directories keep growing",
+                )
+            } else {
+                Finding::ok("disk", format!("{usage}. {budget_text}."))
             }
-            MEASURING.store(false, Ordering::SeqCst);
-        });
+        }
+        _ => Finding::warning(
+            "disk",
+            format!("{free} GB free, {budget_text}."),
+            "run `ignite doctor` again once the build directories have been measured",
+        ),
     }
-    last.map(|(_, _, gb)| gb)
-}
-
-/// Where the last measurement of `dir` is kept, so that it outlives the daemon: the daemon
-/// restarts far more often than a measurement (`du` over hundreds of gigabytes) finishes, and
-/// a measurement kept only in memory left `doctor` saying "not measured yet" for good.
-fn saved_path(dir: &Path) -> PathBuf {
-    let name: String = dir
-        .to_string_lossy()
-        .chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
-        .collect();
-    // The daemon's own file, which a later daemon reads back, so not a test's scratch folder.
-    #[allow(clippy::disallowed_methods)]
-    let temp = std::env::temp_dir();
-    temp.join(format!("ignite-trees-used{name}"))
-}
-
-/// The measurement of `dir` a previous daemon saved: seconds since the epoch and gigabytes.
-fn saved(dir: &Path) -> Option<(PathBuf, SystemTime, u64)> {
-    let text = std::fs::read_to_string(saved_path(dir)).ok()?;
-    let (at, gb) = text.trim().split_once(' ')?;
-    let at = SystemTime::UNIX_EPOCH + Duration::from_secs(at.parse().ok()?);
-    Some((dir.to_path_buf(), at, gb.parse().ok()?))
-}
-
-fn save(dir: &Path, at: SystemTime, gb: u64) {
-    let secs = at
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .map_or(0, |d| d.as_secs());
-    // A measurement that cannot be saved is only measured again by the next daemon.
-    let _ = std::fs::write(saved_path(dir), format!("{secs} {gb}\n"));
-}
-
-/// The gigabytes `du` counts under `dir`.
-fn measure_gb(dir: &Path) -> Option<u64> {
-    let output = Command::new("du").arg("-sk").arg(dir).output().ok()?;
-    let text = String::from_utf8_lossy(&output.stdout);
-    let kilobytes: u64 = text.split_whitespace().next()?.parse().ok()?;
-    Some(kilobytes / (1024 * 1024))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// The daemon restarts far more often than `du` finishes over the trees, so a measurement
-    /// kept only in memory never reached `doctor`. A saved measurement is read back.
-    #[test]
-    fn a_measurement_is_read_back_after_a_restart() {
-        let dir = ignite_core::test_files::temp_dir()
-            .join(format!("ignite-used-test-{}", std::process::id()));
-        let at = SystemTime::now();
-        save(&dir, at, 287);
-        let (_, read_at, gb) = saved(&dir).unwrap();
-        assert_eq!(gb, 287);
-        assert!(at.duration_since(read_at).unwrap() < Duration::from_secs(1));
-        let _ = std::fs::remove_file(saved_path(&dir));
+    fn disk(total_gb: u64, free_gb: u64) -> DiskSpace {
+        DiskSpace {
+            total: total_gb * BYTES_PER_GB,
+            available: free_gb * BYTES_PER_GB,
+        }
     }
 
     #[test]
-    fn the_disk_has_room_when_free_space_and_the_trees_own_use_reach_the_budget() {
-        // jarvis: 277 GB free, the trees use 200 GB, and they may use 400 GB.
-        let roomy = disk_finding(Some(277), Some(200), Some(400));
-        assert!(roomy.ok && !roomy.warning, "{roomy:?}");
-        assert_eq!(
-            roomy.text,
-            "277 GB free and the trees use 200 GB, room for the 400 GB they may use."
-        );
-        let short = disk_finding(Some(150), Some(200), Some(400));
-        assert!(!short.ok, "{short:?}");
+    fn doctor_names_the_term_that_sets_the_budget() {
+        let used = Some(200 * BYTES_PER_GB);
+        let capped = disk_finding(Some(disk(1000, 277)), used, Some(300));
+        assert!(capped.ok && !capped.warning, "{capped:?}");
         assert!(
-            short
+            capped
                 .text
-                .starts_with("150 GB free and the trees use 200 GB, so they can grow to 350 GB"),
-            "{short:?}"
+                .contains("300.0 GB tree budget (set by the cap)")
         );
-        let unmeasured = disk_finding(Some(277), None, Some(400));
+
+        let derived = disk_finding(Some(disk(1000, 150)), used, Some(400));
+        assert!(derived.ok && !derived.warning, "{derived:?}");
+        assert!(
+            derived
+                .text
+                .contains("250.0 GB tree budget (set by the disk)")
+        );
+
+        let full = disk_finding(Some(disk(1858, 4)), used, None);
+        assert!(!full.ok, "{full:?}");
+        assert!(full.text.starts_with("4 GB free, under the"));
+        assert!(full.text.contains("18.2 GB tree budget (set by the disk)"));
+
+        let unmeasured = disk_finding(Some(disk(1000, 500)), None, Some(400));
         assert!(unmeasured.ok && unmeasured.warning, "{unmeasured:?}");
-        assert!(disk_finding(Some(500), None, Some(400)).fix.is_none());
-        // jarvis: 4 GB free while the trees used 1,633 GB of a 250 GB budget.
-        // The trees over their budget while the disk still has room.
-        let over = disk_finding(Some(400), Some(600), Some(250));
+        assert!(
+            unmeasured
+                .text
+                .contains("tree budget pending a measurement (400 GB cap)")
+        );
+
+        let over = disk_finding(Some(disk(1000, 400)), Some(600 * BYTES_PER_GB), Some(250));
         assert!(over.ok && over.warning, "{over:?}");
         assert!(
             over.text
-                .starts_with("the trees use 600 GB, over the 250 GB they may use"),
-            "{over:?}"
+                .contains("over the 250.0 GB tree budget (set by the cap)")
         );
-        let full = disk_finding(Some(4), Some(1633), Some(250));
-        assert!(!full.ok, "{full:?}");
-        assert!(full.text.starts_with("4 GB free, under the"), "{full:?}");
     }
 }

@@ -1110,16 +1110,21 @@ Rules for trees:
   at every compile and leaves it in `deps` for the binary's debug info, so a
   test binary rebuilt in place gained a full set at each compile: they were half
   of a 113 GB tree. Each codegen unit keeps its newest object.
-- To hold the machine under `trees_disk_gb`, the daemon deletes builds that a
-  newer build of the same unit replaced, then the build directories of the free
-  trees used longest ago, then, with no free tree left, those of the idle leased
-  trees holding the most bytes of their own. A replaced build is a top-level
-  unit (a test binary or program) with a newer unit of the same crate and
-  settings, together with every unit only it depends on, followed through the
-  dependency fingerprints that Cargo records. A unit that a kept build depends
-  on is never deleted, however alike it looks to another. While the disk has
-  less than 50 GB free, it also holds the trees under their current size less
-  what the disk lacks, since the limit was set for the disk as it was then.
+- The build directories may use the volume's size minus the space used outside
+  them and a reserve of 50 GB or a tenth of the volume, whichever is larger. The
+  optional Fleet dashboard cap can lower that budget. Before the first fleet
+  notice, the daemon uses `trees_disk_gb` from `ignite.toml` as the cap if it is
+  set. A notice with an empty cap switches to automatic sizing. The disk loop
+  and `ignite doctor` name the term that set the budget.
+- To stay within the budget, the daemon deletes builds that a newer build of the
+  same unit replaced, then the build directories of the free trees used longest
+  ago, then, with no free tree left, those of the idle leased trees holding the
+  most bytes of their own. A replaced build is a top-level unit (a test binary
+  or program) with a newer unit of the same crate and settings, together with
+  every unit only it depends on, followed through the dependency fingerprints
+  that Cargo records. A unit that a kept build depends on is never deleted,
+  however alike it looks to another. Below 50 GiB free, the daemon first clears
+  builds to recover free space without waiting to measure every tree.
 - The trees' size counts each file's blocks once. A seeded tree's files are APFS
   clones of its donor's and share their blocks, so each file counts its private
   bytes (macOS `getattrlist`, `ATTR_CMNEXT_PRIVATESIZE`) in its own tree and its
@@ -1140,13 +1145,14 @@ Rules for trees:
   deletion cannot leave records of builds whose files are gone.
 - The daemon's disk loop checks this every minute, in a loop of its own so that
   idle work waiting for cores cannot hold it up. It measures the trees at most
-  once every 30 minutes (every 5 while under 50 GB free), and not at all while
-  the disk has 150 GB free, since a measurement walks every build directory.
-  Free trees are swept, and so are leased trees while nothing runs in them: no
-  verb was asked from the tree, no process has its working directory or
-  executable inside it, and the build manager holds back any build there until
-  the sweep ends. A tree running a command keeps its build directories. With no
-  free tree left to clear, idle leased trees first lose their incremental caches
+  once every 30 minutes and can clear builds without measuring every 5 minutes
+  while under 50 GiB free. It skips the walk when the disk has at least 150 GiB
+  free, the reserve is covered, and the cap cannot bind. Free trees are swept,
+  and so are leased trees while nothing runs in them: no verb was asked from the
+  tree, no process has its working directory or executable inside it, and the
+  build manager holds back any build there until the sweep ends. A tree running
+  a command keeps its build directories. With no free tree left to clear, idle
+  leased trees first lose their incremental caches
   (`<target>/<profile>/incremental`), which costs only a slower next compile,
   and only then, largest first, their whole build directories. On 2026-11-20 the
   trees held 1,800 GB under a 250 GB limit with nearly every tree leased, and

@@ -12,9 +12,8 @@ use super::*;
 
 const MB: usize = 1_000_000;
 
-/// A tree set over the fixture's trees with a disk limit of `limit` bytes, and its every ticket
-/// tree leased, holding `sizes[i]` bytes in `out/big` of `tree-0<i+1>`.
-fn all_leased(f: &Fixture, limit: Option<u64>, sizes: &[usize]) -> Trees {
+/// Every ticket tree in the fixture, leased with `sizes[i]` bytes in its build file.
+fn all_leased(f: &Fixture, sizes: &[usize]) -> Trees {
     for (i, size) in sizes.iter().enumerate() {
         let tree = format!("tree-0{}", i + 1);
         write(
@@ -23,10 +22,8 @@ fn all_leased(f: &Fixture, limit: Option<u64>, sizes: &[usize]) -> Trees {
             &"x".repeat(*size),
         );
     }
-    let mut config = f.trees.config().clone();
-    config.disk_limit = limit;
     let trees = Trees::new(
-        config,
+        f.trees.config().clone(),
         open_in_memory().unwrap(),
         Arc::new(FakeClock::new(
             Timestamp::parse("2026-11-18T00:00:00.000Z").unwrap(),
@@ -73,15 +70,10 @@ fn state(trees: &Trees, tree: &str) -> String {
 #[test]
 fn with_every_tree_leased_the_largest_idle_one_is_cleared() {
     let f = Fixture::new(3, 1);
-    let probe = all_leased(&f, None, &[MB, 3 * MB, 2 * MB]);
-    let total = probe.hold_disk(0).unwrap().before;
-    for name in ["tree-01", "tree-02", "tree-03"] {
-        probe.release_unsaved(&id(name), &f.tip(), None).unwrap();
-    }
-    drop(probe);
-    let trees = all_leased(&f, Some(total - 5 * MB as u64 / 2), &[MB, 3 * MB, 2 * MB]);
+    let trees = all_leased(&f, &[MB, 3 * MB, 2 * MB]);
+    let total = sweep_to(&trees, None).before;
 
-    let report = trees.hold_disk(0).unwrap();
+    let report = sweep_to(&trees, Some(total - 5 * MB as u64 / 2));
 
     assert!(report.cleared.is_empty(), "{report:?}");
     assert_eq!(report.reclaimed, [id("tree-02")], "{report:?}");
@@ -99,7 +91,7 @@ fn with_every_tree_leased_the_largest_idle_one_is_cleared() {
 #[test]
 fn a_leased_tree_running_a_verb_is_left_alone() {
     let f = Fixture::new(3, 1);
-    let trees = all_leased(&f, Some(1), &[MB, 2 * MB, 3 * MB]);
+    let trees = all_leased(&f, &[MB, 2 * MB, 3 * MB]);
     let busy = crate::steps::global().begin(
         crate::steps::Kind::Verb("check".to_owned()),
         crate::steps::Work {
@@ -109,7 +101,7 @@ fn a_leased_tree_running_a_verb_is_left_alone() {
         },
     );
 
-    let report = trees.hold_disk(0).unwrap();
+    let report = sweep_to(&trees, Some(1));
     drop(busy);
 
     assert!(report.reclaimed.contains(&id("tree-02")), "{report:?}");
@@ -122,7 +114,7 @@ fn a_leased_tree_running_a_verb_is_left_alone() {
 #[test]
 fn stale_object_files_in_a_leased_tree_are_deleted_under_the_limit_too() {
     let f = Fixture::new(2, 1);
-    let trees = all_leased(&f, None, &[0, 0]);
+    let trees = all_leased(&f, &[0, 0]);
     let profile = f.repo.join(".worktrees/tree-02/out/debug");
     write(&profile, ".fingerprint/app-0a0a/bin-app", "");
     let old = profile.join("deps/app-0a0a.cgu.first.rcgu.o");
@@ -135,7 +127,7 @@ fn stale_object_files_in_a_leased_tree_are_deleted_under_the_limit_too() {
         .unwrap();
     write(&profile, "deps/app-0a0a.cgu.second.rcgu.o", "new");
 
-    let report = trees.hold_disk(0).unwrap();
+    let report = sweep_to(&trees, None);
 
     assert_eq!(report.objects, 1, "{report:?}");
     assert!(!old.exists());
@@ -146,7 +138,7 @@ fn stale_object_files_in_a_leased_tree_are_deleted_under_the_limit_too() {
 #[test]
 fn making_room_for_a_ticket_keeps_leased_and_landing_builds() {
     let f = Fixture::new(2, 1);
-    let trees = all_leased(&f, None, &[MB]);
+    let trees = all_leased(&f, &[MB]);
     let worktrees = f.repo.join(".worktrees");
     write(&worktrees.join("tree-02"), "out/big", "unused build");
     write(&worktrees.join("landing-1"), "out/big", "tip build");
@@ -162,7 +154,7 @@ fn making_room_for_a_ticket_keeps_leased_and_landing_builds() {
 #[test]
 fn below_the_floor_idle_leased_trees_are_cleared_once_no_free_tree_is_left() {
     let f = Fixture::new(2, 1);
-    let trees = all_leased(&f, None, &[MB, MB]);
+    let trees = all_leased(&f, &[MB, MB]);
     let reads = Cell::new(0);
     let report = trees
         .free_disk(100, || {
@@ -184,7 +176,7 @@ fn incremental_caches_go_before_any_leased_tree_is_cleared() {
     let f = Fixture::new(2, 1);
     // The files are written after the leases, which seed one tree as a clone of another, so
     // the trees share no blocks and hold about 6 MB, 4 MB of it incremental caches.
-    let trees = all_leased(&f, Some(9 * MB as u64 / 2), &[0, 0]);
+    let trees = all_leased(&f, &[0, 0]);
     for tree in ["tree-01", "tree-02"] {
         let profile = f.repo.join(".worktrees").join(tree).join("out/debug");
         write(&profile, ".fingerprint/app-0a0a/bin-app", "");
@@ -196,7 +188,7 @@ fn incremental_caches_go_before_any_leased_tree_is_cleared() {
         );
     }
 
-    let report = trees.hold_disk(0).unwrap();
+    let report = sweep_to(&trees, Some(9 * MB as u64 / 2));
 
     assert!(report.incremental.contains(&id("tree-02")), "{report:?}");
     assert!(report.reclaimed.is_empty(), "{report:?}");

@@ -296,16 +296,10 @@ impl ignite_core::traits::Builds for Watching {
     }
 }
 
-/// `f`'s trees again, over a new database, with `builds` and `disk_limit`.
-fn trees_with(
-    f: &Fixture,
-    builds: Arc<dyn ignite_core::traits::Builds>,
-    disk_limit: Option<u64>,
-) -> Trees {
-    let mut config = f.trees.config().clone();
-    config.disk_limit = disk_limit;
+/// The fixture trees over a new database and using the given build manager.
+fn trees_with(f: &Fixture, builds: Arc<dyn ignite_core::traits::Builds>) -> Trees {
     let trees = Trees::new(
-        config,
+        f.trees.config().clone(),
         open_in_memory().unwrap(),
         Arc::new(FakeClock::new(
             Timestamp::parse("2026-11-18T00:00:00.000Z").unwrap(),
@@ -333,7 +327,7 @@ fn a_free_tree_whose_blocks_a_clone_shares_is_kept_and_one_with_its_own_is_clear
     }
     let f = Fixture::new(3, 1);
     let builds = watching(&f);
-    let probe = trees_with(&f, builds.clone(), None);
+    let probe = trees_with(&f, builds.clone());
     let leased = match probe.lease(f.request("T.1", false)).unwrap() {
         Lease::Ready(lease) => lease,
         Lease::Waiting(waiter) => panic!("{}", waiter.reason()),
@@ -353,17 +347,17 @@ fn a_free_tree_whose_blocks_a_clone_shares_is_kept_and_one_with_its_own_is_clear
     fs::create_dir_all(leased.path.join("out")).unwrap();
     clone_file(&donor.join("out/big"), &leased.path.join("out/big"));
     write(&own, "out/own", &"y".repeat(2_000_000));
-    let total = probe.hold_disk(0).unwrap().before;
+    let total = sweep_to(&probe, None).before;
     assert!(total < 7_000_000, "the clone counts once: {total}");
 
     probe.release_unsaved(&leased.tree, &f.tip(), None).unwrap();
-    let limited = trees_with(&f, builds.clone(), Some(total - 1_000_000));
+    let limited = trees_with(&f, builds.clone());
     let held = match limited.lease(f.request("T.1", false)).unwrap() {
         Lease::Ready(lease) => lease,
         Lease::Waiting(waiter) => panic!("{}", waiter.reason()),
     };
     assert_eq!(held.tree, leased.tree);
-    let report = limited.hold_disk(0).unwrap();
+    let report = sweep_to(&limited, Some(total - 1_000_000));
 
     assert_eq!(report.cleared, [id(&free[1])], "{report:?}");
     assert!(report.after <= report.limit.unwrap(), "{report:?}");
@@ -422,9 +416,9 @@ fn a_cleared_tree_is_forgotten_before_its_directories_are_deleted() {
         &"x".repeat(100_000),
     );
     let builds = watching(&f);
-    let trees = trees_with(&f, builds.clone(), Some(1));
+    let trees = trees_with(&f, builds.clone());
 
-    let report = trees.hold_disk(0).unwrap();
+    let report = sweep_to(&trees, Some(1));
 
     assert_eq!(report.cleared, [id("tree-01")]);
     assert_eq!(*builds.forgotten.lock().unwrap(), [(id("tree-01"), true)]);
@@ -440,7 +434,7 @@ fn a_seeded_tree_is_forgotten_before_its_own_build_is_replaced() {
     }
     let f = Fixture::new(2, 2);
     let builds = watching(&f);
-    let trees = trees_with(&f, builds.clone(), None);
+    let trees = trees_with(&f, builds.clone());
     trees.record_build(&id("tree-01"), &f.commits[0]).unwrap();
     let other = match trees.lease(f.request("T.1", false)).unwrap() {
         Lease::Ready(lease) => lease,
@@ -526,7 +520,7 @@ fn a_compiling_lease_returns_before_its_seed_and_a_build_waits_for_the_seed() {
     }
     let f = Fixture::new(2, 2);
     let builds = Arc::new(Held::default());
-    let trees = trees_with(&f, builds.clone(), None);
+    let trees = trees_with(&f, builds.clone());
     trees.record_build(&id("tree-01"), &f.commits[0]).unwrap();
     let other = match trees.lease(f.request("T.1", false)).unwrap() {
         Lease::Ready(lease) => lease,

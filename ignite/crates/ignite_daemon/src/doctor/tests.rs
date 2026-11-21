@@ -7,8 +7,6 @@ use super::*;
 struct FakeHost {
     existing: Vec<PathBuf>,
     free_gb: u64,
-    /// What the trees use already.
-    used_gb: u64,
     tools: Vec<&'static str>,
 }
 
@@ -25,8 +23,12 @@ impl Host for FakeHost {
     fn disk_free_gb(&self, _path: &Path) -> Option<u64> {
         Some(self.free_gb)
     }
-    fn trees_used_gb(&self, _dir: &Path) -> Option<u64> {
-        Some(self.used_gb)
+    fn disk_space(&self, _path: &Path) -> Option<ignite_os::system::DiskSpace> {
+        let gb = ignite_core::capacity::BYTES_PER_GB;
+        Some(ignite_os::system::DiskSpace {
+            total: 1000 * gb,
+            available: self.free_gb * gb,
+        })
     }
     fn tool_path(&self, name: &str) -> Option<PathBuf> {
         self.tools
@@ -111,7 +113,7 @@ fn healthy_host() -> FakeHost {
         .map(PathBuf::from)
         .to_vec(),
         free_gb: 500,
-        used_gb: 10,
+
         tools: vec!["git", "cargo"],
     }
 }
@@ -126,6 +128,8 @@ fn diagnose_with(host: &FakeHost, hub: &FakeHub, trees: &FakeTrees) -> Vec<Findi
         probe: &Writable,
         manifest: Ok(manifest()),
         version: Commit::new("abc1234").ok(),
+        fleet: None,
+        used_tree_bytes: Some(10 * ignite_core::capacity::BYTES_PER_GB),
     })
 }
 
@@ -158,6 +162,8 @@ fn diagnose_with_probe(probe: &dyn listener::WriteProbe) -> Vec<Finding> {
         probe,
         manifest: Ok(manifest()),
         version: Commit::new("abc1234").ok(),
+        fleet: None,
+        used_tree_bytes: Some(10 * ignite_core::capacity::BYTES_PER_GB),
     })
 }
 
@@ -219,6 +225,8 @@ fn doctor_does_not_probe_a_hub_it_cannot_reach() {
         probe: &probe,
         manifest: Ok(manifest()),
         version: Commit::new("abc1234").ok(),
+        fleet: None,
+        used_tree_bytes: Some(10 * ignite_core::capacity::BYTES_PER_GB),
     });
     let hub_line = findings.iter().find(|f| f.label == "hub").unwrap().line();
     assert!(hub_line.contains("cannot reach the hub"), "{hub_line}");
@@ -273,6 +281,8 @@ fn doctor_warns_when_a_configured_provider_has_no_model_tiers() {
         probe: &Writable,
         manifest: Ok(manifest()),
         version: Commit::new("abc1234").ok(),
+        fleet: None,
+        used_tree_bytes: Some(10 * ignite_core::capacity::BYTES_PER_GB),
     });
     let lines: Vec<String> = findings
         .iter()
@@ -308,6 +318,8 @@ fn doctor_warns_when_an_app_in_cli_mode_has_no_program_on_the_path() {
         probe: &Writable,
         manifest: Ok(manifest()),
         version: Commit::new("abc1234").ok(),
+        fleet: None,
+        used_tree_bytes: Some(10 * ignite_core::capacity::BYTES_PER_GB),
     });
     let lines: Vec<String> = findings
         .iter()
@@ -388,6 +400,8 @@ fn doctor_counts_present_trees_without_using_the_legacy_ticket_tree_count() {
         probe: &Writable,
         manifest: Ok(manifest()),
         version: Commit::new("abc1234").ok(),
+        fleet: None,
+        used_tree_bytes: Some(10 * ignite_core::capacity::BYTES_PER_GB),
     });
     assert!(
         findings
@@ -585,6 +599,8 @@ fn doctor_warns_about_directories_under_the_trees_folder_it_does_not_own() {
         probe: &Writable,
         manifest: Ok(manifest()),
         version: Commit::new("abc1234").ok(),
+        fleet: None,
+        used_tree_bytes: Some(10 * ignite_core::capacity::BYTES_PER_GB),
     });
     let warning = findings.iter().find(|f| f.warning).expect("a warning");
     let line = warning.line();

@@ -105,14 +105,17 @@ pub trait IdleHost: Send + Sync {
     fn release(&self, tree: &TreeId, built_at: Option<&Commit>) -> Result<()>;
     /// How many commits `to` has that `from` does not.
     fn commits_between(&self, from: &Commit, to: &Commit) -> Result<usize>;
-    /// Deletes build directories until the trees are under their disk limit, and `short` bytes
-    /// under their current size when the disk lacks that much of the free space kept.
-    fn hold_disk(&self, short: u64) -> Result<DiskReport>;
+    /// Deletes build directories while the trees are above the measured budget.
+    fn hold_disk(&self) -> Result<DiskReport>;
     /// Deletes the build directories of free trees, used longest ago first, until the disk has
-    /// `floor_gb` gigabytes free, without measuring the trees ([`Trees::free_disk`]).
-    fn free_disk(&self, floor_gb: u64) -> Result<DiskReport>;
-    /// Gigabytes free on the disk that holds the trees, when it can be read.
-    fn disk_free_gb(&self) -> Option<u64> {
+    /// `floor_gib` gibibytes free, without measuring the trees ([`Trees::free_disk`]).
+    fn free_disk(&self, floor_gib: u64) -> Result<DiskReport>;
+    /// Size and available bytes of the disk that holds the trees.
+    fn disk_space(&self) -> Option<ignite_os::system::DiskSpace> {
+        None
+    }
+    /// The effective cap, if the hub or legacy configuration sets one.
+    fn disk_cap_gb(&self) -> Option<u32> {
         None
     }
 }
@@ -180,19 +183,23 @@ impl IdleHost for LiveHost {
         Ok(ignite_git::refs::commits_between(&self.repo, from, to)?.len())
     }
 
-    fn hold_disk(&self, short: u64) -> Result<DiskReport> {
-        self.trees.hold_disk(short)
+    fn hold_disk(&self) -> Result<DiskReport> {
+        self.trees.hold_disk()
     }
 
-    fn free_disk(&self, floor_gb: u64) -> Result<DiskReport> {
-        let gb = 1_000_000_000;
+    fn free_disk(&self, floor_gib: u64) -> Result<DiskReport> {
+        let dir = &self.trees.config().dir;
+        let floor = floor_gib * ignite_core::capacity::BYTES_PER_GIB;
         self.trees
-            .free_disk(floor_gb * gb, || self.disk_free_gb().map(|free| free * gb))
+            .free_disk(floor, || ignite_os::system::disk_free_bytes(dir).ok())
     }
 
-    fn disk_free_gb(&self) -> Option<u64> {
-        use crate::doctor::Host as _;
-        crate::doctor::NativeHost.disk_free_gb(&self.repo)
+    fn disk_space(&self) -> Option<ignite_os::system::DiskSpace> {
+        ignite_os::system::disk_space(&self.trees.config().dir).ok()
+    }
+
+    fn disk_cap_gb(&self) -> Option<u32> {
+        self.trees.disk_cap_gb()
     }
 }
 

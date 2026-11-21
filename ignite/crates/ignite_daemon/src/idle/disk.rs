@@ -1,6 +1,5 @@
-//! Holding the trees under `trees_disk_gb`: the disk loop asks [`Trees::hold_disk`] to delete
-//! replaced builds, and then the build directories of the free trees used longest ago, whenever
-//! the trees are over their limit or the disk has less than [`FLOOR_GB`] free
+//! The disk loop asks [`Trees::hold_disk`] to clear builds above the current budget. It
+//! clears builds without measuring first while the volume has less than [`FLOOR_GB`] free
 //! (`docs/ignite.md`, "Build trees").
 //!
 //! Measuring the trees walks every file in their build directories, which takes a while on
@@ -17,7 +16,9 @@
 
 use std::time::Duration;
 
+use ignite_core::capacity::{BYTES_PER_GB, BYTES_PER_GIB, disk_reserve_bytes};
 use ignite_core::traits::Result;
+use ignite_os::system::DiskSpace;
 
 use super::Idle;
 use crate::trees::DiskReport;
@@ -26,30 +27,36 @@ use crate::trees::DiskReport;
 /// file of every build directory, about 290 GB on jarvis, so it is kept rare on a busy machine.
 pub const DISK_EVERY: Duration = Duration::from_mins(30);
 
-/// Free disk space at which the trees are not measured at all. A measurement walked about
-/// 290 GB of build directories for over ten minutes on jarvis, holding the idle loop in one
-/// round, while 255 GB of the disk was free; with that much room nothing needs deleting.
+/// Skip the expensive walk when at least this much disk is free and the volume reserve
+/// and cap already fit.
 pub const ROOM_GB: u64 = 150;
 
-/// Free disk space the daemon keeps. Below it the trees are held under their current size
-/// less what the disk lacks, whatever `trees_disk_gb` allows: that limit was set for the disk
-/// as it was then, and the rest of the disk can fill after it was set.
+/// Below this much free space, clear builds without walking every tree first.
 pub use ignite_core::dispatch_pressure::DISK_FLOOR_GB as FLOOR_GB;
 
-/// The least time between two measurements while the disk is below [`FLOOR_GB`].
+/// The least time between two clearing passes while the disk is below [`FLOOR_GB`].
 pub const LOW_EVERY: Duration = Duration::from_mins(5);
+
+/// Free space already covers the reserve, and the cap could hold every used block even
+/// if all were in the trees.
+fn has_disk_room(disk: DiskSpace, cap_gb: Option<u32>) -> bool {
+    disk.available >= (ROOM_GB * BYTES_PER_GIB).max(disk_reserve_bytes(disk.total))
+        && cap_gb.is_none_or(|cap| {
+            disk.total.saturating_sub(disk.available) <= u64::from(cap) * BYTES_PER_GB
+        })
+}
 
 impl Idle {
     /// Brings the trees under their disk limit if they are over it, unless they were measured
     /// less than [`DISK_EVERY`] ago. Returns the report of a measurement made, which is also
     /// printed when it deleted anything.
     pub fn hold_disk(&self) -> Result<Option<DiskReport>> {
-        let free = self.host.disk_free_gb();
-        if free.is_some_and(|free| free >= ROOM_GB) {
+        let disk = self.host.disk_space();
+        if disk.is_some_and(|disk| has_disk_room(disk, self.host.disk_cap_gb())) {
             return Ok(None);
         }
-        let short_gb = free.map_or(0, |free| FLOOR_GB.saturating_sub(free));
-        let every = if short_gb > 0 { LOW_EVERY } else { DISK_EVERY };
+        let below_floor = disk.is_some_and(|disk| disk.available < FLOOR_GB * BYTES_PER_GIB);
+        let every = if below_floor { LOW_EVERY } else { DISK_EVERY };
         let now = self.clock.now();
         {
             let mut last = super::lock(&self.disk_held);
@@ -63,12 +70,17 @@ impl Idle {
         // Below the floor, free trees are cleared without measuring the trees first: two full
         // measurements of 1.6 TB took over an hour, the daemon restarted for a release before
         // any round finished, and the disk stayed full with every build waiting for space.
-        let report = if short_gb > 0 {
+        let report = if below_floor {
             crate::steps::step("clearing free trees until the disk is back above its floor");
             self.host.free_disk(FLOOR_GB)?
         } else {
             crate::steps::step("holding the trees under their disk limit");
-            self.host.hold_disk(0)?
+            self.host.hold_disk()?
+        };
+        let gb = |bytes: u64| bytes as f64 / BYTES_PER_GB as f64;
+        let limit = match (report.limit, report.limit_source) {
+            (Some(limit), Some(source)) => format!("{:.1} GB (set by the {source})", gb(limit)),
+            _ => "unavailable".to_owned(),
         };
         if !report.superseded.is_empty()
             || !report.cleared.is_empty()
@@ -76,7 +88,6 @@ impl Idle {
             || !report.reclaimed.is_empty()
             || report.objects > 0
         {
-            let gb = |bytes: u64| bytes as f64 / 1e9;
             let names = |trees: &[ignite_core::ids::TreeId]| {
                 trees
                     .iter()
@@ -88,8 +99,7 @@ impl Idle {
                 "ignite: trees held under their disk limit: deleted {} stale object files \
                  ({:.1} GB), {} replaced builds, the incremental caches of {} idle leased trees \
                  ({}), and the build directories of {} free trees ({}) and {} idle leased trees \
-                 ({}), freeing {:.1} GB more ({:.1} GB to {:.1} GB \
-                 of {})",
+                 ({}), freeing {:.1} GB more ({:.1} GB to {:.1} GB, limit {limit})",
                 report.objects,
                 gb(report.object_bytes),
                 report.superseded.len(),
@@ -102,9 +112,11 @@ impl Idle {
                 gb(report.before.saturating_sub(report.after)),
                 gb(report.before),
                 gb(report.after),
-                report
-                    .limit
-                    .map_or_else(|| "no limit".to_owned(), |l| format!("{:.1} GB", gb(l))),
+            );
+        } else if !below_floor {
+            eprintln!(
+                "ignite: tree disk budget {limit}, {:.1} GB in use after sweep",
+                gb(report.after)
             );
         }
         Ok(Some(report))

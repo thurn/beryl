@@ -255,7 +255,7 @@ fn a_verb_process_leases_idle_trees_through_the_daemon_leaving_one_free() {
         fn commits_between(&self, _: &Commit, _: &Commit) -> Result<usize> {
             Ok(7)
         }
-        fn hold_disk(&self, _: u64) -> Result<crate::trees::DiskReport> {
+        fn hold_disk(&self) -> Result<crate::trees::DiskReport> {
             Ok(crate::trees::DiskReport::default())
         }
         fn free_disk(&self, _: u64) -> Result<crate::trees::DiskReport> {

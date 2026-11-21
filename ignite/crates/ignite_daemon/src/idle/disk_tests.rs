@@ -29,11 +29,22 @@ fn the_disk_is_held_at_most_once_every_thirty_minutes() {
 fn the_trees_are_not_measured_while_the_disk_has_room() {
     let f = Fixture::new();
     let idle = f.idle();
-    *f.host.free_gb.lock().unwrap() = Some(ROOM_GB + 100);
+    *f.host.free_gib.lock().unwrap() = Some(ROOM_GB + 100);
     assert!(idle.hold_disk().unwrap().is_none());
     assert_eq!(f.host.held.load(Ordering::SeqCst), 0);
 
-    *f.host.free_gb.lock().unwrap() = Some(ROOM_GB - 1);
+    *f.host.free_gib.lock().unwrap() = Some(ROOM_GB - 1);
+    assert!(idle.hold_disk().unwrap().is_some());
+    assert_eq!(f.host.held.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn the_trees_are_measured_while_a_cap_can_bind_even_when_the_disk_has_room() {
+    let f = Fixture::new();
+    let idle = f.idle();
+    *f.host.free_gib.lock().unwrap() = Some(ROOM_GB + 100);
+    *f.host.cap_gb.lock().unwrap() = Some(300);
+
     assert!(idle.hold_disk().unwrap().is_some());
     assert_eq!(f.host.held.load(Ordering::SeqCst), 1);
 }
@@ -45,12 +56,12 @@ fn the_trees_are_not_measured_while_the_disk_has_room() {
 fn a_disk_below_its_floor_clears_free_trees_without_measuring_them() {
     let f = Fixture::new();
     let idle = f.idle();
-    *f.host.free_gb.lock().unwrap() = Some(FLOOR_GB + 10);
+    *f.host.free_gib.lock().unwrap() = Some(FLOOR_GB + 10);
     assert!(idle.hold_disk().unwrap().is_some());
     assert_eq!(f.host.held.load(Ordering::SeqCst), 1);
     assert_eq!(f.host.freed.load(Ordering::SeqCst), 0);
 
-    *f.host.free_gb.lock().unwrap() = Some(2);
+    *f.host.free_gib.lock().unwrap() = Some(2);
     f.clock.advance(LOW_EVERY.as_secs_f64() + 1.0);
     assert!(idle.hold_disk().unwrap().is_some());
     assert_eq!(f.host.held.load(Ordering::SeqCst), 1);

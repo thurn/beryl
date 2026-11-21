@@ -96,14 +96,13 @@ struct Host {
     between: AtomicUsize,
     /// How many times the disk was held.
     held: AtomicUsize,
-    /// The bytes short of the free space kept, as the last hold was told.
-    short: AtomicU64,
     /// How many times free trees were cleared to bring the disk back to its floor.
     freed: AtomicUsize,
     /// The floor in gigabytes, as the last clearing was told.
     floor: AtomicU64,
     /// Gigabytes free on the trees' disk; `None` reads as unknown.
-    free_gb: Mutex<Option<u64>>,
+    free_gib: Mutex<Option<u64>>,
+    cap_gb: Mutex<Option<u32>>,
     leased: Mutex<Vec<Commit>>,
     released: Mutex<Vec<(TreeId, Option<Commit>)>>,
 }
@@ -129,9 +128,8 @@ impl IdleHost for Arc<Host> {
         Ok(self.between.load(Ordering::SeqCst))
     }
 
-    fn hold_disk(&self, short: u64) -> Result<DiskReport> {
+    fn hold_disk(&self) -> Result<DiskReport> {
         self.held.fetch_add(1, Ordering::SeqCst);
-        self.short.store(short, Ordering::SeqCst);
         Ok(DiskReport::default())
     }
 
@@ -141,8 +139,19 @@ impl IdleHost for Arc<Host> {
         Ok(DiskReport::default())
     }
 
-    fn disk_free_gb(&self) -> Option<u64> {
-        *self.free_gb.lock().unwrap()
+    fn disk_space(&self) -> Option<ignite_os::system::DiskSpace> {
+        let gib = ignite_core::capacity::BYTES_PER_GIB;
+        self.free_gib
+            .lock()
+            .unwrap()
+            .map(|free| ignite_os::system::DiskSpace {
+                total: 1000 * gib,
+                available: free * gib,
+            })
+    }
+
+    fn disk_cap_gb(&self) -> Option<u32> {
+        *self.cap_gb.lock().unwrap()
     }
 }
 
@@ -286,10 +295,10 @@ impl Fixture {
             busy: AtomicBool::new(false),
             between: AtomicUsize::new(0),
             held: AtomicUsize::new(0),
-            short: AtomicU64::new(0),
             freed: AtomicUsize::new(0),
             floor: AtomicU64::new(0),
-            free_gb: Mutex::new(None),
+            free_gib: Mutex::new(None),
+            cap_gb: Mutex::new(None),
             leased: Mutex::new(Vec::new()),
             released: Mutex::new(Vec::new()),
         });

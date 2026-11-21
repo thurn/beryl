@@ -52,9 +52,8 @@ pub trait Host {
     fn memory_mb(&self) -> u64;
     /// Gigabytes free on the disk that holds `path`.
     fn disk_free_gb(&self, path: &Path) -> Option<u64>;
-    /// Gigabytes the files under the trees folder `dir` take up, from a recent measurement, or
-    /// `None` while none has been made. It must answer at once: `doctor` stays cheap.
-    fn trees_used_gb(&self, _dir: &Path) -> Option<u64> {
+    /// Size of the volume and bytes available to the daemon.
+    fn disk_space(&self, _path: &Path) -> Option<ignite_os::system::DiskSpace> {
         None
     }
     /// Where the program called `name` is found on the search path.
@@ -71,20 +70,6 @@ pub(crate) fn command_output(program: &str, args: &[&str]) -> Option<String> {
         .status
         .success()
         .then(|| String::from_utf8_lossy(&output.stdout).trim().to_owned())
-}
-
-/// The bytes `df` reports as available on the disk that holds `path`.
-#[cfg(not(windows))]
-fn df_available_bytes(path: &Path) -> Option<u64> {
-    let text = command_output("df", &["-Pk", &path.to_string_lossy()])?;
-    let kilobytes: u64 = text
-        .lines()
-        .nth(1)?
-        .split_whitespace()
-        .nth(3)?
-        .parse()
-        .ok()?;
-    Some(kilobytes * 1024)
 }
 
 impl Host for NativeHost {
@@ -122,15 +107,13 @@ impl Host for NativeHost {
     }
 
     fn disk_free_gb(&self, path: &Path) -> Option<u64> {
-        #[cfg(windows)]
-        let bytes = ignite_os::system::disk_free_bytes(path).ok();
-        #[cfg(not(windows))]
-        let bytes = df_available_bytes(path);
-        bytes.map(|bytes| bytes / (1024 * 1024 * 1024))
+        ignite_os::system::disk_free_bytes(path)
+            .ok()
+            .map(|bytes| bytes / ignite_core::capacity::BYTES_PER_GIB)
     }
 
-    fn trees_used_gb(&self, dir: &Path) -> Option<u64> {
-        trees::used_gb(dir)
+    fn disk_space(&self, path: &Path) -> Option<ignite_os::system::DiskSpace> {
+        ignite_os::system::disk_space(path).ok()
     }
 
     fn tool_path(&self, name: &str) -> Option<PathBuf> {
@@ -433,6 +416,9 @@ pub struct DoctorInput<'a> {
     /// The check manifests, or the reason they cannot be read.
     pub manifest: std::result::Result<Manifest, String>,
     pub version: Option<Commit>,
+    pub fleet: Option<ignite_core::fleet::FleetNotice>,
+    /// The recent clone-aware measurement of the managed build directories, if available.
+    pub used_tree_bytes: Option<u64>,
 }
 
 /// The first word of each command that a family the machine can run, or a product such a family
@@ -689,6 +675,8 @@ pub struct DoctorVerb {
     pub mirror: Option<PathBuf>,
     /// The emergency pause this machine enforces; `None` where there is none.
     pub emergency: Option<Arc<crate::emergency::Emergencies>>,
+    /// The daemon's live tree configuration and last fleet notice.
+    pub managed_trees: Option<crate::trees::Trees>,
 }
 
 impl Verb for DoctorVerb {
@@ -718,6 +706,14 @@ impl Verb for DoctorVerb {
             probe: &listener::HttpProbe,
             manifest: read_manifest(&ctx.repo, &ctx.config.repository.checks),
             version: running_version(),
+            fleet: self
+                .managed_trees
+                .as_ref()
+                .and_then(crate::trees::Trees::fleet_notice),
+            used_tree_bytes: self
+                .managed_trees
+                .as_ref()
+                .and_then(crate::trees::used_bytes),
         };
         let mut findings = diagnose(&input);
         if let Some(health) = &self.loops {

@@ -1,5 +1,5 @@
-//! Holding the trees under the machine's disk limit (`trees_disk_gb` in `ignite.toml`), and
-//! under whatever size leaves the disk the free space the daemon keeps.
+//! Holding the trees under the disk budget, using the volume's available space and the
+//! fleet cap to decide how much they may hold.
 //!
 //! The build directories are what grows. Each change to a crate's dependencies, features or
 //! profile makes Cargo build that crate, and every crate above it, under a new hash beside the
@@ -23,12 +23,14 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
+use ignite_core::capacity::{BYTES_PER_GB, disk_budget_bytes};
 use ignite_core::ids::TreeId;
 use ignite_core::traits::{Error, Result};
+use ignite_os::system::{DiskSpace, disk_space};
 use ignite_store::local::{rows, trees as store};
 use serde::Serialize;
 
-use super::{Kind, Trees, store_error};
+use super::{Kind, TreeConfig, Trees, store_error};
 use space::Space;
 
 mod leased;
@@ -36,6 +38,7 @@ mod objects;
 mod space;
 #[cfg(test)]
 mod tests;
+pub(crate) mod usage;
 
 /// The bytes a free tree's deletion must free alone for the first pass of [`Trees::hold_disk`]
 /// to clear it. A tree whose files are all clones of another tree's still writes its own lock
@@ -60,6 +63,7 @@ pub struct DiskReport {
     pub before: u64,
     pub after: u64,
     pub limit: Option<u64>,
+    pub limit_source: Option<DiskLimitSource>,
     /// Replaced builds deleted, as unit folder paths.
     pub superseded: Vec<PathBuf>,
     /// Free trees whose build directories were deleted whole.
@@ -74,6 +78,48 @@ pub struct DiskReport {
     pub object_bytes: u64,
 }
 
+/// The term that set the limit for a sweep.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub enum DiskLimitSource {
+    Cap,
+    Disk,
+    FreeSpaceFloor,
+}
+
+impl std::fmt::Display for DiskLimitSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Cap => "cap",
+            Self::Disk => "disk",
+            Self::FreeSpaceFloor => "free-space floor",
+        })
+    }
+}
+
+impl TreeConfig {
+    /// The same budget is used by the disk loop and doctor. The volume includes every block
+    /// it holds only once, so subtract the clone-aware tree total to find the bytes outside.
+    pub(crate) fn disk_budget(
+        disk: Option<DiskSpace>,
+        used: Option<u64>,
+        cap_gb: Option<u32>,
+    ) -> Option<(u64, DiskLimitSource)> {
+        let cap = cap_gb.map(|gb| u64::from(gb) * BYTES_PER_GB);
+        let derived = disk.zip(used).map(|(disk, used)| {
+            let outside = disk
+                .total
+                .saturating_sub(disk.available)
+                .saturating_sub(used);
+            disk_budget_bytes(disk.total, outside)
+        });
+        match (derived, cap) {
+            (Some(derived), Some(cap)) if cap < derived => Some((cap, DiskLimitSource::Cap)),
+            (Some(derived), _) => Some((derived, DiskLimitSource::Disk)),
+            (None, cap) => cap.map(|cap| (cap, DiskLimitSource::Cap)),
+        }
+    }
+}
+
 impl Trees {
     /// The bytes that deleting each known tree's build directories alone would free: the
     /// bytes they share with clones in another tree are not counted ([`Space`]).
@@ -81,21 +127,35 @@ impl Trees {
         self.measure().own()
     }
 
-    /// Measures every known tree's build directories together.
+    /// Measures the build directories of all managed trees with shared blocks counted once.
     fn measure(&self) -> Space {
         let config = &self.inner.config;
+        let keep = config.keep.get();
         let rows = store::all(&self.lock().db).unwrap_or_default();
         Space::measure(rows.iter().filter_map(|row| id_of(row).ok()).map(|id| {
             let path = config.path(&id);
-            let dirs = config.keep.get().iter().map(|dir| path.join(dir)).collect();
+            let dirs = keep.iter().map(|dir| path.join(dir)).collect();
             (id, dirs)
         }))
     }
 
-    /// Brings the trees under the disk limit, if they are over it. `short` is how many bytes
-    /// the disk lacks of the free space the daemon keeps; the trees are then held that many
-    /// bytes under their current size as well, since a limit set when the disk had room says
-    /// nothing about how full the rest of the disk has become since.
+    fn build_bytes(&self) -> u64 {
+        self.measure().total()
+    }
+
+    /// The last fleet notice, from the same local database the heartbeat writes to.
+    pub(crate) fn fleet_notice(&self) -> Option<ignite_core::fleet::FleetNotice> {
+        crate::fleet_notice::read(&self.lock().db)
+    }
+
+    pub(crate) fn disk_cap_gb(&self) -> Option<u32> {
+        crate::fleet_notice::disk_cap_gb(
+            self.fleet_notice().as_ref(),
+            self.inner.config.legacy_disk_cap_gb,
+        )
+    }
+
+    /// Brings the trees under the volume's current budget if they are over it.
     ///
     /// Free trees are cleared in two passes, each in the order of last use. The first clears
     /// only trees whose deletion alone frees at least [`OWN_BYTES`]. A tree seeded from another
@@ -108,24 +168,38 @@ impl Trees {
     /// are all cleared and the trees are still over the limit, the idle leased trees lose their
     /// incremental caches, and if the trees are over it still, those holding the most bytes of
     /// their own are cleared whole (`disk/leased.rs`).
-    pub fn hold_disk(&self, short: u64) -> Result<DiskReport> {
+    pub fn hold_disk(&self) -> Result<DiskReport> {
+        let dir = &self.inner.config.dir;
+        let report = self.hold_disk_with(|| disk_space(dir).ok())?;
+        usage::record(dir, report.after);
+        Ok(report)
+    }
+
+    pub(super) fn hold_disk_with(
+        &self,
+        disk: impl FnOnce() -> Option<DiskSpace>,
+    ) -> Result<DiskReport> {
+        self.hold_disk_under(|used| TreeConfig::disk_budget(disk(), Some(used), self.disk_cap_gb()))
+    }
+
+    pub(super) fn hold_disk_under(
+        &self,
+        budget: impl FnOnce(u64) -> Option<(u64, DiskLimitSource)>,
+    ) -> Result<DiskReport> {
         let mut report = DiskReport::default();
         let mut objects = objects::Swept::default();
         self.each_idle_tree(|dir| objects += objects::sweep_objects(dir))?;
         report.objects = objects.files;
         report.object_bytes = objects.bytes;
-        let before = self.measure().total();
-        let room = (short > 0).then(|| before.saturating_sub(short));
-        let limit = match (self.inner.config.disk_limit, room) {
-            (Some(limit), Some(room)) => Some(limit.min(room)),
-            (limit, room) => limit.or(room),
-        };
+        let before = self.build_bytes();
         report.before = before;
         report.after = before;
-        report.limit = limit;
-        let Some(limit) = limit else {
+        // Read free space after sweeping stale objects so their bytes are excluded on both sides.
+        let Some((limit, source)) = budget(before) else {
             return Ok(report);
         };
+        report.limit = Some(limit);
+        report.limit_source = Some(source);
         if before <= limit {
             return Ok(report);
         }
@@ -208,6 +282,7 @@ impl Trees {
     pub fn free_disk(&self, floor: u64, free: impl Fn() -> Option<u64>) -> Result<DiskReport> {
         let mut report = DiskReport {
             limit: Some(floor),
+            limit_source: Some(DiskLimitSource::FreeSpaceFloor),
             ..DiskReport::default()
         };
         // Once the disk is back above the floor, or its free space cannot be read, nothing

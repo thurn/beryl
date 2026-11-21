@@ -61,7 +61,8 @@ use ignite_store::local::{handles as handle_store, rows, trees as store};
 use rusqlite::Connection;
 use serde::Serialize;
 
-pub use disk::DiskReport;
+pub(crate) use disk::usage::used_bytes;
+pub use disk::{DiskLimitSource, DiskReport};
 pub(crate) use elastic::ticket_tree_number;
 pub use seed::{Seeding, wait_for_seed_on_disk, wait_until_seeded};
 pub use setup::Unfinished;
@@ -97,8 +98,8 @@ pub struct TreeConfig {
     pub branches: Vec<String>,
     pub ticket_tree_ceiling: u32,
     pub landing_trees: u32,
-    /// The disk the trees may use, in bytes.
-    pub disk_limit: Option<u64>,
+    /// The legacy cap in GB, used only until the hub sends a fleet notice.
+    pub legacy_disk_cap_gb: Option<u32>,
     /// The build products' output directories, relative to a tree's root: what a reset keeps.
     /// Both lists change when the manifests do ([`TreeConfig::reload`]).
     pub keep: Live<Vec<String>>,
@@ -141,9 +142,7 @@ impl TreeConfig {
             .collect(),
             ticket_tree_ceiling: derived.worker_ceiling.saturating_add(EXTRA_TICKET_TREES),
             landing_trees: derived.landing_trees,
-            disk_limit: machine
-                .trees_disk_gb
-                .map(|gb| u64::from(gb) * 1_000_000_000),
+            legacy_disk_cap_gb: machine.trees_disk_gb,
             keep: keep.into(),
             prebuild: prebuild.into(),
             prebuild_outputs: prebuild_outputs.into(),

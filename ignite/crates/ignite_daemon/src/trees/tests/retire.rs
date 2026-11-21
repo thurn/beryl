@@ -51,23 +51,3 @@ fn a_restart_does_not_recreate_a_tree_whose_retirement_removed_its_checkout() {
     assert!(!path.exists());
     assert_eq!(f.trees.free_ticket_trees().unwrap(), 1);
 }
-
-#[test]
-fn a_disk_short_of_free_space_sweeps_free_trees_with_no_limit_set() {
-    let f = Fixture::new(2, 1);
-    for tree in ["tree-01", "tree-02"] {
-        write(
-            &f.repo.join(".worktrees").join(tree),
-            "out/big",
-            &"x".repeat(200_000),
-        );
-    }
-    let report = f.trees.hold_disk(0).unwrap();
-    assert!(report.cleared.is_empty(), "{report:?}");
-    assert_eq!(report.limit, None);
-
-    let report = f.trees.hold_disk(1).unwrap();
-    assert_eq!(report.limit, Some(report.before - 1));
-    assert_eq!(report.cleared.len(), 1, "{report:?}");
-    assert!(report.after < report.before);
-}

@@ -19,6 +19,7 @@ use ignite_store::local::open_in_memory;
 
 use super::*;
 
+mod disk_budget;
 mod elastic;
 mod free;
 mod landing;
@@ -28,6 +29,13 @@ mod releases;
 mod retire;
 mod seed;
 mod setup;
+
+/// Exercise the existing sweep order with an exact byte limit, using small fixture files.
+fn sweep_to(trees: &Trees, limit: Option<u64>) -> DiskReport {
+    trees
+        .hold_disk_under(|_| limit.map(|bytes| (bytes, DiskLimitSource::Cap)))
+        .unwrap()
+}
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
@@ -135,7 +143,7 @@ impl Fixture {
             branches: vec!["main".to_owned()],
             ticket_tree_ceiling: ticket_trees,
             landing_trees,
-            disk_limit: None,
+            legacy_disk_cap_gb: None,
             keep: vec!["out".to_owned()].into(),
             prebuild: vec!["bin".to_owned()].into(),
             prebuild_outputs: BTreeMap::from([("bin".to_owned(), vec!["out".to_owned()])]).into(),
@@ -656,18 +664,7 @@ fn replaced_builds_are_swept_and_then_the_free_trees_used_longest_ago_are_cleare
         "out/big",
         &"x".repeat(100_000),
     );
-    let mut config = f.trees.config().clone();
-    config.disk_limit = Some(1);
-    let small = Trees::new(
-        config,
-        open_in_memory().unwrap(),
-        Arc::new(FakeClock::new(
-            Timestamp::parse("2026-11-18T00:00:00.000Z").unwrap(),
-        )),
-        f.builds.clone(),
-    );
-    small.setup(&f.tip()).unwrap();
-    let report = small.hold_disk(0).unwrap();
+    let report = sweep_to(&f.trees, Some(1));
     assert!(report.before > report.after);
     assert_eq!(report.cleared, [id("tree-01"), id("tree-02")]);
     assert!(!f.repo.join(".worktrees/tree-02/out").exists());
@@ -691,24 +688,13 @@ fn trees_over_the_limit_are_brought_under_it_and_a_leased_tree_is_left_alone() {
         .max()
         .unwrap();
 
-    let mut config = f.trees.config().clone();
-    // Room for two and a half trees' builds, with three holding them.
-    config.disk_limit = Some(one_tree * 2 + one_tree / 2);
-    let limited = Trees::new(
-        config,
-        open_in_memory().unwrap(),
-        Arc::new(FakeClock::new(
-            Timestamp::parse("2026-11-18T00:00:00.000Z").unwrap(),
-        )),
-        f.builds.clone(),
-    );
-    limited.setup(&f.tip()).unwrap();
-    let leased = match limited.lease(f.request("T.1", false)).unwrap() {
+    let leased = match f.trees.lease(f.request("T.1", false)).unwrap() {
         Lease::Ready(lease) => lease,
         Lease::Waiting(waiter) => panic!("{}", waiter.reason()),
     };
 
-    let report = limited.hold_disk(0).unwrap();
+    // Room for two and a half trees' builds, with three holding them.
+    let report = sweep_to(&f.trees, Some(one_tree * 2 + one_tree / 2));
 
     assert!(report.before > report.limit.unwrap());
     assert!(report.after <= report.limit.unwrap(), "{report:?}");
@@ -718,7 +704,8 @@ fn trees_over_the_limit_are_brought_under_it_and_a_leased_tree_is_left_alone() {
     // products.
     assert_eq!(f.builds.forgotten(), report.cleared);
     assert!(leased.path.join("out/big").exists());
-    let states: Vec<String> = limited
+    let states: Vec<String> = f
+        .trees
         .status()
         .unwrap()
         .trees
