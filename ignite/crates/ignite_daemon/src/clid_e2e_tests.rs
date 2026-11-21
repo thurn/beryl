@@ -342,6 +342,8 @@ impl Rig {
             format!("{ROLES}role_cli_turn"),
             "--ignored".to_owned(),
             "--nocapture".to_owned(),
+            // With one test thread, libtest writes its status on the CLI's first JSON line.
+            "--quiet".to_owned(),
             "--".to_owned(),
             self.home.display().to_string(),
         ];

@@ -319,15 +319,14 @@ fn a_second_start_of_a_turn_does_not_run_the_program_twice() {
     assert!(matches!(refused, Err(Error::Conflict(_))), "{refused:?}");
     assert_eq!(f.run_dirs(), 1);
 
-    // A second supervisor started for the same turn anyway waits for the turn lock, then finds
-    // the turn ran and runs nothing.
+    // A second supervisor started for the same turn runs nothing, whether it tries to take the lock
+    // before or after the original turn exits.
     let duplicate = launcher.launch(&f.session, 1, &command).unwrap();
     open_gate(&gate);
     assert_eq!(started.wait().exit, Some(0));
     let duplicate = duplicate.wait();
     assert_eq!(duplicate.exit, Some(3));
     let output = fs::read_to_string(&duplicate.output).unwrap();
-    assert!(output.contains("waits for it"), "{output}");
     assert!(output.contains("turn 1 ran already"), "{output}");
     assert_eq!(f.runs(), 1);
     assert_eq!(
