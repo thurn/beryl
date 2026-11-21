@@ -1,8 +1,8 @@
+use app_client::driver::Page;
 use beryl_inspect::pages::Recorded;
 use beryl_inspect::recordings;
 use beryl_protocol::protocol::Side;
-use beryl_scene::agent::Layout;
-use beryl_scene::driver::Page;
+use kit_probe::agent::Layout;
 
 /// The recordings `data/beryl3d/screens.json` names, in its order.
 fn listed_recordings() -> Vec<String> {
@@ -133,8 +133,8 @@ fn every_built_screen_shows_in_its_recording() {
 pub(crate) fn assert_shows(name: &str, entry: &serde_json::Value) {
     use std::str::FromStr;
 
-    use beryl_scene::driver::{Action, Moment};
-    use beryl_scene::input::Size;
+    use app_client::driver::{Action, Moment};
+    use kit_ui::input::Size;
 
     let field = |key: &str| {
         entry[key]
@@ -181,12 +181,12 @@ pub(crate) fn assert_shows(name: &str, entry: &serde_json::Value) {
         }
     }
     // The short tree names only the first few cards of a crowded place.
-    let options = beryl_scene::agent::TreeOptions {
+    let options = kit_probe::agent::TreeOptions {
         full: true,
-        ..beryl_scene::agent::TreeOptions::default()
+        ..kit_probe::agent::TreeOptions::default()
     };
     let tree =
-        beryl_scene::agent::tree(page.frame(), &options).expect("the whole tree needs no locator");
+        kit_probe::agent::tree(page.frame(), &options).expect("the whole tree needs no locator");
     let bare = without_ids_and_boxes(&tree);
     assert!(
         tree.contains(shows) || bare.lines().any(|line| line.contains(shows)),

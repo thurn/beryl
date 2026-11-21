@@ -18,15 +18,16 @@
 use std::collections::VecDeque;
 use std::path::Path;
 
-use beryl_scene::Client;
-use beryl_scene::Input;
-use beryl_scene::agent::{locate, uncovered};
-use beryl_scene::frame::Wake;
-use beryl_scene::input::{
-    Button, Key, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase, TextChange,
-};
+use app_client::Client;
+use app_client::Input;
 use game_probe::driver::{Action, Duration, point as written_point};
 use glam::Vec2;
+use kit_frame::frame::Wake;
+use kit_probe::agent::locate;
+use kit_scene::hit::uncovered;
+use kit_ui::input::{
+    Button, Key, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase, TextChange,
+};
 
 /// How many moves a drag makes between its press and its release.
 const DRAG_MOVES: u32 = 8;

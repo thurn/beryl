@@ -3,11 +3,11 @@
 
 use std::path::PathBuf;
 
+use app_client::Input;
 use beryl_3d::frame_log::{self, FrameLog, InputLine, Run};
 use beryl_host::rate::Step;
 use beryl_host::{Shown, Ticked};
-use beryl_scene::Input;
-use beryl_scene::input::{Insets, Lifecycle, Size};
+use kit_ui::input::{Insets, Lifecycle, Size};
 
 const MS: u64 = 1_000_000;
 

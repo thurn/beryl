@@ -11,7 +11,7 @@ use std::fmt::Write as _;
 
 use beryl_inspect::pages;
 use beryl_protocol::protocol::Side;
-use beryl_scene::hud::log::{LogKind, Logged};
+use game_hud::hud::log::{LogKind, Logged};
 
 /// What the web's `logged` gave, for each recording and seat.
 const WEB: [(&str, Side, &str); 5] = [

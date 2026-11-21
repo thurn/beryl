@@ -6,8 +6,8 @@ use std::fmt::Write;
 use std::io::Write as _;
 use std::time::{Duration, Instant};
 
-use beryl_scene::agent::{Context, Judged, Rule};
-use beryl_scene::driver::Mode;
+use app_client::driver::Mode;
+use kit_probe::agent::{Context, Judged, Rule};
 use serde_json::{Value, json};
 
 use super::options::{self, Options, Usage};

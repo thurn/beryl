@@ -6,8 +6,8 @@
 //! table and untested in the flat layer.
 
 use beryl_assets::{Format, Prepared, dimensions};
-use beryl_scene::frame::{Frame, TextureArray, Wake};
-use beryl_scene::input::{AssetReady, FaceSize, Tier};
+use kit_frame::frame::{Frame, TextureArray, Wake};
+use kit_ui::input::{AssetReady, FaceSize, Tier};
 use wgpu::util::DeviceExt;
 
 use crate::atlas::Atlas;
@@ -23,16 +23,16 @@ use crate::mesh::meshes;
 use crate::pipeline::{DEPTH, RECORD, bind_group_layout, pipelines};
 use crate::slots::{Slots, mapped_features};
 use crate::target::Target;
-use beryl_scene::frame::PaintTable;
+use kit_frame::frame::PaintTable;
 
 /// How many records the instance buffer holds: the most a frame of the engine's largest board
-/// holds (`beryl_scene::frame::DRAWS`), so that the buffer is made once, at startup, and never
+/// holds (`kit_frame::frame::DRAWS`), so that the buffer is made once, at startup, and never
 /// again during play.
-const RECORDS: u64 = beryl_scene::frame::DRAWS as u64;
+const RECORDS: u64 = kit_frame::frame::DRAWS as u64;
 /// The Baseline uniforms' size: the view and projection, the target's size, the shake, and
 /// whether the frame has masks.
 const UNIFORMS: u64 = 96;
-/// Where the frame's paint table (`beryl_scene::frame::PaintTable`) starts in the uniform
+/// Where the frame's paint table (`kit_frame::frame::PaintTable`) starts in the uniform
 /// buffer: after the Enhanced tier's `Lit`, at the next offset a uniform binding may start at.
 const PAINT_OFFSET: u64 = 512;
 /// The paint table's size.
@@ -635,4 +635,4 @@ fn bind_groups(
     })
 }
 
-const _: () = assert!(size_of::<beryl_scene::frame::Draw>() as u64 == RECORD);
+const _: () = assert!(size_of::<kit_frame::frame::Draw>() as u64 == RECORD);

@@ -10,7 +10,7 @@
 //!   `moving`, `pile`, `covered` and `faded` taking a parenthesised value, and `copy` and
 //!   `note` a parenthesised name in quotes, escaped as an element's name is.
 
-use beryl_scene::frame::Role;
+use kit_frame::frame::Role;
 
 /// The words a state may be.
 const STATES: [&str; 19] = [

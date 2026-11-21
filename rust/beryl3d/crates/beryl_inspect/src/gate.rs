@@ -12,15 +12,15 @@
 //! views after it, as the test driver hands them over. Nothing reads a clock, so every playback
 //! makes the same calls and gets the same frames.
 
+use app_client::Input;
+use app_client::driver::{Page, plays_on};
+use app_client::{Client, Config};
 use beryl_protocol::GameUpdate;
 use beryl_protocol::card_records::CardRecords;
 use beryl_protocol::protocol::{SessionId, Side};
-use beryl_scene::Input;
-use beryl_scene::agent::Layout;
-use beryl_scene::driver::{Page, plays_on};
-use beryl_scene::frame::{Frame, Wake, Work};
-use beryl_scene::input::{AssetReady, Insets, Pointer, Size, Tier};
-use beryl_scene::{Client, Config};
+use kit_frame::frame::{Frame, Wake, Work};
+use kit_probe::agent::Layout;
+use kit_ui::input::{AssetReady, Insets, Pointer, Size, Tier};
 
 use crate::pages::recording;
 use crate::stress::{Board, Drive, card_records, pointer_moves, stress};

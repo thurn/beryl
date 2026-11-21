@@ -3,9 +3,7 @@
 //! after each edit.
 
 mod bloom;
-mod downlevel;
 mod enhanced;
-mod enhanced_boards;
 mod faces;
 mod light;
 mod render;

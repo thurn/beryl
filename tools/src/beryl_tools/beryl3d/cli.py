@@ -410,7 +410,7 @@ OWN_COMMANDS: tuple[Command, ...] = (
         "cargo",
         "runs cargo with the given arguments in rust/beryl3d",
         (
-            ("just b3d cargo check -p beryl_scene", "type-check one crate"),
+            ("just b3d cargo check -p app_client", "type-check one crate"),
             ("just b3d cargo build --release", "an optimized build of the workspace"),
         ),
         run_cargo,
@@ -422,7 +422,7 @@ OWN_COMMANDS: tuple[Command, ...] = (
         (
             ("just b3d cargo-test", "every test of the workspace"),
             (
-                "just b3d cargo-test -p beryl_scene pose",
+                "just b3d cargo-test -p kit_space pose",
                 "tests of one crate named pose",
             ),
         ),
@@ -447,7 +447,7 @@ OWN_COMMANDS: tuple[Command, ...] = (
         (
             ("just b3d clippy", "lint the workspace"),
             (
-                "just b3d cargo clippy -p beryl_scene",
+                "just b3d cargo clippy -p app_client",
                 "lint one crate, warnings allowed",
             ),
         ),

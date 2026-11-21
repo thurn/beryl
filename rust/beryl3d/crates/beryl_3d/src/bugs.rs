@@ -11,16 +11,16 @@
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 
+use app_client::Client;
+use app_client::Input;
+use app_client::command::Request;
 use beryl_host::Inbox;
 use beryl_render::Picture;
-use beryl_scene::Client;
-use beryl_scene::Input;
-use beryl_scene::agent::{TreeOptions, tree};
-use beryl_scene::command::Request;
-use beryl_scene::input::{Rect, Size};
 use beryl_session::GameUpdate;
 use beryl_session::Sessions;
 use beryl_session::bugs::{self, Attached, BugReport, Environment, Images, PageInfo, Region};
+use kit_probe::agent::{TreeOptions, tree};
+use kit_ui::input::{Rect, Size};
 use serde_json::json;
 
 use crate::fixture::Replayed;

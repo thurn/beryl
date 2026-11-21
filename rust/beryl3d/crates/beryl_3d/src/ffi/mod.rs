@@ -17,11 +17,11 @@ use std::path::{Path, PathBuf};
 use std::ptr::NonNull;
 use std::sync::{Arc, OnceLock};
 
+use app_client::{Client, Config};
 use beryl_host::{Phone, Wakeup};
 use beryl_render::Native;
-use beryl_scene::frame::Wake;
-use beryl_scene::input::Lifecycle;
-use beryl_scene::{Client, Config};
+use kit_frame::frame::Wake;
+use kit_ui::input::Lifecycle;
 
 pub use types::*;
 

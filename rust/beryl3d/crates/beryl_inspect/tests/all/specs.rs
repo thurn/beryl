@@ -1,12 +1,12 @@
 //! Every card spec moment opens from the seat it was recorded for and plays to its end.
 
+use app_client::driver::TICK;
 use beryl_inspect::pages::{self, DESKTOP_WINDOWS};
 use beryl_inspect::runner::{caught, each};
 use beryl_inspect::{recordings, stress};
 use beryl_protocol::Seat;
 use beryl_protocol::protocol::Side;
-use beryl_scene::agent::Layout;
-use beryl_scene::driver::TICK;
+use kit_probe::agent::Layout;
 
 /// Card spec moments that the recorder (`beryl_cli`) cannot record, each with the start of the
 /// reason the pack gives. A moment listed here that now records fails the test, so that the

@@ -19,42 +19,35 @@ A program here that spreads work over threads sizes them with
 
 ## Crates
 
-- `kit_base`: shared identifiers, geometry, paint, typography, poses and motion
-  curves. Its build script generates the constants of `data` and `tokens` and
-  embeds the serif font faces.
-- `kit_text`: text shaping, line breaking and glyph requests.
-- `kit_frame`: the resolved elements and draw records for one frame.
-- `kit_ui`: elements, styles, widgets, flat layout and device input types.
-- `kit_space`: motion tracks and the poses they give at a time.
-- `kit_fx`: effect runs, card looks, light, particles and camera shake.
-- `kit_scene`: hit testing and element coverage.
-- `kit_probe`: tree printouts, locators and frame checks.
-- `game_table`: zone placement, the camera, card faces and table drawing.
-- `game_play`: script playback, verbs, pointer handling, sound cues and the
-  effects, marks and floats that a script controls.
-- `game_hud`: the game screen, its prompts, the inspector and navigation.
-- `game_manual`: the manual table, its controls and lobby, and its command data.
-- `game_probe`: game fixtures, replay timing and checks on frames and scripts.
-- `beryl_scene`: the client, its remaining screens and its concrete test driver.
-  It re-exports toolkit and game modules so callers can continue using their
-  existing paths. The scene, toolkit and game crates use no GPU, window, clock
-  or thread (`scene-purity`).
-- `beryl_render`: draws a scene with wgpu. The only crate that names `wgpu`.
-- `beryl_assets`: decodes and packs card pictures for the renderer.
-- `beryl_host`: the window and event loop (winit) that drive a scene and render
-  it, and `Phone`, the Rust half of the iOS and Android hosts.
-- `beryl_inspect`: reads a scene and reports it as text; it has no GPU, engine
-  or card dependency, so `b3d` links and starts fast after an edit.
-- `beryl_record`: the `record` program, the only one here besides the app that
-  plays the engine. It builds the recordings pack `beryl_inspect` reads when it
-  is missing; `just b3d record` runs it, and `just b3d` does when `b3d` or
-  `b3d-render` exits with 3.
-- `beryl_pictures`: `b3d-render`, the picture commands `png` and `film`. Like
-  `beryl_inspect` it links no engine or cards, so it relinks fast after an edit.
-- `beryl_3d`: the client that ties `beryl_scene`, `beryl_render`,
-  `beryl_assets`, `beryl_host` and `beryl_inspect` together. On phones it is a
-  library whose C functions (`src/ffi`, `include/beryl3d.h`) a small Swift app
-  (`ios/`) or Kotlin app (`android/`) calls.
+- `kit_base` holds shared data, geometry, poses, design tokens and bundled
+  fonts.
+- `kit_text` shapes text, breaks lines and requests glyphs.
+- `kit_frame` describes resolved elements and draw records for one frame.
+- `kit_ui` provides elements, styles, widgets, flat layout and device input.
+- `kit_space` fits cameras and evaluates motion tracks.
+- `kit_fx` produces card effects, lighting, particles and camera shake.
+- `kit_scene` resolves hit testing and element coverage.
+- `kit_probe` formats frame trees, parses driver actions and checks frames.
+- `game_table` places and draws zones and selects the faces they display.
+- `game_play` plays scripts, verbs, pointer motions, sound cues, marks and
+  floats.
+- `game_hud` builds the game screen, prompts, inspector and navigation types.
+- `game_manual` builds the manual table, lobby and their commands.
+- `game_probe` supplies fixtures, replay timing and game-specific checks.
+- `app_screens` builds the app screens and their settings controls.
+- `app_client` owns the client, settings, commands and replay driver.
+- `scaffold_web` is reserved for fitting zones to the web interface during the
+  transition.
+
+The client core uses no GPU, window, clock or thread (`scene-purity`).
+
+- `beryl_render` draws frames with wgpu.
+- `beryl_assets` prepares card pictures, glyphs and icons for the renderer.
+- `beryl_host` supplies the window, event loop and native phone host.
+- `beryl_inspect` reads frames and recordings for the text commands.
+- `beryl_record` plays the engine to build the recordings pack.
+- `beryl_pictures` draws pictures and films offscreen.
+- `beryl_3d` ties the client, host, assets and renderer together.
 
 ## Commands
 
@@ -260,15 +253,10 @@ project, and selects the main lanes.
   add a `cap_allowances` entry for the crate with its current `lines` and a
   `reason` explaining which seams were considered. The levels report prints each
   allowance and its reason. Raise an allowance by editing the file. `--update`
-  lowers it or removes it when the crate fits the default limit. During the
-  split, `modules` assigns each `beryl_scene/src` module to a crate by its most
-  specific file or directory prefix. `upward` counts the references from each
-  mapped prefix to modules assigned to higher crates. `protocol` counts the
-  lines that name `beryl_protocol` in each toolkit crate and in the legacy
-  modules assigned to it, so moving a module keeps its existing count.
-  `just b3d levels` lists the upward references with their locations, and
-  `--update` lowers the recorded counts after a removal. The `levels` step in
-  `b3d-source` verifies the counts, manifest dependencies and source line cap.
+  lowers it or removes it when the crate fits the default limit. The `levels`
+  check reads manifests for dependency order and counts lines that name
+  `beryl_protocol` in toolkit crates. `just b3d levels --update` lowers those
+  counts when references are removed.
 
 - `data/beryl3d/space.json`: the table's spatial values, such as `verbs`,
   `catch_up`, `frame_rate`, `card`, `layout.desktop` (the desktop layout's

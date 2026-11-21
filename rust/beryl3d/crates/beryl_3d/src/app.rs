@@ -6,18 +6,18 @@ use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
 
+use app_client::Input;
+use app_client::command::Request;
+use app_client::{Client, Config};
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 use beryl_host::{Desktop, WindowMode};
 use beryl_host::{Feed, Inbox, Opened, Ticked, Windowless, WindowlessOptions};
-use beryl_scene::Input;
-use beryl_scene::command::Request;
-use beryl_scene::frame::Wake;
-use beryl_scene::input::{Lifecycle, Size};
-use beryl_scene::{Client, Config};
 #[cfg(feature = "tools")]
 use beryl_session::protocol::Side;
 use beryl_session::protocol::Status;
 use beryl_session::script::Verb;
+use kit_frame::frame::Wake;
+use kit_ui::input::{Lifecycle, Size};
 
 use crate::audio::{Audio, Output};
 use crate::bugs::Bugs;
@@ -674,7 +674,7 @@ fn run_of(options: &Options, pause_at: Option<u64>) -> Run {
 
 /// The audio thread, at the levels `settings` give. A run with no window plays no sound, so
 /// that agents' and checks' runs are silent.
-fn start_audio(window: Window, settings: &beryl_scene::settings::Settings) -> Audio {
+fn start_audio(window: Window, settings: &app_client::settings::Settings) -> Audio {
     let audio = Audio::start(if window == Window::None {
         Output::Silent
     } else {
@@ -688,7 +688,7 @@ fn start_audio(window: Window, settings: &beryl_scene::settings::Settings) -> Au
 /// plays, with `--tier` in place of the saved graphics setting. It goes in the settings the
 /// client holds, so that the settings the client asks to save never carry the other value back
 /// to the frame loop.
-fn player_settings(options: &Options) -> (Option<beryl_scene::settings::Settings>, Option<Saver>) {
+fn player_settings(options: &Options) -> (Option<app_client::settings::Settings>, Option<Saver>) {
     let (mut settings, saver) = saved_settings(options);
     if let Some(graphics) = options.graphics {
         settings.get_or_insert_default().graphics = graphics;
@@ -700,7 +700,7 @@ fn player_settings(options: &Options) -> (Option<beryl_scene::settings::Settings
 /// plays. A replayed recording, a resumed replay file and a game `--agent` plays start from
 /// the defaults and save nothing, so that a test's or an agent's run never changes the
 /// player's settings.
-fn saved_settings(options: &Options) -> (Option<beryl_scene::settings::Settings>, Option<Saver>) {
+fn saved_settings(options: &Options) -> (Option<app_client::settings::Settings>, Option<Saver>) {
     #[cfg(feature = "tools")]
     if options.fixture.is_some() {
         return (None, None);

@@ -1,16 +1,16 @@
 //! The shapes of light: the atlas's page 0, which glows, streaks, marks and effects draw from
 //! (docs/beryl-3d.md, "Effects", "The shapes of light"). It is drawn here in code, with no
 //! image file and no randomness, so every machine draws the same page. Each shape fills one
-//! cell of `beryl_scene::frame::sprites`, white with its shape in the opacity, like a glyph
+//! cell of `kit_frame::frame::sprites`, white with its shape in the opacity, like a glyph
 //! page's coverage, and leaves an empty border of `BORDER` texels around itself so that a
 //! sampler filtering at the cell's edge never reads its neighbour.
 //!
 //! The glyph worker's pages start at page 1 (`glyphs`), and a host uploads this page before
 //! its first frame.
 
-use beryl_scene::data::space::light::glow;
-use beryl_scene::frame::{Sprite, sprites};
-use beryl_scene::input::AssetReady;
+use kit_base::data::space::light::glow;
+use kit_frame::frame::{Sprite, sprites};
+use kit_ui::input::AssetReady;
 
 use crate::packer::PAGE_SIZE;
 use crate::{Prepared, Upload};
@@ -352,7 +352,7 @@ impl Chevron {
     /// The parts at `(x, y)`, each from -1 to 1 across the cell's drawn area with y toward the
     /// point.
     fn at(x: f32, y: f32) -> Self {
-        use beryl_scene::data::space::own::wedge::CHEVRON;
+        use kit_base::data::space::own::wedge::CHEVRON;
         /// One point of the web's desktop table, in card widths.
         const POINT: f32 = 1.0 / 95.0;
         let room = sprites::WEDGE_ROOM;

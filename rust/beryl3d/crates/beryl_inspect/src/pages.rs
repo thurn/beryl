@@ -3,13 +3,13 @@
 //! on every tick of a recording. A name is a fixture's, a card spec moment's as
 //! `<card>/<moment>`, a stress board's ([`crate::stress`]) or a screen's ([`crate::screens`]).
 
+use app_client::driver::{Duration, Page, Recording, TICK};
 use beryl_protocol::ipc::CARD_RECORDS;
 use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::protocol::Side;
 use beryl_protocol::{GameUpdate, Seat, SessionId};
-use beryl_scene::agent::Layout;
-use beryl_scene::driver::{Duration, Page, Recording, TICK};
-use beryl_scene::input::{Insets, Size};
+use kit_probe::agent::Layout;
+use kit_ui::input::{Insets, Size};
 
 use crate::faults::Listed;
 use crate::runner::Test;

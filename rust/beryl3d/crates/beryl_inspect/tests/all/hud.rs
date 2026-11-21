@@ -2,11 +2,11 @@
 //! in it, the step stops about it, which the interface checks pass at the desktop windows, and the
 //! step banner.
 
+use app_client::driver::{Duration, Moment, Page};
 use beryl_inspect::pages;
 use beryl_protocol::protocol::Side;
-use beryl_scene::agent::{Layout, Rule};
-use beryl_scene::driver::{Duration, Moment, Page};
-use beryl_scene::input::Size;
+use kit_probe::agent::{Layout, Rule};
+use kit_ui::input::Size;
 
 /// These moments used to draw life changes, pile counts, row counts or the log through
 /// other text. Keep the generic text check on the reported frames, including the Retina
@@ -84,7 +84,7 @@ fn pay_default(width: f32, height: f32) -> Page {
 
 #[test]
 fn both_orbs_hold_the_life_totals_of_the_view() {
-    use beryl_scene::art::orb::{DESKTOP_SCALE, face_offset};
+    use game_play::art::orb::{DESKTOP_SCALE, face_offset};
     let mut page = pay_default(1600.0, 900.0);
     for (side, orb, total) in [
         (Side::You, "region \"your orb\"", "player \"You 20\""),

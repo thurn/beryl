@@ -7,11 +7,11 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use app_client::driver::TimelineStep;
 use beryl_protocol::ipc::{FixtureMessage, STAGE_TIMINGS};
 use beryl_protocol::protocol::Side;
 use beryl_protocol::script::{Edge, own_timings};
-use beryl_scene::driver::TimelineStep;
-use beryl_scene::sound;
+use game_play::sound;
 use serde_json::Value;
 
 use super::options::{self, Options, Usage, seat_word, side_of};
@@ -93,7 +93,7 @@ fn line(name: &str, seat: Side, step: &TimelineStep) -> String {
 }
 
 /// The lines of the recording `name` as `seat` sees it.
-fn lines(name: &str, seat: Side, layout: beryl_scene::agent::Layout) -> Result<Vec<String>, Usage> {
+fn lines(name: &str, seat: Side, layout: kit_probe::agent::Layout) -> Result<Vec<String>, Usage> {
     let size = options_window(layout);
     let mut page = pages::page(name, seat, layout, size).map_err(Usage)?;
     Ok(page
@@ -103,13 +103,13 @@ fn lines(name: &str, seat: Side, layout: beryl_scene::agent::Layout) -> Result<V
         .collect())
 }
 
-fn options_window(layout: beryl_scene::agent::Layout) -> beryl_scene::input::Size {
+fn options_window(layout: kit_probe::agent::Layout) -> kit_ui::input::Size {
     match layout {
-        beryl_scene::agent::Layout::Desktop => beryl_scene::input::Size {
+        kit_probe::agent::Layout::Desktop => kit_ui::input::Size {
             width: 1600.0,
             height: 900.0,
         },
-        beryl_scene::agent::Layout::Phone => beryl_scene::input::Size {
+        kit_probe::agent::Layout::Phone => kit_ui::input::Size {
             width: 393.0,
             height: 759.0,
         },

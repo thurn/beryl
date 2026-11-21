@@ -5,16 +5,16 @@
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
 
+use app_client::Input;
+use app_client::driver::{REPLY_DELAY, TICK, plays_on};
+use app_client::{Client, Config};
 use beryl_inspect::pages::recording;
 use beryl_protocol::protocol::Side;
-use beryl_scene::Input;
-use beryl_scene::driver::{REPLY_DELAY, TICK, plays_on};
-use beryl_scene::frame::Role;
-use beryl_scene::frame::Wake;
-use beryl_scene::input::Size;
-use beryl_scene::input::{Button, Insets, Modifiers, Pointer, PointerKind, PointerPhase};
-use beryl_scene::{Client, Config};
 use glam::Vec2;
+use kit_frame::frame::Role;
+use kit_frame::frame::Wake;
+use kit_ui::input::Size;
+use kit_ui::input::{Button, Insets, Modifiers, Pointer, PointerKind, PointerPhase};
 
 /// The system allocator, counting the allocations this thread makes while `COUNTING` is set.
 struct Counting;

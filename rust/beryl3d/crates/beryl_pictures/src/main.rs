@@ -23,9 +23,9 @@ use std::process::ExitCode;
 use beryl_host::{Headless, Scans};
 use beryl_inspect::cli::{self, Options, Ran, Spec, Usage, options};
 use beryl_inspect::recordings;
-use beryl_scene::agent::hit::is_within;
-use beryl_scene::agent::{TreeOptions, tree};
-use beryl_scene::input::Rect;
+use kit_probe::agent::{TreeOptions, tree};
+use kit_scene::hit::is_within;
+use kit_ui::input::Rect;
 
 /// Why a command did not draw: its command line was wrong, or the machine could not.
 pub(crate) enum Error {

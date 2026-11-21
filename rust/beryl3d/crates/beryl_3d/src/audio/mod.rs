@@ -16,8 +16,8 @@ use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use beryl_scene::frame::Sound;
-use beryl_scene::screens::Music;
+use app_screens::screens::Music;
+use kit_frame::frame::Sound;
 use rodio::mixer::Mixer;
 use rodio::source::Done;
 use rodio::{Player, Source};

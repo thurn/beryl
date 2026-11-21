@@ -5,17 +5,17 @@
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver};
 
+use app_client::Input;
+use app_client::Press;
+use app_client::{Client, Config};
+use app_screens::screens::Screen;
 use beryl_art::Origins;
 use beryl_host::{Faces, Scans, When};
 use beryl_protocol::card_records::CardRecords;
 use beryl_render::{Limits, Renderer};
-use beryl_scene::Input;
-use beryl_scene::Press;
-use beryl_scene::element::Action;
-use beryl_scene::faces::CARD_BACK;
-use beryl_scene::input::FaceId;
-use beryl_scene::screens::Screen;
-use beryl_scene::{Client, Config};
+use game_table::faces::CARD_BACK;
+use kit_ui::element::Action;
+use kit_ui::input::FaceId;
 
 /// An address where nothing listens, so that a scan the empty cache lacks fails at once.
 const NOWHERE: Origins<'static> = Origins {

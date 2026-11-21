@@ -2,17 +2,17 @@
 //! automatically drops to Baseline when frames run late, before the rate steps, and never
 //! otherwise; a change of the setting during play changes the tier or the drop.
 
+use app_client::Input;
+use app_client::Press;
+use app_client::settings::{Graphics, Setting};
+use app_client::{Client, Config};
 use beryl_host::rate::Step;
 use beryl_host::{Chosen, Draw, FrameLoop, Shown, Ticks};
-use beryl_scene::Input;
-use beryl_scene::Press;
-use beryl_scene::data::space::frame_rate;
-use beryl_scene::element::Action;
-use beryl_scene::frame::Frame;
-use beryl_scene::input::{Button, Modifiers, Pointer, PointerKind, PointerPhase, Tier};
-use beryl_scene::settings::{Graphics, Setting};
-use beryl_scene::{Client, Config};
 use glam::Vec2;
+use kit_base::data::space::frame_rate;
+use kit_frame::frame::Frame;
+use kit_ui::element::Action;
+use kit_ui::input::{Button, Modifiers, Pointer, PointerKind, PointerPhase, Tier};
 
 /// Ticks at whatever rate the loop asks for; the test sets each tick's time itself.
 #[derive(Default)]

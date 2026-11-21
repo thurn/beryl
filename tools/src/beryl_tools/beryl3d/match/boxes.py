@@ -35,7 +35,7 @@ Box = tuple[float, float, float, float]
 # than half a point is below what a Retina display shows as a move.
 EXACT = 0.5
 # How far two lines' boxes may reach into each other and not count as overlapping, in points,
-# as in Beryl 3D's "text overlaps nothing" check (beryl_scene's `agent::text_overlap`): a
+# as in Beryl 3D's "text overlaps nothing" check (`kit_probe::agent::text_overlap`): a
 # line's box is as tall as its line, leading and all, so two lines set close together touch
 # where no glyph does.
 SLACK = 1.0

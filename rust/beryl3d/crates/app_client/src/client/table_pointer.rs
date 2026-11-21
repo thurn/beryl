@@ -1,0 +1,329 @@
+//! The manual table's pointer, on the client's side: picking up a card and dropping it
+//! (`manual::drop`), Cmd-clicking a card and sweeping a rectangle to select (`manual::selection`),
+//! clicking what a command acts toward (`manual::arrows`), and the marks and arrow these draw on
+//! each frame.
+
+use beryl_protocol::protocol::{ObjectId, Side, ZoneName};
+use game_hud::inspect::Viewed;
+use glam::Vec2;
+
+use super::{Client, Platform};
+use kit_base::data::space::pointer::DRAG_THRESHOLD_POINTS;
+use kit_scene::hit::hit;
+
+use app_screens::screens::Screen;
+use game_manual::manual::arrows::{self, Pick};
+use game_manual::manual::drop::{self, Area, End};
+use game_manual::manual::selection;
+use game_manual::manual::{Target, target_at, viewers};
+use kit_frame::frame::{Place, Role};
+use kit_ui::input::{Button, Pointer, PointerPhase};
+
+impl Client {
+    /// Whether the manual table is shown with nothing over it that takes the pointer: the table
+    /// screen, a table's view, no sheet, menu or overlay.
+    pub(super) fn at_table(&self) -> bool {
+        self.screen == Screen::Table
+            && self.sheet.is_none()
+            && self.manual.menu.is_none()
+            && !self.manual.overlay_open()
+            && (self.show.latest()).is_some_and(|update| update.view.table.is_some())
+    }
+
+    /// Takes `pointer` on the manual table before anything else does, as the module describes.
+    /// Returns whether it meant something here, and so nothing else.
+    pub(super) fn table_pointer(&mut self, pointer: &Pointer) -> bool {
+        if self.screen != Screen::Table {
+            return false;
+        }
+        if pointer.phase == PointerPhase::Down {
+            // Cmd is Control off the Mac, as the web's `meta` click is.
+            self.manual.meta = if self.platform == Platform::Mac {
+                pointer.modifiers.command
+            } else {
+                pointer.modifiers.control
+            };
+        }
+        if self.manual.picking.is_some() {
+            return self.pick_target(pointer);
+        }
+        if self.life_clicked(pointer) {
+            return true;
+        }
+        if self.sweep(pointer) {
+            return true;
+        }
+        self.follow_landing(pointer);
+        false
+    }
+
+    /// While a command waits for its target, a press on a card or a life total gives it that
+    /// target, and a press anywhere else gives up. Every press then means nothing else.
+    fn pick_target(&mut self, pointer: &Pointer) -> bool {
+        if pointer.phase != PointerPhase::Down {
+            return matches!(pointer.phase, PointerPhase::Up);
+        }
+        let Some(pick) = self.manual.picking.take() else {
+            return false;
+        };
+        let clicked = target_at(&self.frame, pointer.position);
+        if pointer.button == Button::Primary
+            && let Some(to) = arrows::picked(pick, clicked)
+            && let Some(view) = self.show.latest().map(|update| &update.view)
+        {
+            let actions = arrows::actions(pick, to, view, &self.manual.state.selection);
+            self.send_table(actions);
+        }
+        self.show.pointer_mut().cancel();
+        true
+    }
+
+    /// A click on a player's life total on the table, with nothing of the flat layer over it,
+    /// opens the number prompt that sets it, as the web's `registerPlayers` gives it Set life.
+    /// Returns whether it did.
+    fn life_clicked(&mut self, pointer: &Pointer) -> bool {
+        if pointer.phase != PointerPhase::Down
+            || pointer.button != Button::Primary
+            || !self.at_table()
+            || self.layer.press_at(pointer.position, self.open).is_some()
+        {
+            return false;
+        }
+        let Target::Life(side) = target_at(&self.frame, pointer.position) else {
+            return false;
+        };
+        self.run_table_command("life.set", Target::Life(side));
+        true
+    }
+
+    /// A library's pile on the manual table, at `place`, as the pile a click on it draws from:
+    /// a press on it draws a card for its player instead of opening it, as the web's
+    /// `registerClicks` runs Draw a card for a click on a library.
+    pub(super) fn table_library_at(&self, place: Place) -> Option<Viewed> {
+        let Place::Card {
+            zone: ZoneName::Library,
+            side,
+            ..
+        } = place
+        else {
+            return None;
+        };
+        self.at_table()
+            .then_some(Viewed::Pile(side, ZoneName::Library))
+    }
+
+    /// A click on `pile` let go over it: on the manual table, a library draws a card for its
+    /// player. Returns whether it did.
+    pub(super) fn table_library_clicked(&mut self, pile: Viewed) -> bool {
+        let Viewed::Pile(side, ZoneName::Library) = pile else {
+            return false;
+        };
+        if !self.at_table() {
+            return false;
+        }
+        self.run_table_command("library.draw", Target::Pile(side, ZoneName::Library));
+        true
+    }
+
+    /// Starts a command's wait for its target, from the card it was given to.
+    pub(super) fn start_pick(&mut self, command: u16, target: Target) {
+        if let Target::Card(from) = target {
+            self.manual.picking = Some(Pick { command, from });
+        }
+    }
+
+    /// A sweep: the primary button going down on the empty table begins a rectangle, moving
+    /// draws it once it has travelled the drag threshold, and letting go selects what it
+    /// touches. Returns whether the pointer moved or ended a sweep, and so means nothing else.
+    fn sweep(&mut self, pointer: &Pointer) -> bool {
+        match pointer.phase {
+            PointerPhase::Down if pointer.button == Button::Primary => {
+                let empty = self.at_table()
+                    && self.layer.press_at(pointer.position, self.open).is_none()
+                    && hit(&self.frame, pointer.position).is_none_or(|index| {
+                        let element = &self.frame.resolved[index as usize];
+                        !matches!(element.role, Role::Card | Role::Pile | Role::Player)
+                    });
+                self.manual.sweep = empty.then_some((pointer.position, pointer.position));
+                false
+            }
+            PointerPhase::Move => {
+                let Some((from, _)) = self.manual.sweep else {
+                    return false;
+                };
+                self.manual.sweep = Some((from, pointer.position));
+                if from.distance(pointer.position) >= DRAG_THRESHOLD_POINTS {
+                    self.show_screen();
+                }
+                true
+            }
+            PointerPhase::Up => {
+                let Some((from, _)) = self.manual.sweep.take() else {
+                    return false;
+                };
+                if from.distance(pointer.position) >= DRAG_THRESHOLD_POINTS
+                    && let Some(view) = self.show.latest().map(|update| &update.view)
+                {
+                    let rect = selection::sweep_box(from, pointer.position);
+                    self.manual.state.selection = selection::swept(&self.frame, rect, view);
+                }
+                self.show_screen();
+                true
+            }
+            PointerPhase::Cancel | PointerPhase::Leave => {
+                if self.manual.sweep.take().is_some() {
+                    self.show_screen();
+                }
+                false
+            }
+            _ => false,
+        }
+    }
+
+    /// The cards a press on `slot` carries: the selection if the card is in it, and the card
+    /// alone otherwise.
+    fn carried_cards(&self, slot: ObjectId) -> Vec<ObjectId> {
+        let selected = &self.manual.state.selection;
+        if selected.contains(&slot) {
+            selected.clone()
+        } else {
+            vec![slot]
+        }
+    }
+
+    /// While a card is held on the table, outlines where it would land under `pointer`, and
+    /// stops once the press ends.
+    fn follow_landing(&mut self, pointer: &Pointer) {
+        let landing = match (pointer.phase, self.show.pointer().held()) {
+            (PointerPhase::Move, Some(slot)) => self.landing_at(slot, pointer.position),
+            _ => None,
+        };
+        if landing != self.manual.landing {
+            self.manual.landing = landing;
+            self.show_screen();
+        }
+    }
+
+    /// Where the card in `slot`, and the cards it carries, would land if let go at `at`, if
+    /// they may land there.
+    fn landing_at(&self, slot: usize, at: Vec2) -> Option<drop::Destination> {
+        let slot = ObjectId(u16::try_from(slot).ok()?);
+        let view = &self.show.latest()?.view;
+        let cards = self.carried_cards(slot);
+        let table = self.show.table();
+        let to = drop::destination_at(
+            &self.frame,
+            (table.layout(), table.camera()),
+            at,
+            &cards,
+            view,
+        )?;
+        drop::available(view, &to, &cards).then_some(to)
+    }
+
+    /// The card in `slot`, held on the table, was let go at `at`: the cards it carries land
+    /// where it was let go. Several put on the top of a library open the order tray instead.
+    /// On a frozen table (`manual::link`) nothing moves.
+    pub(super) fn table_drop(&mut self, slot: usize, at: Vec2) {
+        self.manual.landing = None;
+        let to = (!self.table_frozen())
+            .then(|| self.landing_at(slot, at))
+            .flatten();
+        let Some(to) = to else {
+            self.show_screen();
+            return;
+        };
+        let Ok(card) = u16::try_from(slot).map(ObjectId) else {
+            return;
+        };
+        let cards = self.carried_cards(card);
+        if to.area == Area::Pile(ZoneName::Library) && to.end == Some(End::Top) && cards.len() > 1 {
+            self.order_library(to.side, cards);
+            return;
+        }
+        let Some(view) = self.show.latest().map(|update| &update.view) else {
+            return;
+        };
+        let actions = drop::actions(view, &self.frame, &cards, &to, at);
+        self.send_table(drop::batch(actions).into_iter().collect());
+        self.show_screen();
+    }
+
+    /// A Cmd-click on the card in `slot` on the table adds it to the selection or takes it out.
+    pub(super) fn table_select(&mut self, slot: ObjectId) {
+        let actionable =
+            (self.show.latest()).is_some_and(|update| selection::actionable(&update.view, slot));
+        if actionable {
+            selection::toggle(&mut self.manual.state.selection, slot);
+        }
+    }
+
+    /// Escape on the table, with no menu, overlay or viewer open for it to close, gives up a
+    /// command's wait for its target, or else empties the selection, as the web's selection
+    /// takes Escape. Returns whether it did either.
+    pub(super) fn table_escape(&mut self) -> bool {
+        if !self.at_table() || self.viewing.open.is_some() {
+            return false;
+        }
+        if self.manual.picking.take().is_some() {
+            return true;
+        }
+        if self.manual.state.selection.is_empty() && self.manual.sweep.is_none() {
+            return false;
+        }
+        self.manual.state.selection.clear();
+        self.manual.sweep = None;
+        self.show_screen();
+        true
+    }
+
+    /// Whether a press may pick up the card in `slot`, resting at `place`, on the manual table:
+    /// a card on the battlefield, on the stack or in the viewer's hand that the table can act
+    /// on. `None` off the table, where the open prompt decides.
+    pub(super) fn table_holdable(&self, slot: usize, place: Place) -> Option<bool> {
+        if !self.at_table() || self.manual.picking.is_some() {
+            return None;
+        }
+        let Place::Card { zone, side, .. } = place else {
+            return Some(false);
+        };
+        let reachable = match zone {
+            ZoneName::Battlefield | ZoneName::Stack => true,
+            ZoneName::Hand => side == Side::You,
+            _ => false,
+        };
+        let slot = ObjectId(u16::try_from(slot).ok()?);
+        let view = &self.show.latest()?.view;
+        Some(reachable && selection::actionable(view, slot))
+    }
+
+    /// The card of the open viewer under `at` on the table, as a target, if there is one.
+    pub(super) fn viewer_card_at(&self, at: Vec2) -> Option<Target> {
+        self.viewing.open?;
+        viewers::card_at(&self.frame, at, |slot| self.viewer_shows(slot))
+    }
+
+    /// On each frame at `now` on the manual table: the held card drops where it is let go, the
+    /// selected cards wear the `selected` mark, the selection's summary stands over the highest
+    /// selected permanent, and a command waiting for its target draws an arrow from its card to
+    /// the mouse.
+    pub(super) fn table_frame(&mut self, now: u64) {
+        let table = self.screen == Screen::Table
+            && (self.show.latest()).is_some_and(|update| update.view.table.is_some());
+        self.show.pointer_mut().drop_anywhere(table);
+        if !table {
+            return;
+        }
+        selection::mark(self.show.lit_mut(), &self.manual.state.selection, now);
+        // The summary follows the highest selected permanent as the table last drew it, and
+        // the screen is built again only when that permanent changes.
+        let over = selection::highest(&self.frame, &self.manual.state.selection);
+        if over != self.manual.state.summary_over {
+            self.manual.state.summary_over = over;
+            self.show_screen();
+        }
+        if let (Some(pick), Some(mouse)) = (self.manual.picking, self.owned.mouse) {
+            self.show.lit_mut().set_aims([arrows::aim(pick, mouse)]);
+        }
+    }
+}

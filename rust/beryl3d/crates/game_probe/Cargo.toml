@@ -24,3 +24,7 @@ game_table.workspace = true
 game_play.workspace = true
 game_hud.workspace = true
 game_manual.workspace = true
+
+[dev-dependencies]
+# Reads the web audio manifest to verify that both clients use the same cue names.
+beryl_test_files = { path = "../../../crates/beryl_test_files" }

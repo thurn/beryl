@@ -3,8 +3,8 @@
 use beryl_inspect::faults::Listed;
 use beryl_inspect::runner::{Outcome, Test};
 use beryl_protocol::protocol::Side;
-use beryl_scene::agent::{Fault, Rule};
-use beryl_scene::input::Size;
+use kit_probe::agent::{Fault, Rule};
+use kit_ui::input::Size;
 
 fn outcome(recording: &str, rules: &[Rule]) -> Outcome {
     Outcome {
@@ -27,7 +27,7 @@ fn outcome(recording: &str, rules: &[Rule]) -> Outcome {
             })
             .collect(),
         frames: 1,
-        judged: beryl_scene::agent::Judged::default(),
+        judged: kit_probe::agent::Judged::default(),
         error: None,
         seconds: 0.0,
     }

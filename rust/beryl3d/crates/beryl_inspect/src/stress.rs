@@ -14,9 +14,9 @@ use beryl_protocol::script::{
     Act, Arrow, Fact, Mark, Notice, Reset, Span, Step, StepTiming, Stream, Subject, Table, Tally,
     replay, time_script,
 };
-use beryl_scene::agent::Rule;
 use game_probe::probe::{self, card, permanent};
 use game_probe::testing;
+use kit_probe::agent::Rule;
 
 /// A synthetic board and any scripted changes to it.
 #[derive(Clone, Debug, PartialEq)]
@@ -522,12 +522,10 @@ pub(crate) const STACK_REST_FRAMES: usize = 120;
 /// A four-second round trip along the inner edge of the fan in its resting frame, card by card
 /// in hand order through the cards in view, so through each row of a hand laid in several. The position follows the curvature
 /// of the edge across window shapes.
-pub(crate) fn pointer_moves(
-    frame: &beryl_scene::frame::Frame,
-) -> Vec<(u64, beryl_scene::input::Pointer)> {
-    use beryl_scene::driver::TICK;
-    use beryl_scene::frame::{Place, Role};
-    use beryl_scene::input::{Button, Modifiers, Pointer, PointerKind, PointerPhase};
+pub(crate) fn pointer_moves(frame: &kit_frame::frame::Frame) -> Vec<(u64, kit_ui::input::Pointer)> {
+    use app_client::driver::TICK;
+    use kit_frame::frame::{Place, Role};
+    use kit_ui::input::{Button, Modifiers, Pointer, PointerKind, PointerPhase};
 
     const HALF: u16 = 120;
     let points: Vec<_> = frame
@@ -575,7 +573,7 @@ pub(crate) fn pointer_moves(
     let onto_hand = |point| {
         let mut below = point;
         for _ in 0..40 {
-            if beryl_scene::agent::hit(frame, below).is_some_and(in_hand) {
+            if kit_scene::hit::hit(frame, below).is_some_and(in_hand) {
                 return below;
             }
             below.y += 2.0;

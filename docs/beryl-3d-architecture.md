@@ -132,8 +132,8 @@ level and on any crate of a lower level, and on nothing else in this table.
 | `game_hud`     | game     | The game screen's features: prompts, life totals, the log, the inspector, the pile viewer, the opening hand, the result | `hud/`, `prompts/`, `inspect/`, `navigation.rs`, parts of `screens/`                     |
 | `game_manual`  | game     | The manual table and its lobby                                                                                          | `manual/`, parts of `screens/`                                                           |
 | `game_probe`   | game     | Game elements in recordings, table and feature stories, checks that read scripts                                        | `driver/element.rs`, `agent/steps.rs`, `testing.rs`, `probe.rs`                          |
-| `app_screens`  | app      | The screens with no game: start, settings, bug report, the story browser, testing                                       | `screens/`, `settings.rs`                                                                |
-| `app_client`   | app      | `Client`: the feature registry, routing, session commands and the test driver that runs the client                      | `client/`, `command.rs`, parts of `driver/`                                              |
+| `app_screens`  | app      | The screens with no game: start, settings, bug report, the story browser, testing                                       | `screens/` and the settings sheet's controls                                             |
+| `app_client`   | app      | `Client`: the feature registry, routing, session commands and the test driver that runs the client                      | `client/`, `command.rs`, `settings.rs`, parts of `driver/`                               |
 | `scaffold_web` | scaffold | Fitting rows and piles to the web interface's positions; deleted at the switch                                          | `table/web_fit.rs`                                                                       |
 
 The crates that are not part of the client core keep their names and jobs:

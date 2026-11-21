@@ -10,11 +10,11 @@ publish = false
 workspace = true
 
 [dependencies]
+kit_ui.workspace = true
 kit_base.workspace = true
 kit_frame.workspace = true
 # The card faces it uploads: their formats and layers, as the asset workers prepare them.
 beryl_assets = { path = "../beryl_assets" }
-beryl_scene = { path = "../beryl_scene" }
 # Casts draw records to bytes for upload, in place of hand-written unsafe casts.
 bytemuck = { version = "1.25.2", features = ["derive"] }
 # The key light's matrix and directions, in the client core's own math types, in place of
@@ -28,10 +28,8 @@ pollster = "1.0.1"
 wgpu = "30.0.2"
 
 [dev-dependencies]
-# Plays the gated boards and recordings whose frames the `fragments` example counts.
-beryl_inspect = { path = "../beryl_inspect" }
-# The seat a recording is seen from.
-beryl_protocol = { path = "../../../crates/beryl_protocol" }
+kit_space.workspace = true
+kit_text.workspace = true
 # Parses the shader to count each material's texture samples and expressions, in place of Arm's
 # offline compiler, whose installer needs a person. The release wgpu 30.0.2 compiles with.
 naga = { version = "30.0.2", features = ["wgsl-in"] }

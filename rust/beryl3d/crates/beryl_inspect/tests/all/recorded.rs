@@ -4,21 +4,21 @@
 
 use std::time::Instant;
 
+use app_client::Input;
+use app_client::driver::{Duration, Moment, Page, TICK};
+use app_client::{Client, Config};
 use beryl_inspect::pages::{Recorded, check_recording, recording};
 use beryl_inspect::{recordings, stress};
 use beryl_protocol::Seat;
 use beryl_protocol::protocol::{Side, ZoneName};
 use beryl_protocol::script::Verb;
-use beryl_scene::Input;
-use beryl_scene::agent::tree::line;
-use beryl_scene::agent::{Layout, locate};
-use beryl_scene::driver::{Duration, Moment, Page, TICK};
-use beryl_scene::frame::{Frame, FrameBuilder, Place, Wake};
-use beryl_scene::input::{Insets, Size, Tier};
-use beryl_scene::play::Show;
-use beryl_scene::pose::Pose;
-use beryl_scene::table::{DESKTOP, Rest, Table, Window};
-use beryl_scene::{Client, Config};
+use game_play::play::Show;
+use game_table::table::{DESKTOP, Rest, Table, Window};
+use kit_base::pose::Pose;
+use kit_frame::frame::{Frame, FrameBuilder, Place, Wake};
+use kit_probe::agent::tree::line;
+use kit_probe::agent::{Layout, locate};
+use kit_ui::input::{Insets, Size, Tier};
 
 const SEATS: [Side; 2] = [Side::You, Side::Opponent];
 
@@ -139,7 +139,7 @@ fn unplaced((name, seat): &(String, Seat)) -> Option<String> {
 }
 
 /// Whether a card drawn at `pose` lies in the pile `rest` places it in, within the distance a
-/// card may settle there without a segment (`settle` in `beryl_scene`'s `play::step`).
+/// card may settle there without a segment (`settle` in `game_play::play::step`).
 fn settled_in_pile(rest: &Rest, pose: Option<Pose>) -> bool {
     let in_pile = matches!(
         rest.place,

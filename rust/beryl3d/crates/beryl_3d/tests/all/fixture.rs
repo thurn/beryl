@@ -4,10 +4,10 @@
 
 use std::path::PathBuf;
 
+use app_client::Input;
+use app_client::{Client, Config};
 use beryl_3d::fixture::{self, Fixture};
-use beryl_scene::Input;
-use beryl_scene::input::{Insets, Size};
-use beryl_scene::{Client, Config};
+use kit_ui::input::{Insets, Size};
 
 /// A sixtieth of a second, in nanoseconds: the ticks of a 60 Hz display.
 const TICK: u64 = 1_000_000_000 / 60;

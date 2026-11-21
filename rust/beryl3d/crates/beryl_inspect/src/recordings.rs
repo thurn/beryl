@@ -11,12 +11,12 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 
+use app_client::driver::{Page, Recording};
 use beryl_protocol::Seat;
 use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::protocol::Side;
-use beryl_scene::agent::Layout;
-use beryl_scene::driver::{Page, Recording};
-use beryl_scene::input::Size;
+use kit_probe::agent::Layout;
+use kit_ui::input::Size;
 
 use crate::pack::{self, Entry, Recorder};
 use crate::stress::Board;

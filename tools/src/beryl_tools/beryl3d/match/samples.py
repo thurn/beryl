@@ -338,7 +338,7 @@ def native_style(style: dict[str, str]) -> dict[str, object]:
 
 def native_icon(sample: dict[str, object]) -> dict[str, object] | None:
     """A sample's icon as `b3d-render sample` reads it: `{"id", "size", "color"}`, the icon of
-    `beryl_scene::widgets::icons` and its side in points."""
+    `kit_ui::widgets::icons` and its side in points."""
     icon = sample.get("icon")
     if not isinstance(icon, dict):
         return None

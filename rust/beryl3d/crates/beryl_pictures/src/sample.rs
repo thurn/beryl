@@ -27,7 +27,7 @@
 //! are rasterized by the real glyph worker. Glyph pixels are left out of the score (decision
 //! M2): every pixel Beryl 3D's glyphs cover, found by drawing the text alone in white on black,
 //! and the pixels beside those, since the two rasterizers' antialiasing differs. An icon, one of
-//! `beryl_scene::widgets::icons` at its side in points, is drawn centred in the box from the real
+//! `kit_ui::widgets::icons` at its side in points, is drawn centred in the box from the real
 //! glyph worker's atlas, in its color, with the sample's drop shadows; its pixels are scored.
 //!
 //! Colors are channels from 0 to 255. For each sample it prints one line of JSON, `{"name",
@@ -45,18 +45,18 @@ use std::sync::mpsc::{self, Receiver};
 use beryl_assets::Prepared;
 use beryl_assets::glyphs::GlyphWorker;
 use beryl_assets::light;
-use beryl_scene::element::{
+use game_table::table::{Camera, DESKTOP, Window};
+use kit_frame::frame::{Frame, FrameBuilder};
+use kit_text::text::TypeStyle;
+use kit_text::text::fonts::Font;
+use kit_ui::element::{
     Align, Border, Element, Extent, Filter, Gradient, Justify, Length, Position, Shadow, Shape,
     Shown, Stop, holder, row,
 };
-use beryl_scene::frame::{Frame, FrameBuilder};
-use beryl_scene::input::AssetReady;
-use beryl_scene::input::{Insets, Size, Tier};
-use beryl_scene::layout::Layer;
-use beryl_scene::table::{Camera, DESKTOP, Window};
-use beryl_scene::text::TypeStyle;
-use beryl_scene::text::fonts::Font;
-use beryl_scene::widgets::IconId;
+use kit_ui::input::AssetReady;
+use kit_ui::input::{Insets, Size, Tier};
+use kit_ui::layout::Layer;
+use kit_ui::widgets::IconId;
 use serde_json::Value;
 
 use crate::Error;
@@ -392,7 +392,7 @@ fn screen(sample: &Sample, mask: bool) -> Element {
         }
     }
     if let Some(text) = &sample.text {
-        let mut words = beryl_scene::element::text(&text.string)
+        let mut words = kit_ui::element::text(&text.string)
             .style(TypeStyle {
                 font: Font::OpenSans,
                 weight: 400,

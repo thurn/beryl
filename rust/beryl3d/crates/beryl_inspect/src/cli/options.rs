@@ -10,11 +10,11 @@
 
 use std::fmt::Write;
 
+use app_client::driver::{Action, Moment};
 use beryl_protocol::Seat;
 use beryl_protocol::protocol::Side;
-use beryl_scene::agent::Layout;
-use beryl_scene::driver::{Action, Moment};
-use beryl_scene::input::Size;
+use kit_probe::agent::Layout;
+use kit_ui::input::Size;
 
 use crate::recordings;
 
@@ -32,7 +32,7 @@ impl std::fmt::Display for Usage {
 /// The two visual tiers (docs/beryl-3d.md, "Rendering"). Text commands accept the option and
 /// print the same tree in either, because the tiers differ only in shading; `png` and `film`
 /// draw in the tier given.
-pub use beryl_scene::input::Tier;
+pub use kit_ui::input::Tier;
 
 /// A command's own options, beside the common ones.
 #[derive(Clone, Copy, Debug, Default)]
@@ -125,8 +125,8 @@ impl Options {
             scale: 1.0,
             tier: Tier::Baseline,
             at: Moment::Named {
-                name: beryl_scene::driver::Name::Start,
-                offset: beryl_scene::driver::Offset::default(),
+                name: app_client::driver::Name::Start,
+                offset: app_client::driver::Offset::default(),
             },
             actions: Vec::new(),
             action_lines: Vec::new(),

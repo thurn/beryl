@@ -88,7 +88,7 @@
     "tools/src/beryl_tools/ignite/beryl3d.py": [
       "rust/beryl3d/crates/beryl_inspect/Cargo.toml",
       "rust/beryl3d/crates/beryl_record/Cargo.toml",
-      "rust/beryl3d/crates/beryl_scene/Cargo.toml",
+      "rust/beryl3d/crates/app_client/Cargo.toml",
       "rust/cards/cards_1993/Cargo.toml",
       "rust/cards/cards_1994/Cargo.toml",
       "rust/cards/cards_1995/Cargo.toml",

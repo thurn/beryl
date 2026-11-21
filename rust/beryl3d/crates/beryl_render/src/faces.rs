@@ -15,8 +15,8 @@
 use std::collections::VecDeque;
 
 use beryl_assets::{FULL_LAYERS, Format, Layer, Prepared, Upload, dimensions};
-use beryl_scene::frame::Wake;
-use beryl_scene::input::{AssetReady, FaceSize};
+use kit_frame::frame::Wake;
+use kit_ui::input::{AssetReady, FaceSize};
 
 use crate::textures::{back, face};
 

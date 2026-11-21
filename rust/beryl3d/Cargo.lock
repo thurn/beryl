@@ -104,11 +104,14 @@ name = "app_client"
 version = "0.1.0"
 dependencies = [
  "app_screens",
+ "beryl_card_records",
+ "beryl_protocol",
  "game_hud",
  "game_manual",
  "game_play",
  "game_probe",
  "game_table",
+ "glam",
  "kit_base",
  "kit_frame",
  "kit_fx",
@@ -118,17 +121,21 @@ dependencies = [
  "kit_text",
  "kit_ui",
  "scaffold_web",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
 name = "app_screens"
 version = "0.1.0"
 dependencies = [
+ "beryl_protocol",
  "game_hud",
  "game_manual",
  "game_play",
  "game_probe",
  "game_table",
+ "glam",
  "kit_base",
  "kit_frame",
  "kit_fx",
@@ -137,6 +144,7 @@ dependencies = [
  "kit_space",
  "kit_text",
  "kit_ui",
+ "serde_json",
 ]
 
 [[package]]
@@ -211,6 +219,8 @@ checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
 name = "beryl_3d"
 version = "0.1.0"
 dependencies = [
+ "app_client",
+ "app_screens",
  "beryl_3d",
  "beryl_assets",
  "beryl_cards",
@@ -218,16 +228,21 @@ dependencies = [
  "beryl_inspect",
  "beryl_protocol",
  "beryl_render",
- "beryl_scene",
  "beryl_search",
  "beryl_session",
  "beryl_shell",
  "beryl_table_session",
  "beryl_test_files",
  "cc",
+ "game_manual",
+ "game_play",
  "game_probe",
  "glam",
  "jni-sys 0.3.1",
+ "kit_base",
+ "kit_frame",
+ "kit_probe",
+ "kit_ui",
  "log",
  "ndk-sys",
  "rodio",
@@ -247,15 +262,13 @@ name = "beryl_assets"
 version = "0.1.0"
 dependencies = [
  "beryl_art",
- "beryl_assets",
- "beryl_card_records",
- "beryl_scene",
  "beryl_test_files",
  "ctt",
  "image",
  "kit_base",
  "kit_frame",
  "kit_text",
+ "kit_ui",
  "parley",
  "swash",
  "tiny-skia",
@@ -397,14 +410,23 @@ dependencies = [
 name = "beryl_host"
 version = "0.1.0"
 dependencies = [
+ "app_client",
+ "app_screens",
  "arboard",
  "beryl_art",
  "beryl_assets",
+ "beryl_card_records",
  "beryl_protocol",
  "beryl_render",
- "beryl_scene",
  "game_probe",
+ "game_table",
  "glam",
+ "image",
+ "kit_base",
+ "kit_frame",
+ "kit_probe",
+ "kit_scene",
+ "kit_ui",
  "libc",
  "ndk-sys",
  "objc2 0.6.5",
@@ -419,11 +441,19 @@ dependencies = [
 name = "beryl_inspect"
 version = "0.1.0"
 dependencies = [
+ "app_client",
  "beryl_protocol",
- "beryl_scene",
  "beryl_test_files",
+ "game_hud",
+ "game_play",
  "game_probe",
+ "game_table",
  "glam",
+ "kit_base",
+ "kit_frame",
+ "kit_probe",
+ "kit_scene",
+ "kit_ui",
  "libc",
  "miniz_oxide 0.8.9",
  "postcard",
@@ -452,14 +482,21 @@ dependencies = [
 name = "beryl_pictures"
 version = "0.1.0"
 dependencies = [
+ "app_client",
  "beryl_assets",
  "beryl_host",
  "beryl_inspect",
  "beryl_protocol",
  "beryl_render",
- "beryl_scene",
  "game_probe",
+ "game_table",
  "glam",
+ "kit_base",
+ "kit_frame",
+ "kit_probe",
+ "kit_scene",
+ "kit_text",
+ "kit_ui",
  "serde_json",
 ]
 
@@ -491,14 +528,14 @@ name = "beryl_render"
 version = "0.1.0"
 dependencies = [
  "beryl_assets",
- "beryl_inspect",
- "beryl_protocol",
- "beryl_scene",
  "bytemuck",
  "glam",
  "image",
  "kit_base",
  "kit_frame",
+ "kit_space",
+ "kit_text",
+ "kit_ui",
  "naga",
  "pollster",
  "serde_json",
@@ -530,31 +567,6 @@ name = "beryl_scenario_types"
 version = "0.1.0"
 dependencies = [
  "beryl_card",
-]
-
-[[package]]
-name = "beryl_scene"
-version = "0.1.0"
-dependencies = [
- "beryl_card_records",
- "beryl_protocol",
- "beryl_test_files",
- "game_hud",
- "game_manual",
- "game_play",
- "game_probe",
- "game_table",
- "glam",
- "kit_base",
- "kit_frame",
- "kit_fx",
- "kit_probe",
- "kit_scene",
- "kit_space",
- "kit_text",
- "kit_ui",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -1812,6 +1824,7 @@ name = "game_probe"
 version = "0.1.0"
 dependencies = [
  "beryl_protocol",
+ "beryl_test_files",
  "game_hud",
  "game_manual",
  "game_play",

@@ -4,13 +4,13 @@
 //! Also the phone host before the platform has passed a surface: it has no renderer yet, so a
 //! lifecycle input is ignored and no frame is drawn.
 
+use app_client::Input;
+use app_client::{Client, Config};
 use beryl_host::phone::{Platform, due};
 use beryl_host::{Draw, FrameLoop, NoFeed, Phone, Shown};
-use beryl_scene::Input;
-use beryl_scene::frame::{Frame, Wake};
-use beryl_scene::input::{Button, Lifecycle, Modifiers, Pointer, PointerKind, PointerPhase};
-use beryl_scene::{Client, Config};
 use glam::Vec2;
+use kit_frame::frame::{Frame, Wake};
+use kit_ui::input::{Button, Lifecycle, Modifiers, Pointer, PointerKind, PointerPhase};
 
 /// The interval of a 120 Hz display, in nanoseconds.
 const INTERVAL_120: u64 = 8_333_333;

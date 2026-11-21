@@ -3,7 +3,7 @@
 //!
 //! Every card before the flat layer casts a shadow of its true shape from one directional key
 //! light, on the table and on the cards below it. The light points the way the Baseline tier's
-//! contact shadows fall (`cast` in `beryl_scene`'s `table/shadows.rs`), so a card at a height
+//! contact shadows fall (`cast` in the table's `shadows.rs`), so a card at a height
 //! casts its shadow at the same place in both tiers. Each frame, the cards are drawn into a
 //! depth map seen from the light, through an orthographic projection fitted to the part of the
 //! table the camera sees; the table and every sprite cast nothing.

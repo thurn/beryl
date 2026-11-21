@@ -4,7 +4,7 @@
 use std::sync::Arc;
 use std::sync::mpsc::Sender;
 
-use beryl_scene::Input;
+use app_client::Input;
 
 /// Hands inputs to the host from other threads. Each one also wakes the host's event loop, so
 /// a still table responds at once.

@@ -70,7 +70,7 @@ COUNTS: tuple[str, ...] = ("pixels", "boxes", "styles", "unsupported", "unmatche
 # How many moments the report names for each area.
 WORST = 3
 # Where Beryl 3D's scene code lives, which each area's source is under.
-SCENE = "rust/beryl3d/crates/beryl_scene/src"
+CRATES = "rust/beryl3d/crates"
 
 
 @dataclass(frozen=True)
@@ -111,38 +111,46 @@ AREAS: tuple[Area, ...] = (
     # Target arrows, source lines, lines of combat and the pointer arrow: each is one element
     # of role `arrow`, whose light is its own records. (An attacker's wedge and a blocker's
     # crescent are drawn with their card, so their pixels count in the card's area.)
-    Area("arrows", f"{SCENE}/light", roles=frozenset({"arrow"})),
+    Area("arrows", f"{CRATES}/game_play/src/light", roles=frozenset({"arrow"})),
     Area(
         "card face",
-        f"{SCENE}/faces.rs",
+        f"{CRATES}/game_table/src/faces.rs",
         inside=frozenset({"card", "ability"}),
     ),
-    Area("stack", f"{SCENE}/table/stack.rs", places=("stack",)),
-    Area("hand", f"{SCENE}/table/hands.rs", places=("hand.",)),
-    Area("battlefield", f"{SCENE}/table/rows", places=("battlefield.",)),
+    Area("stack", f"{CRATES}/game_table/src/table/stack.rs", places=("stack",)),
+    Area("hand", f"{CRATES}/game_table/src/table/hands.rs", places=("hand.",)),
+    Area(
+        "battlefield",
+        f"{CRATES}/game_table/src/table/rows.rs",
+        places=("battlefield.",),
+    ),
     Area(
         "piles",
-        f"{SCENE}/table/pile.rs",
+        f"{CRATES}/game_table/src/table/pile.rs",
         roles=frozenset({"pile"}),
         names=re.compile(r"(Your|Opponent's) (library|graveyard|exile)( \d+)?"),
         places=("library.", "graveyard.", "exile.", "sideboard.", "revealed"),
     ),
-    Area("prompt", f"{SCENE}/prompts", names=region_names("prompt")),
-    Area("game log", f"{SCENE}/hud/log", names=region_names("log", "Game log")),
+    Area("prompt", f"{CRATES}/game_hud/src/prompts", names=region_names("prompt")),
+    Area(
+        "game log",
+        f"{CRATES}/game_hud/src/hud/log.rs",
+        names=region_names("log", "Game log"),
+    ),
     Area(
         "life orbs",
-        f"{SCENE}/hud/players.rs",
+        f"{CRATES}/game_hud/src/hud/players.rs",
         roles=frozenset({"player"}),
         names=region_names("players", "your orb", "opponent's orb"),
     ),
     Area(
         "steps",
-        f"{SCENE}/hud/steps.rs",
+        f"{CRATES}/game_hud/src/hud/steps.rs",
         names=region_names("steps", "Your steps", "Opponent's steps"),
     ),
     Area(
         "screens",
-        f"{SCENE}/screens",
+        f"{CRATES}/app_screens/src/screens",
         names=region_names(
             "start",
             "settings",
@@ -155,7 +163,9 @@ AREAS: tuple[Area, ...] = (
         ),
     ),
     # The game's flat layer: a pixel of it that no nearer area claims is the table's cloth.
-    Area("cloth", f"{SCENE}/table/scene.rs", names=region_names("game")),
+    Area(
+        "cloth", f"{CRATES}/game_table/src/table/scene.rs", names=region_names("game")
+    ),
 )
 # The area of an element no entry of `AREAS` claims.
 OTHER = "other"

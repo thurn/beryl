@@ -5,13 +5,13 @@
 
 use std::time::Instant;
 
+use app_client::Client;
+use app_client::Input;
+use app_client::command::Request;
+use app_client::settings::Graphics;
 use beryl_render::{Picture, Readback};
-use beryl_scene::Client;
-use beryl_scene::Input;
-use beryl_scene::command::Request;
-use beryl_scene::frame::{Frame, Wake};
-use beryl_scene::input::Tier;
-use beryl_scene::settings::Graphics;
+use kit_frame::frame::{Frame, Wake};
+use kit_ui::input::Tier;
 
 use crate::rate::{Paced, RateRule, Step, Thresholds};
 

@@ -56,15 +56,15 @@ def test_native_profiles_relink_changed_path_dependencies_without_incremental_re
     native: Path = main / "native"
     scene = crate(
         native,
-        "beryl_scene",
+        "app_client",
         {"beryl_card_store": store},
         "pub fn value() -> u32 { beryl_card_store::value() }\n",
     )
     inspect = crate(
-        native, "beryl_inspect", {"beryl_cli": client, "beryl_scene": scene}, ""
+        native, "beryl_inspect", {"beryl_cli": client, "app_client": scene}, ""
     )
     (inspect / "src" / "main.rs").write_text(
-        'fn main() { println!("{}", beryl_cli::value() + beryl_scene::value()); }\n'
+        'fn main() { println!("{}", beryl_cli::value() + app_client::value()); }\n'
     )
     (native / "Cargo.toml").write_text(
         '[workspace]\nresolver = "3"\nmembers = ["crates/*"]\n' + profiles
@@ -111,7 +111,7 @@ def test_native_profiles_relink_changed_path_dependencies_without_incremental_re
     caches = {path.name.rsplit("-", 1)[0] for path in incremental.iterdir()}
     # The main-workspace dependencies compile in full, except the crates between the card
     # crates and `record`, which every card edit recompiles.
-    assert caches == {"beryl_scene", "beryl_inspect", "beryl_cli"}
+    assert caches == {"app_client", "beryl_inspect", "beryl_cli"}
     # A second revision must rebuild and relink the main-workspace dependency chain,
     # while an edited native member must continue to use its incremental cache.
     (kernel / "src" / "lib.rs").write_text("pub fn value() -> u32 { 20 }\n")

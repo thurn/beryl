@@ -23,7 +23,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicUsize, Ordering};
 
 use beryl_inspect::gate::{BOARDS, Playback, rank};
-use beryl_scene::input::Tier;
+use kit_ui::input::Tier;
 use serde_json::{Value, json};
 
 /// What the program is doing, so that the allocator knows which count an allocation joins.

@@ -23,7 +23,7 @@
 //!
 //! The thresholds are `frame_rate` in `data/beryl3d/space.json`.
 
-use beryl_scene::data::space::frame_rate;
+use kit_base::data::space::frame_rate;
 
 /// What the rule needs to know of one animating frame, in nanoseconds.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

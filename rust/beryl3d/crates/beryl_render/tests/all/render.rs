@@ -6,11 +6,12 @@
 use beryl_assets::Format;
 use beryl_assets::light;
 use beryl_render::{BACK_LAYER, Limits, Renderer, Target};
-use beryl_scene::frame::{Band, DRAWS, Draw, Frame, FrameBuilder, sprites};
-use beryl_scene::input::{FaceSize, Tier};
-use beryl_scene::table::{CARD_HEIGHT, CARD_WIDTH, Camera, DESKTOP, Window};
 use glam::camera::rh::{proj::directx, view::look_at_mat4};
 use glam::{Affine3A, Mat4, Quat, Vec2, Vec3};
+use kit_base::geometry::{CARD_HEIGHT, CARD_WIDTH, Window};
+use kit_frame::frame::{Band, DRAWS, Draw, Frame, FrameBuilder, sprites};
+use kit_space::camera::{Camera, DESKTOP_CAMERA};
+use kit_ui::input::{FaceSize, Tier};
 
 pub(super) const BOTH: [Limits; 2] = [Limits::Default, Limits::Downlevel];
 /// How far a sampled channel may be from the expected value, out of 255.
@@ -412,7 +413,7 @@ pub(super) struct TwentyCards {
 
 pub(super) fn twenty_cards() -> TwentyCards {
     let window = Window::default();
-    let camera = Camera::fit(DESKTOP.camera, window);
+    let camera = Camera::fit(DESKTOP_CAMERA, window);
     let raised = [3, 9, 15];
     let mut opaque = Vec::new();
     let mut shadows = Vec::new();

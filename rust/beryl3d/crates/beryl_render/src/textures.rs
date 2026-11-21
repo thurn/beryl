@@ -2,7 +2,7 @@
 //! placeholder face per card name and a placeholder back.
 
 /// The layer of the face arrays that holds the card back: the card back is always the first
-/// face of a match (`beryl_scene::faces::CARD_BACK`).
+/// face of a match (`kit_base::faces::CARD_BACK`).
 pub const BACK_LAYER: u16 = 0;
 
 /// FNV-1a, a small stable hash: the same name gives the same face on every machine.

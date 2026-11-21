@@ -10,13 +10,13 @@ use beryl_assets::glyphs::GlyphWorker;
 use beryl_assets::packer::PAGE_SIZE;
 use beryl_assets::{Prepared, Upload};
 use beryl_render::{Limits, Renderer, Target};
-use beryl_scene::frame::{Band, Draw, Frame, FrameBuilder, Sprite};
-use beryl_scene::input::{AssetReady, GlyphCell, GlyphKey, Tier};
-use beryl_scene::table::{CARD_HEIGHT, CARD_WIDTH};
-use beryl_scene::text::fonts::Font;
-use beryl_scene::widgets::icons::GEAR;
 use glam::camera::rh::{proj::directx, view::look_at_mat4};
 use glam::{Affine3A, Mat4, Quat, Vec2, Vec3};
+use kit_base::geometry::{CARD_HEIGHT, CARD_WIDTH};
+use kit_frame::frame::{Band, Draw, Frame, FrameBuilder, Sprite};
+use kit_text::text::fonts::Font;
+use kit_ui::input::{AssetReady, GlyphCell, GlyphKey, Tier};
+use kit_ui::widgets::icons::GEAR;
 
 const BOTH: [Limits; 2] = [Limits::Default, Limits::Downlevel];
 /// The target's side in pixels.

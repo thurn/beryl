@@ -4,8 +4,8 @@
 //! Enhanced.
 
 use beryl_inspect::gate::{BOARDS, Playback};
-use beryl_scene::frame::{Draw, Frame, Material};
-use beryl_scene::input::Tier;
+use kit_frame::frame::{Draw, Frame, Material};
+use kit_ui::input::Tier;
 
 /// The records of `frame` other than those of `material`.
 fn records_but(frame: &Frame, material: Material) -> Vec<Draw> {

@@ -7,16 +7,16 @@
 
 use std::sync::mpsc::{Receiver, channel};
 
+use app_client::Input;
+use app_client::command::{Reply, SessionCommand};
+use app_client::{Client, Config};
 use beryl_3d::session::{self, Session};
 use beryl_host::{Class, Draw, FrameLoop, Inbox, Shown, Ticks};
 use beryl_protocol::ipc::decks::DeckImportRequest;
 use beryl_protocol::ipc::{LobbyChange, LobbyUpdate};
-use beryl_scene::Input;
-use beryl_scene::command::{Reply, SessionCommand};
-use beryl_scene::frame::Frame;
-use beryl_scene::input::Lifecycle;
-use beryl_scene::{Client, Config};
 use beryl_session::{SessionError, SessionId};
+use kit_frame::frame::Frame;
+use kit_ui::input::Lifecycle;
 
 /// A stand-in for `Sessions` whose every call takes as long as the test holds it: it returns
 /// only when the test sends it a release.
@@ -128,7 +128,7 @@ fn the_live_session_starts_a_solo_table_and_sends_its_view() {
         },
         Inbox::new(sender, || true),
     );
-    let request = beryl_scene::manual::solo_request();
+    let request = game_manual::manual::solo_request();
     assert!(
         request
             .deck
@@ -189,7 +189,7 @@ fn the_live_session_opens_a_solo_lobby_loads_a_deck_and_starts_the_table() {
     let view = opened.view.expect("a new table is in its lobby");
     assert!(!view.can_start, "a table with no deck cannot start");
 
-    let deck = beryl_scene::manual::solo_request().deck;
+    let deck = game_manual::manual::solo_request().deck;
     let loaded = lobby_after(
         &commands,
         &inbox,

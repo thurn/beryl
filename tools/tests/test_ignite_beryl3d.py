@@ -350,18 +350,18 @@ KEYS: list[tuple[str, str]] = [("allowed", "p0"), ("differs", "p0")]
 
 def test_format_results_blame_the_package_that_holds_the_file() -> None:
     root = paths.REPO / "rust" / "beryl3d" / "crates"
-    output = f"Diff in {root}/beryl_scene/src/lib.rs:12:\n-a\n+b\n"
+    output = f"Diff in {root}/app_client/src/lib.rs:12:\n-a\n+b\n"
     dirs = {
-        "beryl_scene": "rust/beryl3d/crates/beryl_scene",
+        "app_client": "rust/beryl3d/crates/app_client",
         "beryl_inspect": "rust/beryl3d/crates/beryl_inspect",
     }
-    results = adapter.format_results(1, output, dirs, ["beryl_scene", "beryl_inspect"])
+    results = adapter.format_results(1, output, dirs, ["app_client", "beryl_inspect"])
     assert results == [
         Result(
-            "b3d-format:beryl_scene",
+            "b3d-format:app_client",
             "fail",
-            "not formatted (run `just fmt`):\nrust/beryl3d/crates/beryl_scene/src/lib.rs",
-            "rust/beryl3d/crates/beryl_scene/src/lib.rs:12",
+            "not formatted (run `just fmt`):\nrust/beryl3d/crates/app_client/src/lib.rs",
+            "rust/beryl3d/crates/app_client/src/lib.rs:12",
         ),
         Result("b3d-format:beryl_inspect", "pass"),
     ]

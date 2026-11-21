@@ -4,12 +4,12 @@
 
 use std::collections::BTreeMap;
 
+use app_client::driver::TimelineStep;
 use beryl_inspect::{pages, recordings};
 use beryl_protocol::Seat;
 use beryl_protocol::protocol::Side;
-use beryl_scene::agent::Layout;
-use beryl_scene::driver::TimelineStep;
-use beryl_scene::input::Size;
+use kit_probe::agent::Layout;
+use kit_ui::input::Size;
 
 fn parity() -> serde_json::Value {
     let text = beryl_test_files::read_to_string("data/beryl3d/parity.json")

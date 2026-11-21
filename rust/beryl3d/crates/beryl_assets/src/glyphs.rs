@@ -11,11 +11,11 @@ use std::collections::BTreeSet;
 use std::sync::mpsc::{self, Receiver, Sender, SyncSender};
 use std::thread::{self, JoinHandle};
 
-use beryl_scene::input::{AssetReady, GlyphCell, GlyphKey, IconCell};
-use beryl_scene::text::fonts::ALL;
-use beryl_scene::text::glyph_key;
-use beryl_scene::tokens::type_style;
-use beryl_scene::widgets::icon_shadows;
+use kit_base::tokens::type_style;
+use kit_text::text::fonts::ALL;
+use kit_text::text::glyph_key;
+use kit_ui::input::{AssetReady, GlyphCell, GlyphKey, IconCell};
+use kit_ui::widgets::icon_shadows;
 use swash::FontRef;
 use swash::scale::{Render, ScaleContext, Source};
 use swash::zeno::Format;
@@ -38,7 +38,7 @@ const LAST_PAGE: u16 = ATLAS_PAGES - 1;
 const DEMAND_PAGES: u16 = 3;
 
 /// The keys of the printable ASCII characters, space to tilde, of every type style in
-/// `beryl_scene::tokens` at `scale` physical pixels per point, for a host to hand to
+/// `kit_base::tokens` at `scale` physical pixels per point, for a host to hand to
 /// [`GlyphWorker::prepare`] before its first frame. A character a font lacks is left out.
 #[must_use]
 pub fn prepare_latin(scale: f32) -> Vec<GlyphKey> {
@@ -133,7 +133,7 @@ impl GlyphWorker {
         }
     }
 
-    /// Asks for every icon of `beryl_scene::widgets::icons` rasterized at `scale` physical
+    /// Asks for every icon of `kit_ui::widgets::icons` rasterized at `scale` physical
     /// pixels per point, which a host does before its first frame and again whenever the
     /// display's scale changes. The cells come in an `AssetReady::Icons` that replaces the
     /// client's cells of the old scale, which it draws scaled until then. Asking for the scale

@@ -13,11 +13,12 @@ use beryl_assets::{MatchFaces, faces_built_on_this_thread};
 use beryl_host::{Headless, Scans};
 use beryl_inspect::pages;
 use beryl_protocol::protocol::Side;
-use beryl_scene::agent::{Layout, hit, uncovered};
-use beryl_scene::frame::{StateBits, box_shadow_reach};
-use beryl_scene::input::Size;
-use beryl_scene::tokens::shadow;
 use game_probe::driver::Moment;
+use kit_base::tokens::shadow;
+use kit_frame::frame::{StateBits, box_shadow_reach};
+use kit_probe::agent::Layout;
+use kit_scene::hit::{self, uncovered};
+use kit_ui::input::Size;
 
 const WINDOW: Size = Size {
     width: 1600.0,
@@ -128,7 +129,7 @@ fn cards_show_the_scans_in_the_cache_prepared_on_other_threads() {
     // Written as a PNG, which the decoder reads whatever the file is called.
     let scan = scratch.0.join("scan.png");
     beryl_render::write_rgba_png(&scan, &pixels, width, height).expect("a scan");
-    let faces = MatchFaces::new(page.faces());
+    let faces = MatchFaces::new(page.faces().faces());
     assert!(faces.faces.len() > 1, "the recording lists its faces");
     for face in &faces.faces {
         let file = scans.art.join(&face.scan[1..]);
@@ -341,5 +342,9 @@ fn a_picture_at_scale_2_draws_what_its_clips_hold() {
     );
 }
 
+#[path = "pictures/downlevel.rs"]
+mod downlevel;
+#[path = "pictures/enhanced_boards.rs"]
+mod enhanced_boards;
 #[path = "pictures/light.rs"]
 mod light;

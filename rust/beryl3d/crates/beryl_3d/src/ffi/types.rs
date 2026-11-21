@@ -5,11 +5,11 @@
 
 use std::ffi::{CString, c_char, c_void};
 
-use beryl_scene::command::{Haptic, Request};
-use beryl_scene::input::{
+use app_client::command::{Haptic, Request};
+use glam::Vec2;
+use kit_ui::input::{
     Button, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase,
 };
-use glam::Vec2;
 
 /// What `beryl3d_new` starts.
 #[repr(C)]
@@ -320,9 +320,9 @@ mod tests {
     use std::ffi::CStr;
     use std::path::PathBuf;
 
-    use beryl_scene::frame::ElementId;
-    use beryl_scene::input::Rect;
-    use beryl_scene::settings::Settings;
+    use app_client::settings::Settings;
+    use kit_frame::frame::ElementId;
+    use kit_ui::input::Rect;
 
     use super::*;
 

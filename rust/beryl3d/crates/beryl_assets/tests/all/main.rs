@@ -2,8 +2,6 @@
 //! to be a binary of its own, and every one of them linked the crate and its dependencies again
 //! after each edit.
 
-mod faces;
-mod frame;
 mod glyph_coverage;
 mod glyphs;
 mod icons;

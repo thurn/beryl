@@ -13,16 +13,16 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
+use app_client::Input;
+use app_client::settings::{Graphics, Settings};
+use app_client::{Client, Config};
 use beryl_host::{Chosen, Opening};
 use beryl_protocol::GameUpdate;
 use beryl_protocol::protocol::SessionId;
 use beryl_render::{Renderer, Target};
-use beryl_scene::Input;
-use beryl_scene::data::space::enhanced::probe as data;
-use beryl_scene::input::{Insets, Size, Tier};
-use beryl_scene::settings::{Graphics, Settings};
-use beryl_scene::{Client, Config};
 use game_probe::probe as board;
+use kit_base::data::space::enhanced::probe as data;
+use kit_ui::input::{Insets, Size, Tier};
 use serde::{Deserialize, Serialize};
 
 /// How many permanents the measured board holds: the `stress-255` gate's board.

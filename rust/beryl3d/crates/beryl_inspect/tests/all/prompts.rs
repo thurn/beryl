@@ -7,11 +7,11 @@ use beryl_inspect::pages::{self, Recorded};
 use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::protocol::{Side, Status};
 
+use app_client::driver::{Duration, Moment, Page, Recording};
 use beryl_protocol::script::{Mark, Subject};
-use beryl_scene::agent::Layout;
-use beryl_scene::driver::{Duration, Moment, Page, Recording};
-use beryl_scene::input::Size;
-use beryl_scene::light::{MarkSpan, Span};
+use game_play::light::{MarkSpan, Span};
+use kit_probe::agent::Layout;
+use kit_ui::input::Size;
 
 /// Long enough for the marks a prompt begins to have come up, or those it ends to have gone.
 const SETTLE_MS: u64 = 500;

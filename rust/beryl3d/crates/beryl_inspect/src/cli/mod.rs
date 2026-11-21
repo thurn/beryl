@@ -17,7 +17,7 @@ mod view;
 
 use std::fmt::Write;
 
-use beryl_scene::driver::{Moment, Page};
+use app_client::driver::{Moment, Page};
 
 pub use options::{Options, Spec, Tier, Usage};
 pub use view::position_line;
@@ -427,7 +427,7 @@ pub fn time_of(page: &mut Page, options: &Options, moment: &Moment) -> Result<u6
 /// uncovered element.
 pub fn seek_and_act(page: &mut Page, options: &Options, moment: &Moment) -> Result<(), Usage> {
     let time = time_of(page, options, moment)?;
-    page.seek(&Moment::At(beryl_scene::driver::Duration(time)))
+    page.seek(&Moment::At(app_client::driver::Duration(time)))
         .map_err(|error| Usage(error.to_string()))?;
     act(page, options)
 }

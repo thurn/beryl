@@ -9,6 +9,11 @@ publish = false
 workspace = true
 
 [dependencies]
+beryl_protocol.workspace = true
+glam.workspace = true
+# Reads recorded replies and encodes requests to match them, without a hand-written reader.
+serde = "1.0.229"
+serde_json.workspace = true
 kit_base.workspace = true
 kit_text.workspace = true
 kit_frame.workspace = true
@@ -24,3 +29,9 @@ game_manual.workspace = true
 game_probe.workspace = true
 app_screens.workspace = true
 scaffold_web.workspace = true
+
+[dev-dependencies]
+# The incremental compilation test prepares an already recorded view.
+game_play = { workspace = true, features = ["driver"] }
+# Supplies face records for tests without linking the engine or cards.
+beryl_card_records = { path = "../../../crates/beryl_card_records" }

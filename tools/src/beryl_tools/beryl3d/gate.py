@@ -51,7 +51,7 @@ def read_budgets() -> Budgets:
     return json.loads(BUDGETS.read_text())
 
 
-# The client core's work counters (`beryl_scene::frame::Work`).
+# The client core's work counters (`kit_frame::frame::Work`).
 COUNTERS: tuple[str, ...] = (
     "elements",
     "segments",
@@ -61,7 +61,7 @@ COUNTERS: tuple[str, ...] = (
     "placed",
     "steps",
 )
-# The draw list's load (`beryl_scene::frame::Load`) held to a budget.
+# The draw list's load (`kit_frame::frame::Load`) held to a budget.
 LOAD = ("draw_calls", "upload_bytes", "blended_area")
 
 

@@ -25,9 +25,9 @@ mod paint;
 
 use std::cell::{Cell, RefCell};
 
-use beryl_scene::faces::{Plate, PrintedText};
-use beryl_scene::input::FaceSize;
-use beryl_scene::text::fonts::Font;
+use kit_base::faces::{Plate, PrintedText};
+use kit_text::text::fonts::Font;
+use kit_ui::input::FaceSize;
 use tiny_skia::{Pixmap, Point, Shader};
 
 pub use back::card_back;

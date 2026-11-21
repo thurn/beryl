@@ -1,7 +1,7 @@
 //! The frames `rank` picks for the instruction-count gate, and a playback's shape.
 
 use beryl_inspect::gate::{Phase, REST_FRAMES, play, rank};
-use beryl_scene::frame::{Frame, Role};
+use kit_frame::frame::{Frame, Role};
 
 #[test]
 fn rank_picks_the_frames_with_the_most_work() {

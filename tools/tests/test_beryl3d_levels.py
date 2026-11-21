@@ -8,7 +8,6 @@ from pathlib import Path
 import pytest
 from beryl_tools.beryl3d import purity
 
-SCENE = "rust/beryl3d/crates/beryl_scene/src"
 KIT = "rust/beryl3d/crates/kit_base"
 GAME = "rust/beryl3d/crates/game_table"
 APP = "rust/beryl3d/crates/app_client"
@@ -34,57 +33,31 @@ def root(tmp_path: Path) -> Path:
                 },
                 "cap_lines": 5,
                 "cap_allowances": {},
-                "modules": {
-                    "pose": "kit_base",
-                    "table": "game_table",
-                    "table/overlay.rs": "app_client",
-                },
-                "upward": {},
                 "protocol": {"kit_base": 0},
             }
         ),
     )
     for crate in (KIT, GAME, APP):
         write(tmp_path, f"{crate}/Cargo.toml", "")
-    write(tmp_path, f"{SCENE}/table/mod.rs", "mod overlay;\n")
-    write(tmp_path, f"{SCENE}/table/overlay.rs", "pub struct Overlay;\n")
     return tmp_path
 
 
-def test_references_to_a_higher_module_fail(root: Path) -> None:
-    write(root, f"{SCENE}/pose.rs", "type Overlay = crate::table::overlay::Overlay;\n")
-    count, reference = purity.levels(root)
-    assert "upward.pose measured 1, above 0" in count
-    assert reference.startswith(f"{SCENE}/pose.rs:1: crate::table::overlay::Overlay")
-    assert reference.endswith("from kit_base to app_client")
-
-
-def test_grouped_crate_paths_include_each_leaf_and_resolve_root_reexports(
-    root: Path,
-) -> None:
-    write(root, f"{SCENE}/lib.rs", "pub use table::overlay::Overlay as Screen;\n")
-    write(
-        root,
-        f"{SCENE}/pose.rs",
-        "use crate::{\n    Screen,\n    table::{self, overlay::{Overlay as Alias, *}},\n};\n",
-    )
-    count, *references = purity.levels(root)
-    assert "upward.pose measured 4, above 0" in count
-    assert [line.split(": ", 1)[1] for line in references] == [
-        "crate::Screen points upward from kit_base to app_client",
-        "crate::table points upward from kit_base to game_table",
-        "crate::table::overlay::Overlay points upward from kit_base to app_client",
-        "crate::table::overlay::* points upward from kit_base to app_client",
-    ]
+@pytest.mark.parametrize("name", ("beryl_assets", "beryl_render"))
+def test_drawing_crates_can_only_use_toolkit_members(root: Path, name: str) -> None:
+    manifest = f"rust/beryl3d/crates/{name}/Cargo.toml"
+    write(root, manifest, '[dependencies]\nkit_base = { path = "../kit_base" }\n')
+    assert purity.levels(root) == []
+    write(root, manifest, '[dependencies]\napp_client = { path = "../app_client" }\n')
+    assert purity.levels(root) == [f"{manifest}: {name} depends upward on app_client"]
 
 
 def test_comments_and_literals_do_not_create_references(root: Path) -> None:
     write(
         root,
-        f"{SCENE}/pose.rs",
-        "// use crate::table;\n/* /* nested */ use crate::table; */\n"
-        'const TEXT: &str = r#"crate::table::overlay"#;\n'
-        'const WARNING: &str = "crate::table::overlay"; // beryl_protocol\n',
+        f"{KIT}/src/pose.rs",
+        "// use beryl_protocol;\n/* /* nested */ use beryl_protocol; */\n"
+        'const TEXT: &str = r#"beryl_protocol"#;\n'
+        'const WARNING: &str = "beryl_protocol"; // beryl_protocol\n',
     )
     assert purity.levels(root) == []
 
@@ -174,37 +147,17 @@ def test_only_app_client_can_use_the_web_scaffold(root: Path) -> None:
     assert found == f"{GAME}/Cargo.toml: game_table depends upward on scaffold_web"
 
 
-def test_update_only_lowers_recorded_counts(root: Path) -> None:
-    path = root / purity.LEVELS_FILE
-    config = json.loads(path.read_text())
-    config["upward"] = {"pose": 1}
-    path.write_text(json.dumps(config))
-    (found,) = purity.levels(root)
-    assert "upward.pose measured 0, below 1; run `just b3d levels --update`" in found
-    assert purity.levels(root, update=True) == []
-    assert json.loads(path.read_text())["upward"] == {}
-    write(root, f"{SCENE}/pose.rs", "use crate::table;\n")
-    assert purity.levels(root, update=True)
-    assert json.loads(path.read_text())["upward"] == {}
-
-
-def test_protocol_lines_keep_their_allowance_when_a_module_moves(root: Path) -> None:
+def test_update_only_lowers_recorded_protocol_counts(root: Path) -> None:
     path = root / purity.LEVELS_FILE
     config = json.loads(path.read_text())
     config["protocol"]["kit_base"] = 1
     path.write_text(json.dumps(config))
-    source = "use beryl_protocol::types as beryl_protocol;\n"
-    write(root, f"{SCENE}/pose.rs", source)
-    assert purity.levels(root) == []
-    (root / f"{SCENE}/pose.rs").unlink()
-    write(root, f"{KIT}/src/pose.rs", source)
-    write(
-        root, f"{KIT}/Cargo.toml", '[dependencies]\nberyl_protocol = { path = "x" }\n'
-    )
+    write(root, f"{KIT}/src/pose.rs", "use beryl_protocol::types as beryl_protocol;\n")
     assert purity.levels(root) == []
     (root / f"{KIT}/src/pose.rs").unlink()
+    assert purity.levels(root, update=True) == []
+    assert json.loads(path.read_text())["protocol"] == {"kit_base": 0}
+    write(root, f"{KIT}/src/pose.rs", "use beryl_protocol::types;\n")
     (found,) = purity.levels(root, update=True)
-    assert (
-        found == f"{KIT}/Cargo.toml: toolkit crate kit_base depends on beryl_protocol"
-    )
+    assert "protocol.kit_base measured 1, above 0" in found
     assert json.loads(path.read_text())["protocol"] == {"kit_base": 0}

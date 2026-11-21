@@ -9,21 +9,13 @@ publish = false
 [lints]
 workspace = true
 
-[features]
-# `decklist_faces`, which lists a match's faces from its decklists through the card records of
-# `beryl_card_records`, and so embeds the card store. A recording's pages carry their own face
-# lists, so `b3d-render` leaves it off (docs/beryl-3d.md, "Edit-to-output time").
-decklists = ["dep:beryl_card_records"]
-
 [dependencies]
+kit_frame.workspace = true
+kit_ui.workspace = true
 kit_base.workspace = true
 kit_text.workspace = true
-beryl_scene = { path = "../beryl_scene" }
 # The scan cache and Scryfall's download queue, shared with the Tauri app.
 beryl_art = { path = "../../../crates/beryl_art" }
-# Each card's printing, faces and tokens, from which a decklist's faces are listed. It links no
-# engine or cards.
-beryl_card_records = { path = "../../../crates/beryl_card_records", optional = true }
 # Compresses faces to ASTC, ETC2 and BC7 with their mipmaps, in place of hand-written texture
 # encoders. Default features off: they add encoders that link prebuilt ISPC kernels, which do not
 # exist for iOS or Android (docs/beryl-3d.md, "Card faces").
@@ -42,8 +34,5 @@ swash = "=0.2.10"
 tiny-skia = { version = "=0.11.4", default-features = false, features = ["std", "simd"] }
 
 [dev-dependencies]
-kit_frame.workspace = true
 # Opens repository files and records each read, so Ignite reruns the tests when one changes.
 beryl_test_files = { path = "../../../crates/beryl_test_files" }
-# The crate itself with `decklists`, whose faces the tests prepare.
-beryl_assets = { path = ".", features = ["decklists"] }

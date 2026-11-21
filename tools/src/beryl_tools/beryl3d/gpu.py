@@ -173,7 +173,7 @@ def fragments_script(names: list[str]) -> str:
 set -e
 {source.take_in_script()}cd {source.SOURCE}/rust/beryl3d
 export CARGO_TARGET_DIR="{VM_TARGET}" BERYL_CACHE="$HOME/{source.VM_CACHE}"
-{vm.JOBS_SCRIPT}cargo build --locked -q -p beryl_render --example fragments
+{vm.JOBS_SCRIPT}cargo build --locked -q -p beryl_pictures --example fragments
 {runs}""")
 
 

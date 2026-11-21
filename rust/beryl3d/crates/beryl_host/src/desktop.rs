@@ -9,13 +9,13 @@ use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::{Duration, Instant};
 
+use app_client::Client;
+use app_client::Input;
+use app_client::command::Request;
 use beryl_assets::light;
 use beryl_render::{Presented, Renderer, Surface};
-use beryl_scene::Client;
-use beryl_scene::Input;
-use beryl_scene::command::Request;
-use beryl_scene::frame::Frame;
-use beryl_scene::input::Lifecycle;
+use kit_frame::frame::Frame;
+use kit_ui::input::Lifecycle;
 use winit::application::ApplicationHandler;
 use winit::dpi::{LogicalPosition, LogicalSize};
 use winit::event::{ElementState, KeyEvent, WindowEvent};

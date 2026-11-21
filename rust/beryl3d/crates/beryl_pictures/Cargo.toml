@@ -10,22 +10,27 @@ publish = false
 workspace = true
 
 # `just b3d png` and `film`. This crate links no engine, cards or search (no `beryl_session`), so
-# that after an edit to `beryl_scene` the program relinks and starts as fast as `b3d` does
+# that after an edit to the client the program relinks and starts as fast as `b3d` does
 # (docs/beryl-3d.md, "Edit-to-output time").
 [[bin]]
 name = "b3d-render"
 path = "src/main.rs"
 
 [dependencies]
+kit_scene.workspace = true
+game_table.workspace = true
+kit_frame.workspace = true
+kit_probe.workspace = true
+kit_text.workspace = true
+kit_ui.workspace = true
 # Writes a picture as a PNG.
 beryl_render = { path = "../beryl_render" }
 # `Headless`, which plays a recording through the test driver and draws its frames offscreen.
 beryl_host = { path = "../beryl_host", features = ["headless"] }
 # The recordings pack and the option parser the text commands use.
 beryl_inspect = { path = "../beryl_inspect" }
-beryl_scene = { path = "../beryl_scene" }
 game_probe.workspace = true
-# The point `pixels` asks Beryl 3D's hit test about, a type `beryl_scene` takes.
+# The point `pixels` asks Beryl 3D's hit test about, a type the client takes.
 glam = "0.34.3"
 # Reads a `just b3d match` snapshot's element records and pairs (`pixels`) and `sample`'s job
 # file, which `beryl_inspect` writes with the same crate, in place of a parser of our own.
@@ -35,5 +40,7 @@ serde_json = "1.0.154"
 beryl_assets = { path = "../beryl_assets" }
 
 [dev-dependencies]
+app_client.workspace = true
+kit_base.workspace = true
 # The seat a recording is seen from.
 beryl_protocol = { path = "../../../crates/beryl_protocol" }

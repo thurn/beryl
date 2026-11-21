@@ -8,8 +8,8 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 
-use beryl_scene::screens::Music;
-use beryl_scene::sound::NAMES;
+use app_screens::screens::Music;
+use game_play::sound::NAMES;
 use rodio::buffer::SamplesBuffer;
 use rodio::{Decoder, Source};
 use serde_json::Value;

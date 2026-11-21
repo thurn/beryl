@@ -15,11 +15,11 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex};
 
+use app_client::Client;
+use app_client::Input;
 use beryl_host::{Drive, Inbox};
 use beryl_render::Picture;
-use beryl_scene::Client;
-use beryl_scene::Input;
-use beryl_scene::agent::{TreeOptions, tree};
+use kit_probe::agent::{TreeOptions, tree};
 
 /// What a request is answered with: the text after `ok`, or the reason for `error`.
 type Answer = Result<String, String>;

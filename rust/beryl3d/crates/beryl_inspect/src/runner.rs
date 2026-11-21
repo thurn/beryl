@@ -13,11 +13,11 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 
+use app_client::driver::{Mode, Page};
 use beryl_protocol::Seat;
 use beryl_protocol::protocol::Side;
-use beryl_scene::agent::{Count, Fault, Judged, Layout, Rule};
-use beryl_scene::driver::{Mode, Page};
-use beryl_scene::input::Size;
+use kit_probe::agent::{Count, Fault, Judged, Layout, Rule};
+use kit_ui::input::Size;
 
 use crate::cli::options::side_of;
 use crate::pages::{self, Windows};
@@ -466,7 +466,7 @@ mod tests {
 
     use super::{Side, Test, grant_file_in, read_grant, run_until, spread_by};
     use crate::pages::DESKTOP_WINDOWS;
-    use beryl_scene::driver::Mode;
+    use app_client::driver::Mode;
 
     /// Under Ignite a command reads its grant from the file `IGNITE_CORES_FILE` names, which
     /// wins over the token pool's file when both are set.

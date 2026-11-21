@@ -3793,7 +3793,7 @@ call. Three runs gave identical counts.
   laid out again as it starts (any `hold` or `alone` timing) is still compiled
   whole as it starts.
 
-**Time per frame, natively**, by beryl_render's `frame_times` example in a
+**Time per frame, natively**, by `beryl_pictures`'s `frame_times` example in a
 release build, paced at 60 frames a second, five runs. Each figure is the median
 of the five runs, with the worst of the five in brackets. `client` is the
 `handle` calls and `Client::frame`; `encode` is `Renderer::render`, which writes

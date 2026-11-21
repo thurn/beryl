@@ -2,13 +2,13 @@
 //! program runs them: every output can be pasted into the next command, and a wrong command
 //! line exits with status 2 and names what would work.
 
+use app_client::driver::Moment;
 use beryl_inspect::cli::line::Line;
 use beryl_inspect::cli::{Ran, main};
 use beryl_inspect::pages;
 use beryl_protocol::protocol::Side;
-use beryl_scene::agent::Layout;
-use beryl_scene::driver::Moment;
-use beryl_scene::input::Size;
+use kit_probe::agent::Layout;
+use kit_ui::input::Size;
 use serde_json::Value;
 
 const RECORDING: &str = "verbs-zones";

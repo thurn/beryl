@@ -24,8 +24,8 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 
 use beryl_art::{ArtCache, ArtError, Fetch};
-use beryl_scene::faces::FaceList;
-use beryl_scene::input::{AssetReady, FaceId, FaceSize};
+use kit_base::faces::ListedFace;
+use kit_ui::input::{AssetReady, FaceId, FaceSize};
 
 use crate::cache::{self, CacheKey};
 use crate::encode::{ENCODER_VERSION, Format, Layer, decode, encode};
@@ -209,7 +209,11 @@ impl Preparer {
     /// each face arrives on the returned channel as it is ready, in layer `FaceId.0` of the
     /// board-size array, under the `FaceId` the client knows it by. Jobs of an earlier match
     /// still queued are dropped, and the full-size layers are emptied.
-    pub fn prepare_match(&mut self, list: &FaceList, supported: &[Format]) -> Receiver<Prepared> {
+    pub fn prepare_match(
+        &mut self,
+        list: &[ListedFace],
+        supported: &[Format],
+    ) -> Receiver<Prepared> {
         let format = Format::choose(supported);
         if format == Format::Rgba8 {
             eprintln!(

@@ -6,13 +6,13 @@
 //! the order tray before anything moves. Pointing at a face-down card shows its face only to a
 //! viewer who knows it.
 
+use app_client::driver::Page;
 use beryl_inspect::pages;
 use beryl_protocol::protocol::{Side, ZoneName};
-use beryl_scene::agent::Layout;
-use beryl_scene::driver::Page;
-use beryl_scene::frame::{Place, Resolved, Role, StateBits};
-use beryl_scene::input::Size;
 use glam::Vec2;
+use kit_frame::frame::{Place, Resolved, Role, StateBits};
+use kit_probe::agent::Layout;
+use kit_ui::input::Size;
 
 /// A sweep from the empty table above your Serra Angel to below your Pacifism, which touches
 /// those two permanents and no land.

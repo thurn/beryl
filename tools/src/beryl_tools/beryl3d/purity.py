@@ -7,15 +7,12 @@ import json
 import re
 import sys
 import tomllib
-from collections.abc import Iterator
 from pathlib import Path
 from typing import NamedTuple, TypedDict, cast
 
 from .. import paths
 
-SCENE = "beryl_scene"
 SCENE_CRATES: set[str] = {
-    SCENE,
     "kit_base",
     "kit_text",
     "kit_frame",
@@ -29,6 +26,9 @@ SCENE_CRATES: set[str] = {
     "game_hud",
     "game_manual",
     "game_probe",
+    "app_screens",
+    "app_client",
+    "scaffold_web",
 }
 RENDER = "beryl_render"
 INSPECT = "beryl_inspect"
@@ -57,7 +57,7 @@ ATOMIC: re.Pattern[str] = re.compile(r"(?<![\w:])Atomic[A-Z]\w*")
 # A path into `std`, or a braced group of them: `std::time`, `std::{fs, collections::X}`.
 STD_PATH: re.Pattern[str] = re.compile(r"\bstd\s*::\s*(\{|[a-z_]+)")
 # Dependencies used by the scene or toolkit must preserve frame determinism.
-SCENE_DEPENDENCIES: set[str] = (SCENE_CRATES - {SCENE}) | {
+SCENE_DEPENDENCIES: set[str] = SCENE_CRATES | {
     "arrayvec",
     "self_cell",
     "smallbox",  # Inline storage for action messages.
@@ -313,7 +313,7 @@ TOKEN_FOLDERS: tuple[tuple[str, str], ...] = (
     ("game_hud", "screens"),
     ("game_manual", "manual"),
     ("game_manual", "screens"),
-    (SCENE, "screens"),
+    ("app_screens", "screens"),
 )
 TOKEN_FILE = "data/design-tokens.json"
 # The float literals that are not sizes: zero, one, a half to centre and two to halve or double.
@@ -382,8 +382,6 @@ class Levels(TypedDict):
     crates: dict[str, CrateLevel]
     cap_lines: int
     cap_allowances: dict[str, CapAllowance]
-    modules: dict[str, str]
-    upward: dict[str, int]
     protocol: dict[str, int]
 
 
@@ -421,96 +419,15 @@ def rust_tokens(source: str) -> list[RustToken]:
     return tokens
 
 
-class RustPath(NamedTuple):
-    parts: tuple[str, ...]
-    offset: int
-    alias: str | None
-
-
-def path_tree(tokens: list[RustToken], start: int) -> tuple[list[RustPath], int]:
-    """Read paths through a nested use tree or through the path part of an expression."""
-    parts: list[str] = []
-    index = start
-    while index < len(tokens):
-        word = tokens[index].text
-        if word == "{":
-            paths: list[RustPath] = []
-            index += 1
-            while index < len(tokens) and tokens[index].text != "}":
-                children, index = path_tree(tokens, index)
-                paths.extend(
-                    RustPath(
-                        (
-                            tuple(parts)
-                            if child.parts == ("self",)
-                            else tuple([*parts, *child.parts])
-                        ),
-                        child.offset,
-                        child.alias,
-                    )
-                    for child in children
-                )
-                if index >= len(tokens) or tokens[index].text != ",":
-                    break
-                index += 1
-            return paths, index + 1
-        if word != "*" and not RUST_IDENTIFIER.fullmatch(word):
-            break
-        parts.append(word.removeprefix("r#"))
-        index += 1
-        if index == len(tokens) or tokens[index].text != "::":
-            break
-        index += 1
-    if not parts:
-        return [], index
-    alias = None
-    if index + 1 < len(tokens) and tokens[index].text == "as":
-        alias = tokens[index + 1].text.removeprefix("r#")
-        index += 2
-    return [RustPath(tuple(parts), tokens[start].offset, alias)], index
-
-
-def crate_paths(tokens: list[RustToken]) -> Iterator[RustPath]:
-    for index in range(len(tokens) - 1):
-        if tokens[index].text == "crate" and tokens[index + 1].text == "::":
-            paths, _ = path_tree(tokens, index + 2)
-            yield from (path for path in paths if path.parts)
-
-
-def root_reexports(path: Path) -> dict[str, tuple[str, ...]]:
-    """Resolve root re-exports such as `crate::Client` to their module in beryl_scene."""
-    if not path.is_file():
-        return {}
-    tokens = rust_tokens(path.read_text())
-    exports: dict[str, tuple[str, ...]] = {}
-    for index in range(len(tokens) - 1):
-        if tokens[index].text != "pub" or tokens[index + 1].text != "use":
-            continue
-        paths, _ = path_tree(tokens, index + 2)
-        for parts, _, alias in paths:
-            if parts and parts[-1] != "*":
-                exports[alias or parts[-1]] = (
-                    parts[1:] if parts[0] == "crate" else parts
-                )
-    return exports
-
-
-def module_key(relative: Path, modules: dict[str, str]) -> str | None:
-    """Find the most specific file or directory prefix in the division map."""
-    for prefix in (relative, relative.with_suffix(""), *relative.parents):
-        key = prefix.as_posix()
-        if key in modules:
-            return key
-    return None
-
-
 def upwards(config: Levels, source: str, target: str) -> bool:
     """Apply the dependency order and the dedicated consumer of the web scaffold."""
+    order = config["crates"]
+    if source in {"beryl_assets", "beryl_render"} and target in order:
+        return order[target]["level"] != "toolkit"
     if target == "scaffold_web":
         return source != "app_client"
     if source == "scaffold_web" and target == "app_client":
         return True
-    order = config["crates"]
     return (
         source in order
         and target in order
@@ -528,59 +445,6 @@ def named_lines(tokens: list[RustToken], starts: list[int]) -> set[int]:
 
 def line_starts(source: str) -> list[int]:
     return [0, *(match.end() for match in re.finditer("\n", source))]
-
-
-def legacy_imports(
-    root: Path, config: Levels, protocol: dict[str, int], found: list[str]
-) -> dict[str, list[str]]:
-    """Measure the upward imports left in beryl_scene and its assigned protocol lines."""
-    src = crates(root) / SCENE / "src"
-    modules = config.get("modules", {})
-    assignments: dict[Path, str] = {}
-    targets: dict[tuple[str, ...], str] = {}
-    for path in sorted(src.rglob("*.rs")):
-        relative = path.relative_to(src)
-        if relative == Path("lib.rs"):
-            continue
-        key = module_key(relative, modules)
-        if key is None:
-            found.append(
-                f"{path.relative_to(root)}: assign this module in {LEVELS_FILE}"
-            )
-            continue
-        assignments[path] = key
-        parts = (
-            relative.parent.parts
-            if path.name == "mod.rs"
-            else relative.with_suffix("").parts
-        )
-        targets[parts] = modules[key]
-    exports = root_reexports(src / "lib.rs")
-
-    upward: dict[str, list[str]] = {}
-    for path, key in assignments.items():
-        importer = modules[key]
-        source = path.read_text()
-        starts = line_starts(source)
-        tokens = rust_tokens(source)
-        if importer in protocol:
-            protocol[importer] += len(named_lines(tokens, starts))
-        for parts, offset, _ in crate_paths(tokens):
-            resolved = (
-                tuple([*exports[parts[0]], *parts[1:]])
-                if parts[0] in exports
-                else parts
-            )
-            for end in range(len(resolved), 0, -1):
-                if (target := targets.get(resolved[:end])) is not None:
-                    if upwards(config, importer, target):
-                        number = bisect.bisect_right(starts, offset)
-                        upward.setdefault(key, []).append(
-                            f"{path.relative_to(root)}:{number}: "
-                            f"crate::{'::'.join(parts)} points upward from {importer} to {target}"
-                        )
-                    break
-    return upward
 
 
 def dependency_names(
@@ -703,10 +567,7 @@ def compare_levels(
             )
         elif count < limit:
             if update:
-                if section == "upward" and count == 0:
-                    del limits[key]
-                else:
-                    limits[key] = count
+                limits[key] = count
             else:
                 found.append(
                     f"{LEVELS_FILE}: {section}.{key} measured {count}, below {limit}; "
@@ -726,13 +587,8 @@ def levels(root: Path, *, update: bool = False, verbose: bool = False) -> list[s
         for name, entry in config["crates"].items()
         if entry["level"] == "toolkit"
     }
-    upward = legacy_imports(root, config, protocol, found)
     crate_levels(root, config, protocol, found, update)
-    counts = {key: len(lines) for key, lines in upward.items()}
     if verbose:
-        for lines in upward.values():
-            print("\n".join(lines))
-        print(f"{sum(counts.values())} upward imports")
         print("Protocol lines by toolkit crate")
         for name, count in protocol.items():
             print(f"  {name}  {count}")
@@ -740,13 +596,7 @@ def levels(root: Path, *, update: bool = False, verbose: bool = False) -> list[s
             print(
                 f"Cap allowance for {name}: {allowance.get('lines')} lines. {allowance.get('reason', '')}"
             )
-    limits = config.get("upward", {})
-    found.extend(compare_levels("upward", counts, limits, update))
     found.extend(compare_levels("protocol", protocol, config["protocol"], update))
-    if not verbose:
-        for key, lines in upward.items():
-            if counts[key] > limits.get(key, 0):
-                found.extend(lines)
     after = json.dumps(config, indent=2) + "\n"
     if update and after != before:
         path.write_text(after)
@@ -756,7 +606,7 @@ def levels(root: Path, *, update: bool = False, verbose: bool = False) -> list[s
 
 
 def levels_step(*args: str) -> int:
-    """Print the division's imports and source counts, optionally lowering the recorded counts."""
+    """Print the dependency order violations and source counts, optionally lowering the recorded counts."""
     return report("levels", levels(paths.REPO, update="--update" in args, verbose=True))
 
 

@@ -6,19 +6,20 @@
 
 use std::str::FromStr;
 
+use app_client::Input;
+use app_client::command::SessionCommand;
+use app_client::driver::{Duration, Moment, Page};
+use app_client::{Client, Config};
 use beryl_inspect::pages::{page, recording};
 use beryl_protocol::DecisionId;
 use beryl_protocol::protocol::{ObjectView, RefusalView, Side, Status};
-use beryl_scene::Input;
-use beryl_scene::agent::Layout;
-use beryl_scene::command::SessionCommand;
-use beryl_scene::driver::{Duration, Moment, Page};
-use beryl_scene::frame::{Frame, Role, Wake};
-use beryl_scene::input::{
+use game_play::sound;
+use glam::Vec2;
+use kit_frame::frame::{Frame, Role, Wake};
+use kit_probe::agent::Layout;
+use kit_ui::input::{
     Button, Insets, Key, KeyCode, KeyPhase, Modifiers, Pointer, PointerKind, PointerPhase, Size,
 };
-use beryl_scene::{Client, Config, sound};
-use glam::Vec2;
 
 const SIZE: Size = Size {
     width: 1600.0,
@@ -99,7 +100,7 @@ impl Table {
 
     /// The mouse moved to `at`, pressed and released there, with frames after each, and the
     /// sounds those frames began.
-    fn click(&mut self, at: Vec2) -> Vec<beryl_scene::frame::Sound> {
+    fn click(&mut self, at: Vec2) -> Vec<kit_frame::frame::Sound> {
         let mut sounds = Vec::new();
         for phase in [PointerPhase::Move, PointerPhase::Down, PointerPhase::Up] {
             self.client.handle(Input::Pointer(Pointer {

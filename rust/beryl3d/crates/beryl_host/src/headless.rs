@@ -28,11 +28,11 @@ use beryl_assets::{Config, FULL_LAYERS, Format, Full, Prepared, Preparer, defaul
 use beryl_render::{Limits, Renderer, Target};
 
 use crate::assets::Scans;
-use beryl_scene::driver::{DriverError, Page};
-use beryl_scene::faces::FaceList;
-use beryl_scene::frame::Frame;
-use beryl_scene::input::{AssetReady, FaceSize};
+use app_client::driver::{DriverError, Page};
 use game_probe::driver::Moment;
+use game_table::faces::FaceList;
+use kit_frame::frame::Frame;
+use kit_ui::input::{AssetReady, FaceSize};
 
 /// An address where nothing listens, so that a scan the cache lacks fails to download at once.
 const NOWHERE: Origins<'static> = Origins {
@@ -244,7 +244,7 @@ fn load_faces(
         wake: Arc::new(|| {}),
         start: crate::threads::asset_thread,
     });
-    let results = preparer.prepare_match(list, &[format]);
+    let results = preparer.prepare_match(list.faces(), &[format]);
     // Each face is sent once at board size, unless its encoder failed, which the wait gives up
     // on.
     for _ in 0..list.faces().len() {

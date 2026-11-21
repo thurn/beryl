@@ -14,7 +14,7 @@ from ... import paths as repo_paths
 from .. import paths as beryl3d_paths
 
 HERE: Path = Path(__file__).resolve().parent
-BUNDLED: Path = beryl3d_paths.WORKSPACE / "crates" / "beryl_scene" / "fonts"
+BUNDLED: Path = beryl3d_paths.WORKSPACE / "crates" / "kit_base" / "fonts"
 FONTSOURCE: Path = repo_paths.UI / "node_modules" / "@fontsource-variable"
 # Each bundled font and the web's WOFF2 file of the same face: fontsource's Latin subset of its
 # variable weight axis, which the web interface's text uses.

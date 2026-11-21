@@ -1,16 +1,16 @@
 //! Sound: every file the manifest lists decodes, the looping tracks are cut at loops.json's
 //! exact lengths, and an audio thread with no output starts and drops what it is sent.
 
+use app_screens::screens::Music;
 use beryl_3d::audio::files::{self, Manifest};
 use beryl_3d::audio::{Audio, Output};
-use beryl_scene::frame::{Sound, SoundId};
-use beryl_scene::screens::Music;
+use kit_frame::frame::{Sound, SoundId};
 
 #[test]
 fn every_sound_effect_decodes() {
     let manifest = Manifest::read().unwrap();
     let effects = files::decode_effects(&manifest).unwrap();
-    assert_eq!(effects.len(), beryl_scene::sound::NAMES.len());
+    assert_eq!(effects.len(), game_play::sound::NAMES.len());
     for (clips, cue) in effects.iter().zip(&manifest.sounds) {
         assert_eq!(clips.len(), cue.variants);
         assert!(clips.iter().all(|clip| clip.frames > 0));

@@ -8,9 +8,9 @@ use beryl_assets::glyphs::{
 };
 use beryl_assets::packer::{ATLAS_PAGES, PAGE_SIZE};
 use beryl_assets::{Prepared, Upload};
-use beryl_scene::input::{AssetReady, GlyphCell, GlyphKey};
-use beryl_scene::text::fonts::Font;
-use beryl_scene::widgets::icon_shadows;
+use kit_text::text::fonts::Font;
+use kit_ui::input::{AssetReady, GlyphCell, GlyphKey};
+use kit_ui::widgets::icon_shadows;
 use swash::FontRef;
 
 /// Only catches a hung worker; a page normally arrives in milliseconds.
@@ -129,10 +129,10 @@ fn latin_glyphs_cover_every_type_style() {
     let printable = usize::from(b'~' - b' ') + 1;
     assert_eq!(
         keys.len(),
-        beryl_scene::tokens::type_style::ALL.len() * printable,
+        kit_base::tokens::type_style::ALL.len() * printable,
         "each bundled text font has all of ASCII, at every type style's size"
     );
-    let title = beryl_scene::tokens::type_style::TITLE;
+    let title = kit_base::tokens::type_style::TITLE;
     assert!(keys.iter().any(
         |key| key.font == title.font.face(title.weight, title.italic)
             && key.weight == title.weight

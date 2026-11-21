@@ -1,5 +1,5 @@
 //! `--fixture`: a recording from the recordings pack replayed in place of a game, on the same
-//! clock as the test driver's (`beryl_scene::driver`). The first views are given at the first
+//! clock as the test driver's (`app_client::driver`). The first views are given at the first
 //! frame, each later view 400 milliseconds after the table comes to rest in the view before
 //! it, and a command is answered from the recording's responses. Nothing here calls the
 //! session, so the frame thread can do it all: it is a lookup in memory.
@@ -14,18 +14,18 @@
 
 use std::path::Path;
 
-use beryl_scene::Client;
-use beryl_scene::command::{Reply, SessionCommand};
-use beryl_scene::driver::{Recording, Responses};
-use beryl_scene::frame::Wake;
+use app_client::Client;
+use app_client::command::{Reply, SessionCommand};
+use app_client::driver::{Recording, Responses};
 use beryl_session::GameUpdate;
 use beryl_session::card_records::CardRecords;
 use beryl_session::ipc::FixtureMessage;
 use game_probe::driver::{REPLY_DELAY, plays_on};
+use kit_frame::frame::Wake;
 #[cfg(feature = "tools")]
 use {
-    beryl_inspect::pages, beryl_scene::agent::Layout, beryl_scene::input::Size,
-    beryl_session::protocol::Side, game_probe::driver::Moment,
+    beryl_inspect::pages, beryl_session::protocol::Side, game_probe::driver::Moment,
+    kit_probe::agent::Layout, kit_ui::input::Size,
 };
 
 /// A moment of a replayed recording, which a bug report saved at it records in its `ui.json`.

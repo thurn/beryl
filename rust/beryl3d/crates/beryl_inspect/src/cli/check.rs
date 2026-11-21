@@ -3,8 +3,8 @@
 use std::fmt::Write;
 use std::time::Instant;
 
-use beryl_scene::agent::{Context, Fault};
-use beryl_scene::driver::Mode;
+use app_client::driver::Mode;
+use kit_probe::agent::{Context, Fault};
 use serde_json::{Value, json};
 
 use super::options::{Options, Usage};

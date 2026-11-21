@@ -12,7 +12,6 @@ members = [
     "crates/beryl_pictures",
     "crates/beryl_record",
     "crates/beryl_render",
-    "crates/beryl_scene",
     "crates/kit_base",
     "crates/kit_text",
     "crates/kit_frame",
@@ -136,7 +135,7 @@ opt-level = 3
 # (`just b3d test`) took about 270 CPU-seconds; at opt-level 2 it takes about 110. The rebuild
 # after a one-line edit to `beryl_scene` stays about 2 s. Optimizing the session crates as well
 # saved nothing more.
-[profile.dev.package.beryl_scene]
+[profile.dev.package.app_client]
 opt-level = 2
 [profile.dev.package.beryl_inspect]
 opt-level = 2
@@ -156,7 +155,7 @@ opt-level = 1
 # After an engine revision, reused incremental codegen units in the main workspace's path
 # dependencies left missing `_anon.*.llvm.*` symbols at the native link. Compile each changed
 # dependency in full; Cargo still reuses unchanged crates. `test` inherits this override.
-# Native members such as `beryl_scene` keep incremental compilation for quick edits.
+# The app client keeps incremental compilation for quick edits.
 # Registry crates already build without it, so the wildcard needs no maintained package list.
 incremental = false
 # The crates between the card crates and `record` keep incremental compilation all the same.

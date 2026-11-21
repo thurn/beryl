@@ -1,5 +1,5 @@
 //! The flat layer's icons (docs/beryl-3d.md, "The frame": the `Icon` material). Each icon of
-//! `beryl_scene::widgets::icons` is kept here as the web interface's own SVG path data, copied
+//! `kit_ui::widgets::icons` is kept here as the web interface's own SVG path data, copied
 //! exactly, with the viewbox, fills and strokes its stylesheet gives it. The glyph worker
 //! rasterizes every icon with `tiny_skia` into a single-channel atlas cell at the display's
 //! scale, at the size the web draws it, and sends the cells as an `AssetReady::Icons`
@@ -12,14 +12,14 @@
 
 use std::cell::Cell;
 
-use beryl_scene::element::Shadow;
-use beryl_scene::input::IconCell;
-use beryl_scene::widgets::icons::{
+use kit_ui::element::Shadow;
+use kit_ui::input::IconCell;
+use kit_ui::widgets::icons::{
     BUG, BUTTON_SIDE, CLOSE, FULL_CONTROL, FULL_CONTROL_SIDE, GEAR, LOCK, LOCK_SIDE, LOG, MENU,
     MINUS, PASS_ON, PHASE_SIDE, PHASES, PLUS, SPEAKER, SPEAKER_OFF, STEPS, STEPS_OUTLINED, UNDO,
     WHOLE,
 };
-use beryl_scene::widgets::{IconId, icon_shadows};
+use kit_ui::widgets::{IconId, icon_shadows};
 use tiny_skia::{FillRule, LineCap, LineJoin, Paint, Pixmap, Stroke, Transform};
 
 use crate::blur;
@@ -528,7 +528,7 @@ pub const ALL: [Artwork; 43] = [
     button(MENU, &[stroked("M5 7h14M5 12h14M5 17h14", 2.0)]),
     // The lock of a permanent that doesn't untap, `MARK_ICONS.lock` in components/Card.tsx:
     // filled even-odd, so the shackle's hole is left empty. It is drawn on the card's face
-    // (`beryl_scene::table::badges`), not in the flat layer.
+    // (`kit_base::geometry::badges`), not in the flat layer.
     Artwork {
         icon: LOCK,
         size: LOCK_SIDE,
@@ -739,7 +739,7 @@ pub(crate) fn artwork(icon: IconId) -> Option<&'static Artwork> {
 
 #[cfg(test)]
 mod tests {
-    use beryl_scene::widgets::icons::{ORB, atlas_size};
+    use kit_ui::widgets::icons::{ORB, atlas_size};
 
     use super::ALL;
     use crate::svg;

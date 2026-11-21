@@ -3,10 +3,10 @@
 
 use std::fmt::Write;
 
-use beryl_scene::agent::tree::locator_of;
-use beryl_scene::driver::{Duration, Moment, Name, Offset, Page, StepMoment};
-use beryl_scene::frame::Role;
+use app_client::driver::{Duration, Moment, Name, Offset, Page, StepMoment};
 use game_probe::agent::steps::card_of;
+use kit_frame::frame::Role;
+use kit_probe::agent::tree::locator_of;
 use serde_json::{Value, json};
 
 use super::options::{self, Options, Usage, quote, seat_word, side_of};

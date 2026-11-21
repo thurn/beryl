@@ -9,14 +9,15 @@
 //! every flat-layer panel is drawn, so that a scrim or other panel drawn over a button, which
 //! makes it look disabled, fails the check too.
 
+use app_client::driver::{Moment, Page};
 use beryl_inspect::pages;
 use beryl_protocol::protocol::Side;
-use beryl_scene::agent::{Layout, hit};
-use beryl_scene::art::orb::Shape;
-use beryl_scene::driver::{Moment, Page};
-use beryl_scene::frame::{Draw, Frame, Material, RADIAL, Role};
-use beryl_scene::input::{AssetReady, GlyphCell, Rect, Size};
 use glam::{Vec2, Vec3};
+use kit_frame::frame::{Draw, Frame, Material, RADIAL, Role};
+use kit_probe::agent::Layout;
+use kit_scene::hit;
+use kit_ui::input::{AssetReady, GlyphCell, Rect, Size};
+use kit_ui::orb::Shape;
 
 const WINDOW: Size = Size {
     width: 1600.0,
@@ -410,16 +411,16 @@ fn the_life_orbs_are_drawn_in_the_webs_core_bezel_and_ring() {
     );
     // The orbs are drawn from `art::orb`'s layers, each an icon cell, not as panels, so the
     // colours and widths are read from the layers the cells are rasterized from.
-    let layers = &beryl_scene::art::orb::LAYERS;
+    let layers = &kit_ui::orb::LAYERS;
     let filled_core = layers
         .iter()
         .find(|layer| layer.shape == Shape::Core && layer.paint.stroke.is_none())
         .expect("a layer fills the core");
     assert_eq!(filled_core.color, core, "the core's fill");
     assert!(
-        (beryl_scene::art::orb::BEZEL - bezel).abs() < 0.01,
+        (kit_ui::orb::BEZEL - bezel).abs() < 0.01,
         "the bezel is {} points wide, not the web's {bezel}",
-        beryl_scene::art::orb::BEZEL
+        kit_ui::orb::BEZEL
     );
     assert!(
         layers.iter().any(|layer| {

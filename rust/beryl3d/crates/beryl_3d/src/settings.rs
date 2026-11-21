@@ -7,9 +7,9 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Sender};
 
-use beryl_scene::manual::bindings::Bindings;
-use beryl_scene::settings::{Graphics, Settings};
+use app_client::settings::{Graphics, Settings};
 use beryl_session::protocol::StopsSetting;
+use game_manual::manual::bindings::Bindings;
 use serde::{Deserialize, Serialize};
 
 /// The file's name in the data folder.

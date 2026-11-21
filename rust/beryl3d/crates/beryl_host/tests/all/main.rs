@@ -8,3 +8,5 @@ mod frames;
 mod phone;
 mod threads;
 mod tier;
+
+mod asset_cards;

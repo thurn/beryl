@@ -3,12 +3,12 @@
 use std::collections::BTreeMap;
 use std::fmt::Write;
 
-use beryl_scene::agent::fault::rect_text;
-use beryl_scene::agent::hit::bounds;
-use beryl_scene::agent::tree::{line as tree_line, place_word};
-use beryl_scene::agent::{TreeOptions, tree as tree_text};
-use beryl_scene::driver::{Duration, Moment, Name, Offset, Page};
-use beryl_scene::frame::{Frame, Role};
+use app_client::driver::{Duration, Moment, Name, Offset, Page};
+use kit_frame::frame::{Frame, Role};
+use kit_probe::agent::fault::rect_text;
+use kit_probe::agent::tree::{line as tree_line, place_word};
+use kit_probe::agent::{TreeOptions, tree as tree_text};
+use kit_scene::hit::bounds;
 use serde_json::{Value, json};
 
 use super::line::{Element, Line};

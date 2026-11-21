@@ -5,11 +5,11 @@
 
 use beryl_assets::{Format, Layer, MatchFace, Prepared, Source, Upload, dimensions, encode, frame};
 use beryl_render::{BACK_LAYER, Limits, Renderer, Target};
-use beryl_scene::faces::PrintedText;
-use beryl_scene::frame::{Band, Draw, Frame, FrameBuilder, Wake};
-use beryl_scene::input::{AssetReady, FaceId, FaceSize, Tier};
 use glam::camera::rh::{proj::directx, view::look_at_mat4};
 use glam::{Affine3A, Vec3};
+use kit_base::faces::PrintedText;
+use kit_frame::frame::{Band, Draw, Frame, FrameBuilder, Wake};
+use kit_ui::input::{AssetReady, FaceId, FaceSize, Tier};
 
 const BOTH: [Limits; 2] = [Limits::Default, Limits::Downlevel];
 

@@ -1,13 +1,13 @@
 //! `just b3d test` and the interface test runner behind it (docs/beryl-3d.md, "Test speed").
 
+use app_client::driver::Page;
 use beryl_inspect::cli::{Options, Ran, Spec, main};
 use beryl_inspect::faults::PATH_VARIABLE;
 use beryl_inspect::pages::{self, PHONE_SAFE_AREA, Windows};
 use beryl_inspect::runner::{self, Limits, Outcome, Test};
 use beryl_protocol::protocol::Side;
-use beryl_scene::agent::Layout;
-use beryl_scene::driver::Page;
-use beryl_scene::input::{Insets, Size};
+use kit_probe::agent::Layout;
+use kit_ui::input::{Insets, Size};
 use serde_json::Value;
 
 fn run(line: &[&str]) -> Ran {
@@ -241,7 +241,7 @@ fn outcome(recording: &str, frames: usize) -> Outcome {
         },
         faults: Vec::new(),
         frames,
-        judged: beryl_scene::agent::Judged::default(),
+        judged: kit_probe::agent::Judged::default(),
         error: None,
         seconds: 0.0,
     }

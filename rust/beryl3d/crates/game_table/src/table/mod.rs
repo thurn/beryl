@@ -9,7 +9,6 @@
 mod anchors;
 pub use anchors::spot_of;
 pub mod badges;
-mod camera;
 pub mod far_shade;
 mod hands;
 pub use hands::HandFits;
@@ -32,7 +31,8 @@ mod web_fit;
 use beryl_protocol::protocol::{Side, ZoneName};
 use glam::Vec2;
 
-pub use camera::{Camera, CameraData};
+use kit_space::camera::DESKTOP_CAMERA;
+pub use kit_space::camera::{Camera, CameraData};
 pub use look::{Dress, Look};
 pub use phone::{PhoneBands, phone_bands};
 pub use pile::{PILE_IDS, PileShown, pile_name};
@@ -59,9 +59,7 @@ use kit_frame::frame::Place;
 /// Half the line height of a life total in logical points.
 pub const HALF_LIFE: f32 = type_style::TITLE.size * type_style::TITLE.line_height / 2.0;
 
-/// Logical points per unit of life orb art on the desktop. The web's stage uses
-/// `--orb: calc(1px / 1.045)` (`.table .life-orb`, `ui/src/screens/styles/table.css`).
-pub const ORB_DESKTOP_SCALE: f32 = 1.0 / 1.045;
+pub use kit_ui::orb::DESKTOP_SCALE as ORB_DESKTOP_SCALE;
 
 pub use kit_base::geometry::{CARD_HEIGHT, CARD_WIDTH, Window};
 /// The height between two cards lying one on the other, in a pile or an overlapped row.
@@ -311,12 +309,7 @@ macro_rules! hand_data {
 /// `space.json`. The camera's pitch and field of view are solved by `just b3d camera-fit` from
 /// the cards measured in Arena's recordings, `data/beryl3d/camera-fit.json`.
 pub const DESKTOP: Layout = Layout {
-    camera: CameraData {
-        pitch_degrees: desktop::camera::PITCH_DEGREES,
-        fov_degrees: desktop::camera::FOV_DEGREES,
-        target: desktop::camera::TARGET,
-        required: desktop::camera::REQUIRED,
-    },
+    camera: DESKTOP_CAMERA,
     strip: desktop::STRIP,
     creatures: row_area!(creatures, true),
     lands: row_area!(lands, false),

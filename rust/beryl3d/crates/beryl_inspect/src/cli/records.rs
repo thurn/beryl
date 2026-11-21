@@ -24,16 +24,16 @@
 
 use beryl_protocol::protocol::Side;
 use beryl_protocol::script::Subject;
-use beryl_scene::agent::checks::{ring_outer, ring_rect};
-use beryl_scene::agent::hit::bounds;
-use beryl_scene::agent::tree::{locator_of, place_word};
-use beryl_scene::element::{Border, Extent, Filter, Gradient, Length, Shadow, Shape};
-use beryl_scene::frame::{
+use game_table::table::ABILITY_IDS;
+use kit_frame::frame::{
     EffectLook, ElementLook, Frame, LookPaint, LookShadow, Place, REVEALED_FACE, Resolved, Ring,
     Ringed, Role,
 };
-use beryl_scene::input::Size;
-use beryl_scene::table::ABILITY_IDS;
+use kit_probe::agent::checks::{ring_outer, ring_rect};
+use kit_probe::agent::tree::{locator_of, place_word};
+use kit_scene::hit::bounds;
+use kit_ui::element::{Border, Extent, Filter, Gradient, Length, Shadow, Shape};
+use kit_ui::input::Size;
 use serde_json::{Map, Value, json};
 
 /// Rounds `value` to hundredths, as the web side rounds its boxes.
@@ -383,7 +383,7 @@ fn mark_record(frame: &Frame, ring: &Ring, size: Size, z: usize) -> Value {
             .iter()
             .position(|element| element.id == id && element.place != Place::Layer),
         Ringed::Player(player) => {
-            let name = beryl_scene::hud::players::orb_name(player);
+            let name = game_hud::hud::players::orb_name(player);
             (frame.resolved.iter()).position(|element| {
                 element.place == Place::Layer && frame.name(element.name) == name
             })

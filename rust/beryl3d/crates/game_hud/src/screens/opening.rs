@@ -48,7 +48,7 @@ use kit_ui::widgets::screen::backdrop;
 use kit_ui::widgets::{button, primary};
 
 /// The name of the element that holds the whole opening, its backdrop and its group, which
-/// "every step shown" looks for (`agent::steps::sample`).
+/// "every step shown" looks for (`game_probe::agent::steps::sample`).
 pub const SCREEN_NAME: &str = "opening screen";
 
 /// The starting hand size ([CR 103.5]): "Each player draws a number of cards equal to their

@@ -4,18 +4,18 @@
 
 use std::str::FromStr;
 
+use app_client::Input;
+use app_client::command::SessionCommand;
+use app_client::driver::{Mode, Moment, Page};
+use app_client::{Client, Config};
 use beryl_inspect::pages::{page, recording};
 use beryl_protocol::prompt::{Click, ClickRequest};
 use beryl_protocol::protocol::{ObjectId, Side, Status};
 use beryl_protocol::script::Subject;
-use beryl_scene::Input;
-use beryl_scene::agent::Layout;
-use beryl_scene::agent::fault::Rule;
-use beryl_scene::command::SessionCommand;
-use beryl_scene::driver::{Mode, Moment, Page};
-use beryl_scene::frame::{Role, Wake};
-use beryl_scene::input::{Button, Insets, Modifiers, Pointer, PointerKind, PointerPhase, Size};
-use beryl_scene::{Client, Config};
+use kit_frame::frame::{Role, Wake};
+use kit_probe::agent::Layout;
+use kit_probe::agent::fault::Rule;
+use kit_ui::input::{Button, Insets, Modifiers, Pointer, PointerKind, PointerPhase, Size};
 
 const SIZE: Size = Size {
     width: 1600.0,

@@ -1,4 +1,4 @@
-//! The layers of the life orbs' art (`beryl_scene::art::orb`) drawn into coverage, one atlas
+//! The layers of the life orbs' art (`kit_ui::orb`) drawn into coverage, one atlas
 //! cell for each layer of each seat's orb at each scale the orb is drawn at. The glyph worker
 //! draws them with the icons (`GlyphWorker::icons`), and the flat layer tints each cell with its
 //! layer's color.
@@ -8,8 +8,8 @@
 //! Into it go the layer's outlines, filled and stroked with `tiny_skia`, then its fade
 //! (`Ramp`), multiplied into the coverage, then its blur.
 
-use beryl_scene::art::orb::{self, Layer, Ramp};
-use beryl_scene::input::IconCell;
+use kit_ui::input::IconCell;
+use kit_ui::orb::{self, Layer, Ramp};
 use tiny_skia::{FillRule, LineCap, LineJoin, Paint, PathBuilder, Pixmap, Stroke, Transform};
 
 use crate::glyphs::Bitmap;
@@ -17,7 +17,7 @@ use crate::glyphs::Bitmap;
 /// One cell of the art: a layer of one seat's orb at one scale.
 #[derive(Clone, Copy, Debug)]
 pub struct Cell {
-    /// Whose orb, by index in `orb::SIDES`: the viewer's first.
+    /// Whose orb, by index in `orb::ORIENTATIONS`: the viewer's first.
     pub seat: usize,
     /// The layer's index in `orb::LAYERS`.
     pub at: usize,
@@ -59,7 +59,7 @@ impl Cell {
 /// Every cell of the art: each layer of each seat's orb at each scale.
 pub fn cells() -> impl Iterator<Item = Cell> {
     orb::SCALES.into_iter().flat_map(|units| {
-        (0..orb::SIDES.len())
+        (0..orb::ORIENTATIONS.len())
             .flat_map(move |seat| (0..orb::LAYERS.len()).map(move |at| Cell { seat, at, units }))
     })
 }
@@ -81,7 +81,7 @@ pub(crate) fn rasterize(cell: Cell, scale: f32) -> Bitmap {
         (layer.drop - top) * down,
     );
     let mut builder = PathBuilder::new();
-    for (points, closed) in orb::outlines(layer.shape, orb::SIDES[cell.seat]) {
+    for (points, closed) in orb::outlines(layer.shape, orb::ORIENTATIONS[cell.seat]) {
         let mut points = points.into_iter();
         let Some(first) = points.next() else {
             continue;
@@ -134,7 +134,7 @@ fn fade(coverage: &mut [u8], cell: Cell, (width, height): (u16, u16)) {
     let alpha: Box<dyn Fn(f32, f32) -> f32> = match layer.ramp {
         Ramp::None => return,
         Ramp::Down([rise, whole, keep, gone]) => {
-            let core_top = orb::core_top(orb::SIDES[cell.seat]);
+            let core_top = orb::core_top(orb::ORIENTATIONS[cell.seat]);
             let height = 2.0 * orb::CORE_RY;
             Box::new(move |_, y| {
                 let at = (y - core_top) / height;
@@ -233,7 +233,7 @@ fn box_blur(
 #[must_use]
 pub(crate) fn icon_cell(cell: Cell, rect: [u16; 4]) -> IconCell {
     IconCell {
-        icon: orb::icon(orb::SIDES[cell.seat], cell.at),
+        icon: orb::icon(orb::ORIENTATIONS[cell.seat], cell.at),
         size: cell.width(),
         rect,
         shadow: 0,
@@ -258,8 +258,8 @@ mod tests {
                 "{cell:?} has no ink"
             );
             let banded = matches!(
-                beryl_scene::art::orb::LAYERS[cell.at].ramp,
-                beryl_scene::art::orb::Ramp::Down(_)
+                kit_ui::orb::LAYERS[cell.at].ramp,
+                kit_ui::orb::Ramp::Down(_)
             );
             let edge = (0..height).flat_map(|y| [at(0, y), at(width - 1, y)]);
             let edge: Vec<u8> = if banded {

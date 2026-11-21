@@ -9,15 +9,15 @@ use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::Instant;
 
+use app_client::Client;
+use app_client::Input;
+use app_client::command::Request;
 use beryl_assets::light;
 #[cfg(feature = "headless")]
 use beryl_render::Target;
 use beryl_render::{Native, Presented, Renderer, Surface};
-use beryl_scene::Client;
-use beryl_scene::Input;
-use beryl_scene::command::Request;
-use beryl_scene::frame::{Frame, Wake};
-use beryl_scene::input::{Insets, Key, Lifecycle, Pointer, Size, TextChange};
+use kit_frame::frame::{Frame, Wake};
+use kit_ui::input::{Insets, Key, Lifecycle, Pointer, Size, TextChange};
 
 use crate::assets::{Faces, Glyphs, Scans};
 use crate::frames::{Chosen, Draw, Feed, FrameLoop, Opened, Shown, Ticks, When};

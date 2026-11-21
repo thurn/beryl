@@ -3,15 +3,15 @@
 //! that finds nothing stops the script with the line that named it, and each load thread is in
 //! the class it was given.
 
+use app_client::Input;
+use app_client::{Client, Config};
 use beryl_3d::fixture::Fixture;
 use beryl_3d::load;
 use beryl_host::{Class, Draw, Drive, Feed, FrameLoop, Shown, Ticked, Ticks};
-use beryl_scene::Input;
-use beryl_scene::agent::{TreeOptions, tree};
-use beryl_scene::frame::{Frame, Wake};
-use beryl_scene::input::{Insets, Size};
-use beryl_scene::{Client, Config};
 use beryl_session::protocol::Side;
+use kit_frame::frame::{Frame, Wake};
+use kit_probe::agent::{TreeOptions, tree};
+use kit_ui::input::{Insets, Size};
 
 /// A 60 Hz display's interval, in nanoseconds.
 const INTERVAL: u64 = 16_666_667;

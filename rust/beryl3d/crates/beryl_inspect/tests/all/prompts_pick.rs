@@ -5,14 +5,14 @@
 
 use std::str::FromStr;
 
+use app_client::driver::{Duration, Moment, Page};
 use beryl_inspect::pages::page;
 use beryl_protocol::protocol::{Side, ZoneName};
-use beryl_scene::agent::Layout;
-use beryl_scene::driver::{Duration, Moment, Page};
-use beryl_scene::frame::{Role, StateBits};
-use beryl_scene::input::Size;
-use beryl_scene::light::arrows::AIM_ID;
+use game_play::light::arrows::AIM_ID;
 use glam::Vec2;
+use kit_frame::frame::{Role, StateBits};
+use kit_probe::agent::Layout;
+use kit_ui::input::Size;
 
 const SIZE: Size = Size {
     width: 1600.0,

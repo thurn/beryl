@@ -20,15 +20,14 @@ use std::path::PathBuf;
 use std::sync::mpsc::{Sender, channel};
 use std::thread::JoinHandle;
 
+use app_client::Input;
+use app_client::command::{Reply, SessionCommand};
 use beryl_host::{Class, Inbox};
 use beryl_protocol::AgentView;
 use beryl_protocol::ipc::{
     Platform, TableHostRequest, TableHostSettings, TableJoinRequest, TableLink, TableLobbyRequest,
     TableResumeRequest,
 };
-use beryl_scene::Input;
-use beryl_scene::command::{Reply, SessionCommand};
-use beryl_scene::manual::tokens;
 use beryl_session::ai::AgentMove;
 use beryl_session::card_records::{CardRecords, CardRecordsRequest, card_records};
 use beryl_session::{Seat, Sessions, StartGame, StopsSetting};
@@ -36,6 +35,7 @@ use beryl_shell::Dirs;
 use beryl_table_session::TableEvent;
 use beryl_table_session::connections::TableConnections;
 use beryl_table_session::decks::{self, Decks};
+use game_manual::manual::tokens;
 
 use crate::bugs::Job;
 

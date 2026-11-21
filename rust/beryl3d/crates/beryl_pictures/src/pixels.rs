@@ -39,8 +39,8 @@ use std::path::Path;
 
 use beryl_inspect::cli::{self, Options, Usage};
 use beryl_render::{Picture, read_rgba_png, write_rgba_png};
-use beryl_scene::agent::hit::hit;
 use glam::Vec2;
+use kit_scene::hit::hit;
 use serde_json::{Value, json};
 
 use crate::Error;
@@ -310,14 +310,14 @@ pub(crate) fn pixels(options: &Options) -> Result<String, Error> {
 /// elements can be answerable.
 fn keep_only(
     options: &Options,
-    frame: &beryl_scene::frame::Frame,
+    frame: &kit_frame::frame::Frame,
     web_records: &mut [Record],
     b3d_records: &mut [Record],
 ) -> Result<(), Error> {
     let Some(locator) = options.value("--only") else {
         return Ok(());
     };
-    let root = beryl_scene::agent::locate(frame, locator)
+    let root = kit_probe::agent::locate(frame, locator)
         .map_err(|error| Usage(format!("--only: {error}")))?;
     only_inside(b3d_records, root as usize);
     let web_root = (options.value("--web-only"))

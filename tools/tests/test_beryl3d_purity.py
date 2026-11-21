@@ -11,7 +11,6 @@ from beryl_tools.beryl3d import purity
 
 CRATES = "rust/beryl3d/crates"
 SCENE_CRATES = (
-    "beryl_scene",
     "kit_base",
     "kit_text",
     "kit_frame",
@@ -25,6 +24,9 @@ SCENE_CRATES = (
     "game_hud",
     "game_manual",
     "game_probe",
+    "app_screens",
+    "app_client",
+    "scaffold_web",
 )
 LINTS = '[workspace.lints.rust]\nwarnings = "deny"\n'
 
@@ -54,7 +56,7 @@ def test_only_the_renderer_calls_wgpu(tmp_path: Path) -> None:
 
 def test_the_inspector_has_no_gpu_dependency(tmp_path: Path) -> None:
     manifest = f"{CRATES}/beryl_inspect/Cargo.toml"
-    write(tmp_path, manifest, '[dependencies]\nberyl_scene = { path = "x" }\n')
+    write(tmp_path, manifest, '[dependencies]\napp_client = { path = "x" }\n')
     assert purity.scene_purity(tmp_path) == []
     write(tmp_path, manifest, '[dependencies]\nwgpu = "30.0.2"\n')
     (found,) = purity.scene_purity(tmp_path)
@@ -104,7 +106,7 @@ def test_only_the_recorder_file_names_the_recorder(tmp_path: Path) -> None:
 
 
 def test_the_scene_names_no_clock_however_it_is_imported(tmp_path: Path) -> None:
-    scene = f"{CRATES}/beryl_scene/src/lib.rs"
+    scene = f"{CRATES}/app_client/src/lib.rs"
     write(
         tmp_path,
         scene,
@@ -112,10 +114,10 @@ def test_the_scene_names_no_clock_however_it_is_imported(tmp_path: Path) -> None
         "    time::Duration,\n};\n",
     )
     (found,) = purity.scene_purity(tmp_path)
-    assert found.startswith(f"{scene}:4: beryl_scene names std::time")
+    assert found.startswith(f"{scene}:4: app_client names std::time")
     write(tmp_path, scene, "use std::collections::*;\ntype Seen = HashSet<u32>;\n")
     (found,) = purity.scene_purity(tmp_path)
-    assert found.startswith(f"{scene}:2: beryl_scene names HashSet")
+    assert found.startswith(f"{scene}:2: app_client names HashSet")
     write(tmp_path, scene, "static COUNT: AtomicU32 = AtomicU32::new(0);\n")
     (found,) = purity.scene_purity(tmp_path)
     assert "names AtomicU32" in found
@@ -145,7 +147,7 @@ def test_only_the_app_and_the_recorder_depend_on_the_engine(tmp_path: Path) -> N
 @pytest.mark.parametrize(
     "source",
     (
-        "beryl_scene/src/screens/start.rs",
+        "app_screens/src/screens/start.rs",
         "kit_ui/src/widgets/button.rs",
         "game_play/src/hud/counts.rs",
         "game_hud/src/prompts/bar.rs",

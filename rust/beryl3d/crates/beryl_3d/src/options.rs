@@ -4,8 +4,8 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
+use app_client::settings::Graphics;
 use beryl_host::Class;
-use beryl_scene::settings::Graphics;
 
 use crate::tier::Verdict;
 

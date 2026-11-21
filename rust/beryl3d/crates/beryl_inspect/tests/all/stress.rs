@@ -92,10 +92,10 @@ fn the_board_is_mixed() {
 
 #[test]
 fn verbs_play_in_one_beat_with_live_timings() {
+    use app_client::driver::Mode;
     use beryl_protocol::protocol::Why;
     use beryl_protocol::script::{Act, Verb, time_script};
-    use beryl_scene::agent::Rule;
-    use beryl_scene::driver::Mode;
+    use kit_probe::agent::Rule;
     let board = stress("stress-verbs").unwrap();
     let [before, after] = board.views.as_slice() else {
         panic!("one beat follows the reset");
@@ -132,7 +132,7 @@ fn verbs_play_in_one_beat_with_live_timings() {
     let mut page = beryl_inspect::pages::page(
         "stress-verbs",
         beryl_protocol::protocol::Side::You,
-        beryl_scene::agent::Layout::Desktop,
+        kit_probe::agent::Layout::Desktop,
         beryl_inspect::pages::DESKTOP_WINDOWS[0],
     )
     .unwrap();
@@ -155,7 +155,7 @@ fn verbs_play_in_one_beat_with_live_timings() {
 fn the_pointer_crosses_the_hand_and_back() {
     use beryl_inspect::gate;
     use beryl_protocol::protocol::{Side, ZoneName};
-    use beryl_scene::frame::{Place, Role, StateBits};
+    use kit_frame::frame::{Place, Role, StateBits};
 
     let mut first = None;
     let mut middle = None;
@@ -204,7 +204,7 @@ fn the_pointer_crosses_the_hand_and_back() {
 #[test]
 fn fifty_arrows_hold_for_two_seconds_then_the_top_ability_resolves() {
     use beryl_inspect::gate::{self, Phase};
-    use beryl_scene::frame::Role;
+    use kit_frame::frame::Role;
 
     let mut at_rest = 0;
     let mut final_counts = (0, 0);
@@ -239,13 +239,13 @@ fn fifty_arrows_hold_for_two_seconds_then_the_top_ability_resolves() {
 /// of those must still give the same picture however many frames came before.
 #[test]
 fn a_frame_of_every_verb_is_the_same_however_many_frames_came_before() {
-    use beryl_scene::driver::{Duration, Page};
-    use beryl_scene::frame::Frame;
+    use app_client::driver::{Duration, Page};
+    use kit_frame::frame::Frame;
     let open = || -> Page {
         beryl_inspect::pages::page(
             "stress-verbs",
             beryl_protocol::protocol::Side::You,
-            beryl_scene::agent::Layout::Desktop,
+            kit_probe::agent::Layout::Desktop,
             beryl_inspect::pages::DESKTOP_WINDOWS[0],
         )
         .unwrap()

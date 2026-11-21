@@ -23,12 +23,12 @@ use std::sync::mpsc::{Sender, channel};
 use std::thread::JoinHandle;
 use std::time::Instant;
 
+use app_client::Input;
 use beryl_host::Ticked;
 use beryl_host::rate::Step;
-use beryl_scene::Input;
-use beryl_scene::frame::SoundId;
-use beryl_scene::input::{Lifecycle, Modifiers, TextChange};
-use beryl_scene::sound::NAMES;
+use game_play::sound::NAMES;
+use kit_frame::frame::SoundId;
+use kit_ui::input::{Lifecycle, Modifiers, TextChange};
 use serde::{Deserialize, Serialize};
 
 pub use crate::tier::Tiered;

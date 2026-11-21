@@ -1,8 +1,8 @@
 //! The settings file: what is written reads back the same.
 
+use app_client::settings::{Graphics, Setting, Settings};
 use beryl_3d::settings;
-use beryl_scene::manual::commands;
-use beryl_scene::settings::{Graphics, Setting, Settings};
+use game_manual::manual::commands;
 
 #[test]
 fn settings_written_read_back_equal() {

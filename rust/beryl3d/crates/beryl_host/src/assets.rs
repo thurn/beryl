@@ -22,14 +22,14 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver};
 
+use app_client::Client;
+use app_client::Input;
 use beryl_art::{ArtCache, Origins};
 use beryl_assets::glyphs::{GlyphWorker, prepare_latin};
 use beryl_assets::{Config, Format, Prepared, Preparer, default_workers};
 use beryl_render::Renderer;
-use beryl_scene::Client;
-use beryl_scene::Input;
-use beryl_scene::frame::Wake;
-use beryl_scene::input::{AssetReady, FaceSize};
+use kit_frame::frame::Wake;
+use kit_ui::input::{AssetReady, FaceSize};
 
 use crate::frames::When;
 
@@ -129,7 +129,7 @@ pub struct Faces {
     /// Calls the host's wake, so that held faces get frames to be uploaded in.
     wake: Arc<dyn Fn() + Send + Sync>,
     /// Whether the active list the arrays were made for is the gallery's, and its number
-    /// (`beryl_scene::faces::Faces::number`).
+    /// (`game_table::faces::Faces::number`).
     active: Option<(bool, u64)>,
     /// Where the workers send the faces of the active list.
     results: Option<Receiver<Prepared>>,
@@ -210,7 +210,7 @@ impl Faces {
             .map(|face| face.names.first().map_or("", String::as_str))
             .collect();
         renderer.set_faces(&names, format);
-        self.results = Some(self.preparer.prepare_match(list, &[format]));
+        self.results = Some(self.preparer.prepare_match(list.faces(), &[format]));
         if !active.0 {
             client.face_arrays_made();
         }

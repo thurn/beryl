@@ -5,11 +5,11 @@
 
 use std::str::FromStr;
 
+use app_client::driver::{Duration, Moment, Page};
 use beryl_inspect::pages::page;
 use beryl_protocol::protocol::Side;
-use beryl_scene::agent::{Fault, Layout, Rule};
-use beryl_scene::driver::{Duration, Moment, Page};
-use beryl_scene::input::{Rect, Size};
+use kit_probe::agent::{Fault, Layout, Rule};
+use kit_ui::input::{Rect, Size};
 
 const SIZE: Size = Size {
     width: 1600.0,

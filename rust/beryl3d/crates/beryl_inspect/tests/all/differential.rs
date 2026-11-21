@@ -4,11 +4,11 @@
 //! Other rules remain covered by the ordinary recording checks; a background text overlap
 //! must not make a jump planting fail its comparison.
 
+use app_client::driver::{Checked, Mode, StepMoment, TICK};
 use beryl_inspect::pages::Windows;
 use beryl_inspect::runner::{self, Test};
-use beryl_scene::agent::{Fault, Rule};
-use beryl_scene::driver::{Checked, Mode, StepMoment, TICK};
-use beryl_scene::play::record::Planted;
+use game_play::play::record::Planted;
+use kit_probe::agent::{Fault, Rule};
 
 /// How many tests the sample holds.
 const SAMPLE: usize = 200;

@@ -2,12 +2,12 @@
 //! tick however many inputs arrive, no tick is asked for while the client wants none, and a
 //! paused clock draws one frame at the pause and no other until an input arrives.
 
+use app_client::Input;
+use app_client::{Client, Config};
 use beryl_host::{Draw, FrameLoop, Shown, Sleep, Ticks};
-use beryl_scene::Input;
-use beryl_scene::frame::Frame;
-use beryl_scene::input::{Button, Modifiers, Pointer, PointerKind, PointerPhase};
-use beryl_scene::{Client, Config};
 use glam::Vec2;
+use kit_frame::frame::Frame;
+use kit_ui::input::{Button, Modifiers, Pointer, PointerKind, PointerPhase};
 
 /// Ticks that only record what the loop asked for.
 #[derive(Default)]
@@ -150,8 +150,8 @@ fn the_gap_since_the_last_frame_is_measured_only_while_the_ticks_run() {
 struct DueAt(u64);
 
 impl beryl_host::Feed for DueAt {
-    fn wake(&self) -> beryl_scene::frame::Wake {
-        beryl_scene::frame::Wake::At(self.0)
+    fn wake(&self) -> kit_frame::frame::Wake {
+        kit_frame::frame::Wake::At(self.0)
     }
 }
 
@@ -160,7 +160,7 @@ impl beryl_host::Feed for DueAt {
 /// or a replay would stop at its first still moment.
 #[test]
 fn the_loops_wake_counts_the_feed_and_the_pause() {
-    use beryl_scene::frame::Wake;
+    use kit_frame::frame::Wake;
     let mut frames = FrameLoop::new(client(), TestTicks::default())
         .with_feed(Box::new(DueAt(5 * INTERVAL)))
         .paused_at(Some(3 * INTERVAL));
@@ -197,12 +197,12 @@ impl Draw for Asker {
 fn a_tick_leaves_no_glyph_unasked() {
     let mut client = Client::new(Config::LARGEST);
     client.handle(Input::Surface {
-        size: beryl_scene::input::Size {
+        size: kit_ui::input::Size {
             width: 1600.0,
             height: 900.0,
         },
         scale: 1.0,
-        safe_area: beryl_scene::input::Insets::default(),
+        safe_area: kit_ui::input::Insets::default(),
     });
     client.handle(Input::Agents(Vec::new()));
     let mut frames = FrameLoop::new(client, TestTicks::default());

@@ -11,7 +11,7 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use beryl_scene::agent::Fault;
+use kit_probe::agent::Fault;
 
 use crate::recordings;
 use crate::runner::Outcome;

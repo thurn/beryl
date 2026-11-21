@@ -18,10 +18,10 @@ use beryl_inspect::stress::Board;
 use beryl_inspect::{pages, recordings, runner};
 use beryl_protocol::Seat;
 use beryl_protocol::protocol::Side;
-use beryl_scene::agent::Layout;
-use beryl_scene::frame::{Draw, Frame, Material, Role, Sprite, sprites};
-use beryl_scene::input::Size;
 use game_probe::driver::{Duration, Moment};
+use kit_frame::frame::{Draw, Frame, Material, Role, Sprite, sprites};
+use kit_probe::agent::Layout;
+use kit_ui::input::Size;
 
 const WINDOW: Size = Size {
     width: 1600.0,
@@ -115,7 +115,7 @@ fn lights(frame: &Frame) -> Vec<Light> {
 
 /// The recording `name` from `side` in the window, its frames `looking` so that each record
 /// names its element.
-fn page(name: &str, side: Side) -> Result<beryl_scene::driver::Page, String> {
+fn page(name: &str, side: Side) -> Result<app_client::driver::Page, String> {
     let mut page = pages::page(name, side, Layout::Desktop, WINDOW)?;
     page.set_looking(true);
     Ok(page)

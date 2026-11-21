@@ -14,7 +14,7 @@ The file has four members:
 - `root`: the other declarations of the `:root` rule, after the tokens.
 - `rules`: the stylesheet's other rules, each with its `selectors` and `declarations`.
 - `flat`: what only Beryl 3D's flat layer uses, which CSS has no property for. Only the build
-  script in `rust/beryl3d/crates/beryl_scene/build.rs` reads it.
+  script in `rust/beryl3d/crates/kit_base/build.rs` reads it.
 """
 
 from __future__ import annotations
