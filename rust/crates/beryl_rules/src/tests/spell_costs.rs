@@ -1,5 +1,5 @@
-//! Static rule changes to what a spell costs, written as data no card has yet, read through
-//! the path the cards' own take ([CR 601.2f]): "The total cost is the mana cost or
+//! Static rule changes to what a spell costs, tested directly with test-only cards
+//! ([CR 601.2f]): "The total cost is the mana cost or
 //! alternative cost (as determined in rule 601.2b), plus all additional costs and cost
 //! increases, and minus all cost reductions."
 //!

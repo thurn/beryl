@@ -1,8 +1,8 @@
 //! Counter ([CR 701.6](https://yawgatog.com/resources/magic-rules/#R7016)).
 
-use beryl_engine::{TurnStep, Zone};
+use beryl_engine::{DecisionKind, TurnStep, Zone};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
-use beryl_scenario_types::{ME, THEM, advance_to};
+use beryl_scenario_types::{ME, Resolve, THEM, advance_to, stack};
 
 use crate::{names, props};
 
@@ -117,3 +117,35 @@ pub const UNLESS_PAID: &[Scenario] = &[
             ME.has(Zone::Battlefield, props::ARTIFACT.card, 0),
         ]),
 ];
+
+pub const SELF_TARGET: &[Scenario] =
+    &[
+        Scenario::new("A counterspell is not a legal target for itself")
+            .hand(P0, &[names::COUNTERSPELL, names::ISLAND])
+            .battlefield(P0, &[names::ISLAND; 2])
+            .actions(&[ME.deciding(DecisionKind::Priority, 2)]),
+    ];
+
+pub const SAME_NAME: &[Scenario] =
+    &[
+        Scenario::new("A counterspell offers two same-named spells with different targets")
+            .interaction(&[names::LIGHTNING_BOLT])
+            .battlefield(P0, &[names::ISLAND; 2])
+            .hand(P0, &[names::COUNTERSPELL])
+            .battlefield(P1, &[names::MOUNTAIN; 2])
+            .hand(P1, &[names::LIGHTNING_BOLT; 2])
+            .at(2, P1, TurnStep::PrecombatMain)
+            .actions(&[
+                THEM.casts(names::LIGHTNING_BOLT),
+                THEM.targets_player(ME),
+                THEM.casts(names::LIGHTNING_BOLT),
+                THEM.targets_player(THEM),
+                ME.casts(names::COUNTERSPELL),
+                ME.deciding(DecisionKind::Target, 2),
+                ME.targets(names::LIGHTNING_BOLT),
+                Resolve,
+                Resolve,
+                stack(0),
+                THEM.has(Zone::Graveyard, names::LIGHTNING_BOLT, 2),
+            ]),
+    ];

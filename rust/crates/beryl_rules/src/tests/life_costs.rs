@@ -47,14 +47,6 @@ fn bloodletter_at(life: i16) -> (Game, Opt) {
     (g, activate)
 }
 
-#[test]
-fn a_life_total_below_the_payment_cannot_pay_it() {
-    let (mut g, activate) = bloodletter_at(2);
-    let d = g.current();
-    assert_eq!(d.kind, DecisionKind::Priority);
-    assert!(index_of(&d, activate).is_none(), "2 life cannot pay 3");
-}
-
 /// A life total equal to the payment pays it, and the payment is a life loss like any other:
 /// it is reported as one, and the player at 0 life loses the game when state-based actions are
 /// next checked ([CR 704.5a]): "If a player has 0 or less life, that player loses the game."

@@ -49,6 +49,16 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
         actions::counter::GRAVEYARD,
     ),
     (
+        "actions::counter",
+        names::COUNTERSPELL,
+        actions::counter::SELF_TARGET,
+    ),
+    (
+        "actions::counter",
+        names::COUNTERSPELL,
+        actions::counter::SAME_NAME,
+    ),
+    (
         "actions::explore",
         names::GET_LOST,
         actions::explore::SCENARIOS,
@@ -99,6 +109,31 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
         casting::SCENARIOS,
     ),
     ("casting", names::JACE_VRYNS_PRODIGY, casting::PERMITTED),
+    (
+        "casting",
+        crate::props::VANILLA.card,
+        casting::SORCERY_TIMING,
+    ),
+    (
+        "casting",
+        names::TEFERI_TIME_RAVELER,
+        casting::LOYALTY_TIMING,
+    ),
+    ("casting", names::GET_LOST, casting::LEGAL_TARGETS),
+    ("casting", names::THIEVING_SKYDIVER, casting::KICKER_X),
+    ("casting", names::THUNDERTRAP_TRAINER, casting::OFFSPRING),
+    (
+        "casting",
+        names::OVERLORD_OF_THE_MISTMOORS,
+        casting::IMPENDING,
+    ),
+    ("casting", names::STRIP_MINE, casting::SACRIFICED_SOURCE),
+    (
+        "casting",
+        crate::props::ARTIFACT.card,
+        casting::TRIGGER_TARGETS,
+    ),
+    ("casting", names::TENDRILS_OF_AGONY, casting::STORM),
     ("choices", names::ELITE_SPELLBINDER, choices::SCENARIOS),
     ("coins", names::MANA_CRYPT, coins::SCENARIOS),
     ("combat", props::VANILLA.card, combat::DECLARATIONS),
@@ -137,6 +172,7 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
     ("costs", names::VILLAGE_RITES, costs::SACRIFICE_TO_CAST),
     ("costs", names::SPARAS_HEADQUARTERS, costs::CYCLING),
     ("damage", names::MANA_CRYPT, damage::SCENARIOS),
+    ("damage", names::LIGHTNING_BOLT, damage::ANY_TARGET),
     (
         "delayed_triggers",
         names::TEFERI_HERO_OF_DOMINARIA,
@@ -201,8 +237,15 @@ pub static SCENARIOS: &[(&str, &str, &[Scenario])] = &[
         keywords::trample::TRAMPLER,
         keywords::trample::SCENARIOS,
     ),
+    (
+        "keywords::flashback",
+        names::SNAPCASTER_MAGE,
+        keywords::flashback::RETURN_TO_HAND,
+    ),
     ("linked", names::CURRENCY_CONVERTER, linked::SCENARIOS),
     ("mana", names::MANA_DRAIN, mana::SCENARIOS),
+    ("mana", names::MANA_CRYPT, mana::FLOATING_MANA),
+    ("mana", crate::props::VANILLA.card, mana::EQUIVALENT_SOURCES),
     (
         "replacement",
         names::CLEVER_IMPERSONATOR,

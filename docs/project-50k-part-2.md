@@ -503,8 +503,9 @@ define their own test cards and arrange boards through the kernel's test door,
 because `beryl_scenario` sits above the engine. A test that only drives
 decisions and reads the result is a scenario in disguise: it moves to
 `beryl_cards/src/library/` as a hand-written scenario on a real card, where the
-oracles also play it, and its test card is deleted. A test that calls an
-internal function directly stays where it is. Opening decisions stay in
+oracles also play it. Delete its test card when no remaining test uses it. Tests
+of engine internals stay where they are, including tests of Beryl's payment
+profiles, candidate ordering, and replay state. Opening decisions stay in
 whole-game tests because scenarios and their oracle replays start with opening
 hands already kept. The reviews of the rules keystones epic list which test
 definition each real card's scenario covers.

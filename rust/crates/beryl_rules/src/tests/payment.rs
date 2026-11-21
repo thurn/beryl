@@ -39,42 +39,6 @@ fn colored_symbols_need_units_of_their_color() {
 }
 
 #[test]
-fn plans_that_differ_only_in_which_lands_tap_are_not_a_decision() {
-    let mut g = Game::new(Profile::EXACT);
-    let bear = g.give(g.me, "Test Bear", Zone::Hand);
-    let lands = [
-        g.give(g.me, "Test Land", Zone::Battlefield),
-        g.give(g.me, "Test Land", Zone::Battlefield),
-        g.give(g.me, "Test Land", Zone::Battlefield),
-    ];
-    g.pick(cast(bear));
-    assert_eq!(
-        g.s.object(bear).zone(),
-        Zone::Stack,
-        "paid without a question"
-    );
-    assert_eq!(lands.iter().filter(|&&l| tapped(&g, l)).count(), 2);
-}
-
-#[test]
-fn plans_that_leave_different_mana_floating_are_a_decision() {
-    let mut g = Game::new(Profile::EXACT);
-    let bear = g.give(g.me, "Test Bear", Zone::Hand);
-    g.give(g.me, "Test Land", Zone::Battlefield);
-    g.give(g.me, "Test Land", Zone::Battlefield);
-    let crypt = g.give(g.me, "Test Crypt", Zone::Battlefield);
-    g.pick(cast(bear));
-    let d = g.decide();
-    assert_eq!(d.kind, DecisionKind::PaymentPlan);
-    // Two lands, leaving nothing floating; or a land and the Crypt, leaving {C}.
-    assert_eq!(d.len(), 2);
-    g.pick(Opt::Plan(1));
-    assert!(tapped(&g, crypt));
-    assert_eq!(g.s.player(g.me).mana().amounts(), [0, 0, 0, 0, 0, 1]);
-    assert_eq!(g.s.object(bear).zone(), Zone::Stack);
-}
-
-#[test]
 fn offering_payments_with_a_full_pool_does_not_wrap_remaining_mana() {
     let mut g = Game::new(Profile::EXACT);
     g.give(g.me, "Test Crypt", Zone::Battlefield);
@@ -681,26 +645,4 @@ fn a_priority_with_only_mana_to_make_passes_silently() {
     });
     assert!(!(d.player == g.me && offers_mana), "{d:?}");
     assert!(!tapped(&g, land));
-}
-
-#[test]
-fn floating_mana_empties_as_the_step_ends() {
-    let mut g = Game::new(Profile::EXACT);
-    g.s.set_profile(Profile {
-        full_control: Some(g.me),
-        ..tapping(&g)
-    });
-    let land = g.give(g.me, "Test Land", Zone::Battlefield);
-    let step = g.s.turn().step();
-    g.pick(Opt::Mana {
-        slot: land,
-        color: ManaColor::White,
-    });
-    assert_eq!(g.s.player(g.me).mana().amounts(), [1, 0, 0, 0, 0, 0]);
-    // CR 500.5: "As a step or phase ends ... any unspent mana left in a player's mana pool
-    // empties."
-    while g.s.turn().step() == step {
-        g.choose(crate::Choice(0));
-    }
-    assert_eq!(g.s.player(g.me).mana(), ManaPool::default());
 }

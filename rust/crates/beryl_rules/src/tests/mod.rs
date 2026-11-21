@@ -38,7 +38,6 @@ mod remembered_mana;
 mod replace;
 mod replay;
 mod rules;
-mod spell_copies;
 mod spell_costs;
 mod static_abilities;
 mod trackers;

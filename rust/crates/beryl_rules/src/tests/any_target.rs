@@ -12,7 +12,6 @@ use super::LAND;
 use super::cast::{BEAR, Game, cast};
 use crate::card::{Ability, CardDef, Face, Types};
 use crate::ids::Slot;
-use crate::replacement::event::{self, Reason};
 use crate::state::{Continuous, Duration, Shield, Subject, Zone};
 use crate::{CardTable, DecisionKind, Decklist, Opt, Profile};
 
@@ -58,9 +57,9 @@ const DECK: &Decklist = &[
 ];
 
 /// A game where each player has a Test Bear and a Test Land on the battlefield, and the
-/// starting player has cast a Test Bolt and is choosing its target. Returns the game, the
-/// Bolt, and the starting player's and the opponent's Bears.
-fn bolting() -> (Game, Slot, Slot, Slot) {
+/// starting player has cast a Test Bolt and is choosing its target. Returns the game and
+/// the starting player's and the opponent's Bears.
+fn bolting() -> (Game, Slot, Slot) {
     let mut g = Game::with(&CARDS, DECK, Profile::EXACT);
     let (me, them) = (g.me, g.them);
     let mine = g.give(me, "Test Bear", Zone::Battlefield);
@@ -69,12 +68,12 @@ fn bolting() -> (Game, Slot, Slot, Slot) {
     g.give(them, "Test Land", Zone::Battlefield);
     let bolt = g.give(me, "Test Bolt", Zone::Hand);
     g.pick(cast(bolt));
-    (g, bolt, mine, theirs)
+    (g, mine, theirs)
 }
 
 #[test]
 fn the_target_step_offers_every_player_and_every_creature() {
-    let (mut g, _, mine, theirs) = bolting();
+    let (mut g, mine, theirs) = bolting();
     let d = g.decide();
     assert_eq!(d.kind, DecisionKind::Target);
     let offered: Vec<Opt> = (0..d.len())
@@ -88,54 +87,6 @@ fn the_target_step_offers_every_player_and_every_creature() {
     let mut expected = vec![Opt::Object(mine), Opt::Object(theirs)];
     expected.sort_by_key(|o| format!("{o:?}"));
     assert_eq!(objects, expected);
-}
-
-#[test]
-fn damage_to_a_player_lowers_their_life() {
-    let (mut g, bolt, mine, theirs) = bolting();
-    g.pick(Opt::Player(g.them));
-    g.pass_both();
-    assert_eq!(g.s.player(g.them).life(), 17);
-    assert_eq!(g.s.player(g.me).life(), 20);
-    assert_eq!(g.s.object(bolt).zone(), Zone::Graveyard);
-    for bear in [mine, theirs] {
-        assert_eq!(g.s.object(bear).zone(), Zone::Battlefield);
-    }
-}
-
-/// Damage to a creature is marked on it, and a creature with lethal damage marked on it is
-/// destroyed the next time state-based actions are checked ([CR 704.5g]): "If a creature has
-/// toughness greater than 0, it has damage marked on it, and the total damage marked on it is
-/// greater than or equal to its toughness, that creature has been dealt lethal damage and is
-/// destroyed."
-///
-/// [CR 704.5g]: https://yawgatog.com/resources/magic-rules/#R7045g
-#[test]
-fn damage_to_a_creature_destroys_it() {
-    let (mut g, _, mine, theirs) = bolting();
-    g.pick(Opt::Object(theirs));
-    g.pass_both();
-    g.decide();
-    assert_eq!(g.s.object(theirs).zone(), Zone::Graveyard);
-    assert_eq!(g.s.object(mine).zone(), Zone::Battlefield);
-    assert_eq!(g.s.player(g.them).life(), 20);
-}
-
-/// A target that has left the battlefield is illegal, and a spell whose every target is
-/// illegal doesn't resolve ([CR 608.2b]): "If all its targets, for every instance of the word
-/// "target," are now illegal, the spell or ability doesn't resolve."
-///
-/// [CR 608.2b]: https://yawgatog.com/resources/magic-rules/#R6082b
-#[test]
-fn a_target_that_left_makes_the_spell_do_nothing() {
-    let (mut g, bolt, _, theirs) = bolting();
-    g.pick(Opt::Object(theirs));
-    let sink = &mut g.x.events;
-    event::move_one(&mut g.s, &g.t, sink, theirs, Zone::Hand, Reason::Effect).unwrap();
-    g.pass_both();
-    assert_eq!(g.s.object(bolt).zone(), Zone::Graveyard);
-    assert_eq!(g.s.player(g.them).life(), 20);
-    assert_eq!(g.s.player(g.me).life(), 20);
 }
 
 /// Damage a prevention shield prevents is not dealt ([CR 615.1]): prevention effects "apply to

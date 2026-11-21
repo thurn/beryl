@@ -1,9 +1,9 @@
 //! Mana ([CR 106](https://yawgatog.com/resources/magic-rules/#R106)).
 
 use beryl_engine::card::ManaColor;
-use beryl_engine::{TurnStep, Zone};
-use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Scenario};
-use beryl_scenario_types::{ME, THEM, advance_to};
+use beryl_engine::{DecisionKind, TurnStep, Zone};
+use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
+use beryl_scenario_types::{ME, Resolve, THEM, advance_to, stack};
 
 use crate::{names, props};
 
@@ -62,3 +62,36 @@ pub const SCENARIOS: &[Scenario] = &[
             ME.mana(ManaColor::Colorless, 3),
         ]),
 ];
+
+pub const EQUIVALENT_SOURCES: &[Scenario] =
+    &[
+        Scenario::new("Equivalent lands pay without a payment choice")
+            .hand(P0, &[props::VANILLA.card])
+            .battlefield(P0, &[names::ISLAND; 3])
+            .actions(&[
+                ME.casts(props::VANILLA.card),
+                stack(1),
+                ME.tapped(names::ISLAND, 2),
+                Resolve,
+                ME.controls(props::VANILLA.card, 1),
+            ]),
+    ];
+
+pub const FLOATING_MANA: &[Scenario] =
+    &[
+        Scenario::new("A payment that floats mana is a distinct choice")
+            .hand(P0, &[props::VANILLA.card])
+            .battlefield(P0, &[names::ISLAND, names::ISLAND, names::MANA_CRYPT])
+            .actions(&[
+                ME.casts(props::VANILLA.card),
+                ME.deciding(DecisionKind::PaymentPlan, 2),
+                // One Island pays {U}, and Mana Crypt pays {1} with {C} left over.
+                ME.answers(DecisionKind::PaymentPlan, Pick::Plan { i: 1 }),
+                stack(1),
+                ME.tapped(names::MANA_CRYPT, 1),
+                ME.tapped(names::ISLAND, 1),
+                ME.mana(ManaColor::Colorless, 1),
+                Resolve,
+                ME.controls(props::VANILLA.card, 1),
+            ]),
+    ];

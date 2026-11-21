@@ -1,9 +1,9 @@
 //! Costs ([CR 118](https://yawgatog.com/resources/magic-rules/#R118)) paid to cast a spell,
 //! activate an ability, or carry out an instruction during resolution.
 
-use beryl_engine::{DecisionKind, Zone};
+use beryl_engine::{DecisionKind, TurnStep, Zone};
 use beryl_scenario::{Action, Assertion, P0, P1, Permanent, Pick, Scenario};
-use beryl_scenario_types::{ME, Resolve};
+use beryl_scenario_types::{ME, Resolve, stack};
 
 use crate::{names, props};
 
@@ -94,11 +94,15 @@ pub const SACRIFICE_TO_CAST: &[Scenario] =
 ///
 /// [CR 702.29a]: https://yawgatog.com/resources/magic-rules/#R70229a
 pub const CYCLING: &[Scenario] = &[Scenario::new("Cycling Spara's Headquarters")
+    .at(1, P0, TurnStep::Upkeep)
     .battlefield(P0, &[names::PLAINS; 3])
     .hand(P0, &[names::SPARAS_HEADQUARTERS])
     .actions(&[
         ME.activates(names::SPARAS_HEADQUARTERS, 4),
-        ME.has(Zone::Hand, names::ISLAND, 1),
+        stack(1),
+        ME.has_cards(Zone::Hand, 0),
         ME.has(Zone::Graveyard, names::SPARAS_HEADQUARTERS, 1),
         ME.tapped(names::PLAINS, 3),
+        Resolve,
+        ME.has(Zone::Hand, names::ISLAND, 1),
     ])];

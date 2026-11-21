@@ -79,3 +79,25 @@ pub const INSTANT_RESPONSE: &[Scenario] =
                 ME.has(Zone::Graveyard, names::COUNTERSPELL, 0),
             ]),
     ];
+
+pub const RETURN_TO_HAND: &[Scenario] =
+    &[
+        Scenario::new("Returning a spell cast with flashback exiles it instead")
+            .interaction(&[names::REPRIEVE])
+            .battlefield(P0, &[names::ISLAND, names::ISLAND, names::PLAINS])
+            .hand(P0, &[names::SNAPCASTER_MAGE])
+            .graveyard(P0, &[props::SORCERY.card])
+            .battlefield(P1, &[names::PLAINS; 2])
+            .hand(P1, &[names::REPRIEVE])
+            .actions(&[
+                ME.casts(names::SNAPCASTER_MAGE),
+                Resolve,
+                Resolve,
+                ME.casts(props::SORCERY.card),
+                THEM.casts(names::REPRIEVE),
+                Resolve,
+                ME.has(Zone::Exile, props::SORCERY.card, 1),
+                ME.has(Zone::Hand, props::SORCERY.card, 0),
+                THEM.has(Zone::Graveyard, names::REPRIEVE, 1),
+            ]),
+    ];
