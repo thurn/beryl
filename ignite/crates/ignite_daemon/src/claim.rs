@@ -43,6 +43,7 @@ use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 use rusqlite::Connection;
 
 use ignite_core::admission::{self, COMPILES_FROM_CORES, Worked};
+use ignite_core::dispatch::JUSTICIAR;
 use ignite_core::ids::{Commit, Handle, MachineId, Seq, SessionId, TicketId, TreeId};
 use ignite_core::protocol::client::{Exit, Reply, Request};
 use ignite_core::protocol::hub::{ReleaseCause, TicketBrief};
@@ -410,7 +411,13 @@ impl Claims {
             Err(error) => return failure(&error, "cannot read the tip"),
         };
         let tip = base.commit.clone();
-        let compiles = self.expected_cores(ctx, detail.as_ref(), now) >= COMPILES_FROM_CORES;
+        // A justiciar may be investigating a full disk. Let the claim proceed without
+        // starting background builds. The session can request products when it needs them.
+        let justiciar = detail
+            .as_ref()
+            .is_some_and(|detail| detail.ticket.labels.iter().any(|label| label == JUSTICIAR));
+        let compiles =
+            !justiciar && self.expected_cores(ctx, detail.as_ref(), now) >= COMPILES_FROM_CORES;
         let lease_id = match &target {
             Target::Ticket { id, .. } => id.clone(),
             // The hub numbers an ad hoc ticket only when it files it, and the tree's branch needs

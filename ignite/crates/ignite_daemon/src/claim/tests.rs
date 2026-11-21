@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use ignite_core::dispatch::JUSTICIAR;
 use ignite_core::ids::Commit;
 use ignite_core::protocol::client::Exit;
 use ignite_core::protocol::hub::{DependencyNote, ReleaseCause};
@@ -106,6 +107,21 @@ fn a_lapsed_reservation_code_claims_nothing() {
     // The live code claims it.
     let reply = start(&world, &["Tq.48", "--reservation", "7f3a"], WORKER);
     assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+}
+
+#[test]
+fn a_reserved_justiciar_ticket_starts_without_prebuilding() {
+    let world = World::new();
+    let mut incident = ticket("Tq.48", "Investigate a full disk", "");
+    incident.labels.push(JUSTICIAR.to_owned());
+    incident.cores = Some(4.0);
+    world.desk.add(incident);
+    lock(&world.desk.reservations).insert(id("Tq.48"), "7f3a".to_owned());
+
+    let reply = start(&world, &["Tq.48", "--reservation", "7f3a"], WORKER);
+
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    assert_eq!(*lock(&world.trees.leases), [(id("Tq.48"), false)]);
 }
 
 #[test]
