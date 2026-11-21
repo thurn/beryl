@@ -9,19 +9,12 @@
 
 use crate::prelude::*;
 
-/// The second ability is a replacement effect ([CR 614.1a]): "Effects that use the word
-/// 'instead' are replacement effects." It replaces each opponent's draws but the first one they
-/// draw in each of their draw steps ([CR 504.1]): "First, the active player draws a card." The
-/// opponent draws nothing, and the rest of what had them draw still happens.
+/// With a Notion Thief on each side, the first replacement gives the draw to the other
+/// Thief's controller. The second sends it back. Under [CR 614.5], a replacement effect
+/// “gets only one opportunity to affect an event or any modified events that may replace
+/// that event.” With Chains of Mephistopheles, [CR 616.1] says “the affected player chooses
+/// one to apply.”
 ///
-/// Its controller's draw is a modified event, which this Notion Thief does not replace again
-/// ([CR 614.5]): "A replacement effect doesn't invoke itself repeatedly; it gets only one
-/// opportunity to affect an event or any modified events that may replace that event." An
-/// opponent's Notion Thief still may, and then that opponent draws. With Chains of
-/// Mephistopheles as well, the player who would draw chooses which applies first ([CR 616.1]).
-///
-/// [CR 614.1a]: https://yawgatog.com/resources/magic-rules/#R6141a
-/// [CR 504.1]: https://yawgatog.com/resources/magic-rules/#R5041
 /// [CR 614.5]: https://yawgatog.com/resources/magic-rules/#R6145
 /// [CR 616.1]: https://yawgatog.com/resources/magic-rules/#R6161
 pub static CARD: CardDef = Printed::NotionThief

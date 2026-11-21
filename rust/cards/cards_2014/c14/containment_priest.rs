@@ -8,14 +8,11 @@
 
 use crate::prelude::*;
 
-/// The second ability is a replacement effect ([CR 614.1a]): "Effects that use the word
-/// 'instead' are replacement effects." Whether the object is a creature is asked of it as it
-/// would exist on the battlefield ([CR 614.12]): "check the characteristics of the permanent as
-/// it would exist on the battlefield". An enchantment that Opalescence would make a creature is
-/// exiled; a land is not. A creature spell that resolves was cast, and enters. The Priest is not
-/// on the battlefield as it enters, so it does not exile itself or a creature entering with it.
+/// Opalescence can make an entering enchantment a creature, so the Priest can exile it.
+/// [CR 614.12] says to “check the characteristics of the permanent as it would exist on the
+/// battlefield.” The Priest applies from the battlefield. It is still outside that zone as
+/// it and any creatures entering with it are checked.
 ///
-/// [CR 614.1a]: https://yawgatog.com/resources/magic-rules/#R6141a
 /// [CR 614.12]: https://yawgatog.com/resources/magic-rules/#R61412
 pub static CARD: CardDef = Printed::ContainmentPriest
     .keywords(Keywords::FLASH)

@@ -8,18 +8,13 @@
 
 use crate::prelude::*;
 
-/// "{2}, {T}: This land becomes a copy of target land, except it has this ability." The land
-/// takes the copiable values of the target, which are what is printed on it as other copy
-/// effects modify them ([CR 707.2]): "Other effects (including type-changing and
-/// text-changing effects), status, counters, and stickers are not copied." It is not entering, so the target's
-/// "enters" abilities and replacements don't apply: a copy of Dark Depths has no ice
-/// counters. The effect has no duration: it lasts until the land leaves the battlefield or a
-/// later copy effect overrides it (CR 613.2a).
+/// Copying Dark Depths gives the Stage no ice counters. [CR 707.2] says that “status,
+/// counters, and stickers are not copied.” The Stage already occupies the battlefield, so
+/// the copied replacement that gives Dark Depths its initial counters never applies.
 ///
-/// "Except it has this ability" is part of the copy's copiable values ([CR 707.9a]): "This
-/// ability becomes part of the copiable values for the copy, along with any other abilities
-/// that were copied." So the ability is listed twice: as the land's own, and as the one the
-/// copy exception gives, which only a copy has. The copy no longer has "{T}: Add {C}."
+/// The copy exception grants a copy of the activated ability. [CR 707.9a] says “This ability
+/// becomes part of the copiable values for the copy,” so the printed face and the exception
+/// each carry the same ability.
 ///
 /// [CR 707.2]: https://yawgatog.com/resources/magic-rules/#R7072
 /// [CR 707.9a]: https://yawgatog.com/resources/magic-rules/#R7079a

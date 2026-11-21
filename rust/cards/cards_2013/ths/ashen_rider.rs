@@ -11,9 +11,7 @@ use crate::prelude::*;
 pub static CARD: CardDef = Printed::AshenRider
     .keywords(Keywords::FLYING)
     .abilities(&[
-        Ability::triggered(&Trigger::ENTERS)
-            .target(&TargetSpec::permanent(Filter::Any))
-            .effect(&exile(target())),
+        when_enters(&exile(target())).target(&TargetSpec::permanent(Filter::Any)),
         Ability::triggered(&Trigger::DIES)
             .target(&TargetSpec::permanent(Filter::Any))
             .effect(&exile(target())),
