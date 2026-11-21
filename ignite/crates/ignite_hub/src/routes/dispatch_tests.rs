@@ -306,6 +306,17 @@ fn landing_reserves_the_chain_and_its_brief_carries_the_note() {
     let first = tickets::load(&conn, ids[0].as_str()).unwrap().unwrap();
     assert_eq!(first.close_reason.as_deref(), Some(note));
     assert_eq!(first.landed.unwrap().commits[0].as_str(), "3a9e4c1");
+    let (status, retry) = post(
+        &mut conn,
+        "/landed",
+        &landed(ids[0].as_str(), "local_a", note),
+        at(60.5),
+    );
+    assert_eq!(status, 200);
+    assert_eq!(
+        retry, reply,
+        "a lost reply must keep the same code and expiry"
+    );
     let (status, brief) = post(
         &mut conn,
         "/claims",
@@ -315,14 +326,15 @@ fn landing_reserves_the_chain_and_its_brief_carries_the_note() {
     assert_eq!(status, 200, "{brief}");
     assert_eq!(brief["needs"][0]["ticket"], ids[0].as_str());
     assert_eq!(brief["needs"][0]["landed"]["note"], note);
-    // A resent landing answers as the first did.
-    let (status, _) = post(
+    // The claim consumed the reservation, so a replay cannot hand it off again.
+    let (status, retry) = post(
         &mut conn,
         "/landed",
         &landed(ids[0].as_str(), "local_a", note),
         at(62.0),
     );
     assert_eq!(status, 200);
+    assert!(retry["next"].is_null());
 }
 
 #[test]

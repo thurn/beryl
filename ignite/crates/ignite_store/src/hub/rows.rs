@@ -103,6 +103,7 @@ crate::tables! {
         session: String,
         expires_at: String,
         code: String,
+        after_landing: Option<String>,
     }
 
     Handoff = "handoffs" { seq: i64, machine: String, ticket: String, kind: String, at: String }

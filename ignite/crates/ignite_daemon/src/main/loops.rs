@@ -200,7 +200,9 @@ impl Parts {
                 ticker.round(|| {
                     let sent = crate::outbox::tick(&db, ctx.hub.as_ref(), &beat);
                     titles.report_holders(&ctx, &db);
-                    landing.deliver_pending(&ctx);
+                    landing.deliver_pending(&ctx, |landed, next| {
+                        dispatcher.chain(&ctx, &landed.ticket, next, landed.fresh);
+                    });
                     if let Err(error) = update.poll_release() {
                         eprintln!("ignite: the release branch was not checked: {error}");
                     }

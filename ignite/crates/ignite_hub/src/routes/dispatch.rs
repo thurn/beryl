@@ -467,9 +467,8 @@ fn brief(conn: &Connection, id: &str) -> Result<TicketBrief, Response> {
 
 /// Records what landed, closes the ticket, frees the worker and reserves the next ticket of
 /// its chain for the same session, all in one `IMMEDIATE` transaction, so an interruption
-/// leaves nothing half done. A repeat of a landing that already happened answers as the first
-/// did, without the reservation, so a daemon may resend it; it also frees the worker and marks
-/// the ticket's finding closed again, which does nothing when they are already done.
+/// leaves nothing half done. A repeat returns the same reservation while it can still be used.
+/// It leaves the worker alone because the worker may already be working on another ticket.
 fn landed(conn: &mut Connection, landed: &Landed, now: Timestamp) -> Answer {
     let id = landed.ticket.as_str();
     let mut tx = conn
@@ -477,15 +476,18 @@ fn landed(conn: &mut Connection, landed: &Landed, now: Timestamp) -> Answer {
         .map_err(sql_failure)?;
     let ticket = load(&tx, id)?;
     if ticket.status == Status::Closed && ticket.session.as_ref() == Some(&landed.session) {
-        free_worker(
+        if ticket.landed.as_ref() != Some(&landed.work) {
+            return Ok(Response::json(200, &json!(LandedReply { next: None })));
+        }
+        let next = fleet::reservation_for_landing(
             &tx,
-            &landed.machine,
-            &landed.session,
-            Some(&landed.work.files),
-        )?;
-        findings::close_ticket(&tx, id, now).map_err(|e| store_failure(&e))?;
-        tx.commit().map_err(sql_failure)?;
-        return Ok(Response::json(200, &json!(LandedReply { next: None })));
+            landed.machine.as_str(),
+            landed.session.as_str(),
+            id,
+            now,
+        )
+        .map_err(|e| store_failure(&e))?;
+        return Ok(Response::json(200, &json!(LandedReply { next })));
     }
     holds(&ticket, &landed.session)?;
     let work = serde_json::to_value(&landed.work).map_err(|e| failure(500, &e.to_string()))?;
@@ -514,6 +516,9 @@ fn landed(conn: &mut Connection, landed: &Landed, now: Timestamp) -> Answer {
             .map_err(|e| store_failure(&e))?,
         None => None,
     };
+    if let Some(reservation) = &next {
+        fleet::link_landing(&tx, reservation.ticket.as_str(), id).map_err(|e| store_failure(&e))?;
+    }
     tx.commit().map_err(sql_failure)?;
     Ok(Response::json(200, &json!(LandedReply { next })))
 }

@@ -53,7 +53,8 @@ fn hand_offs_racing_each_other_and_the_loop_each_get_a_slot() {
                 .map(|n| {
                     let reservation = reservation(&format!("T.{}", n + 1), 1);
                     let daemon = &rig.daemon;
-                    scope.spawn(move || daemon.begin(&reservation, "m-1", Some("high"), None))
+                    scope
+                        .spawn(move || daemon.begin(&reservation, "m-1", Some("high"), None, false))
                 })
                 .collect();
             let sessions = handing.into_iter().map(|h| h.join().unwrap()).collect();

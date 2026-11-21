@@ -426,32 +426,6 @@ impl Dispatcher {
         self.state().draining = draining;
     }
 
-    /// A landing's next chain ticket with `--fresh`: hand it to the same session, cleared first.
-    pub fn chain(&self, ctx: &Context, reservation: &Reservation) {
-        let app = self
-            .pool
-            .member(&reservation.session)
-            .ok()
-            .flatten()
-            .map_or_else(|| "claude".to_owned(), |m| m.app);
-        let detail = ctx.hub.ticket(&reservation.ticket).ok();
-        let members = self.pool.members().unwrap_or_default();
-        let mut state = self.state();
-        let now = ctx.clock.now();
-        Self::queue_handoff(
-            &ctx.config,
-            &mut state,
-            reservation,
-            &app,
-            detail,
-            &members,
-            now,
-        );
-        drop(state);
-        self.save();
-        self.run_cli_calls(ctx);
-    }
-
     /// Brings the state up to date and gives the next instruction for the dispatcher `asking`,
     /// if there is one.
     pub fn step(&self, ctx: &Context, asking: Option<&SessionId>) -> Option<DispatchInstruction> {
@@ -767,7 +741,7 @@ impl Dispatcher {
             "Run `ignite start {}` and follow what it prints.",
             start_arguments(&reserved)
         );
-        let clear = !slots::is_slot(session);
+        let clear = !slots::is_slot(session) && !cli::is_cli_session(session);
         Self::push_handoff(state, session, reserved, prompt, clear);
     }
 
@@ -798,6 +772,7 @@ impl Dispatcher {
                 slot: session.clone(),
                 reserved,
                 resume: None,
+                fresh: clear && cli::is_cli_session(session),
             });
             return;
         }

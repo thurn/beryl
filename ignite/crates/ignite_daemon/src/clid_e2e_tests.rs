@@ -467,7 +467,8 @@ impl Rig {
             expires_at: "2026-11-20T12:00:00.000Z".parse().unwrap(),
             code: "c0de".to_owned(),
         };
-        self.daemon.begin(&reservation, MODEL, Some("high"), None)
+        self.daemon
+            .begin(&reservation, MODEL, Some("high"), None, false)
     }
 
     /// Blocks until the supervisor of turn `turn` of `session` has exited.

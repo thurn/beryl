@@ -691,7 +691,7 @@ pub struct AdhocClaim {
 }
 
 /// The reply to `POST /landed`: the next ticket of the landed ticket's `lane:` chain, already
-/// reserved for the same session, which takes it without being cleared.
+/// reserved for the same session. A retry returns that reservation while it can still be claimed.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LandedReply {
     pub next: Option<Reservation>,

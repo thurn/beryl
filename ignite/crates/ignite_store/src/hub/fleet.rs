@@ -221,18 +221,49 @@ pub fn reservation_of(conn: &Connection, ticket: &str) -> Result<Option<(String,
         .optional()?)
 }
 
-/// The live reservation that `machine` holds for `session`, if any. The caller runs [`lapse`]
-/// first.
+/// The worker's live reservation from ordinary dispatch. The caller runs [`lapse`] first.
+/// Retrying a landing retrieves its successor reservation separately.
 pub fn reservation_for_worker(
     conn: &Connection,
     machine: &str,
     session: &str,
 ) -> Result<Option<Reservation>> {
+    read_reservation(conn, machine, session, None)
+}
+
+/// Links a chain reservation to the landing that created it, in the landing's transaction.
+pub fn link_landing(conn: &Connection, ticket: &str, landed: &str) -> Result<()> {
+    conn.execute(
+        "UPDATE reservations SET after_landing = ?2 WHERE ticket = ?1",
+        params![ticket, landed],
+    )?;
+    Ok(())
+}
+
+/// The still-live successor reserved by this landing, if it has not been claimed or released.
+pub fn reservation_for_landing(
+    conn: &Connection,
+    machine: &str,
+    session: &str,
+    landed: &str,
+    now: Timestamp,
+) -> Result<Option<Reservation>> {
+    Ok(read_reservation(conn, machine, session, Some(landed))?
+        .filter(|reservation| reservation.expires_at > now))
+}
+
+fn read_reservation(
+    conn: &Connection,
+    machine: &str,
+    session: &str,
+    after_landing: Option<&str>,
+) -> Result<Option<Reservation>> {
     let row: Option<(String, String, String)> = conn
         .query_row(
             "SELECT ticket, expires_at, code FROM reservations
-             WHERE machine = ?1 AND session = ?2 ORDER BY expires_at LIMIT 1",
-            params![machine, session],
+             WHERE machine = ?1 AND session = ?2 AND after_landing IS ?3
+             ORDER BY expires_at LIMIT 1",
+            params![machine, session, after_landing],
             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
         )
         .optional()?;

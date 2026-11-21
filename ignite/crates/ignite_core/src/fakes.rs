@@ -15,10 +15,10 @@ use crate::protocol::cli::TranscriptAppend;
 use crate::protocol::cli::TranscriptLine;
 use crate::protocol::hub::{
     AuditReport, CachedResult, Claim, ExplorationFind, FlakyReport, IncompleteReport,
-    JusticiarReport, Landed, LandedCommit, ListingKey, MachineFree, MetricsImport, NewResult,
-    OpenRegression, Pause, Record, RegressionFiled, RegressionReport, ReportFiled, Reservation,
-    ResultKey, RevertFiled, Reverted, SessionTitle, StoredListing, TicketBrief, TipClaim,
-    TipClaimReply, TipVerified, TipWaiting, TipWaitingFiled, Verdict,
+    JusticiarReport, Landed, LandedCommit, LandedReply, ListingKey, MachineFree, MetricsImport,
+    NewResult, OpenRegression, Pause, Record, RegressionFiled, RegressionReport, ReportFiled,
+    Reservation, ResultKey, RevertFiled, Reverted, SessionTitle, StoredListing, TicketBrief,
+    TipClaim, TipClaimReply, TipVerified, TipWaiting, TipWaitingFiled, Verdict,
 };
 use crate::protocol::tickets::{
     BatchReply, BatchRequest, Comment, FeedBatch, FeedChange, ImportReply, ImportRequest, Lease,
@@ -417,10 +417,10 @@ impl Hub for FakeHub {
         Ok(brief)
     }
 
-    fn landed(&self, landed: &Landed) -> Result<()> {
+    fn landed(&self, landed: &Landed) -> Result<LandedReply> {
         self.reachable()?;
         lock(&self.landings).push(landed.clone());
-        Ok(())
+        Ok(LandedReply { next: None })
     }
 
     /// Leases never expire here: an acquire succeeds when the lease is free or already the

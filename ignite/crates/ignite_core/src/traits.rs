@@ -16,10 +16,10 @@ use crate::protocol::Usage;
 use crate::protocol::cli::TranscriptAppend;
 use crate::protocol::hub::{
     AuditReport, CachedResult, Claim, CompileUnit, ExplorationFind, FlakyReport, IncompleteReport,
-    JusticiarReport, Landed, LandedCommit, ListingKey, MachineFree, MetricsImport, NewResult,
-    OpenRegression, Pause, Record, RegressionFiled, RegressionReport, ReportFiled, Reservation,
-    ResultKey, SessionTitle, StoredListing, TicketBrief, TipClaim, TipClaimReply, TipVerified,
-    TipWaiting, TipWaitingFiled,
+    JusticiarReport, Landed, LandedCommit, LandedReply, ListingKey, MachineFree, MetricsImport,
+    NewResult, OpenRegression, Pause, Record, RegressionFiled, RegressionReport, ReportFiled,
+    Reservation, ResultKey, SessionTitle, StoredListing, TicketBrief, TipClaim, TipClaimReply,
+    TipVerified, TipWaiting, TipWaitingFiled,
 };
 use crate::protocol::hub::{RevertFiled, Reverted, Verdict, VerdictKey};
 use crate::protocol::tickets::{
@@ -371,7 +371,7 @@ pub trait Hub: Send + Sync {
             .map_or(NextReply::Nothing(None), NextReply::Reserved))
     }
     fn claim(&self, claim: &Claim) -> Result<TicketBrief>;
-    fn landed(&self, landed: &Landed) -> Result<()>;
+    fn landed(&self, landed: &Landed) -> Result<LandedReply>;
     fn lease(&self, name: &str, op: LeaseOp) -> Result<LeaseReply>;
     fn feed(&self, since: Seq, wait_s: u32) -> Result<FeedBatch>;
     fn records(&self, batch: &[Record]) -> Result<()>;

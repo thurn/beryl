@@ -25,13 +25,13 @@ use ignite_core::ids::{Commit, RecordId, Seq, TicketId};
 use ignite_core::protocol::cli::TranscriptAppend;
 use ignite_core::protocol::hub::{
     AdhocClaim, AuditReport, CachedResult, Claim, Close, ExplorationFind, FlakyReport, Heartbeat,
-    HeartbeatReply, IncompleteReport, JusticiarReport, Landed, LandedCommit, LandingsReply,
-    LandingsRequest, ListingKey, ListingLookup, ListingReply, LookupReply, LookupRequest,
-    MAX_BODY_BYTES, MachineFree, MachineRegister, MachineRegistered, MetricsImport, NewResult,
-    OpenRegression, OpenRegressions, Pause, Record, RecordBatch, RegressionFiled, RegressionReport,
-    Release, ReportFiled, Reservation, ResultKey, RevertFiled, Reverted, SessionTitle,
-    StoreRequest, StoredListing, TicketBrief, TipClaim, TipClaimReply, TipVerified, TipWaiting,
-    TipWaitingFiled, Verdict, VerdictKey,
+    HeartbeatReply, IncompleteReport, JusticiarReport, Landed, LandedCommit, LandedReply,
+    LandingsReply, LandingsRequest, ListingKey, ListingLookup, ListingReply, LookupReply,
+    LookupRequest, MAX_BODY_BYTES, MachineFree, MachineRegister, MachineRegistered, MetricsImport,
+    NewResult, OpenRegression, OpenRegressions, Pause, Record, RecordBatch, RegressionFiled,
+    RegressionReport, Release, ReportFiled, Reservation, ResultKey, RevertFiled, Reverted,
+    SessionTitle, StoreRequest, StoredListing, TicketBrief, TipClaim, TipClaimReply, TipVerified,
+    TipWaiting, TipWaitingFiled, Verdict, VerdictKey,
 };
 use ignite_core::protocol::tickets::{
     BatchReply, BatchRequest, FeedBatch, ImportReply, ImportRequest, Lease, LeaseBusy, LeaseOp,
@@ -450,9 +450,8 @@ impl Hub for HubClient {
         self.post("/claims", claim)
     }
 
-    fn landed(&self, landed: &Landed) -> Result<()> {
-        let _: serde_json::Value = self.post("/landed", landed)?;
-        Ok(())
+    fn landed(&self, landed: &Landed) -> Result<LandedReply> {
+        self.post("/landed", landed)
     }
 
     fn lease(&self, name: &str, op: LeaseOp) -> Result<LeaseReply> {

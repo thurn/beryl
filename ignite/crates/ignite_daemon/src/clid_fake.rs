@@ -119,13 +119,14 @@ impl CliPool for FakeCliPool {
         model: &str,
         effort: Option<&str>,
         resume: Option<&Resume>,
+        _fresh: bool,
     ) -> Result<SessionId> {
-        let app = reservation
-            .session
-            .as_str()
+        let name = reservation.session.as_str();
+        let placeholder = name.split_once("-slot-").is_some();
+        let app = name
             .strip_prefix("cli-")
-            .and_then(|rest| rest.split_once("-slot-"))
-            .map(|(app, _)| app.to_owned())
+            .and_then(|rest| rest.split_once("-slot-").or_else(|| rest.rsplit_once('-')))
+            .map(|(app, _)| app)
             .ok_or_else(|| Error::Invalid(format!("{} is not a CLI slot", reservation.session)))?;
         if let Some(error) = lock(&self.refuse).clone() {
             return Err(Error::Io(error));
@@ -141,8 +142,12 @@ impl CliPool for FakeCliPool {
             model.to_owned(),
             effort.map(str::to_owned),
         ));
-        let session = SessionId::new(format!("cli-{app}-{:08x}", begun.len()))
-            .map_err(|e| Error::Invalid(e.to_string()))?;
+        let session = if placeholder {
+            SessionId::new(format!("cli-{app}-{:08x}", begun.len()))
+                .map_err(|e| Error::Invalid(e.to_string()))?
+        } else {
+            reservation.session.clone()
+        };
         lock(&self.checks).insert(session.clone(), SessionCheck::Idle);
         lock(&self.taken).insert(key, session.clone());
         Ok(session)
@@ -217,7 +222,7 @@ mod tests {
             code: "c0de".to_owned(),
         };
         let session = pool
-            .begin(&reservation, "opus", Some("high"), None)
+            .begin(&reservation, "opus", Some("high"), None, false)
             .unwrap();
         assert_eq!(session.as_str(), "cli-claude-00000001");
         assert_eq!(pool.check(&session), SessionCheck::Idle);
@@ -233,7 +238,8 @@ mod tests {
                 },
                 "opus",
                 None,
-                None
+                None,
+                false
             )
             .is_err()
         );

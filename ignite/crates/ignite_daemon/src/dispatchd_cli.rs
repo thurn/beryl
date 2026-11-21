@@ -72,6 +72,8 @@ pub(super) enum Call {
         slot: SessionId,
         reserved: Reserved,
         resume: Option<Resume>,
+        #[serde(default)]
+        fresh: bool,
     },
     /// Queue `text` for the session's next turn. An urgent message (`ignite tell --now`, or an
     /// order from a justiciar) also ends the running turn.
@@ -112,6 +114,15 @@ pub(super) fn is_cli_slot(session: &SessionId) -> bool {
 /// desktop session or a slot's placeholder.
 pub(super) fn is_cli_session(session: &SessionId) -> bool {
     session.as_str().starts_with(PREFIX) && !is_cli_slot(session)
+}
+
+/// The app of a CLI session, even after a finished worker leaves the pool.
+pub(super) fn session_app(session: &SessionId) -> Option<&str> {
+    if !is_cli_session(session) {
+        return None;
+    }
+    let (app, _) = session.as_str().strip_prefix(PREFIX)?.rsplit_once('-')?;
+    Some(app)
 }
 
 /// Whether `session` is the slot of an app in CLI mode that takes only tickets that hold
@@ -293,13 +304,15 @@ impl Dispatcher {
                     slot,
                     reserved,
                     resume,
+                    fresh,
                 } => {
                     let call = Call::Begin {
                         slot: slot.clone(),
                         reserved: reserved.clone(),
                         resume: resume.clone(),
+                        fresh,
                     };
-                    self.begin(ctx, cli, &slot, reserved, resume.as_ref());
+                    self.begin(ctx, cli, &slot, reserved, resume.as_ref(), fresh);
                     let mut state = self.state();
                     if let Some(index) = state.begins_running.iter().position(|c| *c == call) {
                         state.begins_running.remove(index);
@@ -338,6 +351,7 @@ impl Dispatcher {
         slot: &SessionId,
         reserved: Reserved,
         resume: Option<&Resume>,
+        fresh: bool,
     ) {
         let now = ctx.clock.now();
         // A hand-off saved before a restart may run after its reservation lapsed at the hub,
@@ -387,7 +401,7 @@ impl Dispatcher {
         let model = reserved.model.clone().unwrap_or_default();
         let started = cli
             .pool
-            .begin(&reservation, &model, Some(reserved.effort.as_str()), resume);
+            .begin(&reservation, &model, Some(&reserved.effort), resume, fresh);
         let session = match started {
             Ok(session) => session,
             Err(error) => {

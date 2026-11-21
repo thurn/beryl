@@ -4,10 +4,10 @@
 //! accepts moves it to `pushed`; a push the remote refuses deletes it. A push that fails with no
 //! answer leaves it `pushing`, because the remote may have taken the commit before the failure;
 //! the daemon's sender settles such a record once it is old enough (see `resolve`).
-//! A `pushed` record is sent to the hub (`POST /landed`, which closes the ticket) and deleted
-//! once the hub accepts it. While the hub cannot be reached, the record stays and is sent by a
-//! later landing or by the daemon's sender, so a landing is told to the hub exactly once and
-//! never pushed a second time to get there.
+//! A `pushed` record is sent to the hub (`POST /landed`, which closes the ticket). It stays
+//! on disk until the hub confirms the landing and has no successor reservation left. That
+//! lets the daemon's sender recover a reply lost after the hub closed the ticket, and retry
+//! the hand-off while the landing worker is still finishing its turn.
 
 use std::fs;
 use std::io::Write as _;
@@ -16,7 +16,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use ignite_core::ids::{Commit, TicketId, TreeId};
-use ignite_core::protocol::hub::Landed;
+use ignite_core::protocol::hub::{Landed, Reservation};
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{Error, Hub, Result};
 
@@ -156,23 +156,34 @@ impl Records {
         }
     }
 
-    /// Tells the hub about one pushed landing, and deletes its record once the hub accepts it.
-    pub fn deliver(&self, hub: &dyn Hub, record: &LandingRecord) -> Result<()> {
-        hub.landed(&record.landed)?;
-        self.remove(&record.landed.ticket)
+    /// Records one pushed landing at the hub and returns any successor still reserved for it.
+    pub fn deliver(&self, hub: &dyn Hub, record: &LandingRecord) -> Result<Option<Reservation>> {
+        let reply = hub.landed(&record.landed)?;
+        if reply.next.is_none() {
+            self.remove_if(&record.landed.ticket, &record.commit)?;
+        }
+        Ok(reply.next)
     }
 
-    /// Tells the hub about every pushed landing it has not heard of. Returns the tickets it
-    /// closed. It stops at the first sign that the hub cannot be reached; a record the hub
-    /// refuses for another reason stays on disk, with a message on standard error.
-    pub fn deliver_all(&self, hub: &dyn Hub) -> Result<Vec<TicketId>> {
+    /// Sends the pushed records and offers each still-reserved successor to the caller.
+    /// It stops at the first sign that the hub cannot be reached.
+    pub fn deliver_all(
+        &self,
+        hub: &dyn Hub,
+        mut handoff: impl FnMut(&Landed, &Reservation),
+    ) -> Result<Vec<TicketId>> {
         let mut closed = Vec::new();
         for record in self.all()? {
             if record.state != RecordState::Pushed {
                 continue;
             }
             match self.deliver(hub, &record) {
-                Ok(()) => closed.push(record.landed.ticket),
+                Ok(next) => {
+                    if let Some(next) = next {
+                        handoff(&record.landed, &next);
+                    }
+                    closed.push(record.landed.ticket);
+                }
                 Err(error @ Error::Unreachable(_)) => return Err(error),
                 Err(error) => eprintln!(
                     "ignite: the landing of {} was not recorded: {error}",

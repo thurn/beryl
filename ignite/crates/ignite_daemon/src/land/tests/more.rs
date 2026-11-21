@@ -98,11 +98,15 @@ fn the_sender_closes_a_ticket_whose_push_landed_but_whose_landing_never_ran_agai
     assert_eq!(reply.exit, Exit::Unreachable, "{}", reply.text);
 
     // A record that is still young is left to its landing.
-    world.landing.deliver_pending(&world.ctx);
+    world
+        .landing
+        .deliver_pending(&world.ctx, |_, _| unreachable!());
     assert!(world.landings().is_empty());
 
     world.clock.advance(120.0);
-    world.landing.deliver_pending(&world.ctx);
+    world
+        .landing
+        .deliver_pending(&world.ctx, |_, _| unreachable!());
 
     assert_eq!(world.landings().len(), 1);
     assert!(world.landing.records.all().unwrap().is_empty());
@@ -121,7 +125,9 @@ fn a_landing_the_sender_settles_releases_its_ticket_tree() {
     assert!(world.trees.released.lock().unwrap().is_empty());
 
     world.clock.advance(120.0);
-    world.landing.deliver_pending(&world.ctx);
+    world
+        .landing
+        .deliver_pending(&world.ctx, |_, _| unreachable!());
 
     let tree = TreeId::new("tree-01").unwrap();
     assert_eq!(
@@ -150,7 +156,9 @@ fn a_settled_landing_leaves_a_tree_leased_to_another_ticket_alone() {
     }
 
     world.clock.advance(120.0);
-    world.landing.deliver_pending(&world.ctx);
+    world
+        .landing
+        .deliver_pending(&world.ctx, |_, _| unreachable!());
 
     assert_eq!(world.landings().len(), 1);
     assert!(world.trees.released.lock().unwrap().is_empty());
@@ -164,12 +172,16 @@ fn the_sender_drops_an_old_record_whose_commit_never_reached_the_remote() {
     write_pushing(&world, &never, Some(world.clock.now()));
 
     world.clock.advance(120.0);
-    world.landing.deliver_pending(&world.ctx);
+    world
+        .landing
+        .deliver_pending(&world.ctx, |_, _| unreachable!());
     // Not on the remote, but not old enough to be sure the push is not still in flight.
     assert_eq!(world.landing.records.all().unwrap().len(), 1);
 
     world.clock.advance(600.0);
-    world.landing.deliver_pending(&world.ctx);
+    world
+        .landing
+        .deliver_pending(&world.ctx, |_, _| unreachable!());
     assert!(world.landing.records.all().unwrap().is_empty());
     assert!(world.landings().is_empty());
 }

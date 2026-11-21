@@ -38,7 +38,7 @@ fn begin_regression_with(rig: &Rig, code: &str) -> SessionId {
         ..reservation("R.1", 1)
     };
     rig.daemon
-        .begin(&reservation, "m-1", Some("low"), Some(&resume))
+        .begin(&reservation, "m-1", Some("low"), Some(&resume), false)
         .unwrap()
 }
 

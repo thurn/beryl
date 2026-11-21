@@ -79,11 +79,14 @@ fn a_queued_handoff_and_the_instruction_ids_survive_a_restart() {
     first
         .hub
         .insert_ticket(detail("T.1", "open", None, &[], ""));
-    first.dispatcher.chain(&first.ctx, &reservation);
+    first
+        .dispatcher
+        .chain(&first.ctx, &ticket_id("T.0"), &reservation, true);
 
     let restarted = rig_on(&[], file.open(), first.clock.now().plus_seconds(5.0));
     let queued = restarted.step().expect("queued before the restart");
     assert_eq!(handoff_to(&queued), ("local_w1", "T.1"));
+    assert!(queued.clear);
     // A new instruction does not reuse the ID of the one that was queued.
     restarted.dispatcher.forget(&session("nobody"));
     let id = {
@@ -281,7 +284,7 @@ fn a_cli_handoff_begun_before_its_session_was_saved_starts_no_second_session() {
     // The CLI pool started the session, and the daemon died before it saved the reservation
     // under the new session.
     let started = fake
-        .begin(&reservation, "opus", Some("high"), None)
+        .begin(&reservation, "opus", Some("high"), None, false)
         .unwrap();
     assert_eq!(reserved_sessions(&first), ["cli-claude-slot-1"]);
 

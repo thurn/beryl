@@ -78,7 +78,7 @@ use serde_json::json;
 use ignite_core::ids::{Commit, TicketId};
 use ignite_core::protocol::Class;
 use ignite_core::protocol::client::{Exit, Reply, Request};
-use ignite_core::protocol::hub::Landed;
+use ignite_core::protocol::hub::{Landed, Reservation};
 use ignite_core::protocol::tickets::LandedWork;
 use ignite_core::traits::{Error, Push, Rebase};
 
@@ -176,17 +176,16 @@ fn short(commit: &Commit) -> &str {
 }
 
 impl Landing {
-    /// Tells the hub about landings it has not heard of. The daemon's sender calls this each
-    /// round; every `ignite land` calls it first.
-    pub fn deliver_pending(&self, ctx: &Context) {
+    /// Settles and resends pending landings. The daemon's sender also offers their successors.
+    pub fn deliver_pending(&self, ctx: &Context, handoff: impl FnMut(&Landed, &Reservation)) {
         self.resolve_pushing(ctx);
-        if let Err(error) = self.records.deliver_all(ctx.hub.as_ref()) {
+        if let Err(error) = self.records.deliver_all(ctx.hub.as_ref(), handoff) {
             eprintln!("ignite: landings not recorded at the hub: {error}");
         }
     }
 
     fn land(&self, ctx: &Context, req: &Request, args: &LandArgs) -> Reply {
-        self.deliver_pending(ctx);
+        self.deliver_pending(ctx, |_, _| {});
         self.land_in_mode(ctx, req, args)
             .unwrap_or_else(|stop| *stop)
     }
@@ -694,7 +693,7 @@ impl Landing {
     ) -> Settled {
         let ticket = &record.landed.ticket;
         let closed = match self.records.deliver(ctx.hub.as_ref(), record) {
-            Ok(()) => "ticket closed".to_owned(),
+            Ok(_) => "ticket closed".to_owned(),
             Err(Error::Unreachable(_)) => "the ticket closes when the hub returns".to_owned(),
             Err(error) => format!("the hub refused the record ({error}); it is kept"),
         };

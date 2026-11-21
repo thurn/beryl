@@ -508,3 +508,152 @@ fn a_regression_for_a_cli_slot_names_its_culprit_to_the_cli_pool() {
     tick(&rig);
     assert_eq!(fake.resumes().get(1), Some(&None));
 }
+
+/// Commits the landing in the real hub and drops both HTTP replies from the first delivery.
+fn hub_with_lost_landing_reply(rig: &Rig) -> crate::hubclient::tests::FakeHttpHub {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use ignite_hub::auth::Writer;
+    use ignite_hub::routes::{Request, dispatch, tickets};
+
+    use crate::hubclient::tests::FakeHttpHub;
+
+    let machine = rig.ctx.machine.clone();
+    let clock = rig.clock.clone();
+    let request = move |method: &str, path: &str, body: &str| Request {
+        method: method.to_owned(),
+        path: path.to_owned(),
+        query: Vec::new(),
+        writer: Some(Writer {
+            machine: machine.clone(),
+            actor: "test".to_owned(),
+        }),
+        body: body.as_bytes().to_vec(),
+        headers: Vec::new(),
+    };
+    let db = Mutex::new(ignite_store::hub::open_in_memory().unwrap());
+    let landing_requests = AtomicUsize::new(0);
+    FakeHttpHub::start(move |method, url, body| {
+        let path = url.strip_prefix("/test/api").unwrap();
+        let path = path.split_once('?').map_or(path, |(path, _)| path);
+        let req = request(method, path, body);
+        let mut db = lock(&db);
+        let now = clock.now();
+        let response = dispatch::handle(&mut db, &req, now)
+            .or_else(|| tickets::handle(&mut db, &req, now))
+            .unwrap();
+        if path == "/landed" && landing_requests.fetch_add(1, Ordering::SeqCst) < 2 {
+            assert_eq!(response.status, 200);
+            return (502, "the proxy lost the hub's reply".to_owned());
+        }
+        (response.status, String::from_utf8(response.body).unwrap())
+    })
+}
+
+#[test]
+fn a_lost_landing_reply_delivers_the_lane_successor_once_the_cli_turn_ends() {
+    use ignite_core::ids::Commit;
+    use ignite_core::protocol::hub::{Claim, Landed};
+    use ignite_core::protocol::tickets::{BatchRequest, LandedWork, Status};
+    use serde_json::json;
+
+    use crate::land::records::{LandingRecord, RecordState, Records};
+
+    let mut rig = rig(&[]);
+    rig.ctx.config.pool.models.insert(
+        "codex".to_owned(),
+        [("opus".to_owned(), "codex-model".to_owned())].into(),
+    );
+    let fake = Arc::new(FakeCliPool::default());
+    rig.dispatcher
+        .set_cli(fake.clone(), "local", &rig.ctx.config);
+    let worker = session("cli-codex-00000001");
+    let now = rig.clock.now();
+    let http = hub_with_lost_landing_reply(&rig);
+    rig.ctx.hub = Arc::new(http.client());
+
+    let batch: BatchRequest = serde_json::from_value(json!({
+        "ops": [
+            {"op": "create", "fields": {"title": "first", "labels": ["lane:test"]}},
+            {"op": "create", "fields": {"title": "second", "labels": ["lane:test", "tier:opus"]},
+             "deps": [{"on": "$0"}]}
+        ]
+    }))
+    .unwrap();
+    let filed = rig.ctx.hub.batch(&batch).unwrap();
+    let first = filed.results[0].id.clone();
+    let second = filed.results[1].id.clone();
+    let claim = Claim {
+        ticket: first.clone(),
+        machine: rig.ctx.machine.clone(),
+        session: worker.clone(),
+        tree: "tree-01".parse().unwrap(),
+        code: None,
+    };
+    rig.ctx.hub.claim(&claim).unwrap();
+    let dir = ignite_core::test_files::temp_dir()
+        .join(format!("ignite-lane-landing-{}", std::process::id()));
+    let records = Records::new(&dir);
+    let commit = "3a9e4c1".parse::<Commit>().unwrap();
+    let record = LandingRecord {
+        landed: Landed {
+            ticket: first.clone(),
+            machine: rig.ctx.machine.clone(),
+            session: worker.clone(),
+            work: LandedWork {
+                commits: vec![commit.clone()],
+                files: Vec::new(),
+                note: "Landed the first ticket.".to_owned(),
+            },
+            fresh: false,
+        },
+        commit,
+        state: RecordState::Pushed,
+        written_at: Some(now),
+        tree: None,
+    };
+    records.write(&record).unwrap();
+    assert!(matches!(
+        records.deliver(rig.ctx.hub.as_ref(), &record),
+        Err(Error::Unreachable(_))
+    ));
+    assert_eq!(
+        rig.ctx.hub.ticket(&first).unwrap().ticket.status,
+        Status::Closed
+    );
+
+    let send_pending = || {
+        records
+            .deliver_all(rig.ctx.hub.as_ref(), |landed, next| {
+                rig.dispatcher
+                    .chain(&rig.ctx, &landed.ticket, next, landed.fresh);
+            })
+            .unwrap();
+    };
+    fake.set_check(&worker, SessionCheck::Running);
+    send_pending();
+    assert!(fake.begun().is_empty());
+    assert_eq!(records.get(&first).unwrap(), Some(record));
+
+    fake.set_check(&worker, SessionCheck::Gone);
+    send_pending();
+    send_pending();
+    let begun = fake.begun();
+    assert_eq!(begun.len(), 1);
+    let (next, model, _) = &begun[0];
+    assert_eq!(next.session, worker);
+    assert_eq!(next.ticket, second);
+    assert_eq!(model, "codex-model");
+    rig.ctx
+        .hub
+        .claim(&Claim {
+            ticket: second,
+            code: Some(next.code.clone()),
+            ..claim
+        })
+        .unwrap();
+    send_pending();
+    assert_eq!(fake.begun().len(), 1);
+    assert!(records.all().unwrap().is_empty());
+    std::fs::remove_dir(dir).unwrap();
+}

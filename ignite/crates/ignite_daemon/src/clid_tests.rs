@@ -290,7 +290,7 @@ impl Rig {
 
     fn try_begin(&self) -> Result<SessionId> {
         self.daemon
-            .begin(&reservation("T.1", 1), "m-1", Some("high"), None)
+            .begin(&reservation("T.1", 1), "m-1", Some("high"), None, false)
     }
 
     fn slot(&self) -> Slot {
@@ -378,7 +378,7 @@ fn begin_starts_the_first_turn_with_the_hand_off_prompt() {
     assert_eq!(rig.turns.starts().len(), 1);
     let second = rig
         .daemon
-        .begin(&reservation("T.2", 1), "m-1", Some("high"), None)
+        .begin(&reservation("T.2", 1), "m-1", Some("high"), None, false)
         .unwrap();
     let slots = rig.daemon.slots("fake");
     assert_eq!(slots[1].index, 2);
@@ -386,7 +386,7 @@ fn begin_starts_the_first_turn_with_the_hand_off_prompt() {
     // A placeholder of an app not in CLI mode is refused.
     let mut other = reservation("T.3", 1);
     other.session = SessionId::new("cli-codex-slot-1").unwrap();
-    assert!(rig.daemon.begin(&other, "m-1", None, None).is_err());
+    assert!(rig.daemon.begin(&other, "m-1", None, None, false).is_err());
 }
 
 #[test]
@@ -506,7 +506,7 @@ fn a_cli_handoff_without_a_model_uses_the_configured_default() {
     rig.keep_running(1);
     let session = rig
         .daemon
-        .begin(&reservation("T.1", 1), "", None, None)
+        .begin(&reservation("T.1", 1), "", None, None, false)
         .unwrap();
     assert_eq!(rig.row(&session).model.as_deref(), Some("default-model"));
     assert_eq!(
@@ -644,6 +644,12 @@ fn messages_reach_the_next_turn_and_an_urgent_one_ends_the_running_turn() {
 
 #[test]
 fn the_next_ticket_of_a_lane_keeps_the_session_and_resumes_its_transcript() {
+    for fresh in [false, true] {
+        check_lane_transcript(fresh);
+    }
+}
+
+fn check_lane_transcript(fresh: bool) {
     let rig = Rig::new();
     rig.keep_running(1);
     rig.push(clean("landed"));
@@ -652,7 +658,7 @@ fn the_next_ticket_of_a_lane_keeps_the_session_and_resumes_its_transcript() {
     next.session = session.clone();
     // While its turn runs, the session cannot take the next ticket.
     assert!(matches!(
-        rig.daemon.begin(&next, "m-1", None, None),
+        rig.daemon.begin(&next, "m-1", None, None, false),
         Err(Error::Conflict(_))
     ));
     lock(&rig.turns.live).clear();
@@ -660,21 +666,28 @@ fn the_next_ticket_of_a_lane_keeps_the_session_and_resumes_its_transcript() {
     rig.then(Action::Free);
     rig.daemon.step().unwrap();
     rig.keep_running(2);
-    assert_eq!(rig.daemon.begin(&next, "m-1", None, None).unwrap(), session);
+    assert_eq!(
+        rig.daemon.begin(&next, "m-1", None, None, fresh).unwrap(),
+        session
+    );
     let starts = rig.turns.starts();
     assert_eq!(starts[1].1, 2);
-    assert!(starts[1].2.args.ends_with(&[
-        "--resume".to_owned(),
-        "t-1".to_owned(),
-        "Run `ignite start T.2 --reservation c0de` and follow what it prints.".to_owned()
-    ]));
+    let args = &starts[1].2.args;
+    assert_eq!(args.iter().any(|arg| arg == "--resume"), !fresh);
+    if !fresh {
+        assert!(args.windows(2).any(|pair| pair == ["--resume", "t-1"]));
+    }
+    assert_eq!(
+        args.last().unwrap(),
+        "Run `ignite start T.2 --reservation c0de` and follow what it prints."
+    );
     let slot = rig.slot();
     assert_eq!(slot.ticket, Some(TicketId::new("T.2").unwrap()));
     // A session that never ran a turn here is not a CLI slot.
     next.session = SessionId::new("cli-fake-0badc0de").unwrap();
     "f00d".clone_into(&mut next.code);
     assert!(matches!(
-        rig.daemon.begin(&next, "m-1", None, None),
+        rig.daemon.begin(&next, "m-1", None, None, false),
         Err(Error::Invalid(_))
     ));
 }

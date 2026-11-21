@@ -195,6 +195,11 @@ pub const MIGRATIONS: &[Migration] = &[
         sql: include_str!("machine_cli_apps.sql"),
         code: None,
     },
+    Migration {
+        version: 31,
+        sql: include_str!("reservation_landings.sql"),
+        code: None,
+    },
 ];
 
 /// Opens (creating if needed) and migrates the hub's database.

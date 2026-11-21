@@ -7,9 +7,9 @@ use ignite_core::fakes::FakeHub;
 use ignite_core::ids::{Commit, RecordId, Seq, TicketId};
 use ignite_core::protocol::hub::{
     AuditReport, CachedResult, Claim, ExplorationFind, FlakyReport, Landed, LandedCommit,
-    MachineFree, MetricsImport, NewResult, OpenRegression, Pause, Record, RegressionFiled,
-    RegressionReport, ReportFiled, Reservation, ResultKey, RevertFiled, Reverted, TicketBrief,
-    TipClaim, TipClaimReply, TipVerified, TipWaiting, TipWaitingFiled,
+    LandedReply, MachineFree, MetricsImport, NewResult, OpenRegression, Pause, Record,
+    RegressionFiled, RegressionReport, ReportFiled, Reservation, ResultKey, RevertFiled, Reverted,
+    TicketBrief, TipClaim, TipClaimReply, TipVerified, TipWaiting, TipWaitingFiled,
 };
 use ignite_core::protocol::tickets::{
     BatchReply, BatchRequest, FeedBatch, LeaseOp, LeaseReply, Ticket, TicketDetail, TicketQuery,
@@ -74,7 +74,7 @@ impl Hub for SpyHub {
         self.gate("claim")?;
         self.inner.claim(claim)
     }
-    fn landed(&self, landed: &Landed) -> Result<()> {
+    fn landed(&self, landed: &Landed) -> Result<LandedReply> {
         self.gate("landed")?;
         self.inner.landed(landed)
     }

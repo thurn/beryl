@@ -97,8 +97,13 @@ impl CliDaemon {
 
     /// What the turns of `session`, a CLI session whose slot has been freed, say about it;
     /// `None` when it never ran a turn here. A session that still holds a slot cannot take
-    /// another ticket until its turn has ended and the slot is free.
-    pub(super) fn earlier_session(&self, session: &SessionId) -> Result<Option<Earlier>> {
+    /// another ticket until its turn has ended and the slot is free. With `fresh`, the next
+    /// turn starts a new transcript.
+    pub(super) fn earlier_session(
+        &self,
+        session: &SessionId,
+        fresh: bool,
+    ) -> Result<Option<Earlier>> {
         if self.row(session)?.is_some() {
             return Err(Error::Conflict(format!(
                 "{session} is still finishing its last ticket's turn"
@@ -112,7 +117,11 @@ impl CliDaemon {
             app: last.app.clone(),
             index: u32::try_from(last.slot).unwrap_or(0),
             turn: last.turn,
-            transcript: turns.iter().rev().find_map(|t| t.transcript.clone()),
+            transcript: if fresh {
+                None
+            } else {
+                turns.iter().rev().find_map(|t| t.transcript.clone())
+            },
         }))
     }
 

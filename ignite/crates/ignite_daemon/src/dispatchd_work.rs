@@ -13,7 +13,8 @@ use ignite_core::protocol::tickets::TicketDetail;
 use ignite_core::time::Timestamp;
 
 use super::{
-    Dispatcher, Purpose, Reserved, State, cli, feed, label, shared, slots, suits, tier_for,
+    Dispatcher, Purpose, Reserved, State, cli, feed, label, shared, slots, start_arguments, suits,
+    tier_for,
 };
 use crate::clid::Resume;
 use crate::pool::Member;
@@ -59,6 +60,63 @@ impl Drop for AskingGuard<'_> {
 }
 
 impl Dispatcher {
+    /// Queues a lane's successor for the session that landed its predecessor. The sender
+    /// offers the same reservation again until it is claimed or expires.
+    pub fn chain(
+        &self,
+        ctx: &Context,
+        predecessor: &TicketId,
+        reservation: &Reservation,
+        fresh: bool,
+    ) {
+        let session = &reservation.session;
+        if reservation.expires_at <= ctx.clock.now() || self.host.holders().contains_key(session) {
+            return;
+        }
+        let app = if let Some(app) = cli::session_app(session) {
+            let Some(cli) = self.cli.get() else { return };
+            // Releasing the tree does not end the CLI turn. Starting the successor now
+            // would fail because the old turn still owns the session's slot.
+            if cli.pool.check(session) != crate::clid::SessionCheck::Gone {
+                return;
+            }
+            app.to_owned()
+        } else {
+            self.pool
+                .member(session)
+                .ok()
+                .flatten()
+                .map_or_else(|| "claude".to_owned(), |member| member.app)
+        };
+        let Ok(detail) = ctx.hub.ticket(&reservation.ticket) else {
+            return;
+        };
+        let Some(reserved) = handoff_details(&ctx.config, reservation, &app, &detail) else {
+            return;
+        };
+        let mut state = self.state();
+        if state
+            .reserved
+            .get(session)
+            .is_some_and(|queued| queued.ticket != *predecessor)
+            || state
+                .reserved
+                .values()
+                .chain(&state.orphans)
+                .any(|queued| queued.ticket == reserved.ticket && queued.code == reserved.code)
+        {
+            return;
+        }
+        let prompt = format!(
+            "Run `ignite start {}` and follow what it prints.",
+            start_arguments(&reserved)
+        );
+        Self::push_handoff(&mut state, session, reserved, prompt, fresh);
+        drop(state);
+        self.save();
+        self.run_cli_calls(ctx);
+    }
+
     /// Brings the state up to date: notices claims, finished tickets and lapsed reservations,
     /// retries what could not be read, gives overdue instructions again and, while workers are
     /// idle and trees are free, asks the hub for tickets. Then starts the CLI sessions and sends
@@ -545,32 +603,9 @@ impl Dispatcher {
             state.unread.push((reservation.clone(), app.to_owned()));
             return;
         };
-        let labels = &detail.ticket.labels;
-        let tier = tier_for(labels, app);
-        // The hub is only told about tiers the app has a model ID for (see `ask_for_work`), so
-        // a tier without one means `ignite.toml` changed after the hub was asked. Reserving the
-        // worker anyway would hand the dispatcher a model it cannot set, so the worker is left
-        // idle and the reservation lapses at the hub.
-        let model = match &tier {
-            Some(tier) => {
-                let Some(id) = config.pool.model_id(app, tier) else {
-                    Self::drop_placeholder(state, named, ticket);
-                    return;
-                };
-                Some(id)
-            }
-            None => None,
-        };
-        let reserved = Reserved {
-            ticket: ticket.clone(),
-            expires_at,
-            code,
-            tier,
-            model,
-            effort: label(labels, "effort:")
-                .unwrap_or_else(|| config.pool.default_effort(app))
-                .to_owned(),
-            app: app.to_owned(),
+        let Some(reserved) = handoff_details(config, reservation, app, &detail) else {
+            Self::drop_placeholder(state, named, ticket);
+            return;
         };
         if let Some(culprit) = Self::culprit_worker(state, &detail, &reserved, members, now) {
             Self::drop_placeholder(state, named, ticket);
@@ -593,6 +628,7 @@ impl Dispatcher {
                 slot: named.clone(),
                 reserved,
                 resume: Some(Resume { culprit, prompt }),
+                fresh: false,
             });
             return;
         }
@@ -652,6 +688,33 @@ impl Dispatcher {
             state.reserved.remove(session);
         }
     }
+}
+
+/// The successor uses its own ticket's model and effort even when it resumes a transcript.
+fn handoff_details(
+    config: &Config,
+    reservation: &Reservation,
+    app: &str,
+    detail: &TicketDetail,
+) -> Option<Reserved> {
+    let labels = &detail.ticket.labels;
+    let tier = tier_for(labels, app);
+    // A tier with no model ID cannot be started on this app.
+    let model = match &tier {
+        Some(tier) => Some(config.pool.model_id(app, tier)?),
+        None => None,
+    };
+    Some(Reserved {
+        ticket: reservation.ticket.clone(),
+        expires_at: reservation.expires_at,
+        code: Some(reservation.code.clone()),
+        tier,
+        model,
+        effort: label(labels, "effort:")
+            .unwrap_or_else(|| config.pool.default_effort(app))
+            .to_owned(),
+        app: app.to_owned(),
+    })
 }
 
 /// The tiers the hub is told a worker of `app` runs. A model the app has no ID for cannot be

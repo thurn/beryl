@@ -14,8 +14,8 @@ use ignite_core::fakes::{FakeClock, FakeHub};
 use ignite_core::ids::{CheckName, Commit, InputHash, Oid, RecordId, Seq, TicketId, TreeId};
 use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::{
-    CachedResult, Claim, FlakyReport, Landed, MachineFree, MetricsImport, NewResult, Record,
-    RegressionFiled, RegressionReport, Reservation, ResultKey, TicketBrief, TipClaim,
+    CachedResult, Claim, FlakyReport, Landed, LandedReply, MachineFree, MetricsImport, NewResult,
+    Record, RegressionFiled, RegressionReport, Reservation, ResultKey, TicketBrief, TipClaim,
     TipClaimReply, TipVerified, Verdict, VerdictKey,
 };
 use ignite_core::protocol::tickets::{
@@ -322,7 +322,7 @@ impl Hub for LeaseHub {
     fn ticket(&self, id: &TicketId) -> Result<TicketDetail> {
         self.hub.ticket(id)
     }
-    fn landed(&self, landed: &Landed) -> Result<()> {
+    fn landed(&self, landed: &Landed) -> Result<LandedReply> {
         if self.landed_down.load(Ordering::SeqCst) {
             return Err(Error::Unreachable("hub down".to_owned()));
         }

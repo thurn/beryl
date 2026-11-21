@@ -126,7 +126,8 @@ pub trait CliPool: Send + Sync {
     /// Takes a reservation the hub made for one of `app`'s CLI slots (its placeholder session
     /// is `cli-<app>-slot-<k>`), or for a CLI session whose ticket ended (the next ticket of a
     /// `lane:` chain): creates the slot's row with a new Ignite session, or the same one, and
-    /// starts its first turn with the hand-off prompt. With `resume`, a new session's first
+    /// starts its first turn with the hand-off prompt. With `fresh`, a lane's next ticket starts
+    /// a fresh transcript in the same Ignite session. With `resume`, a new session's first
     /// turn may resume the culprit's transcript instead (see [`Resume`]). Returns the session,
     /// which the dispatcher adds to the pool as a single-use worker. A reservation (its ticket
     /// and code) that a slot already took returns that slot's session and starts nothing.
@@ -136,6 +137,7 @@ pub trait CliPool: Send + Sync {
         model: &str,
         effort: Option<&str>,
         resume: Option<&Resume>,
+        fresh: bool,
     ) -> Result<SessionId>;
     /// Queues `text` for the session's next turn. An urgent message (`tell --now`, or an order
     /// from a justiciar) ends the running turn and resumes with it.
@@ -652,7 +654,9 @@ impl CliPool for CliDaemon {
         model: &str,
         effort: Option<&str>,
         resume: Option<&Resume>,
+        fresh: bool,
     ) -> Result<SessionId> {
+        let _opening = lock(&self.opening);
         let ticket = reservation.ticket.as_str();
         let taken = self.database(|conn| store::by_reservation(conn, ticket, &reservation.code))?;
         if let Some(session) = taken.and_then(|row| row.session) {
@@ -661,13 +665,12 @@ impl CliPool for CliDaemon {
         let named = &reservation.session;
         let (app, preferred, earlier) = if let Some((app, index)) = placeholder(named) {
             (app, index, None)
-        } else if let Some(earlier) = self.earlier_session(named)? {
+        } else if let Some(earlier) = self.earlier_session(named, fresh)? {
             (earlier.app.clone(), earlier.index, Some(earlier))
         } else {
             return Err(Error::Invalid(format!("{named} is not a CLI slot")));
         };
         let model = self.app(&app)?.model_for(Some(model))?;
-        let _opening = lock(&self.opening);
         let session = match &earlier {
             Some(_) => named.clone(),
             None => Self::new_session(&app)?,

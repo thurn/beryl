@@ -360,7 +360,9 @@ fn a_push_while_the_hub_is_down_closes_the_ticket_when_it_returns_with_one_push(
     assert!(world.landings().is_empty());
 
     world.hub.landed_down.store(false, Ordering::SeqCst);
-    world.landing.deliver_pending(&world.ctx);
+    world
+        .landing
+        .deliver_pending(&world.ctx, |_, _| unreachable!());
     let landed: Vec<String> = world
         .landings()
         .iter()
@@ -641,7 +643,7 @@ fn a_malformed_record_is_moved_aside_and_the_others_are_still_delivered() {
     let delivered = world
         .landing
         .records
-        .deliver_all(world.hub.as_ref())
+        .deliver_all(world.hub.as_ref(), |_, _| unreachable!())
         .unwrap();
 
     assert_eq!(delivered, [held.ticket]);
