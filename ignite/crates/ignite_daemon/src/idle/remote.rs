@@ -50,8 +50,8 @@ impl IdleHost for RemoteIdleHost {
         self.local.commits_between(from, to)
     }
 
-    fn hold_disk(&self) -> Result<DiskReport> {
-        self.local.hold_disk()
+    fn hold_disk(&self, stop: &dyn Fn() -> bool) -> Result<DiskReport> {
+        self.local.hold_disk(stop)
     }
 
     fn free_disk(&self, floor_gib: u64) -> Result<DiskReport> {

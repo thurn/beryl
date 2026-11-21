@@ -392,7 +392,10 @@ fn a_handoff_sweep_prefers_reclaimable_builds_to_an_older_shared_donor() {
 
     let report = f
         .trees
-        .reclaim_disk_for_handoff_with(|| Some(if path.join("out").exists() { 65 } else { 75 }))
+        .reclaim_disk_for_handoff_with(
+            || Some(if path.join("out").exists() { 65 } else { 75 }),
+            &|| false,
+        )
         .unwrap();
 
     assert_eq!(report.cleared, [reclaimable]);
@@ -400,7 +403,10 @@ fn a_handoff_sweep_prefers_reclaimable_builds_to_an_older_shared_donor() {
     assert!(leased.path.join("out/big").exists());
 
     f.trees.request_disk_for_handoff(75);
-    let report = f.trees.reclaim_disk_for_handoff_with(|| Some(65)).unwrap();
+    let report = f
+        .trees
+        .reclaim_disk_for_handoff_with(|| Some(65), &|| false)
+        .unwrap();
 
     assert!(report.cleared.is_empty(), "{report:?}");
     assert!(donor.join("out/big").exists());

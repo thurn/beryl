@@ -143,7 +143,7 @@ fn making_room_for_a_ticket_keeps_leased_and_landing_builds() {
     write(&worktrees.join("tree-02"), "out/big", "unused build");
     write(&worktrees.join("landing-1"), "out/big", "tip build");
 
-    let report = trees.free_unused_disk(100, || Some(50)).unwrap();
+    let report = trees.free_unused_disk(100, || Some(50), &|| false).unwrap();
 
     assert_eq!(report.cleared, [id("tree-02")], "{report:?}");
     assert!(worktrees.join("tree-01/out/big").exists());
@@ -197,4 +197,71 @@ fn incremental_caches_go_before_any_leased_tree_is_cleared() {
     assert!(!profile.join("incremental").exists());
     assert!(profile.join("deps/app-0a0a").exists());
     assert_eq!(state(&trees, "tree-02"), "leased");
+}
+
+/// On 2026-11-20 every tree was leased and running commands, and the disk stayed full while the
+/// log said only what had been deleted. Below the floor with every tree busy, the pass deletes
+/// nothing in them and names each tree and what runs in it, including a command that only waits
+/// for the disk space this pass is failing to find. Once that command ends, the next pass clears
+/// its tree.
+#[test]
+fn below_the_floor_with_every_tree_busy_the_pass_says_why_and_clears_the_first_to_go_idle() {
+    let f = Fixture::new(2, 1);
+    let trees = all_leased(&f, &[MB, MB]);
+    let verb = |tree: &str, name: &str| {
+        crate::steps::global().begin(
+            crate::steps::Kind::Verb(name.to_owned()),
+            crate::steps::Work {
+                ticket: Some(TicketId::new("T.1").unwrap()),
+                tree: Some(id(tree)),
+                tree_path: Some(trees.config().path(&id(tree))),
+                ..crate::steps::Work::default()
+            },
+        )
+    };
+    let running = verb("tree-01", "check");
+    let waiting = verb("tree-02", "test");
+    let entered = waiting.enter();
+    let wait = crate::steps::waiting(format!(
+        "{} 3 GB free, under the 30 GB a build needs",
+        crate::build::DISK_WAIT
+    ));
+
+    let report = trees.free_disk(100, || Some(10)).unwrap();
+    drop(wait);
+    drop(entered);
+
+    assert!(report.reclaimed.is_empty(), "{report:?}");
+    let stuck = report.stuck.expect("the pass says what holds the space");
+    assert_eq!((stuck.free, stuck.floor), (10, 100));
+    let why = |tree: &str| {
+        stuck
+            .busy
+            .iter()
+            .find(|busy| busy.tree == id(tree))
+            .map(|busy| busy.why.clone())
+            .unwrap_or_default()
+    };
+    assert!(
+        why("tree-01").contains("`check` for T.1 runs from it"),
+        "{stuck:?}"
+    );
+    assert_eq!(
+        why("tree-02"),
+        "`test` for T.1 waits for disk space to start a build"
+    );
+    assert!(f.repo.join(".worktrees/tree-02/out/big").exists());
+
+    waiting.finish();
+    drop(waiting);
+    let report = trees.free_disk(100, || Some(10)).unwrap();
+    running.finish();
+
+    assert_eq!(report.reclaimed, [id("tree-02")], "{report:?}");
+    assert!(!f.repo.join(".worktrees/tree-02/out").exists());
+    let stuck = report.stuck.expect("the disk is still below its floor");
+    assert!(
+        stuck.busy.iter().all(|busy| busy.tree != id("tree-02")),
+        "{stuck:?}"
+    );
 }

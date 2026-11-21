@@ -31,8 +31,10 @@ use ignite_store::local::{rows, trees as store};
 use serde::Serialize;
 
 use super::{Kind, TreeConfig, Trees, store_error};
-use space::Space;
+pub use floor::{BusyTree, FloorStuck};
+use space::{Space, Stop};
 
+mod floor;
 mod leased;
 mod objects;
 mod space;
@@ -76,6 +78,12 @@ pub struct DiskReport {
     /// trees were measured, and the bytes they held (`disk/objects.rs`).
     pub objects: u64,
     pub object_bytes: u64,
+    /// The measurement stopped partway because the disk fell below its floor of free space, so
+    /// that the disk loop could clear builds at once ([`Trees::hold_disk`]).
+    pub interrupted: bool,
+    /// Set when [`Trees::free_disk`] left the disk below its floor with nothing more it could
+    /// delete safely: what holds the space, for the disk loop to report.
+    pub stuck: Option<FloorStuck>,
 }
 
 /// The term that set the limit for a sweep.
@@ -129,14 +137,21 @@ impl Trees {
 
     /// Measures the build directories of all managed trees with shared blocks counted once.
     fn measure(&self) -> Space {
+        self.measure_until(&Stop::new(&|| false))
+            .unwrap_or_default()
+    }
+
+    /// [`Trees::measure`], or `None` once `stop` says to stop partway.
+    fn measure_until(&self, stop: &Stop) -> Option<Space> {
         let config = &self.inner.config;
         let keep = config.keep.get();
         let rows = store::all(&self.lock().db).unwrap_or_default();
-        Space::measure(rows.iter().filter_map(|row| id_of(row).ok()).map(|id| {
+        let trees = rows.iter().filter_map(|row| id_of(row).ok()).map(|id| {
             let path = config.path(&id);
             let dirs = keep.iter().map(|dir| path.join(dir)).collect();
             (id, dirs)
-        }))
+        });
+        Space::measure_until(trees, stop)
     }
 
     fn build_bytes(&self) -> u64 {
@@ -165,13 +180,23 @@ impl Trees {
     /// are all cleared and the trees are still over the limit, the idle leased trees lose their
     /// incremental caches, and if the trees are over it still, those holding the most bytes of
     /// their own are cleared whole (`disk/leased.rs`).
-    pub fn hold_disk(&self) -> Result<DiskReport> {
+    ///
+    /// `stop` is asked before each directory the sweep reads, and once it says yes the sweep
+    /// returns at once with [`DiskReport::interrupted`] set. The disk loop asks whether the disk
+    /// fell below its floor: a measurement of hundreds of gigabytes takes many minutes, and the
+    /// disk can fill meanwhile, which needs builds cleared now and not once the walk ends.
+    pub fn hold_disk(&self, stop: &dyn Fn() -> bool) -> Result<DiskReport> {
         let dir = &self.inner.config.dir;
-        let report = self.hold_disk_with(|| disk_space(dir).ok())?;
-        usage::record(dir, report.after);
+        let budget =
+            |used| TreeConfig::disk_budget(disk_space(dir).ok(), Some(used), self.disk_cap_gb());
+        let report = self.hold_disk_until(budget, stop)?;
+        if !report.interrupted {
+            usage::record(dir, report.after);
+        }
         Ok(report)
     }
 
+    #[cfg(test)]
     pub(super) fn hold_disk_with(
         &self,
         disk: impl FnOnce() -> Option<DiskSpace>,
@@ -179,16 +204,32 @@ impl Trees {
         self.hold_disk_under(|used| TreeConfig::disk_budget(disk(), Some(used), self.disk_cap_gb()))
     }
 
+    #[cfg(test)]
     pub(super) fn hold_disk_under(
         &self,
         budget: impl FnOnce(u64) -> Option<(u64, DiskLimitSource)>,
     ) -> Result<DiskReport> {
+        self.hold_disk_until(budget, &|| false)
+    }
+
+    pub(super) fn hold_disk_until(
+        &self,
+        budget: impl FnOnce(u64) -> Option<(u64, DiskLimitSource)>,
+        stop: &dyn Fn() -> bool,
+    ) -> Result<DiskReport> {
+        let stop = &Stop::new(stop);
         let mut report = DiskReport::default();
         let mut objects = objects::Swept::default();
-        self.each_idle_tree(|dir| objects += objects::sweep_objects(dir))?;
+        self.each_idle_tree(|dir| {
+            if !stop.now() {
+                objects += objects::sweep_objects(dir);
+            }
+        })?;
         report.objects = objects.files;
         report.object_bytes = objects.bytes;
-        let before = self.build_bytes();
+        let Some(before) = self.measure_until(stop).map(|space| space.total()) else {
+            return Ok(interrupted(report));
+        };
         report.before = before;
         report.after = before;
         // Read free space after sweeping stale objects so their bytes are excluded on both sides.
@@ -201,9 +242,15 @@ impl Trees {
             return Ok(report);
         }
         let mut superseded = Vec::new();
-        self.each_idle_tree(|dir| superseded.extend(sweep_superseded(dir)))?;
+        self.each_idle_tree(|dir| {
+            if !stop.now() {
+                superseded.extend(sweep_superseded(dir));
+            }
+        })?;
         report.superseded = superseded;
-        let mut space = self.measure();
+        let Some(mut space) = self.measure_until(stop) else {
+            return Ok(interrupted(report));
+        };
         report.after = space.total();
         let free: HashSet<TreeId> = self.free_rows()?.iter().map(id_of).collect::<Result<_>>()?;
         for own_only in [true, false] {
@@ -233,7 +280,10 @@ impl Trees {
         if report.after > limit {
             report.incremental = self.drop_incremental()?;
             if !report.incremental.is_empty() {
-                space = self.measure();
+                let Some(measured) = self.measure_until(stop) else {
+                    return Ok(interrupted(report));
+                };
+                space = measured;
                 report.after = space.total();
             }
         }
@@ -241,7 +291,10 @@ impl Trees {
             self.reclaim_leased(&mut space, limit, &mut report)?;
         }
         if !report.cleared.is_empty() || !report.reclaimed.is_empty() {
-            report.after = self.measure().total();
+            let Some(measured) = self.measure_until(stop) else {
+                return Ok(interrupted(report));
+            };
+            report.after = measured.total();
         }
         self.serve_waiters();
         Ok(report)
@@ -263,71 +316,17 @@ impl Trees {
         self.each_idle_leased(sweep)
     }
 
-    /// Frees disk space fast while the disk has less than `floor` bytes free, without
-    /// measuring the trees first. Deletes the whole build directories of free trees, used
-    /// longest ago first, and reads the disk's free space with `free` after each one, stopping
-    /// once it reaches `floor` or cannot be read. With no free tree left, it deletes the stale
-    /// object files and incremental caches of the leased trees that run nothing, and then their
-    /// whole build directories, leased longest ago first (`disk/leased.rs`).
-    ///
-    /// [`Trees::hold_disk`] measures every tree in full twice before it clears any, which took
-    /// over half an hour per measurement on 1.6 TB of build directories under load. The daemon
-    /// restarted for each release every few minutes, so no round ever finished, and the disk
-    /// filled to 4 GB free with every build waiting for space. A full disk needs space now; which
-    /// tree holds the most bytes of its own matters less than freeing any. A tree whose files
-    /// are clones of another's frees little, and the next free tree goes after it.
-    pub fn free_disk(&self, floor: u64, free: impl Fn() -> Option<u64>) -> Result<DiskReport> {
-        let mut report = DiskReport {
-            limit: Some(floor),
-            limit_source: Some(DiskLimitSource::FreeSpaceFloor),
-            ..DiskReport::default()
-        };
-        // Once the disk is back above the floor, or its free space cannot be read, nothing
-        // more is deleted and the free space is not read again.
-        let done = std::cell::Cell::new(false);
-        let low = || {
-            let low = !done.get() && free().is_some_and(|bytes| bytes < floor);
-            done.set(!low);
-            low
-        };
-        for row in self.free_rows()? {
-            if !low() {
-                break;
-            }
-            let id = id_of(&row)?;
-            if self.clear_free(&id)? {
-                report.cleared.push(id);
-            }
-        }
-        if low() {
-            let mut objects = objects::Swept::default();
-            self.each_idle_leased(|dir| objects += objects::sweep_objects(dir))?;
-            report.objects = objects.files;
-            report.object_bytes = objects.bytes;
-        }
-        if low() {
-            report.incremental = self.drop_incremental()?;
-        }
-        for row in self.leased_rows()? {
-            if !low() {
-                break;
-            }
-            let id = id_of(&row)?;
-            if self.clear_idle_leased(&id)? {
-                report.reclaimed.push(id);
-            }
-        }
-        self.serve_waiters();
-        Ok(report)
-    }
-
     /// Make room for a handoff by clearing free ticket trees in order of last use. Trees
     /// with private blocks go first, so a clone donor is kept when its deletion would
     /// recover little. Only measure all the trees if shared blocks still need looking at.
+    ///
+    /// The measurement of shared blocks gives way when `stop` says yes, as in
+    /// [`Trees::hold_disk`]: this is a best-effort cleanup, and the disk's floor comes first.
     pub(super) fn free_unused_disk(
         &self,
         target: u64,
         free: impl Fn() -> Option<u64>,
+        stop: &dyn Fn() -> bool,
     ) -> Result<DiskReport> {
         let mut report = DiskReport {
             limit: Some(target),
@@ -357,8 +356,10 @@ impl Trees {
                 report.cleared.push(id);
             }
         }
-        if !shared.is_empty() && needs_space() {
-            let mut space = self.measure();
+        if !shared.is_empty()
+            && needs_space()
+            && let Some(mut space) = self.measure_until(&Stop::new(stop))
+        {
             let candidates: HashSet<_> = shared.iter().cloned().collect();
             for id in shared {
                 if !needs_space() {
@@ -445,6 +446,14 @@ impl Trees {
         drop(locked);
         self.serve_waiters();
         result.map_err(|error| store_error(&error))
+    }
+}
+
+/// A sweep's report once it stopped for the disk's floor; what it deleted so far stays listed.
+fn interrupted(report: DiskReport) -> DiskReport {
+    DiskReport {
+        interrupted: true,
+        ..report
     }
 }
 

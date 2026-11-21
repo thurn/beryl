@@ -1142,19 +1142,34 @@ Rules for trees:
   deletion cannot leave records of builds whose files are gone.
 - The daemon's disk loop checks this every minute, in a loop of its own so that
   idle work waiting for cores cannot hold it up. It measures the trees at most
-  once every 30 minutes and can clear builds without measuring every 5 minutes
-  while under 50 GiB free. It skips the walk when the disk has at least 150 GiB
-  free, the reserve is covered, and the cap cannot bind. Free trees are swept,
-  and so are leased trees while nothing runs in them: no verb was asked from the
-  tree, no process has its working directory or executable inside it, and the
-  build manager holds back any build there until the sweep ends. A tree running
-  a command keeps its build directories. With no free tree left to clear, idle
-  leased trees first lose their incremental caches
-  (`<target>/<profile>/incremental`), which costs only a slower next compile,
-  and only then, largest first, their whole build directories. On 2026-11-20 the
-  trees held 1,800 GB under a 250 GB limit with nearly every tree leased, and
-  the disk filled because only free trees were swept. The daemon logs what it
-  deleted and how much it freed.
+  once every 30 minutes. While the disk has under 50 GiB free, it clears builds
+  without measuring at every round, before anything else it does and again
+  between its other steps. A measurement reads the free space before each
+  directory and stops once the disk is below 50 GiB, so the clearing pass runs
+  at once instead of after a walk that can take many minutes. It skips the walk
+  when the disk has at least 150 GiB free, the reserve is covered, and the cap
+  cannot bind. Free trees are swept, and so are leased trees while nothing runs
+  in them: no verb was asked from the tree, no process has its working directory
+  or executable inside it, and the build manager holds back any build there
+  until the sweep ends. A tree running a command keeps its build directories.
+  With no free tree left to clear, idle leased trees first lose their
+  incremental caches (`<target>/<profile>/incremental`), which costs only a
+  slower next compile, and only then, largest first, their whole build
+  directories. On 2026-11-20 the trees held 1,800 GB under a 250 GB limit with
+  nearly every tree leased, and the disk filled because only free trees were
+  swept. The daemon logs what it deleted and how much it freed.
+- When the clearing pass leaves the disk under 50 GiB free with nothing more it
+  may delete, the disk loop's round fails with the reason, which `ignite status`
+  and `ignite doctor` show. The reason names each tree that still holds builds
+  and what runs in it, such as a verb, a build, a process or a seed, and marks a
+  verb that only waits for disk space to start its build. With no tree holding
+  builds, it says the space is held outside the trees or by a snapshot. The pass
+  runs again at every round, so the first tree whose command ends is cleared
+  within a minute. Meanwhile builds wait to start and handoffs wait for room,
+  and stopping one of the named commands with `ignite stop` frees its tree
+  sooner. On 2026-11-18 files outside the trees filled the disk, and on
+  2026-11-20 every tree was busy, and both times the log said only what had been
+  deleted.
 - The disk loop retires ticket trees after they have been free for 24 hours,
   keeping the two most recently used free trees as warm donors. It removes the
   worktree, its build directories and its local database row. A restart resumes

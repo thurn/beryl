@@ -67,12 +67,26 @@ impl Trees {
     ///
     /// [`Builds::pause`]: ignite_core::traits::Builds::pause
     pub(super) fn pause_idle(&self, id: &TreeId) -> Option<Paused<'_>> {
+        self.pause_or_why(id).ok()
+    }
+
+    /// [`Trees::pause_idle`], or what keeps the tree busy, in words for the disk loop's report
+    /// when it cannot get the disk back above its floor (`disk/floor.rs`).
+    pub(super) fn pause_or_why(&self, id: &TreeId) -> std::result::Result<Paused<'_>, String> {
         let path = self.inner.config.path(id);
-        if super::super::Seeding::involves(&path)
-            || !self.inner.steps.in_tree(id, &path).is_empty()
-            || !self.inner.builds.pause(id)
-        {
-            return None;
+        if super::super::Seeding::involves(&path) {
+            return Err("a seed copies builds into it or out of it".to_owned());
+        }
+        let verbs = self.inner.steps.in_tree(id, &path);
+        if !verbs.is_empty() {
+            return Err(verbs
+                .iter()
+                .map(|activity| describe_verb(activity))
+                .collect::<Vec<_>>()
+                .join("; "));
+        }
+        if !self.inner.builds.pause(id) {
+            return Err("a build runs in it".to_owned());
         }
         let paused = Paused {
             trees: self,
@@ -80,14 +94,26 @@ impl Trees {
             path,
         };
         // Read after the pause, so a command that starts building between the two is seen.
-        let occupied = Native
-            .occupants(&paused.path)
-            .map_or(true, |found| !found.is_empty());
-        let still_leased = store::get(&self.lock().db, id.as_str())
+        match Native.occupants(&paused.path) {
+            Ok(found) if !found.is_empty() => {
+                let pids: Vec<String> = found.iter().map(|o| o.pid.to_string()).collect();
+                return Err(format!(
+                    "processes work inside it (pid {})",
+                    pids.join(", ")
+                ));
+            }
+            Ok(_) => {}
+            Err(error) => return Err(format!("its processes cannot be listed: {error}")),
+        }
+        let state = store::get(&self.lock().db, id.as_str())
             .ok()
             .flatten()
-            .is_some_and(|row| row.state == store::State::Leased.as_str());
-        (!occupied && still_leased).then_some(paused)
+            .map(|row| row.state);
+        match state {
+            Some(state) if state == store::State::Leased.as_str() => Ok(paused),
+            Some(state) => Err(format!("it is {state}")),
+            None => Err("it is no longer recorded".to_owned()),
+        }
     }
 
     /// Calls `sweep` with each idle leased tree's build directories, paused while it runs.
@@ -190,5 +216,28 @@ impl Trees {
             remove(&paused.path.join(dir));
         }
         Ok(true)
+    }
+}
+
+/// A running verb as the floor report names it: what it is, for which ticket, and whether it
+/// only waits for disk space, which is the case where it waits on the disk loop itself.
+fn describe_verb(activity: &crate::steps::Activity) -> String {
+    let name = match activity.kind() {
+        crate::steps::Kind::Verb(verb) => verb.clone(),
+        crate::steps::Kind::Loop(name) => name.clone(),
+    };
+    let ticket = activity
+        .work()
+        .ticket
+        .map(|ticket| format!(" for {ticket}"))
+        .unwrap_or_default();
+    let waits_for_disk = activity
+        .waits()
+        .iter()
+        .any(|wait| wait.starts_with(crate::build::DISK_WAIT));
+    if waits_for_disk {
+        format!("`{name}`{ticket} waits for disk space to start a build")
+    } else {
+        format!("`{name}`{ticket} runs from it")
     }
 }

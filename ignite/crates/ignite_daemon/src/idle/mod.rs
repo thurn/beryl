@@ -25,8 +25,9 @@
 //! never edit one tree at once.
 //!
 //! Holding the trees under their disk limit is not a job: the daemon's disk loop calls
-//! [`Idle::hold_disk`] every round, which measures at most every 30 minutes, or every five
-//! while the disk is short of free space.
+//! [`Idle::hold_floor`] and [`Idle::hold_disk`] every round. The first clears builds whenever the
+//! disk is below its floor of free space; the second measures the trees at most every 30
+//! minutes, and gives way to the first if the disk falls below the floor during the walk.
 
 mod audit;
 mod backoff;
@@ -56,7 +57,7 @@ use crate::server::{Context, Verb};
 use crate::trees::{DiskReport, Trees};
 
 pub use audit::AuditSummary;
-pub use disk::{DISK_EVERY, FLOOR_GB, LOW_EVERY, ROOM_GB};
+pub use disk::{DISK_EVERY, FLOOR_GB, ROOM_GB};
 pub use launch::{IdleJobVerb, JobRunner, JobWait, ServerJobs};
 pub use rebuild::RebuildCount;
 pub use remote::RemoteIdleHost;
@@ -105,8 +106,9 @@ pub trait IdleHost: Send + Sync {
     fn release(&self, tree: &TreeId, built_at: Option<&Commit>) -> Result<()>;
     /// How many commits `to` has that `from` does not.
     fn commits_between(&self, from: &Commit, to: &Commit) -> Result<usize>;
-    /// Deletes build directories while the trees are above the measured budget.
-    fn hold_disk(&self) -> Result<DiskReport>;
+    /// Deletes build directories while the trees are above the measured budget, giving up
+    /// partway once `stop` says yes ([`Trees::hold_disk`]).
+    fn hold_disk(&self, stop: &dyn Fn() -> bool) -> Result<DiskReport>;
     /// Deletes the build directories of free trees, used longest ago first, until the disk has
     /// `floor_gib` gibibytes free, without measuring the trees ([`Trees::free_disk`]).
     fn free_disk(&self, floor_gib: u64) -> Result<DiskReport>;
@@ -183,8 +185,8 @@ impl IdleHost for LiveHost {
         Ok(ignite_git::refs::commits_between(&self.repo, from, to)?.len())
     }
 
-    fn hold_disk(&self) -> Result<DiskReport> {
-        self.trees.hold_disk()
+    fn hold_disk(&self, stop: &dyn Fn() -> bool) -> Result<DiskReport> {
+        self.trees.hold_disk(stop)
     }
 
     fn free_disk(&self, floor_gib: u64) -> Result<DiskReport> {
@@ -238,6 +240,9 @@ pub struct Idle {
     work: Mutex<()>,
     /// When the trees' disk use was last measured, which [`Idle::hold_disk`] limits.
     disk_held: Mutex<Option<Timestamp>>,
+    /// What the last pass to get the disk above its floor could not delete, which the disk
+    /// loop reports until a pass succeeds ([`Idle::hold_floor`]).
+    floor_stuck: Mutex<Option<crate::trees::FloorStuck>>,
 }
 
 /// The number of commits the verified commit moves before each rebuild edit is measured again.
@@ -270,6 +275,7 @@ impl Idle {
             shares: Mutex::new(Vec::new()),
             work: Mutex::new(()),
             disk_held: Mutex::new(None),
+            floor_stuck: Mutex::new(None),
         })
     }
 

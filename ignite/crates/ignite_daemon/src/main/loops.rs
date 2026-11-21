@@ -32,7 +32,7 @@ use crate::sched::Scheduler;
 use crate::server::{Context, Server};
 use crate::supervise::SupervisedLauncher;
 use crate::tip::{CheckTipWork, TipLoop, TipOutcome, TipRoundVerb};
-use crate::trees::Trees;
+use crate::trees::{DiskReport, Trees};
 use crate::update::Home;
 
 /// How often the outbox is sent and the heartbeat beats. Transcript lines are sent sooner,
@@ -404,12 +404,31 @@ impl Parts {
     /// retires surplus free trees. This is a loop of its own
     /// because a round of the idle loop waits for its job, which can wait hours for cores, and
     /// the machine is the most likely to fill its disk while it is busy.
+    ///
+    /// The pass that gets the disk back above its floor runs first and again before each other
+    /// step, and the long walks give way to it (see `idle/disk.rs`). It once ran only at the end
+    /// of a round, after retiring trees, a handoff's cleanup and a measurement that could take
+    /// many minutes. A floor pass that can delete nothing more fails the round with what holds
+    /// the space, so `ignite status` and `ignite doctor` show it.
     fn spawn_disk(&self) {
         let (idle, trees) = (self.idle.clone(), self.trees.clone());
         self.start_loop("ignite-disk", DISK_STALLS_AFTER, move |ticker| {
             loop {
                 ticker.round(|| {
                     let mut failure = None;
+                    let floor = |failure: &mut Option<String>| match idle.hold_floor() {
+                        Ok(Some(report)) => {
+                            if let Some(stuck) = report.stuck {
+                                *failure = Some(stuck.to_string());
+                            }
+                        }
+                        Ok(None) => {}
+                        Err(error) => {
+                            eprintln!("ignite: disk not cleared back above its floor: {error}");
+                            *failure = Some(format!("disk not cleared above its floor: {error}"));
+                        }
+                    };
+                    floor(&mut failure);
                     crate::steps::step("retiring surplus trees");
                     match trees.retire_surplus() {
                         Ok(retired) if !retired.is_empty() => {
@@ -423,7 +442,10 @@ impl Parts {
                             failure = Some(format!("surplus trees not retired: {error}"));
                         }
                     }
-                    if let Err(error) = trees.reclaim_disk_for_handoff() {
+                    if idle.below_floor() {
+                        floor(&mut failure);
+                    }
+                    if let Err(error) = trees.reclaim_disk_for_handoff(&|| idle.below_floor()) {
                         eprintln!(
                             "ignite: cannot reclaim unused build outputs for a handoff: {error}"
                         );
@@ -431,9 +453,22 @@ impl Parts {
                             "cannot reclaim build outputs for a handoff: {error}"
                         ));
                     }
-                    if let Err(error) = idle.hold_disk() {
-                        eprintln!("ignite: trees not held under their disk limit: {error}");
-                        failure = Some(format!("trees not held under their disk limit: {error}"));
+                    if idle.below_floor() {
+                        floor(&mut failure);
+                        return failure.map_or(Ok(()), Err);
+                    }
+                    match idle.hold_disk() {
+                        Ok(Some(DiskReport {
+                            stuck: Some(stuck), ..
+                        })) => {
+                            failure = Some(stuck.to_string());
+                        }
+                        Ok(_) => {}
+                        Err(error) => {
+                            eprintln!("ignite: trees not held under their disk limit: {error}");
+                            failure =
+                                Some(format!("trees not held under their disk limit: {error}"));
+                        }
                     }
                     failure.map_or(Ok(()), Err)
                 });

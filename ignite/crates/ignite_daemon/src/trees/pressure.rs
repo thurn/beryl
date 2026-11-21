@@ -20,14 +20,21 @@ impl Trees {
             .fetch_max(target_gb, Ordering::Relaxed);
     }
 
-    pub(crate) fn reclaim_disk_for_handoff(&self) -> Result<()> {
-        self.reclaim_disk_for_handoff_with(|| NativeHost.disk_free_gb(&self.inner.config.dir))?;
+    /// Clears free ticket trees until a waiting handoff's disk target is met. `stop` is asked
+    /// during the measurement of shared blocks, which gives way to the disk's floor (see
+    /// [`Trees::free_unused_disk`]).
+    pub(crate) fn reclaim_disk_for_handoff(&self, stop: &dyn Fn() -> bool) -> Result<()> {
+        self.reclaim_disk_for_handoff_with(
+            || NativeHost.disk_free_gb(&self.inner.config.dir),
+            stop,
+        )?;
         Ok(())
     }
 
     pub(super) fn reclaim_disk_for_handoff_with(
         &self,
         free: impl Fn() -> Option<u64>,
+        stop: &dyn Fn() -> bool,
     ) -> Result<DiskReport> {
         let target = self.inner.handoff_disk_target.swap(0, Ordering::Relaxed);
         if target == 0 || free().is_none_or(|free| free >= target) {
@@ -36,7 +43,7 @@ impl Trees {
         crate::steps::step(format!(
             "clearing unused build outputs for a handoff needing {target} GB free"
         ));
-        let report = self.free_unused_disk(target, free)?;
+        let report = self.free_unused_disk(target, free, stop)?;
         if !report.cleared.is_empty() {
             eprintln!(
                 "ignite: cleared build outputs in {} free trees for a ticket needing {target} GB free",

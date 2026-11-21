@@ -11,6 +11,7 @@
 //! since gets a new clone ID, and its shared blocks then count once under each ID, which
 //! overcounts only those clones.
 
+use std::cell::Cell;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::io;
@@ -35,18 +36,53 @@ struct Held {
     shared: HashMap<u64, u64>,
 }
 
+/// Asks whether a long walk of the trees should stop, and remembers a yes. The disk loop asks it
+/// whether the disk has fallen below its floor of free space, so that a measurement of hundreds
+/// of gigabytes gives way to the pass that clears builds at once (`idle/disk.rs`).
+pub(crate) struct Stop<'a> {
+    asked: &'a dyn Fn() -> bool,
+    hit: Cell<bool>,
+}
+
+impl<'a> Stop<'a> {
+    pub(crate) fn new(asked: &'a dyn Fn() -> bool) -> Stop<'a> {
+        Stop {
+            asked,
+            hit: Cell::new(false),
+        }
+    }
+
+    /// Whether the walk should stop. Once the answer is yes it stays yes without asking again.
+    pub(crate) fn now(&self) -> bool {
+        if !self.hit.get() {
+            self.hit.set((self.asked)());
+        }
+        self.hit.get()
+    }
+}
+
 impl Space {
     /// Measures each tree's directories, not following symbolic links. A directory that does not
     /// exist holds nothing.
+    #[cfg(test)]
     pub(super) fn measure(trees: impl IntoIterator<Item = (TreeId, Vec<PathBuf>)>) -> Space {
+        Space::measure_until(trees, &Stop::new(&|| false)).unwrap_or_default()
+    }
+
+    /// [`Space::measure`], asking `stop` before each directory it reads. `None` once `stop`
+    /// says yes, since a measurement of only some of the files would undercount.
+    pub(super) fn measure_until(
+        trees: impl IntoIterator<Item = (TreeId, Vec<PathBuf>)>,
+        stop: &Stop,
+    ) -> Option<Space> {
         let mut space = Space::default();
         for (id, dirs) in trees {
             let held = space.trees.entry(id).or_default();
             for dir in dirs {
-                add(held, &dir, u64::MAX);
+                add(held, &dir, u64::MAX, stop);
             }
         }
-        space
+        (!stop.now()).then_some(space)
     }
 
     /// Check a free tree without walking every tree on the machine. Stop as soon as it holds
@@ -54,7 +90,7 @@ impl Space {
     pub(super) fn private_enough(dirs: impl IntoIterator<Item = PathBuf>, minimum: u64) -> bool {
         let mut held = Held::default();
         for dir in dirs {
-            add(&mut held, &dir, minimum);
+            add(&mut held, &dir, minimum, &Stop::new(&|| false));
             if held.private >= minimum {
                 return true;
             }
@@ -132,8 +168,8 @@ impl Space {
     }
 }
 
-/// Adds what is under `path` to `held`.
-fn add(held: &mut Held, path: &Path, minimum: u64) {
+/// Adds what is under `path` to `held`, until `stop` says to stop.
+fn add(held: &mut Held, path: &Path, minimum: u64, stop: &Stop) {
     let Ok(meta) = fs::symlink_metadata(path) else {
         return;
     };
@@ -153,15 +189,15 @@ fn add(held: &mut Held, path: &Path, minimum: u64) {
         return;
     }
     held.private += allocated;
-    if !meta.is_dir() || held.private >= minimum {
+    if !meta.is_dir() || held.private >= minimum || stop.now() {
         return;
     }
     let Ok(entries) = fs::read_dir(path) else {
         return;
     };
     for entry in entries.filter_map(io::Result::ok) {
-        add(held, &entry.path(), minimum);
-        if held.private >= minimum {
+        add(held, &entry.path(), minimum, stop);
+        if held.private >= minimum || stop.now() {
             break;
         }
     }

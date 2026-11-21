@@ -99,11 +99,72 @@ fn a_handoff_waiting_for_disk_sweeps_free_trees_while_builds_are_held() {
     assert_eq!(target, 131);
     f.trees.request_disk_for_handoff(target);
 
-    let report = f.trees.reclaim_disk_for_handoff_with(free_gb).unwrap();
+    let report = f
+        .trees
+        .reclaim_disk_for_handoff_with(free_gb, &|| false)
+        .unwrap();
 
     assert_eq!(report.cleared, free_trees[..2]);
     assert!(f.trees.config().path(&free_trees[2]).join("out").exists());
     assert!(first.path.join("out").exists());
     assert!(second.path.join("out").exists());
     assert!(blocked().is_none());
+}
+
+/// A measurement of the trees walked 290 GB for over ten minutes, and the disk can fall below
+/// its floor during one. Asked to stop partway through the walk, the sweep returns at once,
+/// marked as interrupted, without clearing anything on the strength of a partial count.
+#[test]
+fn a_measurement_asked_to_stop_partway_returns_at_once_and_clears_nothing() {
+    let f = Fixture::new(3, 1);
+    for tree in ["tree-01", "tree-02", "tree-03"] {
+        let root = f.repo.join(".worktrees").join(tree);
+        for dir in ["a", "b", "c"] {
+            write(&root, &format!("out/{dir}/deep/big"), &"x".repeat(10_000));
+        }
+    }
+    // How often an uninterrupted sweep asks: the last questions come from the measurement.
+    let asked = Cell::new(0);
+    let report = f
+        .trees
+        .hold_disk_until(|_| None, &|| {
+            asked.set(asked.get() + 1);
+            false
+        })
+        .unwrap();
+    assert!(!report.interrupted);
+    let full = asked.get();
+    assert!(
+        full > 3,
+        "the walk asks before each directory, not once: {full}"
+    );
+
+    asked.set(0);
+    let report = f
+        .trees
+        .hold_disk_until(|_| Some((1, DiskLimitSource::Cap)), &|| {
+            asked.set(asked.get() + 1);
+            asked.get() >= full - 1
+        })
+        .unwrap();
+
+    assert!(report.interrupted, "{report:?}");
+    assert!(report.cleared.is_empty(), "{report:?}");
+    assert_eq!(
+        report.limit, None,
+        "the budget is not read from a partial count"
+    );
+    for tree in ["tree-01", "tree-02", "tree-03"] {
+        assert!(
+            f.repo
+                .join(".worktrees")
+                .join(tree)
+                .join("out/a/deep/big")
+                .exists()
+        );
+    }
+    // Never asked to stop, the same sweep clears trees to reach the limit.
+    let report = sweep_to(&f.trees, Some(1));
+    assert!(!report.interrupted);
+    assert!(!report.cleared.is_empty(), "{report:?}");
 }

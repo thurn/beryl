@@ -62,7 +62,7 @@ pub(crate) use cargo::command;
 use cargo::{WholeKey, feature_differences, package_args};
 use flight::{Flight, FlightGuard, STOP_RECHECK};
 pub use rejoin::BUILD_KEY_ENV;
-pub use room::{DiskRoom, NativeRoom, START_GB};
+pub use room::{DISK_WAIT, DiskRoom, NativeRoom, START_GB};
 
 use ignite_core::hash::{HashParts, input_hash};
 use ignite_core::ids::{InputHash, TreeId};
