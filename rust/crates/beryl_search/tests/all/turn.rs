@@ -69,6 +69,30 @@ fn turn_choice_is_independent_of_hidden_cards() {
 }
 
 #[test]
+fn budgeted_turn_search_scores_more_complete_worlds() {
+    let (t, mut state) = position(&CARDS, &OPENING).unwrap();
+    let Step::Decide(d) = next(&mut state, &t, &mut Scratch::new(), &mut Replay) else {
+        panic!("priority in main");
+    };
+    let obs = Observation::new(&state, d.decider);
+    let work = 300_000;
+    let mut bounded = agent(&t, work, FAMILY);
+    let mut budgeted = agent(&t, work, "turnbudget72/hidden/rollout/tuned/anchor+guard");
+    bounded.choose(obs, &d, AgentDecision(0));
+    budgeted.choose(obs, &d, AgentDecision(0));
+
+    let bounded = bounded.last_search().unwrap();
+    let budgeted = budgeted.last_search().unwrap();
+    let most_worlds = bounded.visits.iter().copied().max().unwrap();
+    let mut scored = budgeted.visits.iter().copied().filter(|&n| n > 0);
+    let worlds = scored.next().unwrap();
+    assert!(worlds > most_worlds);
+    assert!(scored.all(|n| n == worlds));
+    assert!(!budgeted.turn.unwrap().defaulted);
+    assert!(budgeted.work <= work);
+}
+
+#[test]
 fn a_small_budget_falls_back_and_each_priority_uses_its_own_position() {
     let (t, mut state) = position(&CARDS, &OPENING).unwrap();
     let mut scratch = Scratch::new();

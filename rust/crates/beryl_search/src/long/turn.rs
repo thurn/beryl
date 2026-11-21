@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{
     Agent, AgentDecision, AnchorCheck, Bitboard, Capture, Choice, Decision, DecisionKind,
-    EVAL_STEPS, GameTable, ITERATION_STEPS, Layout, Leaf, LongSearch, Observation, Opt,
+    EVAL_STEPS, GameTable, ITERATION_STEPS, Layout, Leaf, LongSearch, Method, Observation, Opt,
     ROLLOUT_TEMPERATURE, Replay, RolloutPolicy, Scratch, Search, Seat, Softmax, SplitMix64, State,
     Step, WORLD_STEPS, combat, deal, discounted, evaluate, guarded, keys, mean_and_error, observe,
     smart, value,
@@ -19,7 +19,8 @@ use super::{
 use crate::rollout::{RolloutEnd, soft_rollout_within};
 
 const PROPOSAL_WORLDS: u64 = 24;
-const SCORING_WORLDS: u16 = 48;
+const MIN_SCORING_WORLDS: u16 = 48;
+const MAX_SCORING_WORLDS: u16 = 4_096;
 const WIDTH: usize = 8;
 
 /// Deterministic work and line counts for one turn search.
@@ -125,7 +126,7 @@ fn search<L: Layout>(
             }
         })
         .unwrap_or(default);
-    let comparable = rewards[usize::from(default.0)].len() == usize::from(SCORING_WORLDS);
+    let comparable = rewards[usize::from(default.0)].len() >= usize::from(MIN_SCORING_WORLDS);
     let anchor = (comparable && guarded(best)).then(|| {
         let leads: Vec<_> = rewards[usize::from(best.0)]
             .iter()
@@ -686,7 +687,12 @@ impl<L: Layout> TurnSearch<'_, L> {
         rng: &mut SplitMix64,
     ) {
         let limit = agent.settings.work;
-        for _ in 0..SCORING_WORLDS {
+        let worlds = if agent.settings.family.method == Method::TurnBudget {
+            MAX_SCORING_WORLDS
+        } else {
+            MIN_SCORING_WORLDS
+        };
+        for _ in 0..worlds {
             if !self.room(limit, WORLD_STEPS + 1) {
                 break;
             }

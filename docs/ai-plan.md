@@ -549,15 +549,30 @@ using `just blunders greedy+hold+waste+combat+walker --seeds 1`.
 - **Claims:** `spare-jace-wielder`.
 - **Measure:** a root rung, 3M, `plausible`.
 
-### 6.9 Rung 8: `turn72`, the search over whole turns
+### 6.9 Rung 8: Search over whole turns
 
-Built (`long/turn.rs`). It proposes continuations of the player's turn with the
-opponent passing and tests them in fresh worlds. Alone it fixed both Subtlety
-entries and lowered the Snapcaster entry, and no match was played. It is
-measured again once `hold` and `paired` are in the champion.
+`turn72` proposes continuations of the player's turn with the opponent passing
+and scores them in up to 48 fresh worlds. With `walker` enabled on both sides,
+it improved the suite from 376 to 396 of 400 but lost the 3M match against
+`pimc72` with a score of 40.4%.
 
-- **Claims:** none.
-- **Measure:** the method, 3M, `stronger`.
+`turnbudget72` raises the scoring limit to 4,096 worlds and stops at the
+decision's work budget. It requires at least 48 complete scoring worlds before
+it can override the rollout policy. Outside the active player's empty-stack
+priority, it uses PIMC as `turn72` does.
+
+With `walker` enabled, the budgeted search passed 398 of 400 suite runs against
+376 for PIMC. Teferi rose from 5 to 20 passes out of 20 and Subtlety from 11 to
+20\. Staff before combat damage fell from 20 to 18. At 3M the budgeted search
+scored 54.3% over 600 held-out games and 52.6% over 1,200 fresh confirmation
+games. Both matches ended undecided under the `stronger` bar and meet the
+capped-match guidance for a blunder rung in §4.4. The short 10M match was
+inconclusive. The 30M suite measures blunders, so use the 3M family explicitly
+for the measured configuration:
+
+```text
+turnbudget72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired+walker@3M
+```
 
 ## 7. Speed
 

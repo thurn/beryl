@@ -79,6 +79,8 @@ pub enum Method {
     Pimc { worlds: u16 },
     /// Bounded turn search on own-turn empty-stack priority, PIMC elsewhere.
     Turn,
+    /// Turn search that uses the work budget for more scoring worlds.
+    TurnBudget,
     /// `trees` root-parallel trees, a fresh world each iteration.
     Ismcts { trees: u16 },
 }
@@ -247,6 +249,7 @@ impl fmt::Display for Family {
         match self.method {
             Method::Pimc { worlds } => write!(f, "pimc{worlds}")?,
             Method::Turn => write!(f, "turn72")?,
+            Method::TurnBudget => write!(f, "turnbudget72")?,
             Method::Ismcts { trees } => write!(f, "ismcts{trees}")?,
         }
         let sight = match self.sight {
@@ -282,7 +285,8 @@ impl FromStr for Family {
         let bad = || {
             format!(
                 "{s:?} is no family: method/sight/leaf/knowledge[/options], as \
-                 ismcts18/hidden/rollout/tuned (pimcN, ismctsN or turn72; hidden, hands or omniscient; \
+                 ismcts18/hidden/rollout/tuned (pimcN, ismctsN, turn72 or turnbudget72; \
+                 hidden, hands or omniscient; \
                  rollout, cutN or eval; estimate or tuned; options anchor, expert, guard, mid, \
                  means, hold, waste, combat, order, sure, paired, first, walker and prior joined by + in \
                  that order; expert, guard, sure and paired require anchor; first requires paired; \
@@ -340,6 +344,8 @@ impl FromStr for Family {
             Method::Ismcts { trees: n }
         } else if method == "turn72" {
             Method::Turn
+        } else if method == "turnbudget72" {
+            Method::TurnBudget
         } else {
             return Err(bad());
         };
@@ -474,7 +480,7 @@ impl<L: Layout> LongSearch<L> {
         let (n, resample) = match self.settings.family.method {
             Method::Pimc { worlds } => (worlds, false),
             Method::Ismcts { trees } => (trees, true),
-            Method::Turn => (72, false),
+            Method::Turn | Method::TurnBudget => (72, false),
         };
         let known: Bitboard<L::Slot> = L::Slot::all().filter(|&slot| obs.knows(slot)).collect();
         (0..n.max(1))
@@ -978,7 +984,8 @@ impl<L: Layout> LongSearch<L> {
         {
             return Choice(0);
         }
-        if self.settings.family.method == Method::Turn
+        let method = self.settings.family.method;
+        if matches!(method, Method::Turn | Method::TurnBudget)
             && d.kind == DecisionKind::Priority
             && d.player == obs.turn().active()
             && obs.stack().is_empty()
@@ -1898,6 +1905,7 @@ mod tests {
             "pimc72/hidden/rollout/tuned/anchor+mid+means",
             "pimc72/hidden/rollout/tuned/anchor+guard",
             "turn72/hidden/rollout/tuned/anchor+guard",
+            "turnbudget72/hidden/rollout/tuned/anchor+guard+hold+waste+combat+sure+paired+walker",
             "pimc72/hidden/rollout/tuned/anchor+guard+mid+means",
             "pimc72/hidden/rollout/tuned/anchor+hold",
             "pimc72/hidden/rollout/tuned/anchor+guard+hold+waste+combat",
