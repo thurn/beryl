@@ -68,7 +68,7 @@ impl Ledger {
                 .sum::<f64>()
                 .round() as u32,
             swap_used_mb: self.pressure.swap_used_mb(),
-            memory_pressed: self.pressure.pressed(self.free_memory_mb),
+            memory_pressed: self.memory_pressed(self.free_memory_mb),
             max_per_command: self.limits.max_per_command(),
             free_memory_mb: self.free_memory_mb,
             tip_build: self.limits.tip_build,

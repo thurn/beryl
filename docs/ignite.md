@@ -1130,7 +1130,8 @@ Rules for trees:
   Free trees are cleared in two passes, each oldest first: first those whose
   deletion alone frees at least 1 GB, so a donor whose blocks a leased tree's
   clones share is kept, then any whose bytes no tree outside the free ones
-  shares.
+  shares. When a sweep gives a tree back, any lease that had to wait for it can
+  proceed, even when the sweep found no builds to clear.
 - A build waits to start while the disk has less than 30 GB free, reading the
   free space again every 10 seconds, until there is room or its work is stopped.
   A backup's APFS snapshot keeps every block that builds rewrite or delete
@@ -3469,6 +3470,8 @@ tiers with the same `[pool.cli]` and `[pool.models]` tables.
 - The daemon includes each provider whose probe passed when it asks the hub for
   work. The hub names the provider in its reservation. The daemon gives back a
   reservation if that provider went on a CLI hold or has no configured program.
+  The daemon reads available memory when it computes worker room and checks for
+  memory pressure again after getting a reservation.
 - Each new worker gets a session ID, `cli-<app>-<8 hex>`, which every turn
   carries in `IGNITE_SESSION`. The daemon takes the lowest free worker number
   for the provider and stores the worker's ticket, model, effort, turn number

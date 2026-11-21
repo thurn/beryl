@@ -22,6 +22,20 @@ fn write_build(trees: &Trees, tree: &str) {
 }
 
 #[test]
+fn restoring_a_swept_tree_serves_a_lease_that_arrived_during_the_sweep() {
+    let f = Fixture::new(1, 1);
+    let row = f.trees.take_for_sweep("tree-01").unwrap().unwrap();
+    let Lease::Waiting(waiter) = f.trees.lease(f.request("T.1", false)).unwrap() else {
+        panic!("a lease cannot take the tree during a sweep");
+    };
+
+    f.trees.put_back(&row).unwrap();
+
+    let lease = waiter.wait(Duration::ZERO).unwrap().unwrap();
+    assert_eq!(lease.tree, id("tree-01"));
+}
+
+#[test]
 fn outside_growth_reduces_the_budget_and_the_sweep_brings_trees_under_it() {
     let f = Fixture::new(2, 1);
     for tree in ["tree-01", "tree-02"] {

@@ -12,6 +12,8 @@ use std::collections::VecDeque;
 
 use ignite_core::time::Timestamp;
 
+use super::Scheduler;
+
 /// How long a grant's use is measured before it lends anything, and the window its long-run
 /// use is averaged over. A build alternates between compiling on every core and linking on
 /// one, each phase seconds long, so a window shorter than that would lend cores a moment before
@@ -146,5 +148,14 @@ impl Pressure {
     pub fn pressed(&self, free_memory_mb: Option<u64>) -> bool {
         self.swap_growth_mb() >= SWAP_GROWTH_MB
             || free_memory_mb.is_some_and(|mb| mb < LOW_MEMORY_MB)
+    }
+}
+
+impl Scheduler {
+    /// Reads memory for a worker admission decision without waiting for the next sample.
+    /// A failed read leaves available memory unknown. The periodic swap history still applies.
+    pub fn worker_memory(&self) -> (bool, Option<u64>) {
+        let free = self.host.free_memory_mb().ok();
+        (self.lock().ledger.memory_pressed(free), free)
     }
 }

@@ -204,6 +204,7 @@ fn shrinking_agent_builds_give_their_cores_back_to_a_tip_build() {
 fn an_adopted_tip_build_holds_the_reserve_until_released() {
     let clock = Arc::new(FakeClock::new(T0));
     let host = Arc::new(FakeHost {
+        free_memory_mb: Mutex::new(None),
         busy: Mutex::new(0.0),
         trees: Mutex::new(BTreeMap::new()),
     });
@@ -230,6 +231,7 @@ fn an_adopted_tip_build_holds_the_reserve_until_released() {
 fn the_express_lane_borrows_the_idle_reserve_and_a_tip_build_still_gets_it() {
     let clock = Arc::new(FakeClock::new(T0));
     let host = Arc::new(FakeHost {
+        free_memory_mb: Mutex::new(None),
         busy: Mutex::new(0.0),
         trees: Mutex::new(BTreeMap::new()),
     });

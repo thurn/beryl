@@ -428,10 +428,12 @@ impl Trees {
 
     /// Writes a swept tree's row back, which frees it. If that write fails, tries once more to
     /// free the tree by changing only its state, so a store error cannot leave it `resetting`
-    /// (nothing but a daemon restart would move it).
+    /// (nothing but a daemon restart would move it). A lease that arrived during the sweep
+    /// may be waiting for this tree, even if the sweep found no builds to delete.
     pub(super) fn put_back(&self, row: &rows::Tree) -> Result<()> {
         let locked = self.lock();
-        if let Err(error) = store::upsert(&locked.db, row) {
+        let result = store::upsert(&locked.db, row);
+        if result.is_err() {
             let _ = store::transition(
                 &locked.db,
                 &row.id,
@@ -439,9 +441,10 @@ impl Trees {
                 store::State::Free,
                 &self.now(),
             );
-            return Err(store_error(&error));
         }
-        Ok(())
+        drop(locked);
+        self.serve_waiters();
+        result.map_err(|error| store_error(&error))
     }
 }
 

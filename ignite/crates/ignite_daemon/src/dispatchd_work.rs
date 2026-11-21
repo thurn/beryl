@@ -303,10 +303,13 @@ impl Dispatcher {
                 .cli
                 .get()
                 .expect("only a configured CLI pool asks for work");
-            if room.memory_pressed
-                || !room.providers.iter().any(|provider| provider.name == app)
-                || !cli.can_start(&app)
-            {
+            let (_, memory_pressed, _) = self.host.worker_capacity();
+            if room.memory_pressed || memory_pressed {
+                "memory pressure prevents another worker from starting".clone_into(&mut why);
+                cli::refuse(ctx, &reservation, &why);
+                break;
+            }
+            if !room.providers.iter().any(|provider| provider.name == app) || !cli.can_start(&app) {
                 why = format!("{app} cannot start a worker now");
                 cli::refuse(ctx, &reservation, &why);
                 break;
@@ -425,4 +428,28 @@ fn handoff_details(
             .to_owned(),
         app: app.to_owned(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::dispatchd::cli_tests::{cli, reserve};
+    use crate::dispatchd::tests::{lock, rig, ticket_id};
+
+    #[test]
+    fn a_reservation_is_returned_when_memory_pressure_changes_after_planning() {
+        let rig = rig(&[]);
+        let fake = cli(&rig, 2);
+        reserve(&rig, "T.1", "reservation-1", &[]);
+        let asking = rig
+            .dispatcher
+            .plan_asking(&mut rig.dispatcher.state())
+            .expect("the machine initially has worker room");
+
+        *lock(&rig.host.worker_capacity) = (2, true, Some(512));
+        let (offers, _) = rig.dispatcher.ask_for_work(&rig.ctx, asking);
+
+        assert!(offers.is_empty());
+        assert!(fake.begun().is_empty());
+        assert_eq!(rig.hub.refused_reservations()[0].ticket, ticket_id("T.1"));
+    }
 }

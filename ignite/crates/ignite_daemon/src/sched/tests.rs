@@ -451,6 +451,7 @@ fn a_grant_sets_the_thread_counts() {
 /// A host whose CPU and memory readings the test sets.
 struct FakeHost {
     busy: Mutex<f64>,
+    free_memory_mb: Mutex<Option<u64>>,
     /// The CPU seconds each process tree has used so far, by the PID at its root. A PID not
     /// listed does not run.
     trees: Mutex<BTreeMap<u32, f64>>,
@@ -466,7 +467,10 @@ impl HostCpu for FakeHost {
     }
 
     fn free_memory_mb(&self) -> io::Result<u64> {
-        Err(io::Error::other("not read"))
+        self.free_memory_mb
+            .lock()
+            .unwrap()
+            .ok_or_else(|| io::Error::other("not read"))
     }
 
     fn process_tree_cpu_seconds(&self, pid: u32) -> io::Result<f64> {
@@ -483,6 +487,7 @@ fn scheduler() -> (Arc<Scheduler>, Arc<FakeClock>, Arc<FakeHost>) {
     let clock = Arc::new(FakeClock::new(T0));
     let host = Arc::new(FakeHost {
         busy: Mutex::new(0.0),
+        free_memory_mb: Mutex::new(None),
         trees: Mutex::new(BTreeMap::new()),
     });
     let scheduler = Scheduler::new(limits(), clock.clone(), host.clone());
@@ -548,6 +553,19 @@ fn an_idle_command_is_told_to_stop_when_land_waits() {
     // A grant released without being asked to stop reports false.
     scheduler.release(&land);
     assert!(!scheduler.wait_stop(land.id));
+}
+
+#[test]
+fn worker_admission_reads_memory_since_the_last_scheduler_sample() {
+    let (scheduler, _, host) = scheduler();
+    *host.free_memory_mb.lock().unwrap() = Some(8_000);
+    scheduler.sample();
+
+    *host.free_memory_mb.lock().unwrap() = Some(512);
+    assert_eq!(scheduler.worker_memory(), (true, Some(512)));
+
+    *host.free_memory_mb.lock().unwrap() = None;
+    assert_eq!(scheduler.worker_memory(), (false, None));
 }
 
 #[test]

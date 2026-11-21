@@ -129,6 +129,11 @@ pub struct Ledger {
 }
 
 impl Ledger {
+    /// Applies the scheduler's swap history to a current free-memory reading.
+    pub(super) fn memory_pressed(&self, free_memory_mb: Option<u64>) -> bool {
+        self.pressure.pressed(free_memory_mb)
+    }
+
     pub fn new(limits: Limits) -> Self {
         Self {
             limits,

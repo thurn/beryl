@@ -418,12 +418,8 @@ impl Host for DaemonHost {
     }
 
     fn worker_capacity(&self) -> (u32, bool, Option<u64>) {
-        let status = self.scheduler.status();
-        (
-            self.worker_ceiling,
-            status.memory_pressed,
-            status.free_memory_mb,
-        )
+        let (pressed, free) = self.scheduler.worker_memory();
+        (self.worker_ceiling, pressed, free)
     }
 
     fn observe_queue(&self, now: Timestamp) {
