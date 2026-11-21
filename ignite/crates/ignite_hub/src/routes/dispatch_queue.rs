@@ -256,8 +256,13 @@ struct Snapshot {
 
 impl Snapshot {
     fn load(conn: &Connection, now: Timestamp) -> Result<Snapshot> {
-        let mut statement =
-            conn.prepare("SELECT id, parent, workers, max_workers, status, owner FROM tickets")?;
+        // A meta-ticket's schedule is what asks for its copies to be worked, so one with no
+        // allocation counts as an epic with an allocation of 1. Without that its copies, which
+        // have a parent and so are not loose, would wait for an allocation nobody sets.
+        let mut statement = conn.prepare(
+            "SELECT id, parent, coalesce(workers, CASE type WHEN 'meta' THEN 1 END), max_workers, \
+             status, owner FROM tickets",
+        )?;
         let rows = statement.query_map([], |row| {
             Ok((
                 row.get::<_, String>(0)?,
@@ -411,7 +416,8 @@ impl Snapshot {
     ///
     /// An epic is active when it has an allocation (the `workers` column) greater than zero: the
     /// nearest ancestor with an allocation decides, so an epic set to 0 stops its milestones however their
-    /// parent is set. A ticket with no parent has no epic a person could activate, so a person
+    /// parent is set. A meta-ticket always has one (see [`Snapshot::load`]), so its copies are
+    /// offered. A ticket with no parent has no epic a person could activate, so a person
     /// releasing it (only an `open` ticket gets here) is what asks for it to be worked. A ticket
     /// started by name skips these rules, because `/claims` does not ask the queue.
     fn offered(&self, ticket: Ticket) -> Option<Ticket> {

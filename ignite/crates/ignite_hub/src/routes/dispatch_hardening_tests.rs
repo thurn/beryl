@@ -42,6 +42,47 @@ fn every_label_the_hub_files_with_is_offered_under_an_inactive_epic() {
 }
 
 #[test]
+fn a_scheduled_ticket_s_copy_is_offered_and_an_allocation_of_zero_parks_it() {
+    let mut conn = hub::open_in_memory().unwrap();
+    let request = BatchRequest {
+        preconditions: Vec::new(),
+        ops: vec![Operation::Create {
+            fields: TicketFields {
+                title: Some("Sweep stale tickets".to_owned()),
+                ticket_type: Some(TicketType::Meta),
+                every_hours: Some(Some(6)),
+                ..TicketFields::default()
+            },
+            parent: None,
+            deps: Vec::new(),
+            request_key: None,
+        }],
+    };
+    // Files the meta-ticket and its first copy, and returns both.
+    let schedule = |conn: &mut rusqlite::Connection| {
+        let batch::BatchOutcome::Applied(filed) =
+            batch::apply(conn, &request, "person", "", start()).unwrap()
+        else {
+            panic!("the meta-ticket was refused");
+        };
+        let copies = crate::upkeep::schedules::file_due(conn, start()).unwrap();
+        (filed.results[0].id.clone(), copies)
+    };
+    let (meta, copies) = schedule(&mut conn);
+    assert_eq!(copies, vec![format!("{meta}.1")]);
+    // The copy has a parent, the meta-ticket, which nobody gave an allocation.
+    let (_, reply) = post(&mut conn, "/next", &free("m-1", &["local_a"]), start());
+    assert_eq!(reply["ticket"], copies[0].as_str());
+
+    // A person can still park the schedule's work, as with an epic.
+    let mut conn = hub::open_in_memory().unwrap();
+    let (meta, _) = schedule(&mut conn);
+    super::tests::set_workers(&mut conn, &meta, 0);
+    let (_, reply) = post(&mut conn, "/next", &free("m-1", &["local_a"]), start());
+    assert_eq!(reply, Value::Null);
+}
+
+#[test]
 fn a_justiciar_ticket_is_offered_before_a_regression() {
     let mut conn = hub::open_in_memory().unwrap();
     let ids = file(
