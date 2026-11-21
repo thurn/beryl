@@ -263,6 +263,11 @@ impl Builds for MeteredBuilds {
         self.timed(|| self.inner.ensure_for(tree, product, packages, who))
     }
 
+    // Nextest must use the same package selection as the build it waits for.
+    fn selected(&self, tree: &TreeId, product: &str, packages: &[String]) -> Vec<String> {
+        self.inner.selected(tree, product, packages)
+    }
+
     fn has_built(&self, tree: &TreeId, product: &str) -> bool {
         self.inner.has_built(tree, product)
     }
@@ -290,7 +295,7 @@ impl Builds for MeteredBuilds {
 
 #[cfg(test)]
 mod tests {
-    use ignite_core::fakes::FakeClock;
+    use ignite_core::fakes::{FakeBuilds, FakeClock};
 
     use super::*;
 
@@ -307,6 +312,21 @@ mod tests {
                 listing_alone_s: 0.0,
             }),
         }
+    }
+
+    #[test]
+    fn tip_nextest_uses_the_builds_package_selection() {
+        let tree = TreeId::new("landing-1").unwrap();
+        let inner = Arc::new(FakeBuilds::default());
+        // The subset's features differ, so the build manager builds the whole workspace.
+        inner.script_selected(&tree, "tests", &[]);
+        let builds = MeteredBuilds {
+            inner,
+            meter: Arc::new(meter(&Arc::new(FakeClock::new(Timestamp::EPOCH)))),
+        };
+        let requested = ["core".to_owned()];
+
+        assert!(builds.selected(&tree, "tests", &requested).is_empty());
     }
 
     fn alone(meter: &Meter) -> f64 {
