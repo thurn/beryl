@@ -327,8 +327,9 @@ valid edit arrives. The log names the file and the validation error.
 
 Changing how far a card lifts is then an edit to a JSON file and one
 `just b3d png`, with no compile. Verb, audit, pointer, playback, presentation,
-lighting and shadow tuning already take this path. During the conversion,
-`space-constants.json` holds spatial values that still generate Rust constants.
+lighting, shadow, arrow, mark and combat emblem tuning already take this path.
+During the conversion, `space-constants.json` holds spatial values that still
+generate Rust constants.
 
 ### Effects
 

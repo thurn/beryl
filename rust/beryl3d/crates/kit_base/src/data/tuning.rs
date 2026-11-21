@@ -4,6 +4,7 @@ use glam::Vec2;
 use serde::de::{DeserializeOwned, Error};
 use serde::{Deserialize, Deserializer};
 
+use super::light::{Light, Own};
 use super::lighting::Lighting;
 use super::playback::{CatchUp, FrameRate, Slide, TierProbe};
 use super::pointer::PointerTuning;
@@ -16,6 +17,8 @@ pub struct Data {
     pub verbs: Verbs,
     pub audit: Audit,
     pub pointer: PointerTuning,
+    pub light: Light,
+    pub own: Own,
     pub catch_up: CatchUp,
     pub frame_rate: FrameRate,
     pub slide: Slide,
@@ -39,7 +42,8 @@ impl Data {
     ) -> Result<Self, String> {
         let VerbFile { verbs } = read("verbs.json", &load("verbs.json")?)?;
         validate(&verbs).map_err(|(key, why)| format!("verbs.json: verbs.{key}: {why}"))?;
-        let effects = Effects::parse(effects)?;
+        let light = Light::parse(&load("light.json")?)?;
+        let effects = Effects::parse(effects)?.with_lift(light.lift);
         for required in ["glow", "dissolve", "loss"] {
             if effects.get(required).is_none() {
                 return Err(format!("effects/{required}.json: missing definition"));
@@ -49,6 +53,8 @@ impl Data {
             verbs,
             audit: read("audit.json", &load("audit.json")?)?,
             pointer: PointerTuning::parse(&load("pointer.json")?)?,
+            light,
+            own: Own::parse(&load("own.json")?)?,
             catch_up: CatchUp::parse(&load("catch-up.json")?)?,
             frame_rate: FrameRate::parse(&load("frame-rate.json")?)?,
             slide: read("slide.json", &load("slide.json")?)?,

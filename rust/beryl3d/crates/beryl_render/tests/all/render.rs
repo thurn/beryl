@@ -21,8 +21,16 @@ pub(super) fn renderer(limits: Limits) -> Renderer {
     let mut renderer =
         Renderer::headless(limits, crate::lighting()).expect("a GPU adapter and device");
     let format = Format::choose(&renderer.formats());
+    let tuning = (
+        kit_base::data::light::Light::parse(include_str!(
+            "../../../../../../data/beryl3d/light.json"
+        ))
+        .unwrap(),
+        kit_base::data::light::Own::parse(include_str!("../../../../../../data/beryl3d/own.json"))
+            .unwrap(),
+    );
     renderer.set_faces(&["", "Island", "Plains", "Counterspell"], format);
-    assert!(renderer.upload_page(&light::prepared()));
+    assert!(renderer.upload_page(&light::prepared(&tuning.0, &tuning.1)));
     renderer
 }
 

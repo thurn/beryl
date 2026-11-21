@@ -1650,8 +1650,8 @@ streaks and notices (`StepOut`).
   in that frame, on the screen, with the web stage's shapes
   (`ui/src/stage/lines.ts`): a target arrow arcs over what lies between, the
   line to a source sags toward the bottom of the window by `light.sag`, and a
-  line of combat runs straight. Its values are under `light` in
-  `space-constants.json`.
+  line of combat runs straight. Its values are in `data/beryl3d/light.json`,
+  read at runtime.
 - **A step ends when its animation ends.** A script's beats play in order, the
   steps of one beat together, on the time passed to `frame`.
 - **A notice outlives its beat.** `announce` moves nothing: it writes a

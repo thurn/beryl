@@ -608,7 +608,9 @@ impl Show {
         let dress = Dress {
             effects: &self.card_effects,
             badges: &self.badges,
-            marks: &|on, look| light::marks::look(&self.lit, on, now, look),
+            marks: &|on, look| {
+                light::marks::look(&self.table.data().light, &self.lit, on, now, look)
+            },
             pointer: &|slot, camera, look| {
                 crate::pointer::look(pointer, slot, (now, camera), tuning, look);
             },

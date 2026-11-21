@@ -658,7 +658,7 @@ impl Table {
         if shown.zone == ZoneName::Battlefield {
             own::write(
                 (slot, shown),
-                &look,
+                (&look, &self.data.own),
                 &self.fights,
                 (dress.now, band),
                 builder,
@@ -744,7 +744,7 @@ impl Table {
         // flat layer.
         let resting = if opacity == 255 && look.dissolve <= 0.0 && look.whiten <= 0.0 {
             Band::Opaque
-        } else if look.pose.position.z < kit_base::data::space::light::ON_TABLE_BELOW {
+        } else if look.pose.position.z < self.data.light.on_table_below {
             Band::TableMarks
         } else {
             Band::RaisedMarks

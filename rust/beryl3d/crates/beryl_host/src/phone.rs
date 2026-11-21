@@ -196,7 +196,7 @@ impl Phone {
     fn open(
         &mut self,
         (client, mut feed): (Client, Box<dyn Feed>),
-        mut renderer: Renderer,
+        renderer: Renderer,
         output: Output,
         size: Input,
     ) {
@@ -210,7 +210,7 @@ impl Phone {
         let chosen = Chosen::BASELINE;
         let mut frames = FrameLoop::new(client, Platform::default())
             .with_feed(feed)
-            .with_assets(Assets::live(&mut renderer, {
+            .with_assets(Assets::live({
                 let inbox = self.inbox.clone();
                 move || {
                     inbox.send(Input::Nudge);

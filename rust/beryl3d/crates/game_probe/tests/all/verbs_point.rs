@@ -10,7 +10,6 @@ use game_play::light::arrows::RIBBON;
 use game_play::play::Show;
 use game_probe::agent::steps::{no_jumps, rest_equals_placement, step_times};
 use glam::Vec2;
-use kit_base::data::space::light;
 use kit_frame::frame::{Frame, Material, Role};
 use kit_probe::agent::checks::{KeptArrow, keep_arrows, lines_hold};
 use kit_probe::agent::{Context, Layout, TreeOptions};
@@ -368,13 +367,14 @@ fn an_arrow_at_a_player_ends_inside_their_life_total() {
     let drawn = played.last_frame();
     let arrow = arrows(&drawn)[0];
     let table = played.show.table();
+    let light = &table.data().light;
     let camera = table.camera();
     let anchor = camera.to_screen(table.player_pose(Side::Opponent).position);
     // The life orb's half-size, in pixels of the web's stage, whose 900 are the window's height.
-    let half = light::PLAYER_HALF_PIXELS * (camera.window.size.height / 900.0);
+    let half = light.player_half_pixels * (camera.window.size.height / 900.0);
     let inside = ((arrow.corners[3] - anchor) / half).length();
     assert!(
-        (inside - (1.0 - light::onto::INTO)).abs() < 0.01,
+        (inside - (1.0 - light.onto.into)).abs() < 0.01,
         "{:?} ends {inside} of the way out from {anchor:?}",
         arrow.corners
     );

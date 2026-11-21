@@ -5,7 +5,6 @@ use glam::{Affine3A, Vec2, Vec3};
 
 use super::{EffectRun, Reach, player};
 use kit_base::data::effect::Effects;
-use kit_base::data::space::light::LIFT;
 use kit_base::pose::Pose;
 use kit_frame::frame::{Draw, EffectLook, FrameBuilder, Sprite, sprites};
 
@@ -26,7 +25,7 @@ pub fn write(
                 *run,
                 now,
                 |ago| reach_at(run.on, ago),
-                eye,
+                (eye, effects.lift()),
                 builder,
             );
         }
@@ -37,12 +36,12 @@ pub fn write(
 pub(super) fn record_as(
     builder: &mut FrameBuilder<'_>,
     run: &EffectRun,
-    pose: &Pose,
+    (pose, lift): (&Pose, f32),
     half: Vec2,
     (scale, opacity): (f32, f32),
 ) {
     let size = (half * 2.0 * scale).extend(1.0);
-    let model = Affine3A::from_scale_rotation_translation(size, pose.rotation, above(pose));
+    let model = Affine3A::from_scale_rotation_translation(size, pose.rotation, above(pose, lift));
     builder.effect(EffectLook {
         name: run.effect.name(),
         on: Some(run.on),
@@ -53,17 +52,26 @@ pub(super) fn record_as(
 
 /// A glow record of `sprite`, `size` millimetres large, lying in the plane of the face of
 /// what is at `pose`, just over it.
-pub(super) fn lying(pose: &Pose, size: Vec2, tint: [u8; 4], sprite: Sprite, progress: f32) -> Draw {
-    let transform =
-        Affine3A::from_scale_rotation_translation(size.extend(1.0), pose.rotation, above(pose));
+pub(super) fn lying(
+    (pose, lift): (&Pose, f32),
+    size: Vec2,
+    tint: [u8; 4],
+    sprite: Sprite,
+    progress: f32,
+) -> Draw {
+    let transform = Affine3A::from_scale_rotation_translation(
+        size.extend(1.0),
+        pose.rotation,
+        above(pose, lift),
+    );
     Draw::glow(transform, tint, sprite, progress)
 }
 
 /// The point `light.lift` millimetres over the middle of what is at `pose`, along its face's
 /// normal, as a mark lies, so that a card held up toward the camera has its light in front of
 /// it too.
-pub(super) fn above(pose: &Pose) -> Vec3 {
-    pose.position + pose.rotation * Vec3::Z * LIFT
+pub(super) fn above(pose: &Pose, lift: f32) -> Vec3 {
+    pose.position + pose.rotation * Vec3::Z * lift
 }
 
 /// `tint` with its opacity scaled by `by`, from 0 to 1.
@@ -81,13 +89,13 @@ pub(super) fn fade(tint: [u8; 4], by: f32) -> [u8; 4] {
 pub(super) fn path_streak(
     reach: Reach,
     was: Reach,
-    eye: Vec3,
+    (eye, lift): (Vec3, f32),
     minimum: f32,
     width: f32,
     tint: [u8; 4],
 ) -> Option<Draw> {
     let longer = reach.half.x.max(reach.half.y);
-    let (to, from) = (above(&reach.pose), above(&was.pose));
+    let (to, from) = (above(&reach.pose, lift), above(&was.pose, lift));
     let way = to - from;
     let length = way.length();
     if length <= 0.0 || length < longer * minimum {

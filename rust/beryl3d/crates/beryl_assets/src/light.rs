@@ -9,7 +9,7 @@
 //! its first frame.
 
 use kit_base::atlas::AssetReady;
-use kit_base::data::space::light::glow;
+use kit_base::data::light::{Glow, Light, Own};
 use kit_frame::frame::{Sprite, sprites};
 
 use crate::packer::PAGE_SIZE;
@@ -26,11 +26,15 @@ const TEXEL: f32 = 1.0 / HALF;
 
 /// The atlas's page 0, `PAGE_SIZE` rows of as many 8-bit opacity texels, top row first.
 #[must_use]
-pub fn light_page() -> Vec<u8> {
+pub fn light_page(light: &Light, own: &Own) -> Vec<u8> {
     let side = usize::from(PAGE_SIZE);
     let mut pixels = vec![0; side * side];
+    let tuning = Tuning {
+        glow: &light.glow,
+        chevron: own.wedge.chevron,
+    };
     for (sprite, shape) in SHAPES {
-        draw(&mut pixels, sprite, shape);
+        draw(&mut pixels, sprite, (&tuning, shape));
     }
     pixels
 }
@@ -39,11 +43,11 @@ pub fn light_page() -> Vec<u8> {
 /// Its `ready` lists no glyphs, and the client needs nothing from it: the cells of `sprites`
 /// are constants.
 #[must_use]
-pub fn prepared() -> Prepared {
+pub fn prepared(light: &Light, own: &Own) -> Prepared {
     Prepared {
         upload: Upload::AtlasPage {
             page: sprites::PAGE,
-            pixels: light_page(),
+            pixels: light_page(light, own),
         },
         ready: AssetReady::Glyphs {
             page: sprites::PAGE,
@@ -52,32 +56,41 @@ pub fn prepared() -> Prepared {
     }
 }
 
-/// A shape: given a point of its cell, x right and y up, each from -1 to 1 across the drawn
-/// area, its opacity there from 0 to 1.
-type Shape = fn(f32, f32) -> f32;
+/// The tuning the shapes of light are drawn from: the glow of the ribbons, and how far the
+/// attacker's chevron reaches past its card, in card widths. The scene reads the same values
+/// when it sizes and lights the records that sample these shapes.
+#[derive(Clone, Copy)]
+struct Tuning<'a> {
+    glow: &'a Glow,
+    chevron: f32,
+}
+
+/// A shape: given the tuning and a point of its cell, x right and y up, each from -1 to 1
+/// across the drawn area, its opacity there from 0 to 1.
+type Shape = fn(&Tuning<'_>, f32, f32) -> f32;
 
 /// Each shape with its cell.
 const SHAPES: [(Sprite, Shape); 16] = [
-    (sprites::DISC, disc),
-    (sprites::BURST, burst),
-    (sprites::RING, ring),
-    (sprites::CONE, cone),
-    (sprites::COMET, comet),
+    (sprites::DISC, |_, x, y| disc(x, y)),
+    (sprites::BURST, |_, x, y| burst(x, y)),
+    (sprites::RING, |_, x, y| ring(x, y)),
+    (sprites::CONE, |_, x, y| cone(x, y)),
+    (sprites::COMET, |_, x, y| comet(x, y)),
     (sprites::RIBBON_CELL, ribbons),
-    (sprites::OUTLINE, outline),
-    (sprites::HEAD, head),
+    (sprites::OUTLINE, |_, x, y| outline(x, y)),
+    (sprites::HEAD, |_, x, y| head(x, y)),
     (sprites::WEDGE, wedge),
-    (sprites::CRESCENT, crescent),
-    (sprites::TAP, tap),
-    (sprites::MOON, moon),
-    (sprites::PLAQUE, plaque),
-    (sprites::COIN, coin),
-    (sprites::HALO, halo),
+    (sprites::CRESCENT, |_, x, y| crescent(x, y)),
+    (sprites::TAP, |_, x, y| tap(x, y)),
+    (sprites::MOON, |_, x, y| moon(x, y)),
+    (sprites::PLAQUE, |_, x, y| plaque(x, y)),
+    (sprites::COIN, |_, x, y| coin(x, y)),
+    (sprites::HALO, |_, x, y| halo(x, y)),
     (sprites::WEDGE_HOT, wedge_hot),
 ];
 
 /// Fills `sprite`'s cell of `pixels` with `shape`, leaving its border empty.
-fn draw(pixels: &mut [u8], sprite: Sprite, shape: Shape) {
+fn draw(pixels: &mut [u8], sprite: Sprite, (tuning, shape): (&Tuning<'_>, Shape)) {
     let [left, top, width, height] = sprite.rect;
     let side = usize::from(PAGE_SIZE);
     for row in BORDER..height - BORDER {
@@ -85,7 +98,7 @@ fn draw(pixels: &mut [u8], sprite: Sprite, shape: Shape) {
             // The texel's centre, from -1 to 1 across the drawn area, y up.
             let x = (f32::from(column - BORDER) + 0.5) / HALF - 1.0;
             let y = 1.0 - (f32::from(row - BORDER) + 0.5) / HALF;
-            let opacity = shape(x, y).clamp(0.0, 1.0);
+            let opacity = shape(tuning, x, y).clamp(0.0, 1.0);
             let index = usize::from(top + row) * side + usize::from(left + column);
             pixels[index] = (opacity * 255.0).round() as u8;
         }
@@ -207,7 +220,7 @@ fn comet(x: f32, y: f32) -> f32 {
 /// `sprites::RIBBON_CORE`, an arrow's hot core, and the columns of `sprites::ribbon_lit`, each
 /// a ribbon's body and halo. Each is the same all along, so a record draws its profile across
 /// whatever stretch of the ribbon its quad covers.
-fn ribbons(x: f32, y: f32) -> f32 {
+fn ribbons(tuning: &Tuning<'_>, x: f32, y: f32) -> f32 {
     // The texel column `x` is the middle of, counted from the cell's left edge.
     let column = (x + 1.0) * HALF + f32::from(BORDER) - 0.5;
     let first = f32::from(sprites::RIBBON_LIT_FIRST);
@@ -221,11 +234,11 @@ fn ribbons(x: f32, y: f32) -> f32 {
         if lit >= sprites::RIBBON_LIT_COLUMNS {
             return 0.0;
         }
-        return ribbon_lit(sprites::ribbon_lit_share(lit), y.abs());
+        return ribbon_lit(tuning.glow, sprites::ribbon_lit_share(lit), y.abs());
     }
     let core = f32::from(sprites::RIBBON_CORE.rect[0] - sprites::RIBBON_CELL.rect[0]);
     if column >= core - 8.0 {
-        return ribbon_core(y.abs());
+        return ribbon_core(tuning.glow, y.abs());
     }
     falloff(y.abs())
 }
@@ -234,8 +247,8 @@ fn ribbons(x: f32, y: f32) -> f32 {
 /// `1 - exp(-1.5 x)`, which burns what is past full toward white as a bloom does. A shape of
 /// light holds its light soft-clipped at the gain `light.glow.gain`, and a record's tint
 /// fades it from there.
-fn soft_clipped(light: f32) -> f32 {
-    1.0 - (-1.5 * glow::GAIN * light).exp()
+fn soft_clipped(glow: &Glow, light: f32) -> f32 {
+    1.0 - (-1.5 * glow.gain * light).exp()
 }
 
 /// A ribbon's body and halo `across` from its middle, in shares of its quad's half height, where
@@ -246,10 +259,10 @@ fn soft_clipped(light: f32) -> f32 {
 /// `2.6 b + 16` pixels high on each side, as the web's strip is, so the halo's scale is a share
 /// of that height that depends on `share` alone. The web's noise along the ribbon averages
 /// about 1, and its edge here is faded over the last tenth of the quad.
-fn ribbon_lit(share: f32, across: f32) -> f32 {
+fn ribbon_lit(glow: &Glow, share: f32, across: f32) -> f32 {
     // From `share = b / h` and `h = reach_share b + reach_pixels`: the pixel, in shares of h.
-    let pixel = ((1.0 - glow::REACH_SHARE * share) / glow::REACH_PIXELS).max(0.0);
-    let halo_scale = glow::HALO_SHARE * share + glow::HALO_PIXELS * pixel;
+    let pixel = ((1.0 - glow.reach_share * share) / glow.reach_pixels).max(0.0);
+    let halo_scale = glow.halo_share * share + glow.halo_pixels * pixel;
     let body = if share > 0.0 {
         1.0 - smooth(0.4, 1.08, across / share)
     } else {
@@ -257,15 +270,15 @@ fn ribbon_lit(share: f32, across: f32) -> f32 {
     };
     let halo = (-across / halo_scale).exp();
     let edge = 1.0 - smooth(0.9, 1.0, across);
-    soft_clipped(glow::BODY * body + glow::HALO * halo) * edge
+    soft_clipped(glow, glow.body * body + glow.halo * halo) * edge
 }
 
 /// An arrow's hot core `across` from its middle, in shares of its quad's half height, which is
 /// `light.glow.core_reach` times the body's half-width: the web's `exp(-(2.5 x)^2)`, with `x`
 /// the distance in body half-widths, at the strength of its noise's average.
-fn ribbon_core(across: f32) -> f32 {
-    let x = across * glow::CORE_REACH;
-    soft_clipped(glow::CORE * (-(2.5 * x).powi(2)).exp()) * (1.0 - smooth(0.9, 1.0, across))
+fn ribbon_core(glow: &Glow, across: f32) -> f32 {
+    let x = across * glow.core_reach;
+    soft_clipped(glow, glow.core * (-(2.5 * x).powi(2)).exp()) * (1.0 - smooth(0.9, 1.0, across))
 }
 
 /// A card-shaped outline: the ring of a rounded rectangle of a card's proportions, solid on
@@ -324,16 +337,16 @@ fn head(x: f32, y: f32) -> f32 {
 /// desktop table's scale of about 95 points to a card's width. This record holds the light
 /// the web gives the tone's glow color, soft-clipped as its `lit` clips it; `wedge_hot` holds
 /// the light it gives the core color.
-fn wedge(x: f32, y: f32) -> f32 {
-    let parts = Chevron::at(x, y);
+fn wedge(tuning: &Tuning<'_>, x: f32, y: f32) -> f32 {
+    let parts = Chevron::at(tuning.chevron, x, y);
     let light = (parts.fill * 1.7 + parts.glow + parts.line) * parts.arm;
     1.0 - (-1.5 * light).exp()
 }
 
 /// The white-hot part of the chevron that `wedge` draws: its rim, hottest at the point, and
 /// the fill near the point, in the web's tone's core color.
-fn wedge_hot(x: f32, y: f32) -> f32 {
-    let parts = Chevron::at(x, y);
+fn wedge_hot(tuning: &Tuning<'_>, x: f32, y: f32) -> f32 {
+    let parts = Chevron::at(tuning.chevron, x, y);
     let light =
         (parts.line * (0.65 + 0.9 * parts.apex) + parts.fill * parts.apex * 0.55) * parts.arm;
     1.0 - (-1.5 * light).exp()
@@ -351,16 +364,15 @@ struct Chevron {
 impl Chevron {
     /// The parts at `(x, y)`, each from -1 to 1 across the cell's drawn area with y toward the
     /// point.
-    fn at(x: f32, y: f32) -> Self {
-        use kit_base::data::space::own::wedge::CHEVRON;
+    fn at(chevron: f32, x: f32, y: f32) -> Self {
         /// One point of the web's desktop table, in card widths.
         const POINT: f32 = 1.0 / 95.0;
         let room = sprites::WEDGE_ROOM;
         // In card widths, from the middle of the base: the base is a card wide, and the point
-        // is `CHEVRON` past it.
+        // is `chevron` past it.
         let px = x * 0.5 * (1.0 + 2.0 * room);
-        let py = f32::midpoint(y, 1.0) * (CHEVRON + 2.0 * room) - room;
-        let (half, high) = (0.5, CHEVRON);
+        let py = f32::midpoint(y, 1.0) * (chevron + 2.0 * room) - room;
+        let (half, high) = (0.5, chevron);
         let edge_y = high * (1.0 - px.abs() / half);
         let distance = segment((px, py), (-half, 0.0), (0.0, high)).min(segment(
             (px, py),

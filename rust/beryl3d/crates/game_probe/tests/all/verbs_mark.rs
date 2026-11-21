@@ -12,12 +12,14 @@ use beryl_protocol::script::{
     Act, Mark, Span as Edge, Subject, Table as Played, Verb, time_script,
 };
 use beryl_protocol::testing::ScriptBuilder;
-use game_play::light::marks::band;
+use game_play::light::marks;
 use game_play::play::Show;
 use game_play::play::record::ScriptRecord;
 use game_probe::agent::game_checks::marks_on;
 use game_probe::agent::steps::{no_jumps, rest_equals_placement, step_times};
 use glam::Vec3;
+use kit_base::data::light::Light;
+use kit_base::pose::Pose;
 use kit_frame::frame::{Band, Draw, Frame, Material, Resolved, StateBits, sprites};
 use kit_probe::agent::{Context, Layout, Rule};
 use kit_ui::input::Insets;
@@ -247,6 +249,12 @@ fn an_outline_rings_its_card_through_a_flight() {
         checked += 1;
     }
     assert!(checked > 10, "the flight was drawn: {checked} frames");
+}
+
+/// `marks::band` with the shipped tuning.
+fn band(on: Subject, pose: &Pose) -> Band {
+    let light = Light::parse(include_str!("../../../../../../data/beryl3d/light.json")).unwrap();
+    marks::band(&light, on, pose)
 }
 
 #[test]

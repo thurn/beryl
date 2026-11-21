@@ -18,6 +18,8 @@ use beryl_render::Renderer;
 use game_hud::art::orb;
 use game_table::faces::FaceList;
 use kit_base::atlas::{AssetReady, FaceId, FaceSize, GlyphKey};
+use kit_base::data::Data;
+use kit_base::data::light::{Light, Own};
 use kit_frame::frame::Wake;
 use kit_ui::art::icons as icon_artwork;
 use kit_ui::widgets::icon_shadows;
@@ -123,6 +125,9 @@ impl Scans {
 
 /// The workers and their deliveries to one renderer and client.
 pub struct Assets {
+    /// The tuning the atlas's shapes of light were last drawn from, so that an edit of it
+    /// draws and uploads the page again.
+    light: Option<(Light, Own)>,
     glyphs: GlyphWorker,
     pages: Receiver<Prepared>,
     scale: Option<f32>,
@@ -140,13 +145,7 @@ pub struct Assets {
 impl Assets {
     /// Starts the asset workers. The host's `wake` asks its event loop for a frame after a
     /// delivery or while face uploads are queued.
-    pub fn start(
-        renderer: &mut Renderer,
-        scans: &Scans,
-        origins: Origins,
-        wake: impl Fn() + Send + Sync + 'static,
-    ) -> Self {
-        renderer.upload_page(&beryl_assets::light::prepared());
+    pub fn start(scans: &Scans, origins: Origins, wake: impl Fn() + Send + Sync + 'static) -> Self {
         let wake: Arc<dyn Fn() + Send + Sync> = Arc::new(wake);
         let (out, pages) = mpsc::channel();
         let glyphs = spawn_glyph_worker(out, {
@@ -161,6 +160,7 @@ impl Assets {
             start: crate::threads::asset_thread,
         });
         Self {
+            light: None,
             glyphs,
             pages,
             scale: None,
@@ -173,8 +173,19 @@ impl Assets {
         }
     }
 
-    pub(crate) fn live(renderer: &mut Renderer, wake: impl Fn() + Send + Sync + 'static) -> Self {
-        Self::start(renderer, &Scans::app(), beryl_art::SCRYFALL, wake)
+    pub(crate) fn live(wake: impl Fn() + Send + Sync + 'static) -> Self {
+        Self::start(&Scans::app(), beryl_art::SCRYFALL, wake)
+    }
+
+    /// Draws the shapes of light from `data`'s tuning and uploads them as atlas page 0, unless
+    /// the page already holds that tuning. A host calls it before each frame, so the page is
+    /// there for the first frame and follows an edit of `light.json` or `own.json`.
+    pub fn sync_light(&mut self, renderer: &mut Renderer, data: &Data) {
+        let tuning = (data.light, data.own);
+        if self.light != Some(tuning) {
+            renderer.upload_page(&beryl_assets::light::prepared(&data.light, &data.own));
+            self.light = Some(tuning);
+        }
     }
 
     /// Advances the service without waiting on a worker. In a live frame, card faces are
@@ -183,6 +194,7 @@ impl Assets {
         if when == When::AfterFrame {
             self.after_frame = client.wake();
         }
+        self.sync_light(renderer, client.data());
         self.request_text(client);
         self.prepare_faces(client, renderer);
         // Match requests stay queued while the gallery's arrays are active.
@@ -225,6 +237,7 @@ impl Assets {
         // Detect a hung worker or an encoder that never produced a result.
         const FACE_WAIT: Duration = Duration::from_mins(2);
 
+        self.sync_light(renderer, client.data());
         self.request_text(client);
         self.glyphs.flush();
         self.upload_text(client, renderer, |ready| remember_atlas(ready.clone()));
@@ -289,10 +302,12 @@ impl Assets {
     pub fn settle_glyphs(
         &mut self,
         renderer: &mut Renderer,
+        data: &Data,
         scale: f32,
         wanted: impl IntoIterator<Item = GlyphKey>,
         deliver: impl FnMut(AssetReady),
     ) {
+        self.sync_light(renderer, data);
         self.request_glyphs(scale, wanted);
         self.glyphs.flush();
         self.upload_glyphs(renderer, deliver);

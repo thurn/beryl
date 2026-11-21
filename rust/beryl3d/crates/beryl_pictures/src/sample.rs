@@ -461,7 +461,8 @@ struct Drawer {
 
 impl Drawer {
     fn new(mut renderer: Renderer, scale: f32, camera: CameraData) -> Self {
-        renderer.upload_page(&light::prepared());
+        let data = beryl_inspect::data::checkout().expect("the checkout's tuning is valid");
+        renderer.upload_page(&light::prepared(&data.light, &data.own));
         let (out, pages) = mpsc::channel();
         let glyphs = beryl_host::spawn_glyph_worker(out, || {});
         glyphs.icons(scale);

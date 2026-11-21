@@ -8,7 +8,6 @@ use glam::{Affine3A, Vec2, Vec3};
 
 use super::{EffectRun, Reach, player};
 use kit_base::data::effect::{Effects, Emitter, Primitive, Vortex};
-use kit_base::data::space::light::LIFT;
 use kit_frame::frame::{Band, Draw, FrameBuilder, PARTICLES, sprites};
 use kit_ui::input::Tier;
 
@@ -66,6 +65,7 @@ pub fn write(
     builder: &mut FrameBuilder<'_>,
 ) {
     let tier = builder.tier();
+    let lift = effects.lift();
     let emitters = || emitters(effects, runs, now, tier);
     let (wanted, writing) = emitters().fold((0, 0), |(wanted, writing), (_, _, kind, _)| {
         (wanted + kind.count(), writing + 1)
@@ -79,8 +79,12 @@ pub fn write(
         let Some(reach) = reach_at(on) else { continue };
         for index in 0..kind.count().min(most) {
             let particle = match kind {
-                Kind::Sweep(emitter) => sweep_particle(emitter, &reach, seeds, index, progress),
-                Kind::Vortex(emitter) => vortex_particle(emitter, &reach, seeds, index, progress),
+                Kind::Sweep(emitter) => {
+                    sweep_particle(emitter, (&reach, lift), seeds, index, progress)
+                }
+                Kind::Vortex(emitter) => {
+                    vortex_particle(emitter, (&reach, lift), seeds, index, progress)
+                }
             };
             if let Some(draw) = particle {
                 builder.draw(Band::Particles, draw);
@@ -139,13 +143,20 @@ fn age(progress: f32, birth: f32, life: f32) -> Option<f32> {
 
 /// The record of a particle of `size` millimetres at `at`, a point of the card's face measured
 /// from its centre, lying `light.lift` over the face of the card at `reach`.
-fn lying(reach: &Reach, at: Vec2, size: f32, tint: [u8; 4], age: f32, seed: f32) -> Draw {
+fn lying(
+    (reach, lift): (&Reach, f32),
+    at: Vec2,
+    size: f32,
+    tint: [u8; 4],
+    age: f32,
+    seed: f32,
+) -> Draw {
     let pose = &reach.pose;
     let size = size * pose.scale;
     let transform = Affine3A::from_scale_rotation_translation(
         Vec3::new(size, size, 1.0),
         pose.rotation,
-        pose.position + pose.rotation * at.extend(LIFT),
+        pose.position + pose.rotation * at.extend(lift),
     );
     Draw::particle(transform, tint, sprites::DISC, age, seed)
 }
@@ -154,7 +165,7 @@ fn lying(reach: &Reach, at: Vec2, size: f32, tint: [u8; 4], age: f32, seed: f32)
 /// point along the row, a drift direction, and a size for the particle.
 fn sweep_particle(
     emitter: &Emitter,
-    reach: &Reach,
+    (reach, lift): (&Reach, f32),
     seeds: Seeds,
     index: usize,
     progress: f32,
@@ -169,7 +180,7 @@ fn sweep_particle(
     let travel = emitter.travel.at(age);
     let at = start + Vec2::new(drift, -emitter.fall.at(progress)) * travel * reach.pose.scale;
     Some(lying(
-        reach,
+        (reach, lift),
         at,
         emitter.size.at(seeds.random(index, 3)),
         emitter.tint,
@@ -181,7 +192,7 @@ fn sweep_particle(
 /// Emits a particle whose seeded starting point rotates and shrinks toward the center.
 fn vortex_particle(
     emitter: &Vortex,
-    reach: &Reach,
+    (reach, lift): (&Reach, f32),
     seeds: Seeds,
     index: usize,
     progress: f32,
@@ -196,7 +207,7 @@ fn vortex_particle(
     let turn = Vec2::from_angle(emitter.turns * std::f32::consts::TAU * age);
     let left = 1.0 - age;
     Some(lying(
-        reach,
+        (reach, lift),
         turn.rotate(start) * left,
         emitter.size.at(seeds.random(index, 3)) * left,
         emitter.tint,

@@ -159,7 +159,7 @@ pub fn write(
                     pose: look.pose,
                     half: Vec2::new(CARD_WIDTH, CARD_HEIGHT) * (0.5 * look.pose.scale),
                 };
-                player::write_surface_burst(quad, progress, run, reach, builder);
+                player::write_surface_burst(quad, (progress, effects.lift()), run, reach, builder);
             }
             _ => {}
         }

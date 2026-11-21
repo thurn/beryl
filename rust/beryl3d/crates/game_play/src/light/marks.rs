@@ -24,7 +24,7 @@ use super::{Lit, MarkSpan, Open, Span};
 use crate::art::orb;
 use crate::play::Scene;
 use game_table::table::{ABILITY_IDS, CARD_HEIGHT, CARD_WIDTH, Look};
-use kit_base::data::space::light;
+use kit_base::data::light::Light;
 use kit_base::pose::{Curve, Pose};
 use kit_base::tokens::color;
 use kit_frame::frame::{
@@ -50,7 +50,7 @@ fn stands(open: &Open, now: u64) -> bool {
 /// `paying`), drawn a little above the cards it now reaches across.
 /// A permanent the script has already tapped under the mark lies turned as it rests, and does
 /// not turn again.
-pub fn look(lit: &Lit, on: Subject, now: u64, look: &mut Look) {
+pub fn look(light: &Light, lit: &Lit, on: Subject, now: u64, look: &mut Look) {
     for open in lit.open() {
         let mark = match open.span {
             Span::Focus(focused) if focused == on && stands(open, now) => {
@@ -70,7 +70,7 @@ pub fn look(lit: &Lit, on: Subject, now: u64, look: &mut Look) {
                 if look.state & StateBits::TAPPED == 0 {
                     look.pose.rotation *= Quat::from_rotation_z(-FRAC_PI_2 * turned);
                 }
-                look.pose.position.z += light::PAYING_LIFT * turned;
+                look.pose.position.z += light.paying_lift * turned;
             }
         }
     }
@@ -79,8 +79,8 @@ pub fn look(lit: &Lit, on: Subject, now: u64, look: &mut Look) {
 /// The resting pass for a mark. Marks on cards lying close to the table are tested against
 /// the cards above them. The rest share the pass used for hand cards and stack items.
 #[must_use]
-pub fn band(on: Subject, pose: &Pose) -> Band {
-    if matches!(on, Subject::Object { .. }) && pose.position.z < light::ON_TABLE_BELOW {
+pub fn band(light: &Light, on: Subject, pose: &Pose) -> Band {
+    if matches!(on, Subject::Object { .. }) && pose.position.z < light.on_table_below {
         Band::TableMarks
     } else {
         Band::RaisedMarks
@@ -105,6 +105,7 @@ fn tint(mark: Mark) -> [u8; 4] {
 /// drawn the later begun outside the earlier. A mark on an object shares its paint band,
 /// so it follows the object in flight, in a screen preview, or under the pointer.
 pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<'_>) {
+    let light = &scene.table().data().light;
     let open = lit.open();
     for (index, mark_open) in open.iter().enumerate() {
         let Span::Mark(MarkSpan { mark, on }) = mark_open.span else {
@@ -133,8 +134,8 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
             Subject::Player { player } => player_face_offset(scene, player, pose.scale),
             Subject::Object { .. } | Subject::Ability { .. } => 0.0,
         };
-        let position = pose.position + pose.rotation * Vec3::new(0.0, -face, light::LIFT);
-        let resting = band(on, &pose);
+        let position = pose.position + pose.rotation * Vec3::new(0.0, -face, light.lift);
+        let resting = band(light, on, &pose);
         let id = match on {
             Subject::Object { slot } => Some(ElementId(u32::from(slot.0))),
             Subject::Ability { id } => Some(ElementId(ABILITY_IDS + id % ABILITY_IDS)),
@@ -144,13 +145,13 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
             .and_then(|id| builder.table_band(id))
             .map_or(resting, |band| band.records(resting));
         if mark == Mark::Paying {
-            let size = light::TAP_SIZE * pose.scale;
+            let size = light.tap_size * pose.scale;
             // `look` lifts the paying card off the table as the mark comes up; the symbol
             // rises with it, or the card's face would hide it from the depth test.
             let transform = pose.sheared(Affine3A::from_scale_rotation_translation(
                 Vec3::new(size, size, 1.0),
                 pose.rotation,
-                position + Vec3::Z * light::PAYING_LIFT * shown,
+                position + Vec3::Z * light.paying_lift * shown,
             ));
             builder.draw(band, Draw::glow(transform, tint, sprites::TAP, 0.0));
             continue;
@@ -185,7 +186,7 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
             })
             .count();
         #[expect(clippy::cast_precision_loss, reason = "a handful of marks")]
-        let grow = light::OUTLINE_GROW * pose.scale * (1 + inside) as f32;
+        let grow = light.outline_grow * pose.scale * (1 + inside) as f32;
         let size = sprites::outline_size(half + Vec2::splat(grow));
         let transform = pose.sheared(Affine3A::from_scale_rotation_translation(
             size.extend(1.0),
@@ -339,7 +340,7 @@ fn ringed(on: Subject) -> Ringed {
 /// 900 covers.
 pub(crate) fn player_half(scene: &Scene<'_>, scale: f32) -> Vec2 {
     let window = scale * CARD_HEIGHT / scene.table().layout().hand.height;
-    light::PLAYER_HALF_PIXELS * (window / 900.0)
+    scene.table().data().light.player_half_pixels * (window / 900.0)
 }
 
 /// How far below their anchor, in millimetres at the depth of the anchor, whose pose has

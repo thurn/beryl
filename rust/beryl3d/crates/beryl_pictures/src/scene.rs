@@ -47,7 +47,9 @@ impl HeadlessPage for PictureScene {
         match &mut self.0 {
             Scene::Recording(page) => page.prepare_assets(assets, renderer),
             story @ Scene::Story(_) => {
-                assets.settle_glyphs(renderer, story.scale(), story.wanted_glyphs(), |ready| {
+                let data = story.story_data().cloned().expect("a story has its tuning");
+                let (scale, wanted) = (story.scale(), story.wanted_glyphs());
+                assets.settle_glyphs(renderer, &data, scale, wanted, |ready| {
                     story.give_glyphs(ready);
                 });
             }

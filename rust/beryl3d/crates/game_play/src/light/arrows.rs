@@ -9,7 +9,7 @@
 //! tone's core color, as the web's ribbon shader lights them (`ui/src/stage/glow.ts`). Its
 //! width along its length follows the web stage's `widthOf` (`ui/src/stage/light.ts`), its
 //! opacity the fade of its `Open`, and its color what it says.
-//! The values are `light` in `data/beryl3d/space-constants.json`: lengths in millimetres at the arrow's
+//! The values are in `data/beryl3d/light.json`: lengths in millimetres at the arrow's
 //! target, which `Camera::points_per_millimetre` turns into points, and shares as they are.
 
 use std::f32::consts::PI;
@@ -22,8 +22,7 @@ use super::marks;
 use super::{Lit, Open, Span};
 use crate::play::{Reach, Scene};
 use crate::verbs::Interval;
-use kit_base::data::space::light;
-use kit_base::data::space::light::glow;
+use kit_base::data::light::Light;
 use kit_base::tokens::color;
 pub use kit_frame::frame::ARROW_IDS;
 use kit_frame::frame::sprites;
@@ -140,8 +139,9 @@ impl Drawn {
     fn write(&self, scene: &Scene<'_>, builder: &mut FrameBuilder<'_>) {
         let camera = scene.table().camera();
         let [from, to] = self.reaches;
-        let sag = light::SAG * camera.window.size.height;
-        let Some(way) = way_of(self.arrow, self.ends[0], self.ends[1], Some(sag)) else {
+        let light = &scene.table().data().light;
+        let sag = light.sag * camera.window.size.height;
+        let Some(way) = way_of(light, self.arrow, self.ends[0], self.ends[1], Some(sag)) else {
             return;
         };
         let points = cubic(way);
@@ -169,30 +169,30 @@ impl Drawn {
         );
         let points_per_millimetre = camera.points_per_millimetre(to.pose.position);
         let sized = |reach: &Reach| {
-            (reach.half.x.min(reach.half.y) / light::sized::HALF)
-                .clamp(light::sized::LEAST, light::sized::MOST)
+            (reach.half.x.min(reach.half.y) / light.sized.half)
+                .clamp(light.sized.least, light.sized.most)
         };
         let k = sized(&from).min(sized(&to));
         let (cut, wide, tone) = match self.arrow {
-            Arrow::FriendlyTarget => (Cut::Arrow, light::wide::TARGET, color::FRIENDLY_TARGET),
-            Arrow::HostileTarget => (Cut::Arrow, light::wide::TARGET, color::HOSTILE_TARGET),
-            Arrow::Source => (Cut::Swell, light::wide::SOURCE, color::SOURCE_LINE),
-            Arrow::Attack => (Cut::Beam, light::wide::ATTACK, color::ATTACK_LINE),
-            Arrow::Block => (Cut::Beam, light::wide::BLOCK, color::BLOCK_LINE),
+            Arrow::FriendlyTarget => (Cut::Arrow, light.wide.target, color::FRIENDLY_TARGET),
+            Arrow::HostileTarget => (Cut::Arrow, light.wide.target, color::HOSTILE_TARGET),
+            Arrow::Source => (Cut::Swell, light.wide.source, color::SOURCE_LINE),
+            Arrow::Attack => (Cut::Beam, light.wide.attack, color::ATTACK_LINE),
+            Arrow::Block => (Cut::Beam, light.wide.block, color::BLOCK_LINE),
         };
         let (core, gain) = match self.arrow {
-            Arrow::FriendlyTarget => (color::FRIENDLY_TARGET_CORE, glow::gains::TARGET),
-            Arrow::HostileTarget => (color::HOSTILE_TARGET_CORE, glow::gains::TARGET),
-            Arrow::Source => (color::SOURCE_LINE_CORE, glow::gains::SOURCE),
-            Arrow::Attack => (color::ATTACK_LINE_CORE, glow::gains::ATTACK),
-            Arrow::Block => (color::BLOCK_LINE_CORE, glow::gains::BLOCK),
+            Arrow::FriendlyTarget => (color::FRIENDLY_TARGET_CORE, light.glow.gains.target),
+            Arrow::HostileTarget => (color::HOSTILE_TARGET_CORE, light.glow.gains.target),
+            Arrow::Source => (color::SOURCE_LINE_CORE, light.glow.gains.source),
+            Arrow::Attack => (color::ATTACK_LINE_CORE, light.glow.gains.attack),
+            Arrow::Block => (color::BLOCK_LINE_CORE, light.glow.gains.block),
         };
         let tint = tinted(tone, opacity);
         let shine = Shine {
             tone,
             core,
-            // The shapes hold their light at the gain `glow::GAIN`.
-            strength: opacity * gain / glow::GAIN,
+            // The shapes hold their light at the gain `light.glow.gain`.
+            strength: opacity * gain / light.glow.gain,
         };
         // The line to a source grows out of the source, which is where it ends, so it is cut
         // from that end.
@@ -203,11 +203,13 @@ impl Drawn {
         let lengths = Lengths {
             wide: wide * k * points_per_millimetre,
             per_millimetre: points_per_millimetre,
+            light,
         };
         let band = builder.node_band(index).records(Band::Glows);
         write_ribbon(scene, &ribbon, cut, lengths, (shine, band), builder);
         if matches!(self.arrow, Arrow::FriendlyTarget | Arrow::HostileTarget) {
             write_head(
+                light,
                 scene,
                 &points,
                 self.ends[1].half.x,
@@ -295,9 +297,10 @@ fn tinted(tone: [u8; 4], opacity: f32) -> [u8; 4] {
 
 /// A ribbon's widest half-width and a millimetre, in points on the screen.
 #[derive(Clone, Copy)]
-struct Lengths {
+struct Lengths<'a> {
     wide: f32,
     per_millimetre: f32,
+    light: &'a Light,
 }
 
 /// How a ribbon is lit: the color of its body and halo, the color of its core, and how strongly,
@@ -321,7 +324,7 @@ fn write_ribbon(
     scene: &Scene<'_>,
     points: &[Vec2; 4],
     cut: Cut,
-    lengths: Lengths,
+    lengths: Lengths<'_>,
     (shine, band): (Shine, Band),
     builder: &mut FrameBuilder<'_>,
 ) {
@@ -329,7 +332,8 @@ fn write_ribbon(
         return;
     };
     let camera = scene.table().camera();
-    let pixel = glow::PIXEL * lengths.per_millimetre;
+    let light = lengths.light;
+    let pixel = light.glow.pixel * lengths.per_millimetre;
     // The side the core leans to, as the web's `flip`: up the screen for a ribbon that runs
     // right, judged where the ribbon's middle is.
     let middle = (cuts[RIBBON / 2].0, cuts[RIBBON / 2 + 1].0);
@@ -339,7 +343,7 @@ fn write_ribbon(
         1.0
     };
     let lean = match cut {
-        Cut::Arrow => glow::CORE_LEAN,
+        Cut::Arrow => light.glow.core_lean,
         Cut::Swell | Cut::Beam => 0.0,
     };
     // Each cut: where it is, the body's half-width there, how high the halo reaches each side,
@@ -348,16 +352,16 @@ fn write_ribbon(
     // here the ends narrow instead, which the pieces' tapers carry on smoothly: the core over
     // the web's fade, and the halo, with the body inside it, to a point over its last
     // `REACH_PIXELS` at each end. The halo's profile is the one its unnarrowed height gives.
-    let reach_pixels = glow::REACH_PIXELS * pixel;
+    let reach_pixels = light.glow.reach_pixels * pixel;
     let cuttings = cuts.map(|(at, arc, half)| {
-        let reach = glow::REACH_SHARE * half + reach_pixels;
+        let reach = light.glow.reach_share * half + reach_pixels;
         let narrowed = smooth(0.0, reach_pixels, arc) * smooth(0.0, reach_pixels, whole - arc);
         Cutting {
             at,
             half,
             column: sprites::ribbon_lit_column(half / reach),
             reach: reach * narrowed.max(0.02),
-            core: half * smooth(0.0, glow::FADE_PIXELS * pixel, arc),
+            core: half * smooth(0.0, light.glow.fade_pixels * pixel, arc),
             halves: Vec2::ZERO,
         }
     });
@@ -401,7 +405,7 @@ fn write_ribbon(
             .mitred(slant(along, near.halves), slant(along, far.halves)),
         );
         let high = from.core.max(to.core);
-        if high * glow::CORE_REACH < 0.05 {
+        if high * light.glow.core_reach < 0.05 {
             continue;
         }
         let up = Vec2::new(way.y, -way.x) * flip;
@@ -411,7 +415,7 @@ fn write_ribbon(
             Draw::glow(
                 camera.screen_transform(
                     centre + up * lean_by,
-                    Vec2::new(long, 2.0 * high * glow::CORE_REACH),
+                    Vec2::new(long, 2.0 * high * light.glow.core_reach),
                     way,
                 ),
                 tinted(shine.core, shine.strength),
@@ -431,13 +435,14 @@ type Sample = (Vec2, f32, f32);
 /// each with how far along the curve it is and the ribbon's half-width there (between those of
 /// the fine points beside it), and how long the curve is; `None` for a curve of no length. The cuts are chosen among `FINE` points along the curve so that each piece takes an
 /// equal share of the ribbon's length, of how much its width changes and of how far it turns,
-/// weighed by `glow::WIDTH_WEIGHT` and `glow::TURN_WEIGHT`: where an arrow flares near its head
+/// weighed by `light.glow.width_weight` and `light.glow.turn_weight`: where an arrow flares near its head
 /// or bends most, the pieces are short.
 fn cut_ribbon(
     points: &[Vec2; 4],
     cut: Cut,
-    lengths: Lengths,
+    lengths: Lengths<'_>,
 ) -> Option<([Sample; RIBBON + 1], f32)> {
+    let light = lengths.light;
     // Each fine point: where it is, how far along the curve, and the half-width there.
     let mut fine: [Sample; FINE + 1] = [(Vec2::ZERO, 0.0, 0.0); FINE + 1];
     let mut arc = 0.0;
@@ -476,8 +481,8 @@ fn cut_ribbon(
         };
         measure[number] = measure[number - 1]
             + (here.1 - before.1) / whole
-            + glow::WIDTH_WEIGHT * changed
-            + glow::TURN_WEIGHT * turned;
+            + light.glow.width_weight * changed
+            + light.glow.turn_weight * turned;
     }
     let mut cuts: [Sample; RIBBON + 1] = [(Vec2::ZERO, 0.0, 0.0); RIBBON + 1];
     let mut below = 0;
@@ -543,6 +548,7 @@ fn smooth(from: f32, to: f32, t: f32) -> f32 {
 /// the way it arrives, as long as a share of `target_half`, half the width of what it meets on
 /// the screen.
 fn write_head(
+    light: &Light,
     scene: &Scene<'_>,
     points: &[Vec2; 4],
     target_half: f32,
@@ -550,15 +556,15 @@ fn write_head(
     (tint, band): ([u8; 4], Band),
     builder: &mut FrameBuilder<'_>,
 ) {
-    let long = (light::head::SHARE * target_half).clamp(
-        light::head::LEAST * points_per_millimetre,
-        light::head::MOST * points_per_millimetre,
+    let long = (light.head.share * target_half).clamp(
+        light.head.least * points_per_millimetre,
+        light.head.most * points_per_millimetre,
     );
     let tip = points[3];
     let way = (tip - points[2]).normalize_or(Vec2::X);
     let transform = scene.table().camera().screen_transform(
         tip - way * (long / 2.0),
-        Vec2::new(long, 2.0 * long * light::head::SPREAD),
+        Vec2::new(long, 2.0 * long * light.head.spread),
         way,
     );
     builder.draw(band, Draw::glow(transform, tint, sprites::HEAD, 0.0));
@@ -566,38 +572,45 @@ fn write_head(
 
 /// A ribbon's half-width where it has come `arc` of the `whole` points it is long, as the web
 /// stage's `widthOf` has it.
-fn width_of(cut: Cut, lengths: Lengths, arc: f32, whole: f32) -> f32 {
+fn width_of(cut: Cut, lengths: Lengths<'_>, arc: f32, whole: f32) -> f32 {
     let wide = lengths.wide;
     let s = if whole > 0.0 { arc / whole } else { 0.0 };
     let left = whole - arc;
     match cut {
         Cut::Swell => {
-            use light::swell::{END, LEAST, PEAK, START};
-            let bulge = (PI * s.powf(0.5f32.ln() / PEAK.ln())).sin();
-            let ends = (s / START).clamp(0.0, 1.0) * ((1.0 - s) / END).clamp(0.0, 1.0).powf(1.5);
-            wide * (LEAST + (1.0 - LEAST) * bulge) * ends
+            let swell = lengths.light.swell;
+            let bulge = (PI * s.powf(0.5f32.ln() / swell.peak.ln())).sin();
+            let ends = (s / swell.start).clamp(0.0, 1.0)
+                * ((1.0 - s) / swell.end).clamp(0.0, 1.0).powf(1.5);
+            wide * (swell.least + (1.0 - swell.least) * bulge) * ends
         }
         Cut::Beam => {
-            use light::beam::{DART, FROM, HEAD, NECK, TO};
-            let (head, neck) = (HEAD * wide, NECK * wide);
-            let beam = (FROM + (TO - FROM) * s) * wide;
+            let beam_tuning = lengths.light.beam;
+            let (head, neck) = (beam_tuning.head * wide, beam_tuning.neck * wide);
+            let beam = (beam_tuning.from + (beam_tuning.to - beam_tuning.from) * s) * wide;
             if left < head {
-                DART * wide * left / head
+                beam_tuning.dart * wide * left / head
             } else if left < neck {
-                DART * wide + (beam - DART * wide) * (left - head) / (neck - head)
+                beam_tuning.dart * wide
+                    + (beam - beam_tuning.dart * wide) * (left - head) / (neck - head)
             } else {
                 beam
             }
         }
         Cut::Arrow => {
-            use light::arrow::{FADE, FADE_POWER, FLARE, FLARE_AT, FLARE_SPREAD, RAMP, RISE, TAIL};
+            let arrow = lengths.light.arrow;
             let per = lengths.per_millimetre;
-            let ramp = (s / RAMP).clamp(0.0, 1.0);
+            let ramp = (s / arrow.ramp).clamp(0.0, 1.0);
             let smooth = ramp * ramp * (3.0 - 2.0 * ramp);
-            let tail = TAIL + (1.0 - TAIL) * smooth.powf(RISE);
-            let flare =
-                1.0 + FLARE * (-((left - FLARE_AT * per) / (FLARE_SPREAD * per)).powi(2)).exp();
-            wide * tail * flare * (left / (FADE * per)).clamp(0.0, 1.0).powf(FADE_POWER)
+            let tail = arrow.tail + (1.0 - arrow.tail) * smooth.powf(arrow.rise);
+            let flare = 1.0
+                + arrow.flare
+                    * (-((left - arrow.flare_at * per) / (arrow.flare_spread * per)).powi(2)).exp();
+            wide * tail
+                * flare
+                * (left / (arrow.fade * per))
+                    .clamp(0.0, 1.0)
+                    .powf(arrow.fade_power)
         }
     }
 }

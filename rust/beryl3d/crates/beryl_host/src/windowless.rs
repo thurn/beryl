@@ -101,8 +101,8 @@ impl Windowless {
             wake.send(Input::Nudge);
         };
         let assets = match self.scans {
-            Some((scans, origins)) => Assets::start(&mut renderer, &scans, origins, wake),
-            None => Assets::live(&mut renderer, wake),
+            Some((scans, origins)) => Assets::start(&scans, origins, wake),
+            None => Assets::live(wake),
         };
         let opening = opening(&options);
         let chosen = setup(&mut renderer, opening);

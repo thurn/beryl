@@ -12,14 +12,14 @@
 //! it points at.
 //!
 //! Every point is in logical points from the window's top left corner, y down, and the values of
-//! `light` in `data/beryl3d/space-constants.json` are copied from `lines.ts`: shares of a way or of an
+//! `data/beryl3d/light.json` are copied from `lines.ts`: shares of a way or of an
 //! end's half-height, which do not depend on units, but for `hang.graze`, in points, which the
 //! web's desktop stage measures as pixels.
 
 use beryl_protocol::script::Arrow;
 use glam::Vec2;
 
-use kit_base::data::space::light::{bow, hang, onto};
+use kit_base::data::light::Light;
 
 /// One end of a line as it lies on the screen: its middle, how far it reaches from there across
 /// and down, as a box or, `round`, as the ellipse inside that box (a player's life total, as the
@@ -40,7 +40,13 @@ pub struct End {
 /// or a creature over what it strikes. The line to a source sags to the height `sag` on the
 /// screen, where the layout gives one.
 #[must_use]
-pub fn way_of(arrow: Arrow, from: End, to: End, sag: Option<f32>) -> Option<[Vec2; 3]> {
+pub fn way_of(
+    light: &Light,
+    arrow: Arrow,
+    from: End,
+    to: End,
+    sag: Option<f32>,
+) -> Option<[Vec2; 3]> {
     match arrow {
         Arrow::Attack | Arrow::Block => {
             let [a, b] = straight(from, to)?;
@@ -51,8 +57,8 @@ pub fn way_of(arrow: Arrow, from: End, to: End, sag: Option<f32>) -> Option<[Vec
                 return None;
             }
             match sag {
-                Some(sag) => Some(hung(from, to, sag)),
-                None => arc(from, to),
+                Some(sag) => Some(hung(light, from, to, sag)),
+                None => arc(light, from, to),
             }
         }
         Arrow::FriendlyTarget | Arrow::HostileTarget => {
@@ -62,13 +68,13 @@ pub fn way_of(arrow: Arrow, from: End, to: End, sag: Option<f32>) -> Option<[Vec
             let apart = if overlap(from, to) {
                 None
             } else {
-                arc(from, to)
+                arc(light, from, to)
             };
             let faced = apart
-                .filter(|_| to.toward != 0.0 && !tight(from, to))
-                .and_then(|_| onto_card(from, to));
+                .filter(|_| to.toward != 0.0 && !tight(light, from, to))
+                .and_then(|_| onto_card(light, from, to));
             Some(match faced.or(apart) {
-                Some([a, c, b]) => [a, c, b.lerp(to.middle, onto::INTO)],
+                Some([a, c, b]) => [a, c, b.lerp(to.middle, light.onto.into)],
                 None => stack_loop(from, to),
             })
         }
@@ -120,9 +126,9 @@ fn unit(a: End, b: End) -> f32 {
 
 /// Whether two ends that lie apart have little between them, along the straight way from one's
 /// middle to the other's.
-fn tight(from: End, to: End) -> bool {
+fn tight(light: &Light, from: End, to: End) -> bool {
     match (edge(from, to.middle), edge(to, from.middle)) {
-        (Some(near), Some(there)) => there.distance(near) < bow::CLOSE * unit(from, to),
+        (Some(near), Some(there)) => there.distance(near) < light.bow.close * unit(from, to),
         _ => true,
     }
 }
@@ -131,15 +137,15 @@ fn tight(from: End, to: End) -> bool {
 /// in front of `to`, on the open table, so that it comes onto its target square, from the side no
 /// neighbour of its row stands on (Arena's comes down onto the middle of its target,
 /// `I3Te0m1bBFw 31:35.08`). `None` where `from` itself stands in front of its target.
-fn onto_card(from: End, to: End) -> Option<[Vec2; 3]> {
+fn onto_card(light: &Light, from: End, to: End) -> Option<[Vec2; 3]> {
     let back = from.middle - to.middle;
     let unit = unit(from, to);
-    let ahead = (onto::SHARE * back.length())
-        .max(onto::LEAST * unit)
-        .min(onto::MOST * unit);
-    let lean = (onto::LEAN * back.x / to.half.x).clamp(-1.0, 1.0);
+    let ahead = (light.onto.share * back.length())
+        .max(light.onto.least * unit)
+        .min(light.onto.most * unit);
+    let lean = (light.onto.lean * back.x / to.half.x).clamp(-1.0, 1.0);
     let front = Vec2::new(
-        to.middle.x + lean * onto::ASIDE * to.half.x,
+        to.middle.x + lean * light.onto.aside * to.half.x,
         to.middle.y + to.toward * (to.half.y + ahead),
     );
     Some([edge(from, front)?, front, edge(to, front)?])
@@ -149,7 +155,7 @@ fn onto_card(from: End, to: End) -> Option<[Vec2; 3]> {
 /// straight way between their middles, on the side that is up the screen, so that it goes over
 /// what lies between (Arena's "over the top"). Two ends with little between them leave no room
 /// for an arrow there, so its arc goes round the side of both instead.
-fn arc(from: End, to: End) -> Option<[Vec2; 3]> {
+fn arc(light: &Light, from: End, to: End) -> Option<[Vec2; 3]> {
     let near = edge(from, to.middle)?;
     let there = edge(to, from.middle)?;
     let way = to.middle - from.middle;
@@ -162,12 +168,12 @@ fn arc(from: End, to: End) -> Option<[Vec2; 3]> {
     let up = Vec2::new(side * way.y, -side * way.x) / far;
     // How far each end reaches the way the arc bows.
     let out = |end: End| up.x.abs() * end.half.x + up.y.abs() * end.half.y;
-    let bowed = if tight(from, to) {
-        out(from).max(out(to)) + bow::ROUND * unit
+    let bowed = if tight(light, from, to) {
+        out(from).max(out(to)) + light.bow.round * unit
     } else {
-        (bow::SHARE * far)
-            .max(bow::LEAST * unit)
-            .min(bow::MOST * unit)
+        (light.bow.share * far)
+            .max(light.bow.least * unit)
+            .min(light.bow.most * unit)
     };
     let over = from.middle.lerp(to.middle, 0.5) + up * bowed;
     // Out of each end toward that point, or straight toward the other end where the point is
@@ -217,12 +223,12 @@ fn stack_loop(from: End, to: End) -> [Vec2; 3] {
 /// The line from an ability `from` to its `source`, sagging at most to the screen height `sag`.
 /// Arena's leaves the bottom of its source going down, hangs low over the table and comes up into
 /// the bottom of the stack card, from either seat (`0VsYGs88NXA 19:39.85`, `2VW6ZzmS8U4 32:16.0`).
-/// Its lowest point lies below the lower of its two ends by `hang::DEEP` of how far apart they
+/// Its lowest point lies below the lower of its two ends by `light.hang.deep` of how far apart they
 /// are across (half a card at least), and no lower than `sag`. A source that lies under the
 /// stack card has a short curve from the bottom of the stack card down into the top of the
 /// source; one above it whose hanging curve would cross the stack card has a short curve from the
 /// top of the stack card up into the bottom of the source.
-fn hung(from: End, source: End, sag: f32) -> [Vec2; 3] {
+fn hung(light: &Light, from: End, source: End, sag: f32) -> [Vec2; 3] {
     let edge = |end: End, down: f32| Vec2::new(end.middle.x, end.middle.y + down * end.half.y);
     let a = edge(from, 1.0);
     let top = edge(source, -1.0);
@@ -231,7 +237,7 @@ fn hung(from: End, source: End, sag: f32) -> [Vec2; 3] {
     // A short curve that bows `side` of the way between its ends.
     let short = |start: Vec2, end: Vec2, side: f32| {
         let round = Vec2::new(
-            f32::midpoint(start.x, end.x) + side * hang::BOW * (end.y - start.y).abs(),
+            f32::midpoint(start.x, end.x) + side * light.hang.bow * (end.y - start.y).abs(),
             f32::midpoint(start.y, end.y),
         );
         [start, round, end]
@@ -239,13 +245,13 @@ fn hung(from: End, source: End, sag: f32) -> [Vec2; 3] {
     if top.y >= a.y && across <= from.half.x + source.half.x {
         return short(a, top, 1.0);
     }
-    let deepest = sag.min(a.y.max(b.y) + (source.half.y / 2.0).max(hang::DEEP * across));
+    let deepest = sag.min(a.y.max(b.y) + (source.half.y / 2.0).max(light.hang.deep * across));
     // A curve from `a` round `c` to `b` is lowest at (a.y b.y - c.y²) / (a.y + b.y - 2 c.y),
     // which is `deepest` where `c` lies this low.
     let low = deepest + ((deepest - a.y) * (deepest - b.y)).max(0.0).sqrt();
-    let hanging = [a, Vec2::new(b.x + hang::ALONG * (a.x - b.x), low), b];
+    let hanging = [a, Vec2::new(b.x + light.hang.along * (a.x - b.x), low), b];
     let crown = edge(from, -1.0);
-    if b.y <= crown.y && crosses(hanging, from) {
+    if b.y <= crown.y && crosses(light, hanging, from) {
         short(crown, b, if b.x < crown.x { -1.0 } else { 1.0 })
     } else {
         hanging
@@ -256,10 +262,10 @@ fn hung(from: End, source: End, sag: f32) -> [Vec2; 3] {
 const CROSS_STEPS: u16 = 64;
 
 /// Whether the quadratic curve from `a` round `c` to `b` passes over `end` anywhere between its
-/// own two ends, further in than `hang::GRAZE` points, less than the line is wide: a curve that
+/// own two ends, further in than `light.hang.graze` points, less than the line is wide: a curve that
 /// clips a corner of the stack card by less than that still hangs.
-fn crosses([a, c, b]: [Vec2; 3], end: End) -> bool {
-    let inside = end.half - Vec2::splat(hang::GRAZE);
+fn crosses(light: &Light, [a, c, b]: [Vec2; 3], end: End) -> bool {
+    let inside = end.half - Vec2::splat(light.hang.graze);
     (1..CROSS_STEPS).any(|i| {
         let t = f32::from(i) / f32::from(CROSS_STEPS);
         let p = a.lerp(c, t).lerp(c.lerp(b, t), t);
@@ -298,7 +304,9 @@ mod tests {
             round: false,
             toward: 1.0,
         };
-        let [a, c, b] = way_of(Arrow::Source, ability, source, Some(810.0)).unwrap();
+        let light =
+            Light::parse(include_str!("../../../../../../data/beryl3d/light.json")).unwrap();
+        let [a, c, b] = way_of(&light, Arrow::Source, ability, source, Some(810.0)).unwrap();
         assert!(
             a.distance(Vec2::new(1342.33, 529.61)) < 0.01,
             "leaves at {a}"

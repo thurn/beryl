@@ -12,7 +12,10 @@ use super::tuning::read;
 
 /// Definitions indexed by the names used in script timing. Hosts parse these before playback.
 #[derive(Clone, Debug, PartialEq)]
-pub struct Effects(BTreeMap<String, Definition>);
+pub struct Effects {
+    definitions: BTreeMap<String, Definition>,
+    lift: f32,
+}
 
 impl Effects {
     /// Parses pairs of filename stems and JSON texts.
@@ -42,7 +45,10 @@ impl Effects {
                 return Err(format!("{file}: duplicate definition"));
             }
         }
-        Ok(Self(definitions))
+        Ok(Self {
+            definitions,
+            lift: 0.0,
+        })
     }
 
     /// Whether an effect with no named anchor can play on its step's subject.
@@ -54,7 +60,22 @@ impl Effects {
 
     #[must_use]
     pub fn get(&self, name: &str) -> Option<&Definition> {
-        self.0.get(name)
+        self.definitions.get(name)
+    }
+
+    /// Sets the height, in millimetres, at which light lies over the face of what it is drawn
+    /// on (`light.lift` in `light.json`), so that light is in front of a card held up toward
+    /// the camera as well as one lying on the table.
+    #[must_use]
+    pub fn with_lift(mut self, lift: f32) -> Self {
+        self.lift = lift;
+        self
+    }
+
+    /// The height at which light lies over a surface, in millimetres.
+    #[must_use]
+    pub fn lift(&self) -> f32 {
+        self.lift
     }
 }
 

@@ -302,6 +302,15 @@ impl Scene {
         }
     }
 
+    /// The tuning a toolkit story is played with. A recording's tuning belongs to its client.
+    #[must_use]
+    pub fn story_data(&self) -> Option<&std::sync::Arc<kit_base::data::Data>> {
+        match self {
+            Self::Recording(_) => None,
+            Self::Story(story) => Some(story.player.data()),
+        }
+    }
+
     pub fn give_glyphs(&mut self, ready: AssetReady) {
         match self {
             Self::Recording(page) => page.give_glyphs(ready),

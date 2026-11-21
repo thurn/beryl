@@ -17,7 +17,7 @@
 //! creature fights. The wedge starts a little large and settles over `pop_ms`, and the crescent
 //! opens from `opens_from` of its size over `open_ms`, as in `fighterLight`. The web keeps
 //! these times in its code rather than in `data/ui-conventions.json`, so they are under `own`
-//! in `data/beryl3d/space-constants.json` with the sizes and offsets, which are shares of a card.
+//! in `data/beryl3d/own.json` with the sizes and offsets, which are shares of a card.
 
 use std::cell::Cell;
 use std::f32::consts::PI;
@@ -26,7 +26,7 @@ use beryl_protocol::protocol::{Combat, ObjectView, Side};
 use glam::{Affine3A, Quat, Vec2, Vec3};
 
 use super::{CARD_HEIGHT, CARD_WIDTH, Look};
-use kit_base::data::space::own;
+use kit_base::data::light::Own;
 use kit_base::tokens::color;
 use kit_frame::frame::{Band, Draw, FrameBuilder, PaintBand, Sprite, sprites};
 
@@ -93,7 +93,7 @@ impl PartialEq for Fights {
 /// Writes the marks of `record`, the permanent in `slot` drawn as `look`, at `now`.
 pub(super) fn write(
     (slot, record): (usize, &ObjectView),
-    look: &Look,
+    (look, own): (&Look, &Own),
     fights: &Fights,
     (now, band): (u64, PaintBand),
     builder: &mut FrameBuilder,
@@ -103,15 +103,15 @@ pub(super) fn write(
     if look.pose.opacity <= 0.0 {
         return;
     }
-    let mut marks = Marks::on(look, band, builder);
+    let mut marks = Marks::on(look, own, band, builder);
     let card = Vec2::new(CARD_WIDTH, CARD_HEIGHT);
     if record.summoning_sick {
-        let size = Vec2::splat(own::moon::SIZE * CARD_WIDTH);
-        marks.icon(sprites::MOON, own::moon::AT * card, size, color::MOON);
+        let size = Vec2::splat(own.moon.size * CARD_WIDTH);
+        marks.icon(sprites::MOON, own.moon.at * card, size, color::MOON);
     }
     if record.token {
-        let size = Vec2::splat(own::coin::SIZE * CARD_WIDTH);
-        marks.icon(sprites::COIN, own::coin::AT * card, size, color::COIN);
+        let size = Vec2::splat(own.coin.size * CARD_WIDTH);
+        marks.icon(sprites::COIN, own.coin.at * card, size, color::COIN);
     }
     if record.controller != record.owner {
         let size = sprites::outline_size(card / 2.0);
@@ -132,6 +132,7 @@ pub(super) fn write(
 /// side whether its face is up or down, in the band of marks on cards on the table or on cards
 /// above it, as clear as the card is.
 struct Marks<'b, 'f> {
+    own: &'b Own,
     card: Affine3A,
     band: Band,
     opacity: f32,
@@ -139,9 +140,10 @@ struct Marks<'b, 'f> {
 }
 
 impl<'b, 'f> Marks<'b, 'f> {
-    fn on(look: &Look, band: PaintBand, builder: &'b mut FrameBuilder<'f>) -> Self {
+    fn on(look: &Look, own: &'b Own, band: PaintBand, builder: &'b mut FrameBuilder<'f>) -> Self {
         let pose = look.pose;
         Self {
+            own,
             card: pose.upward(),
             band: band.records(Band::TableMarks),
             opacity: pose.opacity.clamp(0.0, 1.0),
@@ -155,7 +157,7 @@ impl<'b, 'f> Marks<'b, 'f> {
             * Affine3A::from_scale_rotation_translation(
                 size.extend(1.0),
                 Quat::from_rotation_z(turn),
-                at.extend(own::LIFT),
+                at.extend(self.own.lift),
             )
     }
 
@@ -176,7 +178,10 @@ impl<'b, 'f> Marks<'b, 'f> {
             Quat::IDENTITY
         };
         self.card
-            * Affine3A::from_rotation_translation(fold, (edge.axis * edge.reach).extend(own::LIFT))
+            * Affine3A::from_rotation_translation(
+                fold,
+                (edge.axis * edge.reach).extend(self.own.lift),
+            )
             * Affine3A::from_scale_rotation_translation(
                 size.extend(1.0),
                 Quat::from_rotation_z(turn),
@@ -198,12 +203,13 @@ impl<'b, 'f> Marks<'b, 'f> {
     /// web's `fighterLight` lights it in two colors: its body, rim and halo in the ember glow,
     /// and its white-hot rim in the ember core.
     fn fight(&mut self, fighting: Fighting, edge: &Edge, age: f32) {
-        let fade = (age / own::FADE_MS).clamp(0.0, 1.0);
+        let fade = (age / self.own.fade_ms).clamp(0.0, 1.0);
         let turn = edge.axis.y.atan2(edge.axis.x) - PI / 2.0;
         if fighting == Fighting::Attacks {
-            let pop = (-age / own::wedge::POP_MS).exp();
-            let length = own::wedge::CHEVRON * CARD_WIDTH * (1.0 + own::wedge::POP.y * pop);
-            let size = sprites::wedge_size(edge.across * (1.0 + own::wedge::POP.x * pop), length);
+            let pop = (-age / self.own.wedge.pop_ms).exp();
+            let length = self.own.wedge.chevron * CARD_WIDTH * (1.0 + self.own.wedge.pop.y * pop);
+            let size =
+                sprites::wedge_size(edge.across * (1.0 + self.own.wedge.pop.x * pop), length);
             let transform = self.past(edge, length / 2.0, size, turn);
             for (sprite, tint) in [
                 (sprites::WEDGE, color::WEDGE),
@@ -215,11 +221,11 @@ impl<'b, 'f> Marks<'b, 'f> {
             }
             return;
         }
-        let t = (age / own::crescent::OPEN_MS).clamp(0.0, 1.0);
-        let open = own::crescent::OPENS_FROM
-            + (1.0 - own::crescent::OPENS_FROM) * (1.0 - (1.0 - t).powi(3));
-        let size = own::crescent::SIZE * edge.across * open;
-        let out = own::crescent::GAP * edge.across;
+        let t = (age / self.own.crescent.open_ms).clamp(0.0, 1.0);
+        let open = self.own.crescent.opens_from
+            + (1.0 - self.own.crescent.opens_from) * (1.0 - (1.0 - t).powi(3));
+        let size = self.own.crescent.size * edge.across * open;
+        let out = self.own.crescent.gap * edge.across;
         let draw = Draw::glow(
             self.past(edge, out, size, turn),
             with_opacity(color::CRESCENT, fade * self.opacity),

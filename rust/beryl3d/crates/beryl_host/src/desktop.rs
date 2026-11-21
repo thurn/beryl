@@ -293,7 +293,7 @@ impl<S: FnOnce(&mut Renderer, Opening) -> Chosen> App<S> {
             .ok_or("the window opened twice")?;
         let (mut renderer, surface) =
             Renderer::for_window(Arc::clone(&window), size.width, size.height, lighting)?;
-        let assets = Assets::live(&mut renderer, {
+        let assets = Assets::live({
             let wake = self.wake.clone();
             move || {
                 wake.send(Input::Nudge);

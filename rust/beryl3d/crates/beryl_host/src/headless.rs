@@ -77,10 +77,10 @@ impl<P: HeadlessPage> Headless<P> {
     pub fn new(page: P, width: f32, height: f32, scans: &Scans) -> Result<Self, String> {
         let page = page.with_host_atlas();
         let scale = page.scale();
-        let mut renderer = Renderer::headless(Limits::Default, page.lighting())?;
+        let renderer = Renderer::headless(Limits::Default, page.lighting())?;
         let pixels = |points: f32| (points * scale).round().max(1.0) as u32;
         let target = Target::offscreen(&renderer, pixels(width), pixels(height));
-        let assets = Assets::start(&mut renderer, scans, NOWHERE, || {});
+        let assets = Assets::start(scans, NOWHERE, || {});
         Ok(Self {
             page,
             renderer,

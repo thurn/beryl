@@ -1,6 +1,15 @@
 //! The shapes of light on the atlas's page 0, as `light_page` draws them.
 
 use beryl_assets::light::{BORDER, light_page};
+use kit_base::data::light::{Light, Own};
+
+/// The shipped tuning the shapes are drawn from.
+fn tuning() -> (Light, Own) {
+    (
+        Light::parse(include_str!("../../../../../../data/beryl3d/light.json")).unwrap(),
+        Own::parse(include_str!("../../../../../../data/beryl3d/own.json")).unwrap(),
+    )
+}
 use beryl_assets::packer::PAGE_SIZE;
 use kit_frame::frame::{Sprite, sprites};
 
@@ -34,14 +43,14 @@ const MIDDLE: u16 = sprites::CELL / 2;
 
 #[test]
 fn the_page_is_one_atlas_page_and_drawn_the_same_each_time() {
-    let page = light_page();
+    let page = light_page(&tuning().0, &tuning().1);
     assert_eq!(page.len(), usize::from(PAGE_SIZE) * usize::from(PAGE_SIZE));
-    assert_eq!(page, light_page());
+    assert_eq!(page, light_page(&tuning().0, &tuning().1));
 }
 
 #[test]
 fn every_cell_has_a_shape_and_an_empty_border() {
-    let page = light_page();
+    let page = light_page(&tuning().0, &tuning().1);
     let cell = sprites::CELL;
     for sprite in ALL {
         let mut inside = 0_u32;
@@ -62,7 +71,7 @@ fn every_cell_has_a_shape_and_an_empty_border() {
 
 #[test]
 fn the_disc_is_full_at_its_centre_and_never_brighter_farther_out() {
-    let page = light_page();
+    let page = light_page(&tuning().0, &tuning().1);
     let disc = sprites::DISC;
     assert_eq!(at(&page, disc, MIDDLE, MIDDLE), 255);
     // Along each axis from the middle outward, the opacity never rises.
@@ -81,14 +90,14 @@ fn the_disc_is_full_at_its_centre_and_never_brighter_farther_out() {
 
 #[test]
 fn the_ring_and_the_outline_are_empty_at_their_centres() {
-    let page = light_page();
+    let page = light_page(&tuning().0, &tuning().1);
     assert_eq!(at(&page, sprites::RING, MIDDLE, MIDDLE), 0);
     assert_eq!(at(&page, sprites::OUTLINE, MIDDLE, MIDDLE), 0);
 }
 
 #[test]
 fn the_outline_is_solid_on_its_edge() {
-    let page = light_page();
+    let page = light_page(&tuning().0, &tuning().1);
     // Up the middle column from the centre, the outline's top edge reaches full opacity.
     let top_edge = (BORDER..MIDDLE)
         .map(|y| at(&page, sprites::OUTLINE, MIDDLE, y))
@@ -110,7 +119,7 @@ fn on_quad(x: u16, y: u16) -> (f32, f32) {
 fn the_outline_is_empty_where_its_mesh_leaves_the_quad_out() {
     // A texel within two texels of a part the mesh leaves out is sampled there by bilinear
     // filtering, so it must be empty too.
-    let page = light_page();
+    let page = light_page(&tuning().0, &tuning().1);
     let margin = 2.0 / f32::from(sprites::CELL);
     let [outer, hole] = [sprites::OUTLINE_OUTER, sprites::OUTLINE_HOLE];
     for y in 0..sprites::CELL {

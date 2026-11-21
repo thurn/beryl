@@ -59,7 +59,7 @@ pub(super) fn write_light(
     run: EffectRun,
     now: u64,
     reach_at: impl Fn(u64) -> Option<Reach>,
-    eye: Vec3,
+    (eye, lift): (Vec3, f32),
     builder: &mut FrameBuilder<'_>,
 ) {
     for (primitive, p) in layers(definition, run, now, builder.tier()) {
@@ -85,19 +85,21 @@ pub(super) fn write_light(
                 } else {
                     basic
                 };
-                write_quad(quad, (sprite(*shape), size), p, run, reach, builder);
+                write_quad(quad, (sprite(*shape), size), (p, lift), run, reach, builder);
             }
             Primitive::Ring { quad } => {
-                write_quad(quad, (sprites::RING, basic), p, run, reach, builder);
+                write_quad(quad, (sprites::RING, basic), (p, lift), run, reach, builder);
             }
             Primitive::Burst {
                 quad,
                 on_surface: false,
             } => {
                 let size = Vec2::splat(basic.max_element());
-                write_quad(quad, (sprites::BURST, size), p, run, reach, builder);
+                write_quad(quad, (sprites::BURST, size), (p, lift), run, reach, builder);
             }
-            Primitive::Directed { sprite } => write_directed(sprite, p, run, reach, builder),
+            Primitive::Directed { sprite } => {
+                write_directed(sprite, (p, lift), run, reach, builder)
+            }
             Primitive::Streak {
                 lookback_ms,
                 width,
@@ -106,13 +108,13 @@ pub(super) fn write_light(
                 opacity,
                 record,
             } => {
-                write_record(record.as_ref(), p, run, reach, builder);
+                write_record(record.as_ref(), (p, lift), run, reach, builder);
                 let before = u64::from(*lookback_ms) * 1_000_000;
                 if let Some(was) = reach_at(before)
                     && let Some(draw) = light::path_streak(
                         reach,
                         was,
-                        eye,
+                        (eye, lift),
                         minimum.at(p),
                         width.at(p),
                         light::fade(*tint, opacity.at(p)),
@@ -129,20 +131,27 @@ pub(super) fn write_light(
 /// Writes a burst in surface paint order, using the surface's own pose and scale.
 pub(super) fn write_surface_burst(
     quad: &Quad,
-    progress: f32,
+    (progress, lift): (f32, f32),
     run: EffectRun,
     reach: Reach,
     builder: &mut FrameBuilder<'_>,
 ) {
     if quad.fade.at(progress) < 1.0 {
         let size = Vec2::splat(reach.half.max_element() * 2.0);
-        write_quad(quad, (sprites::BURST, size), progress, run, reach, builder);
+        write_quad(
+            quad,
+            (sprites::BURST, size),
+            (progress, lift),
+            run,
+            reach,
+            builder,
+        );
     }
 }
 
 fn write_record(
     record: Option<&LightRecord>,
-    progress: f32,
+    (progress, lift): (f32, f32),
     run: EffectRun,
     reach: Reach,
     builder: &mut FrameBuilder<'_>,
@@ -151,7 +160,7 @@ fn write_record(
         light::record_as(
             builder,
             &run,
-            &reach.pose,
+            (&reach.pose, lift),
             reach.half,
             (
                 record.scale.at(progress),
@@ -164,7 +173,7 @@ fn write_record(
 fn write_quad(
     quad: &Quad,
     (sprite, size): (Sprite, Vec2),
-    progress: f32,
+    (progress, lift): (f32, f32),
     run: EffectRun,
     reach: Reach,
     builder: &mut FrameBuilder<'_>,
@@ -174,11 +183,11 @@ fn write_quad(
     } else {
         quad.record.as_ref()
     };
-    write_record(record, progress, run, reach, builder);
+    write_record(record, (progress, lift), run, reach, builder);
     builder.draw(
         Band::Glows,
         light::lying(
-            &reach.pose,
+            (&reach.pose, lift),
             size * quad.scale.at(progress),
             light::fade(quad.tint, quad.alpha.at(progress)),
             sprite,
@@ -189,7 +198,7 @@ fn write_quad(
 
 fn write_directed(
     directed: &DirectedSprite,
-    progress: f32,
+    (progress, lift): (f32, f32),
     run: EffectRun,
     reach: Reach,
     builder: &mut FrameBuilder<'_>,
@@ -209,9 +218,15 @@ fn write_directed(
     let transform = glam::Affine3A::from_scale_rotation_translation(
         Vec3::new(width, length, 1.0),
         pose.rotation * Quat::from_rotation_z(angle),
-        light::above(&pose) + pose.rotation * start + pose.rotation * axis * (length * 0.5),
+        light::above(&pose, lift) + pose.rotation * start + pose.rotation * axis * (length * 0.5),
     );
-    write_record(directed.record.as_ref(), progress, run, reach, builder);
+    write_record(
+        directed.record.as_ref(),
+        (progress, lift),
+        run,
+        reach,
+        builder,
+    );
     builder.draw(
         Band::Glows,
         kit_frame::frame::Draw::glow(
