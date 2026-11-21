@@ -975,12 +975,13 @@ to exit.
 
 ## Build trees
 
-Build trees keep Cargo's incremental builds usable, which the measurements above
-show is worth about 25 times on a small edit to a core crate. A tree keeps its
-own build directories, and no cache is shared between trees. Instead, a lease
-can start from a copy of another tree's build (see the rule on seeding below).
+A build tree stays at a fixed path across leases because rustc ignores
+incremental caches built at another path. On a one-function kernel edit, a new
+directory took 421 to 544 CPU-seconds to build the tests. A tree that had built
+the previous state took 18. Each tree keeps its own build directories, and a
+lease can start from a copy of another tree's build.
 
-Each machine has a fixed number of trees of two kinds:
+Ignite manages two kinds of trees:
 
 - A **ticket tree** is leased to one ticket from `ignite start` until its
   landing or release.
@@ -1020,12 +1021,6 @@ Each machine has a fixed number of trees of two kinds:
   them edit one tree at once. Keeping a free tree built at the tip stays in the
   daemon.
 
-```toml
-# ignite.toml, per machine
-[machine.jarvis]
-trees_disk_gb = 250
-```
-
 The daemon derives the landing-tree count from the machine's physical cores.
 
 Rules for trees:
@@ -1034,8 +1029,7 @@ Rules for trees:
   creates the next available `tree-NN`. The machine can keep up to twice its
   logical core count plus four ticket trees. At that ceiling, `ignite start`
   waits for a tree to become free. The daemon advertises existing free trees
-  plus room for new ones to the hub. `ignite doctor` counts the trees present
-  and flags a legacy `ticket_trees` setting if it is still in the configuration.
+  plus room for new ones to the hub. `ignite doctor` counts the trees present.
 - `ignite start` leases a free tree and checks out a branch at the tip. With
   `repository.green` set and the ref present, the start is `green` instead,
   except in two cases. When a dependency of the ticket landed at a commit that
@@ -1103,7 +1097,9 @@ Rules for trees:
   each created when a command first needs it. Today those are `rust/target`,
   `rust/beryl3d/target` and `ui/node_modules`, and none of them is named in
   Ignite's code. A tree that has only held documentation or Python tickets uses
-  little disk.
+  little disk. On 2026-11-19, `du` measured 49 to 118 GB per built tree across
+  the Rust and Ignite targets, including 6 to 21 GB of incremental caches. Those
+  measurements counted shared clone blocks in each tree.
 - Every round, before measuring, the daemon deletes the object files that newer
   compiles of the same codegen unit replaced. rustc names each object
   `<crate>-<hash>.<codegen unit>.<invocation>.rcgu.o` with a new invocation part
@@ -1112,10 +1108,10 @@ Rules for trees:
   of a 113 GB tree. Each codegen unit keeps its newest object.
 - The build directories may use the volume's size minus the space used outside
   them and a reserve of 50 GB or a tenth of the volume, whichever is larger. The
-  optional Fleet dashboard cap can lower that budget. Before the first fleet
-  notice, the daemon uses `trees_disk_gb` from `ignite.toml` as the cap if it is
-  set. A notice with an empty cap switches to automatic sizing. The disk loop
-  and `ignite doctor` name the term that set the budget.
+  optional Fleet dashboard cap can lower that budget. Before the daemon has
+  received a fleet notice, it sizes the budget automatically. The daemon keeps
+  its latest notice across restarts. The disk loop and `ignite doctor` name the
+  term that set the budget.
 - To stay within the budget, the daemon deletes builds that a newer build of the
   same unit replaced, then the build directories of the free trees used longest
   ago, then, with no free tree left, those of the idle leased trees holding the
@@ -3425,9 +3421,8 @@ with `ignite pool watch`. To work a ticket in a desktop session, run
   `stop_percent` in fleet settings, the hub stops new hand-offs for the affected
   models on every machine. A newer sample below the threshold or the window's
   reset ends the hold. `ignite status` and `ignite pool list` show holds from
-  the latest hub heartbeat. The old `[pool] usage_hold_percent` key supplies the
-  initial defaults when the hub first creates fleet settings. Existing fleet
-  settings take effect at the next reservation.
+  the latest hub heartbeat. Changes to fleet settings take effect at the next
+  reservation.
 - The pool carries on across epics.
 
 ### CLI mode
@@ -3435,8 +3430,7 @@ with `ignite pool watch`. To work a ticket in a desktop session, run
 A provider declares its executable and optional arguments in
 `[pool.cli.<provider>]` and the tiers it offers in `[pool.models.<provider>]`.
 The daemon derives worker room from available memory, the number of workers, and
-a ceiling of twice the machine's logical cores. Legacy machine pool tables are
-accepted for seeding fleet settings during an upgrade.
+a ceiling of twice the machine's logical cores.
 
 ```toml
 [pool.cli.claude]
@@ -4243,13 +4237,10 @@ are the choices a person makes on the dashboard.
 | A person's intent     | Fleet settings in the hub's database             | Each machine's state and disk cap; each provider's share, whether it is on, and its stop percentage                       |
 | A reviewed definition | `ignite.toml`                                    | A provider's program, arguments and models; the check families a machine can run; devices a machine has a fixed number of |
 
-`ignite.toml` loses `ticket_trees`, `landing_trees`, `trees_disk_gb`, `floor`,
-`express_cores`, `tip_build_cores`, the `[machine.<name>.pool.<app>]` tables,
-`[pool] default_owner`, `[pool] usage_hold_percent` and the per-machine
-`browser-pages` count. A machine needs no `[machine.<name>]` table unless it
-lists `families` or devices. A provider's program and arguments stay in the file
-because they are command lines that run with no sandbox, so they change by a
-reviewed landing and never from a web page.
+Machine tables in `ignite.toml` declare operating systems, check families and
+fixed device counts such as `oracle` and `bench-vm`. Provider definitions
+declare reviewed programs, arguments and models. Older files still load and
+unknown keys produce warnings.
 
 ### Fleet settings
 
@@ -4275,11 +4266,12 @@ cap, or change a provider's on/off switch, share or stop percentage. Leave a
 machine's cap empty for automatic. The public dashboard shows the saved
 settings.
 
-The hub stores settings under `fleet` in its database. On its first start
-without fleet settings, it seeds them from `ignite.toml`. Machines with a CLI
-pool start active, and other configured machines start in checks-only mode. Each
-machine keeps its configured disk cap. Provider shares start at the sum of their
-CLI slots across machines, with the configured stop percentage.
+The hub stores settings under `fleet` in its database. With a new database, the
+hub records defaults for the machines and providers named in `ignite.toml`.
+Machines start active with automatic disk caps. Providers start enabled with
+zero share and a 99% stop percentage. When all eligible providers have zero
+share, dispatch chooses the one with the fewest tickets in progress. A hub with
+saved fleet settings keeps them across upgrades.
 
 `GET /fleet` under the hub's project API returns the view, which
 `ignite fleet --json` also prints. `PUT /fleet` requires a machine token with an
@@ -4342,10 +4334,9 @@ Reserves and counts are fractions of the machine. `P` is its physical cores and
 | Most workers at once (the ceiling) | 2 × L                     | 36        | 20        | 40     |
 
 The daemon derives the reserves, floors and landing-tree count at startup.
-Cygnus has no browser page slots because its checks do not request them. Old
-reserves, floors, landing-tree counts and per-machine resource counts replaced
-by `per_core` may remain in `ignite.toml` during the rollout. `ignite doctor`
-names each retired key and reports that Ignite uses the derived value.
+Cygnus has no browser page slots because its checks do not request them. A
+resource declared with `per_core` uses the derived count on every machine that
+runs checks requiring it.
 
 - **Ticket trees have no count.** A lease that finds no free tree creates one. A
   tree that has been free for 24 hours is removed, except the newest two free

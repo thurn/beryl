@@ -304,9 +304,8 @@ fn fleet_writes_use_the_private_listener_and_check_the_version() {
 }
 
 #[test]
-fn the_first_private_start_seeds_the_legacy_fleet_only_once() {
-    // The legacy fleet's pool and disk-cap values, independent of later edits to the repo config.
-    let legacy = r#"
+fn the_first_private_start_seeds_fleet_defaults_only_once() {
+    let definitions = r#"
 [repository]
 remote = "origin"
 staging = "staging"
@@ -318,39 +317,21 @@ url = "http://127.0.0.1:0"
 project = "pj"
 [gate]
 threshold = 0.004
-cap = 400
-[pool]
-usage_hold_percent = 99
 [pool.cli.codex]
 program = "codex"
 [pool.cli.claude]
 program = "claude"
-[machine.jarvis]
-ticket_trees = 24
-landing_trees = 3
-trees_disk_gb = 900
-[machine.jarvis.pool.codex]
-mode = "cli"
-slots = 15
-[machine.multivac]
-ticket_trees = 8
-landing_trees = 2
-trees_disk_gb = 350
-[machine.multivac.pool.codex]
-mode = "desktop"
-slots = 3
+[machine.jarvis.resources]
+oracle = 1
 [machine.cygnus]
-ticket_trees = 3
-landing_trees = 2
-trees_disk_gb = 60
-[machine.cygnus.pool.missing]
-slots = 3
+os = "windows"
+families = ["rust"]
 "#;
     let dir = ignite_core::test_files::temp_dir()
         .join(format!("ignite-fleet-seed-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let mut server = HubServer {
-        config: Config::parse("ignite.toml", legacy).unwrap(),
+        config: Config::parse("ignite.toml", definitions).unwrap(),
         listen: "127.0.0.1:0".to_owned(),
         database: dir.join("hub.sqlite"),
         wordmark: None,
@@ -364,32 +345,19 @@ slots = 3
     assert_eq!(seeded.settings.version, 1);
     assert_eq!(seeded.changes.len(), 1);
     assert_eq!(seeded.changes[0].settings, seeded.settings);
-    assert_eq!(seeded.settings.machines.len(), 3);
-    for (name, state, cap) in [
-        ("jarvis", MachineState::Active, 900),
-        ("multivac", MachineState::Active, 350),
-        ("cygnus", MachineState::ChecksOnly, 60),
-    ] {
-        let setting = seeded.settings.machine(name);
-        assert_eq!(setting.state, state);
-        assert_eq!(setting.disk_cap_gb, Some(cap));
+    assert_eq!(seeded.settings.machines.len(), 2);
+    for name in ["jarvis", "cygnus"] {
+        let setting = &seeded.settings.machines[name];
+        assert_eq!(setting.state, MachineState::Active);
+        assert_eq!(setting.disk_cap_gb, None);
     }
     assert_eq!(seeded.settings.providers.len(), 2);
-    assert_eq!(
-        seeded.settings.provider("codex"),
-        ProviderSetting {
-            enabled: true,
-            share: 18,
-            stop_percent: 99,
-        }
-    );
-    assert_eq!(
-        seeded.settings.provider("claude"),
-        ProviderSetting::default()
-    );
+    for name in ["claude", "codex"] {
+        assert_eq!(seeded.settings.providers[name], ProviderSetting::default());
+    }
     private.stop();
 
-    server.config.pool.usage_hold_percent = 85;
+    server.config.pool.cli.clear();
     let restarted = server.start().unwrap();
     assert_eq!(get_fleet(restarted.address()), seeded);
     restarted.stop();

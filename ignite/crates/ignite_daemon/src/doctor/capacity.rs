@@ -1,9 +1,9 @@
-//! The core readings used at startup and by `doctor`, and the retired settings it reports.
+//! The core readings used at startup and by `doctor`.
 
 use ignite_core::capacity::MachineFacts;
-use ignite_core::config::{Config, Os};
+use ignite_core::config::Os;
 
-use super::{Finding, Host};
+use super::Host;
 
 pub(crate) fn machine_facts(host: &dyn Host, os: Os) -> MachineFacts {
     MachineFacts {
@@ -12,43 +12,5 @@ pub(crate) fn machine_facts(host: &dyn Host, os: Os) -> MachineFacts {
         physical_cores: host.physical_cores(),
         memory_mb: host.memory_mb(),
         disk_total_gb: 0, // Only core-based capacity is derived here.
-    }
-}
-
-pub(super) fn retired_findings(config: &Config, findings: &mut Vec<Finding>) {
-    for (name, machine) in &config.machine {
-        if machine.ticket_trees.is_some() {
-            findings.push(Finding::ok(
-                "config",
-                format!(
-                    "machine.{name}.ticket_trees in ignite.toml is retired. Ignite creates ticket trees as needed."
-                ),
-            ));
-        }
-        let keys = [
-            ("landing_trees", machine.landing_trees.is_some()),
-            ("floor", machine.floor.is_some()),
-            ("express_cores", machine.express_cores.is_some()),
-            ("tip_build_cores", machine.tip_build_cores.is_some()),
-            ("pool", !machine.pool.is_empty()),
-        ];
-        let resources = machine
-            .resources
-            .keys()
-            .filter(|key| config.resources.contains_key(*key))
-            .map(|key| format!("resources.{key}"));
-        for key in keys
-            .into_iter()
-            .filter(|(_, present)| *present)
-            .map(|(key, _)| key.to_owned())
-            .chain(resources)
-        {
-            findings.push(Finding::ok(
-                "config",
-                format!(
-                    "machine.{name}.{key} in ignite.toml is retired. Ignite uses the derived value."
-                ),
-            ));
-        }
     }
 }

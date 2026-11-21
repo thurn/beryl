@@ -30,10 +30,6 @@ cap = 400
 
 [machine.m1]
 os = "macos"
-ticket_trees = 1
-landing_trees = 1
-trees_disk_gb = 10
-floor = {{ batch = 1, tip = 1 }}
 "#
     )
 }
@@ -190,7 +186,25 @@ fn fleet_edits_are_visible_in_the_cli_and_preserve_other_fields() {
             .contains("provider codex: on, share 50, stop at 99%")
     );
 
-    let saved = json(&fleet(&["machine", "m1", "--state", "active", "--json"]));
+    let saved = json(&fleet(&[
+        "machine",
+        "m1",
+        "--state",
+        "active",
+        "--disk-cap-gb",
+        "10",
+        "--json",
+    ]));
+    assert_eq!(saved["machines"]["m1"]["disk_cap_gb"], 10);
+
+    let saved = json(&fleet(&[
+        "machine",
+        "m1",
+        "--state",
+        "checks-only",
+        "--json",
+    ]));
+    assert_eq!(saved["machines"]["m1"]["state"], "checks-only");
     assert_eq!(saved["machines"]["m1"]["disk_cap_gb"], 10);
     assert_eq!(saved["providers"]["codex"]["share"], 50);
 
@@ -198,12 +212,12 @@ fn fleet_edits_are_visible_in_the_cli_and_preserve_other_fields() {
         "machine",
         "m1",
         "--state",
-        "checks-only",
+        "active",
         "--disk-cap-gb",
         "auto",
         "--json",
     ]));
-    assert_eq!(saved["machines"]["m1"]["state"], "checks-only");
+    assert_eq!(saved["machines"]["m1"]["state"], "active");
     assert!(saved["machines"]["m1"]["disk_cap_gb"].is_null());
 
     running.stop();

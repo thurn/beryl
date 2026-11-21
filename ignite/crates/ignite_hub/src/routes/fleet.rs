@@ -5,8 +5,7 @@ use serde_json::json;
 
 use ignite_core::config::{Config, Os};
 use ignite_core::fleet::{
-    FleetMachine, FleetSettings, FleetUpdate, FleetView, MachineSetting, MachineState,
-    ProviderSetting,
+    FleetMachine, FleetSettings, FleetUpdate, FleetView, MachineSetting, ProviderSetting,
 };
 use ignite_core::time::Timestamp;
 use ignite_store::hub::fleet_settings::{self, PutOutcome};
@@ -95,7 +94,7 @@ fn update(conn: &mut Connection, request: &Request, now: Timestamp) -> Response 
     }
 }
 
-/// Imports the old pool configuration once, as the first audited settings change.
+/// Records defaults for the configured machines and providers on the hub's first start.
 pub(crate) fn seed(conn: &mut Connection, config: &Config, now: Timestamp) -> Result<()> {
     if fleet_settings::settings(conn)?.version != 0 {
         return Ok(());
@@ -106,36 +105,20 @@ pub(crate) fn seed(conn: &mut Connection, config: &Config, now: Timestamp) -> Re
 }
 
 fn initial_settings(config: &Config) -> FleetSettings {
-    let mut settings = FleetSettings::default();
-    let stop_percent = config.pool.usage_hold_percent;
-    for name in config.pool.cli.keys() {
-        settings.providers.insert(
-            name.clone(),
-            ProviderSetting {
-                stop_percent,
-                ..ProviderSetting::default()
-            },
-        );
+    FleetSettings {
+        machines: config
+            .machine
+            .keys()
+            .map(|name| (name.clone(), MachineSetting::default()))
+            .collect(),
+        providers: config
+            .pool
+            .cli
+            .keys()
+            .map(|name| (name.clone(), ProviderSetting::default()))
+            .collect(),
+        ..FleetSettings::default()
     }
-    for (name, machine) in &config.machine {
-        let mut state = MachineState::ChecksOnly;
-        for (provider, pool) in &machine.pool {
-            if pool.slots > 0
-                && let Some(provider) = settings.providers.get_mut(provider)
-            {
-                state = MachineState::Active;
-                provider.share = provider.share.saturating_add(pool.slots);
-            }
-        }
-        settings.machines.insert(
-            name.clone(),
-            MachineSetting {
-                state,
-                disk_cap_gb: machine.trees_disk_gb,
-            },
-        );
-    }
-    settings
 }
 
 fn invalid(error: impl std::fmt::Display) -> StoreError {

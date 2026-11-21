@@ -171,7 +171,6 @@ mod tests {
             branches: Vec::new(),
             ticket_tree_ceiling: 1,
             landing_trees: 0,
-            legacy_disk_cap_gb: None,
             keep: keep.into_iter().collect::<Vec<_>>().into(),
             prebuild: outputs.keys().cloned().collect::<Vec<_>>().into(),
             prebuild_outputs: outputs.into(),

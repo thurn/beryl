@@ -17,22 +17,19 @@ project = "demo"
 threshold = 0.004      # expected failures per billion instructions
 seconds = 60           # of running checks per landing, builds not counted
 
+[resources.browser-pages]
+per_core = 0.5
+
 [machine.jarvis]
-ticket_trees = 24
-landing_trees = 3
-trees_disk_gb = 400
+os = "macos"
 
 [machine.jarvis.resources]
-browser-pages = 9
 oracle = 1
 bench-vm = 1
 
 [machine.cygnus]
 os = "windows"
-ticket_trees = 6
-landing_trees = 2
 families = ["rust", "clippy", "format", "source-rules", "python"]
-floor = { batch = 8, tip = 2 }
 
 [[rebuild]]
 name = "kernel-body"
@@ -56,14 +53,14 @@ fn parses_the_document_examples() {
     assert_eq!(config.rules, Rules::default());
     let jarvis = config.machine("jarvis").unwrap();
     assert_eq!(
-        (jarvis.ticket_trees, jarvis.landing_trees),
-        (Some(24), Some(3))
+        config.resources["browser-pages"],
+        Resource { per_core: 0.5 }
     );
-    assert_eq!(jarvis.resources["browser-pages"], 9);
+    assert_eq!(jarvis.resources["oracle"], 1);
+    assert_eq!(jarvis.resources["bench-vm"], 1);
     assert_eq!(jarvis.families, None);
     let cygnus = config.machine("cygnus").unwrap();
     assert_eq!(cygnus.os, Some(Os::Windows));
-    assert_eq!(cygnus.floor, Some(Floor { batch: 8, tip: 2 }));
     assert_eq!(config.rebuild[1].name, "one-card");
 }
 
@@ -91,7 +88,6 @@ fn the_express_lane_covers_a_landing_only_when_every_changed_file_matches() {
     assert!(!express.covers(&paths(&["ignite/crates/a.rs", "rust/Cargo.toml"])));
     assert!(!express.covers(&[]));
     assert_eq!(express.families, ["ignite"]);
-    assert_eq!(config.machine["jarvis"].express_cores, None);
 }
 
 #[test]
@@ -219,56 +215,55 @@ fn a_check_is_protected_by_its_own_name_or_its_family() {
 }
 
 #[test]
-fn the_cli_pool_tables_ignore_legacy_mode_settings() {
-    let settings = r#"
-[machine.jarvis.pool.claude]
-mode = "cli"
-slots = 8
-[machine.jarvis.pool.codex]
-mode = "desktop"
-slots = 2
+fn old_capacity_and_pool_settings_load_as_unknown_keys() {
+    let providers = r#"
 [pool.cli.claude]
 program = "claude"
 args = ["--dangerously-skip-permissions"]
 [pool.cli.codex]
 program = "codex"
 "#;
-    let parse = |settings| {
-        let (config, unknown) =
-            Config::parse_with_unknown("ignite.toml", &format!("{DOCUMENT_EXAMPLES}{settings}"))
-                .unwrap();
-        assert!(unknown.is_empty(), "{unknown:?}");
-        config
-    };
-    let config = parse(settings);
+    let current = format!("{DOCUMENT_EXAMPLES}{providers}");
+    let legacy = current.replace(
+        "[machine.jarvis.resources]",
+        r#"ticket_trees = 24
+landing_trees = 3
+trees_disk_gb = 400
+floor = { batch = 8, tip = 2 }
+express_cores = 3
+tip_build_cores = 4
+[machine.jarvis.pool.codex]
+mode = "desktop"
+slots = 2
+[machine.jarvis.resources]"#,
+    ) + r#"
+[pool]
+default_owner = "jarvis/codex"
+usage_hold_percent = 85
+"#;
+    let (config, unknown) = Config::parse_with_unknown("ignite.toml", &legacy).unwrap();
+    assert_eq!(config, Config::parse("ignite.toml", &current).unwrap());
+    let mut keys = unknown.iter().map(String::as_str).collect::<Vec<_>>();
+    keys.sort_unstable();
     assert_eq!(
-        config.machine_pool("JARVIS", "claude"),
-        MachinePool { slots: 8 }
-    );
-    assert_eq!(
-        config.machine_pool("jarvis", "codex"),
-        MachinePool { slots: 2 }
-    );
-    assert_eq!(
-        config.machine_pool("cygnus", "codex"),
-        MachinePool::default()
+        keys,
+        [
+            "machine.jarvis.express_cores",
+            "machine.jarvis.floor",
+            "machine.jarvis.landing_trees",
+            "machine.jarvis.pool",
+            "machine.jarvis.ticket_trees",
+            "machine.jarvis.tip_build_cores",
+            "machine.jarvis.trees_disk_gb",
+            "pool.default_owner",
+            "pool.usage_hold_percent",
+        ]
     );
     assert_eq!(config.cli_program("other"), None);
     let claude = config.cli_program("claude").unwrap();
     assert_eq!(claude.program, "claude");
     assert_eq!(claude.args, ["--dangerously-skip-permissions"]);
     assert!(config.cli_program("codex").unwrap().args.is_empty());
-
-    let without_modes = settings
-        .lines()
-        .filter(|line| !line.starts_with("mode"))
-        .collect::<Vec<_>>()
-        .join("\n");
-    assert_eq!(parse(&without_modes), config);
-    assert_eq!(
-        serde_json::to_value(config.machine_pool("jarvis", "codex")).unwrap(),
-        serde_json::json!({"slots": 2})
-    );
 }
 
 #[test]
@@ -333,21 +328,21 @@ fn platform_manifest() -> crate::manifest::Manifest {
 fn a_family_no_machine_of_its_platform_runs_is_unrunnable() {
     // The only Windows machine lists its families and leaves out `platform`, which must pass
     // on Windows, so tip verification would wait for it forever.
-    let text = DOCUMENT_EXAMPLES.replace("jarvis]\n", "jarvis]\nos = \"macos\"\n");
-    let config = Config::parse("ignite.toml", &text).unwrap();
+    let config = Config::parse("ignite.toml", DOCUMENT_EXAMPLES).unwrap();
     assert_eq!(
         config.unrunnable_families(&platform_manifest()),
         vec![("platform".to_owned(), Some(Os::Windows))]
     );
 
-    let listed = text.replace("\"python\"]", "\"python\", \"platform\"]");
+    let listed = DOCUMENT_EXAMPLES.replace("\"python\"]", "\"python\", \"platform\"]");
     let config = Config::parse("ignite.toml", &listed).unwrap();
     assert!(config.unrunnable_families(&platform_manifest()).is_empty());
 }
 
 #[test]
 fn a_machine_without_a_declared_os_runs_only_families_that_pass_anywhere() {
-    let config = Config::parse("ignite.toml", DOCUMENT_EXAMPLES).unwrap();
+    let text = DOCUMENT_EXAMPLES.replace("os = \"macos\"\n", "");
+    let config = Config::parse("ignite.toml", &text).unwrap();
     assert!(config.runs_family(None, "rust"));
     assert!(!config.runs_family(Some(Os::Macos), "rust"));
     assert_eq!(

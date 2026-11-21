@@ -11,7 +11,8 @@ use std::time::Duration;
 
 use rusqlite::Connection;
 
-use ignite_core::config::{Config, Floor};
+use ignite_core::capacity::Floor;
+use ignite_core::config::Config;
 use ignite_core::fakes::{FakeBuilds, FakeClock, FakeGit, FakeHub, FakeLauncher};
 use ignite_core::ids::{Commit, Handle, MachineId, SessionId, TreeId};
 use ignite_core::protocol::Class;

@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use ignite_core::config::Floor;
+use ignite_core::capacity::Floor;
 use ignite_core::protocol::Class;
 
 use std::sync::Arc;

@@ -119,7 +119,7 @@ fn a_command_whose_work_is_stopped_is_ended_and_its_cores_are_given_back() {
     use std::sync::Arc;
     use std::time::Duration;
 
-    use ignite_core::config::Floor;
+    use ignite_core::capacity::Floor;
     use ignite_core::time::SystemClock;
     use ignite_daemon::sched::{Limits, Scheduler};
     use ignite_daemon::steps::{Kind, Steps, Work};
@@ -273,7 +273,7 @@ mod grants {
     use std::sync::Arc;
     use std::thread;
 
-    use ignite_core::config::Floor;
+    use ignite_core::capacity::Floor;
     use ignite_core::fakes::FakeClock;
     use ignite_core::time::Timestamp;
     use ignite_daemon::sched::{GrantRequest, Limits, Scheduler};
@@ -562,7 +562,7 @@ mod stop_grace {
     use std::thread;
     use std::time::{Duration, Instant};
 
-    use ignite_core::config::Floor;
+    use ignite_core::capacity::Floor;
     use ignite_core::time::SystemClock;
     use ignite_daemon::sched::{GrantRequest, Limits, Scheduler};
     use ignite_os::hostcpu::HostCpu;

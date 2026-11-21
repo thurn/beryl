@@ -216,13 +216,7 @@ pub fn machinery(base: &Base, setup: TreeSetup) -> Result<Machinery> {
     );
     builds.rejoin(unfinished, &reset);
     let repo = &base.options.repo;
-    let tree_config = TreeConfig::new(
-        repo,
-        &base.config,
-        &base.declared,
-        &base.derived,
-        &base.manifest,
-    );
+    let tree_config = TreeConfig::new(repo, &base.config, &base.derived, &base.manifest);
     let trees = Trees::new(
         tree_config,
         base.open()?,
@@ -357,13 +351,7 @@ pub fn verb_side(
     idle_host: impl FnOnce(LiveHost) -> Box<dyn IdleHost>,
 ) -> Result<(Context, Vec<LongVerb>)> {
     let repo = &base.options.repo;
-    let tree_config = TreeConfig::new(
-        repo,
-        &base.config,
-        &base.declared,
-        &base.derived,
-        &base.manifest,
-    );
+    let tree_config = TreeConfig::new(repo, &base.config, &base.derived, &base.manifest);
     let trees = Trees::new(
         tree_config,
         base.open()?,

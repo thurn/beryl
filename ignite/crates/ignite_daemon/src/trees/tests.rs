@@ -143,7 +143,6 @@ impl Fixture {
             branches: vec!["main".to_owned()],
             ticket_tree_ceiling: ticket_trees,
             landing_trees,
-            legacy_disk_cap_gb: None,
             keep: vec!["out".to_owned()].into(),
             prebuild: vec!["bin".to_owned()].into(),
             prebuild_outputs: BTreeMap::from([("bin".to_owned(), vec!["out".to_owned()])]).into(),

@@ -4,7 +4,8 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
-use ignite_core::config::{Floor, Os};
+use ignite_core::capacity::Floor;
+use ignite_core::config::Os;
 use ignite_core::fakes::FakeClock;
 use ignite_core::ids::TicketId;
 use ignite_core::protocol::Class;

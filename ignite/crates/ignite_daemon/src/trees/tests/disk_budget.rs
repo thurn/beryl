@@ -48,14 +48,12 @@ fn outside_growth_reduces_the_budget_and_the_sweep_brings_trees_under_it() {
 }
 
 #[test]
-fn a_notice_overrides_the_legacy_cap_including_when_it_clears_the_cap() {
+fn the_latest_notice_sets_or_clears_the_fleet_cap() {
     let f = Fixture::new(1, 1);
-    let mut config = f.trees.config().clone();
-    config.legacy_disk_cap_gb = Some(1);
     let db = f.scratch.0.join("daemon.db");
     let pool = crate::pool::Pool::new(ignite_store::local::open(&db).unwrap());
     let trees = Trees::new(
-        config,
+        f.trees.config().clone(),
         ignite_store::local::open(&db).unwrap(),
         Arc::new(FakeClock::new(
             Timestamp::parse("2026-11-18T00:00:00.000Z").unwrap(),
@@ -65,10 +63,13 @@ fn a_notice_overrides_the_legacy_cap_including_when_it_clears_the_cap() {
     trees.setup(&f.tip()).unwrap();
     write_build(&trees, "tree-01");
     let disk = || Some(sample(926, 200 * BYTES_PER_GB));
-    let legacy = trees.hold_disk_with(disk).unwrap();
-    assert_eq!(legacy.limit, Some(BYTES_PER_GB));
-    assert_eq!(legacy.limit_source, Some(DiskLimitSource::Cap));
-    assert!(legacy.cleared.is_empty());
+    let before_notice = trees.hold_disk_with(disk).unwrap();
+    assert_eq!(
+        before_notice.limit,
+        Some(107_400_000_000 + before_notice.before)
+    );
+    assert_eq!(before_notice.limit_source, Some(DiskLimitSource::Disk));
+    assert!(before_notice.cleared.is_empty());
 
     let mut notice = FleetNotice {
         disk_cap_gb: Some(0),

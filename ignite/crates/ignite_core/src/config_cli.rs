@@ -11,31 +11,6 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Legacy `[machine.<host>.pool.<app>]` settings, read only to seed fleet settings
-/// when upgrading a hub. The daemon derives worker room from the machine.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(from = "MachinePoolConfig")]
-pub struct MachinePool {
-    pub slots: u32,
-}
-
-#[derive(Deserialize)]
-struct MachinePoolConfig {
-    #[serde(default)]
-    slots: u32,
-    /// Older machine tables can still carry the retired mode key.
-    #[serde(rename = "mode")]
-    _mode: Option<String>,
-}
-
-impl From<MachinePoolConfig> for MachinePool {
-    fn from(config: MachinePoolConfig) -> Self {
-        Self {
-            slots: config.slots,
-        }
-    }
-}
-
 /// `[pool.cli.<app>]`: the program every CLI turn of the app runs and the arguments it always
 /// gets, before the ones each turn adds (model, effort, transcript, prompt).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -57,14 +32,6 @@ impl CliProgram {
 }
 
 impl super::Config {
-    /// Legacy worker slots recorded for `app` on this machine.
-    pub fn machine_pool(&self, hostname: &str, app: &str) -> MachinePool {
-        self.machine(hostname)
-            .and_then(|machine| machine.pool.get(app))
-            .copied()
-            .unwrap_or_default()
-    }
-
     /// The program and arguments of `app`'s CLI turns, if `[pool.cli.<app>]` declares them.
     pub fn cli_program(&self, app: &str) -> Option<&CliProgram> {
         self.pool.cli.get(app)

@@ -68,8 +68,6 @@ fn config() -> Config {
         cap = 10
         [machine.testbox]
         os = "macos"
-        landing_trees = 1
-        trees_disk_gb = 100
         "#,
     )
     .unwrap()
@@ -252,9 +250,6 @@ fn a_healthy_machine_has_no_problems() {
     let reply = report(&findings);
     assert_eq!(reply.exit, Exit::Success);
     assert!(reply.text.ends_with("healthy"));
-    assert!(reply.text.contains(
-        "machine.testbox.landing_trees in ignite.toml is retired. Ignite uses the derived value."
-    ));
 }
 
 #[test]
@@ -297,7 +292,7 @@ fn doctor_warns_when_a_configured_provider_has_no_model_tiers() {
 }
 
 #[test]
-fn doctor_warns_when_an_app_in_cli_mode_has_no_program_on_the_path() {
+fn doctor_warns_when_a_configured_cli_program_is_missing_from_the_path() {
     let mut config = config();
     config.pool.cli.insert(
         "fake".to_owned(),
@@ -306,10 +301,6 @@ fn doctor_warns_when_an_app_in_cli_mode_has_no_program_on_the_path() {
             dialect: Some("codex".to_owned()),
             ..Default::default()
         },
-    );
-    config.machine.get_mut("testbox").unwrap().pool.insert(
-        "fake".to_owned(),
-        ignite_core::config::MachinePool { slots: 2 },
     );
     let findings = diagnose(&DoctorInput {
         config: &config,
@@ -387,10 +378,8 @@ fn a_missing_tree_directory_is_one_problem() {
 }
 
 #[test]
-fn doctor_counts_present_trees_without_using_the_legacy_ticket_tree_count() {
-    let mut config = config();
-    let machine = config.machine.get_mut("testbox").unwrap();
-    machine.ticket_trees = Some(24);
+fn doctor_counts_present_trees() {
+    let config = config();
     let host = healthy_host();
     let trees = FakeTrees(vec![tree("landing-1")]);
     let findings = diagnose(&DoctorInput {
@@ -409,11 +398,6 @@ fn doctor_counts_present_trees_without_using_the_legacy_ticket_tree_count() {
         findings
             .iter()
             .any(|f| f.label == "trees" && f.text == "1 tree present.")
-    );
-    assert!(
-        findings
-            .iter()
-            .any(|f| f.label == "config" && f.text.contains("ticket_trees"))
     );
     assert!(findings.iter().all(|f| f.ok));
 }

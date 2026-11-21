@@ -149,10 +149,7 @@ impl Trees {
     }
 
     pub(crate) fn disk_cap_gb(&self) -> Option<u32> {
-        crate::fleet_notice::disk_cap_gb(
-            self.fleet_notice().as_ref(),
-            self.inner.config.legacy_disk_cap_gb,
-        )
+        self.fleet_notice().and_then(|notice| notice.disk_cap_gb)
     }
 
     /// Brings the trees under the volume's current budget if they are over it.

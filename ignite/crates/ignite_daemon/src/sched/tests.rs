@@ -3,8 +3,8 @@ use std::io;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-use ignite_core::capacity::{MachineFacts, derive};
-use ignite_core::config::{Config, Floor, Os};
+use ignite_core::capacity::{Floor, MachineFacts, derive};
+use ignite_core::config::{Config, Os};
 use ignite_core::fakes::FakeClock;
 use ignite_core::manifest::Manifest;
 use ignite_core::protocol::Class;

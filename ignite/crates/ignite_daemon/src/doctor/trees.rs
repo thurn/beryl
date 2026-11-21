@@ -7,7 +7,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use ignite_core::capacity::{BYTES_PER_GB, BYTES_PER_GIB};
-use ignite_core::config::Machine;
 use ignite_core::ids::Commit;
 use ignite_core::traits::Result;
 use ignite_os::system::DiskSpace;
@@ -130,12 +129,7 @@ fn present_count(present: usize) -> String {
     format!("{present} {trees} present")
 }
 
-pub(super) fn findings(
-    input: &DoctorInput,
-    machine: &Machine,
-    landing_trees: u32,
-    findings: &mut Vec<Finding>,
-) {
+pub(super) fn findings(input: &DoctorInput, landing_trees: u32, findings: &mut Vec<Finding>) {
     let dir = input.repo.join(&input.config.repository.trees);
     let restart = "restart the daemon, which creates the trees it is missing";
     if !input.host.path_exists(&dir) {
@@ -207,7 +201,7 @@ pub(super) fn findings(
     findings.push(disk_finding(
         input.host.disk_space(probe),
         input.used_tree_bytes,
-        crate::fleet_notice::disk_cap_gb(input.fleet.as_ref(), machine.trees_disk_gb),
+        input.fleet.as_ref().and_then(|notice| notice.disk_cap_gb),
     ));
 }
 

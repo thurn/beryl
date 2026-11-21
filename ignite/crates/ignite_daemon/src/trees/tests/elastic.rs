@@ -22,19 +22,16 @@ fn a_configuration_without_ticket_trees_creates_one_for_each_lease() {
         [gate]
         threshold = 1.0
         cap = 10
-        [machine.local]
-        landing_trees = 1
         "#,
     )
     .unwrap();
     let mut config = TreeConfig::new(
         &f.repo,
         &config,
-        config.machine("local").unwrap(),
         &Derived {
             express_cores: 2,
             tip_build_cores: 2,
-            floor: ignite_core::config::Floor::default(),
+            floor: ignite_core::capacity::Floor::default(),
             landing_trees: 1,
             worker_ceiling: 2,
         },

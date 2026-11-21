@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::config::{Floor, Os};
+use crate::config::Os;
 use crate::ids::TicketId;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -23,6 +23,13 @@ pub struct Derived {
     pub floor: Floor,
     pub landing_trees: u32,
     pub worker_ceiling: u32,
+}
+
+/// Cores reserved for the `batch` and `tip` classes.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Floor {
+    pub batch: u32,
+    pub tip: u32,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

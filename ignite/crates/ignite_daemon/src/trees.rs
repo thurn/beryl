@@ -50,7 +50,7 @@ use std::time::Duration;
 
 use crate::manifests::Live;
 use ignite_core::capacity::Derived;
-use ignite_core::config::{Config, Machine};
+use ignite_core::config::Config;
 use ignite_core::ids::{Commit, Handle, SessionId, TicketId, TreeId};
 use ignite_core::manifest::Manifest;
 use ignite_core::traits::{BuildResult, Builds, Clock, Error, Result};
@@ -98,8 +98,6 @@ pub struct TreeConfig {
     pub branches: Vec<String>,
     pub ticket_tree_ceiling: u32,
     pub landing_trees: u32,
-    /// The legacy cap in GB, used only until the hub sends a fleet notice.
-    pub legacy_disk_cap_gb: Option<u32>,
     /// The build products' output directories, relative to a tree's root: what a reset keeps.
     /// Both lists change when the manifests do ([`TreeConfig::reload`]).
     pub keep: Live<Vec<String>>,
@@ -117,13 +115,7 @@ impl TreeConfig {
         format!("{}{ticket}", self.saved)
     }
 
-    pub fn new(
-        repo: &Path,
-        config: &Config,
-        machine: &Machine,
-        derived: &Derived,
-        manifest: &Manifest,
-    ) -> Self {
+    pub fn new(repo: &Path, config: &Config, derived: &Derived, manifest: &Manifest) -> Self {
         let (keep, prebuild, prebuild_outputs) = Self::products(manifest);
         TreeConfig {
             repo: repo.to_path_buf(),
@@ -142,7 +134,6 @@ impl TreeConfig {
             .collect(),
             ticket_tree_ceiling: derived.worker_ceiling.saturating_add(EXTRA_TICKET_TREES),
             landing_trees: derived.landing_trees,
-            legacy_disk_cap_gb: machine.trees_disk_gb,
             keep: keep.into(),
             prebuild: prebuild.into(),
             prebuild_outputs: prebuild_outputs.into(),

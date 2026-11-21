@@ -69,10 +69,6 @@ project = "demo"
 
 [gate]
 threshold = 0.004
-
-[machine.one]
-ticket_trees = 2
-landing_trees = 1
 "#;
 
     #[test]
@@ -83,7 +79,6 @@ landing_trees = 1
         assert!((config.land.max_base_age_hours - 12.0).abs() < f64::EPSILON);
         assert!(!config.revert.broken_build);
         assert_eq!(config.repository.green, None);
-        assert_eq!(config.machine["one"].tip_build_cores, None);
     }
 
     #[test]
@@ -91,12 +86,11 @@ landing_trees = 1
         let text = MINIMAL.replace(
             "checks = \"checks\"",
             "checks = \"checks\"\ngreen = \"green\"",
-        ) + "tip_build_cores = 4\n\n[land]\nmode = \"verdict\"\nmax_base_age_hours = 6\n\n\
+        ) + "\n[land]\nmode = \"verdict\"\nmax_base_age_hours = 6\n\n\
              [revert]\nbroken_build = true\n";
         let (config, unknown) = Config::parse_with_unknown("ignite.toml", &text).unwrap();
         assert!(unknown.is_empty(), "{unknown:?}");
         assert_eq!(config.repository.green.as_deref(), Some("green"));
-        assert_eq!(config.machine["one"].tip_build_cores, Some(4));
         assert_eq!(config.land.mode, super::LandMode::Verdict);
         assert!((config.land.max_base_age_hours - 6.0).abs() < f64::EPSILON);
         assert!(config.revert.broken_build);

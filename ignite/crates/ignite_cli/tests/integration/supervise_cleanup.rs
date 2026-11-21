@@ -11,7 +11,7 @@ use std::process::{Command, Stdio};
 use std::sync::Arc;
 use std::thread;
 
-use ignite_core::config::Floor;
+use ignite_core::capacity::Floor;
 use ignite_core::fakes::FakeClock;
 use ignite_core::ids::TicketId;
 use ignite_core::protocol::Class;

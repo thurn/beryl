@@ -17,10 +17,6 @@ master = "master"
 # this; every daemon has run a build that only warns since 506508f9a.
 release = "refs/ignite/release"
 release_family = "ignite"
-# Build trees are fixed directories that keep their rust/target between tickets: rustc ignores
-# incremental caches built at another path, and a new directory per change rebuilt every crate
-# on the changed chain from scratch (421-544 CPU-seconds of test build after a one-function
-# beryl_kernel change, against 18 in a tree that built the state before).
 trees = ".worktrees"
 checks = "ignite/checks"
 # The newest tip whose build checks (the families declared `builds = true`) passed. `ignite start`
@@ -36,8 +32,7 @@ saved = "refs/ignite/tickets/"
 # scheduling waited 10 to 30 minutes for `ignite land` in the queue it was fixing, and three were
 # pushed to the release ref (`repository.release`) by hand instead. A landing whose every changed
 # file matches `paths` runs these commands in its own ticket tree, side by side with others, on
-# each machine's `express_cores`, which the scheduler never hands out, instead of the gate; it
-# then pushes and moves the release ref on their pass.
+# reserved express cores. When the commands pass, Ignite pushes and moves the release ref.
 # The commands are those of the `ignite` and `ignite-lint` families (ignite/checks/rest.toml):
 # the whole workspace's tests, because `cargo test -p ignite_daemon` alone once missed a failing
 # test in `ignite_core`. They run under cargo-nextest, which runs every test binary at once and
@@ -136,8 +131,8 @@ rules = [
 # rebased for real first, so a verdict never rests on code half a day older than the tip.
 # `mode = "strict"` restores checking on the exact tip.
 [land]
-mode = "verdict"
-max_base_age_hours = 12
+  mode = "verdict"
+  max_base_age_hours = 12
 
 # Landing by verdict can leave a tip that does not compile: two changes that each build alone.
 # Until it is fixed `green` cannot move and later landings pile onto it, and a fix written by an
@@ -200,8 +195,7 @@ sonnet = "gpt-6.2-sol"
 light = "gpt-6.2-sol"
 
 # The daemon runs each worker turn with the configured program and CLI adapter. Set
-# `dialect` when the provider name differs from the adapter name. The machine tables
-# below give each provider its worker slots. See "CLI mode" in docs/ignite.md.
+# `dialect` when the provider name differs from the adapter name. See "CLI mode" in docs/ignite.md.
 [pool.cli.claude]
 program = "claude"
 args = ["--dangerously-skip-permissions"]
@@ -228,84 +222,21 @@ per_core = 0.5
 # The Mac Studio that runs the hub.
 [machine.jarvis]
 os = "macos"
-# Kept for older daemons that still require a fixed ticket tree count. Current daemons
-# create ticket trees on demand and retire excess free trees.
-ticket_trees = 24
-landing_trees = 3
-# On 2026-11-18 the trees grew to 419 GB under a 400 GB limit while the rest of the disk filled,
-# leaving 1.6 GB free, and on 2026-11-20 to 1,800 GB with nearly every tree leased. The daemon
-# deletes stale object files and replaced builds in free trees and in leased trees that run
-# nothing, then clears free trees and, with none left, the largest idle leased trees to stay under
-# this limit. It also clears trees whenever the disk has under 50 GB free, whatever this allows.
-# A tree whose build was cleared rebuilds at its next command.
-#
-# The limit must be one the trees running commands can stay under, since those are never swept.
-# Measured 2026-11-19 with `du` (which counts blocks shared with a clone in each tree): a tree
-# with a build held 49 to 118 GB in rust/target, rust/beryl3d/target and ignite/target together,
-# 6 to 21 GB of it incremental caches, which the disk loop deletes from idle leased trees before
-# clearing any. 250 GB fit two to four such trees, so with 24 ticket trees, most of them leased,
-# it could never be met and the loop cleared a session's build every round. 900 GB holds about
-# ten trees with builds, more than run commands at once on 18 cores, and leaves the 1,858 GB disk
-# several hundred GB free beside the main checkout and the caches.
-trees_disk_gb = 900
-floor = { batch = 8, tip = 2 }
-# Of 18 cores: an express landing's commands took 164 s on three with the load above 25, measured
-# 2026-11-18 after a change to the daemon: fmt and clippy are fast, and the test build and run take
-# the rest. The tree's target directory was warm. A run also borrows the cores the scheduler has
-# free when it starts, up to 12 in all (docs/ignite.md, "Express landings"); these are its floor.
-express_cores = 3
-# Of 18 cores, kept for a tip round's build checks, which decide when `green` moves and so where
-# every new ticket starts. On 2026-11-19, 8,053 of 9,692 commands started on one core, because a
-# higher class never takes cores from a lower class's running grants; a build check on one core
-# would hold `green` back for minutes. Reserve cores no tip build holds are lent to the express
-# lane and the release build (docs/ignite.md, "Cores, memory and shared resources").
-tip_build_cores = 4
 
-# Jarvis runs headless Codex workers and offers their slots after the GPT-6.2 Sol probe passes.
-# Keep the 15 regular slots used by the previous Claude pool.
-[machine.jarvis.pool.codex]
-mode = "cli"
-slots = 15
-
-# Browser pages: at most half the cores' worth at once across every tree. Headless WebKit runs at
-# a higher priority than any build, so more pages starve the builds beside them.
 [machine.jarvis.resources]
-browser-pages = 9
 oracle = 1
 bench-vm = 1
 
 # The MacBook Pro.
 [machine.multivac]
 os = "macos"
-ticket_trees = 8
-landing_trees = 2
-# The disk is 926 GB, and on 2026-11-19 it had about 500 GB free after a cleanup. 350 GB of
-# trees still leaves room above the 50 GB at which the daemon sweeps free trees.
-trees_disk_gb = 350
-floor = { batch = 2, tip = 2 }
-express_cores = 2
-# Of 10 cores; see jarvis.
-tip_build_cores = 2
-
-# Multivac offers three Codex slots after the GPT-6.2 Sol probe passes. Its
-# `~/.codex/config.toml` must declare a `playwright` MCP server: the shared Codex arguments set
-# `mcp_servers.playwright.required`, and Codex refuses to start when that server is missing.
-[machine.multivac.pool.codex]
-mode = "cli"
-slots = 3
 
 [machine.multivac.resources]
-browser-pages = 4
 oracle = 1
 
 # The Windows PC (12 cores, 20 threads, 32 GB) with a 128 GB Dev Drive (ReFS) at D:. No browser,
 # oracle or app families: those need WebKit, the Java oracles, the Lima machines or a desktop
 # window system, which only the Macs have.
-#
-# Trees are seeded as block clones on the Dev Drive, so they share most of their blocks; the
-# limit leaves room on the 128 GB disk for the main checkout and the caches. A tree's Beryl
-# test build is about 20 GB before cloning. Two landing trees let idle work run beside a
-# landing.
 #
 # `families` holds those that passed when run by hand on cygnus on 2026-11-19. `pytest` is left
 # out: 29 of its 1,021 checks assume Unix paths or Unix sockets. `ignite-platform` declares
@@ -313,17 +244,10 @@ oracle = 1
 # listed here: without it every tip waits on its Windows checks and `master` never moves.
 [machine.cygnus]
 os = "windows"
-ticket_trees = 3
-landing_trees = 2
-trees_disk_gb = 60
 families = [
   "rust", "doctests", "clippy", "rust-format", "ignite", "ignite-lint", "source", "markdown",
   "repository", "commit", "black", "b3d-format", "b3d-source", "ignite-platform",
 ]
-floor = { batch = 4, tip = 2 }
-express_cores = 2
-# Of 20 threads; see jarvis. Its families include Beryl's clippy, a build check.
-tip_build_cores = 2
 
 [[rebuild]]
 name = "kernel-body"

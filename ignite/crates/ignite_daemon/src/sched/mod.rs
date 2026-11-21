@@ -67,8 +67,8 @@ use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError, Weak};
 use std::thread;
 use std::time::Duration;
 
-use ignite_core::capacity::{Derived, MachineFacts, resource_slots};
-use ignite_core::config::{Config, Floor, Machine};
+use ignite_core::capacity::{Derived, Floor, MachineFacts, resource_slots};
+use ignite_core::config::{Config, Machine};
 use ignite_core::ids::TicketId;
 use ignite_core::manifest::{Manifest, Platforms};
 use ignite_core::protocol::Class;

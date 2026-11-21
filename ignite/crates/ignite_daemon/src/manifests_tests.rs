@@ -49,11 +49,10 @@ fn reload_at(repo: &Path) -> (Reload, TreeConfig) {
     let tree_config = TreeConfig::new(
         repo,
         &config,
-        config.machine("local").unwrap(),
         &Derived {
             express_cores: 2,
             tip_build_cores: 2,
-            floor: ignite_core::config::Floor::default(),
+            floor: ignite_core::capacity::Floor::default(),
             landing_trees: 2,
             worker_ceiling: 4,
         },

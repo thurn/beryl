@@ -3,7 +3,7 @@
 //! Ignite's code names no path, branch or tool of any one repository. The remote, the names of
 //! the integration and release branches, where build trees live, where check manifests live,
 //! fixed resources, the landing gate's values and the rebuild edits all come from here.
-//! Every table refuses keys it does not know, so a misspelt key is an error, not a default.
+//! The parser reports unrecognized keys and keeps loading the file.
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -17,7 +17,7 @@ use crate::manifest::RebuildEdit;
 mod cli;
 #[path = "config_land.rs"]
 mod land;
-pub use cli::{CliProgram, MachinePool};
+pub use cli::CliProgram;
 pub use land::{Land, LandMode, Revert};
 
 /// An operating system a machine runs or a check must pass on.
@@ -139,16 +139,13 @@ fn default_cap_seconds() -> f64 {
     600.0
 }
 
-/// The express lane (see "Express landings" in the design document). A landing whose every
-/// changed file matches `paths` runs `commands` in one fixed worktree, `tree`, on cores the
-/// scheduler never hands out (`express_cores` on the machine), instead of the gate. It exists
-/// so that a fix to Ignite's own scheduling never waits in the queue it is fixing.
+/// A landing whose every changed file matches `paths` runs `commands` in its ticket tree on
+/// reserved express cores. This lets fixes to the scheduler proceed without waiting for the gate.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Express {
     /// Path patterns, relative to the checkout's root, as in a family's `inputs`.
     pub paths: Vec<String>,
-    /// The fixed worktree the commands run in, relative to the checkout's root. It keeps its
-    /// ignored files, such as a Cargo target directory, from one landing to the next.
+    /// The former shared express worktree path, retained in configuration for older daemons.
     pub tree: PathBuf,
     /// The directory, relative to the worktree, that the commands run in.
     pub dir: String,
@@ -401,38 +398,17 @@ impl Rules {
 }
 
 /// What the worker pool's apps accept.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PoolConfig {
-    /// The model ID each app's session tool accepts for each `tier:` label, as
-    /// `app -> tier -> id`. Tier labels on tickets and in a pool member's `models` list stay the
-    /// vocabulary for matching a ticket to a worker; this table only says what to ask the app
-    /// for once a worker has been chosen.
+    /// The CLI model ID for each provider and ticket tier, as `provider -> tier -> id`.
     #[serde(default)]
     pub models: BTreeMap<String, BTreeMap<String, String>>,
     /// The reasoning effort each app uses for tickets without an `effort:` label.
     #[serde(default)]
     pub default_effort: BTreeMap<String, String>,
-    /// The old pool-wide percentage, used only to seed fleet settings on first run.
-    #[serde(default = "default_hold_percent")]
-    pub usage_hold_percent: u32,
     /// `[pool.cli.<app>]`: the program each app's CLI turns run, by app.
     #[serde(default)]
     pub cli: BTreeMap<String, CliProgram>,
-}
-
-fn default_hold_percent() -> u32 {
-    crate::plan_usage::DEFAULT_HOLD_PERCENT
-}
-
-impl Default for PoolConfig {
-    fn default() -> PoolConfig {
-        PoolConfig {
-            models: BTreeMap::new(),
-            default_effort: BTreeMap::new(),
-            usage_hold_percent: default_hold_percent(),
-            cli: BTreeMap::new(),
-        }
-    }
 }
 
 impl PoolConfig {
@@ -465,29 +441,10 @@ pub struct Resource {
 pub struct Machine {
     /// The operating system, when the declaration states it.
     pub os: Option<Os>,
-    /// The disk the trees may use, in gigabytes.
-    pub trees_disk_gb: Option<u32>,
     /// The check families the machine can run; `None` means every family.
     pub families: Option<Vec<String>>,
     /// Scarce resources by name, with each one's capacity.
     pub resources: BTreeMap<String, u32>,
-    // Retired capacity settings are read only by `doctor`.
-    pub ticket_trees: Option<u32>,
-    pub landing_trees: Option<u32>,
-    pub floor: Option<Floor>,
-    pub express_cores: Option<u32>,
-    pub tip_build_cores: Option<u32>,
-    /// `[machine.<host>.pool.<app>]`: the worker slots on this machine for each provider.
-    pub pool: BTreeMap<String, MachinePool>,
-}
-
-/// Cores reserved for the `batch` and `tip` classes.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Floor {
-    #[serde(default)]
-    pub batch: u32,
-    #[serde(default)]
-    pub tip: u32,
 }
 
 /// A configuration file that cannot be used, naming the file and, where known, the key.

@@ -527,8 +527,7 @@ pub fn diagnose(input: &DoctorInput) -> Vec<Finding> {
         ),
     ));
 
-    capacity::retired_findings(input.config, &mut findings);
-    trees::findings(input, machine, derived.landing_trees, &mut findings);
+    trees::findings(input, derived.landing_trees, &mut findings);
     family_findings(input, machine, &mut findings);
     findings
 }
