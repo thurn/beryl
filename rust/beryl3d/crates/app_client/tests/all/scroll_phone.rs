@@ -3,7 +3,7 @@
 //! shows as many cards as keep a strip to press, counts the rest off each end, and scrolls under
 //! the wheel and a drag as a battlefield row does.
 
-use app_client::driver::{Page, Recording};
+use app_client::driver::{Duration, Page, Recording};
 use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::protocol::{Side, ZoneName};
 use beryl_protocol::testing::{ScriptBuilder, ViewBuilder};
@@ -138,4 +138,39 @@ fn a_long_stack_shows_its_top_items_in_one_row_and_scrolls_under_the_wheel() {
         count(&mut page, "Stack", "left"),
         Some(20 - shown.len() - 2)
     );
+}
+
+#[test]
+fn a_touch_fling_advances_the_group_window_after_release() {
+    use app_client::Input;
+    use kit_ui::input::{Button, Modifiers, Pointer, PointerKind, PointerPhase};
+
+    let mut page = page(&table(ZoneName::Hand, "Card", 60), SMALL);
+    let start = on_card(&mut page, ZoneName::Hand, 3);
+    let end = start - Vec2::new(70.0, 0.0);
+    let finger = |phase, position| {
+        Input::Pointer(Pointer {
+            id: 1,
+            kind: PointerKind::Touch,
+            phase,
+            position,
+            button: Button::Primary,
+            wheel: Vec2::ZERO,
+            modifiers: Modifiers::default(),
+        })
+    };
+    page.give_input(finger(PointerPhase::Down, start));
+    page.step(Duration::from_millis(32));
+    page.give_input(finger(PointerPhase::Move, end));
+    page.give_input(finger(PointerPhase::Up, end));
+    assert_eq!(count(&mut page, "Your hand", "left"), Some(1));
+
+    page.still();
+    let left = count(&mut page, "Your hand", "left").expect("cards off the left end");
+    assert!(
+        left > 1,
+        "the window coasted past the group reached by the drag"
+    );
+    assert_eq!(drawn(page.frame(), ZoneName::Hand)[0].0, left);
+    assert_eq!(unreachable(&mut page), 0);
 }

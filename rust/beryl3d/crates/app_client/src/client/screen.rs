@@ -28,6 +28,8 @@ impl Client {
         if self.shown != (self.screen, sheet) {
             self.shown = (self.screen, sheet);
             self.end_gesture();
+            self.scrolling.cancel();
+            self.scroll_row_focus = None;
             self.cancel_touch();
             self.inspector.pinned = None;
         }

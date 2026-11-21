@@ -690,6 +690,7 @@ impl Page {
     fn render(&mut self) {
         self.give_cues();
         loop {
+            self.client.prepare_scroll(self.now);
             let sounds = &self.client.frame(self.now).sounds;
             self.heard.extend(sounds.iter().map(|s| (self.now, *s)));
             let mut answered = false;

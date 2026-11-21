@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use glam::{Quat, Vec2};
+use kit_base::geometry::{GroupWindow, ScrollAxis};
 
 use super::press::{self, PressArea, Quad};
 use super::{
@@ -487,8 +488,29 @@ impl<'a> Layout<'a> {
                 results[copy] = hidden(copy, face.pose, 0);
             }
         }
+        let scroll = (overflow == Overflow::Scrolled).then(|| {
+            let last = if end == clusters.len() {
+                first
+            } else {
+                clusters.len() - 1
+            };
+            let axis = match self.container.policy {
+                Policy::Grid { .. } => ScrollAxis::Vertical,
+                Policy::Cascade { direction, .. } if direction.y.abs() > direction.x.abs() => {
+                    ScrollAxis::Vertical
+                }
+                _ => ScrollAxis::Horizontal,
+            };
+            GroupWindow {
+                first,
+                shown: end - first,
+                last,
+                axis,
+            }
+        });
         Solved {
             items: results,
+            scroll,
             overflow,
             before: clusters[..first].iter().map(Cluster::len).sum(),
             after: clusters[end..].iter().map(Cluster::len).sum(),

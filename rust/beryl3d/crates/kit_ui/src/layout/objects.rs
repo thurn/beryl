@@ -49,7 +49,9 @@ fn collect(node: &Node, origin: Vec2, clip: Option<Rect>, boxes: &mut Vec<(Objec
         boxes.push((slot, rect, inside));
     }
     let clip = match node.element.style.overflow {
-        Overflow::Clip | Overflow::Scroll => Some(clip.map_or(rect, |clip| cut(clip, rect))),
+        Overflow::Clip | Overflow::Scroll | Overflow::ScrollX | Overflow::ScrollY => {
+            Some(clip.map_or(rect, |clip| cut(clip, rect)))
+        }
         Overflow::Visible => clip,
     };
     // A node's own move or fade offsets it alone, not its children (`layout::motion`).

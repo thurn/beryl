@@ -66,7 +66,7 @@ impl Grip {
     /// `DRAG_THRESHOLD_POINTS` from where it began, as the web interface's `Pointer` has it.
     pub fn moved(&mut self, at: Vec2) {
         self.at = at;
-        if let Some(sideways) = super::rows::sideways(self.start, at) {
+        if let Some(sideways) = kit_ui::scroll::sideways(self.start, at) {
             // Whether the drag scrolls is settled where it first passes the threshold.
             if !self.moved && self.hold == Hold::UpOrDown && sideways {
                 self.hold = Hold::Never;

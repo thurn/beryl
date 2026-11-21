@@ -149,8 +149,8 @@ fn key_name(code: KeyCode, mac: bool) -> Option<&'static str> {
         A, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, B, Back, Backslash, Backspace, BracketLeft,
         BracketRight, C, Comma, D, Delete, Digit0, Digit1, Digit2, Digit3, Digit4, Digit5, Digit6,
         Digit7, Digit8, Digit9, E, End, Enter, Equal, Escape, F, F1, F2, F3, F4, F5, F6, F7, F8,
-        F9, F10, F11, F12, G, H, Home, I, J, K, L, M, Minus, N, O, P, Period, Q, R, S, Slash,
-        Space, T, Tab, U, V, W, X, Y, Z,
+        F9, F10, F11, F12, G, H, Home, I, J, K, L, M, Minus, N, O, P, PageDown, PageUp, Period, Q,
+        R, S, Slash, Space, T, Tab, U, V, W, X, Y, Z,
     };
     Some(match code {
         A => "A",
@@ -216,6 +216,8 @@ fn key_name(code: KeyCode, mac: bool) -> Option<&'static str> {
         ArrowRight => "ArrowRight",
         Home => "Home",
         End => "End",
+        PageUp => "PageUp",
+        PageDown => "PageDown",
         Minus => "−",
         Equal => "=",
         Comma => ",",

@@ -3,4 +3,5 @@
 mod backdrop;
 mod keep_only;
 mod paints;
+mod scroll;
 mod transitions;

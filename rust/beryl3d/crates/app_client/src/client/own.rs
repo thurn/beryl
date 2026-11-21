@@ -329,11 +329,11 @@ impl Client {
     }
 
     /// Compiles what the frame at `now`, in nanoseconds since the client started, needs of the
-    /// scripts to come (`Show::prepare`), and lays out the floats of the life totals, pools,
-    /// notices and row-end counts that adds. A host calls it before each `frame`, in the same tick: it may
-    /// allocate, where `frame` allocates nothing. `frame` calls it too, for callers that do
-    /// not, and it then does nothing more for the same `now`.
+    /// scripts to come (`Show::prepare`) and samples active scroll momentum. A new scroll
+    /// offset may require row placement, so call this before drawing the frame. The frame
+    /// also prepares the scripts for callers that omit this step.
     pub fn prepare(&mut self, now: u64) {
+        self.prepare_scroll(now);
         self.prepare_table(self.bug.table(now));
     }
 

@@ -98,8 +98,8 @@ fn layout_fields(style: &Style) -> taffy::Style {
         // An element that clips or scrolls is as large as its own style says, whatever its
         // children need, as in CSS.
         overflow: taffy::Point {
-            x: overflow(style.overflow),
-            y: overflow(style.overflow),
+            x: overflow(style.overflow, true),
+            y: overflow(style.overflow, false),
         },
         grid_column: placement(style.grid_column),
         grid_row: placement(style.grid_row),
@@ -107,11 +107,13 @@ fn layout_fields(style: &Style) -> taffy::Style {
     }
 }
 
-fn overflow(overflow: Overflow) -> taffy::Overflow {
+fn overflow(overflow: Overflow, horizontal: bool) -> taffy::Overflow {
     match overflow {
         Overflow::Visible => taffy::Overflow::Visible,
-        Overflow::Clip => taffy::Overflow::Clip,
         Overflow::Scroll => taffy::Overflow::Scroll,
+        Overflow::ScrollX if horizontal => taffy::Overflow::Scroll,
+        Overflow::ScrollY if !horizontal => taffy::Overflow::Scroll,
+        Overflow::Clip | Overflow::ScrollX | Overflow::ScrollY => taffy::Overflow::Clip,
     }
 }
 

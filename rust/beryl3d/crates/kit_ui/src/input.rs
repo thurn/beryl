@@ -120,6 +120,8 @@ pub enum KeyCode {
     ArrowRight,
     Home,
     End,
+    PageUp,
+    PageDown,
     /// The function keys F1 to F12, which the manual table binds (F11 and F12 change a life
     /// total, for one).
     F1,

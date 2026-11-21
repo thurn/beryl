@@ -208,3 +208,77 @@ fn a_look_at_the_top_lists_only_the_cards_it_took() {
     later.players.you.library.push(ObjectId(9));
     assert_eq!(look.cards(&later), [ObjectId(4)]);
 }
+
+#[test]
+fn scrolling_a_large_pile_moves_its_cards_and_clips_cards_that_leave_the_grid() {
+    use app_client::Press;
+    use game_hud::inspect::Viewed;
+    use glam::Vec2;
+    use kit_ui::element::Action;
+    use kit_ui::input::{Button, Pointer, PointerKind, PointerPhase};
+
+    let mut builder = ViewBuilder::new();
+    for number in 0..100 {
+        builder.card(ZoneName::Graveyard, Side::You, &format!("Discard {number}"));
+    }
+    builder.script(ScriptBuilder::reset().build());
+    let mut update = builder.update();
+    update.view.table = Some(table(&update.view));
+
+    let mut client = Client::new(Config {
+        elements: 2048,
+        draws: 2048,
+        name_bytes: 65_536,
+    });
+    client.handle(Input::Surface {
+        size: Size {
+            width: 1600.0,
+            height: 900.0,
+        },
+        scale: 2.0,
+        safe_area: Insets::default(),
+    });
+    client.handle(Input::Update(Box::new(update)));
+    client.frame(0);
+    client.press(&Action::new(Press::View(Viewed::Pile(
+        Side::You,
+        ZoneName::Graveyard,
+    ))));
+    client.frame(0);
+    let frame = client.frame(1_000_000_000);
+    let grid = frame
+        .resolved
+        .iter()
+        .find(|element| element.role == Role::List && frame.name(element.name) == "cards")
+        .expect("the pile viewer shows a grid");
+    let at = grid.corners.iter().copied().sum::<Vec2>() / 4.0;
+    let cards = |frame: &Frame| -> Vec<_> {
+        frame
+            .resolved
+            .iter()
+            .filter(|element| element.role == Role::Card && element.opacity > 0.0)
+            .map(|element| element.id)
+            .collect()
+    };
+    let top = cards(frame);
+    assert!(!top.is_empty());
+    client.handle(Input::Pointer(Pointer {
+        id: 0,
+        kind: PointerKind::Mouse,
+        phase: PointerPhase::Wheel,
+        position: at,
+        button: Button::None,
+        wheel: Vec2::new(0.0, -10_000.0),
+        modifiers: Modifiers::default(),
+    }));
+    let end = cards(client.frame(1_010_000_000));
+    assert!(!end.is_empty());
+    assert!(
+        top.iter().any(|id| !end.contains(id)),
+        "cards that left the clip disappeared"
+    );
+    assert!(
+        end.iter().any(|id| !top.contains(id)),
+        "new cards scrolled into view"
+    );
+}

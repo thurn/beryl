@@ -267,6 +267,8 @@ fn key_code(code: WinitKey) -> Option<KeyCode> {
         WinitKey::ArrowRight => KeyCode::ArrowRight,
         WinitKey::Home => KeyCode::Home,
         WinitKey::End => KeyCode::End,
+        WinitKey::PageUp => KeyCode::PageUp,
+        WinitKey::PageDown => KeyCode::PageDown,
         // F11 is not here: it toggles fullscreen (`is_fullscreen_key`), so the manual table's
         // F11 (lose one life) is reached by its alias, the minus key.
         WinitKey::F1 => KeyCode::F1,

@@ -134,7 +134,13 @@ fn overflow_uses_the_first_enabled_stage_that_fits() {
     let scrolled = layout(&container);
     assert_eq!(scrolled.overflow, Overflow::Scrolled);
     assert_eq!((scrolled.before, scrolled.after), (0, 1));
-    let end = arrange(&container, &items, &camera, 999);
+    let window = scrolled
+        .scroll
+        .expect("the solver supplies its group window");
+    assert_eq!((window.first, window.shown, window.last), (0, 2, 2));
+    let end = arrange(&container, &items, &camera, window.last);
+    let window = end.scroll.expect("the solver keeps its window at the end");
+    assert_eq!((window.first, window.shown, window.last), (1, 2, 1));
     assert_eq!((end.before, end.after), (2, 0));
     assert_eq!(
         end.items.iter().map(|placed| placed.count).sum::<usize>(),

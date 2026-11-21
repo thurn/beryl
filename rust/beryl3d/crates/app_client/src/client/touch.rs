@@ -111,6 +111,7 @@ impl Client {
         };
         if held {
             self.show.pointer_mut().cancel();
+            self.scrolling.cancel();
             self.end_gesture();
         }
     }
@@ -211,7 +212,7 @@ impl Client {
     /// drags stops, and the element of the flat layer it pressed is no longer drawn held down.
     fn drop_touch_press(&mut self) {
         self.show.pointer_mut().cancel();
-        self.row_gesture.cancel();
+        self.scrolling.cancel();
         self.end_gesture();
         if self.manual.sweep.take().is_some() {
             self.show_screen();

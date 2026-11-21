@@ -88,8 +88,12 @@ pub enum Overflow {
     Visible,
     /// They are cut off at the element's edges.
     Clip,
-    /// They are cut off, and the element scrolls to show them.
+    /// They are cut off, and the element can scroll on either axis.
     Scroll,
+    /// They are cut off, and the element scrolls horizontally.
+    ScrollX,
+    /// They are cut off, and the element scrolls vertically.
+    ScrollY,
 }
 
 use kit_base::paint::{Border, Shadow};

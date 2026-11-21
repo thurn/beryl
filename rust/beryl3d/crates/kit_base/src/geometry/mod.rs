@@ -21,6 +21,25 @@ pub struct Size {
     pub height: f32,
 }
 
+/// Which screen axis advances through an arranged container.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ScrollAxis {
+    Horizontal,
+    Vertical,
+}
+
+/// A viewport into an ordered list of groups.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GroupWindow {
+    /// The first group in view.
+    pub first: usize,
+    /// The number of visible groups.
+    pub shown: usize,
+    /// The largest requested first group that the container can accept.
+    pub last: usize,
+    pub axis: ScrollAxis,
+}
+
 /// How far in from each edge of the surface its clear area starts, in logical points.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Insets {

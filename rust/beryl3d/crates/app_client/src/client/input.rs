@@ -41,6 +41,8 @@ impl Client {
         if heard.is_none_or(|heard| heard.game) {
             if pointer.phase == PointerPhase::Down && pointer.button == Button::Primary {
                 self.end_gesture();
+                self.scrolling.cancel();
+                self.scroll_row_focus = None;
             }
             self.claim(&pointer);
             if ends_gesture(&pointer) {
@@ -82,14 +84,19 @@ impl Client {
         // A frozen table takes no gesture of its own; the flat layer's buttons still work.
         let frozen = self.table_frozen();
         if (!frozen && self.table_pointer(&pointer))
-            || self.scroll_layer(&pointer)
+            || self.scroll_pointer(&pointer)
             || self.open_table_menu(&pointer)
-            || self.carry_item(&pointer)
         {
             return;
         }
-        if !self.slide(&pointer) {
-            self.press_layer(&pointer);
+        if self.carry_item(&pointer) {
+            self.scrolling.cancel();
+            return;
+        }
+        if self.slide(&pointer) {
+            self.scrolling.cancel();
+        } else {
+            self.press_flat(&pointer, true);
         }
         let hovered = self.hover_flat(&pointer);
         // The pointer on a payment's Auto Pay, or a touch held on it, marks what it would tap.
@@ -158,17 +165,6 @@ impl Client {
         true
     }
 
-    /// A press on the flat layer or a card of the table, as `point` describes it.
-    fn press_layer(&mut self, pointer: &Pointer) {
-        let scroll = (self.row_gesture).handle(pointer, &self.frame, self.show.table());
-        if let Some((row, first)) = scroll
-            && self.show.scroll_row(row, first)
-        {
-            (self.row_counts).prepare(&mut self.layer, self.show.coming_rows());
-        }
-        self.press_flat(pointer, true);
-    }
-
     /// A press on the flat layer, or with `table` on a card of the table that no element of
     /// the flat layer covers, as `point` describes it.
     pub(super) fn press_flat(&mut self, pointer: &Pointer, table: bool) {
@@ -178,7 +174,11 @@ impl Client {
             PointerPhase::Down if primary => {
                 let pressed = (self.layer.press_at(pointer.position, open)).map(|(id, ..)| id);
                 self.gesture.set_release(pressed.map(Release::Element));
-                if let Some(id) = self.layer.focusable_at(pointer.position, open) {
+                let focus = self
+                    .layer
+                    .focusable_at(pointer.position, open)
+                    .or_else(|| self.layer.scroller_at(pointer.position, open));
+                if let Some(id) = focus {
                     self.layer.focus(Some(id));
                     if self.layer.edited_id() == Some(id) {
                         self.press_field(pointer);
@@ -249,58 +249,6 @@ impl Client {
         }
     }
 
-    /// Scrolls the flat layer's element under `pointer` by the wheel, or by a touch dragged
-    /// over it, which then scrolls it until the finger lifts. Returns whether the pointer
-    /// scrolled the flat layer, and so means nothing else.
-    fn scroll_layer(&mut self, pointer: &Pointer) -> bool {
-        let open = self.open;
-        match pointer.phase {
-            PointerPhase::Wheel => {
-                let Some(id) = self.layer.scroller_at(pointer.position, open) else {
-                    return false;
-                };
-                // A wheel turned down scrolls toward the end, as in a browser.
-                if self.layer.scroll(id, -pointer.wheel) {
-                    self.place_shown();
-                }
-                true
-            }
-            PointerPhase::Down if pointer.kind == PointerKind::Touch => {
-                if let Some(id) = self.layer.scroller_at(pointer.position, open) {
-                    self.gesture = Gesture::Scroll {
-                        finger: pointer.id,
-                        id,
-                        last: pointer.position,
-                        release: None,
-                    };
-                }
-                false
-            }
-            PointerPhase::Move => match &mut self.gesture {
-                Gesture::Scroll {
-                    finger,
-                    id,
-                    last,
-                    release,
-                } if *finger == pointer.id => {
-                    // The content follows the finger, and the touch is no longer a press.
-                    let delta = *last - pointer.position;
-                    *last = pointer.position;
-                    *release = None;
-                    let id = *id;
-                    if self.layer.scroll(id, delta) {
-                        self.place_shown();
-                    }
-                    true
-                }
-                _ => false,
-            },
-            PointerPhase::Down | PointerPhase::Up | PointerPhase::Cancel | PointerPhase::Leave => {
-                false
-            }
-        }
-    }
-
     /// A key goes to the screen's shortcuts first, then moves the focus (Tab), moves through
     /// or presses a row of the focused list or menu (`Layer::navigate`), moves a focused
     /// slider (left and right), presses the focused element (Return) or closes the menu or
@@ -349,6 +297,7 @@ impl Client {
             }
         }
         if key.code == KeyCode::Tab {
+            self.scroll_row_focus = None;
             self.layer.move_focus(!key.modifiers.shift);
             return None;
         }
@@ -363,9 +312,12 @@ impl Client {
             _ => None,
         };
         if let Some(up) = arrow
-            && let Some(press) = self.nudge(up)
+            && self.layer.focused_slider().is_some()
         {
-            return Some(press);
+            return self.nudge(up);
+        }
+        if self.scroll_key(key) {
+            return None;
         }
         if first && key.code == KeyCode::Enter {
             return self.layer.focused_press();

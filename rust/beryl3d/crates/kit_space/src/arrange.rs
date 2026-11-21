@@ -171,6 +171,8 @@ pub struct Solved {
     pub overflow: Overflow,
     pub before: usize,
     pub after: usize,
+    /// The group offset and bounds for the toolkit's input recognizer, when scrolling applies.
+    pub scroll: Option<kit_base::geometry::GroupWindow>,
 }
 
 /// A cluster advances as one unit. Copies rest at the face's pose. Members are drawn

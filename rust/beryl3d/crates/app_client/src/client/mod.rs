@@ -31,7 +31,6 @@ use game_play::hud::notices::NoticeFloats;
 use game_play::play::Show;
 use game_play::play::record::{Plant, ScriptRecord};
 use game_play::pointer::LetGo;
-use game_play::pointer::rows::RowGesture;
 use game_play::pointer::touch::Touch;
 use game_table::faces::{CARD_BACK, FaceList, Faces};
 use game_table::table::{Table, Window};
@@ -47,6 +46,7 @@ mod manual;
 mod manual_overlays;
 mod own;
 mod press;
+mod scrolling;
 pub use app_screens::screens::BugPress;
 pub use press::{Dismiss, Press};
 mod refusal;
@@ -111,8 +111,10 @@ pub struct Client {
     banner: Banner,
     /// The registered features, their state and the open sheet route.
     features: features::Features,
-    /// What the pointer is doing to scroll a battlefield row.
-    row_gesture: RowGesture,
+    /// Scrolls the flat layer and the table from common pointer events.
+    scrolling: kit_ui::scroll::ScrollGesture<scrolling::Target>,
+    /// The row clicked most recently, if the player has not moved the keyboard focus.
+    scroll_row_focus: Option<game_table::table::Scroller>,
     /// The screen the flat layer shows. A recording or a game is fed to the client on the game
     /// screen, which it starts on.
     screen: Screen,
@@ -220,7 +222,8 @@ impl Client {
             row_counts: RowCounts::default(),
             banner: Banner::default(),
             features: features::Features::default(),
-            row_gesture: RowGesture::default(),
+            scrolling: kit_ui::scroll::ScrollGesture::default(),
+            scroll_row_focus: None,
             screen: Screen::Game,
             gallery: GalleryState::default(),
             gallery_faces: None,
@@ -426,7 +429,8 @@ impl Client {
         let covers = self.prompt_covers_table();
         self.show.cover_table(covers);
         let targets = self.targets(self.table_open());
-        let transitioning = self.tick_layer(now) | self.shake_button(table_now);
+        let transitioning =
+            self.tick_layer(now) | self.shake_button(table_now) | self.scrolling.moving(now);
         self.show.pointer_mut().advance(table_now);
         self.show.advance_slide(table_now);
         self.inspect(table_now);
@@ -533,6 +537,7 @@ impl Client {
     /// Lays the table and the flat layer out in a window of a new size, scale or safe area.
     fn resize(&mut self, window: Window) {
         self.end_gesture();
+        self.scrolling.cancel();
         self.window = window;
         self.show.resize(window);
         self.layer.resize(window);

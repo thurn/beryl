@@ -1,12 +1,11 @@
 //! What the primary pointer is doing since it went down (`Gesture`): pressing an element of the
-//! flat layer or a pile, setting a slider, scrolling the flat layer with a finger, or carrying an
+//! flat layer or a pile, setting a slider, or carrying an
 //! order prompt's item. Only one of these is under way at a time. The branch of
 //! `Client::point` that claims the pointer as it goes down sets it, later phases match on it,
 //! and `Client::end_gesture` ends it in one place: on the release, Cancel or Leave, the next
 //! press, a change of screen or sheet, and a resize.
 
 use game_hud::inspect::Viewed;
-use glam::Vec2;
 
 use super::Client;
 use super::carry::Carry;
@@ -31,14 +30,6 @@ pub(super) enum Gesture {
     Press(Release),
     /// A slider, which every move sets until the release.
     Slider(ElementId),
-    /// A finger scrolling the flat layer's element `id`, last at `last`. Until it moves, its
-    /// release is a press as usual.
-    Scroll {
-        finger: u8,
-        id: ElementId,
-        last: Vec2,
-        release: Option<Release>,
-    },
     /// An item of an order prompt's row (`carry_item`). Until it leaves the row, its release
     /// is a press as usual.
     Carry {
@@ -52,16 +43,16 @@ impl Gesture {
     fn release(self) -> Option<Release> {
         match self {
             Gesture::Press(release) => Some(release),
-            Gesture::Scroll { release, .. } | Gesture::Carry { release, .. } => release,
+            Gesture::Carry { release, .. } => release,
             Gesture::None | Gesture::Slider(_) => None,
         }
     }
 
-    /// Sets what letting the pointer go does: inside a scroll or carry, which a move may still
-    /// turn into no press, and otherwise as the whole gesture. A slider takes no press.
+    /// Sets what letting the pointer go does. A move can still cancel the press if the
+    /// pointer is carrying an item. A slider takes no press.
     pub(super) fn set_release(&mut self, to: Option<Release>) {
         match self {
-            Gesture::Scroll { release, .. } | Gesture::Carry { release, .. } => *release = to,
+            Gesture::Carry { release, .. } => *release = to,
             Gesture::None | Gesture::Press(_) => *self = to.map_or(Gesture::None, Gesture::Press),
             Gesture::Slider(_) => {}
         }

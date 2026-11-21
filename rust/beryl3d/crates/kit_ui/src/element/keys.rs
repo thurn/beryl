@@ -149,6 +149,8 @@ fn key_named(name: &str, mac: bool) -> Option<KeyCode> {
         "ArrowRight" => ArrowRight,
         "Home" => KeyCode::Home,
         "End" => KeyCode::End,
+        "PageUp" => KeyCode::PageUp,
+        "PageDown" => KeyCode::PageDown,
         "F1" => KeyCode::F1,
         "F2" => KeyCode::F2,
         "F3" => KeyCode::F3,

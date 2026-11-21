@@ -353,6 +353,12 @@ each once, for every feature, instead of where a fix first needed it.
 | Pointer and touch | Hover, press, long press, wheel and drag, recognized in one place                                                       |
 | Drag and drop     | Dragging an item from one container to another                                                                          |
 
+The same scroll recognizer takes input for clipped elements and arranged
+containers. A flat element keeps its offset with its retained node and scrolls
+in points. An arranged row scrolls in whole groups and reports the counts off
+each end. After a touch drag, the client samples the offset track on its frame
+clock before it draws.
+
 A capability's conformance is shown by stories that draw it. The web interface's
 CSS samples stay the reference for paint until the switch.
 

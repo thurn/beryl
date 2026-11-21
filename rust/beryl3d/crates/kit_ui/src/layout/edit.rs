@@ -114,6 +114,15 @@ impl Layer {
         self.editing.as_ref().map(|editing| editing.id)
     }
 
+    /// Whether a text field takes a press at this point.
+    #[must_use]
+    pub fn field_at(&self, point: Vec2, open: bool) -> bool {
+        self.hit(point, open, |node, _| {
+            node.element.field.as_ref().map(|_| ())
+        })
+        .is_some()
+    }
+
     /// The name of the screen's element `id`, if it is on the screen.
     #[must_use]
     pub fn name_of(&self, id: ElementId) -> Option<&str> {

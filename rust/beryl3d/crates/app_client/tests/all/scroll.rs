@@ -151,6 +151,83 @@ fn a_drag_scrolls_one_group_for_each_step_of_travel() {
 }
 
 #[test]
+fn keys_scroll_the_row_last_pressed_by_whole_groups() {
+    use kit_ui::input::KeyCode;
+
+    let mut page = page(&lands(40));
+    let point = on_card(&mut page, 1);
+    for phase in [PointerPhase::Down, PointerPhase::Up] {
+        page.give_input(Input::Pointer(Pointer {
+            id: 0,
+            kind: PointerKind::Mouse,
+            phase,
+            position: point,
+            button: Button::Primary,
+            wheel: Vec2::ZERO,
+            modifiers: Modifiers::default(),
+        }));
+    }
+    page.key(KeyCode::ArrowRight);
+    page.still();
+    assert_eq!(first(&mut page), 1);
+    page.key(KeyCode::End);
+    page.still();
+    assert_eq!(count(&mut page, "right"), None);
+    page.key(KeyCode::Home);
+    page.still();
+    assert_eq!(first(&mut page), 0);
+}
+
+#[test]
+fn the_wheel_scrolls_a_group_window_supplied_by_the_arrangement_solver() {
+    use glam::Quat;
+    use kit_base::geometry::Window;
+    use kit_space::arrange::{Container, Item, Limits, Policy, Region, arrange};
+    use kit_space::camera::{Camera, DESKTOP_CAMERA};
+    use kit_ui::scroll::{ScrollGesture, ScrollInput, Viewport};
+
+    let camera = Camera::fit(DESKTOP_CAMERA, Window::default());
+    let container = Container {
+        region: Region {
+            centre: camera.data.target,
+            size: Vec2::new(100.0, 120.0),
+            rotation: Quat::IDENTITY,
+        },
+        policy: Policy::Grid {
+            columns: 1,
+            gap: Vec2::ZERO,
+        },
+        limits: Limits {
+            scroll: true,
+            ..Limits::default()
+        },
+    };
+    let items: Vec<_> = (0..5)
+        .map(|key| Item {
+            key,
+            size: Vec2::splat(50.0),
+            pressable: false,
+            group: None,
+            under: None,
+        })
+        .collect();
+    let initial = arrange(&container, &items, &camera, 0);
+    assert_eq!((initial.before, initial.after), (0, 3));
+    let initial = Viewport::groups(initial.scroll.expect("the grid scrolls"));
+
+    let mut gesture = ScrollGesture::default();
+    let wheel = wheel_at(Vec2::ZERO, NOTCH_DOWN);
+    let ScrollInput::Claimed(Some(((), offset))) =
+        gesture.pointer(&wheel, 0, Some(((), initial)), |()| None)
+    else {
+        panic!("one notch should advance one group");
+    };
+    assert_eq!(offset, Vec2::Y);
+    let scrolled = arrange(&container, &items, &camera, offset.y as usize);
+    assert_eq!((scrolled.before, scrolled.after), (1, 2));
+}
+
+#[test]
 fn scrolling_past_the_end_stops_at_it() {
     let mut page = page(&lands(40));
     let shown = row(page.frame()).len();
@@ -248,8 +325,8 @@ fn a_row_that_fits_ignores_the_wheel() {
     assert_eq!(row(page.frame()), before);
 }
 
-fn wheel_at(point: Vec2, wheel: Vec2) -> Input {
-    Input::Pointer(Pointer {
+fn wheel_at(point: Vec2, wheel: Vec2) -> Pointer {
+    Pointer {
         id: 0,
         kind: PointerKind::Mouse,
         phase: PointerPhase::Wheel,
@@ -257,7 +334,7 @@ fn wheel_at(point: Vec2, wheel: Vec2) -> Input {
         button: Button::None,
         wheel,
         modifiers: Modifiers::default(),
-    })
+    }
 }
 
 /// `view` with its last land tapped, and the script that taps it.
@@ -294,13 +371,13 @@ fn a_script_played_while_a_row_scrolls_ends_where_placement_rests_each_card() {
     let index = row(&frame)[1].1;
     let rect = uncovered(&frame, index).expect("an uncovered card");
     let point = Vec2::new(rect.x + rect.width / 2.0, rect.y + rect.height / 2.0);
-    client.handle(wheel_at(point, NOTCH_DOWN * 4.0));
+    client.handle(Input::Pointer(wheel_at(point, NOTCH_DOWN * 4.0)));
     client.frame(1_000_000);
     // The last land is out of view; a script taps it, and the row scrolls while it plays.
     client.handle(Input::Update(Box::new(tapping_the_last(&view.build()))));
     client.frame(400_000_000);
     client.frame(500_000_000);
-    client.handle(wheel_at(point, NOTCH_DOWN * 2.0));
+    client.handle(Input::Pointer(wheel_at(point, NOTCH_DOWN * 2.0)));
     for at in [550, 600, 700, 900, 1200] {
         client.frame(at * 1_000_000);
     }

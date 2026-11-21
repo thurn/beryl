@@ -296,6 +296,8 @@ pub fn key_code(name: &str) -> Option<KeyCode> {
         ("arrowright", KeyCode::ArrowRight),
         ("home", KeyCode::Home),
         ("end", KeyCode::End),
+        ("pageup", KeyCode::PageUp),
+        ("pagedown", KeyCode::PageDown),
         ("back", KeyCode::Back),
         ("f1", KeyCode::F1),
         ("f2", KeyCode::F2),

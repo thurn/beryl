@@ -240,7 +240,11 @@ impl Client {
                     self.press_flat(pointer, false);
                 }
             }
-            _ => self.press_flat(pointer, false),
+            _ => {
+                if !self.scroll_pointer(pointer) {
+                    self.press_flat(pointer, false);
+                }
+            }
         }
         self.hover_flat(pointer);
     }
@@ -325,7 +329,9 @@ impl Client {
                             self.press(&press);
                         }
                     }
-                    _ => {}
+                    _ => {
+                        self.scroll_key(key);
+                    }
                 }
                 true
             }
