@@ -230,7 +230,7 @@ fn a_daemon_that_stays_down_gets_a_turn_then_a_resume_and_recovery_ends_the_inci
 }
 
 #[test]
-fn the_first_cli_app_in_name_order_is_used_and_an_override_counts() {
+fn only_configured_cli_apps_with_slots_can_start_a_justiciar() {
     let text = r#"
         [repository]
         remote = "origin"
@@ -256,14 +256,10 @@ fn the_first_cli_app_in_name_order_is_used_and_an_override_counts() {
         program = "codex"
     "#;
     let config = ignite_core::config::Config::parse("ignite.toml", text).unwrap();
-    let none = |_: &str| None;
     let checkout = Path::new("/repo");
-    let picked = first_cli_app(&config, "jarvis", &none, checkout).unwrap();
+    let picked = first_cli_app(&config, "jarvis", checkout).unwrap();
     assert_eq!(picked.name, "codex");
-    let claude_forced = |app: &str| (app == "claude").then(|| "cli".to_owned());
-    let picked = first_cli_app(&config, "jarvis", &claude_forced, checkout).unwrap();
-    assert_eq!(picked.name, "claude");
-    assert_eq!(first_cli_app(&config, "multivac", &none, checkout), None);
+    assert_eq!(first_cli_app(&config, "multivac", checkout), None);
 }
 
 #[cfg(unix)]

@@ -53,7 +53,7 @@ resumes.
   gates for the game's performance. [Rebuild counts](#rebuild-counts) borrow
   their method of measurement.
 - [Claude Code's model configuration](https://code.claude.com/docs/en/model-config.md)
-  documents `autoCompactWindow`, the setting the dispatcher relies on.
+  documents the agent's model and context settings.
 
 ## What the measurements show
 
@@ -282,10 +282,8 @@ This section names the parts. Each has its own section below.
   keeps a local branch `staging` at `refs/ignite/staging`, and `green` at
   `refs/ignite/green` (`ignite_core::refname::local_branch`). A push by hand
   names the full ref: `git push origin <commit>:refs/ignite/staging`.
-- A **worker** is a desktop-app agent session that implements tickets. The
-  **pool** is a machine's set of workers. The **dispatcher** is one small
-  session, per machine and per desktop app in use there, that hands tickets to
-  workers when the daemon tells it to. A **hand-off** is one ticket given to one
+- A **worker** is a headless CLI session that implements a ticket. The **pool**
+  is a machine's set of workers. A **hand-off** is a reservation used to start a
   worker.
 
 An agent meets all of this through one command, `ignite`.
@@ -1037,8 +1035,7 @@ express_cores = 3   # see Express landings
 Rules for trees:
 
 - Ignite never builds in a directory outside this set. When every ticket tree is
-  leased, `ignite start` waits and says so, and the dispatcher hands off no
-  ticket.
+  leased, `ignite start` waits and says so, and the daemon starts no ticket.
 - `ignite start` leases a free tree and checks out a branch at the tip. With
   `repository.green` set and the ref present, the start is `green` instead,
   except in two cases. When a dependency of the ticket landed at a commit that
@@ -2976,13 +2973,13 @@ no landing recorded it files a new P0 ticket with the same text. A second report
 of the same revert commit changes nothing, and a landing of the ticket clears
 `reverted`. A session already holding a ticket that depends on the reopened one
 is told, as `ignite tell` tells it, to release that ticket, which is handed out
-again when the reopened one lands. The dispatcher offers the reopened ticket to
-the idle worker whose last ticket it was ("your landing of <ticket> was
-reverted: the tip did not build with it"), and the brief of `ignite start`
-prints a `reverted` line with the revert commit, the checks and that command. A
-report the hub does not take is kept in the verifier's memory and sent again at
-the start of the next round. Another build check that failed with the same
-landing is covered by the same revert once it passes at that revert commit.
+again when the reopened one lands. The daemon offers the reopened ticket to the
+idle worker whose last ticket it was ("your landing of <ticket> was reverted:
+the tip did not build with it"), and the brief of `ignite start` prints a
+`reverted` line with the revert commit, the checks and that command. A report
+the hub does not take is kept in the verifier's memory and sent again at the
+start of the next round. Another build check that failed with the same landing
+is covered by the same revert once it passes at that revert commit.
 
 ### Regression tickets
 
@@ -3228,11 +3225,11 @@ or held by a build tree, since its branch, tree and session title carry the ID:
 release it first. An import is refused if it would break the rule, and tickets
 moved before the rule existed were renumbered once by a migration.
 
-Labels carry what the dispatcher needs to know about a ticket: `tier:opus`,
-`tier:sonnet` or `tier:light` names the model it needs, and `lane:<name>` a
-chain. Which machine and app work it is the ticket's owner, a field of its own
-(see [Owners](#owners)). `ignite ticket batch` creates or changes many tickets
-in one request that succeeds or fails as a whole.
+Labels say what a worker needs to run the ticket: `tier:opus`, `tier:sonnet` or
+`tier:light` names the model it needs, and `lane:<name>` a chain. Which machine
+and app work it is the ticket's owner, a field of its own (see
+[Owners](#owners)). `ignite ticket batch` creates or changes many tickets in one
+request that succeeds or fails as a whole.
 
 Every change to anything in Beryl has a ticket. `ignite start "<summary>"` makes
 that cheap for a session that was handed a task directly: it files the ticket
@@ -3242,10 +3239,10 @@ The hub also serves the dashboard, the one page meant for a person. It keeps the
 current ticket views and adds each machine's cores and trees, the pool with what
 each worker holds and what it is running, the landing queue, the state of tip
 verification, open regressions and each exploration family's finds. Its first
-line says what needs a person: tickets marked `needs:person`, a machine with no
-dispatcher or with a paused pool, the tickets that hold `master` back while a
-pool is paused, an open regression that no worker can take, and a ticket owned
-by a machine or app that `ignite.toml` does not declare.
+line shows tickets marked `needs:person`, a machine with a paused pool, the
+tickets that hold `master` back while a pool is paused, an open regression that
+no worker can take, and a ticket owned by a machine or app that `ignite.toml`
+does not declare.
 
 The dashboard is at the hub's root and a ticket's page is at `/T<id>` (for
 example `/TBEJE.34`). Only the API is under the project name (`/by/api`). Page
@@ -3395,322 +3392,50 @@ ignite ticket update MAB12 --every 2d
   edits in place like any other value, and when the next copy falls due under
   "Next copy". A copy's page links to its meta-ticket under "Schedule".
 
-## Workers, the pool and the dispatcher
+## Workers and the pool
 
-In desktop mode, the default, workers are sessions in the Claude and Codex
-desktop apps, so a person can see every one in the app's sidebar, open it, and
-steer it from another device with the app's Remote Control feature. In CLI mode
-(see [CLI mode](#cli-mode)) the daemon runs each worker as a headless CLI
-process, and a person watches it with `ignite pool watch` or the dashboard. The
-mode is set per machine and per app. Ignite makes handing workers work cheap,
-and each machine's daemon holds work back while that machine is full.
+The daemon runs each worker as a headless CLI process, one `claude -p` or
+`codex exec` process per turn. A person can watch workers on the dashboard or
+with `ignite pool watch`. To work a ticket in a desktop session, run
+`ignite start <ticket>`.
 
 ### The pool
 
-Each machine has one standing pool that serves every active epic. The steps
-below that name a dispatcher apply to apps in desktop mode; an app in CLI mode
-has no dispatcher and its slots come from `ignite.toml` (see
-[CLI mode](#cli-mode)).
-
-- `ignite pool init`, run from the main checkout, writes the dispatcher's
-  instructions into `~/ignite`. In Claude, a person opens a session there and
-  sends `/ignite pool 8`. That session registers itself as the machine's
-  dispatcher, starts the workers in the main checkout (at most ten per message)
-  and runs the dispatch loop. The desktop app lets only a turn a person started
-  start sessions, and its tools for clearing and prompting a session are only
-  known to work on sessions the caller started, so the session that starts the
-  workers must be the dispatcher.
-- Registering a dispatcher replaces any earlier dispatcher of the same app on
-  that machine, and removes the workers the earlier one started, which the new
-  one could not drive.
-- Workers must run in a permission mode that never prompts. A permission prompt
-  stalls a worker nobody is watching, so `/ignite pool` refuses to start workers
-  in any other mode.
-- `ignite pool pause` stops new feature work on a machine, and
-  `ignite pool resume` starts it again. Workers that are running finish. A
-  paused machine is still handed the tickets that hold `master` back (regression
-  and justiciar tickets), one at a time: a person may pause to save usage or to
-  work by hand, and `master` must not stay stuck while nobody watches.
-  `ignite pool pause --all` stops every hand-off on every machine, those tickets
-  included, until `ignite pool resume --all`. While any pool is paused,
-  `ignite status` and the dashboard's first line name the tickets that hold
-  `master` back. Nothing but a person's `resume` ends a pause.
-- A usage hold is a different state, which Ignite starts and ends by itself.
-  When the newest sample of a Claude plan window (see `usage` under "The
-  dispatcher") is at or above `usage_hold_percent` under `[pool]` in
-  `ignite.toml` (99 unless set), the machine behaves as `ignite pool pause`
-  makes it: running workers finish, no new Claude ticket is handed out, and the
-  tickets that hold `master` back still go to one worker at a time. When the
-  plan runs out, every running worker fails mid-ticket and new tickets cannot
-  run at all; a median ticket uses about 0.06 to 0.14% of the weekly limit, so
-  99% leaves room for the tickets already running. The hold ends when a newer
-  sample of that window is below the threshold or when the window's `resetsAt`
-  passes, and samples are still taken every 15 minutes while it lasts. A window
-  named for one model family, such as `Weekly · Fable`, holds only hand-offs
-  whose model ID contains that name; any other window, such as
-  `Weekly · all models` or `5-hour`, holds every Claude hand-off on the machine.
-  Codex hand-offs are never held. `ignite status`, `ignite pool list`,
-  `ignite pool usage` and the dashboard's first line name the window that holds,
-  its percentage and when it resets.
-- `ignite pool usage` prints how much of the Claude plan is used, from the
-  dispatcher's latest samples (see `usage` under "The dispatcher").
-- The pool outlives epics. Nothing is rebuilt when a plan starts or ends.
-- Claude Code workers are cleared and prompted again for each ticket. Each Codex
-  ticket uses a fresh local chat. A person can open it in the main checkout and
-  send `ignite start <ticket>` directly.
-- Codex desktop pool dispatch runs within an active turn. The thread tools
-  require an explicit request to create the worker chats and explicit
-  authorization to message their destinations. Slot registration records
-  capacity. Start with the `In Codex` section generated by `ignite pool init`.
-- Codex capacity is counted in slots. In Codex, `/ignite pool 5` registers the
-  dispatcher with five slots
-  (`ignite pool add <thread> --app codex --dispatcher --slots 5`); sending it
-  again with another count changes the count, and `0` keeps it. Each free slot
-  counts as an idle Codex worker when the daemon asks the hub for tickets, under
-  a placeholder session `codex-slot-<k>`. The slot's hand-off names no session:
-  the dispatcher opens a new chat in the main checkout and acknowledges with its
-  thread ID (`ignite dispatch ack <id> ok <thread>`). The daemon adds that chat
-  to the pool as a single-use worker, so stall checks, messages and justiciar
-  instructions reach it like any other worker. The slot is free again when the
-  ticket lands, its lease expires, its reservation lapses unclaimed after 10
-  minutes, or the app says the chat is gone. A chat never gets a second ticket.
-- Slots belong to the dispatcher, not the machine, so a Claude pool and a Codex
-  pool on one machine stay independent; both share the machine's ticket trees
-  and cores. A Codex dispatcher that rotates (see below) keeps its slots and the
-  chats still running; a new Codex dispatcher registered with a count of its own
-  replaces the old one's slots and chats. `ignite pool list` and the dashboard
-  show each slot as a `codex` worker, idle or reserved, and each chat as a
-  worker holding its ticket.
-
-### The dispatcher
-
-The dispatcher is one session per machine and per app whose whole job is to make
-the tool calls the daemon asks for.
-
-- In Claude it runs on Haiku 5.5, in `~/ignite`, a folder outside the
-  repository, so its fixed prefix holds none of Beryl's instruction files. The
-  folder's instructions name the main checkout, because a session started from
-  the dispatcher otherwise runs in the dispatcher's folder.
-- That folder's `.claude/settings.json` sets `autoCompactWindow` to 120,000
-  tokens, so its context never grows the way an orchestrator's does today. It
-  also sets the environment variable `CLAUDE_CODE_AUTO_COMPACT_WINDOW` to the
-  same value. A Claude Desktop session can keep a window of its own that
-  outranks `autoCompactWindow`: a dispatcher showed a 1M window and reached
-  131,000 tokens without compacting until `/autocompact` was run in it. The
-  environment variable outranks that window.
-- The same file denies every tool the loop never calls (`permissions.deny`): the
-  desktop app's browsers, simulator, charts, terminal, panes and task list, and
-  the built-in editing, research, subagent and artifact tools. Claude Code drops
-  a denied tool from the model's context. Without the list, about 60,000 of the
-  120,000 tokens were in use before the dispatcher's first message, most of them
-  tool definitions, which left room for only a short stretch of the loop between
-  compactions.
-- The same file holds a `PreToolUse` hook on the tools that start, clear,
-  reconfigure or message a session: `start_session`, `clear_session`,
-  `set_session_model`, `set_session_effort` and `send_message`. The hook runs
-  `ignite dispatch allowed`, which reads the tool call from stdin and asks the
-  daemon whether an instruction the dispatcher holds (given and not yet
-  acknowledged) calls for that tool on that session. If not, it exits 2, which
-  blocks the call and shows the dispatcher the current instruction. Without it,
-  only the instructions' wording stopped a confused dispatcher from starting
-  duplicate workers or clearing a busy one.
-  - Clearing needs a hand-off with `clear` set to that session; setting the
-    model or effort needs a hand-off to it; sending needs a `message` to it, or
-    a hand-off to it whose `raw` read-back matched, so a prompt never reaches a
-    worker before the daemon has seen its model and effort stick.
-  - A hand-off with `clear` set may set the model and effort only after the
-    clear succeeded. The app refuses to clear a session that is still working,
-    and on 2026-11-19 a Haiku dispatcher set a busy worker's model anyway before
-    stopping. A `PostToolUse` hook on `clear_session` runs
-    `ignite dispatch cleared`, which tells the daemon the clear succeeded;
-    Claude Code runs it only after a call that did not fail, and the app reports
-    a refusal as a failure. A `raw` read-back of a hand-off whose worker was
-    never reported cleared fails the hand-off, so the prompt is not sent. Claude
-    Code reads hooks when a session starts, so the daemon holds hand-offs to
-    this only once a clear has been reported: a dispatcher started before the
-    hook existed carries on as before.
-  - Starting a session needs a hand-off that names no session, a `rotate` in the
-    last 10 minutes, or the pool setup of `/ignite pool <n>`: from
-    `ignite pool add --dispatcher` until the workers are registered, at most 15
-    minutes. It is also allowed while no Claude dispatcher is registered.
-  - Every failure blocks, including a daemon that does not answer, except for
-    the client's own justiciar hand-off while the daemon is down.
-- It never plans, reads tickets or decides anything.
-- On a Codex `rotate` instruction, the person can open a fresh dispatcher chat
-  in `~/ignite` and send `/ignite pool 0` to keep the slots and running workers.
-
-The Claude loop is one blocking command and the tool calls that command returns:
-
-```text
-$ ignite dispatch --wait 3600
-```
-
-The dispatcher runs the wait as a background command and ends its turn, and the
-app wakes it when the command exits. A foreground tool call is cut off after 600
-seconds, and every wait that ends `idle` costs a full request over the
-dispatcher's context, so the wait is as long as an hour; it ends as soon as
-there is something to do. Anything else that wakes the dispatcher meanwhile,
-such as a notice from a worker, may lead it to start a second wait. The daemon
-keeps only the newest wait from each dispatcher session: the older one ends
-printing `replaced`, and the dispatcher then does nothing. Two waits never both
-take instructions, and starting one too many never leaves the dispatcher without
-a wait.
-
-```json
-{"id": 4812, "do": "handoff", "session": "local_c8470108",
- "clear": true, "model": "claude-opus-5-5", "effort": "medium",
- "prompt": "Run `ignite start TQ44S.9.48 --reservation 7f3a` and follow it."}
-```
-
-The dispatcher carries out a hand-off as separate calls, in the order listed
-below, and reports `ignite dispatch ack 4812 ok`, or `failed` with the reason.
-
-The `model` is an ID the app's session tool accepts, not a tier name. The daemon
-looks the ticket's `tier:` label up in `[pool.models.<app>]` in `ignite.toml`:
-
-```toml
-# The model ID each app's session tool accepts for each `tier:` label.
-[pool.models.claude]
-opus = "claude-opus-5-5"
-sonnet = "claude-sonnet-5-5"
-light = "claude-sonnet-5-5"
-```
-
-Tier names stay the vocabulary for matching: ticket labels and a pool member's
-`models` list use them, and the table only says what to ask the app for once a
-worker has been chosen. When a model is released, change the IDs here and no
-ticket changes. An app with no table is given the tier name as it is. A Claude
-tier with no ID in the table is not reported to the hub as one the worker runs,
-so no ticket that names it is handed to a Claude worker, and `ignite doctor`
-warns about each such tier.
-
-The ticket's `effort:` label sets the reasoning effort. Without one, Ignite uses
-the app's entry in `[pool.default_effort]`, or `medium` if the app has no entry.
-A justiciar hand-off is always `high`.
-
-1. Clear the session. A session that refuses is still finishing a turn. The
-   hand-off fails, the daemon tries another worker, and it comes back to this
-   one after a minute.
-2. Set the model and effort, then read the session back with `get_session` and
-   report what it returned, as it came:
-   `ignite dispatch ack 4812 raw '<the JSON>'`. The app can ignore a model
-   without saying so, so the daemon, not the dispatcher, compares the
-   read-back's `model` and `effort` with what it asked for. A model ID's
-   context-window suffix, such as `[1m]`, does not count as a difference. When
-   they match, the instruction stays open and the reply says to send the prompt.
-   When they differ, the hand-off fails as if the dispatcher had reported
-   `failed`, and the reply says not to send the prompt: a ticket is never run on
-   a model other than the one it names. An `ok` for a hand-off to a named
-   session with no matching read-back is refused.
-3. Send the prompt. It carries a reservation code that only this hand-off's
-   `ignite start` can use, so a hand-off that arrives late, after the ticket
-   went elsewhere, claims nothing.
-
-The other instructions are `message`, which sends text to a live session,
-`check`, which asks whether a session is running, idle or gone, `usage`, which
-asks how much of the Claude plan is used, and `idle`, which means the wait ended
-with nothing to do.
-
-Nothing else in Ignite knows how much of the Claude subscription plan is used:
-without samples, the pool kept handing out tickets until workers failed at the
-limit, and nobody could say what a ticket cost as a share of the plan. The
-desktop app tells any session through its `get_usage` tool, which the daemon
-cannot call, so it asks a Claude dispatcher with `usage`:
-
-- The daemon queues a `usage` ahead of a waiting hand-off when the last one was
-  more than 5 minutes ago, and on its own every 15 minutes, so the series has no
-  long gaps while nothing is handed off. A Codex dispatcher is never asked.
-- The instruction's text names the tool: the dispatcher loads
-  `mcp__ccd_session_mgmt__get_usage` with `ToolSearch`, calls it, and reports
-  the result as it came with `raw`.
-- The daemon stores one row per window of `plan.windows` (its `label`, such as
-  `Weekly · all models`, `percentUsed` and `resetsAt`) in the local database's
-  `plan_usage` table, with the time and the machine. A `plan.status` other than
-  `ok` (`not_applicable`, `unavailable`) is stored as one row with no window and
-  the plan's note, and a report that is not `get_usage`'s JSON as `unreadable`.
-- Each row goes to the hub's `POST /metrics/import` under the source
-  `plan_usage`, with `holds` set when it is at or above `usage_hold_percent`,
-  which is how the dashboard knows of a usage hold (see "The pool"). A row the
-  hub did not acknowledge is sent with the next sample.
-- `ignite pool usage` prints the newest sample of each window, its age and when
-  the window resets.
-- `ignite pool init` no longer denies `get_usage` in the dispatcher folder's
-  settings, and removes the rule an earlier run added. Claude Code reads the
-  settings when a session starts, so a dispatcher started before then reports
-  the tool's refusal, which is stored as `unreadable`.
-
-The two judgments where a dispatcher's mistake costs most are whether a session
-is gone and whether a hand-off's model stuck: a wrong `gone` releases a live
-worker's ticket, and a skipped read-back runs a ticket on the wrong model. So a
-Claude dispatcher makes neither. For a `check` it calls `get_session` and
-reports the result as it came, JSON or error, with `raw`, and the daemon reads
-it:
-
-- an error saying the session was not found, or `isArchived: true`, is gone (an
-  archived session can take no message);
-- `isRunning: true` is running, and `isRunning: false` is idle;
-- anything else, such as a timeout or a result about another session, is
-  unknown, which proves nothing.
-
-A Codex dispatcher answers a `check` with `running`, `idle`, `gone` or `unknown`
-after reading the thread. For a hand-off, it passes the model and effort at chat
-creation and acknowledges the resulting thread ID. A bounded Codex dispatch uses
-`ignite dispatch --wait 30` and reads the result before the turn ends. In
-Claude, the dispatcher stays titled `🔮 dispatcher <machine>` while it waits.
-Each instruction identifies an action and its inputs. The numbered tool calls
-for each action live in the dispatcher's `AGENTS.md`.
+- `ignite pool pause` limits the local machine to tickets that hold `master`
+  back. `ignite pool pause --all` stops all new starts. Use `ignite pool resume`
+  or `ignite pool resume --all` to resume work.
+- `ignite pool usage` shows the latest Claude plan samples. When a window
+  reaches `[pool] usage_hold_percent`, the machine only starts the affected
+  tiers for tickets that hold `master` back. A family-specific window holds only
+  that model family. A newer sample below the threshold or the window's reset
+  ends the hold. `ignite status` and `ignite pool list` also show the hold.
+- The pool carries on across epics.
 
 ### CLI mode
 
-A dispatcher is a session only a person can start, it can make mistakes, and
-when it stops answering nothing automatic repairs the pool. In CLI mode an app
-has no dispatcher on a machine: the daemon runs each worker itself as a headless
-CLI process, `claude -p` or `codex exec`, one process per turn.
-`ignite pool list` shows which mode each app on a machine runs.
+A provider needs a program under `[pool.cli.<app>]` and a positive slot count
+under `[machine.<host>.pool.<app>]` to take tickets on a machine. A machine with
+no worker slots can still run checks.
 
 ```toml
-# How each app's workers run on this machine: "desktop" (the default) or "cli".
 [machine.jarvis.pool.claude]
-mode = "cli"
 slots = 8
 
-# The program and the arguments every turn of the app gets.
 [pool.cli.claude]
 program = "claude"
-args = ["--dangerously-skip-permissions"]
 ```
 
-- `ignite pool mode <app> cli|desktop|config` stores an override in the daemon's
-  database that outranks the file until it is set back to `config`, so a machine
-  switches back without a landing or a restart. A switch never touches a ticket
-  in progress: workers of the old mode finish, and only new hand-offs follow the
-  new mode.
-- Nothing about a session lives in the daemon's memory. A worker is a row in
-  `cli_slots` (its ticket, app, model, effort, turn number and next prompt) and
-  the transcript the CLI keeps on disk.
-- A slot is offered to the hub as an idle worker under a placeholder session,
-  `cli-<app>-slot-<k>`, as a Codex dispatcher's slots are. One slot above
-  `slots` takes only tickets that hold `master` back, which replaces keeping a
-  worker free for the justiciar. A reservation gives the slot an Ignite session
-  ID, `cli-<app>-<8 hex>`, which every turn carries in `IGNITE_SESSION`. Each
-  claim starts a new transcript; only the next ticket of a `lane:` chain resumes
-  one.
-- An app's slots are offered only after a one-word probe turn has succeeded on
-  that machine since the daemon started.
-- The daemon builds its CLI pool at start when `[pool.cli.<app>]` gives any app
-  a program, and gives every such app an adapter whatever its mode, so
-  `ignite pool mode` switches an app without a restart. Three loops follow the
-  pool: `ignite-cli` reads every running turn and acts on each end about once a
-  second, `ignite-cli-health` runs the probe turns of the apps in CLI mode and
-  sends each CLI hold's report, and `ignite-cli-dispatch` runs the dispatcher's
-  step every 10 seconds while any app is in CLI mode. A probe runs a whole turn,
-  so it never holds up the turns of other slots. `ignite doctor` lists all three
-  loops.
-- The dispatch loop is what offers idle slots to the hub. A machine whose apps
-  all run in CLI mode has no dispatcher session to ask for steps, and the only
-  other steps come from `ignite` verbs. Before 2026-11-20 there was no such
-  loop, so once every worker on jarvis was idle, no verb ran and the machine
-  took no ticket for over half an hour.
+- The daemon keeps each worker's ticket, model, effort, turn number and next
+  prompt in `cli_slots`. The CLI keeps the transcript on disk.
+- The daemon offers a free slot to the hub as `cli-<app>-slot-<k>` after a probe
+  turn succeeds. One extra slot takes only tickets that hold `master` back. The
+  worker that claims a reservation gets a session ID, `cli-<app>-<8 hex>`, which
+  every turn carries in `IGNITE_SESSION`. A lane successor, regression or
+  reverted ticket can resume the earlier worker's transcript.
+- Three loops follow the pool. `ignite-cli` reads running turns and acts on
+  their ends about once a second. `ignite-cli-health` runs probe turns and
+  reports CLI holds. `ignite-cli-dispatch` asks the hub for tickets every ten
+  seconds while the machine has worker slots. `ignite doctor` lists all three.
 
 A turn:
 
@@ -3790,23 +3515,22 @@ Messages, usage and repair:
   waits while a `land` of the session has begun its push. An ordinary `tell`
   waits for the turn's end.
 - Every `rate_limit_event` of a Claude turn is a sample of the plan's usage, so
-  a machine whose Claude app is in CLI mode queues no `usage` instruction. Each
-  turn's cost and token counts go to the hub with its ticket.
+  the daemon can report usage while workers run. Each turn's cost and token
+  counts go to the hub with its ticket.
 - Every column of the CLI tables and every field of JSON kept in them has a
   default, and the release selftest decodes every row of the copied database
   with the new build, so a release that cannot read an older build's rows is
   rejected before any daemon restarts into it.
 - When the daemon has been down for 15 minutes and `justiciar-needed.json`
-  exists, a machine with an app in CLI mode has its monitor start one headless
-  justiciar turn in the main checkout, on the `opus` tier at `high` effort, as
-  session `cli-monitor-justiciar`. Its prompt is `ignite guide justiciar` with
-  the crash evidence: the monitor's request, the newest crash record, and the
-  last 50 lines of the daemon's log and of `starts.jsonl`. The turn holds
-  `monitor/justiciar.lock` in the Ignite home and logs to
-  `monitor/justiciar-<n>.log`. Later runs resume its transcript while the daemon
-  still does not answer, at most 6 turns per incident and never two at once. The
-  incident ends once the daemon has answered in two runs in a row. A machine
-  with no app in CLI mode gets none of this.
+  exists, a machine with a configured CLI provider and worker slots has its
+  monitor start one headless justiciar turn in the main checkout, on the `opus`
+  tier at `high` effort, as session `cli-monitor-justiciar`. Its prompt is
+  `ignite guide justiciar` with the crash evidence: the monitor's request, the
+  newest crash record, and the last 50 lines of the daemon's log and of
+  `starts.jsonl`. The turn holds `monitor/justiciar.lock` in the Ignite home and
+  logs to `monitor/justiciar-<n>.log`. Later runs resume its transcript while
+  the daemon still does not answer, at most 6 turns per incident and never two
+  at once. The incident ends once the daemon has answered in two runs in a row.
 - The daemon sends a digest of each transcript to the hub, which shows it at
   `/pool/session/<id>` with a box that sends `ignite tell`.
   `ignite pool watch <ticket or session>` follows the same digest in a terminal,
@@ -3831,10 +3555,6 @@ the second releases the ticket. Titles do not apply. `ignite start` and
 commands, wait in the foreground with `ignite wait`, never ask a person, and end
 the turn only after `ignite land` or `ignite release`, or to wait on an `ignite`
 verb.
-
-Clearing a worker, the settle time after a ticket, the model read-back, the
-`dispatch allowed` hooks, rotation and session titles exist only for the desktop
-dispatcher.
 
 The `cli_e2e_*` tests in `ignite_daemon` run the whole of this against a shell
 script that stands in for `claude`: real supervisors, a real database file and
@@ -3950,17 +3670,13 @@ that machine take it, such as `jarvis/claude` or `cygnus/codex`.
 The hub reserves the ticket for that machine in the same request, so two
 machines never take one ticket. What happens next:
 
-- The daemon gives the dispatcher the hand-off. The worker's `ignite start`
-  turns the reservation into a claim held by that session and tree.
-- A hand-off the dispatcher has not acknowledged in 2 minutes is given again.
-  After three failures the daemon stops handing off, and the dashboard shows the
-  dispatcher as down. Workers already running are unaffected.
-- The dispatcher's queue (pending and given hand-offs, reservations, refusals,
-  stalls and the next instruction ID) is kept in the daemon's database, so a
-  restart loses none of it; a hand-off given and not acknowledged before a
-  restart is given again at once.
-- A reservation that no `ignite start` has claimed in 10 minutes lapses. The
-  ticket returns to the queue, and the worker is treated as stalled.
+- The daemon starts a CLI worker, whose `ignite start` turns the reservation
+  into a claim held by that session and tree.
+- The daemon records pending starts in its local database. After a restart it
+  retries any unexpired start with the same reservation code. If the CLI
+  supervisor already started that worker, it returns the existing session.
+- A reservation that no `ignite start` has claimed in 10 minutes lapses, and the
+  hub can offer the ticket again.
 - A session that runs a command for a ticket whose lease expired, and that
   another session has since claimed, gets exit code 3.
 
@@ -4099,26 +3815,20 @@ leased for nothing.
 
 - Any `ignite` command from a tree renews its ticket's lease, and a command
   still running keeps it renewed however long it takes.
-- After 30 minutes in which no command started or ran, the daemon has the
-  dispatcher look at the session. Silence proves nothing: a healthy worker can
-  read and think for a long time, and an app that cannot find a session has not
-  shown that the session is gone. The silence clock survives a restart: each
-  held tree's last activity is kept in the daemon's database, so a worker that
-  died just before a restart is still looked at 30 minutes after its last
-  command. A worker removed from the pool when a new dispatcher replaces its own
-  is looked at straight away if it still holds a ticket.
+- After 30 minutes without a command starting or running, the daemon checks the
+  CLI worker's process. The silence clock survives a restart because the daemon
+  saves each held tree's last activity.
 - A command stuck far past its time also counts as a stall, although it is
   running and keeps the lease renewed: a command the worker started, other than
   `wait`, that has run for 45 minutes, or whose current step has lasted 30
-  minutes. The daemon has the dispatcher look at the session as it does for
-  silence, and again every 30 minutes while the same command stays stuck. An
-  idle session gets one message that names the command, its step and how long
-  each has run, and says: if the ticket can still be done, continue it; if it
-  waits on something outside the ticket, file that, make it a dependency and
-  release; if it cannot be completed as written, run `ignite justiciar` with the
-  evidence and release. A worker with a `land`, `release` or `close` running is
-  never looked at for a stuck command, because a landing's long waits belong to
-  the landing queue and tip verification.
+  minutes. The daemon checks the CLI worker again every 30 minutes while the
+  same command stays stuck. An idle session gets one message that names the
+  command, its step and how long each has run, and says: if the ticket can still
+  be done, continue it; if it waits on something outside the ticket, file that,
+  make it a dependency and release; if it cannot be completed as written, run
+  `ignite justiciar` with the evidence and release. A worker with a `land`,
+  `release` or `close` running is never looked at for a stuck command, because a
+  landing's long waits belong to the landing queue and tip verification.
 - A session that is still running is left alone. An idle one is sent one message
   asking it to continue or release.
 - The daemon releases the ticket only when the app confirms that the session is
@@ -4139,17 +3849,17 @@ leased for nothing.
   pool that holds a ticket. A person's own session, including one running
   `/ignite`, ends turns to talk to the person, and is never blocked. Neither is
   a justiciar's session, nor a worker with an `ignite` verb of its session still
-  running (the daemon guarantees a wake-up with a check two minutes after the
-  verb ends), nor a worker with a live process under the session's process, such
-  as a background shell command or monitor script, whose end wakes the worker.
-  The hook passes its parent process with `--parent`, and Ignite looks for live
-  descendants of it (macOS and Windows). With nothing running, the first stop is
-  blocked and the next releases the ticket. A released worker is refused by
-  `ignite start` until the dispatcher hands it a ticket. The hook names the
-  session by the desktop app's `CLAUDE_CODE_HOST_SESSION_ID`, the ID Ignite
-  records for the lease; the hook input's own `session_id` is Claude Code's
-  internal ID, which Ignite never sees. Codex has no such hook, so Codex workers
-  rely on the silence check alone, which also still catches workers that died.
+  running (the daemon wakes CLI workers when the verb ends), nor a worker with a
+  live process under the session's process, such as a background shell command
+  or monitor script, whose end wakes the worker. The hook passes its parent
+  process with `--parent`, and Ignite looks for live descendants of it (macOS
+  and Windows). With nothing running, the first stop is blocked and the next
+  releases the ticket. A released worker is refused by `ignite start`; Ignite
+  starts a worker for the next ticket. The hook names the session by the desktop
+  app's `CLAUDE_CODE_HOST_SESSION_ID`, the ID Ignite records for the lease; the
+  hook input's own `session_id` is Claude Code's internal ID, which Ignite never
+  sees. Codex has no such hook, so Codex workers rely on the silence check
+  alone, which also still catches workers that died.
 - A pool worker whose title starts with ⛔ ("stopped unfinished") when it ends a
   turn holding its ticket is released at the first stop, without the block
   message: a worker once kept a ticket, its tree and a running build for hours
@@ -4257,23 +3967,14 @@ ignite tell TQ44S.9.48 "Do not wait for multivac. Land when the gate passes."
 ignite tell --all "The oracle engines are down until noon. Skip oracle checks."
 ```
 
-- `ignite tell <ticket>` records the text as a comment on the ticket and marks
-  it for delivery. The daemon of the machine where the ticket is being worked
-  has its dispatcher send the text to that session as a message. Only a session
-  that holds the ticket and claimed it before the comment was written gets the
-  message. A comment from before the claim is already in the session's brief,
-  and a ticket that has just been released sends nothing, so an old order never
-  reaches the next session to take the ticket.
-- A session that is inside `ignite wait` gets its wait ended at once, so it does
-  not sit out the rest of the wait. The reply says only "<ticket> has a message
-  for you from the dispatcher. End your turn to receive it." It does not carry
-  the text, because a command's reply is tool output, which agents rightly treat
-  as data and not as instructions. The dispatcher's message, which the session
-  receives when its turn ends, is the only copy that carries the text.
-- The told comment's `changed` line records that the message exists, who sent it
-  and its first line in quotes:
-  `changed  comment: message from <sender>, delivered by the dispatcher, starting "<first line>"`.
-  Other comments print as before.
+- `ignite tell <ticket>` records the text as a comment. If a CLI worker holds
+  the ticket, its daemon delivers the comment to its next turn. It delivers only
+  comments made during that worker's claim, since older comments are already in
+  the worker's brief.
+- A worker in `ignite wait` receives a notice that the wait has ended and a
+  message is queued. Its next turn receives the message text. A person working
+  from a desktop session can read the comment with
+  `ignite ticket show <ticket> --comments`.
 - `ignite tell <session>` does the same for the ticket that session holds, and
   `--all` for every ticket in progress, on every machine.
 - Another session can use it too. A worker that learns something the holder of
@@ -4320,19 +4021,9 @@ release ref when Ignite blocks its own landing.
   than one worker, so a pool full of stuck tickets cannot starve the ticket that
   would free them. In CLI mode that is the one slot above `slots`, which takes
   only tickets that hold `master` back.
-- When the hub cannot be reached for 15 minutes, a daemon hands a justiciar
-  prompt to its own idle worker directly, since the hub is what would have filed
-  the ticket.
-- When the daemon itself is down, the dispatcher's `ignite dispatch` cannot
-  reach it. If the monitor has written `justiciar-needed.json`, the client
-  answers with a hand-off of a justiciar prompt to a worker of the pool, which
-  it reads from the daemon's database.
-- For an app in desktop mode, the one fault nothing automatic repairs is a
-  missing dispatcher: only a turn a person started can start sessions. The
-  daemon posts a notification when the dispatcher stops answering. An app in CLI
-  mode has no dispatcher, and a machine that runs one repairs a daemon that
-  stays down by itself: the monitor starts a headless justiciar (see
-  [CLI mode](#cli-mode)).
+- When the hub cannot be reached for 15 minutes, the daemon starts a local CLI
+  justiciar without a ticket. The monitor can also start a local CLI justiciar
+  when the daemon is down. See [CLI mode](#cli-mode).
 - A person can also declare an emergency by invoking the `/ignite-justiciar`
   skill in any session. That session files or claims the justiciar ticket,
   declares the emergency pause (below), fixes the fault first and validates
@@ -4352,14 +4043,13 @@ release ref when Ignite blocks its own landing.
   ticket. Nothing in the pool waits on the person. The justiciar then closes its
   ticket, and titles itself ⛔ only when no interim path exists.
 - An order is a message that starts `Message about <ticket>:`, sent through the
-  dispatcher in desktop mode and as an `ignite tell` for a CLI session, which
-  ends the running turn and resumes with it. `ignite tell` signs each comment
-  `from <session>`, taken from the session the caller's environment names. A
-  worker checks an order with `ignite ticket show <ticket>`: the ticket must be
-  labelled `justiciar` and held by the session the order names. The skill
-  therefore reads its own session ID (`mcp__ccd_session_mgmt__get_session` with
-  `self`, or the thread ID on Codex) before it declares, and uses it in the
-  ticket comment and every order.
+  CLI worker’s daemon after an `ignite tell`, which ends the running turn and
+  resumes with it. `ignite tell` signs each comment `from <session>`, taken from
+  the session the caller's environment names. A worker checks an order with
+  `ignite ticket show <ticket>`: the ticket must be labelled `justiciar` and
+  held by the session the order names. The skill therefore reads its own session
+  ID (`mcp__ccd_session_mgmt__get_session` with `self`, or the thread ID on
+  Codex) before it declares, and uses it in the ticket comment and every order.
 
 #### The emergency pause
 
@@ -4775,8 +4465,8 @@ asked for.
 
 Improvement tickets are how the workflow gets better without a separate role. A
 rule over the records files each one with an estimate of what it would save, and
-the dispatcher guarantees them workers. A rule finds the waste that a query can
-name. What takes judgement to find is the work of a [patrol](#patrols).
+the hub guarantees them workers. A rule finds the waste that a query can name.
+What takes judgement to find is the work of a [patrol](#patrols).
 
 A **rule** is a query that finds a source of waste and names a subject, a cost
 and a saving per week. The efficiency dashboard's findings are rules already.
@@ -4994,7 +4684,7 @@ rule lives where it is needed.
   prints one in under 50 lines, and a command names the topic at the moment it
   applies, so a worker reads it only then.
 - **The `/ignite` skill** holds the rules for planning, for sweeping stale
-  tickets and for the dispatcher.
+  tickets.
 - **`AGENTS.md` and the project's skills** hold the rules that are about Beryl
   and not about Ignite.
 - **Ignite itself** does what a rule used to ask of an agent, wherever a program
@@ -5191,8 +4881,7 @@ machines in a rehearsal:
 - Each machine has a second clone of the repository, with its own build trees.
 - A rehearsal hub on jarvis serves a copy of the ticket database on its own
   port, and the rehearsal daemons use it.
-- Desktop sessions opened in the clones form the pool and the dispatcher, so the
-  hand-off path is the real one.
+- The rehearsal daemons run their own headless workers.
 
 A switch that fails on the day, before other work resumes, can be undone from
 what it leaves untouched. The import only reads the old ticket database, and the
@@ -5215,10 +4904,6 @@ These are the choices that were weighed against measurements and set aside.
 - **A shared cache of compiled output between trees.** The same loss of
   incremental builds applies, and the measured waste is cold trees, which fixed
   build trees remove.
-- **Workers as command-line sessions started by the daemon.** This removes the
-  dispatcher entirely, but a person cannot see or steer those sessions in the
-  desktop app. A dispatcher with a small context costs about a tenth of today's
-  orchestration and keeps every session visible.
 - **A wall-clock budget for the gate.** Today's 60 to 90 second target runs
   fewer checks when the machine is busy, which sends more defects to `staging`
   when the machine can least afford the repair.
@@ -5306,7 +4991,7 @@ These show that each kind of failure goes where the design sends it.
   shown as `known-failing` in their gates. Land the fix and expect `master` to
   move.
 - **The culprit's session.** Repeat while the worker that landed the break has
-  no new ticket. Expect the dispatcher to send the regression to that session.
+  no new ticket. Expect the CLI worker to resume the earlier transcript.
 - **A flaky check.** Add a check that fails every other run. Expect the first
   flake recorded and passed over, the second on a later commit to switch the
   check off on both machines, and one P3 ticket quoting both failures.
@@ -5325,20 +5010,12 @@ These show that cores, trees and workers go where the rules say.
   a quiet machine, a longer wall time, idle work stopped, and the record's
   instruction count within 1% of the quiet run's.
 - **No free tree.** Lease every ticket tree and run `ignite start` in one more
-  session. Expect a wait that names the reason, no new directory, and no
-  hand-off from the dispatcher.
-- **The dispatcher (desktop mode).** Run `ignite pool init`, open a session in
-  `~/ignite` and send `/ignite pool 4`. Expect four workers whose folder is the
-  main checkout. File six ready tickets. Expect four hand-offs at once and two
-  as workers finish, and each worker titled with its ticket. After 50 hand-offs,
-  expect the dispatcher's transcript to show at least one compaction and no
-  request with more than about 130,000 tokens of context.
-- **CLI mode.** Set an app to `mode = "cli"`, restart the daemon and file two
-  ready tickets. Expect `ignite pool list` to show the mode and the slots, two
-  workers whose session IDs start with `cli-`, and no dispatcher. Run
-  `ignite pool watch <ticket>` and expect the worker's messages and tool calls.
-  Run `ignite pool mode <app> desktop` and expect running workers to finish and
-  new hand-offs to wait for a dispatcher.
+  session. Expect a wait that names the reason, no new directory, and no start
+  from the pool.
+- **CLI workers.** Configure two slots for a provider and file two ready
+  tickets. Expect `ignite pool list` to show two workers with session IDs
+  starting with `cli-`. Run `ignite pool watch <ticket>` to see messages and
+  tool calls.
 - **A CLI turn killed.** Kill a CLI worker's process mid-turn, then restart the
   daemon. Expect the turn to resume with the interruption message, the ticket
   still held, and no second turn on the transcript.
@@ -5379,8 +5056,8 @@ These show that cores, trees and workers go where the rules say.
   after `ignite pool resume`. File a regression while paused and expect it
   handed to one worker; with `--all`, expect it handed to nobody.
 - **A worker that only looks stalled.** Leave a worker reading for 31 minutes
-  with no `ignite` command. Expect the dispatcher to look at it, find it
-  running, and send nothing.
+  with no `ignite` command. Expect the daemon to check it, find it running, and
+  send nothing.
 - **A hung command.** Add a check that never returns, with its hang limit set to
   one minute in the rehearsal. Expect it ended with its child processes, marked
   `incomplete` as hung, not run again, and a P1 ticket listing the processes.

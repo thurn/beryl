@@ -17,10 +17,7 @@
 //! - A shared failure, one check failing the same way for several workers here, is reported
 //!   once, unless an open regression ticket already names the check (see `dispatchd_shared.rs`).
 //! - A request `ignite justiciar` made while the hub was down is sent once it answers again.
-//! - When the hub has not answered for [`HUB_DOWN_S`], the dispatcher hands a justiciar prompt
-//!   to an idle worker of this machine directly (see `dispatchd_justiciar.rs`).
-//! - When the dispatcher stops answering hand-offs, a desktop notification says so: nothing
-//!   automatic can start the sessions a new dispatcher needs.
+//! - When the hub is unreachable for [`HUB_DOWN_S`], the daemon starts a local CLI justiciar.
 //!
 //! The `justiciar` verb is how a session asks for a justiciar.
 
@@ -62,7 +59,6 @@ struct ReporterState {
     hub_down_since: Option<Timestamp>,
     /// Loops already reported while they stay unhealthy.
     reported_loops: BTreeSet<String>,
-    notified_dispatcher_down: bool,
 }
 
 /// Sends the daemon's emergencies to the hub; see the module's documentation.
@@ -162,7 +158,6 @@ impl Reporter {
     /// One round, after a heartbeat that reached the hub (`hub_answered`) or not.
     pub fn tick(&self, ctx: &Context, hub_answered: bool) {
         let now = ctx.clock.now();
-        self.notice_dispatcher();
         if !hub_answered {
             let since = *self.state().hub_down_since.get_or_insert(now);
             if now.seconds_since(since) >= HUB_DOWN_S {
@@ -274,24 +269,6 @@ impl Reporter {
         report.evidence = request.at.to_string();
         if ctx.hub.justiciar(&report).is_ok() {
             let _ = std::fs::remove_file(&path);
-        }
-    }
-
-    fn notice_dispatcher(&self) {
-        let down = self.dispatcher.is_down();
-        let mut state = self.state();
-        if down && !state.notified_dispatcher_down {
-            state.notified_dispatcher_down = true;
-            ignite_os::notify::post(
-                "Ignite's dispatcher stopped",
-                &format!(
-                    "The dispatcher on {} has not carried out three hand-offs. Open its session, \
-                     or start a new one with /ignite pool.",
-                    self.host
-                ),
-            );
-        } else if !down {
-            state.notified_dispatcher_down = false;
         }
     }
 }

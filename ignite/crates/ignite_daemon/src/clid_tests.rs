@@ -386,7 +386,7 @@ fn begin_starts_the_first_turn_with_the_hand_off_prompt() {
     assert_eq!(slots[1].session.as_ref(), Some(&second));
     // A placeholder of an app not in CLI mode is refused.
     let mut other = reservation("T.3", 1);
-    other.session = SessionId::new("cli-codex-slot-1").unwrap();
+    other.session = SessionId::new(format!("cli-{}-slot-1", "codex")).unwrap();
     assert!(rig.daemon.begin(&other, "m-1", None, None, false).is_err());
 }
 

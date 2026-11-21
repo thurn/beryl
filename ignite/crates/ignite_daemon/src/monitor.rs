@@ -346,7 +346,7 @@ fn evidence(state: &MonitorState, seen: &Observation, home: &Home, now: Timestam
 /// for the probe and the desktop for notifications.
 pub struct NativeMachine {
     pub socket: PathBuf,
-    /// The Ignite home: the main checkout it records, and `daemon.db` for `ignite pool mode`.
+    /// The Ignite home, which records the main checkout.
     pub home: PathBuf,
 }
 
@@ -411,13 +411,7 @@ impl Machine for NativeMachine {
         let checkout = PathBuf::from(fs::read_to_string(home.checkout_file()).ok()?.trim());
         let config = crate::main::read_config(&checkout).ok()?;
         let hostname = crate::doctor::Host::hostname(&crate::doctor::NativeHost);
-        let db = ignite_store::local::open(&self.home.join("daemon.db")).ok();
-        let overrides = |app: &str| {
-            db.as_ref()
-                .and_then(|conn| ignite_store::local::cli_slots::mode_override(conn, app).ok())
-                .flatten()
-        };
-        justiciar::first_cli_app(&config, &hostname, &overrides, &checkout)
+        justiciar::first_cli_app(&config, &hostname, &checkout)
     }
 
     fn locked(&self, lock: &Path) -> bool {

@@ -228,7 +228,7 @@ mod tests {
         assert_eq!(session.as_str(), "cli-claude-00000001");
         assert_eq!(pool.check(&session), SessionCheck::Idle);
         pool.set_check(&session, SessionCheck::Running);
-        assert_eq!(pool.check(&session).as_str(), "running");
+        assert_eq!(pool.check(&session), SessionCheck::Running);
         let stranger = SessionId::new("local_c8470108").unwrap();
         assert_eq!(pool.check(&stranger), SessionCheck::Gone);
         assert!(

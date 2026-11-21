@@ -12,8 +12,8 @@
 //!   legitimately.
 //! - `pass`, too, when anything the session started is still running, since the worker is
 //!   waiting on it. That is either an `ignite` verb of the session, such as a background
-//!   `ignite test` or `ignite run -- <command>`, whose wake-up the daemon guarantees (see
-//!   `wake`), or a live process under the session's own process (`--parent`, the hook's parent),
+//!   `ignite test` or `ignite run -- <command>`, whose end wakes a CLI worker (see `wake`),
+//!   or a live process under the session's own process (`--parent`, the hook's parent),
 //!   such as a background shell command or a monitor script, which the agent app runs as its
 //!   children and wakes the worker for when they exit. The hook runs under the same process, so
 //!   the branch that holds the hook's own client (the request's PID) is left out. If the app
@@ -65,7 +65,7 @@ use std::sync::Arc;
 use ignite_core::cli::decide::{block_text, cut, quoting};
 use ignite_core::ids::{SessionId, TicketId};
 use ignite_core::protocol::client::{Exit, Reply, Request};
-use ignite_core::protocol::hub::{JusticiarReport, WorkerRole};
+use ignite_core::protocol::hub::JusticiarReport;
 use ignite_core::traits::{Error, Result};
 
 use super::Dispatcher;
@@ -212,13 +212,7 @@ impl Dispatcher {
             return Reply::text(Exit::Usage, "no session");
         };
         let pass = |why: &str| Reply::text(Exit::Success, format!("pass     {why}"));
-        let worker = self
-            .pool
-            .member(session)
-            .ok()
-            .flatten()
-            .is_some_and(|m| m.role == WorkerRole::Worker);
-        if !worker {
+        if !session.is_cli() && !matches!(self.pool.member(session), Ok(Some(_))) {
             return pass("not a worker of this machine's pool");
         }
         let Some(ticket) = self.host.holders().get(session).cloned() else {
@@ -249,10 +243,12 @@ impl Dispatcher {
             return Reply::text(Exit::Success, format!("{released}\n{sent}"));
         }
         let waiting_on = self.running_verb(session);
-        self.note_turn_end(session, waiting_on.is_some(), ctx.clock.now());
+        if cli {
+            self.note_turn_end(session, waiting_on.is_some(), ctx.clock.now());
+        }
         if let Some(verb) = waiting_on {
             return pass(&format!(
-                "`ignite {verb}` is still running; Ignite wakes the session when it finishes"
+                "`ignite {verb}` is still running; the session can wait for it to finish"
             ));
         }
         let running = ended
@@ -290,7 +286,7 @@ impl Dispatcher {
                 format!(
                     "released {ticket} from {session}; its work is saved on the remote. \
                      Stop now: do not claim it or any other ticket and do not restart its \
-                     commands; the dispatcher hands you your next ticket."
+                     commands."
                 )
             }
             Err(error) => format!("pass     could not release {ticket} from {session}: {error}"),

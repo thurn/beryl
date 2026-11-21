@@ -99,7 +99,7 @@ pub struct Resume {
     pub prompt: String,
 }
 
-/// Whether a CLI session is working, as the dispatcher's `check` asks it of a desktop session.
+/// Whether a CLI session has a slot and a running turn.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SessionCheck {
     /// A turn's process runs: its turn lock is held.
@@ -110,18 +110,7 @@ pub enum SessionCheck {
     Gone,
 }
 
-impl SessionCheck {
-    /// The word a dispatcher's acknowledgement uses for the same answer.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            SessionCheck::Running => "running",
-            SessionCheck::Idle => "idle",
-            SessionCheck::Gone => "gone",
-        }
-    }
-}
-
-/// What the dispatcher calls for the apps that run in CLI mode on this machine.
+/// Starts and monitors CLI worker sessions.
 pub trait CliPool: Send + Sync {
     /// Takes a reservation the hub made for one of `app`'s CLI slots (its placeholder session
     /// is `cli-<app>-slot-<k>`), or for a CLI session whose ticket ended (the next ticket of a

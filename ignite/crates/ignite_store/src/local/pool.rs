@@ -103,6 +103,25 @@ pub fn set_setting(conn: &Connection, key: &str, value: Option<&str>) -> Result<
     Ok(())
 }
 
+/// Rows still used by CLI workers when upgrading from the desktop instruction queue.
+pub fn legacy_dispatch_state(conn: &Connection) -> Result<Vec<rows::DispatchEntry>> {
+    let mut statement = conn.prepare(
+        "SELECT kind, key, body FROM dispatch_queue
+         WHERE kind IN ('reserved', 'refused', 'stall', 'released', 'tell', 'cli_begin', 'meta')
+         ORDER BY rowid",
+    )?;
+    let rows = statement
+        .query_map([], |row| {
+            Ok(rows::DispatchEntry {
+                kind: row.get(0)?,
+                key: row.get(1)?,
+                body: row.get(2)?,
+            })
+        })?
+        .collect::<rusqlite::Result<_>>()?;
+    Ok(rows)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

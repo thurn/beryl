@@ -16,13 +16,10 @@ fn join_pool(rig: &Rig, session: &SessionId) {
         .put(&crate::pool::Member {
             session: session.clone(),
             app: "fake".to_owned(),
-            role: ignite_core::protocol::hub::WorkerRole::Worker,
             down: false,
             models: Vec::new(),
-            parent: None,
             files: Vec::new(),
             added_at: rig.clock.now(),
-            slots: 0,
             single_use: true,
         })
         .unwrap();

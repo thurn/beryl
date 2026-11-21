@@ -492,27 +492,25 @@ pub fn lock_held(lock: &Path) -> bool {
     matches!(file.try_lock(), Err(fs::TryLockError::WouldBlock))
 }
 
-/// The first app the machine `hostname` runs in CLI mode, in the order of the app names, where
-/// `overrides` gives the mode `ignite pool mode` forced on an app (`cli` or `desktop`).
+/// The first configured CLI app with worker slots and a justiciar model.
 pub fn first_cli_app(
     config: &ignite_core::config::Config,
     hostname: &str,
-    overrides: &dyn Fn(&str) -> Option<String>,
     checkout: &Path,
 ) -> Option<JusticiarApp> {
-    config.pool.cli.iter().find_map(|(name, program)| {
-        let configured = config.machine_pool(hostname, name).mode.as_str().to_owned();
-        let mode = overrides(name).unwrap_or(configured);
-        if mode != "cli" {
-            return None;
-        }
-        Some(JusticiarApp {
-            name: name.clone(),
-            program: program.clone(),
-            model: config.pool.model_id(name, TIER)?,
-            checkout: checkout.to_path_buf(),
+    config
+        .pool
+        .cli
+        .iter()
+        .filter(|(name, _)| config.machine_pool(hostname, name).slots > 0)
+        .find_map(|(name, program)| {
+            Some(JusticiarApp {
+                name: name.clone(),
+                program: program.clone(),
+                model: config.pool.model_id(name, TIER)?,
+                checkout: checkout.to_path_buf(),
+            })
         })
-    })
 }
 
 #[cfg(test)]

@@ -1,11 +1,10 @@
 //! Workers that end their turn waiting on an `ignite` verb are let stop and woken, and workers
-//! whose ticket Ignite released may not claim again until the dispatcher hands them a ticket.
+//! whose ticket Ignite released may only claim a successor the daemon reserved for them.
 
 use ignite_core::traits::Clock;
 
 use super::restart_tests::DbFile;
 use super::tests::{Rig, START, detail, lock, request, rig, rig_on, session, ticket_id};
-use super::wake::{WAKE, WAKE_S};
 use super::*;
 use crate::server::Verb;
 
@@ -15,7 +14,7 @@ fn holding() -> Rig {
     rig.hold("local_w1", "T.1");
     rig.hub
         .insert_ticket(detail("T.1", "in_progress", Some("local_w1"), &[], ""));
-    assert!(rig.step().is_none());
+    super::cli_tests::tick(&rig);
     rig
 }
 
@@ -50,15 +49,6 @@ fn runs_in_background(rig: &Rig, verb: &str) {
     );
 }
 
-/// The background verb of `local_w1` finished now.
-fn finishes(rig: &Rig) {
-    lock(&rig.host.verbs).remove(&session("local_w1"));
-    lock(&rig.host.commands)
-        .get_mut(&session("local_w1"))
-        .unwrap()
-        .since = rig.clock.now();
-}
-
 #[test]
 fn a_worker_waiting_on_a_background_run_is_let_stop_and_never_released() {
     let rig = holding();
@@ -69,43 +59,6 @@ fn a_worker_waiting_on_a_background_run_is_let_stop_and_never_released() {
     let again = ended(&rig, &["--session", "local_w1", "--again"]);
     assert_eq!(verdict(&again), "pass", "{again}");
     assert!(lock(&rig.host.releases).is_empty());
-    // While the run goes on, nothing checks the worker.
-    rig.clock.advance(WAKE_S * 5.0);
-    assert!(rig.step().is_none());
-}
-
-#[test]
-fn a_waiting_worker_nothing_woke_is_told_its_command_finished() {
-    let rig = holding();
-    runs_in_background(&rig, "test");
-    assert_eq!(verdict(&ended(&rig, &["--session", "local_w1"])), "pass");
-    rig.clock.advance(600.0);
-    finishes(&rig);
-    assert!(
-        rig.step().is_none(),
-        "checked before its tool could wake it"
-    );
-    rig.clock.advance(WAKE_S);
-    let check = rig.step().unwrap();
-    assert_eq!(check.action, DispatchAction::Check);
-    rig.ack(check.id, "idle", "");
-    let wake = rig.step().unwrap();
-    assert_eq!(wake.action, DispatchAction::Message);
-    assert_eq!(wake.prompt.as_deref(), Some(WAKE));
-    assert!(lock(&rig.host.releases).is_empty());
-}
-
-#[test]
-fn a_waiting_worker_its_tool_woke_gets_no_message() {
-    let rig = holding();
-    runs_in_background(&rig, "check");
-    assert_eq!(verdict(&ended(&rig, &["--session", "local_w1"])), "pass");
-    finishes(&rig);
-    rig.clock.advance(WAKE_S);
-    let check = rig.step().unwrap();
-    rig.ack(check.id, "running", "");
-    rig.clock.advance(60.0);
-    assert!(rig.step().is_none());
 }
 
 #[test]
@@ -148,64 +101,6 @@ fn a_worker_released_at_turn_end_may_not_claim_again() {
 }
 
 #[test]
-fn a_released_worker_may_start_only_the_ticket_handed_to_it() {
-    let rig = holding();
-    ended(&rig, &["--session", "local_w1", "--again"]);
-    assert!(rig.step().is_none());
-    rig.clock.advance(SETTLE_S);
-    rig.reserve("T.2", "local_w1", &[]);
-    let handoff = rig.step().unwrap();
-    assert_eq!(handoff.action, DispatchAction::Handoff);
-    assert!(handoff.clear, "a hand-off clears the session first");
-    let w1 = session("local_w1");
-    assert!(
-        rig.dispatcher
-            .refuse_start(&w1, Some(&ticket_id("T.2")))
-            .is_none()
-    );
-    assert!(
-        rig.dispatcher
-            .refuse_start(&w1, Some(&ticket_id("T.1")))
-            .is_some()
-    );
-    // Once it holds the handed ticket, the record ends.
-    rig.ack(handoff.id, "ok", "");
-    rig.hold("local_w1", "T.2");
-    rig.step();
-    assert!(
-        rig.dispatcher
-            .refuse_start(&w1, Some(&ticket_id("T.7")))
-            .is_none()
-    );
-}
-
-#[test]
-fn a_worker_released_by_the_stall_rule_may_not_claim_again() {
-    let rig = holding();
-    lock(&rig.host.commands).insert(
-        session("local_w1"),
-        SessionCommand {
-            command: "brief".to_owned(),
-            since: rig.clock.now(),
-            running: false,
-        },
-    );
-    rig.clock.advance(SILENT_S);
-    let check = rig.step().unwrap();
-    rig.ack(check.id, "idle", "");
-    let reminder = rig.step().unwrap();
-    rig.ack(reminder.id, "ok", "");
-    rig.clock.advance(IDLE_AFTER_MESSAGE_S);
-    let recheck = rig.step().unwrap();
-    rig.ack(recheck.id, "idle", "");
-    assert_eq!(lock(&rig.host.releases).len(), 1);
-    let refusal = rig
-        .dispatcher
-        .refuse_start(&session("local_w1"), Some(&ticket_id("T.1")));
-    assert!(refusal.is_some());
-}
-
-#[test]
 fn a_restarted_daemon_still_refuses_a_released_worker() {
     let file = DbFile::new("released");
     let now = Timestamp::from_millis(START);
@@ -214,7 +109,7 @@ fn a_restarted_daemon_still_refuses_a_released_worker() {
     first
         .hub
         .insert_ticket(detail("T.1", "in_progress", Some("local_w1"), &[], ""));
-    first.step();
+    super::cli_tests::tick(&first);
     ended(&first, &["--session", "local_w1", "--again"]);
     let restarted = rig_on(&[], file.open(), now);
     let refusal = restarted

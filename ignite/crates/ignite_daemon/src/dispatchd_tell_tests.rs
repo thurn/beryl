@@ -42,39 +42,46 @@ fn change(rig: &Rig, ticket: &str) {
     rig.dispatcher.poll_feed(&rig.ctx, 0).unwrap();
 }
 
-fn nothing_sent(rig: &Rig) {
-    assert!(rig.step().is_none());
-    assert!(lock(&rig.host.interrupts).is_empty());
-}
-
 #[test]
 fn a_release_does_not_send_a_tell_from_before_the_claim() {
-    let rig = rig(&["local_w1"]);
-    rig.hub
-        .insert_ticket(claimed("T.1", "local_w1", &[OLD_ORDER], CLAIMED_LATER));
-    rig.hold("local_w1", "T.1");
+    let rig = rig(&["cli-claude-00000001"]);
+    rig.hub.insert_ticket(claimed(
+        "T.1",
+        "cli-claude-00000001",
+        &[OLD_ORDER],
+        CLAIMED_LATER,
+    ));
+    rig.hold("cli-claude-00000001", "T.1");
+    let fake = super::cli_tests::cli(&rig, 1);
+    super::cli_tests::tick(&rig);
     rig.dispatcher.poll_feed(&rig.ctx, 0).unwrap();
     // The hub takes the ticket back, but the dispatcher still lists the session as the holder.
-    let mut released = claimed("T.1", "local_w1", &[OLD_ORDER], CLAIMED_LATER);
+    let mut released = claimed("T.1", "cli-claude-00000001", &[OLD_ORDER], CLAIMED_LATER);
     released.ticket.status = Status::Open;
     released.ticket.assignee = None;
     released.ticket.session = None;
     released.ticket.claimed_at = None;
     rig.hub.insert_ticket(released);
     change(&rig, "T.1");
-    nothing_sent(&rig);
+    assert!(fake.sent().is_empty());
 }
 
 #[test]
 fn a_restarted_dispatcher_does_not_send_a_tell_from_before_the_claim() {
     // A fresh dispatcher has an empty record of the tells it sent.
-    let rig = rig(&["local_w1"]);
-    rig.hub
-        .insert_ticket(claimed("T.1", "local_w1", &[OLD_ORDER], CLAIMED_LATER));
-    rig.hold("local_w1", "T.1");
+    let rig = rig(&["cli-claude-00000001"]);
+    rig.hub.insert_ticket(claimed(
+        "T.1",
+        "cli-claude-00000001",
+        &[OLD_ORDER],
+        CLAIMED_LATER,
+    ));
+    rig.hold("cli-claude-00000001", "T.1");
+    let fake = super::cli_tests::cli(&rig, 1);
+    super::cli_tests::tick(&rig);
     rig.dispatcher.poll_feed(&rig.ctx, 0).unwrap();
     change(&rig, "T.1");
-    nothing_sent(&rig);
+    assert!(fake.sent().is_empty());
 }
 
 /// A Claude CLI session that holds T.1, which it claimed long before any tell, with the

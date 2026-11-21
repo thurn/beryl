@@ -316,8 +316,7 @@ fn with_entry(
 mod tests {
     use super::*;
 
-    /// The instructions, the line every instruction ends with and the CLI's default all name
-    /// the same wait, so the dispatcher is never told two different ones.
+    /// The legacy setup instructions name the CLI's default wait.
     #[test]
     fn every_text_names_the_default_wait() {
         let wait = format!(
@@ -325,7 +324,6 @@ mod tests {
             ignite_core::protocol::client::DISPATCH_WAIT_S
         );
         assert!(INSTRUCTIONS.contains(&wait));
-        assert!(ignite_daemon::dispatchd::LOOP.contains(&wait));
     }
 
     fn scratch(name: &str) -> PathBuf {

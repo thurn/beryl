@@ -1,21 +1,4 @@
-//! CLI mode in the assembled daemon (see "CLI mode" in the design document): the CLI pool over
-//! the machine's local database, its turns run as supervised commands, the dispatcher's link
-//! to it, and the two loops that follow it.
-//!
-//! - Every app that `[pool.cli.<app>]` gives a program gets an adapter, whether or not it runs
-//!   in CLI mode now: `ignite pool mode` can switch an app without a restart, and the
-//!   dispatcher reads the mode on every step.
-//! - Before the daemon's socket answers, [`crate::clid::CliDaemon::recover`] starts each turn a
-//!   stopped daemon recorded and never started. Turns that run are followed by the loop.
-//! - The `ignite-cli` loop runs [`crate::clid::CliDaemon::step`] about once a second.
-//! - The `ignite-cli-health` loop runs the probe turns of the apps in CLI mode and sends each
-//!   CLI hold's report ([`Health::tick`]). A probe runs a whole turn, so it has a loop of its
-//!   own and never holds up the turns of other slots.
-//! - The `ignite-cli-dispatch` loop runs [`Dispatcher::tick`] every [`DISPATCH_EVERY`] while
-//!   any app is in CLI mode, so idle CLI slots are offered to the hub. A machine whose apps all
-//!   run in CLI mode has no dispatcher session, and nothing else asks for its steps once every
-//!   worker is idle: before this loop, such a machine stopped taking tickets until some `ignite`
-//!   verb happened to run a dispatch step.
+//! Connects the CLI worker supervisors to the daemon’s launch, health and ticket loops.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -25,7 +8,7 @@ use std::time::Duration;
 use ignite_core::cli::CliApp;
 use ignite_core::cli::claude::Claude;
 use ignite_core::cli::codex::Codex;
-use ignite_core::config::{Config, PoolMode};
+use ignite_core::config::Config;
 use ignite_core::traits::Result;
 
 use super::assemble::{Base, Desks, Machinery};
@@ -47,7 +30,7 @@ const HEALTH_EVERY: Duration = Duration::from_secs(30);
 const HEALTH_STALLS_AFTER: Duration = Duration::from_mins(30);
 /// The name the health loop registers under.
 const HEALTH_LOOP: &str = "ignite-cli-health";
-/// How often the dispatch loop runs the dispatcher's step. A step asks the hub for tickets only
+/// How often the daemon asks for tickets. A step asks the hub for tickets only
 /// while a worker is idle and a ticket tree is free.
 const DISPATCH_EVERY: Duration = Duration::from_secs(10);
 /// A dispatch round asks the hub once per group of idle workers and reads each reserved ticket.
@@ -74,7 +57,7 @@ pub struct CliMode {
 
 /// Builds the CLI pool when `ignite.toml` gives any app a CLI program, starts the turns a
 /// stopped daemon recorded and never started, and gives the pool to the dispatcher. `None`
-/// when no app has a program, so every app runs with its desktop dispatcher.
+/// when no app has a program.
 pub fn cli_mode(
     base: &Base,
     ctx: &Context,
@@ -175,7 +158,7 @@ impl CliMode {
                     // Only the apps in CLI mode now are probed: a probe costs a turn.
                     let running: Vec<&dyn CliApp> = apps
                         .iter()
-                        .filter(|app| dispatcher.mode(app.name()).0 == PoolMode::Cli)
+                        .filter(|app| dispatcher.cli_enabled(app.name()))
                         .map(AsRef::as_ref)
                         .collect();
                     health.tick(&ctx, &running);
@@ -189,10 +172,7 @@ impl CliMode {
         parts.start_loop(DISPATCH_LOOP, DISPATCH_STALLS_AFTER, move |ticker| {
             loop {
                 ticker.round(|| {
-                    if apps
-                        .iter()
-                        .any(|app| dispatcher.mode(app.name()).0 == PoolMode::Cli)
-                    {
+                    if apps.iter().any(|app| dispatcher.cli_enabled(app.name())) {
                         dispatcher.tick(&ctx);
                     }
                     Ok(())

@@ -5,13 +5,12 @@
 use std::fmt::Write as _;
 
 use ignite_core::cli::{Slot, SlotState};
-use ignite_core::config::PoolMode;
 use ignite_core::ids::SessionId;
 use ignite_core::protocol::cli::{TranscriptKind, TranscriptLine};
 use ignite_core::time::Timestamp;
 use ignite_core::traits::Result;
 
-use super::{APPS, Dispatcher};
+use super::Dispatcher;
 
 /// `seconds` as the largest whole unit, such as `45s`, `12m` or `3h`.
 pub(crate) fn duration(seconds: f64) -> String {
@@ -70,10 +69,7 @@ impl Dispatcher {
             return Vec::new();
         };
         let mut lines = Vec::new();
-        for app in APPS {
-            if self.mode(app).0 != PoolMode::Cli {
-                continue;
-            }
+        for app in self.cli_apps() {
             if let Some(hold) = cli.pool.held(app) {
                 lines.push(format!(
                     "hold     {app} CLI hold for {} ({}): {}",

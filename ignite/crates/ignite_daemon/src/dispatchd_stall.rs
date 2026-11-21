@@ -1,42 +1,15 @@
-//! Workers that went silent: a working session that has run no `ignite` command for 30 minutes
-//! is checked through the dispatcher. A running one is left alone, an idle one is asked once to
-//! continue or release, and its ticket is released only when the app says the session is gone,
-//! or that it is still idle 15 minutes after the reminder. A failed lookup proves nothing.
-//!
-//! A command stuck far past its time counts as a stall too, although it is running: a verb other
-//! than `wait`, `land`, `release` or `close` that has run for 45 minutes, or whose current step
-//! has lasted 30. A worker once sat in `ignite wait` on an `ignite test` that spent 55 minutes
-//! in one step, and was never silent, so nothing looked at it for hours. Such a worker is
-//! checked the same way, and an idle one gets a message that names the command, its step and
-//! how long each has run, and says what to do with a ticket that cannot go on. A session with a
-//! `land`, `release` or `close` running is never looked at for a stuck command: a landing's long
-//! waits belong to the landing queue and tip verification.
-//!
-//! A worker that ended its turn waiting on an `ignite` verb is looked at sooner, once the verb
-//! has finished (see `wake`), and an idle one is told the verb finished rather than that it has
-//! been silent.
-//!
-//! Every answer leaves a record of when the session was checked, so the next check comes 30
-//! minutes later. A `running` answer used to remove the record, and the next step found the same
-//! silence and asked again: one worker writing code without running `ignite` was checked about
-//! twice a minute. A release that failed did the same, which reminded an archived session every
-//! 15 minutes for hours.
-//!
-//! A CLI session (see `cli`) is watched by the same rules. Its `check` is answered at once by the
-//! CLI pool instead of a dispatcher, and its reminder is queued for its next turn.
+//! Checks CLI workers that go silent or whose commands stop making progress.
 
 use std::fmt::Write as _;
 
 use serde::{Deserialize, Serialize};
 
 use ignite_core::ids::{SessionId, TicketId};
-use ignite_core::protocol::client::DispatchAction;
 use ignite_core::time::Timestamp;
 
 use super::wake::WAKE;
-use super::{
-    CONTINUE, Dispatcher, IDLE_AFTER_MESSAGE_S, Purpose, SILENT_S, Stall, State, ends_ticket,
-};
+use super::{CONTINUE, Dispatcher, IDLE_AFTER_MESSAGE_S, SILENT_S, Stall, State, cli, ends_ticket};
+use crate::clid::SessionCheck;
 use crate::loop_health::span;
 use crate::server::Context;
 
@@ -118,20 +91,18 @@ impl DueRelease {
 }
 
 impl Dispatcher {
-    /// Acts on a `check` answer for `session`. Returns what to add to the acknowledgement and,
-    /// when the session's ticket is to be given back, the release for the caller to carry out
-    /// with the state unlocked (it asks the hub).
+    /// Handles a CLI session check and returns any release to perform outside the state lock.
     pub(super) fn checked(
         &self,
         state: &mut State,
         ctx: &Context,
         session: &SessionId,
-        answer: &str,
-    ) -> (String, Option<DueRelease>) {
+        answer: SessionCheck,
+    ) -> Option<DueRelease> {
         let now = ctx.clock.now();
         let holding = self.host.holders().get(session).cloned();
         match answer {
-            "running" => {
+            SessionCheck::Running => {
                 // A stuck command's record is kept, so the same stuck command is looked at again
                 // only after another 30 minutes.
                 let stuck = state.stalls.remove(session).and_then(|stall| stall.stuck);
@@ -144,24 +115,16 @@ impl Dispatcher {
                         woken: false,
                     },
                 );
-                (format!("; {session} is running"), None)
+                None
             }
-            "gone" => {
+            SessionCheck::Gone => {
                 let _ = self.pool.update(session, |m| m.down = true);
                 state.stalls.remove(session);
                 state.reserved.remove(session);
-                match holding {
-                    Some(ticket) => (
-                        String::new(),
-                        Some(DueRelease::new(session, ticket, "the session is gone")),
-                    ),
-                    None => (format!("; {session} is down"), None),
-                }
+                holding.map(|ticket| DueRelease::new(session, ticket, "the session is gone"))
             }
-            "idle" => {
-                let Some(ticket) = holding else {
-                    return (format!("; {session} is idle"), None);
-                };
+            SessionCheck::Idle => {
+                let ticket = holding?;
                 let stall = state.stalls.entry(session.clone()).or_insert(Stall {
                     checked_at: now,
                     messaged_at: None,
@@ -174,14 +137,12 @@ impl Dispatcher {
                     None => {
                         stall.messaged_at = Some(now);
                         let message = stuck.as_deref().unwrap_or(unprompted);
-                        Self::queue(
-                            state,
-                            Some(session),
-                            DispatchAction::Message,
-                            message,
-                            Purpose::Message,
-                        );
-                        (format!("; asked {session} to continue or release"), None)
+                        state.cli_calls.push(cli::Call::Message {
+                            session: session.clone(),
+                            text: message.to_owned(),
+                            urgent: false,
+                        });
+                        None
                     }
                     // The record stays, so that a release that fails is tried again only at the
                     // next check, 30 minutes on. A release that works ends the hold, and with it
@@ -193,28 +154,23 @@ impl Dispatcher {
                         } else {
                             "the session stayed idle after a reminder"
                         };
-                        (
-                            String::new(),
-                            Some(DueRelease::new(session, ticket, reason)),
-                        )
+                        Some(DueRelease::new(session, ticket, reason))
                     }
-                    Some(_) => (String::new(), None),
+                    Some(_) => None,
                 }
             }
-            // `unknown`, `ok` or `failed`: a lookup that failed proves nothing.
-            _ => (String::new(), None),
         }
     }
 
-    /// Gives a ticket back, and says what happened for the acknowledgement's text.
+    /// Gives a ticket back, and returns the outcome for the daemon log.
     pub(super) fn release(&self, due: &DueRelease) -> String {
         let (session, ticket, reason) = (&due.session, &due.ticket, due.reason);
         match self.host.release(session, ticket, reason) {
             Ok(()) => {
                 self.note_released(session, ticket);
-                format!("; released {ticket} from {session}: {reason}")
+                format!("released {ticket} from {session}: {reason}")
             }
-            Err(error) => format!("; could not release {ticket} from {session}: {error}"),
+            Err(error) => format!("could not release {ticket} from {session}: {error}"),
         }
     }
 
@@ -222,7 +178,12 @@ impl Dispatcher {
     /// stuck past its time.
     pub(super) fn watch_silence(&self, state: &mut State, now: Timestamp) {
         Self::forget_settled(state);
-        let sessions: Vec<SessionId> = state.held.keys().cloned().collect();
+        let sessions: Vec<SessionId> = state
+            .held
+            .keys()
+            .filter(|session| cli::is_cli_session(session))
+            .cloned()
+            .collect();
         for session in sessions {
             if let Some(stuck) = self.stuck(&session, now) {
                 Self::watch_stuck(state, &session, stuck, now);
@@ -272,7 +233,7 @@ impl Dispatcher {
                 });
                 stall.checked_at = now;
                 stall.stuck = None;
-                Self::queue_check(state, &session);
+                state.cli_calls.push(cli::Call::Check { session });
             }
         }
     }
@@ -322,15 +283,16 @@ impl Dispatcher {
             });
             stall.checked_at = now;
             stall.stuck = Some(stuck);
-            Self::queue_check(state, session);
+            state.cli_calls.push(cli::Call::Check {
+                session: session.clone(),
+            });
         }
     }
 
     pub(super) fn check_outstanding(state: &State, session: &SessionId) -> bool {
         state
-            .pending
+            .cli_calls
             .iter()
-            .chain(state.given.values().map(|g| &g.queued))
-            .any(|q| q.purpose == Purpose::Check && q.body.session.as_ref() == Some(session))
+            .any(|call| matches!(call, cli::Call::Check { session: pending } if pending == session))
     }
 }

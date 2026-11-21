@@ -679,7 +679,7 @@ fn model_findings(config: &Config) -> Option<Finding> {
 fn cli_findings(config: &Config, host: &dyn Host, hostname: &str) -> Vec<Finding> {
     crate::dispatchd::APPS
         .into_iter()
-        .filter(|app| config.machine_pool(hostname, app).mode == ignite_core::config::PoolMode::Cli)
+        .filter(|app| config.machine_pool(hostname, app).slots > 0)
         .filter_map(|app| {
             let program = config.cli_program(app)?;
             host.tool_path(&program.program).is_none().then(|| {
@@ -691,8 +691,7 @@ fn cli_findings(config: &Config, host: &dyn Host, hostname: &str) -> Vec<Finding
                         program.program
                     ),
                     format!(
-                        "install `{}` or put its folder on the PATH of the daemon's service, or \
-                         run `ignite pool mode {app} desktop`",
+                        "install `{}` or put its folder on the PATH of the daemon's service",
                         program.program
                     ),
                 )

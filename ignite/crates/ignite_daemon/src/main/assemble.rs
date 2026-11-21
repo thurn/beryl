@@ -26,7 +26,7 @@ use crate::checks::sources::HubHistory;
 use crate::checks::verbs::{CheckVerb, TestVerb, WhyVerb};
 use crate::checks::{CheckSettings, Checks};
 use crate::claim::{BriefVerb, ClaimHook, Claims, CloseVerb, ReleaseVerb, StartVerb};
-use crate::dispatchd::{DispatchVerb, Dispatcher, Setup, TellVerb, TurnEndedVerb};
+use crate::dispatchd::{Dispatcher, Setup, TellVerb, TurnEndedVerb};
 use crate::doctor::{
     self, AdmissionSection, CoresSection, DoctorVerb, GitTrees, LoopsSection, NativeHost,
     StatusSection, StatusVerb, TreesSection,
@@ -421,7 +421,6 @@ pub fn desks(base: &Base, ctx: &Context, machinery: &Machinery) -> Result<Desks>
     let setup = Setup {
         os: base.os,
         families: base.families().unwrap_or_default(),
-        plan_usage: true,
     };
     let dispatcher = Arc::new(Dispatcher::new(
         Pool::new(base.open()?),
@@ -466,7 +465,7 @@ pub fn server(
     registry.register(Box::new(SyncVerb {
         landing: parts.landing.clone(),
     }));
-    registry.register(Box::new(DispatchVerb::new(parts.dispatcher.clone())));
+    registry.register(Box::new(RemovedDispatchVerb));
     registry.register(Box::new(
         PoolVerb::new(parts.dispatcher.clone()).ending(parts.emergencies.clone()),
     ));
@@ -712,6 +711,28 @@ fn toolchain(repo: &Path) -> String {
         .filter(|out| out.status.success())
         .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_owned())
         .unwrap_or_default()
+}
+
+/// Answers older clients until they stop sending desktop dispatch requests.
+struct RemovedDispatchVerb;
+
+impl crate::server::Verb for RemovedDispatchVerb {
+    fn name(&self) -> &'static str {
+        "dispatch"
+    }
+
+    fn needs_the_tree_lease(&self) -> bool {
+        false
+    }
+
+    fn run(
+        &self,
+        _ctx: &Context,
+        _req: &ignite_core::protocol::client::Request,
+    ) -> ignite_core::protocol::client::Reply {
+        use ignite_core::protocol::client::{Exit, Reply};
+        Reply::text(Exit::Usage, "the desktop dispatcher was removed")
+    }
 }
 
 #[cfg(test)]

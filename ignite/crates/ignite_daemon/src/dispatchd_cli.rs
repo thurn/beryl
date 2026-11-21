@@ -1,36 +1,12 @@
-//! The dispatcher's side of CLI mode (see "CLI mode" in the design document): an app in CLI mode
-//! on this machine runs its workers as headless CLI processes that the daemon starts itself
-//! through [`CliPool`], so it needs no dispatcher session.
-//!
-//! - The app's mode is read on every step: the override `ignite pool mode` stored in the local
-//!   database, or else `[machine.<host>.pool.<app>]` in `ignite.toml`. An app is in CLI mode only
-//!   while the daemon has a [`CliPool`] and `[pool.cli.<app>]` names its program. A switch never
-//!   touches a ticket in progress: workers of the old mode finish, and only new hand-offs follow
-//!   the new mode.
-//! - An app in CLI mode offers the hub `slots` idle workers, and one more that takes only tickets
-//!   that hold `master` back (see `slots`). "Dispatcher down" never stops its hand-offs. Its
-//!   slots are offered only once a probe turn has passed since the daemon started, and never
-//!   while the app is on a CLI hold ([`CliPool::offers`]); a hold also starts no session.
-//! - A hand-off to a CLI slot, and a message or a `check` for a CLI session, never enters the
-//!   instruction queue. Each is recorded as a [`Call`] while the state is locked, and carried out
-//!   through [`CliPool`] once it is unlocked, since starting a turn writes to the database and
-//!   starts a process. The settle time, refusals, clears, read-backs and rotation of the desktop
-//!   dispatcher do not apply.
-//! - A `check` of a CLI session is answered at once by [`CliPool::check`], and the answer goes
-//!   through the same stall rules as a desktop dispatcher's (see `stall`).
-//! - With the hub unreachable for 15 minutes, the daemon starts a CLI session with the justiciar
-//!   prompt and no ticket, before it tries a desktop worker (see `justiciar`).
+//! Starts CLI workers for hub reservations and delivers checks and messages to them.
 
 use std::sync::Arc;
 
-use ignite_core::config::{Config, PoolMode};
+use ignite_core::config::Config;
 use ignite_core::ids::SessionId;
-use ignite_core::protocol::cli::{PoolModeReply, PoolModeSetting};
 use ignite_core::protocol::hub::Reservation;
-use ignite_core::traits::{Error, Result};
-use ignite_store::local::cli_slots;
 
-use super::{Dispatcher, Reserved, State, justiciar};
+use super::{Dispatcher, Reserved, State};
 use crate::clid::{CliPool, Resume};
 use crate::pool::{CLAUDE_MODELS, Member};
 use crate::server::Context;
@@ -38,7 +14,7 @@ use crate::server::Context;
 /// The apps a machine may run.
 pub const APPS: [&str; 2] = ["claude", "codex"];
 
-/// What the dispatcher needs to run apps in CLI mode.
+/// The worker supervisor and configuration for this machine.
 pub(super) struct CliMode {
     pub(super) pool: Arc<dyn CliPool>,
     /// The machine's hostname, which names its `[machine.<host>]` table.
@@ -56,13 +32,11 @@ pub(super) struct Layout {
     /// The tiers the app runs, matched against a ticket's `tier:` label.
     pub(super) models: Vec<String>,
     /// Whether the slots are offered to the hub: a probe turn has passed since the daemon
-    /// started and the app is on no CLI hold. A held app stays in CLI mode, so its desktop
-    /// workers are offered nothing either.
+    /// started and the app is on no CLI hold.
     pub(super) offered: bool,
 }
 
-/// Something to ask the [`CliPool`] once the state is unlocked. A `Begin` is saved with the
-/// dispatcher's queue until it has run (see `store`).
+/// Work to send to the CLI supervisor once the state is unlocked. A pending start is saved until it runs.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(super) enum Call {
     /// Start a session for `reserved` in the slot whose placeholder is `slot`, or, when `slot`
@@ -82,7 +56,7 @@ pub(super) enum Call {
         text: String,
         urgent: bool,
     },
-    /// Ask whether the session is running, and apply the answer as a `check` acknowledgement.
+    /// Check whether the worker still has a running turn.
     Check { session: SessionId },
 }
 
@@ -136,11 +110,6 @@ pub(super) fn is_extra_slot(state: &State, session: &SessionId) -> bool {
     })
 }
 
-/// Whether `app` runs in CLI mode at the last step.
-pub(super) fn in_cli_mode(state: &State, app: &str) -> bool {
-    state.cli_layout.iter().any(|layout| layout.app == app)
-}
-
 /// The tiers `app` runs: its `[pool.models.<app>]` table's, or for Claude without one, every
 /// Claude tier. An empty list leaves the choice to `offered_models` (see `work`).
 fn tiers(config: &Config, app: &str) -> Vec<String> {
@@ -152,8 +121,7 @@ fn tiers(config: &Config, app: &str) -> Vec<String> {
 }
 
 impl Dispatcher {
-    /// Lets the dispatcher run apps in CLI mode through `pool`, on the machine named `hostname`
-    /// in `config`. Without it, every app runs with its desktop dispatcher.
+    /// Connects the CLI supervisor to the worker pool.
     pub fn set_cli(&self, pool: Arc<dyn CliPool>, hostname: &str, config: &Config) {
         let _ = self.cli.set(CliMode {
             pool,
@@ -162,62 +130,17 @@ impl Dispatcher {
         });
     }
 
-    /// The mode `app` runs in now, and whether `ignite pool mode` forced it.
-    pub fn mode(&self, app: &str) -> (PoolMode, bool) {
-        let stored = self
-            .pool
-            .with_database(|conn| cli_slots::mode_override(conn, app))
-            .ok()
-            .flatten()
-            .and_then(|word| PoolModeSetting::parse(&word))
-            .and_then(PoolModeSetting::mode);
-        let Some(cli) = self.cli.get() else {
-            return (PoolMode::Desktop, stored.is_some());
-        };
-        let wanted = stored.unwrap_or_else(|| cli.config.machine_pool(&cli.hostname, app).mode);
-        // A program is what a CLI turn runs, so an app without one stays with its dispatcher.
-        let runnable = cli.config.cli_program(app).is_some();
-        let mode = if wanted == PoolMode::Cli && runnable {
-            PoolMode::Cli
-        } else {
-            PoolMode::Desktop
-        };
-        (mode, stored.is_some())
-    }
-
-    /// `ignite pool mode <app> <setting>`: stores the override, or removes it for `config`.
-    pub fn set_mode(&self, app: &str, setting: PoolModeSetting) -> Result<PoolModeReply> {
-        if !APPS.contains(&app) {
-            return Err(Error::Invalid(format!("unknown app {app}")));
-        }
-        let word = setting.mode().map(PoolMode::as_str);
-        self.pool
-            .with_database(|conn| cli_slots::set_mode_override(conn, app, word))
-            .map_err(|e| Error::Io(e.to_string()))?;
-        let (mode, overridden) = self.mode(app);
-        self.update_cli_layout();
-        Ok(PoolModeReply {
-            app: app.to_owned(),
-            mode,
-            overridden,
+    /// Whether the configured app has worker slots on this machine.
+    pub fn cli_enabled(&self, app: &str) -> bool {
+        self.cli.get().is_some_and(|cli| {
+            cli.config.cli_program(app).is_some()
+                && cli.config.machine_pool(&cli.hostname, app).slots > 0
         })
     }
 
-    /// Why `app` runs with its dispatcher although CLI mode was asked for, if it does.
-    pub fn cli_unavailable(&self, app: &str) -> Option<String> {
-        let Some(cli) = self.cli.get() else {
-            return Some("this daemon runs no CLI turns".to_owned());
-        };
-        if cli.config.cli_program(app).is_none() {
-            return Some(format!("ignite.toml has no [pool.cli.{app}] table"));
-        }
-        None
-    }
-
-    /// Apps in effective CLI mode, including apps that are not offering slots.
+    /// The configured providers that can take work on this machine.
     pub fn cli_apps(&self) -> impl Iterator<Item = &'static str> + '_ {
-        APPS.into_iter()
-            .filter(|app| self.mode(app).0 == PoolMode::Cli)
+        APPS.into_iter().filter(|app| self.cli_enabled(app))
     }
 
     /// The slots each app in CLI mode has: `slots` from `ignite.toml`, and one more for tickets
@@ -236,19 +159,10 @@ impl Dispatcher {
             .collect()
     }
 
-    /// Reads each app's mode again, so that a switch takes effect at the next step.
+    /// Updates the slots offered based on the latest probe results and holds.
     pub(super) fn update_cli_layout(&self) {
         let layouts = self.cli_layouts();
         self.state().cli_layout = layouts;
-    }
-
-    /// Brings the state up to date, as a dispatcher's step does, without giving an instruction:
-    /// hands tickets to free CLI slots, and checks silent CLI sessions. The CLI loop calls it,
-    /// since a machine whose apps all run in CLI mode has no dispatcher to ask for steps.
-    pub fn tick(&self, ctx: &Context) {
-        let members = self.pool.members().unwrap_or_default();
-        self.refresh(ctx, &members);
-        self.save();
     }
 
     /// Carries out the calls queued while the state was locked, and those that carrying them
@@ -258,8 +172,7 @@ impl Dispatcher {
     /// reservation to the new session. A daemon that dies before then runs it again after its
     /// restart, and [`CliPool::begin`] returns the session it already started, if it did.
     ///
-    /// Before the daemon gives the dispatcher its CLI pool, a `Begin` restored from the saved
-    /// queue waits in `cli_calls` until its reservation lapses.
+    /// A restored start waits for the CLI pool to be attached or its reservation to lapse.
     pub(super) fn run_cli_calls(&self, ctx: &Context) {
         loop {
             let calls = {
@@ -285,6 +198,7 @@ impl Dispatcher {
             if calls.is_empty() {
                 break;
             }
+            self.save();
             self.run_cli_batch(ctx, calls);
         }
         self.save();
@@ -330,10 +244,10 @@ impl Dispatcher {
                 Call::Check { session } => {
                     let answer = cli.pool.check(&session);
                     let mut state = self.state();
-                    let (_, release) = self.checked(&mut state, ctx, &session, answer.as_str());
+                    let release = self.checked(&mut state, ctx, &session, answer);
                     drop(state);
                     if let Some(due) = release {
-                        eprintln!("ignite: {}", self.release(&due).trim_start_matches("; "));
+                        eprintln!("ignite: {}", self.release(&due));
                     }
                 }
             }
@@ -342,8 +256,7 @@ impl Dispatcher {
 
     /// Starts a session for `reserved` in `slot`. The session joins the pool as a single-use
     /// worker and takes the reservation, so stall checks, messages and tells reach it. A start
-    /// that fails frees the slot, which is left alone for a minute, as a desktop worker that
-    /// refused a hand-off is, and the reservation lapses at the hub.
+    /// that fails frees the slot for a retry after one minute. Its reservation lapses at the hub.
     fn begin(
         &self,
         ctx: &Context,
@@ -426,13 +339,10 @@ impl Dispatcher {
             let member = Member {
                 session: session.clone(),
                 app: reserved.app.clone(),
-                role: ignite_core::protocol::hub::WorkerRole::Worker,
                 down: false,
                 models: tiers(&cli.config, &reserved.app),
-                parent: None,
                 files: Vec::new(),
                 added_at: now,
-                slots: 0,
                 single_use: true,
             };
             if let Err(error) = self.pool.put(&member) {
@@ -450,20 +360,26 @@ impl Dispatcher {
         state.reserved.insert(session, reserved);
     }
 
-    /// Starts a justiciar CLI session with `prompt` and no ticket, in the first app in CLI mode
-    /// that has an ID for the justiciar's tier. Returns the session, or `None` when no app runs
-    /// in CLI mode or the start failed, so that a desktop worker is tried instead. The caller
-    /// has checked that no justiciar is within its hold.
-    pub(super) fn cli_justiciar(&self, ctx: &Context, prompt: &str) -> Option<SessionId> {
+    /// Starts a local justiciar when the hub is unreachable and one is not already on duty.
+    pub fn hand_off_justiciar(&self, ctx: &Context, prompt: &str) -> Option<SessionId> {
+        const HOLD_S: f64 = 2.0 * 3_600.0;
+        const TIER: &str = "opus";
+        const EFFORT: &str = "high";
+        let now = ctx.clock.now();
+        if self
+            .state()
+            .justiciar
+            .as_ref()
+            .is_some_and(|(_, at)| now.seconds_since(*at) < HOLD_S)
+        {
+            return None;
+        }
         let cli = self.cli.get()?;
         let (app, model) = self.cli_layouts().into_iter().find_map(|layout| {
-            let id = ctx.config.pool.model_id(&layout.app, justiciar::TIER)?;
+            let id = ctx.config.pool.model_id(&layout.app, TIER)?;
             Some((layout.app, id))
         })?;
-        match cli
-            .pool
-            .begin_justiciar(&app, prompt, &model, justiciar::EFFORT)
-        {
+        match cli.pool.begin_justiciar(&app, prompt, &model, EFFORT) {
             Ok(session) => {
                 self.state().justiciar = Some((session.clone(), ctx.clock.now()));
                 self.save();

@@ -1,8 +1,7 @@
 //! `ignite tell`: a correction to work in flight. The text becomes a comment on the ticket, and
 //! the ticket's metadata key `tell` is set to that comment's number in the same batch. The
-//! daemon of the machine where the ticket is held sees the new number in the feed and sends the
-//! text to the session working it (see `deliver_tell`). A ticket nobody holds gets only the
-//! comment, which whoever starts it reads in the brief.
+//! daemon sees the new number in the feed and sends the text when a CLI worker holds the ticket.
+//! Anyone working from a desktop session can read the comment on the ticket.
 //!
 //! An ordinary tell reaches the session when its turn ends. For a CLI worker (a session the
 //! daemon runs as headless CLI turns, `cli-<app>-<id>`) a tell can also be urgent: `--now`, and
@@ -77,10 +76,15 @@ fn held(ticket: &Ticket) -> bool {
     ticket.status == Status::InProgress && ticket.session.is_some()
 }
 
+/// Whether the daemon can send the comment to the ticket holder's next turn.
+fn deliverable(ticket: &Ticket) -> bool {
+    held(ticket) && ticket.session.as_ref().is_some_and(is_cli_session)
+}
+
 /// Whether the tell is urgent for `ticket`'s holder: it is held by a CLI worker, and the sender
 /// asked for `--now` or holds a justiciar ticket (`justiciar`).
 fn urgent(ticket: &Ticket, now: bool, justiciar: bool) -> bool {
-    held(ticket) && ticket.session.as_ref().is_some_and(is_cli_session) && (now || justiciar)
+    deliverable(ticket) && (now || justiciar)
 }
 
 /// Whether the sending session holds an in-progress ticket labelled `justiciar`, among
@@ -113,8 +117,8 @@ fn tell_one(ctx: &Context, req: &Request, target: &str, text: &str, now: bool) -
             .cloned()
             .ok_or_else(|| Error::Invalid(format!("{session} holds no ticket")))?
     };
-    let mark = held(&ticket);
-    if let (true, true, Some(session)) = (now, mark, &ticket.session)
+    let mark = deliverable(&ticket);
+    if let (true, true, Some(session)) = (now, held(&ticket), &ticket.session)
         && !is_cli_session(session)
     {
         return Ok(Reply::text(
@@ -132,6 +136,9 @@ fn tell_one(ctx: &Context, req: &Request, target: &str, text: &str, now: bool) -
             ticket.id
         ),
         (Some(session), true) => format!("told     {} and its session {session}", ticket.id),
+        (Some(session), false) if held(&ticket) => {
+            format!("commented {} for desktop session {session}", ticket.id)
+        }
         _ => format!(
             "commented {}; nobody holds it, so whoever starts it reads it in the brief",
             ticket.id
@@ -145,16 +152,21 @@ fn tell_all(ctx: &Context, req: &Request, text: &str) -> Result<Reply> {
     let justiciar = from_justiciar(req, &in_progress);
     let tickets: Vec<(TicketId, bool, bool)> = in_progress
         .iter()
-        .map(|t| (t.id.clone(), held(t), urgent(t, false, justiciar)))
+        .map(|t| (t.id.clone(), deliverable(t), urgent(t, false, justiciar)))
         .collect();
     if tickets.is_empty() {
         return Ok(Reply::text(Exit::Success, "no ticket is in progress"));
     }
     write(ctx, &tickets, text)?;
     let names: Vec<&str> = tickets.iter().map(|(id, _, _)| id.as_str()).collect();
+    let action = if tickets.iter().all(|(_, delivered, _)| *delivered) {
+        "told"
+    } else {
+        "commented"
+    };
     Ok(Reply::text(
         Exit::Success,
-        format!("told     {}", names.join(", ")),
+        format!("{action} {}", names.join(", ")),
     ))
 }
 

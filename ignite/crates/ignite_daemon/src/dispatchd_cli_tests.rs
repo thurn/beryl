@@ -1,6 +1,5 @@
-//! An app in CLI mode: its slots take tickets through the CLI pool with no dispatcher, the extra
-//! slot takes only tickets that hold `master` back, and messages and checks for its sessions go
-//! to the CLI pool instead of the instruction queue.
+//! CLI workers take reservations, receive messages, and resume when their commands finish.
+//! Each provider keeps an extra slot for tickets that hold `master` back.
 
 use ignite_core::config::{CliProgram, MachinePool, PoolMode};
 use ignite_core::protocol::hub::Reservation;
@@ -93,10 +92,6 @@ fn an_app_in_cli_mode_hands_off_through_the_cli_pool_without_a_dispatcher() {
         (model.as_str(), effort.as_deref()),
         ("opus", Some("medium"))
     );
-    assert!(
-        rig.step().is_none(),
-        "a CLI hand-off never enters the instruction queue"
-    );
 
     // The new session joins the pool, holds the reservation, and fills a slot.
     let member = rig
@@ -115,7 +110,7 @@ fn an_app_in_cli_mode_hands_off_through_the_cli_pool_without_a_dispatcher() {
         .filter(|w| w.state == "idle")
         .map(|w| w.session.as_str())
         .collect();
-    // As with a Codex dispatcher's slots, the sessions fill the lowest numbers first.
+    // The sessions fill the lowest slot numbers first.
     assert_eq!(idle, ["cli-claude-slot-2", "cli-claude-slot-3"]);
 
     // The first request offered both slots and the extra one was asked for alone, for tickets
@@ -155,14 +150,24 @@ fn codex_cli_handoffs_use_the_configured_effort_unless_the_ticket_overrides_it()
         .insert(
             "codex".to_owned(),
             MachinePool {
-                mode: PoolMode::Cli,
+                mode: PoolMode::Desktop,
                 slots: 2,
             },
         );
     rig.dispatcher
         .set_cli(fake.clone(), "local", &rig.ctx.config);
-    reserve(&rig, "T.1", "cli-codex-slot-1", &[]);
-    reserve(&rig, "T.2", "cli-codex-slot-2", &["effort:medium"]);
+    reserve(
+        &rig,
+        "T.1",
+        &cli::placeholder("codex", 1).unwrap().to_string(),
+        &[],
+    );
+    reserve(
+        &rig,
+        "T.2",
+        &cli::placeholder("codex", 2).unwrap().to_string(),
+        &["effort:medium"],
+    );
     tick(&rig);
 
     let begun = fake.begun();
@@ -247,10 +252,6 @@ fn a_tell_and_a_stall_check_for_a_cli_session_reach_the_cli_pool() {
     rig.clock.advance(SILENT_S + 1.0);
     tick(&rig);
     assert_eq!(fake.sent()[1].text, CONTINUE);
-    assert!(
-        rig.step().is_none(),
-        "no check or message entered the queue"
-    );
 
     // Still idle 15 minutes after the reminder: the ticket is released, as for any worker.
     rig.clock.advance(IDLE_AFTER_MESSAGE_S + 1.0);
@@ -283,74 +284,6 @@ fn a_cli_session_is_woken_as_soon_as_its_verb_ends() {
     let sent = fake.sent();
     assert_eq!(sent.len(), 1, "no two-minute wait for a CLI session");
     assert_eq!(sent[0].text, WAKE);
-}
-
-#[test]
-fn pool_mode_switches_without_disturbing_a_held_ticket() {
-    let rig = rig(&["local_w1", "local_w2"]);
-    rig.reserve("T.1", "local_w1", &[]);
-    let handoff = rig.step().expect("a desktop hand-off");
-    rig.ack(handoff.id, "ok", "");
-    rig.hold("local_w1", "T.1");
-    let fake = cli(&rig, 1);
-
-    // The file says desktop for codex and cli for claude, so claude already runs in CLI mode.
-    let reply = rig.pool(&["mode", "claude", "desktop"], None);
-    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
-    assert!(reply.text.contains("desktop mode"), "{}", reply.text);
-    let reply = rig.pool(&["mode", "claude", "cli"], None);
-    assert!(reply.text.contains("cli mode"), "{}", reply.text);
-    let list = rig.pool(&["list"], None);
-    assert!(
-        list.text
-            .contains("mode     claude cli (set by `ignite pool mode`)"),
-        "{}",
-        list.text
-    );
-
-    // The desktop worker keeps its ticket; only the CLI slots are offered.
-    let before = rig.hub.asked().len();
-    reserve(&rig, "T.2", "cli-claude-slot-1", &[]);
-    rig.dispatcher.step(&rig.ctx, None);
-    assert_eq!(
-        asks(&rig)[before].0,
-        ["cli-claude-slot-1"],
-        "an idle desktop worker of an app in CLI mode is offered nothing"
-    );
-    assert_eq!(rig.state_of("local_w1"), "working");
-    assert!(lock(&rig.host.releases).is_empty());
-    assert_eq!(fake.begun().len(), 1);
-    rig.hold("cli-claude-00000001", "T.2");
-
-    // Back to desktop: the CLI session keeps its ticket and its checks still go to the pool.
-    let reply = rig.pool(&["mode", "claude", "config"], None);
-    assert!(reply.text.contains("cli mode"), "{}", reply.text);
-    let reply = rig.pool(&["mode", "claude", "desktop"], None);
-    assert!(reply.text.contains("desktop mode"), "{}", reply.text);
-    let before = rig.hub.asked().len();
-    rig.dispatcher.step(&rig.ctx, None);
-    assert_eq!(asks(&rig)[before].0, ["local_w2"]);
-    assert_eq!(rig.state_of("cli-claude-00000001"), "working");
-    assert!(rig.view_has_no_cli_slot());
-    let reply = rig.pool(&["mode", "claude", "tui"], None);
-    assert_eq!(reply.exit, Exit::Usage, "{}", reply.text);
-}
-
-impl Rig {
-    fn view_has_no_cli_slot(&self) -> bool {
-        let view = self.dispatcher.view().unwrap();
-        !view.iter().any(|w| cli::is_cli_slot(&w.session))
-    }
-}
-
-#[test]
-fn a_dispatcher_that_is_down_does_not_stop_cli_hand_offs() {
-    let rig = rig(&[]);
-    let fake = cli(&rig, 1);
-    rig.dispatcher.state().down = true;
-    reserve(&rig, "T.1", "cli-claude-slot-1", &[]);
-    tick(&rig);
-    assert_eq!(fake.begun().len(), 1);
 }
 
 #[test]
@@ -397,7 +330,6 @@ fn the_hub_down_justiciar_runs_as_a_cli_session() {
     );
     assert_eq!(started[0].prompt, "Repair the hub.");
     assert!(cli::is_cli_session(&given));
-    assert!(rig.step().is_none(), "no desktop worker is given it");
     assert!(
         rig.dispatcher
             .hand_off_justiciar(&rig.ctx, "Repair the hub.")
@@ -445,29 +377,6 @@ fn an_unprobed_or_held_app_offers_no_slots() {
     let before = asks(&rig).len();
     tick(&rig);
     assert!(offered_cli_slots(&rig, before), "{:?}", asks(&rig));
-}
-
-#[test]
-fn a_machine_whose_claude_runs_in_cli_mode_queues_no_usage() {
-    let rig = super::tests::rig_sampling(
-        &[],
-        ignite_store::local::open_in_memory().unwrap(),
-        Timestamp::from_millis(super::tests::START),
-        true,
-    );
-    let reply = rig.pool(
-        &["add", "local_dispatcher", "--app", "claude", "--dispatcher"],
-        Some("local_dispatcher"),
-    );
-    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
-    cli(&rig, 1);
-    tick(&rig);
-    let step = rig.step();
-    assert!(
-        step.as_ref()
-            .is_none_or(|given| given.action != DispatchAction::Usage),
-        "{step:?}"
-    );
 }
 
 /// A regression reserved for a CLI slot, whose culprit's CLI session ended when it landed, asks

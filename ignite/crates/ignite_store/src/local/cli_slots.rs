@@ -11,11 +11,6 @@ use rusqlite::{Connection, OptionalExtension, Row, TransactionBehavior, params};
 use crate::Result;
 use crate::local::rows::{CliHold, CliLanded, CliMessage, CliSlot, CliTurn};
 
-/// The `pool_settings` key of an app's mode override.
-fn mode_key(app: &str) -> String {
-    format!("mode.{app}")
-}
-
 fn columns(names: &[&str]) -> String {
     names.join(", ")
 }
@@ -478,31 +473,6 @@ pub fn hold_reported(conn: &Connection, app: &str) -> Result<()> {
     Ok(())
 }
 
-/// The mode `ignite pool mode` forced on `app` (`cli` or `desktop`), or `None` when
-/// `ignite.toml` decides.
-pub fn mode_override(conn: &Connection, app: &str) -> Result<Option<String>> {
-    let value = conn
-        .query_row(
-            "SELECT value FROM pool_settings WHERE key = ?1",
-            [mode_key(app)],
-            |row| row.get(0),
-        )
-        .optional()?;
-    Ok(value)
-}
-
-/// Forces `app`'s mode, or with `None` removes the override.
-pub fn set_mode_override(conn: &Connection, app: &str, mode: Option<&str>) -> Result<()> {
-    match mode {
-        Some(mode) => conn.execute(
-            "INSERT OR REPLACE INTO pool_settings (key, value) VALUES (?1, ?2)",
-            params![mode_key(app), mode],
-        )?,
-        None => conn.execute("DELETE FROM pool_settings WHERE key = ?1", [mode_key(app)])?,
-    };
-    Ok(())
-}
-
 /// Replaces every column of a recorded turn except its key, the session and number.
 pub fn update_turn(conn: &Connection, turn: &CliTurn) -> Result<()> {
     conn.execute(
@@ -657,20 +627,6 @@ mod tests {
         assert_eq!(take_landed(&mut conn, "T.1").unwrap(), None);
         assert_eq!(take_landed(&mut conn, "T.2").unwrap(), Some(new));
         assert_eq!(take_landed(&mut conn, "T.2").unwrap(), None);
-    }
-
-    #[test]
-    fn a_mode_override_is_stored_and_removed() {
-        let conn = open_in_memory().unwrap();
-        assert_eq!(mode_override(&conn, "claude").unwrap(), None);
-        set_mode_override(&conn, "claude", Some("cli")).unwrap();
-        assert_eq!(
-            mode_override(&conn, "claude").unwrap().as_deref(),
-            Some("cli")
-        );
-        assert_eq!(mode_override(&conn, "codex").unwrap(), None);
-        set_mode_override(&conn, "claude", None).unwrap();
-        assert_eq!(mode_override(&conn, "claude").unwrap(), None);
     }
 
     #[test]

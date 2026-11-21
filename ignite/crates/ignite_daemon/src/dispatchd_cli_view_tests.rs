@@ -76,7 +76,7 @@ fn pool_list_shows_a_running_a_parked_and_a_free_cli_slot() {
             "slot     claude 3  free",
         ]
     );
-    assert!(reply.text.contains("mode     claude cli"));
+    assert!(!reply.text.lines().any(|line| line.starts_with("mode ")));
 }
 
 fn line(turn: u32, index: u32, kind: TranscriptKind, text: &str) -> TranscriptLine {

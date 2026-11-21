@@ -30,14 +30,12 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
-use ignite_core::protocol::client::DispatchAction;
-use ignite_core::protocol::hub::{JusticiarReport, WorkerRole};
+use ignite_core::protocol::hub::JusticiarReport;
 use ignite_core::protocol::tickets::{Status, TicketQuery};
 use ignite_core::time::Timestamp;
 use ignite_store::local::rows::CheckSighting;
 
-use super::{Dispatcher, Purpose, State, cli};
-use crate::pool::Member;
+use super::{Dispatcher, State, cli};
 use crate::server::Context;
 
 /// How close together two sessions' failures must be to count as one shared failure: 15
@@ -180,7 +178,7 @@ impl Dispatcher {
     /// Ends the shared failure in force when its check passed, `green` moved or it lapsed;
     /// starts one when the sightings show it; and, while one lasts, sends its message to each
     /// running worker that has not had it.
-    pub(super) fn watch_shared(&self, state: &mut State, members: &[Member], now: Timestamp) {
+    pub(super) fn watch_shared(&self, state: &mut State, now: Timestamp) {
         if let Some(current) = &state.shared.current {
             let lapsed = now.seconds_since(current.since) >= LAPSE_S;
             let moved = match (&current.green, self.host.green()) {
@@ -231,13 +229,8 @@ impl Dispatcher {
         let workers: Vec<_> = state
             .held
             .keys()
+            .filter(|session| cli::is_cli_session(session))
             .filter(|session| !current.messaged.contains(session.as_str()))
-            .filter(|session| {
-                cli::is_cli_session(session)
-                    || members
-                        .iter()
-                        .any(|m| &m.session == *session && m.role == WorkerRole::Worker)
-            })
             .cloned()
             .collect();
         if workers.is_empty() {
@@ -245,13 +238,11 @@ impl Dispatcher {
         }
         let message = current.message();
         for session in workers {
-            Self::queue(
-                state,
-                Some(&session),
-                DispatchAction::Message,
-                &message,
-                Purpose::Message,
-            );
+            state.cli_calls.push(cli::Call::Message {
+                session: session.clone(),
+                text: message.clone(),
+                urgent: false,
+            });
             if let Some(current) = &mut state.shared.current {
                 current.messaged.insert(session.to_string());
             }

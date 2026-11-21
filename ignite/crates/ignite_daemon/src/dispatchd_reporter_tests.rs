@@ -5,10 +5,8 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use ignite_core::protocol::client::Exit;
-use ignite_core::traits::Clock;
 
-use super::tests::{Rig, request, rig, session};
-use super::*;
+use super::tests::{Rig, request, rig};
 use crate::crash::{self, CrashRecord};
 use crate::justiciar::{HUB_DOWN_S, JusticiarVerb, Reporter};
 use crate::loop_health::LoopHealth;
@@ -141,38 +139,27 @@ fn a_loop_waiting_for_cores_is_not_reported_until_it_waits_on_something_else() {
 }
 
 #[test]
-fn a_hub_down_for_fifteen_minutes_gets_a_local_justiciar() {
-    let rig = rig(&["local_w1", "local_w2"]);
+fn a_hub_down_for_fifteen_minutes_gets_one_local_justiciar() {
+    let rig = rig(&[]);
+    let fake = super::cli_tests::cli(&rig, 1);
     let home = home("hub-down");
     let (reporter, _) = reporter(&rig, &home);
     reporter.tick(&rig.ctx, false);
-    assert!(rig.dispatcher.state().pending.is_empty());
-    rig.clock.advance(HUB_DOWN_S);
+    rig.clock.advance(HUB_DOWN_S - 1.0);
     reporter.tick(&rig.ctx, false);
-    let given = rig.step().expect("a hand-off");
-    assert_eq!(given.action, DispatchAction::Handoff);
-    assert!(given.clear);
-    assert_eq!(given.model.as_deref(), Some("opus"));
-    assert!(given.prompt.unwrap().contains("ignite guide justiciar"));
-    let worker = given.session.unwrap();
-
-    // Only one justiciar at a time, and it is kept from tickets.
-    rig.clock.advance(60.0);
+    assert!(fake.justiciars().is_empty());
+    rig.clock.advance(1.0);
     reporter.tick(&rig.ctx, false);
-    assert!(rig.dispatcher.state().pending.is_empty());
-    let members = rig.dispatcher.pool().members().unwrap();
-    let state = rig.dispatcher.state();
-    let idle = Dispatcher::idle_workers(&state, &members, rig.clock.now());
-    assert!(idle.iter().all(|m| m.session != worker), "{idle:?}");
-    assert!(
-        idle.iter()
-            .any(|m| m.session == session("local_w2") || m.session == session("local_w1"))
-    );
+    reporter.tick(&rig.ctx, false);
+    assert_eq!(fake.justiciars().len(), 1);
+    assert!(fake.justiciars()[0].prompt.contains("has not answered"));
+    std::fs::remove_dir_all(home).unwrap();
 }
 
 #[test]
 fn asking_for_a_justiciar_files_it_and_keeps_it_while_the_hub_is_down() {
-    let rig = rig(&["local_w1"]);
+    let rig = rig(&[]);
+    let fake = super::cli_tests::cli(&rig, 1);
     let home = home("verb");
     let verb = JusticiarVerb {
         home: home.clone(),
@@ -191,32 +178,10 @@ fn asking_for_a_justiciar_files_it_and_keeps_it_while_the_hub_is_down() {
     rig.hub.set_unreachable(true);
     let reply = verb.run(&rig.ctx, &ask);
     assert_eq!(reply.exit, Exit::Unreachable, "{}", reply.text);
-    assert!(
-        rig.step()
-            .is_some_and(|i| i.action == DispatchAction::Handoff)
-    );
+    assert_eq!(fake.justiciars().len(), 1);
     rig.hub.set_unreachable(false);
     let (reporter, _) = reporter(&rig, &home);
     reporter.tick(&rig.ctx, true);
     assert_eq!(rig.hub.justiciar_reports().len(), 2);
     assert!(!home.join("justiciar-request.json").exists());
-}
-
-#[test]
-fn a_refused_justiciar_hand_off_releases_the_hold() {
-    let rig = rig(&["local_w1", "local_w2"]);
-    let first = rig
-        .dispatcher
-        .hand_off_justiciar(&rig.ctx, "repair the hub")
-        .expect("a worker");
-    let given = rig.step().expect("the hand-off");
-    assert_eq!(rig.ack(given.id, "failed", "busy").exit, Exit::Success);
-    let now = rig.clock.now();
-    assert!(!justiciar::holds(&rig.dispatcher.state(), &first, now));
-    // The prompt can go to another worker straight away.
-    let second = rig
-        .dispatcher
-        .hand_off_justiciar(&rig.ctx, "repair the hub")
-        .expect("another worker");
-    assert_ne!(second, first);
 }

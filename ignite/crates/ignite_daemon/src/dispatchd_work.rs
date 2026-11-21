@@ -1,10 +1,5 @@
-//! The part of a dispatcher step that asks the hub: reading the tickets of finished sessions,
-//! retrying hand-offs whose ticket could not be read, and asking for new tickets for idle
-//! workers.
-//!
-//! The dispatcher's state is locked only for the decisions. Every hub request runs between two
-//! short locks, because a slow hub would otherwise hold up whatever else needs the state, such
-//! as the sender's heartbeat (see [`Dispatcher::view`]).
+//! Asks the hub for tickets when CLI slots and trees are free.
+//! Hub requests run outside the state lock so heartbeat reporting can continue.
 
 use ignite_core::config::Config;
 use ignite_core::dispatch_pressure::{BACKLOG_SECONDS, DispatchPressure};
@@ -13,10 +8,7 @@ use ignite_core::protocol::hub::{IdleWorker, MachineFree, NextReply, Reservation
 use ignite_core::protocol::tickets::TicketDetail;
 use ignite_core::time::Timestamp;
 
-use super::{
-    Dispatcher, Purpose, Reserved, State, cli, feed, label, shared, slots, start_arguments, suits,
-    tier_for,
-};
+use super::{Dispatcher, REFUSED_S, Reserved, State, cli, feed, label, shared, tier_for, workers};
 use crate::clid::Resume;
 use crate::pool::Member;
 use crate::server::Context;
@@ -30,8 +22,6 @@ struct Asking {
     /// The idle CLI slots that take only tickets that hold `master` back (see `slots`).
     extra: Vec<Member>,
     trees: u32,
-    /// The pool's workers that are not down and its Codex slots, idle or not.
-    workers: usize,
     /// The pool is paused, so the hub may offer only a ticket that holds `master` back.
     master_only: bool,
     /// Seconds the oldest request of ticket work has waited for cores, when that is at least
@@ -69,25 +59,18 @@ impl Dispatcher {
         if reservation.expires_at <= ctx.clock.now() || self.host.holders().contains_key(session) {
             return;
         }
-        let app = if let Some(app) = cli::session_app(session) {
-            let Some(cli) = self.cli.get() else { return };
-            // Releasing the tree does not end the CLI turn. Starting the successor now
-            // would fail because the old turn still owns the session's slot.
-            if cli.pool.check(session) != crate::clid::SessionCheck::Gone {
-                return;
-            }
-            app.to_owned()
-        } else {
-            self.pool
-                .member(session)
-                .ok()
-                .flatten()
-                .map_or_else(|| "claude".to_owned(), |member| member.app)
+        let Some(app) = cli::session_app(session) else {
+            return;
         };
+        let Some(cli) = self.cli.get() else { return };
+        // The predecessor's turn must free the slot before the successor can start.
+        if cli.pool.check(session) != crate::clid::SessionCheck::Gone {
+            return;
+        }
         let Ok(detail) = ctx.hub.ticket(&reservation.ticket) else {
             return;
         };
-        let Some(reserved) = handoff_details(&ctx.config, reservation, &app, &detail) else {
+        let Some(reserved) = handoff_details(&ctx.config, reservation, app, &detail) else {
             return;
         };
         let mut state = self.state();
@@ -98,33 +81,27 @@ impl Dispatcher {
             || state
                 .reserved
                 .values()
-                .chain(&state.orphans)
                 .any(|queued| queued.ticket == reserved.ticket && queued.code == reserved.code)
         {
             return;
         }
-        let prompt = format!(
-            "Run `ignite start {}` and follow what it prints.",
-            start_arguments(&reserved)
-        );
-        Self::push_handoff(&mut state, session, reserved, prompt, fresh);
+        Self::begin_in_slot(&mut state, session, reserved, None, fresh);
         drop(state);
         self.save();
         self.run_cli_calls(ctx);
     }
 
-    /// Brings the state up to date: notices claims, finished tickets and lapsed reservations,
-    /// retries what could not be read, gives overdue instructions again and, while workers are
-    /// idle and trees are free, asks the hub for tickets. Then starts the CLI sessions and sends
-    /// the CLI messages and checks this decided on (see `cli`).
-    pub(super) fn refresh(&self, ctx: &Context, members: &[Member]) {
+    /// Updates claims and reservations, retries unread tickets and asks the hub for work.
+    /// Starts reserved workers and delivers pending checks and messages.
+    pub fn tick(&self, ctx: &Context) {
         self.host.observe_queue(ctx.clock.now());
         self.update_cli_layout();
-        self.refresh_state(ctx, members);
+        let mut members = self.pool.members().unwrap_or_default();
+        self.refresh_state(ctx, &mut members);
         self.run_cli_calls(ctx);
     }
 
-    fn refresh_state(&self, ctx: &Context, members: &[Member]) {
+    fn refresh_state(&self, ctx: &Context, members: &mut Vec<Member>) {
         let now = ctx.clock.now();
         let (finished, unread) = {
             let mut state = self.state();
@@ -145,14 +122,7 @@ impl Dispatcher {
                 let _ = self.pool.update(&session, |m| m.files = landed.files);
             }
         }
-        // A chat that left frees its slot in this step, so the members are read again.
-        let fresh;
-        let members = if self.end_chats() {
-            fresh = self.pool.members().unwrap_or_default();
-            &fresh
-        } else {
-            members
-        };
+        self.retire_workers(members);
         let unread: Vec<Offer> = unread
             .into_iter()
             .map(|(reservation, app)| {
@@ -164,24 +134,12 @@ impl Dispatcher {
             let mut state = self.state();
             for (reservation, app, detail) in unread {
                 if state.reserved.contains_key(&reservation.session) {
-                    Self::queue_handoff(
-                        &ctx.config,
-                        &mut state,
-                        &reservation,
-                        &app,
-                        detail,
-                        members,
-                        now,
-                    );
+                    Self::queue_handoff(&ctx.config, &mut state, &reservation, &app, detail);
                 }
             }
-            Self::expire_given(&mut state, now);
             self.watch_silence(&mut state, now);
-            self.watch_shared(&mut state, members, now);
-            Self::drop_claimed_handoffs(&mut state);
-            Self::retry_orphans(&mut state, members, now);
-            Self::drop_expired_handoffs(&mut state, now);
-            self.plan_asking(&mut state, members, now)
+            self.watch_shared(&mut state, now);
+            self.plan_asking(&mut state, members)
         };
         let Some(asking) = asking else {
             return;
@@ -191,15 +149,7 @@ impl Dispatcher {
         let mut state = self.state();
         state.idle_reason = idle_reason;
         for (reservation, app, detail) in offers {
-            Self::queue_handoff(
-                &ctx.config,
-                &mut state,
-                &reservation,
-                &app,
-                detail,
-                members,
-                now,
-            );
+            Self::queue_handoff(&ctx.config, &mut state, &reservation, &app, detail);
         }
     }
 
@@ -210,108 +160,23 @@ impl Dispatcher {
         let mut finished = Vec::new();
         for (session, ticket) in &state.held {
             if !holders.contains_key(session) {
-                state.last_ticket.insert(session.clone(), ticket.clone());
                 state.stalls.remove(session);
-                state.finished_at.insert(session.clone(), now);
                 finished.push((session.clone(), ticket.clone()));
             }
         }
-        let lapsed: Vec<SessionId> = state
-            .reserved
-            .iter()
-            .filter(|(session, r)| !holders.contains_key(*session) && r.expires_at <= now)
-            .map(|(session, _)| session.clone())
-            .collect();
+        state.reserved.retain(|session, reserved| {
+            !holders.contains_key(session) && reserved.expires_at > now
+        });
         state
-            .reserved
-            .retain(|session, _| !holders.contains_key(session));
-        for session in lapsed {
-            state.reserved.remove(&session);
-            // A slot or a chat opened for this ticket is simply free again (see `slots`).
-            let chat = slots::is_slot(&session)
-                || cli::is_cli_slot(&session)
-                || self
-                    .pool
-                    .member(&session)
-                    .ok()
-                    .flatten()
-                    .is_some_and(|m| m.single_use);
-            if !chat {
-                // A reservation nobody claimed: the worker is treated as stalled.
-                Self::queue_check(state, &session);
-            }
-        }
-        state.orphans.retain(|r| r.expires_at > now);
+            .refused
+            .retain(|_, at| now.seconds_since(*at) < REFUSED_S);
         state.held = holders;
         finished
     }
 
-    /// Removes the queued hand-offs whose reservation has lapsed, and the reservations they
-    /// held. Giving a worker a ticket the hub no longer holds for it would leave the worker
-    /// waiting for a start that is refused.
-    pub(super) fn drop_expired_handoffs(state: &mut State, now: Timestamp) {
-        let mut dropped: Vec<(Option<SessionId>, TicketId)> = Vec::new();
-        state.pending.retain(|queued| match &queued.purpose {
-            Purpose::Handoff(reserved) if reserved.expires_at <= now => {
-                dropped.push((queued.body.session.clone(), reserved.ticket.clone()));
-                false
-            }
-            _ => true,
-        });
-        for (session, ticket) in dropped {
-            if let Some(session) = session
-                && state
-                    .reserved
-                    .get(&session)
-                    .is_some_and(|reserved| reserved.ticket == ticket)
-            {
-                state.reserved.remove(&session);
-            }
-        }
-    }
-
-    /// Removes the hand-offs waiting for a worker (the orphans, and the queued hand-offs not yet
-    /// given to the dispatcher) whose ticket a session of this machine already holds, and the
-    /// reservations they held.
-    ///
-    /// A hand-off whose acknowledgement failed can still reach its worker: on 2026-11-20 the
-    /// desktop app delivered hand-off prompts five to eight minutes after they were sent. That
-    /// worker then claims the ticket, while the reservation waits as an orphan for another idle
-    /// worker. Handing it on gave a second worker a start that was refused because another
-    /// session held the ticket, and that worker stopped unfinished.
-    pub(super) fn drop_claimed_handoffs(state: &mut State) {
-        let claimed: std::collections::BTreeSet<TicketId> = state.held.values().cloned().collect();
-        if claimed.is_empty() {
-            return;
-        }
-        state.orphans.retain(|r| !claimed.contains(&r.ticket));
-        let outdated: Vec<(Option<SessionId>, TicketId)> = state
-            .pending
-            .iter()
-            .filter_map(|queued| match &queued.purpose {
-                Purpose::Handoff(reserved) if claimed.contains(&reserved.ticket) => Some((
-                    slots::handoff_session(state, queued),
-                    reserved.ticket.clone(),
-                )),
-                _ => None,
-            })
-            .collect();
-        state.pending.retain(|queued| {
-            !matches!(&queued.purpose, Purpose::Handoff(reserved) if claimed.contains(&reserved.ticket))
-        });
-        for (session, ticket) in outdated {
-            // The holder's own reservation was already removed when its claim was noticed.
-            if let Some(session) = session
-                && !state.held.contains_key(&session)
-            {
-                Self::drop_placeholder(state, &session, &ticket);
-            }
-        }
-    }
-
     /// Decides whether to ask the hub for tickets, and for which workers. Only one step asks
     /// at a time.
-    fn plan_asking(&self, state: &mut State, members: &[Member], now: Timestamp) -> Option<Asking> {
+    fn plan_asking(&self, state: &mut State, members: &[Member]) -> Option<Asking> {
         // A paused pool still asks, for the tickets that hold `master` back: a regression or
         // justiciar ticket left until `ignite pool resume` would keep `master` stuck while
         // nobody watches. The hub offers such tickets to one worker at a time, and nothing at
@@ -324,23 +189,10 @@ impl Dispatcher {
             state.idle_reason = None;
             return None;
         }
-        let workers = slots::with_slots(state, members);
-        let mut idle: Vec<Member> = Self::idle_workers(state, &workers, now)
+        let (extra, idle): (Vec<Member>, Vec<Member>) = workers::cli_placeholders(state, members)
             .into_iter()
-            // An app in CLI mode is offered only its CLI slots; its desktop workers finish.
-            .filter(|m| cli::is_cli_slot(&m.session) || !cli::in_cli_mode(state, &m.app))
-            .cloned()
-            .collect();
-        // A dispatcher that stopped answering stops only the hand-offs it would carry out.
-        if state.down {
-            idle.retain(|m| cli::is_cli_slot(&m.session));
-            if idle.is_empty() {
-                state.idle_reason = None;
-                return None;
-            }
-        }
-        let (extra, idle): (Vec<Member>, Vec<Member>) = idle
-            .into_iter()
+            .filter(|m| !state.reserved.contains_key(&m.session))
+            .filter(|m| !state.refused.contains_key(&m.session))
             .partition(|m| cli::is_extra_slot(state, &m.session));
         let reserved = u32::try_from(state.reserved.len()).unwrap_or(u32::MAX);
         let trees = self.host.free_ticket_trees().saturating_sub(reserved);
@@ -356,7 +208,6 @@ impl Dispatcher {
             idle,
             extra,
             trees,
-            workers: slots::capacity(state, members),
             master_only,
             backlog: (waited >= f64::from(BACKLOG_SECONDS)).then_some(waited),
             shared: state
@@ -369,7 +220,7 @@ impl Dispatcher {
 
     /// How many workers were left idle after the last request for tickets, and why: the hub's
     /// reason when it offered nothing, for `ignite status`. `None` when no worker was idle or the
-    /// pool asked for nothing (down, updating or paused everywhere).
+    /// pool asked for nothing (updating or paused everywhere).
     pub fn idle_reason(&self) -> Option<(usize, String)> {
         self.state().idle_reason.clone()
     }
@@ -387,7 +238,6 @@ impl Dispatcher {
             idle,
             extra,
             mut trees,
-            workers,
             master_only,
             backlog,
             shared,
@@ -427,14 +277,7 @@ impl Dispatcher {
             }
         }
         let mut offers = Vec::new();
-        let mut why = self.ask_group(
-            ctx,
-            &mut free,
-            &mut trees,
-            workers,
-            master_only,
-            &mut offers,
-        );
+        let mut why = self.ask_group(ctx, &mut free, &mut trees, master_only, &mut offers);
         if let Some(waited) = backlog
             && !free.is_empty()
         {
@@ -449,7 +292,7 @@ impl Dispatcher {
             why = format!("{reason} ({why})");
         }
         if !held.is_empty() {
-            let held_why = self.ask_group(ctx, &mut held, &mut trees, workers, true, &mut offers);
+            let held_why = self.ask_group(ctx, &mut held, &mut trees, true, &mut offers);
             if !held.is_empty() {
                 let windows: Vec<String> = holds
                     .iter()
@@ -472,7 +315,7 @@ impl Dispatcher {
             })
             .collect();
         if !extra.is_empty() {
-            let extra_why = self.ask_group(ctx, &mut extra, &mut trees, workers, true, &mut offers);
+            let extra_why = self.ask_group(ctx, &mut extra, &mut trees, true, &mut offers);
             if free.is_empty() && held.is_empty() && !extra.is_empty() {
                 why = format!(
                     "only tickets that hold master back go to the extra CLI slot ({extra_why})"
@@ -492,7 +335,6 @@ impl Dispatcher {
         ctx: &Context,
         group: &mut Vec<(Member, Vec<String>)>,
         trees: &mut u32,
-        workers: usize,
         master_only: bool,
         offers: &mut Vec<Offer>,
     ) -> String {
@@ -516,13 +358,7 @@ impl Dispatcher {
                 pressure: self.pressure(ctx.clock.now()),
                 families: self.setup.families.clone(),
                 name: None,
-                // The last idle worker of a pool of several is kept for justiciar tickets.
-                // A paused pool asks for justiciar and regression tickets alike.
-                // An app in CLI mode keeps its extra slot for them instead (see `slots`).
-                justiciar_only: !master_only
-                    && group.len() == 1
-                    && workers > 1
-                    && !cli::is_cli_slot(&group[0].0.session),
+                justiciar_only: false,
                 master_only,
                 // `next_explained` asks for the reason itself.
                 explain: false,
@@ -563,122 +399,55 @@ impl Dispatcher {
     /// sent, so a ticket never runs on a model it does not name; the hand-off is decided again
     /// when they arrive.
     ///
-    /// A reservation's code may be used by any session of the machine it was made for, so the
-    /// worker it goes to is decided here:
-    ///
-    /// - A regression goes to the idle worker whose last ticket its `caused-by` line names, which
-    ///   still has the conversation in which it made that change. The hub decides which machine
-    ///   works a regression; this only picks among this machine's workers.
-    /// - A reservation for a worker that was meanwhile given a regression in its place goes to
-    ///   another idle worker, or waits for one with the refused hand-offs.
-    /// - Every other reservation goes to the worker the hub named.
     pub(super) fn queue_handoff(
         config: &Config,
         state: &mut State,
         reservation: &Reservation,
         app: &str,
         detail: Option<TicketDetail>,
-        members: &[Member],
-        now: Timestamp,
     ) {
-        let named = &reservation.session;
+        let slot = &reservation.session;
         let ticket = &reservation.ticket;
-        let expires_at = reservation.expires_at;
-        let code = Some(reservation.code.clone());
-        // The named worker holds another reservation when an earlier hand-off of this step gave
-        // it a regression it caused.
-        let taken = state
-            .reserved
-            .get(named)
-            .is_some_and(|reserved| reserved.ticket != *ticket);
         let Some(detail) = detail else {
-            let placeholder = Reserved {
-                ticket: ticket.clone(),
-                expires_at,
-                code,
-                tier: None,
-                model: None,
-                effort: String::new(),
-                app: app.to_owned(),
-            };
-            if !taken {
-                state.reserved.insert(named.clone(), placeholder);
-            }
+            state.reserved.insert(
+                slot.clone(),
+                Reserved {
+                    ticket: ticket.clone(),
+                    expires_at: reservation.expires_at,
+                    code: Some(reservation.code.clone()),
+                    model: None,
+                    effort: String::new(),
+                    app: app.to_owned(),
+                },
+            );
             state.unread.push((reservation.clone(), app.to_owned()));
             return;
         };
         let Some(reserved) = handoff_details(config, reservation, app, &detail) else {
-            Self::drop_placeholder(state, named, ticket);
+            Self::drop_placeholder(state, slot, ticket);
             return;
         };
-        if let Some(culprit) = Self::culprit_worker(state, &detail, &reserved, members, now) {
-            Self::drop_placeholder(state, named, ticket);
-            if detail.ticket.metadata.contains_key("reverted") {
-                Self::queue_reverted_handoff(state, &culprit, reserved, &detail);
-            } else {
-                Self::queue_regression_handoff(state, &culprit, reserved, &detail.ticket.title);
-            }
-            return;
-        }
-        // A CLI worker's session ended with its ticket, so no idle worker holds the culprit's
-        // conversation; the slot resumes its transcript instead, when it was kept.
-        if !taken
-            && cli::is_cli_slot(named)
-            && let Some(culprit) = feed::cause(&detail)
-        {
-            let prompt = feed::culprit_prompt(&detail, &reserved);
-            state.reserved.insert(named.clone(), reserved.clone());
-            state.cli_calls.push(cli::Call::Begin {
-                slot: named.clone(),
-                reserved,
-                resume: Some(Resume { culprit, prompt }),
-                fresh: false,
-            });
-            return;
-        }
-        if !taken {
-            Self::queue_handoff_reserved(state, named, reserved);
-            return;
-        }
-        let workers = slots::with_slots(state, members);
-        let other = Self::idle_workers(state, &workers, now)
-            .into_iter()
-            .find(|m| suits(m, reserved.tier.as_ref(), &reserved.app))
-            .map(|m| m.session.clone());
-        match other {
-            Some(other) => Self::queue_handoff_reserved(state, &other, reserved),
-            None => state.orphans.push(reserved),
-        }
+        let resume = feed::cause(&detail).map(|culprit| Resume {
+            culprit,
+            prompt: feed::culprit_prompt(&detail, &reserved),
+        });
+        Self::begin_in_slot(state, slot, reserved, resume, false);
     }
 
-    /// The idle worker here whose last ticket caused `detail`, a regression, or whose last ticket
-    /// `detail` is, a ticket that was reverted, if one can run it.
-    fn culprit_worker(
-        state: &State,
-        detail: &TicketDetail,
-        reserved: &Reserved,
-        members: &[Member],
-        now: Timestamp,
-    ) -> Option<SessionId> {
-        let cause = feed::cause(detail)?;
-        let workers = slots::with_slots(state, members);
-        Self::idle_workers(state, &workers, now)
-            .into_iter()
-            .filter(|m| suits(m, reserved.tier.as_ref(), &reserved.app))
-            .find(|m| state.last_ticket.get(&m.session) == Some(&cause))
-            .map(|m| m.session.clone())
-    }
-
-    /// Offers a reopened ticket whose landing a tip round reverted to the worker that landed
-    /// it. It keeps its conversation, as the culprit of a regression does.
-    fn queue_reverted_handoff(
+    pub(super) fn begin_in_slot(
         state: &mut State,
-        session: &SessionId,
+        slot: &SessionId,
         reserved: Reserved,
-        detail: &TicketDetail,
+        resume: Option<Resume>,
+        fresh: bool,
     ) {
-        let prompt = feed::reverted_prompt(detail, &reserved);
-        Self::push_handoff(state, session, reserved, prompt, false);
+        state.reserved.insert(slot.clone(), reserved.clone());
+        state.cli_calls.push(cli::Call::Begin {
+            slot: slot.clone(),
+            reserved,
+            resume,
+            fresh,
+        });
     }
 
     /// Removes the placeholder reservation of `ticket` for `session`, left while the ticket's
@@ -712,7 +481,6 @@ fn handoff_details(
         ticket: reservation.ticket.clone(),
         expires_at: reservation.expires_at,
         code: Some(reservation.code.clone()),
-        tier,
         model,
         effort: label(labels, "effort:")
             .unwrap_or_else(|| config.pool.default_effort(app))

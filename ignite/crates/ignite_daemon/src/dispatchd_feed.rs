@@ -1,34 +1,14 @@
-//! What the dispatcher does with a change in the hub's feed: delivering an `ignite tell`, and
-//! finding the culprit of a regression ticket and the prompt that hands the regression to it.
+//! Delivers hub messages to CLI workers and builds prompts for regressions and reverted tickets.
 
 use ignite_core::ids::{SessionId, TicketId};
-use ignite_core::protocol::client::{DispatchAction, Exit, Reply};
 use ignite_core::protocol::tickets::{Status, TicketDetail};
 
-use super::{Dispatcher, Purpose, Reserved, State, cli, start_arguments, tell};
+use super::{Reserved, State, cli, start_arguments, tell};
 
-/// Sends a new `tell` on `detail`'s ticket to `holder`, the session working it here, as a
-/// `message` instruction. If the session is inside `ignite wait`, the wait ends with a reply that
-/// says a message is waiting but does not carry its text: a wait's reply is tool output, which
-/// agents rightly treat as data rather than instructions, while the dispatcher's message reaches
-/// them as a teammate's request once their turn ends.
-///
-/// A CLI session gets the text through the CLI pool instead, which ends its wait itself, and
-/// ends its running turn when the tell is urgent: when the ticket's `tell_now` key holds the
-/// same comment number as `tell`.
-///
-/// Nothing is sent unless the ticket is in progress and assigned to `holder`, and its claim is
-/// not newer than the comment. A tell made before the session claimed the ticket is already in
-/// its brief, and a tell on a ticket that was just released was meant for whoever held it
-/// before. The dispatcher still lists `holder` for a moment after a release, and a ticket's
-/// `tell` number stays on it for good, so without these tests a restarted dispatcher (which has
-/// forgotten which tells it sent) would send an old order to a session it was never meant for.
-pub(super) fn deliver_tell(
-    dispatcher: &Dispatcher,
-    state: &mut State,
-    holder: &SessionId,
-    detail: &TicketDetail,
-) {
+pub(super) fn deliver_tell(state: &mut State, holder: &SessionId, detail: &TicketDetail) {
+    if !cli::is_cli_session(holder) {
+        return;
+    }
     let ticket = &detail.ticket;
     let Some(tell) = ticket
         .metadata
@@ -58,33 +38,16 @@ pub(super) fn deliver_tell(
         return;
     }
     let text = format!("Message about {}: {}", ticket.id, comment.text);
-    if cli::is_cli_session(holder) {
-        let urgent = ticket
-            .metadata
-            .get(tell::NOW_KEY)
-            .and_then(serde_json::Value::as_u64)
-            == Some(tell);
-        state.cli_calls.push(cli::Call::Message {
-            session: holder.clone(),
-            text,
-            urgent,
-        });
-        return;
-    }
-    Dispatcher::queue(
-        state,
-        Some(holder),
-        DispatchAction::Message,
-        &text,
-        Purpose::Message,
-    );
-    let notice = format!(
-        "{} has a message for you from the dispatcher. End your turn to receive it.",
-        ticket.id
-    );
-    dispatcher
-        .host
-        .interrupt(holder, Reply::text(Exit::Success, notice));
+    let urgent = ticket
+        .metadata
+        .get(tell::NOW_KEY)
+        .and_then(serde_json::Value::as_u64)
+        == Some(tell);
+    state.cli_calls.push(cli::Call::Message {
+        session: holder.clone(),
+        text,
+        urgent,
+    });
 }
 
 /// The ticket whose worker should take `detail` because it holds the change's context: for a
