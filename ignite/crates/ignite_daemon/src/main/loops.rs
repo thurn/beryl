@@ -471,7 +471,7 @@ impl Parts {
                     if idle.below_floor() {
                         floor(&mut failure);
                     }
-                    if let Err(error) = trees.reclaim_disk_for_handoff(&|| idle.below_floor()) {
+                    if let Err(error) = trees.reclaim_disk_for_handoff(&idle.floor_reader()) {
                         eprintln!(
                             "ignite: cannot reclaim unused build outputs for a handoff: {error}"
                         );

@@ -59,6 +59,11 @@ impl<'a> Stop<'a> {
         }
         self.hit.get()
     }
+
+    /// Whether an earlier question was answered yes, without asking again.
+    fn stopped(&self) -> bool {
+        self.hit.get()
+    }
 }
 
 impl Space {
@@ -168,7 +173,9 @@ impl Space {
     }
 }
 
-/// Adds what is under `path` to `held`, until `stop` says to stop.
+/// Adds what is under `path` to `held`, until `stop` says to stop. It asks `stop` once before
+/// reading each directory, not after each file: a build directory holds about 18 files for
+/// every directory, and the question can cost a process start (`idle/disk.rs`).
 fn add(held: &mut Held, path: &Path, minimum: u64, stop: &Stop) {
     let Ok(meta) = fs::symlink_metadata(path) else {
         return;
@@ -197,7 +204,7 @@ fn add(held: &mut Held, path: &Path, minimum: u64, stop: &Stop) {
     };
     for entry in entries.filter_map(io::Result::ok) {
         add(held, &entry.path(), minimum, stop);
-        if held.private >= minimum || stop.now() {
+        if held.private >= minimum || stop.stopped() {
             break;
         }
     }

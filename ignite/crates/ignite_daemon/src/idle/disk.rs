@@ -14,16 +14,20 @@
 //! The pass below the floor comes before everything else the disk loop does. A measurement can
 //! take many minutes, and the disk could fall below the floor during one and wait for it to end,
 //! so the walk reads the disk's free space before each directory and stops once it is below the
-//! floor, and the floor pass runs at once. The loop also runs the floor pass before each of its
+//! floor, and the floor pass runs at once. Reading the free space starts a `df` process on
+//! macOS, so the walk reads it at most once every [`FLOOR_READ_EVERY`] and reuses the last
+//! answer in between (see [`Idle::floor_reader`]). The loop also runs the floor pass before each of its
 //! other steps. When a floor pass finds nothing more it may delete, it says what holds the space
 //! (`trees/disk/floor.rs`), and the next round tries again rather than waiting minutes.
 //!
 //! [`Trees::hold_disk`]: crate::trees::Trees::hold_disk
 //! [`Trees::free_disk`]: crate::trees::Trees::free_disk
 
+use std::cell::Cell;
 use std::time::Duration;
 
 use ignite_core::capacity::{BYTES_PER_GB, BYTES_PER_GIB, disk_reserve_bytes};
+use ignite_core::time::Timestamp;
 use ignite_core::traits::Result;
 use ignite_os::system::DiskSpace;
 
@@ -33,6 +37,12 @@ use crate::trees::DiskReport;
 /// The least time between two measurements of the trees' disk use. A measurement walks every
 /// file of every build directory, about 290 GB on jarvis, so it is kept rare on a busy machine.
 pub const DISK_EVERY: Duration = Duration::from_mins(30);
+
+/// The least time between two reads of the disk's free space during a walk of the trees. Each
+/// read starts a `df` process on macOS. When the walk read it before every file, a measurement
+/// of eleven trees on multivac ran for over an hour without finishing, spending nearly all its
+/// time starting `df`, so no round ever cleared a free tree and the pool waited on the disk cap.
+pub const FLOOR_READ_EVERY: Duration = Duration::from_secs(5);
 
 /// Skip the expensive walk when at least this much disk is free and the volume reserve
 /// and cap already fit.
@@ -57,6 +67,24 @@ impl Idle {
         self.host
             .disk_space()
             .is_some_and(|disk| disk.available < FLOOR_GB * BYTES_PER_GIB)
+    }
+
+    /// [`Idle::below_floor`] for a long walk to ask before each directory: it reads the free
+    /// space the first time and then at most once every [`FLOOR_READ_EVERY`], answering with the
+    /// last reading in between.
+    pub(crate) fn floor_reader(&self) -> impl Fn() -> bool + '_ {
+        let last: Cell<Option<(Timestamp, bool)>> = Cell::new(None);
+        move || {
+            let now = self.clock.now();
+            if let Some((at, below)) = last.get()
+                && now.seconds_since(at) < FLOOR_READ_EVERY.as_secs_f64()
+            {
+                return below;
+            }
+            let below = self.below_floor();
+            last.set(Some((now, below)));
+            below
+        }
     }
 
     /// Clears builds without measuring the trees while the disk is below [`FLOOR_GB`], every
@@ -114,7 +142,8 @@ impl Idle {
             *last = Some(now);
         }
         crate::steps::step("holding the trees under their disk limit");
-        let report = self.host.hold_disk(&|| self.below_floor())?;
+        let below_floor = self.floor_reader();
+        let report = self.host.hold_disk(&below_floor)?;
         if report.interrupted {
             eprintln!(
                 "ignite: the disk fell below its {FLOOR_GB} GiB floor while the trees were \

@@ -3,6 +3,7 @@
 use std::sync::atomic::Ordering;
 
 use super::Fixture;
+use crate::idle::disk::FLOOR_READ_EVERY;
 use crate::idle::{DISK_EVERY, FLOOR_GB, ROOM_GB};
 use crate::trees::{BusyTree, FloorStuck};
 use ignite_core::ids::TreeId;
@@ -157,5 +158,31 @@ fn a_floor_pass_with_no_builds_left_names_the_space_outside_the_trees() {
             .to_string()
             .contains("held outside the trees' build directories"),
         "{stuck}"
+    );
+}
+
+/// Reading the free space starts a `df` process on macOS, and a walk of the trees asks whether
+/// the disk is below its floor before every directory. A walk that read it every time on
+/// multivac ran for over an hour without finishing. The walk's question reads the free space the
+/// first time, then reuses that answer until [`FLOOR_READ_EVERY`] has passed.
+#[test]
+fn a_walk_reads_the_free_space_at_most_once_per_interval() {
+    let f = Fixture::new();
+    let idle = f.idle();
+    *f.host.free_gib.lock().unwrap() = Some(FLOOR_GB + 10);
+    let below_floor = idle.floor_reader();
+    assert!(!below_floor());
+
+    *f.host.free_gib.lock().unwrap() = Some(2);
+    f.clock.advance(FLOOR_READ_EVERY.as_secs_f64() - 1.0);
+    assert!(
+        !below_floor(),
+        "the last reading is reused within the interval"
+    );
+
+    f.clock.advance(1.0);
+    assert!(
+        below_floor(),
+        "the free space is read again once the interval has passed"
     );
 }
