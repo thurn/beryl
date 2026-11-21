@@ -4,6 +4,11 @@
     "rule": "CR 509.1b",
     "text": "{2}{U}: This creature can't be blocked this turn."
   },
+  "Ashiok, Nightmare Weaver": {
+    "mechanic": "exiling the top cards of a library with a source link, and a variable loyalty cost that selects a linked creature with exactly that mana value",
+    "rule": "CR 607.2a",
+    "text": "+2: Exile the top three cards of target opponent's library.\n−X: Put a creature card with mana value X exiled with Ashiok onto the battlefield under your control. That creature is a Nightmare in addition to its other types."
+  },
   "Mockingbird": {
     "mechanic": "a filter for mana value at most the mana spent to cast this spell",
     "rule": "CR 601.2h",
