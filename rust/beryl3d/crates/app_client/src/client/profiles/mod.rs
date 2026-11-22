@@ -1,14 +1,19 @@
 //! Profile-specific projections of the resting table for screen placement.
 
 use app_screens::screens::Screen;
+use beryl_protocol::PlayerView;
 use beryl_protocol::protocol::{Side, ZoneName};
 use game_hud::hud::phase::phase_box;
 use game_hud::hud::placement_scene::{Group, PlacementScene};
+use game_table::table::{Camera, Objects};
 use kit_base::data::profiles::Piece;
 use kit_frame::frame::{ABILITY_IDS, ElementId, Role};
 
+const SHOWN_BOARD_IDS: u32 = 1 << 31;
+
 impl super::Client {
-    /// Projects the latest view's arranged objects for the phone's screen layout.
+    /// Projects resting objects for compact control placement. Manual controls clear
+    /// the cards still showing during the transition as well as the arriving view.
     pub(super) fn placement_scene(&self) -> Option<PlacementScene> {
         let profile = self.show.table().profile();
         profile.data().hud.floating_prompt?;
@@ -16,33 +21,29 @@ impl super::Client {
         let Some(update) = self.show.latest() else {
             return Some(layout);
         };
-        let camera = self.show.table().camera();
-        let objects = self.show.latest_objects();
-        for object in &update.view.objects {
-            let group = match object.zone {
-                ZoneName::Battlefield if object.controller == Side::You => Group::YourRows,
-                ZoneName::Battlefield => Group::TheirRows,
-                ZoneName::Stack => Group::Stack,
-                ZoneName::Hand if object.owner == Side::You => Group::Hand,
-                _ => continue,
-            };
-            if let Some(pose) = objects.card_pose(usize::from(object.slot.0)) {
-                layout.object(
-                    ElementId(u32::from(object.slot.0)),
-                    Role::Card,
-                    group,
-                    pose,
-                    camera.card_box(&pose).0,
-                );
-            }
-        }
-        for (id, pose) in objects.ability_poses() {
-            layout.object(
-                ElementId(ABILITY_IDS + id),
-                Role::Ability,
-                Group::Stack,
-                pose,
-                camera.card_box(&pose).0,
+        let table = self.show.table();
+        let camera = table.camera();
+        project(
+            &mut layout,
+            &update.view,
+            self.show.latest_objects(),
+            camera,
+            0,
+        );
+        if self.features.screen == Screen::Table
+            && let Some(shown) = self
+                .show
+                .shown()
+                .filter(|shown| !std::ptr::eq(*shown, update))
+        {
+            // Controls move when a view arrives, while the board can still be showing
+            // the previous hand and battlefield. Give both sets of cards clearance.
+            project(
+                &mut layout,
+                &shown.view,
+                table.objects(),
+                camera,
+                SHOWN_BOARD_IDS,
             );
         }
         if let Some(slot) = profile.slot("phase").filter(|_| {
@@ -51,5 +52,43 @@ impl super::Client {
             layout.phase(phase_box(update.view.stack.is_empty(), slot.rect));
         }
         Some(layout)
+    }
+}
+
+/// Adds each board's projected resting objects. The last displayed board uses a separate id
+/// range so both positions can coexist when the same card moves between zones.
+fn project(
+    layout: &mut PlacementScene,
+    view: &PlayerView,
+    objects: &Objects,
+    camera: &Camera,
+    id_offset: u32,
+) {
+    for object in &view.objects {
+        let group = match object.zone {
+            ZoneName::Battlefield if object.controller == Side::You => Group::YourRows,
+            ZoneName::Battlefield => Group::TheirRows,
+            ZoneName::Stack => Group::Stack,
+            ZoneName::Hand if object.owner == Side::You => Group::Hand,
+            _ => continue,
+        };
+        if let Some(pose) = objects.card_pose(usize::from(object.slot.0)) {
+            layout.object(
+                ElementId(id_offset + u32::from(object.slot.0)),
+                Role::Card,
+                group,
+                pose,
+                camera.card_box(&pose).0,
+            );
+        }
+    }
+    for (id, pose) in objects.ability_poses() {
+        layout.object(
+            ElementId(id_offset + ABILITY_IDS + id),
+            Role::Ability,
+            Group::Stack,
+            pose,
+            camera.card_box(&pose).0,
+        );
     }
 }

@@ -305,7 +305,8 @@
       "align_x": "center"
     },
     "manual.connection": {
-      "inset": [8, 0, 0, 0]
+      "region": "opponent_strip",
+      "inset": [36, 0, 0, 0]
     },
     "manual.log": {
       "inset": [16, 16, 0, 16],
@@ -315,9 +316,25 @@
     "manual.proposals": {
       "inset": [64, 16, 0, 16]
     },
+    "manual.proposals.panel": {
+      "region": "battlefield",
+      "inset": [0, 16, 0, 16],
+      "max_width": 136,
+      "max_height": 192,
+      "align_x": "end",
+      "align_y": "center"
+    },
+    "manual.proposals.short": {
+      "region": "battlefield",
+      "max_height": 132
+    },
     "manual.next": {
-      "region": "window",
-      "inset": [0, 24, 24, 0]
+      "region": "your_strip",
+      "inset": [0, 8, 0, 8],
+      "max_width": 148,
+      "max_height": 44,
+      "align_x": "end",
+      "align_y": "center"
     },
     "manual.mana": {
       "region": "log_area",

@@ -76,9 +76,8 @@ pub fn banner(
     Some(shown)
 }
 
-/// How far below the window's top the banner stands: under the safe area on the phone, and at
-/// `.table-link`'s padding (the link metrics in `flat.json`), at most a share of
-/// the window's height, on the desktop. The banner is at most as wide as its configured width.
+/// The desktop banner's offset, matching the web's `.table-link` padding. Compact
+/// profiles give the banner a slot below the opponent's life text.
 #[must_use]
 pub fn top(window: Size, metrics: LinkBanner) -> f32 {
     metrics.top.min(metrics.top_share * window.height)

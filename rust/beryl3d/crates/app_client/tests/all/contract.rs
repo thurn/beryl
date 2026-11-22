@@ -310,6 +310,7 @@ mod milestone_three {
                         fields: &FIELDS,
                         bindings: &settings.bindings,
                         link_error: None,
+                        next_slot: None,
                         log: None,
                         proposals: None,
                         menu: None,

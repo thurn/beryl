@@ -506,6 +506,8 @@ impl ProfileData {
             ("manual.menu", compact),
             ("manual.next", compact),
             ("manual.proposals", compact),
+            ("manual.proposals.panel", false),
+            ("manual.proposals.short", false),
             ("menu", self.hud.table.contains(&Piece::Menu)),
             ("opening", true),
             ("phase", self.hud.table.contains(&Piece::Phase)),

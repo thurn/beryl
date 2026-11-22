@@ -9,8 +9,8 @@ use crate::manual::{assists, drop, link, opening, pools, quit, selection, turn};
 use beryl_protocol::PlayerView;
 use game_hud::hud::{HudIn, players, steps};
 use game_hud::{hud::viewer::RevealedFace, inspect::Viewed};
-use game_table::{faces::FaceList, profiles::Profile, table::Window};
-use kit_base::data::profiles::ProfileData;
+use game_table::{faces::FaceList, table::Window};
+use kit_base::{data::profiles::ProfileData, geometry::Rect};
 use kit_scene::SizeClass;
 use kit_ui::element::{Action, Chord, Element, column};
 use kit_ui::widgets::{FieldState, Fields};
@@ -21,6 +21,7 @@ pub struct Inputs<'a> {
     pub fields: &'a Fields,
     pub bindings: &'a Bindings,
     pub link_error: Option<&'a str>,
+    pub next_slot: Option<Rect>,
     pub log: Option<Element>,
     pub proposals: Option<Element>,
     pub menu: Option<Element>,
@@ -37,6 +38,7 @@ pub struct ViewKey {
     hud_tuning: kit_base::data::hud::Hud,
     view: Option<PlayerView>,
     link_error: Option<String>,
+    next_slot: Option<Rect>,
     bindings: Bindings,
     viewing: Option<Viewed>,
     viewer: Option<(FieldState, Option<FaceList>, Vec<RevealedFace>)>,
@@ -55,6 +57,7 @@ impl ViewKey {
             hud_tuning: hud.data.hud,
             view: hud.view.cloned(),
             link_error: input.link_error.map(str::to_owned),
+            next_slot: input.next_slot,
             bindings: input.bindings.clone(),
             viewing: hud.viewing,
             viewer: hud.viewing.map(|_| {
@@ -129,7 +132,7 @@ pub(super) fn table(state: &State, input: Inputs<'_>) -> Element {
         link::banner(view, window.size, top, input.link_error, metrics.link)
     });
     screen
-        .children(controls(hud, frozen, covered, profile))
+        .children(controls(hud, frozen, covered, input.next_slot))
         .children(input.log)
         .children(summary)
         .children(input.proposals)
@@ -151,15 +154,15 @@ pub(super) fn table(state: &State, input: Inputs<'_>) -> Element {
 
 /// The life orbs, the step tracks, the rows of mana and player counters and the Next button,
 /// none while the guided start's screen covers the table, as the game's opening covers its
-/// controls. The Next button stands in the lower right, where the ask prompt docks, so it gives
-/// way to whatever the table shows over itself, and a `frozen` table shows none.
-fn controls(input: &HudIn, frozen: bool, covered: bool, profile: Profile<'_>) -> Vec<Element> {
+/// controls. The Next button gives way to open overlays, and a frozen table shows none.
+fn controls(input: &HudIn, frozen: bool, covered: bool, next_slot: Option<Rect>) -> Vec<Element> {
     if input.view.and_then(opening::prompt).is_some() {
         return Vec::new();
     }
+    let profile = input.profile;
     let next = (input.view.and_then(|view| view.table.as_ref()))
         .filter(|_| !covered && !frozen)
-        .map(|table| turn::next(table.phase, input.window, profile));
+        .map(|table| turn::next(table.phase, input.window, next_slot));
     let pools = input
         .view
         .map(|view| pools::pools(view, input.window, profile));

@@ -6,7 +6,7 @@ use beryl_protocol::protocol::{Answer, TableAction};
 use game_manual::features::{
     ask, context_menu, library_order, lobby, log, palette, proposals, table, tokens,
 };
-use game_manual::manual::{ask::dock_anchor, assists::proposal_anchor, link, opening};
+use game_manual::manual::{ask::dock_anchor, assists::proposal_bounds, link, opening, turn};
 use kit_ui::widgets::FieldState;
 
 use super::{Client, Features, Mounted, Placement, Screen, SessionCommand, ViewInputs, update};
@@ -138,6 +138,7 @@ impl Mounted for TableScreen {
                 fields: inputs.fields,
                 bindings: inputs.bindings,
                 link_error: inputs.link_error,
+                next_slot: turn::next_slot(inputs.hud),
                 log,
                 proposals,
                 menu,
@@ -432,12 +433,13 @@ impl Mounted for ProposalPanel {
         id: &'static str,
         inputs: ViewInputs<'_>,
     ) -> Option<&'a Element> {
-        let proposals = &inputs.view?.table.as_ref()?.proposals;
-        if proposals.is_empty() {
+        let view = inputs.view?;
+        let proposals = &view.table.as_ref()?.proposals;
+        if proposals.is_empty() || link::frozen(view) || opening::prompt(view).is_some() {
             return None;
         }
         let slot = Features::slot::<Self>(&mut features.slots, id);
-        let anchor = proposal_anchor(
+        let bounds = proposal_bounds(
             proposals,
             *slot.state(),
             inputs.profile,
@@ -448,7 +450,7 @@ impl Mounted for ProposalPanel {
             proposals,
             window: inputs.window,
             profile: inputs.profile,
-            anchor,
+            bounds,
         }))
     }
 

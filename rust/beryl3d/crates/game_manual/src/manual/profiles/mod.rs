@@ -1,12 +1,11 @@
 //! Compact profile slots and layouts for manual table controls.
 
-use beryl_protocol::protocol::ProposalView;
-use game_hud::hud::placement_scene::{Group, PlacementScene, rect};
+use game_hud::hud::placement_scene::{Group, PlacementScene, inset, rect};
 use game_table::profiles::TableBands;
 use glam::Vec2;
 use kit_base::data::profiles::Banded;
 use kit_base::geometry::Rect;
-use kit_base::tokens::{size, space, type_style};
+use kit_base::tokens::{size, space};
 use kit_ui::element::{Anchor, Element, row};
 use kit_ui::widgets::button;
 
@@ -116,44 +115,88 @@ pub(super) fn ask_anchor(
     Anchor::Point(Vec2::new(placed.x, placed.y), Vec2::ZERO)
 }
 
-/// A proposal tries the corner, then the space above the viewer’s strip.
-pub(super) fn proposal_slot(
-    proposals: &[ProposalView],
-    corner: Rect,
+/// Places Next beside the viewer's life total, raising it above the hand when the
+/// fan takes up more than one row. The middle offers another slot on a crowded table.
+pub(super) fn next_slot(
+    preferred: Rect,
     bands: TableBands,
     layout: Option<&PlacementScene>,
-    target: f32,
-) -> Option<Anchor> {
-    let layout = layout?;
-    let height = panel_height(proposals, target);
-    let preferred = rect(corner.x, corner.y, corner.width, height);
-    let over_hand = rect(
-        corner.x,
-        bands.your_strip.top - height,
-        corner.width,
-        height,
+) -> Rect {
+    let Some(layout) = layout else {
+        return preferred;
+    };
+    let hand_top = layout
+        .group(Group::Hand)
+        .iter()
+        .map(|card| card.y)
+        .fold(bands.hand.top, f32::min);
+    let raised = rect(
+        preferred.x,
+        preferred.y.min(hand_top - preferred.height - space::S),
+        preferred.width,
+        preferred.height,
     );
-    let choices = [preferred, over_hand].into_iter().map(Into::into);
-    let avoids = vec![Group::YourRows.children(), Group::Stack.children()];
-    let (_, placed) = layout.place("proposal panel", avoids, choices)?;
-    Some(Anchor::Point(
-        Vec2::new(corner.x + corner.width, placed.y),
-        Vec2::X,
-    ))
+    let middle = rect(
+        preferred.x,
+        bands.middle.middle() - preferred.height / 2.0,
+        preferred.width,
+        preferred.height,
+    );
+    let left = rect(bands.left, middle.y, middle.width, middle.height);
+    let avoids = [Group::Hand, Group::YourRows, Group::TheirRows, Group::Stack]
+        .map(Group::children)
+        .to_vec();
+    // Allow the middle button's border to cross the edge of a card by a few
+    // points if rounding and perspective leave it just outside the gap.
+    let choices = [
+        raised.into(),
+        middle.into(),
+        left.into(),
+        inset(middle, space::S),
+        inset(left, space::S),
+    ];
+    layout
+        .place("Next", avoids, choices)
+        .map_or(raised, |(_, placed)| placed)
 }
 
-/// The space the title, review rows and Apply need before the panel is laid out.
-fn panel_height(proposals: &[ProposalView], touch: f32) -> f32 {
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "proposal panels hold a short list"
-    )]
-    let count = |length: usize| length as f32;
-    let title = type_style::BODY.size * type_style::BODY.line_height;
-    2.0 * space::M
-        + touch
-        + proposals
-            .iter()
-            .map(|proposal| title + count(proposal.lines.len() + 1) * (touch + space::S) + space::M)
-            .sum::<f32>()
+/// Finds a clear lane for the proposal panel at either edge of the battlefield. The
+/// scrollable review can use a shorter slot when the full panel would cover a row.
+pub(super) fn proposal_slot(
+    preferred: Rect,
+    short_height: Option<f32>,
+    bands: TableBands,
+    layout: &PlacementScene,
+) -> Option<Rect> {
+    let groups = [Group::YourRows, Group::TheirRows, Group::Stack, Group::Hand];
+    let top = bands.opponent_back.top;
+    let bottom = bands.your_strip.top;
+    let left = bands.left + space::S;
+    let right = preferred.x;
+    let occupied: Vec<_> = groups
+        .iter()
+        .flat_map(|&group| layout.group(group))
+        .collect();
+    let heights = std::iter::once(preferred.height)
+        .chain(short_height.filter(|&height| height < preferred.height));
+    let choices = heights.flat_map(|height| {
+        let centred = preferred.y + (preferred.height - height) / 2.0;
+        let mut positions = vec![centred, top, bottom - height];
+        for card in &occupied {
+            positions.push(card.y + card.height + space::S);
+            positions.push(card.y - height - space::S);
+        }
+        positions.sort_by(|a, b| (a - centred).abs().total_cmp(&(b - centred).abs()));
+        positions.dedup();
+        positions
+            .into_iter()
+            .filter(move |y| *y >= top && y + height <= bottom)
+            .flat_map(move |y| {
+                [right, left].map(move |x| rect(x, y, preferred.width, height).into())
+            })
+    });
+    let avoids = groups.map(Group::children).to_vec();
+    layout
+        .place("proposal panel", avoids, choices)
+        .map(|(_, placed)| placed)
 }

@@ -11,7 +11,7 @@ use beryl_protocol::ipc::FixtureMessage;
 use beryl_protocol::protocol::Side;
 use game_probe::story::Body;
 use kit_probe::agent::Layout;
-use kit_ui::input::{Insets, Size};
+use kit_ui::input::{Button, Insets, Modifiers, Pointer, PointerKind, PointerPhase, Size};
 
 use crate::faults::Listed;
 use crate::runner::Test;
@@ -262,6 +262,34 @@ pub(crate) fn page_with_messages(
     if drive.pointer_over_hand {
         let moves = pointer_moves(page.frame());
         page.set_pointer_moves(moves);
+    }
+    // Desktop already shows the proposals. Replay the press on compact profiles so
+    // the ordinary interface checks see the open panel alongside the cards and stack.
+    if matches!(
+        name,
+        "screen/table-assists" | "story/game_manual/table-assists"
+    ) && page.data().profiles.for_size(size).size_class == kit_scene::SizeClass::Compact
+    {
+        let toggle = page
+            .try_find("button \"Show proposals\"")
+            .map_err(|error| error.to_string())?;
+        let rect = toggle.rect;
+        let position = [rect.x + rect.width / 2.0, rect.y + rect.height / 2.0].into();
+        let presses = [PointerPhase::Down, PointerPhase::Up].map(|phase| {
+            (
+                TICK.0,
+                Pointer {
+                    id: 0,
+                    kind: PointerKind::Mouse,
+                    phase,
+                    position,
+                    button: Button::Primary,
+                    wheel: [0.0; 2].into(),
+                    modifiers: Modifiers::default(),
+                },
+            )
+        });
+        page.set_pointer_moves(presses.to_vec());
     }
     if let Some((released, delay)) = delay {
         // The reply delay applies once every view but the last has been released.

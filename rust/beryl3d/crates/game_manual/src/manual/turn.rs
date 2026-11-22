@@ -13,9 +13,12 @@ use beryl_protocol::protocol::{PlayerView, Side, TableAction, TablePhase};
 use glam::Vec2;
 
 use crate::features::table::Message as TableMessage;
+use game_hud::hud::HudIn;
 use game_table::table::Window;
-use kit_ui::element::{Anchor, Element};
-use kit_ui::widgets::primary;
+use kit_base::geometry::Rect;
+use kit_base::tokens::{color, type_style};
+use kit_ui::element::{Anchor, Element, Position, TextAlign, text};
+use kit_ui::widgets::{primary, start_panel::small};
 
 /// The phase each icon of the step track sets, by its index in the track
 /// (`hud::steps::STEP_STOPS`): the last, cleanup, sets the end step, as the web maps it.
@@ -135,36 +138,48 @@ pub fn advance(view: &PlayerView, with_action: bool) -> Vec<TableAction> {
     }
 }
 
-/// The Next button and, under it, the name of the phase after `phase`, in the lower right of
-/// `window`. On the desktop it stands as the web's table stands its `turn-action`, at the foot
-/// of the game's action dock (`prompts::bar`), `layout::DOCK_RIGHT` and `DOCK_BOTTOM` in from
-/// the corner. On the phone it stands the table's edge (`flat.table.edge`) in from the corner.
+/// The compact slot for Next, after clearing the table's resting cards.
 #[must_use]
-pub fn next(
-    phase: TablePhase,
-    window: Window,
-    profile: game_table::profiles::Profile<'_>,
-) -> Element {
-    use game_hud::prompts::bar::{captioned, captioned_dock, dock_sized, turn_action};
+pub fn next_slot(hud: &HudIn<'_>) -> Option<Rect> {
+    let preferred = hud.profile.slot("manual.next")?.rect;
+    let bands = hud.profile.bands()?;
+    Some(super::profiles::next_slot(
+        preferred,
+        bands,
+        hud.placement_scene,
+    ))
+}
+
+/// Next advances to the phase named in its caption. Compact layouts put both labels
+/// inside one touch target. Desktop keeps the caption below the dock's button.
+#[must_use]
+pub fn next(phase: TablePhase, window: Window, slot: Option<Rect>) -> Element {
+    use game_hud::prompts::bar::{captioned_dock, dock_sized, turn_action};
     use kit_ui::layout::{DOCK_BOTTOM, DOCK_RIGHT};
-    let size = window.size;
     let button = primary("Next").on_press(TableMessage::Next);
     let caption = caption(next_phase(phase));
-    let (mut action, corner) = if let Some(slot) = profile.slot("manual.next") {
-        let rect = slot.rect;
-        (
-            captioned(button, caption),
-            Vec2::new(rect.x + rect.width, rect.y + rect.height),
-        )
-    } else {
-        let dock = captioned_dock().child(turn_action(dock_sized(button), None, caption));
-        (
-            dock,
-            Vec2::new(size.width - DOCK_RIGHT, size.height - DOCK_BOTTOM),
-        )
-    };
-    action.anchor = Some(Anchor::Point(corner, Vec2::ONE));
-    action
+    if let Some(slot) = slot {
+        let phase_style = type_style::SCREEN_BODY;
+        let phase_height = phase_style.size * phase_style.line_height;
+        let mut button = small(button).width(slot.width).height(slot.height).child(
+            text(caption)
+                .style(phase_style)
+                .color(color::PRIMARY_INK)
+                .text_align(TextAlign::Center)
+                .position(Position::Absolute)
+                .inset([None, Some(0.0), Some(0.0), Some(0.0)]),
+        );
+        button.style.padding = [0.0, 0.0, phase_height, 0.0];
+        button.anchor = Some(Anchor::Point(Vec2::new(slot.x, slot.y), Vec2::ZERO));
+        return button;
+    }
+    let mut dock = captioned_dock().child(turn_action(dock_sized(button), None, caption));
+    let corner = Vec2::new(
+        window.size.width - DOCK_RIGHT,
+        window.size.height - DOCK_BOTTOM,
+    );
+    dock.anchor = Some(Anchor::Point(corner, Vec2::ONE));
+    dock
 }
 
 #[cfg(test)]

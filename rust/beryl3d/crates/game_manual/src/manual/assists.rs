@@ -5,7 +5,8 @@
 //!   and Apply, which commits the checked lines as one undoable batch (the web's
 //!   `ProposalPanel`, `ui/src/table/ProposalPanel.tsx`). The table marks each affected card
 //!   itself, with a suggested mark in the view's script. On the desktop the panel stands in the
-//!   log's column at the table's left edge; on a phone it is folded to a button under the log's icon;
+//!   log's column at the table's left edge. A compact table opens it in a clear lane
+//!   at the edge of the battlefield.
 //! - state nudges' labels: a small button on each card or life total a nudge is about, which
 //!   applies the nudge's action (the web's `CardLabels` and `LifeLabels`,
 //!   `ui/src/table/Labels.tsx`);
@@ -24,7 +25,7 @@ use beryl_protocol::protocol::{
 use beryl_protocol::script::Subject;
 use game_hud::hud::anchors::anchor_target;
 use game_hud::hud::placement_scene::PlacementScene;
-use kit_base::data::Card;
+use kit_base::{data::Card, geometry::Rect};
 
 use glam::Vec2;
 
@@ -33,7 +34,7 @@ use game_hud::inspect::viewer::object_box;
 use game_table::profiles::Profile;
 use game_table::table::Window;
 use kit_base::tokens::{color, size, space, type_style};
-use kit_ui::element::{Align, Anchor, Element, column, row, text};
+use kit_ui::element::{Align, Anchor, Element, Overflow, column, row, text};
 use kit_ui::input::Size;
 use kit_ui::widgets::screen::overlay;
 use kit_ui::widgets::start_panel::{checkbox, small};
@@ -42,22 +43,15 @@ use kit_ui::widgets::{button, primary};
 /// The proposal panel's name.
 pub const PROPOSALS: &str = "Proposals";
 
-/// The panel of `proposals`, or nothing while there are none: one section per proposal, its
-/// title, a checkbox per line with whose change it is, and Apply, enabled while a line is
-/// checked. On the desktop it stands in the log's column at the table's left edge, centred
-/// between the two players' rows, where no card lies, since the space under the log holds the
-/// opponent's lands. A phone's table has no room the panel could take without covering cards,
-/// so there it is folded to a button under the log's icon button in the safe area's top right
-/// corner, beside the opponent's battlefield, and opens under that button while `opened` is the
-/// id of the first proposal, with the button at its top, as the folded log does. The web gives the panel a strip of its own over
-/// the phone's hand instead.
+/// The proposals, with a checkbox per change and Apply for each proposal. Like the web's
+/// compact footer, the open review needs its own space so players can still use the cards.
 #[must_use]
 pub fn proposals(
     proposals: &[ProposalView],
     opened: Option<u32>,
     window: Window,
     profile: Profile<'_>,
-    anchor: Option<Anchor>,
+    bounds: Option<Rect>,
     metrics: kit_base::data::flat::Manual,
 ) -> Option<Element> {
     let first = proposals.first()?.id;
@@ -72,65 +66,92 @@ pub fn proposals(
         panel = panel
             .children(proposals.iter().map(|each| proposal(each, None)))
             .width(metrics.log.width);
-        let left = metrics.edge;
         panel.anchor = Some(Anchor::Point(
-            Vec2::new(left, window.size.height / 2.0),
+            Vec2::new(metrics.edge, window.size.height / 2.0),
             Vec2::new(0.0, 0.5),
         ));
         return Some(panel);
     };
     let rect = slot.rect;
     let target = profile.data().checks.target_points;
-    let corner = Anchor::Point(Vec2::new(rect.x + rect.width, rect.y), Vec2::X);
     let open = opened == Some(first);
     let name = if open {
         "Hide proposals"
     } else {
         "Show proposals"
     };
-    let mut heading = small(button(PROPOSALS)).min_height(target).name(name);
-    // Narrower than a button's own padding makes it, to keep clear of the opponent's cards.
-    heading.style.padding = [0.0, space::M, 0.0, space::M];
-    let heading = heading
+    let mut toggle = small(button(PROPOSALS))
+        .min_height(target)
+        .name(name)
         .selected(open)
         .on_press(ProposalsMessage::Toggle((!open).then_some(first)));
+    toggle.style.padding = [0.0, space::M, 0.0, space::M];
+    toggle.anchor = Some(Anchor::Point(
+        Vec2::new(rect.x + rect.width, rect.y),
+        Vec2::X,
+    ));
     if !open {
-        let mut folded = heading;
-        folded.anchor = Some(corner);
-        return Some(folded);
+        return Some(toggle);
     }
-    panel = panel
-        .width(rect.width)
-        .align_items(Align::End)
-        .child(heading)
-        .children(
-            proposals
-                .iter()
-                .map(|each| proposal(each, Some(target)).align_self(Align::Stretch)),
+
+    let body = column()
+        .name("proposal changes")
+        .gap(space::M)
+        .min_height(0.0)
+        .overflow(Overflow::ScrollY)
+        .children(proposals.iter().map(|each| proposal(each, Some(target))));
+    if let Some(bounds) = bounds {
+        panel = panel
+            .width(bounds.width)
+            .max_height(bounds.height)
+            .child(body);
+        panel.anchor = Some(Anchor::Point(Vec2::new(bounds.x, bounds.y), Vec2::ZERO));
+        return Some(
+            column()
+                .name("proposal controls")
+                .child(toggle)
+                .child(panel),
         );
-    panel.anchor = anchor.or(Some(corner));
+    }
+    // If both sides of the battlefield are occupied, use a dismissible review
+    // like the command list. The player can return to the board with one press.
+    let safe = kit_scene::Slot::safe_area(window);
+    panel = panel
+        .holds_focus()
+        .width(metrics.log.width.min(rect.width))
+        .max_height(safe.height - 2.0 * space::M)
+        .child(
+            small(button("Hide proposals"))
+                .name(name)
+                .min_height(target)
+                .on_press(ProposalsMessage::Toggle(None)),
+        )
+        .child(body);
+    panel.anchor = Some(Anchor::Point(
+        Vec2::new(safe.x + safe.width / 2.0, safe.y + safe.height / 2.0),
+        Vec2::splat(0.5),
+    ));
     Some(panel)
 }
 
-/// Places an open phone panel and records its clearance from the table.
+/// Declares the open compact panel's placement relative to both battlefields, the stack
+/// and the viewer's hand. No slot means the board needs the separate review panel.
 #[must_use]
-pub fn proposal_anchor(
+pub fn proposal_bounds(
     proposals: &[ProposalView],
     opened: Option<u32>,
     profile: Profile<'_>,
     layout: Option<&PlacementScene>,
-) -> Option<Anchor> {
-    let first = proposals.first()?;
-    if opened != Some(first.id) {
+) -> Option<Rect> {
+    if opened != Some(proposals.first()?.id) {
         return None;
     }
-    let rect = profile.slot("manual.proposals")?.rect;
+    let [panel, short] = profile.slots(["manual.proposals.panel", "manual.proposals.short"]);
     super::profiles::proposal_slot(
-        proposals,
-        rect,
+        panel?.rect,
+        short.map(|slot| slot.rect.height),
         profile.bands()?,
-        layout,
-        profile.data().checks.target_points,
+        layout?,
     )
 }
 
@@ -147,10 +168,13 @@ fn proposal(proposal: &ProposalView, target: Option<f32>) -> Element {
             line: line.id,
             on: !line.on,
         };
-        touch(
-            checkbox(&format!("{} · {whose}", line.text), line.on).on_press(press),
-            target,
-        )
+        let mut control = checkbox(&format!("{} · {whose}", line.text), line.on).on_press(press);
+        if target.is_some() {
+            control.children[0].style.shrink = 0.0;
+            control.children[1].style.min_width = Some(0.0);
+            control = control.align_self(Align::Stretch);
+        }
+        touch(control, target)
     });
     let apply = touch(small(primary("Apply")), target)
         .name("Apply")
