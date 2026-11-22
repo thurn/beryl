@@ -570,9 +570,21 @@ impl Ctx {
                 super::words::step_noun(step),
             )],
             Effect::EndTurn => vec!["end the turn".to_owned()],
-            Effect::ExtraTurn(player) => vec![self.stated(player, ("take", "takes"), |_| {
-                "an extra turn after this one".to_owned()
-            })],
+            Effect::ExtraTurn(player, ability) => {
+                let take_turn = self.clause(player, ("take", "takes"), |_| {
+                    "an extra turn after this one".to_owned()
+                });
+                let mut clauses = vec![take_turn];
+                if let Some(ability) = ability {
+                    let trigger = self
+                        .face
+                        .and_then(|face| face.abilities.get(ability.index()));
+                    if let Some(trigger) = trigger {
+                        clauses.extend(self.delayed(trigger));
+                    }
+                }
+                clauses
+            }
             Effect::ControlPlayer(player) => vec![format!(
                 "you control {} during that player's next turn",
                 self.player(player)

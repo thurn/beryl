@@ -7,6 +7,7 @@ use super::super::operands::{amounts, chooser, objects, player_count, players, z
 use super::super::{Kind, LINKED, Neighbours, leak, leak_slice};
 
 mod damage;
+mod turn;
 
 /// The neighbours of the node `effect` itself, its children unchanged.
 #[expect(
@@ -755,11 +756,7 @@ pub(super) fn local(effect: &'static Effect) -> Vec<(Kind, String, Effect)> {
             "omit ending the turn".to_owned(),
             Effect::NOTHING,
         ),
-        Effect::ExtraTurn(player) => {
-            for (name, player) in players(player) {
-                add(Kind::EffectPlayers, name, Effect::ExtraTurn(player));
-            }
-        }
+        Effect::ExtraTurn(player, ability) => turn::extra_turn(player, ability, &mut add),
         Effect::ChangeRule { rule, duration } => {
             for (kind, name, rule) in rules(rule) {
                 add(

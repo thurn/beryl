@@ -85,7 +85,9 @@ fn replay_paused<'a, L: Layout>(
 ) -> Option<&'a State<L>> {
     match s.pending() {
         Pending::Resolving(_) => resolve::replay_to_question(s, t, x, seen).ok(),
-        Pending::StepActions(_) => paused_step::replay_to_question(s, t, x, seen).ok(),
+        Pending::StepActions(_) | Pending::TurnStart(_) => {
+            paused_step::replay_to_question(s, t, x, seen).ok()
+        }
         Pending::None
         | Pending::PlayOrDraw { .. }
         | Pending::Mulligans

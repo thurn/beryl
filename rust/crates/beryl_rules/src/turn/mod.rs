@@ -3,6 +3,7 @@
 //! Implements: CR 103.8, CR 305.2, CR 500.2, CR 500.5, CR 500.6, CR 502.3, CR 502.4, CR 504.1, CR 514, CR 703.4d, CR 703.4f
 
 mod end;
+mod start;
 pub(crate) use end::end_the_turn;
 
 pub(crate) mod paused_step;
@@ -18,10 +19,12 @@ use crate::game::Game;
 use crate::ids::Seat;
 use crate::layout::Layout;
 use crate::objects::phasing;
-use crate::replacement::event::{self, Reason, Sink};
-use crate::state::{Duration, Pending, State, TurnStep, Zone, ZoneKey};
+use crate::replacement::event::{self, Reason, ReplacementKind, Sink};
+use crate::replacement::turns;
+use crate::state::{Duration, ObjectRef, Pending, State, TurnStep, Zone, ZoneKey};
 use crate::table::{Capability, GameTable};
 use crate::zones::drawing;
+use beryl_kernel::rule_changes::RuleKind;
 
 /// Whether any creature is attacking.
 pub(crate) fn any_attacking<L: Layout>(s: &State<L>) -> bool {
@@ -42,7 +45,27 @@ pub(crate) fn begin_turn<L: Layout>(
         s.end_game(Outcome::Stalled(StallReason::Turns));
         return Ok(());
     }
-    let active = s.begin_turn();
+    if t.replaces_any().replaces(ReplacementKind::BeginTurn)
+        && let Some(question) = turns::choose(s, t)?
+    {
+        s.pause_step_actions(Default::default(), question, true);
+        return Ok(());
+    }
+    take_turn(s, t, sink, &[])
+}
+
+/// Begins a turn that survived its replacements, carrying out any actions they deferred
+/// to this turn before its first step (see CR 614.10b).
+fn take_turn<L: Layout>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+    untaps: &[ObjectRef<L>],
+) -> Result<(), Full> {
+    if !s.delayed().is_empty() {
+        crate::stack::delayed_triggers::end_turn(s, t);
+    }
+    let active = s.begin_turn()?;
     // See CR 611.2a: an effect lasts "as long as stated by the spell or ability creating it";
     // one that lasts until a player's next turn ends as that turn begins.
     s.expire(Duration::UntilYourNextTurn(active));
@@ -50,6 +73,12 @@ pub(crate) fn begin_turn<L: Layout>(
     // See CR 302.6: the active player's permanents have now been under their control since their
     // most recent turn began.
     s.reset_permanents_for_turn(active);
+    for &object in untaps {
+        sink.enter_source(|| object);
+        let result = event::set_tapped(s, t, sink, object, false);
+        sink.leave();
+        result?;
+    }
     if t.can(Capability::TurnStructure) {
         return begin_planned_turn(s, t, sink);
     }
@@ -131,23 +160,40 @@ pub(crate) fn step_actions<L: Layout>(
 /// Untaps the active player's permanents
 /// ([CR 502.3](https://yawgatog.com/resources/magic-rules/#R5023)): "the active player
 /// determines which permanents they control will untap. Then they untap them all
-/// simultaneously." Their events are kept as one group.
+/// simultaneously." Their events are kept as one group. The rule also says "effects can
+/// keep one or more of a player's permanents from untapping".
 fn untap<L: Layout>(s: &mut State<L>, t: &GameTable, sink: &mut Sink<L>) -> Result<(), Full> {
     phasing::untap_step(s, t, sink)?;
     sink.together();
-    let untapped = untap_all(s, t, sink);
+    let untapped = if t.rules_of(RuleKind::StaysTapped).is_empty() {
+        untap_all::<L, false>(s, t, sink)
+    } else {
+        untap_all::<L, true>(s, t, sink)
+    };
     sink.apart();
     untapped
 }
 
 /// [`untap`], inside the group it opens.
 #[inline]
-fn untap_all<L: Layout>(s: &mut State<L>, t: &GameTable, sink: &mut Sink<L>) -> Result<(), Full> {
+fn untap_all<L: Layout, const RESTRICTED: bool>(
+    s: &mut State<L>,
+    t: &GameTable,
+    sink: &mut Sink<L>,
+) -> Result<(), Full> {
     let active = s.turn().active();
     let mut i = 0;
     while i < s.battlefield().len() {
         let slot = s.battlefield()[i];
-        if s.controller(slot) == active {
+        if s.controller(slot) == active
+            && (!RESTRICTED
+                || !crate::continuous::rule_change::own_rule_holds(
+                    s,
+                    t,
+                    slot,
+                    RuleKind::StaysTapped,
+                ))
+        {
             event::set_tapped(s, t, sink, s.object_ref(slot), false)?;
         }
         i += 1;

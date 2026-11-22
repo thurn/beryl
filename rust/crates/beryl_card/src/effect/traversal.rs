@@ -99,7 +99,7 @@ impl Effect {
             | Effect::ControlPlayer(_)
             | Effect::EndTurn
             | Effect::AdditionalStep(_)
-            | Effect::ExtraTurn(_) => Branches::Single,
+            | Effect::ExtraTurn(..) => Branches::Single,
         }
     }
 
@@ -173,7 +173,7 @@ impl Effect {
             | Effect::ControlPlayer(_)
             | Effect::EndTurn
             | Effect::AdditionalStep(_)
-            | Effect::ExtraTurn(_) => &[],
+            | Effect::ExtraTurn(..) => &[],
         }
     }
 
@@ -308,7 +308,7 @@ impl Effect {
             | Effect::ControlPlayer(_)
             | Effect::EndTurn
             | Effect::AdditionalStep(_)
-            | Effect::ExtraTurn(_) => None,
+            | Effect::ExtraTurn(..) => None,
         }
     }
 }

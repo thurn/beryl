@@ -196,6 +196,7 @@ fn enters_untapped<L: Layout>(s: &State<L>, player: Seat, face: &Face) -> bool {
             | Rewrite::Instead
             | Rewrite::Dredge(_)
             | Rewrite::Choose(_)
+            | Rewrite::MaySkipTurnToUntap
             | Rewrite::Multiply(_)
             | Rewrite::EnterAsCopy { .. } => true,
         })

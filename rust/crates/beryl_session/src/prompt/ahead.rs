@@ -22,7 +22,10 @@ use super::held::Table;
 /// take the recorded answer of the question after it.
 pub(crate) fn forced<L: Layout>(s: &State<L>) -> State<L> {
     let mut copy = s.clone();
-    if matches!(s.pending(), Pending::Resolving(_) | Pending::StepActions(_)) {
+    if matches!(
+        s.pending(),
+        Pending::Resolving(_) | Pending::StepActions(_) | Pending::TurnStart(_)
+    ) {
         return copy;
     }
     copy.set_profile(Profile {

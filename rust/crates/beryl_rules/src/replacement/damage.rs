@@ -416,7 +416,7 @@ fn prevention_filter(effect: &'static Effect) -> Option<&'static Filter> {
         | Effect::ControlPlayer(_)
         | Effect::EndTurn
         | Effect::AdditionalStep(_)
-        | Effect::ExtraTurn(_) => None,
+        | Effect::ExtraTurn(..) => None,
     }
 }
 

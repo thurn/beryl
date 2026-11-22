@@ -39,6 +39,10 @@ pub use damage::{
     prevent_next_damage_from_chosen_source, prevent_next_damage_to_any_target,
 };
 
+mod turn;
+
+pub use turn::{control_player, end_turn, extra_turn, extra_turn_with_trigger};
+
 /// "This creature", "this spell": [`Objects::This`].
 pub const fn this() -> Objects {
     Objects::This
@@ -735,21 +739,6 @@ pub const fn delay(ability: u8) -> Effect {
 /// [`Effect::GetEmblem`]: "[player] gets an emblem with [abilities]".
 pub const fn get_emblem(player: Players, emblem: &'static CardDef) -> Effect {
     Effect::GetEmblem { player, emblem }
-}
-
-/// [`Effect::ControlPlayer`]: "you control [player] during that player's next turn".
-pub const fn control_player(player: Players) -> Effect {
-    Effect::ControlPlayer(player)
-}
-
-/// [`Effect::ExtraTurn`]: "[player] takes an extra turn after this one".
-pub const fn extra_turn(player: Players) -> Effect {
-    Effect::ExtraTurn(player)
-}
-
-/// [`Effect::EndTurn`]: "End the turn".
-pub const fn end_turn() -> Effect {
-    Effect::EndTurn
 }
 
 /// [`Effect::WinGame`]: "[player] wins the game".

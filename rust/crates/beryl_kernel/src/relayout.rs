@@ -408,6 +408,7 @@ impl<L: Layout> Relayout for Pending<L> {
             }),
             Pending::Resolving(r) => Pending::Resolving(r.relayout()),
             Pending::StepActions(r) => Pending::StepActions(r.relayout()),
+            Pending::TurnStart(r) => Pending::TurnStart(r.relayout()),
             &Pending::TurningFaceUp {
                 slot: s,
                 cost,

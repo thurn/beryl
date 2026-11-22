@@ -41,9 +41,15 @@ impl<L: Layout> Store<L> for Effects<L> {
     /// an otherwise interchangeable object, even when both have the same characteristics.
     #[inline]
     fn names(&self) -> Bitboard<L::Slot> {
-        self.of(Kinds::PREVENTION)
+        self.of(Kinds::PREVENTION | Kinds::EXTRA_TURN)
             .iter()
-            .filter_map(ContinuousEffect::chosen_shield_source)
+            .filter_map(|entry| {
+                if let Payload::ExtraTurn(Some(trigger)) = entry.payload {
+                    trigger.source
+                } else {
+                    entry.chosen_shield_source()
+                }
+            })
             .map(|source| source.slot)
             .collect()
     }
@@ -111,7 +117,7 @@ impl<L: Layout> Store<L> for Effects<L> {
                             Payload::Rule(_)
                                 | Payload::Prevent(_)
                                 | Payload::Control(_)
-                                | Payload::ExtraTurn
+                                | Payload::ExtraTurn(_)
                         ),
                         "an effect on a player that is no rule change, shield, control or extra turn",
                         Some(At::Player(player)),
@@ -224,7 +230,14 @@ impl<L: Layout> Store<L> for Effects<L> {
                 ))
             })
         };
-        on_objects.or_else(permission).or_else(rule_change)
+        let extra_turn = || {
+            let (_, player, _) = self.next_extra_turn()?;
+            Some(format!("a pending extra turn for player {}", player.get()))
+        };
+        on_objects
+            .or_else(permission)
+            .or_else(rule_change)
+            .or_else(extra_turn)
     }
 }
 

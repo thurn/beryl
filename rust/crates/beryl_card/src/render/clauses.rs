@@ -300,7 +300,7 @@ pub(super) fn subject_of(effect: &Effect) -> Option<Players> {
         | Effect::FlipCoin(player)
         | Effect::WinGame(player)
         | Effect::LoseGame(player)
-        | Effect::ExtraTurn(player) => Some(player),
+        | Effect::ExtraTurn(player, _) => Some(player),
         Effect::EndTurn | Effect::AdditionalStep(_) => None,
         Effect::ForEachPlayer { .. }
         | Effect::Counter(_)

@@ -141,6 +141,7 @@ impl<L: Layout> State<L> {
                 attacked: false,
                 controller: None,
                 after_extra: None,
+                starting_draw_later: false,
             },
             stack: Default::default(),
             captured_words: Default::default(),

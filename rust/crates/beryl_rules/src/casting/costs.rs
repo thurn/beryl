@@ -201,6 +201,7 @@ pub fn cost_being_cast<L: Layout>(s: &State<L>, t: &GameTable, x: u8) -> Option<
         | Pending::CombatDamage { .. }
         | Pending::Resolving(_)
         | Pending::StepActions(_)
+        | Pending::TurnStart(_)
         | Pending::TurningFaceUp { .. }
         | Pending::OrderEntered { .. }
         | Pending::EnterChoosing { .. }

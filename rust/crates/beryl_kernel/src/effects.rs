@@ -30,6 +30,7 @@ use crate::object::ObjectRef;
 use crate::observation::Observation;
 use crate::query::Copiable;
 use crate::rule_changes::{RuleId, Rules};
+use crate::stack::{AbilityRef, TriggeredAbility};
 use crate::state::State;
 use crate::store::{Duration, Ended};
 use crate::table::GameTable;
@@ -105,7 +106,7 @@ pub enum Continuous<L: Layout = Small> {
     /// `controller` controls `controlled` during `controlled`'s next turn ([`control`]).
     Control { controlled: Seat, controller: Seat },
     /// The player takes an extra turn after the current one ([`extra_turn`]).
-    ExtraTurn(Seat),
+    ExtraTurn(Seat, Option<AbilityRef<L, TriggeredAbility>>),
 }
 
 impl<L: Layout> Continuous<L> {
@@ -122,7 +123,7 @@ impl<L: Layout> Continuous<L> {
             | Continuous::Text(object, _) => Subject::Object(object),
             Continuous::Rule(subject, _) | Continuous::Prevent(subject, _) => subject,
             Continuous::Control { controlled, .. } => Subject::Player(controlled),
-            Continuous::ExtraTurn(player) => Subject::Player(player),
+            Continuous::ExtraTurn(player, _) => Subject::Player(player),
         }
     }
 
@@ -140,7 +141,7 @@ impl<L: Layout> Continuous<L> {
             Continuous::Copy(_, values) => Payload::Copy(values),
             Continuous::Text(_, change) => Payload::Text(change),
             Continuous::Control { controller, .. } => Payload::Control(controller),
-            Continuous::ExtraTurn(_) => Payload::ExtraTurn,
+            Continuous::ExtraTurn(_, trigger) => Payload::ExtraTurn(trigger),
         }
     }
 }
@@ -333,7 +334,7 @@ pub enum Payload<L: Layout = Small> {
     /// This player controls the affected player in their next turn ([`control`]).
     Control(Seat),
     /// The affected player takes an extra turn after the current one ([`extra_turn`]).
-    ExtraTurn,
+    ExtraTurn(Option<AbilityRef<L, TriggeredAbility>>),
 }
 
 impl<L: Layout> Payload<L> {
@@ -351,7 +352,7 @@ impl<L: Layout> Payload<L> {
             Payload::Copy(_) => Kinds::COPY,
             Payload::Text(_) => Kinds::TEXT,
             Payload::Control(_) => Kinds::CONTROL,
-            Payload::ExtraTurn => Kinds::EXTRA_TURN,
+            Payload::ExtraTurn(_) => Kinds::EXTRA_TURN,
         }
     }
 }
@@ -651,7 +652,7 @@ impl<L: Layout> State<L> {
                 }
                 Continuous::Prevent(Subject::Player(_), _)
                 | Continuous::Control { .. }
-                | Continuous::ExtraTurn(_) => {}
+                | Continuous::ExtraTurn(..) => {}
                 Continuous::Layer(object, _)
                 | Continuous::Move(object, _)
                 | Continuous::Rule(Subject::Object(object), _)

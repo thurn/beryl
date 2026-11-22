@@ -103,7 +103,7 @@ fn leads(
 }
 
 /// Waits for step triggers after the spell resolves. An Aura that watches its enchanted player
-/// needs time to reach that player's turn when it was cast on an opponent.
+/// may need to reach the next turn. A trigger tied to an extra turn always needs to reach it.
 fn wait_for_step_trigger(def: &CardDef, place: Place) -> Option<Stimulus> {
     def.faces
         .iter()
@@ -116,7 +116,7 @@ fn wait_for_step_trigger(def: &CardDef, place: Place) -> Option<Stimulus> {
             )
         })
         .map(|trigger| {
-            if trigger.whose == Players::Enchanted {
+            if trigger.exact_turn || trigger.whose == Players::Enchanted {
                 LAST_TURN
             } else {
                 TURN

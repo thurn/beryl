@@ -51,8 +51,9 @@ pub(crate) fn step_actions<L: Layout>(
     x: &mut Scratch<L>,
     a: &mut dyn Answers<L>,
 ) -> Result<(), Full> {
+    let starting_turn = matches!(s.pending(), Pending::TurnStart(_));
     let mut record = match s.pending() {
-        Pending::StepActions(r) => r.record.clone(),
+        Pending::StepActions(r) | Pending::TurnStart(r) => r.record.clone(),
         Pending::None
         | Pending::PlayOrDraw { .. }
         | Pending::Mulligans
@@ -74,7 +75,7 @@ pub(crate) fn step_actions<L: Layout>(
         let (spare, sink) = x.copy_to_spare(s);
         // Events of a run that ends paused are discarded with the copy.
         let mark = sink.len();
-        let Some(question) = run(spare, t, sink, record.as_slice())? else {
+        let Some(question) = run(spare, t, sink, record.as_slice(), starting_turn)? else {
             s.clone_from(spare);
             x.counts.copied();
             return Ok(());
@@ -88,7 +89,7 @@ pub(crate) fn step_actions<L: Layout>(
             continue;
         }
         resolve::keep_what_was_seen(s, spare, chance::replaying(sink));
-        s.pause_step_actions(record, question);
+        s.pause_step_actions(record, question, starting_turn);
         return Ok(());
     }
 }
@@ -102,12 +103,13 @@ pub(crate) fn replay_to_question<'a, L: Layout>(
     x: &'a mut Scratch<L>,
     seen: Option<&mut Vec<Tagged<L>>>,
 ) -> Result<&'a State<L>, Full> {
-    let Pending::StepActions(r) = s.pending().clone() else {
-        unreachable!("a step's paused turn-based actions");
+    let (Pending::StepActions(paused) | Pending::TurnStart(paused)) = s.pending() else {
+        unreachable!("paused turn-based actions");
     };
+    let starting_turn = matches!(s.pending(), Pending::TurnStart(_));
     let (spare, sink) = x.copy_to_spare(s);
     let mark = sink.len();
-    run(spare, t, sink, r.record.as_slice())?;
+    run(spare, t, sink, paused.record.as_slice(), starting_turn)?;
     match seen {
         Some(seen) => seen.extend(sink.take_from(mark)),
         None => sink.truncate(mark),
@@ -125,11 +127,16 @@ fn run<L: Layout>(
     t: &GameTable,
     sink: &mut Sink<L>,
     record: &[L::Index],
+    starting_turn: bool,
 ) -> Result<Option<Decision<L>>, Full> {
     sink.revealed = s.resume_resolution();
     sink.asking.begin(record, true)?;
     let scopes = sink.save_scopes();
-    let done = turn::step_actions(s, t, sink);
+    let done = if starting_turn {
+        turn::start::replay(s, t, sink)
+    } else {
+        turn::step_actions(s, t, sink)
+    };
     let stopped = sink.asking.end();
     sink.revealed = Bitboard::EMPTY;
     match done {

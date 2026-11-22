@@ -139,7 +139,7 @@ impl Scope<'_> {
                 let abilities = self.face.abilities;
                 let delayed = ability.index() < abilities.len()
                     && match abilities[ability.index()].trigger() {
-                        Some(trigger) => trigger.delayed,
+                        Some(trigger) => trigger.delayed && !trigger.exact_turn,
                         None => false,
                     }
                     && !matches!(
@@ -152,6 +152,16 @@ impl Scope<'_> {
                         )
                     );
                 if delayed {
+                    Ok(())
+                } else {
+                    Err(Malformed::Delayed)
+                }
+            }
+            Effect::ExtraTurn(_, Some(ability)) => {
+                let abilities = self.face.abilities;
+                if ability.index() < abilities.len()
+                    && matches!(abilities[ability.index()].trigger(), Some(t) if t.delayed && t.exact_turn && matches!(t.event, crate::TriggerEvent::Step(_)))
+                {
                     Ok(())
                 } else {
                     Err(Malformed::Delayed)
@@ -220,7 +230,7 @@ impl Scope<'_> {
             | Effect::ControlPlayer(_)
             | Effect::EndTurn
             | Effect::AdditionalStep(_)
-            | Effect::ExtraTurn(_) => Ok(()),
+            | Effect::ExtraTurn(_, None) => Ok(()),
         };
         both(entry, self.operands(effect.operands()))
     }

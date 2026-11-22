@@ -142,6 +142,7 @@ impl<'a, L: Layout> Observation<'a, L> {
             | Pending::Casting(_)
             | Pending::Resolving(_)
             | Pending::StepActions(_)
+            | Pending::TurnStart(_)
             | Pending::TurningFaceUp { .. }
             | Pending::OrderEntered { .. }
             | Pending::EnterChoosing { .. }

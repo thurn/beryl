@@ -34,6 +34,8 @@ pub struct Trigger {
     /// triggered ability will trigger only once--the next time its trigger event
     /// occurs--unless it has a stated duration".
     pub delayed: bool,
+    /// Whether this delayed ability can trigger only in the extra turn an effect schedules.
+    pub exact_turn: bool,
 }
 
 /// The event of a trigger: one of the kinds of event the engine raises. An entry names what
@@ -245,6 +247,7 @@ impl Trigger {
             subject,
             whose: Players::EachPlayer,
             delayed: false,
+            exact_turn: false,
         }
     }
 
@@ -314,6 +317,16 @@ impl Trigger {
         Trigger {
             delayed: true,
             ..self
+        }
+    }
+
+    /// "At the beginning of that turn's [step]": a delayed ability scheduled with an
+    /// extra turn, expiring with it if that step never begins (CR 603.7b and CR 614.10a).
+    pub const fn during_extra_turn(step: TurnStep) -> Trigger {
+        Trigger {
+            delayed: true,
+            exact_turn: true,
+            ..Trigger::step(step, Players::EachPlayer)
         }
     }
 

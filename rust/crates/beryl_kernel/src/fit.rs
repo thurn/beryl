@@ -218,9 +218,9 @@ impl<L: Layout> State<L> {
             )?;
         }
         match &self.pending {
-            Pending::Resolving(paused) | Pending::StepActions(paused) => {
-                Self::fits_paused::<M>(paused)
-            }
+            Pending::Resolving(paused)
+            | Pending::StepActions(paused)
+            | Pending::TurnStart(paused) => Self::fits_paused::<M>(paused),
             Pending::CombatDamage { lethal, .. } => room(
                 "combat damage assignments",
                 lethal.len(),

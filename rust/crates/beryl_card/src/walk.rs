@@ -168,7 +168,10 @@ impl Ability {
             ) => {
                 filter.walk(visit);
             }
-            Some(Replaced::None | Replaced::ThisEnters | Replaced::Damage) | None => {}
+            Some(
+                Replaced::None | Replaced::ThisEnters | Replaced::BeginTurn | Replaced::Damage,
+            )
+            | None => {}
         }
         if let Some(rule) = self.rule() {
             rule.players.walk(visit);
@@ -178,6 +181,7 @@ impl Ability {
                 }
                 Governed::ActivateLoyaltyAbilities(objects)
                 | Governed::Block(objects)
+                | Governed::UntapInUntapStep(objects)
                 | Governed::BlockAnyNumber(objects)
                 | Governed::Counter(objects) => {
                     objects.walk(visit);
@@ -462,7 +466,7 @@ impl Effect {
                 | Effect::ControlPlayer(_)
                 | Effect::EndTurn
                 | Effect::AdditionalStep(_)
-                | Effect::ExtraTurn(_) => {}
+                | Effect::ExtraTurn(..) => {}
             }
             false
         });

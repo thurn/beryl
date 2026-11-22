@@ -811,10 +811,18 @@ with the other spells. The transaction commits at cleanup, without running later
 instructions or giving priority for a normal resolution. Time Stop and Sundial
 of the Infinite use this effect.
 
-**Skipping a turn** is a replacement of beginning the turn (Time Vault), in the
-replacement pipeline, which already asks optional replacements. A continuous
-rule that skips a beginning-phase step removes it just before it would begin.
-Stasis removes untap at the start of each turn while its rule is in force.
+**Skipping a turn** replaces the start of a scheduled turn. A replacement choice
+pauses and replays through the same mechanism as a draw step's dredge choice.
+Skipping a regular turn advances the regular order. Skipping an extra turn
+consumes the scheduled turn and any delayed ability tied to it. Effects that
+wait for the next turn a player actually takes keep waiting. Time Vault untaps
+at the start of the next turn that actually begins. Final Fortune's delayed
+ability is scheduled with its extra turn and expires if that turn never has an
+end step.
+
+A continuous rule that skips a beginning-phase step removes it just before it
+would begin. Stasis removes untap at the start of each turn while its rule is in
+force.
 
 **Enchanting a player.** Paradox Haze adds an upkeep immediately after the
 enchanted player's first upkeep. The turn plan records whether the step that

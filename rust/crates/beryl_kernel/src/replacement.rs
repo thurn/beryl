@@ -109,6 +109,9 @@ pub(crate) fn check(def: &CardDef) -> Result<Replaces, Unreplaced> {
             // mask the layers fold over permanents: the game's table says whether any card has
             // it ([`crate::table::Capability::Dredge`]).
             (Replaced::Draw(Players::You, Draws::Each), Rewrite::Dredge(n)) if n > 0 => {}
+            (Replaced::BeginTurn, Rewrite::MaySkipTurnToUntap) => {
+                mask = mask | ReplacementKind::BeginTurn;
+            }
             (Replaced::Damage, Rewrite::Multiply(n)) if n > 1 => {
                 mask = mask | ReplacementKind::Damage;
             }
@@ -118,6 +121,7 @@ pub(crate) fn check(def: &CardDef) -> Result<Replaces, Unreplaced> {
                 | Replaced::Draw(..)
                 | Replaced::PutInto(..)
                 | Replaced::Enters { .. }
+                | Replaced::BeginTurn
                 | Replaced::Damage,
                 Rewrite::None
                 | Rewrite::ToZone(_)
@@ -125,6 +129,7 @@ pub(crate) fn check(def: &CardDef) -> Result<Replaces, Unreplaced> {
                 | Rewrite::EntersTappedUnlessFewLands(_)
                 | Rewrite::EntersTappedUnlessPayLife(_)
                 | Rewrite::EntersWithCounters(..)
+                | Rewrite::MaySkipTurnToUntap
                 | Rewrite::Instead
                 | Rewrite::Dredge(_)
                 | Rewrite::Choose(_)

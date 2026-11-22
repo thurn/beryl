@@ -91,6 +91,7 @@ fn resolve_top<L: Layout>(
         | Pending::CombatDamage { .. }
         | Pending::Casting(_)
         | Pending::StepActions(_)
+        | Pending::TurnStart(_)
         | Pending::TurningFaceUp { .. }
         | Pending::OrderEntered { .. }
         | Pending::EnterChoosing { .. }

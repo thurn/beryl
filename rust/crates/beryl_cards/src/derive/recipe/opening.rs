@@ -240,6 +240,18 @@ pub(super) fn open_recipe(def: &'static CardDef, place: Place, recipe: Recipe) -
             ));
             out
         }
+        Recipe::BeginTurnWithTappedSource => {
+            let mut out = new("begin your turn with the source tapped");
+            out.start = out.start.at(TURN - 1, P1, TurnStep::End);
+            let setup = &mut out.start.setup.players[P0.index()];
+            let mut permanents = setup.permanents.to_vec();
+            let permanent = permanents.iter_mut().find(|p| p.card == def.name)?;
+            *permanent = permanent.tapped();
+            setup.permanents = Vec::leak(permanents);
+            out.stimuli
+                .extend([Stimulus::PassUntil(TURN, TurnStep::Upkeep), Stimulus::Keep]);
+            out
+        }
         Recipe::Cast(player, filter, zone) => {
             let card = cast_partner(def, player, filter, zone)?;
             let mut out = new("cast a matching spell");

@@ -79,6 +79,9 @@ impl Ctx {
             (Replaced::Draw(players, draws), Rewrite::Instead) => {
                 return self.replaced_draw(ability, players, draws);
             }
+            (Replaced::BeginTurn, Rewrite::MaySkipTurnToUntap) => vec![format!(
+                "if you would begin your turn while {this} is tapped, you may skip that turn instead. If you do, untap {this}"
+            )],
             (Replaced::Damage, Rewrite::Multiply(n)) => vec![super::prevention::multiplied(n)],
             (
                 Replaced::None
@@ -86,9 +89,11 @@ impl Ctx {
                 | Replaced::Draw(..)
                 | Replaced::PutInto(..)
                 | Replaced::Enters { .. }
+                | Replaced::BeginTurn
                 | Replaced::Damage,
                 Rewrite::None
                 | Rewrite::ToZone(_)
+                | Rewrite::MaySkipTurnToUntap
                 | Rewrite::Instead
                 | Rewrite::Dredge(_)
                 | Rewrite::Multiply(_),

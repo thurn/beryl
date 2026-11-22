@@ -217,6 +217,8 @@ pub mod decks {
                 names::SUNDIAL_OF_THE_INFINITE,
                 names::PARADOX_HAZE,
                 names::STASIS,
+                names::TIME_VAULT,
+                names::FINAL_FORTUNE,
             ],
         ),
         ("sagas", &[names::THE_ELDEST_REBORN]),

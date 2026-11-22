@@ -15,10 +15,12 @@ use beryl_card::TurnStep;
 
 use crate::decision::Outcome;
 use crate::event::Event;
+use crate::fixed::Full;
 use crate::format::Format;
 use crate::ids::Seat;
-use crate::layout::{Layout, Table};
+use crate::layout::{Layout, Queue, Table};
 use crate::reference::Permanents;
+use crate::stack::{PendingTrigger, TriggerInfo};
 use crate::state::{Budgets, State};
 
 /// Where the game is in its turns (architecture §4.4).
@@ -49,13 +51,16 @@ pub struct Turn {
     ///
     /// [CR 724.1]: https://yawgatog.com/resources/magic-rules/#R7241
     pub(crate) controller: Option<Seat>,
-    /// In an extra turn, the active player of the last turn that was not one, whom the turn
-    /// order goes on from when the extra turns are over (see [CR 500.7]): "Some effects can give
+    /// The seat the regular turn order continues from, when the last actual turn was extra
+    /// or a regular turn was skipped (see [CR 500.7]): "Some effects can give
     /// a player extra turns. They do this by adding the turns directly after the specified
     /// turn." [`State::begin_turn`] sets it.
     ///
     /// [CR 500.7]: https://yawgatog.com/resources/magic-rules/#R5007
     pub(crate) after_extra: Option<Seat>,
+    /// The starting player's first actual turn is still waiting after their opening turn was
+    /// skipped, or is the current turn.
+    pub(crate) starting_draw_later: bool,
 }
 
 /// Every field, but the controller and the turn an extra turn follows only where there is
@@ -74,6 +79,7 @@ impl std::hash::Hash for Turn {
             attacked,
             controller,
             after_extra,
+            starting_draw_later,
         } = *self;
         (number, active, starting_player, step, priority).hash(h);
         (passes, cleanup_check, attacked).hash(h);
@@ -83,6 +89,9 @@ impl std::hash::Hash for Turn {
         if let Some(regular) = after_extra {
             // Tagged, so that it hashes apart from a controller's seat.
             (u8::MAX, regular).hash(h);
+        }
+        if starting_draw_later {
+            true.hash(h);
         }
     }
 }
@@ -114,10 +123,8 @@ impl Turn {
     /// [CR 103.8a]: https://yawgatog.com/resources/magic-rules/#R1038a
     #[inline]
     pub fn is_starting_players_first_turn(self) -> bool {
-        // The first turn always begins with the starting player active.
         debug_assert!(self.number > 0);
-        debug_assert!(self.number > 1 || self.active == self.starting_player);
-        self.number <= 1
+        (self.number <= 1 || self.starting_draw_later) && self.active == self.starting_player
     }
 
     /// The step or phase the game is in (see CR 500.1).
@@ -180,6 +187,41 @@ impl<L: Layout> State<L> {
         self.turn.active = starting;
     }
 
+    /// The active player of the turn that would begin next, before a replacement can skip it.
+    /// See [CR 500.7]: "The most recently created turn will be taken first."
+    ///
+    /// [CR 500.7]: https://yawgatog.com/resources/magic-rules/#R5007
+    pub fn next_turn_player(&self) -> Seat {
+        if self.turn.number == 0 && self.turn.after_extra.is_none() {
+            return self.turn.starting_player;
+        }
+        self.effects.next_extra_turn().map_or_else(
+            || self.next_player(self.turn.after_extra.unwrap_or(self.turn.active)),
+            |(_, player, _)| player,
+        )
+    }
+
+    /// Consumes the turn that would begin next, without starting it or taking a waiting
+    /// player-controlling effect. See [CR 614.10a]: "Anything scheduled for a skipped step,
+    /// phase, or turn won't happen." See [CR 724.1b]: "If a turn is skipped, any pending
+    /// player-controlling effects wait until the player who would be affected actually takes
+    /// a turn."
+    ///
+    /// [CR 614.10a]: https://yawgatog.com/resources/magic-rules/#R61410a
+    /// [CR 724.1b]: https://yawgatog.com/resources/magic-rules/#R7241b
+    pub fn skip_turn(&mut self) {
+        let before_first = self.turn.number == 0 && self.turn.after_extra.is_none();
+        if before_first || self.effects.take_extra_turn().is_none() {
+            self.turn.starting_draw_later |= before_first;
+            let last_regular = self.turn.after_extra.unwrap_or(self.turn.active);
+            self.turn.after_extra = Some(if before_first {
+                self.turn.starting_player
+            } else {
+                self.next_player(last_regular)
+            });
+        }
+    }
+
     /// Begins the next turn and returns its active player: the starting player's first
     /// (see [CR 103.8]: "The starting player takes their first turn."), then the extra turn
     /// created last if one is waiting ([`crate::effects::extra_turn`]; see [CR 500.7]: "The most
@@ -201,14 +243,30 @@ impl<L: Layout> State<L> {
     /// [CR 500.7]: https://yawgatog.com/resources/magic-rules/#R5007
     /// [CR 724.1]: https://yawgatog.com/resources/magic-rules/#R7241
     #[inline]
-    pub fn begin_turn(&mut self) -> Seat {
-        if self.turn.number == 0 {
+    pub fn begin_turn(&mut self) -> Result<Seat, Full> {
+        if self.turn.starting_draw_later
+            && self.turn.number > 0
+            && self.turn.active == self.turn.starting_player
+        {
+            self.turn.starting_draw_later = false;
+        }
+        if self.turn.number == 0 && self.turn.after_extra.is_none() {
             self.turn.active = self.turn.starting_player;
         } else {
             let regular = self.turn.after_extra.unwrap_or(self.turn.active);
-            let extra = self.effects.take_extra_turn();
-            self.turn.after_extra = extra.map(|_| regular);
-            self.turn.active = extra.unwrap_or_else(|| self.next_player(regular));
+            if let Some((player, trigger)) = self.effects.take_extra_turn() {
+                self.turn.after_extra = Some(regular);
+                self.turn.active = player;
+                if let Some(of) = trigger {
+                    self.delay_trigger(PendingTrigger {
+                        of,
+                        info: TriggerInfo::default(),
+                    })?;
+                }
+            } else {
+                self.turn.after_extra = None;
+                self.turn.active = self.next_player(regular);
+            }
         }
         self.turn.controller = self.effects.take_control(self.turn.active);
         // See CR 724.4: the controller sees what the controlled player sees, from the turn's
@@ -223,7 +281,12 @@ impl<L: Layout> State<L> {
             p.lands_played = 0;
         }
         self.trackers.begin_turn();
-        self.turn.active
+        Ok(self.turn.active)
+    }
+
+    /// Drops delayed abilities whose stated duration has expired (see CR 603.7b).
+    pub fn retain_delayed(&mut self, keep: impl Fn(&PendingTrigger<L>) -> bool) {
+        self.delayed.retain(keep);
     }
 
     /// The player who learns what `player` learns, besides them: the player controlling them

@@ -129,6 +129,8 @@ pub enum ReplacementKind {
     Move,
     /// Damage (`beryl_card`'s `Replaced::Damage`).
     Damage,
+    /// A player beginning a turn (`beryl_card`'s `Replaced::BeginTurn`).
+    BeginTurn,
 }
 
 impl ReplacementKind {

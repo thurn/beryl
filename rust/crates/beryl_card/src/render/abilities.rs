@@ -193,8 +193,10 @@ impl Ctx {
                 format!("at the beginning of {step} each turn")
             }
             TriggerEvent::Step(step) => {
-                let step = step_name(step);
-                format!("at the beginning of {}", self.whose_step(trigger, step))
+                format!(
+                    "at the beginning of {}",
+                    self.whose_step(trigger, step_name(step))
+                )
             }
             TriggerEvent::MainPhase => {
                 format!(
@@ -288,8 +290,12 @@ impl Ctx {
     }
 
     /// Whose step it is: "your upkeep", "each opponent's upkeep", "each end step", and for
-    /// a delayed trigger "the next end step" or "your next main phase" (CR 603.7).
+    /// a delayed trigger "the next end step", "your next main phase" or "that turn's end step"
+    /// (CR 603.7).
     fn whose_step(&mut self, trigger: &Trigger, step: &str) -> String {
+        if trigger.exact_turn {
+            return format!("that turn's {step}");
+        }
         match (trigger.whose, trigger.delayed) {
             (Players::You, true) => format!("your next {step}"),
             (Players::EachPlayer, true) => format!("the next {step}"),

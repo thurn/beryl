@@ -177,6 +177,39 @@ pub mod scenarios {
             THEM.life(23),
             ME.life(23),
         ]),
+        Scenario::new("Mindslaver waits for a turn after Time Vault skips the extra turn")
+            .interaction(&[Card::FinalFortune, Card::TimeVault])
+            .at(1, P0, TurnStep::End)
+            .battlefield(
+                P0,
+                &[
+                    MINDSLAVER,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                    Card::Island,
+                ],
+            )
+            .hand(P1, &[Card::TimeVault, Card::FinalFortune])
+            .battlefield(P1, &[Card::Mountain; 4])
+            .library(P1, &[Card::Forest; 2])
+            .actions(&[
+                advance_to(2, TurnStep::PrecombatMain),
+                THEM.casts(Card::TimeVault),
+                Resolve,
+                THEM.casts(Card::FinalFortune),
+                Resolve,
+                advance_to(2, TurnStep::End),
+                THEM.passes(),
+                ME.activates(MINDSLAVER, 0),
+                ME.targets_player(THEM),
+                THEM.picks_up_to(Card::TimeVault),
+                advance_to(3, TurnStep::PrecombatMain),
+                THEM.tapped(Card::TimeVault, 0),
+                advance_to(4, TurnStep::PrecombatMain),
+                ME.plays(Card::Forest),
+                THEM.controls(Card::Forest, 1),
+            ]),
         // CR 724.1 and 500.7: P0 takes an extra turn first, turn 2, which P1 takes no part
         // in; the control waits for turn 3, P1's next turn.
         warping("the controller's extra turn comes before the controlled turn").actions(&[

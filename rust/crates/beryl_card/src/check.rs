@@ -239,6 +239,7 @@ impl Scope<'_> {
                 | Rewrite::Instead
                 | Rewrite::Dredge(_)
                 | Rewrite::Choose(_)
+                | Rewrite::MaySkipTurnToUntap
                 | Rewrite::Multiply(_)
                 | Rewrite::EnterAsCopy { .. } => Ok(()),
             },

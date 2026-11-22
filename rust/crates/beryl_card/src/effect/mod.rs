@@ -647,7 +647,8 @@ pub enum Effect {
     /// turn. ... If multiple players are given extra turns, the extra turns are added one at a
     /// time, in APNAP order (see rule 101.4). The most recently created turn will be taken
     /// first."
-    ExtraTurn(Players),
+    /// Optionally creates the delayed ability that will trigger only during that extra turn.
+    ExtraTurn(Players, Option<AbilityIx>),
     /// "That player gets an additional [step] after this step."
     /// Adds a step to the active player's current phase (see [CR 500.9]).
     ///
@@ -764,7 +765,7 @@ impl Effect {
             | Effect::ControlPlayer(_)
             | Effect::EndTurn
             | Effect::AdditionalStep(_)
-            | Effect::ExtraTurn(_) => false,
+            | Effect::ExtraTurn(..) => false,
         }
     }
 }

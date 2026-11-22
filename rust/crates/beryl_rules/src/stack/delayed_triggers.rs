@@ -30,15 +30,8 @@ pub fn create<L: Layout>(
     amount: u8,
     object: Option<ObjectRef<L>>,
 ) -> Result<(), Full> {
-    let entry = &resolution.entry;
     let delayed = PendingTrigger {
-        of: AbilityRef {
-            source: entry.object(),
-            card: entry.card(),
-            face: entry.face(),
-            ability: TriggeredAbility::own(ability),
-            controller: entry.controller(),
-        },
+        of: source(resolution, ability),
         info: TriggerInfo {
             amount,
             object,
@@ -46,6 +39,35 @@ pub fn create<L: Layout>(
         },
     };
     trigger::delay(game.state, delayed)
+}
+
+/// The delayed ability and its source as the spell or ability that creates it resolves
+/// (see CR 603.7d and CR 603.7e).
+pub(crate) fn source<L: Layout>(
+    resolution: &Resolution<'_, L>,
+    ability: AbilityIx,
+) -> AbilityRef<L, TriggeredAbility> {
+    let entry = &resolution.entry;
+    AbilityRef {
+        source: entry.object(),
+        card: entry.card(),
+        face: entry.face(),
+        ability: TriggeredAbility::own(ability),
+        controller: entry.controller(),
+    }
+}
+
+/// Drops unfired abilities whose stated turn has ended.
+/// Under [CR 603.7b]: "A delayed triggered ability will trigger only once—the next time its
+/// trigger event occurs—unless it has a stated duration, such as “this turn.”"
+///
+/// [CR 603.7b]: https://yawgatog.com/resources/magic-rules/#R6037b
+pub(crate) fn end_turn<L: Layout>(s: &mut State<L>, t: &GameTable) {
+    s.retain_delayed(|d| {
+        !trigger::ability(t, d.of.card, d.of.face, d.of.ability.get())
+            .trigger()
+            .is_some_and(|trigger| trigger.exact_turn)
+    });
 }
 
 /// [`Effect::Delay`](beryl_card::Effect::Delay): "[When], [effect]", said by a resolving

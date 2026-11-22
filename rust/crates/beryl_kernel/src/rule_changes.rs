@@ -182,6 +182,8 @@ pub enum RuleKind {
     CantPreventDamage,
     /// The affected players skip a named step (see CR 500.11).
     SkipStep,
+    /// The permanent with this ability stays tapped during its controller's untap step.
+    StaysTapped,
 }
 
 impl RuleKind {
@@ -189,7 +191,7 @@ impl RuleKind {
         self as usize
     }
 
-    const COUNT: usize = Self::SkipStep as usize + 1;
+    const COUNT: usize = Self::StaysTapped as usize + 1;
 
     /// The kind of change `rule` is, or the part of it no code reads.
     pub fn of(rule: &RuleChange) -> Result<RuleKind, Unchecked> {
@@ -239,6 +241,9 @@ impl RuleKind {
             // Its controller declares the block (see CR 509.1a), so the change is asked of the
             // creature, and is for "you" or for nobody.
             (Governed::Block(Objects::This), When::Never) => for_controller(RuleKind::CantBlock),
+            (Governed::UntapInUntapStep(Objects::This), When::Never) => {
+                for_controller(RuleKind::StaysTapped)
+            }
             (Governed::BlockAnyNumber(Objects::This), When::AsUsual) => {
                 for_controller(RuleKind::BlockAnyNumber)
             }
@@ -287,6 +292,7 @@ impl RuleKind {
             (
                 Governed::ActivateLoyaltyAbilities(_)
                 | Governed::Block(_)
+                | Governed::UntapInUntapStep(_)
                 | Governed::BlockAnyNumber(_)
                 | Governed::Attack { .. }
                 | Governed::ActivateAbilities { .. }

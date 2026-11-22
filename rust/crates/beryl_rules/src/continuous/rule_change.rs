@@ -151,6 +151,7 @@ fn spells_of(rule: &RuleChange) -> Filter {
         Governed::CastSpells(filter) => filter,
         Governed::ActivateLoyaltyAbilities(_)
         | Governed::Block(_)
+        | Governed::UntapInUntapStep(_)
         | Governed::BlockAnyNumber(_)
         | Governed::Attack { .. }
         | Governed::ActivateAbilities { .. }
@@ -444,7 +445,12 @@ fn countered_never<L: Layout>(
 // Out of line, as the compiler had it before a second rule kind was asked of an object: inlined
 // into the decision builder and the blocker check it costs the rollout benchmark more.
 #[inline(never)]
-fn own_rule_holds<L: Layout>(s: &State<L>, t: &GameTable, slot: L::Slot, kind: RuleKind) -> bool {
+pub(crate) fn own_rule_holds<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    slot: L::Slot,
+    kind: RuleKind,
+) -> bool {
     let of_kind = t.rules_of(kind);
     if of_kind.is_empty() {
         return false;

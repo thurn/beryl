@@ -77,19 +77,19 @@ mod tests {
     fn the_controlled_turn_is_the_next_one_the_player_takes() {
         let mut s = State::<Small>::empty(Profile::EXACT);
         s.set_starting_player(Seat::P0);
-        assert_eq!(s.begin_turn(), Seat::P0);
+        assert_eq!(s.begin_turn().unwrap(), Seat::P0);
         control(&mut s, Seat::P1, Seat::P0);
         assert_eq!(s.decider(Seat::P1), Seat::P1, "it waits for P1's turn");
 
-        assert_eq!(s.begin_turn(), Seat::P1);
+        assert_eq!(s.begin_turn().unwrap(), Seat::P1);
         assert_eq!(s.turn().controller(), Some(Seat::P0));
         assert_eq!(s.decider(Seat::P1), Seat::P0);
         // CR 724.8: the controller still makes their own decisions.
         assert_eq!(s.decider(Seat::P0), Seat::P0);
         assert!(s.effects().is_empty(), "the turn took the effect");
 
-        s.begin_turn();
-        s.begin_turn();
+        s.begin_turn().unwrap();
+        s.begin_turn().unwrap();
         assert_eq!(s.turn().active(), Seat::P1);
         assert_eq!(
             (s.turn().controller(), s.decider(Seat::P1)),
@@ -103,16 +103,16 @@ mod tests {
     fn the_last_effect_created_works() {
         let mut s = State::<Small>::empty(Profile::EXACT);
         s.set_starting_player(Seat::P0);
-        s.begin_turn();
+        s.begin_turn().unwrap();
         control(&mut s, Seat::P1, Seat::P0);
         control(&mut s, Seat::P1, Seat::P1);
-        s.begin_turn();
+        s.begin_turn().unwrap();
         assert_eq!(s.turn().controller(), None);
         assert!(s.effects().is_empty());
 
         control(&mut s, Seat::P0, Seat::P0);
         control(&mut s, Seat::P0, Seat::P1);
-        s.begin_turn();
+        s.begin_turn().unwrap();
         assert_eq!(s.decider(Seat::P0), Seat::P1);
     }
 
@@ -123,18 +123,18 @@ mod tests {
         let [seen, later] = [Slot::from_index(3), Slot::from_index(4)];
         let mut s = State::<Small>::empty(Profile::EXACT);
         s.set_starting_player(Seat::P0);
-        s.begin_turn();
+        s.begin_turn().unwrap();
         s.board().set_known(Seat::P1, seen, true);
         control(&mut s, Seat::P1, Seat::P0);
         assert!(!s.knows(Seat::P0, seen));
 
-        s.begin_turn();
+        s.begin_turn().unwrap();
         assert!(s.knows(Seat::P0, seen));
         s.look(&mut Sink::default(), Seat::P1, Bitboard::single(later));
         assert!(s.knows(Seat::P0, later));
         assert!(!s.knows(Seat::P1, Slot::from_index(5)));
 
-        s.begin_turn();
+        s.begin_turn().unwrap();
         assert!(s.knows(Seat::P0, seen) && s.knows(Seat::P0, later));
         assert_eq!(
             s.knowledge()[Seat::P0.index()] & Bitboard::single(seen),

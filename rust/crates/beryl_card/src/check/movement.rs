@@ -78,7 +78,7 @@ pub(super) const fn moved_by(effect: &Effect) -> Option<&Objects> {
         | Effect::ControlPlayer(_)
         | Effect::EndTurn
         | Effect::AdditionalStep(_)
-        | Effect::ExtraTurn(_) => None,
+        | Effect::ExtraTurn(..) => None,
     }
 }
 

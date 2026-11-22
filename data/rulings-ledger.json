@@ -586,6 +586,22 @@
     }
   ],
   "Fencing Ace": [],
+  "Final Fortune": [
+    {
+      "published_at": "2004-10-04",
+      "hash": "7f6aad9d2e29",
+      "scenario": [
+        "Skipping Final Fortune's extra turn prevents its loss trigger"
+      ]
+    },
+    {
+      "published_at": "2022-12-08",
+      "hash": "68b8923bdb96",
+      "scenario": [
+        "An extra turn granted later goes before Final Fortune's turn"
+      ]
+    }
+  ],
   "Fire // Ice": [
     {
       "published_at": "2022-12-08",
@@ -1028,7 +1044,9 @@
     {
       "published_at": "2024-04-12",
       "hash": "eb6689e2bb70",
-      "untestable": "The engine has no whole-turn skip. Time Vault and turn skipping are tracked in by-ptc7.6.6."
+      "scenario": [
+        "Mindslaver waits for a turn after Time Vault skips the extra turn"
+      ]
     },
     {
       "published_at": "2024-04-12",
@@ -2001,6 +2019,30 @@
       "scenario": [
         "Time Stop exiles itself and an uncounterable spell on the opponent's turn",
         "Time Stop gives a cleanup discard trigger a chance to resolve"
+      ]
+    }
+  ],
+  "Time Vault": [
+    {
+      "published_at": "2008-10-01",
+      "hash": "968bb85d3015",
+      "scenario": [
+        "Time Vault enters tapped and skips a turn to untap",
+        "Time Vault stays tapped when its controller takes the turn"
+      ]
+    },
+    {
+      "published_at": "2008-10-01",
+      "hash": "a2a46be23b74",
+      "scenario": [
+        "Two Vault activations grant turns without requiring skips"
+      ]
+    },
+    {
+      "published_at": "2022-12-08",
+      "hash": "68b8923bdb96",
+      "scenario": [
+        "The Vault's extra turn is taken before the earlier extra turn"
       ]
     }
   ],

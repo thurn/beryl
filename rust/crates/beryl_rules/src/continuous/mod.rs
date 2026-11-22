@@ -320,16 +320,19 @@ pub(crate) fn control_player_instruction<L: Layout>(
 pub(crate) fn extra_turn_instruction<L: Layout>(
     run: &mut Run<'_, '_, L>,
     players: Players,
+    ability: Option<crate::card::AbilityIx>,
 ) -> Result<Outcome<L>, Full> {
     let named = run.scene().players(players);
     let (game, resolution) = run.resolving();
+    let trigger =
+        ability.map(|ability| crate::stack::delayed_triggers::source(resolution, ability));
     let mut count = 0;
     for player in game.state.players_in_turn_order(named) {
-        // It lasts until its turn begins, which ends it.
+        // It lasts until its turn begins or is skipped.
         start(
             game,
             resolution,
-            Continuous::ExtraTurn(player),
+            Continuous::ExtraTurn(player, trigger),
             Duration::Indefinite,
         )?;
         count += 1;

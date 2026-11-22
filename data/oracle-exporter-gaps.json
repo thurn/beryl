@@ -106,5 +106,29 @@
     "card": "Time Stop",
     "scenario": "Time Stop gives a cleanup discard trigger a chance to resolve",
     "gap": "a cleanup discard choice, which Forge asks through chooseCardsToDiscardToMaximumHandSize and the harness does not replay"
+  },
+  {
+    "oracle": "xmage",
+    "card": "Time Vault",
+    "scenario": "The Vault's extra turn is taken before the earlier extra turn",
+    "gap": "an untapped Time Vault in the starting position. XMage puts it onto the battlefield as a new permanent, so it enters tapped and the untap step leaves it tapped"
+  },
+  {
+    "oracle": "xmage",
+    "card": "Time Vault",
+    "scenario": "Two Vault activations grant turns without requiring skips",
+    "gap": "an untapped Time Vault in the starting position. XMage puts it onto the battlefield as a new permanent, so it enters tapped and the untap step leaves it tapped"
+  },
+  {
+    "oracle": "xmage",
+    "card": "Time Vault",
+    "scenario": "generated 2: activate ability 3 on the battlefield",
+    "gap": "an untapped Time Vault in the starting position. XMage puts it onto the battlefield as a new permanent, so it enters tapped and the untap step leaves it tapped"
+  },
+  {
+    "oracle": "forge",
+    "card": "Time Vault",
+    "scenario": "Two Vault activations grant turns without requiring skips",
+    "gap": "the two activations must use distinct permanents with the same name. The harness looks up the first by name again once that copy is tapped"
   }
 ]

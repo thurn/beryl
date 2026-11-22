@@ -132,7 +132,7 @@ impl Effect {
             | Effect::WinGame(player)
             | Effect::LoseGame(player)
             | Effect::ControlPlayer(player)
-            | Effect::ExtraTurn(player) => Operands::of_players(player),
+            | Effect::ExtraTurn(player, _) => Operands::of_players(player),
             Effect::CopySpell { spells, count, .. } => Operands::of_objects(spells).amount(count),
             Effect::Unless { player, cost, .. } => {
                 Operands::of_players(player).filter(chosen_for(cost))

@@ -21,6 +21,7 @@ enum Recipe {
     Attack(Seat),
     AttackWithout(Filter),
     Step(Seat, TurnStep),
+    BeginTurnWithTappedSource,
     Chapter(u8),
     Cast(Seat, Filter, Zone),
     PlayLand(Seat, Filter),
@@ -126,6 +127,7 @@ fn trigger(event: Trigger) -> Vec<Recipe> {
 fn replacement(event: Replaced) -> Vec<Recipe> {
     match event {
         Replaced::None => vec![],
+        Replaced::BeginTurn => vec![Recipe::BeginTurnWithTappedSource],
         Replaced::ThisEnters => vec![Recipe::PlaySource],
         Replaced::Draw(whose, _) => players(whose).iter().copied().map(Recipe::Draw).collect(),
         Replaced::PutInto(filter, zone) => match zone {
@@ -217,6 +219,7 @@ fn recipes(def: &'static CardDef, place: Place) -> Vec<Recipe> {
                     recipes.push(Recipe::AttackWithout(filter));
                 }
                 Governed::Attack { .. } => recipes.push(Recipe::Attack(P0)),
+                Governed::UntapInUntapStep(_) => recipes.push(Recipe::BeginTurnWithTappedSource),
                 _ => {}
             }
         }
@@ -347,6 +350,7 @@ mod tests {
                 objects: &Filter::Any,
                 not_cast: true,
             },
+            Replaced::BeginTurn,
             Replaced::Damage,
         ];
         for event in events {

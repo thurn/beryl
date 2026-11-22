@@ -51,6 +51,7 @@ mod draws;
 mod enchant;
 pub mod event;
 pub(crate) mod protection;
+pub(crate) mod turns;
 
 pub(crate) use draws::{DrawReplacement, draw, dredge, dredges};
 pub(crate) use enchant::{Enchants, enchants};
@@ -452,6 +453,7 @@ fn entering<L: Layout>(
             | Rewrite::ToZone(_)
             | Rewrite::Instead
             | Rewrite::Dredge(_)
+            | Rewrite::MaySkipTurnToUntap
             | Rewrite::Multiply(_) => continue,
         }
         crate::coverage::hit(ability);
@@ -531,6 +533,7 @@ fn copy_to_enter<L: Layout>(
                 | Rewrite::Instead
                 | Rewrite::Dredge(_)
                 | Rewrite::Choose(_)
+                | Rewrite::MaySkipTurnToUntap
                 | Rewrite::Multiply(_) => None,
             })
     else {
@@ -596,6 +599,7 @@ fn life_asked(face: &crate::card::Face) -> Option<(AbilityIx, u8)> {
             | Rewrite::Instead
             | Rewrite::Dredge(_)
             | Rewrite::Choose(_)
+            | Rewrite::MaySkipTurnToUntap
             | Rewrite::Multiply(_)
             | Rewrite::EnterAsCopy { .. } => None,
         })
@@ -733,6 +737,7 @@ fn chooses(face: &crate::card::Face) -> Option<(AbilityIx, ChosenKind)> {
             | Rewrite::EntersWithCounters(..)
             | Rewrite::Instead
             | Rewrite::Dredge(_)
+            | Rewrite::MaySkipTurnToUntap
             | Rewrite::Multiply(_)
             | Rewrite::EnterAsCopy { .. } => None,
         })
@@ -763,7 +768,11 @@ pub(crate) fn chosen_to_enter<L: Layout>(
 /// answers it, or the run stops at it ([`crate::asking`]), returning [`Full`] for whoever
 /// opened the run to tell apart. A run that cannot stop, which a choice no state could
 /// foresee meets, takes the first candidate: declining, for an optional replacement.
-fn answer<L: Layout>(s: &State<L>, sink: &mut Sink<L>, d: &Decision<L>) -> Result<Choice, Full> {
+pub(crate) fn answer<L: Layout>(
+    s: &State<L>,
+    sink: &mut Sink<L>,
+    d: &Decision<L>,
+) -> Result<Choice, Full> {
     debug_assert!(!d.is_empty(), "a choice with no candidate");
     if d.len() == 1 && s.profile().stops != Stops::Forced {
         return Ok(Choice(0));

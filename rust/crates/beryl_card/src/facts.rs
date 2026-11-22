@@ -153,7 +153,7 @@ impl Effect {
             | Effect::ControlPlayer(_)
             | Effect::EndTurn
             | Effect::AdditionalStep(_)
-            | Effect::ExtraTurn(_) => false,
+            | Effect::ExtraTurn(..) => false,
         })
     }
 

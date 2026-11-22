@@ -497,7 +497,7 @@ pub(crate) fn may_instruction<L: Layout>(
         | Effect::ControlPlayer(_)
         | Effect::EndTurn
         | Effect::AdditionalStep(_)
-        | Effect::ExtraTurn(_)
+        | Effect::ExtraTurn(..)
         | Effect::Wish { .. } => (MAY, Bitboard::EMPTY),
     };
     let agreed = match run.one(player) {

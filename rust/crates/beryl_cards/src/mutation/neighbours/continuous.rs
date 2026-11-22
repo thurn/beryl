@@ -334,6 +334,7 @@ fn governed(what: Governed) -> Neighbours<Governed> {
             },
         )],
         G::BlockAnyNumber(o) => objects_of(o, G::BlockAnyNumber),
+        G::UntapInUntapStep(o) => objects_of(o, G::UntapInUntapStep),
         G::Counter(Objects::All {
             filter: Filter::Any,
             ..
@@ -398,26 +399,31 @@ fn governed(what: Governed) -> Neighbours<Governed> {
             out
         }
         G::PreventDamage => Vec::new(),
-        G::Player(changes) => {
-            let bits = [
-                PlayerRules::LIFE_CANT_CHANGE,
-                PlayerRules::PROTECTION_FROM_EVERYTHING,
-            ];
-            bits.into_iter()
-                .enumerate()
-                .filter(|&(_, bit)| changes.contains(bit))
-                .map(|(index, _)| {
-                    let other = bits[1 - index];
-                    let action = if changes.contains(other) {
-                        "drop"
-                    } else {
-                        "swap"
-                    };
-                    (format!("{action} player rule {index}"), G::Player(other))
-                })
-                .collect()
-        }
+        G::Player(changes) => player_rule_neighbours(changes),
     }
+}
+
+fn player_rule_neighbours(changes: PlayerRules) -> Neighbours<Governed> {
+    let bits = [
+        PlayerRules::LIFE_CANT_CHANGE,
+        PlayerRules::PROTECTION_FROM_EVERYTHING,
+    ];
+    bits.into_iter()
+        .enumerate()
+        .filter(|&(_, bit)| changes.contains(bit))
+        .map(|(index, _)| {
+            let other = bits[1 - index];
+            let action = if changes.contains(other) {
+                "drop"
+            } else {
+                "swap"
+            };
+            (
+                format!("{action} player rule {index}"),
+                Governed::Player(other),
+            )
+        })
+        .collect()
 }
 
 fn skipped_steps(step: beryl_card::TurnStep) -> Neighbours<Governed> {

@@ -170,7 +170,7 @@ fn a_tracker_ends_with_the_turn_and_as_its_permanent_leaves() {
     assert!(Tracker::ALL.into_iter().all(|k| s.trackers(b).has(k)));
 
     // The next turn begins with nothing noted of it.
-    s.begin_turn();
+    s.begin_turn().unwrap();
     assert_eq!(s.trackers, Trackers::empty());
     assert_eq!(s.stores_lingering(&t), None);
 }
@@ -300,7 +300,7 @@ fn a_count_ends_with_the_turn_and_survives_small_to_large_and_back() {
     assert_eq!(back, s);
 
     // The next turn begins with nothing counted.
-    s.begin_turn();
+    s.begin_turn().unwrap();
     assert_eq!(s.trackers, Trackers::empty());
     assert_eq!(s.stores_lingering(&t), None);
 }

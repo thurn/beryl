@@ -112,7 +112,9 @@ pub(crate) fn decision<L: Layout>(
             cost,
             payment,
         } => face_down::decision(s, t, sink, slot, cost, payment),
-        Pending::Resolving(ref r) | Pending::StepActions(ref r) => Ok(r.question.clone()),
+        Pending::Resolving(ref r) | Pending::StepActions(ref r) | Pending::TurnStart(ref r) => {
+            Ok(r.question.clone())
+        }
     }
 }
 
@@ -280,7 +282,7 @@ pub(super) fn perform_machine<L: Layout>(
             s.record_answer(answer)
                 .and_then(|()| resolve::resolve(s, t, x, a))
         }
-        Pending::StepActions(_) => s
+        Pending::StepActions(_) | Pending::TurnStart(_) => s
             .record_answer(index::<L>(usize::from(c.0)))
             .and_then(|()| paused_step::step_actions(s, t, x, a)),
         Pending::Casting(casting) => {

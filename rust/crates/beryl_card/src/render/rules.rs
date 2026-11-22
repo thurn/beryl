@@ -39,6 +39,12 @@ impl Ctx {
                     }
                 };
             }
+            Governed::UntapInUntapStep(objects) => {
+                return format!(
+                    "{} doesn't untap during your untap step",
+                    self.objects(objects)
+                );
+            }
             Governed::BlockAnyNumber(objects) => {
                 return format!(
                     "{} can block any number of creatures",

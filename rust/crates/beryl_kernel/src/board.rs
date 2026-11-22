@@ -61,6 +61,9 @@ impl<L: Layout> State<L> {
         if self.turn.step != TurnStep::Upkeep {
             return Some(format!("the {:?} step, not the upkeep", self.turn.step));
         }
+        if self.turn.after_extra.is_some() || self.turn.starting_draw_later {
+            return Some("a changed turn order".to_owned());
+        }
         if self.pending != Pending::None {
             return Some("a question open".to_owned());
         }
@@ -137,6 +140,7 @@ impl<L: Layout> Board<'_, L> {
         self.0.turn.number = turn;
         self.0.turn.active = active;
         self.0.turn.after_extra = None;
+        self.0.turn.starting_draw_later = false;
         self.0.turn.starting_player = if turn % 2 == 1 {
             active
         } else {
@@ -176,6 +180,7 @@ impl<L: Layout> Board<'_, L> {
         // the turn begun next is theirs, or their opponent's.
         self.0.turn.active = if turn == 1 { active } else { active.opponent() };
         self.0.turn.after_extra = None;
+        self.0.turn.starting_draw_later = false;
         self.0.turn.step = TurnStep::Cleanup;
         self.0.turn.priority = self.0.turn.active;
         self.0.turn.passes = 0;

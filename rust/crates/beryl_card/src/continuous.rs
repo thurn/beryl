@@ -39,6 +39,13 @@ impl Replacement {
     /// "This enters tapped."
     pub const ENTERS_TAPPED: Replacement = Replacement::this_enters(Rewrite::EntersTapped);
 
+    /// If you would begin your turn while this permanent is tapped, you may skip that turn
+    /// instead. If you do, untap this permanent.
+    pub const SKIP_TURN_TO_UNTAP: Replacement = Replacement {
+        replaces: Replaced::BeginTurn,
+        rewrite: Rewrite::MaySkipTurnToUntap,
+    };
+
     /// A replacement of how the permanent with the ability enters.
     pub const fn this_enters(rewrite: Rewrite) -> Replacement {
         Replacement {
@@ -194,6 +201,8 @@ pub enum Replaced {
         objects: &'static Filter,
         not_cast: bool,
     },
+    /// The controller of this permanent beginning their turn.
+    BeginTurn,
     /// Damage a source would deal to a permanent or a player, whichever the source and the
     /// recipient ([CR 614.1a](https://yawgatog.com/resources/magic-rules/#R6141a)): "Effects
     /// that use the word 'instead' are replacement effects."
@@ -243,6 +252,8 @@ pub enum Rewrite {
     EntersTappedUnlessPayLife(u8),
     /// It enters with N counters of a kind on it ([`Replacement::enters_with_counters`]).
     EntersWithCounters(CounterKind, u8),
+    /// While this permanent is tapped, its controller may skip the turn to untap it.
+    MaySkipTurnToUntap,
     /// The ability's [`body`](crate::Ability::body) happens instead.
     Instead,
     /// Dredge N ([`Replacement::dredge`]): its owner may mill N cards instead of drawing, if

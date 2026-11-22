@@ -279,7 +279,7 @@ fn unless_discards<L: Layout>(
         | Effect::ControlPlayer(_)
         | Effect::EndTurn
         | Effect::AdditionalStep(_)
-        | Effect::ExtraTurn(_) => None,
+        | Effect::ExtraTurn(..) => None,
     };
     let (game, resolution) = run.resolving();
     let hand = game.state.zone(ZoneKey::Of(player, Zone::Hand));

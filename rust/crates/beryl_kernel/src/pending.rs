@@ -327,6 +327,8 @@ pub enum Pending<L: Layout = Small> {
         slot: L::Slot,
         ability: beryl_card::ObjectAbility,
     },
+    /// Beginning the next turn, paused to ask about replacing that event (see CR 614.10).
+    TurnStart(Resolving<L>),
 }
 
 // The original derived hash wrote each variant's tag as an isize. The enum now has a
@@ -352,6 +354,7 @@ impl<L: Layout> std::hash::Hash for Pending<L> {
             Self::Casting(casting) => (9_isize, casting).hash(state),
             Self::Resolving(resolving) => (10_isize, resolving).hash(state),
             Self::StepActions(resolving) => (11_isize, resolving).hash(state),
+            Self::TurnStart(resolving) => (17_isize, resolving).hash(state),
             Self::TurningFaceUp {
                 slot,
                 cost,
@@ -388,7 +391,10 @@ impl<L: Layout> State<L> {
         debug_assert!(
             !matches!(
                 question,
-                Pending::None | Pending::Resolving(_) | Pending::StepActions(_)
+                Pending::None
+                    | Pending::Resolving(_)
+                    | Pending::StepActions(_)
+                    | Pending::TurnStart(_)
             ),
             "a question to open"
         );
@@ -428,6 +434,7 @@ impl<L: Layout> State<L> {
             | Pending::CombatDamage { .. }
             | Pending::Casting(_)
             | Pending::StepActions(_)
+            | Pending::TurnStart(_)
             | Pending::TurningFaceUp { .. }
             | Pending::OrderEntered { .. }
             | Pending::EnterChoosing { .. }
@@ -447,9 +454,14 @@ impl<L: Layout> State<L> {
     /// knew as the actions began is kept from its first pause, as
     /// [`State::pause_resolution`] keeps it.
     #[inline]
-    pub fn pause_step_actions(&mut self, record: L::Queue<L::Index, 32>, question: Decision<L>) {
+    pub fn pause_step_actions(
+        &mut self,
+        record: L::Queue<L::Index, 32>,
+        question: Decision<L>,
+        starting_turn: bool,
+    ) {
         let knowledge = match &self.pending {
-            Pending::StepActions(r) => r.knowledge.clone(),
+            Pending::StepActions(r) | Pending::TurnStart(r) => r.knowledge.clone(),
             Pending::None
             | Pending::PlayOrDraw { .. }
             | Pending::Mulligans
@@ -466,13 +478,18 @@ impl<L: Layout> State<L> {
             | Pending::EnterChoosing { .. }
             | Pending::ManaColor { .. } => self.knowledge.clone(),
         };
-        self.pending = Pending::StepActions(Resolving {
+        let paused = Resolving {
             record,
             question,
             knowledge,
             hidden: 0,
             asks_hidden: false,
-        });
+        };
+        self.pending = if starting_turn {
+            Pending::TurnStart(paused)
+        } else {
+            Pending::StepActions(paused)
+        };
     }
 
     /// Settles the open question so that a resolution's body, or a step's turn-based
@@ -484,7 +501,7 @@ impl<L: Layout> State<L> {
     #[inline]
     pub fn resume_resolution(&mut self) -> Bitboard<L::Slot> {
         let revealed = match &self.pending {
-            Pending::Resolving(r) | Pending::StepActions(r) => {
+            Pending::Resolving(r) | Pending::StepActions(r) | Pending::TurnStart(r) => {
                 let knowledge = r.knowledge.clone();
                 self.restore_knowledge(knowledge)
             }
@@ -516,7 +533,9 @@ impl<L: Layout> State<L> {
     /// If neither is paused.
     #[inline]
     pub fn record_answer(&mut self, answer: L::Index) -> Result<(), Full> {
-        let (Pending::Resolving(r) | Pending::StepActions(r)) = &mut self.pending else {
+        let (Pending::Resolving(r) | Pending::StepActions(r) | Pending::TurnStart(r)) =
+            &mut self.pending
+        else {
             unreachable!("a paused resolution or step");
         };
         if r.asks_hidden {
