@@ -210,3 +210,50 @@ impl TurnStep {
         TurnStep::Cleanup,
     ];
 }
+
+/// A phase that can be added to a turn.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum TurnPhase {
+    Beginning,
+    Main,
+    Combat,
+    Ending,
+}
+
+impl TurnPhase {
+    /// The steps to schedule when this kind of phase is added.
+    pub const fn steps(self) -> &'static [TurnStep] {
+        use TurnStep::{
+            BeginningOfCombat, Cleanup, CombatDamage, DeclareAttackers, DeclareBlockers, Draw, End,
+            EndOfCombat, FirstStrikeDamage, PostcombatMain, Untap, Upkeep,
+        };
+        match self {
+            Self::Beginning => &[Untap, Upkeep, Draw],
+            Self::Main => &[PostcombatMain],
+            Self::Combat => &[
+                BeginningOfCombat,
+                DeclareAttackers,
+                DeclareBlockers,
+                FirstStrikeDamage,
+                CombatDamage,
+                EndOfCombat,
+            ],
+            Self::Ending => &[End, Cleanup],
+        }
+    }
+
+    /// The kind of phase that contains this step.
+    pub const fn of(step: TurnStep) -> Self {
+        match step {
+            TurnStep::Untap | TurnStep::Upkeep | TurnStep::Draw => Self::Beginning,
+            TurnStep::PrecombatMain | TurnStep::PostcombatMain => Self::Main,
+            TurnStep::BeginningOfCombat
+            | TurnStep::DeclareAttackers
+            | TurnStep::DeclareBlockers
+            | TurnStep::FirstStrikeDamage
+            | TurnStep::CombatDamage
+            | TurnStep::EndOfCombat => Self::Combat,
+            TurnStep::End | TurnStep::Cleanup => Self::Ending,
+        }
+    }
+}

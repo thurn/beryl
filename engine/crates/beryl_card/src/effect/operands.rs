@@ -121,6 +121,7 @@ impl Effect {
             | Effect::ChangeRule { .. }
             | Effect::AdditionalStep(_)
             | Effect::Subgame
+            | Effect::AdditionalPhases { .. }
             | Effect::EndTurn => Operands::NONE,
             Effect::RestartGame { filter } => Operands::NONE.filter(Some(filter)),
             Effect::May { player, .. }
@@ -147,6 +148,7 @@ impl Effect {
             | Effect::Destroy { objects, .. }
             | Effect::Regenerate(objects)
             | Effect::Tap(objects)
+            | Effect::Untap(objects)
             | Effect::PhaseOut(objects)
             | Effect::SetPrepared { objects, .. }
             | Effect::Exile(objects)

@@ -653,6 +653,7 @@ impl Scope<'_> {
             | Filter::Supertypes(_)
             | Filter::SubtypeWord(_)
             | Filter::ColorWords(_)
+            | Filter::AttackedThisTurn
             | Filter::Tapped
             | Filter::Token
             | Filter::ManaValueAtMost(_)

@@ -10,6 +10,7 @@ impl Effect {
     /// casting the spell, activating the ability, or otherwise putting the spell or ability
     /// on the stack, the player announces these while applying the effect." The kind of mana
     /// a mana ability adds is chosen as it is activated, so [`Effect::AddMana`] asks nothing.
+    #[allow(clippy::too_many_lines)] // One exhaustive match, a line per instruction.
     pub const fn asks(&self) -> bool {
         match *self {
             Effect::May { .. }
@@ -71,6 +72,7 @@ impl Effect {
             | Effect::Destroy { .. }
             | Effect::Regenerate(_)
             | Effect::Tap(_)
+            | Effect::Untap(_)
             | Effect::PhaseOut(_)
             | Effect::SetPrepared { .. }
             | Effect::Exile(_)
@@ -113,6 +115,7 @@ impl Effect {
             | Effect::LoseGame(_)
             | Effect::ControlPlayer(_)
             | Effect::AdditionalStep(_)
+            | Effect::AdditionalPhases { .. }
             | Effect::ExtraTurn(..) => false,
         }
     }
@@ -162,6 +165,7 @@ impl Effect {
             | Effect::Destroy { .. }
             | Effect::Regenerate(_)
             | Effect::Tap(_)
+            | Effect::Untap(_)
             | Effect::PhaseOut(_)
             | Effect::SetPrepared { .. }
             | Effect::Exile(_)
@@ -224,6 +228,7 @@ impl Effect {
             | Effect::RestartGame { .. }
             | Effect::EndTurn
             | Effect::AdditionalStep(_)
+            | Effect::AdditionalPhases { .. }
             | Effect::ExtraTurn(..) => None,
         }
     }

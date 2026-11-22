@@ -73,7 +73,7 @@ pub use effect::{
     Taken,
 };
 pub use filter::Filter;
-pub use ids::{Seat, TurnStep, Zone, ZoneSet};
+pub use ids::{Seat, TurnPhase, TurnStep, Zone, ZoneSet};
 pub use index::{AbilityIx, CastingIx, ExceptIx, GrantIx, ModeIx, SpecIx};
 pub use mana::{INTRINSIC_MANA, ManaColor, ManaCost, ManaRestriction, ManaSet, mana};
 pub use prompt::{Part, Place, Prompt, Purpose, Shape};
@@ -100,7 +100,7 @@ pub mod prelude {
         LibraryOrder, LibraryPosition, ManaColor, ManaCost, ManaRestriction, ManaSet, Modification,
         Named, Objects, Place, PlayerRules, Players, Prevention, Prompt, Protection, Purpose,
         PutOnto, Recipients, Replacement, RuleChange, SpellCost, Subtype, Subtypes, Supertypes,
-        Taken, TargetKind, TargetSpec, TextWord, Trigger, TriggerEvent, TurnStep, Types, When,
-        Zone, ZoneSet, card, card_with_shape, mana,
+        Taken, TargetKind, TargetSpec, TextWord, Trigger, TriggerEvent, TurnPhase, TurnStep, Types,
+        When, Zone, ZoneSet, card, card_with_shape, mana,
     };
 }

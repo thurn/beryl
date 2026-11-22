@@ -396,6 +396,7 @@ fn without_you(filter: Filter) -> Option<Filter> {
         | Filter::ColorWords(_)
         | Filter::Whose(_)
         | Filter::Owned(_)
+        | Filter::AttackedThisTurn
         | Filter::Tapped
         | Filter::Token
         | Filter::ManaValueAtMost(_)

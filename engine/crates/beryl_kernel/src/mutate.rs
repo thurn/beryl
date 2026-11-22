@@ -508,7 +508,10 @@ impl<L: Layout> State<L> {
 
     /// Removes every permanent from combat as it ends (see [CR 511.3]): "As soon as the end of combat
     /// step ends, all creatures, battles, and planeswalkers are removed from combat." The turn
-    /// forgets that attackers were declared ([`State::declare_attack`]).
+    /// forgets that attackers were declared in this combat ([`State::declare_attack`]).
+    /// The attack targets, block assignments and first-strike status belong to the roles that
+    /// end here. The turn's tracker remembers declared attackers until the next turn or until
+    /// the permanent leaves the battlefield.
     ///
     /// [CR 511.3]: https://yawgatog.com/resources/magic-rules/#R5113
     #[inline]

@@ -58,7 +58,7 @@
 //! | show or hide a card | [`State::reveal`], [`State::look`], [`State::forget`], and for a paused resolution [`State::keep_seen`] | each player's knowledge; the identity is settled first |
 //! | store the layers' results | [`State::rederive`], which lends the cache to the one function that fills it ([`derive::Rederive`]) | the derived table by battlefield index, the listening and replacing masks, the rules the static abilities change for each player, the layer inputs the static abilities read ([`static_ability::Inputs`]), whether an effect removed abilities (for [`State::has_ability`]) or changed land types (for [`State::makes_card_mana`] and [`State::intrinsic_mana`]), what each face-down permanent's controller sees, `derived_dirty` cleared |
 //! | change a player | [`State::gain_life`], [`State::lose_life`], [`State::damage_player`], [`State::add_mana`], [`State::spend_mana`], [`State::add_remembered_mana`], [`State::spend_remembered_mana`], [`State::empty_mana_pools`], [`State::count_land_played`], [`State::declare_mulligan`], [`State::keep_hand`], [`State::count_bottomed`], [`State::count_mulligan`], [`State::add_emblem`] | a pool spends only mana it holds, and holds at most four entries of mana that remembers in [`Small`] (a fifth is `Full`); a hand is kept with what it owes the bottom of the library; a mulligan taken is one to declare again |
-//! | move the turn, count toward a budget, end or restart the game | [`State::set_starting_player`], [`State::begin_turn`], [`State::begin_step`], [`State::give_priority`], [`State::pass_priority`], [`State::reset_passes`], [`State::declare_attack`], [`State::set_cleanup_check`], [`State::count_decision`], [`State::count_state_based_check`], [`State::reset_state_based_checks`], [`State::end_game`], [`State::restart`] | passes reset with priority; the lands played and the decisions offered begin again with the turn; that attackers were declared ends with the combat ([`State::end_combat`]) |
+//! | move the turn, count toward a budget, end or restart the game | [`State::set_starting_player`], [`State::begin_turn`], [`State::begin_step`], [`State::give_priority`], [`State::pass_priority`], [`State::reset_passes`], [`State::declare_attack`], [`State::set_cleanup_check`], [`State::count_decision`], [`State::count_state_based_check`], [`State::reset_state_based_checks`], [`State::end_game`], [`State::restart`] | passes reset with priority; the lands played and the decisions offered begin again with the turn; that attackers were declared ends with the combat ([`State::end_combat`]), while tracked attackers are remembered for the turn |
 //! | use the stack | [`State::put_on_stack`], [`State::take_top_of_stack`], [`State::take_off_stack`] and [`State::take_ability_off_stack`], which return the entry, [`State::announce_x`], [`State::announce_target`] | a spell's entry goes on once its card is in the stack zone and comes off before the card leaves, so the zone move keeps the stack's set of objects and these keep its order; an entry taken from below the top repairs the ability targets above it, which name abilities by their place ([`state::Target`]); a spell's entry taken off without resolving is kept when an ability still on the stack or waiting to be put there needs the departed spell's characteristics ([`State::departed_spell`]) |
 //! | queue triggers | [`State::queue_trigger`], [`State::take_trigger`], [`State::delay_trigger`], [`State::fire_delayed`] | a delayed trigger that fires waits with the others, once |
 //! | keep and forget last-known information (see CR 603.10a) | [`State::record_last_known`], [`State::forget_last_known`] | one row for each object that left, copied from its current layer results before it moves; a row no waiting trigger, stack entry or delayed trigger names is forgotten |
@@ -192,7 +192,7 @@
 //! | Effects' locked-in sets | a table of sets of slots, which an entry names by index; an empty set is a free place, and the table ends at its last set in use | 32 | 4 ([`effects::SETS`]) | 136 | a `Vec` |
 //! | the rules changed for each player | two sets of rules for each: those of the permanents' static abilities, stored with the layer results, and those of the Effects store's entries, its index | 8, a bit for each rule change the game numbered | 2 players, twice | 32 | the same |
 //! | Memos | a queue of (slot, memo) and a mask of the kinds live in it | 3, of the 4 allowed | 32 ([`memos::MEMOS`]) | 100, of the 136 allowed | a `Vec` of 4-byte entries |
-//! | Trackers | a set of slots for each kind keyed by permanent | 32 | 2 kinds | 64 | 128 each |
+//! | Trackers | a set of slots for each kind keyed by permanent | 32 | 3 kinds | 96 | 128 each |
 //! | Trackers' counts | a byte for each player and kind of count, padded to the sets' alignment | 1 | 3 kinds, 2 players | 8 | the same |
 //! | Counters | a queue of (slot, kind, count), in the order each kind was first put on its object | 3 | 32 ([`counters::COUNTERS`]) | 97, of the 104 allowed | a `Vec` |
 //!
@@ -264,7 +264,7 @@
 //! | by-bajq.7.4 | +48 (landed: +32) | up to four entries of mana that remembers in each player's pool |
 //! | by-bajq.8.3 | +16 (landed: +16) | the count of mandatory resolutions in a row and the hash it compares, padded |
 //! | by-bajq.8.4 | +32 (landed: +32) | a set of the phased-out permanents' slots |
-//! | Turn plan | +208 | the queue of 24 remaining steps and their positions |
+//! | Turn plan | +160 | the queue of 24 remaining steps and their positions |
 //!
 //! ### Affected sides and payloads
 //!
@@ -384,7 +384,7 @@
 //! | an object's last-known information ([`State::last_known`]) | not read: only an ability that looked back reads it | a pass over the table's rows, at most 16 |
 //! | what a player may cast ([`State::cast_permissions`]) and what a spell costs more ([`State::cost_increase`]) | one AND each | one pass; a hand's cards need no entry |
 //! | the zone move's reset | one bit test of the keyed slots | each store ends its entries about the slot, out of line; an arrival also tests the Memos kinds for a link to the slot |
-//! | the turn's reset | Effects: the store's length read twice a turn. Trackers: nine words cleared, since the kernel begins the turn with no table to ask | Effects: one pass. Trackers: the same nine words, in place of two flags on every permanent |
+//! | the turn's reset | Effects: the store's length read twice a turn. Trackers: thirteen words cleared, since the kernel begins the turn with no table to ask | Effects: one pass. Trackers: the same thirteen words, in place of two flags on every permanent |
 //! | [`State::signature`] | one bit test of the keyed slots, and one of the two bits as two objects are compared (`store::Stored`) | out of line, the two objects' memos, their rows of counters and the effects on them compared: a permanent's layer results show what its effects make of it now, not for how long |
 //! | "is a rule change of this kind in force" ([`State::rules_for`], [`GameTable::rules_of`]) | for a player, their two sets of rules joined and one AND with the table's set of the kind, which is the whole answer; for a permanent, one AND of the table's rules of its card and one of the store's kinds | for a permanent, a second AND of the rules of the face that is up, or one pass over the store's entries |
 //! | an event's match against triggered abilities (the rules' `stack::trigger::match_event`) | one AND of the kinds any card of the game listens to ([`GameTable::listens_any`]) | one AND of the battlefield's listener mask; then, for each permanent whose card listens to the kind, the listeners of that kind on the face that is up ([`GameTable::listeners`]), and no other ability of it |
@@ -787,7 +787,7 @@ pub mod trackers;
 mod turn;
 pub mod two_player;
 pub mod zone;
-
+pub use beryl_card::TurnPhase;
 pub use bitboard::Bitboard;
 pub use fit::Misfit;
 pub use ids::{CardId, CardIx, LargeCardIx, LargeSlot, Seat, Slot, SlotId, SlotPlace};
@@ -797,4 +797,4 @@ pub use player_set::PlayerSet;
 pub use query::Copiable;
 pub use state::{Attachment, State};
 pub use table::GameTable;
-pub use turn::plan::{CombatPosition, Placement, StepPosition, StepTarget, TurnChange, TurnPhase};
+pub use turn::plan::{CombatPosition, Placement, StepPosition, StepTarget, TurnChange};

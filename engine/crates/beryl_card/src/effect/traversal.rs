@@ -46,6 +46,7 @@ impl Effect {
             | Effect::Destroy { .. }
             | Effect::Regenerate(_)
             | Effect::Tap(_)
+            | Effect::Untap(_)
             | Effect::PhaseOut(_)
             | Effect::SetPrepared { .. }
             | Effect::Exile(_)
@@ -107,6 +108,7 @@ impl Effect {
             | Effect::RestartGame { .. }
             | Effect::EndTurn
             | Effect::AdditionalStep(_)
+            | Effect::AdditionalPhases { .. }
             | Effect::ExtraTurn(..) => Branches::Single,
         }
     }
@@ -158,6 +160,7 @@ impl Effect {
             | Effect::Destroy { .. }
             | Effect::Regenerate(_)
             | Effect::Tap(_)
+            | Effect::Untap(_)
             | Effect::PhaseOut(_)
             | Effect::SetPrepared { .. }
             | Effect::Exile(_)
@@ -219,6 +222,7 @@ impl Effect {
             | Effect::RestartGame { .. }
             | Effect::EndTurn
             | Effect::AdditionalStep(_)
+            | Effect::AdditionalPhases { .. }
             | Effect::ExtraTurn(..) => &[],
         }
     }
@@ -301,6 +305,7 @@ impl Effect {
             | Effect::Destroy { .. }
             | Effect::Regenerate(_)
             | Effect::Tap(_)
+            | Effect::Untap(_)
             | Effect::PhaseOut(_)
             | Effect::SetPrepared { .. }
             | Effect::Exile(_)
@@ -362,6 +367,7 @@ impl Effect {
             | Effect::RestartGame { .. }
             | Effect::EndTurn
             | Effect::AdditionalStep(_)
+            | Effect::AdditionalPhases { .. }
             | Effect::ExtraTurn(..) => None,
         }
     }

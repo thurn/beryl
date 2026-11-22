@@ -114,6 +114,7 @@ impl Ctx {
                 vec![self.acts(("regenerate", "regenerates"), objects, "")]
             }
             Effect::Tap(objects) => vec![format!("tap {}", self.objects(objects))],
+            Effect::Untap(objects) => vec![self.acts(("untap", "untaps"), objects, "")],
             Effect::PhaseOut(objects) => vec![self.phase_out(objects)],
             Effect::SetPrepared { objects, prepared } => {
                 vec![self.set_prepared(objects, prepared)]
@@ -545,6 +546,11 @@ impl Ctx {
                 "that player gets an additional {} after this step",
                 super::words::step_noun(step),
             )],
+            Effect::AdditionalPhases { after, phases } => {
+                super::phases::additional_phases(after, phases)
+                    .into_iter()
+                    .collect()
+            }
             Effect::EndTurn | Effect::RestartGame { .. } => self.end_or_restart(effect),
             Effect::ExtraTurn(player, ability) => {
                 let take_turn = self.clause(player, ("take", "takes"), |_| {

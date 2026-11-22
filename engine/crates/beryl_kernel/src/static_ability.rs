@@ -131,6 +131,7 @@ fn mentions_tapped(filter: Filter) -> bool {
         | Filter::ColorWords(_)
         | Filter::Whose(_)
         | Filter::Owned(_)
+        | Filter::AttackedThisTurn
         | Filter::Token
         | Filter::ManaValueAtMost(_)
         | Filter::PowerAtMost(_)
@@ -469,9 +470,9 @@ pub fn read_by_the_layers(filter: Filter) -> bool {
         | Filter::Token
         | Filter::ManaValueAtMost(_)
         | Filter::InZone(_) => true,
-        // A power is a result of layer 7, which no filter of an earlier layer may read until
-        // the layers order effects by dependency.
-        Filter::ManaValueAtMostX | Filter::PowerAtMost(_) => false,
+        // The layers have no resolution X or attack history input. Reading power in earlier
+        // layers requires dependency ordering because layer 7 writes power.
+        Filter::ManaValueAtMostX | Filter::PowerAtMost(_) | Filter::AttackedThisTurn => false,
         Filter::Not(filter) => read_by_the_layers(*filter),
         Filter::All(filters) | Filter::AnyOf(filters) => {
             filters.iter().all(|&filter| read_by_the_layers(filter))

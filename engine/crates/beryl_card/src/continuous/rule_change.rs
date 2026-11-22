@@ -317,6 +317,7 @@ fn spells(filter: Filter) -> &'static str {
         | Filter::ColorWords(_)
         | Filter::Whose(_)
         | Filter::Owned(_)
+        | Filter::AttackedThisTurn
         | Filter::Tapped
         | Filter::Token
         | Filter::ManaValueAtMost(_)

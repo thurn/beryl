@@ -225,6 +225,7 @@ fn unless_discards<L: Layout>(
         | Effect::Destroy { .. }
         | Effect::Regenerate(_)
         | Effect::Tap(_)
+        | Effect::Untap(_)
         | Effect::PhaseOut(_)
         | Effect::SetPrepared { .. }
         | Effect::Exile(_)
@@ -287,6 +288,7 @@ fn unless_discards<L: Layout>(
         | Effect::RestartGame { .. }
         | Effect::EndTurn
         | Effect::AdditionalStep(_)
+        | Effect::AdditionalPhases { .. }
         | Effect::ExtraTurn(..) => None,
     };
     let (game, resolution) = run.resolving();

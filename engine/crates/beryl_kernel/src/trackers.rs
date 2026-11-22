@@ -91,6 +91,11 @@ kinds! {
         ///
         /// [CR 606.3]: https://yawgatog.com/resources/magic-rules/#R6063
         LoyaltyActivated = "had a loyalty ability activated this turn",
+        /// The permanent was declared as an attacker. A permanent put onto the battlefield
+        /// attacking never "attacked" for the purposes of effects (see [CR 508.4]).
+        ///
+        /// [CR 508.4]: https://yawgatog.com/resources/magic-rules/#R5084
+        AttackedThisTurn = "attacked this turn",
     }
 }
 
@@ -126,14 +131,18 @@ pub struct Trackers<L: Layout = Small> {
     counts: L::PerPlayer<[u8; Count::ALL.len()]>,
 }
 
-/// The sets, then the counts only if one is above zero: a game no card of which reads a count
-/// hashes as it did before the counts were kept, so a saved hash of its states holds. Two
-/// equal stores still hash the same.
+/// Hashes the original two sets, and includes counts and attack history when present so
+/// states from games without those facts keep their saved hashes.
 impl<L: Layout> Hash for Trackers<L> {
     fn hash<H: Hasher>(&self, h: &mut H) {
-        self.sets.hash(h);
+        self.sets[..2].hash(h);
         if self.counts.iter().flatten().any(|&n| n > 0) {
             self.counts.hash(h);
+        }
+        let attacked = self.sets[Tracker::AttackedThisTurn.index()];
+        if !attacked.is_empty() {
+            Tracker::AttackedThisTurn.hash(h);
+            attacked.hash(h);
         }
     }
 }
@@ -141,7 +150,7 @@ impl<L: Layout> Hash for Trackers<L> {
 /// Copied with the state that holds it ([`State<Small>`] is `Copy`).
 impl Copy for Trackers<Small> {}
 
-/// The store is 72 bytes in [`Small`]: a set of slots for each kind keyed by permanent, and
+/// The store is 104 bytes in [`Small`]: a set of slots for each kind keyed by permanent, and
 /// a byte for each count of each of the two players, padded to the sets' alignment. The
 /// state's room (the crate's contract, "Stores") counts on it.
 const _: () = assert!(size_of::<Trackers<Small>>() == 32 * Tracker::ALL.len() + 8);
@@ -181,7 +190,7 @@ impl<L: Layout> Store<L> for Trackers<L> {
     }
 
     /// None. A tracker is about a permanent, and the zone move ends a permanent's where it
-    /// unlists it from the battlefield, with two bits cleared. Through the keyed slots,
+    /// unlists it from the battlefield, by clearing its bit in each set. Through the keyed slots,
     /// every permanent that entered this turn would leave by the stores' rare path.
     #[inline]
     fn keys(&self) -> Bitboard<L::Slot> {

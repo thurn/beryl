@@ -52,7 +52,7 @@ use crate::cost::Cost;
 use crate::counter::CounterKind;
 use crate::definition::CardDef;
 use crate::filter::Filter;
-use crate::ids::Zone;
+use crate::ids::{TurnPhase, Zone};
 use crate::index::{AbilityIx, ExceptIx};
 use crate::mana::{ManaColor, ManaSet};
 use crate::prompt::Prompt;
@@ -209,6 +209,10 @@ pub enum Effect {
     /// [CR 702.26b]: https://yawgatog.com/resources/magic-rules/#R70226b
     /// [CR 502.1]: https://yawgatog.com/resources/magic-rules/#R5021
     PhaseOut(Objects),
+    /// Untap every named permanent ([CR 701.26b]).
+    ///
+    /// [CR 701.26b]: https://yawgatog.com/resources/magic-rules/#R70126b
+    Untap(Objects),
     /// "Exile [objects]"
     /// ([CR 701.13a](https://yawgatog.com/resources/magic-rules/#R70113a)): "To exile an
     /// object, move it to the exile zone from wherever it is."
@@ -670,6 +674,14 @@ pub enum Effect {
     ///
     /// [CR 500.9]: https://yawgatog.com/resources/magic-rules/#R5009
     AdditionalStep(crate::TurnStep),
+    /// Adds these phases, in order, immediately after the current phase if it matches `after`
+    /// ([CR 500.8]). A spell may do this during another player's turn.
+    ///
+    /// [CR 500.8]: https://yawgatog.com/resources/magic-rules/#R5008
+    AdditionalPhases {
+        after: TurnPhase,
+        phases: &'static [TurnPhase],
+    },
     /// "End the turn" ([CR 725.1]): stop resolving, exile the stack and go to cleanup.
     /// The skipped steps trigger nothing. An ability still waiting for the next end step
     /// waits for the next one that actually begins. Triggers from the turn-ending process

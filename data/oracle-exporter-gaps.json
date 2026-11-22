@@ -244,5 +244,65 @@
     "card": "Delver of Secrets",
     "scenario": "a single-faced copy of Delver cannot transform",
     "gap": "the scenario starts after Delver's upkeep on turn one, which XMage still plays and asks about"
+  },
+  {
+    "oracle": "xmage",
+    "card": "Relentless Assault",
+    "scenario": "only declared attackers untap and can attack again",
+    "gap": "the exporter schedules declarations by turn and step name, which conflates attackers in repeated combats"
+  },
+  {
+    "oracle": "xmage",
+    "card": "Relentless Assault",
+    "scenario": "a precombat cast puts a main phase between two combats",
+    "gap": "the exporter schedules declarations by turn and step name, which conflates attackers in repeated combats"
+  },
+  {
+    "oracle": "xmage",
+    "card": "Relentless Assault",
+    "scenario": "two casts after the same main phase give two more combats",
+    "gap": "the exporter schedules declarations by turn and step name, which conflates attackers in repeated combats"
+  },
+  {
+    "oracle": "xmage",
+    "card": "Relentless Assault",
+    "scenario": "an attack trigger fires in both combats",
+    "gap": "the exporter schedules declarations by turn and step name, which conflates attackers in repeated combats"
+  },
+  {
+    "oracle": "xmage",
+    "card": "Relentless Assault",
+    "scenario": "the opponent gets the extra combat on their turn",
+    "gap": "the exporter schedules declarations by turn and step name, which conflates attackers in repeated combats"
+  },
+  {
+    "oracle": "forge",
+    "card": "Relentless Assault",
+    "scenario": "only declared attackers untap and can attack again",
+    "gap": "the harness uses standard phase order and treats the added beginning of combat as already passed during the postcombat main phase"
+  },
+  {
+    "oracle": "forge",
+    "card": "Relentless Assault",
+    "scenario": "two casts after the same main phase give two more combats",
+    "gap": "the harness uses standard phase order and treats the added beginning of combat as already passed during the postcombat main phase"
+  },
+  {
+    "oracle": "forge",
+    "card": "Relentless Assault",
+    "scenario": "an attack trigger fires in both combats",
+    "gap": "the harness uses standard phase order and treats the added beginning of combat as already passed during the postcombat main phase"
+  },
+  {
+    "oracle": "forge",
+    "card": "Relentless Assault",
+    "scenario": "a first striker can be blocked in the second combat",
+    "gap": "the harness uses standard phase order and treats the added beginning of combat as already passed during the postcombat main phase"
+  },
+  {
+    "oracle": "forge",
+    "card": "Relentless Assault",
+    "scenario": "the opponent gets the extra combat on their turn",
+    "gap": "the harness uses standard phase order and treats the added beginning of combat as already passed during the postcombat main phase"
   }
 ]

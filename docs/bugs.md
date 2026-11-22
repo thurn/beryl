@@ -6,6 +6,12 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **The next-stop prediction could skip an extra combat.** The prediction
+  excluded a creature with vigilance while it was still attacking in the current
+  combat. It now checks whether the creature can attack after its current combat
+  role expires. `a_vigilant_attacker_makes_each_combat_a_distinct_smart_stop`
+  checks both combat occurrences.
+
 - **Flipping a permanent could make it appear attached to a player.** The flip
   flag overlapped the bits that record which player an Aura enchants. The flag
   now uses a separate bit, and a compile-time assertion checks that the two

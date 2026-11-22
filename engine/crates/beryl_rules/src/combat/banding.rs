@@ -9,6 +9,7 @@ use crate::decision::{OPTIONS, Opt};
 use crate::fixed::Full;
 use crate::layout::{Layout, Queue};
 use crate::state::{Memo, Pending, State};
+use crate::table::GameTable;
 use beryl_kernel::reference::Permanent;
 
 /// Offers a new band for each bander and legal ways to join bands already declared.
@@ -74,11 +75,12 @@ pub(super) fn append_attack_options<L: Layout>(
 #[inline(never)]
 pub(super) fn attack<L: Layout>(
     s: &mut State<L>,
+    t: &GameTable,
     slot: L::Slot,
     first: L::Slot,
 ) -> Result<(), Full> {
     s.remember(slot, Memo::CombatBand(first))?;
-    declare_attacker(s, slot);
+    declare_attacker(s, t, slot);
     let attacker = if first == slot {
         Some(slot)
     } else {

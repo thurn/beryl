@@ -2,7 +2,9 @@
 //!
 //! Implements: CR 500.8, CR 500.9, CR 500.11, CR 505.1a
 
-use beryl_card::TurnStep;
+use std::hash::{Hash, Hasher};
+
+use beryl_card::{TurnPhase, TurnStep};
 
 use crate::event::Event;
 use crate::fixed::Full;
@@ -29,52 +31,6 @@ pub enum StepTarget {
     Scheduled { turn: u16, id: u32 },
 }
 
-/// A phase that can be added to a turn.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum TurnPhase {
-    Beginning,
-    Main,
-    Combat,
-    Ending,
-}
-
-impl TurnPhase {
-    fn steps(self) -> &'static [TurnStep] {
-        use TurnStep::{
-            BeginningOfCombat, Cleanup, CombatDamage, DeclareAttackers, DeclareBlockers, Draw, End,
-            EndOfCombat, FirstStrikeDamage, PostcombatMain, Untap, Upkeep,
-        };
-        match self {
-            Self::Beginning => &[Untap, Upkeep, Draw],
-            Self::Main => &[PostcombatMain],
-            Self::Combat => &[
-                BeginningOfCombat,
-                DeclareAttackers,
-                DeclareBlockers,
-                FirstStrikeDamage,
-                CombatDamage,
-                EndOfCombat,
-            ],
-            Self::Ending => &[End, Cleanup],
-        }
-    }
-
-    /// The phase the ordinary turn schedules this step in.
-    pub const fn of(step: TurnStep) -> Self {
-        match step {
-            TurnStep::Untap | TurnStep::Upkeep | TurnStep::Draw => Self::Beginning,
-            TurnStep::PrecombatMain | TurnStep::PostcombatMain => Self::Main,
-            TurnStep::BeginningOfCombat
-            | TurnStep::DeclareAttackers
-            | TurnStep::DeclareBlockers
-            | TurnStep::FirstStrikeDamage
-            | TurnStep::CombatDamage
-            | TurnStep::EndOfCombat => Self::Combat,
-            TurnStep::End | TurnStep::Cleanup => Self::Ending,
-        }
-    }
-}
-
 /// Where an insertion goes relative to its anchor.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Placement {
@@ -92,16 +48,31 @@ pub enum TurnChange {
     CutToCleanup,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct PlannedStep {
-    id: u32,
+    // Storing the ID as bytes keeps each of the 24 entries in Small at six
+    // bytes, without reducing the range of IDs available in a turn.
+    id: [u8; 4],
     step: Option<TurnStep>,
     starts_phase: bool,
 }
 
 impl PlannedStep {
+    fn id(self) -> u32 {
+        u32::from_ne_bytes(self.id)
+    }
+
     fn name(self) -> TurnStep {
         self.step.expect("an entry in the turn plan has a step")
+    }
+}
+
+impl Hash for PlannedStep {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // Preserve the hash of an existing plan across the layout change.
+        self.id().hash(state);
+        self.step.hash(state);
+        self.starts_phase.hash(state);
     }
 }
 
@@ -154,7 +125,7 @@ impl<L: Layout> TurnPlan<L> {
             self.remaining.insert(
                 index + offset,
                 PlannedStep {
-                    id: self.next_id,
+                    id: self.next_id.to_ne_bytes(),
                     step: Some(step),
                     starts_phase: starts_phase && offset == 0,
                 },
@@ -237,7 +208,13 @@ impl<L: Layout> State<L> {
                 move |had_main, entry| {
                     let step = main_phase_name(entry.name(), *had_main);
                     *had_main |= step == TurnStep::PrecombatMain;
-                    Some((step, StepTarget::Scheduled { turn, id: entry.id }))
+                    Some((
+                        step,
+                        StepTarget::Scheduled {
+                            turn,
+                            id: entry.id(),
+                        },
+                    ))
                 },
             )
             .chain(rest.iter().filter(move |_| !planned).map(move |&step| {
@@ -270,7 +247,11 @@ impl<L: Layout> State<L> {
             StepTarget::Scheduled { turn, id } => {
                 self.turn.number < turn
                     || (self.turn.number == turn
-                        && self.turn_plan.remaining.iter().any(|entry| entry.id == id))
+                        && self
+                            .turn_plan
+                            .remaining
+                            .iter()
+                            .any(|entry| entry.id() == id))
             }
         }
     }
@@ -441,6 +422,41 @@ impl<L: Layout> State<L> {
         };
         plan.insert(index, phase.steps(), true)?;
         Ok(Some(Event::TurnPlanChanged(TurnChange::InsertPhase(phase))))
+    }
+
+    /// Adds `phases` in order after the current phase, if it is `after`.
+    ///
+    /// Under [CR 500.8], "They do this by adding the phases directly after the specified phase."
+    /// A later insertion at the same boundary precedes the entire earlier insertion.
+    /// Checks that the whole sequence fits before changing the plan.
+    ///
+    /// [CR 500.8]: https://yawgatog.com/resources/magic-rules/#R5008
+    pub fn insert_phases_after_current(
+        &mut self,
+        after: TurnPhase,
+        phases: &[TurnPhase],
+    ) -> Result<bool, Full> {
+        if phases.is_empty() || TurnPhase::of(self.turn.step) != after {
+            return Ok(false);
+        }
+        assert!(self.has_turn_plan());
+        let plan = &mut self.turn_plan;
+        let added = phases.iter().try_fold(0usize, |count, phase| {
+            count.checked_add(phase.steps().len()).ok_or(Full)
+        })?;
+        if added > L::Queue::<PlannedStep, CAPACITY>::CAPACITY - plan.remaining.len() {
+            return Err(Full);
+        }
+        plan.next_id
+            .checked_add(u32::try_from(added).map_err(|_| Full)?)
+            .ok_or(Full)?;
+        let mut index = plan.phase_end(0);
+        for phase in phases {
+            let steps = phase.steps();
+            plan.insert(index, steps, true)?;
+            index += steps.len();
+        }
+        Ok(true)
     }
 
     /// Removes the first remaining step of this name.

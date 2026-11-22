@@ -498,6 +498,7 @@ pub(super) fn subject_of(effect: &Effect) -> Option<Players> {
         Effect::Subgame
         | Effect::EndTurn
         | Effect::AdditionalStep(_)
+        | Effect::AdditionalPhases { .. }
         | Effect::RestartGame { .. } => None,
         Effect::ForEachPlayer { .. }
         | Effect::Counter(_)
@@ -506,6 +507,7 @@ pub(super) fn subject_of(effect: &Effect) -> Option<Players> {
         | Effect::Destroy { .. }
         | Effect::Regenerate(_)
         | Effect::Tap(_)
+        | Effect::Untap(_)
         | Effect::PhaseOut(_)
         | Effect::SetPrepared { .. }
         | Effect::Exile(_)

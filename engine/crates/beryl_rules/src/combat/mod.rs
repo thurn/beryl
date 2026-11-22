@@ -17,7 +17,7 @@ use crate::ids::Seat;
 use crate::layout::{Layout, Queue};
 use crate::replacement::event::{self, Event, Sink};
 use crate::replacement::protection;
-use crate::state::{AttackTarget, CombatRole, Pending, State, TurnStep};
+use crate::state::{AttackTarget, CombatRole, Pending, State, Tracker, TurnStep};
 use crate::table::{Capability, GameTable};
 
 mod assignment;
@@ -66,7 +66,7 @@ fn blockers_of<L: Layout>(s: &State<L>, attacker: L::Slot) -> Bitboard<L::Slot> 
 /// (`restricted`, [`rule_change::attacks_restricted`]). In a two-player game every
 /// planeswalker it could attack is the one defending player's, so a restriction read for that
 /// player is the whole check.
-fn eligible_attackers<'a, L: Layout>(
+fn eligible_attackers<'a, L: Layout, const NEW_COMBAT: bool>(
     s: &'a State<L>,
     t: &'a GameTable,
 ) -> impl Iterator<Item = L::Slot> + 'a {
@@ -79,7 +79,7 @@ fn eligible_attackers<'a, L: Layout>(
                 && derived.types.contains(Types::CREATURE)
                 && !o.is_tapped()
                 && (!o.is_summoning_sick() || derived.keywords.contains(Keywords::HASTE))
-                && !o.is_attacking()
+                && (NEW_COMBAT || !o.is_attacking())
                 && !(restricted && rule_change::cant_attack(s, t, slot)))
             .then_some(slot)
         })
@@ -88,7 +88,16 @@ fn eligible_attackers<'a, L: Layout>(
 /// Whether the active player has a creature that can attack now, so that declaring attackers
 /// is a decision.
 pub(crate) fn can_declare_attackers<L: Layout>(s: &State<L>, t: &GameTable) -> bool {
-    eligible_attackers(s, t).next().is_some()
+    eligible_attackers::<L, false>(s, t).next().is_some()
+}
+
+/// Whether a later combat would offer an attack from this position. Current combat roles
+/// expire before that combat begins (see [CR 511.3]): "all creatures, battles, and planeswalkers
+/// are removed from combat."
+///
+/// [CR 511.3]: https://yawgatog.com/resources/magic-rules/#R5113
+pub(crate) fn can_attack_in_later_combat<L: Layout>(s: &State<L>, t: &GameTable) -> bool {
+    eligible_attackers::<L, true>(s, t).next().is_some()
 }
 
 /// The declare attackers step's turn-based action begins ([CR 508.1]): "First, the active player
@@ -116,7 +125,7 @@ pub(crate) fn attack_decision<L: Layout>(
     let mut list: L::Queue<Opt<L>, OPTIONS> = Default::default();
     let (player, kind, part) = if attacker.is_none() {
         list.push(Opt::Done)?;
-        let attackers = collapse(s, eligible_attackers(s, t).collect());
+        let attackers = collapse(s, eligible_attackers::<L, false>(s, t).collect());
         Candidates::<L>::extend_options(&mut list, attackers, |out, slot| {
             out.push(Opt::attack(slot))
         })?;
@@ -165,7 +174,7 @@ pub(crate) fn attack<L: Layout>(
 ) -> Result<(), Full> {
     match opt {
         Opt::Attack { slot, band: None } => {
-            declare_attacker(s, slot);
+            declare_attacker(s, t, slot);
             s.ask(Pending::DeclareAttackers {
                 attacker: Some(slot),
             });
@@ -174,7 +183,7 @@ pub(crate) fn attack<L: Layout>(
         Opt::Attack {
             slot,
             band: Some(first),
-        } => banding::attack(s, slot, first),
+        } => banding::attack(s, t, slot, first),
         Opt::Defender(target) => {
             let Pending::DeclareAttackers {
                 attacker: Some(attacker),
@@ -219,11 +228,14 @@ pub(crate) fn attack<L: Layout>(
 ///
 /// [CR 508.1k]: https://yawgatog.com/resources/magic-rules/#R5081k
 #[inline]
-fn declare_attacker<L: Layout>(s: &mut State<L>, slot: L::Slot) {
+fn declare_attacker<L: Layout>(s: &mut State<L>, t: &GameTable, slot: L::Slot) {
     let attacker = s.permanent_at(slot).expect("a declared attacker");
     let mut defending = s.players_in_turn_order(s.defending_players());
     let player = defending.next().expect("combat has a defending player");
     s.declare_attacker(attacker, player);
+    // See CR 508.4: creatures put onto the battlefield attacking never "attacked"
+    // for effects. Only a declaration pick records the turn's attack history.
+    s.track(t, Tracker::AttackedThisTurn, slot);
 }
 
 /// Finishes the attack declaration: the attackers tap, then attack triggers trigger.

@@ -130,6 +130,7 @@ impl Evaluate for Filter {
             Filter::Whose(players) => is_for(players, s.controller(slot), you),
             Filter::Owned(players) => is_for(players, o.owner, you),
             Filter::Tapped => o.flags.has(Flag::Tapped),
+            Filter::AttackedThisTurn => s.tracked(crate::trackers::Tracker::AttackedThisTurn, slot),
             Filter::Token => o.is_token(),
             Filter::ManaValueAtMost(n) => s.mana_value(t, slot) <= n,
             Filter::ManaValueAtMostX => s.mana_value(t, slot) <= x,
@@ -166,6 +167,7 @@ fn combined<L: Layout>(
         | Filter::ColorWords(_)
         | Filter::Whose(_)
         | Filter::Owned(_)
+        | Filter::AttackedThisTurn
         | Filter::Tapped
         | Filter::Token
         | Filter::ManaValueAtMost(_)
@@ -205,6 +207,7 @@ pub(crate) fn passes_so_far<L: Layout>(
         Filter::Any
         | Filter::Whose(_)
         | Filter::Owned(_)
+        | Filter::AttackedThisTurn
         | Filter::Tapped
         | Filter::Token
         | Filter::ManaValueAtMost(_)
@@ -256,7 +259,7 @@ pub fn matches_outside(filter: &Filter, card: &CardDef, owner: Seat, words: &Wor
         Filter::Not(f) => !passes(f),
         Filter::All(fs) => fs.iter().all(passes),
         Filter::AnyOf(fs) => fs.iter().any(passes),
-        Filter::Tapped | Filter::Token | Filter::InZone(_) => false,
+        Filter::AttackedThisTurn | Filter::Tapped | Filter::Token | Filter::InZone(_) => false,
     }
 }
 

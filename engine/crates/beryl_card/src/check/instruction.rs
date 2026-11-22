@@ -196,6 +196,7 @@ impl Scope<'_> {
             | Effect::Destroy { .. }
             | Effect::Regenerate(_)
             | Effect::Tap(_)
+            | Effect::Untap(_)
             | Effect::PhaseOut(_)
             | Effect::SetPrepared { .. }
             | Effect::Exile(_)
@@ -255,6 +256,7 @@ impl Scope<'_> {
             | Effect::RestartGame { .. }
             | Effect::EndTurn
             | Effect::AdditionalStep(_)
+            | Effect::AdditionalPhases { .. }
             | Effect::ExtraTurn(_, None) => Ok(()),
         };
         both(entry, self.operands(effect.operands()))

@@ -124,8 +124,9 @@ pub fn next_step_stop<L: Layout>(
     let mut after = after;
     let mut attacking = any_attacking(s);
     for (step, target) in s.later_steps() {
-        let declares =
-            step == TurnStep::BeginningOfCombat && active && combat::can_declare_attackers(s, t);
+        let declares = step == TurnStep::BeginningOfCombat
+            && active
+            && combat::can_attack_in_later_combat(s, t);
         if step == TurnStep::BeginningOfCombat {
             attacking = declares;
         }

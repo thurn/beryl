@@ -2,8 +2,8 @@
 
 use beryl_card::effect::build::{draw, gain_life, this, untap_up_to, you};
 use beryl_card::{
-    Ability, AbilityIx, CardDef, Face, Governed, Players, Replacement, RuleChange, Says, Trigger,
-    Types, When,
+    Ability, AbilityIx, CardDef, Face, Governed, Keywords, Players, Replacement, RuleChange, Says,
+    Trigger, Types, When,
 };
 use beryl_kernel::format::Format;
 use beryl_kernel::table::Capability;
@@ -71,9 +71,27 @@ static WATCH_DRAWS: CardDef = CardDef {
     }],
 };
 
+static VIGILANT_CREATURE: CardDef = CardDef {
+    name: "Test Vigilant Creature",
+    shape: beryl_card::definition::Shape::Single,
+    tokens: &[],
+    faces: &[Face {
+        types: Types::CREATURE,
+        keywords: Keywords::VIGILANCE,
+        power: Some(2),
+        toughness: Some(2),
+        ..Face::EMPTY
+    }],
+};
+
 fn table() -> GameTable {
-    static CARDS: CardTable = CardTable::new(&[&LAND, &REORDER, &WATCH_DRAWS]);
-    let deck = [(36, LAND.name), (3, REORDER.name), (1, WATCH_DRAWS.name)];
+    static CARDS: CardTable = CardTable::new(&[&LAND, &REORDER, &WATCH_DRAWS, &VIGILANT_CREATURE]);
+    let deck = [
+        (35, LAND.name),
+        (3, REORDER.name),
+        (1, WATCH_DRAWS.name),
+        (1, VIGILANT_CREATURE.name),
+    ];
     GameTable::new(Format::CONSTRUCTED, &CARDS, [&deck, &deck]).unwrap()
 }
 
@@ -177,6 +195,47 @@ fn two_upkeeps_stop_and_the_last_insertion_plays_first() {
 }
 
 #[test]
+fn a_vigilant_attacker_makes_each_combat_a_distinct_smart_stop() {
+    let t = table();
+    let mut s = State::new(&t, 1, Profile::SMART).unwrap();
+    s.board().begin_at(3, Seat::P0, TurnStep::PrecombatMain);
+    s.plan_from_current_step(t.format()).unwrap();
+    assert!(
+        s.insert_phases_after_current(TurnPhase::Main, &[TurnPhase::Combat, TurnPhase::Main])
+            .unwrap()
+    );
+    let slot = s
+        .library(Seat::P0)
+        .iter()
+        .copied()
+        .find(|&slot| s.definition_name(&t, slot) == VIGILANT_CREATURE.name)
+        .unwrap();
+    s.board().place(slot, Zone::Battlefield).unwrap();
+    let creature = s.permanent_at(slot).unwrap();
+    let mut x = Scratch::recording();
+    crate::continuous::layers::refresh(&mut s, &t, &mut x.events).unwrap();
+
+    let next_combat = |s: &State| {
+        let NextStop::Step(TurnStep::BeginningOfCombat, target) =
+            next_step_stop(&t, Observation::new(s, Seat::P0), StepStops::NONE, None)
+        else {
+            panic!("the next stop should be the beginning of combat");
+        };
+        target
+    };
+    let first = next_combat(&s);
+    while s.before_step(first) {
+        let step = s.take_planned_step().unwrap();
+        let _began = s.begin_step(step);
+    }
+    s.declare_attacker(creature, Seat::P1);
+    assert!(s.object(slot).is_attacking());
+    let second = next_combat(&s);
+    assert_ne!(first, second);
+    assert!(s.before_step(second));
+}
+
+#[test]
 fn a_full_phase_insertion_can_retry_after_widening() {
     let t = table();
     let mut s = State::new(&t, 1, Profile::EXACT).unwrap();
@@ -209,19 +268,22 @@ fn a_full_phase_insertion_can_retry_after_widening() {
         );
     }
     let before: Vec<_> = s.later_steps().collect();
+    let phases = &[TurnPhase::Main, TurnPhase::Combat];
     assert!(
-        s.insert_phase(TurnPhase::Main, Placement::After, TurnPhase::Combat)
+        s.insert_phases_after_current(TurnPhase::Main, phases)
             .is_err()
     );
     assert_eq!(s.later_steps().collect::<Vec<_>>(), before);
     let mut wide = s.widen();
     assert_eq!(wide.later_steps().collect::<Vec<_>>(), before);
     assert!(
-        wide.insert_phase(TurnPhase::Main, Placement::After, TurnPhase::Combat)
+        wide.insert_phases_after_current(TurnPhase::Main, phases)
             .unwrap()
-            .is_some()
     );
-    assert_eq!(wide.later_steps().count(), before.len() + 6);
+    let after: Vec<_> = wide.later_steps().collect();
+    assert_eq!(after[0].0, TurnStep::PostcombatMain);
+    assert_eq!(after[1].0, TurnStep::BeginningOfCombat);
+    assert_eq!(after[7..], before);
     assert!(wide.remove_phase(TurnPhase::Combat).is_some());
     let _cut = wide.cut_to_cleanup().unwrap();
     assert_eq!(

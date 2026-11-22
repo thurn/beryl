@@ -9,6 +9,7 @@ use super::super::operands::{
 use super::super::{Kind, LINKED, Neighbours, leak, leak_slice};
 
 mod damage;
+mod phases;
 mod turn;
 
 /// The neighbours of the node `effect` itself, its children unchanged.
@@ -169,6 +170,7 @@ pub(super) fn local(effect: &'static Effect) -> Vec<(Kind, String, Effect)> {
         Effect::Counter(o) => objects_of(o, Effect::Counter, &mut add),
         Effect::Regenerate(o) => objects_of(o, Effect::Regenerate, &mut add),
         Effect::Tap(o) => objects_of(o, Effect::Tap, &mut add),
+        Effect::Untap(o) => objects_of(o, Effect::Untap, &mut add),
         Effect::PhaseOut(o) => objects_of(o, Effect::PhaseOut, &mut add),
         Effect::SetPrepared { objects, prepared } => preparation(objects, prepared, &mut add),
         Effect::Exile(o) => objects_of(o, Effect::Exile, &mut add),
@@ -755,21 +757,10 @@ pub(super) fn local(effect: &'static Effect) -> Vec<(Kind, String, Effect)> {
                 add(Kind::EffectPlayers, name, Effect::ControlPlayer(player));
             }
         }
-        Effect::AdditionalStep(_) => add(
-            Kind::SequenceStep,
-            "omit adding the step".to_owned(),
-            Effect::NOTHING,
-        ),
-        Effect::RestartGame { .. } => add(
-            Kind::SequenceStep,
-            "omit restarting the game".to_owned(),
-            Effect::NOTHING,
-        ),
-        Effect::EndTurn => add(
-            Kind::SequenceStep,
-            "omit ending the turn".to_owned(),
-            Effect::NOTHING,
-        ),
+        Effect::AdditionalStep(_) | Effect::RestartGame { .. } | Effect::EndTurn => {
+            add(Kind::SequenceStep, turn::omission(effect), Effect::NOTHING);
+        }
+        Effect::AdditionalPhases { after, phases } => phases::neighbours(after, phases, &mut add),
         Effect::ExtraTurn(player, ability) => turn::extra_turn(player, ability, &mut add),
         Effect::ChangeRule { rule, duration } => {
             for (kind, name, rule) in rules(rule) {

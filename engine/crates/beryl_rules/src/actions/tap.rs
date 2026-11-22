@@ -62,12 +62,31 @@ pub fn untap_up_to<L: Layout>(
     let tapped = permanents.filter(|slot| s.object(slot).is_tapped());
     let prompt = Prompt::new(Purpose::Untap).most(n);
     let chosen = choices::pick_up_to(game, resolution, player, tapped, n, prompt)?;
+    untap_selected(game, chosen)?;
+    Ok(chosen)
+}
+
+/// Untaps every named permanent: "Only tapped permanents can be untapped" ([CR 701.26b]).
+///
+/// [CR 701.26b]: https://yawgatog.com/resources/magic-rules/#R70126b
+pub(crate) fn untap_instruction<L: Layout>(
+    run: &mut Run<'_, '_, L>,
+    objects: Objects,
+) -> Result<Outcome<L>, Full> {
+    let permanents = run.permanents(objects).slots();
+    let (game, _) = run.resolving();
+    let tapped = permanents.filter(|slot| game.state.object(slot).is_tapped());
+    untap_selected(game, tapped)?;
+    Ok(Outcome::acted_on(tapped))
+}
+
+fn untap_selected<L: Layout>(game: &mut Game<'_, L>, slots: Bitboard<L::Slot>) -> Result<(), Full> {
     // In battlefield order, never slot order: the untaps' events are seen in this order.
-    let permanents = game.state.in_game_order(game.table, chosen)?;
-    for &slot in permanents.as_slice() {
+    let ordered = game.state.in_game_order(game.table, slots)?;
+    for &slot in ordered.as_slice() {
         untap(game, game.state.object_ref(slot))?;
     }
-    Ok(chosen)
+    Ok(())
 }
 
 /// [`Effect::UntapUpTo`](beryl_card::Effect::UntapUpTo): "[Player] untaps up to [count]

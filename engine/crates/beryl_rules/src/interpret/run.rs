@@ -183,6 +183,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             | Effect::Destroy { .. }
             | Effect::Regenerate(_)
             | Effect::Tap(_)
+            | Effect::Untap(_)
             | Effect::PhaseOut(_)
             | Effect::SetPrepared { .. }
             | Effect::Exile(_)
@@ -243,6 +244,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             | Effect::LoseGame(_)
             | Effect::ControlPlayer(_)
             | Effect::AdditionalStep(_)
+            | Effect::AdditionalPhases { .. }
             | Effect::ExtraTurn(..) => self.carry_out_instruction(effect)?,
         };
         Ok(())
@@ -296,6 +298,7 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
             } => destroy::instruction(self, objects, regeneration)?,
             Effect::Regenerate(objects) => regenerate::instruction(self, objects)?,
             Effect::Tap(objects) => crate::actions::tap::instruction(self, objects)?,
+            Effect::Untap(objects) => tap::untap_instruction(self, objects)?,
             Effect::PhaseOut(objects) => crate::objects::phasing::instruction(self, objects)?,
             Effect::SetPrepared { objects, prepared } => {
                 crate::objects::preparation::instruction(self, objects, prepared)?
@@ -426,6 +429,9 @@ impl<'c, 'a, L: Layout> Run<'c, 'a, L> {
                 continuous::control_player_instruction(self, players)?
             }
             Effect::AdditionalStep(step) => crate::turn::additional_step(self.game(), step)?,
+            Effect::AdditionalPhases { after, phases } => {
+                crate::turn::phases::additional(self, after, phases)?
+            }
             Effect::ExtraTurn(players, ability) => {
                 continuous::extra_turn_instruction(self, players, ability)?
             }
@@ -696,6 +702,7 @@ fn at_once(effect: &Effect) -> bool {
             | Effect::RemoveAllCounters(_)
             | Effect::AddMana { .. }
             | Effect::AddManaOfKind { .. }
+            | Effect::Untap(_)
             | Effect::UntapUpTo { .. }
             | Effect::WinGame(_)
             | Effect::LoseGame(_)

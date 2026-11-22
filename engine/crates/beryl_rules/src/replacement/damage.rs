@@ -362,6 +362,7 @@ fn prevention_filter(effect: &'static Effect) -> Option<&'static Filter> {
         | Effect::Destroy { .. }
         | Effect::Regenerate(_)
         | Effect::Tap(_)
+        | Effect::Untap(_)
         | Effect::PhaseOut(_)
         | Effect::SetPrepared { .. }
         | Effect::Exile(_)
@@ -424,6 +425,7 @@ fn prevention_filter(effect: &'static Effect) -> Option<&'static Filter> {
         | Effect::RestartGame { .. }
         | Effect::EndTurn
         | Effect::AdditionalStep(_)
+        | Effect::AdditionalPhases { .. }
         | Effect::ExtraTurn(..) => None,
     }
 }

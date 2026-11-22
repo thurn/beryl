@@ -5,8 +5,8 @@
 use beryl_card::definition::Shape;
 use beryl_card::{
     Ability, AbilityKind, Amount, Behavior, CardDef, Condition, CostAction, CostPart, Designation,
-    Draws, Effect, FACE_DOWN, Face, Keywords, Modification, Node, Objects, Replaced, Replacement,
-    Rewrite, Subtype, Words, Zone,
+    Draws, Effect, FACE_DOWN, Face, Filter, Keywords, Modification, Node, Objects, Replaced,
+    Replacement, Rewrite, Subtype, Words, Zone,
 };
 
 use crate::event::Listens;
@@ -132,15 +132,17 @@ pub enum Capability {
     Banding,
     /// A permanent can enter prepared and make a spell copy in exile.
     Preparation,
+    /// A card reads whether a permanent was declared as an attacker this turn.
+    AttackedThisTurn,
 }
 
-// The game keeps its capabilities in a `u32`.
-const _: () = assert!((Capability::Preparation as u32) < u32::BITS);
+// The game keeps its capabilities in a `u64`.
+const _: () = assert!((Capability::AttackedThisTurn as u32) < u64::BITS);
 
 impl Capability {
     /// The capabilities of every face and subtype the game can contain.
     #[inline]
-    pub(super) fn of_game(defs: &[&CardDef], subtypes: &SubtypeNumbers) -> u32 {
+    pub(super) fn of_game(defs: &[&CardDef], subtypes: &SubtypeNumbers) -> u64 {
         let mut capabilities = defs
             .iter()
             .flat_map(|d| d.faces)
@@ -166,7 +168,7 @@ impl Capability {
     }
 
     /// The capabilities a face gives a game that can contain it.
-    fn of(face: &Face) -> u32 {
+    fn of(face: &Face) -> u64 {
         let mut found = casting_capabilities(face) | keyword_capabilities(face.keywords);
         if Inputs::of(face) != Inputs::NONE {
             found |= Capability::LayerInputs.bit();
@@ -263,13 +265,13 @@ impl Capability {
     }
 
     #[inline]
-    pub(super) const fn bit(self) -> u32 {
-        1 << (self as u32)
+    pub(super) const fn bit(self) -> u64 {
+        1 << (self as u64)
     }
 }
 
 /// The capabilities that come from a face's keyword abilities.
-fn keyword_capabilities(keywords: Keywords) -> u32 {
+fn keyword_capabilities(keywords: Keywords) -> u64 {
     let mut found = 0;
     if keywords.contains(Keywords::DELVE) {
         found |= Capability::Delve.bit();
@@ -281,7 +283,7 @@ fn keyword_capabilities(keywords: Keywords) -> u32 {
 }
 
 /// The capabilities that come from a face's casting options, costs and permissions.
-fn casting_capabilities(face: &Face) -> u32 {
+fn casting_capabilities(face: &Face) -> u64 {
     use beryl_card::CastingOption;
 
     let mut found = if face.permits_cast_while_searching() {
@@ -315,7 +317,7 @@ fn casting_capabilities(face: &Face) -> u32 {
 }
 
 /// The capabilities needed by the instructions a spell or ability can carry out.
-fn body_capabilities(body: Behavior) -> u32 {
+fn body_capabilities(body: Behavior) -> u64 {
     match body {
         Behavior::Data(effect) => {
             let mut found = 0;
@@ -334,8 +336,10 @@ fn body_capabilities(body: Behavior) -> u32 {
                 found |= Capability::ReadsDepartedSpell.bit();
             }
             if effect.any(&|instruction| {
-                matches!(instruction, Effect::EndTurn | Effect::AdditionalStep(_))
-                    || matches!(instruction, Effect::ChangeRule { rule, .. }
+                matches!(
+                    instruction,
+                    Effect::EndTurn | Effect::AdditionalStep(_) | Effect::AdditionalPhases { .. }
+                ) || matches!(instruction, Effect::ChangeRule { rule, .. }
                         if matches!(rule.what, beryl_card::Governed::TakeStep(_)))
             }) {
                 found |= Capability::TurnStructure.bit();
@@ -350,7 +354,7 @@ fn body_capabilities(body: Behavior) -> u32 {
 }
 
 /// The facts an ability reads, whether they appear in its body or in its conditions.
-fn facts_read_by(ability: &Ability) -> u32 {
+fn facts_read_by(ability: &Ability) -> u64 {
     let mut found = 0;
     if ability
         .trigger()
@@ -371,6 +375,7 @@ fn facts_read_by(ability: &Ability) -> u32 {
             }
             Node::Amount(Amount::CardsDrawn(_)) => Capability::CardsDrawn.bit(),
             Node::Condition(Condition::DrewInDrawStep(_)) => Capability::DrewInDrawStep.bit(),
+            Node::Filter(Filter::AttackedThisTurn) => Capability::AttackedThisTurn.bit(),
             Node::Filter(_) | Node::Amount(_) | Node::Condition(_) | Node::Objects(_) => 0,
         };
     });
@@ -395,7 +400,7 @@ fn copies_itself(effect: &Effect) -> bool {
 /// [`Capability::Merges`]) every kind a permanent's ability listens to, `here`. A card of any
 /// face may be under a merged permanent, where the table's listeners of the permanent's
 /// definition do not find its triggered abilities, so trigger matching looks for them apart.
-pub(super) fn merged_listen_away(capabilities: u32, away: Listens, here: Listens) -> Listens {
+pub(super) fn merged_listen_away(capabilities: u64, away: Listens, here: Listens) -> Listens {
     if capabilities & Capability::Merges.bit() == 0 {
         away
     } else {

@@ -106,6 +106,7 @@ impl Ctx {
                 noun.suffixes.push(verb.to_owned());
             }
             Filter::Tapped => noun.adjectives.push("tapped".to_owned()),
+            Filter::AttackedThisTurn => noun.suffixes.push("that attacked this turn".to_owned()),
             Filter::Token => noun.adjectives.push("token".to_owned()),
             Filter::ManaValueAtMost(n) => {
                 noun.suffixes.push(format!("with mana value {n} or less"));
@@ -170,6 +171,9 @@ impl Ctx {
                     .map(|c| format!("non{c}")),
             ),
             Filter::Tapped => noun.adjectives.push("untapped".to_owned()),
+            Filter::AttackedThisTurn => noun
+                .suffixes
+                .push("that didn't attack this turn".to_owned()),
             Filter::Token => noun.adjectives.push("nontoken".to_owned()),
             Filter::Whose(players) => {
                 let who = self.controls(*players, false);

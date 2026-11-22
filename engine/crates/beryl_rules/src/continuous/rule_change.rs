@@ -190,6 +190,7 @@ pub(crate) fn accepts(filter: Filter, face: &Face) -> bool {
         | Filter::ColorWords(_)
         | Filter::Whose(_)
         | Filter::Owned(_)
+        | Filter::AttackedThisTurn
         | Filter::Tapped
         | Filter::Token
         | Filter::ManaValueAtMost(_)
@@ -220,6 +221,7 @@ fn accepts_composed(filter: Filter, face: &Face) -> bool {
         Filter::AnyOf(filters) => filters.iter().any(|&filter| accepts_composed(filter, face)),
         Filter::Whose(_)
         | Filter::Owned(_)
+        | Filter::AttackedThisTurn
         | Filter::Tapped
         | Filter::Token
         | Filter::ManaValueAtMost(_)

@@ -89,6 +89,7 @@ pub(crate) fn player_matches(spec: &TargetSpec, player: Seat, you: Seat) -> bool
             | Filter::SubtypeWord(_)
             | Filter::ColorWords(_)
             | Filter::Owned(_)
+            | Filter::AttackedThisTurn
             | Filter::Tapped
             | Filter::Token
             | Filter::ManaValueAtMost(_)

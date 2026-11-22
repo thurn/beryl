@@ -10,6 +10,7 @@ impl Effect {
     /// first: a removal destroys, exiles, sacrifices or returns it, or puts it into a
     /// library, and a counter counters it. A player is told as they choose the target
     /// ([`crate::Ability::takes_target`]).
+    #[allow(clippy::too_many_lines)] // One exhaustive match, a line per instruction.
     pub const fn takes(&self, target: SpecIx, how: Takes) -> bool {
         match *self {
             Effect::Destroy { objects, .. }
@@ -54,6 +55,7 @@ impl Effect {
             | Effect::ExchangeControl(..)
             | Effect::Regenerate(_)
             | Effect::Tap(_)
+            | Effect::Untap(_)
             | Effect::PhaseOut(_)
             | Effect::SetPrepared { .. }
             | Effect::PreventDamage { .. }
@@ -108,6 +110,7 @@ impl Effect {
             | Effect::RestartGame { .. }
             | Effect::EndTurn
             | Effect::AdditionalStep(_)
+            | Effect::AdditionalPhases { .. }
             | Effect::ExtraTurn(..) => false,
         }
     }

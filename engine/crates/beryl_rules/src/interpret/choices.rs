@@ -490,6 +490,7 @@ pub(crate) fn may_instruction<L: Layout>(
         | Effect::Destroy { .. }
         | Effect::Regenerate(_)
         | Effect::Tap(_)
+        | Effect::Untap(_)
         | Effect::PhaseOut(_)
         | Effect::SetPrepared { .. }
         | Effect::ExileUntilThisLeaves(_)
@@ -547,6 +548,7 @@ pub(crate) fn may_instruction<L: Layout>(
         | Effect::RestartGame { .. }
         | Effect::EndTurn
         | Effect::AdditionalStep(_)
+        | Effect::AdditionalPhases { .. }
         | Effect::ExtraTurn(..)
         | Effect::Wish { .. } => (MAY, Bitboard::EMPTY),
     };

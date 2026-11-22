@@ -38,6 +38,7 @@ pub(super) const fn moved_by(effect: &Effect) -> Option<&Objects> {
         | Effect::CopySpell { .. }
         | Effect::Regenerate(_)
         | Effect::Tap(_)
+        | Effect::Untap(_)
         | Effect::PhaseOut(_)
         | Effect::SetPrepared { .. }
         | Effect::PutBack { .. }
@@ -86,6 +87,7 @@ pub(super) const fn moved_by(effect: &Effect) -> Option<&Objects> {
         | Effect::RestartGame { .. }
         | Effect::EndTurn
         | Effect::AdditionalStep(_)
+        | Effect::AdditionalPhases { .. }
         | Effect::ExtraTurn(..) => None,
     }
 }

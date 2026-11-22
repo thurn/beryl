@@ -2018,6 +2018,36 @@
       ]
     }
   ],
+  "Relentless Assault": [
+    {
+      "published_at": "2025-09-19",
+      "hash": "8549dad617de",
+      "scenario": [
+        "a cast outside a main phase untaps without adding phases",
+        "a precombat cast puts a main phase between two combats"
+      ]
+    },
+    {
+      "published_at": "2025-09-19",
+      "hash": "34a788d86287",
+      "untestable": "Attack requirements that apply per turn or per combat are outside the implemented rules."
+    },
+    {
+      "published_at": "2025-09-19",
+      "hash": "aefd216c0db0",
+      "scenario": [
+        "the opponent gets the extra combat on their turn"
+      ]
+    },
+    {
+      "published_at": "2025-09-19",
+      "hash": "acb0ed4f5d9d",
+      "scenario": [
+        "an attack trigger fires in both combats",
+        "a first striker can be blocked in the second combat"
+      ]
+    }
+  ],
   "Rest in Peace": [
     {
       "published_at": "2018-03-16",

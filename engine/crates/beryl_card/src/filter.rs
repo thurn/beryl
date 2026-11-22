@@ -43,6 +43,10 @@ pub enum Filter {
     /// [CR 108.3]: https://yawgatog.com/resources/magic-rules/#R1083
     Owned(&'static Players),
     Tapped,
+    /// Was declared as an attacker this turn ([CR 508.4]).
+    ///
+    /// [CR 508.4]: https://yawgatog.com/resources/magic-rules/#R5084
+    AttackedThisTurn,
     /// Is a token ([CR 111.1](https://yawgatog.com/resources/magic-rules/#R1111)): "Some
     /// effects put tokens onto the battlefield." Not a token is "nontoken".
     Token,
@@ -76,6 +80,7 @@ impl Filter {
             | Filter::ColorWords(_)
             | Filter::Whose(_)
             | Filter::Owned(_)
+            | Filter::AttackedThisTurn
             | Filter::Tapped
             | Filter::Token
             | Filter::ManaValueAtMost(_)
@@ -110,6 +115,7 @@ impl Filter {
             | Filter::Supertypes(_)
             | Filter::SubtypeWord(_)
             | Filter::ColorWords(_)
+            | Filter::AttackedThisTurn
             | Filter::Tapped
             | Filter::Token
             | Filter::ManaValueAtMost(_)
