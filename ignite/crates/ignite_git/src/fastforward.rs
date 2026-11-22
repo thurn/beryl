@@ -39,19 +39,43 @@ pub enum FastForward {
     Branches(Vec<(String, Branch)>),
 }
 
+/// A phase of the main checkout's fast-forward, reported before it starts.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Step<'a> {
+    CheckingCheckout,
+    ReadingHead,
+    Fetching(&'a str),
+    Comparing(&'a str),
+    Merging(&'a str),
+    UpdatingRef(&'a str),
+}
+
 /// Fetches each of `branches` from `remote` and fast-forwards the local branch kept at it
 /// ([`refname::local_branch`]: `staging` for both `staging` and `refs/ignite/staging`) in the
 /// checkout at `repo`. The branch checked out moves with `git merge --ff-only`, which also
 /// updates its files; any other moves with a compare-and-swap of its ref.
 pub fn main_checkout(repo: &Path, remote: &str, branches: &[String]) -> Result<FastForward> {
+    main_checkout_with_progress(repo, remote, branches, |_| {})
+}
+
+/// Like [`main_checkout`], with a callback before each phase that runs Git.
+pub fn main_checkout_with_progress(
+    repo: &Path,
+    remote: &str,
+    branches: &[String],
+    mut progress: impl FnMut(Step<'_>),
+) -> Result<FastForward> {
+    progress(Step::CheckingCheckout);
     if busy(repo)? {
         return Ok(FastForward::Busy);
     }
+    progress(Step::ReadingHead);
     let current = cmd::run(repo, ["symbolic-ref", "--quiet", "--short", "HEAD"])
         .ok()
         .map(|name| name.trim().to_owned());
     let mut done = Vec::new();
     for branch in branches {
+        progress(Step::Fetching(branch));
         let remote_tip = match refs::remote_tip(repo, remote, branch) {
             Ok(tip) => tip,
             Err(Error::NotFound(_)) => {
@@ -62,6 +86,7 @@ pub fn main_checkout(repo: &Path, remote: &str, branches: &[String]) -> Result<F
         };
         let local_branch = refname::local_branch(branch);
         let local_ref = format!("refs/heads/{local_branch}");
+        progress(Step::Comparing(&local_ref));
         let Ok(local) = cmd::run(repo, ["rev-parse", "--verify", "--quiet", &local_ref]) else {
             done.push((branch.clone(), Branch::Missing));
             continue;
@@ -73,8 +98,10 @@ pub fn main_checkout(repo: &Path, remote: &str, branches: &[String]) -> Result<F
             Branch::Diverged
         } else {
             if current.as_deref() == Some(local_branch.as_str()) {
+                progress(Step::Merging(&local_ref));
                 cmd::run(repo, ["merge", "--ff-only", "--quiet", remote_tip.as_str()])?;
             } else {
+                progress(Step::UpdatingRef(&local_ref));
                 cmd::run(
                     repo,
                     [

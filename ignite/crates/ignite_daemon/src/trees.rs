@@ -32,6 +32,7 @@ mod disk;
 mod elastic;
 pub mod head;
 mod landing;
+mod main_checkout;
 mod pressure;
 pub(crate) use pressure::LargestTree;
 mod reset;
@@ -42,7 +43,7 @@ mod setup;
 mod slots;
 mod status;
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 pub(crate) mod volumes;
 mod wait;
 
@@ -58,7 +59,6 @@ use ignite_core::config::Config;
 use ignite_core::ids::{Commit, Handle, SessionId, TicketId, TreeId};
 use ignite_core::manifest::Manifest;
 use ignite_core::traits::{BuildResult, Builds, Clock, Error, Result};
-use ignite_git::fastforward::{self, FastForward};
 use ignite_git::save::{self, Saved};
 use ignite_git::{refs, worktree};
 use ignite_store::local::{handles as handle_store, rows, trees as store};
@@ -788,12 +788,5 @@ impl Trees {
     /// [`TreeConfig::reload`], with manifests read again from the main checkout.
     pub fn reload_products(&self, manifest: &Manifest) {
         self.inner.config.reload(manifest);
-    }
-
-    /// Fast-forwards the main checkout's local integration branches to the remote, only while
-    /// the checkout has no local changes.
-    pub fn fast_forward_main(&self) -> Result<FastForward> {
-        let config = &self.inner.config;
-        fastforward::main_checkout(&config.repo, &config.remote, &config.branches)
     }
 }

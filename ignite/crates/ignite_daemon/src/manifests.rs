@@ -17,8 +17,8 @@
 //! what is prebuilt, the exploration families its idle loop chooses from, and a tree that holds
 //! no manifest directory. A change to the manifests builds no release and restarts no daemon
 //! (see [`crate::update::scope::ignite_change`]), so those components hold a [`Live`] value, and
-//! the tip loop calls [`Reload::run`] after each fast-forward of the main checkout, so the daemon
-//! reads the manifests `master` has, as a restart into the new release did.
+//! the main loop calls [`Reload::run`] after fast-forwarding the checkout, so the daemon reads
+//! the updated manifests without waiting for a restart.
 
 use std::fmt;
 use std::path::{Path, PathBuf};

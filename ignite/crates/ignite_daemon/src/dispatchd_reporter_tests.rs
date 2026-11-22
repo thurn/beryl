@@ -89,6 +89,77 @@ fn a_stuck_loop_is_reported_once_for_this_machine() {
     assert!(reports[0].on_machine);
 }
 
+#[test]
+fn main_loop_reports_the_ref_while_git_waits_for_a_fetch() {
+    use std::io::{BufRead, BufReader, Write};
+    use std::net::TcpListener;
+
+    use crate::main::main_round;
+    use crate::trees::tests::{Fixture, git};
+
+    let rig = rig(&[]);
+    let home = home("main-fetch");
+    let (reporter, health) = reporter(&rig, &home);
+    let ticker = health.register("ignite-main", Duration::from_mins(10));
+    let fixture = Fixture::new(0, 1);
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let remote = format!("http://{}", listener.local_addr().unwrap());
+    git(&fixture.repo, &["remote", "set-url", "origin", &remote]);
+    git(&fixture.repo, &["config", "remote.origin.proxy", ""]);
+
+    std::thread::scope(|scope| {
+        let round = scope.spawn(|| {
+            ticker.round(|| {
+                main_round(&fixture.trees, || {
+                    let status = &health.lines()[0];
+                    assert!(status.contains("reloading the check manifests"), "{status}");
+                    let problem = &health.problems()[0];
+                    assert!(
+                        problem.contains("reloading the check manifests"),
+                        "{problem}"
+                    );
+                    Ok(false)
+                })
+            })
+        });
+
+        let (connection, _) = listener.accept().unwrap();
+        drop(listener);
+        let mut request = BufReader::new(connection);
+        let mut line = String::new();
+        request.read_line(&mut line).unwrap();
+        assert!(line.starts_with("GET /info/refs"), "{line}");
+        loop {
+            line.clear();
+            if request.read_line(&mut line).unwrap() == 0 || line == "\r\n" {
+                break;
+            }
+        }
+
+        rig.clock.advance(601.0);
+        let status = health.lines();
+        reporter.tick(&rig.ctx, true);
+        let reports = rig.hub.justiciar_reports();
+
+        // A plain list of refs suffices because the checkout already has the advertised commit.
+        let refs = format!("{}\trefs/heads/main\n", fixture.tip());
+        write!(
+            request.get_mut(),
+            "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{refs}",
+            refs.len()
+        )
+        .unwrap();
+        drop(request);
+
+        let step = "fetching refs/heads/main from origin for the main checkout";
+        assert!(status[0].contains(step), "{status:?}");
+        assert_eq!(reports.len(), 1, "{reports:?}");
+        assert_eq!(reports[0].subject, "loop:ignite-main");
+        assert!(reports[0].details.contains(step), "{reports:?}");
+        assert_eq!(round.join().unwrap(), Some(()), "{:?}", health.reports());
+    });
+}
+
 /// On 2026-11-20 cygnus filed a P0 justiciar ticket because its idle loop had waited ten
 /// minutes in the scheduler's queue for 12 cores while a tip round and an agent's build held all
 /// 18. That is how idle work is meant to behave, so a round waiting for cores is not reported;

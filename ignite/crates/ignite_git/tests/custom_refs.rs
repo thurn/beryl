@@ -5,7 +5,7 @@
 mod support;
 
 use ignite_core::traits::{Error, Git, Push};
-use ignite_git::fastforward::{self, Branch, FastForward};
+use ignite_git::fastforward::{self, Branch, FastForward, Step};
 use ignite_git::{GitCli, push, refs, save};
 use support::{Scratch, commit_all, git, remote_and_clone, write};
 
@@ -102,7 +102,20 @@ fn the_main_checkout_keeps_its_local_branch_at_a_custom_ref() {
     );
     git(&clone, &["checkout", "--quiet", "staging"]);
 
-    let done = fastforward::main_checkout(&clone, "origin", &[STAGING.to_owned()]).unwrap();
+    let mut expected = [
+        Step::CheckingCheckout,
+        Step::ReadingHead,
+        Step::Fetching(STAGING),
+        Step::Comparing("refs/heads/staging"),
+        Step::Merging("refs/heads/staging"),
+    ]
+    .into_iter();
+    let done =
+        fastforward::main_checkout_with_progress(&clone, "origin", &[STAGING.to_owned()], |step| {
+            assert_eq!(Some(step), expected.next());
+        })
+        .unwrap();
+    assert_eq!(expected.next(), None);
     assert_eq!(
         done,
         FastForward::Branches(vec![(

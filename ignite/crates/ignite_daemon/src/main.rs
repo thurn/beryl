@@ -20,6 +20,8 @@ mod cli;
 mod desk;
 pub mod drill;
 mod loops;
+#[cfg(test)]
+pub(crate) use loops::main_round;
 mod machine_state;
 mod restart_window;
 mod selfupdate;

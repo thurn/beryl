@@ -228,19 +228,7 @@ impl Parts {
         let (trees, manifests) = (self.trees.clone(), self.manifests.clone());
         self.start_loop("ignite-main", MAIN_STALLS_AFTER, move |ticker| {
             loop {
-                ticker.round(|| {
-                    trees
-                        .fast_forward_main()
-                        .map_err(|error| format!("main checkout not fast-forwarded: {error}"))?;
-                    match manifests.run() {
-                        Ok(true) => eprintln!("ignite: read the changed check manifests"),
-                        Ok(false) => {}
-                        Err(error) => {
-                            return Err(format!("check manifests not read again: {error}"));
-                        }
-                    }
-                    Ok(())
-                });
+                ticker.round(|| main_round(&trees, || manifests.run()));
                 thread::sleep(MAIN_EVERY);
             }
         });
@@ -421,6 +409,21 @@ impl Parts {
             }
         });
     }
+}
+
+/// Updates the checkout, then reads its check manifests for the daemon's next round of work.
+pub(crate) fn main_round(
+    trees: &Trees,
+    reload: impl FnOnce() -> std::result::Result<bool, String>,
+) -> std::result::Result<(), String> {
+    trees
+        .fast_forward_main()
+        .map_err(|error| format!("main checkout not fast-forwarded: {error}"))?;
+    crate::steps::step("reloading the check manifests from the main checkout");
+    if reload().map_err(|error| format!("check manifests not read again: {error}"))? {
+        eprintln!("ignite: read the changed check manifests");
+    }
+    Ok(())
 }
 
 /// The class of the work a loop's rounds do. Builds a round starts run in it, so tip

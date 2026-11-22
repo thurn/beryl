@@ -39,7 +39,7 @@ impl Drop for Scratch {
     }
 }
 
-fn git(dir: &Path, args: &[&str]) -> String {
+pub(crate) fn git(dir: &Path, args: &[&str]) -> String {
     let out = Command::new("git")
         .current_dir(dir)
         .args(args)
@@ -75,11 +75,11 @@ fn commit_all(dir: &Path, message: &str) -> Commit {
 }
 
 /// A remote, a seed checkout that pushes to it, and the main checkout (a clone) with trees.
-struct Fixture {
+pub(crate) struct Fixture {
     scratch: Scratch,
     seed: PathBuf,
-    repo: PathBuf,
-    trees: Trees,
+    pub(crate) repo: PathBuf,
+    pub(crate) trees: Trees,
     builds: Arc<FakeBuilds>,
     clock: Arc<FakeClock>,
     /// The commits on `main`, oldest first.
@@ -87,7 +87,7 @@ struct Fixture {
 }
 
 impl Fixture {
-    fn new(ticket_trees: u32, commits: usize) -> Fixture {
+    pub(crate) fn new(ticket_trees: u32, commits: usize) -> Fixture {
         Fixture::with_landing(ticket_trees, 1, commits)
     }
 
@@ -169,7 +169,7 @@ impl Fixture {
         }
     }
 
-    fn tip(&self) -> Commit {
+    pub(crate) fn tip(&self) -> Commit {
         self.commits.last().unwrap().clone()
     }
 
