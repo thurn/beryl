@@ -100,7 +100,7 @@ hang() { while [ ! -e "$dir/gate.$n" ]; do sleep 0.05; done; }
 if [ -f "$dir/turn.$n" ]; then . "$dir/turn.$n"; else init; say done; result; fi
 "#;
 
-/// The dispatcher's side as the CLI pool sees it: who holds which ticket, and the releases.
+/// The ticket holders and releases that the CLI pool sees through its host.
 #[derive(Default)]
 struct E2eHost {
     holders: Mutex<BTreeMap<SessionId, TicketId>>,

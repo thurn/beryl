@@ -80,7 +80,7 @@ fn pool_list_shows_a_running_a_parked_and_a_free_cli_slot() {
     assert!(!reply.text.lines().any(|line| line.starts_with("mode ")));
 
     let status = crate::pool::PauseSection {
-        dispatcher: rig.dispatcher.clone(),
+        headless_dispatch: rig.headless_dispatch.clone(),
         hub: rig.hub.clone(),
         clock: rig.clock.clone(),
     };

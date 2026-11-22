@@ -6,7 +6,7 @@
 //! the next daemon follows it. A thread of the daemon that started it waits for the supervisor,
 //! so it leaves no zombie process behind.
 //!
-//! Two parts of one daemon can try to start the same turn at once: the dispatcher's hand-off
+//! Two parts of one daemon can try to start the same turn at once: the ticket hand-off
 //! records a turn and starts it, while the `ignite-cli` loop finds the same turn recorded as
 //! starting and starts it too. [`SupervisedTurns::start`] looks for the turn's run and starts it
 //! under one lock, so the second caller finds the run the first one started. A supervisor

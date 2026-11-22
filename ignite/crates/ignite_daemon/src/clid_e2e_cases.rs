@@ -141,7 +141,7 @@ fn cli_e2e_a_crash_between_recording_a_turn_and_starting_it_runs_it_once() {
         failed: AtomicBool::new(false),
     }));
     // The session exists once its turn is recorded, so the hand-off succeeds and the
-    // dispatcher adds the session to the pool; the turn starts later.
+    // daemon adds the session to the pool; the turn starts later.
     rig.try_begin().unwrap();
     assert_eq!(rig.invocations(), 0);
     let session = rig.slot().session.unwrap();
@@ -416,7 +416,7 @@ fn cli_e2e_a_hand_off_begun_again_after_a_restart_starts_no_second_turn() {
     let session = rig.begin();
     rig.wait_started(1);
 
-    // The dispatcher saves a hand-off before `begin` and its new session after it, so a daemon
+    // The daemon saves a hand-off before `begin` and its new session after it, so a daemon
     // that died in between asks again for the same reservation.
     rig.restart();
     rig.daemon.recover().unwrap();
@@ -444,7 +444,7 @@ fn cli_e2e_four_workers_on_two_providers_start_with_room_and_leave_at_landing() 
     use ignite_core::protocol::tickets::LandedWork;
     use ignite_core::traits::Hub;
 
-    use crate::dispatchd::{Dispatcher, Setup};
+    use crate::dispatchd::{HeadlessDispatch, Setup};
 
     let rig = Rig::new("worker-room");
     let fake_turn = r#"case "$1" in
@@ -458,7 +458,7 @@ esac
 "#;
     probe_dispatch_providers(&rig);
 
-    let dispatcher = Dispatcher::new(
+    let headless_dispatch = HeadlessDispatch::new(
         Pool::new(Rig::open(&rig.home)),
         rig.host.clone(),
         Setup {
@@ -466,25 +466,25 @@ esac
             families: Vec::new(),
         },
     );
-    dispatcher.set_cli(rig.daemon.clone(), &rig.ctx.config);
+    headless_dispatch.set_cli(rig.daemon.clone(), &rig.ctx.config);
     for n in 1..=4 {
         queue_room_ticket(&rig, n);
         rig.script(n + 2, fake_turn);
         rig.fifo(n + 2);
     }
 
-    assert!(dispatcher.view().unwrap().is_empty());
-    dispatcher.tick(&rig.ctx);
-    let first_batch = dispatcher.view().unwrap();
+    assert!(headless_dispatch.view().unwrap().is_empty());
+    headless_dispatch.tick(&rig.ctx);
+    let first_batch = headless_dispatch.view().unwrap();
     assert_eq!(first_batch.len(), 3);
     for worker in first_batch {
         lock(&rig.host.holders).insert(worker.session, worker.ticket.unwrap());
     }
-    dispatcher.tick(&rig.ctx);
+    headless_dispatch.tick(&rig.ctx);
     for n in 3..=6 {
         rig.wait_started(n);
     }
-    let workers = dispatcher.view().unwrap();
+    let workers = headless_dispatch.view().unwrap();
     assert_eq!(workers.len(), 4);
     for (app, tickets) in [("claude", ["T.1", "T.3"]), ("fake", ["T.2", "T.4"])] {
         let slots = rig.daemon.slots(app);
@@ -503,9 +503,9 @@ esac
     for worker in &workers {
         lock(&rig.host.holders).insert(worker.session.clone(), worker.ticket.clone().unwrap());
     }
-    dispatcher.tick(&rig.ctx);
+    headless_dispatch.tick(&rig.ctx);
     assert!(
-        dispatcher
+        headless_dispatch
             .view()
             .unwrap()
             .iter()
@@ -537,8 +537,8 @@ esac
         rig.wait_turn(&worker.session, 1);
     }
     rig.daemon.step().unwrap();
-    dispatcher.tick(&rig.ctx);
-    assert!(dispatcher.view().unwrap().is_empty());
+    headless_dispatch.tick(&rig.ctx);
+    assert!(headless_dispatch.view().unwrap().is_empty());
     assert!(store::list(&Rig::open(&rig.home)).unwrap().is_empty());
 }
 

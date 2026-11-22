@@ -1,9 +1,7 @@
-//! CLI mode in the daemon: each worker of an app in CLI mode runs as a headless CLI process, one
-//! process per turn, which the daemon starts, reads and follows itself instead of asking a
-//! desktop dispatcher (see "CLI mode" in the design document).
+//! The daemon runs each worker as a headless CLI process and supervises one process per turn.
 //!
-//! [`CliPool`] is what the dispatcher calls to hand a ticket to a CLI slot, send a CLI session a
-//! message and ask whether one is running. [`CliDaemon`] implements it, and its
+//! Headless dispatch uses [`CliPool`] to hand tickets to CLI slots, send messages to sessions,
+//! and check whether they are running. [`CliDaemon`] implements it, and its
 //! [`CliDaemon::step`] is the body of the `ignite-cli` loop, which runs about once a second:
 //!
 //! - A slot whose turn is recorded as starting has its run looked up (`start::recover`), and a
@@ -25,8 +23,8 @@
 //! refused model: every slot is a `cli_slots` row and every turn a `cli_turns` row, so a
 //! restarted daemon continues where the last one stopped. What other parts of the daemon do
 //! reaches this module through traits: [`Turns`] runs turns as supervised commands,
-//! [`Effects`] takes usage samples, costs, holds and reports, and the dispatcher's
-//! [`Host`] answers who holds which ticket, which verbs run and releases tickets.
+//! [`Effects`] takes usage samples, costs, holds and reports, and [`Host`] reports who
+//! holds each ticket and which verbs are running, and releases tickets.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -123,7 +121,7 @@ pub trait CliPool: Send + Sync {
     /// starts its first turn with the hand-off prompt. With `fresh`, a lane's next ticket starts
     /// a fresh transcript in the same Ignite session. With `resume`, a new session's first
     /// turn may resume the culprit's transcript instead (see [`Resume`]). Returns the session,
-    /// which the dispatcher adds to the pool as a single-use worker. A reservation (its ticket
+    /// which the daemon adds to the pool as a single-use worker. A reservation (its ticket
     /// and code) that a slot already took returns that slot's session and starts nothing.
     /// The admission callback runs only for a new start, just before it is recorded. A refusal
     /// leaves no slot and returns `Ok(None)`.
@@ -323,7 +321,7 @@ pub struct CliDaemon {
     /// How many lines of each turn's digest (by session and turn) are in the outbox, as far as
     /// this daemon knows. A restart forgets it, and the hub drops the repeats.
     sent: Mutex<BTreeMap<(SessionId, u32), usize>>,
-    /// Held while a hand-off chooses a slot and claims it, so the dispatcher's threads take
+    /// Held while a hand-off chooses a slot and claims it, so threads handing off tickets take
     /// slots one at a time (see `claim::open_slot`).
     opening: Mutex<()>,
 }

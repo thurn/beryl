@@ -380,9 +380,9 @@ fn begin_starts_the_first_turn_with_the_hand_off_prompt() {
     assert_eq!(command.cwd, PathBuf::from("/checkout"));
     assert_eq!(rig.slot().state, SlotState::Running);
     assert_eq!(rig.daemon.check(&session), SessionCheck::Running);
-    // The dispatcher counts busy sessions, not slot numbers, so a placeholder can name a busy
+    // The daemon counts busy sessions, not slot numbers, so a placeholder can name a busy
     // slot: the ticket takes the lowest free one.
-    // The same reservation again, as a restarted dispatcher that had not saved the session
+    // The same reservation again, as a restarted daemon that had not saved the session
     // asks, returns the session and starts no turn.
     assert_eq!(rig.try_begin().unwrap(), session);
     assert_eq!(rig.turns.starts().len(), 1);

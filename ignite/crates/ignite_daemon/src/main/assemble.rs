@@ -1,6 +1,6 @@
 //! The steps of [`super::Daemon::start`]: what the machine is ([`Base`]), the machinery that
 //! runs commands and keeps trees, the check runner with landing and idle work on top of it, the
-//! claims and the dispatcher, and the verbs.
+//! claims, headless dispatch, and the verbs.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -26,7 +26,7 @@ use crate::checks::sources::HubHistory;
 use crate::checks::verbs::{CheckVerb, TestVerb, WhyVerb};
 use crate::checks::{CheckSettings, Checks};
 use crate::claim::{BriefVerb, ClaimHook, Claims, CloseVerb, ReleaseVerb, StartVerb};
-use crate::dispatchd::{Dispatcher, Setup, TellVerb, TurnEndedVerb};
+use crate::dispatchd::{HeadlessDispatch, Setup, TellVerb, TurnEndedVerb};
 use crate::doctor::{
     self, AdmissionSection, CoresSection, DoctorVerb, ExplorationSection, GitTrees, LoopsSection,
     NativeHost, StatusSection, StatusVerb, TreesSection,
@@ -393,12 +393,12 @@ pub fn verb_side(
     Ok((ctx, verbs))
 }
 
-/// The claims, the dispatcher, and the late links both need to the server.
+/// Claims, headless dispatch, and the server links they receive after construction.
 pub struct Desks {
     /// The launcher that starts the commands of verb processes, passed on to the server.
     pub supervised: Arc<SupervisedLauncher>,
     pub claims: Arc<Claims>,
-    pub dispatcher: Arc<Dispatcher>,
+    pub headless_dispatch: Arc<HeadlessDispatch>,
     pub tree_desk: Arc<desk::TreeDeskOver>,
     pub host: Arc<desk::DaemonHost>,
 }
@@ -430,16 +430,16 @@ pub fn desks(base: &Base, ctx: &Context, machinery: &Machinery) -> Result<Desks>
         os: base.os,
         families: base.families().unwrap_or_default(),
     };
-    let dispatcher = Arc::new(Dispatcher::new(
+    let headless_dispatch = Arc::new(HeadlessDispatch::new(
         Pool::new(base.open()?),
         host.clone(),
         setup,
     ));
-    claims.gate_starts(dispatcher.clone());
+    claims.gate_starts(headless_dispatch.clone());
     Ok(Desks {
         supervised: machinery.supervised.clone(),
         claims,
-        dispatcher,
+        headless_dispatch,
         tree_desk,
         host,
     })
@@ -475,20 +475,20 @@ pub fn server(
     }));
     registry.register(Box::new(RemovedDispatchVerb));
     registry.register(Box::new(
-        PoolVerb::new(parts.dispatcher.clone()).ending(parts.emergencies.clone()),
+        PoolVerb::new(parts.headless_dispatch.clone()).ending(parts.emergencies.clone()),
     ));
     registry.register(Box::new(crate::emergency::EmergencyVerb(
         parts.emergencies.clone(),
     )));
     registry.register(Box::new(TellVerb));
     registry.register(Box::new(TurnEndedVerb::new(
-        parts.dispatcher.clone(),
+        parts.headless_dispatch.clone(),
         parts.reporter.host.clone(),
     )));
     registry.register(Box::new(crate::justiciar::JusticiarVerb {
         home: parts.home.root.clone(),
         host: parts.reporter.host.clone(),
-        dispatcher: parts.dispatcher.clone(),
+        headless_dispatch: parts.headless_dispatch.clone(),
     }));
     registry.register(Box::new(InstallVerb));
     registry.register(Box::new(DoctorVerb {
@@ -509,7 +509,7 @@ pub fn server(
     }));
     // The calls of verb processes, which run long verbs outside the daemon (see `crate::host`).
     let host = Host::new(HostParts {
-        dispatcher: Some(desks.dispatcher.clone()),
+        headless_dispatch: Some(desks.headless_dispatch.clone()),
         starter: Arc::new(SupervisedStarter::new(
             desks.supervised.clone(),
             Some(parts.scheduler.clone()),
@@ -614,14 +614,14 @@ fn status_sections(base: &Base, parts: &loops::Parts) -> Vec<Box<dyn StatusSecti
         Arc::new(move || scheduler.status())
     };
     let trees = parts.trees.clone();
-    let dispatcher = parts.dispatcher.clone();
+    let headless_dispatch = parts.headless_dispatch.clone();
     let fleet_trees = trees.clone();
     let idle = parts.idle.clone();
     vec![
         Box::new(doctor::CapacitySection {
             derived: base.derived.clone(),
             disk_budget: move || trees.disk_budget(),
-            worker_room: move || dispatcher.worker_room(),
+            worker_room: move || headless_dispatch.worker_room(),
         }),
         Box::new(doctor::FleetSection(move || fleet_trees.fleet_notice())),
         Box::new(super::machine_state::SnapshotSection(parts.client.clone())),
@@ -642,7 +642,7 @@ fn status_sections(base: &Base, parts: &loops::Parts) -> Vec<Box<dyn StatusSecti
             parts.emergencies.clone(),
         )),
         Box::new(crate::pool::PauseSection {
-            dispatcher: parts.dispatcher.clone(),
+            headless_dispatch: parts.headless_dispatch.clone(),
             hub: parts.ctx.hub.clone(),
             clock: parts.ctx.clock.clone(),
         }),
@@ -751,7 +751,10 @@ impl crate::server::Verb for RemovedDispatchVerb {
         _req: &ignite_core::protocol::client::Request,
     ) -> ignite_core::protocol::client::Reply {
         use ignite_core::protocol::client::{Exit, Reply};
-        Reply::text(Exit::Usage, "the desktop dispatcher was removed")
+        Reply::text(
+            Exit::Usage,
+            "the `ignite dispatch` command has been retired",
+        )
     }
 }
 

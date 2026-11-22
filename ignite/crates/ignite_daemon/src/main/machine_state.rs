@@ -93,11 +93,11 @@ impl Parts {
     /// A release build runs on a thread of its own, so a round never waits for Cargo; the round
     /// only looks whether the build has finished and names it in the loop's step.
     pub(super) fn spawn_sender(&self, db: Connection, server: Arc<Server>) {
-        let (ctx, client, landing, dispatcher, version) = (
+        let (ctx, client, landing, headless_dispatch, version) = (
             self.ctx.clone(),
             self.client.clone(),
             self.landing.clone(),
-            self.dispatcher.clone(),
+            self.headless_dispatch.clone(),
             self.version.clone(),
         );
         let (scheduler, trees) = (self.scheduler.clone(), self.trees.clone());
@@ -116,7 +116,7 @@ impl Parts {
                 let version = update
                     .version()
                     .map_or_else(|| version.clone(), |commit| commit.to_string());
-                let pool = dispatcher.pool();
+                let pool = headless_dispatch.pool();
                 if let Err(error) =
                     crate::dispatchd::post_usage(pool, ctx.hub.as_ref(), &ctx.machine)
                 {
@@ -130,11 +130,11 @@ impl Parts {
                         capacity: None,
                         machine: ctx.machine.clone(),
                         version,
-                        workers: dispatcher.view().unwrap_or_default(),
-                        cli_apps: dispatcher.cli_apps().map(str::to_owned).collect(),
+                        workers: headless_dispatch.view().unwrap_or_default(),
+                        cli_apps: headless_dispatch.cli_apps().map(str::to_owned).collect(),
                         families: current_families(&ctx.repo, &hostname),
                     },
-                    || dispatcher.machine_sample(now, &scheduler, &trees, &facts),
+                    || headless_dispatch.machine_sample(now, &scheduler, &trees, &facts),
                     |beat| client.heartbeat(beat),
                 )?;
                 if let Err(error) = crate::fleet_notice::heard(pool, &reply) {
@@ -150,8 +150,10 @@ impl Parts {
                     titles.report_holders(&ctx, &db);
                     landing.deliver_pending(
                         &ctx,
-                        |landed, next| dispatcher.chain(&ctx, &landed.ticket, next, landed.fresh),
-                        || Ok(dispatcher.pressure(ctx.clock.now())),
+                        |landed, next| {
+                            headless_dispatch.chain(&ctx, &landed.ticket, next, landed.fresh);
+                        },
+                        || Ok(headless_dispatch.pressure(ctx.clock.now())),
                     );
                     if let Err(error) = update.poll_release() {
                         eprintln!("ignite: the release branch was not checked: {error}");

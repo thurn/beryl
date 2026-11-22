@@ -19,7 +19,7 @@ fn holding() -> Rig {
 }
 
 fn ended(rig: &Rig, args: &[&str]) -> String {
-    let verb = TurnEndedVerb::new(rig.dispatcher.clone(), "jarvis".to_owned());
+    let verb = TurnEndedVerb::new(rig.headless_dispatch.clone(), "jarvis".to_owned());
     let reply = verb.run(&rig.ctx, &request("turn-ended", args, None));
     assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
     reply.text
@@ -83,18 +83,18 @@ fn a_worker_released_at_turn_end_may_not_claim_again() {
     assert!(text.contains("Stop now"), "{text}");
     let w1 = session("local_w1");
     let t1 = ticket_id("T.1");
-    let refusal = rig.dispatcher.refuse_start(&w1, Some(&t1)).unwrap();
+    let refusal = rig.headless_dispatch.refuse_start(&w1, Some(&t1)).unwrap();
     assert!(refusal.starts_with("refused"), "{refusal}");
     assert!(refusal.contains("end your turn"), "{refusal}");
     assert!(
-        rig.dispatcher
+        rig.headless_dispatch
             .refuse_start(&w1, Some(&ticket_id("T.5")))
             .is_some()
     );
-    assert!(rig.dispatcher.refuse_start(&w1, None).is_some());
+    assert!(rig.headless_dispatch.refuse_start(&w1, None).is_some());
     // Another session is not affected.
     assert!(
-        rig.dispatcher
+        rig.headless_dispatch
             .refuse_start(&session("local_w2"), Some(&t1))
             .is_none()
     );
@@ -113,7 +113,7 @@ fn a_restarted_daemon_still_refuses_a_released_worker() {
     ended(&first, &["--session", "local_w1", "--again"]);
     let restarted = rig_on(&[], file.open(), now);
     let refusal = restarted
-        .dispatcher
+        .headless_dispatch
         .refuse_start(&session("local_w1"), Some(&ticket_id("T.1")));
     assert!(refusal.is_some());
 }

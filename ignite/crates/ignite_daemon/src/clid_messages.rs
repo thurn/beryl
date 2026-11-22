@@ -1,7 +1,6 @@
-//! Messages for CLI sessions (see "CLI mode" in the design document). An `ignite tell`, a stall
-//! reminder or a wake-up for a CLI session is a row of `cli_messages`, never a dispatcher
-//! instruction, and the next turn's prompt is every message that no turn has carried yet, in the
-//! order they were queued ([`prompt`]).
+//! The daemon queues each `ignite tell`, stall reminder, and wake-up for a CLI session in
+//! `cli_messages`. The next turn's prompt includes undelivered messages in the order they
+//! were queued ([`prompt`]).
 //!
 //! - [`CliDaemon::queue_message`] queues one. A session inside `ignite wait` has the wait ended
 //!   with a reply that says a message is waiting, as a desktop session's is: the reply is tool

@@ -36,7 +36,7 @@ fn the_culprit_is_chosen_once_an_unread_regression_can_be_read() {
     reserve_for(&rig, "R", "reservation-2");
     tick(&rig);
     assert!(fake.begun().is_empty());
-    assert!(rig.dispatcher.view().unwrap().is_empty());
+    assert!(rig.headless_dispatch.view().unwrap().is_empty());
     rig.hub.insert_ticket(regression("R", "T.1"));
     tick(&rig);
     assert_eq!(fake.begun()[0].0.session.as_str(), "reservation-2");
@@ -51,11 +51,11 @@ fn the_culprit_is_chosen_once_an_unread_regression_can_be_read() {
 fn a_regression_the_hub_did_not_reserve_here_reaches_no_worker() {
     let rig = rig(&[]);
     let fake = cli(&rig, 1);
-    rig.dispatcher.poll_feed(&rig.ctx, 0).unwrap();
+    rig.headless_dispatch.poll_feed(&rig.ctx, 0).unwrap();
     // Another machine found the regression, so the hub reserves it there, not here.
     rig.hub.insert_ticket(regression("R", "T.1"));
     rig.hub.push_change("ticket", Some(ticket_id("R")));
-    rig.dispatcher.poll_feed(&rig.ctx, 0).unwrap();
+    rig.headless_dispatch.poll_feed(&rig.ctx, 0).unwrap();
     tick(&rig);
     assert!(fake.begun().is_empty());
 }
@@ -154,7 +154,7 @@ fn the_worker_already_holding_a_regression_receives_the_late_attribution() {
     let worker = "cli-claude-00000001";
     rig.hold(worker, "R");
     tick(&rig);
-    rig.dispatcher.poll_feed(&rig.ctx, 0).unwrap();
+    rig.headless_dispatch.poll_feed(&rig.ctx, 0).unwrap();
 
     let attribution = "The culprit search for rust:a identified T.1 (commit 5e1b0aa).";
     let mut attributed = claimed(
@@ -169,7 +169,7 @@ fn the_worker_already_holding_a_regression_receives_the_late_attribution() {
         .insert(CAUSED_BY_KEY.to_owned(), json!("T.1"));
     rig.hub.insert_ticket(attributed);
     rig.hub.push_change("ticket", Some(ticket_id("R")));
-    rig.dispatcher.poll_feed(&rig.ctx, 0).unwrap();
+    rig.headless_dispatch.poll_feed(&rig.ctx, 0).unwrap();
 
     assert_eq!(fake.sent().len(), 1);
     assert_eq!(fake.sent()[0].session, session(worker));

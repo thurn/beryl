@@ -8,7 +8,7 @@ use ignite_core::time::Timestamp;
 use ignite_store::local::pool as store;
 use serde::{Deserialize, Serialize};
 
-use super::{Dispatcher, Pool, Reserved, Stall, State, cli, shared};
+use super::{HeadlessDispatch, Pool, Reserved, Stall, State, cli, shared};
 
 const KEY: &str = "cli_dispatch_state";
 
@@ -94,7 +94,7 @@ fn legacy_snapshot(rows: &[ignite_store::local::rows::DispatchEntry]) -> Snapsho
     snapshot
 }
 
-impl Dispatcher {
+impl HeadlessDispatch {
     /// Saves pending starts before launch. Replaying one after a crash is safe because the CLI
     /// supervisor looks up the reservation code and returns the worker it already started.
     pub(super) fn save(&self) {

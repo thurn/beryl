@@ -253,7 +253,7 @@ impl TipMachine {
         let steps = Arc::new(Steps::new(Arc::new(FakeClock::new(T0))));
         let host = Host::with_timing(
             HostParts {
-                dispatcher: None,
+                headless_dispatch: None,
                 starter: self.commands.clone(),
                 builds: Arc::new(FakeBuilds::default()),
                 landing: self.landing.clone(),

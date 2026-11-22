@@ -71,7 +71,7 @@ fn messages(rig: &Rig, fake: &FakeCliPool) -> Vec<(String, String)> {
 fn status(rig: &Rig) -> Vec<String> {
     use crate::doctor::StatusSection;
     crate::pool::PauseSection {
-        dispatcher: rig.dispatcher.clone(),
+        headless_dispatch: rig.headless_dispatch.clone(),
         hub: rig.hub.clone(),
         clock: rig.clock.clone(),
     }
@@ -126,7 +126,13 @@ fn two_sessions_failing_one_check_the_same_way_stop_ordinary_handoffs() {
     );
     assert_eq!(status(&rig)[0], why);
     assert!(rig.pool(&["list"], None).text.contains(&why));
-    assert!(rig.dispatcher.idle_reason().unwrap().1.starts_with(&why));
+    assert!(
+        rig.headless_dispatch
+            .idle_reason()
+            .unwrap()
+            .1
+            .starts_with(&why)
+    );
 }
 
 #[test]
@@ -148,7 +154,7 @@ fn two_different_first_lines_are_not_a_shared_failure() {
     );
     assert!(messages(&rig, &fake).is_empty());
     assert!(!master_only(&rig, &fake));
-    assert!(rig.dispatcher.shared_failure().is_none());
+    assert!(rig.headless_dispatch.shared_failure().is_none());
 }
 
 #[test]
@@ -169,7 +175,7 @@ fn a_cached_failure_on_the_same_inputs_counts_as_the_same_failure() {
         sighting.hash = Some("abc".to_owned());
     }
     tick(&rig);
-    assert!(rig.dispatcher.shared_failure().is_some());
+    assert!(rig.headless_dispatch.shared_failure().is_some());
 }
 
 #[test]
@@ -184,7 +190,7 @@ fn a_pass_of_the_check_ends_it() {
     sighting(&rig, "cli-claude-00000003", "pass", "", 0.0);
     rig.finish("cli-claude-00000001");
     messages(&rig, &fake);
-    assert!(rig.dispatcher.shared_failure().is_none());
+    assert!(rig.headless_dispatch.shared_failure().is_none());
     assert!(!master_only(&rig, &fake));
     assert!(status(&rig).iter().all(|line| !line.contains(CHECK)));
 }
@@ -196,16 +202,16 @@ fn green_moving_ends_it_and_old_failures_do_not_start_it_again() {
     sighting(&rig, "cli-claude-00000001", "fail", "boom", 120.0);
     sighting(&rig, "cli-claude-00000002", "fail", "boom", 60.0);
     tick(&rig);
-    assert!(rig.dispatcher.shared_failure().is_some());
+    assert!(rig.headless_dispatch.shared_failure().is_some());
 
     *lock(&rig.host.green) = Some("bbbb".to_owned());
     rig.clock.advance(10.0);
     tick(&rig);
-    assert!(rig.dispatcher.shared_failure().is_none());
+    assert!(rig.headless_dispatch.shared_failure().is_none());
     rig.clock.advance(10.0);
     tick(&rig);
     assert!(
-        rig.dispatcher.shared_failure().is_none(),
+        rig.headless_dispatch.shared_failure().is_none(),
         "seen before it ended"
     );
 }
@@ -239,7 +245,7 @@ fn failures_reported_late_from_older_trees_leave_ordinary_dispatch_available() {
         Some("aaaa"),
     );
     assert!(!master_only(&rig, &fake));
-    assert!(rig.dispatcher.shared_failure().is_none());
+    assert!(rig.headless_dispatch.shared_failure().is_none());
 
     sighting(&rig, "cli-claude-00000003", "fail", "boom", 0.0);
     assert!(
@@ -256,11 +262,11 @@ fn failures_reported_late_from_older_trees_leave_ordinary_dispatch_available() {
         Some("cccc"),
     );
     assert!(master_only(&rig, &fake), "both trees include current green");
-    assert!(rig.dispatcher.shared_failure().is_some());
+    assert!(rig.headless_dispatch.shared_failure().is_some());
 }
 
 #[test]
-fn it_survives_rebuilding_the_dispatcher_from_the_store() {
+fn it_survives_reloading_headless_dispatch_from_the_store() {
     let file = DbFile::new("shared");
     let first = rig_on(
         &["cli-claude-00000001", "cli-claude-00000002"],
@@ -284,7 +290,7 @@ fn it_survives_rebuilding_the_dispatcher_from_the_store() {
         "each worker had its message"
     );
     assert!(master_only(&restarted, &restarted_fake));
-    assert!(restarted.dispatcher.shared_failure().is_some());
+    assert!(restarted.headless_dispatch.shared_failure().is_some());
 }
 
 #[test]
@@ -293,14 +299,14 @@ fn it_lapses_after_two_hours() {
     sighting(&rig, "cli-claude-00000001", "fail", "boom", 120.0);
     sighting(&rig, "cli-claude-00000002", "fail", "boom", 60.0);
     tick(&rig);
-    assert!(rig.dispatcher.shared_failure().is_some());
+    assert!(rig.headless_dispatch.shared_failure().is_some());
 
     rig.clock.advance(LAPSE_S - 60.0);
     tick(&rig);
-    assert!(rig.dispatcher.shared_failure().is_some());
+    assert!(rig.headless_dispatch.shared_failure().is_some());
     rig.clock.advance(60.0);
     messages(&rig, &fake);
-    assert!(rig.dispatcher.shared_failure().is_none());
+    assert!(rig.headless_dispatch.shared_failure().is_none());
     assert!(!master_only(&rig, &fake));
 }
 
@@ -311,13 +317,13 @@ fn a_release_after_the_tip_result_was_unknown_starts_it() {
     lock(&rig.host.sightings)[0].tip_unknown = 1;
     tick(&rig);
     assert!(
-        rig.dispatcher.shared_failure().is_none(),
+        rig.headless_dispatch.shared_failure().is_none(),
         "still holds its ticket"
     );
 
     rig.finish("cli-claude-00000001");
     tick(&rig);
-    let why = rig.dispatcher.shared_failure().expect("started");
+    let why = rig.headless_dispatch.shared_failure().expect("started");
     assert!(
         why.contains("result at the tip could not be found or run"),
         "{why}"
@@ -330,8 +336,8 @@ fn it_is_reported_once_unless_a_regression_names_the_check() {
     sighting(&rig, "cli-claude-00000001", "fail", "boom", 120.0);
     sighting(&rig, "cli-claude-00000002", "fail", "boom", 60.0);
     tick(&rig);
-    rig.dispatcher.report_shared(&rig.ctx, "jarvis");
-    rig.dispatcher.report_shared(&rig.ctx, "jarvis");
+    rig.headless_dispatch.report_shared(&rig.ctx, "jarvis");
+    rig.headless_dispatch.report_shared(&rig.ctx, "jarvis");
     let reports = rig.hub.justiciar_reports();
     assert_eq!(reports.len(), 1);
     assert_eq!(reports[0].subject, format!("shared:{CHECK}"));
@@ -348,7 +354,7 @@ fn it_is_reported_once_unless_a_regression_names_the_check() {
     sighting(&named, "cli-claude-00000001", "fail", "boom", 120.0);
     sighting(&named, "cli-claude-00000002", "fail", "boom", 60.0);
     tick(&named);
-    named.dispatcher.report_shared(&named.ctx, "jarvis");
+    named.headless_dispatch.report_shared(&named.ctx, "jarvis");
     assert!(named.hub.justiciar_reports().is_empty());
 }
 

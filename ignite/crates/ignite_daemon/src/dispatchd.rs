@@ -226,8 +226,8 @@ struct State {
     shared: shared::Watch,
 }
 
-/// The state for reserving tickets and supervising the local CLI pool.
-pub struct Dispatcher {
+/// Reserves tickets, hands them to local CLI workers, and tracks those workers.
+pub struct HeadlessDispatch {
     pool: Pool,
     host: Arc<dyn Host>,
     setup: Setup,
@@ -262,9 +262,9 @@ fn start_arguments(reserved: &Reserved) -> String {
     }
 }
 
-impl Dispatcher {
-    pub fn new(pool: Pool, host: Arc<dyn Host>, setup: Setup) -> Dispatcher {
-        Dispatcher {
+impl HeadlessDispatch {
+    pub fn new(pool: Pool, host: Arc<dyn Host>, setup: Setup) -> HeadlessDispatch {
+        HeadlessDispatch {
             state: Mutex::new(recovery::load(&pool)),
             pool,
             host,

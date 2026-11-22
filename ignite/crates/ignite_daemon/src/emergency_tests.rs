@@ -282,7 +282,7 @@ fn the_server_refuses_a_heavy_verb_until_every_machine_resumes() {
     let waited = server.handle(&waiting());
     assert_eq!(waited.exit, Exit::Running, "{}", waited.text);
 
-    // What `ignite pool resume --all` does here (see the dispatcher's tests), and what the next
+    // What `ignite pool resume --all` does here (see the headless dispatch tests), and what the next
     // heartbeat does on every other machine.
     emergencies.heard(None);
     assert_eq!(

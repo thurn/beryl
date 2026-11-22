@@ -10,7 +10,7 @@ use ignite_core::fakes::ScriptedTurn;
 
 use super::*;
 
-/// Adds `session` to the pool, as the dispatcher does after a hand-off.
+/// Adds `session` to the pool, as the daemon does after a hand-off.
 fn join_pool(rig: &Rig, session: &SessionId) {
     rig.pool
         .put(&crate::pool::Member {

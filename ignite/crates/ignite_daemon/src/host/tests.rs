@@ -210,7 +210,7 @@ fn daemon(db: &Arc<Mutex<Connection>>, runs: &Path, scheduler: Option<Arc<Schedu
     let steps = Arc::new(Steps::new(Arc::new(ignite_core::time::SystemClock)));
     let host = Host::with_timing(
         HostParts {
-            dispatcher: None,
+            headless_dispatch: None,
             starter: starter.clone(),
             builds: builds.clone(),
             landing: Arc::new(Landing::default()),

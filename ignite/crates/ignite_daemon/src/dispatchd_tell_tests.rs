@@ -39,7 +39,7 @@ const CLAIMED_LATER: &str = "2027-01-02T00:00:00.000Z";
 
 fn change(rig: &Rig, ticket: &str) {
     rig.hub.push_change("ticket", Some(ticket_id(ticket)));
-    rig.dispatcher.poll_feed(&rig.ctx, 0).unwrap();
+    rig.headless_dispatch.poll_feed(&rig.ctx, 0).unwrap();
 }
 
 #[test]
@@ -54,8 +54,8 @@ fn a_release_does_not_send_a_tell_from_before_the_claim() {
     rig.hold("cli-claude-00000001", "T.1");
     let fake = super::cli_tests::cli(&rig, 1);
     super::cli_tests::tick(&rig);
-    rig.dispatcher.poll_feed(&rig.ctx, 0).unwrap();
-    // The hub takes the ticket back, but the dispatcher still lists the session as the holder.
+    rig.headless_dispatch.poll_feed(&rig.ctx, 0).unwrap();
+    // The hub takes the ticket back, but the daemon still lists the session as the holder.
     let mut released = claimed("T.1", "cli-claude-00000001", &[OLD_ORDER], CLAIMED_LATER);
     released.ticket.status = Status::Open;
     released.ticket.assignee = None;
@@ -67,8 +67,8 @@ fn a_release_does_not_send_a_tell_from_before_the_claim() {
 }
 
 #[test]
-fn a_restarted_dispatcher_does_not_send_a_tell_from_before_the_claim() {
-    // A fresh dispatcher has an empty record of the tells it sent.
+fn headless_dispatch_does_not_send_an_old_tell_after_restart() {
+    // A restart clears the in-memory record of sent tells.
     let rig = rig(&["cli-claude-00000001"]);
     rig.hub.insert_ticket(claimed(
         "T.1",
@@ -79,13 +79,13 @@ fn a_restarted_dispatcher_does_not_send_a_tell_from_before_the_claim() {
     rig.hold("cli-claude-00000001", "T.1");
     let fake = super::cli_tests::cli(&rig, 1);
     super::cli_tests::tick(&rig);
-    rig.dispatcher.poll_feed(&rig.ctx, 0).unwrap();
+    rig.headless_dispatch.poll_feed(&rig.ctx, 0).unwrap();
     change(&rig, "T.1");
     assert!(fake.sent().is_empty());
 }
 
 /// A Claude CLI session that holds T.1, which it claimed long before any tell, with the
-/// dispatcher's feed read up to now.
+/// daemon caught up on the hub feed.
 fn cli_holder(rig: &Rig) -> (std::sync::Arc<crate::clid::FakeCliPool>, &'static str) {
     use super::cli_tests::{cli, reserve, tick};
     let fake = cli(rig, 1);
@@ -96,7 +96,7 @@ fn cli_holder(rig: &Rig) -> (std::sync::Arc<crate::clid::FakeCliPool>, &'static 
     rig.hub
         .insert_ticket(claimed("T.1", worker, &[], "1970-01-01T00:00:00.000Z"));
     tick(rig);
-    rig.dispatcher.poll_feed(&rig.ctx, 0).unwrap();
+    rig.headless_dispatch.poll_feed(&rig.ctx, 0).unwrap();
     (fake, worker)
 }
 
@@ -111,17 +111,17 @@ fn tell_now_ends_a_cli_workers_turn_and_a_plain_tell_waits() {
         "{}",
         reply.text
     );
-    rig.dispatcher.poll_feed(&rig.ctx, 0).unwrap();
+    rig.headless_dispatch.poll_feed(&rig.ctx, 0).unwrap();
     let sent = fake.sent();
     assert_eq!(sent.len(), 1);
     assert_eq!(sent[0].session.as_str(), worker);
     assert_eq!(sent[0].text, "Message about T.1: Stop and release.");
     assert!(sent[0].urgent);
-    // The CLI pool ends the session's wait itself, so the dispatcher does not.
+    // The CLI pool ends the session's wait when it queues the message.
     assert!(lock(&rig.host.interrupts).is_empty());
 
     assert_eq!(rig.tell(&["T.1", "Also this."]).exit, Exit::Success);
-    rig.dispatcher.poll_feed(&rig.ctx, 0).unwrap();
+    rig.headless_dispatch.poll_feed(&rig.ctx, 0).unwrap();
     let sent = fake.sent();
     assert_eq!(sent.len(), 2);
     assert!(!sent[1].urgent);
@@ -140,7 +140,7 @@ fn every_tell_from_a_justiciar_is_urgent_for_a_cli_worker() {
     ));
     let reply = rig.tell_as("local_j1", &["T.1", "Release it."]);
     assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
-    rig.dispatcher.poll_feed(&rig.ctx, 0).unwrap();
+    rig.headless_dispatch.poll_feed(&rig.ctx, 0).unwrap();
     let sent = fake.sent();
     assert_eq!(sent.len(), 1);
     assert_eq!(

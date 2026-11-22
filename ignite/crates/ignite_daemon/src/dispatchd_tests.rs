@@ -129,7 +129,7 @@ pub(super) struct Rig {
     pub(super) git: Arc<FakeGit>,
     pub(super) hub: Arc<FakeHub>,
     pub(super) host: Arc<FakeHost>,
-    pub(super) dispatcher: Arc<Dispatcher>,
+    pub(super) headless_dispatch: Arc<HeadlessDispatch>,
 }
 
 pub(super) const START: i64 = 1_800_000_000_000;
@@ -142,8 +142,8 @@ pub(super) fn rig(workers: &[&str]) -> Rig {
     )
 }
 
-/// A dispatcher over `db` with its clock at `now`; a second one over the same database file is a
-/// restarted daemon.
+/// Creates headless dispatch state backed by `db`, with the clock set to `now`. Opening the same
+/// database again simulates a daemon restart.
 pub(super) fn rig_on(workers: &[&str], db: rusqlite::Connection, now: Timestamp) -> Rig {
     let text = r#"
         [repository]
@@ -191,14 +191,14 @@ pub(super) fn rig_on(workers: &[&str], db: rusqlite::Connection, now: Timestamp)
         os: Os::Macos,
         families: Vec::new(),
     };
-    let dispatcher = Arc::new(Dispatcher::new(pool, host.clone(), setup));
+    let headless_dispatch = Arc::new(HeadlessDispatch::new(pool, host.clone(), setup));
     let rig = Rig {
         ctx,
         clock,
         git,
         hub,
         host,
-        dispatcher,
+        headless_dispatch,
     };
     for name in workers {
         pool_member(&rig, name);
@@ -207,7 +207,7 @@ pub(super) fn rig_on(workers: &[&str], db: rusqlite::Connection, now: Timestamp)
 }
 
 fn pool_member(rig: &Rig, name: &str) {
-    rig.dispatcher
+    rig.headless_dispatch
         .pool()
         .put(&crate::pool::Member {
             session: session(name),
@@ -261,7 +261,8 @@ pub(super) fn detail(
 
 impl Rig {
     pub(super) fn pool(&self, args: &[&str], session: Option<&str>) -> Reply {
-        PoolVerb::new(self.dispatcher.clone()).run(&self.ctx, &request("pool", args, session))
+        PoolVerb::new(self.headless_dispatch.clone())
+            .run(&self.ctx, &request("pool", args, session))
     }
 
     pub(super) fn tell(&self, args: &[&str]) -> Reply {
@@ -281,7 +282,7 @@ impl Rig {
     }
 
     pub(super) fn state_of(&self, worker: &str) -> String {
-        let view = self.dispatcher.view().unwrap();
+        let view = self.headless_dispatch.view().unwrap();
         view.into_iter()
             .find(|w| w.session == session(worker))
             .unwrap()
@@ -300,7 +301,7 @@ fn resuming_every_machine_ends_the_emergency_here_at_once() {
     let declared = EmergencyVerb(emergencies.clone()).run(&rig.ctx, &declare);
     assert_eq!(declared.exit, Exit::Success, "{}", declared.text);
     assert!(emergencies.in_force().is_some());
-    let pool = PoolVerb::new(rig.dispatcher.clone()).ending(emergencies.clone());
+    let pool = PoolVerb::new(rig.headless_dispatch.clone()).ending(emergencies.clone());
     let resumed = pool.run(
         &rig.ctx,
         &request("pool", &["resume", "--all"], Some("local_j")),
@@ -355,12 +356,12 @@ fn tell_all_comments_on_every_ticket_in_progress_in_one_batch() {
 fn tell_on_a_ticket_nobody_holds_is_only_a_comment() {
     let rig = rig(&["local_w1"]);
     rig.hub.insert_ticket(detail("T.1", "open", None, &[], ""));
-    rig.dispatcher.poll_feed(&rig.ctx, 0).unwrap();
+    rig.headless_dispatch.poll_feed(&rig.ctx, 0).unwrap();
     let reply = rig.tell(&["T.1", "Use the new helper."]);
     assert!(reply.text.contains("nobody holds it"), "{}", reply.text);
     let ops = &rig.hub.batches()[0].ops;
     assert!(matches!(ops.as_slice(), [Operation::Comment { .. }]));
-    rig.dispatcher.poll_feed(&rig.ctx, 0).unwrap();
+    rig.headless_dispatch.poll_feed(&rig.ctx, 0).unwrap();
     assert!(lock(&rig.host.interrupts).is_empty());
 }
 
@@ -390,10 +391,10 @@ fn a_draining_daemon_asks_the_hub_for_nothing_until_it_stops() {
     let rig = rig(&[]);
     let fake = cli(&rig, 1);
     reserve(&rig, "T.1", "reservation-1", &[]);
-    rig.dispatcher.set_draining(true);
+    rig.headless_dispatch.set_draining(true);
     tick(&rig);
     assert!(rig.hub.asked().is_empty());
-    rig.dispatcher.set_draining(false);
+    rig.headless_dispatch.set_draining(false);
     tick(&rig);
     assert_eq!(fake.begun()[0].0.ticket.as_str(), "T.1");
 }

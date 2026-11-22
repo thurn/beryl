@@ -119,7 +119,7 @@ fn a_verb_process_finishes_through_the_daemon_over_the_socket() {
     });
     let host = Host::with_timing(
         HostParts {
-            dispatcher: None,
+            headless_dispatch: None,
             starter: starter.clone(),
             builds: Arc::new(FakeBuilds::default()),
             landing: Arc::new(NoTrees),

@@ -49,20 +49,26 @@ fn a_tell_delivered_before_a_restart_is_not_delivered_again() {
     first.hold("cli-claude-00000001", "T.1");
     let fake = cli(&first, 1);
     tick(&first);
-    first.dispatcher.poll_feed(&first.ctx, 0).unwrap();
+    first.headless_dispatch.poll_feed(&first.ctx, 0).unwrap();
     first.hub.insert_ticket(told.clone());
     first.hub.push_change("ticket", Some(ticket_id("T.1")));
-    first.dispatcher.poll_feed(&first.ctx, 0).unwrap();
+    first.headless_dispatch.poll_feed(&first.ctx, 0).unwrap();
     assert_eq!(fake.sent().len(), 1);
 
     let restarted = rig_on(&["cli-claude-00000001"], file.open(), first.clock.now());
     restarted.hold("cli-claude-00000001", "T.1");
     cli_with(&restarted, 1, fake.clone());
     tick(&restarted);
-    restarted.dispatcher.poll_feed(&restarted.ctx, 0).unwrap();
+    restarted
+        .headless_dispatch
+        .poll_feed(&restarted.ctx, 0)
+        .unwrap();
     restarted.hub.insert_ticket(told);
     restarted.hub.push_change("ticket", Some(ticket_id("T.1")));
-    restarted.dispatcher.poll_feed(&restarted.ctx, 0).unwrap();
+    restarted
+        .headless_dispatch
+        .poll_feed(&restarted.ctx, 0)
+        .unwrap();
     assert_eq!(fake.sent().len(), 1);
 }
 
@@ -86,16 +92,16 @@ fn saved_cli_handoff(rig: &Rig) -> Reservation {
         app: "claude".to_owned(),
         master_blocker: reservation.master_blocker,
     };
-    let mut state = rig.dispatcher.state();
-    Dispatcher::begin_in_slot(&mut state, &reservation.session, reserved, None, false);
+    let mut state = rig.headless_dispatch.state();
+    HeadlessDispatch::begin_in_slot(&mut state, &reservation.session, reserved, None, false);
     drop(state);
-    rig.dispatcher.save();
+    rig.headless_dispatch.save();
     reservation
 }
 
-/// The sessions holding a reservation in `rig`'s dispatcher.
+/// The sessions holding a reservation in the test daemon's dispatch state.
 fn reserved_sessions(rig: &Rig) -> Vec<String> {
-    let state = rig.dispatcher.state();
+    let state = rig.headless_dispatch.state();
     state
         .reserved
         .keys()

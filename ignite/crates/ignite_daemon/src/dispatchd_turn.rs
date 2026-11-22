@@ -51,7 +51,7 @@
 //! never releases it, and its block text says nothing about titles (see `ignite guide
 //! cli-worker`).
 //!
-//! A session released either way may not claim a ticket again until the dispatcher hands it one
+//! A session released either way may not claim a ticket again until the daemon hands it one
 //! (see `wake`), and the reply tells it to stop.
 //!
 //! The client sends this verb without the asking session (see `client::UNRECORDED_VERBS` in the
@@ -69,7 +69,7 @@ use ignite_core::protocol::hub::JusticiarReport;
 use ignite_core::protocol::hub::ReleaseCause;
 use ignite_core::traits::{Error, Result};
 
-use super::Dispatcher;
+use super::HeadlessDispatch;
 use crate::server::{Context, Verb};
 
 /// The label that marks a justiciar's ticket, whose session is never blocked or released.
@@ -88,14 +88,17 @@ pub(super) use ignite_core::cli::decide::release_reason;
 
 /// `ignite turn-ended --session <id> [--again] [--note <last message>] [--parent <pid>]`.
 pub struct TurnEndedVerb {
-    dispatcher: Arc<Dispatcher>,
+    headless_dispatch: Arc<HeadlessDispatch>,
     /// The machine's hostname, which names it in a justiciar report.
     host: String,
 }
 
 impl TurnEndedVerb {
-    pub fn new(dispatcher: Arc<Dispatcher>, host: String) -> TurnEndedVerb {
-        TurnEndedVerb { dispatcher, host }
+    pub fn new(headless_dispatch: Arc<HeadlessDispatch>, host: String) -> TurnEndedVerb {
+        TurnEndedVerb {
+            headless_dispatch,
+            host,
+        }
     }
 }
 
@@ -151,7 +154,9 @@ impl Verb for TurnEndedVerb {
 
     fn run(&self, ctx: &Context, req: &Request) -> Reply {
         match parse(&req.args) {
-            Ok(ended) => self.dispatcher.turn_ended(ctx, &ended, req.pid, &self.host),
+            Ok(ended) => self
+                .headless_dispatch
+                .turn_ended(ctx, &ended, req.pid, &self.host),
             Err(error) => Reply::text(Exit::Usage, error.to_string()),
         }
     }
@@ -207,7 +212,7 @@ pub(super) fn justiciar_reason(ticket: &TicketId, note: Option<&str>) -> String 
     }
 }
 
-impl Dispatcher {
+impl HeadlessDispatch {
     fn turn_ended(&self, ctx: &Context, ended: &Ended, asker: Option<u32>, host: &str) -> Reply {
         let Some(session) = &ended.session else {
             return Reply::text(Exit::Usage, "no session");

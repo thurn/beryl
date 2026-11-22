@@ -40,7 +40,7 @@ const UNKEPT: &str = "unkept";
 /// The message of a failure found in the result cache instead of run.
 pub const FAILED_BEFORE: &str = "failed before on these inputs";
 
-/// The verbs whose outcomes are kept per session for the dispatcher (see `note_sightings`).
+/// The verbs whose outcomes help detect shared failures (see `note_sightings`).
 const SIGHTED_VERBS: &[&str] = &["test", "check", "land"];
 
 /// How far back a command's passes count toward its hang limit: 30 days.
@@ -139,8 +139,8 @@ impl ResultCache {
         }
     }
 
-    /// Records, for the dispatcher, each pass and failure in `run` as `session`'s latest outcome
-    /// of the check, when `verb` is `test`, `check` or `land` (see `dispatchd_shared`). `hashes`
+    /// Records the latest outcome of each check for `session` when `verb` is `test`, `check`,
+    /// or `land`, so the daemon can detect shared failures (see `dispatchd_shared`). `hashes`
     /// gives each check's input hash. `head` is the tested tree's checked-out commit.
     pub fn note_sightings(
         &self,

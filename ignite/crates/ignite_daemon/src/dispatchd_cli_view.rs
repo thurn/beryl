@@ -10,7 +10,7 @@ use ignite_core::protocol::cli::{TranscriptKind, TranscriptLine};
 use ignite_core::time::Timestamp;
 use ignite_core::traits::Result;
 
-use super::Dispatcher;
+use super::HeadlessDispatch;
 
 /// `seconds` as the largest whole unit, such as `45s`, `12m` or `3h`.
 pub(crate) fn duration(seconds: f64) -> String {
@@ -71,7 +71,7 @@ fn describe_hold(hold: &Hold, now: Timestamp) -> String {
     )
 }
 
-impl Dispatcher {
+impl HeadlessDispatch {
     /// One line per slot of each app in CLI mode, and one per CLI hold, as `ignite pool list`
     /// prints them. Empty when no app runs in CLI mode.
     pub fn cli_lines(&self, now: Timestamp) -> Vec<String> {

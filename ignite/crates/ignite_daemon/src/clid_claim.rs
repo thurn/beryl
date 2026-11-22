@@ -325,7 +325,7 @@ impl CliDaemon {
     /// its first turn in the same transaction, then starts that turn. Unless the app is on a
     /// CLI hold: then the slot waits, backing off, for the hold to end.
     ///
-    /// The slot is written only if it is still free. The dispatcher hands tickets over from
+    /// The slot is written only if it is still free. The daemon hands tickets over from
     /// more than one thread, and the slot's row is keyed by app and number, so a write over
     /// another session's slot would take it from that session and strand its turn. The
     /// caller holds `opening`, so within one daemon no other hand-off can take the slot
@@ -334,7 +334,7 @@ impl CliDaemon {
     /// Once the turn is recorded, the session exists whether or not its supervisor starts: a
     /// supervisor that fails to start is started by the `ignite-cli` loop, which finds the
     /// turn recorded and not started. So that failure is logged, not returned, and the
-    /// dispatcher adds the session to the pool as it does for any other start.
+    /// daemon adds the session to the pool as it does for any other start.
     pub(super) fn open_slot(&self, mut row: CliSlot) -> Result<()> {
         for _ in 0..OPEN_ATTEMPTS {
             let first = match self.held(&row.app) {

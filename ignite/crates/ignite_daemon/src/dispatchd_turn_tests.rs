@@ -16,7 +16,7 @@ fn holding(labels: &[&str]) -> Rig {
 }
 
 fn ended(rig: &Rig, args: &[&str]) -> Reply {
-    let verb = TurnEndedVerb::new(rig.dispatcher.clone(), "jarvis".to_owned());
+    let verb = TurnEndedVerb::new(rig.headless_dispatch.clone(), "jarvis".to_owned());
     let reply = verb.run(&rig.ctx, &request("turn-ended", args, None));
     assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
     reply
@@ -149,7 +149,7 @@ fn a_long_last_message_is_cut_in_the_release_note() {
 #[test]
 fn the_verb_needs_a_session() {
     let rig = holding(&[]);
-    let verb = TurnEndedVerb::new(rig.dispatcher.clone(), "jarvis".to_owned());
+    let verb = TurnEndedVerb::new(rig.headless_dispatch.clone(), "jarvis".to_owned());
     let reply = verb.run(&rig.ctx, &request("turn-ended", &["--again"], None));
     assert_eq!(reply.exit, Exit::Usage, "{}", reply.text);
 }

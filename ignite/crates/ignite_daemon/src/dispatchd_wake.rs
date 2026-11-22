@@ -3,7 +3,7 @@
 use ignite_core::ids::{SessionId, TicketId};
 use ignite_core::time::Timestamp;
 
-use super::{Dispatcher, Stall, State, cli};
+use super::{HeadlessDispatch, Stall, State, cli};
 use crate::claim::StartGate;
 
 /// The message an idle worker gets when the command it ended its turn waiting on has finished.
@@ -11,7 +11,7 @@ pub const WAKE: &str = "The `ignite` command you ended your turn waiting on has 
                         result with `ignite wait <handle>` or `ignite status`, then continue the \
                         ticket, or run `ignite release` with its exact state.";
 
-impl Dispatcher {
+impl HeadlessDispatch {
     /// The first `ignite` verb `session` started that is still running, such as `test`, or
     /// `None` when nothing it started runs.
     pub(super) fn running_verb(&self, session: &SessionId) -> Option<String> {
@@ -108,8 +108,8 @@ impl Dispatcher {
     }
 }
 
-impl StartGate for Dispatcher {
+impl StartGate for HeadlessDispatch {
     fn refuse_start(&self, session: &SessionId, ticket: Option<&TicketId>) -> Option<String> {
-        Dispatcher::refuse_start(self, session, ticket)
+        HeadlessDispatch::refuse_start(self, session, ticket)
     }
 }

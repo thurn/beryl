@@ -12,7 +12,7 @@ use crate::fleet_notice;
 
 fn status(rig: &Rig) -> Vec<String> {
     crate::pool::PauseSection {
-        dispatcher: rig.dispatcher.clone(),
+        headless_dispatch: rig.headless_dispatch.clone(),
         hub: rig.hub.clone(),
         clock: rig.clock.clone(),
     }
@@ -23,7 +23,7 @@ fn status(rig: &Rig) -> Vec<String> {
 fn a_fleet_hold_is_reported_but_does_not_filter_workers_at_the_daemon() {
     let rig = rig(&[]);
     let _fake = cli(&rig, 2);
-    let pool = rig.dispatcher.pool();
+    let pool = rig.headless_dispatch.pool();
     let mut notice = FleetNotice::default();
     notice.holds.insert(
         "claude".to_owned(),

@@ -9,7 +9,9 @@ use ignite_core::protocol::hub::ReleaseCause;
 use ignite_core::time::Timestamp;
 
 use super::wake::WAKE;
-use super::{CONTINUE, Dispatcher, IDLE_AFTER_MESSAGE_S, SILENT_S, Stall, State, cli, ends_ticket};
+use super::{
+    CONTINUE, HeadlessDispatch, IDLE_AFTER_MESSAGE_S, SILENT_S, Stall, State, cli, ends_ticket,
+};
 use crate::clid::SessionCheck;
 use crate::loop_health::span;
 use crate::server::Context;
@@ -74,7 +76,7 @@ fn overdue(verb: &RunningVerb, now: Timestamp) -> Option<Stuck> {
     Some(Stuck { at, what })
 }
 
-/// A ticket to give back once the dispatcher's state is unlocked.
+/// A ticket to give back once the dispatch state is unlocked.
 pub(super) struct DueRelease {
     session: SessionId,
     ticket: TicketId,
@@ -91,7 +93,7 @@ impl DueRelease {
     }
 }
 
-impl Dispatcher {
+impl HeadlessDispatch {
     /// Handles a CLI session check and returns any release to perform outside the state lock.
     pub(super) fn checked(
         &self,

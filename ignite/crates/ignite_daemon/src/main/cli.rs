@@ -12,7 +12,7 @@ use super::loops::Parts;
 use crate::clid::health::{Health, HealthEffects};
 use crate::clid::start::TurnLauncher;
 use crate::clid::{self, CliDaemon, CliSetup, SupervisedTurns};
-use crate::dispatchd::Dispatcher;
+use crate::dispatchd::HeadlessDispatch;
 use crate::pool::Pool;
 use crate::server::Context;
 
@@ -39,13 +39,13 @@ pub struct CliMode {
     daemon: Arc<CliDaemon>,
     health: Arc<Health>,
     providers: Vec<(String, Arc<dyn CliApp>)>,
-    dispatcher: Arc<Dispatcher>,
+    headless_dispatch: Arc<HeadlessDispatch>,
     ctx: Context,
 }
 
 /// Builds the CLI pool when `ignite.toml` gives any app a CLI program, starts the turns a
-/// stopped daemon recorded and never started, and gives the pool to the dispatcher. `None`
-/// when no app has a program.
+/// stopped daemon recorded and never started, and connects the pool to headless dispatch.
+/// Returns `None` when no app has a program.
 pub fn cli_mode(
     base: &Base,
     ctx: &Context,
@@ -93,12 +93,14 @@ pub fn cli_mode(
         Ok(started) => eprintln!("ignite: started {started} CLI turns a stopped daemon recorded"),
         Err(error) => eprintln!("ignite: CLI turns not recovered at start: {error}"),
     }
-    desks.dispatcher.set_cli(daemon.clone(), &base.config);
+    desks
+        .headless_dispatch
+        .set_cli(daemon.clone(), &base.config);
     Ok(Some(Arc::new(CliMode {
         daemon,
         health,
         providers,
-        dispatcher: desks.dispatcher.clone(),
+        headless_dispatch: desks.headless_dispatch.clone(),
         ctx: ctx.clone(),
     })))
 }
@@ -136,12 +138,12 @@ impl CliMode {
                 thread::sleep(HEALTH_EVERY);
             }
         });
-        let (dispatcher, ctx) = (self.dispatcher.clone(), self.ctx.clone());
+        let (headless_dispatch, ctx) = (self.headless_dispatch.clone(), self.ctx.clone());
         parts.start_loop(DISPATCH_LOOP, DISPATCH_STALLS_AFTER, move |ticker| {
             loop {
                 ticker.round(|| {
-                    if dispatcher.cli_apps().next().is_some() {
-                        dispatcher.tick(&ctx);
+                    if headless_dispatch.cli_apps().next().is_some() {
+                        headless_dispatch.tick(&ctx);
                     }
                     Ok(())
                 });

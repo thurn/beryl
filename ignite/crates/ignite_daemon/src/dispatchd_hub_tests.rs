@@ -17,11 +17,14 @@ fn no_hub_request_is_made_while_the_state_is_locked() {
     cli(&rig, 1);
     let offences = Arc::new(Mutex::new(Vec::<String>::new()));
     let calls = Arc::new(Mutex::new(Vec::<String>::new()));
-    let dispatcher = rig.dispatcher.clone();
+    let headless_dispatch = rig.headless_dispatch.clone();
     let spy = {
         let (offences, calls) = (offences.clone(), calls.clone());
         SpyHub::new(rig.hub.clone()).spying(move |name| {
-            if matches!(dispatcher.state.try_lock(), Err(TryLockError::WouldBlock)) {
+            if matches!(
+                headless_dispatch.state.try_lock(),
+                Err(TryLockError::WouldBlock)
+            ) {
                 lock(&offences).push(name.to_owned());
             }
             lock(&calls).push(name.to_owned());
@@ -43,9 +46,9 @@ fn no_hub_request_is_made_while_the_state_is_locked() {
     rig.hold("cli-claude-00000001", "T.1");
     tick(&rig);
     // The feed, and a message to the holder.
-    rig.dispatcher.poll_feed(&rig.ctx, 0).unwrap();
+    rig.headless_dispatch.poll_feed(&rig.ctx, 0).unwrap();
     rig.tell(&["T.1", "Hello."]);
-    rig.dispatcher.poll_feed(&rig.ctx, 0).unwrap();
+    rig.headless_dispatch.poll_feed(&rig.ctx, 0).unwrap();
     rig.finish("cli-claude-00000001");
     tick(&rig);
 
@@ -65,17 +68,17 @@ fn the_feed_cursor_follows_a_hub_whose_journal_restarted_lower() {
     let rig = rig(&[]);
     rig.hub.push_change("ticket", None);
     rig.hub.push_change("ticket", None);
-    rig.dispatcher.poll_feed(&rig.ctx, 0).unwrap();
-    assert_eq!(rig.dispatcher.state().feed, Some(Seq(2)));
+    rig.headless_dispatch.poll_feed(&rig.ctx, 0).unwrap();
+    assert_eq!(rig.headless_dispatch.state().feed, Some(Seq(2)));
     // The hub's database was restored from an older backup.
-    rig.dispatcher.state().feed = Some(Seq(99));
-    rig.dispatcher.poll_feed(&rig.ctx, 0).unwrap();
-    assert_eq!(rig.dispatcher.state().feed, Some(Seq(2)));
+    rig.headless_dispatch.state().feed = Some(Seq(99));
+    rig.headless_dispatch.poll_feed(&rig.ctx, 0).unwrap();
+    assert_eq!(rig.headless_dispatch.state().feed, Some(Seq(2)));
 }
 
 fn hear_fleet_state(rig: &Rig) {
     crate::fleet_notice::heard(
-        rig.dispatcher.pool(),
+        rig.headless_dispatch.pool(),
         &HeartbeatReply {
             fleet: rig.hub.fleet_notice(&rig.ctx.machine),
             paused_everywhere: rig.hub.pauses().last().is_some_and(|pause| pause.paused),
@@ -92,7 +95,7 @@ fn a_paused_pool_asks_only_for_tickets_holding_master_back() {
     let rig = rig(&[]);
     let fake = cli(&rig, 2);
     let status = crate::pool::PauseSection {
-        dispatcher: rig.dispatcher.clone(),
+        headless_dispatch: rig.headless_dispatch.clone(),
         hub: rig.hub.clone(),
         clock: rig.clock.clone(),
     };
@@ -187,7 +190,7 @@ fn dispatch_stops_and_resumes_on_heartbeat_without_starting_a_new_daemon() {
 
 /// On 2026-11-20 jarvis kept starting workers while 16 to 18 commands waited for its cores, and
 /// every command took many times its unloaded time. While ticket work has waited two minutes or
-/// more for cores, the dispatcher asks only for the tickets that hold `master` back, as a paused
+/// more for cores, the daemon asks only for the tickets that hold `master` back, as a paused
 /// pool does, and `ignite status` says why its workers are idle.
 #[test]
 fn a_long_wait_for_cores_asks_only_for_tickets_holding_master_back() {
@@ -202,7 +205,7 @@ fn a_long_wait_for_cores_asks_only_for_tickets_holding_master_back() {
             .all(|free| free.master_only && !free.justiciar_only),
         "{asked:?}"
     );
-    let (idle, why) = rig.dispatcher.idle_reason().unwrap();
+    let (idle, why) = rig.headless_dispatch.idle_reason().unwrap();
     assert_eq!(idle, 2);
     assert!(
         why.starts_with("commands have waited 150 s for cores"),

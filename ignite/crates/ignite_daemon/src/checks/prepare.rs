@@ -441,7 +441,7 @@ impl Checks {
             self.execute(ctx, tree, &name, items, options, own, None);
         });
         for ((), own) in ran {
-            // Each session's outcomes let the dispatcher see a failure several sessions share.
+            // The daemon compares session outcomes to detect shared failures.
             self.cache.note_sightings(
                 options.session.as_ref(),
                 &options.verb,

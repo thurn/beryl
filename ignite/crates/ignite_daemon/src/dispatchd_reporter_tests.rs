@@ -27,7 +27,7 @@ fn reporter(rig: &Rig, home: &Path) -> (Reporter, LoopHealth) {
         "jarvis".to_owned(),
         "abc1234".to_owned(),
         health.clone(),
-        rig.dispatcher.clone(),
+        rig.headless_dispatch.clone(),
     );
     (reporter, health)
 }
@@ -164,7 +164,7 @@ fn asking_for_a_justiciar_files_it_and_keeps_it_while_the_hub_is_down() {
     let verb = JusticiarVerb {
         home: home.clone(),
         host: "jarvis".to_owned(),
-        dispatcher: rig.dispatcher.clone(),
+        headless_dispatch: rig.headless_dispatch.clone(),
     };
     let ask = request(
         "justiciar",

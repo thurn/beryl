@@ -11,12 +11,12 @@ use ignite_core::protocol::machine_state::MachineSample;
 use ignite_core::time::Timestamp;
 use ignite_core::traits::Result;
 
-use super::{Dispatcher, State, cli, shared};
+use super::{HeadlessDispatch, State, cli, shared};
 use crate::pool::Member;
 use crate::sched::{Scheduler, Status};
 use crate::trees::Trees;
 
-impl Dispatcher {
+impl HeadlessDispatch {
     /// Removes from the pool every chat whose ticket ended: it holds no tree and no reservation,
     /// or the app said it is gone. Its slot is then free. Returns whether any chat left.
     pub(super) fn retire_workers(&self, members: &mut Vec<Member>) {
@@ -82,7 +82,7 @@ impl Dispatcher {
     }
 }
 
-impl Dispatcher {
+impl HeadlessDispatch {
     /// Report room before subtracting pending reservations, which the hub already counts.
     pub(super) fn reported_room(
         &self,

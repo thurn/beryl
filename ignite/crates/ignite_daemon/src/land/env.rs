@@ -122,7 +122,7 @@ pub trait LandGate: Send + Sync {
         excused: &Excused,
     ) -> GateRun;
     /// Records that the landing of `options.session` was refused because the results of
-    /// `checks` at the tip could not be found or run, so that the dispatcher can stop starting
+    /// `checks` at the tip could not be found or run, so that the daemon can stop starting
     /// tickets into that failure (see `dispatchd_shared`).
     fn tip_unknown(&self, _checks: &[CheckName], _options: &RunOptions) {}
     /// Runs `checks` in `tree` as it is, each from the result cache where it can be, with the

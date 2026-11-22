@@ -2,9 +2,8 @@
 //! database, `mirror.db` beside `daemon.db`, so that losing the hub's machine, or a bad edit
 //! made through the hub's API, never loses a ticket or its earlier state.
 //!
-//! The mirror follows the hub on a loop of its own (`ignite-mirror`), apart from the
-//! dispatcher's feed loop, so the dispatcher stays as it was and a slow first copy never holds
-//! up a hand-off:
+//! The mirror follows the hub in its own loop (`ignite-mirror`). The dispatch feed loop can
+//! hand off tickets while the first copy runs.
 //!
 //! 1. **First copy.** An empty mirror reads the hub's feed position, then pages through
 //!    `GET /export` one page a round and stores every ticket at that position.

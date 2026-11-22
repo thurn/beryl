@@ -7,12 +7,12 @@
 //!   only when the change feed names the ticket, or once after the daemon starts. What was shown
 //!   is recorded per tree in the local database, so a restart shows nothing twice. A comment
 //!   made by `ignite tell` is printed as a record of the message, not as its text, because the
-//!   session receives the text as the dispatcher's message.
+//!   daemon delivers the message separately.
 //! - The silence clock (`active_at`) is saved in the local database as it changes and read when
 //!   the daemon starts (see `activity`), so a restart does not give a silent session another 30
 //!   minutes.
 //! - [`Claims::tick`] keeps the clock current: a session whose command is still running, such as
-//!   a long `ignite run` or `ignite wait`, is active however long it runs. The dispatcher's stall
+//!   a long `ignite run` or `ignite wait`, is active however long it runs. The daemon's stall
 //!   procedure (see `dispatchd_stall`) decides what to do with a session that went silent, and
 //!   with one whose command has run far past its time, which this clock does not measure.
 
@@ -110,7 +110,7 @@ fn changes_after(detail: &TicketDetail, marks: &rows::Shown, session: &SessionId
             continue;
         }
         if tells.contains(&u64::from(comment.n)) {
-            // A tell reaches the session as the dispatcher's message, which agents treat as a
+            // The daemon delivers a tell separately as a message the agent treats as a
             // teammate's request. Here it is tool output, which they rightly treat as data, so
             // the line records that the message exists and quotes only its first line.
             let first = comment
@@ -122,7 +122,7 @@ fn changes_after(detail: &TicketDetail, marks: &rows::Shown, session: &SessionId
             changes.push(Change {
                 at: comment.at,
                 lines: vec![format!(
-                    "comment: message from {}, delivered by the dispatcher, starting \"{first}\"",
+                    "comment: message from {}, delivered by the daemon, starting \"{first}\"",
                     comment.author
                 )],
                 edit: false,

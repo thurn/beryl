@@ -1,6 +1,6 @@
 //! The daemon's entry point: reads `ignite.toml` and the check manifests, builds the real
 //! implementation of every part (the scheduler, the supervisor, build trees, builds, the check
-//! runner and its cache, landing, tip verification, idle work, claims and the dispatcher),
+//! runner and its cache, landing, tip verification, idle work, claims and headless dispatch),
 //! registers every verb with one [`Server`] and serves the machine's socket.
 //!
 //! [`Daemon::start`] does the assembly from [`DaemonOptions`], so a test can run two daemons in
@@ -121,7 +121,7 @@ impl Daemon {
             landing,
             idle,
             claims: desks.claims.clone(),
-            dispatcher: desks.dispatcher.clone(),
+            headless_dispatch: desks.headless_dispatch.clone(),
             scheduler: machinery.scheduler.clone(),
             facts: base.facts.clone(),
             sender_db: Mutex::new(Some(base.open()?)),
@@ -136,7 +136,7 @@ impl Daemon {
                 crate::doctor::Host::hostname(&crate::doctor::NativeHost),
                 base.options.version.clone(),
                 health,
-                desks.dispatcher.clone(),
+                desks.headless_dispatch.clone(),
             )),
             emergencies: Arc::new(crate::emergency::Emergencies::new(
                 base.clock.clone(),

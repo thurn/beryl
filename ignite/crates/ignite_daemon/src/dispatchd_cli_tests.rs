@@ -27,7 +27,7 @@ pub(super) fn cli_with(rig: &Rig, ceiling: u32, fake: Arc<FakeCliPool>) -> Arc<F
         },
     );
     lock(&rig.host.worker_capacity).0 = ceiling;
-    rig.dispatcher.set_cli(fake.clone(), &config);
+    rig.headless_dispatch.set_cli(fake.clone(), &config);
     fake
 }
 
@@ -55,11 +55,11 @@ fn queue_offer(rig: &Rig, ticket: &str, provider: &str, key: &str, master_blocke
 }
 
 pub(super) fn tick(rig: &Rig) {
-    rig.dispatcher.tick(&rig.ctx);
+    rig.headless_dispatch.tick(&rig.ctx);
 }
 
 #[test]
-fn an_app_in_cli_mode_hands_off_through_the_cli_pool_without_a_dispatcher() {
+fn headless_dispatch_hands_the_ticket_to_the_cli_pool() {
     let rig = rig(&[]);
     let fake = cli(&rig, 2);
     reserve(&rig, "T.1", "reservation-1", &["tier:opus"]);
@@ -80,7 +80,7 @@ fn an_app_in_cli_mode_hands_off_through_the_cli_pool_without_a_dispatcher() {
 
     // The new session joins the pool, holds the reservation, and fills a slot.
     let member = rig
-        .dispatcher
+        .headless_dispatch
         .pool()
         .member(&session("cli-claude-00000001"))
         .unwrap()
@@ -89,7 +89,7 @@ fn an_app_in_cli_mode_hands_off_through_the_cli_pool_without_a_dispatcher() {
     assert_eq!(rig.state_of("cli-claude-00000001"), "reserved");
     rig.hold("cli-claude-00000001", "T.1");
     assert_eq!(rig.state_of("cli-claude-00000001"), "working");
-    assert_eq!(rig.dispatcher.view().unwrap().len(), 1);
+    assert_eq!(rig.headless_dispatch.view().unwrap().len(), 1);
 
     let asked = &rig.hub.asked()[0];
     assert!(asked.idle_workers.is_empty());
@@ -116,7 +116,7 @@ fn configured_providers_offer_their_tiers_and_use_their_effort_defaults() {
             ..CliProgram::default()
         },
     );
-    rig.dispatcher.set_cli(fake.clone(), &rig.ctx.config);
+    rig.headless_dispatch.set_cli(fake.clone(), &rig.ctx.config);
     rig.hub.insert_ticket(detail("T.1", "open", None, &[], ""));
     rig.hub.insert_ticket(detail(
         "T.2",
@@ -132,7 +132,10 @@ fn configured_providers_offer_their_tiers_and_use_their_effort_defaults() {
     let begun = fake.begun();
     assert_eq!(begun.len(), 2);
     assert_eq!(begun[1].1, "fake-model");
-    assert_eq!(rig.dispatcher.cli_apps().collect::<Vec<_>>(), ["fake"]);
+    assert_eq!(
+        rig.headless_dispatch.cli_apps().collect::<Vec<_>>(),
+        ["fake"]
+    );
     let asks = rig.hub.asked();
     let providers = &asks[0].room.as_ref().unwrap().providers;
     assert_eq!(providers[0].name, "fake");
@@ -164,7 +167,7 @@ fn zero_room_allows_the_hub_to_offer_a_ticket_that_holds_master_back() {
     assert_eq!(asked[before].room.as_ref().unwrap().start, 0);
     assert!(!asked[before].master_only);
     assert!(
-        rig.dispatcher
+        rig.headless_dispatch
             .worker_room_line()
             .unwrap()
             .contains("ceiling 2")
@@ -195,7 +198,7 @@ fn a_tell_and_a_stall_check_for_a_cli_session_reach_the_cli_pool() {
     tick(&rig);
 
     // A tell made after the claim is queued for the session's next turn.
-    rig.dispatcher.poll_feed(&rig.ctx, 0).unwrap();
+    rig.headless_dispatch.poll_feed(&rig.ctx, 0).unwrap();
     rig.hub.insert_ticket(claimed(
         "T.1",
         worker,
@@ -203,7 +206,7 @@ fn a_tell_and_a_stall_check_for_a_cli_session_reach_the_cli_pool() {
         "2027-01-01T00:00:00.000Z",
     ));
     rig.hub.push_change("ticket", Some(ticket_id("T.1")));
-    rig.dispatcher.poll_feed(&rig.ctx, 0).unwrap();
+    rig.headless_dispatch.poll_feed(&rig.ctx, 0).unwrap();
     let sent = fake.sent();
     assert_eq!(sent.len(), 1);
     assert_eq!(sent[0].session, session(worker));
@@ -246,7 +249,8 @@ fn a_cli_session_is_woken_as_soon_as_its_verb_ends() {
             running: false,
         },
     );
-    rig.dispatcher.note_turn_end(&worker, true, rig.clock.now());
+    rig.headless_dispatch
+        .note_turn_end(&worker, true, rig.clock.now());
     tick(&rig);
     let sent = fake.sent();
     assert_eq!(sent.len(), 1, "no two-minute wait for a CLI session");
@@ -260,7 +264,7 @@ fn a_failed_start_returns_the_reservation_and_backs_off_the_provider() {
     fake.refuse(Some("the program is missing"));
     reserve(&rig, "T.1", "reservation-1", &[]);
     tick(&rig);
-    assert!(rig.dispatcher.view().unwrap().is_empty());
+    assert!(rig.headless_dispatch.view().unwrap().is_empty());
     assert_eq!(rig.hub.refused_reservations()[0].ticket, ticket_id("T.1"));
     let before = rig.hub.asked().len();
     tick(&rig);
@@ -280,7 +284,7 @@ fn a_reservation_for_an_unknown_provider_is_returned_without_starting() {
     tick(&rig);
     assert_eq!(rig.hub.refused_reservations().len(), 1);
     assert!(fake.begun().is_empty());
-    assert!(rig.dispatcher.view().unwrap().is_empty());
+    assert!(rig.headless_dispatch.view().unwrap().is_empty());
 }
 
 #[test]
@@ -294,7 +298,7 @@ fn memory_pressure_reports_zero_room() {
     assert_eq!(room.start, 0);
     assert!(room.memory_pressed);
     assert_eq!(
-        rig.dispatcher.worker_room_line().as_deref(),
+        rig.headless_dispatch.worker_room_line().as_deref(),
         Some("worker room limited by memory")
     );
 }
@@ -342,7 +346,7 @@ fn the_hub_down_justiciar_runs_as_a_cli_session() {
     let rig = rig(&["local_w1"]);
     let fake = cli(&rig, 1);
     let given = rig
-        .dispatcher
+        .headless_dispatch
         .hand_off_justiciar(&rig.ctx, "Repair the hub.")
         .expect("a CLI justiciar starts");
     let started = fake.justiciars();
@@ -358,7 +362,7 @@ fn the_hub_down_justiciar_runs_as_a_cli_session() {
     assert_eq!(started[0].prompt, "Repair the hub.");
     assert!(cli::is_cli_session(&given));
     assert!(
-        rig.dispatcher
+        rig.headless_dispatch
             .hand_off_justiciar(&rig.ctx, "Repair the hub.")
             .is_none(),
         "one justiciar at a time"
@@ -500,7 +504,7 @@ fn a_lost_landing_reply_delivers_the_lane_successor_once_the_cli_turn_ends() {
         [("opus".to_owned(), "codex-model".to_owned())].into(),
     );
     let fake = Arc::new(FakeCliPool::default());
-    rig.dispatcher.set_cli(fake.clone(), &rig.ctx.config);
+    rig.headless_dispatch.set_cli(fake.clone(), &rig.ctx.config);
     let worker = session("cli-codex-00000001");
     let now = rig.clock.now();
     let http = hub_with_lost_landing_reply(&rig);
@@ -553,7 +557,7 @@ fn a_lost_landing_reply_delivers_the_lane_successor_once_the_cli_turn_ends() {
             .deliver_all(
                 rig.ctx.hub.as_ref(),
                 |landed, next| {
-                    rig.dispatcher
+                    rig.headless_dispatch
                         .chain(&rig.ctx, &landed.ticket, next, landed.fresh);
                 },
                 || Ok(None),
@@ -616,10 +620,13 @@ fn capacity_reports_probe_and_hold_independently() {
             .collect(),
         default_model: Some("sonnet".into()),
     };
-    assert_eq!(rig.dispatcher.provider_capacity(), [expected.clone()]);
+    assert_eq!(
+        rig.headless_dispatch.provider_capacity(),
+        [expected.clone()]
+    );
     fake.set_probed("claude", false);
     fake.set_hold("claude", None);
     expected.probed = false;
     expected.hold_reason = None;
-    assert_eq!(rig.dispatcher.provider_capacity(), [expected]);
+    assert_eq!(rig.headless_dispatch.provider_capacity(), [expected]);
 }

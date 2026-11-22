@@ -688,7 +688,7 @@ impl Scheduler {
     }
 
     /// How long the request of `classes` that has waited longest has waited, in seconds; zero
-    /// when none waits. The dispatcher starts no ordinary ticket while ticket work waits long.
+    /// when none waits. The daemon pauses ordinary ticket starts when ticket work has waited too long.
     pub fn longest_wait(&self, classes: &[Class]) -> f64 {
         self.lock().ledger.longest_wait(classes, self.clock.now())
     }

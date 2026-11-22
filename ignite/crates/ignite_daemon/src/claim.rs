@@ -13,7 +13,7 @@
 //! [`ClaimHook`], a hook the server runs after every request from a leased tree, renews the
 //! ticket's lease and prints the comments and edits that others made to the ticket since the
 //! session's previous command (see `watch`). Each held ticket keeps a silence clock, when its
-//! session last ran a command, saved across restarts (see `activity`). The dispatcher's stall
+//! session last ran a command, saved across restarts (see `activity`). The daemon's stall
 //! procedure (see `dispatchd_stall`) reads it through [`Claims::quiet_since`] when the server has
 //! no record of the session's last command, and releases a stopped session's ticket through
 //! [`Claims::release_session`].
@@ -182,8 +182,8 @@ pub trait TreeDesk: Send + Sync {
     fn set_ticket(&self, tree: &TreeId, ticket: &TicketId) -> Result<()>;
 }
 
-/// Whether a session may claim at all. The dispatcher refuses a pool worker whose ticket Ignite
-/// released from it, until it hands that worker a ticket (see `dispatchd`'s `wake`).
+/// Whether a session may claim at all. After releasing a worker's ticket, the daemon
+/// refuses claims from that worker until it hands them another ticket (see `dispatchd_wake`).
 pub trait StartGate: Send + Sync {
     /// The refusal's text when `session` may not start `ticket` (`None` for a summary).
     fn refuse_start(&self, session: &SessionId, ticket: Option<&TicketId>) -> Option<String>;
@@ -235,14 +235,14 @@ struct State {
     saved: BTreeMap<TreeId, rows::ClaimActivity>,
 }
 
-/// The tickets held on this machine, shared by the verbs, the request hooks and the dispatcher.
+/// The tickets held on this machine, shared by verbs, request hooks, and headless dispatch.
 pub struct Claims {
     clock: Arc<dyn Clock>,
     desk: Arc<dyn TicketDesk>,
     trees: Arc<dyn TreeDesk>,
     /// The server, once it exists: it is built with verbs that hold these claims.
     commands: OnceLock<Arc<dyn RunningCommands>>,
-    /// The dispatcher, once it exists, which may refuse a start (see [`StartGate`]).
+    /// The gate that may refuse a start once headless dispatch is initialized (see [`StartGate`]).
     gate: OnceLock<Arc<dyn StartGate>>,
     db: Mutex<Connection>,
     state: Mutex<State>,
@@ -327,7 +327,7 @@ impl Claims {
         held_at(&state, cwd).map(|h| (h.tree.clone(), h.ticket.clone(), h.session.clone()))
     }
 
-    /// Gives back `session`'s ticket for the dispatcher, keeping its work on the saved branch:
+    /// Gives back `session`'s ticket on behalf of headless dispatch and saves its work on a branch:
     /// the note is `reason` followed by what was saved.
     pub fn release_session(
         &self,
@@ -363,7 +363,7 @@ impl Claims {
             // placeholder name until the session runs `start` again and claims it. When the
             // daemon restarts in between, nothing claims it: the hub has never heard of the
             // name and answers every release with "Unknown ticket", so the tree stayed leased
-            // and the dispatcher reminded the session every 15 minutes, for hours. There is
+            // and the daemon reminded the session every 15 minutes, for hours. There is
             // nothing to release at the hub, and `give_back` saved the work before asking, so
             // the tree is freed here.
             Err(Error::NotFound(_)) if is_placeholder(ticket) => {

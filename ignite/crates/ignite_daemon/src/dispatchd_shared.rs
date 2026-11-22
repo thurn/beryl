@@ -1,4 +1,4 @@
-//! Shared failures: when the tip is broken, or a check is broken for everyone, the dispatcher
+//! Shared failures: when the tip is broken, or a check is broken for everyone, the daemon
 //! stops starting ordinary tickets on this machine.
 //!
 //! Before this, each worker found such a failure on its own, spent its ticket's time on a
@@ -26,7 +26,7 @@
 //!
 //! It ends when the check passes for any session on this machine, when the `green` branch moves,
 //! or after [`LAPSE_S`], whichever is first. Only failures seen after the end can start the next
-//! one. It is saved with the dispatcher's queue (see `store`), so a restart does not lift it.
+//! one. The daemon persists the hold with the dispatch queue (see `store`), so it survives a restart.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -38,7 +38,7 @@ use ignite_core::protocol::tickets::{Status, TicketQuery};
 use ignite_core::time::Timestamp;
 use ignite_store::local::rows::CheckSighting;
 
-use super::{Dispatcher, State, cli};
+use super::{HeadlessDispatch, State, cli};
 use crate::server::Context;
 
 /// How close together two sessions' failures must be to count as one shared failure: 15
@@ -204,7 +204,7 @@ fn tested_green(ctx: &Context, head: Option<&str>, green: Option<&str>) -> bool 
     }
 }
 
-impl Dispatcher {
+impl HeadlessDispatch {
     fn detect_shared(&self, ctx: &Context, state: &State, now: Timestamp) -> Option<SharedFailure> {
         let window = now.plus_seconds(-SAME_WINDOW_S);
         let since = match state.shared.ended_at {
@@ -329,7 +329,7 @@ impl Dispatcher {
                     current.check
                 ),
                 details: format!(
-                    "{}.\n\nSessions: {}. First line: {}.\n\nSince {} the dispatcher on {host} \
+                    "{}.\n\nSessions: {}. First line: {}.\n\nSince {} the daemon on {host} \
                      starts only tickets that hold master back. That ends when the check passes \
                      for a session on {host}, when green moves, or two hours after it started.",
                     current.reason(),

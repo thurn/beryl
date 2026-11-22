@@ -9,7 +9,7 @@ use ignite_core::protocol::hub::{MachineFree, NextReply, Reservation, Room};
 use ignite_core::protocol::tickets::TicketDetail;
 use ignite_core::time::Timestamp;
 
-use super::{Dispatcher, REFUSED_S, Reserved, State, cli, feed, label, shared};
+use super::{HeadlessDispatch, REFUSED_S, Reserved, State, cli, feed, label, shared};
 use crate::clid::Resume;
 use crate::pool::Member;
 use crate::server::Context;
@@ -32,7 +32,7 @@ struct Asking {
 }
 
 /// Clears the flag that says a step is asking the hub, however the step ends.
-struct AskingGuard<'a>(&'a Dispatcher);
+struct AskingGuard<'a>(&'a HeadlessDispatch);
 
 impl Drop for AskingGuard<'_> {
     fn drop(&mut self) {
@@ -40,7 +40,7 @@ impl Drop for AskingGuard<'_> {
     }
 }
 
-impl Dispatcher {
+impl HeadlessDispatch {
     pub(crate) fn pressure(&self, now: Timestamp) -> Option<DispatchPressure> {
         self.host.pressure(now)
     }
@@ -426,15 +426,21 @@ mod tests {
 
     fn queue_offers(rig: &Rig, set_master_blocker: bool) {
         let asking = rig
-            .dispatcher
-            .plan_asking(&mut rig.dispatcher.state())
+            .headless_dispatch
+            .plan_asking(&mut rig.headless_dispatch.state())
             .expect("the machine initially has worker room");
-        let (offers, _) = rig.dispatcher.ask_for_work(&rig.ctx, asking);
+        let (offers, _) = rig.headless_dispatch.ask_for_work(&rig.ctx, asking);
         assert!(!offers.is_empty());
-        let mut state = rig.dispatcher.state();
+        let mut state = rig.headless_dispatch.state();
         for (mut reservation, app, detail) in offers {
             reservation.master_blocker = set_master_blocker;
-            super::Dispatcher::queue_handoff(&rig.ctx, &mut state, &reservation, &app, detail);
+            super::HeadlessDispatch::queue_handoff(
+                &rig.ctx,
+                &mut state,
+                &reservation,
+                &app,
+                detail,
+            );
         }
     }
 
@@ -444,12 +450,12 @@ mod tests {
         let fake = cli(&rig, 2);
         reserve(&rig, "T.1", "reservation-1", &[]);
         let asking = rig
-            .dispatcher
-            .plan_asking(&mut rig.dispatcher.state())
+            .headless_dispatch
+            .plan_asking(&mut rig.headless_dispatch.state())
             .expect("the machine initially has worker room");
 
         *lock(&rig.host.worker_capacity) = (2, true, Some(512));
-        let (offers, _) = rig.dispatcher.ask_for_work(&rig.ctx, asking);
+        let (offers, _) = rig.headless_dispatch.ask_for_work(&rig.ctx, asking);
 
         assert!(offers.is_empty());
         assert!(fake.begun().is_empty());
@@ -464,7 +470,7 @@ mod tests {
         queue_offers(&rig, false);
 
         *lock(&rig.host.worker_capacity) = (2, false, Some(3_023));
-        rig.dispatcher.run_cli_calls(&rig.ctx);
+        rig.headless_dispatch.run_cli_calls(&rig.ctx);
 
         assert!(fake.begun().is_empty());
         assert_eq!(rig.hub.refused_reservations()[0].ticket, ticket_id("T.1"));
@@ -479,7 +485,7 @@ mod tests {
             queue_offers(&rig, true);
 
             *lock(&rig.host.worker_capacity) = (2, memory_pressed, Some(2_000));
-            rig.dispatcher.run_cli_calls(&rig.ctx);
+            rig.headless_dispatch.run_cli_calls(&rig.ctx);
 
             assert_eq!(fake.begun().len(), usize::from(!memory_pressed));
             assert_eq!(
@@ -504,7 +510,7 @@ mod tests {
 
         // The memory sample stays unchanged after the first launch. Only one footprint fits.
         *lock(&rig.host.worker_capacity) = (3, false, Some(3_024));
-        rig.dispatcher.run_cli_calls(&rig.ctx);
+        rig.headless_dispatch.run_cli_calls(&rig.ctx);
 
         assert_eq!(fake.begun().len(), 1);
         assert_eq!(fake.begun()[0].0.ticket, ticket_id("T.1"));

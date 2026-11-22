@@ -13,7 +13,7 @@ use ignite_core::traits::{Error, Result};
 use ignite_store::local::{pool as store, rows};
 use rusqlite::Connection;
 
-use crate::dispatchd::{Dispatcher, hub_exit};
+use crate::dispatchd::{HeadlessDispatch, hub_exit};
 use crate::server::{Context, Verb};
 
 /// One pool member as the daemon uses it.
@@ -125,7 +125,7 @@ impl Pool {
         Ok(())
     }
 
-    /// The dispatcher's saved queue, in the order it was written.
+    /// The saved dispatch queue, in the order it was written.
     pub(crate) fn with_database<T>(&self, f: impl FnOnce(&mut Connection) -> T) -> T {
         f(&mut self.conn())
     }
@@ -147,16 +147,16 @@ impl Pool {
 
 /// `ignite pool list | add | remove | pause | resume`.
 pub struct PoolVerb {
-    dispatcher: Arc<Dispatcher>,
+    headless_dispatch: Arc<HeadlessDispatch>,
     /// The emergency this machine enforces, which resuming every machine ends here at once
     /// rather than at the next heartbeat.
     emergency: Option<Arc<crate::emergency::Emergencies>>,
 }
 
 impl PoolVerb {
-    pub fn new(dispatcher: Arc<Dispatcher>) -> PoolVerb {
+    pub fn new(headless_dispatch: Arc<HeadlessDispatch>) -> PoolVerb {
         PoolVerb {
-            dispatcher,
+            headless_dispatch,
             emergency: None,
         }
     }
@@ -181,13 +181,13 @@ impl Verb for PoolVerb {
         let result = match words.split_first() {
             Some((&"list", _)) | None => Ok(self.list(ctx)),
             Some((&("add" | "remove" | "mode"), _)) => Err(Error::Invalid(
-                "the desktop dispatcher was removed".to_owned(),
+                "desktop worker commands have been retired".to_owned(),
             )),
             Some((&"pause", rest)) => self.pause(ctx, req, rest.contains(&"--all"), true),
             Some((&"resume", rest)) => self.pause(ctx, req, rest.contains(&"--all"), false),
             Some((&"watch", rest)) => self.watch(rest),
             Some((&"usage", [])) => Ok(crate::dispatchd::usage_report(
-                self.dispatcher.pool(),
+                self.headless_dispatch.pool(),
                 ctx.clock.now(),
             )),
             Some(_) => Err(Error::Invalid(
@@ -202,12 +202,12 @@ impl Verb for PoolVerb {
 
 impl PoolVerb {
     fn list(&self, ctx: &Context) -> Reply {
-        let view = match self.dispatcher.view() {
+        let view = match self.headless_dispatch.view() {
             Ok(view) => view,
             Err(error) => return Reply::text(hub_exit(&error), error.to_string()),
         };
         let mut lines = Vec::new();
-        let pool = self.dispatcher.pool();
+        let pool = self.headless_dispatch.pool();
         let state = crate::fleet_notice::current(pool);
         if let Some(notice) = &state {
             lines.push(crate::fleet_notice::state_line(notice));
@@ -227,13 +227,13 @@ impl PoolVerb {
         }
         let holds = crate::dispatchd::usage_holds(pool, ctx.clock.now());
         lines.extend(crate::dispatchd::hold_lines(&holds));
-        if let Some(shared) = self.dispatcher.shared_failure() {
+        if let Some(shared) = self.headless_dispatch.shared_failure() {
             lines.push(format!("shared   {shared}"));
         }
-        lines.extend(self.dispatcher.cli_lines(ctx.clock.now()));
+        lines.extend(self.headless_dispatch.cli_lines(ctx.clock.now()));
         for worker in &view {
             let mut line = format_worker(worker);
-            if let Some(note) = self.dispatcher.handoff_note(&worker.session) {
+            if let Some(note) = self.headless_dispatch.handoff_note(&worker.session) {
                 let _ = write!(line, "  {note}");
             }
             lines.push(line);
@@ -267,7 +267,7 @@ impl PoolVerb {
         }
         let target = target
             .ok_or_else(|| Error::Invalid("usage: ignite pool watch <ticket | session>".into()))?;
-        let Some((session, lines)) = self.dispatcher.cli_digest(target)? else {
+        let Some((session, lines)) = self.headless_dispatch.cli_digest(target)? else {
             return Err(Error::NotFound(format!(
                 "no CLI session works or worked {target}; `ignite pool list` shows the slots"
             )));
@@ -290,7 +290,7 @@ impl PoolVerb {
                 paused,
             })?;
             // Known here at once rather than at the next heartbeat.
-            self.dispatcher.pool().set_paused_everywhere(paused);
+            self.headless_dispatch.pool().set_paused_everywhere(paused);
             let mut text = format!("{verb}   hand-offs on every machine");
             if paused {
                 text.push_str(", even of tickets that hold master back");
@@ -327,7 +327,7 @@ const HOLDING_MASTER: [&str; 2] = ["regression", ignite_core::dispatch::JUSTICIA
 /// The machine's fleet state, any hand-off pauses and usage holds, and the tickets holding
 /// `master` back while work is paused.
 pub struct PauseSection {
-    pub dispatcher: Arc<Dispatcher>,
+    pub headless_dispatch: Arc<HeadlessDispatch>,
     pub hub: Arc<dyn ignite_core::traits::Hub>,
     pub clock: Arc<dyn ignite_core::traits::Clock>,
 }
@@ -338,7 +338,7 @@ impl crate::doctor::StatusSection for PauseSection {
     }
 
     fn lines(&self) -> Vec<String> {
-        let pool = self.dispatcher.pool();
+        let pool = self.headless_dispatch.pool();
         let holds = crate::dispatchd::usage_holds(pool, self.clock.now());
         let holds: Vec<String> = crate::dispatchd::hold_lines(&holds).collect();
         let notice = crate::fleet_notice::current(pool);
@@ -356,16 +356,16 @@ impl crate::doctor::StatusSection for PauseSection {
         } else {
             None
         };
-        let shared = self.dispatcher.shared_failure();
+        let shared = self.headless_dispatch.shared_failure();
         let restricted = notice.is_some_and(|notice| notice.state != MachineState::Active);
         let mut lines: Vec<String> = pause.map(str::to_owned).into_iter().chain(state).collect();
         let ordinary = !restricted && pause.is_none() && holds.is_empty() && shared.is_none();
         lines.extend(shared);
         lines.extend(holds);
-        lines.extend(self.dispatcher.cli_hold_lines(self.clock.now()));
+        lines.extend(self.headless_dispatch.cli_hold_lines(self.clock.now()));
         if ordinary {
-            lines.extend(self.dispatcher.worker_room_line());
-            if let Some((_, why)) = self.dispatcher.idle_reason() {
+            lines.extend(self.headless_dispatch.worker_room_line());
+            if let Some((_, why)) = self.headless_dispatch.idle_reason() {
                 lines.push(why);
             }
             return lines;
@@ -396,7 +396,7 @@ impl crate::doctor::StatusSection for PauseSection {
                 }
             }
         }
-        lines.extend(self.dispatcher.worker_room_line());
+        lines.extend(self.headless_dispatch.worker_room_line());
         lines
     }
 }

@@ -92,9 +92,9 @@ pub(super) fn register(host: &Arc<Host>, registry: &mut Registry) {
     add::<ReadDispatchPressure>(host, registry, |host, ctx, call| {
         host.running(ctx, &call.handle)?;
         Ok(host
-            .dispatcher
+            .headless_dispatch
             .as_ref()
-            .and_then(|dispatcher| dispatcher.pressure(ctx.clock.now())))
+            .and_then(|headless_dispatch| headless_dispatch.pressure(ctx.clock.now())))
     });
     debug_assert!(
         CALLS.iter().all(|(verb, _)| registry.get(verb).is_some()),

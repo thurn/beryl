@@ -124,11 +124,9 @@ pub trait Verb: Send + Sync {
     fn needs_the_tree_lease(&self) -> bool {
         true
     }
-    /// False for a verb that only waits for something or only reads, such as `status`, the
-    /// dispatcher's `dispatch --wait` or a worker's `wait`. Every other verb gets its handle
-    /// before it starts, so that a client cut off by a restart can wait on it again, and counts
-    /// in [`Server::running_verbs`]. A verb that only reads gets no handle: the client sends it
-    /// again instead.
+    /// False for a verb that only waits for something or only reads, such as `status` or `wait`.
+    /// Every other verb gets a handle before it starts and counts in [`Server::running_verbs`].
+    /// A client cut off by a restart can wait on that handle again. It resends a read-only verb.
     fn blocks_update(&self) -> bool {
         true
     }

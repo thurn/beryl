@@ -10,7 +10,7 @@ use ignite_core::protocol::hub::{ProviderOffer, Reservation};
 use ignite_core::time::Timestamp;
 use ignite_core::traits::Error;
 
-use super::{Dispatcher, Reserved, State};
+use super::{HeadlessDispatch, Reserved, State};
 use crate::clid::{CULPRIT_BUSY, CliPool, Resume};
 use crate::pool::Member;
 use crate::server::Context;
@@ -129,7 +129,7 @@ fn provider_offer(config: &Config, app: &str) -> ProviderOffer {
     }
 }
 
-impl Dispatcher {
+impl HeadlessDispatch {
     /// Connects the CLI supervisor to the worker pool.
     pub fn set_cli(&self, pool: Arc<dyn CliPool>, config: &Config) {
         let _ = self.cli.set(CliMode {

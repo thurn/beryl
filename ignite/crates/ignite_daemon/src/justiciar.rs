@@ -33,7 +33,7 @@ use ignite_core::time::Timestamp;
 use ignite_core::traits::Error;
 
 use crate::crash;
-use crate::dispatchd::Dispatcher;
+use crate::dispatchd::HeadlessDispatch;
 use crate::loop_health::LoopHealth;
 use crate::server::{Context, Verb};
 
@@ -67,7 +67,7 @@ pub struct Reporter {
     pub host: String,
     pub version: String,
     pub loops: LoopHealth,
-    pub dispatcher: Arc<Dispatcher>,
+    pub headless_dispatch: Arc<HeadlessDispatch>,
     state: Mutex<ReporterState>,
 }
 
@@ -139,14 +139,14 @@ impl Reporter {
         host: String,
         version: String,
         loops: LoopHealth,
-        dispatcher: Arc<Dispatcher>,
+        headless_dispatch: Arc<HeadlessDispatch>,
     ) -> Self {
         Self {
             home,
             host,
             version,
             loops,
-            dispatcher,
+            headless_dispatch,
             state: Mutex::new(ReporterState::default()),
         }
     }
@@ -162,7 +162,7 @@ impl Reporter {
             let since = *self.state().hub_down_since.get_or_insert(now);
             if now.seconds_since(since) >= HUB_DOWN_S {
                 let prompt = self.hub_down_prompt(ctx, since);
-                if let Some(worker) = self.dispatcher.hand_off_justiciar(ctx, &prompt) {
+                if let Some(worker) = self.headless_dispatch.hand_off_justiciar(ctx, &prompt) {
                     eprintln!("ignite: the hub is down; gave {worker} a justiciar prompt");
                 }
             }
@@ -171,7 +171,7 @@ impl Reporter {
         self.state().hub_down_since = None;
         self.send_crashes(ctx);
         self.send_loops(ctx, now);
-        self.dispatcher.report_shared(ctx, &self.host);
+        self.headless_dispatch.report_shared(ctx, &self.host);
         self.send_local_request(ctx);
     }
 
@@ -278,7 +278,7 @@ impl Reporter {
 pub struct JusticiarVerb {
     pub home: PathBuf,
     pub host: String,
-    pub dispatcher: Arc<Dispatcher>,
+    pub headless_dispatch: Arc<HeadlessDispatch>,
 }
 
 impl Verb for JusticiarVerb {
@@ -346,7 +346,7 @@ impl Verb for JusticiarVerb {
                      a session asked for a justiciar: {reason}\n\nRead `ignite guide justiciar` \
                      and end the emergency."
                 );
-                let given = self.dispatcher.hand_off_justiciar(ctx, &prompt);
+                let given = self.headless_dispatch.hand_off_justiciar(ctx, &prompt);
                 Reply::text(
                     Exit::Unreachable,
                     format!(

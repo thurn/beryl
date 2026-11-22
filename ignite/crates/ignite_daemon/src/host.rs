@@ -127,7 +127,7 @@ pub trait LandingTrees: Send + Sync {
 
 /// What the host is built from.
 pub struct HostParts {
-    pub dispatcher: Option<Arc<crate::dispatchd::Dispatcher>>,
+    pub headless_dispatch: Option<Arc<crate::dispatchd::HeadlessDispatch>>,
     pub starter: Arc<dyn RunStarter>,
     pub builds: Arc<dyn Builds>,
     pub landing: Arc<dyn LandingTrees>,
@@ -166,7 +166,7 @@ impl Default for Timing {
 
 /// The daemon's side of the host protocol. See the module documentation.
 pub struct Host {
-    dispatcher: Option<Arc<crate::dispatchd::Dispatcher>>,
+    headless_dispatch: Option<Arc<crate::dispatchd::HeadlessDispatch>>,
     starter: Arc<dyn RunStarter>,
     builds: Arc<dyn Builds>,
     landing: Arc<dyn LandingTrees>,
@@ -219,7 +219,7 @@ impl Host {
 
     pub fn with_timing(parts: HostParts, timing: Timing) -> Arc<Host> {
         Arc::new(Host {
-            dispatcher: parts.dispatcher,
+            headless_dispatch: parts.headless_dispatch,
             starter: parts.starter,
             builds: parts.builds,
             landing: parts.landing,

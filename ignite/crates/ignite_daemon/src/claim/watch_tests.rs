@@ -53,7 +53,7 @@ fn a_command_resets_the_silence_clock() {
 }
 
 /// The lease of a session whose command runs on stays renewed. A command stuck past its time is
-/// the dispatcher's to judge, from the command's own age and step (see `dispatchd_stall`).
+/// judged by the daemon using the command's own age and step (see `dispatchd_stall`).
 #[test]
 fn a_long_command_keeps_the_silence_clock_moving() {
     let world = started();
@@ -124,7 +124,7 @@ fn a_told_comment_is_recorded_as_a_message_and_not_printed_as_its_text() {
     assert_eq!(
         command(&world),
         [
-            "changed  comment: message from local_teller, delivered by the dispatcher, \
+            "changed  comment: message from local_teller, delivered by the daemon, \
              starting \"Stop your landing.\"",
             "changed  comment by derek: An ordinary note."
         ]
@@ -272,7 +272,7 @@ fn a_freed_tree_leaves_no_clock_behind() {
             ReleaseCause::TakenBack,
         )
         .unwrap();
-    // The dispatcher took the ticket back, which the hub counts against the ticket.
+    // The daemon took the ticket back, which the hub counts against the ticket.
     assert_eq!(lock(&world.desk.releases)[0].cause, ReleaseCause::TakenBack);
     minutes(&world, 1.0);
     assert!(world.claims.holder(TREE.as_ref()).is_none());
@@ -302,9 +302,9 @@ fn a_failed_save_keeps_the_ticket_held() {
 }
 
 /// A tree leased under an ad hoc placeholder that no `start` claimed before the daemon
-/// restarted is unknown at the hub. The dispatcher's release used to fail on it forever.
+/// restarted is unknown at the hub. The daemon used to retry the failed release indefinitely.
 #[test]
-fn an_unclaimed_placeholder_tree_is_freed_by_the_dispatchers_release() {
+fn releasing_an_unclaimed_placeholder_frees_its_tree() {
     let path = ignite_core::test_files::temp_dir().join(format!(
         "ignite-claim-placeholder-{}.db",
         std::process::id()

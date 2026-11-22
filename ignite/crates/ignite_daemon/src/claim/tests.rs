@@ -634,7 +634,7 @@ fn the_brief_of_a_reverted_ticket_says_how_to_apply_its_work_again() {
     assert!(!plain.text.contains("reverted"), "{}", plain.text);
 }
 
-/// A gate that refuses `local_released` every ticket but `Tq.50`, as the dispatcher refuses a
+/// A gate that refuses `local_released` every ticket but `Tq.50`, as the daemon refuses a
 /// worker whose ticket Ignite released until it hands that worker one.
 struct Gate;
 

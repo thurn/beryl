@@ -1,6 +1,6 @@
 //! The adapters that join modules written against each other's traits: the hub's hand-off
 //! routes as [`TicketDesk`], the machine's [`Trees`] as [`TreeDesk`], and the rest of the daemon
-//! as the dispatcher's [`Host`].
+//! as the [`Host`] for headless dispatch.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -359,7 +359,7 @@ fn release_unclaimed(served: &Served, trees: &Trees, key: &(TicketId, SessionId)
     }
 }
 
-/// The dispatcher's [`Host`]: the trees, the scheduler, the server and the claims.
+/// The trees, scheduler, server, and claims that back the [`Host`] for headless dispatch.
 pub struct DaemonHost {
     pub trees: Trees,
     pub scheduler: Arc<Scheduler>,
@@ -367,7 +367,7 @@ pub struct DaemonHost {
     /// When the build queue can admit work again after its latest long wait.
     pub queue_recovery: Mutex<QueueRecovery>,
     pub claims: Arc<Claims>,
-    /// The daemon's context outside any request, for releases the dispatcher asks for.
+    /// The daemon's context outside any request, for releases requested by headless dispatch.
     pub ctx: Context,
     /// Set once the server exists.
     pub server: OnceLock<Weak<Server>>,

@@ -1,4 +1,4 @@
-//! [`FakeCliPool`], a [`CliPool`] held in memory for the dispatcher's tests.
+//! [`FakeCliPool`], a [`CliPool`] held in memory for headless dispatch tests.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Mutex;

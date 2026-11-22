@@ -20,7 +20,7 @@ use super::selfupdate::SelfUpdate;
 use crate::checks::Checks;
 use crate::claim::Claims;
 use crate::crash;
-use crate::dispatchd::Dispatcher;
+use crate::dispatchd::HeadlessDispatch;
 use crate::hubclient::HubClient;
 use crate::idle::{Idle, ServerJobs};
 use crate::land::Landing;
@@ -81,7 +81,7 @@ pub struct Parts {
     pub landing: Arc<Landing>,
     pub idle: Arc<Idle>,
     pub claims: Arc<Claims>,
-    pub dispatcher: Arc<Dispatcher>,
+    pub headless_dispatch: Arc<HeadlessDispatch>,
     pub scheduler: Arc<Scheduler>,
     pub facts: MachineFacts,
     /// The sender's own connection to the local database, taken by the first [`Parts::spawn`].
@@ -274,12 +274,12 @@ impl Parts {
             server,
             repo: self.ctx.repo.clone(),
         };
-        let (ctx, idle, trees, scheduler, dispatcher) = (
+        let (ctx, idle, trees, scheduler, headless_dispatch) = (
             self.ctx.clone(),
             self.idle.clone(),
             self.trees.clone(),
             self.scheduler.clone(),
-            self.dispatcher.clone(),
+            self.headless_dispatch.clone(),
         );
         self.start_loop("ignite-idle", IDLE_STALLS_AFTER, move |ticker| {
             let mut prebuild: Option<thread::JoinHandle<Result<()>>> = None;
@@ -297,7 +297,7 @@ impl Parts {
                             return Err(format!("idle work: {error}"));
                         }
                     }
-                    let pool = dispatcher.pool();
+                    let pool = headless_dispatch.pool();
                     if crate::fleet_notice::is_off(pool) {
                         return Ok(());
                     }
