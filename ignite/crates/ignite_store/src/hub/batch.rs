@@ -28,7 +28,7 @@ use ignite_core::protocol::tickets::{
 use ignite_core::time::Timestamp;
 
 use crate::hub::fix_outcomes::{self, LandingFix};
-use crate::hub::{feed, findings, tickets};
+use crate::hub::{feed, findings, fleet, placement_deferrals, tickets};
 use crate::{Result, StoreError};
 
 mod ancestors;
@@ -405,10 +405,15 @@ impl<'a> Run<'a> {
         }
     }
 
-    /// Assigns `ticket` to the actor and starts it, unless someone else holds it. The first
-    /// claim records when and on which machine the work started.
+    /// Assigns `ticket` to the actor unless someone holds it or has a live reservation.
+    /// The first claim records when and on which machine the work started.
     fn claim(&mut self, index: usize, ticket: &Ticket) -> Step<()> {
-        if ticket.assignee.as_deref().is_some_and(|a| a != self.actor) {
+        let reserved = self.conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM reservations WHERE ticket = ?1 AND expires_at > ?2)",
+            params![ticket.id.as_str(), self.now.to_string()],
+            |row| row.get::<_, bool>(0),
+        )?;
+        if reserved || ticket.assignee.as_deref().is_some_and(|a| a != self.actor) {
             return Err(Stop::Conflict {
                 failed: index,
                 id: Some(ticket.id.to_string()),
@@ -672,6 +677,11 @@ impl<'a> Run<'a> {
             &format!("UPDATE tickets SET {} WHERE id = ?", assignments.join(", ")),
             params_from_iter(values),
         )?;
+        // A dispatch wait belongs to one period when the ticket was open and unassigned.
+        if patch.contains_key("status") || patch.contains_key("assignee") {
+            placement_deferrals::clear(self.conn, &before.id)?;
+            fleet::release_reservation(self.conn, before.id.as_str())?;
+        }
         let change: Map<String, Value> = patch
             .iter()
             .map(|(k, v)| (k.clone(), json!([old.get(k).unwrap_or(&Value::Null), v])))

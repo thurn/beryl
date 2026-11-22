@@ -16,7 +16,7 @@ use rusqlite::Connection;
 use ignite_core::config::Os;
 use ignite_core::dispatch::{self, ReadyTicket, Stage, TicketKind};
 use ignite_core::dispatch_pressure::{BACKLOG_SECONDS, Budget};
-use ignite_core::fleet::MachineState;
+use ignite_core::fleet::{FleetSettings, MachineState};
 use ignite_core::ids::{MachineId, TicketId};
 use ignite_core::mix::ProviderLoad;
 use ignite_core::plan_usage::Hold;
@@ -100,6 +100,7 @@ struct Seat<'a> {
     /// A checks-only machine, which takes a ticket that holds `master` back only when no
     /// active machine can; `ready` then holds only the tickets it may take.
     checks_only: bool,
+    settings: &'a FleetSettings,
     /// Each provider's usage holds across the fleet.
     holds: &'a BTreeMap<String, Vec<Hold>>,
 }
@@ -150,11 +151,10 @@ pub fn available(conn: &Connection, now: Timestamp) -> Result<Available> {
         if improvements.is_none() {
             improvements = improvements_due(conn, id)?;
         }
-        let pending = if free.room.is_some() {
-            mix::pending(conn, id, now)?
-        } else {
-            0
-        };
+        let pending = free
+            .room
+            .as_ref()
+            .map_or(Ok(0), |_| mix::pending(conn, id, now))?;
         page.machines.push(MachineReport {
             name: name.clone(),
             summary: if asked.is_some() {
@@ -170,7 +170,7 @@ pub fn available(conn: &Connection, now: Timestamp) -> Result<Available> {
         });
         let checks_only = state == MachineState::ChecksOnly;
         let fallback = checks_only
-            .then(|| held::Fallback::load(conn, &settings, &snapshot.heard, &free))
+            .then(|| held::Fallback::load(conn, &settings, &snapshot.heard, &free, now))
             .transpose()?;
         let ready = snapshot.ready_tickets(conn, &worked, &landed, now, fallback.as_ref())?;
         let providers = free
@@ -192,6 +192,7 @@ pub fn available(conn: &Connection, now: Timestamp) -> Result<Available> {
             stopped: paused == Paused::Everything || holds_one,
             master_reason,
             checks_only,
+            settings: &settings,
             holds: &holds,
         });
     }
@@ -342,7 +343,7 @@ fn refusal(seat: &Seat, start: bool, ticket: &ReadyTicket) -> Option<String> {
             mix::choose(&seat.providers, room, pending, ticket).err()
         })
     } else {
-        dispatch::blocker(free, ticket).or_else(|| held_by_usage(seat.holds, free, ticket))
+        dispatch::blocker(free, ticket).or_else(|| legacy_refusal(seat, free, ticket))
     };
     blocker
         .map(|reason| {
@@ -365,23 +366,16 @@ fn refusal(seat: &Seat, start: bool, ticket: &ReadyTicket) -> Option<String> {
         })
 }
 
-/// The usage hold that keeps every idle worker suited to `ticket` from taking it, as a reason,
-/// or `None` when one of them is free of holds.
-fn held_by_usage(
-    holds: &BTreeMap<String, Vec<Hold>>,
-    free: &MachineFree,
-    ticket: &ReadyTicket,
-) -> Option<String> {
+/// A provider blocker shared by the suited idle workers, or `None` if one is available.
+fn legacy_refusal(seat: &Seat, free: &MachineFree, ticket: &ReadyTicket) -> Option<String> {
     let mut reason = None;
     for worker in free
         .idle_workers
         .iter()
         .filter(|w| dispatch::suits(free, w, ticket))
     {
-        let hold = usage::blocking_hold(holds, worker, ticket)?;
-        reason.get_or_insert_with(|| {
-            format!("{} is on a usage hold ({})", worker.app, hold.describe())
-        });
+        let blocked = usage::legacy_blocker(seat.settings, seat.holds, worker, ticket)?;
+        reason.get_or_insert(blocked);
     }
     reason
 }
@@ -391,7 +385,8 @@ fn held_by_usage(
 fn take(seat: &mut Seat, ticket: &ReadyTicket, now: Timestamp) {
     let free = &seat.free;
     let chosen = free.idle_workers.iter().position(|w| {
-        dispatch::suits(free, w, ticket) && usage::blocking_hold(seat.holds, w, ticket).is_none()
+        dispatch::suits(free, w, ticket)
+            && usage::legacy_blocker(seat.settings, seat.holds, w, ticket).is_none()
     });
     if let Some(index) = chosen {
         seat.free.idle_workers.remove(index);

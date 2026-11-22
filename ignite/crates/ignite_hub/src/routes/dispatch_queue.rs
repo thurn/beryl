@@ -134,7 +134,7 @@ pub fn next(
         free.pressure.as_ref(),
     )?;
     let fallback = (state == MachineState::ChecksOnly)
-        .then(|| held::Fallback::load(conn, &settings, &snapshot.heard, &free))
+        .then(|| held::Fallback::load(conn, &settings, &snapshot.heard, &free, now))
         .transpose()?;
     let mut ready = snapshot.ready_tickets(conn, &history, &landed, now, fallback.as_ref())?;
     if paused == Paused::MasterOnly {
@@ -197,7 +197,7 @@ fn dispatch_ready(
                 )
             } else {
                 let session = dispatch::pick_worker(free, ticket, &last_files, |worker| {
-                    usage::blocking_hold(&holds, worker, ticket).is_none()
+                    usage::legacy_blocker(settings, &holds, worker, ticket).is_none()
                 })?;
                 let provider = free
                     .idle_workers
@@ -228,7 +228,9 @@ fn dispatch_ready(
                 })
             } else {
                 dispatch::next_for(free, &ready, &epic_order, improvements, &last_files)
-                    .and_then(|handoff| usage::hold_reason(&holds, free, &ready, &handoff))
+                    .and_then(|handoff| {
+                        usage::unavailable_reason(settings, &holds, free, &ready, &handoff)
+                    })
                     .unwrap_or_else(|| dispatch::why_nothing(free, &ready, &epic_order))
             };
             Ok(Err(reason.into()))

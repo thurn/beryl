@@ -66,7 +66,11 @@ fn whichever_machine_asks_first_can_take_an_unpinned_ticket() {
     for machine in ["m-1", "m-2"] {
         let mut conn = two_machines();
         let id = file(&mut conn, &[("unpinned", &[], &[])]).remove(0);
-        let (_, offer) = post(&mut conn, "/next", &free(machine, &["local_a"]), start());
+        let mut asking = free(machine, &["local_a"]);
+        if machine == "m-2" {
+            asking["os"] = json!("windows");
+        }
+        let (_, offer) = post(&mut conn, "/next", &asking, start());
         assert_eq!(offer["ticket"], id.as_str());
     }
 }
@@ -80,7 +84,9 @@ fn an_epics_machine_pin_applies_to_its_children() {
     set(&conn, epic.as_str(), "labels", r#"["machine:cygnus"]"#);
     let (_, none) = post(&mut conn, "/next", &free("m-1", &["local_a"]), start());
     assert_eq!(none, Value::Null);
-    let (_, offer) = post(&mut conn, "/next", &free("m-2", &["local_b"]), at(1.0));
+    let mut windows = free("m-2", &["local_b"]);
+    windows["os"] = json!("windows");
+    let (_, offer) = post(&mut conn, "/next", &windows, at(1.0));
     assert_eq!(offer["ticket"], id.as_str());
 }
 

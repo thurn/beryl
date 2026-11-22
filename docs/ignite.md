@@ -3756,21 +3756,25 @@ machine or provider unknown to the fleet.
   present, or the model used for its health probe.
 
 The hub reserves the ticket for that machine in the same request, so two
-machines never take one ticket. What happens next:
+machines never take one ticket. An operating system requirement is matched
+against the machine's registration. A ticket with no such requirement can run on
+either operating system if the machine and provider are eligible. What happens
+next:
 
 - The daemon starts a CLI worker, whose `ignite start` turns the reservation
-  into a claim held by that session and tree.
+  into a claim held by that session and tree. The machine's reservation code is
+  required while the reservation is live.
 - The daemon records pending starts in its local database. After a restart it
   retries any unexpired start with the same reservation code. If the CLI
   supervisor already started that worker, it returns the existing session.
 - A reservation that no `ignite start` has claimed in 10 minutes lapses, and the
-  hub can offer the ticket again.
+  hub can offer the ticket again. Closing or assigning a ticket cancels any
+  unused reservation.
 - A session that runs a command for a ticket whose lease expired, and that
   another session has since claimed, gets exit code 3.
 
-That is the whole of fleet scheduling: a machine with free workers, trees and
-cores pulls work, and a busy one does not. The hub keeps no model of any
-machine's load.
+A machine with room pulls work. The hub compares reported capacity and accounts
+for existing claims and reservations.
 
 ### Dividing workers between epics
 
@@ -4420,8 +4424,10 @@ Each machine has a state and an optional disk cap:
 - **Active**: the machine takes tickets and verifies tips.
 - **Checks only**: it verifies tips, and takes a ticket only when the ticket
   holds `master` back and no active machine heard from in the last 30 minutes
-  satisfies the ticket's operating system and pins. A machine running long
-  experiments is kept in this state.
+  satisfies the ticket's operating system and pins and offers a tier and model
+  that can take it. The hub uses fresh capacity reports to check CLI probes and
+  model availability, and uses advertised providers for older daemons. A machine
+  running long experiments is kept in this state.
 - **Off**: it asks for no ticket, claims no new tip check and starts no idle
   work. Running workers and commands can finish. The daemon keeps sending
   heartbeats and updating itself.
@@ -4491,7 +4497,8 @@ When a daemon reports worker room, the hub chooses the provider for each
 reservation from the CLIs that passed their probe on that machine. The
 reservation names the provider, and the claim keeps that choice until the ticket
 is released, closed or landed. Older daemons can still send idle workers and
-receive reservations for those sessions.
+receive reservations for those sessions if their providers are enabled and free
+of a usage hold.
 
 The hub considers providers that are enabled, offered on the machine, able to
 run the ticket's tier, free of a usage hold for that model, and allowed by the
@@ -4580,10 +4587,11 @@ check families, and a provider that can take the ticket. The requesting machine
 can take the ticket if the best peer saves 30 seconds or less. Exact ties go to
 the machine with the larger fraction of its admitted cores free, then by name.
 After 60 seconds from the first deferral, any eligible machine can take the
-ticket. A reservation clears the deferral. When placement defers a ticket, the
-hub tries the next ticket in dispatch order and names the preferred machine if
-it has no work to offer. Regressions, justiciar tickets, machine-pinned tickets
-and lane hand-offs to the session that landed the predecessor skip placement.
+ticket. The deferral clears when the ticket is reserved, claimed or leaves the
+open queue. When placement defers a ticket, the hub tries the next ticket in
+dispatch order and names the preferred machine if it has no work to offer.
+Regressions, justiciar tickets, machine-pinned tickets and lane hand-offs to the
+session that landed the predecessor skip placement.
 
 Keeping similar work together needs no rule of its own. A machine already
 working an area holds that area's build outputs, so it has the lowest estimate

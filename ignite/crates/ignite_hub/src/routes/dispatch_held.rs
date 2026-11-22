@@ -1,15 +1,20 @@
 //! Which machines can take a ticket that holds `master` back.
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 
 use rusqlite::{Connection, params};
 
-use ignite_core::dispatch::{JUSTICIAR, ReadyTicket, TicketKind};
+use ignite_core::dispatch::{JUSTICIAR, ReadyTicket, TicketKind, label};
 use ignite_core::fleet::{FleetSettings, MachineState};
-use ignite_core::protocol::hub::{MachineFree, Reservation};
+use ignite_core::ids::MachineId;
+use ignite_core::mix::{self, ProviderLoad};
+use ignite_core::plan_usage::{Hold, model_for_tier};
+use ignite_core::protocol::hub::{MachineFree, ProviderOffer, Reservation};
+use ignite_core::time::Timestamp;
 use ignite_store::Result;
-use ignite_store::hub::{fleet, tickets};
+use ignite_store::hub::{capacity, fleet, provider_usage, tickets};
 
+use crate::routes::dispatch::mix as dispatch_mix;
 use crate::upkeep::regressions;
 
 /// The states of a regression whose check still fails, so that its ticket holds `master` back.
@@ -42,16 +47,35 @@ pub fn paused(conn: &Connection, free: &MachineFree, state: MachineState) -> Res
 
 pub(super) struct Fallback<'a> {
     free: &'a MachineFree,
-    active: Vec<(String, String, Vec<String>)>,
+    settings: &'a FleetSettings,
+    holds: BTreeMap<String, Vec<Hold>>,
+    active: Vec<ActiveMachine>,
+}
+
+struct ActiveMachine {
+    name: String,
+    os: String,
+    providers: Providers,
+}
+
+enum Providers {
+    Reported {
+        offers: Vec<ProviderOffer>,
+        loads: Vec<ProviderLoad>,
+    },
+    Legacy(Vec<String>),
 }
 
 impl<'a> Fallback<'a> {
     pub(super) fn load(
         conn: &Connection,
-        settings: &FleetSettings,
+        settings: &'a FleetSettings,
         heard: &HashSet<String>,
         free: &'a MachineFree,
+        now: Timestamp,
     ) -> Result<Self> {
+        let reports = capacity::latest(conn, now)?;
+        let holds = provider_usage::held(conn, settings, now)?;
         let active = fleet::machines(conn)?
             .into_iter()
             .filter(|machine| {
@@ -60,16 +84,45 @@ impl<'a> Fallback<'a> {
                     && heard.contains(&machine.name.to_ascii_lowercase())
             })
             .map(|machine| {
-                let providers = serde_json::from_str(&machine.cli_apps).unwrap_or_default();
-                (machine.name, machine.os, providers)
+                let report = machine
+                    .id
+                    .parse::<MachineId>()
+                    .ok()
+                    .and_then(|id| reports.get(&id));
+                let providers = if let Some(report) = report {
+                    let offers = dispatch_mix::offers(report);
+                    let loads = dispatch_mix::peer_loads(&offers, settings, &holds);
+                    Providers::Reported { offers, loads }
+                } else {
+                    let mut names: Vec<String> =
+                        serde_json::from_str(&machine.cli_apps).unwrap_or_default();
+                    if names.is_empty() {
+                        // Older daemons did not list their CLIs, but identified each worker.
+                        names.extend(
+                            fleet::workers(conn, &machine.id)?
+                                .into_iter()
+                                .map(|worker| worker.app),
+                        );
+                    }
+                    Providers::Legacy(names)
+                };
+                Ok(ActiveMachine {
+                    name: machine.name,
+                    os: machine.os,
+                    providers,
+                })
             })
-            .collect();
-        Ok(Self { free, active })
+            .collect::<Result<_>>()?;
+        Ok(Self {
+            free,
+            settings,
+            holds,
+            active,
+        })
     }
 
-    /// An `Active` machine with the needed system and pins takes precedence. Its current load
-    /// does not enter this decision. A `ChecksOnly` machine keeps tip verification running while
-    /// those workers are busy.
+    /// Defer to an active machine that can run the ticket's OS, pins and model. Worker room and
+    /// busy cores do not affect precedence because this decision is only for master blockers.
     pub(super) fn allows(&self, ticket: &ReadyTicket) -> bool {
         let os_fits = |os: &str| ticket.needs_os.is_none_or(|needed| needed.as_str() == os);
         let name = self
@@ -80,14 +133,29 @@ impl<'a> Fallback<'a> {
         holds_master(ticket)
             && os_fits(self.free.os.as_str())
             && ticket.pins.admits_machine(name)
-            && !self.active.iter().any(|(name, os, providers)| {
-                ticket.pins.admits_machine(name)
-                    && os_fits(os)
-                    && (ticket.pins.provider.is_none()
-                        || providers
-                            .iter()
-                            .any(|provider| ticket.pins.admits_provider(provider)))
+            && !self.active.iter().any(|machine| {
+                ticket.pins.admits_machine(&machine.name)
+                    && os_fits(&machine.os)
+                    && self.provider_fits(&machine.providers, ticket)
             })
+    }
+
+    fn provider_fits(&self, providers: &Providers, ticket: &ReadyTicket) -> bool {
+        let tier = label(&ticket.labels, "tier:");
+        match providers {
+            Providers::Reported { offers, loads } => {
+                mix::choose(loads, offers, tier, ticket.pins.provider.as_deref()).is_ok()
+            }
+            Providers::Legacy(names) => names.iter().any(|name| {
+                ticket.pins.admits_provider(name)
+                    && self.settings.provider(name).enabled
+                    && self.holds.get(name).is_none_or(|holds| {
+                        let model_ids = BTreeMap::new();
+                        let model = model_for_tier(name, tier, &model_ids, None);
+                        holds.iter().all(|hold| !hold.holds_model(model))
+                    })
+            }),
+        }
     }
 }
 

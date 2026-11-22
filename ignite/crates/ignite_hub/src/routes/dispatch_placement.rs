@@ -181,28 +181,8 @@ impl Peer {
         settings: &FleetSettings,
         holds: &BTreeMap<String, Vec<Hold>>,
     ) -> Self {
-        let offers: Vec<_> = capacity
-            .providers
-            .iter()
-            .filter(|provider| provider.probed && provider.hold_reason.is_none())
-            .map(|provider| ProviderOffer {
-                name: provider.name.clone(),
-                tiers: provider.tiers.clone(),
-                model_ids: provider.model_ids.clone(),
-                default_model: provider.default_model.clone(),
-            })
-            .collect();
-        // Placement asks whether a provider can take the ticket. The peer's own /next
-        // request chooses which one gets the reservation using the live fleet share.
-        let loads = offers
-            .iter()
-            .map(|offer| ProviderLoad {
-                setting: settings.provider(&offer.name),
-                holds: holds.get(&offer.name).cloned().unwrap_or_default(),
-                in_progress: 0,
-                name: offer.name.clone(),
-            })
-            .collect();
+        let offers = dispatch_mix::offers(&capacity);
+        let loads = dispatch_mix::peer_loads(&offers, settings, holds);
         Self {
             name,
             os,

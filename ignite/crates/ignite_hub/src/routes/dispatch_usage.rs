@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use rusqlite::Connection;
 
 use ignite_core::dispatch::{Handoff, ReadyTicket, label};
-use ignite_core::fleet::FleetNotice;
+use ignite_core::fleet::{FleetNotice, FleetSettings};
 use ignite_core::plan_usage::{Hold, model_for_tier};
 use ignite_core::protocol::hub::{IdleWorker, MachineFree};
 use ignite_core::time::Timestamp;
@@ -32,7 +32,7 @@ pub(super) fn notice(conn: &Connection, machine: &str, now: Timestamp) -> Result
     })
 }
 
-pub(super) fn blocking_hold<'a>(
+fn blocking_hold<'a>(
     holds: &'a BTreeMap<String, Vec<Hold>>,
     worker: &IdleWorker,
     ticket: &ReadyTicket,
@@ -47,8 +47,27 @@ pub(super) fn blocking_hold<'a>(
     windows.iter().find(|hold| hold.holds_model(model))
 }
 
-/// Explains why the hand-off dispatch would have made without provider holds is blocked.
-pub(super) fn hold_reason(
+/// Why a legacy daemon's idle worker cannot receive a new reservation.
+pub(super) fn legacy_blocker(
+    settings: &FleetSettings,
+    holds: &BTreeMap<String, Vec<Hold>>,
+    worker: &IdleWorker,
+    ticket: &ReadyTicket,
+) -> Option<String> {
+    if !settings.provider(&worker.app).enabled {
+        return Some(format!("{} is off", worker.app));
+    }
+    let hold = blocking_hold(holds, worker, ticket)?;
+    Some(format!(
+        "{} is on a usage hold ({})",
+        worker.app,
+        hold.describe()
+    ))
+}
+
+/// Explains why a legacy worker that would otherwise receive the hand-off cannot take it.
+pub(super) fn unavailable_reason(
+    settings: &FleetSettings,
     holds: &BTreeMap<String, Vec<Hold>>,
     free: &MachineFree,
     ready: &[ReadyTicket],
@@ -59,10 +78,5 @@ pub(super) fn hold_reason(
         .iter()
         .find(|worker| worker.session == handoff.session)?;
     let ticket = ready.iter().find(|ticket| ticket.id == handoff.ticket)?;
-    let hold = blocking_hold(holds, worker, ticket)?;
-    Some(format!(
-        "{} is on a usage hold ({})",
-        worker.app,
-        hold.describe()
-    ))
+    legacy_blocker(settings, holds, worker, ticket)
 }

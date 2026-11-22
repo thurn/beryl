@@ -174,6 +174,7 @@ impl Upkeep {
         keep(fleet::lapse(conn, now).map(|lapsed| {
             report.lapsed_reservations = u32::try_from(lapsed.len()).unwrap_or(u32::MAX);
         }));
+        keep(ignite_store::hub::placement_deferrals::prune(conn));
         keep(offline::release_claims(conn, now).map(|released| report.released_claims = released));
         keep(offline::release_unheld(conn, now).map(|released| {
             report.released_claims.extend(released);

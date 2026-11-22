@@ -35,3 +35,16 @@ pub fn clear(conn: &Connection, ticket: &TicketId) -> Result<()> {
     )?;
     Ok(())
 }
+
+/// Removes waits left by older builds after a ticket left the open queue.
+pub fn prune(conn: &Connection) -> Result<()> {
+    conn.execute(
+        "DELETE FROM placement_deferrals
+         WHERE NOT EXISTS (
+             SELECT 1 FROM tickets
+             WHERE id = placement_deferrals.ticket AND status = 'open' AND assignee IS NULL
+         )",
+        [],
+    )?;
+    Ok(())
+}

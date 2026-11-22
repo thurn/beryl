@@ -229,10 +229,20 @@ fn next(conn: &mut Connection, free: &MachineFree, now: Timestamp) -> Answer {
         .map_err(sql_failure)?;
     fleet::lapse(&tx, now).map_err(|e| store_failure(&e))?;
     let mut free = free.clone();
-    let registered = fleet::name_of(&tx, free.machine.as_str()).map_err(|e| store_failure(&e))?;
-    free.name = registered
-        .or(free.name)
-        .or_else(|| Some(free.machine.to_string()));
+    if let Some((name, os)) =
+        fleet::name_and_os_of(&tx, free.machine.as_str()).map_err(|e| store_failure(&e))?
+    {
+        if os != free.os.as_str() {
+            return Err(failure(
+                400,
+                "request OS differs from the machine's registration",
+            ));
+        }
+        free.name = Some(name);
+    }
+    if free.name.is_none() {
+        free.name = Some(free.machine.to_string());
+    }
     let mut answer = queue::next(&tx, &free, now).map_err(|e| store_failure(&e))?;
     if free.room.is_none()
         && let Ok(reservation) = &mut answer
@@ -304,9 +314,16 @@ fn claim(conn: &mut Connection, claim: &Claim, now: Timestamp) -> Answer {
     if let Some(refused) = refused {
         return Err(conflict(&format!("{id} {refused}"), Some(&ticket)));
     }
+    // A batch claim without a reservation code cannot take a live reservation.
+    // Consume the validated reservation here, in the same transaction as the claim.
+    let provider = if let Some((_, _, provider)) = reservation {
+        fleet::release_reservation(&tx, id).map_err(|e| store_failure(&e))?;
+        provider
+    } else {
+        None
+    };
     let ops = vec![Operation::Claim { id: id.to_owned() }];
     apply_in(&mut tx, ops, &claim.session, &claim.machine, now)?;
-    let provider = reservation.and_then(|(_, _, provider)| provider);
     let brief = take(&tx, claim, provider.as_deref(), now)?;
     tx.commit().map_err(sql_failure)?;
     Ok(Response::json(200, &json!(brief)))
@@ -344,8 +361,8 @@ fn adhoc(conn: &mut Connection, request: &AdhocClaim, now: Timestamp) -> Answer 
     Ok(Response::json(200, &json!(brief)))
 }
 
-/// After the batch claimed the ticket: records the session and tree working it, drops its
-/// reservation and returns its brief. Runs in the claim's transaction.
+/// Records the session and tree working the ticket and returns its brief in the claim's
+/// transaction.
 fn take(
     tx: &Connection,
     claim: &Claim,
@@ -365,9 +382,6 @@ fn take(
         now,
     )
     .map_err(|e| store_failure(&e))?;
-    fleet::release_reservation(tx, id).map_err(|e| store_failure(&e))?;
-    ignite_store::hub::placement_deferrals::clear(tx, &claim.ticket)
-        .map_err(|e| store_failure(&e))?;
     brief(tx, id)
 }
 

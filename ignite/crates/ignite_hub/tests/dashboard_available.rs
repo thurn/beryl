@@ -286,6 +286,19 @@ fn the_available_page_uses_worker_room_and_explains_provider_constraints() {
 }
 
 #[test]
+fn the_available_page_explains_why_a_legacy_worker_cannot_take_work() {
+    let conn = seeded();
+    conn.execute(
+        "INSERT INTO meta (key, value) VALUES ('fleet', ?1)",
+        [r#"{"version":1,"machines":{},"providers":{"claude":{"enabled":false,"share":1,"stop_percent":99}}}"#],
+    )
+    .unwrap();
+    let body = page(&conn, "/available");
+    assert!(body.contains("claude is off"));
+    assert!(!section(&body, "waiting").contains("Next on jarvis"));
+}
+
+#[test]
 fn a_chip_names_a_reporting_machines_reason_not_a_silent_machines() {
     let conn = seeded();
     // `multivac` never asked and has no workers. Renamed to sort before the machines that

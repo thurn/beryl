@@ -28,7 +28,7 @@ fn machines() -> Connection {
     conn
 }
 
-fn capacity(warm: bool) -> CapacityReport {
+pub(super) fn capacity(warm: bool) -> CapacityReport {
     CapacityReport {
         outputs: vec![OUTPUT.into()],
         leased_trees: warm
@@ -50,7 +50,7 @@ fn capacity(warm: bool) -> CapacityReport {
     }
 }
 
-fn record(conn: &Connection, machine: &str, report: &CapacityReport, now: Timestamp) {
+pub(super) fn record(conn: &Connection, machine: &str, report: &CapacityReport, now: Timestamp) {
     let snapshot = MachineSnapshot {
         at: now,
         free_disk_gib: None,
@@ -175,6 +175,61 @@ fn after_sixty_seconds_the_cold_machine_takes_a_deferred_ticket() {
     );
     assert_eq!(ask(&mut conn, &cold, at(60.0))["ticket"], ticket.as_str());
     assert_eq!(placement_deferrals::first(&conn, &ticket).unwrap(), None);
+}
+
+#[test]
+fn closing_and_reopening_a_ticket_restarts_its_placement_wait() {
+    use ignite_core::protocol::tickets::{BatchRequest, Operation};
+    use ignite_store::hub::batch;
+
+    let mut conn = machines();
+    let ticket = super::tests::file_under(
+        &mut conn,
+        super::tests::Parent::Loose,
+        &[("change the engine", &[], &[])],
+    )
+    .1
+    .remove(0);
+    files(&conn, &ticket, "engine/src/main.rs");
+    let cold = request("m-1", &capacity(false), 0);
+    let warm = capacity(true);
+    record(&conn, "m-2", &warm, start());
+    assert!(ask(&mut conn, &cold, start())["nothing"].is_string());
+    assert_eq!(
+        placement_deferrals::first(&conn, &ticket).unwrap(),
+        Some(start())
+    );
+    let ops = vec![
+        Operation::Close {
+            id: ticket.to_string(),
+            reason: "deferred work".into(),
+            include_ready: false,
+        },
+        Operation::Reopen {
+            id: ticket.to_string(),
+        },
+    ];
+    assert!(matches!(
+        batch::apply(
+            &mut conn,
+            &BatchRequest {
+                preconditions: vec![],
+                ops
+            },
+            "operator",
+            "m-1",
+            at(61.0)
+        )
+        .unwrap(),
+        batch::BatchOutcome::Applied(_)
+    ));
+    assert_eq!(placement_deferrals::first(&conn, &ticket).unwrap(), None);
+    record(&conn, "m-2", &warm, at(61.0));
+    assert!(ask(&mut conn, &cold, at(61.0))["nothing"].is_string());
+    assert_eq!(
+        placement_deferrals::first(&conn, &ticket).unwrap(),
+        Some(at(61.0))
+    );
 }
 
 #[test]

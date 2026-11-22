@@ -152,6 +152,9 @@ fn checks_only_takes_a_windows_regression_while_an_active_mac_is_heard_from() {
 
     let mut windows = free("m-win", &["local_a"]);
     windows["os"] = json!("windows");
+    let mut wrong_os = windows.clone();
+    wrong_os["os"] = json!("macos");
+    assert_eq!(post(&mut conn, "/next", &wrong_os, at(0.5)).0, 400);
     let (_, reply) = post(&mut conn, "/next", &windows, at(1.0));
     assert_eq!(offered(&reply), Some(ids[1].as_str()), "{reply}");
     let (_, mac) = post(&mut conn, "/next", &free("m-1", &["local_b"]), at(2.0));
@@ -162,6 +165,11 @@ fn checks_only_takes_a_windows_regression_while_an_active_mac_is_heard_from() {
 fn checks_only_defers_to_a_recent_active_machine_unless_the_pin_excludes_it() {
     let mut conn = hub::open_in_memory().unwrap();
     crate::routes::dispatch::tests::register(&mut conn);
+    let beat = json!({"machine": "m-1", "version": "v", "workers": [], "cli_apps": ["claude"]});
+    assert_eq!(
+        post(&mut conn, "/machines/heartbeat", &beat, start()).0,
+        200
+    );
     pause(&mut conn, &json!("m-2"), true);
     let ids = file(
         &mut conn,
@@ -181,6 +189,46 @@ fn checks_only_defers_to_a_recent_active_machine_unless_the_pin_excludes_it() {
     // When the other machine has gone silent, this machine also takes unpinned regressions.
     let (_, later) = post(&mut conn, "/next", &asking, at(1800.0));
     assert_eq!(offered(&later), Some(ids[0].as_str()), "{later}");
+}
+
+#[test]
+fn checks_only_takes_a_blocker_when_the_active_machines_model_is_held() {
+    let mut conn = hub::open_in_memory().unwrap();
+    crate::routes::dispatch::tests::register(&mut conn);
+    pause(&mut conn, &json!("m-2"), true);
+    let ticket = file(
+        &mut conn,
+        &[("repair", &["provider:claude", "tier:sonnet"], &[])],
+    )
+    .remove(0);
+    regression(&conn, "build:app", &ticket, "open");
+
+    let mut active = crate::routes::dispatch::placement_tests::capacity(false);
+    active.providers[0]
+        .model_ids
+        .insert("sonnet".into(), "claude-opus".into());
+    crate::routes::dispatch::placement_tests::record(&conn, "m-1", &active, start());
+    let checking = free("m-2", &["local_a"]);
+    let (_, first) = post(&mut conn, "/next", &checking, at(1.0));
+    assert_eq!(first, Value::Null);
+
+    hub::provider_usage::record(
+        &conn,
+        &ignite_core::fleet::ProviderSample {
+            provider: "claude".into(),
+            at: start(),
+            machine: "m-1".parse().unwrap(),
+            status: "ok".into(),
+            label: Some("Weekly · Opus".into()),
+            percent_used: Some(99.0),
+            resets_at: Some(at(60.0).to_string()),
+            note: None,
+        },
+    )
+    .unwrap();
+    // The active machine maps this ticket's tier to Opus. The checks-only machine uses Sonnet.
+    let (_, second) = post(&mut conn, "/next", &checking, at(2.0));
+    assert_eq!(offered(&second), Some(ticket.as_str()), "{second}");
 }
 
 #[test]

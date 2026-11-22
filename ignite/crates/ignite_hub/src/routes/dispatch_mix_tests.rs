@@ -133,6 +133,63 @@ fn equal_shares_alternate_across_machines_counting_claims_and_reservations() {
 }
 
 #[test]
+fn releasing_a_claim_and_lapsing_a_reservation_each_free_provider_load() {
+    use ignite_store::hub::fleet::RESERVATION_SECONDS;
+
+    let mut conn = open_in_memory().unwrap();
+    set_mix(&mut conn, [50, 50, 0], false);
+    file(
+        &mut conn,
+        &[("one", &[], &[]), ("two", &[], &[]), ("three", &[], &[])],
+    );
+    let machine = machine_room("m-1", 3, &["claude", "codex"]);
+    let session = "cli-claude-ea631acc";
+    let first = ask(&mut conn, &machine, start());
+    assert_eq!(first["provider"], "claude");
+    assert_eq!(
+        post(
+            &mut conn,
+            "/claims",
+            &claim_reserved(&first, session),
+            start()
+        )
+        .0,
+        200
+    );
+    assert_eq!(ask(&mut conn, &machine, at(1.0))["provider"], "codex");
+    assert_eq!(ask(&mut conn, &machine, at(2.0))["provider"], "claude");
+
+    let ticket = first["ticket"].as_str().unwrap();
+    assert_eq!(
+        post(&mut conn, "/release", &release(ticket, session), at(3.0)).0,
+        200
+    );
+    let after_release = ask(&mut conn, &machine, at(4.0));
+    assert_eq!(after_release["provider"], "claude");
+    assert_eq!(
+        post(&mut conn, "/reservations/refuse", &after_release, at(4.0)).0,
+        200
+    );
+
+    // Only the Codex reservation has lapsed. The remaining Claude reservation still counts.
+    let after_lapse = ask(&mut conn, &machine, at(RESERVATION_SECONDS + 1.0));
+    assert_eq!(after_lapse["provider"], "codex");
+}
+
+#[test]
+fn an_older_daemon_cannot_start_work_with_a_disabled_provider() {
+    let mut conn = open_in_memory().unwrap();
+    set_mix(&mut conn, [50, 50, 0], false);
+    let ticket = file(&mut conn, &[("work", &[], &[])]).remove(0);
+    let mut machine = free("m-1", &["third-idle"]);
+    machine["idle_workers"][0]["app"] = json!("third");
+    machine["explain"] = json!(true);
+    assert_eq!(ask(&mut conn, &machine, start())["nothing"], "third is off");
+    machine["idle_workers"][0]["app"] = json!("claude");
+    assert_eq!(ask(&mut conn, &machine, at(1.0))["ticket"], ticket.as_str());
+}
+
+#[test]
 fn a_standby_takes_work_during_a_hold_and_yields_at_reset() {
     let mut conn = open_in_memory().unwrap();
     set_mix(&mut conn, [100, 0, 0], false);
@@ -406,6 +463,37 @@ fn an_existing_claim_counts_when_its_worker_reported_the_provider() {
     .unwrap();
     let machine = machine_room("m-2", 1, &["claude", "codex"]);
     assert_eq!(ask(&mut conn, &machine, at(1.0))["provider"], "codex");
+}
+
+#[test]
+fn a_batch_claim_cannot_take_a_live_reservation() {
+    use ignite_core::protocol::tickets::{BatchRequest, Operation};
+    use ignite_store::hub::batch;
+
+    let mut conn = open_in_memory().unwrap();
+    let id = file(&mut conn, &[("work", &[], &[])]).remove(0);
+    let machine = machine_room("m-1", 1, &["claude"]);
+    let reserved = ask(&mut conn, &machine, start());
+    assert_eq!(reserved["ticket"], id.as_str());
+
+    let batch = BatchRequest {
+        preconditions: vec![],
+        ops: vec![Operation::Claim { id: id.to_string() }],
+    };
+    assert!(matches!(
+        batch::apply(&mut conn, &batch, "batch-actor", "m-2", at(1.0)).unwrap(),
+        batch::BatchOutcome::Conflict(_)
+    ));
+    assert_eq!(
+        post(
+            &mut conn,
+            "/claims",
+            &claim_reserved(&reserved, "cli-claude-12345678"),
+            at(2.0)
+        )
+        .0,
+        200
+    );
 }
 
 #[test]

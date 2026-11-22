@@ -108,7 +108,7 @@ fn project_next_start(
     )?;
     free.free_cores = dispatch::room(&free, &capacity.cores);
     let fallback = (state == MachineState::ChecksOnly)
-        .then(|| held::Fallback::load(conn, &settings, &queue.heard, &free))
+        .then(|| held::Fallback::load(conn, &settings, &queue.heard, &free, now))
         .transpose()?;
     let mut ready = queue.ready_tickets(conn, &history, &landed, now, fallback.as_ref())?;
     let order = dispatch_groups(&queue, &mut ready);

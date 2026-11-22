@@ -326,11 +326,16 @@ pub fn paused_everywhere(conn: &Connection) -> Result<bool> {
 
 /// The machine's hostname, if it has registered.
 pub fn name_of(conn: &Connection, machine: &str) -> Result<Option<String>> {
+    Ok(name_and_os_of(conn, machine)?.map(|(name, _)| name))
+}
+
+/// The registered hostname and operating system of a machine.
+pub fn name_and_os_of(conn: &Connection, machine: &str) -> Result<Option<(String, String)>> {
     Ok(conn
         .query_row(
-            "SELECT name FROM machines WHERE id = ?1",
+            "SELECT name, os FROM machines WHERE id = ?1",
             [machine],
-            |row| row.get(0),
+            |row| Ok((row.get(0)?, row.get(1)?)),
         )
         .optional()?)
 }

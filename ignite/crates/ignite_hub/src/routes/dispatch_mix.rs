@@ -4,16 +4,51 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use rusqlite::Connection;
 
+use ignite_core::capacity::CapacityReport;
 use ignite_core::dispatch::{ReadyTicket, label};
 use ignite_core::fleet::FleetSettings;
 use ignite_core::mix::{self, ProviderLoad};
 use ignite_core::plan_usage::{Hold, model_for_tier};
-use ignite_core::protocol::hub::Room;
+use ignite_core::protocol::hub::{ProviderOffer, Room};
 use ignite_core::time::Timestamp;
 use ignite_store::Result;
 use ignite_store::hub::{fleet_settings, machine_asks, provider_usage};
 
 use super::queue::held;
+
+/// Providers that a machine's capacity report says can start. Worker room and memory pressure
+/// are separate decisions because master blockers can bypass a shortage of worker room.
+pub(super) fn offers(report: &CapacityReport) -> Vec<ProviderOffer> {
+    report
+        .providers
+        .iter()
+        .filter(|provider| provider.probed && provider.hold_reason.is_none())
+        .map(|provider| ProviderOffer {
+            name: provider.name.clone(),
+            tiers: provider.tiers.clone(),
+            model_ids: provider.model_ids.clone(),
+            default_model: provider.default_model.clone(),
+        })
+        .collect()
+}
+
+/// For peer eligibility, only the ability to run the ticket matters. A peer's own ask chooses
+/// which provider gets the reservation using the live fleet load.
+pub(super) fn peer_loads(
+    offers: &[ProviderOffer],
+    settings: &FleetSettings,
+    holds: &BTreeMap<String, Vec<Hold>>,
+) -> Vec<ProviderLoad> {
+    offers
+        .iter()
+        .map(|offer| ProviderLoad {
+            setting: settings.provider(&offer.name),
+            holds: holds.get(&offer.name).cloned().unwrap_or_default(),
+            in_progress: 0,
+            name: offer.name.clone(),
+        })
+        .collect()
+}
 
 /// Include every known provider, even one absent from this machine's offers, so
 /// dispatch can explain why it was unavailable.
