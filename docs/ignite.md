@@ -4617,11 +4617,18 @@ whose copies, called rounds, study one kind of recurring workflow problem. The
 scheduled ticket defines what each round does. The parent ticket's notes carry
 evidence and results to the next round.
 
-The **velocity patrol** fixes the issue that most directly prolongs the time
-from a worker's first claim to a commit landing on `staging`. Time spent on
-releases, handoffs and retries after the first claim counts toward the duration.
-Report the median and p90 from ticket history, and investigate long-running
-claims that have no landing.
+The **velocity patrol** fixes the issue with the biggest demonstrated cost to
+feature delivery. Measure the time from a worker's first claim to a feature
+commit landing on `staging`. Include tickets that directly deliver a feature
+even if they are filed as tasks. Time spent on releases, handoffs and retries
+after the first claim counts toward the duration. Report the cohort, median and
+p90 from ticket history, and investigate long-running feature claims without a
+landing.
+
+CI failures and flaky tests can delay a feature directly or consume worker time
+on separate repair tickets. Both costs count when choosing what to fix. Report
+feature elapsed time and worker time spent on repairs separately so that a retry
+and the delay it caused are visible without being counted twice.
 
 Each round fixes one issue and files zero tickets. If a ready, unclaimed ticket
 already covers the most urgent issue, record the choice, close the round, then
