@@ -7,6 +7,8 @@ use beryl_card::{Amount, Found, Players};
 use crate::actions::{reveal, shuffle};
 use crate::bitboard::Bitboard;
 use crate::card::{Prompt, Purpose, Stop};
+use crate::casting::start::cast_during_resolution;
+use crate::decision::Opt;
 use crate::filter::{Evaluate, Filter};
 use crate::game::Game;
 use crate::ids::Seat;
@@ -16,6 +18,7 @@ use crate::layout::{Layout, Queue};
 use crate::replacement::event::Reason;
 use crate::resolution::Resolution;
 use crate::state::{Zone, ZoneKey};
+use crate::table::Capability;
 use crate::zones;
 
 /// `player` searches their library for a card that passes `filter`, and finds one of the
@@ -38,9 +41,7 @@ pub fn search_library<L: Layout>(
     Ok(search_library_up_to(game, resolution, player, filter, 1)?.sole())
 }
 
-/// [`search_library`] for up to `n` cards, as "a basic land card" for each of several: those
-/// found, still in the library, one `ChooseUpTo` at a time. The caller shuffles once they
-/// have moved.
+/// [`search_library`] for up to `n` cards with the stated quality.
 pub fn search_library_up_to<L: Layout>(
     game: &mut Game<'_, L>,
     resolution: &mut Resolution<'_, L>,
@@ -48,12 +49,77 @@ pub fn search_library_up_to<L: Layout>(
     filter: Filter,
     n: u8,
 ) -> Result<Bitboard<L::Slot>, Stop> {
-    let library = game.state.zone(ZoneKey::Of(player, Zone::Library));
+    search_library_of_up_to(game, resolution, player, player, filter, n)
+}
+
+/// `player` searches `owner`'s library for up to `n` cards with the stated quality. The
+/// cards found remain in the library, chosen one `ChooseUpTo` at a time. The caller moves
+/// them and shuffles.
+#[inline]
+pub fn search_library_of_up_to<L: Layout>(
+    game: &mut Game<'_, L>,
+    resolution: &mut Resolution<'_, L>,
+    player: Seat,
+    owner: Seat,
+    filter: Filter,
+    n: u8,
+) -> Result<Bitboard<L::Slot>, Stop> {
+    let prompt = Prompt::new(Purpose::Search).most(n);
+    if game.table.can(Capability::CastWhileSearching) && player == owner && n != 0 {
+        return search_with_casts(game, resolution, player, filter, n, prompt);
+    }
+    let library = game.state.zone(ZoneKey::Of(owner, Zone::Library));
     zones::look_at(game, player, library);
     let words = resolution.words(game);
     let found = filter.select(game.state, game.table, library, player, &words);
-    let prompt = Prompt::new(Purpose::Search).most(n);
     choices::pick_up_to(game, resolution, player, found, n, prompt)
+}
+
+/// A card in the player's own library can permit a cast before any card has been found.
+/// See [CR 608.2g]: "That spell becomes the topmost object on the stack, and the currently
+/// resolving spell or ability continues to resolve". The cast or its payment can change
+/// the library, so each question uses the cards that are still there.
+///
+/// [CR 608.2g]: https://yawgatog.com/resources/magic-rules/#R6082g
+#[cold]
+#[inline(never)]
+fn search_with_casts<L: Layout>(
+    game: &mut Game<'_, L>,
+    resolution: &mut Resolution<'_, L>,
+    player: Seat,
+    filter: Filter,
+    n: u8,
+    prompt: Prompt,
+) -> Result<Bitboard<L::Slot>, Stop> {
+    loop {
+        let library = game.state.zone(ZoneKey::Of(player, Zone::Library));
+        zones::look_at(game, player, library);
+        let words = resolution.words(game);
+        let found = filter.select(game.state, game.table, library, player, &words);
+        let pick = choices::search_pick(game, resolution, player, found, library, prompt)?;
+        if let Opt::Cast { slot, face, .. } = pick {
+            if cfg!(debug_assertions) {
+                let def = game
+                    .state
+                    .card_def(game.table, slot)
+                    .expect("a card offered to cast");
+                for ability in def.face(face).abilities {
+                    if ability.permits_cast_while_searching() {
+                        crate::coverage::hit(ability);
+                    }
+                }
+            }
+            cast_during_resolution(game, resolution, player, pick, false)?;
+            continue;
+        }
+        let Opt::Object(slot) = pick else {
+            debug_assert_eq!(pick, Opt::Done);
+            return Ok(Bitboard::EMPTY);
+        };
+        let first = Bitboard::single(slot);
+        let rest = choices::pick_up_to(game, resolution, player, found & !first, n - 1, prompt)?;
+        return Ok(first | rest);
+    }
 }
 
 /// [`Effect::Search`](beryl_card::Effect::Search): "[Player] searches their library for

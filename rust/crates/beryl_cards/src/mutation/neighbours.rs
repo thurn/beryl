@@ -220,6 +220,16 @@ fn own_mutants(def: &'static CardDef) -> Vec<Mutant> {
             });
         }
         for (index, ability) in face.abilities.iter().enumerate() {
+            if ability.permits_cast_while_searching() {
+                let mut abilities = face.abilities.to_vec();
+                abilities[index] = ability.in_zones(beryl_card::ZoneSet::BATTLEFIELD);
+                out.push(Mutant {
+                    node: format!("{face_name}ability {index}, search permission"),
+                    neighbour: "no permission to cast during a search".to_owned(),
+                    kind: Kind::SearchCast,
+                    def: with_face(def, f, with(face, leak_slice(abilities), face.grants)),
+                });
+            }
             if let Some(changed) = every_time(face, index, ability) {
                 out.push(Mutant {
                     node: format!("{face_name}ability {index}, trigger frequency"),
@@ -420,6 +430,7 @@ mutation_kinds! {
     RuleGoverned,
     RulePlayers,
     RuleWhen,
+    SearchCast,
     SearchFilter,
     SequenceStep,
     StaticAffected,

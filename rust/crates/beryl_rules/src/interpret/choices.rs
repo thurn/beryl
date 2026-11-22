@@ -16,6 +16,7 @@
 //! | [`Shape::Pick`] | [`pick`] | One object, where one must be taken. |
 //! | | [`retarget`] | A copy's target: the one it has, or a new one. |
 //! | | [`pick_or_end`] | One more object, or the end of the picks. |
+//! | | [`search_pick`] | A card to find, a card to cast, or the end of the search. |
 //! | | [`pick_up_to`] | A whole run: up to a number of objects. |
 //! | | [`may_pick`] | A whole run: one object, which may be declined. |
 //! | [`Shape::Split`] | [`pick`], [`pick_or_end`] | A card for the destination the prompt's part names; the second way where the first destination's picks offer an end. |
@@ -76,6 +77,7 @@ use beryl_kernel::chosen::ChosenValue;
 use crate::bitboard::Bitboard;
 use crate::card::{Flow, Part, Players, Prompt, Purpose, Shape, Stop};
 use crate::decision::{Candidates, Decision, DecisionKind, OPTIONS, Opt};
+use crate::fixed::Full;
 use crate::game::Game;
 use crate::ids::Seat;
 use crate::interpret::{Outcome, Run};
@@ -250,16 +252,50 @@ pub fn pick_or_end<L: Layout>(
         },
         "{prompt:?} has no pick that may end"
     );
-    let left = crate::engine::collapse(game.state, candidates);
-    let mut list: L::Queue<Opt<L>, OPTIONS> = Default::default();
-    list.push(Opt::Done)?;
-    Candidates::<L>::extend_options(&mut list, left, |out, slot| out.push(Opt::Object(slot)))?;
+    let list = pick_or_end_options(game, candidates)?;
     let d = Decision::options(player, DecisionKind::ChooseUpTo, list, prompt);
     let answer = resolution.answer(game, &d)?;
     Ok(match d.candidates.option(answer) {
         Some(Opt::Object(slot)) => Some(slot),
         _ => None,
     })
+}
+
+#[inline]
+fn pick_or_end_options<L: Layout>(
+    game: &Game<'_, L>,
+    candidates: Bitboard<L::Slot>,
+) -> Result<L::Queue<Opt<L>, OPTIONS>, Full> {
+    let left = crate::engine::collapse(game.state, candidates);
+    let mut list: L::Queue<Opt<L>, OPTIONS> = Default::default();
+    list.push(Opt::Done)?;
+    Candidates::<L>::extend_options(&mut list, left, |out, slot| out.push(Opt::Object(slot)))?;
+    Ok(list)
+}
+
+/// Before the player has found any card in their library, the search also offers legal
+/// casts of cards that grant that permission. A cast is chosen in the search's question
+/// (see CR 608.2d) and performed by the caller. With nothing to find or cast, there is
+/// nothing to ask, as in [`pick_up_to`].
+pub(crate) fn search_pick<L: Layout>(
+    game: &mut Game<'_, L>,
+    resolution: &mut Resolution<'_, L>,
+    player: Seat,
+    found: Bitboard<L::Slot>,
+    library: Bitboard<L::Slot>,
+    prompt: Prompt,
+) -> Result<Opt<L>, Stop> {
+    let mut list = pick_or_end_options(game, found)?;
+    crate::casting::search_cast_options(game.state, game.table, library, player, &mut list)?;
+    if list.len() == 1 {
+        return Ok(Opt::Done);
+    }
+    let question = Decision::options(player, DecisionKind::ChooseUpTo, list, prompt);
+    let answer = resolution.answer(game, &question)?;
+    Ok(question
+        .candidates
+        .option(answer)
+        .expect("an answer among the options"))
 }
 
 /// Asks `player` to choose up to `n` of `candidates`, one [`pick_or_end`] at a time, each a

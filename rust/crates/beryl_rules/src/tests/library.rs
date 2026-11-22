@@ -145,6 +145,93 @@ fn top_cards_and_draws_skip_objects_waiting_to_cease_to_exist() {
     assert!(scratch.events.events().is_empty());
 }
 
+/// A search permission is tied to the owner's search. After one cast, the rest of the
+/// library stays in order and the second copy remains findable. Choosing a find ends the
+/// casting window. The cast is public, and shuffling hides the remaining cards again.
+#[test]
+fn casting_during_a_search_preserves_the_library_and_ends_at_the_first_find() {
+    use beryl_card::{CardDef, Face, Filter, card, mana};
+
+    static CASTER: CardDef = card(
+        "Search Caster",
+        &[Face::EMPTY
+            .types(Types::CREATURE)
+            .cost(mana("{G}"))
+            .power_toughness(1, 1)
+            .abilities(&[Ability::cast_while_searching()])],
+    );
+    static CREATURE: CardDef = card(
+        "Search Creature",
+        &[Face::EMPTY.types(Types::CREATURE).power_toughness(1, 1)],
+    );
+    static CATALOG: CardTable = CardTable::new(&[&CASTER, &CREATURE]);
+    let deck = [(2, CASTER.name), (1, CREATURE.name)];
+    let t = GameTable::new(Format::CONSTRUCTED, &CATALOG, [&deck, &deck]).unwrap();
+    let mut s = State::new(&t, 1, Profile::EXACT).unwrap();
+    let mut x = Scratch::recording();
+    let player = Seat::P0;
+    let opponent = player.opponent();
+    let creature = find(&s, &t, player, CREATURE.name);
+    let source = s.object_ref(creature);
+    let filter = Filter::Types(Types::CREATURE);
+    let _mana = s.add_mana(player, None, crate::card::ManaColor::Green, 2);
+
+    let (_, foreign) = resolving(&t, &mut s, &mut x, source, &[], |game, resolution| {
+        crate::actions::search::search_library_of_up_to(
+            game, resolution, player, opponent, filter, 2,
+        )
+    });
+    let foreign = foreign.unwrap();
+    assert!(matches!(&foreign.candidates, Candidates::Options(options)
+        if options.iter().all(|option| matches!(option, Opt::Done | Opt::Object(_)))));
+
+    let mut search = |s: &mut State, answers: &[u8]| {
+        resolving(&t, s, &mut x, source, answers, |game, resolution| {
+            crate::actions::search::search_library_up_to(game, resolution, player, filter, 2)
+        })
+    };
+    let original = s;
+    let (_, first) = search(&mut s, &[]);
+    let first = first.unwrap();
+    let before = s.library(player).to_vec();
+    let cast_option = |slot| Opt::Cast {
+        slot,
+        face: FaceIx::FRONT,
+        costs: Castings::NONE,
+    };
+    let mut casters = before.iter().copied().filter(|&slot| slot != creature);
+    let cast = casters.next().unwrap();
+    let kept = casters.next().unwrap();
+    let cast_answer = pick(&first, cast_option(cast));
+    pick(&first, cast_option(kept));
+
+    s = original;
+    let (_, next) = search(&mut s, &[cast_answer]);
+    let next = next.unwrap();
+    let remaining: Vec<_> = before.into_iter().filter(|&slot| slot != cast).collect();
+    assert_eq!(s.library(player), remaining);
+    assert_eq!(s.object(cast).zone(), Zone::Stack);
+    assert!(s.knows(opponent, cast));
+    assert!(s.knows(player, kept));
+    assert!(!s.knows(opponent, kept));
+    assert!(matches!(&next.candidates, Candidates::Options(options)
+        if options.iter().all(|option| !matches!(option, Opt::Cast { slot, .. } | Opt::Object(slot) if *slot == cast))));
+    pick(&next, cast_option(kept));
+    let find_answer = pick(&next, Opt::Object(creature));
+
+    s = original;
+    let (_, after_find) = search(&mut s, &[cast_answer, find_answer]);
+    let after_find = after_find.unwrap();
+    assert_eq!(after_find.len(), 2);
+    pick(&after_find, Opt::Object(kept));
+    pick(&after_find, Opt::Done);
+
+    crate::actions::shuffle::shuffle(&mut Game::new(&mut s, &t, &mut x.events), player).unwrap();
+    assert!(!s.knows(player, kept));
+    assert!(!s.knows(opponent, kept));
+    assert!(s.knows(opponent, cast));
+}
+
 /// [CR 701.26b](https://yawgatog.com/resources/magic-rules/#R70126b): "Only tapped permanents
 /// can be untapped." Here an opponent of the ability's controller untaps a creature: neither
 /// the lands nor the controller the helper was first written for.

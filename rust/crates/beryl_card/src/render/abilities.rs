@@ -494,6 +494,12 @@ impl Ctx {
             (layer.condition, self.layered(layer))
         } else if let Some(rule) = ability.rule() {
             (ability.condition().copied(), self.rule_change(rule))
+        } else if ability.permits_cast_while_searching() {
+            (
+                None,
+                "while you're searching your library, you may cast this card from your library"
+                    .to_owned(),
+            )
         } else {
             (None, String::new())
         };

@@ -349,7 +349,7 @@ fn escaping<L: Layout>(s: &State<L>, t: &GameTable, player: Seat) -> Bitboard<L:
 }
 
 /// Appends the spells `player` can cast now, by card, face and casting options.
-pub(super) fn cast_options<L: Layout, const TARGETS: bool>(
+pub(super) fn cast_options<L: Layout, const TARGETS: bool, const SEARCH: bool>(
     s: &State<L>,
     t: &GameTable,
     now: &Situation<L, TARGETS>,
@@ -366,18 +366,25 @@ pub(super) fn cast_options<L: Layout, const TARGETS: bool>(
         s.card_def(t, slot).is_some_and(|def| {
             def.face_ixs().any(|f| {
                 let face = def.face(f);
-                face.playable() && in_time(s, t, now, face, from)
-            }) || (morph && has_morph(def.front()) && in_time(s, t, now, &FACE_DOWN, from))
+                face.playable()
+                    && (!SEARCH || face.permits_cast_while_searching())
+                    && in_time(s, t, now, face, from)
+            }) || (!SEARCH
+                && morph
+                && has_morph(def.front())
+                && in_time(s, t, now, &FACE_DOWN, from))
         })
     });
-    Candidates::<L>::extend_options(out, collapse(s, cards), |out, slot| {
+    // Each card cast during a search leaves its own place in the library.
+    let cards = if SEARCH { cards } else { collapse(s, cards) };
+    Candidates::<L>::extend_options(out, cards, |out, slot| {
         let Some(def) = s.card_def(t, slot) else {
             return Ok(());
         };
         let ways = Ways::of(s, t, player, slot, from);
         for f in def.face_ixs() {
             let face = def.face(f);
-            if !face.playable() {
+            if !face.playable() || SEARCH && !face.permits_cast_while_searching() {
                 continue;
             }
             let ways = if ways.on_adventure && f == FaceIx::BACK {
@@ -400,7 +407,7 @@ pub(super) fn cast_options<L: Layout, const TARGETS: bool>(
                 escape_options(s, t, now, slot, f, from, out)?;
             }
         }
-        if morph && ways.plain && !ways.alternative && has_morph(def.front()) {
+        if !SEARCH && morph && ways.plain && !ways.alternative && has_morph(def.front()) {
             let face = FaceIx::DOWN;
             let costs = Castings::NONE;
             if refused(s, t, now, slot, face, costs, from, ways.increase).is_none() {
@@ -692,7 +699,7 @@ pub(crate) fn priority_options<L: Layout>(
     out: &mut L::Queue<Opt<L>, OPTIONS>,
 ) -> Result<(), Full> {
     let now = Situation::of(player);
-    cast_options(s, t, &now, cast_sources(s, t, player), From::Priority, out)?;
+    cast_options::<L, true, false>(s, t, &now, cast_sources(s, t, player), From::Priority, out)?;
     activation_options(s, t, &now, out)?;
     now.complete()?;
     Ok(())
@@ -715,7 +722,7 @@ pub fn payable_responses<L: Layout>(
     debug_assert_ne!(s.turn().active(), player);
     let now = Situation::<L, false>::ignoring_targets(player);
     let mut out = Default::default();
-    cast_options(
+    cast_options::<L, false, false>(
         s,
         t,
         &now,

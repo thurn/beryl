@@ -1,10 +1,10 @@
 //! The mode shape: one of a few answers, each a button, about the cards it shows.
 //!
-//! A decision asks three: who plays first, whether to keep a hand, and whether to cast a card
-//! a resolved spell or ability offers. Each of the decision's candidates is a button, and a
-//! click on one answers.
+//! A decision can ask who plays first, whether to keep a hand, whether to cast a card an
+//! effect offers, or what to do in a library search that offers both finding and casting.
+//! Each candidate has a button that answers the decision.
 //!
-//! The fourth is the session's own ([`Mode::act`]): the ways to use a card clicked at a
+//! The session also asks its own ([`Mode::act`]): the ways to use a card clicked at a
 //! priority, when it has several
 //! ([CR 601.2b](https://yawgatog.com/resources/magic-rules/#R6012b): "If the spell has
 //! alternative or additional costs that will be paid as it's being cast ... the player
@@ -72,7 +72,12 @@ impl Mode {
             .map(|(i, candidate)| {
                 let label = match &candidate.option {
                     Candidate::Pass if !words.decline.is_empty() => &words.decline,
-                    option if cast(option) && casts == 1 && !words.confirm.is_empty() => {
+                    option
+                        if purpose == Purpose::CastOffer
+                            && cast(option)
+                            && casts == 1
+                            && !words.confirm.is_empty() =>
+                    {
                         &words.confirm
                     }
                     _ => &candidate.label,

@@ -123,6 +123,8 @@ pub mod decks {
             &[
                 names::BLOODBRAID_ELF,
                 names::BONECRUSHER_GIANT,
+                names::PANGLACIAL_WURM,
+                names::TRINKET_MAGE,
                 names::LIGHTNING_BOLT,
                 names::COUNTERSPELL,
             ],

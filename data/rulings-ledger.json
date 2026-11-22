@@ -1450,6 +1450,51 @@
     }
   ],
   "Palace Guard": [],
+  "Panglacial Wurm": [
+    {
+      "published_at": "2006-07-15",
+      "hash": "ab9038b42392",
+      "scenario": [
+        "Cast the Wurm, then find an artifact",
+        "Six mana cannot cast the Wurm during the search"
+      ]
+    },
+    {
+      "published_at": "2006-07-15",
+      "hash": "2ccae6691e8f",
+      "covered": "Ability::cast_while_searching"
+    },
+    {
+      "published_at": "2006-07-15",
+      "hash": "744fdc3ea0a7",
+      "covered": "Ability::cast_while_searching"
+    },
+    {
+      "published_at": "2006-07-15",
+      "hash": "58b48512b942",
+      "scenario": [
+        "Cast the Wurm, then find an artifact",
+        "Cast the Wurm while searching for an opponent's spell"
+      ]
+    },
+    {
+      "published_at": "2006-07-15",
+      "hash": "82db1df50464",
+      "covered": "Ability::cast_while_searching"
+    },
+    {
+      "published_at": "2006-07-15",
+      "hash": "89a130c627f7",
+      "scenario": [
+        "Cast two Wurms in a search with no artifact to find"
+      ]
+    },
+    {
+      "published_at": "2006-07-15",
+      "hash": "9054c5dab9da",
+      "covered": "Ability::cast_while_searching"
+    }
+  ],
   "Paradox Haze": [
     {
       "published_at": "2006-09-25",

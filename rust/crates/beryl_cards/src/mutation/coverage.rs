@@ -40,6 +40,10 @@ fn witness(kind: Kind) -> Witness {
         Kind::FreeCast => Scripted("Malcolm, Alluring Scoundrel", fixtures::MALCOLM),
         Kind::Keyword | Kind::TriggerFrequency => Generated("Worldgorger Dragon"),
         Kind::May | Kind::SearchFilter => Generated("Trinket Mage"),
+        Kind::SearchCast => {
+            let card = crate::names::PANGLACIAL_WURM;
+            Scripted(card, &crate::written_scenarios_for(card)[0])
+        }
         Kind::Prevention => Scripted("Circle of Protection: Red", fixtures::RED_PREVENTION),
         Kind::PutController
         | Kind::PutLink

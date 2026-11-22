@@ -531,6 +531,9 @@ class Exporter:
         if kind == "PaymentPlan" and self.payments.as_made:
             # The payment's taps, replayed with the mana each made, chose the plan already.
             return
+        if kind == "ChooseUpTo" and what == "Cast":
+            # XMage asks separately whether to cast and which card to cast before the find.
+            raise Unsupported("casting while searching a library")
         if kind == "CastOffer" and what == "Cast":
             self.payments.float_for_offer(
                 who, self.at(p), p, self.payment(), self.lines

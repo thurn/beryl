@@ -29,9 +29,23 @@ pub(super) fn offer_options<L: Layout>(
     let mut out: L::Queue<Opt<L>, OPTIONS> = Default::default();
     out.push(Opt::Pass)?;
     let now = Situation::of(player);
-    cast_options(s, t, &now, cards, From::Resolution { free }, &mut out)?;
+    cast_options::<L, true, false>(s, t, &now, cards, From::Resolution { free }, &mut out)?;
     now.complete()?;
     Ok(out)
+}
+
+/// Appends the payable casts whose faces allow casting from the library while searching it
+/// (see CR 608.2g). The search supplies the cards in the player's own library.
+pub(crate) fn search_cast_options<L: Layout>(
+    s: &State<L>,
+    t: &GameTable,
+    library: Bitboard<L::Slot>,
+    player: Seat,
+    out: &mut L::Queue<Opt<L>, OPTIONS>,
+) -> Result<(), Full> {
+    let now = Situation::of(player);
+    cast_options::<L, true, true>(s, t, &now, library, From::Resolution { free: false }, out)?;
+    now.complete()
 }
 
 /// Takes a spell off the stack for an effect that moves its card to `to` without its

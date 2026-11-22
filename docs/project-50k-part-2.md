@@ -910,9 +910,9 @@ total cost, pay) become functions that take each answer from an answer source:
   in a random order. Read the spell's last known mana value if it has left the
   stack.
 - **Panglacial Wurm** adds a way to cast to the search's own question.
-  `interpret::choices::pick_or_end` offers `Opt::Cast` for a card of the
-  searched library whose definition says it may be cast while its owner
-  searches, and the search goes on after the cast.
+  `interpret::choices::search_pick` offers `Opt::Cast` for each payable cast a
+  card in the player's own library permits. The search reads the library again
+  after each cast. Finding the first card ends the casting window.
 - **Knowledge Pool** and **Possibility Storm** are triggers on a spell cast from
   a hand that exile it and cast another, free. They need the cast trigger to
   know the zone the spell was cast from.

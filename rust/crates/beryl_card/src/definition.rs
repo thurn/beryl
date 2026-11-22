@@ -247,6 +247,13 @@ impl Face {
         matches!(self.use_of_face, FaceUse::TransformingBack)
     }
 
+    /// Whether this face allows its owner to cast it while searching their own library.
+    pub fn permits_cast_while_searching(&self) -> bool {
+        self.abilities
+            .iter()
+            .any(Ability::permits_cast_while_searching)
+    }
+
     /// Whether this face is an instant or a sorcery: its spell resolves by following its
     /// instructions, not by becoming a permanent
     /// ([CR 608.2](https://yawgatog.com/resources/magic-rules/#R6082),

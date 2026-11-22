@@ -80,14 +80,14 @@ impl Builder<'_> {
             } else {
                 unknown_in_library(next)
             };
-            self.arrive(Some(ZoneName::Hand), &card, None);
+            self.arrive(Some(ZoneName::Hand), &card, None, None);
         }
         self.open &= back.is_empty();
         let dealt_again = back.into_iter().filter(|o| redealt.contains(&o.slot));
         for next in rest.into_iter().chain(dealt_again) {
             match self.table.objects.get(&next.slot).map(|o| o.zone) {
                 Some(zone) if zone == next.zone => self.record(next),
-                from => self.arrive(from, next, None),
+                from => self.arrive(from, next, None, None),
             }
         }
         self.orders();
@@ -97,12 +97,20 @@ impl Builder<'_> {
     }
 
     /// `next` comes to its zone from `from`, or from nowhere, with no event to say why.
-    fn arrive(&mut self, from: Option<ZoneName>, next: &ObjectView, item: Option<StackItem>) {
-        let at = self.table.order(next.zone, next.owner).and_then(|now| {
-            let end = self.after.order(next.zone, next.owner)?;
-            let at = end.iter().position(|&s| s == next.slot)?;
-            let others = now.iter().filter(|&&s| s != next.slot).count();
-            (at < others).then(|| u16::try_from(at).ok()).flatten()
+    fn arrive(
+        &mut self,
+        from: Option<ZoneName>,
+        next: &ObjectView,
+        item: Option<StackItem>,
+        stack_at: Option<u16>,
+    ) {
+        let at = stack_at.or_else(|| {
+            self.table.order(next.zone, next.owner).and_then(|now| {
+                let end = self.after.order(next.zone, next.owner)?;
+                let at = end.iter().position(|&s| s == next.slot)?;
+                let others = now.iter().filter(|&&s| s != next.slot).count();
+                (at < others).then(|| u16::try_from(at).ok()).flatten()
+            })
         });
         // An opening hand is dealt, and a mulligan's goes back, with no event before the
         // first turn: their cards do not travel, as none a view's events move before the game
@@ -315,7 +323,10 @@ impl Builder<'_> {
                 (_, &StackItem::Spell { slot, .. }, _) => {
                     if let Some(next) = after.objects.get(&slot) {
                         let from = self.table.objects.get(&slot).map(|o| o.zone);
-                        self.arrive(from, next, Some(item));
+                        // A spell cast during a paused resolution can be shown below
+                        // the resolving entry. Moving it within the stack needs an index.
+                        let at = u16::try_from(at).expect("a stack index");
+                        self.arrive(from, next, Some(item), Some(at));
                     }
                 }
             }

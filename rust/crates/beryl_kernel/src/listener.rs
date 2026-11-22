@@ -211,7 +211,8 @@ pub(crate) fn given(def: &CardDef) -> Result<Listens, Unmatched> {
 /// that states which zones it functions in functions only from those zones." A triggered
 /// ability is matched on the battlefield and in the zones of [`AWAY`] ([`listens_to`]).
 /// Priority decisions find activated abilities on the battlefield and in hands, graveyards,
-/// and exile. Other abilities are found in the usual zone for their kind.
+/// and exile. A search finds the casting permissions of cards in the library. Other
+/// abilities are found in the usual zone for their kind.
 ///
 /// [CR 113.6b]: https://yawgatog.com/resources/magic-rules/#R1136b
 pub fn found_where_it_works(ability: &Ability) -> bool {
@@ -225,7 +226,12 @@ pub fn found_where_it_works(ability: &Ability) -> bool {
             let zones = ability.zones();
             !zones.is_empty() && ACTIVATION_ZONES.includes(zones)
         }
-        AbilityKind::Spell | AbilityKind::Mana | AbilityKind::Static | AbilityKind::Replacement => {
+        AbilityKind::Static => {
+            ability.works_where_its_kind_does()
+                || (ability.permits_cast_while_searching()
+                    && ability.zones() == ZoneSet::of(Zone::Library))
+        }
+        AbilityKind::Spell | AbilityKind::Mana | AbilityKind::Replacement => {
             ability.works_where_its_kind_does()
         }
     }

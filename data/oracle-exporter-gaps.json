@@ -1,6 +1,12 @@
 [
   {
     "oracle": "xmage",
+    "card": "Panglacial Wurm",
+    "scenario": "Six mana cannot cast the Wurm during the search",
+    "gap": "XMage asks whether to cast a card from the library even when the player cannot pay for it. The exporter has no answer to this extra choice."
+  },
+  {
+    "oracle": "xmage",
     "card": "Paradox Haze",
     "scenario": "the other player gets two upkeeps and a trigger in each",
     "gap": "XMage test commands address a step by turn and step name, so the exporter cannot place priority and stack assertions in its second occurrence."

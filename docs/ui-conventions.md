@@ -396,6 +396,9 @@ recordings do not show them.
   for the other. On the phone it lies beside its owner's library, toward the
   table, as the cards the opponent looks at do. Arena's recordings show no such
   pick.
+- **Casting while searching a library.** When a library search offers a spell to
+  cast, the candidate buttons offer the cast alongside the cards the search can
+  find and Done. After the cast, the search continues.
 - **Choosing a sideboard card during a game.** The catalog shows eligible card
   names to the player making the choice. Done leaves every card in the
   sideboard. The chosen card is revealed and appears in its owner's hand.

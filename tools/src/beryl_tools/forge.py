@@ -273,9 +273,7 @@ def advance_step(position: JsonObject) -> JsonObject:
 
 
 def step(action: JsonObject, cards: Cards, purpose: object = None) -> JsonObject | None:
-    """One Beryl action as a harness step, or None for an assert left unchecked. `cards`
-    describes the scenario's cards. `purpose` is what the prompt of the decision an answer
-    answers is for, as the trace names it: a kind says only the form of the answer."""
+    """Convert a Beryl action using card facts and the prompt purpose of an answer."""
     kind = action["action"]
     if kind == "PlayLand":
         return {"op": "play_land", "player": action["player"], "card": action["card"]}
@@ -335,6 +333,8 @@ def step(action: JsonObject, cards: Cards, purpose: object = None) -> JsonObject
             # Forge's AI pays a spell's costs itself (AiCostDecision), asking its controller
             # nothing.
             raise Unsupported("a choice of the cards an exile cost takes")
+        if action["kind"] == "ChooseUpTo" and pick["pick"] == "Cast":
+            raise Unsupported("casting while searching a library")
         if action["kind"] == "CastOffer" and pick["pick"] == "Cast":
             card = cast(str, pick["card"])
             if pick["face"] != 0:

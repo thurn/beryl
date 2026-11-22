@@ -5,6 +5,7 @@
 use super::{Ability, AbilityKind};
 use crate::continuous::{LayerSpec, Replacement};
 use crate::filter::Filter;
+use crate::ids::{Zone, ZoneSet};
 use crate::mana::ManaRestriction;
 use crate::trigger::Trigger;
 
@@ -16,6 +17,8 @@ pub(super) enum OfKind {
     Trigger(&'static Trigger),
     /// Static abilities: the continuous effect they generate on the battlefield.
     Layer(&'static LayerSpec),
+    /// Static abilities: permission to cast this card while searching its owner's library.
+    CastWhileSearching,
     /// Replacement abilities: what they replace and how.
     Replacement(&'static Replacement),
     /// Mana abilities. First, "Activate only if you control a [permanent this filter
@@ -32,14 +35,37 @@ impl OfKind {
     const fn mana(self) -> (Option<&'static Filter>, Option<&'static ManaRestriction>) {
         match self {
             OfKind::Mana(filter, spend) => (filter, spend),
-            OfKind::None | OfKind::Trigger(_) | OfKind::Layer(_) | OfKind::Replacement(_) => {
-                (None, None)
-            }
+            OfKind::None
+            | OfKind::Trigger(_)
+            | OfKind::Layer(_)
+            | OfKind::Replacement(_)
+            | OfKind::CastWhileSearching => (None, None),
         }
     }
 }
 
 impl Ability {
+    /// "While you're searching your library, you may cast this card from your library."
+    /// This static ability works in the library ([CR 113.6b]): "An ability that states
+    /// which zones it functions in functions only from those zones." It allows only the
+    /// owner searching their own library to cast this card, before finding a card. The cast
+    /// card leaves the library. The search continues with the remaining cards in their
+    /// existing order until the effect shuffles.
+    ///
+    /// [CR 113.6b]: https://yawgatog.com/resources/magic-rules/#R1136b
+    pub const fn cast_while_searching() -> Ability {
+        Ability {
+            of_kind: OfKind::CastWhileSearching,
+            zones: ZoneSet::of(Zone::Library),
+            ..Ability::of(AbilityKind::Static)
+        }
+    }
+
+    /// Whether this ability permits casting this card from its owner's library while they search.
+    pub const fn permits_cast_while_searching(&self) -> bool {
+        matches!(self.of_kind, OfKind::CastWhileSearching) && self.zones.contains(Zone::Library)
+    }
+
     /// "Activate only if you control a [permanent `filter` accepts]" (CR 602.5), of a mana
     /// ability.
     #[must_use]
@@ -94,7 +120,11 @@ impl Ability {
     pub const fn trigger(&self) -> Option<&'static Trigger> {
         match self.of_kind {
             OfKind::Trigger(trigger) => Some(trigger),
-            OfKind::None | OfKind::Layer(_) | OfKind::Replacement(_) | OfKind::Mana(..) => None,
+            OfKind::None
+            | OfKind::Layer(_)
+            | OfKind::Replacement(_)
+            | OfKind::Mana(..)
+            | OfKind::CastWhileSearching => None,
         }
     }
 
@@ -103,7 +133,11 @@ impl Ability {
     pub const fn replacement(&self) -> Option<&'static Replacement> {
         match self.of_kind {
             OfKind::Replacement(replacement) => Some(replacement),
-            OfKind::None | OfKind::Trigger(_) | OfKind::Layer(_) | OfKind::Mana(..) => None,
+            OfKind::None
+            | OfKind::Trigger(_)
+            | OfKind::Layer(_)
+            | OfKind::Mana(..)
+            | OfKind::CastWhileSearching => None,
         }
     }
 
@@ -112,7 +146,11 @@ impl Ability {
     pub const fn layer(&self) -> Option<&'static LayerSpec> {
         match self.of_kind {
             OfKind::Layer(layer) => Some(layer),
-            OfKind::None | OfKind::Trigger(_) | OfKind::Replacement(_) | OfKind::Mana(..) => None,
+            OfKind::None
+            | OfKind::Trigger(_)
+            | OfKind::Replacement(_)
+            | OfKind::Mana(..)
+            | OfKind::CastWhileSearching => None,
         }
     }
 

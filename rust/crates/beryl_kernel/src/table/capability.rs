@@ -124,10 +124,12 @@ pub enum Capability {
     DesignatedAbilities,
     /// A spell can require sacrificing a permanent as part of its casting cost.
     SacrificeToCast,
+    /// A card can be cast from its owner's library while they search it.
+    CastWhileSearching,
 }
 
 // The game keeps its capabilities in a `u32`.
-const _: () = assert!((Capability::SacrificeToCast as u32) < u32::BITS);
+const _: () = assert!((Capability::CastWhileSearching as u32) < u32::BITS);
 
 impl Capability {
     /// The capabilities of every face and subtype the game can contain.
@@ -264,11 +266,15 @@ impl Capability {
     }
 }
 
-/// The capabilities that come from a face's casting options and costs.
+/// The capabilities that come from a face's casting options, costs and permissions.
 fn casting_capabilities(face: &Face) -> u32 {
     use beryl_card::CastingOption;
 
-    let mut found = 0;
+    let mut found = if face.permits_cast_while_searching() {
+        Capability::CastWhileSearching.bit()
+    } else {
+        0
+    };
     if face
         .additional_cost
         .iter()

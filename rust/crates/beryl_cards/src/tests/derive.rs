@@ -22,6 +22,11 @@ const UNREACHED: &[(&str, &str)] = &[
          hand-written scenarios play it, choose Human and cast a Human with that mana",
     ),
     (
+        "Panglacial Wurm: ability 0 (Static)",
+        "the generator does not start the card in a library and play a search; the card's \
+         hand-written scenarios cast it during the search",
+    ),
+    (
         "Spara's Headquarters: ability 0 (Mana)",
         "no card of the pool asks for {G}, and automatic payment spends a unit that may be \
          several kinds as the lowest of them, {W}",

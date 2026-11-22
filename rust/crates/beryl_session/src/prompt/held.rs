@@ -94,6 +94,17 @@ impl Held {
             view,
         };
         let shape = match purpose.shape() {
+            // A search can offer finding and casting the same card. Separate buttons keep
+            // those actions distinct, and the usual search tray handles the picks afterward.
+            Shape::Pick
+                if purpose == Purpose::Search
+                    && decision
+                        .candidates
+                        .iter()
+                        .any(|c| matches!(c.option, Candidate::Cast { .. })) =>
+            {
+                Shaped::Mode(Mode::open(purpose, decision))
+            }
             Shape::Pick => Shaped::Pick(Pick::open(&table, purpose, decision)?),
             Shape::Order => Shaped::Order(Order::open(&table, decision)?),
             Shape::Split => Shaped::Split(Split::open(&table, decision)?),
