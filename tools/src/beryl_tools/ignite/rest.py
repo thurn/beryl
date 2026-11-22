@@ -18,10 +18,10 @@ Run from the repository's root as `python -m beryl_tools.ignite.rest <verb> <fam
 The families:
 
 - `counts`: `counts:rollouts` is the rollout benchmark's instruction count against its bar, and
-  `counts:family/<name>` a family's present cost against its ratio, both in
-  `rust/crates/beryl_bench/count-gate.toml`. The count runs in the `beryl-bench` virtual machine,
-  which mounts the main checkout, trees included. After `counts:rollouts` a run in the `tip` class
-  (`IGNITE_CLASS`) stores the verified commit's count and files the trend's `count-creep` and
+  `counts:family/<name>` a family's ARM64 present cost against its ratio, both in
+  `rust/crates/beryl_bench/count-gate.toml`. The count runs in the `beryl-bench` virtual machine
+  under Lima or WSL. After `counts:rollouts` an ARM64 run in the `tip` class (`IGNITE_CLASS`)
+  stores the verified commit's count and files the trend's `count-creep` and
   `count-lower` tickets through `ignite ticket`, as `count_trend.py` does; they never change the
   check's outcome.
 - `fuzz`: batches of random games, `fuzz:<target>/<first seed>+<games>`, played by the tests of
@@ -185,12 +185,11 @@ def scale_checks(root: Path) -> list[dict[str, Any]]:
 
 def list_checks(family: str, root: Path) -> list[dict[str, Any]]:
     if family == "counts":
+        # The family ratios in the repository are qualified on ARM64.
+        names = [] if system.WINDOWS else gate_families(root)
         return [
             {"check": ROLLOUTS, "inputs": []},
-            *[
-                {"check": f"{FAMILY_PREFIX}{name}", "inputs": []}
-                for name in gate_families(root)
-            ],
+            *[{"check": f"{FAMILY_PREFIX}{name}", "inputs": []} for name in names],
         ]
     if family == "scale":
         return scale_checks(root)
@@ -427,7 +426,9 @@ def run_rollouts(root: Path) -> dict[str, Any]:
         if not measure.is_file():
             return {}
         found = json.loads(measure.read_text())
-    trend(root, int(found["measured"]), int(found["bar"]), bool(found["ok"]))
+    # The trend stores ARM64 counts. Windows checks its own x86-64 instruction bar.
+    if not system.WINDOWS:
+        trend(root, int(found["measured"]), int(found["bar"]), bool(found["ok"]))
     result: dict[str, Any] = {"outcome": "pass" if found["ok"] else "fail"}
     if not found["ok"]:
         result["message"] = clip(str(found["message"]))

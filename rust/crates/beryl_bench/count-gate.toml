@@ -1,6 +1,6 @@
 # The instruction-count gate: slow CI's `counts` lane (`just count-gate`) runs
 # this benchmark under Callgrind in the `beryl-bench` VM and fails when it
-# executes more than `tolerance_percent` above `instructions`.
+# executes more than `tolerance_percent` above the bar for its instruction set.
 #
 # Why: the corpus is WU Control mirror positions (docs/benchmarking.md). A rule
 # or card those decks don't use must cost them nothing: gate it behind a
@@ -10,8 +10,8 @@
 # unrelated code. The bar is the total since the last bump, so small rises add
 # up and fail together.
 #
-# Raise `instructions` only for one of these, named in the commit body with the
-# old and new counts:
+# Raise either instruction bar only for one of these reasons. Name the reason
+# and the old and new counts for that architecture in the commit body:
 #
 # 1. The work changed, not its cost: a rules fix or card change alters what
 #    the corpus's rollouts do, so `rollouts_never_change` was updated in the
@@ -26,14 +26,17 @@
 # "it's under 2%"; room for work to come. Never raise `tolerance_percent` to
 # pass a change.
 #
-# Lower `instructions` whenever the count is more than 0.5% below it, so the
-# slack isn't banked for the next regression. Slow CI files a `count-lower`
-# bead when it measures that, and a `count-creep` bead when one tested range
-# adds more than 0.25% or the count drifts 0.5% above its lowest since the bar
-# moved, while the gate still passes (`tools/src/beryl_tools/count_trend.py`).
+# Lower a bar whenever the count is more than 0.5% below it, so the slack is
+# taken out before the next regression. On ARM64, tip verification files a
+# `count-lower` ticket when it measures that, and a `count-creep` ticket when one
+# tested range adds more than 0.25% or the count drifts 0.5% above its lowest
+# since the bar moved, while the gate still passes (`count_trend.py`).
 
 benchmark = "rollout_counts::cube_rollout::rollouts::corpus"
+# ARM64 under Lima on macOS.
 instructions = 378_137_522
+# x86-64 under WSL on Windows.
+instructions_x86_64 = 436_580_889
 tolerance_percent = 1.0
 
 # The present-cost gate (docs/benchmarking.md, "The present-cost gate"): each family's

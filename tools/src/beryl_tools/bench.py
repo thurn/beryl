@@ -5,8 +5,8 @@
   is normally heavy (docs/benchmarking.md, "Timing under load"), and reports that load before
   and after. It builds them under the `search` profile for this CPU (architecture §18) unless
   the arguments name a `--profile`.
-- `bench-count` runs the Gungraun (Valgrind) instruction-count benchmarks in a Lima Linux VM,
-  creating and provisioning it on first use. Counts don't depend on load, so there's no check.
+- `bench-count` runs the Gungraun (Valgrind) instruction-count benchmarks in Linux under Lima or
+  WSL, creating and provisioning it on first use. Counts don't depend on load.
   Each worktree builds into a target dir of its own there: Cargo names a path package's
   artifacts the same in every worktree and trusts mtimes, so a shared dir would let one
   worktree link another's code. Runs take turns under a lock in the VM.
@@ -497,11 +497,11 @@ class Gate:
     tolerance_percent: float
 
 
-def load_gate(text: str) -> Gate:
+def load_gate(text: str, *, windows: bool = False) -> Gate:
     data = tomllib.loads(text)
     return Gate(
         benchmark=str(data["benchmark"]),
-        instructions=int(data["instructions"]),
+        instructions=int(data["instructions_x86_64" if windows else "instructions"]),
         tolerance_percent=float(data["tolerance_percent"]),
     )
 
@@ -636,9 +636,13 @@ def vm_ready() -> int:
     problem is not rerun, judged or bisected as a count that failed (vm_host.vm_failed).
     """
     why = None
-    if platform.machine() not in ("arm64", "aarch64"):
-        # The bar counts an aarch64 build's instructions; an x86-64 build runs others.
-        why = "the gate's bar is for Apple silicon; `just bench-count` compares here"
+    machine = platform.machine().lower()
+    if system.WINDOWS and machine not in ("amd64", "x86_64"):
+        why = "the Windows count gate needs an x86-64 WSL distribution"
+    elif not system.WINDOWS and machine not in ("arm64", "aarch64"):
+        why = "the Lima count gate needs an ARM64 host"
+    elif system.WINDOWS and shutil.which("wsl") is None:
+        why = "WSL is missing: install it, then run `just bench-count` once"
     elif not system.WINDOWS and shutil.which("limactl") is None:
         why = "Lima is missing: brew install lima, then `just bench-count` once"
     elif vm_host.status(VM) is None:  # Creating it takes minutes, too long for a gate.
@@ -702,7 +706,7 @@ def count_gate(args: argparse.Namespace) -> int:
     if runner is None:
         log("no gungraun in rust/Cargo.lock")
         return 2
-    gate = load_gate(GATE_FILE.read_text())
+    gate = load_gate(GATE_FILE.read_text(), windows=system.WINDOWS)
     script = count_script(
         provision_script(toolchain(), runner),
         gate_cargo(gate),
@@ -723,6 +727,8 @@ def count_gate(args: argparse.Namespace) -> int:
         log(f"Gungraun reported no count for {gate.benchmark}")
         return 2
     ok, message = judge(gate, measured)
+    if system.WINDOWS:
+        message = f"x86-64 WSL: {message}"
     log(f"{gate.benchmark}: {message}")
     if args.measure:
         # Ignite's `counts` family judges the trend itself and files its tickets.

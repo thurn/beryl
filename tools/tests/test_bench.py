@@ -173,9 +173,14 @@ GATE = bench.Gate("rollout_counts::cube_rollout::rollouts::corpus", 1_000_000, 1
 
 
 def test_the_gate_file_parses_and_names_a_counts_benchmark() -> None:
-    gate = bench.load_gate(bench.GATE_FILE.read_text())
+    text = bench.GATE_FILE.read_text()
+    gate = bench.load_gate(text)
+    windows = bench.load_gate(text, windows=True)
     assert gate.benchmark.split("::")[0].endswith("_counts")
     assert gate.instructions > 0 and 0 < gate.tolerance_percent < 5
+    assert windows.benchmark == gate.benchmark
+    assert windows.instructions > 0 and windows.instructions != gate.instructions
+    assert windows.tolerance_percent == gate.tolerance_percent
 
 
 def test_the_gate_counts_only_its_benchmark_as_json() -> None:

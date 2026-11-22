@@ -44,11 +44,11 @@ just bench -p beryl_bench --bench example_timing
 ```
 
 - `just bench-count [cargo bench flags]` runs the Gungraun benchmarks (default
-  `--bench '*_counts'`) in the `beryl-bench` Lima VM, creating it on first use.
-  `just bench-count` and `just bench` build `-p beryl_bench` unless the flags
-  name a package: from the whole workspace, Cargo would build in the features
-  other members' tests turn on, such as `coverage`, which no app or search build
-  has.
+  `--bench '*_counts'`) in `beryl-bench` under Lima on macOS or WSL on Windows,
+  creating the Linux environment on first use. `just bench-count` and
+  `just bench` build `-p beryl_bench` unless the flags name a package: from the
+  whole workspace, Cargo would build in the features other members' tests turn
+  on, such as `coverage`, which no app or search build has.
 
 - `just bench [--force] [cargo bench flags] [-- harness flags]` builds, checks
   that the CPU is not slowed (battery, Low Power Mode, throttling), then times
@@ -59,11 +59,12 @@ just bench -p beryl_bench --bench example_timing
 
 - `just count-gate` counts only `rollout_counts`' `rollouts` subject in the VM,
   about 15 s once built, and fails when it runs more than the tolerance above
-  the bar in `rust/crates/beryl_bench/count-gate.toml`. It is slow CI's `counts`
-  lane, so a rule or card the WU Control mirror doesn't use can't slow it down
-  unnoticed. The file's comments say when the bar may rise.
+  the architecture's bar in `rust/crates/beryl_bench/count-gate.toml`. Compare
+  before and after counts from the same architecture. Ignite records ARM64
+  counts in its trend. The file's comments say when either bar may rise.
   `just count-gate --family <name>` gates a family's present cost instead
-  ([The present-cost gate](#the-present-cost-gate)).
+  ([The present-cost gate](#the-present-cost-gate)). Its thresholds are for
+  ARM64 verification. Windows can run it for local measurements.
 
 Name benchmark targets by kind: `<subject>_counts`, `<subject>_abba`,
 `<subject>_timing`.
@@ -219,10 +220,11 @@ effect directly.
 
 The VM:
 
-- `beryl-bench`: arm64 Ubuntu on Apple's virtualization, 4 CPUs, 4 GiB. It
-  mounts only the main checkout, read-only. `by bench-count` installs Valgrind,
-  the Rust pinned in `rust-toolchain.toml` and the `gungraun-runner` matching
-  `Cargo.lock`.
+- Under Lima, `beryl-bench` is ARM64 Ubuntu on Apple's virtualization, with four
+  CPUs and 4 GiB. It mounts only the main checkout, read-only. Under WSL, it is
+  a dedicated x86-64 Ubuntu distribution that mounts the Windows drives.
+  `by bench-count` installs Valgrind, the Rust pinned in `rust-toolchain.toml`
+  and the `gungraun-runner` matching `Cargo.lock`.
 - Each worktree builds into a target directory of its own in the VM, so it
   counts its own code: Cargo names the engine's artifacts the same in every
   worktree and trusts file times. A new one starts as a copy of the count gate's
@@ -389,8 +391,5 @@ when counts and ABBA agree.
 
 ## The Windows machine
 
-Not used. It would bring a different instruction set (x86) from the one we ship,
-Windows' own background noise, and remote access to maintain. It earns its keep
-only as a dedicated Linux benchmark machine: isolated cores, turbo and SMT off,
-a fixed clock. Reach for that only if counts plus ABBA on the Mac stop being
-enough.
+Use Cygnus for x86-64 instruction counts in WSL. Wall-clock benchmarks for
+shipping performance run on the Mac.

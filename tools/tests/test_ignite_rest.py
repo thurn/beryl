@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import stat
+import sys
 import tomllib
 from pathlib import Path
 
@@ -53,7 +54,9 @@ def test_the_manifest_declares_the_families_and_products() -> None:
             assert f"rest list {name}" in str(family["list"])
             assert "{checks}" in str(family["run"])
     counts = declared["family"]["counts"]
-    assert counts["platforms"] == ["macos"] and counts["resources"] == ["bench-vm"]
+    platforms = counts["platforms"]
+    assert isinstance(platforms, list) and "macos" in platforms
+    assert counts["resources"] == ["bench-vm"]
     for name in ("fuzz", "exhaust"):
         family = declared["family"][name]
         assert family["kind"] == "exploration"
@@ -130,12 +133,19 @@ def repository(root: Path) -> None:
     )
 
 
-def test_counts_lists_the_rollouts_and_each_family_with_a_bar(tmp_path: Path) -> None:
+def test_counts_lists_the_rollouts_and_arm64_family_bars(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     repository(tmp_path)
+    monkeypatch.setattr(adapter.system, "WINDOWS", False)
     assert [c["check"] for c in adapter.list_checks("counts", tmp_path)] == [
         "counts:rollouts",
         "counts:family/blank",
         "counts:family/layers",
+    ]
+    monkeypatch.setattr(adapter.system, "WINDOWS", True)
+    assert [c["check"] for c in adapter.list_checks("counts", tmp_path)] == [
+        "counts:rollouts",
     ]
 
 
@@ -214,28 +224,32 @@ def test_scale_results_are_named_for_the_family() -> None:
 # --- the count gate ---
 
 GATE = """\
-#!/bin/sh
-# A stand-in for `count-gate`: reads its arguments and answers as FAKE_GATE says.
-case "$FAKE_GATE" in
-cannot) echo "no beryl-bench VM: run just bench-count once" >&2; exit 125 ;;
-fail)
-  [ "$1" = "--measure" ] && echo '{"measured": 1010, "bar": 1000, "ok": false, "message": "over"}' > "$2"
-  exit 1 ;;
-*)
-  [ "$1" = "--measure" ] && echo '{"measured": 995, "bar": 1000, "ok": true, "message": "ok"}' > "$2"
-  exit 0 ;;
-esac
+import json
+import os
+import sys
+from pathlib import Path
+
+mode = os.environ.get("FAKE_GATE")
+if mode == "cannot":
+    print("no beryl-bench VM: run just bench-count once", file=sys.stderr)
+    sys.exit(125)
+ok = mode != "fail"
+if sys.argv[1] == "--measure":
+    result = {"measured": 995 if ok else 1010, "bar": 1000, "ok": ok,
+              "message": "ok" if ok else "over"}
+    Path(sys.argv[2]).write_text(json.dumps(result))
+sys.exit(0 if ok else 1)
 """
 
 
 @pytest.fixture
 def gate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    script = tmp_path / "bin" / "gate"
-    script.parent.mkdir()
+    script = tmp_path / "gate.py"
     script.write_text(GATE)
-    script.chmod(script.stat().st_mode | stat.S_IEXEC)
     monkeypatch.setattr(
-        adapter, "count_gate_command", lambda *args: [str(script), *args]
+        adapter,
+        "count_gate_command",
+        lambda *args: [sys.executable, str(script), *args],
     )
     return script
 
@@ -249,6 +263,7 @@ def test_a_passing_count_is_a_pass_and_never_files_when_it_is_not_a_tip(
 ) -> None:
     monkeypatch.delenv("FAKE_GATE", raising=False)
     monkeypatch.delenv("IGNITE_CLASS", raising=False)
+    monkeypatch.setattr(adapter.system, "WINDOWS", False)
     trended: list[tuple[str | None, int, int, bool]] = []
     monkeypatch.setattr(
         count_trend,
@@ -260,6 +275,20 @@ def test_a_passing_count_is_a_pass_and_never_files_when_it_is_not_a_tip(
     adapter.run_counts([adapter.ROLLOUTS], tmp_path, results)
     assert lines(results) == [{"check": "counts:rollouts", "outcome": "pass"}]
     assert trended == [(None, 995, 1000, True)]
+
+
+def test_windows_counts_are_judged_without_entering_the_arm64_trend(
+    tmp_path: Path, gate: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def unexpected_trend(*args: object) -> None:
+        pytest.fail("Windows counts must stay out of the ARM64 trend")
+
+    monkeypatch.setattr(adapter.system, "WINDOWS", True)
+    monkeypatch.setattr(adapter, "trend", unexpected_trend)
+    monkeypatch.delenv("FAKE_GATE", raising=False)
+    results = tmp_path / "results.jsonl"
+    adapter.run_counts([adapter.ROLLOUTS], tmp_path, results)
+    assert lines(results) == [{"check": "counts:rollouts", "outcome": "pass"}]
 
 
 def test_a_count_over_the_bar_fails_with_the_gates_message(
