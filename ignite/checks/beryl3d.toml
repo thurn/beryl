@@ -185,10 +185,8 @@ inputs = [
   "tools/src/beryl_tools/xmage_classes.py",
 ]
 
-# The source rules of tools/src/beryl_tools/beryl3d/purity.py: `scene-purity` (no GPU, window,
-# clock or thread in `beryl_scene`), `lints-match` (Beryl 3D's lints equal the main
-# workspace's), `data-names` (the verbs of data/beryl3d/space.json are UI Conventions' names)
-# and `scene-literals`. One check per rule.
+# The source rules of tools/src/beryl_tools/beryl3d/purity.py inspect the checkout without
+# building Beryl 3D. One check per rule.
 [family.b3d-source]
 kind = "regression"
 adapter = "jsonl"
@@ -231,6 +229,25 @@ inputs = [
   "tools/src/beryl_tools/system.py",
   "tools/src/beryl_tools/vocabulary.py",
   "tools/src/beryl_tools/xmage_classes.py",
+]
+
+# The inspector validates the checkout's tuning files, and the recordings pack shows which
+# corpus names the recorder found. Both use the shared macOS build so a cold Cargo build
+# cannot hold up the source checks.
+[family.b3d-validation]
+kind = "regression"
+adapter = "jsonl"
+platforms = ["macos"]
+needs = ["python-env", "b3d"]
+always = true
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-validation list"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-validation run {checks}"
+inputs = [
+  "tools/src/beryl_tools/beryl3d/pack.py",
+  "tools/src/beryl_tools/beryl3d/paths.py",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/beryl3d_validation.py",
+  "tools/src/beryl_tools/ignite/rust.py",
 ]
 
 # Every test of the workspace that cargo-nextest runs, each hashed over the package that holds

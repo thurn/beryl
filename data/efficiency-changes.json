@@ -65,6 +65,11 @@
     "expect": "down"
   },
   {
+    "label": "Beryl 3D's tuning and corpus checks use the shared build",
+    "metric": "fast-check.cpu-seconds",
+    "expect": "down"
+  },
+  {
     "label": "Only beryl_3d and beryl_record link the engine, so an engine edit rebuilds no other Beryl 3D test",
     "metric": "fast-check.cpu-seconds",
     "expect": "down"
@@ -781,11 +786,6 @@
     "expect": "down"
   },
   {
-    "label": "The Beryl 3D map gives agents source and data paths directly from client registries, shortening the search for code to change.",
-    "metric": "bead.agent-minutes",
-    "expect": "down"
-  },
-  {
     "label": "The Rust test, scenario and CLI builds share dependency features and use the same compiler settings for build and normal dependencies.",
     "metric": "fast-check.cpu-seconds",
     "expect": "down"
@@ -803,6 +803,11 @@
   {
     "label": "Ignite lends idle tip and express cores to agent commands and recalls the loans when work arrives for either reserve.",
     "metric": "machine.queued-core-hours-per-day",
+    "expect": "down"
+  },
+  {
+    "label": "The Beryl 3D map gives agents source and data paths directly from client registries, shortening the search for code to change.",
+    "metric": "bead.agent-minutes",
     "expect": "down"
   }
 ]

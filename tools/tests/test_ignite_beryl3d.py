@@ -70,6 +70,21 @@ def test_the_programs_that_reread_their_grant_ask_for_one_that_grows() -> None:
     assert growing == {"b3d-interface", "b3d-every-tick"}
 
 
+def test_the_validations_use_the_shared_build_and_source_checks_run_anywhere() -> None:
+    families = manifest()["family"]
+    assert families["b3d-source"]["platforms"] == "any"
+    assert families["b3d-source"]["needs"] == ["python-env"]
+    source_checks = {entry.check for entry in adapter.LISTS["b3d-source"]()}
+    assert "b3d-source:data-names" in source_checks
+    assert source_checks.isdisjoint({"b3d-source:b3d-data", "b3d-source:corpus"})
+    assert families["b3d-validation"]["platforms"] == ["macos"]
+    assert families["b3d-validation"]["needs"] == ["python-env", "b3d"]
+    assert {entry.check for entry in adapter.LISTS["b3d-validation"]()} == {
+        "b3d-validation:tuning",
+        "b3d-validation:corpus",
+    }
+
+
 def test_the_families_that_read_recordings_name_every_crate_the_recorder_is_built_from() -> (
     None
 ):

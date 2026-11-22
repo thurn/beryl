@@ -4,9 +4,7 @@ from __future__ import annotations
 
 import bisect
 import json
-import os
 import re
-import subprocess
 import sys
 import tomllib
 from pathlib import Path
@@ -308,31 +306,6 @@ def data_names(root: Path) -> list[str]:
         for name in sorted(effect_names - effect_files)
     )
     return found
-
-
-def b3d_data(root: Path) -> list[str]:
-    """Run the inspector's loader against the tuning files in this checkout."""
-    done = subprocess.run(
-        [
-            "cargo",
-            "run",
-            "--locked",
-            "--quiet",
-            "-p",
-            "beryl_inspect",
-            "--bin",
-            "b3d",
-            "--",
-            "data",
-        ],
-        cwd=root / "rust" / "beryl3d",
-        env={**os.environ, "BERYL3D_DATA": str(root / "data" / "beryl3d")},
-        capture_output=True,
-        text=True,
-        errors="replace",
-        check=False,
-    )
-    return [] if done.returncode == 0 else [done.stderr.strip() or done.stdout.strip()]
 
 
 # Elements take their sizes from kit_base design tokens (docs/beryl-3d.md, "Elements").
@@ -779,7 +752,6 @@ def report(name: str, found: list[str]) -> int:
 
 
 SOURCE_RULES: dict[str, Callable[[Path], list[str]]] = {
-    "b3d-data": b3d_data,
     "scene-purity": scene_purity,
     "levels": levels,
     "lints-match": lints_match,

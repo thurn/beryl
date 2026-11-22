@@ -315,8 +315,9 @@ per subject, and `kit_base` reads each into a typed struct once.
   the app started with `--watch` read them from the checkout, and the app reads
   them again when one changes.
 - **A file is validated when it is read**: an unknown key, a missing key or a
-  value out of range fails with the file and the key. The `b3d-data` step of the
-  source checks reads every file, and fails for a key that no code reads.
+  value out of range fails with the file and the key. The
+  `b3d-validation:tuning` check reads every file and fails for a key that no
+  code reads.
 - **A frame looks nothing up by name.** Values are resolved into structs when
   the data arrives.
 

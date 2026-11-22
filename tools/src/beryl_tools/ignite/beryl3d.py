@@ -33,7 +33,7 @@ from pathlib import Path
 from .. import card_files, card_store, paths, set_groups
 from ..beryl3d import gate, pack, purity, timeline
 from ..beryl3d import paths as b3d_paths
-from . import Listed, Result, listed, report
+from . import Listed, Result, beryl3d_validation, listed, report
 from .rust import asked, clippy_results, parse_packages, unformatted
 
 WORKSPACE: Path = b3d_paths.WORKSPACE
@@ -67,11 +67,6 @@ FRAME_LIMITS = "frame-limits"
 # The one check of `b3d-frame-counts`: Callgrind counts every board at once in the
 # beryl3d-bench machine, and the scaling check compares two boards' counts.
 FRAME_COUNTS = "b3d-frame-counts:boards"
-
-SOURCE_RULES: dict[str, Callable[[Path], list[str]]] = {
-    **purity.SOURCE_RULES,
-    "corpus": pack.check_corpus,
-}
 
 
 def run_out(
@@ -639,7 +634,7 @@ def clippy_run(checks: list[str]) -> list[Result]:
 def source_run(checks: list[str]) -> list[Result]:
     results: list[Result] = []
     for name in asked("b3d-source", checks):
-        rule = SOURCE_RULES.get(name)
+        rule = purity.SOURCE_RULES.get(name)
         if rule is None:
             continue
         found = rule(paths.REPO)
@@ -714,10 +709,8 @@ LISTS: dict[str, Callable[[], list[Listed]]] = {
     "b3d-clippy": lambda: [
         Listed(f"b3d-clippy:{n}", [f"crate:{n}"]) for n in packages()
     ],
-    "b3d-source": lambda: [
-        Listed(f"b3d-source:{n}", pack.CORPUS_INPUTS if n == "corpus" else [])
-        for n in SOURCE_RULES
-    ],
+    "b3d-source": lambda: [Listed(f"b3d-source:{n}") for n in purity.SOURCE_RULES],
+    "b3d-validation": beryl3d_validation.checks,
     "b3d-interface": lambda: interface_list("b3d-interface"),
     "b3d-every-tick": lambda: interface_list("b3d-every-tick"),
     "b3d-gate": gate_list,
@@ -734,6 +727,7 @@ RUNS: dict[str, Callable[[list[str]], list[Result]]] = {
     "b3d-format": format_run,
     "b3d-clippy": clippy_run,
     "b3d-source": source_run,
+    "b3d-validation": lambda c: beryl3d_validation.run(DEBUG, c),
     "b3d-interface": lambda c: interface_run("b3d-interface", c, []),
     "b3d-every-tick": lambda c: interface_run("b3d-every-tick", c, ["--every-tick"]),
     "b3d-gate": gate_run,

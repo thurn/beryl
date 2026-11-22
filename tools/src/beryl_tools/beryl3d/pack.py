@@ -182,34 +182,7 @@ def corpus_errors(text: str, names: set[str]) -> list[str]:
     ]
 
 
-def check_corpus(repo: Path) -> list[str]:
-    """Check the corpus against the current recorder, including derived spec names."""
-    workspace: Path = repo / "rust" / "beryl3d"
-    path = repo / "data" / "beryl3d" / "corpus.txt"
-
-    def run(command: list[str]) -> str:
-        return subprocess.run(
-            command, cwd=workspace, check=True, text=True, capture_output=True
-        ).stdout
-
-    try:
-        text = path.read_text(encoding="utf-8")
-        run(
-            [
-                "cargo",
-                "build",
-                "--locked",
-                "-q",
-                "--profile",
-                "test",
-                "-p",
-                "beryl_record",
-            ]
-        )
-        exe = "record.exe" if os.name == "nt" else "record"
-        current = Path(run([str(workspace / "target" / "debug" / exe)]).strip())
-        return corpus_errors(text, {entry.name for entry in read(current.read_bytes())})
-    except subprocess.CalledProcessError as error:
-        return [f"could not read the current recordings pack: {error.stderr.strip()}"]
-    except (OSError, ValueError) as error:
-        return [str(error)]
+def check_corpus(data: Path, current: Path) -> list[str]:
+    """Check the corpus against the current pack, including derived spec names."""
+    text = (data / "corpus.txt").read_text(encoding="utf-8")
+    return corpus_errors(text, {entry.name for entry in read(current.read_bytes())})
