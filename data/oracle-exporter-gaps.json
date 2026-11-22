@@ -49,12 +49,6 @@
   },
   {
     "oracle": "xmage",
-    "card": "Glasspool Mimic",
-    "scenario": "generated 2: cast from hand",
-    "gap": "a choice Beryl leaves out because no answer changes anything, which the oracle asks anyway: whether to enter as a copy when the player controls no creature"
-  },
-  {
-    "oracle": "xmage",
     "card": "Dandân",
     "scenario": "generated 5: wait for the state condition on the battlefield",
     "gap": "a setup trigger pending at the first main phase"

@@ -70,6 +70,23 @@ def test_the_setups_active_player_is_player_a_on_turn_1() -> None:
     assert lines[-2:] == ["setStopAt(2, PhaseStep.BEGIN_COMBAT);", "execute();"]
 
 
+@pytest.mark.parametrize(
+    ("turn", "step", "restores_draw"),
+    [(1, "Upkeep", False), (2, "Upkeep", True), (2, "Draw", False)],
+)
+def test_xmage_restores_the_draw_only_after_a_later_upkeep_setup(
+    turn: int, step: str, restores_draw: bool
+) -> None:
+    entry = next(
+        e for e in json.loads(FIXTURE.read_text()) if e["card"] == "Mana Drain"
+    )
+    entry["setup"].update(turn=turn, step=step)
+    faces = xmage_java.Faces.load(card_store.STORE)
+    export = xmage_java.Export(entry["card"], entry["name"], "upkeep")
+    xmage.Exporter(entry, faces, export).arrange()
+    assert any("useNextSkipStep" in line for line in export.body) is restores_draw
+
+
 def test_a_command_after_the_opponents_spell_passes_priority_first() -> None:
     # Player 0 (playerB) casts Get Lost in player 1's (playerA's) main phase, then playerA
     # sacrifices a Map: without the pass, playerA would sacrifice before Get Lost was cast.

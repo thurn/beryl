@@ -76,6 +76,9 @@ class Exporter:
         setup = cast(Json, entry["setup"])
         self.setup: Json = setup
         self.first_turn: int = cast(int, setup["turn"])
+        self.restore_first_draw: bool = (
+            self.first_turn > 1 and setup["step"] == "Upkeep"
+        )
         self.active: int = cast(int, setup["active"])
         self.lines: list[str] = export.body
         # The creatures declared as attackers this turn, for blocks.
@@ -134,9 +137,7 @@ class Exporter:
     def at(self, p: Position) -> str:
         """`turn, PhaseStep.STEP` for a position."""
         turn = self.turn(p.turn)
-        # XMage plays a scenario from its turn 1, whose starting player skips the draw step
-        # (CR 103.8a), where Beryl's setup may start in a later turn whose draw step happens.
-        if turn == 1 and self.first_turn > 1 and STEPS[p.step] == "DRAW":
+        if turn == 1 and STEPS[p.step] == "DRAW" and not self.restore_first_draw:
             raise Unsupported("the draw step of XMage's first turn, which it skips")
         return f"{turn}, PhaseStep.{STEPS[p.step]}"
 
@@ -265,6 +266,13 @@ class Exporter:
         # makes every run play the same game, as Forge's harness already does.
         self.emit(f"mage.util.RandomUtil.setSeed({cast(int, self.setup['seed'])}L);")
         start = cast(str, self.setup["step"])
+        # XMage's duel skips its first draw (CR 103.8a). A later Beryl upkeep still has a draw.
+        if self.restore_first_draw:
+            self.emit(
+                'runCode("restore the draw step", 1, PhaseStep.UPKEEP, playerA, '
+                "(info, player, game) -> game.getState().getTurnMods()"
+                ".useNextSkipStep(player.getId(), PhaseStep.DRAW));"
+            )
         self.cards.refuse_identical_damage_replacements(self.setup)
         for seat, setup in enumerate(cast(list[Json], self.setup["players"])):
             who = self.player(seat)

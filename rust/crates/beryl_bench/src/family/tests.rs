@@ -185,13 +185,15 @@ fn families_pair_their_steps() {
                 }
             ),
             (
+                // The rollout can target a manifested creature with a planeswalker's
+                // ability once its public creature characteristics are visible to the policy.
                 "identity",
                 Pairing {
-                    paired: 2_862,
+                    paired: 2_867,
                     skipped: 99,
                     capacity_stalls: 0,
-                    layer_recomputes: 1_341,
-                    transactions: 2_874
+                    layer_recomputes: 1_346,
+                    transactions: 2_872
                 }
             ),
         ]
